@@ -9,7 +9,11 @@ Enumerate Docker containers, images, volumes, networks, socket access.
 import subprocess
 import json
 import os
+import platform as _platform
 from pathlib import Path
+
+_IS_MACOS = _platform.system() == 'Darwin'
+_IS_LINUX = _platform.system() == 'Linux'
 
 class DockerEnumerator:
     """Enumerate Docker environment"""
@@ -57,12 +61,18 @@ class DockerEnumerator:
     
     def check_in_container(self):
         """Detect if running inside a container"""
-        # Check /.dockerenv
         if Path('/.dockerenv').exists():
             self.in_container = True
             return True
-        
-        # Check cgroup
+
+        if _IS_MACOS:
+            # macOS: check env var and process tree only
+            if os.environ.get('container'):
+                self.in_container = True
+                return True
+            return False
+
+        # Linux: check cgroup
         try:
             with open('/proc/1/cgroup') as f:
                 content = f.read()
@@ -71,8 +81,7 @@ class DockerEnumerator:
                     return True
         except:
             pass
-        
-        # Check hostname (often container ID)
+
         try:
             hostname = os.uname().nodename
             if len(hostname) == 12 and all(c in '0123456789abcdef' for c in hostname):
@@ -80,7 +89,7 @@ class DockerEnumerator:
                 return True
         except:
             pass
-        
+
         return False
     
     def check_socket_access(self):
@@ -220,38 +229,35 @@ class DockerEnumerator:
     
     def check_privileged(self):
         """Check if container is running in privileged mode"""
+        if _IS_MACOS:
+            return False  # macOS doesn't have Linux capability model
         try:
-            # Check /proc/self/status for CapEff
             with open('/proc/self/status') as f:
                 for line in f:
                     if line.startswith('CapEff:'):
                         cap_eff = int(line.split()[1], 16)
-                        # If all capabilities, likely privileged
                         if cap_eff == 0x3fffffffff or cap_eff == 0x1ffffffffff:
                             self.privileged = True
                             return True
         except:
             pass
-        
         return False
     
     def get_capabilities(self):
         """Get current capabilities"""
+        if _IS_MACOS:
+            self.capabilities = ['N/A (macOS — no Linux capability model)']
+            return self.capabilities
         try:
             result = subprocess.run(
-                ['capsh', '--print'],
-                capture_output=True,
-                text=True,
-                timeout=2
+                ['capsh', '--print'], capture_output=True, text=True, timeout=2
             )
-            
             if result.returncode == 0:
                 for line in result.stdout.split('\n'):
                     if 'Current:' in line:
                         caps = line.split('Current:')[1].strip()
                         self.capabilities = caps.split(',')
         except:
-            # Fallback: read from /proc/self/status
             try:
                 with open('/proc/self/status') as f:
                     for line in f:
@@ -260,11 +266,12 @@ class DockerEnumerator:
                             self.capabilities.append(f'CapEff: 0x{cap_hex}')
             except:
                 pass
-        
         return self.capabilities
     
     def get_mounts(self):
         """Get container mounts"""
+        if _IS_MACOS:
+            return self._get_mounts_macos()
         try:
             with open('/proc/self/mountinfo') as f:
                 for line in f:
@@ -272,8 +279,6 @@ class DockerEnumerator:
                     if len(parts) >= 5:
                         mount_point = parts[4]
                         mount_source = parts[3] if len(parts) > 3 else ''
-                        
-                        # Look for interesting mounts
                         if any(x in mount_point for x in ['/host', '/proc', '/sys', '/var/run/docker.sock']):
                             self.mounts.append({
                                 'source': mount_source,
@@ -282,7 +287,20 @@ class DockerEnumerator:
                             })
         except:
             pass
-        
+        return self.mounts
+
+    def _get_mounts_macos(self):
+        try:
+            result = subprocess.run(
+                ['mount'], capture_output=True, text=True, timeout=3
+            )
+            for line in result.stdout.strip().split('\n'):
+                if any(x in line for x in ['/host', '/var/run/docker.sock']):
+                    parts = line.split()
+                    mount_point = parts[2] if len(parts) >= 3 else line
+                    self.mounts.append({'source': parts[0] if parts else '', 'target': mount_point, 'interesting': True})
+        except:
+            pass
         return self.mounts
     
     def check_escape_vectors(self):
@@ -307,19 +325,19 @@ class DockerEnumerator:
                 'exploit': 'Full host access via /dev, /proc, /sys'
             })
         
-        # Host PID namespace
-        try:
-            with open('/proc/1/cgroup') as f:
-                if 'docker' not in f.read():
-                    # PID 1 is not in a container cgroup
-                    self.escape_vectors.append({
-                        'type': 'Host PID Namespace',
-                        'severity': 'HIGH',
-                        'description': 'Sharing host PID namespace',
-                        'exploit': 'Can see and interact with host processes'
-                    })
-        except:
-            pass
+        # Host PID namespace (Linux only)
+        if _IS_LINUX:
+            try:
+                with open('/proc/1/cgroup') as f:
+                    if 'docker' not in f.read():
+                        self.escape_vectors.append({
+                            'type': 'Host PID Namespace',
+                            'severity': 'HIGH',
+                            'description': 'Sharing host PID namespace',
+                            'exploit': 'Can see and interact with host processes'
+                        })
+            except:
+                pass
         
         # CAP_SYS_ADMIN
         if 'cap_sys_admin' in str(self.capabilities).lower():

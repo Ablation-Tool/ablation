@@ -8,7 +8,12 @@ Enumerate running processes, loaded modules, memory maps.
 
 import os
 import re
+import platform as _platform
+import subprocess
 from pathlib import Path
+
+_IS_MACOS = _platform.system() == 'Darwin'
+_IS_LINUX = _platform.system() == 'Linux'
 
 class ProcessEnumerator:
     """Enumerate and analyze processes"""
@@ -19,6 +24,11 @@ class ProcessEnumerator:
         
     def list_all_processes(self):
         """List all running processes"""
+        if _IS_MACOS:
+            return self._list_processes_macos()
+        return self._list_processes_linux()
+
+    def _list_processes_linux(self):
         procs = []
         for entry in Path("/proc").iterdir():
             if entry.is_dir() and entry.name.isdigit():
@@ -28,19 +38,37 @@ class ProcessEnumerator:
                         name = f.read().strip()
                     with open(entry / "cmdline") as f:
                         cmdline = f.read().replace('\x00', ' ').strip()
-                    
-                    procs.append({
-                        'pid': pid,
-                        'name': name,
-                        'cmdline': cmdline or name
-                    })
+                    procs.append({'pid': pid, 'name': name, 'cmdline': cmdline or name})
                 except:
                     pass
-        
+        return sorted(procs, key=lambda x: x['pid'])
+
+    def _list_processes_macos(self):
+        procs = []
+        try:
+            result = subprocess.run(
+                ['ps', '-axo', 'pid,ppid,comm,args'],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.strip().split('\n')[1:]:
+                parts = line.split(None, 3)
+                if len(parts) >= 3:
+                    try:
+                        procs.append({
+                            'pid': int(parts[0]),
+                            'name': parts[2].split('/')[-1],
+                            'cmdline': parts[3] if len(parts) > 3 else parts[2]
+                        })
+                    except:
+                        pass
+        except:
+            pass
         return sorted(procs, key=lambda x: x['pid'])
     
     def get_memory_maps(self):
         """Read process memory maps"""
+        if _IS_MACOS:
+            return self._get_memory_maps_macos()
         maps = []
         try:
             with open(self.proc_path / "maps") as f:
@@ -69,7 +97,41 @@ class ProcessEnumerator:
             pass
         
         return maps
-    
+
+    def _get_memory_maps_macos(self):
+        maps = []
+        try:
+            result = subprocess.run(
+                ['vmmap', '-wide', str(self.pid)],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode != 0:
+                return []
+            for line in result.stdout.split('\n'):
+                parts = line.split()
+                if len(parts) >= 3 and '-' in parts[0] and parts[0][0:2] in ('0x', '') :
+                    try:
+                        addr_range = parts[0]
+                        perms_str = parts[1] if len(parts) > 1 else '----'
+                        pathname = parts[-1] if len(parts) > 4 else ''
+                        addrs = addr_range.split('-')
+                        if len(addrs) == 2:
+                            maps.append({
+                                'start': int(addrs[0], 16),
+                                'end': int(addrs[1], 16),
+                                'perms': perms_str,
+                                'offset': 0,
+                                'pathname': pathname,
+                                'readable': 'r' in perms_str,
+                                'writable': 'w' in perms_str,
+                                'executable': 'x' in perms_str,
+                            })
+                    except:
+                        pass
+        except:
+            pass
+        return maps
+
     def get_loaded_modules(self):
         """Get loaded shared libraries"""
         maps = self.get_memory_maps()
@@ -103,24 +165,43 @@ class ProcessEnumerator:
     
     def get_open_files(self):
         """List open file descriptors"""
+        if _IS_MACOS:
+            return self._get_open_files_macos()
         fds = []
         fd_path = self.proc_path / "fd"
-        
         try:
             for fd in fd_path.iterdir():
                 if fd.is_symlink():
                     target = os.readlink(str(fd))
-                    fds.append({
-                        'fd': int(fd.name),
-                        'target': target
-                    })
+                    fds.append({'fd': int(fd.name), 'target': target})
         except:
             pass
-        
         return sorted(fds, key=lambda x: x['fd'])
+
+    def _get_open_files_macos(self):
+        fds = []
+        try:
+            result = subprocess.run(
+                ['lsof', '-p', str(self.pid)],
+                capture_output=True, text=True, timeout=5
+            )
+            for i, line in enumerate(result.stdout.strip().split('\n')):
+                if i == 0:
+                    continue
+                parts = line.split(None, 8)
+                if len(parts) >= 9:
+                    try:
+                        fds.append({'fd': parts[3], 'target': parts[8]})
+                    except:
+                        pass
+        except:
+            pass
+        return fds
     
     def get_environment(self):
         """Read process environment variables"""
+        if _IS_MACOS:
+            return self._get_environment_macos()
         env = {}
         try:
             with open(self.proc_path / "environ", 'rb') as f:
@@ -131,22 +212,55 @@ class ProcessEnumerator:
                         env[key] = value
         except:
             pass
-        
+        return env
+
+    def _get_environment_macos(self):
+        env = {}
+        try:
+            result = subprocess.run(
+                ['ps', 'eww', '-p', str(self.pid)],
+                capture_output=True, text=True, timeout=5
+            )
+            lines = result.stdout.strip().split('\n')
+            if len(lines) >= 2:
+                env_part = lines[-1].strip()
+                for token in env_part.split():
+                    if '=' in token:
+                        k, v = token.split('=', 1)
+                        env[k] = v
+        except:
+            pass
         return env
     
     def report(self):
         """Generate full process report"""
         lines = []
         lines.append(f"Process: PID {self.pid}")
-        
-        try:
-            with open(self.proc_path / "comm") as f:
-                lines.append(f"Name: {f.read().strip()}")
-            with open(self.proc_path / "cmdline") as f:
-                cmdline = f.read().replace('\x00', ' ').strip()
-                lines.append(f"Command: {cmdline}")
-        except:
-            pass
+
+        if _IS_MACOS:
+            try:
+                result = subprocess.run(
+                    ['ps', '-p', str(self.pid), '-o', 'pid,comm,args'],
+                    capture_output=True, text=True, timeout=3
+                )
+                out_lines = result.stdout.strip().split('\n')
+                if len(out_lines) >= 2:
+                    parts = out_lines[1].split(None, 2)
+                    if len(parts) >= 2:
+                        lines.append(f"Name: {parts[1].split('/')[-1]}")
+                    if len(parts) >= 3:
+                        lines.append(f"Command: {parts[2]}")
+            except:
+                pass
+        else:
+            try:
+                with open(self.proc_path / "comm") as f:
+                    lines.append(f"Name: {f.read().strip()}")
+                with open(self.proc_path / "cmdline") as f:
+                    cmdline = f.read().replace('\x00', ' ').strip()
+                    lines.append(f"Command: {cmdline}")
+            except:
+                pass
         
         # Memory maps
         maps = self.get_memory_maps()

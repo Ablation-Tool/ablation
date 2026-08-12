@@ -8,7 +8,11 @@ Trace syscalls for running processes using strace/ptrace.
 
 import subprocess
 import re
+import platform as _platform
 from pathlib import Path
+
+_IS_MACOS = _platform.system() == 'Darwin'
+_IS_LINUX = _platform.system() == 'Linux'
 
 class SyscallTracer:
     """Trace and analyze system calls"""
@@ -29,35 +33,65 @@ class SyscallTracer:
         """
         if not self.pid:
             raise ValueError("PID required for tracing")
-        
-        # Use strace to capture syscalls
+
+        if _IS_MACOS:
+            return self._trace_macos(duration)
+
         cmd = [
-            'strace',
-            '-p', str(self.pid),
-            '-c',  # Count syscalls
-            '-f',  # Follow forks
-            '-e', 'trace=all',
-            '-T',  # Show time spent in syscalls
+            'strace', '-p', str(self.pid),
+            '-c', '-f', '-e', 'trace=all', '-T',
         ]
-        
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=duration
-            )
-            
-            # Parse strace output
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=duration)
             return self._parse_strace_summary(result.stderr)
-            
         except subprocess.TimeoutExpired as e:
-            # Expected - we timeout after duration
             return self._parse_strace_summary(e.stderr.decode() if e.stderr else '')
         except PermissionError:
             return {'error': 'Permission denied - need CAP_SYS_PTRACE or root'}
         except FileNotFoundError:
             return {'error': 'strace not installed'}
+        except Exception as e:
+            return {'error': str(e)}
+
+    def _trace_macos(self, duration):
+        """macOS syscall tracing via dtruss (requires root + SIP disabled)"""
+        try:
+            result = subprocess.run(
+                ['dtruss', '-p', str(self.pid)],
+                capture_output=True, text=True, timeout=duration
+            )
+            lines = (result.stdout + result.stderr).strip().split('\n')
+            counts = {}
+            for line in lines:
+                parts = line.split('(')
+                if parts:
+                    name = parts[0].strip()
+                    if name:
+                        counts[name] = counts.get(name, 0) + 1
+            syscalls = sorted(
+                [{'name': k, 'calls': v, 'errors': 0, 'time_percent': 0.0, 'total_time': 0.0}
+                 for k, v in counts.items()],
+                key=lambda x: x['calls'], reverse=True
+            )
+            return {'total_calls': sum(counts.values()), 'total_errors': 0, 'syscalls': syscalls}
+        except subprocess.TimeoutExpired as e:
+            lines = (e.stderr.decode() if e.stderr else '').strip().split('\n')
+            counts = {}
+            for line in lines:
+                parts = line.split('(')
+                if parts and parts[0].strip():
+                    n = parts[0].strip()
+                    counts[n] = counts.get(n, 0) + 1
+            syscalls = sorted(
+                [{'name': k, 'calls': v, 'errors': 0, 'time_percent': 0.0, 'total_time': 0.0}
+                 for k, v in counts.items()],
+                key=lambda x: x['calls'], reverse=True
+            )
+            return {'total_calls': sum(counts.values()), 'total_errors': 0, 'syscalls': syscalls}
+        except PermissionError:
+            return {'error': 'syscall tracing requires root + SIP disabled on macOS (dtruss)'}
+        except FileNotFoundError:
+            return {'error': 'syscall tracing requires dtrace/dtruss on macOS (root + SIP disabled)'}
         except Exception as e:
             return {'error': str(e)}
     
@@ -74,29 +108,16 @@ class SyscallTracer:
         """
         if not self.pid:
             raise ValueError("PID required for tracing")
-        
-        cmd = [
-            'strace',
-            '-p', str(self.pid),
-            '-f',
-            '-s', '256',  # String limit
-            '-v',  # Verbose
-            '-tt',  # Timestamps
-        ]
-        
+
+        if _IS_MACOS:
+            return [{'error': 'detailed trace requires dtruss on macOS (root + SIP disabled)'}]
+
+        cmd = ['strace', '-p', str(self.pid), '-f', '-s', '256', '-v', '-tt']
         if syscall_filter:
             cmd.extend(['-e', f'trace={syscall_filter}'])
-        
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=duration
-            )
-            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=duration)
             return self._parse_strace_detailed(result.stderr)
-            
         except subprocess.TimeoutExpired as e:
             stderr = e.stderr.decode() if e.stderr else ''
             return self._parse_strace_detailed(stderr)
