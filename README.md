@@ -3,7 +3,7 @@
 
 ## ⚡ Overview
 
-**Ablation reverse engineers systems from the inside**  platform detection, binary analysis, process enumeration, network mapping, privilege escalation paths, and syscall tracing. 
+**Ablation reverse engineers systems from the inside** 
 
 
 <p align="center">
