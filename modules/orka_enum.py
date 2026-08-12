@@ -16,9 +16,43 @@ import socket
 import hmac
 import hashlib
 import base64
-import requests
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import requests as _requests
+    _HAS_REQUESTS = True
+except ImportError:
+    _HAS_REQUESTS = False
+
+
+def _http_get(url, headers=None, timeout=5):
+    """HTTP GET — uses requests if available, falls back to urllib."""
+    if _HAS_REQUESTS:
+        r = _requests.get(url, headers=headers or {}, timeout=timeout)
+        r.status_code  # trigger AttributeError if broken
+        return r.status_code, r.text, r.json if r.headers.get('content-type', '').startswith('application/json') else lambda: {}
+    req = urllib.request.Request(url, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode('utf-8', errors='replace')
+            sc = resp.status
+            def _json():
+                try:
+                    return json.loads(body)
+                except Exception:
+                    return {}
+            return sc, body, _json
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        def _json():
+            try:
+                return json.loads(body)
+            except Exception:
+                return {}
+        return e.code, body, _json
 
 # RE-derived constants (com.macstadium.orka-engine.server v3.5.2)
 LICENSESPRING_PRODUCT_UUID = "8ad72323-35e5-477c-ab2c-ea2e080dadc1"
