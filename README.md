@@ -5,13 +5,14 @@
 Deploy inside compromised systems to autonomously reverse engineer unknown platforms.
 
 ```
-    ___    __    __    ___  ___________  ____  _  __
-   / _ |  / /   / /   / _ |/_  __/  _/ |/ / | / /
-  / __ | / _ \ / /__ / __ | / /  _/ //    /  |/ / 
- /_/ |_|/_.__//____//_/ |_|/_/ /___/_/|_/_/|___/  
+    ___    ____  __    ___  ______________  _   __
+   /   |  / __ )/ /   /   |/_  __/  _/ __ \/ | / /
+  / /| | / __  / /   / /| | / /  / // / / /  |/ / 
+ / ___ |/ /_/ / /___/ ___ |/ / _/ // /_/ / /|  /  
+/_/  |_/_____/_____/_/  |_/_/ /___/\____/_/ |_/   
+                                                  
                                                    
  Autonomous Reverse Engineering Tool v2.2.0
- Deploy INSIDE systems | Zero dependencies
 ```
 Know the system before you own the system.
 ---
