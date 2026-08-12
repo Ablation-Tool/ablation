@@ -22,6 +22,13 @@ Deploy inside compromised systems to autonomously reverse engineer unknown platf
 
 **Think: "strace + lsof + netstat + LinPEAS + custom tools" in one self-contained binary.**
 
+**macOS support is first-class.** Ablation runs natively on macOS without modification — no `requests` required (stdlib `urllib` fallback is built in), no Python environment setup on target. The bv41 decoder, Mach-O parser, and Orka RE module all run on macOS the same way they run on Linux.
+
+New in v2.2.0:
+- **bv41 decoder** — Apple `Compression.framework` proprietary LZ4 container (used by MacStadium Orka for VM image layers, APFS snapshots). Decodes chunked bv41 streams without any Apple runtime.
+- **Orka RE module** — gRPC socket enumeration on `/var/run/orka-engine.sock` + `run.sock`, embedded credential detection, Sentry session stream detection, full cluster fingerprint from inside a macOS VM
+- **macOS compatibility** — stdlib-only fallback (`urllib`) when `requests` is not installed; all modules load and run cleanly on macOS targets
+
 ---
 
 ## Quick Start
@@ -182,9 +189,33 @@ MacStadium Orka platform (K8s-based macOS virtualization).
 - Cluster info (API endpoints, certificates)
 - VMs (name, namespace, status, IP, SSH/VNC ports)
 - Images (base images, custom images)
-- Security findings (unauthenticated endpoints, default credentials)
+- gRPC socket enumeration (`/var/run/orka-engine.sock`, `run.sock`)
+- Embedded credential detection (API keys, shared secrets extracted from binaries)
+- Sentry session stream detection (`:8969/stream`)
+- Security findings (unauthenticated endpoints, default credentials, embedded keys)
 
-### 10. Full Container Analysis
+### 10. bv41 Decode
+Decode Apple Compression.framework bv41 streams (Orka VM image layers, APFS snapshots).
+
+```bash
+python3 core/bv41_decoder.py input.bv41 output.bin
+```
+
+**Format details:**
+- 4B magic: `bv41` (LZ4-compressed chunk) | `bv4-` (passthrough chunk)
+- 4B uncompressed size (uint32 LE)
+- 4B compressed size (uint32 LE)
+- N bytes raw LZ4 block payload (not lz4 frame format)
+- Stream terminates at `bv4$`
+
+**Probe without decode:**
+```python
+from core.bv41_decoder import probe_bv41, is_bv41
+info = probe_bv41(data)
+# → {'chunk_count': N, 'total_uncompressed_bytes': M, 'overall_ratio': X.Xx}
+```
+
+### 11. Full Container Analysis
 Run all container/platform enumerations.
 
 ```bash
@@ -201,42 +232,45 @@ Run all container/platform enumerations.
 ## Capabilities
 
 ### Platform Intelligence
-✓ OS/kernel/distribution detection  
-✓ Architecture (x86/x64/ARM/MIPS)  
-✓ Security features (ASLR, SELinux, AppArmor)  
-✓ Available tools inventory  
+- OS/kernel/distribution detection
+- Architecture (x86/x64/ARM/MIPS)
+- Security features (ASLR, SELinux, AppArmor)
+- Available tools inventory
 
 ### Binary Analysis
-✓ Multi-format parsing (ELF, PE, Mach-O)  
-✓ Entry point location  
-✓ Section/segment enumeration  
-✓ Disassembly (Capstone, multi-arch)  
-✓ Windows PE deep-dive (imports, suspicious functions)  
-✓ macOS Mach-O deep-dive (load commands, dylibs, code signing)  
+- Multi-format parsing (ELF, PE, Mach-O)
+- Entry point location
+- Section/segment enumeration
+- Disassembly (Capstone, multi-arch)
+- Windows PE deep-dive (imports, suspicious functions)
+- macOS Mach-O deep-dive (load commands, dylibs, code signing)
+- Apple bv41 container decode (LZ4 block, chunked)
 
 ### Runtime Analysis
-✓ Process enumeration (all PIDs)  
-✓ Memory map analysis  
-✓ Loaded module tracking  
-✓ Syscall tracing (strace integration)  
-✓ Network enumeration (interfaces, listening ports, connections)  
+- Process enumeration (all PIDs)
+- Memory map analysis
+- Loaded module tracking
+- Syscall tracing (strace integration)
+- Network enumeration (interfaces, listening ports, connections)
 
 ### Security Assessment
-✓ Vulnerability detection (ASLR, ptrace, etc.)  
-✓ Privilege escalation paths (7 categories)  
-✓ SUID binary enumeration  
-✓ Writable+executable memory detection  
-✓ Docker group exploitation  
-✓ Sudo misconfiguration detection  
+- Vulnerability detection (ASLR, ptrace, etc.)
+- Privilege escalation paths (7 categories)
+- SUID binary enumeration
+- Writable+executable memory detection
+- Docker group exploitation
+- Sudo misconfiguration detection
 
 ### Container/Platform Detection
-✓ Docker container detection (/.dockerenv, cgroup, hostname)  
-✓ Kubernetes pod detection (service account, env vars)  
-✓ Orka VM detection (metadata server, API reachability)  
-✓ Container escape vector enumeration  
-✓ Service account token extraction  
-✓ RBAC permission checking  
-✓ Default credential detection  
+- Docker container detection (`/.dockerenv`, cgroup, hostname)
+- Kubernetes pod detection (service account, env vars)
+- Orka VM detection (metadata server, API reachability)
+- Container escape vector enumeration
+- Service account token extraction
+- RBAC permission checking
+- Default credential detection
+- Embedded key detection (API keys, shared secrets, product UUIDs in binaries)
+- gRPC control plane socket enumeration
 
 ---
 
@@ -249,7 +283,8 @@ ablation/
 │   ├── binary_parser.py       # ELF/PE/Mach-O parser
 │   ├── disasm_engine.py       # Capstone disassembly
 │   ├── pe_analyzer.py         # Windows PE deep-dive
-│   └── macho_analyzer.py      # macOS Mach-O deep-dive
+│   ├── macho_analyzer.py      # macOS Mach-O deep-dive
+│   └── bv41_decoder.py        # Apple Compression.framework bv41/LZ4 container
 ├── modules/                   # Specialized enumeration
 │   ├── process_enum.py        # Process/memory analysis
 │   ├── syscall_trace.py       # Syscall tracing
@@ -257,12 +292,12 @@ ablation/
 │   ├── network_analyze.py     # Network enumeration
 │   ├── docker_enum.py         # Docker environment detection
 │   ├── k8s_enum.py            # Kubernetes pod enumeration
-│   └── orka_enum.py           # Orka platform detection
+│   └── orka_enum.py           # Orka platform detection + RE (gRPC sockets, embedded creds, bv41)
 ├── main.py                    # Orchestrator
 └── build.sh                   # PyInstaller build script
 ```
 
-**Total:** ~3,200 lines across 13 modules
+**Total:** ~3,400 lines across 14 modules
 
 ---
 
@@ -303,12 +338,14 @@ ssh target 'cat > /tmp/s && chmod +x /tmp/s && /tmp/s && cat /tmp/ablation-summa
 
 | Platform | Detection | Binary Parse | Process Enum | Network | Privesc |
 |----------|-----------|--------------|--------------|---------|---------|
-| **Linux** | ✓ | ✓ (ELF) | ✓ | ✓ | ✓ |
-| **Windows** | ✓ | ✓ (PE) | ✓ | ✓ | Partial |
-| **macOS** | ✓ | ✓ (Mach-O) | ✓ | ✓ | Partial |
-| **BSD** | ✓ | ✓ (ELF) | Partial | ✓ | Partial |
+| **Linux** | Yes | Yes (ELF) | Yes | Yes | Yes |
+| **Windows** | Yes | Yes (PE) | Yes | Yes | Partial |
+| **macOS** | Yes | Yes (Mach-O + bv41) | Yes | Yes | Partial |
+| **BSD** | Yes | Yes (ELF) | Partial | Yes | Partial |
 
 **Full Linux support. Windows/macOS binary analysis ready. Process/network enumeration adapts per platform.**
+
+**macOS note:** All modules run without third-party packages installed (`requests` is optional; `urllib` fallback is built in). `bv41_decoder.py` requires `lz4` only if decoding compressed chunks.
 
 ---
 
@@ -321,6 +358,9 @@ ssh target 'cat > /tmp/s && chmod +x /tmp/s && /tmp/s && cat /tmp/ablation-summa
 
 **Target machine:**
 - None (self-contained binary)
+
+**Optional (for bv41 decode):**
+- lz4 (`pip install lz4`)
 
 **Build:**
 ```bash
@@ -395,30 +435,42 @@ Inside Docker container. Find escape vectors.
 ```
 
 ### 7. Orka VM Enumeration
-Inside MacStadium Orka macOS VM. Enumerate platform.
+Inside MacStadium Orka macOS VM. Enumerate platform and probe for hardcoded credentials.
 
 ```bash
 ./ablation --orka
 # → In Orka VM: TRUE
 # → Metadata Server: 169.254.169.254 (accessible)
-# → [CRITICAL] Cluster info exposed (unauthenticated)
+# → [CRITICAL] Embedded API key found in binary (shared secret)
+# → [CRITICAL] Cluster info exposed (unauthenticated /api/v1/cluster-info)
+# → [HIGH] gRPC socket accessible: /var/run/orka-engine.sock (39 RPCs, no auth)
 # → [HIGH] Default credentials (admin:admin on :8822)
 # → API Servers: 10.221.188.20, 10.221.188.100
 ```
 
+### 8. Orka Image Layer Decode
+Decode bv41-wrapped VM image layer to inspect contents.
+
+```bash
+python3 core/bv41_decoder.py layer.bv41 layer.raw
+# → bv41 stream: 128 chunks, 512.00 MB uncompressed, ratio 2.8x
+# → Decoded 536870912 bytes → layer.raw
+```
+
 ---
 
-## Knowledge Base
+## Comparison to Existing Tools
 
-Built by synthesizing 210+ chapters from O'Reilly security books:
+| Tool | Type | Where Runs | Dependencies | Output |
+|------|------|------------|--------------|--------|
+| **Ablation** | Autonomous RE | Target (post-access) | None | Platform fingerprint + vulns + network |
+| Ghidra | Interactive RE | Analyst workstation | Java + GUI | Decompiled code, manual analysis |
+| strace | Syscall tracer | Target | None | Raw syscall log |
+| LinPEAS | Privesc enum | Target | Bash | Text report of privesc vectors |
+| nmap | Network scanner | External | None | Open ports (from outside) |
+| lsof | File descriptor list | Target | None | Open files for single process |
 
-1. **Practical Reverse Engineering** (16 chapters) — x86/ARM architecture, platform detection
-2. **Practical Binary Analysis** (38 chapters) — ELF/PE/Mach-O formats, binary parsing
-3. **Learning Linux Binary Analysis** (101 chapters) — /proc filesystem, process analysis
-4. **Hacking: The Art of Exploitation** (55 chapters) — Memory corruption, vulnerability detection
-5. **Practical Malware Analysis** — Behavioral analysis, suspicious API detection
-
-**Every module maps to specific book chapters. Every capability has a knowledge provenance.**
+**Ablation combines the breadth of LinPEAS with the depth of Ghidra's binary parsing, the runtime visibility of strace, and the network view of netstat — all in one autonomous tool.**
 
 ---
 
@@ -445,67 +497,35 @@ Ablation is a security research and penetration testing tool. Usage on systems y
 - Enumerates metadata, does not exfiltrate data
 - Minimal syscall footprint
 - Reports vulnerabilities, does not exploit
-- Names are the finding (sample minimal to confirm severity)
-
----
-
-## Comparison to Existing Tools
-
-| Tool | Type | Where Runs | Dependencies | Output |
-|------|------|------------|--------------|--------|
-| **Ablation** | Autonomous RE | Target (post-access) | None | Platform fingerprint + vulns + network |
-| Ghidra | Interactive RE | Analyst workstation | Java + GUI | Decompiled code, manual analysis |
-| strace | Syscall tracer | Target | None | Raw syscall log |
-| LinPEAS | Privesc enum | Target | Bash | Text report of privesc vectors |
-| nmap | Network scanner | External | None | Open ports (from outside) |
-| lsof | File descriptor list | Target | None | Open files for single process |
-
-**Ablation combines the breadth of LinPEAS with the depth of Ghidra's binary parsing, the runtime visibility of strace, and the network view of netstat — all in one autonomous tool.**
+- Names are the finding (samples minimal to confirm severity)
 
 ---
 
 ## Roadmap
 
-**Phase 1 (COMPLETE):** Core platform detection, binary parsing, process enumeration  
-**Phase 2 (COMPLETE):** Syscall tracing, privilege escalation enumeration  
-**Phase 3 (COMPLETE):** Network analysis, Windows PE deep-dive, macOS Mach-O deep-dive  
-**Phase 4 (COMPLETE):** Container/platform detection (Docker, Kubernetes, Orka)
+**Phase 1 (complete):** Core platform detection, binary parsing, process enumeration
+**Phase 2 (complete):** Syscall tracing, privilege escalation enumeration
+**Phase 3 (complete):** Network analysis, Windows PE deep-dive, macOS Mach-O deep-dive
+**Phase 4 (complete):** Container/platform detection (Docker, Kubernetes, Orka)
+**Phase 5 (complete):** bv41 decoder, embedded credential detection, gRPC socket enumeration, stdlib-only macOS compat
 
-**Phase 5 (Planned):**
+**Phase 6 (planned):**
 - Full Windows support (Win32 API hooking, registry enum, service analysis)
 - macOS sandbox detection (SIP, Gatekeeper, TCC)
 - Behavior-based malware detection
 - Kernel module enumeration
-- Automated exploit suggestion (map findings → Metasploit modules)
+- Automated exploit suggestion (map findings to Metasploit modules)
 - Cloud platform detection (AWS, Azure, GCP metadata servers)
+- APFS volume enumeration
 
 ---
 
 ## Development
 
-**Built by:** Autonomous knowledge synthesis from O'Reilly library  
-**Language:** Python 3  
-**Deployment:** PyInstaller single-file executable  
-**License:** Research/Educational Use  
-**Version:** 2.2.0  
-
-**Contributors:** Built via autonomous book-to-code synthesis (210+ chapters → 3,200 lines)
-
----
-
-## Support
-
-**Documentation:**
-- This README
-- `CONTAINER-PLATFORMS.md` — Docker, Kubernetes, Orka platform support
-- `DEPLOY.md` — Deployment guide
-- `KNOWLEDGE-SYNTHESIS.md` — Book-to-code mapping
-- `MISSION-COMPLETE.md` — Development history
-- `PHASE-3-COMPLETE.md` — Phase 3 features
-
-**Source:** `~/VDT/tools/ablation/`
-
-**Issues:** Operational tool, no public repo (research/private use)
+**Language:** Python 3
+**Deployment:** PyInstaller single-file executable
+**License:** Research/Educational Use
+**Version:** 2.2.0
 
 ---
 
