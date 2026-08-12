@@ -27,6 +27,10 @@
 
 ### 🍏 The "Special Sauce"
 
+<p align="center">
+  <img src="assets/sauce.jpg" width="480" alt="It's in the sauce">
+</p>
+
 **`core/bv41_decoder.py` is the only publicly available offline decoder for Apple's framed LZ4 container format.** No other tool — standard LZ4 libraries, 7-Zip (including LZ4-enabled forks), Keka, or APFS forensic suites (BlackBag, Cellebrite) — implements this specific framing.
 
 What makes it the only open implementation:
