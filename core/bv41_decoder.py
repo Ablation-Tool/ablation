@@ -182,6 +182,83 @@ def probe_bv41(data: bytes) -> dict:
     }
 
 
+def decode_bv41_to_file(data: bytes, output_path: str, progress_cb=None) -> int:
+    """Stream-decode bv41 to a file without accumulating output in RAM.
+
+    Writes each chunk's decompressed bytes directly to the output file as it
+    is processed. Suitable for 500MB+ layers where decode_bv41() would require
+    2x the uncompressed size in memory simultaneously.
+
+    progress_cb(chunks_done: int, bytes_written: int) is called after each chunk
+    if provided.
+
+    Returns total bytes written.
+    """
+    try:
+        import lz4.block as lz4block
+    except ImportError:
+        raise RuntimeError("lz4 required: pip install lz4")
+
+    buf = io.BytesIO(data)
+    bytes_written = 0
+    chunks_done = 0
+
+    with open(output_path, 'wb') as fout:
+        while True:
+            magic = buf.read(4)
+            if not magic or magic == MAGIC_TERMINATOR:
+                break
+            if magic not in (MAGIC_COMPRESSED, MAGIC_UNCOMPRESSED):
+                raise ValueError(f"Unknown bv41 chunk magic at offset {buf.tell()-4}: {magic!r}")
+
+            uncomp_size, comp_size = struct.unpack_from('<II', buf.read(8))
+            payload = buf.read(comp_size)
+            if len(payload) < comp_size:
+                raise ValueError(f"Truncated payload: expected {comp_size}, got {len(payload)}")
+
+            if magic == MAGIC_UNCOMPRESSED:
+                fout.write(payload[:uncomp_size])
+                bytes_written += uncomp_size
+            else:
+                decompressed = lz4block.decompress(payload, uncompressed_size=uncomp_size)
+                fout.write(decompressed)
+                bytes_written += len(decompressed)
+
+            chunks_done += 1
+            if progress_cb is not None:
+                progress_cb(chunks_done, bytes_written)
+
+    return bytes_written
+
+
+def iter_bv41_chunks(data: bytes):
+    """Yield (chunk_type, uncomp_size, payload_bytes) for each chunk.
+
+    chunk_type: 'compressed' | 'passthrough'
+    payload_bytes: the raw bytes for this chunk (compressed if type=='compressed',
+                   verbatim if type=='passthrough').
+
+    Stops at the bv4$ terminator or end of data. Does NOT decompress —
+    caller decides what to do with each chunk. Useful for partial inspection,
+    layer diffing, or feeding a streaming decompressor.
+    """
+    buf = io.BytesIO(data)
+    while True:
+        magic = buf.read(4)
+        if not magic or magic == MAGIC_TERMINATOR:
+            return
+        if magic not in (MAGIC_COMPRESSED, MAGIC_UNCOMPRESSED):
+            raise ValueError(f"Unknown bv41 chunk magic at offset {buf.tell()-4}: {magic!r}")
+
+        uncomp_size, comp_size = struct.unpack_from('<II', buf.read(8))
+        payload = buf.read(comp_size)
+        if len(payload) < comp_size:
+            raise ValueError(f"Truncated payload: expected {comp_size}, got {len(payload)}")
+
+        chunk_type = 'compressed' if magic == MAGIC_COMPRESSED else 'passthrough'
+        yield chunk_type, uncomp_size, payload
+
+
 def is_bv41(data: bytes) -> bool:
     """Quick magic check."""
     return data[:4] in (MAGIC_COMPRESSED, MAGIC_UNCOMPRESSED)
