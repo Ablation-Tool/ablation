@@ -17,7 +17,6 @@ Deploy inside compromised systems to autonomously reverse engineer unknown platf
 Know the system before you own the system.
 ---
 
-  **Autonomous Reverse Engineering Tool v2.2.0**
   <br>
 
   <!-- Badges styled with Deep Magenta (#961490) -->
