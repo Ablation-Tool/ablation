@@ -1,6 +1,5 @@
 
 
-**Ablation reverse engineers systems from the inside** 
 
 
 <p align="center">
