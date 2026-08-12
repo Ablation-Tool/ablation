@@ -225,6 +225,28 @@ What makes `core/bv41_decoder.py` distinct:
 - `probe_bv41()` API for metadata-only inspection (chunk count, compression ratio, uncompressed size) without full decode
 - Integrated into a post-exploitation autonomous RE tool with CLI one-liner and PyInstaller single-binary packaging
 
+**Format internals — why standard LZ4 decoders reject it:**
+
+Standard LZ4 (Yann Collet) uses a frame format with magic `0x184D2204`, a frame descriptor, and data blocks. Apple did not use this. `bv41` wraps raw LZ4 *block* data with Apple's own framing, one chunk at a time:
+
+```
+Offset  Size  Field
+  0     4B    magic: b'bv41' (compressed), b'bv4-' (uncompressed pass-through), b'bv4$' (terminator)
+  4     4B    uncompressed_size (uint32 LE)
+  8     4B    compressed_size (uint32 LE)
+ 12     N     raw LZ4 block payload — no LZ4 frame header, just the block data
+```
+
+The payload is a raw LZ4 block, not a frame. A call to `lz4.decompress()` or any frame-format decoder will fail immediately — the magic byte check rejects it. Correct decode requires `lz4.block.decompress(payload, uncompressed_size=N)` where the size comes from the bv41 header, not from within the LZ4 stream.
+
+A stream can chain multiple `bv41` or `bv4-` chunks until a `bv4$` terminator. The decoder must walk the chain, accumulating output, and stop at the terminator — most LZ4 tools have no concept of this chunking.
+
+**How Orka uses it:**
+
+orka-engine and runvz both call `AppleArchive.ByteStream.decompressionStream(using: .lz4)` — Apple's private framework API — to decode VM image layers before handing them to `Virtualization.framework`. The bv41 container is the wire format for those layers on NFS and OCI registries. Inspecting a layer without this decoder means calling into a live macOS `Compression.framework` — not viable in offline RE.
+
+**`core/bv41_decoder.py` is currently the only publicly available tool that decodes this format offline.** The format is lightly documented by Apple only as an implementation detail of `COMPRESSION_LZ4` and is used in a narrow enough context that no open-source or commercial tool has shipped a decoder. 7-Zip (including LZ4-enabled forks), Keka, and APFS/disk-image forensic suites (BlackBag, Cellebrite) all lack support for this specific chunked framing.
+
 ### 11. Full Container Analysis
 Run all container/platform enumerations.
 
