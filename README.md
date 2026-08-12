@@ -23,12 +23,7 @@
 
 ## ⚡ Overview
 
-**Ablation fingerprints unknown systems from the inside** — platform detection, binary analysis, process enumeration, network mapping, privilege escalation paths, and syscall tracing. All autonomous. Zero dependencies on target.
-
-### macOS
-
-macOS support is first-class. Ablation runs natively without modification or target environment setup — no third-party packages required, no Python environment setup on target.
-
+**Ablation reverse engineers systems from the inside**  platform detection, binary analysis, process enumeration, network mapping, privilege escalation paths, and syscall tracing. 
 
 ### 🍏 The "Special Sauce"
 
