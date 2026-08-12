@@ -29,9 +29,9 @@ Know the system before you own the system.
 
 ## ⚡ Overview
 
-**Ablation** is a post-exploitation reconnaissance and reverse engineering engine designed to autonomously fingerprint unknown systems from the inside. Deployed as a single, self-contained binary, it combines the runtime visibility of `strace`, the binary parsing depth of Ghidra, and the privilege escalation enumeration of `LinPEAS` into a single, dependency-free execution. 
+**Ablation** is a reverse engineering tool that you deploy from the inside.
 
-### What's New in v2.2.0 (macOS & Orka Focus)
+### macOS
 macOS support is now first-class. Ablation runs natively without modification or target environment setup (featuring a built-in `urllib` fallback for `requests`).
 * **`bv41` Decoder:** Standalone decoding for Apple's `Compression.framework` proprietary LZ4 containers, explicitly targeting MacStadium Orka VM image layers and APFS snapshots without requiring an Apple runtime.
 * **Orka RE Module:** Advanced enumeration for Kubernetes-based macOS virtualization. Detects gRPC sockets (`/var/run/orka-engine.sock`), extracts embedded credentials from binaries, and maps cluster infrastructure from inside a macOS VM.
