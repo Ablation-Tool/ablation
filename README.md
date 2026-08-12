@@ -1,23 +1,3 @@
-# Ablation
-
-**Autonomous Reverse Engineering Tool**
-
-```
-    ___    ____  __    ___  ______________  _   __
-   /   |  / __ )/ /   /   |/_  __/  _/ __ \/ | / /
-  / /| | / __  / /   / /| | / /  / // / / /  |/ / 
- / ___ |/ /_/ / /___/ ___ |/ / _/ // /_/ / /|  /  
-/_/  |_/_____/_____/_/  |_/_/ /___/\____/_/ |_/   
-                                                   
- Autonomous Reverse Engineering Tool v2.2.0
-```
----
-
-<div>
-  <img src="https://img.shields.io/badge/Language-Python_3-961490?style=flat-square" alt="Language">
-  <img src="https://img.shields.io/badge/Build-PyInstaller-961490?style=flat-square" alt="Build">
-  <img src="https://img.shields.io/badge/License-Research_Only-961490?style=flat-square" alt="License">
-</div>
 
 ---
 
