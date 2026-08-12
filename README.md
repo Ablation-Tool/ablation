@@ -32,15 +32,12 @@ Know the system before you own the system.
 **Ablation** is a reverse engineering tool that you deploy from the inside.
 
 ### macOS
-macOS support is now first-class. Ablation runs natively without modification or target environment setup (featuring a built-in `urllib` fallback for `requests`).
+macOS support is now first-class. Ablation runs natively without modification or target environment setup.
 * **`bv41` Decoder:** Standalone decoding for Apple's `Compression.framework` proprietary LZ4 containers, explicitly targeting MacStadium Orka VM image layers and APFS snapshots without requiring an Apple runtime.
 * **Orka RE Module:** Advanced enumeration for Kubernetes-based macOS virtualization. Detects gRPC sockets (`/var/run/orka-engine.sock`), extracts embedded credentials from binaries, and maps cluster infrastructure from inside a macOS VM.
 
-### 🍏 The "Special Sauce": `bv41` Decoding
-
-The exact `bv41` / `bv4-` / `bv4$` chunked container is an internal Apple format from `Compression.framework`. Public documentation is essentially nonexistent. General-purpose tools, standard `lz4` libraries, 7-Zip, OCI layer unpackers, and most APFS forensic suites do not handle it. 
-
-Standard `lz4` frame decoders reject the raw LZ4 block payload because it lacks the frame magic; standard APFS tools stop at the filesystem layer and don't descend into the compressed stream.
+### 🍏 The "Special Sauce"
+It's in the sauce
 
 **Cool shit that nobody else has**
 * **Cross-Platform:** Runs offline with no Apple runtime and no macOS required.
