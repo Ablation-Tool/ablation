@@ -64,11 +64,7 @@ Offset  Size  Field
  12     N     raw LZ4 block payload — NOT an LZ4 frame
 ```
 
-The stream is a chain of variable-length chunks ending at the `bv4$` terminator. A decoder must walk the chain, not just read a single block.
 
-**Why standard decoders fail:** The standard LZ4 frame format starts with magic `0x184D2204`, a frame descriptor, and data blocks. The bv41 payload skips all of that — it is a raw LZ4 block, not a frame. Every decoder that opens with a magic check fails immediately. Correct decode requires `lz4.block.decompress(payload, uncompressed_size=N)` where `N` is read from the bv41 header, not from the LZ4 stream itself. Multi-chunk files require iterating all chunks; stopping at the first block silently truncates output.
-
-**How Orka uses it:** Both `orka-engine` and `runvz` call `AppleArchive.ByteStream.decompressionStream(using: .lz4)` — Apple's private API — to decode VM image layers before handing them to `Virtualization.framework`. The bv41 container is the wire format for those layers on NFS mounts and OCI registries. Inspecting or auditing a layer without this decoder requires calling into a live macOS `Compression.framework` runtime.
 
 ---
 
