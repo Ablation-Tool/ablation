@@ -33,8 +33,6 @@ Know the system before you own the system.
 
 macOS support is first-class. Ablation runs natively without modification or target environment setup — no third-party packages required, no Python environment setup on target.
 
-- **`bv41` Decoder:** Decodes Apple's proprietary LZ4 container (bv41 framing, `Compression.framework`), targeting MacStadium Orka VM image layers and APFS snapshots without requiring an Apple runtime.
-- **Orka RE Module:** Detects gRPC sockets (`/var/run/orka-engine.sock`, `run.sock`), extracts embedded credentials from binaries, maps cluster infrastructure from inside a macOS VM.
 
 ### 🍏 The "Special Sauce"
 
