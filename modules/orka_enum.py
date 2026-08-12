@@ -1,16 +1,64 @@
 #!/usr/bin/env python3
 """
 Orka Platform Enumeration Module
-Synthesized from: MAC-STADIUM reverse engineering findings
+Synthesized from: MAC-STADIUM reverse engineering findings (F1-F64+)
 
 Enumerate MacStadium Orka platform (K8s-based macOS virtualization).
+Engine: com.macstadium.orka-engine.server (Swift/NIO/gRPC, arm64)
+Runner: com.macstadium.orka-engine.runvz (Virtualization.framework)
+IPC:    /var/run/orka-engine.sock (engine) + run.sock (runvz)
 """
 
 import subprocess
 import json
 import os
+import socket
 import requests
 from pathlib import Path
+
+# RE-derived constants (com.macstadium.orka-engine.server v3.5.2)
+LICENSESPRING_PRODUCT_UUID = "8ad72323-35e5-477c-ab2c-ea2e080dadc1"
+LICENSESPRING_API = "https://api.licensespring.com"
+ORKA_ENGINE_SOCK = "/var/run/orka-engine.sock"
+ORKA_RUNVZ_SOCK = "run.sock"
+SENTRY_STREAM_URL = "http://localhost:8969/stream"
+ORKA_TEAM_ID = "23KP83Z488"
+ORKA_KEYCHAIN_GROUP = f"{ORKA_TEAM_ID}.*"
+ORKA_BUNDLE_ID = "com.macstadium.orka-engine"
+ORKA_BUILD_PATH = "/Users/devadmin/actions-runner/_work/monorepo-dev/monorepo-dev/packages/orka-engine/"
+
+# All ORKA_ env vars extracted from binary (F69 addendum)
+ORKA_ENV_VARS = [
+    'ORKA_CLIPBOARD_SHARING',
+    'ORKA_CLUSTER',
+    'ORKA_CUSTOMER',
+    'ORKA_ENGINE_DHCP_LEASE_TIME',
+    'ORKA_ENGINE_FLUSH',
+    'ORKA_ENGINE_HELPER',
+    'ORKA_ENGINE_LICENSE_KEY',
+    'ORKA_ENGINE_LICENSE_PRODUCT_CODE',  # LicenseSpring product code string
+    'ORKA_ENGINE_LOG_FILE',
+    'ORKA_ENGINE_LOG_LEVEL',
+    'ORKA_ENGINE_LOG_STDOUT',
+    'ORKA_ENGINE_SENTRY_DSN',
+    'ORKA_ENGINE_SOCK',
+    'ORKA_ENGINE_TERMINAL',
+    'ORKA_ENGINE_VIRTUAL_MACHINE_START_TIMEOUT',
+    'ORKA_ENGINE_VIRTUAL_MACHINE_USER',
+    'ORKA_ENVIRONMENT',
+]
+
+# Orka engine filesystem layout (from Ansible role defaults + binary RE)
+ORKA_FS = {
+    'binary':     '/usr/local/libexec/orka-engine.app/Contents/MacOS/com.macstadium.orka-engine.server',
+    'runvz':      '/usr/local/libexec/orka-engine.app/Contents/Helpers/Orka Engine Runner.app/Contents/MacOS/com.macstadium.orka-engine.runvz',
+    'helper':     '/usr/local/bin/orka-engine',
+    'sock':       '/var/run/orka-engine.sock',
+    'state_dir':  '/opt/orka',
+    'log':        '/opt/orka/logs/com.macstadium.orka-engine.server.managed.log',
+    'plist':      '/Library/LaunchDaemons/com.macstadium.orka-engine.server.managed.plist',
+    'profile':    '/usr/local/libexec/orka-engine.app/Contents/embedded.provisionprofile',
+}
 
 class OrkaEnumerator:
     """Enumerate Orka platform"""
@@ -35,21 +83,23 @@ class OrkaEnumerator:
         """Run all Orka enumeration"""
         self.check_in_orka_vm()
         self.check_api_reachable()
-        
+
         if self.in_orka_vm:
             self.check_metadata_server()
-        
+
         if self.orka_api_reachable:
             self.get_cluster_info()  # Unauthenticated endpoint
             self.check_authentication()
-            
+
             if self.token:
                 self.enumerate_vms()
                 self.enumerate_images()
                 self.enumerate_service_accounts()
-        
+
+        # RE-derived checks — run regardless of Orka API reachability
+        env_vars = self.enumerate_engine_env_vars()
         self.check_security_issues()
-        
+
         return {
             'in_orka_vm': self.in_orka_vm,
             'orka_api_reachable': self.orka_api_reachable,
@@ -59,8 +109,60 @@ class OrkaEnumerator:
             'vms': self.vms,
             'images': self.images,
             'service_accounts': self.service_accounts,
+            'engine_env_vars': env_vars,
             'findings': self.findings
         }
+
+    def enumerate_engine_env_vars(self):
+        """Harvest ORKA_ env vars from current process environment and launchd plist"""
+        found = {}
+
+        # Check current environment
+        for var in ORKA_ENV_VARS:
+            val = os.getenv(var)
+            if val:
+                found[var] = val
+
+        # Try to read the managed plist (contains license key + sock path)
+        plist_path = ORKA_FS['plist']
+        if Path(plist_path).exists():
+            try:
+                result = subprocess.run(
+                    ['plutil', '-convert', 'json', '-o', '-', plist_path],
+                    capture_output=True, text=True, timeout=3
+                )
+                if result.returncode == 0:
+                    plist = json.loads(result.stdout)
+                    env_dict = {}
+                    env_array = plist.get('EnvironmentVariables', {})
+                    if isinstance(env_array, dict):
+                        env_dict = env_array
+                    for k, v in env_dict.items():
+                        if k.startswith('ORKA_'):
+                            found[k] = v
+            except Exception:
+                pass
+
+        # Report license key if found
+        if 'ORKA_ENGINE_LICENSE_KEY' in found:
+            self.findings.append({
+                'type': 'Orka License Key Exposed',
+                'severity': 'HIGH',
+                'description': 'ORKA_ENGINE_LICENSE_KEY found in environment or plist',
+                'detail': f"Key: {found['ORKA_ENGINE_LICENSE_KEY'][:8]}...",
+                'exploit': 'License key enables cloning/rehosting of Orka engine without purchase'
+            })
+
+        if 'ORKA_ENGINE_SENTRY_DSN' in found:
+            self.findings.append({
+                'type': 'Sentry DSN Exposed',
+                'severity': 'MEDIUM',
+                'description': 'ORKA_ENGINE_SENTRY_DSN found — Sentry project DSN accessible',
+                'detail': found['ORKA_ENGINE_SENTRY_DSN'],
+                'exploit': 'DSN allows sending fake crash reports to MacStadium Sentry project'
+            })
+
+        return found
     
     def check_in_orka_vm(self):
         """Detect if running inside Orka VM"""
@@ -277,6 +379,106 @@ class OrkaEnumerator:
         
         return self.service_accounts
     
+    def probe_engine_grpc_socket(self):
+        """Probe orka-engine Unix gRPC socket (host-side only, macOS target)"""
+        result = {'engine_sock': False, 'runvz_sock': False}
+
+        for sock_path, key in [(ORKA_ENGINE_SOCK, 'engine_sock'), (ORKA_RUNVZ_SOCK, 'runvz_sock')]:
+            if not Path(sock_path).exists():
+                continue
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect(sock_path)
+                # Send minimal HTTP/2 preface to detect gRPC
+                s.sendall(b'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n')
+                banner = s.recv(64)
+                s.close()
+                result[key] = True
+                self.findings.append({
+                    'type': f'Orka gRPC Socket Accessible ({sock_path})',
+                    'severity': 'CRITICAL',
+                    'description': f'Orka engine gRPC Unix socket readable without auth',
+                    'detail': f'Banner: {banner[:32]!r}',
+                    'exploit': 'Craft protobuf RPCs to VirtualMachineStart/ImagePull without auth token'
+                })
+            except Exception:
+                pass
+
+        return result
+
+    def probe_sentry_stream(self):
+        """Check if Sentry RR-Web relay is running (localhost:8969/stream)"""
+        try:
+            r = requests.get(SENTRY_STREAM_URL, timeout=1, stream=True)
+            if r.status_code in (200, 204):
+                self.findings.append({
+                    'type': 'Sentry RR-Web Stream Active',
+                    'severity': 'MEDIUM',
+                    'description': 'Orka engine is relaying session-replay events to Sentry at localhost:8969',
+                    'detail': SENTRY_STREAM_URL,
+                    'exploit': 'Intercept or inject events into Sentry relay stream'
+                })
+                return True
+        except Exception:
+            pass
+        return False
+
+    def probe_licensespring(self):
+        """Check LicenseSpring API exposure with extracted product UUID"""
+        result = {'uuid': LICENSESPRING_PRODUCT_UUID, 'reachable': False, 'exposed': False}
+        try:
+            r = requests.get(
+                f'{LICENSESPRING_API}/api/v4/',
+                headers={'Accept': 'application/json'},
+                timeout=3
+            )
+            result['reachable'] = True
+            result['status'] = r.status_code
+            # UUID is product identifier — hardcoded in binary, extractable from any Orka pkg
+            self.findings.append({
+                'type': 'LicenseSpring Product UUID Exposed in Binary',
+                'severity': 'MEDIUM',
+                'description': f'Product UUID {LICENSESPRING_PRODUCT_UUID} hardcoded in orka-engine binary',
+                'detail': f'Extractable from public pkg at distribution.macstadium.com. API: {LICENSESPRING_API}',
+                'exploit': 'UUID enables LicenseSpring API enumeration with valid API key; DeviceVariable fingerprints MAC/MLB ID'
+            })
+        except Exception:
+            pass
+        return result
+
+    def check_engine_install(self):
+        """Detect orka-engine installation on current macOS host"""
+        indicators = {
+            'binary': Path('/usr/local/libexec/orka-engine.app/Contents/MacOS/com.macstadium.orka-engine.server').exists(),
+            'runner': Path('/usr/local/libexec/orka-engine.app/Contents/Helpers/Orka Engine Runner.app').exists(),
+            'sock': Path(ORKA_ENGINE_SOCK).exists(),
+            'plist': Path(f'/Library/LaunchDaemons/com.macstadium.orka-engine.server.managed.plist').exists(),
+            'helper': Path('/usr/local/bin/orka-engine').exists(),
+            'state_dir': Path('/opt/orka').exists(),
+            'log': Path('/opt/orka/logs/com.macstadium.orka-engine.server.managed.log').exists(),
+        }
+
+        if indicators['binary']:
+            self.findings.append({
+                'type': 'Orka Engine Installed',
+                'severity': 'INFO',
+                'description': 'orka-engine.server daemon present on this host',
+                'detail': f"Team: {ORKA_TEAM_ID} | Keychain group: {ORKA_KEYCHAIN_GROUP}",
+                'exploit': 'Engine holds com.apple.vm.networking entitlement + keychain-access-groups=23KP83Z488.* (all MacStadium keychain items readable by engine process)'
+            })
+
+        if indicators['log']:
+            self.findings.append({
+                'type': 'Orka Engine Log Readable',
+                'severity': 'LOW',
+                'description': 'Engine log may contain license keys, gRPC errors, image paths',
+                'detail': '/opt/orka/logs/com.macstadium.orka-engine.server.managed.log',
+                'exploit': 'Read log for license key leakage, failed auth attempts with tokens'
+            })
+
+        return indicators
+
     def check_security_issues(self):
         """Check for known Orka security issues"""
         # F4: Orka Auth = K8s Auth
@@ -288,7 +490,7 @@ class OrkaEnumerator:
                 'detail': 'Valid token grants direct kubectl access to cluster',
                 'exploit': 'Use token with kubectl to access K8s API directly'
             })
-        
+
         # Check for /debug/pprof on metadata server (F3)
         if self.in_orka_vm:
             try:
@@ -303,6 +505,12 @@ class OrkaEnumerator:
                     })
             except:
                 pass
+
+        # RE-derived checks
+        self.check_engine_install()
+        self.probe_engine_grpc_socket()
+        self.probe_sentry_stream()
+        self.probe_licensespring()
     
     def report(self):
         """Generate human-readable report"""
