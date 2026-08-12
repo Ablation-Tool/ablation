@@ -19,7 +19,6 @@ Know the system before you own the system.
 
   **Autonomous Reverse Engineering Tool v2.2.0**
   <br>
-  *Deploy INSIDE systems | Zero dependencies | Know the system before you own the system.*
 
   <!-- Badges styled with Deep Magenta (#961490) -->
   <img src="https://img.shields.io/badge/Language-Python_3-961490?style=flat-square" alt="Language">
