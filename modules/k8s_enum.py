@@ -9,7 +9,11 @@ Enumerate K8s pods, services, secrets, RBAC, service accounts.
 import subprocess
 import json
 import os
+import platform as _platform
 from pathlib import Path
+
+_IS_MACOS = _platform.system() == 'Darwin'
+_IS_LINUX = _platform.system() == 'Linux'
 
 class K8sEnumerator:
     """Enumerate Kubernetes environment"""
@@ -70,15 +74,16 @@ class K8sEnumerator:
             self.in_k8s = True
             return True
         
-        # Check cgroup
-        try:
-            with open('/proc/1/cgroup') as f:
-                if 'kubepods' in f.read():
-                    self.in_k8s = True
-                    return True
-        except:
-            pass
-        
+        # Linux only: check cgroup
+        if _IS_LINUX:
+            try:
+                with open('/proc/1/cgroup') as f:
+                    if 'kubepods' in f.read():
+                        self.in_k8s = True
+                        return True
+            except:
+                pass
+
         return False
     
     def get_service_account(self):
@@ -263,36 +268,37 @@ class K8sEnumerator:
                 'exploit': 'Use token to authenticate to K8s API'
             })
         
-        # Privileged pod (check via capabilities or proc)
-        try:
-            with open('/proc/self/status') as f:
-                for line in f:
-                    if line.startswith('CapEff:'):
-                        cap_eff = int(line.split()[1], 16)
-                        if cap_eff == 0x3fffffffff:
+        # Privileged pod (Linux only — requires /proc capability check)
+        if _IS_LINUX:
+            try:
+                with open('/proc/self/status') as f:
+                    for line in f:
+                        if line.startswith('CapEff:'):
+                            cap_eff = int(line.split()[1], 16)
+                            if cap_eff == 0x3fffffffff:
+                                self.escape_vectors.append({
+                                    'type': 'Privileged Pod',
+                                    'severity': 'CRITICAL',
+                                    'description': 'Pod running with privileged: true',
+                                    'exploit': 'Full host access via /dev, /proc, /sys'
+                                })
+            except:
+                pass
+
+            # hostPath mounts
+            try:
+                with open('/proc/self/mountinfo') as f:
+                    for line in f:
+                        if '/host' in line or '/var/run/docker.sock' in line:
                             self.escape_vectors.append({
-                                'type': 'Privileged Pod',
+                                'type': 'Dangerous hostPath Mount',
                                 'severity': 'CRITICAL',
-                                'description': 'Pod running with privileged: true',
-                                'exploit': 'Full host access via /dev, /proc, /sys'
+                                'description': 'Host filesystem or Docker socket mounted',
+                                'exploit': 'Access host filesystem or Docker API'
                             })
-        except:
-            pass
-        
-        # hostPath mounts
-        try:
-            with open('/proc/self/mountinfo') as f:
-                for line in f:
-                    if '/host' in line or '/var/run/docker.sock' in line:
-                        self.escape_vectors.append({
-                            'type': 'Dangerous hostPath Mount',
-                            'severity': 'CRITICAL',
-                            'description': 'Host filesystem or Docker socket mounted',
-                            'exploit': 'Access host filesystem or Docker API'
-                        })
-                        break
-        except:
-            pass
+                            break
+            except:
+                pass
         
         # Excessive RBAC permissions
         dangerous_perms = ['create pods', 'delete pods', '*']

@@ -8,8 +8,12 @@ Enumerate common privilege escalation vectors.
 
 import os
 import subprocess
+import platform as _platform
 from pathlib import Path
 import stat
+
+_IS_MACOS = _platform.system() == 'Darwin'
+_IS_LINUX = _platform.system() == 'Linux'
 
 class PrivescEnumerator:
     """Enumerate privilege escalation paths"""
@@ -258,10 +262,25 @@ class PrivescEnumerator:
     
     def check_kernel_exploits(self):
         """Check kernel version for known exploits"""
+        kernel_version = None
         try:
-            with open('/proc/version') as f:
-                kernel_version = f.read().strip()
-            
+            if _IS_MACOS:
+                result = subprocess.run(['uname', '-r'], capture_output=True, text=True, timeout=2)
+                kernel_version = f'Darwin {result.stdout.strip()}'
+            else:
+                with open('/proc/version') as f:
+                    kernel_version = f.read().strip()
+        except:
+            try:
+                result = subprocess.run(['uname', '-r'], capture_output=True, text=True, timeout=2)
+                kernel_version = result.stdout.strip()
+            except:
+                pass
+
+        if not kernel_version:
+            return
+
+        try:
             # Extract version number
             import re
             match = re.search(r'Linux version (\d+\.\d+\.\d+)', kernel_version)
