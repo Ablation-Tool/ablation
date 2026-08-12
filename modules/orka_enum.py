@@ -156,23 +156,40 @@ OCI_MEDIA_TYPES = {
     'shared_img': 'application/vnd.macstadium.orka-si.image.layer.v1.aar+lz4',
 }
 
-# gRPC service map (F99 — full inventory from ServerInterceptor<X,Y> type pairs)
+# gRPC service map — CONFIRMED from ServerInterceptor<X,Y> type pairs (F108)
+# 20 RPCs total across 4 intercepted services + 5 RunVZService routes (per-VM socket)
 ORKA_GRPC_SERVICES = {
+    # All on /var/run/orka-engine.sock
+    # Return types: VMList→VirtualMachineListResponse, VMStart→VirtualMachineStartResponse,
+    #               VMInstall→VirtualMachineInstallResponse, all others→google.protobuf.Empty
     'VirtualMachineService': [
-        'VMCreate', 'VMStart', 'VMStop', 'VMDelete', 'VMList',
-        'VMGet', 'VMSuspend', 'VMResume', 'VMRevert', 'VMSave',
-        'VMCommit', 'VMInstall', 'VirtualMachineRepartition',   # F98 destructive
-        'VirtualMachineResize', 'VirtualMachineClone',
+        'List', 'Create', 'Start', 'Stop', 'Restart', 'Delete',
+        'Clone', 'Edit', 'Save',
+        'Console',      # F107 — VM serial/VNC access, any socket holder can attach
+        'Install',      # VZMacOSRestoreImage-based install
+        'Repartition',  # F98 — destructive disk op; log: " disk repartitioned"
     ],
+    # ImageList and DownloadLatestIPSW take google.protobuf.Empty (zero-byte body)
     'ImageService': [
-        'ImageList', 'ImageDelete', 'ImagePull', 'ImagePush',
-        'ImageDownloadLatestIPSW',   # F97 — pulls from Apple CDN
-        'ImageCommit',
+        'List',                # takes Empty — trivially exploitable with socket access
+        'Pull', 'Push', 'Copy', 'Delete',
+        'DownloadLatestIPSW',  # F97 — triggers macOS IPSW download from Apple CDN
     ],
-    'SystemService': [
-        'SystemPing',                # F106 — Empty→Empty, SystemProvider.swift
-    ],
+    # 1 confirmed RPC (Empty→Empty), source: SystemProvider.swift (F106)
+    # Method name not resolved — "Ping" is speculative
+    'SystemService': ['Ping'],
+    # VMs call Register() on boot — "received callback from VM" log string (F108)
+    'VirtualMachineRegistrationService': ['Register'],
 }
+
+# RunVZService — per-VM run.sock (engine→runvz), gRPC paths confirmed (F108)
+ORKA_RUNVZ_METHODS = [
+    'Console',      # VM console access
+    'Info',         # VM state query
+    'Repartition',  # destructive disk repartition (also F98)
+    'Restart',
+    'Stop',
+]
 
 
 class OrkaEnumerator:
