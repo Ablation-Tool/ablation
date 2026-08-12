@@ -215,12 +215,16 @@ info = probe_bv41(data)
 # → {'chunk_count': N, 'total_uncompressed_bytes': M, 'overall_ratio': X.Xx}
 ```
 
-**Why this matters — the format is obscure by design:**
+**Special Sauce**
 
-The exact `bv41` / `bv4-` / `bv4$` chunked container is an internal Apple format from `Compression.framework`. Public documentation is essentially nonexistent. General-purpose tools — standard lz4 libraries, 7-Zip, OCI layer unpackers, most APFS forensic suites — do not handle it. Standard `lz4` frame decoders reject the raw LZ4 block payload because it lacks the frame magic; standard APFS tools stop at the filesystem layer and don't descend into the compressed stream.
+The exact `bv41` / `bv4-` / `bv4$` chunked container is an internal Apple format from `Compression.framework`. Public documentation is essentially nonexistent. 
+General-purpose tools, standard lz4 libraries, 7-Zip, OCI layer unpackers, most APFS forensic suites do not handle it. 
+
+Standard `lz4` frame decoders reject the raw LZ4 block payload because it lacks the frame magic; standard APFS tools stop at the filesystem layer and don't descend into the compressed stream.
 
 What makes `core/bv41_decoder.py` distinct:
-- Standalone, dependency-light Python decoder — runs offline with no Apple runtime, no macOS required
+- Standalone, dependency-light Python decoder.
+- Runs offline with no Apple runtime, no macOS required
 - Explicit targeting of Orka VM image layers and APFS snapshots for RE and supply-chain inspection
 - `probe_bv41()` API for metadata-only inspection (chunk count, compression ratio, uncompressed size) without full decode
 - Integrated into a post-exploitation autonomous RE tool with CLI one-liner and PyInstaller single-binary packaging
