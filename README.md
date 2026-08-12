@@ -1,7 +1,4 @@
 
----
-
-## ⚡ Overview
 
 **Ablation reverse engineers systems from the inside** 
 
