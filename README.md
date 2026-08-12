@@ -2,7 +2,7 @@
 
 **Autonomous Reverse Engineering Tool**
 
-Deploy inside compromised systems to autonomously reverse engineer unknown platforms.
+Deploy inside systems to reverse engineer unknown platforms.
 
 ```
     ___    ____  __    ___  ______________  _   __
