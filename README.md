@@ -42,8 +42,7 @@ The exact `bv41` / `bv4-` / `bv4$` chunked container is an internal Apple format
 
 Standard `lz4` frame decoders reject the raw LZ4 block payload because it lacks the frame magic; standard APFS tools stop at the filesystem layer and don't descend into the compressed stream.
 
-**What makes `core/bv41_decoder.py` distinct:**
-* **Standalone & Dependency-Light:** A pure Python decoder.
+**Cool shit that nobody else has**
 * **Cross-Platform:** Runs offline with no Apple runtime and no macOS required.
 * **Targeted:** Explicitly built for Orka VM image layers and APFS snapshots for reverse engineering and supply-chain inspection.
 * **Metadata Probing:** Features a `probe_bv41()` API for metadata-only inspection (chunk count, compression ratio, uncompressed size) without requiring a full decode.
