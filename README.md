@@ -51,16 +51,6 @@ Standard `lz4` frame decoders reject the raw LZ4 block payload because it lacks 
 
 ---
 
-## 🛠️ Core Capabilities
-
-* **Platform Intelligence:** OS, kernel, architecture, and security feature mapping (ASLR, AppArmor, SELinux).
-* **Binary Analysis:** Multi-format parser (ELF, PE, Mach-O) with Capstone disassembly, section enumeration, and entry-point location.
-* **Runtime Analysis:** Process memory mapping, loaded module tracking, syscall tracing, and network interface/connection mapping.
-* **Security Assessment:** SUID binary enumeration, writable/executable memory detection, Docker group exploitation paths, and `sudo` misconfigurations.
-* **Platform & Container Mapping:** Escape vector identification, token extraction, and credential detection across Docker, Kubernetes, and Orka.
-
----
-
 ## 🚀 Quick Start
 
 ### Build & Deploy
