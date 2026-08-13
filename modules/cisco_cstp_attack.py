@@ -1546,6 +1546,17 @@ class OrkaJWTRE:
         #   exp > now  (or absent: VerifyExpiresAt with required=false passes on absent claim)
         #   iat <= now (or absent)
         #   nbf <= now (or absent)
+        # Go string pool addresses (confirmed file offset = vaddr - 0x400000):
+        #   "exp" vaddr 0x21de0fe, file 0x1dde0fe — key in VerifyExpiresAt mapaccess1_faststr
+        #   "iss" vaddr 0x21de1b5, file 0x1dde1b5 — key in VerifyIssuer mapaccess1_faststr
+        #   "iat" — analogous offset in VerifyIssuedAt
+        #   "nbf" — analogous offset in VerifyNotBefore
+        # VerifyIssuer (0x1844da0): also has xor $0x1,%ecx at 0x1844e3b on absent claim
+        # → issuer bypass = same structural bug as VerifyAudience CVE-2020-26160
+        'claim_string_vaddrs': {
+            'exp': 0x21de0fe,
+            'iss': 0x21de1b5,
+        },
         'condition':   'aud claim absent in token AND required=false in call',
         'impact':      'audience check bypassed → accept tokens without aud validation',
         'exploit': {
