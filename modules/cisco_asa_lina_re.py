@@ -630,13 +630,42 @@ CONFIRMED_9222232_ADDRS = {
     # Binary question "true or false" → Cisco AI answer (09:36): "True."
     'cisco_ai_rfc5080_violation_confirmed': '"If LINA does not validate Message-Authenticator in Access-Accept responses when the Access-Request included it, this is a violation of RFC 5080 and exposes a security gap." (09:36)',
     'cisco_ai_rfc5080_true_false': 'True.  (Cisco AI, 09:36 — response to "true or false")',
-    # SCOPE: SYSTEMIC — not version-specific, NO CONFIG MITIGATION EXISTS
-    # → ALL ASA versions doing RADIUS-based VPN auth are affected.
-    # Scope: ASA 5500-X, 5585-X, Firepower 2100/4100/9300 FTD mode, ASAv, FTDv
-    # Confirmed affected binary: 9.22.2.32 (strstr call at 0x3a4bee6, no MAC check)
-    # Disclosure target: Cisco PSIRT (psirt@cisco.com)
-    'scope': 'ALL_ASA_VERSIONS',
-    'no_config_mitigation': True,   # no ASA command exists to enforce Message-Auth
+    # === CROSS-VERSION BINARY ANALYSIS (2026-08-13) ===
+    # Three versions confirmed — NONE have Message-Auth check near OU= parse path:
+    #
+    # 9.14.2.14 (94MB, BuildID 65cd03...):
+    #   'OU=' at 0x3c0af79, 2x 'Message-Authenticator' (nearest: 0x3bf4339, delta ~107KB)
+    #   'message-authenticator-required' keyword: NOT PRESENT
+    #   Enforcement reject string: NOT PRESENT
+    #   → UNCONDITIONALLY VULNERABLE — no mitigation possible
+    #
+    # 9.16.1 (93MB, built 2021-05-20):
+    #   'OU=' at 0x3c3db51, 2x 'Message-Authenticator' (nearest: 0x3c26289, delta ~118KB)
+    #   'message-authenticator-required' keyword: NOT PRESENT
+    #   Enforcement reject string: NOT PRESENT
+    #   → UNCONDITIONALLY VULNERABLE — no mitigation possible
+    #
+    # 9.22.2.32 (104MB, built 2026-01-23):
+    #   'OU=' at 0x43b7581, 20x 'Message-Authenticator' (nearest: 0x439d5f3, delta ~105KB)
+    #   'message-authenticator-required' keyword: 0x4a6ef70 (PRESENT — new in 9.22.x)
+    #   Enforcement reject string: 0x49e7250 (PRESENT)
+    #   Optional path string: "Proceeding with user authentication" (DEFAULT = optional)
+    #   → VULNERABLE BY DEFAULT — mitigation requires explicit `message-authenticator-required`
+    #     under `aaa-server host` config; NOT enabled by default
+    #
+    # Cisco AI stated "no config command exists" — INCORRECT for 9.22.x.
+    # Correct: command was ADDED in 9.22.x train; absent in all earlier versions.
+    # The addition suggests Cisco is aware of the gap but has NOT issued a CVE or advisory.
+    # Default-off posture means deployed 9.22.x systems remain vulnerable without hardening.
+    #
+    # CLI COMMAND (9.22.x only):
+    #   ASA(config)# aaa-server <group> host <ip>
+    #   ASA(config-aaa-server-host)# message-authenticator-required
+    #
+    'scope': 'ALL_ASA_VERSIONS_BY_DEFAULT',
+    'mitigation_9_22_x_only': 'message-authenticator-required (aaa-server host sub-command)',
+    'mitigation_default': 'DISABLED — optional MA is the default; missing MA allows auth to proceed',
+    'versions_no_mitigation': ['9.14.x', '9.16.x', 'all trains before 9.22.x'],
     'disclosure_status': 'PENDING — Cisco PSIRT',
 }
 
