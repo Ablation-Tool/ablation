@@ -777,6 +777,24 @@ CONFIRMED_9222232_ADDRS = {
                                     'DNS server, WINS server, default domain, ACL/filter names — overflow '
                                     'corrupts these, altering VPN session behavior and security policy.',
     'f2_cisco_ai_methodology':      'Image #120 (11:05): "Your methodology is correct."',
+    'f2_cisco_ai_explain_124':      'Image #124 (11:08): "A 96-byte OU= value in the RADIUS Class attribute '
+                                    'will overflow the 32-byte group_policy_name buffer in the group policy '
+                                    'object, overwriting adjacent fields including pointers for wins-server '
+                                    'and dns-server. When the ASA later uses these pointers, it will '
+                                    'dereference attacker-controlled memory, leading to a high risk of '
+                                    'memory corruption or code execution. This is a critical vulnerability."',
+    'f2_cisco_ai_exploit_ease':     'Image #124 (11:09): "If the attacker has the RADIUS shared secret and '
+                                    'MitM access, performing this attack is straightforward: they inject an '
+                                    'oversized OU= value in the Class attribute of a RADIUS Access-Accept, '
+                                    'and the ASA will process it, leading to memory corruption. No advanced '
+                                    'exploitation is required to trigger the overflow."',
+    'f2_cisco_ai_widespread_125':   'Image #125 (11:10): "This vulnerability is highly exploitable and '
+                                    'widespread. It can lead to denial of service or remote code execution, '
+                                    'especially if the attacker can place controlled data at the overwritten '
+                                    'pointer locations. The lack of default mitigations and the prevalence of '
+                                    'RADIUS VPN deployments make this a critical issue for many organizations."',
+    'f2_cisco_ai_script_ease_127':  'Image #127 (11:13): "Yes, someone with moderate scripting skills could '
+                                    'easily write a script to exploit this vulnerability."',
     'f2_extraction_max':            0x100,
     'f2_cli_max':                   64,
     'f2_strncpy_bound':             'runtime [r15+0x8] from attr_def table 0x76f20a0',
