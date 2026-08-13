@@ -693,10 +693,134 @@ CONFIRMED_ASDM_SSL_BYPASS = {
     ],
     'check_server_trusted_string_offsets': [0x0021405d, 0x00943aa0, 0x015bb0e0],
     'hostname_verifier_hit_count': 56,
+}
 
-    # ── Attack surface summary ────────────────────────────────────────────────
-    'attack_surface': {
-        'vector': 'Network MitM between ASDM client and ASA management interface (HTTPS 443)',
+# ── ASDM 7.20.2 ADDITIONAL CONFIRMED SSL BYPASS CLASSES ──────────────────────
+# Extracted from: asdm-7202.bin -> SIGNATURE4 container 1E69DA (142MB, 14855 classes)
+# av (idx=376) and ak (idx=302) confirmed identical to 7.16.1 — bypass persists.
+#
+# ADDITIONAL CLASSES CONFIRMED IN 7.20.2:
+CONFIRMED_ASDM_7202_ADDITIONAL = {
+    # ── efu (idx 10831 @ 0x0289a499): HostnameVerifier trust-all ──────────────
+    # Used in the CIDS/IDS sensor communication path (SDEE protocol client)
+    'efu_class': {
+        'cafebabe_offset': 0x0289a499,
+        'idx_in_container': 10831,
+        'sha256': '54fdeba589e9d548af67a1c11c7330f96669767948d400ae873bdcdb90010cc1',
+        'implements': 'javax/net/ssl/HostnameVerifier',
+        'bypass_methods': {
+            'verify': {
+                'descriptor': '(Ljava/lang/String;Ljavax/net/ssl/SSLSession;)Z',
+                'bytecode': '0: iconst_1\n1: ireturn',
+                'code_length': 2,  # returns true for ALL hostnames
+            },
+        },
+        'context': 'CIDS/IDS SDEE sensor client — installed as global default',
+    },
+
+    # ── efv (idx 10832 @ 0x0289a5e5): X509TrustManager trust-all ─────────────
+    # Second complete X509TrustManager bypass, parallel to class av
+    # Used in the same CIDS sensor connection path as efu
+    'efv_class': {
+        'cafebabe_offset': 0x0289a5e5,
+        'idx_in_container': 10832,
+        'sha256': 'a579f2dd2adc435eb7a5a3bbc5c6c03cd9a230bf89e4da247313f6e35a2147fa',
+        'implements': 'javax/net/ssl/X509TrustManager',
+        'bypass_methods': {
+            'checkClientTrusted': {'bytecode': '0: return', 'code_length': 1},
+            'checkServerTrusted': {'bytecode': '0: return', 'code_length': 1},
+            'getAcceptedIssuers': {'bytecode': '0: aconst_null\n1: areturn', 'code_length': 2},
+        },
+    },
+
+    # ── efw (idx 10833 @ 0x0289a7ea): CIDS HTTP worker — JVM GLOBAL BYPASS ───
+    # Runnable implementing SDEE (Security Device Event Exchange) HTTP client
+    # User-Agent: "CIDS Client/4.0"
+    # CRITICAL: static initializer sets JVM-GLOBAL SSL/TLS bypass on class load:
+    #
+    #   static {
+    #       efv tm = new efv();          // trust-all X509TrustManager
+    #       SSLContext ctx = SSLContext.getInstance("TLS");
+    #       ctx.init(null, new TrustManager[]{tm}, new SecureRandom());
+    #       HttpsURLConnection.setDefaultSSLSocketFactory(ctx.getSocketFactory());  // GLOBAL
+    #       efu hv = new efu();          // trust-all HostnameVerifier
+    #       HttpsURLConnection.setDefaultHostnameVerifier(hv);                       // GLOBAL
+    #   }
+    #
+    # Once efw is loaded by the classloader, ALL subsequent HttpsURLConnection
+    # requests in the ASDM JVM use the trust-all SSLSocketFactory and HostnameVerifier.
+    # This is BROADER than class av's bypass (which targets specific connections).
+    #
+    # SDEE protocol strings: "sdee-server", "sessionCookies", "SdeeError",
+    # "respEditConfigDelta", "respEditDefaultConfig", "execPushUpgrade"
+    # → ASDM uses SDEE to communicate with Cisco IDS/IPS sensors for event monitoring.
+    'efw_class': {
+        'cafebabe_offset': 0x0289a7ea,
+        'idx_in_container': 10833,
+        'sha256': '4a90274f75e9014636bf7f6452a307690ef80b614f9d899de42d1af2eca55b83',
+        'implements': 'java/lang/Runnable',
+        'global_bypass': True,  # sets HttpsURLConnection JVM defaults in <clinit>
+        'static_init_sequence': [
+            'new efv -> trust-all TrustManager',
+            'SSLContext.getInstance("TLS")',
+            'ctx.init(null, [efv], SecureRandom)',
+            'HttpsURLConnection.setDefaultSSLSocketFactory(ctx.getSocketFactory())',
+            'new efu -> trust-all HostnameVerifier',
+            'HttpsURLConnection.setDefaultHostnameVerifier(efu)',
+        ],
+        'protocol': 'SDEE (Security Device Event Exchange)',
+        'user_agent': 'CIDS Client/4.0',
+        'auth_method': 'HTTP Basic (Authorization: Basic <base64>)',
+        'attack_surface': (
+            'Loading class efw (e.g., by opening ASDM Monitoring > IPS module) '
+            'installs trust-all as the JVM GLOBAL default. All subsequent HTTPS '
+            'connections in the ASDM JVM — including the management connection to '
+            'the ASA — then bypass certificate validation.'
+        ),
+    },
+
+    # ── CCOImageASDHandler$1 (idx 7339 @ 0x015f9385): CCO software update MITM ─
+    # Named class: com.cisco.pdm.pdmdata.ccowiz.asd.CCOImageASDHandler$1
+    # Anonymous inner X509TrustManager used for Cisco CCO software update downloads.
+    # The PARENT class (CCOImageASDHandler, idx 7340) hits these Cisco API endpoints:
+    #   oauth2_token:      https://cloudsso.cisco.com/as/token.oauth2
+    #   software_metadata: https://api.cisco.com/software/v4.0/metadata/udirelease
+    #   image_metadata:    https://api.cisco.com/software/v4.0/metadata/udiimage
+    #   download_url:      https://api.cisco.com/software/v4.0/download/udiimage
+    'cco_trustmanager_class': {
+        'cafebabe_offset': 0x015f9385,
+        'idx_in_container': 7339,
+        'class_name': 'com/cisco/pdm/pdmdata/ccowiz/asd/CCOImageASDHandler$1',
+        'implements': 'javax/net/ssl/X509TrustManager',
+        'bypass_methods': {
+            'checkClientTrusted': {'bytecode': '0: return', 'code_length': 1,
+                                    'throws_declared': 'CertificateException'},
+            'checkServerTrusted': {'bytecode': '0: return', 'code_length': 1,
+                                    'throws_declared': 'CertificateException'},
+            'getAcceptedIssuers': {'bytecode': '0: aconst_null\n1: areturn', 'code_length': 2},
+        },
+        'attack_surface': (
+            'MITM of network path from ASDM workstation to api.cisco.com or '
+            'cloudsso.cisco.com → serve malicious ASDM/firmware image → code '
+            'execution on ASDM management workstation. '
+            'CCOImageASDHandler uses Apache HttpClient (not HttpsURLConnection), '
+            'so efw\'s global bypass does not affect it; this class is the direct bypass.'
+        ),
+        'supply_chain_risk': 'HIGH — update path MITM bypasses certificate validation',
+    },
+}
+
+CONFIRMED_ASDM_SSL_BYPASS = {
+    'blob_file': '1265F6',                # LZMA-decompressed ASDM blob in binwalk output
+    'blob_zip_start': 0x0127dc95,         # first PK\x03\x04 header — 2514 ZIP entries
+    'asdm_version': '7.16(1) + 7.20(2)',
+    'compiled_class_version': 52,         # Java 8 (major=52)
+
+    # ── Class: av (implements X509TrustManager) ──────────────────────────────
+    # Source file: av.java  (obfuscated name, ProGuard-style one/two-char identifiers)
+    # This is the outer class itself, NOT an anonymous inner.
+    # Its static a(boolean) method globally replaces the JVM SSL defaults.
+    'av_class': {
         'precondition': 'Network position on ASDM admin workstation segment OR ASA mgmt network',
         'impact': (
             'ASDM silently accepts any TLS certificate from any host claiming to be the ASA. '
@@ -727,7 +851,7 @@ ASDM_RE_COMMANDS = {
     'extract_ak1_class': (
         'python3 -c "'
         'with open(\'1265F6\',\'rb\') as f: d=f.read(); '
-        'open(\'ak\$1.class\',\'wb\').write(d[0x0094393b:0x00943bec])"'
+        r"open('ak$1.class','wb').write(d[0x0094393b:0x00943bec])\""
     ),
     'disasm_av': "javap -c -p 'av.class'",
     'disasm_ak1': "javap -c -p 'ak$1.class'",
