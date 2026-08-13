@@ -1290,6 +1290,53 @@ LINA_IPC_SURFACES = {
         'content': 'packet queues between kernel and LINA; inter-module event passing',
         'attack': 'inject crafted events to trigger lina state machine transitions',
     },
+    # ZeroMQ IPC sockets — confirmed strings in lina 9.22.2.32 .rodata
+    # ipc:// prefix = Unix domain socket under /tmp; no network exposure
+    # Post-pivot: connect with zmq library or raw Unix socket read/write
+    'zmq_ipc_sockets': {
+        'auth_agent':         'ipc:///tmp/authagent.%u  — per-process auth agent channel',
+        'vpn_updates':        'ipc:///tmp/vpn_updates   — VPN session update push channel',
+        'vpn_status_updates': 'ipc:///tmp/vpn_status_updates',
+        'xml_server':         'ipc:///tmp/asa-lina-xml-server  — ASDM/FMC XML command channel',
+        'sig_xml_server':     'ipc:///tmp/asa-sig-xml-server',
+        'cluster_events':     'ipc:///tmp/asa-lina-cluster-events',
+        'cluster_recv':       'ipc:///tmp/asa-lina-cluster-recv',
+        'logd_data':          'ipc:///tmp/logd_data_ep  — live log stream (read to capture auth events)',
+        'portmgr':            'ipc:///tmp/portmgr',
+        'run_cmd_queue':      '/tmp/run_cmd_que  — FXOS-CURL command queue (file, not zmq)',
+        'run_cmd_pid':        '/tmp/run_cmd.pid  — FXOS-CURL response file',
+        'ipc_log':            '/tmp/lina_ipc_log.txt  — IPC debug log (read post-pivot)',
+        'fdm_ready':          '/tmp/fdmReady  — FDM readiness sentinel (write to block FDM)',
+    },
+    'zmq_attack_paths': {
+        'authagent_inject': (
+            'Connect to ipc:///tmp/authagent.%u (replace %u with lina PID) and send '
+            'crafted auth result message — may allow group policy assignment without RADIUS.'
+        ),
+        'vpn_updates_inject': (
+            'Write crafted VPN session update to ipc:///tmp/vpn_updates — may modify '
+            'group policy or ACL for existing active sessions (COA-equivalent without RADIUS COA).'
+        ),
+        'xml_server_cmd': (
+            'Send raw XML to ipc:///tmp/asa-lina-xml-server — same channel ASDM uses. '
+            'No HTTPS layer, no cert check. Equivalent to authenticated ASDM session. '
+            'Post-pivot: socat - UNIX-CONNECT:/tmp/asa-lina-xml-server'
+        ),
+        'run_cmd_injection': (
+            'Write command to /tmp/run_cmd_que, watch /tmp/run_cmd.pid for response. '
+            'FXOS-CURL channel — may allow arbitrary command execution if lina is executing '
+            'these without validation (shell injection via FXOS integration path).'
+        ),
+        'shell_scripts': [
+            '/asa/scripts/set_lina_start.sh',         # executed at lina startup
+            '/asa/scripts/attr_vc_startup.sh',         # attribute VC lifecycle
+            '/asa/scripts/attr_vc_shutdown.sh',
+            '/asa/scripts/auth_agent_server_startup.sh',
+            '/asa/scripts/auth_agent_server_shutdown.sh',
+            # If /asa is writable (check with: ls -la /asa/scripts/), replacing any of
+            # these with a malicious shell script gives code exec on next reload/restart.
+        ],
+    },
     'proc_mem_targets': {
         'radius_psk':   'aaa_server_t.secret field — plaintext string in RW segment',
         'tacacs_key':   'tacacs_server_t.key field — plaintext string in RW segment',
