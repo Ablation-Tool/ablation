@@ -323,6 +323,37 @@ LINA_CONFIG_FILE_PATHS = {
 #      vulnerable to MitM even while the firewall inspects others.
 
 LINA_SSL_INSPECTION = {
+    'flow_diagram': """
++-------------------+        +---------------------+        +-------------------+
+|      Client       | <----> |   Cisco LINA Proxy  | <----> |      Server       |
++-------------------+        +---------------------+        +-------------------+
+        |                          |                              |
+        |--- ClientHello --------->|                              |
+        |                          |--- ClientHello ------------->|
+        |                          |<-- ServerHello --------------|
+        |<-- ServerHello ----------|                              |
+        |<-- Device Cert ----------|                              |  (LINA presents its own cert)
+        |                          |<-- Server Cert --------------|  (LINA receives real cert)
+        |--- KeyExchange --------->|                              |
+        |                          |--- KeyExchange ------------->|
+        |                          |                              |
+        |--- Encrypted Data ------>|                              |
+        |                          |--- Decrypt client data ------|
+        |                          |--- Inspect (policy, threats) |
+        |                          |--- Encrypt for server -------|
+        |                          |--- Encrypted Data ---------->|
+        |                          |                              |
+        |                          |<-- Encrypted Data -----------|
+        |                          |--- Decrypt server data ------|
+        |                          |--- Inspect (policy, threats) |
+        |                          |--- Encrypt for client -------|
+        |<-- Encrypted Data -------|                              |
+
+Two independent SSL sessions:
+  Client <-> LINA  : uses LINA's trustpoint certificate
+  LINA   <-> Server: uses real server certificate
+ASDM bypass: av.class checkServerTrusted = no-op → client session hijackable with any cert
+""",
     'mechanism': (
         'LINA presents its own certificate (from configured trustpoint) to the client, '
         'decrypts traffic, applies policy/inspection, re-encrypts with server certificate. '
