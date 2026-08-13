@@ -150,6 +150,50 @@ ORKA_FS = {
     'profile':   '/usr/local/libexec/orka-engine.app/Contents/embedded.provisionprofile',
 }
 
+# ── orka3 CLI binary RE constants (extracted 2026-08-13) ─────────────────────
+# Source: strings analysis of /home/cowboy/VDT/tools/orka3/orka3 (Go ELF, 77MB)
+# Build path: /home/runner/work/monorepo-dev/monorepo-dev/packages/orka-cli-v2/pkg/orkaapiserver/api.go
+# Go module path: macstadium.com/orka-cli-v2 (devel)
+
+# Orka API server endpoints (hardcoded in CLI help text)
+ORKA_API_SERVER_NEW  = 'http://10.221.188.20'   # Orka 2.1+ default
+ORKA_API_SERVER_OLD  = 'http://10.221.188.100'  # pre-2.1 default
+ORKA_API_ENDPOINT    = '/api/v1/cluster-info'   # first confirmed API path
+ORKA_DEFAULT_NS      = 'orka-default'           # all VM configs namespace
+
+# Harbor registry — default credentials confirmed in binary (CLI example usage)
+HARBOR_HOST          = 'http://10.221.188.5:30080'
+HARBOR_USER          = 'admin'
+HARBOR_PASS          = 'p@ssw0rd'
+HARBOR_INSECURE_FLAG = '--allow-insecure'
+
+# Token storage: Orka stores auth JWT in ~/.kube/config after OIDC login
+# OIDC callback: localhost:<dynamic_port>/callback — AuthServer struct
+ORKA_TOKEN_PATH      = '~/.kube/config'
+ORKA_CONFIG_JSON_KEY = 'api-url'           # json struct tag in config struct
+
+# K8s CRD types deployed by orka-operator
+ORKA_CRDS = ['Image', 'ImageList', 'ImageCache', 'ImageCacheList', 'Iso', 'IsoList']
+
+# orka3 CLI command surface (extracted from go:symbol table)
+ORKA3_COMMANDS = {
+    'config':             ['ReadConfig', 'WriteConfig', 'GetDefaultConfigFilePath'],
+    'vm':                 ['deployVM', 'createVM', 'deleteVm', 'nameVM', 'saveImage',
+                           'commitImage', 'resizeImage', 'vmPush', 'executeCommand',
+                           'waitForVM', 'validateCredentials'],
+    'vm_config':          ['createVmConfig', 'deleteVmConfig', 'listVmConfig'],
+    'user':               ['doLogin', 'doLogout', 'GetToken', 'extractIdToken',
+                           'fetchClusterInfo', 'createTokenWithNoExpiration',
+                           'listenOnNextFreePort', 'forceIPv4'],
+    'serviceaccount':     ['createServiceAccount', 'createServiceAccountToken',
+                           'createTokenWithNoExpiration', 'deleteServiceAccount'],
+    'rolebinding':        ['addSubjects', 'removeSubjects', 'getOrkaResourcesRolebinding'],
+    'registrycredential': ['addCredentials', 'removeCredentials', 'listServers'],
+    'namespace':          ['createNamespace', 'deleteNamespaces', 'getNamespaceDetails'],
+    'node':               ['tagNode', 'untagNode', 'namespaceNode'],
+    'imagecache':         ['cacheImage', 'removeImage', 'getImageCacheInfo'],
+}
+
 # OCI media types (F100)
 OCI_MEDIA_TYPES = {
     'disk_layer': 'application/vnd.macstadium.orka-engine.disk.layer.v1+lz4',
@@ -281,6 +325,58 @@ class OrkaEnumerator:
                 self.orka_api_reachable = True
                 return api_url
         return None
+
+    def probe_orka3_api_cluster_info(self) -> dict:
+        """
+        Probe /api/v1/cluster-info — confirmed endpoint from orka3 binary RE.
+        Binary embeds: '/api/v1/cluster-infoinvalid token claims...'
+        unauthenticated access = cluster topology disclosure.
+        """
+        results = {}
+        for api_url in [ORKA_API_SERVER_NEW, ORKA_API_SERVER_OLD]:
+            sc, body, get_json = _http_get(f'{api_url}{ORKA_API_ENDPOINT}', timeout=5)
+            data = get_json()
+            results[api_url] = {
+                'status': sc,
+                'data': data,
+                'raw': body[:500] if body else None,
+            }
+            if sc == 200 and data:
+                self.findings.append(
+                    f'ORKA_CLUSTER_INFO_UNAUTH: {api_url}{ORKA_API_ENDPOINT} '
+                    f'returned cluster data without auth'
+                )
+                self.cluster_info = data
+        return results
+
+    def probe_harbor_default_creds(self) -> dict:
+        """
+        Test Harbor registry with default credentials confirmed from orka3 binary.
+        Binary example: orka3 regcred add --allow-insecure http://10.221.188.5:30080
+                        --username admin --password p@ssw0rd
+        """
+        results = {}
+        import base64
+        cred = base64.b64encode(f'{HARBOR_USER}:{HARBOR_PASS}'.encode()).decode()
+        # Harbor v2 API health
+        sc, body, _ = _http_get(
+            f'{HARBOR_HOST}/api/v2.0/systeminfo',
+            headers={'Authorization': f'Basic {cred}'},
+            timeout=5,
+        )
+        results['health'] = {'status': sc, 'auth': 'admin:p@ssw0rd', 'body': body[:300]}
+        if sc == 200:
+            self.findings.append(
+                f'HARBOR_DEFAULT_CREDS: {HARBOR_HOST} accessible with admin:p@ssw0rd'
+            )
+        # Harbor projects
+        sc2, body2, get_json2 = _http_get(
+            f'{HARBOR_HOST}/api/v2.0/projects',
+            headers={'Authorization': f'Basic {cred}'},
+            timeout=5,
+        )
+        results['projects'] = {'status': sc2, 'data': get_json2()}
+        return results
 
     # ── Metadata server (VM-side) ─────────────────────────────────────────────
 
