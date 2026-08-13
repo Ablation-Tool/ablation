@@ -268,6 +268,48 @@ RADIUS_VSA_TABLE = {
     'cVPN3000-Firewall-ACL-Out':     (0x54e2b48, 0x61058,  'token=0x58,type=0x06=flags'),
 }
 
+# ─── CONFIRMED CODE ADDRESSES (ASA 9.14.2.14, x86-64) ───────────────────────
+#
+# LDAP-CLASS → RADIUS-CLASS INJECTION PATH (confirmed from binary):
+#
+#  Function at ~0xc613xx:
+#    Processes LDAP authentication response, reads LDAP-Class attribute
+#    Prepares RADIUS Class (attr 25) attribute record in stack buffer at -0x40(rbp)
+#
+#  Key instruction sequence at 0xc61458:
+#    mov $0x19, %edx          ; EDX = 25 = IETF RADIUS Class attribute number
+#    call 0xc567e0            ; attr_add_shim(attr_list=RDI, value=RSI, attr_type=25, ...)
+#
+#  attr_add_shim at 0xc567e0:
+#    movzwl %dx, %edx         ; zero-extend attr_type to 32-bit
+#    mov $0x1, %ecx           ; ECX = 1 (adding 1 attribute)
+#    jmp 0xc563d0             ; tail-call to attr_list_add_impl
+#
+#  attr_list_add_impl at 0xc563d0:
+#    Signature: (attr_list_ptr=RDI, value_struct=RSI, attr_type=EDX, count=ECX)
+#    - Reads value_struct type field: movzwl (%rsi),%r15d
+#    - Iterates linked list: compares attr_type with r13w at each 16-byte node
+#    - When type matches: calls 0x23f3dc0 (malloc) to allocate node
+#    - Checks attribute category: (attr_type & 0xf000) == 0x6000 → string type
+#
+#  Debug log at 0xc6148f + call 0x10fc730:
+#    LEA RDX = "Class attribute created from LDAP-Class attribute\n" (0x3be5230)
+#    ESI = 3 (log level), EDI = 0xc5 (205 = AAA debug facility)
+#    → Only fires when debug logging enabled (testb $0x20, flag checked at 0xc61482)
+#
+CONFIRMED_FUNCTION_ADDRS = {
+    'ldap_class_to_radius_class':  0xc61360,  # approx; see 0xc61458 for attr_type=25 MOV
+    'attr_add_shim_class':         0xc567e0,  # shim: adds attr type=25 (Class) to attr list
+    'attr_list_add_impl':          0xc563d0,  # generic attribute list add/update
+    'attr_list_find_by_type':      0xc56800,  # iterate list, find by type field
+    'malloc_wrapper':              0x23f3dc0, # called by attr_list_add_impl for node alloc
+    'aaa_debug_log':               0x10fc730, # debug logging function (facility, level, fmt, ...)
+}
+
+# LDAP-Class string (log/debug message, not the attribute name itself):
+#   file offset 0x3be5230: "Class attribute created from LDAP-Class attribute\n"
+#   Note: terminated with \n, then NUL padding (not \n\x00 but \n\x00\x00\x00\x00\x00)
+
 # GROUP POLICY INJECTION CHAIN (RADIUS Class attribute path):
 #
 # Attack: forge or relay a RADIUS Access-Accept with a crafted Class (attr 25) value
