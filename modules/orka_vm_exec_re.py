@@ -24,6 +24,51 @@ Symbols extracted:
   vmiexec.vmCommandDescriptor      — per-command metadata (virsh state + messages)
   vmiexec.vmState                  — VM state machine (running/stopped/etc)
   vmiexec.NewExecutor              — executor factory
+                                     Signature (confirmed from disassembly):
+                                       func NewExecutor(config *rest.Config,
+                                                        namespace string,
+                                                        podName string) (Executor, error)
+                                     Calls: k8s.io/client-go/kubernetes.NewForConfig
+                                     Returns wrapped in go:itab.*executor,Executor @ 0x271aac0
+
+=== executor struct layout (confirmed from NewExecutor field stores) ===
+  [0x00]  *rest.Config           ← GetConfigOrDie() return
+  [0x08]  namespace.ptr          ← NewExecutor arg: namespace string ptr
+  [0x10]  namespace.len          ← NewExecutor arg: namespace string len
+  [0x18]  podName.ptr            ← NewExecutor arg: podName string ptr
+  [0x20]  podName.len            ← NewExecutor arg: podName string len
+  [0x28]  *kubernetes.Clientset  ← NewForConfig(config) return
+
+=== VM name → K8s pod name mapping (CONFIRMED: identity) ===
+  CLI: orka3 vm suspend <vm-name>
+  Cobra closure: newVmSuspendCommand.func12
+  → args[0] (vm-name string) used verbatim as podName
+  → defaultExecutorFn(namespace, podName) via global fn ptr
+  → NewExecutor(config, "orka-default", vm-name)
+  → getExecRequestURL builds: /api/v1/namespaces/orka-default/pods/<vm-name>/exec?container=orka-vm
+
+  NO mapping, NO label selector, NO transformation.
+  Orka VM name == K8s pod name, one-to-one, namespace defaults to "orka-default".
+  --namespace flag overrides the namespace.
+
+=== getExecRequestURL CALL chain (confirmed from disassembly @ 0x1c71700) ===
+  Call chain (RIP-relative CALLs resolved):
+    .(*CoreV1Client).RESTClient @ 0x15c8280
+    .(*Request).Namespace(executor[0x08/0x10])  — "orka-default" by default
+    .(*Request).Resource("pods")                 — literal "pods" @ 0x21de872
+    .(*Request).Name(executor[0x18/0x20])        — vm-name verbatim
+    .(*Request).SubResource("exec")              — literal "exec" @ 0x21de816
+    runtime.newobject (allocates PodExecOptions)
+    store "orka-vm" @ opts[0x28] len=7 @ [0x30]  — hardcoded container
+    .(*Request).SpecificallyVersionedParams(opts) @ 0x1127d80
+    .(*Request).URL() @ 0x1128960
+
+=== Virsh command assembly (PENDING) ===
+  "virsh" does NOT appear as a standalone string literal in the orka3 binary.
+  Hypothesis: the orka-vm container has a wrapper script/binary that accepts
+  the command name (start/destroy/resume/suspend) and constructs the virsh invocation,
+  OR the virsh args are assembled at runtime from per-character constants.
+  Investigation: inspect orka-vm container image layers (via Harbor at 10.221.188.5:30080).
 
 === VMCommand map (extracted from map.init.0 @ 0x1c707a0) ===
 All 5 keys CONFIRMED via map.init.0 disassembly + success string pool extraction:
