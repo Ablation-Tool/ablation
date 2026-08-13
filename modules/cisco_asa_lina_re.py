@@ -1,13 +1,48 @@
 """
-cisco_asa_lina_re.py — Cisco ASA lina ARM64 binary RE module
+cisco_asa_lina_re.py — Cisco ASA lina binary RE module
 
 Targets the authentication/authorization subsystem in the lina process:
-  lina = the monolithic ASA firewall process (ELF, ARM64, statically linked)
+  lina = the monolithic ASA firewall process (ELF, dynamically linked)
   Auth surface: RADIUS NAS client, TACACS+ client, WebVPN/CSTP cut-through proxy
+
+=== CONFIRMED FROM ASA 9.14.2.14 LINA (real binary) ===
+  Build: asa9-14-2-14-smp-k8.bin -> rootfs.img (CPIO) -> asa/bin/lina
+  Architecture: x86-64 ELF (NOT ARM64 as originally assumed)
+  Size: 95MB stripped dynamically linked ELF
+  BuildID: 65cd0306770da18bb71c057dc0dd1472391a1569
+  NOTE: ARM64 would apply to ASA-on-Firepower (FTD) chassis; classic ASA HW = x86-64
+
+  RADIUS VSA attribute strings confirmed in .rodata:
+    cVPN3000-IETF-Radius-Class   — IETF Class attr (25) → group policy assignment
+    cVPN3000-Group-Policy        — direct group policy from RADIUS
+    cVPN3000-Cisco-AV-Pair       — Cisco AV-pair VSA
+    cVPN3000-Tunnel-Group-Lock   — pin user to specific tunnel group
+    Cisco-AV-pair                — standard Cisco VSA (vendor 9, attr 1)
+    Tunnel-Group-Name            — attribute name used in assignment log messages
+    DfltGrpPolicy                — default group policy name (literal in binary)
+    DefaultWEBVPNGroup           — default WebVPN tunnel group name
+
+  SAML (lasso library) functions confirmed:
+    lasso_login_init_authn_request
+    lasso_login_process_authn_response_msg
+    lasso_login_build_authn_request_msg
+    lasso_login_build_authn_response_msg
+    lasso_saml2_assertion_validate_audience
+
+  Class attribute injection surface (confirmed string):
+    "Class attribute created from LDAP-Class attribute"
+    → lina processes LDAP group membership → RADIUS Class attr (attr 25) → group policy
+
+  dACL (downloadable ACL) RADIUS processing confirmed:
+    "aaai_dacl_processing_required"
+    "dACL processing skipped: no ATTR_FILTER_ID found"
+    "dACL %s already exists, using number %d"
+    COA mode: "%s: Processing a dacl in COA-PUSH mode. Old server is [%A]"
 
 Architecture reference (ARM64 AAPCS — "9780128192221-arm64-assembly" ch.5):
   X0–X7    : function args (first 8); X0 = return value
   X8–X15   : volatile (caller-saved); X16/X17 = linker scratch
+  NOTE: x86-64 SysV ABI applies to real lina (RDI/RSI/RDX/RCX/R8/R9 for args)
   X19–X28  : non-volatile (callee-saved); must be restored before RET
   X29 (FP) : frame pointer — always saved in prologue
   X30 (LR) : link register — holds return address after BL
@@ -173,6 +208,22 @@ LINA_STRING_ANCHORS = {
     'aaa_error_server':       b'AAA Server is not responding\x00',
     'aaa_error_reject':       b'Authentication Failure\x00',
     'aaa_debug_radius':       b'RADIUS packet\x00',
+
+    # CONFIRMED in ASA 9.14.2.14 lina (x86-64, 95MB stripped):
+    # RADIUS VSA attribute name strings (null-terminated in .rodata)
+    'cvpn3000_ietf_class':    b'cVPN3000-IETF-Radius-Class\x00',
+    'cvpn3000_group_policy':  b'cVPN3000-Group-Policy\x00',
+    'cvpn3000_av_pair':       b'cVPN3000-Cisco-AV-Pair\x00',
+    'cvpn3000_tg_lock':       b'cVPN3000-Tunnel-Group-Lock\x00',
+    'cisco_av_pair':          b'Cisco-AV-pair\x00',
+    'tunnel_group_name':      b'Tunnel-Group-Name\x00',
+    'dflt_grp_policy':        b'DfltGrpPolicy\x00',
+    'default_webvpn_group':   b'DefaultWEBVPNGroup\x00',
+    'class_from_ldap':        b'Class attribute created from LDAP-Class attribute\x00',
+    'dacl_coa_push':          b'Processing a dacl in COA-PUSH mode\x00',
+    'saml_init_authn':        b'lasso_login_init_authn_request\x00',
+    'saml_process_resp':      b'lasso_login_process_authn_response_msg\x00',
+    'saml_validate_audience': b'lasso_saml2_assertion_validate_audience\x00',
 }
 
 # RADIUS client function chain in lina (typical symbol names in debug builds;
