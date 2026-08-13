@@ -847,6 +847,47 @@ CONFIRMED_9222232_ADDRS = {
                                     'a managed timer handle. The ASA will dereference and operate on '
                                     'attacker-controlled memory, enabling arbitrary code execution or further '
                                     'exploitation. This is a severe vulnerability with high impact."',
+    'f2_cisco_ai_full_chain_142':   'Image #142 (11:34): "This is a critical exploit path: the attacker can '
+                                    'achieve arbitrary code execution by overflowing the group_policy_name '
+                                    'field, overwriting the timer pointer, and placing a fake timer object '
+                                    'with a controlled function pointer in memory. When the ASA tears down '
+                                    'the session or the timer fires, it will call the attacker\'s function '
+                                    'pointer, leading to full compromise."',
+    'f2_cisco_ai_search_direct_143': 'Image #143 (11:34): "If you need to further confirm the function pointer '
+                                    'dereference, continue searching for direct CALL *[reg+offset] instructions '
+                                    'in the timer code paths and correlate them with the overflowed pointer '
+                                    'field. This will provide definitive evidence of a reliable code execution '
+                                    'primitive."',
+    'f2_cisco_ai_textbook_141':     'Image #141 (11:32): "This is a textbook heap exploitation scenario: the '
+                                    'attacker can use the overflow to place a fake timer object in memory, set '
+                                    'up the required fields, and trigger a function pointer call with full '
+                                    'control over the target address and argument. This makes the vulnerability '
+                                    'not just a crash or DoS, but a reliable remote code execution vector."',
+    'f2_cisco_ai_139':              'Image #139 (11:26): "This confirms that the overflow vulnerability can be '
+                                    'exploited to achieve a controlled dereference and potentially arbitrary '
+                                    'code execution by crafting a fake timer structure in memory. This is a '
+                                    'critical and highly exploitable vulnerability."',
+    # CORRECTED ACE PRIMITIVE — two-level fake struct chain
+    # The CALL *[rdi+0x4c] was a false positive (scanner hit bytes inside displacement).
+    # Actual ACE path:
+    #   1. Fake timer A at attacker_ptr (gp_obj+0x308):
+    #        A+0x18 = parent_B_addr   (pointer to fake parent struct)
+    #        A+0x2a = 0x42 ('B')      (type check must pass)
+    #        A+0x2b = 0x00            (no leaf flag)
+    #   2. Fake parent struct B:
+    #        B+0x20 = target_function (function pointer — called via CALL *rax)
+    #   3. mgd_timer_stop(A) → 0x102b22c: rsi = *(*(A+0x18)+0x20) = *(B+0x20)
+    #      → 0x102ab00: saves RSI at -0xd0(%rbp)
+    #      → 0x102cc10: loads RSI into -0xa8(%rbp)
+    #      → 0x102cdeb: CALL *rax = CALL *target_function (ACE)
+    'f2_ace_path_corrected':        {
+        'dispatch_site':    '0x102cdeb (CALL *rax)',
+        'rax_source':       'RSI of 0x102cc10 = *(parent+0x20) = *(*(attacker_ptr+0x18)+0x20)',
+        'fake_A_fields':    {'+0x18': 'parent_B_addr', '+0x2a': '0x42', '+0x2b': '0x00'},
+        'fake_B_field':     {'+0x20': 'target_function (function pointer)'},
+        'call_chain':       'mgd_timer_stop → 0x102b22c → 0x102ab00 → 0x102cc10 → CALL *rax',
+        'false_positive_note': '0x102bb0c CALL *[rdi+0x4c] was false positive; bytes inside LEA disp',
+    },
     'f2_extraction_max':            0x100,
     'f2_cli_max':                   64,
     'f2_strncpy_bound':             'runtime [r15+0x8] from attr_def table 0x76f20a0',
