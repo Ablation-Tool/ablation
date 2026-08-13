@@ -515,10 +515,29 @@ BYTECODE_AUTH_PATTERNS = {
     # SSL bypass: checkServerTrusted with only 'return' in body
     # In javap: Code length = 1, single opcode = 0xb1 (return)
     # "An empty void method is: return, 1 byte" (Decompiling Java §2 methodology)
+    #
+    # CONFIRMED in ASDM 7.16.1 (asdm-7161.bin, SIGNATURE4 container @ 0x213f62):
+    #   class av implements javax.net.ssl.X509TrustManager (obfuscated name)
+    #   checkServerTrusted: Code stack=0, locals=3; 0: return  (1 byte)
+    #   checkClientTrusted: Code stack=0, locals=3; 0: return  (1 byte)
+    #   getAcceptedIssuers: Code stack=1, locals=1; 0: aconst_null; 1: areturn
+    #   -> Trust any certificate, return null accepted issuers list
+    #
+    # Companion class ak uses ALLOW_ALL_HOSTNAME_VERIFIER from
+    #   org/apache/http/conn/ssl/SSLConnectionSocketFactory
+    #   -> field ALLOW_ALL_HOSTNAME_VERIFIER: Lorg/apache/http/conn/ssl/X509HostnameVerifier;
+    #   -> SSLContext.init(null, new TrustManager[]{new av()}, new SecureRandom())
+    #   -> HttpsURLConnection.setDefaultSSLSocketFactory(ctx.getSocketFactory())
+    #   -> HttpsURLConnection.setDefaultHostnameVerifier(av$1_instance)
+    #
+    # SHA-256 of class av: c37f5cf3106baad710c1b792052ee3af4fa635e049b79985c278d5968ca85cf1
+    # Binary path: asdm-7161.bin -> SIGNATURE4 container -> class av @ file offset 0x213f62
     'ssl_bypass_empty_return': {
         'opcode': 0xb1,
         'code_length_max': 3,   # return + maybe areturn or nop; anything <= 3 is trivial
         'javap_pattern': r'Code:\s*\n\s+0:\s+return',
+        'confirmed_in': 'asdm-7161.bin class av (SHA256: c37f5cf3106baad710c1b792052ee3af4fa635e049b79985c278d5968ca85cf1)',
+        'confirmed_offset': 0x213f62,
         'note': (
             'checkServerTrusted() with empty body: Code attribute = 1 byte (0xb1 return). '
             'No CertificateException throw = trust-all bypass. '
@@ -528,12 +547,18 @@ BYTECODE_AUTH_PATTERNS = {
 
     # HostnameVerifier.verify() returning constant true
     # Pattern: iconst_1 (0x04) -> ireturn (0xac)
+    #
+    # CONFIRMED in ASDM 7.16.1: class ak uses Apache HttpClient
+    #   ALLOW_ALL_HOSTNAME_VERIFIER (static field) for HttpsURLConnection.
+    #   Inner class av$1 referenced in CP implements HostnameVerifier.
     'hostname_bypass_return_true': {
         'sequence_hex': [0x04, 0xac],   # iconst_1, ireturn
         'javap_pattern': r'Code:\s*\n\s+0:\s+iconst_1\s*\n\s+1:\s+ireturn',
+        'allow_all_constant': 'org/apache/http/conn/ssl/SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER',
         'note': (
             'verify() returning hardcoded true (iconst_1 + ireturn). '
             'All hostnames accepted. Two-byte body. '
+            'Also confirmed via ALLOW_ALL_HOSTNAME_VERIFIER static field in class ak. '
             'Decompiling Java §2: "b1 return ... An empty void method".'
         ),
     },
@@ -570,6 +595,152 @@ BYTECODE_AUTH_PATTERNS = {
     },
 }
 
+
+# ---------------------------------------------------------------------------
+# CONFIRMED: ASDM 7.16(1) binary SSL bypass — extracted from asdm-7161.bin
+# Blob: asdm-7161-extracted/_asdm-7161.bin.extracted/1265F6 (149MB LZMA-decompressed)
+# Classes extracted and verified with javap 2026-08-13.
+# ---------------------------------------------------------------------------
+
+CONFIRMED_ASDM_SSL_BYPASS = {
+    'blob_file': '1265F6',                # LZMA-decompressed ASDM blob in binwalk output
+    'blob_zip_start': 0x0127dc95,         # first PK\x03\x04 header — 2514 ZIP entries
+    'asdm_version': '7.16(1)',
+    'compiled_class_version': 52,         # Java 8 (major=52)
+
+    # ── Class: av (implements X509TrustManager) ──────────────────────────────
+    # Source file: av.java  (obfuscated name, ProGuard-style one/two-char identifiers)
+    # This is the outer class itself, NOT an anonymous inner.
+    # Its static a(boolean) method globally replaces the JVM SSL defaults.
+    'av_class': {
+        'cafebabe_offset': 0x00213f62,    # class file starts here in 1265F6 blob
+        'hit_offset':      0x00213f9b,    # 'javax/net/ssl/X509TrustManager' Utf8 CP entry
+        'size_estimate':   3035,          # bytes until next CAFEBABE at 0x00214b3d
+        'cp_count':        144,
+        'implements':      'javax/net/ssl/X509TrustManager',
+        'bypass_methods': {
+            'checkClientTrusted': {
+                'descriptor': '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V',
+                'bytecode': '0: return',
+                'code_length': 1,         # single 0xb1 (return) opcode — trust all clients
+            },
+            'checkServerTrusted': {
+                'descriptor': '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V',
+                'bytecode': '0: return',
+                'code_length': 1,         # CONFIRMED: accepts any server certificate
+            },
+            'getAcceptedIssuers': {
+                'descriptor': '()[Ljava/security/cert/X509Certificate;',
+                'bytecode': '0: aconst_null\n1: areturn',
+                'code_length': 2,         # returns null (no accepted issuers list)
+            },
+        },
+        # Static method a(boolean) — the global SSL bypass installer
+        # a(true)  = install trust-all TrustManager + HostnameVerifier as JVM defaults
+        # a(false) = restore Sun deploy TrustManager (com.sun.deploy.security.X509DeployTrustManager)
+        'installer_method': {
+            'name': 'a',
+            'descriptor': '(Z)V',          # takes boolean, returns void
+            'ssl_context_string': 'SSL',   # ldc #37 "SSL"
+            'sets_default_ssl_factory':    True,   # HttpsURLConnection.setDefaultSSLSocketFactory
+            'sets_default_hostname_verifier': True, # HttpsURLConnection.setDefaultHostnameVerifier
+            'hostname_verifier_class': 'av$1',      # anonymous inner at 0x00214b3d
+            'trust_manager_false_path': 'com.sun.deploy.security.X509DeployTrustManager',
+            'trust_manager_true_path':  'av',       # the trust-all class itself
+        },
+    },
+
+    # ── Class: ak$1 (anonymous inner of ak, implements X509TrustManager) ─────
+    # Minimal trust-all TrustManager. Holds reference to outer ak instance.
+    # Likely used in a separate HTTP connection pool managed by the ak class.
+    'ak1_class': {
+        'cafebabe_offset': 0x0094393b,    # class file starts here in 1265F6 blob
+        'hit_offset':      0x00943976,    # 'javax/net/ssl/X509TrustManager' Utf8 CP entry
+        'size_estimate':   689,           # smallest of the three — minimal implementation
+        'cp_count':        33,
+        'implements':      'javax/net/ssl/X509TrustManager',
+        'outer_class':     'ak',
+        'bypass_methods': {
+            'checkClientTrusted': {
+                'descriptor': '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V',
+                'bytecode': '0: return',
+                'code_length': 1,
+            },
+            'checkServerTrusted': {
+                'descriptor': '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V',
+                'bytecode': '0: return',
+                'code_length': 1,         # CONFIRMED: accepts any server certificate
+            },
+            'getAcceptedIssuers': {
+                'descriptor': '()[Ljava/security/cert/X509Certificate;',
+                'bytecode': '0: iconst_0\n1: anewarray X509Certificate\n4: areturn',
+                'code_length': 5,         # returns empty array (not null)
+            },
+        },
+    },
+
+    # ── X509TrustManager hits in 1265F6 (full map) ───────────────────────────
+    'trustmanager_hits': [
+        {'label': 'av',   'offset': 0x00213f9b, 'source': 'av.java'},
+        {'label': 'ak$1', 'offset': 0x00943976, 'source': 'ak$1.java'},
+        {'label': 'CCOImageASDHandler', 'offset': 0x015bafdf,
+         'package': 'com/cisco/pdm/pdmdata/ccowiz/asd',
+         'note': 'inside ZIP section; Cisco PDM CCO download handler'},
+    ],
+    'check_server_trusted_string_offsets': [0x0021405d, 0x00943aa0, 0x015bb0e0],
+    'hostname_verifier_hit_count': 56,
+
+    # ── Attack surface summary ────────────────────────────────────────────────
+    'attack_surface': {
+        'vector': 'Network MitM between ASDM client and ASA management interface (HTTPS 443)',
+        'precondition': 'Network position on ASDM admin workstation segment OR ASA mgmt network',
+        'impact': (
+            'ASDM silently accepts any TLS certificate from any host claiming to be the ASA. '
+            'av.a(true) installs trust-all globally via HttpsURLConnection defaults — affects '
+            'ALL HTTPS connections from the ASDM process, not just ASA connections.'
+        ),
+        'credential_exposure': (
+            'ASA admin username + password submitted over the intercepted HTTPS session. '
+            'All management commands (config changes, user additions) visible in plaintext '
+            'after MitM decryption.'
+        ),
+        'detection_difficulty': 'Low — victim ASDM shows no cert error; connection appears normal',
+        'hostname_verifier': 'av$1 also disables hostname verification — SNI mismatch not detected',
+    },
+}
+
+# ── Confirmed class extraction commands (run these on the local binary) ───────
+ASDM_RE_COMMANDS = {
+    'extract_blob': (
+        'binwalk --extract --directory asdm-7161-extracted asdm-7161.bin'
+        # -> _asdm-7161.bin.extracted/1265F6 (LZMA-decompressed, 149MB)
+    ),
+    'extract_av_class': (
+        'python3 -c "'
+        'with open(\'1265F6\',\'rb\') as f: d=f.read(); '
+        'open(\'av.class\',\'wb\').write(d[0x00213f62:0x00214b3d])"'
+    ),
+    'extract_ak1_class': (
+        'python3 -c "'
+        'with open(\'1265F6\',\'rb\') as f: d=f.read(); '
+        'open(\'ak\$1.class\',\'wb\').write(d[0x0094393b:0x00943bec])"'
+    ),
+    'disasm_av': "javap -c -p 'av.class'",
+    'disasm_ak1': "javap -c -p 'ak$1.class'",
+    'verify_ssl_bypass': (
+        "javap -c 'av.class' | grep -A3 checkServerTrusted"
+        # expected output:
+        #   public void checkServerTrusted(java.security.cert.X509Certificate[], java.lang.String) ...
+        #     Code:
+        #        0: return
+    ),
+    'extract_zip_section': (
+        'python3 -c "'
+        'with open(\'1265F6\',\'rb\') as f: d=f.read(); '
+        'open(\'asdm_main.jar\',\'wb\').write(d[0x0127dc95:])"'
+        # -> asdm_main.jar contains 2514 entries; use javap/cfr normally
+    ),
+}
 
 # ---------------------------------------------------------------------------
 # Field and method access flags (Decompiling Java §2 Tables 2-4, 2-5)
