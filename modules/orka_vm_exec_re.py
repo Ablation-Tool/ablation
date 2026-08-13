@@ -84,6 +84,25 @@ Symbols extracted:
     +0x38: Command []string <- commands arg
     +0x40/0x48: namespace from executor struct
 
+=== ExecuteVirshCommand pre-check (CONFIRMED from disassembly) ===
+  Before sending any virsh command, ExecuteVirshCommand FIRST checks domain state with:
+    virsh status macos
+  The string "status" (6 bytes) at vaddr 0x21e0dac is the pre-check subcommand.
+  Confirmed: python3 -c "open('/path/orka3','rb').seek(0x21e0dac - 0x400000) or
+             open('/path/orka3','rb').read(6)" -> b'status'
+
+  Flow:
+    1. ExecuteVirshCommand called with command key (e.g. "start")
+    2. Look up vmCommandDescriptor for key -> get virshState (required pre-state)
+    3. K8s exec "virsh status macos" in orka-vm container
+    4. stringslite.Index(stdout, virshState) — check domain is in required state
+       If not: return error "VM is already <state>"
+    5. If state matches: K8s exec "virsh <virshCmd> macos"
+    6. stringslite.Index(stdout, successMsg) — verify command succeeded
+
+  Purpose: prevent idempotent state errors (e.g. "start" on already-running VM
+  would cause libvirt error; the pre-check catches this cleanly).
+
 === Virsh command assembly (PENDING) ===
   "virsh" does NOT appear as a standalone string literal in the orka3 binary.
   Hypothesis: the orka-vm container has a wrapper script/binary that accepts
@@ -258,6 +277,27 @@ ORKA_VM_CONTAINER = 'orka-vm'
 
 # Confirmed from map.init.0 success strings ("Domain macos started", "Domain macos destroyed")
 VIRSH_DOMAIN = 'macos'
+
+# Pre-check subcommand: ExecuteVirshCommand calls "virsh status macos" FIRST to gate
+# the actual command on domain state. String at vaddr 0x21e0dac (file offset 0x1de0dac).
+# Confirmed: python3 read of raw binary bytes at that offset returns b'status'.
+VIRSH_PRECHECK_CMD = 'status'
+
+# ExecuteVirshCommand two-phase exec flow (confirmed from disassembly):
+VIRSH_EXEC_FLOW = {
+    'phase_1': {
+        'cmd':  ['virsh', VIRSH_PRECHECK_CMD, VIRSH_DOMAIN],
+        'desc': 'Read domain state via virsh status; check against vmCommandDescriptor.virshState',
+        'gate': 'If stdout does not contain required virshState -> return error, abort',
+    },
+    'phase_2': {
+        'cmd':  ['virsh', '<virshCmd>', VIRSH_DOMAIN],
+        'desc': 'Execute actual virsh command (start/destroy/resume/suspend)',
+        'gate': 'If stdout does not contain successMsg -> return error',
+    },
+    'state_check_fn': 'stringslite.Index',
+    'success_check_fn': 'stringslite.Index',
+}
 
 # VMCommand string keys — ALL 5 CONFIRMED from map.init.0 + success string pool:
 #   0x21fc7e1 "Domain macos started"   — start success (virsh start macos raw output)
