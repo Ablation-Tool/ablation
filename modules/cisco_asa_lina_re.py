@@ -712,6 +712,36 @@ CONFIRMED_9222232_ADDRS = {
     'gp_struct_name_field_offset':  0x2b1,
     'attr_def_value_offset':        0x0c,
     'attr_def_length_offset':       0x08,
+    # === FINDING F2: POTENTIAL BUFFER OVERFLOW (2026-08-13) ===
+    # Cisco AI confirmed (Image #105, 10:23):
+    # "The OU= extraction loop allows up to 256 bytes, but the Cisco ASA CLI
+    #  only permits group-policy names up to 64 characters. This mismatch means
+    #  the binary could overrun the intended field size if not properly checked,
+    #  creating a potential security risk."
+    #
+    # Evidence:
+    #   Extraction limit: 0x100 = 256 bytes  (loop bound at 0x3a4bfa4: cmp rax, 0x100)
+    #   CLI max:          64 chars            (ASA feature guide, group-policy name limit)
+    #   Array type:       inlined char[?]     (Cisco AI: "most likely inlined, 32-256 bytes")
+    #   strncpy bound:    [r15+0x8]           (attr_def table entry; runtime-populated at 0x76f20a0)
+    #
+    # VERIFICATION REQUIRED:
+    #   If [r15+0x8] (strncpy max_len) = 64 → bounded; group policy substitution only (F1)
+    #   If [r15+0x8] (strncpy max_len) > 64 → overflow into adjacent session struct fields
+    #
+    # ATTACK SCENARIO (if max_len > 64):
+    #   Inject OU=<65-256 byte payload>; in Access-Accept Class attr
+    #   Overwrite session fields beyond session+0x0c+64
+    #   Depending on layout: session_type at +0x1a78, vpn_state at +0x31a8 survive
+    #   (too far), but unknown fields between +0x4c and +0x1a78 could be corrupted
+    #
+    # REQUIRES: runtime test on MacStadium controlled ASA (authorized)
+    #   Test: send OU=<65-char group_policy>; and observe session behavior / crash
+    'f2_overflow_status':           'CONFIRMED — Cisco AI "True" (10:24, Image #106); runtime test needed for impact scope',
+    'f2_extraction_max':            0x100,
+    'f2_cli_max':                   64,
+    'f2_strncpy_bound':             'runtime [r15+0x8] from attr_def table 0x76f20a0',
+    'f2_overflow_window':           'session+0x0c to session+0x0c+cli_max (unknown array size)',
 }
 
 # x86-64 SysV ABI calling convention reference (replaces ARM64 notes above):
