@@ -19,20 +19,27 @@ Symbols extracted:
                                          (WebSocket/SPDY upgrade required)
   vmiexec.vmActions                — map[VMCommand]vmCommandDescriptor
                                      VMCommand is a STRING type (not iota int)
-                                     Confirmed keys from map.init.0:
-                                       "revert" "start" "stop" "resume" (+suspect "suspend")
+                                     Confirmed keys from map.init.0 + success string pool:
+                                       "start" "stop" "revert" "resume" "suspend" (all 5 confirmed)
   vmiexec.vmCommandDescriptor      — per-command metadata (virsh state + messages)
   vmiexec.vmState                  — VM state machine (running/stopped/etc)
   vmiexec.NewExecutor              — executor factory
 
 === VMCommand map (extracted from map.init.0 @ 0x1c707a0) ===
-  Key         virshState   successMsg                  errorMsg
-  "revert"    "running"    "VM has been reverted"      "VM is already running"
-  "start"     "shut off"   "VM has started"            "VM is already stopped"
-  "stop"      "running"    "VM has stopped" +          "VM is stopped"
-                           "Domain macos destroyed"
-  "resume"    "paused"     "Domain macos resumed"      —
-  "suspend"   "running"    "VM is suspended"           —  (inferred from CLI symbols)
+All 5 keys CONFIRMED via map.init.0 disassembly + success string pool extraction:
+
+  Key         virshCmd     virshState  successMsg               errorMsg
+  "start"     start        shut off    "Domain macos started"   "VM is already running"
+  "stop"      destroy      running     "Domain macos destroyed" "VM is already stopped"
+  "revert"    (dynamic)    running     "VM has been reverted"   "VM is already running"
+  "resume"    resume       paused      "Domain macos resumed"   —
+  "suspend"   suspend      running     "VM has been suspended"  —
+
+  NOTE: "revert" does NOT use snapshot-revert literal — "snapshot-revert" absent from binary.
+        success string "VM has been reverted" (Orka-layer message, not raw libvirt output)
+        virsh snapshot name is likely passed dynamically or uses current snapshot.
+  NOTE: "suspend" success = "VM has been suspended" (0x21fe604), NOT "Domain macos suspended".
+        "Domain macos suspended" (0x21fff55) is the raw libvirt output; Orka wraps it.
 
   virsh domain name: "macos"  (literal in success strings)
   K8s container name: "orka-vm"  (PodExecOptions.Container, confirmed via LEA)
@@ -156,13 +163,18 @@ ORKA_VM_CONTAINER = 'orka-vm'
 # Confirmed from map.init.0 success strings ("Domain macos started", "Domain macos destroyed")
 VIRSH_DOMAIN = 'macos'
 
-# Confirmed VMCommand string keys from map.init.0 disassembly
+# VMCommand string keys — ALL 5 CONFIRMED from map.init.0 + success string pool:
+#   0x21fc7e1 "Domain macos started"   — start success (virsh start macos raw output)
+#   0x21fff3f "Domain macos destroyed" — stop success (virsh destroy macos raw output)
+#   0x21fc7f5 "VM has been reverted"   — revert success (Orka-layer; snapshot-revert absent from binary)
+#   0x21fc809 "Domain macos resumed"   — resume success (virsh resume macos raw output)
+#   0x21fe604 "VM has been suspended"  — suspend success (Orka-layer; 0x21fff55=raw libvirt output)
 VM_COMMANDS = {
-    'start':   {'virsh_state': 'shut off', 'success': 'VM has started',     'error': 'VM is already stopped'},
-    'stop':    {'virsh_state': 'running',  'success': 'VM has stopped',      'error': 'VM is stopped'},
-    'revert':  {'virsh_state': 'running',  'success': 'VM has been reverted','error': 'VM is already running'},
-    'resume':  {'virsh_state': 'paused',   'success': 'Domain macos resumed', 'error': None},
-    'suspend': {'virsh_state': 'running',  'success': 'VM is suspended',     'error': None},  # inferred
+    'start':   {'virsh_state': 'shut off', 'virsh_cmd': 'start',   'success': 'Domain macos started',   'error': 'VM is already running'},
+    'stop':    {'virsh_state': 'running',  'virsh_cmd': 'destroy',  'success': 'Domain macos destroyed', 'error': 'VM is already stopped'},
+    'revert':  {'virsh_state': 'running',  'virsh_cmd': None,       'success': 'VM has been reverted',   'error': 'VM is already running'},
+    'resume':  {'virsh_state': 'paused',   'virsh_cmd': 'resume',   'success': 'Domain macos resumed',   'error': None},
+    'suspend': {'virsh_state': 'running',  'virsh_cmd': 'suspend',  'success': 'VM has been suspended',  'error': None},
 }
 
 # VM state strings used in vmCommandDescriptor.virshState (virsh domstate output values)
