@@ -26,6 +26,20 @@ Usage:
     ./ablation --ios [HOST]  - Cisco IOS/IOS-XE enumeration (SNMP/TFTP/REST/Telnet)
     ./ablation --cisco-re HOST [--cisco-re-port PORT]
                              - Full Cisco RE probe suite: 38 probes across ASA/IOS/NX-OS/ISE/API
+    ./ablation --cisco-ios-re FILE
+                             - RE Cisco IOS firmware image, crash dump, or running-config
+    ./ablation --cisco-asdm FILE
+                             - RE Cisco ASDM JAR/class file: constant pool walk, cred extraction
+    ./ablation --cisco-asdm-live HOST [--cisco-asdm-live-port PORT]
+                             - Download ASDM JAR live from ASA, RE constant pool
+    ./ablation --cisco-guestshell PATH
+                             - RE NX-OS guest shell rootfs directory or ext4 image
+    ./ablation --cisco-webvpn HOST [--cisco-webvpn-port PORT]
+                             - RE WebVPN JS portal (win.js, logon), SAML surface
+    ./ablation --cisco-config FILE
+                             - RE Cisco config: type-7 decode, cred extract, weak-config scan
+    ./ablation --cisco-rommon FILE|0xCONFREG
+                             - ROMMON bypass analysis: confreg decode, bypass steps
 """
 
 import sys
@@ -310,6 +324,64 @@ except (ImportError, Exception):
     PEParser = None
     scan_pe_file = None
 
+try:
+    from cisco_ios_re import (CiscoIOSImage, IOSCrashDumpRE,
+                               CiscoConfigRE as _IOSConfigRE, analyze_ios_firmware)
+    HAS_CISCO_IOS_RE = True
+except ImportError:
+    HAS_CISCO_IOS_RE = False
+    CiscoIOSImage = None
+    IOSCrashDumpRE = None
+    analyze_ios_firmware = None
+
+try:
+    from cisco_asdm_re import ASDMJarRE, CiscoClassFileRE, analyze_asdm
+    HAS_CISCO_ASDM_RE = True
+except ImportError:
+    HAS_CISCO_ASDM_RE = False
+    ASDMJarRE = None
+    analyze_asdm = None
+
+try:
+    from cisco_nxos_guestshell_re import GuestShellRE, NXOSRootfsExtractor, analyze_guestshell
+    HAS_CISCO_GUESTSHELL_RE = True
+except ImportError:
+    HAS_CISCO_GUESTSHELL_RE = False
+    GuestShellRE = None
+    analyze_guestshell = None
+
+try:
+    from cisco_webvpn_js_re import WebVPNJSRE, WebVPNSAMLRE, analyze_webvpn
+    HAS_CISCO_WEBVPN_RE = True
+except ImportError:
+    HAS_CISCO_WEBVPN_RE = False
+    WebVPNJSRE = None
+    analyze_webvpn = None
+
+try:
+    from cisco_config_re import CiscoConfigRE, analyze_config
+    HAS_CISCO_CONFIG_RE = True
+except ImportError:
+    HAS_CISCO_CONFIG_RE = False
+    CiscoConfigRE = None
+    analyze_config = None
+
+try:
+    from cisco_rommon_re import ROMMONBypassRE, SecureBootRE, analyze_rommon
+    HAS_CISCO_ROMMON_RE = True
+except ImportError:
+    HAS_CISCO_ROMMON_RE = False
+    ROMMONBypassRE = None
+    analyze_rommon = None
+
+try:
+    from cisco_asdm_download_re import ASDMDownloader, analyze_asdm_live
+    HAS_CISCO_ASDM_LIVE = True
+except ImportError:
+    HAS_CISCO_ASDM_LIVE = False
+    ASDMDownloader = None
+    analyze_asdm_live = None
+
 
 class Ablation:
     """Main reverse engineering orchestrator"""
@@ -350,8 +422,14 @@ class Ablation:
             'cisco_api': {},
             'net_sniffer': {},
             'cisco_re': {},
+            'cisco_ios_re': {},
+            'cisco_asdm_re': {},
+            'cisco_guestshell_re': {},
+            'cisco_webvpn_re': {},
+            'cisco_config_re': {},
+            'cisco_rommon_re': {},
         }
-        self.version = "2.12.0"
+        self.version = "2.13.0"
     
     def banner(self):
         """Display banner"""
@@ -1665,6 +1743,24 @@ def main():
                         help='Full Cisco RE probe suite: ASA/IOS/NX-OS/ISE/API probes against one host')
     parser.add_argument('--cisco-re-port', type=int, default=443, metavar='PORT',
                         help='Port for --cisco-re (default 443)')
+    parser.add_argument('--cisco-ios-re', metavar='FILE',
+                        help='RE a Cisco IOS firmware image, crash dump, or running-config file')
+    parser.add_argument('--cisco-asdm', metavar='FILE',
+                        help='RE a Cisco ASDM JAR or .class file (static analysis, constant pool walk)')
+    parser.add_argument('--cisco-asdm-live', metavar='HOST',
+                        help='Download and RE ASDM JAR live from a Cisco ASA (host or IP)')
+    parser.add_argument('--cisco-asdm-live-port', type=int, default=443, metavar='PORT',
+                        help='Port for --cisco-asdm-live (default 443)')
+    parser.add_argument('--cisco-guestshell', metavar='PATH',
+                        help='RE a NX-OS guest shell rootfs directory or ext4 image')
+    parser.add_argument('--cisco-webvpn', metavar='HOST',
+                        help='RE Cisco ASA WebVPN JS portal and SAML surface against a live host')
+    parser.add_argument('--cisco-webvpn-port', type=int, default=443, metavar='PORT',
+                        help='Port for --cisco-webvpn (default 443)')
+    parser.add_argument('--cisco-config', metavar='FILE',
+                        help='RE a Cisco running/startup config: extract creds, decode type-7, find weaknesses')
+    parser.add_argument('--cisco-rommon', metavar='FILE_OR_CONFREG',
+                        help='RE ROMMON bypass: accepts config file path or hex confreg value (e.g. 0x2142)')
 
     args = parser.parse_args()
     
@@ -2056,6 +2152,127 @@ def main():
                     for e in arp:
                         flag = 'complete' if e.get('complete') else 'stale'
                         print(f"    {e['ip']:18s}  {e['mac']}  {e['interface']}  [{flag}]")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_ios_re', None):
+        ablation.banner()
+        if not HAS_CISCO_IOS_RE:
+            print("[-] cisco_ios_re module not available")
+        else:
+            path = args.cisco_ios_re
+            print(f"[*] Cisco IOS RE: {path}")
+            result = analyze_ios_firmware(path)
+            ablation.findings['cisco_ios_re'] = result
+            for c in result.get('credentials', []):
+                print(f"  [CRED] {c.get('type','')}: {str(c.get('value',''))[:80]}")
+            for g in result.get('gadgets', [])[:10]:
+                print(f"  [GADGET] {g.get('vaddr',''):#010x} {g.get('mnemonic','')}")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_asdm', None):
+        ablation.banner()
+        if not HAS_CISCO_ASDM_RE:
+            print("[-] cisco_asdm_re module not available")
+        else:
+            path = args.cisco_asdm
+            print(f"[*] ASDM JAR/class RE: {path}")
+            result = analyze_asdm(path)
+            ablation.findings['cisco_asdm_re'] = result
+            for c in result.get('credentials', []):
+                print(f"  [CRED] {c.get('pattern_type','')}: {str(c.get('matched_string',''))[:100]}")
+            for ip in result.get('internal_ips', []):
+                print(f"  [IP] {ip}")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_asdm_live', None):
+        ablation.banner()
+        if not HAS_CISCO_ASDM_LIVE:
+            print("[-] cisco_asdm_download_re module not available")
+        else:
+            host = args.cisco_asdm_live
+            port = getattr(args, 'cisco_asdm_live_port', 443)
+            print(f"[*] ASDM live download + RE: {host}:{port}")
+            result = analyze_asdm_live(host, port=port)
+            ablation.findings['cisco_asdm_re'] = result
+            print(f"  JAR: {result.get('jar_path')} ({result.get('jar_size_bytes',0)} bytes)")
+            print(f"  Classes: {result.get('class_count',0)}")
+            for c in result.get('credentials', []):
+                print(f"  [CRED] {c.get('pattern_type','')}: {str(c.get('matched_string',''))[:100]}")
+            for ip in result.get('internal_ips', []):
+                print(f"  [IP] {ip}")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_guestshell', None):
+        ablation.banner()
+        if not HAS_CISCO_GUESTSHELL_RE:
+            print("[-] cisco_nxos_guestshell_re module not available")
+        else:
+            path = args.cisco_guestshell
+            print(f"[*] NX-OS guest shell RE: {path}")
+            result = analyze_guestshell(path)
+            ablation.findings['cisco_guestshell_re'] = result
+            for c in result.get('credentials', []):
+                sev = c.get('severity', 'INFO')
+                print(f"  [{sev}] {c.get('file','')}: {str(c.get('matched_text',''))[:80]}")
+            for f in result.get('findings', []):
+                print(f"  [{f.get('severity','INFO')}] {f.get('title','')}: {str(f.get('detail',''))[:100]}")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_webvpn', None):
+        ablation.banner()
+        if not HAS_CISCO_WEBVPN_RE:
+            print("[-] cisco_webvpn_js_re module not available")
+        else:
+            host = args.cisco_webvpn
+            port = getattr(args, 'cisco_webvpn_port', 443)
+            print(f"[*] WebVPN JS + SAML RE: {host}:{port}")
+            result = analyze_webvpn(host, port)
+            ablation.findings['cisco_webvpn_re'] = result
+            for ep in result.get('endpoints', []):
+                print(f"  [ENDPOINT] {ep.get('method','GET')} {ep.get('path','')}")
+            for hv in result.get('hardcoded_values', []):
+                print(f"  [{hv.get('type','')}] {hv.get('value','')}")
+            for f in result.get('findings', []):
+                print(f"  [{f.get('severity','INFO')}] {f.get('title','')}: {str(f.get('detail',''))[:120]}")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_config', None):
+        ablation.banner()
+        if not HAS_CISCO_CONFIG_RE:
+            print("[-] cisco_config_re module not available")
+        else:
+            src = args.cisco_config
+            if src == '-':
+                import sys as _sys2
+                text = _sys2.stdin.read()
+            else:
+                text = open(src).read()
+            print(f"[*] Cisco config RE: {src}")
+            result = analyze_config(text)
+            ablation.findings['cisco_config_re'] = result
+            for c in result.get('credentials', []):
+                decoded = f" → {c['decoded']}" if c.get('decoded') else ''
+                print(f"  [CRED/{c.get('severity','?')}] {c.get('type','')}: {str(c.get('value',''))[:60]}{decoded}")
+            for w in result.get('weaknesses', []):
+                print(f"  [{w.get('severity','INFO')}] {w.get('title','')}: {w.get('detail','')[:100]}")
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_rommon', None):
+        ablation.banner()
+        if not HAS_CISCO_ROMMON_RE:
+            print("[-] cisco_rommon_re module not available")
+        else:
+            src = args.cisco_rommon
+            print(f"[*] ROMMON bypass RE: {src}")
+            result = analyze_rommon(src)
+            ablation.findings['cisco_rommon_re'] = result
+            for f in result.get('findings', []):
+                print(f"  [{f.get('severity','INFO')}] {f.get('title','')}: {str(f.get('detail',''))[:120]}")
+            steps = result.get('bypass_steps', [])
+            if steps:
+                print("\n  Bypass procedure:")
+                for i, step in enumerate(steps, 1):
+                    print(f"    {i}. {step}")
             print(json.dumps(result, indent=2, default=str))
 
     elif getattr(args, 'cisco_re', None):

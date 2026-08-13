@@ -6496,6 +6496,18 @@ def probe_cisco_crosswork_telemetry_exposure(host: str, port: int = 443,
         except Exception:
             return None, None
 
+    # Crosswork-specific body markers — require at least one to avoid FPs on
+    # generic 401/404 responses from non-Crosswork backends (e.g. VergeOS gcweb).
+    _CW_MARKERS = [
+        "crosswork", "X-Crosswork", "cw-fault", "cw-access",
+        "crosswork-access", "collection_job", "nso-service",
+        "imdata", "totalCount",  # APIC/Crosswork imdata schema
+    ]
+
+    def _crosswork_body_confirmed(body_text: str) -> bool:
+        b = body_text.lower()
+        return any(m.lower() in b for m in _CW_MARKERS)
+
     crosswork_paths = [
         ("/api/v1/collections", "CROSSWORK_COLLECTIONS"),
         ("/api/v1/devices", "CROSSWORK_DEVICES"),
@@ -6506,11 +6518,15 @@ def probe_cisco_crosswork_telemetry_exposure(host: str, port: int = 443,
         status, body = _get(path)
         if status is None:
             continue
+        # Require Crosswork-specific body content — skip generic 401/404 pages
+        if status in (404, 400) and not _crosswork_body_confirmed(body or ""):
+            continue
+        if status == 401 and not _crosswork_body_confirmed(body or ""):
+            # Generic {"err":"Login required"} from non-Crosswork backends → skip
+            continue
         sev = "HIGH"
         if status < 300:
-            sev = "CRITICAL"
-            if re.search(r'"device|"host|"address|"ip|"mgmt', body, re.I):
-                sev = "CRITICAL"
+            sev = "CRITICAL" if re.search(r'"device|"host|"address|"ip|"mgmt', body, re.I) else "HIGH"
         elif status in (401, 403):
             sev = "MEDIUM"
         elif status >= 500:
