@@ -226,6 +226,71 @@ LINA_STRING_ANCHORS = {
     'saml_validate_audience': b'lasso_saml2_assertion_validate_audience\x00',
 }
 
+# ─── RADIUS VSA DISPATCH TABLE (CONFIRMED ASA 9.14.2.14) ────────────────────
+#
+# Two interleaved tables in lina's .data/.bss region map cVPN3000 VSA names
+# to lina-internal attribute tokens used by the AAA processing engine.
+#
+# TABLE-1 (index/lookup) — file offset 0x7a16f8, 24-byte triplets:
+#   {str_ptr_64, table2_next_ptr_64, flags_u64=0x8}
+#   str_ptr = vaddr of cVPN3000 VSA name string in .rodata
+#   table2_next_ptr = vaddr of next entry's str_ptr in TABLE-2 (iterator ptr)
+#   flags = 0x8 for all 40 confirmed entries
+#
+# TABLE-2 (data) — vaddr 0x54e2948, file 0x52e2948, 16-byte pairs:
+#   {str_ptr_64, internal_code_u64}
+#   internal_code encoding (LE, bottom 32 bits significant):
+#     byte[0] = lina internal attribute token ID (sequential)
+#     byte[1] = type/flags (0x10 = group-policy domain for most; 0x00 for IETF-mapped attrs)
+#     byte[2] = data type class (0x00=IETF, 0x01=bool/enum, 0x02=int, 0x06=flags, 0x07=octet-string)
+#     byte[3] = 0x00
+#
+# KEY ENTRIES CONFIRMED (from binary scan):
+RADIUS_VSA_TABLE = {
+    # (str_name, vaddr_in_table2, internal_code, decoded)
+    'cVPN3000-IETF-Radius-Session-Timeout': (0x54e2948, 0x2001c, 'token=0x1c,type=0x02=int'),
+    'cVPN3000-IETF-Radius-Idle-Timeout':    (0x54e2958, 0x11019, 'token=0x19,type=0x01=bool/enum'),
+    # === GROUP POLICY INJECTION SURFACE ===
+    # IETF Class attribute (attr 25): lina maps it internally as token=0x0b, type=0x07 (octet-string)
+    # Attack path: RADIUS Access-Accept with Class attr (25) containing group-policy name
+    #   → lina processes Class as octet-string → extracts group-policy name string
+    #   → assigns VPN session to named group-policy (tunnel-group, ACL, split-tunnel config)
+    # String confirmed at file offset 0x3f0e610: "cVPN3000-IETF-Radius-Class"
+    # Companion string confirmed: "Class attribute created from LDAP-Class attribute"
+    'cVPN3000-IETF-Radius-Class':    (0x54e2968, 0x7000b,  'token=0x0b,type=0x07=octet-string,ATTACK_SURFACE'),
+    'cVPN3000-IETF-Radius-Filter-Id':(0x54e2978, 0x210ce,  'token=0xce,type=0x02=int'),
+    'cVPN3000-Auth-Service-Type':    (0x54e2988, 0x21054,  'token=0x54,type=0x02=int'),
+    'cVPN3000-Tunnel-Group-Lock':    (0x54e2b28, 0x71056,  'token=0x56,type=0x07=octet-string,ATTACK_SURFACE'),
+    'cVPN3000-Authorization-Type':   (0x54e29b8, 0x11043,  'token=0x43,type=0x01=bool/enum'),
+    'cVPN3000-WebVPN-SVC-Enable':    (0x54e2ab8, 0x21068,  'token=0x68,type=0x02=int'),
+    'cVPN3000-WebVPN-ACL-Filters':   (0x54e29f8, 0x1104c,  'token=0x4c,type=0x01=bool/enum'),
+    'cVPN3000-Firewall-ACL-In':      (0x54e2b38, 0x71057,  'token=0x57,type=0x07=octet-string'),
+    'cVPN3000-Firewall-ACL-Out':     (0x54e2b48, 0x61058,  'token=0x58,type=0x06=flags'),
+}
+
+# GROUP POLICY INJECTION CHAIN (RADIUS Class attribute path):
+#
+# Attack: forge or relay a RADIUS Access-Accept with a crafted Class (attr 25) value
+#   Value bytes = name of an existing group policy (e.g. b"DfltGrpPolicy\x00")
+#   The group policy must exist in ASA config — RADIUS cannot CREATE a new one,
+#   only SELECT an existing named policy.
+#
+# Effect of selecting a different group policy:
+#   - Override split-tunnel ACL → full-tunnel → MITM all client traffic
+#   - Override ACL (vpn-filter) → broader network access
+#   - Override idle-timeout / session-timeout → persistent sessions
+#   - Override DNS servers → DNS hijack
+#
+# Known group policy names (default, always present):
+KNOWN_DEFAULT_GROUP_POLICIES = [
+    b'DfltGrpPolicy',    # confirmed literal in lina .rodata
+    b'DefaultWEBVPNGroup',  # confirmed literal in lina .rodata
+]
+
+# The cVPN3000-Group-Policy VSA (vendor 3076, attr ?) is the DIRECT path:
+# RADIUS Access-Accept with cVPN3000-Group-Policy = "DfltGrpPolicy" sets group policy directly.
+# String confirmed in .rodata at file offset 0x3f0e80a.
+
 # RADIUS client function chain in lina (typical symbol names in debug builds;
 # in production builds these are recovered via string cross-references):
 LINA_RADIUS_FUNCTIONS = {
