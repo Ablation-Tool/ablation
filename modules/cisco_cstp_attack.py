@@ -1231,7 +1231,7 @@ class RADIUSClassAttrRE:
 # Live SAML SP metadata constants (atl-vpn.macstadium.com, confirmed 2026-08-13)
 # ---------------------------------------------------------------------------
 
-MACSADIUM_SAML = {
+MACSTADIUM_SAML = {
     # SP entity IDs per tunnel group
     'entity_id_sso_vpn':  'https://atl-vpn.macstadium.com/saml/sp/metadata/MacStadium-SSO-VPN',
     'acs_url_sso_vpn':    'https://atl-vpn.macstadium.com/+CSCOE+/saml/sp/acs?tgname=MacStadium-SSO-VPN',
