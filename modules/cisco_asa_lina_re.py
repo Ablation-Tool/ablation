@@ -667,6 +667,51 @@ CONFIRMED_9222232_ADDRS = {
     'mitigation_default': 'DISABLED — optional MA is the default; missing MA allows auth to proceed',
     'versions_no_mitigation': ['9.14.x', '9.16.x', 'all trains before 9.22.x'],
     'disclosure_status': 'PENDING — Cisco PSIRT',
+    # === GROUP POLICY ASSIGNMENT CALL CHAIN (2026-08-13 RE) ===
+    # Traced from 0x3a4bda0 (parse+log) through the assignment hierarchy.
+    # Cisco AI confirmed (Image #100, 10:18): "group policy name is assigned to the
+    # session struct at offset 0xc" and "0x3256dd0 writes to a different field (VPN state)."
+    #
+    # CONFIRMED SESSION STRUCT OFFSETS (9.22.2.32):
+    #   session + 0x000c : group_policy_name  (char* or inlined str)  ← INJECTION TARGET
+    #   session + 0x1a78 : session_type       (DWORD; 1=IPsec, 2=SSL, 3=clientless, 4=L2L)
+    #   session + 0x31a8 : vpn_state_machine  (DWORD; written by 0x3256dd0)
+    #
+    # CALL CHAIN (top to bottom):
+    #   caller function   0x02ae13f0  — session type dispatch ([rdi+0x1a78] switch)
+    #     0x03a4c300      — RADIUS group policy wrapper
+    #       check         0x03df61b0  — RADIUS active check
+    #       0x03a4bda0    — Class attr parse+log  (RDI=session, RSI=gp_db_ptr)
+    #                       strstr("OU=") at 0x03a4bee6
+    #                       256-byte extract buffer at [rbp-0x241]
+    #                       ';' delimiter check at 0x03a4bf52
+    #       0x03a4a250    — group policy allocator  (session, &out_gp_obj, &flag)
+    #         0x01a330a0  — gp struct builder (session→rbx, allocs r13 via 0x3ce91e0)
+    #           0x01a30710 — RADIUS attr KV parser (session string walk; strncpy 0x1a30894)
+    #             strncpy  0x01a30894 — strncpy(gp_struct+0x2b1, attr_def+0xc, attr_def+0x8)
+    #             [callee] — writes gp name to session+0xc  ← CONFIRMED WRITE
+    #       free(gp_obj)  0x02cf6640
+    #     state transition 0x03256dd0  — set_vpn_state(session, 3, 2); writes session+0x31a8
+    #
+    # ATTRIBUTE DEFINITION STRUCT LAYOUT (r15 in 0x1a30710):
+    #   r15 + 0x08 : max_length  (DWORD — passed as rdx to strncpy)
+    #   r15 + 0x0c : value_ptr  (char* — passed as rsi to strncpy)  ← Cisco AI "offset 0xc"
+    #
+    # IPC SOCKETS (post-pivot, post-lina-shell — ZeroMQ found via strings sweep):
+    #   authagent: ipc:///tmp/authagent.%u
+    #   xml_server: ipc:///tmp/asa-lina-xml-server  (ASDM XML cmd channel)
+    #   vpn_updates: ipc:///tmp/vpn_updates
+    'session_group_policy_offset':  0x0c,
+    'session_type_offset':          0x1a78,
+    'session_vpn_state_offset':     0x31a8,
+    'gp_alloc_fn':                  0x03a4a250,
+    'gp_struct_builder_fn':         0x01a330a0,
+    'gp_attr_kv_parser_fn':         0x01a30710,
+    'gp_strncpy_site':              0x01a30894,
+    'vpn_state_machine_fn':         0x03256dd0,
+    'gp_struct_name_field_offset':  0x2b1,
+    'attr_def_value_offset':        0x0c,
+    'attr_def_length_offset':       0x08,
 }
 
 # x86-64 SysV ABI calling convention reference (replaces ARM64 notes above):
