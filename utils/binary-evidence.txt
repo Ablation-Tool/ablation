@@ -1,0 +1,160 @@
+CISCO ASA LINA — BINARY EVIDENCE SUMMARY
+Researcher: Independent security researcher
+Date: 2026-08-13
+Product: Cisco Adaptive Security Appliance (ASA)
+No CVE assigned as of disclosure date.
+
+=============================================================
+FINDING F1: RADIUS Class Attribute Group Policy Substitution
+             (Missing Message-Authenticator Validation)
+=============================================================
+
+AFFECTED VERSIONS (binary analysis confirmed):
+  9.22.2.32  BuildID: 88929a4c3f35a2c0786e01e63c2e64626666ef23
+  9.14.2.14  BuildID: 65cd0306770da18bb71c057dc0dd1472391a1569
+  9.16.x     (string pattern confirmed; full trace not completed)
+  All prior versions: no mitigation mechanism exists in any train
+             before 9.22.x.
+
+BINARY: asa/bin/lina (x86-64 ELF PIE, stripped, ~105MB)
+Extracted from: asa9-22-2-32-smp-k8.bin -> rootfs CPIO -> asa/bin/lina
+
+KEY ADDRESSES (vaddr, 9.22.2.32):
+
+  0x03a4bda0  Class attribute parse+log function
+              -- Entry point for RADIUS attr 25 "OU=" processing
+              -- Function prologue: 55 48 89 e5 (PUSH rbp; MOV rbp,rsp)
+
+  0x03a4bee6  strstr("OU=") call site
+              -- LEA rsi, [0x43b7581]   ; "OU=\x00" string
+              -- CALL strstr
+              -- Extracts OU= value from Class attribute
+
+  0x03a4bfa4  Extraction loop upper bound
+              -- CMP rax, 0x100         ; 256-byte maximum extraction
+              -- This is the F1/F2 boundary: 256 extracted, 64 CLI max
+
+  0x03a4bf52  Semicolon delimiter check
+              -- CMP dl, 0x3b           ; ';' terminates the OU= value
+
+  0x02ae13f0  Session type dispatch (caller of wrapper)
+              -- MOV [rdi+0x1a78], ...  ; session_type field reference
+
+  0x03a4c300  RADIUS group policy wrapper (caller of 0x3a4bda0)
+  0x03a4c365  Caller of 0x3a4bda0 (path 1)
+  0x03a4c3fe  Caller of 0x3a4bda0 (path 2)
+  0x03a4c5b9  Caller of 0x3a4bda0 (path 3)
+
+  NONE OF THE THREE CALLERS CHECK FOR MESSAGE-AUTHENTICATOR (attr 80)
+  BEFORE OR AFTER CALLING 0x3a4bda0. Exhaustive search confirmed via
+  string scan for attr-80 validation patterns in all three caller bodies.
+
+  0x4a6ef70   String: "message-authenticator-required"
+              -- PRESENT in 9.22.2.32 ONLY
+              -- ABSENT in 9.14.2.14 and all earlier versions
+              -- Added silently; no CVE or advisory issued
+              -- Default state: DISABLED (opt-in, not enforced)
+
+GROUP POLICY NAME ASSIGNMENT CALL CHAIN:
+
+  0x03a4bda0  parse+log (RDI=session ptr, RSI=gp_db_ptr)
+    |
+    v
+  0x03a4a250  group policy allocator (session, &out_gp_obj, &flag)
+    |
+    v
+  0x01a330a0  gp struct builder
+              (session -> RBX; allocs via 0x3ce91e0 -> R13)
+    |
+    v
+  0x01a30710  RADIUS attr KV parser (walks attribute string)
+    |
+    v
+  0x01a30894  strncpy(gp_struct+0x2b1, [r15+0x0c], [r15+0x08])
+              -- r15 = attr_def table entry
+              -- [r15+0x08] = max_length (DWORD, runtime value)
+              -- [r15+0x0c] = value_ptr  (source string)
+              -- destination field gp_struct+0x2b1 maps to session+0x0c
+    |
+    v
+  session+0x0c  group_policy_name written here   <-- INJECTION TARGET
+
+SESSION STRUCT CONFIRMED OFFSETS (9.22.2.32):
+  session + 0x000c : group_policy_name (inlined char array)  <-- injection
+  session + 0x1a78 : session_type      (DWORD)
+  session + 0x31a8 : vpn_state_machine (DWORD; written by 0x3256dd0)
+
+ATTRIBUTE DEFINITION TABLE:
+  vaddr 0x76f20a0 (RW- segment, zero at rest, populated at runtime)
+  Entry layout:
+    +0x08 : max_length (DWORD) — passed as rdx (n) to strncpy
+    +0x0c : value_ptr  (char*) — passed as rsi (src) to strncpy
+  Note: max_length cannot be determined from static analysis;
+        runtime verification required to confirm F2 exploitability.
+
+RFC COMPLIANCE:
+  RFC 5080 §2.2 requires: if Access-Request includes Message-Authenticator,
+  the Access-Accept MUST include Message-Authenticator.
+  RFC 2865 does not mandate Message-Authenticator on Access-Accept.
+  Cisco ASA does not require or validate Message-Authenticator on
+  Access-Accept in any known version. The attack exploits this gap.
+
+RELATED CVE:
+  CVE-2024-3596 (BlastRADIUS) — DOES NOT COVER F1/F2.
+  BlastRADIUS targets Access-Request MD5 chosen-prefix collision injection,
+  a different attack vector. F1/F2 exploit the Access-Accept response path
+  using only the known RADIUS shared secret.
+
+=============================================================
+FINDING F2: RADIUS Class Attribute Buffer Overflow (LINA)
+=============================================================
+
+ROOT CAUSE:
+  Extraction loop at 0x03a4bfa4 allows OU= values up to 256 bytes.
+  Cisco ASA CLI enforces a 64-character maximum for group-policy names.
+  The strncpy at 0x01a30894 uses a runtime-sourced length bound ([r15+0x08]).
+  If that runtime bound exceeds the actual array size at session+0x0c,
+  a 65-256 byte OU= value overwrites adjacent session struct fields.
+
+EVIDENCE:
+  Extraction cap:  0x100 = 256 bytes  (CMP rax,0x100 at 0x03a4bfa4)
+  CLI-enforced max: 64 chars           (ASA group-policy name limit)
+  strncpy bound:   runtime [r15+0x08] from attr_def table 0x76f20a0
+  Array type:      inlined char[] at session+0x0c
+                   (estimated 32-256 bytes; exact size requires runtime)
+
+EXPLOITATION PATH (if max_length > array size):
+  1. Inject OU= value of 65-256 bytes (poc_radius_ou_inject.py --f2)
+  2. strncpy copies beyond end of group_policy_name array
+  3. Adjacent session struct fields overwritten
+  4. Fields between session+0x0c+array_end and session+0x1a78 are unknown;
+     corruption of function pointers or callbacks may enable code execution
+
+RUNTIME VERIFICATION STATUS: IN PROGRESS (controlled test environment)
+
+=============================================================
+REPRODUCTION (using included poc_radius_ou_inject.py)
+=============================================================
+
+Prerequisites:
+  - RADIUS shared secret for the target ASA's aaa-server group
+  - ASA configured to use the PoC host as its RADIUS server, OR
+    network position to intercept Access-Accept traffic
+
+F1 reproduction (group policy substitution):
+  python3 poc_radius_ou_inject.py --server --port 1812 \
+    --secret <shared_secret> --policy <existing_high_priv_policy_name>
+  --> Authenticate a VPN session against the ASA
+  --> ASA assigns <high_priv_policy_name> to the session
+  --> No Message-Authenticator in response; ASA accepts without it
+
+F2 reproduction (overflow probe):
+  python3 poc_radius_ou_inject.py --server --port 1812 \
+    --secret <shared_secret> --policy <any_name> --f2
+  --> Sends OU= value padded to 200 bytes
+  --> Observe ASA session behavior: crash / truncation / corruption
+
+RFC 5080 §2.2 compliance check (using included radius_ma_check.go):
+  go run radius_ma_check.go --rfc5080 request.bin response.bin <secret>
+  --> RESULT: RFC 5080 §2.2 N/A — if Access-Request has no MA
+  --> RESULT: VIOLATION     — if Access-Request has MA but response does not
