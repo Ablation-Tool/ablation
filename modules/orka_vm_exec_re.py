@@ -89,6 +89,26 @@ All 5 keys CONFIRMED via map.init.0 disassembly + success string pool extraction
 
 === Attack Chains ===
 
+=== vm.executeCommand call chain (CONFIRMED from disassembly) ===
+vm.executeCommand @ 0x1c76b20 (277 bytes):
+  1. call defaultExecutorFn @ 0x1c76a80 (indirect via global fn ptr @ 0x38c15a8)
+       defaultExecutorFn:
+         a. controller-runtime/config.GetConfigOrDie @ 0x17d47c0
+            → loads K8s client config (KUBECONFIG env or in-cluster SA token)
+         b. vmiexec.NewExecutor @ 0x1c71060
+            → creates executor with K8s client targeting orka-vm container
+  2. if executor ok: call vmiexec.ExecuteVirshCommand @ 0x1c70c80
+       → SPDY/WebSocket exec to /api/v1/namespaces/{ns}/pods/{pod}/exec?container=orka-vm
+       → NO ORKA REST API CALL — pure K8s exec path
+
+SECURITY IMPLICATION:
+  Orka CLI (orka3) has a DIRECT K8s exec mode — bypasses Orka REST API entirely.
+  If you have a K8s credential (kubeconfig or SA token), orka3 can:
+    - Send VM commands directly to K8s without Orka API auth
+    - No Orka-layer audit trail for virsh commands
+  Attack path: forge JWT → steal SA token (no-expiry) → use SA token as kubeconfig
+                → orka3 VM commands bypass Orka auth entirely
+
 Chain A — VM RCE via vmiexec (internal access required):
   1. Forge admin JWT (orka_oidc_re.forge_admin_token)
   2. GET /api/v1/cluster-info → base_oauth_endpoint
@@ -98,7 +118,7 @@ Chain A — VM RCE via vmiexec (internal access required):
   5. virsh domifaddr <vmname> → get VM IP
   6. virsh console <vmname> → macOS VM shell
 
-Chain A (confirmed exec path):
+Chain A (confirmed exec path — direct K8s, no Orka API):
   kubectl exec {orka-vm-pod} -c orka-vm -n orka-default \
     -- virsh list --all
   → shows "macos" domain on hypervisor node
