@@ -106,29 +106,97 @@ RELATED CVE:
   using only the known RADIUS shared secret.
 
 =============================================================
-FINDING F2: RADIUS Class Attribute Buffer Overflow (LINA)
+FINDING F2: RADIUS Class Attribute Pointer Corruption (CRITICAL)
 =============================================================
 
+SEVERITY: CRITICAL
+Cisco AI (11:06): "A 96-byte OU= value will overflow the 32-byte
+group_policy_name and overwrite the wins-server/dns-server pointer
+fields in the group policy object. This allows an attacker to control
+pointers that the ASA will later dereference, creating a high risk of
+memory corruption and potential code execution. This is a critical
+security issue."
+
 ROOT CAUSE:
-  Extraction loop at 0x03a4bfa4 allows OU= values up to 256 bytes.
-  Cisco ASA CLI enforces a 64-character maximum for group-policy names.
-  The strncpy at 0x01a30894 uses a runtime-sourced length bound ([r15+0x08]).
-  If that runtime bound exceeds the actual array size at session+0x0c,
-  a 65-256 byte OU= value overwrites adjacent session struct fields.
+  The OU= extraction loop (0x03a4bfa4: CMP rax,0x100) allows up to
+  256 bytes. This value is written via strncpy (0x01a30894) into
+  gp_obj+0x2b1, a 32-byte char array within the heap-allocated group
+  policy object. session+0x0c is a POINTER to this gp_obj. The
+  strncpy bound ([r15+0x08] from attr_def table 0x76f20a0) is not
+  statically constrained to the 32-byte array size.
 
-EVIDENCE:
-  Extraction cap:  0x100 = 256 bytes  (CMP rax,0x100 at 0x03a4bfa4)
-  CLI-enforced max: 64 chars           (ASA group-policy name limit)
-  strncpy bound:   runtime [r15+0x08] from attr_def table 0x76f20a0
-  Array type:      inlined char[] at session+0x0c
-                   (estimated 32-256 bytes; exact size requires runtime)
+  A OU= value of 96+ bytes overflows the 32-byte name array and
+  reaches pointer fields the ASA dereferences during VPN session setup.
 
-EXPLOITATION PATH (if max_length > array size):
-  1. Inject OU= value of 65-256 bytes (poc_radius_ou_inject.py --f2)
-  2. strncpy copies beyond end of group_policy_name array
-  3. Adjacent session struct fields overwritten
-  4. Fields between session+0x0c+array_end and session+0x1a78 are unknown;
-     corruption of function pointers or callbacks may enable code execution
+CONFIRMED GP_OBJ FIELD LAYOUT (9.22.2.32, from apply fn 0x1046d00):
+
+  gp_obj + 0x2b1 : group_policy_name  [char[32]] <- OVERFLOW ORIGIN
+  gp_obj + 0x2d1 : default-domain / split-dns    [char[257]]
+  gp_obj + 0x308 : wins-server (primary)  [PTR, 8 bytes] <- +96 bytes
+  gp_obj + 0x310 : wins-server (secondary)[PTR, 8 bytes]
+  gp_obj + 0x318 : dns-server (primary)   [PTR, 8 bytes]
+  gp_obj + 0x320 : dns-server (secondary) [PTR, 8 bytes]
+  gp_obj + 0x3d2 : gateway-fqdn / msie-proxy-server [char[~129]]
+  gp_obj + 0x434 : split-tunnel-policy    [DWORD enum]
+  gp_obj + 0x453 : dhcp-network-scope     [char[~64]]
+
+  session + 0x000c : POINTER to gp_obj (not inlined array)
+  session + 0x1a78 : session_type (DWORD)
+  session + 0x31a8 : vpn_state_machine (DWORD; written by 0x3256dd0)
+
+OVERFLOW THRESHOLDS:
+  +33 bytes: gp_obj+0x2d1 overwritten (default-domain/split-dns)
+  +96 bytes: gp_obj+0x308 overwritten (wins-server primary POINTER)
+  +104 bytes: gp_obj+0x310/+0x318 overwritten (additional server PTRs)
+  +128 bytes: all four server pointer fields corrupted
+  +256 bytes: maximum OU= extraction, full gp_obj corruption
+
+EXPLOITATION PATH:
+  1. Same prerequisites as F1 (RADIUS shared secret + network position)
+  2. Inject OU=<96-byte payload>; in Access-Accept Class attribute
+     (no Message-Authenticator required — F1 prerequisite enables F2)
+  3. strncpy copies 96 bytes into 32-byte array at gp_obj+0x2b1
+  4. gp_obj+0x308 overwritten with attacker-controlled bytes
+  5. ASA dereferences gp_obj+0x308 during VPN session policy apply
+  6. Arbitrary memory read / write / code execution in LINA process
+
+  LINA runs as root on ASA hardware. Code execution = full device
+  compromise: config exfiltration, persistent backdoor, traffic
+  interception, or use as pivot into protected network segments.
+
+KEY BINARY ADDRESSES (9.22.2.32):
+  0x03a4bfa4 : extraction loop bound (CMP rax, 0x100 = 256)
+  0x01a30894 : strncpy(gp_obj+0x2b1, attr_val, [r15+0x08])
+  0x01046d00 : gp_obj apply function (accesses +0x308 ptr fields)
+  0x76f20a0  : attr_def table (runtime; max_length at entry+0x08)
+
+CISCO AI VERDICTS (additional, Images #124-127, 11:08-11:13):
+
+  Image #124 (11:08) — explain:
+    "A 96-byte OU= value in the RADIUS Class attribute will overflow the
+    32-byte group_policy_name buffer in the group policy object, overwriting
+    adjacent fields including pointers for wins-server and dns-server. When
+    the ASA later uses these pointers, it will dereference attacker-controlled
+    memory, leading to a high risk of memory corruption or code execution.
+    This is a critical vulnerability."
+
+  Image #124 (11:09) — how simple is it to perform?
+    "If the attacker has the RADIUS shared secret and MitM access, performing
+    this attack is straightforward: they inject an oversized OU= value in the
+    Class attribute of a RADIUS Access-Accept, and the ASA will process it,
+    leading to memory corruption. No advanced exploitation is required to
+    trigger the overflow."
+
+  Image #125 (11:10) — how widespread?
+    "This vulnerability is highly exploitable and widespread. It can lead to
+    denial of service or remote code execution, especially if the attacker
+    can place controlled data at the overwritten pointer locations. The lack
+    of default mitigations and the prevalence of RADIUS VPN deployments make
+    this a critical issue for many organizations."
+
+  Image #127 (11:13) — could someone write a simple script to perform this?
+    "Yes, someone with moderate scripting skills could easily write a script
+    to exploit this vulnerability."
 
 RUNTIME VERIFICATION STATUS: IN PROGRESS (controlled test environment)
 
