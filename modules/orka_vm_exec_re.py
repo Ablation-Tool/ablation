@@ -63,6 +63,27 @@ Symbols extracted:
     .(*Request).SpecificallyVersionedParams(opts) @ 0x1127d80
     .(*Request).URL() @ 0x1128960
 
+=== (*executor).Exec call chain (CONFIRMED from disassembly @ 0x1c711c0) ===
+  1. (*CoreV1Client).Pods(namespace).Get(ctx, podName, GetOptions{})
+       → if IsNotFound: return fmt.Errorf("pod not found: %s", podName)
+  2. getExecRequestURL(self, commands []string) -> *url.URL
+  3. remotecommand.NewSPDYExecutor(config, "POST", url) -> Executor
+       NewSPDYExecutor @ 0x170bc80; method literal "POST" @ 0x21de7a2
+  4. executor.Stream(StreamOptions{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}})
+  5. Result string assembled via runtime.concatstring2 + strings.Join:
+       "stdOut: " + stdout   (literal @ 0x21e6085)
+       "stdErr: " + stderr   (literal @ 0x21e608d)
+       strings.Join(parts, "; ")  (separator @ 0x21ddc0d)
+  6. Return: "stdOut: <stdout>; stdErr: <stderr>", nil
+
+  PodExecOptions heap layout (runtime.newobject + field stores):
+    +0x21: Stdout = true  (movb $0x1)
+    +0x22: Stderr = true  (movw $0x1)
+    +0x28: Container ptr  -> "orka-vm" @ 0x21e374b
+    +0x30: Container len  = 7 (movq $0x7)
+    +0x38: Command []string <- commands arg
+    +0x40/0x48: namespace from executor struct
+
 === Virsh command assembly (PENDING) ===
   "virsh" does NOT appear as a standalone string literal in the orka3 binary.
   Hypothesis: the orka-vm container has a wrapper script/binary that accepts
