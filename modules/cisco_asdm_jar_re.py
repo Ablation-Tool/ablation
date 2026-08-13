@@ -530,8 +530,12 @@ BYTECODE_AUTH_PATTERNS = {
     #   -> HttpsURLConnection.setDefaultSSLSocketFactory(ctx.getSocketFactory())
     #   -> HttpsURLConnection.setDefaultHostnameVerifier(av$1_instance)
     #
-    # SHA-256 of class av: c37f5cf3106baad710c1b792052ee3af4fa635e049b79985c278d5968ca85cf1
+    # SHA-256 of class av (7161): c37f5cf3106baad710c1b792052ee3af4fa635e049b79985c278d5968ca85cf1
     # Binary path: asdm-7161.bin -> SIGNATURE4 container -> class av @ file offset 0x213f62
+    # ALSO CONFIRMED in asdm-7202.bin: class av @ file offset 0x2059d6, idx=376
+    #   checkServerTrusted: Code stack=0, locals=3; 0: return (IDENTICAL to 7161)
+    #   Same class index position (302=ak, 376=av) in both versions.
+    #   Bypass spans ASDM 7.16.1 -> 7.20.2 (latest); likely all 7.x versions.
     'ssl_bypass_empty_return': {
         'opcode': 0xb1,
         'code_length_max': 3,   # return + maybe areturn or nop; anything <= 3 is trivial
