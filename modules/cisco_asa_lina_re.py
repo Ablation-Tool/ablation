@@ -1098,6 +1098,128 @@ MEMORY_DUMP_PROCEDURE = {
 }
 
 
+# ─── SAML SP ATTACK SURFACE (ASA 9.14.2.14) ─────────────────────────────────
+#
+# Lina uses the lasso SAML library for SAML 2.0 SP functionality (WebVPN/AnyConnect).
+# All findings below are from binary RE of lina 9.14.2.14 (file offset = vaddr for RX segment).
+#
+# PLT stub addresses (file == vaddr in RX segment):
+SAML_LASSO_PLT = {
+    'lasso_login_new':                         0x00bdd920,
+    'lasso_login_process_authn_response_msg':  0x00bdbc10,  # SP-side assertion validator
+    'lasso_login_process_authn_request_msg':   0x00bde400,  # IdP-side request validator
+    'lasso_login_init_authn_request':          0x00bde490,  # build SP→IdP redirect
+    'lasso_login_build_authn_request_msg':     0x00bdd460,  # serialize AuthnRequest
+    'lasso_login_build_authn_response_msg':    0x00bdd590,  # IdP response builder
+    'lasso_login_validate_request_msg':        0x00bdd050,  # validate SP request msg
+    'lasso_login_get_assertion':               0x00bdd2f0,  # extract LassoSaml2Assertion
+    'lasso_login_accept_sso':                  0x00bdefa8,  # complete SSO handshake
+    'lasso_login_destroy':                     0x00bdd190,  # cleanup login object
+    'lasso_profile_set_signature_hint':        0x00bdd660,  # ← CRITICAL (see below)
+    'lasso_profile_set_session_from_dump':     0x00bddad0,
+    'lasso_strerror':                          0x00bdd500,
+    'lasso_saml2_assertion_validate_audience': 0x00bde690,  # audience restriction check
+    'lasso_server_destroy':                    0x00bdd1d0,
+    'lasso_init':                              0x00bdcdb0,
+    'lasso_logout_new':                        0x00bdcfb0,
+}
+
+# GOT entries for lasso PLT (RW segment; file_offset = vaddr - 0x200000):
+SAML_LASSO_GOT = {
+    'lasso_login_process_authn_response_msg': 0x4fce340,
+    'lasso_login_process_authn_request_msg':  0x4fcf738,
+    'lasso_login_init_authn_request':         0x4fcf780,
+    'lasso_login_build_authn_request_msg':    0x4fcf1f0,
+    'lasso_profile_set_signature_hint':       0x4fcf068,
+    'lasso_saml2_assertion_validate_audience':0x4fce2e0,
+    'lasso_login_new':                        0x4fcf1c8,
+    'lasso_login_get_assertion':              0x4fceeb0,
+}
+
+# ── CRITICAL: SAML signature hint bypass ──────────────────────────────────────
+#
+# Function at 0x02ecfcb0 handles SP-initiated SAML login (builds AuthnRequest).
+# At 0x02ecfd17: MOV esi, [rbx+0x18]  ; load config field "sign_requests"
+# At 0x02ecfd1a: TEST esi, esi
+# At 0x02ecfd1c: JE 0x2ecff60          ; if field==0 (not configured): ALLOW_UNSIGNED path
+#
+# ALLOW_UNSIGNED path (0x02ecff60):
+#   MOV esi, 0x2           ; LASSO_PROFILE_SIGNATURE_HINT_ALLOW_UNSIGNED = 2
+#   MOV rdi, rax           ; login object ptr
+#   CALL 0xbdd660          ; lasso_profile_set_signature_hint(login, ALLOW_UNSIGNED)
+#
+# LassoProfileSignatureHint enum:
+#   0 = MAYBE         — use provider metadata to decide
+#   1 = FORBID_NONE   — require at least one signature on any message
+#   2 = ALLOW_UNSIGNED — accept messages without any signature
+#
+# Result when config field 0x18 is zero (default when "no saml ... sign-request" configured):
+#   ASA sends UNSIGNED AuthnRequests to the IdP.
+#   SP metadata generated with AuthnRequestsSigned="false".
+#
+# SP metadata template (file offset 0x042f0f80):
+#   <SPSSODescriptor AuthnRequestsSigned="%s" WantAssertionsSigned="%s" ...>
+#   Both fields are runtime-configurable via SAML IDP config.
+#   If WantAssertionsSigned="false", IdPs that respect this flag won't sign assertions.
+#   With lasso MAYBE hint (default for response processing), unsigned assertions
+#   from a cooperating IdP would not trigger a signature validation failure.
+#
+SAML_SIGNATURE_BYPASS = {
+    'function':     0x02ecfcb0,  # SP-init handler
+    'hint_site':    0x02ecff60,  # MOV esi,2; CALL lasso_profile_set_signature_hint
+    'config_check': 0x02ecfd17,  # MOV esi,[rbx+0x18]; TEST esi,esi; JE hint_site
+    'enum_allow_unsigned': 2,
+    'affects': 'OUTGOING AuthnRequest (not incoming response validation)',
+    'response_processing_fn': 0x02ed01c6,  # creates new login obj, no hint set
+    'response_process_call':  0x02ed01e1,  # CALL lasso_login_process_authn_response_msg
+    'response_rc_check':      0x02ed01e6,  # TEST eax,eax; JE success
+    'severity': 'MEDIUM — requires IdP cooperation or on-path MITM',
+}
+
+# ── SAML assertion post-processing (success path after response validation) ────
+#
+# After lasso_login_process_authn_response_msg returns 0 (success) at 0x02ed0398:
+# 1. 0x02ed03a5: CALL 0xbdd050 (lasso_login_validate_request_msg, esi=1=REDIRECT binding)
+# 2. 0x02ed04cd: CALL 0xbdd2f0 (lasso_login_get_assertion) → RAX = LassoSaml2Assertion*
+# 3. Traversal of assertion struct: rbx+0x20 → NameID data structure
+# 4. String at 0x042f1820: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'
+#    → preferred NameID format for subject identification
+# 5. saml_get_tgname() (string at 0x042f0921) → maps SAML context to tunnel group
+#
+# Key validation checks confirmed (by string presence):
+#   'assertion audience is invalid'        @ 0x042f0b5c  → audience restriction CHECKED
+#   'assertion is expired or not valid'    @ 0x042f18b0  → expiry validation CHECKED
+#   'name_id is NULL'                      @ 0x042f0b0f  → NameID presence CHECKED
+#   'NameIDPolicy is invalid'              @ 0x042f0aba  → NameIDPolicy CHECKED
+#
+# SAML→tunnel-group mapping function strings:
+#   'saml_get_tgname'           @ 0x042f0921
+#   'saml_get_config_by_tgname' @ 0x042f0950
+#   'saml_add_config'           @ 0x042f0970
+#   'Tunnel-group name is null' @ 0x042f0d73
+#   → SAML config is keyed by tunnel-group name (the group selector in the portal)
+#
+SAML_POST_VALIDATION = {
+    'success_path_entry': 0x02ed0398,
+    'validate_binding':   0x02ed03a5,  # CALL lasso_login_validate_request_msg(login,1)
+    'get_assertion':      0x02ed04cd,  # CALL lasso_login_get_assertion → assertion ptr
+    'nameid_format_str':  0x042f1820,  # urn:...:nameid-format:persistent
+    'acclass_str':        0x042f17f0,  # urn:...:ac:classes:Password
+    'tgname_fn_str':      0x042f0921,  # 'saml_get_tgname' — tunnel-group lookup
+}
+
+# ── CCO supply chain note (from ASDM analysis) ────────────────────────────────
+# ASDM class efw (idx 10833, ASDM 7.20.2) sets JVM-global SSL bypass:
+#   HttpsURLConnection.setDefaultSSLSocketFactory(trust_all_ctx)
+#   HttpsURLConnection.setDefaultHostnameVerifier(allow_all_hv)
+# This affects the CCO firmware download path (CCOImageASDHandler, class idx 7340):
+#   oauth2:    https://cloudsso.cisco.com/as/token.oauth2
+#   metadata:  https://api.cisco.com/software/v4.0/metadata/udirelease
+#   download:  https://api.cisco.com/software/v4.0/download/udiimage
+# MITM of api.cisco.com during ASDM session → arbitrary firmware served to admin.
+# Documented in cisco_asdm_jar_re.py CONFIRMED_ASDM_7202_ADDITIONAL.
+
+
 # ─── MODULE ENTRYPOINT ───────────────────────────────────────────────────────
 
 class CiscoASALinaRE:
