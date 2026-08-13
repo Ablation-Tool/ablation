@@ -586,17 +586,24 @@ CONFIRMED_FUNCTION_ADDRS = {
 
 CONFIRMED_9222232_ADDRS = {
     # Class attr (attr 25) / OU= parsing function
+    # DUAL CONFIRMED: binary RE (2026-08-13) + Cisco AI explicit statement:
+    # "no Message-Authenticator validation is performed before this step"
     'class_attr_parse_fn':          0x03a4bda0,  # function start (55 48 89 e5 prologue)
     'class_attr_strstr_call':       0x03a4bee6,  # CALL strstr(attr_value, "OU=")
     'class_attr_ou_string_vaddr':   0x043b7581,  # "OU=\x00" in R-- segment (strstr 2nd arg)
     'class_attr_semicolon_check':   0x03a4bf1b,  # CMP dl, 0x3b  (';' delimiter loop)
     'class_attr_output_buf_lea':    0x03a4bf24,  # LEA rdi,[rbp-0x241]  256-byte stack buf
     'class_attr_log_fmt_vaddr':     0x0497c510,  # "OU=%s (tunnelgroup %s)\n"
-    'class_attr_log_callsite':      0x02c33a9e,  # CALL to aaa debug log function
+    'class_attr_log_callsite':      0x02c33a9e,  # log site — records successful OU= extraction
     # Callers of 0x3a4bda0 (3 confirmed xrefs)
     'class_attr_caller_1':          0x03a4c365,
     'class_attr_caller_2':          0x03a4c3fe,
     'class_attr_caller_3':          0x03a4c5b9,
+    # Binary RE validation: Message-Authenticator string NOT in 2KB window around 0x3a4bda0
+    # String exists at: 0x439d5f3, 0x4506b4f, 0x49e7xxx (NAS-side only — not in this path)
+    'mac_validation_absent':        True,
+    'mac_binary_confirmed':         '2026-08-13: not found in 2048-byte window around parse fn',
+    'mac_cisco_ai_confirmed':       '2026-08-13: "no Message-Authenticator validation is performed before this step"',
 }
 
 # x86-64 SysV ABI calling convention reference (replaces ARM64 notes above):
