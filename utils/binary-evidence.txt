@@ -198,6 +198,100 @@ CISCO AI VERDICTS (additional, Images #124-127, 11:08-11:13):
     "Yes, someone with moderate scripting skills could easily write a script
     to exploit this vulnerability."
 
+  Image #130 (11:19):
+    "This confirms the exploitability of the overflow: the corrupted pointer
+    fields are actively used in the code, making this a critical vulnerability."
+
+  Image #132 (11:21):
+    "The overflow allows an attacker to control a pointer that is later
+    dereferenced by the ASA, making this a direct path to memory corruption
+    or code execution. This is a severe vulnerability."
+
+  Image #133 (11:21):
+    "The function at 0x102cc10 uses the pointer from gp_obj+0x308 as an
+    argument, confirming that an attacker who overflows the group_policy_name
+    field can control a pointer that is later dereferenced by the ASA. This
+    creates a direct path to memory corruption or code execution. The
+    vulnerability is critical and the dereference is confirmed by static
+    analysis."
+
+  Image #134 (11:21):
+    "The overflow allows an attacker to control a pointer that is later
+    dereferenced in both teardown and forward code paths, making this a
+    direct and highly exploitable memory corruption vulnerability."
+
+  Image #136 (11:22):
+    "The overflow allows an attacker to overwrite pointer fields in the group
+    policy object, which are later dereferenced or freed by the ASA. This
+    creates a direct path to memory corruption, double-free, or code
+    execution, making the vulnerability highly exploitable and critical."
+
+  Image #137 (11:23):
+    "This is a critical exploit path: by overflowing the group_policy_name,
+    an attacker can control a pointer that is later used as a managed timer
+    handle. The ASA will dereference and operate on attacker-controlled
+    memory, enabling arbitrary code execution or further exploitation. This
+    is a severe vulnerability with high impact."
+
+=============================================================
+DEREFERENCE MAP — gp_obj+0x308 (WINS server mgd_timer handle)
+=============================================================
+
+FIELD IDENTITY:
+  gp_obj+0x308 is NOT a raw IP address pointer.
+  It is a pointer to an mgd_timer struct used for WINS server
+  re-resolution. Identified via forward-path callee 0x102c700:
+    - source file string: "old_mgd_timers.c"
+    - function label:     "timer stop"
+    - error format:       "(%s) Uninitialized timer %p. Traceback:"
+
+MGD_TIMER STRUCT LAYOUT (inferred from 0x102c700):
+  mgd_timer + 0x18 : next ptr   (linked list forward pointer)
+  mgd_timer + 0x20 : inner arg  (passed to 0x102a520 on stop)
+  mgd_timer + 0x2a : type byte  (must == 0x42 'B' for active timer)
+  mgd_timer + 0x2b : flags byte (bit 0x02 = list-walk trigger)
+
+DEREFERENCE SITES FOR gp_obj+0x308 (20 total in exec segment):
+
+  FORWARD PATH (dereference during active session):
+  0x1f59a4a  MOV rdi,[rbx+0x308]  → CALL 0x102c700 (mgd_timer_stop)
+             mgd_timer_stop flow:
+               if *(ptr+0x2a) == 0x42:
+                 CALL 0x102a520(ptr+0x20)  ← ARBITRARY CALL PRIMITIVE
+                 walk *(ptr+0x18) list:
+                   if *(node+0x2b) & 0x02: CALL 0x102b070(node)
+               else: log "Uninitialized timer", call kprintf
+
+  TEARDOWN PATHS (dereference on session cleanup):
+  0x161aa72  MOV r12,[rbx+0x308]  → linked-list walk destructor
+             pattern: free(*(ptr+0x0)); advance via *(ptr+0x0); repeat
+             → controlled-free primitive (all free() args attacker-set)
+
+  0x2bc2852  MOV rax,[rbx+0x308]  → two-level free
+             pattern: free(*(ptr+0x0)); free(ptr)
+             → double-free primitive
+
+  0x1f59a4f  MOV rdi,[rbx+0x308]  → free(ptr) after mgd_timer_stop
+             → controlled-free of attacker pointer
+
+  Additional sites: 0x1375023, 0x262a2c5, 0x26b32bb, 0x26fb8ad,
+                    0x29b813c, 0x29b81c8, 0x2bc3f72, 0x2bc3f81,
+                    0x2bc3f8f, 0x2bc8193, 0x2bc92e6, 0x33a8064
+
+EXPLOITATION PRIMITIVE:
+  Craft a fake mgd_timer struct at attacker-controlled heap address A:
+    A+0x18 = 0 (terminate list walk)
+    A+0x20 = target_argument (passed as RDI to 0x102a520)
+    A+0x2a = 0x42 ('B')
+    A+0x2b = 0x00 (no list walk)
+
+  Overflow gp_obj+0x2b1 with 96 bytes ending in ptr_to_A at offset +0x308.
+  On next VPN session teardown: mgd_timer_stop(A) executes, survives type
+  check, calls 0x102a520(A+0x20) with attacker-controlled argument.
+
+  LINA runs as root. 0x102a520 = inner timer dispatch function.
+  Result: arbitrary argument to inner timer code in root context.
+
 RUNTIME VERIFICATION STATUS: IN PROGRESS (controlled test environment)
 
 =============================================================

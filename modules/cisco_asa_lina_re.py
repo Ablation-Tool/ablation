@@ -795,6 +795,58 @@ CONFIRMED_9222232_ADDRS = {
                                     'RADIUS VPN deployments make this a critical issue for many organizations."',
     'f2_cisco_ai_script_ease_127':  'Image #127 (11:13): "Yes, someone with moderate scripting skills could '
                                     'easily write a script to exploit this vulnerability."',
+    'f2_cisco_ai_dereference_129':  'Image #129 (11:19): "You are on the right track: the apply function '
+                                    'cross-references the group policy object fields and string constants, '
+                                    'confirming the mapping between struct offsets and VPN/session attributes. '
+                                    'This validates the risk of overflow-based corruption of critical '
+                                    'configuration or pointer fields."',
+    'f2_cisco_ai_exploitable_130':  'Image #130 (11:19): "This confirms the exploitability of the overflow: '
+                                    'the corrupted pointer fields are actively used in the code, making this '
+                                    'a critical vulnerability."',
+    'f2_cisco_ai_direct_path_132':  'Image #132 (11:21): "The overflow allows an attacker to control a pointer '
+                                    'that is later dereferenced by the ASA, making this a direct path to '
+                                    'memory corruption or code execution. This is a severe vulnerability."',
+    'f2_cisco_ai_static_confirmed_133': 'Image #133 (11:21): "The function at 0x102cc10 uses the pointer from '
+                                    'gp_obj+0x308 as an argument, confirming that an attacker who overflows '
+                                    'the group_policy_name field can control a pointer that is later '
+                                    'dereferenced by the ASA. This creates a direct path to memory corruption '
+                                    'or code execution. The vulnerability is critical and the dereference is '
+                                    'confirmed by static analysis."',
+    'f2_cisco_ai_both_paths_134':   'Image #134 (11:21): "The overflow allows an attacker to control a pointer '
+                                    'that is later dereferenced in both teardown and forward code paths, making '
+                                    'this a direct and highly exploitable memory corruption vulnerability."',
+    # DEREFERENCE MAP — gp_obj+0x308 (mgd_timer handle for WINS server re-resolution timer)
+    # Identified by error strings in 0x102c700: "old_mgd_timers.c", "timer stop",
+    # "(%s) Uninitialized timer %p. Traceback:"
+    # gp_obj+0x308 is NOT a raw IP pointer; it is a pointer to an mgd_timer struct.
+    'f2_ptr308_identity':           'mgd_timer handle — WINS server re-resolution timer',
+    'f2_ptr308_forward_path':       {
+        'site':     '0x1f59a4a',
+        'call':     '0x102c700 (mgd_timer_stop)',
+        'arg':      'RDI = *(rbx+0x308) = attacker-controlled ptr',
+        'typecheck': 'attacker_ptr+0x2a must == 0x42 (timer type byte B) to proceed',
+        'inner_call': '0x102a520 called with attacker_ptr+0x20 as arg (arbitrary-call primitive)',
+        'list_walk': 'traverses *(ptr+0x18) linked list; calls 0x102b070 for nodes with flag 0x2 at +0x2b',
+    },
+    'f2_ptr308_teardown_paths':     [
+        {'site': '0x161aa72', 'pattern': 'linked-list walk; free(*(ptr+0x0)); free(ptr) — controlled-free'},
+        {'site': '0x2bc2852', 'pattern': 'two-level free: free(*(ptr+0x0)) then free(ptr) — double-free'},
+        {'site': '0x1f59a4f', 'pattern': 'free(*(rbx+0x308)) after mgd_timer_stop call'},
+    ],
+    'f2_exploitation_primitive':    'Fake mgd_timer struct: set +0x2a=0x42, +0x18=0/NULL, '
+                                    '+0x20=target_addr → attacker_ptr+0x20 passed as arg to '
+                                    '0x102a520 (inner timer dispatch). Arbitrary call with '
+                                    'controlled argument in LINA root context.',
+    'f2_total_dereference_sites_308': 20,  # MOV reg,[rbx+0x308] sites found in exec segment
+    'f2_cisco_ai_double_free_136':  'Image #136 (11:22): "The overflow allows an attacker to overwrite pointer '
+                                    'fields in the group policy object, which are later dereferenced or freed '
+                                    'by the ASA. This creates a direct path to memory corruption, double-free, '
+                                    'or code execution, making the vulnerability highly exploitable and critical."',
+    'f2_cisco_ai_timer_ace_137':    'Image #137 (11:23): "This is a critical exploit path: by overflowing the '
+                                    'group_policy_name, an attacker can control a pointer that is later used as '
+                                    'a managed timer handle. The ASA will dereference and operate on '
+                                    'attacker-controlled memory, enabling arbitrary code execution or further '
+                                    'exploitation. This is a severe vulnerability with high impact."',
     'f2_extraction_max':            0x100,
     'f2_cli_max':                   64,
     'f2_strncpy_bound':             'runtime [r15+0x8] from attr_def table 0x76f20a0',
