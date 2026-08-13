@@ -59,9 +59,17 @@ Targets the authentication/authorization subsystem in the lina process:
       3a4bf1b: CMP dl, 0x3b      ; ';' semicolon delimiter
       3a4bf24: LEA rdi,[rbp-0x241]; 256-byte output buffer
     Log format: "OU=%s (tunnelgroup %s)\n" at vaddr 0x497c510
-    Log call site: vaddr 0x02c33a9e
+    Log call site: vaddr 0x02c33a9e — records successful OU= extraction
     Callers of 0x3a4bda0: 0x3a4c365, 0x3a4c3fe, 0x3a4c5b9
     CRITICAL: no Message-Authenticator (attr 80) check in any caller path
+
+  SCOPE: SYSTEMIC ACROSS ALL ASA VERSIONS
+  Cisco AI confirmed 2026-08-13 09:23:
+    "No Cisco ASA version is known to enforce Message-Authenticator
+     validation (RADIUS attribute 80) on incoming Access-Accept packets."
+  Affected platforms: ASA 5500-X/5585-X, Firepower 2100/4100/9300 (FTD),
+                      ASAv, FTDv — all models running RADIUS-based VPN auth
+  Disclosure: Cisco PSIRT (psirt@cisco.com)
 
 === CONFIRMED FROM ASA 9.14.2.14 LINA (real binary) ===
   Build: asa9-14-2-14-smp-k8.bin -> rootfs.img (CPIO) -> asa/bin/lina
@@ -604,6 +612,15 @@ CONFIRMED_9222232_ADDRS = {
     'mac_validation_absent':        True,
     'mac_binary_confirmed':         '2026-08-13: not found in 2048-byte window around parse fn',
     'mac_cisco_ai_confirmed':       '2026-08-13: "no Message-Authenticator validation is performed before this step"',
+    # SCOPE: SYSTEMIC — not version-specific
+    # Cisco AI 2026-08-13 09:23: "No Cisco ASA version is known to enforce
+    # Message-Authenticator validation (RADIUS attribute 80) on incoming Access-Accept packets."
+    # → ALL ASA versions doing RADIUS-based VPN auth are affected.
+    # Scope: ASA 5500-X, 5585-X, Firepower 2100/4100/9300 FTD mode, ASAv, FTDv
+    # Confirmed affected binary: 9.22.2.32 (strstr call at 0x3a4bee6, no MAC check)
+    # Disclosure target: Cisco PSIRT (psirt@cisco.com)
+    'scope': 'ALL_ASA_VERSIONS',
+    'disclosure_status': 'PENDING — Cisco PSIRT',
 }
 
 # x86-64 SysV ABI calling convention reference (replaces ARM64 notes above):
