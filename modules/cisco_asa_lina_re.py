@@ -829,6 +829,89 @@ def tacacs_decrypt_body(key: bytes, session_id: int, version: int,
     return bytes(plaintext)
 
 
+# ─── LINA API SURFACE MAP ────────────────────────────────────────────────────
+#
+# Three external management APIs and a rich internal module API layer.
+# Each is an RE target and a potential attack surface.
+
+LINA_API_SURFACE = {
+    'cli': {
+        'mechanism': 'internal command parser in lina; strings like "configure terminal" anchor it',
+        'auth': 'local username/password or AAA (RADIUS/TACACS+)',
+        're_anchors': [b'configure terminal\x00', b'enable password\x00', b'show running-config\x00'],
+        'attack': 'Type 7 XOR secrets in running-config; TACACS+ key via "show running-config all"',
+    },
+    'asdm': {
+        'mechanism': 'XML/HTTP over HTTPS/443 to lina management listener',
+        'auth': 'HTTP Basic (admin:password) in Authorization header — captured by ASDMMitmProxy',
+        're_anchors': [b'ASDM\x00', b'pdm\x00', b'Content-Type: text/xml\x00', b'HTTP/1.1 200\x00'],
+        'attack': (
+            'av.class trust-all bypass → ASDMMitmProxy intercepts admin session. '
+            'XML request body contains raw config commands — parse Authorization header '
+            'for base64 creds; parse XML body for any inline secrets.'
+        ),
+        'xml_endpoints': [
+            '/admin/exec/<urlencoded-cli-command>',
+            '/admin/config',
+            '/admin/logon',
+        ],
+    },
+    'rest_api_ftd': {
+        'mechanism': 'REST over HTTPS; JSON payloads; JWT bearer tokens',
+        'auth': 'OAuth2 / JWT bearer',
+        're_anchors': [b'application/json\x00', b'X-Auth-Token\x00', b'/api/fdm/\x00'],
+        'attack': 'token replay; unauthenticated endpoints if mis-configured; JSON injection',
+    },
+    'internal_module_api': {
+        'mechanism': (
+            'Each feature module (NAT, VPN, ACL, routing) registers via function table. '
+            'Pattern: struct with fn pointers {init, config_apply, pkt_process, cleanup}. '
+            'Modules dlopen\'d at runtime → visible in /proc/lina/maps as *.so entries.'
+        ),
+        're_pattern': (
+            'Scan lina for function table registration calls:\n'
+            'LEA rdi, [module_struct]\n'
+            'CALL register_module_fn\n'
+            'Module struct: {name_ptr, init_fn, config_fn, pkt_fn, cleanup_fn}'
+        ),
+        'module_extraction': (
+            '/proc/$(pidof lina)/maps | grep ".so" → list loaded feature modules\n'
+            'cp /proc/$(pidof lina)/fd/<n> /tmp/<module>.so 2>/dev/null\n'
+            'or: find /asa/lib/ -name "*.so" → smaller, focused analysis targets'
+        ),
+    },
+}
+
+LINA_IPC_SURFACES = {
+    'shared_memory': {
+        'how_to_find': 'grep shm /proc/$(pidof lina)/maps  OR  ipcs -m',
+        'content': 'Snort←→LINA packet flow data; may contain cleartext from inspected SSL sessions',
+        'attack': (
+            'dd if=/dev/shm/<segment> of=/tmp/shm_dump.bin\n'
+            'or: dd if=/proc/$(pidof lina)/mem bs=4096 skip=$((SHM_VADDR/4096)) ...'
+        ),
+    },
+    'unix_sockets': {
+        'how_to_find': 'ls /var/run/*.sock  OR  ss -x  OR  netstat -x',
+        'content': 'management daemon IPC; may accept unauthenticated commands if socket perms misconfigured',
+        'attack': 'socat - UNIX-CONNECT:/var/run/<socket>  to probe raw protocol',
+    },
+    'message_queues': {
+        'how_to_find': 'ipcs -q',
+        'content': 'packet queues between kernel and LINA; inter-module event passing',
+        'attack': 'inject crafted events to trigger lina state machine transitions',
+    },
+    'proc_mem_targets': {
+        'radius_psk':   'aaa_server_t.secret field — plaintext string in RW segment',
+        'tacacs_key':   'tacacs_server_t.key field — plaintext string in RW segment',
+        'ssl_ca_key':   'EVP_PKEY struct in heap — private key for SSL inspection trustpoint',
+        'session_table':'VPN session table in heap — user IPs, assigned addrs, session tokens',
+        'nat_table':    'NAT translation table — active flows, internal IPs',
+        'radius_live':  'in-flight RADIUS Access-Accept packets in recv buffer — Class attr visible',
+    },
+}
+
+
 # ─── LINA FUNCTION RECONSTRUCTION MAP ───────────────────────────────────────
 #
 # x86-64 function boundary heuristic for stripped lina PIE binary:
