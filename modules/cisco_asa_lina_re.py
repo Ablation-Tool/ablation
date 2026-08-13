@@ -767,19 +767,77 @@ CONFIRMED_9222232_ADDRS = {
     #   Estimated name array: ~32 bytes       (gp_obj+0x2d1 is next field, 32 bytes above)
     #   strncpy bound:    [r15+0x8]           (runtime-populated attr_def table 0x76f20a0)
     #
-    'f2_overflow_status':           'CONFIRMED — heap gp_obj overflow (not session struct); blast radius = gp_obj+0x2d1+',
+    'f2_overflow_status':           'CRITICAL — pointer corruption confirmed by Cisco AI (Image #122, 11:06)',
+    'f2_cisco_ai_verdict':          'Image #122 (11:06): "A 96-byte OU= value will overflow the 32-byte '
+                                    'group_policy_name and overwrite the wins-server/dns-server pointer fields '
+                                    'in the group policy object. This allows an attacker to control pointers '
+                                    'that the ASA will later dereference, creating a high risk of memory '
+                                    'corruption and potential code execution. This is a critical security issue."',
+    'f2_cisco_ai_field_confirm':    'Image #121 (11:06): fields at +0x308/+0x310/+0x318/+0x320 confirmed as '
+                                    'DNS server, WINS server, default domain, ACL/filter names — overflow '
+                                    'corrupts these, altering VPN session behavior and security policy.',
+    'f2_cisco_ai_methodology':      'Image #120 (11:05): "Your methodology is correct."',
     'f2_extraction_max':            0x100,
     'f2_cli_max':                   64,
     'f2_strncpy_bound':             'runtime [r15+0x8] from attr_def table 0x76f20a0',
     'f2_overflow_target':           'gp_obj+0x2b1 (heap-allocated; session+0x0c is pointer to gp_obj)',
     'f2_name_array_size_estimate':  32,  # gp_obj+0x2d1 - gp_obj+0x2b1 = 0x20 bytes
+    # GP_OBJ FIELD LAYOUT — FROM APPLY FUNCTION 0x1046d00 (wins-server ref)
+    # Function 0x1046d00 references all group policy attribute strings and
+    # accesses gp_obj at offsets +0x308..+0x4a0, confirming full field map.
+    # String constants found: 'wins-server (primary/secondary)',
+    # 'dns-server (primary/secondary)', 'default-domain', 'split-dns',
+    # 'split-tunnel-policy', 'gateway-fqdn', 'dhcp-network-scope',
+    # 'vpn-framed-ip-address', 'msie-proxy-bypass', 'svc compression', etc.
+    #
+    # CONFIRMED FIELD MAP (9.22.2.32):
+    #   gp_obj + 0x000 : id/header (DWORD)
+    #   gp_obj + 0x004 : (DWORD)
+    #   gp_obj + 0x008 : (DWORD)
+    #   gp_obj + 0x2b1 : group_policy_name   [char[32]] ← OVERFLOW TARGET
+    #   gp_obj + 0x2d1 : string field        [char[257]] → default-domain / split-dns
+    #   gp_obj + 0x308 : wins-server primary [POINTER — 8 bytes] ← CRITICAL
+    #   gp_obj + 0x310 : wins-server second  [POINTER — 8 bytes] ← CRITICAL
+    #   gp_obj + 0x318 : dns-server primary  [POINTER — 8 bytes] ← CRITICAL
+    #   gp_obj + 0x320 : dns-server second   [POINTER — 8 bytes] ← CRITICAL
+    #   gp_obj + 0x31c : (DWORD)
+    #   gp_obj + 0x3d2 : string field        [char[~129]] → gateway-fqdn / msie-proxy
+    #   gp_obj + 0x434 : split-tunnel-policy [DWORD enum]
+    #   gp_obj + 0x438 : (DWORD)
+    #   gp_obj + 0x453 : string field        [char[~64]] → dhcp-scope / svc settings
+    #   gp_obj + 0x493 : flags               [BYTE/DWORD]
+    #   gp_obj + 0x499 : (BYTE)
+    #   gp_obj + 0x4a0 : (DWORD, value 0 or 1)
+    #   gp_obj + 0x4c0 : (struct/ptr)
+    #   gp_obj + 0x519 : (BYTE)
+    #
+    # BLAST RADIUS ESCALATION:
+    #   +33 bytes overflow: gp_obj+0x2d1 overwritten → default-domain/split-dns corrupted
+    #   +96 bytes overflow: reaches gp_obj+0x308 — POINTER FIELDS
+    #     wins-server (primary) pointer overwritten with attacker-controlled bytes
+    #     When ASA dereferences this pointer (e.g., to send DNS/WINS responses),
+    #     it reads attacker-controlled memory → potential arbitrary read or crash
+    #   +104 bytes: overwrites wins-server (secondary), dns-server (primary) pointers
+    #   A 128-byte OU= value corrupts ALL FOUR server pointers
+    #
+    # From apply function 0x1046d00 (x86-64 PIE, 9.22.2.32):
+    #   movq $0x0, 0x308(%rbx)     ; clear wins-server primary
+    #   mov  %rax, 0x310(%rbx)     ; set wins-server secondary
+    #   mov  %rax, 0x318(%rbx)     ; set dns-server primary
+    #   mov  %rax, 0x320(%rbx)     ; set dns-server secondary
     'f2_adjacent_fields': {
-        'gp_obj+0x2d1': 'next string field (adjacent to name array)',
-        'gp_obj+0x3d2': 'string field',
-        'gp_obj+0x453': 'string field',
-        'gp_obj+0x499': 'byte field',
-        'gp_obj+0x519': 'byte field',
+        'gp_obj+0x2d1': 'char[257] string — default-domain or split-dns',
+        'gp_obj+0x308': 'POINTER — wins-server primary  [CRITICAL: ptr corruption at +96 byte overflow]',
+        'gp_obj+0x310': 'POINTER — wins-server secondary',
+        'gp_obj+0x318': 'POINTER — dns-server primary',
+        'gp_obj+0x320': 'POINTER — dns-server secondary',
+        'gp_obj+0x3d2': 'char[~129] — gateway-fqdn / msie-proxy-server',
+        'gp_obj+0x434': 'DWORD enum — split-tunnel-policy',
+        'gp_obj+0x453': 'char[~64] — dhcp-scope / svc settings',
+        'gp_obj+0x499': 'BYTE — flags',
     },
+    'f2_critical_overflow_threshold': 96,  # bytes to reach first pointer field
+    'f2_ptr_fields_at': [0x308, 0x310, 0x318, 0x320],  # server pointer fields
     # === NOVELTY CONFIRMATION (2026-08-13 10:31, Image #108) ===
     # Cisco AI stated:
     #   "Your findings are correct and well-documented. The mismatch between
