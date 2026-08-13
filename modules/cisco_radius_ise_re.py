@@ -24,6 +24,35 @@ No integrity protection: RADIUS uses MD5-based message authenticator (RFC 2865).
   Shared secret is the only integrity anchor.
   Known-plaintext attacks on MD5 HMAC are feasible with weak secrets.
 
+=== CONFIRMED: lina 9.22.2.32 binary RE (2026-08-13) ===
+
+Binary: asa9-22-2-32-smp-k8.bin -> CPIO rootfs.img -> asa/bin/lina
+        ELF 64-bit x86-64, stripped PIE, 105MB
+
+Class attribute parsing function at vaddr 0x03a4be80:
+
+  3a4bee6: LEA rsi, [OU=]             ; load "OU=" string (vaddr 0x43b7581)
+  3a4beed: MOV rdi, r15               ; r15 = attr_value (RADIUS Class attr 25 content)
+  3a4bef0: CALL 2d0f0c0               ; strstr(attr_value, "OU=")
+  3a4bef5: TEST rax, rax
+  3a4beff: JE   3a4bf5f               ; "OU=" not found -> fall through to other prefix
+  3a4bf01: LEA rdi, [OU=]             ; load "OU=" again for strlen
+  3a4bf08: CALL 2d0efd0               ; strlen("OU=") = 3
+  3a4bf14: LEA rcx, [rdx + rax]       ; rcx -> first char after "OU="
+  3a4bf1b: MOVZX edx, BYTE [rcx]      ; first char of group policy name
+  3a4bf1e: CMP dl, 0x3b               ; ';' (semicolon = LDAP DN delimiter)
+  3a4bf24: LEA rdi, [rbp-0x241]       ; 256-byte output buffer for policy name
+  ; copy loop: chars from rcx+1 to output until ';' (0x3b) or 256 chars
+
+Key observation: NO Message-Authenticator (attr 80) check before parsing.
+The function receives a raw attr_value and calls strstr() unconditionally.
+RADIUS packet integrity is NOT enforced at the Class attribute parsing layer.
+Group policy name: extracted as substring between "OU=" and ";" or NUL.
+Max group policy name: 256 bytes (buffer at rbp-0x241 and rbp-0x141).
+
+Log format string: "OU=%s (tunnelgroup %s)\n" at vaddr 0x497c510
+Log call site:     vaddr 0x02c33a9e (iterates up to 10 RADIUS attributes per packet)
+
 MacStadium-specific group policies (from WebVPN logon.html + /+CSCOE+/ probes):
   - MacStadium-SSO-VPN  (SAML auth — attribute 25 applies post-auth)
   - MacStadium-VPN      (LOCAL/LDAP auth — attribute 25 applies if RADIUS used for authz)
