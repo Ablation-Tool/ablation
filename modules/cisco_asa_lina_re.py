@@ -767,6 +767,130 @@ RADIUS_RFC_GAP = {
 }
 
 
+import hmac as _hmac
+
+
+RADIUS_CODE_NAMES = {1: 'Access-Request', 2: 'Access-Accept', 3: 'Access-Reject', 11: 'Access-Challenge'}
+RADIUS_ATTR_NAMES = {1: 'User-Name', 2: 'User-Password', 4: 'NAS-IP-Address',
+                     25: 'Class', 80: 'Message-Authenticator'}
+
+
+class RadiusPacketAnalyzer:
+    """
+    Parse RADIUS packets, detect Message-Authenticator, validate per RFC 2104 / RFC 5080.
+
+    Validates message-auth for both Access-Request and Access-Accept (they differ:
+    Access-Accept HMAC computation substitutes the Request-Authenticator into the
+    Authenticator field before computing HMAC-MD5 — the AI-generated script omits this).
+    """
+
+    ATTR_MSG_AUTH = 80
+    ATTR_CLASS    = 25
+
+    def __init__(self, packet: bytes, shared_secret: bytes,
+                 request_authenticator: bytes = None):
+        self.packet = packet
+        self.secret = shared_secret
+        # request_authenticator required for Access-Accept HMAC-MD5 validation
+        self.request_auth = request_authenticator
+
+        self.code, self.identifier, self.length = struct.unpack('!BBH', packet[:4])
+        self.authenticator = packet[4:20]
+        self._parse_attributes()
+
+    def _parse_attributes(self):
+        self.attributes = []
+        attr_bytes = self.packet[20:self.length]
+        i = 0
+        while i < len(attr_bytes):
+            t = attr_bytes[i]
+            l = attr_bytes[i + 1]
+            v = attr_bytes[i + 2:i + l]
+            self.attributes.append((t, l, v, 20 + i))  # (type, len, value, packet_offset)
+            i += l
+
+    @property
+    def code_name(self):
+        return RADIUS_CODE_NAMES.get(self.code, f'Unknown({self.code})')
+
+    def has_message_authenticator(self) -> bool:
+        return any(t == self.ATTR_MSG_AUTH for t, *_ in self.attributes)
+
+    def message_authenticator_value(self) -> bytes | None:
+        for t, l, v, _ in self.attributes:
+            if t == self.ATTR_MSG_AUTH:
+                return v
+        return None
+
+    def validate_message_authenticator(self) -> bool:
+        """
+        RFC 2104 HMAC-MD5 check.
+        For Access-Accept: substitute Request-Authenticator into Authenticator field first.
+        For Access-Request: use packet as-is (with Message-Auth zeroed).
+        """
+        ma_value = self.message_authenticator_value()
+        if ma_value is None:
+            return False
+
+        pkt = bytearray(self.packet)
+
+        # Zero the Message-Authenticator value in place
+        for t, l, v, offset in self.attributes:
+            if t == self.ATTR_MSG_AUTH:
+                pkt[offset + 2: offset + 2 + 16] = b'\x00' * 16
+                break
+
+        # Access-Accept/Reject/Challenge: substitute Request-Authenticator
+        if self.code != 1 and self.request_auth is not None:
+            pkt[4:20] = self.request_auth
+
+        computed = _hmac.new(self.secret, bytes(pkt), hashlib.md5).digest()
+        return computed == ma_value
+
+    def validate_response_authenticator(self) -> bool:
+        """RFC 2865 Response-Authenticator check (requires request_auth + secret)."""
+        if self.request_auth is None:
+            return False
+        attr_bytes = self.packet[20:self.length]
+        computed = forge_response_authenticator(
+            self.code, self.identifier, self.request_auth, attr_bytes, self.secret
+        )
+        return computed == self.authenticator
+
+    def class_attr_ou_values(self) -> list:
+        """Extract OU= group policy names from Class attr (attr 25), LINA parse logic."""
+        results = []
+        for t, l, v, _ in self.attributes:
+            if t == self.ATTR_CLASS:
+                try:
+                    s = v.decode('utf-8', errors='replace')
+                    if 'OU=' in s:
+                        # Mirror LINA strstr call at 0x3a4bee6 — find OU=, stop at ';'
+                        idx = s.index('OU=') + 3
+                        end = s.find(';', idx)
+                        policy = s[idx:end] if end != -1 else s[idx:]
+                        results.append(policy)
+                except Exception:
+                    pass
+        return results
+
+    def summary(self) -> dict:
+        return {
+            'code': self.code_name,
+            'id': self.identifier,
+            'length': self.length,
+            'has_message_authenticator': self.has_message_authenticator(),
+            'message_authenticator_valid': (
+                self.validate_message_authenticator() if self.has_message_authenticator() else None
+            ),
+            'response_authenticator_valid': (
+                self.validate_response_authenticator() if self.request_auth else None
+            ),
+            'class_attr_ou_values': self.class_attr_ou_values(),
+            'attributes': [(RADIUS_ATTR_NAMES.get(t, t), v.hex()) for t, l, v, _ in self.attributes],
+        }
+
+
 def forge_response_authenticator(code: int, identifier: int,
                                   request_authenticator: bytes,
                                   attributes_bytes: bytes,
