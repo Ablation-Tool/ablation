@@ -148,8 +148,11 @@ try:
     from cisco_cstp_attack import (
         HostScanGateRE, CSTPTunnelRE, ASDMJarClassRE, GoBinaryRE,
         SAMLSpInjectionRE, UsernameTimingOracleRE, TunnelGroupEnumRE, RADIUSClassAttrRE,
+        OrkaJWTRE,
         analyze_asa_attack_surface, analyze_go_binary, analyze_java_class,
         analyze_saml_sp, analyze_username_oracle, analyze_tunnel_groups, analyze_radius_class_attr,
+        analyze_orka_jwt,
+        MACSTADIUM_SAML, MACSTADIUM_ASA,
     )
     HAS_CSTP = True
 except ImportError:
