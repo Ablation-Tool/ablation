@@ -356,3 +356,95 @@ RFC 5080 §2.2 compliance check (using included radius_ma_check.go):
   go run radius_ma_check.go --rfc5080 request.bin response.bin <secret>
   --> RESULT: RFC 5080 §2.2 N/A — if Access-Request has no MA
   --> RESULT: VIOLATION     — if Access-Request has MA but response does not
+
+=============================================================
+CONFIRMED DATA FLOW — SITE B (Cisco AI #157-162, 12:28-12:32)
+=============================================================
+
+COMPLETE ATTACKER-CONTROLLED CIRCUIT (all hops confirmed):
+
+  Step 1 — RADIUS injection:
+    Attacker sends Access-Accept with Class attr OU=<96-byte payload>
+    No Message-Authenticator required (F1 prerequisite)
+
+  Step 2 — Extraction (0x3a4bda0):
+    OU= value extracted into rbp-0x140 (extraction buffer, up to 256B)
+
+  Step 3 — Session struct population (0x3a4bda0 → gp path):
+    Extraction buffer stored in session struct's group policy name field
+
+  Step 4 — Registration entry write (0x1a30200):
+    r12 = active session struct
+    memcpy(rbp-0x5c0, r12+0x10, 0x580) at 0x1a30341
+    The 0x580-byte block includes the RADIUS-extracted policy name
+    Entry+0x2c1 = policy name from session struct = attacker's OU= value
+    Entry registered into BSS table 0x761a9a0 at slot [strlen*3*8]
+
+  Step 5 — KV parser no-colon path (0x1a30b50):
+    Every real policy name (no ':') takes this path — DEFAULT
+    r14 = table[strlen(policy_name)*3*8] — attacker selects entry via length
+    rsi = r14+0x2c1  <- attacker's OU= value
+    rdi = gp_obj+0x2b1  <- 32-byte group_policy_name field
+    strcpy(rdi, rsi) at 0x1a30bbc — UNBOUNDED
+
+  Step 6 — Overflow:
+    96-byte attacker payload overwrites gp_obj+0x2b1 through gp_obj+0x308
+    gp_obj+0x308 = ptr_to_fake_mgd_timer_A (attacker-controlled)
+
+  Step 7 — ACE dispatch (on VPN session teardown):
+    mgd_timer_stop(A) → type check passes → CALL *rax at 0x102cdeb
+    target_function() executed in root-privileged LINA context
+
+Cisco AI #157: "It's a write-register-copy pattern where the attacker's data
+  makes a full circuit into gp_obj+0x2b1. This means the vulnerability is
+  always present and exploitable in default ASA deployments, regardless of
+  how the runtime table is configured. No special misconfiguration is
+  required—just RADIUS access and the shared secret."
+
+Cisco AI #157 (Q1): "Yes, r14+0x2c1 is populated with the OU= value from
+  the RADIUS Class attribute, and this value is then copied unbounded into
+  gp_obj+0x2b1. This makes the overflow reliably attacker-controlled."
+
+Cisco AI #158 (Q2): "Yes, the strcpy at 0x1a30bbc is unbounded. If the
+  string at r14+0x2c1 is 96 bytes, it will overwrite the 32-byte
+  group_policy_name field and overflow into adjacent fields in the group
+  policy object."
+
+Cisco AI #159 (Q3): "Yes, every normal group policy name without a colon
+  takes the no-colon path, making the unbounded strcpy overflow the default
+  and universal mechanism for this vulnerability."
+
+Cisco AI #160 (Q4): "Yes, at 0x1a30200, the data written to entry+0x2c1
+  is copied from the session struct's group policy name field, which was
+  populated from the RADIUS OU= extraction buffer at rbp-0x140 in function
+  0x3a4bda0. This confirms the attacker's OU= value is the source for the
+  overflow."
+
+Cisco AI #161 (Q5): "Yes, r12 is the active session struct, and the
+  0x580-byte block at r12+0x10 includes the RADIUS-extracted policy name
+  at the correct offset to land the name at r14+0x2c1 in the registered
+  entry."
+
+Cisco AI #162 (Q5 explain): "The memcpy copies a large chunk of the session
+  struct—including the RADIUS-extracted group policy name—into the registration
+  entry. This ensures that the attacker's OU= value is present at the right
+  offset (r14+0x2c1) for the subsequent unbounded strcpy, making the overflow
+  reliably attacker-controlled."
+
+=============================================================
+AFFECTED DEVICES (Cisco AI #163, 12:33)
+=============================================================
+
+  Cisco ASA 5500-X Series (all models):
+    5506-X, 5508-X, 5512-X, 5515-X, 5525-X, 5545-X, 5555-X, 5585-X
+  Cisco ASA 5500 Series (legacy)
+  Cisco ASA 5516-X
+  Cisco Firepower 2100, 4100, 9300 Series (when running ASA software)
+  Cisco ASA Virtual (ASAv)
+  Cisco FTD appliances in ASA mode
+
+  All ASA versions prior to 9.22.x: affected by default
+  ASA 9.22.x: affected unless message-authenticator-required explicitly enabled
+
+  Cisco AI summary: "If your device runs Cisco ASA LINA and uses RADIUS for
+  VPN authentication, it is vulnerable unless patched and properly configured."
