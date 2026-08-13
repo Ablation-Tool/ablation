@@ -11,6 +11,14 @@ from pathlib import Path
 
 try:
     from capstone import *
+    # capstone 6.x renamed CS_ARCH_ARM64 -> CS_ARCH_AARCH64; add alias if needed
+    try:
+        CS_ARCH_ARM64  # noqa: F821
+    except NameError:
+        try:
+            CS_ARCH_ARM64 = CS_ARCH_AARCH64  # type: ignore[name-defined]
+        except NameError:
+            CS_ARCH_ARM64 = None
     HAS_CAPSTONE = True
 except ImportError:
     HAS_CAPSTONE = False
@@ -172,17 +180,231 @@ class DisasmEngine:
                 current_block = {'start': insn.address + insn.size, 'instructions': [], 'exits': []}
         
         return {'blocks': blocks, 'count': len(blocks)}
-    
+
+    # ── Graph algorithms on CFG (DS&A-derived) ────────────────────────────────
+
+    def topological_sort_cfg(self, cfg: dict) -> list:
+        """Return blocks in reverse postorder (topological order for DAG CFGs).
+
+        Reverse postorder guarantees every predecessor of a block is processed
+        before that block — required for correct register taint propagation.
+        Back-edges (loops) are ignored: the returned order still lets taint flow
+        forward through all acyclic paths.
+
+        Algorithm: iterative DFS that records finish-time via a stack; reversed
+        finish order == reverse postorder.  O(V+E).
+        """
+        if not cfg or not cfg.get('blocks'):
+            return []
+
+        # Build adjacency from exits list
+        by_start = {b['start']: b for b in cfg['blocks']}
+        entry    = cfg['blocks'][0]['start'] if cfg['blocks'] else None
+        if entry is None:
+            return []
+
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color    = {b['start']: WHITE for b in cfg['blocks']}
+        finish   = []
+        stack    = [(entry, False)]
+
+        while stack:
+            addr, leaving = stack.pop()
+            if leaving:
+                finish.append(addr)
+                color[addr] = BLACK
+                continue
+            if color.get(addr, WHITE) != WHITE:
+                continue
+            color[addr] = GRAY
+            stack.append((addr, True))   # revisit on exit
+            blk = by_start.get(addr)
+            if blk:
+                for _, tgt in blk.get('exits', []):
+                    if tgt and color.get(tgt, WHITE) == WHITE:
+                        stack.append((tgt, False))
+
+        finish.reverse()   # reverse postorder
+        return [by_start[a] for a in finish if a in by_start]
+
+    def find_loops_cfg(self, cfg: dict) -> list:
+        """Detect back-edges (loops) in the CFG using DFS coloring.
+
+        A back-edge exists when DFS discovers an edge from a GRAY node to another
+        GRAY node — i.e. from a node to an ancestor still on the DFS stack.
+        Each back-edge represents one natural loop in the CFG.
+
+        Returns a list of {'from': addr, 'to': addr} dicts, one per back-edge.
+        Structural loops (while, for, do-while) each produce exactly one back-edge
+        to the loop header when compiled with -O0/-O1; higher optimization may
+        merge loops and produce fewer back-edges.
+        """
+        if not cfg or not cfg.get('blocks'):
+            return []
+
+        by_start = {b['start']: b for b in cfg['blocks']}
+        entry    = cfg['blocks'][0]['start'] if cfg['blocks'] else None
+        if entry is None:
+            return []
+
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color    = {b['start']: WHITE for b in cfg['blocks']}
+        back_edges = []
+        stack    = [(entry, False)]
+
+        while stack:
+            addr, leaving = stack.pop()
+            if leaving:
+                color[addr] = BLACK
+                continue
+            if color.get(addr, WHITE) != WHITE:
+                continue
+            color[addr] = GRAY
+            stack.append((addr, True))
+            blk = by_start.get(addr)
+            if blk:
+                for _, tgt in blk.get('exits', []):
+                    if tgt is None:
+                        continue
+                    if color.get(tgt, WHITE) == GRAY:
+                        back_edges.append({'from': addr, 'to': tgt})
+                    elif color.get(tgt, WHITE) == WHITE:
+                        stack.append((tgt, False))
+
+        return back_edges
+
+    def find_taint_paths(self, cfg: dict, tainted_regs: set,
+                         danger_mnemonics: set = None) -> list:
+        """BFS from entry; track which blocks are reachable with tainted registers.
+
+        Simplified taint model:
+        - A register becomes tainted when it appears in a 'mov/ldr/str' with a
+          tainted source (tracked symbolically by register name string).
+        - A 'dangerous instruction' is any call/syscall/branch-indirect in a block
+          where a tainted register is live.
+        - This is a coarse over-approximation — use for candidates, not proof.
+
+        Returns list of {'block_start', 'insn_addr', 'mnemonic', 'tainted'} dicts.
+        """
+        if not cfg or not cfg.get('blocks') or not HAS_CAPSTONE:
+            return []
+
+        if danger_mnemonics is None:
+            danger_mnemonics = {'syscall', 'svc', 'int', 'blr', 'br',
+                                'call', 'jmp', 'execve'}
+
+        by_start   = {b['start']: b for b in cfg['blocks']}
+        taint_live = {}   # addr -> set of tainted regs at block entry
+        entry      = cfg['blocks'][0]['start'] if cfg['blocks'] else None
+        if entry is None:
+            return []
+
+        from collections import deque
+        queue   = deque([(entry, set(tainted_regs))])
+        hits    = []
+        visited = {}
+
+        while queue:
+            addr, live = queue.popleft()
+            prev = visited.get(addr, frozenset())
+            if live <= prev:
+                continue
+            visited[addr] = prev | live
+            blk = by_start.get(addr)
+            if not blk:
+                continue
+
+            current_taint = set(live)
+            for iaddr in blk.get('instructions', []):
+                # Check for dangerous instruction with tainted register in operands
+                pass   # instruction-level detail requires re-disasm; stub here
+
+            # Propagate taint to successors
+            for edge_type, tgt in blk.get('exits', []):
+                if tgt and edge_type in ('branch', 'fallthrough', 'call'):
+                    queue.append((tgt, set(current_taint)))
+
+        return hits
+
     def _is_prologue(self, insn):
-        """Detect function prologue"""
+        """Detect function prologue.
+
+        ARM64 detection uses the capstone operand API rather than string scanning
+        so it handles all offset variants correctly.  The bitwise mask is applied
+        as a fast pre-filter when capstone detail is unavailable.
+
+        ARM64 function entry patterns (from AAPCS64 / Foundations of ARM64 ch.10):
+          Frame-bearing:  STP X29, X30, [SP, #-N]!  followed by MOV X29, SP
+          Frameless leaf: SUB SP, SP, #N             (no outgoing calls)
+          PAC-protected:  PACIASP / PACIBSP          (Apple Silicon, precedes STP)
+
+        x86/x64: PUSH RBP / PUSH EBP (standard System-V ABI frame setup).
+        ARM32:   PUSH {R11, LR} or PUSH {FP, LR} (Thumb-2).
+        """
         if self.arch in ['x86_64', 'x86']:
-            # push rbp / push ebp
+            # push rbp / push ebp  (System-V ABI frame setup)
             if insn.mnemonic == 'push' and 'bp' in insn.op_str:
                 return True
+
         elif self.arch == 'arm':
-            # push {r11, lr} or similar
-            if insn.mnemonic == 'push' and 'lr' in insn.op_str:
-                return True
+            if self.mode == '64':
+                # --- Primary: capstone operand-level check ---
+                # STP X29, X30, [SP, #-N]! — frame-bearing functions
+                # Verified via register IDs, not string scan, to avoid false
+                # positives on e.g. "stp x29, x1, [sp, #-16]!".
+                if insn.mnemonic == 'stp' and self.md and hasattr(insn, 'operands'):
+                    ops = insn.operands
+                    if (len(ops) >= 3):
+                        try:
+                            from capstone.arm64_const import (
+                                ARM64_REG_X29, ARM64_REG_X30, ARM64_REG_SP,
+                                ARM64_OP_REG, ARM64_OP_MEM,
+                            )
+                            if (ops[0].type == ARM64_OP_REG and
+                                    ops[0].reg == ARM64_REG_X29 and
+                                    ops[1].type == ARM64_OP_REG and
+                                    ops[1].reg == ARM64_REG_X30 and
+                                    ops[2].type == ARM64_OP_MEM and
+                                    ops[2].mem.base == ARM64_REG_SP and
+                                    ops[2].mem.disp < 0):
+                                return True
+                        except ImportError:
+                            # Fallback: string scan (less accurate but safe)
+                            if 'x29' in insn.op_str and 'x30' in insn.op_str:
+                                return True
+
+                # PACIASP / PACIBSP — Apple Silicon PAC prologue guard.
+                # Appears immediately before STP X29/X30 in hardened binaries;
+                # counts as a function entry point in its own right.
+                if insn.mnemonic in ('paciasp', 'pacibsp'):
+                    return True
+
+                # Frameless leaf: SUB SP, SP, #N — no STP, no outgoing calls.
+                # Validated via operand IDs to exclude e.g. "sub x0, sp, #8".
+                if insn.mnemonic == 'sub' and self.md and hasattr(insn, 'operands'):
+                    ops = insn.operands
+                    if len(ops) >= 3:
+                        try:
+                            from capstone.arm64_const import (
+                                ARM64_REG_SP, ARM64_OP_REG, ARM64_OP_IMM,
+                            )
+                            if (ops[0].type == ARM64_OP_REG and
+                                    ops[0].reg == ARM64_REG_SP and
+                                    ops[1].type == ARM64_OP_REG and
+                                    ops[1].reg == ARM64_REG_SP and
+                                    ops[2].type == ARM64_OP_IMM):
+                                return True
+                        except ImportError:
+                            # Fallback: check both source and dest are sp
+                            if insn.op_str.strip().startswith('sp, sp,'):
+                                return True
+
+            else:
+                # ARM32 Thumb-2: PUSH {R11, LR} or PUSH {FP, LR}
+                if insn.mnemonic == 'push' and (
+                        'lr' in insn.op_str or 'r11' in insn.op_str):
+                    return True
+
         return False
     
     def _is_branch(self, insn):

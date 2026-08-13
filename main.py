@@ -21,25 +21,6 @@ Usage:
     ./ablation --arm64 FILE  - ARM64 Mach-O deep analysis
     ./ablation --java PATH   - Java .class/.jar security audit
     ./ablation --swift PATH  - Swift Mach-O binary RE
-    ./ablation --lateral     - Lateral movement: creds/SSH keys/API tokens/cloud metadata/subnet scan
-    ./ablation --tls [HOST]  - TLS cipher suite audit (default: MacStadium VPN targets)
-    ./ablation --ios [HOST]  - Cisco IOS/IOS-XE enumeration (SNMP/TFTP/REST/Telnet)
-    ./ablation --cisco-re HOST [--cisco-re-port PORT]
-                             - Full Cisco RE probe suite: 38 probes across ASA/IOS/NX-OS/ISE/API
-    ./ablation --cisco-ios-re FILE
-                             - RE Cisco IOS firmware image, crash dump, or running-config
-    ./ablation --cisco-asdm FILE
-                             - RE Cisco ASDM JAR/class file: constant pool walk, cred extraction
-    ./ablation --cisco-asdm-live HOST [--cisco-asdm-live-port PORT]
-                             - Download ASDM JAR live from ASA, RE constant pool
-    ./ablation --cisco-guestshell PATH
-                             - RE NX-OS guest shell rootfs directory or ext4 image
-    ./ablation --cisco-webvpn HOST [--cisco-webvpn-port PORT]
-                             - RE WebVPN JS portal (win.js, logon), SAML surface
-    ./ablation --cisco-config FILE
-                             - RE Cisco config: type-7 decode, cred extract, weak-config scan
-    ./ablation --cisco-rommon FILE|0xCONFREG
-                             - ROMMON bypass analysis: confreg decode, bypass steps
 """
 
 import sys
@@ -86,23 +67,11 @@ except ImportError:
     JWTCryptoAnalyzer = None
 
 try:
-    from asa_enum import (ASAEnumerator, enumerate_macstadium_asas, MACSTADIUM_ASAS,
-                           probe_asa_mpf_policy_exposure, probe_asa_botnet_url_filter_exposure,
-                           probe_asa_asdm_jar_exposure, probe_cisco_java_deserialization_surface,
-                           probe_asa_anyconnect_profile_download, probe_asa_mobile_vpn_surface,
-                           probe_asa_ios_client_redirect_surface, probe_asa_webvpn_session_exposure)
+    from asa_enum import ASAEnumerator, enumerate_macstadium_asas, MACSTADIUM_ASAS
     HAS_ASA_ENUM = True
 except ImportError:
     HAS_ASA_ENUM = False
     ASAEnumerator = None
-    probe_asa_mpf_policy_exposure = None
-    probe_asa_botnet_url_filter_exposure = None
-    probe_asa_asdm_jar_exposure = None
-    probe_cisco_java_deserialization_surface = None
-    probe_asa_anyconnect_profile_download = None
-    probe_asa_mobile_vpn_surface = None
-    probe_asa_ios_client_redirect_surface = None
-    probe_asa_webvpn_session_exposure = None
 
 try:
     from harbor_enum import HarborEnumerator
@@ -119,268 +88,67 @@ except ImportError:
     JavaREAnalyzer = None
 
 try:
-    from nxos_enum import (NXOSEnumerator, enumerate_macstadium_cisco, MACSTADIUM_CISCO_TARGETS,
-                            probe_nxos_bgp_evpn_control_plane, probe_nxos_vxlan_multisite_exposure,
-                            probe_nxos_vdc_isolation_exposure, probe_nxos_fcoe_vsan_exposure,
-                            probe_nxos_management_proxy_exposure, probe_nxos_nexus_dashboard_exposure,
-                            probe_nxos_mac_arp_table_exposure, probe_nxos_ecmp_hash_exposure)
+    from nxos_enum import NXOSEnumerator, enumerate_macstadium_cisco, MACSTADIUM_CISCO_TARGETS
     HAS_NXOS = True
 except ImportError:
     HAS_NXOS = False
     NXOSEnumerator = None
     MACSTADIUM_CISCO_TARGETS = []
-    probe_nxos_bgp_evpn_control_plane = None
-    probe_nxos_vxlan_multisite_exposure = None
-    probe_nxos_vdc_isolation_exposure = None
-    probe_nxos_fcoe_vsan_exposure = None
-    probe_nxos_management_proxy_exposure = None
-    probe_nxos_nexus_dashboard_exposure = None
-    probe_nxos_mac_arp_table_exposure = None
-    probe_nxos_ecmp_hash_exposure = None
 
 try:
-    from vergeio_enum import VergeIOEnumerator, enumerate_vergeos
-    HAS_VERGEIO = True
+    from cisco_asdm_download_re import ASDMDownloader, ASDMJarRE as ASDMJARAnalyzer
+    HAS_ASDM_RE = True
 except ImportError:
-    HAS_VERGEIO = False
-    VergeIOEnumerator = None
+    HAS_ASDM_RE = False
+    ASDMDownloader = None
 
 try:
-    from ebpf_analyzer import eBPFAnalyzer, analyze_ebpf
-    HAS_EBPF = True
+    from cisco_webvpn_js_re import WebVPNJSRE
+    HAS_WEBVPN_JS = True
 except ImportError:
-    HAS_EBPF = False
-    eBPFAnalyzer = None
+    HAS_WEBVPN_JS = False
+    WebVPNJSRE = None
 
 try:
-    from macos_malware_re import MacOSMalwareRE
-    HAS_MACOS_MALWARE = True
+    from cisco_ios_re import CiscoIOSImage, analyze_ios_firmware
+    HAS_IOS_RE = True
 except ImportError:
-    HAS_MACOS_MALWARE = False
-    MacOSMalwareRE = None
+    HAS_IOS_RE = False
+    CiscoIOSImage = None
 
 try:
-    from ise_enum import (ISEEnumerator, enumerate_macstadium_ise, MACSTADIUM_ISE_CANDIDATES,
-                           probe_ise_jmx_monitoring_exposure, probe_ise_heap_dump_exposure,
-                           probe_ise_legacy_api_endpoint_exposure, probe_ise_spring_framework_exposure,
-                           probe_ise_nginx_auth_bypass, probe_ise_nginx_upstream_config,
-                           probe_ise_concurrent_auth_race_surface, probe_ise_typed_error_fingerprint)
-    HAS_ISE = True
+    from cisco_rommon_re import ROMMONBypassRE
+    HAS_ROMMON_RE = True
 except ImportError:
-    HAS_ISE = False
-    ISEEnumerator = None
-    MACSTADIUM_ISE_CANDIDATES = []
-    probe_ise_jmx_monitoring_exposure = None
-    probe_ise_heap_dump_exposure = None
-    probe_ise_legacy_api_endpoint_exposure = None
-    probe_ise_spring_framework_exposure = None
-    probe_ise_nginx_auth_bypass = None
-    probe_ise_nginx_upstream_config = None
-    probe_ise_concurrent_auth_race_surface = None
-    probe_ise_typed_error_fingerprint = None
+    HAS_ROMMON_RE = False
+    ROMMONBypassRE = None
 
 try:
-    from ise_iso import ISEISOAnalyzer, analyze_iso_no_root
-    HAS_ISE_ISO = True
+    from cisco_config_re import CiscoConfigRE
+    HAS_CONFIG_RE = True
 except ImportError:
-    HAS_ISE_ISO = False
-    ISEISOAnalyzer = None
+    HAS_CONFIG_RE = False
+    CiscoConfigRE = None
 
 try:
-    from macos_sysadmin import MacOSSysadminEnumerator
-    HAS_MACOS_SYSADMIN = True
-except ImportError:
-    HAS_MACOS_SYSADMIN = False
-    MacOSSysadminEnumerator = None
-
-try:
-    from elf_parser import ELFParser
-    HAS_ELF_PARSER = True
-except ImportError:
-    HAS_ELF_PARSER = False
-    ELFParser = None
-
-try:
-    from shellcode_utils import (
-        detect_platform as sc_detect_platform,
-        shellcode_reverse_tcp_linux_x86_64,
-        shellcode_reverse_tcp_linux_arm64,
-        detect_bad_bytes,
-        nop_sled,
-    )
-    HAS_SHELLCODE = True
-except ImportError:
-    HAS_SHELLCODE = False
-
-try:
-    from ios_enum import (IOSEnumerator, MACSTADIUM_IOS_CANDIDATES,
-                           probe_ios_arm_debug_interface_exposure, probe_ios_rommon_variable_exposure,
-                           probe_ios_crash_artifact_exposure, probe_ios_exception_level_disclosure,
-                           probe_ios_cef_fib_exposure, probe_ios_bgp_rib_tree_exposure)
-    HAS_IOS = True
-except ImportError:
-    HAS_IOS = False
-    IOSEnumerator = None
-    MACSTADIUM_IOS_CANDIDATES = []
-    probe_ios_arm_debug_interface_exposure = None
-    probe_ios_rommon_variable_exposure = None
-    probe_ios_crash_artifact_exposure = None
-    probe_ios_exception_level_disclosure = None
-    probe_ios_cef_fib_exposure = None
-    probe_ios_bgp_rib_tree_exposure = None
-
-try:
-    from podman_enum import PodmanEnumerator, enumerate_podman, find_podman_sockets
-    HAS_PODMAN = True
-except ImportError:
-    HAS_PODMAN = False
-    PodmanEnumerator = None
-
-try:
-    from lateral_movement import (LateralMovementScanner,
-                                   LateralMovementEnumerator,
-                                   enumerate_lateral_movement)
-    HAS_LATERAL = True
-except ImportError:
-    HAS_LATERAL = False
-    LateralMovementScanner = None
-    LateralMovementEnumerator = None
-
-try:
-    from tls_analyzer import TLSAnalyzer
-    HAS_TLS = True
-except ImportError:
-    HAS_TLS = False
-    TLSAnalyzer = None
-
-try:
-    from nginx_enum import NginxEnumerator, enumerate_macstadium_nginx
-    HAS_NGINX = True
-except ImportError:
-    HAS_NGINX = False
-    NginxEnumerator = None
-
-try:
-    from hyperflex_enum import probe_hx_connect, enumerate_hyperflex_cluster
-    HAS_HYPERFLEX = True
-except ImportError:
-    HAS_HYPERFLEX = False
-
-try:
-    from streaming_enum import (enumerate_streaming_surface, kafka_list_topics,
-                                 flink_enumerate, nifi_enumerate,
-                                 schema_registry_enumerate)
-    HAS_STREAMING = True
-except ImportError:
-    HAS_STREAMING = False
-
-try:
-    from nexus_dashboard_enum import probe_nexus_dashboard, enumerate_nexus_dashboard
-    HAS_NEXUS_DASH = True
-except ImportError:
-    HAS_NEXUS_DASH = False
-
-try:
-    from cisco_api_enum import (enumerate_cisco_api_surface, APICEnum,
-                                 DNACEnum, UCSMgrEnum, VManageEnum,
-                                 RESTCONFEnum, NSOEnum,
-                                 probe_aci_microsegmentation_exposure, probe_aci_tenant_network_topology,
-                                 probe_cisco_nginx_proxy_exposure, probe_cisco_api_gateway_bypass,
-                                 probe_cisco_crosswork_telemetry_exposure, probe_cisco_tetration_analytics_exposure,
-                                 probe_cisco_catalyst_center_mobile_api, probe_cisco_umbrella_api_exposure)
+    from cisco_api_enum import CiscoAPIEnum
     HAS_CISCO_API = True
 except ImportError:
     HAS_CISCO_API = False
-    probe_aci_microsegmentation_exposure = None
-    probe_aci_tenant_network_topology = None
-    probe_cisco_nginx_proxy_exposure = None
-    probe_cisco_api_gateway_bypass = None
-    probe_cisco_crosswork_telemetry_exposure = None
-    probe_cisco_tetration_analytics_exposure = None
-    probe_cisco_catalyst_center_mobile_api = None
-    probe_cisco_umbrella_api_exposure = None
+    CiscoAPIEnum = None
 
 try:
-    from net_sniffer import RawSniffer, sniff_network
-    HAS_NET_SNIFFER = True
+    from cisco_nxos_guestshell_re import NXOSGuestshellRE
+    HAS_GUESTSHELL = True
 except ImportError:
-    HAS_NET_SNIFFER = False
-    RawSniffer = None
+    HAS_GUESTSHELL = False
+    NXOSGuestshellRE = None
 
-try:
-    from attck_tagger import tag_findings_list
-    HAS_ATTCK = True
-except ImportError:
-    HAS_ATTCK = False
-    tag_findings_list = None
 
-try:
-    import sys as _sys
-    _sys.path.insert(0, str(__file__ and __import__('pathlib').Path(__file__).parent.parent / 'core'))
-    from pe_parser import PEParser, scan_pe_file
-    HAS_PE_PARSER = True
-except (ImportError, Exception):
-    HAS_PE_PARSER = False
-    PEParser = None
-    scan_pe_file = None
-
-try:
-    from cisco_ios_re import (CiscoIOSImage, IOSCrashDumpRE,
-                               CiscoConfigRE as _IOSConfigRE, analyze_ios_firmware)
-    HAS_CISCO_IOS_RE = True
-except ImportError:
-    HAS_CISCO_IOS_RE = False
-    CiscoIOSImage = None
-    IOSCrashDumpRE = None
-    analyze_ios_firmware = None
-
-try:
-    from cisco_asdm_re import ASDMJarRE, CiscoClassFileRE, analyze_asdm
-    HAS_CISCO_ASDM_RE = True
-except ImportError:
-    HAS_CISCO_ASDM_RE = False
-    ASDMJarRE = None
-    analyze_asdm = None
-
-try:
-    from cisco_nxos_guestshell_re import GuestShellRE, NXOSRootfsExtractor, analyze_guestshell
-    HAS_CISCO_GUESTSHELL_RE = True
-except ImportError:
-    HAS_CISCO_GUESTSHELL_RE = False
-    GuestShellRE = None
-    analyze_guestshell = None
-
-try:
-    from cisco_webvpn_js_re import WebVPNJSRE, WebVPNSAMLRE, analyze_webvpn
-    HAS_CISCO_WEBVPN_RE = True
-except ImportError:
-    HAS_CISCO_WEBVPN_RE = False
-    WebVPNJSRE = None
-    analyze_webvpn = None
-
-try:
-    from cisco_config_re import CiscoConfigRE, analyze_config
-    HAS_CISCO_CONFIG_RE = True
-except ImportError:
-    HAS_CISCO_CONFIG_RE = False
-    CiscoConfigRE = None
-    analyze_config = None
-
-try:
-    from cisco_rommon_re import ROMMONBypassRE, SecureBootRE, analyze_rommon
-    HAS_CISCO_ROMMON_RE = True
-except ImportError:
-    HAS_CISCO_ROMMON_RE = False
-    ROMMONBypassRE = None
-    analyze_rommon = None
-
-try:
-    from cisco_asdm_download_re import ASDMDownloader, analyze_asdm_live
-    HAS_CISCO_ASDM_LIVE = True
-except ImportError:
-    HAS_CISCO_ASDM_LIVE = False
-    ASDMDownloader = None
-    analyze_asdm_live = None
+MACSTADIUM_ASAS = [
+    {'host': '207.254.35.12', 'port': 443, 'label': 'ASA-Primary'},
+    {'host': '207.254.16.2',  'port': 443, 'label': 'ASA-Secondary'},
+]
 
 
 class Ablation:
@@ -406,30 +174,8 @@ class Ablation:
             'crypto_audit': {},
             'asa': {},
             'nxos': {},
-            'vergeio': {},
-            'ebpf': {},
-            'ise': {},
-            'macos_malware': {},
-            'macos_sysadmin': {},
-            'lateral_movement': {},
-            'tls': {},
-            'ios': {},
-            'podman': {},
-            'nginx': {},
-            'hyperflex': {},
-            'streaming': {},
-            'nexus_dashboard': {},
-            'cisco_api': {},
-            'net_sniffer': {},
-            'cisco_re': {},
-            'cisco_ios_re': {},
-            'cisco_asdm_re': {},
-            'cisco_guestshell_re': {},
-            'cisco_webvpn_re': {},
-            'cisco_config_re': {},
-            'cisco_rommon_re': {},
         }
-        self.version = "2.13.0"
+        self.version = "2.4.0"
     
     def banner(self):
         """Display banner"""
@@ -451,33 +197,33 @@ class Ablation:
         print()
         
         # Step 1: Platform detection
-        print("[1/13] Platform Detection")
+        print("[1/8] Platform Detection")
         self.detect_platform()
         print(f"  OS: {self.findings['platform']['os']} {self.findings['platform']['arch_bits']}bit")
         print(f"  Kernel: {self.findings['platform'].get('kernel', 'N/A')}")
         print()
         
         # Step 2: Process enumeration
-        print("[2/13] Process Enumeration")
+        print("[2/8] Process Enumeration")
         self.enumerate_processes()
         print(f"  Found {len(self.findings['processes'])} running processes")
         print()
         
         # Step 3: Binary discovery
-        print("[3/13] Binary Discovery")
+        print("[3/8] Binary Discovery")
         self.discover_binaries()
         print(f"  Found {len(self.findings['binaries'])} interesting binaries")
         print()
         
         # Step 4: Network analysis
-        print("[4/13] Network Analysis")
+        print("[4/8] Network Analysis")
         self.analyze_network()
         print(f"  Interfaces: {len(self.findings['network'].get('interfaces', []))}")
         print(f"  Listening: {len(self.findings['network'].get('listening', []))}")
         print()
         
         # Step 5: Container/platform enumeration
-        print("[5/13] Container/Platform Enumeration")
+        print("[5/8] Container/Platform Enumeration")
         self.enumerate_containers()
         docker_info = self.findings['docker']
         k8s_info = self.findings['kubernetes']
@@ -492,56 +238,39 @@ class Ablation:
         print()
         
         # Step 6: Vulnerability hunting
-        print("[6/13] Vulnerability Analysis")
+        print("[6/8] Vulnerability Analysis")
         self.hunt_vulnerabilities()
         print(f"  Identified {len(self.findings['vulnerabilities'])} potential vulnerabilities")
         print()
-
+        
         # Step 7: Privilege escalation paths
-        print("[7/13] Privilege Escalation Enumeration")
+        print("[7/8] Privilege Escalation Enumeration")
         self.enumerate_privesc()
         print(f"  Found {len(self.findings['privesc_paths'])} potential paths")
         print()
         
-        # Step 8: macOS malware IOC / persistence / TCC (Darwin only)
-        if self.findings['platform'].get('os') in ('Darwin', 'macOS'):
-            print("[8/13] macOS Malware RE / Persistence / TCC")
-            self.analyze_macos_malware()
-            mm = self.findings['macos_malware']
-            fc = mm.get('finding_count', 0)
-            print(f"  Malware IOC findings: {fc}")
-            self.enumerate_macos_sysadmin()
-            ms = self.findings['macos_sysadmin']
-            kc = len(ms.get('keychain', {}).get('entries', []))
-            su = len(ms.get('sudo', {}).get('nopasswd_rules', []))
-            print(f"  Sysadmin: keychain entries={kc}, sudo NOPASSWD={su}")
-            print()
-        else:
-            print("[8/13] macOS RE — skipped (non-Darwin)")
-            print()
-
-        # Step 9: Swift binary RE (macOS/iOS targets)
+        # Step 8: Swift binary RE (macOS/iOS targets)
         if self.findings['platform'].get('os') in ('Darwin', 'macOS') or \
            any('swift' in b.get('path', '').lower() or 'orka' in b.get('path', '').lower()
                for b in self.findings['binaries']):
-            print("[9/13] Swift Binary Analysis")
+            print("[8/11] Swift Binary Analysis")
             self.analyze_swift_binaries()
             sr = self.findings['swift_re']
             print(f"  Symbols: {sr.get('total_symbols', 0)}, SwiftNIO: {sr.get('swiftnio_detected', False)}, gRPC: {sr.get('grpc_detected', False)}")
             print()
         else:
-            print("[9/13] Swift Analysis — skipped (non-Darwin)")
+            print("[8/11] Swift Analysis — skipped (non-Darwin)")
             print()
 
         # Step 9: Java/JVM RE
-        print("[10/13] Java/JVM Analysis")
+        print("[9/11] Java/JVM Analysis")
         self.analyze_java_artifacts()
         jr = self.findings['java_re']
         print(f"  Classes: {jr.get('total_classes', 0)}, Frameworks: {jr.get('frameworks', [])}")
         print()
 
         # Step 10: Cryptographic audit
-        print("[11/13] Cryptographic Audit")
+        print("[10/11] Cryptographic Audit")
         self.audit_crypto()
         ca = self.findings['crypto_audit']
         jwt_count = len(ca.get('jwt_findings', []))
@@ -552,38 +281,8 @@ class Ablation:
                 print(f"  [CRIT] {cf}")
         print()
 
-        # Step 12: Lateral movement / credential harvest
-        print("[12/13] Lateral Movement & Credential Harvest")
-        self.scan_lateral_movement()
-        lm = self.findings['lateral_movement']
-        cred_count = len(lm.get('creds', {}).get('files', []))
-        key_count  = len(lm.get('ssh', {}).get('private_keys', []))
-        tok_count  = len(lm.get('tokens', {}).get('tokens', []))
-        print(f"  Creds: {cred_count}, SSH keys: {key_count}, API tokens: {tok_count}")
-        print()
-
-        # Step 12b: TLS cipher audit (MacStadium VPN targets)
-        print("[12b/14] TLS Cipher Suite Audit")
-        self.audit_tls()
-        tls_results = self.findings['tls'].get('results', [])
-        weak_hosts  = [r['host'] for r in tls_results if r.get('weak_ciphers')]
-        print(f"  Hosts audited: {len(tls_results)}, Weak cipher hosts: {len(weak_hosts)}")
-        print()
-
-        # Step 12c: Nginx enumeration (Cisco Nexus NX-API frontend)
-        print("[12c/14] Nginx Enumeration (Cisco Nexus 207.254.14.1:443)")
-        self.scan_nginx()
-        nginx_findings = self.findings.get('nginx', {}).get('findings', [])
-        print(f"  Nginx findings: {len(nginx_findings)}")
-        print()
-
-        # Step 13: JDWP debug port scan (JVM processes)
-        print("[13/14] JVM Debug Port Scan (JDWP)")
-        self.scan_jdwp_processes()
-        print()
-
-        # Step 14: Generate report
-        print("[14/14] Report Generation")
+        # Step 11: Generate report
+        print("[11/11] Report Generation")
         report_path = self.generate_report()
         print(f"  Report saved: {report_path}")
         print()
@@ -949,227 +648,6 @@ class Ablation:
 
         return result
 
-    def enumerate_ise(self, targets=None, username='admin', password=''):
-        """Enumerate Cisco ISE 3.1: ERS/Open API, MnT version, pxGrid, RADIUS, guest portals."""
-        if not HAS_ISE:
-            self.findings['ise'] = {'error': 'ise_enum module not available'}
-            return {}
-
-        results = enumerate_macstadium_ise(targets=targets)
-        self.findings['ise'] = {'instances': results}
-
-        for r in results:
-            for finding in r.get('findings', []):
-                sev = finding.get('severity', 'INFO')
-                if sev in ('CRITICAL', 'HIGH'):
-                    self.findings['vulnerabilities'].append({
-                        'severity':    sev,
-                        'type':        f"ISE: {finding['title']}",
-                        'description': finding.get('detail', '')[:200],
-                        'impact':      'NAC bypass / RADIUS auth forging / network access control takeover',
-                        'remediation': 'Rotate credentials; restrict ERS/Open API; disable weak RADIUS secrets',
-                    })
-
-        return self.findings['ise']
-
-    def enumerate_vergeio(self, host: str, port: int = 443):
-        """Enumerate VergeOS HCI platform (gcweb 4.0 fingerprint)."""
-        if not HAS_VERGEIO:
-            self.findings['vergeio'] = {'error': 'vergeio_enum module not available'}
-            return {}
-
-        result = enumerate_vergeos(host=host, port=port)
-        self.findings['vergeio'] = result
-
-        for finding in result.get('findings', []):
-            if finding.get('severity') in ('CRITICAL', 'HIGH'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    finding['severity'],
-                    'type':        f"VergeOS: {finding['title']}",
-                    'description': finding.get('detail', ''),
-                    'impact':      'HCI platform compromise / tenant isolation break / VM exfil',
-                    'remediation': 'Rotate API keys; enforce IP allow-list; disable auto-create-users',
-                })
-        return result
-
-    def analyze_macos_malware(self):
-        """macOS-specific malware IOC scan, persistence enum, TCC audit, DYLD hijack surface."""
-        if not HAS_MACOS_MALWARE:
-            self.findings['macos_malware'] = {'error': 'macos_malware_re module not available'}
-            return {}
-
-        scanner = MacOSMalwareRE()
-        result = scanner.run()
-        self.findings['macos_malware'] = result
-
-        for finding in result.get('findings', []):
-            sev = finding.get('severity', 'INFO')
-            if sev in ('CRITICAL', 'HIGH'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    sev,
-                    'type':        f"macOS: {finding['title']}",
-                    'description': finding.get('detail', '')[:200],
-                    'impact':      'Persistence / TCC bypass / credential access / malware IOC',
-                    'remediation': 'Audit LaunchAgents; harden TCC; enable SIP; review Orka service config',
-                })
-        return result
-
-    def enumerate_macos_sysadmin(self):
-        """macOS attack surface: keychain, dscl, launchd, ARD, FileVault, MDM, TCC, Orka paths."""
-        if not HAS_MACOS_SYSADMIN:
-            self.findings['macos_sysadmin'] = {'error': 'macos_sysadmin module not available'}
-            return {}
-
-        enum = MacOSSysadminEnumerator()
-        result = enum.run()
-        self.findings['macos_sysadmin'] = result
-
-        for finding in result.get('findings', []):
-            sev = finding.get('severity', 'INFO')
-            if sev in ('CRITICAL', 'HIGH'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    sev,
-                    'type':        f"macOS sysadmin: {finding['title']}",
-                    'description': finding.get('detail', '')[:200],
-                    'impact':      'Credential access / persistence / lateral movement',
-                    'remediation': 'Rotate exposed credentials; harden remote management; restrict sudo',
-                })
-        return result
-
-    def enumerate_podman_containers(self, socket_path=None, exec_oracle=False):
-        """Podman socket enumeration: containers, privileged mounts, env secrets, Oracle exec."""
-        if not HAS_PODMAN:
-            self.findings['podman'] = {'error': 'podman_enum module not available'}
-            return {}
-
-        if socket_path:
-            enum = PodmanEnumerator(socket_path=socket_path, exec_oracle=exec_oracle)
-            result = enum.run(exec_oracle=exec_oracle)
-            all_results = [result]
-        else:
-            out = enumerate_podman(exec_oracle=exec_oracle)
-            all_results = out.get('results', [])
-
-        self.findings['podman'] = {'results': all_results,
-                                   'sockets': find_podman_sockets()}
-
-        for r in all_results:
-            for finding in r.get('findings', []):
-                sev = finding.get('severity', 'INFO')
-                if sev in ('CRITICAL', 'HIGH'):
-                    self.findings['vulnerabilities'].append({
-                        'severity':    sev,
-                        'type':        f"Podman: {finding['title']}",
-                        'description': finding.get('detail', '')[:200],
-                        'impact':      ('Container escape via privileged mount / '
-                                        'Oracle DB cred harvest / ISE service takeover'),
-                        'remediation': ('Remove privileged containers; restrict socket permissions; '
-                                        'rotate container env secrets'),
-                    })
-        return self.findings['podman']
-
-    def run_ebpf_analysis(self, target_pid=None):
-        """eBPF capability audit + tracing script generation."""
-        if not HAS_EBPF:
-            self.findings['ebpf'] = {'error': 'ebpf_analyzer module not available'}
-            return {}
-
-        result = analyze_ebpf(target_pid=target_pid)
-        self.findings['ebpf'] = result
-
-        for finding in result.get('findings', []):
-            if finding.get('severity') in ('CRITICAL', 'HIGH'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    finding['severity'],
-                    'type':        f"eBPF: {finding['title']}",
-                    'description': finding.get('detail', ''),
-                    'impact':      'Kernel privilege escalation / plaintext TLS extraction',
-                    'remediation': 'Patch kernel; set unprivileged_bpf_disabled=1; restrict CAP_BPF',
-                })
-        return result
-
-    def scan_lateral_movement(self, scan_network=True):
-        """Credential harvest, SSH keys, API tokens, cloud metadata, subnet scan."""
-        if not HAS_LATERAL:
-            self.findings['lateral_movement'] = {'error': 'lateral_movement module not available'}
-            return {}
-
-        scanner = LateralMovementScanner(
-            scan_network=scan_network,
-            scan_timeout=0.5,
-            max_workers=80,
-        )
-        result = scanner.run_all()
-        self.findings['lateral_movement'] = result
-
-        creds = result.get('creds', {})
-        for f in creds.get('files', []):
-            if f.get('type') in ('shadow', 'htpasswd', 'aws_credentials', 'docker_config'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    'HIGH',
-                    'type':        f"Credential: {f['type']}",
-                    'description': f.get('path', ''),
-                    'impact':      'Direct credential access / lateral movement',
-                    'remediation': 'Restrict file permissions; rotate exposed secrets',
-                })
-
-        for key in result.get('ssh', {}).get('private_keys', []):
-            self.findings['vulnerabilities'].append({
-                'severity':    'HIGH',
-                'type':        'SSH private key exposed',
-                'description': key.get('path', ''),
-                'impact':      'SSH lateral movement to any host in known_hosts',
-                'remediation': 'Remove private keys from host; use agent forwarding only',
-            })
-
-        for tok in result.get('tokens', {}).get('tokens', []):
-            sev = 'CRITICAL' if tok.get('service') in ('aws', 'gcp', 'azure', 'k8s') else 'HIGH'
-            self.findings['vulnerabilities'].append({
-                'severity':    sev,
-                'type':        f"API token: {tok.get('service', 'unknown')}",
-                'description': tok.get('path', ''),
-                'impact':      'Cloud/infrastructure control plane access',
-                'remediation': 'Rotate token; audit usage in cloud audit logs',
-            })
-
-        return result
-
-    def audit_tls(self, targets=None):
-        """TLS cipher suite audit against MacStadium ASA targets and any local TLS services."""
-        if not HAS_TLS:
-            self.findings['tls'] = {'error': 'tls_analyzer module not available'}
-            return {}
-
-        analyzer = TLSAnalyzer()
-
-        if targets:
-            results = analyzer.analyze_hosts(targets)
-        else:
-            results = analyzer.analyze_macstadium()
-
-        self.findings['tls'] = {'results': results}
-
-        for r in results:
-            weak = r.get('weak_ciphers', [])
-            if weak:
-                self.findings['vulnerabilities'].append({
-                    'severity':    'HIGH',
-                    'type':        f"Weak TLS ciphers: {r['host']}",
-                    'description': f"{len(weak)} weak suites: {', '.join(weak[:3])}",
-                    'impact':      'BEAST/POODLE/SWEET32 downgrade; session decryption',
-                    'remediation': 'Enforce TLS 1.2+ with AEAD suites only; disable RC4/3DES/CBC',
-                })
-            if r.get('expired_cert'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    'MEDIUM',
-                    'type':        f"Expired TLS cert: {r['host']}",
-                    'description': r.get('cert_subject', ''),
-                    'impact':      'Client certificate validation bypass; MITM surface',
-                    'remediation': 'Renew certificate',
-                })
-
-        return {'results': results}
-
     def analyze_process(self, pid):
         """Deep analysis of specific process"""
         enum = ProcessEnumerator(pid)
@@ -1189,47 +667,19 @@ class Ablation:
         """Deep analysis of specific binary"""
         parser = BinaryParser(filepath)
         info = parser.parse()
-
-        # ELF security analysis
-        if HAS_ELF_PARSER and info.get('format') == 'ELF':
-            try:
-                ep = ELFParser(filepath)
-                ep.parse()
-                info['elf'] = ep.to_dict()
-                sec = info['elf'].get('security', {})
-                if not sec.get('pie'):
-                    self.findings['vulnerabilities'].append({
-                        'severity': 'MEDIUM', 'type': 'ELF: No PIE',
-                        'description': filepath, 'impact': 'Fixed base address aids ROP/exploit',
-                        'remediation': 'Recompile with -fPIE -pie',
-                    })
-                if not sec.get('nx'):
-                    self.findings['vulnerabilities'].append({
-                        'severity': 'HIGH', 'type': 'ELF: No NX (executable stack)',
-                        'description': filepath, 'impact': 'Stack shellcode execution possible',
-                        'remediation': 'Recompile with -z noexecstack',
-                    })
-                if sec.get('relro') == 'none':
-                    self.findings['vulnerabilities'].append({
-                        'severity': 'MEDIUM', 'type': 'ELF: No RELRO',
-                        'description': filepath, 'impact': 'GOT overwrite attack surface open',
-                        'remediation': 'Link with -Wl,-z,relro,-z,now',
-                    })
-            except Exception:
-                pass
-
+        
         # Disassemble entry point
         with open(filepath, 'rb') as f:
             if info.get('entry_point'):
                 entry = int(info['entry_point'], 16)
                 f.seek(entry if entry < 1000000 else 0)
                 code = f.read(512)
-
+                
                 engine = DisasmEngine()
                 disasm = engine.disassemble(code, entry, count=50)
-
+                
                 info['disassembly'] = disasm[:20]
-
+        
         return info
     
     def trace_syscalls(self, pid, duration=5):
@@ -1237,342 +687,10 @@ class Ablation:
         tracer = SyscallTracer(pid)
         return tracer.trace_process(duration)
     
-    def scan_nginx(self, host: str = None, port: int = 443, use_tls: bool = True):
-        """Enumerate nginx attack surface — stub_status, CVEs, alias traversal, SSRF, NX-API."""
-        if not HAS_NGINX:
-            self.findings['nginx'] = {'error': 'nginx_enum module not available'}
-            return {}
-
-        target_host = host or NginxEnumerator.MACSTADIUM_HOST
-        enum = NginxEnumerator(host=target_host, port=port, use_tls=use_tls)
-        result = enum.run()
-        self.findings['nginx'] = result
-
-        for f in result.get('findings', []):
-            if f['severity'] in ('CRITICAL', 'HIGH', 'MEDIUM'):
-                self.findings['vulnerabilities'].append({
-                    'severity':    f['severity'],
-                    'type':        f'nginx: {f["type"]}',
-                    'description': f['description'],
-                    'impact':      f.get('detail', ''),
-                    'remediation': f.get('exploit', ''),
-                })
-
-        return result
-
-    def scan_jdwp_processes(self, host: str = None):
-        """
-        Scan local JVM /proc/*/cmdline for JDWP flags + probe remote JDWP ports.
-        If host is given, probes that host for JDWP ports (ISE/Cisco targets).
-        """
-        from java_re import analyze_jvm_flags, scan_jvm_processes, detect_debug_port
-
-        all_findings = []
-
-        # Local /proc scan
-        try:
-            proc_findings = scan_jvm_processes()
-            all_findings.extend(proc_findings)
-        except Exception:
-            pass
-
-        # Remote port probe — ISE candidates and provided host
-        probe_hosts = []
-        if host:
-            probe_hosts.append(host)
-        # ISE candidates from ise_enum if loaded
-        if HAS_ISE:
-            try:
-                from ise_enum import MACSTADIUM_ISE_CANDIDATES
-                probe_hosts.extend(MACSTADIUM_ISE_CANDIDATES)
-            except Exception:
-                pass
-
-        jdwp_results = {}
-        for h in probe_hosts:
-            hits = detect_debug_port(h)
-            if hits:
-                jdwp_results[h] = hits
-                for hit in hits:
-                    if hit.get('jdwp_confirmed'):
-                        self.findings['vulnerabilities'].append({
-                            'severity':    'CRITICAL',
-                            'type':        'JDWP_OPEN',
-                            'description': f'JDWP debug port open on {h}:{hit["port"]}',
-                            'impact':      'Full JVM control: heap read, arbitrary code eval via Runtime.exec()',
-                            'remediation': hit.get('exploit_note', ''),
-                        })
-
-        self.findings['java_re']['jdwp_scan'] = {
-            'proc_findings': all_findings,
-            'remote_results': jdwp_results,
-        }
-
-        return {'proc_findings': all_findings, 'remote_jdwp': jdwp_results}
-
-    def enumerate_hyperflex(self, hosts: list = None, timeout: int = 8) -> dict:
-        """HyperFlex Connect REST API: brute creds, Intersight claim code, iSCSI/NFS export."""
-        if not HAS_HYPERFLEX:
-            self.findings['hyperflex'] = {'error': 'hyperflex_enum module not available'}
-            return {}
-        targets = hosts or []
-        results = enumerate_hyperflex_cluster(targets, timeout=timeout)
-        self.findings['hyperflex'] = results
-        for r in results:
-            if r.get('cred_result'):
-                self.findings['vulnerabilities'].append({
-                    'severity': 'CRITICAL',
-                    'type': 'HYPERFLEX_DEFAULT_CREDS',
-                    'description': (f"HyperFlex Connect {r['host']} — default creds valid: "
-                                    f"{r['cred_result']['user']}:{r['cred_result']['pass']}"),
-                    'impact': 'Full cluster control, VM/datastore access, Intersight pivot',
-                    'remediation': 'Change admin password; disable HX Connect if not needed',
-                })
-            if r.get('intersight_claim_code'):
-                self.findings['vulnerabilities'].append({
-                    'severity': 'CRITICAL',
-                    'type': 'INTERSIGHT_CLAIM_CODE',
-                    'description': f"Intersight claim code exposed on {r['host']}",
-                    'impact': 'Attacker can claim device into their Intersight org',
-                    'remediation': 'Rotate device claim codes; restrict HX Connect access',
-                })
-            if r.get('iscsi_targets'):
-                self.findings['interesting'].append({
-                    'host': r['host'],
-                    'type': 'ISCSI_EXPOSED',
-                    'detail': r['iscsi_targets'],
-                })
-            if r.get('nfs_exports'):
-                self.findings['interesting'].append({
-                    'host': r['host'],
-                    'type': 'NFS_EXPORTS',
-                    'detail': r['nfs_exports'],
-                })
-        return results
-
-    def enumerate_streaming(self, hosts: list = None, timeout: int = 8) -> dict:
-        """Kafka/Flink/NiFi/Schema Registry unauthenticated enumeration."""
-        if not HAS_STREAMING:
-            self.findings['streaming'] = {'error': 'streaming_enum module not available'}
-            return {}
-        targets = hosts or []
-        results = enumerate_streaming_surface(targets, timeout=timeout)
-        self.findings['streaming'] = results
-        for host, services in results.items():
-            kafka = services.get('kafka', {})
-            if kafka.get('topics'):
-                self.findings['vulnerabilities'].append({
-                    'severity': 'HIGH',
-                    'type': 'KAFKA_UNAUTH_TOPIC_LIST',
-                    'description': f"Kafka {host}:9092 unauthenticated: {len(kafka['topics'])} topics",
-                    'impact': 'Data exfil: consume all topics including telemetry, PII, secrets',
-                    'remediation': 'Enable SASL_SSL; set ACLs; disable PLAINTEXT listener',
-                })
-            flink = services.get('flink', {})
-            if flink.get('jar_upload_open'):
-                self.findings['vulnerabilities'].append({
-                    'severity': 'CRITICAL',
-                    'type': 'FLINK_UNAUTH_RCE',
-                    'description': f"Flink {host}:8081 JAR upload unauthenticated — RCE",
-                    'impact': 'Arbitrary code execution on Flink cluster workers',
-                    'remediation': 'Enable REST API auth; firewall port 8081',
-                })
-            nifi = services.get('nifi', {})
-            if not nifi.get('auth_required') and nifi.get('reachable'):
-                self.findings['vulnerabilities'].append({
-                    'severity': 'CRITICAL',
-                    'type': 'NIFI_UNAUTH_ACCESS',
-                    'description': f"NiFi {host} unauthenticated access",
-                    'impact': 'Processor config = arbitrary code exec; cred theft from controller services',
-                    'remediation': 'Enable TLS + user authentication in nifi.properties',
-                })
-        return results
-
-    def enumerate_cisco_apis(self, hosts: list = None, timeout: int = 8) -> dict:
-        """Sweep APIC/DNA-C/UCS-M/vManage/RESTCONF/NSO on all hosts."""
-        if not HAS_CISCO_API:
-            self.findings['cisco_api'] = {'error': 'cisco_api_enum module not available'}
-            return {}
-        targets = hosts or []
-        results = enumerate_cisco_api_surface(targets, timeout=timeout)
-        self.findings['cisco_api'] = results
-        for host, svcs in results.items():
-            for svc_name, svc_data in svcs.items():
-                cred = svc_data.get('cred_result')
-                if cred:
-                    self.findings['vulnerabilities'].append({
-                        'severity': 'CRITICAL',
-                        'type': f'CISCO_{svc_name.upper()}_DEFAULT_CREDS',
-                        'description': (f"{svc_name} on {host} — "
-                                        f"default creds: {cred.get('user')}:{cred.get('pass')}"),
-                        'impact': self._cisco_api_impact(svc_name, svc_data),
-                        'remediation': 'Change default credentials; restrict management plane access',
-                    })
-        return results
-
-    @staticmethod
-    def _cisco_api_impact(svc: str, data: dict) -> str:
-        impacts = {
-            "apic": "Full ACI fabric control: all tenants, EPGs, contracts, L3Out routes, user accounts",
-            "dnac": "All managed device configs, SNMP community strings, SSH credentials, wireless PSKs",
-            "ucs_manager": "Full UCS compute control: service profiles, firmware, local user accounts",
-            "vmanage": "SD-WAN fabric control: vEdge configs, certificates, routing policies, alarm data",
-            "restconf": "IOS-XE running config: TACACS+ keys, BGP neighbor passwords, SNMP communities, user list",
-            "nso": "All managed device credentials via authgroups; NSO manages every device it orchestrates",
-        }
-        nodes = len(data.get('data', {}).get('devices', {}).get('imdata', []) or [])
-        base = impacts.get(svc, "Cisco platform access")
-        return f"{base} ({nodes} devices if populated)"
-
-    def enumerate_nexus_dashboard(self, hosts: list = None, timeout: int = 8) -> dict:
-        """Nexus Dashboard SSO single-pivot, NDFC fabric inventory, Kafka anomaly export."""
-        if not HAS_NEXUS_DASH:
-            self.findings['nexus_dashboard'] = {'error': 'nexus_dashboard_enum module not available'}
-            return {}
-        targets = hosts or []
-        results = enumerate_nexus_dashboard(targets, timeout=timeout)
-        self.findings['nexus_dashboard'] = results
-        for r in results:
-            if r.get('cred_result'):
-                impact = r.get('sso_impact', {})
-                self.findings['vulnerabilities'].append({
-                    'severity': 'CRITICAL',
-                    'type': 'NEXUS_DASHBOARD_DEFAULT_CREDS',
-                    'description': (f"Nexus Dashboard {r['host']} SSO creds valid: "
-                                    f"{r['cred_result']['user']}:{r['cred_result']['pass']}"),
-                    'impact': (f"Single cred = APIC+NDFC+NDO+DataBroker. "
-                               f"Sites:{impact.get('sites',0)} Fabrics:{impact.get('fabrics',0)} "
-                               f"Switches:{impact.get('switches',0)}"),
-                    'remediation': 'Change default credentials; enable MFA; restrict ND mgmt access',
-                })
-            if r.get('kafka_export_open'):
-                self.findings['vulnerabilities'].append({
-                    'severity': 'HIGH',
-                    'type': 'ND_KAFKA_UNAUTH',
-                    'description': f"Nexus Dashboard {r['host']}:9092 Kafka export unauthenticated",
-                    'impact': 'Subscribe to all NDI anomaly/telemetry topics without credentials',
-                    'remediation': 'Enable Kafka SASL auth in NDI Kafka exporter config',
-                })
-        return results
-
-    def enumerate_cisco_re(self, host: str, port: int = 443) -> dict:
-        """Run all Cisco RE probe functions against a single target host."""
-        _PROBE_REGISTRY = []
-
-        if HAS_ASA_ENUM:
-            _PROBE_REGISTRY += [
-                ('asa', 'mpf_policy',          probe_asa_mpf_policy_exposure),
-                ('asa', 'botnet_url_filter',    probe_asa_botnet_url_filter_exposure),
-                ('asa', 'asdm_jar',             probe_asa_asdm_jar_exposure),
-                ('asa', 'java_deser',           probe_cisco_java_deserialization_surface),
-                ('asa', 'anyconnect_profile',   probe_asa_anyconnect_profile_download),
-                ('asa', 'mobile_vpn',           probe_asa_mobile_vpn_surface),
-                ('asa', 'ios_redirect',         probe_asa_ios_client_redirect_surface),
-                ('asa', 'webvpn_session',       probe_asa_webvpn_session_exposure),
-            ]
-        if HAS_IOS:
-            _PROBE_REGISTRY += [
-                ('ios', 'arm_debug',            probe_ios_arm_debug_interface_exposure),
-                ('ios', 'rommon_vars',          probe_ios_rommon_variable_exposure),
-                ('ios', 'crash_artifacts',      probe_ios_crash_artifact_exposure),
-                ('ios', 'exception_level',      probe_ios_exception_level_disclosure),
-                ('ios', 'cef_fib',              probe_ios_cef_fib_exposure),
-                ('ios', 'bgp_rib',              probe_ios_bgp_rib_tree_exposure),
-            ]
-        if HAS_NXOS:
-            _PROBE_REGISTRY += [
-                ('nxos', 'bgp_evpn',           probe_nxos_bgp_evpn_control_plane),
-                ('nxos', 'vxlan_multisite',     probe_nxos_vxlan_multisite_exposure),
-                ('nxos', 'vdc_isolation',       probe_nxos_vdc_isolation_exposure),
-                ('nxos', 'fcoe_vsan',           probe_nxos_fcoe_vsan_exposure),
-                ('nxos', 'mgmt_proxy',          probe_nxos_management_proxy_exposure),
-                ('nxos', 'nexus_dashboard',     probe_nxos_nexus_dashboard_exposure),
-                ('nxos', 'mac_arp_table',       probe_nxos_mac_arp_table_exposure),
-                ('nxos', 'ecmp_hash',           probe_nxos_ecmp_hash_exposure),
-            ]
-        if HAS_ISE:
-            _PROBE_REGISTRY += [
-                ('ise', 'jmx_monitoring',       probe_ise_jmx_monitoring_exposure),
-                ('ise', 'heap_dump',            probe_ise_heap_dump_exposure),
-                ('ise', 'legacy_api',           probe_ise_legacy_api_endpoint_exposure),
-                ('ise', 'spring_framework',     probe_ise_spring_framework_exposure),
-                ('ise', 'nginx_auth_bypass',    probe_ise_nginx_auth_bypass),
-                ('ise', 'nginx_upstream',       probe_ise_nginx_upstream_config),
-                ('ise', 'concurrent_auth_race', probe_ise_concurrent_auth_race_surface),
-                ('ise', 'typed_error_fp',       probe_ise_typed_error_fingerprint),
-            ]
-        if HAS_CISCO_API:
-            _PROBE_REGISTRY += [
-                ('api', 'aci_microseg',         probe_aci_microsegmentation_exposure),
-                ('api', 'aci_tenant_topo',      probe_aci_tenant_network_topology),
-                ('api', 'nginx_proxy',          probe_cisco_nginx_proxy_exposure),
-                ('api', 'gateway_bypass',       probe_cisco_api_gateway_bypass),
-                ('api', 'crosswork_telemetry',  probe_cisco_crosswork_telemetry_exposure),
-                ('api', 'tetration',            probe_cisco_tetration_analytics_exposure),
-                ('api', 'catalyst_center',      probe_cisco_catalyst_center_mobile_api),
-                ('api', 'umbrella',             probe_cisco_umbrella_api_exposure),
-            ]
-
-        all_findings = []
-        probe_summary = {}
-        for (category, name, fn) in _PROBE_REGISTRY:
-            if fn is None:
-                continue
-            key = f"{category}.{name}"
-            try:
-                result = fn(host, port=port)
-            except TypeError:
-                try:
-                    result = fn(host)
-                except Exception as exc:
-                    result = [{'severity': 'INFO', 'title': 'probe_error',
-                               'detail': str(exc), 'host': host, 'port': port}]
-            except Exception as exc:
-                result = [{'severity': 'INFO', 'title': 'probe_error',
-                           'detail': str(exc), 'host': host, 'port': port}]
-            if not isinstance(result, list):
-                result = []
-            probe_summary[key] = len(result)
-            all_findings.extend(result)
-
-        critical = [f for f in all_findings if f.get('severity') == 'CRITICAL']
-        high     = [f for f in all_findings if f.get('severity') == 'HIGH']
-
-        for f in critical + high:
-            self.findings['vulnerabilities'].append({
-                'severity':    f.get('severity'),
-                'title':       f.get('title', ''),
-                'detail':      f.get('detail', ''),
-                'host':        f.get('host', host),
-                'port':        f.get('port', port),
-                'source':      'cisco_re',
-            })
-
-        self.findings['cisco_re'] = {
-            'host':           host,
-            'port':           port,
-            'probes_run':     len(_PROBE_REGISTRY),
-            'probe_summary':  probe_summary,
-            'total_findings': len(all_findings),
-            'critical':       len(critical),
-            'high':           len(high),
-            'findings':       all_findings,
-        }
-        return self.findings['cisco_re']
-
     def generate_report(self):
         """Generate comprehensive report"""
         report_path = Path('/tmp/ablation-report.json')
-
-        # ATT&CK technique tagging — enrich vulnerabilities and privesc paths
-        if HAS_ATTCK and tag_findings_list is not None:
-            self.findings['vulnerabilities'] = tag_findings_list(
-                self.findings.get('vulnerabilities', [])
-            )
-            self.findings['privesc_paths'] = tag_findings_list(
-                self.findings.get('privesc_paths', [])
-            )
-
+        
         with open(report_path, 'w') as f:
             json.dump(self.findings, f, indent=2)
         
@@ -1700,67 +818,15 @@ def main():
     parser.add_argument('--asa', action='store_true', help='Cisco ASA WebVPN enumeration')
     parser.add_argument('--jwt', metavar='TOKEN', help='Analyze JWT token for weaknesses')
     parser.add_argument('--nxos', action='store_true', help='Cisco NX-OS / ACI / APIC enumeration')
-    parser.add_argument('--vergeio', metavar='HOST', help='VergeOS HCI (gcweb) enumeration')
-    parser.add_argument('--ebpf', type=int, nargs='?', const=0, metavar='PID',
-                        help='eBPF capability audit + tracing scripts (optional: target PID)')
-    parser.add_argument('--ise', metavar='HOST', nargs='?', const='',
-                        help='Cisco ISE 3.1 enumeration (no arg = MacStadium candidates)')
-    parser.add_argument('--ise-iso', metavar='PATH',
-                        help='Analyze ISE ISO/mountpoint: extract root hash, Oracle config, TACACS+ creds')
-    parser.add_argument('--ise-mountpoint', metavar='DIR',
-                        help='Already-mounted ISE ISO root (use with --ise-iso)')
-    parser.add_argument('--macos', action='store_true',
-                        help='macOS malware IOC scan, persistence, TCC audit, DYLD hijack')
-    parser.add_argument('--lateral', action='store_true',
-                        help='Lateral movement scan: creds, SSH keys, API tokens, cloud metadata, subnet')
-    parser.add_argument('--winprobe', metavar='HOST',
-                        help='Remote Windows protocol surface: SMB null session, WMI/RPC, WinRM, RDP, MS17-010 fingerprint')
-    parser.add_argument('--winprobe-port', type=int, default=445, metavar='PORT',
-                        help='SMB port for --winprobe (default 445)')
-    parser.add_argument('--winprobe-timeout', type=float, default=5.0, metavar='SEC',
-                        help='Per-probe timeout for --winprobe (default 5.0s)')
-    parser.add_argument('--tls', metavar='HOST[:PORT]', nargs='*',
-                        help='TLS cipher suite audit (no args = MacStadium VPN targets)')
-    parser.add_argument('--ios', metavar='HOST', nargs='?', const='',
-                        help='Cisco IOS/IOS-XE enumeration (SNMP/TFTP/REST/Telnet)')
-    parser.add_argument('--nginx', metavar='HOST', nargs='?', const='',
-                        help='Nginx enumeration — version/config/location disclosure, status page, LFI probes (no arg = MacStadium NX-OS 207.254.14.1)')
-    parser.add_argument('--podman', metavar='SOCKET', nargs='?', const='',
-                        help='Podman socket enumeration: containers, secrets, privileged mounts (no arg = auto-discover)')
-    parser.add_argument('--podman-exec-oracle', action='store_true',
-                        help='With --podman: exec into Oracle/ISE containers to harvest DB creds')
-    parser.add_argument('--hyperflex', metavar='HOST', nargs='+',
-                        help='HyperFlex Connect enum: REST API brute, Intersight claim code, iSCSI/NFS')
-    parser.add_argument('--streaming', metavar='HOST', nargs='+',
-                        help='Streaming pipeline enum: Kafka 9092, Flink 8081, NiFi 8080/8443, Schema Registry')
-    parser.add_argument('--nexus-dash', metavar='HOST', nargs='+',
-                        help='Nexus Dashboard SSO pivot: APIC+NDFC+NDO creds, Kafka export')
-    parser.add_argument('--cisco-api', metavar='HOST', nargs='+',
-                        help='Cisco platform API sweep: APIC/DNA-C/UCS-M/vManage/RESTCONF/NSO')
-    parser.add_argument('--sniff', type=float, nargs='?', const=10.0, metavar='DURATION',
-                        help='Raw packet capture for credential extraction (default 10s, needs root)')
-    parser.add_argument('--cisco-re', metavar='HOST',
-                        help='Full Cisco RE probe suite: ASA/IOS/NX-OS/ISE/API probes against one host')
-    parser.add_argument('--cisco-re-port', type=int, default=443, metavar='PORT',
-                        help='Port for --cisco-re (default 443)')
-    parser.add_argument('--cisco-ios-re', metavar='FILE',
-                        help='RE a Cisco IOS firmware image, crash dump, or running-config file')
-    parser.add_argument('--cisco-asdm', metavar='FILE',
-                        help='RE a Cisco ASDM JAR or .class file (static analysis, constant pool walk)')
-    parser.add_argument('--cisco-asdm-live', metavar='HOST',
-                        help='Download and RE ASDM JAR live from a Cisco ASA (host or IP)')
-    parser.add_argument('--cisco-asdm-live-port', type=int, default=443, metavar='PORT',
-                        help='Port for --cisco-asdm-live (default 443)')
-    parser.add_argument('--cisco-guestshell', metavar='PATH',
-                        help='RE a NX-OS guest shell rootfs directory or ext4 image')
-    parser.add_argument('--cisco-webvpn', metavar='HOST',
-                        help='RE Cisco ASA WebVPN JS portal and SAML surface against a live host')
-    parser.add_argument('--cisco-webvpn-port', type=int, default=443, metavar='PORT',
-                        help='Port for --cisco-webvpn (default 443)')
-    parser.add_argument('--cisco-config', metavar='FILE',
-                        help='RE a Cisco running/startup config: extract creds, decode type-7, find weaknesses')
-    parser.add_argument('--cisco-rommon', metavar='FILE_OR_CONFREG',
-                        help='RE ROMMON bypass: accepts config file path or hex confreg value (e.g. 0x2142)')
+    parser.add_argument('--asdm-re', metavar='HOST', help='Download + RE Cisco ASDM JAR from live ASA')
+    parser.add_argument('--webvpn-js', metavar='HOST', help='RE Cisco ASA WebVPN portal JavaScript')
+    parser.add_argument('--ios-re', metavar='FILE', help='RE Cisco IOS/IOS-XE firmware image')
+    parser.add_argument('--config-re', metavar='FILE', help='RE Cisco running-config for creds/topology')
+    parser.add_argument('--rommon-re', metavar='CONFREG', help='ROMMON bypass analysis (hex config-register, e.g. 0x2102)')
+    parser.add_argument('--cisco-api', metavar='HOST', help='Cisco API surface RE (RESTCONF/NETCONF/YANG)')
+    parser.add_argument('--guestshell', metavar='HOST', help='NX-OS guestshell RE and escape analysis')
+    parser.add_argument('--asdm-re-all', action='store_true', help='ASDM RE against all MacStadium ASAs')
+    parser.add_argument('--webvpn-js-all', action='store_true', help='WebVPN JS RE against all MacStadium ASAs')
 
     args = parser.parse_args()
     
@@ -1874,128 +940,142 @@ def main():
             result = ablation.enumerate_nxos()
             print(json.dumps(result, indent=2, default=str))
 
-    elif args.vergeio:
+    elif getattr(args, 'asdm_re', None):
         ablation.banner()
-        if not HAS_VERGEIO:
-            print("[-] vergeio_enum module not available")
+        if not HAS_ASDM_RE:
+            print("[-] cisco_asdm_download_re module not available")
         else:
-            print(f"[*] Enumerating VergeOS HCI at {args.vergeio}...")
-            result = ablation.enumerate_vergeio(args.vergeio)
+            def _run_asdm(host, port=443):
+                dl = ASDMDownloader(host, port)
+                jnlp = dl.find_jnlp()
+                jars_downloaded = {}
+                if jnlp:
+                    print(f"  [+] JNLP found ({len(jnlp)} bytes)")
+                    jar_paths = dl.parse_jnlp(jnlp)
+                    print(f"  [+] JAR paths: {jar_paths}")
+                    for jar_path in jar_paths:
+                        data = dl.download_jar(jar_path)
+                        if data:
+                            jars_downloaded[jar_path] = data
+                else:
+                    print(f"  [-] No JNLP — trying direct JAR paths")
+                    for path in ['/admin/public/asdm.jar', '/asdm.jar', '/admin/public/asdm-launcher.jar']:
+                        data = dl.download_jar(path)
+                        if data:
+                            jars_downloaded[path] = data
+                            print(f"  [+] Direct JAR hit: {path} ({len(data)} bytes)")
+                for path, data in jars_downloaded.items():
+                    print(f"  [*] Analyzing JAR: {path}")
+                    analyzer = ASDMJARAnalyzer(data, jar_name=path)
+                    result = analyzer.analyze()
+                    print(json.dumps(result, indent=2, default=str))
+                if not jars_downloaded:
+                    print(f"  [-] No JARs retrieved — JNLP:{'found' if jnlp else 'none'}")
+            host = args.asdm_re
+            print(f"[*] ASDM Download + RE: {host}")
+            _run_asdm(host)
+
+    elif getattr(args, 'asdm_re_all', False):
+        ablation.banner()
+        if not HAS_ASDM_RE:
+            print("[-] cisco_asdm_download_re module not available")
+        else:
+            def _run_asdm_target(asa):
+                host, port = asa['host'], asa['port']
+                print(f"\n[*] ASDM RE: {asa['label']} ({host}:{port})")
+                dl = ASDMDownloader(host, port)
+                jnlp = dl.find_jnlp()
+                jars_downloaded = {}
+                if jnlp:
+                    print(f"  [+] JNLP found ({len(jnlp)} bytes)")
+                    jar_paths = dl.parse_jnlp(jnlp)
+                    for jar_path in jar_paths:
+                        data = dl.download_jar(jar_path)
+                        if data:
+                            jars_downloaded[jar_path] = data
+                else:
+                    for path in ['/admin/public/asdm.jar', '/asdm.jar', '/admin/public/asdm-launcher.jar']:
+                        data = dl.download_jar(path)
+                        if data:
+                            jars_downloaded[path] = data
+                            print(f"  [+] Direct JAR: {path} ({len(data)} bytes)")
+                for path, data in jars_downloaded.items():
+                    analyzer = ASDMJARAnalyzer(data, jar_name=path)
+                    result = analyzer.analyze()
+                    print(json.dumps(result, indent=2, default=str))
+                if not jars_downloaded:
+                    print(f"  [-] No JARs — JNLP:{'found' if jnlp else 'none'}")
+            for asa in MACSTADIUM_ASAS:
+                _run_asdm_target(asa)
+
+    elif getattr(args, 'webvpn_js', None):
+        ablation.banner()
+        if not HAS_WEBVPN_JS:
+            print("[-] cisco_webvpn_js_re module not available")
+        else:
+            host = args.webvpn_js
+            print(f"[*] WebVPN JS RE: {host}")
+            re_eng = WebVPNJSRE(host, 443)
+            result = re_eng.analyze()
             print(json.dumps(result, indent=2, default=str))
 
-    elif args.ebpf is not None:
+    elif getattr(args, 'webvpn_js_all', False):
         ablation.banner()
-        if not HAS_EBPF:
-            print("[-] ebpf_analyzer module not available")
+        if not HAS_WEBVPN_JS:
+            print("[-] cisco_webvpn_js_re module not available")
         else:
-            pid = args.ebpf if args.ebpf else None
-            print(f"[*] eBPF capability audit{f' (PID {pid})' if pid else ''}...")
-            result = ablation.run_ebpf_analysis(target_pid=pid)
-            # Print ready-to-run tracing scripts
-            print("\n[+] Tracing scripts ready:")
-            for name, script in result.get('tracing_scripts', {}).items():
-                print(f"\n  [{name}]")
-                print(f"  {script}")
-            print(json.dumps({k: v for k, v in result.items() if k != 'tracing_scripts'},
-                             indent=2, default=str))
+            for asa in MACSTADIUM_ASAS:
+                print(f"\n[*] WebVPN JS RE: {asa['label']} ({asa['host']})")
+                re_eng = WebVPNJSRE(asa['host'], asa['port'])
+                result = re_eng.analyze()
+                print(json.dumps(result, indent=2, default=str))
 
-    elif args.ise_iso or args.ise_mountpoint:
+    elif getattr(args, 'ios_re', None):
         ablation.banner()
-        if not HAS_ISE_ISO:
-            print("[-] ise_iso module not available")
+        if not HAS_IOS_RE:
+            print("[-] cisco_ios_re module not available")
         else:
-            iso  = getattr(args, 'ise_iso', None)
-            mnt  = getattr(args, 'ise_mountpoint', None)
-            print(f"[*] ISE ISO analysis: {iso or mnt}")
-            analyzer = ISEISOAnalyzer(iso_path=iso, mountpoint=mnt)
-            try:
-                result = analyzer.analyze()
-            finally:
-                analyzer.cleanup()
-            # Print shadow hashes immediately
-            for e in result.get('shadow', []):
-                print(f"[HASH] {e['user']}: {e['hash']}")
-                print(f"       crack: {e['hash_id']['cmd']}")
+            result = analyze_ios_firmware(args.ios_re)
             print(json.dumps(result, indent=2, default=str))
 
-    elif args.ise is not None:
+    elif getattr(args, 'config_re', None):
         ablation.banner()
-        if not HAS_ISE:
-            print("[-] ise_enum module not available")
+        if not HAS_CONFIG_RE:
+            print("[-] cisco_config_re module not available")
         else:
-            targets = [{'host': args.ise, 'port': 443}] if args.ise else None
-            print(f"[*] Cisco ISE 3.1 enumeration: {args.ise or 'MacStadium candidates'}...")
-            result = ablation.enumerate_ise(targets=targets)
+            with open(args.config_re) as f:
+                text = f.read()
+            re_eng = CiscoConfigRE(text)
+            result = re_eng.analyze_all()
             print(json.dumps(result, indent=2, default=str))
 
-    elif args.macos:
+    elif getattr(args, 'rommon_re', None):
         ablation.banner()
-        ablation.detect_platform()
-        print("[*] macOS attack surface enumeration...")
-        if HAS_MACOS_MALWARE:
-            ablation.analyze_macos_malware()
-            mm = ablation.findings['macos_malware']
-            print(f"  Malware IOC findings: {mm.get('finding_count', 0)}")
-        if HAS_MACOS_SYSADMIN:
-            result = ablation.enumerate_macos_sysadmin()
+        if not HAS_ROMMON_RE:
+            print("[-] cisco_rommon_re module not available")
+        else:
+            confreg = int(args.rommon_re, 16) if args.rommon_re.startswith('0x') else int(args.rommon_re)
+            re_eng = ROMMONBypassRE()
+            result = re_eng.analyze_confreg(confreg)
             print(json.dumps(result, indent=2, default=str))
-        else:
-            print("[-] macos_sysadmin module not available")
 
-    elif args.lateral:
+    elif getattr(args, 'cisco_api', None):
         ablation.banner()
-        if not HAS_LATERAL:
-            print("[-] lateral_movement module not available")
+        if not HAS_CISCO_API:
+            print("[-] cisco_api_enum module not available")
         else:
-            print("[*] Lateral movement scan...")
-            scanner = LateralMovementScanner(scan_network=True, scan_timeout=0.5, max_workers=80)
-            results = scanner.run_all()
-            print(scanner.report())
-            print(json.dumps(results, indent=2, default=str))
-
-    elif getattr(args, 'winprobe', None):
-        ablation.banner()
-        if not HAS_LATERAL:
-            print("[-] lateral_movement module not available")
-        else:
-            host = args.winprobe
-            port = getattr(args, 'winprobe_port', 445)
-            timeout = getattr(args, 'winprobe_timeout', 5.0)
-            print(f"[*] Windows protocol surface probe: {host}:{port}")
-            enum = LateralMovementEnumerator(host, port=port, timeout=timeout)
+            enum = CiscoAPIEnum(args.cisco_api)
             result = enum.run()
-            ablation.findings['lateral_movement'] = result
-            sev = result.get('severity', 'INFO')
-            print(f"  [{sev}] SMB null session: {result['smb_null_session'].get('null_session')}")
-            print(f"  [{sev}] WMI/RPC reachable: {result['wmi_dcom'].get('reachable')}")
-            print(f"  [{sev}] RPC endpoints:     {len(result.get('rpc_endpoints', []))}")
-            print(f"  [{sev}] WinRM reachable:   {result['winrm'].get('reachable')} "
-                  f"auth={result['winrm'].get('auth_methods')}")
-            print(f"  [{sev}] RDP reachable:     {result['rdp'].get('reachable')} "
-                  f"NLA={result['rdp'].get('nla_required')}")
-            print(f"  [{sev}] MS17-010 fp:       {result['ms17_010'].get('vulnerable_fingerprint')} "
-                  f"dialect={result['ms17_010'].get('smb_dialect')}")
             print(json.dumps(result, indent=2, default=str))
 
-    elif args.tls is not None:
+    elif getattr(args, 'guestshell', None):
         ablation.banner()
-        if not HAS_TLS:
-            print("[-] tls_analyzer module not available")
+        if not HAS_GUESTSHELL:
+            print("[-] cisco_nxos_guestshell_re module not available")
         else:
-            analyzer = TLSAnalyzer()
-            if args.tls:
-                targets = []
-                for t in args.tls:
-                    if ':' in t:
-                        h, p = t.rsplit(':', 1)
-                        targets.append({'host': h, 'port': int(p)})
-                    else:
-                        targets.append({'host': t, 'port': 443})
-                results = analyzer.analyze_hosts(targets)
-            else:
-                print("[*] TLS audit: MacStadium VPN targets")
-                results = analyzer.analyze_macstadium()
-            print(analyzer.report(results))
+            re_eng = NXOSGuestshellRE(args.guestshell)
+            result = re_eng.analyze()
+            print(json.dumps(result, indent=2, default=str))
 
     elif args.containers:
         ablation.banner()
@@ -2012,288 +1092,6 @@ def main():
         orka_enum.enumerate_all()
         print(orka_enum.report())
     
-    elif args.nginx is not None:
-        ablation.banner()
-        if not HAS_NGINX:
-            print("[-] nginx_enum module not available")
-        else:
-            host = args.nginx or '207.254.14.1'
-            print(f"[*] Nginx enumeration: {host} (NX-OS nginx 1.7.10 target)...")
-            enumerator = NginxEnumerator(host)
-            results = enumerator.run()
-            ablation.findings['nginx'] = results
-            for f in results.get('findings', []):
-                print(f"  [{f.get('severity', 'INFO')}] {f.get('title', f.get('type', ''))}")
-            print(json.dumps(results, indent=2, default=str))
-
-    elif args.ios is not None:
-        ablation.banner()
-        if not HAS_IOS:
-            print("[-] ios_enum module not available")
-        else:
-            if args.ios:
-                targets = [{'host': args.ios, 'port': 443, 'label': 'cli-arg'}]
-            else:
-                targets = MACSTADIUM_IOS_CANDIDATES
-            print(f"[*] Cisco IOS/IOS-XE enumeration: {args.ios or 'MacStadium candidates'}...")
-            results = []
-            for t in targets:
-                enum = IOSEnumerator(t['host'], port=t.get('port', 443))
-                r = enum.run()
-                results.append(r)
-                for f in r.get('findings', []):
-                    print(f"  [{f['severity']}] {f['title']}")
-            ablation.findings['ios'] = results
-            print(json.dumps(results, indent=2, default=str))
-
-    elif args.podman is not None:
-        ablation.banner()
-        if not HAS_PODMAN:
-            print("[-] podman_enum module not available")
-        else:
-            exec_oracle = getattr(args, 'podman_exec_oracle', False)
-            sock = args.podman or None
-            if sock:
-                print(f"[*] Podman enumeration via socket: {sock}")
-            else:
-                sockets = find_podman_sockets()
-                print(f"[*] Podman auto-discovery: {len(sockets)} socket(s) found")
-                for s in sockets:
-                    print(f"    {s['path']} ({s['type']})")
-            result = ablation.enumerate_podman_containers(
-                socket_path=sock, exec_oracle=exec_oracle)
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'hyperflex', None):
-        ablation.banner()
-        if not HAS_HYPERFLEX:
-            print("[-] hyperflex_enum module not available")
-        else:
-            print(f"[*] HyperFlex Connect enum: {args.hyperflex}")
-            results = ablation.enumerate_hyperflex(hosts=args.hyperflex)
-            for r in results:
-                cred = r.get('cred_result')
-                print(f"  {r['host']}: reachable={r['reachable']} "
-                      f"creds={cred} "
-                      f"intersight_code={r.get('intersight_claim_code')} "
-                      f"iscsi={len(r.get('iscsi_targets', []))} "
-                      f"nfs={len(r.get('nfs_exports', []))}")
-            print(json.dumps(results, indent=2, default=str))
-
-    elif getattr(args, 'streaming', None):
-        ablation.banner()
-        if not HAS_STREAMING:
-            print("[-] streaming_enum module not available")
-        else:
-            print(f"[*] Streaming pipeline enum: {args.streaming}")
-            results = ablation.enumerate_streaming(hosts=args.streaming)
-            for host, svcs in results.items():
-                kafka_topics = svcs.get('kafka', {}).get('topics', [])
-                flink_jar = svcs.get('flink', {}).get('jar_upload_open', False)
-                nifi_unauth = not svcs.get('nifi', {}).get('auth_required', True)
-                print(f"  {host}: kafka_topics={len(kafka_topics)} "
-                      f"flink_rce={flink_jar} nifi_unauth={nifi_unauth}")
-            print(json.dumps(results, indent=2, default=str))
-
-    elif getattr(args, 'nexus_dash', None):
-        ablation.banner()
-        if not HAS_NEXUS_DASH:
-            print("[-] nexus_dashboard_enum module not available")
-        else:
-            print(f"[*] Nexus Dashboard SSO pivot: {args.nexus_dash}")
-            results = ablation.enumerate_nexus_dashboard(hosts=args.nexus_dash)
-            for r in results:
-                cred = r.get('cred_result')
-                impact = r.get('sso_impact', {})
-                print(f"  {r['host']}: creds={cred} "
-                      f"sites={impact.get('sites',0)} "
-                      f"kafka_open={r.get('kafka_export_open')}")
-            print(json.dumps(results, indent=2, default=str))
-
-    elif getattr(args, 'cisco_api', None):
-        ablation.banner()
-        if not HAS_CISCO_API:
-            print("[-] cisco_api_enum module not available")
-        else:
-            print(f"[*] Cisco platform API sweep: {args.cisco_api}")
-            results = ablation.enumerate_cisco_apis(hosts=args.cisco_api)
-            for host, svcs in results.items():
-                for svc, data in svcs.items():
-                    cred = data.get('cred_result')
-                    if cred or data.get('reachable'):
-                        print(f"  {host}/{svc}: reachable={data.get('reachable')} creds={cred}")
-            print(json.dumps(results, indent=2, default=str))
-
-    elif args.sniff is not None:
-        ablation.banner()
-        if not HAS_NET_SNIFFER:
-            print("[-] net_sniffer module not available")
-        else:
-            duration = args.sniff
-            print(f"[*] Raw packet capture for {duration}s (needs root / CAP_NET_RAW)...")
-            result = sniff_network(duration=duration)
-            ablation.findings['net_sniffer'] = result
-            if result.get('error'):
-                print(f"[-] {result['error']}")
-            else:
-                print(f"[+] Packets captured: {result['packets']}")
-                print(f"[+] Unique connections: {len(result.get('connections', []))}")
-                creds = result.get('credentials', [])
-                if creds:
-                    print(f"[!] Credentials extracted: {len(creds)}")
-                    for c in creds:
-                        print(f"    [{c['proto']}] {c['type']}: {c['value']} "
-                              f"({c.get('src', '?')} -> {c.get('dst', '?')}:{c.get('port', '?')})")
-                else:
-                    print("[*] No cleartext credentials observed")
-                arp = result.get('arp_table', [])
-                if arp:
-                    print(f"[*] ARP cache: {len(arp)} entries")
-                    for e in arp:
-                        flag = 'complete' if e.get('complete') else 'stale'
-                        print(f"    {e['ip']:18s}  {e['mac']}  {e['interface']}  [{flag}]")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_ios_re', None):
-        ablation.banner()
-        if not HAS_CISCO_IOS_RE:
-            print("[-] cisco_ios_re module not available")
-        else:
-            path = args.cisco_ios_re
-            print(f"[*] Cisco IOS RE: {path}")
-            result = analyze_ios_firmware(path)
-            ablation.findings['cisco_ios_re'] = result
-            for c in result.get('credentials', []):
-                print(f"  [CRED] {c.get('type','')}: {str(c.get('value',''))[:80]}")
-            for g in result.get('gadgets', [])[:10]:
-                print(f"  [GADGET] {g.get('vaddr',''):#010x} {g.get('mnemonic','')}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_asdm', None):
-        ablation.banner()
-        if not HAS_CISCO_ASDM_RE:
-            print("[-] cisco_asdm_re module not available")
-        else:
-            path = args.cisco_asdm
-            print(f"[*] ASDM JAR/class RE: {path}")
-            result = analyze_asdm(path)
-            ablation.findings['cisco_asdm_re'] = result
-            for c in result.get('credentials', []):
-                print(f"  [CRED] {c.get('pattern_type','')}: {str(c.get('matched_string',''))[:100]}")
-            for ip in result.get('internal_ips', []):
-                print(f"  [IP] {ip}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_asdm_live', None):
-        ablation.banner()
-        if not HAS_CISCO_ASDM_LIVE:
-            print("[-] cisco_asdm_download_re module not available")
-        else:
-            host = args.cisco_asdm_live
-            port = getattr(args, 'cisco_asdm_live_port', 443)
-            print(f"[*] ASDM live download + RE: {host}:{port}")
-            result = analyze_asdm_live(host, port=port)
-            ablation.findings['cisco_asdm_re'] = result
-            print(f"  JAR: {result.get('jar_path')} ({result.get('jar_size_bytes',0)} bytes)")
-            print(f"  Classes: {result.get('class_count',0)}")
-            for c in result.get('credentials', []):
-                print(f"  [CRED] {c.get('pattern_type','')}: {str(c.get('matched_string',''))[:100]}")
-            for ip in result.get('internal_ips', []):
-                print(f"  [IP] {ip}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_guestshell', None):
-        ablation.banner()
-        if not HAS_CISCO_GUESTSHELL_RE:
-            print("[-] cisco_nxos_guestshell_re module not available")
-        else:
-            path = args.cisco_guestshell
-            print(f"[*] NX-OS guest shell RE: {path}")
-            result = analyze_guestshell(path)
-            ablation.findings['cisco_guestshell_re'] = result
-            for c in result.get('credentials', []):
-                sev = c.get('severity', 'INFO')
-                print(f"  [{sev}] {c.get('file','')}: {str(c.get('matched_text',''))[:80]}")
-            for f in result.get('findings', []):
-                print(f"  [{f.get('severity','INFO')}] {f.get('title','')}: {str(f.get('detail',''))[:100]}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_webvpn', None):
-        ablation.banner()
-        if not HAS_CISCO_WEBVPN_RE:
-            print("[-] cisco_webvpn_js_re module not available")
-        else:
-            host = args.cisco_webvpn
-            port = getattr(args, 'cisco_webvpn_port', 443)
-            print(f"[*] WebVPN JS + SAML RE: {host}:{port}")
-            result = analyze_webvpn(host, port)
-            ablation.findings['cisco_webvpn_re'] = result
-            for ep in result.get('endpoints', []):
-                print(f"  [ENDPOINT] {ep.get('method','GET')} {ep.get('path','')}")
-            for hv in result.get('hardcoded_values', []):
-                print(f"  [{hv.get('type','')}] {hv.get('value','')}")
-            for f in result.get('findings', []):
-                print(f"  [{f.get('severity','INFO')}] {f.get('title','')}: {str(f.get('detail',''))[:120]}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_config', None):
-        ablation.banner()
-        if not HAS_CISCO_CONFIG_RE:
-            print("[-] cisco_config_re module not available")
-        else:
-            src = args.cisco_config
-            if src == '-':
-                import sys as _sys2
-                text = _sys2.stdin.read()
-            else:
-                text = open(src).read()
-            print(f"[*] Cisco config RE: {src}")
-            result = analyze_config(text)
-            ablation.findings['cisco_config_re'] = result
-            for c in result.get('credentials', []):
-                decoded = f" → {c['decoded']}" if c.get('decoded') else ''
-                print(f"  [CRED/{c.get('severity','?')}] {c.get('type','')}: {str(c.get('value',''))[:60]}{decoded}")
-            for w in result.get('weaknesses', []):
-                print(f"  [{w.get('severity','INFO')}] {w.get('title','')}: {w.get('detail','')[:100]}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_rommon', None):
-        ablation.banner()
-        if not HAS_CISCO_ROMMON_RE:
-            print("[-] cisco_rommon_re module not available")
-        else:
-            src = args.cisco_rommon
-            print(f"[*] ROMMON bypass RE: {src}")
-            result = analyze_rommon(src)
-            ablation.findings['cisco_rommon_re'] = result
-            for f in result.get('findings', []):
-                print(f"  [{f.get('severity','INFO')}] {f.get('title','')}: {str(f.get('detail',''))[:120]}")
-            steps = result.get('bypass_steps', [])
-            if steps:
-                print("\n  Bypass procedure:")
-                for i, step in enumerate(steps, 1):
-                    print(f"    {i}. {step}")
-            print(json.dumps(result, indent=2, default=str))
-
-    elif getattr(args, 'cisco_re', None):
-        ablation.banner()
-        host = args.cisco_re
-        port = getattr(args, 'cisco_re_port', 443)
-        print(f"[*] Cisco RE probe suite: {host}:{port}")
-        print(f"    ASA={HAS_ASA_ENUM} IOS={HAS_IOS} NXOS={HAS_NXOS} ISE={HAS_ISE} API={HAS_CISCO_API}")
-        result = ablation.enumerate_cisco_re(host, port=port)
-        crit = result.get('critical', 0)
-        high = result.get('high', 0)
-        total = result.get('total_findings', 0)
-        print(f"\n[+] Probes run:     {result.get('probes_run', 0)}")
-        print(f"[+] Total findings: {total}")
-        print(f"[!] CRITICAL: {crit}  HIGH: {high}")
-        for f in result.get('findings', []):
-            sev = f.get('severity', 'INFO')
-            if sev in ('CRITICAL', 'HIGH', 'MEDIUM'):
-                print(f"  [{sev}] {f.get('title', '')} — {f.get('detail', '')[:120]}")
-        print(json.dumps(result, indent=2, default=str))
-
     else:
         ablation.run_autonomous()
         print("[+] Analysis complete!")
