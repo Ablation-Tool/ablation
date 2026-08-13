@@ -37,8 +37,13 @@ rule Cisco_ASA_LINA_Radius_OU_Overflow_ACE
         // CALL *0x20(%rax) — function pointer dispatch via parent+0x20 (ACE dispatch site)
         $call_ptr = { ff 50 20 }
 
+        // Site B: lea 0x2c1(%r14),%rsi; mov %r13,%rdi — unbounded strcpy setup at 0x1a30bb2
+        // no-colon path: attacker-controlled table entry name copied to gp_obj+0x2b1 via strcpy
+        $strcpy_nocolon = { 49 8d b6 c1 02 00 00 4c 89 ef }
+
     condition:
-        $ou_string and $overflow_cmp and $timer_type and $call_ptr
+        // Both sites: traditional ACE chain OR the no-colon unbounded strcpy path
+        $ou_string and $overflow_cmp and ($timer_type and $call_ptr) or $strcpy_nocolon
 }
 
 rule Cisco_ASA_LINA_Radius_OU_Overflow_F1_Missing_MA
