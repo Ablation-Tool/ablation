@@ -891,6 +891,48 @@ class RadiusPacketAnalyzer:
         }
 
 
+def check_rfc5080_compliance(request_packet: bytes, response_packet: bytes,
+                              shared_secret: bytes) -> dict:
+    """
+    Check RFC 5080 §2.2 compliance for a request/response pair.
+
+    Rule: if Access-Request contains Message-Authenticator, the Access-Accept/Reject/
+    Challenge response MUST also contain a valid Message-Authenticator.
+
+    LINA confirmed to NOT enforce this — binary RE + Cisco AI "True." (2026-08-13).
+
+    Returns dict with compliance verdict and evidence for disclosure reports.
+    """
+    req  = RadiusPacketAnalyzer(request_packet,  shared_secret)
+    resp = RadiusPacketAnalyzer(response_packet, shared_secret,
+                                request_authenticator=req.authenticator)
+
+    req_has_ma  = req.has_message_authenticator()
+    resp_has_ma = resp.has_message_authenticator()
+
+    violation = req_has_ma and not resp_has_ma
+
+    result = {
+        'request_code':  req.code_name,
+        'response_code': resp.code_name,
+        'request_has_message_authenticator':  req_has_ma,
+        'response_has_message_authenticator': resp_has_ma,
+        'rfc5080_s2_2_violation': violation,
+        'verdict': 'VIOLATION — RFC 5080 §2.2' if violation else 'COMPLIANT',
+    }
+
+    if resp_has_ma:
+        result['response_message_authenticator_valid'] = resp.validate_message_authenticator()
+
+    return result
+
+
+# Field check (bash — no Python required):
+#   xxd -g 1 radius_packet.bin | grep '50 12'
+#   # 50 = type 80 (Message-Authenticator), 12 = length 18
+#   # absence in an Access-Accept where the request contained it = RFC 5080 §2.2 violation
+
+
 def forge_response_authenticator(code: int, identifier: int,
                                   request_authenticator: bytes,
                                   attributes_bytes: bytes,
