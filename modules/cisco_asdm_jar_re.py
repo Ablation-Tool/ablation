@@ -183,38 +183,593 @@ JAVAP_GREP_CREDS = (
 )
 
 # ---------------------------------------------------------------------------
+# Decompiler tool reference (Decompiling Java §3 — Tools of the Trade)
+# ---------------------------------------------------------------------------
+#
+# Book verdict (Decompiling Java §3):
+#   JAD       — fastest, best inner-class support, annotates output with bytecode.
+#               Last version 1.5.8g / 1.5.8e2 (2001). Not maintained but still
+#               the most reliable for pre-Java8 class files such as older ASDM builds.
+#   CFR       — best modern option; handles Java 8+ lambdas, invokedynamic.
+#               Actively maintained. Use for ASDM ≥7.x (Java 8 bytecode).
+#   JD-GUI    — GUI frontend; writes to ZIP of .java files via jd-cli on headless.
+#   JODE      — open source; use if CFR fails on a specific construct.
+#   javap     — ships with JDK; canonical disassembler. -verbose reveals full CP.
+#   ClassNavigator — GUI disassembler with side-by-side bytecode/CP panes.
+#   JavaDump  — outputs HTML with hotlinked CP entries; useful for navigation.
+
+DECOMPILE_TOOLS = {
+    'javap': {
+        # JDK built-in disassembler. No source recovery but shows all bytecode
+        # and the complete constant pool in human-readable form.
+        # (Decompiling Java §1 Listing 1-2, §2, §4 Listing 4-2)
+        'basic':             'javap -c {classfile}',
+        'verbose':           'javap -verbose {classfile}',
+        'verbose_private':   'javap -c -p -verbose {classfile}',
+        # -p: show private members (credential fields, session tokens)
+        # -verbose: emits full constant pool — each Utf8 entry is visible
+        # -l: also show line numbers and local var tables (stripped by -g:none)
+        'with_lines':        'javap -c -p -l -verbose {classfile}',
+        # Extract single class from JAR then disassemble
+        'extract_disasm':    (
+            'unzip -p {jarfile} {classentry} > /tmp/_cls.class '
+            '&& javap -c -p -verbose /tmp/_cls.class'
+        ),
+        # Grep constant pool string table for credential hints
+        'grep_creds':        (
+            'javap -verbose -c -p {classfile} '
+            '| grep -E "(password|secret|token|enable|asdm|cisco|tacacs|radius|snmp|auth|Basic|Bearer)"'
+        ),
+        # Grep for SSL bypass method names in pool
+        'grep_ssl':          (
+            'javap -verbose -c -p {classfile} '
+            '| grep -E "(checkServerTrusted|checkClientTrusted|getAcceptedIssuers|verify|SSLContext|TrustManager)"'
+        ),
+        # Find all ldc instructions (string-loading bytecode) in output
+        'grep_ldc':          'javap -c {classfile} | grep ldc',
+        # Find invoke* instructions targeting auth/login methods
+        'grep_invoke_auth':  (
+            'javap -c {classfile} '
+            '| grep -E "(invokevirtual|invokespecial|invokestatic|invokeinterface).*#.*[Aa]uth|[Ll]ogin|[Pp]assword"'
+        ),
+    },
+
+    'cfr': {
+        # CFR decompiler — best for Java 8+ (invokedynamic, lambdas).
+        # https://github.com/leibnitz27/cfr  latest: cfr-0.152.jar
+        # (Book: SourceAgain = best 2nd-gen decompiler; CFR is the modern equivalent)
+        'decompile_jar':   'java -jar cfr.jar {jarfile} --outputdir {outdir}',
+        'decompile_class': 'java -jar cfr.jar {classfile}',
+        # --caseinsensitivefs: needed on case-sensitive Linux for ASDM JARs
+        # --silent: suppress progress noise
+        'decompile_jar_focused': (
+            'java -jar cfr.jar {jarfile} '
+            '--caseinsensitivefs true --silent false --outputdir {outdir}'
+        ),
+        # Decompile only a specific class by its binary name
+        'decompile_one_class': (
+            'java -jar cfr.jar {jarfile} --classfilter {classname} --outputdir {outdir}'
+        ),
+        # After decompile: grep source files for auth patterns
+        'find_auth': (
+            'grep -rE --include="*.java" '
+            '"(password|setPassword|getPassword|authenticate|sendCredential|'
+            'checkServer|TrustManager|HostnameVerifier|equals.*pass|pass.*equals)" '
+            '{outdir}/'
+        ),
+        # Find string literals that look like credentials
+        'find_strings': (
+            'grep -rE --include="*.java" '
+            '"(\"[A-Za-z0-9+/]{20,}\"|\\.getProperty\\(|System\\.getenv)" '
+            '{outdir}/'
+        ),
+        # Find hardcoded IP/URL patterns in decompiled output
+        'find_urls': (
+            'grep -rE --include="*.java" '
+            '"(https?://|/api/|/\\+CSCOU\\+/|/\\+CSCOE\\+/|/\\+webvpn\\+/)" '
+            '{outdir}/'
+        ),
+    },
+
+    'jad': {
+        # JAD 1.5.8g — fastest pre-Java8 decompiler; best for ASDM <= 6.x
+        # (Decompiling Java §3: "JAD is fast, free, and very effective")
+        # Annotates output with bytecode fragments — useful for RE.
+        'basic':        'jad {classfile}',
+        # -a: annotate output with original bytecode
+        # -b: add bytecode comments to each statement
+        # -d: output directory
+        'annotated':    'jad -a -b -d {outdir} {classfile}',
+        'batch_jar':    'jar xf {jarfile} && jad -a -b -r -d {outdir} **/*.class',
+        # -r: recurse into subdirs; -lnc: line numbering; -f: ignore try/catch
+        'full':         'jad -a -b -r -lnc -d {outdir} -s java {classglob}',
+    },
+
+    'jode': {
+        # JODE — open source, handles inner classes, good for obfuscated code.
+        # (Decompiling Java §3: "one of only two open source decompilers")
+        'gui':     'java jode.decompiler.Window',
+        'cli':     'java jode.decompiler.Main --dest {outdir} {classfile}',
+    },
+
+    'jd_cli': {
+        # jd-cli — CLI wrapper for JD-Core. jd-gui is the GUI equivalent.
+        'jar':      'jd-cli {jarfile} --outputDir {outdir}',
+        'class':    'jd-cli {classfile}',
+        # Write ZIP of .java files
+        'zip_out':  'jd-cli {jarfile} --outputZipFile {outdir}/src.zip',
+    },
+
+    'procyon': {
+        # Procyon — handles Java 8+ try-with-resources and lambda better than JAD.
+        # Good fallback when CFR output is garbled.
+        'class':    'java -jar procyon.jar {classfile} -o {outdir}',
+        'jar':      'java -jar procyon.jar -jar {jarfile} -o {outdir}',
+    },
+
+    'fernflower': {
+        # FernFlower — IntelliJ's built-in decompiler. Handles modern bytecode.
+        'jar':      'java -jar fernflower.jar {jarfile} {outdir}',
+        'class':    'java -jar fernflower.jar {classfile} {outdir}',
+    },
+
+    'hex': {
+        # Raw hex/binary approach — no decompiler needed; searches constant pool
+        # bytes directly. Most robust when decompiler fails (Decompiling Java §3,
+        # §4: "hexadecimal editors ... change the condition").
+        # String literals in constant pool are UTF-8 bytes preceded by tag=1 + u2 len.
+        # grep -a: treat binary as ASCII text
+        'strings_from_jar':    'strings -n 6 {jarfile} | grep -E "(password|auth|token|enable)"',
+        'strings_from_class':  'strings -n 4 {classfile}',
+        # xxd: hex dump + ASCII sidebar — spot CAFEBABE + constant pool manually
+        'hex_dump':            'xxd {classfile} | head -80',
+        # Find UTF-8 Utf8_info entries (tag=0x01) before grep
+        'cp_utf8_raw':         (
+            "python3 -c \"import sys; d=open('{classfile}','rb').read(); "
+            "[print(d[i+3:i+3+int.from_bytes(d[i+1:i+3],'big')].decode('utf-8','replace')) "
+            "for i in range(10,len(d)-3) if d[i]==1]\""
+        ),
+        # Patch a boolean conditional in-place (flip ifeq<->ifne or ifge<->iflt)
+        # Decompiling Java §3: "edit the condition so boolean=true"
+        # ifeq=0x99, ifne=0x9a, iflt=0x9b, ifge=0x9c, ifgt=0x9d, ifle=0x9e
+        'patch_note': (
+            'Flip conditional: 0x99(ifeq)<->0x9a(ifne), 0x9b(iflt)<->0x9c(ifge). '
+            'Use: python3 -c "d=bytearray(open(f,\'rb\').read()); '
+            'd[offset]=0x9a; open(f,\'wb\').write(d)"'
+        ),
+    },
+
+    'strip_debug': {
+        # Remove -g debug info (LineNumberTable, LocalVariableTable, SourceFile).
+        # javac -g:none does this at compile time; these tools do it post-compile.
+        # (Decompiling Java §4: "-g:none keeps lines/vars/source out of classfile")
+        # JCF StripDebug (from JavaDump/JCF utils): drops line number attributes.
+        'jcf_strip':   'java lti.java.javadump.StripDebug {classfile}',
+        # ProGuard -dontobfuscate -optimizations !* = strip debug only
+        'proguard':    'java -jar proguard.jar @strip_debug.pro',
+        # javap tells you what debug info is present:
+        'check_attrs': 'javap -verbose {classfile} | grep -E "(LineNumber|LocalVariable|SourceFile)"',
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Bytecode opcode table — auth/RE relevant subset
+# Source: Decompiling Java §2 Table 2-6 (complete 0x00–0xc9 table)
+# Full table: 201 opcodes defined; 0xca–0xff reserved or JVM-internal.
+# ---------------------------------------------------------------------------
+
+# Complete opcode name -> (hex, decimal, operand_bytes) for opcodes used in RE
+BYTECODE_OPCODES = {
+    # String/constant loading — the primary path to finding string literals
+    'nop':              (0x00, 0,  0),
+    'ldc':              (0x12, 18, 1),   # push cp[index1] — strings, ints, floats
+    'ldc_w':            (0x13, 19, 2),   # wide index variant (cp[index1<<8|index2])
+    'ldc2_w':           (0x14, 20, 2),   # push long/double constant
+    'bipush':           (0x10, 16, 1),   # push byte as int
+    'sipush':           (0x11, 17, 2),   # push short as int
+
+    # Local variable loads — auth code pushes 'this', password arg, etc.
+    'aload_0':          (0x2a, 42, 0),   # load ref from local 0 (usually 'this')
+    'aload_1':          (0x2b, 43, 0),   # load ref from local 1
+    'aload_2':          (0x2c, 44, 0),   # load ref from local 2
+    'aload_3':          (0x2d, 45, 0),   # load ref from local 3
+    'aload':            (0x19, 25, 1),   # load ref from local N
+
+    # Field access — credential stored as instance field
+    'getfield':         (0xb4, 180, 2),  # get instance field; cp index -> Fieldref
+    'putfield':         (0xb5, 181, 2),  # set instance field
+    'getstatic':        (0xb2, 178, 2),  # get static field
+    'putstatic':        (0xb3, 179, 2),  # set static field
+
+    # Method invocation — the four invoke variants
+    'invokevirtual':    (0xb6, 182, 2),  # instance method (normal dispatch)
+    'invokespecial':    (0xb7, 183, 2),  # <init>, superclass, private
+    'invokestatic':     (0xb8, 184, 2),  # static method
+    'invokeinterface':  (0xb9, 185, 4),  # interface method (4-byte: index+count+0)
+
+    # Object creation — 'new' creates object; <init> is next
+    'new':              (0xbb, 187, 2),  # create new object; cp -> Class
+    'dup':              (0x59, 89,  0),  # duplicate top of stack (used after 'new')
+
+    # Conditional jumps — licensing/auth gates (Decompiling Java §3)
+    'ifeq':             (0x99, 153, 2),  # branch if int == 0  (flip to ifne to bypass)
+    'ifne':             (0x9a, 154, 2),  # branch if int != 0
+    'iflt':             (0x9b, 155, 2),  # branch if int < 0
+    'ifge':             (0x9c, 156, 2),  # branch if int >= 0
+    'ifgt':             (0x9d, 157, 2),  # branch if int > 0
+    'ifle':             (0x9e, 158, 2),  # branch if int <= 0
+    'if_icmpeq':        (0x9f, 159, 2),  # branch if int == int
+    'if_icmpne':        (0xa0, 160, 2),  # branch if int != int
+    'if_acmpeq':        (0xa5, 165, 2),  # branch if ref == ref
+    'if_acmpne':        (0xa6, 166, 2),  # branch if ref != ref
+
+    # Returns
+    'return':           (0xb1, 177, 0),  # return void  (empty body = SSL bypass)
+    'areturn':          (0xb0, 176, 0),  # return reference
+    'ireturn':          (0xac, 172, 0),  # return int
+
+    # Exception — absence in checkServerTrusted = trust-all bypass
+    'athrow':           (0xbf, 191, 0),  # throw exception on stack
+
+    # Type check — instanceof used in auth dispatch
+    'instanceof':       (0xc1, 193, 2),  # check object type; cp -> Class
+    'checkcast':        (0xc0, 192, 2),  # cast object; cp -> Class
+
+    # Misc used in auth/session code
+    'goto':             (0xa7, 167, 2),  # unconditional branch
+    'tableswitch':      (0xaa, 170, -1), # switch table (variable length)
+    'lookupswitch':     (0xab, 171, -1), # switch lookup (variable length)
+    'monitorenter':     (0xc2, 194, 0),  # synchronized block enter
+    'monitorexit':      (0xc3, 195, 0),  # synchronized block exit
+}
+
+# Reverse lookup: opcode byte -> mnemonic
+OPCODE_BY_BYTE = {v[0]: k for k, v in BYTECODE_OPCODES.items()}
+
+
+# ---------------------------------------------------------------------------
+# Bytecode auth-pattern descriptions
+# Source: Decompiling Java §2 (bytecode walkthrough), §3 (tool output examples)
+# These are pattern descriptions for manual or automated analysis of javap output.
+# ---------------------------------------------------------------------------
+
+BYTECODE_AUTH_PATTERNS = {
+    # ldc (0x12) or ldc_w (0x13) loading a String constant that contains
+    # "password", "auth", etc. In javap output: "ldc #N <String "password">"
+    # In raw bytecode: [0x12, cp_index] where cp[cp_index] is CONSTANT_String
+    # pointing to a CONSTANT_Utf8 with the password literal.
+    'ldc_string_literal': {
+        'opcode': 0x12,
+        'opcode_wide': 0x13,
+        'javap_pattern': r'ldc\s+#\d+\s+<String\s+"(?i)(?:password|secret|token|enable|cisco|auth)"',
+        'note': (
+            'ldc pushes a CONSTANT_String (tag=8) by 1-byte cp index. '
+            'The String entry\'s string_index -> CONSTANT_Utf8 (tag=1) holds bytes. '
+            'ldc_w uses a 2-byte index for cp_index > 255.'
+        ),
+    },
+
+    # invokevirtual (0xb6) calling String.equals() after loading a password literal.
+    # Pattern: ldc <password> -> aload_N <input> -> invokevirtual #M String.equals
+    # This is the "cleartext password comparison" pattern.
+    'invokevirtual_string_equals': {
+        'opcode': 0xb6,
+        'javap_pattern': r'invokevirtual\s+#\d+\s+<Method\s+(?:java/lang/String|java\.lang\.String)\.equals',
+        'sequence': ['ldc', 'invokevirtual_String.equals'],
+        'note': (
+            'Cleartext credential comparison. Sequence: push hardcoded string '
+            '(ldc), push user input (aload), call String.equals (invokevirtual). '
+            'Flip ifeq/ifne after the call to bypass auth.'
+        ),
+    },
+
+    # invokevirtual on password-related method names
+    'invokevirtual_auth_method': {
+        'opcode': 0xb6,
+        'javap_pattern': r'invokevirtual\s+#\d+.*(?i)(?:getPassword|setPassword|authenticate|sendCredential|login|verifyPassword)',
+        'note': 'Instance method call on auth-related method.',
+    },
+
+    # invokespecial (0xb7) on constructor of auth/session class
+    'invokespecial_auth_init': {
+        'opcode': 0xb7,
+        'javap_pattern': r'invokespecial\s+#\d+.*(?i)(?:auth|login|cred|session|password)<init>',
+        'note': (
+            'Constructor call on auth class. invokespecial is used for <init>, '
+            'private methods, and superclass calls '
+            '(Decompiling Java §2: "b7 0001 invokespecial #1").'
+        ),
+    },
+
+    # invokestatic (0xb8) calling static auth factory or digest method
+    'invokestatic_auth': {
+        'opcode': 0xb8,
+        'javap_pattern': r'invokestatic\s+#\d+.*(?i)(?:authenticate|login|md5|sha|digest|hmac|encrypt)',
+        'note': 'Static auth helper: digest computation, token factory, etc.',
+    },
+
+    # invokeinterface (0xb9) on HttpURLConnection or similar for auth headers
+    'invokeinterface_connection': {
+        'opcode': 0xb9,
+        'javap_pattern': r'invokeinterface\s+#\d+.*(?i)(?:setRequestProperty|addRequestProperty|connect|getResponseCode)',
+        'note': (
+            'HTTP connection method call. Look for preceding ldc with '
+            '"Authorization", "X-Auth-Token", or "Cookie" to find '
+            'where auth headers are set.'
+        ),
+    },
+
+    # putfield (0xb5) storing a string that was loaded with ldc into a field
+    # named password/token/credential. Pattern: ldc <secret> -> putfield #N <password>
+    'putfield_credential': {
+        'opcode': 0xb5,
+        'javap_pattern': r'putfield\s+#\d+\s+<Field.*(?i)(?:password|token|secret|credential|key)',
+        'note': (
+            'Stores a credential value to an instance field. '
+            'Preceding ldc instruction is the literal value. '
+            'Field name visible in constant pool Fieldref -> NameAndType -> Utf8.'
+        ),
+    },
+
+    # SSL bypass: checkServerTrusted with only 'return' in body
+    # In javap: Code length = 1, single opcode = 0xb1 (return)
+    # "An empty void method is: return, 1 byte" (Decompiling Java §2 methodology)
+    'ssl_bypass_empty_return': {
+        'opcode': 0xb1,
+        'code_length_max': 3,   # return + maybe areturn or nop; anything <= 3 is trivial
+        'javap_pattern': r'Code:\s*\n\s+0:\s+return',
+        'note': (
+            'checkServerTrusted() with empty body: Code attribute = 1 byte (0xb1 return). '
+            'No CertificateException throw = trust-all bypass. '
+            'Confirm: javap -c <class> | grep -A5 checkServerTrusted'
+        ),
+    },
+
+    # HostnameVerifier.verify() returning constant true
+    # Pattern: iconst_1 (0x04) -> ireturn (0xac)
+    'hostname_bypass_return_true': {
+        'sequence_hex': [0x04, 0xac],   # iconst_1, ireturn
+        'javap_pattern': r'Code:\s*\n\s+0:\s+iconst_1\s*\n\s+1:\s+ireturn',
+        'note': (
+            'verify() returning hardcoded true (iconst_1 + ireturn). '
+            'All hostnames accepted. Two-byte body. '
+            'Decompiling Java §2: "b1 return ... An empty void method".'
+        ),
+    },
+
+    # getfield (0xb4) reading a credential field
+    'getfield_credential': {
+        'opcode': 0xb4,
+        'javap_pattern': r'getfield\s+#\d+\s+<Field.*(?i)(?:password|token|secret|credential|session)',
+        'note': 'Reads stored credential from instance field — trace back to where it was set.',
+    },
+
+    # Authorization header construction:
+    # ldc "Authorization" -> invokevirtual setRequestProperty
+    'auth_header_set': {
+        'sequence': ['ldc_Authorization', 'ldc_value', 'invokeinterface_setRequestProperty'],
+        'javap_pattern': r'ldc\s+.*"Authorization"',
+        'note': (
+            'Authorization HTTP header. Subsequent ldc is the value '
+            '("Basic <base64>", "Bearer <token>"). '
+            'Base64-decode to recover cleartext credentials.'
+        ),
+    },
+
+    # Conditional bypass gate — the classic licensing/auth bypass target
+    # (Decompiling Java §3: "change the condition so it will work on any web server")
+    'auth_gate_conditional': {
+        'opcodes': [0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e],  # ifeq..ifle
+        'javap_pattern': r'(?:ifeq|ifne|iflt|ifge|ifgt|ifle)\s+\d+',
+        'note': (
+            'Auth gate: boolean conditional after equals/compareTo call. '
+            'Flip ifeq(0x99)<->ifne(0x9a) or iflt(0x9b)<->ifge(0x9c) '
+            'in hex to bypass. Patch in-place with python bytearray.'
+        ),
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Field and method access flags (Decompiling Java §2 Tables 2-4, 2-5)
+# Used by access_flags fields in field_info and method_info structures.
+# ---------------------------------------------------------------------------
+
+FIELD_ACCESS_FLAGS = {
+    'ACC_PUBLIC':    0x0001,   # accessible from any class
+    'ACC_PRIVATE':   0x0002,   # accessible only within defining class
+    'ACC_PROTECTED': 0x0004,   # accessible within package + subclasses
+    'ACC_STATIC':    0x0008,   # class field, not instance field
+    'ACC_FINAL':     0x0010,   # no assignment after init (use in credential fields)
+    'ACC_VOLATILE':  0x0040,   # thread-updated (synchronization hint)
+    'ACC_TRANSIENT': 0x0080,   # excluded from serialization
+}
+
+# ACC_STATIC|ACC_FINAL = 0x0018 — static final constant (hardcoded credential candidate)
+FIELD_STATIC_FINAL = FIELD_ACCESS_FLAGS['ACC_STATIC'] | FIELD_ACCESS_FLAGS['ACC_FINAL']
+
+METHOD_ACCESS_FLAGS = {
+    'ACC_PUBLIC':       0x0001,
+    'ACC_PRIVATE':      0x0002,
+    'ACC_PROTECTED':    0x0004,
+    'ACC_STATIC':       0x0008,
+    'ACC_FINAL':        0x0010,
+    'ACC_SYNCHRONIZED': 0x0020,  # monitor lock around method body
+    'ACC_NATIVE':       0x0100,  # native (C/C++) implementation — can't decompile
+    'ACC_ABSTRACT':     0x0400,  # no body
+    'ACC_STRICT':       0x0800,  # strict floating-point
+}
+
+# ---------------------------------------------------------------------------
+# Field descriptor character codes (Decompiling Java §2 Table 2-2)
+# Used in method descriptors: (param_types)return_type
+# e.g. (Ljava/lang/String;I)V = takes String + int, returns void
+# ---------------------------------------------------------------------------
+
+FIELD_DESCRIPTORS = {
+    'B': 'byte',
+    'C': 'char',
+    'D': 'double',
+    'F': 'float',
+    'I': 'int',
+    'J': 'long',
+    'S': 'short',
+    'Z': 'boolean',
+    'V': 'void',
+    '[': 'array (prefix; count brackets for dimensions)',
+    'L': 'class reference (followed by class/name; until semicolon)',
+}
+
+# Common ASDM method descriptor patterns
+ASDM_DESCRIPTOR_PATTERNS = {
+    # Credential setters
+    '(Ljava/lang/String;)V':             'void method(String) — credential setter',
+    '(Ljava/lang/String;[B)V':           'void method(String, byte[]) — binary credential',
+    '(Ljava/lang/String;Ljava/lang/String;)V': 'void method(String,String) — user+pass pair',
+    '(Ljava/lang/String;)Ljava/lang/String;': 'String method(String) — transform/hash',
+    # Connection setup
+    '()Ljava/net/HttpURLConnection;':    'HttpURLConnection factory',
+    '()Ljava/net/URL;':                  'URL getter',
+    '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V': (
+        'checkServerTrusted signature — empty body = SSL bypass'
+    ),
+    '(Ljava/lang/String;Ljava/net/Socket;)Z': 'HostnameVerifier.verify signature',
+    # Auth token/cookie
+    '()Ljava/lang/String;':              'String getter — possible session/token accessor',
+    '(Ljava/lang/String;I)V':            'void method(String, int) — host+port setter',
+}
+
+
+# ---------------------------------------------------------------------------
+# Obfuscation detection patterns (Decompiling Java §3-§4)
+# ---------------------------------------------------------------------------
+
+# Layout obfuscation: renamed class/method/field to garbage identifiers.
+# Crema used Java-like keywords; JOBE used a,b,c,...,z.
+# Modern obfuscators (Zelix, ProGuard) use short alpha sequences.
+OBFUSCATION_NAME_PATTERNS = [
+    r'^[a-z]{1,3}$',                    # a, b, aa, abc — short alpha (JOBE style)
+    r'^[A-Z][a-z]{0,2}[0-9]+$',         # A1, B12 — mixed short (ProGuard)
+    r'^[^\x20-\x7e]{2,}',  # non-printable/unicode identifiers (crash old decompilers)
+    r'^[01]+$',                          # binary strings
+    r'^\$\$',                            # synthetic inner-class markers (valid but suspicious)
+]
+
+# ---------------------------------------------------------------------------
 # Methodology note (book-grounded)
 # ---------------------------------------------------------------------------
 
 _METHODOLOGY = """
-JVM Constant Pool RE Methodology (Decompiling Java §2, JVM Spec §4.4):
+JVM Constant Pool RE Methodology (Decompiling Java §2-§4, JVM Spec §4.4):
+
+=== CLASS FILE STRUCTURE (Decompiling Java §2) ===
 
 1. CAFEBABE validation (u4 @ offset 0x00). Not a class file if absent.
-2. Major version @ offset 0x06 (u2): maps to Java release (52=Java8, 61=Java17, etc.)
+   Microsoft CLR files use BSJB; JAR is ZIP (magic PK\x03\x04).
+
+2. Major version @ offset 0x06 (u2): maps to Java release.
    ASDM historically compiled with Java 8 (major=52); newer builds use 11/17.
-3. cp_count @ offset 0x08 (u2): constant pool has cp_count-1 entries (index 0 reserved).
+   Verifier REJECTS classfiles with major version > JVM's supported max.
+
+3. cp_count @ offset 0x08 (u2): constant pool has cp_count-1 entries.
+   Index 0 is reserved and does NOT appear in classfile bytes.
+
 4. Parse cp_info entries sequentially. Tag byte determines size:
-     tag=1  (Utf8):  u2 length + length bytes  — all string literals live here
+     tag=1  (Utf8):   u2 length + length bytes  — all string literals live here
      tag=3/4 (Int/Float): u4
-     tag=5/6 (Long/Double): u8, consumes TWO pool slots
+     tag=5/6 (Long/Double): u8, consumes TWO pool slots (next slot = phantom)
      tag=7/8/16/19/20: u2 index
-     tag=9/10/11/12: u2+u2
-     tag=15: u1+u2
-     tag=17/18: u2+u2
-5. String literals in Java source become CONSTANT_String_info (tag=8) entries whose
-   string_index points to a CONSTANT_Utf8_info (tag=1) entry containing the UTF-8 bytes.
+     tag=9/10/11/12: u2+u2 indices
+     tag=15 (MethodHandle): u1 ref_kind + u2 ref_index
+     tag=17/18 (Dynamic/InvokeDynamic): u2+u2
+
+5. ClassFile layout after constant pool:
+     access_flags (u2) — see FIELD_ACCESS_FLAGS / METHOD_ACCESS_FLAGS tables
+     this_class (u2) -> CONSTANT_Class -> CONSTANT_Utf8 (binary class name)
+     super_class (u2) -> same chain
+     interfaces_count (u2) + interfaces[](u2) -> CONSTANT_Class entries
+     fields_count + field_info[] -> AccessFlags, name_index, descriptor_index, attrs
+     methods_count + method_info[] -> same + Code attribute
+     attributes_count + attributes[] -> SourceFile, InnerClasses, etc.
+
+=== STRING LITERAL RECOVERY ===
+
+6. All Java string literals become CONSTANT_String_info (tag=8) entries.
+   string_index -> CONSTANT_Utf8_info (tag=1) holding UTF-8 bytes.
    Therefore: hunt tag=1 entries for plaintext credentials, URLs, API paths.
-6. Method references (tag=10) resolve via class_index -> CONSTANT_Class_info ->
-   CONSTANT_Utf8_info for class name, and name_and_type_index -> CONSTANT_NameAndType_info
-   -> CONSTANT_Utf8_info for method name + descriptor.
-   Descriptor format: (param_types)return_type  e.g. (Ljava/lang/String;I)V
-7. To find authentication code: look for Methodref entries whose class resolves to
-   javax/net/ssl/SSLContext, java/net/HttpURLConnection, or com/cisco/* with
-   method names matching auth/login/sendPassword patterns.
-8. SSL bypass: classes implementing X509TrustManager with empty checkServerTrusted()
-   (method body = just areturn) are in every ASDM version. The JVM Spec guarantees
-   these method names survive into the constant pool as CONSTANT_Utf8_info entries,
-   so grep the pool for 'checkServerTrusted' to identify candidate classes instantly.
+   Harvest: scan all tag=1 entries in every .class in the JAR.
+
+7. Static final String fields (ACC_STATIC|ACC_FINAL = 0x0018) get a
+   ConstantValue attribute referencing a CONSTANT_String in the pool.
+   These are hardcoded constants (API keys, endpoints, default passwords).
+
+8. ldc (0x12) bytecode loads a CONSTANT_String by 1-byte cp index.
+   ldc_w (0x13) uses a 2-byte index. In javap output:
+     ldc #5 <String "password">
+   The "#5" is the cp index; follow to tag=8 -> tag=1 for the literal bytes.
+
+=== AUTH/CREDENTIAL PATTERNS ===
+
+9. Method references (tag=10) resolve:
+     class_index -> CONSTANT_Class -> CONSTANT_Utf8 (class binary name)
+     name_and_type_index -> CONSTANT_NameAndType -> name Utf8 + descriptor Utf8
+   Descriptor format: (param_types)return_type
+   e.g. ([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V
+         = checkServerTrusted(X509Certificate[], String) -> void
+
+10. Auth code search:
+    a) Class name contains auth/login/cred/session/password/token
+    b) CP Utf8 pool contains auth method names (authenticate, sendCredentials, etc.)
+    c) CP NameAndType entries (tag=12) whose name resolves to auth method names
+    d) String refs matching HTTP form POST fields (username=, password=, tgroup=)
+    e) String refs matching HTTP auth headers (Authorization: Basic, X-Auth-Token)
+
+11. Cleartext credential comparison pattern (Decompiling Java §2 bytecode walk):
+    ldc <hardcoded_string> -> aload_N <input> -> invokevirtual String.equals
+    Flip the subsequent ifeq/ifne to bypass the check.
+
+=== SSL BYPASS ===
+
+12. ASDM ships custom X509TrustManager with empty checkServerTrusted():
+    Method body = single return (opcode 0xb1), Code attribute length = 1.
+    "An empty void method is: return, 1 byte" (Decompiling Java §2 methodology).
+    Detection: grep CP for 'checkServerTrusted' -> find the class -> javap -c
+    Confirm: javap output shows Code length=1 with only 'return'.
+
+13. HostnameVerifier.verify() returning true:
+    Body = iconst_1 (0x04) + ireturn (0xac), Code length = 2.
+
+=== OBFUSCATION (Decompiling Java §3-§4) ===
+
+14. Layout obfuscation (most common): identifier scrambling in constant pool.
+    Crema: Java-like keywords used as variable names. Crashes non-Crema-aware decompilers.
+    JOBE/ProGuard: a,b,c short names. Unicode names crash early decompilers.
+    The JVM uses indices, not names, so renamed identifiers do not change execution.
+
+15. javac -g:none: strips LineNumberTable, LocalVariableTable, SourceFile.
+    Variable names become slot references (slot_0, slot_1...) in javap.
+    Method names and class names survive (must be in pool for dynamic linking).
+    ASDM is compiled -g:none (or stripped post-compile by ProGuard).
+
+16. Control obfuscation: insert dead code, reorder expressions (Zelix KlassMaster).
+    Data obfuscation: split variables, change encoding, bogus classes.
+    High-mode obfuscation may fail JVM Verifier on strict VMs — rare in practice.
+
+=== TOOLCHAIN DECISION TREE ===
+
+17. ASDM <= 6.x (major <= 50, Java 6):    JAD 1.5.8g    (jad -a -b target.class)
+    ASDM 7.x (major = 51-52, Java 7-8):   CFR           (java -jar cfr.jar asdm.jar)
+    ASDM >= 7.12 (major >= 52, Java 8+):  CFR or Procyon (handles invokedynamic)
+    Obfuscated:                            CFR + manual CP walk + extract_raw_strings()
+    Decompiler fails:                      javap -c -p -verbose -> manual re-trace
+
+18. Post-decompile grep targets (Decompiling Java §4):
+    - password / secret / token / enable in string literals
+    - Authorization: Basic / Bearer in setRequestProperty calls
+    - /+CSCOU+/ /+CSCOE+/ /+webvpn+/ /api/ in URL strings
+    - checkServerTrusted / verify in method names
+    - SSLContext.getInstance / TrustManager in class names
 """
 
 
@@ -952,6 +1507,157 @@ class ASDMJarRE:
         ])
 
         return '\n'.join(lines)
+
+    # ------------------------------------------------------------------
+    # Class-level convenience: build javap command string for any entry
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # detect_obfuscation
+    # ------------------------------------------------------------------
+
+    def detect_obfuscation(self) -> dict:
+        """
+        Detect obfuscation applied to the ASDM JAR.
+
+        Methodology (Decompiling Java §3-§4):
+          Layout obfuscation: Crema/ProGuard/Zelix rename class/method/field
+          identifiers in the constant pool to short garbage strings (a,b,c)
+          or Java-like keywords (void,catch,final used as names). Zelix also
+          reorders bytecode to break control-flow analysis.
+
+          Detection heuristics:
+            1. Class name length distribution: obfuscated JARs have many
+               classes with names <= 3 chars (a.class, aa.class).
+            2. High ratio of one-or-two-char identifiers in Utf8 pool.
+            3. Unicode (non-ASCII) identifiers: crash old decompilers.
+            4. Absence of SourceFile attribute: compiled with -g:none or
+               attribute stripped post-compile (Decompiling Java §4).
+            5. Very few LineNumberTable entries: debug info stripped.
+
+        Returns dict with obfuscation indicators.
+        """
+        if self._zf is None:
+            self.extract_class_files()
+        if self._zf is None:
+            return {}
+
+        obf_indicators = {
+            'short_class_names':    [],
+            'unicode_class_names':  [],
+            'no_source_attribute':  0,
+            'total_classes':        len(self._class_entries),
+            'obfuscation_score':    0,  # 0-10
+            'likely_obfuscated':    False,
+            'obfuscator_guess':     None,
+        }
+
+        import re as _re
+        short_rx  = _re.compile(r'^[a-zA-Z]{1,3}$')
+        uni_rx    = _re.compile(r'[^\x00-\x7F]')
+
+        for entry in self._class_entries:
+            # basename without .class and path
+            basename = entry.split('/')[-1].replace('.class', '')
+            if short_rx.match(basename):
+                obf_indicators['short_class_names'].append(entry)
+            if uni_rx.search(basename):
+                obf_indicators['unicode_class_names'].append(entry)
+
+            # Check for SourceFile attribute absence
+            try:
+                data = self._zf.read(entry)
+                if b'SourceFile' not in data:
+                    obf_indicators['no_source_attribute'] += 1
+            except Exception:
+                pass
+
+        total = obf_indicators['total_classes'] or 1
+        short_ratio   = len(obf_indicators['short_class_names']) / total
+        unicode_ratio = len(obf_indicators['unicode_class_names']) / total
+        no_src_ratio  = obf_indicators['no_source_attribute'] / total
+
+        score = 0
+        if short_ratio > 0.5:
+            score += 4   # most class names are short
+        elif short_ratio > 0.2:
+            score += 2
+        if unicode_ratio > 0.1:
+            score += 4   # unicode = aggressive obfuscation (crashes old decompilers)
+        if no_src_ratio > 0.8:
+            score += 2   # SourceFile stripped
+
+        obf_indicators['obfuscation_score'] = min(score, 10)
+        obf_indicators['likely_obfuscated'] = score >= 4
+
+        # Heuristic: guess obfuscator from patterns
+        if unicode_ratio > 0.1:
+            obf_indicators['obfuscator_guess'] = 'Crema/HoseMocha (Unicode names)'
+        elif short_ratio > 0.5 and no_src_ratio > 0.8:
+            obf_indicators['obfuscator_guess'] = 'ProGuard/Zelix/DashO (short alpha)'
+        elif short_ratio > 0.2:
+            obf_indicators['obfuscator_guess'] = 'JOBE-style (a,b,c renaming)'
+
+        return obf_indicators
+
+    # ------------------------------------------------------------------
+    # extract_raw_strings
+    # ------------------------------------------------------------------
+
+    def extract_raw_strings(self, classentry: str,
+                            min_length: int = 4) -> list:
+        """
+        Brute-force string extraction from a single .class file without
+        full constant pool parsing. Scans for CONSTANT_Utf8_info (tag=1)
+        entries sequentially.
+
+        Use when _parse_constant_pool() fails (unknown tag, truncated file,
+        aggressive bytecode obfuscation that inserts invalid entries).
+
+        Method (Decompiling Java §2, §3 hex editor approach):
+          - Scan every byte for tag=1 (CONSTANT_Utf8).
+          - Read u2 length at offset+1, then length bytes at offset+3.
+          - Decode as UTF-8 (JVM modified UTF-8; fallback to latin-1).
+          - Filter by min_length and printability.
+
+        False positives are common (any 3 bytes = tag + u2 len can match).
+        Cross-reference with pool_index hits for confidence.
+
+        Returns list of (byte_offset, decoded_string).
+        """
+        if self._zf is None:
+            self.extract_class_files()
+        if self._zf is None or not self._class_entries:
+            return []
+
+        try:
+            data = self._zf.read(classentry)
+        except Exception:
+            return []
+
+        if data[:4] != b'\xca\xfe\xba\xbe':
+            return []
+
+        results = []
+        i = 10  # skip magic(4) + minor(2) + major(2) + cp_count(2) partially
+
+        while i < len(data) - 3:
+            if data[i] == 1:  # CP_UTF8 tag
+                ln = struct.unpack_from('>H', data, i + 1)[0]
+                end = i + 3 + ln
+                if end <= len(data) and 3 <= ln <= 65535:
+                    raw = data[i + 3:end]
+                    try:
+                        s = raw.decode('utf-8', errors='replace')
+                    except Exception:
+                        s = raw.decode('latin-1', errors='replace')
+                    # Filter: printable chars, meets min_length, not all-control
+                    printable = sum(1 for c in s if c.isprintable())
+                    if len(s) >= min_length and printable / max(len(s), 1) > 0.7:
+                        results.append((i, s))
+            i += 1
+
+        return results
 
     # ------------------------------------------------------------------
     # Class-level convenience: build javap command string for any entry
