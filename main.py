@@ -144,6 +144,18 @@ except ImportError:
     HAS_GUESTSHELL = False
     NXOSGuestshellRE = None
 
+try:
+    from cisco_cstp_attack import (
+        HostScanGateRE, CSTPTunnelRE, ASDMJarClassRE, GoBinaryRE,
+        analyze_asa_attack_surface, analyze_go_binary, analyze_java_class,
+    )
+    HAS_CSTP = True
+except ImportError:
+    HAS_CSTP = False
+    HostScanGateRE = None
+    CSTPTunnelRE = None
+    GoBinaryRE = None
+
 
 MACSTADIUM_ASAS = [
     {'host': '207.254.35.12', 'port': 443, 'label': 'ASA-Primary'},
@@ -827,6 +839,9 @@ def main():
     parser.add_argument('--guestshell', metavar='HOST', help='NX-OS guestshell RE and escape analysis')
     parser.add_argument('--asdm-re-all', action='store_true', help='ASDM RE against all MacStadium ASAs')
     parser.add_argument('--webvpn-js-all', action='store_true', help='WebVPN JS RE against all MacStadium ASAs')
+    parser.add_argument('--cstp', metavar='HOST', help='CSTP/HostScan/DAP attack surface RE')
+    parser.add_argument('--cstp-all', action='store_true', help='CSTP RE against all MacStadium ASAs')
+    parser.add_argument('--go-re', metavar='BINARY', help='Go binary static RE (module graph, endpoints, creds)')
 
     args = parser.parse_args()
     
@@ -1075,6 +1090,28 @@ def main():
         else:
             re_eng = NXOSGuestshellRE(args.guestshell)
             result = re_eng.analyze()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cstp', None) or getattr(args, 'cstp_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'cstp_all', False) else [
+                {'host': args.cstp, 'port': 443, 'label': args.cstp}
+            ]
+            for t in targets:
+                print(f"\n[*] CSTP/HostScan/DAP RE: {t['label']} ({t['host']})")
+                result = analyze_asa_attack_surface(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'go_re', None):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available (GoBinaryRE lives there)")
+        else:
+            print(f"[*] Go binary RE: {args.go_re}")
+            result = analyze_go_binary(args.go_re)
             print(json.dumps(result, indent=2, default=str))
 
     elif args.containers:
