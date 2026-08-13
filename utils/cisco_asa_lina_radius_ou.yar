@@ -13,28 +13,32 @@
   Usage: yara cisco_asa_lina_radius_ou.yar /path/to/lina
 */
 
-rule Cisco_ASA_LINA_Radius_OU_Overflow_F2
+rule Cisco_ASA_LINA_Radius_OU_Overflow_ACE
 {
     meta:
-        description = "Detects Cisco ASA LINA with RADIUS Class attribute OU= overflow (F2 pointer corruption)"
+        description = "Detects Cisco ASA LINA vulnerable to RADIUS Class OU= overflow and timer pointer ACE"
         severity    = "CRITICAL"
         cve         = "N/A (unassigned as of 2026-08-13)"
+        note        = "Match = binary vulnerable to reliable RCE via two-level fake mgd_timer ACE chain"
 
     strings:
         // "OU=" string in RO segment
         $ou_string  = "OU="
 
-        // CMP rax,0x100 — the 256-byte extraction loop bound at 0x3a4bfa4
+        // CMP rax,0x100 — 256-byte extraction loop bound at 0x3a4bfa4
         $overflow_cmp = { 48 3d 00 01 00 00 }
 
         // LEA rsi,[...] + CALL — strstr("OU=") call pattern
         $strstr_call = { 48 8d 35 ?? ?? ?? ?? e8 ?? ?? ?? ?? }
 
-        // message-authenticator-required string (present in 9.22.x, absent in earlier)
-        $ma_required = "message-authenticator-required"
+        // cmpb $0x42,0x2a(%rdi) — mgd_timer type check (type byte must be 'B'/0x42 for active timer)
+        $timer_type = { 80 7f 2a 42 }
+
+        // CALL *0x20(%rax) — function pointer dispatch via parent+0x20 (ACE dispatch site)
+        $call_ptr = { ff 50 20 }
 
     condition:
-        $ou_string and $overflow_cmp and $strstr_call
+        $ou_string and $overflow_cmp and $timer_type and $call_ptr
 }
 
 rule Cisco_ASA_LINA_Radius_OU_Overflow_F1_Missing_MA
