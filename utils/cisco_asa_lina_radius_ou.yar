@@ -20,6 +20,8 @@ rule Cisco_ASA_LINA_Radius_OU_Overflow_ACE
         severity    = "CRITICAL"
         cve         = "N/A (unassigned as of 2026-08-13)"
         note        = "Match = binary vulnerable to reliable RCE via two-level fake mgd_timer ACE chain"
+        author      = "Independent Security Researcher"
+        date        = "2026-08-13"
 
     strings:
         // "OU=" string in RO segment
@@ -52,6 +54,8 @@ rule Cisco_ASA_LINA_Radius_OU_Overflow_F1_Missing_MA
         description = "Detects Cisco ASA LINA missing message-authenticator-required (F1 — all pre-9.22.x)"
         severity    = "HIGH"
         note        = "Absence of $ma_required string indicates no opt-in mitigation available"
+        author      = "Independent Security Researcher"
+        date        = "2026-08-13"
 
     strings:
         $ou_string   = "OU="
@@ -68,6 +72,8 @@ rule Cisco_ASA_LINA_Radius_OU_Overflow_9_22_Mitigatable
         description = "Detects ASA 9.22.x LINA — has message-authenticator-required but disabled by default"
         severity    = "HIGH"
         note        = "Mitigation available but requires explicit configuration"
+        author      = "Independent Security Researcher"
+        date        = "2026-08-13"
 
     strings:
         $ou_string   = "OU="

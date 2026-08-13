@@ -61,7 +61,7 @@ def compute_response_authenticator(code: int, pkt_id: int, attrs: bytes,
                                    request_auth: bytes, secret: str) -> bytes:
     length = 20 + len(attrs)
     data = (
-        struct.pack("BBH", code, pkt_id, length)
+        struct.pack("!BBH", code, pkt_id, length)
         + request_auth
         + attrs
         + secret.encode()
@@ -77,7 +77,7 @@ def build_access_accept(pkt_id: int, request_auth: bytes, secret: str,
         RADIUS_CODE_ACCESS_ACCEPT, pkt_id, attrs, request_auth, secret
     )
     length = 20 + len(attrs)
-    header = struct.pack("BBH", RADIUS_CODE_ACCESS_ACCEPT, pkt_id, length)
+    header = struct.pack("!BBH", RADIUS_CODE_ACCESS_ACCEPT, pkt_id, length)
     return header + resp_auth + attrs
 
 
