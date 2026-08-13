@@ -117,13 +117,36 @@ pointers that the ASA will later dereference, creating a high risk of
 memory corruption and potential code execution. This is a critical
 security issue."
 
-ROOT CAUSE:
+ROOT CAUSE — TWO CONFIRMED OVERFLOW SITES:
+
+  SITE A: strncpy (runtime-bounded) at 0x01a30894
+  ------------------------------------------------
   The OU= extraction loop (0x03a4bfa4: CMP rax,0x100) allows up to
   256 bytes. This value is written via strncpy (0x01a30894) into
   gp_obj+0x2b1, a 32-byte char array within the heap-allocated group
   policy object. session+0x0c is a POINTER to this gp_obj. The
   strncpy bound ([r15+0x08] from attr_def table 0x76f20a0) is not
-  statically constrained to the 32-byte array size.
+  statically constrained to the 32-byte array size. If max_length is
+  set > 32 at runtime, the overflow is reachable.
+
+  SITE B: strcpy (UNBOUNDED) at 0x01a30bbc
+  -----------------------------------------
+  The no-colon path in the KV parser (0x1a30b50) runs when the policy
+  name contains no ':' character (normal for all real policy names).
+
+  0x1a30b6d: ebx = thread_local_context_type (fs:-0x3030 + 0x2f0)
+  0x1a30b79: eax = strlen(attacker_policy_name)
+  0x1a30b80: rdx = 3 * eax
+  0x1a30b84: rax = 0x761a9a0 (BSS runtime table)
+  0x1a30b8b: r14 = table[strlen * 3 * 8]  <- attacker controls index via name len
+  0x1a30bac: if r14->type (r14+0x08) != ctx_type: skip (walk linked list)
+  0x1a30bb2: rsi = r14 + 0x2c1           <- string from runtime entry
+  0x1a30bb9: rdi = gp_obj+0x2b1          <- 32-byte dest
+  0x1a30bbc: strcpy(gp_obj+0x2b1, r14+0x2c1)  <- NO BOUND CHECK
+
+  The attacker selects the table entry via OU= value length. If
+  r14+0x2c1 in the matching entry is longer than 31 bytes, gp_obj+0x308
+  is overwritten. No static constraint prevents this.
 
   A OU= value of 96+ bytes overflows the 32-byte name array and
   reaches pointer fields the ASA dereferences during VPN session setup.
@@ -232,6 +255,19 @@ CISCO AI VERDICTS (additional, Images #124-127, 11:08-11:13):
     handle. The ASA will dereference and operate on attacker-controlled
     memory, enabling arbitrary code execution or further exploitation. This
     is a severe vulnerability with high impact."
+
+  Image #155 (12:13):
+    "The function saves its arguments (including the group policy object
+    pointer) on the stack and uses them for field accesses and buffer writes.
+    The vulnerability is enabled by a runtime-populated table that sets the
+    maximum copy length for the group_policy_name field. If this value is set
+    too high, the overflow and pointer corruption vulnerabilities are
+    exploitable, regardless of the static binary code. This makes the issue
+    persistent and highly dependent on runtime configuration."
+
+    Context: disassembly shown to Cisco AI = 0x1a33120-0x1a3315f
+    (argument setup for call to KV parser 0x1a30710; includes gp_obj+0x2b1
+    setup as RSI, and lea 0x8(%r13),%rbx before the call)
 
 =============================================================
 DEREFERENCE MAP — gp_obj+0x308 (WINS server mgd_timer handle)
