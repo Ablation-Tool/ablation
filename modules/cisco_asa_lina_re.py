@@ -1174,6 +1174,11 @@ SAML_SIGNATURE_BYPASS = {
     'response_process_call':  0x02ed01e1,  # CALL lasso_login_process_authn_response_msg
     'response_rc_check':      0x02ed01e6,  # TEST eax,eax; JE success
     'severity': 'MEDIUM — requires IdP cooperation or on-path MITM',
+    # Cross-version: CONFIRMED SAME in ASA 9.22.2.32 (9.22 lina, PLT 0x00ffb380)
+    #   0x035c1ed0: MOV esi, 0x2  ; ALLOW_UNSIGNED
+    #   0x035c1ed5: MOV rdi, rax  ; login object
+    #   0x035c1ed8: CALL 0xffb380 ; lasso_profile_set_signature_hint
+    # → NOT FIXED between 9.14 and 9.22. Persistent across versions.
 }
 
 # ── SAML assertion post-processing (success path after response validation) ────
@@ -1249,7 +1254,7 @@ SAML_POST_VALIDATION = {
 #   Constraint: NotOnOrAfter window limits to ~5 min; audience must match ASA entityID
 #
 SAML_REPLAY_SURFACE = {
-    'inresponseto_absent':    True,  # confirmed: string not in binary
+    'inresponseto_absent':    True,  # confirmed: absent in both 9.14.2.14 AND 9.22.2.32
     'subjectconfirmation_absent': True,
     'requestid_absent':       True,
     'audience_validated':     True,   # confirmed: 'assertion audience is invalid' present
