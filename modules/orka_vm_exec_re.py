@@ -44,6 +44,16 @@ All 5 keys CONFIRMED via map.init.0 disassembly + success string pool extraction
   virsh domain name: "macos"  (literal in success strings)
   K8s container name: "orka-vm"  (PodExecOptions.Container, confirmed via LEA)
 
+=== virsh binary path (CONFIRMED ABSENT from .rodata) ===
+  String "virsh" appears ONCE in the entire binary:
+    vaddr 0x1cf6d20 → "virshStatus" (K8s type reflection label, NOT a command path)
+  "/usr/local/bin/virsh", "/usr/bin/virsh", "virsh\x00", "virsh " — ALL ABSENT.
+  Conclusion: virsh executable path is constructed at runtime by vmiexec internals,
+  not stored as a string constant. vmiexec likely uses a configurable path or
+  discovers virsh via PATH inside the orka-vm container.
+  Binary at 0x21ff43a (context of /usr/local/bin): "/usr/local/bin/python" and
+  "/usr/bin/env -S tclsh" — these are unrelated script interpreter paths.
+
 === Exec mechanism (CONFIRMED) ===
   NOT: /api/v1/namespaces/{ns}/vms/{name}/exec (Orka API)
   YES: /api/v1/namespaces/{ns}/pods/{pod}/exec?container=orka-vm (K8s API)
