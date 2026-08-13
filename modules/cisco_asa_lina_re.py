@@ -581,6 +581,99 @@ class CiscoASALinaRE:
             return None
         return tacacs_decrypt_body(self.tacacs_key, session_id, version, seq_no, ciphertext)
 
+    def scan_arm64_prologue_offsets(self, data: bytes) -> list[int]:
+        """
+        Return list of file offsets where STP x29, x30, [sp, #-N]! appears.
+        ARM64 encoding: 1010 1001 10xx xxxx 0111 1011 1111 1101
+        Mask: 0xFFC07FFF = 0xA9807BFD (frame-size bits in [21:15] are variable).
+        Each hit = start of a non-leaf function.
+        """
+        hits = []
+        for i in range(0, len(data) - 4, 4):
+            word = struct.unpack_from('<I', data, i)[0]
+            if (word & 0xFFC07FFF) == 0xA9807BFD:
+                hits.append(i)
+        return hits
+
+    def scan_adrp_string_xrefs(self, data: bytes, target_string: bytes) -> list[int]:
+        """
+        Find ADRP+ADD sequences in ARM64 code that load a given .rodata string.
+        ARM64 string loading in PIC code always uses:
+            ADRP Xn, page      ; high 21 bits of target VA
+            ADD  Xn, Xn, #lo12 ; low 12 bits = byte offset within page
+        This locates all code sites that reference a specific string.
+
+        Strategy: find target_string offset in data → compute expected page+lo12
+        → scan for ADRP+ADD pairs whose combined offset matches.
+        Returns list of offsets where the ADRP instruction starts.
+        """
+        str_off = data.find(target_string)
+        if str_off < 0:
+            return []
+        # Heuristic: scan for ADD instructions with lo12 == (str_off & 0xFFF)
+        # ADD Xn, Xn, #imm12: encoding 0x91000000 | (imm12 << 10) | (Rn << 5) | Rd
+        lo12 = str_off & 0xFFF
+        hits = []
+        for i in range(4, len(data) - 4, 4):
+            word = struct.unpack_from('<I', data, i)[0]
+            # ADD (immediate) family: top 10 bits = 0b1001000100 = 0x244
+            if (word >> 22) == 0x244:
+                imm12 = (word >> 10) & 0xFFF
+                if imm12 == lo12:
+                    # Check preceding word is ADRP: top 8 bits = 0b10010000..
+                    prev = struct.unpack_from('<I', data, i - 4)[0]
+                    if (prev >> 24) & 0x9F == 0x90:
+                        hits.append(i - 4)
+        return hits
+
+    def scan_radius_dispatcher(self, data: bytes) -> dict:
+        """
+        Locate the RADIUS response dispatcher in stripped lina.
+
+        ARM64 book (Vostokov, ch14): CMP+B.EQ chains on a byte-width register
+        are the idiom for switch-style dispatch. The RADIUS Code byte (offset 0
+        in packet) takes values {1,2,3,11} — all non-zero, so CBZ is NOT used.
+
+        Pattern to find:
+          1. Load a byte: LDRB Wn, [Xm]        ; Code byte
+          2. CMP  Wn, #1  ; Access-Request
+          3. B.EQ <handler>
+          4. CMP  Wn, #2  ; Access-Accept
+          5. B.EQ <handler>
+          ...
+
+        Returns dict with candidate offsets and string anchor hits.
+        """
+        anchors = {}
+        for name, pattern in LINA_STRING_ANCHORS.items():
+            off = data.find(pattern)
+            if off >= 0:
+                anchors[name] = hex(off)
+
+        # ARM64: CMP Wn, #imm  encoding = 0x7100001F | (imm << 10) | (Rn << 5)
+        # B.EQ encoding: 0x54000000 | (offset19 << 5)
+        # Look for CMP Wn, #1 followed within 8 bytes by B.EQ
+        cmp1_pattern_word = 0x7100041F  # CMP Wn, #1 where n varies — mask needed
+        dispatch_candidates = []
+        for i in range(0, len(data) - 16, 4):
+            word = struct.unpack_from('<I', data, i)[0]
+            # CMP Wn, #1: encoding 0x7100 04xx where xx = Wn (bits 4:0)
+            if (word & 0xFFFFFFE0) == 0x71000400:
+                next_word = struct.unpack_from('<I', data, i + 4)[0]
+                # B.EQ: top 24 bits = 0x54xxxxxx (bits [31:24] = 0x54, bit[0]=0)
+                if (next_word >> 24) == 0x54 and (next_word & 1) == 0:
+                    dispatch_candidates.append(hex(i))
+
+        return {
+            'string_anchors_found': anchors,
+            'dispatch_candidates_cmp1_beq': dispatch_candidates[:20],
+            'note': (
+                'Candidates = addresses of CMP Wn,#1 / B.EQ pairs. '
+                'Cross with ADRP+ADD xrefs to Access-Accept string to confirm dispatcher.'
+            ),
+            'prologue_count': len(self.scan_arm64_prologue_offsets(data)),
+        }
+
     def run(self) -> list[dict]:
         if self.binary_path:
             return self.analyze_binary()
