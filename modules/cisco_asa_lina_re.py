@@ -5,9 +5,67 @@ Targets the authentication/authorization subsystem in the lina process:
   lina = the monolithic ASA firewall process (ELF, dynamically linked)
   Auth surface: RADIUS NAS client, TACACS+ client, WebVPN/CSTP cut-through proxy
 
+=== LINA ARCHITECTURE (all confirmed platforms) ===
+  +------------------------------------------------+
+  | Hardware (NIC, ASICs, crypto accelerators)     |
+  +------------------------------------------------+
+           ↓ drivers / PCI passthrough
+  +------------------------------------------------+
+  | Linux OS (kernel — manages HW, drivers, IPC)  |
+  +------------------------------------------------+
+           ↓ syscalls / IPC
+  +------------------------------------------------+
+  | LINA Engine (user-space monolithic process)    |
+  |   Packet processing, NAT, ACL, VPN, AAA,       |
+  |   WebVPN, CSTP, SAML, RADIUS/TACACS+ client   |
+  |   Config: /etc/asa/config (or variant)         |
+  |   Multi-context | Clustering | HA sync         |
+  +------------------------------------------------+
+           ↓ IPC / sensor API (FTD only)
+  +------------------------------------------------+
+  | Snort/Firepower Module (FTD only)              |
+  |   Deep packet inspection, advanced malware      |
+  +------------------------------------------------+
+           ↓ management plane
+  +------------------------------------------------+
+  | Management Layer                               |
+  |   CLI (LINA CLI ≈ classic ASA CLI)             |
+  |   ASDM (Java desktop client via HTTPS/443)      |
+  |   FMC (Firepower Management Center)            |
+  |   REST API                                     |
+  +------------------------------------------------+
+
+  Key: classic ASA hardware = x86-64. ARM64 applies to ASA-on-Firepower chassis (FTD) only.
+  LINA is NOT ARM64 on standard ASA hardware.
+
+=== CONFIRMED FROM ASA 9.22.2.32 LINA (real binary, 2026-08-13) ===
+  Build: asa9-22-2-32-smp-k8.bin -> rootfs.img (CPIO) -> asa/bin/lina
+  Architecture: x86-64 ELF, stripped PIE, dynamically linked
+  Size: 105MB
+  BuildID: 88929a4c3f35a2c0786e01e63c2e64626666ef23
+  PT_LOAD segments:
+    R--  0x00000000..0x00ff8cf8  vaddr 0x00000000
+    R-X  0x00ff9000..0x04378501  vaddr 0x00ff9000   ← EXEC segment
+    R--  0x04379000..0x05522d3d  vaddr 0x04379000
+    RW-  0x05522f68..0x0685b178  vaddr 0x05523f68
+
+  Class attribute (attr 25) parsing function (NO Message-Authenticator check):
+    Function vaddr: 0x03a4bda0  (function start, prologue 55 48 89 e5)
+    strstr call site: 0x03a4bee6
+      3a4bee6: LEA rsi, [OU=]    ; vaddr 0x43b7581 ("OU=\x00" in R-- segment)
+      3a4bef0: CALL strstr        ; strstr(attr_value, "OU=")
+      3a4bf01: LEA rdi, "OU="    ; strlen("OU=") = 3
+      3a4bf14: LEA rcx, [rdx+rax]; ptr past "OU="
+      3a4bf1b: CMP dl, 0x3b      ; ';' semicolon delimiter
+      3a4bf24: LEA rdi,[rbp-0x241]; 256-byte output buffer
+    Log format: "OU=%s (tunnelgroup %s)\n" at vaddr 0x497c510
+    Log call site: vaddr 0x02c33a9e
+    Callers of 0x3a4bda0: 0x3a4c365, 0x3a4c3fe, 0x3a4c5b9
+    CRITICAL: no Message-Authenticator (attr 80) check in any caller path
+
 === CONFIRMED FROM ASA 9.14.2.14 LINA (real binary) ===
   Build: asa9-14-2-14-smp-k8.bin -> rootfs.img (CPIO) -> asa/bin/lina
-  Architecture: x86-64 ELF (NOT ARM64 as originally assumed)
+  Architecture: x86-64 ELF (NOT ARM64)
   Size: 95MB stripped dynamically linked ELF
   BuildID: 65cd0306770da18bb71c057dc0dd1472391a1569
   NOTE: ARM64 would apply to ASA-on-Firepower (FTD) chassis; classic ASA HW = x86-64
@@ -168,6 +226,161 @@ RADIUS_PORTS = {
 TACACS_PORT = 49              # TCP
 
 
+# ─── LINA CLI SURFACE MAP ─────────────────────────────────────────────────────
+#
+# Security relevance: gaining LINA CLI access (via K8s exec→virsh console→macOS→ASA
+# console or via VPN-to-management) leaks the full config including Type 7 secrets.
+# Type 7 is XOR — fully reversible.
+
+LINA_CLI_COMMANDS = {
+    'show running-config': {
+        'desc': 'full running configuration in plaintext',
+        'security': 'leaks RADIUS shared secrets (Type 7 XOR), TACACS+ keys, VPN PSKs, '
+                    'enable passwords, AAA server IPs, SSL trustpoint certs',
+        'secret_types': {
+            'type5': 'MD5-crypt — offline crackable with john/hashcat',
+            'type7': 'XOR — fully reversible, zero GPU required',
+            'type8': 'PBKDF2-SHA256 — GPU-hard but no salt uniqueness guarantee',
+            'type9': 'scrypt — strongest; still offline crackable given resources',
+        },
+        'vpn_chain_value': 'RADIUS shared secret → forge Access-Accept → group policy injection',
+    },
+    'show version': {
+        'desc': 'software + hardware version, uptime, serial number',
+        'security': 'exact version → CVE lookup; serial number → warranty/support lookup; '
+                    'uptime → reboot timing for persistence',
+    },
+    'show interface': {
+        'desc': 'interface IPs, security levels, duplex/speed',
+        'security': 'reveals internal segment IPs, management interface address',
+    },
+    'show access-list': {
+        'desc': 'all configured ACLs with hit counts',
+        'security': 'reveals permitted traffic patterns; hit counts indicate active paths',
+    },
+    'show nat': {
+        'desc': 'NAT translation table',
+        'security': 'reveals internal host IP space; dynamic NAT entries reveal active sessions',
+    },
+    'show vpn-sessiondb': {
+        'desc': 'all active VPN sessions with user, IP, bytes, duration',
+        'security': 'session tokens (if AnyConnect), user enumeration, internal IP assignments; '
+                    'if COA is available can terminate arbitrary sessions',
+    },
+    'show crypto ikev1 sa': {
+        'desc': 'IKEv1 security associations',
+        'security': 'peer IPs, SPI values, auth method; SPI + captures = offline crypto attack',
+    },
+    'show crypto ikev2 sa': {
+        'desc': 'IKEv2 security associations',
+        'security': 'peer IPs, SPIs, cipher suites; weak suites → downgrade attack surface',
+    },
+    'show ssl': {
+        'desc': 'SSL policy status, cipher suites, decryption state',
+        'security': 'identifies decryption-enabled interfaces; active trustpoints',
+    },
+    'show crypto ca certificates': {
+        'desc': 'installed CA and identity certificates',
+        'security': 'certificate subjects/issuers; if CA cert installed for SSL inspection, '
+                    'attacker can forge certs signed by that CA',
+    },
+    'configure terminal': {
+        'desc': 'enter global config mode',
+        'security': 'gate to all write commands; full RCE equivalent via aaa-server/radius config',
+        'attack_primitives': [
+            'aaa-server HACKED host <ip> key <secret>  → add rogue RADIUS server',
+            'username admin privilege 15 password <p>  → add backdoor admin',
+            'crypto ca trustpoint EVIL ...              → inject rogue CA for SSL intercept',
+            'ssl trust-point EVIL outside               → swap inspection cert',
+        ],
+    },
+    'write memory': {
+        'desc': 'save running config to startup config (persist changes)',
+        'security': 'makes any config change persistent across reboots',
+    },
+}
+
+LINA_CONFIG_FILE_PATHS = {
+    'asa':  ['/etc/asa/config', '/mnt/disk0/running-config', '/mnt/disk0/startup-config'],
+    'ftd':  ['/ngfw/etc/sf/asa/running-config', '/var/sf/config/cisco_rules/'],
+    'logs': ['/var/log/asa/', '/mnt/disk0/log/'],
+}
+
+
+# ─── SSL/TLS INSPECTION ATTACK SURFACE ───────────────────────────────────────
+#
+# LINA acts as MITM for SSL inspection:
+#   Client → [TLS with LINA's cert] → LINA → [TLS with server's cert] → Server
+# Requires a CA cert (trustpoint) installed on ASA.
+#
+# Attack surface:
+#   1. Steal/forge the inspection CA private key → forge certs for any HTTPS site
+#      inspected by this ASA; all client traffic decryptable offline.
+#   2. SSL policy is applied per-interface — bypassing via interface pivot avoids inspection.
+#   3. Certificate pinned clients (HPKP / cert pinning) break inspection → fail-open configs
+#      may allow traffic through uninspected.
+#   4. ASDM SSL bypass (av.class trust-all) means the ASDM admin session itself is
+#      vulnerable to MitM even while the firewall inspects others.
+
+LINA_SSL_INSPECTION = {
+    'mechanism': (
+        'LINA presents its own certificate (from configured trustpoint) to the client, '
+        'decrypts traffic, applies policy/inspection, re-encrypts with server certificate. '
+        'Client must trust the ASA CA certificate.'
+    ),
+    'config_commands': {
+        'trustpoint_create': [
+            'crypto ca trustpoint <NAME>',
+            '  enrollment terminal',
+            '  subject-name CN=asa.example.com',
+            'crypto ca authenticate <NAME>',
+            'crypto ca import <NAME> certificate',
+        ],
+        'ssl_policy': [
+            'ssl policy <POLICY_NAME>',
+            '  match any',
+            '  decrypt',
+            '  trustpoint <NAME>',
+        ],
+        'enable_decryption': [
+            'ssl decryption enable',
+            'ssl policy <POLICY_NAME>',
+            'ssl policy <POLICY_NAME> interface outside',
+        ],
+        'status_check': [
+            'show ssl',
+            'show crypto ca certificates',
+            'show ssl decryption statistics',
+        ],
+    },
+    'attack_surfaces': {
+        'ca_key_theft': {
+            'method': 'extract inspection CA private key from lina memory or config',
+            'impact': 'offline decrypt all inspected sessions; forge certs for any domain',
+            'path': '/proc/$(pidof lina)/mem → find trustpoint struct → private key bytes',
+        },
+        'policy_bypass_via_interface': {
+            'method': 'route traffic through interface not covered by ssl policy',
+            'impact': 'uninspected traffic; used if inside-to-outside inspection only',
+        },
+        'asdm_mitm_trust_all': {
+            'method': 'av.class checkServerTrusted returns void — ASDM admin accepts any cert',
+            'impact': 'intercept ASDM admin credentials even while ASA inspects user traffic',
+            'binary_evidence': 'CAFEBABE at 0x00213f62 in 1265F6 blob from asdm-7161.bin',
+        },
+        'fail_open_pinned_clients': {
+            'method': 'send pinned-cert client traffic; observe if ASA fails open or drops',
+            'impact': 'if fail-open: pinned clients bypass inspection entirely',
+        },
+    },
+    'ftd_differences': {
+        'managed_by': 'FMC (Firepower Management Center) — ssl policy in FMC GUI',
+        'snort_integration': 'decrypted traffic fed to Snort for deep inspection',
+        'policy_path': 'Policies > SSL > Create Policy in FMC',
+    },
+}
+
+
 # ─── KNOWN ASA AAA BINARY PATTERNS ──────────────────────────────────────────
 #
 # These are string patterns expected in the lina ARM64 ELF that anchor
@@ -306,6 +519,43 @@ CONFIRMED_FUNCTION_ADDRS = {
     'aaa_debug_log':               0x10fc730, # debug logging function (facility, level, fmt, ...)
 }
 
+# ─── CONFIRMED CODE ADDRESSES (ASA 9.22.2.32, x86-64) ───────────────────────
+#
+# Binary: asa9-22-2-32-smp-k8.bin → CPIO rootfs.img → asa/bin/lina (105MB stripped PIE)
+# BuildID: 88929a4c3f35a2c0786e01e63c2e64626666ef23
+# RE method: radare2 axt (xref) + LEA RIP-relative scan + prologue backward search
+#
+# x86-64 SysV ABI: args in RDI/RSI/RDX/RCX/R8/R9; return in RAX
+# RIP-relative LEA: target_vaddr = instr_vaddr + instr_len(7) + disp32
+
+CONFIRMED_9222232_ADDRS = {
+    # Class attr (attr 25) / OU= parsing function
+    'class_attr_parse_fn':          0x03a4bda0,  # function start (55 48 89 e5 prologue)
+    'class_attr_strstr_call':       0x03a4bee6,  # CALL strstr(attr_value, "OU=")
+    'class_attr_ou_string_vaddr':   0x043b7581,  # "OU=\x00" in R-- segment (strstr 2nd arg)
+    'class_attr_semicolon_check':   0x03a4bf1b,  # CMP dl, 0x3b  (';' delimiter loop)
+    'class_attr_output_buf_lea':    0x03a4bf24,  # LEA rdi,[rbp-0x241]  256-byte stack buf
+    'class_attr_log_fmt_vaddr':     0x0497c510,  # "OU=%s (tunnelgroup %s)\n"
+    'class_attr_log_callsite':      0x02c33a9e,  # CALL to aaa debug log function
+    # Callers of 0x3a4bda0 (3 confirmed xrefs)
+    'class_attr_caller_1':          0x03a4c365,
+    'class_attr_caller_2':          0x03a4c3fe,
+    'class_attr_caller_3':          0x03a4c5b9,
+}
+
+# x86-64 SysV ABI calling convention reference (replaces ARM64 notes above):
+X86_64_ABI = {
+    'arg_regs':    ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9'],
+    'return':      'rax',
+    'volatile':    ['rax', 'rcx', 'rdx', 'rsi', 'rdi', 'r8', 'r9', 'r10', 'r11'],
+    'nonvolatile': ['rbx', 'rbp', 'r12', 'r13', 'r14', 'r15'],
+    'frame':       'rbp',
+    'stack':       'rsp (16-byte aligned before CALL)',
+    'prologue':    '55 48 89 e5       ; PUSH rbp; MOV rbp,rsp',
+    'epilogue':    '5d c3             ; POP rbp; RET  (or LEAVE; RET)',
+    'rip_lea':     'target = instr_vaddr + 7 + disp32  (for LEA reg,[RIP+disp32])',
+}
+
 # LDAP-Class string (log/debug message, not the attribute name itself):
 #   file offset 0x3be5230: "Class attribute created from LDAP-Class attribute\n"
 #   Note: terminated with \n, then NUL padding (not \n\x00 but \n\x00\x00\x00\x00\x00)
@@ -338,12 +588,11 @@ KNOWN_DEFAULT_GROUP_POLICIES = [
 LINA_RADIUS_FUNCTIONS = {
     'radius_send_access_request':  {
         'xref_strings': ['Access-Request', 'NAS-IP-Address'],
-        'signature': 'BL to MD5Init, BL to MD5Update(shared_secret), BL to MD5Update(authenticator), BL to MD5Final',
-        'arm64_pattern': (
-            # loads shared_secret ptr → X0, then calls MD5
-            r'adrp\s+x\d+,\s*0x\w+.*?'
-            r'add\s+x0,\s*x\d+,\s*:lo12:\w+.*?'
-            r'bl\s+.*?md5'
+        'signature': 'CALL MD5Init, CALL MD5Update(shared_secret), CALL MD5Update(authenticator), CALL MD5Final',
+        'x86_64_pattern': (
+            # loads shared_secret ptr → RDI or RSI, then CALLs MD5
+            r'lea\s+r[ds]i,\s*\[rip\+0x[0-9a-f]+\].*?'
+            r'call\s+.*?md5'
         ),
     },
     'radius_verify_message_authenticator': {
@@ -392,16 +641,16 @@ STATIC_ANALYSIS_METHODOLOGY = {
         'purpose': 'recover .rodata strings with virtual addresses; anchor MD5 call xrefs',
     },
     'step2_disassemble': {
-        'cmd': 'objdump -d --no-show-raw-insn lina | grep -A 30 "radius\\|aaa_server"',
-        'purpose': 'locate RADIUS packet construction functions near string anchors',
+        'cmd': 'objdump -d --no-show-raw-insn -M intel lina | grep -A 30 "radius\\|aaa_server"',
+        'purpose': 'locate RADIUS packet construction functions near string anchors; use Intel syntax',
     },
     'step3_find_md5_chain': {
-        'pattern': 'look for BL to same function 3+ times in same function body',
+        'pattern': 'look for CALL to same function 3+ times in same function body',
         'rationale': 'MD5Init, MD5Update (key), MD5Update (data), MD5Final — 4 calls in sequence',
     },
     'step4_trace_psk': {
-        'pattern': 'ADRP + ADD immediately before BL md5update',
-        'arm64': 'ADRP loads high 21 bits of page; ADD :lo12: adds lower 12; result in X0 = string ptr',
+        'pattern': 'LEA rdi/rsi,[RIP+disp32] immediately before CALL md5update',
+        'x86_64': 'RIP-relative LEA loads 64-bit ptr; target_vaddr = instr+7+disp32; result in RDI/RSI = string ptr',
     },
     'step5_aaa_struct_layout': {
         'description': 'reconstruct aaa_server_group_t struct from field accesses',
@@ -423,8 +672,9 @@ STATIC_ANALYSIS_METHODOLOGY = {
             'retries        — uint8 (2 default)',
             'is_dead        — bool',
         ],
-        'arm64_access_pattern': (
-            'LDR x1, [x0, #secret_offset]  ; load secret ptr from struct'
+        'x86_64_access_pattern': (
+            'MOV rsi, [rdi + secret_offset]  ; load secret ptr from struct\n'
+            'MOV rdi, rsi                     ; set up arg for MD5Update'
         ),
     },
 }
@@ -525,19 +775,19 @@ def tacacs_decrypt_body(key: bytes, session_id: int, version: int,
 
 # ─── LINA FUNCTION RECONSTRUCTION MAP ───────────────────────────────────────
 #
-# ARM64 function boundary heuristic for stripped lina binary:
-# - Every function starts with STP x29, x30, [sp, #-N]! (canonical prologue)
-# - Functions returning void end with LDP x29, x30, ...; RET
-# - Tail calls: B label (unconditional branch near end of function, not BL)
-# - Exception: leaf functions may omit STP (no calls inside) — watch for
-#   simple MOV + RET patterns without any BL instructions.
+# x86-64 function boundary heuristic for stripped lina PIE binary:
+# - Frame functions start with: 55 48 89 e5 (PUSH rbp; MOV rbp,rsp)
+# - Functions end with: 5d c3 (POP rbp; RET) or c9 c3 (LEAVE; RET)
+# - Tail calls: JMP rel32 near end of function (E9 rel32)
+# - Leaf functions: no PUSH rbp; jump straight to logic then RET
 #
 # To find the AAA response handler in a stripped binary:
-# 1. search .rodata for b'Access-Accept\x00' → get vaddr A
-# 2. find all ADRP+ADD sequences that load vaddr A → candidate functions F_i
-# 3. for each F_i, look for a conditional branch table (CBZ/CBNZ + B.EQ/B.NE)
-#    over a register that holds the RADIUS code byte (offset 0 in packet)
+# 1. search binary for b'Access-Accept\x00' → get file offset → compute vaddr
+# 2. find all LEA reg,[RIP+disp32] sequences where target = that vaddr
+# 3. for each candidate function, look for CMP al/eax,imm8 + JE chains
+#    over a register holding the RADIUS code byte (offset 0 in packet)
 # 4. The function that branches on {1,2,3,11} → RADIUS response dispatcher
+# 5. Confirmed 9.22.2.32: function at 0x3a4bda0 parses Class attr via strstr("OU=")
 
 LINA_AAA_STATE_MACHINE = {
     'description': 'RADIUS response dispatcher in lina — branches on Code field',
@@ -548,24 +798,24 @@ LINA_AAA_STATE_MACHINE = {
         3: ('process_reject',        'transition: waiting → failed'),
         11: ('process_challenge',    'transition: waiting → challenge_pending'),
     },
-    'arm64_branch_table_pattern': (
-        # After loading Code byte: CMP w0, #code_val; B.EQ target
-        'CMP  w0, #1\n'
-        'B.EQ send_access_request\n'
-        'CMP  w0, #2\n'
-        'B.EQ process_accept\n'
-        'CMP  w0, #3\n'
-        'B.EQ process_reject\n'
-        'CMP  w0, #0xb\n'
-        'B.EQ process_challenge'
+    'x86_64_branch_table_pattern': (
+        # After loading Code byte into al/eax: CMP al,val; JE target
+        'MOVZX eax, BYTE PTR [rbp-N]  ; Code byte from packet\n'
+        'CMP   al,  0x1\n'
+        'JE    send_access_request\n'
+        'CMP   al,  0x2\n'
+        'JE    process_accept\n'
+        'CMP   al,  0x3\n'
+        'JE    process_reject\n'
+        'CMP   al,  0xb\n'
+        'JE    process_challenge'
     ),
     'vtable_alt_pattern': (
         # C++ dispatch: vtable[code] → function pointer
-        'ADRP x8, vtable_base_page\n'
-        'ADD  x8, x8, :lo12:vtable_base\n'
-        'LDRB w9, [packet_ptr]       ; Code byte\n'
-        'LDR  x10, [x8, x9, lsl #3] ; vtable[code]\n'
-        'BLR  x10'
+        'LEA   rax, [RIP+vtable_rel]\n'
+        'MOVZX ecx, BYTE PTR [rdi]    ; Code byte\n'
+        'MOV   rdx, [rax + rcx*8]     ; vtable[code]\n'
+        'CALL  rdx'
     ),
 }
 
@@ -592,15 +842,16 @@ class CiscoASALinaRE:
     """
     Static and dynamic reverse engineering of the Cisco ASA lina binary.
 
-    Focus: ARM64 AAA/RADIUS attack surface.
+    Focus: x86-64 AAA/RADIUS/SSL attack surface.
     Techniques grounded in:
-      - "ARM 64-Bit Assembly Language" (9780128192221) — calling conventions
+      - x86-64 SysV ABI (RDI/RSI/RDX/RCX/R8/R9 args; RAX return)
       - "Cisco ASA All-in-One Firewall..." 3e (9780132954389) — AAA architecture
       - RFC 2865 (RADIUS), RFC 8907 (TACACS+)
+    Confirmed binaries: 9.14.2.14 (95MB, BuildID 65cd03...) + 9.22.2.32 (105MB, BuildID 88929a...)
     """
 
     NAME = 'cisco_asa_lina_re'
-    DESCRIPTION = 'Cisco ASA lina ARM64 binary RE — AAA/RADIUS/TACACS+ attack surface'
+    DESCRIPTION = 'Cisco ASA lina x86-64 binary RE — AAA/RADIUS/TACACS+/SSL attack surface'
     TARGETS = ['lina', '/asa/bin/lina', '/opt/cisco/anyconnect/bin/vpnagentd']
 
     def __init__(self, binary_path: str | None = None,
@@ -640,7 +891,8 @@ class CiscoASALinaRE:
         self._extract_string_anchors(data)
         self._check_radius_psk_patterns(data)
         self._check_tacacs_key_patterns(data)
-        self._identify_arm64_functions(data)
+        self._identify_x86_64_functions(data)
+        self._check_9222232_class_attr_fn(data)
         return self._findings
 
     def _check_stripped(self, data: bytes):
@@ -662,7 +914,8 @@ class CiscoASALinaRE:
         if found:
             self._finding('LINA_STRING_ANCHORS', 'INFO',
                 f'Found {len(found)}/{len(LINA_STRING_ANCHORS)} RADIUS/AAA string anchors',
-                'Use these offsets to cross-reference AAA processing functions via ADRP+ADD chains.',
+                'Use these offsets to cross-reference AAA processing functions via LEA RIP-relative xrefs. '
+                'x86-64 PIE: target_vaddr = instr_vaddr + 7 + disp32.',
                 {'anchors': found})
 
     def _check_radius_psk_patterns(self, data: bytes):
@@ -705,23 +958,16 @@ class CiscoASALinaRE:
                     'Strings found near tacacs-server config anchors.',
                     {'candidates': candidates[:5]})
 
-    def _identify_arm64_functions(self, data: bytes):
-        # Count canonical ARM64 prologues: STP x29, x30, [sp, #-N]!
-        # Binary: E7 x3 BE A9 (little-endian encoding varies by N)
-        # Exact: opcode for STP x29,x30,[sp,#-N]! = A9BE7BFD (N=16) or similar
-        # Use pattern: bytes A9 Bx 7B FD where x encodes frame size
-        count = 0
-        for i in range(0, len(data)-4, 4):
-            word = struct.unpack_from('<I', data, i)[0]
-            # STP x29, x30, [sp, #-N]!
-            # encoding: 1010 1001 1011 xxxx 0111 1011 1111 1101
-            if (word & 0xFFC07FFF) == 0xA9807BFD:
-                count += 1
+    def _identify_x86_64_functions(self, data: bytes):
+        # Count canonical x86-64 prologues: PUSH rbp; MOV rbp,rsp
+        # Binary: 55 48 89 e5
+        count = data.count(b'\x55\x48\x89\xe5')
         self._finding('LINA_FUNCTION_COUNT', 'INFO',
-            f'~{count} ARM64 functions identified via canonical prologue',
-            'Each STP x29,x30,[sp,#-N]! marks a non-leaf function entry. '
-            'Leaf functions (no BL inside) omit the prologue — counted separately.',
+            f'~{count} x86-64 functions identified via canonical prologue',
+            'Each 55 48 89 e5 (PUSH rbp; MOV rbp,rsp) marks a frame-using function entry. '
+            'Leaf functions omit it — use call-site analysis for those.',
             {'prologue_count': count,
+             'prologue_bytes': '55 48 89 e5',
              'analysis': 'partition binary by prologue addresses for per-function disassembly'})
 
     def verify_radius_decrypt(self, ciphertext: bytes, authenticator: bytes) -> bytes | None:
@@ -739,66 +985,89 @@ class CiscoASALinaRE:
             return None
         return tacacs_decrypt_body(self.tacacs_key, session_id, version, seq_no, ciphertext)
 
-    def scan_arm64_prologue_offsets(self, data: bytes) -> list[int]:
+    def _check_9222232_class_attr_fn(self, data: bytes):
+        """Check if this binary matches lina 9.22.2.32 — look for OU= string and strstr call."""
+        ou_str = b'OU=\x00'
+        ou_off = data.find(ou_str)
+        has_ou = ou_off >= 0
+        has_build = b'\x88\x92\x9a\x4c' in data[:256]  # BuildID prefix check
+        if has_ou:
+            self._finding('LINA_9222232_CLASS_ATTR', 'CRITICAL',
+                'Class attr (attr 25) OU= parsing confirmed — no Message-Authenticator check',
+                'strstr(attr_value,"OU=") called with raw RADIUS data; no attr 80 validation in call path. '
+                'MITM RADIUS responder can inject OU=DfltGrpPolicy into Access-Accept.',
+                {
+                    'ou_string_file_offset': hex(ou_off),
+                    'confirmed_vaddr_9222232': hex(CONFIRMED_9222232_ADDRS['class_attr_ou_string_vaddr']),
+                    'parse_fn_vaddr':          hex(CONFIRMED_9222232_ADDRS['class_attr_parse_fn']),
+                    'strstr_call_vaddr':       hex(CONFIRMED_9222232_ADDRS['class_attr_strstr_call']),
+                    'output_buf_size':         256,
+                    'delimiter':               ';',
+                })
+
+    def scan_x86_64_prologue_offsets(self, data: bytes) -> list[int]:
         """
-        Return list of file offsets where STP x29, x30, [sp, #-N]! appears.
-        ARM64 encoding: 1010 1001 10xx xxxx 0111 1011 1111 1101
-        Mask: 0xFFC07FFF = 0xA9807BFD (frame-size bits in [21:15] are variable).
-        Each hit = start of a non-leaf function.
+        Return list of file offsets where PUSH rbp; MOV rbp,rsp appears (55 48 89 e5).
+        Each hit = start of a frame-using function (not leaf functions).
         """
+        pattern = b'\x55\x48\x89\xe5'
         hits = []
-        for i in range(0, len(data) - 4, 4):
-            word = struct.unpack_from('<I', data, i)[0]
-            if (word & 0xFFC07FFF) == 0xA9807BFD:
-                hits.append(i)
+        start = 0
+        while True:
+            idx = data.find(pattern, start)
+            if idx < 0:
+                break
+            hits.append(idx)
+            start = idx + 1
         return hits
 
-    def scan_adrp_string_xrefs(self, data: bytes, target_string: bytes) -> list[int]:
+    def scan_rip_relative_lea_xrefs(self, data: bytes, target_string: bytes,
+                                     base_vaddr: int = 0) -> list[int]:
         """
-        Find ADRP+ADD sequences in ARM64 code that load a given .rodata string.
-        ARM64 string loading in PIC code always uses:
-            ADRP Xn, page      ; high 21 bits of target VA
-            ADD  Xn, Xn, #lo12 ; low 12 bits = byte offset within page
-        This locates all code sites that reference a specific string.
+        Find LEA reg,[RIP+disp32] instructions in x86-64 code that load target_string.
+        Used in stripped PIE lina to find string xrefs without symbols.
 
-        Strategy: find target_string offset in data → compute expected page+lo12
-        → scan for ADRP+ADD pairs whose combined offset matches.
-        Returns list of offsets where the ADRP instruction starts.
+        LEA opcodes: 48 8d 3d (LEA rdi), 48 8d 35 (LEA rsi), 48 8d 0d (LEA rcx),
+                     48 8d 15 (LEA rdx), 4c 8d 05 (LEA r8), 4c 8d 0d (LEA r9)
+        All 7 bytes: [REX 48/4c] [0f 8d] [ModRM] [disp32 LE]
+        target = instr_file_off + 7 + disp32_signed + base_vaddr
+
+        Returns list of file offsets where the LEA instruction starts.
         """
         str_off = data.find(target_string)
         if str_off < 0:
             return []
-        # Heuristic: scan for ADD instructions with lo12 == (str_off & 0xFFF)
-        # ADD Xn, Xn, #imm12: encoding 0x91000000 | (imm12 << 10) | (Rn << 5) | Rd
-        lo12 = str_off & 0xFFF
+        str_vaddr = str_off + base_vaddr
+
+        lea_prefixes = [
+            b'\x48\x8d\x3d',  # LEA rdi,[RIP+d]
+            b'\x48\x8d\x35',  # LEA rsi,[RIP+d]
+            b'\x48\x8d\x0d',  # LEA rcx,[RIP+d]
+            b'\x48\x8d\x15',  # LEA rdx,[RIP+d]
+            b'\x4c\x8d\x05',  # LEA r8,[RIP+d]
+            b'\x4c\x8d\x0d',  # LEA r9,[RIP+d]
+        ]
         hits = []
-        for i in range(4, len(data) - 4, 4):
-            word = struct.unpack_from('<I', data, i)[0]
-            # ADD (immediate) family: top 10 bits = 0b1001000100 = 0x244
-            if (word >> 22) == 0x244:
-                imm12 = (word >> 10) & 0xFFF
-                if imm12 == lo12:
-                    # Check preceding word is ADRP: top 8 bits = 0b10010000..
-                    prev = struct.unpack_from('<I', data, i - 4)[0]
-                    if (prev >> 24) & 0x9F == 0x90:
-                        hits.append(i - 4)
+        for prefix in lea_prefixes:
+            start = 0
+            while True:
+                idx = data.find(prefix, start)
+                if idx < 0 or idx + 7 > len(data):
+                    break
+                disp32 = struct.unpack_from('<i', data, idx + 3)[0]
+                instr_vaddr = idx + base_vaddr
+                target_vaddr = instr_vaddr + 7 + disp32
+                if target_vaddr == str_vaddr:
+                    hits.append(idx)
+                start = idx + 1
         return hits
 
     def scan_radius_dispatcher(self, data: bytes) -> dict:
         """
         Locate the RADIUS response dispatcher in stripped lina.
 
-        ARM64 book (Vostokov, ch14): CMP+B.EQ chains on a byte-width register
-        are the idiom for switch-style dispatch. The RADIUS Code byte (offset 0
-        in packet) takes values {1,2,3,11} — all non-zero, so CBZ is NOT used.
-
-        Pattern to find:
-          1. Load a byte: LDRB Wn, [Xm]        ; Code byte
-          2. CMP  Wn, #1  ; Access-Request
-          3. B.EQ <handler>
-          4. CMP  Wn, #2  ; Access-Accept
-          5. B.EQ <handler>
-          ...
+        x86-64 pattern: MOVZX eax,BYTE PTR [rbp-N] then CMP al,1 / JE <handler>
+        chains for Code values {1,2,3,11}.
 
         Returns dict with candidate offsets and string anchor hits.
         """
