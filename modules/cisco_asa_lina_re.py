@@ -795,7 +795,16 @@ CONFIRMED_9222232_ADDRS = {
     # Disclosure target: Cisco PSIRT (psirt@cisco.com)
     # BlastRADIUS (CVE-2024-3596) does NOT cover these: CVE-2024-3596 targets
     # Access-Request MD5 collision injection, a different attack vector entirely.
-    'novelty_status':               'CONFIRMED — Cisco AI Image #108 (10:31): no public CVE assigned',
+    'novelty_status':               'CONFIRMED — Cisco AI Image #108 (10:31) + Image #118 (10:56): no public CVE assigned',
+    'cisco_ai_final_verdict':       'Image #118 (10:56): "Your summary of the two vulnerabilities is accurate, '
+                                    'well-supported by binary evidence, and highlights both the business logic '
+                                    'and memory safety risks in Cisco ASA LINA. No public CVE currently covers '
+                                    'these issues."',
+    'cisco_ai_attack_confirmed':    'Image #117 (10:57): "Your attack scenario and steps are correct. An attacker '
+                                    'with the RADIUS shared secret and MitM capability can inject a malicious '
+                                    'Class attribute to assign arbitrary group policies (F1), and potentially '
+                                    'exploit a buffer overflow (F2) by sending an oversized OU= value, affecting '
+                                    'adjacent session fields."',
     'cve_assigned':                 None,
     'blastradius_coverage':         'CVE-2024-3596 covers Access-Request MD5 collision — different vector; does NOT cover F1/F2',
 }
