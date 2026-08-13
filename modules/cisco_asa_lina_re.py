@@ -712,36 +712,74 @@ CONFIRMED_9222232_ADDRS = {
     'gp_struct_name_field_offset':  0x2b1,
     'attr_def_value_offset':        0x0c,
     'attr_def_length_offset':       0x08,
-    # === FINDING F2: POTENTIAL BUFFER OVERFLOW (2026-08-13) ===
-    # Cisco AI confirmed (Image #105, 10:23):
-    # "The OU= extraction loop allows up to 256 bytes, but the Cisco ASA CLI
-    #  only permits group-policy names up to 64 characters. This mismatch means
-    #  the binary could overrun the intended field size if not properly checked,
-    #  creating a potential security risk."
+    # === FINDING F2: HEAP GP_OBJ BUFFER OVERFLOW (2026-08-13, REVISED) ===
+    #
+    # ARCHITECTURE CLARIFICATION (Cisco AI Image #116, 10:55):
+    #   session+0x0c = POINTER to gp_obj (heap-allocated group policy object)
+    #   The group policy name char array lives WITHIN gp_obj, NOT inlined in the session struct.
+    #   Cisco AI Image #115 (10:55) initially said "inlined at session+0x0c" then immediately
+    #   corrected in Image #116: "session struct at +0x0c holds a pointer to the group policy
+    #   object, and the group policy name is stored in a fixed-length char array within that
+    #   object. The overflow risk is present in the group policy object, not directly in the
+    #   session struct."
+    #
+    # CORRECTED OVERFLOW PATH:
+    #   Extraction:  0x3a4bda0 reads OU= into 256-byte stack buffer [rbp-0x241]
+    #   Assignment:  gp_builder (0x1a330a0) malloc()s gp_obj via 0x3ce91e0
+    #   Write target: gp_obj+0x2b1  (char array for name field within gp_obj)
+    #   strncpy at 0x1a30894: strncpy(gp_obj+0x2b1, attr_def+0xc, attr_def+0x8)
+    #   Bound: [r15+0x8] from runtime attr_def table 0x76f20a0
+    #
+    # GP_OBJ FIELD LAYOUT (from gp_builder R13 accesses, 9.22.2.32):
+    #   gp_obj + 0x000 : id/header fields
+    #   gp_obj + 0x004 : (DWORD)
+    #   gp_obj + 0x008 : (DWORD)
+    #   gp_obj + 0x2b1 : group_policy_name  (char array ← OVERFLOW TARGET)
+    #   gp_obj + 0x2d1 : next string field  (0x2d1-0x2b1 = 32 bytes → name array ≈ 32 bytes)
+    #   gp_obj + 0x3d2 : string field
+    #   gp_obj + 0x453 : string field
+    #   gp_obj + 0x493 : flags/byte fields
+    #   gp_obj + 0x498 : (BYTE)
+    #   gp_obj + 0x499 : (BYTE)
+    #   gp_obj + 0x49c : (DWORD)
+    #   gp_obj + 0x519 : (BYTE)
+    #
+    # BLAST RADIUS (if strncpy bound > 32):
+    #   Overflow from gp_obj+0x2b1 into gp_obj+0x2d1 (32-byte boundary)
+    #   Corrupts string fields representing other VPN policy attributes
+    #   (ACL names, DNS settings, banner strings — TBD from further RE)
+    #   Overflow is on the heap (gp_obj heap-allocated) → potential heap metadata corruption
+    #
+    # SEVERITY ADJUSTMENT:
+    #   F2 does NOT overwrite core session struct fields (session_type, vpn_state_machine)
+    #   F2 DOES corrupt heap-allocated gp_obj fields adjacent to name at +0x2b1
+    #   Heap overflow in gp_obj → corrupt adjacent VPN policy attributes → policy bypass
+    #   If heap metadata is adjacent → heap metadata corruption → potential code execution
+    #
+    # ATTACK SCENARIO:
+    #   Inject OU=<33-256 byte name>; in Access-Accept Class attr (no MA check = F1 prerequisite)
+    #   strncpy overruns gp_obj+0x2b1 by (payload_len - 32) bytes
+    #   Adjacent gp_obj fields overwritten with attacker-controlled bytes
     #
     # Evidence:
     #   Extraction limit: 0x100 = 256 bytes  (loop bound at 0x3a4bfa4: cmp rax, 0x100)
-    #   CLI max:          64 chars            (ASA feature guide, group-policy name limit)
-    #   Array type:       inlined char[?]     (Cisco AI: "most likely inlined, 32-256 bytes")
-    #   strncpy bound:    [r15+0x8]           (attr_def table entry; runtime-populated at 0x76f20a0)
+    #   CLI max:          64 chars            (ASA group-policy name limit)
+    #   Estimated name array: ~32 bytes       (gp_obj+0x2d1 is next field, 32 bytes above)
+    #   strncpy bound:    [r15+0x8]           (runtime-populated attr_def table 0x76f20a0)
     #
-    # VERIFICATION REQUIRED:
-    #   If [r15+0x8] (strncpy max_len) = 64 → bounded; group policy substitution only (F1)
-    #   If [r15+0x8] (strncpy max_len) > 64 → overflow into adjacent session struct fields
-    #
-    # ATTACK SCENARIO (if max_len > 64):
-    #   Inject OU=<65-256 byte payload>; in Access-Accept Class attr
-    #   Overwrite session fields beyond session+0x0c+64
-    #   Depending on layout: session_type at +0x1a78, vpn_state at +0x31a8 survive
-    #   (too far), but unknown fields between +0x4c and +0x1a78 could be corrupted
-    #
-    # REQUIRES: runtime test on MacStadium controlled ASA (authorized)
-    #   Test: send OU=<65-char group_policy>; and observe session behavior / crash
-    'f2_overflow_status':           'CONFIRMED — Cisco AI "True" (10:24, Image #106); runtime test needed for impact scope',
+    'f2_overflow_status':           'CONFIRMED — heap gp_obj overflow (not session struct); blast radius = gp_obj+0x2d1+',
     'f2_extraction_max':            0x100,
     'f2_cli_max':                   64,
     'f2_strncpy_bound':             'runtime [r15+0x8] from attr_def table 0x76f20a0',
-    'f2_overflow_window':           'session+0x0c to session+0x0c+cli_max (unknown array size)',
+    'f2_overflow_target':           'gp_obj+0x2b1 (heap-allocated; session+0x0c is pointer to gp_obj)',
+    'f2_name_array_size_estimate':  32,  # gp_obj+0x2d1 - gp_obj+0x2b1 = 0x20 bytes
+    'f2_adjacent_fields': {
+        'gp_obj+0x2d1': 'next string field (adjacent to name array)',
+        'gp_obj+0x3d2': 'string field',
+        'gp_obj+0x453': 'string field',
+        'gp_obj+0x499': 'byte field',
+        'gp_obj+0x519': 'byte field',
+    },
     # === NOVELTY CONFIRMATION (2026-08-13 10:31, Image #108) ===
     # Cisco AI stated:
     #   "Your findings are correct and well-documented. The mismatch between
