@@ -1208,6 +1208,58 @@ SAML_POST_VALIDATION = {
     'tgname_fn_str':      0x042f0921,  # 'saml_get_tgname' — tunnel-group lookup
 }
 
+# ── SAML replay — no InResponseTo validation (binary-confirmed) ───────────────
+#
+# Search for 'InResponseTo', 'RequestID', 'SubjectConfirmation' in lina 9.14.2.14:
+#   ALL THREE absent from the binary (confirmed exhaustive string search).
+#
+# SAML 2.0 SP security requirements (OASIS SAML Core 2.0, sec. 3.4.1.4):
+#   - SP MUST maintain a state table of outstanding AuthnRequests
+#   - Successful SSO Response MUST have an InResponseTo matching a pending ID
+#   - Absence of InResponseTo check → IdP-initiated (unsolicited) assertions accepted
+#     by any SP that disables this check
+#
+# Attack (no MITM, no signed forged assertion required):
+#   Prerequisites:
+#     a) ASA and victim SP use the same IdP
+#     b) Attacker can authenticate to the IdP via ANY valid SP they control
+#     c) IdP assertions include the correct ASA Audience (entityID = ASA's SP metadata URL)
+#        OR audience restriction is not enforced / attacker can read ASA entityID from
+#        the public metadata endpoint (/+CSCOE+/saml/sp/metadata/<tg>)
+#
+#   Steps:
+#     1. Attacker registers their own SP with the same IdP
+#     2. Attacker initiates login through their SP → receives signed IdP assertion
+#     3. Attacker modifies the Audience element to match ASA entityID
+#        (only possible if assertion is unsigned / MITM of IdP-to-attacker channel)
+#     4. POST the (potentially modified) assertion to ASA ACS:
+#        POST /+CSCOE+/saml/sp/acs
+#        SAMLResponse=<base64-encoded-response>
+#     5. ASA calls lasso_login_process_authn_response_msg() — passes without InResponseTo check
+#     6. Audience check fires (0x042f0b5c) — passes if Audience matches ASA entityID
+#     7. Authentication succeeds as the NameID in the assertion
+#
+#   Without step 3 modification (pure replay scenario):
+#     - Requires no signature bypass at all — just the absence of InResponseTo
+#     - Any SP using the same IdP can harvest a valid assertion and replay it to ASA
+#     - Time-bounded by NotOnOrAfter (typically 5 minutes from IdP)
+#     - CRITICAL if the same IdP serves both ASA and other SaaS (Okta/Azure AD/ADFS)
+#
+#   Severity: HIGH (without signature bypass) / CRITICAL (combined with unsigned assert)
+#   Constraint: NotOnOrAfter window limits to ~5 min; audience must match ASA entityID
+#
+SAML_REPLAY_SURFACE = {
+    'inresponseto_absent':    True,  # confirmed: string not in binary
+    'subjectconfirmation_absent': True,
+    'requestid_absent':       True,
+    'audience_validated':     True,   # confirmed: 'assertion audience is invalid' present
+    'expiry_validated':       True,   # confirmed: 'assertion is expired or not valid' present
+    'signature_absent_error': True,   # no 'signature invalid' error string in binary
+    'acs_endpoint':          '/+CSCOE+/saml/sp/acs',
+    'metadata_endpoint':     '/+CSCOE+/saml/sp/metadata/<tunnel-group-name>',
+    'attack_window_sec':      300,    # typical SAML NotOnOrAfter = 5 minutes
+}
+
 # ── CCO supply chain note (from ASDM analysis) ────────────────────────────────
 # ASDM class efw (idx 10833, ASDM 7.20.2) sets JVM-global SSL bypass:
 #   HttpsURLConnection.setDefaultSSLSocketFactory(trust_all_ctx)
