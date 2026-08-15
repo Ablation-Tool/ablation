@@ -5,7 +5,9 @@
 
 ## What is ablation?
 
-Ablation is a modular reverse engineering and attack surface analysis tool built for post-access work. It runs on the target — no debugger, no source code, no prior knowledge of what's installed. Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
+Ablation is a modular reverse engineering and attack surface analysis tool built for post-access work. 
+It runs on the target without a debugger, source code, or prior knowledge of what's installed. 
+Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
 
 Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules share a common disassembly engine (x86 / ARM64 / MIPS / PPC), a unified binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
 
