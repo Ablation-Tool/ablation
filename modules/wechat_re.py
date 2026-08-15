@@ -37,7 +37,7 @@ encryptAlgo enum (from AES_GCM_ENCRYPT / SM4_GCM_ENCRYPT / ECDH_ENCRYPT strings)
 
 Findings:
   F1  MMTLS protocol — custom TLS variant with AES-GCM + SM4-GCM + double-ratchet
-  F2  ALERT_FALLBACK_NO_MMTLS — server-triggered protocol downgrade to HTTPS
+  F2  ALERT_FALLBACK_NO_MMTLS — level=2/type=0x74; OnAlert@0x1cc100; sets mmtls_obj[0x3e4]=1
   F3  PSK 0-RTT session resumption — extracted PSK enables no-handshake replay
   F4  gILinkKey runtime MMTLS key extractable via Frida/ptrace
   F5  computerKeyWithAllStr DB key derivation — requires IMEI + UIN to decrypt DB
@@ -250,19 +250,44 @@ class WeChatREAnalyzer:
             "severity": "MEDIUM",
             "detail": (
                 "Server can send ALERT_FALLBACK_NO_MMTLS to force WeChat to downgrade to HTTPS.\n"
-                "Network-level MITM can replay this alert to strip MMTLS and intercept traffic.\n"
-                "WeChat logs: '%_: receive ALERT_FALLBACK_NO_MMTLS, use_mmtls_=%_, fallback url: %_'\n"
-                "Client sets use_mmtls_=false and reconnects over plain HTTPS to fallback URL.\n"
-                "Impact: all traffic after downgrade is TLS (standard, inspectable via CA cert)."
+                "Alert wire format: level=2 (fatal, uint8 @ alert_struct+0x08), type=0x74 (uint16 LE @ alert_struct+0x0a).\n"
+                "OnAlert dispatch @ libwechatnetwork.so:0x1cc100: level==2 → type check → 0x74 → handler @ 0x1cc308.\n"
+                "Handler verifies session ticket (bl 0x1d98a0), then sets mmtls_obj[0x3e4]=1 (MMTLS disabled flag).\n"
+                "Log string @ 0x6a2c2 (typo in binary): 'recevie fallback no mmtls alert and verify succ, set no mmtls, %u'.\n"
+                "type==0x73: PSK_DELETE alert — 'debug: delete access psk, ret %d' (@ 0x4b376), calls PSK invalidation.\n"
+                "Source: mmtls_client_handshake_state.h (embedded path @ 0x4b40f).\n"
+                "MITM injection requires valid alert signature (bl 0x1d98a0 verifies before setting flag)."
             ),
             "evidence": {
-                "log_string": "receive ALERT_FALLBACK_NO_MMTLS, use_mmtls_=%_, fallback url: %_",
-                "function": "MMStnManager::IsMMTLSEnabled() → can return false after alert",
+                "alert_type_fallback":   "0x74 (116 decimal)",
+                "alert_type_psk_delete": "0x73 (115 decimal)",
+                "alert_level":           "2 (fatal)",
+                "on_alert_va":           "0x1cc100",
+                "fallback_handler_va":   "0x1cc308",
+                "mmtls_disabled_flag":   "mmtls_obj+0x3e4 = 1",
+                "log_va":                "0x6a2c2",
+                "log_string":            "recevie fallback no mmtls alert and verify succ, set no mmtls, %u",
+                "psk_delete_log_va":     "0x4b376",
+                "fallback_log_vas":      ["0x3553d", "0x39ff2", "0x416cf"],
+                "error_codes":           {"valid": "kEctMMTLSValidFallbackAlert @ 0x521ad",
+                                          "invalid": "kEctMMTLSInvalidFallbackAlert @ 0x795bd"},
             },
             "frida_hook": (
-                "// Intercept to observe downgrade trigger\n"
-                "// Target: Java_com_tencent_mars_mm_MMLogic_setMmtlsCtrlInfo\n"
-                "// or: _ZN4mars3stn12MMStnManager14IsMMTLSEnabledEv"
+                "// Hook OnAlert to detect FALLBACK\n"
+                "var base = Module.findBaseAddress('libwechatnetwork.so');\n"
+                "Interceptor.attach(base.add(0x1cc100), {\n"
+                "    onEnter: function(args) {\n"
+                "        var alert = ptr(args[0]);\n"
+                "        var level = alert.add(0x08).readU8();\n"
+                "        var type  = alert.add(0x0a).readU16();\n"
+                "        if (type === 0x74) {\n"
+                "            console.log('[WX-F2] ALERT_FALLBACK_NO_MMTLS level=' + level + ' type=0x' + type.toString(16));\n"
+                "        } else if (type === 0x73) {\n"
+                "            console.log('[WX-F2] PSK_DELETE alert');\n"
+                "        }\n"
+                "    }\n"
+                "});\n"
+                "// Or hook flag write: base+0x1cc3e4 (strb w8, [x19+0x3e4])"
             ),
         })
 
