@@ -45,6 +45,17 @@ Findings:
   F7  libapp.so 38MB contains all business logic in compiled C++ (not Java/DEX)
   F8  .cso compressed .so format — WeChat's custom loader decompresses at runtime
   F9  SQLCipher (not SQLite SEE) — PRAGMA key interface, HMAC per-page auth, standard tooling works
+  F10 Alert XML + dual ECDSA sigs; hardcoded 2020 Tencent alert at 0x42d3b; timestamp check bypassed
+  F11 CGI function code table: 200+ reqid→name (sendmsg/newsync/pay) from alert XML body
+  F12 HKDF derivation chain confirmed: 7 labels, trafficKeyPair=56B layout, PSK/app key labels
+  F13 Deterministic nonce: xorNonce(nonce[8:12], LE32(seq)); NIST AES-GCM violation; keystream recovery
+  F14 Server P-256 pubkey dual use: ECDH key exchange + ECDSA verify (same hardcoded key)
+  F15 Session Save() wire format: u16-len(pskAccess)||u16-len(pskRefresh)||newSessionTicket
+  F10 HKDF connection key derivation — EXPAND_ONLY mode, EVP_PKEY API; label='connection key'
+  F11 ECDSA alert verify — hardcoded P-256 pubkey@0x8c2e9 (65B uncompressed); BYPASS CLOSED
+  F12 PSK storage path confirmed — ClientCredStorage/ClientCredentialManager; mmtlsregionkey
+  F13 Alert wire format — XML + dual ECDSA sig; hardcoded Tencent 2020 alert@0x42d3b; BYPASS CLOSED
+  F14 CGI function code table — 200+ reqid→name mappings extracted from signed alert body
 """
 
 import subprocess
@@ -78,6 +89,37 @@ CRYPTO_LIBS = [
 # gILinkKey address in libwechatnetwork.so arm64 v8.0.56
 GILIINKKEY_VA = 0x3d4648
 GILIINKKEY_SIZE = 72  # bytes, BSS section
+
+# MMTLS record type constants (from gommtls/mmtls/const.go)
+MMTLS_PROTOCOL_VERSION   = 0xF104
+MMTLS_MAGIC_ABORT        = 0x15  # Alert record
+MMTLS_MAGIC_HANDSHAKE    = 0x16  # Handshake record
+MMTLS_MAGIC_RECORD       = 0x17  # Application data record
+MMTLS_MAGIC_SYSTEM       = 0x19  # PSK session-resumption record
+MMTLS_CIPHER_PSK         = 0xA8  # TLS_PSK_WITH_AES_128_GCM_SHA256
+MMTLS_CIPHER_ECDHE       = 0xC02B # TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+
+# HKDF label strings confirmed from gommtls source (mmtls.go)
+# All labels: info = label_bytes + sha256_hasher_sum (except "server/client finished")
+HKDF_LABEL_HANDSHAKE_KEYS  = b"handshake key expansion"    # → 56B trafficKeyPair
+HKDF_LABEL_APP_KEYS        = b"application data key expansion"  # → 56B trafficKeyPair
+HKDF_LABEL_EXPANDED_SECRET = b"expanded secret"             # → 32B (no trailing hash)
+HKDF_LABEL_PSK_ACCESS      = b"PSK_ACCESS"                  # → 32B
+HKDF_LABEL_PSK_REFRESH     = b"PSK_REFRESH"                 # → 32B
+HKDF_LABEL_SERVER_FINISHED = b"server finished"             # → 32B (hash=nil, label only)
+HKDF_LABEL_CLIENT_FINISHED = b"client finished"             # → 32B (hash=nil, label only)
+
+# trafficKeyPair layout (56 bytes) — confirmed from gommtls computeTrafficKey()
+# clientKey   = trafficKey[0:16]
+# serverKey   = trafficKey[16:32]
+# clientNonce = trafficKey[32:44]  (12 bytes)
+# serverNonce = trafficKey[44:56]  (12 bytes)
+TRAFFIC_KEY_PAIR_SIZE = 56
+
+# Server P-256 pubkey — hardcoded in gommtls const.go, used for BOTH ECDH key exchange
+# AND ECDSA signature verification (verifyEcdsa uses ServerEcdh pubkey)
+SERVER_ECDH_PUBKEY_X = "1da177b6a5ed34dabb3f2b047697ca8bbeb78c68389ced43317a298d77316d54"
+SERVER_ECDH_PUBKEY_Y = "4175c032bc573d5ce4b3ac0b7f2b9a8d48ca4b990ce2fa3ce75cc9d12720fa35"
 
 # MMTLS JNI attack surface in libwechatnetwork.so
 MMTLS_JNI_FUNCS = [
@@ -521,6 +563,437 @@ class WeChatREAnalyzer:
                     "AES_GCM_ENCRYPT no need compress again here. type:%d",
                     "SM4_GCM_ENCRYPT no need decrypt here len:%d algo:%d",
                 ],
+            },
+        })
+
+        # F10: HKDF connection key derivation
+        findings.append({
+            "id": "WX-F10",
+            "title": "HKDF EXPAND_ONLY derives MMTLS connection keys from session secret",
+            "severity": "INFO",
+            "detail": (
+                "Error string 'hkdf expand connection key fail' @ 0x625eb → EVP_PKEY HKDF in EXPAND_ONLY mode.\n"
+                "OpenSSL EVP_PKEY HKDF call chain (WeChat's BoringSSL fork):\n"
+                "  EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL)\n"
+                "  EVP_PKEY_CTX_hkdf_mode(ctx, EVP_PKEY_HKDEF_MODE_EXPAND_ONLY)\n"
+                "  EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256())\n"
+                "  EVP_PKEY_CTX_set1_hkdf_key(ctx, prk, prk_len)   // PRK from extract phase\n"
+                "  EVP_PKEY_CTX_add1_hkdf_info(ctx, 'connection key', 14) // info/label\n"
+                "  EVP_PKEY_derive(ctx, out, &out_len)               // 32B AES-256 key\n"
+                "Frida: hook EVP_PKEY_derive; force return 1 + zero-fill output to observe downstream.\n"
+                "Three error strings map to the HKDF→AES-GCM key setup pipeline:\n"
+                "  0x7022a: hash for deriving connection key fail (extract phase)\n"
+                "  0x625eb: hkdf expand connection key fail (expand phase)\n"
+                "  0x7b4f3: compute connection keys fail (caller wrapping both)"
+            ),
+            "evidence": {
+                "error_strings": {
+                    "0x7022a": "hash for derving connection key fail",
+                    "0x625eb": "hkdf expand connection key fail",
+                    "0x7b4f3": "compute connection keys fail",
+                },
+                "hkdf_mode": "EVP_PKEY_HKDEF_MODE_EXPAND_ONLY (2)",
+                "info_label": "'connection key' (14 bytes)",
+                "output_len": "32 bytes (AES-256-GCM key)",
+            },
+            "frida_hook": (
+                "// Intercept HKDF output — catches derived connection key\n"
+                "// EVP_PKEY_derive(ctx, key_out, &key_len)\n"
+                "const libssl = Process.findModuleByName('libssl.so') ||\n"
+                "               Process.findModuleByName('libcrypto.so');\n"
+                "if (libssl) {\n"
+                "  const derive = Module.findExportByName(libssl.name, 'EVP_PKEY_derive');\n"
+                "  if (derive) Interceptor.attach(derive, {\n"
+                "    onEnter(args) { this.out = args[1]; this.outLen = args[2]; },\n"
+                "    onLeave(ret) {\n"
+                "      if (ret.toInt32() === 1 && !this.out.isNull()) {\n"
+                "        const len = this.outLen.readU64().toNumber();\n"
+                "        console.log('[WX-F10] HKDF derived key (' + len + 'B):',\n"
+                "          hexdump(this.out, {length: len}));\n"
+                "      }\n"
+                "    }\n"
+                "  });\n"
+                "}"
+            ),
+        })
+
+        # F11: ECDSA alert signature verification
+        findings.append({
+            "id": "WX-F11",
+            "title": "MMTLS alert ECDSA verify — hardcoded P-256 pubkey; bypass CLOSED",
+            "severity": "MEDIUM",
+            "detail": (
+                "Alert handler verifies ECDSA/SHA-256 signature before acting on ALERT_FALLBACK_NO_MMTLS.\n"
+                "Hardcoded Tencent P-256 public key at libwechatnetwork.so:0x8c2e9 (65B uncompressed).\n"
+                "Verify chain @ 0x3a1470: d2i_EC_PUBKEY → SHA256 → d2i_ECDSA_SIG → ECDSA_do_verify.\n"
+                "ECDSA_do_verify return semantics: 1=valid, 0=invalid (no error queued), -1=internal error.\n"
+                "\n"
+                "Bypass approach A: hook ECDSA_do_verify, return 1 unconditionally.\n"
+                "  → Returns 1 puts nothing on error queue; no ERR_clear_error() needed.\n"
+                "  → Does NOT bypass cmp w21,1 at 0x210044 (sees raw d2i_ECDSA_SIG result).\n"
+                "\n"
+                "Bypass approach B: patch .rodata pubkey @ 0x8c2e9 with own P-256 DER (65B).\n"
+                "  Memory.protect(base.add(0x8c2e9), 65, 'rwx')\n"
+                "  base.add(0x8c2e9).writeByteArray([0x04, ...own_X_32B, ...own_Y_32B])\n"
+                "  → Then sign forged alerts with own private key.\n"
+                "\n"
+                "BYPASS STATUS: CLOSED — see WX-F13. cmp w21,1 at 0x210044 checks DER parse\n"
+                "result directly. Forged pubkey/ECDSA hook still fails at the XML signature2\n"
+                "check which requires the second P-256 sig over XML body + md5 + timestamp."
+            ),
+            "evidence": {
+                "pubkey_va": "libwechatnetwork.so:0x8c2e9",
+                "pubkey_format": "uncompressed P-256 (65B): 04 || X[32] || Y[32]",
+                "verify_fn_va": "0x3a1470",
+                "verify_chain": "d2i_EC_PUBKEY → SHA256 → d2i_ECDSA_SIG → ECDSA_do_verify",
+                "bypass_check_va": "0x210044: cmp w21, 1",
+                "note": "DER parse error (-1) → alert rejected. Bypass chain does not survive F13.",
+            },
+        })
+
+        # F12: PSK storage path confirmed
+        findings.append({
+            "id": "WX-F12",
+            "title": "ClientCredStorage PSK paths confirmed — mmtlsregionkey in binary",
+            "severity": "INFO",
+            "detail": (
+                "Static RE confirms ClientCredStorage and ClientCredentialManager class names\n"
+                "in libwechatnetwork.so string table. key_dir_ field stores base directory.\n"
+                "String 'mmtlsregionkey' in binary indicates per-region key isolation.\n"
+                "File pattern: /data/data/com.tencent.mm/files/mmtls/%08llx (hex session ID)\n"
+                "MMKV alternate storage: check /data/data/com.tencent.mm/files/mmkv/ for\n"
+                "  keys matching 'session_ticket', 'psk', 'auth_long', 'auth_short'.\n"
+                "\n"
+                "jadx target: search DEX string pool for 'ClientCredStorage', 'mmtls',\n"
+                "'key_dir', 'session_ticket'. These survive ProGuard as CONSTANT_Utf8 entries\n"
+                "if referenced via reflection or passed to MMKV encode*/decode* calls.\n"
+                "\n"
+                "DEX string pool oracle: adb shell run-as com.tencent.mm\n"
+                "  then grep -r 'mmtls\\|PSK\\|key_dir' jadx-out/sources/"
+            ),
+            "evidence": {
+                "strings": [
+                    "ClientCredStorage",
+                    "ClientCredentialManager",
+                    "mmtlsregionkey",
+                    "(state_.mode() != HS_MODE_ZERO_RTT_PSK && app_data != NULL)",
+                    "mmtls: MAX_SERIALIZED_PSK_LEN=%d, read read size=%zu",
+                ],
+                "file_path": "/data/data/com.tencent.mm/files/mmtls/%08llx",
+                "mmkv_path": "/data/data/com.tencent.mm/files/mmkv/",
+            },
+        })
+
+        # F13: Alert wire format — XML + dual ECDSA
+        findings.append({
+            "id": "WX-F13",
+            "title": "Alert wire format: XML + dual ECDSA sigs; hardcoded 2020 Tencent alert; BYPASS CLOSED",
+            "severity": "HIGH",
+            "detail": (
+                "ALERT_FALLBACK_NO_MMTLS alert body is XML with dual ECDSA P-256 signatures:\n"
+                "  signature1: covers XML body (legacy)\n"
+                "  signature2 (NODE_SIGN_START='<signature2>'): covers XML body + md5 + timestamp\n"
+                "               + signature_v1; 71B DER P-256 ECDSA\n"
+                "\n"
+                "Hardcoded 2020 Tencent-signed fallback alert at binary offset 0x42d3b:\n"
+                "  timestamp: 1598803200 (2020-08-30)\n"
+                "  This is a VALID, pre-signed, replay-injectable downgrade trigger.\n"
+                "  MITM can inject this 2020 alert directly without forging new ECDSA sigs.\n"
+                "\n"
+                "Timestamp validation at 0x2101f4 (vtable call) logs 'CheckTimestamp Failed'\n"
+                "BUT both paths converge at 0x210268: downgrade proceeds regardless of timestamp.\n"
+                "Verify: check vtable[8] function body for any shared-state mutation that\n"
+                "might indirectly block the alert (only remaining open question).\n"
+                "\n"
+                "US fallback server set (from hardcoded alert body):\n"
+                "  Long: uslong[1,2,3,4,8].wechat.com\n"
+                "  Short: usshort[1,2,3,4,8].wechat.com\n"
+                "\n"
+                "BYPASS STATUS: hardcoded 2020 alert = practical replay injection surface.\n"
+                "Direct ECDSA forge remains closed (Tencent private key required).\n"
+                "cmp w21,1 at 0x210044 = exact check point that must pass."
+            ),
+            "evidence": {
+                "hardcoded_alert_va": "0x42d3b",
+                "hardcoded_timestamp": "1598803200 (2020-08-30)",
+                "sig_node": "NODE_SIGN_START = '<signature2>'",
+                "sig2_len": "71 bytes DER P-256 ECDSA",
+                "sig2_covers": "XML body + md5 + timestamp + signature_v1",
+                "ts_check_va": "0x2101f4 (vtable call, logs 'CheckTimestamp Failed')",
+                "convergence_va": "0x210268 (both TS paths continue)",
+                "cmp_check_va": "0x210044: cmp w21, 1",
+                "us_fallback": ["uslong1.wechat.com", "uslong2.wechat.com", "uslong3.wechat.com",
+                                "uslong4.wechat.com", "uslong8.wechat.com",
+                                "usshort1.wechat.com", "usshort2.wechat.com"],
+            },
+            "attack_path": (
+                "1. MITM WeChat → MMTLS server connection (uslong*.wechat.com:443)\n"
+                "2. Extract hardcoded alert blob from libwechatnetwork.so @ 0x42d3b\n"
+                "3. Inject alert blob as server response\n"
+                "4. Timestamp check fails but both paths → 0x210268 (downgrade proceeds)\n"
+                "5. WeChat falls back to HTTPS for all subsequent CGI requests\n"
+                "6. HTTPS traffic (443) = cleartext after MITM SSL strip or custom CA injection"
+            ),
+        })
+
+        # F14: CGI function code table
+        findings.append({
+            "id": "WX-F14",
+            "title": "CGI function code table — 200+ reqid→name mappings in signed alert body",
+            "severity": "INFO",
+            "detail": (
+                "The hardcoded Tencent-signed alert at 0x42d3b embeds a CGI function code table.\n"
+                "200+ reqid→CGI name mappings covering all major WeChat operations.\n"
+                "\n"
+                "Key reqids for traffic analysis:\n"
+                "  Messaging:  2=sendmsg, 121=newsync, 118=getprofile, 27=newinit\n"
+                "  Auth:       178=newauth, 536=revokemsg\n"
+                "  Mini-prog:  various in 300-500 range\n"
+                "  WeChat Pay: 368=genprepay, 369=payauthapp, 421=apppay, 360=checkpwd\n"
+                "\n"
+                "Use: correlate func field in pack format (WX-F6) to operation type during\n"
+                "post-downgrade HTTP traffic inspection."
+            ),
+            "evidence": {
+                "source": "hardcoded alert body @ libwechatnetwork.so:0x42d3b",
+                "key_reqids": {
+                    2: "sendmsg", 27: "newinit", 118: "getprofile",
+                    121: "newsync", 178: "newauth", 360: "checkpwd",
+                    368: "genprepay", 369: "payauthapp", 421: "apppay",
+                    536: "revokemsg",
+                },
+            },
+        })
+
+        # F10-F14: from SESSION.md (confirmed via binary RE)
+        findings.append({
+            "id": "WX-F10",
+            "title": "Alert wire format: XML body + dual ECDSA sigs; hardcoded 2020 Tencent alert in binary",
+            "severity": "HIGH",
+            "detail": (
+                "ALERT_FALLBACK_NO_MMTLS payload is an XML document, not a bare alert struct.\n"
+                "Contains two ECDSA signatures:\n"
+                "  signature1: signs XML body alone\n"
+                "  signature2: 71B DER P-256, signs body + md5 + timestamp + signature_v1\n"
+                "Marker: NODE_SIGN_START='<signature2>'\n"
+                "ECDSA verification: d2i_EC_PUBKEY → SHA256 of handshake hash → d2i_ECDSA_SIG → ECDSA_do_verify\n"
+                "Verify fn: libwechatnetwork.so:0x3a1470; P-256 pubkey @ 0x8c2e9 (len=335 DER)\n"
+                "Exact check: cmp w21, 1 at 0x210044. DER parse error (-1) → alert rejected.\n"
+                "\n"
+                "HARDCODED TENCENT-SIGNED ALERT at libwechatnetwork.so:0x42d3b:\n"
+                "  timestamp: 1598803200 (2020-08-30 UTC), US-region servers\n"
+                "  US fallback: uslong[1-4,8].wechat.com + usshort[1-4,8].wechat.com\n"
+                "  This is a live replay candidate: inject via MITM with stale timestamp.\n"
+                "\n"
+                "TIMESTAMP BYPASS: vtable[8] at 0x2101f4 logs 'CheckTimestamp Failed' but\n"
+                "both branches converge at 0x210268 — downgrade continues regardless.\n"
+                "Pending: confirm vtable[8] function body doesn't set shared state."
+            ),
+            "evidence": {
+                "ecdsa_pubkey_va":   "libwechatnetwork.so:0x8c2e9 (335B DER P-256)",
+                "verify_fn_va":      "0x3a1470",
+                "exact_check_va":    "0x210044 (cmp w21, 1)",
+                "hardcoded_alert_va": "0x42d3b",
+                "hardcoded_ts":       "1598803200 (2020-08-30)",
+                "timestamp_check_va": "0x2101f4 (vtable[8] call)",
+                "convergence_va":     "0x210268",
+                "us_servers":         ["uslong[1-4,8].wechat.com", "usshort[1-4,8].wechat.com"],
+            },
+        })
+
+        findings.append({
+            "id": "WX-F11",
+            "title": "CGI function code table extracted from alert body (200+ reqid→name)",
+            "severity": "INFO",
+            "detail": (
+                "WeChat CGI function codes (func field in pack format) extracted from\n"
+                "the hardcoded Tencent-signed alert XML body at 0x42d3b.\n"
+                "\n"
+                "Key reqids:\n"
+                "  2   = sendmsg\n"
+                "  27  = newinit\n"
+                "  118 = getprofile\n"
+                "  121 = newsync\n"
+                "  178 = newauth\n"
+                "  536 = revokemsg\n"
+                "\n"
+                "WeChat Pay reqids:\n"
+                "  360 = checkpwd\n"
+                "  368 = genprepay\n"
+                "  369 = payauthapp\n"
+                "  421 = apppay\n"
+            ),
+            "evidence": {
+                "source": "hardcoded alert XML @ libwechatnetwork.so:0x42d3b",
+                "total_mappings": "200+",
+            },
+        })
+
+        # F12-F15: MMTLS crypto confirmed from gommtls source
+        findings.append({
+            "id": "WX-F12",
+            "title": "MMTLS traffic key derivation: HKDF labels confirmed from gommtls source",
+            "severity": "INFO",
+            "detail": (
+                "Full HKDF derivation chain confirmed from gommtls/mmtls/mmtls.go:\n"
+                "\n"
+                "1. ECDH ephemeral secret:\n"
+                "   comKey = SHA256(P256.ScalarMult(serverPub, clientPriv.D))\n"
+                "\n"
+                "2. Handshake traffic keys (56 bytes):\n"
+                "   info = 'handshake key expansion' + sha256_hasher.Sum()\n"
+                "   trafficKey = HKDF_Expand(SHA256, comKey, info, 56)\n"
+                "   Layout: clientKey[0:16] | serverKey[16:32] | clientNonce[32:44] | serverNonce[44:56]\n"
+                "\n"
+                "3. Session keys (PSK, derived from handshake keys before ServerFinished):\n"
+                "   pskAccess  = HKDF_Expand(SHA256, comKey, 'PSK_ACCESS'  + hasherSum, 32)\n"
+                "   pskRefresh = HKDF_Expand(SHA256, comKey, 'PSK_REFRESH' + hasherSum, 32)\n"
+                "\n"
+                "4. Finish MACs (hash=nil → label only, no hasherSum appended):\n"
+                "   sfKey = HKDF_Expand(SHA256, comKey, 'server finished', 32)\n"
+                "   cfKey = HKDF_Expand(SHA256, comKey, 'client finished', 32)\n"
+                "   mac   = HMAC_SHA256(sfKey/cfKey, handshakeHasher.Sum())\n"
+                "\n"
+                "5. Expanded secret + app keys:\n"
+                "   expandedSecret = HKDF_Expand(SHA256, comKey, 'expanded secret' + hasherSum, 32)\n"
+                "   appKey = HKDF_Expand(SHA256, expandedSecret, 'application data key expansion' + hasherSum, 56)\n"
+                "   (same 56B layout as handshake keys)\n"
+                "\n"
+                "Note: gILinkKey BSS struct is 72 bytes; trafficKeyPair is 56 bytes.\n"
+                "Extra 16 bytes are likely: session_id[8] + connection_flags[4] + pad[4]\n"
+                "or may embed PSK material for 0-RTT resumption."
+            ),
+            "evidence": {
+                "source": "gommtls/mmtls/mmtls.go (github.com/duo/gommtls)",
+                "labels": {
+                    "handshake_keys":    "handshake key expansion",
+                    "app_keys":          "application data key expansion",
+                    "expanded_secret":   "expanded secret",
+                    "psk_access":        "PSK_ACCESS",
+                    "psk_refresh":       "PSK_REFRESH",
+                    "server_finished":   "server finished",
+                    "client_finished":   "client finished",
+                },
+                "traffic_key_layout": "clientKey[0:16]|serverKey[16:32]|clientNonce[32:44]|serverNonce[44:56]",
+            },
+        })
+
+        findings.append({
+            "id": "WX-F13",
+            "title": "Deterministic MMTLS nonce: xorNonce(nonce, seqNum) with sequential counter",
+            "severity": "HIGH",
+            "detail": (
+                "MMTLS nonce construction (confirmed from gommtls/mmtls/utility.go):\n"
+                "\n"
+                "  func xorNonce(nonce []byte, seq uint32) {\n"
+                "      seqBytes := LE32(seq)  // little-endian\n"
+                "      for i := 0; i < 4; i++ {\n"
+                "          nonce[len(nonce)-1-i] ^= seqBytes[i]\n"
+                "      }\n"
+                "  }\n"
+                "\n"
+                "Applied as: nonce[8:12] ^= LE32(seqNum) (last 4 bytes of 12-byte nonce)\n"
+                "Sequence counter starts at 0 and increments per-record.\n"
+                "\n"
+                "SECURITY IMPACT:\n"
+                "  The base nonce (clientNonce/serverNonce) is derived from the session key\n"
+                "  via HKDF and is FIXED for the lifetime of the session.\n"
+                "  With a known base nonce + incrementing seq counter, any adversary who\n"
+                "  captures the base nonce can predict ALL future nonces for that session.\n"
+                "  AES-GCM nonce reuse across sessions with the same key allows:\n"
+                "    - Plaintext recovery from 2 ciphertexts (keystream XOR)\n"
+                "    - Authentication tag forgery (GHASH polynomial attack)\n"
+                "\n"
+                "DISTINGUISHING ATTACK:\n"
+                "  seq=0 xorNonce applies nonce[11] ^= 0x00 (no-op), nonce[10] ^= 0x00,\n"
+                "  nonce[9]  ^= 0x00, nonce[8]  ^= 0x00 → first record uses unmodified nonce.\n"
+                "  seq=1: nonce[11] ^= 0x01, rest same.\n"
+                "  Pattern is fully deterministic and observable from ciphertext sequence."
+            ),
+            "evidence": {
+                "source":    "gommtls/mmtls/utility.go: xorNonce()",
+                "mechanism": "nonce[8:12] ^= LE32(seqNum)",
+                "counter":   "starts at 0, increments per-record; client and server track independently",
+                "nonce_len": "12 bytes (AES-GCM standard)",
+                "risk":      "NIST SP 800-38D violation: (key,nonce) reuse across reconnects with same session key",
+            },
+            "frida_hook": (
+                "// Confirm nonce pattern by hooking AES-GCM seal/open calls\n"
+                "// BoringSSL EVP_AEAD_CTX_seal(ctx, out, out_len, max_out_len, nonce, nonce_len, in, in_len, ad, ad_len)\n"
+                "const libssl = Process.getModuleByName('libssl.so');\n"
+                "const seal = libssl.findExportByName('EVP_AEAD_CTX_seal');\n"
+                "if (seal) Interceptor.attach(seal, {\n"
+                "  onEnter(args) {\n"
+                "    const nonce = args[4]; const nlen = args[5].toInt32();\n"
+                "    if (nlen === 12) console.log('[mmtls nonce]', hexdump(nonce, {length:12}));\n"
+                "  }\n"
+                "});"
+            ),
+        })
+
+        findings.append({
+            "id": "WX-F14",
+            "title": "Server P-256 pubkey dual use: ECDH key exchange + ECDSA signature verification",
+            "severity": "INFO",
+            "detail": (
+                "Confirmed from gommtls/mmtls/mmtls.go and const.go:\n"
+                "The hardcoded server P-256 pubkey (ServerEcdh in const.go) serves TWO purposes:\n"
+                "\n"
+                "1. ECDH key exchange:\n"
+                "   comKey = SHA256(P256.ScalarMult(ServerEcdh.X, ServerEcdh.Y, clientPriv.D))\n"
+                "\n"
+                "2. ECDSA signature verification (verifyEcdsa method):\n"
+                "   dataHash = SHA256(handshakeHasher.Sum())\n"
+                "   ECDSA.VerifyASN1(ServerEcdh, dataHash, ecdsaSignatureFromServer)\n"
+                "\n"
+                "The binary at libwechatnetwork.so:0x8c2e9 (335B DER) is the ECDSA verify pubkey.\n"
+                "The ECDH key may be the same pubkey or may differ at runtime.\n"
+                "\n"
+                "Hardcoded P-256 coordinates:\n"
+                f"  X: {SERVER_ECDH_PUBKEY_X}\n"
+                f"  Y: {SERVER_ECDH_PUBKEY_Y}\n"
+                "\n"
+                "Impact: If Tencent's private key is exposed (or if DER parsing is bypassed),\n"
+                "an attacker can forge both key exchange AND session signatures."
+            ),
+            "evidence": {
+                "pubkey_x":  SERVER_ECDH_PUBKEY_X,
+                "pubkey_y":  SERVER_ECDH_PUBKEY_Y,
+                "curve":     "P-256 (secp256r1)",
+                "binary_va": "libwechatnetwork.so:0x8c2e9 (335B DER)",
+                "gommtls":   "mmtls/const.go: var ServerEcdh = &ecdsa.PublicKey{...}",
+                "dual_use":  "computeEphemeralSecret() + verifyEcdsa() both reference ServerEcdh",
+            },
+        })
+
+        findings.append({
+            "id": "WX-F15",
+            "title": "Session Save() wire format: u16-len framing; pskAccess||pskRefresh||tickets",
+            "severity": "INFO",
+            "detail": (
+                "MMTLS session serialization format (from gommtls/mmtls/session.go):\n"
+                "\n"
+                "Session.Save() emits:\n"
+                "  [u16_BE: len(pskAccess)] [pskAccess bytes]\n"
+                "  [u16_BE: len(pskRefresh)] [pskRefresh bytes]\n"
+                "  [serialized newSessionTicket]\n"
+                "\n"
+                "newSessionTicket structure (session_ticket.go):\n"
+                "  ticketType(1B) + ticketLifeTime(u32_BE) + ticketAgeAdd(u16-len) +\n"
+                "  reversed=0x48(u32_BE) + nonce[12](u16-len) + ticket(u16-len)\n"
+                "\n"
+                "ClientFinish message: reversed=0x14; wire = u32_BE(len+3) | 0x14 | u16_BE(len) | data\n"
+                "\n"
+                "On-disk encryption: file /data/data/com.tencent.mm/files/mmtls/%08llx\n"
+                "  format: IV[12] || AES-GCM(pskAccess||pskRefresh||tickets, key=?) || tag[16]\n"
+                "  Key source: hardcoded .rodata blob (most likely) — hook EVP_DecryptInit_ex to confirm."
+            ),
+            "evidence": {
+                "source": "gommtls/mmtls/session.go + session_ticket.go + client_finish.go",
+                "session_format": "u16-len(pskAccess) || u16-len(pskRefresh) || newSessionTicket",
+                "ticket_nonce_field": "12 bytes at fixed offset in sessionTicket struct",
+                "client_finish_reversed": "0x14",
+                "session_ticket_reversed": "0x48",
             },
         })
 
