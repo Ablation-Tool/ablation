@@ -21,6 +21,11 @@ Usage:
     ./ablation --arm64 FILE  - ARM64 Mach-O deep analysis
     ./ablation --java PATH   - Java .class/.jar security audit
     ./ablation --swift PATH  - Swift Mach-O binary RE
+    ./ablation --wechat      - WeChat Android RE: MMTLS + DB key + Frida hooks
+    ./ablation --wechat-apk APK    - Analyze WeChat APK (lib inventory, manifest)
+    ./ablation --wechat-libs DIR   - Enumerate arm64-v8a native lib attack surface
+    ./ablation --wechat-db-key IMEI UIN - Compute EnMicroMsg.db decryption key
+    ./ablation --wechat-frida      - Generate Frida hooks for MMTLS key extraction
 """
 
 import sys
@@ -238,6 +243,13 @@ try:
 except ImportError:
     HAS_LINA_RE = False
     CiscoASALinaRE = None
+
+try:
+    from wechat_re import WeChatREAnalyzer
+    HAS_WECHAT_RE = True
+except ImportError:
+    HAS_WECHAT_RE = False
+    WeChatREAnalyzer = None
 
 
 MACSTADIUM_ASAS = [
@@ -968,6 +980,12 @@ def main():
     parser.add_argument('--lina-binary', metavar='FILE', help='Path to extracted lina ELF for static analysis')
     parser.add_argument('--radius-decrypt', nargs=3, metavar=('CIPHER_HEX','AUTH_HEX','SECRET'), help='Decrypt RADIUS User-Password: cipher_hex auth_hex shared_secret')
 
+    parser.add_argument('--wechat', action='store_true', help='WeChat Android static RE: MMTLS protocol + DB key + Frida hooks')
+    parser.add_argument('--wechat-apk', metavar='FILE', help='Path to WeChat APK for analysis')
+    parser.add_argument('--wechat-libs', metavar='DIR', help='Path to extracted arm64-v8a native libs directory')
+    parser.add_argument('--wechat-db-key', nargs=2, metavar=('IMEI', 'UIN'), help='Compute WeChat DB decryption key from IMEI and UIN')
+    parser.add_argument('--wechat-frida', action='store_true', help='Generate Frida hook script for MMTLS key extraction')
+
     args = parser.parse_args()
     
     ablation = Ablation()
@@ -1567,6 +1585,39 @@ def main():
         orka_enum.enumerate_all()
         print(orka_enum.report())
     
+    elif getattr(args, 'wechat', False) or getattr(args, 'wechat_apk', None) or \
+         getattr(args, 'wechat_libs', None) or getattr(args, 'wechat_db_key', None) or \
+         getattr(args, 'wechat_frida', False):
+        ablation.banner()
+        if not HAS_WECHAT_RE:
+            print("[-] wechat_re module not available")
+        elif getattr(args, 'wechat_db_key', None):
+            imei, uin = args.wechat_db_key
+            analyzer = WeChatREAnalyzer()
+            key = analyzer.compute_db_key(imei, uin)
+            print(f"[+] WeChat DB key (MD5({imei}+{uin})[:7]): {key}")
+            print(f"    Use: sqlite3_activate_see(db, \"{key}\")")
+        elif getattr(args, 'wechat_frida', False):
+            apk = getattr(args, 'wechat_apk', None)
+            libs = getattr(args, 'wechat_libs', None)
+            analyzer = WeChatREAnalyzer(apk_path=apk, libs_dir=libs)
+            script = analyzer.generate_frida_hooks()
+            out_path = "/tmp/wechat_mmtls_hooks.js"
+            with open(out_path, "w") as f:
+                f.write(script)
+            print(f"[+] Frida hook script written to {out_path}")
+            print(f"    Deploy: frida -U -n com.tencent.mm -l {out_path}")
+        else:
+            apk = getattr(args, 'wechat_apk', None)
+            libs = getattr(args, 'wechat_libs', None)
+            analyzer = WeChatREAnalyzer(apk_path=apk, libs_dir=libs)
+            result = analyzer.run()
+            print(analyzer.report())
+            out_path = "/tmp/wechat-re-report.json"
+            with open(out_path, "w") as fh:
+                json.dump(result, fh, indent=2, default=str)
+            print(f"[+] Full report: {out_path}")
+
     else:
         ablation.run_autonomous()
         print("[+] Analysis complete!")
