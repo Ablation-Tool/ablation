@@ -51,11 +51,6 @@ Findings:
   F13 Deterministic nonce: xorNonce(nonce[8:12], LE32(seq)); NIST AES-GCM violation; keystream recovery
   F14 Server P-256 pubkey dual use: ECDH key exchange + ECDSA verify (same hardcoded key)
   F15 Session Save() wire format: u16-len(pskAccess)||u16-len(pskRefresh)||newSessionTicket
-  F10 HKDF connection key derivation — EXPAND_ONLY mode, EVP_PKEY API; label='connection key'
-  F11 ECDSA alert verify — hardcoded P-256 pubkey@0x8c2e9 (65B uncompressed); BYPASS CLOSED
-  F12 PSK storage path confirmed — ClientCredStorage/ClientCredentialManager; mmtlsregionkey
-  F13 Alert wire format — XML + dual ECDSA sig; hardcoded Tencent 2020 alert@0x42d3b; BYPASS CLOSED
-  F14 CGI function code table — 200+ reqid→name mappings extracted from signed alert body
 """
 
 import subprocess
@@ -1001,15 +996,145 @@ class WeChatREAnalyzer:
         return findings
 
     # ------------------------------------------------------------------
+    # DEX analysis (jadx output)
+    # ------------------------------------------------------------------
+
+    def analyze_dex(self, jadx_out_dir=None):
+        """
+        Search jadx-decompiled DEX for MMTLS-relevant symbols.
+
+        DEX string pool is the oracle: file paths, MMKV keys, library names
+        all appear as CONSTANT_Utf8 literals even after ProGuard renaming.
+        Obfuscated class/method names (a.b.c) lose names but descriptor
+        signatures (Ljava/lang/String;I)Ljava/lang/String; survive intact.
+
+        JNI bridge detection:
+          If Java_com_tencent_mm_protocal_MMProtocalJni_computerKeyWithAllStr
+          absent from nm -D output → WeChat uses RegisterNatives().
+          Find JNI_OnLoad in libMMProtocalJni.so and parse JNINativeMethod[]
+          struct: {const char* name, const char* signature, void* fnPtr}.
+          Match fnPtr to function offset; match signature to jadx native decl.
+        """
+        if not jadx_out_dir:
+            jadx_out_dir = "/media/cowboy/research/wechat-re/jadx-out/sources"
+
+        results = {}
+
+        search_terms = [
+            "mmtls", "PSK", "ClientCredStorage", "ClientCredentialManager",
+            "key_dir", "mmtlsregionkey", "saveAuthLongList", "saveAuthShortList",
+            "encodeString", "decodeString", "mmkv",
+            "computerKeyWithAllStr", "loadLibrary",
+        ]
+
+        for term in search_terms:
+            stdout, _, rc = _run(
+                ["grep", "-r", "--include=*.java", "-l", term, jadx_out_dir]
+            )
+            if rc == 0 and stdout.strip():
+                results[term] = stdout.strip().splitlines()
+
+        # Check for native method declarations (ACC_NATIVE in jadx = 'native' keyword)
+        stdout, _, _ = _run(
+            ["grep", "-r", "--include=*.java", "-n", "native.*computerKey", jadx_out_dir]
+        )
+        if stdout.strip():
+            results["computerKeyWithAllStr_native_decl"] = stdout.strip().splitlines()
+
+        # MMKV key names (decode*/encode* call sites with string literal first arg)
+        stdout, _, _ = _run(
+            ["grep", "-r", "--include=*.java", "-n", r'encode\|decode', jadx_out_dir]
+        )
+        if stdout.strip():
+            results["mmkv_codec_sites"] = stdout.strip().splitlines()[:30]
+
+        return results
+
+    def check_register_natives(self, libs_dir=None):
+        """
+        Determine if libMMProtocalJni.so uses RegisterNatives for computerKeyWithAllStr.
+        If so, parse JNINativeMethod[] from JNI_OnLoad to find actual fnPtr.
+
+        JNINativeMethod struct (ARM64):
+          +0x00: const char* name       (8B pointer to method name string)
+          +0x08: const char* signature  (8B pointer to descriptor string)
+          +0x10: void* fnPtr            (8B pointer to native function)
+        Total: 24B per entry.
+        """
+        if not libs_dir:
+            libs_dir = "/media/cowboy/research/wechat-re/native-libs/lib/arm64-v8a"
+
+        lib_path = os.path.join(libs_dir, "libMMProtocalJni.so")
+        if not os.path.exists(lib_path):
+            return {"error": "libMMProtocalJni.so not found"}
+
+        # Check if standard export exists
+        stdout, _, _ = _run(["nm", "-D", lib_path])
+        has_std_export = "computerKeyWithAllStr" in stdout
+
+        result = {
+            "standard_export_present": has_std_export,
+            "jni_onload_present": "JNI_OnLoad" in stdout,
+        }
+
+        if not has_std_export:
+            result["method"] = "RegisterNatives — parse JNINativeMethod[] in JNI_OnLoad"
+            result["struct_layout"] = (
+                "JNINativeMethod[i]: "
+                "+0x00=name_ptr(8B) +0x08=sig_ptr(8B) +0x10=fn_ptr(8B)"
+            )
+            result["target_descriptor"] = "(Ljava/lang/String;I)Ljava/lang/String;"
+            result["frida_hook"] = (
+                "// Parse RegisterNatives call to find computerKeyWithAllStr fn ptr\n"
+                "var libproto = Module.findBaseAddress('libMMProtocalJni.so');\n"
+                "var env = Java.vm.tryGetEnv();\n"
+                "// Hook RegisterNatives (JNIEnv method at fixed vtable offset)\n"
+                "// Alternative: search for descriptor string in .so and walk back\n"
+                "var desc = Memory.scanSync(libproto, Module.findBaseAddress('libMMProtocalJni.so')\n"
+                "  .add(0x100000), '(Ljava/lang/String;I)Ljava/lang/String;');\n"
+                "// desc[0].address points to the signature string\n"
+                "// JNINativeMethod.signature = desc[0].address\n"
+                "// fnPtr is at JNINativeMethod.signature - 8 (sig field is +8 from struct base)\n"
+                "// → struct_base = desc[0].address - 8; fnPtr = struct_base.add(0x10).readPointer()"
+            )
+
+        return result
+
+    # ------------------------------------------------------------------
     # Runtime hooks (Frida script generation)
     # ------------------------------------------------------------------
 
     def generate_frida_hooks(self):
-        """Generate Frida script targeting MMTLS key extraction and pack intercept."""
+        """
+        Generate Frida script targeting MMTLS key extraction and pack intercept.
+
+        EVP API arg order (confirmed from OpenSSL 3.0 book, Ch.2):
+          EVP_EncryptInit_ex(ctx, cipher_type, engine=NULL, key, iv)
+          → args[3]=key ptr, args[4]=iv ptr
+          For AES-256-GCM: key=32B, iv=12B
+          For SM4-GCM: same layout; differentiate by cipher NID (SM4-GCM=888) via
+            EVP_CIPHER_CTX_get0_cipher(ctx) → EVP_CIPHER_get_nid()
+
+        GCM tag extraction:
+          EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG=0x11, tag_len=16, tag_buf)
+          Called AFTER EVP_EncryptFinal_ex; hook ctrl with arg1==0x11.
+
+        ECDSA bypass (WX-F11):
+          ECDSA_do_verify returning 0 puts NOTHING on error queue.
+          Force-return 1 requires NO ERR_clear_error() call.
+          Bypass closed by WX-F13 XML sig check (cmp w21,1 @ 0x210044).
+
+        BoringSSL AEAD (if present alongside EVP):
+          EVP_AEAD_CTX_open(ctx, out, &out_len, max_out, nonce, nonce_len, in, in_len, ad, ad_len)
+          Returns 1 on success, plaintext at `out` for `*out_len` bytes.
+          Hook onLeave to capture decrypted MMTLS frame payload.
+        """
         script = '''\
 "use strict";
 // WeChat MMTLS + Pack interceptor — generated by Ablation wechat_re
 // Target: WeChat {ver} arm64
+// EVP arg order: EVP_EncryptInit_ex(ctx, cipher, engine, key[3], iv[4])
+// GCM tag hook: EVP_CIPHER_CTX_ctrl(ctx, 0x11=GET_TAG, 16, buf)
 
 var libnet = null;
 var libproto = null;
