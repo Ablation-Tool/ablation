@@ -80,65 +80,59 @@ Root is not required for binary analysis. Live-process modes (`net_sniffer`, `sy
 
 ## Module reference
 
+---
+
 ### Apple / macOS
 
-macOS is a first-class platform. The Apple module group covers Swift binary RE, full Mach-O format analysis, macOS-specific malware persistence mechanisms, the sysadmin attack surface (Keychain, FileVault, MDM/DEP, Open Directory, ARD/VNC), and complete Orka cluster enumeration with JWT forgery, VM exec, and API surface reconstruction.
+macOS is a first-class platform. Covers Swift binary RE, Mach-O format analysis, malware persistence, sysadmin attack surface, and full Orka cluster enumeration.
 
-#### `swift_re` — Swift binary reverse engineering
+#### `swift_re` — Swift binary RE
 
-Parses the Swift 5 ABI without requiring `swift-demangle` in PATH: reads `__swift5_types`, `__swift5_proto`, and `__swift5_reflstr` Mach-O sections directly to extract type metadata, protocol conformances, and reflection metadata.
+Reads `__swift5_types`, `__swift5_proto`, `__swift5_reflstr` Mach-O sections directly — no `swift-demangle` in PATH required.
 
-Detects gRPC service descriptors embedded in Swift binaries — common in Orka components. Extracts service names, method names, request/response types, and streaming flags from the protobuf descriptor pool in `__DATA`. Finds SwiftNIO TCP/HTTP server setup call sites and Vapor route registrations (maps the full URL → handler table).
+- **gRPC** — extracts service names, methods, request/response types, streaming flags from the protobuf descriptor pool in `__DATA`
+- **SwiftNIO / Vapor** — finds TCP/HTTP server setup call sites, maps full URL → handler table
+- **async/await** — detects `swift_async_let_start`, `swift_task_create`, actor hops (`_swift_task_switch`), continuation resume points; maps functions that cross trust boundaries
+- **LicenseSpring** — locates license validation call sites in commercial macOS binaries
 
-ARM64 async/await boundary detection: identifies `swift_async_let_start`, `swift_task_create`, actor hops (`_swift_task_switch`), and continuation resume points. Maps async functions that cross trust domains. Also detects LicenseSpring SDK license validation call sites for commercial macOS software RE.
+#### `macos_malware_re` — macOS malware and persistence
 
-#### `macos_malware_re` — macOS malware and persistence analysis
-
-Maps all macOS persistence mechanisms: LaunchAgents (`~/Library/LaunchAgents/`), LaunchDaemons (`/Library/LaunchDaemons/`), Login Items, cron, periodic scripts, shell profile injection (`~/.zshrc`/`~/.bash_profile`), DYLD_INSERT_LIBRARIES hijacking, and kernel extension / System Extension loading.
-
-TCC (Transparency Consent Control) database analysis: reads `~/Library/Application Support/com.apple.TCC/TCC.db` directly, maps which apps hold Full Disk Access, camera, microphone, and screen-recording grants. Detects TCC bypass indicators — UTType handler registrations, AppleScript grants, Accessibility permission abuse.
-
-EvilQuest / ThiefQuest IOC detection: known LaunchAgent PList names, ransomware file extension list, C2 beacon patterns, and the characteristic `sysctl hw.model` VM-detection bypass.
-
-dyld hijack surface: finds `@rpath`, `@loader_path`, `@executable_path` entries in Mach-O LC_RPATH load commands. Checks whether rpath directories are writable — a writable rpath allows dylib injection without a SIP bypass.
-
-Keychain analysis: enumerates stored items by service/account label using `security` CLI, identifies items with `kSecAttrAccessibleAlways` (readable without user authentication). Orka-specific paths (`/Users/admin/orka/`, `/opt/orka/`, `/etc/orka/`) scanned for credential files and cluster tokens.
+- **Persistence** — LaunchAgents, LaunchDaemons, Login Items, cron, periodic scripts, shell profile injection, DYLD_INSERT_LIBRARIES, kernel extensions / System Extensions
+- **TCC** — reads `TCC.db` directly; maps FDA, camera, mic, screen-recording grants; flags UTType handler / AppleScript / Accessibility bypass indicators
+- **EvilQuest / ThiefQuest** — known PList names, ransomware extension list, C2 beacon patterns, `sysctl hw.model` VM-detection bypass
+- **dyld hijack** — finds writable `@rpath` entries in LC_RPATH load commands (writable rpath = dylib injection without SIP bypass)
+- **Keychain** — enumerates items by service/account label, flags `kSecAttrAccessibleAlways`; scans `/Users/admin/orka/`, `/opt/orka/`, `/etc/orka/` for credential files
 
 #### `macos_sysadmin` — macOS administrative attack surface
 
-Keychain: full item enumeration — generic passwords, internet passwords, certificates, keys. Maps weak ACLs (any-application access) vs. per-application access controls.
-
-FileVault: FDE status, recovery key exposure check, Institutional Recovery Key presence.
-
-Open Directory: local user enumeration via LDAP to `127.0.0.1`, group membership, admin group members, shadow hash presence in `/var/db/dslocal/`.
-
-MDM / DEP: enrollment status (`profiles status`), enrolled MDM server URL, DEP enrollment indicator. An enrolled device can receive arbitrary MDM commands from the enrolled server — MDM infrastructure compromise = silent OS-level control of the fleet.
-
-ARD / VNC: Apple Remote Desktop service status, VNC password location in `/Library/Preferences/com.apple.RemoteManagement.plist`, screen-sharing enabled users.
-
-Sudoers and PAM: `/etc/sudoers` NOPASSWD rules, PAM module stack, authentication bypass indicators.
-
-Orka-specific service names: maps Orka-related launchd services, agent socket paths, and control plane tokens stored in macOS Keychain by Orka client tooling.
+- **Keychain** — generic passwords, internet passwords, certificates, keys; maps any-app ACLs vs per-app ACLs
+- **FileVault** — FDE status, recovery key exposure, Institutional Recovery Key presence
+- **Open Directory** — local user enumeration via LDAP to `127.0.0.1`, admin group members, shadow hash presence in `/var/db/dslocal/`
+- **MDM / DEP** — enrolled MDM server URL, DEP indicator; enrolled devices accept arbitrary MDM commands from the enrolled server
+- **ARD / VNC** — service status, VNC password plist location, screen-sharing enabled users
+- **Sudoers / PAM** — NOPASSWD rules, PAM module stack, auth bypass indicators
+- **Orka** — launchd services, agent socket paths, control plane tokens stored in macOS Keychain by Orka client tooling
 
 #### `orka_enum` — Orka live cluster enumeration
 
-Live enumeration of an Orka API endpoint: validates tokens, lists VMs, extracts VM configuration (CPU, RAM, image, Orka node), maps image registry contents, and tests default credentials. Feeds `orka_oidc_re` and `orka_jwt_dynamic_re` with token material for forgery.
+Validates tokens, lists VMs, extracts VM configuration (CPU, RAM, image, node), maps image registry contents, tests default credentials. Feeds `orka_oidc_re` and `orka_jwt_dynamic_re` with token material.
 
-#### `orka_oidc_re` — Orka3 OIDC / PKCE flow RE + CVE-2020-26160
+#### `orka_oidc_re` — Orka OIDC / PKCE flow RE + CVE-2020-26160
 
-Reconstructs the Orka3 OIDC authorization flow from Go binary symbols: `fetchClusterInfo`, PKCE code challenge generation, authorization endpoint URL, token exchange, and JWT extraction. Maps internal host range (`10.221.188.x`) from cluster-info response.
+Reconstructs the OIDC auth flow from Go binary symbols: `fetchClusterInfo`, PKCE code challenge, token exchange, JWT extraction. Maps internal host range (`10.221.188.x`) from cluster-info.
 
-CVE-2020-26160: `dgrijalva/jwt-go` v3.2.0 accepted an empty HMAC key — Orka's HS256 token validation was affected. Also implements the `aud` (audience) claim bypass path: tokens without a required `aud` claim were accepted when the parser's expected audience list was empty.
+- **CVE-2020-26160** — `dgrijalva/jwt-go` v3.2.0 accepted an empty HMAC key; Orka's HS256 validation was affected
+- **`aud` bypass** — tokens without a required audience claim accepted when the parser's expected audience list was empty
 
 ```python
 from modules.orka_oidc_re import OrkaOIDCAnalyzer
-a = OrkaOIDCAnalyzer('https://orka-api:443')
-flow = a.extract_auth_flow()  # client_id, redirect_uri, PKCE method, token endpoint
+flow = OrkaOIDCAnalyzer('https://orka-api:443').extract_auth_flow()
+# -> {client_id, redirect_uri, pkce_method, token_endpoint}
 ```
 
 #### `orka_jwt_dynamic_re` — Orka HS256 empty-key forge
 
-In-vitro harness that replicates Go's `SigningMethodHMAC.Verify` with `b''` as the key. Takes a captured Orka JWT, extracts the header and claims, and produces a forged token signed with an empty HMAC-SHA256 key — gives any `sub` and `role` claim, including `orka-admin`.
+Replicates Go's `SigningMethodHMAC.Verify` with `b''` as the key. Forges a token with any `sub` and `role` claim.
 
 ```python
 from modules.orka_jwt_dynamic_re import OrkaJWTForger
@@ -151,71 +145,67 @@ forged = OrkaJWTForger().forge(
 
 #### `orka_api_surface_re` — Orka REST API reconstruction from binary
 
-Extracts the complete Orka REST API surface by scanning Go binary components for URL path strings and HTTP method references: 60+ routes across VM management, image management, ISO operations, service account operations, registry credential management, node management, and image cache. Cross-references with the Kubernetes API server to distinguish Orka-layer endpoints from K8s-native endpoints. Outputs a sorted endpoint table with observed authentication requirements.
+Scans Go binary components for URL path strings and HTTP method references. Outputs 60+ sorted routes across VM, image, ISO, service account, registry credential, node, and image cache operations — with observed authentication requirements per endpoint.
 
 #### `orka_vm_exec_re` — Orka VM exec path
 
-Orka VMs are K8s pods. VM name == pod name with no transformation (confirmed from `getExecRequestURL` call chain in disassembly). This module traces the exec path: K8s pod exec API (`/api/v1/namespaces/orka-default/pods/<vm>/exec?container=orka-vm`), SPDY executor transport, SA token creation, and the resulting virsh command execution capability on the hypervisor node.
-
-With `pods/exec` permission on `orka-default` namespace and a forged or stolen SA token: arbitrary command execution in any running Orka VM.
+VM name == pod name (confirmed from `getExecRequestURL` disassembly — no transformation). Traces the exec path to `/api/v1/namespaces/orka-default/pods/<vm>/exec?container=orka-vm` via SPDY executor. With `pods/exec` permission and a forged SA token: arbitrary command execution in any running Orka VM, virsh access on the hypervisor node.
 
 #### `core/macho_analyzer` — Mach-O binary parser
 
-Universal binaries (fat), single-arch Mach-O 32/64. Extracts: all load commands (LC_ types), section/segment layout, import table (dylib deps + symbols), export trie, code signature (entitlements, team ID, signing identity), and Objective-C runtime metadata (class list, method list, ivar list, protocol list, category list). Entitlement extraction identifies hardened-runtime bypass entitlements: `com.apple.security.cs.allow-unsigned-executable-memory`, `com.apple.private.security.clear-library-validation`.
+Universal fat binaries, single-arch 32/64. Extracts: all LC_ load commands, section/segment layout, import table, export trie, code signature (entitlements, team ID), ObjC runtime metadata (class/method/ivar/protocol lists). Flags hardened-runtime bypass entitlements: `com.apple.security.cs.allow-unsigned-executable-memory`, `com.apple.private.security.clear-library-validation`.
 
 #### `core/bv41_decoder` — Apple BV41 / Compression.framework LZ4 decoder
 
-Pure Python. Decodes Apple's BV41 chunked LZ4 format used in `dyld_shared_cache` slices, APFS snapshots, and Orka VM image layers stored in Harbor. Finds `bv41` magic, decodes the block header, decompresses the payload. No native dependencies.
+Pure Python, no native dependencies. Decodes Apple's BV41 chunked LZ4 format from `dyld_shared_cache` slices, APFS snapshots, and Orka VM image layers in Harbor.
 
 #### `core/swift_demangle` — Swift ABI name demangler
 
-Handles `$s` prefix (Swift 5+ mangling): module qualifiers, generic specializations, protocol conformances, operator names, property accessors. Falls back to the `swift-demangle` binary if present in PATH.
+Handles `$s` prefix (Swift 5+ mangling): module qualifiers, generic specializations, protocol conformances, operator names, property accessors. Falls back to the `swift-demangle` binary if present.
 
 ---
 
 ### Cisco ASA / Firepower
 
-#### `cisco_asa_lina_re` — LINA binary RE and RADIUS overflow
+#### `cisco_asa_lina_re` — LINA binary RE + RADIUS overflow
 
-LINA is the monolithic x86-64 ELF process that implements Cisco ASA. This module recovers struct field layouts from stripped binaries and provides a live RADIUS overflow probe.
+LINA is the monolithic x86-64 ELF that implements Cisco ASA. Recovers struct field layouts from stripped binaries via LEA frequency analysis and provides a live RADIUS overflow probe.
 
-**Struct recovery methodology:** scans all `REX 8D /r disp32` (LEA with 32-bit displacement) instructions in the 0x200–0x500 displacement range. Classifies each site by follow-up instruction type: CALL sites (string/copy operations), CMP sites (enum comparators), TEST/AND sites (bitmask fields), and MOV-write sites (direct field writes). Frequency and instruction-class distributions identify field purpose without source code.
+**Struct recovery:** scans all `REX 8D /r disp32` LEA instructions in the 0x200–0x500 displacement range. Follow-up instruction type (CALL / CMP / TEST / MOV-write) reveals field purpose: CALL = string/copy target, CMP = enum comparator, TEST = bitmask, MOV = direct write.
 
-**Confirmed `gp_obj` layout — 9.22.2.32 (5633 LEA sites, 367 distinct offsets):**
+**Confirmed `gp_obj` layout — 9.22.2.32 (5633 LEA sites, 367 offsets):**
 
 | Offset | Type | Hits | Field | Notes |
 |--------|------|------|-------|-------|
-| `0x2b0/0x2b1` | `char*` | — | `gp_name` | Version-dependent offset |
-| `0x2f0` | `ptr` | — | `dns_ptr` | DNS server string pointer |
+| `0x2b0/0x2b1` | `char*` | — | `gp_name` | Version-dependent |
+| `0x2f0` | `ptr` | — | `dns_ptr` | |
 | `0x308` | `ptr` | — | `wins_ptr` | **PRIMARY OVERFLOW TARGET** |
 | `0x310` | `int32` | 59 | `auth_state` | |
 | `0x318` | `int32` | 63 | `primary_status` | |
 | `0x328` | `char*` | 112 | `secondary_string` | **HOTTEST post-overflow field** |
-| `0x367` | `uint8` | 31 | `state_enum` | Only compared to `0x83` — single auth gate |
+| `0x367` | `uint8` | 31 | `state_enum` | Only compared to `0x83` |
 | `0x368` | `uint32` | 50 | `auth_flags` | 37 TEST ops — auth bypass candidate |
-| `0x36c` | `uint16` | — | `port_proto` | Port/protocol field |
+| `0x36c` | `uint16` | — | `port_proto` | |
 
-**`RadiusOverflowProbe`:** RFC 2865 RADIUS server that sends Class attribute (type 25) payloads of controlled length against the `wins_ptr` write path. Version dispatch is automatic at construction time:
+**`RadiusOverflowProbe`** — RFC 2865 RADIUS server, sends Class attribute (type 25) payloads of controlled length against `wins_ptr`. Version dispatch is automatic:
 
 ```python
 from modules.cisco_asa_lina_re import RadiusOverflowProbe
 
-# 9.22.2+ layout: gp_name=0x2b1, OVERFLOW_DELTA=0x57
 p = RadiusOverflowProbe(version=(9, 22, 2, 32), secret=b'cisco')
 print(hex(p.GP_NAME_OFFSET))   # 0x2b1
-print(hex(p.OVERFLOW_DELTA))   # 0x57 (wins_ptr - gp_name)
+print(hex(p.OVERFLOW_DELTA))   # 0x57
 
-# Pre-9.22.2 layout: gp_name=0x2b0, OVERFLOW_DELTA=0x58
 p2 = RadiusOverflowProbe(version=(9, 20, 3, 0))
 print(hex(p2.OVERFLOW_DELTA))  # 0x58
 
-p.run()  # listen on :1812, send overflow payload on each Access-Request
+p.run()   # listens :1812, fires overflow payload on each Access-Request
 ```
 
-**Version-confirmed offset table** (`modules/regression.py`):
+**Version-confirmed offsets** (`regression.py`):
 
-| ASA Version | `gp_name` offset | `OVERFLOW_DELTA` | Source |
-|-------------|-----------------|------------------|--------|
+| ASA Version | `gp_name` | `OVERFLOW_DELTA` | Source |
+|-------------|-----------|------------------|--------|
 | 9.13.1 | 0x2b0 | 0x58 | ASAv virtioa.qcow2 |
 | 9.14.1.1 | 0x2b0 | 0x58 | FTD 6.6.0 qcow2 |
 | 9.15.1 | 0x2b0 | 0x58 | FTD 6.7.0-65 qcow2 |
@@ -223,121 +213,134 @@ p.run()  # listen on :1812, send overflow payload on each Access-Request
 | 9.22.1.1 | 0x2b0 | 0x58 | ASAv PLR qcow2 |
 | 9.22.2.32 | **0x2b1** | **0x57** | inline-strcpy discriminator |
 
-9.21.x: presumed 0x2b0 (continuity from 9.20.3 + 9.22.1.1), not yet confirmed from firmware.
+9.21.x: presumed 0x2b0 — not yet confirmed from firmware.
 
-#### `cisco_radius_ise_re` — RADIUS Class attribute injection (ISE)
+#### `cisco_radius_ise_re` — RADIUS Class attribute injection
 
-ISE-specific RADIUS analysis. Confirmed write site in 9.22.2.32: `LEA rdi,[obj+0x308]; MOV rsi,rbx; CALL 0x3cf0ee0` (bounded copy entry at `0x3cefb70`). Builds RFC 2865 Access-Accept packets with arbitrary Class attribute 25 content (OU= injection). Also covers ISE CoA (Change of Authorization, RFC 5176), posture bypass analysis, and ISE Vendor-Specific Attribute parser surface.
+Confirmed write site in 9.22.2.32: `LEA rdi,[obj+0x308]; MOV rsi,rbx; CALL 0x3cf0ee0` (copy body at `0x3cefb70`). Builds RFC 2865 Access-Accept packets with arbitrary Class attribute 25 / OU= content. Covers ISE CoA (RFC 5176), posture bypass, and VSA parser surface.
 
-#### `cisco_cstp_attack` — AnyConnect / CSTP attack surface
+#### `cisco_cstp_attack` — AnyConnect / CSTP
 
-CSTP (Cisco Secure Tunneling Protocol) is the AnyConnect VPN transport. Module covers: DAP (Dynamic Access Policy) bypass chains — maps the posture evaluation sequence and conditions where DAP rules are satisfied without meeting stated requirements. `sdesktop` cookie injection path. SAML SP injection (ACS URL manipulation). Username timing oracle (response-time delta distinguishes valid vs invalid usernames). Tunnel group enumeration from the WebVPN login page. RADIUS CoA mid-session injection (force re-auth or disconnect). CRL/OCSP bypass (certificate validation path). Certificate-map tunnel-group bypass. ASA version fingerprinting from HTTP response headers.
+- DAP (Dynamic Access Policy) bypass — posture evaluation sequence, conditions where rules pass without meeting requirements
+- `sdesktop` cookie injection, SAML SP ACS URL manipulation
+- Username timing oracle — response-time delta distinguishes valid vs invalid usernames
+- Tunnel group enumeration from the WebVPN login page
+- RADIUS CoA mid-session injection (force re-auth / disconnect)
+- CRL/OCSP bypass, certificate-map tunnel-group bypass
+- ASA version fingerprinting from HTTP response headers
 
 #### `cisco_webvpn_js_re` — WebVPN JavaScript RE
 
-Downloads unauthenticated JS bundles from `/+CSCOU+/` and `/+CSCOE+/`. Extracts: tunnel group names, hidden API endpoints not visible in the UI, OS detection logic that changes portal behavior by client user-agent, CSRF token generation pattern, SAML SP metadata and ACS URL. Maps session state machine transitions — identifies states where re-authentication can be skipped.
+Downloads unauthenticated JS bundles from `/+CSCOU+/` and `/+CSCOE+/`. Extracts: tunnel group names, hidden API endpoints, OS detection logic, CSRF token generation pattern, SAML SP metadata and ACS URL. Maps session state machine — identifies states where re-auth can be skipped.
 
 #### `cisco_asdm_download_re` — ASDM JAR download
 
-Handles the full ASDM JAR retrieval chain: `GET /admin/launch` → `302` → logon page → `POST /+webvpn+/index.html` → session cookie → JNLP XML parse → JAR URL resolution → JAR stream to disk. Supports both the standard path (`/+CSCOU+/asa/asdm.jar`) and version-specific paths.
+Full retrieval chain: `GET /admin/launch` → `302` → logon → `POST /+webvpn+/index.html` → session cookie → JNLP XML parse → JAR URL resolution → stream to disk.
 
 #### `cisco_asdm_jar_re` — ASDM JAR / JVM constant pool RE
 
-Parses CAFEBABE class files per the JVM specification: constant pool (all tag types — Utf8, Class, Methodref, Fieldref, InterfaceMethodref, String, Integer, Float, Long, Double, NameAndType, MethodHandle, MethodType, Dynamic, InvokeDynamic), field and method descriptors, attribute table. Stdlib only (`struct`, `zipfile`).
+Parses CAFEBABE class files per JVM spec (all constant pool tag types). Stdlib only (`struct`, `zipfile`).
 
-Extracts: the custom `X509TrustManager` that accepts any certificate (ASDM skips TLS validation against ASA — confirmed), REST API endpoint URLs from string constants, hardcoded credential candidates, and `ObjectInputStream.readObject()` call sites (deserialization surface).
-
-#### `cisco_asdm_re` — ASDM class file structure
-
-JVM class file structure parsing and constant pool analysis as a standalone module. Used upstream by `cisco_asdm_jar_re`.
+- Custom `X509TrustManager` that accepts any certificate — ASDM skips TLS validation against ASA (confirmed)
+- REST API endpoint URLs from string constants
+- Hardcoded credential candidates
+- `ObjectInputStream.readObject()` call sites (deserialization surface)
 
 #### `cisco_rommon_re` — ROMMON bypass
 
-Maps the ROMMON boot environment: password recovery procedure (config-register `0x2142` modification to skip startup-config load), image authentication bypass paths in older IOS versions (load unsigned image from ROMMON), and ROMMON environment variable injection.
+Config-register `0x2142` modification to skip startup-config load, image authentication bypass paths (load unsigned image from ROMMON in older IOS), ROMMON environment variable injection.
 
 #### `cisco_config_re` — Configuration analysis
 
-Parses IOS / ASA running and startup configs. Type 7 decode (Vigenere with known key — reversible). Extracts: enable secret hashes, local user password hashes, SNMP community strings, TACACS+/RADIUS shared secrets, BGP neighbor passwords, NTP authentication keys, crypto key material (certificate subject, key size), and AAA chain structure.
+Type 7 decode (Vigenere, reversible). Extracts: enable secret / local user hashes, SNMP community strings, TACACS+/RADIUS shared secrets, BGP neighbor passwords, NTP auth keys, crypto key material, AAA chain structure.
 
 #### `cisco_ios_re` — IOS firmware RE
 
-IOS firmware image analysis: image format identification (ELF, compressed ELF, monolithic), IFS (IOS File System) extraction, text/data segment map, IOSd process entry point. Crash dump analysis with ADRP-based image-base recovery for ARM64. MIPS/ARM64/x86 gadget extraction. Hardcoded credential scan.
+Image format identification (ELF / compressed ELF / monolithic), IFS extraction, IOSd entry point. Crash dump analysis with ADRP-based image-base recovery (ARM64). MIPS/ARM64/x86 gadget extraction. Hardcoded credential scan.
 
 #### `cisco_api_enum` — ASA REST API enumeration
 
-ASA REST API (`/api/...`, available since ASA 9.3) endpoint enumeration. Unauthenticated surface mapping. Session cookie reuse from ASDM auth flow.
+ASA REST API (`/api/...`, 9.3+) endpoint enumeration. Unauthenticated surface mapping. Session cookie reuse from ASDM auth flow.
 
 #### `cisco_asa_cred_audit` — ASA credential audit
 
-Credential testing across all ASA management interfaces: web management, ASDM, REST API. Measures lockout behavior (threshold, window, applies uniformly across interfaces?). Maps the authentication stack — local vs RADIUS vs TACACS+ — so the right target for credential testing is clear.
+Credential testing across web management, ASDM, and REST API. Measures lockout behavior per-interface. Maps auth stack (local vs RADIUS vs TACACS+).
 
 ---
 
 ### Cisco NX-OS / ACI / Data Center
 
-#### `nxos_enum` — NX-OS / ACI / APIC enumeration
+#### `nxos_enum` — NX-OS / ACI / APIC
 
-Full ACI fabric enumeration via APIC REST API. Unauthenticated endpoint: `GET /api/aaaListDomains.json` returns all AAA domain names without credentials. Full MIT (Management Information Tree) class queries (auth required for the rest): fabric nodes, tenants, EPGs, bridge domains, VRFs, L4 contracts, L3Outs, BGP peers. VMM integration objects expose vCenter controller IP (`vmmCtrlrP`) and vCenter username (`vmmUsrAccP`) — lateral movement path from ACI to vSphere. Default credential list: `admin/admin`, `admin/C1sco12345`, `admin/Cisco123`, and variants.
+- Unauthenticated: `GET /api/aaaListDomains.json` returns all AAA domain names
+- Full MIT queries: fabric nodes, tenants, EPGs, bridge domains, VRFs, L4 contracts, L3Outs, BGP peers
+- VMM objects expose vCenter controller IP (`vmmCtrlrP`) and username (`vmmUsrAccP`) — lateral movement to vSphere
+- Default creds: `admin/admin`, `admin/C1sco12345`, `admin/Cisco123`, variants
 
 #### `nexus_dashboard_enum` — Nexus Dashboard / NDI / NDFC / NDO
 
-Nexus Dashboard is the SSO convergence platform for NDI (Insights), NDFC (Fabric Controller), and NDO (Orchestrator). One credential set unlocks all three. Kafka anomaly export configuration (`/api/v1/event-services/exporters`) is often world-readable without authentication — exposes Kafka broker addresses, topics, and TLS certificates. Hashicorp Terraform and ServiceNow integration endpoints can expose cloud provider credentials and ITSM tokens.
+SSO platform — one credential set unlocks NDI, NDFC, and NDO. Kafka export config (`/api/v1/event-services/exporters`) is often world-readable without auth: broker addresses, topics, TLS certs. Terraform and ServiceNow integration endpoints can expose cloud provider credentials and ITSM tokens.
 
 #### `cisco_nxos_guestshell_re` — NX-OS guestshell rootfs analysis
 
-NX-OS ships with a Guest Shell LXC container (CentOS). Analyzes extracted or mounted rootfs images: credential pattern scan (passwords, API tokens, shadow hashes, JDBC URLs, private keys, SNMP community strings), unexpected SUID binaries vs the known-safe set, world-writable cron directories, Python security packages that shouldn't be in production. Validates EXT4 magic (`0xEF53` at offset `0x438`) before analysis.
+Analyzes extracted/mounted CentOS LXC rootfs. Validates EXT4 magic (`0xEF53` at `0x438`).
+
+- Credential scan: passwords, API tokens, shadow hashes, JDBC URLs, private keys, SNMP community strings
+- SUID binaries vs known-safe set
+- World-writable cron directories
+- Python security packages that shouldn't be in production
 
 #### `hyperflex_enum` — Cisco HyperFlex
 
-HyperFlex REST API (`/coreapi/v1/`) enumeration. SCVM (Storage Controller VM) SSH surface. Default credential testing. Cluster health data read, VM inventory extraction, Intersight claim-code extraction.
+HyperFlex REST API (`/coreapi/v1/`), SCVM SSH surface, default credential testing, VM inventory, Intersight claim-code extraction.
 
 #### `ios_enum` — IOS / IOS-XE live enumeration
 
-SSH and NETCONF-based enumeration of live Cisco IOS and IOS-XE devices: interface inventory, routing table, BGP neighbors, ACLs, user accounts, Syslog/SNMP configuration, CDP neighbor table, AAA server list. NETCONF/YANG support for IOS-XE 16.3+. Type 7/5/8/9 password decode.
+SSH + NETCONF enumeration: interface inventory, routing table, BGP neighbors, ACLs, user accounts, Syslog/SNMP config, CDP neighbors, AAA server list. NETCONF/YANG for IOS-XE 16.3+. Type 7/5/8/9 password decode.
 
 ---
 
 ### Binary Analysis Core
 
-#### `core/binary_parser` — Universal format detection
+#### `core/binary_parser` — Format detection
 
-ELF32/64, Mach-O 32/64, Mach-O fat (universal binary), PE32/PE32+, and raw firmware blob detection from magic bytes. Dispatches to the appropriate format-specific analyzer.
+ELF32/64, Mach-O 32/64 / fat, PE32/PE32+, and raw firmware blobs from magic bytes. Dispatches to the appropriate analyzer.
 
 #### `core/elf_parser` — ELF analysis
 
-Full ELF parsing: header, program headers, section headers, symbol tables (`.symtab` and `.dynsym`), dynamic section (needed libraries, RPATH, RUNPATH), relocation tables (REL/RELA), and GNU notes. Stripped binary symbol recovery: identifies function prologues (ENDBR64, PUSH RBP + MOV RBP RSP), estimates function boundaries, builds an approximate symbol map from cross-references.
+Header, program headers, section headers, `.symtab` / `.dynsym`, dynamic section (RPATH, RUNPATH, needed libs), REL/RELA relocations, GNU notes. Stripped binary recovery: prologue detection (ENDBR64, PUSH RBP + MOV RBP RSP) → approximate symbol map from cross-references.
 
 #### `core/pe_parser` / `core/pe_analyzer` — PE analysis
 
-PE32/PE32+ parsing: DOS header, NT headers, section table, import directory (all DLL + function names), export directory, TLS callbacks, load config (CFG, ASLR, DEP flags), debug directory (PDB path). Security feature detection: ASLR, DEP/NX, SafeSEH, CFG, Authenticode signature presence. Section entropy analysis for packed/encrypted sections.
+NT headers, section table, import/export directories, TLS callbacks, load config (CFG, ASLR, DEP flags), PDB path. Security feature flags: ASLR, DEP/NX, SafeSEH, CFG, Authenticode. Section entropy for packed/encrypted regions.
 
 #### `core/firmware_analyzer` — Firmware image analysis
 
-Embedded filesystem magic detection: SquashFS, CramFS, ext2/3/4, JFFS2, YAFFS, UBI. Per-block entropy analysis to distinguish compressed regions, encrypted regions, and plaintext config areas. Extracts root filesystem to a temp directory for further analysis — credential scan, SUID binary check, web app RE.
+Magic detection: SquashFS, CramFS, ext2/3/4, JFFS2, YAFFS, UBI. Per-block entropy to distinguish compressed vs encrypted vs plaintext regions. Extracts root filesystem to temp directory for downstream analysis.
 
 #### `core/disasm_engine` — Multi-architecture disassembler
 
-Capstone wrapper with gp_obj field annotation support. Architectures: x86 (16/32/64), ARM (ARM/Thumb/ARM64), MIPS (32/64), PowerPC. Provides: function boundary detection, call graph extraction, basic block decomposition, and cross-reference building. The annotation layer maps known Cisco ASA struct offsets to human-readable field names inline.
+Capstone wrapper. Architectures: x86 (16/32/64), ARM/Thumb/ARM64, MIPS 32/64, PowerPC. Function boundary detection, call graph, basic block decomposition, cross-reference building. Annotation layer maps Cisco ASA struct offsets to field names inline.
 
 #### `core/yara_generator` — YARA rule generation
 
-Generates YARA rules from binary analysis results: string constants, byte sequences around function prologues, import table combinations, and section layout signatures. Output rules are ready for hunting across firmware collections or malware corpora.
+String constants, byte sequences around prologues, import combinations, section layout signatures → ready-to-use YARA rules for firmware or malware hunting.
 
 #### `core/attck_tagger` — MITRE ATT&CK tagging
 
-Maps all ablation findings to ATT&CK technique IDs. Input: structured findings from any module. Output: ATT&CK technique list with tactic, technique ID, name, and the specific finding that triggered the tag.
+Structured findings → ATT&CK technique list with tactic, technique ID, name, and triggering finding.
 
-#### `core/shellcode_utils` — Shellcode analysis and generation
+#### `core/shellcode_utils` — Shellcode analysis and templates
 
-x86-64 and ARM64 shellcode templates. Entropy calculation, null-byte density analysis, common shellcode sequence detection (GetProcAddress patterns, syscall stubs, XOR decode loops), NOP sled identification. XOR/ADD encoders for bad-byte avoidance.
+x86-64 / ARM64 shellcode templates. Entropy, null-byte density, common sequence detection (GetProcAddress, syscall stubs, XOR decode loops), NOP sled identification. XOR/ADD encoders for bad-byte avoidance.
 
-#### `core/tls_analyzer` — TLS certificate and configuration analysis
+#### `core/tls_analyzer` — TLS analysis
 
-Certificate chain parsing, CT log anomaly detection (I/N ≥ 0.30 = honeypot signal, per confirmed discriminator), cipher suite enumeration, protocol version detection. Flags: self-signed certificates, expired certificates, weak key sizes (RSA < 2048), deprecated ciphers (RC4, DES, 3DES, export-grade, null), TLS 1.0/1.1. Quantum-vulnerability inventory: RSA/ECDSA → vulnerable to Shor's algorithm; ML-KEM/ML-DSA → post-quantum safe.
+Certificate chain parsing, CT anomaly detection (I/N ≥ 0.30 = honeypot signal), cipher enumeration, protocol version detection. Flags: self-signed, expired, RSA < 2048, RC4/DES/3DES/export-grade/null ciphers, TLS 1.0/1.1. Quantum inventory: RSA/ECDSA → Shor-vulnerable; ML-KEM/ML-DSA → post-quantum safe.
 
 #### `core/platform_detect` — Platform fingerprinting
 
-OS, architecture, kernel version, container runtime detection. Identifies: bare metal vs VM vs Docker vs K8s Pod vs Orka VM. Used at startup to determine which module set applies.
+OS, architecture, kernel version, container runtime. Bare metal vs VM vs Docker vs K8s Pod vs Orka VM. Used at startup to select the applicable module set.
 
 ---
 
@@ -345,29 +348,32 @@ OS, architecture, kernel version, container runtime detection. Identifies: bare 
 
 #### `java_re` — Java class file RE
 
-Parses CAFEBABE class files: complete constant pool (all tag types per JVM spec), method access flags, field descriptors, attribute table. Security extraction: `ObjectInputStream.readObject()` call sites (deserialization), `Runtime.exec()` / `ProcessBuilder` (command injection), reflection call sites (`Class.forName`, `Method.invoke`), JDBC URLs and connection strings in string constants. Framework fingerprinting: Spring, Jackson, Gson, Hibernate detection from import patterns.
+Full constant pool parse (all JVM tag types). Security extraction:
 
-#### `java_decompiler` — Java decompilation wrapper
+- `ObjectInputStream.readObject()` call sites — deserialization surface
+- `Runtime.exec()` / `ProcessBuilder` — command injection chains
+- `Class.forName` / `Method.invoke` — reflection abuse
+- JDBC URLs and connection strings from string constants
+- Framework fingerprinting: Spring, Jackson, Gson, Hibernate
 
-Wraps Procyon, CFR, or Fernflower (whichever is in PATH) to produce readable source from class files. Falls back to `javap -c` bytecode output. Identifies the best available decompiler and uses it.
+#### `java_decompiler` — Decompilation wrapper
+
+Uses Procyon, CFR, or Fernflower (whichever is in PATH). Falls back to `javap -c` bytecode output.
 
 ---
 
 ### Windows Kernel
 
-#### `windows_kernel_re` — Windows kernel driver RE
+#### `windows_kernel_re` — Kernel driver RE
 
-**IOCTL dispatch:** finds `DriverEntry`, traces `IRP_MJ_DEVICE_CONTROL` handler registration, extracts the IOCTL dispatch table with full `CTL_CODE` decomposition (device type, access required, function code, transfer type), maps each IOCTL to its handler function. The dispatch table is the primary attack surface for kernel driver exploitation.
-
-**DKOM:** identifies `PsGetCurrentProcess` / `PsLookupProcessByProcessId` call sites followed by `EPROCESS` field accesses — process token stealing and DKOM-based rootkit technique detection.
-
-**SSDT hooks:** checks SSDT for entries pointing outside `ntoskrnl.exe` / `win32k.sys` (rootkit indicator). Enumerates shadow SSDT (`Win32k.sys`) hooks.
-
-**Driver signing bypass:** detects `g_CiEnabled` / `g_CiOptions` patch patterns (DSE disable), `SeLoadDriverPrivilege` abuse, and test-signing mode indicators.
+- **IOCTL dispatch** — `DriverEntry` → `IRP_MJ_DEVICE_CONTROL` handler → full `CTL_CODE` decomposition (device type, access, function, transfer type) → per-IOCTL handler map
+- **DKOM** — `PsGetCurrentProcess` / `PsLookupProcessByProcessId` call sites followed by `EPROCESS` field access; process token stealing detection
+- **SSDT hooks** — entries pointing outside `ntoskrnl.exe` / `win32k.sys`; shadow SSDT enumeration
+- **DSE bypass** — `g_CiEnabled` / `g_CiOptions` patch patterns, `SeLoadDriverPrivilege` abuse, test-signing mode indicators
 
 #### `forensics_enum` — Forensic artifact analysis
 
-SEH chain corruption detection (FS:[0] pattern), POPAD+JMP shellcode sequence identification. Windows artifact map: event log locations and sizes, prefetch files, recently accessed files (MRU), shellbag entries, jump lists, browser history paths. Maps the forensic footprint for understanding attacker dwell time.
+SEH chain corruption (FS:[0] pattern), POPAD+JMP shellcode sequences. Windows artifact map: event logs, prefetch, MRU, shellbags, jump lists, browser history. Maps attacker dwell time indicators.
 
 ---
 
@@ -375,21 +381,29 @@ SEH chain corruption detection (FS:[0] pattern), POPAD+JMP shellcode sequence id
 
 #### `docker_enum` — Docker escape surface
 
-In-container checks: Docker socket at `/var/run/docker.sock` (writable = root via `docker run --privileged`), container capabilities (`CAP_SYS_ADMIN`, `CAP_NET_ADMIN`, `CAP_DAC_OVERRIDE`), namespace isolation (PID, mount, network, user), writable host paths via bind mounts. Daemon API checks (no socket needed): TCP 2375/2376 without TLS client auth. Image and container enumeration via daemon API.
+- `/var/run/docker.sock` writable → root via `docker run --privileged`
+- Capabilities: `CAP_SYS_ADMIN`, `CAP_NET_ADMIN`, `CAP_DAC_OVERRIDE`
+- Namespace isolation: PID, mount, network, user
+- Writable host paths via bind mounts
+- Daemon API on TCP 2375/2376 without TLS client auth
 
 #### `k8s_enum` — Kubernetes enumeration
 
-Service account token extraction from `/var/run/secrets/kubernetes.io/serviceaccount/`. Direct API server enumeration using the SA token — no `kubectl` needed. RBAC self-check via `SelfSubjectAccessReview` — tests `get/list/create/delete` on pods, secrets, configmaps, and `exec` on pods. Reports exact permissions without cluster-admin.
+SA token from `/var/run/secrets/kubernetes.io/serviceaccount/`. Direct API server enumeration — no `kubectl` needed. RBAC self-check via `SelfSubjectAccessReview` (exact permissions, no cluster-admin required).
 
-Secret extraction with base64 decode. ConfigMap credential hunting (password/token/key pattern matching). Privilege escalation path detection: `pods/exec` → RCE on any pod; `secrets/get` on `kube-system` → credential harvest; `create pods` → privileged pod → host escape; `system:node` role → lateral to other nodes. etcd direct access (2379): key-space enumeration, secret extraction bypassing K8s RBAC. Kubelet API (10250): pod list, exec without auth on unprotected Kubelets.
+- Secret extraction with base64 decode
+- ConfigMap credential hunting
+- Privesc paths: `pods/exec` → RCE; `secrets/get` on `kube-system` → cred harvest; `create pods` → privileged pod → host escape; `system:node` → lateral to other nodes
+- etcd direct access (2379): key-space enumeration, secret extraction bypassing RBAC
+- Kubelet API (10250): pod list, exec on unprotected Kubelets
 
 #### `harbor_enum` — Harbor OCI registry + supply chain
 
-Default credentials: `admin:Harbor12345` (common on Orka and self-hosted K8s deployments). Project and repository enumeration, image manifest pull, layer extraction. BV41 / Apple Compression metadata decode (`bv41_decoder`). Vulnerability scan results (Trivy integration) — attacker gets CVE inventory without running a scanner. Robot account enumeration (often broad access, longer-lived tokens). Supply chain mapping: identifies images with `FROM` referencing external registries.
+Default creds: `admin:Harbor12345`. Project/repo enumeration, image manifest pull, layer extraction, BV41 metadata decode. Trivy vulnerability scan results (attacker gets CVE inventory without running a scanner). Robot account enumeration. Supply chain map: images with external `FROM` references.
 
-#### `privesc_enum` — Privilege escalation enumeration
+#### `privesc_enum` — Privilege escalation
 
-SUID/SGID binaries (vs known-safe set), world-writable paths, cron job injection (writable scripts referenced by root cron), sudo NOPASSWD rules, Linux capabilities on binaries and processes, Docker group membership, `/etc/passwd` writability, readable shadow or backup files, package manager attack surface (`pip install` to root PATH, `npm install -g` writable prefix). Cross-platform: macOS vs Linux checks.
+SUID/SGID vs known-safe set, world-writable paths, cron job injection, sudo NOPASSWD rules, Linux capabilities on binaries/processes, Docker group membership, `/etc/passwd` writability, readable shadow files, package manager PATH attack surface. Cross-platform: macOS + Linux.
 
 ---
 
@@ -397,31 +411,34 @@ SUID/SGID binaries (vs known-safe set), world-writable paths, cron job injection
 
 #### `tls_enum` — TLS service enumeration
 
-Active TLS handshake probes: supported cipher suites, protocol versions (TLS 1.0/1.1 detection), certificate chain, OCSP stapling, session resumption (session ID and session ticket), HSTS/HPKP header presence, JA3 server fingerprint.
+Supported cipher suites, protocol versions (TLS 1.0/1.1 detection), certificate chain, OCSP stapling, session resumption (ID + ticket), HSTS/HPKP, JA3 server fingerprint.
 
-#### `net_sniffer` — Raw packet capture and credential extraction
+#### `net_sniffer` — Raw packet capture + credential extraction
 
-Raw socket capture with protocol parsers: HTTP basic auth, FTP, Telnet, SMTP AUTH, POP3, IMAP, SNMP community strings, SIP Digest authentication, clear-text LDAP bind requests. Output is structured credential tuples.
+Protocol parsers: HTTP basic auth, FTP, Telnet, SMTP AUTH, POP3, IMAP, SNMP community strings, SIP Digest, clear-text LDAP bind requests. Output is structured credential tuples.
 
-#### `network_analyze` — Network topology analysis
+#### `network_analyze` — Network topology
 
-Network interface map, routing table, listening services, established connection inventory. From captured traffic or pcap: ARP table reconstruction, VLAN tag enumeration (802.1Q), routing protocol identification (OSPF/EIGRP/BGP hello detection), DHCP server and internal DNS server identification.
+Interface map, routing table, listening services, established connections. From pcap: ARP table, VLAN tags (802.1Q), routing protocol detection (OSPF/EIGRP/BGP hellos), DHCP and DNS server identification.
 
-#### `nginx_enum` — nginx configuration and CVE surface
+#### `nginx_enum` — nginx configuration + CVE surface
 
-Config file parsing: server blocks, location blocks, `proxy_pass` targets, `auth_basic` / `auth_request` directives, include chains. Alias traversal: detects `location /path/ { alias /dir; }` without trailing slash on the location — path confusion allows `GET /path../etc/passwd`. Version fingerprinting mapped to known CVEs (CVE-2017-7529 range filter overflow, HTTP/2 off-by-one). `proxy_pass` misconfiguration: path appended to upstream URL enables SSRF amplification.
+Config parsing: server blocks, location blocks, `proxy_pass` targets, auth directives, include chains. Alias traversal: `location /path/ { alias /dir; }` without trailing slash → `GET /path../etc/passwd`. Version → CVE mapping (CVE-2017-7529, HTTP/2 off-by-one). `proxy_pass` path-append SSRF amplification.
 
-#### `sip_enum` — SIP / VoIP enumeration
+#### `sip_enum` — SIP / VoIP
 
-SIP OPTIONS sweep for extension discovery, REGISTER scan, Digest auth capture, RTP stream identification. Maps voicemail extensions, conference bridge numbers, SIP trunk authentication credentials from REGISTER messages.
+OPTIONS sweep for extension discovery, REGISTER scan, Digest auth capture, RTP stream identification. Maps voicemail extensions, conference bridges, SIP trunk credentials.
 
-#### `streaming_enum` — Data streaming platform enumeration
+#### `streaming_enum` — Kafka / Flink / NiFi
 
-**Kafka:** broker enumeration via Metadata API (no auth required if ACLs aren't enforced), topic list, partition/leader map, consumer group offsets, sensitive topic detection by name pattern, produce access test (data injection surface). **Flink:** REST API (`/jobs`, `/taskmanagers`, `/jars`) — job submission allows arbitrary JAR execution without auth by default. **NiFi:** processor configuration reads (passwords in clear text for many processor types), template download (full pipeline definition including credentials), sensitive property key extraction. **Confluent Schema Registry:** unauthenticated subject and schema enumeration.
+- **Kafka** — Metadata API broker enumeration (no auth if ACLs unenforced), topic list, partition/leader map, consumer group offsets, sensitive topic detection, produce access test
+- **Flink** — REST API at `:8081`; job submission allows arbitrary JAR execution without auth by default
+- **NiFi** — processor config reads (cleartext passwords in many processor types), template download with embedded credentials
+- **Schema Registry** — unauthenticated subject and schema enumeration
 
 #### `llm_enum` — LLM inference server enumeration
 
-Ollama (`/api/tags`, `/api/generate`), LM Studio, LocalAI, and generic OpenAI-compatible endpoints. Checks: unauthenticated model listing, unfiltered text generation, model file path exposure, system prompt leakage via `/api/show`.
+Ollama, LM Studio, LocalAI, OpenAI-compatible. Checks: unauthenticated model listing, unfiltered generation, model file path exposure, system prompt leakage via `/api/show`.
 
 ---
 
@@ -429,17 +446,19 @@ Ollama (`/api/tags`, `/api/generate`), LM Studio, LocalAI, and generic OpenAI-co
 
 #### `jwt_crypto_analyzer` — JWT attack suite
 
-`alg: none` bypass: strips signature, sets algorithm to `none`. RS256 → HS256 confusion: re-signs with the RS256 public key as HMAC-SHA256 secret — valid if the library reads only the `alg` header. Weak HMAC key brute-force (wordlist of production-leaked common secrets). `kid` header injection: SQL injection when server queries a DB for the key by ID, SSRF via URL-valued `kid`, directory traversal to a predictable file path.
+- `alg: none` bypass
+- RS256 → HS256 confusion (re-sign with public key as HMAC secret)
+- Weak HMAC key brute-force (production-leaked wordlist)
+- `kid` injection: SQL injection (DB key lookup), SSRF (URL-valued kid), directory traversal
 
 ```python
 from modules.jwt_crypto_analyzer import JWTAttackSuite
-suite = JWTAttackSuite(target_url='https://target/api/')
-suite.run_all(token='eyJhbGc...')
+JWTAttackSuite(target_url='https://target/api/').run_all(token='eyJhbGc...')
 ```
 
-#### `crypto_audit` — Binary cryptographic implementation audit
+#### `crypto_audit` — Binary cryptographic audit
 
-Hardcoded key material detection (high-entropy byte sequences near crypto function call sites), weak RNG usage (`rand()` / `random()` in security-sensitive contexts), ECB mode indicators (identical ciphertext block pairs), MD5/SHA1 import detection, custom cryptographic implementations (re-implementation of AES/DES/RSA rather than system crypto).
+Hardcoded key material (high-entropy bytes near crypto call sites), weak RNG (`rand()` / `random()` in security-sensitive paths), ECB mode indicators, MD5/SHA1 imports, custom crypto re-implementations.
 
 ---
 
@@ -447,15 +466,15 @@ Hardcoded key material detection (high-entropy byte sequences near crypto functi
 
 #### `process_enum` — Process and memory analysis
 
-All running processes (PID, PPID, name, command line) — `/proc` on Linux, `ps` on macOS. For a target PID: `/proc/PID/maps` (heap/stack/mmap layout, loaded DSOs), `/proc/PID/fd` (open database connections, sockets, sensitive files held open), `/proc/PID/environ` (environment variables, often contains credentials). macOS: `vmmap` and `lsof` equivalents.
+All processes (PID, PPID, name, cmdline) — `/proc` on Linux, `ps` on macOS. Per-PID: `/proc/PID/maps` (heap/stack/mmap/DSO layout), `/proc/PID/fd` (open DB connections, sockets, sensitive files held open), `/proc/PID/environ` (environment variables). macOS: `vmmap` + `lsof` equivalents.
 
 #### `lateral_movement` — Lateral movement surface
 
-TCP scan using stdlib socket — no nmap dependency. Cloud metadata: `169.254.169.254` (AWS/GCP/Azure IMDS), ECS task metadata endpoint. Extracts IAM role ARN, temporary credentials, instance identity document, user data. Credential harvest from common locations: `~/.aws/credentials`, `~/.kube/config`, `~/.ssh/id_*`, `~/.docker/config.json`, `.env` files in web roots, `/etc/kubernetes/admin.conf`. Orka internal DNS discovery (`10.221.188.x`).
+TCP scan (stdlib socket, no nmap). Cloud metadata: `169.254.169.254` (AWS/GCP/Azure IMDS), ECS task metadata endpoint — IAM role ARN, temporary credentials, user data. Credential harvest: `~/.aws/credentials`, `~/.kube/config`, `~/.ssh/id_*`, `~/.docker/config.json`, `.env` files, `/etc/kubernetes/admin.conf`. Orka internal DNS discovery (`10.221.188.x`).
 
 #### `syscall_trace` — System call tracing
 
-Wraps `strace` (Linux) / `dtruss` / `dtrace` (macOS). Filters and structures output: `open`/`openat` (file access), `connect` (network), `execve` (process launch), `write` to network FDs. Identifies credential access patterns and data exfiltration paths.
+Wraps `strace` (Linux) / `dtruss` / `dtrace` (macOS). Structured output: `open`/`openat`, `connect`, `execve`, `write` to network FDs. Flags credential access patterns and data exfiltration paths.
 
 ---
 
@@ -463,7 +482,7 @@ Wraps `strace` (Linux) / `dtruss` / `dtrace` (macOS). Filters and structures out
 
 #### `regression` — Struct offset version registry
 
-Version-confirmed struct field offset database for Cisco ASA LINA. `SymbolicOffsetRegression` stores confirmed offsets from real firmware images indexed by version tuple. `FirmwareVersionRegression` fits a boundary model across the confirmed data points. `OLS`, `LogisticRegression`, `DescriptiveStats`, `CorrelationMatrix` for offset trend analysis.
+Version-confirmed struct offsets for Cisco ASA LINA, indexed by version tuple. `FirmwareVersionRegression` fits a boundary model. Includes `OLS`, `LogisticRegression`, `DescriptiveStats`, `CorrelationMatrix`.
 
 ```python
 from modules.regression import SymbolicOffsetRegression
@@ -481,7 +500,7 @@ for ver, entry in SymbolicOffsetRegression.CONFIRMED.items():
 
 #### `utils/poc_radius_ou_inject.py` — RADIUS Group Policy Injection PoC
 
-Standalone PoC for F1 (no Message-Authenticator enforcement) + F2 (256-byte OU= vs 64-byte CLI limit) on Cisco ASA. Two modes: fake RADIUS server (responds to every Access-Request with attacker-controlled OU= in Class attribute 25), and single-packet send mode (fires one crafted Access-Accept at the ASA). Demonstrates the overflow delta computed by `RadiusOverflowProbe`.
+Standalone PoC for F1 (no Message-Authenticator enforcement) + F2 (256-byte OU= vs 64-byte CLI limit). Two modes: fake RADIUS server (every Access-Request gets an attacker-controlled OU= response), and single-packet send. Demonstrates the overflow delta from `RadiusOverflowProbe`.
 
 ---
 
