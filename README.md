@@ -5,20 +5,20 @@
 
 ## What is ablation?
 
-Ablation is an autonomous reverse engineering and attack surface analysis tool. Drop it on a compromised or test system — Linux, macOS, Docker, Kubernetes, or Orka — and it maps what's running, how binaries are structured internally, and where security boundaries break down, without requiring a debugger, source code, or prior knowledge of the target.
+Ablation is a modular reverse engineering and attack surface analysis tool built for post-access work. It runs on the target — no debugger, no source code, no prior knowledge of what's installed. Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
 
-It covers eight domains through a modular CLI: binary RE (ELF / Mach-O / PE / firmware), live process analysis, macOS / Apple Silicon (including Orka clusters), Cisco infrastructure (ASA, NX-OS, IOS, HyperFlex), containers and Kubernetes, network protocols, cryptography, and post-compromise enumeration. All 60+ modules share a common disassembly engine, binary parser, and ATT&CK tagger.
+Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules share a common disassembly engine (x86 / ARM64 / MIPS / PPC), a unified binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
 
 ## Platforms
 
 | Platform | Coverage |
 |----------|----------|
-| Linux (ELF, x86-64 / ARM64 / MIPS) | Binary RE, live process, privesc, containers |
-| **macOS / Apple Silicon** | **Mach-O, Swift ABI, Orka clusters, malware persistence, Keychain, MDM** |
+| Linux (ELF — x86-64, ARM64, MIPS) | Binary RE, live process, privesc, containers |
+| **macOS / Apple Silicon** | **Mach-O, Swift ABI, Orka cluster RE, malware persistence, Keychain, MDM** |
 | Windows (PE / PE32+) | Kernel driver RE, IOCTL dispatch, DKOM, SSDT, DSE bypass |
 | Docker | Escape surface, socket mounts, capability audit |
 | Kubernetes | SA token extraction, RBAC, secret read, etcd direct access |
-| **MacStadium Orka** | **K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC map** |
+| **Orka** | **K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC service map** |
 | Cisco ASA / Firepower | LINA struct RE, RADIUS overflow, ASDM JAR, WebVPN JS, ROMMON |
 | Cisco NX-OS / ACI | APIC REST, fabric topology, guestshell rootfs, Nexus Dashboard |
 
@@ -80,7 +80,7 @@ Root is not required for binary analysis. Live-process modes (`net_sniffer`, `sy
 
 ### Apple / macOS
 
-macOS is a first-class platform. The Apple module group covers Swift binary RE, full Mach-O format analysis, macOS-specific malware persistence mechanisms, the sysadmin attack surface (Keychain, FileVault, MDM/DEP, Open Directory, ARD/VNC), and complete MacStadium Orka cluster enumeration with JWT forgery, VM exec, and API surface reconstruction.
+macOS is a first-class platform. The Apple module group covers Swift binary RE, full Mach-O format analysis, macOS-specific malware persistence mechanisms, the sysadmin attack surface (Keychain, FileVault, MDM/DEP, Open Directory, ARD/VNC), and complete Orka cluster enumeration with JWT forgery, VM exec, and API surface reconstruction.
 
 #### `swift_re` — Swift binary reverse engineering
 
@@ -118,7 +118,7 @@ Sudoers and PAM: `/etc/sudoers` NOPASSWD rules, PAM module stack, authentication
 
 Orka-specific service names: maps Orka-related launchd services, agent socket paths, and control plane tokens stored in macOS Keychain by Orka client tooling.
 
-#### `orka_enum` — MacStadium Orka live cluster enumeration
+#### `orka_enum` — Orka live cluster enumeration
 
 Live enumeration of an Orka API endpoint: validates tokens, lists VMs, extracts VM configuration (CPU, RAM, image, Orka node), maps image registry contents, and tests default credentials. Feeds `orka_oidc_re` and `orka_jwt_dynamic_re` with token material for forgery.
 
@@ -383,7 +383,7 @@ Secret extraction with base64 decode. ConfigMap credential hunting (password/tok
 
 #### `harbor_enum` — Harbor OCI registry + supply chain
 
-Default credentials: `admin:Harbor12345` (common on MacStadium Orka and self-hosted K8s). Project and repository enumeration, image manifest pull, layer extraction. BV41 / Apple Compression metadata decode (`bv41_decoder`). Vulnerability scan results (Trivy integration) — attacker gets CVE inventory without running a scanner. Robot account enumeration (often broad access, longer-lived tokens). Supply chain mapping: identifies images with `FROM` referencing external registries.
+Default credentials: `admin:Harbor12345` (common on Orka and self-hosted K8s deployments). Project and repository enumeration, image manifest pull, layer extraction. BV41 / Apple Compression metadata decode (`bv41_decoder`). Vulnerability scan results (Trivy integration) — attacker gets CVE inventory without running a scanner. Robot account enumeration (often broad access, longer-lived tokens). Supply chain mapping: identifies images with `FROM` referencing external registries.
 
 #### `privesc_enum` — Privilege escalation enumeration
 
@@ -449,7 +449,7 @@ All running processes (PID, PPID, name, command line) — `/proc` on Linux, `ps`
 
 #### `lateral_movement` — Lateral movement surface
 
-TCP scan using stdlib socket — no nmap dependency. Cloud metadata: `169.254.169.254` (AWS/GCP/Azure IMDS), ECS task metadata endpoint. Extracts IAM role ARN, temporary credentials, instance identity document, user data. Credential harvest from common locations: `~/.aws/credentials`, `~/.kube/config`, `~/.ssh/id_*`, `~/.docker/config.json`, `.env` files in web roots, `/etc/kubernetes/admin.conf`. MacStadium internal DNS discovery (`10.221.188.x`).
+TCP scan using stdlib socket — no nmap dependency. Cloud metadata: `169.254.169.254` (AWS/GCP/Azure IMDS), ECS task metadata endpoint. Extracts IAM role ARN, temporary credentials, instance identity document, user data. Credential harvest from common locations: `~/.aws/credentials`, `~/.kube/config`, `~/.ssh/id_*`, `~/.docker/config.json`, `.env` files in web roots, `/etc/kubernetes/admin.conf`. Orka internal DNS discovery (`10.221.188.x`).
 
 #### `syscall_trace` — System call tracing
 
