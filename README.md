@@ -23,6 +23,7 @@ Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules sh
 | **Orka** | **K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC service map** |
 | Cisco ASA / Firepower | LINA struct RE, RADIUS overflow, ASDM JAR, WebVPN JS, ROMMON |
 | Cisco NX-OS / ACI | APIC REST, fabric topology, guestshell rootfs, Nexus Dashboard |
+| **WeChat Android** | **MMTLS protocol RE, PSK extraction, DB key derivation, Frida hooks** |
 
 ## Quick start
 
@@ -496,6 +497,53 @@ for ver, entry in SymbolicOffsetRegression.CONFIRMED.items():
 
 ---
 
+### WeChat Android
+
+WeChat 8.0.56 arm64 static RE. Covers the MMTLS transport protocol, DB encryption key derivation, and runtime key extraction via Frida. Synthesized from symbol tables, embedded source paths, and log strings in `libwechatnetwork.so` and `libMMProtocalJni.so`.
+
+#### `wechat_re` — MMTLS + DB key + Frida hook generation
+
+**MMTLS protocol** (WeChat's custom TLS replacement, private `mars-wechat` repo):
+- Two-tier key architecture: `HybridEcdh` (static+ephemeral) → `AxEcdh` (double ratchet / Signal-style forward secrecy)
+- Cipher suites: AES-GCM (primary), SM4-GCM (Chinese national standard GB/T 32907)
+- KDF: HKDF (TLS 1.3 style), handshake format in `mmtls_handshake_messages.cpp` (private)
+- PSK 0-RTT session resumption: `HS_MODE_ZERO_RTT_PSK`, tickets stored in `ClientCredStorage`
+
+**Findings encoded:**
+| ID | Severity | Finding |
+|----|----------|---------|
+| WX-F1 | INFO | MMTLS two-tier crypto: HybridEcdh + AxEcdh double ratchet |
+| WX-F2 | MEDIUM | `ALERT_FALLBACK_NO_MMTLS` — network-level downgrade to HTTPS |
+| WX-F3 | HIGH | PSK 0-RTT session resumption — extracted PSK enables replay |
+| WX-F4 | HIGH | `gILinkKey` (72B, BSS, VA 0x3d4648) — live MMTLS key extractable via Frida |
+| WX-F5 | HIGH | DB key: `computerKeyWithAllStr(IMEI, UIN)` → 7-char hex → SQLite SEE |
+| WX-F6 | INFO | Pack format reconstructed: header (clientVer/type/flag/seq) + body (uin/func/encryptAlgo) |
+
+```bash
+# Full static RE (APK + libs)
+./ablation --wechat \
+  --wechat-apk /path/to/wechat-arm64.apk \
+  --wechat-libs /path/to/native-libs/lib
+
+# Compute EnMicroMsg.db decryption key offline
+./ablation --wechat-db-key 123456789012345 987654321
+# [+] WeChat DB key (MD5(IMEI+UIN)[:7]): a3f9e2c
+
+# Generate Frida hooks (MMTLS key extraction + pack/unpack intercept)
+./ablation --wechat-frida
+# Deploy: frida -U -n com.tencent.mm -l /tmp/wechat_mmtls_hooks.js
+```
+
+**Frida intercept points:**
+- `LongLinkWithMMTLS::C1` at VA `0x1ab2c4` — read `gILinkKey` after handshake completes
+- `Java_..._UtilsJni_GenEcdhKeyPair` — capture ephemeral ECDH key pair
+- `Java_..._MMLogic_saveAuthLongList` — observe PSK persistence (0-RTT ticket)
+- `Java_..._MMProtocalJni_computerKeyWithAllStr` — intercept DB key derivation
+
+**DB encryption:** SQLite SEE (`sqlite3_activate_see` API in `libWCDB.so`) — **not SQLCipher**. Standard SQLCipher tools won't open WeChat databases. Key is 7 hex chars derived from MD5(IMEI+UIN).
+
+---
+
 ### Utilities
 
 #### `utils/poc_radius_ou_inject.py` — RADIUS Group Policy Injection PoC
@@ -550,6 +598,7 @@ ablation/
 │   ├── nexus_dashboard_enum.py
 │   ├── ios_enum.py
 │   ├── hyperflex_enum.py
+│   ├── wechat_re.py
 │   ├── docker_enum.py
 │   ├── k8s_enum.py
 │   ├── harbor_enum.py
