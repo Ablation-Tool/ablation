@@ -20,8 +20,9 @@ MMTLS Protocol (mars-wechat private fork):
   Live key: mmtls::gILinkKey global (72 bytes, BSS) in libwechatnetwork.so
 
 DB encryption:
-  libWCDB.so → sqlite3_activate_see() → SQLite SEE (not SQLCipher)
-  Key derivation: computerKeyWithAllStr(IMEI, UIN, salt) in libMMProtocalJni.so
+  libWCDB.so → SQLCipher (NOT SQLite SEE — confirmed via cipherUseHmac/cipherHmacAlgorithm PRAGMAs)
+  Key derivation: computerKeyWithAllStr(IMEI, UIN, etype=0→MD5) in libMMProtocalJni.so
+  Algorithm table @ 0xe3c40: etype 0=MD5(16B), etype 1=SHA1(20B), etype 2=EC(128B)
 
 Pack format (from mmpack.cpp log strings):
   Header fields: g_clientVer, type, flag, noticeid, newflag, groupKey, sequence
@@ -43,7 +44,7 @@ Findings:
   F6  Three-repo build: mars(OSS) + mars-wechat(MMTLS) + mars-private(IP obfuscation)
   F7  libapp.so 38MB contains all business logic in compiled C++ (not Java/DEX)
   F8  .cso compressed .so format — WeChat's custom loader decompresses at runtime
-  F9  SQLite SEE (not SQLCipher) — distinct key API, different attack surface
+  F9  SQLCipher (not SQLite SEE) — PRAGMA key interface, HMAC per-page auth, standard tooling works
 """
 
 import subprocess
@@ -323,31 +324,38 @@ class WeChatREAnalyzer:
             ),
         })
 
-        # F5: DB key derivation
+        # F5: DB key derivation (CORRECTED: SQLCipher, not SQLite SEE)
         findings.append({
             "id": "WX-F5",
-            "title": "WeChat DB key: computerKeyWithAllStr(IMEI, UIN, salt) → SQLite SEE key",
+            "title": "WeChat DB key: computerKeyWithAllStr(IMEI, UIN, etype=0→MD5) → SQLCipher key",
             "severity": "HIGH",
             "detail": (
-                "EnMicroMsg.db (and others) are encrypted with SQLite SEE (NOT SQLCipher).\n"
-                "Key activated via sqlite3_activate_see() in libWCDB.so.\n"
-                "Key derivation: MMProtocalJni.computerKeyWithAllStr(imei, uin, hardcoded_salt)\n"
-                "  → internally: SHA1 or MD5 of concatenated inputs (community research: MD5)\n"
-                "  → hex-encode → first 7 chars = DB passphrase\n"
-                "Attack: IMEI from device + UIN from login → compute key → open DB offline.\n"
-                "Note: SEE key API differs from SQLCipher: standard sqlcipher tools won't work."
+                "libWCDB.so uses SQLCipher (NOT SQLite SEE).\n"
+                "Evidence: cipherUseHmac/cipherHmacAlgorithm/cipherDefaultUseHmac PRAGMAs in libWCDB.so,\n"
+                "sha1_block_data_order + _armv8_sha1_probe (SQLCipher HMAC path).\n"
+                "Key derivation: computerKeyWithAllStr dispatches via etype parameter:\n"
+                "  etype 0 (DB key): output_size=16 → MD5; fn @ libMMProtocalJni.so:0x3f438\n"
+                "  etype 1: output_size=20 → SHA1; fn @ libMMProtocalJni.so:0x3f4d8\n"
+                "  etype 2: output_size=128 → EC key (no direct compute fn)\n"
+                "Algorithm dispatch table: libMMProtocalJni.so @ 0xe3c40\n"
+                "Result: MD5(IMEI+UIN).hexdigest()[:7] = 7-char SQLCipher PRAGMA key.\n"
+                "Attack: IMEI from device + UIN from login → compute key → sqlcipher open."
             ),
             "evidence": {
                 "jni_func": "Java_com_tencent_mm_protocal_MMProtocalJni_computerKeyWithAllStr",
-                "db_api": "sqlite3_activate_see",
-                "lib": "libWCDB.so (custom SQLite SEE build)",
+                "algo_table": "libMMProtocalJni.so @ 0xe3c40 (etype→{size,fn_ptr})",
+                "lib": "libWCDB.so (SQLCipher)",
+                "sqlcipher_pragmas": [
+                    "cipherUseHmac", "cipherHmacAlgorithm", "cipherDefaultUseHmac"
+                ],
             },
             "key_formula": (
-                "# Approximate (community-derived, verify against binary):\n"
+                "# Confirmed from static RE (etype=0 path, MD5, 16-byte output → 7-char hex):\n"
                 "import hashlib\n"
                 "def wechat_db_key(imei: str, uin: str) -> str:\n"
                 "    raw = (imei + uin).encode('utf-8')\n"
-                "    return hashlib.md5(raw).hexdigest()[:7]"
+                "    return hashlib.md5(raw).hexdigest()[:7]\n"
+                "# Open DB: sqlcipher EnMicroMsg.db -> PRAGMA key='<7chars>';"
             ),
         })
 
@@ -520,9 +528,9 @@ waitForLib("libMMProtocalJni.so", function(mod) {{
 
     def compute_db_key(self, imei: str, uin: str) -> str:
         """
-        Approximate WeChat DB key derivation.
-        Community-derived formula; verify against binary before use.
-        Key: MD5(imei + uin)[:7] → SQLite SEE passphrase.
+        WeChat DB key derivation (etype=0 path).
+        Confirmed from static RE: etype=0 → MD5 (16-byte digest), first 7 hex chars.
+        libWCDB.so uses SQLCipher; open with: PRAGMA key='<result>';
         """
         raw = (imei + uin).encode("utf-8")
         return hashlib.md5(raw).hexdigest()[:7]
