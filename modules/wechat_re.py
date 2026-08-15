@@ -1167,6 +1167,59 @@ waitForLib("libwechatnetwork.so", function(mod) {{
         }}
     }});
 
+    // Hook EVP_EncryptInit_ex — confirmed arg order: (ctx, cipher, engine, key[3], iv[4])
+    // AES-256-GCM: key=32B, iv=12B. SM4-GCM: same layout, NID=888.
+    var EVP_Ei = Module.findExportByName(null, 'EVP_EncryptInit_ex');
+    if (EVP_Ei) {{
+        Interceptor.attach(EVP_Ei, {{
+            onEnter: function(args) {{
+                var keyPtr = args[3]; var ivPtr = args[4];
+                if (!keyPtr.isNull()) {{
+                    console.log('[wechat_re] EVP_EncryptInit_ex key:', hexdump(keyPtr, {{length:32, header:false}}));
+                }}
+                if (!ivPtr.isNull()) {{
+                    console.log('[wechat_re] EVP_EncryptInit_ex iv:', hexdump(ivPtr, {{length:12, header:false}}));
+                }}
+            }}
+        }});
+    }}
+
+    // Hook EVP_CIPHER_CTX_ctrl — extract GCM auth tag (EVP_CTRL_GCM_GET_TAG = 0x11)
+    var EVP_ctrl = Module.findExportByName(null, 'EVP_CIPHER_CTX_ctrl');
+    if (EVP_ctrl) {{
+        Interceptor.attach(EVP_ctrl, {{
+            onEnter: function(args) {{
+                this.type = args[1].toInt32();
+                this.len  = args[2].toInt32();
+                this.buf  = args[3];
+            }},
+            onLeave: function(ret) {{
+                if (this.type === 0x11 && !this.buf.isNull()) {{  // GET_TAG
+                    console.log('[wechat_re] GCM tag:', hexdump(this.buf, {{length:this.len, header:false}}));
+                }}
+            }}
+        }});
+    }}
+
+    // Hook EVP_AEAD_CTX_open (BoringSSL AEAD interface) — captures decrypted MMTLS frame
+    // Signature: open(ctx, out, &out_len, max_out_len, nonce, nonce_len, in, in_len, ad, ad_len)
+    var AEAD_open = Module.findExportByName(null, 'EVP_AEAD_CTX_open');
+    if (AEAD_open) {{
+        Interceptor.attach(AEAD_open, {{
+            onEnter: function(args) {{
+                this.out    = args[1];
+                this.outLen = args[2];
+            }},
+            onLeave: function(ret) {{
+                if (ret.toInt32() === 1 && !this.out.isNull()) {{
+                    var len = this.outLen.readU64().toNumber();
+                    console.log('[wechat_re] EVP_AEAD_CTX_open plaintext (' + len + 'B):');
+                    console.log(hexdump(this.out, {{length: Math.min(len, 256), header:false}}));
+                }}
+            }}
+        }});
+    }}
+
     // Hook GenEcdhKeyPair to capture ephemeral ECDH keys
     var genEcdh = Module.findExportByName("libwechatnetwork.so",
         "Java_com_tencent_mm_jni_utils_UtilsJni_GenEcdhKeyPair");
