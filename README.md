@@ -5,11 +5,9 @@
 
 ## What is ablation?
 
-Ablation is a modular reverse engineering and attack surface analysis tool built for post-access work. 
-It runs on the target without a debugger, source code, or prior knowledge of what's installed. 
-Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
+Ablation is a custom-built modular reverse engineering and attack surface analysis tool. No commodity scanners, no pre-built frameworks — every module is written from scratch for the specific target. It runs on the target without a debugger, source code, or prior knowledge of what's installed. Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
 
-Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules share a common disassembly engine (x86 / ARM64 / MIPS / PPC), a unified binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
+Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules share a custom disassembly engine (x86 / ARM64 / MIPS / PPC), a custom binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
 
 ## Platforms
 
@@ -23,7 +21,7 @@ Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules sh
 | **Orka** | **K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC service map** |
 | Cisco ASA / Firepower | LINA struct RE, RADIUS overflow, ASDM JAR, WebVPN JS, ROMMON |
 | Cisco NX-OS / ACI | APIC REST, fabric topology, guestshell rootfs, Nexus Dashboard |
-| **WeChat Android** | **MMTLS protocol RE, PSK extraction, DB key derivation, Frida hooks** |
+| **WeChat Android** | **MMTLS protocol RE, PSK extraction, DB key derivation, ptrace key extraction** |
 
 ## Quick start
 
@@ -499,15 +497,25 @@ for ver, entry in SymbolicOffsetRegression.CONFIRMED.items():
 
 ### WeChat Android
 
-WeChat 8.0.56 arm64 static RE. Covers the MMTLS transport protocol, DB encryption key derivation, and runtime key extraction via Frida. Synthesized from symbol tables, embedded source paths, and log strings in `libwechatnetwork.so` and `libMMProtocalJni.so`.
+WeChat 8.0.56 arm64 static RE. Covers the MMTLS transport protocol, DB encryption key derivation, and runtime key extraction via ptrace — no Frida. Synthesized from symbol tables, embedded source paths, and log strings in `libwechatnetwork.so` and `libMMProtocalJni.so`.
 
-#### `wechat_re` — MMTLS + DB key + Frida hook generation
+Native ARM64 tooling lives in [mmtls-lab](https://github.com/zellkernel/mmtls-lab). `wechat_re.py` drives it via adb.
+
+#### `wechat_re` — MMTLS + DB key + ptrace key extraction
 
 **MMTLS protocol** (WeChat's custom TLS replacement, private `mars-wechat` repo):
 - Two-tier key architecture: `HybridEcdh` (static+ephemeral) → `AxEcdh` (double ratchet / Signal-style forward secrecy)
 - Cipher suites: AES-GCM (primary), SM4-GCM (Chinese national standard GB/T 32907)
-- KDF: HKDF (TLS 1.3 style), handshake format in `mmtls_handshake_messages.cpp` (private)
+- KDF: HKDF-SHA384 (TLS 1.3 style), handshake format in `mmtls_handshake_messages.cpp` (private)
 - PSK 0-RTT session resumption: `HS_MODE_ZERO_RTT_PSK`, tickets stored in `ClientCredStorage`
+
+**Key offsets (libwechatnetwork.so 8.0.56 arm64):**
+
+| Symbol | VA | Notes |
+|--------|----|-------|
+| `gILinkKey` | `0x3d4648` | 72-byte live session key (BSS) |
+| HKDF call | `0x1ce28c` | BL `0x1dc424`; return site `0x1ce290` |
+| key-insert orchestrator | `0x303fb0` | hlist splice at `0x304074` |
 
 **Findings encoded:**
 | ID | Severity | Finding |
@@ -515,7 +523,7 @@ WeChat 8.0.56 arm64 static RE. Covers the MMTLS transport protocol, DB encryptio
 | WX-F1 | INFO | MMTLS two-tier crypto: HybridEcdh + AxEcdh double ratchet |
 | WX-F2 | MEDIUM | `ALERT_FALLBACK_NO_MMTLS` — network-level downgrade to HTTPS |
 | WX-F3 | HIGH | PSK 0-RTT session resumption — extracted PSK enables replay |
-| WX-F4 | HIGH | `gILinkKey` (72B, BSS, VA 0x3d4648) — live MMTLS key extractable via Frida |
+| WX-F4 | HIGH | `gILinkKey` (72B, BSS, `0x3d4648`) — live MMTLS session key; extractable via ptrace probe |
 | WX-F5 | HIGH | DB key: `computerKeyWithAllStr(IMEI, UIN)` → 7-char hex → SQLite SEE |
 | WX-F6 | INFO | Pack format reconstructed: header (clientVer/type/flag/seq) + body (uin/func/encryptAlgo) |
 
@@ -528,19 +536,32 @@ WeChat 8.0.56 arm64 static RE. Covers the MMTLS transport protocol, DB encryptio
 # Compute EnMicroMsg.db decryption key offline
 ./ablation --wechat-db-key 123456789012345 987654321
 # [+] WeChat DB key (MD5(IMEI+UIN)[:7]): a3f9e2c
-
-# Generate Frida hooks (MMTLS key extraction + pack/unpack intercept)
-./ablation --wechat-frida
-# Deploy: frida -U -n com.tencent.mm -l /tmp/wechat_mmtls_hooks.js
 ```
 
-**Frida intercept points:**
-- `LongLinkWithMMTLS::C1` at VA `0x1ab2c4` — read `gILinkKey` after handshake completes
-- `Java_..._UtilsJni_GenEcdhKeyPair` — capture ephemeral ECDH key pair
-- `Java_..._MMLogic_saveAuthLongList` — observe PSK persistence (0-RTT ticket)
-- `Java_..._MMProtocalJni_computerKeyWithAllStr` — intercept DB key derivation
+```python
+from modules.wechat_re import WeChatRE
+wx = WeChatRE()
 
-**DB encryption:** SQLite SEE (`sqlite3_activate_see` API in `libWCDB.so`) — **not SQLCipher**. Standard SQLCipher tools won't open WeChat databases. Key is 7 hex chars derived from MD5(IMEI+UIN).
+# Discover gILinkKey write site (single-steps from HKDF return until key changes)
+result = wx.probe_discover()
+# {'writer_pc': 0x1cad30, 'key': 'a3f9...', 'steps': 317}
+
+# Continuous key capture at write site
+wx.probe_hook(writer_pc=0x1cad30)
+# streams JSON per key-write event
+
+# One-shot key snapshot
+wx.probe_dump()
+```
+
+**ptrace intercept points (mmtls_probe):**
+- `probe_discover`: plants `BRK #0` at HKDF return (`0x1ce290`), single-steps until `gILinkKey` changes — resolves write site dynamically
+- `probe_hook`: persistent `BRK #0` at `writer_pc`, re-armed after each hit; captures 72-byte key on every MMTLS session establishment
+- `probe_dump`: polls `/proc/pid/mem` at `gILinkKey` until non-zero + stable (200ms verify)
+
+**Injector (mmtls_inject):** PLT/GOT patcher with FULL_RELRO bypass. Android linker marks `.got.plt` `PROT_READ` after relocations — bypassed by injecting `mprotect()` into the target process via ptrace register manipulation (no shellcode). Patches `connect`/`send`/`recv`/`sendto`/`recvfrom` GOT entries to redirect through `libhook.so` globals.
+
+**DB encryption:** SQLCipher (`libWCDB.so`) — not SQLite SEE. Key is 7 hex chars derived from MD5(IMEI+UIN).
 
 ---
 
