@@ -985,6 +985,10 @@ def main():
     parser.add_argument('--wechat-libs', metavar='DIR', help='Path to extracted arm64-v8a native libs directory')
     parser.add_argument('--wechat-db-key', nargs=2, metavar=('IMEI', 'UIN'), help='Compute WeChat DB decryption key from IMEI and UIN')
     parser.add_argument('--wechat-frida', action='store_true', help='Generate Frida hook script for MMTLS key extraction')
+    parser.add_argument('--wechat-probe-build', action='store_true', help='Cross-compile wechat-probe (ARM64 ptrace watchpoint) for Android')
+    parser.add_argument('--wechat-probe-push', action='store_true', help='Build + adb-push wechat-probe to connected device')
+    parser.add_argument('--wechat-probe-watch', action='store_true', help='Set HW watchpoint on gILinkKey; block until write; print writer PC + hex dump')
+    parser.add_argument('--wechat-probe-dump', action='store_true', help='One-shot /proc/pid/mem dump of gILinkKey from running WeChat')
 
     args = parser.parse_args()
     
@@ -1587,7 +1591,9 @@ def main():
     
     elif getattr(args, 'wechat', False) or getattr(args, 'wechat_apk', None) or \
          getattr(args, 'wechat_libs', None) or getattr(args, 'wechat_db_key', None) or \
-         getattr(args, 'wechat_frida', False):
+         getattr(args, 'wechat_frida', False) or \
+         getattr(args, 'wechat_probe_build', False) or getattr(args, 'wechat_probe_push', False) or \
+         getattr(args, 'wechat_probe_watch', False) or getattr(args, 'wechat_probe_dump', False):
         ablation.banner()
         if not HAS_WECHAT_RE:
             print("[-] wechat_re module not available")
@@ -1607,6 +1613,30 @@ def main():
                 f.write(script)
             print(f"[+] Frida hook script written to {out_path}")
             print(f"    Deploy: frida -U -n com.tencent.mm -l {out_path}")
+        elif getattr(args, 'wechat_probe_build', False):
+            analyzer = WeChatREAnalyzer()
+            r = analyzer.wechat_probe_build()
+            if "error" in r:
+                print(f"[-] build failed: {r['error']}")
+            else:
+                print(f"[+] wechat-probe built: {r['binary']}")
+        elif getattr(args, 'wechat_probe_push', False):
+            analyzer = WeChatREAnalyzer()
+            r = analyzer.wechat_probe_push()
+            if "error" in r:
+                print(f"[-] push failed: {r['error']}")
+            else:
+                print(f"[+] pushed to device: {r['pushed']}")
+        elif getattr(args, 'wechat_probe_watch', False):
+            analyzer = WeChatREAnalyzer()
+            analyzer.wechat_probe_watch()
+        elif getattr(args, 'wechat_probe_dump', False):
+            analyzer = WeChatREAnalyzer()
+            r = analyzer.wechat_probe_dump()
+            if "error" in r:
+                print(f"[-] {r['error']}")
+            else:
+                print(r.get("output", ""))
         else:
             apk = getattr(args, 'wechat_apk', None)
             libs = getattr(args, 'wechat_libs', None)
