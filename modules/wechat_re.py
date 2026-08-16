@@ -423,6 +423,9 @@ class WeChatREAnalyzer:
                 "size": GILIINKKEY_SIZE,
                 "section": "BSS (GLOBAL OBJECT)",
                 "ctor_va": "0x1ab2c4 (LongLinkWithMMTLSC1E)",
+                "static_refs_in_libwechatnetwork": "ZERO — exhaustive ADRP+ADD scan, 85 ADRP→0x3d4000 hits, none add offset in [0x648,0x68F]; 8048 RELA.DYN entries checked, no R_AARCH64_RELATIVE addend in [0x3d4648,0x3d46B7]",
+                "writer_location": "libapp.so (or JNI caller) — not libwechatnetwork.so",
+                "runtime_approach": "Frida MemoryAccessMonitor on libwechatnetwork.so base + 0x3d4648; capture writer PC post-handshake",
                 "key_deriv_errors": [
                     "0x625eb: 'hkdf expand connection key fail'",
                     "0x7b4f3: 'compute connection keys fail'",
@@ -695,10 +698,14 @@ class WeChatREAnalyzer:
                 "  This is a VALID, pre-signed, replay-injectable downgrade trigger.\n"
                 "  MITM can inject this 2020 alert directly without forging new ECDSA sigs.\n"
                 "\n"
-                "Timestamp validation at 0x2101f4 (vtable call) logs 'CheckTimestamp Failed'\n"
-                "BUT both paths converge at 0x210268: downgrade proceeds regardless of timestamp.\n"
-                "Verify: check vtable[8] function body for any shared-state mutation that\n"
-                "might indirectly block the alert (only remaining open question).\n"
+                "Timestamp validation at 0x2101f4 (vtable[1] call: ldr x8,[x25,#0xe0]; and x8,x8,#~1; ldr x8,[x8,#8]; blr x8)\n"
+                "logs 'CheckTimestamp Failed' on failure but ALL THREE paths converge at 0x210268:\n"
+                "  Path 1: tbnz w0,#0,0x210268 — CheckTimestamp returns bit0 set (success)\n"
+                "  Path 2: cbz w0,0x210268 — second check branch (failure)\n"
+                "  Path 3: cbz x9,0x210268 @ 0x2101a4 — handler object is NULL, CheckTimestamp skipped entirely\n"
+                "Failure path only: zeroes 128B at x23 (alert buffer); no mmtls_disabled flag set.\n"
+                "str wzr,[x24] at 0x210270 clears a LOCAL in-progress flag only — not mmtls_obj[0x3e4].\n"
+                "CONFIRMED: downgrade proceeds regardless of timestamp; stale 2020 alert IS a live replay trigger.\n"
                 "\n"
                 "US fallback server set (from hardcoded alert body):\n"
                 "  Long: uslong[1,2,3,4,8].wechat.com\n"
@@ -714,8 +721,12 @@ class WeChatREAnalyzer:
                 "sig_node": "NODE_SIGN_START = '<signature2>'",
                 "sig2_len": "71 bytes DER P-256 ECDSA",
                 "sig2_covers": "XML body + md5 + timestamp + signature_v1",
-                "ts_check_va": "0x2101f4 (vtable call, logs 'CheckTimestamp Failed')",
-                "convergence_va": "0x210268 (both TS paths continue)",
+                "ts_check_va": "0x2101f4 (vtable[1]: ldr x8,[x25,#0xe0]; and x8,x8,#~1; ldr x8,[x8,#8]; blr x8)",
+                "convergence_path1": "tbnz w0,#0,0x210268 (bit0 set → direct)",
+                "convergence_path2": "cbz w0,0x210268 (failure branch after 2nd check)",
+                "convergence_path3": "cbz x9,0x210268 @ 0x2101a4 (NULL handler → CheckTimestamp entirely skipped)",
+                "failure_effect": "zeroes 128B at x23 (alert buffer); str wzr,[x24] @ 0x210270 = local in-progress flag ONLY",
+                "convergence_va": "0x210268 (ALL three paths)",
                 "cmp_check_va": "0x210044: cmp w21, 1",
                 "us_fallback": ["uslong1.wechat.com", "uslong2.wechat.com", "uslong3.wechat.com",
                                 "uslong4.wechat.com", "uslong8.wechat.com",
@@ -780,9 +791,9 @@ class WeChatREAnalyzer:
                 "  US fallback: uslong[1-4,8].wechat.com + usshort[1-4,8].wechat.com\n"
                 "  This is a live replay candidate: inject via MITM with stale timestamp.\n"
                 "\n"
-                "TIMESTAMP BYPASS: vtable[8] at 0x2101f4 logs 'CheckTimestamp Failed' but\n"
-                "both branches converge at 0x210268 — downgrade continues regardless.\n"
-                "Pending: confirm vtable[8] function body doesn't set shared state."
+                "TIMESTAMP BYPASS: vtable[1] at 0x2101f4 logs 'CheckTimestamp Failed' but\n"
+                "ALL THREE paths converge at 0x210268 — downgrade continues regardless.\n"
+                "CONFIRMED: failure path zeroes 128B at x23 only; no shared blocking state set."
             ),
             "evidence": {
                 "ecdsa_pubkey_va":   "libwechatnetwork.so:0x8c2e9 (335B DER P-256)",
@@ -790,7 +801,7 @@ class WeChatREAnalyzer:
                 "exact_check_va":    "0x210044 (cmp w21, 1)",
                 "hardcoded_alert_va": "0x42d3b",
                 "hardcoded_ts":       "1598803200 (2020-08-30)",
-                "timestamp_check_va": "0x2101f4 (vtable[8] call)",
+                "timestamp_check_va": "0x2101f4 (vtable[1]: ldr x8,[x25,#0xe0]; and x8,x8,#~1; ldr x8,[x8,#8]; blr x8)",
                 "convergence_va":     "0x210268",
                 "us_servers":         ["uslong[1-4,8].wechat.com", "usshort[1-4,8].wechat.com"],
             },
@@ -990,6 +1001,73 @@ class WeChatREAnalyzer:
                 "client_finish_reversed": "0x14",
                 "session_ticket_reversed": "0x48",
             },
+        })
+
+        # F16: gILinkKey zero static refs — writer in libapp.so
+        findings.append({
+            "id": "WX-F16",
+            "title": "gILinkKey has ZERO static refs in libwechatnetwork.so — writer is in libapp.so",
+            "severity": "INFO",
+            "detail": (
+                "Exhaustive static reference survey confirms gILinkKey (_ZN5mmtls9gILinkKeyE)\n"
+                "at VA 0x3d4648 is never written by libwechatnetwork.so itself.\n"
+                "\n"
+                "Survey methodology:\n"
+                "  1. ADRP+ADD scan: 85 ADRP instructions that address page 0x3d4000 found;\n"
+                "     NONE add an ADD offset in [0x648, 0x68F] — no direct PC-relative ref.\n"
+                "  2. RELA.DYN scan: all 8048 APS2-encoded relocations decoded; no\n"
+                "     R_AARCH64_RELATIVE entry with addend in [0x3d4648, 0x3d46B7].\n"
+                "  3. GOT survey: GOT@0x3ce188 (addend=0x3d4600) has 1 caller @ 0x111fbc\n"
+                "     → passes addr to ctor @ 0x111bb0; ctor zeroes exactly [0x3d4600, 0x3d4648)\n"
+                "     = adjacent container object, NOT gILinkKey.\n"
+                "  4. GOT@0x3ce1b8 (addend=0x3d4690) has 4 callers accessing obj+0x218/+0x230,\n"
+                "     well past the 72B gILinkKey range.\n"
+                "  5. LongLinkWithMMTLSC1E ctor @ 0x1ab2c4: vtable+mutex+string init only;\n"
+                "     no writes to gILinkKey range.\n"
+                "\n"
+                "CONCLUSION: gILinkKey is written by libapp.so (or via JNI) after the MMTLS\n"
+                "handshake completes. Static layout (H1 vs H2) cannot be determined without\n"
+                "runtime instrumentation.\n"
+                "\n"
+                "Runtime approach:\n"
+                "  Frida MemoryAccessMonitor watchpoint on libwechatnetwork.so base + 0x3d4648\n"
+                "  with size=72. onAccess callback captures writer PC + stack backtrace.\n"
+                "  After write: hexdump all 72 bytes to map field offsets.\n"
+                "  Cross-correlate with EVP_EncryptInit_ex args[3] (key ptr) and args[4] (nonce ptr)\n"
+                "  to determine byte offsets of each field within the struct."
+            ),
+            "evidence": {
+                "symbol": "_ZN5mmtls9gILinkKeyE",
+                "va": hex(GILIINKKEY_VA),
+                "size_bytes": GILIINKKEY_SIZE,
+                "adrp_hits_to_page": 85,
+                "adrp_hits_with_giilinkkey_offset": 0,
+                "rela_dyn_entries_scanned": 8048,
+                "rela_dyn_hits": 0,
+                "writer_so": "libapp.so (or JNI layer)",
+                "adjacent_ctor_va": "0x111bb0 (zeroes [0x3d4600,0x3d4648) — NOT gILinkKey)",
+                "got_entry_0x3ce188": "addend=0x3d4600, caller=0x111fbc (adjacent container only)",
+                "got_entry_0x3ce1b8": "addend=0x3d4690, 4 callers accessing obj+0x218/+0x230 (past gILinkKey)",
+            },
+            "frida_hook": (
+                "// MemoryAccessMonitor watchpoint — catches the first write to gILinkKey\n"
+                "const libnet = Process.getModuleByName('libwechatnetwork.so');\n"
+                "const keyAddr = libnet.base.add(0x" + format(GILIINKKEY_VA, 'x') + ");\n"
+                "MemoryAccessMonitor.enable({base: keyAddr, size: " + str(GILIINKKEY_SIZE) + "}, {\n"
+                "  onAccess(d) {\n"
+                "    if (d.operation === 'write') {\n"
+                "      console.log('[WX-F16] gILinkKey write from', d.from, 'offset', d.rangeIndex);\n"
+                "      console.log(Thread.backtrace(this.context, Backtracer.ACCURATE)\n"
+                "        .map(DebugSymbol.fromAddress).join('\\n'));\n"
+                "      // Full dump after write settles:\n"
+                "      setTimeout(() => {\n"
+                "        console.log('[WX-F16] gILinkKey contents:');\n"
+                "        console.log(hexdump(keyAddr, {length: " + str(GILIINKKEY_SIZE) + "}));\n"
+                "      }, 100);\n"
+                "    }\n"
+                "  }\n"
+                "});"
+            ),
         })
 
         self.findings.extend(findings)
