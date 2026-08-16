@@ -1322,6 +1322,238 @@ waitForLib("libwechatnetwork.so", function(mod) {{
             }}
         }});
     }}
+
+    // -----------------------------------------------------------------------
+    // Hook 1b: gILinkKey key-insert orchestrator (fn@0x303fb0)
+    // CALLED BY: InstallLinkKey@0x285c84 via BL with x0=[NetCore+0x170]=struct_base
+    // Also called by: gILinkKey_sort_reorder@0x305090 (key rotation)
+    // NOT the raw hlist splice — it's the orchestrator that: inserts node, fires
+    //   post-insert BLR callbacks at 0x30432c/0x304340, re-registers fn@0x304378
+    //   as callback for next handshake via GOT[0x3d00f8] at 0x304294.
+    // Node layout (0x1c0 bytes):
+    //   +0x00 NEXT  +0x08 PPREV  +0x10 key_material  +0x1b8 tick
+    //   guard byte at src[+0x34]: nonzero = early-return (prevents re-entrancy)
+    // key_material layout (base = node+0x10):
+    //   +0x00 raw16  +0x10 u64  +0x18 std::string(str1)
+    //   +0x30 raw16  +0x40 raw32(expiry@+0x08)  +0x60 u64
+    //   +0x68 str2  +0x80 str3  +0x98 str4  +0xb0 int32
+    //   +0xb8 list_head  +0xd0..+0x12f 4×vector<string>
+    // trafficKeyPair candidate: node+0x40..+0x77 (56B raw region)
+    // hlist insert at 0x304074: ldr x10,[x8,#0x48]! → x8=struct_base+0x48=gILinkKey
+    // -----------------------------------------------------------------------
+    var insertFn = mod.base.add(0x303fb0);
+    var insertCount = 0;
+    Interceptor.attach(insertFn, {{
+        onEnter: function(args) {{
+            this.structBase = args[0];    // x0 = struct_base (= gILinkKey-0x48 = [NetCore+0x170])
+            this.srcKey     = args[1];   // x1 = source key_material ptr
+            this.callId     = ++insertCount;
+            var guardByte = '?';
+            try {{ guardByte = this.srcKey.add(0x34).readU8(); }} catch(e) {{}}
+            // guardByte nonzero = INSERT will return 0 early (re-entrancy guard)
+            console.log('[gILinkKey INSERT #' + this.callId + '] src=' + this.srcKey +
+                        ' guard=' + guardByte + (guardByte !== 0 ? ' (WILL SKIP)' : ''));
+        }},
+        onLeave: function() {{
+            var structBase = this.structBase;
+            try {{
+                var newNode   = structBase.add(0x50).readPointer();
+                var countAfter = structBase.add(0x60).readU64().toNumber();
+                var expiry    = newNode.add(0x58).readS32();
+                var tick      = newNode.add(0x1b8).readU64().toNumber();
+                console.log('[gILinkKey INSERT #' + this.callId + ' DONE] node=' + newNode +
+                            ' count=' + countAfter + ' expiry=' + expiry + 'ms tick=' + tick);
+                // trafficKeyPair candidate: node+0x40..+0x77 (56B)
+                var keyRaw = hexdump(newNode.add(0x40), {{offset:0, length:56, header:false, ansi:false}});
+                console.log('  keyPair[56B]:\\n' + keyRaw);
+                // str1 (std::string, libc++ SSO, at node+0x28)
+                var ssoDisc = newNode.add(0x3f).readU8(); // byte[0x2f] = SSO discriminant
+                var str1 = _readLibcppString(newNode.add(0x28));
+                if (str1) console.log('  str1(node+0x28): ' + str1);
+            }} catch(e) {{
+                console.log('[gILinkKey INSERT #' + this.callId + '] dump err: ' + e);
+            }}
+        }}
+    }});
+
+    function _readLibcppString(base) {{
+        try {{
+            var disc = base.add(0x17).readU8();
+            if ((disc & 0x80) === 0) {{
+                var len = (disc >> 1) & 0x7f;
+                if (len === 0) return null;
+                return base.readByteArray(len);
+            }} else {{
+                var ptr2 = base.readPointer();
+                var size = base.add(0x10).readU64().toNumber();
+                if (size === 0 || ptr2.isNull()) return null;
+                return ptr2.readByteArray(Math.min(size, 64));
+            }}
+        }} catch(e) {{ return null; }}
+    }}
+
+    // NetCore callers — attribute which event triggered INSERT
+    var callers = [
+        [0x2898d4, 'OnNetworkChange'],
+        [0x28b698, '__ConnStatusCallBack'],
+        [0x293af0, 'operator()_lambda'],
+        [0x287b10, '__OnLongLinkNetworkError'],
+        [0x28646c, '__OnShortLinkNetworkError'],
+        [0x305090, 'gILinkKey_sort_reorder'],  // calls INSERT internally during key rotation
+    ];
+    for (var i = 0; i < callers.length; i++) {{
+        (function(off, name) {{
+            Interceptor.attach(mod.base.add(off), {{
+                onEnter: function() {{
+                    console.log('[NetCore] ' + name + ' fired');
+                }}
+            }});
+        }})(callers[i][0], callers[i][1]);
+    }}
+
+    // -----------------------------------------------------------------------
+    // Hook 1d: __InitLongLink callback registration (fn@0x284d5c, BL at 0x284e7c)
+    // __InitLongLink allocs 0x20B functor and calls fn@0x28fac8 to store it:
+    //   functor[0x00] = InstallLinkKey ptr (GOT[0x3cf820] = base+0x285ac4)
+    //   functor[0x08] = 0
+    //   functor[0x10] = NetCore* (x19 at registration time)
+    //   functor[0x18] = 2 (bound type flag, w23=2 at 0x284db8)
+    // Manager table ptr (GOT[0x3cf828] = base+0x3c8148) stored alongside.
+    // -----------------------------------------------------------------------
+    var initLongLinkBL = mod.base.add(0x284e7c);  // BL to fn@0x28fac8
+    Interceptor.attach(initLongLinkBL, {{
+        onEnter: function(args) {{
+            // x0 = &sp[0x60] = mars_boost::function object being registered
+            var funcObj = args[0];
+            console.log('[__InitLongLink] InstallLinkKey callback registration, func_obj=' + funcObj);
+            try {{
+                var managerPtr = funcObj.readPointer();
+                var functorPtr = funcObj.add(8).readPointer();
+                console.log('  manager_ptr (table @ base+0x3c8148): ' + managerPtr);
+                console.log('  functor_ptr (0x20B object): ' + functorPtr);
+                if (!functorPtr.isNull()) {{
+                    var installKeyFn = functorPtr.readPointer();
+                    var netcore = functorPtr.add(0x10).readPointer();
+                    var flag = functorPtr.add(0x18).readU32();
+                    console.log('  functor[0x00] InstallLinkKey: ' + installKeyFn);
+                    console.log('  functor[0x10] NetCore*: ' + netcore);
+                    console.log('  functor[0x18] bound_type_flag: ' + flag);
+                }}
+            }} catch(e) {{ console.log('  dump err: ' + e); }}
+        }}
+    }});
+
+    // -----------------------------------------------------------------------
+    // Hook 1e: mars_boost invoke thunk (fn@0x28fd70, table slot[1] @ base+0x3c8150)
+    // Called when LongLink fires the registered callback post-MMTLS handshake.
+    // TAIL CALLS InstallLinkKey via BR x7 (no LR update) — LR at entry = caller.
+    // Arg layout at invoke thunk entry:
+    //   x0 = functor_ptr (the 0x20B object from __InitLongLink)
+    //   x1..x5 = MMTLS handshake args from LongLink callback site
+    // Invoke thunk shuffles → InstallLinkKey sees:
+    //   x0=NetCore*, x1=2(bound), x2=orig_x1, x3=orig_x2, x4=orig_x3, x5=orig_x4(ILinkKey*), x6=orig_x5
+    // this.returnAddress here = LR = instr after BLR in LongLink handshake handler
+    // -----------------------------------------------------------------------
+    var invokeThunk = mod.base.add(0x28fd70);
+    Interceptor.attach(invokeThunk, {{
+        onEnter: function(args) {{
+            console.log('[mars_boost_invoke] caller=' + this.returnAddress +
+                        ' functor=' + args[0] +
+                        ' mmtls_arg1=' + args[1].toInt32() +
+                        ' mmtls_arg2=' + args[2].toInt32());
+        }}
+    }});
+
+    // -----------------------------------------------------------------------
+    // Hook 1f: MMTLS handshake completion handler (fn@0x304378)
+    // Called by: MMTLS state machine via stored fn ptr (BLR, exact call site TBD)
+    //   Registered/re-registered by fn@0x303fb0 at 0x304294 via GOT[0x3d00f8].
+    // x0 = struct_base (= [NetCore+0x170] = gILinkKey-0x48)
+    // Entry checks: [x0+0x20] = mars_boost callback table_ptr (0 → early log+return)
+    // Fires the mars_boost callback at struct_base+0x20 which calls invoke_thunk →
+    //   InstallLinkKey. BLR at 0x304a5c with w1=9, w2=-1, w3=-14 (normal key install).
+    // Post-insert BLR callbacks at 0x30432c and 0x304340 fire inside fn@0x303fb0
+    //   after hlist insert; these notify external listeners (not the key install path).
+    // -----------------------------------------------------------------------
+    var handshakeHandler = mod.base.add(0x304378);
+    Interceptor.attach(handshakeHandler, {{
+        onEnter: function(args) {{
+            this.structBase = args[0];
+            var cbRegistered = '?';
+            try {{ cbRegistered = args[0].add(0x20).readPointer(); }} catch(e) {{}}
+            console.log('[MMTLS_handshake_complete] struct_base=' + args[0] +
+                        ' callback_registered=' + cbRegistered);
+        }},
+        onLeave: function(retval) {{
+            console.log('[MMTLS_handshake_complete] ret=' + retval);
+        }}
+    }});
+
+    // -----------------------------------------------------------------------
+    // Hook 1c: NetCore::InstallLinkKey (fn@0x285ac4)
+    // Full static chain:
+    //   [MMTLS state machine] --BLR--> fn@0x304378(struct_base)
+    //     → [struct_base+0x20] mars_boost dispatch
+    //     → invoke_thunk@0x28fd70 (BLR)
+    //     → BR TAIL CALL → InstallLinkKey@0x285ac4
+    //       → [x22+0x170]=struct_base loaded at 0x285c78
+    //       → BL fn@0x303fb0(struct_base, key_ptr, flag) at 0x285c84
+    //         → hlist insert-at-head + re-register fn@0x304378 for next handshake
+    //         → BLR post-insert callbacks (0x30432c, 0x304340)
+    // Because BR at 0x28fda4 is a tail call (no LR update), this.returnAddress =
+    //   LR from invoke_thunk caller = instr after BLR in fn@0x304378 at 0x304a60.
+    // Arg layout (after invoke thunk's arg shuffle):
+    //   x0 = NetCore* this
+    //   x1 = 2 (bound type flag from functor[0x18], stored by __InitLongLink)
+    //   x2 = original MMTLS arg1 (9 on normal path, 9 on PSK path)
+    //   x3 = original MMTLS arg2 (-1 on normal path, -9 on PSK path)
+    //   x4 = original MMTLS arg3 (-14 on normal path)
+    //   x5 = ILinkKey* fresh key material (original MMTLS arg4)
+    //   x6 = key type/version flag (original MMTLS arg5)
+    // Conditions inside: [this+0x80] = MMTLS-enabled flag
+    // PSK path: args[2]==9 && args[3]==-9 → branch @ 0x285c38 → NOT INSERT path
+    // Normal path: BL INSERT @ 0x285c84 with [this+0x170] as gILinkKey ptr
+    // -----------------------------------------------------------------------
+    var installKey = mod.base.add(0x285ac4);
+    Interceptor.attach(installKey, {{
+        onEnter: function(args) {{
+            var caller = this.returnAddress;
+            var netcoreThis = args[0];
+            var payload   = args[5];   // ILinkKey* (orig MMTLS arg4, shifted by invoke thunk)
+            var keyType   = args[6].toInt32();   // key type flag (orig MMTLS arg5)
+            var boundFlag = args[1].toInt32();   // always 2 (from functor[0x18])
+            var w2 = args[2].toInt32();          // orig MMTLS arg1 (PSK indicator)
+            var w3 = args[3].toInt32();          // orig MMTLS arg2 (-9 on PSK path)
+            var w4 = args[4].toInt32();
+            console.log('[InstallLinkKey] caller=' + caller +
+                        ' this=' + netcoreThis + ' payload=' + payload +
+                        ' bound=' + boundFlag + '/w2:' + w2 + '/w3:' + w3 + '/w4:' + w4 +
+                        ' keyType=' + keyType);
+
+            // MMTLS-enabled flag at [this+0x80]
+            var mmtlsFlag = '?';
+            try {{ mmtlsFlag = netcoreThis.add(0x80).readU8(); }} catch(e) {{}}
+            console.log('  mmtls_flag=[this+0x80]=' + mmtlsFlag);
+
+            // Dump first 0x40 bytes of fresh payload
+            if (!payload.isNull()) {{
+                try {{
+                    var hdr = hexdump(payload, {{offset:0, length:64, header:false, ansi:false}});
+                    console.log('  fresh_payload[0x40]:\\n' + hdr);
+                }} catch(e) {{
+                    console.log('  payload dump err: ' + e);
+                }}
+            }}
+
+            // PSK path: args[2](orig_mmtls_arg1)==9 && args[3](orig_mmtls_arg2)==-9
+            if (w2 === 9 && w3 === -9) {{
+                console.log('  [PSK path] MMTLS_arg1=9 MMTLS_arg2=-9 → branch @ 0x285c38 → NO INSERT');
+            }}
+        }},
+        onLeave: function(retval) {{
+            console.log('[InstallLinkKey] ret=' + retval);
+        }}
+    }});
 }});
 
 // Hook 2: Intercept pack/unpack for plaintext message capture
@@ -1541,6 +1773,243 @@ waitForLib("libMMProtocalJni.so", function(mod) {{
             "output": result.stdout,
             "exit_code": result.returncode,
         }
+
+    # ------------------------------------------------------------------
+    # mmtls-lab PLT/GOT injector integration
+    # ------------------------------------------------------------------
+
+    INJECTOR_DIR = Path(__file__).parent.parent.parent / "mmtls-lab" / "injector"
+    INJECTOR_BIN  = INJECTOR_DIR / "mmtls_inject"
+    LIBHOOK_SO    = INJECTOR_DIR / "libhook.so"
+    DEVICE_INJ    = "/data/local/tmp/mmtls_inject"
+    DEVICE_HOOK   = "/data/local/tmp/libhook.so"
+
+    def _injector_ready(self):
+        """True if both ARM64 binaries have been built."""
+        return self.INJECTOR_BIN.exists() and self.LIBHOOK_SO.exists()
+
+    def injector_build(self):
+        """Cross-compile mmtls_inject + libhook.so (aarch64-linux-gnu-gcc)."""
+        build = self.INJECTOR_DIR / "build.sh"
+        if not build.exists():
+            return {"error": f"build.sh not found at {build}"}
+        stdout, stderr, rc = _run(["bash", str(build)])
+        if rc != 0:
+            return {"error": stderr.strip(), "stdout": stdout.strip()}
+        return {"ok": True, "stdout": stdout.strip()}
+
+    def injector_push(self):
+        """ADB-push mmtls_inject + libhook.so to device."""
+        if not self._injector_ready():
+            r = self.injector_build()
+            if "error" in r:
+                return r
+
+        for src, dst in [(str(self.INJECTOR_BIN), self.DEVICE_INJ),
+                         (str(self.LIBHOOK_SO),   self.DEVICE_HOOK)]:
+            _, stderr, rc = _run(["adb", "push", src, dst])
+            if rc != 0:
+                return {"error": f"push {src} failed: {stderr.strip()}"}
+
+        _run(["adb", "shell", "chmod", "755", self.DEVICE_INJ])
+        _run(["adb", "shell", "chmod", "755", self.DEVICE_HOOK])
+
+        # Set LD_PRELOAD wrap prop so libhook.so loads on next WeChat launch
+        _run(["adb", "shell", "setprop", "wrap.com.tencent.mm",
+              f"LD_PRELOAD={self.DEVICE_HOOK}"])
+        return {"pushed": [self.DEVICE_INJ, self.DEVICE_HOOK],
+                "ldpreload_prop": "set"}
+
+    def injector_dump_key(self):
+        """
+        Non-destructive: dump gILinkKey from running WeChat (no hooks installed).
+        Returns 72-byte hex string and JSON line for MMTLS key extraction.
+        Requires: root, WeChat running, mmtls_inject on device.
+        """
+        stdout, _, rc = _run(["adb", "shell", "pidof", "com.tencent.mm"])
+        if rc != 0 or not stdout.strip():
+            return {"error": "WeChat not running"}
+        pid = stdout.strip().split()[0]
+
+        if not self._injector_ready():
+            r = self.injector_push()
+            if "error" in r:
+                return r
+
+        # Check binary is on device
+        _, _, rc2 = _run(["adb", "shell", f"test -x {self.DEVICE_INJ}"])
+        if rc2 != 0:
+            r = self.injector_push()
+            if "error" in r:
+                return r
+
+        out, err, rc = _run(["adb", "shell",
+                              f"{self.DEVICE_INJ} {pid} --dump-key-only"])
+        result = {"pid": pid, "raw": out}
+
+        # Parse JSON line
+        for line in out.splitlines():
+            if line.startswith("[JSON]"):
+                import json as _json
+                try:
+                    result["key_json"] = _json.loads(line[7:])
+                    result["gILinkKey"] = result["key_json"].get("gILinkKey")
+                except Exception:
+                    pass
+            elif line.startswith("[KEY]"):
+                result["key_header"] = line
+
+        if rc != 0:
+            result["error"] = err.strip()
+        return result
+
+    def injector_install_hooks(self):
+        """
+        Attach to WeChat via ptrace and patch PLT/GOT for send/recv/connect/sendto/recvfrom.
+        libhook.so must already be mapped (requires WeChat restart after injector_push).
+        Monitor output: adb logcat -s mmhook
+        """
+        stdout, _, rc = _run(["adb", "shell", "pidof", "com.tencent.mm"])
+        if rc != 0 or not stdout.strip():
+            return {"error": "WeChat not running"}
+        pid = stdout.strip().split()[0]
+
+        # Verify libhook.so is mapped
+        maps_out, _, _ = _run(["adb", "shell", f"grep libhook /proc/{pid}/maps"])
+        if not maps_out.strip():
+            return {
+                "error": "libhook.so not mapped in WeChat",
+                "fix": (
+                    "1. Run injector_push() to set LD_PRELOAD prop\n"
+                    "2. Force-stop WeChat: adb shell am force-stop com.tencent.mm\n"
+                    "3. Relaunch WeChat from UI\n"
+                    "4. Re-run injector_install_hooks()"
+                )
+            }
+
+        out, err, rc = _run(["adb", "shell", f"{self.DEVICE_INJ} {pid}"])
+        result = {"pid": pid, "output": out}
+
+        patched = [l for l in out.splitlines() if l.startswith("[+]")]
+        result["patched_symbols"] = [l.split()[1] for l in patched]
+        result["patched_count"]   = len(patched)
+
+        if rc != 0:
+            result["error"] = err.strip()
+        else:
+            result["monitor_cmd"] = "adb logcat -s mmhook"
+
+        return result
+
+    # ------------------------------------------------------------------
+    # mmtls_probe integration (discover / hook / dump)
+    # ------------------------------------------------------------------
+
+    PROBE_DIR  = Path(__file__).parent.parent.parent / "mmtls-lab" / "probe"
+    PROBE_BIN  = PROBE_DIR / "mmtls_probe"
+    DEVICE_PROBE = "/data/local/tmp/mmtls_probe"
+
+    def _probe_ready(self):
+        return self.PROBE_BIN.exists()
+
+    def probe_build(self):
+        """Cross-compile mmtls_probe static binary."""
+        build = self.PROBE_DIR / "build.sh"
+        if not build.exists():
+            return {"error": f"probe build.sh not found at {build}"}
+        stdout, stderr, rc = _run(["bash", str(build)])
+        if rc != 0:
+            return {"error": stderr.strip(), "stdout": stdout.strip()}
+        return {"ok": True, "stdout": stdout.strip()}
+
+    def probe_push(self):
+        """ADB-push mmtls_probe to device."""
+        if not self._probe_ready():
+            r = self.probe_build()
+            if "error" in r:
+                return r
+        _, stderr, rc = _run(["adb", "push", str(self.PROBE_BIN), self.DEVICE_PROBE])
+        if rc != 0:
+            return {"error": f"push failed: {stderr.strip()}"}
+        _run(["adb", "shell", "chmod", "755", self.DEVICE_PROBE])
+        return {"pushed": self.DEVICE_PROBE}
+
+    def probe_discover(self):
+        """
+        Run mmtls_probe discover — single-step from HKDF_RET until gILinkKey changes.
+        Returns writer_pc (absolute runtime addr) and the first captured key.
+        Requires: WeChat already logged in and connected (handshake in flight or trigger login).
+        """
+        _, _, rc2 = _run(["adb", "shell", f"test -x {self.DEVICE_PROBE}"])
+        if rc2 != 0:
+            r = self.probe_push()
+            if "error" in r:
+                return r
+
+        out, err, rc = _run(["adb", "shell", f"su -c '{self.DEVICE_PROBE} discover'"],
+                             timeout=120)
+        result = {"stderr": err.strip(), "exit_code": rc}
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    obj = json.loads(line)
+                    result.update(obj)
+                    if "writer_pc" in obj:
+                        result["writer_pc_int"] = int(obj["writer_pc"], 16)
+                except Exception:
+                    pass
+        return result
+
+    def probe_hook(self, writer_pc: int):
+        """
+        Run mmtls_probe hook <writer_pc> — stream key JSON lines per handshake.
+        Blocks until WeChat exits or probe is killed.
+        Returns list of captured key dicts.
+        """
+        _, _, rc2 = _run(["adb", "shell", f"test -x {self.DEVICE_PROBE}"])
+        if rc2 != 0:
+            r = self.probe_push()
+            if "error" in r:
+                return r
+
+        pc_hex = hex(writer_pc)
+        out, err, rc = _run(
+            ["adb", "shell", f"su -c '{self.DEVICE_PROBE} hook {pc_hex}'"],
+            timeout=3600
+        )
+        events = []
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    events.append(json.loads(line))
+                except Exception:
+                    pass
+        return {"events": events, "count": len(events), "stderr": err.strip()}
+
+    def probe_dump(self):
+        """
+        Run mmtls_probe dump — poll gILinkKey until non-zero, return one snapshot.
+        Use when WeChat is already connected (key already written to BSS).
+        """
+        _, _, rc2 = _run(["adb", "shell", f"test -x {self.DEVICE_PROBE}"])
+        if rc2 != 0:
+            r = self.probe_push()
+            if "error" in r:
+                return r
+
+        out, err, rc = _run(["adb", "shell", f"su -c '{self.DEVICE_PROBE} dump'"],
+                             timeout=30)
+        result = {"stderr": err.strip(), "exit_code": rc}
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    result.update(json.loads(line))
+                except Exception:
+                    pass
+        return result
 
     # ------------------------------------------------------------------
     # Full analysis
