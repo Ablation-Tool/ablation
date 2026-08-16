@@ -266,6 +266,89 @@ class HiJoyPTTRE:
 
         return report
 
+    # ── live tracing (hijoy_trace native binary) ────────────────────────────
+
+    TRACER_DIR    = Path(__file__).parent.parent.parent / "hijoy-trace"
+    TRACER_BIN    = TRACER_DIR / "hijoy_trace"
+    DEVICE_TRACER = "/data/local/tmp/hijoy_trace"
+    PACKAGE       = "com.hijoytech.iwalkie30"
+
+    def _tracer_ready(self) -> bool:
+        return self.TRACER_BIN.exists()
+
+    def tracer_build(self) -> bool:
+        if not self.TRACER_BIN.parent.exists():
+            return False
+        r = subprocess.run(["bash", str(self.TRACER_DIR / "build.sh")],
+                           capture_output=True, text=True)
+        print(r.stdout + r.stderr)
+        return r.returncode == 0
+
+    def tracer_push(self) -> bool:
+        if not self._tracer_ready():
+            print("[!] tracer binary not built — run tracer_build() first")
+            return False
+        r = subprocess.run(
+            ["adb", "push", str(self.TRACER_BIN), self.DEVICE_TRACER],
+            capture_output=True, text=True)
+        subprocess.run(
+            ["adb", "shell", f"chmod 755 {self.DEVICE_TRACER}"],
+            capture_output=True)
+        return r.returncode == 0
+
+    def _get_pid(self) -> int:
+        r = subprocess.run(
+            ["adb", "shell", f"pidof {self.PACKAGE}"],
+            capture_output=True, text=True)
+        try:
+            return int(r.stdout.strip().split()[0])
+        except (ValueError, IndexError):
+            return 0
+
+    def tracer_start(self, duration: int = 3600) -> list:
+        """
+        Attach hijoy_trace to the running iWalkie process.
+        Returns a list of decoded JSON event dicts.
+        Streams to stderr until timeout or process exit.
+        """
+        pid = self._get_pid()
+        if not pid:
+            raise RuntimeError(f"{self.PACKAGE} not running")
+
+        out, err = [], []
+        cmd = ["adb", "shell", f"su -c '{self.DEVICE_TRACER} {pid}'"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        import threading, time
+
+        def drain_stderr():
+            for line in proc.stderr:
+                print(line, end="", flush=True)
+
+        t = threading.Thread(target=drain_stderr, daemon=True)
+        t.start()
+
+        deadline = time.time() + duration
+        events = []
+        try:
+            while time.time() < deadline:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    print(f"[raw] {line}")
+        except KeyboardInterrupt:
+            pass
+        finally:
+            proc.terminate()
+            proc.wait()
+
+        return events
+
 def main():
     parser = argparse.ArgumentParser(
         description='HiJoy PTT Protocol Reverse Engineering Tool',
