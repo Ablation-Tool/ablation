@@ -1441,6 +1441,108 @@ waitForLib("libMMProtocalJni.so", function(mod) {{
         return result
 
     # ------------------------------------------------------------------
+    # wechat-probe: custom ARM64 hardware watchpoint tool
+    # ------------------------------------------------------------------
+
+    # Source: /media/cowboy/research/wechat-re/tools/wechat-probe/
+    # Build:  aarch64-linux-gnu-gcc -O2 -static -o wechat-probe probe.c
+    # Target: mmtls::gILinkKey @ libwechatnetwork.so+0x3d4648 (72 bytes)
+
+    PROBE_SRC = "/media/cowboy/research/wechat-re/tools/wechat-probe"
+    PROBE_BIN = "/media/cowboy/research/wechat-re/tools/wechat-probe/wechat-probe"
+    PROBE_DEVICE_PATH = "/data/local/tmp/wechat-probe"
+
+    def wechat_probe_build(self):
+        """Cross-compile wechat-probe for arm64."""
+        import subprocess, os
+        src = self.PROBE_SRC
+        if not os.path.isdir(src):
+            return {"error": f"source dir not found: {src}"}
+        result = subprocess.run(
+            ["make", "-C", src],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return {"error": result.stderr.strip()}
+        return {
+            "binary": self.PROBE_BIN,
+            "stdout": result.stdout.strip(),
+        }
+
+    def wechat_probe_push(self):
+        """ADB-push wechat-probe to device."""
+        import os
+        if not os.path.isfile(self.PROBE_BIN):
+            r = self.wechat_probe_build()
+            if "error" in r:
+                return r
+
+        stdout, stderr, rc = _run(["adb", "push", self.PROBE_BIN, self.PROBE_DEVICE_PATH])
+        if rc != 0:
+            return {"error": stderr.strip()}
+        _run(["adb", "shell", "chmod", "+x", self.PROBE_DEVICE_PATH])
+        return {"pushed": self.PROBE_DEVICE_PATH}
+
+    def wechat_probe_watch(self):
+        """
+        Attach wechat-probe to running WeChat and set HW write watchpoint on gILinkKey.
+        Blocks until watchpoint fires.  Returns writer PC (relative to lib base), LR,
+        and 72-byte hex dump with H1/H2 annotations.
+        Requires: rooted device, WeChat running, ADB connected.
+        """
+        import subprocess
+
+        # Ensure binary is on device
+        r = self.wechat_probe_push()
+        if "error" in r:
+            return r
+
+        # Get WeChat PID
+        stdout, _, rc = _run(["adb", "shell", "pidof", "com.tencent.mm"])
+        if rc != 0 or not stdout.strip():
+            return {"error": "WeChat (com.tencent.mm) is not running"}
+        pid = stdout.strip().split()[0]
+
+        print(f"[*] wechat-probe watch pid={pid} — waiting for gILinkKey write...")
+        print("[*] Trigger: open a WeChat chat or send a message to force MMTLS handshake\n")
+
+        proc = subprocess.run(
+            ["adb", "shell", "su", "-c",
+             f"{self.PROBE_DEVICE_PATH} watch {pid}"],
+            capture_output=False,  # stream to terminal
+            text=True
+        )
+        return {"exit_code": proc.returncode}
+
+    def wechat_probe_dump(self):
+        """
+        One-shot dump of gILinkKey from running WeChat via /proc/pid/mem.
+        Does NOT attach with ptrace — reads the current value of the 72-byte key.
+        Use post-handshake to capture the live session key.
+        """
+        import subprocess
+
+        r = self.wechat_probe_push()
+        if "error" in r:
+            return r
+
+        stdout, _, rc = _run(["adb", "shell", "pidof", "com.tencent.mm"])
+        if rc != 0 or not stdout.strip():
+            return {"error": "WeChat not running"}
+        pid = stdout.strip().split()[0]
+
+        result = subprocess.run(
+            ["adb", "shell", "su", "-c",
+             f"{self.PROBE_DEVICE_PATH} dump {pid}"],
+            capture_output=True, text=True
+        )
+        return {
+            "pid": pid,
+            "output": result.stdout,
+            "exit_code": result.returncode,
+        }
+
+    # ------------------------------------------------------------------
     # Full analysis
     # ------------------------------------------------------------------
 
