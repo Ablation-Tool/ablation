@@ -15,7 +15,7 @@ Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules sh
 
 | Platform | Coverage |
 |----------|----------|
-| Linux (ELF — x86-64, ARM64, MIPS) | Binary RE, live process, privesc, containers |
+| Linux (ELF — x86-64, ARM64, MIPS) | Binary RE, live process, privesc, containers, garble-obfuscated Go |
 | **macOS / Apple Silicon** | **Mach-O, Swift ABI, Orka cluster RE, malware persistence, Keychain, MDM** |
 | Windows (PE / PE32+) | Kernel driver RE, IOCTL dispatch, DKOM, SSDT, DSE bypass |
 | Docker | Escape surface, socket mounts, capability audit |
@@ -66,6 +66,9 @@ print(hex(p2.GP_NAME_OFFSET), hex(p2.OVERFLOW_DELTA))
 
 # Kafka / Flink / NiFi enumeration
 ./ablation --kafka 10.0.0.1:9092
+
+# Go binary obfuscated with garble (GoReSym fails → use this)
+python3 modules/go_garble_re.py /path/to/binary
 ```
 
 ## Requirements
@@ -567,6 +570,49 @@ wx.probe_dump()
 
 ---
 
+### Go Binary RE
+
+#### `go_garble_re` — garble-obfuscated Go ELF static analysis
+
+Handles Go binaries compiled with `mvdan/garble` — the standard Go RE toolchain (GoReSym, `strings`, pclntab parsers) fails completely on these because garble encrypts all string constants at compile time, scrambles the pclntab function table, and renames every package and symbol. This module works around all three.
+
+```bash
+python3 modules/go_garble_re.py /path/to/binary
+```
+
+**What it does:**
+
+- **Correct VA→file-offset mapping** — parses ELF LOAD program headers directly. Stock ablation `--binary` and `--go-re` modes treat the entry-point VA as a file offset (wrong for any non-PIE Go binary with a high base like `0x400000`). This module converts every virtual address correctly via `va - p_vaddr + p_offset`.
+- **pclntab detection + garble diagnosis** — locates the Go function table by magic bytes (supports Go 1.12/1.16/1.18/1.20+ formats). Reports whether garble has scrambled the header (invalid `quantum`/`ptrsize` fields signal obfuscation; GoReSym will fail on these).
+- **Bootstrap chain tracer** — Capstone disassembly that follows the Go runtime call chain from the entry point (`_rt0_amd64_linux` → `_rt0_amd64` → `runtime.rt0_go` → ...) using correct VA-aware addressing, not raw file offset iteration.
+- **String anchor xref scanner** — given a known string's file offset (e.g. a port number found by `strings`), converts it to VA and scans all executable segments for RIP-relative LEA instructions that load that exact address. Finds every site that references the string — the surrounding function is the string's user.
+- **Garble decrypt stub finder** — garble inserts a per-string XOR decrypt stub called from every use site. Scans all CALLs to find the most frequently called short functions and flags those with XOR instructions — these are the decrypt stubs. Reversing one stub + its call sites maps a full string decryption chain.
+
+```python
+from modules.go_garble_re import analyze_go_garble_binary
+
+result = analyze_go_garble_binary('/path/to/linkease')
+print(result['pclntab'])          # garble diagnosis
+print(result['bootstrap'])        # entry → rt0 call chain with VA + file offsets
+print(result['string_xrefs'])     # LEA sites referencing string anchors
+print(result['decrypt_stubs'])    # top XOR-stub candidates by call frequency
+```
+
+**Findings structure:**
+
+| Key | Contents |
+|-----|----------|
+| `elf` | Entry VA, file offset, LOAD segment map |
+| `pclntab` | Magic, quantum, ptrsize, nfunc (or garble-scrambled values) |
+| `bootstrap` | Per-stage VA + file offset + first 8 instructions |
+| `string_xrefs` | Per-anchor: xref count + list of LEA instruction VAs |
+| `decrypt_stubs` | Top candidates: VA, call count, XOR flag, instruction preview |
+| `findings` | Human-readable summary line per finding |
+
+**When to reach for it:** Any Go binary where GoReSym returns `"failed to locate pclntab"` or `"failed to read pclntab"` — that's the garble signature. Also useful for stripped Go binaries with no section headers (pclntab found by magic scan, not section lookup).
+
+---
+
 ### Utilities
 
 #### `utils/poc_radius_ou_inject.py` — RADIUS Group Policy Injection PoC
@@ -621,6 +667,7 @@ ablation/
 │   ├── nexus_dashboard_enum.py
 │   ├── ios_enum.py
 │   ├── hyperflex_enum.py
+│   ├── go_garble_re.py             ← garble-obfuscated Go ELF RE
 │   ├── wechat_re.py
 │   ├── docker_enum.py
 │   ├── k8s_enum.py
