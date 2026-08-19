@@ -5161,7 +5161,7 @@ def probe_sip_media_interception(host: str, port: int = 5060, timeout: float = 1
     sdp_body = '\r\n'.join([
         'v=0',
         f'o=- 1234567890 1234567890 IN IP4 {local_ip}',
-        's=NuClide SIP Probe',
+        's= SIP Probe',
         f'c=IN IP4 {local_ip}',
         't=0 0',
         'm=audio 20000 RTP/AVP 0',
