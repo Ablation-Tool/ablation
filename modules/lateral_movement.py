@@ -6109,7 +6109,7 @@ def detect_ssh_weak_auth_surface(host, port=22, timeout=10.0) -> list:
     """SSH server weak authentication configuration surface.
 
     Synthesized from Security with Go Ch.13 (SSH client, brute-force patterns,
-    RFC 4253 transport layer) and the NuClide lateral-movement doctrine.
+    RFC 4253 transport layer) and the  lateral-movement doctrine.
     Probes kex_init negotiation to surface legacy algorithms without completing
     the DH exchange — stdlib only (struct + socket).
     """
@@ -6194,7 +6194,7 @@ def detect_ssh_weak_auth_surface(host, port=22, timeout=10.0) -> list:
         banner = raw_banner.split(b'\n')[0].decode('utf-8', errors='replace').strip()
 
         # Client sends its own version string (RFC 4253 requirement)
-        sock.sendall(b'SSH-2.0-NuClide_1.0\r\n')
+        sock.sendall(b'SSH-2.0-_1.0\r\n')
 
         # Legacy version check
         if banner.startswith('SSH-'):
@@ -6392,7 +6392,7 @@ def detect_exposed_jump_host_indicators(host, port=22, timeout=10.0) -> list:
         banner_line = raw_banner.split(b'\n')[0].decode('utf-8', errors='replace').strip()
         banner_lower = banner_line.lower()
 
-        sock.sendall(b'SSH-2.0-NuClide_1.0\r\n')
+        sock.sendall(b'SSH-2.0-_1.0\r\n')
 
         # Jump-host keyword detection in banner
         matched_kw = [kw for kw in JUMP_HOST_KEYWORDS if kw in banner_lower]
