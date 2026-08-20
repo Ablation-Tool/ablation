@@ -252,29 +252,17 @@ def extract_key(console: FTDConsole = None) -> bytes | None:
     4. Oracle each 16-byte candidate
     Returns raw key bytes or None.
     """
-    # Step 1: Kill current Tomcat via console
+    # Step 1: Restart Tomcat cleanly via pmtool (confirmed name: ngfwWebUi)
     if console:
-        r = console.run(
-            f'echo {SUDO_PASSWORD!r} | sudo -S ps aux 2>/dev/null | '
-            f'grep "ngfwWebUi.*java" | grep -v grep | awk \'{{print $2}}\'',
-            wait=5
-        )
-        cur_pids = [l.strip() for l in r.split('\n') if l.strip().isdigit()]
-        print(f'[*] Current Tomcat PIDs: {cur_pids}')
-        cur_pid = cur_pids[0] if cur_pids else None
-
-        if cur_pid:
-            print(f'[*] Killing PID {cur_pid} (supervisor will restart)...')
-            console.run(
-                f'echo {SUDO_PASSWORD!r} | sudo -S kill -9 {cur_pid} 2>&1',
-                wait=4
-            )
+        print('[*] Restarting FDM via pmtool restartbytype ngfwWebUi...')
+        console.run('pmtool restartbytype ngfwWebUi 2>&1', wait=5)
     else:
         # Running directly on FTD as root
         pid = find_tomcat_pid()
         if pid:
-            print(f'[*] Killing PID {pid}...')
-            subprocess.run(['kill', '-9', str(pid)])
+            print(f'[*] Restarting via pmtool (current PID {pid})...')
+            subprocess.run(['pmtool', 'restartbytype', 'ngfwWebUi'],
+                           capture_output=True)
 
     # Step 2: Poll for new PID
     print('[*] Waiting for new Tomcat PID...')
