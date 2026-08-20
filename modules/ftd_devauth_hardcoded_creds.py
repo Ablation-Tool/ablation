@@ -38,31 +38,43 @@ CRACKED CREDENTIALS (SHA-256 brute-force):
   Pattern: {Role}123$ variants are likely newer FTD/FDM defaults where Cisco added '$'
   to satisfy password complexity requirements (appears in FTD 7.x).
 
-SCOPE:
-  DevAuthenticationProvider is the DEFAULT auth provider (isDefaultProvider=true).
-  These hardcoded credentials work on EVERY FTD with FDM, regardless of config.
-  The "Sourcefire" password is a legacy default from pre-Cisco acquisition era.
-  "Admin123" / "Reader123" / "Writer123" are standard Cisco lab/dev defaults.
+SCOPE (REVISED 2026-08-19 — Spring @Profile analysis):
+  DevAuthenticationProvider is CONDITIONALLY active:
 
-IMPACT:
-  - admin credentials (Admin123 / Sourcefire) → full FDM admin access
-  - Admin FDM access → all F-FTD-67 (config import zip-slip) attack vectors
-  - Admin FDM access → all F-FTD-65 (config export KEK extraction)
-  - Reader credentials → read access to FTD config / state (passive exfil)
-  - Writer credentials → config write without full admin scope
+  UnifiedWebSecurityConfigurer (core-security.jar):
+    @Bean
+    @Order(0)
+    @Profile("dev")                             ← KEY: dev profile only
+    public NgfwAuthenticationProvider devAuthenticationProvider() {
+        return new DevAuthenticationProvider();
+    }
 
-Chain:
-  F-FTD-79 (admin:Admin123 or admin:Sourcefire)
-    → POST /fdm/token {"grant_type":"password","username":"admin","password":"Admin123"}
-    → Get JWT token
-    → Full FDM API access as admin
+  Production FTD JVM args: -Dspring.profiles.active=production,server-mode
+  → "dev" NOT in active profiles → DevAuthenticationProvider NOT instantiated
+  → reader/writer accounts NOT functional on production FTD deployments
+
+  ADMIN HASH FALLBACK (separate from @Profile gate):
+    The DEFAULT_ADMIN_HASHES fallback fires when:
+      username == "admin" AND userFromDb.getPassword() == null (no DB password set)
+    On factory-fresh FTD where admin password has NOT been set via FDM:
+      Admin123 / Admin123$ / Sourcefire all bypass auth via hash comparison
+    After admin password is set in DB: hash fallback bypassed; DB password required
+
+IMPACT (corrected):
+  - admin hash bypass: affects UNCONFIGURED FTD only (no DB password set)
+    → factory-fresh or first-boot state; overlaps with F-FTD-60 (EasySetup pre-auth)
+  - reader/writer: only on FTD with dev Spring profile (lab/CI builds, NOT production)
+  - The "Sourcefire" legacy password may work on very old lab deployments
+
+Chain (unconfigured FTD):
+  F-FTD-79 (admin:Admin123 — factory-fresh, no DB password)
+    → POST /api/fdm/v6/fdm/token {"grant_type":"password","username":"admin","password":"Admin123"}
+    → Get JWT token → full FDM API access as admin
     → F-FTD-67 (config import zip-slip) → arbitrary file write as www
     → F-FTD-69 (sudo chmod SUID) → root
-    → F-FTD-73 (PERL5LIB hijack) → root code exec
 
-Affected: FTD 6.7.0-65 + 7.x (DevAuthenticationProvider in core-security.jar; {Role}123$ variants
-         confirm presence in 7.x — Cisco added '$' suffix for complexity requirements in later versions)
-Auth required: None (these ARE the credentials)
+Affected: Factory-fresh / unconfigured FTD 6.x + 7.x; dev-profile lab builds
+Auth required: None (these ARE the credentials, but only work on unconfigured devices)
 """
 
 # CONTROLLED ENVIRONMENT ONLY
