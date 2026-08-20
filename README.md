@@ -21,7 +21,7 @@ Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules sh
 | Docker | Escape surface, socket mounts, capability audit |
 | Kubernetes | SA token extraction, RBAC, secret read, etcd direct access |
 | **Orka** | **K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC service map** |
-| Cisco ASA / Firepower | LINA struct RE, RADIUS overflow, ASDM JAR, WebVPN JS, ROMMON |
+| Cisco ASA / Firepower | LINA struct RE, RADIUS overflow, ASDM JAR, WebVPN JS, ROMMON, FTD RE engine |
 | Cisco NX-OS / ACI | APIC REST, fabric topology, guestshell rootfs, Nexus Dashboard |
 
 ## Quick start
@@ -71,10 +71,27 @@ print(hex(p2.GP_NAME_OFFSET), hex(p2.OVERFLOW_DELTA))
 
 ```
 Python 3.8+
-capstone      # binary disassembly — pip install capstone
+capstone        # binary disassembly — pip install capstone
 ```
 
-Root is not required for binary analysis. Live-process modes (`net_sniffer`, `syscall_trace`, `process_enum`) need elevated privileges where noted.
+**Cisco RE Engine additional dependencies (optional — only needed for `cisco_re_engine.py`):**
+
+```
+flare-floss     # stack/tight-loop string deobfuscation — pip install flare-floss
+flare-capa      # capability identification — pip install flare-capa
+ropper          # ROP chain generation — pip install ropper
+keystone-engine # shellcode assembly — pip install keystone-engine
+rzpipe          # radare2 Python API — pip install rzpipe
+frida           # dynamic instrumentation — pip install frida-tools
+scapy           # protocol fuzzing — pip install scapy
+```
+
+External binaries: `r2` (radare2), `bindiff` (BinDiff v8), `frida` CLI. capa rule set must be cloned separately:
+```bash
+git clone https://github.com/mandiant/capa-rules.git /tmp/capa-rules
+```
+
+Root is not required for binary analysis. Live-process modes (`net_sniffer`, `syscall_trace`, `process_enum`) and Frida attach (`cisco_re_engine.py --mode frida`) need elevated privileges where noted.
 
 ---
 
@@ -265,6 +282,50 @@ ASA REST API (`/api/...`, 9.3+) endpoint enumeration. Unauthenticated surface ma
 #### `cisco_asa_cred_audit` — ASA credential audit
 
 Credential testing across web management, ASDM, and REST API. Measures lockout behavior per-interface. Maps auth stack (local vs RADIUS vs TACACS+).
+
+#### `cisco_re_engine` — Unified Cisco RE platform (8 modules)
+
+**CONTROLLED ENVIRONMENT ONLY**
+
+Cisco-specialized RE suite integrating FLOSS, capa, radare2, BinDiff/Diaphora, Frida, ropper, keystone, and Scapy into a single ablation-native module. Purpose-built heuristics for lina, FTD, ASA, and AnyConnect.
+
+```bash
+# Static analysis: FLOSS + capa + r2 on a Cisco ELF
+python3 modules/cisco_re_engine.py /tmp/ftd-p6/usr/local/asa/bin/lina --mode static
+
+# Full static chain
+python3 modules/cisco_re_engine.py /path/to/lina --mode full
+
+# Semantic firmware diff (two versions)
+python3 modules/cisco_re_engine.py /path/to/lina-old --mode diff --binary-b /path/to/lina-new
+
+# Frida attach to running process
+python3 modules/cisco_re_engine.py /path/to/lina --mode frida --process lina
+
+# ROP gadget discovery + shellcode assembly
+python3 modules/cisco_re_engine.py /path/to/lina --mode exploit
+
+# Protocol fuzzer (cstp | dtls | fdm_api | ikev2)
+python3 modules/cisco_re_engine.py /dev/null --mode fuzz --fuzz-host 192.168.45.45 --fuzz-port 443 --fuzz-protocol fdm_api
+
+# All modules in sequence
+python3 modules/cisco_re_engine.py /path/to/lina --mode all
+```
+
+**Module breakdown:**
+
+| Module | Tools | What it surfaces |
+|--------|-------|-----------------|
+| `static_analysis` | FLOSS, capa, r2 | Deobfuscated strings, capability fingerprints, function map |
+| `string_correlate` | FLOSS + capa xref | Maps strings to capa hits and code xrefs — context for each credential/config string |
+| `auth_hunt` | r2 string scan | Auth/credential/crypto patterns: hardcoded hashes, DevAuth markers, RADIUS/TACACS+/SAML strings, debug interface indicators |
+| `firmware_diff` | BinDiff / Diaphora | Semantic diff between firmware versions; classifies changes (auth check, bug fix, crypto update); highlights attack surface delta |
+| `frida_trace` | Frida | Real-time strcmp/SHA256/setuid hook with backtrace; maps auth flow at runtime |
+| `exploit_surface` | ropper + keystone | ROP gadget chain suggestion, shellcode assembly skeleton, ASLR/DEP mitigation notes |
+| `protocol_fuzz` | Scapy | CSTP, DTLS, FDM REST API (including Log4Shell probe), IKEv2 template fuzzing |
+| `report` | CVE map | Unified findings JSON/text with CISCO_CVE_MAP auto-attribution (F-FTD-60, F-FTD-79, Log4Shell, etc.) |
+
+**Built-in heuristics:** DevAuth SHA-256 hashes (F-FTD-79, all 7 cracked), sftunnel HMAC markers, FDM provision/token endpoint strings, lina struct field names (`gp_name`, `wins_ptr`, `auth_flags`), proprietary Cisco DES/3DES key schedule constants, debug interface markers (`gdbserver`, `SYS_ptrace`, `/dev/cisco0`).
 
 ---
 
@@ -533,6 +594,7 @@ ablation/
 │   ├── orka_jwt_dynamic_re.py      ← Empty-key HS256 JWT forge
 │   ├── orka_oidc_re.py             ← CVE-2020-26160 + PKCE flow RE
 │   ├── orka_vm_exec_re.py          ← VM exec via K8s pod exec API
+│   ├── cisco_re_engine.py          ← Unified Cisco RE: FLOSS+capa+r2+BinDiff+Frida+ropper+keystone+Scapy
 │   ├── cisco_asa_lina_re.py        ← LINA struct RE + RadiusOverflowProbe
 │   ├── cisco_radius_ise_re.py
 │   ├── cisco_asdm_re.py
