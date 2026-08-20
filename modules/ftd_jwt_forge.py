@@ -31,7 +31,10 @@ Root cause chain (F-FTD-97 → F-FTD-102 → F-FTD-106):
     - username: FDM username
     - userRole: Neo4j UserRole.name — must match UserRole node in graph
                UserRoleManager Cypher: MATCH (a:UserRole{name:{userRole}}) CALL cisco.permissions.populate(a)
-               Retrieve via: AJP GET /identity/users (F-FTD-105) → user.userRole.name
+               Values from META-INF/default-userroles.yaml + core-security-application-production.properties:
+                 ROLE_ADMIN (UUID 00000011-0000-0000-0000-000000000011) — full admin
+                 ROLE_READ_WRITE (UUID ...000000000012) — write except admin_only
+                 ROLE_READ_ONLY (UUID ...000000000013) — read only (but users: WRITE)
     - userUuid: FDM user UUID (from /identity/users response)
     - accessTokenExpiresAt: milliseconds epoch (added by NgfwTokenEnhancer.enhance)
     - refreshCount: "0" (integer-as-string)
@@ -88,7 +91,14 @@ ADMIN_USER_UUID = "c5a22f41-9c3b-11f1-a1e3-591e15734044"
 NEO4J_STRINGS_FILE = "/ngfw/var/lib/db/ngfw.db/neostore.propertystore.db.strings"
 
 DEFAULT_TOKEN_LIFETIME = 1800  # seconds (30 min — FDM default)
-DEFAULT_ROLE = "ADMIN"
+# Role names from META-INF/default-userroles.yaml + core-security-application-production.properties
+# fdm.authority.userrole.name.admin=ROLE_ADMIN
+# fdm.authority.userrole.name.read.write=ROLE_READ_WRITE
+# fdm.authority.userrole.name.read.only=ROLE_READ_ONLY
+ROLE_ADMIN_UUID = "00000011-0000-0000-0000-000000000011"
+ROLE_READ_WRITE_UUID = "00000011-0000-0000-0000-000000000012"
+ROLE_READ_ONLY_UUID = "00000011-0000-0000-0000-000000000013"
+DEFAULT_ROLE = "ROLE_ADMIN"
 DEFAULT_USERNAME = "admin"
 DEFAULT_ISSUER = "Cisco-FDM"
 DEFAULT_HOST = "127.0.0.1"
