@@ -180,7 +180,7 @@
   Email address                                                                 
   Your personal email address. Consider creating a free webmail account if you  
   do not wish to share your email address.                                      
-  zellkernel@gmail.com                                                          
+  sshpie@gmail.com                                                          
   Do you want us to share your contact information with vendors? *              
   We will share contact information with vendors unless otherwise specified.    
    Yes                                                                          
@@ -586,7 +586,7 @@
   with CERT/CC VINCE for coordinated disclosure. I am requesting
   90-day coordinated disclosure.
 
-  Nicholas Kloster
+  sshpie
   CVE-2025-4364 / ICSA-25-140-11
 
   Attach cisco-asa-radius-ou-inject-poc.zip from your Desktop.
@@ -2629,7 +2629,7 @@
   - ~/Desktop/cisco-asa-radius-ou-inject-poc.zip (12K) — updated with tightened
   YARA file
 
-  Committed and pushed to zellkernel/ablation (commit 75d9c0d).
+  Committed and pushed to sshpie/ablation (commit 75d9c0d).
 
   The primary YARA rule now matches on four signals simultaneously: OU= string,
   256-byte extraction bound, timer type check (cmpb $0x42,0x2a(%rdi)), and
