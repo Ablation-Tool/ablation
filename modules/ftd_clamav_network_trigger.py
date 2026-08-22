@@ -54,7 +54,7 @@ ATTACK VECTOR — NETWORK REACHABLE WITHOUT AUTHENTICATION:
 
   SFDataCorrelator process context:
     - Runs with Cisco's elevated service privileges
-    - Reads/writes nuclide.db equivalent (FTD event database)
+    - Reads/writes sshpie.db equivalent (FTD event database)
     - Has access to sfmbservice IPC → can inject messages to other FTD services
     - Network access to cloud AMP API (outbound) → potential C2 pivot
 
