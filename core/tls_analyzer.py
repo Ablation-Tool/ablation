@@ -719,7 +719,7 @@ class TLSAnalyzer:
         CT poison (OID 1.3.6.1.4.1.11129.2.4.3) marks a pre-certificate submitted
         to CT logs but not yet finalized. Its presence in a live cert is anomalous.
 
-        Per Insight #97 (NuClide cert-distribution honeypot discriminator):
+        Per Insight #97 ( cert-distribution honeypot discriminator):
         cert I/N ratio >= 0.30 signals a honeypot fleet. CT anomalies compound
         this signal.
         """
