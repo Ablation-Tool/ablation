@@ -27,6 +27,35 @@ Accepted request_start fields:
   temperature   — float, e.g. 0.9
   seed          — int for deterministic output
   language      — ISO 639-1, e.g. "zh"
+
+Server architecture (RE'd 2026-08-24):
+  Loading path: hf_hub_download(model_id) → json.load(config.json) → mx.load(*.safetensors) → Qwen3TTSMLXModel
+  model_type check: direct JSON parse (NOT transformers AutoConfig)
+  Weight loading: MLX C++ native loader (NOT np.load, NOT pickle)
+  trust_remote_code: NOT used — server never calls AutoModel.from_pretrained with trust_remote_code
+  Result: auto_map entries in config.json are IGNORED; Python files in model repo are NEVER imported
+
+Health endpoint (unauth):
+  GET /health → 200 {"status":"ok","warmed":bool,"instance_id":"...","last_model_switch":{...},"prompt_cache":{...},"memory":{...}}
+  Leaks: instance_id, process_started_at, last model switch details (from/to model, duration, MLX memory)
+
+HF model injection live test (sshpie/deadbug-tts-v1):
+  auto_map: AutoConfig/AutoModel/AutoTokenizer/AutoProcessor — NONE triggered
+  modeling_deadbug.py present in target cache, NEVER imported
+  /tmp/deadbug_pwned.txt — NOT created (payload did not execute)
+  Conclusion: SSRF + HF_TOKEN reuse CONFIRMED; RCE via auto_map BLOCKED
+
+Parameter names (402 expected, from error messages — Qwen3-TTS 0.6B talker component):
+  talker.code_predictor.lm_head.{0-14}.weight  [2048, 256] U32 (4-bit quantized)
+  talker.code_predictor.model.codec_embedding.{0-14}.weight  [...]
+  talker.code_predictor.model.layers.{0-4}.*.weight  (11 params/layer)
+  talker.code_predictor.model.norm.weight
+  talker.codec_head.weight
+  talker.model.codec_embedding.weight
+  talker.model.layers.{0-27}.*.weight  (11 params/layer, 28 layers)
+  talker.model.norm.weight
+  talker.model.text_embedding.weight
+  talker.text_projection.linear_fc{1,2}.{weight,bias}
 """
 
 import socket
