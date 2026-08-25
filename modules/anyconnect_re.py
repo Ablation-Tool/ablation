@@ -253,6 +253,29 @@ NE_PHASE1_SELREFS = {
     'requestConfigurationForListener:session:sessionConfig:childConfig:validateAuthBlock:responseBlock:': 0x2ca468,
 }
 
+# startIKEv2TunnelWithOptions: session setup selrefs (in order of execution before auth)
+# Function @ 0xd878b. These are the exact selrefs called on self (r12) before the Cisco
+# delegate is invoked at 0xd8f53. All VAs are in __DATA,__objc_selrefs.
+#
+# Sequence:
+#   protocolConfiguration → tunnelKind → setTunnelKind: → setOptions:(r14) →
+#   ifIndex → pathStatus (must==1) → protocolConfiguration → serverAddress →
+#   [... more setup ...] → NEIKEv2ProviderAuthenticate:(r14) @ 0xd8f53
+#
+# setOptions: @ 0x2ca758 is the pre-auth intercept: provider STORES tunnelOptions
+# before calling Cisco. Hook setOptions: to observe/replace creds before Cisco sees them.
+# Bypass: patch 0xd8f60 (call [rip+0x188a32]) → skip Cisco delegate, return rax=1.
+NE_TUNNEL_START_SELREFS = {
+    'protocolConfiguration':   0x2c7b60,  # get IKEv2 protocol config from provider
+    'tunnelKind':              0x2ca6f8,  # get tunnel kind from config
+    'setTunnelKind:':          0x2ca750,  # set tunnel kind on provider
+    'setOptions:':             0x2ca758,  # store tunnelOptions on provider (pre-auth intercept)
+    'ifIndex':                 0x2ca708,  # interface index guard check
+    'pathStatus':              0x2ca760,  # network path must be 1 (satisfied) to proceed
+    'serverAddress':           0x2c6e58,  # VPN server address from protocol config
+    'NEIKEv2ProviderAuthenticate:': 0x2ca770,  # Cisco delegate auth (ONE call @ 0xd8f53)
+}
+
 # XPC / Mach bootstrap service names hardcoded in NE binary
 NE_XPC_SERVICES = [
     'com.apple.networkextension.ikev2.listener',      # IKEv2 listener bootstrap name (key Mach service)
@@ -570,6 +593,15 @@ class AnyConnectNEAnalyzer:
     def provider_auth_callsite(self, count=30):
         """Disassemble 15 instructions around the NEIKEv2ProviderAuthenticate: call at 0xd8f53."""
         return self.disasm_va(0xd8f3f, count=count)
+
+    def tunnel_start_selrefs(self):
+        """Return ordered selref map for startIKEv2TunnelWithOptions: pre-auth setup sequence.
+        Sequence: protocolConfiguration → tunnelKind → setTunnelKind: → setOptions:(tunnelOptions)
+        → ifIndex (guard) → pathStatus==1 (guard) → serverAddress → NEIKEv2ProviderAuthenticate:
+        Bypass target: patch call at 0xd8f60 (objc_msgSend via [rip+0x188a32]) → rax=1, skip Cisco.
+        Pre-auth intercept: hook setOptions: @ 0x2ca758 to observe/replace tunnelOptions dict.
+        """
+        return NE_TUNNEL_START_SELREFS
 
     def xpc_services(self):
         """Extract all XPC/Mach service names from the binary."""
