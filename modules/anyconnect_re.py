@@ -1111,6 +1111,16 @@ NE_1095_140_2_METHODS = {
     # The 9 paths (GTC/MSCHAPV2/TLS/TTLS/PEAP/LEAP/FAST/MD5/Identity) map to the 9 registered
     # modules scanned by this NSFastEnumeration.
     'NEIKEv2EAP.selectModuleForPayload:ikeSA:':                     0x9da3c,
+    # Large dispatcher (0x118-byte frame). Args: self, request, ikeSA, ..., handler_out_ptr, type_out_ptr.
+    # OUTPUT INIT @ 0x9ec29: if r15(type_out_ptr) != nil → byte ptr [r15]=0 (zero type before dispatch).
+    # NIL GUARD @ 0x9ec30: r12(request) nil → je 0x9f2c2 (early return, no payload built).
+    # EAP-IDENTITY FAST PATH @ 0x9ec82: cmp eax,1 → EAP-Identity bypasses module lookup;
+    #   creates identity response inline without calling selectModuleForPayload:ikeSA:.
+    # NSFastEnumeration over module registry (same list as selectModuleForPayload) @ 0x9ee78 area:
+    #   no list lock — same concurrent-mutation exposure as selectModuleForPayload (NSFastEnumeration).
+    # [obj sel@0x22ae62: request] called @ 0x9ec79 and again @ 0x9eca3 on same request object:
+    #   DOUBLE-READ: request payload type fetched twice; concurrent EAP renegotiation between reads
+    #   → type mismatch between fast-path check and module dispatch.
     'NEIKEv2EAP.createPayloadResponseForRequest:ikeSA:...':         0x9ebd9,
     # Post-EAP MSK — RFC 5106 AUTH derivation key (LINA and NE both compute this).
     # DOUBLE-READ @ 0x9f329 / 0x9f337: same selector r14 loaded at 0x9f31f, called twice:
@@ -1123,6 +1133,16 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2EAP.sessionKey':                                        0x9f303,
 
     # ── App version attribute ────────────────────────────────────────────────────
+    # attributeType @ 0x8373d: override-or-default-7 pattern.
+    #   [self overrideSelector] → rax; rax non-nil → [self overrideSelector] tailcall → return dynamic type.
+    #   rax nil → mov eax,7; ret (hardcoded default type 7 = Application Version attribute).
+    #   NOT a pure trampoline — double-read on overrideSelector (two ObjC dispatch calls on same selector).
+    # attributeName @ 0x83776: lazy getter with double-read TOCTOU.
+    #   r14 = static fallback string [rip+0x1eb1a8] (empty NSString or constant).
+    #   [self sel@0x245cdd] → rax; nil → return r14 (fallback). Non-nil:
+    #   [self r15] retain → rbx (first read); nil-check rbx → if nil, return r14.
+    #   [self r15] retain → r14 (SECOND read same selector); concurrent setAttributeName: between
+    #   reads → first read non-nil (passes gate), second read nil → return nil (caller nil-unsafe).
     'NEIKEv2AppVersionAttribute.attributeType':                     0x8373d,
     'NEIKEv2AppVersionAttribute.attributeName':                     0x83776,
 
@@ -1147,18 +1167,34 @@ NE_1095_140_2_METHODS = {
     #   → first read non-nil, second nil → confused fallback → wrong g^xy fed to PRF+.
     'NEIKEv2IKESA.sharedSecret':                                    0xb8969,
     # IKEv2-PSK from system keychain — static cred for PSK-mode LINA auth
+    # Atomic property trampoline: edx=0x300; ecx=1; jmp 0x1f412e (objc_getProperty atomic retain).
+    # Setter at 0xb9e50: ecx=0x300; jmp 0x1f4164. Offset 0x300 = deepest ivar in IKESA layout.
+    # At 0xb9e82: `add rdi,0x310; call 0x1f413a` — objc_loadWeakRetained for an adjacent weak ref.
+    # fetchedSharedSecret is the PSK pulled from the system keychain; atomic because it can be
+    # refreshed mid-session by the credential-fetch flow.
     'NEIKEv2IKESA.fetchedSharedSecret':                             0xb9e3c,
+    # Atomic property trampolines: digitalSigLocalPrivateKey @ +0x228, digitalSigRemotePublicKey @ +0x238.
+    # Setters at 0xb9ab8 / 0xb9afe: ecx=0x228 / 0x238; jmp 0x1f4164.
+    # Keys are SecKeyRef objects (ObjC retain semantics). Concurrent cert renegotiation →
+    # concurrent set/get on same ivar → see atomic trampoline caveats above (get-then-use TOCTOU).
     'NEIKEv2IKESA.digitalSignatureLocalPrivateKey':                 0xb9aa4,
     'NEIKEv2IKESA.digitalSignatureRemotePublicKey':                 0xb9aea,
-    # ROLE-DISPATCH GETTERS (encryptionKey/decryptionKey — same pattern as ChildSA key getters):
-    # encryptionKey @ 0xb9207: [self flag_sel] → al; je/jmp → choose ivar selector → retain → return
-    # decryptionKey @ 0xb9250: [self flag_sel] → al; cmove → choose ivar selector → retain → return
-    # Both have NO nil guard — pre-install returns nil; caller must check or downstream
-    # createEncryptedData:/createDecryptedData: nil-guard (esi=0x11 error).
+    # ROLE-DISPATCH GETTERS — all four directional key getters share this structure:
+    #   [self flag_sel] → al (boolean role/direction bit, e.g. isInitiator)
+    #   je/jmp or cmove → pick ivar selector A or B → retain → jmp 0x1f4104
+    # encryptionKey (je/jmp @ 0xb9207) and localIntegrityKey (je/jmp @ 0xb9172): uses je branch.
+    # decryptionKey (cmove @ 0xb9250) and remoteIntegrityKey (cmove @ 0xb91bb): uses cmove.
+    # NO nil guard on returned key in any of the four — pre-install / post-delete returns nil.
+    # Downstream: createEncryptedData:/createDecryptedData: nil-guard → esi=0x11 error; but
+    # callers that read key and use it without nil-checking → crash or silent nil-message drop.
     'NEIKEv2IKESA.encryptionKey':                                   0xb9207,
     'NEIKEv2IKESA.decryptionKey':                                   0xb9250,
     'NEIKEv2IKESA.localIntegrityKey':                               0xb9172,
     'NEIKEv2IKESA.remoteIntegrityKey':                              0xb91bb,
+    # Atomic property trampoline: edx=0x218; ecx=1; jmp 0x1f412e.
+    # Setter at 0xb9a72: ecx=0x218; jmp 0x1f4164. Followed immediately by decryptCryptoCtx @ +0x220.
+    # CryptoCtx is the ObjC wrapper around the active CCCryptorRef for encrypt/decrypt operations.
+    # Replace-during-rekey: concurrent setEncryptCryptoCtx:(nil) + encrypt → nil ctx → CCCryptorUpdate crash.
     'NEIKEv2IKESA.encryptCryptoCtx':                                0xb9a5e,
 }
 
@@ -2203,6 +2239,82 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def ikesa_integrity_keys(self, count=80):
+        """Disassemble localIntegrityKey/remoteIntegrityKey @ 0xb9172/0xb91bb — role-dispatch getters.
+        localIntegrityKey: [self flag_sel] → al; je/jmp picks selector A or B → retain → jmp 0x1f4104.
+        remoteIntegrityKey: same but cmove variant. Mirror of encryptionKey/decryptionKey pair.
+        No nil guard — pre-install nil returned silently. Same directional role-bit pattern across
+        all four IKESA crypto key getters (enc/dec/localInt/remoteInt).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.localIntegrityKey')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return {
+            'localIntegrityKey': self.disasm_va(va, count),
+            'remoteIntegrityKey': self.disasm_va(
+                NE_1095_140_2_METHODS['NEIKEv2IKESA.remoteIntegrityKey'], count),
+        }
+
+    def ikesa_crypto_ctx(self, count=60):
+        """Disassemble encryptCryptoCtx @ 0xb9a5e — atomic property trampoline.
+        edx=0x218 (ivar offset); ecx=1 (atomic); jmp 0x1f412e (objc_getProperty).
+        Setter at 0xb9a72: ecx=0x218; jmp 0x1f4164. Adjacent decryptCryptoCtx @ +0x220.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.encryptCryptoCtx')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def ikesa_sig_keys(self, count=60):
+        """Disassemble digitalSignatureLocalPrivateKey/RemotePublicKey @ 0xb9aa4/0xb9aea.
+        Both atomic property trampolines: edx=0x228/0x238; ecx=1; jmp 0x1f412e.
+        SecKeyRef objects. Concurrent cert renegotiation → get-then-use TOCTOU.
+        """
+        va_l = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.digitalSignatureLocalPrivateKey')
+        va_r = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.digitalSignatureRemotePublicKey')
+        if va_l is None or va_r is None:
+            return {'error': 'method not in address table'}
+        return {
+            'local_private': self.disasm_va(va_l, count),
+            'remote_public': self.disasm_va(va_r, count),
+        }
+
+    def ikesa_fetched_psk(self, count=80):
+        """Disassemble fetchedSharedSecret @ 0xb9e3c — atomic property, PSK from keychain.
+        edx=0x300 (deepest IKESA ivar seen); ecx=1; jmp 0x1f412e. Setter at 0xb9e50.
+        Adjacent weak property at +0x310: `add rdi,0x310; call 0x1f413a` (objc_loadWeakRetained).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.fetchedSharedSecret')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def app_version_attr(self, count=100):
+        """Disassemble AppVersionAttribute.attributeType/attributeName @ 0x8373d/0x83776.
+        attributeType: override-or-default-7 pattern (two dispatch calls on same override selector).
+        attributeName: double-read TOCTOU — nil gate on first read, use second read without lock.
+        """
+        va_t = NE_1095_140_2_METHODS.get('NEIKEv2AppVersionAttribute.attributeType')
+        va_n = NE_1095_140_2_METHODS.get('NEIKEv2AppVersionAttribute.attributeName')
+        if va_t is None or va_n is None:
+            return {'error': 'method not in address table'}
+        return {
+            'attribute_type': self.disasm_va(va_t, count),
+            'attribute_name': self.disasm_va(va_n, count),
+        }
+
+    def eap_create_payload_response(self, count=280):
+        """Disassemble createPayloadResponseForRequest:ikeSA:... @ 0x9ebd9.
+        EAP request dispatcher. EAP-Identity (type==1) fast-path bypasses module enum.
+        Double-read on request payload type (@ 0x9ec79 and 0x9eca3): TOCTOU if request mutated.
+        NSFastEnumeration over module list without lock (same exposure as selectModuleForPayload).
+        r15 type_out_ptr zeroed at entry; r12 request nil → early return 0x9f2c2.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2EAP.createPayloadResponseForRequest:ikeSA:...')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def ikesa_skeyseed(self, count=80):
         """Disassemble NEIKEv2IKESA.sKeySeed @ 0xb9946 — atomic property getter.
         5-instruction trampoline: mov edx,0x1d8; mov ecx,1; jmp 0x1f412e (objc_getProperty).
@@ -2360,6 +2472,12 @@ class AnyConnectNEAnalyzer:
             'create_initiator_signed_octets': self.create_initiator_signed_octets(),
             'create_responder_signed_octets': self.create_responder_signed_octets(),
             'receive_delete_child_sa': self.receive_delete_child_sa(),
+            'ikesa_integrity_keys': self.ikesa_integrity_keys(),
+            'ikesa_crypto_ctx': self.ikesa_crypto_ctx(),
+            'ikesa_sig_keys': self.ikesa_sig_keys(),
+            'ikesa_fetched_psk': self.ikesa_fetched_psk(),
+            'app_version_attr': self.app_version_attr(),
+            'eap_create_payload_response': self.eap_create_payload_response(),
             'ikesa_skeyseed': self.ikesa_skeyseed(),
             'ikesa_encryption_key': self.ikesa_encryption_key(),
             'ikesa_shared_secret': self.ikesa_shared_secret(),
