@@ -143,25 +143,31 @@ def sections_summary(binary):
     ]
 
 
-def disassemble(binary, vaddr, count=50):
-    """Disassemble `count` instructions at virtual address `vaddr`."""
-    # Find segment containing vaddr
-    text_bytes = b''
-    base_va = 0
+def disassemble(binary, vaddr, count=50, raw=None):
+    """Disassemble `count` instructions at virtual address `vaddr`.
+
+    Pass raw=<file bytes> for correct results on high-VA addresses.
+    Fallback to LIEF segment content works for addresses < first segment file_offset limit.
+    """
+    file_bytes = b''
     for seg in binary.segments:
         if seg.virtual_address <= vaddr < seg.virtual_address + seg.virtual_size:
-            off = vaddr - seg.virtual_address
-            seg_data = bytes(seg.content)
-            text_bytes = seg_data[off:]
-            base_va = vaddr
+            rel_off = vaddr - seg.virtual_address
+            if raw is not None:
+                # Direct file read via file_offset: correct for all addresses in segment
+                file_off = seg.file_offset + rel_off
+                file_bytes = raw[file_off:]
+            else:
+                seg_data = bytes(seg.content)
+                file_bytes = seg_data[rel_off:]
             break
-    if not text_bytes:
+    if not file_bytes:
         return [{'error': f'vaddr {hex(vaddr)} not found in any segment'}]
 
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
     md.detail = True
     results = []
-    for insn in md.disasm(text_bytes, base_va):
+    for insn in md.disasm(file_bytes, vaddr):
         results.append({
             'addr': hex(insn.address),
             'mnemonic': insn.mnemonic,
@@ -297,12 +303,12 @@ def analyze(path, args):
         result['cfstrings_count'] = len(cf)
         result['cfstrings_sample'] = cf[:30]
 
-    # Disassembly
+    # Disassembly — pass raw bytes for correct VA→file-offset mapping on all addresses
     if args.disasm:
         parts = args.disasm.split(':')
         vaddr = int(parts[0], 16)
         count = int(parts[1]) if len(parts) > 1 else 50
-        result['disasm'] = disassemble(binary, vaddr, count)
+        result['disasm'] = disassemble(binary, vaddr, count, raw=raw)
 
     # Symbol filter
     if args.sym_filter:

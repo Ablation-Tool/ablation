@@ -381,6 +381,25 @@ class AnyConnectNEAnalyzer:
         """
         return self.disasm('NEConfigurationManager.upgradeLegacyPluginConfigurationsWithUpgradeInfo:completionQueue:handler:')
 
+    def plugin_dispatch(self):
+        """Disassemble configurePluginWithPayload: — routes IKEv2|L2TP|CiscoNExt connection types."""
+        return self.disasm('NEConfiguration.configurePluginWithPayload:pluginType:payloadType:')
+
+    def skeyseed_derivation(self, count=150):
+        """Disassemble calculateSKEYSEEDDerivatives — RFC 5996 §2.14 PRF+ key material derivation.
+        Derives {SK_d, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr} from SKEYSEED + Ni|Nr|SPIi|SPIr.
+        LINA runs the identical computation on the ASA side. @ 0x95706
+        """
+        return self.disasm_va(0x95706, count=count)
+
+    def prf_plus(self, count=80):
+        """Disassemble NEIKEv2Crypto.createPRFPlusFromData: — the PRF+ primitive. @ 0x8e500"""
+        return self.disasm_va(0x8e500, count=count)
+
+    def phase2_install(self, count=120):
+        """Disassemble NEIKEv2Session.installChildSA: — Phase 2 SA install into kernel. @ 0xee682"""
+        return self.disasm('NEIKEv2Session.installChildSA:')
+
     def xpc_services(self):
         """Extract all XPC/Mach service names from the binary."""
         return xpc_service_map(self.path)
