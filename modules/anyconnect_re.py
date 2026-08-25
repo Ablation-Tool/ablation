@@ -1026,10 +1026,35 @@ NE_1095_140_2_METHODS = {
     #   → NAT-D computed with SPIs from different SA epochs → false NAT detection negative.
     # SHA1(SPI_i|SPI_r|IP|port) — 160-byte zero scratch @ [rbp-0xd0] (10x movaps xmm0 clear).
     'NEIKEv2Crypto.createNATDetectionHashForInitiatorSPI:responderSPI:address:': 0x8f9bb,
+    # Auth protocol selector. Args: authMethod(rdx), authData(rcx → r14 via retain).
+    # DISPATCH @ 0x8f1d5: cmp rbx(authMethod), 0xe (14=DIGITAL_SIG / RFC 7427)
+    #   authMethod != 14 → generic path @ 0x8f269: [class sel@0x239c54: authMethod] → protocol object.
+    #   authMethod == 14 → ASN.1 OID parse path:
+    # OID BOUNDS CHECK @ 0x8f21b-0x8f22e:
+    #   r12b = byte[authData.bytes[0]] (OID field length byte)
+    #   [r14 sel@0x237935] CALLED TWICE (@ 0x8f204 and 0x8f225): TOCTOU — concurrent authData
+    #   mutation between reads → length value differs from bytes boundary → off-by-one window.
+    #   jae 0x8f290: (authData.length-1) >= r12b → valid range; else → error @ 0x8f230
+    # ERROR @ 0x8f230: isKindOfClass(esi=0x10=16) — NOT 0x11; class 16 is distinct error class.
+    # OID DISPATCH @ 0x8f290-0x8f2c1 (r12b = OID algorithm field length):
+    #   r12b==4  → @ 0x8f2e0
+    #   r12b==12 → @ 0x8f303
+    #   r12b==15 → XOR memcmp against 30 0d 06 09 2a 86 48 86 / follow-up bytes
+    #     (SEQUENCE OID RSA prefix, matches sha*WithRSAEncryption AlgorithmIdentifier)
+    #   r12b other → 0x8f320 (unknown OID → error)
+    # TOCTOU: [r14 sel@0x237935] twice; authData.bytes mutated between reads → OID boundary wrong.
     'NEIKEv2Crypto.copyAuthenticationProtocolForAuthMethod:authData:': 0x8f1b8,
 
     # ── NEIKEv2ChildSA Phase 2 key material (RFC 5996 §2.17) ───────────────────
-    # LINA and NE both derive these from the same PRF+ keystream
+    # LINA and NE both derive these from the same PRF+ keystream.
+    # COMMON GETTER PATTERN (all 4 key accessors share identical structure):
+    #   [self selector_A] → al (boolean role/direction flag)
+    #   test al; cmove rcx, rax — pick selector_B or selector_C based on flag
+    #   [self selector_chosen] → retain → return (tail-call 0x1f4104)
+    # The flag is likely isInitiator or a direction bit set at ChildSA install time.
+    # NO NIL GUARD on returned key — if key not yet installed (pre-install path, or during
+    #   partial rekey), getter returns nil silently. Downstream createEncryptedData: nil-guards
+    #   key → esi=0x11 error. But callers between getter and encrypt without nil check → crash.
     'NEIKEv2ChildSA.initiatorSendEncryptionKey':                    0x75bab,
     'NEIKEv2ChildSA.responderSendEncryptionKey':                    0x75c59,
     'NEIKEv2ChildSA.initiatorSendIntegrityKey':                     0x75d07,
@@ -1999,6 +2024,43 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def copy_auth_proto(self, count=200):
+        """Disassemble copyAuthenticationProtocolForAuthMethod:authData: @ 0x8f1b8.
+        authMethod==14 (DIGITAL_SIG) → ASN.1 OID parse: r12b=byte[authData[0]] (OID len).
+        Bounds: [r14.length] read TWICE with no lock (TOCTOU); jae dispatches to OID cases
+        r12b==4/12/15. r12b==15: XOR against RSA+SHA DER prefix (30 0d 06 09 2a 86 48 86).
+        Unknown OID → error. isKindOfClass(esi=0x10) on error — class 16, not 0x11.
+        authMethod!=14 → [class sel@0x239c54: authMethod] generic lookup.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.copyAuthenticationProtocolForAuthMethod:authData:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def child_sa_enc_key(self, count=80):
+        """Disassemble initiatorSendEncryptionKey @ 0x75bab + responderSendEncryptionKey @ 0x75c59.
+        Role-aware getters: [self flag_sel] → al; cmove picks one of two backing selectors;
+        returns retained key object. No nil guard — pre-install or mid-rekey returns nil silently.
+        """
+        va_i = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.initiatorSendEncryptionKey')
+        va_r = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.responderSendEncryptionKey')
+        return {
+            'initiatorSendEncryptionKey': self.disasm_va(va_i, count) if va_i else None,
+            'responderSendEncryptionKey': self.disasm_va(va_r, count) if va_r else None,
+        }
+
+    def child_sa_int_key(self, count=80):
+        """Disassemble initiatorSendIntegrityKey @ 0x75d07 + responderSendIntegrityKey @ 0x75db5.
+        Identical cmove-based role-dispatch as enc key getters; same no-nil-guard issue.
+        """
+        va_i = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.initiatorSendIntegrityKey')
+        va_r = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.responderSendIntegrityKey')
+        return {
+            'initiatorSendIntegrityKey': self.disasm_va(va_i, count) if va_i else None,
+            'responderSendIntegrityKey': self.disasm_va(va_r, count) if va_r else None,
+        }
+
     def select_eap_module(self, count=240):
         """Disassemble selectModuleForPayload:ikeSA: @ 0x9da3c — 9-module EAP dispatcher.
         Outer dispatch: [class sel:payload] → eax; cmp eax, 1 → inner loop or error path.
@@ -2168,6 +2230,9 @@ class AnyConnectNEAnalyzer:
             'prototype_dh_keys': self.prototype_dh_keys(),
             'copy_dh_keys': self.copy_dh_keys(),
             'nat_detection_hash': self.nat_detection_hash(),
+            'copy_auth_proto': self.copy_auth_proto(),
+            'child_sa_enc_key': self.child_sa_enc_key(),
+            'child_sa_int_key': self.child_sa_int_key(),
             'select_eap_module': self.select_eap_module(),
             'initiate_delete_child_sa': self.initiate_delete_child_sa(),
             'uninstall_all_child_sas': self.uninstall_all_child_sas(),
