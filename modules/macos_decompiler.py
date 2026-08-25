@@ -322,31 +322,164 @@ class ObjCMetadata:
             if name:
                 self.classrefs[ptr_va] = name
 
+    # ------------------------------------------------------------------
+    # classlist + method list parser
+    # ------------------------------------------------------------------
+    # method_map:  selector_name → [imp_va, ...]
+    # imp_map:     imp_va → 'ClassName.selector'
+    # classes:     class_name → ObjCClass (already declared above)
+    # ------------------------------------------------------------------
+
     def _extract_method_lists(self):
-        sec = self._get_section('__DATA', '__objc_const')
-        if sec is None:
+        """Walk __objc_classlist, parse class_ro_t, extract method tables.
+
+        Handles two method_list_t formats:
+          - Absolute (flags bit 31 = 0): entries are 24-byte {sel_ptr, types_ptr, imp_ptr}
+          - Relative (flags bit 31 = 1): entries are 12-byte {sel_rel, types_rel, imp_rel}
+            used by arm64 macOS 12+ binaries compiled with -objc_relative_method_lists
+        """
+        self.method_map: Dict[str, list] = {}   # sel_name → [imp_va]
+        self.imp_map:    Dict[int, str]  = {}   # imp_va   → 'Class.sel'
+
+        # Prefer DATA_CONST, fall back to DATA
+        classlist = (self._get_section('__DATA_CONST', '__objc_classlist') or
+                     self._get_section('__DATA',       '__objc_classlist'))
+        if classlist is None:
             return
-        # Method list parsing: struct method_list_t { uint32 flags; uint32 count; method_t[] }
-        # method_t: { ptr name_ptr; ptr types; ptr imp }
-        # This is a lightweight scan; full parsing requires following class ptrs
-        content = bytes(sec.content)
-        base_va = sec.virtual_address
-        for off in range(0, len(content) - 24, 4):
-            flags = struct.unpack_from('<I', content, off)[0]
-            count = struct.unpack_from('<I', content, off + 4)[0]
-            if count == 0 or count > 2000:
+
+        clcontent = bytes(classlist.content)
+        n_classes = len(clcontent) // 8
+
+        for ci in range(n_classes):
+            raw_cls = struct.unpack_from('<Q', clcontent, ci * 8)[0]
+            cls_va  = self._decode_ptr(raw_cls)
+            if not cls_va:
+                cls_va = raw_cls & ~7
+            if not cls_va:
                 continue
-            if flags not in (0x80000000, 0x00000000, 3, 0):
+
+            # -- class_t (5 × 8-byte fields): metacls, super, cache, vtable, data --
+            cls_raw = self._read_at(cls_va, 48)
+            if len(cls_raw) < 40:
                 continue
-            for m in range(count):
-                entry_off = off + 8 + m * 24
-                if entry_off + 24 > len(content):
-                    break
-                name_ptr, types_ptr, imp = struct.unpack_from('<QQQ', content, entry_off)
-                sel = self._read_cstring(name_ptr)
-                if sel and imp:
-                    # Placeholder; class association requires class list walk
-                    pass
+
+            # Walk both the class and its metaclass
+            for is_meta in (False, True):
+                if is_meta:
+                    meta_raw_ptr = struct.unpack_from('<Q', cls_raw, 0)[0]
+                    meta_va = self._decode_ptr(meta_raw_ptr)
+                    if not meta_va:
+                        meta_va = meta_raw_ptr & ~7
+                    if not meta_va:
+                        continue
+                    target_raw = self._read_at(meta_va, 48)
+                    if len(target_raw) < 40:
+                        continue
+                else:
+                    target_raw = cls_raw
+
+                raw_data = struct.unpack_from('<Q', target_raw, 32)[0]
+                ro_va    = self._decode_ptr(raw_data) & ~7
+                if not ro_va:
+                    ro_va = raw_data & ~7
+                if not ro_va:
+                    continue
+
+                # -- class_ro_t offsets --
+                # [0x00] flags uint32  [0x04] instanceStart  [0x08] instanceSize
+                # [0x10] ivarLayout ptr  [0x18] name ptr
+                # [0x20] baseMethods ptr  [0x28] baseProtocols  [0x30] ivars
+                ro_raw = self._read_at(ro_va, 64)
+                if len(ro_raw) < 40:
+                    continue
+
+                raw_name = struct.unpack_from('<Q', ro_raw, 24)[0]
+                name_va  = self._decode_ptr(raw_name) if raw_name else 0
+                if not name_va:
+                    name_va = raw_name
+                class_name = self._read_cstring(name_va) if name_va else ''
+                if not class_name:
+                    continue
+
+                prefix = '+' if is_meta else '-'
+
+                # Register class in self.classes
+                if not is_meta and class_name not in self.classes:
+                    self.classes[class_name] = ObjCClass(name=class_name)
+
+                raw_ml = struct.unpack_from('<Q', ro_raw, 32)[0]
+                ml_va  = self._decode_ptr(raw_ml) & ~7
+                if not ml_va:
+                    ml_va = raw_ml & ~7
+                if not ml_va:
+                    continue
+
+                self._parse_method_list(ml_va, class_name, prefix)
+
+    def _parse_method_list(self, ml_va: int, class_name: str, prefix: str):
+        """Parse one method_list_t at ml_va, register entries into method_map/imp_map."""
+        ml_hdr = self._read_at(ml_va, 8)
+        if len(ml_hdr) < 8:
+            return
+
+        flags, count = struct.unpack_from('<II', ml_hdr)
+        if count == 0 or count > 4096:
+            return
+
+        relative = bool(flags & 0x80000000)   # bit 31: relative method selectors
+        entry_size = 12 if relative else 24
+        entries_va = ml_va + 8
+
+        for mi in range(count):
+            entry_va = entries_va + mi * entry_size
+            entry_raw = self._read_at(entry_va, entry_size)
+            if len(entry_raw) < entry_size:
+                break
+
+            if relative:
+                # Each field is a signed int32 offset FROM that field's address
+                sel_rel, _types_rel, imp_rel = struct.unpack_from('<iii', entry_raw)
+
+                # selector reference: the int32 at entry_va+0 points to a selref slot
+                # which in turn points to the selector string
+                selref_va = entry_va + sel_rel
+                selref_raw = self._read_at(selref_va, 8)
+                if len(selref_raw) < 8:
+                    continue
+                raw_selptr = struct.unpack_from('<Q', selref_raw)[0]
+                sel_str_va = self._decode_ptr(raw_selptr)
+                if not sel_str_va:
+                    sel_str_va = raw_selptr
+                sel_name = self._read_cstring(sel_str_va) if sel_str_va else ''
+
+                # implementation: int32 relative from (entry_va + 8)
+                imp_field_va = entry_va + 8
+                imp_va = imp_field_va + imp_rel
+
+                # Handle stubs: if imp points to a __stubs trampoline, resolve one hop
+                imp_va = imp_va & ~1  # clear thumb bit (arm32 compat)
+
+            else:
+                # Absolute: {sel_ptr(8), types_ptr(8), imp(8)}
+                sel_ptr_raw, _types_raw, imp_va = struct.unpack_from('<QQQ', entry_raw)
+                sel_str_va = self._decode_ptr(sel_ptr_raw)
+                if not sel_str_va:
+                    sel_str_va = sel_ptr_raw
+                sel_name = self._read_cstring(sel_str_va) if sel_str_va else ''
+                imp_va = self._decode_ptr(imp_va) if imp_va else 0
+
+            if not sel_name or not imp_va:
+                continue
+
+            full_name = f'{prefix}[{class_name} {sel_name}]'
+            if sel_name not in self.method_map:
+                self.method_map[sel_name] = []
+            self.method_map[sel_name].append(imp_va)
+            self.imp_map[imp_va] = full_name
+
+            # Also extend class record
+            if class_name in self.classes and prefix == '-':
+                self.classes[class_name].methods.append(sel_name)
 
     def _extract_stubs(self):
         for sym in self.binary.symbols:
@@ -1638,6 +1771,63 @@ class MacOSDecompiler:
     def classrefs(self) -> Dict[int, str]:
         return self.meta.classrefs
 
+    def classes(self) -> Dict[str, 'ObjCClass']:
+        return self.meta.classes
+
+    def method_map(self) -> Dict[str, list]:
+        """selector name → list of implementation VAs."""
+        return getattr(self.meta, 'method_map', {})
+
+    def imp_map(self) -> Dict[int, str]:
+        """imp VA → '+/-[ClassName selector]' full name."""
+        return getattr(self.meta, 'imp_map', {})
+
+    def lookup_imp(self, class_name: str, selector: str) -> Optional[int]:
+        """Return implementation VA for a method, or None."""
+        imap = self.imp_map()
+        prefix_inst = f'-[{class_name} {selector}]'
+        prefix_cls  = f'+[{class_name} {selector}]'
+        for va, name in imap.items():
+            if name in (prefix_inst, prefix_cls):
+                return va
+        return None
+
+    def decompile_method(self, class_name: str, selector: str,
+                         end_va: int = 0) -> 'DecompResult':
+        """Decompile by class name + selector (no VA needed).
+
+        Looks up the implementation address in imp_map, then calls decompile().
+        Raises KeyError if the method is not found.
+        """
+        va = self.lookup_imp(class_name, selector)
+        if va is None:
+            raise KeyError(f'Method not found: {class_name} {selector!r}')
+        imap = self.imp_map()
+        full_name = imap.get(va, f'[{class_name} {selector}]')
+        return self.decompile(va, func_name=full_name, end_va=end_va)
+
+    def dump_classes(self) -> str:
+        """Return a text summary of all parsed ObjC classes and their methods."""
+        lines = []
+        for cname, cls in sorted(self.meta.classes.items()):
+            lines.append(f'@interface {cname}')
+            imap = getattr(self.meta, 'imp_map', {})
+            # Gather all methods (instance + class) for this class
+            methods_all = [(va, nm) for va, nm in imap.items()
+                           if f'[{cname} ' in nm]
+            methods_all.sort(key=lambda x: x[0])
+            for va, nm in methods_all:
+                prefix = nm[0]  # '+' or '-'
+                sel = nm[nm.index(' ')+1:-1]
+                lines.append(f'  {prefix} (id){sel}  // 0x{va:x}')
+            lines.append('@end')
+            lines.append('')
+        return '\n'.join(lines)
+
+    def xref_selector(self, selector: str) -> List[int]:
+        """Return all VAs in selrefs that reference the given selector."""
+        return [va for va, sel in self.meta.selrefs.items() if sel == selector]
+
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -1650,27 +1840,60 @@ def main():
     ap.add_argument('binary', help='Path to Mach-O binary')
     ap.add_argument('--va', type=lambda x: int(x, 16),
                     help='Virtual address of function to decompile')
+    ap.add_argument('--method', metavar='CLASS.selector',
+                    help='Decompile by ObjC method name, e.g. NSObject.init')
     ap.add_argument('--name', default='', help='Function name override')
-    ap.add_argument('--arch', choices=['x86_64', 'arm64'], default='x86_64')
     ap.add_argument('--end', type=lambda x: int(x, 16), default=0,
                     help='End VA (optional)')
     ap.add_argument('--dot', action='store_true', help='Print CFG in DOT format')
     ap.add_argument('--json', action='store_true', help='Output JSON')
     ap.add_argument('--selrefs', action='store_true', help='Dump selrefs table')
+    ap.add_argument('--classrefs', action='store_true', help='Dump classrefs table')
+    ap.add_argument('--classes', action='store_true', help='Dump all ObjC classes + methods')
+    ap.add_argument('--imps', action='store_true', help='Dump imp VA → method name table')
+    ap.add_argument('--xref', metavar='SELECTOR', help='Find all selrefs to a selector')
     args = ap.parse_args()
 
-    dec = MacOSDecompiler(args.binary, arch=args.arch)
+    dec = MacOSDecompiler(args.binary)
 
     if args.selrefs:
         for va, sel in sorted(dec.selrefs().items()):
             print(f'0x{va:016x}  {sel}')
         return
 
-    if not args.va:
-        ap.print_help()
+    if args.classrefs:
+        for va, cls in sorted(dec.classrefs().items()):
+            print(f'0x{va:016x}  {cls}')
         return
 
-    result = dec.decompile(args.va, args.end, args.name)
+    if args.classes:
+        print(dec.dump_classes())
+        return
+
+    if args.imps:
+        for va, nm in sorted(dec.imp_map().items()):
+            print(f'0x{va:016x}  {nm}')
+        return
+
+    if args.xref:
+        for va in dec.xref_selector(args.xref):
+            print(f'0x{va:016x}')
+        return
+
+    if args.method:
+        if '.' in args.method:
+            cls_name, sel = args.method.split('.', 1)
+        else:
+            print('--method requires CLASS.selector format', file=sys.stderr)
+            sys.exit(1)
+        result = dec.decompile_method(cls_name, sel, end_va=args.end)
+
+    elif args.va:
+        result = dec.decompile(args.va, args.end, args.name)
+
+    else:
+        ap.print_help()
+        return
 
     if args.json:
         out = {
