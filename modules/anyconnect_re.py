@@ -414,6 +414,27 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2Session.receiveDeleteChildSA:packet:':                  0xac247,
     'NEIKEv2Session.initiateDeleteChildSA:':                        0xac557,
     # ChildSA install / migrate / uninstall (installChildSA: fully annotated above)
+    # MOBIKE child SA address migration. r13=self; rdx=ChildSA → retain → r14. Stack canary @ 0xefcbf.
+    #
+    # DOUBLE-READ OF SA LIST @ 0xefcdf / 0xefd19 (same TOCTOU as install/uninstall):
+    #   0xefcdf: [r13 sel@0x1d9997] → retain → rbx  ← READ 1 (nil → 0xf0ae7 error)
+    #   0xefd19: [r13 sel@0x1d9997] → retain → r14  ← READ 2 (same selector, new retain)
+    #   Window: concurrent installChildSA:/uninstallChildSA: modifies SA list between reads →
+    #   rbx and r14 reference different list generations; operations on rbx and r14 diverge.
+    #
+    # LOG STRUCT @ 0xefe1c: flag=0x8400302 (same verbose flag as installChildSA: and uninstallChildSA:)
+    #   Confirms migrateChildSA: is in the same unprotected critical region as install/uninstall.
+    #
+    # MIGRATION CALL @ 0xefecc (MOBIKE ADDRESS HIJACKING SURFACE):
+    #   [r12 sel@0x1db13d:new_src_addr(rdx):new_dest_addr(rcx)] → rbx
+    #   Source and destination addresses read from the incoming ChildSA object (r13/r14 derived).
+    #   No visible verification that the new address belongs to the authenticated IKE peer.
+    #   MOBIKE RFC 4555 §3.5 requires UPDATE_SA_ADDRESSES with NOTIFY payloads protected by
+    #   the IKE SA — if the IKE SA is compromised (e.g. via DES downgrade) the address
+    #   verification is also compromised → traffic hijack to attacker-controlled address.
+    #
+    # FAILURE PATH @ 0xefef1: test rbx; je 0xf027f (nil return from migration → no cleanup visible
+    #   in first 200 insns; function continues beyond window at 0xf027f).
     'NEIKEv2Session.migrateChildSA:':                               0xefca4,
     'NEIKEv2Session.migrateAllChildSAs':                            0xf0bcf,
     # Atomic old→new SA swap for rekeyed child SAs. r14=self; rdx=rekeyed_ChildSA → retain → r15.
@@ -589,11 +610,66 @@ NE_1095_140_2_METHODS = {
     #   → attacker derives all rekeyed {SK_d_new, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr}
     #   offline from observed IKE exchange parameters.
     'NEIKEv2IKESA(Crypto).calculateSKEYSEEDForRekey:':             0x950a4,
+    # DH local value generation. r12=self.
+    # r13 = DH group object from self; r14 = msgSend cached ptr.
+    # NIL DH GROUP @ 0x949ed: je 0x94b02 → error path; isKindOfClass(esi=0x10, not 0x11)
+    #   Note: esi=0x10 here vs esi=0x11 (NEIKEv2ChildSA) on all other nil paths — different class check.
+    #
+    # DH GROUP VALIDITY PREDICATE @ 0x94a30-0x94a43:
+    #   [r13 sel@0x234de9:rbx(len_a):rax(len_b)] → test al; je 0x94b3b
+    #   Lengths extracted twice from DH group object at 0x94a03 (sel@0x234e03:edx) and 0x94a1b (sel@0x234df0:edx).
+    #   If predicate returns 0 (invalid group/lengths inconsistent) → abort: DH object on self unchanged.
+    #   Concurrent call with different DH group wins on the self store race (below).
+    #
+    # DH CONTEXT BUILD @ 0x94a4b-0x94af5 (SUCCESS PATH):
+    #   [r13 sel@0x234c76] → retain → rbx (DH context object containing private key material)
+    #   [r13 sel@0x231e76] → rax; [self sel@0x2342f1:rax] — bind DH input param
+    #   [r13 sel@0x234c61:0] — zero old state on DH group object
+    #   [r13 sel@r15] → retain → rbx (re-read DH params after zero)
+    #   [self sel@0x23429e:rbx] ← STORE DH component A on self (NO LOCK)
+    #   [r13 sel@0x234d49] → rax; [self sel@0x234284:rax] ← STORE DH component B on self (NO LOCK)
+    #   Concurrent generateLocalDHValues: second write overwrites first → first caller holds stale
+    #   local DH values; SKEYSEED derived from mismatched DH public/private components.
+    #
+    # ACTUAL KEY GENERATION: inside DH group object methods (not visible at this level).
+    #   Entropy source (SecRandomCopyBytes vs /dev/urandom) resides in DH group implementation.
     'NEIKEv2IKESA(Crypto).generateLocalDHValues':                   0x9498d,
+    # Nonce generation. r14=self. Very short (~54 bytes, 0x94bcc-0x94c80).
+    # READ NONCE LENGTH @ 0x94be8-0x94c09:
+    #   [self sel@0x231d47] → retain → rbx (nonce obj); [rbx sel@0x234743] → r15d (length); release rbx
+    #
+    # MINIMUM LENGTH ENFORCEMENT @ 0x94c0f:
+    #   `cmp r15d, 0xf; ja 0x94c43` (unsigned) — NONCE MUST BE > 15 (≥ 16 bytes = 128 bits)
+    #   ≤ 15 → error path at 0x94c15: 0x1f3dec alloc → isKindOfClass(0x11) → error or no-op
+    #   RFC 7296 §2.10: nonce MUST be ≥ 128 bits — this check correctly enforces the minimum.
+    #   RISK: configured nonce length of exactly 16 bytes passes; RFC recommends ≥ 256 bits.
+    #         If NE configuration accepts nonce_len=16, connections use minimum-compliant entropy.
+    #
+    # NONCE CREATION @ 0x94c43:
+    #   [nonce_class sel@0x234aef:r15d] → rbx (alloc nonce of configured length)
+    #   [self sel@0x2340ef:rbx] (store on self); release rbx; return 1
+    #   Entropy source is in the nonce class method — not visible at this level.
     'NEIKEv2IKESA(Crypto).generateLocalNonce':                      0x94bcc,
     'NEIKEv2IKESA(Crypto).fetchLocalCertificateIdentity':           0x94c8e,
     'NEIKEv2IKESA(Crypto).generateLocalValues':                     0x966db,
     'NEIKEv2IKESA(Crypto).generateAllValuesForRekey:':              0x9672c,
+    # PSK auth data computation. r14=self; rdx=shared_secret(PSK)→r13; rcx=octets→r12.
+    # NIL PSK @ 0x9853c: je 0x98673 → error (esi=0x11); nil octets @ 0x98545: je 0x9869e → error (esi=0x11)
+    # nil PRF config @ 0x98576: je 0x986c9 → error (esi=0x11)
+    #
+    # DOUBLE-READ OF PRF CONFIG @ 0x98556 / 0x9858a (TOCTOU):
+    #   0x98556: [r14(self) sel@0x23077a] → retain → rbx  ← READ 1 (test rbx → nil bail 0x986c9)
+    #   0x9858a: [r14(self) sel@0x23077a] → retain → rbx  ← READ 2 (same selector)
+    #   Window: concurrent IKE renegotiation modifies self's PRF configuration between reads →
+    #   first rbx is released; second read's PRF object is used for auth computation.
+    #   If the PRF type changes (e.g., SHA1→SHA256 during concurrent reauth), auth data is computed
+    #   with a different PRF than the IKE SA was set up with → auth verification failure
+    #   or mismatch between initiator/responder auth computation.
+    #
+    # AUTH COMPUTATION @ 0x9862f:
+    #   [r15(PRF_obj) sel@0x23138d:rbx(PSK):r12(octets):rax(extra_component)] → r15
+    #   MAC/PRF output: prf(PSK, data_to_authenticate | signed_octets) per RFC 7296 §2.15
+    #   Returns auth data object; r15=nil on any error.
     'NEIKEv2IKESA(Crypto).createAuthenticationDataForSharedSecret:octets:': 0x98509,
     'NEIKEv2IKESA(Crypto).createInitiatorSignedOctets':             0x98987,
     'NEIKEv2IKESA(Crypto).createResponderSignedOctets':             0x98e85,
@@ -1282,6 +1358,57 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def migrate_child_sa(self, count=200):
+        """Disassemble NEIKEv2Session.migrateChildSA: @ 0xefca4 — MOBIKE address migration.
+        Double-reads the SA list (sel@0x1d9997, 0xefcdf and 0xefd19) without lock, same
+        pattern as install/uninstall. Shares log flag 0x8400302 — unprotected critical region.
+
+        Migration call at 0xefecc: [r12 sel@0x1db13d:new_src:new_dest] uses addresses
+        from the incoming ChildSA object without visible peer-identity verification.
+        Combined with DES downgrade (IKE SA compromised): attacker-controlled MOBIKE
+        UPDATE_SA_ADDRESSES → kernel SA migrated to attacker address → traffic hijack.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.migrateChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def generate_local_dh_values(self, count=240):
+        """Disassemble generateLocalDHValues @ 0x9498d — DH local value generation.
+        DH group validity predicate at 0x94a43 (two length args → al test). STORES at
+        0x94acb and 0x94af2 both unlocked — concurrent calls: last write wins, first
+        caller holds stale DH public/private pair → SKEYSEED derived from mismatched
+        DH components. Actual key-generation entropy source is inside the DH group object.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).generateLocalDHValues')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def generate_local_nonce(self, count=80):
+        """Disassemble generateLocalNonce @ 0x94bcc — nonce creation with length gate.
+        Reads configured nonce length; enforces `cmp r15d, 0xf; ja` (≥ 16 bytes = 128 bits,
+        RFC 7296 minimum). Length ≤ 15 → error. Nonce class method at 0x94c54 generates
+        the actual bytes — entropy source not visible at this level.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).generateLocalNonce')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_auth_data_psk(self, count=220):
+        """Disassemble createAuthenticationDataForSharedSecret:octets: @ 0x98509 — PSK auth.
+        Double-reads PRF config from self (sel@0x23077a at 0x98556 and 0x9858a) without lock
+        — same TOCTOU pattern as calculateSKEYSEEDDerivatives. Concurrent renegotiation changing
+        PRF type between reads → auth computed with wrong PRF → auth mismatch.
+
+        Main auth call at 0x9862f: prf(PSK, data_to_auth | signed_octets) per RFC 7296 §2.15.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createAuthenticationDataForSharedSecret:octets:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def copy_sas_to_delete_install_rekeyed(self, count=200):
         """Disassemble copySAsToDeleteAndInstallRekeyedChildSA: @ 0xf6d4b — double-read SA race.
         Old→new child SA atomic swap. Delete loop at 0xf6dfa reads the SA list TWICE per
@@ -1388,6 +1515,10 @@ class AnyConnectNEAnalyzer:
             'receive_rekey_child_sa': self.receive_rekey_child_sa(),
             'skeyseed_for_rekey': self.skeyseed_for_rekey(),
             'copy_sas_to_delete_install_rekeyed': self.copy_sas_to_delete_install_rekeyed(),
+            'migrate_child_sa': self.migrate_child_sa(),
+            'generate_local_dh_values': self.generate_local_dh_values(),
+            'generate_local_nonce': self.generate_local_nonce(),
+            'create_auth_data_psk': self.create_auth_data_psk(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
