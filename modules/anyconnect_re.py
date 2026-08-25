@@ -55,12 +55,41 @@ NE_1095_140_2_METHODS = {
     'shouldAllowUnentitledExtension:':                              0x107dc5,
     # Raw socket grant — where Apple hands Cisco the CSTP/DTLS socket
     # Gate chain: _SecRequirementCreateWithString (lazy-init @ 0x3e5b6) ->
-    #   0x18a2f4: _SecCodeCopyGuestWithAttributes -> _SecCodeCheckValidity(callerCode, flags, DR)
+    #   0x18a2f4: _ne_code_sig_gate → SecStaticCodeCheckValidity(callerCode, flags=0, DR)
     #   DR = "identifier com.cisco.anyconnect.macos.acsockext and cert leaf[OU]=DE8Y96K9QP"
-    #   Bypass: hook _SecCodeCheckValidity GOT (0x262008) → return 0 OR null DR ptr in lazy-init
+    #   Bypass: patch je @ 0x18a3c4 → jmp 0x18a4a3 (2-byte) OR hook GOT @ 0x262008 → return 0
     #   NOTE: call @ 0x3e2ce (esi=2) is _os_log_type_enabled(DEBUG) — NOT a security gate
     'requestSocket:interface:local:remote:completionHandler:':      0x3e26c,
     'extensionHasACRequirement':                                    0x3e982,
+    # TWO-STAGE CODESIG GATE — validates that a caller extension satisfies a DR.
+    # Signature: _ne_code_sig_gate(SecRequirementRef req, id urlOrPath, id aux) → BOOL
+    #   r15=rdi=req, r12=retain(rsi=url/path), rbx=retain(rdx=aux)
+    #
+    # STAGE 1 — SecStaticCode creation (error check, NOT the security gate):
+    #   0x18a33b: test r12; je 0x18a398 → nil path skips static code creation
+    #   Non-nil path @ 0x18a344: build struct at [rbp-0x40]/[rbp-0x38] with r12 (path)
+    #   0x18a369: call [rip+0xd7629] → creates SecStaticCode from r12 with flags=1 → retained rbx
+    #   0x18a37a-0x18a385: call 0x1f38f4(0, rbx, 0, &[rbp-0x68]) → first code validity check
+    #   r13d = result; jne 0x18a431 if non-zero (code object creation failed → bail)
+    #   Nil path @ 0x18a398: call 0x1f38fa(0, &[rbp-0x68]) → same check for nil-url case
+    #
+    # STAGE 2 — THE ACTUAL GATE:
+    #   0x18a3af: rdi=[rbp-0x68] (code object from stage 1)
+    #   0x18a3b8: esi=0 (kSecCSDefaultFlags)
+    #   0x18a3ba: rdx=r15 (the requirement ref from original rdi arg)
+    #   0x18a3bd: call 0x1f38e8 → SecStaticCodeCheckValidity(code, 0, requirement)
+    #   0x18a3c2: test eax, eax
+    #   0x18a3c4: je 0x18a4a3  ← BYPASS TARGET (2-byte patch: 74 dd → eb dd)
+    #     eax==0 (success): jmp to 0x18a4a3 (continue processing valid code)
+    #     eax!=0 (fail): log error, return r15d=0 (BOOL NO)
+    #
+    # BYPASS OPTIONS:
+    #   A. Patch 0x18a3c4: `74 dd` → `eb dd` (je → jmp) — always success regardless of result
+    #   B. Hook GOT[_SecStaticCodeCheckValidity] @ 0x262008 → redirect to `xor eax,eax; ret`
+    #   Both require code injection into nesessionmanager or dyld-load hook in the extension.
+    #
+    # Error path @ 0x18a431: builds error struct, logs with 0x8400102 flag, return 0.
+    # Stack canary: [rbp-0x30] checked @ 0x18a486 before ret (standard canary pattern).
     '_ne_code_sig_gate':                                            0x18a2f4,
 
     # ── NEConfiguration plugin type dispatch ─────────────────────────────────────
@@ -140,6 +169,57 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2PacketTunnelProvider.receiveConnection:':              0xa4e00,
 
     # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
+    # IKE SA_INIT initiator path (called from connection setup after receiveConnection: accepts).
+    # r13=self (NEIKEv2Session); r12=objc_msgSend (used throughout).
+    #
+    # PROLOGUE / PROPERTY LOADS:
+    #   0xa2c64: sel@0x2269d8 → [self propA] retain → r15 (IKE config / server info)
+    #   0xa2ca9: sel@0x227060 → [self propB] retain → r14 (connection context / dispatch queue)
+    #   0xa2cc4: test r15; je 0xa32f5 → bail if IKE config nil
+    #   0xa2ccd: test r14; je 0xa3320 → bail if connection context nil
+    #
+    # SELECTOR RESOLUTION:
+    #   0xa2cd7: r13 = sel@0x223c4a (selD — probably `localAddress` or `remoteAddress`)
+    #   0xa2ce4: [r14 selD] retain → rbx; nil guard → 0xa334b
+    #
+    # CONFIG-FLAG BRANCH (0xa2def):
+    #   0xa2dba: [r12=IKE_config sel@0x223b67] → retain rbx
+    #   0xa2de3: [rbx sel@0x226558] → r14d (BOOL) — flag check (likely isMobileConnect/isReauthRequired)
+    #   0xa2def: test r14b; je 0xa2e9b → FALSE = standard SA_INIT path; TRUE = retransmit/reauth path
+    #
+    # TRUE-FLAG PATH (retransmit / reauth variant):
+    #   0xa2e27: [self sel@0x22683f] retain → r14 (state/timer object)
+    #   0xa2e46: edi=9; call 0x7651c → clock_gettime_nsec_np(CLOCK_UPTIME_RAW_APPROX) → rbx (timestamp)
+    #   0xa2e5a: [r14 sel@0x226826:3:rbx] — set retransmit-count=3, base-timestamp=rbx
+    #   0xa2e74: [self sel@0x226d1d]; [self sel@0x226d18] — two setters on self
+    #   → jmp 0xa3281 (skip standard SA_INIT, use timer-driven retransmit)
+    #
+    # FALSE-FLAG PATH (standard SA_INIT):
+    #   0xa2ecd: [self sel@0x226cc4] — setter on self (marks connection as initiating)
+    #   0xa2ee7: [self sel@0x223a41] retain → [rbp-0x60] (probably socket/flow object)
+    #   0xa2efc: [[rbp-0x60] sel@0x225ecd] retain → rbx (sub-property, maybe write-handler)
+    #   0xa2f2b: [self sel@0x226dfd:r15:rbx] → BOOL r15d
+    #           *** IKE SA_INIT DISPATCH (pre-send gate — passes connection + handler) ***
+    #   0xa2f43: test r15b; je 0xa3098 → if false, error path (edx=3 state set)
+    #
+    # IKE_SA_INIT SEND (reached after bool check):
+    #   0xa2f4c: [r12 sel@0x226d95] → test al; je 0xa3137 (MOBIKE flag check)
+    #   If MOBIKE/rekey flag set:
+    #     0xa2f78: [SomeClass sel@0x226d5b:r12(IKE_SA)] retain → [rbp-0x60] (probe object)
+    #   0xa2fa5-0xa2fc7: build stack block literal at [rbp-0x98]:
+    #     [r14]      = _NSConcreteStackBlock isa ptr [rip+0x1be0ca]
+    #     [r14+8]    = 0xc2000000 (block flags: BLOCK_HAS_COPY_DISPOSE | BLOCK_HAS_DESCRIPTOR)
+    #     [r14+0x10] = invoke fn ptr [rip+0x3fb] (relative to 0xa2fb8 ≈ 0xa2fb3+local offset)
+    #     [r14+0x18] = descriptor ptr [rip+0x1c204d]
+    #     [r14+0x20] = self (r12 = [rbp-0x58])
+    #     [r14+0x28] = retained(IKE_SA_obj) — captures IKE SA
+    #     [r14+0x30] = retained([rbp-0x48]) — captures connection context
+    #   0xa3000: [self sel@0x226bb6:IKE_SA_obj:1:block_ptr]
+    #           *** ACTUAL IKE_SA_INIT SEND ***
+    #           cmp eax, -1; jne 0xa307c → if -1 (error), log + set error state edx=3
+    #
+    # ERROR PATTERN: ALL failure branches set [property sel@0x22663d:3:msg] — edx=3 = error marker
+    #   (same as receiveConnection: — system-wide error count convention)
     'NEIKEv2Session.initiateConnect':                               0xa2c42,
 
     # ── NEIKEv2Session(Exchange) Phase 2 handlers ────────────────────────────────
@@ -725,6 +805,42 @@ class AnyConnectNEAnalyzer:
         """
         return NE_TUNNEL_START_SELREFS
 
+    def codesig_gate(self, count=200):
+        """Disassemble _ne_code_sig_gate @ 0x18a2f4.
+        Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
+
+        Stage 1 (0x18a369): creates SecStaticCode from URL/path arg (flags=1).
+        Stage 2 (0x18a3bd): SecStaticCodeCheckValidity(code, flags=0, requirement=r15).
+        Gate: je 0x18a4a3 at 0x18a3c4 — patches to jmp to bypass validation.
+
+        Bypass options:
+          A. 2-byte patch at 0x18a3c4: `74 dd` → `eb dd` (je → jmp unconditional)
+          B. Hook GOT[_SecStaticCodeCheckValidity] @ 0x262008 → `xor eax,eax; ret`
+        Both require injection into nesessionmanager or NE extension load hook.
+        """
+        va = NE_1095_140_2_METHODS.get('_ne_code_sig_gate')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def initiate_connect(self, count=320):
+        """Disassemble NEIKEv2Session.initiateConnect @ 0xa2c42.
+        Maps Phase 1 initiator: SA_INIT dispatch and two-path structure.
+
+        Config-flag branch at 0xa2def (sel@0x226558 BOOL):
+          TRUE  → retransmit/reauth path: clock_gettime_nsec_np + [obj sel:3:timestamp]
+          FALSE → standard path → [self sel@0x226dfd:r15:rbx] pre-send gate
+                  → [self sel@0x226bb6:IKE_SA:1:block] ACTUAL SA_INIT send at 0xa3000
+
+        Block literal at [rbp-0x98] (0xa2fa5-0xa2fc7) captures {self, IKE_SA, connection}.
+        Error marker: edx=3 on all failure branches (system-wide NE error convention).
+        MOBIKE conditional: sel@0x226d95 check after successful initiation.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.initiateConnect')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def keychain_acl_race(self, count=280):
         """Disassemble addAppToKeychainACLsForConfiguration: @ 0x3528a.
         Maps the type check vs ACL write race and the batch iteration loop.
@@ -766,6 +882,8 @@ class AnyConnectNEAnalyzer:
             'protocol_overlap': self.protocol_overlap(),
             'keychain_surface': self.keychain_surface(),
             'keychain_acl_race': self.keychain_acl_race(),
+            'codesig_gate': self.codesig_gate(),
+            'initiate_connect': self.initiate_connect(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
