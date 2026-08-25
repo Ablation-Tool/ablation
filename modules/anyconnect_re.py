@@ -37,6 +37,10 @@ NE_1095_140_2_METHODS = {
     # Entitlement gate — validates Cisco sysext before loading
     'shouldAllowUnentitledExtension:':                              0x107dc5,
     # Raw socket grant — where Apple hands Cisco the CSTP/DTLS socket
+    # Gate chain: _SecRequirementCreateWithString (lazy-init @ 0x3e5b6) ->
+    #   0x18a2f4: _SecCodeCopyGuestWithAttributes -> _SecCodeCheckValidity(callerCode, flags, DR)
+    #   DR = "identifier com.cisco.anyconnect.macos.acsockext and cert leaf[OU]=DE8Y96K9QP"
+    #   Bypass: null DR ptr in lazy-init block (skips check) OR hook SecCodeCheckValidity -> 0
     'requestSocket:interface:local:remote:completionHandler:':      0x3e26c,
     # Always-on VPN requirement check
     'extensionHasACRequirement':                                    0x3e982,
@@ -74,12 +78,32 @@ NE_1095_140_2_METHODS = {
     # Config payload — where LINA assigns IP/DNS to AnyConnect client
     'NEIKEv2AppVersionAttribute.attributeType':                     0x8373d,
     'NEIKEv2AppVersionAttribute.attributeName':                     0x83776,
-    # Always-on VPN gate — type-0x10 entitlement bypasses AC requirement check
-    # Flow: config-read @ 0x3e9a4 -> if enabled: auth-check(0x10) @ 0x3e9c5
-    #   jne 0x3ea89 if has-type16 -> xor ebx,ebx -> return false (bypass)
+    # Internal NE code-signature gate — called from requestSocket: and other methods
+    # 0x18a2f4: _SecCodeCopyGuestWithAttributes -> _SecCodeCheckValidity -> _SecCopyErrorMessageString
+    '_ne_code_sig_gate':                                            0x18a2f4,
+    # Always-on VPN gate — REAL check is at 0x3e9a4 preference read
+    # NOTE: call at 0x3e9c5 (esi=0x10) is os_log_type_enabled(OS_LOG_TYPE_ERROR) — NOT a security gate
+    # Actual gate: _SecRequirementCreateWithString at 0x3e9a4 -> _SecCodeCheckValidity
     'extensionHasACRequirement':                                    0x3e982,
     # Keychain ACL race — TOCTOU between isKindOfClass: @ 0x352e3 and SecACL write @ 0x35488
     'addAppToKeychainACLsForConfiguration:':                        0x3528a,
+    # Phase 1 IKESA key derivation — RFC 5996 SKEYSEED = prf(Ni|Nr, g^ir)
+    'NEIKEv2IKESA.sKeySeed':                                        0xb9946,
+    'NEIKEv2IKESA.setSKeySeed:':                                    0xb995a,
+    # DH shared secret before SKEYSEED derivation (input to prf)
+    'NEIKEv2IKESA.sharedSecret':                                    0xb8969,
+    # IKEv2-PSK from system keychain — static cred for PSK-mode LINA auth
+    'NEIKEv2IKESA.fetchedSharedSecret':                             0xb9e3c,
+    # Client private key from keychain (granted via addAppToKeychainACLsForConfiguration:)
+    'NEIKEv2IKESA.digitalSignatureLocalPrivateKey':                 0xb9aa4,
+    # LINA server public key from its TLS cert in IKE_AUTH
+    'NEIKEv2IKESA.digitalSignatureRemotePublicKey':                 0xb9aea,
+    # SK_e: IKE SA encryption/decryption keys (derived from SKEYSEED via PRF+)
+    'NEIKEv2IKESA.encryptionKey':                                   0xb9207,
+    'NEIKEv2IKESA.decryptionKey':                                   0xb9250,
+    # SK_a: IKE SA integrity keys
+    'NEIKEv2IKESA.localIntegrityKey':                               0xb9172,
+    'NEIKEv2IKESA.remoteIntegrityKey':                              0xb91bb,
 }
 
 # Cisco co-design markers in Apple's binary
