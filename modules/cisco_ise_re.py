@@ -58,6 +58,7 @@ ISE-F39: mctrust (Meraki Sync Service) container mounts -v /var/run/:/host/var/r
 ISE-F40: CA REST API on HTTP port 9444 (Tomcat Connector: no address bind → 0.0.0.0 in XML; Tomcat binds all, but GPCE firewall INPUT-DROP + DEFAULTCHAIN-lo-ACCEPT makes 9444 localhost-only) — zero auth (no web.xml security-constraint, no JAX-RS @RolesAllowed, no filter); GET /caservice/api/keys/download/ROOT_CA returns ISE root CA private key; POST /cr/sign/{certtype} signs arbitrary CSRs; accessible from loopback and --network=host containers (ISE-F11 EDDA); standalone HIGH, chained CRITICAL [CRITICAL-via-chain]
 ISE-F42: Unauthenticated OCSP cert reload — GET /ocsp/update on port 2560 (network-accessible via cpmadjustfw.sh enable_ocsp_port); Jersey OcspRestServer.update() calls OcspServlet.load() to reload OCSP server cert+key from CA; no auth (no web.xml security-constraint, no @RolesAllowed); allows external actor to force OCSP cert state reload [MEDIUM]
 ISE-F43: simple-config.xml hardcoded Cisco dev cert + encrypted private key — /opt/CSCOcpm/prrt/bin/simple-config.xml ships in ISE 3.3.0 RPM; contains ACS cert for tkrpis1.cisco.com (2021-2023, expired) + PKCS#8 encrypted private key + hardcoded 48-byte binary decryption password all in same file; key_material pattern: password stored alongside ciphertext [LOW]
+ISE-F44: Hermes (pxGrid Cloud Agent) container mounts -v /var/run/:/host/var/run/ — bridge network hermes-network (169.254.7.0/24), --cap-drop=all, --read-only, -p 127.0.0.1:8913:8913/tcp; key_manager.sock accessible at /host/var/run/ from container; extends ISE-F39/F11 pattern to third ISE container [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3400,9 +3401,47 @@ def decode_simple_config_key_password() -> bytes:
     return binascii.unhexlify(SIMPLE_CONFIG_DEV_KEY_PASSWORD_HEX)
 
 
+# ISE-F44: Hermes (pxGrid Cloud Agent) container mounts /var/run/ from host
+# Source: /opt/CSCOcpm/bin/hermes-control.sh (in CSCOcpm-common-3.3.0-430.x86_64.rpm)
+# Container run flags (podman create):
+#   --name hermes-service
+#   --network hermes-network  (bridge, 169.254.7.0/24)
+#   -v /opt/hermes:/opt/hermes
+#   -v /opt/xgrid:/opt/xgrid:ro
+#   -v /etc/localtime:/etc/localtime:ro
+#   -v /var/run/:/host/var/run/   <- key_manager.sock accessible from container
+#   --user isehermes:isehermes
+#   -p 127.0.0.1:8913:8913/tcp
+#   --cap-drop=all
+#   --read-only
+#   --umask $HERMES_UMASK
+# Third ISE container with /var/run/ host mount pattern (ISE-F11=EDDA, ISE-F39=mctrust, ISE-F44=hermes)
+# Service: pxGrid Cloud Agent — bridges ISE internal pxGrid to Cisco cloud services
+
+HERMES_HOST = "127.0.0.1"
+HERMES_PORT = 8913
+HERMES_KEYMGR_SOCK_IN_CONTAINER = "/host/var/run/key_manager.sock"
+
+def probe_hermes_service(host: str = HERMES_HOST, port: int = HERMES_PORT) -> dict:
+    """ISE-F44: Probe Hermes pxGrid Cloud Agent service on localhost:8913."""
+    import socket
+    result = {"host": host, "port": port}
+    try:
+        s = socket.create_connection((host, port), timeout=5)
+        s.send(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+        data = s.recv(4096)
+        s.close()
+        result["banner"] = data.decode("utf-8", errors="replace")[:500]
+        result["open"] = True
+    except Exception as e:
+        result["error"] = str(e)
+        result["open"] = False
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.20.0",
+    "version": "1.21.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3412,13 +3451,13 @@ MODULE_META = {
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
-        "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43",
+        "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
-             "ISE-F39"],
+             "ISE-F39", "ISE-F44"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43"],
@@ -3516,6 +3555,14 @@ MODULE_META = {
         "ise_f43_key_type": "PKCS#8 ENCRYPTED PRIVATE KEY",
         "ise_f43_key_password_hex": "383237363439374644304432313942353245443534463245413836433338313534383631393342383332453637433731303232393136453237444138423644334642333338323138394632464236323944304339424439423330353031334445",
         "ise_f43_antipattern": "password stored in same XML element as encrypted ciphertext",
+        "ise_f44_container": "hermes (pxGrid Cloud Agent)",
+        "ise_f44_control_script": "/opt/CSCOcpm/bin/hermes-control.sh",
+        "ise_f44_network": "hermes-network (bridge, 169.254.7.0/24)",
+        "ise_f44_port": "127.0.0.1:8913:8913/tcp",
+        "ise_f44_run_flags": "--cap-drop=all --read-only -v /var/run/:/host/var/run/ --network hermes-network",
+        "ise_f44_socket_in_container": "/host/var/run/key_manager.sock",
+        "ise_f44_pattern": "Third ISE container with /var/run/ host mount: ISE-F11=EDDA, ISE-F39=mctrust, ISE-F44=hermes",
+        "ise_f44_chain": "hermes-RCE -> /host/var/run/key_manager.sock -> ISE-F1 decrypt oracle -> full ISE credential exfil",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3582,5 +3629,6 @@ MODULE_META = {
         "sweep_ca_privkeys",
         "trigger_ocsp_cert_reload",
         "decode_simple_config_key_password",
+        "probe_hermes_service",
     ],
 }
