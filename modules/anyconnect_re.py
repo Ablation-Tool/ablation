@@ -82,6 +82,20 @@ NE_1095_140_2_METHODS = {
     # This is where Apple calls into Cisco's acsockext during tunnel startup (not rekey/reconnect).
     'NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions:':    0xd878b,
 
+    # ── NEIKEv2 TCP connection accept path (called after handleNewConnection: passes) ──
+    # Prologue: r15=self, r12=retain(rdx=connection), r14=session/queue property of self.
+    # 6-guard gate chain before session factory:
+    #   0xa4e70: connection nil → bail 0xa567e
+    #   0xa4ed5: r14 property nil → bail 0xa569d
+    #   0xa4f73: type/cert check on r12 → bail 0xa5149 if mismatch
+    #   0xa4f95: [r12 isConnectionReusableForDestination:r14] (sel@0x224ea1) → 0xa51b0 if NO
+    #   0xa4fad: [r14 <sel@0x224d46>] → 0xa52f0 if NO
+    #   0xa4fc7: [r14 <sel@0x224d66>:0] → 0xa534d if NO
+    # Session factory at 0xa4fcd: [SharedClass <sel@0x224e5d>:r12(connection):r14] → retained session
+    # TOCTOU: connection-reuse check (0xa4f87) reads self state before factory; factory re-reads at 0xa4fcd.
+    # Race window = between guard 4 (reuse) and factory call; another thread can change connection state.
+    'NEIKEv2PacketTunnelProvider.receiveConnection:':              0xa4e00,
+
     # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
     'NEIKEv2Session.initiateConnect':                               0xa2c42,
 
@@ -333,6 +347,13 @@ LINA_SIGS = [
 # Extracted from: cisco-secure-client-macos-5.1.16.194-core-vpn-webdeploy-k9.dmg
 # → XAR vpn_module.pkg/Payload → gzip+cpio → Socket Filter.app/Contents/Library/SystemExtensions/
 # Verified: all show push rbp; mov rbp, rsp prologue.
+#
+# VERSION BOUNDARY NOTE: 5.1.x acsockext is pure AppProxy/Filter/DNS proxy extension.
+# NEIKEv2ProviderAuthenticate: is NOT present in 5.1.x binary.
+# That interface was AnyConnect 4.x / Catalina-era (NE 1095.140.2).
+# In Secure Client 5.x, IKEv2 is handled via Apple's standard NEVPNProtocolIKEv2 or
+# a separate Packet Tunnel Provider (not this extension).
+# AnyConnect 4.10.x acsockext needed for the Catalina auth delegate implementation.
 ACSOCKEXT_5_1_16_194_METHODS = {
     # ── ExtensionWrapper — C++ core bridge (IMultiplexer / InterceptorCB holder) ───────────
     # newFlowStarted loads global C++ obj via [rip+0x7b7e9]; tests for NULL before dispatching.
@@ -351,8 +372,16 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     'AppProxyProvider.updateProxyRulesWithCompletionHandler:':            0x100067820,
 
     # ── AppProxyTCPConnection — per-connection handler; TOCTOU in reuse check ───────────
-    # isConnectionReusableForDestination: saves r15(self)/r14(preferredIface)/r12(global class).
-    # If reuse-check passes then USE of rdx(destination) happens ~50 insns later → TOCTOU window.
+    # isConnectionReusableForDestination: (called from NE receiveConnection: @ 0xa4f87)
+    # Args: r15=self, rdx=candidate(rbx retained), rcx=r14=existing(retained).
+    # TRIPLE-READ race — 3 unprotected property reads with no lock:
+    #   Read 1: [self <sel@0x86109>] @ 0x10004b3c0 → active connection object
+    #   Compare: [activeConn <sel@0x862c6>:candidate] @ 0x10004b3e2 → BOOL (r13d)
+    #   Read 2: [self <sel@0x862da>] @ 0x10004b3ff → second self property (r13)
+    #   Read 3: [self <sel@0x86346>] @ 0x10004b43b → counter/ID from self (eax)
+    #   ID compare: [r14 →0x10009b132] vs eax @ 0x10004b44b; sete r12b = final result
+    # Race: another thread can change active connection (Add/Remove) between Read 1 and Read 3.
+    # Reuse returns YES while the underlying connection object has already been deallocated.
     'AppProxyTCPConnection.isConnectionReusableForDestination:withPreferredInterface:': 0x10004b393,
 
     # ── AppProxyUDPSession — UDP session TOCTOU ──────────────────────────────────────────
@@ -378,7 +407,11 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     # Flow found → [flow delayedResponseCount] dec → [flow setDelayedResponseCount:]
     # → call 0x10005da06 (actual write: esi=2/edx=1/r8=flow_obj/rcx=format)
     'DNSProxyProvider._injectBlock_callback':                             0x100082f38,
-    # The write function called from block callback (0x1000830c3 and 0x100083122)
+    # The write function called from block callback (0x1000830c3 and 0x100083122).
+    # Args: rdi=peer_addr_str, esi=2(family), edx=1(proto), rcx=format_arg, r8=flow_obj.
+    # Internal: cmp esi,3 → trace-only path. Otherwise:
+    #   0x10005db2c: subroutine — actual flow write (ecx=0x801=flags, rdi=flow_obj, rdx=formatted_data)
+    #   0x10005dbaa: secondary write (edi=2, esi=r14b=1, rdx=r13=data)
     'DNSProxyProvider._writeUDPDatagramToFlow':                           0x10005da06,
     'DNSProxyProvider.findUDPFlowWithDelayedReponse:':                    0x100082827,
     'DNSProxyProvider.notifyFlowEnd:':                                    0x1000821c7,
@@ -569,9 +602,19 @@ class AnyConnectNEAnalyzer:
         return self.disasm_va(0xc0e85, count=count)
 
     def phase1_rx(self, count=200):
-        """Disassemble receiveConnection: @ 0xa4e00 — Phase 1 IKE_SA_INIT entry.
-        Called by Listener after handleNewConnection: passes; creates IKESA and calls
-        validateSAInitAs*: with completion block.
+        """Disassemble receiveConnection: @ 0xa4e00 — Phase 1 TCP connection accept.
+        Called after handleNewConnection: @ 0xc0e85 passes DR gate.
+        Prologue: r15=self, r12=retain(rdx=connection), r14=session/queue property.
+        6-guard chain before session factory:
+          0xa4e70: nil(connection) → 0xa567e
+          0xa4ed5: nil(r14) → 0xa569d
+          0xa4f73: type/cert check on r12 → 0xa5149
+          0xa4f87: [r12 isConnectionReusableForDestination:r14] (sel@0x224ea1) → 0xa51b0
+          0xa4fad: [r14 sel@0x224d46] → 0xa52f0
+          0xa4fc7: [r14 sel@0x224d66:0] → 0xa534d
+        Factory @ 0xa4fcd: [SharedClass sel@0x224e5d :r12:r14] → retained IKEv2Session
+        TOCTOU: reuse check at 0xa4f87 and factory at 0xa4fcd both read self connection
+        state without holding a lock → race window between guard 4 and factory.
         """
         return self.disasm_va(0xa4e00, count=count)
 
@@ -720,12 +763,24 @@ class ACSockExtAnalyzer:
         - Flow DISCARDED by outer injectDelayedResponseIntoUDPFlow: (rsi never saved)
         - This is the SECOND fetch; first is in caller before injectDelayed... is called
         Post-fetch: [flow delayedResponseCount] → dec → [flow setDelayedResponseCount:]
-        Write call: 0x10005da06 at 0x1000830c3 (peer_addr_str, esi=2, edx=1, r8=flow_obj)
+        Write chain: 0x1000830c3 calls _writeUDPDatagramToFlow @ 0x10005da06
+          → 0x10005db2c (ecx=0x801, rdi=flow_obj, rdx=data): actual NE flow write
+          → 0x10005dbaa (edi=2, esi=1, rdx=data): secondary write/cleanup
         """
         return self.disasm_va(0x100082f38, count=count)
 
     def reuse_toctou(self, count=80):
-        """Disassemble isConnectionReusableForDestination — TOCTOU check→use race @ 0x10004b393."""
+        """Disassemble isConnectionReusableForDestination — triple-read TOCTOU @ 0x10004b393.
+        Called from NE receiveConnection: @ 0xa4f87 (sel@0x224ea1) as connection reuse gate.
+        Args: r15=self, rdx=candidate(retained→rbx), rcx=existing(retained→r14).
+        Race: 3 unprotected property reads between check and use:
+          Read 1 (0x10004b3c0): [self <active_conn_sel>] — gets current active connection
+          Compare (0x10004b3e2): [activeConn <match_sel>:candidate] → BOOL
+          Read 2 (0x10004b3ff): [self <second_sel>]
+          Read 3 (0x10004b43b): [self <counter_sel>] → eax
+          ID compare (0x10004b44b): r14_id == eax → sete r12b
+        Returns YES while active connection already deallocated (use-after-free candidate).
+        """
         return self.disasm('AppProxyTCPConnection.isConnectionReusableForDestination:withPreferredInterface:',
                            count=count)
 
