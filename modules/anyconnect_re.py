@@ -1064,10 +1064,28 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2ChildSA.responderTrafficSelectors':                     0x76075,
 
     # ── Cisco private IKEv2 notify — non-RFC, LINA-only extension ───────────────
+    # initWithNotifyStatus:notifyData: — validates code is in Cisco vendor range.
+    # Args: notifyStatus (rdx → r15d, uint16), notifyData (rcx → r14 via retain).
+    # RANGE CHECK @ 0x77295: cmp r15d, 0x9fff; jbe → error (esi=0x10, class 16).
+    #   r15d <= 0x9FFF → REJECTED; r15d > 0x9FFF (i.e., 0xA000+) → valid private range.
+    #   Cisco IKEv2 private notify status codes start at 0xA000 (above RFC private range 0x4000-0x4FFF).
+    # ALLOC @ 0x772b7: [class sel@0x24f369] → r12 (NEIKEv2PrivateNotify object).
+    # SETTERS: [r12 setNotifyStatus: r15w]; [r12 setNotifyData: r14] — no further validation on data.
+    # notifyData is accepted opaque; attacker-controlled data in INFORMATIONAL exchange passes here.
     'NEIKEv2PrivateNotify.initWithNotifyStatus:notifyData:':        0x77274,
+    # Trivial word getter: `movzx eax, word ptr [rdi+8]; ret`. Reads notifyStatus at fixed ivar offset.
+    # No lock, no guard — raw word read. setNotifyStatus: writes [rdi+8]=dx (complementary setter).
+    # notifyData getter @ 0x77638: `mov rax, [rdi+0x10]; ret` — NSData ptr at offset +0x10.
     'NEIKEv2PrivateNotify.notifyStatus':                            0x77620,
 
     # ── Vendor ID — AnyConnect identifies itself to LINA ────────────────────────
+    # parsePayloadData @ 0xc9d85: 3-instruction stub:
+    #   mov rdx, [rip+0x205470]; mov ecx, 1; jmp 0x1f412e
+    #   Returns a constant NSData object (the expected Cisco VendorID bytes, length via ecx=1 flag).
+    # generatePayloadData @ 0xc9bda: checks self.property nil; if non-nil → bool flag check;
+    #   reads raw data property → setPayloadData → release; returns BOOL success.
+    #   Two reads from same selector (r14) with no lock: nil-check on read 1, use on read 2 (TOCTOU).
+    # VendorID length constant at 0xc9dd0: `mov eax, 0x25; ret` (37 bytes — Cisco AnyConnect VID len).
     'NEIKEv2VendorIDPayload.parsePayloadData':                      0xc9d85,
     'NEIKEv2VendorIDPayload.generatePayloadData':                   0xc9bda,
 
@@ -1094,7 +1112,14 @@ NE_1095_140_2_METHODS = {
     # modules scanned by this NSFastEnumeration.
     'NEIKEv2EAP.selectModuleForPayload:ikeSA:':                     0x9da3c,
     'NEIKEv2EAP.createPayloadResponseForRequest:ikeSA:...':         0x9ebd9,
-    # Post-EAP MSK — RFC 5106 AUTH derivation key (LINA and NE both compute this)
+    # Post-EAP MSK — RFC 5106 AUTH derivation key (LINA and NE both compute this).
+    # DOUBLE-READ @ 0x9f329 / 0x9f337: same selector r14 loaded at 0x9f31f, called twice:
+    #   0x9f329: [self sel@r14] → rax; test → nil guard (je 0x9f386)
+    #   0x9f337: [self sel@r14] → rax (NOT retained between checks)
+    #   Concurrent EAP state teardown between checks → second read returns nil → crash.
+    # MSK LOCATION @ 0x9f340: add rbx(self), 8 → &self.msk_buf; read 0x40 (64) bytes via 0x1f36f0.
+    #   64-byte MSK raw array at EAP object offset +8. No guard before read beyond nil-sel check.
+    # RETURNS: [class sel: buf, rcx=len] → NSData wrapping MSK bytes (used in createEAPAuthData).
     'NEIKEv2EAP.sessionKey':                                        0x9f303,
 
     # ── App version attribute ────────────────────────────────────────────────────
@@ -2061,6 +2086,39 @@ class AnyConnectNEAnalyzer:
             'responderSendIntegrityKey': self.disasm_va(va_r, count) if va_r else None,
         }
 
+    def private_notify_init(self, count=140):
+        """Disassemble NEIKEv2PrivateNotify.initWithNotifyStatus:notifyData: @ 0x77274.
+        Cisco vendor range gate: r15d <= 0x9FFF → error (esi=0x10, class 16); r15d > 0x9FFF valid.
+        notifyData retained opaque; no content validation. Two setters then return.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2PrivateNotify.initWithNotifyStatus:notifyData:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def vendor_id_payload(self, count=100):
+        """Disassemble VendorIDPayload.generatePayloadData @ 0xc9bda + parsePayloadData @ 0xc9d85.
+        generatePayloadData: two reads from same selector (no lock) → TOCTOU; returns BOOL.
+        parsePayloadData: 3-instruction stub returns constant NSData (Cisco VendorID 37 bytes).
+        """
+        va_gen = NE_1095_140_2_METHODS.get('NEIKEv2VendorIDPayload.generatePayloadData')
+        va_prs = NE_1095_140_2_METHODS.get('NEIKEv2VendorIDPayload.parsePayloadData')
+        return {
+            'generatePayloadData': self.disasm_va(va_gen, count) if va_gen else None,
+            'parsePayloadData': self.disasm_va(va_prs, count) if va_prs else None,
+        }
+
+    def eap_session_key(self, count=100):
+        """Disassemble NEIKEv2EAP.sessionKey @ 0x9f303 — post-EAP MSK accessor.
+        Double-read on selector r14 (0x9f329 nil-check, 0x9f337 use) with no retention:
+        concurrent EAP teardown between reads → second read returns nil → crash.
+        MSK at self+8, 64 bytes (offset into EAP object).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2EAP.sessionKey')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def select_eap_module(self, count=240):
         """Disassemble selectModuleForPayload:ikeSA: @ 0x9da3c — 9-module EAP dispatcher.
         Outer dispatch: [class sel:payload] → eax; cmp eax, 1 → inner loop or error path.
@@ -2233,6 +2291,9 @@ class AnyConnectNEAnalyzer:
             'copy_auth_proto': self.copy_auth_proto(),
             'child_sa_enc_key': self.child_sa_enc_key(),
             'child_sa_int_key': self.child_sa_int_key(),
+            'private_notify_init': self.private_notify_init(),
+            'vendor_id_payload': self.vendor_id_payload(),
+            'eap_session_key': self.eap_session_key(),
             'select_eap_module': self.select_eap_module(),
             'initiate_delete_child_sa': self.initiate_delete_child_sa(),
             'uninstall_all_child_sas': self.uninstall_all_child_sas(),
