@@ -362,9 +362,19 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     'DNSProxyProvider.startProxyWithOptions:completionHandler:':          0x1000788cb,
     'DNSProxyProvider.handleNewOpenTCPFlow:':                             0x10007ab8f,
     'DNSProxyProvider.handleNewOpenUDPFlow:':                             0x10007a322,
-    # injectDelayedResponse: frame size 0x1b8; r14d=edx=local_addr. Packet injection entry.
-    # If DNS resolver state is desynchronized (race), packet lands on wrong flow.
+    # TOCTOU DNS injection:
+    # 1. Caller: findUDPFlowWithDelayedReponse: @ 0x100082827 → identifies flow F
+    # 2. Caller: injectDelayedResponseIntoUDPFlow:flow:... @ 0x100082ad4 called with flow F
+    # 3. INSIDE inject: flow rsi is NOT saved; function does addr formatting then at 0x100082dc9
+    #    calls [self queue] → dispatch_async(self.queue, block) @ 0x100082e63
+    # 4. Block captures {self, packet_data, peer_addr, local_addr_byte} — NOT flow F
+    # 5. Block callback @ 0x100082f38 re-fetches flow by address from self's state
+    # RACE: if flow F recycled between step 1 and block execution → packet injects into new flow F'
+    # Prologue args: rdi→r15=self, edx→r14d=local_addr(uint32), rcx=peer_addr struct*, r8=peer_addr?
+    # Injection call: 0x100082e63 = dispatch_async(r12=[self queue], r13=block_struct)
+    # Block callback entry: 0x100082f38 (next function); extracts self from block[0x20]
     'DNSProxyProvider.injectDelayedResponseIntoUDPFlow:local_addr:peer_addr:packet:':  0x100082ad4,
+    'DNSProxyProvider._injectBlock_callback':                             0x100082f38,
     'DNSProxyProvider.findUDPFlowWithDelayedReponse:':                    0x100082827,
     'DNSProxyProvider.notifyFlowEnd:':                                    0x1000821c7,
     'DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt:':            0x100079ae1,
@@ -683,10 +693,26 @@ class ACSockExtAnalyzer:
                     f'choices: {list(ACSOCKEXT_5_1_16_194_METHODS)}'}
         return self.disasm_va(vaddr, count=count)
 
-    def inject_path(self, count=120):
-        """Disassemble injectDelayedResponseIntoUDPFlow — packet injection entry @ 0x100082ad4."""
+    def inject_path(self, count=160):
+        """Disassemble injectDelayedResponseIntoUDPFlow — async DNS injection entry @ 0x100082ad4.
+        TOCTOU: passed flow (rsi) is NOT saved to callee-saved register at prologue.
+        @ 0x100082dc9: [self queue] → r12 = dispatch_queue
+        @ 0x100082e63: dispatch_async(queue, block) — injection dispatched ASYNCHRONOUSLY.
+        Block captures {self, packet_data, peer_addr, local_addr_byte} — NOT the flow.
+        Block callback @ 0x100082f38 re-fetches flow by addr. If flow recycled between
+        findUDPFlowWithDelayedReponse: (@ 0x100082827) and block execution → packet lands
+        on wrong (new) flow. Race window = [findFlow result] to [block dispatch execution].
+        """
         return self.disasm('DNSProxyProvider.injectDelayedResponseIntoUDPFlow:local_addr:peer_addr:packet:',
                            count=count)
+
+    def inject_block_callback(self, count=80):
+        """Disassemble the async block callback for DNS injection @ 0x100082f38.
+        This is the function that executes on self.queue after dispatch_async.
+        rdi = block struct; extracts self from block[0x20], peer_addr from block[0x30].
+        If flow state changed since findUDPFlow: → packet written to wrong flow.
+        """
+        return self.disasm_va(0x100082f38, count=count)
 
     def reuse_toctou(self, count=80):
         """Disassemble isConnectionReusableForDestination — TOCTOU check→use race @ 0x10004b393."""
