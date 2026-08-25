@@ -2650,6 +2650,103 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def session_delete_child(self, count=120):
+        """Disassemble NEIKEv2Session.initiateDeleteChildSPI:remoteSPI: @ 0xa006e.
+        r12=self, rdx/rcx retained (localSPI→r13, remoteSPI→[rbp-0x30]).
+        [self sel@0x226a8a]→retain→rbx @ 0xa00bb; nil → je 0xa01fc (early return).
+        NSData built for both SPIs; block @ [rbp-0x68] (magic 0xc2000000, invoke@0xa011b):
+          self(r12) captured at block[0x20]; remoteSPI data at block[0x28].
+        Dispatch via [r12 sel@0x229a5e:r15:ecx=1:block] @ 0xa0158.
+        Return -1 → error log path @ 0xa016d. No lock around self reads.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.initiateDeleteChildSPI:remoteSPI:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def session_receive_delete_child(self, count=120):
+        """Disassemble NEIKEv2Session.receiveDeleteChildSPI:remoteSPI:packet: @ 0xa0336.
+        r15=self; rdx/rcx/r8 each retained (THREE retains at prologue).
+        [self sel@0x2267b6]→retain→rbx; class method log-context lookup.
+        [r14 sel@0x226279:result]→al — SPI type check; je 0xa04cd (type mismatch).
+        [r14 sel@0x2297f1:r13]→al — SPI match; je 0xa04fc (no match).
+        [rip+0x22d0e6][sel@0x2297d7:r14:rbx]→retain→r12; NIL GUARD @ 0xa041b: je 0xa052b.
+        [rbx sel@0x229798:r12:ecx=0]→al → process-delete gate; jne 0xa0558.
+        DOUBLE-READ: packet SPI fields read twice (via r14) + session state from r13.
+        Concurrent SPI deletion → same ChildSA matched twice → double-delete UAF on SA.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.receiveDeleteChildSPI:remoteSPI:packet:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def session_handle_eap_ikesa(self, count=150):
+        """Disassemble NEIKEv2Session.handleEAPIKESA:childSA:authPacket:handler: @ 0xa26ee.
+        r13=self; rdx/rcx/r15/r14=handler — FOUR retains at prologue. Stack canary @ 0xa2718.
+        [self sel@0x2243e4]→retain→rbx @ 0xa2765; [handler sel@0x227566]→retain→rbx;
+        nil → je 0xa291c (no handler).
+        EAP auth call @ 0xa27c8: [rip+0x22ad49][sel:authData:handler:r8]→rax; nil → je 0xa2937.
+        Block @ [r13-0xb8] (magic 0xc2000000, invoke @ 0xa27f9): self, authData, childSA,
+        handler all captured. Dispatch @ 0xa285c: [self sel@0x22735a:ikeSA:ecx=1:block].
+        cmp eax,-1 @ 0xa2862: -1 → error log @ 0xa286e.
+        RACE: four args captured in escaping block without additional retain after prologue release.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.handleEAPIKESA:childSA:authPacket:handler:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def session_setup_received_child(self, count=120):
+        """Disassemble NEIKEv2Session.setupReceivedChildWithHandler: @ 0xa4809.
+        r13=self; rdx handler retained → [rbp-0x30].
+        FIVE self reads without lock:
+          [self sel@0x2222ff]→rbx @ 0xa4846 (released).
+          [self sel@0x225543]→r15 @ 0xa4873; [self sel@0x225493]→rbx @ 0xa488b (released).
+          [self sel@0x22550b]→al (BOOL) @ 0xa48a8 (fifth read, only if r15 nil and rbx nil).
+          [self sel@0x225519]→rbx @ 0xa48e7 (fourth path).
+        NIL GATE @ 0xa4894: r15 nil → 0xa48e0. isKindOfClass(0x11) @ 0xa48c9.
+        VTABLE DISPATCH @ 0xa48fd: call [r14+0x10](r14, r15) — invokes handler via C++ vtable ptr.
+        Concurrent session mutation → nil vtable ptr or wrong handler object at dispatch.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.setupReceivedChildWithHandler:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def session_receive_new_child(self, count=150):
+        """Disassemble NEIKEv2Session.receiveNewChildSA:packet: @ 0xa6d21.
+        r12=self; rdx→r13, rcx→rbx (packet) both retained.
+        [self sel@0x21fdd8]→rbx @ 0xa6d6d; released. [self sel@0x2228e8]→[rbp-0x30] @ 0xa6d96.
+        NIL GUARD on [rbp-0x30] @ 0xa6d9d: je 0xa7701. NIL on r15 @ 0xa6da3: je 0xa772c.
+        NIL on r13 @ 0xa6dac: je 0xa6f08.
+        [r13 sel@0x21fb68]→r14; [r14 sel@0x221ff5]→rbx; [r12 sel@0x222f25:r13:rbx]→r15d (BOOL).
+        SPI match: [sel@0x222ebf:r13]→al; je 0xa700b. Duplicate: [sel@0x22304b:r15:r13]→al; je 0xa7104.
+        THREE reads from self + reads from incoming r13 without lock — state machine with
+        TOCTOU: concurrent rekey completion between ChildSA lookup and SPI install → duplicate install.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.receiveNewChildSA:packet:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def session_rekey_child(self, count=120):
+        """Disassemble NEIKEv2Session.initiateRekeyChildSA: @ 0xa775f.
+        r13=self; rdx retained → r12 (ChildSA). Stack canary @ 0xa7780.
+        [self sel@0x21f399]→rbx @ 0xa77ac; released. [self sel@0x221ea9]→r15 @ 0xa77d5;
+        NIL GUARD → je 0xa7f53. NIL GUARD on r12 → je 0xa7f85.
+        [r12 sel@0x2226ab]→ebx (BOOL) — PFS flag check.
+        PFS branch (ebx!=0): isKindOfClass(esi=2) @ 0xa781c → al; jne: call 0x1caccc
+          (IKE_CHILD_SA_INIT rekey with new DH group). esi=2 = NEIKEv2IKESA type.
+        No-PFS branch (ebx==0): isKindOfClass(esi=1) @ 0xa7849; struct built @ [rbp-0x50]
+          (flags=0x8400202 = CHILD_REKEY payload).
+        TWO reads from self (sel@0x21f399, sel@0x221ea9) without lock.
+        RACE: concurrent MOBIKE/teardown between self reads and ChildSA dispatch → wrong rekey target.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.initiateRekeyChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def ikesa_skeyseed_set(self, count=40):
         """Disassemble NEIKEv2IKESA.setSKeySeed: @ 0xb995a — atomic setter trampoline.
         3-instruction: mov ecx,0x1d8; pop rbp; jmp 0x1f4164 (objc_setProperty_atomic).
@@ -2968,6 +3065,12 @@ class AnyConnectNEAnalyzer:
             'child_sa_traffic_selectors': self.child_sa_traffic_selectors(),
             'notify_status': self.notify_status(),
             'extension_has_ac_requirement': self.extension_has_ac_requirement(),
+            'session_delete_child': self.session_delete_child(),
+            'session_receive_delete_child': self.session_receive_delete_child(),
+            'session_handle_eap_ikesa': self.session_handle_eap_ikesa(),
+            'session_setup_received_child': self.session_setup_received_child(),
+            'session_receive_new_child': self.session_receive_new_child(),
+            'session_rekey_child': self.session_rekey_child(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
@@ -3049,6 +3152,10 @@ class ACSockExtAnalyzer:
             'startExtension': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.startExtension'], count),
             'stopExtension': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.stopExtension:'], count),
             'onFilterStart': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.onFilterStart'], count),
+            'flowClosed': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS[
+                'ExtensionWrapper.flowClosed:family:localAddr:localPort:remoteAddr:remotePort:flowData:'], count),
+            'updateFlowData': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS[
+                'ExtensionWrapper.updateFlowData:family:localAddr:localPort:remoteAddr:remotePort:data:bytes:isSend:'], count),
         }
 
     def app_proxy_tcp_flow(self, count=120):
@@ -3162,6 +3269,26 @@ class ACSockExtAnalyzer:
             '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleNewFlow:',
             count=count)
 
+    def flow_data_lifecycle(self, count=80):
+        """Disassemble ExtensionWrapper.flowClosed/updateFlowData — C++ dispatch methods.
+        flowClosed @ 0x10005aed6: Load IMultiplexer ptr [rip+0x7b6df]; NULL → skip dispatch.
+          Passes (family, localAddr, localPort, remoteAddr, remotePort, flowData) via stack
+          [rbp+0x10..0x20] to C++ IMultiplexer::flowClosed @ 0x100060dce.
+          NO per-flow state cleanup beyond C++ dispatch — state freed by multiplexer layer.
+        updateFlowData @ 0x10005ae16: IMultiplexer NULL gate @ 0x10005ae48.
+          Converts data arg [rbp+0x20] via [rip+0x6d37b]. isSend flag from [rbp+0x30].
+          Dispatches to C++ IMultiplexer::updateFlowData @ 0x1000608fa.
+          NULL multiplexer (stopExtension race) → mid-flow data silently dropped.
+        """
+        return {
+            'flow_closed': self.disasm_va(
+                ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.flowClosed:family:localAddr:localPort:remoteAddr:remotePort:flowData:'],
+                count),
+            'update_flow_data': self.disasm_va(
+                ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.updateFlowData:family:localAddr:localPort:remoteAddr:remotePort:data:bytes:isSend:'],
+                count),
+        }
+
     def app_proxy_notify_rules(self, count=120):
         """Disassemble AppProxyProvider.notifyProxyRulesForConsumer: @ 0x10007503f.
         Async rules-change notification. Builds block at [rbp-0x50] (magic 0xc6000000;
@@ -3252,6 +3379,7 @@ class ACSockExtAnalyzer:
         """Run all ACSockExtAnalyzer callables and return a keyed dict."""
         return {
             'extension_lifecycle': self.extension_lifecycle(),
+            'flow_data_lifecycle': self.flow_data_lifecycle(),
             'app_proxy_tcp_flow': self.app_proxy_tcp_flow(),
             'app_proxy_udp_flow': self.app_proxy_udp_flow(),
             'app_proxy_notify_rules': self.app_proxy_notify_rules(),
