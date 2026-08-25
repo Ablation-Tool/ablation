@@ -1213,16 +1213,56 @@ NE_LISTENER_METHODS = {
     # After gates: calls requestConfigurationForListener:session:... on delegate (nesessionmanager)
     # sessionsBeforeAuth tracks pre-auth sessions; race window = here until auth completes
     'handleNewConnection:':                                           0xc0e85,
-    # Calls back to nesessionmanager delegate (configurationDelegate) for VPN config;
-    # validateAuthBlock param is the custom auth callback (RSA SecurID / Duo path)
+    # 5 RETAINS at prologue (rdx, rcx, r8, r9, [rbp+0x10] — all args retained upfront).
+    # Autorelease pool push @ 0xc15d4 (0x1f3dec). os_log check @ 0xc15e9 (flag 0x8400102, 12 fields).
+    # Dispatches to configurationDelegate via [self sel@0x208e19] → retained → [delegate sel@0x20587e: session].
+    # validateAuthBlock param routes to RSA SecurID/Duo custom auth callback (stored, not called inline).
+    # responseBlock param retained; called on completion path after delegate returns VPN config.
+    # TOCTOU: 5 independent arg retains with no shared lock — concurrent session mutation
+    #   between any two retains → stale session config paired with fresh child config.
     'requestConfigurationForSession:sessionConfig:childConfig:validateAuthBlock:responseBlock:': 0xc156d,
+    # Retain rdx → r15 (error/session object). NIL GUARD @ 0xc1a7c: r15 nil → skip to 0xc1b5c.
+    # os_log @ 0xc1a91 (flag 0x8400102, 12 fields). Notifies configurationDelegate of pre-auth failure.
+    # [self sel@0x208986] → retained → [delegate sel@0x2053ef: r15] — error dispatch to delegate.
+    # Separate delegate re-read @ 0xc1aca (SECOND [self sel@0x208986] call): TOCTOU if delegate swapped.
     'sessionFailedBeforeRequestingConfiguration:':                    0xc1a38,
-    # Full init variants: saSession=kernel SA mode, packetDelegate=user-space mode
+    # Kernel SA mode init. 0xc8 stack frame. 8 retains (rdx through [rbp+0x28]).
+    # kernelSASessionName length gate @ 0xc1c4f: dec rax; cmp rax,0xffff; jb 0xc1c8a
+    #   length > 65535 → esi=0x11 error. Min length: dec-then-unsigned means len==0 wraps to 0xffff → PASS.
+    #   Zero-length session name is accepted (cmp 0xffff,0xffff → not below → branch taken normally).
+    # Alloc @ 0xc1ca9: [class sel:...] → dispatch queue setup for listener.
+    # 4 nil guards before alloc: ikeConfig(r15), kernelSASessionName(r12), delegate(rbx), delegateQueue(r13).
     'initWithListenerIKEConfig:saSession:kernelSASessionName:listenerUDPPort:listenerInterface:listenerQueue:delegate:delegateQueue:': 0xc1b79,
+    # User-space packet delegate mode init. 0x68 stack frame. 7 retains.
+    # Structurally mirrors kernel SA variant. packetDelegate replaces saSession arg.
+    # 4 nil guards: ikeConfig(r15), delegate(r14), delegateQueue(rbx), and one more.
+    # @ 0xc2a08: [class sel:...] → new listener object (r12). nil guard @ 0xc2a13 → 0xc2edb.
     'initWithListenerIKEConfig:saSession:kernelSASessionName:packetDelegate:listenerQueue:delegate:delegateQueue:': 0xc294f,
+    # User-space packet receive path. Retain rdx → r13 (packet). 0xa8 stack frame. Stack canary (0x1f3bfa).
+    # SEQUENTIAL PACKET READS (no packet lock):
+    #   0xc24f8: [r13 sel@0x2068f0] → al; je 0xc2869 (type check 1 — skip if wrong class)
+    #   0xc2510: [r13 sel@0x207fbb] → al; jne 0xc2869 (type check 2)
+    #   0xc2528: [r13 sel@0x20737b] → retained → rbx (packet attribute)
+    #   0xc2540: [r13 sel@0x206933] → r15; r15 nil → jne 0xc2869 (discard)
+    # Four sequential reads from r13 with no lock: concurrent packet mutation between reads
+    #   → type passes check 1 but mutates to invalid before check 2 → wrong dispatch.
+    # After guards: builds IKE_SA_INIT struct and dispatches to session.
     'receivePacket:':                                                 0xc248d,
+    # Orderly shutdown. Autorelease pool (0x1f3dec). os_log flag 0x8400102, r9d=2 fields.
+    # RACE ON SESSION PROPERTY:
+    #   0xc3d87: [self sel@0x206731] → retain → rbx (session object)
+    #   0xc3da7: rbx nil → skip session cancel (je 0xc3de4)
+    #   0xc3ddf: [self sel@0x2066d4: nil] — nil out session property
+    # Check-then-nil is not atomic: concurrent cancel+incoming-packet between read(0xc3d87)
+    #   and nil-write(0xc3ddf) → both paths operate on same session → double-cancel or UAF
+    #   when session teardown races with receivePacket: that retained the same session object.
     'cancel':                                                         0xc3d1b,
-    # Property: tracks pre-auth sessions (TOCTOU race window between here and auth complete)
+    # RAW IVAR GETTER: `mov rax, [rdi+0x30]; pop rbp; ret` — NOT an atomic trampoline.
+    # Reads the pre-auth session array directly from offset +0x30 in the listener object.
+    # Setter at 0xc3eb7: `add rdi,0x30; mov rsi,rdx; jmp 0x1f4176` (raw word store — also not atomic).
+    # Adjacent property at +0x38: similar raw getter. Weak property at +0x40 via objc_loadWeakRetained.
+    # Non-atomic read of a mutable collection: handleNewConnection: writes sessionsBeforeAuth while
+    #   auth-complete path reads it → data race on the array pointer itself.
     'sessionsBeforeAuth':                                             0xc3ead,
 }
 
@@ -2239,6 +2279,79 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def listener_req_config(self, count=160):
+        """Disassemble requestConfigurationForSession:...validateAuthBlock:responseBlock: @ 0xc156d.
+        5 retains at prologue (all args). Dispatches to configurationDelegate with VPN config.
+        validateAuthBlock routes RSA SecurID/Duo path; responseBlock retained for completion.
+        TOCTOU: 5 independent retains with no shared lock (concurrent session mutation window).
+        """
+        va = NE_LISTENER_METHODS.get(
+            'requestConfigurationForSession:sessionConfig:childConfig:validateAuthBlock:responseBlock:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, 160)
+
+    def listener_session_failed(self, count=120):
+        """Disassemble sessionFailedBeforeRequestingConfiguration: @ 0xc1a38.
+        Error dispatcher to configurationDelegate. Double-read on delegate property (TOCTOU).
+        r15 nil guard @ 0xc1a7c; os_log flag 0x8400102. [self delegate] called twice.
+        """
+        va = NE_LISTENER_METHODS.get('sessionFailedBeforeRequestingConfiguration:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def listener_init(self, count=160):
+        """Disassemble initWithListenerIKEConfig:saSession:... @ 0xc1b79 (kernel SA mode).
+        8 retains. kernelSASessionName length gate: dec→unsigned compare → length==0 wraps
+        to 0xffff → PASSES (zero-length name accepted). Listener object alloc @ 0xc1ca9.
+        Also shows packetDelegate variant @ 0xc294f (user-space mode, 7 retains, 0x68 frame).
+        """
+        va = NE_LISTENER_METHODS.get(
+            'initWithListenerIKEConfig:saSession:kernelSASessionName:listenerUDPPort:listenerInterface:listenerQueue:delegate:delegateQueue:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return {
+            'kernel_sa_mode': self.disasm_va(va, count),
+            'packet_delegate_mode': self.disasm_va(
+                NE_LISTENER_METHODS['initWithListenerIKEConfig:saSession:kernelSASessionName:packetDelegate:listenerQueue:delegate:delegateQueue:'],
+                count),
+        }
+
+    def listener_receive_packet(self, count=200):
+        """Disassemble receivePacket: @ 0xc248d — user-space UDP packet receive.
+        4 sequential reads from packet object r13 without lock: type-check 1 @ 0xc24f8,
+        type-check 2 @ 0xc2510, attribute reads @ 0xc2528/0xc2540. Concurrent packet mutation
+        between reads → type passes gate then changes before second check → wrong dispatch.
+        Stack canary at 0x1f3bfa.
+        """
+        va = NE_LISTENER_METHODS.get('receivePacket:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def listener_cancel(self, count=100):
+        """Disassemble cancel @ 0xc3d1b — orderly listener shutdown.
+        Check-then-nil on session property (not atomic): read session @ 0xc3d87, nil-write
+        @ 0xc3ddf. Concurrent cancel+receivePacket: racing here → double-cancel or UAF.
+        os_log flag 0x8400102, r9d=2 fields.
+        """
+        va = NE_LISTENER_METHODS.get('cancel')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def listener_sessions_before_auth(self, count=40):
+        """Disassemble sessionsBeforeAuth @ 0xc3ead — raw ivar getter at offset +0x30.
+        NOT atomic: `mov rax,[rdi+0x30]; ret`. Setter raw word store at 0xc3eb7.
+        Non-atomic read of mutable collection; handleNewConnection: write races with
+        auth-complete read → torn array pointer read.
+        """
+        va = NE_LISTENER_METHODS.get('sessionsBeforeAuth')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def ikesa_integrity_keys(self, count=80):
         """Disassemble localIntegrityKey/remoteIntegrityKey @ 0xb9172/0xb91bb — role-dispatch getters.
         localIntegrityKey: [self flag_sel] → al; je/jmp picks selector A or B → retain → jmp 0x1f4104.
@@ -2472,6 +2585,12 @@ class AnyConnectNEAnalyzer:
             'create_initiator_signed_octets': self.create_initiator_signed_octets(),
             'create_responder_signed_octets': self.create_responder_signed_octets(),
             'receive_delete_child_sa': self.receive_delete_child_sa(),
+            'listener_req_config': self.listener_req_config(),
+            'listener_session_failed': self.listener_session_failed(),
+            'listener_init': self.listener_init(),
+            'listener_receive_packet': self.listener_receive_packet(),
+            'listener_cancel': self.listener_cancel(),
+            'listener_sessions_before_auth': self.listener_sessions_before_auth(),
             'ikesa_integrity_keys': self.ikesa_integrity_keys(),
             'ikesa_crypto_ctx': self.ikesa_crypto_ctx(),
             'ikesa_sig_keys': self.ikesa_sig_keys(),
