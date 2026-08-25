@@ -2983,9 +2983,118 @@ class ACSockExtAnalyzer:
             '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleNewFlow:',
             count=count)
 
+    def app_proxy_notify_rules(self, count=120):
+        """Disassemble AppProxyProvider.notifyProxyRulesForConsumer: @ 0x10007503f.
+        Async rules-change notification. Builds block at [rbp-0x50] (magic 0xc6000000;
+        invoke ptr @ [rip+0x78]). Atomic refcount on Swift payload object (rdx=consumer
+        captured in block). Dispatches via 0x10009b01e (dispatch_async equivalent).
+        Block lifetime: consumer retained inside block; released in block destructor.
+        """
+        return self.disasm('AppProxyProvider.notifyProxyRulesForConsumer:', count=count)
+
+    def app_proxy_update_rules(self, count=200):
+        """Disassemble AppProxyProvider.updateProxyRulesWithCompletionHandler: @ 0x100067820.
+        Large rules-reconciliation function (0x1d8 frame). Stack canary. Retains completionHandler.
+        Two reads from self ([sel@0x69ebc] twice — no lock between reads).
+        Swift string construction at [rbp-0x130] via 0x10009b1b0.
+        VERSION/HASH GATE @ 0x1000678bc: [rbp-0x120] vs [rcx+0x30] — equal → jne 0x100067b42
+        (skip update; rules unchanged). C++ std::list-style head ptr comparison for change detection.
+        """
+        return self.disasm('AppProxyProvider.updateProxyRulesWithCompletionHandler:', count=count)
+
+    def dns_handle_tcp_flow(self, count=120):
+        """Disassemble DNSProxyProvider.handleNewOpenTCPFlow: @ 0x10007ab8f.
+        Registers new TCP flow with DNS proxy state. Retain flow (rdx → r14).
+        [self sel@0x56979] → rbx (session/handler map); nil → skip @ 0x10007ad0e.
+        [self sel@0x56b1b] → r14; nil → skip (second nil guard).
+        Swift alloc @ 0x10009b162 for per-flow session object.
+        TWO nil-guarded reads from self without a lock — TOCTOU on session map.
+        """
+        return self.disasm('DNSProxyProvider.handleNewOpenTCPFlow:', count=count)
+
+    def dns_handle_udp_flow(self, count=120):
+        """Disassemble DNSProxyProvider.handleNewOpenUDPFlow: @ 0x10007a322.
+        Registers new UDP flow. 0x108 frame.
+        [self sel@0x571f3] → r12 → retained → r14; nil guard @ 0x10007a367.
+        [self sel@0x5739c] → rbx; nil guard @ 0x10007a38c (second nil guard on self).
+        Zeroes two counters at [rbp-0x118/-0x110] before registering flow.
+        Both reads from self are unprotected — concurrent flow teardown → use-after-free on r14.
+        """
+        return self.disasm('DNSProxyProvider.handleNewOpenUDPFlow:', count=count)
+
+    def dns_notify_flow_end(self, count=100):
+        """Disassemble DNSProxyProvider.notifyFlowEnd: @ 0x1000821c7.
+        Flow teardown notification. Retain rdx (flow → rbx). 80-byte stack zeroing (5x movups xmm0).
+        DOUBLE-READ TOCTOU on [self sel@0x4f526]:
+          Read 1 @ 0x1000821f0: nil → skip @ 0x100082291.
+          Read 2 @ 0x100082227: r14 ← same selector (no lock between reads).
+        Concurrent flow-map mutation → r14 nil on second read → crash on use.
+        type flag=2 in end-event struct built after double-read.
+        """
+        return self.disasm('DNSProxyProvider.notifyFlowEnd:', count=count)
+
+    def dns_check_session_leak(self, count=80):
+        """Disassemble DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt: @ 0x100079ae1.
+        Zeroes both output ptrs at entry. [self sel@0x57a58] → pending count property.
+        THRESHOLD GATE @ 0x100079b25: cmp qword [r15], 0x5dc (1500) → jb exit.
+        If pendingSessionCnt >= 1500: Swift string build + writeUDPDatagramToFlow @ 0x10005da06
+        (esi=2/AF_INET, edx=1/proto) — write-path reachable from threshold trigger.
+        Threshold value 1500 (0x5dc) hardcoded — no configuration surface.
+        """
+        return self.disasm('DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt:', count=count)
+
+    def filter_start(self, count=80):
+        """Disassemble FilterDataProvider.startFilterWithCompletionHandler: @ 0x100092d40.
+        Thin Swift wrapper. Retain completionHandler (rdx → r14).
+        Alloc Swift object 0x18 bytes (flags=7) @ 0x10009b30c; store r14 at [obj+0x10].
+        [self sel@0x35439] → r13; call 0x1000927f0 (filter-start string + object → schedule).
+        Release r13; tail call 0x10009b36c (swift_release). Thin wrapper — no policy logic here.
+        """
+        return self.disasm(
+            '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.startFilterWithCompletionHandler:',
+            count=count)
+
+    def filter_report(self, count=80):
+        """Disassemble FilterDataProvider.handleReport: @ 0x100097190.
+        NEFilterReport dispatcher. Retain report (rdx → r14); retain self (→ r13).
+        call 0x100095ec0 with r14 (actual report processing).
+        Tail-releases r14, r13. 0x100095ec0 routes to policy engine or telemetry.
+        Report contains flow verdict; 0x100095ec0 is the single policy-routing pivot.
+        """
+        return self.disasm(
+            '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleReport:',
+            count=count)
+
     def cpp_typeinfo(self):
         """Return C++ RTTI typeinfo addresses for vtable hooking targets."""
         return ACSOCKEXT_CPP_TYPEINFO
+
+    def run_all(self):
+        """Run all ACSockExtAnalyzer callables and return a keyed dict."""
+        return {
+            'extension_lifecycle': self.extension_lifecycle(),
+            'app_proxy_tcp_flow': self.app_proxy_tcp_flow(),
+            'app_proxy_udp_flow': self.app_proxy_udp_flow(),
+            'app_proxy_notify_rules': self.app_proxy_notify_rules(),
+            'app_proxy_update_rules': self.app_proxy_update_rules(),
+            'udp_session_reuse': self.udp_session_reuse(),
+            'reuse_toctou': self.reuse_toctou(),
+            'dns_proxy_start': self.dns_proxy_start(),
+            'dns_handle_tcp_flow': self.dns_handle_tcp_flow(),
+            'dns_handle_udp_flow': self.dns_handle_udp_flow(),
+            'dns_find_udp_flow': self.dns_find_udp_flow(),
+            'dns_write_chain': self.dns_write_chain(),
+            'inject_path': self.inject_path(),
+            'inject_block_callback': self.inject_block_callback(),
+            'dns_notify_flow_end': self.dns_notify_flow_end(),
+            'dns_check_session_leak': self.dns_check_session_leak(),
+            'flow_start': self.flow_start(),
+            'filter_flow': self.filter_flow(),
+            'filter_start': self.filter_start(),
+            'filter_report': self.filter_report(),
+            'cpp_typeinfo': self.cpp_typeinfo(),
+            'xpc_services': self.xpc_services(),
+        }
 
     def imp_scan(self, extra_selectors=None):
         """Scan classlist for IMP addresses of all known attack-surface methods."""
