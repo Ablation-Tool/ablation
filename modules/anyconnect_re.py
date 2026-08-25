@@ -430,6 +430,29 @@ NE_1095_140_2_METHODS = {
     #
     # ERROR MARKER @ 0xac41a: `mov edx, 3` (9th function with this convention confirmed)
     'NEIKEv2Session.receiveDeleteChildSA:packet:':                  0xac247,
+    # ChildSA DELETE initiator path (self sends the delete, vs receiveDeleteChildSA: handles peer's).
+    # r12=self; rdx=ChildSA → retain → r14. Stack canary; retain-check (0x1f3bfa) @ 0xac5a3.
+    #
+    # r14 nil → 0xac71d: isKindOfClass(0x11) nil-guard (standard class check, not dead code here).
+    #
+    # r14 non-nil:
+    #   error ctx alloc (0x1f3dec) → rbx; isKindOfClass(0) @ 0xac5cd (esi=xor-zero) → DEAD CODE
+    #     (same dead-code log path as receiveDeleteChildSA: — isKindOfClass:nil always NO)
+    #   log flag 0x8400202 @ 0xac5dc (SAME lower-verbosity flag as receiveDeleteChildSA:)
+    #
+    # DOUBLE-READ TOCTOU @ 0xac655 / 0xac680:
+    #   READ 1: [r14(ChildSA) sel@0x21c67b] → retain → [rbp-0x58]  ← property read
+    #   subread: [[rbp-0x58] sel@0x21c668] → retain → r15           ← sub-property
+    #   READ 2: [r14(ChildSA) sel@0x21c67b] → retain → r13          ← SAME selector, second read
+    #   subread: [r13 sel@0x21c646] → retain → r14                  ← sub-property
+    #   Main call @ 0xac6bd: [self sel@0x21d7cc:r15(sub1):r14(sub2)] — 4-arg delete dispatch
+    #   r15 from sub-read-1, r14 from sub-read-2 → inputs from different ChildSA state reads.
+    #   Concurrent SA modification between 0xac655 and 0xac680 → mismatched sub-properties.
+    #
+    # ERROR MARKER @ 0xac636: `mov edx, 3` (10th function with edx=3 convention confirmed)
+    #
+    # BLOCK LITERAL @ 0xac7d4 (overlapping next fn body): flags=0xc2000000, invoke@0xac8d8
+    #   Completion handler for async delete acknowledgment from peer.
     'NEIKEv2Session.initiateDeleteChildSA:':                        0xac557,
     # ChildSA install / migrate / uninstall (installChildSA: fully annotated above)
     # MOBIKE child SA address migration. r13=self; rdx=ChildSA → retain → r14. Stack canary @ 0xefcbf.
@@ -553,8 +576,49 @@ NE_1095_140_2_METHODS = {
     #
     # STACK CANARY @ 0xf7355/0xf7358: jne 0xf7390 → smash handler (standard pattern)
     'NEIKEv2Session.uninstallChildSA:':                             0xf7161,
+    # Bulk child SA teardown. r14=self. Stack canary @ 0xf73b6.
+    # isKindOfClass(0) @ 0xf73cd (xor-zero esi → DEAD CODE, same as receiveDeleteChildSA:)
+    # log flag 0x8400202 @ 0xf73fa (3rd function with this lower-verbosity flag).
+    #
+    # TWO SEPARATE NSFastEnumeration loops over TWO DIFFERENT collection properties (NO LOCK):
+    #   Loop 1 @ 0xf744b-0xf7545: [r14 sel@0x1d39f2] → collection; per-item: sel@0x1d05a0 on each SA
+    #   Loop 2 @ 0xf7560-0xf762a+: [r14 sel@0x1d3921] → second collection; per-item: sel@0x1d048e on each SA
+    #   Different selectors → two different SA lists, each uninstalled separately, with no lock on either.
+    #
+    # COMPOSITION RACE: concurrent installChildSA: or migrateChildSA: writes to either list during
+    #   enumeration → new SA added mid-loop deleted (premature teardown) or loop terminates early
+    #   leaving old SAs installed (dangling kernel SAs). Both loops are affected independently.
     'NEIKEv2Session.uninstallAllChildSAs':                          0xf7395,
+    # Traffic selector reporting for a ChildSA. r12=self; rdx=ChildSA → retain → r13.
+    # r13 nil → 0xf7860: isKindOfClass(0x11) guard (standard nil path).
+    #
+    # THREE READS FROM ChildSA (r13):
+    #   [r13 sel@0x1d15d2] → eax stored [rbp-0x34] (TS type/count integer)
+    #   [r13 sel@0x1d1714] → retain → [rbp-0x30] (initiator traffic selectors)
+    #   [r13 sel@0x1d1704] → retain → [rbp-0x40] (responder traffic selectors)
+    #   No lock between reads — concurrent ChildSA modification → inconsistent TS snapshot.
+    #
+    # BLOCK BUILD @ 0xf77a4: isa=[rip+0x1698c4], flags=0xc2000000, invoke@0xf7894
+    #   Captures: self(r12), ChildSA property (rbx), TS-type-int(eax), initTS, respTS
+    #   Block passed as completion handler to reporting call.
+    #
+    # BLOCK INVOKE @ 0xf788e: gate predicate @ 0xf78a7
+    #   [self sel@0x1d354f] → al; al!=0 → return immediately (report silently suppressed!)
+    #   al==0 → report: esi=[rbx+0x40](TS count); rdi/rdx/rcx = TS data from captures
+    #   → vtable call: jmp [rdi+0x10]
+    #   TOCTOU: TS snapshot taken at block-build time; predicate check at invoke time (async).
+    #   If TS changes between capture and invoke, reported TS does not match live SA state.
     'NEIKEv2Session.reportTrafficSelectorsForChildSA:':             0xf76c6,
+    # Child SA reset. r14=self; rdx=ChildSA → retain → rbx. Short body (~60 insns).
+    # error ctx @ 0xf7d32 (0x1f3dec); isKindOfClass(1) @ 0xf7d53 (esi=1, NOT 0x11 or 0 —
+    #   checks ChildSA type against class ID 1; je 0xf7d97 skips log if wrong type).
+    # log flag 0x8400202 @ 0xf7d60 (4th occurrence — all delete/reset paths share this flag).
+    #
+    # RESET DISPATCH (two sequential unlocked calls):
+    #   0xf7da0: [r14(self) sel@0x1d2209:rbx(ChildSA)] ← reset ChildSA state on self
+    #   0xf7dbe: [rbx(ChildSA) sel@0x1d0fea]           ← clear something on the ChildSA itself
+    #   No lock between the two calls; concurrent installChildSA: or migrateChildSA: between them
+    #   → ChildSA partially reset: first clear done, second not yet → inconsistent SA state.
     'NEIKEv2Session.resetChild:':                                   0xf7d08,
 
     # ── NEIKEv2IKESA(Crypto) — PRF+ key derivation (RFC 5996 §2.14) ──────────────
@@ -1612,6 +1676,58 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def initiate_delete_child_sa(self, count=220):
+        """Disassemble initiateDeleteChildSA: @ 0xac557 — initiator DELETE path.
+        Symmetric to receiveDeleteChildSA: but self-initiated. Double-read TOCTOU on ChildSA
+        property sel@0x21c67b at 0xac655 and 0xac680 (no lock); sub-properties r15/r14 fed
+        into main delete dispatch at 0xac6bd from mismatched state reads.
+        edx=3 at 0xac636 — 10th function with this convention.
+        Block literal at 0xac7d4 (flags=0xc2000000): async completion handler.
+        Log flag 0x8400202; isKindOfClass(0) at 0xac5cd is dead code.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.initiateDeleteChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def uninstall_all_child_sas(self, count=200):
+        """Disassemble uninstallAllChildSAs @ 0xf7395 — bulk child SA teardown.
+        Two separate unlocked NSFastEnumeration loops over two different collection properties
+        (sel@0x1d39f2 and sel@0x1d3921): per-item calls sel@0x1d05a0 and sel@0x1d048e
+        respectively. Concurrent installChildSA:/migrateChildSA: during either loop →
+        premature teardown of new SAs or dangling old SAs. Isomorphic to migrateAllChildSAs
+        but applied to uninstall, and running two independent loops without a list lock.
+        Log flag 0x8400202; isKindOfClass(0) at 0xf73cd is dead code.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.uninstallAllChildSAs')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def report_traffic_selectors(self, count=200):
+        """Disassemble reportTrafficSelectorsForChildSA: @ 0xf76c6 — TS reporting.
+        Reads initiator TS (sel@0x1d1714) and responder TS (sel@0x1d1704) from ChildSA,
+        captures both in a stack block (flags=0xc2000000, invoke@0xf7894), then calls
+        async reporter. Block gate predicate at 0xf78a7: [self sel@0x1d354f] al!=0 silently
+        suppresses the report. TOCTOU: TS snapshot at block-build vs TS at async invoke.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.reportTrafficSelectorsForChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def reset_child(self, count=160):
+        """Disassemble resetChild: @ 0xf7d08 — short child SA reset (~60 insns).
+        isKindOfClass(1) at 0xf7d53 (type ID 1, not 0x11 — distinct from nil-path checks).
+        Two sequential unlocked calls: [self sel@0x1d2209:ChildSA] then [ChildSA sel@0x1d0fea].
+        Concurrent installChildSA:/migrateChildSA: between the two → partial reset race.
+        Log flag 0x8400202 (4th function sharing this lower-verbosity tier).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.resetChild:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def create_responder_auth_data(self, count=220):
         """Disassemble createResponderAuthenticationData @ 0x9b303 — responder AUTH construction.
         Mirror of createInitiatorAuthenticationData. Identical `cmp rax, 2; jne 0x9b430` PSK
@@ -1758,6 +1874,10 @@ class AnyConnectNEAnalyzer:
             'generate_local_dh_values': self.generate_local_dh_values(),
             'generate_local_nonce': self.generate_local_nonce(),
             'create_auth_data_psk': self.create_auth_data_psk(),
+            'initiate_delete_child_sa': self.initiate_delete_child_sa(),
+            'uninstall_all_child_sas': self.uninstall_all_child_sas(),
+            'report_traffic_selectors': self.report_traffic_selectors(),
+            'reset_child': self.reset_child(),
             'create_responder_auth_data': self.create_responder_auth_data(),
             'create_initiator_signed_octets': self.create_initiator_signed_octets(),
             'create_responder_signed_octets': self.create_responder_signed_octets(),
