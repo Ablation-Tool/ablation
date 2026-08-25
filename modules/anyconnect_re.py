@@ -1425,13 +1425,29 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     'ExtensionWrapper.stopExtension:':                                    0x10005ad6d,
     'ExtensionWrapper.onFilterStart':                                     0x10005adb4,
     'ExtensionWrapper.newFlowStarted:family:protocol:pid:localAddr:localPort:remoteAddr:remotePort:flowData:remoteHostName:': 0x10005adcc,
+    # flowClosed: flow teardown notification. Load IMultiplexer ptr [rip+0x7b6df]; NULL → skip.
+    # Passes (family, localAddr, localPort, remoteAddr, remotePort, flowData) via stack [rbp+0x10..0x20]
+    # to C++ IMultiplexer::flowClosed @ 0x100060dce. Paired with newFlowStarted.
+    # NO cleanup of per-flow state beyond C++ dispatch — state must be freed by multiplexer.
     'ExtensionWrapper.flowClosed:family:localAddr:localPort:remoteAddr:remotePort:flowData:': 0x10005aed6,
+    # updateFlowData: mid-connection data notification. IMultiplexer ptr NULL gate @ 0x10005ae48.
+    # Converts data arg [rbp+0x20] via [rip+0x6d37b]. isSend flag from [rbp+0x30].
+    # Data bytes and isSend dispatched to C++ IMultiplexer::updateFlowData @ 0x1000608fa.
+    # If multiplexer ptr is NULL (stopExtension not yet completed): silently drops mid-flow data.
     'ExtensionWrapper.updateFlowData:family:localAddr:localPort:remoteAddr:remotePort:data:bytes:isSend:': 0x10005ae16,
 
     # ── AppProxyProvider — NEAppProxyProvider subclass (TCP/UDP flow intercept) ────────────
     'AppProxyProvider.handleNewTCPFlow:flowVerdict:':                     0x10006a52c,
     'AppProxyProvider.handleNewUDPFlow:initialRemoteEndpoint:':           0x100069b52,
+    # notifyProxyRulesForConsumer: async rules-change notification. Builds block at [rbp-0x50]
+    # (block magic 0xc6000000; invoke ptr @ [rip+0x78]). Atomic refcount on Swift payload object.
+    # Dispatches via 0x10009b01e (dispatch_async-equivalent). rdx=consumer arg captured in block.
     'AppProxyProvider.notifyProxyRulesForConsumer:':                      0x10007503f,
+    # updateProxyRulesWithCompletionHandler: large rules-reconciliation function (0x1d8 frame).
+    # Stack canary. Retains completionHandler (rdx). Two self-property reads ([sel@0x69ebc] twice).
+    # Swift string construction at [rbp-0x130] (0x10009b1b0). Version/hash compare @ 0x1000678bc:
+    #   [rbp-0x120] vs [rcx+0x30] — if equal (jne → 0x100067b42): rules unchanged, skip update.
+    # Change detection: C++ std::list-style iteration; head ptr comparison. Only updates on diff.
     'AppProxyProvider.updateProxyRulesWithCompletionHandler:':            0x100067820,
 
     # ── AppProxyTCPConnection — per-connection handler; TOCTOU in reuse check ───────────
@@ -1448,11 +1464,31 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     'AppProxyTCPConnection.isConnectionReusableForDestination:withPreferredInterface:': 0x10004b393,
 
     # ── AppProxyUDPSession — UDP session TOCTOU ──────────────────────────────────────────
+    # isSessionReusableForDestination: — TOCTOU mirror of TCP triple-read pattern.
+    # r15=self, rbx=candidate(retained), r14=existing(retained).
+    # Read 1 @ 0x100078099: [self sel@0x5943a] → retained → r13 (active session object)
+    # Match @ 0x1000780b7: [r13 sel@0x595f7: candidate] → BOOL (r12d) → release r13
+    # r12b==0 → je 0x100078126 (return NO). If YES:
+    # Read 2 @ 0x1000780db: [self sel@0x5960b] → retained → r13 (second self property)
+    # Further reads after — same race: concurrent session update between Read 1 and Read 2
+    # → session freed between reads → UAF. UDP variant of the AppProxyTCPConnection TOCTOU.
     'AppProxyUDPSession.isSessionReusableForDestination:withPreferredInterface:':       0x10007805f,
 
     # ── DNSProxyProvider — DNS intercept + UDP flow injection ───────────────────────────
+    # startProxyWithOptions:completionHandler: — DNS proxy init. Retain options+completionHandler.
+    # Builds Swift string for startup log then calls writeUDPDatagramToFlow @ 0x10005da06 @ 0x100078945
+    # (esi=2/AF_INET, edx=1/proto, r8=options): logs startup via the write chain. Runs write path
+    # AT INIT TIME, not per-packet — write chain reachable without any active DNS flow.
     'DNSProxyProvider.startProxyWithOptions:completionHandler:':          0x1000788cb,
+    # handleNewOpenTCPFlow: — registers new TCP flow with DNS proxy state.
+    # Retain flow (rdx → r14). [self sel@0x56979] → rbx (session/handler map); nil → skip @ 0x10007ad0e.
+    # [self sel@0x56b1b] → r14 (second property from self); nil → skip.
+    # Swift alloc @ 0x10009b162 for per-flow session object. Two nil-guarded reads from self.
     'DNSProxyProvider.handleNewOpenTCPFlow:':                             0x10007ab8f,
+    # handleNewOpenUDPFlow: — registers new UDP flow with DNS proxy state. 0x108 frame.
+    # [self sel@0x571f3] → r12 (handler); [self r12] → retained → r14; nil guard @ 0x10007a367.
+    # [self sel@0x5739c] → rbx; nil guard @ 0x10007a38c.
+    # Zeroes two counters at [rbp-0x118/-0x110] before registering flow.
     'DNSProxyProvider.handleNewOpenUDPFlow:':                             0x10007a322,
     # TOCTOU DNS injection:
     # 1. Caller: findUDPFlowWithDelayedReponse: @ 0x100082827 → identifies flow F
@@ -1495,14 +1531,33 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     'DNSProxyProvider._write_actual_ne_flow_write':                       0x10005e2cc,
     'DNSProxyProvider._write_chunked_path':                               0x10005dbaa,
     'DNSProxyProvider.findUDPFlowWithDelayedReponse:':                    0x100082827,
+    # notifyFlowEnd: — flow teardown notification for DNS proxy state.
+    # Retain rdx (flow/endpoint → rbx). [self sel@0x4f526] → r15 (flow map); nil → skip @ 0x100082291.
+    # DOUBLE-READ on [self sel@0x4f526]:
+    #   Read 1 @ 0x1000821f0: nil gate for skip.
+    #   Read 2 @ 0x100082227: r14 ← same selector again (no lock between reads).
+    #   Concurrent flow-map mutation → first read non-nil, second nil → r14 nil → use → crash.
+    # 80-byte stack zeroing (5x movups xmm0) before building end-event struct (type flag=2).
     'DNSProxyProvider.notifyFlowEnd:':                                    0x1000821c7,
+    # checkUdpSessionLeak:pendingSessionCnt: — leak detector.
+    # Zeroes both output ptrs at entry. [self sel@0x57a58] → pending count property.
+    # THRESHOLD CHECK @ 0x100079b25: cmp qword [r15], 0x5dc (1500) → jb exit (below threshold).
+    # If pendingSessionCnt >= 1500: build Swift string + call writeUDPDatagramToFlow @ 0x10005da06
+    # (esi=2, edx=1) to log the leak event. Write-path reachable from threshold trigger.
     'DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt:':            0x100079ae1,
 
     # ── FilterDataProvider (Swift) — NEFilterDataProvider subclass ──────────────────────
     # Swift class: _TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider
     # handleNewFlow loads r15 via [rip+0x33a33] then calls r15(rdx) = swift_retain/class lookup.
     '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleNewFlow:':   0x100094770,
+    # startFilterWithCompletionHandler: — minimal Swift filter init. Retain completionHandler (rdx → r14).
+    # Alloc Swift object 0x18 bytes (flags=7) @ 0x10009b30c; store r14 at [obj+0x10].
+    # [self sel@0x35439] → r13; call 0x1000927f0 (filter-start string + object → register/schedule).
+    # Release r13; tail call 0x10009b36c (swift_release). Thin wrapper around filter registration.
     '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.startFilterWithCompletionHandler:': 0x100092d40,
+    # handleReport: — NEFilterReport dispatcher. Retain report (rdx → r14); retain self (→ r13).
+    # call 0x100095ec0 with r14 (actual report processing). Tail-releases r14, r13.
+    # Report contains flow verdict; 0x100095ec0 routes to policy engine or telemetry.
     '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleReport:':    0x100097190,
 }
 
@@ -1511,20 +1566,47 @@ ACSOCKEXT_5_1_16_194_METHODS = {
 # m_pMultiplexer (ObjC ivar) -> IMultiplexer* vtable @ 0x1000c8ba8
 # m_pInterceptorCB -> IAppProxyInterceptorCB* @ 0x1000cb218 or IDnsProxyInterceptorCB* @ 0x1000cb3a0
 ACSOCKEXT_CPP_TYPEINFO = {
+    # IMultiplexer: root C++ interface. ExtensionWrapper.m_pMultiplexer holds the singleton.
+    # Vtable for all flow lifecycle events (newFlowStarted/flowClosed/updateFlowData).
+    # NULL check in every ExtensionWrapper method: if NULL → event silently dropped.
+    # Hook: overwrite vtable ptr or swap m_pMultiplexer global → intercept all flow events.
     'IMultiplexer':               0x1000c8ba8,
+    # IAppProxyInterceptorCB: C++ callback for AppProxy flow policy (TCP/UDP).
+    # AppProxyProvider dispatches handleNewTCPFlow/handleNewUDPFlow results here.
+    # Vtable controls flow allow/deny/redirect decisions.
     'IAppProxyInterceptorCB':     0x1000cb218,
+    # IDnsProxyInterceptorCB: C++ callback for DNS proxy flow policy.
+    # DNSProxyProvider routes handleNewOpenTCPFlow/handleNewOpenUDPFlow here.
+    # Separate from AppProxy CB — DNS flows get different policy path.
     'IDnsProxyInterceptorCB':     0x1000cb3a0,
+    # ISocketPlugin: base interface for all Cisco socket plugin types.
+    # Hierarchy root above ISocketMultiplexorPlugin. Plugin registration uses this type.
     'ISocketPlugin':              0x1000c92a8,
+    # ISocketMultiplexorPlugin: per-socket multiplexer plugin interface.
+    # Loaded by IMultiplexer for each socket type. Hot-swappable at runtime via vtable.
     'ISocketMultiplexorPlugin':   0x1000c8bc8,
+    # IIpcServiceCallbacks: C++ callbacks for IPC/XPC service events.
+    # Used by the extension's IPC layer to relay events to the C++ core.
     'IIpcServiceCallbacks':       0x1000c8bb8,
     'IZtnaFakeDnsHandler':        0x1000c9090,  # ZTNA fake DNS: injects policy DNS responses
+    # IZtnaPluginCallback: paired with IZtnaFakeDnsHandler; receives ZTNA policy enforcement events.
     'IZtnaPluginCallback':        0x1000c8c08,
     'IOpenDnsPluginClient':       0x1000c8be8,  # OpenDNS/Umbrella plugin
     'IScanSafePluginCallback':    0x1000c8c18,  # ScanSafe (web security) callback
+    # IDnsCachePluginClient: DNS cache plugin interface. Interacts with the in-process DNS cache
+    # used by the DNS proxy for negative caching and TTL override.
     'IDnsCachePluginClient':      0x1000c8bd8,
+    # ITcpSocket: vtable for raw TCP socket operations in the C++ core.
+    # AppProxyTCPConnection ultimately wraps one of these for actual data transfer.
     'ITcpSocket':                 0x1000ca500,
+    # IUdpSocket: vtable for raw UDP socket operations.
+    # AppProxyUDPSession and DNS injection flows bottom out here.
     'IUdpSocket':                 0x1000c8548,
+    # ISocketPacket: packet abstraction used in the send/receive path.
+    # CSerializerReader::get_list<T> deserializes into ISocketPacket — OOB target on untrusted input.
     'ISocketPacket':              0x1000ca870,
+    # ISignalEvent: C++ event signaling between threads (semaphore/cv abstraction).
+    # Used to synchronize flow start/end with the policy engine.
     'ISignalEvent':               0x1000cb608,
 }
 
