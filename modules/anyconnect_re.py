@@ -84,16 +84,28 @@ NE_1095_140_2_METHODS = {
 
     # ── NEIKEv2 TCP connection accept path (called after handleNewConnection: passes) ──
     # Prologue: r15=self, r12=retain(rdx=connection), r14=session/queue property of self.
-    # 6-guard gate chain before session factory:
+    # 6-guard gate chain:
     #   0xa4e70: connection nil → bail 0xa567e
     #   0xa4ed5: r14 property nil → bail 0xa569d
-    #   0xa4f73: type/cert check on r12 → bail 0xa5149 if mismatch
-    #   0xa4f95: [r12 isConnectionReusableForDestination:r14] (sel@0x224ea1) → 0xa51b0 if NO
-    #   0xa4fad: [r14 <sel@0x224d46>] → 0xa52f0 if NO
+    #   0xa4f73: type/cert check on r12 → debug-log path 0xa5149
+    #   0xa4f87: [r12 isConnectionReusableForDestination:r14] (sel@0x224ea1) → NO: 0xa51b0
+    #   0xa4fad: [r14 <sel@0x224d46>] → debug-log path 0xa52f0 if NO
     #   0xa4fc7: [r14 <sel@0x224d66>:0] → 0xa534d if NO
-    # Session factory at 0xa4fcd: [SharedClass <sel@0x224e5d>:r12(connection):r14] → retained session
-    # TOCTOU: connection-reuse check (0xa4f87) reads self state before factory; factory re-reads at 0xa4fcd.
-    # Race window = between guard 4 (reuse) and factory call; another thread can change connection state.
+    # Factory @ 0xa4fcd: [SharedClass <sel@0x224e5d>:r12(conn):r14] → retained IKEv2Session (rbx/r13)
+    # Key dispatch @ 0xa50a8: [self <sel@0x224b25>:session:block] → BOOL
+    #   YES = validateSAInit:block: scheduled (queued async) → early exit
+    #   NO  = error: [self <logProp>]:3 set, two cleanup calls, → exit
+    #
+    # TOCTOU — new-conn path @ 0xa51b0 (entered when reuse check returned NO):
+    #   r14 = existing-connection state; NO lock held after reuse check at 0xa4f87.
+    #   0xa51ba: [r14 <sel@0x221767>] retain → addr struct (FIRST USE of stale r14)
+    #   0xa51d3: [rax <sel@0x223bf6>] retain → port (second field)
+    #   0xa51ec: [rax <sel@0x222cad>] retain → third field
+    #   0xa5205: [rax <sel@0x224344>] retain → fourth field
+    #   0xa5230: rol r12w, 8 — port byte-swap (network→host order)
+    #   If r14 deallocated between 0xa4f87 (check) and 0xa51ba (use) → UAF: IKE_SA_INIT
+    #   parameters built from freed connection object; corrupted proposal sent to peer.
+    #   Race window: ~115 insns of unprotected r14 reads before any new-conn factory call.
     'NEIKEv2PacketTunnelProvider.receiveConnection:':              0xa4e00,
 
     # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
@@ -601,20 +613,23 @@ class AnyConnectNEAnalyzer:
         """
         return self.disasm_va(0xc0e85, count=count)
 
-    def phase1_rx(self, count=200):
+    def phase1_rx(self, count=320):
         """Disassemble receiveConnection: @ 0xa4e00 — Phase 1 TCP connection accept.
         Called after handleNewConnection: @ 0xc0e85 passes DR gate.
         Prologue: r15=self, r12=retain(rdx=connection), r14=session/queue property.
-        6-guard chain before session factory:
-          0xa4e70: nil(connection) → 0xa567e
-          0xa4ed5: nil(r14) → 0xa569d
-          0xa4f73: type/cert check on r12 → 0xa5149
-          0xa4f87: [r12 isConnectionReusableForDestination:r14] (sel@0x224ea1) → 0xa51b0
-          0xa4fad: [r14 sel@0x224d46] → 0xa52f0
-          0xa4fc7: [r14 sel@0x224d66:0] → 0xa534d
-        Factory @ 0xa4fcd: [SharedClass sel@0x224e5d :r12:r14] → retained IKEv2Session
-        TOCTOU: reuse check at 0xa4f87 and factory at 0xa4fcd both read self connection
-        state without holding a lock → race window between guard 4 and factory.
+        Two paths after 6-guard chain:
+          REUSE path (isReusable YES):
+            Factory @ 0xa4fcd: [SharedClass sel:r12:r14] → IKEv2Session
+            Dispatch @ 0xa50a8: [self sel@0x224b25:session:block] — validateSAInit:block: scheduled
+            YES → exit cleanly; NO → error cleanup
+          NEW-CONN path @ 0xa51b0 (isReusable NO):
+            Extract r14 addr/port → r12w byte-swapped port via rol r12w,8 @ 0xa5230
+            Build IKE_SA_INIT struct @ [rbp-0x40]
+            Factory @ 0xa5288: [static sel:packet_struct:2:flags] → new IKEv2Session
+            Final dispatch @ 0xa52c7: [self sel@0x2248f2:new_session:nil] → BOOL
+        TOCTOU (new-conn path): r14 extracted 0xa51ba–0xa5227 without lock;
+        r14 freed between reuse check (0xa4f87) and extract (0xa51ba) → UAF/corrupted
+        IKE_SA_INIT proposal (port/addr from stale connection object).
         """
         return self.disasm_va(0xa4e00, count=count)
 
