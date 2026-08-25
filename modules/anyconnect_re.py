@@ -74,6 +74,12 @@ NE_1095_140_2_METHODS = {
     # Config payload — where LINA assigns IP/DNS to AnyConnect client
     'NEIKEv2AppVersionAttribute.attributeType':                     0x8373d,
     'NEIKEv2AppVersionAttribute.attributeName':                     0x83776,
+    # Always-on VPN gate — type-0x10 entitlement bypasses AC requirement check
+    # Flow: config-read @ 0x3e9a4 -> if enabled: auth-check(0x10) @ 0x3e9c5
+    #   jne 0x3ea89 if has-type16 -> xor ebx,ebx -> return false (bypass)
+    'extensionHasACRequirement':                                    0x3e982,
+    # Keychain ACL race — TOCTOU between isKindOfClass: @ 0x352e3 and SecACL write @ 0x35488
+    'addAppToKeychainACLsForConfiguration:':                        0x3528a,
 }
 
 # Cisco co-design markers in Apple's binary
