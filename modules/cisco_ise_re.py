@@ -33,6 +33,7 @@ ISE-F6: Kong Admin API exposed on 0.0.0.0:19001/19444 with no authentication [CR
 ISE-F7: RabbitMQ loopback_users.guest=false + plaintext management port 15672 [HIGH]
 ISE-F8: PostgreSQL trust auth (no password) accessible from Docker bridge network [MEDIUM]
 ISE-F9: IRF RabbitMQ user irf:irf hardcoded, administrator tag, vhost irf [HIGH]
+ISE-F10: SSE Connector port 8989 all-interfaces + push_cmd=true + FileUpload=true [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -141,6 +142,57 @@ ISE uses RabbitMQ for internal service bus (ERS events, pxGrid notifications, po
 Injecting messages into ISE's internal messaging bus = policy poisoning vector.
 After guest deletion, ISE uses `rabbitmq` user with password from db.properties
 (same decrypt-oracle chain as ISE-F1 applies to RABBITMQ_PWD).
+
+=== ISE-F10: SSE Connector — 0.0.0.0:8989 + push_cmd + FileUpload ===
+
+Source: CSCOcpm-SSEConnector-3.3.0-430.x86_64.rpm
+Binary: connector_linux_amd64_1.9.22 (Go, not stripped)
+Config: /opt/sse/conf/connector.toml
+
+connector.toml:
+  server_port = 8989
+  interface = "all"          # binds to 0.0.0.0, not localhost
+  [Globals.HTTPSServer]
+  enabled = true             # TLS on port 8989
+
+bd_enabled_connector.toml (Business Domain enabled mode):
+  push_cmd = true            # SSE cloud can push and execute commands on ISE
+  [Globals.Contexts.FileUpload]
+  enabled = true             # file upload capability active
+  [Globals.Contexts.Messaging]
+  enabled = true
+
+API routes (gorilla/mux, confirmed from binary):
+  POST /v1/contexts/          ContextCreationHandler
+  GET  /v1/contexts           ContextListHandler
+  *    /v1/contexts/{ctxt_id} ContextLookupHandler + others
+  *    /v1/contexts/{ctxt_id}/services/registry   NoCertTokenHandler (NO CLIENT CERT)
+  *    /v1/contexts/{ctxt_id}/services/token       EventHandler
+  *    /v1/contexts/{ctxt_id}/services/eventsws    RegistrationTokenHandler
+  *    /v1/contexts/{ctxt_id}/services/proxyreg
+  *    /v1/contexts/{ctxt_id}/services/wsproxy     WSProxyHandler
+  *    /v1/contexts/{ctxt_id}/services/httpproxy   HTTPProxyHandler
+  POST /v1/action             ActionHandler
+
+NoCertTokenHandler at /v1/contexts/{ctxt_id}/services/registry:
+  - Accepts POST, Content-Type: application/json
+  - NO client cert check (name is explicit)
+  - Handles connector-to-SSE pre-registration (JWT issuance without device cert)
+  - ctxt_id from URL path, not validated against a pre-authorized set
+
+HTTPProxyHandler / WSProxyHandler:
+  - Proxy mode allows SSE cloud to route arbitrary HTTP through ISE's network position
+  - With push_cmd=true: SSE cloud can send command execution directives
+
+Attack surface:
+  1. Port 8989 is TLS but NOT verified mTLS on the NoCertToken endpoint
+  2. Any LAN host that reaches ISE:8989 can POST to /v1/contexts/{ctxt_id}/services/registry
+  3. Legitimate threat: SSE cloud compromise -> push_cmd to all connected ISE instances
+  4. HTTPProxy/WSProxy routes: pivot through ISE to internal services
+  5. FileUpload endpoint: write arbitrary files to ISE filesystem
+
+ISE runs as `isesse` user — SSE file upload target: /opt/sse/data/ (writable by isesse).
+Command execution via push_cmd writes to ISE action log, executes as isesse.
 
 === ISE-F9: IRF RabbitMQ hardcoded administrator credential ===
 
@@ -875,6 +927,76 @@ def publish_rabbitmq_message(host: str, exchange: str, routing_key: str, payload
 # Ablation registration
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# ISE-F10: SSE Connector — probe NoCertToken endpoint
+# ---------------------------------------------------------------------------
+
+SSE_CONNECTOR_PORT = 8989
+SSE_NOCERT_REGISTRY_PATH = "/v1/contexts/{ctxt_id}/services/registry"
+
+
+def probe_sse_connector(host: str, port: int = SSE_CONNECTOR_PORT,
+                        ctxt_id: str = "0") -> Optional[int]:
+    """
+    Probe SSE connector port 8989 HTTPS.
+    Returns HTTP status code from GET /v1/contexts, or None if unreachable.
+
+    ISE binds SSE connector on 0.0.0.0:8989 (interface = "all" in connector.toml).
+    TLS server cert at /opt/sse/certificates/ssecert.pem (self-signed).
+    """
+    import ssl
+    import http.client
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        conn = http.client.HTTPSConnection(host, port, context=ctx, timeout=10)
+        conn.request("GET", "/v1/contexts")
+        resp = conn.getresponse()
+        return resp.status
+    except Exception:
+        return None
+
+
+def nocert_register_sse_connector(host: str, ctxt_id: str,
+                                   payload: dict,
+                                   port: int = SSE_CONNECTOR_PORT) -> Optional[dict]:
+    """
+    POST to SSE connector NoCertTokenHandler: /v1/contexts/{ctxt_id}/services/registry
+    No client certificate required (by design — pre-registration path).
+    Returns parsed JSON response or None.
+
+    Equivalent:
+      curl -sk -X POST -H "Content-Type: application/json" \\
+        -d '<payload>' \\
+        https://<ise>:8989/v1/contexts/<ctxt_id>/services/registry
+    """
+    import ssl
+    import http.client
+    import json
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    body = json.dumps(payload).encode()
+    path = f"/v1/contexts/{ctxt_id}/services/registry"
+    try:
+        conn = http.client.HTTPSConnection(host, port, context=ctx, timeout=10)
+        conn.request("POST", path, body=body, headers={
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        resp = conn.getresponse()
+        data = resp.read().decode('utf-8', errors='replace')
+        try:
+            return json.loads(data)
+        except Exception:
+            return {"status": resp.status, "body": data}
+    except Exception:
+        return None
+
+
 IRF_RABBIT_USER = "irf"
 IRF_RABBIT_PASS = "irf"
 IRF_RABBIT_VHOST = "irf"
@@ -899,11 +1021,11 @@ def list_irf_queues(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[list]
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "target": "Cisco ISE 3.3.0.430",
-    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9"],
+    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10"],
     "critical": ["ISE-F1", "ISE-F6"],
-    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9"],
+    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10"],
     "medium": ["ISE-F5", "ISE-F8"],
     "low": ["ISE-F4"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
@@ -927,5 +1049,7 @@ MODULE_META = {
         "publish_rabbitmq_message",
         "probe_irf_rabbitmq_admin",
         "list_irf_queues",
+        "probe_sse_connector",
+        "nocert_register_sse_connector",
     ],
 }
