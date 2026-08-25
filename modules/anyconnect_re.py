@@ -1270,17 +1270,32 @@ NE_LISTENER_METHODS = {
 # IMPs are in acsockext (Cisco's binary, not NE.framework). NE binary contains the call sites.
 # Selref VAs used for call-site tracing: resolve which method is being called at runtime.
 NE_PHASE1_SELREFS = {
-    # IKE_SA_INIT — proposal and DH validation
+    # IKE_SA_INIT — proposal and DH validation (IMPs in acsockext)
+    # validateSAInitAsInitiator: processes IKE_SA_INIT response: validates responder proposal,
+    #   DH public key, nonce. Verifies negotiated cipher suite against local policy.
+    #   Responder DOWNGRADE: if acsockext doesn't enforce policy strictly, ENCR_DES accepted →
+    #   see createEncryptedData DES path @ 0x93bd8 (no NE-side policy gate on cipher).
     'validateSAInitAsInitiator:':                                     0x2c9cd8,
+    # validateSAInitAsResponder: validates initiator IKE_SA_INIT proposal; sends INVALID_KE
+    #   if group mismatch (sendInvalidKE: BOOL arg). Responder negotiates — weakest group
+    #   accepted if acsockext has permissive policy → feeds prototypeDHKeysForGroup: dispatch.
     'validateSAInitAsResponder:sendInvalidKE:':                       0x2c9e28,
-    # IKE_AUTH — standard PKI/PSK auth
+    # IKE_AUTH — standard PKI/PSK auth (call sites in NE; IMPs in acsockext)
+    # createIKEAuthForInitiatorIKESA:childSA: builds IKE_AUTH request payloads (IDi, AUTH, SA, TSi/TSr).
     'createIKEAuthForInitiatorIKESA:childSA:':                        0x2c9d28,
+    # validateAuthAsInitiator:childSA: validates responder AUTH in IKE_AUTH response.
     'validateAuthAsInitiator:childSA:':                               0x2c9d40,
+    # Part1/Part2 responder auth: Part1 validates IDr+AUTH; Part2 installs ChildSA.
+    # Splitting auth into two phases exposes TOCTOU: IKESA state mutated between Part1 and Part2.
     'validateAuthPart1AsResponderCopyErrorForIKESA:':                 0x2c9e40,
     'validateAuthPart2AsResponderCopyErrorForIKESA:childSA:':         0x2c9e50,
+    # createIKEAuthResponse:ikeSA:childSA: builds responder IKE_AUTH reply payload set.
     'createIKEAuthResponse:ikeSA:childSA:':                           0x2c9e58,
     # EAP over IKEv2 (RSA SecurID, Duo, LDAP) — RFC 5106 + RFC 5998
+    # handleEAPIKESA:childSA:authPacket:handler: — core EAP session dispatch loop (acsockext IMP).
+    # NE call sites relay to this per EAP round-trip. Handler block fires on each EAP exchange.
     'handleEAPIKESA:childSA:authPacket:handler:':                     0x2c9d08,
+    # validateEAPOnlyAuthentication: verifies EAP-only auth (RFC 5998 § 3.2.1).
     'validateEAPOnlyAuthentication:':                                  0x2c9d30,
     # NEIKEv2ProviderAuthenticate: — THE Cisco delegate callback
     # NE calls this into acsockext for vendor-specific auth (custom IKE payloads, SecurID).
@@ -1289,15 +1304,29 @@ NE_PHASE1_SELREFS = {
     # BOOL return: YES → tunnel proceeds, NO → error path (0x1f3dec).
     # IMP is in acsockext. Hook objc_msgSend call at 0xd8f60 → bypass Cisco auth entirely.
     'NEIKEv2ProviderAuthenticate:':                                    0x2ca770,
-    # Cisco private IKEv2 extensions (non-RFC vendor payloads in IKE_AUTH)
+    # Cisco private IKEv2 extensions (non-RFC vendor payloads in IKE_AUTH).
+    # customIKEAuthPayloads: returns array of INFORMATIONAL payloads Cisco appends to IKE_AUTH.
+    # customIKEAuthVendorPayloads: per-vendor subarray (Cisco Vendor ID negotiation).
+    # customIKEAuthPrivateNotifies: NEIKEv2PrivateNotify objects (vendor range 0xA000+).
+    #   Hooking any of these: inject arbitrary payloads into IKE_AUTH without valid auth.
     'customIKEAuthPayloads':                                          0x2c92c0,
     'customIKEAuthVendorPayloads':                                    0x2c92d0,
     'customIKEAuthPrivateNotifies':                                    0x2c9078,
-    # Certificate validation chain
+    # Certificate validation chain (acsockext IMPs; NE call sites in validateAuthAs* methods)
+    # checkValidityOfDigitalSignature: verifies AUTH payload signature against remote cert.
+    #   authenticationProtocol arg carries the OID parsed in copyAuthenticationProtocolForAuthMethod:.
+    #   IF acsockext accepts nil authenticationProtocol → default algo used → sig verification weakened.
     'checkValidityOfDigitalSignature:authenticationProtocol:sessionConfiguration:remoteSignedOctets:': 0x2c9a18,
+    # copyTrustedKeyForCertificate: walks trust anchor chain; policyRef is a SecPolicyRef.
+    #   enableRevocationCheck/strictRevocationCheck: if acsockext passes NO/NO → OCSP/CRL skipped
+    #   → revoked peer cert accepted. Call site is in cert validation; observe these args.
     'copyTrustedKeyForCertificate:remoteCAArray:policyRef:enableRevocationCheck:strictRevocationCheck:': 0x2c9a00,
-    # Config request / validate auth block
+    # copyValidateAuthBlock: returns the custom auth verification block (for RSA SecurID, Duo).
+    #   The block is passed to requestConfigurationForSession:...validateAuthBlock: (NE_LISTENER_METHODS).
+    #   Replacing the returned block → arbitrary auth bypass without touching IKEv2 layer.
     'copyValidateAuthBlock':                                           0x2c9dd8,
+    # requestConfigurationForListener:...: acsockext-side of the config-request roundtrip.
+    #   Called FROM nesessionmanager BACK INTO acsockext with the VPN config. Arg: listener + session.
     'requestConfigurationForListener:session:sessionConfig:childConfig:validateAuthBlock:responseBlock:': 0x2ca468,
 }
 
@@ -2669,6 +2698,70 @@ class ACSockExtAnalyzer:
             return {'error': f'unknown method: {method_name}. '
                     f'choices: {list(ACSOCKEXT_5_1_16_194_METHODS)}'}
         return self.disasm_va(vaddr, count=count)
+
+    def extension_lifecycle(self, count=80):
+        """Disassemble ExtensionWrapper.startExtension/stopExtension/onFilterStart.
+        startExtension @ 0x10005ad06: loads global C++ IMultiplexer ptr via [rip+0x7b7e9];
+          NULL test before dispatch.
+        stopExtension: @ 0x10005ad6d: teardown path.
+        onFilterStart @ 0x10005adb4: filter activation; loads InterceptorCB ptr.
+        """
+        return {
+            'startExtension': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.startExtension'], count),
+            'stopExtension': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.stopExtension:'], count),
+            'onFilterStart': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['ExtensionWrapper.onFilterStart'], count),
+        }
+
+    def app_proxy_tcp_flow(self, count=120):
+        """Disassemble AppProxyProvider.handleNewTCPFlow:flowVerdict: @ 0x10006a52c.
+        Primary TCP flow intercept. flowVerdict block called with NEFilterNewFlowVerdict.
+        Dispatches to m_pInterceptorCB C++ vtable for policy evaluation.
+        """
+        return self.disasm('AppProxyProvider.handleNewTCPFlow:flowVerdict:', count=count)
+
+    def app_proxy_udp_flow(self, count=120):
+        """Disassemble AppProxyProvider.handleNewUDPFlow:initialRemoteEndpoint: @ 0x100069b52.
+        UDP flow intercept. initialRemoteEndpoint retained; passed to C++ interceptor.
+        Unlocked access to m_pMultiplexer pointer ([rip+0x7b7e9]) — same global as startExtension.
+        """
+        return self.disasm('AppProxyProvider.handleNewUDPFlow:initialRemoteEndpoint:', count=count)
+
+    def udp_session_reuse(self, count=80):
+        """Disassemble AppProxyUDPSession.isSessionReusableForDestination @ 0x10007805f.
+        Mirror of AppProxyTCPConnection TOCTOU (3 unprotected reads). UDP session variant.
+        """
+        return self.disasm('AppProxyUDPSession.isSessionReusableForDestination:withPreferredInterface:',
+                           count=count)
+
+    def dns_find_udp_flow(self, count=80):
+        """Disassemble DNSProxyProvider.findUDPFlowWithDelayedReponse: @ 0x100082827.
+        Caller of injectDelayedResponseIntoUDPFlow: — double-fetch root. Returns flow by
+        peer address; result handed to inject path. If flow recycled between find and inject
+        execution → packet injects into wrong flow.
+        """
+        return self.disasm('DNSProxyProvider.findUDPFlowWithDelayedReponse:', count=count)
+
+    def dns_write_chain(self, count=80):
+        """Disassemble the UDP datagram write chain: writeUDPDatagramToFlow → addr router → actual write.
+        writeUDPDatagramToFlow @ 0x10005da06: trace log check, Swift string ABI.
+        _write_addr_prefix_router @ 0x10005db2c: prefix match → handle-setup or chunked path.
+        _write_handle_setup @ 0x10005e1e4: 0x10009adb4 → handle; 0x10009adba → write_obj.
+        _write_actual_ne_flow_write @ 0x10005e2cc: ACTUAL NE flow write (flags=0x801).
+        _write_chunked_path @ 0x10005dbaa: 1000-byte chunks, '\n'/'  ' splits, Swift stdlib ops.
+        """
+        return {
+            'writeUDPDatagramToFlow': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['DNSProxyProvider._writeUDPDatagramToFlow'], count),
+            'addr_prefix_router': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['DNSProxyProvider._write_addr_prefix_router'], count),
+            'handle_setup': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['DNSProxyProvider._write_handle_setup'], count),
+            'actual_ne_write': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['DNSProxyProvider._write_actual_ne_flow_write'], count),
+            'chunked_path': self.disasm_va(ACSOCKEXT_5_1_16_194_METHODS['DNSProxyProvider._write_chunked_path'], count),
+        }
+
+    def dns_proxy_start(self, count=100):
+        """Disassemble DNSProxyProvider.startProxyWithOptions:completionHandler: @ 0x1000788cb.
+        DNS proxy lifecycle start. Sets up UDP flow dispatch tables.
+        """
+        return self.disasm('DNSProxyProvider.startProxyWithOptions:completionHandler:', count=count)
 
     def inject_path(self, count=160):
         """Disassemble injectDelayedResponseIntoUDPFlow — async DNS injection entry @ 0x100082ad4.
