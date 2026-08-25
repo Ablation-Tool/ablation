@@ -184,6 +184,65 @@ Pure Python, no native dependencies. Decodes Apple's BV41 chunked LZ4 format fro
 
 Handles `$s` prefix (Swift 5+ mangling): module qualifiers, generic specializations, protocol conformances, operator names, property accessors. Falls back to the `swift-demangle` binary if present.
 
+#### `anyconnect_re` — macOS AnyConnect / NetworkExtension RE (Catalina 10.15.7)
+
+LIEF + capstone x86_64 RE of two binaries: Apple's `NetworkExtension.framework` (1095.140.2, 4.1MB) and Cisco's `acsockext` System Extension (5.1.16.194, fat binary). Exposes callable classes with pre-mapped address tables for IKEv2 tunnel setup, auth bypass intercept, and DNS injection TOCTOU.
+
+**`AnyConnectNEAnalyzer`** — NE framework (x86_64, Catalina)
+
+Key address tables:
+- `NE_1095_140_2_METHODS` — method IMPs for IKEv2, listener, crypto
+- `NE_LISTENER_METHODS` — `receiveConnection:` and associated selrefs
+- `NE_PHASE1_SELREFS` — phase-1 selrefs (IKE_SA_INIT → IKE_AUTH); `NEIKEv2ProviderAuthenticate:` @ `0x2ca770`
+- `NE_TUNNEL_START_SELREFS` — 8 ordered selrefs in tunnel-start sequence:
+  `protocolConfiguration` → `tunnelKind` → `setTunnelKind:` → `setOptions:` (0x2ca758, pre-auth intercept) → `ifIndex` → `pathStatus` → `serverAddress` → `NEIKEv2ProviderAuthenticate:` (0x2ca770)
+
+Key methods:
+- `start_ikev2_tunnel(count=200)` — disasm `NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions:` @ `0xd878b`; r12=self, r14=tunnelOptions
+- `provider_auth_callsite(count=30)` — 15 insns around `0xd8f3f`; call to `NEIKEv2ProviderAuthenticate:` at `0xd8f53`, objc_msgSend site at `0xd8f60`
+- `tunnel_start_selrefs()` — returns `NE_TUNNEL_START_SELREFS`
+- `skeyseed_derivation()` — SKEYSEED PRF derivation in IKE_SA_INIT response handler
+- `prf_plus()` — PRF+ key material expansion (KEYMAT/SK_* derivation)
+- `listener_rx_path(count=100)` — `receiveConnection:` @ `0xa4e00`; r15=self, r12=retain(connection)
+
+Bypass targets:
+- `0xd8f60` — patch `call [rip+0x188a32]` (objc_msgSend to `NEIKEv2ProviderAuthenticate:`) → force rax=1; skips Cisco auth entirely on tunnel start
+- `0x2ca758` (setOptions: selref) — hook point fires before auth callback; access to full tunnelOptions
+
+```python
+from modules.anyconnect_re import AnyConnectNEAnalyzer
+
+a = AnyConnectNEAnalyzer('/path/to/NetworkExtension')
+print(a.tunnel_start_selrefs())
+insns = a.start_ikev2_tunnel(count=200)
+auth = a.provider_auth_callsite()
+```
+
+**`ACSockExtAnalyzer`** — acsockext 5.1.16.194 (x86_64 slice, Catalina)
+
+Cisco's `com.cisco.anyconnect.macos.acsockext` System Extension. Implements AppProxy, NetworkFilter, and DNS proxy flows via `NEAppProxyProvider` / `NEFilterDataProvider` / `NEDNSProxyProvider`. No IKEv2 auth delegate (version boundary: `NEIKEv2ProviderAuthenticate:` is AnyConnect 4.x only; acsockext 5.1.x dropped it).
+
+Key methods:
+- `inject_path(count=100)` — `injectDelayedResponseIntoUDPFlow:` @ `0x100082ad4`; dispatches async block without capturing flow reference
+- `inject_block_callback(count=120)` — block @ `0x100082f38`; double-fetch TOCTOU confirmed:
+  - outer caller discards flow (`rsi` never saved after `injectDelayedResponseIntoUDPFlow:` call)
+  - block re-fetches via `findUDPFlowWithDelayedReponse:` @ `0x100082f5e`
+  - block struct: `[0x20]=self`, `[0x28]=packet_data`, `[0x30]=peer_addr(28B)`, `[0x48]=local_addr_byte`, `[0x4c]=local_addr(28B)`
+  - write at `0x10005da06` (`_writeUDPDatagramToFlow`) called from `0x1000830c3`
+- `reuse_toctou(count=50)` — `isConnectionReusableForDestination:` @ `0x10004b393`; ~50-insn check→use window
+- `flow_start()` — `NEAppProxyTCPFlow` / UDP flow startup path
+- `cpp_typeinfo()` — C++ typeinfo scan (SEI stack embedded in extension)
+
+TOCTOU race window: between `injectDelayedResponseIntoUDPFlow:` dispatching the async block and the block executing `findUDPFlowWithDelayedReponse:`, the flow object can be destroyed/replaced by a concurrent DNS response on the same port — second fetch may return a different or null flow.
+
+```python
+from modules.anyconnect_re import ACSockExtAnalyzer
+
+ac = ACSockExtAnalyzer('/path/to/acsockext_x86_64')
+print(ac.inject_path())
+print(ac.inject_block_callback())
+```
+
 ---
 
 ### Cisco ASA / Firepower
