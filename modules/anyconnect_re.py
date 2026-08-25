@@ -874,7 +874,30 @@ NE_1095_140_2_METHODS = {
     # the cmove at 0x9b683 (e.g., concurrent auth config update), wrong verification method
     # selected → valid auth data rejected, or wrong-method data accepted (auth bypass).
     'NEIKEv2IKESA(Crypto).checkNonCertAuthData:':                   0x9b576,
+    # EAP initiator AUTH data construction. r13=self. Parallel structure to createInitiatorAuthenticationData.
+    # THREE NIL-GUARDED PROPERTY READS (no lock between reads):
+    #   [self sel@<r15>] → rbx; nil → 0x9bdfc (esi=0x11 guard)
+    #   [self sel@0x22d04b] → rbx; nil → 0x9be27 (esi=0x11 guard)
+    #   [self sel@0x22dd3e] → r14; nil → 0x9bd71 (esi=0x11 guard) — likely MSK/EAP session key
+    #
+    # DOUBLE-READ ON FIRST SELECTOR @ 0x9bc51 / 0x9bcd1 (TOCTOU):
+    #   READ 1: [self sel@<r15=rip+0x22de20>] → rbx ← first property
+    #   READ 2: [self sel@<r15>] → rbx (SAME selector, second read)
+    #   [rbx sel@0x22dd97] → r12 (sub-property from READ 2)
+    #   Concurrent EAP negotiation state change between reads → r12 derived from different session
+    #   state than r14 (MSK) → EAP auth computed with mismatched components.
+    #
+    # AUTH COMPUTATION @ 0x9bd28: [self sel@0x22dcf1:r12:r14] → r15 (4-arg EAP MAC call)
+    #   Returns r15 or nil on failure. Three release paths before return.
     'NEIKEv2IKESA(Crypto).createInitiatorEAPAuthenticationData':    0x9bc40,
+    # EAP responder AUTH data construction. Structurally IDENTICAL to initiator EAP version.
+    # r13=self. Same 3 nil-guarded reads + double-read on first selector + 4-arg MAC call.
+    #
+    # THREE READS: sel@<r15=[rip+0x22dc09]>, sel@0x22ce34, sel@0x22db1f
+    # DOUBLE-READ ON FIRST SELECTOR @ 0x9be72 / 0x9beeb (different selector constant from initiator)
+    # AUTH COMPUTATION @ 0x9bf3f: [self sel@0x22dada:r12:r14] → r15
+    # Carries same TOCTOU risk as initiator path; initiator/responder double-reads use different
+    # selector addrs but identical control flow — the same concurrent-state race applies to both.
     'NEIKEv2IKESA(Crypto).createResponderEAPAuthenticationData':    0x9be57,
 
     # ── NEIKEv2Crypto class methods ──────────────────────────────────────────────
@@ -887,6 +910,34 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2Crypto.decryptGCMWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x92ff4,
     'NEIKEv2Crypto.encryptChaChaPolyWithContext:key:iv:aad:aadLen:plaintext:len:output:outputLen:': 0x932de,
     'NEIKEv2Crypto.decryptChaChaPolyWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x9362a,
+    # Primary IKE message encryption dispatch. 7 args: data, algorithm, key, iv, encCtx, aad, padToKey.
+    # PROLOGUE: retains all 6 ObjC args (algorithm, key, iv, encCtx, aad, padToKeyLength) via r13 fn ptr.
+    # FOUR NIL GUARDS: iv (0x937d8), encCtx (0x937e5), algorithm (0x937eb), key (0x937fd).
+    #
+    # ALGORITHM CONSISTENCY CHECKS (two sequential comparisons, both required to pass):
+    #   0x93833: [iv sel@0x232e57] == [key sel@0x235fa5]; jne 0x9395e (esi=0x11 error)
+    #   0x9385b: [encCtx sel@0x232e57] == [key sel@0x235e60]; jne 0x93990 (esi=0x11 error)
+    #   If algorithm properties of iv/encCtx don't match key's expected values → error.
+    #   These checks validate input consistency but do NOT validate the algorithm against policy
+    #   (no DES-forbidden check here; policy enforcement absent in receiveRekeyIKESA: path).
+    #
+    # CBC PADDING @ 0x9386c-0x93928 (entered if padDataToKeyLength==true):
+    #   pad_size = ceil(data_len, block_size) - data_len (PKCS-style)
+    #   computed: [encCtx.length] % [key.length + 1] → stored [rbp-0x31]
+    #   calloc at 0x1f3d80 + memset equivalent at 0x1f39f0 for padding buffer
+    #   Applies to CBC-mode ciphers; no-padding path at 0x939c2.
+    #
+    # CIPHER DISPATCH @ 0x939f4:
+    #   [key sel@0x235d4a] → al; jne: AES/CBC path (al!=0 → GCM/AEAD wrapper)
+    #   je 0x93abb: non-AES path → [key sel@0x235436] → rax; cmp rax, 0x1c; jne 0x93bd8
+    #     0x1c path: ChaCha20-Poly1305 (or GCM constant = 28 in NE's internal type numbering)
+    #     0x93bd8 path: DES/3DES or other legacy cipher — this is where ENCR_DES (type 2) lands
+    #       after the downgrade chain delivers a DES-keyed encCtx from installChildSA:.
+    #
+    # ENCR_DES IN USER-SPACE: The kernel SA handles IPsec data-plane DES; IKE control messages
+    #   also traverse this function. If the IKE SA itself is DES-keyed (IKE SA downgrade via
+    #   receiveRekeyIKESA:), subsequent IKE_AUTH and INFORMATIONAL exchanges use DES encryption
+    #   here (0x93bd8 path) — the attacker can decrypt ALL subsequent IKE exchanges.
     'NEIKEv2Crypto.createEncryptedData:algorithm:key:iv:encryptionContext:aad:padDataToKeyLength:': 0x9376f,
     'NEIKEv2Crypto.createDecryptedData:algorithm:key:iv:aad:padDataToKeyLength:':    0x9401d,
     'NEIKEv2Crypto.prototypeDHKeysForGroup:':                       0x8ff04,
@@ -913,7 +964,26 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2VendorIDPayload.generatePayloadData':                   0xc9bda,
 
     # ── EAP over IKEv2 — 9 module dispatch paths ────────────────────────────────
-    # selectModuleForPayload has 9 cold paths = EAP-GTC/MSCHAPV2/TLS/TTLS/PEAP/LEAP/FAST/MD5/Identity
+    # EAP module selector. r12=self; rdx=payload → retain → r15; rcx=ikeSA → retain → r13.
+    # Stack canary @ 0x9da60. Either arg nil → 0x9eaa8/0x9ead3 (error exits).
+    #
+    # TWO-LEVEL DISPATCH:
+    #   OUTER @ 0x9daa0: [class sel@0x22c031:r15(payload)] → eax; cmp eax, 1; jne 0x9dc60
+    #     eax==1: EAP-Request/Response inner path (reads ikeSA property and subtype)
+    #     eax!=1: 0x9dc60 error context; isKindOfClass(0x10) — class 16 (NOT 0x11)
+    #
+    # INNER LOOP FOR eax==1 (NSFastEnumeration over EAP module registry):
+    #   Reads subtype from payload; [ikeSA sel@0x22b1e8] → retain → r14 (module list)
+    #   cmp r13d, 1; je 0x9dd12 (subtype==1 skips the loop — EAP-Identity shortcut)
+    #   Loop: [objects[r15] sel@0x228daf] → eax; cmp eax, [rbp-0xc0](saved subtype)
+    #     je 0x9dca8 (MATCH: [self sel@0x229109:matched_module] — module selected)
+    #     No match: inc, continue until end; → 0x9dcc2 (no matching module)
+    #   No list lock during enumeration — concurrent EAP renegotiation modifying module list
+    #   during this loop → module skipped or stale module selected.
+    #
+    # ERROR DISCRIMINATOR: class 0x10 in non-type-1 path vs class 0x11 in nil-guard paths.
+    # The 9 paths (GTC/MSCHAPV2/TLS/TTLS/PEAP/LEAP/FAST/MD5/Identity) map to the 9 registered
+    # modules scanned by this NSFastEnumeration.
     'NEIKEv2EAP.selectModuleForPayload:ikeSA:':                     0x9da3c,
     'NEIKEv2EAP.createPayloadResponseForRequest:ikeSA:...':         0x9ebd9,
     # Post-EAP MSK — RFC 5106 AUTH derivation key (LINA and NE both compute this)
@@ -1728,6 +1798,58 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def create_initiator_eap_auth(self, count=200):
+        """Disassemble createInitiatorEAPAuthenticationData @ 0x9bc40 — EAP initiator AUTH.
+        Three nil-guarded reads from self (sel@<r15>, sel@0x22d04b, sel@0x22dd3e).
+        Double-read TOCTOU on first selector at 0x9bc51/0x9bcd1 — sub-property r12 derived
+        from READ 2 (0x9bce2) while MSK r14 is from an earlier read; concurrent EAP state
+        change → mismatched inputs to EAP MAC computation at 0x9bd28.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createInitiatorEAPAuthenticationData')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_responder_eap_auth(self, count=200):
+        """Disassemble createResponderEAPAuthenticationData @ 0x9be57 — EAP responder AUTH.
+        Structurally identical to initiator EAP path with different selector addresses.
+        Double-read on first selector at 0x9be72/0x9beeb; 4-arg MAC call at 0x9bf3f.
+        Same TOCTOU as initiator; initiator and responder both composable under concurrent EAP.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createResponderEAPAuthenticationData')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_encrypted_data(self, count=240):
+        """Disassemble createEncryptedData:algorithm:key:iv:encCtx:aad:padToKey @ 0x9376f.
+        Primary IKE control message encryption dispatch. Two algorithm consistency checks
+        (0x93833: iv.algorithm==key.expected; 0x9385b: encCtx.algorithm==key.other) before
+        CBC padding calculation (PKCS-style at 0x9386c) and cipher dispatch at 0x939f4.
+        AES-CBC: al!=0 path. Non-AES: cmp rax, 0x1c at 0x93acb (ChaCha20/GCM id);
+        jne 0x93bd8 = DES/3DES path — where ENCR_DES lands after IKE SA downgrade.
+        No algorithm-against-policy check: downgraded DES encCtx passes consistency checks
+        silently and reaches DES encryption path at 0x93bd8.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.createEncryptedData:algorithm:key:iv:encryptionContext:aad:padDataToKeyLength:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def select_eap_module(self, count=240):
+        """Disassemble selectModuleForPayload:ikeSA: @ 0x9da3c — 9-module EAP dispatcher.
+        Outer dispatch: [class sel:payload] → eax; cmp eax, 1 → inner loop or error path.
+        Inner: NSFastEnumeration over EAP module registry; per-item: [obj sel@0x228daf] → eax;
+        cmp eax, subtype → match → [self sel@0x229109:module]. Subtype==1 (EAP-Identity) skips
+        loop. No list lock during enum → concurrent EAP negotiation → module skip/stale select.
+        isKindOfClass(0x10) on error (class 16, distinct from 0x11 in nil-guard paths).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2EAP.selectModuleForPayload:ikeSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def create_responder_auth_data(self, count=220):
         """Disassemble createResponderAuthenticationData @ 0x9b303 — responder AUTH construction.
         Mirror of createInitiatorAuthenticationData. Identical `cmp rax, 2; jne 0x9b430` PSK
@@ -1874,6 +1996,10 @@ class AnyConnectNEAnalyzer:
             'generate_local_dh_values': self.generate_local_dh_values(),
             'generate_local_nonce': self.generate_local_nonce(),
             'create_auth_data_psk': self.create_auth_data_psk(),
+            'create_initiator_eap_auth': self.create_initiator_eap_auth(),
+            'create_responder_eap_auth': self.create_responder_eap_auth(),
+            'create_encrypted_data': self.create_encrypted_data(),
+            'select_eap_module': self.select_eap_module(),
             'initiate_delete_child_sa': self.initiate_delete_child_sa(),
             'uninstall_all_child_sas': self.uninstall_all_child_sas(),
             'report_traffic_selectors': self.report_traffic_selectors(),
