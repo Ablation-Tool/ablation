@@ -901,9 +901,42 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2IKESA(Crypto).createResponderEAPAuthenticationData':    0x9be57,
 
     # ── NEIKEv2Crypto class methods ──────────────────────────────────────────────
-    # PRF+ primitive (the load-bearing call inside calculateSKEYSEEDDerivatives)
+    # PRF+ key derivation (RFC 5996 §2.13). Args: data, key, prfAlgorithm(int), outputLength(int).
+    # TWO RETAINS + 2 NIL GUARDS: key @ 0x8e53c, data @ 0x8e547. prfAlgorithm/outputLength are ints.
+    # HMAC CONTEXT ALLOC @ 0x8e554: [class sel:xor0:xor0] — context created with ZERO key/algorithm.
+    #   Key bound only at finalize call @ 0x8e643: [class sel: ctx key: key alg: prfAlgorithm].
+    #   NULL-KEY RACE: context accessed between alloc and key-binding → HMAC with nil key (same
+    #   pattern as createInitiatorSignedOctets @ 0x98c03 and createResponderSignedOctets @ 0x9906a).
+    # PRF+ LOOP (RFC 5996 T(i) = prf(K, T(i-1)|S|counter)):
+    #   r12=0: counter; r15=nil: T(0)=nil skipped on first iteration @ 0x8e5f9.
+    #   0x8e5fb: [ctx updateWithData: T(i-1)] — skipped if r15 nil
+    #   0x8e60d: [ctx updateWithData: data/S]
+    #   0x8e623: [ctx updateWithData: &counter_byte]
+    #   0x8e643: [class finalizeWithCtx: ctx key: key alg: prfAlgorithm] → T(i)
+    # Loop accumulates T(1)|T(2)|... until outputLength bytes produced.
+    # REACHABLE FROM: calculateSKEYSEEDDerivatives, generateAllValuesForRekey — all key material.
     'NEIKEv2Crypto.createPRFPlusFromData:key:prfAlgorithm:outputLength:': 0x8e500,
+    # HMAC using PRF algorithm type. Args: data(rdx), key(rbx), prfAlgorithm(r8/r14, int).
+    # TWO RETAINS: r12=data, r15=key. NIL GUARDS: key @ 0x8e2b7, data @ 0x8e2c0.
+    # PRF TYPE BITMAP GATE @ 0x8e2c6 (only algorithm validation in this path):
+    #   lea rax, [r14-1]; cmp rax, 7; jae → error; ecx=0x73=0b01110011; bt ecx, rax; jb → valid
+    #   Valid r14: 1(HMAC-MD5), 2(HMAC-SHA1), 5(HMAC-SHA256), 6(HMAC-SHA384), 7(HMAC-SHA512)
+    #   REJECTED: 3(DES-MAC), 4(AES-XCBC-96/PRF_AES128_XCBC), 8+ → esi=0x11 error.
+    # TABLE DISPATCH @ 0x8e307-0x8e3a4:
+    #   [rip+0x1ac79e + r14*4-4]: block-size table; [rip+0x1ac79d + r14*8-8]: HMAC fn ptr;
+    #   [rip+0x1ac7c5 + r14*4-4]: digest output size. calloc for output buffer.
+    # CALL @ 0x8e3a4 (0x1f344a): CCHmac(alg, key_bytes, key_len, data_bytes, data_len, out_buf).
     'NEIKEv2Crypto.createHMACFromData:key:prfAlgorithm:':           0x8e284,
+    # HMAC using integrity algorithm type. Args: data(rdx), key(rbx), integrityAlgorithm(r8/r14, int).
+    # TWO RETAINS: r12=data, r15=key. NIL GUARDS: key @ 0x8e03b, data @ 0x8e044.
+    # INTEGRITY TYPE BITMAP GATE @ 0x8e04a (only algorithm validation in this path):
+    #   lea rax, [r14-1]; cmp rax, 0xe; jae → error; ecx=0x3863=0b0011100001100011; bt ecx, rax
+    #   Valid r14: 1(HMAC-MD5-96), 2(HMAC-SHA1-96), 6(HMAC-MD5-128), 7(HMAC-SHA1-160),
+    #              12(HMAC-SHA2-256-128), 13(HMAC-SHA2-384-192), 14(HMAC-SHA2-512-256)
+    #   REJECTED: 3(DES-MAC), 4(KPDK-MD5), 5(AES-XCBC-96), 8-11(GCM/CMAC variants).
+    # Same table-dispatch + CCHmac call @ 0x8e128 (0x1f344a) as prfAlgorithm variant.
+    # PRF vs INTEGRITY: two functions share identical structure; differ only in bitmap width and mask.
+    #   Mixing types (PRF selector as integrity arg) → guaranteed error at bitmap gate.
     'NEIKEv2Crypto.createHMACFromData:key:integrityAlgorithm:':     0x8e008,
     'NEIKEv2Crypto.createRandomWithSize:':                          0x8de32,
     'NEIKEv2Crypto.encryptGCMWithContext:aad:aadLen:plaintext:len:output:outputLen:': 0x92e29,
@@ -939,6 +972,18 @@ NE_1095_140_2_METHODS = {
     #   receiveRekeyIKESA:), subsequent IKE_AUTH and INFORMATIONAL exchanges use DES encryption
     #   here (0x93bd8 path) — the attacker can decrypt ALL subsequent IKE exchanges.
     'NEIKEv2Crypto.createEncryptedData:algorithm:key:iv:encryptionContext:aad:padDataToKeyLength:': 0x9376f,
+    # IKE message decryption dispatch. Symmetric mirror of createEncryptedData (0x9376f).
+    # Args: data, algorithm, key, iv, aad, padDataToKeyLength (no encryptionContext). FIVE RETAINS.
+    # FOUR NIL GUARDS: key(r15)@0x94078, iv(r12)@0x94081, data([rbp-0x48])@0x94087, alg(r14)@0x9409c.
+    # CONSISTENCY CHECKS (validate iv/key/alg cross-property match, NOT policy):
+    #   0x940d2: [iv.prop sel@0x232e57] == [key.prop sel@0x235709]; jne 0x9425b (esi=0x11 error)
+    #   0x940f7: [key.prop sel@0x2325bb] == [alg.prop sel@0x2355c4]; jne 0x94286
+    # DECRYPT BUFFER @ 0x94136: `add rbx, -0x10` strips CBC pad block from ciphertext length.
+    #   Inverse of encrypt (which adds 0x10); calloc @ 0x9413d for plaintext output.
+    # CIPHER DISPATCH @ 0x9411f: [key sel@0x23561f] → al; same 3-way split as encrypt:
+    #   al!=0 → AES-CBC decrypt; cmp rax,0x1c → GCM; fallthrough → DES/3DES @ 0x93bd8 equivalent.
+    # DES PATH: reachable after IKE SA downgrade — decrypt side also has no policy gate on DES.
+    #   Attacker-negotiated DES-keyed IKE SA → ALL inbound IKE messages decrypted with 56-bit key.
     'NEIKEv2Crypto.createDecryptedData:algorithm:key:iv:aad:padDataToKeyLength:':    0x9401d,
     'NEIKEv2Crypto.prototypeDHKeysForGroup:':                       0x8ff04,
     'NEIKEv2Crypto.copyDHKeys:':                                    0x90805,
@@ -1837,6 +1882,41 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def hmac_prf(self, count=180):
+        """Disassemble createHMACFromData:key:prfAlgorithm: @ 0x8e284 — HMAC with PRF type.
+        Bitmap gate: ecx=0x73 → valid types 1,2,5,6,7 (HMAC-MD5/SHA1/SHA256/SHA384/SHA512).
+        Rejects type 3 (DES-MAC) and type 4 (AES-XCBC-96). Table dispatch to CCHmac @ 0x1f344a.
+        Block-size table: [rip+0x1ac79e+r14*4-4]; fn-ptr table: [rip+0x1ac79d+r14*8-8].
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Crypto.createHMACFromData:key:prfAlgorithm:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def hmac_integrity(self, count=180):
+        """Disassemble createHMACFromData:key:integrityAlgorithm: @ 0x8e008 — HMAC with integrity type.
+        Bitmap gate: ecx=0x3863 → valid types 1,2,6,7,12,13,14. Rejects DES-MAC(3), KPDK(4),
+        AES-XCBC(5), GCM/CMAC variants(8-11). Same CCHmac @ 0x1f344a as PRF variant.
+        PRF and integrity validators use different bitmaps — mixing types guarantees bitmap reject.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Crypto.createHMACFromData:key:integrityAlgorithm:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_decrypted_data(self, count=240):
+        """Disassemble createDecryptedData:algorithm:key:iv:aad:padToKey @ 0x9401d.
+        Symmetric mirror of createEncryptedData. Five retains (no encryptionContext arg).
+        0x94136: `add rbx, -0x10` strips CBC pad block before calloc — inverse of encrypt.
+        Same 3-way cipher dispatch as encrypt: AES-CBC / GCM / DES path (0x93bd8 equivalent).
+        DES path reachable after IKE SA downgrade — no policy gate on inbound DES-keyed messages.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.createDecryptedData:algorithm:key:iv:aad:padDataToKeyLength:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def select_eap_module(self, count=240):
         """Disassemble selectModuleForPayload:ikeSA: @ 0x9da3c — 9-module EAP dispatcher.
         Outer dispatch: [class sel:payload] → eax; cmp eax, 1 → inner loop or error path.
@@ -1999,6 +2079,9 @@ class AnyConnectNEAnalyzer:
             'create_initiator_eap_auth': self.create_initiator_eap_auth(),
             'create_responder_eap_auth': self.create_responder_eap_auth(),
             'create_encrypted_data': self.create_encrypted_data(),
+            'hmac_prf': self.hmac_prf(),
+            'hmac_integrity': self.hmac_integrity(),
+            'create_decrypted_data': self.create_decrypted_data(),
             'select_eap_module': self.select_eap_module(),
             'initiate_delete_child_sa': self.initiate_delete_child_sa(),
             'uninstall_all_child_sas': self.uninstall_all_child_sas(),
