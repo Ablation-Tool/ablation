@@ -37,6 +37,8 @@ ISE-F10: SSE Connector port 8989 all-interfaces + push_cmd=true + FileUpload=tru
 ISE-F11: EDDA container -v /var/run/:/host/var/run/ --network=host = key_manager escape [CRITICAL]
 ISE-F12: GET /api/system/v1/key-manager/all_data — full in-memory credential dump, no auth [CRITICAL]
 ISE-F13: ExecStartPost=chmod o+w key_manager.sock — world-writable socket post-start [HIGH]
+ISE-F14: PBIS (AD connector) SendNTLMv2=false default — NTLMv1 used for AD auth [MEDIUM]
+ISE-F15: PBIS LdapSignAndSeal=false default — unsigned LDAP queries to AD domain controller [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -219,6 +221,68 @@ The ExecStartPost chmod is either a development shortcut or ISE service compatib
 that was shipped to production, negating all UNIX socket access control.
 
 Remediation: Remove chmod line; add SocketGroup=ise-services or specific GIDs for callers.
+
+=== ISE-F14: PBIS AD connector — NTLMv1 default (SendNTLMv2=false) ===
+
+Source: CSCOcpm-ad-3.3.0-430.x86_64.rpm (oem17-open-7.1.1)
+Config: /opt/pbis/share/config/lsassd.reg
+
+PBIS AD connector configuration:
+  [HKEY_THIS_MACHINE\\Services\\lsass\\Parameters\\NTLM]
+  "SendNTLMv2" = dword:00000000    <- NTLMv1 is the default
+  "SupportNTLM2SessionSecurity" = dword:00000001
+  "SupportKeyExchange" = dword:00000001
+  "Support56bit" = dword:00000001
+  "Support128bit" = dword:00000001
+
+  [HKEY_THIS_MACHINE\\Services\\lsass\\Parameters\\Providers\\Local]
+  "AcceptNTLMv1" = dword:00000001   <- local auth accepts NTLMv1
+
+Impact: NTLMv1 is DES-based and crackable with rainbow tables or specialized hardware.
+The "1122334455667788" challenge trick: force challenge bytes → response = LM/NTLMv1 hash
+  → hashcat attack → crack in minutes to hours on GPU cluster.
+
+Kerberos enctype config (pbis-krb5-ad.conf):
+  default_tgs_enctypes = AES256-CTS AES128-CTS RC4-HMAC DES-CBC-MD5 DES-CBC-CRC
+  preferred_enctypes = AES256-CTS AES128-CTS RC4-HMAC DES-CBC-MD5 DES-CBC-CRC
+
+RC4-HMAC (arcfour) in the preferred list enables:
+  - AS-REP roasting if pre-auth not enforced for any ISE service account
+  - Pass-the-hash (RC4 = NTLM hash, no plaintext needed)
+DES-CBC-MD5/DES-CBC-CRC: weak enctypes, effectively broken.
+
+Attack: With network position between ISE and AD DC:
+  1. Capture NTLM challenge/response during ISE user authentication
+  2. NTLMv1: crack offline with rainbow tables (LM hash if short) or GPU cluster
+  3. Pass-the-hash to AD: authenticate as user without password
+
+Scope: Affects ISE deployments joined to AD via PBIS (all ISE 3.3.0 deployments with AD join).
+
+=== ISE-F15: PBIS AD connector — unsigned/unsealed LDAP queries (LdapSignAndSeal=false) ===
+
+Source: CSCOcpm-ad-3.3.0-430.x86_64.rpm (oem17-open-7.1.1)
+Config: /opt/pbis/share/config/lsassd.reg
+
+  [HKEY_THIS_MACHINE\\Services\\lsass\\Parameters\\Providers\\ActiveDirectory]
+  "LdapSignAndSeal" = dword:00000000   <- LDAP traffic is NOT signed or sealed by default
+
+Impact: PBIS issues unsigned LDAP queries to the Active Directory domain controller.
+Without LDAP signing, an attacker with MITM position on the network can:
+  1. Intercept LDAP query (e.g., "is user X member of ISEAdmin group?")
+  2. Inject false LDAP response ("yes, member of ISEAdmin")
+  3. Result: unauthorized ISE admin access for attacker-controlled user
+
+PBIS MultiTenancyEnabled = true (supports joining multiple AD domains simultaneously):
+  Multiple LDAP trust relationships = expanded MITM injection surface.
+
+PBIS SAMR/LSARPC socket: /var/lib/pbis/rpc/lsass (UNIX domain, permissions unknown at rest).
+  Exposes SAMR, LSARPC, DSSETUP, WKSSVC interfaces — not TCP-exposed by default.
+  RegisterTcpIp = false for all RPC servers (correct config, no external exposure).
+
+Machine password storage: PBIS stores machine account credential in SQLite
+  at /var/lib/pbis/db/ (lsasqlite.c, linked libsqlite3.so.0, liblsapstore.so.0).
+  Encrypted with machine-specific key, not ISE key_manager.
+  Root access required to read; key_manager chain (ISE-F1) doesn't reach PBIS pstore.
 
 === ISE-F11: EDDA container — key_manager socket escape via /var/run mount ===
 
@@ -1190,12 +1254,12 @@ def list_irf_queues(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[list]
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "target": "Cisco ISE 3.3.0.430",
-    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10", "ISE-F11", "ISE-F12", "ISE-F13"],
+    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10", "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15"],
     "critical": ["ISE-F1", "ISE-F6", "ISE-F11", "ISE-F12"],
-    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13"],
-    "medium": ["ISE-F5", "ISE-F8"],
+    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15"],
+    "medium": ["ISE-F5", "ISE-F8", "ISE-F14"],
     "low": ["ISE-F4"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "primitives": [
