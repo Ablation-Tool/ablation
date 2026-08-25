@@ -54,11 +54,22 @@ NE_1095_140_2_METHODS = {
     # CVE-2019-8805 (10.15.0): entitlement verification bypass here; patched 10.15.1
     'shouldAllowUnentitledExtension:':                              0x107dc5,
     # Raw socket grant — where Apple hands Cisco the CSTP/DTLS socket
-    # Gate chain: _SecRequirementCreateWithString (lazy-init @ 0x3e5b6) ->
-    #   0x18a2f4: _ne_code_sig_gate → SecStaticCodeCheckValidity(callerCode, flags=0, DR)
-    #   DR = "identifier com.cisco.anyconnect.macos.acsockext and cert leaf[OU]=DE8Y96K9QP"
-    #   Bypass: patch je @ 0x18a3c4 → jmp 0x18a4a3 (2-byte) OR hook GOT @ 0x262008 → return 0
-    #   NOTE: call @ 0x3e2ce (esi=2) is _os_log_type_enabled(DEBUG) — NOT a security gate
+    # Gate chain: DR lazy-init in requestSocket: → caller wrapper @ 0x3e5b6 → _ne_code_sig_gate
+    #
+    # DR caller wrapper @ 0x3e5b6 (embedded in requestSocket:):
+    #   0x3e5b6: call 0x1f39fc     → validates DR requirement ref at [rbp-0x10]
+    #   0x3e5bb: test eax; je 0x3e5ed   → eax==0: DR ready; proceed to gate call
+    #   0x3e5ed: rdi=[rbp-0x10], esi=0, edx=0
+    #   0x3e5f5: call 0x18a2f4     → _ne_code_sig_gate(requirement, NULL_url, NULL_aux)
+    #   NULL url → gate takes SecCodeCopySelf path: validates the CALLING PROCESS (not a file)
+    #   vs DR = "identifier com.cisco.anyconnect.macos.acsockext and cert leaf[OU]=DE8Y96K9QP"
+    #
+    # NULL-REQUIREMENT BYPASS:
+    #   Lazy-init stub @ 0x3e64e writes requirement ref to [rip+0x299905].
+    #   If [rip+0x299905] is zeroed (NULL requirement), _ne_code_sig_gate(NULL, NULL, NULL) is called.
+    #   → SecStaticCodeCheckValidity(self_code, 0, NULL) with no requirement → always passes.
+    #   An unsigned extension with no embedded requirements clears this gate.
+    #   NOTE: call @ 0x3e2ce (esi=2) is _os_log_type_enabled(DEBUG) — NOT a security gate.
     'requestSocket:interface:local:remote:completionHandler:':      0x3e26c,
     'extensionHasACRequirement':                                    0x3e982,
     # TWO-STAGE CODESIG GATE — validates that a caller extension satisfies a DR.
@@ -168,6 +179,58 @@ NE_1095_140_2_METHODS = {
     #   Race window: ~115 insns of unprotected r14 reads. SINGLE-SHOT (no retry loop).
     'NEIKEv2PacketTunnelProvider.receiveConnection:':              0xa4e00,
 
+    # ── NEIKEv2Session — ChildSA kernel install path ────────────────────────────
+    # Writes negotiated ChildSA keying material into kernel network stack.
+    # rdx=ChildSA_obj (3rd ObjC arg, retained → r14 at 0xee6a7); r13=self.
+    #
+    # GUARDS (all must be non-nil):
+    #   0xee6ba-0xee6de: [self sel@0x1dafb9] retain → rbx (session property) → nil bail 0xefb77
+    #   0xee6e4: test r14 → nil bail 0xefba9
+    #   Additional nil checks on 3 session crypto properties (0xee736, 0xee77b, 0xeeaaf)
+    #
+    # CRYPTO OBJECT BUILD:
+    #   0xee7b5: [self sel@0x1dc6cc] → r14 (session crypto suite identifier)
+    #   0xee7d3: [childSA sel@0x1da548] → r12 (direction/SPI property of childSA)
+    #   0xee7e8: [r12 sel@0x1da4f0] → rbx (key material descriptor)
+    #   0xee807-0xee810: [self sel@0x1dc800:r14(suite):rbx(key_desc)] → r13 (combined crypto obj)
+    #
+    # KERNEL SA OBJECT ALLOC:
+    #   0xee8df: [NEKernelSAClass_0x1dedc9 alloc/init] → r12 (kernel SA wrapper)
+    #
+    # DIRECTION SET:
+    #   [IKE_context sel@0x1daa73] → rax; bl = (rax==1) (inbound flag)
+    #   [r12 sel@0x1daa68:edx=(2-bl)] → set traffic direction (inbound=1, outbound=2 or vice versa)
+    #
+    # CIPHER TYPE SET:
+    #   [self sel@0x1da321] → r15 (encryption algorithm object)
+    #   [r15 sel@0x1d7f74] → rax; bl = (rax==2); inc bl
+    #   [r12 sel@0x1d83d8:edx=bl] → set cipher type (1=AES-CBC, 2=AES-GCM)
+    #
+    # KEY MATERIAL WRITE (sequential, no atomic commit):
+    #   [self sel@0x1dac75] → r15 (encryption keying material object)
+    #   [r15 sel@0x1db518] → rbx (AUTH/HMAC key bytes)
+    #   0xeea32: [r12 sel@0x1d9704:rbx] ← WRITE AUTH KEY TO KERNEL SA OBJECT
+    #   [self sel@0x1dac20] → r15 (IV/salt material object)
+    #   [r15 sel@0x1db722] → rbx (IV/salt bytes)
+    #   0xeea95: [r12 sel@0x1d96ad:rbx] ← WRITE IV/SALT TO KERNEL SA OBJECT
+    #
+    # CIPHER DISPATCH @ 0xeeaf5 (rbx = IKEv2 transform type from childSA.encAlgID):
+    #   rbx == 2   → 0xeec5d  ← ENCR_DES (broken — silently accepted, downgrade target)
+    #   rbx == 3   → 0xeebe5  ← ENCR_3DES
+    #   rbx == 12  → AES-CBC path: key_size_enum check; eax=5 → 0xeec53 install
+    #   rbx == 20  → 0xeebec  ← ENCR_AES_GCM_16
+    #   rbx == 28  → 0xeec58  ← ENCR_CHACHA20_POLY1305
+    #   rbx > 19 else → 0xeef41 (unsupported/fallback)
+    #
+    # DOWNGRADE ATTACK SURFACE: ENCR_DES (rbx==2) is accepted without policy enforcement.
+    #   MitM IKE_SA_INIT proposal to replace AES-CBC (12) with DES (2) → 56-bit key installed.
+    #   No validation that childSA.encAlgID is in a policy-approved set.
+    #
+    # KEY MATERIAL RACE: auth key and IV/salt written to r12 in two sequential calls.
+    #   Kernel SA commit is further in the function (beyond 450 insns). Between 0xeea32 and
+    #   the final commit, another thread with r12 access can read partial keying state.
+    'NEIKEv2Session.installChildSA:':                               0xee682,
+
     # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
     # IKE SA_INIT initiator path (called from connection setup after receiveConnection: accepts).
     # r13=self (NEIKEv2Session); r12=objc_msgSend (used throughout).
@@ -231,12 +294,37 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2Session.receiveNewChildSA:packet:':                     0xa6d21,
     'NEIKEv2Session.initiateRekeyChildSA:':                         0xa775f,
     'NEIKEv2Session.receiveRekeyChildSA:packet:':                   0xa85a6,
+    # IKE SA rekey initiator — near-identical structure to initiateConnect.
+    # r13=self; r12=objc_msgSend throughout.
+    #
+    # STATE GUARD @ 0xa94c8 (sel@0x2209d1):
+    #   [r14 sel] → test al; je 0xa950f — TRUE: already rekeying → bail/cleanup (no double rekey)
+    #
+    # FALSE path (standard rekey initiation @ 0xa950f):
+    #   [r14 sel@0x2209ca:1] — SET REKEY-IN-PROGRESS flag
+    #   [r14 sel@0x220980] → retain → rbx (current IKE SA)
+    #   [rbx sel@0x2207a7] → test al; je 0xa9722 — IKE SA state guard (wrong state → edx=3 error)
+    #
+    # REKEY SA PROPOSAL BUILD @ 0xa9556:
+    #   [RekeyClass_0x223f13 sel@0x220984:current_SA(rbx)] → r15 (new rekey SA proposal object)
+    #   nil guard → 0xa97cb (error)
+    #
+    # BLOCK BUILD (same pattern as initiateConnect @ 0xa9585-0xa95d0):
+    #   Stack block at [rbp-0x70]: isa=_NSConcreteStackBlock, flags=0xc2000000,
+    #   invoke=[rip+0x35e] (≈ 0xa9904), descriptor=[rip+0x1bba5f]
+    #   Captures: [rbx+0x20]=self(r13), [rbx+0x28]=retain(current_IKE_SA), [rbx+0x30]=retain(r14)
+    #
+    # REKEY SA_INIT SEND @ 0xa95e5:
+    #   [self sel@0x2205d1:rekey_SA_proposal(r15):1:block]
+    #   cmp eax, -1; jne 0xa965a → error if -1
+    #
+    # ERROR PATHS: edx=3 convention confirmed at 0xa9620, 0xa96e4, 0xa978d, 0xa983a
+    #   (all 4 error branches log via [prop sel@0x220060:3:msg] — same as initiateConnect)
     'NEIKEv2Session.initiateRekeyIKESA':                            0xa9463,
     'NEIKEv2Session.receiveRekeyIKESA:':                            0xa9cf6,
     'NEIKEv2Session.receiveDeleteChildSA:packet:':                  0xac247,
     'NEIKEv2Session.initiateDeleteChildSA:':                        0xac557,
-    # ChildSA install / migrate / uninstall
-    'NEIKEv2Session.installChildSA:':                               0xee682,
+    # ChildSA install / migrate / uninstall (installChildSA: fully annotated above)
     'NEIKEv2Session.migrateChildSA:':                               0xefca4,
     'NEIKEv2Session.migrateAllChildSAs':                            0xf0bcf,
     'NEIKEv2Session.copySAsToDeleteAndInstallRekeyedChildSA:':      0xf6d4b,
@@ -805,6 +893,47 @@ class AnyConnectNEAnalyzer:
         """
         return NE_TUNNEL_START_SELREFS
 
+    def install_child_sa(self, count=450):
+        """Disassemble NEIKEv2Session.installChildSA: @ 0xee682.
+        Maps keying material write into kernel SA object and cipher dispatch.
+
+        Key material write sequence (sequential, no atomic commit):
+          [self sel@0x1dac75] → enc_key_obj → [enc_key_obj sel@0x1db518] → auth_key_bytes
+          0xeea32: [r12 sel@0x1d9704:auth_key]    <- AUTH KEY WRITE TO KERNEL SA
+          [self sel@0x1dac20] → iv_obj → [iv_obj sel@0x1db722] → iv_salt_bytes
+          0xeea95: [r12 sel@0x1d96ad:iv_salt]     <- IV/SALT WRITE TO KERNEL SA
+
+        Cipher dispatch at 0xeeaf5 on childSA.encAlgID (IKEv2 transform type):
+          2  → ENCR_DES (56-bit — silently accepted; downgrade target)
+          3  → ENCR_3DES
+          12 → ENCR_AES_CBC (key size enum check)
+          20 → ENCR_AES_GCM_16
+          28 → ENCR_CHACHA20_POLY1305
+          else → unsupported/fallback @ 0xeef41
+
+        DOWNGRADE: no policy enforcement on encAlgID before dispatch.
+        MitM IKE_SA_INIT to substitute DES (2) for AES-CBC (12) → 56-bit key installs silently.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.installChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def initiate_rekey_ikesa(self, count=250):
+        """Disassemble NEIKEv2Session.initiateRekeyIKESA @ 0xa9463.
+        Maps IKE SA rekey initiator — near-identical to initiateConnect structure.
+
+        State guard at 0xa94c8 (sel@0x2209d1): bail if already rekeying (no double-rekey).
+        Rekey SA proposal built via [RekeyClass sel@0x220984:current_SA] at 0xa9567.
+        Same block-capture pattern as initiateConnect:
+          [self sel@0x2205d1:rekey_SA_proposal:1:block] at 0xa95e5 = REKEY SA_INIT SEND
+        edx=3 error convention confirmed at 4 branches (0xa9620/0xa96e4/0xa978d/0xa983a).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.initiateRekeyIKESA')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def codesig_gate(self, count=200):
         """Disassemble _ne_code_sig_gate @ 0x18a2f4.
         Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
@@ -884,6 +1013,8 @@ class AnyConnectNEAnalyzer:
             'keychain_acl_race': self.keychain_acl_race(),
             'codesig_gate': self.codesig_gate(),
             'initiate_connect': self.initiate_connect(),
+            'install_child_sa': self.install_child_sa(),
+            'initiate_rekey_ikesa': self.initiate_rekey_ikesa(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
