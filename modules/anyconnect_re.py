@@ -411,6 +411,24 @@ NE_1095_140_2_METHODS = {
     # SPI BYTE-SWAP @ 0xa898d: `rol r14w, 8` (4th occurrence — network→host SPI order)
     #   [r14_class sel@0x22149e:0x11:r12(incoming):SPI_obj] → new ChildSA with explicit SPI @ 0xa89ea
     'NEIKEv2Session.receiveRekeyChildSA:packet:':                   0xa85a6,
+    # ChildSA DELETE handler (RFC 7296 §3.11 INFORMATIONAL + DELETE). r15=self.
+    # rdx=ChildSA_to_delete → retain → r12; rcx=delete_packet → retain → r13.
+    # Stack canary @ 0xac268; retain-check (0x1f3bfa) @ 0xac2a7.
+    #
+    # THREE NIL-GUARDS: r14 @ 0xac2d4, r12 @ 0xac2dd, r13 @ 0xac2e6 → error on any nil.
+    #
+    # DELETE DISPATCH @ 0xac361 (5-arg msgSend):
+    #   Packet SPI (r13 field) flows into the delete call without visible validation
+    #   against session-owned SA list. Crafted out-of-session SPI in a DELETE payload
+    #   may trigger deletion of an unrelated SA.
+    #
+    # RESULT DISPATCH @ 0xac3b2: `test r13b, r13b`
+    #   r13b==0 (failure): esi=0x10 isKindOfClass check @ 0xac455 (class 16)
+    #   r13b!=0 (success): isKindOfClass(0) @ 0xac3bb — esi=0 → al always 0 (dead-code log path)
+    #     log flag 0x8400202 at 0xac3d2 (DIFFERENT from 0x8400302 — lower verbosity than install/migrate)
+    #     dead-code confirmed: isKindOfClass:nil always returns NO → log block never executes.
+    #
+    # ERROR MARKER @ 0xac41a: `mov edx, 3` (9th function with this convention confirmed)
     'NEIKEv2Session.receiveDeleteChildSA:packet:':                  0xac247,
     'NEIKEv2Session.initiateDeleteChildSA:':                        0xac557,
     # ChildSA install / migrate / uninstall (installChildSA: fully annotated above)
@@ -698,7 +716,36 @@ NE_1095_140_2_METHODS = {
     #   MAC/PRF output: prf(PSK, data_to_authenticate | signed_octets) per RFC 7296 §2.15
     #   Returns auth data object; r15=nil on any error.
     'NEIKEv2IKESA(Crypto).createAuthenticationDataForSharedSecret:octets:': 0x98509,
+    # IKEv2 initiator signed-octets construction (RFC 7296 §2.15 / §2.6). r12=self.
+    # FOUR NIL-GUARDED READS (same unprotected pattern as calculateSKEYSEEDDerivatives):
+    #   [self sel@0x23100e], [self sel@0x230e8c], [self sel@0x230f17], [self sel@0x2302aa]
+    #   Any nil → esi=0x11 error. No lock between reads; all four reference self properties.
+    #
+    # CONDITIONAL SELECTOR @ 0x98a7c:
+    #   [r12 sel@0x230373] → al; je 0x98a87
+    #   al!=0 → sel@0x230f33; al==0 → sel@0x230f32 (selects nonce variant for assembly)
+    #
+    # SIGNING CONTEXT @ 0x98c03 (NULL-KEY RACE — same pattern as calculateSKEYSEEDDerivatives):
+    #   [class sel@0x230ad1:0:0] → r14  (MAC/signing context allocated with NO key arg)
+    #   key bound via [r14 sel@0x22ecf5:rbx] in next instruction
+    #   Race window: concurrent teardown nulls key before bind → null-keyed signing context
+    #   → null-keyed MAC over signed octets → AUTH payload built with a predictable HMAC.
+    #
+    # OUTPUT: MACedIDForI per RFC 7296 §2.15 — feeds into createInitiatorAuthenticationData
+    #   and ultimately into the initiator AUTH payload. Null-keyed version is reproducible offline.
     'NEIKEv2IKESA(Crypto).createInitiatorSignedOctets':             0x98987,
+    # IKEv2 responder signed-octets construction. Symmetric counterpart to createInitiatorSignedOctets.
+    # r15=self. Same structure: four nil-guarded reads, NSMutableData assembly, null-key signing context.
+    #
+    # FOUR NIL-GUARDED READS @ 0x98ebd, 0x98eea, 0x98f17, 0x98f47 (esi=0x11 on nil).
+    #
+    # MAC CONTEXT @ 0x9906a (NULL-KEY RACE — identical to initiator path):
+    #   [class sel@0x230666:0:0] → r13  (xor edx,ecx → edx=0 → class alloc, NO key arg)
+    #   key bound @ 0x9907c: [r13 sel@0x22e886:rbx]
+    #   Same race window; null-keyed responder signed octets composable with null-keyed initiator.
+    #
+    # BLOCK LITERAL @ 0x9b854: `mov eax, 0xc2000000` (standard _NSConcreteStackBlock flags)
+    #   invoke pointer @ 0x9b864 — block used in the 5-arg assembly call @ 0x99035.
     'NEIKEv2IKESA(Crypto).createResponderSignedOctets':             0x98e85,
     # Initiator auth data construction. r12=self.
     # PROPERTY READS @ 0x9b0a1 / 0x9b0cb / 0x9b0e7 — three from self before dispatch:
@@ -726,6 +773,20 @@ NE_1095_140_2_METHODS = {
     # before the cmp-rax-2 dispatch. Concurrent renegotiation changing auth method:
     #   PSK→cert: r14 was bound for cert path, PSK dispatch runs → wrong octets in PSK HMAC.
     'NEIKEv2IKESA(Crypto).createInitiatorAuthenticationData':       0x9b090,
+    # Responder AUTH data construction. Mirror of createInitiatorAuthenticationData. r15=self.
+    #
+    # AUTH TYPE DISPATCH @ 0x9b384 (IDENTICAL PATTERN to initiator @ 0x9b111):
+    #   `cmp rax, 2; jne 0x9b430`
+    #   rax==2 → PSK path: [self sel@0x22be63] → r13(PSK); [self sel@0x22e674:r13:r14] → rbx
+    #   ← chains into createAuthenticationDataForSharedSecret:octets: (TOCTOU risk inherited)
+    #   rax!=2 → cert path @ 0x9b430: [r15 sel@0x22e5f1] → al; je 0x9b48e (EAP/other check)
+    #           cert (al!=0): [self sel@0x22e5e5:r14] → rbx
+    #   not-cert @ 0x9b48e: [r15 sel@0x22e5a3] → al; je 0x9b4bf
+    #           other (al!=0): [self sel@0x22e597:r14] → rbx
+    #
+    # TOCTOU: auth method object (r15) read before dispatch; concurrent renegotiation changing
+    # auth method → PSK dispatch with cert octets, or cert dispatch with PSK octets.
+    # Initiator and responder use symmetric dispatch; both carry the same auth-type race.
     'NEIKEv2IKESA(Crypto).createResponderAuthenticationData':       0x9b303,
     # Non-certificate auth data verification. r12=self; rdx=auth_data → retain → r14.
     # THREE NIL-GUARDED PROPERTY READS (0x9b5a6, 0x9b5c9, 0x9b5d3 — all from self):
@@ -1551,6 +1612,57 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def create_responder_auth_data(self, count=220):
+        """Disassemble createResponderAuthenticationData @ 0x9b303 — responder AUTH construction.
+        Mirror of createInitiatorAuthenticationData. Identical `cmp rax, 2; jne 0x9b430` PSK
+        dispatch (@ 0x9b384); PSK path chains into createAuthenticationDataForSharedSecret:octets:.
+        cert path @ 0x9b430; EAP/other @ 0x9b48e. Same TOCTOU on auth method object: concurrent
+        renegotiation → wrong auth type used in responder AUTH payload.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createResponderAuthenticationData')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_initiator_signed_octets(self, count=240):
+        """Disassemble createInitiatorSignedOctets @ 0x98987 — MACedIDForI construction.
+        Four unprotected nil-guarded reads from self (sel@0x23100e/0x230e8c/0x230f17/0x2302aa).
+        Null-key MAC race at 0x98c03: [class sel@0x230ad1:0:0] allocs signing context with no
+        key; key bound in next instruction. Race window: concurrent teardown nulls the key →
+        null-keyed HMAC over signed octets → predictable AUTH payload offline.
+        Output feeds into createInitiatorAuthenticationData → initiator AUTH payload.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createInitiatorSignedOctets')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_responder_signed_octets(self, count=240):
+        """Disassemble createResponderSignedOctets @ 0x98e85 — MACedIDForR construction.
+        Symmetric counterpart to createInitiatorSignedOctets. Four nil-guarded reads;
+        null-key MAC race at 0x9906a: [class sel@0x230666:0:0] alloc, no key, key bound
+        at 0x9907c. Block literal at 0x9b854 (flags=0xc2000000, invoke@0x9b864).
+        Both initiator and responder null-key races composable.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createResponderSignedOctets')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def receive_delete_child_sa(self, count=200):
+        """Disassemble receiveDeleteChildSA:packet: @ 0xac247 — child SA DELETE handler.
+        Stack canary + retain-check (0x1f3bfa) @ 0xac2a7. Three nil-guards on r14/r12/r13.
+        5-arg delete dispatch @ 0xac361: packet SPI flows without visible session-SA-list
+        validation — crafted out-of-session SPI may trigger deletion of unrelated SA.
+        Log flag 0x8400202 (vs 0x8400302 in install/migrate — lower verbosity tier).
+        isKindOfClass(0) @ 0xac3bb is dead code (isKindOfClass:nil always NO).
+        edx=3 at 0xac41a — 9th function with this convention confirmed.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.receiveDeleteChildSA:packet:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def codesig_gate(self, count=200):
         """Disassemble _ne_code_sig_gate @ 0x18a2f4.
         Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
@@ -1646,6 +1758,10 @@ class AnyConnectNEAnalyzer:
             'generate_local_dh_values': self.generate_local_dh_values(),
             'generate_local_nonce': self.generate_local_nonce(),
             'create_auth_data_psk': self.create_auth_data_psk(),
+            'create_responder_auth_data': self.create_responder_auth_data(),
+            'create_initiator_signed_octets': self.create_initiator_signed_octets(),
+            'create_responder_signed_octets': self.create_responder_signed_octets(),
+            'receive_delete_child_sa': self.receive_delete_child_sa(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
