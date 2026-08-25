@@ -106,6 +106,18 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2IKESA.remoteIntegrityKey':                              0xb91bb,
 }
 
+# Full Cisco designated requirement string hardcoded in Apple's NE binary @ 0x1f8b00
+# Used by _SecCodeCheckValidity in requestSocket:, extensionHasACRequirement, etc.
+# Requires: Cisco bundle ID + Team ID DE8Y96K9QP + Apple-anchored Developer ID Application cert
+# Bypass: hook _SecCodeCheckValidity at GOT (0x262008) to return 0, or corrupt DR ptr
+NE_CISCO_DR = (
+    'anchor apple generic and identifier "com.cisco.anyconnect.macosext.networkextension"'
+    ' and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */'
+    ' or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */'
+    ' and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */'
+    ' and certificate leaf[subject.OU] = DE8Y96K9QP)'
+)
+
 # Cisco co-design markers in Apple's binary
 CISCO_MARKERS = [
     b'DE8Y96K9QP',                                    # Cisco Team ID (Apple hardcoded)
