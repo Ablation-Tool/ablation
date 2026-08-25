@@ -24,6 +24,7 @@ Standalone:
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +52,28 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2Session.installChildSA:':                               0xee682,
     # EAP IKEv2 SA handler
     'NEIKEv2Session.handleEAPIKESA:...':                            0xa26ee,
+    # Phase 2 ChildSA key material — exact fields LINA generates on ASA side (RFC 5996)
+    'NEIKEv2ChildSA.initiatorSendEncryptionKey':                    0x75bab,
+    'NEIKEv2ChildSA.responderSendEncryptionKey':                    0x75c59,
+    'NEIKEv2ChildSA.initiatorSendIntegrityKey':                     0x75d07,
+    'NEIKEv2ChildSA.responderSendIntegrityKey':                     0x75db5,
+    'NEIKEv2ChildSA.shouldGenerateNewDHKeys':                       0x757ed,
+    'NEIKEv2ChildSA.initiatorTrafficSelectors':                     0x75fc7,
+    'NEIKEv2ChildSA.responderTrafficSelectors':                     0x76075,
+    # Cisco private IKEv2 notify — non-RFC, LINA-only extension
+    'NEIKEv2PrivateNotify.initWithNotifyStatus:notifyData:':        0x77274,
+    'NEIKEv2PrivateNotify.notifyStatus':                            0x77620,
+    # Vendor ID — AnyConnect identifies itself to LINA
+    'NEIKEv2VendorIDPayload.parsePayloadData':                      0xc9d85,
+    'NEIKEv2VendorIDPayload.generatePayloadData':                   0xc9bda,
+    # EAP over IKEv2 — module selection (EAP-GTC for SecurID, EAP-MSCHAPV2 for password)
+    'NEIKEv2EAP.selectModuleForPayload:ikeSA:':                     0x9da3c,
+    'NEIKEv2EAP.createPayloadResponseForRequest:ikeSA:...':         0x9ebd9,
+    # Post-EAP MSK — RFC 5106 AUTH derivation key (LINA and NE both compute this)
+    'NEIKEv2EAP.sessionKey':                                        0x9f303,
+    # Config payload — where LINA assigns IP/DNS to AnyConnect client
+    'NEIKEv2AppVersionAttribute.attributeType':                     0x8373d,
+    'NEIKEv2AppVersionAttribute.attributeName':                     0x83776,
 }
 
 # Cisco co-design markers in Apple's binary
@@ -229,6 +252,48 @@ class AnyConnectNEAnalyzer:
             'protocol_overlap': self.protocol_overlap(),
             'keychain_surface': self.keychain_surface(),
         }
+
+
+def ikev2_class_methods(binary_path, class_name):
+    """
+    Get all instance methods for a specific NEIKEv2 class.
+    Example: ikev2_class_methods(ne, 'NEIKEv2Session')
+    Returns list of {addr, name} for each -[ClassName *] method.
+    """
+    result = _run_tool(binary_path, '--sym-filter', f'^-\\[{re.escape(class_name)} ')
+    return result.get('sym_filter_results', result)
+
+
+def ikev2_key_material(binary_path):
+    """
+    Extract NEIKEv2ChildSA key-material method symbols.
+    These are the IKEv2 Phase 2 key fields that must interop with LINA's IKEv2 SA on the ASA.
+    Same RFC 5996 structure on both sides: LINA (ASA) <-> Apple NE (client).
+    """
+    result = _run_tool(binary_path, '--sym-filter',
+                       r'NEIKEv2ChildSA.*(encrypt|integrity|nonce|Traffic|rekey|DH)')
+    return result.get('sym_filter_results', result)
+
+
+def ne_extension_gate(binary_path):
+    """
+    Disassemble shouldAllowUnentitledExtension: switch table.
+    Cisco's plugin type is one case; patching to always return Cisco's DR = load bypass.
+    Binary: NetworkExtension 1095.140.2 @ 0x107dc5
+    """
+    result = _run_tool(binary_path, '--disasm', '0x107dc5:120')
+    return result.get('disasm', result)
+
+
+def raw_socket_gate(binary_path):
+    """
+    Disassemble requestSocket: — where Apple grants Cisco a raw CSTP/DTLS socket.
+    Authority check at 0x3e2ce (call 0x1f421e, esi=2):
+      test al,al / jne 0x3e362 -> flip jne to jmp = skip auth check.
+    Binary: NetworkExtension 1095.140.2 @ 0x3e26c
+    """
+    result = _run_tool(binary_path, '--disasm', '0x3e26c:120')
+    return result.get('disasm', result)
 
 
 if __name__ == '__main__':
