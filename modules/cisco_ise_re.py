@@ -48,17 +48,44 @@ ISE-F21: Elasticsearch 6.8.12 on localhost:9200, no auth, no TLS — ISE MNT aut
 ISE-F22: pi-profiler Docker image hardcoded RabbitMQ dev credential + Actuator admin [MEDIUM]
 ISE-F23: ESAPI hardcoded MasterKey + MasterSalt — decrypts all ESAPI-protected web layer values [HIGH]
 ISE-F24: ActiveMQ JMS broker anonymous access — null/null credentials, PAP/PDP policy topics unprotected [MEDIUM]
+ISE-F25: Kairos AI agent hardcoded production cloud endpoint + version disclosure [LOW]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
 Service: /usr/lib/python3.6/site-packages/ise_key_manager/server/key_manager_server.py
 Socket:  /var/run/key_manager.sock  (UNIX domain, no auth)
-Routes:
-  GET  /api/system/v1/key-manager/all_data     -> dumps all cached TPM2 secrets
-  POST /api/system/v1/key-manager/decrypt      -> decrypts arbitrary ciphertext with cached key
-  POST /api/system/v1/key-manager/encrypt      -> encrypts arbitrary plaintext
-  POST /api/system/v1/key-manager/seal         -> seals data in TPM2
+Second socket: /var/run/tpm2_manager.sock  (TPM2 manager, key_manager communicates with this internally)
+Routes (no caller authentication on any endpoint):
+  GET  /api/system/v1/key-manager/all_data     -> dumps ALL cached TPM2 secrets + tpm2_mgr_password
+  POST /api/system/v1/key-manager/decrypt      -> decrypts arbitrary ciphertext with cached passphrase
+  POST /api/system/v1/key-manager/encrypt      -> encrypts arbitrary plaintext with cached passphrase
+  POST /api/system/v1/key-manager/seal         -> seals data in TPM2 (caller-supplied data_type)
   POST /api/system/v1/key-manager/unseal       -> unseals data from TPM2
+  GET  /api/system/v1/key-manager/health       -> health check (requires is_initialized=True)
+  GET  /api/system/v1/key-manager/random       -> get TPM2-sourced random bytes (NO init check)
+  POST /api/system/v1/key-manager/init         -> initialize with caller-supplied passphrase (pre-init only)
+
+key_manager encryption algorithm (encryption_manager.py):
+  encrypt(passphrase, plaintext):
+    key = SHA256(passphrase.encode('utf-8')).digest()  # AES-256 key via SHA256 of passphrase
+    IV = Random.new().read(16)                          # random 16-byte IV
+    return base64(IV + AES_CBC_PKCS5(key, IV, plaintext))
+  decrypt(passphrase, ciphertext_b64):
+    raw = base64.decode(ciphertext_b64)
+    key = SHA256(passphrase.encode('utf-8')).digest()
+    IV = raw[:16]; ct = raw[16:]
+    return AES_CBC_PKCS5_decrypt(key, IV, ct)
+
+Passphrase: the key_mgr_passphrase sealed in TPM2, returned by /all_data endpoint.
+Key record: /etc/ise/tpm2/key_manager_record.json (list of sealed_keys with data_type/key_name)
+
+Hermes binary (hermes.bin, Go) confirms calling key_manager at runtime:
+  String: "http://unix/api/system/v1/key-manager/decrypt"
+  -> Hermes decrypts pxGrid cert passwords and ERS creds via this socket.
+
+db.properties dev DB link (commented-out, confirming ISE-F2 key scope):
+  #DB_LINKS_HC=Link209:psctest:fG5w7wguLks=:10.77.116.209:1521:pscor209
+  fG5w7wguLks= -> 'psctest' (Cisco internal dev DB on 10.77.116.209)
 
 TPM abstraction: tpmutil.sh (called by all ISE crypto ops including genkekkey.sh, setdbpw.sh)
   tpmutil.sh decrypt <data>:
@@ -803,6 +830,35 @@ Additional: ISE AI Agent (Kairos) binary (21MB Go binary, ise-ai-agent:3.3-0.1.6
   - Contains /debug/pprof/ Go profiling endpoint (may be exposed locally)
   - AWS SDK integration (GetFederationTokenInput, AssumeRoleWithSAMLInput)
     -> ISE AI agent may use AWS STS for cloud connectivity; AWS creds via key_manager (ISE-F1 chain)
+
+=== ISE-F25: Kairos AI agent hardcoded production cloud endpoint + version disclosure ===
+
+Source: ise-ai-app Docker layer (be4cf5f9.../layer.tar -> ise-agent binary, 21MB Go ELF)
+Binary: extracted as /tmp/ise-kairos-agent.bin
+
+Hardcoded production endpoint:
+  https://api.euc1.prd.kairos.ciscolabs.com/ingest/v1/stable-ise
+
+Path decomposition:
+  api.euc1.prd.kairos.ciscolabs.com  -> Cisco Kairos platform, EU-central-1 (Frankfurt AWS), PRD env
+  /ingest/v1/stable-ise              -> API version (v1), product variant ("stable-ise")
+
+Agent version string (extractable via strings):
+  ise-agent-v0.1.6
+
+Additional extracted strings:
+  "x-kairos-checksum-%s"             -> custom integrity header name
+  "EC2IMDSEndpoint"                  -> AWS IMDS endpoint reference (Cisco cloud infra)
+  "AssumeRole"                       -> AWS STS role assumption
+  "cisco.com/kairos-common/v3"       -> Go module path for Kairos shared library
+
+Authentication: mTLS via client certificate ("api-proxy-cert" / "newClientCert")
+  -> provisioned at runtime by cisco.com/kairos-common/v3/pkg/ca
+  -> no hardcoded API tokens or secrets in binary
+
+Impact: LOW — endpoint is Cisco-controlled. No credentials exposed.
+  Disclosure: exact agent version fingerprinting; CI/CD path enumeration via variant naming;
+  confirms ISE 3.3.0 installations phone home to EU-central-1 AWS on port 443.
 
 """
 
@@ -1910,21 +1966,92 @@ def probe_activemq_jms(host: str, port: int = ACTIVEMQ_PORT) -> Optional[dict]:
         return {"open": False, "banner": None, "activemq": False}
 
 
+# ---------------------------------------------------------------------------
+# ISE-F25: Kairos AI agent — hardcoded production cloud endpoint + version disclosure
+# ---------------------------------------------------------------------------
+# Source: ise-ai-app Docker layer (ise-agent-v0.1.6, 21MB Go binary)
+# Binary: /tmp/ise-kairos-agent.bin (extracted from be4cf5f9.../layer.tar)
+#
+# Cisco's Kairos ISE AI cloud telemetry agent ships in every ISE 3.3.0 deployment.
+# The agent binary contains a hardcoded Cisco production ingest endpoint and the
+# exact agent version string. Both are extractable via static strings analysis.
+#
+# Version: ise-agent-v0.1.6
+# Endpoint: https://api.euc1.prd.kairos.ciscolabs.com/ingest/v1/stable-ise
+#   -> EUC1 = AWS eu-central-1 (Frankfurt), PRD = production environment
+#   -> Path leaks product codename ("kairos"), environment ("prd"), region ("euc1"),
+#      API version ("v1"), and product variant ("stable-ise")
+#
+# Authentication: mTLS via client certificate managed by cisco.com/kairos-common/v3/pkg/ca
+#   -> No hardcoded API tokens. Client cert provisioned at runtime ("api-proxy-cert").
+#   -> Reachability probe (no valid cert) confirms endpoint existence without auth.
+#
+# Other extracted strings of interest:
+#   "x-kairos-checksum-%s"  — custom header name for integrity verification
+#   "EC2IMDSEndpoint"        — AWS IMDS endpoint reference (Cisco infra metadata)
+#   "AssumeRole"             — AWS STS role assumption (Cisco cloud backend)
+#   "cisco.com/kairos-common/v3"  — Go module path for Kairos shared library
+#
+# Impact: LOW — endpoint is Cisco-controlled infrastructure. No credentials exposed.
+#   Disclosure risk: operator fingerprinting (exact agent version) and CI/CD path
+#   enumeration ("stable-ise" variant naming). No direct exploitation path.
+
+KAIROS_CLOUD_ENDPOINT = "https://api.euc1.prd.kairos.ciscolabs.com/ingest/v1/stable-ise"
+KAIROS_AGENT_VERSION = "ise-agent-v0.1.6"
+KAIROS_CHECKSUM_HEADER = "x-kairos-checksum-%s"
+KAIROS_GO_MODULE = "cisco.com/kairos-common/v3"
+
+
+def probe_kairos_cloud_endpoint() -> dict:
+    """
+    ISE-F25: Confirm Kairos production endpoint reachability without client cert.
+
+    A TLS handshake to the hardcoded endpoint confirms the endpoint is live and
+    extracts the server certificate chain. No mTLS client cert is sent — the server
+    will reject or stall the handshake, but the TLS server hello / cert is visible
+    before the mutual-auth step, confirming endpoint existence and Cisco ownership.
+
+    Returns dict: {reachable: bool, tls_subject: str|None, error: str|None}
+    """
+    import ssl
+    import socket
+
+    host = "api.euc1.prd.kairos.ciscolabs.com"
+    port = 443
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with socket.create_connection((host, port), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert(binary_form=False)
+                subject = dict(x[0] for x in cert.get("subject", [])) if cert else {}
+                return {
+                    "reachable": True,
+                    "tls_subject": subject.get("commonName"),
+                    "error": None,
+                }
+    except ssl.SSLError as e:
+        return {"reachable": True, "tls_subject": None, "error": f"SSL: {e}"}
+    except Exception as e:
+        return {"reachable": False, "tls_subject": None, "error": str(e)}
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.11.0",
+    "version": "1.12.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
         "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
         "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
-        "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24",
+        "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19", "ISE-F23"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24"],
-    "low": ["ISE-F4", "ISE-F17"],
+    "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
         "ise_f2_3des_key": "ASDF asdf 1234 8983 jkla",
@@ -1945,6 +2072,8 @@ MODULE_META = {
         "ise_f24_activemq_pass": None,
         "ise_f24_superuser_ct": "h1BYu+lcwcM=",
         "ise_f24_superuser_pt": "admin",
+        "ise_f25_kairos_endpoint": "https://api.euc1.prd.kairos.ciscolabs.com/ingest/v1/stable-ise",
+        "ise_f25_kairos_agent_version": "ise-agent-v0.1.6",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -1980,5 +2109,6 @@ MODULE_META = {
         "probe_pi_profiler_actuator",
         "decrypt_esapi_value",
         "probe_activemq_jms",
+        "probe_kairos_cloud_endpoint",
     ],
 }
