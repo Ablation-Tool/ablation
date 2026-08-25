@@ -374,7 +374,12 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     # Injection call: 0x100082e63 = dispatch_async(r12=[self queue], r13=block_struct)
     # Block callback entry: 0x100082f38 (next function); extracts self from block[0x20]
     'DNSProxyProvider.injectDelayedResponseIntoUDPFlow:local_addr:peer_addr:packet:':  0x100082ad4,
+    # Block callback: [self findUDPFlowWithDelayedReponse:peer_addr] re-fetches flow (DOUBLE-FETCH)
+    # Flow found → [flow delayedResponseCount] dec → [flow setDelayedResponseCount:]
+    # → call 0x10005da06 (actual write: esi=2/edx=1/r8=flow_obj/rcx=format)
     'DNSProxyProvider._injectBlock_callback':                             0x100082f38,
+    # The write function called from block callback (0x1000830c3 and 0x100083122)
+    'DNSProxyProvider._writeUDPDatagramToFlow':                           0x10005da06,
     'DNSProxyProvider.findUDPFlowWithDelayedReponse:':                    0x100082827,
     'DNSProxyProvider.notifyFlowEnd:':                                    0x1000821c7,
     'DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt:':            0x100079ae1,
@@ -706,11 +711,16 @@ class ACSockExtAnalyzer:
         return self.disasm('DNSProxyProvider.injectDelayedResponseIntoUDPFlow:local_addr:peer_addr:packet:',
                            count=count)
 
-    def inject_block_callback(self, count=80):
+    def inject_block_callback(self, count=120):
         """Disassemble the async block callback for DNS injection @ 0x100082f38.
-        This is the function that executes on self.queue after dispatch_async.
-        rdi = block struct; extracts self from block[0x20], peer_addr from block[0x30].
-        If flow state changed since findUDPFlow: → packet written to wrong flow.
+        Block struct layout: [0x20]=self, [0x28]=packet_data, [0x30]=peer_addr(28B),
+        [0x48]=local_addr_byte, [0x4c]=local_addr(28B).
+        DOUBLE-FETCH confirmed:
+        - 0x100082f5e: [self findUDPFlowWithDelayedReponse:&block[0x30]] — RE-FETCHES flow
+        - Flow DISCARDED by outer injectDelayedResponseIntoUDPFlow: (rsi never saved)
+        - This is the SECOND fetch; first is in caller before injectDelayed... is called
+        Post-fetch: [flow delayedResponseCount] → dec → [flow setDelayedResponseCount:]
+        Write call: 0x10005da06 at 0x1000830c3 (peer_addr_str, esi=2, edx=1, r8=flow_obj)
         """
         return self.disasm_va(0x100082f38, count=count)
 
