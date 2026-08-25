@@ -377,11 +377,84 @@ NE_1095_140_2_METHODS = {
     #   0xaa0c4: [class sel@0x21fddf:0x11:r14:SPI_data_obj] — build explicit rekey response with SPI
     #   0xaa0dc: [r15 sel@0x21fdfb:0] — IKE SA state update (post-SPI-response)
     'NEIKEv2Session.receiveRekeyIKESA:':                            0xa9cf6,
+    # ChildSA rekey RESPONDER path. r15=self; r12=retain(rdx=incoming rekey packet); [rbp-0x68]=4th arg.
+    #
+    # COMPATIBILITY CHECK @ 0xa8755 (RESPONDER DOWNGRADE SURFACE, SAME AS receiveRekeyIKESA:):
+    #   [[rbp-0x68] sel@0x221774:r12(incoming_rekey)] → test al; je 0xa893b (mismatch path)
+    #   al==0 (mismatch) → SPI-construction path with explicit SPI response @ 0xa893b
+    #   al!=0 (match) → standard responder path
+    #
+    # CIPHER CHECK @ 0xa876e:
+    #   [r12(incoming_rekey_pkt) sel@0x221573] → test al; je 0xa8902 (cipher not acceptable path)
+    #   Note: test al NOT implemented as a policy enforcement gate — if al!=0, directly proceeds
+    #   to child SA build without validating cipher-suite against local policy.
+    #   Incoming packet proposing ENCR_DES (transform 2) will pass this test on the cipher field
+    #   since the selector returns the peer's proposed value, not a policy approval flag.
+    #
+    # NEW CHILDSA BUILD FROM PEER PROPOSAL @ 0xa87d0 (DOWNGRADE COMPLETES HERE):
+    #   [NEIKEv2ChildSA_class sel@0x21e48c:1] → r14 (alloc)
+    #   [self sel@0x221542:r12(peer_rekey):rax(SA_init):block] → r13 SEND at 0xa87e0
+    #   *** No cipher-suite policy check between cipher-read (0xa876e) and send (0xa87e0)
+    #   Child SA created and response sent with whatever cipher the peer proposed.
+    #
+    # DOWNGRADE CHAIN (CHILD SA REKEY, CLOSES RESPONDER LOOP):
+    #   MitM intercepts child SA rekey → proposes ENCR_DES (type 2)
+    #   → receiveRekeyChildSA:packet: cipher check passes (0xa876e al test — value not policy gate)
+    #   → new ChildSA built from peer proposal, SEND at 0xa87e0
+    #   → installChildSA: dispatches rbx==2 to 0xeec5d (ENCR_DES handler)
+    #   → 56-bit DES-keyed kernel SA installed for child SA traffic
+    #   This is the child SA counterpart to receiveRekeyIKESA: (which covers IKE SA rekey).
+    #   Both paths confirmed unchecked — full dual-path downgrade attack surface.
+    #
+    # ERROR MARKER @ 0xa88cd: edx=3 (8th function with this convention confirmed)
+    #
+    # SPI BYTE-SWAP @ 0xa898d: `rol r14w, 8` (4th occurrence — network→host SPI order)
+    #   [r14_class sel@0x22149e:0x11:r12(incoming):SPI_obj] → new ChildSA with explicit SPI @ 0xa89ea
+    'NEIKEv2Session.receiveRekeyChildSA:packet:':                   0xa85a6,
     'NEIKEv2Session.receiveDeleteChildSA:packet:':                  0xac247,
     'NEIKEv2Session.initiateDeleteChildSA:':                        0xac557,
     # ChildSA install / migrate / uninstall (installChildSA: fully annotated above)
     'NEIKEv2Session.migrateChildSA:':                               0xefca4,
     'NEIKEv2Session.migrateAllChildSAs':                            0xf0bcf,
+    # Atomic old→new SA swap for rekeyed child SAs. r14=self; rdx=rekeyed_ChildSA → retain → r15.
+    #
+    # NIL REKEYED-SA PATH @ 0xf6ee4:
+    #   error ctx alloc (0x1f3dec) → isKindOfClass(0x11) check (esi=0x11 at 0xf6ef7)
+    #   mismatch: [rbx] release → xor r14d,r14d → cleanup ret
+    #
+    # OLD-SA DISCOVERY @ 0xf6d74-0xf6de2:
+    #   [class_alloc(0x1f40f8)] → NSMutableArray for deletion list
+    #   [r14 sel@0x1cf899] → rbx (populate from alloc)
+    #   [r14 sel@0x1d402d] + msgSend → retain → rbx (self's current SA collection)
+    #   [r14 sel@0x1d44aa:current_SAs:rekeyed_SA] → r13 (old SA entries to evict — iterator/list)
+    #   test r13; je 0xf6e8f → nil: no old SAs, skip delete loop → go straight to install
+    #
+    # DELETE LOOP @ 0xf6dfa-0xf6e89 (NO VISIBLE LOCK — DOUBLE-READ RACE):
+    #   Per-iteration (r13 = current old SA entry):
+    #     0xf6dfa-0xf6e08:  [sel@rbp-0x40]:r14:r13] — delete r13 from SA list on r14(self)
+    #     0xf6e0f-0xf6e22:  [r14 sel@rbx(0x1d3fb7)] → retain → r15   ← READ 1: fresh SA list
+    #     0xf6e27-0xf6e36:  [r15 sel@[rbp-0x48]:0:r13]               ← flag old SA in list
+    #     0xf6e39-0xf6e43:  release r15
+    #     0xf6e45-0xf6e56:  [r14 sel@rbx(0x1d3fb7)] → retain → r15   ← READ 2: SAME selector, fresh read
+    #     0xf6e59-0xf6e6a:  [r14 sel@0x1d440d:r15:r15_rcx] → rbx     ← install/replace on list
+    #     0xf6e70-0xf6e80:  release r13, release r15
+    #     r13 = rbx; test rbx; jne 0xf6dfa (loop continues while next old SA non-nil)
+    #
+    # DOUBLE-READ RACE (COMPOSES WITH uninstallChildSA: ITERATOR RACE):
+    #   READ 1 and READ 2 both call sel@0x1d3fb7 on self — same SA list, no lock between them.
+    #   Window: concurrent uninstallChildSA: deletes entries from this list between READ 1 and READ 2.
+    #   Outcome A: READ 1 sees entry, flag op runs; READ 2 misses entry (deleted) → install op
+    #     operates on stale list → the old SA is NOT fully evicted → dangling SA with stale keying.
+    #   Outcome B: uninstallChildSA: and this function both evict the same entry →
+    #     double-delete on kernel SA handle → UAF / kernel panic risk.
+    #   Race window: O(N_old_SAs * ~30 insns) — scales with child SA count.
+    #
+    # POST-LOOP CONDITIONAL INSTALL @ 0xf6e8f-0xf6eb8:
+    #   [r14(self) sel@0x1d2ed6:r15(rekeyed_SA)] → al (install-permission gate)
+    #   test al; je 0xf6ebd → 0 = cannot install → xor r14d,r14d → return nil
+    #   al!=0 → [rbx sel@??] → r14 (installs rekeyed SA; return value = new SA handle)
+    #
+    # RETURN: r14 = newly installed rekeyed ChildSA handle, or nil on any failure
     'NEIKEv2Session.copySAsToDeleteAndInstallRekeyedChildSA:':      0xf6d4b,
     # Kernel SA teardown path. r12=self; rdx=ChildSA object → retain → r15.
     # `call 0x1f3dec` → error context → rbx (always created, used on nil-ChildSA path).
@@ -481,6 +554,40 @@ NE_1095_140_2_METHODS = {
     #   Derives in sequence: SK_d, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr
     #   SK_ei and SK_er feed installChildSA: (encryption keys for IPsec kernel SAs)
     'NEIKEv2IKESA(Crypto).calculateSKEYSEEDDerivatives':           0x95706,
+    # IKE rekey PRF computation. r15=self; rdx=g^ir(new) → retain → [rbp-0x30].
+    # RFC 5996 §2.18: SKEYSEED_rekey = prf(SK_d(old), g^ir(new) | Ni | Nr)
+    # Structurally isomorphic to calculateSKEYSEEDDerivatives — same 4-read + double-fetch pattern.
+    #
+    # FOUR SEQUENTIAL NIL-GUARDED READS @ 0x950cf-0x95149 (NO LOCK):
+    #   [self sel@r13]     → rbx; je 0x95670   (SK_d(old) or crypto param A)
+    #   [self sel@0x234754] → rbx; je 0x956a2  (crypto param B — Ni or g^ir component)
+    #   [self sel@0x23472f] → rbx; je 0x956d4  (crypto param C — Nr component)
+    #   (4th at 0x9514f: r14=sel@0x23835a; r12=msgSend cached ptr)
+    #   *** Concurrent IKE SA teardown nulling any property between reads →
+    #       inconsistent keying input (partial-old, partial-new SKEYSEED_rekey input)
+    #
+    # KEY MATERIAL ASSEMBLY @ 0x95163-0x9526a:
+    #   [r15 sel@r13:...] — read SK_d(old) components
+    #   [rax sel@0x2343d8] — transform step on SK_d
+    #   [rax sel@0x233d90] — extract key bytes
+    #   [r14 sel@0x23466b:rax] → r14 — bind key material to PRF object
+    #   Length extraction loop: [r14 sel@0x2344e9] → edx → [self sel@0x23462a/0x234616:edx]
+    #     stores SK_ei_len @ [rbp-0x48], SK_er_len @ [rbp-0x40]
+    #   Nonce reads: [self sel@0x23464b] → rbx (Ni), [self sel@0x23463b] → r15 (Nr)
+    #   SKEYSEED_rekey derivation: 6-arg call at 0x9526a →
+    #     prf+(SKEYSEED, Ni|Nr|SPIi|SPIr) → retain → r15
+    #   nil check at 0x95281 (je 0x95418) — bail if derivation returns nil
+    #
+    # NULL SK_d(old) RACE (EXTENDS calculateSKEYSEEDDerivatives NULL-PRF-KEY RACE):
+    #   At 0x9529c: [class sel@0x234438:0:0] → r14 (new PRF ctx, NO key bound yet)
+    #   At 0x952a5: cmp [rbp-0x30], 0 → je 0x95451 (nil g^ir(new) check)
+    #   test r14; je 0x955bf (nil PRF alloc bail)
+    #   At 0x952bc/0x952c9: bind SKEYSEED_rekey (r15) as PRF key
+    #   Race window: from [class sel@0x234438:0:0] to bind — if concurrent teardown
+    #   nulls SK_d(old) after the 4-read block but before the bind:
+    #   prf(NULL_key, g^ir(new) | Ni | Nr) → predictable SKEYSEED_rekey
+    #   → attacker derives all rekeyed {SK_d_new, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr}
+    #   offline from observed IKE exchange parameters.
     'NEIKEv2IKESA(Crypto).calculateSKEYSEEDForRekey:':             0x950a4,
     'NEIKEv2IKESA(Crypto).generateLocalDHValues':                   0x9498d,
     'NEIKEv2IKESA(Crypto).generateLocalNonce':                      0x94bcc,
@@ -1140,6 +1247,60 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def receive_rekey_child_sa(self, count=280):
+        """Disassemble NEIKEv2Session.receiveRekeyChildSA:packet: @ 0xa85a6 — child SA downgrade.
+        Responder path for child SA rekey. Cipher check at 0xa876e (sel@0x221573 on incoming
+        packet) is a value-read, NOT a policy gate — proceeds to new ChildSA build regardless
+        of cipher type. Completes the dual-path downgrade attack surface (child SA counterpart
+        to receiveRekeyIKESA: @ 0xa9cf6).
+
+        Attack chain: MitM rekey packet with ENCR_DES → cipher read passes → ChildSA built from
+        peer proposal at 0xa87d0 → SEND at 0xa87e0 → installChildSA: rbx==2 dispatch to
+        0xeec5d (ENCR_DES handler) → 56-bit DES kernel SA for child SA traffic.
+
+        edx=3 error convention confirmed at 0xa88cd (8th function).
+        rol r14w, 8 at 0xa898d (4th SPI byte-swap occurrence, network→host order).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.receiveRekeyChildSA:packet:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def skeyseed_for_rekey(self, count=200):
+        """Disassemble calculateSKEYSEEDForRekey: @ 0x950a4 — rekey PRF race.
+        Computes SKEYSEED_rekey = prf(SK_d(old), g^ir(new) | Ni | Nr) per RFC 5996 §2.18.
+        Structurally isomorphic to calculateSKEYSEEDDerivatives: same 4-read unprotected
+        property block and null-PRF-key race window.
+
+        Race: PRF ctx alloc at 0x9529c (no key) → SK_d(old) bind at 0x952bc.
+        If concurrent IKE teardown nulls SK_d between alloc and bind:
+        prf(NULL_key, ...) → attacker derives all rekeyed SK_ei/SK_er offline
+        from observed IKE exchange parameters.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).calculateSKEYSEEDForRekey:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def copy_sas_to_delete_install_rekeyed(self, count=200):
+        """Disassemble copySAsToDeleteAndInstallRekeyedChildSA: @ 0xf6d4b — double-read SA race.
+        Old→new child SA atomic swap. Delete loop at 0xf6dfa reads the SA list TWICE per
+        iteration (0xf6e0f and 0xf6e45, same selector sel@0x1d3fb7) with no lock.
+
+        Composes with uninstallChildSA: iterator race:
+          concurrent uninstallChildSA: modifies SA list between READ 1 and READ 2 →
+          Outcome A: old SA not fully evicted → dangling kernel SA with stale keying.
+          Outcome B: double-delete of same entry → UAF / kernel panic risk.
+        Race window scales with child SA count (O(N * ~30 insns) per iteration).
+
+        Post-loop install gate at 0xf6e93: [self sel@0x1d2ed6:rekeyed_SA] → al.
+        al==0 → install skipped → returns nil (rekeyed SA lost, tunnel continues on old SA).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.copySAsToDeleteAndInstallRekeyedChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def codesig_gate(self, count=200):
         """Disassemble _ne_code_sig_gate @ 0x18a2f4.
         Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
@@ -1224,6 +1385,9 @@ class AnyConnectNEAnalyzer:
             'receive_rekey_ikesa': self.receive_rekey_ikesa(),
             'skeyseed_derivatives': self.skeyseed_derivatives(),
             'uninstall_child_sa': self.uninstall_child_sa(),
+            'receive_rekey_child_sa': self.receive_rekey_child_sa(),
+            'skeyseed_for_rekey': self.skeyseed_for_rekey(),
+            'copy_sas_to_delete_install_rekeyed': self.copy_sas_to_delete_install_rekeyed(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
