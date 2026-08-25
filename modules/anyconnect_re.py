@@ -436,6 +436,26 @@ NE_1095_140_2_METHODS = {
     # FAILURE PATH @ 0xefef1: test rbx; je 0xf027f (nil return from migration → no cleanup visible
     #   in first 200 insns; function continues beyond window at 0xf027f).
     'NEIKEv2Session.migrateChildSA:':                               0xefca4,
+    # Bulk MOBIKE migration — iterates all child SAs calling migrateChildSA: on each.
+    # r13=self. Stack canary @ 0xf0bf0. NSFastEnumeration over child SA collection.
+    #
+    # ENUMERATION SETUP @ 0xf0c0d-0xf0c47:
+    #   [self sel@0x1da254] → retain → [rbp-0xb8] (child SA collection)
+    #   NSFastEnumeration init (struct at [rbp-0x100], [rbp-0xb0], r8d=0x10)
+    #
+    # PER-ITEM MIGRATION LOOP @ 0xf0c71-0xf0caa (NO LOCK ON SA LIST):
+    #   rdx = collection[r14] (current child SA)
+    #   [r13(self) sel@0x1da442:rdx] → al  ← calls migrateChildSA: on each SA
+    #   test al; je 0xf0ce1 → EARLY EXIT on first failure: xor r14d (return 0)
+    #   Subsequent SAs in the list are NOT migrated; partial migration state.
+    #
+    # COMPOSITION RISK:
+    #   migrateAllChildSAs iterates without a list lock.
+    #   Concurrent uninstallChildSA: or copySAsToDeleteAndInstallRekeyedChildSA: modifies the list
+    #   during enumeration → iterator skips or double-visits SAs.
+    #   Each per-SA call inherits migrateChildSA:'s own double-read race (0xefcdf/0xefd19).
+    #   Outcome: some SAs migrated to new address, some not → asymmetric tunnel state
+    #   (inbound SA at old address, outbound at new) → traffic blackhole without teardown.
     'NEIKEv2Session.migrateAllChildSAs':                            0xf0bcf,
     # Atomic old→new SA swap for rekeyed child SAs. r14=self; rdx=rekeyed_ChildSA → retain → r15.
     #
@@ -652,6 +672,13 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2IKESA(Crypto).generateLocalNonce':                      0x94bcc,
     'NEIKEv2IKESA(Crypto).fetchLocalCertificateIdentity':           0x94c8e,
     'NEIKEv2IKESA(Crypto).generateLocalValues':                     0x966db,
+    # Rekey readiness predicate (~30 insns, 0x9672c-0x96768). rbx=self.
+    # TWO SEQUENTIAL BOOLEAN READS, SHORT-CIRCUITS ON FALSE:
+    #   0x96735: [self sel@0x23321c] → al; je 0x9675d → return 0 (DH not ready?)
+    #   0x96746: [self sel@0x233213] → al; setne al (nonce not ready?)
+    #   Returns 1 only if BOTH properties are truthy.
+    # Likely called before sending a rekey proposal to confirm local values are prepared.
+    # No evident race surface in the predicate itself; risk is at the values it checks.
     'NEIKEv2IKESA(Crypto).generateAllValuesForRekey:':              0x9672c,
     # PSK auth data computation. r14=self; rdx=shared_secret(PSK)→r13; rcx=octets→r12.
     # NIL PSK @ 0x9853c: je 0x98673 → error (esi=0x11); nil octets @ 0x98545: je 0x9869e → error (esi=0x11)
@@ -673,8 +700,54 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2IKESA(Crypto).createAuthenticationDataForSharedSecret:octets:': 0x98509,
     'NEIKEv2IKESA(Crypto).createInitiatorSignedOctets':             0x98987,
     'NEIKEv2IKESA(Crypto).createResponderSignedOctets':             0x98e85,
+    # Initiator auth data construction. r12=self.
+    # PROPERTY READS @ 0x9b0a1 / 0x9b0cb / 0x9b0e7 — three from self before dispatch:
+    #   [self sel@0x22dc28] → rbx; nil → je 0x9b2d4 (esi=0x11 error)
+    #   [self sel@0x22e91e] → r14; nil → je 0x9b18b (esi=0x11 error)
+    #   [self sel@0x22de8a] → retain → r15; [r15 sel@0x22ddb4] → rax (auth type integer)
+    #
+    # AUTH TYPE DISPATCH @ 0x9b111:
+    #   `cmp rax, 2; jne 0x9b1bd`
+    #   rax == 2 → PSK / shared-secret path (RFC 7296: auth method 2 = Shared Key Message Integrity Code)
+    #   rax != 2 → cert or EAP path at 0x9b1bd
+    #
+    # PSK PATH (rax==2) @ 0x9b11b:
+    #   [self sel@0x22c0d6] → retain → r13 (PSK object)
+    #   [self sel@0x22e8e7:r13(PSK):r14(nonce?)] → rbx
+    #   ← chains into createAuthenticationDataForSharedSecret:octets: (TOCTOU risk inherited)
+    #   test rbx; jne 0x9b2a6 (success: release, return rbx)
+    #
+    # CERT/EAP PATH @ 0x9b1bd:
+    #   [r15 sel@0x22e864] → al; je 0x9b21b (not cert → non-cert branch)
+    #   CERT (al!=0): [self sel@0x22e858:r14] → rax; test → jne 0x9b247 (cert auth data)
+    #   NOT-CERT @ 0x9b21b: [r15 sel@0x22e816] → al; je 0x9b24c (third type check)
+    #
+    # TOCTOU ON AUTH TYPE: r15 (auth method obj) and r14 (nonce/octets) read from self
+    # before the cmp-rax-2 dispatch. Concurrent renegotiation changing auth method:
+    #   PSK→cert: r14 was bound for cert path, PSK dispatch runs → wrong octets in PSK HMAC.
     'NEIKEv2IKESA(Crypto).createInitiatorAuthenticationData':       0x9b090,
     'NEIKEv2IKESA(Crypto).createResponderAuthenticationData':       0x9b303,
+    # Non-certificate auth data verification. r12=self; rdx=auth_data → retain → r14.
+    # THREE NIL-GUARDED PROPERTY READS (0x9b5a6, 0x9b5c9, 0x9b5d3 — all from self):
+    #   rbx: nil → 0x9b710 (esi=0x11); r15: nil → 0x9b742 (esi=0x11)
+    #
+    # AUTH-TYPE GATE @ 0x9b5f4:
+    #   [r15 sel@0x22e434] → test al; je 0x9b634 (al==0: not cert-type, proceed)
+    #   al==1 → 0x9b601: error immediately (caller passed cert auth data to non-cert checker)
+    #
+    # PSK SUBPATH @ 0x9b634:
+    #   [r15 sel@0x22e3fd] → al; je 0x9b660 (al==0: not PSK either)
+    #   al==1: [r12 sel@0x22e3f9:r14] → r13d (PSK verification); return r13d
+    #
+    # CMOVE SELECTOR DISPATCH @ 0x9b660-0x9b6a4:
+    #   [r12(self) sel@0x22d781] → al  (runtime boolean read from self)
+    #   `cmove rcx, rax` at 0x9b683: selects between sel@0x22e3cd (al==0) or sel@0x22e3dc (al!=0)
+    #   [r12 sel(chosen)] → r12_new (reads WHICH auth method object to use based on runtime state)
+    #   [r12_new sel@0x22bf17:r14(auth_data)] → r13d (actual verification call)
+    #
+    # CMOVE RACE: if self's state property (sel@0x22d781) changes between 0x9b66e read and
+    # the cmove at 0x9b683 (e.g., concurrent auth config update), wrong verification method
+    # selected → valid auth data rejected, or wrong-method data accepted (auth bypass).
     'NEIKEv2IKESA(Crypto).checkNonCertAuthData:':                   0x9b576,
     'NEIKEv2IKESA(Crypto).createInitiatorEAPAuthenticationData':    0x9bc40,
     'NEIKEv2IKESA(Crypto).createResponderEAPAuthenticationData':    0x9be57,
@@ -1358,6 +1431,56 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def migrate_all_child_sas(self, count=200):
+        """Disassemble migrateAllChildSAs @ 0xf0bcf — bulk MOBIKE migration without lock.
+        NSFastEnumeration over all child SAs, calling migrateChildSA: on each (sel@0x1da442).
+        No lock on the SA list during enumeration — concurrent modify skips or double-visits SAs.
+        Early exit on first failure (je 0xf0ce1 → xor r14d=0) → partial migration state:
+        some SAs at new address, some still at old → asymmetric tunnel blackhole.
+        Each per-SA call inherits migrateChildSA:'s double-read race.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.migrateAllChildSAs')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def generate_all_values_for_rekey(self, count=40):
+        """Disassemble generateAllValuesForRekey: @ 0x9672c — short rekey readiness predicate.
+        Reads two boolean properties from self in sequence; returns 1 only if both are truthy.
+        Short-circuits on first false. No lock; predicate checks state set by concurrent callers.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).generateAllValuesForRekey:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def create_initiator_auth_data(self, count=200):
+        """Disassemble createInitiatorAuthenticationData @ 0x9b090 — auth type dispatch.
+        Reads auth type integer from self's auth method object, dispatches:
+          rax==2 → PSK path → chains into createAuthenticationDataForSharedSecret:octets:
+          rax!=2 → cert (sel@0x22e864 al-check) or EAP path
+        TOCTOU: auth method and nonce/octets read from self before dispatch; concurrent
+        auth-type change → mismatched inputs to auth computation (wrong PSK HMAC octets).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).createInitiatorAuthenticationData')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def check_non_cert_auth_data(self, count=200):
+        """Disassemble checkNonCertAuthData: @ 0x9b576 — non-cert auth verification.
+        Auth-type gate at 0x9b5f4 (al==1 → reject cert-type data immediately).
+        PSK subpath at 0x9b634.
+        cmove selector dispatch at 0x9b683: branch-free selection between two verification
+        method selectors based on runtime self property (sel@0x22d781 → al → cmove rcx,rax).
+        If self's state changes between the al read (0x9b66e) and the dispatch, wrong
+        verification method selected → auth bypass or false rejection.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).checkNonCertAuthData:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def migrate_child_sa(self, count=200):
         """Disassemble NEIKEv2Session.migrateChildSA: @ 0xefca4 — MOBIKE address migration.
         Double-reads the SA list (sel@0x1d9997, 0xefcdf and 0xefd19) without lock, same
@@ -1515,6 +1638,10 @@ class AnyConnectNEAnalyzer:
             'receive_rekey_child_sa': self.receive_rekey_child_sa(),
             'skeyseed_for_rekey': self.skeyseed_for_rekey(),
             'copy_sas_to_delete_install_rekeyed': self.copy_sas_to_delete_install_rekeyed(),
+            'migrate_all_child_sas': self.migrate_all_child_sas(),
+            'generate_all_values_for_rekey': self.generate_all_values_for_rekey(),
+            'create_initiator_auth_data': self.create_initiator_auth_data(),
+            'check_non_cert_auth_data': self.check_non_cert_auth_data(),
             'migrate_child_sa': self.migrate_child_sa(),
             'generate_local_dh_values': self.generate_local_dh_values(),
             'generate_local_nonce': self.generate_local_nonce(),
