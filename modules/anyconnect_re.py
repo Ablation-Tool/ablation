@@ -182,6 +182,59 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2IKESA.encryptCryptoCtx':                                0xb9a5e,
 }
 
+# NEIKEv2Listener method addresses — the acsockext→NE receive path
+# Listener registers on 'com.apple.networkextension.ikev2.listener' (Mach bootstrap)
+# handleNewConnection: validates the connecting extension's DR before handing off to session
+NE_LISTENER_METHODS = {
+    # Gate: validates signing identity of connecting NW extension via signingIdentifierAllowed:domainsOrAccountsRequired:
+    # Boolean gate @ 0xc0f26: test al,al; je 0xc1358 — fails if Cisco's DR not satisfied
+    # sessionsBeforeAuth tracks pre-auth sessions; window between here and auth completion
+    'handleNewConnection:':                                           0xc0e85,
+    # Calls back to nesessionmanager delegate (configurationDelegate) for VPN config;
+    # validateAuthBlock param is the custom auth callback (RSA SecurID / Duo path)
+    'requestConfigurationForSession:sessionConfig:childConfig:validateAuthBlock:responseBlock:': 0xc156d,
+    'sessionFailedBeforeRequestingConfiguration:':                    0xc1a38,
+    # Full init variants: saSession=kernel SA mode, packetDelegate=user-space mode
+    'initWithListenerIKEConfig:saSession:kernelSASessionName:listenerUDPPort:listenerInterface:listenerQueue:delegate:delegateQueue:': 0xc1b79,
+    'initWithListenerIKEConfig:saSession:kernelSASessionName:packetDelegate:listenerQueue:delegate:delegateQueue:': 0xc294f,
+    'receivePacket:':                                                 0xc248d,
+    'cancel':                                                         0xc3d1b,
+    # Property: tracks pre-auth sessions (TOCTOU race window between here and auth complete)
+    'sessionsBeforeAuth':                                             0xc3ead,
+}
+
+# Phase 1 IKE auth selref addresses (in __DATA,__objc_selrefs)
+# IMPs are in acsockext (Cisco's binary, not NE.framework). NE binary contains the call sites.
+# Selref VAs used for call-site tracing: resolve which method is being called at runtime.
+NE_PHASE1_SELREFS = {
+    # IKE_SA_INIT — proposal and DH validation
+    'validateSAInitAsInitiator:':                                     0x2c9cd8,
+    'validateSAInitAsResponder:sendInvalidKE:':                       0x2c9e28,
+    # IKE_AUTH — standard PKI/PSK auth
+    'createIKEAuthForInitiatorIKESA:childSA:':                        0x2c9d28,
+    'validateAuthAsInitiator:childSA:':                               0x2c9d40,
+    'validateAuthPart1AsResponderCopyErrorForIKESA:':                 0x2c9e40,
+    'validateAuthPart2AsResponderCopyErrorForIKESA:childSA:':         0x2c9e50,
+    'createIKEAuthResponse:ikeSA:childSA:':                           0x2c9e58,
+    # EAP over IKEv2 (RSA SecurID, Duo, LDAP) — RFC 5106 + RFC 5998
+    'handleEAPIKESA:childSA:authPacket:handler:':                     0x2c9d08,
+    'validateEAPOnlyAuthentication:':                                  0x2c9d30,
+    # NEIKEv2ProviderAuthenticate: — THE Cisco delegate callback
+    # NE calls this into acsockext for vendor-specific auth (custom IKE payloads, SecurID).
+    # IMP is in acsockext. Intercept here = bypass custom auth without vendor code.
+    'NEIKEv2ProviderAuthenticate:':                                    0x2ca770,
+    # Cisco private IKEv2 extensions (non-RFC vendor payloads in IKE_AUTH)
+    'customIKEAuthPayloads':                                          0x2c92c0,
+    'customIKEAuthVendorPayloads':                                    0x2c92d0,
+    'customIKEAuthPrivateNotifies':                                    0x2c9078,
+    # Certificate validation chain
+    'checkValidityOfDigitalSignature:authenticationProtocol:sessionConfiguration:remoteSignedOctets:': 0x2c9a18,
+    'copyTrustedKeyForCertificate:remoteCAArray:policyRef:enableRevocationCheck:strictRevocationCheck:': 0x2c9a00,
+    # Config request / validate auth block
+    'copyValidateAuthBlock':                                           0x2c9dd8,
+    'requestConfigurationForListener:session:sessionConfig:childConfig:validateAuthBlock:responseBlock:': 0x2ca468,
+}
+
 # XPC / Mach bootstrap service names hardcoded in NE binary
 NE_XPC_SERVICES = [
     'com.apple.networkextension.ikev2.listener',      # IKEv2 listener bootstrap name (key Mach service)
@@ -380,6 +433,20 @@ class AnyConnectNEAnalyzer:
         Block invoke at 0x33b91 does the actual migration; dispatch_async race after isKindOfClass:.
         """
         return self.disasm('NEConfigurationManager.upgradeLegacyPluginConfigurationsWithUpgradeInfo:completionQueue:handler:')
+
+    def listener_rx_path(self, count=120):
+        """Disassemble handleNewConnection: @ 0xc0e85 — acsockext→NE trust boundary.
+        Gate at 0xc0f26 (test al,al; je 0xc1358) is signingIdentifierAllowed: check.
+        Failing: connection rejected. Bypass: spoof signing ID or return true from hook.
+        """
+        return self.disasm_va(0xc0e85, count=count)
+
+    def phase1_rx(self, count=200):
+        """Disassemble receiveConnection: @ 0xa4e00 — Phase 1 IKE_SA_INIT entry.
+        Called by Listener after handleNewConnection: passes; creates IKESA and calls
+        validateSAInitAs*: with completion block.
+        """
+        return self.disasm_va(0xa4e00, count=count)
 
     def plugin_dispatch(self):
         """Disassemble configurePluginWithPayload: — routes IKEv2|L2TP|CiscoNExt connection types."""
