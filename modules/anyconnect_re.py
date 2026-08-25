@@ -9,6 +9,20 @@ Primary targets:
   com.cisco.anyconnect.macos.acsockext — Cisco NE extension (requires extraction)
   kextd (kext_tools-623.120.1) — kext approval chain
 
+NE Trust Architecture (from sandbox profiles + binary RE):
+  nesessionmanager ──XPC──► neagent (com.apple.neagent)
+                   ──XPC──► nehelper (com.apple.nehelper)
+                   ──fork──► pppd [no-sandbox] (L2TP/IPsec + RSA SecurID via /var/ace)
+                   reads:  /Library/Preferences/com.apple.networkextension.*.plist
+  neagent ──XPC──► acsockext [pluginkit.pkd loads, DR-gated by NE binary]
+  NE binary ── requestSocket: DR gate: _SecRequirementCreateWithString → _SecCodeCheckValidity
+               DR @ 0x1f8b00: "identifier com.cisco.anyconnect.macosext.networkextension ... DE8Y96K9QP"
+  kextd ── validates acsock.kext via MDM AllowedKernelExtensions policy (Team ID DE8Y96K9QP)
+           NOT by hardcoded DR; trust source = /Library/SystemExtensions/
+
+  RSA SecurID path: nesessionmanager can write /var/ace and /var/db/RSASecurID_DHParams
+  (these are LINA auth method fields that live on the macOS side, pppd-inherited)
+
 Usage:
     from modules.anyconnect_re import AnyConnectNEAnalyzer
     a = AnyConnectNEAnalyzer('/path/to/NetworkExtension')
@@ -32,31 +46,99 @@ from pathlib import Path
 MACOS_RE = Path(__file__).parent.parent / 'tools' / 'macos_re.py'
 
 # Method addresses in NetworkExtension 1095.140.2 (Catalina 10.15.7)
-# Extracted via LIEF symbol dump — NOT stripped
+# IMP addresses from ObjC classlist parse (NOT LIEF symbol_dump — those return methname strings).
+# sym_filter addresses in range 0x24xxxx are __TEXT,__objc_methname strings, NOT code.
+# Verified: functions in range 0x0xxxx–0x1exxxx are in __TEXT,__text (correct).
 NE_1095_140_2_METHODS = {
-    # Entitlement gate — validates Cisco sysext before loading
+    # ── Entitlement + socket grant gate ─────────────────────────────────────────
+    # CVE-2019-8805 (10.15.0): entitlement verification bypass here; patched 10.15.1
     'shouldAllowUnentitledExtension:':                              0x107dc5,
     # Raw socket grant — where Apple hands Cisco the CSTP/DTLS socket
     # Gate chain: _SecRequirementCreateWithString (lazy-init @ 0x3e5b6) ->
     #   0x18a2f4: _SecCodeCopyGuestWithAttributes -> _SecCodeCheckValidity(callerCode, flags, DR)
     #   DR = "identifier com.cisco.anyconnect.macos.acsockext and cert leaf[OU]=DE8Y96K9QP"
-    #   Bypass: null DR ptr in lazy-init block (skips check) OR hook SecCodeCheckValidity -> 0
+    #   Bypass: hook _SecCodeCheckValidity GOT (0x262008) → return 0 OR null DR ptr in lazy-init
+    #   NOTE: call @ 0x3e2ce (esi=2) is _os_log_type_enabled(DEBUG) — NOT a security gate
     'requestSocket:interface:local:remote:completionHandler:':      0x3e26c,
-    # Always-on VPN requirement check
     'extensionHasACRequirement':                                    0x3e982,
-    # Central Cisco plugin dispatch (IKEv2 | L2TP | Cisco NExt)
-    'configurePluginWithPayload:pluginType:payloadType:':           0x244613,
-    # Explicit kext→sysext migration (acsock.kext → acsockext)
-    'upgradeLegacyPluginConfigurationsWithUpgradeInfo:':            0x246198,
-    # Keychain ACL insertion — race window for cred read access
+    '_ne_code_sig_gate':                                            0x18a2f4,
+
+    # ── NEConfiguration plugin type dispatch ─────────────────────────────────────
+    # Type dispatch: retains payload/pluginType/payloadType, then isKindOfClass: branches
+    # to IKEv2 | L2TP | CiscoNExt handler. Block invoke at 0x33b91 does actual migration work.
+    # NOTE: class is NEConfiguration (not NEConfigurationManager); IMP from classlist parse
+    'NEConfiguration.configurePluginWithPayload:pluginType:payloadType:': 0x11299,
+    # kext→sysext migration: captures (self, upgradeInfo, queue, handler) into a dispatch_block
+    # block invoke at 0x33b91; race window between isKindOfClass: check and block dispatch
+    'NEConfigurationManager.upgradeLegacyPluginConfigurationsWithUpgradeInfo:completionQueue:handler:': 0x33a8c,
+    # Keychain ACL insertion — TOCTOU race: isKindOfClass @ 0x352e3 vs SecACL write @ 0x35488 (~250 insns)
     'addAppToKeychainACLsForConfiguration:':                        0x3528a,
-    # IKEv2 session initiator
+
+    # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
     'NEIKEv2Session.initiateConnect':                               0xa2c42,
-    # IKEv2 child SA installation
+
+    # ── NEIKEv2Session(Exchange) Phase 2 handlers ────────────────────────────────
+    'NEIKEv2Session.initiateDeleteChildSPI:remoteSPI:':             0xa006e,
+    'NEIKEv2Session.receiveDeleteChildSPI:remoteSPI:packet:':       0xa0336,
+    'NEIKEv2Session.handleEAPIKESA:childSA:authPacket:handler:':    0xa26ee,
+    'NEIKEv2Session.setupReceivedChildWithHandler:':                0xa4809,
+    'NEIKEv2Session.initiateNewChildSA:':                           0xa64a4,
+    'NEIKEv2Session.receiveNewChildSA:packet:':                     0xa6d21,
+    'NEIKEv2Session.initiateRekeyChildSA:':                         0xa775f,
+    'NEIKEv2Session.receiveRekeyChildSA:packet:':                   0xa85a6,
+    'NEIKEv2Session.initiateRekeyIKESA':                            0xa9463,
+    'NEIKEv2Session.receiveRekeyIKESA:':                            0xa9cf6,
+    'NEIKEv2Session.receiveDeleteChildSA:packet:':                  0xac247,
+    'NEIKEv2Session.initiateDeleteChildSA:':                        0xac557,
+    # ChildSA install / migrate / uninstall
     'NEIKEv2Session.installChildSA:':                               0xee682,
-    # EAP IKEv2 SA handler
-    'NEIKEv2Session.handleEAPIKESA:...':                            0xa26ee,
-    # Phase 2 ChildSA key material — exact fields LINA generates on ASA side (RFC 5996)
+    'NEIKEv2Session.migrateChildSA:':                               0xefca4,
+    'NEIKEv2Session.migrateAllChildSAs':                            0xf0bcf,
+    'NEIKEv2Session.copySAsToDeleteAndInstallRekeyedChildSA:':      0xf6d4b,
+    'NEIKEv2Session.uninstallChildSA:':                             0xf7161,
+    'NEIKEv2Session.uninstallAllChildSAs':                          0xf7395,
+    'NEIKEv2Session.reportTrafficSelectorsForChildSA:':             0xf76c6,
+    'NEIKEv2Session.resetChild:':                                   0xf7d08,
+
+    # ── NEIKEv2IKESA(Crypto) — PRF+ key derivation (RFC 5996 §2.14) ──────────────
+    # SKEYSEED = prf(Ni|Nr, g^ir)  [initial]
+    # SKEYSEED_rekey = prf(SK_d(old), g^ir(new) | Ni | Nr)
+    # {SK_d, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr} = prf+(SKEYSEED, Ni|Nr|SPIi|SPIr)
+    'NEIKEv2IKESA(Crypto).calculateSKEYSEEDDerivatives':           0x95706,
+    'NEIKEv2IKESA(Crypto).calculateSKEYSEEDForRekey:':             0x950a4,
+    'NEIKEv2IKESA(Crypto).generateLocalDHValues':                   0x9498d,
+    'NEIKEv2IKESA(Crypto).generateLocalNonce':                      0x94bcc,
+    'NEIKEv2IKESA(Crypto).fetchLocalCertificateIdentity':           0x94c8e,
+    'NEIKEv2IKESA(Crypto).generateLocalValues':                     0x966db,
+    'NEIKEv2IKESA(Crypto).generateAllValuesForRekey:':              0x9672c,
+    'NEIKEv2IKESA(Crypto).createAuthenticationDataForSharedSecret:octets:': 0x98509,
+    'NEIKEv2IKESA(Crypto).createInitiatorSignedOctets':             0x98987,
+    'NEIKEv2IKESA(Crypto).createResponderSignedOctets':             0x98e85,
+    'NEIKEv2IKESA(Crypto).createInitiatorAuthenticationData':       0x9b090,
+    'NEIKEv2IKESA(Crypto).createResponderAuthenticationData':       0x9b303,
+    'NEIKEv2IKESA(Crypto).checkNonCertAuthData:':                   0x9b576,
+    'NEIKEv2IKESA(Crypto).createInitiatorEAPAuthenticationData':    0x9bc40,
+    'NEIKEv2IKESA(Crypto).createResponderEAPAuthenticationData':    0x9be57,
+
+    # ── NEIKEv2Crypto class methods ──────────────────────────────────────────────
+    # PRF+ primitive (the load-bearing call inside calculateSKEYSEEDDerivatives)
+    'NEIKEv2Crypto.createPRFPlusFromData:key:prfAlgorithm:outputLength:': 0x8e500,
+    'NEIKEv2Crypto.createHMACFromData:key:prfAlgorithm:':           0x8e284,
+    'NEIKEv2Crypto.createHMACFromData:key:integrityAlgorithm:':     0x8e008,
+    'NEIKEv2Crypto.createRandomWithSize:':                          0x8de32,
+    'NEIKEv2Crypto.encryptGCMWithContext:aad:aadLen:plaintext:len:output:outputLen:': 0x92e29,
+    'NEIKEv2Crypto.decryptGCMWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x92ff4,
+    'NEIKEv2Crypto.encryptChaChaPolyWithContext:key:iv:aad:aadLen:plaintext:len:output:outputLen:': 0x932de,
+    'NEIKEv2Crypto.decryptChaChaPolyWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x9362a,
+    'NEIKEv2Crypto.createEncryptedData:algorithm:key:iv:encryptionContext:aad:padDataToKeyLength:': 0x9376f,
+    'NEIKEv2Crypto.createDecryptedData:algorithm:key:iv:aad:padDataToKeyLength:':    0x9401d,
+    'NEIKEv2Crypto.prototypeDHKeysForGroup:':                       0x8ff04,
+    'NEIKEv2Crypto.copyDHKeys:':                                    0x90805,
+    'NEIKEv2Crypto.createNATDetectionHashForInitiatorSPI:responderSPI:address:': 0x8f9bb,
+    'NEIKEv2Crypto.copyAuthenticationProtocolForAuthMethod:authData:': 0x8f1b8,
+
+    # ── NEIKEv2ChildSA Phase 2 key material (RFC 5996 §2.17) ───────────────────
+    # LINA and NE both derive these from the same PRF+ keystream
     'NEIKEv2ChildSA.initiatorSendEncryptionKey':                    0x75bab,
     'NEIKEv2ChildSA.responderSendEncryptionKey':                    0x75c59,
     'NEIKEv2ChildSA.initiatorSendIntegrityKey':                     0x75d07,
@@ -64,47 +146,57 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2ChildSA.shouldGenerateNewDHKeys':                       0x757ed,
     'NEIKEv2ChildSA.initiatorTrafficSelectors':                     0x75fc7,
     'NEIKEv2ChildSA.responderTrafficSelectors':                     0x76075,
-    # Cisco private IKEv2 notify — non-RFC, LINA-only extension
+
+    # ── Cisco private IKEv2 notify — non-RFC, LINA-only extension ───────────────
     'NEIKEv2PrivateNotify.initWithNotifyStatus:notifyData:':        0x77274,
     'NEIKEv2PrivateNotify.notifyStatus':                            0x77620,
-    # Vendor ID — AnyConnect identifies itself to LINA
+
+    # ── Vendor ID — AnyConnect identifies itself to LINA ────────────────────────
     'NEIKEv2VendorIDPayload.parsePayloadData':                      0xc9d85,
     'NEIKEv2VendorIDPayload.generatePayloadData':                   0xc9bda,
-    # EAP over IKEv2 — module selection (EAP-GTC for SecurID, EAP-MSCHAPV2 for password)
+
+    # ── EAP over IKEv2 — 9 module dispatch paths ────────────────────────────────
+    # selectModuleForPayload has 9 cold paths = EAP-GTC/MSCHAPV2/TLS/TTLS/PEAP/LEAP/FAST/MD5/Identity
     'NEIKEv2EAP.selectModuleForPayload:ikeSA:':                     0x9da3c,
     'NEIKEv2EAP.createPayloadResponseForRequest:ikeSA:...':         0x9ebd9,
     # Post-EAP MSK — RFC 5106 AUTH derivation key (LINA and NE both compute this)
     'NEIKEv2EAP.sessionKey':                                        0x9f303,
-    # Config payload — where LINA assigns IP/DNS to AnyConnect client
+
+    # ── App version attribute ────────────────────────────────────────────────────
     'NEIKEv2AppVersionAttribute.attributeType':                     0x8373d,
     'NEIKEv2AppVersionAttribute.attributeName':                     0x83776,
-    # Internal NE code-signature gate — called from requestSocket: and other methods
-    # 0x18a2f4: _SecCodeCopyGuestWithAttributes -> _SecCodeCheckValidity -> _SecCopyErrorMessageString
-    '_ne_code_sig_gate':                                            0x18a2f4,
-    # Always-on VPN gate — REAL check is at 0x3e9a4 preference read
-    # NOTE: call at 0x3e9c5 (esi=0x10) is os_log_type_enabled(OS_LOG_TYPE_ERROR) — NOT a security gate
-    # Actual gate: _SecRequirementCreateWithString at 0x3e9a4 -> _SecCodeCheckValidity
-    'extensionHasACRequirement':                                    0x3e982,
-    # Keychain ACL race — TOCTOU between isKindOfClass: @ 0x352e3 and SecACL write @ 0x35488
-    'addAppToKeychainACLsForConfiguration:':                        0x3528a,
-    # Phase 1 IKESA key derivation — RFC 5996 SKEYSEED = prf(Ni|Nr, g^ir)
+
+    # ── Phase 1 IKESA key storage (RFC 5996) ────────────────────────────────────
     'NEIKEv2IKESA.sKeySeed':                                        0xb9946,
     'NEIKEv2IKESA.setSKeySeed:':                                    0xb995a,
-    # DH shared secret before SKEYSEED derivation (input to prf)
+    'NEIKEv2IKESA.skD':                                             0xb9969,
     'NEIKEv2IKESA.sharedSecret':                                    0xb8969,
     # IKEv2-PSK from system keychain — static cred for PSK-mode LINA auth
     'NEIKEv2IKESA.fetchedSharedSecret':                             0xb9e3c,
-    # Client private key from keychain (granted via addAppToKeychainACLsForConfiguration:)
     'NEIKEv2IKESA.digitalSignatureLocalPrivateKey':                 0xb9aa4,
-    # LINA server public key from its TLS cert in IKE_AUTH
     'NEIKEv2IKESA.digitalSignatureRemotePublicKey':                 0xb9aea,
-    # SK_e: IKE SA encryption/decryption keys (derived from SKEYSEED via PRF+)
     'NEIKEv2IKESA.encryptionKey':                                   0xb9207,
     'NEIKEv2IKESA.decryptionKey':                                   0xb9250,
-    # SK_a: IKE SA integrity keys
     'NEIKEv2IKESA.localIntegrityKey':                               0xb9172,
     'NEIKEv2IKESA.remoteIntegrityKey':                              0xb91bb,
+    'NEIKEv2IKESA.encryptCryptoCtx':                                0xb9a5e,
 }
+
+# XPC / Mach bootstrap service names hardcoded in NE binary
+NE_XPC_SERVICES = [
+    'com.apple.networkextension.ikev2.listener',      # IKEv2 listener bootstrap name (key Mach service)
+    'com.apple.networkextension.packet-tunnel',
+    'com.apple.networkextension.app-proxy',
+    'com.apple.networkextension.filter-control',
+    'com.apple.networkextension.filter-data',
+    'com.apple.networkextension.filter-packet',
+    'com.apple.networkextension.dns-proxy',
+    'com.apple.networkextension.statuschanged',
+    'com.apple.networkextension.app-configuration-changed',
+    'com.apple.vpn.managed',
+    'com.apple.vpn.managed.alwayson',
+    'com.apple.vpn.managed.applayer',
+]
 
 # Full Cisco designated requirement string hardcoded in Apple's NE binary @ 0x1f8b00
 # Used by _SecCodeCheckValidity in requestSocket:, extensionHasACRequirement, etc.
@@ -284,8 +376,14 @@ class AnyConnectNEAnalyzer:
         return self.disasm('requestSocket:interface:local:remote:completionHandler:')
 
     def kext_migration(self):
-        """Disassemble upgradeLegacyPluginConfigurationsWithUpgradeInfo: — kext→sysext race window."""
-        return self.disasm('upgradeLegacyPluginConfigurationsWithUpgradeInfo:')
+        """Disassemble upgradeLegacyPluginConfigurationsWithUpgradeInfo: — kext→sysext race window.
+        Block invoke at 0x33b91 does the actual migration; dispatch_async race after isKindOfClass:.
+        """
+        return self.disasm('NEConfigurationManager.upgradeLegacyPluginConfigurationsWithUpgradeInfo:completionQueue:handler:')
+
+    def xpc_services(self):
+        """Extract all XPC/Mach service names from the binary."""
+        return xpc_service_map(self.path)
 
     def run_all(self):
         return {
@@ -293,7 +391,165 @@ class AnyConnectNEAnalyzer:
             'cisco_artifacts': self.cisco_artifacts(),
             'protocol_overlap': self.protocol_overlap(),
             'keychain_surface': self.keychain_surface(),
+            'xpc_services': self.xpc_services(),
+            'sandbox_surface': sandbox_surface(),
         }
+
+
+def xpc_service_map(binary_path):
+    """
+    Extract XPC / Mach service names from the NE binary.
+    These are the IPC endpoints in the nesessionmanager→neagent→acsockext chain.
+    Known from sandbox profiles:
+      neagent registers: com.apple.ist.ds.appleconnect2.service.neagent
+      nesessionmanager looks up: com.apple.neagent, com.apple.nehelper, com.apple.sysextd
+    """
+    raw = Path(binary_path).read_bytes()
+    import re as _re
+    pat = _re.compile(rb'com\.(apple|cisco)\.[a-z][a-z0-9._-]{5,60}')
+    hits = {}
+    for m in pat.finditer(raw):
+        try:
+            s = m.group().decode('ascii')
+            hits.setdefault(s, []).append(hex(m.start()))
+        except Exception:
+            pass
+    return hits
+
+
+def sandbox_surface():
+    """
+    Return the macOS NE sandbox architecture derived from nesessionmanager.sb + neagent.sb.
+    These define the trust boundary surfaces between processes.
+    """
+    return {
+        'neagent_registers': ['com.apple.ist.ds.appleconnect2.service.neagent'],
+        'nesessionmanager_lookups': [
+            'com.apple.neagent',
+            'com.apple.neagent.lsproxy',
+            'com.apple.nehelper',
+            'com.apple.pluginkit.pkd',   # loads acsockext
+            'com.apple.sysextd',         # manages system extension lifecycle
+            'com.apple.securityd.xpc',
+            'com.apple.SecurityServer',  # keychain access
+        ],
+        'nesessionmanager_file_writes': [
+            '/Library/Preferences/com.apple.networkextension.*.plist',
+            '/Library/Preferences/SystemConfiguration/VPN-*.plist',
+            '/private/var/run/racoon',   # IKEv1 racoon socket
+            '/var/ace',                  # RSA SecurID ACE directory
+            '/var/db/RSASecurID_DHParams',  # RSA SecurID DH params
+        ],
+        'nesessionmanager_spawns': [
+            '/usr/sbin/pppd [no-sandbox]',  # L2TP/IPsec; inherits RSA SecurID paths
+        ],
+        'authorization_rights': ['system.keychain.modify'],
+        'kextd_trust_model': 'MDM AllowedKernelExtensions (Team ID DE8Y96K9QP) — NOT hardcoded DR',
+    }
+
+
+def objc_imp_scan(binary_path, target_methods):
+    """
+    Parse ObjC classlist to extract real IMP (implementation) addresses for named methods.
+    LIEF symbol_dump() returns selector string addresses (in __TEXT,__objc_methname), NOT IMPs.
+    This function navigates objc_class_t → class_ro_t → method_list_t to get actual code addresses.
+
+    Args:
+        binary_path: path to Mach-O binary
+        target_methods: set of selector strings to find
+    Returns:
+        dict: {selector: {'imp': hex(addr), 'class': class_name}}
+    """
+    try:
+        import lief as _lief
+        import struct
+    except ImportError:
+        return {'error': 'pip install lief'}
+
+    binary = _lief.parse(str(binary_path))
+    raw = Path(binary_path).read_bytes()
+
+    def va_to_off(va):
+        for seg in binary.segments:
+            if seg.virtual_address <= va < seg.virtual_address + seg.virtual_size:
+                return seg.file_offset + (va - seg.virtual_address)
+        return -1
+
+    def get_sec(seg, sect):
+        for s in binary.sections:
+            if s.segment_name.strip('\x00') == seg and s.name.strip('\x00') == sect:
+                return bytes(s.content), s.virtual_address
+        return b'', 0
+
+    def rd_ptr(off):
+        if off + 8 > len(raw):
+            return 0
+        return struct.unpack_from('<Q', raw, off)[0]
+
+    def rd_u32(off):
+        if off + 4 > len(raw):
+            return 0
+        return struct.unpack_from('<I', raw, off)[0]
+
+    def cstr(off):
+        if off < 0 or off >= len(raw):
+            return ''
+        end = off
+        while end < len(raw) and raw[end]:
+            end += 1
+        return raw[off:end].decode('ascii', 'replace')
+
+    methname_raw, methname_va = get_sec('__TEXT', '__objc_methname')
+
+    def resolve_sel(ptr):
+        if methname_va and methname_va <= ptr < methname_va + len(methname_raw):
+            return cstr(ptr - methname_va + (va_to_off(methname_va) or 0))
+        foff = va_to_off(ptr)
+        return cstr(foff) if foff >= 0 else ''
+
+    classlist_raw, _ = get_sec('__DATA', '__objc_classlist')
+    if not classlist_raw:
+        classlist_raw, _ = get_sec('__DATA_CONST', '__objc_classlist')
+
+    found = {}
+    target = set(target_methods)
+    for i in range(0, len(classlist_raw) - 7, 8):
+        class_ptr = rd_ptr(i) & ~0x7
+        if not class_ptr:
+            continue
+        cf = va_to_off(class_ptr)
+        if cf < 0 or cf + 40 > len(raw):
+            continue
+        data_ptr = rd_ptr(cf + 32) & ~0x7
+        df = va_to_off(data_ptr)
+        if df < 0 or df + 40 > len(raw):
+            continue
+        name_foff = va_to_off(rd_ptr(df + 24))
+        class_name = cstr(name_foff) if name_foff >= 0 else ''
+        methods_ptr = rd_ptr(df + 32)
+        if not methods_ptr:
+            continue
+        mf = va_to_off(methods_ptr)
+        if mf < 0 or mf + 8 > len(raw):
+            continue
+        entsize = rd_u32(mf) & 0xfffc
+        count = rd_u32(mf + 4)
+        if entsize != 24 or count > 5000:
+            continue
+        for j in range(count):
+            mo = mf + 8 + j * 24
+            if mo + 24 > len(raw):
+                break
+            sel_ptr = rd_ptr(mo)
+            imp = rd_ptr(mo + 16)
+            if not sel_ptr or not imp:
+                continue
+            sel_name = resolve_sel(sel_ptr)
+            if sel_name in target:
+                found[sel_name] = {'imp': hex(imp), 'class': class_name}
+                if len(found) == len(target):
+                    return found
+    return found
 
 
 def ikev2_class_methods(binary_path, class_name):
@@ -330,8 +586,9 @@ def ne_extension_gate(binary_path):
 def raw_socket_gate(binary_path):
     """
     Disassemble requestSocket: — where Apple grants Cisco a raw CSTP/DTLS socket.
-    Authority check at 0x3e2ce (call 0x1f421e, esi=2):
-      test al,al / jne 0x3e362 -> flip jne to jmp = skip auth check.
+    Real gate chain @ 0x3e5b6: _SecRequirementCreateWithString (lazy-init, DR = Cisco Team ID)
+      -> 0x18a2f4 (_ne_code_sig_gate): _SecCodeCopyGuestWithAttributes -> _SecCodeCheckValidity
+    NOTE: call @ 0x3e2ce (esi=2) is _os_log_type_enabled(DEBUG) — NOT a security gate.
     Binary: NetworkExtension 1095.140.2 @ 0x3e26c
     """
     result = _run_tool(binary_path, '--disasm', '0x3e26c:120')
@@ -347,6 +604,8 @@ if __name__ == '__main__':
     ap.add_argument('--cisco', action='store_true')
     ap.add_argument('--proto', action='store_true')
     ap.add_argument('--keychain', action='store_true')
+    ap.add_argument('--xpc', action='store_true', help='XPC service name extraction')
+    ap.add_argument('--sandbox', action='store_true', help='Print sandbox architecture map')
     ap.add_argument('--disasm', metavar='METHOD', help='Disassemble named method or hex addr')
     ap.add_argument('--sym', metavar='REGEX', help='Symbol grep')
     ap.add_argument('--objc', action='store_true')
@@ -366,6 +625,10 @@ if __name__ == '__main__':
         print(json.dumps(a.protocol_overlap(), indent=2))
     elif args.keychain:
         print(json.dumps(a.keychain_surface(), indent=2))
+    elif args.xpc:
+        print(json.dumps(a.xpc_services(), indent=2))
+    elif args.sandbox:
+        print(json.dumps(sandbox_surface(), indent=2))
     elif args.disasm:
         if args.disasm.startswith('0x') or args.disasm[0].isdigit():
             print(json.dumps(a.disasm_va(int(args.disasm, 16)), indent=2))
