@@ -74,6 +74,14 @@ NE_1095_140_2_METHODS = {
     # Keychain ACL insertion — TOCTOU race: isKindOfClass @ 0x352e3 vs SecACL write @ 0x35488 (~250 insns)
     'addAppToKeychainACLsForConfiguration:':                        0x3528a,
 
+    # ── NEIKEv2PacketTunnelProvider — tunnel startup + Cisco auth delegation ──────
+    # THE function containing the ONE call to NEIKEv2ProviderAuthenticate: (at 0xd8f53).
+    # r12=self (provider), r14=rdx=tunnelOptions (retained into r14 at prologue 0xd87b6).
+    # At 0xd8f53: [self NEIKEv2ProviderAuthenticate:tunnelOptions] → BOOL
+    # YES → session continues (jne 0xd8f0e), NO → failure path (call 0x1f3dec)
+    # This is where Apple calls into Cisco's acsockext during tunnel startup (not rekey/reconnect).
+    'NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions:':    0xd878b,
+
     # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
     'NEIKEv2Session.initiateConnect':                               0xa2c42,
 
@@ -228,7 +236,10 @@ NE_PHASE1_SELREFS = {
     'validateEAPOnlyAuthentication:':                                  0x2c9d30,
     # NEIKEv2ProviderAuthenticate: — THE Cisco delegate callback
     # NE calls this into acsockext for vendor-specific auth (custom IKE payloads, SecurID).
-    # IMP is in acsockext. Intercept here = bypass custom auth without vendor code.
+    # ONE call site in NE binary: 0xd8f53, inside startIKEv2TunnelWithOptions: @ 0xd878b.
+    # Fires at tunnel START, not rekey. Arg: tunnelOptions dict (rdx → r14 at prologue).
+    # BOOL return: YES → tunnel proceeds, NO → error path (0x1f3dec).
+    # IMP is in acsockext. Hook objc_msgSend call at 0xd8f60 → bypass Cisco auth entirely.
     'NEIKEv2ProviderAuthenticate:':                                    0x2ca770,
     # Cisco private IKEv2 extensions (non-RFC vendor payloads in IKE_AUTH)
     'customIKEAuthPayloads':                                          0x2c92c0,
@@ -544,6 +555,21 @@ class AnyConnectNEAnalyzer:
     def phase2_install(self, count=120):
         """Disassemble NEIKEv2Session.installChildSA: — Phase 2 SA install into kernel. @ 0xee682"""
         return self.disasm('NEIKEv2Session.installChildSA:')
+
+    def start_ikev2_tunnel(self, count=200):
+        """Disassemble NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions: @ 0xd878b.
+        Contains the ONE call to NEIKEv2ProviderAuthenticate: at 0xd8f53.
+        Prologue: r12=self, r14=retain(rdx=tunnelOptions).
+        Call site: [self NEIKEv2ProviderAuthenticate:tunnelOptions] → BOOL
+        YES path: jne 0xd8f0e (continue session), NO path: call 0x1f3dec (error).
+        Auth delegation fires at tunnel START (not rekey). rdx=tunnelOptions is what
+        Cisco receives and must validate (group policy, creds, SecurID config, etc.).
+        """
+        return self.disasm('NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions:')
+
+    def provider_auth_callsite(self, count=30):
+        """Disassemble 15 instructions around the NEIKEv2ProviderAuthenticate: call at 0xd8f53."""
+        return self.disasm_va(0xd8f3f, count=count)
 
     def xpc_services(self):
         """Extract all XPC/Mach service names from the binary."""
