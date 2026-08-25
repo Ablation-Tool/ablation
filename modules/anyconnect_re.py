@@ -420,11 +420,29 @@ ACSOCKEXT_5_1_16_194_METHODS = {
     # → call 0x10005da06 (actual write: esi=2/edx=1/r8=flow_obj/rcx=format)
     'DNSProxyProvider._injectBlock_callback':                             0x100082f38,
     # The write function called from block callback (0x1000830c3 and 0x100083122).
-    # Args: rdi=peer_addr_str, esi=2(family), edx=1(proto), rcx=format_arg, r8=flow_obj.
-    # Internal: cmp esi,3 → trace-only path. Otherwise:
-    #   0x10005db2c: subroutine — actual flow write (ecx=0x801=flags, rdi=flow_obj, rdx=formatted_data)
-    #   0x10005dbaa: secondary write (edi=2, esi=r14b=1, rdx=r13=data)
+    # Args: rdi=peer_addr_str, esi=2(AF_INET), edx=1(proto), rcx=format_arg, r8=flow_obj.
+    # COMPLETE WRITE CHAIN (end-to-end):
+    #   _writeUDPDatagramToFlow (0x10005da06) — trace log check (cmp esi,3), va_list format
+    #     ↳ 0x10005db2c (addr-prefix router):
+    #         addr string checked against prefix constants via 0x10009b306 (prefix match fn)
+    #         prefix match A → 0x10005e1e4 (handle setup path)
+    #         prefix match B → tail-call 0x10009b384 (alt write)
+    #     ↳ 0x10005e1e4 (handle setup):
+    #         0x10009adb4(edi=0, rsi=data, edx=0x8000100) → handle
+    #         0x10009adba(edi=0, esi=0, rdx=handle, rcx=extra) → write_obj
+    #         0x10005e2cc(rdi=write_obj, rsi=output_struct, rdx=flags=0x801) → BOOL ← ACTUAL WRITE
+    #         log: 0x10009b2f4(rdi=buffer, rdx=flags=0x801) on success
+    #     ↳ 0x10005dbaa (secondary chunked path, called at 0x10005daff):
+    #         Args: edi=2(AF_INET), esi=1(proto), rdx=data_string
+    #         Swift string ABI: byte[0]&1 = large string (heap ptr), else inline (shr rbx,1)
+    #         1000-byte chunk loop (r14 = r15 + 0x3e8): 0x10005dc7e-0x10005dd18
+    #         chunk boundary detection: '\n'(0x0a) @ 0x10005dcc9, ' '(0x20) @ 0x10005dce7
+    #         per-chunk append: 0x10009ae50/ae5c/ae68 (Swift stdlib string ops)
     'DNSProxyProvider._writeUDPDatagramToFlow':                           0x10005da06,
+    'DNSProxyProvider._write_addr_prefix_router':                         0x10005db2c,
+    'DNSProxyProvider._write_handle_setup':                               0x10005e1e4,
+    'DNSProxyProvider._write_actual_ne_flow_write':                       0x10005e2cc,
+    'DNSProxyProvider._write_chunked_path':                               0x10005dbaa,
     'DNSProxyProvider.findUDPFlowWithDelayedReponse:':                    0x100082827,
     'DNSProxyProvider.notifyFlowEnd:':                                    0x1000821c7,
     'DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt:':            0x100079ae1,
@@ -778,9 +796,15 @@ class ACSockExtAnalyzer:
         - Flow DISCARDED by outer injectDelayedResponseIntoUDPFlow: (rsi never saved)
         - This is the SECOND fetch; first is in caller before injectDelayed... is called
         Post-fetch: [flow delayedResponseCount] → dec → [flow setDelayedResponseCount:]
-        Write chain: 0x1000830c3 calls _writeUDPDatagramToFlow @ 0x10005da06
-          → 0x10005db2c (ecx=0x801, rdi=flow_obj, rdx=data): actual NE flow write
-          → 0x10005dbaa (edi=2, esi=1, rdx=data): secondary write/cleanup
+        Write chain (end-to-end) — call at 0x1000830c3:
+          _writeUDPDatagramToFlow @ 0x10005da06
+            → 0x10005db2c (addr-prefix router; ecx=0x801 passed as flags)
+              → 0x10005e1e4 (handle setup):
+                  0x10009adb4(data, 0x8000100) → handle
+                  0x10009adba(handle, extra) → write_obj
+                  0x10005e2cc(write_obj, output, flags=0x801) ← ACTUAL NE FLOW WRITE
+              → 0x10009b384 (alt write path, no prefix match)
+            → 0x10005dbaa (chunked write, 1000B/chunk, Swift string ABI, '\n'/'  ' split)
         """
         return self.disasm_va(0x100082f38, count=count)
 
