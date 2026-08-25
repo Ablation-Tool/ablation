@@ -71,7 +71,32 @@ NE_1095_140_2_METHODS = {
     # kext→sysext migration: captures (self, upgradeInfo, queue, handler) into a dispatch_block
     # block invoke at 0x33b91; race window between isKindOfClass: check and block dispatch
     'NEConfigurationManager.upgradeLegacyPluginConfigurationsWithUpgradeInfo:completionQueue:handler:': 0x33a8c,
-    # Keychain ACL insertion — TOCTOU race: isKindOfClass @ 0x352e3 vs SecACL write @ 0x35488 (~250 insns)
+    # Keychain ACL insertion (adds app to Cisco's Keychain ACL for PSK/XAuthPassword/cert privkey).
+    # rdx=config (NEConfiguration-like object containing new app path in property sel@0x2916d9).
+    #
+    # STRUCTURE (420 insns total):
+    #   0x352b8: r13 = [config <sel@0x2916d9>] retain → app path/identifier
+    #   0x352dc: TYPE CHECK: [static_class_ref <sel@0x2917d6>:r13] → bail if bad ObjC type
+    #           *** TYPE-ONLY CHECK — validates ObjC class, NOT code signature ***
+    #           Any NSString/NSURL-typed path passes regardless of app identity.
+    #   0x3543c: [r15 <sel@0x291d0d>] → existing ACL app paths from config's ACL object
+    #   0x35473: rdi=[rip+0x297d96], rsi=sel@0x2922e1, rdx=r13; SecACL-related call
+    #   0x35595: BATCH ITERATION LOOP — reads all existing Keychain ACL entries in batches of 0x10
+    #           per-entry: [entry_array[i] <sel@0x292141>] → sub-property → add to new list
+    #           next batch: [iter_obj <sel@0x291115>:struct:error:0x10] @ 0x356a4
+    #   0x356d3: build final app list r12 including the NEW entry (r13)
+    #   0x35707: [r14 <sel@0x292075>:r12] → FIRST ACL WRITE (r14 = primary ACL object)
+    #   0x3572d: [[rbp-0xd8] <sel@0x292054>:r12] → SECOND ACL WRITE (secondary ACL object)
+    #
+    # PRIMARY ISSUE: type check at 0x352dc is insufficient — validates ObjC class only.
+    #   Craft NEConfiguration with malicious app path (valid NSString) → passes type check
+    #   → malicious app written to Cisco Keychain ACL → can read PSK/XAuthPassword/cert privkey.
+    #   No code-signature verification at any point in this function.
+    #
+    # SECONDARY TOCTOU: ACL read-modify-write without lock (~420-insn window):
+    #   type_check(0x352dc) → batch_read_loop(0x35595) → ACL_write(0x35707)
+    #   Concurrent `addAppToKeychainACLsForConfiguration:` loses write if it lands
+    #   between batch read and write (classic lost-update on the ACL app list).
     'addAppToKeychainACLsForConfiguration:':                        0x3528a,
 
     # ── NEIKEv2PacketTunnelProvider — tunnel startup + Cisco auth delegation ──────
@@ -700,6 +725,36 @@ class AnyConnectNEAnalyzer:
         """
         return NE_TUNNEL_START_SELREFS
 
+    def keychain_acl_race(self, count=280):
+        """Disassemble addAppToKeychainACLsForConfiguration: @ 0x3528a.
+        Maps the type check vs ACL write race and the batch iteration loop.
+
+        Structure:
+          0x352b8: r13 = [config <sel@0x2916d9>] retain  → new app path/identifier
+          0x352dc: TYPE CHECK [static_class <sel@0x2917d6>:r13] → bail if invalid ObjC type
+                   *** TYPE-ONLY: validates ObjC class, NOT code signature ***
+          0x3543c: existing ACL app paths from config's retained ACL object (r15)
+          0x35473: SecACL-related call (rdi=[rip+0x297d96], rdx=r13, rcx=0)
+          0x35595: batch iteration loop — reads all Keychain ACL entries in 0x10-entry batches
+                   per entry: [entry_array[i] <sel@0x292141>] → sub-property → accumulate
+                   next batch: [iter_obj <sel@0x291115>:struct:error:0x10] @ 0x356a4
+          0x35707: [r14 <sel@0x292075>:r12] FIRST ACL WRITE  (primary ACL object)
+          0x3572d: [[rbp-0xd8] <sel@0x292054>:r12] SECOND ACL WRITE  (secondary ACL object)
+
+        PRIMARY ISSUE: type check at 0x352dc insufficient — any NSString/NSURL passes.
+          Craft NEConfiguration with malicious app path → type check passes
+          → malicious app written to Cisco Keychain ACL
+          → reads PSK / XAuthPassword / cert privkey without code-signature gate.
+
+        SECONDARY TOCTOU: read-modify-write without lock (~420-insn window).
+          type_check(0x352dc) → batch_read(0x35595) → ACL_write(0x35707)
+          Concurrent call loses update (batch read of concurrent write overwritten).
+        """
+        va = NE_1095_140_2_METHODS.get('addAppToKeychainACLsForConfiguration:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def xpc_services(self):
         """Extract all XPC/Mach service names from the binary."""
         return xpc_service_map(self.path)
@@ -710,6 +765,7 @@ class AnyConnectNEAnalyzer:
             'cisco_artifacts': self.cisco_artifacts(),
             'protocol_overlap': self.protocol_overlap(),
             'keychain_surface': self.keychain_surface(),
+            'keychain_acl_race': self.keychain_acl_race(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
