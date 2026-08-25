@@ -938,6 +938,14 @@ NE_1095_140_2_METHODS = {
     # PRF vs INTEGRITY: two functions share identical structure; differ only in bitmap width and mask.
     #   Mixing types (PRF selector as integrity arg) → guaranteed error at bitmap gate.
     'NEIKEv2Crypto.createHMACFromData:key:integrityAlgorithm:':     0x8e008,
+    # Cryptographic RNG wrapper. Arg: size (rdx, int — no retain needed).
+    # NULL-SIZE GUARD @ 0x8de50: test edx; je 0x8ded2 → esi=0x11 error (size==0 disallowed).
+    # ALLOC @ 0x8de5d (0x1f3d80): calloc(size) → rbx (raw byte buffer).
+    # RANDOM FILL @ 0x8de7e (0x1f39f0): SecRandomCopyBytes(kSecRandomDefault, size, rbx).
+    #   Negative return (js 0x8df2f): raw errno logged via 0x1f3ada.
+    # WRAP @ 0x8dea7: [class sel@0x238a2a: rbx, size] → NSData object.
+    # FREE @ 0x8deb3 (0x1f3cf6): raw buffer freed after NSData copy takes ownership.
+    # No seed arg — entropy from SecRandom only. Downstream: nonces, DH private key gen.
     'NEIKEv2Crypto.createRandomWithSize:':                          0x8de32,
     'NEIKEv2Crypto.encryptGCMWithContext:aad:aadLen:plaintext:len:output:outputLen:': 0x92e29,
     'NEIKEv2Crypto.decryptGCMWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x92ff4,
@@ -985,8 +993,38 @@ NE_1095_140_2_METHODS = {
     # DES PATH: reachable after IKE SA downgrade — decrypt side also has no policy gate on DES.
     #   Attacker-negotiated DES-keyed IKE SA → ALL inbound IKE messages decrypted with 56-bit key.
     'NEIKEv2Crypto.createDecryptedData:algorithm:key:iv:aad:padDataToKeyLength:':    0x9401d,
+    # DH key pair factory. Arg: group (rdx → rbx, int).
+    # DISPATCH_ONCE GUARD @ 0x8ff0e: [rip+0x2483a2]==-1 → already init; else call dispatch_once @ 0x8fffc.
+    #   Initialization: pre-computes prototype DH key pairs for all supported groups (static singletons).
+    # RANGE CHECK @ 0x8ff1c: lea rax,[rbx-1]; cmp rax,0x14; ja 0x8ff42
+    #   Groups 1-21 via jump table; group 31 (Curve25519) via separate check @ 0x8ff42.
+    #   All others → esi=0x11 error. Supported: MODP-768(1)..MODP-8192(18), ECP-256(19),
+    #   ECP-384(20), ECP-521(21), Curve25519(31).
+    # RETURN @ 0x8ffda: [prototype retain/copy] — returns shared prototype ref, NOT fresh keying material.
+    #   Callers must generate fresh DH private value per session; prototype provides group parameters only.
     'NEIKEv2Crypto.prototypeDHKeysForGroup:':                       0x8ff04,
+    # Deep-copies a DH key pair object. Arg: dhKeys source (rdx → r15).
+    # ALLOC @ 0x9081d: [class sel@0x238f54] → r14 (new empty DH key container).
+    # NIL GUARD: r14 @ 0x90838 (alloc fail → error).
+    # KEY TYPE DISPATCH @ 0x90851-0x90879:
+    #   [r14 sel@0x23612x] → eax; eax==2 or eax==3 → ECDH path @ 0x908c4; else MODP.
+    # PROPERTY COPY (both paths): 6 sequential ObjC property reads from source r14 with NO LOCK:
+    #   [r14 sel@0x238ede] → public key bytes; [r14 sel@0x238ee5] → length/group;
+    #   remaining props at 0x908fa, 0x90907, 0x9091f, 0x90931 — all sequential, unsynchronized.
+    # TOCTOU: concurrent prototypeDHKeysForGroup:/installChildSA: mutating source object →
+    #   copy gets public key from one DH epoch, private key from another → invalid pair.
     'NEIKEv2Crypto.copyDHKeys:':                                    0x90805,
+    # NAT-D hash construction (RFC 5996 §3.10.1). Args: initiatorSPI(rdx), responderSPI(rcx), address(r8).
+    # THREE RETAINS: r12=initiatorSPI, r13=responderSPI, r14=address (retain fn @ r15).
+    # NIL GUARD: address nil @ 0x8fa08 → je 0x8fa59 error.
+    #   isKindOfClass(esi=xor-zero=0) @ 0x8fa6c → al=0 always (DEAD CODE — same xor-zero pattern).
+    #   ERROR LOG @ 0x8fa78: leaks both SPIs into os_log (flag 0x8400202) when address is nil.
+    # ADDRESS FAMILY DISPATCH @ 0x8fa26: [r14 sel@0x239xxx] → rax; cmp rax,2
+    #   rax==2 (AF_INET): rbx=[r14.ipv4Addr]+4; r15d=4 (4-byte IPv4)
+    #   rax!=2 (AF_INET6): 16-byte path @ 0x8fb1e
+    # TOCTOU: three args retained independently without lock; IKE SA rekey between reads
+    #   → NAT-D computed with SPIs from different SA epochs → false NAT detection negative.
+    # SHA1(SPI_i|SPI_r|IP|port) — 160-byte zero scratch @ [rbp-0xd0] (10x movaps xmm0 clear).
     'NEIKEv2Crypto.createNATDetectionHashForInitiatorSPI:responderSPI:address:': 0x8f9bb,
     'NEIKEv2Crypto.copyAuthenticationProtocolForAuthMethod:authData:': 0x8f1b8,
 
@@ -1917,6 +1955,50 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def create_random(self, count=120):
+        """Disassemble createRandomWithSize: @ 0x8de32 — OS-entropy random NSData generator.
+        size==0 → esi=0x11 error. calloc(size) → SecRandomCopyBytes(kSecRandomDefault, size, buf)
+        → wrap in NSData → free raw buf. No seed arg. Downstream: nonces, DH private keys.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Crypto.createRandomWithSize:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def prototype_dh_keys(self, count=160):
+        """Disassemble prototypeDHKeysForGroup: @ 0x8ff04 — DH group parameter factory.
+        dispatch_once guard at 0x8ff0e; groups 1-21 via jump table, group 31 (Curve25519)
+        via explicit check. Returns shared prototype ref — NOT fresh keying material;
+        callers must generate fresh private value per session from this prototype.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Crypto.prototypeDHKeysForGroup:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def copy_dh_keys(self, count=200):
+        """Disassemble copyDHKeys: @ 0x90805 — DH key pair deep-copy.
+        Alloc new container, dispatch on key type (eax==2/3 → ECDH, else MODP), then 6
+        sequential unserialised property reads from source. TOCTOU: concurrent SA mutation
+        → copy gets public/private keys from different DH epochs → invalid pair.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Crypto.copyDHKeys:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def nat_detection_hash(self, count=200):
+        """Disassemble createNATDetectionHashForInitiatorSPI:responderSPI:address: @ 0x8f9bb.
+        SHA1(SPI_i|SPI_r|IP|port) for RFC 5996 NAT-D payload. Dead-code isKindOfClass(0)
+        on nil-address error. os_log leaks both SPIs (flag 0x8400202). TOCTOU: three args
+        retained separately — concurrent rekey → hash uses SPIs from different SA epochs.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.createNATDetectionHashForInitiatorSPI:responderSPI:address:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def select_eap_module(self, count=240):
         """Disassemble selectModuleForPayload:ikeSA: @ 0x9da3c — 9-module EAP dispatcher.
         Outer dispatch: [class sel:payload] → eax; cmp eax, 1 → inner loop or error path.
@@ -2082,6 +2164,10 @@ class AnyConnectNEAnalyzer:
             'hmac_prf': self.hmac_prf(),
             'hmac_integrity': self.hmac_integrity(),
             'create_decrypted_data': self.create_decrypted_data(),
+            'create_random': self.create_random(),
+            'prototype_dh_keys': self.prototype_dh_keys(),
+            'copy_dh_keys': self.copy_dh_keys(),
+            'nat_detection_hash': self.nat_detection_hash(),
             'select_eap_module': self.select_eap_module(),
             'initiate_delete_child_sa': self.initiate_delete_child_sa(),
             'uninstall_all_child_sas': self.uninstall_all_child_sas(),
