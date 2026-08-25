@@ -947,9 +947,31 @@ NE_1095_140_2_METHODS = {
     # FREE @ 0x8deb3 (0x1f3cf6): raw buffer freed after NSData copy takes ownership.
     # No seed arg — entropy from SecRandom only. Downstream: nonces, DH private key gen.
     'NEIKEv2Crypto.createRandomWithSize:':                          0x8de32,
+    # AES-GCM encryption. C-style raw-ptr interface (not ObjC retain/release).
+    # Arg map: context(rdi), aad(rdx→r14), aadLen(r15), plaintext, len, output(r9→r12), outputLen(r8d→ebx).
+    # NIL GUARD @ 0x92e52: context nil → je 0x92fc9 (error).
+    # OUTPUT SIZE CHECK @ 0x92e73: `lea eax,[r12+0x10]; cmp eax,ebx` — requires outputLen >= len+16 (GCM tag).
+    #   If output buffer too small → autorelease pool push + esi=0x11 error (no write past output buffer end).
+    # TAG APPEND: GCM auth tag (16 bytes) written after ciphertext; output must be pre-allocated to len+16.
     'NEIKEv2Crypto.encryptGCMWithContext:aad:aadLen:plaintext:len:output:outputLen:': 0x92e29,
+    # AES-GCM decryption. Stack canary. VLA STACK ALLOCATION via `call 0x676d0`:
+    #   alloca size = align16(CCCryptorRefSize) → `sub rsp,rax` — variable-length stack frame.
+    #   Plaintext buffer placed on stack; size derived from ciphertext input.
+    #   ATTACKER-CONTROLLED CIPHERTEXT LENGTH → unbounded stack allocation (no explicit upper bound check
+    #   before alloca). Large ciphertext in IKE payload → stack probe fault before write (guard page catches
+    #   most cases), but may exhaust guard on low-stack threads.
+    # AUTHENTICATED DECRYPTION LENGTH GATE @ 0x93043: `lea eax,[encTextLen-0x10]; cmp eax,outputLen`
+    #   — strips 16-byte GCM tag from ciphertext before decryption begins.
     'NEIKEv2Crypto.decryptGCMWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x92ff4,
+    # ChaCha20-Poly1305 encryption. Stack canary. THREE RETAINS: key(rdx→rbx), iv(rcx→r12), aad(r14→r13).
+    # THREE NIL GUARDS: key @ 0x9332f, iv @ 0x93338, aad @ 0x9333e.
+    # Uses CCCryptorRef/Apple CryptoKit for ChaCha20 (macOS 10.15+ supported). 16-byte Poly1305 tag appended.
     'NEIKEv2Crypto.encryptChaChaPolyWithContext:key:iv:aad:aadLen:plaintext:len:output:outputLen:': 0x932de,
+    # ChaCha20-Poly1305 decryption. Stack canary. TAG LENGTH GATE @ 0x93652:
+    #   `lea ebx,[encTextLen-0x10]; cmp ebx,outputLen` — strips 16-byte Poly1305 tag.
+    #   Ciphertext shorter than 16 bytes → esi=0x11 error before any crypto operation.
+    # aadLen(r9d) checked == 8 @ 0x93689: `cmp r9d,8; jne 0x9370e` — AAD length gate; 0x9370e is
+    #   an alternate path (likely handles aadLen != 8 gracefully, not an error branch).
     'NEIKEv2Crypto.decryptChaChaPolyWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:': 0x9362a,
     # Primary IKE message encryption dispatch. 7 args: data, algorithm, key, iv, encCtx, aad, padToKey.
     # PROLOGUE: retains all 6 ObjC args (algorithm, key, iv, encCtx, aad, padToKeyLength) via r13 fn ptr.
@@ -2576,6 +2598,58 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def gcm_encrypt(self, count=160):
+        """Disassemble NEIKEv2Crypto.encryptGCMWithContext:... @ 0x92e29 — AES-GCM encryption.
+        C-style raw-ptr interface. context(rdi) retained → r14; nil guard → je 0x92fc9.
+        OUTPUT SIZE CHECK @ 0x92e73: lea eax,[r12+0x10]; cmp eax,ebx — requires outputLen >= len+16
+        (16-byte GCM tag appended after ciphertext). Undersized buffer → autorelease pool + 0x11 error.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.encryptGCMWithContext:aad:aadLen:plaintext:len:output:outputLen:'
+        )
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def gcm_decrypt(self, count=160):
+        """Disassemble NEIKEv2Crypto.decryptGCMWithKey:... @ 0x92ff4 — AES-GCM decryption.
+        Stack canary. VLA STACK ALLOC via call 0x676d0 + sub rsp,rax — plaintext buffer on stack,
+        size = align16(encTextLen). Attacker-controlled ciphertext length → unbounded alloca.
+        TAG GATE @ 0x93043: lea eax,[encTextLen-0x10]; cmp eax,outputLen (strips 16-byte GCM tag).
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.decryptGCMWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:'
+        )
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def chacha_encrypt(self, count=160):
+        """Disassemble NEIKEv2Crypto.encryptChaChaPolyWithContext:... @ 0x932de.
+        Stack canary. THREE retains at prologue: key(rdx→rbx), iv(rcx→r12), aad(r14→r13).
+        Three nil guards: key @ 0x9332f, iv @ 0x93338, aad @ 0x9333e.
+        16-byte Poly1305 tag appended to ciphertext output.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.encryptChaChaPolyWithContext:key:iv:aad:aadLen:plaintext:len:output:outputLen:'
+        )
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def chacha_decrypt(self, count=160):
+        """Disassemble NEIKEv2Crypto.decryptChaChaPolyWithKey:... @ 0x9362a.
+        Stack canary. POLY1305 TAG GATE @ 0x93652: lea ebx,[encTextLen-0x10]; cmp ebx,outputLen
+        (subtracts 16-byte Poly1305 tag; ciphertext < 16 bytes → 0x11 error before any crypto).
+        aadLen(r9d) checked == 8 @ 0x93689: alternate path for non-standard AAD lengths.
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.decryptChaChaPolyWithKey:keyLen:iv:ivLen:aad:aadLen:encryptedText:len:output:outputLen:'
+        )
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def codesig_gate(self, count=200):
         """Disassemble _ne_code_sig_gate @ 0x18a2f4.
         Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
@@ -2711,6 +2785,10 @@ class AnyConnectNEAnalyzer:
             'ikesa_skeyseed': self.ikesa_skeyseed(),
             'ikesa_encryption_key': self.ikesa_encryption_key(),
             'ikesa_shared_secret': self.ikesa_shared_secret(),
+            'gcm_encrypt': self.gcm_encrypt(),
+            'gcm_decrypt': self.gcm_decrypt(),
+            'chacha_encrypt': self.chacha_encrypt(),
+            'chacha_decrypt': self.chacha_decrypt(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
