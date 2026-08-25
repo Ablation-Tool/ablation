@@ -34,6 +34,7 @@ ISE-F7: RabbitMQ loopback_users.guest=false + plaintext management port 15672 [H
 ISE-F8: PostgreSQL trust auth (no password) accessible from Docker bridge network [MEDIUM]
 ISE-F9: IRF RabbitMQ user irf:irf hardcoded, administrator tag, vhost irf [HIGH]
 ISE-F10: SSE Connector port 8989 all-interfaces + push_cmd=true + FileUpload=true [HIGH]
+ISE-F11: EDDA container -v /var/run/:/host/var/run/ --network=host = key_manager escape [CRITICAL]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -142,6 +143,51 @@ ISE uses RabbitMQ for internal service bus (ERS events, pxGrid notifications, po
 Injecting messages into ISE's internal messaging bus = policy poisoning vector.
 After guest deletion, ISE uses `rabbitmq` user with password from db.properties
 (same decrypt-oracle chain as ISE-F1 applies to RABBITMQ_PWD).
+
+=== ISE-F11: EDDA container — key_manager socket escape via /var/run mount ===
+
+Source: CSCOcpm-edda-3.3.0-430.x86_64.rpm
+Binary: edda-url-fetcher.bin (Go, not stripped, 15MB)
+Control: edda-control.sh / edda.properties
+
+Docker launch (from edda.properties):
+  edda.extra_arguments=--network=host \
+    -v /opt/edda/connector-config:/connector-config \
+    -v /opt/edda/config:/config \
+    -v /opt/CSCOcpm/logs:/logs \
+    -v /opt/xgrid:/opt/xgrid \
+    -v /opt/edda/cert:/opt/edda/cert \
+    -v /var/run/:/host/var/run/   <-- CRITICAL: host /var/run/ mounted into container
+
+Key mount impact:
+  /host/var/run/key_manager.sock  <- key_manager UNIX socket accessible from EDDA container
+  /host/var/run/docker.pid        <- Docker daemon accessible
+  --network=host                  <- EDDA shares ISE host network namespace
+
+Binary confirms: cisco.com/cpm/pkg/crypto.DecryptWithTPM in edda-url-fetcher.bin
+  EDDA calls key_manager.sock for decrypting credentials at runtime.
+  With /host/var/run/ mount, the key_manager socket path inside the container:
+    /host/var/run/key_manager.sock
+
+Chain: EDDA SSRF/injection -> shell in container -> curl /host/var/run/key_manager.sock ->
+  Oracle DB password + Meraki API key (same F1 blast radius, from inside the container).
+
+EDDA function: URL fetcher for pxGrid Direct (fetches external URLs, parses YAML configs,
+  stores results in Redis at localhost:6379 via --network=host).
+
+URL fetch surface (from symbol analysis):
+  main.fetch / main.eddaUrlFetcher / main.fetchJsonResponse / main.parseUrlTemplateString
+  URL templates are user-controlled (from pxGrid Direct admin UI -> /connector-config/*.yaml).
+  If URL template injection → SSRF or local file read via EDDA → container escape.
+
+Redis at localhost:6379 (host network): all Redis data (endpoint records, pxGrid sessions)
+  accessible from EDDA container without auth (standard ISE Redis, no password).
+
+Attack chain:
+  1. Compromise EDDA URL fetcher (SSRF, template injection, or ISE-F6 Kong route injection)
+  2. Shell in edda-url-fetcher container
+  3. curl --unix-socket /host/var/run/key_manager.sock /decrypt -> Oracle DB password
+  4. psql system/<pw>@localhost:1521/cpm10 -> full ISE database
 
 === ISE-F10: SSE Connector — 0.0.0.0:8989 + push_cmd + FileUpload ===
 
@@ -1021,10 +1067,10 @@ def list_irf_queues(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[list]
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "target": "Cisco ISE 3.3.0.430",
-    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10"],
-    "critical": ["ISE-F1", "ISE-F6"],
+    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10", "ISE-F11"],
+    "critical": ["ISE-F1", "ISE-F6", "ISE-F11"],
     "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10"],
     "medium": ["ISE-F5", "ISE-F8"],
     "low": ["ISE-F4"],
