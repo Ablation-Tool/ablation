@@ -87,14 +87,20 @@ NE_1095_140_2_METHODS = {
     # 6-guard gate chain:
     #   0xa4e70: connection nil → bail 0xa567e
     #   0xa4ed5: r14 property nil → bail 0xa569d
-    #   0xa4f73: type/cert check on r12 → debug-log path 0xa5149
+    #   0xa4f73: type/cert check on r12 → debug-log path 0xa5149 (log + edx=3 error)
     #   0xa4f87: [r12 isConnectionReusableForDestination:r14] (sel@0x224ea1) → NO: 0xa51b0
     #   0xa4fad: [r14 <sel@0x224d46>] → debug-log path 0xa52f0 if NO
     #   0xa4fc7: [r14 <sel@0x224d66>:0] → 0xa534d if NO
     # Factory @ 0xa4fcd: [SharedClass <sel@0x224e5d>:r12(conn):r14] → retained IKEv2Session (rbx/r13)
     # Key dispatch @ 0xa50a8: [self <sel@0x224b25>:session:block] → BOOL
-    #   YES = validateSAInit:block: scheduled (queued async) → early exit
-    #   NO  = error: [self <logProp>]:3 set, two cleanup calls, → exit
+    #   YES = validateSAInit:block: scheduled (queued async) → early exit 0xa513a
+    #   NO  = error: [self <logProp>]:3 set (edx=3), two cleanup calls, → exit
+    # Final dispatch @ 0xa52c7: [self sel@0x2248f2:new_session:nil] → BOOL
+    #   YES @ 0xa55d5: [self setCurrentSession:sel]; release(new_session,r14,r12); ret
+    #   NO  @ 0xa555e: [self.prop setCount:3:log]; [self stateChange:]; → falls to YES cleanup
+    #   NO path does NOT retry — single-shot failure, no re-fetch, no loop amplification.
+    # Session-nil bail @ 0xa545a: edx=3 error log + [self sel@0x2246b8/2246b6] cleanup.
+    # Error classification: ALL error paths use edx=3 to set error count on a property.
     #
     # TOCTOU — new-conn path @ 0xa51b0 (entered when reuse check returned NO):
     #   r14 = existing-connection state; NO lock held after reuse check at 0xa4f87.
@@ -105,7 +111,7 @@ NE_1095_140_2_METHODS = {
     #   0xa5230: rol r12w, 8 — port byte-swap (network→host order)
     #   If r14 deallocated between 0xa4f87 (check) and 0xa51ba (use) → UAF: IKE_SA_INIT
     #   parameters built from freed connection object; corrupted proposal sent to peer.
-    #   Race window: ~115 insns of unprotected r14 reads before any new-conn factory call.
+    #   Race window: ~115 insns of unprotected r14 reads. SINGLE-SHOT (no retry loop).
     'NEIKEv2PacketTunnelProvider.receiveConnection:':              0xa4e00,
 
     # ── NEIKEv2Session Phase 1 ───────────────────────────────────────────────────
