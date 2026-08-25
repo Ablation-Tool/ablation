@@ -2650,6 +2650,174 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def ikesa_skeyseed_set(self, count=40):
+        """Disassemble NEIKEv2IKESA.setSKeySeed: @ 0xb995a — atomic setter trampoline.
+        3-instruction: mov ecx,0x1d8; pop rbp; jmp 0x1f4164 (objc_setProperty_atomic).
+        Paired with sKeySeed getter @ 0xb9946. Concurrent set during calculateSKEYSEEDDerivatives
+        read is the race window (get-result, set-nil, compute-with-nil result).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.setSKeySeed:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def ikesa_skd(self, count=40):
+        """Disassemble NEIKEv2IKESA.skD @ 0xb9969 — atomic getter trampoline.
+        5-instruction: mov edx,0x1e0; mov ecx,1; pop rbp; jmp 0x1f412e (objc_getProperty).
+        Ivar at self+0x1e0. skD = PRF(SKEYSEED, Ni|Nr|SPIi|SPIr) child key derivation input.
+        Concurrent skD set between get and PRF input → wrong child key material.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.skD')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def ikesa_decryption_key(self, count=100):
+        """Disassemble NEIKEv2IKESA.decryptionKey @ 0xb9250 — cmove role-dispatch getter.
+        Mirrors encryptionKey (je/jmp) but uses cmove: [self flag_sel]→al; call r14; test al;
+        lea rax/rcx; cmove rcx,rax → pick selector A or B → retain → jmp 0x1f4104.
+        decryptionKey selector selected based on local/remote role (same flag as encryptionKey).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.decryptionKey')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def prf_plus(self, count=160):
+        """Disassemble NEIKEv2Crypto.createPRFPlusFromData:key:prfAlgorithm:outputLength: @ 0x8e500.
+        PRF+ construction per RFC 7296 §2.13. Register layout: r9d→r15d (outputLength),
+        rcx→rbx (key), rdx→rdi (data).
+        NIL GUARD 1 @ 0x8e53c: key nil → je 0x8e7eb.
+        NIL GUARD 2 @ 0x8e547: data nil → je 0x8e81f.
+        HMAC CTX alloc @ 0x8e554 (class via [rip+0x23ecec]); nil guard → je 0x8e6da.
+        outputLength==0 gate @ 0x8e57d: je 0x8e710.
+        Iteration context alloc @ 0x8e5ce; nil guard → je 0x8e714.
+        Loop body @ 0x8e5f8-0x8e643: appends T(i-1), data, counter; then finalizes.
+        No iteration-count cap visible — large outputLength drives unbounded HMAC rounds.
+        Pure computation on retained inputs (no TOCTOU).
+        """
+        va = NE_1095_140_2_METHODS.get(
+            'NEIKEv2Crypto.createPRFPlusFromData:key:prfAlgorithm:outputLength:'
+        )
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def fetch_cert_identity(self, count=120):
+        """Disassemble NEIKEv2IKESA(Crypto).fetchLocalCertificateIdentity @ 0x94c8e.
+        r13=self, r14=cert-identity selector, r15=objc_msgSend ptr.
+        DOUBLE RETAIN: [self sel@r14]→retain→rbx; [rbx sel@0x234508]→retain→r12; rbx released.
+        NIL GUARD on r12 @ 0x94ce5: je 0x94db3 (nil fallback).
+        DOUBLE-READ TOCTOU @ 0x94db3: nil path re-reads SAME selector r14 from self.
+          Concurrent identity install between first nil read and second read → divergent execution
+          (first path: missing cert; second path: cert present — SecIdentity query proceeds with
+          new cert on the nil branch's code path, out of sequence with prologue checks).
+        CERT TYPE JUMP TABLE @ 0x94d6e: lea eax,[ebx-1]; cmp eax,4; ja 0x94f6d (>4 → fallback);
+          movsxd + jmp rax — 5 cert types dispatched via switch (bounds-checked).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).fetchLocalCertificateIdentity')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def generate_local_values(self, count=160):
+        """Disassemble NEIKEv2IKESA(Crypto).generateLocalValues @ 0x966db.
+        VA 0x966db is a BOOLEAN PREDICATE (not the generation function):
+          Triple-read AND: [self sel1]→al; je 0x96720; [self sel2]→al; je 0x96720;
+          [self sel3]→al; setne al — returns AND of three unprotected property reads.
+          Concurrent property clear → false negative → DH generation skipped silently.
+        Predicate 2 @ 0x9672c: dual-read variant.
+        Actual generateLocalValues @ 0x96769: 0x1c8-byte frame, stack canary @ 0x96780.
+          Alloc @ 0x96795 via [rip+0x236923]; nil guard → je 0x969af.
+          Two sequential retains from self without lock; 80-byte stack zero (5x movaps xmm0)
+          before building local DH struct.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA(Crypto).generateLocalValues')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def initiate_new_child_sa(self, count=160):
+        """Disassemble NEIKEv2Session.initiateNewChildSA: @ 0xa64a4 — PFS child SA creation.
+        r13=self; rdx→retain→r15 (ChildSA config).
+        FIVE self-reads without lock: sel@0x220665→rbx @ 0xa64c5; sel@0x223175→r14 @ 0xa64f4
+        (nil guard → 0xa68fb); sel@0x22365b @ 0xa653d; sel@0x22379b @ 0xa6581 (BOOL→r14d);
+        sel@0x223732 @ 0xa65b9 (PFS gate).
+        PFS path: alloc new ChildSA ([rip+0x226e9f] class); block @ [rbp-0x68] (magic 0xc2000000,
+        invoke @ [rip+0x348]); dispatch_async @ 0xa6629 — self(r13) captured in block at [rbp-0x68+0x28]
+        WITHOUT additional retain.
+        RACE: session teardown frees self while async block still holds the bare (no extra-retain) ptr
+        → use-after-free when block executes. Five unlocked self reads = cumulative TOCTOU on session state.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2Session.initiateNewChildSA:')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def child_sa_dh_keys_gate(self, count=80):
+        """Disassemble NEIKEv2ChildSA.shouldGenerateNewDHKeys @ 0x757ed.
+        Four-level lazy getter cascade — four DH-key selectors in descending priority:
+          sel@0x2535be → r14 @ 0x75802; non-nil → return r14 @ 0x758da.
+          sel@0x2535a5 → r15 @ 0x75826; r15 non-nil → return r15.
+          sel@0x25347c @ 0x75857; non-nil → return.
+          sel@0x2510b2 @ 0x7586f (final fallback).
+        All four reads from self, NO lock.
+        TOCTOU: during PFS rekey (initiateNewChildSA: running concurrently), another thread assigns
+        selector 2 after selector 1 is checked nil here → returns nil (no DH keys found) even though
+        keys are being set → ChildSA installed WITHOUT PFS DH exchange, forward secrecy silently degraded.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.shouldGenerateNewDHKeys')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def child_sa_traffic_selectors(self, count=80):
+        """Disassemble NEIKEv2ChildSA.initiatorTrafficSelectors/responderTrafficSelectors @ 0x75fc7/0x76075.
+        Both use cmove role-dispatch (same pattern as encryptionKey/decryptionKey):
+          [self flag_sel]→al; test al; cmove rcx,rax → selects TSi or TSr selector → retain → 0x1f4104.
+        No nil guard on result — nil TS propagates to traffic selector negotiation.
+        Setter @ 0x76013 (TSi) / 0x760da (TSr).
+        Adjacent at 0x760c1: raw weak-ref getter at ivar +0x150 (objc_loadWeakRetained @ 0x1f413a).
+        Scalar getter @ 0x760ee: `mov eax,[rdi+0x148]; ret` — raw int ivar, NOT atomic (no trampoline).
+        """
+        va_i = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.initiatorTrafficSelectors')
+        va_r = NE_1095_140_2_METHODS.get('NEIKEv2ChildSA.responderTrafficSelectors')
+        if va_i is None or va_r is None:
+            return {'error': 'method not in address table'}
+        return {
+            'initiator': self.disasm_va(va_i, count),
+            'responder': self.disasm_va(va_r, count),
+        }
+
+    def notify_status(self, count=40):
+        """Disassemble NEIKEv2PrivateNotify.notifyStatus @ 0x77620.
+        RAW IVAR GETTER: `movzx eax, word ptr [rdi+8]; ret` — 16-bit status at struct +8.
+        NOT an ObjC atomic property — direct C struct member access, no trampoline.
+        NOT ATOMIC: concurrent write to [rdi+8] during read → torn 16-bit value.
+        Setter @ 0x7762a: `mov word ptr [rdi+8],dx; ret`.
+        notifyData getter @ 0x77634: `mov rax,[rdi+0x10]; ret` (ptr at +0x10).
+        notifyData setter @ 0x7763e: `add rdi,0x10; jmp 0x1f4176` (objc_storeStrong).
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2PrivateNotify.notifyStatus')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def extension_has_ac_requirement(self, count=100):
+        """Disassemble extensionHasACRequirement @ 0x3e982 — Cisco code-signing gate.
+        Loads Cisco requirement string via `lea rdi,[rip+0x22b97e]` (SecRequirement string literal).
+        Calls SecRequirementCreateWithString (@ 0x1f39fc); test eax → je 0x3e9e2 (failure).
+        Non-zero (error): `call 0x1f3dec` → retain → rbx; isKindOfClass(0x10=NSError) @ 0x3e9c5.
+        [self sel]→retain→rbx (nil → skip @ 0x3ea17); builds 0x20-byte struct @ [rbp-0x40].
+        CALLS codesig_gate (0x18a2f4) @ 0x3ea5f with (seccode, requirement, edx=0).
+        This is the AnyConnect-specific entry point that gates NE operations on Cisco's signing identity.
+        Bypass: hook codesig_gate (0x18a2f4) or patch je @ 0x18a3c4 to jmp — same target as generic gate.
+        """
+        va = NE_1095_140_2_METHODS.get('extensionHasACRequirement')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def codesig_gate(self, count=200):
         """Disassemble _ne_code_sig_gate @ 0x18a2f4.
         Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
@@ -2789,6 +2957,17 @@ class AnyConnectNEAnalyzer:
             'gcm_decrypt': self.gcm_decrypt(),
             'chacha_encrypt': self.chacha_encrypt(),
             'chacha_decrypt': self.chacha_decrypt(),
+            'ikesa_skeyseed_set': self.ikesa_skeyseed_set(),
+            'ikesa_skd': self.ikesa_skd(),
+            'ikesa_decryption_key': self.ikesa_decryption_key(),
+            'prf_plus': self.prf_plus(),
+            'fetch_cert_identity': self.fetch_cert_identity(),
+            'generate_local_values': self.generate_local_values(),
+            'initiate_new_child_sa': self.initiate_new_child_sa(),
+            'child_sa_dh_keys_gate': self.child_sa_dh_keys_gate(),
+            'child_sa_traffic_selectors': self.child_sa_traffic_selectors(),
+            'notify_status': self.notify_status(),
+            'extension_has_ac_requirement': self.extension_has_ac_requirement(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
