@@ -186,9 +186,16 @@ NE_1095_140_2_METHODS = {
 # Listener registers on 'com.apple.networkextension.ikev2.listener' (Mach bootstrap)
 # handleNewConnection: validates the connecting extension's DR before handing off to session
 NE_LISTENER_METHODS = {
-    # Gate: validates signing identity of connecting NW extension via signingIdentifierAllowed:domainsOrAccountsRequired:
-    # Boolean gate @ 0xc0f26: test al,al; je 0xc1358 — fails if Cisco's DR not satisfied
-    # sessionsBeforeAuth tracks pre-auth sessions; window between here and auth completion
+    # Connection receive gate chain (6 nil/type checks before session create):
+    # 0xc0eb6: nil-check on retained connection → 0xc12d4
+    # 0xc0ecd: nil-check on endpoint derived from connection → 0xc12fe
+    # 0xc0ef8: nil-check on another derived value → 0xc132b
+    # 0xc0f26: [endpoint isKindOfClass: ExpectedClass.class] → 0xc1358 if wrong type
+    #   (NOT a DR check — DR validation happens at extension LOAD TIME by pluginkit.pkd)
+    # 0xc0f87: nil-check on self.saSession → 0xc1386
+    # 0xc0fc1: nil-check on something else → 0xc13c0
+    # After gates: calls requestConfigurationForListener:session:... on delegate (nesessionmanager)
+    # sessionsBeforeAuth tracks pre-auth sessions; race window = here until auth completes
     'handleNewConnection:':                                           0xc0e85,
     # Calls back to nesessionmanager delegate (configurationDelegate) for VPN config;
     # validateAuthBlock param is the custom auth callback (RSA SecurID / Duo path)
@@ -286,6 +293,77 @@ LINA_SIGS = [
     b'Message-Authenticator',
     b'dtls1_get_record',
 ]
+
+# acsockext 5.1.16.194 (Cisco Secure Client) — com.cisco.anyconnect.macos.acsockext
+# Universal binary x86_64+arm64. VAs below are x86_64 slice (PIE base 0x100000000).
+# Extracted from: cisco-secure-client-macos-5.1.16.194-core-vpn-webdeploy-k9.dmg
+# → XAR vpn_module.pkg/Payload → gzip+cpio → Socket Filter.app/Contents/Library/SystemExtensions/
+# Verified: all show push rbp; mov rbp, rsp prologue.
+ACSOCKEXT_5_1_16_194_METHODS = {
+    # ── ExtensionWrapper — C++ core bridge (IMultiplexer / InterceptorCB holder) ───────────
+    # newFlowStarted loads global C++ obj via [rip+0x7b7e9]; tests for NULL before dispatching.
+    # First stack params at [rbp+0x10],[rbp+0x18],[rbp+0x28] = addrs/ports/remoteHostName.
+    'ExtensionWrapper.startExtension':                                    0x10005ad06,
+    'ExtensionWrapper.stopExtension:':                                    0x10005ad6d,
+    'ExtensionWrapper.onFilterStart':                                     0x10005adb4,
+    'ExtensionWrapper.newFlowStarted:family:protocol:pid:localAddr:localPort:remoteAddr:remotePort:flowData:remoteHostName:': 0x10005adcc,
+    'ExtensionWrapper.flowClosed:family:localAddr:localPort:remoteAddr:remotePort:flowData:': 0x10005aed6,
+    'ExtensionWrapper.updateFlowData:family:localAddr:localPort:remoteAddr:remotePort:data:bytes:isSend:': 0x10005ae16,
+
+    # ── AppProxyProvider — NEAppProxyProvider subclass (TCP/UDP flow intercept) ────────────
+    'AppProxyProvider.handleNewTCPFlow:flowVerdict:':                     0x10006a52c,
+    'AppProxyProvider.handleNewUDPFlow:initialRemoteEndpoint:':           0x100069b52,
+    'AppProxyProvider.notifyProxyRulesForConsumer:':                      0x10007503f,
+    'AppProxyProvider.updateProxyRulesWithCompletionHandler:':            0x100067820,
+
+    # ── AppProxyTCPConnection — per-connection handler; TOCTOU in reuse check ───────────
+    # isConnectionReusableForDestination: saves r15(self)/r14(preferredIface)/r12(global class).
+    # If reuse-check passes then USE of rdx(destination) happens ~50 insns later → TOCTOU window.
+    'AppProxyTCPConnection.isConnectionReusableForDestination:withPreferredInterface:': 0x10004b393,
+
+    # ── AppProxyUDPSession — UDP session TOCTOU ──────────────────────────────────────────
+    'AppProxyUDPSession.isSessionReusableForDestination:withPreferredInterface:':       0x10007805f,
+
+    # ── DNSProxyProvider — DNS intercept + UDP flow injection ───────────────────────────
+    'DNSProxyProvider.startProxyWithOptions:completionHandler:':          0x1000788cb,
+    'DNSProxyProvider.handleNewOpenTCPFlow:':                             0x10007ab8f,
+    'DNSProxyProvider.handleNewOpenUDPFlow:':                             0x10007a322,
+    # injectDelayedResponse: frame size 0x1b8; r14d=edx=local_addr. Packet injection entry.
+    # If DNS resolver state is desynchronized (race), packet lands on wrong flow.
+    'DNSProxyProvider.injectDelayedResponseIntoUDPFlow:local_addr:peer_addr:packet:':  0x100082ad4,
+    'DNSProxyProvider.findUDPFlowWithDelayedReponse:':                    0x100082827,
+    'DNSProxyProvider.notifyFlowEnd:':                                    0x1000821c7,
+    'DNSProxyProvider.checkUdpSessionLeak:pendingSessionCnt:':            0x100079ae1,
+
+    # ── FilterDataProvider (Swift) — NEFilterDataProvider subclass ──────────────────────
+    # Swift class: _TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider
+    # handleNewFlow loads r15 via [rip+0x33a33] then calls r15(rdx) = swift_retain/class lookup.
+    '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleNewFlow:':   0x100094770,
+    '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.startFilterWithCompletionHandler:': 0x100092d40,
+    '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleReport:':    0x100097190,
+}
+
+# C++ RTTI type info VAs in acsockext x86_64 (PIE base 0x100000000)
+# These mark the vtable interfaces for the C++ core beneath the ObjC/Swift layer.
+# m_pMultiplexer (ObjC ivar) -> IMultiplexer* vtable @ 0x1000c8ba8
+# m_pInterceptorCB -> IAppProxyInterceptorCB* @ 0x1000cb218 or IDnsProxyInterceptorCB* @ 0x1000cb3a0
+ACSOCKEXT_CPP_TYPEINFO = {
+    'IMultiplexer':               0x1000c8ba8,
+    'IAppProxyInterceptorCB':     0x1000cb218,
+    'IDnsProxyInterceptorCB':     0x1000cb3a0,
+    'ISocketPlugin':              0x1000c92a8,
+    'ISocketMultiplexorPlugin':   0x1000c8bc8,
+    'IIpcServiceCallbacks':       0x1000c8bb8,
+    'IZtnaFakeDnsHandler':        0x1000c9090,  # ZTNA fake DNS: injects policy DNS responses
+    'IZtnaPluginCallback':        0x1000c8c08,
+    'IOpenDnsPluginClient':       0x1000c8be8,  # OpenDNS/Umbrella plugin
+    'IScanSafePluginCallback':    0x1000c8c18,  # ScanSafe (web security) callback
+    'IDnsCachePluginClient':      0x1000c8bd8,
+    'ITcpSocket':                 0x1000ca500,
+    'IUdpSocket':                 0x1000c8548,
+    'ISocketPacket':              0x1000ca870,
+    'ISignalEvent':               0x1000cb608,
+}
 
 # Protocol overlap patterns — auth methods shared between LINA and Apple NE
 PROTOCOL_OVERLAP_PATTERNS = [
@@ -482,6 +560,108 @@ class AnyConnectNEAnalyzer:
         }
 
 
+class ACSockExtAnalyzer:
+    """
+    RE engine for com.cisco.anyconnect.macos.acsockext (Cisco Socket Filter system extension).
+    Replaces acsock.kext on macOS 11+. Universal binary (x86_64 + arm64).
+    C++ core (IMultiplexer / IAppProxyInterceptorCB / NGC types) beneath ObjC + Swift NE layer.
+
+    Architecture:
+      NEFilterDataProvider (Swift: FilterDataProvider) ─┐
+      NEAppProxyProvider (ObjC: AppProxyProvider)       ├─► ExtensionWrapper
+      NEDNSProxyProvider (ObjC: DNSProxyProvider)       ┘       │
+                                                          m_pMultiplexer (IMultiplexer C++)
+                                                          m_pInterceptorCB (IAppProxyInterceptorCB C++)
+                                                          m_pRuleAggregator (C++ rule engine)
+    Attack surface:
+      - injectDelayedResponseIntoUDPFlow: — packet injection path
+      - isConnectionReusableForDestination: — TOCTOU race (~50 insns check→use window)
+      - IZtnaFakeDnsHandler vtable — ZTNA DNS policy enforcement bypass
+      - CSerializerReader::get_list<T> — custom deserialization (OOB target on untrusted input)
+    """
+
+    def __init__(self, binary_path):
+        self.path = Path(binary_path)
+        if not self.path.exists():
+            raise FileNotFoundError(binary_path)
+        raw_fat = self.path.read_bytes()
+        self._raw = _extract_x86_64_slice(raw_fat)
+        print(f'[acsockext_re] loaded {self.path.name} ({len(raw_fat):,} bytes fat, '
+              f'{len(self._raw):,} bytes x86_64 slice)')
+
+    def disasm_va(self, vaddr, count=80):
+        """Disassemble at vaddr (full VA, e.g. 0x100082ad4) in x86_64 slice."""
+        try:
+            import lief as _lief
+            from capstone import Cs, CS_ARCH_X86, CS_MODE_64
+            import tempfile, os
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.macho')
+            tmp.write(self._raw)
+            tmp.flush()
+            b = _lief.parse(tmp.name)
+            os.unlink(tmp.name)
+        except ImportError:
+            return {'error': 'pip install lief capstone'}
+
+        cs = Cs(CS_ARCH_X86, CS_MODE_64)
+        raw = self._raw
+        for seg in b.segments:
+            if seg.virtual_address <= vaddr < seg.virtual_address + seg.virtual_size:
+                foff = seg.file_offset + (vaddr - seg.virtual_address)
+                code = raw[foff:foff + count * 8]
+                insns = []
+                for ins in cs.disasm(code, vaddr):
+                    insns.append({'addr': hex(ins.address), 'mnem': ins.mnemonic, 'op': ins.op_str})
+                    if len(insns) >= count:
+                        break
+                return insns
+        return {'error': f'vaddr 0x{vaddr:x} not found in segments'}
+
+    def disasm(self, method_name, count=80):
+        """Disassemble a known acsockext 5.1.16.194 method by name."""
+        vaddr = ACSOCKEXT_5_1_16_194_METHODS.get(method_name)
+        if vaddr is None:
+            return {'error': f'unknown method: {method_name}. '
+                    f'choices: {list(ACSOCKEXT_5_1_16_194_METHODS)}'}
+        return self.disasm_va(vaddr, count=count)
+
+    def inject_path(self, count=120):
+        """Disassemble injectDelayedResponseIntoUDPFlow — packet injection entry @ 0x100082ad4."""
+        return self.disasm('DNSProxyProvider.injectDelayedResponseIntoUDPFlow:local_addr:peer_addr:packet:',
+                           count=count)
+
+    def reuse_toctou(self, count=80):
+        """Disassemble isConnectionReusableForDestination — TOCTOU check→use race @ 0x10004b393."""
+        return self.disasm('AppProxyTCPConnection.isConnectionReusableForDestination:withPreferredInterface:',
+                           count=count)
+
+    def flow_start(self, count=80):
+        """Disassemble ExtensionWrapper.newFlowStarted — all flow metadata (pid, addrs, ports) @ 0x10005adcc."""
+        return self.disasm('ExtensionWrapper.newFlowStarted:family:protocol:pid:localAddr:localPort:remoteAddr:remotePort:flowData:remoteHostName:',
+                           count=count)
+
+    def filter_flow(self, count=80):
+        """Disassemble FilterDataProvider.handleNewFlow (Swift) — NE filter intercept @ 0x100094770."""
+        return self.disasm(
+            '_TtC36com_cisco_anyconnect_macos_acsockext18FilterDataProvider.handleNewFlow:',
+            count=count)
+
+    def cpp_typeinfo(self):
+        """Return C++ RTTI typeinfo addresses for vtable hooking targets."""
+        return ACSOCKEXT_CPP_TYPEINFO
+
+    def imp_scan(self, extra_selectors=None):
+        """Scan classlist for IMP addresses of all known attack-surface methods."""
+        targets = set(ACSOCKEXT_5_1_16_194_METHODS)
+        if extra_selectors:
+            targets.update(extra_selectors)
+        return objc_imp_scan(self.path, targets)
+
+    def xpc_services(self):
+        """Extract XPC/Mach service names from acsockext binary."""
+        return xpc_service_map(self.path)
+
+
 def xpc_service_map(binary_path):
     """
     Extract XPC / Mach service names from the NE binary.
@@ -534,14 +714,38 @@ def sandbox_surface():
     }
 
 
+def _extract_x86_64_slice(raw):
+    """Extract x86_64 slice bytes from a fat (universal) Mach-O binary.
+    Returns raw bytes of the thin x86_64 slice, or raw unchanged for thin binaries.
+    Fat magic = 0xcafebabe (big-endian). Arch cputype 0x01000007 = x86_64.
+    """
+    import struct as _struct
+    FAT_MAGIC = 0xcafebabe
+    if len(raw) < 8:
+        return raw
+    magic = _struct.unpack_from('>I', raw, 0)[0]
+    if magic != FAT_MAGIC:
+        return raw
+    narch = _struct.unpack_from('>I', raw, 4)[0]
+    for i in range(narch):
+        off = 8 + i * 20
+        cputype = _struct.unpack_from('>i', raw, off)[0]
+        file_offset = _struct.unpack_from('>I', raw, off + 8)[0]
+        size = _struct.unpack_from('>I', raw, off + 12)[0]
+        if cputype & 0x00ffffff == 0x7:  # x86_64
+            return raw[file_offset:file_offset + size]
+    return raw  # no x86_64 slice found
+
+
 def objc_imp_scan(binary_path, target_methods):
     """
     Parse ObjC classlist to extract real IMP (implementation) addresses for named methods.
     LIEF symbol_dump() returns selector string addresses (in __TEXT,__objc_methname), NOT IMPs.
     This function navigates objc_class_t → class_ro_t → method_list_t to get actual code addresses.
+    Handles fat (universal) binaries by extracting the x86_64 slice first.
 
     Args:
-        binary_path: path to Mach-O binary
+        binary_path: path to Mach-O binary (thin or fat/universal)
         target_methods: set of selector strings to find
     Returns:
         dict: {selector: {'imp': hex(addr), 'class': class_name}}
@@ -549,11 +753,26 @@ def objc_imp_scan(binary_path, target_methods):
     try:
         import lief as _lief
         import struct
+        import tempfile, os
     except ImportError:
         return {'error': 'pip install lief'}
 
-    binary = _lief.parse(str(binary_path))
-    raw = Path(binary_path).read_bytes()
+    raw_file = Path(binary_path).read_bytes()
+    raw = _extract_x86_64_slice(raw_file)
+
+    # If we extracted a slice, write to a temp file so lief.parse() gets a thin binary
+    _tmp = None
+    if raw is not raw_file:
+        _tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.macho')
+        _tmp.write(raw)
+        _tmp.flush()
+        parse_path = _tmp.name
+    else:
+        parse_path = str(binary_path)
+
+    binary = _lief.parse(parse_path)
+    if _tmp:
+        os.unlink(_tmp.name)
 
     def va_to_off(va):
         for seg in binary.segments:
@@ -685,6 +904,7 @@ if __name__ == '__main__':
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('binary')
+    ap.add_argument('--acsockext', action='store_true', help='Use ACSockExtAnalyzer (fat universal binary)')
     ap.add_argument('--all', action='store_true')
     ap.add_argument('--lina', action='store_true')
     ap.add_argument('--cisco', action='store_true')
@@ -696,36 +916,55 @@ if __name__ == '__main__':
     ap.add_argument('--sym', metavar='REGEX', help='Symbol grep')
     ap.add_argument('--objc', action='store_true')
     ap.add_argument('--full', action='store_true')
+    ap.add_argument('--cpp-typeinfo', action='store_true', help='C++ RTTI typeinfo addresses (acsockext)')
     ap.add_argument('--out', metavar='FILE', help='JSON output file')
     args = ap.parse_args()
 
-    a = AnyConnectNEAnalyzer(args.binary)
-
-    if args.all:
-        print(json.dumps(a.run_all(), indent=2))
-    elif args.lina:
-        print(json.dumps(a.hunt_lina(), indent=2))
-    elif args.cisco:
-        print(json.dumps(a.cisco_artifacts(), indent=2))
-    elif args.proto:
-        print(json.dumps(a.protocol_overlap(), indent=2))
-    elif args.keychain:
-        print(json.dumps(a.keychain_surface(), indent=2))
-    elif args.xpc:
-        print(json.dumps(a.xpc_services(), indent=2))
-    elif args.sandbox:
-        print(json.dumps(sandbox_surface(), indent=2))
-    elif args.disasm:
-        if args.disasm.startswith('0x') or args.disasm[0].isdigit():
-            print(json.dumps(a.disasm_va(int(args.disasm, 16)), indent=2))
+    if args.acsockext:
+        a = ACSockExtAnalyzer(args.binary)
+        if args.disasm:
+            if args.disasm.startswith('0x') or args.disasm[0].isdigit():
+                print(json.dumps(a.disasm_va(int(args.disasm, 16)), indent=2))
+            else:
+                print(json.dumps(a.disasm(args.disasm), indent=2))
+        elif args.cpp_typeinfo:
+            print(json.dumps(a.cpp_typeinfo(), indent=2))
+        elif args.xpc:
+            print(json.dumps(a.xpc_services(), indent=2))
+        elif args.all:
+            print(json.dumps({'methods': ACSOCKEXT_5_1_16_194_METHODS,
+                              'cpp_typeinfo': ACSOCKEXT_CPP_TYPEINFO,
+                              'xpc': a.xpc_services()}, indent=2))
         else:
-            print(json.dumps(a.disasm(args.disasm), indent=2))
-    elif args.sym:
-        print(json.dumps(a.sym_grep(args.sym), indent=2))
-    elif args.objc:
-        print(json.dumps(a.objc_classes(), indent=2))
-    elif args.full:
-        out = args.out
-        print(json.dumps(a.full_re(out), indent=2))
+            print(json.dumps({'methods': list(ACSOCKEXT_5_1_16_194_METHODS),
+                              'cpp_interfaces': list(ACSOCKEXT_CPP_TYPEINFO)}, indent=2))
     else:
-        print(json.dumps(a.run_all(), indent=2))
+        a = AnyConnectNEAnalyzer(args.binary)
+        if args.all:
+            print(json.dumps(a.run_all(), indent=2))
+        elif args.lina:
+            print(json.dumps(a.hunt_lina(), indent=2))
+        elif args.cisco:
+            print(json.dumps(a.cisco_artifacts(), indent=2))
+        elif args.proto:
+            print(json.dumps(a.protocol_overlap(), indent=2))
+        elif args.keychain:
+            print(json.dumps(a.keychain_surface(), indent=2))
+        elif args.xpc:
+            print(json.dumps(a.xpc_services(), indent=2))
+        elif args.sandbox:
+            print(json.dumps(sandbox_surface(), indent=2))
+        elif args.disasm:
+            if args.disasm.startswith('0x') or args.disasm[0].isdigit():
+                print(json.dumps(a.disasm_va(int(args.disasm, 16)), indent=2))
+            else:
+                print(json.dumps(a.disasm(args.disasm), indent=2))
+        elif args.sym:
+            print(json.dumps(a.sym_grep(args.sym), indent=2))
+        elif args.objc:
+            print(json.dumps(a.objc_classes(), indent=2))
+        elif args.full:
+            out = args.out
+            print(json.dumps(a.full_re(out), indent=2))
+        else:
+            print(json.dumps(a.run_all(), indent=2))
