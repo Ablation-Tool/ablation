@@ -237,13 +237,26 @@ class ObjCMetadata:
     def _extract(self):
         if not LIEF_OK or not hasattr(self.binary, 'sections'):
             return
-        # Build VA-indexed section content cache (avoids get_raw_segment which
-        # is not available in all LIEF versions)
+        # Build VA-indexed section content cache
         self._sec_cache: list = []  # list of (va, end_va, bytes)
         for s in self.binary.sections:
             if s.size:
                 raw = bytes(s.content)
                 self._sec_cache.append((s.virtual_address, s.virtual_address + s.size, raw))
+        # Detect LC_DYLD_CHAINED_FIXUPS: pointers in __DATA are encoded as
+        # chained rebase entries, not raw VAs. Decode: actual_va = image_base + (raw & 0xFFFFFFFFF)
+        self._chained_fixups = False
+        self._image_base = 0x100000000  # arm64 Mach-O default
+        for cmd in self.binary.commands:
+            cn = str(cmd.command)
+            if 'CHAINED_FIXUPS' in cn:
+                self._chained_fixups = True
+                break
+        # Determine image base from first __TEXT segment
+        for seg in (self.binary.segments if hasattr(self.binary, 'segments') else []):
+            if seg.name.strip('\x00') == '__TEXT' and seg.virtual_address:
+                self._image_base = seg.virtual_address & ~0xFFF
+                break
         self._extract_selrefs()
         self._extract_classrefs()
         self._extract_method_lists()
@@ -260,6 +273,21 @@ class ObjCMetadata:
                 return s
         return None
 
+    def _decode_ptr(self, raw: int) -> int:
+        """Decode a raw 8-byte pointer value to an actual VA.
+
+        Handles both plain absolute VAs and LC_DYLD_CHAINED_FIXUPS rebase encodings.
+        Chained rebase: actual_va = image_base + (raw & 0xFFFFFFFFF)  [36-bit target field]
+        """
+        if not self._chained_fixups:
+            return raw
+        # DYLD_CHAINED_PTR_64_REBASE: bit 63 = bind flag (0 = rebase)
+        if raw >> 63:
+            return 0  # bind entry — no local VA
+        target = raw & 0xFFFFFFFFF  # low 36 bits
+        high8 = (raw >> 36) & 0xFF  # bits 36-43 (top byte of actual VA)
+        return (high8 << 56) | (self._image_base + target)
+
     def _extract_selrefs(self):
         sec = self._get_section('__DATA', '__objc_selrefs')
         if sec is None:
@@ -269,7 +297,10 @@ class ObjCMetadata:
         content = bytes(sec.content)
         for i in range(0, len(content) - 7, 8):
             ptr_va = sec.virtual_address + i
-            target_va = struct.unpack_from('<Q', content, i)[0]
+            raw = struct.unpack_from('<Q', content, i)[0]
+            target_va = self._decode_ptr(raw)
+            if not target_va:
+                continue
             sel = self._read_cstring(target_va)
             if sel:
                 self.selrefs[ptr_va] = sel
@@ -283,7 +314,10 @@ class ObjCMetadata:
         content = bytes(sec.content)
         for i in range(0, len(content) - 7, 8):
             ptr_va = sec.virtual_address + i
-            target_va = struct.unpack_from('<Q', content, i)[0]
+            raw = struct.unpack_from('<Q', content, i)[0]
+            target_va = self._decode_ptr(raw)
+            if not target_va:
+                continue
             name = self._resolve_classptr(target_va)
             if name:
                 self.classrefs[ptr_va] = name
@@ -341,19 +375,26 @@ class ObjCMetadata:
             return ''
 
     def _resolve_classptr(self, va: int) -> str:
-        # ObjC class struct (x86_64): [0x20] = data_ptr → class_ro_t
+        # ObjC class_t: [0x20] = data_ptr → class_ro_t
         # class_ro_t: [0x18] = name_ptr (null-terminated class name)
         try:
             raw = self._read_at(va, 48)
             if len(raw) < 40:
                 return ''
-            data_ptr = struct.unpack_from('<Q', raw, 32)[0] & ~7
+            raw_data = struct.unpack_from('<Q', raw, 32)[0]
+            data_ptr = self._decode_ptr(raw_data) & ~7
+            if not data_ptr:
+                # Fallback: treat raw_data as direct VA masked
+                data_ptr = raw_data & ~7
             if not data_ptr:
                 return ''
             ro_raw = self._read_at(data_ptr, 32)
             if len(ro_raw) < 32:
                 return ''
-            name_ptr = struct.unpack_from('<Q', ro_raw, 24)[0]
+            raw_name = struct.unpack_from('<Q', ro_raw, 24)[0]
+            name_ptr = self._decode_ptr(raw_name) if raw_name else 0
+            if not name_ptr:
+                name_ptr = raw_name
             return self._read_cstring(name_ptr) if name_ptr else ''
         except Exception:
             return ''
@@ -1443,9 +1484,8 @@ class MacOSDecompiler:
 
     def __init__(self, binary_path: str,
                  address_table: Optional[Dict[str, Any]] = None,
-                 arch: str = 'x86_64'):
+                 arch: Optional[str] = None):
         self.binary_path = binary_path
-        self.arch = arch
         # address_table: {name: {va, ...}} OR {va: name}
         self.addr_table: Dict[int, str] = {}
         if address_table:
@@ -1468,7 +1508,13 @@ class MacOSDecompiler:
         except AttributeError:
             pass
         if fat_types and isinstance(self.binary, tuple(fat_types)):
-            self.binary = self._pick_slice(self.binary, arch)
+            self.binary = self._pick_slice(self.binary, arch or 'x86_64')
+
+        # Auto-detect arch from binary if not specified
+        if arch is None:
+            cpu = str(self.binary.header.cpu_type)
+            arch = 'arm64' if 'ARM64' in cpu else 'x86_64'
+        self.arch = arch
 
         self.meta = ObjCMetadata(self.binary)
         self.disasm = Disassembler(self.binary, arch)
