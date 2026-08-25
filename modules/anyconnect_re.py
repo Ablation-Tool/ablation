@@ -1127,14 +1127,34 @@ NE_1095_140_2_METHODS = {
     'NEIKEv2AppVersionAttribute.attributeName':                     0x83776,
 
     # ── Phase 1 IKESA key storage (RFC 5996) ────────────────────────────────────
+    # ATOMIC PROPERTY TRAMPOLINES (sKeySeed, skD, and most IKESA key ivars):
+    #   getter: mov edx, <offset>; mov ecx, 1; jmp 0x1f412e (objc_getProperty, atomic=YES, retain=YES)
+    #   setter: mov ecx, <offset>; jmp 0x1f4164 (objc_setProperty_atomic)
+    # Ivar layout from IKESA object base: sKeySeed@+0x1d8, skD@+0x1e0, ...packed sequentially.
+    # ATOMIC SEMANTICS: individual read/write is safe; but get→use sequences are NOT atomic.
+    #   calculateSKEYSEEDDerivatives: reads sKeySeed once (atomic retain) then uses it.
+    #   Concurrent setSKeySeed:(nil) between get-result and PRF+call → nil seed in PRF+
+    #   (createPRFPlusFromData: nil-guards key → esi=0x11 error → derivative calculation aborts).
     'NEIKEv2IKESA.sKeySeed':                                        0xb9946,
     'NEIKEv2IKESA.setSKeySeed:':                                    0xb995a,
     'NEIKEv2IKESA.skD':                                             0xb9969,
+    # Multi-level lazy getter for DH shared secret (g^xy).
+    # THREE READS from self without a caller-level lock:
+    #   0xb8984: [self sel@r15] → retain → rbx; nil → @ 0xb8a65 (fetch from keychain)
+    #   0xb89b4: [self sel@r14] → retain → rbx; nil → 0xb89d3 (third read sel@r15 again)
+    #   Third read @ 0xb89e4: [self sel@r15] again — 3rd read of same selector
+    # DH completion race: concurrent generateLocalDHValues/installChildSA updating sharedSecret
+    #   → first read non-nil, second nil → confused fallback → wrong g^xy fed to PRF+.
     'NEIKEv2IKESA.sharedSecret':                                    0xb8969,
     # IKEv2-PSK from system keychain — static cred for PSK-mode LINA auth
     'NEIKEv2IKESA.fetchedSharedSecret':                             0xb9e3c,
     'NEIKEv2IKESA.digitalSignatureLocalPrivateKey':                 0xb9aa4,
     'NEIKEv2IKESA.digitalSignatureRemotePublicKey':                 0xb9aea,
+    # ROLE-DISPATCH GETTERS (encryptionKey/decryptionKey — same pattern as ChildSA key getters):
+    # encryptionKey @ 0xb9207: [self flag_sel] → al; je/jmp → choose ivar selector → retain → return
+    # decryptionKey @ 0xb9250: [self flag_sel] → al; cmove → choose ivar selector → retain → return
+    # Both have NO nil guard — pre-install returns nil; caller must check or downstream
+    # createEncryptedData:/createDecryptedData: nil-guard (esi=0x11 error).
     'NEIKEv2IKESA.encryptionKey':                                   0xb9207,
     'NEIKEv2IKESA.decryptionKey':                                   0xb9250,
     'NEIKEv2IKESA.localIntegrityKey':                               0xb9172,
@@ -2183,6 +2203,43 @@ class AnyConnectNEAnalyzer:
             return {'error': 'method not in address table'}
         return self.disasm_va(va, count)
 
+    def ikesa_skeyseed(self, count=80):
+        """Disassemble NEIKEv2IKESA.sKeySeed @ 0xb9946 — atomic property getter.
+        5-instruction trampoline: mov edx,0x1d8; mov ecx,1; jmp 0x1f412e (objc_getProperty).
+        Ivar layout: sKeySeed @ self+0x1d8. Concurrent setSKeySeed: during derivative
+        calculation → nil seed in createPRFPlusFromData: (nil-guards key → 0x11 error).
+        Also covers setSKeySeed:(0xb995a) and skD(0xb9969, offset 0x1e0) trampolines.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.sKeySeed')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def ikesa_encryption_key(self, count=100):
+        """Disassemble NEIKEv2IKESA.encryptionKey @ 0xb9207 — role-dispatch getter.
+        [self flag_sel] → al; je/jmp → pick ivar selector A or B → retain → jmp 0x1f4104.
+        decryptionKey(0xb9250) uses cmove variant of same pattern. No nil guard on result;
+        pre-install returns nil → downstream createEncryptedData: 0x11 error.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.encryptionKey')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
+    def ikesa_shared_secret(self, count=160):
+        """Disassemble NEIKEv2IKESA.sharedSecret @ 0xb8969 — multi-level lazy getter (g^xy).
+        THREE sequential unserialised reads from self:
+          0xb8984: [self sel@r15] → retain, nil → keychain fallback @ 0xb8a65.
+          0xb89b4: [self sel@r14] → retain, nil → third read @ 0xb89e4.
+          0xb89e4: [self sel@r15] AGAIN — same selector, different resolution path.
+        DH completion race: concurrent update to sharedSecret between reads → first non-nil,
+        second nil → wrong g^xy fed into calculateSKEYSEEDDerivatives.
+        """
+        va = NE_1095_140_2_METHODS.get('NEIKEv2IKESA.sharedSecret')
+        if va is None:
+            return {'error': 'method not in address table'}
+        return self.disasm_va(va, count)
+
     def codesig_gate(self, count=200):
         """Disassemble _ne_code_sig_gate @ 0x18a2f4.
         Maps the two-stage SecStaticCodeCheckValidity gate and bypass target.
@@ -2303,6 +2360,9 @@ class AnyConnectNEAnalyzer:
             'create_initiator_signed_octets': self.create_initiator_signed_octets(),
             'create_responder_signed_octets': self.create_responder_signed_octets(),
             'receive_delete_child_sa': self.receive_delete_child_sa(),
+            'ikesa_skeyseed': self.ikesa_skeyseed(),
+            'ikesa_encryption_key': self.ikesa_encryption_key(),
+            'ikesa_shared_secret': self.ikesa_shared_secret(),
             'xpc_services': self.xpc_services(),
             'sandbox_surface': sandbox_surface(),
         }
