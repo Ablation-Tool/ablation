@@ -46,10 +46,12 @@ Key changes from 3.3.0 -> 3.5.0.527:
     F54 (Apache Ignite no auth): port 10800 TLS, authenticationEnabled commented out, --network=host
     F55 (ISE-internal ES 9200): separate from MNT-LA (9210); xpack.security.enabled: false, 0.0.0.0
 
-  CONFIRMED (representative): F1,F3,F4,F7,F9,F11,F12,F13,F16,F17,F18,F20,F23,F27,F28,
-    F34(chain),F38,F39,F40,F42,F43,F44,F45,F47,F48,F50,F51,F52
+  CONFIRMED (representative): F1,F3,F4,F7,F9,F11,F12,F13,F14,F15,F16,F17,F18,F20,F23,
+    F26,F27,F28,F34(chain),F38,F39,F40,F42,F43,F44,F45,F47,F48,F49,F50,F51,F52
   PARTIAL: F10,F19,F29,F35
-  UNVERIFIED (RPM in encrypted pkg2): F6,F8,F14,F15,F24,F26,F30,F31,F33,F36,F46,F49
+  UNVERIFIED (RPM in encrypted pkg2): F5,F6,F8,F24,F30,F31,F33,F36,F46
+  CHANGED: F2,F21,F22,F24(removed),F37,F53
+  NOT FOUND: F25,F32
 
 === FINDINGS (ISE 3.3.0.430, confirmed 2026-08-25) ===
 
@@ -92,7 +94,7 @@ ISE-F45: ESAPI hardcoded MasterKey+MasterSalt shared across ALL ISE components �
 ISE-F46: PSP oracle.xml hardcoded Cisco dev Oracle credentials seeded into SEC_PIP_MASTER at DB init — DEFAULT_PIP_MASTER SQL inserts Entitlement Repository PIP record with username=bala/password=bala at jdbc:oracle:thin:@131.107.0.23:1521:secdev; credentials stored as plaintext XML in SEC_PIP_PROP column; pattern: SEC_PIP_MASTER stores all PIP credentials as plaintext XML in Oracle DB [LOW]
 ISE-F47: CiscoRA EST server: plain HTTP on port 8084 (listen 8084 default_server est; HTTPS listener on 9443 commented out), Proof of Possession disabled (est_pop off), CRL checking disabled (est_crl off) — certificate enrollment without TLS protection or key ownership verification; est_ise_ca_server=127.0.0.1:9444 (CA REST API ISE-F40); allows enrollment of arbitrary public keys without proving private key possession [MEDIUM]
 ISE-F48: Oracle TCPS/2484 opened to 0.0.0.0/0 on MNT nodes with Data Connect enabled — cpmadjustfw.sh datadirect_fw_enable() adds iptables ACCEPT rules for 0.0.0.0/0 on port 2484 (IPv4+IPv6) when Data Connect feature enabled on MNT node; Oracle sqlnet.ora has SSL_CLIENT_AUTHENTICATION=FALSE (no client cert required); DATACONNECT Oracle user credentials = ISE_DB_PWD recoverable via ISE-F35+ISE-F38 chain; DATACONNECT schema exposes User_Identity_Groups, ADMIN_USERS, ENDPOINTS_DATA, SECURITY_GROUPS views; chain: ISE-F35 (KEK) -> ISE_DB_PWD -> Oracle TCPS:2484 -> full ISE policy DB read [HIGH]
-ISE-F49: IRF core engine Docker socket mount + adapter.dockerImage injection — irf-control.sh launches IRF core engine container with -v /var/run/docker.sock:/var/run/docker.sock; docker-mgr.js createAdapterContainer()/getStartupConfig() uses adapter.dockerImage directly as options['Image'] in POST /v1.24/libpod/containers/create without validation; adapter records sourced from unauthenticated MongoDB (ISE-F9 extended); chain: ISE-F9 (unauth MongoDB inject) -> write adapter record with attacker-controlled dockerImage -> ISE-F9 (irf:irf AMQP trigger) -> IRF core engine pulls and runs attacker image via Docker socket -> host escape [CRITICAL]
+ISE-F49: IRF core engine Docker socket mount + adapter.dockerImage injection — irf-control.sh launches IRF core engine container with -v /var/run/docker.sock:/var/run/docker.sock; docker-mgr.js createAdapterContainer()/getStartupConfig() uses adapter.dockerImage directly as options['Image'] in POST /v1.24/libpod/containers/create without validation; adapter records sourced from unauthenticated MongoDB (ISE-F9 extended); chain: ISE-F9 (unauth MongoDB inject) -> write adapter record with attacker-controlled dockerImage -> ISE-F9 (irf:irf AMQP trigger) -> IRF core engine pulls and runs attacker image via Docker socket -> host escape [CRITICAL] [3.5 CONFIRMED: irf-control.sh:126 DOCKER_SOCK=/var/run/docker.sock; :425 -v $DOCKER_SOCK:$DOCKER_SOCK in setup_irf_core_engine()]
 ISE-F50: MNT Elasticsearch (port 9210) unauthenticated on 0.0.0.0 — elasticsearch.yml: network.host=0.0.0.0, http.port=9210, no xpack.security; contains index mnt_analytics_radius_authentication with full RADIUS auth records (identity/username, endpoint_id/MAC, framed_ip, framed_ipv6, identity_store, auth_method, auth_protocol, network_device_name, location, device_type, nas_ip, policy_set, authorization_rule); unauthenticated read/write on all interfaces; distinct from ISE-F21 (primary ES port 9200) [HIGH]
 ISE-F51: Kibana (port 5701) unauthenticated, binding all interfaces — kibana.yml: server.host="0", elasticsearch.hosts=["http://localhost:9210"], no xpack.security; security.showInsecureClusterWarning: false confirms X-Pack security disabled; unauthenticated GUI access to all MNT Elasticsearch indexes including RADIUS/TACACS authentication logs; chain: ISE-F50 (unauth ES data) + ISE-F51 (GUI) = complete RADIUS auth log exfiltration [HIGH]
 ISE-F52: Grafana (port 3011) shipped with default admin:admin credentials and unrotated factory secret_key — grafana.ini: http_port=3011, admin_user=admin, admin_password=admin (factory defaults, commented-out = active defaults); secret_key=SW2YcwTIb9zpOOhoPsMm (upstream Grafana default, unrotated in ISE 3.3.0 ship); secret_key used to sign Grafana session cookies — knowledge of key (public from this disclosure) enables session token forgery without authentication; datasource: Prometheus at localhost:9091 [MEDIUM]
@@ -2108,6 +2110,9 @@ def probe_kairos_cloud_endpoint() -> dict:
 # environment variables. MongoDB 3.x ships with authentication DISABLED by default.
 # Any process that can reach the irf-internal-nw bridge (169.254.1.0/24) can read
 # or write the IRF database without credentials.
+#
+# 3.5.0.527 VERIFICATION: CONFIRMED — irf-control.sh:360 setup_mongo() still no --auth;
+# start_mongoDB():597 uses mongosh without --auth; irf-mongo-3.1.8 image (same version).
 #
 # IRF stores: AMP threat events, pxGrid threat notifications, endpoint compromise
 # indicators, adaptive policy sync state. All readable/writable via unauthenticated
