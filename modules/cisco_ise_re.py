@@ -1,10 +1,15 @@
 """
-cisco_ise_re.py — Cisco ISE 3.3.0 static RE module
+cisco_ise_re.py — Cisco ISE static RE module (3.3.0.430 + 3.5.0.527 verification)
 
-Target: ISE 3.3.0 x86_64 ISO
+Primary Target: ISE 3.3.0 x86_64 ISO
   /media/cowboy/research/cisco-firmware/ise/Cisco-ISE-3.3.0.430.SPA.x86_64.iso
 
-Extraction chain:
+Verified Against: ISE 3.5.0.527 (September 2025, current release)
+  /media/cowboy/research/cisco-firmware/ise/Cisco-ISE-3.5.0.527.SPA.x86_64.iso
+  3.5 extraction: CARSisePkg1 -> aa (gzip) -> bundle.tar -> 19 CSCOcpm-*.rpm
+  3.5 RE work: /media/cowboy/research/ise-re/ise-35/
+
+Extraction chain (3.3.0):
   ISO (9660, label ADEOS) -> Extra/CARSisePkg1.rpm
   -> 7z -> cpio -> gzip tar bundle.tar
   -> CSCOcpm-common-3.3.0-430.x86_64.rpm -> 7z -> cpio
@@ -12,7 +17,7 @@ Extraction chain:
   -> CSCOcpm-key-manager -> key_manager Python aiohttp service
 
 Application stack:
-  - Apache Tomcat 9.0.73 at /opt/CSCOcpm/appsrv/apache-tomcat-9.0.73/
+  - Apache Tomcat 9.0.73 (3.3) / 9.0.105 (3.5) at /opt/CSCOcpm/appsrv/apache-tomcat-*/
   - Oracle DB (cepm user, cpm10 SID) via JDBC thin driver, port 1521
   - vaservice Java daemon
   - ERS API on ports 9060/9061/9062 (External RESTful Services)
@@ -21,6 +26,30 @@ Application stack:
   - Kong API gateway (Docker, ise-kong-container): ports 19001/19444 admin, 8443 proxy
   - PostgreSQL (Docker, ise-postgres-container): port-bound to 127.0.0.1, trust auth
   - RabbitMQ (Docker, ise-rabbitmq-container): ports 8672/8671 AMQP, 15672 management
+  - [3.5 NEW] Apache Ignite (ise35-ignite): port 10800 TLS, no auth, --network=host
+  - [3.5 NEW] ISE-internal Elasticsearch: port 9200, xpack.security.enabled: false
+
+=== ISE 3.5.0.527 VERIFICATION STATUS (2026-08-26) ===
+
+Key changes from 3.3.0 -> 3.5.0.527:
+  MITIGATED:
+    F2  (3DES hardcoded key): key_manager now AES-256-CBC + TPM-sealed; no hardcoded fallback
+    F37 (Redis no auth): redis.conf bind 127.0.0.1 — network attack surface removed
+    F53 (node-exporter no auth): prometheus.yml now uses basic_auth + generated password
+  CHANGED (vuln persists, different form):
+    F21 (ES 6.8.12 no auth): upgraded to 8.17.1, xpack.security.enabled: false still
+    F22 (pi-profiler hardcoded creds): generated password now; runtime auth still weak
+  NOT FOUND in 3.5:
+    F25 (Kairos hardcoded endpoint): ise-ai-agent-control.sh present, no hardcoded prod URL
+    F32 (ise-ai-key.pem): only analytics_key.pem (public) shipped
+  NEW in 3.5:
+    F54 (Apache Ignite no auth): port 10800 TLS, authenticationEnabled commented out, --network=host
+    F55 (ISE-internal ES 9200): separate from MNT-LA (9210); xpack.security.enabled: false, 0.0.0.0
+
+  CONFIRMED (representative): F1,F3,F4,F7,F9,F11,F12,F13,F16,F17,F18,F20,F23,F27,F28,
+    F34(chain),F38,F39,F40,F42,F43,F44,F45,F47,F48,F50,F51,F52
+  PARTIAL: F10,F19,F29,F35
+  UNVERIFIED (RPM in encrypted pkg2): F6,F8,F14,F15,F24,F26,F30,F31,F33,F36,F46,F49
 
 === FINDINGS (ISE 3.3.0.430, confirmed 2026-08-25) ===
 
@@ -68,7 +97,15 @@ ISE-F50: MNT Elasticsearch (port 9210) unauthenticated on 0.0.0.0 — elasticsea
 ISE-F51: Kibana (port 5701) unauthenticated, binding all interfaces — kibana.yml: server.host="0", elasticsearch.hosts=["http://localhost:9210"], no xpack.security; security.showInsecureClusterWarning: false confirms X-Pack security disabled; unauthenticated GUI access to all MNT Elasticsearch indexes including RADIUS/TACACS authentication logs; chain: ISE-F50 (unauth ES data) + ISE-F51 (GUI) = complete RADIUS auth log exfiltration [HIGH]
 ISE-F52: Grafana (port 3011) shipped with default admin:admin credentials and unrotated factory secret_key — grafana.ini: http_port=3011, admin_user=admin, admin_password=admin (factory defaults, commented-out = active defaults); secret_key=SW2YcwTIb9zpOOhoPsMm (upstream Grafana default, unrotated in ISE 3.3.0 ship); secret_key used to sign Grafana session cookies — knowledge of key (public from this disclosure) enables session token forgery without authentication; datasource: Prometheus at localhost:9091 [MEDIUM]
 ISE-F53: Node-exporter /metrics endpoint with no authentication — node-exporter/config/config.yml: basic_auth_users: (empty, no users) = no basic auth required; exposes ISE host system metrics (CPU, memory, disk I/O, network I/O, filesystem utilization, process count) to any client; Prometheus configured to scrape with username=prometheus,password=(empty) confirming no-auth requirement [MEDIUM]
-ISE-F54: Logstash monitoring API (port 9600) binding 0.0.0.0 — logstash.yml: http.host="0.0.0.0"; default Logstash monitoring API exposes GET /_node (pipeline config, worker threads, batch settings), GET /_node/stats (event throughput, error rates), GET /_node/plugins (installed codecs/filters/inputs/outputs) with no authentication; pipelines include radius_auth, radius_acc, tacacs_authentication, tacacs_acc, radius_errors — pipeline structure disclosed [MEDIUM]
+ISE-F54: Logstash monitoring API (port 9600) binding 0.0.0.0 — logstash.yml: http.host="0.0.0.0"; default Logstash monitoring API exposes GET /_node (pipeline config, worker threads, batch settings), GET /_node/stats (event throughput, error rates), GET /_node/plugins (installed codecs/filters/inputs/outputs) with no authentication; pipelines include radius_auth, radius_acc, tacacs_authentication, tacacs_acc, radius_errors — pipeline structure disclosed [MEDIUM] [3.3.0 only - not yet verified in 3.5]
+
+=== NEW FINDINGS IN ISE 3.5.0.527 ===
+
+ISE-F54-3.5: Apache Ignite no authentication on port 10800 — ignite-config.xml: authenticationEnabled commented out; ClientConnectorConfiguration: host=0.0.0.0, port=10800, sslEnabled=true (TLS but no client auth); --network=host in container config; persistence enabled; exposed schemas: EDF2EndPoint, UPSEddaData, EndPointLicenseInfo; passwords loaded from /run/secrets/DATAGRID_KS_PWD at runtime; authentication intentionally disabled in shipped config [HIGH]
+  Source: /media/cowboy/research/ise-re/ise-35/ise35-ignite/opt/ignite/config/ignite-config.xml
+
+ISE-F55-3.5: ISE-internal Elasticsearch (port 9200) no auth distinct from MNT-LA (9210) — elasticsearch.yml: network.host: 0.0.0.0, http.port: 9200, xpack.security.enabled: false; this is a second ES instance separate from the MNT-LA (F50); contains ISE internal operational data [MEDIUM]
+  Source: /media/cowboy/research/ise-re/ise-35/ise35-common-extracted/opt/elasticsearch/ise/config/elasticsearch.yml
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
