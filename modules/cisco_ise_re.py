@@ -46,20 +46,21 @@ Key changes from 3.3.0 -> 3.5.0.527:
     F54 (Apache Ignite no auth): port 10800 TLS, authenticationEnabled commented out, --network=host
     F55 (ISE-internal ES 9200): separate from MNT-LA (9210); xpack.security.enabled: false, 0.0.0.0
 
-  CONFIRMED (representative): F1,F3,F4,F7,F9,F11,F12,F13,F14,F15,F16,F17,F18,F20,F23,
+  CONFIRMED (full): F1,F3,F4,F5,F7,F9,F11,F12,F13,F14,F15,F16,F17,F18,F23,
     F26,F27,F28,F34(chain),F38,F39,F40,F42,F43,F44,F45,F47,F48,F49,F50,F51,F52
-  PARTIAL: F10,F19,F29,F35
-  UNVERIFIED (RPM in encrypted pkg2): F5,F6,F8,F24,F30,F31,F33,F36,F46
-  CHANGED: F2,F21,F22,F24(removed),F37,F53
-  NOT FOUND: F25,F32
+  PARTIAL (vuln persists, mitigated path added): F2(DESede fallback),F10,F19,F29,F35
+  CHANGED/MITIGATED: F21(ES 8.17.1+no-auth),F22(generated creds),F24(ActiveMQ removed),F37(Redis loopback),F53(basic-auth)
+  NOT FOUND: F25,F32,F33
+  UNVERIFIED (encrypted pkg2): F6,F8,F30,F31,F36,F46
+  NEW in 3.5: F54(Ignite port 10800 no-auth),F55(ES port 9200 no-auth)
 
 === FINDINGS (ISE 3.3.0.430, confirmed 2026-08-25) ===
 
 ISE-F1: key_manager decrypt oracle — unauth ciphertext decryption via UNIX socket [CRITICAL]
-ISE-F2: Hardcoded 3DES key -> static Oracle DB credential — decrypts all default-state creds [CRITICAL]
+ISE-F2: Hardcoded 3DES key -> static Oracle DB credential — decrypts all default-state creds [CRITICAL] [3.5 PARTIAL: DESede+encryptionKey="ASDF asdf 1234 8983 jkla" persists as fallback when useNewKey=false (TPM fail); TPM-sealed AES path added but does not remove legacy path; DefaultCryptEncryptor.class:#2]
 ISE-F3: Tomcat manager — empty-password account [HIGH]
 ISE-F4: Hardcoded Tomcat shutdown secret [LOW]
-ISE-F5: TLSv1/TLSv1.1 enabled on ERS port 8906 [MEDIUM]
+ISE-F5: TLSv1/TLSv1.1 enabled on ERS port 8906 [MEDIUM] [3.5 CONFIRMED: ers-connector.template:10 sslEnabledProtocols="TLSv1,TLSv1.1,TLSv1.2" hardcoded; portal-connector.template:7 same; bypasses catalina.sh High/Medium security variable]
 ISE-F6: Kong Admin API exposed on 0.0.0.0:19001/19444 with no authentication [CRITICAL]
 ISE-F7: RabbitMQ loopback_users.guest=false + plaintext management port 15672 [HIGH]
 ISE-F8: PostgreSQL trust auth (no password) accessible from Docker bridge network [MEDIUM]
