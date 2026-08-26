@@ -669,6 +669,19 @@ Two distinct Oracle credential paths hardcoded in the shipped DB schema:
    Connection: jdbc:oracle:thin:@localhost:1521:cpm10
    Oracle user: handleruser, password: mohammal
 
+3) admin:admin — 3DES-encrypted PDP endpoint credential (verified from CreateCpmTables.sql:4903)
+   Table: SEC_PDP_PROTOCOL
+   INSERT: SEC_USER_NAME='admin', SEC_PASSWORD='h1BYu+lcwcM=', SEC_ENDPOINT_URL='http://localhost:8080/pdp/PdpEndPoint'
+   Protocol: Java, ConfigID=2
+
+   Decryption (ISE-F2 key):
+     DES3.new(b'ASDF asdf 1234 8983 jkla', DES3.MODE_ECB).decrypt(
+       b64decode('h1BYu+lcwcM='))[:-3]
+     = b'admin'
+
+   Authenticates to ISE internal XACML/PDP endpoint (port 8080).
+   Source: ise35-db-extracted/opt/CSCOcpm/db/sql/CreateCpmTables.sql:4903
+
 Both credentials authenticate to the Oracle cpm10 DB. Combined with Oracle port 1521
 being accessible from within ISE (local + mnthost): any foothold = DB access.
 
@@ -3934,7 +3947,7 @@ exit;
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.27.0",
+    "version": "1.28.0",
     "target": "Cisco ISE 3.5.0.527",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
