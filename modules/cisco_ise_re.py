@@ -33,7 +33,7 @@ Application stack (ISE 3.5.0.527):
 === FINDINGS (ISE 3.5.0.527, verified 2026-08-26) ===
 
 ISE-F1: key_manager decrypt oracle — unauth ciphertext decryption via UNIX socket [CRITICAL]
-ISE-F2: Hardcoded 3DES key -> static Oracle DB credential — decrypts all default-state creds [CRITICAL] [3.5 PARTIAL: DESede+encryptionKey="ASDF asdf 1234 8983 jkla" persists as fallback when useNewKey=false (TPM fail); TPM-sealed AES path added but does not remove legacy path; DefaultCryptEncryptor.class:#2]
+ISE-F2: Hardcoded 3DES key -> static Oracle DB credential — decrypts all default-state creds [CRITICAL] [DESede+encryptionKey="ASDF asdf 1234 8983 jkla" persists as fallback when useNewKey=false (TPM fail); TPM-sealed AES path added but does not remove legacy path; DefaultCryptEncryptor.class:#2]
 ISE-F3: Tomcat manager — empty-password account [HIGH]
 ISE-F4: Hardcoded Tomcat shutdown secret [LOW]
 ISE-F5: TLSv1/TLSv1.1 enabled on ERS port 8906 [MEDIUM] [3.5 CONFIRMED: ers-connector.template:10 sslEnabledProtocols="TLSv1,TLSv1.1,TLSv1.2" hardcoded; portal-connector.template:7 same; bypasses catalina.sh High/Medium security variable]
@@ -41,7 +41,8 @@ ISE-F6: Kong Admin API exposed on 0.0.0.0:19001/19444 with no authentication [CR
 ISE-F7: RabbitMQ loopback_users.guest=false + plaintext management port 15672 [HIGH]
 ISE-F8: PostgreSQL trust auth (no password) accessible from Docker bridge network [MEDIUM]
 ISE-F9: IRF RabbitMQ user irf:irf hardcoded, administrator tag, vhost irf [HIGH]
-ISE-F10: SSE Connector port 8989 all-interfaces + push_cmd=true + FileUpload=true [HIGH]
+ISE-F10: SSE Connector all-interfaces binding unconditional across all three config profiles [HIGH]
+  3.5: Three configs — connector.toml (push_cmd=false), bd_enabled_connector.toml (push_cmd=true), bd_disabled_connector.toml (push_cmd=false); interface=all in all three
 ISE-F11: EDDA container -v /var/run/:/host/var/run/ --network=host = key_manager escape [CRITICAL]
 ISE-F12: GET /api/system/v1/key-manager/all_data — full in-memory credential dump, no auth [CRITICAL]
 ISE-F13: ExecStartPost=chmod o+w key_manager.sock — world-writable socket post-start [HIGH]
@@ -55,8 +56,11 @@ ISE-F20: SQL schema hardcoded Oracle creds — Mali:Mali (plaintext PIP) + handl
 ISE-F21: Elasticsearch 6.8.12 on localhost:9200, no auth, no TLS — ISE MNT auth/RADIUS logs [MEDIUM]
 ISE-F23: ESAPI hardcoded MasterKey + MasterSalt — decrypts all ESAPI-protected web layer values [HIGH]
 ISE-F34: LUKS sec_confleak partition key exposed via key_manager decrypt oracle — chain to CA privkey [CRITICAL]
-ISE-F35: AES KEK stored in plaintext in db.properties alongside KEK-encrypted credentials [HIGH, PARTIAL in 3.5: per-deployment generated but still unprotected on disk]
+  tpmutil.sh encrypt/decrypt -> key_manager socket (no auth); install_enc_drive.sh:77 writes LUKS ciphertext to /etc/ise/confleak/encrypted_encpart.txt; mount_boot.sh:18 decrypts via tpmutil.sh -> key_manager/decrypt
+ISE-F35: AES-128 KEK stored in plaintext in db.properties alongside KEK-encrypted credentials [HIGH]
+  cpminitialsetup.sh:1318: KEK_KEY=`genkekkey.sh -g AES 128`; :1324: echo "KEK_KEY=$KEK_KEY" >> db.properties (also db-priming.properties + javalib/db.properties)
 ISE-F38: resetSystemPasswds() bug — orapwd password=dbstr (missing $) sets Oracle SYS to literal "dbstr" on wallet failure [HIGH]
+  Bug at TWO sites: cpminitialsetup.sh:2544 AND :2562
 ISE-F39: mctrust (Meraki Sync Service) container mounts -v /var/run/:/host/var/run/ with --cap-drop=all — key_manager.sock accessible from bridge-isolated container; Meraki API key recoverable via ISE-F1 chain [HIGH]
 ISE-F40: CA REST API on HTTP port 9444 — zero auth (no web.xml security-constraint, no JAX-RS @RolesAllowed, no filter); GET /caservice/api/keys/download/ROOT_CA returns ISE root CA private key; POST /cr/sign/{certtype} signs arbitrary CSRs; accessible from loopback and --network=host containers (ISE-F11 EDDA) [CRITICAL]
 ISE-F42: Unauthenticated OCSP cert reload — GET /ocsp/update on port 2560; no auth; allows external actor to force OCSP cert state reload [MEDIUM]
@@ -64,10 +68,12 @@ ISE-F43: simple-config.xml hardcoded Cisco dev cert + encrypted private key — 
 ISE-F44: Hermes (pxGrid Cloud Agent) container mounts -v /var/run/:/host/var/run/ — key_manager.sock accessible at /host/var/run/ from container; extends ISE-F39/F11 pattern to third ISE container [HIGH]
 ISE-F45: ESAPI hardcoded MasterKey+MasterSalt shared across ALL ISE tiers — same key in main Tomcat (apache-tomcat-9.0.105/lib/ESAPI.properties) AND CA Tomcat (apache-tomcat-ca-9.0.105/lib/ESAPI.properties); single key decrypts ESAPI values across all tiers [MEDIUM]
 ISE-F47: CiscoRA EST server: plain HTTP, Proof of Possession disabled (est_pop off), CRL checking disabled (est_crl off) — certificate enrollment without TLS or key ownership verification [MEDIUM]
+  Source: CSCOcpm-cisco-ra-3.5.0-527.x86_64.cpio/nginx/conf/nginx.conf: est_pop off; est_ise_ca_server 127.0.0.1; est_ise_ca_port 9444 (CA plain HTTP)
 ISE-F48: Oracle TCPS/2484 opened to 0.0.0.0/0 on MNT nodes with Data Connect enabled — SSL_CLIENT_AUTHENTICATION=FALSE; DATACONNECT schema exposes User_Identity_Groups, ADMIN_USERS, ENDPOINTS_DATA, SECURITY_GROUPS views [HIGH]
 ISE-F49: IRF core engine Docker socket mount + adapter.dockerImage injection [CRITICAL]
   Source: irf-control.sh:126 DOCKER_SOCK=/var/run/docker.sock; :425 -v $DOCKER_SOCK:$DOCKER_SOCK in setup_irf_core_engine()
-ISE-F50: MNT Elasticsearch (port 9210) unauthenticated on 0.0.0.0 — xpack.security=false; RADIUS/TACACS auth logs unprotected [MEDIUM]
+ISE-F50: MNT Elasticsearch (port 9210) unauthenticated on 0.0.0.0 — no xpack.security directive (absent=disabled); cluster: docker-cluster; RADIUS/TACACS auth logs unprotected [MEDIUM]
+  Source: opt/elasticsearch/mnt-la/config/elasticsearch.yml: network.host: 0.0.0.0, http.port: 9210, no security config
 ISE-F51: Kibana (port 5701) unauthenticated, all interfaces — security.showInsecureClusterWarning: false; GUI access to RADIUS/TACACS auth logs [MEDIUM]
 ISE-F52: Grafana (port 3011) — admin:admin default + secret_key=SW2YcwTIb9zpOOhoPsMm (upstream default, unrotated); session token forgery without auth [MEDIUM]
 ISE-F54: Apache Ignite no authentication on port 10800 [NEW in 3.5, HIGH]
