@@ -88,9 +88,11 @@ ISE-F56: CUSTOMERSUPPORT backdoor OS accounts — key-manager-recoverable SSH pa
   customersuppadmin (UID 332, gadmin) + customersuppreadonly (UID 333, guser); both SSH-enabled
   Shell: confdsh.sh -> confd_cli --groups=admin/oper -> full ISE config CLI
   Shared password stored as CUSTOMERSUPPORT_PWD in db.properties; decrypt via key_manager/decrypt (no auth)
-  Locked (usermod -L) normally; unlocked (usermod -U) by radkit-control.sh during RADKit support sessions
+  UNLOCK DISCREPANCY: cpminitialsetup.sh/radkit-control.sh lock with usermod -L; setdbpw.sh:315-322
+    setCustomerSupportPwd() uses usermod -U with NO subsequent re-lock -> accounts permanently unlocked
+    after any password rotation (setdbpw.sh:363 calls it unconditionally in 10-arg rotation workflow)
   Password never expires (chage -M 99999)
-  Source: cpminitialsetup.sh:967-983; radkit-control.sh:277-290; iseperms.sh:201,237-238
+  Source: cpminitialsetup.sh:967-983; radkit-control.sh:277-290; setdbpw.sh:315-322,363; iseperms.sh:201,237-238
 ISE-F57: RADKit Docker container — RADKIT_SERVICE_SUPERADMIN_PASSWORD + CUSTOMER_SUPPORT_PASSWORD passed as base64 env vars [HIGH]
   docker_create_container --env RADKIT_SERVICE_SUPERADMIN_PASSWORD_BASE64=... --env CUSTOMER_SUPPORT_PASSWORD_BASE64=...
   docker inspect radkit-service OR /var/lib/docker/containers/<id>/config.v2.json -> base64-decode = plaintext
