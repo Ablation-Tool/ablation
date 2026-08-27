@@ -345,6 +345,16 @@ CUCM-F29 MEDIUM: CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5,
   Affected: CAPF phone cert enrollment, inter-cluster token encryption, OAuth token RSA wrapping
   CVSS: 5.9 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
 
+CUCM-F30 MEDIUM: CallManager RSA private key passphrase stored in plaintext at predictable path
+  File: cm-security/libCryptoUtil.so → CreatePrivateKeyPassPhraseInLocalStore() at 0x1772
+  Path: /usr/local/cm/.security/CallManager/keys/CallManager.passphrase
+  CreatePrivateKeyPassPhraseInLocalStore(): fopen("w") → GetRandonPassPhrase(10 bytes) → fwrite() (NO encrypt)
+  GetPrivateKeyPassPhraseFromLocalStore(): fopen("r") → fread() byte-by-byte (NO decrypt) → raw return
+  GetRandonPassPhrase(): RAND_bytes(10) → 56-char alphabet [A-x] → 57.5 bits entropy
+  Contrast: CAPF creds use CCMShellEncryptionUtil AES-CBC; CallManager passphrase has no encryption layer
+  Chain: any file-read exploit → CallManager.passphrase → decrypt CallManager_priv.pem → SRTP MITM
+  CVSS: 5.5 Medium AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
@@ -353,7 +363,7 @@ CUCM-F29 MEDIUM: CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5,
 - libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 import requests
 import urllib3
@@ -789,6 +799,7 @@ def full_findings_summary() -> str:
         ("CUCM-F27", "MEDIUM",   "SAML SP AuthnRequests unsigned by default (metadata_auth_request_signed=false) — forged IdP redirects"),
         ("CUCM-F28", "LOW",      "SAML SP metadata/assertion signing disabled (sp_md_signed=false) — SP metadata substitution surface"),
         ("CUCM-F29", "MEDIUM",   "CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5, deprecated NIST SP 800-131A) — Bleichenbacher susceptibility"),
+        ("CUCM-F30", "MEDIUM",   "CallManager RSA private key passphrase stored in plaintext at /usr/local/cm/.security/CallManager/keys/CallManager.passphrase"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
