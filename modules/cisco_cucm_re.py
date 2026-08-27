@@ -679,21 +679,40 @@ CUCM-F51 HIGH: cucm-uds.war UDS REST API — Auth constraint covers only /user/*
   Chain: /servers → lateral movement target enumeration
   CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
 
+CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (built Aug 2011, EOL Dec 2016)
+  Component: platform-sso RPM / SSO Tomcat instance
+  Evidence: usr/local/platform/sso/tomcat/custom/ServerInfo.properties:
+    server.info=Apache Tomcat/6.0.30
+    server.built=Aug 9 2011 09:34:27
+  CUCM 15.0.1 (2024/2025) ships 13-year-old Tomcat for SSO SAML authentication
+  PAM etc/pam.d/sso-auth: 'auth sufficient pam_permit.so' — always returns PAM_SUCCESS
+    Local auth entirely delegated to SAML; no fallback password check
+  EOL: Apache Tomcat 6.0.x EOL December 2016; 50+ CVEs in 6.0.30 -> EOL window
+  Critical CVEs:
+    CVE-2012-3546: auth bypass with client cert + NIO (CUCM uses client cert auth extensively)
+    CVE-2016-8735: RCE via JmxRemoteLifecycleListener
+    CVE-2014-0096: XXE via DefaultServlet
+    CVE-2013-2185: RCE via file upload if manager app deployed
+  Compound: SSO Tomcat compromise = auth bypass for all CUCM platform services using SSO
+  Chain: F6 (JWT) + F52: EOL Tomcat provides alternate SSO bypass path even with alg:none blocked
+  CVSS: 7.5 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
 - cm-car/cm-cdrdlv/cm-cef/cm-ipvms/cm-ipvmsd/cm-ccmportal/cm-CTIManager/cm-soap-cdr — CLOSED (no findings)
 - headset/ucmuser/ccmuser/cucreports/dhcp/ils/ccmpns — CLOSED (scope only; no new standalone findings)
 - cm-lpns WebSocket endpoint — CANDIDATE: AuthFilter maps to /register/* HTTP only; @ServerEndpoint bypasses?
-- cm-changecredential — CLOSED (F50 documented: no security-constraint, PIN oracle, Unity sync)
-- cucm-uds — CLOSED (F51 documented: unauthenticated /emLoggedInUsers + /users + /servers + ccmcip endpoints)
+- cm-changecredential — CLOSED (F50: no security-constraint, PIN oracle, Unity sync)
+- cucm-uds — CLOSED (F51: unauthenticated /emLoggedInUsers + /users + /servers + ccmcip)
+- platform-sso — CLOSED (F52: Tomcat 6.0.30 EOL in SSO auth tier; pam_permit.so)
+- platform-adminsftp/platform-drf/install_file_signing — CLOSED (no credential findings; drf.war properly auth-constrained)
 - cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
-- ucplatform: platform-adminsftp, platform-drf, install_file_signing, platform-sso — IN PROGRESS
-- ucapp_common remaining: cm-gaxl, cm-reporter, cm-reporter-servlet, cm-scheduler, cm-script, cm-tvs, cm-changecredential-CLOSED, cucminventory, ucm-ccmact, generic-util
-- serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-svc-web, cm-soap2-logcollectionservice2, cm-soap2-realtimeservice2, cm-soap-logcollectionservice, cm-soap-perfmonservice, cm-soap-realtimeservice
+- ucapp_common remaining: cm-gaxl, cm-reporter-servlet, cm-scheduler, cm-tvs, cucminventory, ucm-ccmact
+- serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-soap-callrecordservice, cm-soap-dpservice
 """
 
-VERSION = "3.7.0"
+VERSION = "3.8.0"
 
 import requests
 import urllib3
@@ -1677,6 +1696,7 @@ def full_findings_summary() -> str:
         ("CUCM-F49", "HIGH",    "pms.war Phone Migration Service: Jersey REST at /* has NO auth-constraint; transport-guarantee=NONE (comment says HTTPS redirect, misconfigured); FindPhoneByDN unauthenticated; PhoneMigration PIN oracle (3 distinct error msgs); brute PIN → hijack any user phone profile; chain: F3 static key → dump SSIDs+PINs from DB → direct hijack"),
         ("CUCM-F50", "HIGH",    "changecredential.war NO security-constraint (Servlet 2.2 DTD); /ChangeCredentialServlet exposes userid+oldpin params; PIN oracle: DIRUSER_ERROR=unknown user, INVALID_CREDENTIAL=valid user, USER_LOCKED=exhausted; PIN change propagates to Unity Connection via UpdateUnityUsersPinUtil; chain: F3 decrypt EndUser.pin offline → bypass oracle"),
         ("CUCM-F51", "HIGH",    "cucm-uds.war UDS REST API (Jersey): auth-constraint covers only /user/* and /private/user/*; unauthenticated: /emLoggedInUsers (EM session state — who is on which phone NOW), /users (directory enumeration), /clusterUser, /servers (cluster topology), /groups (RBAC), /private/emLoggedInUsers, /private/users, /private/clusterUser, /private/servers; /docs/* DefaultServlet listings=true; ccmcip /ControlledDevices.jsp + /xmldirectory.jsp unconstrained; chain: F51 emLoggedInUsers → F48 IPMA call divert; F51 users → F49/F50 PIN oracle"),
+        ("CUCM-F52", "HIGH",    "platform-sso ships Tomcat 6.0.30 (built Aug 2011, EOL Dec 2016) as SSO auth tier Tomcat; 50+ CVEs in 6.0.30→EOL window including CVE-2012-3546 auth bypass (client cert + NIO); PAM sso-auth uses pam_permit.so (auth always succeeds) → local auth fully delegated to SAML; SSO Tomcat compromise = full platform auth bypass"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
