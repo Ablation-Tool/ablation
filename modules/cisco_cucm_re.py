@@ -854,9 +854,30 @@ CUCM-F95 MEDIUM: pms.war Jersey JAX-RS FindPhoneByDN + PhoneMigration -- no auth
   security-constraint has only <transport-guarantee>NONE</transport-guarantee>, no <auth-constraint>
   FindPhoneByDN: phone MAC-to-DN mapping enumerable without auth; PhoneMigration: upgrade state exposed
   Chain: F84 (TFTP phone config enumeration -> MACs) -> F95 (FindPhoneByDN -> MAC-to-extension mapping)
+
+CUCM-F96 MEDIUM: cm-CtlCli ctl_cli.sh copy_ctlFile() TOCTOU -- /tmp/ctl_batch predictable SFTP batch file -> cluster-wide lateral movement
+  /tmp/ctl_batch + /tmp/delete_ctl_batch created via cat >> without O_EXCL; world-writable /tmp
+  Race window: cat-create to sftp_connect.sh -b /tmp/ctl_batch sftpuser@$node execution
+  Attacker with local shell pre-plants malicious SFTP batch -> sftpuser executes injected commands on ALL cluster peer nodes
+  Chain: F72 (TOCTOU class), F35 (CTL file controls cluster security mode)
+
+CUCM-F97 HIGH: cm-RIS mmfSpyScript.sh ${PARAMS[*]} unquoted array expansion -- shell injection in RIS diagnostics CLI
+  OUTPUT=`/usr/local/cm/bin/mmfSpy ${PARAMS[*]}` -- ${PARAMS[*]} word-splits on whitespace in backtick context
+  Shell metacharacters (backtick, $(), ;, |, &) in CLI args break out -> execute as shell commands in mmfSpyScript.sh context
+  Attack vector: authenticated CLI user 'show risdb <injected>' payload; same class as F63/F67/F94 DRF injection family
+
+CUCM-F98 CRITICAL: platform-survivability survivabilityNode_dkey_copy.sh -- dkey.txt + oldkeys.txt set world-readable
+  chmod u=rw,go=r applied to /usr/local/platform/.security/CCMEncryption/keys/dkey.txt (plaintext DB encryption Dkey)
+  oldkeys.txt = all historical Dkeys (never pruned); any local process reading dkey.txt bypasses F3's static-AES KEK step
+  Chain: F3 (static AES key = alternative Dkey recovery, now second-order); F4 + Dkey = full credential dump
+
+CUCM-F99 HIGH: cm-ccmivr ccmivr.war Servlet 2.4 schema + Servlet 3.0 <http-method-omission> version mismatch
+  GET+POST omitted from deny-all <auth-constraint/>; IVR PIN-lookup, PlaceCall, GetAudioFile accessible without auth
+  Version mismatch: Servlet 2.4 declared but Servlet 3.0 omission elements used -- parser behavior unpredictable
+  Chain: F37 (ccmivr SQLi now confirmed pre-auth accessible); ccmportal + ccmivr = 2nd confirmed WAR with omission pattern
 """
 
-VERSION = "3.24.0"
+VERSION = "3.25.0"
 
 import requests
 import urllib3
