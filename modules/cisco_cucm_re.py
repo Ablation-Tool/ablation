@@ -634,16 +634,66 @@ CUCM-F49 HIGH: pms.war Phone Migration Service — Jersey REST API unauthenticat
   Secondary: transport-guarantee=NONE → PIN transmitted in cleartext over HTTP
   CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
 
+CUCM-F50 HIGH: changecredential.war — No security-constraint; PIN oracle (DIRUSER/INVALID_CREDENTIAL/USER_LOCKED) + Unity voicemail PIN sync
+  Component: cm-changecredential RPM / changecredential.war (Servlet 2.2 DTD)
+  display-name: Cisco Change Pin Application
+  NO <security-constraint> anywhere in web.xml — no transport guarantee, no role enforcement
+  Endpoints: /ChangeCredentialServlet, /jsp/ChangePin.jsp, /jsp/ChangeSuccess.jsp, /jsp/ChangePinError.jsp
+  Request params (from ChangeCredentialCommunicator.getChangePinXML() bytecode):
+    userid (user directory ID), oldpin (current PIN in cleartext), device (phone device name)
+  PIN oracle via Constants.java interface error codes:
+    DIRUSER_ERROR → user not found (enumerate valid userids)
+    INVALID_CREDENTIAL → wrong PIN (valid user confirmed)
+    USER_LOCKED → account locked (valid user, PIN attempts exhausted)
+    NEW_PIN_SAME_AS_OLD_PIN, NEW_PIN_MISMATCH → distinct UI messages
+  ChangePinError_jsp renders distinct errors per return code → full oracle surface
+  UpdateUnityUsersPinUtil: successful PIN change propagates to all Unity Connection servers
+    where appserverinfo.content LIKE '%<pinSyncEnabled>true</pinSyncEnabled>%'
+  Authenticator.initGoodApps() loads device credentials from CMDatabase — device param is user-supplied
+  Chain: F3 static key → decrypt user PINs from EndUser.pin → replay directly
+    OR F46 dnaliaslookup ClearCache → enumerate valid userids → oracle brute-force F50
+  CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N
+
+CUCM-F51 HIGH: cucm-uds.war UDS REST API — Auth constraint covers only /user/* and /private/user/*
+  Component: ucm-cucm-uds RPM / cucm-uds.war (Servlet 3.0, Jersey 1.x)
+  Jersey servlet covers /* with 6 packages: priv.resources + pub.resources + ccmcip + ccmpd + providers + xps
+  Security-constraint auth only on: /user/* and /private/user/* (GET/POST/PUT/DELETE/HEAD)
+  Catch-all /* constraint: user-data-constraint NONE, NO auth-constraint
+  UDSFilter (app-level auth) maps only to /user/* and /private/user/* — skips all other endpoints
+  Unauthenticated endpoints confirmed via bytecode @Path extraction:
+    /emLoggedInUsers (EmLoggedInUsers pub) — real-time EM session state: who is logged into which phone NOW
+    /users (UsersResource pub) — user directory search/enum (ThrottleFilter applies, no auth)
+    /clusterUser (ClusterUserResource pub) — cluster-level user lookup
+    /servers (ServersResource pub) — CUCM cluster server topology (IPs, roles)
+    /groups (UserGroupResources pub) — user role/group enumeration
+    /private/emLoggedInUsers (EmLoggedInUsers priv) — private API tier, same data
+    /private/users (UsersResource priv) — private user search
+    /private/clusterUser (ClusterUserResource priv) — private cluster user data
+    /private/servers (ServersResource priv) — private server list
+    /version (VersionResource pub) — API version
+    /docs/* — DefaultServlet with listings=true (directory listing of docs/ content)
+    /ccmcip/ControlledDevices.jsp — devices controlled by a given user
+    /ccmcip/xmldirectory.jsp — XML directory service
+  Chain: /emLoggedInUsers → F48 IPMA call divert against active sessions
+  Chain: /users → F49/F50 PIN oracle against enumerated userids
+  Chain: /servers → lateral movement target enumeration
+  CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
 - cm-car/cm-cdrdlv/cm-cef/cm-ipvms/cm-ipvmsd/cm-ccmportal/cm-CTIManager/cm-soap-cdr — CLOSED (no findings)
 - headset/ucmuser/ccmuser/cucreports/dhcp/ils/ccmpns — CLOSED (scope only; no new standalone findings)
 - cm-lpns WebSocket endpoint — CANDIDATE: AuthFilter maps to /register/* HTTP only; @ServerEndpoint bypasses?
+- cm-changecredential — CLOSED (F50 documented: no security-constraint, PIN oracle, Unity sync)
+- cucm-uds — CLOSED (F51 documented: unauthenticated /emLoggedInUsers + /users + /servers + ccmcip endpoints)
 - cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
+- ucplatform: platform-adminsftp, platform-drf, install_file_signing, platform-sso — IN PROGRESS
+- ucapp_common remaining: cm-gaxl, cm-reporter, cm-reporter-servlet, cm-scheduler, cm-script, cm-tvs, cm-changecredential-CLOSED, cucminventory, ucm-ccmact, generic-util
+- serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-svc-web, cm-soap2-logcollectionservice2, cm-soap2-realtimeservice2, cm-soap-logcollectionservice, cm-soap-perfmonservice, cm-soap-realtimeservice
 """
 
-VERSION = "3.5.0"
+VERSION = "3.7.0"
 
 import requests
 import urllib3
@@ -1625,6 +1675,8 @@ def full_findings_summary() -> str:
         ("CUCM-F47", "MEDIUM",  "dna.war DNAMainServlet at /DNAMainServlet has no <security-constraint>; TokenFilter class (com.cisco.ccm.dna.servlets.TokenFilter) missing from WAR; alias persistence layer writable without auth; chain: F47 poison store + F46 ClearCache = persistent alias redirect"),
         ("CUCM-F48", "HIGH",    "ma.war (IPMA) security-constraint lists PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE deny-all but omits GET/POST; CSCsx40175 Cisco internal bug ref; /servlet/MAService + setAsstDivertTarget.jsp + setMgrDivertTarget.jsp unauthenticated GET+POST → call divert any manager/assistant pair"),
         ("CUCM-F49", "HIGH",    "pms.war Phone Migration Service: Jersey REST at /* has NO auth-constraint; transport-guarantee=NONE (comment says HTTPS redirect, misconfigured); FindPhoneByDN unauthenticated; PhoneMigration PIN oracle (3 distinct error msgs); brute PIN → hijack any user phone profile; chain: F3 static key → dump SSIDs+PINs from DB → direct hijack"),
+        ("CUCM-F50", "HIGH",    "changecredential.war NO security-constraint (Servlet 2.2 DTD); /ChangeCredentialServlet exposes userid+oldpin params; PIN oracle: DIRUSER_ERROR=unknown user, INVALID_CREDENTIAL=valid user, USER_LOCKED=exhausted; PIN change propagates to Unity Connection via UpdateUnityUsersPinUtil; chain: F3 decrypt EndUser.pin offline → bypass oracle"),
+        ("CUCM-F51", "HIGH",    "cucm-uds.war UDS REST API (Jersey): auth-constraint covers only /user/* and /private/user/*; unauthenticated: /emLoggedInUsers (EM session state — who is on which phone NOW), /users (directory enumeration), /clusterUser, /servers (cluster topology), /groups (RBAC), /private/emLoggedInUsers, /private/users, /private/clusterUser, /private/servers; /docs/* DefaultServlet listings=true; ccmcip /ControlledDevices.jsp + /xmldirectory.jsp unconstrained; chain: F51 emLoggedInUsers → F48 IPMA call divert; F51 users → F49/F50 PIN oracle"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
