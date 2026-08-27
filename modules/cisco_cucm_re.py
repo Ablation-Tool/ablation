@@ -534,17 +534,59 @@ CUCM-F41 CRITICAL: CMAS Redis unauthenticated on all interfaces — CDR exfil + 
   Amplifier: post-RCE accesses F3 key, Informix DB, CTL files, HAProxy socket (F38)
   CVSS: 9.8 Critical AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
 
+CUCM-F42 MEDIUM: BPS JVM-global LDAP TLS endpoint identification disabled
+  Component: cm-bps RPM / /usr/local/cm/conf/bps/BPSCfg.xml
+  JVM param: -Dcom.sun.jndi.ldap.object.disableEndpointIdentification=true
+  Effect: disables JDK built-in LDAPS hostname verification for ALL JNDI LDAP connections in BPS
+  Classes affected: ImportLDAPAuth, ImportLDAPDir (bulk LDAP user/auth import)
+  Attack: MitM on LDAP connection exposes LDAP bind credentials + allows injecting fake users into CUCM
+  Extends: F22 (same LDAPS bypass pattern, different service)
+  CVSS: 5.9 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
+
+CUCM-F43 HIGH: Cisco EVVBU code-signing private key ships in CUCM installer
+  Component: cm-security RPM / /usr/local/cm/.security/certs/maKey.pvk
+  PVK magic: 0xb0b5f11e (valid Microsoft PVK)
+  Key type: 0x2 = AT_SIGNATURE (code-signing, not encryption)
+  Encrypted: yes (salt_len=16, key_len=1172)
+  Cert subject: CN=Cisco Systems Inc., OU=Enterprise Voice Video Business Unit
+  Cert issuer: CN=Thawte Code Signing CA
+  Impact: extracted PVK + cracked/known password → sign binaries as Cisco EVVBU → pass Authenticode
+  Chain: PVK password may follow same pattern as other CUCM static keys (F3)
+  CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+
+CUCM-F44 CRITICAL: WebDialer Axis SOAP at /services/* accessible without container auth
+  Component: cm-webdialer RPM / webdialer.war
+  web.xml security-constraint covers: /Webdialer/* and /j_security_check ONLY
+  /services/* has NO security-constraint entry → unauthenticated access
+  Services exposed: WebdialerSoapService (allowedMethods=*), WebdialerSoapService70 (allowedMethods=*)
+  AdminService: enableRemoteAdmin=false (localhost only) — still has hardcoded adminPassword=admin
+  server-config.wsdd: <parameter name="adminPassword" value="admin"/>
+  F40 extension: webdialer.war also ships WD70/CiscoSoapClientTestTrustManager.class (SunFakeTrustSocketFactory)
+  Attack chain:
+    1. POST /services/WebdialerSoapService70 → initiate calls without auth
+    2. After F41 Redis RCE: use adminPassword=admin locally → hot-deploy malicious Axis service
+  CVSS: 9.8 Critical AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+
+CUCM-F45 CRITICAL: Extension Mobility EMServiceServlet — GET/POST unconstrained (HTTP method omission)
+  Component: cm-em RPM / emservice.war, emapp.war
+  web.xml security-constraint: deny-all on PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE (explicit list)
+  Servlet spec §13.8.1: listed methods ONLY — GET and POST are NOT constrained
+  No <login-config> in either WAR
+  Servlet: /EMServiceServlet (Extension Mobility phone login/logout)
+  Impact: unauthenticated GET/POST to /EMServiceServlet → phone hijack via EM login
+    - Any attacker can associate any user profile with any IP phone in the enterprise
+    - Intercepts calls and voicemail routed to that phone
+  Amplifier: F3 static key → decrypt EM user credentials from DB → replay to unauthenticated EMServiceServlet
+  CVSS: 9.1 Critical AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- cm-pnp: Plug and Play provisioning
-- cm-ucmuser: UCMUser self-care portal WAR
-- cm-bps: Bulk provisioning
 - cm-car / cm-cdrdlv: CDR/CAR reporting (low priority)
-- cm-ccm binary deep dive: SIP nonce generation, RADIUS auth, media crypto key exchange
+- cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
 """
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 
 import requests
 import urllib3
@@ -1342,6 +1384,60 @@ def check_cmas_redis(host: str = None, port: int = 6379) -> dict:
     return evidence
 
 
+def check_webdialer_soap(host: str = None, port: int = 8080) -> dict:
+    """CUCM-F44: Probe WebDialer Axis SOAP endpoint for unauthenticated access."""
+    evidence = {
+        "finding": "CUCM-F44",
+        "severity": "CRITICAL",
+        "title": "WebDialer /services/* accessible without container auth; adminPassword=admin",
+    }
+    if host:
+        import urllib.request
+        # Probe /services/WebdialerSoapService70 — should return Axis WSDL without auth
+        url = f"http://{host}:{port}/webdialer/services/WebdialerSoapService70?wsdl"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                body = r.read(512).decode("utf-8", errors="replace")
+                if "wsdl" in body.lower() or "WebdialerSoap" in body or "WD70" in body:
+                    evidence["probe"] = {
+                        "host": host, "port": port, "status": r.status,
+                        "verdict": "UNAUTHENTICATED_SOAP_WSDL",
+                        "snippet": body[:200],
+                    }
+                else:
+                    evidence["probe"] = {"host": host, "port": port, "status": r.status, "body_snippet": body[:100]}
+        except Exception as e:
+            evidence["probe"] = {"host": host, "port": port, "error": str(e)}
+    return evidence
+
+
+def check_em_service(host: str = None, port: int = 8080) -> dict:
+    """CUCM-F45: Probe Extension Mobility EMServiceServlet for unauthenticated GET access."""
+    evidence = {
+        "finding": "CUCM-F45",
+        "severity": "CRITICAL",
+        "title": "EMServiceServlet HTTP method bypass — GET/POST unauthenticated (Servlet 2.2 omission)",
+    }
+    if host:
+        import urllib.request
+        url = f"http://{host}:{port}/emservice/EMServiceServlet"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                body = r.read(512).decode("utf-8", errors="replace")
+                evidence["probe"] = {
+                    "host": host, "port": port, "status": r.status,
+                    "verdict": "EM_SERVICE_ACCESSIBLE" if r.status < 400 else "BLOCKED",
+                    "snippet": body[:200],
+                }
+        except urllib.error.HTTPError as e:
+            evidence["probe"] = {"host": host, "port": port, "http_status": e.code, "verdict": "BLOCKED" if e.code in (401, 403) else "CHECK_RESPONSE"}
+        except Exception as e:
+            evidence["probe"] = {"host": host, "port": port, "error": str(e)}
+    return evidence
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -1386,6 +1482,10 @@ def full_findings_summary() -> str:
         ("CUCM-F39", "HIGH",    "SRST CTL client EasyX509TrustManager: checkServerTrusted() no-op — CTLSocket.tlsConnect() accepts any server cert; MitM → inject CTL → branch phones trust attacker CA → full phone estate MitM"),
         ("CUCM-F40", "LOW",     "CiscoSoapClientTestTrustManager (named Test) shipped in production UXLService.war; sets JVM-wide axis.socketSecureFactory=SunFakeTrustSocketFactory; checkClientTrusted() no-op"),
         ("CUCM-F41", "CRITICAL","CMAS Redis bind=0.0.0.0 protected-mode=no no requirepass; pub/sub broker for CDRs+syslogs+filebeat; CONFIG SET file-write → SSH key injection or cron RCE"),
+        ("CUCM-F42", "MEDIUM",  "BPS JVM -Dcom.sun.jndi.ldap.object.disableEndpointIdentification=true globally disables LDAPS hostname verification; ImportLDAPAuth bulk import MitM-able; extends F22"),
+        ("CUCM-F43", "HIGH",    "cm-security ships Cisco EVVBU code-signing private key: maKey.pvk (PVK magic 0xb0b5f11e, AT_SIGNATURE, encrypted); cert CN=Cisco Systems Inc. OU=EVVBU; Thawte Code Signing CA; crack PVK → sign binaries as Cisco"),
+        ("CUCM-F44", "CRITICAL","WebDialer webdialer.war /services/* (WebdialerSoapService, WD70) has NO <security-constraint>; server-config.wsdd adminPassword=admin; enableRemoteAdmin=false limits hotdeploy to localhost; unauthenticated SOAP call initiation"),
+        ("CUCM-F45", "CRITICAL","Extension Mobility emservice.war security-constraint enumerates PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE but omits GET/POST; Servlet spec: unlisted methods unconstrained; no <login-config>; /EMServiceServlet unauthenticated GET+POST → phone hijack"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
