@@ -875,9 +875,22 @@ CUCM-F99 HIGH: cm-ccmivr ccmivr.war Servlet 2.4 schema + Servlet 3.0 <http-metho
   GET+POST omitted from deny-all <auth-constraint/>; IVR PIN-lookup, PlaceCall, GetAudioFile accessible without auth
   Version mismatch: Servlet 2.4 declared but Servlet 3.0 omission elements used -- parser behavior unpredictable
   Chain: F37 (ccmivr SQLi now confirmed pre-auth accessible); ccmportal + ccmivr = 2nd confirmed WAR with omission pattern
+
+CUCM-F100 CRITICAL: cm-usersync DNAliasSync_do_backup/restore -- 4th DRF os.system() + sudo tar injection instance
+  5 injection points: DEVICE_TARBALL(arg4), LOGPATH(arg1), STATUSPATH(arg2), DEC_SEQ(arg6), ENC_SEQ(arg8)
+  Status progress: os.system("echo ... > " + STATUSPATH) = arbitrary write-to-any-path as root
+  Restore: command = DEVICE_TARBALL + DEC_SEQ + " | sudo /bin/tar ..." = command-prefix injection -> root RCE
+  Systemic class confirmed 4 instances: F63 (cm-syslog), F67 (cm-reporter), F94 (cm-bps BAT), F100 (cm-usersync DNAliasSync)
+
+CUCM-F101 HIGH: webdialer.war Axis 1.x /services/* no container auth + hardcoded adminPassword=admin
+  server-config.wsdd globalConfiguration: adminPassword=admin (Axis default unchanged)
+  /services/* NOT in any security-constraint; AxisServlet serves WebdialerSoapService/Service70/Version without container auth
+  HTTPAuthHandler in transport extracts creds but no Authenticate handler -> no actual validation at Axis level
+  Version service: returns Axis 1.x version without auth (CVE fingerprinting surface)
+  Chain: F1 (Axis2 admin:axis2 in axl.war) -> F101 (Axis 1.x adminPassword=admin in webdialer) = systemic Axis default-cred pattern
 """
 
-VERSION = "3.25.0"
+VERSION = "3.26.0"
 
 import requests
 import urllib3
@@ -1909,6 +1922,8 @@ def full_findings_summary() -> str:
         ("CUCM-F97", "HIGH",    "cm-RIS mmfSpyScript.sh: OUTPUT=`/usr/local/cm/bin/mmfSpy ${PARAMS[*]}` -- ${PARAMS[*]} unquoted array expansion in backtick command; word-split on whitespace causes shell metacharacters in CLI args (backtick, $(), ;, |, &) to break out of argument context and execute as shell commands in mmfSpyScript.sh process context; attack vector: authenticated CLI user runs 'show risdb <injected>' with metachar payload; privilege level = dispatch context of mmfSpyScript.sh (platform CLI broker typically root or privileged service account); class: CWE-78 (same as F63/F67/F94 DRF injection family, different component); remediation: quote array as \"${PARAMS[@]}\" and validate against allowlist"),
         ("CUCM-F98", "CRITICAL","platform-survivability survivabilityNode_dkey_copy.sh replaceDkeyOnServivalNode(): chmod u=rw,go=r applied to dkey.txt + encrypted_Dkey.txt + oldkeys.txt at /usr/local/platform/.security/CCMEncryption/keys/; dkey.txt = plaintext database encryption Dkey; oldkeys.txt = all historical Dkeys (never pruned, appended on rotation); any local process reading dkey.txt bypasses F3's static-AES-key KEK step entirely; world-readable at file level (directory traversal permission needed for exploitation; CUCM's permissive posture makes it probable); chain: F3 (static AES key = alternative Dkey recovery, now second-order); F4 (Informix creds) + Dkey = full credential dump; F11 (inter-cluster passwords decryptable with Dkey)"),
         ("CUCM-F99", "HIGH",    "cm-ccmivr ccmivr.war: version=2.4 schema but uses Servlet 3.0 <http-method-omission>GET + POST omitted from deny-all <auth-constraint/>; same pattern as F87 (ccmportal.war) -- GET+POST exempted from container auth, leaving IVR PIN-lookup (IVRPinLookup/IVRCalleridLookup), enable/disable remote extension, PlaceCall, GetAudioFile all accessible without authentication; amplifies F37 (ccmivr SQLi via calledPartyNumber now confirmed pre-auth); version mismatch: Servlet 2.4 declared but Servlet 3.0 features used -- older strict parsers may collapse to full deny (more restrictive) or fully ignore omission elements (less restrictive); systemic: ccmportal + ccmivr = 2nd confirmed WAR with this pattern"),
+        ("CUCM-F100", "CRITICAL","cm-usersync DNAliasSync_do_backup.py / DNAliasSync_do_restore.py: 4th independent DRF os.system() + sudo tar injection instance (systemic class F63/F67/F94/F100); 5 injection points all from sys.argv: DEVICE_TARBALL(arg4), LOGPATH(arg1), STATUSPATH(arg2), DEC_SEQ(arg6), ENC_SEQ(arg8); restore: command = DEVICE_TARBALL + DEC_SEQ + ' | sudo /bin/tar ...' = command-prefix injection -> root shell; STATUSPATH: os.system('echo ... > ' + STATUSPATH) = arbitrary root file write; systemic DRF framework defect confirmed across 4 separate CUCM components"),
+        ("CUCM-F101", "HIGH",    "cm-webdialer webdialer.war Axis 1.x /services/* no container auth + hardcoded adminPassword=admin in server-config.wsdd; /services/* NOT covered by any security-constraint; WebdialerSoapService/Service70/Version accessible without container auth; globalConfiguration adminPassword=admin (Axis default unchanged); HTTPAuthHandler in transport extracts creds but no Authenticate handler in service requestFlow -> no actual validation; Version service returns Axis version without auth (fingerprinting); chain: F1 (Axis2 admin:axis2 in axl.war) + F101 (Axis 1.x adminPassword=admin) = systemic Axis default-cred pattern"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
