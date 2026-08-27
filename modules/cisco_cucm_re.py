@@ -373,6 +373,22 @@ CUCM-F31 CRITICAL: F3 static key decrypts Windows CA service account credentials
   Scope: all CUCM deployments with Online CA mode (CAPFCertGenMethod=4, ONLINE_CA_TYPE=2) + Windows ADCS
   CVSS: 9.1 Critical AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H
 
+CUCM-F33 CRITICAL: Hardcoded OpenAM encryption password in FederationConfig.properties
+  File: sso_sp/usr/local/platform/sso/saml/metadata/FederationConfig.properties
+  Key: am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2  (same across ALL CUCM installations)
+  Decoder: com.sun.identity.saml.xmlsig.passwordDecoder=com.sun.identity.fedlet.FedletEncodeDecode
+  Affected secrets:
+    storepass: /usr/local/platform/.security/tomcat/keys/tomcat.passphrase (SAML JKS password)
+    keypass:   /usr/local/platform/.security/tomcat/keys/tomcat.passphrase (SAML signing key password)
+  Chain:
+    am.encryption.pwd → FedletEncodeDecode.decode(tomcat.passphrase) → JKS password
+    → unlock tomcat.keystore → extract SAML SP signing private key
+    → forge SAML assertions for any user → authenticate as admin
+    → also: unlock Tomcat HTTPS private key → TLS MITM all CUCM web interfaces
+  Context: F3 covers CCMEncryption (CallManager subsystem); F33 covers OpenAM/Fedlet (SSO subsystem)
+    Two independent hardcoded keys across two orthogonal credential stores
+  CVSS: 9.1 Critical AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N (key is public from ISO; no auth needed)
+
 CUCM-F32 CRITICAL: F3 static key decrypts OAuth JWT signing + encryption keys in authzkeys DB table
   File: ims/com/cisco/security/ims/authentication/GetAuthzKeys.class
   SQL: select keyid, keyvalue, tkpurpose from authzkeys
@@ -400,7 +416,7 @@ CUCM-F32 CRITICAL: F3 static key decrypts OAuth JWT signing + encryption keys in
 - libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "2.4.0"
+VERSION = "2.5.0"
 
 import requests
 import urllib3
@@ -853,6 +869,49 @@ def check_oauth_authzkeys_decryption(jar_path: str = None) -> dict:
     return {"finding": "CUCM-F32", "severity": "CRITICAL", "evidence": evidence}
 
 
+def check_openam_encryption_key(federation_config_path: str = None) -> dict:
+    """CUCM-F33: Confirm hardcoded am.encryption.pwd in FederationConfig.properties.
+
+    Static evidence:
+      FederationConfig.properties L152: am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2
+      FederationConfig.properties L113: passwordDecoder=com.sun.identity.fedlet.FedletEncodeDecode
+      Affected: tomcat.keystore SAML signing key + Tomcat HTTPS TLS key
+    """
+    HARDCODED_KEY = "8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2"
+    evidence = {
+        "file":           "FederationConfig.properties",
+        "path":           "/usr/local/platform/sso/saml/metadata/FederationConfig.properties",
+        "hardcoded_key":  HARDCODED_KEY,
+        "line":           152,
+        "property":       "am.encryption.pwd",
+        "decoder_class":  "com.sun.identity.fedlet.FedletEncodeDecode",
+        "affected_secrets": [
+            {"property": "com.sun.identity.saml.xmlsig.storepass",
+             "value_path": "/usr/local/platform/.security/tomcat/keys/tomcat.passphrase",
+             "unlocks": "tomcat.keystore JKS (SAML signing key + Tomcat TLS key)"},
+            {"property": "com.sun.identity.saml.xmlsig.keypass",
+             "value_path": "/usr/local/platform/.security/tomcat/keys/tomcat.passphrase",
+             "unlocks": "SAML SP signing private key (alias: tomcat)"},
+        ],
+        "chain": (
+            f"am.encryption.pwd={HARDCODED_KEY!r} → FedletEncodeDecode.decode(tomcat.passphrase) → "
+            "JKS password → unlock tomcat.keystore → extract SAML signing key → "
+            "forge SAML assertions for any user → admin access"
+        ),
+    }
+    if federation_config_path:
+        try:
+            with open(federation_config_path) as f:
+                for line in f:
+                    if "am.encryption.pwd" in line:
+                        value = line.split("=", 1)[1].strip()
+                        evidence["observed_key"] = value
+                        evidence["key_matches"] = (value == HARDCODED_KEY)
+        except Exception as e:
+            evidence["read_error"] = str(e)
+    return {"finding": "CUCM-F33", "severity": "CRITICAL", "evidence": evidence}
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -888,6 +947,7 @@ def full_findings_summary() -> str:
         ("CUCM-F30", "MEDIUM",   "CallManager RSA private key passphrase stored in plaintext at /usr/local/cm/.security/CallManager/keys/CallManager.passphrase"),
         ("CUCM-F31", "CRITICAL", "F3 static key decrypts Windows CA service account creds + FIPS SSM PIN from CACredentials.txt → ADCS compromise + lateral movement"),
         ("CUCM-F32", "CRITICAL", "F3 static key decrypts OAuth JWT signing + encryption keys in authzkeys DB table → forge tokens for any CUCM user"),
+        ("CUCM-F33", "CRITICAL", "Hardcoded OpenAM am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2 in FederationConfig.properties → decode SAML JKS passphrase → forge SAML for any user"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
