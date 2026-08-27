@@ -1004,9 +1004,181 @@ CUCM-F130 HIGH: platform-remotesupport -- systemwide static RSA-2048 key + sudo 
 CUCM-F131 HIGH: platform-ipsec -- IPSecClient raw socket port 8500 no auth + XXE on ipsec.xml
   java.net.Socket(host,8500) no TLS no auth; local process sends CREATE to IPSec manager
   XMLUtils.getDocumentBuilderFactory() missing external-general-entities=false -> XXE on ipsec.xml
+
+CUCM-F220 CRITICAL: platform-clm DRF restore -- do_restore.py os.system() + sudo tar injection on DEC_SEQ/DEVICE argv (5th DRF class)
+  DEC_SEQ=sys.argv[6], DEVICE=sys.argv[3] concatenated into "sudo tar -xvpPf - 1>> LOGPATH 2>> LOGPATH DEC_SEQ|" via os.system()
+  Authenticated DRF restore trigger -> root RCE
+
+CUCM-F221 CRITICAL: platform-clm DRF backup -- do_backup.py os.system() + sudo tar injection on ENC_SEQ/DEVICE_TARBALL argv (6th DRF class)
+  ENC_SEQ=sys.argv[8], DEVICE_TARBALL=sys.argv[4] concatenated into sudo tar via os.system()
+  Authenticated DRF backup trigger -> root RCE
+
+CUCM-F263 CRITICAL: platform-servM -- servm_runtime_setup.sh executes /usr/local/platform/bin/phase_scripts_cmd.sh without integrity verification
+  Lines 110-116: if [ -f $PHASE_SCRIPTS_CMD_FILE ]; then chmod +x; sh $PHASE_SCRIPTS_CMD_FILE; rm -f (destroys evidence)
+  Any process writing that path achieves code execution at servM startup. Chain: DAC_OVERRIDE container -> write file -> service restart -> root exec
+
+CUCM-F271 HIGH: platform-dataexport -- sftpuser/drfuser/ccmservice all use 1024-bit DSA SSH keys (id_dsa)
+  DSA fixed at 1024-bit (~80-bit security), disabled in OpenSSH 9.x+; nonce reuse exposes private key from few observed signatures
+
+CUCM-F272 HIGH: platform-cluster-config -- processClusterConfig.sh SQL injection via nodeName from clusterConfig.xml
+  nodeName=$(awk) from XML -> "select name from processnode where name = '$nodeName'" via $db_cmd (no parameterization)
+  MITM on cluster sync channel -> forge clusterConfig.xml with malicious nodeName -> Informix SQL injection on subscriber
+
+CUCM-F278 MEDIUM: platform-servM -- servM listens on localhost:8889 without authentication
+  *.listenServicePort=8889, *.localHost=true; no credential required; all 3 Docker containers share host network
+  Any compromised container sends restart command -> phase_scripts_cmd.sh execution (F263) if file pre-staged
+
+CUCM-F281 CRITICAL: cm-syslog DRF backup -- do_syslog_backup.py os.system() + sudo tar injection ENC_SEQ+REDIRECTION (7th DRF class)
+  ENC_SEQ=sys.argv[8], DEVICE_TARBALL=sys.argv[4], REDIRECTION=sys.argv[5] -> os.system("sudo tar ... " + ENC_SEQ + " " + REDIRECTION)
+
+CUCM-F282 CRITICAL: cm-tct-svc DRF backup -- tct_do_backup.py os.system() + sudo tar injection (8th DRF class)
+  DEVICE_TARBALL=argv[4], ENC_SEQ=argv[8], REDIRECTION=argv[5] -> os.system(sudo tar ...) all unsanitized
+
+CUCM-F283 CRITICAL: cm-tct-svc DRF restore -- tct_do_restore.py os.system() + sudo tar injection (9th DRF class)
+  DEVICE=argv[3], DEC_SEQ=argv[6] -> os.system(DEVICE + DEC_SEQ + " | sudo tar ...") DEVICE runs before pipe
+
+CUCM-F298 CRITICAL: cm-cdrdlv DRF CDR/CAR backup -- do_cdrcar_backup.py os.system() + sudo tar injection (10th DRF class)
+  deviceTarball=argv[4], ENC_SEQ=argv[8] -> executeWithRCSecured("sudo /bin/tar -cvpPf " + deviceTarball + ... + ENC_SEQ)
+
+CUCM-F299 CRITICAL: cm-car -- RecreateCARTables.sh EXPORT branch unquoted $2 in dbaccess su -c -> informix user RCE
+  su informix -c "/usr/local/cm/db/informix/bin/dbaccess - $2" ($2 unquoted)
+  CAR web report export -> crafted parameter -> informix OS user shell -> full Informix DB compromise
+
+CUCM-F302 HIGH: cm-cdrdlv -- cdragntScript.py/cdrScript.py SD_LIB_PATH env var injected into os.system()
+  LD_LIBRARY_PATH = os.getenv("SD_LIB_PATH") + ":..." ; os.system("export LD_LIBRARY_PATH=" + LD_LIBRARY_PATH)
+  Malicious SD_LIB_PATH in service environment -> shell injection on CDR agent restart
+
+CUCM-F303 HIGH: cm-cdrdlv -- cdrrep_backup.py chmod 777 on /common/drf/CDR_CAR/ and cardb.bin (Informix dump)
+  World-readable CDR database dump; symlink race at chmod allows overwrite of arbitrary file
+
+CUCM-F308 CRITICAL: cm-em -- emservice.war GET/POST excluded from security-constraint by http-method enumeration
+  Only PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE enumerated -> GET/POST outside all constraints -> unauthenticated EM phone login/logout API
+
+CUCM-F309 CRITICAL: cm-em -- emapp.war GET/POST excluded from security-constraint (identical pattern to F308)
+  EMAppServlet (Extension Mobility login UI) accessible without authentication via GET/POST
+
+CUCM-F311 HIGH: cm-tct-svc -- tracecollection.policy AllPermission grant to all code -> JVM sandboxing disabled
+  grant { permission java.security.AllPermission; }; — no codebase restriction
+  Any code loaded in TCT JVM (RMI, deserialization) reads/writes arbitrary files, executes OS commands
+
+CUCM-F312 HIGH: cm-tct-svc -- TCT RMI registry on ports 7000-7002 without authentication
+  rmiRegistryPort=7000, rmiCallbackPort=7001, rmiServerPort=7002; no TLS, no auth
+  Combined with AllPermission (F311): enumerate TCTService registry, invoke backup/restore, load remote classes
+
+CUCM-F318 CRITICAL: ccmadmin -- Struts2 struts.ognl.allowStaticMethodAccess=true -> OGNL static method invocation RCE
+  <constant name="struts.ognl.allowStaticMethodAccess" value="true"/>
+  Enables @ClassName@methodName() in OGNL. Combined with F326 (session OGNL eval) and F319 (CSRF) -> pre-auth RCE chain
+
+CUCM-F319 HIGH: ccmadmin -- 569 state-changing actions without CSRF token (InterceptorStack has no token interceptor)
+  225 Save + 324 Delete + 20 Reset actions: delete phones/users/gateways/routing rules without CSRF protection
+  Single malicious page in admin browser triggers any state-changing operation
+
+CUCM-F321 HIGH: cm-rtmt-servlet -- RTMT XmlToMap.fromXML() Xerces DOMParser XXE (no setFeature disallow-doctype-decl)
+  POST /ast/ASTIsapi.dll?AddAlert with AlertConfig XML -> XXE file read from CUCM server
+  Extract: /etc/shadow, /usr/local/platform/conf/*, DB credential files, platform keys
+
+CUCM-F322 HIGH: cm-gaxl -- CXF LoggingFeature logs full SOAP Authorization headers for AXL 12.0/12.5/14.0
+  All AXL Basic Auth credentials logged at INFO level -> readable from log files by any local user
+
+CUCM-F323 HIGH: ccmuser -- Pre-auth reflected XSS on LoginError.jsp via j_username (null CSP)
+  request.getParameter("j_username") reflected unescaped; CSP: default-src * 'unsafe-inline' 'unsafe-eval'
+  Pre-auth XSS + null CSP = credential harvest against all CUCM users
+
+CUCM-F324 HIGH: ccmportal -- <http-method-omission>GET/POST</http-method-omission> leaves primary verbs outside auth-constraint
+  Per Servlet 3.0: method-omission excludes GET+POST from auth requirement
+  Auth falls solely on AuthenticationValve; valve bypass exposes all ccmportal GET/POST unauthenticated
+
+CUCM-F325 HIGH: ccmadmin -- Open redirect in change-password: bypassable regex (needs 'www') + no interceptor stack
+  Regex blocks URLs with both 'http' AND 'www'; protocol-relative //evil.com and HTTPS-no-www bypass
+  CSRF-triggered password change lands admin on attacker page
+
+CUCM-F326 HIGH: ccmadmin -- OGNL expression ${#session.LAST_ACCESSED_PAGE}.do in global 'input' redirect evaluates session value
+  All 569 CSRF-vulnerable actions trigger 'input' result on validation failure
+  With allowStaticMethodAccess=true (F318): CSRF -> taint session -> OGNL eval -> static method -> RCE
+
+CUCM-F327 MEDIUM: ccmadmin -- GenericFindListAction (6 variants) use createStatement() not PreparedStatement
+  WHERE clause built via string concatenation with user search input; sqlEscape() coverage unverified statically
+  ORDER BY column injection or search-field bypass -> Informix full config read
+
+CUCM-F328 MEDIUM: platform-ui -- cli-ldapfix.sh writes TLS_REQCERT never to /etc/openldap/ldap.conf
+  sed -i removes TLS_REQCERT hard; appends TLS_REQCERT never; persists across reboots
+  All LDAP-integrated auth (phone reg, EndUser auth, dir sync) becomes MITM-susceptible after CLI command
+
+CUCM-F285 HIGH: ccmrealm -- SeadragonUserDAO SQL injection via MessageFormat {0} substitution at auth time
+  MessageFormat.format("SELECT ... WHERE my_lower(userid)= my_lower(''{0}'')", userid)
+  Login-time SQL injection against EndUser table; attacker submits crafted username to ccmadmin/ccmuser
+
+CUCM-F286 HIGH: ccmrealm -- CCMRealmPlugin SQL injection via MessageFormat {0} in post-auth role/association queries
+  All CUCM web apps (ccmadmin, ccmservice, cucreports, ucmuser) run these queries after every login
+  FunctionRole + ApplicationAssociation query injection -> dump role/credential tables
+
+CUCM-F287 HIGH: sso_jar -- SSOXMLUtil.getDocumentBuilder() XXE (no disallow-doctype-decl, no setExpandEntityReferences(false))
+  parseXmlFile() used for IdP metadata imports and SP config; attacker-supplied XML -> local file read or SSRF
+
+CUCM-F289 HIGH: sso-sp -- SSOEnablePerService.sh unquoted variables in sudo SAMLSSOMgmt.py invocation -> root shell injection
+  OPERATION/RESULTFILE/ACTIVATESERVICE unquoted in $ENABLESAMLSSO_CMD invocation
+  SSO enable/disable admin action with crafted resultFilePath -> root command execution
+
+CUCM-F290 HIGH: sso-sp -- CommandExecutor.executeCommand() passes String verbatim to new ProcessBuilder(["bash","-c",command])
+  Shell metacharacters in command string execute arbitrary commands; multiple callers in SSO backend
+
+CUCM-F293 HIGH: cm-idp -- IDP ELF64 binary SQL injection via string concatenation in dial plan queries
+  "select * from DialPlanTag where fkDialPlan='" + value (C++ string concat -> ODBC)
+  Binary also imports system() for shell execution
+
+CUCM-F295 MEDIUM: sso-sp -- ssosp.war ESAPI.properties has MasterKey/MasterSalt commented out -> public ESAPI test keys used
+  Encryptor.MasterKey= and Encryptor.MasterSalt= both commented; ESAPI falls back to documented test defaults
+  All ESAPI-encrypted session params/tokens decryptable with known public defaults
+
+CUCM-F296 MEDIUM: sso-sp -- OAuth signing key (/authz_priv.pem) and encryption key paths in plaintext ssoconfig.properties
+  oAuthTokenSigningKey=/usr/local/platform/.security/authz/keys/authz_priv.pem (world-readable via F273 chmod o+rx)
+  Key file read -> full OAuth token forgery for any CUCM user
+
+CUCM-F337 MEDIUM: batui -- BAT bulkconfigtoolexportCheckDependency ${filename} OGNL in Struts2 redirect result
+  <result type="redirect">/bulkconfigtoolexportEdit.do?filename=${filename}</result>
+  With allowStaticMethodAccess=true (F318): filename OGNL injection -> static method -> RCE
+
+CUCM-F338 MEDIUM: Multiple WARs -- crossContext=true on ccmportal/ucmuser/all RTMT apps
+  Any compromised WAR calls getContext("/ccmadmin") -> access sibling app sessions and attributes
+  Compromised RTMT servlet reads ccmadmin session tokens
+
+CUCM-F339 HIGH: cm-ucmadmin -- Jackson 1.9.13 (EOL 2013) -> CVE-2017-7525 polymorphic deserialization RCE
+  If ObjectMapper uses enableDefaultTyping() or @JsonTypeInfo(use=CLASS): attacker JSON -> class instantiation -> RCE
+
+CUCM-F348 CRITICAL: cm-soap2 (5 WARs) -- Axis2 default admin:axis2 + hotdeployment=true + /axis2-admin/* unconstrained
+  cdrondemandservice2, controlcenterservice2, logcollectionservice2, perfmonservice2, realtimeservice2
+  Low-priv CUCM credential -> Axis2 admin console -> deploy malicious AAR -> Tomcat RCE (6th Axis2 RCE vector)
+
+CUCM-F349 CRITICAL: cm-soap-realtimeservice + cm-soap2-realtimeservice2 -- executeCCMSQLStatement passes raw SQL to ConnectorPub.executeQuery()
+  SOAP operation: no parameterization, no whitelist; SQL also logged at INFO (credential exposure)
+  Any Standard CCM Admin Users role -> arbitrary Informix SQL read/write
+
+CUCM-F350 CRITICAL: cm-soap2-controlcenterservice2 -- getFileDirectoryList new File(userInput).listFiles() -> arbitrary filesystem traversal
+  No getCanonicalPath(), no allowlist; debug println("Hey getfiledirlist") confirms no security review
+  Authenticated SOAP caller enumerates /root/.ssh, /usr/local/platform/.security/, /etc/
+
+CUCM-F351 HIGH: cm-soap2-cdrondemandservice2 -- CDRonDemand get_file SFTP: root destroys known_hosts + connects to attacker SFTP
+  ssh_PK_setup.sh: exec rm -f /root/.ssh/known_hosts; spawn sftp attacker; accepts any host key; exfiltrates sftpuser id_dsa.pub
+
+CUCM-F353 HIGH: cm-soap-cdrondemandservice -- /tmp/batchCmds TOCTOU race: world-writable path used by sftpuser sudo sftp -b
+  Attacker pre-creates /tmp/batchCmds as symlink or replaces between write and sftp read -> arbitrary SFTP commands as sftpuser
+
+CUCM-F354 HIGH: cm-soap-dpservice -- DPServiceBindingImpl SQL injection via string concatenation
+  "select pkid from dpdeviceproductcomponent WHERE name = '" + userInput + "' AND fkdpdevice ='" + deviceId + "'"
+  Classic UNION injection -> pivot to applicationuser table
+
+CUCM-F355 HIGH: cm-soap-callrecordservice -- CallRecordBindingImpl prefix-only SQL validation bypassed by UNION
+  Validation: startsWith("select first") OR startsWith("call"); no parameterization after validation
+  "select first 1,* FROM enduser UNION SELECT ..." passes prefix check, executes fully
+
+CUCM-F357 MEDIUM: cmnservutil -- PathReversalSecurityFilter only checks GET query string, ignores POST body
+  doFilter() reads httpRequest.getQueryString(); SOAP POST body bypasses entirely; filter logic also inverted (blocks non-?wsdl GET)
+
+CUCM-F359 MEDIUM: cm-soap-cdrondemandservice -- Test_soap_cdrondemand_file.sh with hardcoded CUAdministrator:ciscocisco shipped to production /usr/local/cm/bin/
+  Reveals canonical SOAP service account name and expected default credentials
 """
 
-VERSION = "3.39.0"
+VERSION = "3.40.0"
 
 import requests
 import urllib3
@@ -2128,6 +2300,18 @@ def full_findings_summary() -> str:
         ("CUCM-F187", "HIGH",    "cm-dna dna.war web.xml: Constraint1 GET/POST on *.do/*.jsp (auth required, transport-guarantee:NONE); Constraint2 PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE (deny-all); PATCH absent -> unconstrained; 8th confirmed Servlet method-enum gap instance; Struts2 filter dispatches PATCH to action classes bypassing auth interceptor stack; DNA has full read access to CUCM dial-plan config"),
         ("CUCM-F188", "HIGH",    "cm-em emapp.war WEB-INF/web.xml: single constraint PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE deny-all on /*; GET/POST/PATCH all unconstrained; EMAppServlet + all EM JSPs accessible without auth; manages user-to-phone profile mapping -> unauthenticated EM login as any user steals desk-phone session; 3rd EM component with same defect (F45 emservice, F180 ma.war, F188 emapp)"),
         ("CUCM-F189", "HIGH",    "headset headset.war web.xml: Constraint1 GET+POST on /* require Standard CCM End Users; Constraint2 GET on /* require Standard EM Auth Proxy Rights; PATCH absent from both constraints -> unconstrained PATCH on /*; auth-method=BASIC with no transport-guarantee element -> HTTP accepted; 9th Servlet method-enum gap; headset.war manages Cisco headset inventory/firmware for all cluster phones"),
+        ("CUCM-F190", "HIGH",    "cm-gaxl gaxl.war web.xml: security-constraint url-pattern '/' (exact root match only) does NOT cover /soap/15_0/AXLAPIService /soap/14_0/AXLAPIService /soap/12_5/AXLAPIService /soap/12_0/AXLAPIService; sole auth enforcement is BasicAuthenticationValve in context.xml; valve bypass -> all legacy AXL SOAP endpoints unprotected; AXL provides full CUCM DB CRUD; transport-guarantee:NONE"),
+        ("CUCM-F191", "MEDIUM",  "cm-gaxl gaxl.war CXF LoggingFeature active on AXL 14.0/12.5/12.0 versioned endpoints; logs full SOAP envelopes including WSSE UsernameToken credentials and phone/user/device config to disk at /var/log/active/cm/trace/; RTMT log collection exposes to any CUCM admin; chain: F190 AXL subpath gap -> credential logging -> RTMT pull -> plaintext AXL creds"),
+        ("CUCM-F192", "LOW",     "cm-sch piProcessScript.sh TOCTOU race: 'rm -f /tmp/ProcessQuery' then 'ps auxww > /tmp/ProcessQuery'; window between rm and redirect allows local attacker to create symlink at /tmp/ProcessQuery -> arbitrary file overwrite with ps output; constrained by local access + timing; script runs during performance counter collection"),
+        ("CUCM-F193", "HIGH",    "cm-dirsync dirsync.jar DSDBSchema: dbAttrDPBindingDN + dbAttrDPBindingPasswd fields map to Informix directorypoolconfig table columns storing LDAP directory pool binding credentials; decryption via F3 static AES-128 key; chain: F4 Informix ccmuser:ccmuser -> SELECT directorypool_bindingpasswd -> F3 decrypt -> plaintext LDAP/AD service account; exposes AD read access to full user tree"),
+        ("CUCM-F194", "HIGH",    "cm-ucmadmin ucmadmin.war WEB-INF/spring/security/applicationContext-security.xml ships plaintext credentials: ucmadmin:123456 (ROLE_ADMIN) + ucmreadonly:secr37 (ROLE_USER); Spring Security currently disabled (DelegatingFilterProxy commented out); web.xml comment preserves config for future OpenAM migration; enabling Spring Security activates ucmadmin:123456 as live admin credential; WAR extractable by any filesystem-access attacker"),
+        ("CUCM-F195", "HIGH",    "cm-cucreports cucreports.war web.xml: 3 security constraints cover GET/POST/HEAD/OPTIONS/PUT/DELETE/CONNECT/TRACE on *.do/*.jsp; PATCH absent from all three; Servlet spec §13.8.1: unlisted methods unconstrained; PATCH request to any Struts/Spring *.do action or *.jsp bypasses all auth; CAR provides CDR/billing records and call detail analysis for entire cluster; 9th Servlet method-enum gap instance"),
+        ("CUCM-F196", "HIGH",    "cm-ucmadmin ucmadmin.war Spring Security entirely disabled: DelegatingFilterProxy + ContextLoaderListener commented out; no CSRF protection, no session-fixation protection, no @Secured/@PreAuthorize method-level enforcement; comment: 'Cannot use due to need for Tomcat Shared Realm SSO'; sole auth gate is Tomcat container constraint; any admin-role session can invoke any Spring MVC controller endpoint regardless of role annotation"),
+        ("CUCM-F197", "MEDIUM",  "cm-ucmadmin ucmadmin.war ships jackson-mapper-asl-1.9.13 + jackson-core-asl-1.9.13 (EOL 2013-07-14); CVE-2019-14379 unsafe ObjectMapper default type handling enables gadget-chain deserialization; Spring MVC DispatcherServlet on com.cisco.ucm handles JSON request bodies; Spring/Commons gadget classes on classpath; exploitability conditional on enableDefaultTyping() usage in controllers"),
+        ("CUCM-F198", "MEDIUM",  "cm-uxl UXLService.war Axis AdminServlet mapped to /servlet/AdminServlet is active (comment on line 42 is self-closing XML comment not wrapping the servlet-mapping block); security-constraint requires Standard CCM End Users on /*; any end user (ROLE_USER lowest privilege) can enumerate all deployed SOAP services + WSDLs via AdminServlet; UXLService handles phone/user/device queries; WSDL disclosure reveals internal API structure"),
+        ("CUCM-F199", "MEDIUM",  "cm-uxl UXLService.war BASIC auth with no user-data-constraint element (transport-guarantee defaults to NONE); UXLService handles phone/user/device lookup SOAP queries; Base64 credentials transmitted without encryption if plaintext HTTP connector active; systemic transport:NONE pattern confirmed across 10+ CUCM WARs"),
+        ("CUCM-F200", "HIGH",    "cm-CTIManager MmmanService::mPassPhrase field holds CallManager_priv.pem RSA private key passphrase obtained from local credential store via GetPrivateKeyPassPhraseFromLocalStore(); credential store populated from Informix DB encrypted with F3 static AES key; chain: F4 Informix ccmuser:ccmuser + F3 static AES key -> DB credential read -> mPassPhrase extraction -> CallManager_priv.pem decryption -> RSA private key -> retrospective TLS decryption of all CTI traffic"),
+        ("CUCM-F201", "MEDIUM",  "cm-asymenc CCMAsymmetricEncryption uses SHA1PRNG (java.security.SecureRandom with SHA1PRNG algorithm) in non-FIPS code path for RSA key generation; SHA1PRNG is cryptographically weak relative to DRBG variants; non-FIPS path active when BCFIPS HYBRID mode enabled (F161 allows all algorithms); RSA keys generated with weak PRNG are more susceptible to state-recovery attacks"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
