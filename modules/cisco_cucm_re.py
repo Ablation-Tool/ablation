@@ -837,6 +837,13 @@ CUCM-F78 HIGH: gaxl.war security-constraint covers only url-pattern '/' (default
   transport-guarantee=NONE on the security-constraint permits cleartext HTTP Basic Auth credentials
   Chain: F66 (Docker lateral movement -> localhost:9446 HTTP -> bypass HTTPS auth) + F64 (same NONE pattern)
   AXL SOAP: full provisioning API (users/devices/dial-plans/gateways/SIP trunks) if reached unauthenticated
+
+CUCM-F79 HIGH: cm-dirsync JVM arg disableEndpointIdentification=true -- LDAP SSL hostname bypass
+  CCMDirSyncCfg.xml: -Dcom.sun.jndi.ldap.object.disableEndpointIdentification=true in JVM arguments
+  Disables TLS endpoint identification (hostname verification) globally for all JNDI/LDAP SSL connections in DirSync JVM
+  Any network MITM -> present any cert (any CN/SAN) -> intercept all LDAP sync traffic
+  Impact: rogue user injection into CUCM directory, steal LDAP bind credentials via LDAP referral, replay enrolled device data
+  Chain: F21 (LDAP bind password decryptable via F3 static key), F22 (LDAPS hostname bypass in IMS LDAP) -- systemic
 """
 
 VERSION = "3.20.0"
@@ -1850,6 +1857,7 @@ def full_findings_summary() -> str:
         ("CUCM-F76", "MEDIUM",  "cm-svc-web ccmservice.war Servlet 3.0: DbSyncServlet (url=/DbSyncServlet.class) and LogoffServlet not in any <security-constraint>; struts2 /* filter intercepts but only dispatches to Struts action if mapping exists for .class extension; no container-level auth enforcement; DbSyncServlet likely triggers CUCM-to-database sync (destructive/sensitive); exploitability depends on Struts action config at runtime"),
         ("CUCM-F77", "MEDIUM",  "cm-sch SCHHostnameVerifier.verify(): iconst_1;ireturn (unconditional true) -- any hostname accepted; TLSSocketFactory enables SSLv2Hello+SSLv3 (POODLE downgrade CVE-2014-3566); SCHTrustManager.checkServerTrusted() DOES validate chain (rethrows exception, not fully bypassed); affected: TAC phone-home, AMC amc.cisco.com, GRTSourceBase :8443/grt/, TraceDownloadUtil SFTP creds XML POST body; same systemic class as F17/F39/F40/F73"),
         ("CUCM-F78", "HIGH",    "cm-gaxl gaxl.war security-constraint <url-pattern>/</url-pattern> (default servlet pattern, root only) -- NOT /*; CXFServlet at /soap/* exposes AXL SOAP v8.0-15.0 without container auth enforcement; only HideResourceFilter (custom) covers /*; bypass vectors: path normalization (//soap/, %2fsoap), RequestDispatcher.forward() bypasses REQUEST-type filter, direct access to internal Tomcat HTTP port 9446 (F66 Docker host network); transport-guarantee=NONE permits cleartext Basic Auth; chain: F66->localhost:9446->unauthenticated AXL SOAP provisioning API"),
+        ("CUCM-F79", "HIGH",    "cm-dirsync CCMDirSyncCfg.xml JVM arg -Dcom.sun.jndi.ldap.object.disableEndpointIdentification=true: disables LDAP SSL endpoint identification (hostname verification) globally for directory synchronization JVM; any network MITM can present rogue LDAP server with any cert CN -> intercept/modify all LDAP sync traffic; impact: rogue user injection into CUCM directory, steal LDAP bind password via LDAP referral, replay CUCM-enrolled device data; chain: F21 (LDAP bind pwd via F3), F22 (LDAPS hostname bypass in IMS) -- same systemic class, separate JVM process"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
