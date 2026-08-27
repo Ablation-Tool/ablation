@@ -189,6 +189,23 @@ CUCM-F16 HIGH: Phone device cert CN validated via strstr substring match — dev
     → register as victim phone → steal registration, intercept calls, SRTP session takeover
   CVSS: 8.1 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
 
+CUCM-F20 LOW: Development JDBC credential in dbl2j.jar TimedPingPrimary.main() — shipped in production
+  File: cm-dbl/dbl2j.jar → com.cisco.ccm.dbl.TimedPingPrimary.main()
+  Bytecode offset 46 (ldc #63): "jdbc:informix-sqli://nw096a-93:1500/ccm0500v0001:informixserver=nw096a_93_ccm;user=dbuser;password=42lj5i"
+  Only in main() test entry point — Cisco internal dev environment (CUCM 5.0 era)
+  Non-production credential; confirms dbuser username; reveals internal Cisco infrastructure names
+  CVSS: LOW — test credential for long-gone internal Cisco host
+
+CUCM-F19 HIGH: platform-services.war Axis2 admin UI exposed without auth (admin:axis2, hotdeployment=true)
+  File: platform-api/platform-services.war → WEB-INF/conf/axis2.xml + WEB-INF/web.xml
+  axis2.xml: userName=admin, password=axis2, hotdeployment=true (confirmed)
+  web.xml: security-constraint covers /services/* ONLY; axis2-web/ NOT covered
+  AxisAdminServlet defined but NO servlet-mapping → hot-deploy via upload.jsp currently blocked
+  Accessible without auth: admin.jsp, Login.jsp, upload.jsp, listServices.jsp, HappyAxis.jsp
+  If AxisAdminServlet mapping added → CRITICAL (same as F1 but different WAR/endpoint)
+  Pattern identical to F1 (axl.war) with same admin:axis2 default credential
+  CVSS: 8.1 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
+
 CUCM-F18 MEDIUM: AXL SQL Toolkit trust-all TrustManager + JVM-global HostnameVerifier bypass
   File: cm-axlsqltoolkit/axlsqltoolkit.zip → src/AxlSqlToolkit.java (SOURCE INCLUDED)
   MyTrustManager inner class (lines 281-288):
@@ -221,7 +238,7 @@ CUCM-F17 HIGH: Platform API SOAP client trust-all X509TrustManager — inter-clu
 - common-api RPM analysis
 """
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 import requests
 import urllib3
@@ -515,6 +532,8 @@ def full_findings_summary() -> str:
         ("CUCM-F16", "HIGH",     "Phone cert CN validated via strstr (not strcmp) — registration spoofing via substring cert"),
         ("CUCM-F17", "HIGH",     "Platform API SOAP client trust-all X509TrustManager — inter-cluster cert/key MITM"),
         ("CUCM-F18", "MEDIUM",   "AXL SQL Toolkit trust-all TrustManager + JVM-global HostnameVerifier bypass → credential interception"),
+        ("CUCM-F19", "HIGH",     "platform-services.war Axis2 admin:axis2 + hotdeployment=true; axis2-web/ exposed without auth"),
+        ("CUCM-F20", "LOW",      "dbl2j.jar TimedPingPrimary.main() development JDBC credential shipped in production bytecode"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
