@@ -827,9 +827,19 @@ CUCM-F77 MEDIUM: cm-sch SCHHostnameVerifier unconditional return true + TLSSocke
   Note: SCHTrustManager.checkServerTrusted() DOES validate chain (rethrows CertificateException) -- not fully bypassed
   Affected channels: TAC phone-home, AMC (amc.cisco.com), GRTSourceBase :8443/grt/, TraceDownloadUtil SFTP creds XML POST
   Chain: F17/F39/F40/F73 (systemic no-op hostname verifier pattern); SFTP creds in TraceDownloadUtil XML body exposed
+
+CUCM-F78 HIGH: gaxl.war security-constraint covers only url-pattern '/' (default servlet) — NOT '/*'
+  Component: cm-gaxl RPM / usr/local/cm/war/gaxl.war / WEB-INF/web.xml
+  CXFServlet at /soap/* exposes AXL SOAP v8.0-15.0; security-constraint <url-pattern>/</url-pattern> = root only
+  HideResourceFilter (com.cisco.gaxl.filters.HideResourceFilter) is only protection for /soap/*
+  Custom filter bypass vectors: path normalization (//soap/, %2fsoap), forward dispatcher type not restricted,
+    direct internal HTTP port 9446 access from Docker host network (F66)
+  transport-guarantee=NONE on the security-constraint permits cleartext HTTP Basic Auth credentials
+  Chain: F66 (Docker lateral movement -> localhost:9446 HTTP -> bypass HTTPS auth) + F64 (same NONE pattern)
+  AXL SOAP: full provisioning API (users/devices/dial-plans/gateways/SIP trunks) if reached unauthenticated
 """
 
-VERSION = "3.19.0"
+VERSION = "3.20.0"
 
 import requests
 import urllib3
@@ -1839,6 +1849,7 @@ def full_findings_summary() -> str:
         ("CUCM-F75", "MEDIUM",  "cm-ucmadmin ucmadmin.war: Spring Security filter (springSecurityFilterChain) commented out in applicationContext-security.xml with note 'Cannot use due to need for Tomcat Shared Realm SSO'; consequence: zero CSRF token validation on 15+ @RequestBody POST endpoints (DirectoryNumber/EndUser/SIPTrunk/FeatureGroupTemplate/RouteList/SIPProfile/TranslationPattern/etc.); attacker with link clicked by authenticated admin executes provisioning changes against live CUCM config; transport-guarantee=NONE enables HTTP downgrade to steal auth cookie before CSRF"),
         ("CUCM-F76", "MEDIUM",  "cm-svc-web ccmservice.war Servlet 3.0: DbSyncServlet (url=/DbSyncServlet.class) and LogoffServlet not in any <security-constraint>; struts2 /* filter intercepts but only dispatches to Struts action if mapping exists for .class extension; no container-level auth enforcement; DbSyncServlet likely triggers CUCM-to-database sync (destructive/sensitive); exploitability depends on Struts action config at runtime"),
         ("CUCM-F77", "MEDIUM",  "cm-sch SCHHostnameVerifier.verify(): iconst_1;ireturn (unconditional true) -- any hostname accepted; TLSSocketFactory enables SSLv2Hello+SSLv3 (POODLE downgrade CVE-2014-3566); SCHTrustManager.checkServerTrusted() DOES validate chain (rethrows exception, not fully bypassed); affected: TAC phone-home, AMC amc.cisco.com, GRTSourceBase :8443/grt/, TraceDownloadUtil SFTP creds XML POST body; same systemic class as F17/F39/F40/F73"),
+        ("CUCM-F78", "HIGH",    "cm-gaxl gaxl.war security-constraint <url-pattern>/</url-pattern> (default servlet pattern, root only) -- NOT /*; CXFServlet at /soap/* exposes AXL SOAP v8.0-15.0 without container auth enforcement; only HideResourceFilter (custom) covers /*; bypass vectors: path normalization (//soap/, %2fsoap), RequestDispatcher.forward() bypasses REQUEST-type filter, direct access to internal Tomcat HTTP port 9446 (F66 Docker host network); transport-guarantee=NONE permits cleartext Basic Auth; chain: F66->localhost:9446->unauthenticated AXL SOAP provisioning API"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
