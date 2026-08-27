@@ -1006,7 +1006,7 @@ CUCM-F131 HIGH: platform-ipsec -- IPSecClient raw socket port 8500 no auth + XXE
   XMLUtils.getDocumentBuilderFactory() missing external-general-entities=false -> XXE on ipsec.xml
 """
 
-VERSION = "3.38.0"
+VERSION = "3.39.0"
 
 import requests
 import urllib3
@@ -2123,6 +2123,11 @@ def full_findings_summary() -> str:
         ("CUCM-F182", "LOW",     "cm-alarm /usr/local/cm/jar/alarmutil.jar Alarms.class: developer artifacts in production JAR: '/home/dkathuri/catalogs/JavaApplications.xml' + 'DSN=sqlserver;UID=dkathuri;PWD=dkathuri;DATABASE=ccm0300;'; reveals CI/dev DB name and username==password credential pattern; may match production accounts"),
         ("CUCM-F183", "INFO",    "cm-amc /usr/local/cm/conf/amc/amc.policy: 'grant { permission java.security.AllPermission; }'; AMC JVM no sandbox; log4j 1.x on classpath (amcCfg.xml) + AllPermission -> CVE-2021-4104 JNDI exec with full OS access; force multiplier for any AMC-accessible vector"),
         ("CUCM-F184", "INFO",    "cm-amc /usr/local/platform/conf/amc/AlertConfig.Default.xml: user_DownloadProtocol='(FTP)' default; SFTP fields blank; alert-triggered file downloads use cleartext FTP by default unless admin explicitly selects SFTP"),
+        ("CUCM-F185", "HIGH",    "cm-CTIManager /usr/local/cm/bin/CTIManager binary: format strings ' SRP User: '/' SRP Password: '/' SRP Default User: '/' SRP Verifier File: ' in binary; log target /var/log/active/cm/trace/cti/tmp.txt; SRP credentials logged plaintext at CTI init; RTMT/SOAP log collection exposes to any admin; CTI SRP controls JTAPI/TAPI/TSP call-control access for CRM/contact-center/softphone integrations"),
+        ("CUCM-F186", "MEDIUM",  "cm-CTIManager /usr/local/cm/bin/CTIManager binary: cipher string 'ECDHE-RSA-AES256-GCM-SHA384:...:AES128-SHA'; AES128-SHA appended as fallback: no PFS, SHA-1 HMAC, static RSA key exchange; downgrade + RSA key compromise (F35/F119/F157) -> retrospective decryption of all recorded CTI sessions including caller-ID/dialed-number/call-state for every routed call"),
+        ("CUCM-F187", "HIGH",    "cm-dna dna.war web.xml: Constraint1 GET/POST on *.do/*.jsp (auth required, transport-guarantee:NONE); Constraint2 PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE (deny-all); PATCH absent -> unconstrained; 8th confirmed Servlet method-enum gap instance; Struts2 filter dispatches PATCH to action classes bypassing auth interceptor stack; DNA has full read access to CUCM dial-plan config"),
+        ("CUCM-F188", "HIGH",    "cm-em emapp.war WEB-INF/web.xml: single constraint PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE deny-all on /*; GET/POST/PATCH all unconstrained; EMAppServlet + all EM JSPs accessible without auth; manages user-to-phone profile mapping -> unauthenticated EM login as any user steals desk-phone session; 3rd EM component with same defect (F45 emservice, F180 ma.war, F188 emapp)"),
+        ("CUCM-F189", "HIGH",    "headset headset.war web.xml: Constraint1 GET+POST on /* require Standard CCM End Users; Constraint2 GET on /* require Standard EM Auth Proxy Rights; PATCH absent from both constraints -> unconstrained PATCH on /*; auth-method=BASIC with no transport-guarantee element -> HTTP accepted; 9th Servlet method-enum gap; headset.war manages Cisco headset inventory/firmware for all cluster phones"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
