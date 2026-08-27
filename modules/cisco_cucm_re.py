@@ -716,6 +716,8 @@ CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (b
 - ucm-ccmact — CLOSED (F54: ccmact.war /v1/tester/* + /v1/testalarm/* + /v1/actions/srp/* unauthenticated, explicit dev comment)
 - sso-sp RPM — CLOSED (F56-F59: credential policy brute-force, hardcoded Fedlet key, unsigned SAML, OAuth implicit grant)
 - cm-jar-lib / snmp-mon — CLOSED (F61 Struts CVE-2024-53677, F62 SNMP defaults)
+- cm-syslog / cm-tct-svc — CLOSED (F63: DRF backup/restore scripts os.system()+sudo root RCE)
+- cm-axl (callmanager RPM) — CLOSED (F64: axl.war transport-guarantee=NONE, AXL HTTP Basic in cleartext)
 
 CUCM-F56 HIGH: Default Credential Policy — minlength=1, trivialcredchecking=0, maxdays=0 (brute-force via F50 oracle)
   Component: cm-dbl RPM / CredentialPolicy.csv pkid=9454babf-48d0-4e16-9b80-2d0da4b38750
@@ -755,7 +757,7 @@ CUCM-F60 MEDIUM: CCMEncryption.jar setStaticKey() public static override bypasse
   Chains: F3 (root static key), F41 (Redis write dkey.txt+dkey_status.txt), F53 (world-writable sshd_config chain)
 """
 
-VERSION = "3.13.0"
+VERSION = "3.16.0"
 
 import requests
 import urllib3
@@ -1750,6 +1752,9 @@ def full_findings_summary() -> str:
         ("CUCM-F60", "MEDIUM",  "CCMEncryption.jar (cm-encryption): setStaticKey() is public static — sets useDynamicKey=false, disables dynamic key at runtime, forces fallback to AES-128 static key smetsysocsiccni\\x00 (16B); callable via reflection post-RCE (F1/F35/F41); <clinit> hardcodes useDynamicKey=true but effective key depends on dkey_status.txt=enable AND dkey.txt (64-char hex, 32B AES-256); wire format: IV(16,random)||AES-128-CBC-PKCS5(ciphertext); dkey.txt path predictable (/usr/local/platform/.security/CCMEncryption/keys/); if writable (F41 Redis/F53 sshd_config), plant known key to decrypt all future credentials"),
         ("CUCM-F61", "HIGH",    "cm-jar-lib ships Apache Struts 2.5.33 (struts2-core-2.5.33.jar, built Dec 5 2023); CVE-2024-53677 published Dec 9 2023 — CUCM ISO ships unpatched (2.5.34 fixes it); CVE-2024-53677 CVSS 9.8: file upload path traversal → write JSP shell outside webroot → RCE as tomcat; ccmadmin.war + ccmservice.war use Struts with certificate/firmware upload actions; chain: F3/F55 credential theft → admin auth → Struts file upload → JSP shell → tomcat RCE"),
         ("CUCM-F62", "MEDIUM",  "snmp-mon ships SNMP agent with: snmpd.cnf community=ccmadmincommunity (well-known CUCM default, SNMPv1 noAuthNoPriv); mgr.cnf USM root user auth=MD5 authpass=\\\"authpass\\\" priv=DES privpass=\\\"privpass\\\" literal defaults; USM public user noAuth/noPriv (unauthenticated read); SNMP MIB exposes phone registration state, extension list, cluster topology, performance counters; write access via root USM → modify trap destinations → alert evasion"),
+        ("CUCM-F63", "CRITICAL","cm-syslog + cm-tct-svc DRF backup/restore scripts: do_backup.py/do_restore.py/do_syslog_restore.py/tct_do_backup.py/tct_do_restore.py all concatenate sys.argv values directly into os.system() shell commands; restore scripts execute \\\"DEVICE_TARBALL + DEC_SEQ | sudo /bin/tar -xvpPf - 1>> LOGFILE\\\" — three user-controlled injection points (DEVICE_TARBALL, DEC_SEQ, LOGFILE) with sudo; inject shell metacharacters in DRF backup config (SFTP path, encryption sequence, log path) → root RCE; LOGFILE→/etc/cron.d/backdoor = root persistence; chain: admin auth (F1/F7) → DRF backup config → sudo root shell"),
+        ("CUCM-F64", "MEDIUM",  "cm-axl axl.war web.xml: <transport-guarantee>NONE</transport-guarantee> on /axl and /services/AXLAPIService — servlet container does not enforce HTTPS; AXL SOAP uses HTTP Basic Auth (base64 in Authorization header); admin credentials + full provisioning payload (users, phones, dial plans) traverse network in cleartext HTTP; network interception of any AXL session yields admin creds; chains with F37 (ccmivr SQLi), F61 (Struts RCE), F63 (DRF injection)"),
+        ("CUCM-F65", "LOW",     "cm-perfupdcounter JPIWriterServiceImpl: LocateRegistry.createRegistry(9234) on 0.0.0.0 (all interfaces); no auth; no TLS; exposed interface: jstatsClearAll(containerID) clears all RTMT perf counters, jstatsUpdate*/jstatsInit inject false values; port 9234 RTMT-accessible; post-RCE cleanup step: clear perf trace before lateral movement; chain: F41/F35 post-compromise evasion"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
