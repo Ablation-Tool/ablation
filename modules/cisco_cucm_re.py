@@ -603,14 +603,31 @@ CUCM-F47 MEDIUM: dna.war DNAMainServlet — no <security-constraint> + TokenFilt
   Chain: F47 poison alias store → F46 ClearCache → poisoned mappings served to all clients before refresh
   CVSS: 5.3 Medium AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
 
+CUCM-F48 HIGH: ma.war (IPMA) HTTP method omission — GET/POST to call-divert + config endpoints unconstrained
+  Component: cm-ipma RPM / ma.war
+  web.xml (Servlet 2.2 DTD): security-constraint for /* enumerates PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE
+    with deny-all auth-constraint; GET and POST NOT listed → unconstrained per Servlet spec §13.8.1
+  Comment <!--CSCsx40175--> confirms Cisco tracked this as internal bug
+  Exposed via unauthenticated GET/POST:
+    /servlet/MAService — IPMA main service (manager/assistant call routing)
+    /phone/setAsstDivertTarget.jsp — set assistant call divert target
+    /phone/setMgrDivertTarget.jsp — set manager call divert target
+    /desktop/mgrconfig.jsp — manager desktop config
+    /phone/asstMenu.jsp, mgrmenu.jsp — full phone menu UIs
+  Impact: unauthenticated POST redirects all calls for any manager/assistant pair to attacker-controlled number
+  Chain: F3 static key → decrypt manager credentials from DB; OR exploit unauthenticated GET/POST directly
+  Same class as F45; CSCsx40175 = Cisco tracked this
+  CVSS: 8.1 High AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:H/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- cm-car / cm-cdrdlv / cm-cef / cm-ipvms / cm-ipvmsd — CLOSED (car.war auth OK; ipvmsd SRTP only; cef DRF scripts)
+- cm-car/cm-cdrdlv/cm-cef/cm-ipvms/cm-ipvmsd/cm-ccmportal/cm-CTIManager/cm-soap-cdr — CLOSED (no findings)
+- cm-lpns WebSocket endpoint — CANDIDATE: AuthFilter maps to /register/* HTTP only; @ServerEndpoint bypasses?
 - cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
 """
 
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 
 import requests
 import urllib3
@@ -1488,6 +1505,32 @@ def check_dna_alias_lookup(host: str = None, port: int = 8080) -> dict:
     return evidence
 
 
+def check_ipma_service(host: str = None, port: int = 8080) -> dict:
+    """CUCM-F48: Probe IPMA ma.war MAService for unauthenticated GET access."""
+    evidence = {
+        "finding": "CUCM-F48",
+        "severity": "HIGH",
+        "title": "IPMA ma.war GET/POST unconstrained — call divert unauthenticated (Servlet 2.2 method omission CSCsx40175)",
+    }
+    if host:
+        import urllib.request
+        url = f"http://{host}:{port}/ma/servlet/MAService"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                body = r.read(512).decode("utf-8", errors="replace")
+                evidence["probe"] = {
+                    "host": host, "port": port, "status": r.status,
+                    "verdict": "IPMA_SERVICE_ACCESSIBLE" if r.status < 400 else "BLOCKED",
+                    "snippet": body[:200],
+                }
+        except urllib.error.HTTPError as e:
+            evidence["probe"] = {"host": host, "port": port, "http_status": e.code, "verdict": "BLOCKED" if e.code in (401, 403) else "CHECK_RESPONSE"}
+        except Exception as e:
+            evidence["probe"] = {"host": host, "port": port, "error": str(e)}
+    return evidence
+
+
 def check_dna_main_servlet(host: str = None, port: int = 8080) -> dict:
     """CUCM-F47: Probe dna.war DNAMainServlet for unauthenticated access."""
     evidence = {
@@ -1564,6 +1607,7 @@ def full_findings_summary() -> str:
         ("CUCM-F45", "CRITICAL","Extension Mobility emservice.war security-constraint enumerates PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE but omits GET/POST; Servlet spec: unlisted methods unconstrained; no <login-config>; /EMServiceServlet unauthenticated GET+POST → phone hijack"),
         ("CUCM-F46", "MEDIUM",  "dnaliaslookup.war security-constraint has user-data-constraint NONE but NO auth-constraint; CLIENT-CERT login-config never enforced; UserLookupServlet + AddToCache + ClearCache unauthenticated; extension enum + cache poison + DN alias DoS"),
         ("CUCM-F47", "MEDIUM",  "dna.war DNAMainServlet at /DNAMainServlet has no <security-constraint>; TokenFilter class (com.cisco.ccm.dna.servlets.TokenFilter) missing from WAR; alias persistence layer writable without auth; chain: F47 poison store + F46 ClearCache = persistent alias redirect"),
+        ("CUCM-F48", "HIGH",    "ma.war (IPMA) security-constraint lists PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE deny-all but omits GET/POST; CSCsx40175 Cisco internal bug ref; /servlet/MAService + setAsstDivertTarget.jsp + setMgrDivertTarget.jsp unauthenticated GET+POST → call divert any manager/assistant pair"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
