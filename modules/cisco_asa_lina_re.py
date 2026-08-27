@@ -2446,6 +2446,7 @@ class CiscoASALinaRE:
                 'lina_mgmt_port': 8112,
                 'exploit_path_remote': 'TCP:4000 → jdwp-shellifier → Runtime.exec as nobody → 8113 CLI',
                 'exploit_path_local':  'post-pivot shell → nc 127.0.0.1 4000 → JDWP handshake → loadAgent',
+                'psirt_submission':    '~/Desktop/ASA-F5-JDWP-PSIRT-submission.md (2026-08-27, pending)',
             }
         )
 
