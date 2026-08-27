@@ -712,9 +712,11 @@ CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (b
 - ucapp_common remaining: cm-gaxl, cm-reporter-servlet, cm-scheduler, cm-tvs, cucminventory, ucm-ccmact — agent scanning
 - serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-soap-callrecordservice, cm-soap-dpservice — agent scanning
 - ucplatform remaining: platform-ipsec, platform-tomcat, platform-containers, platform-docker, platform-servM, platform-util, platform-ver, service-registration, platform-fipsutil — extracted, analyzing
+- cm-tvs — CLOSED (F55: bundleITLRecovery.sh SFTP password stdout echo + PKCS12 passphrase in ps args + ITLRecovery.p12 664)
+- ucm-ccmact — CLOSED (F54: ccmact.war /v1/tester/* + /v1/testalarm/* + /v1/actions/srp/* unauthenticated, explicit dev comment)
 """
 
-VERSION = "3.9.0"
+VERSION = "3.10.0"
 
 import requests
 import urllib3
@@ -1700,6 +1702,8 @@ def full_findings_summary() -> str:
         ("CUCM-F51", "HIGH",    "cucm-uds.war UDS REST API (Jersey): auth-constraint covers only /user/* and /private/user/*; unauthenticated: /emLoggedInUsers (EM session state — who is on which phone NOW), /users (directory enumeration), /clusterUser, /servers (cluster topology), /groups (RBAC), /private/emLoggedInUsers, /private/users, /private/clusterUser, /private/servers; /docs/* DefaultServlet listings=true; ccmcip /ControlledDevices.jsp + /xmldirectory.jsp unconstrained; chain: F51 emLoggedInUsers → F48 IPMA call divert; F51 users → F49/F50 PIN oracle"),
         ("CUCM-F52", "HIGH",    "platform-sso ships Tomcat 6.0.30 (built Aug 2011, EOL Dec 2016) as SSO auth tier Tomcat; 50+ CVEs in 6.0.30→EOL window including CVE-2012-3546 auth bypass (client cert + NIO); PAM sso-auth uses pam_permit.so (auth always succeeds) → local auth fully delegated to SAML; SSO Tomcat compromise = full platform auth bypass"),
         ("CUCM-F53", "MEDIUM",  "platform-ui sshRestrict.sh: chmod 666 /etc/ssh/sshd_config + /etc/security/limits.conf with NO permission restoration; world-writable persists permanently after any 'set session maxlimit' CLI command; sshd restart triggered by same command activates any injected config; chain: F41 Redis → write AuthorizedKeysFile → wait for next admin sshRestrict run → root SSH"),
+        ("CUCM-F54", "MEDIUM",  "ccmact.war (ucm-ccmact): explicit web.xml comment 'no auth-constraint means everybody has access' on /v1/tester/* (Tester5XX — forces 5xx errors), /v1/testalarm/* (TestAlarm — fires real CUCM alarm events unauthenticated → alarm flood/evasion), /v1/actions/srp/* (SRPHandshakeResource — Activation Code Onboarding SRP, custom crypto: CryptoUtils/DefaultSRPCrypto/KDF/SRPMath), /v1/ping; auth-constrained: /v1/activationcode + /v1/release only"),
+        ("CUCM-F55", "MEDIUM",  "cm-tvs bundleITLRecovery.sh: echo 'S_PWD is $S_PWD' line 47 (debug line) emits decrypted SftpPwCrypt SFTP backup password to stdout on Publisher during ITL Recovery bundle creation; openssl pkcs12 -password pass:$S_PWD also exposes passphrase in ps aux; ITLRecovery.p12 at /usr/local/cm/tftp/ chmod 664 group=ccmbase → readable by any ccmbase member; PKCS12 passphrase = SFTP password; ITL Recovery private key extraction → phone estate MitM (same impact as F35)"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
