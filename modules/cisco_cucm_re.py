@@ -82,11 +82,15 @@ CUCM-F4 HIGH: ccmuser:ccmuser hardcoded Informix DB credential
   Group ccmusers: ALL PRIVILEGES on every CUCM table
   TCP:1526 (Informix) → ccmuser:ccmuser → full DB dump
 
-CUCM-F5 MEDIUM: Default passwordreverse hash in siprealm + applicationuser
-  File: makedb.sql lines 2016 + 6159
+CUCM-F5 CRITICAL: passwordreverse default = AES-CBC(static_key, empty_string) → SIP auth bypass
+  File: makedb.sql lines 2016 + 6159 + CCMMigrateUtil analysis
   DEFAULT '69c4f936f9cdf45f6bbca2570c31215629bb5d6fb97493478b8ff3db6fffbc55'
-  All fresh installs: siprealm.passwordreverse = default hash (SIP auth bypass)
-  Crack status: SHA-256, candidate list not matched — hashcat needed
+  DECRYPTED (using CUCM-F3 static key, confirmed 2026-08-27):
+    ct format: IV(16)|AES-CBC(plaintext)
+    plaintext = b'' (EMPTY STRING — 16 bytes PKCS7 padding, Match=True)
+  Impact: SIP Auth Bypass on all siprealm/applicationuser entries with default passwordreverse
+    HA1 = SHA-256(username:realm:'') is trivially computable → unauthorized SIP registration
+    Call routing manipulation, trunk spoofing, SIP identity spoofing
 
 CUCM-F6 MEDIUM: Nimbus JOSE+JWT 4.23 (2016) in SSO SP — alg:none risk
   File: sso-sp → nimbus-jose-jwt.jar Bundle-Version: 4.23.0
