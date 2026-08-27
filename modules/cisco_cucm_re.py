@@ -174,12 +174,27 @@ CUCM-F15 LOW: pktCap BASIC auth over cleartext HTTP
   Credentials transmitted as base64 without TLS on port 8080
   Chain: on-path sniff pktCap credentials → download .pktCap.passphrase (F12) → decrypt captures
 
+CUCM-F16 HIGH: Phone device cert CN validated via strstr substring match — device identity spoofing
+  File: cm-ccm/var/log/active/cm/bin/ccm
+  CheckDeviceIDinX509Certificate at VA 0x1c92310:
+    1c9236c: call strstr(certCN, deviceID_truncated)  ; SUBSTRING, not strcmp
+    1c92374: setne %al  ; 1=match(pass), 0=nomatch(reject)
+  Device ID truncated to 16 bytes before comparison (mov $0x10,%edx at 0x1c92351)
+  Only caller: UnicastBridgeControl::wait_register_StationRegister at VA 0x1934db2
+    → 0x1934dca: jne 0x1934f70  ; match → ValidateCipher(3) → proceed to registration
+    → else: StationOutputRegisterRejectC1; log "missmatch in devcie name and X509 Name in certificate"
+  Attack: cert with CN containing victim device ID as substring passes check
+    e.g., certCN="EVIL-SEP001122334455" → strstr(certCN,"SEP001122334455") = non-null → PASS
+  Chain with F3: static AES key → decrypt CAPF CA key → forge cert with embedded victim device ID
+    → register as victim phone → steal registration, intercept calls, SRTP session takeover
+  CVSS: 8.1 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
+
 === PENDING TASKS ===
-- ssobackend.jar JWT validation path RE (F6)
-- phone registration LSC/MIC TLS cert verification path in ccm binary (SIP station)
+- ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
+- Nimbus JOSE+JWT CVE mapping for 4.23 build
 """
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 import requests
 import urllib3
@@ -381,6 +396,33 @@ def probe_pktcap_fileinfo(host: str, username: str, password: str, port: int = 8
         return {"error": str(e), "finding": "CUCM-F12"}
 
 
+def check_device_id_strstr_bypass(cert_cn: str, device_id: str) -> dict:
+    """
+    CUCM-F16: Simulate CheckDeviceIDinX509Certificate behavior.
+    Tests whether certCN passes the strstr(certCN, deviceID[:16]) check used in ccm binary.
+    Returns exploit assessment without requiring a live CUCM instance.
+    """
+    truncated_id = device_id[:16]
+    passes_strstr = truncated_id in cert_cn
+    passes_strcmp = cert_cn == device_id
+
+    return {
+        "finding":       "CUCM-F16",
+        "cert_cn":       cert_cn,
+        "device_id":     device_id,
+        "truncated_id":  truncated_id,
+        "passes_strstr": passes_strstr,
+        "passes_strcmp": passes_strcmp,
+        "vulnerable":    passes_strstr and not passes_strcmp,
+        "note":          (
+            "BYPASS: cert CN contains device ID as substring — strstr passes, strcmp fails"
+            if (passes_strstr and not passes_strcmp) else
+            "exact match — expected behavior" if passes_strcmp else
+            "no match — registration would be rejected"
+        ),
+    }
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -399,6 +441,7 @@ def full_findings_summary() -> str:
         ("CUCM-F13", "MEDIUM",   "pktCap second-order SQLi via remoteUser in group membership check"),
         ("CUCM-F14", "LOW",      "pktCap key arg injection into pktCap_protectData (mode flip, no shell inj)"),
         ("CUCM-F15", "LOW",      "pktCap BASIC auth over cleartext HTTP (transport-guarantee=NONE)"),
+        ("CUCM-F16", "HIGH",     "Phone cert CN validated via strstr (not strcmp) — registration spoofing via substring cert"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
