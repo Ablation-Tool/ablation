@@ -888,6 +888,18 @@ CUCM-F101 HIGH: webdialer.war Axis 1.x /services/* no container auth + hardcoded
   HTTPAuthHandler in transport extracts creds but no Authenticate handler -> no actual validation at Axis level
   Version service: returns Axis 1.x version without auth (CVE fingerprinting surface)
   Chain: F1 (Axis2 admin:axis2 in axl.war) -> F101 (Axis 1.x adminPassword=admin in webdialer) = systemic Axis default-cred pattern
+
+CUCM-F102 CRITICAL: cm-userlookup DNAliasLookUp DRF -- 5th independent os.system()+sudo tar injection
+  Same template as F63/F67/F94/F100; LOGPATH/STATUSPATH/DEVICE_TARBALL/DEC_SEQ all from sys.argv
+  restore: DEVICE_TARBALL + DEC_SEQ + " | sudo /bin/tar -xvpPf -" = command-prefix -> root shell
+  STATUSPATH: os.system("echo 0 > " + STATUSPATH) = root write-anywhere -> /etc/sudoers.d/ injection
+  DRF framework template defect confirmed across 5 independent CUCM components; central remediation needed
+
+CUCM-F103 HIGH: cm-lpns lpns.war Servlet 4.0 -- ZERO container security-constraints
+  No <security-constraint> elements anywhere in web.xml; all auth = application-level AuthenticationFilter
+  AuthenticationFilter covers /register/* only; all other paths (unregister/, push delivery, admin) unconstrained
+  LPNS handles Cisco Jabber/mobile push notification delivery; pre-auth push delivery = notification spoofing
+  Chain: F51 (UDS user enumeration) -> F103 (targeted pre-auth push attacks against enumerated users)
 """
 
 VERSION = "3.27.0"
