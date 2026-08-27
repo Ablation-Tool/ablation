@@ -711,7 +711,8 @@ CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (b
 - cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
 - ucapp_common remaining: cm-gaxl, cm-reporter-servlet, cm-scheduler, cm-tvs, cucminventory, ucm-ccmact — agent scanning
 - serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-soap-callrecordservice, cm-soap-dpservice — agent scanning
-- ucplatform remaining: platform-ipsec, platform-tomcat, platform-containers, platform-docker, platform-servM, platform-util, platform-ver, service-registration, platform-fipsutil — extracted, analyzing
+- ucplatform remaining: platform-ipsec, platform-tomcat, platform-servM, platform-util, platform-ver, service-registration, platform-fipsutil — extracted, analyzing
+- platform-containers — CLOSED (F66: AXL/UDS/SSOSP containers host networking + DAC_OVERRIDE + /tmp RW mount = container compromise → host lateral movement)
 - cm-tvs — CLOSED (F55: bundleITLRecovery.sh SFTP password stdout echo + PKCS12 passphrase in ps args + ITLRecovery.p12 664)
 - ucm-ccmact — CLOSED (F54: ccmact.war /v1/tester/* + /v1/testalarm/* + /v1/actions/srp/* unauthenticated, explicit dev comment)
 - sso-sp RPM — CLOSED (F56-F59: credential policy brute-force, hardcoded Fedlet key, unsigned SAML, OAuth implicit grant)
@@ -772,7 +773,7 @@ CUCM-F64 MEDIUM: axl.war transport-guarantee=NONE - AXL SOAP admin credentials i
   Chains: F37 (ccmivr SQLi), F61 (Struts RCE), F63 (DRF injection) all require admin auth - AXL interception provides it
 """
 
-VERSION = "3.17.0"
+VERSION = "3.18.0"
 
 import requests
 import urllib3
@@ -1770,6 +1771,7 @@ def full_findings_summary() -> str:
         ("CUCM-F63", "CRITICAL","cm-syslog + cm-tct-svc DRF backup/restore scripts: do_backup.py/do_restore.py/do_syslog_restore.py/tct_do_backup.py/tct_do_restore.py all concatenate sys.argv values directly into os.system() shell commands; restore scripts execute \\\"DEVICE_TARBALL + DEC_SEQ | sudo /bin/tar -xvpPf - 1>> LOGFILE\\\" — three user-controlled injection points (DEVICE_TARBALL, DEC_SEQ, LOGFILE) with sudo; inject shell metacharacters in DRF backup config (SFTP path, encryption sequence, log path) → root RCE; LOGFILE→/etc/cron.d/backdoor = root persistence; chain: admin auth (F1/F7) → DRF backup config → sudo root shell"),
         ("CUCM-F64", "MEDIUM",  "cm-axl axl.war web.xml: <transport-guarantee>NONE</transport-guarantee> on /axl and /services/AXLAPIService — servlet container does not enforce HTTPS; AXL SOAP uses HTTP Basic Auth (base64 in Authorization header); admin credentials + full provisioning payload (users, phones, dial plans) traverse network in cleartext HTTP; network interception of any AXL session yields admin creds; chains with F37 (ccmivr SQLi), F61 (Struts RCE), F63 (DRF injection)"),
         ("CUCM-F65", "LOW",     "cm-perfupdcounter JPIWriterServiceImpl: LocateRegistry.createRegistry(9234) on 0.0.0.0 (all interfaces); no auth; no TLS; exposed interface: jstatsClearAll(containerID) clears all RTMT perf counters, jstatsUpdate*/jstatsInit inject false values; port 9234 RTMT-accessible; post-RCE cleanup step: clear perf trace before lateral movement; chain: F41/F35 post-compromise evasion"),
+        ("CUCM-F66", "HIGH",    "platform-containers: AXL/UDS/SSOSP Docker containers all use network_mode=host (no port isolation from host); cap_add includes DAC_OVERRIDE + DAC_READ_SEARCH + SYS_PTRACE (bypasses POSIX permissions, can trace processes); volume mounts: /tmp:/tmp/ (RW shared), /opt/cisco:/opt/cisco/ (RW), /etc:/etc/:ro (SSH keys, LDAP creds, passwd visible), /usr:/usr/:ro, /var:/var/:ro; container compromise (F1/F61 RCE) -> host network stack -> Informix 9088 + Redis 6379 reachable localhost; /tmp staging for race-condition host privilege escalation; docker-compose-axl.yml + docker-compose-ssosp.yml + start_uds.sh all share this pattern"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
