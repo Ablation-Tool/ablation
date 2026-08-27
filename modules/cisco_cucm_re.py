@@ -408,30 +408,54 @@ CUCM-F32 CRITICAL: F3 static key decrypts OAuth JWT signing + encryption keys in
   Downstream: all OAuth-protected CUCM REST APIs, Jabber SSO, Webex integration, UCCX agent sessions
   CVSS: 9.1 Critical AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:N
 
-CUCM-F34 HIGH: F3 static key decrypts full credential estate — LDAP bind + phone SSH + DirSync
-  Components: BPS/PhoneDBManager, IMS/AuthenticationLDAP, DirSync/DSLDAPSyncImpl
+CUCM-F34 HIGH: F3 static key decrypts full credential estate — LDAP bind + phone SSH + DirSync + UDS + CAPF binary
+  Components: BPS/PhoneDBManager, IMS/AuthenticationLDAP, DirSync/DSLDAPSyncImpl, cucm-uds/LdapUtilities,
+              cucm-uds/UcServiceProfileDetailXMLService
   Affected credential tables/columns:
     ldapauthentication.ldappassword      → IMS AuthenticationLDAP → AD/LDAP bind credential
     directorypluginconfig.ldappassword   → DirSync DSLDAPSyncImpl → directory sync LDAP bind
     device.sshpassword                   → BPS PhoneDBManager / RDPDBManager → IP phone SSH passwords
     authzkeys.keyvalue                   → IMS GetAuthzKeys → OAuth JWT keys (see F32)
-  Bytecode: all use CCMEncryption.hexToByte(hex) → CCMEncryption.decryptPassword([B)
-  Chain:
-    F4 (ccmuser:ccmuser) → SELECT ldappassword FROM ldapauthentication
-    → F3 AES-128-CBC decrypt → plaintext AD bind DN + password
-    → LDAP/AD enum, Kerberoasting, lateral movement
-    F4 → SELECT sshpassword FROM device
-    → F3 decrypt → SSH passwords for all Cisco 7800/8800 series phones
+    UcServiceProfileDetail XML <Password>→ cucm-uds/UcServiceProfileDetailXMLService → user profile pwds
+    UDS outbound LDAP                    → cucm-uds/LdapUtilities → UDS LDAP bind credential
+  Binary confirmations (smetsysocsiccni in .rodata, confirmed 2026-08-27):
+    CCMShellEncryptionUtil, CCMEncryptionTest, capf, CTIManager, ccm (core CallManager)
   CVSS: 8.8 High AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N
+
+CUCM-F35 CRITICAL: RCE → plaintext passphrase → CTL file forge → full phone estate MitM
+  Binary: /usr/local/cm/bin/CTLCli (ELF64, debug symbols, not stripped)
+  Functions confirmed: PEM_read_bio_RSAPrivateKey, RSASign, RSASignException
+  File paths: /usr/local/cm/tftp/CTLFile.tlv (deployed), /usr/local/cm/tftp/CTLFile_old.tlv (backup)
+  Passphrase source (F30): /usr/local/cm/.security/CallManager/keys/CallManager.passphrase → plaintext
+  Chain:
+    F1 Axis2 RCE → read CallManager.passphrase (plaintext, F30)
+    → PEM_read_bio_RSAPrivateKey(CallManager_priv.pem, passphrase) → CM signing key
+    → inject attacker cert into CTLFile.tlv → sign with CM key via CTLCli/RSASign
+    → deploy to /usr/local/cm/tftp/CTLFile.tlv (TFTP auto-serves, no auth)
+    → AXL DoDeviceReset → all phones reboot → fetch forged CTL
+    → phones trust attacker SAST cert → MitM all SRTP/TLS traffic → voice recording
+  updateCTLFile.sh: echo "y" | /usr/local/cm/bin/ctl_cli.sh 3 (unattended CTL reset automation)
+  CVSS: 9.9 Critical AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H
+
+CUCM-F36 LOW: Decrypted credential logging in CCM trace logs
+  Binary: /var/log/active/cm/bin/ccm (strings confirmed 2026-08-27)
+  Sites:
+    SIPSecurity: "decrypt hex password = \"%s\" , ecnrypted len %d" → plaintext SIP auth password logged
+    SAF profile: "password............... %s" → SAF connection password in diagnostic dump
+    HttpNPConnection: "userName=%s, password=%s" → HTTP service credentials in request log
+  Access: RTMT log collection available to 'Standard CCM Admin Users' role (lower privilege than full admin)
+  Impact: lateral movement via SAF inter-cluster passwords; SIP device password recovery → rogue registration
+  CVSS: 3.5 Low AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N
 
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- ccm binary: RADIUS integration deeper analysis
-- CTLCli chain finding: F1/F7 RCE → read CallManager_priv.pem → forge signed TFTP configs
+- cm-ccintegration: Contact Center integration (not yet analyzed)
+- cm-car / cm-cdrdlv: CDR/CAR reporting (low priority)
+- cm-ccm binary deep dive: SIP nonce generation, RADIUS auth, media crypto key exchange
 """
 
-VERSION = "2.6.0"
+VERSION = "2.7.0"
 
 import requests
 import urllib3
@@ -970,6 +994,107 @@ def check_f3_credential_estate(db_conn=None) -> dict:
     return evidence
 
 
+def check_ctl_chain(host: str = None, port: int = 8443) -> dict:
+    """
+    CUCM-F35: CTL file forge chain assessment.
+    F1 RCE + F30 plaintext passphrase → CTLCli → forged CTLFile.tlv → phone estate MitM.
+
+    Static evidence:
+      CTLCli binary: PEM_read_bio_RSAPrivateKey, RSASign, RSASignException
+      Files: /usr/local/cm/tftp/CTLFile.tlv, /usr/local/cm/tftp/CTLFile_old.tlv
+      updateCTLFile.sh: echo "y" | /usr/local/cm/bin/ctl_cli.sh 3
+    """
+    evidence = {
+        "finding": "CUCM-F35",
+        "severity": "CRITICAL",
+        "binary": "/usr/local/cm/bin/CTLCli",
+        "build_id": "0f961bbada7eb221b24f42b8e603d2eea5373620",
+        "functions_confirmed": ["PEM_read_bio_RSAPrivateKey", "RSASign", "RSASignException"],
+        "ctl_file_path": "/usr/local/cm/tftp/CTLFile.tlv",
+        "passphrase_path": "/usr/local/cm/.security/CallManager/keys/CallManager.passphrase",
+        "chain": [
+            "F1 Axis2 RCE → arbitrary code execution as Tomcat/CM service user",
+            "F30: read /usr/local/cm/.security/CallManager/keys/CallManager.passphrase (plaintext)",
+            "PEM_read_bio_RSAPrivateKey(CallManager_priv.pem, passphrase) → CM signing key in memory",
+            "Inject attacker X.509 cert with SAST role into CTLFile.tlv payload",
+            "Sign CTLFile.tlv with CM private key (RSASign in CTLCli or equivalent OpenSSL call)",
+            "Write forged CTL to /usr/local/cm/tftp/CTLFile.tlv (TFTP auto-serves, no auth check)",
+            "DoDeviceReset via AXL API → phones reboot → TFTP fetch forged CTLFile.tlv",
+            "Phones trust attacker SAST cert → accept attacker as trusted CUCM",
+            "MitM all SIP/TLS and SRTP: decrypt voice, intercept signaling, register phantom extensions",
+        ],
+        "impact": "Full phone estate PKI trust collapse; all encrypted calls decryptable; arbitrary extension registration",
+        "cvss": "9.9 Critical AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    }
+    if host:
+        # Probe: check if CTLFile.tlv is accessible via TFTP or HTTP
+        import socket
+        try:
+            # Check TFTP port open (UDP 69)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(3)
+            s.sendto(b'\x00\x01CTLFile.tlv\x00octet\x00', (host, 69))
+            data, _ = s.recvfrom(1024)
+            evidence["tftp_probe"] = {"status": "open", "data_len": len(data),
+                                       "note": "TFTP responding — CTLFile.tlv likely accessible"}
+        except Exception as e:
+            evidence["tftp_probe"] = {"status": "error", "msg": str(e)}
+        finally:
+            try: s.close()
+            except: pass
+    return evidence
+
+
+def check_credential_logging(log_dir: str = None) -> dict:
+    """
+    CUCM-F36: Detect decrypted credential logging in CUCM trace logs.
+
+    Static evidence from core ccm binary strings:
+      SIPSecurity: "decrypt hex password = \"%s\" , ecnrypted len %d"
+      SAF profile:  "password............... %s"
+      HttpNP:       "userName=%s, password=%s"
+    """
+    import re
+    evidence = {
+        "finding": "CUCM-F36",
+        "severity": "LOW",
+        "log_sites": [
+            {"binary": "ccm", "pattern": 'SIPSecurity::decrypt hex password = "%s"',
+             "credential": "SIP auth password (decrypted plaintext)", "level": "DEBUG/TRACE"},
+            {"binary": "ccm", "pattern": "password............... %s",
+             "credential": "SAF forwarder connection password", "level": "DIAGNOSTIC"},
+            {"binary": "ccm", "pattern": "userName=%s, password=%s",
+             "credential": "HTTP service account credentials", "level": "DEBUG"},
+        ],
+        "log_path": "/var/log/active/cm/trace/ccm/sdi/",
+        "access_role": "Standard CCM Admin Users (RTMT log collection)",
+        "impact": "SAF inter-cluster password → lateral movement; SIP device password → rogue registration",
+        "cvss": "3.5 Low AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
+    }
+    if log_dir:
+        import os, glob
+        password_pattern = re.compile(
+            r'(decrypt hex password\s*=\s*"[^"]{4,}"'
+            r'|password\.*\s*=\s*\S+)',
+            re.IGNORECASE
+        )
+        hits = []
+        for log_file in glob.glob(os.path.join(log_dir, "*.txt")):
+            try:
+                with open(log_file, errors='replace') as f:
+                    for i, line in enumerate(f, 1):
+                        if password_pattern.search(line):
+                            hits.append({"file": log_file, "line": i,
+                                         "content": line.strip()[:120]})
+                            if len(hits) >= 20:
+                                break
+            except Exception:
+                pass
+        evidence["log_hits"] = hits
+        evidence["hit_count"] = len(hits)
+    return evidence
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -1006,7 +1131,9 @@ def full_findings_summary() -> str:
         ("CUCM-F31", "CRITICAL", "F3 static key decrypts Windows CA service account creds + FIPS SSM PIN from CACredentials.txt → ADCS compromise + lateral movement"),
         ("CUCM-F32", "CRITICAL", "F3 static key decrypts OAuth JWT signing + encryption keys in authzkeys DB table → forge tokens for any CUCM user"),
         ("CUCM-F33", "CRITICAL", "Hardcoded OpenAM am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2 in FederationConfig.properties → decode SAML JKS passphrase → forge SAML for any user"),
-        ("CUCM-F34", "HIGH",     "F3 static key decrypts full credential estate: ldapauthentication.ldappassword (AD bind), device.sshpassword (all phones), directorypluginconfig.ldappassword (DirSync)"),
+        ("CUCM-F34", "HIGH",     "F3 static key decrypts full credential estate: ldapauthentication.ldappassword (AD bind), device.sshpassword (all phones), directorypluginconfig.ldappassword (DirSync), UDS LDAP + service profile passwords; confirmed in 5 binaries"),
+        ("CUCM-F35", "CRITICAL", "F1 RCE + F30 plaintext passphrase → CTLCli CTL file forge → phone estate trusts attacker cert → MitM all SRTP/TLS"),
+        ("CUCM-F36", "LOW",      "Decrypted credential logging: SIPSecurity, SAF connection profile, HttpNPConnection all log plaintext passwords at trace level"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
