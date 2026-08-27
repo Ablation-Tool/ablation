@@ -320,15 +320,40 @@ CUCM-F26 INFO: Developer GDB extension spy.py ships in production ISO
   Exposes: internal DB name (corroborates F4/F9), CUCM data structure internals, named developer
   Impact: informational — confirms CCMDB name, assists binary RE, developer identity for social engineering
 
+CUCM-F27 MEDIUM: SAML SP AuthnRequests unsigned by default — forged IdP redirects
+  File: sso-sp/usr/local/platform/sso/saml/conf/ssoconfig.properties line 56
+  Config: metadata_auth_request_signed=false
+  Bytecode (SPMetadataController constructor):
+    offset 124-134: METADATA_AUTH_REQUEST_SIGNED = ssoCP.getPropertyValue("metadata_auth_request_signed") → "false"
+    offset 232-238: setAuthnRequestsSigned(Boolean.valueOf("false")) → false
+  Impact: IdP cannot verify AuthnRequest origin; combined with F7 XSW + F10 always-true → forged
+    AuthnRequest → forged SAML response → unconditional admin auth bypass
+  CVSS: 5.3 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:N
+
+CUCM-F28 LOW: SAML SP metadata and assertion signing disabled — SP spoofing surface
+  File: sso-sp/usr/local/platform/sso/saml/conf/ssoconfig.properties lines 57, 63
+  Config: metadata_assertion_signed=false; sp_md_signed=false
+  Impact: SP metadata (sp.xml) unsigned → IdP cannot verify metadata integrity; substituted metadata
+    → IdP routes SAML responses to attacker ACS. Requires admin/filesystem write access. Amplifies F7/F10.
+
+CUCM-F29 MEDIUM: CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5, deprecated)
+  File: cm-asymencryption/com/cisco/ccm/security/CCMAsymmetricEncryption.class
+  Constant pool #9: "RSA/ECB/PKCS1PADDING"
+  Bytecode: rsaAsymPubEnc() uses PKCS1 at offset 12 (FIPS/BCFIPS path) and offset 77 (non-FIPS)
+  Local var rsaOAEPEncrypter (slot 3) stores PKCS1 Cipher — OAEP migration started but never completed
+  NIST SP 800-131A Rev2: PKCS#1 v1.5 encryption disallowed after 2023; Bleichenbacher oracle susceptibility
+  Affected: CAPF phone cert enrollment, inter-cluster token encryption, OAuth token RSA wrapping
+  CVSS: 5.9 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- ccm binary: NCS port 8001 bind address, RADIUS integration (next)
-- CTLCli 55MB ELF: certificate trust list security
+- ccm binary: RADIUS integration deeper analysis
+- CTLCli chain finding: F1/F7 RCE → read CallManager_priv.pem → forge signed TFTP configs
 - libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 import requests
 import urllib3
@@ -648,6 +673,90 @@ def probe_ciscora_est(host: str, port: int = 8084) -> dict:
     }
 
 
+def probe_saml_sp_signing(host: str, port: int = 8443) -> dict:
+    """
+    CUCM-F27/F28: Fetch SAML SP metadata and check AuthnRequestsSigned and WantAssertionsSigned.
+    SP metadata is at /ssosp/saml/SSO/alias/<entity>/metadata or /ssosp/saml/metadata/sp.xml.
+    F27: AuthnRequestsSigned=false → AuthnRequests unsigned.
+    F28: WantAssertionsSigned=false + metadata not signed.
+    """
+    import xml.etree.ElementTree as ET
+    results = {}
+    sp_paths = [
+        "/ssosp/saml/metadata/sp.xml",
+        "/ssosp/saml/SSO/alias/cucm/metadata",
+    ]
+    for path in sp_paths:
+        url = f"https://{host}:{port}{path}"
+        try:
+            r = requests.get(url, verify=False, timeout=10)
+            results[path] = {"status": r.status_code}
+            if r.status_code == 200:
+                try:
+                    root = ET.fromstring(r.text)
+                    ns = {'md': 'urn:oasis:names:tc:SAML:2.0:metadata'}
+                    spsso = root.find('.//md:SPSSODescriptor', ns)
+                    if spsso is not None:
+                        results[path]["AuthnRequestsSigned"] = spsso.get('AuthnRequestsSigned', 'NOT_SET')
+                        results[path]["WantAssertionsSigned"] = spsso.get('WantAssertionsSigned', 'NOT_SET')
+                        sig = root.find('{http://www.w3.org/2000/09/xmldsig#}Signature')
+                        results[path]["metadata_signed"] = sig is not None
+                    results[path]["raw_snippet"] = r.text[:500]
+                except ET.ParseError as e:
+                    results[path]["parse_error"] = str(e)
+        except Exception as e:
+            results[path] = {"error": str(e)}
+    return {
+        "finding":    "CUCM-F27+F28",
+        "host":       host,
+        "port":       port,
+        "config_defaults": {
+            "metadata_auth_request_signed": "false",
+            "metadata_assertion_signed":    "false",
+            "sp_md_signed":                 "false",
+        },
+        "sp_metadata_probes": results,
+        "note": ("F27: AuthnRequestsSigned=false → forged AuthnRequests; "
+                 "F28: sp_md_signed=false → unsigned SP metadata allows substitution"),
+    }
+
+
+def check_rsa_pkcs1_in_asymencryption(jar_path: str = None) -> dict:
+    """
+    CUCM-F29: Confirm RSA/ECB/PKCS1PADDING usage in CCMAsymmetricEncryption.class.
+    If jar_path provided, attempts to extract and verify the constant pool entry.
+    Otherwise returns static bytecode evidence from RE.
+    """
+    evidence = {
+        "class":         "com.cisco.ccm.security.CCMAsymmetricEncryption",
+        "jar":           "cm-asymencryption-1.0.0.1-0.x86_64.rpm",
+        "constant_pool": {"#9": "RSA/ECB/PKCS1PADDING"},
+        "usage": [
+            {"method": "rsaAsymPubEnc", "bytecode_offset": 12,  "path": "FIPS (isSecure=true, BCFIPSProvider)"},
+            {"method": "rsaAsymPubEnc", "bytecode_offset": 77,  "path": "non-FIPS (SHA1PRNG)"},
+        ],
+        "anomaly":    "local var 'rsaOAEPEncrypter' (slot 3) stores RSA/ECB/PKCS1PADDING cipher — OAEP migration incomplete",
+        "nist_ref":   "NIST SP 800-131A Rev2 (2023): PKCS#1 v1.5 key transport disallowed",
+        "cve_class":  "Bleichenbacher adaptive chosen-ciphertext attack (1998)",
+        "remediation": "Replace 'RSA/ECB/PKCS1PADDING' with 'RSA/ECB/OAEPWithSHA-256AndMGF1Padding'",
+    }
+    if jar_path:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["javap", "-verbose", "-classpath", jar_path,
+                 "com.cisco.ccm.security.CCMAsymmetricEncryption"],
+                capture_output=True, text=True, timeout=30,
+            )
+            evidence["javap_grep"] = [
+                line for line in result.stdout.splitlines()
+                if "PKCS1" in line or "OAEP" in line or "rsaOAEP" in line
+            ]
+        except Exception as e:
+            evidence["javap_error"] = str(e)
+    return {"finding": "CUCM-F29", "evidence": evidence}
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -677,6 +786,9 @@ def full_findings_summary() -> str:
         ("CUCM-F24", "MEDIUM",   "CiscoRA EST NTLM relay to Windows CA — phone cert issuance via NTLM credential relay"),
         ("CUCM-F25", "LOW",      "Hardcoded dev hostname WIN-EJSG9DN4GS6 in production CiscoRA nginx.conf; lab CA cert ships with ISO"),
         ("CUCM-F26", "INFO",     "Developer GDB extension spy.py (IMDB=CCMDB, author 'Stephen') ships in production ISO"),
+        ("CUCM-F27", "MEDIUM",   "SAML SP AuthnRequests unsigned by default (metadata_auth_request_signed=false) — forged IdP redirects"),
+        ("CUCM-F28", "LOW",      "SAML SP metadata/assertion signing disabled (sp_md_signed=false) — SP metadata substitution surface"),
+        ("CUCM-F29", "MEDIUM",   "CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5, deprecated NIST SP 800-131A) — Bleichenbacher susceptibility"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
