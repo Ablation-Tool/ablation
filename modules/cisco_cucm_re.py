@@ -447,7 +447,7 @@ CUCM-F36 LOW: Decrypted credential logging in CCM trace logs
   Impact: lateral movement via SAF inter-cluster passwords; SIP device password recovery → rogue registration
   CVSS: 3.5 Low AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N
 
-CUCM-F37 HIGH: Pre-Auth SQL Injection in ccmivr IVR via ccmusername PreparedStatement bypass
+CUCM-F37 HIGH: Pre-Auth SQL Injection in ccmivr IVR via ccmusername PreparedStatement bypass (HTTP-accessible)
   Component: cm-ccmivr/usr/local/cm/war/ccmivr.war
              IVRDBInterface.getRemoteDestinationListFromCcmusername()
   Root cause: SQL built via StringBuilder.append(ccmusername) BEFORE prepareStatement() call.
@@ -463,22 +463,36 @@ CUCM-F37 HIGH: Pre-Auth SQL Injection in ccmivr IVR via ccmusername PreparedStat
     162: invokeinterface #52  PreparedStatement.executeQuery()
   Attack: ccmusername=x' UNION SELECT password FROM enduser WHERE userid='admin
   Amplifier: F3 static key decrypts any returned encrypted passwords from enduser table
+  HTTP note: haproxy.conf excludes /ccmivr from HTTPS redirect → SQLi exploitable over plaintext HTTP port 80
   CVSS: 8.6 High AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:L/A:N
+
+CUCM-F38 MEDIUM: HAProxy admin socket world-writable — local privilege escalation to network layer
+  Config: /usr/local/cm/conf/haproxy.conf
+  Vulnerable line: stats socket /var/run/haproxy.sock mode 666 level admin
+  Scope: HAProxy terminates TLS for ALL CUCM web services: 443, 8443, 9560 (LPNS), 6971/6972 (phone reg)
+  Impact: any local user issues admin commands: show sess (active TLS sessions), disable server (DoS),
+          set map (disable rate limiting on auth endpoints = brute-force amplifier), drain backends
+  Amplifier: combining with F1 RCE → web shell → HAProxy admin → disable rate limits → brute-force all auth
+  CVSS: 6.7 Medium AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:L/A:L
+  Additional ctftp notes:
+    - ctftp binary uses CCMEncryption::passwordToHex (F3 static key confirmed in TFTP service)
+    - /usr/local/platform/.security/CCMEncryption/keys/dkey.txt = dynamic key path; absent on fresh install
+      → fallback to F3 static key for ALL phone config file encryption
+    - /usr/local/platform/.security/ITLRecovery/keys/ITLRecovery_priv.pem = ITL recovery key path
+      (access via F30-style plaintext passphrase pattern allows silent phone trust reset)
+    - SIPOAuth: phones with OAuth token + HTTPS get full config; without = mini config (attack surface reduction)
 
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- cm-security: security subsystem key/cert management
-- cm-sso: SSO implementation (additional findings beyond F33)
-- cm-idp: Identity Provider
-- cm-ccmuser: CCMUser WAR (only context.xml analyzed so far)
-- cm-tftp: TFTP device provisioning / phone firmware
 - cm-pnp: Plug and Play provisioning
+- cm-ucmuser: UCMUser self-care portal WAR
+- cm-bps: Bulk provisioning
 - cm-car / cm-cdrdlv: CDR/CAR reporting (low priority)
 - cm-ccm binary deep dive: SIP nonce generation, RADIUS auth, media crypto key exchange
 """
 
-VERSION = "2.8.0"
+VERSION = "2.9.0"
 
 import requests
 import urllib3
@@ -1219,7 +1233,8 @@ def full_findings_summary() -> str:
         ("CUCM-F34", "HIGH",     "F3 static key decrypts full credential estate: ldapauthentication.ldappassword (AD bind), device.sshpassword (all phones), directorypluginconfig.ldappassword (DirSync), UDS LDAP + service profile passwords; confirmed in 5 binaries"),
         ("CUCM-F35", "CRITICAL", "F1 RCE + F30 plaintext passphrase → CTLCli CTL file forge → phone estate trusts attacker cert → MitM all SRTP/TLS"),
         ("CUCM-F36", "LOW",      "Decrypted credential logging: SIPSecurity, SAF connection profile, HttpNPConnection all log plaintext passwords at trace level"),
-        ("CUCM-F37", "HIGH",     "Pre-auth SQLi in ccmivr ccmusername via prepareStatement-with-concatenated-string (no ? placeholders); validator allows single-quote; GET/POST unprotected; amplified by F3 to decrypt returned enduser passwords"),
+        ("CUCM-F37", "HIGH",     "Pre-auth SQLi in ccmivr ccmusername via prepareStatement-with-concatenated-string (no ? placeholders); validator allows single-quote; GET/POST unprotected; ccmivr exempt from HTTPS redirect (HTTP-accessible); amplified by F3"),
+        ("CUCM-F38", "MEDIUM",  "HAProxy admin socket /var/run/haproxy.sock mode 666 level admin — any local user reads sessions, disables rate limits, drains backends"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
