@@ -123,13 +123,33 @@ CUCM-F10 CRITICAL: SAMLAuthValve.authenticate() returns TRUE regardless of Realm
   ANY mechanism setting session USERNAME → unconditional TRUE from SAMLAuthValve
   Combined with F7 XSW: unauthenticated admin access
 
+CUCM-F11 HIGH: SAFClientControl inter-cluster passwords decryptable via static key fallback
+  File: cm-ccm binary → SAFClientControl::getDecryptedPwd() at VA 0x14e0a90
+  Disassembly (2026-08-27):
+    call CCMEncryption::CCMEncryption()              // ResetKey → current key
+    call CCMEncryption::hexToPassword()              // hex-decode encrypted SAF pw
+    call CCMEncryption::DecryptText()                // decrypt
+    → on failure: fallback at 0x23da083 calls staticKey() + SetKey(staticKey)
+    → retries AES-128-CBC with "smetsysocsiccni\x00"
+  SAF credentials in CCMDB_SAFCLIENTSETTINGS.password → inter-cluster trust
+  Static key fallback = SAF passwords always extractable from DB dump + static key
+
+=== CCMEncryptionLibrary::Key() fully mapped (2026-08-27) ===
+  VA 0x23dba2a in main ccm binary:
+  if (dKeyConfig == 0 OR dKeyConfig == 2):
+      return _staticKey  → "smetsysocsiccni\x00"  // fresh install = ALWAYS static
+  else:
+      fopen dkey.txt → fread(64 hex chars) → hexToBytes → _currentKey (32B AES-256)
+      return _currentKey
+  DecryptText fallback: after all dynamic key attempts → staticKey() → SetKey(staticKey) → retry
+  Consequence: static key ALWAYS decrypts any credential encrypted before dkey migration
+
 === PENDING TASKS ===
-- hashcat SHA-256 run on 69c4f936... hash (F5)
 - ssobackend.jar JWT validation path RE (F6)
-- ccm-ccm main binary auth subsystem + dbaxlweb ifx.txt path (F9)
+- phone registration LSC/MIC TLS cert verification path in ccm binary (SIP station)
 """
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 import requests
 import urllib3
@@ -280,12 +300,13 @@ def full_findings_summary() -> str:
         ("CUCM-F2",  "HIGH",     "platformcom BasicAuthentication localhost bypass"),
         ("CUCM-F3",  "CRITICAL", "Hardcoded AES-128 static key 'smetsysocsiccni' → decrypt ALL CUCM credentials"),
         ("CUCM-F4",  "HIGH",     "ccmuser:ccmuser hardcoded Informix DB credential"),
-        ("CUCM-F5",  "MEDIUM",   "Default passwordreverse hash in siprealm + applicationuser"),
+        ("CUCM-F5",  "CRITICAL", "Default passwordreverse = AES-CBC(statickey,'') → SIP auth bypass (all default users)"),
         ("CUCM-F6",  "MEDIUM",   "Nimbus JOSE+JWT 4.23 (2016) — alg:none bypass risk"),
         ("CUCM-F7",  "CRITICAL", "OpenSAML 2.6.5 XSW + SAMLAuthValve always-true bypass → admin access"),
         ("CUCM-F8",  "LOW",      "log4j 1.x (slf4j-log4j12-1.6.1) — JMSAppender CVE-2019-17571"),
         ("CUCM-F9",  "INFO",     "dbaxlweb DB username exposed; pw encrypted with static key"),
         ("CUCM-F10", "CRITICAL", "SAMLAuthValve returns TRUE regardless of Realm.authenticate() result"),
+        ("CUCM-F11", "HIGH",     "SAFClientControl inter-cluster pw decryptable via static key fallback"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
