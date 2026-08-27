@@ -196,6 +196,31 @@ CUCM-F20 LOW: Development JDBC credential in dbl2j.jar TimedPingPrimary.main() �
   Non-production credential; confirms dbuser username; reveals internal Cisco infrastructure names
   CVSS: LOW — test credential for long-gone internal Cisco host
 
+CUCM-F21 HIGH: LDAP Manager bind password decryptable via F3 static AES key — Active Directory access
+  File: cm-ccm binary → authenticationLDAPConfig::readLDAPServerDetailsFromDB() at VA 0x2331746
+  Disassembly — CCMEncryption call chain:
+    0x2331e47: call CCMEncryptionC1()      ; construct CCMEncryption (uses F3 static key fallback)
+    0x2331eb2: call hexToPassword()        ; hex-decode ciphertext from ldapauthentication.ldappassword
+    0x2331f2c: call DecryptText()          ; AES-CBC decrypt → plaintext LDAP Manager bind password
+    0x2331f47: movq $0x0,0x418(%r12)       ; reset pConfig.ldapManagerPW before store
+  DB schema: cm-dbl/makedb.sql
+    ldapauthentication.ldappassword LVARCHAR(401) DEFAULT '' NOT NULL
+  Default ciphertext (typefieldinfo DirectoryPluginConfig.LdapPassword):
+    9e1cb76005b4b718276f4f3662d11f4474dbf844c91298f70fa00d71a9151211
+  Decryption (confirmed Python 2026-08-27):
+    KEY = b'smetsysocsiccni\x00'  (F3 static key)
+    IV  = 9e1cb76005b4b718276f4f4662d11f44  (first 16 bytes)
+    PT  = b''  (empty string — same as F5 passwordreverse pattern)
+    Re-encrypt match: True
+  Attack chain:
+    F4 (ccmuser:ccmuser) → SELECT ldapdn,ldappassword FROM ldapauthentication
+    F3 static key → AES_128_CBC_decrypt(ldappassword) → plaintext bind password
+    ldap_simple_bind_s(ldap_server, ldapdn, plaintext_pw) → full AD enumeration
+    Default case: empty pw → anonymous LDAP bind may succeed on many AD servers
+  Note: F21 is the direct impact path from F3 to enterprise Active Directory.
+  Enterprise CUCM deployments use LDAP integration universally → near-universal applicability.
+  CVSS: 8.6 High AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N (scoped: C:H because reads entire AD tree)
+
 CUCM-F19 HIGH: platform-services.war Axis2 admin UI exposed without auth (admin:axis2, hotdeployment=true)
   File: platform-api/platform-services.war → WEB-INF/conf/axis2.xml + WEB-INF/web.xml
   axis2.xml: userName=admin, password=axis2, hotdeployment=true (confirmed)
@@ -238,7 +263,7 @@ CUCM-F17 HIGH: Platform API SOAP client trust-all X509TrustManager — inter-clu
 - common-api RPM analysis
 """
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 
 import requests
 import urllib3
@@ -534,6 +559,7 @@ def full_findings_summary() -> str:
         ("CUCM-F18", "MEDIUM",   "AXL SQL Toolkit trust-all TrustManager + JVM-global HostnameVerifier bypass → credential interception"),
         ("CUCM-F19", "HIGH",     "platform-services.war Axis2 admin:axis2 + hotdeployment=true; axis2-web/ exposed without auth"),
         ("CUCM-F20", "LOW",      "dbl2j.jar TimedPingPrimary.main() development JDBC credential shipped in production bytecode"),
+        ("CUCM-F21", "HIGH",     "LDAP Manager bind password decryptable via F3 static AES key → AD/LDAP full enumeration"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
