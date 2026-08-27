@@ -286,14 +286,49 @@ CUCM-F17 HIGH: Platform API SOAP client trust-all X509TrustManager — inter-clu
   Pattern identical to ASA/ASDM F6 (class av trust-all TrustManager)
   CVSS: 7.4 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
 
+CUCM-F23 MEDIUM: CiscoRA EST Proof of Possession disabled — phone cert enrollment without key ownership
+  File: cm-security/usr/local/thirdparty/nginx/install/conf/nginx.conf
+  Config: est_pop off;   (RFC 7030 §4.2 requires PoP for non-EAP enrollments)
+  Attack: capture phone CSR during simpleenroll request → re-submit without possessing private key
+          → CA issues cert bound to phone identity without proof of key ownership
+  Amplification: F24 NTLM relay controls which CSR gets approved → full phone identity manufacturing
+  CVSS: 5.9 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:N
+
+CUCM-F24 MEDIUM: CiscoRA EST NTLM auth relay to Windows CA — phone cert issuance via NTLM relay
+  File: cm-security/usr/local/thirdparty/nginx/install/conf/nginx.conf
+  Config:
+    est_certsrv_auth_method NTLM;
+    est_certsrv_ca_auth_method NTLM;
+    est_certsrv_auth_server WIN-EJSG9DN4GS6;
+    est_certsrv_auth_html_check off;    (removes HTML response integrity check)
+    est_certsrv_ca_html_check off;
+  Attack: intercept CiscoRA outbound NTLM auth to Windows CA (HTTPS:443) → relay NTLM credential
+          → authenticate as CiscoRA service account → approve arbitrary CSRs via Windows CA API
+  With F23 (PoP disabled): attacker can both intercept CSRs AND relay CA auth → full identity manufacturing
+  CVSS: 6.5 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:H/A:N
+
+CUCM-F25 LOW: Hardcoded development hostname WIN-EJSG9DN4GS6 in production CiscoRA nginx.conf
+  File: cm-security/usr/local/thirdparty/nginx/install/conf/nginx.conf
+  Config: est_certsrv_auth_server WIN-EJSG9DN4GS6; est_certsrv_server WIN-EJSG9DN4GS6;
+          est_trusted_certs .../CAPF/certs/WIN-EJSG9DN4GS6.pem (lab CA cert ships with ISO)
+  Impact: lab CA cert distributed to all CUCM 15.0.1 → anyone with lab CA key can be trusted by CiscoRA
+          EST enrollment non-functional in customer environments (silent config failure)
+
+CUCM-F26 INFO: Developer GDB extension spy.py ships in production ISO
+  File: cm-ccm/common/spy.py
+  Content: "Stephen's GDB Python Helper (SPY)"; IMDB = "CCMDB"
+  Exposes: internal DB name (corroborates F4/F9), CUCM data structure internals, named developer
+  Impact: informational — confirms CCMDB name, assists binary RE, developer identity for social engineering
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
-- cm-axlsqltoolkit RPM analysis (injectable query patterns)
-- common-api RPM analysis
+- ccm binary: NCS port 8001 bind address, RADIUS integration (next)
+- CTLCli 55MB ELF: certificate trust list security
+- libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "1.9.0"
+VERSION = "2.0.0"
 
 import requests
 import urllib3
@@ -566,6 +601,53 @@ def check_platform_api_trust_all_tls(host: str, port: int = 8443) -> dict:
     }
 
 
+def probe_ciscora_est(host: str, port: int = 8084) -> dict:
+    """
+    CUCM-F23/F24: Probe CiscoRA EST server for Proof of Possession and NTLM auth exposure.
+    CiscoRA runs on port 8084 (nginx + custom EST module).
+    F23: est_pop off — enrollments accepted without key ownership proof.
+    F24: est_certsrv_auth_method NTLM — Windows CA auth susceptible to NTLM relay.
+    """
+    results = {}
+    base = f"https://{host}:{port}"
+    # EST standard endpoints (RFC 7030)
+    est_paths = [
+        "/.well-known/est/cacerts",       # GET — returns CA cert chain (no auth)
+        "/.well-known/est/simpleenroll",  # POST — CSR submission endpoint
+        "/.well-known/est/csrattrs",      # GET — returns CSR attribute requirements
+    ]
+    for path in est_paths:
+        url = base + path
+        try:
+            r = requests.get(url, verify=False, timeout=10)
+            results[path] = {
+                "status":        r.status_code,
+                "content_type":  r.headers.get("Content-Type", ""),
+                "len":           len(r.content),
+                "auth_required": r.status_code in (401, 403),
+                "note":          "EST endpoint reachable" if r.status_code != 404 else "not found",
+            }
+            if r.status_code == 401:
+                www_auth = r.headers.get("WWW-Authenticate", "")
+                results[path]["www_authenticate"] = www_auth
+                results[path]["ntlm_confirmed"] = "NTLM" in www_auth
+        except Exception as e:
+            results[path] = {"error": str(e)}
+    return {
+        "finding":        "CUCM-F23+F24",
+        "host":           host,
+        "port":           port,
+        "est_endpoints":  results,
+        "config_evidence": {
+            "est_pop":               "off",
+            "est_certsrv_auth":      "NTLM",
+            "hardcoded_ca_server":   "WIN-EJSG9DN4GS6",
+        },
+        "note": ("F23: est_pop off — submit CSR without private key proof; "
+                 "F24: NTLM relay — intercept CiscoRA→WindowsCA NTLM handshake"),
+    }
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -591,6 +673,10 @@ def full_findings_summary() -> str:
         ("CUCM-F20", "LOW",      "dbl2j.jar TimedPingPrimary.main() development JDBC credential shipped in production bytecode"),
         ("CUCM-F21", "HIGH",     "LDAP Manager bind password decryptable via F3 static AES key → AD/LDAP full enumeration"),
         ("CUCM-F22", "MEDIUM",   "IMS LDAP/LDAPS TLS hostname verification disabled (disableEndpointIdentification=true) → AD MITM"),
+        ("CUCM-F23", "MEDIUM",   "CiscoRA EST Proof of Possession disabled (est_pop off) — phone cert issued without key ownership proof"),
+        ("CUCM-F24", "MEDIUM",   "CiscoRA EST NTLM relay to Windows CA — phone cert issuance via NTLM credential relay"),
+        ("CUCM-F25", "LOW",      "Hardcoded dev hostname WIN-EJSG9DN4GS6 in production CiscoRA nginx.conf; lab CA cert ships with ISO"),
+        ("CUCM-F26", "INFO",     "Developer GDB extension spy.py (IMDB=CCMDB, author 'Stephen') ships in production ISO"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
