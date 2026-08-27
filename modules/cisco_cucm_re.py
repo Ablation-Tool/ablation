@@ -355,6 +355,24 @@ CUCM-F30 MEDIUM: CallManager RSA private key passphrase stored in plaintext at p
   Chain: any file-read exploit → CallManager.passphrase → decrypt CallManager_priv.pem → SRTP MITM
   CVSS: 5.5 Medium AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N
 
+CUCM-F31 CRITICAL: F3 static key decrypts Windows CA service account credentials + FIPS SSM PIN
+  File: cm-capf/usr/local/bin/base_scripts/EnrollmentService.sh
+  Sources:
+    CACredentials.txt L1: AES-CBC(F3_key, CA_service_account_username)
+    CACredentials.txt L2: AES-CBC(F3_key, CA_service_account_password)  ← Windows domain creds
+    TAM_PWD_FILE L1:      AES-CBC(F3_key, ssm_pin)                      ← FIPS module unlock PIN
+  Decryption: sudo CCMShellEncryptionUtil -d $CA_UserName_Encrypted → plaintext Windows domain user
+              sudo CCMShellEncryptionUtil -d $CA_Pwd_Encrypted       → plaintext Windows domain password
+              sudo CCMShellEncryptionUtil -d $TAM_Pwd_Encrypted      → plaintext FIPS SSM PIN
+  Written to ciscoRA_config_file: msca-user-id, msca-password, ssm-pin (plaintext, deleted after nginx reads)
+  Chain:
+    F3 key → decrypt CACredentials.txt → Windows CA domain user:password
+    → authenticate to ADCS → issue certs for any SIP extension → forge phone identity
+    → lateral movement: CA service accounts often have elevated AD privileges
+    F3 key → decrypt TAM_PWD_FILE → FIPS SSM PIN → unlock BCFIPS module → recover CAPF CA key
+  Scope: all CUCM deployments with Online CA mode (CAPFCertGenMethod=4, ONLINE_CA_TYPE=2) + Windows ADCS
+  CVSS: 9.1 Critical AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
@@ -363,7 +381,7 @@ CUCM-F30 MEDIUM: CallManager RSA private key passphrase stored in plaintext at p
 - libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
 import requests
 import urllib3
@@ -800,6 +818,7 @@ def full_findings_summary() -> str:
         ("CUCM-F28", "LOW",      "SAML SP metadata/assertion signing disabled (sp_md_signed=false) — SP metadata substitution surface"),
         ("CUCM-F29", "MEDIUM",   "CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5, deprecated NIST SP 800-131A) — Bleichenbacher susceptibility"),
         ("CUCM-F30", "MEDIUM",   "CallManager RSA private key passphrase stored in plaintext at /usr/local/cm/.security/CallManager/keys/CallManager.passphrase"),
+        ("CUCM-F31", "CRITICAL", "F3 static key decrypts Windows CA service account creds + FIPS SSM PIN from CACredentials.txt → ADCS compromise + lateral movement"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
