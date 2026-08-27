@@ -900,9 +900,113 @@ CUCM-F103 HIGH: cm-lpns lpns.war Servlet 4.0 -- ZERO container security-constrai
   AuthenticationFilter covers /register/* only; all other paths (unregister/, push delivery, admin) unconstrained
   LPNS handles Cisco Jabber/mobile push notification delivery; pre-auth push delivery = notification spoofing
   Chain: F51 (UDS user enumeration) -> F103 (targeted pre-auth push attacks against enumerated users)
+
+CUCM-F104 HIGH: ucm-ccmact ccmact.war -- production debug endpoints /v1/tester/* + /v1/testalarm/* unauthenticated
+  Developer comment in source confirms intentional design; alarm injection + tester endpoints pre-auth accessible
+
+CUCM-F105 CRITICAL: platform-docker cm-axl containers -- Struts 2.5.33 CVE-2023-50164 file upload path traversal RCE
+  CVSS 9.8; unauthenticated file write to server root -> JSP/WAR RCE inside AXL container
+
+CUCM-F106 CRITICAL: platform-docker -- all 3 Tomcat containers R/W bind-mount /opt/cisco/ -> host filesystem write
+  Container foothold writes to host path -> persistence, config tampering, host priv-esc
+
+CUCM-F107 CRITICAL: platform-docker -- UDS container R/W bind-mount /usr/local/cm/.security/
+  Full CUCM security material dir (certs, keys, CAPF creds, dkey.txt) R/W; any UDS RCE -> exfil+replace
+
+CUCM-F108 HIGH: platform-docker -- SYS_PTRACE capability all 3 containers + host network mode
+  ptrace() any host process; no network namespace; cross-container + host memory dump
+
+CUCM-F109 HIGH: platform-docker -- /common/ R/W bind-mount shared across all 3 containers
+  Container-to-container lateral movement; persistence via image layer poisoning through shared mount
+
+CUCM-F110 HIGH: platform-docker -- Tomcat Manager (/manager/) deployed in all AXL/UDS containers
+  Default admin app enabled; WAR upload -> arbitrary code exec without additional exploit inside each container
+
+CUCM-F111 CRITICAL: platform-docker -- ccmservice user added to dockerroot group at install
+  dockerroot = equivalent root via docker run --privileged; platform service account -> unlimited container launch
+
+CUCM-F112 CRITICAL: ucfips-openssl -- CiscoSSL 1.0.2zd EOL Jan 2020 ships alongside 1.1.1t
+  All consumers route to 1.0.2 path; 8+ years unpatched CVEs: CVE-2022-0778 (loop), CVE-2022-2274 (heap RCE), 50+ more
+
+CUCM-F113 HIGH: ucfips-openssl -- fips_post_corrupt exported callable symbol + CISCOSSL_FOM_DIAG env bypass
+  nm -D: fips_post_corrupt at 0x7af00; env var relaxes FIPS integrity before library load; FIPS defeatable by local process
+
+CUCM-F114 HIGH: ucfips-openssl -- SSLv2 fully implemented + RC4 (brc4a) + 3DES in FIPS engine + TLS 1.0 + SSLv2Hello
+  SSLv2_client/server_method exported; brc4a (Cisco RC4) in cfom.so; cfom_des_ede3_* complete 3DES; DROWN surface
+
+CUCM-F115 HIGH: cm-soap2 (5 WARs) -- Servlet 2.2 method gap (PATCH unconstrained) + transport-guarantee:NONE
+  GET/POST auth-constrained; PATCH not listed -> no auth at container; BASIC auth over HTTP; all 5 SOAP2 services
+
+CUCM-F116 HIGH: cm-capf nginx_update.sh -- $certificate_enrollment_profile_label unescaped in sudo sed -i
+  GNU sed \n injects newlines -> arbitrary nginx.conf directives as root; CA creds written plaintext before encryption
+
+CUCM-F117 CRITICAL: cm-authentication CUCMUtil.getHostName() -- OAuth SQLi -> unauthenticated Informix DB access
+  "select name from processnode where nodeid=" + nodeId (string concat, no PreparedStatement)
+  nodeId from OAuth token -> SQLi -> applicationuser.credential -> decrypt with F3 static key -> admin auth
+  Chain: pre-auth OAuth -> SQLi -> credential exfil -> F3 decrypt -> admin API access -> F1 axl:axis2 -> RCE
+
+CUCM-F118 CRITICAL: platform-snmp -- SNMPv3 root hardcoded authpass/privpass (MD5+DES) + public no-auth + ccmadmincommunity R/W
+  mgr.cnf: root usmHMACMD5AuthProtocol usmDESPrivProtocol "authpass" "privpass" -- identical on all deployments
+  public user: usmNoAuthProtocol/usmNoPrivProtocol -- anonymous SNMPv3
+  naa.cnf: readcomm=writecomm=ccmadmincommunity; VACM WriteView=iso (full MIB write) for SNMPv1/v2c noAuthNoPriv
+
+CUCM-F119 HIGH: cm-authentication AuthenticationDB -- SHA-1 password hashing + String.equals() timing oracle
+  MessageDigest.getInstance("SHA-1"); String.equals() short-circuits on first byte mismatch (not MessageDigest.isEqual())
+  SHA-1 offline GPU crackable; remote timing oracle for password inference
+
+CUCM-F120 CRITICAL: cm-changecredential changecredential.war -- Trust-All TrustManager + no container auth + appCertificate default "password"
+  checkServerTrusted/checkClientTrusted = return; HostnameVerifier.verify = true (unconditional)
+  ZERO <security-constraint> in web.xml (Servlet 2.2); appCertificate default = "password" in shipped DTD
+  Chain: POST ChangeCredentialServlet + 7960LoginApp:password -> pre-auth PIN change for any CUCM user
+
+CUCM-F121 HIGH: platform-remotesupport -- static RSA-2048 public key systemwide + sudo script wildcard arg injection
+  All CUCM 15.0.1.x use same hardcoded pubkey; Cisco TAC holds private key; key compromise = systemic passphrase decrypt
+  sudo script -fq /var/log/.../remote_activity.log* trailing * = argument glob -> path traversal to /etc/cron.d/
+
+CUCM-F122 HIGH: platform-ipsec IPSecClient -- raw socket port 8500 no auth/TLS + XXE on ipsec.xml
+  java.net.Socket(host,8500) + PrintWriter.println("CREATE"); any local process sends IPSec management commands
+  XMLUtils.getDocumentBuilderFactory() missing setFeature(external-general-entities,false) -> XXE on ipsec.xml
+
+NOTE: F115-F123 above are the DRF framework + TVS agent findings. F124-F131 are the concurrent SOAP2/CAPF/auth/SNMP/changecred/remotesupport/ipsec findings renumbered to avoid collision.
+
+CUCM-F124 HIGH: cm-soap2 (5 WARs) -- Servlet 2.2 PATCH method unconstrained + transport-guarantee:NONE
+  CDRonDemandService2/controlcenterservice2/logcollectionservice2/perfmonservice2/realtimeservice2
+  GET+POST auth-constrained (admin role required); PATCH not listed in either constraint -> no container auth
+  transport-guarantee:NONE -> HTTP Basic credentials sniffable; extends F89 SOAP1/AXL gap to SOAP2 family
+
+CUCM-F125 HIGH: cm-capf nginx_update.sh -- $certificate_enrollment_profile_label unescaped in sudo sed -i
+  GNU sed \n in replacement string -> arbitrary nginx.conf directives injected as root
+  CA credentials written plaintext (echo $4 > credential_file) before CCMEncryption step
+
+CUCM-F126 CRITICAL: cm-authentication CUCMUtil.getHostName() -- OAuth token SQLi -> Informix DB
+  "select name from processnode where nodeid=" + nodeId (String concat, no PreparedStatement)
+  nodeId from OAuth token field -> pre-auth Informix SQLi
+  Chain: OAuth endpoint -> SQLi -> applicationuser.credential -> F3 decrypt -> admin auth -> F1 RCE
+
+CUCM-F127 CRITICAL: platform-snmp -- SNMPv3 root hardcoded authpass/privpass + public no-auth + ccmadmincommunity R/W
+  mgr.cnf: root MD5/DES authpass/privpass hardcoded; public usmNoAuth/usmNoPriv = anonymous
+  naa.cnf: readcomm=writecomm=ccmadmincommunity; VACM WriteView=iso full MIB for noAuthNoPriv SNMPv1/v2c
+
+CUCM-F128 HIGH: cm-authentication -- SHA-1 password hashing + String.equals() timing oracle
+  MessageDigest.getInstance("SHA-1"); String.equals() short-circuits (not MessageDigest.isEqual())
+  SHA-1 GPU crackable; timing oracle for remote password inference
+
+CUCM-F129 CRITICAL: cm-changecredential -- Trust-All TrustManager + no container auth + appCertificate default "password"
+  checkServerTrusted/checkClientTrusted=return; HostnameVerifier.verify=true unconditional
+  web.xml: ZERO <security-constraint>; CredentialChange.dtd: appCertificate=password for 7960LoginApp
+  Pre-auth PIN change for any CUCM user via 7960LoginApp:password; all outbound HTTPS MITMable
+
+CUCM-F130 HIGH: platform-remotesupport -- systemwide static RSA-2048 key + sudo script wildcard
+  All CUCM 15.0.1.x: same hardcoded pubkey in remotesupport_createaccount binary at known offsets
+  Cisco TAC holds private key; compromise = retroactive decrypt of all remote support passphrases ever
+  sudo script -fq /var/.../remote_activity.log* trailing * glob -> path traversal to /etc/cron.d/
+
+CUCM-F131 HIGH: platform-ipsec -- IPSecClient raw socket port 8500 no auth + XXE on ipsec.xml
+  java.net.Socket(host,8500) no TLS no auth; local process sends CREATE to IPSec manager
+  XMLUtils.getDocumentBuilderFactory() missing external-general-entities=false -> XXE on ipsec.xml
 """
 
-VERSION = "3.29.0"
+VERSION = "3.31.0"
 
 import requests
 import urllib3
@@ -1958,6 +2062,14 @@ def full_findings_summary() -> str:
         ("CUCM-F121", "CRITICAL","cm-tvs bundleITLRecovery.sh: chmod 664 on /usr/local/cm/tftp/ITLRecovery.p12 (world-readable PKCS12 containing ITLRecovery_priv.pem + ITLRecovery.pem); PKCS12 password passed as '-password pass:$S_PWD' in openssl cmdline -> visible in /proc/PID/cmdline + echo to stdout/log; ITLRecovery private key = authority to sign ITL files for all phones; exfil ITLRecovery.p12 + recover password -> forge ITL -> redirect all phones to attacker CUCM; chain: F107 (UDS container /usr/local/cm/.security/ R/W) -> read ITLRecovery key"),
         ("CUCM-F122", "HIGH",    "cm-tvs tvs binary tvsSSLLibInit(): creates phone ssl_ctx without SSL_CTX_set_verify call; OpenSSL default = SSL_VERIFY_NONE; SSL_CTX_set_verify called exactly once in binary for outbound syslog connection (0x585fb) not for phone listener; any host reaching TVS port completes TLS without presenting certificate; any network-accessible attacker issues cert verification queries to TVS without authentication; chain: F122 (unauthenticated TVS) + F123 (DB hash lookup only) -> oracle for CUCM trusted certs"),
         ("CUCM-F123", "HIGH",    "cm-tvs tvs binary tvsHandleCertVerificationReq() -> getCertificateInformation() -> CertificateCache::getCertificateInformation(): no X509_verify / X509_STORE_CTX_init / X509_verify_cert / OCSP_sendreq_bio in cert verification code path; trust decision = DER hash lookup in Informix Certificate table; no chain validation, no validity period check, no CRL, no OCSP; write to CUCM Certificate table (via F3/F4 DB cred compromise or AXL API) -> insert attacker cert -> TVS vouches to all phones; chain: F4 (Informix creds) -> insert cert -> F123 vouches -> all phones trust attacker CUCM identity"),
+        ("CUCM-F124", "HIGH",    "cm-soap2 all 5 SOAP2 WARs (CDRonDemandService2/controlcenterservice2/logcollectionservice2/perfmonservice2/realtimeservice2): Servlet 2.2 method enum gap - GET+POST auth-constrained, PATCH not listed in either constraint -> no container auth; transport-guarantee:NONE on all 5 -> HTTP Basic auth over non-TLS channel; admin credentials sniffable; extends F89 (AXL Servlet 2.2 gap) to full SOAP2 service family"),
+        ("CUCM-F125", "HIGH",    "cm-capf nginx_update.sh: $certificate_enrollment_profile_label ($8) + $ca_decrypt_user ($7) injected unescaped into sudo /bin/sed -i replacement strings; GNU sed \\n in replacement injects newlines -> arbitrary nginx.conf directives as root; CA username+password written as plaintext to CACredentials.txt (echo $4 > cred_file; echo $5) before CCMEncryption step"),
+        ("CUCM-F126", "CRITICAL","cm-authentication IMS.jar CUCMUtil.getHostName(): \"select name from processnode where nodeid=\" + nodeId (string concatenation, no PreparedStatement); nodeId from OAuth token -> pre-auth SQL injection into CUCM Informix DB; chain: OAuth endpoint -> SQLi -> SELECT credential FROM applicationuser -> decrypt with F3 static key smetsysocsiccni -> admin auth -> F1 (axl.war admin:axis2) -> RCE"),
+        ("CUCM-F127", "CRITICAL","platform-snmp mgr.cnf: SNMPv3 root user with hardcoded authKey=authpass privKey=privpass (MD5+DES) identical all deployments; SNMPv3 public user usmNoAuthProtocol/usmNoPrivProtocol = anonymous; naa.cnf: readcomm=writecomm=ccmadmincommunity; VACM WriteView=iso (full MIB) for SNMPv1/v2c noAuthNoPriv; systemic SNMP credential failure across all three SNMP protocol versions"),
+        ("CUCM-F128", "HIGH",    "cm-authentication IMS.jar AuthenticationDB.authenticateUser(): SHA-1 password hashing (MessageDigest.getInstance(SHA-1)); String.equals() comparison short-circuits on first byte mismatch (not MessageDigest.isEqual()); SHA-1 GPU crackable + remote timing oracle for password inference; affects all end-user CUCM password authentication"),
+        ("CUCM-F129", "CRITICAL","cm-changecredential changecredential.war: Trust-All X509TrustManager (checkServerTrusted/checkClientTrusted = return) + HostnameVerifier.verify=true unconditional; ZERO <security-constraint> in web.xml (Servlet 2.2); CredentialChange.dtd example: appCertificate=password for 7960LoginApp; if shipped as default -> pre-auth PIN change for any CUCM user; all outbound HTTPS connections MITMable (no cert/hostname check)"),
+        ("CUCM-F130", "HIGH",    "platform-remotesupport remotesupport_createaccount: hardcoded RSA-2048 public key (Cisco TAC private key) embedded in binary at known offsets; same key across all CUCM 15.0.1.x; key compromise = systemic remote support passphrase decrypt; sudo /usr/bin/script -fq /var/log/.../remote_activity.log* trailing * = sudo argument glob -> path traversal to arbitrary file (e.g., /etc/cron.d/)"),
+        ("CUCM-F131", "HIGH",    "platform-ipsec IPSecClient.class: raw java.net.Socket to port 8500, no TLS, no auth; any local process sends CREATE command to IPSec manager; IPSecManagerImpl XMLUtils.getDocumentBuilderFactory() missing setFeature(external-general-entities,false) and disallow-doctype-decl -> XXE on ipsec.xml (runtime-populated from network/admin sources)"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
