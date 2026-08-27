@@ -771,9 +771,65 @@ CUCM-F64 MEDIUM: axl.war transport-guarantee=NONE - AXL SOAP admin credentials i
   AXL uses HTTP Basic Auth (base64 in Authorization header) -- no HTTPS enforcement
   No HTTPS enforcement -> admin creds + full provisioning payload (users, phones, dial plans) in cleartext
   Chains: F37 (ccmivr SQLi), F61 (Struts RCE), F63 (DRF injection) all require admin auth - AXL interception provides it
+
+CUCM-F67 CRITICAL: cm-reporter DRF backup/restore -- same os.system()+sudo tar as F63, separate component
+  reporter_do_backup.py: cmd = "sudo tar -cvpPf " + DEVICE_TARBALL + " " + REPORTDIR + " 2>> " + LOGPATH + " " + ENC_SEQ + " " + REDIRECTION
+  reporter_do_restore.py: cmd = DEVICE_TARBALL + DEC_SEQ + " | sudo /bin/tar -xvpPf - 1>> " + LOGPATH
+  All args from sys.argv, no sanitization; restore: DEVICE_TARBALL is command prefix -> arbitrary command injection
+  Second independent DRF injection point (cm-reporter component, separate from F63 cm-syslog/cm-tct-svc)
+  Chain: F63 (same pattern), F3 (decrypt backup), F41 (Redis write-anywhere)
+
+CUCM-F68 HIGH: soapservicecontrol.sh hardcoded AdminClient credentials -uxx -wxx
+  /usr/local/cm/bin/soapservicecontrol.sh: java AdminClient -uxx -wxx -> username=xx password=xx
+  Controls SOAP service lifecycle (deploy/undeploy/start/stop) via https://localhost:PORT/CONTEXT/services/AdminService
+  Affects all 6 Axis SOAP services (realtimeservice/perfmonservice/logcollectionservice/controlcenterservice/SNMPService/dpservice)
+  Post-RCE: disable monitoring services (RTMT evasion) by calling script; or replay AdminClient directly
+
+CUCM-F69 HIGH: reporter-servlet.war Servlet 2.3 PATCH bypass on file operation servlets
+  Servlets: DeleteFiles, GetFileContent, GetFileList -- no auth-constraint for PATCH/PROPFIND/non-listed methods
+  Tomcat HttpServlet.service() dispatches unknown methods to doGet() -> file read/delete without auth
+  Probe: PATCH /ccmservice/reporter-servlet/GetFileContent?file=/var/log/active/cm/log/ccm.log
+  sessionFilter /* is remaining gate -- if method-sensitive, fully unauthenticated file ops
+
+CUCM-F70 HIGH: Axis 1.x AdminServlet in 6 WARs + Servlet 2.2 method bypass
+  realtimeservice.war/controlcenterservice.war/SNMPService.war/perfmonservice.war/logcollectionservice.war/dpservice.war
+  /servlet/AdminServlet mapped in all; Servlet 2.2 method enumeration -> PATCH unconstrained
+  WSDD-based service deployment via PATCH to AdminServlet; adminPassword=admin hardcoded in wsdd
+  controlcenterservice.war: additionally missing sessionFilter + PathReversalSecurityFilter entirely
+
+CUCM-F71 HIGH: ftp.exp/sftp.exp Tcl eval on argv -> OS command injection
+  /usr/local/cm/bin/ftp.exp + sftp.exp: eval [concat spawn $argv[0..1]] -> arbitrary Tcl/spawn execution
+  Any CUCM component passing attacker-controlled args to these scripts is a transitive injection vector
+
+CUCM-F72 HIGH: cm_idp_post.sh TOCTOU /tmp/list_cmd backtick injection during W1/W2 upgrade
+  isftp writes SFTP file list to /tmp/list_cmd (no mktemp); then: cmd=... `cat /tmp/list_cmd` -> shell injection
+  Race window during upgrade (script runs as root); or pre-position /tmp/list_cmd before script start
+
+CUCM-F73 MEDIUM: ucmadmin.war PresenceViewerTrustManager no-op TrustManager
+  checkClientTrusted()/checkServerTrusted() empty; anonymous HostnameVerifier returns true
+  All Presence server HTTPS traffic MitM-able; chains: F17/F39/F40 (same TrustManager pattern across components)
+
+CUCM-F74 HIGH: ucmadmin.war xalan-2.7.3.jar CVE-2022-34169 integer truncation -> XSLT injection/arbitrary class load
+  Exploitability conditional on untrusted XSLT reaching TransformerFactory; chain F75->F74: CSRF -> XSLT RCE
+
+CUCM-F75 MEDIUM: ucmadmin.war Spring Security disabled -- no CSRF on 15+ @RequestBody POST endpoints
+  springSecurityFilterChain commented out in applicationContext-security.xml (migration TODO note)
+  15+ admin endpoints (DirectoryNumber/EndUser/SIPTrunk/etc.) accept POST without CSRF token validation
+  transport-guarantee=NONE -> HTTP cookie theft + CSRF -> provisioning changes without admin knowledge
+
+CUCM-F76 MEDIUM: ccmservice.war DbSyncServlet + LogoffServlet not in any <security-constraint>
+  /DbSyncServlet.class mapped but no container-level auth; only struts2 /* filter (action-mapping dependent)
+  DbSyncServlet likely triggers CUCM-DB sync; exploitability conditional on Struts action config
+
+CUCM-F77 MEDIUM: cm-sch SCHHostnameVerifier unconditional return true + TLSSocketFactory SSLv2Hello/SSLv3
+  SCHHostnameVerifier.verify(): iconst_1; ireturn (unconditional true) -- any hostname accepted for TLS certs
+  TLSSocketFactory: setEnabledProtocols(["SSLv2Hello","SSLv3","TLSv1",...]) -> POODLE (CVE-2014-3566) downgrade possible
+  Note: SCHTrustManager.checkServerTrusted() DOES validate chain (rethrows CertificateException) -- not fully bypassed
+  Affected channels: TAC phone-home, AMC (amc.cisco.com), GRTSourceBase :8443/grt/, TraceDownloadUtil SFTP creds XML POST
+  Chain: F17/F39/F40/F73 (systemic no-op hostname verifier pattern); SFTP creds in TraceDownloadUtil XML body exposed
 """
 
-VERSION = "3.18.0"
+VERSION = "3.19.0"
 
 import requests
 import urllib3
@@ -1772,6 +1828,17 @@ def full_findings_summary() -> str:
         ("CUCM-F64", "MEDIUM",  "cm-axl axl.war web.xml: <transport-guarantee>NONE</transport-guarantee> on /axl and /services/AXLAPIService — servlet container does not enforce HTTPS; AXL SOAP uses HTTP Basic Auth (base64 in Authorization header); admin credentials + full provisioning payload (users, phones, dial plans) traverse network in cleartext HTTP; network interception of any AXL session yields admin creds; chains with F37 (ccmivr SQLi), F61 (Struts RCE), F63 (DRF injection)"),
         ("CUCM-F65", "LOW",     "cm-perfupdcounter JPIWriterServiceImpl: LocateRegistry.createRegistry(9234) on 0.0.0.0 (all interfaces); no auth; no TLS; exposed interface: jstatsClearAll(containerID) clears all RTMT perf counters, jstatsUpdate*/jstatsInit inject false values; port 9234 RTMT-accessible; post-RCE cleanup step: clear perf trace before lateral movement; chain: F41/F35 post-compromise evasion"),
         ("CUCM-F66", "HIGH",    "platform-containers: AXL/UDS/SSOSP Docker containers all use network_mode=host (no port isolation from host); cap_add includes DAC_OVERRIDE + DAC_READ_SEARCH + SYS_PTRACE (bypasses POSIX permissions, can trace processes); volume mounts: /tmp:/tmp/ (RW shared), /opt/cisco:/opt/cisco/ (RW), /etc:/etc/:ro (SSH keys, LDAP creds, passwd visible), /usr:/usr/:ro, /var:/var/:ro; container compromise (F1/F61 RCE) -> host network stack -> Informix 9088 + Redis 6379 reachable localhost; /tmp staging for race-condition host privilege escalation; docker-compose-axl.yml + docker-compose-ssosp.yml + start_uds.sh all share this pattern"),
+        ("CUCM-F67", "CRITICAL","cm-reporter DRF backup/restore scripts (reporter_do_backup.py + reporter_do_restore.py): same os.system()+sudo tar pattern as F63; DEVICE_TARBALL/ENC_SEQ/DEC_SEQ from sys.argv unsanitized; restore: DEVICE_TARBALL is first token in cmd string -> command prefix injection; separate RPM/component from F63 (cm-syslog/cm-tct-svc), two independent root RCE injection points in DRF framework; chains: F63 (same class), F3 (decrypt backup), F41 (Redis write-anywhere to stage payload)"),
+        ("CUCM-F68", "HIGH",    "cm-soap-realtimeservice soapservicecontrol.sh: hardcoded AdminClient credentials -uxx (username=xx) -wxx (password=xx) passed to com.cisco.ccm.serviceability.soap.security.AdminClient; manages SOAP service deploy/undeploy/start/stop via https://localhost:PORT/CONTEXT/services/AdminService; affects all Axis SOAP services (realtimeservice/perfmonservice/logcollectionservice/controlcenterservice/SNMPService/dpservice); post-RCE (F35/F41) call this script to disable monitoring services before escalation (RTMT evasion)"),
+        ("CUCM-F69", "HIGH",    "cm-reporter-servlet reporter-servlet.war Servlet 2.3 PATCH method bypass: security-constraint covers /* for GET (auth-required) and POST/PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE (deny); PATCH and all non-listed methods have NO auth-constraint; registered servlets: DeleteFiles/GetFileContent/GetFileList/GetFileListText; Tomcat HttpServlet.service() dispatches unknown methods to doGet() -> file read (GetFileContent) and file delete (DeleteFiles) accessible without auth; sessionFilter on /* is only remaining gate; probe: PATCH /ccmservice/reporter-servlet/GetFileContent?file=/var/log/active/..."),
+        ("CUCM-F70", "HIGH",    "cm-soap-* WARs (realtimeservice/controlcenterservice/SNMPService/perfmonservice/logcollectionservice/dpservice): Axis 1.x AdminServlet at /servlet/AdminServlet mapped in all 6 WARs; Servlet 2.2 method enumeration leaves PATCH/PROPFIND/etc. unconstrained (GET/POST auth-required, PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE denied); PATCH to /servlet/AdminServlet with WSDD body -> service deployment without auth; server-config.wsdd in logcollectionservice.war + dpservice.war: adminPassword=admin hardcoded; enableRemoteAdmin=false limits /services/AdminService but not /servlet/AdminServlet HTTP handler"),
+        ("CUCM-F71", "HIGH",    "cm-svc-web ftp.exp/sftp.exp: Tcl expect scripts use eval on caller-controlled argv; set cmd [lrange $argv 0 1]; set c [concat spawn $cmd]; eval $c -> arbitrary Tcl command injection when first two argv contain shell metacharacters or alternate spawn targets; any CUCM component invoking these scripts with attacker-controlled arguments is a transitive injection vector; runs at calling process privilege level"),
+        ("CUCM-F72", "HIGH",    "cm-script cm_idp_post.sh subCopyfiles(): isftp writes SFTP file list to /tmp/list_cmd (no mktemp, predictable path); contents backtick-substituted into shell command: cmd=...`cat /tmp/list_cmd` then $cmd; TOCTOU race window between isftp write and cat; attacker pre-positions /tmp/list_cmd with shell metacharacters -> injection into sudo -u sftpuser context during W1/W2 upgrade phase; even without race: if /tmp writable before script starts, static injection via predictable path"),
+        ("CUCM-F73", "MEDIUM",  "cm-ucmadmin ucmadmin.war PresenceViewerTrustManager: implements X509TrustManager with empty checkClientTrusted()/checkServerTrusted() bodies (no CertificateException thrown, no chain validation); anonymous HostnameVerifier returns true for any hostname; wired into SSLContext for outbound HTTPS to Presence servers; any network MITM between CUCM and Presence presents self-signed cert, intercepts all admin channel traffic; chains: F17 (same pattern platform-api), F39 (srstctlclient), F40 (UXLService)"),
+        ("CUCM-F74", "HIGH",    "cm-ucmadmin ucmadmin.war bundles xalan-2.7.3.jar: CVE-2022-34169 (CVSS 7.5) integer truncation in XSLT bytecode generator allows arbitrary class load via attacker-supplied stylesheet; exploitability conditional on untrusted XSLT reaching TransformerFactory.newTransformer(Source); ucmadmin.war has 15+ @RequestBody POST endpoints with no CSRF gate (F75); chain F75->F74: CSRF-forced authenticated POST with XSLT payload -> authenticated RCE if transformer call site reachable"),
+        ("CUCM-F75", "MEDIUM",  "cm-ucmadmin ucmadmin.war: Spring Security filter (springSecurityFilterChain) commented out in applicationContext-security.xml with note 'Cannot use due to need for Tomcat Shared Realm SSO'; consequence: zero CSRF token validation on 15+ @RequestBody POST endpoints (DirectoryNumber/EndUser/SIPTrunk/FeatureGroupTemplate/RouteList/SIPProfile/TranslationPattern/etc.); attacker with link clicked by authenticated admin executes provisioning changes against live CUCM config; transport-guarantee=NONE enables HTTP downgrade to steal auth cookie before CSRF"),
+        ("CUCM-F76", "MEDIUM",  "cm-svc-web ccmservice.war Servlet 3.0: DbSyncServlet (url=/DbSyncServlet.class) and LogoffServlet not in any <security-constraint>; struts2 /* filter intercepts but only dispatches to Struts action if mapping exists for .class extension; no container-level auth enforcement; DbSyncServlet likely triggers CUCM-to-database sync (destructive/sensitive); exploitability depends on Struts action config at runtime"),
+        ("CUCM-F77", "MEDIUM",  "cm-sch SCHHostnameVerifier.verify(): iconst_1;ireturn (unconditional true) -- any hostname accepted; TLSSocketFactory enables SSLv2Hello+SSLv3 (POODLE downgrade CVE-2014-3566); SCHTrustManager.checkServerTrusted() DOES validate chain (rethrows exception, not fully bypassed); affected: TAC phone-home, AMC amc.cisco.com, GRTSourceBase :8443/grt/, TraceDownloadUtil SFTP creds XML POST body; same systemic class as F17/F39/F40/F73"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
