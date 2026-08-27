@@ -707,12 +707,14 @@ CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (b
 - cucm-uds — CLOSED (F51: unauthenticated /emLoggedInUsers + /users + /servers + ccmcip)
 - platform-sso — CLOSED (F52: Tomcat 6.0.30 EOL in SSO auth tier; pam_permit.so)
 - platform-adminsftp/platform-drf/install_file_signing — CLOSED (no credential findings; drf.war properly auth-constrained)
+- platform-ui — CLOSED (F53: sshRestrict.sh chmod 666 on sshd_config with no restoration)
 - cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
-- ucapp_common remaining: cm-gaxl, cm-reporter-servlet, cm-scheduler, cm-tvs, cucminventory, ucm-ccmact
-- serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-soap-callrecordservice, cm-soap-dpservice
+- ucapp_common remaining: cm-gaxl, cm-reporter-servlet, cm-scheduler, cm-tvs, cucminventory, ucm-ccmact — agent scanning
+- serviceability_callmanager remaining: cm-alarm, cm-auditeventresponder, cm-soap-callrecordservice, cm-soap-dpservice — agent scanning
+- ucplatform remaining: platform-ipsec, platform-tomcat, platform-containers, platform-docker, platform-servM, platform-util, platform-ver, service-registration, platform-fipsutil — extracted, analyzing
 """
 
-VERSION = "3.8.0"
+VERSION = "3.9.0"
 
 import requests
 import urllib3
@@ -1697,6 +1699,7 @@ def full_findings_summary() -> str:
         ("CUCM-F50", "HIGH",    "changecredential.war NO security-constraint (Servlet 2.2 DTD); /ChangeCredentialServlet exposes userid+oldpin params; PIN oracle: DIRUSER_ERROR=unknown user, INVALID_CREDENTIAL=valid user, USER_LOCKED=exhausted; PIN change propagates to Unity Connection via UpdateUnityUsersPinUtil; chain: F3 decrypt EndUser.pin offline → bypass oracle"),
         ("CUCM-F51", "HIGH",    "cucm-uds.war UDS REST API (Jersey): auth-constraint covers only /user/* and /private/user/*; unauthenticated: /emLoggedInUsers (EM session state — who is on which phone NOW), /users (directory enumeration), /clusterUser, /servers (cluster topology), /groups (RBAC), /private/emLoggedInUsers, /private/users, /private/clusterUser, /private/servers; /docs/* DefaultServlet listings=true; ccmcip /ControlledDevices.jsp + /xmldirectory.jsp unconstrained; chain: F51 emLoggedInUsers → F48 IPMA call divert; F51 users → F49/F50 PIN oracle"),
         ("CUCM-F52", "HIGH",    "platform-sso ships Tomcat 6.0.30 (built Aug 2011, EOL Dec 2016) as SSO auth tier Tomcat; 50+ CVEs in 6.0.30→EOL window including CVE-2012-3546 auth bypass (client cert + NIO); PAM sso-auth uses pam_permit.so (auth always succeeds) → local auth fully delegated to SAML; SSO Tomcat compromise = full platform auth bypass"),
+        ("CUCM-F53", "MEDIUM",  "platform-ui sshRestrict.sh: chmod 666 /etc/ssh/sshd_config + /etc/security/limits.conf with NO permission restoration; world-writable persists permanently after any 'set session maxlimit' CLI command; sshd restart triggered by same command activates any injected config; chain: F41 Redis → write AuthorizedKeysFile → wait for next admin sshRestrict run → root SSH"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
