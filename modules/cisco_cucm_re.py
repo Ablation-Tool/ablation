@@ -743,9 +743,18 @@ CUCM-F59 MEDIUM: ssosp.war OAuth endpoints lack container auth; implicit grant; 
   60+ client IDs in ClientInfo.xml (public, shipped in RPM); all responsetype=token (implicit grant)
   refreshtoken 60 days; chains with F58 SAML bypass for end-to-end OAuth token acquisition
   CVSS: 6.5 Medium AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
+
+CUCM-F60 MEDIUM: CCMEncryption.jar setStaticKey() public static override bypasses dynamic key; wire format IV||AES-CBC; AES-128 static vs AES-256 dynamic key asymmetry
+  Component: cm-encryption RPM / CCMEncryption.jar (com.cisco.ccm.security.CCMEncryption)
+  <clinit>: useDynamicKey=true (iconst_1 hardcoded); keydataDkey null → static key fallback
+  Static key: "smetsysocsiccni\x00" (16B AES-128); Dynamic: 64-char hex from dkey.txt (32B AES-256)
+  setStaticKey() public static: sets useDynamicKey=false → disables dynamic key at runtime (reflection-callable post-RCE)
+  Wire format confirmed: IV(16 bytes, random NativePRNGNonBlocking) || AES-128-CBC-PKCS5(ciphertext)
+  dkey.txt write path predictable: if writable (F41/F53 chains), plant known key → all future encryptions use attacker-known AES-256
+  Chains: F3 (root static key), F41 (Redis write dkey.txt+dkey_status.txt), F53 (world-writable sshd_config chain)
 """
 
-VERSION = "3.11.0"
+VERSION = "3.12.0"
 
 import requests
 import urllib3
@@ -1737,6 +1746,7 @@ def full_findings_summary() -> str:
         ("CUCM-F57", "MEDIUM",  "sso-sp FederationConfig.properties: am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2 — hardcoded OpenAM Fedlet default symmetric encryption key; never rotated in CUCM 15.0.1; used by JCEEncryption to protect SAML keystore passphrases in fedlet.cot; same key across ALL CUCM 15 deployments; chains with F52 (Tomcat 6.0.30 RCE → filesystem read) to decrypt tomcat.keystore passphrase"),
         ("CUCM-F58", "HIGH",    "sso-sp ssoconfig.properties: metadata_auth_request_signed=false (SP-initiated AuthN requests unsigned), metadata_assertion_signed=false (SP does not require signed IdP assertions), sp_md_signed=false; OpenSAML 2.6.5 (EOL 2016) + xmlsec 1.5.6 (CVE-2013-2172); misconfigured IdP sends unsigned assertion → SAML auth bypass → CCMAdmin/AXL/UDS access"),
         ("CUCM-F59", "MEDIUM",  "ssosp.war (sso-sp): /token/access_token + /oauth/authorize + /user/whoami + /token/device have NO container security-constraint (Servlet 2.4 web.xml); 60+ OAuth client IDs hardcoded in ClientInfo.xml in the RPM (public); all clients use responsetype=token (implicit grant, deprecated per RFC 9700); refresh tokens valid 60 days; stolen token + known client_id → impersonate Jabber/phone OAuth client"),
+        ("CUCM-F60", "MEDIUM",  "CCMEncryption.jar (cm-encryption): setStaticKey() is public static — sets useDynamicKey=false, disables dynamic key at runtime, forces fallback to AES-128 static key smetsysocsiccni\\x00 (16B); callable via reflection post-RCE (F1/F35/F41); <clinit> hardcodes useDynamicKey=true but effective key depends on dkey_status.txt=enable AND dkey.txt (64-char hex, 32B AES-256); wire format: IV(16,random)||AES-128-CBC-PKCS5(ciphertext); dkey.txt path predictable (/usr/local/platform/.security/CCMEncryption/keys/); if writable (F41 Redis/F53 sshd_config), plant known key to decrypt all future credentials"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
