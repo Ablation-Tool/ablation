@@ -3788,3 +3788,35 @@ with exit code 144
 ● Done. Both background SSH processes killed.
 
 ✻ Churned for 9s
+---
+# F-FTD-106 CONFIRMED — 2026-08-24
+
+STATUS: CONFIRMED (was CANDIDATE)
+
+JWT signing key extracted from JVM process heap (PID 3512, FTD 7.0.0-94):
+  hex: 9c42f9fd11a9fcfc26b5bc5325fd51c5
+  b64: nEL5/RGp/PwmtbxTJf1RxQ==
+  size: 16 bytes (AES-128, NOT the 32-byte Neo4j encrypted blob)
+
+Correction to prior analysis:
+  - Neo4j SerializationKey.encryptedString = BGFv6IoBiYQfePMHT8jO2ZHoBf7uuZbcvF2pQ45qxlg= (32B decoded)
+  - This is ENCRYPTED material, NOT the JWT key directly
+  - AES_KEY_SIZE=128 constant in EncryptionUtil → actual JWT key is 16 bytes
+  - 22 static decryption candidates all failed; key only recoverable via HMAC oracle heap scan
+  - No GC timing window needed — key is persistent in NGFWCache (10 copies found at ~0xd9-0xeb)
+
+Server-side jti check (new finding):
+  Pure JWT forgery (novel jti) → HTTP 401 "revoked or obsolete"
+  PAYLOAD TAMPER (real jti + extracted key + modified claims) → HTTP 200 CONFIRMED
+  FDM trusts JWT claims; does NOT compare against stored token payload
+
+Confirmed HTTP 200 (forged token, tampered exp +30d):
+  /api/fdm/v6/object/networks, /api/fdm/v6/devices/default/interfaces,
+  /api/fdm/v6/devices/default/routing/virtualrouters, /api/fdm/v6/policy/accesspolicies,
+  /api/fdm/v6/object/securityzones
+
+Modules updated:
+  ~/ablation/modules/ftd_jwt_key_extraction.py — heap scan method, confirmed key, tamper path
+  ~/ablation/modules/ftd_jwt_forge.py — correct key size, claims, tamper_and_resign()
+
+Admin UUID (FTD 7.0.0-94): bd1f4b5f-9c2a-11f1-9b57-4744106b6c8e
