@@ -482,6 +482,38 @@ CUCM-F38 MEDIUM: HAProxy admin socket world-writable — local privilege escalat
       (access via F30-style plaintext passphrase pattern allows silent phone trust reset)
     - SIPOAuth: phones with OAuth token + HTTPS get full config; without = mini config (attack surface reduction)
 
+CUCM-F39 HIGH: SRST CTL Client EasyX509TrustManager — phone trust chain injection via network MitM
+  Component: com-srstctlclient RPM / srstctlclient.jar
+             CTLSocket.tlsConnect() + EasyX509TrustManager
+  Root cause: CTLSocket installs EasyX509TrustManager(null) into SSLContext:
+    new EasyX509TrustManager(null)   ← null KeyStore
+    SSLContext.init([EasyX509TrustManager], null, null)
+    EasyX509TrustManager.checkServerTrusted(): return;  ← no-op — trusts ALL server certs
+    EasyX509TrustManager.checkClientTrusted(): return;  ← no-op — trusts ALL client certs
+    EasyX509TrustManager.getAcceptedIssuers():  return null
+  Protocol: SRST CTL distribution — CUCM pushes CTLFile to branch-site SRST routers over TLS
+  Attack chain:
+    1. MitM between CUCM and SRST router (WAN link, BGP, or L3 device)
+    2. Present self-signed cert — accepted (checkServerTrusted is no-op)
+    3. Inject crafted CTL file — adds attacker CA to phone trust store
+    4. Branch phones trust attacker CA for SIP TLS + TFTP
+    5. Full phone traffic interception / firmware injection
+  Amplifier: F35 (CTL trust chain abuse) — EasyX509TrustManager enables remote F35 without physical access
+  CVSS: 7.4 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
+
+CUCM-F40 LOW: Test TrustManager in production UXL WAR — JVM-wide Axis fake TLS socket factory
+  Component: cm-uxl RPM / UXLService.war
+             WEB-INF/classes/com/cisco/ccm/uxl/client/CiscoSoapClientTestTrustManager.class
+  Root cause: CiscoSoapClientTestTrustManager (named "Test") shipped in production WAR.
+    Static initializer + constructors call allowSelfSignedCertificate():
+      System.setProperty("axis.socketSecureFactory",
+                         "org.apache.axis.components.net.SunFakeTrustSocketFactory")
+    Sets JVM-wide Axis system property → all Axis SOAP clients in UXL WAR accept any TLS cert.
+    checkClientTrusted(): return;  ← no-op (trusts all client certs)
+  Scope: UXL WAR requires BASIC auth (Standard CCM End Users role) — post-auth impact only.
+         JVM property affects outbound Axis SOAP calls from UXL context, not inbound server TLS.
+  CVSS: 3.7 Low AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
@@ -492,7 +524,7 @@ CUCM-F38 MEDIUM: HAProxy admin socket world-writable — local privilege escalat
 - cm-ccm binary deep dive: SIP nonce generation, RADIUS auth, media crypto key exchange
 """
 
-VERSION = "2.9.0"
+VERSION = "3.0.0"
 
 import requests
 import urllib3
@@ -1194,6 +1226,51 @@ def check_ccmivr_sqli(host: str = None, port: int = 8443) -> dict:
     return evidence
 
 
+def check_srst_ctl_tls(host: str = None, port: int = 2444) -> dict:
+    """CUCM-F39: Verify SRST CTL client EasyX509TrustManager TLS bypass.
+    Root cause: CTLSocket.tlsConnect() installs EasyX509TrustManager(null) — checkServerTrusted() no-op.
+    Attack: MitM between CUCM and SRST router → inject CTL file → phones trust attacker CA."""
+    evidence = {
+        "finding": "CUCM-F39",
+        "severity": "HIGH",
+        "cvss": "7.4 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+        "jar": "srstctlclient.jar",
+        "vulnerable_class": "com.cisco.ccm.security.SRSTCTLClient.EasyX509TrustManager",
+        "vulnerable_method": "checkServerTrusted + checkClientTrusted",
+        "caller": "CTLSocket.tlsConnect()",
+        "tls_bypass": "EasyX509TrustManager.checkServerTrusted(): 0: return (no-op — no exception thrown)",
+        "sscontext_init": "SSLContext.init([EasyX509TrustManager(null)], null, null)",
+        "protocol": "SRST CTL distribution — CUCM pushes CTLFile to branch SRST routers",
+        "default_port": 2444,
+        "amplifier": "F35 (CTL trust chain abuse) — this bypass enables remote F35 without physical access",
+        "attack_chain": [
+            "Attain MitM between CUCM pub/sub and branch SRST router",
+            "Present self-signed TLS cert — accepted (checkServerTrusted is no-op)",
+            "Inject crafted CTL file with attacker CA",
+            "Branch phones import attacker CA into trust store",
+            "Intercept SIP TLS / TFTP — full phone estate compromise at that site",
+        ],
+    }
+    if host:
+        import ssl, socket
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try:
+            with socket.create_connection((host, port), timeout=5) as sock:
+                with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                    cert = ssock.getpeercert(binary_form=True)
+                    evidence["probe"] = {
+                        "host": host, "port": port,
+                        "tls_open": True,
+                        "cert_len": len(cert) if cert else 0,
+                        "note": "Port open; CUCM SRST CTL client would accept any cert presented here",
+                    }
+        except Exception as e:
+            evidence["probe"] = {"host": host, "port": port, "error": str(e)}
+    return evidence
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -1235,6 +1312,8 @@ def full_findings_summary() -> str:
         ("CUCM-F36", "LOW",      "Decrypted credential logging: SIPSecurity, SAF connection profile, HttpNPConnection all log plaintext passwords at trace level"),
         ("CUCM-F37", "HIGH",     "Pre-auth SQLi in ccmivr ccmusername via prepareStatement-with-concatenated-string (no ? placeholders); validator allows single-quote; GET/POST unprotected; ccmivr exempt from HTTPS redirect (HTTP-accessible); amplified by F3"),
         ("CUCM-F38", "MEDIUM",  "HAProxy admin socket /var/run/haproxy.sock mode 666 level admin — any local user reads sessions, disables rate limits, drains backends"),
+        ("CUCM-F39", "HIGH",    "SRST CTL client EasyX509TrustManager: checkServerTrusted() no-op — CTLSocket.tlsConnect() accepts any server cert; MitM → inject CTL → branch phones trust attacker CA → full phone estate MitM"),
+        ("CUCM-F40", "LOW",     "CiscoSoapClientTestTrustManager (named Test) shipped in production UXLService.war; sets JVM-wide axis.socketSecureFactory=SunFakeTrustSocketFactory; checkClientTrusted() no-op"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
