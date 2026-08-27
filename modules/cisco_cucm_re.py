@@ -189,6 +189,18 @@ CUCM-F16 HIGH: Phone device cert CN validated via strstr substring match — dev
     → register as victim phone → steal registration, intercept calls, SRTP session takeover
   CVSS: 8.1 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
 
+CUCM-F18 MEDIUM: AXL SQL Toolkit trust-all TrustManager + JVM-global HostnameVerifier bypass
+  File: cm-axlsqltoolkit/axlsqltoolkit.zip → src/AxlSqlToolkit.java (SOURCE INCLUDED)
+  MyTrustManager inner class (lines 281-288):
+    checkClientTrusted(): empty; checkServerTrusted(): empty; getAcceptedIssuers(): null
+  init() sets JVM-global bypass:
+    HttpsURLConnection.setDefaultSSLSocketFactory(sf)                   <- ALL HTTPS in JVM
+    HttpsURLConnection.setDefaultHostnameVerifier(() -> return true)    <- always-true, JVM-global
+  Endpoint: https://host:8443/axl/ — Basic Auth credentials interceptable via MITM
+  Impact: AXL credentials have executeSQLQuery/executeSQLUpdate → full DB dump
+  Same pattern as ASA/ASDM F8 (efw JVM-global SSL bypass); distinction: CLI tool vs persistent service
+  CVSS: 6.8 Medium AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N
+
 CUCM-F17 HIGH: Platform API SOAP client trust-all X509TrustManager — inter-cluster cert/key MITM
   File: platform-api.jar → com.cisco.vos.platform.api.soapclient.SSLProtocolSocketFactory$1
   Anonymous inner class implements javax.net.ssl.X509TrustManager:
@@ -209,7 +221,7 @@ CUCM-F17 HIGH: Platform API SOAP client trust-all X509TrustManager — inter-clu
 - common-api RPM analysis
 """
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 import requests
 import urllib3
@@ -502,6 +514,7 @@ def full_findings_summary() -> str:
         ("CUCM-F15", "LOW",      "pktCap BASIC auth over cleartext HTTP (transport-guarantee=NONE)"),
         ("CUCM-F16", "HIGH",     "Phone cert CN validated via strstr (not strcmp) — registration spoofing via substring cert"),
         ("CUCM-F17", "HIGH",     "Platform API SOAP client trust-all X509TrustManager — inter-cluster cert/key MITM"),
+        ("CUCM-F18", "MEDIUM",   "AXL SQL Toolkit trust-all TrustManager + JVM-global HostnameVerifier bypass → credential interception"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
