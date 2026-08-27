@@ -715,6 +715,7 @@ CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (b
 - cm-tvs — CLOSED (F55: bundleITLRecovery.sh SFTP password stdout echo + PKCS12 passphrase in ps args + ITLRecovery.p12 664)
 - ucm-ccmact — CLOSED (F54: ccmact.war /v1/tester/* + /v1/testalarm/* + /v1/actions/srp/* unauthenticated, explicit dev comment)
 - sso-sp RPM — CLOSED (F56-F59: credential policy brute-force, hardcoded Fedlet key, unsigned SAML, OAuth implicit grant)
+- cm-jar-lib / snmp-mon — CLOSED (F61 Struts CVE-2024-53677, F62 SNMP defaults)
 
 CUCM-F56 HIGH: Default Credential Policy — minlength=1, trivialcredchecking=0, maxdays=0 (brute-force via F50 oracle)
   Component: cm-dbl RPM / CredentialPolicy.csv pkid=9454babf-48d0-4e16-9b80-2d0da4b38750
@@ -754,7 +755,7 @@ CUCM-F60 MEDIUM: CCMEncryption.jar setStaticKey() public static override bypasse
   Chains: F3 (root static key), F41 (Redis write dkey.txt+dkey_status.txt), F53 (world-writable sshd_config chain)
 """
 
-VERSION = "3.12.0"
+VERSION = "3.13.0"
 
 import requests
 import urllib3
@@ -1747,6 +1748,8 @@ def full_findings_summary() -> str:
         ("CUCM-F58", "HIGH",    "sso-sp ssoconfig.properties: metadata_auth_request_signed=false (SP-initiated AuthN requests unsigned), metadata_assertion_signed=false (SP does not require signed IdP assertions), sp_md_signed=false; OpenSAML 2.6.5 (EOL 2016) + xmlsec 1.5.6 (CVE-2013-2172); misconfigured IdP sends unsigned assertion → SAML auth bypass → CCMAdmin/AXL/UDS access"),
         ("CUCM-F59", "MEDIUM",  "ssosp.war (sso-sp): /token/access_token + /oauth/authorize + /user/whoami + /token/device have NO container security-constraint (Servlet 2.4 web.xml); 60+ OAuth client IDs hardcoded in ClientInfo.xml in the RPM (public); all clients use responsetype=token (implicit grant, deprecated per RFC 9700); refresh tokens valid 60 days; stolen token + known client_id → impersonate Jabber/phone OAuth client"),
         ("CUCM-F60", "MEDIUM",  "CCMEncryption.jar (cm-encryption): setStaticKey() is public static — sets useDynamicKey=false, disables dynamic key at runtime, forces fallback to AES-128 static key smetsysocsiccni\\x00 (16B); callable via reflection post-RCE (F1/F35/F41); <clinit> hardcodes useDynamicKey=true but effective key depends on dkey_status.txt=enable AND dkey.txt (64-char hex, 32B AES-256); wire format: IV(16,random)||AES-128-CBC-PKCS5(ciphertext); dkey.txt path predictable (/usr/local/platform/.security/CCMEncryption/keys/); if writable (F41 Redis/F53 sshd_config), plant known key to decrypt all future credentials"),
+        ("CUCM-F61", "HIGH",    "cm-jar-lib ships Apache Struts 2.5.33 (struts2-core-2.5.33.jar, built Dec 5 2023); CVE-2024-53677 published Dec 9 2023 — CUCM ISO ships unpatched (2.5.34 fixes it); CVE-2024-53677 CVSS 9.8: file upload path traversal → write JSP shell outside webroot → RCE as tomcat; ccmadmin.war + ccmservice.war use Struts with certificate/firmware upload actions; chain: F3/F55 credential theft → admin auth → Struts file upload → JSP shell → tomcat RCE"),
+        ("CUCM-F62", "MEDIUM",  "snmp-mon ships SNMP agent with: snmpd.cnf community=ccmadmincommunity (well-known CUCM default, SNMPv1 noAuthNoPriv); mgr.cnf USM root user auth=MD5 authpass=\\\"authpass\\\" priv=DES privpass=\\\"privpass\\\" literal defaults; USM public user noAuth/noPriv (unauthenticated read); SNMP MIB exposes phone registration state, extension list, cluster topology, performance counters; write access via root USM → modify trap destinations → alert evasion"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
