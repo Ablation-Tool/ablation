@@ -284,6 +284,14 @@ Attack chain:
   3. Extract key_mgr_passphrase + ALL sealed secrets in one response
   4. No further decryption steps needed — all data is already in plaintext
 
+tpm2_mgr_password persistence capability:
+  - /all_data returns tpm2_mgr_password from TPM2 NV-RAM (not application config)
+  - This password is the auth value for tpm2_manager.service seal/unseal operations
+  - POST /api/system/v1/key-manager/initialize with tpm2_mgr_password → becomes authorized TPM2 manager
+  - Enables: seal attacker-controlled data in TPM2, re-init after credential rotation
+  - Persists across ISE app restarts (NV-RAM source, not changed by application-level rotation)
+  - Source: key_manager_server.py:477-510 (get_all_data merges tpm2_mgr_password into response)
+
 === ISE-F13: key_manager.service world-writable socket via ExecStartPost ===
 
 Source: /usr/lib/systemd/system/key_manager.service (ise_key_manager-1.0.0-1.x86_64.rpm)
@@ -3947,7 +3955,7 @@ exit;
 
 MODULE_META = {
     "name": "cisco_ise_re",
-    "version": "1.28.0",
+    "version": "1.29.0",
     "target": "Cisco ISE 3.5.0.527",
     "findings": [
         "ISE-F1", "ISE-F2", "ISE-F3", "ISE-F4", "ISE-F5",
