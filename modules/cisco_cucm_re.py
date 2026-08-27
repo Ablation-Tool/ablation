@@ -619,15 +619,31 @@ CUCM-F48 HIGH: ma.war (IPMA) HTTP method omission — GET/POST to call-divert + 
   Same class as F45; CSCsx40175 = Cisco tracked this
   CVSS: 8.1 High AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:H/A:N
 
+CUCM-F49 HIGH: pms.war Phone Migration Service — Jersey REST API unauthenticated; PIN oracle + phone profile hijack
+  Component: pms RPM / pms.war
+  Jersey servlet (com.sun.jersey.spi.container.servlet.ServletContainer) at /*
+    Resource classes: FindPhoneByDN + PhoneMigration (in com.cisco.cucm.pms.views)
+  Security-constraint has user-data-constraint=NONE but NO auth-constraint → completely unauthenticated
+    Comment: "Redirect pms http request to https" but transport-guarantee=NONE (TLS NOT enforced)
+  FindPhoneByDN: enumerate phones by extension (unauthenticated)
+  PhoneMigration: self-service phone profile migration (Primary Extension + SSID + PIN)
+    Error message oracle: invalid-PIN vs invalid-extension vs no-user-association → brute-force attack
+    Successful migration = attacker gets victim's phone profile on attacker-controlled IP phone
+  Impact: extension enumeration + PIN brute force + full phone profile hijack (calls, voicemail, identity)
+  Chain: F3 static key → decrypt Self-Service PINs from DB → direct PhoneMigration without brute force
+  Secondary: transport-guarantee=NONE → PIN transmitted in cleartext over HTTP
+  CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
 - cm-car/cm-cdrdlv/cm-cef/cm-ipvms/cm-ipvmsd/cm-ccmportal/cm-CTIManager/cm-soap-cdr — CLOSED (no findings)
+- headset/ucmuser/ccmuser/cucreports/dhcp/ils/ccmpns — CLOSED (scope only; no new standalone findings)
 - cm-lpns WebSocket endpoint — CANDIDATE: AuthFilter maps to /register/* HTTP only; @ServerEndpoint bypasses?
 - cm-ccm binary deep dive: largely complete; remaining: SIP stack buffer overflow (requires dynamic)
 """
 
-VERSION = "3.4.0"
+VERSION = "3.5.0"
 
 import requests
 import urllib3
@@ -1608,6 +1624,7 @@ def full_findings_summary() -> str:
         ("CUCM-F46", "MEDIUM",  "dnaliaslookup.war security-constraint has user-data-constraint NONE but NO auth-constraint; CLIENT-CERT login-config never enforced; UserLookupServlet + AddToCache + ClearCache unauthenticated; extension enum + cache poison + DN alias DoS"),
         ("CUCM-F47", "MEDIUM",  "dna.war DNAMainServlet at /DNAMainServlet has no <security-constraint>; TokenFilter class (com.cisco.ccm.dna.servlets.TokenFilter) missing from WAR; alias persistence layer writable without auth; chain: F47 poison store + F46 ClearCache = persistent alias redirect"),
         ("CUCM-F48", "HIGH",    "ma.war (IPMA) security-constraint lists PUT/DELETE/HEAD/CONNECT/OPTIONS/TRACE deny-all but omits GET/POST; CSCsx40175 Cisco internal bug ref; /servlet/MAService + setAsstDivertTarget.jsp + setMgrDivertTarget.jsp unauthenticated GET+POST → call divert any manager/assistant pair"),
+        ("CUCM-F49", "HIGH",    "pms.war Phone Migration Service: Jersey REST at /* has NO auth-constraint; transport-guarantee=NONE (comment says HTTPS redirect, misconfigured); FindPhoneByDN unauthenticated; PhoneMigration PIN oracle (3 distinct error msgs); brute PIN → hijack any user phone profile; chain: F3 static key → dump SSIDs+PINs from DB → direct hijack"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
