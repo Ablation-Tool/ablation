@@ -196,6 +196,36 @@ CUCM-F20 LOW: Development JDBC credential in dbl2j.jar TimedPingPrimary.main() �
   Non-production credential; confirms dbuser username; reveals internal Cisco infrastructure names
   CVSS: LOW — test credential for long-gone internal Cisco host
 
+CUCM-F22 MEDIUM: IMS LDAP/LDAPS TLS hostname verification disabled — Active Directory MITM
+  File: cm-authentication/IMS.jar → com.cisco.security.ims.impl.AuthenticationLDAP.makeConnection()
+  Bytecode evidence (constant pool):
+    #54 = String // com.sun.jndi.ldap.object.disableEndpointIdentification
+    #55 = String // com.sun.jndi.ldap.object.disableEndpointIdentification  (set twice in SSL path)
+    #59 = String // ssl  (java.naming.security.protocol value)
+    #60 = String // java.naming.ldap.factory.socket
+    #61 = Class  // com/cisco/security/ims/impl/CustomSocketFactory
+  Config evidence (cm-dirsync/CCMDirSyncCfg.xml):
+    <VmParam Param="-Dcom.sun.jndi.ldap.object.disableEndpointIdentification=true" />
+  CustomSocketFactory amplification:
+    createSocket(String host, int port) → null  (parametrized overloads all return null)
+    createSocket(InetAddress, int, InetAddress, int) → null
+    createSocket(String, int, InetAddress, int) → null
+    Only createSocket() (no-arg) works — LDAPS connections using this factory fail unless JVM fallback occurs
+  Attack chain:
+    on-path attacker between CUCM and AD (TCP/636) → intercept LDAPS connection
+    → present any cert from a CUCM-trusted CA for ANY hostname (hostname check disabled)
+    → TLS session established with attacker endpoint → receive LDAP BIND with plaintext DN + password
+    → same impact as F21 but via network interception vs static key decryption
+  Combined chain (F3 → F21 → F22):
+    F21: static key decrypts stored ciphertext → plaintext bind password obtained offline
+    F22: hostname check disabled → MITM intercepts bind credential in transit
+    Both converge to full AD enumeration
+  Distinction from F17 (platform-api trust-all):
+    F22 does NOT use trust-all TrustManager — system truststore IS validated
+    Attack bar: obtain a cert from ANY CUCM-trusted CA for ANY hostname (not forge a self-signed cert)
+    Enterprise CUCM commonly ships with internal CA certs → internal CA operator = attacker threshold
+  CVSS: 6.5 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
+
 CUCM-F21 HIGH: LDAP Manager bind password decryptable via F3 static AES key — Active Directory access
   File: cm-ccm binary → authenticationLDAPConfig::readLDAPServerDetailsFromDB() at VA 0x2331746
   Disassembly — CCMEncryption call chain:
@@ -263,7 +293,7 @@ CUCM-F17 HIGH: Platform API SOAP client trust-all X509TrustManager — inter-clu
 - common-api RPM analysis
 """
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
 import requests
 import urllib3
@@ -560,6 +590,7 @@ def full_findings_summary() -> str:
         ("CUCM-F19", "HIGH",     "platform-services.war Axis2 admin:axis2 + hotdeployment=true; axis2-web/ exposed without auth"),
         ("CUCM-F20", "LOW",      "dbl2j.jar TimedPingPrimary.main() development JDBC credential shipped in production bytecode"),
         ("CUCM-F21", "HIGH",     "LDAP Manager bind password decryptable via F3 static AES key → AD/LDAP full enumeration"),
+        ("CUCM-F22", "MEDIUM",   "IMS LDAP/LDAPS TLS hostname verification disabled (disableEndpointIdentification=true) → AD MITM"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
