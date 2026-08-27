@@ -373,6 +373,25 @@ CUCM-F31 CRITICAL: F3 static key decrypts Windows CA service account credentials
   Scope: all CUCM deployments with Online CA mode (CAPFCertGenMethod=4, ONLINE_CA_TYPE=2) + Windows ADCS
   CVSS: 9.1 Critical AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H
 
+CUCM-F32 CRITICAL: F3 static key decrypts OAuth JWT signing + encryption keys in authzkeys DB table
+  File: ims/com/cisco/security/ims/authentication/GetAuthzKeys.class
+  SQL: select keyid, keyvalue, tkpurpose from authzkeys
+  tkpurpose=1: symmetric AES token encryption key → CCMEncryption.decryptPassword() → base64 decode → TokenKeys.symmetricKey
+  tkpurpose=2: RSA signing private key → CCMEncryption.decryptPassword() → readPrivateKey() → TokenKeys.verificationKey
+  decryptKey() bytecode: new CCMEncryption; hexToByte(encryptedHex); decryptPassword([B)
+  Same CCMEncryption class as F3 (static key smetsysocsiccni)
+  Key paths: authz_priv.pem, authz_symmetric_Key → /usr/local/platform/.security/authz/keys/
+  Chain:
+    F3 key → CCMEncryption.decryptPassword(authzkeys.keyvalue)
+    → plaintext RSA signing private key
+    → forge JWT: header.payload.RS256_sign(priv_key)
+    → Authorization: Bearer <forged_token>
+    → BearerAuthenticationRequestHandler.authenticate() → AuthenticationImpl.validateAccessToken()
+    → authenticated as any CUCM user (admin, operator, or end user)
+  Access vector: read authzkeys table via F4 (ccmuser:ccmuser Informix) or F1 RCE filesystem read
+  Downstream: all OAuth-protected CUCM REST APIs, Jabber SSO, Webex integration, UCCX agent sessions
+  CVSS: 9.1 Critical AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:N
+
 === PENDING TASKS ===
 - ssobackend.jar JWT validation path RE (F6) — CLOSED (SignedJWT.parse blocks alg:none)
 - Nimbus JOSE+JWT CVE mapping for 4.23 build
@@ -381,7 +400,7 @@ CUCM-F31 CRITICAL: F3 static key decrypts Windows CA service account credentials
 - libCryptoUtil.so from cm-security: hardcoded keys
 """
 
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 
 import requests
 import urllib3
@@ -785,6 +804,55 @@ def check_rsa_pkcs1_in_asymencryption(jar_path: str = None) -> dict:
     return {"finding": "CUCM-F29", "evidence": evidence}
 
 
+def check_oauth_authzkeys_decryption(jar_path: str = None) -> dict:
+    """CUCM-F32: Confirm OAuth signing/encryption keys in authzkeys table use CCMEncryption (F3 static key).
+
+    Static evidence: GetAuthzKeys.decryptKey() bytecode:
+      offset 0: new #80 // class com/cisco/ccm/security/CCMEncryption
+      offset 7: astore_1
+      offset 8: aload_1
+      offset 9: aload_0
+      offset 10: invokestatic #82 // CCMEncryption.hexToByte(String)[B
+      offset 13: invokevirtual #83 // CCMEncryption.decryptPassword([B)String
+    tkpurpose=1: symmetric AES key → decryptKey() → base64 decode → TokenKeys.symmetricKey
+    tkpurpose=2: RSA signing private key → decryptKey() → readPrivateKey() → TokenKeys.verificationKey
+    """
+    evidence = {
+        "class":  "com.cisco.security.ims.authentication.GetAuthzKeys",
+        "method": "decryptKey(String)",
+        "sql":    "select keyid, keyvalue, tkpurpose from authzkeys",
+        "decrypt_calls": [
+            {"offset": 85,  "opcode": "invokestatic",  "target": "decryptKey:(Ljava/lang/String;)Ljava/lang/String;", "context": "tkpurpose=1 symmetric key"},
+            {"offset": 191, "opcode": "invokestatic",  "target": "decryptKey:(Ljava/lang/String;)Ljava/lang/String;", "context": "tkpurpose=2 RSA signing key"},
+        ],
+        "decrypt_impl": [
+            "new #80 // com/cisco/ccm/security/CCMEncryption",
+            "invokestatic #82 // CCMEncryption.hexToByte(String)[B",
+            "invokevirtual #83 // CCMEncryption.decryptPassword([B)String",
+        ],
+        "key_paths": {
+            "signing":    "/usr/local/platform/.security/authz/keys/authz_priv.pem",
+            "encryption": "/usr/local/platform/.security/authz/keys/authz_symmetric_Key",
+        },
+        "chain": "F3 static key → CCMEncryption.decryptPassword(authzkeys.keyvalue) → RSA signing key → forge JWT → BearerAuthenticationRequestHandler accepts → admin access",
+    }
+    if jar_path:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["javap", "-p", "-c", "-classpath", jar_path,
+                 "com.cisco.security.ims.authentication.GetAuthzKeys"],
+                capture_output=True, text=True, timeout=30,
+            )
+            evidence["javap_grep"] = [
+                line for line in result.stdout.splitlines()
+                if "CCMEncryption" in line or "decryptKey" in line or "authzkeys" in line or "tkpurpose" in line
+            ]
+        except Exception as e:
+            evidence["javap_error"] = str(e)
+    return {"finding": "CUCM-F32", "severity": "CRITICAL", "evidence": evidence}
+
+
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
@@ -819,6 +887,7 @@ def full_findings_summary() -> str:
         ("CUCM-F29", "MEDIUM",   "CCMAsymmetricEncryption uses RSA/ECB/PKCS1PADDING (PKCS#1 v1.5, deprecated NIST SP 800-131A) — Bleichenbacher susceptibility"),
         ("CUCM-F30", "MEDIUM",   "CallManager RSA private key passphrase stored in plaintext at /usr/local/cm/.security/CallManager/keys/CallManager.passphrase"),
         ("CUCM-F31", "CRITICAL", "F3 static key decrypts Windows CA service account creds + FIPS SSM PIN from CACredentials.txt → ADCS compromise + lateral movement"),
+        ("CUCM-F32", "CRITICAL", "F3 static key decrypts OAuth JWT signing + encryption keys in authzkeys DB table → forge tokens for any CUCM user"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
