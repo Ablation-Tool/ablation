@@ -714,9 +714,38 @@ CUCM-F52 HIGH: platform-sso — SSO authentication tier bundles Tomcat 6.0.30 (b
 - ucplatform remaining: platform-ipsec, platform-tomcat, platform-containers, platform-docker, platform-servM, platform-util, platform-ver, service-registration, platform-fipsutil — extracted, analyzing
 - cm-tvs — CLOSED (F55: bundleITLRecovery.sh SFTP password stdout echo + PKCS12 passphrase in ps args + ITLRecovery.p12 664)
 - ucm-ccmact — CLOSED (F54: ccmact.war /v1/tester/* + /v1/testalarm/* + /v1/actions/srp/* unauthenticated, explicit dev comment)
+- sso-sp RPM — CLOSED (F56-F59: credential policy brute-force, hardcoded Fedlet key, unsigned SAML, OAuth implicit grant)
+
+CUCM-F56 HIGH: Default Credential Policy — minlength=1, trivialcredchecking=0, maxdays=0 (brute-force via F50 oracle)
+  Component: cm-dbl RPM / CredentialPolicy.csv pkid=9454babf-48d0-4e16-9b80-2d0da4b38750
+  minlength=1 → 9-value PIN space (1-9 single digit); trivialcredchecking=0 → "1" valid
+  maxdays=0 → PINs never expire; prevcredcount=0 → no history; maxhacks=5/hackresettime=30min
+  15 brute-force attempts/hour; chains with F50 PIN oracle (DIRUSER_ERROR/INVALID_CREDENTIAL distinguisher)
+  CVSS: 7.5 High AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
+
+CUCM-F57 MEDIUM: Hardcoded OpenAM Fedlet encryption password in FederationConfig.properties
+  Component: sso-sp RPM / usr/local/platform/sso/saml/metadata/FederationConfig.properties
+  am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2 — upstream OpenAM default, never rotated
+  JCEEncryption uses this key for SAML keystore passphrases in fedlet.cot
+  Same key across all CUCM 15.0.1 deployments; chains with F52 (Tomcat RCE → filesystem read)
+  CVSS: 5.9 Medium AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
+
+CUCM-F58 HIGH: SAML SP unsigned AuthN requests + unsigned assertion acceptance
+  Component: sso-sp RPM / usr/local/platform/sso/saml/conf/ssoconfig.properties
+  metadata_auth_request_signed=false; metadata_assertion_signed=false; sp_md_signed=false
+  OpenSAML 2.6.5 (EOL 2016) + xmlsec 1.5.6 (CVE-2013-2172 XML Signature Spoofing)
+  Misconfigured IdP → unsigned assertion accepted → SAML auth bypass → CCMAdmin/AXL/UDS
+  CVSS: 8.1 High AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
+
+CUCM-F59 MEDIUM: ssosp.war OAuth endpoints lack container auth; implicit grant; 60+ hardcoded client IDs
+  Component: sso-sp RPM / usr/local/platform/war/ssosp.war + ClientInfo.xml
+  /token/access_token + /oauth/authorize + /user/whoami + /token/device: NO security-constraint
+  60+ client IDs in ClientInfo.xml (public, shipped in RPM); all responsetype=token (implicit grant)
+  refreshtoken 60 days; chains with F58 SAML bypass for end-to-end OAuth token acquisition
+  CVSS: 6.5 Medium AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
 """
 
-VERSION = "3.10.0"
+VERSION = "3.11.0"
 
 import requests
 import urllib3
@@ -1704,6 +1733,10 @@ def full_findings_summary() -> str:
         ("CUCM-F53", "MEDIUM",  "platform-ui sshRestrict.sh: chmod 666 /etc/ssh/sshd_config + /etc/security/limits.conf with NO permission restoration; world-writable persists permanently after any 'set session maxlimit' CLI command; sshd restart triggered by same command activates any injected config; chain: F41 Redis → write AuthorizedKeysFile → wait for next admin sshRestrict run → root SSH"),
         ("CUCM-F54", "MEDIUM",  "ccmact.war (ucm-ccmact): explicit web.xml comment 'no auth-constraint means everybody has access' on /v1/tester/* (Tester5XX — forces 5xx errors), /v1/testalarm/* (TestAlarm — fires real CUCM alarm events unauthenticated → alarm flood/evasion), /v1/actions/srp/* (SRPHandshakeResource — Activation Code Onboarding SRP, custom crypto: CryptoUtils/DefaultSRPCrypto/KDF/SRPMath), /v1/ping; auth-constrained: /v1/activationcode + /v1/release only"),
         ("CUCM-F55", "MEDIUM",  "cm-tvs bundleITLRecovery.sh: echo 'S_PWD is $S_PWD' line 47 (debug line) emits decrypted SftpPwCrypt SFTP backup password to stdout on Publisher during ITL Recovery bundle creation; openssl pkcs12 -password pass:$S_PWD also exposes passphrase in ps aux; ITLRecovery.p12 at /usr/local/cm/tftp/ chmod 664 group=ccmbase → readable by any ccmbase member; PKCS12 passphrase = SFTP password; ITL Recovery private key extraction → phone estate MitM (same impact as F35)"),
+        ("CUCM-F56", "HIGH",    "Default Credential Policy (cm-dbl CredentialPolicy.csv pkid=9454babf): minlength=1 (1-digit PIN allowed), trivialcredchecking=0 (no check), maxdays=0 (never expires), prevcredcount=0 (no history); maxhacks=5/hackresettime=30min → 15 brute-force attempts/hour against 9-value PIN space; chains with F50 (changecredential.war DIRUSER_ERROR/INVALID_CREDENTIAL oracle) and F49 (pms.war oracle) for reliable PIN takeover"),
+        ("CUCM-F57", "MEDIUM",  "sso-sp FederationConfig.properties: am.encryption.pwd=8p3BTg2tvtG0Kg//Hqahy8x29u9FPxH2 — hardcoded OpenAM Fedlet default symmetric encryption key; never rotated in CUCM 15.0.1; used by JCEEncryption to protect SAML keystore passphrases in fedlet.cot; same key across ALL CUCM 15 deployments; chains with F52 (Tomcat 6.0.30 RCE → filesystem read) to decrypt tomcat.keystore passphrase"),
+        ("CUCM-F58", "HIGH",    "sso-sp ssoconfig.properties: metadata_auth_request_signed=false (SP-initiated AuthN requests unsigned), metadata_assertion_signed=false (SP does not require signed IdP assertions), sp_md_signed=false; OpenSAML 2.6.5 (EOL 2016) + xmlsec 1.5.6 (CVE-2013-2172); misconfigured IdP sends unsigned assertion → SAML auth bypass → CCMAdmin/AXL/UDS access"),
+        ("CUCM-F59", "MEDIUM",  "ssosp.war (sso-sp): /token/access_token + /oauth/authorize + /user/whoami + /token/device have NO container security-constraint (Servlet 2.4 web.xml); 60+ OAuth client IDs hardcoded in ClientInfo.xml in the RPM (public); all clients use responsetype=token (implicit grant, deprecated per RFC 9700); refresh tokens valid 60 days; stolen token + known client_id → impersonate Jabber/phone OAuth client"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
