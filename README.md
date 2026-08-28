@@ -74,6 +74,12 @@ print(hex(p2.GP_NAME_OFFSET), hex(p2.OVERFLOW_DELTA))
 
 # Go binary obfuscated with garble (GoReSym fails → use this)
 python3 modules/go_garble_re.py /path/to/binary
+
+# CUCM 15.0.1 — full static findings summary (482 findings)
+python3 -c "from modules.cisco_cucm_re import full_findings_summary; print(full_findings_summary())"
+
+# FTD fleet-wide Python AES-256 key (F-FTD-110)
+python3 -c "from modules.ftd_hardcoded_aes_key import AES256_KEY; print(AES256_KEY.hex())"
 ```
 
 ## Requirements
@@ -189,68 +195,9 @@ Pure Python, no native dependencies. Decodes Apple's BV41 chunked LZ4 format fro
 
 Handles `$s` prefix (Swift 5+ mangling): module qualifiers, generic specializations, protocol conformances, operator names, property accessors. Falls back to the `swift-demangle` binary if present.
 
-#### `anyconnect_re` — macOS AnyConnect / NetworkExtension RE (Catalina 10.15.7)
-
-LIEF + capstone x86_64 RE of two binaries: Apple's `NetworkExtension.framework` (1095.140.2, 4.1MB) and Cisco's `acsockext` System Extension (5.1.16.194, fat binary). Exposes callable classes with pre-mapped address tables for IKEv2 tunnel setup, auth bypass intercept, and DNS injection TOCTOU.
-
-**`AnyConnectNEAnalyzer`** — NE framework (x86_64, Catalina)
-
-Key address tables:
-- `NE_1095_140_2_METHODS` — method IMPs for IKEv2, listener, crypto
-- `NE_LISTENER_METHODS` — `receiveConnection:` and associated selrefs
-- `NE_PHASE1_SELREFS` — phase-1 selrefs (IKE_SA_INIT → IKE_AUTH); `NEIKEv2ProviderAuthenticate:` @ `0x2ca770`
-- `NE_TUNNEL_START_SELREFS` — 8 ordered selrefs in tunnel-start sequence:
-  `protocolConfiguration` → `tunnelKind` → `setTunnelKind:` → `setOptions:` (0x2ca758, pre-auth intercept) → `ifIndex` → `pathStatus` → `serverAddress` → `NEIKEv2ProviderAuthenticate:` (0x2ca770)
-
-Key methods:
-- `start_ikev2_tunnel(count=200)` — disasm `NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions:` @ `0xd878b`; r12=self, r14=tunnelOptions
-- `provider_auth_callsite(count=30)` — 15 insns around `0xd8f3f`; call to `NEIKEv2ProviderAuthenticate:` at `0xd8f53`, objc_msgSend site at `0xd8f60`
-- `tunnel_start_selrefs()` — returns `NE_TUNNEL_START_SELREFS`
-- `skeyseed_derivation()` — SKEYSEED PRF derivation in IKE_SA_INIT response handler
-- `prf_plus()` — PRF+ key material expansion (KEYMAT/SK_* derivation)
-- `listener_rx_path(count=100)` — `receiveConnection:` @ `0xa4e00`; r15=self, r12=retain(connection)
-
-Bypass targets:
-- `0xd8f60` — patch `call [rip+0x188a32]` (objc_msgSend to `NEIKEv2ProviderAuthenticate:`) → force rax=1; skips Cisco auth entirely on tunnel start
-- `0x2ca758` (setOptions: selref) — hook point fires before auth callback; access to full tunnelOptions
-
-```python
-from modules.anyconnect_re import AnyConnectNEAnalyzer
-
-a = AnyConnectNEAnalyzer('/path/to/NetworkExtension')
-print(a.tunnel_start_selrefs())
-insns = a.start_ikev2_tunnel(count=200)
-auth = a.provider_auth_callsite()
-```
-
-**`ACSockExtAnalyzer`** — acsockext 5.1.16.194 (x86_64 slice, Catalina)
-
-Cisco's `com.cisco.anyconnect.macos.acsockext` System Extension. Implements AppProxy, NetworkFilter, and DNS proxy flows via `NEAppProxyProvider` / `NEFilterDataProvider` / `NEDNSProxyProvider`. No IKEv2 auth delegate (version boundary: `NEIKEv2ProviderAuthenticate:` is AnyConnect 4.x only; acsockext 5.1.x dropped it).
-
-Key methods:
-- `inject_path(count=100)` — `injectDelayedResponseIntoUDPFlow:` @ `0x100082ad4`; dispatches async block without capturing flow reference
-- `inject_block_callback(count=120)` — block @ `0x100082f38`; double-fetch TOCTOU confirmed:
-  - outer caller discards flow (`rsi` never saved after `injectDelayedResponseIntoUDPFlow:` call)
-  - block re-fetches via `findUDPFlowWithDelayedReponse:` @ `0x100082f5e`
-  - block struct: `[0x20]=self`, `[0x28]=packet_data`, `[0x30]=peer_addr(28B)`, `[0x48]=local_addr_byte`, `[0x4c]=local_addr(28B)`
-  - write at `0x10005da06` (`_writeUDPDatagramToFlow`) called from `0x1000830c3`
-- `reuse_toctou(count=50)` — `isConnectionReusableForDestination:` @ `0x10004b393`; ~50-insn check→use window
-- `flow_start()` — `NEAppProxyTCPFlow` / UDP flow startup path
-- `cpp_typeinfo()` — C++ typeinfo scan (SEI stack embedded in extension)
-
-TOCTOU race window: between `injectDelayedResponseIntoUDPFlow:` dispatching the async block and the block executing `findUDPFlowWithDelayedReponse:`, the flow object can be destroyed/replaced by a concurrent DNS response on the same port — second fetch may return a different or null flow.
-
-```python
-from modules.anyconnect_re import ACSockExtAnalyzer
-
-ac = ACSockExtAnalyzer('/path/to/acsockext_x86_64')
-print(ac.inject_path())
-print(ac.inject_block_callback())
-```
-
 ---
 
-### Cisco ASA / Firepower
+### Cisco
 
 #### `cisco_asa_lina_re` — LINA binary RE + RADIUS overflow
 
@@ -350,6 +297,64 @@ ASA REST API (`/api/...`, 9.3+) endpoint enumeration. Unauthenticated surface ma
 #### `cisco_asa_cred_audit` — ASA credential audit
 
 Credential testing across web management, ASDM, and REST API. Measures lockout behavior per-interface. Maps auth stack (local vs RADIUS vs TACACS+).
+
+#### `anyconnect_re` — AnyConnect / NetworkExtension RE
+
+LIEF + capstone x86_64 RE of Apple's `NetworkExtension.framework` (1095.140.2) and Cisco's `acsockext` System Extension (5.1.16.194) on macOS 10.15.7. Exposes callable address tables for IKEv2 tunnel setup, auth bypass intercept, and DNS injection TOCTOU.
+
+**`AnyConnectNEAnalyzer`** — NE framework (x86_64, Catalina)
+
+Key address tables:
+- `NE_PHASE1_SELREFS` — phase-1 selrefs (IKE_SA_INIT → IKE_AUTH); `NEIKEv2ProviderAuthenticate:` @ `0x2ca770`
+- `NE_TUNNEL_START_SELREFS` — 8 ordered selrefs in tunnel-start: `protocolConfiguration` → `tunnelKind` → `setOptions:` (0x2ca758, pre-auth intercept) → `NEIKEv2ProviderAuthenticate:` (0x2ca770)
+
+Bypass targets:
+- `0xd8f60` — patch `call [rip+0x188a32]` (objc_msgSend → `NEIKEv2ProviderAuthenticate:`) → force rax=1; skips Cisco auth on tunnel start
+- `0x2ca758` — hook point before auth callback; full tunnelOptions access
+
+```python
+from modules.anyconnect_re import AnyConnectNEAnalyzer, ACSockExtAnalyzer
+
+a = AnyConnectNEAnalyzer('/path/to/NetworkExtension')
+print(a.tunnel_start_selrefs())
+insns = a.start_ikev2_tunnel(count=200)
+
+ac = ACSockExtAnalyzer('/path/to/acsockext_x86_64')
+print(ac.inject_block_callback())   # double-fetch TOCTOU @ 0x100082f38
+```
+
+**`ACSockExtAnalyzer`** — `com.cisco.anyconnect.macos.acsockext` 5.1.16.194 (x86_64)
+
+AppProxy / NetworkFilter / DNS proxy via `NEAppProxyProvider` / `NEFilterDataProvider` / `NEDNSProxyProvider`. TOCTOU in `injectDelayedResponseIntoUDPFlow:` — async block re-fetches flow via `findUDPFlowWithDelayedReponse:` @ `0x100082f5e`; race window allows null or replaced flow on second fetch.
+
+#### Cisco FTD / FDM — 43 modules
+
+Static RE of Cisco Firepower Threat Defense 6.7.0-65 through 7.0.0-94 and FDM (Firepower Device Manager). Covers the FDM Java/Tomcat REST layer, Python management plane (`cisco_sf_common_base`), lina binary, and daemon attack surfaces.
+
+**Key chains:**
+
+- **F-FTD-102 → F-FTD-106: JWT forgery** — `ftd_neo4j_password_decrypt` extracts AES key from Neo4j Python bindings → decrypts admin password → `ftd_jwt_forge` forges HS256 tokens → cluster admin on any FDM instance
+- **F-FTD-105: Spring Security bypass** — `ftd_fdm_local_auth_bypass`: FDM whitelist passes `127.0.0.1` behind a reverse proxy forwarding a client-controlled `X-Forwarded-For` header — pre-auth admin API access
+- **F-FTD-107: TAR slip RCE** — `ftd_backup_tarslip`: backup restore decompresses a user-controlled tar without canonical path validation — arbitrary file write as root
+- **F-FTD-109: cli_shadow root** — `ftd_clishadow_root`: `cli_shadow` NOPASSWD in sudoers on FTD 7.0.0-94 — root from any local account
+- **F-FTD-110: Python AES key** — `ftd_hardcoded_aes_key`: SHA-256 of hardcoded passphrase → AES-256-CBC; static across all FTD/FMC deployments; decrypts Python management plane ciphertext fleet-wide without device access
+- **F-FTD-66: SRU zip-slip** — `ftd_sru_zipslip`: `NGFWFileUtils.extractTarArchive` no canonical path check; three vulnerable call sites in the SRU unpack path
+- **F-FTD-67: Config zip-slip** — `ftd_config_import_zipslip`: zip4j 1.3.3 (CVE-2018-1002202) in config import — no signature check on zip contents; admin credentials → arbitrary file write as www
+- **F-FTD-79: DevAuth** — `ftd_devauth_hardcoded_creds`: development auth bypass; all 7 SHA-256 hashes cracked
+- **ZMQ NULL auth** — `ftd_sfdc_zmq_rep`: SFDataCorrelator ZMQ REP socket — NULL auth, data injection
+- **eStreamer unauth** — `ftd_estreamer_unauth`: unauthenticated network event streaming
+- **AJP GhostCat** — `ftd_ajp_ghostcat`: AJP connector on FDM management interface (CVE-2020-1938 surface)
+- **Snort plugin injection** — `ftd_snort3_plugin_injection`: detection engine Lua plugin write path — www → sfsnort pivot
+
+```python
+# Fleet-wide FTD/FMC Python-layer AES-256 key
+from modules.ftd_hardcoded_aes_key import AES256_KEY
+print(AES256_KEY.hex())
+
+# JWT forgery chain (F-FTD-102 → F-FTD-106) — CONTROLLED ENVIRONMENT ONLY
+from modules.ftd_jwt_forge import FDMJWTForger
+token = FDMJWTForger('192.168.1.1').forge(neo4j_key='<hex-from-ftd_neo4j_password_decrypt>')
+```
 
 #### `cisco_re_engine` — Unified Cisco RE platform (8 modules)
 
@@ -886,9 +891,40 @@ ablation/
 │   ├── ftd_hardcoded_aes_key.py    ← Python-layer AES-256 static key
 │   ├── ftd_clishadow_root.py       ← cli_shadow NOPASSWD → root
 │   ├── ftd_telegraf_metrics_unauth.py
+│   ├── ftd_admin_shadow_root.py
+│   ├── ftd_ajp_ghostcat.py
+│   ├── ftd_amp_stunnel_ssrf.py
+│   ├── ftd_apache_cve_2019_0211.py
+│   ├── ftd_azure_imds_access.py
+│   ├── ftd_backup_restore_rootexec.py
 │   ├── ftd_ciscossl_cve_2022_0778.py
-│   ├── [30+ additional ftd_*.py modules]
-│   ├── anyconnect_re.py            ← macOS NetworkExtension + acsockext RE
+│   ├── ftd_clamav_network_trigger.py
+│   ├── ftd_config_import_zipslip.py ← zip4j 1.3.3 zip-slip (F-FTD-67)
+│   ├── ftd_dbaccess_creds.py
+│   ├── ftd_devauth_hardcoded_creds.py ← DevAuth bypass (F-FTD-79)
+│   ├── ftd_estreamer_unauth.py
+│   ├── ftd_fdm_config_export_key.py
+│   ├── ftd_fdm_easysetup_takeover.py
+│   ├── ftd_fdm_user_mgmt_bypass.py
+│   ├── ftd_firmware_dl_ssrf.py
+│   ├── ftd_ha_standby_preauth_bypass.py
+│   ├── ftd_installpkg_root.py
+│   ├── ftd_ldap_cred_exfil.py
+│   ├── ftd_ldap_mitm.py
+│   ├── ftd_lina_lua_inject.py
+│   ├── ftd_log4shell_fdm.py
+│   ├── ftd_mgmt_ip_reconfig.py
+│   ├── ftd_neo4j_backup_exfil.py
+│   ├── ftd_openssl_file_rw.py
+│   ├── ftd_pjb_sqli.py
+│   ├── ftd_platform_api_token_impersonate.py
+│   ├── ftd_rabbitmq_bonfire_inject.py
+│   ├── ftd_sfmb_static_creds.py
+│   ├── ftd_snort3_plugin_injection.py
+│   ├── ftd_sru_zipslip.py          ← NGFWFileUtils tar-slip (F-FTD-66)
+│   ├── ftd_vault_proxy_cred_exfil.py
+│   ├── ftd_www_root_escalation.py
+│   ├── anyconnect_re.py            ← AnyConnect NE IKEv2 + acsockext RE
 │   ├── cisco_ios_re.py
 │   ├── cisco_nxos_guestshell_re.py
 │   ├── nxos_enum.py
@@ -920,6 +956,9 @@ ablation/
 │   ├── lateral_movement.py
 │   ├── syscall_trace.py
 │   └── regression.py
+├── docs/
+│   ├── CONTAINER-PLATFORMS.md
+│   └── DEPLOY.md
 └── utils/
     └── poc_radius_ou_inject.py
 ```
