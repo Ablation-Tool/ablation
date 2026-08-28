@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  Custom-built modular reverse engineering tool. Every module written from scratch for the specific target — no scanner wrappers.
+  Custom-built modular reverse engineering tool.
 </p>
 
 ---
