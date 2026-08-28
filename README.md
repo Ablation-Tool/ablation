@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  Custom-built modular reverse engineering tool.
+  Reverse engineering tool.
 </p>
 
 ---
