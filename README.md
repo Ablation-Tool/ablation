@@ -9,7 +9,7 @@ Ablation is a custom-built modular reverse engineering and attack surface analys
 Every module is written from scratch for the specific target. 
 It runs on the target without a debugger, source code, or prior knowledge of what's installed. Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
 
-Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 60+ modules share a custom disassembly engine (x86 / ARM64 / MIPS / PPC), a custom binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
+Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 100+ modules share a custom disassembly engine (x86 / ARM64 / MIPS / PPC), a custom binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
 
 ## Platforms
 
@@ -503,6 +503,28 @@ SEH chain corruption (FS:[0] pattern), POPAD+JMP shellcode sequences. Windows ar
 
 ### Containers and Kubernetes
 
+#### `vmnetd_re` — Docker vmnetd socket protocol RE
+
+RE module for `com.docker.vmnetd`, the macOS privileged helper that runs as root and handles Docker networking.
+
+**What it maps:**
+- Handler dispatch table — locates `handlePing`, `handleBindIpv4`, `handleInstallSymlinks`, `handleUninstall`, `handleDiagnose` and surrounding byte context to recover command IDs
+- VMN3T handshake magic — finds all occurrences in the binary, extracts surrounding frame structure, locates `handshake.go` source path reference
+- Path strings — extracts all `/usr/local/`, `/usr/bin/`, `/var/run/`, `/etc/`, `/Library/`, `/private/` paths from binary; maps what `symlinkBinary` / `symlinkDockerSock` can create/target
+- `UserWritablePaths` struct fields — context dump from binary for boundary validation logic
+- Live socket probe — sends structured binary probes against `/var/run/com.docker.vmnetd.sock` to confirm command ID → response mapping
+
+```bash
+VMNETD_BINARY=/path/to/com.docker.vmnetd python3 modules/vmnetd_re.py
+```
+
+```python
+from modules.vmnetd_re import run
+run(binary='/path/to/com.docker.vmnetd', socket_path='/var/run/com.docker.vmnetd.sock')
+```
+
+Goal: craft `SymlinkMessage` as root via the privileged socket.
+
 #### `docker_enum` — Docker escape surface
 
 - `/var/run/docker.sock` writable → root via `docker run --privileged`
@@ -564,6 +586,29 @@ OPTIONS sweep for extension discovery, REGISTER scan, Digest auth capture, RTP s
 
 Ollama, LM Studio, LocalAI, OpenAI-compatible. Checks: unauthenticated model listing, unfiltered generation, model file path exposure, system prompt leakage via `/api/show`.
 
+#### `qwen3_tts_re` — Qwen3-TTS / MLX-TTS WebAPI RE
+
+Assessment module for `mlx-community/Qwen3-TTS` and compatible FastAPI/uvicorn TTS services (default port 2023).
+
+**Modules:**
+- **M1 `module_health`** — `/health` endpoint: model IDs, instance UUID, process start time, MLX active memory in GB — full system state without auth
+- **M2 `module_unauth_synthesis`** — confirms unauthenticated compute access; logs WAV size + Content-Disposition
+- **M3 `module_path_enum`** — 30-path sweep: `/docs`, `/openapi.json`, `/models`, `/voices`, `/admin`, `/metrics`, `/config`, `/reload`, `/stream`, `/ws`, and more
+- **M4 `module_ssml_injection`** — SSML basic, SSML `<audio src>` SSRF (IMDS + loopback), prosody injection, XXE, script injection, path traversal in text field, null bytes, 10k-char resource exhaustion, Unicode homoglyphs; baselines against normal synthesis for size-delta anomaly detection
+- **M5 `module_param_discovery`** — probes 30+ undocumented parameters (`voice`, `speaker_id`, `model`, `seed`, `callback_url`, `webhook`, `ssml`, `emotion`, etc.) via error reflection
+- **M6 `module_race_condition`** — 5 concurrent synthesis threads; surfaces missing rate limiting
+- **M7 `module_file_enum`** — predictable-filename IDOR sweep for generated audio files across `/files/`, `/audio/`, `/static/`, `/output/`
+
+```bash
+QWEN3_TTS_TARGET=http://<host>:2023 python3 modules/qwen3_tts_re.py
+```
+
+```python
+import os; os.environ["QWEN3_TTS_TARGET"] = "http://<host>:2023"
+from modules.qwen3_tts_re import run_all
+result = run_all()
+```
+
 ---
 
 ### Cryptography and Authentication
@@ -624,7 +669,7 @@ for ver, entry in SymbolicOffsetRegression.CONFIRMED.items():
 
 WeChat 8.0.56 arm64 static RE. Covers the MMTLS transport protocol, DB encryption key derivation, and runtime key extraction via ptrace — no Frida. Synthesized from symbol tables, embedded source paths, and log strings in `libwechatnetwork.so` and `libMMProtocalJni.so`.
 
-Native ARM64 tooling lives in [mmtls-lab](https://github.com/zellkernel/mmtls-lab). `wechat_re.py` drives it via adb.
+Native ARM64 tooling lives in [mmtls-lab](https://github.com/sshpie/mmtls-lab). `wechat_re.py` drives it via adb.
 
 #### `wechat_re` — MMTLS + DB key + ptrace key extraction
 
@@ -804,6 +849,8 @@ ablation/
 │   ├── sip_enum.py
 │   ├── streaming_enum.py
 │   ├── llm_enum.py
+│   ├── qwen3_tts_re.py             ← Qwen3-TTS / MLX-TTS WebAPI RE
+│   ├── vmnetd_re.py                ← Docker vmnetd privileged socket RE
 │   ├── jwt_crypto_analyzer.py
 │   ├── crypto_audit.py
 │   ├── privesc_enum.py
