@@ -65,7 +65,7 @@ python3 modules/go_garble_re.py /path/to/binary
 | `cisco_radius_ise_re` | Cisco ASA/ISE | RADIUS Class attr injection, OU= overflow, ISE CoA |
 | `cisco_cstp_attack` | Cisco ASA | DAP bypass, SAML, timing oracle, RADIUS CoA mid-session |
 | `cisco_webvpn_js_re` | Cisco ASA | WebVPN JS bundle RE, tunnel group enum, CSRF pattern |
-| `cisco_asdm_download_re` | Cisco ASA | ASDM JAR full retrieval chain |
+| `cisco_asdm_download_re` | Cisco ASA | ASDM JAR retrieval chain |
 | `cisco_asdm_jar_re` | Cisco ASA | JVM constant pool RE, trust manager bypass, deserialization |
 | `cisco_rommon_re` | Cisco ASA | ROMMON bypass, config-register, image auth bypass |
 | `cisco_config_re` | Cisco ASA | Type 7 decode, SNMP/TACACS+/BGP credential extraction |
@@ -76,7 +76,7 @@ python3 modules/go_garble_re.py /path/to/binary
 | `ftd_*` (43 modules) | Cisco FTD/FDM | JWT forgery chain, Neo4j key, TAR slip, cli_shadow root, static AES key, zip-slip, ZMQ NULL — see [docs/cisco.md](docs/cisco.md) |
 | `cisco_ise_re` | Cisco ISE | 46 findings: RADIUS overflow, hardcoded creds, LDAP chain, unauth REST |
 | `cisco_cucm_re` | Cisco CUCM | 482 findings: static AES, JWT forge, ITL key, HAProxy 666, TAPS RCE |
-| `cisco_re_engine` | Cisco | Unified RE: FLOSS, capa, r2, BinDiff, Frida, ropper, keystone, Scapy |
+| `cisco_re_engine` | Cisco | FLOSS, capa, r2, BinDiff, Frida, ropper, keystone, Scapy |
 | `nxos_enum` | Cisco NX-OS | APIC unauth surface, MIT queries, vCenter lateral |
 | `nexus_dashboard_enum` | Cisco NX-OS | SSO pivot, Kafka export, Terraform/ServiceNow creds |
 | `cisco_nxos_guestshell_re` | Cisco NX-OS | CentOS LXC rootfs, credential scan, SUID, cron |

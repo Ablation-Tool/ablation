@@ -52,7 +52,7 @@ OS, architecture, kernel version, container runtime. Bare metal vs VM vs Docker 
 
 ### `java_re` — Java class file RE
 
-Full constant pool parse (all JVM tag types):
+Constant pool parse (all JVM tag types):
 
 - `ObjectInputStream.readObject()` call sites — deserialization surface
 - `Runtime.exec()` / `ProcessBuilder` — command injection chains
