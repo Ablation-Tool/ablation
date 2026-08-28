@@ -199,6 +199,8 @@ Handles `$s` prefix (Swift 5+ mangling): module qualifiers, generic specializati
 
 ### Cisco
 
+Covers ASA / LINA binary RE, FTD / FDM (43 modules), ISE, CUCM, AnyConnect, IOS, and NX-OS. All Cisco modules are purpose-built from firmware extraction — no off-the-shelf scanner wrappers.
+
 #### `cisco_asa_lina_re` — LINA binary RE + RADIUS overflow
 
 LINA is the monolithic x86-64 ELF that implements Cisco ASA. Recovers struct field layouts from stripped binaries via LEA frequency analysis and provides a live RADIUS overflow probe.
