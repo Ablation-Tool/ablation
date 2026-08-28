@@ -160,7 +160,7 @@ def demonstrate_zipslip_structure(output_dir="/tmp"):
     Writes .tar artifacts for manual inspection.
     CONTROLLED ENVIRONMENT ONLY
     """
-    payload = b"F-FTD-66: zip-slip proof — NGFWFileUtils.extractTarArchive path traversal\n"
+    payload = b"F-FTD-66: zip-slip proof - NGFWFileUtils.extractTarArchive path traversal\n"
     target = "/tmp/ftd66-zipslip-proof.txt"
 
     print(f"\n[*] Creating zip-slip demonstration artifacts")
