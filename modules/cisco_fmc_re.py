@@ -204,6 +204,40 @@ FMC-F23: IOS Backend Hardcoded admin:cisco Template Credentials [HIGH]
   Payload: username=admin&passwd=cisco (URL-encoded form params in XML template)
   IOS backend manages Cisco IOS device communication from FMC (CDO integration).
   Template credentials used for initial device onboarding; not rotated if template is reused.
+
+FMC-F24: dbaccess.conf.in Default Database Credentials — World-Readable Credential Store [CRITICAL]
+  File: /etc/sf/dbaccess.conf.in (template) -> /etc/sf/dbaccess.conf (runtime, chmod 644)
+  Default credentials in shipped template:
+    MySQL:   root:admin, interface:interface, barnyard:barnyard,
+             correlator:correlator, external:external, cfguser:cfguser
+    MonetDB: monetdb:monetdb123 (admin), eventdb_user:eventdb123
+  Template comment: "NEW ENTRIES ADDED HERE WILL NOT BE RANDOMIZED."
+  generate_db_access.sh randomizes on firstboot — but failure is non-fatal (warn-and-continue).
+  Bypass: /etc/sf/dbaccess.random.disable disables all randomization.
+  DBUtils._store_creds_db() sets chmod 644 on generated dbaccess.conf — world-readable.
+  Impact: any local process reads /etc/sf/dbaccess.conf and obtains all DB credentials;
+          MySQL root:admin -> full database compromise.
+
+FMC-F25: Lamplighter JKS trustStorePassword="lamplighter" in Supervisord Commandline [HIGH]
+  File: opt/lamplighter/etc/supervisord-manager-active.conf
+  Java argument: -Djavax.net.ssl.trustStorePassword=lamplighter
+  Hardcoded in the process commandline for FeedDownloader service.
+  Any local process reading /proc/<pid>/cmdline or the supervisord conf retrieves the JKS password.
+  Keystore: opt/lamplighter/etc/certs/external_ca.jks
+
+FMC-F26: MongoDB Unauthenticated — Lamplighter Threat Intelligence Database [MEDIUM]
+  File: opt/lamplighter/etc/mongod.conf
+  No security.authorization entry — MongoDB runs without auth.
+  bindIp: 127.0.0.1 (localhost-only).
+  Database: lamplighter (threat intelligence feeds, STIX/TAXII data).
+  Any local process connects to 127.0.0.1:27017 and reads/writes all TID data.
+
+FMC-F27: Redis Unauthenticated — Lamplighter Threat Intelligence Cache [MEDIUM]
+  File: opt/lamplighter/etc/redis.conf
+  requirepass not set; protected-mode commented out.
+  bind 127.0.0.1 (localhost-only).
+  Redis caches threat intelligence feed data.
+  Any local process connects to 127.0.0.1:6379 and reads/writes all cached TID data.
 """
 
 import base64
@@ -214,7 +248,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -827,6 +861,96 @@ def get_ios_backend_creds() -> dict:
     }
 
 
+# ── F24: dbaccess.conf default DB credentials ─────────────────────────────────
+
+DBACCESS_DEFAULTS = {
+    "mysql": {
+        "root":       {"username": "root",       "password": "admin"},
+        "interface":  {"username": "interface",  "password": "interface"},
+        "barnyard":   {"username": "barnyard",   "password": "barnyard",  "schema": "sfsnort", "port": 3306},
+        "correlator": {"username": "correlator", "password": "correlator"},
+        "external":   {"username": "external",   "password": "external"},
+        "cfguser":    {"username": "cfguser",    "password": "cfguser",   "schema": "cfgdb",   "port": 3306},
+    },
+    "monetdb": {
+        "monetdb":  {"username": "monetdb",     "password": "monetdb123", "port": 5193},
+        "eventdb":  {"username": "eventdb_user","password": "eventdb123", "port": 5193},
+    },
+}
+DBACCESS_TEMPLATE = "/etc/sf/dbaccess.conf.in"
+DBACCESS_CONF     = "/etc/sf/dbaccess.conf"
+DBACCESS_DISABLE  = "/etc/sf/dbaccess.random.disable"
+
+def get_dbaccess_defaults() -> dict:
+    """Return default database credentials from dbaccess.conf.in template (F24)."""
+    return {
+        "finding": "FMC-F24",
+        "template": DBACCESS_TEMPLATE,
+        "runtime_conf": DBACCESS_CONF,
+        "runtime_permissions": "0644 (world-readable, owner www:www)",
+        "randomization_bypass": DBACCESS_DISABLE,
+        "defaults": DBACCESS_DEFAULTS,
+        "impact": (
+            "MySQL root:admin = full database compromise; "
+            "all accounts default to username==password or trivial values; "
+            "dbaccess.conf is chmod 644 — any local process reads all DB creds; "
+            "randomization is non-fatal: failure prints warning and continues with template defaults"
+        ),
+    }
+
+
+# ── F25: Lamplighter JKS trustStorePassword in supervisord commandline ─────────
+
+LAMPLIGHTER_JKS_PASSWORD = "lamplighter"
+LAMPLIGHTER_JKS_PATH      = "opt/lamplighter/etc/certs/external_ca.jks"
+LAMPLIGHTER_SUPERVISORD   = "opt/lamplighter/etc/supervisord-manager-active.conf"
+
+def get_lamplighter_jks_password() -> dict:
+    """Return lamplighter JKS trustStorePassword exposed in supervisord commandline (F25)."""
+    return {
+        "finding": "FMC-F25",
+        "jks_file": LAMPLIGHTER_JKS_PATH,
+        "password": LAMPLIGHTER_JKS_PASSWORD,
+        "source": LAMPLIGHTER_SUPERVISORD,
+        "exposure": "-Djavax.net.ssl.trustStorePassword=lamplighter in FeedDownloader commandline",
+        "impact": "Password visible in /proc/<pid>/cmdline and supervisord config; unlocks external_ca.jks",
+    }
+
+
+# ── F26: MongoDB unauthenticated ───────────────────────────────────────────────
+
+LAMPLIGHTER_MONGO_CONF = "opt/lamplighter/etc/mongod.conf"
+
+def report_mongodb_noauth() -> dict:
+    """Document MongoDB running without authentication (F26)."""
+    return {
+        "finding": "FMC-F26",
+        "config": LAMPLIGHTER_MONGO_CONF,
+        "bind": "127.0.0.1:27017",
+        "auth_enabled": False,
+        "database": "lamplighter",
+        "content": "threat intelligence feeds (STIX/TAXII), threat intelligence correlation data",
+        "impact": "any local process connects to MongoDB and reads/writes all threat intel data; no auth required",
+    }
+
+
+# ── F27: Redis unauthenticated ─────────────────────────────────────────────────
+
+LAMPLIGHTER_REDIS_CONF = "opt/lamplighter/etc/redis.conf"
+
+def report_redis_noauth() -> dict:
+    """Document Redis running without authentication (F27)."""
+    return {
+        "finding": "FMC-F27",
+        "config": LAMPLIGHTER_REDIS_CONF,
+        "bind": "127.0.0.1:6379",
+        "requirepass": None,
+        "protected_mode": "commented out",
+        "content": "threat intelligence feed cache",
+        "impact": "any local process connects to Redis and reads/writes all cached threat intel data; no auth required",
+    }
+
+
 def full_findings_summary() -> list[dict]:
     """Return all confirmed FMC findings as structured records."""
     return [
@@ -1087,6 +1211,70 @@ def full_findings_summary() -> list[dict]:
                 "username=admin&passwd=cisco in XML device template; "
                 "used for IOS device onboarding from FMC; "
                 "credentials reused if template not regenerated"
+            ),
+        },
+        {
+            "id": "FMC-F24",
+            "severity": "CRITICAL",
+            "component": "DBUtils / dbaccess.conf",
+            "title": "Default database credentials in dbaccess.conf.in — world-readable runtime config",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "etc/sf/dbaccess.conf.in",
+                "etc/sf/dbaccess.conf",
+            ],
+            "details": (
+                "MySQL root:admin, interface:interface, barnyard:barnyard, correlator:correlator, "
+                "external:external, cfguser:cfguser; "
+                "MonetDB monetdb:monetdb123, eventdb_user:eventdb123; "
+                "runtime dbaccess.conf is chmod 644 (world-readable); "
+                "randomization non-fatal: failure continues with template defaults; "
+                "bypass: /etc/sf/dbaccess.random.disable"
+            ),
+        },
+        {
+            "id": "FMC-F25",
+            "severity": "HIGH",
+            "component": "Lamplighter / FeedDownloader JKS",
+            "title": "trustStorePassword=lamplighter hardcoded in supervisord commandline",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "opt/lamplighter/etc/supervisord-manager-active.conf",
+            "details": (
+                "-Djavax.net.ssl.trustStorePassword=lamplighter in FeedDownloader Java commandline; "
+                "visible in /proc/<pid>/cmdline; "
+                "unlocks opt/lamplighter/etc/certs/external_ca.jks"
+            ),
+        },
+        {
+            "id": "FMC-F26",
+            "severity": "MEDIUM",
+            "component": "Lamplighter / MongoDB",
+            "title": "MongoDB runs without authentication — threat intelligence database",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "opt/lamplighter/etc/mongod.conf",
+            "details": (
+                "security.authorization not configured; "
+                "bind 127.0.0.1:27017; "
+                "database lamplighter stores all STIX/TAXII threat intel data; "
+                "any local process connects and reads/writes without credentials"
+            ),
+        },
+        {
+            "id": "FMC-F27",
+            "severity": "MEDIUM",
+            "component": "Lamplighter / Redis",
+            "title": "Redis runs without authentication — threat intelligence cache",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "opt/lamplighter/etc/redis.conf",
+            "details": (
+                "requirepass not set; protected-mode commented out; "
+                "bind 127.0.0.1:6379; "
+                "caches threat intelligence feed data; "
+                "any local process connects without credentials"
             ),
         },
     ]
