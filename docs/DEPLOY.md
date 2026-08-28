@@ -62,7 +62,7 @@ ssh target '/tmp/re'
 
 ## Self-Contained
 
-The executable is completely self-contained:
+The executable is self-contained:
 - No Python runtime required on target
 - All dependencies embedded
 - Single ~15MB binary

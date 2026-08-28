@@ -2,7 +2,7 @@
 
 ## Supported Platforms
 
-Ablation v2.2.0 enumerates three container/virtualization platforms:
+Ablation enumerates three container/virtualization platforms:
 
 ### 1. Docker
 **Module:** `modules/docker_enum.py`
@@ -105,7 +105,6 @@ Run all three platforms:
 - Kubernetes enumeration (if in K8s pod)
 - Orka enumeration (if in Orka VM or API reachable)
 
-All findings integrated into vulnerability analysis.
 
 ---
 
@@ -241,13 +240,4 @@ ssh admin@vm-ip '/tmp/scan --orka'
 
 ---
 
-## Version History
-
-**v2.0.0:** Docker + Kubernetes support
-**v2.1.0:** Container enumeration integrated into autonomous mode
-**v2.2.0:** Orka platform support added
-
----
-
-**Location:** `~/VDT/tools/ablation/`
 **Modules:** docker_enum.py, k8s_enum.py, orka_enum.py

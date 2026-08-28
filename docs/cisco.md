@@ -1,6 +1,6 @@
 # Cisco Module Reference
 
-Covers ASA, FTD/FDM, ISE, CUCM, AnyConnect, IOS, and NX-OS. All modules purpose-built from firmware extraction.
+Covers ASA, FTD/FDM, ISE, CUCM, AnyConnect, IOS, and NX-OS. All modules from firmware extraction.
 
 ---
 
@@ -67,7 +67,7 @@ Downloads unauthenticated JS bundles from `/+CSCOU+/` and `/+CSCOE+/`. Extracts:
 
 ### `cisco_asdm_download_re` — ASDM JAR download
 
-Full retrieval chain: `GET /admin/launch` → `302` → logon → `POST /+webvpn+/index.html` → session cookie → JNLP XML parse → JAR URL resolution → stream to disk.
+Retrieval chain: `GET /admin/launch` → `302` → logon → `POST /+webvpn+/index.html` → session cookie → JNLP XML parse → JAR URL resolution → stream to disk.
 
 ### `cisco_asdm_jar_re` — ASDM JAR / JVM constant pool RE
 
@@ -92,7 +92,7 @@ Image format identification (ELF / compressed ELF / monolithic), IFS extraction,
 
 ### `cisco_api_enum` — ASA REST API enumeration
 
-ASA REST API (`/api/...`, 9.3+) endpoint enumeration. Unauthenticated surface mapping. Session cookie reuse from ASDM auth flow.
+ASA REST API (`/api/...`, 9.3+) endpoint enumeration. Unauth surface map. Session cookie reuse from ASDM auth flow.
 
 ### `cisco_asa_cred_audit` — ASA credential audit
 
@@ -108,11 +108,11 @@ LIEF + capstone x86_64 RE of Apple's `NetworkExtension.framework` (1095.140.2) a
 
 **`AnyConnectNEAnalyzer`** — NE framework (x86_64, Catalina)
 
-Key address tables:
+Address tables:
 - `NE_PHASE1_SELREFS` — phase-1 selrefs (IKE_SA_INIT → IKE_AUTH); `NEIKEv2ProviderAuthenticate:` @ `0x2ca770`
 - `NE_TUNNEL_START_SELREFS` — 8 ordered selrefs: `protocolConfiguration` → `tunnelKind` → `setOptions:` (0x2ca758) → `NEIKEv2ProviderAuthenticate:` (0x2ca770)
 
-Key methods:
+Methods:
 - `start_ikev2_tunnel(count=200)` — disasm `NEIKEv2PacketTunnelProvider.startIKEv2TunnelWithOptions:` @ `0xd878b`
 - `provider_auth_callsite(count=30)` — 15 insns around `0xd8f3f`; objc_msgSend site at `0xd8f60`
 - `skeyseed_derivation()` — SKEYSEED PRF derivation in IKE_SA_INIT response handler
@@ -135,7 +135,7 @@ auth = a.provider_auth_callsite()
 
 AppProxy / NetworkFilter / DNS proxy via `NEAppProxyProvider` / `NEFilterDataProvider` / `NEDNSProxyProvider`.
 
-Key methods:
+Methods:
 - `inject_path(count=100)` — `injectDelayedResponseIntoUDPFlow:` @ `0x100082ad4`
 - `inject_block_callback(count=120)` — block @ `0x100082f38`; double-fetch TOCTOU confirmed
   - block struct: `[0x20]=self`, `[0x28]=packet_data`, `[0x30]=peer_addr(28B)`, `[0x48]=local_addr_byte`
@@ -155,7 +155,7 @@ print(ac.inject_block_callback())
 
 Static RE of Cisco Firepower Threat Defense 6.7.0-65 through 7.0.0-94 and FDM (Firepower Device Manager). Covers the FDM Java/Tomcat REST layer, Python management plane (`cisco_sf_common_base`), lina binary, and daemon attack surfaces.
 
-**Key chains:**
+**Chains:**
 
 - **F-FTD-102 → F-FTD-106: JWT forgery** — `ftd_neo4j_password_decrypt` extracts AES key from Neo4j Python bindings → decrypts admin password → `ftd_jwt_forge` forges HS256 tokens → cluster admin on any FDM instance
 - **F-FTD-105: Spring Security bypass** — `ftd_fdm_local_auth_bypass`: FDM whitelist passes `127.0.0.1` behind a reverse proxy forwarding a client-controlled `X-Forwarded-For` header — pre-auth admin API access
@@ -182,11 +182,11 @@ token = FDMJWTForger('192.168.1.1').forge(neo4j_key='<hex>')
 
 ---
 
-## `cisco_re_engine` — Unified Cisco RE platform
+## `cisco_re_engine` — Cisco RE platform
 
 **CONTROLLED ENVIRONMENT ONLY**
 
-Integrates FLOSS, capa, radare2, BinDiff/Diaphora, Frida, ropper, keystone, and Scapy into a single ablation-native module.
+Integrates FLOSS, capa, radare2, BinDiff/Diaphora, Frida, ropper, keystone, and Scapy into a single module.
 
 ```bash
 python3 modules/cisco_re_engine.py /path/to/lina --mode static
