@@ -9,7 +9,7 @@ Ablation is a custom-built modular reverse engineering and attack surface analys
 Every module is written from scratch for the specific target. 
 It runs on the target without a debugger, source code, or prior knowledge of what's installed. Give it a binary, a live process, a firmware image, or a running cluster and it figures out the structure, maps the security boundaries, and surfaces what's exploitable.
 
-Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 100+ modules share a custom disassembly engine (x86 / ARM64 / MIPS / PPC), a custom binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
+Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 120+ modules share a custom disassembly engine (x86 / ARM64 / MIPS / PPC), a custom binary parser (ELF / Mach-O / PE / firmware), and an ATT&CK tagger that labels every finding.
 
 ## Platforms
 
@@ -21,7 +21,12 @@ Supports Linux, macOS, Windows, Docker, Kubernetes, and Orka. The 100+ modules s
 | Docker | Escape surface, socket mounts, capability audit |
 | Kubernetes | SA token extraction, RBAC, secret read, etcd direct access |
 | **Orka** | **K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC service map** |
-| Cisco ASA / Firepower | LINA struct RE, RADIUS overflow, ASDM JAR, WebVPN JS, ROMMON, FTD RE engine |
+| **Cisco ASA** | **LINA struct RE, RADIUS class-attr overflow (F1/F2), ASDM JAR, WebVPN JS, ROMMON, CSTP** |
+| **Cisco FTD / FDM** | **40+ modules: JWT forgery, Neo4j key decrypt, TAR slip RCE, ZMQ NULL auth, AJP bypass, hardcoded AES key, 83 total findings** |
+| **Cisco ISE** | **RADIUS OU injection, LDAP chain, credential audit — 46 findings (CRIT:11)** |
+| **Cisco CUCM** | **Static AES key, OAuth JWT forgery chain, ITL signing key, HAProxy mode 666, SAML always-true — 482 findings** |
+| **Cisco AnyConnect** | **NetworkExtension IKEv2 RE, acsockext TOCTOU, DTLS/CSTP attack surface** |
+| Cisco IOS / IOS-XE | Firmware RE, crashdump analysis, hardcoded credential scan, ROMMON bypass |
 | Cisco NX-OS / ACI | APIC REST, fabric topology, guestshell rootfs, Nexus Dashboard |
 | **WeChat Android** | **MMTLS protocol RE, PSK extraction, DB key derivation, ptrace key extraction** |
 
@@ -389,6 +394,43 @@ python3 modules/cisco_re_engine.py /path/to/lina --mode all
 | `report` | CVE map | Unified findings JSON/text with CISCO_CVE_MAP auto-attribution (F-FTD-60, F-FTD-79, Log4Shell, etc.) |
 
 **Built-in heuristics:** DevAuth SHA-256 hashes (F-FTD-79, all 7 cracked), sftunnel HMAC markers, FDM provision/token endpoint strings, lina struct field names (`gp_name`, `wins_ptr`, `auth_flags`), proprietary Cisco DES/3DES key schedule constants, debug interface markers (`gdbserver`, `SYS_ptrace`, `/dev/cisco0`).
+
+#### `cisco_ise_re` — Cisco ISE 3.5 static RE (46 findings, CRIT:11)
+
+Static analysis of Cisco Identity Services Engine 3.5.0.527. Key findings:
+
+- **RADIUS Class attribute OU= overflow** — 256-byte RADIUS Class attribute vs 64-byte CLI GP name buffer; pre-auth memory corruption in LINA auth path (chains from `cisco_radius_ise_re`)
+- **Hardcoded credentials** — dev/service accounts with weak or default passwords
+- **LDAP chain** — bind password decrypt via static key → AD enumeration
+- **SSRF and XXE surfaces** in ISE REST API and posture assessment endpoints
+- **Unauthenticated REST endpoints** in the monitoring/reporting API
+
+```python
+from modules.cisco_ise_re import ISEAttackSurface
+ise = ISEAttackSurface('192.168.1.100')
+ise.probe_unauth_endpoints()
+ise.probe_radius_overflow()
+```
+
+#### `cisco_cucm_re` — Cisco CUCM 15.0.1 static RE (482 findings)
+
+Static analysis of Cisco Unified Communications Manager 15.0.1.11901-2 ISO. AlmaLinux 8, Tomcat, Informix DB, OpenSAML SSO SP.
+
+**Critical chains:**
+
+- **Static AES-128 key** (`smetsysocsiccni\x00`) — decrypts all credentials fleet-wide: CAPF CA key, Informix password, LDAP bind password, SAF inter-cluster creds
+- **OAuth JWT forgery** — `ccmuser:ccmuser` DB → `SELECT keyvalue FROM authzkeys WHERE tkpurpose=2` → static key decrypt → PKCS8 RSA → forge RS256 JWT → cluster-wide SSO
+- **ITL Recovery signing key** — DER private key at `/usr/local/platform/.security/ITLRecovery/keys/ITLRecovery_priv.der` → forge ITL trust list → all phones re-key to attacker CM → SRTP interception
+- **HAProxy admin socket** — `/var/run/haproxy.sock mode 666 level admin` — world-writable; any local process issues `disable server`, `shutdown sessions all`, backend redirect
+- **SAMLAuthValve always-true** + OpenSAML 2.6.5 XSW → pre-auth admin session
+- **TAPS pre-auth RCE** — Java 1.4 skeleton, no JEP 290, CommonsCollections → ysoserial chain
+- **Informix default creds** — `informix/informix` on port 9088
+
+```python
+from modules.cisco_cucm_re import full_findings_summary, probe_axis2_admin
+print(full_findings_summary())           # all 482 findings
+probe_axis2_admin('cucm.internal')       # F1: Axis2 admin:axis2 hot-deploy probe
+```
 
 ---
 
@@ -817,7 +859,7 @@ ablation/
 │   ├── orka_vm_exec_re.py          ← VM exec via K8s pod exec API
 │   ├── cisco_re_engine.py          ← Unified Cisco RE: FLOSS+capa+r2+BinDiff+Frida+ropper+keystone+Scapy
 │   ├── cisco_asa_lina_re.py        ← LINA struct RE + RadiusOverflowProbe
-│   ├── cisco_radius_ise_re.py
+│   ├── cisco_asa_cred_audit.py
 │   ├── cisco_asdm_re.py
 │   ├── cisco_asdm_download_re.py
 │   ├── cisco_asdm_jar_re.py
@@ -825,10 +867,30 @@ ablation/
 │   ├── cisco_cstp_attack.py
 │   ├── cisco_rommon_re.py
 │   ├── cisco_config_re.py
+│   ├── cisco_api_enum.py
+│   ├── cisco_ise_re.py             ← ISE 3.5.0.527 static RE, 46 findings
+│   ├── cisco_radius_ise_re.py      ← RADIUS Class attr injection + ISE CoA
+│   ├── cisco_cucm_re.py            ← CUCM 15.0.1 static RE, 482 findings
+│   ├── cisco_fmc_re.py             ← FMC RE (in progress)
+│   ├── cisco_ftd_re.py             ← FTD RE engine
+│   ├── cisco_ftd_jwt_escalation.py
+│   ├── cisco_ftd_jwt_key_extraction.py
+│   ├── cisco_ftd_tarslip.py
+│   ├── ftd_jwt_forge.py            ← FDM JWT forgery (F-FTD-106)
+│   ├── ftd_jwt_key_extraction.py
+│   ├── ftd_neo4j_password_decrypt.py ← Neo4j AES key → admin password
+│   ├── ftd_backup_tarslip.py       ← TAR slip RCE (F-FTD-107)
+│   ├── ftd_fdm_local_auth_bypass.py ← 127.0.0.1 Spring Security bypass
+│   ├── ftd_eventing_api_unauth.py
+│   ├── ftd_sfdc_zmq_rep.py         ← SFDataCorrelator ZMQ NULL auth
+│   ├── ftd_hardcoded_aes_key.py    ← Python-layer AES-256 static key
+│   ├── ftd_clishadow_root.py       ← cli_shadow NOPASSWD → root
+│   ├── ftd_telegraf_metrics_unauth.py
+│   ├── ftd_ciscossl_cve_2022_0778.py
+│   ├── [30+ additional ftd_*.py modules]
+│   ├── anyconnect_re.py            ← macOS NetworkExtension + acsockext RE
 │   ├── cisco_ios_re.py
 │   ├── cisco_nxos_guestshell_re.py
-│   ├── cisco_api_enum.py
-│   ├── cisco_asa_cred_audit.py
 │   ├── nxos_enum.py
 │   ├── nexus_dashboard_enum.py
 │   ├── ios_enum.py

@@ -10,7 +10,7 @@ Root cause:
   passphrase that is identical across all FTD/FMC deployments:
 
     passphrase = b'r4onxh8364&Jh^%P)Kqf65d6ev#^%#(&(;kuwtUTR-WQp%^#86'
-    key = hashlib.sha256(passphrase).digest()   # b'\xXX...' 32 bytes
+    key = hashlib.sha256(passphrase).digest()   # 32-byte AES-256 key
     mode = AES.MODE_CBC
     IV:  first 16 bytes of the ciphertext (prepended by the encryptor)
 

