@@ -860,9 +860,42 @@ def run_regression(path: str, y_col: str, x_cols=None,
 #   def skip_irrelevant_call(state):
 #       pass
 #
-# Step 4 — Explore and extract algebraic offset AST:
+# Step 4 — Mitigate state-space explosion before explore():
+#
+#   State explosion happens when the init block contains loops or conditional
+#   branches — simgr.explore() forks a new state at every branch, consuming RAM
+#   exponentially. Three mitigations, apply in order of severity:
+#
+#   4a. Veritesting (path merging) — mathematically merges diverging paths instead
+#       of forking. Converts exponential state growth to linear. Enable first:
+#
+#       from angr.exploration_techniques import Veritesting
+#       simgr.use_technique(Veritesting())
+#       simgr.explore(find=end_addr)
+#
+#   4b. Loop-break hook — if Veritesting still hangs on a known loop address,
+#       NOP the back-edge jump to force the engine out:
+#
+#       @proj.hook(0x1184xxx, length=2)  # address of JMP/JNZ back-edge instruction
+#       def break_loop(state):
+#           pass  # skip the back-edge, force linear continuation
+#
+#   4c. Instruction budget — hard cap on how far angr wanders. Use when block
+#       is known to be short (linear init with no branches):
+#
+#       simgr.step(num_inst=200)  # replaces explore() entirely for linear blocks
+#       target_state = simgr.active[0] if simgr.active else None
+#
+#   4d. Under-constrained symbolic memory — if the state branches on uninitialized
+#       memory reads (common in stripped init functions), allow angr to pick
+#       concrete values instead of forking:
+#
+#       state.options.add(angr.options.UNDER_CONSTRAINED_SYMEXEC)
+#
+# Step 5 — Explore and extract algebraic offset AST:
 #
 #   simgr = proj.factory.simgr(state)
+#   simgr.use_technique(Veritesting())  # always apply for non-trivial blocks
 #   simgr.explore(find=end_addr)
 #
 #   if simgr.found:
@@ -873,9 +906,10 @@ def run_regression(path: str, y_col: str, x_cols=None,
 #       print("Simplified:", s.solver.simplify(val))
 #   else:
 #       print("No path found — check simgr.deadended / simgr.errored")
+#       # Inspect simgr.errored[0].error for the exact failure reason
 #       # Use simgr.step(num_inst=50) if block is linear — avoids explore() overhead
 #
-# Step 5 — Constraints to prevent branch explosion:
+# Step 6 — Constraints to prevent branch explosion:
 #
 #   # If init block has alignment/bounds guards, pre-constrain before explore():
 #   state.add_constraints(gp_obj_ptr != 0)
