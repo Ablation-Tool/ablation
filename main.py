@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent / 'modules'))
 
 from platform_detect import PlatformDetector
 from binary_parser import BinaryParser
-from disasm_engine import DisasmEngine
+from disasm_engine import DisasmEngine, DisasmEngineX
 from process_enum import ProcessEnumerator
 from syscall_trace import SyscallTracer
 from privesc_enum import PrivescEnumerator

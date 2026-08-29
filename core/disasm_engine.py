@@ -23,8 +23,95 @@ try:
 except ImportError:
     HAS_CAPSTONE = False
 
+try:
+    import angr as _angr
+    import angr.knowledge_plugins.xrefs.xref as _xref_mod
+    HAS_ANGR = True
+except ImportError:
+    HAS_ANGR = False
+
+
+class DisasmEngineX:
+    """
+    Extended disassembly engine — angr-backed CFG, xref resolution, and data-flow.
+
+    Bridges the three gaps that Capstone's linear sweep cannot cover:
+      1. CFG construction   — CFGFast recursive descent, resolves indirect jumps
+      2. Cross-references   — kb.xrefs.get_xrefs_to(addr) replaces manual pointer hunting
+      3. Data-flow (def-use) — ReachingDefinitionsAnalysis tracks register lifecycles
+
+    Requires: pip install angr
+
+    Usage:
+        dx = DisasmEngineX('lina_9.14.2.14', base_addr=0x0)
+        callers = dx.find_all_callers(0xADDR_OF_SetTextFileContents)
+        defs    = dx.track_register_def_use(func_addr=0xADDR, reg_name='rdx')
+
+    Note: CFGFast on a 105MB binary takes 60-120s and ~4GB RAM on first run.
+    Scope to a function range via normalize=True + function_starts=[addr] to limit.
+    """
+
+    def __init__(self, binary_path: str, base_addr: int = 0x0):
+        if not HAS_ANGR:
+            raise ImportError("angr not installed — pip install angr")
+        self.proj = _angr.Project(
+            binary_path,
+            load_options={'auto_load_libs': False},
+            main_opts={'base_addr': base_addr},
+        )
+        print("[*] DisasmEngineX: building CFG (CFGFast, cross_references=True) ...")
+        self.cfg = self.proj.analyses.CFGFast(
+            cross_references=True,
+            resolve_indirect_jumps=True,
+        )
+        print(f"[+] CFG complete — {len(self.cfg.functions)} functions, "
+              f"{len(list(self.cfg.model.nodes()))} nodes")
+
+    def find_all_callers(self, target_addr: int) -> list:
+        """Return all instruction addresses that call target_addr.
+
+        Replaces manual string/pointer hunting for callers of functions like
+        SetTextFileContents (TOCTOU in ac_strap.dat) or strcpy PLT entries.
+        """
+        node = self.cfg.model.get_any_node(target_addr)
+        if not node:
+            return []
+        xrefs = self.proj.kb.xrefs.get_xrefs_to(target_addr)
+        return [
+            x.ins_addr for x in xrefs
+            if x.type == _xref_mod.XRefType.Call
+        ]
+
+    def track_register_def_use(self, func_addr: int, reg_name: str = 'rdx') -> list:
+        """Track definition and use sites of reg_name within a function.
+
+        Uses Reaching Definitions Analysis (RDA) over VEX IR. Automates the
+        manual register-state tracing done in comments for the F2 overflow chain.
+
+        Returns list of {'definition_at': int, 'used_at': [int, ...]} dicts.
+        """
+        func = self.cfg.functions.get(func_addr)
+        if not func:
+            raise ValueError(f"Function at {func_addr:#x} not found in CFG")
+        rda = self.proj.analyses.ReachingDefinitions(subject=func, track_tmps=False)
+        reg_offset = self.proj.arch.registers[reg_name][0]
+        results = []
+        for node in rda.dep_graph.graph.nodes():
+            if hasattr(node, 'offset') and node.offset == reg_offset:
+                uses = list(rda.dep_graph.graph.successors(node))
+                results.append({
+                    'definition_at': node.codeloc.ins_addr,
+                    'used_at': [u.codeloc.ins_addr for u in uses],
+                })
+        return results
+
+    def xrefs_to(self, target_addr: int) -> list:
+        """All xrefs to target_addr (all types — call, data, jump)."""
+        return list(self.proj.kb.xrefs.get_xrefs_to(target_addr))
+
+
 class DisasmEngine:
-    """Universal disassembly engine"""
+    """Universal disassembly engine — Capstone linear sweep."""
     
     def __init__(self, arch='x86_64', mode='64'):
         self.arch = arch
