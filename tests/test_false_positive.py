@@ -33,7 +33,11 @@ ELF_TARGETS = {
 
 # PE targets: export table scan (Windows DLLs have no standard ELF prologues)
 PE_TARGETS = {
-    'zlib1.dll (Windows PE)': '/usr/x86_64-w64-mingw32/lib/zlib1.dll',
+    'zlib1.dll (MinGW PE)':        '/usr/x86_64-w64-mingw32/lib/zlib1.dll',
+    'kernelbase.dll (Wine x64)':   '/usr/lib/x86_64-linux-gnu/wine/x86_64-windows/kernelbase.dll',
+    'user32.dll (Wine x64)':       '/usr/lib/x86_64-linux-gnu/wine/x86_64-windows/user32.dll',
+    'ntdll.dll (Win11 MSVC)':      '/tmp/win11_dlls/ntdll.dll',
+    'kernel32.dll (Win11 MSVC)':   '/tmp/win11_dlls/kernel32.dll',
 }
 
 _PROLOGUES  = [b'\x55\x48\x89\xe5', b'\xf3\x0f\x1e\xfa\x55', b'\x55\x41']
@@ -86,11 +90,12 @@ def prologue_scan(path: str) -> list[FuncFeatures]:
 
 
 def pe_export_scan(path: str) -> list[FuncFeatures]:
-    """Extract functions from a PE DLL via the export table."""
+    """Extract functions from a PE DLL via the export table (auto-detects 32/64-bit)."""
     import pefile
     pe   = pefile.PE(path)
     img  = pe.get_memory_mapped_image()
-    md   = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+    mode = capstone.CS_MODE_32 if pe.FILE_HEADER.Machine == 0x014c else capstone.CS_MODE_64
+    md   = capstone.Cs(capstone.CS_ARCH_X86, mode)
     feats = []
     for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
         if not exp.name or not exp.address:

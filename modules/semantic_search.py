@@ -29,7 +29,7 @@ from typing import Optional
 
 import numpy as np
 
-_MODEL_NAME = 'sentence-transformers/all-MiniLM-L6-v2'
+_MODEL_NAME = 'sentence-transformers/all-mpnet-base-v2'
 _CACHE_DIR  = Path.home() / '.ablation'
 
 # ── register / address / immediate patterns ──────────────────────────────────
@@ -235,6 +235,51 @@ def describe_function(
     if asm_lines:
         parts.append(f"asm: {normalize_asm(asm_lines)}")
     return ' | '.join(parts)
+
+
+class WhiteningTransform:
+    """PCA whitening to fix BERT embedding anisotropy (Su et al. 2021).
+
+    BERT embeddings cluster near the mean of the embedding manifold so
+    cosine similarity between unrelated sentences is 0.6-0.9 rather than ~0.
+    Whitening maps them to an isotropic Gaussian, calibrating similarity scores
+    so generic pairs drop to 0.4-0.6 and true matches stay above 0.8.
+
+    Fit on the target binary's own function embeddings (the reference
+    distribution) then apply to both seed and candidate embeddings.
+    """
+
+    def __init__(self):
+        self._mu: Optional[np.ndarray] = None
+        self._W:  Optional[np.ndarray] = None
+
+    @property
+    def is_fitted(self) -> bool:
+        return self._mu is not None
+
+    def fit(self, embeddings: np.ndarray) -> 'WhiteningTransform':
+        """Compute whitening parameters from a reference embedding matrix (N×D)."""
+        self._mu = embeddings.mean(axis=0)
+        cov      = np.cov(embeddings.T)
+        vals, vecs = np.linalg.eigh(cov)
+        # Sort descending by eigenvalue (keep most variance first)
+        idx  = np.argsort(vals)[::-1]
+        vals = vals[idx]
+        vecs = vecs[:, idx]
+        # W: maps unit-sphere BERT space to isotropic space
+        self._W = vecs @ np.diag(1.0 / np.sqrt(np.maximum(vals, 1e-9)))
+        return self
+
+    def transform(self, embeddings: np.ndarray) -> np.ndarray:
+        """Apply whitening and re-normalize to unit sphere."""
+        if not self.is_fitted:
+            return embeddings
+        e = (embeddings - self._mu) @ self._W
+        norms = np.linalg.norm(e, axis=-1, keepdims=True)
+        return e / np.maximum(norms, 1e-9)
+
+    def fit_transform(self, embeddings: np.ndarray) -> np.ndarray:
+        return self.fit(embeddings).transform(embeddings)
 
 
 @dataclass

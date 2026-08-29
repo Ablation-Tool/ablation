@@ -404,9 +404,12 @@ class FuncMatcher:
     _TOP_K           = 10      # candidates to keep after Jaccard ranking
     _SEM_TIE_THRESH  = 0.05    # Jaccard gap below which semantic is tiebreaker
     _SEM_JACCARD_MIN = 0.15    # Jaccard below this → semantic becomes primary signal
+    _WHITEN_MIN_N    = 50      # minimum candidates to fit whitening transform
+    _WHITEN_SAMPLE_N = 1000   # max candidates sampled to fit transform (performance)
 
     def __init__(self, semantic_searcher=None):
         self._sem = semantic_searcher
+        self._whitening = None   # fitted WhiteningTransform, built per find_homolog call
 
     def _structural_candidates(
         self, seed: FuncFeatures, candidates: list[FuncFeatures]
@@ -437,11 +440,50 @@ class FuncMatcher:
         scored.sort(key=lambda x: x[0], reverse=True)
         return scored[:self._TOP_K]
 
-    def _semantic_score(self, seed: FuncFeatures, candidate: FuncFeatures) -> float:
-        """Stage 3: direct cosine similarity between seed and candidate embeddings.
+    def _build_whitening(self, candidates: list[FuncFeatures]) -> None:
+        """Fit WhiteningTransform on candidate embeddings if enough exist.
 
-        Does NOT use the func_id_db corpus — encodes both functions on the fly
-        so cross-version homologs with different names are handled correctly.
+        Called once per find_homolog() on the full candidate set before
+        Stage 2 ranking, so the transform is calibrated to the target
+        binary's embedding distribution rather than a generic prior.
+        """
+        if self._sem is None or len(candidates) < self._WHITEN_MIN_N:
+            self._whitening = None
+            return
+        try:
+            import random
+            import numpy as np
+            from modules.semantic_search import WhiteningTransform, describe_function
+            model = self._sem._get_model()
+            # Sample for efficiency — distribution estimate is stable at 1k samples
+            sample = candidates
+            if len(candidates) > self._WHITEN_SAMPLE_N:
+                sample = random.sample(candidates, self._WHITEN_SAMPLE_N)
+            descs = [
+                describe_function(
+                    c.name, 'UNKNOWN', c.callees, c.string_xrefs,
+                    asm_lines=c.norm_lines[:30],
+                )
+                for c in sample
+            ]
+            vecs = model.encode(
+                descs, normalize_embeddings=True,
+                show_progress_bar=False, batch_size=128,
+            ).astype(np.float32)
+            wt = WhiteningTransform()
+            wt.fit(vecs)
+            # Only cache vectors for the sampled functions; TOP_K candidates
+            # not in cache are encoded on demand in _semantic_score.
+            self._whitening = (wt, {id(c): v for c, v in zip(sample, vecs)})
+        except Exception:
+            self._whitening = None
+
+    def _semantic_score(self, seed: FuncFeatures, candidate: FuncFeatures) -> float:
+        """Stage 3: cosine similarity with optional whitening correction.
+
+        Encodes seed and candidate on the fly. If a WhiteningTransform was
+        fitted in _build_whitening(), applies it before computing similarity
+        to correct BERT embedding anisotropy (Su et al. 2021).
         """
         if self._sem is None:
             return 0.0
@@ -454,17 +496,46 @@ class FuncMatcher:
                 seed.callees, seed.string_xrefs,
                 asm_lines=seed.norm_lines[:30],
             )
-            cand_desc = describe_function(
-                candidate.name, 'UNKNOWN',
-                candidate.callees, candidate.string_xrefs,
-                asm_lines=candidate.norm_lines[:30],
-            )
-            vecs = model.encode(
-                [seed_desc, cand_desc],
-                normalize_embeddings=True,
+            seed_vec = model.encode(
+                seed_desc, normalize_embeddings=True,
                 show_progress_bar=False,
-            )
-            return float(np.array(vecs[0]) @ np.array(vecs[1]))
+            ).astype(np.float32)
+
+            # Reuse pre-computed candidate vector if available
+            if self._whitening is not None:
+                wt, vec_cache = self._whitening
+                if id(candidate) in vec_cache:
+                    cand_vec = vec_cache[id(candidate)].astype(np.float32)
+                else:
+                    cand_desc = describe_function(
+                        candidate.name, 'UNKNOWN',
+                        candidate.callees, candidate.string_xrefs,
+                        asm_lines=candidate.norm_lines[:30],
+                    )
+                    cand_vec = model.encode(
+                        cand_desc, normalize_embeddings=True,
+                        show_progress_bar=False,
+                    ).astype(np.float32)
+                # Apply whitening to both
+                seed_vec = wt.transform(seed_vec.reshape(1, -1))[0]
+                cand_vec = wt.transform(cand_vec.reshape(1, -1))[0]
+            else:
+                cand_desc = describe_function(
+                    candidate.name, 'UNKNOWN',
+                    candidate.callees, candidate.string_xrefs,
+                    asm_lines=candidate.norm_lines[:30],
+                )
+                cand_vec = model.encode(
+                    cand_desc, normalize_embeddings=True,
+                    show_progress_bar=False,
+                ).astype(np.float32)
+
+            # Cosine similarity (both already L2-normalized after whitening)
+            norm_s = np.linalg.norm(seed_vec)
+            norm_c = np.linalg.norm(cand_vec)
+            if norm_s < 1e-9 or norm_c < 1e-9:
+                return 0.0
+            return float((seed_vec / norm_s) @ (cand_vec / norm_c))
         except Exception:
             return 0.0
 
@@ -479,6 +550,12 @@ class FuncMatcher:
         struct_pass = self._structural_candidates(seed, target_functions)
         if not struct_pass:
             struct_pass = target_functions  # fallback to full set
+
+        # Whitening disabled: cross-corpus mean subtraction collapses scores for
+        # functions that are "typical" of the target binary, destroying the TP signal.
+        # Jaccard floor (>= 0.15) is the load-bearing FP suppressor; raw MPNet cosine
+        # similarity is the semantic tiebreaker.
+        self._whitening = None
 
         # Stage 2
         ranked = self._jaccard_rank(seed, struct_pass)
