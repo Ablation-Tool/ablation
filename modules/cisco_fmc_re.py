@@ -31,14 +31,6 @@ Credential stores:
 
 FINDINGS:
 
-FMC-F1: auth-daemon Non-PIE EXEC — no ASLR on main binary [HIGH]
-  Binary type: ELF64 EXEC (not PIE/DYN)
-  Entry point: 0x47efa0 (fixed load address)
-  Link: libresolv, pthread, libc only
-  Impact: Fixed load addresses — ROP gadgets at predictable offsets;
-          any memory corruption is immediately weaponizable without ASLR bypass.
-  Note: 24 MB Go binary; 767 KB sftunnel IS PIE.
-
 FMC-F2: cwpass.xml admin:admin and guest:(empty) hardcoded [CRITICAL]
   File: /opt/CSCOpx/objects/security/conf/cwpass.xml
   admin Pwd="0DPiKuNIrrVmD8IUCuw1hQxNqZc=" -> SHA-1("admin") confirmed
@@ -92,13 +84,6 @@ FMC-F7: RADKit sudoaccess Endpoint — Managed FTD Device Root [CRITICAL]
   Impact: FMC user with radkit.modify permission can enable sudo access on any managed
           FTD device — privilege escalation from FMC REST API access to FTD root shell.
 
-FMC-F8: GroupId=2 Hardcoded Privileged Group SQL Query [MEDIUM]
-  Class: com.cisco.nm.vms.ogs.client.CsmCustomOgsFilter (athena-rbac-server.jar)
-  SQL: "select DisplayAttribute from AthenaOgsGroupCacheTable where GroupId = 2"
-  Hardcoded GroupId=2 assumed to be the privileged OGS group at all times.
-  If AthenaOgsGroupCacheTable is manipulated or GroupId ordering differs,
-  wrong group gets privileged access in OGS filtering decisions.
-
 FMC-F9: SSO Token MD5 — ASA/ASDM Trust Forgery [HIGH]
   Source: sf/lib/perl/5.34.3/SF/Auth.pm (create_sso_token function, line 4317)
   Code: my $token = Digest::MD5::md5_hex(encode_base64url($new_kek));
@@ -115,24 +100,12 @@ FMC-F10: HS256 JWT Symmetric Signing — Key Exposure = Token Forge [HIGH]
   JWT token endpoint: https://127.0.0.1/api/ui_platform/v1/uiauth/generatetoken (loopback)
   Session stores X-auth-access-token; validated by auth-daemon on port 2080.
 
-FMC-F11: SHA-1 Forbidden in FIPS 140-3 but Present in Auth Flow [MEDIUM]
-  auth-daemon binary: "FIPS 140-3 self-test failed / passed"
-  auth-daemon: "crypto/sha1: use of SHA-1 is not allowed in FIPS 140-only mode"
-  cwpass.xml uses SHA-1 for MICE credentials while FIPS 140-3 mode prohibits SHA-1.
-  In FIPS mode, the SHA-1 cwpass.xml path may be blocked, but configuration-dependent.
-  Admin password recovery path may use a code branch that bypasses FIPS enforcement.
-
 FMC-F12: IKE PSK Plaintext Exposure via toString() Debug Chain [MEDIUM]
   hestia-vpn-shared.jar — PreSharedKeyPolicyBase.toString() appends "Key: " + sharedKey unmasked.
   VpnBaseTopologyObject.toString() chains through all child policies.
   Any debug log flush of VPN topology object writes all IKE PSKs in plaintext.
   IKE_PSK_KEY_LENGTH_MIN = 1 — validator allows 1-character PSKs.
   Impact: TAC support bundle or debug log -> all S2S VPN PSKs -> decrypt/hijack any managed IPsec tunnel.
-
-FMC-F13: Undocumented RADKit authorizations Endpoint [MEDIUM]
-  auth-daemon binary: "/api/fmc_troubleshoot/v1/domain/{domainUUID}/radkit/authorizations"
-  Second RADKit endpoint, undocumented in public API. Same RBAC domain as sudoaccess.
-  Alternate path for RADKit device authorization state enumeration and possible modification.
 
 FMC-F14: cs-psucli.jar SecurityHandler Hardcoded passw0rd AES Key — CCO Credential Exposure [MEDIUM]
   com.cisco.nm.xms.vds.SecurityHandler: private static String passwordString = "passw0rd"
@@ -192,12 +165,6 @@ FMC-F21: JaCORB CORBA Hardcoded keystore and default passwords [HIGH]
     jacorb.security.default_password=jacorb
   CSCOpx CORBA IOR-based RPC uses these to authenticate SSL client connections.
   Any client that knows "jacorb" can establish a CORBA SSL session to CSCOpx services.
-
-FMC-F22: Vault Token at Predictable Static Path [HIGH]
-  Constant: VAULT_TOKEN = '/etc/vault/token' (backup_restore_vault_secrets.pl)
-  Token used to authenticate to Vault at https://127.0.0.1:8200 via: vault login $token
-  Any process with local filesystem read access reads the token and authenticates to Vault.
-  Vault secrets backed up to /etc/sf/vault/backup/ as JSON — backup directory is an offline exfiltration path.
 
 FMC-F23: IOS Backend Hardcoded admin:cisco Template Credentials [HIGH]
   File: opt/CSCOpx/MDC/ios-backend/templates/settings/ezsdd.xml
@@ -259,7 +226,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -966,16 +933,6 @@ def full_findings_summary() -> list[dict]:
     """Return all confirmed FMC findings as structured records."""
     return [
         {
-            "id": "FMC-F1",
-            "severity": "HIGH",
-            "component": "auth-daemon binary",
-            "title": "auth-daemon Non-PIE EXEC — fixed load address, no ASLR",
-            "cve": None,
-            "version": "10.0.1-1",
-            "binary": "/Volume/10.0.1-1/sf/bin/auth-daemon",
-            "details": "ELF64 EXEC type; entry 0x47efa0; all ROP gadgets at fixed addresses",
-        },
-        {
             "id": "FMC-F2",
             "severity": "CRITICAL",
             "component": "MICE legacy interface / cwpass.xml",
@@ -1034,16 +991,6 @@ def full_findings_summary() -> list[dict]:
             "details": "isSudoEnabled=true enables root-level sudo on all RADKit-managed FTD devices",
         },
         {
-            "id": "FMC-F8",
-            "severity": "MEDIUM",
-            "component": "Athena OGS filter (CsmCustomOgsFilter)",
-            "title": "GroupId=2 hardcoded privileged group SQL assumption",
-            "cve": None,
-            "version": "10.0.1-1",
-            "jar": "athena-rbac-server.jar",
-            "details": "SQL: select DisplayAttribute from AthenaOgsGroupCacheTable where GroupId = 2",
-        },
-        {
             "id": "FMC-F9",
             "severity": "HIGH",
             "component": "SSO / ASA-ASDM-FMC trust",
@@ -1063,15 +1010,6 @@ def full_findings_summary() -> list[dict]:
             "details": "Tokens signed with HMAC-SHA256; key stored in Vault at https://127.0.0.1:8200",
         },
         {
-            "id": "FMC-F11",
-            "severity": "MEDIUM",
-            "component": "FIPS 140-3 / cwpass.xml",
-            "title": "SHA-1 used in cwpass.xml while FIPS 140-3 mode prohibits SHA-1",
-            "cve": None,
-            "version": "10.0.1-1",
-            "details": "FIPS: crypto/sha1 not allowed; cwpass.xml uses SHA-1; behavior in FIPS mode TBD",
-        },
-        {
             "id": "FMC-F12",
             "severity": "MEDIUM",
             "component": "hestia-vpn-shared.jar / IKE PSK",
@@ -1080,16 +1018,6 @@ def full_findings_summary() -> list[dict]:
             "version": "10.0.1-1",
             "jar": "hestia-vpn-shared.jar",
             "details": "toString() appends 'Key: ' + sharedKey unmasked; VPN topology debug log leaks all PSKs",
-        },
-        {
-            "id": "FMC-F13",
-            "severity": "MEDIUM",
-            "component": "RADKit REST API (undocumented)",
-            "title": "Undocumented RADKit authorizations endpoint — alternate device-access enumeration",
-            "cve": None,
-            "version": "10.0.1-1",
-            "endpoint": "GET/PUT /api/fmc_troubleshoot/v1/domain/{domainUUID}/radkit/authorizations",
-            "details": "Undocumented endpoint in same RBAC domain as sudoaccess; not in public API docs",
         },
         {
             "id": "FMC-F14",
@@ -1193,21 +1121,6 @@ def full_findings_summary() -> list[dict]:
                 "jacorb.security.keystore_password=jacorb; "
                 "jacorb.security.default_password=jacorb; "
                 "any client knowing 'jacorb' establishes authenticated CORBA SSL sessions"
-            ),
-        },
-        {
-            "id": "FMC-F22",
-            "severity": "HIGH",
-            "component": "HashiCorp Vault / backup",
-            "title": "Vault token at static filesystem path — any local read = Vault compromise",
-            "cve": None,
-            "version": "10.0.1-1",
-            "file": "sf/bin/backup_restore_vault_secrets.pl",
-            "details": (
-                "VAULT_TOKEN='/etc/vault/token'; "
-                "vault login $token grants full Vault access; "
-                "secrets backed up to /etc/sf/vault/backup/*.json; "
-                "Token at static path authenticates to Vault; backup JSON files are offline exfiltration path"
             ),
         },
         {
