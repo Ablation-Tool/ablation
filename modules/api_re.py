@@ -2218,6 +2218,372 @@ def probe_null_byte_evasion(base, endpoints):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+# ─── Phase 26: OAuth2 Dynamic Client Registration + Token Introspection ─────
+
+OAUTH_DYNAMIC_REG_PATHS = [
+    "/oauth/clients", "/oauth2/clients", "/connect/register",
+    "/api/oauth/clients", "/.well-known/oauth-authorization-server",
+    "/oauth/register", "/auth/clients",
+]
+
+TOKEN_INTROSPECT_PATHS = [
+    "/oauth/introspect", "/oauth2/introspect", "/connect/introspect",
+    "/token/introspect", "/api/oauth/introspect",
+]
+
+TOKEN_REVOKE_PATHS = [
+    "/oauth/revoke", "/oauth2/revoke", "/connect/revoke",
+    "/token/revoke", "/api/oauth/revoke",
+]
+
+
+def probe_oauth_dynamic_reg(base, endpoints):
+    """
+    OAuth dynamic client registration (RFC7591): POST /oauth/clients without
+    auth to self-register a client and get valid client_id/secret.
+    Token introspection (RFC7662): POST token to /oauth/introspect — may leak
+    token metadata to unauthenticated callers.
+    (oauth2-in-action ch12, advanced-api-security ch8)
+    """
+    findings = []
+
+    # Dynamic client registration
+    reg_payload = {
+        "redirect_uris": ["https://attacker.com/callback"],
+        "token_endpoint_auth_method": "none",
+        "grant_types": ["authorization_code", "client_credentials"],
+        "response_types": ["code", "token"],
+        "client_name": "test-client",
+        "scope": "openid profile email admin",
+    }
+
+    for path in OAUTH_DYNAMIC_REG_PATHS:
+        r = get(base + path)
+        if r and r.status_code == 200:
+            try:
+                data = r.json()
+                if "issuer" in data or "registration_endpoint" in data:
+                    reg_ep = data.get("registration_endpoint", base + "/oauth/clients")
+                    print(f"  [OAUTH_DISCOVERY] {path}: authorization server metadata found")
+                    print(f"    registration_endpoint: {reg_ep}")
+                    findings.append({"type": "oauth_server_metadata", "path": path, "data": data})
+                    # Attempt self-registration
+                    r2 = post(reg_ep, json=reg_payload)
+                    if r2 and r2.status_code in (200, 201):
+                        print(f"  [OAUTH_DYNAMIC_REG] Unauth client registration succeeded!")
+                        findings.append({"type": "oauth_dynamic_reg_unauth",
+                                          "endpoint": reg_ep, "response": r2.text[:300]})
+            except Exception:
+                pass
+
+        r = post(base + path, json=reg_payload)
+        if r and r.status_code in (200, 201):
+            print(f"  [OAUTH_DYNAMIC_REG] {path}: POST succeeded {r.status_code} → client registered!")
+            findings.append({"type": "oauth_dynamic_reg_unauth", "path": path,
+                              "response": r.text[:300]})
+
+    # Token introspection without credentials
+    fake_token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0."
+    for path in TOKEN_INTROSPECT_PATHS:
+        r = post(base + path, data={"token": fake_token})
+        if r and r.status_code != 404:
+            print(f"  [TOKEN_INTROSPECT] {path}: {r.status_code} ({len(r.content)}b)")
+            try:
+                data = r.json()
+                if data.get("active") is not None:
+                    print(f"    active={data.get('active')} — introspect responds without client auth!")
+                    findings.append({"type": "token_introspect_unauth", "path": path,
+                                      "active": data.get("active"), "data": data})
+            except Exception:
+                findings.append({"type": "token_introspect_open", "path": path,
+                                  "status": r.status_code})
+
+    # Token revocation endpoint
+    for path in TOKEN_REVOKE_PATHS:
+        r = post(base + path, data={"token": "garbage_token_12345"})
+        if r and r.status_code not in (404,):
+            print(f"  [TOKEN_REVOKE] {path}: {r.status_code} — revocation endpoint exists")
+            findings.append({"type": "token_revoke_endpoint", "path": path, "status": r.status_code})
+
+    return findings
+
+
+# ─── Phase 27: WebSocket / GraphQL Subscription Enumeration ──────────────────
+
+WS_UPGRADE_PATHS = [
+    "/ws", "/websocket", "/graphql", "/api/ws", "/socket",
+    "/api/graphql", "/subscriptions", "/api/subscriptions",
+    "/live", "/events", "/stream",
+]
+
+GRAPHQL_SUBSCRIPTION_QUERY = '{"type":"connection_init","payload":{}}'
+GRAPHQL_SUBSCRIPTION_SUBSCRIBE = (
+    '{"id":"1","type":"subscribe","payload":{"query":"subscription { __typename }"}}'
+)
+
+
+def probe_websocket(base):
+    """
+    WebSocket enumeration:
+    - Detect WS upgrade support via HTTP Upgrade: websocket header
+    - Probe GraphQL subscription endpoint (ws_protocol=graphql-transport-ws)
+    - Check for Server-Sent Events (text/event-stream) streams
+    (grpc-up-and-running ch6, graphql-best-practices ch10)
+    """
+    findings = []
+
+    for path in WS_UPGRADE_PATHS:
+        url = base + path
+
+        # Check for SSE (Server-Sent Events) stream
+        r = get(url, headers={"Accept": "text/event-stream"})
+        if r and r.headers.get("content-type", "").startswith("text/event-stream"):
+            print(f"  [SSE_STREAM] {path}: Server-Sent Events stream detected!")
+            findings.append({"type": "sse_stream", "path": path, "content": r.text[:200]})
+
+        # Check for WebSocket upgrade acceptance
+        ws_headers = {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+            "Sec-WebSocket-Version": "13",
+            "Sec-WebSocket-Protocol": "graphql-transport-ws",
+        }
+        r = get(url, headers=ws_headers)
+        if r and r.status_code == 101:
+            print(f"  [WEBSOCKET_UPGRADE] {path}: WS upgrade accepted (101)!")
+            findings.append({"type": "websocket_upgrade", "path": path})
+        elif r and r.status_code not in (404, 400, 405):
+            if "upgrade" in r.headers.get("connection", "").lower():
+                print(f"  [WEBSOCKET_HINT] {path}: {r.status_code} with Upgrade hint in headers")
+                findings.append({"type": "websocket_hint", "path": path, "status": r.status_code})
+
+    # GraphQL subscription-specific check
+    for path in ["/graphql", "/api/graphql"]:
+        r = post(base + path, json={
+            "query": "subscription { __typename }",
+        })
+        if r and r.status_code not in (404,):
+            print(f"  [GRAPHQL_SUBSCRIPTION] {path}: subscription query returned {r.status_code}")
+            try:
+                data = r.json()
+                if "errors" in data:
+                    for err in data["errors"]:
+                        msg = err.get("message", "")
+                        if "subscription" in msg.lower() and "not support" in msg.lower():
+                            print(f"    GraphQL subscriptions NOT supported on HTTP (expect WS)")
+                        else:
+                            print(f"    Error: {msg[:80]}")
+            except Exception:
+                pass
+            findings.append({"type": "graphql_subscription_probe", "path": path,
+                              "status": r.status_code})
+
+    return findings
+
+
+# ─── Phase 28: Pagination Traversal (BOLA at Scale) ──────────────────────────
+
+def probe_pagination_traversal(base, endpoints):
+    """
+    Pagination link-following: iterate all pages of collection endpoints.
+    Goal: detect unbounded enumeration, different user data across pages,
+    and BOLA (accessing resources beyond what your ID range should allow).
+    Follows RFC5988 Link headers (rel=next) and common JSON pagination patterns.
+    (restful-web-apis ch11, api-security-in-action ch4)
+    """
+    findings = []
+
+    collection_endpoints = [
+        ep for ep in endpoints
+        if "GET" in ep.methods and any(
+            x in ep.path for x in
+            ("/users", "/items", "/products", "/orders", "/files", "/records",
+             "/results", "/data", "/list", "/all")
+        )
+    ]
+
+    for ep in collection_endpoints[:3]:
+        url = base + ep.path
+        page = 1
+        total_records = 0
+        pages_seen = 0
+
+        while pages_seen < 5:
+            r = get(url, params={"page": page, "per_page": 100, "limit": 100, "offset": (page - 1) * 100})
+            if not r or r.status_code != 200:
+                break
+
+            # RFC5988 Link header pagination
+            link_header = r.headers.get("link", "")
+            next_url = None
+            if 'rel="next"' in link_header:
+                import re as _r
+                m = _r.search(r'<([^>]+)>;\s*rel="next"', link_header)
+                if m:
+                    next_url = m.group(1)
+
+            try:
+                data = r.json()
+                if isinstance(data, list):
+                    count = len(data)
+                elif isinstance(data, dict):
+                    for key in ("data", "results", "items", "records", "users"):
+                        if key in data and isinstance(data[key], list):
+                            count = len(data[key])
+                            break
+                    else:
+                        count = 0
+                else:
+                    count = 0
+                total_records += count
+            except Exception:
+                count = 0
+
+            pages_seen += 1
+            if count == 0 or (not next_url and count < 50):
+                break
+
+            if pages_seen == 1 and count > 0:
+                print(f"  [PAGINATION] {ep.path}: {count} records/page, following pages...")
+
+            if next_url:
+                url = next_url
+                page = 1
+            else:
+                page += 1
+
+        if total_records > 500:
+            print(f"  [BULK_ENUM] {ep.path}: {total_records} total records enumerable across {pages_seen} pages!")
+            findings.append({"type": "bulk_enumeration", "endpoint": ep.path,
+                              "total_records": total_records, "pages": pages_seen})
+        elif total_records > 0:
+            print(f"  [PAGINATION_WALK] {ep.path}: {total_records} records across {pages_seen} pages")
+            findings.append({"type": "pagination_walk", "endpoint": ep.path,
+                              "total_records": total_records, "pages": pages_seen})
+
+    return findings
+
+
+# ─── Phase 29: Deprecation / Shadow Version Detection ────────────────────────
+
+DEPRECATION_HEADER_NAMES = [
+    "Sunset", "Deprecation", "X-Deprecated",
+    "X-Api-Deprecated", "API-Deprecated-Version",
+    "X-Api-Sunset-Date",
+]
+
+SHADOW_VERSION_PATHS = [
+    "/v0", "/v0.1", "/api/v0",
+    "/v1-beta", "/v1-alpha", "/api/v1-beta",
+    "/dev", "/staging", "/internal",
+    "/api/internal", "/api/dev",
+    "/api/legacy", "/legacy",
+    "/api/old", "/old",
+    "/beta", "/alpha",
+]
+
+
+def probe_shadow_versions(base, endpoints):
+    """
+    Deprecated/shadow version detection:
+    - Sunset/Deprecation response headers on endpoints (version still alive but marked deprecated)
+    - Old version paths: /v0, /beta, /legacy, /dev, /internal
+    Shadow APIs often skip auth enforcement, validation, or rate limiting added in newer versions.
+    (continuous-api-management ch5, mastering-api-architecture ch6)
+    """
+    findings = []
+
+    # Check deprecation headers on existing endpoints
+    for ep in endpoints[:8]:
+        r = get(base + ep.path)
+        if not r:
+            continue
+        for header in DEPRECATION_HEADER_NAMES:
+            val = r.headers.get(header, "")
+            if val:
+                print(f"  [DEPRECATED] {ep.path}: {header}: {val}")
+                findings.append({"type": "deprecated_endpoint", "path": ep.path,
+                                  "header": header, "value": val})
+
+    # Probe shadow/legacy version paths
+    for path in SHADOW_VERSION_PATHS:
+        r = get(base + path)
+        if r and r.status_code not in (404, 410):
+            print(f"  [SHADOW_VERSION] {path}: {r.status_code} ({len(r.content)}b) — shadow version alive!")
+            body_sample = r.text[:150]
+            findings.append({"type": "shadow_version", "path": path,
+                              "status": r.status_code, "sample": body_sample})
+
+            # Check if shadow version has less auth on known restricted endpoints
+            for ep in [e for e in endpoints if e.auth_required][:2]:
+                shadow_url = base + path + ep.path
+                r2 = get(shadow_url)
+                if r2 and r2.status_code == 200:
+                    print(f"  [SHADOW_AUTH_SKIP] {path}{ep.path}: 200 on shadow while main requires auth!")
+                    findings.append({"type": "shadow_auth_bypass", "shadow": path,
+                                      "endpoint": ep.path, "sample": r2.text[:200]})
+
+    return findings
+
+
+# ─── Phase 30: OAuth2 State Parameter + PKCE Downgrade ───────────────────────
+
+OAUTH_AUTH_ENDPOINT_PATHS = [
+    "/oauth/authorize", "/oauth2/authorize", "/connect/authorize",
+    "/auth/authorize", "/api/oauth/authorize",
+    "/oauth/auth", "/oauth2/auth",
+]
+
+
+def probe_oauth_state_pkce(base):
+    """
+    OAuth2 state parameter absence = CSRF vulnerability (RFC6819 §5.3.5).
+    PKCE downgrade: if code_challenge_method accepted with plain → SHA256 bypass.
+    Missing state validation: authorization server doesn't enforce state parameter.
+    (oauth2-in-action ch7, ch9)
+    """
+    findings = []
+
+    for path in OAUTH_AUTH_ENDPOINT_PATHS:
+        # Missing state parameter - valid OAuth request without state
+        r = get(base + path, params={
+            "response_type": "code",
+            "client_id": "test_client",
+            "redirect_uri": "https://attacker.com/callback",
+        })
+        if r and r.status_code not in (404,):
+            print(f"  [OAUTH_STATE_MISSING] {path}: auth endpoint accepts request without state parameter!")
+            findings.append({"type": "oauth_state_missing", "path": path, "status": r.status_code})
+
+        # PKCE plain downgrade
+        r = get(base + path, params={
+            "response_type": "code",
+            "client_id": "test_client",
+            "redirect_uri": "https://example.com/callback",
+            "code_challenge": "testchallenge",
+            "code_challenge_method": "plain",
+        })
+        if r and r.status_code not in (400, 404):
+            print(f"  [PKCE_PLAIN_ACCEPTED] {path}: plain code_challenge_method accepted (should require S256)")
+            findings.append({"type": "pkce_plain_accepted", "path": path, "status": r.status_code})
+
+        # Open redirect: redirect_uri validation
+        r = get(base + path, params={
+            "response_type": "token",
+            "client_id": "test_client",
+            "redirect_uri": "https://evil.com/callback",
+            "state": "csrf_test",
+        })
+        if r and r.status_code in (200, 302):
+            location = r.headers.get("location", "")
+            if "evil.com" in location:
+                print(f"  [OAUTH_OPEN_REDIRECT] {path}: redirect_uri not validated! Redirects to evil.com")
+                findings.append({"type": "oauth_open_redirect", "path": path, "location": location})
+
+    return findings
+
+
 def run_re(base_url, depth="normal", focus=None):
     """Full API reverse engineering pipeline."""
     base = base_url.rstrip("/")
@@ -2422,6 +2788,31 @@ def run_re(base_url, depth="normal", focus=None):
         print("\n[25] Null byte / WAF evasion probe...")
         nullbyte_findings = probe_null_byte_evasion(base, api.endpoints)
 
+    # Phase 26: OAuth dynamic client registration + token introspection
+    if focus in (None, "oauth2", "auth") and depth in ("normal", "deep"):
+        print("\n[26] OAuth dynamic registration + token introspection probe...")
+        oauth_dyn_findings = probe_oauth_dynamic_reg(base, api.endpoints)
+
+    # Phase 27: WebSocket / GraphQL subscription enumeration
+    if focus in (None, "graphql", "schema", "websocket") and depth in ("normal", "deep"):
+        print("\n[27] WebSocket / subscription probe...")
+        ws_findings = probe_websocket(base)
+
+    # Phase 28: Pagination traversal (BOLA at scale)
+    if focus in (None, "bola", "schema") and depth == "deep":
+        print("\n[28] Pagination traversal probe...")
+        pagination_findings = probe_pagination_traversal(base, api.endpoints)
+
+    # Phase 29: Deprecation / shadow version detection
+    if focus in (None, "schema", "shadow") and depth in ("normal", "deep"):
+        print("\n[29] Shadow/deprecated version probe...")
+        shadow_findings = probe_shadow_versions(base, api.endpoints)
+
+    # Phase 30: OAuth state parameter + PKCE downgrade
+    if focus in (None, "oauth2", "auth") and depth in ("normal", "deep"):
+        print("\n[30] OAuth state/PKCE probe...")
+        oauth_state_findings = probe_oauth_state_pkce(base)
+
     # Summary
     print(f"\n{'='*60}")
     print(f"SUMMARY: {base}")
@@ -2444,7 +2835,8 @@ if __name__ == "__main__":
     ap.add_argument("--focus",
                     choices=["injection", "schema", "state", "jwt", "auth", "bola",
                              "oauth2", "grpc", "graphql", "soap", "biz", "ssrf", "creds",
-                             "cors", "nosql", "bfla", "pii", "timing", "evasion"],
+                             "cors", "nosql", "bfla", "pii", "timing", "evasion",
+                             "websocket", "shadow"],
                     help="Focus on a specific RE dimension")
     ap.add_argument("--fuzz-params", metavar="PATH",
                     help="Deep parameter fuzzing for a specific path")
