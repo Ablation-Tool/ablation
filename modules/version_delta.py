@@ -452,8 +452,15 @@ class VersionTracker:
         proj, cfg = self._load_cfg(seed_binary)
         func = cfg.kb.functions.get(seed_va)
         if func is None:
+            # VA may be inside a function whose entry angr placed elsewhere —
+            # use floor_func to find the nearest function whose start <= seed_va
+            try:
+                func = cfg.kb.functions.floor_func(seed_va)
+            except Exception:
+                pass
+        if func is None:
             return None
-        return FuncFeatures.from_angr(proj, cfg, seed_va, seed_name or func.name)
+        return FuncFeatures.from_angr(proj, cfg, func.addr, seed_name or func.name)
 
     def track(
         self,
