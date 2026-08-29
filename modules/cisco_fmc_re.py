@@ -216,6 +216,74 @@ FMC-F38: pam_faillock deny=0 — OS-Level Account Lockout Disabled [MEDIUM]
   bind 127.0.0.1 (localhost-only).
   Redis caches threat intelligence feed data.
   Any local process connects to 127.0.0.1:6379 and reads/writes all cached TID data.
+
+-- Part 2 findings (FMC-F39+): injection chain across Perl/shell subsystems --
+
+FMC-F39: RemoteStorage.pm NFS/CIFS/SSHFS Mount — Single-Quote Injection [MEDIUM]
+  File: sf/lib/perl/5.34.3/SF/RemoteStorage.pm (lines 252-379)
+  Admin-supplied host/path/options embedded in single-quoted shell strings without escaping.
+  mount_nfs/mount_cifs/mount_sshfs all construct system("mount '...$host...'") form.
+  Single quote in host or path breaks the quoting and injects shell metacharacters.
+  CWE-78.
+
+FMC-F40: BackupRestore.pm Backup Name -> open3() Root RCE [HIGH]
+  File: sf/lib/perl/5.34.3/SF/BackupRestore.pm (lines 1060, 1067)
+  $cmd = "...sf-backup.pl \"$final_backup_directory/$name_of_backup.tar.gz\" &"
+  open3($in, $out, $err, $cmd) — string form passes $cmd to /bin/sh.
+  Sanitization: s/ /_/g + basename only — no double-quote removal.
+  sf-backup.pl runs as root via sudoers NOPASSWD:SETENV.
+  Attacker-controlled backup name (contains ") injects into root shell context.
+  CWE-78.
+
+FMC-F41: FMCModelMigration.pm JSON migration_opts -> system() Injection [HIGH]
+  File: sf/lib/perl/5.34.3/DCCSM/FMCModelMigration.pm (lines 32-34, 88)
+  $migration_opts = $json->{migration_opts} — no validation.
+  system("/usr/bin/perl $migration_tmp_loc$migration_master_script ... $migration_opts $bundle_path &")
+  migration_opts value from uploaded migration bundle JSON flows unsanitized to system() string.
+  CWE-78.
+
+FMC-F42: sudoers NOPASSWD Misconfig + PERL5LIB Injection via SETENV [HIGH]
+  File: etc/sudoers
+  No global Defaults env_reset — SETENV tag on sf-backup.pl, sf-migration.pl, sf-restore.pl, etc.
+  www user: sudo -E <script.pl> passes PERL5LIB through; script uses #!/usr/bin/perl + FlyLoader.
+  Any PERL5LIB-injected module loaded as root before FlyLoader resolves — arbitrary code at root.
+  Also: ALL ALL = NOPASSWD: cli_driver, ct_cmd.sh * — any authenticated user gets root-equivalent.
+  %ldapgroup ALL=(ALL) ALL — LDAP group membership = unrestricted root.
+  CWE-269.
+
+FMC-F43: Upgrade.pm Package Name -> Backtick rm Injection [HIGH]
+  File: sf/lib/perl/5.34.3/DCCSM/Updates/Upgrade.pm (lines 271, 2157)
+  Line 271: INSERT PACKAGE_NAME = basename(uploaded_filename) — metacharacters not stripped.
+  Line 2157: `rm -f $package_name` where $package_name = "/var/sf/updates/" + DB value.
+  Upload package with filename "foo; id #.tar" -> delete triggers `rm -f /var/sf/updates/foo; id #`.
+  Admin auth required for upload; RCE triggers on any subsequent delete operation.
+  CWE-78.
+
+FMC-F44: HealthMon.pm XML Module Name -> String-Form system() Injection [MEDIUM]
+  File: sf/lib/perl/5.34.3/SF/HealthMon.pm (lines 1527, 1604-1609)
+  $mod_name = $XML->{module}->{name} from uploaded health module .tgz XML — no sanitization.
+  system "mkdir -p $right_location_reloc" (and 5 subsequent string-form system() calls).
+  Upload health module with XML <name>foo; id #</name> -> shell execution during install.
+  CWE-78.
+
+FMC-F45: ReportGen.pm + Reports.pm Report Name Single-Quote Injection [MEDIUM]
+  Files: sf/lib/perl/5.34.3/SF/ReportGen.pm (lines 4765-5577), SF/Reports.pm (line 117)
+  $reportoutname = $reportname . "-" . timestamp; only s/ /_/g — no single-quote removal.
+  ReportGen: system("/bin/rm '".$PREVIEW_RPTPATH.$reportoutname.".rpt'...") — injection on create.
+  ReportGen: system("/bin/cp '$logo' '$tempdir'...") — $logo from user-supplied logo filename.
+  ReportGen: /usr/bin/zip -r '".$RPTPATH.$reportoutname.".zip' — same injection on zip.
+  Reports: system("/bin/rm $filename") where $filename = REPORT_PATH + DB-stored report name.
+  Report name with embedded ' breaks shell quoting -> arbitrary command injection.
+  CWE-78.
+
+FMC-F46: user_management.sh PAM $PAM_USER -> Perl Code Injection (Root) [HIGH]
+  File: sf/bin/user_management.sh + sf/htdocs/html_templates/pam/system-auth.tt
+  PAM wires script via pam_exec.so during session open (external auth: LDAP/RADIUS).
+  Pattern: perl -e "print SF::AuthConfigObject::func('$PAM_USER', '$Privilege');"
+  $PAM_USER expands from login username inside double-quoted shell -> breaks Perl single-quote string.
+  Username admin');system('id');# -> Perl executes system('id') as root during login.
+  Condition: FMC configured with external auth + attacker creates LDAP user with crafted username.
+  CWE-78.
 """
 
 import base64
@@ -226,7 +294,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -1386,6 +1454,156 @@ def full_findings_summary() -> list[dict]:
                 "deny=0 disables the lockout counter — no failed-attempt threshold is enforced at the OS PAM layer; "
                 "SSH and console brute-force attacks against any OS account are not rate-limited by PAM; "
                 "pam_faillock module is loaded but provides no protection in this configuration"
+            ),
+        },
+        {
+            "id": "FMC-F39",
+            "severity": "MEDIUM",
+            "component": "SF::RemoteStorage / Backup Storage Mount",
+            "title": "NFS/CIFS/SSHFS mount — single-quote injection via admin-supplied host/path",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/RemoteStorage.pm",
+            "details": (
+                "RemoteStorage.pm:252-379: mount_nfs, mount_cifs, mount_sshfs all construct "
+                "system(\"mount '...$host...$path...'\") with admin-supplied host and path; "
+                "no escaping of single quotes in any parameter; "
+                "host or path containing ' breaks shell quoting and injects metacharacters; "
+                "mount operations run under the www user which has sudoers NOPASSWD on /bin/chmod, /bin/chown; "
+                "also: $opts->{mnt_dir} unquoted in mount command at line 281"
+            ),
+        },
+        {
+            "id": "FMC-F40",
+            "severity": "HIGH",
+            "component": "SF::BackupRestore / Backup Execution",
+            "title": "Backup name injected into open3() root shell via double-quote bypass",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/BackupRestore.pm",
+            "details": (
+                "BackupRestore.pm:1060: $cmd = \"nice /usr/bin/sudo -E .../sf-backup.pl "
+                "\\\"$final_backup_directory/$name_of_backup.tar.gz\\\" &\"; "
+                "BackupRestore.pm:1067: open3($in, $out, $err, $cmd) — string form, dispatched through /bin/sh; "
+                "sanitization: s/ /_/g + basename() only — no double-quote removal; "
+                "attacker-supplied backup name containing \\\" injects into the root shell command; "
+                "sf-backup.pl granted via sudoers NOPASSWD:SETENV — runs as root; "
+                "secondary path: BackupRestore.pm:1560 uses backtick `$cmd` for the same value"
+            ),
+        },
+        {
+            "id": "FMC-F41",
+            "severity": "HIGH",
+            "component": "DCCSM::FMCModelMigration / Migration Engine",
+            "title": "JSON migration_opts parameter injected unsanitized into system() root execution",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/DCCSM/FMCModelMigration.pm",
+            "details": (
+                "FMCModelMigration.pm:32-34: $migration_opts = $json->{migration_opts} — no validation; "
+                "FMCModelMigration.pm:88: system(\"/usr/bin/perl $migration_tmp_loc$migration_master_script "
+                "$src_or_dst_migration $migration_opts $bundle_path &\"); "
+                "migration_opts from uploaded migration bundle JSON flows unsanitized to system() string form; "
+                "attack: upload valid bundle, set migration_opts = 'config; id; #' -> RCE as www user"
+            ),
+        },
+        {
+            "id": "FMC-F42",
+            "severity": "HIGH",
+            "component": "sudoers / PERL5LIB Injection",
+            "title": "sudoers NOPASSWD + SETENV enables PERL5LIB injection into root Perl processes",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "etc/sudoers",
+            "details": (
+                "No global Defaults env_reset in sudoers — only Defaults !use_pty and per-command entries; "
+                "www ALL = NOPASSWD:SETENV: sf-backup.pl, sf-migration.pl, sf-restore-backup.pl, "
+                "sf-delete-backup.pl, sf-rsd-upload-backup.pl; "
+                "SETENV tag allows www to pass arbitrary env vars through sudo -E; "
+                "all SETENV scripts use #!/usr/bin/perl + use FlyLoader — FlyLoader resolves @INC via PERL5LIB; "
+                "www can set PERL5LIB=/tmp/evil and drop a malicious FlyLoader.pm -> loaded as root before real module; "
+                "also: ALL ALL = NOPASSWD: cli_driver, ct_cmd.sh * -> any authenticated user runs root-equivalent commands; "
+                "%ldapgroup ALL=(ALL) ALL -> LDAP group membership grants unrestricted root"
+            ),
+        },
+        {
+            "id": "FMC-F43",
+            "severity": "HIGH",
+            "component": "DCCSM::Updates::Upgrade / Package Management",
+            "title": "Uploaded package filename stored in DB then executed in backtick rm — RCE on delete",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/DCCSM/Updates/Upgrade.pm",
+            "details": (
+                "Upgrade.pm:271: INSERT PACKAGE_NAME = basename($update_info{filename}) — "
+                "basename() strips path separators but not shell metacharacters; "
+                "Upgrade.pm:2157: `rm -f $package_name` where $package_name = /var/sf/updates/ + DB value; "
+                "attack: upload package with filename 'foo; id #.tar' -> DB stores 'foo; id #.tar'; "
+                "on any subsequent delete operation: `rm -f /var/sf/updates/foo; id #` executes id as www; "
+                "admin auth required for initial upload; victim triggering delete (including scheduled cleanup) fires RCE"
+            ),
+        },
+        {
+            "id": "FMC-F44",
+            "severity": "MEDIUM",
+            "component": "SF::HealthMon / Health Module Install",
+            "title": "Health module XML <name> element injected into six string-form system() calls",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/HealthMon.pm",
+            "details": (
+                "HealthMon.pm:1527: $mod_name = $XML->{module}->{name} from XML::Smart-parsed .tgz manifest; "
+                "HealthMon.pm:1604-1609: system \"mkdir -p $right_location_reloc\"; "
+                "system \"cp -pr * $right_location_reloc/\"; system \"chown -R www:www $right_location_reloc\"; "
+                "system \"chmod 750 $right_location_reloc\"; system \"chmod g+s $right_location_reloc\"; "
+                "system \"chmod 555 $right_location_reloc/*\"; "
+                "all six are string-form; $right_location_reloc = /var/sf/healthmon/ + $mod_name (+ optional _version); "
+                "upload health module .tgz with XML <name>foo; id #</name> -> shell execution during install"
+            ),
+        },
+        {
+            "id": "FMC-F45",
+            "severity": "MEDIUM",
+            "component": "SF::ReportGen + SF::Reports / Report Management",
+            "title": "Report name single-quote injection in rm/cp/zip during creation and deletion",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "sf/lib/perl/5.34.3/SF/ReportGen.pm",
+                "sf/lib/perl/5.34.3/SF/Reports.pm",
+            ],
+            "details": (
+                "ReportGen.pm:4765: $reportoutname = CGI-param REPORTNAME . '-' . timestamp; "
+                "sanitization: s/ /_/g only — single quotes not removed; "
+                "ReportGen.pm:5488: system(\"/bin/rm '\".$PREVIEW_RPTPATH.$reportoutname.\".rpt'...\"); "
+                "ReportGen.pm:5533: system(\"/bin/cp '$logo' '$tempdir'...\") — $logo from uploaded logo filename; "
+                "ReportGen.pm:5577: system(\"/usr/bin/zip -r '\".$RPTPATH.$reportoutname.\".zip' *\"); "
+                "Reports.pm:117: system(\"/bin/rm $filename\") where $filename from DB-stored report name (unquoted); "
+                "report name with ' breaks single-quote shell context; logo filename with ' breaks cp context"
+            ),
+        },
+        {
+            "id": "FMC-F46",
+            "severity": "HIGH",
+            "component": "PAM / user_management.sh / External Auth",
+            "title": "PAM $PAM_USER interpolated into Perl -e one-liner — root code execution at login",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "sf/bin/user_management.sh",
+                "sf/htdocs/html_templates/pam/system-auth.tt",
+            ],
+            "details": (
+                "user_management.sh: five functions each invoke: "
+                "perl -e \"print SF::AuthConfigObject::func('$PAM_USER', '$Privilege');\"; "
+                "$PAM_USER is the PAM login username (attacker-controlled for external auth); "
+                "shell double-quote expansion of $PAM_USER inside -e \"...\" breaks the Perl single-quoted literal; "
+                "username admin');system('id');# -> Perl executes system('id') as root; "
+                "PAM wires script via pam_exec.so at session open phase (confirmed in system-auth.tt: "
+                "six session lines covering localUser, conflictingUsername, conflictingPrivilege, "
+                "firstTimeLogin, privNotChanged function flags); "
+                "condition: FMC configured with LDAP/RADIUS external auth + attacker can create LDAP user "
+                "with crafted username containing single quote"
             ),
         },
     ]

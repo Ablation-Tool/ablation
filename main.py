@@ -281,6 +281,13 @@ except ImportError:
     CiscoASALiveCredCheck = None
     cisco_type7_decode = None
 
+try:
+    from modules.api_re import run_re as api_re_run, APIMap
+    HAS_API_RE = True
+except ImportError:
+    HAS_API_RE = False
+    api_re_run = None
+
 
 MACSTADIUM_ASAS = [
     {'host': '207.254.35.12', 'port': 443, 'label': 'ASA-Primary'},
@@ -1069,6 +1076,11 @@ def main():
     parser.add_argument('--wechat-probe-push', action='store_true', help='Build + adb-push wechat-probe to connected device')
     parser.add_argument('--wechat-probe-watch', action='store_true', help='Set HW watchpoint on gILinkKey; block until write; print writer PC + hex dump')
     parser.add_argument('--wechat-probe-dump', action='store_true', help='One-shot /proc/pid/mem dump of gILinkKey from running WeChat')
+
+    parser.add_argument('--api-re', metavar='URL', help='API reverse engineering: full RE pipeline (discovery, injection, JWT, BOLA, GraphQL, mass-assignment)')
+    parser.add_argument('--api-re-depth', choices=['quick', 'normal', 'deep'], default='normal', help='api-re depth (default: normal)')
+    parser.add_argument('--api-re-focus', choices=['injection', 'schema', 'state', 'jwt', 'auth', 'bola'], help='api-re focus dimension')
+    parser.add_argument('--api-re-output', metavar='FILE', help='Write api-re JSON report to file')
 
     args = parser.parse_args()
     
@@ -1933,6 +1945,23 @@ def main():
             with open(out_path, "w") as fh:
                 json.dump(result, fh, indent=2, default=str)
             print(f"[+] Full report: {out_path}")
+
+    elif getattr(args, 'api_re', None):
+        if not HAS_API_RE:
+            print("[!] api_re module not available")
+            sys.exit(1)
+        api = api_re_run(
+            args.api_re,
+            depth=getattr(args, 'api_re_depth', 'normal'),
+            focus=getattr(args, 'api_re_focus', None),
+        )
+        if getattr(args, 'api_re_output', None):
+            from dataclasses import asdict
+            out = {"base_url": api.base_url, "framework": api.framework,
+                   "endpoints": [asdict(e) for e in api.endpoints], "notes": api.notes}
+            with open(args.api_re_output, "w") as fh:
+                json.dump(out, fh, indent=2)
+            print(f"[+] Report: {args.api_re_output}")
 
     else:
         ablation.run_autonomous()
