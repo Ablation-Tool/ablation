@@ -7,6 +7,16 @@
 
 ---
 
+It reads binaries without symbols and tracks specific functions across versions using behavior, not location.
+
+Every other approach breaks when the address moves or the code changes slightly. Signature scanners need exact byte matches. IDA and Ghidra need a human to manually correlate functions across versions. BinDiff works on full binary pairs but has no semantic understanding — it matches structure, not meaning.
+
+We match on all three simultaneously: structure, instruction overlap, and what the function actually does. That combination means a function can move, get optimized by the compiler, have a few instructions swapped, and we still find it. And we do it in under two minutes on a 94MB binary with no debug info.
+
+The specific gap we fill: automated, semantically-aware, cross-version function tracking on stripped enterprise firmware at scale. That doesn't exist as a ready tool anywhere else.
+
+---
+
 ## Architecture
 
 ```
@@ -166,7 +176,7 @@ python3 modules/go_garble_re.py /path/to/binary
 |--------|---------|
 | `func_id_db` | SQLite function identity store — byte-pattern + callee + struct + string matching across binary versions |
 | `llm_analyst/` | Claude ReAct loop — active RE participant; names functions, hypothesizes vulns, reconstructs structs |
-| `semantic_search` | BERT-based function similarity (MiniLM, BinFuse opcode categories, Markov transitions) |
+| `semantic_search` | BERT-based function similarity (MPNet, BinFuse opcode categories, Markov transitions) |
 | `version_delta` | Cross-version homolog matching (structural → 4-gram Jaccard → semantic) + SequenceMatcher patch diff |
 | `bare_adapter` | Ablation findings → BARE binary → ranked Metasploit modules (3,904 modules, offline) |
 | `regression` | Version-confirmed LINA struct offsets, angr Veritesting boundary model |
