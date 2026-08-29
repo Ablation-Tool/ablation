@@ -3,7 +3,6 @@
 </p>
 
 <p align="center">
-  Purpose-built binary reverse engineering framework.
 </p>
 
 ---
