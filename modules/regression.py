@@ -820,23 +820,75 @@ def run_regression(path: str, y_col: str, x_cols=None,
 # Install: pip install pysr   (pulls Julia runtime on first run, ~5min)
 # Repo:    https://github.com/MilesCranmer/PySR
 #
-# ── APPROACH 2: REMaQE Binary Symbolic Execution (code → formula) ─────────────
+# ── APPROACH 2: angr Symbolic Execution (code → formula) ──────────────────────
 #
-# REMaQE symbolically executes the struct-init function and extracts the offset
-# computation as a closed-form expression directly from the binary.
+# Symbolically execute the struct-init function and extract the offset
+# computation as an algebraic expression directly from the binary.
 # No empirical version data needed — the formula comes FROM THE CODE ITSELF.
 #
 # Target: LINA 9.14.2.14, struct-init block at 0x1184232
-#   Fields confirmed: gp_name@+0x2b1, dns_ptr@+0x2f0, wins_ptr@+0x308
+#   Fields confirmed: gp_name@+0x2b0, dns_ptr@+0x2f0, wins_ptr@+0x308
+#
+# ── IMPLEMENTATION (angr, bypassing 105MB CFG overhead) ───────────────────────
+#
+# Install: pip install angr
+#
+# Step 1 — Load with forced base address (PIE offsets match static analysis tools):
+#
+#   import angr, claripy
+#   proj = angr.Project('lina_9.14.2.14',
+#                       main_opts={'base_addr': 0x0},
+#                       load_options={'auto_load_libs': False})
+#
+#   Do NOT use proj.analyses.CFG() — state explosion on 105MB binary.
+#
+# Step 2 — Inject symbolic struct pointer and create call_state:
+#
+#   start_addr = 0x1184232
+#   end_addr   = 0x1184500  # actual block exit — verify in r2/Ghidra
+#   gp_obj_ptr = claripy.BVS('gp_obj', 64)
+#   state = proj.factory.call_state(start_addr, gp_obj_ptr)
+#   # gp_obj_ptr passed via RDI (x64 sysv ABI, first argument)
+#
+# Step 3 — Stub stripped calls to prevent unmapped-memory errors:
+#
+#   # Known libc call (e.g. malloc at 0x1185000):
+#   proj.hook(0x1185000, angr.SIM_PROCEDURES['libc']['malloc']())
+#
+#   # NOP irrelevant internal call (length = size of CALL instruction, usually 5):
+#   @proj.hook(0x1184280, length=5)
+#   def skip_irrelevant_call(state):
+#       pass
+#
+# Step 4 — Explore and extract algebraic offset AST:
+#
+#   simgr = proj.factory.simgr(state)
+#   simgr.explore(find=end_addr)
+#
+#   if simgr.found:
+#       s = simgr.found[0]
+#       # Read 8 bytes from gp_obj + field_offset (e.g. +0x48):
+#       val = s.memory.load(gp_obj_ptr + 0x48, 8)
+#       print("Offset AST:", val)
+#       print("Simplified:", s.solver.simplify(val))
+#   else:
+#       print("No path found — check simgr.deadended / simgr.errored")
+#       # Use simgr.step(num_inst=50) if block is linear — avoids explore() overhead
+#
+# Step 5 — Constraints to prevent branch explosion:
+#
+#   # If init block has alignment/bounds guards, pre-constrain before explore():
+#   state.add_constraints(gp_obj_ptr != 0)
+#   state.add_constraints(gp_obj_ptr % 8 == 0)  # struct must be 8B-aligned
 #
 # Workflow:
-#   1. r2 -c "pdb @ 0x1184232" lina_9.14.2.14 > init_9.14.asm
-#   2. REMaQE recovers: offset_expression = f(struct_base, alignment_const, ...)
-#   3. Repeat for 9.16, 9.18 — diff the expressions
-#   Identical expressions → field stable, same vulnerability surface
-#   Changed expression → Cisco patched the struct layout at that version
+#   1. r2 -c "pdb @ 0x1184232" lina_9.14.2.14 > init_9.14.asm  (find end_addr)
+#   2. Run angr script above — extract AST for gp_name, dns_ptr, wins_ptr fields
+#   3. Repeat for lina 9.16.4.18, 9.22.2.32 — diff the simplified expressions
+#   Identical AST → field stable; changed AST → struct layout patched at that version
 #
-# Repo: https://github.com/FPSG-UIUC/REMaQE
+# REMaQE (github.com/FPSG-UIUC/REMaQE) wraps angr with algebraic simplification
+# on top — use it as a cross-check if the raw angr AST is too complex to read.
 #
 # ── INTEGRATION POINT ─────────────────────────────────────────────────────────
 #
