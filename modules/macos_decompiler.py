@@ -693,6 +693,30 @@ def build_cfg(bbls: List[BasicBlock]) -> 'nx.DiGraph':
 
 # ── VEX lifter ────────────────────────────────────────────────────────────────
 
+def _collect_rdtmp(node) -> list:
+    """Walk a pyvex IRExpr/IRStmt tree and collect all RdTmp tmp indices.
+
+    pyvex statement/expression trees are not uniformly iterable, so we recurse
+    via child_expressions. Returns a flat list of int tmp indices referenced.
+    """
+    if node is None:
+        return []
+    try:
+        import pyvex as _pyvex
+        result = []
+        if isinstance(node, _pyvex.expr.RdTmp):
+            result.append(node.tmp)
+        elif hasattr(node, 'child_expressions'):
+            for child in node.child_expressions:
+                result.extend(_collect_rdtmp(child))
+        elif hasattr(node, 'expressions'):
+            for expr in node.expressions:
+                result.extend(_collect_rdtmp(expr))
+        return result
+    except Exception:
+        return []
+
+
 class VEXLifter:
     def __init__(self, binary, arch: str):
         self.binary = binary
@@ -715,6 +739,56 @@ class VEXLifter:
             return irsb
         except Exception:
             return None
+
+    def vex_ssa_chains(self, bbl: BasicBlock) -> dict:
+        """Extract SSA def-use chains from VEX IR temporaries in one basic block.
+
+        Engineering a Compiler §9.3: VEX IR temporaries (t0, t1, t2, ...) are already
+        in SSA form by construction — each WrTmp(tN, expr) is the unique definition
+        of tN, and RdTmp(tN) in any later statement is a use.  Walking IRSB.statements
+        in order gives the complete def-use graph with no φ-insertion needed.
+
+        Returns {tmp_idx: {'def_stmt': int, 'used_in': [int, ...], 'expr_tag': str}}
+        where def_stmt and used_in are 0-based IRSB statement indices.
+
+        Use this to find which VEX temporaries carry a struct field value across
+        statements (e.g., gp_obj pointer loaded into t3, then stored via t3 at stmt 7)
+        without running a full interprocedural analysis.
+        """
+        import pyvex as _pyvex
+        irsb = bbl.vex
+        if irsb is None:
+            irsb = self.lift_bbl(bbl)
+        if irsb is None:
+            return {}
+
+        # Pass 1: record definition statement index for each tmp
+        defs: dict = {}  # tmp_idx → stmt_idx
+        expr_tags: dict = {}  # tmp_idx → IRExpr tag string
+        for i, stmt in enumerate(irsb.statements):
+            if isinstance(stmt, _pyvex.stmt.WrTmp):
+                defs[stmt.tmp] = i
+                expr_tags[stmt.tmp] = type(stmt.data).__name__
+
+        # Pass 2: collect use statement indices by scanning all RdTmp references
+        uses: dict = {t: [] for t in defs}
+        for i, stmt in enumerate(irsb.statements):
+            for tmp in _collect_rdtmp(stmt):
+                if tmp in uses:
+                    uses[tmp].append(i)
+        # Also scan the IRSB exit condition
+        for tmp in _collect_rdtmp(irsb.next):
+            if tmp in uses:
+                uses[tmp].append(len(irsb.statements))  # virtual exit stmt
+
+        return {
+            t: {
+                'def_stmt': defs[t],
+                'used_in': uses[t],
+                'expr_tag': expr_tags[t],
+            }
+            for t in defs
+        }
 
 
 # ── ObjC pre-recognition pass ─────────────────────────────────────────────────

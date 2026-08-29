@@ -7,6 +7,8 @@ Multi-architecture disassembler with function detection and CFG analysis.
 """
 
 import struct
+from contextlib import contextmanager
+from functools import cached_property
 from pathlib import Path
 
 try:
@@ -29,6 +31,35 @@ try:
     HAS_ANGR = True
 except ImportError:
     HAS_ANGR = False
+
+
+class InsnRecord:
+    """Per-instruction record with __slots__ — replaces per-insn dict.
+
+    Fluent Python ch.11 §"Saving Memory with __slots__": each Python dict
+    costs ~240 bytes of overhead. At 10M instructions a list-of-dicts approach
+    burns ~2.4 GB on dict overhead alone; __slots__ drops that to ~120 bytes/
+    instance (~1.2 GB), and avoids the hash-table realloc on every new key.
+
+    Usage replaces: {'address': ..., 'mnemonic': ..., 'op_str': ..., ...}
+    """
+    __slots__ = ('address', 'mnemonic', 'op_str', 'size', 'raw',
+                 'is_branch', 'is_call', 'is_ret', 'branch_type')
+
+    def __init__(self, address, mnemonic, op_str, size, raw,
+                 is_branch=False, is_call=False, is_ret=False, branch_type=None):
+        self.address = address
+        self.mnemonic = mnemonic
+        self.op_str = op_str
+        self.size = size
+        self.raw = raw
+        self.is_branch = is_branch
+        self.is_call = is_call
+        self.is_ret = is_ret
+        self.branch_type = branch_type
+
+    def __repr__(self):
+        return f'<InsnRecord {self.address:#x}: {self.mnemonic} {self.op_str}>'
 
 
 class DisasmEngineX:
@@ -72,15 +103,22 @@ class DisasmEngineX:
 
         Replaces manual string/pointer hunting for callers of functions like
         SetTextFileContents (TOCTOU in ac_strap.dat) or strcpy PLT entries.
+
+        Deduplicates via seen set: xrefs_to() can return the same ins_addr
+        multiple times when CFGFast resolves indirect-jump aliases — the PBA
+        recursive-disassembler pattern (queue + seen map) applies here too.
         """
         node = self.cfg.model.get_any_node(target_addr)
         if not node:
             return []
         xrefs = self.proj.kb.xrefs.get_xrefs_to(target_addr)
-        return [
-            x.ins_addr for x in xrefs
-            if x.type == _xref_mod.XRefType.Call
-        ]
+        seen: set[int] = set()
+        result = []
+        for x in xrefs:
+            if x.type == _xref_mod.XRefType.Call and x.ins_addr not in seen:
+                seen.add(x.ins_addr)
+                result.append(x.ins_addr)
+        return result
 
     def track_register_def_use(self, func_addr: int, reg_name: str = 'rdx') -> list:
         """Track definition and use sites of reg_name within a function.
@@ -88,7 +126,12 @@ class DisasmEngineX:
         Uses Reaching Definitions Analysis (RDA) over VEX IR. Automates the
         manual register-state tracing done in comments for the F2 overflow chain.
 
-        Returns list of {'definition_at': int, 'used_at': [int, ...]} dicts.
+        Returns list of {'definition_at': int, 'used_at': [int, ...], 'block': int} dicts.
+
+        Engineering a Compiler §9.2.4: RDA computes Reaches(n) = ∪{DEDef(m) ∪ (Reaches(m) − DefKill(m))}
+        for each predecessor m. angr's ReachingDefinitions implements this fixed-point iteration
+        internally; exposing the block address alongside each def-site makes the kill chain visible
+        without re-running the analysis.
         """
         func = self.cfg.functions.get(func_addr)
         if not func:
@@ -101,13 +144,77 @@ class DisasmEngineX:
                 uses = list(rda.dep_graph.graph.successors(node))
                 results.append({
                     'definition_at': node.codeloc.ins_addr,
+                    'block': node.codeloc.block_addr,
                     'used_at': [u.codeloc.ins_addr for u in uses],
+                    'killed_by': [u.codeloc.ins_addr for u in uses
+                                  if hasattr(u, 'offset') and u.offset == reg_offset],
                 })
         return results
+
+    def block_dataflow(self, func_addr: int, reg_name: str = 'rdx') -> dict:
+        """Per-block DEDef and DefKill sets for reg_name across a function.
+
+        Engineering a Compiler §9.2.4: DEDef(b) = definitions in b that reach b's
+        bottom without being re-defined within b. DefKill(b) = all other definitions
+        of the same register that b kills.
+
+        Returns {block_addr: {'DEDef': [ins_addr, ...], 'DefKill': [ins_addr, ...]}}
+        for each block in the function. Use this to understand which blocks expose a
+        definition of reg_name downward vs. which blocks kill incoming definitions —
+        the split is the core of the iterative reaching-definitions fixed point.
+        """
+        func = self.cfg.functions.get(func_addr)
+        if not func:
+            raise ValueError(f"Function at {func_addr:#x} not found in CFG")
+        rda = self.proj.analyses.ReachingDefinitions(subject=func, track_tmps=False)
+        reg_offset = self.proj.arch.registers[reg_name][0]
+
+        # Collect all definitions of reg_name keyed by block
+        by_block: dict = {}
+        for node in rda.dep_graph.graph.nodes():
+            if not (hasattr(node, 'offset') and node.offset == reg_offset):
+                continue
+            blk = node.codeloc.block_addr
+            by_block.setdefault(blk, []).append(node.codeloc.ins_addr)
+
+        result = {}
+        for blk, defs in by_block.items():
+            defs_sorted = sorted(defs)
+            # DEDef: last definition in the block (reaches the block exit)
+            # DefKill: all earlier definitions in the same block (killed by later ones)
+            result[blk] = {
+                'DEDef': [defs_sorted[-1]],
+                'DefKill': defs_sorted[:-1],
+            }
+        return result
 
     def xrefs_to(self, target_addr: int) -> list:
         """All xrefs to target_addr (all types — call, data, jump)."""
         return list(self.proj.kb.xrefs.get_xrefs_to(target_addr))
+
+    @contextmanager
+    def scoped_state(self, func_addr: int, *sym_args):
+        """Context manager for a temporary angr call_state.
+
+        Fluent Python ch.18 §"Using @contextmanager": the generator body before
+        yield runs as __enter__; after yield runs as __exit__ (cleanup).  Prevents
+        state objects from leaking across multiple exploration runs on the same
+        project — each `with` block gets a fresh state and the SimulationManager
+        is discarded on exit regardless of exceptions.
+
+        Usage:
+            with dx.scoped_state(func_addr, gp_obj_ptr) as simgr:
+                simgr.explore(find=end_addr)
+                found = simgr.found
+        """
+        import claripy as _claripy
+        state = self.proj.factory.call_state(func_addr, *sym_args)
+        simgr = self.proj.factory.simulation_manager(state)
+        try:
+            yield simgr
+        finally:
+            del simgr
+            del state
 
 
 class DisasmEngine:
@@ -156,32 +263,58 @@ class DisasmEngine:
             return self._fallback_disasm(code, base_addr, count)
         
         instructions = []
-        for i, insn in enumerate(self.md.disasm(code, base_addr)):
-            if count and i >= count:
-                break
-                
-            inst_dict = {
+        for insn in self.stream(code, base_addr, count):
+            instructions.append({
                 'address': insn.address,
                 'mnemonic': insn.mnemonic,
                 'op_str': insn.op_str,
-                'bytes': insn.bytes.hex(),
-                'size': insn.size
-            }
-            
-            # Add control flow info
-            if self._is_branch(insn):
-                inst_dict['is_branch'] = True
-                inst_dict['branch_type'] = self._branch_type(insn)
-                
-            if self._is_call(insn):
-                inst_dict['is_call'] = True
-                
-            if self._is_ret(insn):
-                inst_dict['is_ret'] = True
-            
-            instructions.append(inst_dict)
-        
+                'bytes': insn.raw,
+                'size': insn.size,
+                **({'is_branch': True, 'branch_type': insn.branch_type} if insn.is_branch else {}),
+                **({'is_call': True} if insn.is_call else {}),
+                **({'is_ret': True} if insn.is_ret else {}),
+            })
         return instructions
+
+    def stream(self, code, base_addr=0x400000, count=0):
+        """Generator variant of disassemble() — yields InsnRecord objects one at a time.
+
+        Fluent Python ch.17 §"How a Generator Works": yields values one by one
+        rather than building a list. For large binaries (105MB lina) this avoids
+        materialising millions of dicts in RAM simultaneously.  Callers that only
+        need a subset (e.g. finding the first CALL *rax) can break early without
+        paying the cost of scanning the entire binary.
+
+        Usage:
+            for insn in engine.stream(code, base_addr):
+                if insn.mnemonic == 'call' and '*rax' in insn.op_str:
+                    break
+        """
+        if not HAS_CAPSTONE or not self.md:
+            yield from self._fallback_disasm_stream(code, base_addr, count)
+            return
+        # disasm_iter() is a true C iterator — no internal list allocation.
+        # disasm() builds the full list before Python sees a single instruction;
+        # on 105MB lina .text (~800K insns) that's ~120MB of wasted allocation.
+        for i, insn in enumerate(self.md.disasm_iter(code, base_addr)):
+            if count and i >= count:
+                return
+            yield InsnRecord(
+                address=insn.address,
+                mnemonic=insn.mnemonic,
+                op_str=insn.op_str,
+                size=insn.size,
+                raw=insn.bytes.hex(),
+                is_branch=self._is_branch(insn),
+                is_call=self._is_call(insn),
+                is_ret=self._is_ret(insn),
+                branch_type=self._branch_type(insn) if self._is_branch(insn) else None,
+            )
+
+    def _fallback_disasm_stream(self, code, base_addr, count):
+        """Stub — fallback path has no stream support; yields nothing."""
+        return
+        yield  # make this a generator
     
     def find_functions(self, code, base_addr=0x400000):
         """
@@ -197,8 +330,8 @@ class DisasmEngine:
         
         functions = []
         current_func = None
-        
-        for insn in self.md.disasm(code, base_addr):
+
+        for insn in self.md.disasm_iter(code, base_addr):
             # Function start: prologue or CALL target
             if self._is_prologue(insn) and not current_func:
                 current_func = {
@@ -240,8 +373,8 @@ class DisasmEngine:
         
         blocks = []
         current_block = {'start': base_addr, 'instructions': [], 'exits': []}
-        
-        for insn in self.md.disasm(code, base_addr):
+
+        for insn in self.md.disasm_iter(code, base_addr):
             current_block['instructions'].append(insn.address)
             
             # Block ends on branch, call, or return
