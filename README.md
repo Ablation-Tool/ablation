@@ -30,6 +30,17 @@
 ## Quick start
 
 ```bash
+# API reverse engineering (30 phases — schema, auth, injection, logic, evasion)
+python3 modules/api_re.py http://target:8080
+python3 modules/api_re.py http://target:8080 --depth deep
+python3 modules/api_re.py http://target:8080 --focus jwt      # JWT alg confusion + alg:none
+python3 modules/api_re.py http://target:8080 --focus nosql    # MongoDB operator injection
+python3 modules/api_re.py http://target:8080 --focus bfla     # admin path + privileged ops
+python3 modules/api_re.py http://target:8080 --focus cors     # origin reflect + null origin
+python3 modules/api_re.py http://target:8080 --focus oauth2   # dynamic reg + PKCE downgrade
+python3 modules/api_re.py http://target:8080 --focus shadow   # deprecated/legacy versions
+python3 modules/api_re.py http://target:8080 --output out.json
+
 # Binary / firmware
 ./ablation --binary /path/to/target
 ./ablation --lina /path/to/lina --asa-version 9.22.2.32
@@ -101,6 +112,7 @@ python3 modules/go_garble_re.py /path/to/binary
 | `llm_enum` | LLM servers | Ollama/LM Studio model list, system prompt leak |
 | `qwen3_tts_re` | TTS (Qwen3) | Unauth synthesis, SSML injection, IDOR, race condition |
 | `network_analyze` | Network | Interface map, routing, VLAN, DHCP, OSPF/EIGRP/BGP |
+| `api_re` | API | 30-phase API RE: schema harvest, BOLA/BFLA, JWT alg confusion, NoSQL inject, CORS, PII scan, OAuth dynamic reg, WebSocket enum, shadow versions, host header inject, timing oracle, second-order inject, null byte evasion |
 | `jwt_crypto_analyzer` | Auth | alg:none, RS256→HS256 confusion, kid SQLi/SSRF/traversal |
 | `crypto_audit` | Binary | Hardcoded key material, weak RNG, ECB mode, custom crypto |
 | `process_enum` | Linux/macOS | /proc maps, open FDs, environ |
