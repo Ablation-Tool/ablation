@@ -3449,6 +3449,8 @@ def cross_version_scan(image_paths: list[tuple[str, str]]) -> dict:
             results[label] = {'findings': findings, 'lina_size': len(lina), 'build_id': bid}
         except Exception as exc:
             results[label] = {'error': str(exc), 'findings': [], 'lina_size': 0, 'build_id': None}
+    if len(results) > 1:
+        print('[hint] Cross-version struct offset data collected — run: ablation --regress-firmware')
     return results
 
 
@@ -4243,6 +4245,10 @@ class RadiusOverflowProbe:
             except ImportError:
                 regression = {'error': 'sklearn not available'}
 
+        if boundaries:
+            print(f'[hint] Crash boundary at payload length {boundaries[0]}B — '
+                  f'save sweep data and run: ablation --regress FILE --regress-logistic '
+                  f'--regress-y crashed --regress-x length')
         return {
             'results':    results,
             'boundaries': boundaries,
