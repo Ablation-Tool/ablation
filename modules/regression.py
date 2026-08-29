@@ -1181,3 +1181,186 @@ class SymbolicOffsetRegression:
             f'  Fields in scope: {", ".join(self.REMAQE_TARGET["fields_confirmed"])}',
         ]
         return '\n'.join(lines)
+
+
+class AngrSymExecRunner:
+    """Runnable angr symbolic execution wrapper for lina struct-field offset extraction.
+
+    Implements the full Step 1-6 recipe from the APPROACH 2 comment above.
+    Mitigations: Veritesting (primary), loop-break hooks (escape hatch),
+    instruction budget (linear blocks), under-constrained symexec (uninit reads).
+
+    Usage:
+        runner = AngrSymExecRunner('lina_9.22.2.32', base_addr=0x0)
+        runner.add_stub(0x1185000, 'malloc')
+        runner.add_nop(0x1184280, length=5)
+        runner.add_loop_break(0x11843a0, length=2)  # JNZ back-edge
+
+        result = runner.run(
+            start_addr=0x1184232,
+            end_addr=0x1184500,
+            field_offsets=[0x2b1, 0x2f0, 0x308],
+        )
+        for voff, ast in result['fields'].items():
+            print(hex(voff), ':', ast)
+    """
+
+    def __init__(self, binary_path: str, base_addr: int = 0x0,
+                 auto_load_libs: bool = False):
+        self.binary_path    = binary_path
+        self.base_addr      = base_addr
+        self.auto_load_libs = auto_load_libs
+        self._stubs: list   = []
+        self._nops:  list   = []
+        self._loops: list   = []
+        self._proj          = None
+
+    def _load(self):
+        try:
+            import angr
+        except ImportError:
+            raise ImportError('angr not installed: pip install angr')
+        if self._proj is None:
+            self._proj = angr.Project(
+                self.binary_path,
+                main_opts={'base_addr': self.base_addr},
+                load_options={'auto_load_libs': self.auto_load_libs},
+            )
+        return self._proj
+
+    def add_stub(self, vaddr: int, libc_name: str):
+        """Replace a stripped libc call with angr's SimProcedure stub."""
+        self._stubs.append((vaddr, libc_name))
+
+    def add_nop(self, vaddr: int, length: int = 5):
+        """NOP an irrelevant internal call (length = CALL instruction byte size)."""
+        self._nops.append((vaddr, length))
+
+    def add_loop_break(self, vaddr: int, length: int = 2):
+        """NOP a back-edge jump to prevent infinite loop in the SimulationManager.
+
+        length=2  for short JMP (EB xx) or JNZ (75 xx)
+        length=6  for near JNZ (0F 85 xx xx xx xx)
+        length=5  for near JMP (E9 xx xx xx xx)
+        """
+        self._loops.append((vaddr, length))
+
+    def _apply_hooks(self, proj):
+        import angr
+
+        for vaddr, name in self._stubs:
+            try:
+                proc = angr.SIM_PROCEDURES['libc'][name]()
+            except KeyError:
+                proc = angr.SIM_PROCEDURES['stubs']['ReturnUnconstrained']()
+            proj.hook(vaddr, proc)
+
+        for vaddr, length in self._nops:
+            proj.hook(vaddr, length=length)(lambda state: None)
+
+        for vaddr, length in self._loops:
+            proj.hook(vaddr, length=length)(lambda state: None)
+
+    def run(self, start_addr: int, end_addr: int,
+            field_offsets: list = None,
+            constraints: list = None,
+            budget: int = None,
+            use_veritesting: bool = True,
+            under_constrained: bool = False) -> dict:
+        """Run symbolic execution from start_addr to end_addr.
+
+        Args:
+            start_addr:        Function or block entry vaddr.
+            end_addr:          Target vaddr passed to simgr.explore(find=...).
+            field_offsets:     Struct byte offsets to read after reaching end_addr.
+                               Each offset is relative to the symbolic gp_obj_ptr
+                               passed as the first argument (RDI in x86-64 SysV ABI).
+            constraints:       List of claripy constraints on gp_obj_ptr.
+                               Defaults to [ptr != 0, ptr % 8 == 0].
+            budget:            If set, use simgr.step(num_inst=budget) instead of
+                               explore(). For known-linear blocks with no branches.
+            use_veritesting:   Apply Veritesting path-merging technique (default True).
+            under_constrained: Add UNDER_CONSTRAINED_SYMEXEC for uninit memory reads.
+
+        Returns:
+            dict:
+              'found'  bool           - whether end_addr was reached
+              'fields' {offset: str}  - simplified AST string per field offset
+              'errors' [str]          - error strings from simgr.errored
+              'gp_obj' BVS            - the symbolic pointer BV for further analysis
+        """
+        import angr
+        import claripy
+
+        proj = self._load()
+        self._apply_hooks(proj)
+
+        gp_obj_ptr = claripy.BVS('gp_obj', 64)
+        state = proj.factory.call_state(start_addr, gp_obj_ptr)
+
+        if under_constrained:
+            state.options.add(angr.options.UNDER_CONSTRAINED_SYMEXEC)
+
+        for c in (constraints or [gp_obj_ptr != 0, gp_obj_ptr % 8 == 0]):
+            state.add_constraints(c)
+
+        simgr = proj.factory.simgr(state)
+
+        if use_veritesting:
+            from angr.exploration_techniques import Veritesting
+            simgr.use_technique(Veritesting())
+
+        result = {'found': False, 'fields': {}, 'errors': [], 'gp_obj': gp_obj_ptr}
+
+        if budget is not None:
+            simgr.step(num_inst=budget)
+            found_states = simgr.active
+        else:
+            simgr.explore(find=end_addr)
+            found_states = simgr.found
+
+        result['errors'] = [str(e.error) for e in simgr.errored]
+
+        if not found_states:
+            return result
+
+        result['found'] = True
+        s = found_states[0]
+
+        for offset in (field_offsets or []):
+            try:
+                raw = s.memory.load(gp_obj_ptr + offset, 8,
+                                    endness=proj.arch.memory_endness)
+                result['fields'][offset] = str(s.solver.simplify(raw))
+            except Exception as exc:
+                result['fields'][offset] = f'ERROR: {exc}'
+
+        return result
+
+    def compare_versions(self, runs: dict) -> dict:
+        """Compare field ASTs across multiple version runs.
+
+        Args:
+            runs: {version_str: result_dict} as returned by self.run()
+
+        Returns:
+            {hex_offset: {'asts': {version: ast_str}, 'stable': bool}}
+        """
+        all_offsets: set = set()
+        for r in runs.values():
+            all_offsets.update(r.get('fields', {}).keys())
+
+        out = {}
+        for offset in sorted(all_offsets):
+            asts = {v: r['fields'].get(offset, 'MISSING') for v, r in runs.items()}
+            out[hex(offset)] = {'asts': asts, 'stable': len(set(asts.values())) == 1}
+        return out
+
+    def report(self, result: dict) -> str:
+        lines = [f'AngrSymExecRunner — {self.binary_path}',
+                 f'  found: {result["found"]}']
+        if result['errors']:
+            lines.append(f'  errors: {result["errors"]}')
+        for offset, ast in sorted(result['fields'].items()):
+            lines.append(f'  gp_obj+0x{offset:03x}: {ast}')
+        return '\n'.join(lines)
