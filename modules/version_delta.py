@@ -374,8 +374,12 @@ class FuncMatcher:
                 else:
                     sem_score = sem_a
 
+        # Jaccard floor: semantic alone is insufficient for HIGH — too many generic
+        # C patterns (alloc+copy+return) score 0.9+ cross-binary with no structural
+        # overlap. Require _SEM_JACCARD_MIN structural corroboration for HIGH.
+        jaccard_ok = best_score >= self._SEM_JACCARD_MIN
         confidence = (
-            'HIGH'   if sem_score >= 0.75 or best_score >= 0.70 else
+            'HIGH'   if jaccard_ok and (sem_score >= 0.75 or best_score >= 0.70) else
             'MEDIUM' if sem_score >= 0.55 or best_score >= 0.45 else
             'LOW'
         )
