@@ -256,7 +256,7 @@ class SemanticSearcher:
     """
 
     def __init__(self, db_path: str, cache_dir: Optional[Path] = None):
-        self._db_path  = Path(db_path)
+        self._db_path  = Path(db_path).expanduser()
         self._cache_dir = cache_dir or _CACHE_DIR
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._model = None
