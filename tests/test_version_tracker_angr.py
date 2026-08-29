@@ -102,7 +102,7 @@ def prologue_scan(path: str) -> list[FuncFeatures]:
     return features
 
 
-def main(use_angr: bool = False):
+def main(use_angr: bool = False, full_cfg: bool = False):
     ss = SemanticSearcher(DB)
     ss.build_corpus()
 
@@ -127,8 +127,19 @@ def main(use_angr: bool = False):
         assert func is not None, 'floor_func returned None'
         print(f'  floor_func → {func.name} @ {hex(func.addr)}')
 
-    # ── target: prologue scan on 9.22 ────────────────────────────────────────
-    target_feats = prologue_scan(LINA_922)
+    # ── target: full CFGFast or prologue scan on 9.22 ────────────────────────
+    if full_cfg:
+        from modules.version_delta import VersionTracker
+        tracker = VersionTracker(
+            binaries={'9.14': LINA_914, '9.22': LINA_922},
+            semantic_searcher=ss,
+        )
+        print(f'CFGFast on 9.22 ({LINA_922}) — this takes ~60-70 min...')
+        t0 = time.time()
+        target_feats = tracker._all_features(LINA_922)
+        print(f'  {len(target_feats)} functions in {time.time()-t0:.1f}s')
+    else:
+        target_feats = prologue_scan(LINA_922)
     assert len(target_feats) > 100, f'too few functions found: {len(target_feats)}'
 
     # ── 3-stage match ────────────────────────────────────────────────────────
@@ -161,6 +172,8 @@ def main(use_angr: bool = False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--angr', action='store_true',
-                        help='also validate angr floor_func (adds CFGFast time)')
+                        help='also validate angr floor_func on 9.14 (adds CFGFast time)')
+    parser.add_argument('--full', action='store_true',
+                        help='run full CFGFast on 9.22 target instead of prologue scan')
     args = parser.parse_args()
-    main(use_angr=args.angr)
+    main(use_angr=args.angr, full_cfg=args.full)
