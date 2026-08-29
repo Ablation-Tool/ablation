@@ -1772,6 +1772,7 @@ def main():
                 if f.get('evidence'):
                     for k, v in list(f['evidence'].items())[:3]:
                         print(f"  {k}: {str(v)[:100]}")
+            print('\n[hint] Cross-version struct offset corpus available — run: ablation --regress-firmware')
 
     elif getattr(args, 'type7_decode', None):
         ablation.banner()
