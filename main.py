@@ -1025,6 +1025,10 @@ def main():
     parser.add_argument('--ftd-binary', metavar='FILE', help='Analyze a single FTD binary (snort, lina, sfmbservice, etc.)')
     parser.add_argument('--ftd-fuzz', metavar='DIR', help='Generate Snort rule fuzzing corpus in DIR')
     parser.add_argument('--ftd-fuzz-count', type=int, default=500, help='Number of fuzz rules to generate (default: 500)')
+    parser.add_argument('--snort-fuzz-atheris', action='store_true',
+        help='Coverage-guided Snort rule fuzzer via Atheris/libFuzzer (pip install atheris)')
+    parser.add_argument('--snort-bin', default='snort', help='Path to snort binary (default: snort)')
+    parser.add_argument('--snort-conf', default='/etc/snort/snort.conf', help='Snort config file for atheris harness')
 
     # cisco_asa_lina_re flags
     parser.add_argument('--lina-re', action='store_true', help='Cisco ASA lina ARM64 binary RE: AAA/RADIUS/TACACS+ attack surface')
@@ -1725,6 +1729,18 @@ def main():
             files = generate_snort_fuzz_corpus(out_dir, count)
             print(f"[+] Generated {len(files)} rule files in {out_dir}")
             print(f"[+] Run: snort -c <conf> -R {out_dir}/*.rules --daq-var buffer_size_bytes=65535")
+            print(f"[hint] For coverage-guided fuzzing run: ablation --snort-fuzz-atheris (pip install atheris)")
+
+    elif getattr(args, 'snort_fuzz_atheris', False):
+        ablation.banner()
+        if not HAS_FTD_RE:
+            print("[-] cisco_ftd_re module not available")
+        else:
+            from modules.cisco_ftd_re import snort_atheris_harness
+            print(f"[*] Coverage-guided Snort fuzzer (Atheris/libFuzzer)")
+            print(f"    snort: {args.snort_bin}  conf: {args.snort_conf}")
+            print(f"    Pass libFuzzer flags after --: ablation --snort-fuzz-atheris -- -max_len=512 -jobs=4")
+            snort_atheris_harness(snort_bin=args.snort_bin, snort_conf=args.snort_conf)
 
     elif getattr(args, 'ftd_re', False) or getattr(args, 'ftd_image', None) or \
             getattr(args, 'ftd_rootfs', None) or getattr(args, 'ftd_binary', None):
