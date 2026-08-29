@@ -262,7 +262,8 @@ class FuncMatcher:
     _BLOCK_TOLERANCE = 2       # ±N basic blocks for structural pre-filter
     _EDGE_RATIO_MAX  = 0.35    # max fractional edge-count difference
     _TOP_K           = 10      # candidates to keep after Jaccard ranking
-    _SEM_TIE_THRESH  = 0.05    # Jaccard gap below which semantic kicks in
+    _SEM_TIE_THRESH  = 0.05    # Jaccard gap below which semantic is tiebreaker
+    _SEM_JACCARD_MIN = 0.15    # Jaccard below this → semantic becomes primary signal
 
     def __init__(self, semantic_searcher=None):
         self._sem = semantic_searcher
@@ -297,20 +298,33 @@ class FuncMatcher:
         return scored[:self._TOP_K]
 
     def _semantic_score(self, seed: FuncFeatures, candidate: FuncFeatures) -> float:
-        """Stage 3: semantic similarity via SemanticSearcher (optional)."""
+        """Stage 3: direct cosine similarity between seed and candidate embeddings.
+
+        Does NOT use the func_id_db corpus — encodes both functions on the fly
+        so cross-version homologs with different names are handled correctly.
+        """
         if self._sem is None:
             return 0.0
         try:
+            import numpy as np
             from modules.semantic_search import describe_function
-            desc = describe_function(
+            model = self._sem._get_model()
+            seed_desc = describe_function(
+                seed.name, 'UNKNOWN',
+                seed.callees, seed.string_xrefs,
+                asm_lines=seed.norm_lines[:30],
+            )
+            cand_desc = describe_function(
                 candidate.name, 'UNKNOWN',
                 candidate.callees, candidate.string_xrefs,
                 asm_lines=candidate.norm_lines[:30],
             )
-            results = self._sem.query(desc, top_k=1)
-            if results and results[0].name == seed.name:
-                return results[0].score
-            return 0.0
+            vecs = model.encode(
+                [seed_desc, cand_desc],
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+            return float(np.array(vecs[0]) @ np.array(vecs[1]))
         except Exception:
             return 0.0
 
@@ -333,24 +347,36 @@ class FuncMatcher:
 
         best_score, best_func = ranked[0]
 
-        # Stage 3 — tiebreak if top-2 are close
+        # Stage 3 — semantic kicks in under two conditions:
+        #   (a) tiebreak: top-2 Jaccard within _SEM_TIE_THRESH
+        #   (b) primary:  best Jaccard below _SEM_JACCARD_MIN (cross-version divergence)
         sem_score = 0.0
-        if (
-            len(ranked) >= 2
-            and ranked[0][0] - ranked[1][0] < self._SEM_TIE_THRESH
-            and self._sem is not None
+        low_jaccard = best_score < self._SEM_JACCARD_MIN
+
+        if self._sem is not None and (
+            low_jaccard or
+            (len(ranked) >= 2 and ranked[0][0] - ranked[1][0] < self._SEM_TIE_THRESH)
         ):
-            sem_a = self._semantic_score(seed, ranked[0][1])
-            sem_b = self._semantic_score(seed, ranked[1][1])
-            if sem_b > sem_a:
-                best_score, best_func = ranked[1]
-                sem_score = sem_b
+            if low_jaccard:
+                # Score all top-K candidates; pick highest semantic match
+                scored_sem = [
+                    (self._semantic_score(seed, f), jac, f)
+                    for jac, f in ranked
+                ]
+                scored_sem.sort(key=lambda x: x[0], reverse=True)
+                sem_score, best_score, best_func = scored_sem[0]
             else:
-                sem_score = sem_a
+                sem_a = self._semantic_score(seed, ranked[0][1])
+                sem_b = self._semantic_score(seed, ranked[1][1])
+                if sem_b > sem_a:
+                    best_score, best_func = ranked[1]
+                    sem_score = sem_b
+                else:
+                    sem_score = sem_a
 
         confidence = (
-            'HIGH'   if best_score >= 0.70 else
-            'MEDIUM' if best_score >= 0.45 else
+            'HIGH'   if sem_score >= 0.75 or best_score >= 0.70 else
+            'MEDIUM' if sem_score >= 0.55 or best_score >= 0.45 else
             'LOW'
         )
 
