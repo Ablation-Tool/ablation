@@ -112,8 +112,10 @@ class FuncFeatures:
                         norm_lines.append(norm)
 
             callees = [
-                (cfg.kb.functions.get(c.addr).name
-                 if cfg.kb.functions.get(c.addr) else hex(c.addr))
+                categorize_callee(
+                    cfg.kb.functions.get(c.addr).name
+                    if cfg.kb.functions.get(c.addr) else hex(c.addr)
+                )
                 for c in func.callees
             ]
             string_xrefs: list[str] = []
@@ -163,6 +165,144 @@ class FuncFeatures:
             callees=callees or [],
             string_xrefs=string_xrefs or [],
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Seed enrichment — callee resolution + string xref extraction
+# ─────────────────────────────────────────────────────────────────────────────
+
+_RIP_REL_RE = re.compile(
+    r'\[rip \+? ?(0x[0-9a-fA-F]+|-?0x[0-9a-fA-F]+|-\d+|\d+)\]',
+    re.IGNORECASE,
+)
+_MIN_STR_LEN = 4
+_MAX_STR_LEN = 120
+
+
+_CALLEE_CATEGORIES: dict[str, str] = {}
+
+def _build_callee_categories() -> dict[str, str]:
+    m: dict[str, str] = {}
+    allocators   = ['malloc', 'calloc', 'realloc', 'xmalloc', 'xcalloc', 'zmalloc',
+                    'malloc_wrapper', 'mem_alloc', 'xalloc', 'safe_malloc',
+                    'attr_alloc', 'radius_alloc', 'chunk_alloc', 'pool_alloc']
+    deallocators = ['free', 'xfree', 'zfree', 'mem_free', 'safe_free', 'vfree',
+                    'attr_free', 'radius_free', 'chunk_free']
+    str_copy     = ['strcpy', 'strncpy', 'strlcpy', 'memcpy', 'memmove',
+                    'bcopy', 'strdup', 'strndup', 'g_strdup']
+    str_compare  = ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'memcmp', 'bcmp']
+    str_length   = ['strlen', 'strnlen']
+    str_format   = ['sprintf', 'snprintf', 'vsprintf', 'vsnprintf', 'asprintf']
+    io_ops       = ['read', 'write', 'send', 'recv', 'sendto', 'recvfrom',
+                    'fread', 'fwrite', 'fgets', 'fputs']
+    crypto_ops   = ['EVP_EncryptUpdate', 'EVP_DecryptUpdate', 'SHA256', 'SHA1',
+                    'MD5', 'HMAC', 'AES_encrypt', 'AES_decrypt',
+                    'RSA_public_encrypt', 'RSA_private_decrypt']
+    log_ops      = ['syslog', 'fprintf', 'printf', 'vprintf', 'log_message',
+                    'cisco_log', 'err_log', 'debug_log']
+    for name in allocators:   m[name.lower()] = 'ALLOCATOR'
+    for name in deallocators: m[name.lower()] = 'DEALLOCATOR'
+    for name in str_copy:     m[name.lower()] = 'STRING_COPY'
+    for name in str_compare:  m[name.lower()] = 'STRING_CMP'
+    for name in str_length:   m[name.lower()] = 'STRING_LEN'
+    for name in str_format:   m[name.lower()] = 'STRING_FORMAT'
+    for name in io_ops:       m[name.lower()] = 'IO_OP'
+    for name in crypto_ops:   m[name.lower()] = 'CRYPTO_OP'
+    for name in log_ops:      m[name.lower()] = 'LOG_OP'
+    return m
+
+_CALLEE_CATEGORIES = _build_callee_categories()
+
+
+def categorize_callee(name: str) -> str:
+    """Map a callee name to a behavioral category, or return the name unchanged."""
+    return _CALLEE_CATEGORIES.get(name.lower(), name)
+
+
+def resolve_callees(
+    callee_vas: list[str],
+    db_path: str,
+    binary_sha256: str = '',
+) -> list[str]:
+    """Replace hex callee VAs with func_id_db names where known.
+
+    Falls back to the hex string for unknowns so the description degrades
+    gracefully rather than losing information.
+    """
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(Path(db_path).expanduser())
+        out = []
+        for va_str in callee_vas:
+            try:
+                va = int(va_str, 16) if va_str.startswith('0x') else int(va_str)
+            except ValueError:
+                out.append(va_str)
+                continue
+            if binary_sha256:
+                row = con.execute(
+                    'SELECT name FROM functions WHERE va=? AND binary_sha256=?',
+                    (va, binary_sha256),
+                ).fetchone()
+            else:
+                row = con.execute(
+                    'SELECT name FROM functions WHERE va=?', (va,)
+                ).fetchone()
+            out.append(row[0] if row else va_str)
+        con.close()
+        return out
+    except Exception:
+        return callee_vas
+
+
+def extract_string_xrefs(
+    binary_data: bytes,
+    asm_lines: list[str],
+    insn_vas: list[int],
+    binary_base: int = 0,
+) -> list[str]:
+    """Follow RIP-relative data references to ASCII strings in the binary.
+
+    For each instruction of the form `lea/mov reg, [rip ± disp]`, compute
+    the target VA, read up to _MAX_STR_LEN bytes from the binary, and keep
+    it if it looks like printable ASCII.  Requires per-instruction VAs
+    (parallel list to asm_lines) so the RIP offset can be resolved correctly.
+    """
+    strings: list[str] = []
+    seen: set[int] = set()
+
+    for i, (line, va) in enumerate(zip(asm_lines, insn_vas)):
+        m = _RIP_REL_RE.search(line)
+        if not m:
+            continue
+
+        # RIP points to the START of the NEXT instruction
+        next_va = insn_vas[i + 1] if i + 1 < len(insn_vas) else va + 7
+
+        raw_disp = m.group(1)
+        try:
+            disp = int(raw_disp, 16) if '0x' in raw_disp else int(raw_disp)
+        except ValueError:
+            continue
+
+        target_va = next_va + disp
+        file_off  = target_va - binary_base
+        if file_off < 0 or file_off + _MIN_STR_LEN >= len(binary_data):
+            continue
+        if file_off in seen:
+            continue
+        seen.add(file_off)
+
+        chunk = binary_data[file_off: file_off + _MAX_STR_LEN]
+        null  = chunk.find(b'\x00')
+        if null < _MIN_STR_LEN:
+            continue
+        candidate = chunk[:null]
+        if all(0x20 <= b < 0x7f for b in candidate):
+            strings.append(candidate.decode('ascii'))
+
+    return strings
 
 
 # ─────────────────────────────────────────────────────────────────────────────
