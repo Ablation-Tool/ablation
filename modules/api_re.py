@@ -352,8 +352,27 @@ INJECTION_PROBES = {
 }
 
 
+# Signals that confirm a specific probe category actually triggered its vuln class.
+# PATH_ACCESS alone means the server tried to open the value as a path — it only
+# confirms path_traversal/pickle_rce, not sql/ssti/ssrf/xxe/etc.
+CONFIRMING_SIGNALS = {
+    "path_traversal":     {"PATH_ACCESS", "FILE_READ"},
+    "pickle_rce":         {"PICKLE_DESERIALIZE"},
+    "sql_injection":      {"SQL_REFLECT"},
+    "ssti":               {"SSTI_EVAL"},
+    "ssrf":               {"SSRF_ACTIVE", "SSRF_CLOUD_METADATA"},
+    "format_string":      {"SSTI_EVAL", "FORMAT_EVAL"},
+    "xxe":                {"FILE_READ", "SSRF_ACTIVE", "SSRF_CLOUD_METADATA"},
+    "prototype_pollution": {"PROTO_POLLUTION_REFLECT"},
+}
+
+
 def probe_param(base_url, path, param, method="GET", timeout=10):
-    """Probe a single parameter with all injection payloads and classify responses."""
+    """
+    Probe a single parameter with all injection payloads.
+    Only reports a category as confirmed when a category-specific signal fires —
+    PATH_ACCESS alone does NOT confirm sql_injection / ssti / ssrf / xxe.
+    """
     results = {}
     url = base_url + path
 
@@ -382,24 +401,36 @@ def probe_param(base_url, path, param, method="GET", timeout=10):
                 body = r.text.lower()
                 if "errno" in body or "no such file" in body:
                     result["signals"].append("PATH_ACCESS")
-                if "invalid load key" in body or "unpickling" in body or "pickle" in body:
+                if "invalid load key" in body or "unpickling" in body or "pickle data" in body:
                     result["signals"].append("PICKLE_DESERIALIZE")
-                if "syntax error" in body or "1=1" in body:
+                if any(x in body for x in ("syntax error", "mysql", "ora-", "pg::", "sqlite")):
                     result["signals"].append("SQL_REFLECT")
-                if "49" in body and "{" in r.text:
+                if "49" in body and "{{" in payload:
                     result["signals"].append("SSTI_EVAL")
-                if "root:" in body or "/bin/bash" in body:
+                if "root:" in body or "/bin/bash" in body or "daemon:" in body:
                     result["signals"].append("FILE_READ")
-                if "connection refused" in body or "no route" in body:
+                if "connection refused" in body or "no route to host" in body:
                     result["signals"].append("SSRF_ACTIVE")
-                if "169.254" in body or "ami-id" in body:
+                # SSRF_CLOUD_METADATA only counts if metadata content appears WITHOUT
+                # a "no such file" error (otherwise the URL just reflected in a path error)
+                if ("169.254" in body or "ami-id" in body or "instance-id" in body) \
+                        and "no such file" not in body and "errno" not in body:
                     result["signals"].append("SSRF_CLOUD_METADATA")
-                if "admin" in body and r.status_code == 200:
+                if "admin" in body and "proto" in payload.lower() and r.status_code == 200:
                     result["signals"].append("PROTO_POLLUTION_REFLECT")
+                if "%" in payload and body != body.replace(payload, "") and "errno" not in body:
+                    result["signals"].append("FORMAT_EVAL")
 
-                if result["signals"]:
+                # Only flag a signal if it's a confirming signal for this category
+                confirming = CONFIRMING_SIGNALS.get(category, set())
+                confirmed = [s for s in result["signals"] if s in confirming]
+                if confirmed:
+                    result["confirmed_signals"] = confirmed
                     category_results.append(result)
-                    print(f"  [!] {category} on param={param!r}: {result['signals']} | {result['body'][:80]}")
+                    print(f"  [!] {category} CONFIRMED on param={param!r}: {confirmed} | {result['body'][:80]}")
+                elif result["signals"]:
+                    # Signals fired but don't confirm this category — show as context only
+                    print(f"  [~] {category} probe on param={param!r}: signals={result['signals']} (not confirming for {category})")
 
             except Exception:
                 pass
@@ -1483,11 +1514,16 @@ WEBHOOK_PARAM_NAMES = [
 def probe_webhook_ssrf(base, endpoints):
     """
     Webhook endpoint discovery + SSRF via cloud metadata probing.
-    Any URL parameter that makes the server fetch a remote URL is an
-    SSRF surface. Cloud metadata endpoints reveal IAM credentials.
+    Uses baseline comparison: if response to SSRF URL is identical to
+    response with a garbage sentinel value, the param is ignored → skip.
+    Only reports when response body differs (param is being consumed) OR
+    body contains metadata content.
     (defending-apis, api-security-for-white-hat-hackers ch6)
     """
     findings = []
+    SENTINEL = "https://definitely-not-real-sentinel-xyz-12345.example.com/"
+    METADATA_INDICATORS = ("ami-id", "instance-id", "iam/", "computeMetadata",
+                           "google.internal", "alibaba", "169.254.169.254")
 
     # Discover webhook endpoints
     webhook_candidates = []
@@ -1499,41 +1535,60 @@ def probe_webhook_ssrf(base, endpoints):
             findings.append({"type": "webhook_endpoint", "path": path,
                               "status": r.status_code})
 
-    # Check discovered endpoints + known endpoints for URL params
     all_candidates = list(set(webhook_candidates + [ep.path for ep in endpoints]))
 
     for path in all_candidates[:10]:
         url = base + path
-        # Probe all webhook URL param names
+
         for pname in WEBHOOK_PARAM_NAMES:
+            # Baseline: garbage sentinel URL — if param is ignored, all probes match this
+            baseline = get(url, params={pname: SENTINEL})
+            if not baseline:
+                continue
+            baseline_body = baseline.text.strip()
+            baseline_len = len(baseline_body)
+
             for meta_url in CLOUD_METADATA_URLS[:3]:
-                # GET probe
                 r = get(url, params={pname: meta_url})
-                if r and r.status_code not in (400, 404, 422):
-                    # Check if response contains metadata indicators
-                    body = r.text.lower()
-                    if any(x in body for x in ("ami-id", "instance-id", "iam", "metadata",
-                                                "google.internal", "alibaba")):
-                        print(f"  [WEBHOOK_SSRF_HIT] {path} {pname}={meta_url}: METADATA LEAKS!")
-                        findings.append({"type": "webhook_ssrf_metadata", "path": path,
+                if not r or r.status_code in (400, 404, 422):
+                    continue
+
+                body = r.text
+                body_lower = body.lower()
+
+                # Hard win: metadata content in response
+                if any(x in body_lower for x in METADATA_INDICATORS):
+                    print(f"  [WEBHOOK_SSRF_HIT] {path} {pname}={meta_url}: METADATA LEAKED!")
+                    findings.append({"type": "webhook_ssrf_metadata", "path": path,
+                                      "param": pname, "url": meta_url,
+                                      "body": body[:500]})
+                    continue
+
+                # Skip if response is identical to sentinel baseline (param ignored)
+                probe_body = body.strip()
+                if probe_body == baseline_body:
+                    continue
+
+                # Skip tiny/null responses that differ only trivially
+                if len(probe_body) < 10 and abs(len(probe_body) - baseline_len) < 5:
+                    continue
+
+                # Response differed — param was consumed, possible SSRF
+                print(f"  [WEBHOOK_SSRF_DIFF] {path} {pname}={meta_url}: response differs from baseline")
+                findings.append({"type": "webhook_ssrf_diff", "path": path,
+                                  "param": pname, "url": meta_url,
+                                  "baseline": baseline_body[:100],
+                                  "probe": probe_body[:100]})
+
+            # POST probe — only on discovered webhook endpoints
+            if path in webhook_candidates:
+                for meta_url in CLOUD_METADATA_URLS[:2]:
+                    r = post(url, json={pname: meta_url})
+                    if r and any(x in r.text.lower() for x in METADATA_INDICATORS):
+                        print(f"  [WEBHOOK_SSRF_POST] {path} POST {pname}={meta_url}: METADATA!")
+                        findings.append({"type": "webhook_ssrf_post", "path": path,
                                           "param": pname, "url": meta_url,
                                           "body": r.text[:500]})
-                    elif r.status_code == 200 and r.text:
-                        print(f"  [WEBHOOK_SSRF_PROBE] {path} {pname}={meta_url}: {r.status_code} {r.text[:50]}")
-
-                # POST probe
-                for ct, data in [
-                    ("json", {pname: meta_url}),
-                    ("json", {"settings": {pname: meta_url}}),
-                ]:
-                    r = post(url, json=data)
-                    if r and r.status_code not in (400, 404, 422):
-                        body = r.text.lower()
-                        if any(x in body for x in ("ami-id", "instance-id", "iam", "metadata")):
-                            print(f"  [WEBHOOK_SSRF_POST] {path} POST {pname}={meta_url}: METADATA!")
-                            findings.append({"type": "webhook_ssrf_post", "path": path,
-                                              "param": pname, "url": meta_url,
-                                              "body": r.text[:500]})
 
     return findings
 
@@ -2652,7 +2707,8 @@ def run_re(base_url, depth="normal", focus=None):
                 for method in ep.methods[:1]:
                     signals = probe_param(base, ep.path, param_name, method)
                     if signals:
-                        ep.vuln_signals.extend(signals)
+                        # Only record categories with confirmed signals, not all probe types
+                        ep.vuln_signals.extend(list(signals.keys()))
 
     # Phase 4b: Verb tampering
     print("\n[4b] Verb tampering...")
