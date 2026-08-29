@@ -8,8 +8,6 @@
 
 ---
 
-Ablation is a custom RE framework built around angr, capstone, Claude (LLM-assisted ReAct analysis), and BERT-based semantic matching. It targets Cisco IOS/ASA/FTD/ISE/CUCM, Orka, WeChat, and generic network infrastructure. Every module is a direct output of active security research — not a generic scanner wrapper.
-
 ## Architecture
 
 ```
