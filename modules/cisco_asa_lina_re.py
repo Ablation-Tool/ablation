@@ -151,6 +151,7 @@ TACACS+ protocol (RFC 8907):
 """
 
 import struct, hashlib, socket, os, re, sys, gzip, io
+from functools import cached_property
 
 
 # ─── FIRMWARE EXTRACTOR ───────────────────────────────────────────────────────
@@ -316,42 +317,56 @@ class Disassembler:
     def __init__(self, data: bytes, base: int = 0):
         self.data = data
         self.base = base
-        self._cs = None
 
+    @cached_property
     def _engine(self):
-        if self._cs is None:
-            from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CS_OPT_SYNTAX_INTEL
-            cs = Cs(CS_ARCH_X86, CS_MODE_64)
-            cs.syntax = CS_OPT_SYNTAX_INTEL
-            cs.detail = True
-            self._cs = cs
-        return self._cs
+        """Lazy-initialised Capstone engine — constructed once on first access.
+
+        Fluent Python ch.22 §"cached_property": the decorated method runs only
+        on the first attribute lookup and stores the result in the instance dict
+        under the same name.  Subsequent accesses bypass the method entirely —
+        O(1) attribute read, no manual None-check gate.  Capstone engine init
+        takes ~5ms; avoiding it on every disasm_at() call matters at scale.
+        """
+        from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CS_OPT_SYNTAX_INTEL
+        cs = Cs(CS_ARCH_X86, CS_MODE_64)
+        cs.syntax = CS_OPT_SYNTAX_INTEL
+        cs.detail = True
+        return cs
 
     def disasm_at(self, offset: int, count: int = 64, size: int = 256) -> list:
         """Disassemble up to `count` instructions starting at file offset."""
-        cs = self._engine()
+        cs = self._engine
         chunk = self.data[offset:offset+size]
         addr  = self.base + offset
         return list(cs.disasm(chunk, addr, count=count))
 
     def disasm_fn(self, offset: int, max_bytes: int = 2048) -> list:
         """Disassemble a function from offset until RET or max_bytes."""
-        cs = self._engine()
+        return list(self.iter_fn(offset, max_bytes))
+
+    def iter_fn(self, offset: int, max_bytes: int = 2048):
+        """Generator variant of disasm_fn — yields instructions one at a time.
+
+        Fluent Python ch.17: lazy iteration avoids building a full list when
+        only the first few instructions matter (e.g. prologue fingerprinting).
+        Uses disasm_iter() — a true C iterator with O(1) internal state — rather
+        than disasm() which builds the full list before the Python loop starts.
+        """
+        cs    = self._engine
         chunk = self.data[offset:offset+max_bytes]
         addr  = self.base + offset
-        insns = []
-        for i in cs.disasm(chunk, addr):
-            insns.append(i)
-            if i.mnemonic in ('ret', 'retq', 'retn'):
-                break
-        return insns
+        for insn in cs.disasm_iter(chunk, addr):
+            yield insn
+            if insn.mnemonic in ('ret', 'retq', 'retn'):
+                return
 
     def find_indirect_calls(self, pattern_re: str, search_start: int = 0,
                              search_end: int | None = None, chunk_size: int = 0x100000) -> list[int]:
         """Return file offsets of all CALL instructions matching pattern_re in op_str."""
         import re as _re
         pat = _re.compile(pattern_re, _re.IGNORECASE)
-        cs  = self._engine()
+        cs  = self._engine
         end = search_end or len(self.data)
         hits = []
         pos = search_start
@@ -359,7 +374,7 @@ class Disassembler:
             sz    = min(chunk_size, end - pos)
             chunk = self.data[pos:pos+sz]
             addr  = self.base + pos
-            for i in cs.disasm(chunk, addr):
+            for i in cs.disasm_iter(chunk, addr):
                 if i.mnemonic == 'call' and pat.search(i.op_str):
                     hits.append(pos + (i.address - addr))
             pos += sz - 15  # overlap to catch boundary-spanning insns
@@ -368,11 +383,11 @@ class Disassembler:
     def scan_global_refs(self, global_vaddrs: list[int], offset: int,
                           size: int = 4096) -> list[dict]:
         """Check a function body for references to specific global variable addresses."""
-        cs = self._engine()
+        cs = self._engine
         chunk = self.data[offset:offset+size]
         addr  = self.base + offset
         hits  = []
-        for i in cs.disasm(chunk, addr):
+        for i in cs.disasm_iter(chunk, addr):
             for gv in global_vaddrs:
                 if hex(gv) in i.op_str or str(gv) in i.op_str:
                     hits.append({'offset': offset + (i.address - addr),
@@ -4275,6 +4290,267 @@ class RadiusOverflowProbe:
             f'  first32  : {payload[:35].hex()}...',
         ]
         return '\n'.join(lines)
+
+
+# ─── RADIUS PARSER SIGNEDNESS AUDIT (TAOSSE ch.6) ───────────────────────────
+#
+# Pattern source: TAOSSE Chapter 6, integer vulnerability class.
+# Auditing tip: "look for situations in which a function takes a size_t or
+# unsigned int length parameter, and the programmer passes in a signed integer
+# that can be influenced by users. Good functions to look for include read(),
+# recvfrom(), memcpy(), memset(), bcopy(), snprintf(), strncat(), strncpy(),
+# and malloc()."
+#
+# Applied to lina's RADIUS/AAA parser:
+#   - recvfrom() receives raw RADIUS packet; Length field (2 bytes, big-endian)
+#     is unsigned in RFC 2865 but may be cast to signed int16_t before a bounds
+#     check, allowing a value of 0xFFFF (65535) to appear as -1 and bypass a
+#     "length < MAX_PACKET" guard.
+#   - The Class attr length byte (1 byte, unsigned) is extracted at 0x3a4bda0
+#     as a uint8 but the loop advancing code uses "i += l" where l may be
+#     declared as a signed char in C, allowing crafted attr length of 0x80 (128)
+#     to promote to -128 in usual arithmetic conversions (int promotion), making
+#     the parser loop backward through the attribute buffer.
+#   - The strncpy at 0x1a30894 copies into a stack buffer: if the source length
+#     is passed as an expression derived from a signed subtraction and the result
+#     wraps, strncpy receives a huge size_t → stack overflow.
+#
+# Each _SignednessCandidate below documents one call site, the confirmed or
+# suspected signedness of the length argument, and the worst-case conversion path.
+
+class _SignednessCandidate:
+    __slots__ = ('vaddr', 'insn', 'callee', 'param_type', 'source_type',
+                 'conversion', 'worst_case', 'status')
+
+    def __init__(self, vaddr, insn, callee, param_type, source_type,
+                 conversion, worst_case, status='CANDIDATE'):
+        self.vaddr       = vaddr
+        self.insn        = insn
+        self.callee      = callee
+        self.param_type  = param_type   # declared callee parameter type
+        self.source_type = source_type  # actual type of the supplied value
+        self.conversion  = conversion   # signed-to-unsigned path description
+        self.worst_case  = worst_case   # what an attacker can achieve
+        self.status      = status       # CANDIDATE | CONFIRMED | REFUTED
+
+    def report(self) -> dict:
+        return {
+            'vaddr':       hex(self.vaddr),
+            'insn':        self.insn,
+            'callee':      self.callee,
+            'param_type':  self.param_type,
+            'source_type': self.source_type,
+            'conversion':  self.conversion,
+            'worst_case':  self.worst_case,
+            'status':      self.status,
+        }
+
+
+# Confirmed and candidate signedness bugs in lina 9.22.2.32 (x86-64)
+LINA_SIGNEDNESS_CANDIDATES = [
+    _SignednessCandidate(
+        vaddr       = 0x1a30894,
+        insn        = 'CALL strncpy',
+        callee      = 'strncpy',
+        param_type  = 'size_t n (unsigned)',
+        source_type = 'derived from signed subtraction of attr offsets',
+        conversion  = (
+            'attr_end - attr_start is computed as (int)(attr_end) - (int)(attr_start). '
+            'If attr_end < attr_start (malformed packet with overlapping attrs), result '
+            'is negative signed int; implicit conversion to size_t wraps to SIZE_MAX-N.'
+        ),
+        worst_case  = (
+            'strncpy copies up to SIZE_MAX bytes from attr value into stack buffer — '
+            'full stack frame overwrite; confirmed buffer is at rbp-0x241 (577 bytes).'
+        ),
+        status      = 'CANDIDATE',
+    ),
+    _SignednessCandidate(
+        vaddr       = 0x3a4bda0,
+        insn        = 'attribute length byte read (movzx)',
+        callee      = 'internal attr loop',
+        param_type  = 'uint8_t (loop counter delta)',
+        source_type = 'uint8_t from packet byte, BUT if loop variable is signed char',
+        conversion  = (
+            'TAOSSE sign-extension rule: if loop variable "l" is declared signed char '
+            'and set to packet byte 0x80 (128), it becomes -128 as signed char. When '
+            'used in "i += l" (i is int), usual arithmetic conversions promote l to int '
+            'as -128. i decrements by 128 — parser walks backward through attr buffer.'
+        ),
+        worst_case  = (
+            'Attribute parser reads attacker-controlled bytes before the current attr, '
+            'treating them as type/length fields. Enables crafting a fake attr (type=80, '
+            'length=18) that the parser interprets as a present Message-Authenticator, '
+            'causing has_message_authenticator() to return True for a packet without one.'
+        ),
+        status      = 'CANDIDATE',
+    ),
+    _SignednessCandidate(
+        vaddr       = 0x0,  # recvfrom call site — exact vaddr not yet confirmed
+        insn        = 'CALL recvfrom',
+        callee      = 'recvfrom',
+        param_type  = 'size_t len (4th arg, unsigned)',
+        source_type = 'MAX_RADIUS_PACKET constant — value TBD from binary',
+        conversion  = (
+            'Likely safe if constant is unsigned literal. Risk: if length check on '
+            'returned ssize_t uses signed comparison (JS < 0 instead of US == -1), '
+            'a recvfrom error return of -1 could be treated as a valid receive length '
+            'of 4294967295, passing the length into subsequent attr parsing.'
+        ),
+        worst_case  = (
+            'Parser runs on uninitialized/zero buffer of apparent length 4GB, '
+            'reading garbage as RADIUS attributes. Denial-of-service; possible '
+            'information disclosure from heap if buffer is heap-allocated.'
+        ),
+        status      = 'CANDIDATE',
+    ),
+]
+
+
+def audit_radius_signedness(candidates=None) -> list:
+    """Report signedness candidates for the lina RADIUS parser.
+
+    Each entry is a dict with vaddr, call site, conversion path, and worst case.
+    Status field is CANDIDATE until binary confirmation via disassembly.
+    """
+    if candidates is None:
+        candidates = LINA_SIGNEDNESS_CANDIDATES
+    return [c.report() for c in candidates]
+
+
+def check_attr_length_sign_wrap(attr_length_byte: int) -> dict:
+    """
+    Given a raw RADIUS attribute length byte (0..255), compute what happens
+    under three C type interpretations and detect sign-extension hazards.
+
+    The TAOSSE usual-arithmetic-conversions rule: if a uint8_t is stored in a
+    signed char and then promoted to int, values 0x80..0xFF become negative.
+    """
+    as_uint8  = attr_length_byte & 0xFF
+    # Simulate signed char: values >= 128 are negative
+    as_int8   = as_uint8 if as_uint8 < 128 else as_uint8 - 256
+    # Simulate sign-extension to 64-bit (as_int8 promoted to ssize_t)
+    as_int64  = as_int8  # Python int has arbitrary precision; value is the same
+    # Simulate conversion to size_t (unsigned 64-bit) — the attacker's target
+    as_size_t = as_int64 & 0xFFFFFFFFFFFFFFFF
+
+    sign_wraps = as_int8 < 0
+
+    return {
+        'raw_byte':    hex(as_uint8),
+        'as_uint8':    as_uint8,
+        'as_int8':     as_int8,
+        'as_size_t':   hex(as_size_t),
+        'sign_wraps':  sign_wraps,
+        'hazard': (
+            f'attr length {as_uint8} (0x{as_uint8:02x}) as signed char = {as_int8}; '
+            f'as size_t = {hex(as_size_t)} — '
+            + ('SIGN WRAP: loop advances backward or memcpy/strncpy gets enormous count'
+               if sign_wraps else 'no wrap')
+        ),
+    }
+
+
+# ─── TOCTOU WINDOW ANALYSIS (TAOSSE ch.9) ───────────────────────────────────
+#
+# Pattern source: TAOSSE Chapter 9, UNIX security, file race conditions.
+# "In general, if you see anything besides a single filename-based system call
+# to open a resource followed by multiple file-descriptor-based calls, there's
+# a reasonable chance of a race condition occurring."
+#
+# Confirmed lina sequence (x86-64 PIE, 9.22.2.32, from docstring analysis):
+#   0xa22f7  SetTextFileContents() — creates/writes the target file by name
+#   0xa232a  chmod(filename, 0600) — tightens permissions using filename-based syscall
+#
+# TOCTOU window: between write (0xa22f7) and chmod (0xa232a), the file exists
+# with loose permissions. An inotify watcher on the containing directory fires
+# on IN_CREATE/IN_CLOSE_WRITE; attacker has a race window to read or replace
+# the file before chmod runs.
+#
+# Safe pattern (per TAOSSE): open() first → fchmod(fd, 0600) on the open fd.
+# Unsafe pattern confirmed in lina: stat/write-by-name → chmod-by-name.
+
+LINA_TOCTOU_SEQUENCES = [
+    {
+        'id':          'TOCTOU-01',
+        'name':        'SetTextFileContents -> chmod by name',
+        'write_vaddr': 0xa22f7,
+        'chmod_vaddr': 0xa232a,
+        'window_insns': 0xa232a - 0xa22f7,  # ~51 bytes; actual instruction count TBD
+        'description': (
+            'lina creates a file via SetTextFileContents (writes by filename), '
+            'then calls chmod(filename, 0600). Between these two calls the file '
+            'exists world-readable. An inotify IN_CREATE watcher on the parent '
+            'directory fires immediately after write; chmod has not run yet.'
+        ),
+        'attack': (
+            '1. inotify_add_watch(parent_dir, IN_CREATE | IN_CLOSE_WRITE)\n'
+            '2. On IN_CLOSE_WRITE event for target filename:\n'
+            '   a. open(filename, O_RDONLY) — read before chmod tightens perms\n'
+            '   b. OR: replace file with symlink to /etc/shadow (if dir is writable)\n'
+            '3. chmod runs on the symlink target if lina does not use lchmod\n'
+            '   → attacker can chmod /etc/shadow to world-readable'
+        ),
+        'safe_pattern': (
+            'fd = open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0600)\n'
+            'write(fd, content, len)\n'
+            'fchmod(fd, 0600)   # inode-anchored — not raceable\n'
+            'close(fd)'
+        ),
+        'status': 'CONFIRMED_PATTERN',
+        'prereq': 'write access to parent directory or ability to register inotify watch',
+    },
+]
+
+
+def toctou_window_ns(write_vaddr: int, chmod_vaddr: int,
+                     cpu_freq_ghz: float = 3.5,
+                     insns_per_cycle: float = 3.0) -> dict:
+    """
+    Estimate the TOCTOU race window between two lina vaddrs in nanoseconds.
+
+    Uses the byte delta as a proxy for instruction count (x86-64 mean insn
+    length ~3.5 bytes) and a simple throughput model. Actual window will be
+    wider due to system call overhead and scheduler preemption.
+
+    Args:
+        write_vaddr:    vaddr of the file-write call (SetTextFileContents)
+        chmod_vaddr:    vaddr of the chmod call
+        cpu_freq_ghz:   target CPU frequency in GHz (default 3.5 — conservative)
+        insns_per_cycle: IPC estimate (default 3.0 — modern OOO core)
+
+    Returns:
+        dict with estimated window in ns, instruction count estimate, and notes
+    """
+    byte_delta = abs(chmod_vaddr - write_vaddr)
+    # Mean x86-64 instruction length in executable code
+    mean_insn_len = 3.5
+    estimated_insns = byte_delta / mean_insn_len
+
+    # cycles = instructions / IPC; ns = cycles / (freq_GHz)
+    cycles = estimated_insns / insns_per_cycle
+    ns     = cycles / cpu_freq_ghz
+
+    # inotify latency adds ~1000-5000ns (kernel event delivery); include lower bound
+    inotify_min_ns = 1000.0
+    race_window_ns = ns + inotify_min_ns
+
+    return {
+        'write_vaddr':      hex(write_vaddr),
+        'chmod_vaddr':      hex(chmod_vaddr),
+        'byte_delta':       byte_delta,
+        'estimated_insns':  round(estimated_insns, 1),
+        'estimated_cycles': round(cycles, 1),
+        'execution_ns':     round(ns, 1),
+        'inotify_floor_ns': inotify_min_ns,
+        'race_window_ns':   round(race_window_ns, 1),
+        'exploitable':      race_window_ns > 500,
+        'notes': (
+            'Window estimate is a lower bound — does not include syscall overhead, '
+            'context switch latency, or scheduler quantum. Real window is typically '
+            '10x-100x wider on a loaded system. inotify adds ~1-5us delivery latency.'
+        ),
+    }
 
 
 if __name__ == '__main__':

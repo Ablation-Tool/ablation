@@ -915,6 +915,32 @@ def run_regression(path: str, y_col: str, x_cols=None,
 #   state.add_constraints(gp_obj_ptr != 0)
 #   state.add_constraints(gp_obj_ptr % 8 == 0)  # struct must be 8B-aligned
 #
+# Step 7 — SSCP pre-pass: constant-propagate VEX IR temporaries before solve():
+#
+#   Engineering a Compiler §9.3.6: Sparse Simple Constant Propagation (SSCP)
+#   initialises every SSA name to ⊤ (unknown), then propagates constants
+#   downward through the def-use chain. Names that stay ⊤ after fixed-point
+#   iteration are either unreachable or unconstrained.
+#
+#   Mapping to pyvex: VEX temporaries are already SSA. Walk IRSB.statements
+#   in order; for each WrTmp(tN, Const(v)) record tN=v. For WrTmp(tN, expr)
+#   where all RdTmp operands are already constant, evaluate the expression
+#   symbolically at elaboration time — this collapses constant chains before
+#   angr's solver sees them, shrinking the SMT problem.
+#
+#   Example — gp_obj_ptr offset extraction:
+#
+#       from macos_decompiler import VEXLifter, _collect_rdtmp
+#       lifter = VEXLifter(binary, 'x86_64')
+#       chains = lifter.vex_ssa_chains(init_bbl)
+#       # Find tmps with Const definitions (⊤ → constant after one step):
+#       for tmp_idx, info in chains.items():
+#           if info['expr_tag'] == 'Const':
+#               print(f"t{tmp_idx} is constant (def_stmt={info['def_stmt']})")
+#       # Substitute known-constant tmps into s.solver.simplify() arguments
+#       # before calling memory.load() — reduces the symbolic expression size
+#       # and avoids solver timeouts on long constant chains.
+#
 # Workflow:
 #   1. r2 -c "pdb @ 0x1184232" lina_9.14.2.14 > init_9.14.asm  (find end_addr)
 #   2. Run angr script above — extract AST for gp_name, dns_ptr, wins_ptr fields
