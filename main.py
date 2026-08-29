@@ -28,6 +28,10 @@ Usage:
     ./ablation --wechat-frida      - Generate Frida hooks for MMTLS key extraction
     ./ablation --mcp-fuzz          - Grammar-guided MCP tool schema fuzzer (prompt injection discovery)
     ./ablation --mcp-fuzz-dry-run  - Print one sample MCP manifest (no Atheris required)
+    ./ablation --func-db-seed      - Seed function ID DB from all confirmed RE sources
+    ./ablation --func-db-query NAME - Query function ID DB by name/role/offset
+    ./ablation --func-db-summary   - Print function ID DB row counts
+    ./ablation --func-db PATH      - Path to function ID DB (default ~/.ablation/func_id.db)
 """
 
 import sys
@@ -1035,6 +1039,14 @@ def main():
         help='Grammar-guided MCP tool schema fuzzer via Atheris — targets prompt injection in .mcp.json tool descriptions (pip install atheris)')
     parser.add_argument('--mcp-fuzz-dry-run', action='store_true',
         help='Print one sample MCP manifest (no fuzzing) — verify grammar output without Atheris')
+    parser.add_argument('--func-db', default='~/.ablation/func_id.db',
+        help='Path to function identity DB (default ~/.ablation/func_id.db)')
+    parser.add_argument('--func-db-seed', action='store_true',
+        help='Seed function ID DB from all confirmed RE sources (lina, AnyConnect, ISE)')
+    parser.add_argument('--func-db-query', metavar='NAME',
+        help='Query function ID DB by name (use ROLE:xxx for role lookup)')
+    parser.add_argument('--func-db-summary', action='store_true',
+        help='Print function ID DB row counts')
 
     # cisco_asa_lina_re flags
     parser.add_argument('--lina-re', action='store_true', help='Cisco ASA lina ARM64 binary RE: AAA/RADIUS/TACACS+ attack surface')
@@ -1763,6 +1775,39 @@ def main():
                 print("    Target: .mcp.json tool description prompt injection")
                 print("    Pass libFuzzer flags after --: ablation --mcp-fuzz -- -runs=50000 -max_len=4096")
                 mcp_fuzz_run()
+
+    elif getattr(args, 'func_db_seed', False) or getattr(args, 'func_db_summary', False) \
+            or getattr(args, 'func_db_query', None):
+        ablation.banner()
+        try:
+            from modules.func_id_db import FuncDB
+        except ImportError as e:
+            print(f"[-] func_id_db module not available: {e}")
+        else:
+            db_path = getattr(args, 'func_db', '~/.ablation/func_id.db')
+            with FuncDB.open(db_path) as db:
+                if getattr(args, 'func_db_seed', False):
+                    print(f"[*] Seeding function ID DB: {db_path}")
+                    counts = db.seed_all()
+                    for src, n in counts.items():
+                        print(f"  {src}: {n} records added")
+                    s = db.summary()
+                    print(f"[+] DB totals: {s}")
+                if getattr(args, 'func_db_summary', False):
+                    s = db.summary()
+                    for k, v in s.items():
+                        print(f"  {k}: {v}")
+                query = getattr(args, 'func_db_query', None)
+                if query:
+                    import json as _json
+                    if query.startswith('ROLE:'):
+                        results = db.match_by_role(query[5:])
+                    elif query.startswith('STRUCT:'):
+                        parts = query[7:].split(':')
+                        results = db.match_by_struct_offset(parts[0], int(parts[1], 0))
+                    else:
+                        results = db.match_by_name(query)
+                    print(_json.dumps(results, indent=2))
 
     elif getattr(args, 'ftd_re', False) or getattr(args, 'ftd_image', None) or \
             getattr(args, 'ftd_rootfs', None) or getattr(args, 'ftd_binary', None):
