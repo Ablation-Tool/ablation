@@ -26,6 +26,8 @@ Usage:
     ./ablation --wechat-libs DIR   - Enumerate arm64-v8a native lib attack surface
     ./ablation --wechat-db-key IMEI UIN - Compute EnMicroMsg.db decryption key
     ./ablation --wechat-frida      - Generate Frida hooks for MMTLS key extraction
+    ./ablation --mcp-fuzz          - Grammar-guided MCP tool schema fuzzer (prompt injection discovery)
+    ./ablation --mcp-fuzz-dry-run  - Print one sample MCP manifest (no Atheris required)
 """
 
 import sys
@@ -1029,6 +1031,10 @@ def main():
         help='Coverage-guided Snort rule fuzzer via Atheris/libFuzzer (pip install atheris)')
     parser.add_argument('--snort-bin', default='snort', help='Path to snort binary (default: snort)')
     parser.add_argument('--snort-conf', default='/etc/snort/snort.conf', help='Snort config file for atheris harness')
+    parser.add_argument('--mcp-fuzz', action='store_true',
+        help='Grammar-guided MCP tool schema fuzzer via Atheris — targets prompt injection in .mcp.json tool descriptions (pip install atheris)')
+    parser.add_argument('--mcp-fuzz-dry-run', action='store_true',
+        help='Print one sample MCP manifest (no fuzzing) — verify grammar output without Atheris')
 
     # cisco_asa_lina_re flags
     parser.add_argument('--lina-re', action='store_true', help='Cisco ASA lina ARM64 binary RE: AAA/RADIUS/TACACS+ attack surface')
@@ -1741,6 +1747,22 @@ def main():
             print(f"    snort: {args.snort_bin}  conf: {args.snort_conf}")
             print(f"    Pass libFuzzer flags after --: ablation --snort-fuzz-atheris -- -max_len=512 -jobs=4")
             snort_atheris_harness(snort_bin=args.snort_bin, snort_conf=args.snort_conf)
+
+    elif getattr(args, 'mcp_fuzz', False) or getattr(args, 'mcp_fuzz_dry_run', False):
+        ablation.banner()
+        try:
+            from modules.mcp_grammar_fuzzer import run as mcp_fuzz_run
+        except ImportError as e:
+            print(f"[-] mcp_grammar_fuzzer module not available: {e}")
+        else:
+            if getattr(args, 'mcp_fuzz_dry_run', False):
+                print("[*] MCP grammar fuzzer — dry run (sample manifest, no Atheris)")
+                mcp_fuzz_run(['ablation', '--dry-run'])
+            else:
+                print("[*] MCP grammar fuzzer (Atheris/libFuzzer)")
+                print("    Target: .mcp.json tool description prompt injection")
+                print("    Pass libFuzzer flags after --: ablation --mcp-fuzz -- -runs=50000 -max_len=4096")
+                mcp_fuzz_run()
 
     elif getattr(args, 'ftd_re', False) or getattr(args, 'ftd_image', None) or \
             getattr(args, 'ftd_rootfs', None) or getattr(args, 'ftd_binary', None):
