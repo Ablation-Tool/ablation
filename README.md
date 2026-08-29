@@ -22,7 +22,7 @@
 | Cisco FTD / FDM | 43 modules: JWT forgery, Neo4j key, TAR slip RCE, ZMQ NULL auth, hardcoded AES key |
 | Cisco ISE | RADIUS OU injection, LDAP chain, credential audit — 46 findings (CRIT:11) |
 | Cisco CUCM | Static AES key, OAuth JWT forgery, ITL signing key, HAProxy 666 — 482 findings |
-| Cisco FMC | 41 findings: PAM code injection (root at login), backup/health module/report RCE chain, PERL5LIB root escalation, hardcoded DB creds |
+| Cisco FMC | 44 findings: PAM code injection (root at login), backup/health module/report RCE chain, PERL5LIB root escalation, hardcoded DB creds, Vault root token plaintext on disk |
 | Cisco AnyConnect | NetworkExtension IKEv2 RE, acsockext TOCTOU |
 | Cisco IOS / IOS-XE | Firmware RE, crashdump analysis, hardcoded credential scan |
 | Cisco NX-OS / ACI | APIC REST, guestshell rootfs, Nexus Dashboard, Kafka/TF cred exfil |
@@ -81,7 +81,7 @@ python3 modules/go_garble_re.py /path/to/binary
 | `ftd_*` (43 modules) | Cisco FTD/FDM | JWT forgery chain, Neo4j key, TAR slip, cli_shadow root, static AES key, zip-slip, ZMQ NULL — see [docs/cisco.md](docs/cisco.md) |
 | `cisco_ise_re` | Cisco ISE | 46 findings: RADIUS overflow, hardcoded creds, LDAP chain, unauth REST |
 | `cisco_cucm_re` | Cisco CUCM | 482 findings: static AES, JWT forge, ITL key, HAProxy 666, TAPS RCE |
-| `cisco_fmc_re` | Cisco FMC | 41 findings: PAM $PAM_USER Perl injection (root), backup name shell injection, health module XML injection, report name injection, PERL5LIB root escalation via SETENV sudoers, hardcoded DB/SMTP/RabbitMQ creds |
+| `cisco_fmc_re` | Cisco FMC | 44 findings: PAM $PAM_USER Perl injection (root), backup name shell injection, health module XML injection, report name injection, PERL5LIB root escalation via SETENV sudoers, hardcoded DB/SMTP/RabbitMQ creds, Vault root token plaintext + hardcoded JKS password |
 | `cisco_re_engine` | Cisco | FLOSS, capa, r2, BinDiff, Frida, ropper, keystone, Scapy |
 | `nxos_enum` | Cisco NX-OS | APIC unauth surface, MIT queries, vCenter lateral |
 | `nexus_dashboard_enum` | Cisco NX-OS | SSO pivot, Kafka export, Terraform/ServiceNow creds |

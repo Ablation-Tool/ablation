@@ -284,6 +284,41 @@ FMC-F46: user_management.sh PAM $PAM_USER -> Perl Code Injection (Root) [HIGH]
   Username admin');system('id');# -> Perl executes system('id') as root during login.
   Condition: FMC configured with external auth + attacker creates LDAP user with crafted username.
   CWE-78.
+
+FMC-F47: Vault Root Token + Unseal Key Stored Plaintext on Disk [HIGH]
+  Files: sf/bin/vault_app.sh (runtime writes /etc/vault/token, /etc/vault/shamir)
+  vault_app.sh writes root token to /etc/vault/token (chmod 600) and unseal key to
+  /etc/vault/shamir (chmod 600) during every startup. Vault stores: ISE credentials,
+  LDAP credentials, RADKit superadmin+keys, OAuth service creds, SecureX config,
+  email creds, external storage creds, internal DB user passwords (internaladmin,
+  internaldauser, internalextdbuser, internalmaintuser, etc.).
+  Root from any RCE chain (Vuln-54/58/51/55) -> cat /etc/vault/token ->
+  complete credential exfil of all third-party integration secrets.
+  CWE-312 (Cleartext Storage of Sensitive Information).
+
+FMC-F48: VaultRestClient Hardcoded JKS Password + Disabled TLS Verification [MEDIUM]
+  File: sf/htdocs/vault-client/vault-java-client-2.0.0-SNAPSHOT.jar
+        opt/lamplighter/lib/jar/vault-java-client-2.0.0-SNAPSHOT.jar
+        opt/CSCOpx/MDC/tomcat/shared/lib/vault-java-client-2.0.0-SNAPSHOT.jar
+  VaultRestClient.java line 79: KEY_STORE_PASSWORD = "KFY))7sd=[-ABR/]" hardcoded
+  across all FMC deployments (CWE-798). Used to protect the in-memory JKS holding
+  the mTLS private key for Vault certificate auth. Non-rotatable.
+  createAcceptSelfSignedCertificateClient(): NoopHostnameVerifier() disables hostname
+  check (CWE-297); TrustSelfSignedStrategy accepts any self-signed cert.
+  vault_app.sh also exports VAULT_SKIP_VERIFY=true globally.
+  Combined: local SSRF/redirect -> MITM Vault channel -> steal Vault tokens.
+
+FMC-F49: vaultSync.conf World-Readable — Vault Secret Path Enumeration [MEDIUM]
+  File: /etc/sf/vault/sync/vaultSync.conf (-rwxr-xr-x root:root)
+  Readable by all system processes. Exposes complete catalog of Vault credential paths:
+  userCredentials/securexconfig, oauth/service, externalStorage, emailCredentials,
+  internaladmin, internalaauser, internaldauser, internalextdbuser, internalintdmin,
+  internalmaintuser, internalnauser, internalsanrouser, internalsanuser, internalsapuser,
+  internaltiduser, identity/pandaAgentConfiguration/*, ise, ldapCredentials/*,
+  radkit/superadmin, radkit/keys/*, proxyCredentials, remoteStorage/*.
+  Any low-privilege local process enumerates all stored secrets before targeting
+  the highest-value paths (ISE credentials, RADKit superadmin).
+  CWE-538 (Exposure of Information Through Listing of Directory Contents).
 """
 
 import base64
@@ -294,7 +329,7 @@ import json
 import re
 from typing import Optional
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 TARGET = "Cisco FMC 10.0.1-1"
 
 
@@ -1604,6 +1639,76 @@ def full_findings_summary() -> list[dict]:
                 "firstTimeLogin, privNotChanged function flags); "
                 "condition: FMC configured with LDAP/RADIUS external auth + attacker can create LDAP user "
                 "with crafted username containing single quote"
+            ),
+        },
+        {
+            "id": "FMC-F47",
+            "severity": "HIGH",
+            "component": "vault_app.sh / HashiCorp Vault / Credential Store",
+            "title": "Vault root token and unseal key written plaintext to /etc/vault/{token,shamir}",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "sf/bin/vault_app.sh",
+            ],
+            "details": (
+                "vault_app.sh writes Vault root token to /etc/vault/token (chmod 600) and "
+                "unseal key to /etc/vault/shamir (chmod 600) during every startup. "
+                "Vault secret catalog includes: ISE credentials, LDAP credentials, "
+                "RADKit superadmin + keys, OAuth service creds, SecureX config, "
+                "email creds, external/remote storage creds, proxy creds, "
+                "and all internal DB user passwords (internaladmin, internaldauser, "
+                "internalextdbuser, internalmaintuser, internalnauser, internalsanrouser, "
+                "internalsanuser, internalsapuser, internaltiduser). "
+                "Root from any RCE chain (FMC-F42 PERL5LIB, FMC-F46 PAM, FMC-F43 package delete) "
+                "-> cat /etc/vault/token -> vault kv get all paths -> complete credential exfil "
+                "of all third-party integration secrets. CWE-312."
+            ),
+        },
+        {
+            "id": "FMC-F48",
+            "severity": "MEDIUM",
+            "component": "vault-java-client / VaultRestClient",
+            "title": "Hardcoded JKS keystore password + NoopHostnameVerifier + TrustSelfSignedStrategy",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "sf/htdocs/vault-client/vault-java-client-2.0.0-SNAPSHOT.jar",
+                "opt/lamplighter/lib/jar/vault-java-client-2.0.0-SNAPSHOT.jar",
+                "opt/CSCOpx/MDC/tomcat/shared/lib/vault-java-client-2.0.0-SNAPSHOT.jar",
+            ],
+            "details": (
+                "VaultRestClient.java line 79: KEY_STORE_PASSWORD = \"KFY))7sd=[-ABR/]\" hardcoded "
+                "across all FMC deployments (CWE-798); used to protect in-memory JKS holding "
+                "the mTLS private key for Vault certificate auth; non-rotatable without recompile. "
+                "createAcceptSelfSignedCertificateClient() uses NoopHostnameVerifier() (CWE-297) "
+                "and TrustSelfSignedStrategy (any self-signed cert accepted). "
+                "vault_app.sh also exports VAULT_SKIP_VERIFY=true globally for all vault CLI calls. "
+                "JAR deployed in 3 locations including Tomcat shared lib; "
+                "local SSRF -> redirect Vault requests -> MITM intercepts mTLS exchange."
+            ),
+        },
+        {
+            "id": "FMC-F49",
+            "severity": "MEDIUM",
+            "component": "vaultSync.conf / Vault Configuration",
+            "title": "vaultSync.conf world-readable — full Vault secret path enumeration",
+            "cve": None,
+            "version": "10.0.1-1",
+            "files": [
+                "etc/sf/vault/sync/vaultSync.conf",
+                "etc/sf/vault/backup/vault_backup_restore.conf",
+            ],
+            "details": (
+                "vaultSync.conf: -rwxr-xr-x root:root (world-readable). "
+                "Exposes complete Vault secret path catalog: "
+                "userCredentials/securexconfig, oauth/service, externalStorage, emailCredentials, "
+                "internaladmin, internalaauser, internaldauser, internalextdbuser, internalintdmin, "
+                "internalmaintuser, internalnauser, internalsanrouser, internalsanuser, internalsapuser, "
+                "internaltiduser, identity/pandaAgentConfiguration/*, ise, ldapCredentials/*, "
+                "radkit/superadmin, radkit/keys/*, proxyCredentials, remoteStorage/*. "
+                "Any low-privilege local process (www, nobody) enumerates all stored secrets "
+                "before targeting highest-value paths (ISE, RADKit superadmin). CWE-538."
             ),
         },
     ]
