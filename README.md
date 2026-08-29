@@ -1,40 +1,101 @@
-
 <p align="center">
   <img src="assets/sauce.jpg" width="480" alt="ablation">
 </p>
 
 <p align="center">
-  Reverse engineering tool.
+  Purpose-built binary reverse engineering framework.
 </p>
 
 ---
 
-## Platforms
+Ablation is a custom RE framework built around angr, capstone, Claude (LLM-assisted ReAct analysis), and BERT-based semantic matching. It targets Cisco IOS/ASA/FTD/ISE/CUCM, Orka, WeChat, and generic network infrastructure. Every module is a direct output of active security research — not a generic scanner wrapper.
+
+## Architecture
+
+```
+modules/
+├── func_id_db.py        SQLite function identity store (WAL, FK-indexed, schema v2)
+├── llm_analyst/         Claude ReAct loop — active RE participant
+│   ├── agent_loop.py    tool-calling loop, budget governor, loop detection
+│   ├── tool_registry.py get_disassembly / get_cfg / get_xrefs / get_strings / query_func_db
+│   ├── context_builder.py hierarchical prompt: prior findings → callees → strings → CFG → asm
+│   ├── rag_retriever.py  SQL-backed prior-findings recall (VA match → callee overlap → role)
+│   └── tasks/           function_namer / vuln_hypothesis / struct_reconstructor
+├── semantic_search.py   BERT function similarity (MiniLM-L6-v2, 384-dim)
+├── version_delta.py     cross-version homolog matching + patch localization
+└── bare_adapter.py      ablation findings → BARE binary → ranked Metasploit modules
+```
+
+### llm_analyst
+
+Claude runs as an active RE participant via a tool-calling ReAct loop. Given an unknown function VA, it issues disassembly, CFG, xref, and string queries against the binary, then calls `query_func_db` to pull prior findings, and terminates with a structured `done()` result: function name, role, confidence, vuln notes.
+
+- 7 tools: `get_disassembly`, `get_cfg`, `get_xrefs`, `get_strings`, `get_imports`, `query_func_db`, `done`
+- Role taxonomy: `RADIUS_ATTR_HANDLER`, `RADIUS_DISPATCH`, `CRYPTO_HPKE`, `CRYPTO_STRAP`, `SAML_HANDLER`, `CSTP_HANDLER`, `DTLS_HANDLER`, and 12 others
+- Budget governor: hard stop at `max_tool_calls` (default 10), partial result on budget exhaust
+- Results with `confidence ≥ 0.5` persist to `func_id_db` as `ANGR_INFERRED`
+
+### semantic_search
+
+BERT-based function similarity seeded from `func_id_db` CONFIRMED/ANGR_INFERRED functions.
+
+- Opcode categorization follows BinFuse (TrustCom 2025): 11 semantic categories (`DATA_TRANSFER_OP`, `ARITHMETIC_OP`, `COMPARISON_OP`, ...) — cross-architecture invariant, x86 `mov` and ARM64 `ldr` collapse to `DATA_TRANSFER_OP`
+- Markov transition text: top-5 adjacent-category transitions (`COMPARISON_OP->CONDITIONAL_OP(2)`) encode behavioral structure invariant to optimization level
+- Corpus cached as numpy array keyed on db hash; repeated queries cost one dot-product (~1ms)
+
+### version_delta
+
+Tracks a seed function across binary versions via a three-stage pipeline.
+
+```
+Stage 1  Structural pre-filter     basic block count ±2, edge ratio ±35%
+Stage 2  Mnemonic 4-gram Jaccard   build-invariant sequence similarity, top-10 candidates
+Stage 3  Semantic tiebreaker       SemanticSearcher when top-2 within 0.05 Jaccard
+```
+
+Patch localization via `difflib.SequenceMatcher` on normalized instruction lines surfaces the exact changed instructions. Primary use case: track the RADIUS Class attribute overflow patch (CVE-2022-0778) across 17 lina versions.
+
+### func_id_db
+
+SQLite store for function identity across binary versions. Schema v2 (WAL, FK-indexed, 1NF).
+
+- Tables: `binaries`, `functions`, `struct_fields`, `call_chains`, `call_chain_steps`
+- Seeded: 23 CONFIRMED lina functions (RADIUS/AAA, HPKE, STRAP, SAML), 7 AnyConnect functions, 52 lina offsets, 1 call chain (6 steps)
+- Matching: byte-pattern signature, callee-set overlap, struct field offset, string xrefs
+
+### bare_adapter
+
+Converts `llm_analyst.AnalysisResult` vuln findings to BARE `findings.json` and ranks against 3,904 Metasploit modules via the BARE binary (offline, air-gap safe, no Python at inference).
+
+- AI/ML-specific findings (HPKE, STRAP, custom RADIUS) trigger `no_high_confidence_match` — expected, no MSF coverage exists for these
+- Classic overflow/memcpy primitives surface usable MSF modules
+
+---
+
+## Target coverage
 
 | Platform | Coverage |
-|----------|----------|
-| Linux (ELF — x86-64, ARM64, MIPS) | Binary RE, live process, privesc, containers, garble-obfuscated Go |
+|----------|---------|
+| Cisco ASA (lina) | struct RE (gp_obj layout), RADIUS class-attr overflow, ASDM JAR, WebVPN JS, ROMMON, 17+ versions tracked |
+| Cisco FTD / FDM | 43 modules: JWT forgery, Neo4j key, TAR slip RCE, ZMQ NULL auth, hardcoded AES-256 key, zip-slip |
+| Cisco ISE | RADIUS OU injection, LDAP chain, credential audit — 46 findings (CRIT:11) |
+| Cisco CUCM | Static AES key, OAuth JWT forgery, ITL signing key, HAProxy 666 — 482 findings |
+| Cisco FMC | 44 findings: PAM code injection (root), backup/health module/report RCE chain, PERL5LIB root escalation, hardcoded DB creds, Vault root token |
+| Cisco AnyConnect | HPKE/STRAP/IPC RE, acsockext TOCTOU, DTLS handler, SAML forging |
+| Cisco IOS / IOS-XE | Firmware RE, crashdump, hardcoded credential scan |
+| Cisco NX-OS / ACI | APIC REST, guestshell rootfs, Nexus Dashboard, Kafka/TF cred exfil |
+| Orka | K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC |
+| WeChat Android | MMTLS two-tier crypto, PSK extraction, DB key derivation, ptrace key extraction |
 | macOS / Apple Silicon | Mach-O, Swift ABI, Orka cluster RE, malware persistence, Keychain, MDM |
 | Windows (PE / PE32+) | Kernel driver RE, IOCTL dispatch, DKOM, SSDT, DSE bypass |
 | Docker / Kubernetes | Escape surface, socket mounts, capability audit, SA token, etcd |
-| Orka | K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC |
-| Cisco ASA | LINA struct RE, RADIUS class-attr overflow, ASDM JAR, WebVPN JS, ROMMON |
-| Cisco FTD / FDM | 43 modules: JWT forgery, Neo4j key, TAR slip RCE, ZMQ NULL auth, hardcoded AES key |
-| Cisco ISE | RADIUS OU injection, LDAP chain, credential audit — 46 findings (CRIT:11) |
-| Cisco CUCM | Static AES key, OAuth JWT forgery, ITL signing key, HAProxy 666 — 482 findings |
-| Cisco FMC | 44 findings: PAM code injection (root at login), backup/health module/report RCE chain, PERL5LIB root escalation, hardcoded DB creds, Vault root token plaintext on disk |
-| Cisco AnyConnect | NetworkExtension IKEv2 RE, acsockext TOCTOU |
-| Cisco IOS / IOS-XE | Firmware RE, crashdump analysis, hardcoded credential scan |
-| Cisco NX-OS / ACI | APIC REST, guestshell rootfs, Nexus Dashboard, Kafka/TF cred exfil |
-| WeChat Android | MMTLS protocol RE, PSK extraction, DB key derivation, ptrace key extraction |
+| Linux (ELF x86-64/ARM64/MIPS) | Binary RE, live process, privesc, containers, garble-obfuscated Go |
+
+---
 
 ## Quick start
 
 ```bash
-# API RE (30 phases)
-python3 modules/api_re.py http://target:8080
-python3 modules/api_re.py http://target:8080 --depth deep --output out.json
-
 # Binary / firmware
 ./ablation --binary /path/to/target
 ./ablation --lina /path/to/lina --asa-version 9.22.2.32
@@ -42,92 +103,209 @@ python3 modules/api_re.py http://target:8080 --depth deep --output out.json
 # Live targets
 ./ablation --asa 192.168.1.1
 ./ablation --orka https://orka-api:443
-./ablation --docker && ./ablation --k8s
 
-# CUCM static findings (482)
+# LLM-assisted function analysis (requires ANTHROPIC_API_KEY)
+python3 -c "
+from modules.llm_analyst import AgentLoop
+from modules.llm_analyst.tasks.vuln_hypothesis import VulnHypothesisTask
+loop = AgentLoop('/path/to/lina')
+result = loop.run(0x4a1234, task=VulnHypothesisTask())
+print(result.name, result.role, result.confidence)
+print(result.vuln_notes)
+"
+
+# Semantic function search
+python3 -c "
+from modules.semantic_search import SemanticSearcher
+s = SemanticSearcher('~/.ablation/func_id.db')
+s.build_corpus()
+for r in s.query_function('sub_unknown', 'RADIUS_ATTR_HANDLER', ['strcpy', 'radius_decode'], ['RADIUS-Class']):
+    print(f'{r.score:.3f}  {r.name}  ({r.role})')
+"
+
+# Cross-version patch tracking
+python3 -c "
+from modules.version_delta import VersionTracker
+tracker = VersionTracker({
+    '9.14': '/path/to/lina-9.14',
+    '9.16': '/path/to/lina-9.16',
+    '9.18': '/path/to/lina-9.18',
+})
+for report in tracker.track(seed_binary='9.14', seed_va=0x4a1234):
+    print(report.summary())
+"
+
+# Quick function diff (no angr required)
+python3 -c "
+from modules.version_delta import diff_functions, jaccard_similarity
+delta = diff_functions(asm_914, 'func_v914', asm_916, 'func_v916', callees_914, callees_916)
+print(delta.unified_diff('9.14', '9.16'))
+"
+
+# Rank Metasploit modules against vuln findings
+python3 -c "
+from modules.bare_adapter import rank_modules, format_bare_output
+output = rank_modules(results, binary_path='/path/to/lina')
+print(format_bare_output(output))
+"
+
+# API RE (30 phases)
+python3 modules/api_re.py http://target:8080
+python3 modules/api_re.py http://target:8080 --depth deep --output out.json
+
+# Platform-specific
 python3 -c "from modules.cisco_cucm_re import full_findings_summary; print(full_findings_summary())"
-
-# FTD fleet-wide AES-256 key (F-FTD-110, all deployments)
 python3 -c "from modules.ftd_hardcoded_aes_key import AES256_KEY; print(AES256_KEY.hex())"
-
-# Go binary obfuscated with garble
 python3 modules/go_garble_re.py /path/to/binary
 ```
 
+---
+
 ## Modules
 
-| Module | Platform | Summary |
-|--------|----------|---------|
-| `swift_re` | macOS | Swift ABI, gRPC service map, async/await, LicenseSpring |
-| `macos_malware_re` | macOS | Persistence, TCC, EvilQuest IOCs, dylib hijack, Keychain |
-| `macos_sysadmin` | macOS | Keychain, FileVault, MDM/DEP, ARD/VNC, Open Directory |
-| `orka_enum` | Orka | Live cluster enum, image registry, default creds |
-| `orka_oidc_re` | Orka | OIDC PKCE flow RE, CVE-2020-26160 |
-| `orka_jwt_dynamic_re` | Orka | HS256 empty-key JWT forge |
-| `orka_api_surface_re` | Orka | REST API reconstruction from Go binary (60+ routes) |
-| `orka_vm_exec_re` | Orka | VM exec via K8s pods/exec API, SA token forge |
-| `cisco_asa_lina_re` | Cisco ASA | LINA struct RE (gp_obj layout), version-dispatched RADIUS overflow probe |
-| `cisco_radius_ise_re` | Cisco ASA/ISE | RADIUS Class attr injection, OU= overflow, ISE CoA |
-| `cisco_cstp_attack` | Cisco ASA | DAP bypass, SAML, timing oracle, RADIUS CoA mid-session |
-| `cisco_webvpn_js_re` | Cisco ASA | WebVPN JS bundle RE, tunnel group enum, CSRF pattern |
-| `cisco_asdm_download_re` | Cisco ASA | ASDM JAR retrieval chain |
-| `cisco_asdm_jar_re` | Cisco ASA | JVM constant pool RE, trust manager bypass, deserialization |
-| `cisco_rommon_re` | Cisco ASA | ROMMON bypass, config-register, image auth bypass |
-| `cisco_config_re` | Cisco ASA | Type 7 decode, SNMP/TACACS+/BGP credential extraction |
-| `cisco_ios_re` | Cisco IOS | Firmware format, IFS extraction, crash dump ARM64 recovery |
-| `cisco_api_enum` | Cisco ASA | REST API endpoint enum, unauthenticated surface |
-| `cisco_asa_cred_audit` | Cisco ASA | Credential testing, lockout behavior, auth stack map |
-| `anyconnect_re` | Cisco AnyConnect | NE IKEv2 address tables, auth bypass target, acsockext TOCTOU |
-| `ftd_*` (43 modules) | Cisco FTD/FDM | JWT forgery chain, Neo4j key, TAR slip, cli_shadow root, static AES key, zip-slip, ZMQ NULL — see [docs/cisco.md](docs/cisco.md) |
-| `cisco_ise_re` | Cisco ISE | 46 findings: RADIUS overflow, hardcoded creds, LDAP chain, unauth REST |
-| `cisco_cucm_re` | Cisco CUCM | 482 findings: static AES, JWT forge, ITL key, HAProxy 666, TAPS RCE |
-| `cisco_fmc_re` | Cisco FMC | 44 findings: PAM $PAM_USER Perl injection (root), backup name shell injection, health module XML injection, report name injection, PERL5LIB root escalation via SETENV sudoers, hardcoded DB/SMTP/RabbitMQ creds, Vault root token plaintext + hardcoded JKS password |
-| `cisco_re_engine` | Cisco | FLOSS, capa, r2, BinDiff, Frida, ropper, keystone, Scapy |
-| `nxos_enum` | Cisco NX-OS | APIC unauth surface, MIT queries, vCenter lateral |
-| `nexus_dashboard_enum` | Cisco NX-OS | SSO pivot, Kafka export, Terraform/ServiceNow creds |
-| `cisco_nxos_guestshell_re` | Cisco NX-OS | CentOS LXC rootfs, credential scan, SUID, cron |
-| `ios_enum` | Cisco IOS-XE | SSH + NETCONF, BGP/ACL/AAA enum, type 7/5/8/9 decode |
-| `hyperflex_enum` | Cisco HyperFlex | REST API, SCVM, default creds, Intersight claim-code |
-| `wechat_re` | WeChat Android | MMTLS two-tier crypto, gILinkKey ptrace extraction, DB key |
-| `go_garble_re` | Go (garble) | pclntab detection, bootstrap trace, XOR stub finder, string xref |
-| `windows_kernel_re` | Windows | IOCTL map, DKOM, SSDT hooks, DSE bypass |
-| `forensics_enum` | Windows | SEH corruption, prefetch, shellbag, browser history |
-| `java_re` | Java | JVM constant pool, ObjectInputStream, JDBC, reflection abuse |
-| `java_decompiler` | Java | Procyon/CFR/Fernflower wrapper |
-| `vmnetd_re` | Docker macOS | vmnetd protocol RE, privileged socket, SymlinkMessage |
-| `docker_enum` | Docker | Socket escape, CAP_SYS_ADMIN, bind mounts, TCP daemon |
-| `k8s_enum` | Kubernetes | SA token, RBAC self-check, etcd bypass, Kubelet unauth |
-| `harbor_enum` | Harbor | Default creds, image manifest, BV41, supply chain map |
-| `privesc_enum` | Linux/macOS | SUID/SGID, sudo NOPASSWD, capabilities, cron injection |
-| `tls_enum` | Network | Cipher suite, JA3, HSTS, session resumption |
-| `net_sniffer` | Network | HTTP/FTP/Telnet/SMTP/SNMP/SIP/LDAP credential capture |
-| `nginx_enum` | Network | Alias traversal, proxy SSRF, CVE map |
-| `sip_enum` | Network | OPTIONS sweep, REGISTER, Digest auth, RTP stream |
-| `streaming_enum` | Kafka/Flink/NiFi | Unauth broker enum, JAR execution, schema registry |
-| `llm_enum` | LLM servers | Ollama/LM Studio model list, system prompt leak |
-| `qwen3_tts_re` | TTS (Qwen3) | Unauth synthesis, SSML injection, IDOR, race condition |
-| `network_analyze` | Network | Interface map, routing, VLAN, DHCP, OSPF/EIGRP/BGP |
-| `api_re` | API | 30-phase RE: schema harvest, BOLA/BFLA, JWT alg confusion, NoSQL inject, CORS, PII scan, OAuth dynamic reg, WebSocket, shadow versions, timing oracle |
-| `jwt_crypto_analyzer` | Auth | alg:none, RS256→HS256 confusion, kid SQLi/SSRF/traversal |
-| `crypto_audit` | Binary | Hardcoded key material, weak RNG, ECB mode, custom crypto |
-| `process_enum` | Linux/macOS | /proc maps, open FDs, environ |
-| `lateral_movement` | Cloud | IMDS (AWS/GCP/Azure), ~/.aws, kubeconfig, SSH keys |
-| `syscall_trace` | Linux/macOS | strace/dtruss wrapper, structured credential access output |
-| `regression` | Cisco ASA | Version-confirmed LINA struct offsets, boundary model |
-| `core/*` | All | ELF/Mach-O/PE/firmware parsers, x86/ARM64/MIPS/PPC disasm, ATT&CK tagger |
+### RE infrastructure
+
+| Module | Summary |
+|--------|---------|
+| `func_id_db` | SQLite function identity store — byte-pattern + callee + struct + string matching across binary versions |
+| `llm_analyst/` | Claude ReAct loop — active RE participant; names functions, hypothesizes vulns, reconstructs structs |
+| `semantic_search` | BERT-based function similarity (MiniLM, BinFuse opcode categories, Markov transitions) |
+| `version_delta` | Cross-version homolog matching (structural → 4-gram Jaccard → semantic) + SequenceMatcher patch diff |
+| `bare_adapter` | Ablation findings → BARE binary → ranked Metasploit modules (3,904 modules, offline) |
+| `regression` | Version-confirmed LINA struct offsets, angr Veritesting boundary model |
+| `cisco_re_engine` | FLOSS, capa, r2, BinDiff, Frida, ropper, keystone, Scapy |
+| `crypto_audit` | Hardcoded key material, weak RNG, ECB mode, custom crypto detection |
+| `vtable_resolver` | C++ vtable layout recovery, virtual dispatch mapping |
+| `interproc_field_writer` | Inter-procedural struct field write tracking |
+
+### Cisco ASA / lina
+
+| Module | Summary |
+|--------|---------|
+| `cisco_asa_lina_re` | LINA struct RE (gp_obj layout), RADIUS class-attr overflow probe |
+| `cisco_radius_ise_re` | RADIUS Class attr injection, OU= overflow, ISE CoA |
+| `cisco_cstp_attack` | DAP bypass, SAML, timing oracle, RADIUS CoA mid-session |
+| `cisco_webvpn_js_re` | WebVPN JS bundle RE, tunnel group enum, CSRF pattern |
+| `cisco_asdm_download_re` | ASDM JAR retrieval chain |
+| `cisco_asdm_jar_re` | JVM constant pool RE, trust manager bypass, deserialization |
+| `cisco_rommon_re` | ROMMON bypass, config-register, image auth bypass |
+| `cisco_config_re` | Type 7 decode, SNMP/TACACS+/BGP credential extraction |
+| `cisco_api_enum` | REST API endpoint enum, unauthenticated surface |
+| `cisco_asa_cred_audit` | Credential testing, lockout behavior, auth stack map |
+| `anyconnect_re` | NE IKEv2 address tables, HPKE/STRAP RE, acsockext TOCTOU |
+
+### Cisco FTD / FDM (43 modules)
+
+| Module | Summary |
+|--------|---------|
+| `ftd_jwt_forge` | JWT forgery chain — RS256→HS256 confusion |
+| `ftd_jwt_key_extraction` | JWT signing key extraction |
+| `ftd_neo4j_password_decrypt` | Neo4j key recovery |
+| `ftd_backup_tarslip` | TAR slip RCE via backup restore |
+| `ftd_config_import_zipslip` | Zip-slip RCE via config import |
+| `ftd_hardcoded_aes_key` | Fleet-wide AES-256 key (F-FTD-110) |
+| `ftd_sfmb_static_creds` | ZMQ NULL auth + static creds |
+| `ftd_clishadow_root` | cli_shadow root escalation |
+| `ftd_www_root_escalation` | www root escalation |
+| `ftd_snort3_plugin_injection` | Snort3 plugin injection |
+| *32 more* | See [docs/cisco.md](docs/cisco.md) |
+
+### Cisco ISE / CUCM / FMC / IOS / NX-OS
+
+| Module | Summary |
+|--------|---------|
+| `cisco_ise_re` | 46 findings: RADIUS overflow, hardcoded creds, LDAP chain |
+| `cisco_cucm_re` | 482 findings: static AES, JWT forge, ITL key, HAProxy 666 |
+| `cisco_fmc_re` | 44 findings: PAM $PAM_USER injection (root), PERL5LIB escalation, Vault token plaintext |
+| `cisco_ios_re` | Firmware format, IFS extraction, crash dump ARM64 recovery |
+| `cisco_nxos_guestshell_re` | CentOS LXC rootfs, credential scan, SUID, cron |
+| `nxos_enum` | APIC unauth surface, MIT queries, vCenter lateral |
+| `nexus_dashboard_enum` | SSO pivot, Kafka export, Terraform/ServiceNow creds |
+| `ios_enum` | SSH + NETCONF, BGP/ACL/AAA enum, type 7/5/8/9 decode |
+| `hyperflex_enum` | REST API, SCVM, default creds, Intersight claim-code |
+
+### Orka / Apple
+
+| Module | Summary |
+|--------|---------|
+| `orka_enum` | Live cluster enum, image registry, default creds |
+| `orka_oidc_re` | OIDC PKCE flow RE, CVE-2020-26160 |
+| `orka_jwt_dynamic_re` | HS256 empty-key JWT forge |
+| `orka_api_surface_re` | REST API reconstruction from Go binary (60+ routes) |
+| `orka_vm_exec_re` | VM exec via K8s pods/exec API, SA token forge |
+| `swift_re` | Swift ABI, gRPC service map, async/await, LicenseSpring |
+| `macos_malware_re` | Persistence, TCC, EvilQuest IOCs, dylib hijack, Keychain |
+| `macos_sysadmin` | Keychain, FileVault, MDM/DEP, ARD/VNC, Open Directory |
+| `macos_decompiler` | Mach-O binary decompilation, symbol recovery |
+| `macos_mach_o_re` | Mach-O segment/section RE, ObjC class layout |
+
+### WeChat / Mobile
+
+| Module | Summary |
+|--------|---------|
+| `wechat_re` | MMTLS two-tier crypto, gILinkKey ptrace extraction, DB key derivation |
+| `arm64_global_tracker` | ARM64 global variable tracking across function calls |
+| `arm_symbolic` | ARM symbolic execution, constraint extraction |
+| `arm_disasm` | ARM32/AArch64 disassembly with role annotation |
+
+### Network / API / Infrastructure
+
+| Module | Summary |
+|--------|---------|
+| `api_re` | 30-phase API RE: schema harvest, BOLA/BFLA, JWT confusion, NoSQL inject, WebSocket, shadow versions |
+| `jwt_crypto_analyzer` | alg:none, RS256→HS256 confusion, kid SQLi/SSRF/traversal |
+| `tls_enum` | Cipher suite, JA3, HSTS, session resumption |
+| `net_sniffer` | HTTP/FTP/Telnet/SMTP/SNMP/SIP/LDAP credential capture |
+| `nginx_enum` | Alias traversal, proxy SSRF, CVE map |
+| `sip_enum` | OPTIONS sweep, REGISTER, Digest auth, RTP stream |
+| `streaming_enum` | Kafka/Flink/NiFi: unauth broker, JAR execution, schema registry |
+| `network_analyze` | Interface map, routing, VLAN, DHCP, OSPF/EIGRP/BGP |
+| `lateral_movement` | Cloud IMDS (AWS/GCP/Azure), ~/.aws, kubeconfig, SSH keys |
+
+### Containers / Windows / Java
+
+| Module | Summary |
+|--------|---------|
+| `docker_enum` | Socket escape, CAP_SYS_ADMIN, bind mounts, TCP daemon |
+| `k8s_enum` | SA token, RBAC self-check, etcd bypass, Kubelet unauth |
+| `harbor_enum` | Default creds, image manifest, BV41, supply chain map |
+| `windows_kernel_re` | IOCTL map, DKOM, SSDT hooks, DSE bypass |
+| `forensics_enum` | SEH corruption, prefetch, shellbag, browser history |
+| `java_re` | JVM constant pool, ObjectInputStream, JDBC, reflection abuse |
+| `java_decompiler` | Procyon/CFR/Fernflower wrapper |
+| `go_garble_re` | pclntab detection, bootstrap trace, XOR stub finder, string xref |
+| `privesc_enum` | SUID/SGID, sudo NOPASSWD, capabilities, cron injection |
+
+---
 
 ## Requirements
 
+**Core:**
 ```
-Python 3.8+
-capstone        # pip install capstone
+Python 3.10+
+capstone          pip install capstone
 ```
 
-`cisco_re_engine` optional:
+**llm_analyst / semantic_search / version_delta:**
+```
+angr              pip install angr
+anthropic         pip install anthropic
+sentence-transformers  pip install sentence-transformers
+numpy             pip install numpy
+```
+
+**cisco_re_engine (optional):**
 ```
 flare-floss  flare-capa  ropper  keystone-engine  rzpipe  frida  scapy
 r2 (radare2)  bindiff (BinDiff v8)
 ```
+
+**bare_adapter:**
+```
+BARE binary       github.com/sshpie/BARE  (install to ~/.local/bin/bare)
+```
+
+---
 
 ## Documentation
 
