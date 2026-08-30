@@ -2256,10 +2256,11 @@ class AxisEAPAnalyzer:
 
     def queue_monitor_surface(self) -> dict:
         """
-        AXIS Queue Monitor (tvqu) attack surface.
+        AXIS Queue Monitor (tvqu) 2.x attack surface — C binary, runs as root.
 
-        appId: 211492  binary: tvqu  version: 3.0.20  arch: ARM32 armhf stripped
-        Bundled: curl (not stripped), libmd5.so, libcjson.so.1, libsodium.so.23
+        appId: 211492  binary: tvqu  version: 2.10.67  arch: armv7hf stripped  APPUSR=root
+        Bundled: curl (not stripped), libcjson.so.1 (2.x); libsodium added in 2.x+ for cloud upload
+        NOTE: 3.x is a Rust rewrite (sdk user, not root) — see queue_monitor_v3_surface()
 
         Architecture mirrors tvgd/tvpc (same codebase family — shared backup/restore pattern).
         Uses libsodium for data encryption before cloud upload (NaCl boxes).
@@ -2293,8 +2294,10 @@ class AxisEAPAnalyzer:
             'app_id': 211492,
             'app_name': 'AXIS Queue Monitor',
             'binary_name': 'tvqu',
-            'version': '3.0.20',
-            'arch': 'ARM32 armhf stripped',
+            'version': '2.10.67',
+            'version_note': 'C binary 2.x branch; 3.x Rust rewrite (sdk, not root) see queue_monitor_v3_surface()',
+            'appusr': 'root',
+            'arch': 'armv7hf stripped',
             'cgi_endpoints': {
                 'viewer': ['/.api'],
                 'operator': ['/.apioperator', '/.restore_backup'],
