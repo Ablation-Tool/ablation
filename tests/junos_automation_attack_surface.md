@@ -1784,3 +1784,74 @@ No exploitable pre-auth memory corruption bug identified through static analysis
 
 CWE-617: Reachability in Pre-auth Context (informational)
 
+
+---
+
+## FINDING 10: BBE Daemon Sweep — Pre-Auth Memory Corruption Extended Hunt
+
+**Class:** Research Assessment  
+**Severity:** Informational  
+**Status:** No exploitable pre-auth memory corruption found in BBE/management-plane extension sweep  
+
+### Scope
+
+Extended survey of EVO-specific management daemons that directly link `libzookeeper_mt.so.2` (bypassing the libzkimpl wrapper) and carry non-trivial strcpy/sprintf counts.
+
+### Binaries Surveyed
+
+| Binary | Size | PIE | Canary | strcpy/sprintf | Notes |
+|--------|------|-----|--------|----------------|-------|
+| `bbe-gtp-proxyd` | 1.7MB | Yes | No | 19 strcpy / 78 sprintf | GTP-C/U proxy; `recvfrom` sockets |
+| `bbe-pfcp-proxyd` | 3.5MB | Yes | No | 100 strcpy/sprintf | PFCP SMF-UPF proxy |
+| `bbe-helperd` | 2.9MB | Yes | No | 100 strcpy/sprintf | BBE subscriber helper |
+| `bbe-stats-svcsd` | 4.8MB | Yes | No | 117 strcpy/sprintf | Stats aggregation |
+| `bbe-upmd` | 1.9MB | Yes | No | 97 strcpy/sprintf | User profile manager |
+| `sysman` | 1.4MB | Yes | No | 0 strcpy (85 memcpy) | ZK watcher, std::string only |
+| `gcd` | 282K | Yes | No | 0 strcpy (26 memcpy) | ZK event consumer |
+| `authd` | 9.7MB | **No (EXEC)** | No | 302 strcpy/sprintf | Non-PIE; uses DAX |
+
+### Key Analysis: bbe-gtp-proxyd
+
+`bbe-gtp-proxyd` has `accept/bind/recv/recvfrom/sendto` sockets — the most aggressive network exposure in the set.
+
+**strcpy at 0x3dedb:** `malloc(100); strcpy(heap_100, rsi)` — no local bounds check. Traced all 4 callers:
+- All 4 pass `lea 0x*(%rip),%rdx` → `0x12f3a0` (same rodata literal). Source is compile-time constant. Safe.
+
+**78 sprintf calls (0x83dee–0x8c79c):** GTP IE formatter. All calls:
+- `rdi` = `0x1c6a40` (global 16KB buffer, `memset`'d to 0 before use)
+- `rsi` = static format string from rodata
+- `rdx` = uint16/uint32 parsed IE value
+- Safe: fixed-width integer into large buffer.
+
+**strcpy at 0x83d6a:** Source = 16KB global buffer; destination = larger trace accumulator. Guard: `cmp $0x9fff,%rax; jle proceed`. Safe.
+
+**strcpy cluster at 0x1227f5–0x12290d (event_send_vsyslog):** All follow `malloc(strlen+1); strcpy(heap, src)` pattern. Safe.
+
+**ZooKeeper paths:**
+- `sysman`: ZK data from `SystemConfigWatcher` → `sm_node_data` setters → `std::string` storage. No raw buffer writes.
+- `gcd`: `ZOO_CREATED_EVENT` handler at 0x15e30 builds `basic_stringstream`, calls `getline` (delimiter='/') to tokenize the znode **path**. Never calls `zoo_get` to read znode data. Path tokens go into `std::vector<std::string>`.
+
+### authd — Highest Remaining Research Value
+
+**authd** remains the only extracted binary with significant pre-auth potential:
+- Non-PIE `EXEC` (type 0x2) — ASLR irrelevant, fixed base
+- No stack canary
+- 302 strcpy/sprintf calls (out of 1667 total dangerous calls)
+- Links `libzookeeper_mt.so.2` directly
+- Also has `grpc_channel_destroy` (gRPC client) and DAX API (`dax_visit_object_by_dap`, `dax_get_ubyte_by_name`)
+- RADIUS/TACACS input paths not traced — these are pre-auth authentication protocol parsers
+
+**Blocker for static analysis:** authd is 9.7MB stripped binary. The DAX data layer abstracts config input; RADIUS/TACACS parsing is inbound from network and worth tracing. Not achievable through static analysis alone — requires either dynamic tracing on live device or decompiler-assisted analysis (Ghidra/IDA).
+
+### Recommended Next Steps
+
+1. **authd dynamic trace** on live EVO 23.4R2.14: `strace -e recvfrom,recv,read -p $(pgrep authd)` — identify what network input authd receives pre-auth
+2. **Ghidra/IDA analysis** of authd: fixed base address = easy ROP chain construction if a vulnerable strcpy with network input is found
+3. **bbe-pfcp-proxyd**: PFCP IE parsers handle mobile data-plane config. Deserves same strcpy trace pass as bbe-gtp-proxyd — not completed in this session
+
+### Impact Assessment
+
+No pre-auth memory corruption found across 14 analyzed management-plane binaries. The Junos EVO 23.4R2.14 management plane relies heavily on C++ container abstractions (std::string, protobuf, ZooClient wrappers) that prevent traditional fixed-buffer overflows at network parse boundaries.
+
+**Most likely pre-auth memory corruption path remaining:** authd RADIUS/TACACS parser (unconfirmed, dynamic analysis required) or CVE-2024-6387 in unextracted OpenSSH 9.2p1 (FINDING 8).
+
