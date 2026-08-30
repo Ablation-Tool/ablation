@@ -317,6 +317,47 @@ a flags or context pointer defaulting to NULL/0.
     routes to log call at 0x80310418 (format string + two args).
     Out-of-range types that also fail this allowlist are rejected.
 
+--- netisr_dispatch / netisr_queue (Jac=0.0 at D35 — FreeBSD netisr rewrite) ---
+
+11.4R3.7 netisr_dispatch (0x803c4a60, 1472 bytes): Monolithic dispatch.
+  Protocol table: 12-byte entries at 0x80c8f028.
+  Index: proto * 12 = sll*4 + sll*16 - sll*4.
+  NO BOUNDS CHECK before table index. OOB read if proto >= table_size.
+  SMP: mfc0/mtc0 $t4 (CP0 Status) for interrupt masking.
+  Handler deref: lw $v0, 4(table_entry) — if NULL, drop via m_freem.
+  Stats: global counter at 0x80c15308.
+
+12.1X46-D35 netisr_dispatch (0x803cc178, 104 bytes): Thin wrapper.
+  NEW: bounds check — sltu $v0, $a0, maxprot (gp-0x49e4).
+  NEW: sync + 2 NOPs — memory barrier before bitmap read (MIPS SMP fix).
+  NEW: bitmap check — 1 << proto AND gp-0x2024 bitmask (registered protos).
+  If registered + in-bounds → jal netisr_defer_dispatch(proto, mbuf, a2=1)
+    a2=1 = NETISR_DISPATCH_DIRECT flag.
+  Otherwise → jal netisr_dispatch_src(proto, NULL, 0) — queue fallback.
+
+12.1X46-D35 netisr_queue (0x803cab9c, 32 bytes): Thin wrapper.
+  move $a2, $a1 then jal netisr_queue_src(proto, 0, mbuf).
+
+Symbol map (D35):
+  netisr_defer_dispatch  0x803cabbc sz=576  — direct dispatch (mfc0/mtc0 path)
+  netisr_dispatch_src    0x803cb90c sz=2156 — queued/policy dispatch
+  netisr_queue_src       0x803cab40 sz=92   — workstream queue insert
+
+New entry struct stride: proto * 56 (sll*3 then sll*6 → subu = *56).
+  Old stride: 12 bytes/entry. New: 56 bytes (workstream queues, dispatch policy, stats).
+  netisr_proto[proto].np_dispatch_policy at offset 0x18; value 4 = DIRECT.
+
+SECURITY DELTA:
+  11.4 OOB path: proto beyond table_size → sll $v1, proto, 4 → table[proto]
+    → lw $v0, 4(OOB addr) → call/deref OOB function pointer.
+    Trigger: crafted IP packet with protocol field >= netisr table limit.
+    Network-reachable via ip_input → netisr_dispatch(NETISR_IP, m).
+  D35 closes: sltu bounds check + bitmap registration gate precedes all
+    table access. OOB deref path eliminated.
+  Additional fix: sync barrier closes MIPS SMP race on bitmap read where
+    a protocol deregistration on CPU-A could be invisible to CPU-B reading
+    the bitmap without a barrier, causing dispatch to freed handler struct.
+
 Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
 
