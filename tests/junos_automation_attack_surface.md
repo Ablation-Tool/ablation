@@ -596,9 +596,16 @@ FINDING 2 — vtable overwrite (RCE):
     delete_node called at 15+ sites; always reached on any XPath traversal.
   Contiguous BSS block: 0x150b10–0x150b6f (96 bytes, 12 slots).
     Overwrite any one slot → code execution on next XPath query that calls it.
-  Overwrite mechanism: requires write-what-where to BSS (candidates in same library:
-    CVE-2022-23308 UAF → freed doc pointer write if XInclude reachable from NETCONF;
-    libnetconf2 F9 OOB heap write if heap allocation adjacent to BSS mapping).
+  Overwrite mechanism: requires write-what-where to BSS.
+  NOTE: CVE-2022-23308 (xmlXIncludeDoProcess UAF) was previously listed here —
+    INCORRECT. CVE-2022-23308 affects libxml2 2.9.10-2.9.12. This binary is
+    libxml2 2.9.9 (xmlParserVersion='20909'). CVE-2022-23308 does NOT apply.
+  Realistic write primitives (not yet confirmed):
+    libnetconf2 F9 OOB heap write (1-2 bytes past heap chunk end) — requires
+      heap chunk adjacent to BSS 0x150b08; heap/BSS adjacency not guaranteed.
+    S3/S4 alloca overflow (slaxext.c:2108 / slaxloader.c:891) — stack-based,
+      but a stack pivot could redirect writes; more likely standalone RCE path.
+  Write primitive to BSS is the OPEN LINK in the vtable overwrite chain.
   Trigger (after overwrite): any NETCONF XPath filter with child-element or parent axis:
     xmlXPathNodeCollectAndTest → cs_xmlXPathNextChildElement/Parent → call *(BSS slot)
     → arbitrary code execution in mgd context (root on FreeBSD/Junos EVO).
