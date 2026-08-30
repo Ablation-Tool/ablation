@@ -358,6 +358,18 @@ SECURITY DELTA:
     a protocol deregistration on CPU-A could be invisible to CPU-B reading
     the bitmap without a barrier, causing dispatch to freed handler struct.
 
+15.1X49-D240 netisr_dispatch (0x8033e85c, 372 bytes) — bounds check preserved:
+  Middle step between D35 (104B) and 22.4 (2212B).
+  Exact disassembly (instruction 10, confirmed):
+    0x8033e880: lw   $v0, -0x46ec($gp)  ; load maxprot
+    0x8033e884: sltu $v0, $a0, $v0      ; v0 = (proto < maxprot)
+    0x8033e888: bnez $v0, 0x8033e978    ; in-bounds → dispatch; OOB falls through
+  sync barrier ABSENT (D35's sync+2NOPs removed as of D240 or earlier).
+  Entry also checks gp-0x15d0 flag (enable-check) before dispatch.
+  REGRESSION BOUNDARY: D240 (2020-12) has bounds check; 22.4R3 (2026-01) does not.
+  Regression introduced between 15.1X49-D240 and 22.4R3 — likely in the 22.x
+  dispatch rewrite that expanded the function from 372B → 2212B.
+
 22.4R3-S9 / 23.4R2-S5.5 netisr_dispatch — SECURITY REGRESSION (both versions):
   22.4 (0x8044d9ec) and 23.4 (0x8045321c): IDENTICAL mnemonic sequence, Jac=1.0.
   Same 2212-byte body; only absolute VA differences (netisr_proto table: 0x8128a450 vs
