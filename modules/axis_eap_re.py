@@ -2376,6 +2376,140 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def cognimatics_tvpc_variants_surface(self) -> dict:
+        """
+        Cognimatics tvpc-based AXIS apps — Direction Detector, Tailgating Detector, Random Selector.
+
+        Shared binary: tvpc  arch: ARM32 armhf  version: 3.12.1
+        CRITICAL: APPUSR="root" APPGRP="root" — binary runs as root, not as ACAP sandbox user.
+        Any exploit in tvpc variants → immediate root on the camera.
+
+        AppIDs:
+          AXIS Direction Detector:   220302
+          AXIS Tailgating Detector:  557 (3.12.1 ARTPEC-7)
+          AXIS Random Selector:      492 (3.12.1 ARTPEC-7)
+
+        Bundled non-binary extras: mini_snmpd, debugar.cgi, debugar.cgi.org, ntp-init,
+        apache.conf, httpd-ssl.conf.5.70, curl (not stripped), modules/anon-gui/anon/
+
+        Key findings:
+
+        1. Runs as root — maximum blast radius
+           APPUSR="root" + APPGRP="root" in package.conf.
+           tvpc 4.6.110 (aarch64) removes TrueviewVAPIX default account in postinst.
+           tvpc 4.0.0 S5L does NOT remove it. This 3.12.1 variant: unknown — check postinst.sh.
+           Either way: code exec in this binary → direct root.
+
+        2. debugar.cgi.org — dev FTP credential artifact in production EAP
+           CoreHandler=CGI config with hardcoded "ftp://root:pass@192.168.0.90:21"
+           Password "pass" for root user at dev server 192.168.0.90.
+           This is a debug configuration file shipped in the production EAP unchanged.
+           Attacker can read this file from a camera that installed this ACAP.
+
+        3. debugar.cgi — coredump upload to ftp://upload.cognimatics.com
+           Camera coredumps sent to Cognimatics FTP server unencrypted.
+           If attacker triggers a crash (OOM, signal, or exploit), the resulting core dump
+           may contain camera memory: credentials, keys, session tokens.
+           FTP = plaintext in transit; Cognimatics FTP server is a third-party.
+
+        4. mini_snmpd — bundled SNMP daemon, community string "public" default
+           ARM32 stripped SNMP daemon with --community flag (default: public).
+           If started by tvpc on any port, exposes camera info via SNMP.
+           Even if not auto-started, binary is present in the package and can be invoked.
+
+        5. SSLCipherSuite includes DES-CBC3-SHA (SWEET32 / CVE-2016-2183)
+           httpd-ssl.conf.5.70: SSLCipherSuite AES256-SHA:AES128-SHA:DES-CBC3-SHA
+           3DES cipher suite present — SWEET32 birthday attack possible on long sessions.
+
+        6. Tarslip via .restore_backup operator CGI (same class as tvgd/tvpc 4.x)
+           Both /direction-detector/.restore_backup and /people-counter/.restore_backup exposed.
+           Operator-level: upload malicious tar.gz → path traversal → arbitrary file write as root.
+           Blast radius: root file write (vs sandbox user in tvgd/tvpc 4.x).
+
+        7. NTP service control in ntp-init
+           ntp-init writes to /run/ntp/ntpd.conf based on get_ntp_servers output.
+           If NTP server list is operator-configurable, attacker-controlled NTP server → time
+           manipulation → certificate validity bypass, replay attacks.
+
+        8. Apache includes IncludeOptional /run/apache2/vhosts/https/*.conf
+           If tvpc (running as root) can write to /run/apache2/vhosts/https/, malicious .conf
+           files can inject arbitrary Apache directives.
+
+        9. postinst.sh — runs as root; check for shell injection
+           All parhandclient calls in postinst.sh run as root. If any param value from
+           package.conf is interpolated unsanitized into shell commands → root code exec at install.
+        """
+        result = {
+            'binary': 'tvpc',
+            'version': '3.12.1',
+            'arch': 'ARM32 armhf',
+            'run_as': 'ROOT (APPUSR=root, APPGRP=root) — maximum blast radius',
+            'apps': {
+                'AXIS Direction Detector': 220302,
+                'AXIS Tailgating Detector': 557,
+                'AXIS Random Selector': 492,
+            },
+            'cgi_endpoints': {
+                'viewer': ['/direction-detector/.api', '/people-counter/.api'],
+                'operator': ['/direction-detector/.apioperator', '/direction-detector/.restore_backup',
+                             '/people-counter/.apioperator', '/people-counter/.restore_backup'],
+                'administrator': ['/direction-detector/.apiadmin', '/people-counter/.apiadmin'],
+            },
+            'bundled': [
+                'mini_snmpd (ARM32, stripped)',
+                'curl (not stripped)',
+                'debugar.cgi (coredump upload config)',
+                'debugar.cgi.org (DEV CRED ARTIFACT: ftp://root:pass@192.168.0.90:21)',
+                'ntp-init (NTP config writer)',
+                'httpd-ssl.conf.5.70 (DES-CBC3-SHA cipher)',
+                'modules/anon-gui/anon/',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'COG-1',
+                    'title': 'Tarslip via .restore_backup as root — arbitrary root file write',
+                    'mechanism': (
+                        'Operator-level .restore_backup CGI accepts tar.gz upload; '
+                        'tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup — no path traversal check. '
+                        'tvpc runs as root → path traversal → root file write anywhere on filesystem.'
+                    ),
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Operator-level auth',
+                    'note': 'Same class as tvgd/tvpc 4.x tarslip but ROOT execution = camera takeover',
+                },
+                {
+                    'id': 'COG-2',
+                    'title': 'debugar.cgi.org hardcoded root:pass dev FTP credential',
+                    'mechanism': 'File /usr/local/packages/tvpc/debugar.cgi.org ships in production EAP; contains ftp://root:pass@192.168.0.90:21 plaintext',
+                    'severity': 'MEDIUM',
+                    'note': 'Credential is for dev server 192.168.0.90 (Cognimatics internal); historical/reuse risk',
+                    'prerequisite': 'Read access to /usr/local/packages/tvpc/ (viewer CGI or backup)',
+                },
+                {
+                    'id': 'COG-3',
+                    'title': 'Coredump exfiltration to Cognimatics FTP server',
+                    'mechanism': 'debugar.cgi: coredumps sent to ftp://upload.cognimatics.com (plaintext FTP, third-party server). Trigger crash → core dump → memory exfil via FTP.',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Ability to trigger crash in tvpc (OOM, signal, or exploit)',
+                },
+                {
+                    'id': 'COG-4',
+                    'title': 'mini_snmpd community string "public" — camera info exposure',
+                    'mechanism': 'Bundled mini_snmpd defaults to community=public; if started exposes camera SNMP subtree on UDP/TCP 161',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'mini_snmpd running (check if auto-started by tvpc)',
+                },
+                {
+                    'id': 'COG-5',
+                    'title': 'DES-CBC3-SHA SWEET32 (CVE-2016-2183) in bundled Apache SSL config',
+                    'mechanism': 'httpd-ssl.conf.5.70 includes DES-CBC3-SHA; 32GB data over long session → birthday collision → plaintext recovery',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Long-lived HTTPS session to camera',
+                },
+            ],
+        }
+        return result
+
     def dat_encrypted_lua_surface(self) -> dict:
         """
         AXIS Digital Autotracking attack surface.
@@ -3025,6 +3159,8 @@ def main():
                         help='Queue Monitor tvqu ARM32 3.0.20 tarslip + libsodium + TLS bypass surface')
     parser.add_argument('--loitering-guard', action='store_true', dest='loitering_guard',
                         help='Loitering Guard ARM32 2.3.8 SocketCameraContainer SSRF + libscene surface')
+    parser.add_argument('--cognimatics-tvpc', action='store_true', dest='cognimatics_tvpc',
+                        help='Cognimatics tvpc variants 3.12.1 runs-as-root tarslip + debugar coredump + SWEET32')
     parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
                         help='sbplayer aarch64/ARM32 1.7.1 UpdateURL+SD-card library RCE + hardcoded SYB API cred')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
@@ -3111,6 +3247,9 @@ def main():
 
     if args.all or getattr(args, 'loitering_guard', False):
         results['loitering_guard'] = analyzer.loitering_guard_surface()
+
+    if args.all or getattr(args, 'cognimatics_tvpc', False):
+        results['cognimatics_tvpc'] = analyzer.cognimatics_tvpc_variants_surface()
 
     if args.all or args.sbplayer_aarch64:
         results['sbplayer_aarch64'] = analyzer.sbplayer_aarch64_surface()
