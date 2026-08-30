@@ -781,6 +781,27 @@ class AxisEAPAnalyzer:
             'key_files': ['connection_key.json', 'localdata/pems/*.pem', 'lic.xml', 'cacert.pem'],
             'sql_surface': 'SQLite backend; "Error when preparing to send data to SQL" in binary',
             'license_gate': 'liblicensekey.so.1 + lic.xml backup/restore chain',
+            # 4.6.110 aarch64 binary RE additions
+            'version_4610': {
+                'arch': 'aarch64 ELF stripped (ARTPEC-8 compatible)',
+                'popen_in_zoom_param': 'cm_param_get_212_zoom(): popen — zoom param read via shell command',
+                'slave_pass_in_axparam': 'Counter.SlavePass stored in axparameter; readable via parhandclient getgroup root.tvpc',
+                'backup_param_filter': 'parhandclient getgroup root.tvpc | grep -v -e 0SysPwd — SlavePass NOT filtered → exported plaintext',
+                'curl_command_shell_injectable': [
+                    "CURL_CA_BUNDLE=... /usr/local/packages/tvpc/curl -L -f --anyauth --insecure %s --user %s:%s \"%s/axis-cgi/opticscontrol.cgi\"",
+                    "CURL_CA_BUNDLE=... /usr/local/packages/tvpc/curl -L -f --anyauth -k --user \"%s:%s\" \"%s/axis-cgi/com/ptz.cgi?zoom=%d%s\"",
+                    "CURL_CA_BUNDLE=... /usr/local/packages/tvpc/curl -L -f --anyauth %s %s -s -m 20 -o curl_response.txt '%s://%s%s/api/?method=camera.ping&encrypted=true'",
+                ],
+                'removed_legacy_account': 'TrueviewVAPIX account removed in postinst.sh (was weak-password default account in prior versions)',
+                'kill_format_string': '(sleep 20; kill -9 %d && echo ...) — PID value from int; verify if PID source is attacker-controllable',
+                'html_pages': [
+                    'statistics.html', 'settings.html', 'settings-neighbour-counters.html',
+                    'settings-data-export.html', 'settings-anonymize.html',
+                    'settings-occupancy.html', 'settings-one-way-trigger.html',
+                    'registration.html', 'liveview.html', 'quickstart.html',
+                    'settings-tailgating.html',
+                ],
+            },
         }
 
         if pkg_dir and Path(pkg_dir).exists():
@@ -1256,6 +1277,35 @@ class AxisEAPAnalyzer:
                 'UpdateIntervalSeconds': 'hidden:int — polling interval (default 900s)',
                 'WatchdogTimeoutMillis': 'hidden:int — watchdog timeout',
                 'Volume': 'int 0-100 — audio volume',
+            },
+            # ARM binary RE additions (Player_for_Soundtrack_Business_ARM.eap — not stripped)
+            'arm_binary_re': {
+                'arch': 'armv7hf ELF PIE (not stripped; debug_info present)',
+                'sdk': 'ACAP SDK 3.0, embeddedSdkVersion 3.0',
+                'user': 'sdk:sdk (non-root ACAP sandbox)',
+                'function_map': {
+                    'downloader_init': 'initializes update downloader; reads UpdateURL axparam',
+                    'downloader_util_validate_checksum': 'validates checksum from server response (not pinned)',
+                    'downloader_free_lv': 'cleanup after library download',
+                    'curl_request': 'HTTP fetch of library binary and checksum',
+                    'get_update_url': 'reads UpdateURL axparam',
+                    'pairing_init': 'starts GraphQL pairing flow to soundtrackyourbrand.com',
+                    'pairing_get_code': 'generates pairing code for SaaS registration',
+                    'ctrl_cb_func': 'FastCGI handler for ctrl.cgi (admin)',
+                    'http_info_cb': 'FastCGI handler for info.cgi (viewer)',
+                    'httpserver_init': 'sets up internal HTTP server',
+                    'storage_init': 'initializes ax_storage for SD card/NAS access',
+                    'check_fw_version_compatible': 'firmware version gate',
+                    'get_soc': 'reads SoC type for architecture selection',
+                    'audio_conf_api_init': 'ALSA audio source configuration',
+                },
+                'checksum_bypass_note': (
+                    'String "checksum missing from server response, so can\'t verify lib and ignoring download" '
+                    'indicates server can return no checksum → client skips validation and still loads lib. '
+                    'dlopen() chain: downloader_init → curl_request → validate_checksum → dlopen if valid (or skip)'
+                ),
+                'sdcard_paths': ['checksum_cached_path', 'checksum_sdcard_path', 'ctx->lib_path'],
+                'storage_api': 'ax_storage_* (AX_STORAGE_WRITABLE_EVENT, AX_STORAGE_AVAILABLE_EVENT)',
             },
         }
         return result
