@@ -798,6 +798,353 @@ class AxisEAPAnalyzer:
 
         return result
 
+    def ptz_snmp_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        PTZ_over_SNMP (axptzoversnmp) MIPS32 ELF attack surface.
+
+        appId: 47267  arch: mipsisa32r2el (legacy MIPS)
+        Implements NTCIP 1205 CCTV MIB via Axis ax_mib_* framework.
+
+        Critical finding: Full PTZ camera control writable via SNMP SET
+        if community string allows write access (default "write" community on many Axis
+        cameras that have SNMP enabled from factory or admin config).
+
+        Writable NTCIP OIDs (base: 1.3.6.1.4.1.1206.4.2.7):
+          .3.1.0  GotoPreset         — send camera to stored position
+          .3.2.0  SetPreset          — overwrite any preset with attacker pan/tilt
+          .4.1.0  Pan                — direct pan control
+          .4.2.0  Tilt               — direct tilt control
+          .4.3.0  Zoom               — zoom control
+          .4.4.0  Focus              — focus control
+          .4.5.0  Iris               — iris/exposure control
+          .5.1.0  CameraFeatureCtrl  — enable/disable camera features
+          .5.4.0  LensFeatureCtrl    — lens feature control
+
+        Library: libPTZoverSNMP.so implements ax_mib_set_obj_val for all listed OIDs.
+        Community string auth: delegated to camera SNMP agent (net-snmp or axsnmpd).
+        Default Axis SNMP write community: "write" (changeable but commonly left default).
+
+        Attack: snmpset -c write -v 2c <camera_ip> 1.3.6.1.4.1.1206.4.2.7.4.1.0 i 9000
+        → rotates camera fully (pan = 9000 centidegrees) without camera web auth.
+
+        Additional: Axis MIBs also expose camera model, firmware version, serial number
+        via Global module OIDs (1.3.6.1.4.1.1206.4.2.6.*) — device fingerprinting without auth.
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('axptzoversnmp')
+            if pd:
+                pkg_dir = str(pd)
+
+        result = {
+            'binary': str(Path(pkg_dir) / 'axptzoversnmp') if pkg_dir else None,
+            'app_id': 47267,
+            'app_name': 'PTZ over SNMP',
+            'arch': 'MIPS32 little-endian (mipsisa32r2el) — legacy',
+            'protocol': 'SNMP v1/v2c (no v3 auth/priv observed in strings)',
+            'mib': 'NTCIP 1205 CCTV MIB (1.3.6.1.4.1.1206.4.2.7)',
+            'attack_paths': [
+                {
+                    'id': 'SNMP-1',
+                    'title': 'Unauthenticated PTZ control via SNMP SET (write community)',
+                    'mechanism': 'NTCIP CCTV MIB writable OIDs; community auth only (no session/token)',
+                    'impact': 'Full camera aim control: pan, tilt, zoom, focus, iris, preset manipulation',
+                    'severity': 'HIGH',
+                    'exploit': 'snmpset -c write -v 2c <ip> 1.3.6.1.4.1.1206.4.2.7.4.1.0 i <pan_centideg>',
+                    'prerequisite': 'SNMP enabled + write community known (default "write" or "private")',
+                },
+                {
+                    'id': 'SNMP-2',
+                    'title': 'Device fingerprinting via SNMP GET (read community)',
+                    'mechanism': 'Global module OIDs expose model, firmware, hardware version without camera web auth',
+                    'impact': 'Passive device fingerprinting; target selection for version-specific exploits',
+                    'severity': 'LOW',
+                    'exploit': 'snmpwalk -c public -v 2c <ip> 1.3.6.1.4.1.1206',
+                },
+                {
+                    'id': 'SNMP-3',
+                    'title': 'Preset poisoning (SetPreset via SNMP SET)',
+                    'mechanism': 'OID .3.2.0 SetPreset overwrites stored camera position; persists across reboots',
+                    'impact': 'Persistent blind spot creation; survives until admin restores preset manually',
+                    'severity': 'HIGH',
+                    'exploit': 'snmpset -c write -v 2c <ip> 1.3.6.1.4.1.1206.4.2.7.3.2.0 i <preset_num>',
+                },
+            ],
+            'writable_oids': {
+                '1.3.6.1.4.1.1206.4.2.7.3.1.0': 'GotoPreset',
+                '1.3.6.1.4.1.1206.4.2.7.3.2.0': 'SetPreset',
+                '1.3.6.1.4.1.1206.4.2.7.4.1.0': 'Pan',
+                '1.3.6.1.4.1.1206.4.2.7.4.2.0': 'Tilt',
+                '1.3.6.1.4.1.1206.4.2.7.4.3.0': 'Zoom',
+                '1.3.6.1.4.1.1206.4.2.7.4.4.0': 'Focus',
+                '1.3.6.1.4.1.1206.4.2.7.4.5.0': 'Iris',
+                '1.3.6.1.4.1.1206.4.2.7.5.1.0': 'CameraFeatureControl',
+                '1.3.6.1.4.1.1206.4.2.7.5.4.0': 'LensFeatureControl',
+            },
+            'library': 'lib/libPTZoverSNMP.so (ax_mib_set_obj_val, ax_mib_get_obj_val)',
+            'note': 'No TLS/SNMPv3 observed; all PTZ control over cleartext SNMP UDP/161',
+        }
+        return result
+
+    def sensor_metrics_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        AXIS Sensor Metrics Dashboard (metricdashboard) aarch64 ELF attack surface.
+
+        appId: 413965  binary: metricdashboard  version: 4.4.0
+        Ships: libmodbus.so.5.1.0, libnmea.so — Modbus TCP/RTU + NMEA GPS bridge on camera.
+
+        This is a camera-mounted ICS/SCADA bridge: connects to Modbus industrial sensors
+        and overlays their readings onto camera video streams. Makes cameras OT-adjacent.
+
+        Critical findings:
+
+        1. Modbus TCP to attacker-controlled host (data-source.cgi, admin-level)
+           Administrator can configure Modbus device IP + register set via data-source.cgi.
+           metricdashboard connects as Modbus client to configured IP:502.
+           If attacker controls admin session → point Modbus client at internal OT network
+           → blind Modbus register scan of otherwise-unreachable ICS devices (SSRF via Modbus).
+           Alternatively: configured external IP → camera exfiltrates sensor readings to attacker.
+
+        2. Serial bus acquisition (RS-485 via /dev/ttyPCC1)
+           "Failed to acquire serial bus for %s" — app acquires exclusive RS-485 bus access.
+           DataProducerModbusSerial class connects to sensors on the camera's physical RS-485 port.
+           If app crashes or is SIGKILL'd, serial bus may remain locked, DoS'ing other ACAP apps.
+           Modbus RTU frames to/from /dev/ttyPCC1 have no authentication by design.
+
+        3. NMEA GPS data injection via RS-485
+           DataProducer 'NMEA' class parses NMEA 0183 sentences from serial port.
+           If attacker can inject bytes into the RS-485 bus (physical access or bridge device),
+           can spoof GPS coordinates overlaid on camera video — location falsification.
+
+        4. Dynamic overlay credential exposure
+           "Failed to retrieve VAPIX credentials" — app fetches VAPIX service account creds
+           from com.axis.HTTPConf1.VAPIXServiceAccounts1 to call dynamicoverlay.cgi.
+           VAPIX service account token is logged on failure — credential in log file.
+
+        CGI: /app-settings.cgi (admin), /data-source.cgi (admin) — both fastCgi
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('metricdashboard') or self.packages.get('AXIS_Sensor_Metrics_Dashboard')
+            if pd:
+                pkg_dir = str(pd)
+
+        result = {
+            'binary': str(Path(pkg_dir) / 'metricdashboard') if pkg_dir else None,
+            'app_id': 413965,
+            'app_name': 'AXIS Sensor Metrics Dashboard',
+            'arch': 'aarch64 ELF stripped (PIE)',
+            'libs': ['libmodbus.so.5.1.0', 'libnmea.so', 'libaxparameter.so.1', 'libaxevent.so.1'],
+            'serial_device': '/dev/ttyPCC1 (RS-485 bus on ARTPEC cameras)',
+            'protocols': ['Modbus TCP (port 502)', 'Modbus RTU (RS-485)', 'NMEA 0183 (GPS)', 'VAPIX HTTP loopback'],
+            'attack_paths': [
+                {
+                    'id': 'SMD-1',
+                    'title': 'Modbus TCP SSRF — camera pivots to internal OT/ICS network',
+                    'cgi': '/data-source.cgi (admin)',
+                    'mechanism': 'Attacker-controlled Modbus device IP; metricdashboard connects as Modbus client',
+                    'impact': 'Blind Modbus register read/write on internal ICS network unreachable from attacker',
+                    'severity': 'HIGH',
+                    'exploit': 'POST /data-source.cgi ip=<internal_plc_ip>&port=502&unit_id=1',
+                },
+                {
+                    'id': 'SMD-2',
+                    'title': 'NMEA GPS spoofing via RS-485 injection',
+                    'mechanism': 'Physical RS-485 bus access; inject forged NMEA $GPRMC sentences',
+                    'impact': 'False GPS coordinates overlaid on camera video; location falsification for evidence',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Physical access to RS-485 wiring or bridge device on same bus',
+                },
+                {
+                    'id': 'SMD-3',
+                    'title': 'VAPIX service account credential exposure in error log',
+                    'mechanism': '"Failed to retrieve VAPIX credentials" error logs cred path; service account token in /tmp or syslog',
+                    'impact': 'Pivot to VAPIX API with service account token; further camera control',
+                    'severity': 'MEDIUM',
+                },
+                {
+                    'id': 'SMD-4',
+                    'title': 'Serial bus DoS via forced ACAP crash',
+                    'mechanism': 'ttyPCC1 bus acquired exclusively; SIGKILL of metricdashboard may leave bus locked',
+                    'impact': 'DoS for all RS-485-dependent ACAP apps on the camera',
+                    'severity': 'LOW',
+                },
+            ],
+            'data_producers': ['DataProducerModbus', 'DataProducerModbusIp', 'DataProducerModbusSerial', 'NMEA'],
+            'cgi_access': 'administrator only (/app-settings.cgi, /data-source.cgi)',
+        }
+        return result
+
+    def metadata_provider_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        Metadata Provider (metadata_provider) ARM32 ELF attack surface.
+
+        appId: 413493  binary: metadata_provider + bundled mosquitto MQTT broker  arch: armv7hf
+        Ships: libpaho-mqtt3as.so.1.3.1, libmetadataproducer.so, mosquitto 2.x
+
+        Architecture: metadata_provider subscribes to Axis camera metadata (video analytics,
+        PTZ events, audio detect) via libmetadataproducer.so, bridges to external MQTT broker.
+        Bundled mosquitto runs locally at localhost:1883 with anonymous auth.
+
+        Findings:
+
+        1. MQTT broker anonymous access (allow_anonymous true, localhost:1883)
+           Any process on the camera can connect to the bundled MQTT broker without auth.
+           From ACAP package context (post-RCE): subscribe to all camera metadata topics.
+           $SYS/broker/log/# subscribed — full broker log visibility.
+
+        2. MQTT bridge SSRF + hostname injection via bridgeBroker CGI
+           CGI_MethodHandlerBridgeBroker creates outbound MQTT connection to attacker-controlled URL.
+           addhost.sh appends to /etc/hosts without validation:
+             "echo $1 $2 >> /etc/hosts" — no dedup, no sanitization.
+           Bridge URL hostname resolved after /etc/hosts injection → SSRF to internal host.
+
+        3. Camera metadata exfiltration via MQTT bridge
+           Once bridge established: all metadata (face detections, person counts, plate reads,
+           motion events, PTZ positions) forwarded to attacker's MQTT broker in real time.
+           No per-topic ACL by default (acl_file not set in mosquitto.conf).
+
+        4. Paho MQTT TLS negotiation bypass
+           caCert, clientCert strings present but no enforce-TLS found in binary strings.
+           Bridge may connect without TLS to external broker if not explicitly configured.
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('metadata_provider') or self.packages.get('Metadata_provider')
+            if pd:
+                pkg_dir = str(pd)
+
+        result = {
+            'binary': str(Path(pkg_dir) / 'metadata_provider') if pkg_dir else None,
+            'app_id': 413493,
+            'app_name': 'Metadata Provider',
+            'arch': 'ARM32 (armv7hf) ELF stripped',
+            'bundled_binaries': ['mosquitto (MQTT broker, ARM32)', 'libpaho-mqtt3as.so.1.3.1'],
+            'mosquitto_config': {
+                'listener': 'localhost:1883',
+                'allow_anonymous': True,
+                'password_file': None,
+                'acl_file': None,
+                'tls': False,
+            },
+            'attack_paths': [
+                {
+                    'id': 'MDP-1',
+                    'title': 'MQTT bridge SSRF via bridgeBroker CGI + /etc/hosts injection',
+                    'cgi': 'CGI_MethodHandlerBridgeBroker (method: bridgeBroker)',
+                    'mechanism': 'addhost.sh appends <ip> <hostname> to /etc/hosts without validation; bridge URL uses injected hostname',
+                    'impact': 'SSRF to internal hosts; exfiltrate camera metadata to attacker MQTT broker',
+                    'severity': 'HIGH',
+                    'exploit': 'POST bridgeBroker with brokerUrl=mqtt://internal-host:1883 + addhost inject',
+                },
+                {
+                    'id': 'MDP-2',
+                    'title': 'Camera metadata stream exfiltration via MQTT bridge',
+                    'mechanism': 'Once bridge established, all video analytics metadata forwarded to external broker',
+                    'impact': 'Real-time face detections, people counts, plate reads, motion events leaked',
+                    'severity': 'HIGH',
+                },
+                {
+                    'id': 'MDP-3',
+                    'title': 'Anon MQTT access (localhost:1883) post-RCE lateral move',
+                    'mechanism': 'allow_anonymous true; any local process subscribes to all camera metadata',
+                    'impact': 'Post-RCE: full metadata access without separate auth',
+                    'severity': 'MEDIUM',
+                },
+            ],
+            'schemas': 'schemas/message_example.json (message format for bridged metadata)',
+        }
+        return result
+
+    def a3dpc_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        AXIS 3D People Counter (a3dpc) MIPS32 ELF attack surface.
+
+        appId: 211491  binaries: a3dpc + pyrun (Python 4.5MB runtime)  arch: mipsisa32r2el
+        Ships: pyrun (self-contained Python interpreter), libwrapper.so (5.5MB), libnlopt.so
+
+        Architecture: a3dpc is a C stub; core logic runs in Python via pyrun (embedded Python).
+        Apache reverse proxy forwards /stereo/* to Python app at localhost:50000.
+        libwrapper.so wraps the stereo depth-sensing algorithm.
+
+        Critical findings:
+
+        1. Admin-level package management CGI endpoints (RCE via ACAP package install)
+           /cmd/install   — installs a new ACAP package (from URL or upload?)
+           /cmd/download  — downloads files to device
+           /cmd/upgrade   — upgrades the app
+           /cmd/purge     — purge/reset all data
+           If /cmd/install accepts a URL, attacker can install a malicious EAP.
+           These are admin-level only — but combined with any admin credential leak → RCE.
+
+        2. Password logging: "GOT proxy_password: %s" (in a3dpc binary)
+           Proxy password printed to debug log/stdout; if logging to file, plaintext cred in log.
+
+        3. X-Forwarded-User header injection
+           Apache config: RequestHeader unset Authorization (strips auth)
+             then RewriteRule injects X-Forwarded-User from REMOTE_USER env var.
+           Python app at localhost:50000 may trust X-Forwarded-User as identity.
+           If REMOTE_USER can be spoofed (e.g., other ACAP app on camera calling loopback),
+           Python app processes requests as arbitrary user.
+
+        4. Stereo depth sensor data — privacy surface
+           libwrapper.so processes stereo depth frames (3D people detection via depth camera).
+           Depth map data sent to Python at 50000; if /stereo endpoint leaks raw depth frames,
+           attacker with viewer access can reconstruct 3D scenes.
+
+        5. Internal proxy without auth forwarding
+           ProxyPass to http://127.0.0.1:50000 after unsetting Authorization header.
+           Python app at 50000 gets no credentials — relies solely on Apache-level auth.
+           If localhost:50000 is reachable from other ACAP apps (no firewall), unauthenticated
+           access to Python app possible from co-resident ACAP.
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('a3dpc') or self.packages.get('3DPeopleCounter')
+            if pd:
+                pkg_dir = str(pd)
+
+        result = {
+            'binary': str(Path(pkg_dir) / 'a3dpc') if pkg_dir else None,
+            'app_id': 211491,
+            'app_name': 'AXIS 3D People Counter',
+            'arch': 'MIPS32 little-endian (mipsisa32r2el) — legacy',
+            'bundled_binaries': ['pyrun (Python 4.5MB self-contained runtime)', 'libwrapper.so (5.5MB depth algorithm)'],
+            'internal_service': 'Python app at localhost:50000 (proxied via Apache /stereo)',
+            'attack_paths': [
+                {
+                    'id': 'A3DPC-1',
+                    'title': 'Admin CGI package install/download — potential RCE via malicious EAP URL',
+                    'cgi': '/cmd/install, /cmd/download, /cmd/upgrade (admin)',
+                    'mechanism': 'Admin-level endpoints trigger ACAP package operations; if URL-based, install attacker EAP',
+                    'impact': 'RCE via malicious ACAP package; persistent foothold via installed app',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Admin-level auth (combined with any admin cred leak = RCE chain)',
+                },
+                {
+                    'id': 'A3DPC-2',
+                    'title': 'Proxy password plaintext logging',
+                    'mechanism': '"GOT proxy_password: %s" in a3dpc binary — cred logged to stdout/debug log',
+                    'impact': 'Proxy credential exposure; pivot to configured proxy or remote system',
+                    'severity': 'MEDIUM',
+                },
+                {
+                    'id': 'A3DPC-3',
+                    'title': 'X-Forwarded-User spoofing from co-resident ACAP',
+                    'mechanism': 'Apache strips Authorization, injects X-Forwarded-User; Python app at 50000 trusts it',
+                    'impact': 'If another ACAP app can make loopback requests to 50000, it can impersonate any user',
+                    'severity': 'MEDIUM',
+                },
+                {
+                    'id': 'A3DPC-4',
+                    'title': 'Depth frame exfiltration via /stereo viewer endpoint',
+                    'mechanism': 'Viewer-accessible /stereo proxy; Python app may serve raw depth map data',
+                    'impact': '3D scene reconstruction; privacy violation beyond standard video',
+                    'severity': 'MEDIUM',
+                },
+            ],
+            'cgi_endpoints': {
+                'administrator': ['/status', '/version', '/work', '/cmd/install', '/cmd/purge', '/cmd/download', '/cmd/upgrade', '/app/version', '/app/restart', '/pages'],
+            },
+        }
+        return result
+
     def facedetector_surface(self) -> dict:
         """
         facedetector aarch64 ELF attack surface.
@@ -967,6 +1314,14 @@ def main():
     parser.add_argument('--lpv', action='store_true', help='License Plate Verifier (fflprapp) attack surface')
     parser.add_argument('--people-counter', action='store_true', dest='people_counter',
                         help='People Counter (tvpc) attack surface')
+    parser.add_argument('--ptz-snmp', action='store_true', dest='ptz_snmp',
+                        help='PTZ over SNMP (axptzoversnmp) NTCIP MIB attack surface')
+    parser.add_argument('--sensor-metrics', action='store_true', dest='sensor_metrics',
+                        help='Sensor Metrics Dashboard (metricdashboard) Modbus/NMEA attack surface')
+    parser.add_argument('--metadata-provider', action='store_true', dest='metadata_provider',
+                        help='Metadata Provider (metadata_provider) MQTT bridge attack surface')
+    parser.add_argument('--3dpc', action='store_true', dest='a3dpc',
+                        help='AXIS 3D People Counter (a3dpc) pyrun/admin-CGI attack surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
