@@ -1198,15 +1198,20 @@ This `printf@plt` call bypasses js_traceout and writes to stdout. But:
 **Stack layout**:
 ```
 rbp - 0x6148 : bottom of frame (RSP on entry)
-rbp - 0x2030 : sprintf destination buffer (8240 bytes)
-rbp - 0x0028 : saved r15, r14, r13, r12, rbx (40 bytes)
-rbp          : saved rbp
+rbp - 0x2030 : sprintf destination buffer (8192 bytes; occupies rbp-0x2030 to rbp-0x30)
+rbp - 0x0030 : 8 bytes padding/local (immediately above buffer end)
+rbp - 0x0028 : saved rbx  |
+rbp - 0x0020 : saved r12  |  40 bytes saved regs
+rbp - 0x0018 : saved r13  |
+rbp - 0x0010 : saved r14  |
+rbp - 0x0008 : saved r15  |
+rbp          : saved rbp (caller)
 rbp + 0x0008 : return address  ← overflow target
 ```
 
 **Vulnerable sprintf at libengine+0x416cd**:
 ```
-416b3: lea -0x2030(%rbp), %r8       ; r8 = 8240-byte stack buffer
+416b3: lea -0x2030(%rbp), %r8       ; r8 = 8192-byte stack buffer (0x2000 bytes)
 416c6: lea 0x1ca3b3(%rip), %rsi     ; "set chassis display permanent message halt@%s"
 416cd: call sprintf@plt             ; sprintf(buf, fmt, rdx)
 ```
@@ -1214,24 +1219,26 @@ rbp + 0x0008 : return address  ← overflow target
 command parameter struct. `(%r12)` is the user-supplied halt message string.
 
 **Overflow math**:
-- Buffer: 8240 bytes
+- Buffer: 8192 bytes (rbp-0x2030 to rbp-0x30, i.e., 0x2000 bytes)
 - Format prefix: `"set chassis display permanent message halt@"` = 42 bytes
-- Available for %s: 8240 - 42 = 8198 bytes before overflow begins
-- Distance to return address: 0x2030 (buf offset) + 8 (saved rbp) + 8 (ret addr) = **0x2040 = 8256 bytes**
-- So: message > 8214 bytes overflows; message > 8256 bytes overwrites return address
+- Overflow begins: message > 8192 - 42 - 1 = 8149 bytes
+- Saved rbx corrupted: message = 8158 bytes (buffer + 8 pad + 8 rbx = 8208 written)
+- Return address overwritten: message = 8214 bytes (8256 total bytes written)
 
 **Chain with RELRO=OFF**:
 - No canary + overwrite return address → ROP chain using libengine gadgets
   (pop rdi @ +0x5b18d, system@PLT @ +0x35ec0)
-- Or: partial overwrite into saved r12-r15 to redirect a subsequent indirect call
+- Partial overwrite: message = 8158 bytes corrupts saved r12 (command struct ptr);
+  subsequent struct dereferences in same frame redirect control flow
 
 **Classification**: POST-AUTH. Requires authenticated NETCONF session with operator
   or superuser access to execute `request system reboot message <text>`.
 
-**Caveat**: DDL enforces a maximum string length on the `message` parameter. If the
-  DDL cap is < 8215 bytes, this is mitigated at the parse layer before reaching the C
-  handler. DDL constraint verification requires live system or DDL schema access
-  (pending).
+**DDL constraint — CONFIRMED ABSENT** (libchassis_cmd-dd.tlv, EVO 23.4R2.14):
+  TLV binary analysis: TAG 0x0b (max-length) for the halt `message` parameter = `ff ff ff ff`
+  (0xffffffff = no enforced limit). Verified at file offsets 0x10d9da and 0x10e50a.
+  DDL dispatches the full, untruncated message string to `mgd_reboot_command`.
+  The overflow is NOT mitigated at the DDL layer.
 
 **Second sprintf chain** — libengine+0x416eb:
 ```
