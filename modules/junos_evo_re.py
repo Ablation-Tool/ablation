@@ -101,13 +101,20 @@ TARGETS = {
     'bbe-pfcp-proxyd': {
         'binary': '/usr/sbin/bbe-pfcp-proxyd',
         'arch': 'x86_64',
-        'size_mb': None,
+        'size_mb': 3.5,
         'mitigations': {'pie': True, 'canary': False, 'relro': False},
-        'bert_functions': None,
-        'bert_top_score': None,
+        'bert_functions': 3812,
+        'bert_top_score': 0.37,
         'protocol': 'PFCP UDP 8805',
         'status': 'PENDING_DYNAMIC',
         'confirmed_bugs': 1,  # Finding 11 — 3+ IPv6 Address IEs
+        # BERT sweep: 406 PLT entries, raw sockets (recvfrom/recvmsg), no gRPC.
+        # strcpy/sprintf/memcpy present. All top candidates (0x172f30, 0xf1fa0,
+        # 0x1dfd60) verified: fixed-constant copies from global state, or IE parser
+        # with duplicate-IE deduplication flag check (test byte ptr [r13], 2; jne).
+        # Finding 11 is likely logic/state-machine crash (null deref or assertion
+        # on unexpected IE count), not a raw buffer overflow at the BERT-visible layer.
+        # PoC: garlic/pfcp_evo_poc.py — awaits dynamic confirmation on live target.
     },
 }
 
@@ -122,6 +129,16 @@ QUERY_PROFILES = {
     'double_free': '{daemon} | calls: free | vuln: double free in error path',
     'avp_parser': '{daemon}_AVP_PARSER | length field | user-controlled | overflow before memcpy or strcpy',
 }
+
+# CVE-2024-6387 (regreSSHion) — Finding 8, PENDING
+# sshd binary not present in firmware extraction. Junos EVO runs sshd inside the
+# Junos guest VM squashfs, not the host initrd/re64 tree. Extraction path:
+#   1. tar -xzf junos-vmhost-install-mx-x86-64-23.4R2-S7.4.tgz
+#   2. find the guest squashfs (usually junos-<version>.squashfs or similar)
+#   3. unsquashfs → sshd at /usr/sbin/sshd
+#   4. strings sshd | grep OpenSSH_
+# Junos 23.4R2 shipped before CVE-2024-6387 (disclosed July 2024, fixed 9.8p1).
+# Expected: OpenSSH 8.x or 9.0-9.7 → likely vulnerable range. Confirm empirically.
 
 # CALIBRATION — score threshold learned from jdhcpd sweep
 # Scores below 0.50 on this model consistently resolve to false positives.
