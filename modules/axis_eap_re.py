@@ -967,6 +967,16 @@ class AxisEAPAnalyzer:
             ],
             'data_producers': ['DataProducerModbus', 'DataProducerModbusIp', 'DataProducerModbusSerial', 'NMEA'],
             'cgi_access': 'administrator only (/app-settings.cgi, /data-source.cgi)',
+            # Source tarball RE (AXIS_Sensor_Metrics_Dashboard_4_4_0_src.tar.gz)
+            'bundled_source': {
+                'libmodbus_version': '3.1.11',
+                'libmodbus_upstream': 'https://libmodbus.org (LGPL 2.1)',
+                'libnmea_version': 'git snapshot (nmea_pars* API)',
+                'nmea_buffers': 'NMEA_CONVSTR_BUF=256, NMEA_TIMEPARSE_BUF=256 (fixed stack buffers)',
+                'build_targets': ['armv7hf (arm-linux-gnueabihf)', 'aarch64 (aarch64-linux-gnu)'],
+                'sdk': 'axisecp/acap-sdk:3.5',
+                'note': 'Source ships upstream libs only; no AXIS-specific app C source included',
+            },
         }
         return result
 
@@ -1138,6 +1148,38 @@ class AxisEAPAnalyzer:
             ],
             'cgi_endpoints': {
                 'administrator': ['/status', '/version', '/work', '/cmd/install', '/cmd/purge', '/cmd/download', '/cmd/upgrade', '/app/version', '/app/restart', '/pages'],
+            },
+            'python_version': '2.7 (EOL 2020-01-01)',
+            'developer_path_leak': '/home/gustafo/3dcounter/package/',
+            'hardcoded_credential': 'admin:1password23 (from pyc string constants)',
+            'flask_routes': [
+                '/anonymize/anonymize', '/anonymize/anonymized.json', '/anonymize/reset',
+                '/awb/<key>.csv', '/awb/clear/<key>',
+                '/axis-cgi/mjpg/video.cgi?{params}',
+                '/calibrate/start', '/calibrate/stop', '/calibrate/clear',
+                '/config.json', '/config/video.json', '/configure.html',
+                '/counts.json', '/data/clear',
+                '/debug_download', '/debug_download_prepare', '/debug/log/<level>',
+                '/export_meta.json', '/export_raw.%s',
+                '/fake/down', '/fake/up',
+                '/full_zone_params_recalculation.json',
+                '/params.json',
+                '/temporary_api/snr', '/temporary_api/zone',
+            ],
+            'path_traversal_constant': '/../ present as string constant in app_api.pyc',
+            'popen_import': 'subprocess.Popen imported in app_api.pyc',
+            'reporting_integration': {
+                'target': 'AXIS StoreDataManager via counter.reporting.datamanager.*',
+                'params': ['url', 'folder_identifier', 'folder_password'],
+                'password_storage': 'counter.reporting.datamanager.folder_passwords in axparameter',
+            },
+            'privacy_script_injection': {
+                'file': 'anon/privacy.sh',
+                'vector': 'PRIVACY_IMAGE_URL to sed without sanitization — expression injection',
+            },
+            'filter_events_injection': {
+                'file': 'anon/filter_events.sh',
+                'vector': 'rm $F unquoted find output — glob/word-split on rm path',
             },
         }
         return result
