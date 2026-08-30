@@ -452,77 +452,77 @@ Trigger path in Junos context:
 
 ## Juniper custom DOM API: register_* / cs_xmlXPathNext* (NULL deref + vtable overwrite)
 
-12 Juniper-specific function pointer slots added to libxml2.so.3 (absent in upstream).
-All 12 are in BSS (zero-initialized). Must be set via `register_*` before use.
+7 Juniper-specific BSS function pointer slots added to libxml2.so.3 (absent in upstream).
+Confirmed via .dynsym/.symtab symbol table and RIP-relative write trace.
 
-Slots (BSS at 0x150b10–0x150b68):
+Slot map (confirmed, Junos EVO 23.4R2.14 x86-64 libxml2.so.3):
 ```
-0x150b10: get_first_node       0x150b48: get_next_node
-0x150b18: get_all_nodeset      0x150b50: delete_nodeset
-0x150b20: is_node_container    0x150b58: get_parent_node
-0x150b28: get_ref_node         0x150b60: get_all_nodes
-0x150b30: delete_node          0x150b68: delete_all_nodes
-0x150b38: is_node_equal        0x150b40: get_child_node
+BSS addr    Name                Register stub  Stub VA
+0x14dbc0    get_first_node      register_get_first_node       0x2f4c0
+0x14dc18    is_node_container   register_is_node_container    0x2f510
+0x14ddb8    get_child_node      register_get_child_node       0x2f4e0
+0x14dde8    get_next_node       register_get_next_node        0x2f4d0
+0x14dd38    delete_node         register_delete_node          0x2f530
+0x14de38    get_parent_node     register_get_parent_node      0x2f4f0
+0x14de58    get_all_nodes       register_get_all_nodes        0x2f500
 ```
 
-Registration functions (3 instructions each — no type checking, no atomicity):
+Registration stubs are 3 instructions each — no type checking, no atomicity guarantee:
 ```asm
-register_get_first_node(fn):
-  mov  [rip + GOT_offset], rax   ; load &get_first_node slot
-  mov  rdi, [rax]                ; *slot = fn
-  ret
+; register_get_first_node(fn):  fn in rdi
+0x2f4c0:  mov  rax, [rip + 0x11e6f9]  ; rax = &get_first_node slot (0x14dbc0)
+0x2f4c7:  mov  [rax], rdi             ; *slot = fn
+0x2f4ca:  ret
 ```
+Pattern repeats identically for all 7 slots at 0x2f4d0, 0x2f4e0, 0x2f4f0, 0x2f500, 0x2f510, 0x2f530.
 
-Call sites WITHOUT NULL checks (confirmed unchecked dereferences):
+cs_xmlXPathNextParent (0x81700) — Junos element traversal (walks "commit-script-input" / "configuration" elements):
+  0x81790:  mov r13, [rip+0xcc6a1]     ; r13 = &get_parent_node (0x14de38)
+  0x8179a:  call qword [r13]           ; call *get_parent_node — NO NULL CHECK
+  0x817a8:  mov rax, [rip+0xcc469]     ; rax = &is_node_container (0x14dc18)
+  0x817b2:  call qword [rax]           ; call *is_node_container — NO NULL CHECK
+  0x817bb:  call qword [r13]           ; call *get_parent_node again — NO NULL CHECK
+  0x817c5:  mov rax, [rip+0xcc56c]     ; rax = &delete_node (0x14dd38)
+  0x817cf:  call qword [rax]           ; call *delete_node — NO NULL CHECK
+  0x817d6:  mov rax, [rip+0xcc3e3]     ; rax = &get_first_node (0x14dbc0)
+  0x817ec:  jmp  qword [rax]           ; tail-call *get_first_node — NO NULL CHECK
 
-`cs_xmlXPathNextChildElement` (0x81870):
-  0x81923: mov [get_first_node GOT], rax; call *(%rax)  ← no NULL check
-  0x81938: mov [get_parent_node GOT], rax; call *(%rax) ← no NULL check
-
-`cs_xmlXPathNextParent` (0x81700):
-  0x817a8: mov [is_node_container GOT], rax; call *(%rax) ← no NULL check
-  0x817bb: call *0x0(%r13)  [r13 = get_parent_node GOT]  ← no NULL check
-  0x817c5: mov [delete_node GOT], rax; call *(%rax)       ← no NULL check
-  0x817df: mov (%rax), %rax; jmp *%rax [get_first_node]   ← tail-call, no NULL check
-
-Call sites WITH NULL checks (for comparison):
-  0x82617: cmpq $0x0, (%rax) for get_all_nodeset ← guarded
-  0x829b8: cmpq $0x0, (%rax) for get_next_node   ← guarded
+delete_node (0x14dd38) is the highest-value overwrite target: 15+ call sites across
+xmlXPathNodeCollectAndTest and auxiliary XPath axis helpers.
 
 Dispatch gate in xmlXPathNodeCollectAndTest (0x8fabe / 0x8fc11):
 ```asm
-; Parent axis selection
-mov  [get_next_node GOT], rax
-lea  xmlXPathNextParent, rdx    ; standard (safe) path
-cmpq $0, (%rax)                 ; is get_next_node NULL?
-lea  cs_xmlXPathNextParent, rax ; custom (unchecked) path
-cmove rdx, rax                  ; get_next_node==NULL → use standard; else use custom
+; parent-axis selection (0x8fabe)
+mov  rax, [rip + 0x...  ]       ; rax = &get_next_node (0x14dde8)
+lea  rdx, xmlXPathNextParent     ; standard (safe) path
+cmpq $0, (%rax)                  ; is *get_next_node == NULL?
+lea  rax, cs_xmlXPathNextParent  ; custom (unchecked) path
+cmove rdx, rax                   ; NULL → standard; non-NULL → custom
 ```
-Selection is gated on `get_next_node`. Custom path is only taken if `get_next_node != NULL`.
+Gate checks ONLY `get_next_node`. Other 6 slots are unchecked inside the custom functions.
 
 FINDING 1 — NULL deref (partial-registration race):
-  Precondition: `register_get_next_node(fn)` has been called (switches to cs_* path),
-    but at least one of {get_parent_node, is_node_container, delete_node, get_first_node}
-    is still NULL.
-  Attack: NETCONF filter with parent or child-element XPath axis triggers cs_* path.
-  `<filter type="xpath" select="//parent::*/child::element()">` →
-    xmlXPathNodeCollectAndTest → takes cs_* branch (get_next_node != NULL) →
-    cs_xmlXPathNextParent calls get_parent_node (unchecked) → NULL deref → crash.
-  Window: partial registration state between any two register_* calls is exploitable
-    if an XPath query arrives during that window.
+  Precondition: `register_get_next_node(fn)` has been called (gate passes),
+    but {get_parent_node | is_node_container | delete_node | get_first_node} still NULL.
+  Trigger: NETCONF XPath filter with parent/child-element axis:
+    `<filter type="xpath" select="parent::configuration">` →
+    xmlXPathNodeCollectAndTest → cmove takes cs_* path (get_next_node != NULL) →
+    cs_xmlXPathNextParent → call *get_parent_node (NULL) → crash at 0x0.
+  Window: any XPath query arriving between first register_* call and last register_* call.
+  Severity: DoS / crash of mgd (management daemon).
 
 FINDING 2 — vtable overwrite (RCE):
-  BSS slots at deterministic offsets per binary version.
-  Overwrite any of the 5 unchecked slots (get_parent_node, is_node_container,
-  delete_node, get_first_node + tail-call, delete_node via cs_xmlXPathNextParent)
-  with attacker-controlled address.
-  Trigger: NETCONF XPath filter with parent/child-element axis (requires get_next_node
-  to be registered to take the cs_* path).
-  Chain: libnetconf2 F1 (heap spray to shape layout) + F9 (OOB heap write to
-    overwrite BSS slot) + F2 (optional TOCTOU for slot alignment) →
-    arbitrary code execution on next XPath axis traversal.
-  Note: BSS is not adjacent to heap — chain requires heap-to-BSS bridge
-    (needs a separate primitive or ASLR info leak first).
+  BSS slots at confirmed deterministic addresses (ASLR does NOT randomize BSS base
+  within a loaded shared library relative to other library segments — load base varies
+  but inter-segment layout is fixed).
+  Target: delete_node slot (0x14dd38) — 15+ call sites, always reached on XPath traversal.
+  Overwrite mechanism: requires write-what-where primitive (candidates in same library:
+    CVE-2022-23308 UAF → if XInclude reachable from NETCONF, freed doc pointer write;
+    libnetconf2 F9 OOB heap write if heap adjacent to BSS mapping).
+  Trigger (after overwrite): any NETCONF XPath filter activates delete_node call site
+    → arbitrary code execution in mgd context (root on FreeBSD Junos).
+  Note on BSS-heap adjacency: not guaranteed without ASLR info leak; chain credibility
+    depends on whether mgd disables ASLR (common in embedded/appliance firmware).
 
 ---
 
@@ -568,6 +568,21 @@ FINDING S3 — slax:sysctl → unbounded alloca stack overflow (slaxext.c:2108)
     net.inet.tcp.pcblist: ~10MB on a busy SRX
   `alloca(10MB)` → stack pointer past guard page → SIGSEGV → DoS.
   Secondary: sysctl read oracle — can read any sysctl accessible to mgd uid.
+
+FINDING S4 — slaxSlaxToXpath → unbounded alloca (slaxloader.c:891)
+  Same alloca class as S3. In the S1 call chain:
+  ```c
+  // slaxloader.c:851 — slaxSlaxToXpath(tag, nointern, expr, errors)
+  // called by slaxExtEvaluate (slaxext.c:2857) with attacker-controlled expr
+  sd.sd_len = strlen(slax_expr);       // line 889 — attacker controls length
+  buf = alloca(sd.sd_len + 1);         // line 891 — NO BOUND CHECK
+  ```
+  `slax_expr` = the XPath expression string passed to `slax:evaluate`.
+  If a SLAX script calls `slax:evaluate($rpc-param)`, the attacker controls `sd_len`.
+  Sending a 1MB NETCONF RPC param → `alloca(1MB+1)` → stack overflow before S1's
+  XPath injection is even attempted. DoS via S4 is easier to reach than XPath injection
+  via S1 for any script that pipes input directly.
+  Source: slaxloader.c:889-891, same binary translation unit as slaxExtEvaluate caller.
 
 SLAX injection trigger path:
   NETCONF RPC → mgd → operational/event script invocation → SLAX script execution
