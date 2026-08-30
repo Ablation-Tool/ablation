@@ -2999,7 +2999,70 @@ class AxisEAPAnalyzer:
                     'severity': 'MEDIUM',
                     'prerequisite': 'None (static artifact in binary)',
                 },
+                {
+                    'id': 'OE-7',
+                    'title': 'OccCoCounterAddress outbound TCP 4066 to attacker-controlled IP',
+                    'mechanism': (
+                        'Counter0OccCoCounterAddress is operator-settable. Camera initiates '
+                        'outbound TCP 4066 connection to this address using SlavePass handshake. '
+                        'Set to attacker IP → camera connects out → MITM occupancy sync or '
+                        'trigger protocol-level memory corruption on the 4066 handshake path.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level auth to set Counter0OccCoCounterAddress',
+                },
+                {
+                    'id': 'OE-8',
+                    'title': 'anon-gui privacy.sh mount --bind as root (identical to DD-1)',
+                    'mechanism': (
+                        'modules/anon-gui/anon/privacy.sh present in OE package. '
+                        'ACTION=$1 ANON_FOLDER=$2 PRIVACY_IMAGE_URL=$3 — ANON_FOLDER unquoted '
+                        'in cp calls at first-init. mount --bind $BLOCKER_FILE $MCAST overlays '
+                        '/usr/sbin/mcast-always-setter as root.'
+                    ),
+                    'exploit_chain': (
+                        'Operator triggers privacy mode via .apiadmin CGI -> privacy.sh called '
+                        'as root -> mount --bind attacker-controlled script over /usr/sbin/mcast-always-setter'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level auth to trigger privacy mode',
+                },
+                {
+                    'id': 'OE-9',
+                    'title': 'SFTP recording exfil to hardcoded Cognimatics server',
+                    'mechanism': (
+                        'sftpclient uploads recordings to upload.cognimatics.com/incoming/ '
+                        'in addition to coredump path /coredumps. Both paths hardcoded in '
+                        'tvpc binary. Recordings may include video data captured by occupancy '
+                        'counting pipeline.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'None — triggered by tvpc on configured upload events',
+                },
+                {
+                    'id': 'OE-10',
+                    'title': 'connection_key.json admin endpoint leaks secondary-camera auth credential',
+                    'mechanism': (
+                        '/local/occupancy-estimator/.apiadmin?connection_key.json returns '
+                        'URL + connection key for secondary camera co-counting link. '
+                        'Key authenticates incoming TCP 4066 co-counter connections. '
+                        'Admin-gated but present as a structured credential endpoint.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level camera auth',
+                },
             ],
+            'cognimatics_mib': {
+                'oid_root': '1.3.6.1.4.1.35894',
+                'file': 'html/occupancy-estimator/COGNIMATICS-MIB.txt',
+                'subtrees': {
+                    'generic': '35894.1 — name, product, version (read-only)',
+                    'status': '35894.2 — operational state (online/disabled/scheadule/error)',
+                    'counting': '35894.3 — occupancy counts',
+                    'alert': '35894.4 — threshold alerts',
+                },
+                'note': 'MIB documentation only — OE does not ship mini_snmpd; no SNMP daemon in package',
+            },
         }
         return result
 
