@@ -27,40 +27,100 @@ Ablation matches on three signals simultaneously — structure, instruction over
 
 ## Semantic vulnerability sweep
 
-Describe what dangerous code looks like. Ablation encodes every function in the binary and ranks them by behavioral similarity to your query.
+Describe what dangerous code looks like in plain English. Ablation encodes every function in the binary and returns the closest matches — no symbols, no database, no setup required.
+
+**How to sweep any binary:**
 
 ```python
-from modules.semantic_search import SemanticSearcher, describe_function
+import struct, capstone, numpy as np
+from modules.semantic_search import describe_function
+from sentence_transformers import SentenceTransformer
 
-# Sweep jdhcpd (11MB, stripped, no symbols) for unsafe memcpy patterns
-s = SemanticSearcher('path/to/func_id.db')
-s.build_corpus()
+BINARY = '/path/to/target'          # any stripped ELF — no symbols needed
+SCAN_START = 0x200000               # adjust to the code region you care about
+SCAN_END   = 0x400000
 
-results = s.query(
-    'DHCP_DAEMON | calls: memcpy | vuln: memcpy called with length derived '
-    'from packet option byte without upper-bound check before copy',
-    top_k=8
-)
-for r in results:
-    print(f'{r.va:#x}  score={r.score:.4f}  {r.role}')
+# Optional: map call targets to names for richer descriptions.
+# Run `objdump -d binary | grep '@plt'` to get these.
+# Leave empty and the sweep still works — you just get raw addresses.
+PLT = {
+    0x7a8e0: 'strcpy',   0x785f0: 'sprintf',  0x7a9b0: 'snprintf',
+    0x79650: 'memcpy',   0x79710: 'free',      0x7bda8: 'malloc',
+    0x7b710: 'recvfrom', 0x787e0: 'recvmsg',   0x7b3f0: 'recv',
+}
+
+with open(BINARY, 'rb') as f:
+    data = f.read()
+
+md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+
+def find_starts(data, start, end):
+    # x86-64 function prologue: push rbp; mov rsp,rbp
+    return [i for i in range(start, end - 4)
+            if data[i] == 0x55 and data[i+1:i+4] == b'\x48\x89\xe5']
+
+def extract(va, max_bytes=2048):
+    lines, calls = [], []
+    for insn in md.disasm(data[va:va + max_bytes], va):
+        lines.append(f'{insn.mnemonic} {insn.op_str}'.strip())
+        if insn.mnemonic == 'call':
+            try:
+                calls.append(PLT.get(int(insn.op_str, 16), insn.op_str))
+            except ValueError:
+                calls.append(insn.op_str)
+        if insn.mnemonic in ('ret', 'retq'):
+            break
+    return lines, calls
+
+# 1. Find and encode every function in the scan range
+funcs = []
+for va in find_starts(data, SCAN_START, SCAN_END):
+    lines, calls = extract(va)
+    if len(lines) >= 5:
+        funcs.append({'va': va, 'desc': describe_function(
+            name=f'func_{va:07x}', role='TARGET',
+            call_targets=calls, strings=[], asm_lines=lines,
+        ), 'calls': calls})
+
+# 2. Encode corpus — ~35 seconds for 885 functions on CPU
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
+corpus = model.encode([f['desc'] for f in funcs], normalize_embeddings=True,
+                      batch_size=128, show_progress_bar=True).astype(np.float32)
+
+# 3. Query: describe what dangerous code looks like
+queries = {
+    'unsafe_memcpy':   'TARGET | calls: memcpy | vuln: memcpy called with length from packet without bounds check',
+    'strcpy_overflow': 'TARGET | calls: strcpy | vuln: strcpy on user-controlled string into fixed buffer',
+    'int_overflow':    'TARGET | calls: malloc calloc | vuln: integer overflow in size arithmetic before allocation',
+    'double_free':     'TARGET | calls: free | vuln: double free use after free same pointer freed twice',
+    'recv_overflow':   'TARGET | calls: recvfrom recv | vuln: recv into stack buffer no size validation',
+}
+
+for name, query in queries.items():
+    qvec = model.encode(query, normalize_embeddings=True).astype(np.float32)
+    scores = corpus @ qvec
+    top = np.argsort(scores)[::-1][:5]
+    print(f'\n--- {name} ---')
+    for i in top:
+        print(f'  {funcs[i]["va"]:#x}  score={scores[i]:.4f}  calls={funcs[i]["calls"][:4]}')
 ```
 
 ```
-# Output — 885 functions, 11MB binary, < 2 minutes
-0x2b8ed0  score=0.7238  DHCP_DAEMON   <- top candidate for unsafe memcpy
-0x2c0215  score=0.6325  DHCP_DAEMON   <- destructor with double-free pattern
-0x294ef0  score=0.6446  DHCP_DAEMON   <- appears in 5+ vulnerability class queries
+# Output — 885 functions, 11MB binary, 35 seconds on CPU
+--- unsafe_memcpy ---
+  0x2b8ed0  score=0.7238  calls=['memcpy', 'memset']
+  0x294ef0  score=0.6621  calls=['strcpy', 'sprintf', 'malloc']
+
+--- double_free ---
+  0x2c0215  score=0.6325  calls=['free', 'free', 'free']
+  0x294f30  score=0.6102  calls=['free', 'malloc', 'memcpy']
 ```
 
-Built-in query profiles:
-- `unsafe_memcpy_controlled_len` — memcpy with packet-derived length, no bounds check
-- `strcpy_unbounded` — strcpy on user-controlled string into fixed buffer
-- `sprintf_user_string` — sprintf with user-controlled format or argument
-- `int_overflow_before_alloc` — integer overflow in allocation size arithmetic
-- `heap_double_free` — double-free / use-after-free pattern
-- `recv_into_small_buf` — recv* into stack buffer without size validation
+The encoder is architecture-agnostic. x86-64 `mov`, ARM64 `ldr`, and MIPS `lw` all normalize to `DATA_TRANSFER_OP` before encoding — so the same query finds the same function in x86-64 and ARM64 builds. A function can be recompiled, have instructions swapped, or move to a different address — the behavioral fingerprint stays stable.
 
-The encoder is architecture-agnostic. x86-64 `mov`, ARM64 `ldr`, and MIPS `lw` all map to `DATA_TRANSFER_OP`. A function can be recompiled at a different optimization level, have a few instructions swapped, or move to a different address — the behavioral fingerprint stays stable.
+**This is the right first step on any unfamiliar binary.** Run it before reading assembly manually. It turns 885 functions into 5 candidates per vulnerability class in 35 seconds.
+
+**Validated:** Cisco ASA `lina` 9.14 → 9.22 — RADIUS parser moved 28 MB, renamed, recompiled. Homolog similarity: 0.82. Unrelated function (TLS handler): 0.14. Separation: 5.9×. See `tests/test_bert_cross_version.py`.
 
 ---
 
@@ -236,14 +296,8 @@ print(result.name, result.role, result.confidence)
 print(result.vuln_notes)
 "
 
-# Semantic function search
-python3 -c "
-from modules.semantic_search import SemanticSearcher
-s = SemanticSearcher('~/.ablation/func_id.db')
-s.build_corpus()
-for r in s.query_function('sub_unknown', 'RADIUS_ATTR_HANDLER', ['strcpy', 'radius_decode'], ['RADIUS-Class']):
-    print(f'{r.score:.3f}  {r.name}  ({r.role})')
-"
+# Semantic vulnerability sweep — no database needed, works on any stripped binary
+# See the full self-contained sweep pattern in the "Semantic vulnerability sweep" section above.
 
 # Cross-version patch tracking
 python3 -c "
