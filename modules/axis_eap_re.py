@@ -2376,6 +2376,184 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def vmd_458_surface(self) -> dict:
+        """
+        AXIS Video Motion Detection 4.5.8 (vmd) attack surface — diff from 4.4.4.
+
+        appId: 143440  binary: vmd  version: 4.5.8  arch: aarch64 stripped
+        Same family as VMD 4.4.4 (appId identical). CGI: administrator /control.cgi.
+
+        Changes from 4.4.4:
+          - Architecture upgrade: 4.4.4 was ARM32; 4.5.8 is aarch64.
+          - XML_SetNamespaceDeclHandler added: namespace-aware XML parsing in libexpat.
+          - libscene.so, libgeometry.so, libfixmath.so.0 still loaded (same substitution surface).
+          - ONVIF CGI handler confirmed still present.
+
+        4.5.8 specific additions:
+          - XML namespace declaration handler: XML namespaces now declared in config.
+            Attack: malformed namespace declarations in VMD XML config → namespace confusion
+            in libexpat → potential memory corruption.
+          - aarch64 binary: bypasses any ARM32-specific exploit mitigations.
+        """
+        result = {
+            'app_id': 143440,
+            'app_name': 'AXIS Video Motion Detection 4',
+            'binary_name': 'vmd',
+            'version': '4.5.8',
+            'arch': 'aarch64 stripped (upgraded from ARM32 in 4.4.4)',
+            'cgi': 'administrator /control.cgi (admin-only)',
+            'libs': ['libscene.so', 'libgeometry.so', 'libfixmath.so.0', 'libexpat.so.1', 'libaxparameter.so.1'],
+            'xml_additions': 'XML_SetNamespaceDeclHandler — namespace-aware XML parsing added in 4.5.8',
+            'attack_paths': [
+                {
+                    'id': 'VMD45-1',
+                    'title': 'libexpat XML namespace confusion via malformed namespace declaration',
+                    'mechanism': 'XML_SetNamespaceDeclHandler installed; malformed xmlns declarations in VMD config may trigger libexpat namespace parsing edge case → heap corruption',
+                    'severity': 'LOW',
+                    'prerequisite': 'Admin-level auth to write VMD config',
+                },
+                {
+                    'id': 'VMD45-2',
+                    'title': 'libscene.so / libgeometry.so substitution (same as VMD 4.4.4)',
+                    'mechanism': 'Proprietary scene libs from firmware path; writable path → malicious .so injection',
+                    'severity': 'LOW',
+                    'prerequisite': 'Write access to lib path',
+                },
+            ],
+        }
+        return result
+
+    def vmd3_lua_surface(self) -> dict:
+        """
+        AXIS Video Motion Detection 3 (VMD3) attack surface.
+
+        appId: 46396  APPTYPE: lua  version: 3.2.0  arch: ARTPEC-5 (Lua runtime)
+        Files: combined.lua (encrypted), encpwd (key blob), VMD3.xml (config).
+        LICENSEPAGE=none.
+
+        Same encrypted-Lua pattern as Digital Auto Tracking — all Lua in one combined.lua,
+        decrypted at runtime by ARTPEC-5 firmware's Lua rule engine.
+
+        VMD3.xml: geometry-based zone config with polygon definitions, timer, sensitivity.
+        The XML defines detection zones as x/y coordinate polygons (float, range -1.0 to 1.0).
+
+        Key findings:
+
+        1. Encrypted Lua — same attack path as DAT
+           combined.lua is binary-encrypted; encpwd is per-package key blob.
+           LD_PRELOAD hook on Lua runtime → intercept plaintext at decrypt time.
+
+        2. VMD3.xml polygon coordinate injection
+           Zone polygons defined as floating point x/y pairs in XML.
+           "knownTypeName="geometry.polygon"" — custom geometry type parsed by firmware.
+           Malformed float coordinates (NaN, Inf, extreme values) in zone config → geometry
+           library floating-point exception or buffer overflow in zone rendering.
+
+        3. ARTPEC-5 only — legacy target
+           ARTPEC-5 cameras may not receive firmware updates; VMD3 on ARTPEC-5 cameras
+           represents an extended attack surface on unpatched hardware.
+        """
+        result = {
+            'app_id': 46396,
+            'app_name': 'AXIS Video Motion Detection 3',
+            'binary_name': 'combined.lua (encrypted)',
+            'version': '3.2.0',
+            'arch': 'ARTPEC-5 (Lua runtime)',
+            'license_page': 'none',
+            'encpwd': 'binary decryption key blob',
+            'attack_paths': [
+                {
+                    'id': 'VMD3-1',
+                    'title': 'Encrypted Lua source recovery via LD_PRELOAD hook',
+                    'mechanism': 'Same as DAT-2: LD_PRELOAD on ARTPEC-5 Lua interpreter → intercept plaintext at decrypt time',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Code exec on ARTPEC-5 camera (LD_PRELOAD allowed on Lua interpreter)',
+                },
+                {
+                    'id': 'VMD3-2',
+                    'title': 'VMD3.xml polygon float injection — geometry exception',
+                    'mechanism': 'Detection zone polygon coordinates in VMD3.xml parsed as floats by firmware geometry lib; NaN/Inf/extreme values → floating-point exception or geometry crash',
+                    'severity': 'LOW',
+                    'prerequisite': 'Write access to VMD3.xml (admin-level or filesystem)',
+                },
+            ],
+        }
+        return result
+
+    def radar_data_visualizer_surface(self) -> dict:
+        """
+        AXIS Radar Data Visualizer (radardatavisualizer) attack surface.
+
+        appId: 414283  binary: radardatavisualizer  version: 3.3.2  arch: aarch64 stripped
+        CGI: administrator /control.cgi, viewer /consume.cgi
+
+        Radar overlay visualizer — renders radar detection zones on video stream using cairo + resvg.
+        Bundles libresvg.so.0 (Rust-based SVG renderer), Cairo, GStreamer, Pango, libcurl.
+
+        Key findings:
+
+        1. viewer /consume.cgi — radar data exposed at viewer level
+           consume.cgi is viewer-accessible; provides radar visualization data (detected objects,
+           zones, speed estimates) without operator/admin auth.
+           axo_match_stream_id + vdo_stream_get — streams video with radar overlay to viewer.
+           All radar targets on camera accessible to any viewer-level user.
+
+        2. resvg_parse_tree_from_file — SVG file path from config
+           "Failed to parse SVG file %s: %d" — %s is SVG file path.
+           If SVG file path comes from axparam (admin-writable), set to /etc/passwd or other
+           sensitive file → resvg attempts to parse as SVG → error message may leak file content
+           or trigger resvg crash via malformed SVG.
+           libresvg.so.0 is Rust-based (memory-safe) but SVG complexity attacks still possible.
+
+        3. Boost library linking — complex template code surface
+           Boost::format and Boost::io::basic_altstringstream in binary (from symbol mangling).
+           Boost format strings: if format string is user-influenced → format string injection.
+
+        4. D-Bus ObjectManager + org.freedesktop.DBus.ObjectManager
+           Introspectable via standard D-Bus; enumerate all managed objects to find undocumented
+           methods on the visualizer's D-Bus interface.
+
+        5. libcurl bundled — RTSP stream from radar sensor
+           radardatavisualizer connects to radar sensor; if sensor URL is operator-configured
+           via axparam + libcurl is used → SSRF to attacker-controlled RTSP endpoint.
+        """
+        result = {
+            'app_id': 414283,
+            'app_name': 'AXIS Radar Data Visualizer',
+            'binary_name': 'radardatavisualizer',
+            'version': '3.3.2',
+            'arch': 'aarch64 stripped',
+            'cgi': {'viewer': '/consume.cgi', 'administrator': '/control.cgi'},
+            'bundled_libs': [
+                'libresvg.so.0.35.0 (Rust SVG renderer)', 'libcairo.so.2.11708.0',
+                'libcurl.so.4.8.0', 'libpango-1.0.so.0', 'libgstreamer-1.0.so.0.2204.0',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'RDV-1',
+                    'title': 'Viewer-level radar target data exposure via /consume.cgi',
+                    'mechanism': 'consume.cgi viewer-accessible; exposes detected radar targets, zones, speed data without elevated auth',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Viewer-level auth (lowest camera privilege)',
+                },
+                {
+                    'id': 'RDV-2',
+                    'title': 'SVG file path injection via axparam → resvg file read / crash',
+                    'mechanism': '"Failed to parse SVG file %s" — path from config; set to /etc/passwd → resvg reads as SVG; error or content in log. libresvg crash via adversarial SVG.',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level axparam write to SVG path config',
+                },
+                {
+                    'id': 'RDV-3',
+                    'title': 'libcurl SSRF via radar sensor URL',
+                    'mechanism': 'Radar sensor connection URL from operator/admin axparam; set to attacker RTSP server → SSRF + connection metadata leak',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Operator or admin axparam write',
+                },
+            ],
+        }
+        return result
+
     def speed_monitor_surface(self) -> dict:
         """
         AXIS Speed Monitor (speedmonitor) attack surface.
@@ -3478,6 +3656,12 @@ def main():
                         help='Queue Monitor tvqu ARM32 3.0.20 tarslip + libsodium + TLS bypass surface')
     parser.add_argument('--loitering-guard', action='store_true', dest='loitering_guard',
                         help='Loitering Guard ARM32 2.3.8 SocketCameraContainer SSRF + libscene surface')
+    parser.add_argument('--vmd458', action='store_true', dest='vmd458',
+                        help='VMD 4.5.8 aarch64 libexpat namespace confusion + libscene substitution')
+    parser.add_argument('--vmd3', action='store_true', dest='vmd3',
+                        help='VMD 3.2.0 Lua encrypted combined.lua + polygon float injection')
+    parser.add_argument('--radar-vis', action='store_true', dest='radar_vis',
+                        help='Radar Data Visualizer 3.3.2 viewer consume.cgi + resvg SVG path injection')
     parser.add_argument('--speed-monitor', action='store_true', dest='speed_monitor',
                         help='Speed Monitor ARM32 1.1.7 SQLite track dump + bundled protobuf/xml2 + radar scene')
     parser.add_argument('--fence-guard', action='store_true', dest='fence_guard',
@@ -3576,6 +3760,15 @@ def main():
 
     if args.all or getattr(args, 'loitering_guard', False):
         results['loitering_guard'] = analyzer.loitering_guard_surface()
+
+    if args.all or getattr(args, 'vmd458', False):
+        results['vmd458'] = analyzer.vmd_458_surface()
+
+    if args.all or getattr(args, 'vmd3', False):
+        results['vmd3'] = analyzer.vmd3_lua_surface()
+
+    if args.all or getattr(args, 'radar_vis', False):
+        results['radar_vis'] = analyzer.radar_data_visualizer_surface()
 
     if args.all or getattr(args, 'speed_monitor', False):
         results['speed_monitor'] = analyzer.speed_monitor_surface()
