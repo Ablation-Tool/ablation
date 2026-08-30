@@ -25,6 +25,7 @@ DB        = '~/.ablation/func_id.db'
 # Note: 9.2.4 (i386), 9.1.7.23 (x86-64), and FTD 1200/10.0.0 ARM64 are in test_cross_arch.py
 VERSIONS = [
     ('ASA 9.1.7.23',   '/media/cowboy/research/cisco-lina-re/asa91723-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.5.2.204',  '/media/cowboy/research/cisco-lina-re/asa952-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.6.4.18',   '/media/cowboy/research/cisco-lina-re/asa964-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.9.2.85',   '/media/cowboy/research/cisco-lina-re/asa992-85-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.10.1.37',  '/media/cowboy/research/cisco-lina-re/asa9101037-extract/cpio-root/asa/bin/lina'),
@@ -48,6 +49,7 @@ VERSIONS = [
                        '_asa9-22-2-32-smp-k8.bin.extracted/_rootfs.img.extracted/cpio-root/asa/bin/lina'),
     ('FTD 7.6.2',      '/media/cowboy/research/cisco-lina-re/ftd-762-extract/'
                        'rootfs/root/ngfw/usr/local/asa/bin/lina'),
+    ('ASA 10.1.2.1.7', '/media/cowboy/research/cisco-lina-re/asa10121-extract/cpio-root/asa/bin/lina'),
 ]
 
 _PROLOGUES  = [b'\x55\x48\x89\xe5', b'\xf3\x0f\x1e\xfa\x55', b'\x55\x41']
