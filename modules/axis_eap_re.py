@@ -2559,8 +2559,8 @@ class AxisEAPAnalyzer:
         AXIS Body Worn Live Self-hosted Server (BodyWornLiveSelfHosted) attack surface.
 
         package: AXIS_Body_Worn_Live_Self-hosted_Server
-        version: 1.5.1 (W401 camera target), 1.0.0 (D3110), 2.0.0 (SBOM only — no EAP)
-        binary: BodyWornLiveSelfHosted (Go static, ~11.8MB), rsignal (Rust), coturn/turnserver
+        version: 1.5.1 (W401), 1.0.0 (D3110), 2.0.0 (Oct 2025), 2.0.1 (Feb 2026)
+        binary: BodyWornLiveSelfHosted (Go static; 1.5.1=11.8MB, 2.0.0=13.0MB, 2.0.1=13.1MB), rsignal (Rust), coturn/turnserver
         appId: unset in package.conf (APPID="")
         arch: W401 (ARTPEC-8 camera appliance); D3110 (body-worn dock)
         LICENSEPAGE: none
@@ -2600,6 +2600,19 @@ class AxisEAPAnalyzer:
           gdbus call com.axis.PolicyKitCert.CertSetDeleteUnpriv BodyWornLiveSelfHosted1
           Called on BOTH uninstall AND upgrade — cert set deleted between upgrade steps → TLS gap
 
+        2.0.x new attack surface (2.0.0 Oct 2025, 2.0.1 Feb 2026 — EAPs confirmed):
+          - GraphQL mutations: addBWLStandaloneConfiguration, createBWLStandaloneConfigurationRequest,
+            deleteBWLStandaloneConfiguration — standalone config write/delete at operator level
+          - ENV_AXIS_SIGNAL_SERVER_TARGET_CA_PATH (2.0.1) / ENV_AXIS_SIGNAL_SERVER_CA_PATH (2.0.0) —
+            custom CA path env var; user-controlled = trust anchor substitution
+          - com.axis.bodyworn.positioning@v1.0.0 — new positioning subsystem with VAPIX events;
+            new event types: stream started/stopped, positioning event
+          - wss://127.0.0.1:8082/client — localhost WebSocket endpoint (new port in 2.0)
+          - com.axis.HTTPConf1.VAPIXServiceAccounts1.GetCredentials — VAPIX service account cred fetch
+          - /usr/local/packages/BodyWornLiveSelfHosted/metrics.sock — Unix socket metrics (2.0);
+            if world-writable, any local ACAP reads live Prometheus metrics
+          - Workload auto-restart on crash: "Queuing restart to start workload after unexpected exit"
+
         Key RE findings:
         1. getStunTurnTestCredentials — auth CGI exports TURN test credentials; uses crypto/hmac (HMAC-SHA1
            TURN credential model RFC 8489 §9.2). If auth check is operator-level or lower, attacker
@@ -2613,6 +2626,9 @@ class AxisEAPAnalyzer:
            session/peer/stream metrics.
         5. Kerberos in coturn — libgssapi_krb5 bundled; TURN server with Kerberos auth misconfigured
            to accept unauthenticated clients falls back to auth-any (confirmed in turnserver strings).
+        6. (2.0.x) GraphQL standalone mutations accessible at operator level — destructive ops.
+        7. (2.0.x) ENV_AXIS_SIGNAL_SERVER_TARGET_CA_PATH — env var CA path injection = MitM signal server.
+        8. (2.0.x) VAPIXServiceAccounts1.GetCredentials — service account creds fetched in LSS context.
         """
         result = {
             'app': 'AXIS Body Worn Live Self-hosted Server',
@@ -2715,6 +2731,65 @@ class AxisEAPAnalyzer:
                     ),
                     'severity': 'LOW',
                     'prerequisite': 'ACAP package upgrade event',
+                    'version': '1.5.1+',
+                },
+                {
+                    'id': 'LSS-7',
+                    'title': '2.0.x: GraphQL standalone config mutations at operator level',
+                    'mechanism': (
+                        '2.0.0+ adds GraphQL mutations addBWLStandaloneConfiguration, '
+                        'createBWLStandaloneConfigurationRequest, deleteBWLStandaloneConfiguration. '
+                        'Confirmed in binary strings. These configure/destroy standalone deployment configs. '
+                        'Operator-level access = reconfigure or delete BWS standalone config without admin rights. '
+                        'deleteBWLStandaloneConfiguration → drops active body-worn system configuration → '
+                        'body-worn cameras lose video relay capability (operational DoS).'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level camera auth (2.0.0+)',
+                    'version': '2.0.0+',
+                },
+                {
+                    'id': 'LSS-8',
+                    'title': '2.0.1: ENV_AXIS_SIGNAL_SERVER_TARGET_CA_PATH — CA path injection',
+                    'mechanism': (
+                        'ENV_AXIS_SIGNAL_SERVER_TARGET_CA_PATH env var in 2.0.1 (SIGNAL_SERVER_CA_PATH in 2.0.0) '
+                        'sets the CA bundle path for signal server TLS verification. If this env var is '
+                        'user-controllable via axparameter or ACAP config interface, attacker substitutes '
+                        'an attacker-controlled CA cert → MitM of BodyWornLiveSelfHosted ↔ signal server TLS '
+                        '→ intercept JWT tokens, peer connection metadata, stream routing.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level axparameter write or ACAP restart with injected env (2.0.x)',
+                    'version': '2.0.0+',
+                },
+                {
+                    'id': 'LSS-9',
+                    'title': '2.0.x: VAPIXServiceAccounts1.GetCredentials in LSS context',
+                    'mechanism': (
+                        'com.axis.HTTPConf1.VAPIXServiceAccounts1.GetCredentials is called from '
+                        'BodyWornLiveSelfHosted context (confirmed in 2.0.1 strings). LSS fetches VAPIX '
+                        'service account credentials to authenticate against camera VAPIX APIs. '
+                        'If the service account creds are returned via an unprotected IDD plugin or '
+                        'Prometheus metrics endpoint, attacker reads plaintext VAPIX service credentials → '
+                        'full VAPIX API access as service account.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'SSRF to localhost IDD plugin or metrics.sock (2.0.x)',
+                    'version': '2.0.0+',
+                },
+                {
+                    'id': 'LSS-10',
+                    'title': '2.0.x: metrics.sock Unix socket — access control check',
+                    'mechanism': (
+                        '/usr/local/packages/BodyWornLiveSelfHosted/metrics.sock is a Unix domain socket '
+                        'for Prometheus metrics in 2.0.x. ACAP sandbox does not guarantee correct socket '
+                        'permissions. If permissions are 0666 or group-writable and another ACAP shares '
+                        'the socket group, any co-resident ACAP can read full Prometheus metrics: '
+                        'peer counts, session states, TURN credential material, stream IDs.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Co-resident ACAP on same device with access to ACAP package dir (2.0.x)',
+                    'version': '2.0.0+',
                 },
             ],
         }
