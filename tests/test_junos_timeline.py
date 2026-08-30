@@ -327,13 +327,24 @@ a flags or context pointer defaulting to NULL/0.
   Handler deref: lw $v0, 4(table_entry) — if NULL, drop via m_freem.
   Stats: global counter at 0x80c15308.
 
-12.1X46-D35 netisr_dispatch (0x803cc178, 104 bytes): Thin wrapper.
+12.1X46-D35 netisr_dispatch (0x803cc178, 104 bytes, 26 insns): Thin wrapper.
   NEW: bounds check — sltu $v0, $a0, maxprot (gp-0x49e4).
   NEW: sync + 2 NOPs — memory barrier before bitmap read (MIPS SMP fix).
   NEW: bitmap check — 1 << proto AND gp-0x2024 bitmask (registered protos).
-  If registered + in-bounds → jal netisr_defer_dispatch(proto, mbuf, a2=1)
-    a2=1 = NETISR_DISPATCH_DIRECT flag.
-  Otherwise → jal netisr_dispatch_src(proto, NULL, 0) — queue fallback.
+  Dispatch logic (exact):
+    bnez $v0, <dispatch_src_label>    ; if IN-BOUNDS (v0=1): call netisr_dispatch_src
+    ; OOB fall-through: sync + bitmap check
+    if bitmap[1<<proto]: jal netisr_defer_dispatch(proto, mbuf, a2=1) [DIRECT]
+    else (OOB + not registered): jal netisr_dispatch_src(proto, NULL, mbuf) [queue]
+  NOTE: in-bounds valid protos call netisr_dispatch_src (workstream-aware full path);
+    OOB protos with bitmap bit set take netisr_defer_dispatch (legacy direct path).
+
+12.1X46-D40 netisr_dispatch (0x803cc258, 104 bytes, 26 insns): IDENTICAL to D35.
+  4-gram Jaccard D35 vs D40: 1.0000. Only callee VAs differ (relocation):
+    D35 netisr_defer_dispatch: 0x803cabbc → D40: 0x803cac9c
+    D35 netisr_dispatch_src:   0x803cb90c → D40: 0x803cb9ec
+  maxprot gp-offset: identical (-0x49e4); bitmap gp-offset: identical (-0x2024).
+  Security properties: same proto bounds check, same sync barrier, same bitmap gate.
 
 12.1X46-D35 netisr_queue (0x803cab9c, 32 bytes): Thin wrapper.
   move $a2, $a1 then jal netisr_queue_src(proto, 0, mbuf).
