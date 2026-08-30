@@ -2720,6 +2720,227 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def occupancy_estimator_surface(self) -> dict:
+        """
+        AXIS Occupancy Estimator (tvpc) attack surface.
+
+        appId: 220301  binary: tvpc  version: 3.16.3  arch: armv7hf (ARTPEC-7 variant (7))
+        APPUSR=root  APPGRP=root  STARTMODE=respawn
+        LICENSEPAGE=axis  HTTPCGIPATHS=cgipaths.conf
+        source: https://www.axis.com/ftp/pub/axis/software/applications/acap/OccupancyEstimator/latest/
+
+        Same Cognimatics codebase as Direction Detector (220302), Tailgating (557), Random Selector (492).
+        All share APPUSR/APPGRP=root, debugar.cgi.org dev FTP artifact, httpd-ssl.conf.5.70 SWEET32,
+        and the .restore_backup tarslip vector. Occupancy Estimator adds:
+          - TCP 23456 unauth event listener (Counter0EventListenerPort)
+          - TCP 4066 master/slave count-sync protocol (Counter0SlavePort / Counter0MasterPort)
+          - Counter.SlavePass credential in params (cleartext in /usr/local/packages/tvpc/localdata/params.meta)
+          - cm_get_cencored_credentials / decensoring — credential material in process memory
+          - Authorization: Bearer %s — bearer token for upstream count-data HTTP POST
+          - TrueviewVAPIX legacy VAPIX account (removed in postinst.sh, persists if upgrade fails)
+          - Lua scripting engine via cog.* namespace (test.lua shipped; operator can inject Lua)
+
+        cgipaths.conf access levels:
+          viewer:    /occupancy-estimator/.api   — full counting API at lowest privilege
+          operator:  /occupancy-estimator/.apioperator, /.restore_backup
+          admin:     /occupancy-estimator/.apiadmin
+
+        postinst.sh:
+          - Removes TrueviewVAPIX VAPIX account (legacy hardcoded cred); partial upgrade leaves it live
+          - Patches httpd-ssl.conf on firmware 5.70 — same SWEET32 vector as other tvpc variants
+          - Sets apache rewrite rules that persist after uninstall (comment in code)
+          - Recursively chmods tvpc tree; file permission audit needed on localdata/
+
+        Key findings:
+        1. APPUSR=root + tarslip (.restore_backup at operator) = arbitrary root file write (same as COG-1)
+        2. TCP 23456 unauth event listener — inject passage events from LAN
+        3. TCP 4066 slave protocol — Counter.SlavePass in cleartext params; slave connects to master
+           with password from params.meta; intercept or forge master/slave sync
+        4. TrueviewVAPIX legacy account — operator-level VAPIX cred; survives failed upgrades
+        5. Bearer token in process strings — Authorization: Bearer %s for upstream HTTP POST of counts
+        """
+        result = {
+            'app': 'AXIS Occupancy Estimator',
+            'package': 'tvpc',
+            'version': '3.16.3',
+            'arch': 'armv7hf (ARTPEC-7)',
+            'appId': '220301',
+            'run_as': 'ROOT (APPUSR=root, APPGRP=root) — maximum blast radius',
+            'license_page': 'axis',
+            'codebase': 'Cognimatics (shared with Direction Detector 220302, Tailgating 557, Random Selector 492)',
+            'tcp_ports': ['23456 (event listener, unauth)', '4066 (master/slave sync)'],
+            'cgi_access': {
+                'viewer': ['/occupancy-estimator/.api'],
+                'operator': ['/occupancy-estimator/.apioperator', '/occupancy-estimator/.restore_backup'],
+                'admin': ['/occupancy-estimator/.apiadmin'],
+            },
+            'hardcoded_artifacts': [
+                'debugar.cgi.org: ftp://root:pass@192.168.0.90:21',
+                'httpd-ssl.conf.5.70: DES-CBC3-SHA SWEET32 (CVE-2016-2183)',
+                'TrueviewVAPIX: legacy VAPIX account removed in postinst.sh',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'OE-1',
+                    'title': 'Tarslip as root via .restore_backup (operator)',
+                    'mechanism': (
+                        'Operator POST to /occupancy-estimator/.restore_backup uploads tar.gz; '
+                        'tvpc runs as root; no path traversal check on extraction target → '
+                        'arbitrary root file write anywhere on camera filesystem → full takeover. '
+                        'Identical to COG-1 in Direction Detector/Tailgating.'
+                    ),
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Operator-level camera auth',
+                },
+                {
+                    'id': 'OE-2',
+                    'title': 'TCP 23456 unauth event injection',
+                    'mechanism': (
+                        'Counter0EventListenerPort=23456 binds a TCP listener for passage event '
+                        'injection. No auth confirmed from binary strings. Attacker on LAN sends '
+                        'crafted passage events → manipulates occupancy counts → false alarm '
+                        'suppression or false positive generation in security monitoring.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Network access to camera TCP 23456',
+                },
+                {
+                    'id': 'OE-3',
+                    'title': 'Counter.SlavePass cleartext in params.meta + TCP 4066 slave protocol',
+                    'mechanism': (
+                        'Master/slave counting sync runs on TCP 4066. Counter.SlavePass stored in '
+                        '/usr/local/packages/tvpc/localdata/params.meta (chmod 600, owner root). '
+                        'Readable via root tarslip (OE-1 chain). SlaveAddress is operator-settable '
+                        '(Counter.SlaveAddress) — set to attacker IP → SSRF to attacker slave, '
+                        'or MitM slave channel to inject false counts.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Operator-level auth or root file read via OE-1',
+                },
+                {
+                    'id': 'OE-4',
+                    'title': 'TrueviewVAPIX legacy VAPIX account persistence on failed upgrade',
+                    'mechanism': (
+                        'postinst.sh removes TrueviewVAPIX account via pwdgrp.cgi. '
+                        'If upgrade fails partway through (power loss, package error), '
+                        'old tvpc remains installed with the legacy account intact. '
+                        'TrueviewVAPIX is operator-level VAPIX — grants camera stream access '
+                        'and VAPIX API calls without the camera admin knowing.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Failed upgrade scenario; account present on partial installs',
+                },
+                {
+                    'id': 'OE-5',
+                    'title': 'Viewer-level full counting API (/occupancy-estimator/.api)',
+                    'mechanism': (
+                        '.api accessible at viewer privilege. Viewer is lowest camera auth level. '
+                        'Exposes full counting API including live occupancy data, counter state, '
+                        'and potentially config read. Combined with OE-3 slave address write '
+                        '(operator), chain: viewer reads counts + operator redirects slave → '
+                        'full occupancy data exfiltration and manipulation.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Viewer-level camera auth',
+                },
+                {
+                    'id': 'OE-6',
+                    'title': 'Hardcoded dev FTP credential in production binary',
+                    'mechanism': (
+                        'debugar.cgi.org contains ftp://root:pass@192.168.0.90:21. '
+                        'Same artifact as all Cognimatics tvpc variants. Coredump handler '
+                        'may use this path to upload crash data → confirms internal '
+                        'Cognimatics dev network artifact shipped in production.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'None (static artifact in binary)',
+                },
+            ],
+        }
+        return result
+
+    def cross_line_surface(self) -> dict:
+        """
+        AXIS Cross Line Detection attack surface.
+
+        appId: 3051  APPTYPE=lua  version: 1.1.5  arch: ARTPEC-5 Lua runtime
+        LICENSEPAGE=axis  STARTMODE=once
+        LUAFILESENCRYPTED=lineTouching.lua  encpwd blob present
+        source: https://www.axis.com/ftp/pub/axis/software/applications/acap/CrossLine/latest/
+
+        Lua-only ACAP (same runtime as VMD3 3.2.0, Digital Auto Tracking 1.0.0).
+        CrossLineDetection.xml defines the rule engine: geometry.segment trigger,
+        line_touching function, direction=both, bounding box + polygon + velocity enabled.
+
+        Two Lua files:
+          dbgutils.lua (plaintext) — scene history traversal, merge/split tracking,
+            follows object IDs through splits/merges across frames. No obvious vuln surface
+            but exposes scene data model: active objects, mergers, splits, deletes per frame.
+          lineTouching.lua (encrypted, encryption="1" in XML) — main detection logic;
+            encrypted with per-package encpwd blob. Same LD_PRELOAD attack applies.
+
+        Key findings:
+        1. LD_PRELOAD on Lua interpreter → plaintext recovery of lineTouching.lua (same as VMD3-1/DAT-2)
+        2. CrossLineDetection.xml geometry.segment polygon float injection (NaN/Inf → geometry exception)
+        3. sceneHistory / scene API exposed to dbgutils.lua — attacker-supplied Lua via cog.* namespace
+           gains access to full scene object model (bounding boxes, velocities, object IDs)
+        """
+        result = {
+            'app': 'AXIS Cross Line Detection',
+            'package': 'CrossLineDetection.xml',
+            'version': '1.1.5',
+            'arch': 'lua (ARTPEC-5 Lua runtime)',
+            'appId': '3051',
+            'run_as': 'ACAP sandbox (Lua runtime)',
+            'license_page': 'axis',
+            'lua_files': {
+                'plaintext': ['dbgutils.lua'],
+                'encrypted': ['lineTouching.lua (encpwd blob)'],
+            },
+            'xml_config': 'CrossLineDetection.xml (geometry.segment, line_touching, direction=both)',
+            'attack_paths': [
+                {
+                    'id': 'CL-1',
+                    'title': 'LD_PRELOAD on Lua interpreter → encrypted lineTouching.lua plaintext recovery',
+                    'mechanism': (
+                        'Lua runtime decrypts lineTouching.lua using encpwd blob at load time. '
+                        'LD_PRELOAD hook on luaL_loadbuffer or lua_pcall intercepts plaintext Lua '
+                        'source before execution. Identical to VMD3-1 and DAT-2. '
+                        'Recovers detection logic and any embedded parameters/credentials.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Shell access on camera (admin) or controlled firmware modification',
+                },
+                {
+                    'id': 'CL-2',
+                    'title': 'CrossLineDetection.xml geometry float injection → rule engine exception',
+                    'mechanism': (
+                        'CrossLine segment defined by two <point x="-0.5" y="0.0"/> elements. '
+                        'Set x or y to NaN or Inf in XML config → geometry.segment constructor '
+                        'receives invalid float → rule engine exception → detection disabled. '
+                        'Admin can write XML config; attacker with admin writes poisoned segment '
+                        'coords → CrossLine silently stops detecting crossings.'
+                    ),
+                    'severity': 'LOW',
+                    'prerequisite': 'Admin-level camera auth',
+                },
+                {
+                    'id': 'CL-3',
+                    'title': 'Scene history API exposed to Lua — object tracking data at ACAP level',
+                    'mechanism': (
+                        'dbgutils.lua (plaintext, always loaded) calls sceneHistory.getActiveSceneObjects, '
+                        'getSceneObjectMergers, getSceneObjectSplits, getDeletedSceneObjectIds. '
+                        'If an operator can inject custom Lua (via cog.* namespace extension or '
+                        'by replacing dbgutils.lua), full per-frame scene data — object IDs, '
+                        'positions, velocities, merge/split events — is accessible.'
+                    ),
+                    'severity': 'LOW',
+                    'prerequisite': 'Operator ability to modify Lua scripts or XML config',
+                },
+            ],
+        }
+        return result
+
     def speed_monitor_surface(self) -> dict:
         """
         AXIS Speed Monitor (speedmonitor) attack surface.
@@ -3842,6 +4063,10 @@ def main():
                         help='Audio Spectrum Visualizer aarch64 2.3.0 cairo OOB + param integer overflow')
     parser.add_argument('--cognimatics-tvpc', action='store_true', dest='cognimatics_tvpc',
                         help='Cognimatics tvpc variants 3.12.1 runs-as-root tarslip + debugar coredump + SWEET32')
+    parser.add_argument('--occupancy-estimator', action='store_true', dest='occupancy_estimator',
+                        help='Occupancy Estimator 3.16.3 root tarslip + TCP 23456/4066 unauth + SlavePass + TrueviewVAPIX')
+    parser.add_argument('--cross-line', action='store_true', dest='cross_line',
+                        help='Cross Line Detection 1.1.5 encrypted Lua LD_PRELOAD + geometry float injection')
     parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
                         help='sbplayer aarch64/ARM32 1.7.1 UpdateURL+SD-card library RCE + hardcoded SYB API cred')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
@@ -3958,6 +4183,12 @@ def main():
 
     if args.all or getattr(args, 'cognimatics_tvpc', False):
         results['cognimatics_tvpc'] = analyzer.cognimatics_tvpc_variants_surface()
+
+    if args.all or getattr(args, 'occupancy_estimator', False):
+        results['occupancy_estimator'] = analyzer.occupancy_estimator_surface()
+
+    if args.all or getattr(args, 'cross_line', False):
+        results['cross_line'] = analyzer.cross_line_surface()
 
     if args.all or args.sbplayer_aarch64:
         results['sbplayer_aarch64'] = analyzer.sbplayer_aarch64_surface()
