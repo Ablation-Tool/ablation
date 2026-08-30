@@ -943,8 +943,8 @@ class AxisEAPAnalyzer:
             'version_4610': {
                 'arch': 'aarch64 ELF stripped (ARTPEC-8 compatible)',
                 'popen_in_zoom_param': 'cm_param_get_212_zoom(): popen — zoom param read via shell command',
-                'slave_pass_in_axparam': 'Counter.SlavePass stored in axparameter; readable via parhandclient getgroup root.tvpc',
-                'backup_param_filter': 'parhandclient getgroup root.tvpc | grep -v -e 0SysPwd — SlavePass NOT filtered → exported plaintext',
+                'slave_pass_in_axparam': 'Counter.SlavePass in axparameter (pre-4.6.110); 4.6.110 adds cm_secret.c secrets storage (Migrating parameter %s to secrets); migrated SlavePass not in params.meta but still readable via secrets API if accessible',
+                'backup_param_filter': 'parhandclient getgroup root.tvpc | grep -v -e 0SysPwd — SlavePass NOT filtered → exported plaintext (pre-migration builds)',
                 'curl_command_shell_injectable': [
                     "CURL_CA_BUNDLE=... /usr/local/packages/tvpc/curl -L -f --anyauth --insecure %s --user %s:%s \"%s/axis-cgi/opticscontrol.cgi\"",
                     "CURL_CA_BUNDLE=... /usr/local/packages/tvpc/curl -L -f --anyauth -k --user \"%s:%s\" \"%s/axis-cgi/com/ptz.cgi?zoom=%d%s\"",
