@@ -20,6 +20,11 @@ Seed: esp_auth — IPsec ESP authentication core. Security-critical function
 present in all versions. Tracks changes to ESP authentication validation
 logic across 14 years of Junos SRX development.
 
+Results: 11.4R3.7 through 12.1X46-D40 (Sep 2015): Jac=1.0, structurally
+identical. 15.1X49-D240 (Dec 2020) onward: Jac=0.8649, +5/-3 structural
+change. ah_get_auth_pads confirms same boundary at Jac=0.8348. Two IPsec
+auth functions changed together — coordinated fix boundary: D40→D240.
+
 Adjust VERSIONS paths to match your extracted junos-srxsme-*-domestic files.
 """
 
@@ -39,6 +44,7 @@ VERSIONS = [
     ('11.4R7.5  (2013-03)',  '/tmp/junos-extract/srx-11.4R7/junos-srxsme-11.4R7.5-domestic'),
     ('11.4R11.4 (2015-07)',  '/tmp/junos-extract/srx-11.4R11/junos-srxsme-11.4R11.4-domestic'),
     ('12.1X46-D35 (2015-05)','/tmp/junos-extract/srx-12.1X46/junos-srxsme-12.1X46-D35.1-domestic'),
+    ('12.1X46-D40 (2015-09)','/tmp/junos-extract/srx-12.1X46-D40/junos-srxsme-12.1X46-D40.2-domestic'),
     ('15.1X49-D240 (2020-12)','/tmp/junos-extract/srx-15.1X49/junos-srxsme-15.1X49-D240.4-domestic'),
     ('22.4R3-S9  (2026-01)', '/tmp/junos-extract/srx-22.4/junos-srxsme-22.4R3-S9.3-domestic'),
     ('23.4R2-S5  (2025-06)', '/tmp/junos-extract/srx-23.4R2-S5/junos-srxsme-23.4R2-S5.5-domestic'),
