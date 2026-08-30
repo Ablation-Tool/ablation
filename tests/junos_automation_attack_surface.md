@@ -1541,3 +1541,97 @@ unauthenticated network attacker → root shell, zero operator interaction.
 2. Remove `world-readable` from NETCONF traceoptions
 3. Change default `node-id` from `openroadm` (fingerprints device role)
 4. Document `$9$` extended alphabet so field teams can decode for asset inventory
+
+---
+
+## FINDING 7: ZooKeeper ACL Disabled — Unauthenticated Znode Read/Write
+
+**Classification**: HIGH (CWE-284 + CWE-306)
+**Scope**: All Junos EVO platforms (base distribution, not platform-specific)
+**Port**: TCP 2181 (ZooKeeper client port, management VRF)
+
+### Configuration Evidence
+
+`/etc/systemd/system/zookeeper.service`:
+```
+Environment="SERVER_JVMFLAGS=-Dzookeeper.skipACL=yes"
+ExecStart=-/sbin/ip vrf exec iri /usr/share/zookeeper/bin/zkServer.sh \
+    --config /var/run/zookeeper/conf/default start
+```
+
+`/usr/conf/zookeeper/conf/default/zoo.cfg`:
+```
+server.1=127.0.0.1:2179:2180:participant;2181
+quorumListenOnAllIPs=true
+maxClientCnxns=0
+admin.enableServer=false
+```
+
+`/usr/conf/zookeeper/conf/evozoo.cfg`:
+```
+127.0.0.1:2181
+```
+
+`-Dzookeeper.skipACL=yes` disables ALL ZooKeeper ACL enforcement at the JVM level.
+This is a compile-time/runtime bypass — no ACL checks occur regardless of what ACLs are
+set on individual znodes. Any client that can connect to port 2181 can:
+- Enumerate the full znode tree
+- Read any znode (all stored data)
+- Create, modify, or delete any znode
+
+### Binding Analysis
+
+- `zoo.cfg`: `server.1=127.0.0.1:...;2181` — quorum ports bound to loopback
+- Client port (2181): No `clientPortAddress` set → ZooKeeper defaults to 0.0.0.0:2181
+- VRF: `ip vrf exec iri` — runs inside the IRI (management) VRF
+- Net: port 2181 accessible on all management interfaces; not reachable from data plane
+- `maxClientCnxns=0` — no connection limit
+- `admin.enableServer=false` — admin port (8080) correctly disabled
+
+### EVO Daemon Dependencies (partial, from systemd After= declarations)
+
+50+ services depend on ZooKeeper, including:
+`snmpd`, `rpd-agent`, `mib2d`, `aaasd`, `fibtd`, `mcasthostd`, `svcsd`, `bbe-stats-svcsd`,
+`idmd-frr-session`, `distributord`, `aggd`, `sysman-ui`, `opticmand`, `bbe-gtp-proxyd`
+
+ZooKeeper stores ephemeral coordination state, leader election data, and operational
+metadata for these daemons. With skipACL, an attacker can:
+1. **Read**: all znode data — may include topology state, session tokens, health counters
+2. **Delete**: ephemeral znodes → daemon re-election cycles, coordination failures, DoS
+3. **Write**: poison znode values → if any daemon reads ZK data into a fixed-size buffer
+   (without bounds check), this is a write-what-where channel into daemon state
+
+### Attack Chain (ZK → daemon disruption)
+
+```
+Attacker → TCP 2181 (ZooKeeper client, no auth)
+                    |
+          zkcli.sh / zkpython / custom client
+                    |
+          [enumerate] ls / get on all znodes
+          [disrupt]   delete ephemeral znodes
+          [inject]    setData znodes with attacker-controlled values
+                    |
+          Dependent daemons read poisoned state
+          → coordination failure / DoS
+          → potential data-driven memory corruption in ZK consumers
+```
+
+### Severity Rationale
+
+- Direct DoS: delete critical coordination znodes → cascade failure across 50+ daemons
+- Information disclosure: all operational state readable without credentials
+- Escalation path: if a ZK consumer processes znode data with strlen→buffer (uninspected),
+  znode write is a write-what-where against daemon heap/stack
+
+### CVE Candidates
+
+- **CWE-284** (Improper Access Control): CVSS v3.1 AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = **9.8**
+- **CWE-306** (Missing Authentication for Critical Function): same vector = **9.8**
+
+### Remediation
+
+1. Remove `-Dzookeeper.skipACL=yes` from `SERVER_JVMFLAGS`
+2. Set `clientPortAddress=127.0.0.1` in zoo.cfg (restrict client port to loopback)
+3. Implement ZooKeeper ACLs per znode tree (world:none, daemon digest auth for consumers)
+4. Firewall filter: block port 2181 inbound on management interfaces at the PFE level
