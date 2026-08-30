@@ -1032,3 +1032,115 @@ not a direct protocol input.
   expansion in the home directory string executes as the mgd process user.
 
 **Reference**: mgd +0x14cff; PLT stub wordexp=+0xf6e0; GOT 0x2b5b0.
+
+---
+
+## Architecture: SSH-Level Authentication (EVO 23.4R2.14)
+
+Junos EVO NETCONF authentication is handled by the SSH daemon BEFORE mgd runs.
+mgd receives an already-authenticated session; the username is injected via SSH
+environment variables, parsed by mgd main() at +0x10c5e:
+
+```
+strstr(ssh_env, "user")     ; find "user=" in SSH_CLIENT env string
+strlcpy(dst, value, 0x11)   ; copy to 17-byte field in peer struct
+                             ; 0x11 limit = safe, no overflow
+```
+
+The username stored at peer+0x80 (via mgmt_peer_auth_user in libddl-util.so.1)
+is a session attribute, not a gate that mgd enforces. All processing inside mgd
+(including ddl_start_command_mode → gram_yyparse) is effectively post-SSH-auth.
+
+Implication for attack surface: there is no mgd-level "pre-auth" window beyond
+the NETCONF hello exchange (already analyzed as hardened). auth_authenticate at
+mgd+0x115a0 is secondary re-auth (privilege escalation checks), not the primary
+session gate.
+
+**auth_authenticate (+0x115a0, 0xee bytes):**
+```
+priv_raise()
+getpwnam(username)   ; username = from SSH env
+endpwent()
+priv_lower()
+if type==2: crypt(user_password, pw_passwd) ; standard UNIX crypt
+            strcmp(crypt_result, stored_hash) ; compare
+```
+NO buffer overflow. No user-controlled format string. Standard crypt+strcmp flow.
+
+**popen("/usr/bin/wall") in auth_get_challenge (+0x118a0):**
+```
+popen("/usr/bin/wall", "w")    ; broadcast to terminals
+fputs(rdi_arg, pipe)           ; write message
+pclose(pipe)
+```
+Called from TWO sites only:
+  - mgd+0x11dd6: rdi = static string "Commit was not confirmed; ..." (0x20758)
+  - mgd+0x11e7f: rdi = static string "Commit was not confirmed; ..." (0x207e0)
+Both args are RIP-relative rodata constants. **Not user-controlled. Not injectable.**
+
+---
+
+## Post-Auth Stack Exhaustion via XML Element Names (EVO 23.4R2.14)
+
+**Location**: gram_xml_cmdl_get_line (libengine.so.1 +0x11eb80, 1983 bytes)
+**Context**: NETCONF XML tokenizer, called from ddl_start_command_mode post-SSH-auth
+
+Two unbounded alloca patterns in the element name processing loop:
+
+```asm
+; Pattern 1 (+0x11ed25-0x11ed55), Pattern 2 (+0x11ee62-0x11ee8f):
+call strlen(element_name_ptr)    ; len = strlen(xml element name)
+lea 0x1(%rax), %rdx              ; rdx = len+1
+add $0x18, %rax                  ; rax = len + 25 (alignment pad)
+and $~0xf, %rax                  ; round to 16 bytes
+sub %rax, %rsp                   ; *** ALLOCA: stack grows by len bytes ***
+call memcpy(alloca_buf, element_name, len+1)
+```
+
+The alloca size = strlen(xml_element_name) with NO upper bound check. The element
+name comes from xml_input_match (libjunos-junoscript callback parser), which reads
+directly from the TCP stream with no built-in length cap.
+
+**Impact**: A valid NETCONF session (post-SSH-auth) sending an XML element with a
+  multi-MB name causes mgd to alloca multi-MB on the stack, triggering:
+  - SIGSEGV on stack guard page hit → mgd process crash → session terminated
+  - No heap corruption; no code execution
+
+**Classification**: Post-auth crash (session DoS). Not exploitable for RCE without
+  additional bypass of stack guard pages.
+
+**Note**: Pattern 3 at +0x11eeeb uses realloc (not alloca) with proper NULL check
+  and space guard — not exploitable.
+
+**Dynamic buffer pattern (safe)**:
+```
+strlen(str) → compute new_size = (r13 + r14 + 0x2000) & ~0x1fff
+realloc(buf, new_size)          ; checked: je error_handler on NULL
+space check before memcpy       ; ja skip_realloc confirms fit
+```
+
+---
+
+## GOT Writability (RELRO=OFF) — Attack Surface Note
+
+RELRO is confirmed OFF on mgd and libengine.so.1 (no PT_GNU_RELRO segment, binary-
+verified in prior session). The GOT is writable after program start.
+
+This means a write-what-where primitive targeting any imported function's GOT entry
+would redirect execution on the NEXT call to that function. No BSS write needed.
+
+**Selected writable GOT entries (mgd, load-base-relative):**
+  - 0x2ab80: xml_input_rpc (called from mgd_get_file_with_cert)
+  - 0x2b5b0: wordexp (called from cmd_cli_directory post-auth)
+  - 0x2b320: xml_initial_handshake (called from main during every new session)
+  - 0x2ac20: popen (called from auth_get_challenge on rollback events)
+  - 0x2aaf8: mgmt_peer_auth_user (called from multiple command handlers)
+
+Overwriting any one of these with a ROP gadget address provides control over the
+next call. xml_initial_handshake's GOT entry is particularly interesting — it's
+called once per NETCONF session from main(), so a GOT overwrite that persists
+across session reconnects would trigger on the next incoming connection.
+
+**Constraint**: Still requires a write primitive. FINDING 2's write primitive
+  search exhausted libengine strcpy/sprintf sites (prior session). Remaining
+  hypothesis: SLAX script with slax:invoke chain (requires config write access).
