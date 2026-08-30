@@ -2376,6 +2376,325 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def speed_monitor_surface(self) -> dict:
+        """
+        AXIS Speed Monitor (speedmonitor) attack surface.
+
+        appId: 413872  binary: speedmonitor  version: 1.1.7  arch: ARM32 armhf stripped
+        CGI: administrator /control.cgi, /statistics.cgi (both admin-only)
+
+        Radar scene analytics ACAP — processes radar-tracked vehicle speed data.
+        Bundles its own GStreamer 2408, libprotobuf 26, libssl.so.3, libxml2.
+
+        Key findings:
+
+        1. SQLite3 Track database — full radar track dump via statistics.cgi
+           "SELECT * FROM Track" — admin-level statistics.cgi returns all tracked data.
+           Track schema: (start_timestamp, speed, object attributes — from radarscene.proto).
+           "DELETE FROM Track WHERE start_timestamp <= ?" — parameterized (good), but SELECT * is not filtered.
+           Unbounded SELECT * dump at admin level = full vehicle speed/time tracking history.
+
+        2. Radar scene protobuf from untrusted source
+           libprotobuf.so.26 (bundled) deserializes radarscene.proto from provider.
+           "Got invalid serialized scene size %d from provider" — size check present.
+           "Received non-wellformed metadata document from radar!" — XML path also present.
+           If protobuf message comes from a network radar device → malformed protobuf → crash.
+
+        3. libxml2 metadata parsing — XML injection path
+           libxml2.so.2.13.4 bundled. "Received non-wellformed metadata document from radar!"
+           If radar metadata XML is user-influenced → classic XML injection/XXE surface.
+
+        4. fdipc IPC with UID validation
+           fdipc_recv_with_uid — validates caller UID on IPC socket.
+           CGI socket TOCTOU race (same as radar_microbus): "Failed to remove old CGI socket" cleanup on shutdown.
+
+        5. ax_storage (SD card/flash) write path
+           axstorage used for persistent track data; ax_storage_setup_async + ax_storage_release_async.
+           If storage path leaks track records to a readable path, exfil via backup or directory read.
+
+        6. Bundled GStreamer 2408 + OpenSSL 3 + libxml2 2.13.4
+           Self-contained dependency bundle — version-specific CVEs apply to bundled libs,
+           not updated by firmware upgrades. libxml2 2.13.4 and libssl.so.3 need CVE audit.
+        """
+        result = {
+            'app_id': 413872,
+            'app_name': 'AXIS Speed Monitor',
+            'binary_name': 'speedmonitor',
+            'version': '1.1.7',
+            'arch': 'ARM32 armhf stripped',
+            'cgi': {'administrator': ['/control.cgi', '/statistics.cgi']},
+            'sqlite_queries': [
+                'SELECT MIN(start_timestamp), MAX(start_timestamp) FROM Track',
+                'INSERT INTO Track (...)',
+                'DELETE FROM Track WHERE start_timestamp <= ? (parameterized)',
+                'SELECT * FROM Track (full dump at admin level)',
+            ],
+            'bundled_libs': [
+                'libgstreamer-1.0.so.0.2408.0', 'libprotobuf.so.26.0.2',
+                'libssl.so.3', 'libcrypto.so.3', 'libxml2.so.2.13.4',
+                'libcurl.so.4.8.0', 'libsqlite3.so.0.8.6',
+            ],
+            'libs': [
+                'libfdipc.so.1', 'libaxevent.so.1', 'libaxparameter.so.1',
+                'libaxstorage.so.1', 'libjansson.so.4', 'libprotobuf.so.26',
+                'libsystemd.so.0',
+            ],
+            'proto_messages': ['Radar.Object', 'Radar.Event', 'Radar.Scene', 'Radar.Label', 'Radar.BoundingBox', 'Radar.Velocity'],
+            'ipc': 'fdipc_recv_with_uid (UID-validated)',
+            'attack_paths': [
+                {
+                    'id': 'SPM-1',
+                    'title': 'Full radar track data dump via statistics.cgi (admin)',
+                    'mechanism': 'SELECT * FROM Track via admin-only statistics.cgi; all tracked vehicle speed/time data accessible without filtering',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'SPM-2',
+                    'title': 'Malformed protobuf from radar device → crash',
+                    'mechanism': 'libprotobuf.so.26 deserializes radarscene.proto from IPC provider; if radar device is attacker-controlled → malformed protobuf → crash/corruption',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Control of connected radar device (physical or network access)',
+                },
+                {
+                    'id': 'SPM-3',
+                    'title': 'libxml2 metadata XXE/injection via radar XML',
+                    'mechanism': '"Received non-wellformed metadata document from radar!" — if XML metadata from radar source is attacker-influenced → libxml2 XXE or injection',
+                    'severity': 'LOW',
+                    'prerequisite': 'Control of connected radar metadata stream',
+                },
+                {
+                    'id': 'SPM-4',
+                    'title': 'Bundled lib CVE exposure (libssl.so.3, libxml2.so.2.13.4)',
+                    'mechanism': 'Bundled libs not updated by firmware; libssl.so.3 and libxml2 2.13.4 may have post-ship CVEs; audit NVD for relevant CVEs',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Exploit of specific bundled lib CVE',
+                },
+            ],
+        }
+        return result
+
+    def fence_guard_surface(self) -> dict:
+        """
+        AXIS Fence Guard (fenceguard) attack surface.
+
+        appId: 47775  binary: fenceguard  version: 2.3.8  arch: aarch64 stripped
+        CGI: administrator /control.cgi (from cgi.txt).
+
+        Same SocketCameraContainer + libscene/libgeometry stack as Loitering Guard + VMD.
+        Also has ONVIF_StateEventProducer (like VMD 4.4.4).
+
+        Key findings:
+
+        1. SocketCameraContainer — multi-camera socket connections (same as Loitering Guard)
+           ZTV21SocketCameraContainer in symbol table; pattern identical to Loitering Guard.
+           Admin control.cgi camera host config → socket SSRF to attacker-controlled camera.
+
+        2. ONVIF_StateEventProducer + sendStartEvent
+           Fence Guard sends ONVIF state events. ZN24ONVIF_StateEventProducer14sendStartEventERK24StateEventProducerHandleRKl
+           If ONVIF state event payload is user-influenced → ONVIF event injection.
+
+        3. libscene.so + libgeometry.so (firmware-loaded)
+           Same substitution vector as VMD/Loitering Guard.
+
+        4. LICENSEPAGE=none — no license gate, no liblicensekey bypass needed.
+        """
+        result = {
+            'app_id': 47775,
+            'app_name': 'AXIS Fence Guard',
+            'binary_name': 'fenceguard',
+            'version': '2.3.8',
+            'arch': 'aarch64 stripped',
+            'cgi': 'administrator /control.cgi (admin-only)',
+            'license_page': 'none',
+            'classes': ['SocketCameraContainer', 'ONVIF_StateEventProducer', 'API_VersionHandler'],
+            'libs': ['libaxparameter.so.1', 'libaxhttp.so', 'libaxevent.so.1', 'libscene.so', 'libgeometry.so'],
+            'attack_paths': [
+                {
+                    'id': 'FG-1',
+                    'title': 'SocketCameraContainer SSRF via admin control.cgi',
+                    'mechanism': 'Identical to Loitering Guard LG-1; admin camera host config → socket SSRF',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'FG-2',
+                    'title': 'ONVIF_StateEventProducer event injection',
+                    'mechanism': 'sendStartEvent sends ONVIF state events; if event payload influenced by CGI param → ONVIF injection to event consumers',
+                    'severity': 'LOW',
+                    'prerequisite': 'Admin-level auth',
+                },
+            ],
+        }
+        return result
+
+    def motion_guard_surface(self) -> dict:
+        """
+        AXIS Motion Guard (motionguard) attack surface.
+
+        appId: 48170  binary: motionguard  version: 2.2.3  arch: ARM32 armhf stripped
+        CGI: administrator /control.cgi (from cgi.txt). LICENSEPAGE=none.
+
+        Same SocketCameraContainer pattern as Fence Guard + Loitering Guard.
+        D-Bus proxy access: g_dbus_proxy_call_with_unix_fd_list_sync (file descriptor passing).
+
+        Key findings:
+
+        1. SocketCameraContainer — same multi-camera socket SSRF pattern
+           Identical symbol _ZTV21SocketCameraContainerC2... present.
+
+        2. D-Bus with FD passing (g_dbus_proxy_call_with_unix_fd_list_sync)
+           File descriptor list in D-Bus call — potential FD leak/hijack surface.
+           If attacker can consume FDs from the motionguard D-Bus interface → resource starvation or FD confusion.
+
+        3. libscene.so / libgeometry.so (same as all scene analysis apps)
+        """
+        result = {
+            'app_id': 48170,
+            'app_name': 'AXIS Motion Guard',
+            'binary_name': 'motionguard',
+            'version': '2.2.3',
+            'arch': 'ARM32 armhf stripped',
+            'cgi': 'administrator /control.cgi (admin-only)',
+            'license_page': 'none',
+            'classes': ['SocketCameraContainer'],
+            'libs': ['libaxparameter.so.1', 'libaxhttp.so', 'libaxevent.so.1', 'libscene.so', 'libgeometry.so'],
+            'attack_paths': [
+                {
+                    'id': 'MG-1',
+                    'title': 'SocketCameraContainer SSRF via admin control.cgi',
+                    'mechanism': 'Same as LG-1/FG-1 pattern; camera host config → socket SSRF',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'MG-2',
+                    'title': 'D-Bus FD list passing — FD leak/starvation',
+                    'mechanism': 'g_dbus_proxy_call_with_unix_fd_list_sync passes FDs over D-Bus; attacker D-Bus client could consume/steal FDs from motionguard interface',
+                    'severity': 'LOW',
+                    'prerequisite': 'D-Bus access to motionguard interface',
+                },
+            ],
+        }
+        return result
+
+    def live_privacy_shield_surface(self) -> dict:
+        """
+        AXIS Live Privacy Shield (liveprivacyshield) attack surface.
+
+        appId: 346005  binary: liveprivacyshield  version: 2.8.8  arch: ARM32 armhf stripped
+        manifest.json present. LICENSEPAGE=none. APPUSR=sdk.
+
+        D-Bus heavy: g_dbus_proxy_call_sync, g_dbus_proxy_get_cached_property, D-Bus signals.
+        Implements a video privacy masking overlay via D-Bus calls to camera firmware services.
+
+        Key findings:
+
+        1. FCGX socket name from environment
+           "Could not get the FCGI socket name from the environment"
+           CGI handled via FCGX socket; socket name from environment variable.
+           If FCGI socket path is attacker-controllable (via environment manipulation in another ACAP),
+           redirect CGI calls to attacker socket.
+
+        2. D-Bus proxy to firmware service (Mor::DBusService pattern)
+           "Cannot call method %s sync because the proxy is not connected"
+           "Cannot handle passed Method in Mor::DBusService::execute."
+           Method name passed as string to execute(); if method comes from CGI input → D-Bus method injection.
+
+        3. PrivacyShield service D-Bus method enumeration
+           Full D-Bus interface exposed; enumerate methods via introspect to find unguarded operations.
+           "Failed to start PrivacyShield service. Exiting" — single point of failure; DoS = privacy masking disabled.
+        """
+        result = {
+            'app_id': 346005,
+            'app_name': 'AXIS Live Privacy Shield',
+            'binary_name': 'liveprivacyshield',
+            'version': '2.8.8',
+            'arch': 'ARM32 armhf stripped',
+            'license_page': 'none',
+            'libs': ['libgio-2.0.so.0', 'libgobject-2.0.so.0', 'libaxhttp.so', 'libaxparameter.so.1'],
+            'attack_paths': [
+                {
+                    'id': 'LPS-1',
+                    'title': 'FCGX socket name env var — socket path redirection',
+                    'mechanism': 'FCGI socket path from environment variable; if another ACAP can set env before liveprivacyshield starts → redirect CGI to attacker socket',
+                    'severity': 'LOW',
+                    'prerequisite': 'Environment manipulation from co-resident ACAP',
+                },
+                {
+                    'id': 'LPS-2',
+                    'title': 'D-Bus method name injection via Mor::DBusService',
+                    'mechanism': '"Cannot handle passed Method in Mor::DBusService::execute." — method name as string to D-Bus execute(); if CGI param feeds method name → D-Bus method injection',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'CGI access level (check manifest for viewer/operator exposure)',
+                },
+                {
+                    'id': 'LPS-3',
+                    'title': 'Privacy masking DoS — single point of failure',
+                    'mechanism': '"Failed to start PrivacyShield service. Exiting" — crash kills masking service; video feeds unmasked until restart. Crash may be triggerable via malformed CGI.',
+                    'severity': 'HIGH',
+                    'note': 'GDPR/privacy violation if masking removed from streams configured for privacy protection',
+                    'prerequisite': 'Ability to crash liveprivacyshield (OOM, signal, malformed CGI)',
+                },
+            ],
+        }
+        return result
+
+    def audio_spectrum_visualizer_surface(self) -> dict:
+        """
+        AXIS Audio Spectrum Visualizer (AudioSpectrumVisualizer) attack surface.
+
+        appId: 413132  binary: AudioSpectrumVisualizer  version: 2.3.0  arch: aarch64 stripped
+        LICENSEPAGE=none. Admin CGI not mentioned — pure parameter-driven.
+
+        Audio analysis visualizer — reads audio from camera microphone, renders spectrum overlay.
+        cairo rendering library used (cairo_restore visible in strings).
+
+        Key findings:
+
+        1. Parameter value validation — integer and enum parsing
+           "Unable to parse parameter %s = %s as an integer" — parameter read from axparam.
+           "Unrecognizable parameter value %s for %s" — enum validation failure string.
+           If parameter boundary not checked → integer overflow in spectrum calculation.
+           "Invalid value of parameter Channel1SpectrumAnalyzerPosition" — named param with position value.
+
+        2. Audio restart after stream restart
+           "Unable to restart stream after restart" — stream state machine.
+           If restart triggered rapidly (via parameter change callback) → potential race condition.
+
+        3. cairo rendering surface — image output
+           Cairo used for rendering spectrum overlay on video.
+           If spectrum analysis data (frequency bins) is not bounds-checked before cairo drawing calls,
+           out-of-bounds draw possible → cairo crash.
+        """
+        result = {
+            'app_id': 413132,
+            'app_name': 'AXIS Audio Spectrum Visualizer',
+            'binary_name': 'AudioSpectrumVisualizer',
+            'version': '2.3.0',
+            'arch': 'aarch64 stripped',
+            'license_page': 'none',
+            'libs': ['libaxparameter.so.1', 'libaxevent.so.1', 'libcairo.so.2'],
+            'params': {'Channel1SpectrumAnalyzerPosition': '(enum position value)'},
+            'attack_paths': [
+                {
+                    'id': 'ASV-1',
+                    'title': 'Integer overflow in spectrum parameter parsing',
+                    'mechanism': '"Unable to parse parameter %s = %s as an integer" — if operator sets extreme integer value for spectrum param → overflow in audio spectrum calculation',
+                    'severity': 'LOW',
+                    'prerequisite': 'Operator-level axparam write',
+                },
+                {
+                    'id': 'ASV-2',
+                    'title': 'Cairo rendering OOB via unchecked spectrum bins',
+                    'mechanism': 'Audio frequency bins fed to cairo rendering; if bin values not range-checked → cairo draw call with OOB coordinates → crash',
+                    'severity': 'LOW',
+                    'prerequisite': 'Control of audio input to camera microphone (physical)',
+                },
+            ],
+        }
+        return result
+
     def cognimatics_tvpc_variants_surface(self) -> dict:
         """
         Cognimatics tvpc-based AXIS apps — Direction Detector, Tailgating Detector, Random Selector.
@@ -3159,6 +3478,16 @@ def main():
                         help='Queue Monitor tvqu ARM32 3.0.20 tarslip + libsodium + TLS bypass surface')
     parser.add_argument('--loitering-guard', action='store_true', dest='loitering_guard',
                         help='Loitering Guard ARM32 2.3.8 SocketCameraContainer SSRF + libscene surface')
+    parser.add_argument('--speed-monitor', action='store_true', dest='speed_monitor',
+                        help='Speed Monitor ARM32 1.1.7 SQLite track dump + bundled protobuf/xml2 + radar scene')
+    parser.add_argument('--fence-guard', action='store_true', dest='fence_guard',
+                        help='Fence Guard aarch64 2.3.8 SocketCameraContainer SSRF + ONVIF state event injection')
+    parser.add_argument('--motion-guard', action='store_true', dest='motion_guard',
+                        help='Motion Guard ARM32 2.2.3 SocketCameraContainer SSRF + D-Bus FD passing')
+    parser.add_argument('--live-privacy-shield', action='store_true', dest='live_privacy_shield',
+                        help='Live Privacy Shield ARM32 2.8.8 D-Bus method injection + DoS privacy masking')
+    parser.add_argument('--audio-spectrum', action='store_true', dest='audio_spectrum',
+                        help='Audio Spectrum Visualizer aarch64 2.3.0 cairo OOB + param integer overflow')
     parser.add_argument('--cognimatics-tvpc', action='store_true', dest='cognimatics_tvpc',
                         help='Cognimatics tvpc variants 3.12.1 runs-as-root tarslip + debugar coredump + SWEET32')
     parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
@@ -3247,6 +3576,21 @@ def main():
 
     if args.all or getattr(args, 'loitering_guard', False):
         results['loitering_guard'] = analyzer.loitering_guard_surface()
+
+    if args.all or getattr(args, 'speed_monitor', False):
+        results['speed_monitor'] = analyzer.speed_monitor_surface()
+
+    if args.all or getattr(args, 'fence_guard', False):
+        results['fence_guard'] = analyzer.fence_guard_surface()
+
+    if args.all or getattr(args, 'motion_guard', False):
+        results['motion_guard'] = analyzer.motion_guard_surface()
+
+    if args.all or getattr(args, 'live_privacy_shield', False):
+        results['live_privacy_shield'] = analyzer.live_privacy_shield_surface()
+
+    if args.all or getattr(args, 'audio_spectrum', False):
+        results['audio_spectrum'] = analyzer.audio_spectrum_visualizer_surface()
 
     if args.all or getattr(args, 'cognimatics_tvpc', False):
         results['cognimatics_tvpc'] = analyzer.cognimatics_tvpc_variants_surface()
