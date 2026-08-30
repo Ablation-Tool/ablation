@@ -3217,7 +3217,7 @@ class AxisEAPAnalyzer:
         """
         AXIS Motion Guard (motionguard) attack surface.
 
-        appId: 48170  binary: motionguard  version: 2.2.3  arch: ARM32 armhf stripped
+        appId: 48170  binary: motionguard  version: 2.3.8  arch: aarch64 stripped (S5L/ARTPEC-7/8; 2.2.3 was armhf)
         CGI: administrator /control.cgi (from cgi.txt). LICENSEPAGE=none.
 
         Same SocketCameraContainer pattern as Fence Guard + Loitering Guard.
@@ -3238,8 +3238,8 @@ class AxisEAPAnalyzer:
             'app_id': 48170,
             'app_name': 'AXIS Motion Guard',
             'binary_name': 'motionguard',
-            'version': '2.2.3',
-            'arch': 'ARM32 armhf stripped',
+            'version': '2.3.8',
+            'arch': 'aarch64 stripped',
             'cgi': 'administrator /control.cgi (admin-only)',
             'license_page': 'none',
             'classes': ['SocketCameraContainer'],
