@@ -1956,3 +1956,82 @@ PFCP `UE IP Address` IE (type 93) and `IPv6 Multiple Addresses` JNPR extension I
 
 Replace `strcpy(malloc(100), src)` at 0x142e7b with `strlcpy(malloc(strlen(src)+1), src, strlen(src)+1)` or bound-check the IE value to ≤ 99 bytes at the PFCP parser layer before storage in SDB.
 
+
+---
+
+## FINDING 12: authd — Pre-Auth Attack Surface Assessment (Static Analysis Scope)
+
+**Class:** Static Analysis Survey — Pre-Auth Memory Corruption Candidates  
+**Severity:** Pending dynamic analysis  
+**Status:** Static analysis complete; no confirmed overflow; two candidates require dynamic verification  
+
+### Summary
+
+`authd` is a 10MB non-PIE (`EXEC_P`) binary with no stack canary (0 `stack_chk_fail` references) — the highest-value target in the management plane for pre-auth memory corruption. A confirmed overflow here requires no ASLR bypass. Static analysis surveyed all 122 strcpy call sites and identified the overall pattern.
+
+### Binary Properties
+
+```
+Type:     EXEC_P (non-PIE) — fixed base address
+Canary:   None
+RELRO:    Partial
+Size:     10,149,576 bytes (~10MB)
+Links:    libzookeeper_mt.so.2, gRPC, protobuf, libslax
+```
+
+### strcpy Pattern Survey (122 calls)
+
+**Dominant safe pattern (most calls):**
+```asm
+strlen(src)              ; measure source
+lea 0x1(%rax),%rdi       ; alloc = strlen + 1
+call malloc_wrapper      ; dynamic-sized allocation
+mov %rax,(%r??)          ; store ptr
+mov src,%rsi
+call strcpy              ; copy into correctly-sized heap buffer → SAFE
+```
+
+**Variant 1: struct field destination, struct field source (0x7dc4de, 0x7dc80e)**
+```asm
+; r14 = RADIUS session struct (from hash table lookup)
+lea 0x140(%r14),%rsi     ; src = radius_session->field_0x140
+lea 0x140(%r14),%rsi     ; or: radius_session->field_0xf5
+mov %r13,%rdi            ; dst = rdi arg (unknown size from caller)
+call strcpy              ; potentially unsafe if dst < src length
+```
+- Function at 0x7dc450 called via function pointer — callers not traced
+- r14 from `call 0x7ddc20` (RADIUS session hash lookup)
+- field_0x140 / field_0xf5: likely User-Name attribute (max 253 bytes in RADIUS)
+- **Risk:** if `r13` destination buffer < 253 bytes AND source is User-Name from RADIUS response
+
+**Variant 2: Unix socket path strcpy (0xa4430a)**
+```asm
+lea -0x8e(%rbp),%rdi     ; dst = sun_path[] = 142-byte stack buffer
+mov %r13,%rsi            ; src = sprintf-formatted socket path
+call strcpy
+```
+- Path is formatted from `sprintf(r13, static_format, rdi, rsi)`
+- Format string is static rodata; not directly network-controllable
+- **Verdict: Likely safe** — Unix socket paths bounded by fixed format
+
+### Dynamic Analysis Plan
+
+**Priority 1: RADIUS response User-Name parsing (function 0x7dc450)**
+```
+strace -e recvfrom,connect -p $(pgrep authd)
+# Setup: authd configured with attacker-controlled RADIUS server
+# Send RADIUS Access-Accept with User-Name attr = 200-byte string
+# Observe: segfault or overwrite past destination buffer
+```
+
+**Priority 2: Live strace during auth attempt**
+```
+strace -e recvfrom,recvmsg,read -p $(pgrep authd)
+# Trigger: SSH login attempt → RADIUS exchange
+# Map: recvfrom → buffer → which strcpy
+```
+
+### Why authd Matters
+
+Non-PIE with no canary: confirmed exploit does not require ASLR bypass or stack cookie leak. A single heap/stack overflow with controlled data → direct code execution. RADIUS runs over UDP — response packets can be spoofed if the attacker can observe the request identifier (visible to anyone on the RADIUS path).
+
