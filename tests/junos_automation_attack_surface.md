@@ -442,13 +442,21 @@ Additional sites (r13 node, no NULL guard on doc):
 Fix in 2.9.14: adds `if (node->doc == NULL) goto out;` before 0x7c9df equivalent.
 This check is absent in 2.9.9.
 
-Trigger path in Junos context:
-  NETCONF RPC → mgd XML parse → xmlXIncludeProcessFlags() called with
-  XML_PARSE_XINCLUDE flag → xmlXIncludeDoProcess → UAF on freed doc pointer.
-  Whether mgd enables XInclude processing by default needs validation via
-  mgd binary RE (xmlXIncludeProcessFlags call sites in mgd).
+Trigger path in Junos context: CONFIRMED UNREACHABLE via NETCONF.
+  Binary verification (EVO 23.4R2.14): mgd imports xmlReadFile only (config file I/O).
+  libengine.so.1 imports: xmlFreeDoc, xmlReadFile, xmlSaveClose, xmlSaveDoc, xmlSaveToFd.
+  Neither mgd nor libengine imports xmlXIncludeProcessFlags, xmlXIncludeProcess, or any
+  xmlXInclude* variant. NETCONF XML is processed by Junos internal xml_* parser stack,
+  NOT libxml2 SAX/DOM. The UAF site in xmlXIncludeDoProcess is present but unreachable
+  from any NETCONF input path — no code path from TCP session to xmlXIncludeDoProcess.
+  Status: UAF confirmed in binary, trigger path confirmed absent.
+
+  SEPARATE TRIGGER NEEDED: xmlXInclude only triggers if attacker can load a crafted
+  XML document via xmlReadFile (e.g., config load from file) and the file contains
+  XInclude hrefs. Requires write access to config file path — post-auth or local.
 
 `xmlLoadExtDtdDefaultValue` exported — external DTD loading compiled in.
+  DTD external entity path also requires xmlReadFile, same constraints as above.
 
 ## Juniper custom DOM API: register_* / cs_xmlXPathNext* (NULL deref + vtable overwrite)
 
@@ -600,12 +608,30 @@ FINDING 2 — vtable overwrite (RCE):
   NOTE: CVE-2022-23308 (xmlXIncludeDoProcess UAF) was previously listed here —
     INCORRECT. CVE-2022-23308 affects libxml2 2.9.10-2.9.12. This binary is
     libxml2 2.9.9 (xmlParserVersion='20909'). CVE-2022-23308 does NOT apply.
-  Realistic write primitives (not yet confirmed):
-    libnetconf2 F9 OOB heap write (1-2 bytes past heap chunk end) — requires
-      heap chunk adjacent to BSS 0x150b08; heap/BSS adjacency not guaranteed.
-    S3/S4 alloca overflow (slaxext.c:2108 / slaxloader.c:891) — stack-based,
-      but a stack pivot could redirect writes; more likely standalone RCE path.
-  Write primitive to BSS is the OPEN LINK in the vtable overwrite chain.
+
+  WRITE PRIMITIVE SEARCH (exhaustive, EVO 23.4R2.14):
+    Surveyed all 46 strcpy sites in libengine.so.1 — all follow strlen→malloc→strcpy pattern
+      (safe by construction) or alloca→strcpy (stack-local, cannot reach libxml2 BSS).
+    Surveyed all 13 sprintf sites in libengine.so.1 — all use constant format strings
+      (RIP-relative literal addresses); no attacker-controlled format string found.
+    CVE-2021-3517 (stack overflow in xmlEncodeEntitiesInternal): function at 0xc8570 contains
+      dynamic buffer growth via PLT call 0x2c530 (xmlBufferGrow); fixed (backported by Juniper,
+      build date 2024-06-26 well post-2021 fix).
+    XInclude UAF trigger: CONFIRMED ABSENT (see UAF section above — mgd imports no XInclude fn).
+    XPath write-primitive via register_* reuse: cscript calls register_delete_node(cs_delete_node)
+      with compile-time constant — not data-driven, no controllable argument path.
+    All register_* calls in cscript ext_register_all (0x11e60) use lea rdx,[rip+const]
+      (function pointers from cscript .text section) — closed against injection.
+
+  Write primitive to BSS: NO CONFIRMED PATH in EVO 23.4R2 after exhaustive binary survey.
+
+  HIGHEST-VALUE REMAINING WRITE PRIMITIVE HYPOTHESIS:
+    If an attacker can install a SLAX commit/op script (requires initial config write access,
+    e.g., via F2-level credentials), the slax:evaluate chain with a hand-crafted slax:invoke
+    to a custom mgd extension could call register_delete_node(fp) where fp is a controlled
+    address. This chain requires existing config write access — degrades FINDING 2 to post-auth
+    privilege escalation, not standalone pre-auth RCE.
+
   Trigger (after overwrite): any NETCONF XPath filter with child-element or parent axis:
     xmlXPathNodeCollectAndTest → cs_xmlXPathNextChildElement/Parent → call *(BSS slot)
     → arbitrary code execution in mgd context (root on FreeBSD/Junos EVO).
@@ -702,6 +728,19 @@ BINARIES EXTRACTED from EVO 23.4R2 meta-ui64_Yocto_2.2_x86_64.fs squashfs:
   mgd:          /usr/sbin/mgd     (177K, x86-64 PIE, stripped)
   libslax.so.3: /usr/lib64/libslax.so.3 (282K, x86-64)
   cscript:      /usr/libexec/ui/cscript (145K, x86-64 PIE, stripped)
+  libxml2.so.3: /usr/lib64/libxml2.so.3 (present, 2.9.9)
+  libengine.so.1: /usr/lib64/libengine.so.1 (2.4M — Junos CLI/RPC engine, NETCONF)
+
+SECURITY MITIGATIONS (confirmed by binary analysis):
+  mgd:       PIE=YES, RELRO=NONE, Stack-canary=NO, NX=YES, BIND_NOW=NO
+  cscript:   PIE=YES, RELRO=NONE, Stack-canary=NO, NX=YES, BIND_NOW=NO
+  libxml2.so.3: RELRO=NONE, Stack-canary=NO, NX=YES
+  IMPLICATION: GOT of libxml2.so.3 is WRITABLE throughout execution.
+    GOT entries for vtable function pointers (0x14dbc0–0x14de98) are writable.
+    GOT entries for libc functions (calloc@0x14dcd8, malloc@0x14dc60,
+    free@0x14dde8, etc.) are all writable — any write-to-GOT = arbitrary call.
+    No stack canary = stack overflows (if found) directly overwrite saved RIP.
+    NX prevents stack/heap shellcode; need ROP gadgets.
 
 Functions in libslax: slaxExtRegister (0x2b7c0), slaxSlaxToXpath (0x2e8b0)
   slaxExtEvaluate and slaxExtSysctl are local (non-exported) — in libslax.so.3
