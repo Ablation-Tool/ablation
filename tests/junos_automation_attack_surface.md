@@ -452,43 +452,81 @@ Trigger path in Junos context:
 
 ## Juniper custom DOM API: register_* / cs_xmlXPathNext* (NULL deref + vtable overwrite)
 
-7 Juniper-specific BSS function pointer slots added to libxml2.so.3 (absent in upstream).
-Confirmed via .dynsym/.symtab symbol table and RIP-relative write trace.
+12 Juniper-specific BSS function pointer slots added to libxml2.so.3 (absent in upstream).
+Confirmed via RELA.dyn relocation table (.got section, Junos EVO 23.4R2.14 x86-64 libxml2.so.3).
 
-Slot map (confirmed, Junos EVO 23.4R2.14 x86-64 libxml2.so.3):
+TWO-LEVEL INDIRECTION: function pointers stored in BSS at 0x150b10+.
+  .got section (0x14dbb8–0x14dea8) holds R_X86_64_GLOB_DAT relocations → resolved at load
+  time to the BSS variable addresses. Code access: mov rax,[GOT_entry] → rax=BSS addr,
+  then call [rax] (= call *(BSS addr) = call the stored function pointer).
+
+Full vtable (BSS variable address = write target; GOT entry = PIC access point):
 ```
-BSS addr    Name                Register stub  Stub VA
-0x14dbc0    get_first_node      register_get_first_node       0x2f4c0
-0x14dc18    is_node_container   register_is_node_container    0x2f510
-0x14ddb8    get_child_node      register_get_child_node       0x2f4e0
-0x14dde8    get_next_node       register_get_next_node        0x2f4d0
-0x14dd38    delete_node         register_delete_node          0x2f530
-0x14de38    get_parent_node     register_get_parent_node      0x2f4f0
-0x14de58    get_all_nodes       register_get_all_nodes        0x2f500
+BSS addr   Name               GOT entry   Register stub  Stub VA
+0x150b10   get_first_node     0x14dbc0    register_get_first_node       0x2f4c0
+0x150b18   get_all_nodeset    0x14dc08    register_get_all_nodeset      0x2f560
+0x150b20   is_node_container  0x14dc18    register_is_node_container    0x2f510
+0x150b28   get_ref_node       0x14dd18    register_get_ref_node         0x2f550
+0x150b30   delete_node        0x14dd38    register_delete_node          0x2f530
+0x150b38   is_node_equal      0x14dd50    register_is_node_equal        0x2f520
+0x150b40   get_child_node     0x14ddb8    register_get_child_node       0x2f4e0
+0x150b48   get_next_node      0x14dde8    register_get_next_node        0x2f4d0
+0x150b50   delete_nodeset     0x14de30    register_delete_nodeset       0x2f570
+0x150b58   get_parent_node    0x14de38    register_get_parent_node      0x2f4f0
+0x150b60   get_all_nodes      0x14de58    register_get_all_nodes        0x2f500
+0x150b68   delete_all_nodes   0x14de98    register_delete_all_nodes     0x2f540
 ```
+12 slots, 8 bytes each. All in a single contiguous BSS block 0x150b10–0x150b6f.
 
 Registration stubs are 3 instructions each — no type checking, no atomicity guarantee:
 ```asm
 ; register_get_first_node(fn):  fn in rdi
-0x2f4c0:  mov  rax, [rip + 0x11e6f9]  ; rax = &get_first_node slot (0x14dbc0)
-0x2f4c7:  mov  [rax], rdi             ; *slot = fn
+0x2f4c0:  mov  rax, [rip + 0x11e6f9]  ; rax = 0x14dbc0 (GOT entry for get_first_node)
+0x2f4c7:  mov  [rax], rdi             ; *(0x14dbc0) = fn  [but GOT→0x150b10, so writes fn to BSS!]
 0x2f4ca:  ret
 ```
-Pattern repeats identically for all 7 slots at 0x2f4d0, 0x2f4e0, 0x2f4f0, 0x2f500, 0x2f510, 0x2f530.
+NOTE: GOT[0x14dbc0] was resolved by linker to 0x150b10 (BSS addr of get_first_node).
+So `mov [rax], rdi` writes fn into BSS at 0x150b10 — correct write target.
+Pattern repeats identically for all 12 slots.
 
-cs_xmlXPathNextParent (0x81700) — Junos element traversal (walks "commit-script-input" / "configuration" elements):
-  0x81790:  mov r13, [rip+0xcc6a1]     ; r13 = &get_parent_node (0x14de38)
-  0x8179a:  call qword [r13]           ; call *get_parent_node — NO NULL CHECK
-  0x817a8:  mov rax, [rip+0xcc469]     ; rax = &is_node_container (0x14dc18)
-  0x817b2:  call qword [rax]           ; call *is_node_container — NO NULL CHECK
-  0x817bb:  call qword [r13]           ; call *get_parent_node again — NO NULL CHECK
-  0x817c5:  mov rax, [rip+0xcc56c]     ; rax = &delete_node (0x14dd38)
-  0x817cf:  call qword [rax]           ; call *delete_node — NO NULL CHECK
-  0x817d6:  mov rax, [rip+0xcc3e3]     ; rax = &get_first_node (0x14dbc0)
-  0x817ec:  jmp  qword [rax]           ; tail-call *get_first_node — NO NULL CHECK
+cs_xmlXPathNextParent (0x81700) — walks "commit-script-input" / "configuration" elements:
+  (GOT entries used; BSS variable at each GOT target is the actual write/call target)
+  0x81790:  mov r13, [rip+0xcc6a1]     ; r13 = GOT[get_parent_node]=0x14de38 → BSS 0x150b58
+  0x8179a:  call qword [r13]           ; call *(BSS 0x150b58) — NO NULL CHECK
+  0x817a8:  mov rax, [rip+0xcc469]     ; rax = GOT[is_node_container]=0x14dc18 → BSS 0x150b20
+  0x817b2:  call qword [rax]           ; call *(BSS 0x150b20) — NO NULL CHECK
+  0x817bb:  call qword [r13]           ; call *(BSS 0x150b58) again — NO NULL CHECK
+  0x817c5:  mov rax, [rip+0xcc56c]     ; rax = GOT[delete_node]=0x14dd38 → BSS 0x150b30
+  0x817cf:  call qword [rax]           ; call *(BSS 0x150b30) — NO NULL CHECK
+  0x817d6:  mov rax, [rip+0xcc3e3]     ; rax = GOT[get_first_node]=0x14dbc0 → BSS 0x150b10
+  0x817ec:  jmp  qword [rax]           ; tail-call *(BSS 0x150b10) — NO NULL CHECK
+  Unchecked BSS slots: get_parent_node(0x150b58), is_node_container(0x150b20),
+    delete_node(0x150b30), get_first_node(0x150b10) — 4 unchecked call sites
 
-delete_node (0x14dd38) is the highest-value overwrite target: 15+ call sites across
-xmlXPathNodeCollectAndTest and auxiliary XPath axis helpers.
+cs_xmlXPathNextChildElement (0x81870) — Junos child-element axis traversal:
+  Element-name check: `repe cmpsb` at 0x8190e against "commit-script-input" (0x113d9a)
+  0x81923:  mov rax, [rip+0xcc296]     ; rax = GOT[get_first_node]=0x14dbc0 → BSS 0x150b10
+  0x8192a:  call qword [rax]           ; call *(BSS 0x150b10) — NO NULL CHECK
+  0x81938:  mov rax, [rip+0xcc4f9]     ; rax = GOT[get_parent_node]=0x14de38 → BSS 0x150b58
+  0x81942:  call qword [rax]           ; call *(BSS 0x150b58) — NO NULL CHECK
+  0x8194f:  mov rax, [rip+0xcc2c2]     ; rax = GOT[is_node_container]=0x14dc18 → BSS 0x150b20
+  0x81956:  call qword [rax]           ; call *(BSS 0x150b20) — NO NULL CHECK
+  0x81964:  mov rbx, [rip+0xcc3cd]     ; rbx = GOT[delete_node]=0x14dd38 → BSS 0x150b30
+  0x8196e:  call qword [rbx]           ; call *(BSS 0x150b30) — NO NULL CHECK
+  0x8197f:  mov rax, [rip+0xcc432]     ; rax = GOT[get_child_node]=0x14ddb8 → BSS 0x150b40
+  0x81994:  jmp  qword [rax]           ; tail-call *(BSS 0x150b40) — NO NULL CHECK
+  Unchecked BSS slots: get_first_node, get_parent_node, is_node_container,
+    delete_node, get_child_node — 5 unchecked call sites
+
+CONFIRMED: 9 of 12 BSS slots have no NULL guard across the two custom axis functions.
+BSS slot layout is contiguous (0x150b10–0x150b6f, 96 bytes). Highest-value overwrite target:
+  delete_node (BSS 0x150b30): 15+ call sites in xmlXPathNodeCollectAndTest + cs_* functions.
+
+NOTE on xmlXPathNodeCollectAndTest NULL checks: at 0x8f941/0x8f94b, the code does
+  `mov rax, [GOT_for_delete_node]; test rax, rax; je skip` — this tests the GOT address
+  (resolved at load time to 0x150b30, always non-null). It does NOT test the stored
+  function pointer at *(0x150b30). The "NULL check" is INEFFECTIVE — the branch is never
+  taken, and a NULL stored pointer still crashes at the call.
 
 Dispatch gate in xmlXPathNodeCollectAndTest (0x8fabe / 0x8fc11):
 ```asm
@@ -512,17 +550,20 @@ FINDING 1 — NULL deref (partial-registration race):
   Severity: DoS / crash of mgd (management daemon).
 
 FINDING 2 — vtable overwrite (RCE):
-  BSS slots at confirmed deterministic addresses (ASLR does NOT randomize BSS base
-  within a loaded shared library relative to other library segments — load base varies
-  but inter-segment layout is fixed).
-  Target: delete_node slot (0x14dd38) — 15+ call sites, always reached on XPath traversal.
-  Overwrite mechanism: requires write-what-where primitive (candidates in same library:
-    CVE-2022-23308 UAF → if XInclude reachable from NETCONF, freed doc pointer write;
-    libnetconf2 F9 OOB heap write if heap adjacent to BSS mapping).
-  Trigger (after overwrite): any NETCONF XPath filter activates delete_node call site
-    → arbitrary code execution in mgd context (root on FreeBSD Junos).
-  Note on BSS-heap adjacency: not guaranteed without ASLR info leak; chain credibility
-    depends on whether mgd disables ASLR (common in embedded/appliance firmware).
+  BSS vtable at confirmed offsets relative to library load base (ASLR randomizes the
+  base, but inter-segment layout is fixed — vtable-to-GOT delta is constant).
+  Target: delete_node BSS at 0x150b30 (load-base-relative offset 0x150b30).
+    delete_node called at 15+ sites; always reached on any XPath traversal.
+  Contiguous BSS block: 0x150b10–0x150b6f (96 bytes, 12 slots).
+    Overwrite any one slot → code execution on next XPath query that calls it.
+  Overwrite mechanism: requires write-what-where to BSS (candidates in same library:
+    CVE-2022-23308 UAF → freed doc pointer write if XInclude reachable from NETCONF;
+    libnetconf2 F9 OOB heap write if heap allocation adjacent to BSS mapping).
+  Trigger (after overwrite): any NETCONF XPath filter with child-element or parent axis:
+    xmlXPathNodeCollectAndTest → cs_xmlXPathNextChildElement/Parent → call *(BSS slot)
+    → arbitrary code execution in mgd context (root on FreeBSD/Junos EVO).
+  ASLR note: vtable BSS offset from load base is constant. Without a leak, attacker
+    needs to guess or brute-force load base. mgd's ASLR posture on EVO not yet confirmed.
 
 ---
 
