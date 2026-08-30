@@ -7,13 +7,58 @@
 
 ---
 
-It reads binaries without symbols and tracks specific functions across versions using behavior, not location.
+Tracks functions across binary versions using behavior, not location — no symbols, no source, no CVE number required.
 
-Every other approach breaks when the address moves or the code changes slightly. Signature scanners need exact byte matches. IDA and Ghidra need a human to manually correlate functions across versions. BinDiff works on full binary pairs but has no semantic understanding — it matches structure, not meaning.
+Every other approach breaks when the address moves or the code changes slightly. Signature scanners need exact byte matches. IDA and Ghidra need a human to manually correlate functions across versions. BinDiff works on full binary pairs but has no semantic understanding — it matches structure, not meaning. None of them tell you *when* a function was patched.
 
-We match on all three simultaneously: structure, instruction overlap, and what the function actually does. That combination means a function can move, get optimized by the compiler, have a few instructions swapped, and we still find it. And we do it in under two minutes on a 94MB binary with no debug info.
+Ablation matches on three signals simultaneously — structure, instruction overlap, and what the function actually does — and uses the result to produce a **forensic patch attribution timeline from firmware alone**.
 
-The specific gap we fill: automated, semantically-aware, cross-version function tracking on stripped enterprise firmware at scale. That doesn't exist as a ready tool anywhere else.
+---
+
+## How it works
+
+```
+Binary  →  Prologue scan  →  FuncFeatures[]
+                                    │
+                          ┌─────────▼──────────┐
+                          │  1. Block filter    │  ±2 basic blocks       (coarse)
+                          │  2. 4-gram Jaccard  │  mnemonic n-grams      (precise)
+                          │  3. MPNet embedding │  semantic meaning       (cross-arch)
+                          └─────────┬──────────┘
+                                    │
+                              HomologMatch
+                            (va, jaccard, semantic_score, confidence, delta)
+```
+
+**Stage 1** prunes the search space. **Stage 2** is the load-bearing signal: mnemonic 4-gram Jaccard is build-invariant — the same function compiled with different optimization flags, address layouts, or minor code tweaks produces nearly the same Jaccard. **Stage 3** bridges ISA boundaries where Jaccard fails (x86-64 seed vs. ARM64 target).
+
+---
+
+## The novel part: Jaccard as a patch epoch classifier
+
+Jaccard isn't used as binary match/no-match. It's a continuous implementation era signal:
+
+| Jaccard | Interpretation |
+|---------|---------------|
+| ~0.97 | Bytecode nearly identical — same implementation era, almost certainly unpatched |
+| ~0.21 | Structural rewrite — function was significantly changed, patched |
+| ~0.11–0.19 | Different implementation era — pre-dates the current codeline |
+
+No existing tool does this. BinDiff and Diaphora give you "X% similar." Ablation gives you "this function has been in the same implementation era since version 9.8, changed once at 9.15, and every version after that is a structural rewrite of the original" — derived entirely from firmware, with no CVE, no advisory, no source code.
+
+**Example — Cisco ASA `attr_list_add_impl` sweep across 33 firmware versions:**
+
+```
+Era 1  (jac ~0.11–0.19)   ASA 9.1.7 → 9.6.4        old implementation
+Era 2  (jac ~0.96–0.97)   ASA 9.8.x → 9.14.4.24    UNPATCHED  (~3.5 years, no CVE)
+──────────────────── patch boundary: ASA 9.15.x ─────────────────────────────────
+Era 3  (jac ~0.21)        ASA 9.15.x → 9.22+        PATCHED
+Era 4  (jac ~0.19)        ASA 10.1.x                 separate codeline, patched
+```
+
+The boundary was identified by sweeping FTD 6.6.0 (ASA 9.14 base, Era 2) vs. FTD 6.7.0 (ASA 9.15 base, Era 3) — no source code, no debug symbols, no prior knowledge of the patch. Cross-architecture coverage extends the same timeline to ARM64 (FTD 10.0.0, FTD 1200) and i386 (ASA 9.1.x, 9.2.x) via the semantic layer.
+
+This runs in under two minutes on a 94MB stripped binary.
 
 ---
 

@@ -27,7 +27,11 @@ VERSIONS = [
     ('ASA 9.1.7.23',   '/media/cowboy/research/cisco-lina-re/asa91723-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.5.2.204',  '/media/cowboy/research/cisco-lina-re/asa952-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.6.4.18',   '/media/cowboy/research/cisco-lina-re/asa964-extract/cpio-root/asa/bin/lina'),
+    # FTD 6.2.0-362 (Jan 2017, ~ASA 9.6.x era): jac=0.1307 Era 1
+    ('FTD 6.2.0-362',  '/media/cowboy/research/cisco-lina-re/ftd620-extract/lina'),
     ('ASA 9.9.2.85',   '/media/cowboy/research/cisco-lina-re/asa992-85-extract/cpio-root/asa/bin/lina'),
+    # FTD 6.3.0-83 (Nov 2018, ~ASA 9.8-9.9 era): jac=0.9593 Era 2 UNPATCHED
+    ('FTD 6.3.0-83',   '/media/cowboy/research/cisco-lina-re/ftd630-extract/lina'),
     ('ASA 9.10.1.37',  '/media/cowboy/research/cisco-lina-re/asa9101037-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.10.1.40',  '/media/cowboy/research/cisco-lina-re/asa9101040-mnt/asa/bin/lina'),
     ('ASA 9.10.1.42',  '/media/cowboy/research/cisco-lina-re/asa9101042-extract/cpio-root/asa/bin/lina'),
@@ -40,8 +44,14 @@ VERSIONS = [
     ('ASA 9.14.2.4',   '/media/cowboy/research/cisco-lina-re/asa9142-4-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14.2.14',  '/media/cowboy/research/cisco-lina-re/asa91424-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14.4.24',  '/media/cowboy/research/cisco-lina-re/asa9144-extract/cpio-root/asa/bin/lina'),
+    # FTD 6.6.0 (Apr 2020, ASA 9.14.x base): jac=0.9593 Era 2 UNPATCHED
+    ('FTD 6.6.0',      '/media/cowboy/research/cisco-lina-re/ftd660-extract/lina'),
+    # FTD 6.7.0-65 (Nov 2020, ASA 9.15.x base): jac=0.2143 Era 3 PATCHED — patch boundary
+    ('FTD 6.7.0-65',   '/media/cowboy/research/cisco-lina-re/ftd670-extract/lina'),
     ('ASA 9.16.1',     '/home/cowboy/VDT/intel/cisco-downloads/asa9-16-1-binwalk-out/'
                        '_asa9-16-1-smp-k8.bin.extracted/asa9-16-1-cpio/asa/bin/lina'),
+    # FTD 7.0.0-94 (May 2021, ASA 9.16.x base): jac=0.2051 Era 3 PATCHED
+    ('FTD 7.0.0-94',   '/media/cowboy/research/cisco-lina-re/ftd700-extract/lina'),
     ('ASA 9.16.2.14',  '/media/cowboy/research/cisco-lina-re/asa9162-14-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.42',  '/media/cowboy/research/cisco-lina-re/asa916442-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.92',  '/media/cowboy/research/cisco-lina-re/asa91692-extract/cpio-root/asa/bin/lina'),
