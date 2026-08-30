@@ -53,6 +53,67 @@ Capstone MIPS caveat: BNE $rs, $zero is sometimes decoded as BEQZ.
   when control flow appears pathological (unconditional jump to Final
   before any Update calls is the red flag).
 
+--- ipsec_sadb_delete_entry (Jac=0.0256 D40→D240) ---
+
+PRE (11.4R3.7, 0x8034b984): 4-instruction stub.
+  lw $v0, 0x58($a0)      ; load SA->lock or refcount field
+  beqz $v0, <return>
+  nop
+  jal <internal_delete>
+  move $a0, ...
+
+POST (15.1X49-D240, 0x80326c18): 14-instruction function with assertion
+and pre-deletion CPSEC notification.
+
+POST structure:
+  [1] Save frame: addiu $sp,-0x20; sw $ra; sw $s1; sw $s0
+  [2] $s0 = SA ($a0), $s1 = arg1 ($a1)
+  [3] ASSERT: lw $v0, 0x174($SA); if v0 != 0, panic(file, func, line=0x308)
+      SA->0x174 must be NULL — any active CPSEC context tied to this SA
+      triggers a kernel panic rather than silently freeing live memory.
+  [4] CPSEC pre-deletion notification:
+        v0 = gp-0x1478   ; load cpsec_module ptr (set by set_cpsec_module)
+        if v0 != NULL:
+            call v0->field_0x38(SA)   ; sa_delete_notify(SA) callback
+      set_cpsec_module (0x803b6210) is a 2-instruction setter:
+        jr $ra / sw $a0, -0x1478($gp)
+      The slot is NULL until the UTM/content-security module registers.
+  [5] jal 0x80326a4c (internal_delete_impl)
+  [6] Restore frame and return.
+
+Type: security fix — use-after-free mitigation at CPSEC-IPsec boundary.
+
+  PRE deleted SAs without notifying the Content Security (UTM/CPSEC) layer.
+  CPSEC held session-tracking and DPI state keyed to SA identity. Without
+  notification, SA deletion left CPSEC with dangling SA pointers. POST adds:
+  (a) an assertion that no active CPSEC context references the SA at deletion
+      time (SA->0x174 == 0), and
+  (b) a pre-deletion callback so CPSEC can flush those references before the
+      SA is freed.
+
+  The near-zero Jaccard (0.0256) reflects a complete structural rewrite:
+  a 4-instruction stub expanded to a 14-instruction function with register
+  saves, an assertion with panic(), a conditional vtable dispatch, and a
+  properly-framed call to the internal delete implementation. This is not a
+  compiler change — it is an architectural addition to the SA lifecycle.
+
+--- esp_aesctr_encrypt (Jac=0.4899 D40→D240) ---
+
+Boundary: D40→D240 (+10 instructions, 402→412). Callee change: kern_log
+replaced by log (3 sites). kern_log was a Juniper-internal logging wrapper
+that prepended module context; log is FreeBSD's standard log(9). The
+calling-convention difference (kern_log takes an extra module-string arg)
+produces different argument-load sequences at each of the 3 call sites,
+accounting for most of the Jaccard drop.
+
+10.4→11.4 boundary: mbuf_throttle and mcl_throttle added. Network memory
+throttling to prevent mbuf-exhaustion DoS; absent in 10.4, present in
+11.4 through all later versions.
+
+key_sa_stir_iv present in all versions — AES-CTR counter uniqueness
+management is unchanged across the entire timeline. No counter reuse
+vulnerability introduced or fixed at any boundary.
+
 Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
 
@@ -69,6 +130,7 @@ DB = '~/.ablation/func_id.db'
 # All are ELF 32-bit MSB MIPS, symbols type A, not stripped.
 _BASE = '/media/cowboy/research/juniper-firmware/extracted'
 VERSIONS = [
+    ('10.4R7.5  (2011-09)',   f'{_BASE}/srx-10.4/junos-srxsme-10.4R7.5-domestic'),
     ('11.4R3.7  (2012-05)',   f'{_BASE}/srx-11.4/junos-srxsme-11.4R3.7-domestic'),
     ('11.4R7.5  (2013-03)',   f'{_BASE}/srx-11.4R7/junos-srxsme-11.4R7.5-domestic'),
     ('11.4R11.4 (2015-07)',   f'{_BASE}/srx-11.4R11/junos-srxsme-11.4R11.4-domestic'),
