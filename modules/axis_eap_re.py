@@ -2212,6 +2212,196 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def digital_autotrack_surface(self) -> dict:
+        """
+        AXIS Digital Autotracking attack surface.
+
+        appId: 6789  APPTYPE: lua  version: 1.0.0  LICENSEPAGE: none
+        All Lua files encrypted (encryption="1" in DigitalAutotracking.xml).
+        encpwd: binary decryption key blob used by the Axis Lua engine (not a standard ELF).
+
+        Key findings:
+
+        1. Encrypted Lua — source code not directly analyzable
+           All 11 Lua files (main.lua, tracker.lua, etc.) are binary-encrypted.
+           encpwd is the per-package decryption key; structure is proprietary to Axis Lua runtime.
+           Attack: if encpwd format can be reversed or the Lua runtime decryption function is hooked
+           (via LD_PRELOAD on the Lua interpreter), plaintext logic recoverable.
+
+        2. shttpclient HTTP call in post_install.sh — unauthenticated HTTP fetch
+           "response=$(shttpclient -sT 4 -o /dev/stdout http://www.axis.com/techsup/compatible_applications/cam_form.php?type=free)"
+           shttpclient is Axis's internal HTTP client. No TLS. URL hardcoded but no authentication.
+           If attacker controls DNS resolution for www.axis.com on the camera's network (via MITM
+           or rogue DNS), post_install.sh fetches attacker-controlled JavaScript.
+           The response is injected into the license form HTML rendered to the admin UI.
+           This is a stored XSS vector in the admin panel via DNS MITM + install trigger.
+
+        3. library names in XML: digitalAutotracking + system
+           <library name="digitalAutotracking"/> — loaded at runtime by the Axis Lua engine.
+           If the Lua engine's library search path is controllable, custom shared lib injection.
+
+        4. APPID=6789, REQEMBDEVVERSION=1.20 — ancient platform requirement
+           Embdev 1.20 is a very old AXIS SDK version. App may run on cameras that no longer
+           receive firmware updates — expanded hardware attack surface.
+        """
+        result = {
+            'app_id': 6789,
+            'app_name': 'AXIS Digital Autotracking',
+            'app_type': 'lua (all Lua files encrypted)',
+            'version': '1.0.0',
+            'license_page': 'none',
+            'encpwd': 'binary decryption key blob (Axis Lua runtime proprietary format)',
+            'encrypted_lua_files': [
+                'middleclass.lua', 'tools.lua', 'timer.lua', 'paramreader.lua',
+                'scenefilter.lua', 'superobject.lua', 'pacemaker.lua', 'regulator.lua',
+                'tracker.lua', 'stabilizer.lua', 'main.lua',
+            ],
+            'libraries_loaded': ['digitalAutotracking', 'system'],
+            'attack_paths': [
+                {
+                    'id': 'DAT-1',
+                    'title': 'Admin XSS via DNS MITM → shttpclient license form inject',
+                    'mechanism': (
+                        'post_install.sh: shttpclient fetches http://www.axis.com/techsup/.../cam_form.php?type=free '
+                        'and injects response into admin license form. No TLS, no validation. '
+                        'Attacker controls DNS for www.axis.com → serve malicious JS → stored XSS in admin panel.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'DNS MITM on camera network + DAT install trigger',
+                },
+                {
+                    'id': 'DAT-2',
+                    'title': 'Lua decryption key (encpwd) extraction → plaintext source recovery',
+                    'mechanism': 'encpwd is the per-package key; Axis Lua runtime decrypts files at load. Hook decryption function via LD_PRELOAD on Lua interpreter → intercept plaintext Lua at decrypt time.',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Code exec on camera (another ACAP or shell); LD_PRELOAD allowed on Lua interpreter',
+                },
+                {
+                    'id': 'DAT-3',
+                    'title': 'Lua runtime library injection via search path control',
+                    'mechanism': '<library name="digitalAutotracking"/> loaded by Axis Lua engine; if engine search path prepends a writable directory, substitute with malicious library',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Write access to Lua engine library search path',
+                },
+            ],
+        }
+        return result
+
+    def sbplayer_aarch64_surface(self) -> dict:
+        """
+        AXIS Player for Soundtrack Business (sbplayer) aarch64 + ARM32 attack surface.
+
+        appId: 413325  binary: sbplayer  version: 1.7.1  arch: aarch64 + ARM32 NOT STRIPPED
+        CGI: viewer /info.cgi, administrator /ctrl.cgi (fastCGI)
+
+        Service: Soundtrack Your Brand (SYB) music streaming on AXIS cameras.
+        Uses GStreamer pipeline (appsrc → alsasink) for audio playback.
+        Pairs with cloud via GraphQL mutation to soundtrackyourbrand.com.
+
+        Key findings:
+
+        1. Library download — same checksum-optional bypass as MIPS 1.5.0
+           "checksum missing from server response, so can't verify lib and igonring download..."
+           (same typo "igonring" as MIPS 1.5.0 — shared code origin confirmed)
+           Download URLs hardcoded:
+             https://builds.soundtrackyourbrand.com/remote/axis-arm/latest
+             https://builds.soundtrackyourbrand.com/remote/axis-aarch64/latest
+           If UpdateURL axparam is set, overrides the default URL.
+           UpdateURL="" (empty default, hidden type) — operator-writable.
+           Chain: operator auth → set UpdateURL → SSRF to attacker URL → serve .so without checksum header → library loaded → RCE.
+
+        2. SD card library load path — physical access vector
+           "SYB library on SD-card detected, trying to load it"
+           Library loaded from SD card if present — checksum checked (lib_checksum_sdcard).
+           Physical access → insert SD card with malicious SYB library → code execution.
+           SD card checksum may be bypassable by controlling the checksum file on the same card.
+
+        3. GraphQL pairing mutation — hardcoded cloud API credentials
+           "Authorization:Basic %s" + GraphQL mutation to https://partner.soundtrackyourbrand.com/api
+           Base64 Basic auth credential hardcoded in binary for the pairing API call.
+           Extract base64 string from binary → decode → Soundtrack API credential.
+           Mutation: generatePairingCodes with hardwareId, label, description fields
+           — if any of these incorporate unsanitized camera hostname or config values, injection possible.
+
+        4. GStreamer pipeline — appsrc injection
+           Pipeline: appsrc → GStreamer → alsasink
+           "Could not push buffer to appsrc." — attacker that can feed data to appsrc can inject
+           audio. More relevant: if GStreamer plugin search path is writable, malicious plugin loaded.
+
+        5. D-Bus: com.axis.AudioConf (SrcId, SinkAlsaDevice parameters)
+           sbplayer communicates with camera's audio system via D-Bus AudioConf interface.
+           SrcId and SinkAlsaDevice sourced from axparameter or D-Bus reply.
+           If SinkAlsaDevice is user-controlled string interpolated into ALSA device path → ALSA injection.
+        """
+        result = {
+            'app_id': 413325,
+            'app_name': 'Player for Soundtrack Business',
+            'binary_name': 'sbplayer',
+            'version': '1.7.1',
+            'arch': 'aarch64 + ARM32 (both NOT STRIPPED)',
+            'cgi': {'viewer': '/info.cgi', 'administrator': '/ctrl.cgi'},
+            'ctrl_cgi_actions': ['play', 'pause', 'skip'],
+            'params': {
+                'UpdateURL': '(empty default, hidden:string — operator-writable)',
+                'Volume': '100 (int:0-100)',
+                'WatchdogTimeoutMillis': '20000',
+                'UpdateIntervalSeconds': '900',
+                'PairingIntervalSeconds': '30',
+            },
+            'library_download_urls': {
+                'arm': 'https://builds.soundtrackyourbrand.com/remote/axis-arm/latest',
+                'aarch64': 'https://builds.soundtrackyourbrand.com/remote/axis-aarch64/latest',
+                'override': 'UpdateURL axparam (operator-writable)',
+            },
+            'libs': [
+                'libgstreamer-1.0.so.0', 'libgstaudio-1.0.so.0', 'libgstbase-1.0.so.0',
+                'libgio-2.0.so.0', 'libgobject-2.0.so.0', 'libglib-2.0.so.0',
+                'libaxpackage.so.1', 'libaxparameter.so.1', 'libaxstorage.so.1', 'libfcgi.so.0',
+            ],
+            'dynamic_lib_load': 'dlopen (SYB library from SD card or download)',
+            'cloud_api': {
+                'endpoint': 'https://partner.soundtrackyourbrand.com/api',
+                'auth': 'Authorization: Basic <hardcoded-base64>',
+                'graphql_mutation': 'generatePairingCodes (hardwareId, label, description fields)',
+            },
+            'dbus_interface': 'com.axis.AudioConf (SrcId, SinkAlsaDevice)',
+            'attack_paths': [
+                {
+                    'id': 'SBP17-1',
+                    'title': 'UpdateURL SSRF → checksum-optional library load → RCE',
+                    'mechanism': (
+                        'Operator sets UpdateURL to attacker HTTPS server. sbplayer fetches "latest" at UpdateIntervalSeconds. '
+                        'Attacker serves malicious .so without checksum header → "can\'t verify lib" warning only → .so loaded via dlopen → RCE.'
+                    ),
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Operator-level auth to write UpdateURL axparam',
+                    'note': 'Same bypass as MIPS 1.5.0 (SBP-1); confirmed shared codebase',
+                },
+                {
+                    'id': 'SBP17-2',
+                    'title': 'SD card malicious SYB library load',
+                    'mechanism': 'Insert SD card with SYB library + forged checksum file; sbplayer prefers SD card path; dlopen executes attacker library',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Physical access to camera SD card slot',
+                },
+                {
+                    'id': 'SBP17-3',
+                    'title': 'Hardcoded Soundtrack API credential extraction',
+                    'mechanism': '"Authorization:Basic %s" with hardcoded base64 string in binary; extract → decode → Soundtrack partner API credential for all sbplayer deployments',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Binary access (this file)',
+                },
+                {
+                    'id': 'SBP17-4',
+                    'title': 'SinkAlsaDevice ALSA device path injection via D-Bus',
+                    'mechanism': 'com.axis.AudioConf SinkAlsaDevice value incorporated into ALSA device selection; if unsanitized → ALSA device path injection',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'D-Bus access to AudioConf interface',
+                },
+            ],
+        }
+        return result
+
     def dce_surface(self) -> dict:
         """
         AXIS Door Controller Extension (DoorControllerExtension) attack surface.
@@ -2665,6 +2855,10 @@ def main():
                         help='InformaCast Speaker ARM32 1.0.8 sentinel/SSRF surface')
     parser.add_argument('--dce', action='store_true', dest='dce',
                         help='Door Controller Extension ARM32 1.1.5 stub + build path leak')
+    parser.add_argument('--dat', action='store_true', dest='digital_autotrack_v2',
+                        help='Digital Autotracking 1.0.0 encrypted Lua + shttpclient XSS surface')
+    parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
+                        help='sbplayer aarch64/ARM32 1.7.1 UpdateURL+SD-card library RCE + hardcoded SYB API cred')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -2740,6 +2934,12 @@ def main():
 
     if args.all or args.dce:
         results['dce'] = analyzer.dce_surface()
+
+    if args.all or args.digital_autotrack_v2:
+        results['digital_autotrack'] = analyzer.digital_autotrack_surface()
+
+    if args.all or args.sbplayer_aarch64:
+        results['sbplayer_aarch64'] = analyzer.sbplayer_aarch64_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
