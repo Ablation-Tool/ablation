@@ -449,8 +449,61 @@ Trigger path in Junos context:
   mgd binary RE (xmlXIncludeProcessFlags call sites in mgd).
 
 `xmlLoadExtDtdDefaultValue` exported — external DTD loading compiled in.
-`xmlLoadExtDtdDefaultValue` exported — external DTD loading compiled in.
-12 custom `register_*` DOM API functions (Juniper-specific node registry).
+
+## Juniper custom DOM API: register_* / cs_xmlXPathNext* (NULL deref + vtable overwrite)
+
+12 Juniper-specific function pointer slots added to libxml2.so.3 (absent in upstream).
+All 12 are in BSS (zero-initialized). Must be set via `register_*` before use.
+
+Slots (BSS at 0x150b10–0x150b68):
+```
+0x150b10: get_first_node       0x150b48: get_next_node
+0x150b18: get_all_nodeset      0x150b50: delete_nodeset
+0x150b20: is_node_container    0x150b58: get_parent_node
+0x150b28: get_ref_node         0x150b60: get_all_nodes
+0x150b30: delete_node          0x150b68: delete_all_nodes
+0x150b38: is_node_equal        0x150b40: get_child_node
+```
+
+Registration functions (3 instructions each — no type checking, no atomicity):
+```asm
+register_get_first_node(fn):
+  mov  [rip + GOT_offset], rax   ; load &get_first_node slot
+  mov  rdi, [rax]                ; *slot = fn
+  ret
+```
+
+Call sites WITHOUT NULL checks (confirmed unchecked dereferences):
+
+`cs_xmlXPathNextChildElement` (0x81870):
+  0x81923: mov [get_first_node GOT], rax; call *(%rax)  ← no NULL check
+  0x81938: mov [get_parent_node GOT], rax; call *(%rax) ← no NULL check
+
+`cs_xmlXPathNextParent` (0x81700):
+  0x817a8: mov [is_node_container GOT], rax; call *(%rax) ← no NULL check
+  0x817bb: call *0x0(%r13)  [r13 = get_parent_node GOT]  ← no NULL check
+  0x817c5: mov [delete_node GOT], rax; call *(%rax)       ← no NULL check
+  0x817df: mov (%rax), %rax; jmp *%rax [get_first_node]   ← tail-call, no NULL check
+
+Call sites WITH NULL checks (for comparison):
+  0x82617: cmpq $0x0, (%rax) for get_all_nodeset ← guarded
+  0x829b8: cmpq $0x0, (%rax) for get_next_node   ← guarded
+
+FINDING 1 — NULL deref:
+  Any XPath query that triggers cs_xmlXPathNextParent or cs_xmlXPathNextChildElement
+  before all 12 slots are registered → NULL call → crash (DoS).
+  NETCONF XPath filter path: <filter type="xpath" select="...">
+    → libxml2 XPath engine → cs_xmlXPathNext* → NULL deref if mgd/SLAX runtime
+    has not called all register_* functions before processing the filter.
+
+FINDING 2 — vtable overwrite (RCE):
+  12 BSS function pointers at deterministic addresses per binary version.
+  Any write-what-where primitive (heap overflow, OOB write, UAF via F1+F2 chain
+  in libnetconf2) that reaches BSS can overwrite a function pointer slot.
+  Next XPath query through the affected axis → arbitrary code execution.
+  The libnetconf2 F9 OOB write (1-2 bytes past heap alloc) could target an adjacent
+  BSS allocation if the heap is arranged to overlap with these slots — requires heap
+  spray (F1) to align.
 
 ---
 
