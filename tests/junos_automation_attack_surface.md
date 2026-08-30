@@ -1962,8 +1962,8 @@ Replace `strcpy(malloc(100), src)` at 0x142e7b with `strlcpy(malloc(strlen(src)+
 ## FINDING 12: authd — Pre-Auth Attack Surface Assessment (Static Analysis Scope)
 
 **Class:** Static Analysis Survey — Pre-Auth Memory Corruption Candidates  
-**Severity:** Pending dynamic analysis  
-**Status:** Static analysis complete; no confirmed overflow; two candidates require dynamic verification  
+**Severity:** N/A — analysis complete, no exploitable path found  
+**Status:** CLOSED — live code paths use bounded copies; candidate strcpy cluster is unreachable dead code  
 
 ### Summary
 
@@ -1991,18 +1991,26 @@ mov src,%rsi
 call strcpy              ; copy into correctly-sized heap buffer → SAFE
 ```
 
-**Variant 1: struct field destination, struct field source (0x7dc4de, 0x7dc80e)**
+**Variant 1: DEAD CODE CLUSTER — struct field strcpy (0x7dc4de, 0x7dc80e)**
 ```asm
-; r14 = RADIUS session struct (from hash table lookup)
-lea 0x140(%r14),%rsi     ; src = radius_session->field_0x140
-lea 0x140(%r14),%rsi     ; or: radius_session->field_0xf5
-mov %r13,%rdi            ; dst = rdi arg (unknown size from caller)
-call strcpy              ; potentially unsafe if dst < src length
+; Function 0x7dc450: r14 = session struct from 0x7ddc20 lookup
+lea 0x140(%r14),%rsi     ; src = session->field_0x140
+mov %r13,%rdi            ; dst = rsi arg to 0x7dc450 (unknown size)
+call strcpy              ; unsafe IF callers pass undersized dst
 ```
-- Function at 0x7dc450 called via function pointer — callers not traced
-- r14 from `call 0x7ddc20` (RADIUS session hash lookup)
-- field_0x140 / field_0xf5: likely User-Name attribute (max 253 bytes in RADIUS)
-- **Risk:** if `r13` destination buffer < 253 bytes AND source is User-Name from RADIUS response
+- **DEAD CODE.** Systematic search (e8 relative calls + 8-byte stored FP + 4-byte truncated) finds
+  ZERO callers for all 20 functions in cluster 0x7db9a0-0x7dcaf6. Not reachable from any live path.
+- Full cluster: 20 functions at ~0x100-byte spacing, each calling 0x7ddc20 (session lookup).
+  No direct calls, no stored pointers anywhere in 10MB binary. Compiled in but dead.
+- **Verdict: Not exploitable** — unreachable code.
+
+**Live RADIUS processing (0x7dff90): strncpy/memcpy throughout**
+- All live RADIUS attribute copies: `strncpy` (bounded) or `memcpy` with length arg
+- One `strcpy` at 0x7df221 in live path: `strcpy(stpcpy_ret, r15)` where r15 is
+  `r12+0xa45` (a 17-byte strncpy'd field within the session struct). Not overflow-capable.
+- The `strcpy` at 0x7e0acf in live path: `strcpy(r12+0x23c, r12)` where r12=rbp-0x44
+  holds a 4-byte `gettimeofday` seconds value. Source = clock data, not attacker-controlled.
+- **Verdict: No exploitable strcpy in live RADIUS processing paths.**
 
 **Variant 2: Unix socket path strcpy (0xa4430a)**
 ```asm
@@ -2016,22 +2024,63 @@ call strcpy
 
 ### Dynamic Analysis Plan
 
-**Priority 1: RADIUS response User-Name parsing (function 0x7dc450)**
+**Dynamic analysis no longer warranted** — static analysis reached closure.
+The candidate strcpy at 0x7dc450 is dead code. Live paths use strncpy/memcpy.
+
+### Why authd Remains Interesting (for future work)
+
+Non-PIE with no canary: confirmed exploit does not require ASLR bypass or stack cookie leak.
+RADIUS runs over UDP — response packets can be spoofed if the attacker can observe the request
+identifier. Future work: decompiler-assisted analysis of the 0x96d9a6/0x96db1b recvmsg path
+(the Junos internal IPC protocol, not RADIUS — potential pre-auth surface from local daemons).
+
+---
+
+## FINDING 13: authd — Dead Code Strcpy Cluster (Unreachable, Not Exploitable)
+
+**Class:** Negative Finding — Static Analysis  
+**Severity:** N/A  
+**Status:** CLOSED  
+
+### Summary
+
+A cluster of 20 functions at 0x7db9a0–0x7dcaf6 in `authd` contains `strcpy` calls where the
+destination buffer size is determined by the caller and the source is a RADIUS session field
+(session+0x140 or session+0xf5, up to 253 bytes per RADIUS RFC). Each function:
+1. Takes `(int id, char *dst)` arguments
+2. Looks up a RADIUS session by `id` via function at 0x7ddc20
+3. Copies a specific session struct field into `dst` via `strcpy`
+
+If called with `dst` smaller than the session field, overflow occurs with attacker-controlled
+data (RADIUS attribute value from a spoofed or rogue RADIUS server).
+
+**However, the cluster is DEAD CODE.** Exhaustive search:
+- Zero `e8 XX XX XX XX` (direct call) instructions targeting the range
+- Zero 8-byte absolute pointers to any function in the range in any section
+- Zero 4-byte truncated pointers
+- Zero virtual dispatch entries
+
+None of these 20 functions appear reachable from any live code path. The cluster is
+compiled-in but orphaned — likely a refactored older implementation.
+
+### Dead Code Cluster Map
+
 ```
-strace -e recvfrom,connect -p $(pgrep authd)
-# Setup: authd configured with attacker-controlled RADIUS server
-# Send RADIUS Access-Accept with User-Name attr = 200-byte string
-# Observe: segfault or overwrite past destination buffer
+0x7db9a0  handler_01  strcpy(dst, session+0x090)
+0x7dba90  handler_02  strcpy(dst, session+0x0f5)   ← User-Name field
+0x7dbb60  handler_03  strcpy(dst, session+0x140)   ← same
+0x7dbc30  handler_04  ...
+...
+0x7dc450  handler_11  strcpy(dst, session+0x140)   ← initially flagged
+...
+0x7dcaf6  handler_20  ...   (last call to 0x7ddc20 in cluster)
 ```
 
-**Priority 2: Live strace during auth attempt**
-```
-strace -e recvfrom,recvmsg,read -p $(pgrep authd)
-# Trigger: SSH login attempt → RADIUS exchange
-# Map: recvfrom → buffer → which strcpy
-```
+### Significance
 
-### Why authd Matters
-
-Non-PIE with no canary: confirmed exploit does not require ASLR bypass or stack cookie leak. A single heap/stack overflow with controlled data → direct code execution. RADIUS runs over UDP — response packets can be spoofed if the attacker can observe the request identifier (visible to anyone on the RADIUS path).
+The existence of this cluster confirms the session struct (RADIUS response struct) DOES contain
+string fields populated from RADIUS attribute values without length caps on the source side.
+The underlying strcpy-into-fixed-buffer vulnerability pattern is valid — it is simply unreachable
+through static code paths. A future firmware update might accidentally re-wire callers to these
+functions, reactivating the vulnerability. The pattern is worth tracking across firmware versions.
 
