@@ -1076,8 +1076,12 @@ class AxisEAPAnalyzer:
                 '1.3.6.1.4.1.1206.4.2.7.5.1.0': 'CameraFeatureControl',
                 '1.3.6.1.4.1.1206.4.2.7.5.4.0': 'LensFeatureControl',
             },
-            'library': 'lib/libPTZoverSNMP.so (ax_mib_set_obj_val, ax_mib_get_obj_val)',
-            'note': 'No TLS/SNMPv3 observed; all PTZ control over cleartext SNMP UDP/161',
+            'library': 'lib/libPTZoverSNMP.so (ptzoversnmp_dbus_move, ptzoversnmp_set, ptzoversnmp_get, dso_mib_register)',
+            'dbus_interfaces': {
+                'registration': 'com.axis.Snmp.DynamicMib / /com/axis/Snmp/DynamicMib — registers NTCIP OID tree with camera SNMP agent',
+                'ptz_control': 'com.axis.PTZ.Coordinator — D-Bus target for actual PTZ movement; SNMP SET path: SNMP SET -> ptzoversnmp_set -> ptzoversnmp_dbus_move -> D-Bus com.axis.PTZ.Coordinator',
+            },
+            'note': 'No TLS/SNMPv3 observed; all PTZ control over cleartext SNMP UDP/161; MIB registration via D-Bus (not standalone agent)',
         }
         return result
 
@@ -1670,6 +1674,20 @@ class AxisEAPAnalyzer:
                     'severity': 'MEDIUM',
                     'affected': 'v1.2.2 ARM32 (armhf) only',
                     'prerequisite': 'Another ACAP app on same camera that can send VideoObjectDetection events',
+                },
+                {
+                    'id': 'FD-4',
+                    'title': 'com.axis.Param.* wildcard D-Bus — broad parameter read/write scope',
+                    'mechanism': (
+                        'manifest.json resources.dbus.requiredMethods includes "com.axis.Param.*" (wildcard). '
+                        'facedetector is granted permission to call ANY method on com.axis.Param D-Bus interface, '
+                        'not scoped to face detection parameters. This includes reading sensitive camera params '
+                        '(network config, credentials, VAPIX service accounts) if D-Bus policy does not '
+                        'restrict to specific method names. Wildcard scope confirmed in 2.1.3 manifest.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'affected': 'v2.x aarch64 (manifest schema 2.0.0)',
+                    'prerequisite': 'Co-resident ACAP app or D-Bus message bus access on same camera',
                 },
             ],
             'files': {},
