@@ -528,17 +528,26 @@ NOTE on xmlXPathNodeCollectAndTest NULL checks: at 0x8f941/0x8f94b, the code doe
   function pointer at *(0x150b30). The "NULL check" is INEFFECTIVE — the branch is never
   taken, and a NULL stored pointer still crashes at the call.
 
-Dispatch gate in xmlXPathNodeCollectAndTest (0x8fabe — parent axis):
+Dispatch gates in xmlXPathNodeCollectAndTest — BOTH confirmed proper stored-ptr check:
+
+Parent-axis gate (0x8fabe):
 ```asm
-0x8fabe: mov  rax, [rip + 0xbe323]    ; rax = GOT[get_next_node]=0x14dde8 → BSS 0x150b48
-0x8fac5: lea  rdx, [rip - 0xe9dc]     ; rdx = &xmlXPathNextParent (standard safe path)
-0x8facc: cmp  qword ptr [rax], 0      ; cmp *(BSS 0x150b48), 0 → check STORED ptr — PROPER
-0x8fad0: lea  rax, [rip - 0xe3d7]     ; rax = &cs_xmlXPathNextParent (Juniper path)
-0x8fad7: cmove rax, rdx               ; if zero (not registered): use standard; else: Juniper
+0x8fabe: mov  rax, [rip + 0xbe323]    ; rax = GOT[get_next_node]=0x14dde8 → 0x150b48
+0x8fac5: lea  rdx, [rip - 0xe9dc]     ; rdx = &xmlXPathNextParent (standard safe)
+0x8facc: cmp  qword ptr [rax], 0      ; *(BSS 0x150b48) == 0? — PROPER stored-ptr check
+0x8fad0: lea  rax, [rip - 0xe3d7]     ; rax = &cs_xmlXPathNextParent (Juniper)
+0x8fad7: cmove rax, rdx               ; NULL → standard; non-NULL → Juniper custom
 ```
-Gate PROPERLY checks *(BSS 0x150b48) (the stored function pointer, not the BSS address).
-If get_next_node is NULL → routes to safe xmlXPathNextParent. Non-NULL → cs_xmlXPathNextParent.
-Other 11 BSS slots are NOT checked by the dispatch gate — unchecked inside cs_* functions.
+
+Child-element-axis gate (0x8fc11):
+```asm
+0x8fc11: mov  rax, [rip + 0xbe1d0]    ; rax = GOT[get_next_node]=0x14dde8 → 0x150b48
+0x8fc18: lea  rdx, [rip - 0xe73f]     ; rdx = &xmlXPathNextChildElement (standard, 0x814e0)
+0x8fc1f: cmp  qword ptr [rax], 0      ; *(BSS 0x150b48) == 0? — PROPER stored-ptr check
+0x8fc23: lea  rax, [rip - 0xe3ba]     ; rax = &cs_xmlXPathNextChildElement (Juniper, 0x81870)
+0x8fc2a: cmove rax, rdx               ; NULL → standard; non-NULL → Juniper custom
+```
+Both gates key on get_next_node only. Once inside cs_* functions, the other 11 slots are unchecked.
 
 NOTE on ineffective check at xmlXPathNodeCollectAndTest delete_node call sites (0x8f941/0x8f94b):
   `mov rax, [rip + 0xbe3f0]` → rax = GOT[delete_node] → 0x150b30 (BSS addr, always non-null)
