@@ -42,6 +42,7 @@ VERSIONS = [
     ('ASA 9.16.1',     '/home/cowboy/VDT/intel/cisco-downloads/asa9-16-1-binwalk-out/'
                        '_asa9-16-1-smp-k8.bin.extracted/asa9-16-1-cpio/asa/bin/lina'),
     ('ASA 9.16.2.14',  '/media/cowboy/research/cisco-lina-re/asa9162-14-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.16.4.42',  '/media/cowboy/research/cisco-lina-re/asa916442-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.76',  '/media/cowboy/research/cisco-lina-re/asa9164-76-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.84',  '/media/cowboy/research/cisco-lina-re/asa9164-84-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.22',       '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'),

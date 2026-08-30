@@ -22,9 +22,12 @@ SEED_VA    = 0xc563d0
 SEED_NAME  = 'attr_list_add_impl'
 DB         = '~/.ablation/func_id.db'
 
-LINA_924   = '/media/cowboy/research/cisco-lina-re/asa924-extract/cpio-root/asa/bin/lina'
-LINA_FTD10 = '/media/cowboy/research/cisco-lina-re/ftd-1000-extract/lina'
-LINA_1200  = '/media/cowboy/research/cisco-lina-re/ftd-1200-762-extract/root/ngfw/usr/local/asa/bin/lina'
+LINA_924        = '/media/cowboy/research/cisco-lina-re/asa924-extract/cpio-root/asa/bin/lina'
+LINA_917_K8     = '/media/cowboy/research/cisco-lina-re/asa917-k8-extract/cpio-root/asa/bin/lina'
+LINA_917_32     = '/media/cowboy/research/cisco-lina-re/asa917-32-extract/cpio-root/asa/bin/lina'
+LINA_917_23_K8  = '/media/cowboy/research/cisco-lina-re/asa917-23-k8-extract/cpio-root/asa/bin/lina'
+LINA_FTD10      = '/media/cowboy/research/cisco-lina-re/ftd-1000-extract/lina'
+LINA_1200       = '/media/cowboy/research/cisco-lina-re/ftd-1200-762-extract/root/ngfw/usr/local/asa/bin/lina'
 
 CROSS_ARCH_SEM_THRESHOLD = 0.85
 
@@ -155,9 +158,12 @@ def main():
     print(f'Seed (x86-64 ASA 9.14): {SEED_NAME}  instrs={seed.n_instrs}\n')
 
     targets = [
-        ('ASA 9.2.4 (i386)',        LINA_924,   i386_prologue_scan,  'i386→x86-64'),
-        ('FTD 10.0.0 (AArch64)',    LINA_FTD10, arm64_prologue_scan, 'AArch64→x86-64'),
-        ('FTD 1200 7.6.2 (AArch64)',LINA_1200,  arm64_prologue_scan, 'AArch64→x86-64'),
+        ('ASA 9.1.7 k8 (i386)',      LINA_917_K8,    i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.1.7 32bit (i386)',   LINA_917_32,    i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.1.7.23 k8 (i386)',   LINA_917_23_K8, i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.2.4 (i386)',         LINA_924,        i386_prologue_scan,  'i386→x86-64'),
+        ('FTD 10.0.0 (AArch64)',     LINA_FTD10,      arm64_prologue_scan, 'AArch64→x86-64'),
+        ('FTD 1200 7.6.2 (AArch64)', LINA_1200,       arm64_prologue_scan, 'AArch64→x86-64'),
     ]
 
     import os
