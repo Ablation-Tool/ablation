@@ -7,13 +7,58 @@
 
 ---
 
-Tracks functions across binary versions using behavior, not location — no symbols, no source, no CVE number required.
+Stripped enterprise firmware, no debug symbols, no source. Ablation reads the binary, encodes what each function *does*, and answers two questions: **which functions match a given vulnerability pattern** and **when was this function patched**.
 
 Every other approach breaks when the address moves or the code changes slightly. Signature scanners need exact byte matches. IDA and Ghidra need a human to manually correlate functions across versions. BinDiff works on full binary pairs but has no semantic understanding — it matches structure, not meaning. None of them tell you *when* a function was patched.
 
-Ablation matches on three signals simultaneously — structure, instruction overlap, and what the function actually does — and uses the result to produce a **forensic patch attribution timeline from firmware alone**.
+Ablation matches on three signals simultaneously — structure, instruction overlap, and what the function actually does — and uses the result to:
+
+- **Sweep a binary for vulnerability classes** in under two minutes
+- **Track a function across every firmware version** and find the exact patch epoch
+- **Bridge architectures**: the same seed finds its ARM64 counterpart in a different build
 
 ---
+
+## Semantic vulnerability sweep
+
+Describe what dangerous code looks like. Ablation encodes every function in the binary and ranks them by behavioral similarity to your query.
+
+```python
+from modules.semantic_search import SemanticSearcher, describe_function
+
+# Sweep jdhcpd (11MB, stripped, no symbols) for unsafe memcpy patterns
+s = SemanticSearcher('path/to/func_id.db')
+s.build_corpus()
+
+results = s.query(
+    'DHCP_DAEMON | calls: memcpy | vuln: memcpy called with length derived '
+    'from packet option byte without upper-bound check before copy',
+    top_k=8
+)
+for r in results:
+    print(f'{r.va:#x}  score={r.score:.4f}  {r.role}')
+```
+
+```
+# Output — 885 functions, 11MB binary, < 2 minutes
+0x2b8ed0  score=0.7238  DHCP_DAEMON   <- top candidate for unsafe memcpy
+0x2c0215  score=0.6325  DHCP_DAEMON   <- destructor with double-free pattern
+0x294ef0  score=0.6446  DHCP_DAEMON   <- appears in 5+ vulnerability class queries
+```
+
+Built-in query profiles:
+- `unsafe_memcpy_controlled_len` — memcpy with packet-derived length, no bounds check
+- `strcpy_unbounded` — strcpy on user-controlled string into fixed buffer
+- `sprintf_user_string` — sprintf with user-controlled format or argument
+- `int_overflow_before_alloc` — integer overflow in allocation size arithmetic
+- `heap_double_free` — double-free / use-after-free pattern
+- `recv_into_small_buf` — recv* into stack buffer without size validation
+
+The encoder is architecture-agnostic. x86-64 `mov`, ARM64 `ldr`, and MIPS `lw` all map to `DATA_TRANSFER_OP`. A function can be recompiled at a different optimization level, have a few instructions swapped, or move to a different address — the behavioral fingerprint stays stable.
+
+---
+
+## Cross-version patch tracking
 
 ## How it works
 
