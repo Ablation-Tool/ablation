@@ -2860,7 +2860,66 @@ class AxisEAPAnalyzer:
                     'prerequisite': 'Co-resident ACAP on same device with access to ACAP package dir (2.0.x)',
                     'version': '2.0.0+',
                 },
+                {
+                    'id': 'LSS-11',
+                    'title': 'LD_LIBRARY_PATH injection — coturn/lib writable = code exec in coturn context',
+                    'mechanism': (
+                        'Go binary hardcodes LD_LIBRARY_PATH=/usr/local/packages/BodyWornLiveSelfHosted/coturn/lib '
+                        'before exec()ing turnserver. If any lib in coturn/lib is writable by a co-resident ACAP '
+                        'or via tarslip from another package, attacker replaces (e.g.) libprom.so with a '
+                        'malicious shared object → code exec in coturn process context on next restart. '
+                        'coturn runs as ACAP SDK user; code exec = full coturn/TURN session takeover.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Write access to ACAP package dir (co-resident ACAP or tarslip chain)',
+                    'version': '1.0.0+',
+                },
+                {
+                    'id': 'LSS-12',
+                    'title': 'Vite dev server port 5173 in production: ICE/IAM endpoints at localhost',
+                    'mechanism': (
+                        'ENV_AXIS_SIGNAL_SERVER_ICE_ENDPOINT_PATH=http://127.0.0.1:5173/ice and '
+                        'ENV_AXIS_SIGNAL_SERVER_IAM_ENDPOINT_PATH=http://127.0.0.1:5173/auth '
+                        'hardcoded in 1.5.1 binary. Port 5173 is Vite default dev server. '
+                        'If production deployment runs a local service on :5173 (debug mode, staging artifact), '
+                        'ICE endpoint and IAM auth endpoint are accessible via SSRF from any service '
+                        'that can reach localhost. Attacker with SSRF → reads ICE config or IAM auth tokens.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'SSRF to localhost:5173 or debug/staging build deployed to production',
+                    'version': '1.5.1 (confirmed in binary; check if removed in 2.x)',
+                },
+                {
+                    'id': 'LSS-13',
+                    'title': 'VAPIXServiceAccounts1.GetCredentials present from 1.0.0, not just 2.0.x',
+                    'mechanism': (
+                        'manifest.json for 1.0.0 D3110 and 1.5.1 W401 both declare '
+                        'com.axis.HTTPConf1.VAPIXServiceAccounts1.GetCredentials as a required D-Bus method. '
+                        'Previously documented only for 2.0.x. VAPIX service account credential fetch is '
+                        'available to LSS from the initial 1.0.0 release. If exposed via SSRF or IDD plugin, '
+                        'VAPIX credentials leak applies to all versions.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'SSRF to IDD plugin or metrics endpoint',
+                    'version': '1.0.0+ (all versions)',
+                },
             ],
+            'manifest_appid': {
+                'note': 'APPID="" in package.conf but manifest.json declares appId: "414710". Correct App ID is 414710.',
+                'appId': '414710',
+                'affected_versions': '1.0.0 (armv7hf D3110), 1.5.1 (aarch64 W401) — confirmed from manifest',
+            },
+            'viewer_accessible_endpoints': {
+                'note': 'Confirmed from manifest.json httpConfig and reverseProxy (1.0.0 and 1.5.1)',
+                'fastcgi': ['status.cgi (viewer)', 'auth.cgi (viewer)'],
+                'reverseProxy': [
+                    'metrics (ws, viewer) -> unix:///usr/local/packages/BodyWornLiveSelfHosted/metrics.sock',
+                    'client (ws, viewer) -> unix:///usr/local/packages/BodyWornLiveSelfHosted/client.sock',
+                    'metrics/core (http, viewer) -> http://127.0.0.1:9446',
+                    'metrics/coturn (http, viewer) -> http://127.0.0.1:9641',
+                ],
+                'impact': 'Any viewer-level auth user can reach live Prometheus metrics and the signaling client WebSocket',
+            },
         }
         return result
 
