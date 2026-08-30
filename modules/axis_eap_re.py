@@ -17,6 +17,12 @@ Targets (by binary, arch, key surface):
   sbplayer                   aarch64 ELF unstripped; UpdateURL axparam → library SSRF (checksum server-supplied)
   remote_ptz_conn_setup      aarch64 ELF unstripped; setvapixparams.cgi writes VAPIX params to remote camera
 
+  DoorControllerExtension ARM32; stub; build path leak /home/svcj/workspace/...
+  radar_microbus         ARM32; protobuf radar events; libfdipc.so.1; dlopen libradar_scene_subscriber.so.0
+  tvgd                   ARM32; Demographic Identifier; PII age/gender JSON; tarslip restore; curl -k restart
+  vmd                    ARM32; Video Motion Detection 4; ONVIF CGI handler; libscene.so/libgeometry.so
+  InformaCastAcap        ARM32; Speaker/Singlewire sentinel; informacast-client service gate (exit 77)
+
 Standalone:
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --all
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --lpv
@@ -26,6 +32,11 @@ Standalone:
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --metadata-provider
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --3dpc
     python3 modules/axis_eap_re.py /path/to/SipThirdPartyIntegration --license-bypass
+    python3 modules/axis_eap_re.py /tmp --radar
+    python3 modules/axis_eap_re.py /tmp --di
+    python3 modules/axis_eap_re.py /tmp --vmd
+    python3 modules/axis_eap_re.py /tmp --informacast
+    python3 modules/axis_eap_re.py /tmp --dce
 """
 
 import argparse
@@ -1844,6 +1855,413 @@ class AxisEAPAnalyzer:
             ],
         }
 
+    def radar_microbus_surface(self) -> dict:
+        """
+        AXIS Radar Integration for Microbus (radar_microbus) attack surface.
+
+        appId: 414271  binary: radar_microbus  version: 1.0.1  arch: ARM32 armhf stripped
+        Source released: nlohmann/json.hpp only (JSON parsing library, MIT license)
+
+        Architecture:
+          - radar_microbus daemon subscribes to radar events via libfdipc.so.1 (fast IPC)
+          - Radar scene data comes from libradar_scene_subscriber.so.0 (dynamically loaded)
+          - Protobuf (libprotobuf.so.26) decodes radar event messages
+          - CGI: administrator /control.cgi (admin-only, no viewer/operator exposure)
+          - Config persisted via atomic rename (fsync + rename pattern confirmed)
+          - regionalsettings via /etc/regionalsettings/regionalsettings.conf
+
+        Key findings:
+
+        1. dlopen of libradar_scene_subscriber.so.0
+           "Failed to load radar scene subscriber library!" — library loaded via dlopen at runtime.
+           "Could not load symbol '%s': %s" and "dlerror" present.
+           If libradar_scene_subscriber.so.0 path is accessible to another ACAP, substituting it
+           with a malicious .so before radar_microbus starts → code execution.
+
+        2. CGI socket (Unix domain socket) path construction
+           CGI communicates via Unix socket; path computed dynamically.
+           "Failed to create directory for CGI socket" / "Failed to remove old CGI socket"
+           — socket dir created/removed on start/shutdown; race condition on cleanup possible.
+
+        3. protobuf parsing of radar data (no source audit possible)
+           libprotobuf.so.26 handles incoming radar event streams.
+           Radar.Label, Covariance, BoundingBox, Event message types visible in strings.
+           No bounds/size validation visible statically — protobuf version 26 audit needed.
+
+        4. Speed limit parameters (blinkOnSpeeding, maximumSpeedLimit, minimumSpeedLimit)
+           Speed alerting configurable via /control.cgi (admin).
+           No input validation visible statically — numeric parameter injection possible.
+
+        5. EventAction, EVENT_DELETE/MERGE/SPLIT
+           Radar event lifecycle management. If control.cgi accepts EventAction payloads
+           without strict enum validation, enum confusion → unexpected state transition.
+
+        Source: nlohmann/json.hpp v3.x (header-only JSON; no known critical CVEs in 3.x).
+        """
+        result = {
+            'app_id': 414271,
+            'app_name': 'AXIS Radar Integration for Microbus',
+            'binary_name': 'radar_microbus',
+            'version': '1.0.1',
+            'arch': 'ARM32 armhf stripped',
+            'cgi': 'administrator /control.cgi (admin-only)',
+            'libs': [
+                'libfdipc.so.1 (fast IPC)', 'libprotobuf.so.26', 'libsystemd.so.0',
+                'libglib-2.0.so.0', 'libatomic.so.1',
+            ],
+            'dynamic_libs': ['libradar_scene_subscriber.so.0 (dlopen at runtime)'],
+            'proto_messages': ['Radar.Label', 'Radar.Covariance', 'Radar.BoundingBox', 'Radar.Event'],
+            'config_path': '/etc/regionalsettings/regionalsettings.conf',
+            'source_released': 'nlohmann/json.hpp (header-only JSON parser, MIT)',
+            'attack_paths': [
+                {
+                    'id': 'RDR-1',
+                    'title': 'libradar_scene_subscriber.so.0 substitution → code exec',
+                    'mechanism': 'dlopen path for radar subscriber lib; place malicious .so in search path before service starts',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Write access to radar subscriber lib path (co-resident ACAP or filesystem access)',
+                },
+                {
+                    'id': 'RDR-2',
+                    'title': 'CGI socket race — Unix socket path collision',
+                    'mechanism': 'CGI socket created/removed on start/shutdown; TOCTOU race may allow socket hijack',
+                    'severity': 'LOW',
+                    'prerequisite': 'Local process on camera with timing access',
+                },
+                {
+                    'id': 'RDR-3',
+                    'title': 'Speed limit parameter injection via /control.cgi',
+                    'mechanism': 'maximumSpeedLimit/minimumSpeedLimit from CGI; no visible bounds check; integer overflow or NaN possible',
+                    'severity': 'LOW',
+                    'prerequisite': 'Admin-level auth',
+                },
+            ],
+        }
+        return result
+
+    def demographic_identifier_surface(self) -> dict:
+        """
+        AXIS Demographic Identifier (tvgd) attack surface.
+
+        appId: 211493  binary: tvgd  version: 1.6.2  arch: ARM32 armhf stripped
+        Also ships: bundled curl (ARM32, not stripped, GNU), libgomp.so.1, libjson.so.0
+        Architecture mirrors People Counter (tvpc) — same codebase family.
+
+        Key findings:
+
+        1. PII data structure: age + gender in JSON events
+           Binary emits: {"age":%d,"gender": %s} via ax_event_handler_send_event.
+           age_average, age_last, age_last_observed, boxsize_average confirmed as fields.
+           CSV export: "Camera time,Camera serial number,Counter name,Interval start,Interval stop..."
+           Full demographic track: [%d] tstart/tend/age/gender/boxsize/trackid
+           This is biometric PII — GDPR Article 9 special category data.
+
+        2. Backup/restore tarslip (same class as tvpc)
+           tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup — no path traversal check.
+           Restore via operator-level .restore_backup CGI.
+           Chain: operator auth → upload malicious tar.gz with path traversal → write arbitrary files.
+
+        3. curl -k restart trigger (TLS not verified)
+           ./curl --digest -k -L -f --user %s:%s "http://%s:%s/axis-cgi/applications/control.cgi?action=restart&package=%s"
+           -k flag = skip TLS verification. Username/password from axparameter.
+           If restart URL constructed from user-controlled host param, SSRF + MITM possible.
+
+        4. ARTPEC-6 detected → self-restart
+           "ARTPEC-6 detected. Triggering application restart." — conditional restart based on
+           chip detection. If chip ID can be spoofed (via another ACAP), trigger infinite restart loop.
+
+        5. parhandclient credential filter gap
+           "parhandclient getgroup root.tvgd | grep -v -e '0SysPwd'"
+           Filters out SysPwd but logs ALL other root.tvgd params to /tmp/parambackup.txt.
+           Other credential params (non-SysPwd) may be written to the backup file.
+
+        6. Apache RewriteRule with file existence check
+           RewriteCond /tmp/tvgd-web-running -f — Apache serves app only if this file exists.
+           If another ACAP can delete /tmp/tvgd-web-running, Demographic Identifier web UI disappears.
+
+        CGI endpoints (operator-accessible):
+          /demographics/.apioperator, /demographics/.restore_backup (operator)
+          /demographics/.apiadmin (admin)
+          /demographics/.api (viewer)
+        """
+        result = {
+            'app_id': 211493,
+            'app_name': 'AXIS Demographic Identifier',
+            'binary_name': 'tvgd',
+            'version': '1.6.2',
+            'arch': 'ARM32 armhf stripped',
+            'cgi_endpoints': {
+                'viewer': ['/demographics/.api'],
+                'operator': ['/demographics/.apioperator', '/demographics/.restore_backup'],
+                'administrator': ['/demographics/.apiadmin'],
+            },
+            'libs': [
+                'libaxhttp.so', 'libaxevent.so.1', 'libaxparameter.so.1',
+                'libaxstorage.so', 'libcapture.so.0', 'libparam.so.1',
+                'libjson.so.0', 'libgomp.so.1', 'liblicensekey.so.1',
+            ],
+            'bundled': ['curl (ARM32 not stripped, GNU)', 'libgomp.so.1', 'libjson.so.0'],
+            'pii_data': {
+                'json_format': '{"age":%d,"gender": %s}',
+                'csv_fields': 'Camera time, Camera serial number, Counter name, Interval start/stop',
+                'track_format': '[%d] tstart/tend/age/gender/boxsize/trackid',
+                'classification': 'GDPR Article 9 special category (biometric/demographic data)',
+            },
+            'attack_paths': [
+                {
+                    'id': 'DI-1',
+                    'title': 'Tarslip via .restore_backup operator CGI',
+                    'mechanism': (
+                        'tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup — no path traversal check. '
+                        'Upload malicious tar.gz with ../../../etc/cron.d/evil → write to arbitrary path.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level auth',
+                },
+                {
+                    'id': 'DI-2',
+                    'title': 'PII exfiltration via viewer-level /demographics/.api',
+                    'mechanism': 'Viewer-accessible API endpoint exposes age/gender/boxsize/trackid data — biometric PII',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Viewer-level auth (lowest privilege level)',
+                },
+                {
+                    'id': 'DI-3',
+                    'title': 'curl -k restart SSRF + MITM',
+                    'mechanism': (
+                        './curl --digest -k ignores TLS cert. Restart URL constructed from params. '
+                        'If package/host param is operator-writable → SSRF to attacker server via restart trigger.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Operator-level write to host/package axparameter',
+                },
+                {
+                    'id': 'DI-4',
+                    'title': 'parhandclient param dump — non-SysPwd credentials to /tmp/parambackup.txt',
+                    'mechanism': 'Grep filter only removes SysPwd; all other root.tvgd params written to /tmp/ plaintext',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Read access to /tmp/parambackup.txt (local process or backup download)',
+                },
+            ],
+            'tarslip_commands': [
+                'tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup',
+                'cd /tmp/; tar czf tvgd-parambackup.tar.gz parambackup.txt eventsbackup.json params.meta',
+            ],
+            'license_gate': 'liblicensekey.so.1',
+        }
+        return result
+
+    def vmd_surface(self) -> dict:
+        """
+        AXIS Video Motion Detection 4 (vmd) attack surface.
+
+        appId: 143440  binary: vmd  version: 4.4.4  arch: ARM32 armhf stripped
+        Proprietary license; admin /control.cgi only.
+
+        Key findings:
+
+        1. ONVIF CGI handler (17Onvif_CGI_Handler)
+           VMD implements an ONVIF CGI handler in addition to the standard CGI handler.
+           ONVIF protocol parsing is a rich attack surface — malformed ONVIF messages may crash.
+
+        2. libscene.so + libgeometry.so — proprietary scene analysis
+           These are custom Axis libraries for scene geometry parsing (perspective filtering,
+           object lifetime). Not shipped as part of VMD; loaded from camera firmware.
+           Attack: if another ACAP can substitute these libs, VMD loads attacker .so.
+
+        3. Size filter perspective validation gap
+           "A valid perspective is required too [sic] use the size perspective filter" — typo in
+           string confirms hasty implementation. SizeFilterPerspective parsing may lack bounds check.
+
+        4. ExclusionFilter, SwayingFilter class names
+           C++ class names visible (not stripped). ExclusionFilter handles zones; SwayingFilter
+           handles sway motion. Both take CGI parameters — potential injection into filter config.
+
+        5. AlarmData::didTriggerAlarm — object ID lookup
+           "Could not find an object with id %i" — object ID from CGI input not found.
+           If object ID is user-supplied integer, out-of-range ID may cause memory OOB access.
+
+        6. libexpat.so.1 (XML parsing)
+           VMD parses XML config via libexpat. Malformed XML in config file (written by CGI)
+           may trigger libexpat vulnerabilities. Check NVD for libexpat CVEs applicable to
+           version bundled with this firmware.
+        """
+        result = {
+            'app_id': 143440,
+            'app_name': 'AXIS Video Motion Detection 4',
+            'binary_name': 'vmd',
+            'version': '4.4.4',
+            'arch': 'ARM32 armhf stripped',
+            'cgi': 'administrator /control.cgi (admin-only)',
+            'libs': [
+                'libaxparameter.so.1', 'libcapture.so.0', 'libgmodule-2.0.so.0',
+                'libaxhttp.so', 'libaxevent.so.1', 'libscene.so', 'libgeometry.so',
+                'libfixmath.so.0', 'libexpat.so.1', 'libglib-utils.so', 'libaxlog.so',
+            ],
+            'cgi_handlers': ['CGI_Handler', 'Onvif_CGI_Handler'],
+            'filter_classes': [
+                'ExclusionFilter', 'SwayingFilter', 'SizeFilterPercent',
+                'SizeFilterPerspective', 'ObjectLifetimeFilter', 'LowConfidentObjectFilter',
+                'PerspectiveFilterExternalData',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'VMD-1',
+                    'title': 'ONVIF CGI handler malformed message crash',
+                    'mechanism': 'Onvif_CGI_Handler parses ONVIF protocol; malformed ONVIF payload may crash or corrupt state',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level auth to submit ONVIF CGI request',
+                },
+                {
+                    'id': 'VMD-2',
+                    'title': 'AlarmData::didTriggerAlarm — object ID OOB',
+                    'mechanism': '"Could not find object with id %i" — integer ID from CGI; out-of-range may OOB-read object array',
+                    'severity': 'LOW',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'VMD-3',
+                    'title': 'libexpat XML config parsing',
+                    'mechanism': 'VMD config written via CGI then parsed by libexpat.so.1; malformed XML in config → libexpat vuln surface',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level auth to write config',
+                },
+                {
+                    'id': 'VMD-4',
+                    'title': 'libscene.so / libgeometry.so substitution',
+                    'mechanism': 'Custom scene libs loaded from firmware; if path overridable by ACAP → code exec',
+                    'severity': 'LOW',
+                    'prerequisite': 'Write access to lib path',
+                },
+            ],
+        }
+        return result
+
+    def informacast_surface(self) -> dict:
+        """
+        AXIS Speaker Functionality for Singlewire InformaCast (InformaCastAcap) surface.
+
+        appId: 414050  binary: InformaCastAcap  version: 1.0.8  arch: ARM32 armhf NOT STRIPPED
+        Identical structure to UCS/SipThirdPartyIntegration — license gate + daemon dependency sentinel.
+
+        Key findings:
+
+        1. informacast-client service dependency gate (post_install.sh)
+           `test -f /usr/lib/systemd/system/informacast-client.service || exit 77`
+           ACAP installation aborted if informacast-client systemd unit absent.
+           Same spoofing vector as UCS-1: touch the unit file to satisfy check without real service.
+
+        2. /etc/dynamic/informacast-client/enabled flag
+           Binary creates/removes /etc/dynamic/informacast-client/enabled to signal service.
+           If another ACAP writes this flag, InformaCast integration appears active without license.
+
+        3. Credential parameters: ServerAddress + ServerPort
+           param.conf: ServerAddress="" (empty default) + ServerPort="8081"
+           informacast-client connects to configured address:8081 (cleartext by default).
+           If ServerAddress is operator-writable → SSRF to attacker's InformaCast server.
+           Port 8081 is the default Singlewire InformaCast server port.
+
+        4. License check identical to UCS pattern
+           licensekey_verify + licensekey_verify_ex + licensekey_dyn_verify_ex
+           has_valid_informacast_license function (vs UCS's has_valid_license).
+           Same dlopen bypass via stub liblicensekey.so.
+
+        5. LD_PRELOAD detection not confirmed (unlike UCS which explicitly tests it)
+           InformaCast binary smaller — may have less hardening. Test LD_PRELOAD injection.
+        """
+        result = {
+            'app_id': 414050,
+            'app_name': 'AXIS Speaker Functionality for Singlewire InformaCast',
+            'binary_name': 'InformaCastAcap',
+            'version': '1.0.8',
+            'arch': 'ARM32 armhf NOT STRIPPED',
+            'service_dependency': '/usr/lib/systemd/system/informacast-client.service',
+            'integration_flag_path': '/etc/dynamic/informacast-client/enabled',
+            'params': {
+                'ServerAddress': '(empty default — operator-writable)',
+                'ServerPort': '8081 (Singlewire InformaCast default port)',
+            },
+            'libs': ['libgio-2.0.so.0', 'libgobject-2.0.so.0', 'libglib-2.0.so.0', 'liblicensekey.so.1'],
+            'attack_paths': [
+                {
+                    'id': 'IC-1',
+                    'title': 'ServerAddress SSRF — route audio alerts to attacker server',
+                    'mechanism': (
+                        'ServerAddress="" operator-writable. Set to attacker IP:8081. '
+                        'informacast-client connects and sends alert broadcasts to attacker. '
+                        'May include audio content, camera identity, alert metadata.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level axparameter write',
+                },
+                {
+                    'id': 'IC-2',
+                    'title': 'informacast-client service spoof — integration without license',
+                    'mechanism': 'Create /usr/lib/systemd/system/informacast-client.service (minimal unit file); ACAP installs and integrates without real InformaCast client',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Write access to /usr/lib/systemd/system/ (requires elevated camera access)',
+                },
+                {
+                    'id': 'IC-3',
+                    'title': 'liblicensekey.so stub bypass (no LD_PRELOAD detection confirmed)',
+                    'mechanism': 'LD_PRELOAD detection not confirmed unlike UCS. LD_PRELOAD injection of stub liblicensekey.so may work directly.',
+                    'severity': 'HIGH',
+                    'prerequisite': 'ACAP process user ability to set LD_PRELOAD (via another ACAP or shell)',
+                },
+            ],
+        }
+        return result
+
+    def dce_surface(self) -> dict:
+        """
+        AXIS Door Controller Extension (DoorControllerExtension) attack surface.
+
+        appId: 414114  binary: DoorControllerExtension  version: 1.1.5  arch: ARM32 armhf NOT STRIPPED
+        STARTMODE=never — setup tool only, not a persistent daemon.
+        No CGI paths, no param.conf content.
+
+        Key findings:
+
+        1. Minimal binary — only main + _start symbols
+           libc.so.6 only dependency. No libaxhttp, no libaxparameter, no libcurl.
+           Binary is almost certainly a stub launcher or config writer.
+           Actual door controller integration lives in camera firmware (door controller SDK).
+
+        2. Build path leak: developer home directory disclosed
+           String in binary: "/home/svcj/workspace/Teams/NB/Accesscontrol/AXIS_Door_Controller_Extension/Build-Acap-Products/armv7hf_Build/app"
+           Developer username: svcj
+           Team path: Teams/NB/Accesscontrol
+           Workspace layout: Build-Acap-Products/ with per-arch subdirs
+           OPSEC finding — developer environment structure disclosed in production binary.
+
+        3. LICENSEPAGE=axis — Axis license management (not custom)
+           License check handled by Axis license server, not local liblicensekey.so.
+           Different attack surface than the licensekey bypass chain.
+        """
+        result = {
+            'app_id': 414114,
+            'app_name': 'AXIS Door Controller Extension',
+            'binary_name': 'DoorControllerExtension',
+            'version': '1.1.5',
+            'arch': 'ARM32 armhf NOT STRIPPED',
+            'run_mode': 'never — setup tool only',
+            'libs': ['libc.so.6'],
+            'build_path_leak': '/home/svcj/workspace/Teams/NB/Accesscontrol/AXIS_Door_Controller_Extension/Build-Acap-Products/armv7hf_Build/app',
+            'developer_username': 'svcj',
+            'team_path': 'Teams/NB/Accesscontrol',
+            'license_type': 'LICENSEPAGE=axis (Axis license server, not local liblicensekey)',
+            'attack_paths': [
+                {
+                    'id': 'DCE-1',
+                    'title': 'Build path disclosure — developer home and team structure',
+                    'mechanism': 'Developer username svcj + team path NB/Accesscontrol disclosed in production binary strings',
+                    'severity': 'INFO',
+                    'note': 'OPSEC finding; username usable for directory/repo enumeration',
+                },
+            ],
+        }
+        return result
+
     def ucs_sip_surface(self) -> dict:
         """
         AXIS Client for Unified Communication Systems (SipThirdPartyIntegration) surface.
@@ -2237,6 +2655,16 @@ def main():
                         help='People Counter 4.0.0 ARTPEC-5/S5L surface (TrueviewVAPIX account)')
     parser.add_argument('--sbplayer-mips', action='store_true', dest='sbplayer_mips',
                         help='sbplayer MIPS32 1.5.0 UpdateURL checksum-optional RCE surface')
+    parser.add_argument('--radar', action='store_true', dest='radar',
+                        help='Radar Integration for Microbus ARM32 1.0.1 surface')
+    parser.add_argument('--di', action='store_true', dest='di',
+                        help='Demographic Identifier tvgd ARM32 1.6.2 PII/tarslip surface')
+    parser.add_argument('--vmd', action='store_true', dest='vmd',
+                        help='Video Motion Detection 4 ARM32 4.4.4 ONVIF/libscene surface')
+    parser.add_argument('--informacast', action='store_true', dest='informacast',
+                        help='InformaCast Speaker ARM32 1.0.8 sentinel/SSRF surface')
+    parser.add_argument('--dce', action='store_true', dest='dce',
+                        help='Door Controller Extension ARM32 1.1.5 stub + build path leak')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -2297,6 +2725,21 @@ def main():
 
     if args.all or args.sbplayer_mips:
         results['sbplayer_mips'] = analyzer.sbplayer_mips_surface()
+
+    if args.all or args.radar:
+        results['radar'] = analyzer.radar_microbus_surface()
+
+    if args.all or args.di:
+        results['di'] = analyzer.demographic_identifier_surface()
+
+    if args.all or args.vmd:
+        results['vmd'] = analyzer.vmd_surface()
+
+    if args.all or args.informacast:
+        results['informacast'] = analyzer.informacast_surface()
+
+    if args.all or args.dce:
+        results['dce'] = analyzer.dce_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
