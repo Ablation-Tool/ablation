@@ -114,6 +114,95 @@ key_sa_stir_iv present in all versions — AES-CTR counter uniqueness
 management is unchanged across the entire timeline. No counter reuse
 vulnerability introduced or fixed at any boundary.
 
+--- Full sweep results (test_junos_full_sweep.py, 2026-08-30) ---
+
+14 versions available, all confirmed present.
+11,976 seed functions. 4,034 Jac<0.3. 7,330 Jac<0.8.
+Two major patch boundaries: 12.1X46-D35 (2015-05) and 15.1X49-D240 (2020-12).
+Third wave at 21.4R3-S3 (jsrxnle_rtc_set, if_tunnel_set_encap_ifl → Jac=0.0).
+
+Top RE targets from sweep:
+  ah6_input               Jac=1.0→0.6094 at D35, then 0.0000 at D240
+  ether_input             Jac=1.0→0.0000 at D35
+  in_pcbdetach            Jac=1.0→0.0000 at D35
+  sbdrop/sbflush/sbrelease_locked  all → 0.0000 at D35
+  netisr_dispatch/netisr_queue     → 0.0000 at D35
+  if_tunnel_set_encap_ifl gradual rewrite, 0.0000 at D240
+
+--- ah6_input (Jac=0.0 at D240) ---
+
+PRE (11.4R3.7, 0x804c9464): 200+ instructions. Full IPv6 AH input processing:
+  mbuf chain traversal, AH header parse, SA lookup via SPI, sequence number
+  replay check, auth verification dispatch, statistics updates.
+
+D35 intermediate (0x804d8360): Jac=0.6094 vs 11.4. Same overall structure,
+  addresses differ (relocation), some stats counter offsets shifted.
+
+POST (15.1X49-D240, 0x8046a950): 11-instruction vtable dispatch stub:
+  addiu $sp, -0x18          ; minimal frame (no saved registers)
+  sw    $ra, 0x10($sp)
+  lw    $v0, -0x1478($gp)   ; same CPSEC module ptr as ipsec_sadb_delete_entry
+  bnez  $v0, <handler>
+  nop
+  j     <return>
+  addiu $v0, $zero, 0x102   ; fallback return (no CPSEC = protocol not supported)
+  lw    $v0, 0x14($v0)      ; vtable slot 0x14 = ah6_input handler
+  jalr  $v0
+  nop
+  [restore + jr $ra]
+
+CPSEC vtable slot map (confirmed so far):
+  0x14  = ah6_input handler
+  0x38  = sa_delete_notify (ipsec_sadb_delete_entry callback)
+
+The entire AH6 processing moved into the pluggable CPSEC module at D240.
+When CPSEC module not loaded (gp-0x1478 == NULL), ah6_input returns 0x102
+without processing the authentication header. Caller protocol dispatch
+behavior on this return value determines whether packets pass unauthenticated.
+
+--- ether_input (Jac=0.0 at D35) ---
+
+PRE (11.4R3.7, 0x8033caf8): 100+ instructions. Full Ethernet frame input:
+  mbuf alignment check, vlan/bridge filter dispatch, interface tag handling.
+
+POST (12.1X46-D35, 0x80346424): 5-instruction trampoline:
+  addiu $sp, -0x18
+  sw    $ra, 0x10($sp)
+  jal   0x80344a84          ; full implementation moved to this function
+  nop
+  [restore + jr $ra]
+
+The real ether_input logic moved to 0x80344a84. This indirection enables
+hooking at the ether_input symbol while keeping the implementation separate.
+
+--- in_pcbdetach (Jac=0.0 at D35) ---
+
+PRE (11.4R3.7, 0x8044feb0): 30+ instructions. Raw CPU register manipulation:
+  mfc0 $a0, $t4, 0     ; read MIPS Status register (interrupt enable state)
+  and  $v0, $a0, $v0   ; clear IE bit
+  mtc0 $v0, $t4, 0     ; write back (disable interrupts)
+  Direct interrupt masking in PCB teardown — no callback hooks.
+
+POST (12.1X46-D35, 0x8045af60): 22 instructions. Callback-based teardown:
+  [1] lw $v0, 0xd4($a0); andi $v0, $v0, 2  ; check PCB flags bit 1
+  [2] if set: check gp-0x1a20 == PCB->sock (offset 0x64)
+        if match: sw $zero, -0x1a20($gp)    ; clear global owner pointer
+        lw $v0, 0xd8($a0)                   ; destructor function pointer
+        jalr $v0 with arg lw $a0, 0xdc($a0) ; call destructor
+  [3] sw $zero, 0x14($v0)  ; null PCB->sock->somethng
+  [4] sw $zero, 0x64($s0)  ; null PCB->sock
+
+Type: UAF mitigation. PRE used raw interrupt disabling to serialize PCB
+teardown; POST adds:
+  (a) A destructor callback (PCB+0xd8) called before detach
+  (b) A global "owner" register (gp-0x1a20) cleared if this PCB is the
+      current owner — prevents dangling global pointer reuse
+  (c) NULL-outs on PCB→socket back-pointers
+
+The mfc0/mtc0 CPU register manipulation in PRE is replaced entirely by
+the callback protocol. The D35 change matches the pattern of FreeBSD
+socket PCB UAF fixes from the 2014-2015 timeframe.
+
 Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
 
