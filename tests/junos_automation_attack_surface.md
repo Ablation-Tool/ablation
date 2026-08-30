@@ -577,7 +577,17 @@ BSS layout adjacent to vtable (from nm + symbol table):
 0x150b80: sw_version              ← software version ptr, just past vtable
 ```
 Overflow primitive landing at 0x150b08 corrupts xmlEntityRefFunc first, then all 12 vtable slots.
-xmlEntityRefFunc called by xmlStopParser/xmlParserHandleReference paths — reachable from NETCONF XML parsing.
+xmlEntityRefFunc call sites confirmed at 0xff06b and 0xff090:
+  0xff06b: mov rax, [rip + 0x51a96]  ; rax = *xmlEntityRefFunc (BSS direct load)
+  0xff072: test rax, rax              ; PROPER null guard — non-null required to trigger
+  0xff075: je skip                    ; if not registered, skip
+  0xff07d: mov rdi, r13
+  0xff080: call rax                   ; call xmlEntityRefFunc(parser_ctx, ?, 0)
+Both call sites properly null-check the stored value, so overwriting with non-null immediately
+triggers the call during XML entity reference processing. Reachable from any NETCONF XML
+input containing `&entity_name;` references — no authentication bypass needed once in session.
+Chain: BSS overflow → xmlEntityRefFunc → arbitrary code execution (mgd/root context)
+  AND: vtable[0x150b10-0x150b68] → XPath traversal → arbitrary code execution
 
 FINDING 2 — vtable overwrite (RCE):
   BSS vtable at confirmed offsets relative to library load base (ASLR randomizes the
