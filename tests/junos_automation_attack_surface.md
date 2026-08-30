@@ -1635,3 +1635,80 @@ Attacker → TCP 2181 (ZooKeeper client, no auth)
 2. Set `clientPortAddress=127.0.0.1` in zoo.cfg (restrict client port to loopback)
 3. Implement ZooKeeper ACLs per znode tree (world:none, daemon digest auth for consumers)
 4. Firewall filter: block port 2181 inbound on management interfaces at the PFE level
+
+---
+
+## FINDING 8: OpenSSH 9.2p1 — CVE-2024-6387 Candidate (Unconfirmed, Binary Not Extracted)
+
+**Classification**: CANDIDATE — CRITICAL if confirmed (CWE-364, pre-auth race condition RCE)
+**Status**: Unconfirmed. sshd binary not present in extracted firmware layers (installed from base OS package). Version inferred from indirect evidence.
+**Port**: TCP 22 (management VRF)
+
+### Evidence
+
+`/usr/sbin/ssh-internal` (evo-ui64 layer, line 18):
+```
+# Taken from OpenSSH 9.2p1 ssh.c:
+```
+
+`/etc/ssh/sshd_config.internal` (evo-ui64):
+```
+UsePrivilegeSeparation yes
+```
+
+The `ssh-internal` script references OpenSSH 9.2p1's `ssh.c` source code, strongly indicating
+the installed OpenSSH package version is **9.2p1** (released 2023-02-02).
+
+### CVE-2024-6387 (regreSSHion) Analysis
+
+**Affected**: OpenSSH < 9.8p1 on glibc-based Linux systems (race in SIGALRM handler)
+**OpenSSH 9.2p1**: IN AFFECTED RANGE — predates 9.8p1 fix (released 2024-07-01)
+
+Mechanism:
+- sshd's `LoginGraceTime` (default 120s) triggers SIGALRM when a client doesn't complete auth
+- SIGALRM handler calls `syslog()` (async-signal-unsafe function on glibc)
+- Race between SIGALRM and the main thread's heap allocator → heap corruption
+- Exploitable to achieve pre-auth RCE as root (sshd runs as root before privilege drop)
+- Glibc `malloc()` mutex and `syslog()` internals make this a timing attack
+- Practical exploitation: 6–8 hours of continuous attempts (reliable but slow)
+
+**Juniper mitigation unknown**: Juniper may have backported the CVE-2024-6387 fix into their
+9.2p1 build or applied compensating controls. Cannot confirm without the sshd binary.
+
+### sshd_config.internal Risk Amplifiers
+
+- `PermitRootLogin yes` — root login enabled; successful exploit = direct root access
+- `UsePrivilegeSeparation yes` — standard, present in all tested OpenSSH versions
+- `LoginGraceTime` not overridden in config → defaults to 120 seconds (sufficient for race)
+
+### Address Restriction
+
+```
+Match Address *,!128.0.0.0/8
+    ForceCommand echo ssh is disabled
+```
+
+Non-128.x.x.x connections get `ForceCommand echo` — shell access disabled. **NETCONF subsystem
+(`Subsystem netconf /usr/libexec/ui/netconf`) may not be subject to ForceCommand.**
+CVE-2024-6387 is pre-auth and fires before `Match Address` rules apply.
+
+### Verification Path
+
+To confirm: extract sshd binary from a live EVO 23.4R2.14 device:
+```bash
+# On device
+scp /usr/sbin/sshd user@researcher:/tmp/
+```
+Then: `strings sshd | grep OpenSSH` should return version string.
+
+### CVE Reference
+
+CVE-2024-6387 (NVD): AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H = **8.1** (NVD) / 9.8 (alternative)
+CWE-364: Signal Handler Race Condition
+
+### Remediation
+
+1. Upgrade OpenSSH to 9.8p1+ or apply Juniper advisory patch when available
+2. Set `LoginGraceTime 0` in sshd_config as temporary mitigation (disables race window)
+3. Restrict port 22 access to management VRF trusted hosts only via firewall filter
+4. If confirmed affected, treat as critical pre-auth RCE candidate
