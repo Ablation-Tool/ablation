@@ -1712,3 +1712,75 @@ CWE-364: Signal Handler Race Condition
 2. Set `LoginGraceTime 0` in sshd_config as temporary mitigation (disables race window)
 3. Restrict port 22 access to management VRF trusted hosts only via firewall filter
 4. If confirmed affected, treat as critical pre-auth RCE candidate
+
+---
+
+## FINDING 9: Pre-Auth Memory Corruption Hunt — Management Plane Binary Assessment
+
+**Class:** Research Assessment  
+**Severity:** Informational (hunt result)  
+**Status:** Exhausted across extracted layers — no exploitable pre-auth memory corruption identified  
+
+### Scope
+
+Static binary analysis of management plane daemons in Junos EVO 23.4R2.14 (x86-64, layers: evo-re64, evo-ui64, evo-jimbase) targeting pre-auth memory corruption bugs to upgrade FINDING 2 (post-auth libxml2 BSS vtable overwrite) to pre-auth RCE.
+
+### Binaries Analyzed
+
+| Binary | Size | PIE | Canary | Dangerous Calls | Result |
+|--------|------|-----|--------|-----------------|--------|
+| `na-grpcd` | 7.6MB | Yes | No | 144 strcpy, 8 sprintf | All in STL `_M_emplace_hint_unique` template — not handler code |
+| `mgd-api` | 363K | Yes | No | 3 strcpy | All safe VLA pattern: `alloc=floor((strlen+24)/16)*16` |
+| `snmpd` | 1.5MB | Yes | No | 4 strcpy | `snmpd_proxy_add` post-auth only; loopback address copies static IPs |
+| `authd` | 10MB | **No** | ? | 1667 total | Uses DAX (not ZK); dangerous calls not traced to pre-auth input |
+| `cli` (setuid) | 282K | Yes | No | 9 strcpy, 8 sprintf | All in CLI display/editor logic; not network-facing |
+| `libnet-snmp` | 783K | — | — | 22+ strcpy | Config-file parsers; PDU path uses memmove with bounds check |
+| `libjunos-junoscript` | 76K | — | — | 0 strcpy, 1 sprintf | `xml_attribute` sprintf into heap-allocated output buffer — safe |
+| `libzkimpl` | 340K | — | — | 0 strcpy | C++ `ZkWatcher` API; all data in `std::string` |
+| `libzookeeper_mt` | 150K | — | — | 0 strcpy | `zoo_get` bounds write via caller-supplied `buffer_len` |
+| `libslax` | 289K | — | — | 0 strcpy | No dangerous calls |
+
+### Key Parsing Path Verdicts
+
+**SNMPv1/v2c community string (UDP 161):**  
+`snmp_comstr_parse` → `asn_parse_string` → bounds check at `[4d849]`: `cmp r8,%rdx; jb error_path`. Community buffer (256 bytes) vs parsed length — returns NULL if PDU community exceeds buffer. No overflow.
+
+**SNMPv3 USM security parameters (UDP 161):**  
+`usm_parse_security_parameters` at `[7b100]` — 4 calls to `asn_parse_string`. Same `asn_parse_string` bounds enforcement. No overflow.
+
+**`__jnx_ns_parse_trap_header` (UDP 161/162):**  
+Single instruction: `ret`. Empty stub — no code.
+
+**ZooKeeper consumers:**  
+All ZK-linked binaries route through `libzkimpl.so.0` (`net::juniper::zkwatchkeeper::ZkWatcher`). All ZK data lands in `std::string` objects. No raw `zoo_get` callers found in any daemon PLT. The FINDING 7 write primitive (unauthenticated znode write) has no direct fixed-size-buffer consumer path visible in the extracted binaries.
+
+**`na-grpcd` gRPC handlers:**  
+With FINDING 5's `skip-authentication` on factory-configured ACX6160-T, all 144 strcpy calls reachable pre-auth. However all 144 are inside a single massive `std::map::_M_emplace_hint_unique` template instantiation — C++ STL internals, not handler code. The 8 sprintf calls include `google::protobuf::CEscapeInternal` (output formatter). No handler-layer dangerous calls.
+
+**`authd` (10MB non-PIE EXEC):**  
+Most exploitable binary if a dangerous path can be reached. Fixed base address (ASLR not applicable). PLT includes `grpc_channel_destroy` (gRPC client role) and `dax_*` calls — reads config from DAX (Junos Data Access eXchange), not from ZK directly. Dangerous calls not successfully traced to pre-auth network input within available analysis budget.
+
+### Conclusion
+
+No exploitable pre-auth memory corruption bug identified through static analysis of the extracted firmware. The Junos EVO 23.4R2.14 management plane is primarily C++ (STL containers, protobuf, gRPC) with bounded string operations at network parse boundaries.
+
+**FINDING 2 upgrade status:** Blocked. Pre-auth RCE via SLAX commit script chain requires:
+1. Pre-auth config write → provided by FINDING 5 (ACX6160-T only)
+2. SLAX script file upload to `/var/db/scripts/commit/` → requires SSH file access (post-auth)
+3. ASLR bypass for libxml2 BSS vtable write → no wire-visible pointer leak found
+
+**Remaining unconfirmed pre-auth candidates:**
+- **CVE-2024-6387** (FINDING 8): OpenSSH 9.2p1 signal-handler race — inferred from source reference in `ssh-internal` script; sshd binary not extracted from live device.
+- **FINDING 5 gRPC handlers** (`na-grpcd`): With `skip-authentication`, all handler code is pre-auth on ACX6160-T factory configs. Handler logic beyond STL map insertions not fully traced.
+
+### Recommendations for Continued Work
+
+1. Extract `sshd` binary from live EVO 23.4R2.14: `strings sshd | grep OpenSSH` to confirm 9.2p1
+2. Instrument `na-grpcd` handler dispatch under FINDING 5 auth bypass (dynamic tracing)
+3. Analyze `authd` RADIUS/TACACS parsing paths for network-controlled input chains (10MB binary, non-PIE, no ASLR — high ROI if pre-auth path exists)
+4. Check `chore`, `sysman`, `gcd` for ZK consumer patterns where attacker-written znode data reaches a fixed-size buffer
+
+### CWE Reference
+
+CWE-617: Reachability in Pre-auth Context (informational)
+
