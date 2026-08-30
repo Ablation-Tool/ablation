@@ -4127,6 +4127,122 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def direction_detector_surface(self) -> dict:
+        """
+        AXIS Direction Detector 3.16.3 attack surface (Cognimatics tvpc variant).
+
+        appId: 220302  binary: tvpc  version: 3.16.3  arch: armv7hf (ARTPEC-6/7, S2E/S2L/S5/S5L)
+        APPUSR=root  APPGRP=root
+        Codebase: identical to People Counter 3.x (same tvpc binary, same param schema)
+        Key addition: anon-gui module (privacy.sh runs mount --bind as root)
+
+        Differences vs People Counter:
+          - APPID 220302 vs 211490; MENUNAME/SETTINGSPAGEFILE differ
+          - Includes modules/anon-gui/anon/ for video anonymization (privacy.sh)
+          - debugar.cgi: config for FTP coredump upload to ftp://upload.cognimatics.com
+          - cgipaths: /direction-detector/.restore_backup + /people-counter/.restore_backup both exposed
+          - All Counter0* / WebReportUpload0* / Occ* params identical to People Counter
+
+        Full tvpc attack surface: see people_counter_surface() — all vectors apply identically.
+        """
+        result = {
+            'package': 'tvpc',
+            'vendor': 'Axis Communications (Cognimatics)',
+            'version': '3.16.3',
+            'app_id': '220302',
+            'type': 'eap_acap',
+            'arch': 'armv7hf',
+            'appusr': 'root',
+            'privilege': 'ROOT — all tvpc vectors execute as root',
+            'variants': ['Direction Detector', 'People Counter (shared codebase)'],
+            'additional_attack_paths': {
+                'DD-1': {
+                    'severity': 'HIGH',
+                    'title': 'privacy.sh runs mount --bind as root via anon-gui',
+                    'detail': (
+                        'modules/anon-gui/anon/privacy.sh takes 3 shell args: action, anon_folder, priv_img_url. '
+                        'ACTION="$1" ANON_FOLDER="$2" PRIVACY_IMAGE_URL="$3" — no quoting on use in sed/cp/mount. '
+                        'Called as root. mount --bind $BLOCKER_FILE $MCAST where BLOCKER_FILE=$PERSIST/blocker.sh '
+                        'and PERSIST=/usr/local/anon (writable if ACAP operator can influence anon_folder arg). '
+                        'Can overwrite /usr/sbin/mcast-always-setter with arbitrary script via bind mount.'
+                    ),
+                    'exploit_chain': 'Operator triggers privacy mode via .apiadmin CGI -> privacy.sh called as root -> mount --bind attacker-controlled script over /usr/sbin/mcast-always-setter -> arbitrary execution',
+                },
+                'DD-2': {
+                    'severity': 'MEDIUM',
+                    'title': 'FTP coredump exfil to hardcoded Cognimatics server',
+                    'detail': (
+                        'debugar.cgi config: TargetURL="ftp://upload.cognimatics.com" TargetPath="/coredumps". '
+                        'Core dumps include stack frames, heap contents, and memory-resident secrets (SlavePass, '
+                        'VAPIX credentials). If core dump upload is enabled, secrets exfiltrate to Cognimatics FTP. '
+                        'Not operator-configurable — URL is hardcoded in config file.'
+                    ),
+                },
+                'DD-3': {
+                    'severity': 'HIGH',
+                    'title': 'Dual .restore_backup tarslip: /direction-detector/ and /people-counter/ both exposed',
+                    'detail': (
+                        'cgipaths.conf registers both /direction-detector/.restore_backup and '
+                        '/people-counter/.restore_backup at operator level. Two tarslip entry points, '
+                        'same underlying handler (tvpc binary, running as root).'
+                    ),
+                },
+            },
+            'tvpc_vectors_apply': 'All vectors from people_counter_surface() apply — popen, tarslip, TCP 23456/4066, SlavePass, VAPIX credentials, WebReportUpload0 SSRF/AllowInsecure, AxisAnalytics account creation',
+        }
+        return result
+
+    def random_selector_surface(self) -> dict:
+        """
+        AXIS Random Selector 3.12.0/3.16.x attack surface (Cognimatics tvpc variant + mini_snmpd).
+
+        appId: 220304  binary: tvpc  version: 3.12.0  arch: armv7hf (ARTPEC-4/5/6/7, L2/S2E/S2L/S3L)
+        APPUSR=root  APPGRP=root
+        Codebase: identical to People Counter 3.x plus mini_snmpd bundled binary
+
+        Key addition vs People Counter/Direction Detector: mini_snmpd (43KB stripped ARM ELF).
+        SNMP community defaults to "public"; auth disabled by default (Snmp0Enabled="0").
+        When admin enables SNMP, mini_snmpd starts without -a flag -> SNMPv1/v2c with community "public".
+        """
+        result = {
+            'package': 'tvpc',
+            'vendor': 'Axis Communications (Cognimatics)',
+            'version': '3.12.0',
+            'app_id': '220304',
+            'type': 'eap_acap',
+            'arch': 'armv7hf',
+            'appusr': 'root',
+            'privilege': 'ROOT — all tvpc vectors execute as root',
+            'additional_binaries': {
+                'mini_snmpd': {
+                    'size': '43768 bytes (stripped ARM ELF)',
+                    'default_community': 'public',
+                    'auth_default': 'disabled (no -a flag) — SNMPv1/v2c read access with community "public"',
+                    'param': 'Snmp0Enabled="0" Snmp0Community="public" Snmp0Traps="0"',
+                },
+            },
+            'additional_attack_paths': {
+                'RS-1': {
+                    'severity': 'HIGH',
+                    'title': 'mini_snmpd SNMPv2c with default "public" community — unauthenticated read',
+                    'detail': (
+                        'When admin enables SNMP (Snmp0Enabled=1), mini_snmpd starts with Snmp0Community string. '
+                        'Default is "public". No -a flag used -> no auth enforcement. '
+                        'SNMPv1/v2c GET walk exposes camera system MIB (sysDescr, sysLocation, ifTable, '
+                        'routes, running processes). Snmp0Traps allows attacker-controlled trap destination.'
+                    ),
+                    'exploit': 'snmpwalk -v2c -c public <camera_ip> 1.3.6',
+                },
+                'RS-2': {
+                    'severity': 'MEDIUM',
+                    'title': 'Dual .restore_backup tarslip: /random-selector/ and /people-counter/ both exposed',
+                    'detail': 'cgipaths.conf registers both CGI paths at operator level. Same root tarslip vector as People Counter.',
+                },
+            },
+            'tvpc_vectors_apply': 'All vectors from people_counter_surface() apply — popen, tarslip, TCP 23456/4066, SlavePass, VAPIX credentials, WebReportUpload0 SSRF/AllowInsecure, AxisAnalytics account creation',
+        }
+        return result
+
     def sbplayer_mips_surface(self) -> dict:
         """
         AXIS Player for Soundtrack Business (sbplayer) MIPS32 v1.5.0 surface.
@@ -4390,6 +4506,10 @@ def main():
                         help='People Counter 5.0.5 Rust rewrite; dropped root; popen+tarslip+TCP 23456/4066 remain')
     parser.add_argument('--qm3', action='store_true', dest='qm3',
                         help='Queue Monitor 3.0.20 Rust rewrite; SSRF via WebReportUpload + AllowInsecure + popen')
+    parser.add_argument('--direction-detector', action='store_true', dest='direction_detector',
+                        help='Direction Detector 3.16.3 tvpc root; anon-gui mount --bind + dual tarslip + FTP coredump exfil')
+    parser.add_argument('--random-selector', action='store_true', dest='random_selector',
+                        help='Random Selector 3.12.0 tvpc root; mini_snmpd community=public + dual tarslip')
     parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
                         help='sbplayer aarch64/ARM32 1.7.1 UpdateURL+SD-card library RCE + hardcoded SYB API cred')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
@@ -4518,6 +4638,12 @@ def main():
 
     if args.all or getattr(args, 'qm3', False):
         results['qm3'] = analyzer.queue_monitor_v3_surface()
+
+    if args.all or getattr(args, 'direction_detector', False):
+        results['direction_detector'] = analyzer.direction_detector_surface()
+
+    if args.all or getattr(args, 'random_selector', False):
+        results['random_selector'] = analyzer.random_selector_surface()
 
     if args.all or args.sbplayer_aarch64:
         results['sbplayer_aarch64'] = analyzer.sbplayer_aarch64_surface()
