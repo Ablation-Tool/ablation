@@ -994,8 +994,8 @@ tokens. The xml_string itself is caller-owned; libjunos-xmlutil does not copy it
 
 **FINDING 2 upgrade status**: No pre-auth memory corruption primitive found in the
   NETCONF XML parsing path. FINDING 2 (vtable overwrite) remains POST-AUTH.
-  Next candidate: xml_input_rpc (mgd PLT -> GOT 0x2ab80) — the post-hello,
-  pre-auth RPC dispatcher has not been analyzed.
+  xml_input_rpc (mgd PLT -> GOT 0x2ab80) analyzed — POST-AUTH DoS only (see FINDING 4).
+  Pre-auth surface exhausted; no upgrade path identified.
 
 ---
 
@@ -1251,3 +1251,72 @@ This APPENDS to the same buffer. Combined output of both sprintf calls feeds int
 
 **Combined impact**: If first sprintf overflows, the second sprintf corrupts further.
   Both calls share the same no-canary stack frame.
+
+---
+
+## FINDING 4 — Post-Auth Stack Exhaustion via Oversized RPC Element Name
+
+**Location**: libjunos-junoscript.so.1, `xml_input_rpc` at +0xe120
+
+**Function role**: Post-hello, post-auth RPC dispatcher. Called by mgd for each
+  NETCONF RPC after the NETCONF `<hello>` exchange (ssh-auth → hello → RPC input).
+
+**Frame**: `sub $0x128, %rsp` (296 bytes fixed base). Alloca expands dynamically below.
+
+**Three unbounded alloca+memcpy patterns** (at +0xe34d–0xe38f, +0xe3a7–0xe3d8, +0xe444–0xe46c):
+
+```asm
+; Pattern 1: RPC element name (e.g., <lock>, <get-config>, <rpc-method>)
+e357:  call strlen(element_name)    ; len = strlen(rpc_element_name)
+e363:  lea 1(%rax), %rdx           ; len+1
+e367:  add $0x18, %rax             ; alignment pad
+e36b:  and $~0xf, %rax             ; round to 16
+e36f:  sub %rax, %rsp              ; *** ALLOCA(aligned(len+25)) — NO BOUND ***
+e372:  lea 0xf(%rsp), %rax
+e381:  ...
+e38f:  call memcpy(alloca_buf, element_name, len+1)
+
+; Pattern 2: RPC namespace URI (xmlns="..." attribute value)
+e3b1:  call strlen(namespace_ptr)
+e3c9:  sub %rax, %rsp              ; ALLOCA — NO BOUND
+e3d8:  call memcpy(alloca_buf, namespace_ptr, len+1)
+
+; Pattern 3: inner element name (nested RPC content element)
+e449:  call strlen(inner_name)
+e45d:  sub %rax, %rsp              ; ALLOCA — NO BOUND
+e46c:  call memcpy(alloca_buf, inner_name, len+1)
+```
+
+**Source**: Element names and namespace URIs come from xml_input_match → TCP stream.
+  xml_input_match2 (callback reader at +0xeb10) imposes no length cap on element names.
+  Attacker sends: `<` + 4MB_string + `>` in a valid NETCONF envelope → strlen = 4MB.
+
+**Impact**:
+- alloca(4MB) on a stack with 8MB default limit → rsp crosses guard page → SIGSEGV
+- mgd process crashes → NETCONF session terminated
+- Classification: POST-AUTH DoS (session crash). Stack geometry prevents RCE:
+  alloca puts buf N bytes BELOW saved_RIP; memcpy writes into that buf (not past it);
+  saved_RIP is never in the write target range.
+
+**Trigger requirement**: Valid SSH credentials + any NETCONF session. No operator-class
+  privilege needed — any login-level user can issue RPCs.
+
+**Comparison to gram_xml_cmdl_get_line DoS** (documented above):
+  - gram_xml_cmdl_get_line: alloca in XML tokenizer, called from ddl_start_command_mode
+  - xml_input_rpc: alloca in RPC dispatcher, called directly from mgd RPC loop
+  - Both: post-auth, session DoS only; neither yields RCE without additional primitives
+  - xml_input_rpc triggers earlier in the RPC dispatch chain (before DDL command parsing)
+
+**JunoScript TCP (port 3221) vs NETCONF**: xml_input_rpc is reachable from both paths.
+  JunoScript raw TCP session: `<junoscript>` hello → xml_input_rpc on each subsequent
+  element. NETCONF SSH: hello exchange → xml_input_rpc on each `<rpc>` element.
+
+**Pre-auth investigation conclusion** (JunoScript TCP, port 3221):
+  No user/password XML attribute processing found in EVO 23.4R2.14 cli or
+  libjunos-junoscript binaries. "password" string in cli binary (0x3303e) is the
+  error message "can't read password entry" — not the `<junoscript password="X">`
+  attribute name. `user` attribute name not referenced from any XML parsing function.
+  JunoScript TCP on EVO 23.4R2 does not process user/password XML attributes in
+  userland; authentication is handled upstream (SSH wrapping or Kerberos) before
+  cli receives the JunoScript session. No pre-auth memory corruption path via
+  credential attribute parsing.
