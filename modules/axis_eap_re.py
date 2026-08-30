@@ -2554,6 +2554,172 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def bw_lss_surface(self) -> dict:
+        """
+        AXIS Body Worn Live Self-hosted Server (BodyWornLiveSelfHosted) attack surface.
+
+        package: AXIS_Body_Worn_Live_Self-hosted_Server
+        version: 1.5.1 (W401 camera target), 1.0.0 (D3110), 2.0.0 (SBOM only — no EAP)
+        binary: BodyWornLiveSelfHosted (Go static, ~11.8MB), rsignal (Rust), coturn/turnserver
+        appId: unset in package.conf (APPID="")
+        arch: W401 (ARTPEC-8 camera appliance); D3110 (body-worn dock)
+        LICENSEPAGE: none
+        source: https://www.axis.com/ftp/pub/axis/software/bw/ACAP/AXIS_Body_Worn_Live_Self-hosted_Server/
+
+        BodyWornLiveSelfHosted is a Go server that runs a WebRTC/coturn media relay and
+        signaling infrastructure directly on an Axis body-worn camera dock (W401/D3110).
+        The binary ships a React SPA (react-router 7.5.3, react 19.1.0) in html/assets/.
+
+        Internal Go packages (axteams-one/bws-webrtc-acap):
+          internal/auth      — JWT issuance + STUN/TURN credential generation
+          internal/cgi       — HTTP CGI routing (ServeHTTP dispatch)
+          internal/cgi/cgis/auth      — auth CGI: getSignalingClientToken, getStunTurnTestCredentials
+          internal/cgi/cgis/configure — configure CGI: configureSystem, deleteSystem, setServerConfig,
+                                        setPrivacyConfig, getPrivacyConfig, getSystemConfig, getSystems
+          internal/peerhub   — peer connection tracking: handlePeerConnectedEvent,
+                               handleStreamAvailableEvent, handleStreamStartedOrResumedEvent
+          internal/coturn    — coturn config/credential management
+          internal/rsignal   — rsignal subprocess management
+          internal/metrics   — Prometheus metrics exporter (:9446/metrics/core, :9641/metrics/coturn)
+
+        coturn:
+          turnserver binary bundles libgssapi_krb5.so.2, libkrb5.so.3 — Kerberos auth support
+          libmicrohttpd.so.12 — embedded HTTP server for coturn admin interface
+          libprom.so — Prometheus client in coturn
+
+        rsignal: Rust binary (serde_json, regex, httpdate) — signaling relay side-car
+
+        IDD plugins (idd/plugins/):
+          bwlcore: curl localhost:9446/local/BodyWornLiveSelfHosted/metrics/core (no auth check in script)
+          bws_webrtc_coturn_metrics: curl localhost:9641/local/BodyWornLiveSelfHosted/metrics/coturn
+          context: parhandclient getlist + gdbus call com.axis.BasicDeviceInfo1 — device serial/firmware leak
+          device_configurations: parhandclient getgroup root.HTTPS + cat /etc/acap/conf/packageparser.conf
+          storage_properties: busctl call com.axis.storage.StorageManager1 + SD card CID dump
+
+        pre-uninstall.sh:
+          gdbus call com.axis.PolicyKitCert.CertSetDeleteUnpriv BodyWornLiveSelfHosted1
+          Called on BOTH uninstall AND upgrade — cert set deleted between upgrade steps → TLS gap
+
+        Key RE findings:
+        1. getStunTurnTestCredentials — auth CGI exports TURN test credentials; uses crypto/hmac (HMAC-SHA1
+           TURN credential model RFC 8489 §9.2). If auth check is operator-level or lower, attacker
+           with operator auth gets TURN shared secret → media relay abuse.
+        2. configureSystem/deleteSystem — configure CGI has destructive system ops; deleteSystem with
+           admin creds wipes body-worn system configuration.
+        3. getSignalingClientToken — JWT issued by auth CGI using golang-jwt/jwt v5.2.2; JWT signing
+           secret in process memory; if weak entropy or predictable, signaling channel takeover.
+        4. Metrics ports (localhost:9446, :9641) — IDD plugins fetch without auth; if device has an
+           SSRF primitive (common in AXIS ACAPs), attacker reaches Prometheus scrape and gets full
+           session/peer/stream metrics.
+        5. Kerberos in coturn — libgssapi_krb5 bundled; TURN server with Kerberos auth misconfigured
+           to accept unauthenticated clients falls back to auth-any (confirmed in turnserver strings).
+        """
+        result = {
+            'app': 'AXIS Body Worn Live Self-hosted Server',
+            'package': 'AXIS_Body_Worn_Live_Self-hosted_Server',
+            'version': '1.5.1',
+            'arch': 'W401 (ARTPEC-8 appliance), D3110 (body-worn dock)',
+            'binary': 'BodyWornLiveSelfHosted (Go static)',
+            'appId': '(unset — APPID="" in package.conf)',
+            'run_as': 'ACAP sandbox user',
+            'license_page': 'none',
+            'bundled_components': [
+                'coturn/turnserver (libgssapi_krb5.so.2, libkrb5.so.3, libmicrohttpd.so.12, libprom.so, libevent-2.1.so.7)',
+                'rsignal (Rust binary — signaling relay)',
+                'React SPA: react 19.1.0, react-router 7.5.3, cookie 1.0.2',
+            ],
+            'internal_packages': [
+                'internal/auth — JWT + TURN credential generation (HMAC)',
+                'internal/cgi/cgis/auth — auth CGI',
+                'internal/cgi/cgis/configure — configure CGI',
+                'internal/peerhub — WebRTC peer tracking',
+                'internal/coturn — coturn integration',
+                'internal/metrics — Prometheus :9446/:9641',
+            ],
+            'idd_plugins': [
+                'bwlcore: curl localhost:9446/metrics/core (no auth)',
+                'bws_webrtc_coturn_metrics: curl localhost:9641/metrics/coturn',
+                'context: parhandclient + gdbus BasicDeviceInfo1',
+                'device_configurations: parhandclient root.HTTPS + packageparser.conf',
+                'storage_properties: busctl StorageManager1 + SD CID',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'LSS-1',
+                    'title': 'TURN shared secret exposure via getStunTurnTestCredentials CGI',
+                    'mechanism': (
+                        'auth CGI method getStunTurnTestCredentials returns time-based TURN credentials '
+                        '(RFC 8489 §9.2 HMAC-SHA1 model). If CGI is accessible at operator auth level, '
+                        'attacker reads TURN shared secret → forges credentials → relays media through '
+                        'camera TURN server → media interception or DoS of body-worn video streams.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level camera auth',
+                },
+                {
+                    'id': 'LSS-2',
+                    'title': 'Destructive configure CGI — deleteSystem / setServerConfig',
+                    'mechanism': (
+                        'configure CGI exposes configureSystem, deleteSystem, setServerConfig, setPrivacyConfig. '
+                        'deleteSystem at admin level wipes BWS system config. setServerConfig with attacker '
+                        'TURN endpoint → SSRF to attacker relay server. setPrivacyConfig can toggle video '
+                        'privacy masking state — privacy DoS similar to LPS-3.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Admin-level camera auth',
+                },
+                {
+                    'id': 'LSS-3',
+                    'title': 'JWT signaling token secret in Go process memory',
+                    'mechanism': (
+                        'getSignalingClientToken issues JWTs (golang-jwt/jwt v5.2.2). JWT signing secret '
+                        'stored in BodyWornLiveSelfHosted process memory; extractable via /proc/PID/mem '
+                        'if process user matches. Known signing secret → forge client JWT → unauthorized '
+                        'signaling channel access → impersonate body-worn camera client.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin shell or /proc access on W401 device',
+                },
+                {
+                    'id': 'LSS-4',
+                    'title': 'Prometheus metrics ports localhost:9446 / :9641 — no IDD auth check',
+                    'mechanism': (
+                        'bwlcore and bws_webrtc_coturn_metrics plugins fetch localhost:9446 and :9641 '
+                        'respectively; no auth in shell scripts. If device has any SSRF primitive '
+                        '(common — sbplayer UpdateURL, rdv libcurl, etc.), attacker fetches full '
+                        'Prometheus metrics: peer counts, stream states, coturn session counts, restart totals.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'SSRF primitive on device (or admin shell)',
+                },
+                {
+                    'id': 'LSS-5',
+                    'title': 'Kerberos in bundled coturn — auth-any fallback',
+                    'mechanism': (
+                        'coturn/turnserver bundles libgssapi_krb5.so.2 and libkrb5.so.3. turnserver strings '
+                        'confirm auth-any / AuthANY option. In default AXIS BWS deployments, coturn is '
+                        'typically not connected to a Kerberos KDC; if auth-any is accidentally active, '
+                        'unauthenticated clients relay media through the TURN server.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Network access to TURN port 3478/5349',
+                },
+                {
+                    'id': 'LSS-6',
+                    'title': 'D-Bus cert set deleted on upgrade (pre-uninstall.sh)',
+                    'mechanism': (
+                        'pre-uninstall.sh calls PolicyKitCert.CertSetDeleteUnpriv BodyWornLiveSelfHosted1 '
+                        'on both uninstall AND upgrade. Certificate set is deleted between old package '
+                        'removal and new package install. During upgrade window, TLS connections using '
+                        'that cert set may fail or fall back to a weaker profile.'
+                    ),
+                    'severity': 'LOW',
+                    'prerequisite': 'ACAP package upgrade event',
+                },
+            ],
+        }
+        return result
+
     def speed_monitor_surface(self) -> dict:
         """
         AXIS Speed Monitor (speedmonitor) attack surface.
@@ -3662,6 +3828,8 @@ def main():
                         help='VMD 3.2.0 Lua encrypted combined.lua + polygon float injection')
     parser.add_argument('--radar-vis', action='store_true', dest='radar_vis',
                         help='Radar Data Visualizer 3.3.2 viewer consume.cgi + resvg SVG path injection')
+    parser.add_argument('--bw-lss', action='store_true', dest='bw_lss',
+                        help='Body Worn Live Self-hosted Server 1.5.1 TURN credential leak + configure CGI destruct ops')
     parser.add_argument('--speed-monitor', action='store_true', dest='speed_monitor',
                         help='Speed Monitor ARM32 1.1.7 SQLite track dump + bundled protobuf/xml2 + radar scene')
     parser.add_argument('--fence-guard', action='store_true', dest='fence_guard',
@@ -3769,6 +3937,9 @@ def main():
 
     if args.all or getattr(args, 'radar_vis', False):
         results['radar_vis'] = analyzer.radar_data_visualizer_surface()
+
+    if args.all or getattr(args, 'bw_lss', False):
+        results['bw_lss'] = analyzer.bw_lss_surface()
 
     if args.all or getattr(args, 'speed_monitor', False):
         results['speed_monitor'] = analyzer.speed_monitor_surface()
