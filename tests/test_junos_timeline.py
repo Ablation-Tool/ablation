@@ -228,6 +228,26 @@ are the architectural preparation that precedes the D240 CPSEC integration.
 D35 is a code-restructuring release; D240 is where the security-layer
 changes land (CPSEC vtable integration for IPsec, ah6_input dispatch stub).
 
+--- sbdrop_locked D35 (Jac=0.0 — struct layout change, NOT security fix) ---
+
+11.4R3.7 (0x802b1d68, 708 bytes): Direct implementation. Sockbuf drop loop.
+  Mbuf cluster pointer: lw $v0, 0x40($a1)  [mbuf struct offset 0x40]
+  Mbuf poison on free: ori $v0, 0xdead; sw $v0, 8($a1)  [UAF detection]
+  Mbuf free dispatch: jal 0x802a35d8 / 0x802a3418 / 0x8075c6cc
+
+D35 internal (0x802bc3d8): Same sockbuf drop loop algorithm.
+  Mbuf cluster pointer: lw $v0, 0x48($a1)  [offset bumped +8]
+  Mbuf poison unchanged: 0xdead sentinel preserved
+  Mbuf free dispatch relocated: jal 0x802ad23c / 0x802ad07c / 0x807745f4
+
+Jac=0.0 cause:
+  1. Mbuf struct layout change: new field inserted before ext_size → offset
+     0x40 → 0x48. All 4-grams containing the mbuf-offset load are different.
+  2. All called function VAs relocated → all jal targets different → no
+     4-gram overlap on those instruction sequences.
+  Security note: 0xdead UAF poison preserved across the change — the mbuf
+  free detection mechanism was not regressed by the struct expansion.
+
 --- if_tunnel_set_encap_ifl (Jac=0.9242 → 0.5515 → 0.0000 at D240) ---
 
 Gradual 3-stage rewrite across the full timeline.
@@ -267,6 +287,22 @@ a flags or context pointer defaulting to NULL/0.
     andi $s6, $a3, 0xff    ; byte-masked flags; always 0 from trampoline
     External callers: $s6=0 always. Any codepath gated on $s6!=0
     is an internal-only feature unreachable through the public API.
+
+  Control flow: $s6 is only evaluated on the $s5==2 dispatch path.
+  The beq $s5, $v0, 0x802ebb48 branch skips the $s6 reassignment at
+  0x802eba98, preserving the 4th arg value.
+
+  At 0x802ebb90: bnez $s6, 0x802ebbfc
+    a3=0 (trampoline/public): fall through → executes 0x802ebb94-0x802ebbf8
+      block: calls 0x8035f4bc with a0=s0+0xdc, a1=s0, a2=4, a3=0
+      (IFL struct s2 passed on stack; output buffer sp+0x30)
+      → tunnel encap update notification/event callback fires
+    a3≠0 (internal batch callers): branch → skip notification block
+
+  FINDING: 4th arg is a suppress-notification flag on the $s5==2 (TYPE_2)
+  encap update path. Batch operations pass a3=1 to avoid per-update event
+  overhead. Not externally reachable — call site suppression is the only
+  path to the notification-skip behavior.
 
   Protocol type dispatch:
     lbu  $v0, 0x28($s2)    ; type byte from IFL struct
