@@ -1867,7 +1867,7 @@ No pre-auth memory corruption found across 14 analyzed management-plane binaries
 
 ### Summary
 
-`bbe-pfcp-proxyd` contains a `strcpy(malloc(100), source)` call where `source = (*r8)->field_0x10` — a string pointer from a doubly-dereferenced SDB (Subscriber Database) struct. Unlike the identical function in `bbe-gtp-proxyd` (where all callers pass static rodata strings), in `bbe-pfcp-proxyd` the callers pass live SDB objects. PFCP IE values (APNs, FQDNs) can be up to 100-253 bytes. If any string IE > 99 bytes is stored in `field_0x10` without capping, the subsequent strcpy overflows the 100-byte heap allocation.
+`bbe-pfcp-proxyd` contains a `strcpy(malloc(100), source)` call where `source = (*r8)->field_0x10` — a string pointer from an SDB (Subscriber Database) record for the attribute `junos-subscriber-ipv6-multi-address`. Unlike the identical function in `bbe-gtp-proxyd` (where all callers pass static rodata strings), in `bbe-pfcp-proxyd` the callers pass live SDB attribute records. A subscriber with 3 or more IPv6 addresses produces a multi-address string of ~120 bytes (3 × ~40 chars). If this SDB value is stored without a length cap, the subsequent strcpy overflows the 100-byte heap allocation. The value is controlled by the PFCP session — a rogue or compromised SMF can inject the overflow via a PFCP Create/Update Session Request carrying crafted IPv6 address IEs.
 
 ### Technical Chain
 
@@ -1910,22 +1910,34 @@ recvmsg(sock, &msghdr, MSG_TRUNC)   ; 0x269a50
 505ab: lea 0xdedee(%rip),%rdx     ; rdx = 0x12f3a0 = STATIC STRING (safe)
 ```
 
-**4. PFCP IE values that could populate field_0x10:**
-Per 3GPP TS 29.244 (PFCP, Rel-16):
-- APN (IE type 185): max 100 octets
-- FQDN (UPF Node ID, IE type 117): max 253 bytes  
-- Network Instance (IE type 22): variable length string
+**4. Identified SDB attribute populated at field_0x10:**
 
-Any of these IEs, if stored into `field_0x10` without a length cap, would overflow the 100-byte heap allocation on `strcpy`.
+Traced statically: the dispatch function 0x1545f0 is called from 0x155548 with:
+- `rdx = 0x2a6750` = `"junos-subscriber-ipv6-multi-address"` (attribute name)
+- `r8 = &local_var_0x90` = pointer to SDB lookup output
+
+The SDB lookup (via `0x145e00 → 0x143b30`) retrieves the SDB record for this attribute. `(*r8)->field_0x10` is the string VALUE of `junos-subscriber-ipv6-multi-address` for the target subscriber.
+
+**Why 100 bytes can be exceeded:**
+- A subscriber with N IPv6 addresses has `field_0x10` = comma/space-separated address list
+- Single IPv6: up to 39 chars (`xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx`)
+- 3 addresses: ~120 bytes → overflows `malloc(100)` by ~20 bytes
+- In DHCPv6 prefix delegation scenarios, 5+ prefixes are possible → 200+ bytes
+
+**PFCP path to SDB population:**
+PFCP `UE IP Address` IE (type 93) and `IPv6 Multiple Addresses` JNPR extension IEs carry subscriber IPv6 addresses from SMF→UPF. The UPF stores these in SDB as `junos-subscriber-ipv6-multi-address`.
 
 ### Attack Scenario
 
-1. Attacker sends crafted PFCP Create Session Request (UDP/8805) with APN or FQDN IE ≥ 100 bytes
+**Threat actor:** Rogue SMF on PFCP path (UDP/8805) — no authentication required; PFCP uses optional IPsec that is commonly not deployed.
+
+1. Attacker sends PFCP Create Session Request with 3+ IPv6 addresses in UE IP Address IEs
 2. `bbe-pfcp-proxyd` receives packet via `recvmsg(256)`
-3. PFCP parser extracts the IE value and stores it in an SDB subscriber session struct at `field_0x10`
-4. Session processing dispatch function (0x1545f0) is called with pointer to this SDB struct as r8
-5. `strcpy(malloc(100), (*r8)->field_0x10)` overflows heap by (strlen(IE) - 99) bytes
-6. No stack canary (binary has 0 `stack_chk_fail` references), PIE EXEC
+3. PFCP session handler stores addresses in SDB as `junos-subscriber-ipv6-multi-address` string ≥ 100 bytes
+4. Dispatch function 0x1545f0 is invoked with SDB record pointer as r8
+5. `strcpy(malloc(100), (*r8)->field_0x10)` overflows the heap allocation
+6. Attacker-controlled string data written past the 100-byte allocation
+7. No stack canary, PIE binary (ASLR applies — ASLR bypass required for code execution)
 
 **Binary properties:** PIE (ASLR applies), no canary, no RELRO — heap overflow with attacker-controlled data.
 
@@ -1935,10 +1947,10 @@ Any of these IEs, if stored into `field_0x10` without a length cap, would overfl
 
 ### Confirmation Required
 
-1. **Dynamic trace:** `strace -e recvmsg -p $(pgrep bbe-pfcp-proxyd)` then send crafted PFCP with 100-byte APN
-2. **Controlled crash test:** PFCP Create Session with `network_instance` IE = 200-byte string
-3. **SDB field trace:** Verify that PFCP IE values populate `field_0x10` in the SDB struct type used at call site 0x1548b6
-4. **PFCP port:** UDP 8805 (PFCP) — pre-auth; SMF authentication happens inside the PFCP session, not before it
+1. **Dynamic trace:** `strace -e recvmsg -p $(pgrep bbe-pfcp-proxyd)` + observe SDB attribute value after sending PFCP Create Session with 3+ IPv6 addrs
+2. **Controlled crash test:** Craft PFCP Create Session carrying 3 UE IP Address IEs (IPv6) with distinct /128 prefixes; monitor bbe-pfcp-proxyd for SIGSEGV/SIGABRT
+3. **SDB read:** After session creation, `sdb get junos-subscriber-ipv6-multi-address <session-key>` — confirm value > 99 bytes
+4. **PFCP port:** UDP 8805 — no auth required at transport layer; SMF authentication occurs at PFCP association level (optional N4 security)
 
 ### Remediation (if confirmed)
 
