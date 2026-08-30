@@ -30,6 +30,8 @@ VERSIONS = [
     ('ASA 9.6.4.18',   '/media/cowboy/research/cisco-lina-re/asa964-extract/cpio-root/asa/bin/lina'),
     # FTD 6.2.0-362 (Jan 2017, ~ASA 9.6.x era): jac=0.1307 Era 1
     ('FTD 6.2.0-362',  '/media/cowboy/research/cisco-lina-re/ftd620-extract/lina'),
+    # ASA 9.7.1 (Jan 2017): jac=0.1301 Era 1 — boundary pin: Era 1→2 transition is between 9.7.1 and 9.9.2.85
+    ('ASA 9.7.1',      '/media/cowboy/research/cisco-lina-re/asa971-extract/lina'),
     ('ASA 9.9.2.85',   '/media/cowboy/research/cisco-lina-re/asa992-85-extract/cpio-root/asa/bin/lina'),
     # FTD 6.3.0-83 (Nov 2018, ~ASA 9.8-9.9 era): jac=0.9593 Era 2 UNPATCHED
     ('FTD 6.3.0-83',   '/media/cowboy/research/cisco-lina-re/ftd630-extract/lina'),
