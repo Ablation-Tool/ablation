@@ -120,7 +120,8 @@ class AxisEAPAnalyzer:
         'BarcodeReader': 'barcode',
         'BodyWornLiveSelfHosted': 'bodyworn',
         'facedetector': 'facedetector',
-        'fflprapp': 'fflprapp',  # AXIS License Plate Verifier
+        'fflprapp': 'fflprapp',    # AXIS License Plate Verifier
+        'tvpc': 'tvpc',            # AXIS People Counter
     }
 
     # licensekey_verify bypass env vars (from disasm of licensekey_stat.c)
@@ -642,6 +643,161 @@ class AxisEAPAnalyzer:
 
         return result
 
+    def people_counter_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        AXIS People Counter (tvpc) aarch64 ELF attack surface.
+
+        appId: 211490  binary: tvpc  version: 4.x (ARTPEC-8 build seen)
+
+        Architecture: tvpc daemon + bundled curl binary (unstripped, OpenSSL 1.1) +
+        libjson.so.0 + libnet_http.so.0 + libevent.so.0 + libparam.so.1
+
+        Key findings:
+
+        1. Shell injection via curl format strings (same class as LPV-2)
+           tvpc calls popen()/system() with:
+             "CURL_CA_BUNDLE=... /usr/local/packages/tvpc/curl -L -f --anyauth --insecure
+              %s --user %s:%s \"%s/axis-cgi/opticscontrol.cgi\" ..."
+           The %s slots: extra_flags, user, password, base_url — all from axparameter.
+           Operator-level write to any of these params → shell injection → RCE.
+           Additional shell calls:
+             "cd /tmp/; tar czf tvpc-parambackup.tar.gz parambackup.txt params.meta"
+             → backup archive path not sanitized; tar path injection via $TMPDIR.
+
+        2. Unauthenticated backup restore (.restore_backup CGI, operator-level)
+           Endpoint: /people-counter/.restore_backup (operator)
+           Restores from /tmp/backup/ including:
+             "cp /tmp/backup/licbackup.xml /usr/local/packages/tvpc/lic.xml"  — license override
+             "cp /tmp/backup/pems/*.pem /usr/local/packages/tvpc/localdata"   — cert injection
+           Attacker-supplied .tar.gz archive → unpack to /tmp/backup/ → overwrite license + TLS certs.
+           Chain: operator access → inject malicious backup → license bypass + cert swap.
+
+        3. Master/slave sync on TCP 4066 (unauthenticated peer sync)
+           Counter0SlavePort/Counter0MasterPort default: 4066 (not TLS).
+           "check-slave-auth" string present but slave peering uses shared connection_key.json.
+           "DPID: duplicate peer identity - disconnecting peer" → peer identity via DPID, not cryptographic.
+           Counter0SlaveAddress: attacker-controlled string; points tvpc at rogue master.
+           Attack: MITM the 4066 channel → inject false people-count data.
+
+        4. Event listener injection on TCP 23456
+           Counter0EventListenerPort: 23456 (default)
+           Counter0EventListenerMessage: "passage"
+           Network-accessible; injects passage events into the counter logic from any host.
+           No authentication observed in param.conf — open by default on the camera LAN.
+
+        5. API key generation weakness
+           Charset: ABCDEFGHJKLMNPQRSTUVWXYZ23456789 (Crockford base32, 32 chars)
+           CreateKeys function generates viewer/operator/admin api_keys stored in axparameter.
+           Key length unknown from strings alone; charset suggests 5 bits/char.
+           Keys served in connection_key.json — check file permissions.
+
+        6. Privacy anonymization bind mount (privilege escalation surface)
+           modules/anon-gui/anon/privacy.sh: mount --bind $OVERRIDE_FOLDER $EVENT_FOLDER
+           Installs at operator/admin level; bind mounts attacker-controlled dir over
+           /etc/actionengine/user/1/ — overwrites Axis action engine event handlers.
+           If $OVERRIDE_FOLDER is user-controlled input, arbitrary filesystem bind mount.
+
+        7. Occupancy Estimator alias (hidden endpoint)
+           apache.conf rewrites /occupancy-estimator/ → /people-counter/
+           Both sets of CGI endpoints exist at viewer/operator/admin levels.
+           RewriteCond checks /tmp/tvpc-web-running — if deleted, redirect to request-failure.html
+           with ?redirector= param (open redirect surface).
+
+        CGI access:
+          viewer:    /people-counter/.api, /occupancy-estimator/.api
+          operator:  .apioperator, .restore_backup (both apps)
+          admin:     .apiadmin (both apps)
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('tvpc') or self.packages.get('AXIS_People_Counter')
+            if pd:
+                pkg_dir = str(pd)
+
+        binary = str(Path(pkg_dir) / 'tvpc') if pkg_dir else None
+
+        result = {
+            'binary': binary,
+            'app_id': 211490,
+            'app_name': 'AXIS People Counter',
+            'binary_name': 'tvpc',
+            'arch': 'aarch64 ELF stripped',
+            'bundled_binaries': ['curl (unstripped, debug info, OpenSSL 1.1.x)', 'libcurl.so.4', 'libjson.so.0'],
+            'sync_ports': {'master_slave': 4066, 'event_listener': 23456},
+            'libs': [
+                'libparam.so.1', 'libevent.so.0', 'libnet_http.so.0', 'libglib-2.0.so.0',
+                'libaxevent.so.1', 'libaxhttp.so.1', 'libaxparameter.so.1',
+                'libvdostream.so.1', 'libcurl.so.4', 'libjson.so.0', 'liblicensekey.so.1',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'PC-1',
+                    'title': 'Shell injection via VAPIX curl command format strings',
+                    'mechanism': 'popen() with --user %s:%s; user/password/URL from axparameter store',
+                    'cgi': 'config write via .apioperator (operator)',
+                    'impact': 'RCE as ACAP process user; pivot to camera root',
+                    'severity': 'CRITICAL',
+                    'exploit': 'Set Camera0SlaveAddress to IP containing shell metacharacters',
+                },
+                {
+                    'id': 'PC-2',
+                    'title': 'Backup restore: license override + cert injection via .restore_backup',
+                    'cgi': '/people-counter/.restore_backup (operator)',
+                    'mechanism': (
+                        'Restore unpacks /tmp/backup/; copies licbackup.xml → lic.xml, '
+                        'pems/*.pem → localdata/; attacker controls archive content'
+                    ),
+                    'impact': 'License bypass (lic.xml swap) + TLS cert injection; auth bypass chain',
+                    'severity': 'HIGH',
+                },
+                {
+                    'id': 'PC-3',
+                    'title': 'Unauthenticated people-count injection via TCP 23456',
+                    'mechanism': 'Counter0EventListenerPort 23456 accepts "passage" messages from any LAN host',
+                    'impact': 'Spoof occupancy/people-count data; trigger access control decisions',
+                    'severity': 'HIGH',
+                    'exploit': 'echo "passage" | nc <camera-ip> 23456',
+                },
+                {
+                    'id': 'PC-4',
+                    'title': 'Master/slave sync MITM on TCP 4066',
+                    'mechanism': 'Unencrypted peer sync; DPID-based identity; no cryptographic challenge',
+                    'impact': 'Inject false counts to slave cameras; corrupt occupancy analytics',
+                    'severity': 'MEDIUM',
+                },
+                {
+                    'id': 'PC-5',
+                    'title': 'Privacy anonymization bind mount over action engine directory',
+                    'mechanism': 'privacy.sh mount --bind $OVERRIDE_FOLDER /etc/actionengine/user/1/',
+                    'impact': 'Overwrite Axis event handlers; disable or redirect camera event actions',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Operator/admin level; triggered by anon mode toggle',
+                },
+                {
+                    'id': 'PC-6',
+                    'title': 'Open redirect in request-failure.html fallback',
+                    'mechanism': 'apache.conf redirects to /request-failure.html?redirector=$4 when tvpc not running',
+                    'impact': 'Phishing redirect from camera hostname; admin credential harvest',
+                    'severity': 'LOW',
+                },
+            ],
+            'api_key_charset': 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789 (Crockford base32, ~5 bits/char)',
+            'key_files': ['connection_key.json', 'localdata/pems/*.pem', 'lic.xml', 'cacert.pem'],
+            'sql_surface': 'SQLite backend; "Error when preparing to send data to SQL" in binary',
+            'license_gate': 'liblicensekey.so.1 + lic.xml backup/restore chain',
+        }
+
+        if pkg_dir and Path(pkg_dir).exists():
+            result['manifest'] = self._read_manifest(Path(pkg_dir))
+            if binary and Path(binary).exists():
+                strs = _strings(binary, min_len=5)
+                result['shell_cmd_confirmed'] = any('--anyauth' in s and 'tvpc/curl' in s for s in strs)
+                result['restore_backup_confirmed'] = any('licbackup.xml' in s for s in strs)
+                result['event_listener_confirmed'] = any('23456' in s for s in strs)
+                result['slave_sync_confirmed'] = any('check-slave-auth' in s for s in strs)
+                result['api_key_gen_confirmed'] = any('CreateKeys' in s for s in strs)
+
+        return result
+
     def facedetector_surface(self) -> dict:
         """
         facedetector aarch64 ELF attack surface.
@@ -809,6 +965,8 @@ def main():
     parser.add_argument('--barcode', action='store_true', help='BarcodeReader VAPIX attack surface')
     parser.add_argument('--facedetector', action='store_true', help='facedetector CGI attack surface')
     parser.add_argument('--lpv', action='store_true', help='License Plate Verifier (fflprapp) attack surface')
+    parser.add_argument('--people-counter', action='store_true', dest='people_counter',
+                        help='People Counter (tvpc) attack surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -833,6 +991,9 @@ def main():
 
     if args.all or args.lpv:
         results['lpv'] = analyzer.lpv_surface()
+
+    if args.all or args.people_counter:
+        results['people_counter'] = analyzer.people_counter_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
