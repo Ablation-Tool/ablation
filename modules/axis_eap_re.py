@@ -415,38 +415,122 @@ class AxisEAPAnalyzer:
 
     def barcode_vapix_surface(self) -> dict:
         """
-        BarcodeReader ARM32 ELF attack surface.
+        AXIS Barcode Reader (BarcodeReader) attack surface — appId 413766.
 
-        Key observations:
-          - http://127.0.0.12/ loopback VAPIX calls (Axis camera internal API)
-          - VAPIX service account token via com.axis.HTTPConf1.VAPIXServiceAccounts1
-          - libaxhttp.so: HTTP handler framework (ax_http_handler_new)
-          - libaxevent.so: event system (ax_event_key_value_set_*)
-          - libaxparameter.so: persistent param store (ax_parameter_get/register_callback)
-          - libvdostream.so: video frame access
-          - liblicensekey.so: same license gate as SIP UCS
-          - OpenCV 3.4.7 embedded (binary converter alignment gap CVE note in strings)
+        Available as ARM32 (armhf, v1.3.2, SHA e1a4ee) and aarch64 (v1.3.2, SHA ba161d).
+        Both binaries carry identical functionality; arch is the only difference.
+
+        Key findings:
+
+        1. NBIX agent / PACS door control (physical access security chain)
+           The barcode reader sends scanned barcodes to the NBIX agent for door controller
+           integration. JSON D-Bus calls confirmed in binary:
+             {"axtdc:GetDoorList":{}} — enumerate all doors on the camera
+             {"axtid:GetIdPointList":{}} — enumerate all ID points
+             {"axtid:GetIdPointConfigurationList":{}} — get ID point config
+             {"axtid:IndicateRemoteActivities":{"Token":"%s","Description":"%s",...}}
+           A barcode value that matches an allowed token triggers door unlock via
+           axtid:IndicateRemoteActivities. No server-side token validation visible in binary —
+           the camera trusts the barcode scanner's reported value.
+           Attack: craft a barcode value that matches a valid token pattern to grant physical access.
+
+        2. ignoreCert=1 default in param.conf
+           Default param: ignoreCert="1" (type hidden:int:min=0;max=1)
+           When enabled, TLS certificate validation is suppressed on all libcurl calls.
+           Combined with the VAPIX service account (see #3), this enables MITM of all
+           cloud/NBIX/PACS HTTP traffic from the barcode reader.
+
+        3. VAPIX service account token via D-Bus
+           Accesses com.axis.HTTPConf1.VAPIXServiceAccounts1 via D-Bus to obtain a
+           VAPIX service account token. Token used to authenticate HTTP calls to
+           http://127.0.0.12/%s (loopback VAPIX). If the camera's D-Bus session is
+           accessible to other ACAP packages, token can be sniffed.
+
+        4. OpenCV 3.4.7 embedded (ARM32 binary)
+           Build string in binary confirms GCC 13.3.0 with -fstack-protector-strong and
+           _FORTIFY_SOURCE=2. OpenCV 3.4.7 alignment gap note present (CVE surface).
+
+        5. PacsConfig / PacsConfigv1 JSON axparameter
+           Both are stored as JSON strings in axparameter. Content not validated in binary.
+           If PacsConfig is writable (operator-level), injecting malformed JSON into PACS
+           config may affect door control behavior.
+
+        CGI: /pacsconfig (viewer-level — admin read-only in cgi.conf)
         """
         pkg_dir = self.packages.get('BarcodeReader')
         binary = str(pkg_dir / 'BarcodeReader') if pkg_dir else None
 
         result = {
             'binary': binary,
-            'arch': 'ARM32 EABI5 (armhf)',
-            'stripped': True,
-            'loopback_vapix': 'http://127.0.0.12/%s — internal VAPIX endpoint pattern',
-            'vapix_service_account': 'com.axis.HTTPConf1.VAPIXServiceAccounts1 — token-based auth to camera API',
-            'event_system': 'ax_event_key_value_set_* — publishes barcode scan events to ACAP event bus',
-            'parameter_store': 'ax_parameter_get/register_callback — reads/watches ACAP params (/usr/share/acap-param/)',
-            'opencv_version': '3.4.7 (embedded; binary converter alignment gap note present)',
-            'cgi_handler': 'libaxhttp.so via ax_http_handler_new — HTTP CGI endpoint',
-            'license_gate': 'liblicensekey.so.1 — same bypass vectors as SipThirdPartyIntegration',
-            'attack_paths': [
-                'CGI param injection via ax_http_handler: barcode data reflected in event JSON template',
-                'VAPIX service account token exposure: token passed to http://127.0.0.12/ in plaintext (loopback)',
-                'License bypass: LD_LIBRARY_PATH / licensekey_path (same as SIP UCS)',
-                'OpenCV 3.4.7: check NVD for post-3.4.7 CVEs applicable to barcode decode path',
+            'app_id': 413766,
+            'arch_variants': {
+                'armhf': 'ARM32 EABI5 armv7hf, SHA e1a4ee, v1.3.2, stripped',
+                'aarch64': 'ARM64 aarch64, SHA ba161d, v1.3.2, stripped',
+            },
+            'cgi': '/pacsconfig (viewer level — cgi.conf: "viewer /pacsconfig")',
+            'libs': [
+                'libstatuscache.so.1', 'libaxevent.so.1', 'libaxparameter.so.1',
+                'libaxhttp.so.1', 'libcurl.so.4', 'libjansson.so.4',
+                'libvdostream.so.1', 'liblicensekey.so.1',
             ],
+            'params': {
+                'ignoreCert': '1 (DEFAULT) — TLS cert validation disabled for all libcurl calls',
+                'BarcodeType': '2 (default)',
+                'PacsConfig': '{} (JSON string — writable at operator level)',
+                'PacsConfigv1': '{} (JSON string — writable)',
+                'useAgent': '0 — NBIX agent mode',
+                'BarcodeFormats': 'QRCode (default)',
+                'HttpsEnforced': '1',
+            },
+            'nbix_pacs': {
+                'dbus_calls': [
+                    '{"axtdc:GetDoorList":{}}',
+                    '{"axtid:GetIdPointList":{}}',
+                    '{"axtid:GetIdPointConfigurationList":{}}',
+                    '{"axtid:IndicateRemoteActivities":{"Token":"%s","Description":"%s","Activities":[...]}}',
+                ],
+                'note': 'Barcode value maps to Token in IndicateRemoteActivities — no visible crypto validation in binary',
+            },
+            'whitelist_codes': '18 barcode format codes (AIM symbology IDs: 706/71D/770/779/7E6/976/7DF/9C1/95A.x/9CA.x/980/A25.x/A66.2)',
+            'attack_paths': [
+                {
+                    'id': 'BR-1',
+                    'title': 'Physical access bypass via barcode token spoofing',
+                    'mechanism': (
+                        'Craft a barcode value matching a valid NBIX token. '
+                        'Scanner calls IndicateRemoteActivities with attacker-controlled Token string. '
+                        'No server-side crypto validation visible in binary — trust is based on barcode value only.'
+                    ),
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Physical access to barcode scanner camera field of view',
+                },
+                {
+                    'id': 'BR-2',
+                    'title': 'MITM via ignoreCert=1 default',
+                    'mechanism': (
+                        'Default param ignoreCert="1" disables TLS verification on all libcurl calls. '
+                        'Position attacker between barcode reader and PACS/NBIX backend to intercept '
+                        'and modify access control decisions.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Network position between camera and PACS server',
+                },
+                {
+                    'id': 'BR-3',
+                    'title': 'PacsConfig JSON injection',
+                    'mechanism': 'PacsConfig axparameter is a raw JSON string; operator-level write → malformed JSON in PACS config',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Operator-level camera auth',
+                },
+                {
+                    'id': 'BR-4',
+                    'title': 'VAPIX service account token leak',
+                    'mechanism': 'Token obtained from com.axis.HTTPConf1.VAPIXServiceAccounts1 D-Bus; used for loopback VAPIX calls; sniffable by co-resident ACAP',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Another ACAP installed on the same camera',
+                },
+            ],
+            'license_gate': 'liblicensekey.so.1 — same bypass vectors as SipThirdPartyIntegration',
             'files': {},
         }
 
@@ -1265,6 +1349,29 @@ class AxisEAPAnalyzer:
                 'file': 'anon/filter_events.sh',
                 'vector': 'rm $F unquoted find output — glob/word-split on rm path',
             },
+            'eap_wrapper_binary_re': {
+                'binary': 'a3dpc (MIPS32 mipsisa32r2el, not stripped, debug info)',
+                'version': '1.8.3 (package.conf)',
+                'functions': [
+                    'download_task', 'download_view', 'install_task', 'install_view',
+                    'purge_task', 'purge_view', 'manifest_load_package', 'manifest_check_blacklist',
+                    'set_exposure_params', 'create_worker', 'pipe_to_log', 'pages_to_json',
+                    'set_log_level', 'enable_debug',
+                ],
+                'exec_pattern': (
+                    '"Executing \'%s\'" — g_spawn_async_with_pipes used for subprocess execution. '
+                    'Combined with download_task, this creates an unzip/install subprocess chain '
+                    'for downloaded ACAP packages. If download URL (DOWNLOAD_URL) accepts '
+                    'user-supplied value, attacker-controlled package path flows into g_spawn_async.'
+                ),
+                'curl_flags': 'curl --fail --connect-timeout 10 --insecure — TLS not verified during package download',
+                'download_url_default': 'https://www.axis.com/r/ — redirector; overridable via DOWNLOAD_URL param',
+                'proxy_url_leak': '"GOT proxy_url: %s" — proxy URL logged at debug level',
+                'postinst_path_manipulation': (
+                    'postinst.sh: parhandclient --nocgi set root.Network.Bonjour.FriendlyName with camera '
+                    'serial/product name interpolated without quoting — potential injection if names contain special chars'
+                ),
+            },
         }
         return result
 
@@ -1439,38 +1546,100 @@ class AxisEAPAnalyzer:
 
     def facedetector_surface(self) -> dict:
         """
-        facedetector aarch64 ELF attack surface.
+        AXIS Face Detector attack surface — appId 412581.
 
-        Uses protobuf + CGI handler pattern. Key findings:
-          - libvideo-object-detection-subscriber.so.0: video analytics subscriber
-          - libbbox.so.1: bounding box library
-          - CGI methods: GetConfig, SetConfig, SendAlarmEvent, GetSupportedVersions,
-                         GetConfigurationCapabilities
-          - sendAlarmEvent params decoded from protobuf — malformed pb may crash
-          - Face detection event published via ax_event_key_value_set_*
+        Three distinct binary generations present on disk:
+
+        v2.1.2 / v2.1.3 (aarch64, stripped):
+          SHA identical — packaging bump only, same binary.
+          Uses liblarod (ARTPEC ML accelerator), libvdostream, no liblicensekey.
+          CGI: administrator /control.cgi
+
+        v1.2.2 (6) (ARM32 armhf, stripped):
+          Old generation — uses libvideo-object-detection-subscriber.so.0 (D-Bus
+          VideoObjectDetection subscriber, no liblarod). libvdostream absent.
+          CGI: administrator /control.cgi
+
+        v1.2.2 (S5L) (aarch64, stripped):
+          Intermediate generation — uses liblarod (ARTPEC-5/6+), libyuv.so.1 bundled.
+          Models: ssdlite_mobilenet_v3_small_320x320_oidface-alpha.larod +
+                  ssdlite_mobilenet_v3_small_320x320_oidface-rot90-alpha.larod
+          CGI: administrator /control.cgi
+
+        Cross-version attack surface:
+          1. SetConfig CGI: "A mandatory parameter is missing" error path — param injection
+          2. SendAlarmEvent CGI: protobuf decode without explicit size guard — fuzz target
+          3. v1.2.2 VideoObjectDetection D-Bus subscriber: older D-Bus API without larod;
+             malformed protobuf from video analytics may crash subscriber thread
+          4. v1.2.2 uses libvideo-object-detection-subscriber.so.0 — external lib;
+             if that lib has bugs, old firmware is the attack surface
+          5. No liblicensekey in any variant — not license-gated; runs unattended
         """
         pkg_dir = self.packages.get('facedetector')
         binary = str(pkg_dir / 'facedetector') if pkg_dir else None
 
         result = {
             'binary': binary,
-            'arch': 'aarch64',
-            'stripped': True,
+            'app_id': 412581,
+            'cgi': 'administrator /control.cgi (admin-only)',
             'cgi_methods': [
                 'GetConfig', 'SetConfig', 'SendAlarmEvent',
                 'GetSupportedVersions', 'GetConfigurationCapabilities',
             ],
-            'protobuf_decode': 'sendAlarmEvent params decoded via protobuf; malformed input path exists',
-            'libs': [
-                'libvideo-object-detection-subscriber.so.0',
-                'libaxhttp.so.1', 'libaxevent.so.1', 'libaxparameter.so.1',
-                'libbbox.so.1', 'libvdostream.so.1', 'libjansson.so.4',
-            ],
+            'versions': {
+                'v2.1.2_v2.1.3': {
+                    'arch': 'aarch64',
+                    'sha_note': 'SHA identical between 2.1.2 and 2.1.3 — packaging bump only',
+                    'libs': ['liblarod.so.1', 'libyuv.so.1', 'libvdostream.so.1',
+                             'libaxhttp.so.1', 'libaxevent.so.1', 'libaxparameter.so.1', 'libjansson.so.4'],
+                    'no_license_gate': True,
+                },
+                'v1.2.2_6_armhf': {
+                    'arch': 'ARM32 armhf',
+                    'libs': ['libvideo-object-detection-subscriber.so.0', 'libcairo.so.2',
+                             'libaxoverlay.so', 'libaxhttp.so.1', 'libaxevent.so.1',
+                             'libaxparameter.so.1', 'libjansson.so.4'],
+                    'note': 'Old generation — D-Bus VideoObjectDetection subscriber; no liblarod',
+                },
+                'v1.2.2_s5l_aarch64': {
+                    'arch': 'aarch64',
+                    'libs': ['libyuv.so.1 (bundled)', 'liblarod.so.1', 'libaxhttp.so.1',
+                             'libaxevent.so.1', 'libaxparameter.so.1', 'libvdostream.so.1', 'libjansson.so.4'],
+                    'models': [
+                        'ssdlite_mobilenet_v3_small_320x320_oidface-alpha.larod',
+                        'ssdlite_mobilenet_v3_small_320x320_oidface-rot90-alpha.larod',
+                    ],
+                    'note': 'ARTPEC-5/S5L intermediate — larod-based, libyuv bundled',
+                },
+            },
             'attack_paths': [
-                'SendAlarmEvent CGI: protobuf decode without explicit size guard — fuzz with malformed proto',
-                'SetConfig CGI: "A mandatory parameter is missing" error path — parameter injection surface',
-                'GetConfigurationCapabilities: "Cannot insert the parameters capabilities" — internal state exposure',
-                'No liblicensekey in imports — not license-gated; runs unattended',
+                {
+                    'id': 'FD-1',
+                    'title': 'SendAlarmEvent protobuf fuzz — crash/RCE via malformed proto',
+                    'cgi': 'administrator /control.cgi (SendAlarmEvent method)',
+                    'mechanism': 'Protobuf decode without explicit size guard in CGI handler; malformed proto field may overflow',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'FD-2',
+                    'title': 'SetConfig mandatory param injection',
+                    'mechanism': '"A mandatory parameter is missing" error path — parameter reflection, injection surface',
+                    'severity': 'LOW',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'FD-3',
+                    'title': 'v1.2.2 VideoObjectDetection D-Bus subscriber — legacy API fuzz',
+                    'mechanism': (
+                        'libvideo-object-detection-subscriber.so.0 receives analytics data via D-Bus. '
+                        'Old D-Bus VideoObjectDetection API predates larod safety improvements. '
+                        'Malformed analytics event from co-resident app may crash facedetector.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'affected': 'v1.2.2 ARM32 (armhf) only',
+                    'prerequisite': 'Another ACAP app on same camera that can send VideoObjectDetection events',
+                },
             ],
             'files': {},
         }
@@ -1675,6 +1844,257 @@ class AxisEAPAnalyzer:
             ],
         }
 
+    def ucs_sip_surface(self) -> dict:
+        """
+        AXIS Client for Unified Communication Systems (SipThirdPartyIntegration) surface.
+
+        appId: 414930  binary: SipThirdPartyIntegration  version: 1.0.2
+        Available as: aarch64 (SHA 0fa6c8) + armhf (SHA 8b2941) — same source, two arches.
+        NOT STRIPPED — full debug info, DWARF symbols.
+
+        This binary is almost entirely a license check + sipd availability sentinel.
+        The actual SIP functionality lives in sipd (Axis daemon, not in this package).
+
+        Key findings:
+
+        1. sipd dependency gate (post_install.sh)
+           Post-install: `test -f /usr/bin/sipd || exit 77`
+           Exit 77 = abort installation. ACAP silently non-functional if sipd absent.
+           Exploitable: spoofing /usr/bin/sipd (zero-byte or minimal file) satisfies the
+           check without starting a real SIP daemon. Camera appears to have UCS installed
+           but makes no SIP calls — useful for capability spoofing in mixed-camera deployments.
+
+        2. sipd integration path: /etc/dynamic/sipd/acaps/third-party-integration-enabled
+           Binary creates/removes this file to signal sipd that third-party integration is
+           active. Writable by ACAP process user; if another ACAP can write this path,
+           it can enable SIP integration without the licensed ACAP being installed.
+
+        3. LD_PRELOAD / /etc/ld.so.preload detection
+           Binary explicitly checks LD_PRELOAD and /etc/ld.so.preload for library injection.
+           Functions: test_ld_preload, test_ld_so_preload, test_ld_so_preload.constprop.0
+           dir_contains_overriding_lib — scans dirs for overriding .so files.
+           This is the liblicensekey.so bypass detection code running at startup.
+           Implication: dlopen-based bypass is the viable path (not LD_PRELOAD injection).
+
+        4. dlopen chain for liblicensekey.so bypass
+           dlopen/dlsym from GLIBC_2.34 present. Binary dynamically loads:
+             liblicensekey.so / liblicensekey.so.1 — the license verification library
+             libparhand.so — parameter handler
+             libcrypto.so — OpenSSL crypto
+           Bypass: substitute liblicensekey.so in dlopen search path (RUNPATH / local dir)
+           with a stub that exports licensekey_verify/licensekey_verify_ex returning success.
+
+        5. licensekey_dyn_get_exp_date — dynamic expiry check
+           Calls both licensekey_verify and licensekey_dyn_verify_ex; both must pass.
+           Static (compiled-in) and dynamic (runtime) license checks are separate.
+        """
+        result = {
+            'app_id': 414930,
+            'app_name': 'AXIS Client for Unified Communication Systems',
+            'binary_name': 'SipThirdPartyIntegration',
+            'version': '1.0.2',
+            'arch_variants': {
+                'aarch64': 'SHA 0fa6c8, GCC 13.2.0 (Yocto SDK sysroots/aarch64)',
+                'armhf': 'SHA 8b2941, GCC 9.3.0 (Ubuntu 9.3.0-17ubuntu1~20.04)',
+            },
+            'stripped': False,
+            'debug_info': True,
+            'sipd_dependency': '/usr/bin/sipd — test in post_install.sh; exit 77 if absent',
+            'integration_flag_path': '/etc/dynamic/sipd/acaps/third-party-integration-enabled',
+            'ld_preload_detection': [
+                'test_ld_preload', 'test_ld_so_preload', 'dir_contains_overriding_lib',
+            ],
+            'libs': [
+                'libgio-2.0.so.0', 'libgobject-2.0.so.0', 'libglib-2.0.so.0',
+                'liblicensekey.so.1',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'UCS-1',
+                    'title': 'sipd absence spoofing — capability stub bypass',
+                    'mechanism': (
+                        'Create minimal /usr/bin/sipd (empty file, chmod +x). '
+                        'Satisfies post_install.sh check (exit 77 avoided). '
+                        'ACAP installed but sipd functionality absent — presence-of-capability spoofing.'
+                    ),
+                    'severity': 'LOW',
+                    'prerequisite': 'Write access to /usr/bin/ (requires elevated access or another vuln)',
+                },
+                {
+                    'id': 'UCS-2',
+                    'title': 'third-party-integration-enabled flag manipulation',
+                    'mechanism': (
+                        'Write /etc/dynamic/sipd/acaps/third-party-integration-enabled without valid license. '
+                        'Signals sipd that integration is active; may enable SIP features without licensed ACAP.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'ACAP process user write access to /etc/dynamic/sipd/acaps/',
+                },
+                {
+                    'id': 'UCS-3',
+                    'title': 'liblicensekey.so stub bypass via dlopen path control',
+                    'mechanism': (
+                        'Place stub liblicensekey.so (exporting licensekey_verify=true) in dlopen '
+                        'search path ahead of system library. Binary detects LD_PRELOAD but not '
+                        'RUNPATH manipulation at package install dir.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Write access to /usr/local/packages/SipThirdPartyIntegration/ or RUNPATH control',
+                },
+            ],
+        }
+        return result
+
+    def people_counter_s5l_surface(self) -> dict:
+        """
+        AXIS People Counter 4.0.0 (aarch64 tvpc, ARTPEC-5/S5L variant) attack surface.
+
+        appId: 211490  binary: tvpc  version: 4.0.0  arch: aarch64 stripped
+        Same binary name as 4.6.110 but older version; this is the S5L (ARTPEC-5) variant.
+
+        Key differences from 4.6.110:
+          - Version 4.0.0 (4.6.110 added SlavePass axparam, TrueviewVAPIX account removal)
+          - Counter0EventListenerPort=23456 confirmed in param.conf (default)
+          - postinst.sh: chmod 755 for group viewer on most files
+          - Backup/restore: same tarslip surface (cd /tmp/; tar czf tvpc-parambackup.tar.gz ...)
+          - TrueviewVAPIX account removal NOT present in 4.0.0 postinst — implies weak default
+            VAPIX account present and active on 4.0.0 cameras
+          - Apache proxy: /stereo → 127.0.0.1:50000 (same vision stereo camera proxy)
+          - NTP manipulation: postinst.sh sets up custom NTP server; NTPD_ARGS=-r -t 60
+          - Old bundled curl binary (armhf): libcurl.so.4 linked statically
+
+        Credential note:
+          - TrueviewVAPIX account removed in 4.6.110 postinst but NOT in 4.0.0
+          - Any 4.0.0 deployment may still have the TrueviewVAPIX VAPIX account with default/weak password
+          - Chain: find TrueviewVAPIX user → default password → VAPIX admin access → camera root
+        """
+        result = {
+            'app_id': 211490,
+            'app_name': 'AXIS People Counter',
+            'binary_name': 'tvpc',
+            'version': '4.0.0',
+            'arch': 'aarch64 ELF stripped',
+            'libs': [
+                'libcapture.so.1', 'libparam.so.1', 'libevent.so.0', 'libnet_http.so.0',
+                'libaxevent.so.1', 'libaxhttp.so.1', 'libaxparameter.so.1',
+                'libvdostream.so.1', 'libcurl.so.4', 'libjson.so.0', 'liblicensekey.so.1',
+            ],
+            'tcp_port': 23456,
+            'bundled': ['curl (armhf binary)', 'apache.conf', 'install_stream_profile.sh'],
+            'key_diff_from_4610': {
+                'trueview_vapix_account': (
+                    'NOT removed in 4.0.0 postinst.sh. 4.6.110 explicitly removes TrueviewVAPIX account. '
+                    '4.0.0 cameras may retain this account with default/weak VAPIX password.'
+                ),
+                'slave_pass_axparam': 'SlavePass axparameter NOT confirmed in 4.0.0 param.conf',
+                'ntp_setup': 'postinst.sh installs custom NTP (NTPD_ARGS=-r -t 60); may affect time sync for other services',
+            },
+            'attack_paths': [
+                {
+                    'id': 'PC40-1',
+                    'title': 'TrueviewVAPIX default VAPIX account on 4.0.0 cameras',
+                    'mechanism': (
+                        'TrueviewVAPIX VAPIX account exists on 4.0.0 cameras (not removed until 4.6.110). '
+                        'Default or guessable password → VAPIX admin-level access → full camera control.'
+                    ),
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Camera network access; 4.0.0 firmware',
+                },
+                {
+                    'id': 'PC40-2',
+                    'title': 'TCP 23456 unauth injection (inherited from 4.6.110)',
+                    'mechanism': 'Counter0EventListenerPort=23456 confirmed; same raw TCP inject surface as 4.6.110',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Network access to port 23456',
+                },
+                {
+                    'id': 'PC40-3',
+                    'title': 'Backup tarslip (inherited from 4.6.110)',
+                    'mechanism': 'cd /tmp/; tar czf tvpc-parambackup.tar.gz ... — same restore path traversal class',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level auth for backup restore trigger',
+                },
+            ],
+        }
+        return result
+
+    def sbplayer_mips_surface(self) -> dict:
+        """
+        AXIS Player for Soundtrack Business (sbplayer) MIPS32 v1.5.0 surface.
+
+        appId: 413325  binary: sbplayer  version: 1.5.0  arch: mipsisa32r2el NOT STRIPPED
+        This is the old MIPS32 variant (pre-aarch64/armhf). Newer variants (1.7.1) exist
+        as separate aarch64 and armhf EAPs (covered in sbplayer_surface()).
+
+        Key findings:
+
+        1. UpdateURL axparameter — SSRF / MITM via unvalidated server-supplied checksum
+           param.conf: UpdateURL="" type="hidden:string" (empty by default)
+           Binary confirms: checksum validation is OPTIONAL — if the server response omits
+           the checksum header, the binary logs a warning and continues loading:
+             "checksum missing from server response, so can't verify lib..."
+           If UpdateURL is set to an attacker-controlled server, the binary will download
+           and load a shared library WITHOUT checksum verification, then call dlopen().
+           This is a supply-chain style RCE at the ACAP process user level.
+
+        2. downloader_* + curl_request + dlopen chain (confirmed from nm symbols)
+           Full function chain: get_update_url → curl_request → checksum verify (optional) →
+           downloader_force_check_now → dlopen (load library). All in nm symbol table.
+
+        3. pairing_* functions (Soundtrack Business pairing protocol)
+           pairing_get_code, pairing_init, pairing_cleanup — pairing code fetched from
+           Soundtrack Business cloud. Authorization:Basic %s present — credentials in memory.
+
+        4. audio_conf_api — ALSA audio pipeline access
+           syb_handler_load/unload/play/pause/skip — audio control via D-Bus at com.axis.AudioConf.
+           Cannot load controls_api / troubles_api — dynamic library loading at runtime.
+
+        5. watchdog pattern
+           watchdog_reset called periodically; if UpdateURL points to a server that hangs,
+           watchdog may not reset, causing ACAP restart loop.
+        """
+        result = {
+            'app_id': 413325,
+            'app_name': 'Player for Soundtrack Business',
+            'binary_name': 'sbplayer',
+            'version': '1.5.0',
+            'arch': 'MIPS32 rel2 mipsisa32r2el NOT STRIPPED',
+            'update_url_param': 'UpdateURL="" — empty default; set via axparameter',
+            'update_interval': 'UpdateIntervalSeconds=900 (15 min)',
+            'pairing_interval': 'PairingIntervalSeconds=30',
+            'checksum_behavior': {
+                'present': 'Hard fail — download rejected',
+                'absent': 'WARNING only — library loaded anyway ("checksum missing from server response, so can\'t verify lib...")',
+            },
+            'attack_paths': [
+                {
+                    'id': 'SBP-1',
+                    'title': 'UpdateURL SSRF → malicious shared library load (RCE)',
+                    'mechanism': (
+                        'Set UpdateURL axparameter to attacker server. Server responds with malicious .so '
+                        'and OMITS checksum header. Binary warns but proceeds to dlopen() the library. '
+                        'Library runs as ACAP process user (acap-sbplayer).'
+                    ),
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Operator-level write to UpdateURL axparameter (config_o.cgi or api_o.cgi)',
+                    'note': 'This is a stronger variant of the checksum-bypass finding from sbplayer_surface()',
+                },
+                {
+                    'id': 'SBP-2',
+                    'title': 'Pairing code MITM — Soundtrack Business auth bypass',
+                    'mechanism': (
+                        'Authorization:Basic in memory during pairing handshake. '
+                        'ignoreCert-equivalent behavior unclear — fuzz pairing protocol for bypass.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Network MITM on Soundtrack Business cloud traffic',
+                },
+            ],
+            'storage_api': 'ax_storage_setup_async / ax_storage_get_path — writes audio to external storage',
+            'dbus_path': 'com.axis.AudioConf.Application',
+        }
+        return result
+
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _read_manifest(self, pkg_dir: Path) -> dict:
@@ -1811,6 +2231,12 @@ def main():
                         help='StoreDataManager (Cognimatics TrueView) server app RE surface')
     parser.add_argument('--digital-autotrack', action='store_true', dest='digital_autotrack',
                         help='AXIS Digital Auto Tracking encrypted Lua + script.sh RE surface')
+    parser.add_argument('--ucs', action='store_true', dest='ucs',
+                        help='UCS/SipThirdPartyIntegration sipd+licensekey bypass surface')
+    parser.add_argument('--people-counter-s5l', action='store_true', dest='people_counter_s5l',
+                        help='People Counter 4.0.0 ARTPEC-5/S5L surface (TrueviewVAPIX account)')
+    parser.add_argument('--sbplayer-mips', action='store_true', dest='sbplayer_mips',
+                        help='sbplayer MIPS32 1.5.0 UpdateURL checksum-optional RCE surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -1862,6 +2288,15 @@ def main():
 
     if args.all or args.digital_autotrack:
         results['digital_autotrack'] = analyzer.digital_autotrack_surface()
+
+    if args.all or args.ucs:
+        results['ucs'] = analyzer.ucs_sip_surface()
+
+    if args.all or args.people_counter_s5l:
+        results['people_counter_s5l'] = analyzer.people_counter_s5l_surface()
+
+    if args.all or args.sbplayer_mips:
+        results['sbplayer_mips'] = analyzer.sbplayer_mips_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
