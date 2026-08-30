@@ -228,6 +228,59 @@ are the architectural preparation that precedes the D240 CPSEC integration.
 D35 is a code-restructuring release; D240 is where the security-layer
 changes land (CPSEC vtable integration for IPsec, ah6_input dispatch stub).
 
+--- if_tunnel_set_encap_ifl (Jac=0.9242 → 0.5515 → 0.0000 at D240) ---
+
+Gradual 3-stage rewrite across the full timeline.
+
+PRE (11.4R3.7, 0x8037bf0c): 100+ instructions. Full tunnel encap setup:
+  Protocol dispatch via indirect jump table (stride 4, table at 0x80a3:offset).
+  Flag check at IFL+0x10: andi $v0, $v0, 0x10 (flag bit 4).
+  Algorithm lookup: mul $a0, algorithm_type, stride → table_base[a0].
+
+D35 intermediate (0x80380acc, Jac=0.5515): Same structure, key changes:
+  Flag check changed: andi $v0, $v0, 4 (flag bit 2 instead of 4).
+  Algorithm stride changed to 0x9c (156 bytes per entry vs prior).
+  Jump table base relocated. Some register allocations swapped ($s2/$s3).
+
+D240 (0x802ebde8, Jac=0.0000): 5-instruction trampoline:
+  addiu $sp, -0x18
+  sw    $ra, 0x10($sp)
+  jal   0x802eb500         ; real implementation
+  move  $a3, $zero         ; NEW: 4th argument added in delay slot
+  [restore + jr $ra]
+
+The `move $a3, $zero` delay slot is the only functional addition: the
+internal function at 0x802eb500 accepts a 4th argument that 11.4/D35
+did not have. The call site zeros it out — the new parameter is likely
+a flags or context pointer defaulting to NULL/0.
+
+0x802eb500 internal analysis (D240):
+  Prologue saves $s7-$s0, $ra — 9 saved regs, complex function.
+  $s4=a0, $s5=a1, $s0=a2, $s6=(a3 & 0xff).
+
+  Liveness gate (NEW in D240):
+    lw  $v0, 0x30($s2)
+    lhu $v0, 0x96($v0)
+    beqz $v0, 0x802ebdb8   ; early-exit if IFL not up
+
+  4th arg capture:
+    andi $s6, $a3, 0xff    ; byte-masked flags; always 0 from trampoline
+    External callers: $s6=0 always. Any codepath gated on $s6!=0
+    is an internal-only feature unreachable through the public API.
+
+  Protocol type dispatch:
+    lbu  $v0, 0x28($s2)    ; type byte from IFL struct
+    addiu $v0, $v0, -6
+    sltiu $v0, $v1, 0x3e   ; in-range: [6..67]
+    jump table (0x3e entries, base 0x80aaebe0): GRE(0x2f), ESP(0x32),
+      AH(0x33), ETHERIP(0x61) have dedicated per-type handlers.
+
+  Secondary capability allowlist (0x802eb578-0x802eb764):
+    Loads global gp-0x4034 (platform tunnel capability register).
+    Chain of beq against ~50 protocol type constants. Rejection
+    routes to log call at 0x80310418 (format string + two args).
+    Out-of-range types that also fail this allowlist are rejected.
+
 Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
 

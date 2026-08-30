@@ -420,3 +420,67 @@ The functions above are implemented in:
 - `mgd` binary — management daemon, script invocation, NETCONF session handling
 
 For the MIPS kernel sweep: focus on `mgd` and `libslax` once sweep results land — functions like `jcs_execute_rpc`, `jcs_open_connection`, `slax_document_fetch` are the binary entry points for these chains.
+
+---
+
+## NETCONF Error Response Reflection (mgd)
+
+**Attack surface:** `<rpc-error>` responses from mgd reflect user-controlled fields
+back to the caller. Two fields are direct input echoes:
+
+- `<bad-element>` — copied from the offending XML element name in the user's RPC.
+  Source: mgd reads the tag name from the parsed XML node and writes it into the
+  error reply. No namespace stripping on Junos; full prefixed name is reflected.
+- `<error-path>` — config hierarchy path, partially derived from user-supplied
+  path in edit-config/get-config requests.
+
+**Injection vectors:**
+1. **XML entity injection via bad-element**: Send an RPC with element names
+   containing XML metacharacters (e.g., `<foo&bar>`, `</foo>`). If mgd constructs
+   `<bad-element>` by string concatenation rather than xmlWriter, entity injection
+   lands in the response stream. Downstream tools parsing the response without
+   sanitization get malformed XML.
+2. **XXE via error-path**: If edit-config requests with XPath-like path expressions
+   are reflected into `<error-path>` without escaping, an attacker controlling the
+   config path string could inject XML entities into operator tooling that consumes
+   the NETCONF session.
+3. **Buffer sizing in bad-element construction**: mgd likely has a fixed format
+   string for error responses. If `bad-element` content exceeds that buffer and
+   mgd uses `snprintf` with the element name length, the truncation point is a
+   crash oracle for length limits in mgd's XML output path.
+
+**RFC 6241 expected behavior (§4.3)**: `<bad-element>` MUST be a qualified name
+(NCName). Junos appears to copy the raw element name without validation.
+
+**Test approach (controlled env only):**
+```xml
+<!-- Send RPC with long element name (>256 bytes) to probe truncation -->
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <edit-config>
+    <target><candidate/></target>
+    <config>
+      <AAAAAAAAAA...256xA.../>
+    </config>
+  </edit-config>
+</rpc>
+
+<!-- XML entity injection test -->
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <edit-config>
+    <target><candidate/></target>
+    <config>
+      <configuration>
+        <system>
+          <invalid&amp;element/>
+        </system>
+      </configuration>
+    </config>
+  </edit-config>
+</rpc>
+```
+
+**Binary RE target in mgd**: Look for the function that writes `<bad-element>` to
+the NETCONF output stream. Likely calls `xmlTextWriterWriteElement` or
+`xmlOutputBufferWrite` with the element name as a `const char*` argument. The
+copy path between `xmlGetLastError()->str1` (bad element name, set by libxml2
+parser) and the NETCONF response write is the target region.
