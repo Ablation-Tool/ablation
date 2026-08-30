@@ -203,6 +203,31 @@ The mfc0/mtc0 CPU register manipulation in PRE is replaced entirely by
 the callback protocol. The D35 change matches the pattern of FreeBSD
 socket PCB UAF fixes from the 2014-2015 timeframe.
 
+--- D35 systematic trampoline refactoring ---
+
+At D35, the following functions were all converted from full implementations
+to 5-instruction trampolines (jal <internal> + restore + jr $ra):
+
+  ether_input      → ether_input_internal (0x80344a84)
+  sbdrop_locked    → 0x802bc3d8
+  sbflush_locked   → (similar internal)
+  sbrelease_locked → (similar internal)
+  netisr_dispatch  → (similar)
+
+Pattern: D35 splits public name → thin wrapper + private _internal function.
+Public name retains stable VA for callers; internal handles logic. Enables:
+  (a) hooking at the public symbol without touching the implementation
+  (b) calling the implementation from additional call sites
+  (c) locking/unlocking wrapper variants sharing the same core
+
+The Jac=0.0 score for all D35 trampoline functions reflects the total
+absence of 4-gram overlap between a 5-instruction wrapper and the original
+50-100+ instruction implementation. These are NOT security changes — they
+are the architectural preparation that precedes the D240 CPSEC integration.
+
+D35 is a code-restructuring release; D240 is where the security-layer
+changes land (CPSEC vtable integration for IPsec, ah6_input dispatch stub).
+
 Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
 
