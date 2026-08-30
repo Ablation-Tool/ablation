@@ -835,8 +835,39 @@ node name → re-escaped (`&amp;`) on output. No injection from this path.
 </rpc>
 ```
 
-**Binary RE target in mgd**: Look for the function that writes `<bad-element>` to
-the NETCONF output stream. Likely calls `xmlTextWriterWriteElement` or
-`xmlOutputBufferWrite` with the element name as a `const char*` argument. The
-copy path between `xmlGetLastError()->str1` (bad element name, set by libxml2
-parser) and the NETCONF response write is the target region.
+**Binary RE results (EVO 23.4R2.14 libengine.so.1 + libjunos-netconf.so.1):**
+
+`gram_xml_rpc_reply_open` (0x11f520):
+  Core copy: `strlcpy(context+0x1e1c8, context+0x68, 0x2000)` — copies element
+  name from received RPC into the context struct's 8KB reply buffer.
+  Buffer sizing confirmed (binary): fields at context+0x201c8 (byte) and
+  context+0x201d0 (byte) begin immediately after the 0x2000-byte buffer at
+  0x1e1c8 (seen at 0x11e836/0x11e83f via `mov byte ptr [r12+0x201c8], 0` /
+  `mov byte ptr [r12+0x201d0], 0`). strlcpy limit matches buffer exactly — NO
+  OVERFLOW. Maximum reflected length: 8191 bytes.
+  Namespace handling: before the copy, function calls strstr(element_name,
+  "xmlns="), xml_attr_named_xmlns, xml_attr_strip_xml[...] to process namespace
+  attributes on the reply element. These use the raw element name as-is.
+
+`gram_xml_report_error` (0x11f510): JMP stub → `gram_file_report_error`
+  (0x11e9a0). The file reporter allocates 8KB on the stack (`sub rsp, 0x2000`),
+  formats error context via `snprintf(buf, 0x2000, '%.*s', len, content)`,
+  then logs via dprintf-style call with limit 0x7f00. This is the LOG path, not
+  the NETCONF wire reply builder. No overflow.
+
+`js_emit_error_response` (libjunos-netconf.so.1, 0x6740):
+  Allocates 8KB stack (`sub rsp, 0x2008`); formats error details using
+  `snprintf(buf, 0x2000, '%s %s %s\n \t%s ', ...)` before logging. Error
+  field array stored in heap-allocated dynamic buffers (dynamic realloc via
+  appender at 0x7c30 — no fixed size). NO OVERFLOW.
+
+`"bad-element"` string present only in libjunos-netconf.so.1 — used in the
+  CLIENT-SIDE NETCONF response parser (0x7ce0). Server-side tag construction
+  in libengine uses runtime tag-name strings passed as function arguments;
+  no "bad-element" literal in libengine or mgd binary.
+
+**Result**: NO BUFFER OVERFLOW found on the bad-element reflection path in
+  EVO 23.4R2. The element name is reflected intact (up to 8191 bytes). The copy
+  uses strlcpy with a limit matching the destination buffer size exactly.
+  Reflection confirmed as a surface but not exploitable via overflow on this
+  binary version.
