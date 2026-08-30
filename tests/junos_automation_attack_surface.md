@@ -656,6 +656,11 @@ FINDING S3 — slax:sysctl → unbounded alloca stack overflow (slaxext.c:2108)
     net.inet.tcp.pcblist: ~10MB on a busy SRX
   `alloca(10MB)` → stack pointer past guard page → SIGSEGV → DoS.
   Secondary: sysctl read oracle — can read any sysctl accessible to mgd uid.
+  NOTE: DoS only — NOT RCE. Alloca puts buf N bytes below saved_RIP; the
+  subsequent sysctlbyname(buf, size) write cannot bridge that gap:
+    saved_RIP at entry_RSP - 8; buf at entry_RSP - fixed_frame - align(size+23, 16);
+    write covers [buf, buf+size-1], which is entirely below saved_RIP.
+  Stack smash is geometrically impossible without a separate write gadget.
 
 FINDING S4 — slaxSlaxToXpath → unbounded alloca (slaxloader.c:891)
   Same alloca class as S3. In the S1 call chain:
@@ -671,17 +676,36 @@ FINDING S4 — slaxSlaxToXpath → unbounded alloca (slaxloader.c:891)
   XPath injection is even attempted. DoS via S4 is easier to reach than XPath injection
   via S1 for any script that pipes input directly.
   Source: slaxloader.c:889-891, same binary translation unit as slaxExtEvaluate caller.
+  NOTE: DoS only — NOT RCE. Binary confirmed in EVO 23.4R2 libslax.so.3 (offset 0x2e8b0):
+    sub rsp, 0x10a8        ; fixed frame (includes slax_data_t @ [rbp-0x10c0])
+    call strlen(r12)       ; 0x2e9d1: strlen(slax_expr)
+    lea edx, [rax+1]       ; sd_len+1
+    lea rax, [rdx+0x17]
+    and rax, ~0xf          ; align to 16
+    sub rsp, rax           ; 0x2e9ed: alloca — NO bound check
+    call memcpy(rcx, r12, rdx)  ; 0x2e9fc: memcpy(buf, slax_expr, sd_len+1)
+  Same geometry as S3: alloca + memcpy(N) cannot reach saved_RIP (N bytes below).
 
-SLAX injection trigger path:
-  NETCONF RPC → mgd → operational/event script invocation → SLAX script execution
-  → libslax processes `slax:evaluate($param)` / `slax:document($param)` →
-  XPath injection / LFI / SSRF.
-  Whether shipped Junos scripts pass RPC params directly to these functions
-  requires mgd binary RE (not available in this layer).
+SLAX trigger path status — EVO 23.4R2 (confirmed by binary extraction):
+  cscript (/usr/libexec/ui/cscript) links libslax.so.3 — SLAX runtime present.
+  mgd (/usr/sbin/mgd) does NOT link libslax directly; delegates via cscript child process.
+  EVO 23.4R2 ships ZERO SLAX (.slax) scripts. All operational scripts are Python.
+  meta-acx-f-re64 layer has Python commit/op scripts; meta-ui64 has only junos.xsl (import lib).
+  CONCLUSION: S1–S4 are NOT standalone pre-auth exploits on EVO 23.4R2. They require
+    an admin-installed SLAX script that passes an RPC parameter to slax:evaluate/slax:sysctl.
+    Attack surface exists but trigger path is post-auth (requires SLAX script installation).
+  Junos Classic (FreeBSD-based, non-EVO) ships SLAX scripts — trigger path there is unconfirmed.
 
 ## Binary RE Targets (automation layer)
 
-Functions in libslax: slaxExtRegister, slaxExtEvaluate, slaxExtDocument, slaxExtSysctl
+BINARIES EXTRACTED from EVO 23.4R2 meta-ui64_Yocto_2.2_x86_64.fs squashfs:
+  mgd:          /usr/sbin/mgd     (177K, x86-64 PIE, stripped)
+  libslax.so.3: /usr/lib64/libslax.so.3 (282K, x86-64)
+  cscript:      /usr/libexec/ui/cscript (145K, x86-64 PIE, stripped)
+
+Functions in libslax: slaxExtRegister (0x2b7c0), slaxSlaxToXpath (0x2e8b0)
+  slaxExtEvaluate and slaxExtSysctl are local (non-exported) — in libslax.so.3
+  but not in the dynamic symbol table.
 Functions in mgd (closed): jcs_execute_rpc, jcs_open_connection, slax_document_fetch
 libxslt.so: xmlXPathEval (called by slaxExtEvaluate — XPath evaluation engine)
 
