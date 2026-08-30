@@ -526,14 +526,61 @@ FINDING 2 — vtable overwrite (RCE):
 
 ---
 
+## libslax source RE — slax:* extension attack surface
+
+Source: github.com/Juniper/libslax (open-source SLAX runtime).
+Registration: slaxExtRegister() at slaxext.c:3764 registers all slax:* functions.
+
+FINDING S1 — slax:evaluate → arbitrary XPath injection (slaxext.c:2862)
+  ```c
+  sexpr = slaxSlaxToXpath("slax:evaluate", 1, (const char *) str, &errors);
+  ret = xmlXPathEval((const xmlChar *) sexpr, ctxt->context);
+  ```
+  `str` = first argument, popped from XPath context stack. If a SLAX script passes
+  a NETCONF RPC parameter directly: `var $r = slax:evaluate($rpc-param);`
+  → attacker controls the XPath expression evaluated against the current document.
+  Current document during NETCONF processing = parsed running config + RPC payload.
+  XPath extraction: `//configuration/system/login/user/authentication/ssh-rsa`
+  → reads SSH keys, passwords, RADIUS secrets from running config.
+  No sandboxing between the injected expression and the config document tree.
+
+FINDING S2 — slax:document → LFI/SSRF (slaxext.c:3203)
+  ```c
+  filename = xmlXPathPopString(ctxt);   // attacker-controlled
+  input = xmlParserInputBufferCreateFilename((char *) filename, sdo.sdo_encoding);
+  ```
+  `xmlParserInputBufferCreateFilename` accepts any URI that libxml2 supports:
+  `file://`, `http://`, `ftp://`, `compress://`, etc.
+  If `filename` flows from NETCONF RPC parameter → arbitrary local file read or SSRF.
+  On Junos: `file:///var/etc/shadow`, `file:///etc/passwd`, `file:///config/juniper.conf`.
+  `http://internal-host/path` → SSRF against management-plane reachable hosts.
+  No URI scheme filtering or path restriction.
+
+FINDING S3 — slax:sysctl → unbounded alloca stack overflow (slaxext.c:2108)
+  ```c
+  size_t size = 0;
+  sysctlbyname((char *) name, NULL, &size, NULL, 0);  // kernel sets size
+  char *buf = alloca(size + 1);                        // NO BOUND CHECK
+  ```
+  `name` = sysctl variable name (attacker-controlled if from NETCONF RPC param).
+  `size` from kernel is unbounded. Large sysctl variables on an active router:
+    kern.file:           ~500KB (all open FDs)
+    net.inet.tcp.pcblist: ~10MB on a busy SRX
+  `alloca(10MB)` → stack pointer past guard page → SIGSEGV → DoS.
+  Secondary: sysctl read oracle — can read any sysctl accessible to mgd uid.
+
+SLAX injection trigger path:
+  NETCONF RPC → mgd → operational/event script invocation → SLAX script execution
+  → libslax processes `slax:evaluate($param)` / `slax:document($param)` →
+  XPath injection / LFI / SSRF.
+  Whether shipped Junos scripts pass RPC params directly to these functions
+  requires mgd binary RE (not available in this layer).
+
 ## Binary RE Targets (automation layer)
 
-The functions above are implemented in:
-- `libslax.so` — SLAX runtime, jcs/slax namespace dispatch
-- `libxslt.so` — XPath evaluator (slax:evaluate ultimately calls xmlXPathEval)
-- `mgd` binary — management daemon, script invocation, NETCONF session handling
-
-For the MIPS kernel sweep: focus on `mgd` and `libslax` once sweep results land — functions like `jcs_execute_rpc`, `jcs_open_connection`, `slax_document_fetch` are the binary entry points for these chains.
+Functions in libslax: slaxExtRegister, slaxExtEvaluate, slaxExtDocument, slaxExtSysctl
+Functions in mgd (closed): jcs_execute_rpc, jcs_open_connection, slax_document_fetch
+libxslt.so: xmlXPathEval (called by slaxExtEvaluate — XPath evaluation engine)
 
 ---
 
