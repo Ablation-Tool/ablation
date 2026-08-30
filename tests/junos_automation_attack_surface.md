@@ -565,6 +565,20 @@ FINDING 1 — NULL deref (partial-registration race):
   Window: any XPath query arriving between first register_* call and last register_* call.
   Severity: DoS / crash of mgd (management daemon).
 
+BSS layout adjacent to vtable (from nm + symbol table):
+```
+0x150b00: xmlParserInitialized    (int)
+0x150b08: xmlEntityRefFunc        ← function pointer, 8 bytes before vtable
+0x150b10: get_first_node          ← VTABLE START
+0x150b18: get_all_nodeset
+...
+0x150b68: delete_all_nodes        ← VTABLE END
+0x150b70: [8 bytes padding/unknown]
+0x150b80: sw_version              ← software version ptr, just past vtable
+```
+Overflow primitive landing at 0x150b08 corrupts xmlEntityRefFunc first, then all 12 vtable slots.
+xmlEntityRefFunc called by xmlStopParser/xmlParserHandleReference paths — reachable from NETCONF XML parsing.
+
 FINDING 2 — vtable overwrite (RCE):
   BSS vtable at confirmed offsets relative to library load base (ASLR randomizes the
   base, but inter-segment layout is fixed — vtable-to-GOT delta is constant).
