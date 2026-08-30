@@ -3997,6 +3997,34 @@ class AxisEAPAnalyzer:
                     'severity': 'HIGH',
                     'prerequisite': 'Write access to /usr/local/packages/SipThirdPartyIntegration/ or RUNPATH control',
                 },
+                {
+                    'id': 'UCS-4',
+                    'title': 'STARTMODE=once TOCTOU on LD anti-tamper check',
+                    'mechanism': (
+                        'dir_contains_overriding_lib / file_overrides_symbols / test_ld_so_preload checks '
+                        'run only at install time (STARTMODE=once). A malicious shared object placed '
+                        'in sipd LD_LIBRARY_PATH AFTER SipThirdPartyIntegration already created the '
+                        'enabled file will not be detected — no re-check on sipd restart. '
+                        'Attacker installs co-resident ACAP, waits for UCS install, then writes malicious '
+                        '.so to a shared path on sipd search order → sipd loads attacker lib on next restart.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Write access to sipd LD_LIBRARY_PATH directory after UCS install completes',
+                },
+                {
+                    'id': 'UCS-5',
+                    'title': 'sipd SIP attack surface once third-party integration enabled',
+                    'mechanism': (
+                        'Once /etc/dynamic/sipd/acaps/third-party-integration-enabled exists, sipd processes '
+                        'SIP from third-party systems. Standard SIP stack attack surface: '
+                        'REGISTER flood (auth replay), malformed SDP/SIP headers (sipd parser bugs), '
+                        'SIP digest credential capture via MITM proxy, unauthenticated INVITE if sipd '
+                        'trust policy misconfigured → unauthorized call initiation or eavesdrop. '
+                        'sipd crash via malformed headers = DoS of all camera SIP functionality.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Network access to sipd SIP port (5060/5061) once third-party integration is active',
+                },
             ],
         }
         return result
