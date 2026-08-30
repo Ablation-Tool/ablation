@@ -1144,3 +1144,103 @@ across session reconnects would trigger on the next incoming connection.
 **Constraint**: Still requires a write primitive. FINDING 2's write primitive
   search exhausted libengine strcpy/sprintf sites (prior session). Remaining
   hypothesis: SLAX script with slax:invoke chain (requires config write access).
+
+---
+
+## ASLR Bypass Exhaustion — libengine Printf Survey
+
+**Goal**: Find a NETCONF-wire-visible pointer leak to bypass ASLR for the GOT overwrite chain.
+
+**Finding**: All 14 format strings with `%p`/`%x` in libengine.so.1 and libjunos-netconf.so.1
+route to `js_traceout` (trace file) or `ctrace` (trace file), not to stdout/NETCONF wire.
+
+**One apparent exception** — libengine+0xe9532:
+```
+lea 0x1347a0(%rip), %rdi   # "SCHEMA: db_read_tlv_file: %s; tlvfp = %p and tlvfp_value = %ld"
+xor %eax, %eax
+call printf@plt             # stdout = NETCONF TCP channel
+```
+
+This `printf@plt` call bypasses js_traceout and writes to stdout. But:
+
+1. The enclosing function (entry at libengine+0xe9470, size ~0x400 bytes) is called only from:
+   - `ddl_schema_init` (libengine+0x114dd5) — DDL schema load at process startup
+   - One other startup-phase caller (libengine+0x10970a)
+
+2. `set_ddl_schema_init_debug` (libengine+0x117a60) is the sole writer of `xp_debug`:
+   ```
+   mov %edi, 0x3ef9c2(%rip)  # → xp_debug at 0x507428
+   ret
+   ```
+   Called from mgd at 0x19a02, conditional on `ui_hooks_util_package_validating() == 0`,
+   only during the dual-phase bootup state machine (startup, not per-session).
+
+3. The printf path fires at boot during `ddl_schema_init`. By the time a NETCONF session
+   is established, schema init has already completed. stdout at boot-time is NOT the
+   NETCONF TCP channel (channel is not set up until after SSH auth + subsystem spawn).
+
+**Conclusion**: No NETCONF-wire-visible address leak found in any of the surveyed
+  libraries. ASLR bypass for the GOT chain remains open.
+
+---
+
+## FINDING 3 — Post-Auth Stack Overflow in mgd_reboot_command (No Canary)
+
+**Location**: libengine.so.1, `mgd_reboot_command` at +0x3fde0
+
+**Prologue analysis** — NO stack canary:
+```
+3fde0: push %rbp
+3fde1: mov  %rsp, %rbp
+3fdf3: sub  $0x6148, %rsp    ; 24904-byte frame, no fs:0x28 canary setup
+```
+
+**Stack layout**:
+```
+rbp - 0x6148 : bottom of frame (RSP on entry)
+rbp - 0x2030 : sprintf destination buffer (8240 bytes)
+rbp - 0x0028 : saved r15, r14, r13, r12, rbx (40 bytes)
+rbp          : saved rbp
+rbp + 0x0008 : return address  ← overflow target
+```
+
+**Vulnerable sprintf at libengine+0x416cd**:
+```
+416b3: lea -0x2030(%rbp), %r8       ; r8 = 8240-byte stack buffer
+416c6: lea 0x1ca3b3(%rip), %rsi     ; "set chassis display permanent message halt@%s"
+416cd: call sprintf@plt             ; sprintf(buf, fmt, rdx)
+```
+`rdx = (%r12)` where `r12` = the `rsi` arg to `mgd_reboot_command` — the DDL-parsed
+command parameter struct. `(%r12)` is the user-supplied halt message string.
+
+**Overflow math**:
+- Buffer: 8240 bytes
+- Format prefix: `"set chassis display permanent message halt@"` = 42 bytes
+- Available for %s: 8240 - 42 = 8198 bytes before overflow begins
+- Distance to return address: 0x2030 (buf offset) + 8 (saved rbp) + 8 (ret addr) = **0x2040 = 8256 bytes**
+- So: message > 8214 bytes overflows; message > 8256 bytes overwrites return address
+
+**Chain with RELRO=OFF**:
+- No canary + overwrite return address → ROP chain using libengine gadgets
+  (pop rdi @ +0x5b18d, system@PLT @ +0x35ec0)
+- Or: partial overwrite into saved r12-r15 to redirect a subsequent indirect call
+
+**Classification**: POST-AUTH. Requires authenticated NETCONF session with operator
+  or superuser access to execute `request system reboot message <text>`.
+
+**Caveat**: DDL enforces a maximum string length on the `message` parameter. If the
+  DDL cap is < 8215 bytes, this is mitigated at the parse layer before reaching the C
+  handler. DDL constraint verification requires live system or DDL schema access
+  (pending).
+
+**Second sprintf chain** — libengine+0x416eb:
+```
+416d9: rcx = rbx              ; second user-supplied arg
+416e5: lea 0x1e99e0(%rip), %rsi  ; "%s %s"
+416eb: call sprintf@plt       ; sprintf(buffer, "%s %s", buffer, rbx)
+```
+This APPENDS to the same buffer. Combined output of both sprintf calls feeds into
+`cmd_pass` at +0x38740, which executes the command string via popen-equivalent.
+
+**Combined impact**: If first sprintf overflows, the second sprintf corrupts further.
+  Both calls share the same no-canary stack frame.
