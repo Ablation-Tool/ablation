@@ -3883,6 +3883,228 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def people_counter_v5_surface(self) -> dict:
+        """
+        AXIS People Counter 5.0.5 (tvpc Rust rewrite) attack surface.
+
+        appId: 211490  binary: tvpc  version: 5.0.5  arch: aarch64 (ARTPEC-8/CV25/S5L/ARTPEC-7)
+        APPUSR=sdk  APPGRP=sdk  — ROOT DROPPED in 5.x (was root in 4.x and earlier)
+        STARTMODE=respawn  HTTPCGIPATHS (via manifest)
+        source: ftp_mirror/ACAP/applications/ACAP/AXIS_People_Counter/5_0_5/
+
+        5.x is a Rust rewrite of the tvpc daemon (crate: tvpcrs). Architecture change:
+          - Rust async runtime: async-executor-1.5.1, async-broadcast-0.5.1, futures-util
+          - D-Bus via zbus-3.x (zvariant, zbus_names) — cookie SHA1 auth method
+          - libsodium NaCl box encryption for secrets: crypto_secretbox/crypto_secretbox_open
+          - VAPIX credentials via D-Bus: tvpcrs::local_vapixFailed to get LocalVapixCredentials
+          - TCP 23456 event listener still present (Counter0EventListenerPort in param.conf)
+          - TCP 4066 master/slave still present (Counter.SlavePort/MasterPort in binary + param.conf)
+          - restore_backup CGI still present (administrator level)
+          - popen still used: gen_allparams_page(): popen
+          - Shell tar backup: cd /tmp/; tar czf tvpc-parambackup.tar.gz parambackup.txt params.meta
+          - Counter.SlavePass migrated to libsodium secrets storage (Migrating parameter %s to secrets)
+          - DBUS_COOKIE_SHA1 auth method for D-Bus sessions
+
+        Bundled: curl (bundled binary), libcjson.so.1, libmd5.so, libsodium.so.23
+        Param filtering: parhandclient getgroup root.tvpc | grep -v -e 'Counter0Name' -e 'Counter0OccName'
+          -e 'Environment0' -e 'Build0' > /tmp/parambackup.txt  (SlavePass NOT in filter)
+
+        CGI access (manifest / cgi.conf):
+          viewer:    /.api
+          operator:  /.apioperator
+          administrator: /.apiadmin, /.restore_backup
+
+        Key delta from 4.x:
+          APPUSR=root→sdk (sandbox user, reduced blast radius)
+          SlavePass now encrypted with libsodium (not plaintext in params.meta)
+          TCP 23456/4066 still in param.conf and binary string table
+          popen and shell tar backup still present (same injection class)
+        """
+        result = {
+            'app': 'AXIS People Counter',
+            'version': '5.0.5',
+            'app_id': 211490,
+            'binary': 'tvpc (Rust, aarch64)',
+            'run_as': 'sdk (dropped root from 4.x)',
+            'arch': 'aarch64 (ARTPEC-8/7, CV25, S5L)',
+            'bundled_libs': ['curl', 'libcjson.so.1', 'libmd5.so', 'libsodium.so.23'],
+            'runtime': 'Rust (tvpcrs crate), async-executor, zbus D-Bus, libsodium NaCl',
+            'cgi': {
+                'viewer': '/.api',
+                'operator': '/.apioperator',
+                'administrator': ['/.apiadmin', '/.restore_backup'],
+            },
+            'ports': {'event_listener': 23456, 'slave_sync': 4066},
+            'attack_paths': [
+                {
+                    'id': 'PC5-1',
+                    'title': 'popen shell injection via allparams generation (operator)',
+                    'mechanism': (
+                        'gen_allparams_page() calls popen() to run parambackup shell command: '
+                        'cd /tmp/; tar czf tvpc-parambackup.tar.gz parambackup.txt params.meta. '
+                        'Injection surface: operator-writable axparameter values interpolated into '
+                        'format strings passed to popen(). Same class as PC-1 in 4.x. '
+                        'APPUSR=sdk means RCE lands in sdk sandbox, not root — reduced blast radius vs 4.x.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level camera auth',
+                    'delta_vs_4x': 'Same vector; blast radius reduced (sdk vs root)',
+                },
+                {
+                    'id': 'PC5-2',
+                    'title': 'Tarslip via .restore_backup (administrator) — sdk sandbox user',
+                    'mechanism': (
+                        'tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup — same tarslip class. '
+                        'Writes attacker-controlled files to /tmp/backup; '
+                        'cp /tmp/backup/licbackup.xml /usr/local/packages/tvpc/lic.xml — license override. '
+                        'Now runs as sdk (APPUSR), not root. Impact: ACAP package dir control, not full camera takeover.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Administrator-level camera auth',
+                    'delta_vs_4x': 'Same vector; blast radius reduced (sdk vs root)',
+                },
+                {
+                    'id': 'PC5-3',
+                    'title': 'TCP 23456 unauth event listener — still present in 5.0.5',
+                    'mechanism': (
+                        'Counter0EventListenerPort=23456 in param.conf. Counter.SlavePort/MasterPort '
+                        'string refs in binary. TCP 23456 passage event injection still accepted from '
+                        'any LAN host without auth. Sends false people-count data → corrupts occupancy analytics.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Network access to camera LAN',
+                },
+                {
+                    'id': 'PC5-4',
+                    'title': 'TCP 4066 master/slave sync — still present, SlavePass now libsodium-encrypted',
+                    'mechanism': (
+                        'Counter.SlavePort=4066 in binary; Counter0SlavePort in param.conf. '
+                        'SlavePass now stored via crypto_secretbox (libsodium NaCl). '
+                        'If libsodium key is derivable from device-specific material (serial/MAC), '
+                        'slave auth bypass still possible. Counter0SlaveAddress SSRF still applies: '
+                        'attacker-controlled SlaveAddress redirects sync to rogue master.'
+                    ),
+                    'severity': 'LOW',
+                    'prerequisite': 'Network access to 4066 + libsodium key recovery',
+                },
+                {
+                    'id': 'PC5-5',
+                    'title': 'VAPIX credentials via D-Bus (tvpcrs::local_vapix)',
+                    'mechanism': (
+                        'tvpcrs::local_vapix fetches LocalVapixCredentials via D-Bus. '
+                        'Credential used for internal VAPIX calls (Authorization: Bearer %s). '
+                        'If D-Bus session is accessible to co-resident ACAP, credential sniffable.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Co-resident ACAP on same device',
+                },
+            ],
+        }
+        return result
+
+    def queue_monitor_v3_surface(self) -> dict:
+        """
+        AXIS Queue Monitor 3.0.20 (tvqu Rust rewrite) attack surface.
+
+        appId: 211492  binary: tvqu  version: 3.0.20  arch: aarch64 (ARTPEC-8/7, CV25, S5L)
+        APPUSR=sdk  APPGRP=sdk  — ROOT DROPPED in 3.x (was sdk in 2.x? verify)
+        STARTMODE=respawn
+        source: ftp_mirror/ACAP/applications/ACAP/AXIS_Queue_Monitor/3_0_20/
+
+        3.0.20 shares architecture with People Counter 5.x (same Rust crate base, libsodium,
+        same bundled libs). Binary: tvqu (vs tvpc for People Counter).
+
+        New in 3.x vs 2.x:
+          - WebReportUpload: configurable web upload with AllowInsecure mode + encrypted=true API
+          - Httppost.AllowInsecure — second insecure HTTP upload path
+          - folder_password — credential for folder/cloud upload target (secrets storage)
+          - libsodium encryption for secrets (crypto_secretbox/open)
+          - CURL command: CURL_CA_BUNDLE=... curl -L -f --anyauth %s %s -s -m 20
+                          '%s://%s%s/api/?method=camera.ping&encrypted=true'
+            %s slots include protocol (http/https) and host — from operator axparam
+          - Histogram binary files: hval.buf, hvalmin.buf, hvalpeople.buf in localdata/
+          - Content-Disposition downloads: queue-%s-logs.tgz, queue-%s-params-copy.tar.gz
+
+        CGI access:
+          viewer:    /.api
+          operator:  /.apioperator
+          administrator: /.apiadmin, /.restore_backup
+
+        Key findings:
+        1. WebReportUpload SSRF: WebReportUpload0Url axparam + AllowInsecure → attacker controls
+           full upload URL (protocol + host); curl executes to attacker server.
+        2. Restore tarslip: tar xzf → cp lic.xml (license override) + histogram binary files.
+        3. folder_password credential in secrets; libsodium-encrypted.
+        4. popen still used (gen_allparams_page()).
+        """
+        result = {
+            'app': 'AXIS Queue Monitor',
+            'version': '3.0.20',
+            'app_id': 211492,
+            'binary': 'tvqu (Rust, aarch64)',
+            'run_as': 'sdk',
+            'arch': 'aarch64 (ARTPEC-8/7, CV25, S5L)',
+            'bundled_libs': ['curl', 'libcjson.so.1', 'libmd5.so', 'libsodium.so.23'],
+            'runtime': 'Rust (same crate base as tvpcrs), zbus D-Bus, libsodium NaCl',
+            'cgi': {
+                'viewer': '/.api',
+                'operator': '/.apioperator',
+                'administrator': ['/.apiadmin', '/.restore_backup'],
+            },
+            'attack_paths': [
+                {
+                    'id': 'QM3-1',
+                    'title': 'SSRF via WebReportUpload0Url + AllowInsecure (operator)',
+                    'mechanism': (
+                        'WebReportUpload0Url is operator-writable. curl command: '
+                        'CURL_CA_BUNDLE=... curl -L -f --anyauth %s %s -s -m 20 '
+                        "'%s://%s%s/api/?method=camera.ping&encrypted=true' "
+                        '— protocol and host from axparam → SSRF to attacker-controlled server. '
+                        'WebReportUpload0AllowInsecure=1 + Httppost.AllowInsecure disable TLS check → MITM. '
+                        'WebReportUpload0ProxyEnabled + Proxy param adds proxy hop to SSRF chain.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level camera auth',
+                },
+                {
+                    'id': 'QM3-2',
+                    'title': 'popen shell injection via allparams/parambackup (operator)',
+                    'mechanism': (
+                        'gen_allparams_page(): popen — same class as PC5-1. '
+                        'cd /tmp/; tar czf tvqu-parambackup.tar.gz parambackup.txt params.meta — shell tar. '
+                        'Operator-writable axparams → shell injection → sdk process RCE.'
+                    ),
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level camera auth',
+                },
+                {
+                    'id': 'QM3-3',
+                    'title': 'Tarslip via .restore_backup — license + histogram binary override',
+                    'mechanism': (
+                        'tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup — tarslip class. '
+                        'cp /tmp/backup/licbackup.xml /usr/local/packages/tvqu/lic.xml — license override. '
+                        'cp /tmp/hval.buf /usr/local/packages/tvqu/localdata/hval.buf — histogram data override. '
+                        'Histogram binary files control queue analytics output; overwriting them '
+                        'corrupts queue-length metrics without exploiting any crypto.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Administrator-level camera auth',
+                },
+                {
+                    'id': 'QM3-4',
+                    'title': 'folder_password credential in libsodium secrets',
+                    'mechanism': (
+                        'folder_password axparam is migrated to libsodium crypto_secretbox storage. '
+                        'If libsodium key is device-derived (serial/MAC), offline key recovery → '
+                        'decrypt folder_password → gain access to cloud upload target (folder storage, SFTP, etc.).'
+                    ),
+                    'severity': 'LOW',
+                    'prerequisite': 'Physical device access for serial number + libsodium key derivation analysis',
+                },
+            ],
+        }
+        return result
+
     def sbplayer_mips_surface(self) -> dict:
         """
         AXIS Player for Soundtrack Business (sbplayer) MIPS32 v1.5.0 surface.
@@ -4142,6 +4364,10 @@ def main():
                         help='Occupancy Estimator 3.16.3 root tarslip + TCP 23456/4066 unauth + SlavePass + TrueviewVAPIX')
     parser.add_argument('--cross-line', action='store_true', dest='cross_line',
                         help='Cross Line Detection 1.1.5 encrypted Lua LD_PRELOAD + geometry float injection')
+    parser.add_argument('--pc5', action='store_true', dest='pc5',
+                        help='People Counter 5.0.5 Rust rewrite; dropped root; popen+tarslip+TCP 23456/4066 remain')
+    parser.add_argument('--qm3', action='store_true', dest='qm3',
+                        help='Queue Monitor 3.0.20 Rust rewrite; SSRF via WebReportUpload + AllowInsecure + popen')
     parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
                         help='sbplayer aarch64/ARM32 1.7.1 UpdateURL+SD-card library RCE + hardcoded SYB API cred')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
@@ -4264,6 +4490,12 @@ def main():
 
     if args.all or getattr(args, 'cross_line', False):
         results['cross_line'] = analyzer.cross_line_surface()
+
+    if args.all or getattr(args, 'pc5', False):
+        results['pc5'] = analyzer.people_counter_v5_surface()
+
+    if args.all or getattr(args, 'qm3', False):
+        results['qm3'] = analyzer.queue_monitor_v3_surface()
 
     if args.all or args.sbplayer_aarch64:
         results['sbplayer_aarch64'] = analyzer.sbplayer_aarch64_surface()
