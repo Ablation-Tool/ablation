@@ -1439,3 +1439,105 @@ resp = stub.Get(get_req)
 
 **CVE candidate**: Missing authentication for critical function (CWE-306).
 CVSS v3.1: AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = **9.8 (Critical)**
+
+---
+
+## FINDING 6: Hardcoded Factory Credentials + World-Readable NETCONF Trace
+
+**Classification**: CRITICAL + MEDIUM (CWE-798 + CWE-532)
+**Platform**: ACX6160-T only (factory default config: `acx6160-t-factory.conf`)
+**Source**: `/etc/config/acx6160-t-factory.conf` (extracted from Junos EVO 23.4R2.14 ISO)
+
+### Hardcoded Privileged User
+
+Factory config contains a fixed `openroadm` user with group `sudo` (administrative equivalent):
+
+```
+org-openroadm-device:org-openroadm-device {
+    info { node-id openroadm; node-type xpdr; }
+    users {
+        user openroadm {
+            password "$9$BQOEyKvWxbwgKMaUHmF369Atu1W87"; ## SECRET-DATA
+            group sudo;
+        }
+    }
+}
+```
+
+Hash properties:
+- `$9$` format: Juniper's reversible password obfuscation (NOT a one-way hash)
+- Standard `$9$` alphabet: 44 chars (`QzF3n6/9CAtpu0OB1IREhcSsDvwg2JjLeyM5GUlKvx7`)
+- Hash chars `W`, `b`, `a`, `H`, `m`, `8` fall outside the standard 44-char alphabet
+- All 6 out-of-alphabet chars are within the 64-char POSIX crypt alphabet
+  (`./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`)
+- **Conclusion**: EVO uses an extended or alternate `$9$` alphabet vs. classic Junos
+
+Hash decode path confirmed via `libengine.so.1`:
+- `foreign_encrypt_password()` at VA 0x1cd3b0 (352 bytes)
+- Generates random 2-char salt from POSIX crypt alphabet at 0x2367a0
+- Calls `platform_hook_vcall()` with args 'crypt', 'salt', 'passwdp' (0x236248)
+- Calls `crypt()` at 0x1cd506 — confirms underlying POSIX crypt for storage
+- `$9$` encoding wraps the crypt output in reversible obfuscation
+
+This hash is **identical across all ACX6160-T factory-default deployments**. Any party who
+decodes the `$9$` value obtains the plaintext password valid on every unmodified device.
+
+### World-Readable NETCONF Trace
+
+```
+netconf {
+    traceoptions {
+        file netconf.log size 20m files 10 world-readable;
+        flag all;
+    }
+}
+```
+
+`world-readable` + `flag all` = every NETCONF session (including credentials in
+`<hello>` and RPCs) written to a globally-readable log file at `/var/log/netconf.log`.
+Any unprivileged local account reads complete NETCONF session content.
+
+### Additional Factory Defaults
+
+- `scripts { language python; }` — Python scripting enabled by default
+- `commit { xpath; }` — XPath commit scripting enabled
+- `ssh { root-login deny; }` — root SSH denied but `openroadm` (sudo) is equivalent
+
+### Attack Chain (Combined with FINDING 5)
+
+```
+1. Attacker → TCP 32767 (pre-auth gRPC, FINDING 5)
+                    |
+           gNMI Set: enable NETCONF ssh
+                    |
+2. Attacker → SSH port 22 → login as openroadm:$9$-decoded-plaintext
+                    |
+              sudo su → root shell
+                    |
+3. Root reads /var/log/netconf.log → all prior session credentials
+```
+
+FINDING 5 (pre-auth gRPC) enables enabling NETCONF via config write; FINDING 6 provides
+the credential (openroadm) and a credential disclosure oracle (netconf.log). Together:
+unauthenticated network attacker → root shell, zero operator interaction.
+
+### Binary Evidence Summary
+
+| Artifact | VA | Notes |
+|---|---|---|
+| `foreign_encrypt_password` | libengine.so.1:0x1cd3b0 | crypt() caller, POSIX salt gen |
+| POSIX crypt alphabet | libengine.so.1:0x2367a0 | 64-char `./0-9A-Za-z` |
+| `crypt_password` dynstr | libengine.so.1:0x1b5f6 | exported symbol |
+| Factory config | `/etc/config/acx6160-t-factory.conf` | only platform w/ skip-auth + openroadm |
+
+### CVE Candidates
+
+- **CWE-798** (Use of Hard-coded Credentials): CVSS v3.1 AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = **9.8**
+- **CWE-532** (Insertion of Sensitive Info into Log File): CVSS v3.1 AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N = **5.5**
+
+### Remediation
+
+1. Remove `openroadm` user from factory config or randomize password per-device at provisioning
+2. Remove `world-readable` from NETCONF traceoptions
+3. Change default `node-id` from `openroadm` (fingerprints device role)
+4. Document `$9$` extended alphabet so field teams can decode for asset inventory
