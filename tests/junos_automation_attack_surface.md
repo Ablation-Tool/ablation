@@ -489,21 +489,40 @@ Call sites WITH NULL checks (for comparison):
   0x82617: cmpq $0x0, (%rax) for get_all_nodeset ← guarded
   0x829b8: cmpq $0x0, (%rax) for get_next_node   ← guarded
 
-FINDING 1 — NULL deref:
-  Any XPath query that triggers cs_xmlXPathNextParent or cs_xmlXPathNextChildElement
-  before all 12 slots are registered → NULL call → crash (DoS).
-  NETCONF XPath filter path: <filter type="xpath" select="...">
-    → libxml2 XPath engine → cs_xmlXPathNext* → NULL deref if mgd/SLAX runtime
-    has not called all register_* functions before processing the filter.
+Dispatch gate in xmlXPathNodeCollectAndTest (0x8fabe / 0x8fc11):
+```asm
+; Parent axis selection
+mov  [get_next_node GOT], rax
+lea  xmlXPathNextParent, rdx    ; standard (safe) path
+cmpq $0, (%rax)                 ; is get_next_node NULL?
+lea  cs_xmlXPathNextParent, rax ; custom (unchecked) path
+cmove rdx, rax                  ; get_next_node==NULL → use standard; else use custom
+```
+Selection is gated on `get_next_node`. Custom path is only taken if `get_next_node != NULL`.
+
+FINDING 1 — NULL deref (partial-registration race):
+  Precondition: `register_get_next_node(fn)` has been called (switches to cs_* path),
+    but at least one of {get_parent_node, is_node_container, delete_node, get_first_node}
+    is still NULL.
+  Attack: NETCONF filter with parent or child-element XPath axis triggers cs_* path.
+  `<filter type="xpath" select="//parent::*/child::element()">` →
+    xmlXPathNodeCollectAndTest → takes cs_* branch (get_next_node != NULL) →
+    cs_xmlXPathNextParent calls get_parent_node (unchecked) → NULL deref → crash.
+  Window: partial registration state between any two register_* calls is exploitable
+    if an XPath query arrives during that window.
 
 FINDING 2 — vtable overwrite (RCE):
-  12 BSS function pointers at deterministic addresses per binary version.
-  Any write-what-where primitive (heap overflow, OOB write, UAF via F1+F2 chain
-  in libnetconf2) that reaches BSS can overwrite a function pointer slot.
-  Next XPath query through the affected axis → arbitrary code execution.
-  The libnetconf2 F9 OOB write (1-2 bytes past heap alloc) could target an adjacent
-  BSS allocation if the heap is arranged to overlap with these slots — requires heap
-  spray (F1) to align.
+  BSS slots at deterministic offsets per binary version.
+  Overwrite any of the 5 unchecked slots (get_parent_node, is_node_container,
+  delete_node, get_first_node + tail-call, delete_node via cs_xmlXPathNextParent)
+  with attacker-controlled address.
+  Trigger: NETCONF XPath filter with parent/child-element axis (requires get_next_node
+  to be registered to take the cs_* path).
+  Chain: libnetconf2 F1 (heap spray to shape layout) + F9 (OOB heap write to
+    overwrite BSS slot) + F2 (optional TOCTOU for slot alignment) →
+    arbitrary code execution on next XPath axis traversal.
+  Note: BSS is not adjacent to heap — chain requires heap-to-BSS bridge
+    (needs a separate primitive or ASLR info leak first).
 
 ---
 
