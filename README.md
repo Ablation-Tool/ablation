@@ -58,6 +58,25 @@ The encoder is architecture-agnostic. x86-64 `mov`, ARM64 `ldr`, and MIPS `lw` a
 
 ---
 
+## Why this changes the economics
+
+| Constraint | Legacy workflow | Ablation |
+|------------|----------------|---------|
+| Target scope | Single binary pair per session | Fleet-wide scans across hundreds of variants |
+| Preparation cost | High — manual symbol recovery, bespoke decoders per target | Zero — autonomous intermediate representation |
+| Compiler variance | Breaks analysis (`-O2` vs `-O3`, ARM vs x86) | Ignored — matches core behavioral logic |
+| Time to value | Days of manual graph alignment | Under two minutes per 94MB image |
+
+**Collapsing patch analysis time.** Traditional patch diffing requires loading multiple massive binaries, waiting for auto-analysis, aligning function structures, and manually isolating changed logic. Dropping that to a sub-two-minute automated job means patch diffing can run continuously across entire build pipelines.
+
+**The N-day syndication model.** When a vendor quietly patches a vulnerability in one device line, Ablation turns that single patch into a behavioral signature and searches thousands of other firmware images across different product lines, OEM derivatives, and legacy builds — finding every unpatched variant sharing the functional logic, not just the same version string.
+
+**Flipping the asymmetry.** Defenders rely on static hashes, CVE metadata, and version strings — metrics trivially bypassed by compiler changes or quiet backports. Behavioral tracking ignores the metadata and hunts the logic. It forces vendors to actually remediate across the full supply chain, because researchers now have tooling to find every instance where a patch was skipped or backported poorly.
+
+**Redeploying human capital.** The barrier to entry in firmware vulnerability research is not finding the initial bug — it is the exorbitant setup time before the hunt begins. Manually scripting LIEF and Capstone to disassemble a monolithic binary, writing custom decoders per target, waiting on Ghidra auto-analysis. When semantic tracking handles the structural alignment autonomously, engineering effort shifts from being a highly paid assembly parser to evaluating exploit viability and building payloads.
+
+---
+
 ## Cross-version patch tracking
 
 ## How it works
