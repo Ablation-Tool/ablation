@@ -404,9 +404,51 @@ Embedded version: `20909` = libxml2 **2.9.9**.
 | CVE | Fixed in upstream | Status in 2.9.9 |
 |-----|------------------|-----------------|
 | CVE-2021-3541 (billion laughs) | 2.9.11 | PATCHED — Juniper backported. `xmlParserEntityCheck` at 0xef6b0: `cmp r13, 0x98967f` (10MB) + ×10 document size limit |
-| CVE-2022-23308 (XInclude UAF) | 2.9.14 | LIKELY UNPATCHED — version is pre-fix; `xmlXIncludeDoProcess` at 0x7b550 exists, NULL guard coverage needs deeper trace |
+| CVE-2022-23308 (XInclude UAF) | 2.9.14 | **CONFIRMED UNPATCHED** — NULL guard absent at two access sites |
 
-`xmlXIncludeDoProcess` is 300+ instructions. Full guard coverage analysis pending.
+`xmlXIncludeDoProcess` UAF analysis (0x7b550, x86-64 ELF, not stripped):
+
+Entry guards (present):
+- `0x7b564`: `test %rsi, %rsi; je 7cddc` — doc == NULL check
+- `0x7b574`: `test %rdx, %rdx; je 7cddc` — tree == NULL check
+- `0x7b580`: `cmpl $0x12, 0x8(%rdx); je 7cddc` — tree->type != XML_NAMESPACE_DECL
+- `0x7b58d`: `test %rdi, %rdi; je 7cddc` — ctxt == NULL check
+
+UAF site 1 (0x7c9d4–0x7c9e6):
+```
+7c9d4:  test  %rbx, %rbx           ; node != NULL (guards the node pointer)
+7c9d7:  je    7ca2f                 ; ← only guards node itself
+7c9d9:  cmpl  $0x1, 0x8(%rbx)      ; node->type == XML_ELEMENT_NODE
+7c9dd:  jne   7c9d0
+7c9df:  mov   0x40(%rbx), %rdi     ; ← rdi = node->doc — NO NULL CHECK
+7c9e3:  mov   %rbx, %rsi
+7c9e6:  call  xmlNodeGetBase        ; xmlNodeGetBase(node->doc, node)
+```
+`node->doc` is loaded and passed directly to `xmlNodeGetBase` without a
+`node->doc == NULL` guard. If doc was freed by a prior XInclude substitution,
+this is a UAF deref.
+
+UAF site 2 (0x7c9f7–0x7ca05):
+```
+7c9f7:  mov   0x40(%rbx), %rax     ; rax = node->doc (second read, no guard)
+7c9fe:  mov   0x88(%rax), %rsi     ; rsi = doc->URL — deref of potentially freed doc
+7ca05:  call  xmlStrEqual
+```
+`doc->URL` (at offset 0x88 in xmlDoc) dereferenced from a potentially-freed doc pointer.
+
+Additional sites (r13 node, no NULL guard on doc):
+  0x7c542, 0x7c6c2, 0x7cab5 — all `mov 0x40(%r13), %rdi` → `call xmlNewDocNode`
+
+Fix in 2.9.14: adds `if (node->doc == NULL) goto out;` before 0x7c9df equivalent.
+This check is absent in 2.9.9.
+
+Trigger path in Junos context:
+  NETCONF RPC → mgd XML parse → xmlXIncludeProcessFlags() called with
+  XML_PARSE_XINCLUDE flag → xmlXIncludeDoProcess → UAF on freed doc pointer.
+  Whether mgd enables XInclude processing by default needs validation via
+  mgd binary RE (xmlXIncludeProcessFlags call sites in mgd).
+
+`xmlLoadExtDtdDefaultValue` exported — external DTD loading compiled in.
 `xmlLoadExtDtdDefaultValue` exported — external DTD loading compiled in.
 12 custom `register_*` DOM API functions (Juniper-specific node registry).
 
