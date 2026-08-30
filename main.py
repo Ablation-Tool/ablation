@@ -26,6 +26,10 @@ Usage:
     ./ablation --wechat-libs DIR   - Enumerate arm64-v8a native lib attack surface
     ./ablation --wechat-db-key IMEI UIN - Compute EnMicroMsg.db decryption key
     ./ablation --wechat-frida      - Generate Frida hooks for MMTLS key extraction
+    ./ablation --axis PATH         - AXIS ACAP EAP RE: license bypass, SIP/barcode/bodyworn/facedetector
+    ./ablation --axis-license PATH - licensekey_verify bypass vectors (SipThirdPartyIntegration)
+    ./ablation --axis-bodyworn PATH - BodyWornLiveSelfHosted WebRTC/TURN/JWT attack surface
+    ./ablation --axis-frida PATH   - Frida license bypass script for AXIS ACAP binary
     ./ablation --mcp-fuzz          - Grammar-guided MCP tool schema fuzzer (prompt injection discovery)
     ./ablation --mcp-fuzz-dry-run  - Print one sample MCP manifest (no Atheris required)
     ./ablation --func-db-seed      - Seed function ID DB from all confirmed RE sources
@@ -1099,6 +1103,10 @@ def main():
     parser.add_argument('--wechat-probe-watch', action='store_true', help='Set HW watchpoint on gILinkKey; block until write; print writer PC + hex dump')
     parser.add_argument('--wechat-probe-dump', action='store_true', help='One-shot /proc/pid/mem dump of gILinkKey from running WeChat')
 
+    parser.add_argument('--axis', metavar='PATH', help='AXIS ACAP EAP RE: full survey of all packages in dir or single binary')
+    parser.add_argument('--axis-license', metavar='PATH', help='AXIS licensekey_verify bypass vectors for SipThirdPartyIntegration binary')
+    parser.add_argument('--axis-bodyworn', metavar='PATH', help='AXIS BodyWornLiveSelfHosted WebRTC/TURN/JWT attack surface')
+    parser.add_argument('--axis-frida', metavar='PATH', help='Print Frida license bypass script for AXIS ACAP binary')
     parser.add_argument('--api-re', metavar='URL', help='API reverse engineering: full RE pipeline (discovery, injection, JWT, BOLA, GraphQL, mass-assignment)')
     parser.add_argument('--api-re-depth', choices=['quick', 'normal', 'deep'], default='normal', help='api-re depth (default: normal)')
     parser.add_argument('--api-re-focus', choices=['injection', 'schema', 'state', 'jwt', 'auth', 'bola'], help='api-re focus dimension')
@@ -2029,6 +2037,38 @@ def main():
             with open(out_path, "w") as fh:
                 json.dump(result, fh, indent=2, default=str)
             print(f"[+] Full report: {out_path}")
+
+    elif getattr(args, 'axis', None) or getattr(args, 'axis_license', None) or \
+         getattr(args, 'axis_bodyworn', None) or getattr(args, 'axis_frida', None):
+        try:
+            from modules.axis_eap_re import AxisEAPAnalyzer
+        except ImportError:
+            print("[-] axis_eap_re module not available")
+            sys.exit(1)
+        target = (getattr(args, 'axis', None) or getattr(args, 'axis_license', None) or
+                  getattr(args, 'axis_bodyworn', None) or getattr(args, 'axis_frida', None))
+        analyzer = AxisEAPAnalyzer(target)
+        if getattr(args, 'axis_frida', None):
+            print(analyzer._sip_frida_hook())
+        elif getattr(args, 'axis_license', None):
+            result = analyzer.licensekey_bypass_vectors()
+            print(json.dumps(result, indent=2, default=str))
+        elif getattr(args, 'axis_bodyworn', None):
+            result = analyzer.bodyworn_attack_surface()
+            print(json.dumps(result, indent=2, default=str))
+        else:
+            results = {
+                'survey': analyzer.survey(),
+                'license_bypass': analyzer.licensekey_bypass_vectors(),
+                'bodyworn': analyzer.bodyworn_attack_surface(),
+                'barcode': analyzer.barcode_vapix_surface(),
+                'facedetector': analyzer.facedetector_surface(),
+            }
+            out_path = "/tmp/axis-re-report.json"
+            with open(out_path, "w") as fh:
+                json.dump(results, fh, indent=2, default=str)
+            print(json.dumps(results, indent=2, default=str))
+            print(f"[+] Report: {out_path}")
 
     elif getattr(args, 'api_re', None):
         if not HAS_API_RE:
