@@ -1174,8 +1174,14 @@ class AxisEAPAnalyzer:
             'bundled_source': {
                 'libmodbus_version': '3.1.11',
                 'libmodbus_upstream': 'https://libmodbus.org (LGPL 2.1)',
+                'libmodbus_cves': {
+                    'CVE-2019-14462': 'OOB read in receive_msg(): response length > allowed max not fully checked before memcpy; affects 3.1.11 and prior 3.1.x',
+                    'CVE-2019-14463': 'OOB write in modbus_reply(): unsigned comparison of response_length allows crafted Modbus server response to write outside buffer; heap corruption',
+                    'impact': 'Camera is a Modbus CLIENT: if admin-configured Modbus server sends crafted response, metricdashboard crashes or achieves RCE as ACAP user. SMD-1 SSRF chains here: attacker controls Modbus server → sends malformed response → RCE on camera',
+                },
                 'libnmea_version': 'git snapshot (nmea_pars* API)',
                 'nmea_buffers': 'NMEA_CONVSTR_BUF=256, NMEA_TIMEPARSE_BUF=256 (fixed stack buffers)',
+                'nmea_scanf_note': 'Custom nmea_scanf(): memcpy(parg_target, beg_tok, width) — width from format parser; caller responsible for buffer sizing; miscalculated width = stack overflow in sentence parse handler',
                 'build_targets': ['armv7hf (arm-linux-gnueabihf)', 'aarch64 (aarch64-linux-gnu)'],
                 'sdk': 'axisecp/acap-sdk:3.5',
                 'note': 'Source ships upstream libs only; no AXIS-specific app C source included',
