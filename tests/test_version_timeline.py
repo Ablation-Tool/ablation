@@ -24,6 +24,7 @@ DB        = '~/.ablation/func_id.db'
 # Ordered from oldest to newest. Set path to None to skip a version.
 # Note: 9.2.4 (i386), 9.1.7.23 (x86-64), and FTD 1200/10.0.0 ARM64 are in test_cross_arch.py
 VERSIONS = [
+    # ASA 9.0.4.42 is i386 — cross-arch result (jac=0.1471, MEDIUM, Era 1); in test_cross_arch.py
     ('ASA 9.1.7.23',   '/media/cowboy/research/cisco-lina-re/asa91723-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.5.2.204',  '/media/cowboy/research/cisco-lina-re/asa952-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.6.4.18',   '/media/cowboy/research/cisco-lina-re/asa964-extract/cpio-root/asa/bin/lina'),
@@ -46,7 +47,9 @@ VERSIONS = [
     ('ASA 9.14.4.24',  '/media/cowboy/research/cisco-lina-re/asa9144-extract/cpio-root/asa/bin/lina'),
     # FTD 6.6.0 (Apr 2020, ASA 9.14.x base): jac=0.9593 Era 2 UNPATCHED
     ('FTD 6.6.0',      '/media/cowboy/research/cisco-lina-re/ftd660-extract/lina'),
-    # FTD 6.7.0-65 (Nov 2020, ASA 9.15.x base): jac=0.2143 Era 3 PATCHED — patch boundary
+    # ASA 9.15.1.1: jac=0.2143 Era 3 PATCHED — direct ASA-side patch boundary confirmation
+    ('ASA 9.15.1.1',   '/media/cowboy/research/cisco-lina-re/asa915-11-extract/lina'),
+    # FTD 6.7.0-65 (Nov 2020, ASA 9.15.x base): jac=0.2143 Era 3 PATCHED — matches 9.15.1.1 exactly
     ('FTD 6.7.0-65',   '/media/cowboy/research/cisco-lina-re/ftd670-extract/lina'),
     ('ASA 9.16.1',     '/home/cowboy/VDT/intel/cisco-downloads/asa9-16-1-binwalk-out/'
                        '_asa9-16-1-smp-k8.bin.extracted/asa9-16-1-cpio/asa/bin/lina'),

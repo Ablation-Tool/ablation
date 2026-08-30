@@ -22,6 +22,7 @@ SEED_VA    = 0xc563d0
 SEED_NAME  = 'attr_list_add_impl'
 DB         = '~/.ablation/func_id.db'
 
+LINA_904        = '/media/cowboy/research/cisco-lina-re/asa904-42-extract/lina'
 LINA_924        = '/media/cowboy/research/cisco-lina-re/asa924-extract/cpio-root/asa/bin/lina'
 LINA_917_K8     = '/media/cowboy/research/cisco-lina-re/asa917-k8-extract/cpio-root/asa/bin/lina'
 LINA_917_32     = '/media/cowboy/research/cisco-lina-re/asa917-32-extract/cpio-root/asa/bin/lina'
@@ -158,12 +159,14 @@ def main():
     print(f'Seed (x86-64 ASA 9.14): {SEED_NAME}  instrs={seed.n_instrs}\n')
 
     targets = [
-        ('ASA 9.1.7 k8 (i386)',      LINA_917_K8,    i386_prologue_scan,  'i386→x86-64'),
-        ('ASA 9.1.7 32bit (i386)',   LINA_917_32,    i386_prologue_scan,  'i386→x86-64'),
-        ('ASA 9.1.7.23 k8 (i386)',   LINA_917_23_K8, i386_prologue_scan,  'i386→x86-64'),
-        ('ASA 9.2.4 (i386)',         LINA_924,        i386_prologue_scan,  'i386→x86-64'),
-        ('FTD 10.0.0 (AArch64)',     LINA_FTD10,      arm64_prologue_scan, 'AArch64→x86-64'),
-        ('FTD 1200 7.6.2 (AArch64)', LINA_1200,       arm64_prologue_scan, 'AArch64→x86-64'),
+        # i386 Era 1 — oldest known: 9.0.4.42 (jac=0.1471, MEDIUM, sem=0.9211)
+        ('ASA 9.0.4.42 (i386)',      LINA_904,        i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.1.7 k8 (i386)',      LINA_917_K8,     i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.1.7 32bit (i386)',   LINA_917_32,     i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.1.7.23 k8 (i386)',   LINA_917_23_K8,  i386_prologue_scan,  'i386→x86-64'),
+        ('ASA 9.2.4 (i386)',         LINA_924,         i386_prologue_scan,  'i386→x86-64'),
+        ('FTD 10.0.0 (AArch64)',     LINA_FTD10,       arm64_prologue_scan, 'AArch64→x86-64'),
+        ('FTD 1200 7.6.2 (AArch64)', LINA_1200,        arm64_prologue_scan, 'AArch64→x86-64'),
     ]
 
     import os
