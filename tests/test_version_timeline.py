@@ -60,7 +60,10 @@ VERSIONS = [
     ('ASA 9.16.4.92',  '/media/cowboy/research/cisco-lina-re/asa91692-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.76',  '/media/cowboy/research/cisco-lina-re/asa9164-76-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.84',  '/media/cowboy/research/cisco-lina-re/asa9164-84-extract/cpio-root/asa/bin/lina'),
+    # ASA 9.20.3: jac=0.1690 Era 3 drift — patched impl accumulating structural changes
+    ('ASA 9.20.3',     '/media/cowboy/research/cisco-lina-re/asa9203-extract/lina'),
     ('ASA 9.22',       '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'),
+    ('ASA 9.22.1.1',   '/media/cowboy/research/cisco-lina-re/asa92211-extract/lina'),
     ('ASA 9.22.2',     '/media/cowboy/research/cisco-lina-re/asa9222-extract/'
                        '_asa9-22-2-32-smp-k8.bin.extracted/_rootfs.img.extracted/cpio-root/asa/bin/lina'),
     ('FTD 7.6.2',      '/media/cowboy/research/cisco-lina-re/ftd-762-extract/'
