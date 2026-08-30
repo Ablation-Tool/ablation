@@ -23,9 +23,37 @@ logic across 14 years of Junos SRX development.
 Results: 11.4R3.7 through 12.1X46-D40 (Sep 2015): Jac=1.0, structurally
 identical. 15.1X49-D240 (Dec 2020) onward: Jac=0.8649, +5/-3 structural
 change. ah_get_auth_pads confirms same boundary at Jac=0.8348. Two IPsec
-auth functions changed together — coordinated fix boundary: D40→D240.
+auth functions changed together — boundary: D40→D240.
 
-Adjust VERSIONS paths to match your extracted junos-srxsme-*-domestic files.
+RE analysis of PRE (11.4R3.7, 0x804cc068) vs POST (15.1X49-D240, 0x8046afb4):
+
+Shared structure (both versions identical):
+  [1] 4x validation: skip>pktlen, skip+auth>pktlen, auth%4!=0, SA==NULL
+  [2] ah_algorithm_lookup(SA->alg_type) → s4 = algorithm descriptor
+  [3] sumsiz(SA) via descriptor[0] → s5 = (ret+3)&~3; EINVAL if s5>=17
+  [4] Skip traversal: advance s1 through mbufs consuming s0 skip bytes
+  [5] Init(sp+0x10, SA) via descriptor[0x14]; return value ignored (s5 fixed)
+  [6] bnez $s2, <data_entry>; j <Final> — auth_len==0 fast path
+  [7] Final(sp+0x10, sp+0x18, 16); ovbcopy(sp+0x18, caller_icv_buf, s5)
+
+The change (Jac=0.8649): register reuse of $s3.
+  PRE:  $s3 = SA pointer throughout; update loop uses addiu $a0, $sp, 0x10 directly.
+  POST: $s3 repurposed as ctx ptr in branch delay slot at 0x8046b250
+        (addiu $s3, $sp, 0x10 in delay slot of bnez multi-chunk dispatch);
+        update loop uses move $a0, $s3 (one fewer addiu per iteration).
+  4-gram change: [lw, addiu, jalr, addu] → [lw, move, jalr, addu]
+
+  Type: compiler register allocation change. Logic, output, and
+  security semantics are byte-for-byte equivalent. The coordinated
+  change in ah_get_auth_pads at the same boundary indicates a batch
+  recompilation across the IPsec auth subsystem, not a targeted patch.
+
+Capstone MIPS caveat: BNE $rs, $zero is sometimes decoded as BEQZ.
+  Verified via raw word decode. Always raw-verify MIPS branch direction
+  when control flow appears pathological (unconditional jump to Final
+  before any Update calls is the red flag).
+
+Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
 
 import sys, os, struct, subprocess, time
@@ -39,16 +67,17 @@ DB = '~/.ablation/func_id.db'
 
 # Each entry: (label, path)
 # All are ELF 32-bit MSB MIPS, symbols type A, not stripped.
+_BASE = '/media/cowboy/research/juniper-firmware/extracted'
 VERSIONS = [
-    ('11.4R3.7  (2012-05)',  '/tmp/junos-extract/srx-11.4/junos-srxsme-11.4R3.7-domestic'),
-    ('11.4R7.5  (2013-03)',  '/tmp/junos-extract/srx-11.4R7/junos-srxsme-11.4R7.5-domestic'),
-    ('11.4R11.4 (2015-07)',  '/tmp/junos-extract/srx-11.4R11/junos-srxsme-11.4R11.4-domestic'),
-    ('12.1X46-D35 (2015-05)','/tmp/junos-extract/srx-12.1X46/junos-srxsme-12.1X46-D35.1-domestic'),
-    ('12.1X46-D40 (2015-09)','/tmp/junos-extract/srx-12.1X46-D40/junos-srxsme-12.1X46-D40.2-domestic'),
-    ('15.1X49-D240 (2020-12)','/tmp/junos-extract/srx-15.1X49/junos-srxsme-15.1X49-D240.4-domestic'),
-    ('22.4R3-S9  (2026-01)', '/tmp/junos-extract/srx-22.4/junos-srxsme-22.4R3-S9.3-domestic'),
-    ('23.4R2-S5  (2025-06)', '/tmp/junos-extract/srx-23.4R2-S5/junos-srxsme-23.4R2-S5.5-domestic'),
-    ('23.4R2-S8  (2026-05)', '/tmp/junos-extract/srx-23.4/junos-srxsme-23.4R2-S8.7-domestic'),
+    ('11.4R3.7  (2012-05)',   f'{_BASE}/srx-11.4/junos-srxsme-11.4R3.7-domestic'),
+    ('11.4R7.5  (2013-03)',   f'{_BASE}/srx-11.4R7/junos-srxsme-11.4R7.5-domestic'),
+    ('11.4R11.4 (2015-07)',   f'{_BASE}/srx-11.4R11/junos-srxsme-11.4R11.4-domestic'),
+    ('12.1X46-D35 (2015-05)', f'{_BASE}/srx-12.1X46/junos-srxsme-12.1X46-D35.1-domestic'),
+    ('12.1X46-D40 (2015-09)', f'{_BASE}/srx-12.1X46-D40/junos-srxsme-12.1X46-D40.2-domestic'),
+    ('15.1X49-D240 (2020-12)',f'{_BASE}/srx-15.1X49/junos-srxsme-15.1X49-D240.4-domestic'),
+    ('22.4R3-S9  (2026-01)',  f'{_BASE}/srx-22.4/junos-srxsme-22.4R3-S9.3-domestic'),
+    ('23.4R2-S5  (2025-06)',  f'{_BASE}/srx-23.4R2-S5/junos-srxsme-23.4R2-S5.5-domestic'),
+    ('23.4R2-S8  (2026-05)',  f'{_BASE}/srx-23.4/junos-srxsme-23.4R2-S8.7-domestic'),
 ]
 
 # Primary seed: IPsec ESP authentication. Security-critical MIPS kernel function.
