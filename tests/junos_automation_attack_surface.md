@@ -1855,3 +1855,92 @@ No pre-auth memory corruption found across 14 analyzed management-plane binaries
 
 **Most likely pre-auth memory corruption path remaining:** authd RADIUS/TACACS parser (unconfirmed, dynamic analysis required) or CVE-2024-6387 in unextracted OpenSSH 9.2p1 (FINDING 8).
 
+
+---
+
+## FINDING 11: bbe-pfcp-proxyd — Plausible Pre-Auth Heap Overflow via PFCP IE String Parsing
+
+**Class:** Memory Corruption — Heap Buffer Overflow (Plausible)  
+**Severity:** HIGH (unconfirmed — requires dynamic analysis to verify)  
+**CVSSv3:** AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H = **8.1** (estimated, pending confirmation)  
+**Status:** Architecture confirms plausibility; IE-to-SDB-to-strcpy path traced; dynamic verification required  
+
+### Summary
+
+`bbe-pfcp-proxyd` contains a `strcpy(malloc(100), source)` call where `source = (*r8)->field_0x10` — a string pointer from a doubly-dereferenced SDB (Subscriber Database) struct. Unlike the identical function in `bbe-gtp-proxyd` (where all callers pass static rodata strings), in `bbe-pfcp-proxyd` the callers pass live SDB objects. PFCP IE values (APNs, FQDNs) can be up to 100-253 bytes. If any string IE > 99 bytes is stored in `field_0x10` without capping, the subsequent strcpy overflows the 100-byte heap allocation.
+
+### Technical Chain
+
+**1. Network receive path:**
+```
+recvmsg(sock, &msghdr, MSG_TRUNC)   ; 0x269a50
+  iov_len = 0x100 (256 bytes max)
+  flags = MSG_TRUNC (0x40)
+  edx = actual_bytes_received (≤ 256)
+→ call 0x269840 (PFCP packet processor)
+```
+
+**2. The vulnerable strcpy function (0x142df0):**
+```asm
+; Function entry
+142df0: push rbp / push r15..rbx
+142e07: test rsi,rsi; je return   ; rsi = source string (2nd arg)
+142e0c: mov 0x80(%rdi),%r14       ; r14 = object->field_0x80
+142e13: mov rsi,%r12              ; r12 = source (save)
+142e55: test r14,%r14
+142e55: jne 142e75               ; if pre-existing buffer, skip malloc
+142e55: mov $0x64,%r15d           ; r15d = 100
+142e64: call malloc(100)          ; alloc 100-byte buffer
+142e75: mov %r12,%rsi             ; rsi = original source string
+142e78: mov %r14,%rdi             ; rdi = malloc'd 100-byte buf
+142e7b: call strcpy               ; ← NO BOUNDS CHECK
+```
+
+**3. Callers of 0x142df0 in bbe-pfcp-proxyd (via dispatch function 0x1545f0):**
+```asm
+1548ac: mov 0x0(%r13),%rax        ; rax = *r13 (deref SDB object pointer)
+1548b0: mov %r14,%rsi             ; rsi = some name string
+1548b3: mov %r12,%rdi             ; rdi = receiving object  
+1548b6: mov 0x10(%rax),%rdx       ; rdx = (*r13)->field_0x10 = DYNAMIC STRING
+1548ba: call 0x142df0             ; strcpy(malloc(100), (*r13)->field_0x10)
+```
+
+**bbe-gtp-proxyd callers (same function, different source):**
+```asm
+505ab: lea 0xdedee(%rip),%rdx     ; rdx = 0x12f3a0 = STATIC STRING (safe)
+```
+
+**4. PFCP IE values that could populate field_0x10:**
+Per 3GPP TS 29.244 (PFCP, Rel-16):
+- APN (IE type 185): max 100 octets
+- FQDN (UPF Node ID, IE type 117): max 253 bytes  
+- Network Instance (IE type 22): variable length string
+
+Any of these IEs, if stored into `field_0x10` without a length cap, would overflow the 100-byte heap allocation on `strcpy`.
+
+### Attack Scenario
+
+1. Attacker sends crafted PFCP Create Session Request (UDP/8805) with APN or FQDN IE ≥ 100 bytes
+2. `bbe-pfcp-proxyd` receives packet via `recvmsg(256)`
+3. PFCP parser extracts the IE value and stores it in an SDB subscriber session struct at `field_0x10`
+4. Session processing dispatch function (0x1545f0) is called with pointer to this SDB struct as r8
+5. `strcpy(malloc(100), (*r8)->field_0x10)` overflows heap by (strlen(IE) - 99) bytes
+6. No stack canary (binary has 0 `stack_chk_fail` references), PIE EXEC
+
+**Binary properties:** PIE (ASLR applies), no canary, no RELRO — heap overflow with attacker-controlled data.
+
+### Why This Is Different from bbe-gtp-proxyd
+
+`bbe-gtp-proxyd` contains the identical `strcpy(malloc(100), rdx)` function (at 0x3de50). All 4 callers of that function pass `lea ...(%rip),%rdx` — compile-time constant rodata strings — so the overflow is impossible. In `bbe-pfcp-proxyd`, callers pass `mov 0x10(%rax),%rdx` from a live SDB object, making the source runtime-determined and potentially attacker-controlled.
+
+### Confirmation Required
+
+1. **Dynamic trace:** `strace -e recvmsg -p $(pgrep bbe-pfcp-proxyd)` then send crafted PFCP with 100-byte APN
+2. **Controlled crash test:** PFCP Create Session with `network_instance` IE = 200-byte string
+3. **SDB field trace:** Verify that PFCP IE values populate `field_0x10` in the SDB struct type used at call site 0x1548b6
+4. **PFCP port:** UDP 8805 (PFCP) — pre-auth; SMF authentication happens inside the PFCP session, not before it
+
+### Remediation (if confirmed)
+
+Replace `strcpy(malloc(100), src)` at 0x142e7b with `strlcpy(malloc(strlen(src)+1), src, strlen(src)+1)` or bound-check the IE value to ≤ 99 bytes at the PFCP parser layer before storage in SDB.
+
