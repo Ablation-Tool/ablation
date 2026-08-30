@@ -38,11 +38,13 @@ VERSIONS = [
     ('ASA 9.14.1.15',  '/media/cowboy/research/cisco-lina-re/asa9141-15-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14.1.30',  '/media/cowboy/research/cisco-lina-re/asa9141-30-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14.2.4',   '/media/cowboy/research/cisco-lina-re/asa9142-4-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.14.2.14',  '/media/cowboy/research/cisco-lina-re/asa91424-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14.4.24',  '/media/cowboy/research/cisco-lina-re/asa9144-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.1',     '/home/cowboy/VDT/intel/cisco-downloads/asa9-16-1-binwalk-out/'
                        '_asa9-16-1-smp-k8.bin.extracted/asa9-16-1-cpio/asa/bin/lina'),
     ('ASA 9.16.2.14',  '/media/cowboy/research/cisco-lina-re/asa9162-14-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.42',  '/media/cowboy/research/cisco-lina-re/asa916442-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.16.4.92',  '/media/cowboy/research/cisco-lina-re/asa91692-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.76',  '/media/cowboy/research/cisco-lina-re/asa9164-76-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.84',  '/media/cowboy/research/cisco-lina-re/asa9164-84-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.22',       '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'),
