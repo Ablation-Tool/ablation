@@ -449,8 +449,34 @@ back to the caller. Two fields are direct input echoes:
    mgd uses `snprintf` with the element name length, the truncation point is a
    crash oracle for length limits in mgd's XML output path.
 
-**RFC 6241 expected behavior (§4.3)**: `<bad-element>` MUST be a qualified name
-(NCName). Junos appears to copy the raw element name without validation.
+**RFC 6241 §4.3 constraint**: `<bad-element>` MUST contain the element's
+*decoded name* (NCName or QName), not raw XML bytes. A compliant implementation:
+  libxml2 parse → decoded node name → `error-info/bad-element` → re-serialized
+RFC-compliant mgd: entity-encoded input (`&amp;`) → decoded (`&`) stored in
+node name → re-escaped (`&amp;`) on output. No injection from this path.
+
+**The actual injection surface is the shortcut path:**
+  `xmlGetLastError()->str1` — libxml2's error string, copied from raw input
+  buffer BEFORE entity decoding. If mgd sources `<bad-element>` from
+  `xmlGetLastError()->str1` rather than from the parsed node name, raw
+  input bytes land in the output stream. The shortcut is common in fast
+  error-path code where parse failed before a valid node was created.
+
+**Distinguishing the two paths (test vectors for `netconf_reflect.py`):**
+  Payload `foo&amp;bar` → RFC-compliant: reflects `foo&amp;bar`
+                       → shortcut path: reflects `foo&amp;bar` (same here)
+  Payload `foo&bar`    → RFC-compliant: XML parse error; node never created;
+                         mgd may fall back to `str1` → reflects `foo&bar`
+                       → shortcut path: also reflects `foo&bar`
+  The distinguishing case: after a valid-XML-but-invalid-config RPC
+  (parse succeeds, mgd rejects the config element), the node exists:
+  Payload `foo&amp;bar` as element name in valid XML context:
+    → RFC path (decoded name): stores `foo&bar` → reflects `foo&amp;bar`
+    → shortcut from raw input: stores `foo&amp;bar` → reflects `foo&amp;bar`
+  Use `entity_ref` probe (`foo&amp;bar`) with a syntactically VALID RPC
+  (valid XML that mgd will reject at config layer, not parse layer) to
+  distinguish. `REFLECTED_TRANSFORMED` result = RFC path. `REFLECTED_EXACT`
+  = shortcut, raw-bytes injection surface confirmed.
 
 **Test approach (controlled env only):**
 ```xml
