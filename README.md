@@ -7,7 +7,13 @@
 
 ---
 
-Stripped enterprise firmware, no debug symbols, no source. Ablation reads the binary, encodes what each function *does*, and answers two questions: **which functions match a given vulnerability pattern** and **when was this function patched**.
+Ablation reads firmware and figures out what each piece of code *does* — not what it looks like, but what job it's performing. Then it can answer the question: "Does this device still have the vulnerable code in it?" — even if that code has been moved around, renamed, or recompiled into a slightly different form. It does that check in under two minutes, automatically, without a human having to read a single line of assembly.
+
+The practical result: one researcher can now scan an entire vendor's firmware catalog for a known vulnerability in an afternoon. Work that used to take a team weeks now takes one person a few hours. And vendors can no longer quietly patch one product and call it done — because now there's tooling that will find every other product where they didn't.
+
+---
+
+Stripped enterprise firmware, no debug symbols, no source. Ablation encodes what each function *does* and answers two questions: **which functions match a given vulnerability pattern** and **when was this function patched**.
 
 Every other approach breaks when the address moves or the code changes slightly. Signature scanners need exact byte matches. IDA and Ghidra need a human to manually correlate functions across versions. BinDiff works on full binary pairs but has no semantic understanding — it matches structure, not meaning. None of them tell you *when* a function was patched.
 
