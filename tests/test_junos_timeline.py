@@ -358,32 +358,34 @@ SECURITY DELTA:
     a protocol deregistration on CPU-A could be invisible to CPU-B reading
     the bitmap without a barrier, causing dispatch to freed handler struct.
 
-23.4R2-S5.5 netisr_dispatch (0x8045321c, 2212 bytes) — SECURITY REGRESSION:
-  Architecture overhaul: proto * 280-byte stride (vs D35's 56), 38-entry table
-  at netisr_proto (0x812a7850, 10640 bytes). netisr_dispatch_src_internal (2488 bytes)
-  at 0x80452864 handles the actual packet delivery.
+22.4R3-S9 / 23.4R2-S5.5 netisr_dispatch — SECURITY REGRESSION (both versions):
+  22.4 (0x8044d9ec) and 23.4 (0x8045321c): IDENTICAL mnemonic sequence, Jac=1.0.
+  Same 2212-byte body; only absolute VA differences (netisr_proto table: 0x8128a450 vs
+  0x812a7850). Same 2488-byte netisr_dispatch_src_internal and 120-byte netisr_dispatch_src.
 
-  ABSENT from 23.4: proto bounds check (sltu), bitmap registration gate, sync barrier.
-  D35's protection layer completely removed/not ported.
+  Architecture overhaul: proto * 280-byte stride (vs D35's 56), 38-entry table.
+  netisr_proto table size: 22.4=10640B @ 0x8128a450, 23.4=10640B @ 0x812a7850.
 
-  23.4 entry sequence:
+  ABSENT from both 22.4 and 23.4: proto bounds check (sltu), bitmap registration
+  gate, sync barrier. D35's protection layer completely removed in the dispatch rewrite.
+
+  Entry sequence:
     proto * (8+32) = proto * 40
     (proto * 40) * 8 - (proto * 40) = proto * 280   [new stride]
     addu v1, (proto*280), netisr_proto               [table index — NO BOUNDS CHECK]
     lw $s3, ($v1)                                     [OOB read if proto >= 38]
 
-  sltu instructions present in netisr_dispatch (0x804533c8, 0x804533dc) are queue-depth
-  comparisons ([s0+8] < [s0+0xc], [s0+0x14] < [s0+0x18]) — NOT proto validation.
-  No sltu in netisr_register against the 38-entry limit either.
-  No sync instruction anywhere in 23.4 netisr_dispatch (vs D35's sync+2NOPs).
+  sltu at +0x1ac (22.4: 0x8044db98/0x8044dbac; 23.4: 0x804533c8/0x804533dc) are
+  queue-depth comparisons ([s0+8] < [s0+0xc]), NOT proto validation.
+  No sync instruction in either version (vs D35's sync+2NOPs).
 
-  Table layout: 38 proto entries × 280 bytes. netisr_proto_num at 0x811a01e4.
-  OOB threshold: proto >= 38 → reads into kernel memory past netisr_proto.
-  Impact: OOB kernel read minimum; if proto is caller-controllable, OOB function
-    pointer deref in the per-entry dispatch fields (same class as 11.4 original).
-  Note: in normal operation, proto numbers are kernel constants (NETISR_IP=2,
-    NETISR_ARP=26, etc.); exploitability requires a path where packet input can
-    influence the netisr_dispatch proto argument beyond the 38-entry range.
+  Table layout: 38 proto entries × 280 bytes. netisr_proto_num at 0x811a01e4 (23.4).
+  OOB threshold: proto >= 38 → kernel memory read/write past netisr_proto.
+  Impact: OOB kernel memory access; if proto-entry-local function pointer at some
+    offset is dereferenced, same function-pointer-hijack class as 11.4 original.
+  Scope: regression present in at least 22.4R3 and 23.4R2 (both confirmed).
+  Exploitability: depends on whether packet processing paths pass attacker-influenced
+    protocol values to netisr_dispatch beyond the 38-entry table boundary.
 
 Firmware at /media/cowboy/research/juniper-firmware/extracted/
 """
