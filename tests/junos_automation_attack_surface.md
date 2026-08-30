@@ -642,9 +642,19 @@ FINDING 2 — vtable overwrite (RCE):
     RELRO:  OFF — GOT writable on mgd and libengine (confirmed: no PT_GNU_RELRO segment).
     Canary: NOT PRESENT — function prologues in libengine use push/sub, no FS:0x28 load.
 
-  ASLR bypass requirement: need one address leak (e.g., via NETCONF error message
-    containing a pointer) to compute libengine base, then derive libc base via fixed
-    inter-library offset. Or: brute-force 64-bit ASLR space is infeasible. Leak required.
+  ASLR bypass analysis (EVO 23.4R2.14):
+    Kernel default: randomize_va_space = 2 (full ASLR — no sysctl override in EVO
+    config). All segments randomized for PIE executables.
+    NETCONF pointer leak survey: 14 format strings containing %p in libengine.so.1.
+    ALL route to js_traceout (PLT 0x37ef0) = Junos tracefile, NOT NETCONF channel.
+    No %p-format path found that writes to the NETCONF wire reply.
+    Confirmed absence: no xmlGetLastError()->str1 pointer reflected to client;
+    gram_file_report_error formats to 8KB stack buf → dprintf with no pointer fields.
+    CONCLUSION: No NETCONF-visible pointer leak identified. ASLR bypass requires
+      either a second vulnerability (info-leak class) or offline core analysis.
+      Without bypass, FINDING 2's RCE component is theoretical — chain incomplete.
+    Net: FINDING 2 = post-auth privilege escalation (config write → vtable overwrite
+      → ROP when ASLR bypass available), not pre-auth RCE.
 
   ROP GADGET LANDSCAPE (libengine.so.1, load-base-relative offsets):
     pop rdi; ret             @ 0x5b18d
