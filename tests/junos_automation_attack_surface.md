@@ -720,7 +720,10 @@ SLAX trigger path status — EVO 23.4R2 (confirmed by binary extraction):
   CONCLUSION: S1–S4 are NOT standalone pre-auth exploits on EVO 23.4R2. They require
     an admin-installed SLAX script that passes an RPC parameter to slax:evaluate/slax:sysctl.
     Attack surface exists but trigger path is post-auth (requires SLAX script installation).
-  Junos Classic (FreeBSD-based, non-EVO) ships SLAX scripts — trigger path there is unconfirmed.
+  Junos Classic (FreeBSD-based, non-EVO): CONFIRMED SAME. Surveyed junos-srxsme 10.4R7.5,
+    11.4R3.7, 21.4R3-S3.4, 23.4R2-S3.9. +CONTENTS file (BSD pkg manifest) across all versions
+    lists zero .slax files. CONCLUSION: No version of Junos Classic SRX ships pre-installed
+    SLAX scripts. S1-S4 require operator-installed scripts on BOTH Classic and EVO.
 
 ## Binary RE Targets (automation layer)
 
