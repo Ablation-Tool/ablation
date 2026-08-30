@@ -1331,6 +1331,115 @@ class AxisEAPAnalyzer:
 
         return result
 
+    def storedatamanager_surface(self) -> dict:
+        """
+        RE surface for AXIS StoreDataManager (Cognimatics TrueView DataManager) v1.6.10.
+        Debian package: AXIS_StoreDataManager_1_06_10.deb
+        Server-side PHP5/MySQL/Zend Framework app; not a camera EAP.
+        Extracted: /tmp/axis_sdm_re/usr/share/cognimatics/datamanager/
+
+        Auth: HTTP Digest (RFC 2069) against MySQL users table.
+          - digest_helper_password field stores pre-computed HA1 = MD5(user:realm:pass)
+          - Realm: APPLICATION_REALM constant
+          - Nonce: uniqid() — trivially predictable on PHP 5 (microsecond timestamp)
+          - No CSRF protection on any state-changing POST
+
+        cm_decrypt2 / cm_decrypt_binary2:
+          - Injected at runtime by abc.php via multi-layer eval(base64_decode(hex(...)))
+          - ~331KB obfuscated blob; ~5 layers deep; function symbols not in any .so
+          - Takes (registrationCode, activationCode) from Zend_Registry 'config-license'
+          - All count data pushed from cameras is encrypted with this scheme;
+            decrypted to ## -delimited protocol strings on the server side
+
+        Protocol v4 (decodeVersion4): ##-delimited fields:
+          [0]=username [1]=password [2]=version [3]=cameraName [4]=serial
+          [5]=cnttime [6]=nbrOfTypes ...
+          Camera plaintext password embedded in field[1] of every data push.
+
+        Camera image upload (Cameras.php:342):
+          - Writes arbitrary JPEG bytes to public/resources/camera/<random>.jpg
+          - Filename generated: preg_replace('/([0-9])/e', 'chr((N+112))', rand())
+          - /e modifier = PHP eval in regex — deprecated in PHP 5.4, removed in 7.0
+          - No extension whitelist; filename is server-generated (not attacker-controlled)
+          - Content not validated as valid JPEG — can store arbitrary bytes
+
+        SQL injection surface (Cameras.php:503):
+          - Camera name search: UPPER(camera.name) LIKE UPPER('%$word%')
+          - $word comes from space-split of user-supplied search string
+          - No PDO binding; raw string interpolation into Zend_Db_Select::where()
+          - Zend_Db_Select::where() passes string verbatim to MySQL if not parameterized
+          - Endpoint: authenticated search (role unclear — likely standard user)
+
+        Debug artifact (Abstract.php:23):
+          - decryptAndDecodeJSON() writes decrypted payload to /tmp/decrypted_json
+          - fopen/fputs/fclose unconditionally on every API call
+          - Leaks all decrypted camera data to local filesystem
+
+        Database schema:
+          - Default password in config template: 'pass'
+          - Tables: camera, camera_group, company, group, document, user, camera_images
+          - Camera credentials NOT stored in SDM MySQL — cameras authenticate to SDM
+            via cm_encrypt'd pushes; SDM authenticates to cameras via VAPIX (separate)
+
+        POS import (ImportJobs.php):
+          - CSV files ingested from file_url field (DB-stored path)
+          - Pos_Model_PosPath resolves file_url; no path traversal mitigation visible
+          - file_url written from session namespace ($namespace->file) — POST-controlled
+
+        Export surface (ExportController.php):
+          - Authenticated export creation stores camera list in export_cameras table
+          - No file download in ExportController (renamed to stored export config)
+          - Actual export generation likely in cron/background worker (not in PHP tree)
+        """
+        return {
+            'package': 'datamanager',
+            'vendor': 'Cognimatics TrueView DataManager',
+            'version': '1.6.10',
+            'type': 'debian_server_app',
+            'stack': 'PHP5 / MySQL 5.0+ / Zend Framework / Apache2',
+            'auth': {
+                'mechanism': 'HTTP Digest (RFC 2069)',
+                'nonce': 'uniqid() — microsecond timestamp, predictable',
+                'password_storage': 'HA1 MD5(user:realm:pass) in digest_helper_password column',
+                'csrf': 'none',
+            },
+            'obfuscation': {
+                'file': 'application/abc.php',
+                'layers': '5+ nested eval(base64_decode(hex(...)))',
+                'blob_bytes': 331140,
+                'purpose': 'inject cm_decrypt2 / cm_decrypt_binary2 PHP functions at runtime',
+                'key_source': 'Zend_Registry config-license: registrationCode + activationCode',
+            },
+            'protocol': {
+                'version': 4,
+                'format': '##-delimited fields; field[1] = plaintext camera password',
+                'transport': 'base64(cm_encrypt(data)) POST body',
+                'debug_leak': '/tmp/decrypted_json written on every API call (Abstract.php:23)',
+            },
+            'sql_injection': {
+                'file': 'application/modules/core/models/Cameras.php:503',
+                'pattern': "UPPER(camera.name) LIKE UPPER('%$word%')",
+                'source': 'user search string, space-split, no PDO binding',
+                'context': 'authenticated search endpoint',
+            },
+            'file_write': {
+                'file': 'application/modules/core/models/Cameras.php:342',
+                'dest': 'public/resources/camera/<random>.jpg',
+                'filename_gen': "preg_replace('/([0-9])/e', ...) — PHP /e eval modifier",
+                'content_check': 'none — arbitrary bytes stored as .jpg',
+            },
+            'pos_import': {
+                'file': 'application/modules/pos/models/ImportJobs.php',
+                'source': 'file_url from session namespace (POST-controlled)',
+                'risk': 'path traversal in CSV file_url not mitigated',
+            },
+            'controllers': 43,
+            'api_methods': [
+                'countData.add', 'getLastSavedDataTime', 'camera.ping',
+                'importCntFilesToCameraGroup',
+            ],
+        }
+
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _read_manifest(self, pkg_dir: Path) -> dict:
@@ -1463,6 +1572,8 @@ def main():
                         help='Player for Soundtrack Business (sbplayer) UpdateURL/library attack surface')
     parser.add_argument('--ptz-remote', action='store_true', dest='ptz_remote',
                         help='p-ptz remote connection (remote_ptz_conn_setup) SSRF surface')
+    parser.add_argument('--storedatamanager', action='store_true', dest='storedatamanager',
+                        help='StoreDataManager (Cognimatics TrueView) server app RE surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -1508,6 +1619,9 @@ def main():
 
     if args.all or args.ptz_remote:
         results['ptz_remote'] = analyzer.ptz_remote_surface()
+
+    if args.all or args.storedatamanager:
+        results['storedatamanager'] = analyzer.storedatamanager_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
