@@ -2,38 +2,29 @@
 axis_eap_re — AXIS ACAP EAP package RE module
 
 Reverse engineers AXIS camera application packages (*.eap = gzip'd tar).
-Targets:
-  SipThirdPartyIntegration  (aarch64 ELF, debug symbols, liblicensekey.so)
-  BarcodeReader              (ARM32 ELF, stripped, libaxhttp/libvdostream)
-  BodyWornLiveSelfHosted     (aarch64 Go static, WebRTC/coturn/MQTT/JWT)
-  facedetector               (aarch64 ELF, stripped, libvideo-object-detection)
-  AXIS License Plate Verifier (aarch64 ELF stripped; fflprapp; 11 TFLite models)
 
-Attack surface by component:
-  licensekey_verify() bypass — LD_LIBRARY_PATH / LD_PRELOAD / /etc/ld.so.preload
-  SipThirdPartyIntegration  — sipd dependency gate (post_install.sh exit 77 skip)
-  BodyWornLiveSelfHosted    — getStunTurnTestCredentials CGI, signaling JWT, coturn TURN creds
-  BarcodeReader             — VAPIX service account token, http://127.0.0.12/ loopback, libcurl
-  facedetector              — CVE-2024-47257 (AXIS) CGI param injection via protobuf decode
-  LicensePlateVerifier      — SQLite plaintext creds, SQL injection in search CGI,
-                               shell injection via curl format strings, cloud auth exposure
-
-Usage:
-    from modules.axis_eap_re import AxisEAPAnalyzer
-    a = AxisEAPAnalyzer('/media/cowboy/research/AXIS')
-    a.survey()
-    a.licensekey_bypass_vectors('/path/to/SipThirdPartyIntegration')
-    a.bodyworn_attack_surface()
-    a.barcode_vapix_surface()
-    a.lpv_surface()
+Targets (by binary, arch, key surface):
+  SipThirdPartyIntegration   aarch64 ELF unstripped; liblicensekey.so bypass chain
+  BarcodeReader              ARM32 ELF stripped; ignoreCert=1 default; nbix PACS/door control
+  BodyWornLiveSelfHosted     aarch64 Go static; WebRTC/coturn/MQTT/JWT; TURN credential leak
+  facedetector               aarch64 ELF stripped; protobuf CGI decode; VideoObjectDetection D-Bus
+  fflprapp                   aarch64 ELF stripped; SQLi in search CGI; shell inject via popen curl
+  tvpc                       aarch64 ELF stripped; restore_backup tarslip; TCP 23456 unauth inject
+  axptzoversnmp              MIPS32; NTCIP 1205 CCTV MIB; full PTZ control via SNMP SET
+  metricdashboard            aarch64 ELF stripped; Modbus TCP SSRF; NMEA GPS spoof; RS-485
+  metadata_provider          ARM32; mosquitto allow_anonymous; MQTT bridge SSRF + /etc/hosts inject
+  a3dpc                      MIPS32; pyrun Python 4.5MB; admin CGI pkg install; X-Forwarded-User
+  sbplayer                   aarch64 ELF unstripped; UpdateURL axparam → library SSRF (checksum server-supplied)
+  remote_ptz_conn_setup      aarch64 ELF unstripped; setvapixparams.cgi writes VAPIX params to remote camera
 
 Standalone:
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --all
-    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --license-bypass
-    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --bodyworn
-    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --barcode
-    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --facedetector
     python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --lpv
+    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --people-counter
+    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --ptz-snmp
+    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --sensor-metrics
+    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --metadata-provider
+    python3 modules/axis_eap_re.py /media/cowboy/research/AXIS --3dpc
     python3 modules/axis_eap_re.py /path/to/SipThirdPartyIntegration --license-bypass
 """
 
@@ -117,11 +108,17 @@ class AxisEAPAnalyzer:
     # Known EAP slugs and their primary binary name
     KNOWN_PACKAGES = {
         'SipThirdPartyIntegration': 'sip_ucs',
-        'BarcodeReader': 'barcode',
-        'BodyWornLiveSelfHosted': 'bodyworn',
+        'BarcodeReader': 'BarcodeReader',
+        'BodyWornLiveSelfHosted': 'BodyWornLiveSelfHosted',
         'facedetector': 'facedetector',
-        'fflprapp': 'fflprapp',    # AXIS License Plate Verifier
-        'tvpc': 'tvpc',            # AXIS People Counter
+        'fflprapp': 'fflprapp',              # AXIS License Plate Verifier
+        'tvpc': 'tvpc',                      # AXIS People Counter
+        'axptzoversnmp': 'axptzoversnmp',    # PTZ over SNMP
+        'metricdashboard': 'metricdashboard', # AXIS Sensor Metrics Dashboard
+        'metadata_provider': 'metadata_provider',  # Metadata Provider
+        'a3dpc': 'a3dpc',                    # AXIS 3D People Counter
+        'sbplayer': 'sbplayer',              # Player for Soundtrack Business
+        'remote_ptz_conn_setup': 'remote_ptz_conn_setup',  # p-ptz remote connection
     }
 
     # licensekey_verify bypass env vars (from disasm of licensekey_stat.c)
@@ -1145,6 +1142,146 @@ class AxisEAPAnalyzer:
         }
         return result
 
+    def sbplayer_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        Player for Soundtrack Business (sbplayer) aarch64 ELF attack surface.
+
+        appId: 413325  binary: sbplayer  version: 1.7.1  arch: aarch64 (unstripped)
+        Libraries: libaxpackage.so.1, libaxparameter.so.1, libaxstorage.so.1,
+                   libcurl.so.4, libgstreamer-1.0.so.0, libssl.so.3, libcrypto.so.3
+
+        Key findings:
+
+        1. UpdateURL axparameter → server-controlled library download
+           sbplayer has a 'downloader' component that fetches library updates from:
+             https://builds.soundtrackyourbrand.com/remote/axis-aarch64/latest  (default)
+           UpdateURL axparameter (default empty, override from param.conf) controls the URL.
+           The downloader validates a checksum, but the checksum is retrieved from the SAME server
+           as the library — no pinning, no signature verification beyond server-supplied hash.
+           Admin can repoint UpdateURL via ctrl.cgi → attacker-controlled update server.
+           Chain: admin access → set UpdateURL → serve malicious lib + matching checksum
+           → sbplayer downloads and installs attacker library → code execution.
+
+        2. GraphQL mutation to soundtrackyourbrand.com API
+           GeneratePairingCodes mutation sends hardwareId (device ID), label, description
+           to https://partner.soundtrackyourbrand.com/api — device identity exfiltration.
+           If any of label/description includes camera metadata, PII leaks to 3rd-party.
+
+        3. ctrl.cgi admin-only; info.cgi viewer — attack surface partition
+           ctrl.cgi accepts play/pause/skip actions. Any format injection in action param?
+
+        CGI: /ctrl.cgi (admin fastCgi), /info.cgi (viewer fastCgi)
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('sbplayer')
+            if pd:
+                pkg_dir = str(pd)
+
+        result = {
+            'binary': str(Path(pkg_dir) / 'sbplayer') if pkg_dir else None,
+            'app_id': 413325,
+            'app_name': 'Player for Soundtrack Business',
+            'arch': 'aarch64 ELF PIE (unstripped, debug_info present)',
+            'external_endpoints': [
+                'https://builds.soundtrackyourbrand.com/remote/axis-aarch64/latest — library update source',
+                'https://builds.soundtrackyourbrand.com/remote/axis-arm/latest — ARM update source',
+                'https://partner.soundtrackyourbrand.com/api — GraphQL pairing API',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'SBP-1',
+                    'title': 'UpdateURL axparameter → SSRF/library swap via attacker update server',
+                    'cgi': 'ctrl.cgi (admin) to write UpdateURL param',
+                    'mechanism': (
+                        'UpdateURL controls library download source; checksum validation is '
+                        'server-supplied (no pinning); admin repoints URL → serve malicious lib + hash'
+                    ),
+                    'impact': 'Arbitrary code execution as sbplayer ACAP process via library replacement',
+                    'severity': 'HIGH',
+                    'prerequisite': 'Admin auth; UpdateURL param writable via ctrl.cgi or axparameter API',
+                },
+                {
+                    'id': 'SBP-2',
+                    'title': 'Device identity exfiltration via GraphQL pairing to soundtrackyourbrand.com',
+                    'mechanism': 'GeneratePairingCodes mutation sends hardwareId, label, description to 3rd-party SaaS',
+                    'impact': 'Camera device ID, label, description sent to external service',
+                    'severity': 'LOW',
+                    'note': 'Expected behavior for pairing flow; risk = 3rd-party data custody',
+                },
+            ],
+            'axparams': {
+                'UpdateURL': 'hidden:string — controls library download source; empty=default soundtrackyourbrand URL',
+                'UpdateIntervalSeconds': 'hidden:int — polling interval (default 900s)',
+                'WatchdogTimeoutMillis': 'hidden:int — watchdog timeout',
+                'Volume': 'int 0-100 — audio volume',
+            },
+        }
+        return result
+
+    def ptz_remote_surface(self, pkg_dir: str | None = None) -> dict:
+        """
+        p-ptz remote connection (remote_ptz_conn_setup) aarch64 ELF attack surface.
+
+        appId: 413658  binary: remote_ptz_conn_setup  version: 1.5.0  arch: aarch64
+        runMode: never (setup tool only, not a persistent daemon)
+        Provides: /axis-cgi/remotecameracontrol/* CGI endpoints for remote PTZ pairing
+
+        Key findings:
+
+        1. setvapixparams.cgi — writes VAPIX params to remote camera
+           Endpoint: /axis-cgi/remotecameracontrol/setvapixparams.cgi
+           This CGI writes VAPIX configuration parameters to a paired remote camera.
+           If the remote camera URL or auth token can be controlled, this becomes an
+           authenticated SSRF — the local camera proxies VAPIX writes to arbitrary targets.
+
+        2. getvapixparams.cgi / getvapixstatus.cgi — read VAPIX config from remote camera
+           Pulls VAPIX parameters from paired remote camera — potential credential/config leak.
+
+        3. /aca/index.html (LEGACY_DEVICE_INTERFACE_PATH)
+           Legacy device interface served from /aca/; if older firmware, may expose legacy API.
+
+        4. Binary has almost no symbols/strings — minimal attack surface from static RE alone.
+           Apollo GraphQL client embedded in JS bundle — mutation queries for PTZ calibration.
+        """
+        if pkg_dir is None:
+            pd = self.packages.get('remote_ptz_conn_setup')
+            if pd:
+                pkg_dir = str(pd)
+
+        result = {
+            'binary': str(Path(pkg_dir) / 'remote_ptz_conn_setup') if pkg_dir else None,
+            'app_id': 413658,
+            'app_name': 'p-ptz remote connection',
+            'arch': 'aarch64 ELF PIE (unstripped)',
+            'run_mode': 'never — setup tool only',
+            'cgi_endpoints': [
+                '/axis-cgi/remotecameracontrol/getvapixparams.cgi',
+                '/axis-cgi/remotecameracontrol/getvapixstatus.cgi',
+                '/axis-cgi/remotecameracontrol/setvapixparams.cgi',
+                '/axis-cgi/ptz/ptzsetactivedrivermode.cgi',
+                '/axis-cgi/viewarea/configure.cgi',
+            ],
+            'attack_paths': [
+                {
+                    'id': 'PTZR-1',
+                    'title': 'setvapixparams.cgi — authenticated SSRF via remote camera parameter write',
+                    'cgi': '/axis-cgi/remotecameracontrol/setvapixparams.cgi',
+                    'mechanism': 'Proxies VAPIX param writes to paired remote camera; remote camera URL/auth from pairing config',
+                    'impact': 'Write VAPIX configuration to attacker-controlled or internal remote camera',
+                    'severity': 'MEDIUM',
+                },
+                {
+                    'id': 'PTZR-2',
+                    'title': 'getvapixparams.cgi — remote camera config/credential read',
+                    'cgi': '/axis-cgi/remotecameracontrol/getvapixparams.cgi',
+                    'mechanism': 'Reads VAPIX params from paired camera; may expose credentials stored in params',
+                    'impact': 'Credential/config leak from paired remote camera',
+                    'severity': 'MEDIUM',
+                },
+            ],
+        }
+        return result
+
     def facedetector_surface(self) -> dict:
         """
         facedetector aarch64 ELF attack surface.
@@ -1322,6 +1459,10 @@ def main():
                         help='Metadata Provider (metadata_provider) MQTT bridge attack surface')
     parser.add_argument('--3dpc', action='store_true', dest='a3dpc',
                         help='AXIS 3D People Counter (a3dpc) pyrun/admin-CGI attack surface')
+    parser.add_argument('--sbplayer', action='store_true', dest='sbplayer',
+                        help='Player for Soundtrack Business (sbplayer) UpdateURL/library attack surface')
+    parser.add_argument('--ptz-remote', action='store_true', dest='ptz_remote',
+                        help='p-ptz remote connection (remote_ptz_conn_setup) SSRF surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -1349,6 +1490,24 @@ def main():
 
     if args.all or args.people_counter:
         results['people_counter'] = analyzer.people_counter_surface()
+
+    if args.all or args.ptz_snmp:
+        results['ptz_snmp'] = analyzer.ptz_snmp_surface()
+
+    if args.all or args.sensor_metrics:
+        results['sensor_metrics'] = analyzer.sensor_metrics_surface()
+
+    if args.all or args.metadata_provider:
+        results['metadata_provider'] = analyzer.metadata_provider_surface()
+
+    if args.all or args.a3dpc:
+        results['a3dpc'] = analyzer.a3dpc_surface()
+
+    if args.all or args.sbplayer:
+        results['sbplayer'] = analyzer.sbplayer_surface()
+
+    if args.all or args.ptz_remote:
+        results['ptz_remote'] = analyzer.ptz_remote_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
