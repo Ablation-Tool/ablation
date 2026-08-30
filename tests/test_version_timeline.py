@@ -22,17 +22,25 @@ SEED_NAME = 'attr_list_add_impl'
 DB        = '~/.ablation/func_id.db'
 
 # Ordered from oldest to newest. Set path to None to skip a version.
+# Note: 9.2.4 (i386), 9.1.7.23 (x86-64), and FTD 1200/10.0.0 ARM64 are in test_cross_arch.py
 VERSIONS = [
+    ('ASA 9.1.7.23',   '/media/cowboy/research/cisco-lina-re/asa91723-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.6.4.18',   '/media/cowboy/research/cisco-lina-re/asa964-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.9.2.85',   '/media/cowboy/research/cisco-lina-re/asa992-85-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.10.1.37',  '/media/cowboy/research/cisco-lina-re/asa9101037-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.10.1.40',  '/media/cowboy/research/cisco-lina-re/asa9101040-mnt/asa/bin/lina'),
+    ('ASA 9.10.1.42',  '/media/cowboy/research/cisco-lina-re/asa9101042-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.12.4.13',  '/media/cowboy/research/cisco-lina-re/asa9124-13-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.12.4.67',  '/media/cowboy/research/cisco-lina-re/asa9124-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.13.1.12',  '/media/cowboy/research/cisco-lina-re/asa9131112-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14 (seed source)', None),   # seed — skip self-match
+    ('ASA 9.14.1.15',  '/media/cowboy/research/cisco-lina-re/asa9141-15-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.14.1.30',  '/media/cowboy/research/cisco-lina-re/asa9141-30-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.14.2.4',   '/media/cowboy/research/cisco-lina-re/asa9142-4-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.14.4.24',  '/media/cowboy/research/cisco-lina-re/asa9144-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.1',     '/home/cowboy/VDT/intel/cisco-downloads/asa9-16-1-binwalk-out/'
                        '_asa9-16-1-smp-k8.bin.extracted/asa9-16-1-cpio/asa/bin/lina'),
+    ('ASA 9.16.2.14',  '/media/cowboy/research/cisco-lina-re/asa9162-14-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.76',  '/media/cowboy/research/cisco-lina-re/asa9164-76-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.16.4.84',  '/media/cowboy/research/cisco-lina-re/asa9164-84-extract/cpio-root/asa/bin/lina'),
     ('ASA 9.22',       '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'),
