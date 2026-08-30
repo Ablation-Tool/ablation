@@ -649,6 +649,41 @@ class AxisEAPAnalyzer:
                 'note': 'Sent to cloud_config/cloud_url periodically; full device fingerprint in cleartext JSON',
             },
             'license_gate': 'liblicensekey.so.1 — same bypass vectors as SipThirdPartyIntegration (appId 333330)',
+            'version_diff_3010_to_3013': {
+                'size_delta_bytes': 53248,
+                'sha256_3010': '2ac0cc82b3b8',
+                'sha256_3013': 'bbbeed435386',
+                'new_subsystems': [
+                    'PROTO_UTMC — UK Traffic Management system cloud protocol; new curl_easy_perform call path; '
+                    'error tags: [PROTO_UTMC] curl_easy_perform() failed, [PROTO_UTMC] Failed to initialize curl',
+                    'AXIS_TZ — timezone resolution via /config/rest/time/v2/timeZone REST endpoint',
+                    'MAX_GAIN — camera gain control; JSON parse path with [MAX_GAIN] error tags',
+                ],
+                'auth_hardening': (
+                    '"Invalid HttpAuthMethod : %lu" added — unsigned long validation on auth method enum; '
+                    'likely closes a type confusion in http_auth_type axparameter parsing'
+                ),
+                'api_fix': (
+                    'apiVersion field leading "?" removed from JSON serialization path '
+                    '(was: ?{"apiVersion":"2.0"...}, now: {"apiVersion":"2.0"...}) — '
+                    'malformed JSON fixed; previously parseable only with lenient decoders'
+                ),
+                'vehicle_model_db': (
+                    'Model DB expanded: Skoda Rapid/Scala → Octavia/Rapid/Scala/Slavia/Superb '
+                    '(2018-2024); Foton Tunland G7 (2018-2019 PICKUPTRUCK) added; '
+                    'MINI Countryman 2024, Toyota Grand Highlander 2023 added'
+                ),
+                'sql_surface_unchanged': (
+                    '"country is" string added in 3.0.13 — new country filter column reference; '
+                    'AND COUNTRY LIKE format strings present in both versions; SQLi surface stable'
+                ),
+                'utmc_attack_surface': (
+                    'PROTO_UTMC adds a new curl invocation path; if utmc_config/url (or equivalent '
+                    'axparameter) is user-writable, UTMC cloud endpoint becomes an SSRF vector. '
+                    'FIXME strings suggest incomplete validation: [PROTO_UTMC] FIXME: Invalid CloudConfig, '
+                    '[PROTO_UTMC] FIXME: Invalid Config, [PROTO_UTMC] FIXME: Invalid event_fname'
+                ),
+            },
         }
 
         if pkg_dir and Path(pkg_dir).exists():
