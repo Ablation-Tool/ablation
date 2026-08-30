@@ -40,6 +40,24 @@ PE_TARGETS = {
     'kernel32.dll (Win11 MSVC)':   '/tmp/win11_dlls/kernel32.dll',
 }
 
+# Cross-arch FP case: DCNM 11.5.4 telemetry-infra (Go i386 static binary)
+# reflect.Value.CanInterface (VA 0x80bff00) scores sem=0.8983 — above the current
+# CROSS_ARCH_SEM_THRESHOLD of 0.85 used in test_cross_arch.py.  Structurally: both
+# examine struct fields and return conditionally, which MPNet cannot distinguish at
+# 0.85.  True ARM64 positives (FTD 10.0.0 / FTD 1200) score sem=0.8973–0.8996 —
+# indistinguishable from this FP at the current threshold.
+# Fix: raise CROSS_ARCH_SEM_THRESHOLD to ≥0.92 OR add language-discriminator
+# (Go runtime symbol check via .gosymtab / .gopclntab presence).
+DCNM_TELEMETRY = '/tmp/dcnm-telemetry/usr/bin/telemetry-infra'
+CROSS_ARCH_SEM_THRESHOLD_CURRENT  = 0.85   # documented as insufficient
+CROSS_ARCH_SEM_THRESHOLD_REQUIRED = 0.92   # minimum to clear this FP class
+
+# i386 prologue patterns (shared with test_cross_arch.py — kept inline to avoid
+# cross-test imports).
+_PROLOGUES_I386  = [b'\x55\x89\xe5', b'\x55\x83\xec', b'\x55\x56', b'\x55\x53', b'\x55\x57']
+_MIN_INSTRS_I386 = 5
+_MAX_BYTES_I386  = 4096
+
 _PROLOGUES  = [b'\x55\x48\x89\xe5', b'\xf3\x0f\x1e\xfa\x55', b'\x55\x41']
 _MIN_INSTRS = 8
 _MAX_BYTES  = 4096
@@ -66,6 +84,41 @@ def extract_func_full(data: bytes, offset: int, base_va: int = 0):
             except ValueError:
                 break
     return lines, callees, vas
+
+
+def i386_prologue_scan(data: bytes) -> list[FuncFeatures]:
+    """Scan a raw i386 ELF for function prologues."""
+    md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+    md.detail = False
+    seen: set[int] = set()
+    for pat in _PROLOGUES_I386:
+        off = 0
+        while True:
+            pos = data.find(pat, off)
+            if pos < 0:
+                break
+            seen.add(pos)
+            off = pos + 1
+    feats = []
+    for offset in sorted(seen):
+        raw = data[offset:offset + _MAX_BYTES_I386]
+        lines, calls = [], []
+        for insn in md.disasm(raw, offset):
+            op = f'{insn.mnemonic} {insn.op_str}'.strip()
+            lines.append(op)
+            if insn.mnemonic == 'call' and insn.op_str.startswith('0x'):
+                calls.append(insn.op_str)
+            if insn.mnemonic in ('ret', 'retl'):
+                break
+            if insn.mnemonic == 'jmp':
+                try:
+                    if abs(int(insn.op_str, 16) - offset) > 0x10000:
+                        break
+                except ValueError:
+                    break
+        if len(lines) >= _MIN_INSTRS_I386:
+            feats.append(FuncFeatures.from_disasm_lines(offset, hex(offset), lines, calls))
+    return feats
 
 
 def prologue_scan(path: str) -> list[FuncFeatures]:
@@ -225,8 +278,41 @@ def main():
     assert match_922 is not None and match_922.confidence == 'HIGH', \
         'true homolog in lina 9.22 lost HIGH confidence'
 
+    # ── cross-arch FP case: DCNM Go i386 binary ──────────────────────────────────
+    import os
+    if os.path.exists(DCNM_TELEMETRY):
+        print(f'\n--- Cross-arch FP regression: DCNM telemetry-infra (Go i386) ---')
+        with open(DCNM_TELEMETRY, 'rb') as f:
+            dcnm_data = f.read()
+        dcnm_feats = i386_prologue_scan(dcnm_data)
+        print(f'  {len(dcnm_feats)} i386 functions')
+        dcnm_match = matcher.find_homolog(seed, dcnm_feats)
+        if dcnm_match:
+            sem = dcnm_match.semantic_score
+            jac = dcnm_match.jaccard
+            conf = dcnm_match.confidence
+            print(f'  top: VA={hex(dcnm_match.va)}  jac={jac:.4f}  sem={sem:.4f}  [{conf}]')
+            # Document the known threshold failure at 0.85.
+            # reflect.Value.CanInterface fires HIGH at the current threshold.
+            # These two assertions together pin the calibration gap:
+            #   - first  asserts the FP still occurs (regression: if broken, threshold may be fixed)
+            #   - second asserts it stays below required fix threshold (bounds the problem)
+            assert sem >= CROSS_ARCH_SEM_THRESHOLD_CURRENT, \
+                f'DCNM FP no longer triggers at threshold {CROSS_ARCH_SEM_THRESHOLD_CURRENT} ' \
+                f'(sem={sem:.4f}) — verify if cross-arch threshold was raised'
+            assert sem < CROSS_ARCH_SEM_THRESHOLD_REQUIRED, \
+                f'DCNM FP exceeds required fix threshold {CROSS_ARCH_SEM_THRESHOLD_REQUIRED} ' \
+                f'(sem={sem:.4f}) — Go runtime semantic signature drifted upward'
+            print(f'  KNOWN FP: sem={sem:.4f} in [{CROSS_ARCH_SEM_THRESHOLD_CURRENT}, '
+                  f'{CROSS_ARCH_SEM_THRESHOLD_REQUIRED}) — threshold calibration gap documented')
+        else:
+            print(f'  no match (DCNM FP resolved or binary changed)')
+    else:
+        print(f'\nSkipping DCNM cross-arch FP check (binary not present at {DCNM_TELEMETRY})')
+
     print('\nPASS — FP suppression via Jaccard floor confirmed')
     print('NOTE: semantic gap negative for generic helpers; callee categorization pending')
+    print('NOTE: cross-arch threshold 0.85 insufficient; DCNM Go FP documented above')
 
 
 if __name__ == '__main__':
