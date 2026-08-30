@@ -913,3 +913,122 @@ node name → re-escaped (`&amp;`) on output. No injection from this path.
   uses strlcpy with a limit matching the destination buffer size exactly.
   Reflection confirmed as a surface but not exploitable via overflow on this
   binary version.
+
+---
+
+## Pre-Auth NETCONF XML Parsing Surface (EVO 23.4R2.14)
+
+**Binary**: mgd (evo-ui64, 177K PIE) -> libjunos-junoscript.so.1 (evo-jimbase, 76K)
+  -> libjunos-xmlutil.so.1 (evo-jimbase)
+
+**Library attribution**: xml_initial_handshake is NOT in evo-ui64 libs (libengine,
+  libjunos-netconf). It resolves via the PLT stub at mgd+0xf1c0 -> GOT 0x2b320
+  -> libjunos-junoscript.so.1 (evo-jimbase partition, separately mounted squashfs).
+  Confirmed via `objdump -T libjunos-junoscript.so.1 | grep -v UND`.
+
+### xml_initial_handshake (libjunos-junoscript.so.1 +0x7b60, 0x14e bytes)
+
+```
+xml_input_match(peer, 2, callback)   ; read first XML element from TCP stream
+xml_input_match(peer, 3, callback)   ; second match attempt
+repz cmps ecx=0xb                    ; strcasecmp against "junoscript" (10 bytes + NUL)
+if match: xml_check_initial_attributes(name_ptr, output_buf)
+if name == "junoscript": xml_initial_handshake_send(peer, system_name)
+```
+
+Flow is linear; no recursion. xml_input_match2 (+0xeb10, 673 bytes) implements the
+callback-driven XML reader; it calls xml_parse_attributes before returning element
+context to the caller.
+
+### xml_check_initial_attributes (libjunos-junoscript.so.1 +0x7a60, 0xf3 bytes)
+
+```
+strtol("1.0", NULL, 0) = 1           ; compile-time version constant (decimal, stops at '.')
+xml_parse_attributes(buf_0x290, 40, xml_string)
+xml_get_attribute(buf, "version")
+strtol(version_str, NULL, 0)         ; attacker-supplied version string
+compare against 1
+xml_get_attribute(buf, "junos:key")
+if found: js_client_data[0xa2] = 1   ; TLS/key flag
+```
+
+**Version bypass**: strtol stops at the first non-numeric character. "1.0" -> 1;
+attacker sends version="1" or version="1anything" -> strtol=1 -> passes the check.
+The version gate is trivially satisfied; no signature or HMAC.
+
+### xml_parse_attributes (libjunos-xmlutil.so.1 +0x1730, 0x1e9 bytes)
+
+```
+args: rdi=buf (0x290=656 bytes on caller's stack), rsi=max_attrs=40, rdx=xml_string
+```
+
+Attribute storage is POINTER-ONLY — no memcpy, no strdup:
+
+```asm
+[rcx]        = attr_name_ptr    ; pointer into original xml_string
+[rdi+rdx*8]  = attr_value_ptr  ; pointer into original xml_string
+```
+
+ebx increments by 2 per attribute; guard: `cmp ebx, max_attrs(40)` -> max 20
+attribute PAIRS. 20 pairs x 2 pointers x 8 bytes = 320 bytes < 656-byte buffer.
+
+xml_unescape called in-place on each value: shrinks or equal length (& sequences
+expand to 1 char, not longer) -> no overwrite past original string bounds.
+
+Null bytes written in-place in the original xml_string to terminate name and value
+tokens. The xml_string itself is caller-owned; libjunos-xmlutil does not copy it.
+
+**Result**: NO BUFFER OVERFLOW. Pre-auth NETCONF XML parsing path is hardened.
+  Pointer storage with bounded count; no fixed-size destination copy; in-place
+  unescape cannot grow strings. Attack surface exists but no memory corruption
+  primitive found in this code path.
+
+### Pre-Auth Surface Summary
+
+| Symbol | Library | Offset | Result |
+|--------|---------|--------|--------|
+| xml_initial_handshake | libjunos-junoscript.so.1 | +0x7b60 | No vuln; strcasecmp gate |
+| xml_check_initial_attributes | libjunos-junoscript.so.1 | +0x7a60 | Version bypass trivial; no overflow |
+| xml_parse_attributes | libjunos-xmlutil.so.1 | +0x1730 | Pointer storage; no copy; hardened |
+| xml_input_match2 | libjunos-junoscript.so.1 | +0xeb10 | Callback reader; no alloc vuln found |
+
+**FINDING 2 upgrade status**: No pre-auth memory corruption primitive found in the
+  NETCONF XML parsing path. FINDING 2 (vtable overwrite) remains POST-AUTH.
+  Next candidate: xml_input_rpc (mgd PLT -> GOT 0x2ab80) — the post-hello,
+  pre-auth RPC dispatcher has not been analyzed.
+
+---
+
+## Post-Auth: wordexp Tilde Expansion via DDL Home Directory (EVO 23.4R2.14)
+
+**Binary**: mgd (evo-ui64), function starting at +0x14ad5
+
+**Classification**: POST-AUTH. wordexp call at +0x14cff is in the same function
+  as mgmt_peer_auth_user call at +0x14b24. Execution order:
+
+```
++0x14b24  call mgmt_peer_auth_user   ; authentication — must succeed
+...
++0x14ad5  call ddl_get_value_string  ; reads "directory" key from DDL config
+           GOT 0x2ad80               ; returns configured home directory string
+...
++0x14cff  call wordexp               ; PLT -> GOT 0x2b5b0
+           if dir[0] == '~': wordexp(dir, &result, 0)
+```
+
+wordexp is only reached after authentication completes. The home directory value
+comes from ddl_get_value_string("directory") — DDL-configured per-user home path,
+not a direct protocol input.
+
+**Chain**: config write access -> set user[X] home-directory "~/${IFS}cmd${IFS}arg"
+  -> NETCONF auth as user X -> wordexp() -> shell injection -> RCE
+
+**Constraint**: Requires (1) authenticated config write access to set the DDL
+  home-directory field, AND (2) authentication as that user. Both gates must pass
+  before wordexp executes. Not a standalone bug; a chain link requiring prior access.
+
+**Flags**: wordexp called with flags=0; WRDE_NOCMD not set. Shell command
+  substitution $(...) and backtick expansion are both enabled. Any wordexp-capable
+  expansion in the home directory string executes as the mgd process user.
+
+**Reference**: mgd +0x14cff; PLT stub wordexp=+0xf6e0; GOT 0x2b5b0.
