@@ -528,16 +528,23 @@ NOTE on xmlXPathNodeCollectAndTest NULL checks: at 0x8f941/0x8f94b, the code doe
   function pointer at *(0x150b30). The "NULL check" is INEFFECTIVE — the branch is never
   taken, and a NULL stored pointer still crashes at the call.
 
-Dispatch gate in xmlXPathNodeCollectAndTest (0x8fabe / 0x8fc11):
+Dispatch gate in xmlXPathNodeCollectAndTest (0x8fabe — parent axis):
 ```asm
-; parent-axis selection (0x8fabe)
-mov  rax, [rip + 0x...  ]       ; rax = &get_next_node (0x14dde8)
-lea  rdx, xmlXPathNextParent     ; standard (safe) path
-cmpq $0, (%rax)                  ; is *get_next_node == NULL?
-lea  rax, cs_xmlXPathNextParent  ; custom (unchecked) path
-cmove rdx, rax                   ; NULL → standard; non-NULL → custom
+0x8fabe: mov  rax, [rip + 0xbe323]    ; rax = GOT[get_next_node]=0x14dde8 → BSS 0x150b48
+0x8fac5: lea  rdx, [rip - 0xe9dc]     ; rdx = &xmlXPathNextParent (standard safe path)
+0x8facc: cmp  qword ptr [rax], 0      ; cmp *(BSS 0x150b48), 0 → check STORED ptr — PROPER
+0x8fad0: lea  rax, [rip - 0xe3d7]     ; rax = &cs_xmlXPathNextParent (Juniper path)
+0x8fad7: cmove rax, rdx               ; if zero (not registered): use standard; else: Juniper
 ```
-Gate checks ONLY `get_next_node`. Other 6 slots are unchecked inside the custom functions.
+Gate PROPERLY checks *(BSS 0x150b48) (the stored function pointer, not the BSS address).
+If get_next_node is NULL → routes to safe xmlXPathNextParent. Non-NULL → cs_xmlXPathNextParent.
+Other 11 BSS slots are NOT checked by the dispatch gate — unchecked inside cs_* functions.
+
+NOTE on ineffective check at xmlXPathNodeCollectAndTest delete_node call sites (0x8f941/0x8f94b):
+  `mov rax, [rip + 0xbe3f0]` → rax = GOT[delete_node] → 0x150b30 (BSS addr, always non-null)
+  `test rax, rax; je 0x8f955` → tests the GOT→BSS address (always non-null) — INEFFECTIVE
+  `call [rax]` → calls *(0x150b30) — crashes if delete_node not registered (BSS still NULL)
+  This path runs even when cs_xmlXPathNextParent is not the dispatch target.
 
 FINDING 1 — NULL deref (partial-registration race):
   Precondition: `register_get_next_node(fn)` has been called (gate passes),
