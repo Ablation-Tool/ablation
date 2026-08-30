@@ -367,6 +367,34 @@ class AxisEAPAnalyzer:
                 'getStunTurnTestCredentials exposes this without requiring camera auth in test context.'
             ),
             'files': {},
+            # 2.0.x binary RE additions
+            'v2_re': {
+                'coturn_version': '4.7.0 (Gorst) — OpenSSL 3.0/3.2',
+                'rsignal_language': 'Rust (cargo/ureq-2.12.1 HTTP client paths embedded)',
+                'rsignal_proxy': 'ALL_PROXY/HTTPS_PROXY/HTTP_PROXY env vars honored — proxy injection via environment',
+                'mosquitto_size_unchanged': 'mosquitto binary identical between 2.0.0 and 2.0.1',
+                'main_binary_diff': '2.0.0=12976312 bytes, 2.0.1=13107362 bytes (+131050); coturn +4096',
+                'credential_logging': '"Username:%s Password:%s" format string in Go binary',
+                'pre_uninstall': 'gdbus call com.axis.PolicyKitCert.CertSetDeleteUnpriv — upgrade deletes certs, breaking TLS until re-provisioned',
+                'idd_plugins': [
+                    'bwlcore', 'bws_webrtc_coturn_metrics', 'common.sh',
+                    'context', 'device_configurations', 'fan_status', 'load_avg',
+                    'meminfo', 'network_stats', 'page_info', 'storage_properties',
+                    'syslog', 'syslog_critical', 'syslog_error', 'syslog_info',
+                    'syslog_warning', 'vmstatus_v2',
+                ],
+                'vapix_go_packages': [
+                    'github.com/axteams-one/bws-webrtc-acap/internal/vapix',
+                    'github.com/axteams-one/bws-webrtc-acap/internal/coturn',
+                    'com.axis.bodyworn/positioning@v1.0.0',
+                ],
+                'vapix_cert_ops': [
+                    'vapix.GetCertificatesRequest / GetCertificatesResponse',
+                    'vapix.DeleteCertificatesResponse',
+                    'CACertificateIDs, CertificateIDs, Certificate, CertSet, CertSetName',
+                ],
+                'turn_relay_abuse': 'coturn 4.7.0 exposes TURN relay; attacker with TURN credential can relay traffic through camera to internal network',
+            },
         }
 
         if pkg_dir:
@@ -1423,6 +1451,86 @@ class AxisEAPAnalyzer:
 
         return result
 
+    def digital_autotrack_surface(self) -> dict:
+        """
+        AXIS Digital Auto Tracking (DigitalAutotracking) attack surface.
+        EAP: AXIS_Digital_Auto_Tracking_1_0_0.eap
+
+        Architecture: rule-engine ACAP; Lua scripts executed by camera firmware's
+        embedded Lua runtime (NOT a standalone binary). No separate ELF binary ships.
+
+        Encrypted Lua:
+          All 11 Lua source files (main.lua, tracker.lua, stabilizer.lua, etc.)
+          have encryption="1" in DigitalAutotracking.xml.
+          File type: binary blob (first bytes: a3 d2 7f 1e ...).
+          encpwd: 256-byte binary key blob — AES key material, not plaintext.
+          Static decryption not possible without the camera firmware's key derivation.
+          The firmware decrypts these at load time in the Lua rule engine; key is
+          device-specific or firmware-embedded (not in the EAP itself).
+
+        Libraries referenced (in XML):
+          <library name="digitalAutotracking"/> — native .so loaded by camera firmware
+          <library name="system"/>              — camera system library
+
+        Tracking rule:
+          Rule "detection_DigitalAutotracking" calls function="trackObjects"
+          Event: name="tracking" with attrs: camera (source), active (property-state)
+          Mote config: boundingBox=false, polygon=true, velocity=true
+
+        script.sh: postinstall + license form loader
+          check_version(): parhandclient get properties.EmbeddedDevelopment.Version
+            → _compare_vers $REQEMBDEVVERSION le $embdevversion
+            → if too old, calls /usr/sbin/install-package.sh uninstall (auto-removes)
+          load_licenseform(): shttpclient -sT 4 -o /dev/stdout http://www.axis.com/techsup/...
+            → fetches PHP page over HTTP (no TLS) — could be MITM'd to inject JavaScript
+
+        Attack surface:
+          1. License form HTTP injection: load_licenseform() fetches from http://www.axis.com/
+             over plain HTTP; the response is echoed as '<script type="text/javascript">'
+             directly into the camera admin UI. MITM on the camera's outbound HTTP → XSS
+             in admin browser session.
+
+          2. Encrypted Lua + native library: if the native digitalAutotracking.so has
+             buffer handling bugs in trackObjects(), they're not auditable from this EAP.
+             Attack surface limited to whatever input the rule engine passes to trackObjects()
+             (video frame metadata, zone/polygon coordinates from params).
+
+          3. parhandclient param injection: check_version() passes firmware version string
+             to _compare_vers without sanitization. If firmware version contains shell
+             metacharacters (unlikely in practice), the eval-based comparison could misfire.
+        """
+        return {
+            'app_name': 'AXIS Digital Auto Tracking',
+            'type': 'rule_engine_lua_acap',
+            'lua_files': 11,
+            'lua_encryption': 'AES (encryption="1" in XML); decryption key in encpwd (256-byte binary blob)',
+            'encpwd_size_bytes': 256,
+            'lua_decryption': 'firmware-side only; static RE not possible without device key',
+            'native_libs': ['digitalAutotracking', 'system'],
+            'tracking_rule': {
+                'function': 'trackObjects',
+                'event_attrs': {'camera': 'source', 'active': 'property-state'},
+                'mote': {'polygon': True, 'velocity': True, 'boundingBox': False},
+            },
+            'attack_paths': [
+                {
+                    'id': 'DAT-1',
+                    'title': 'License form HTTP MITM → admin UI XSS',
+                    'mechanism': 'load_licenseform() fetches http://www.axis.com/techsup/...cam_form.php over plain HTTP; response echo\'d as <script> in admin UI',
+                    'impact': 'XSS in admin browser; session hijack or VAPIX credential exfil',
+                    'severity': 'MEDIUM',
+                    'prerequisite': 'Network position between camera and internet (LAN MITM)',
+                },
+                {
+                    'id': 'DAT-2',
+                    'title': 'Native digitalAutotracking.so — unauditable tracking algorithm',
+                    'mechanism': 'Lua bridge calls native trackObjects(); input = video frame metadata + zone params',
+                    'impact': 'If .so has buffer overflow in trackObjects(), reachable from Lua with no static RE possible',
+                    'severity': 'UNKNOWN — requires device-side RE of native .so',
+                },
+            ],
+        }
+
     def storedatamanager_surface(self) -> dict:
         """
         RE surface for AXIS StoreDataManager (Cognimatics TrueView DataManager) v1.6.10.
@@ -1666,6 +1774,8 @@ def main():
                         help='p-ptz remote connection (remote_ptz_conn_setup) SSRF surface')
     parser.add_argument('--storedatamanager', action='store_true', dest='storedatamanager',
                         help='StoreDataManager (Cognimatics TrueView) server app RE surface')
+    parser.add_argument('--digital-autotrack', action='store_true', dest='digital_autotrack',
+                        help='AXIS Digital Auto Tracking encrypted Lua + script.sh RE surface')
     parser.add_argument('--frida', action='store_true', help='Print Frida license bypass script')
     parser.add_argument('--json', action='store_true', help='Output JSON')
     args = parser.parse_args()
@@ -1714,6 +1824,9 @@ def main():
 
     if args.all or args.storedatamanager:
         results['storedatamanager'] = analyzer.storedatamanager_surface()
+
+    if args.all or args.digital_autotrack:
+        results['digital_autotrack'] = analyzer.digital_autotrack_surface()
 
     if args.frida:
         a = AxisEAPAnalyzer(args.target)
