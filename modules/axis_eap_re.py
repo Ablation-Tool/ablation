@@ -1689,11 +1689,42 @@ class AxisEAPAnalyzer:
                         'facedetector is granted permission to call ANY method on com.axis.Param D-Bus interface, '
                         'not scoped to face detection parameters. This includes reading sensitive camera params '
                         '(network config, credentials, VAPIX service accounts) if D-Bus policy does not '
-                        'restrict to specific method names. Wildcard scope confirmed in 2.1.3 manifest.'
+                        'restrict to specific method names. Wildcard scope confirmed in 2.1.3 ARTPEC-7 and CV25 manifests.'
                     ),
                     'severity': 'MEDIUM',
-                    'affected': 'v2.x aarch64 (manifest schema 2.0.0)',
+                    'affected': 'v2.x aarch64 (manifest schema 2.0.0) — ARTPEC-7 and CV25',
                     'prerequisite': 'Co-resident ACAP app or D-Bus message bus access on same camera',
+                },
+                {
+                    'id': 'FD-5',
+                    'title': 'com.axis.VideoObjectDetection1.* wildcard D-Bus — full object detection interface',
+                    'mechanism': (
+                        'CV25 (Ambarella) variant 2.1.3 manifest declares "com.axis.VideoObjectDetection1.*" '
+                        '(wildcard) as a required D-Bus method. facedetector is granted permission to call '
+                        'ANY method on com.axis.VideoObjectDetection1, including subscription management, '
+                        'object class configuration, and sensitivity tuning for other ACAP apps. '
+                        'If VideoObjectDetection1 D-Bus interface allows modifying detection rules for '
+                        'other subscribers, facedetector can suppress or spoof detections in co-resident '
+                        'analytics ACAPs (Object Analytics, Loitering Guard, Fence Guard) on same camera.'
+                    ),
+                    'severity': 'MEDIUM',
+                    'affected': 'v2.1.3 CV25 (Ambarella) build only — not in ARTPEC-7 variant',
+                    'prerequisite': 'CV25-based camera with co-resident Object Analytics or similar ACAP',
+                },
+                {
+                    'id': 'FD-6',
+                    'title': 'Linux "operator" group membership — privilege scope beyond sdk user',
+                    'mechanism': (
+                        'CV25 manifest declares resources.linux.user.groups: ["video", "operator"]. '
+                        'facedetector process is added to the "operator" Linux group in addition to "video". '
+                        '"operator" group on Axis cameras may grant access to operator-level device files, '
+                        'sockets, or IPC channels not accessible to plain sdk user. '
+                        'Attack chain: compromise facedetector process → operator group file access → '
+                        'read operator-privileged device state or inject into operator-accessible IPC.'
+                    ),
+                    'severity': 'LOW',
+                    'affected': 'v2.1.3 CV25 (Ambarella) build — ARTPEC-7 variant lacks operator group',
+                    'prerequisite': 'Code execution in facedetector context on CV25 camera',
                 },
             ],
             'files': {},
