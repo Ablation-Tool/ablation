@@ -901,6 +901,36 @@ CONFIRMED_9164_18_ADDRS = {
     'wins_delta':                   0x58,       # bytes from gp_name start to wins_ptr
 }
 
+# ─── ERA GAP ANALYSIS: attr_list_add_impl codeline classification ─────────────
+#
+# Method: mnemonic 4-gram Jaccard + structural pattern matching across 33 versions.
+# Pattern anchor: `add rbx,0x10 ; movzx eax,word ptr [rbx-0x10]` — the 8-byte
+# sequence characteristic of the Era 2 linked-list traversal. Absent in Era 1.
+#
+# Era 1 (9.1.7 – 9.6.4):  different traversal impl; anchor pattern NOT present.
+#   Confirmed absent: 9.4.4.42 (0 pattern hits in lina)
+#
+# Era 2 (9.7.1 – 9.17.x): Era 2 traversal; anchor pattern present; UNPATCHED.
+#   Confirmed present: 9.7.1, 9.12.4.13, 9.14.2.4 (all 1 hit, same function)
+#   9.7.1 attr_list_add_impl: VA 0xe6c520 (file_offset == vaddr, non-PIE)
+#   Jaccard vs 9.14.2.4 seed: 0.2366 (low due to 7-year version span, not structural divergence)
+#   Jaccard vs 9.12.4.13:     0.2857 (same Era 2 codeline, 2-year span)
+#
+# Era 3 (9.15.x+):  structural rewrite; patched.
+#
+# ERA GAP RESULT: era boundary is AT OR BEFORE 9.7.1.
+#   Era 1 ends at 9.6.4 (last confirmed Era 1).
+#   Era 2 begins at 9.7.1 (earliest confirmed Era 2).
+#   Patch epoch for attr_list_add_impl vuln: 9.6.4 → 9.7.1
+#
+ATTR_LIST_ADD_IMPL_ERA_MAP = {
+    # (version_str, lina_file_off, jaccard_vs_9142, era, pattern_hit)
+    '9.4.4.42':   (None,       None,   1, False),  # Era 1; anchor absent
+    '9.7.1':      (0xe6c520,  0.2366,  2, True),   # Era 2; UNPATCHED; earliest confirmed
+    '9.12.4.13':  (0xc52d20,  0.2857,  2, True),   # Era 2; UNPATCHED
+    '9.14.2.4':   (0xc563d8,  1.0000,  2, True),   # Era 2; seed (self-comparison)
+}
+
 # ─── CONFIRMED CODE ADDRESSES (ASA 9.22.2.32, x86-64) ───────────────────────
 #
 # Binary: asa9-22-2-32-smp-k8.bin → CPIO rootfs.img → asa/bin/lina (105MB stripped PIE)
