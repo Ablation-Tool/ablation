@@ -930,6 +930,8 @@ ATTR_LIST_ADD_IMPL_ERA_MAP = {
     '9.12.4.13':  (0xc52d20,  0.2857,  2, True),   # Era 2; UNPATCHED
     '9.14.2.4':   (0xc563d8,  1.0000,  2, True),   # Era 2; seed (self-comparison)
 }
+# Anchor bytes live in version_delta.ERA_DISCRIMINATOR_ANCHORS['attr_list_add_impl_era2']
+# Use version_delta.structural_anchor_scan(data) to classify any new binary in O(n).
 
 # ─── CONFIRMED CODE ADDRESSES (ASA 9.22.2.32, x86-64) ───────────────────────
 #
