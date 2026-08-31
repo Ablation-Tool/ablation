@@ -24,6 +24,75 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Layer 0 — structural anchor scan (era classification, O(n) per anchor)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class AnchorScanResult:
+    """Result for one anchor pattern against one binary."""
+    anchor_name: str
+    era:         int
+    hit_offset:  int    # file offset of first hit; -1 if not found
+    description: str
+
+    @property
+    def found(self) -> bool:
+        return self.hit_offset >= 0
+
+
+# Each entry: anchor_name → (anchor_bytes, era, description)
+#
+# An anchor is a byte sequence that is STRUCTURALLY DIAGNOSTIC for a given era —
+# present in all binaries of that era, absent in all others. Absence of an anchor
+# is inconclusive (Era 1 or Era 3 or out-of-range); only a HIT is definitive.
+# Add an entry here whenever a new structural rewrite boundary is confirmed.
+ERA_DISCRIMINATOR_ANCHORS: dict[str, tuple[bytes, int, str]] = {
+    'attr_list_add_impl_era2': (
+        b'\x48\x83\xc3\x10\x0f\xb7\x43\xf0',   # add rbx,0x10 ; movzx eax,[rbx-0x10]
+        2,
+        'Era 2 linked-list traversal; absent in Era 1 (9.4.4 confirmed), '
+        'present 9.7.1–9.17.x (confirmed: 9.7.1@0xe6c558, 9.12.4.13, 9.14.2.4)',
+    ),
+}
+
+
+def structural_anchor_scan(
+    data:     bytes,
+    anchors:  dict[str, tuple[bytes, int, str]] | None = None,
+    text_end: int = 0,
+) -> list[AnchorScanResult]:
+    """
+    Scan binary bytes for known era-discriminator sequences.
+
+    O(n) per anchor — runs before CFG analysis and Jaccard sweep.
+    A HIT gives definitive era classification and can short-circuit later stages.
+    A MISS is inconclusive: the binary may be Era 1, Era 3, or outside the
+    anchor's confirmed version range. Fall through to Jaccard/semantic in that case.
+
+    Args:
+        data:     raw binary bytes
+        anchors:  anchor library; defaults to ERA_DISCRIMINATOR_ANCHORS
+        text_end: scan limit (bytes); 0 = full binary
+
+    Returns:
+        one AnchorScanResult per anchor, in anchor-dict order
+    """
+    if anchors is None:
+        anchors = ERA_DISCRIMINATOR_ANCHORS
+    limit = text_end if text_end > 0 else len(data)
+    results = []
+    for name, (anchor_bytes, era, desc) in anchors.items():
+        hit = data.find(anchor_bytes, 0, limit)
+        results.append(AnchorScanResult(
+            anchor_name=name,
+            era=era,
+            hit_offset=hit,
+            description=desc,
+        ))
+    return results
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature extraction
 # ─────────────────────────────────────────────────────────────────────────────
@@ -368,16 +437,26 @@ class HomologMatch:
 
 @dataclass
 class DeltaReport:
-    seed_binary:   str
-    seed_va:       int
-    seed_name:     str
-    target_binary: str
+    seed_binary:    str
+    seed_va:        int
+    seed_name:      str
+    target_binary:  str
     target_version: str
-    match:         Optional[HomologMatch]
+    match:          Optional[HomologMatch]
+    anchor_results: list[AnchorScanResult] = field(default_factory=list)
+
+    @property
+    def era_confirmed(self) -> Optional[int]:
+        """Return confirmed era number if any anchor hit; None if inconclusive."""
+        for r in self.anchor_results:
+            if r.found:
+                return r.era
+        return None
 
     def summary(self) -> str:
+        era_tag = f" [era{self.era_confirmed}:anchor]" if self.era_confirmed else ""
         if self.match is None:
-            return f"{self.target_version}: NO MATCH"
+            return f"{self.target_version}: NO MATCH{era_tag}"
         m = self.match
         patch = 'PATCHED' if m.delta.is_patched else 'UNCHANGED'
         callee = ''
@@ -388,7 +467,7 @@ class DeltaReport:
         return (
             f"{self.target_version}: {m.name} @ {hex(m.va)}"
             f" jaccard={m.jaccard:.3f} sem={m.semantic_score:.3f}"
-            f" [{m.confidence}] {patch}{callee}"
+            f" [{m.confidence}] {patch}{callee}{era_tag}"
         )
 
 
@@ -685,15 +764,28 @@ class VersionTracker:
 
     def track(
         self,
-        seed_binary: str,
-        seed_va: int,
-        seed_name: str = '',
-        skip_versions: Optional[list[str]] = None,
+        seed_binary:    str,
+        seed_va:        int,
+        seed_name:      str = '',
+        skip_versions:  Optional[list[str]] = None,
+        era_only:       bool = False,
+        anchors:        dict[str, tuple[bytes, int, str]] | None = None,
     ) -> list[DeltaReport]:
         """
         Find homologs of seed_va across all registered binaries.
 
-        Returns one DeltaReport per version, in version-registration order.
+        Layer 0 (anchor scan) runs first on every target binary — O(n) bytes scan,
+        no CFG load required. Results populate DeltaReport.anchor_results.
+
+        Args:
+            era_only: if True and an anchor confirms the era, skip CFG analysis and
+                      homolog finding for that binary. DeltaReport.match will be None
+                      but DeltaReport.era_confirmed will be set. Use when you only need
+                      to know which era a binary belongs to, not the specific homolog VA.
+            anchors:  override anchor library; defaults to ERA_DISCRIMINATOR_ANCHORS.
+
+        Returns:
+            one DeltaReport per version, in version-registration order.
         """
         skip = set(skip_versions or [])
         seed_path = self._binaries.get(seed_binary)
@@ -709,6 +801,31 @@ class VersionTracker:
         for version, binary_path in self._binaries.items():
             if version == seed_binary or version in skip:
                 continue
+
+            # Layer 0: anchor scan — microseconds, no CFG required
+            anchor_results: list[AnchorScanResult] = []
+            try:
+                binary_data = Path(binary_path).read_bytes()
+                anchor_results = structural_anchor_scan(binary_data, anchors)
+            except Exception:
+                pass
+
+            era_hit = any(r.found for r in anchor_results)
+
+            if era_only and era_hit:
+                # Anchor confirmed era; skip expensive CFG + homolog finding
+                reports.append(DeltaReport(
+                    seed_binary=seed_binary,
+                    seed_va=seed_va,
+                    seed_name=seed_feat.name,
+                    target_binary=binary_path,
+                    target_version=version,
+                    match=None,
+                    anchor_results=anchor_results,
+                ))
+                continue
+
+            # Layers 1-3: CFG + structural pre-filter + Jaccard + semantic
             target_feats = self._all_features(binary_path)
             match = self._matcher.find_homolog(seed_feat, target_feats)
             reports.append(DeltaReport(
@@ -718,6 +835,7 @@ class VersionTracker:
                 target_binary=binary_path,
                 target_version=version,
                 match=match,
+                anchor_results=anchor_results,
             ))
 
         return reports
