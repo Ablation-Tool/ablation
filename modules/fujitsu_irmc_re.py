@@ -480,16 +480,50 @@ FINDING_F13 = {
         'RX2530 M1 iRMC Kronos4 (09.69F)',
     ],
     'component': 'AMI SPX BMC / FTS_WebServer + libsafesystem + execdaemon',
-    'title': 'Shell template injection: FTS_WebServer sh-%s template via execdaemon pipe (class-wide)',
+    'title': 'Shell template injection via DDNS hostname/domain fields → nsupdate.sh → system() (class-wide)',
     'binary': 'usr/local/bin/FTS_WebServer',
-    'template': 'sh  %s %s %s %s 0 0 %s',
+    'templates': [
+        'sh  %s %s %s %s 0 0 %s\\n',         # VA 0x1095b8 in CX2550 M4
+        'sh  %s %s %s.%s %s 0 0 %s\\n',      # VA 0x10959c in CX2550 M4 (split host.domain)
+    ],
+    # Template argument mapping (confirmed from nsupdate.sh source + disasm):
+    # sh /usr/local/bin/nsupdate.sh <$1:op> <$2:fqdn_or_hostname> <$3:ip> <$4:tsig_domain> 0 0 <$7:iface>
+    # Split form: sh /usr/local/bin/nsupdate.sh <op> <hostname>.<domain> <ip> <tsig_domain> 0 0 <iface>
+    'injectable_fields': {
+        '0x1430': 'DDNS domain/zone name (text, maxlen=64, configSpaceStringToCS)',
+        '0x1432': 'DDNS hostname prefix (text, maxlen=16, configSpaceStringToCS)',
+        '0x144d': 'DNS domain name (text, maxlen=256, configSpaceRead)',
+    },
+    'trigger': 'POST to iRMC web handler with APPLY=4 (primary NIC) or APPLY=5 (secondary NIC)',
+    'trigger_env_vars': {
+        'APPLY': '4 or 5 (NIC selector)',
+        'P700':  'present �� triggers IPv4 nsupdate_add_delete(ctx, 2, 0)',
+        'P701':  'present → triggers IPv6 nsupdate_add_delete(ctx, 0xa, 0)',
+    },
+    'call_site': {
+        'dynDns_va': '0x69530',
+        'nsupdate_add_delete_va': '0x68ecc',
+        'snprintf_call': '0x692f8',
+        'safe_system_call': '0x6930c',
+    },
     'tmpl_hits_per_platform': 2,
-    'chain': ['FTS_WebServer(web param)', 'libsafesystem::safe_system_exec',
-              'execdaemon_pipe', 'system()'],
+    'chain': [
+        'POST APPLY=4 P700=<any>',
+        'FTS_WebServer::dynDns() reads APPLY/P700 via envGet()',
+        'nsupdate_add_delete(ctx, 2, 0)',
+        'configSpaceRead(0x144d) → unquoted domain string',
+        'snprintf(cmd, 0x200, "sh  %s %s %s.%s %s 0 0 %s\\n", "/usr/local/bin/nsupdate.sh", op, hostname, domain, ip, ...)',
+        'safe_system(cmd) → libsafesystem::safe_system_exec()',
+        'execdaemon_pipe write → /var/execdaemon_pipe',
+        'execdaemon system(cmd) → root shell',
+    ],
+    'poc': 'garlic/fujitsu_irmc_ddns_inject.py',
     'libsafesystem_callers': ['FTS_WebServer', 'FTS_RedfishTaskMngr', 'flasher',
                                'IPMIMain', 'vnc_ami', 'lmedia', 'rmedia', 'solssh'],
-    'note': 'execdaemon pipe pattern confirmed present in Kronos4 (S4) and Kronos5 (S5)',
-    'severity': 'CRITICAL (class-wide; pending %s slot → web param mapping)',
+    'script_path': '/usr/local/bin/nsupdate.sh',
+    'nsupdate_sh_args': '$1=op $2=fqdn $3=ip $4=tsig_domain $5=tsig_enable $6=ttl $7=iface',
+    'severity': 'CRITICAL (class-wide, auth-required, 4 platforms confirmed)',
+    'auth_required': 'iRMC web session (admin or operator role); combinable with F2 default ADMIN hash',
 }
 
 
@@ -506,7 +540,7 @@ SUMMARY = {
     'high':     ['F2 (default ADMIN hash)', 'F6 (no TLS cert validation)', 'F8 (Flash SWF EOL)',
                  'F10 (Redis no-auth on BMC)'],
     'medium':   ['F4 (CRC32 session)', 'F7 (SCCI XML injection)', 'F12 (JNLP Host injection)'],
-    'pending':  ['F9 (ARM BERT sweep on auth libs)', 'F13 (%s slot mapping)'],
+    'pending':  ['F9 (ARM BERT sweep on auth libs)'],
     'chain': (
         'F1 (LDAP Manager cred) -> LDAP bind -> MMB admin account '
         '-> iRMC REST (F6 no TLS) -> trigger TFTP update (F5) '
