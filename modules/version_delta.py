@@ -68,19 +68,23 @@ def _masked_find(data: bytes, pattern: bytes, mask: bytes, start: int, end: int)
 # in both patched and unpatched binaries.
 #
 # Corpus validation (28 lina binaries, 2026-08-31):
-#   impl_v1:  hits 9.2.4, 9.4.4              | misses 9.5.2+ ✓
-#   impl_v2a: hits 9.5.2–9.14.x, 9.20.3     | misses Era 1, 9.15.x, 9.16.x, 9.22.x ✓
-#   impl_v2b: hits 9.15.x, 9.16.x            | misses Era 1, Era 2a, 9.22.x ✓
-#   impl_v2c: hits 9.22.x                    | misses all prior ✓
+#   impl_v1:  ALL ELF32 builds (9.2.4, 9.4.4, 9.17.x-k8...) — 32-bit calling conv
+#             also: ELF64 binaries do NOT hit this anchor ✓
+#   impl_v2a: ELF64 9.5.2–9.14.x, 9.20.3    | misses v1 builds, 9.15.x, 9.16.x, 9.17.x+ELF64 ✓
+#   impl_v2b: ELF64 9.15.x, 9.16.x           | misses v1, v2a, v2c ✓
+#   impl_v2c: ELF64 9.17.x, 9.22.x           | misses all prior ✓
+#             r14 first at 9.17.2.3; 9.20.x reverts to v2a (maintenance branch, forked before 9.15)
 ERA_DISCRIMINATOR_ANCHORS: dict[str, tuple[bytes, bytes, int, str]] = {
-    # v1: old calling convention — jne + lea eax,[rbp-0x10] after match
-    # Wildcard byte: jne displacement (varies per binary)
+    # v1: 32-bit i386 calling convention — jne + lea eax,[ebp-0x10] after match
+    # Covers ALL ELF32 lina builds: old (9.2.4, 9.4.4) AND legacy-HW k8 (9.17.x-k8+)
+    # The lea eax,[rbp-0x10] encoding is identical for 32-bit [ebp-0x10]
     'attr_list_add_impl_v1': (
         b'\x66\x3d\x19\x10\x75\x00\x8d\x45\xf0',
         b'\xff\xff\xff\xff\xff\x00\xff\xff\xff',
         1,
-        'v1: cmp ax,0x1019 / jne / lea eax,[rbp-0x10]; confirmed 9.2.4, 9.4.4; '
-        'boundary before 9.5.2',
+        'v1: 32-bit calling conv; cmp ax,0x1019 / jne / lea eax,[ebp-0x10]; '
+        'all ELF32 builds (9.2.4, 9.4.4, 9.17.x-k8...); '
+        'ELF64 transition at 9.5.2 yields v2a',
     ),
     # v2a: jne + xor esi,esi + mov rdx,r13 after match (r13=context ptr)
     'attr_list_add_impl_v2a': (
@@ -110,8 +114,8 @@ ERA_DISCRIMINATOR_ANCHORS: dict[str, tuple[bytes, bytes, int, str]] = {
         b'\x66\x3d\x19\x10\x75\x00\x31\xf6\x4c\x89\xf2',
         b'\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff',
         2,
-        'v2c: cmp ax,0x1019 / jne / xor esi / mov rdx,r14; confirmed 9.22.x; '
-        'r14 replaces r13 as context ptr',
+        'v2c: cmp ax,0x1019 / jne / xor esi / mov rdx,r14; confirmed 9.17.2.3, 9.22.x; '
+        'r14 first appears at 9.17; 9.20.x reverts to v2a (maintenance branch)',
     ),
 }
 
@@ -141,6 +145,10 @@ def structural_anchor_scan(
     """
     if anchors is None:
         anchors = ERA_DISCRIMINATOR_ANCHORS
+    # ELF32 (i386) binaries — both the old pre-9.5.2 builds AND the legacy-HW k8 builds
+    # from 9.17.x onward — use the 32-bit calling convention.  The v1 anchor correctly
+    # identifies attr_list_add_impl in all of them.  No architecture gate here; the
+    # anchor handles it naturally.
     limit = text_end if text_end > 0 else len(data)
     results = []
     for name, entry in anchors.items():
