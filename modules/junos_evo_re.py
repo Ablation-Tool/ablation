@@ -56,11 +56,71 @@ length/type metadata, then copies. Length fields in network packets feed the
 lookup (key selection), not the memcpy size. Clean separation — parser trusts
 schema, not wire bytes, for copy sizes.
 
-bbe-pfcp-proxyd: FINDING 11 (pending)
-──────────────────────────────────────
-PFCP Create Session with 3+ IPv6 Address IEs triggers anomalous behavior.
-Dynamic confirmation needed: send crafted PFCP packet to port 8805/UDP.
-Binary not yet swept with BERT.
+bbe-pfcp-proxyd: FINDING 11 — STATIC ANALYSIS COMPLETE, HYPOTHESIS REVISED
+──────────────────────────────────────────────────────────────────────────
+Binary: /home/cowboy/junos-evo-work/bbe-pfcp-proxyd (24.4R2-S3.5)
+Extraction: QCOW2 → raw (qemu-img --force-share) → UFS44BSD mount → IZO extraction
+IZO format: V2.0 Juniper proprietary — 119-byte shell wrapper, TOC bytes 119-0x6cd8,
+  sequential zlib-compressed 16KB blocks from 0x6cd8 → ISO 9660 payload.
+
+Security profile: PIE=no (base 0x200000), canary=no, RELRO=partial, NX=yes.
+  11791 functions in .text (file 0x14f740, VA 0x350740, size 0x2d5f9c).
+
+PFCP IE dispatch chain (session establishment path):
+  decodeSessionEstReqPdrFarIes VA 0x46b530
+    → type 1 (Create PDR): decode3GPPCreatePdrIe VA 0x46b680
+      → type 2 (PDI): decode3GPPPdiIe VA 0x46d240
+        dispatches types 0x14-0x17 (Source Interface, Network Instance, SDF Filter)
+        and types 0x83 (Traffic Endpoint ID), 0x84 (→ 0x46ccd0)
+        UE IP Address wire type 0x5d (93): SKIPPED in PDI dispatch (loop-advance path)
+    → type 3 (Create FAR): handler VA 0x46bbe0
+    → type 0x80 (Juniper proprietary): VA 0x468a20
+
+UE IP Address processing (decodeCreateTrafficEndpointIe / getTfeIdFromRule):
+  V4 handler: VA 0x468103 — "HAVE V4 UE IP ADDR ipPrefixFamily:%d,..."
+  V6 handler: VA 0x4683ab — "HAVE V6 UE IP ADDR ipPrefixFamily:%d"
+  Both in function at VA 0x467e30 (function prologue: 55 48 89 e5).
+
+Counter check at VA 0x4736ad (in createCprPdrFar, function starts VA 0x473490):
+  add r13d, 1       ; r13d initialized 0 at 0x473588 (xor r13d, r13d)
+  cmp r13d, 5       ; exit when counter == 5
+  je 0x473533       ; return from function
+  mov eax, 1
+  shl eax, cl       ; 1 << r13d = bitmask bit selector
+  and eax, [rbp-0x40] ; AND with IP-family bitmask from IE content
+  add eax, 0xffffffff ; -= 1 → jump table index
+  cmp eax, 0xf      ; bounds check
+  ja 0x4736ad       ; if > 15, skip (loop back to increment)
+  jmp [rax*8 + 0x291528] ; dispatch on IP family
+
+  Jump table 0x291528 (rax=0..15):
+    [0]→0x4736e0 (IPv4, writes [rbx+0x136]=0x800)
+    [1]→0x47370f (IPv6, writes [rbx+0x136]=0x86dd)
+    [2]→0x4736ad (loop-back)
+    [3]→0x47374a (flags/prefix check)
+    [7]→0x473771 (PPPoE 0x8864)
+    [15]→0x473798 (PPPoE variant)
+    [4-6,8-14]→0x4736ad (loop-back, no-op)
+
+HYPOTHESIS REVISION:
+  Original: counter r13d counts IE instances, array[3] overflows at 4th IE.
+  INCORRECT. Counter scans BITMASK BITS from [rbp-0x40] (IP family flags in
+  one UE IP Address IE). All dispatch handlers write to FIXED struct offsets
+  (rbx+0x11a, +0x11c, +0x136, +0x138, +0xe). No array indexed by r13d.
+
+ACTUAL BEHAVIOR: The counter limits scanning to bits 0-4 of the IP family
+  bitmask. A single UE IP Address IE with 5 IP family flags set triggers 5
+  iterations; excess flags are silently ignored. This is proper bounds behavior,
+  not a buffer overflow.
+
+FINDING 11 STATUS: UNCONFIRMED (static). Original OOB hypothesis refuted by
+  static analysis. The PFCP parser for UE IP Address IE appears bounded.
+  Residual risk: logic-level truncation of PDR processing when >4 IP families
+  present — needs dynamic confirmation to assess crash behavior.
+
+BERT sweep: 185 batches × 64 functions at all-mpnet-base-v2. Top candidates
+  verified as fixed-constant copies or internal-schema-bounded memcpy. No
+  pre-auth write primitive found at BERT-visible layer (score threshold 0.55).
 """
 
 # SWEEP PARAMETERS — used by sweep scripts referencing this module
@@ -101,20 +161,21 @@ TARGETS = {
     'bbe-pfcp-proxyd': {
         'binary': '/usr/sbin/bbe-pfcp-proxyd',
         'arch': 'x86_64',
-        'size_mb': 3.5,
-        'mitigations': {'pie': True, 'canary': False, 'relro': False},
-        'bert_functions': 3812,
-        'bert_top_score': 0.37,
-        'protocol': 'PFCP UDP 8805',
-        'status': 'PENDING_DYNAMIC',
-        'confirmed_bugs': 1,  # Finding 11 — 3+ IPv6 Address IEs
-        # BERT sweep: 406 PLT entries, raw sockets (recvfrom/recvmsg), no gRPC.
-        # strcpy/sprintf/memcpy present. All top candidates (0x172f30, 0xf1fa0,
-        # 0x1dfd60) verified: fixed-constant copies from global state, or IE parser
-        # with duplicate-IE deduplication flag check (test byte ptr [r13], 2; jne).
-        # Finding 11 is likely logic/state-machine crash (null deref or assertion
-        # on unexpected IE count), not a raw buffer overflow at the BERT-visible layer.
-        # PoC: garlic/pfcp_evo_poc.py — awaits dynamic confirmation on live target.
+        'size_mb': 4.3,
+        'mitigations': {'pie': False, 'canary': False, 'relro': 'partial', 'nx': True},
+        'load_base': 0x200000,
+        'text_va': 0x350740, 'text_file': 0x14f740, 'text_size': 0x2d5f9c,
+        'bert_functions': 11791,
+        'protocol': 'PFCP UDP 8805 (FreeBSD 15.0, ELF64)',
+        'status': 'F11_UNCONFIRMED',
+        'confirmed_bugs': 0,
+        # Extraction: QCOW2 24.4R2-S3.5 → raw → UFS44BSD → IZO → ISO 9660
+        # IZO: V2.0 format, 119-byte wrapper, TOC to 0x6cd8, zlib 16KB blocks
+        # F11 original hypothesis (OOB write, r13d indexes 3-slot array): REFUTED.
+        # Counter at 0x4736ad scans IP-family bitmask bits; writes go to FIXED
+        # struct offsets. Not a buffer overflow. See docstring for full analysis.
+        # BERT sweep: 185 batches all-mpnet-base-v2. No pre-auth write primitives.
+        # Residual: dynamic test for logic-truncation DoS with >4 IP family flags.
     },
 }
 
