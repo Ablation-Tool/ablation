@@ -287,6 +287,66 @@ JAB-F12: SSO Browser WebView — OAuth Redirect and Token Leakage [MEDIUM]
     3. Open redirect at IdP → OAuth code delivered to attacker URI
     4. Chain with JAB-F9: deep link triggers SSO then provision re-pointer
 
+JAB-F13: libcpve.so — DTLS Fingerprint Verification Bypass [HIGH]
+  Binary:    libcpve.so (arm64-v8a, 8.7MB, Android 15.0.4)
+  Source:    cpve/src/main/ConnectionFactory.cpp line 1279
+  Namespace: CSF::media::rtp::ConnectionImpl
+
+  Architecture:
+    ConnectionImpl struct has a 1-byte bypass flag at offset +0xe8.
+    When set, connectDtlsSession and connectDtlsSessionWithTimeout skip
+    all DTLS fingerprint validation — the handshake succeeds without verifying
+    the remote certificate fingerprint against the SDP offer.
+
+  Bypass setter (3-instruction function):
+    VA 0x51466c:
+      mov  w8, #1
+      strb w8, [x0, #0xe8]   ; ConnectionImpl->bypass_fingerprint_verify = 1
+      ret
+
+  Verification function (VA 0x514ca8, connectDtlsSession):
+    0x514cb0: ldr  w8, [x0, #0xd0]      ; load DTLS state
+    0x514cb4: cbz  w8, #0x51504c         ; state==0 → early exit (no check, no error)
+    0x514d40: ldrb w8, [x19, #0xe8]      ; load bypass flag
+    0x514d44: cbnz w8, #0x514dac         ; if set → jump to bypass path
+    ...
+    0x514dac: mov  x2, x25               ; load "fingerprint verification is disabled"
+    0x514db0: mov  x0, xzr
+    0x514db4: bl   #0x1e1960             ; LOG(...) — logs bypass, does NOT abort
+    0x514dc4: str  w22, [x19, #0xd0]     ; set state=2 (CONNECTED) — handshake marked complete
+    ; callbacks fire, DTLS session accepted without fingerprint check
+
+  Second bypass check (VA 0x5146c0, connectDtlsSessionWithTimeout path):
+    0x5146c0: ldrb w8, [x19, #0xe8]
+    0x5146c4: cbnz w8, #0x5146d4         ; bypass → skip fingerprint compare at 0x1d46c0
+
+  Log strings confirmed in binary:
+    0x6ed8d5: "connectDtlsSession, disable fingerprint verification"
+    0x6ed958: "connectDtlsSessionWithTimeout, disable fingerprint verification"
+    0x7475dc: "%s: fingerprint verification is disabled"
+    0x747495: "%s: no remote fingerprint"
+    0x747658: "%s: connect error, remote fingerprint did not match %s != %s"
+    0x74763f: "%s: fingerprint is valid"
+
+  Bypass setter vtable pointer: file offset 0x4c798 → VA 0x51466c
+
+  Impact:
+    DTLS-SRTP key exchange completes without certificate validation.
+    Adversary performing media-path MITM presents arbitrary certificate;
+    Jabber accepts it if the bypass flag is set on the ConnectionImpl instance.
+    Bypasses the primary defense against certificate substitution in DTLS-SRTP.
+
+  Trigger condition:
+    Requires disableFingerprintVerification() to be called on the ConnectionImpl
+    instance before connectDtlsSession fires. Trigger path not yet traced — requires
+    identifying all callers of vtable slot at 0x4c798 via BLR trace or SDP negotiation
+    error fallback analysis.
+
+  Chain:
+    JAB-F13 → media path MITM → decrypt RTP/SRTP in real time
+    Combined with JAB-F1 (CiscoSSL 1.1.1 fork) for signaling-path MITM:
+    full session interception (signaling + media) without user indication
+
 DEX STRUCTURE (classes.dex + classes2.dex):
   Total: 59293 strings, 10221 types, 65339 methods, 8104 classes (DEX035)
   Cisco packages: cisco/jabber/app, signin, im, jcf, telephony, service, setting,
@@ -328,6 +388,37 @@ APK_BINARIES_15_0_4 = {
     "libcjose.so":            {"size_mb": 0.123,"role": "JOSE (JWT/JWK/JWE) auth token handling"},
     "libsrtp.so":             {"size_mb": 0.106,"role": "SRTP library (separate from cpve)"},
     "libfips.so":             {"size_mb": 0.035,"role": "FIPS module stub"},
+}
+
+# libcpve.so — DTLS fingerprint bypass (JAB-F13)
+LIBCPVE_DTLS_BYPASS = {
+    "binary":            "libcpve.so (arm64-v8a, 8.7MB)",
+    "source_file":       "cpve/src/main/ConnectionFactory.cpp",
+    "source_line":       1279,
+    "namespace":         "CSF::media::rtp::ConnectionImpl",
+    "bypass_flag_offset": 0xe8,       # 1-byte flag in ConnectionImpl struct
+    "setter_va":         0x51466c,    # mov w8,#1; strb w8,[x0,#0xe8]; ret
+    "verify_fn_va":      0x514ca8,    # connectDtlsSession — checks flag at 0x514d40
+    "bypass_check_1":    0x514d40,    # ldrb w8,[x19,#0xe8]; cbnz → bypass
+    "bypass_check_2":    0x5146c0,    # second check in connectDtlsSessionWithTimeout path
+    "bypass_log_va":     0x514dac,    # logs "fingerprint verification is disabled" then marks CONNECTED
+    "setter_vtable_ptr": 0x4c798,     # file offset of function pointer to setter
+    "log_strings": {
+        0x6ed8d5: "connectDtlsSession, disable fingerprint verification",
+        0x6ed958: "connectDtlsSessionWithTimeout, disable fingerprint verification",
+        0x7475dc: "%s: fingerprint verification is disabled",
+        0x747495: "%s: no remote fingerprint",
+        0x747658: "%s: connect error, remote fingerprint did not match %s != %s",
+        0x74763f: "%s: fingerprint is valid",
+    },
+    "impact": (
+        "DTLS handshake completes without remote cert fingerprint validation. "
+        "MITM on media path can substitute arbitrary certificate. "
+        "Bypasses primary defense against certificate substitution in DTLS-SRTP."
+    ),
+    "trigger": "disableFingerprintVerification() called on ConnectionImpl before connectDtlsSession fires",
+    "trigger_traced": False,          # BLR caller trace not yet complete
+    "chain": ["JAB-F1 (CiscoSSL 1.1.1 fork) → signaling MITM", "JAB-F13 → media MITM"],
 }
 
 # CSF version delta: csfnetutils 11.9.1 → 15.3.0
