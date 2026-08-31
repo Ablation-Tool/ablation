@@ -472,13 +472,17 @@ FINDING_F12 = {
 #
 FINDING_F13 = {
     'id': 'F13',
-    'platform': 'ALL Fujitsu iRMC platforms (Kronos4 S4 + Kronos5 S5, confirmed 4 firmware images)',
+    'platform': 'ALL Fujitsu iRMC platforms (Kronos4 S4 + Kronos5 S5, confirmed 7 firmware images, unpatched Jan 2022 – Dec 2025)',
     'confirmed_platforms': [
-        'CX2550 M5 iRMC Kronos5 (03.65P)',
-        'CX2550 M4 iRMC Kronos5 (03.65P)',
+        'CX2550 M4 iRMC Kronos5 03.65P (D3856, primary analysis target)',
+        'CX2550 M5 iRMC Kronos5 03.65P',
+        'CX2550 M6 iRMC Kronos5 03.65P (D3893, Dec 2025)',
+        'CX2560 M6 iRMC Kronos5 03.65P (D3894, Dec 2025)',
+        'CX2560 M6 iRMC Kronos5 03.36P (D3894, Jan 2022) — oldest confirmed, unpatched window >= 4 years',
         'PRIMEQUEST 3000B AMI BMC (D3858)',
-        'RX2530 M1 iRMC Kronos4 (09.69F)',
+        'RX2530 M1 iRMC Kronos4 09.69F',
     ],
+    'libsafesystem_version': '6.2.0 (identical across all 7 images)',
     'component': 'AMI SPX BMC / FTS_WebServer + libsafesystem + execdaemon',
     'title': 'Shell template injection via DDNS hostname/domain fields → nsupdate.sh → system() (class-wide)',
     'binary': 'usr/local/bin/FTS_WebServer',
