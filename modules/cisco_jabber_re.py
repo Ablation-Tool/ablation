@@ -347,6 +347,80 @@ JAB-F13: libcpve.so — DTLS Fingerprint Verification Bypass [HIGH]
     Combined with JAB-F1 (CiscoSSL 1.1.1 fork) for signaling-path MITM:
     full session interception (signaling + media) without user indication
 
+JAB-F14: HTMLOUT WebView DOM Scraping — Hardcoded JS Token Extractor [HIGH]
+  Source: classes2.dex, string pool
+  Interface: HTMLOUT (addJavascriptInterface target)
+
+  Two hardcoded JavaScript injection strings:
+
+  1. Full-page HTML dump:
+       javascript: var wholeBody = document.documentElement.innerHTML;
+                   HTMLOUT.processHTML(wholeBody, window.location.href);
+     Dumps the entire rendered DOM of any WebView page to the Java interface.
+     HTMLOUT.processHTML receives raw HTML + current URL on every trigger.
+
+  2. Meeting ticket scraper:
+       javascript: var result = document.getElementsByName('result')[0].value;
+                   var ticket = document.getElementsByName('ticket')[0].value;
+                   var timetolive = document.getElementsByName('timetolive')[0].value;
+                   var createtime = document.getElementsByName('createtime')[0].value;
+                   var username = document.getElementsByName('username')[0].value;
+                   var siteurl = document.getElementsByName('siteurl')[0].value;
+                   HTMLOUT.processMeetingInfo(result, ticket, timetolive, createtime,
+                                              username, siteurl);
+     Extracts meeting auth ticket, username, site URL from a Cisco Meeting Server /
+     Webex login form rendered in the WebView. Fields match CMS session token schema.
+
+  Bridge path:
+    IBrowserAdapter (C++ abstract interface)
+    → SwigDirector_IBrowserAdapter_runJavascript (SWIG JNI)
+    → addJavascriptInterface("HTMLOUT", ...)
+    → evaluateJavascript / loadUrl("javascript:...")
+    → HTMLOUT.processHTML / HTMLOUT.processMeetingInfo (Java callback)
+
+  Strings confirmed:
+    'IBrowserAdapter_runJavascript'
+    'SwigDirector_IBrowserAdapter_runJavascript'
+    'AddJavascriptInterface' / 'addJavascriptInterface'
+    'evaluateJavascript'
+    'HTMLOUT'
+
+  Attack:
+    1. MITM or redirect the WebView to attacker-controlled page (chain JAB-F12, JAB-F1)
+    2. Jabber injects the hardcoded JS, receives full HTML including any tokens
+    3. processMeetingInfo delivers ticket+username+siteurl to attacker-controlled host
+       if the phished page mimics a CMS login form with correct field names
+    4. ticket = session bearer for Cisco Meeting Server / Webex session
+
+JAB-F15: CrossLaunch Provision Protocol — Rate-Limited Deep Link Provisioning [HIGH]
+  Source: classes2.dex string pool
+  Classes: CrossLaunchActivity, ShareFileCrossLaunchService
+
+  Config keys:
+    KEY_CROSS_LAUNCH_ENABLE_PROVISION_PROTOCOL
+    KEY_CROSS_LAUNCH_PROVISION_PROTOCOL_RATE_LIMIT
+    KEY_CROSS_LAUNCH_PROVISION_PROTOCOL_TIME_LIMIT
+
+  Strings:
+    'com.cisco.jabber.signin.crosslaunch.provision'  ← scheme handler
+    'ConfigService_setUrlProvisioningData'            ← provisioning URL setter
+    'ConfigService_resetAllowUriProvisioningData'     ← provisioning reset
+    'EnableProvisionProtocol'
+    'DisableCrossLaunch'                              ← admin killswitch
+    'CiscoTelProtocolCrossLaunchBackSchema'           ← ciscotel:// handler
+    'CrossLaunchBackSchema', 'CrossLaunchBackAppName'
+
+  Cross-launch attack path:
+    1. ciscotel:// or ciscojabber:// deep link (BROWSABLE, JAB-F9)
+    2. CrossLaunchActivity handles provision scheme
+    3. ConfigService_setUrlProvisioningData sets attacker CUCM URL
+    4. Rate limit (KEY_CROSS_LAUNCH_PROVISION_PROTOCOL_RATE_LIMIT) is the
+       only defense — brute-forceable if rate window is observed
+    5. ShareFileCrossLaunchService processes file-sharing URIs — potential
+       path traversal if URI validation is missing (ShareFileCrossLaunchService.kt:74-87)
+
+  Chain: JAB-F9 (deep link) → JAB-F15 (provision) → EXP-F9/F10 (Expressway privilege escalation)
+
 DEX STRUCTURE (classes.dex + classes2.dex):
   Total: 59293 strings, 10221 types, 65339 methods, 8104 classes (DEX035)
   Cisco packages: cisco/jabber/app, signin, im, jcf, telephony, service, setting,
@@ -417,7 +491,11 @@ LIBCPVE_DTLS_BYPASS = {
         "Bypasses primary defense against certificate substitution in DTLS-SRTP."
     ),
     "trigger": "disableFingerprintVerification() called on ConnectionImpl before connectDtlsSession fires",
-    "trigger_traced": False,          # BLR caller trace not yet complete
+    "trigger_traced": False,          # No BL callers in .text; not in any C++ vtable found
+    # Dispatch note: TlsSession/DtlsSession vtables at 0x86e9c0/0x86e978 use GLib GObject
+    # dispatch (slot[0]=rodata VA, slot[1]=NULL typeinfo) — not Itanium C++ ABI.
+    # Function is GLOBAL exported; reachable via dlsym or GStreamer element property table
+    # at 0x4c798 (.dynsym st_value, not a runtime pointer). Requires dynamic analysis.
     "chain": ["JAB-F1 (CiscoSSL 1.1.1 fork) → signaling MITM", "JAB-F13 → media MITM"],
 }
 
