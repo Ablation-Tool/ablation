@@ -186,6 +186,44 @@ JAB-F5: cmcrypto.dll Intentionally Stripped [LOW/MEDIUM]
   RE path: requires dynamic analysis (API monitor on Windows) or disassembly
            Exports: enumerate via dumpbin /exports to map the thin API surface
 
+JAB-F7: libcjose 0.6.1 — CVE-2023-37464 Algorithm Confusion + alg:none [CRITICAL]
+  File: libcjose.so (Android 15.0.4 arm64, 123K)
+  Version: 0.6.1 (from embedded source paths: 0.6.1/src/jws.c, 0.6.1/src/jwe.c, etc.)
+  CVE-2023-37464 fixed in: 0.6.2.2 — this build is 3 minor versions behind the fix
+  Compiler: Android clang 6.0.2 r316199 (~2018) — 8-year-old toolchain
+  Dependencies: libcryptox.so, libsslx.so (CiscoSSL fork)
+  Mechanism (confirmed via disassembly of cjose_jws_verify at 0x10aa8):
+    cjose_jws_verify dispatches via two function pointers stored in the JWS struct
+    at offsets [x21+120] and [x21+136]. These pointers are set at cjose_jws_import
+    time based on the "alg" header value in the token. No re-validation of key type
+    occurs at verify time — only the algorithm-specific verify function is called.
+    Attack (CVE-2023-37464 algorithm confusion):
+      1. Server uses RS256 with an RSA key pair for JWS token issuance
+      2. Attacker obtains RSA public key (public by definition)
+      3. Attacker crafts JWS token with header {"alg":"HS256"} (swapped to HMAC)
+      4. Computes HMAC-SHA256 of header.payload using RSA public key bytes as the secret
+      5. Submits forged token — server calls HS256 verify with the same RSA public key
+         as "secret"; HMAC matches → verification passes → token accepted
+  alg:none surface:
+    CJOSE_HDR_ALG_NONE constant and "none" string present in binary
+    If import accepts alg:none, verify dispatches to a no-op function → unsigned
+    tokens pass verification with no signature check
+  Exports: cjose_jws_verify, cjose_jws_sign, cjose_jwe_encrypt, cjose_jwe_decrypt,
+           cjose_jwe_decrypt_multi, cjose_jwk_create_EC_random, cjose_jwk_create_RSA_random,
+           cjose_jwk_derive_ecdh_secret, cjose_jwk_hkdf
+  Auth relevance: EDGE_CISCOEDGE (Expressway-E MRA path, id=1001) uses JWS tokens
+                  for Mobile Remote Access auth. Algorithm confusion here → MRA token
+                  forgery → unauthorized remote access bypass
+
+JAB-F8: libcjose ECDH-ES Key Derivation Exported [MEDIUM]
+  File: libcjose.so (Android 15.0.4)
+  Functions: cjose_jwk_derive_ecdh_bits, cjose_jwk_derive_ecdh_ephemeral_key,
+             cjose_jwk_derive_ecdh_secret, cjose_concatkdf_derive
+  Supported curves: P-256, P-384, P-521
+  JWE algorithms: ECDH-ES, A128KW, A192KW, A256KW, A256GCM, A128CBC-HS256,
+                  A192CBC-HS384, A256CBC-HS512, RSA1_5, RSA-OAEP
+  RSA1_5 presence: RSA PKCS1v1.5 encryption accepted (known padding oracle surface)
+
 JAB-F6: SRTP/DTLS Split — Two Separate Libraries [LOW]
   Windows: both cpve.dll (Protocol Voice Engine, 856K) AND srtp.dll (58K) present
   cpve.dll likely embeds its own SRTP stack; srtp.dll may be legacy or used by
