@@ -472,17 +472,23 @@ FINDING_F12 = {
 #
 FINDING_F13 = {
     'id': 'F13',
-    'platform': 'ALL Fujitsu iRMC platforms (Kronos4 S4 + Kronos5 S5, confirmed 7 firmware images, unpatched Jan 2022 – Dec 2025)',
+    'platform': 'ALL Fujitsu iRMC platforms (Kronos4/5/6, confirmed 8 firmware images, unpatched Jan 2022 – May 2026)',
     'confirmed_platforms': [
+        'CX2550 M7 iRMC Kronos6 02.72S (D3988, build 2026-05-25) — NEWEST GENERATION, SquashFS+Linux 5.4',
         'CX2550 M4 iRMC Kronos5 03.65P (D3856, primary analysis target)',
         'CX2550 M5 iRMC Kronos5 03.65P',
         'CX2550 M6 iRMC Kronos5 03.65P (D3893, Dec 2025)',
         'CX2560 M6 iRMC Kronos5 03.65P (D3894, Dec 2025)',
-        'CX2560 M6 iRMC Kronos5 03.36P (D3894, Jan 2022) — oldest confirmed, unpatched window >= 4 years',
+        'CX2560 M6 iRMC Kronos5 03.36P (D3894, Jan 2022) — oldest confirmed',
         'PRIMEQUEST 3000B AMI BMC (D3858)',
         'RX2530 M1 iRMC Kronos4 09.69F',
     ],
-    'libsafesystem_version': '6.2.0 (identical across all 7 images)',
+    'libsafesystem_version': {
+        'Kronos6': '13.8.0',
+        'Kronos5': '6.2.0 (identical across all Kronos5 images)',
+        'Kronos4': 'pending',
+    },
+    'kronos6_notes': 'SquashFS replaces CramFS; Linux 5.4.266-ami replaces 3.14.17-ami; both F13 templates present; nsupdate.sh identical; execdaemon present',
     'component': 'AMI SPX BMC / FTS_WebServer + libsafesystem + execdaemon',
     'title': 'Shell template injection via DDNS hostname/domain fields → nsupdate.sh → system() (class-wide)',
     'binary': 'usr/local/bin/FTS_WebServer',
