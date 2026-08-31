@@ -65,6 +65,24 @@ EXP-F1: domain_management_helper SETUID ROOT — Argument Injection Surface [CRI
     1. check_args() boundary — if length/character validation is weak, malformed args reach Python
     2. /bin/domain_management (Python) — if it shells out with unquoted args, secondary injection
     3. escapeshellarg() in PHP 5 does not escape newlines — multiline username/password may split args
+  Disassembly of check_uid() (0x1390):
+    getuid() → %ebp, geteuid() → %eax
+    if (uid | euid) == 0 → SKIP strcmp, return success (root always bypasses)
+    if euid != 0 → ERROR
+    if euid == 0 && uid != 0 → strcmp(getpwuid(uid)->pw_name, kAllowedUser)
+    Bypass: root (uid=0, euid=0) skips the _nobody check entirely via the OR-zero branch
+  Disassembly of check_args() (0x1460):
+    Exact argc == 6 required
+    argv[1] == "join\0"  (repz cmpsb, 5 bytes) OR "leave\0" (6 bytes)
+    argv[2] == "--username" (repz cmpsb, 11 bytes)
+    argv[4] == "--password"  (repz cmpsb, 11 bytes)
+    argv[3] (username value) and argv[5] (password value) NOT validated
+  Disassembly of main() (0x10f0):
+    setreuid(0, 0) called before execve → Python script runs as full root
+    LATENT BUG: setreuid failure path (0x11ed) prints error then jumps to execve anyway
+    execve called regardless of setreuid return value
+    envp stripped to { PYTHONPATH=/share/python/site-packages, NULL } — clean env
+    argv_new: ["/bin/python", "/bin/domain_management", verb, "--username", user, "--password", pass, NULL]
   Note: Binary not stripped, full symbol table available for Ghidra/IDA analysis.
 
 EXP-F2: Cert Checker SSRF — Attacker-Controlled Root TLS Connection [HIGH]
@@ -191,6 +209,25 @@ RELATED CVEs (later Expressway versions, same codebase lineage):
   Note: X12.5.4 predates X14.0.x vulnerabilities but shares architectural patterns.
         The xAPI interface (/opt/c_mgmt/xcommand/) present in X12.5 is the attack
         surface class for CVE-2022-20754/20755 in later versions.
+
+EXP-F9: check_uid() Root Bypass — uid|euid==0 Branch Skips _nobody Check [HIGH]
+  Binary: /sbin/domain_management_helper
+  Condition: if (getuid() | geteuid()) == 0 → return success without strcmp
+  Effect: any process with uid=0 AND euid=0 bypasses the _nobody validation gate
+  Path: if an attacker achieves any other root-level entry point on the appliance
+        (SSH key, other SUID, kernel exploit), they can call domain_management_helper
+        directly and escalate via the Python exec chain without going through PHP
+  This is likely intentional (root maintenance bypass) but is load-bearing to the
+  security model — the _nobody check is only meaningful when root is not already attained
+
+EXP-F10: setreuid() Failure Ignored — execve Always Reaches Python As Root [MEDIUM]
+  Binary: /sbin/domain_management_helper
+  Code: setreuid(0, 0) at 0x11c2; failure path at 0x11ed prints error then jmp 0x11cb
+  0x11cb is the execve call — setreuid failure does NOT abort execution
+  Effect: Python always runs (at minimum with euid=0 from the setuid bit)
+          If setreuid(0,0) fails for any reason (capability stripping, namespace,
+          seccomp), execve still fires with euid=0
+  This is a latent design bug — the error message was added but the abort was not
 """
 
 # Expressway X12.5.4 binary fingerprints for version discrimination
