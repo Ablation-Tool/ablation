@@ -1,8 +1,12 @@
 """
-Cisco IP Phone 7945/7965 SIP firmware reverse engineering module.
-Firmware: SIP 9.4.2SR1-1 (cmterm-7945_7965-sip.9-4-2SR1-1.zip)
+Cisco IP Phone 7945/7965/7970/7971 SIP firmware reverse engineering module.
+Firmware: 7945/7965 SIP 9.4.2SR1-1 (cmterm-7945_7965-sip.9-4-2SR1-1.zip)
+          7970/7971 SIP 9.4.2-1 (cmterm-7970_7971-sip.9-4-2-1.zip)
+          7970/7971 SIP 9.2.1 (cmterm-7970_7971-sip.9-2-1.tar) [older]
 Platform: MIPS big-endian, Beamish CVM (J2ME CDC), Linux
 Container: CNU_File_Archive_3.0 (variable-length Cisco sig block, NOT 512-byte strip)
+Coverage: All four models confirmed identical Beamish CVM architecture (368-byte delta
+          between 7965 and 7970 CVM binaries). PHN-F06/F07 apply uniformly across 79xx series.
 """
 
 FIRMWARE = {
@@ -254,4 +258,43 @@ COMPARISON_7965_vs_8941 = {
         "CUCM registration TLS",
         "DHCP option 150 / TFTP provisioning attack vector",
     ],
+}
+
+# ---- 7970/7971 coverage notes ----
+
+COVERAGE_7970_7971 = {
+    "models": ["Cisco IP Phone 7970", "Cisco IP Phone 7971"],
+    "versions_confirmed": ["9.4.2-1", "9.2.1"],
+    "architecture": "Identical Beamish CVM platform to 7945/7965",
+    "cvm_delta": "368 bytes between 7965 and 7970 decompressed CVM (6805740 vs 6805372 bytes)",
+    "jar_structure_difference": (
+        "7970 jar70sip.sbn has ONE ZIP (174 entries, resources only). "
+        "7945/7965 jar45sip.sbn has TWO ZIPs: resources (172 entries) + class library (1007 entries). "
+        "7970 class library is embedded inside cvm70sip.sbn DEADBEEF binary, not a separate JAR."
+    ),
+    "secd_strings_confirmed": [
+        "/tmp/sslAppSrvrSock",
+        "** no secd?! no SSL/TLS proxy srvr sock <%s>",
+        "Entering StcpOpenActiveSSL",
+        "StcpActiveSSLConnectionStatus: SUCCESS",
+    ],
+    "ctl_itl_strings_confirmed": [
+        "OK_INITIAL_CTL", "OK_INITIAL_ITL",
+        "FAILED_CTL", "FAILED_ITL",
+        "CTL_UPDATE", "CTL_ITEM", "ITL_ITEM",
+        "NO CTL OR ITL",
+        "CTL install has failed (neither old, nor new via TFTP [SEC_ERR_CTL])",
+        "ITL install has failed (neither old, nor new via TFTP [SEC_ERR_ITL])",
+        "CTL TFTP/update failed, but have old TL",
+    ],
+    "capf_srst_confirmed": [
+        "isSRSTSecure",
+        "SRST CA, bad cert arg",
+        "capfAuthMode",
+        "CAPF server is : %s",
+    ],
+    "findings_applicable": ["PHN-F06", "PHN-F07"],
+    "findings_by_analogy": ["PHN-F02 (TOFU CTL/ITL)", "PHN-F04 (TVS-absent)"],
+    "apps70_sig_offset": 0x10A4D,
+    "apps70_first_elf_offset": 68157,
 }
