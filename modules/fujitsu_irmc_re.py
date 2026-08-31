@@ -333,21 +333,166 @@ FINDING_F9 = {
     'severity': 'PENDING',
 }
 
+# =============================================================================
+# F10: PRIMEQUEST 3000B BMC — Redis no-auth (internal attack surface)
+# =============================================================================
+#
+# File:    pq3000-bmc-cramfs/mnt/etc/redis/0.conf
+# Platform: PRIMEQUEST 3000B (AMI SPX 4.0, D3858 controller, BMC0286)
+#
+# Redis config:
+#   bind           127.0.0.1
+#   protected-mode yes
+#   port           0 (no TCP; Unix socket only)
+#   unixsocket     /var/tmp/redis.sock
+#   unixsocketperm 700
+#   requirepass    (not set — no auth)
+#
+# Callers: flasher binary reads firmware update parameters from Redis.
+# If an attacker achieves code execution as the Redis socket owner (e.g., via F3
+# execdaemon), they can inject malicious firmware parameters into Redis, causing
+# the flasher daemon to perform an unauthorized flash operation on the next
+# firmware update cycle.
+#
+# Secondary path: FTS_DimmCacheRefresh stores DIMM health data in Redis.
+# Redis key manipulation could corrupt BMC sensor data and IEL event log.
+#
+# Severity: HIGH (requires socket-level access; internal chain only)
+#
+FINDING_F10 = {
+    'id': 'F10',
+    'platform': 'PRIMEQUEST 3000B',
+    'component': 'AMI BMC Redis (D3858 / BMC0286)',
+    'title': 'Redis no-auth on BMC internal socket (flasher reads firmware params from Redis)',
+    'config': {'bind': '127.0.0.1', 'port': 0, 'socket': '/var/tmp/redis.sock',
+               'socketperm': '700', 'requirepass': 'NOT SET'},
+    'callers': ['flasher', 'FTS_DimmCacheRefresh'],
+    'chain': 'F3 execdaemon RCE -> redis-cli inject flash params -> flasher executes malicious flash',
+    'severity': 'HIGH (internal, requires prior code execution)',
+}
+
+# =============================================================================
+# F11: GX2570 BMC — xml_dispatcher.cgi CPLD/ROT firmware update via XML
+# =============================================================================
+#
+# Binary: bmc-gx-squashfs/webfs/cgi-bin/xml_dispatcher.cgi
+# Functions: VerifyXMLFile -> UtilCPLDROT_addTask -> UtilCPLDROT_NVFileUpdateBIOS
+#            GetSessCookie, UtilValidateSSLCert
+#
+# The XML dispatcher CGI processes XML input and dispatches to CPLD ROT firmware
+# update tasks (UtilCPLDROT_NVFileUpdateBIOS). Auth: GetSessCookie + VerifyXMLFile.
+# If XML schema validation is bypassable (XXE, schema confusion, or forged session),
+# the dispatcher can trigger an unauthorized CPLD/ROT firmware update.
+#
+# CPLD/ROT is the hardware root of trust — a compromised CPLD breaks Secure Boot
+# and BIOS attestation for all subsequent host boots.
+#
+# Note: VerifyXMLFile uses libxml2; XXE disabled in modern libxml2 by default but
+# check libxml2 version in firmware (GCC 9.2.0 build suggests 2018-era libxml2).
+#
+# Severity: CRITICAL if auth bypass exists; HIGH with valid session
+#
+FINDING_F11 = {
+    'id': 'F11',
+    'platform': 'PRIMERGY GX2570 MG',
+    'component': 'Supermicro X12DGO BMC / xml_dispatcher.cgi',
+    'title': 'XML dispatcher triggers CPLD ROT firmware update (root-of-trust write)',
+    'binary': 'cgi-bin/xml_dispatcher.cgi',
+    'functions': ['VerifyXMLFile', 'UtilCPLDROT_addTask', 'UtilCPLDROT_NVFileUpdateBIOS'],
+    'auth': 'GetSessCookie (required)',
+    'impact': 'CPLD/ROT compromise breaks Secure Boot + BIOS attestation',
+    'next_step': 'Check libxml2 version for XXE; audit VerifyXMLFile for schema bypass',
+    'severity': 'CRITICAL (with auth bypass) / HIGH (with valid session)',
+}
+
+# =============================================================================
+# F12: GX2570 BMC — url_redirect.cgi HTTP Host header injection -> JNLP
+# =============================================================================
+#
+# Binary: bmc-gx-squashfs/webfs/cgi-bin/url_redirect.cgi
+# Strings: HTTP_HOST, GenerateJNLPContent, /tmp/jnlp, realpath, strncmp, strstr
+#
+# url_redirect.cgi reads the HTTP Host header and uses it to generate JNLP
+# content for the Java KVM client. If Host header is not sanitized before
+# inclusion in the JNLP file, an attacker can inject a malicious KVM server
+# address. A client that opens the KVM session would connect to the attacker's
+# server instead of the BMC, enabling credential interception or arbitrary
+# Java execution (JNLP can trigger JAR download/exec from codebase URL).
+#
+# JNLP written to /tmp/jnlp — world-writable tmpfs directory.
+#
+# Severity: MEDIUM (requires user interaction; unauthenticated host injection)
+#
+FINDING_F12 = {
+    'id': 'F12',
+    'platform': 'PRIMERGY GX2570 MG',
+    'component': 'Supermicro X12DGO BMC / url_redirect.cgi',
+    'title': 'HTTP Host header injection into JNLP KVM launch file',
+    'binary': 'cgi-bin/url_redirect.cgi',
+    'vector': 'Host: <attacker_server> -> JNLP codebase URL -> JAR exec',
+    'output': '/tmp/jnlp',
+    'severity': 'MEDIUM',
+}
+
+# =============================================================================
+# F13: GX2570 BMC — FTS_WebServer shell template injection via safe_system_exec
+# =============================================================================
+#
+# Binary: irmc-s5-cramfs/mnt/usr/local/bin/FTS_WebServer
+# Evidence: strings "sh  %s %s %s %s 0 0 %s" and "sh  %s %s %s.%s %s 0 0 %s"
+# Chain: FTS_WebServer -> libsafesystem::safe_system_exec -> execdaemon_pipe -> system()
+# libsafesystem confirmed in: FTS_WebServer, FTS_RedfishTaskMngr, flasher,
+#   IPMIMain, vnc_ami, lmedia, rmedia, solssh, raidagent, adviserd, compmanager
+#
+# FTS_WebServer uses sh-format templates to construct shell commands for service
+# restarts and firmware operations. If any web-accessible parameter maps to
+# a %s slot in the template (e.g., NTP server name, firmware file path, interface
+# name), the result is shell injection through the execdaemon privileged pipe.
+#
+# Known service restart templates (partial hardcoded list from strings):
+#   /etc/init.d/cdserver restart &
+#   /etc/init.d/ntpdate_wo_status start &
+#   /etc/init.d/rsyslog restart
+# These appear hardcoded; the sh %s templates likely serve dynamic commands.
+#
+# Severity: CRITICAL if a %s maps to user-controlled web input
+# Next step: map web form parameters to sh %s template slots via binary analysis
+#
+FINDING_F13 = {
+    'id': 'F13',
+    'platform': 'PRIMERGY CX2550 M4 / PX8770 M7 / PRIMEQUEST 3000B (all AMI BMC)',
+    'component': 'AMI BMC / FTS_WebServer + libsafesystem + execdaemon',
+    'title': 'Shell template injection: FTS_WebServer sh-%s template via execdaemon pipe',
+    'binary': 'usr/local/bin/FTS_WebServer',
+    'template': 'sh  %s %s %s %s 0 0 %s',
+    'chain': ['FTS_WebServer(web param)', 'libsafesystem::safe_system_exec',
+              'execdaemon_pipe', 'system()'],
+    'libsafesystem_callers': ['FTS_WebServer', 'FTS_RedfishTaskMngr', 'flasher',
+                               'IPMIMain', 'vnc_ami', 'lmedia', 'rmedia', 'solssh'],
+    'severity': 'CRITICAL (pending %s slot → web param mapping)',
+}
+
+
 ALL_FINDINGS = [
     FINDING_F1, FINDING_F2, FINDING_F3, FINDING_F4,
     FINDING_F5, FINDING_F6, FINDING_F7, FINDING_F8, FINDING_F9,
+    FINDING_F10, FINDING_F11, FINDING_F12, FINDING_F13,
 ]
 
 SUMMARY = {
     'platforms': ['PRIMEQUEST 3000B', 'PRIMERGY GX2570 MG', 'PRIMERGY CX2550 M4', 'PRIMERGY PX8770 M7'],
-    'critical': ['F1 (LDAP mmb1234)', 'F3 (execdaemon pipe)', 'F5 (TFTP->RCE)'],
-    'high':     ['F2 (default ADMIN hash + Supermicro TLS cert)', 'F6 (no cert validation)', 'F8 (Flash SWF EOL)'],
-    'medium':   ['F4 (CRC32 session)', 'F7 (SCCI XML injection)'],
-    'pending':  ['F9 (ARM BERT sweep on auth libs)'],
+    'critical': ['F1 (LDAP mmb1234)', 'F3 (execdaemon pipe)', 'F5 (TFTP->RCE)',
+                 'F11 (CPLD ROT via XML)', 'F13 (sh template injection)'],
+    'high':     ['F2 (default ADMIN hash)', 'F6 (no TLS cert validation)', 'F8 (Flash SWF EOL)',
+                 'F10 (Redis no-auth on BMC)'],
+    'medium':   ['F4 (CRC32 session)', 'F7 (SCCI XML injection)', 'F12 (JNLP Host injection)'],
+    'pending':  ['F9 (ARM BERT sweep on auth libs)', 'F13 (%s slot mapping)'],
     'chain': (
         'F1 (LDAP Manager cred) -> LDAP bind -> MMB admin account '
         '-> iRMC REST (F6 no TLS) -> trigger TFTP update (F5) '
-        '-> TFTP payload mount + system() -> host RCE'
+        '-> TFTP payload mount + system() -> host RCE; '
+        'OR: F13 web param -> sh template -> execdaemon -> system() -> BMC RCE; '
+        'OR: F11 XML dispatch -> CPLD ROT write -> Secure Boot bypass'
     ),
 }
 
