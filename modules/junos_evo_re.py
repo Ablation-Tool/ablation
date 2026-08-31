@@ -191,15 +191,35 @@ QUERY_PROFILES = {
     'avp_parser': '{daemon}_AVP_PARSER | length field | user-controlled | overflow before memcpy or strcpy',
 }
 
-# CVE-2024-6387 (regreSSHion) — Finding 8, PENDING
-# sshd binary not present in firmware extraction. Junos EVO runs sshd inside the
-# Junos guest VM squashfs, not the host initrd/re64 tree. Extraction path:
-#   1. tar -xzf junos-vmhost-install-mx-x86-64-23.4R2-S7.4.tgz
-#   2. find the guest squashfs (usually junos-<version>.squashfs or similar)
-#   3. unsquashfs → sshd at /usr/sbin/sshd
-#   4. strings sshd | grep OpenSSH_
-# Junos 23.4R2 shipped before CVE-2024-6387 (disclosed July 2024, fixed 9.8p1).
-# Expected: OpenSSH 8.x or 9.0-9.7 → likely vulnerable range. Confirm empirically.
+# FINDING 8 — CVE-2024-6387 (regreSSHion) — STATIC ANALYSIS COMPLETE
+# ─────────────────────────────────────────────────────────────────────
+# Binary: /usr/sbin/sshd from os-crypto-x86-64-20251216.9125daf_builder_bsd15_244
+# Extraction: contents.izo (5.3MB) → IZO V2.0 first block 0x1d58 → 921 blocks →
+#   15MB ISO 9660 → mounted → sshd (ELF64 x86-64 FreeBSD 15.0, not stripped, 3.3MB)
+# Build: 2025-09-09 14:04:52 UTC, "SSHD release 25.4R20250909_1359_builder"
+#   Juniper clang 15.0.7, source: src/crypto/openssh/sshd.c (Juniper fork)
+#   NT_VERSION: 0x1500008 = FreeBSD 15.0.0
+#
+# CVE-2024-6387 analysis: grace_alarm_handler at VA 0x264f20
+#   1. getpgid(0) / getpid() check — if process group leader, reset SIGALRM to IGN
+#      and kill(0, SIGALRM) to propagate to group
+#   2. ssh_remote_ipaddr / ssh_remote_port — load client addr/port into r14/rbx
+#   3. call sshsigdie (0x2eac40) with file="sshd.c", func="grace_alarm_handler",
+#      line=0x17f(383), fmt="Timeout before authentication for %s port %d", args
+#
+# sshsigdie disassembly (0x2eac40):
+#   push %rbp / mov %rsp,%rbp
+#   mov $0x1,%edi
+#   call _exit@plt    <- ASYNC-SIGNAL-SAFE: _exit(1) directly, no syslog/fatal
+#   ud2
+#
+# VERDICT: NOT VULNERABLE to CVE-2024-6387.
+#   sshsigdie ignores all arguments and calls _exit(1). No syslog(), no heap ops,
+#   no async-signal-unsafe functions in the signal handler path.
+#   Juniper incorporated the regreSSHion fix (upstream: OpenSSH 9.8p1, July 2024).
+#   Binary built Sept 2025 — post-fix. F8 hypothesis refuted.
+#
+# FINDING 8 STATUS: NEGATIVE (static). CVE-2024-6387 not present.
 
 # CALIBRATION — score threshold learned from jdhcpd sweep
 # Scores below 0.50 on this model consistently resolve to false positives.
