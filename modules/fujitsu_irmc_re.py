@@ -1,15 +1,27 @@
 """
 Fujitsu PRIMERGY / PRIMEQUEST server management firmware RE.
 Targets: PRIMEQUEST 3000B MMB, PRIMERGY GX2570 MG (Supermicro X12DGO BMC),
-         PRIMERGY CX2550 M4 / PX8770 M7 (iRMC S5 Kronos5, AMI BMC).
+         PRIMERGY CX2550 M4/M5 (iRMC S5 Kronos5), PRIMERGY RX2530 M1 (iRMC S4 Kronos4).
 
 Firmware sources:
-  PRIMEQUEST 3000B:  ~/fujitsu-re/albiero-pq3000/BMC0286 (AMI CramFS ARM)
+  PRIMEQUEST 3000B:  ~/fujitsu-re/albiero-pq3000/BMC0286 (AMI CramFS ARM, D3858)
                      ~/fujitsu-re/mmb0241-fs/             (MMB0241 RPM set)
+                     ~/fujitsu-re/pq3000-bmc-cramfs/mnt/  (mounted CramFS)
   PRIMERGY GX2570:   ~/fujitsu-re/bmc-gx2570/BMC_Fujitsu_X12DGO_601_12_20230717.bin
-  PRIMERGY CX2550:   ~/fujitsu-re/irmc-s5-fw/CX2550M4_03.65P_sdr03.54.bin
+                     ~/fujitsu-re/bmc-gx-squashfs/rootfs/ (Supermicro ARM squashfs)
+                     ~/fujitsu-re/bmc-gx-squashfs/webfs/  (secondary squashfs w/ CGI)
+                     ~/fujitsu-re/bmc-gx-fcgi/            (FCGI handlers extracted)
+  PRIMERGY CX2550 M4: ~/fujitsu-re/irmc-s5-fw/CX2550M4_03.65P_sdr03.54.bin
+                      ~/fujitsu-re/irmc-s5-cramfs/mnt/    (mounted CramFS)
+  PRIMERGY CX2550 M5: CX2550M5D3853 03.65P (same version, different build)
+                      ~/fujitsu-re/cx2550m5-cramfs/mnt/   (mounted CramFS)
+  PRIMERGY RX2530 M1: RX2530M1D3279 iRMC Kronos4 09.69F
+                      ~/fujitsu-re/rx2530m1-kronos4-cramfs/mnt/ (Kronos4, 4713 files)
+  BIOS ROMs:         ~/fujitsu-re/irmc-cx2550-asm/D3853-A1.ROM  (CX2550 M4 BIOS)
+                     ~/fujitsu-re/d3853-admin-flash/D3853-B1.ROM (CX2550 M5 BIOS, B1 rev)
   SVAgentless:       ~/fujitsu-re/svagentless-extract/srvmagt-rpm/
   iRMC Ansible:      ~/fujitsu-re/ansible-irmc/AnsibleIntegration-v1.2.6/
+  PRAID EP4x0i ASP:  ~/fujitsu-re/praid-ep4x0i-fs/ (StorCLI + 242100151.rom)
 
 Extraction state (2026-08-30):
   GX2570 rootfs   -> ~/fujitsu-re/bmc-gx-squashfs/rootfs/   (squashfs, Supermicro ARM)
@@ -460,16 +472,24 @@ FINDING_F12 = {
 #
 FINDING_F13 = {
     'id': 'F13',
-    'platform': 'PRIMERGY CX2550 M4 / PX8770 M7 / PRIMEQUEST 3000B (all AMI BMC)',
-    'component': 'AMI BMC / FTS_WebServer + libsafesystem + execdaemon',
-    'title': 'Shell template injection: FTS_WebServer sh-%s template via execdaemon pipe',
+    'platform': 'ALL Fujitsu iRMC platforms (Kronos4 S4 + Kronos5 S5, confirmed 4 firmware images)',
+    'confirmed_platforms': [
+        'CX2550 M5 iRMC Kronos5 (03.65P)',
+        'CX2550 M4 iRMC Kronos5 (03.65P)',
+        'PRIMEQUEST 3000B AMI BMC (D3858)',
+        'RX2530 M1 iRMC Kronos4 (09.69F)',
+    ],
+    'component': 'AMI SPX BMC / FTS_WebServer + libsafesystem + execdaemon',
+    'title': 'Shell template injection: FTS_WebServer sh-%s template via execdaemon pipe (class-wide)',
     'binary': 'usr/local/bin/FTS_WebServer',
     'template': 'sh  %s %s %s %s 0 0 %s',
+    'tmpl_hits_per_platform': 2,
     'chain': ['FTS_WebServer(web param)', 'libsafesystem::safe_system_exec',
               'execdaemon_pipe', 'system()'],
     'libsafesystem_callers': ['FTS_WebServer', 'FTS_RedfishTaskMngr', 'flasher',
                                'IPMIMain', 'vnc_ami', 'lmedia', 'rmedia', 'solssh'],
-    'severity': 'CRITICAL (pending %s slot → web param mapping)',
+    'note': 'execdaemon pipe pattern confirmed present in Kronos4 (S4) and Kronos5 (S5)',
+    'severity': 'CRITICAL (class-wide; pending %s slot → web param mapping)',
 }
 
 
