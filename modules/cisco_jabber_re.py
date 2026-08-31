@@ -231,6 +231,71 @@ JAB-F6: SRTP/DTLS Split — Two Separate Libraries [LOW]
   Android: libsrtp.so (106K) separate from libcpve.so (8.7MB) — same split
   Implication: two independent SRTP implementations → different patch cadences,
                different CVE exposure windows
+
+JAB-F9: Android Deep Link Injection — ciscoim/ciscojabber/ciscotel Schemes [HIGH]
+  Registered URL schemes (AndroidManifest, category:BROWSABLE): ciscoim://, ciscojabber://, ciscotel://
+  Handler: CrossLaunchActivity (com.cisco.jabber.signin.crosslaunch.CrossLaunchActivity)
+  Handled scheme actions:
+    ciscotel://         → call initiation to attacker number (toll fraud)
+    sip://              → SIP call
+    jabberphone://      → Jabber phone call
+    clicktocall://      → click-to-call
+    ciscoim://          → IM conversation start
+    im:// / imto:// / xmpp:// → XMPP conversation
+    ciscojabber://provision   → server provisioning (TFTP/CUCM reconfiguration)
+  BROWSABLE category: any web page can trigger CrossLaunchActivity without user prompt
+  Attack: ciscojabber://provision → replaces CUCM/TFTP server with attacker endpoint;
+          ciscotel://attacker-number → toll fraud; ciscoim:// → unsolicited IM
+
+JAB-F10: WebView Chat Renderer — Event Handler Injection via XMPP Messages [HIGH]
+  Files: assets/js/jabberMessageManager.js, jabberPostRequest.js, ConversationTemplate.html
+  Native-to-JS bridge (Android): ChatView JavaScript interface (ChatView.postMessage)
+  Message rendering pipeline:
+    1. Native calls JS loadConversation/appendMessages(base64-encoded HTML)
+    2. decodeBase64Html(): window.atob() + URL decode → raw HTML string
+    3. createElementsFromHtml(): range.createContextualFragment(html)
+       → parses HTML into DOM fragment; inline event handlers (onerror/onload/onclick) EXECUTE
+  ChatView bridge operations (from JS → native):
+    downloadFile(fileId, msgId)          → native file download
+    browseFile(fileId, msgId)            → open file in external viewer
+    deleteMessage(convId, msgId)         → delete message
+    callMeMessage(uri)                   → initiate call to any URI
+    robotMessage(robotUri, action, msg)  → bot action dispatch
+    ecmFileAction(fileId, msgId, type)   → ECM content operation
+    postMessagesHtml(htmlStr)            → inject raw HTML back into renderer
+    startOneToOneConversation(uri)       → start conversation with arbitrary URI
+  Attack: if native HTML sanitizer fails to strip event handlers from XMPP message body:
+    <img src=x onerror="ChatView.postMessage(JSON.stringify({name:'callMeMessage',
+    params:{contactUri:'sip:attacker@domain'}}))"> → triggers outbound call on victim device
+  Note: sanitization boundary is Java-side before base64 encode; DEX analysis needed
+        to confirm whether server-provided HTML is sanitized before WebView injection
+
+JAB-F11: JabberCallStateContentProvider — Exported ContentProvider [MEDIUM]
+  Component: com.cisco.jabber.providers.JabberCallStateContentProvider
+  Protecting permissions: com.cisco.jabber.READ_CALL_STATE, WRITE_CALL_STATE
+  Any app that declares matching permission (or if exported without protection) can
+  query/modify call state: call hijacking, call log access, call spoofing
+
+JAB-F12: SSO Browser WebView — OAuth Redirect and Token Leakage [MEDIUM]
+  Classes: JabberSSOBrowserActivity, MeetingSSOBrowserActivity, SSOActivity
+  WebView-based SSO for CUCM/Expressway/Webex OAuth/SAML flows
+  DEX strings: 'refreshToken', 'accessToken', 'SessionExpireDialogActivity',
+               'RefreshTokenAboutToExpireDialogActivity'
+  Attack:
+    1. MITM of IdP TLS (CiscoSSL 1.1.1 fork — JAB-F1) during SSO flow
+    2. Injected JS in IdP response leaks OAuth tokens via ChatView bridge or postMessage
+    3. Open redirect at IdP → OAuth code delivered to attacker URI
+    4. Chain with JAB-F9: deep link triggers SSO then provision re-pointer
+
+DEX STRUCTURE (classes.dex + classes2.dex):
+  Total: 59293 strings, 10221 types, 65339 methods, 8104 classes (DEX035)
+  Cisco packages: cisco/jabber/app, signin, im, jcf, telephony, service, setting,
+                  system, presence, contact, utils, vvm, widget, csf, droid
+  Notable: com.cisco.anyconnect.vpn integration (VPN_DNS_CONFIGURED/RESTORED intents)
+           com.cisco.jabber.signin.crosslaunch (deep link entry point)
+           com.cisco.jabber.service.contact.delegate.sync.authenticator.AuthenticationService
+  Robot/bot subsystem: BotMsgDetailActivity, robotMessage bridge, robot.css
+  AnyConnect VPN: com.cisco.im.watchlib (watch app), VPN DNS change receiver
 """
 
 # Binary inventory — Windows 15.3.0
