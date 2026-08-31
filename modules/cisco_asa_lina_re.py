@@ -901,37 +901,49 @@ CONFIRMED_9164_18_ADDRS = {
     'wins_delta':                   0x58,       # bytes from gp_name start to wins_ptr
 }
 
-# ─── ERA GAP ANALYSIS: attr_list_add_impl codeline classification ─────────────
+# ─── ATTR_LIST_ADD_IMPL IMPLEMENTATION VARIANT MAP ───────────────────────────
 #
-# Method: mnemonic 4-gram Jaccard + structural pattern matching across 33 versions.
-# Pattern anchor: `add rbx,0x10 ; movzx eax,word ptr [rbx-0x10]` — the 8-byte
-# sequence characteristic of the Era 2 linked-list traversal. Absent in Era 1.
+# Method: corpus sweep (28 lina binaries) + masked anchor scan (2026-08-31).
+# The function exists in ALL versions — it is NOT the patch location.
+# The RADIUS Class vuln patch (MA validation) is UPSTREAM of this function.
+# These variants classify the IMPLEMENTATION, not the patched/unpatched state.
 #
-# Era 1 (9.1.7 – 9.6.4):  different traversal impl; anchor pattern NOT present.
-#   Confirmed absent: 9.4.4.42 (0 pattern hits in lina)
+# v1 (9.2.4, 9.4.4):
+#   Post-match: jne + lea eax,[rbp-0x10]  (old calling convention, 32-bit context ptr)
+#   Boundary before 9.5.2 — rewrite happened between 9.4.4 and 9.5.2.
+#   Prior assumption of 9.6.4→9.7.1 boundary was WRONG.
 #
-# Era 2 (9.7.1 – 9.17.x): Era 2 traversal; anchor pattern present; UNPATCHED.
-#   Confirmed present: 9.7.1, 9.12.4.13, 9.14.2.4 (all 1 hit, same function)
-#   9.7.1 attr_list_add_impl: VA 0xe6c520 (file_offset == vaddr, non-PIE)
-#   Jaccard vs 9.14.2.4 seed: 0.2366 (low due to 7-year version span, not structural divergence)
-#   Jaccard vs 9.12.4.13:     0.2857 (same Era 2 codeline, 2-year span)
+# v2a (9.5.2 → 9.14.x, 9.20.3):
+#   Post-match: jne + xor esi,esi + mov rdx,r13  (r13=context ptr)
+#   Same bytes in 9.5.2, 9.6.4, 9.7.1, 9.9.2, 9.12.4, 9.13.1, 9.14.x, 9.20.3
+#   9.20.3 inclusion: function NOT patched; MA validation added upstream, not here.
 #
-# Era 3 (9.15.x+):  structural rewrite; patched.
+# v2b (9.15.x, 9.16.x):
+#   Loop refactored: branch polarity flipped (je=match, fall-through=loop)
+#   9.15.x: short je (opcode 74); 9.16.x: long je (opcode 0f 84)
+#   Algorithm identical; only loop structure differs.
 #
-# ERA GAP RESULT: era boundary is AT OR BEFORE 9.7.1.
-#   Era 1 ends at 9.6.4 (last confirmed Era 1).
-#   Era 2 begins at 9.7.1 (earliest confirmed Era 2).
-#   Patch epoch for attr_list_add_impl vuln: 9.6.4 → 9.7.1
+# v2c (9.22.x):
+#   Same as v2a but r14 instead of r13 as context ptr (register allocation shifted).
 #
-ATTR_LIST_ADD_IMPL_ERA_MAP = {
-    # (version_str, lina_file_off, jaccard_vs_9142, era, pattern_hit)
-    '9.4.4.42':   (None,       None,   1, False),  # Era 1; anchor absent
-    '9.7.1':      (0xe6c520,  0.2366,  2, True),   # Era 2; UNPATCHED; earliest confirmed
-    '9.12.4.13':  (0xc52d20,  0.2857,  2, True),   # Era 2; UNPATCHED
-    '9.14.2.4':   (0xc563d8,  1.0000,  2, True),   # Era 2; seed (self-comparison)
+# Anchor bytes: version_delta.ERA_DISCRIMINATOR_ANCHORS (masked patterns, 4-tuple format)
+# Classify any new binary: version_delta.structural_anchor_scan(data)
+#
+ATTR_LIST_ADD_IMPL_VARIANT_MAP = {
+    # version: (lina_file_off,  variant, notes)
+    '9.2.4':     (0x45127,    'v1',  'confirmed; jne+lea eax,[rbp-0x10]'),
+    '9.4.4.42':  (0x41763,    'v1',  'confirmed; same as 9.2.4'),
+    '9.5.2':     (0xd70acd,   'v2a', 'confirmed; earliest known v2a'),
+    '9.6.4':     (0x8fa0bd,   'v2a', 'confirmed; v2a not v1 — prior boundary was wrong'),
+    '9.7.1':     (0xe6c520,   'v2a', 'confirmed; jac=0.2366 vs 9.14.2.4'),
+    '9.9.2.85':  (0x967298,   'v2a', 'confirmed'),
+    '9.12.4.13': (0xc52d20,   'v2a', 'confirmed; jac=0.2857 vs 9.7.1'),
+    '9.14.2.4':  (0xc563d8,   'v2a', 'confirmed; seed binary'),
+    '9.15.1.1':  (0xc438c3,   'v2b', 'confirmed; short je (74 XX) + add rbx,0x10'),
+    '9.16.2.14': (0xc7d049,   'v2b', 'confirmed; long je (0f 84) + add rbx,0x10'),
+    '9.20.3':    (0xcf2313,   'v2a', 'confirmed; same v2a bytes as 9.14.x — NOT patched here'),
+    '9.22.1.1':  (0x106cd63,  'v2c', 'confirmed; r14 replaces r13'),
 }
-# Anchor bytes live in version_delta.ERA_DISCRIMINATOR_ANCHORS['attr_list_add_impl_era2']
-# Use version_delta.structural_anchor_scan(data) to classify any new binary in O(n).
 
 # ─── CONFIRMED CODE ADDRESSES (ASA 9.22.2.32, x86-64) ───────────────────────
 #
