@@ -167,6 +167,76 @@ def structural_anchor_scan(
         ))
     return results
 
+
+@dataclass
+class BinaryClassification:
+    """Top-level classification of a lina binary's attr_list_add_impl variant."""
+    variant:    str    # 'v1' | 'v2a' | 'v2b' | 'v2c' | 'unknown'
+    confidence: str    # 'anchor' (deterministic) | 'unknown' (no hit)
+    hit_offset: int    # file offset of anchor match; -1 if none
+    anchor_name: str   # which anchor fired; '' if none
+    elf_class:  int    # 1=ELF32/i386  2=ELF64/x86_64  0=unknown
+
+    @property
+    def is_elf32(self) -> bool:
+        return self.elf_class == 1
+
+
+# anchor name → short variant label
+_ANCHOR_VARIANT: dict[str, str] = {
+    'attr_list_add_impl_v1':        'v1',
+    'attr_list_add_impl_v2a':       'v2a',
+    'attr_list_add_impl_v2b_short': 'v2b',
+    'attr_list_add_impl_v2b_long':  'v2b',
+    'attr_list_add_impl_v2c':       'v2c',
+}
+
+
+def classify_binary(
+    source:  'bytes | str | Path',
+    anchors: dict | None = None,
+) -> BinaryClassification:
+    """
+    Classify a lina binary's attr_list_add_impl variant.
+
+    Layer 0 only — structural anchor scan.  Deterministic, <1ms per binary.
+    Returns variant='unknown' with confidence='unknown' on anchor miss; caller
+    should cascade to Layer 2 (mnemonic Jaccard) for novel/unrecognized builds.
+
+    Args:
+        source:  raw bytes, file path string, or pathlib.Path
+        anchors: override anchor library; defaults to ERA_DISCRIMINATOR_ANCHORS
+
+    Returns:
+        BinaryClassification with variant, confidence tier, and hit metadata
+    """
+    if isinstance(source, (str, Path)):
+        data = Path(source).read_bytes()
+    else:
+        data = source
+
+    elf_class = data[4] if len(data) > 5 and data[:4] == b'\x7fELF' else 0
+    results   = structural_anchor_scan(data, anchors=anchors)
+    hits      = [r for r in results if r.found]
+
+    if not hits:
+        return BinaryClassification(
+            variant='unknown', confidence='unknown',
+            hit_offset=-1, anchor_name='', elf_class=elf_class,
+        )
+
+    # Multiple anchors should never fire on one binary — each variant is mutually
+    # exclusive.  If they do (novel build or anchor regression), take the first hit.
+    r = hits[0]
+    return BinaryClassification(
+        variant=_ANCHOR_VARIANT.get(r.anchor_name, 'unknown'),
+        confidence='anchor',
+        hit_offset=r.hit_offset,
+        anchor_name=r.anchor_name,
+        elf_class=elf_class,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature extraction
 # ─────────────────────────────────────────────────────────────────────────────
