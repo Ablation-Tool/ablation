@@ -26,7 +26,7 @@ from typing import Optional
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Layer 0 — structural anchor scan (era classification, O(n) per anchor)
+# Layer 0 — structural anchor scan (implementation-variant classification)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -42,39 +42,99 @@ class AnchorScanResult:
         return self.hit_offset >= 0
 
 
-# Each entry: anchor_name → (anchor_bytes, era, description)
+def _masked_find(data: bytes, pattern: bytes, mask: bytes, start: int, end: int) -> int:
+    """Find first masked pattern match. Uses bytes.find() on the fixed prefix for speed."""
+    plen = len(pattern)
+    # Find the longest fully-masked prefix to use as a fast filter
+    prefix_len = next((i for i, m in enumerate(mask) if m != 0xff), plen)
+    prefix = pattern[:prefix_len] if prefix_len > 0 else pattern[:1]
+    i = start
+    while i <= end - plen:
+        idx = data.find(prefix, i, end - plen + len(prefix))
+        if idx == -1:
+            break
+        if all((data[idx + j] & mask[j]) == (pattern[j] & mask[j]) for j in range(plen)):
+            return idx
+        i = idx + 1
+    return -1
+
+
+# Anchor format: name → (pattern, mask, impl_variant, description)
 #
-# An anchor is a byte sequence that is STRUCTURALLY DIAGNOSTIC for a given era —
-# present in all binaries of that era, absent in all others. Absence of an anchor
-# is inconclusive (Era 1 or Era 3 or out-of-range); only a HIT is definitive.
-# Add an entry here whenever a new structural rewrite boundary is confirmed.
-ERA_DISCRIMINATOR_ANCHORS: dict[str, tuple[bytes, int, str]] = {
-    'attr_list_add_impl_era2': (
-        b'\x48\x83\xc3\x10\x0f\xb7\x43\xf0',   # add rbx,0x10 ; movzx eax,[rbx-0x10]
+# pattern and mask are equal-length bytes. mask 0xFF = must match, 0x00 = wildcard.
+# impl_variant is an integer classifying the IMPLEMENTATION of the function, not
+# the patched/unpatched state of the system. The patch (MA validation) is upstream
+# and not visible from attr_list_add_impl itself — all variants below are present
+# in both patched and unpatched binaries.
+#
+# Corpus validation (28 lina binaries, 2026-08-31):
+#   impl_v1:  hits 9.2.4, 9.4.4              | misses 9.5.2+ ✓
+#   impl_v2a: hits 9.5.2–9.14.x, 9.20.3     | misses Era 1, 9.15.x, 9.16.x, 9.22.x ✓
+#   impl_v2b: hits 9.15.x, 9.16.x            | misses Era 1, Era 2a, 9.22.x ✓
+#   impl_v2c: hits 9.22.x                    | misses all prior ✓
+ERA_DISCRIMINATOR_ANCHORS: dict[str, tuple[bytes, bytes, int, str]] = {
+    # v1: old calling convention — jne + lea eax,[rbp-0x10] after match
+    # Wildcard byte: jne displacement (varies per binary)
+    'attr_list_add_impl_v1': (
+        b'\x66\x3d\x19\x10\x75\x00\x8d\x45\xf0',
+        b'\xff\xff\xff\xff\xff\x00\xff\xff\xff',
+        1,
+        'v1: cmp ax,0x1019 / jne / lea eax,[rbp-0x10]; confirmed 9.2.4, 9.4.4; '
+        'boundary before 9.5.2',
+    ),
+    # v2a: jne + xor esi,esi + mov rdx,r13 after match (r13=context ptr)
+    'attr_list_add_impl_v2a': (
+        b'\x66\x3d\x19\x10\x75\x00\x31\xf6\x4c\x89\xea',
+        b'\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff',
         2,
-        'Era 2 linked-list traversal; absent in Era 1 (9.4.4 confirmed), '
-        'present 9.7.1–9.17.x (confirmed: 9.7.1@0xe6c558, 9.12.4.13, 9.14.2.4)',
+        'v2a: cmp ax,0x1019 / jne / xor esi / mov rdx,r13; confirmed 9.5.2–9.14.x, '
+        '9.20.3; boundary 9.4.4→9.5.2',
+    ),
+    # v2b: loop refactored — je(match) + add rbx,0x10 as fall-through
+    # Two sub-forms: short je (74 XX, 6-byte pattern) and long je (0f 84 XX XX XX XX, 10-byte)
+    # Use long-je form as anchor; short-je (9.15.x) caught by separate entry
+    'attr_list_add_impl_v2b_short': (
+        b'\x66\x3d\x19\x10\x74\x00\x48\x83\xc3\x10',
+        b'\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff',
+        2,
+        'v2b-short: cmp ax,0x1019 / je(short) / add rbx,0x10; confirmed 9.15.x',
+    ),
+    'attr_list_add_impl_v2b_long': (
+        b'\x66\x3d\x19\x10\x0f\x84\x00\x00\x00\x00\x48\x83\xc3\x10',
+        b'\xff\xff\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff\xff',
+        2,
+        'v2b-long: cmp ax,0x1019 / je(long) / add rbx,0x10; confirmed 9.16.x',
+    ),
+    # v2c: same structure as v2a but r14 instead of r13 (register allocation shifted)
+    'attr_list_add_impl_v2c': (
+        b'\x66\x3d\x19\x10\x75\x00\x31\xf6\x4c\x89\xf2',
+        b'\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff',
+        2,
+        'v2c: cmp ax,0x1019 / jne / xor esi / mov rdx,r14; confirmed 9.22.x; '
+        'r14 replaces r13 as context ptr',
     ),
 }
 
 
 def structural_anchor_scan(
     data:     bytes,
-    anchors:  dict[str, tuple[bytes, int, str]] | None = None,
+    anchors:  dict | None = None,
     text_end: int = 0,
 ) -> list[AnchorScanResult]:
     """
-    Scan binary bytes for known era-discriminator sequences.
+    Scan binary bytes for known implementation-variant anchor sequences.
 
-    O(n) per anchor — runs before CFG analysis and Jaccard sweep.
-    A HIT gives definitive era classification and can short-circuit later stages.
-    A MISS is inconclusive: the binary may be Era 1, Era 3, or outside the
-    anchor's confirmed version range. Fall through to Jaccard/semantic in that case.
+    O(n) per anchor using masked pattern matching. A HIT definitively classifies
+    the implementation variant. A MISS is inconclusive — fall through to Jaccard.
+
+    The "patched vs unpatched" state is NOT visible from these anchors: all variants
+    represent the attr_list_add_impl function, which exists in both patched (MA
+    validation upstream) and unpatched binaries. Use VisorPlus/aimap for vuln state.
 
     Args:
         data:     raw binary bytes
         anchors:  anchor library; defaults to ERA_DISCRIMINATOR_ANCHORS
-        text_end: scan limit (bytes); 0 = full binary
+        text_end: scan limit; 0 = full binary
 
     Returns:
         one AnchorScanResult per anchor, in anchor-dict order
@@ -83,11 +143,17 @@ def structural_anchor_scan(
         anchors = ERA_DISCRIMINATOR_ANCHORS
     limit = text_end if text_end > 0 else len(data)
     results = []
-    for name, (anchor_bytes, era, desc) in anchors.items():
-        hit = data.find(anchor_bytes, 0, limit)
+    for name, entry in anchors.items():
+        if len(entry) == 4:
+            pattern, mask, impl_variant, desc = entry
+            hit = _masked_find(data, pattern, mask, 0, limit)
+        else:
+            # Legacy 3-tuple: exact match
+            pattern, impl_variant, desc = entry
+            hit = data.find(pattern, 0, limit)
         results.append(AnchorScanResult(
             anchor_name=name,
-            era=era,
+            era=impl_variant,
             hit_offset=hit,
             description=desc,
         ))
