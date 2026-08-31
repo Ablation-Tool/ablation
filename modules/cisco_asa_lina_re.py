@@ -930,19 +930,40 @@ CONFIRMED_9164_18_ADDRS = {
 # Classify any new binary: version_delta.structural_anchor_scan(data)
 #
 ATTR_LIST_ADD_IMPL_VARIANT_MAP = {
-    # version: (lina_file_off,  variant, notes)
-    '9.2.4':     (0x45127,    'v1',  'confirmed; jne+lea eax,[rbp-0x10]'),
-    '9.4.4.42':  (0x41763,    'v1',  'confirmed; same as 9.2.4'),
-    '9.5.2':     (0xd70acd,   'v2a', 'confirmed; earliest known v2a'),
-    '9.6.4':     (0x8fa0bd,   'v2a', 'confirmed; v2a not v1 — prior boundary was wrong'),
-    '9.7.1':     (0xe6c520,   'v2a', 'confirmed; jac=0.2366 vs 9.14.2.4'),
-    '9.9.2.85':  (0x967298,   'v2a', 'confirmed'),
-    '9.12.4.13': (0xc52d20,   'v2a', 'confirmed; jac=0.2857 vs 9.7.1'),
-    '9.14.2.4':  (0xc563d8,   'v2a', 'confirmed; seed binary'),
-    '9.15.1.1':  (0xc438c3,   'v2b', 'confirmed; short je (74 XX) + add rbx,0x10'),
-    '9.16.2.14': (0xc7d049,   'v2b', 'confirmed; long je (0f 84) + add rbx,0x10'),
-    '9.20.3':    (0xcf2313,   'v2a', 'confirmed; same v2a bytes as 9.14.x — NOT patched here'),
-    '9.22.1.1':  (0x106cd63,  'v2c', 'confirmed; r14 replaces r13'),
+    # version: (lina_file_off, variant, notes)
+    # ELF64 (x86_64) builds — all offsets are file offsets, not VAs
+    # Variant progression: v1 → v2a (9.4.4→9.5.2) → v2b (9.14.x→9.15.x) → v2c (9.16.x→9.17.x)
+    # Note: 9.20.3 returns to v2a — likely a maintenance branch forked before 9.15; not a regression
+    '9.2.4':       (0x45127,    'v1',  'confirmed; jne+lea eax,[rbp-0x10]'),
+    '9.4.4.42':    (0x41763,    'v1',  'confirmed; same as 9.2.4'),
+    '9.5.2':       (0xd70acd,   'v2a', 'confirmed; earliest known v2a'),
+    '9.6.4':       (0x8fa0bd,   'v2a', 'confirmed; v2a not v1 — prior boundary was wrong'),
+    '9.7.1':       (0xe6c520,   'v2a', 'confirmed; jac=0.2366 vs 9.14.2.4'),
+    '9.9.2.85':    (0x967298,   'v2a', 'confirmed'),
+    '9.10.1.37':   (None,       'v2a', 'confirmed by anchor scan'),
+    '9.10.1.42':   (None,       'v2a', 'confirmed by anchor scan'),
+    '9.12.4':      (None,       'v2a', 'confirmed by anchor scan'),
+    '9.12.4.13':   (0xc52d20,   'v2a', 'confirmed; jac=0.2857 vs 9.7.1'),
+    '9.13.1.12':   (None,       'v2a', 'confirmed by anchor scan'),
+    '9.14.1.15':   (None,       'v2a', 'confirmed by anchor scan'),
+    '9.14.1.30':   (None,       'v2a', 'confirmed by anchor scan'),
+    '9.14.2.4':    (0xc563d8,   'v2a', 'confirmed; seed binary'),
+    '9.14.4':      (None,       'v2a', 'confirmed by anchor scan'),
+    '9.15.1.1':    (0xc438c3,   'v2b', 'confirmed; v2b-short form: short je (74 XX) + add rbx,0x10; first v2b'),
+    '9.16.2.14':   (0xc7d049,   'v2b', 'confirmed; long je (0f 84) + add rbx,0x10'),
+    '9.16.4.42':   (None,       'v2b', 'confirmed by anchor scan; v2b-long form'),
+    '9.16.4.76':   (None,       'v2b', 'confirmed by anchor scan; v2b-long form'),
+    '9.16.4.84':   (None,       'v2b', 'confirmed by anchor scan; v2b-long form'),
+    '9.16.9.2':    (None,       'v2b', 'confirmed by anchor scan; v2b-long form'),
+    '9.17.2.3':    (0x49ed8,    'v2c', 'confirmed; r14 first appearance in 9.17 feature train; 67MB ELF64'),
+    '9.20.3':      (0xcf2313,   'v2a', 'confirmed; v2a — maintenance branch forked before v2b/v2c changes'),
+    '9.22.1.1':    (0x106cd63,  'v2c', 'confirmed; r14 replaces r13'),
+    # ELF32 (i386) builds — k8 suffix; 32-bit userspace for legacy ASA hardware (5505/5510/5512)
+    # v1 anchor correctly identifies attr_list_add_impl in all ELF32 builds — same
+    # 32-bit calling convention as 9.2.4/9.4.4; step size 0xc vs 0x10 in ELF64
+    '9.17-k8':     (0x431f7,    'v1', 'ELF32 i386; 32-bit build for legacy HW; v1 = 32-bit calling conv'),
+    '9.17.3.2':    (0x45527,    'v1', 'ELF32 i386; 32-bit build for legacy HW'),
+    '9.17.23-k8':  (0x45527,    'v1', 'ELF32 i386; 32-bit build for legacy HW'),
 }
 
 # ─── CONFIRMED CODE ADDRESSES (ASA 9.22.2.32, x86-64) ───────────────────────
