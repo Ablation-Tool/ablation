@@ -1653,6 +1653,68 @@ def scan_xor_obfuscation(filepath: str) -> list:
         return []
 
 
+# ─── SFDataCorrelator RE (FTD 7.6.2) ────────────────────────────────────────
+#
+# Binary: /media/cowboy/research/cisco-lina-re/ftd-762-extract/rootfs/root/ngfw/var/sf/bin/SFDataCorrelator
+# 8.1MB stripped PIE ELF x86-64; BuildID dee63e1d248c48e6b92021b03a25d9ba36e184fd
+# Build: 2025-08-07
+#
+# FINDING F-FTD-54 CONFIRMED (FTD 7.6.2) — AMQP TLS verify disabled
+#   Function: RabbitMQClient::DoConnect at file VA 0x3c8130
+#   At 0x3c84a3: test cacert_path (%rax); jne to 0x3c84b3
+#   At 0x3c84b3: mov $0x0,%esi → call amqp_ssl_socket_set_verify(socket, 0) at 0x3c84bb
+#   Pattern: CA cert loaded (amqp_ssl_socket_set_cacert called), verify immediately disabled
+#   Bug persists from FTD 6.7.0 to 7.6.2 — NOT patched.
+#   All FTD→FMC AMQP on :5671: TLS socket opened, cert NEVER verified.
+#   Impact: MITM between FTD+FMC mgmt interfaces → IDS event exfil/injection/suppression.
+#
+# FINDING: getVaultCredentials — VERIFYPEER=0 + VERIFYHOST=0 (mirrors F-FTD-53, FTD 7.6.2)
+#   Function: getVaultCredentials at file VA 0x370db4
+#   curl_easy_setopt sequence at 0x3710e0-0x371131:
+#     0x3710e0: CURLOPT_SSL_VERIFYPEER(64) = 0  ← peer cert NOT verified
+#     0x37110b: CURLOPT_SSL_VERIFYHOST(81)  = 0  ← hostname NOT checked
+#   URL: https://127.0.0.1:8200/v1/auth/cert/login → /v1/proxyCredentials/credentials
+#   F-FTD-53 pattern confirmed in 7.6.2: both TLS options explicitly disabled for Vault.
+#
+# NON-FINDING: CurlRequestURL (FTD 7.6.2)
+#   Function: CurlRequestURLat file VA 0x15f0d0 (2261 bytes)
+#   Only 3 setopt calls: CURLOPT_ERRORBUFFER(10010) × 2 + CURLOPT_URL(10002).
+#   No TLS option overrides → curl defaults (VERIFYPEER=1, VERIFYHOST=2). SECURE.
+#
+# NON-FINDING: SNMP (FTD 7.6.2)
+#   NotifySNMPTrapContext_SetAuthPriv at 0x2caaf4:
+#     0x2cab58: cmp $0x3, [rax+0x8] — guard requires securityLevel=SNMP_SEC_LEVEL_AUTHPRIV
+#     If securityLevel != 3: log and return — SetAuthPriv is not applied.
+#   NotifySNMPSessionInit writes +0x8=5 (custom version field) — securityLevel is config-driven.
+#   No hardcoded bypass; SNMP auth level is set from config. NO CODE-LEVEL FINDING.
+#
+# NON-FINDING: Kafka broker TLS (FTD 7.6.2)
+#   ProcessOutputKafkaConfig at file VA 0x375540: generic passthrough to rd_kafka_conf_set.
+#   No hardcoded security.protocol or ssl.ca.location — TLS is config-driven, not enforced.
+#   Strings confirm: no librdkafka TLS config keys hardcoded in binary. NO CODE-LEVEL FINDING.
+#
+# SUMMARY — SFDataCorrelator remaining surfaces (as of 2026-08-31):
+#   F-FTD-54 CONFIRMED in 7.6.2 (AMQP TLS bypass)
+#   F-FTD-53 pattern CONFIRMED in 7.6.2 (getVaultCredentials TLS bypass)
+#   CurlRequestURL: CLEAN (no TLS override, curl defaults enforced)
+#   SNMP authpriv: NO BUG (config-driven, SetAuthPriv guard correct)
+#   Kafka TLS: NO BUG (no hardcoded plaintext, config-driven)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Confirmed addresses in SFDataCorrelator FTD 7.6.2 (stripped PIE, base 0)
+SFDATACORRELATOR_762_ADDRS = {
+    'RabbitMQClient_DoConnect':       0x3c8130,
+    'amqp_ssl_set_verify_callsite':   0x3c84bb,   # amqp_ssl_socket_set_verify(socket, 0=DISABLED)
+    'getVaultCredentials':            0x370db4,
+    'vault_verifypeer_0':             0x3710e0,   # CURLOPT_SSL_VERIFYPEER = 0
+    'vault_verifyhost_0':             0x37110b,   # CURLOPT_SSL_VERIFYHOST = 0
+    'CurlRequestURL':                 0x15f0d0,   # CLEAN — no TLS override
+    'NotifySNMPSessionInit':          0x2c87f5,
+    'NotifySNMPTrapContext_SetAuthPriv': 0x2caaf4,
+    'ProcessOutputKafkaConfig':       0x375540,
+}
+
+
 def collect_ftd_runtime_state(rootfs: str) -> dict:
     """
     Collect FTD configuration and state from key filesystem paths.
