@@ -94,6 +94,7 @@ PHN_F15_8845 = {
 
     "passwd_entry": "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:65532:100:debug:/tmp:/usr/sbin/debugsh",
     "hash":         "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
+    "plaintext":    "debug",
 
     "cross_model_identity": {
         "78xx 12.5.1SR1-4 rootfs1 (MSB)": "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
@@ -102,6 +103,7 @@ PHN_F15_8845 = {
         "78xx 12.8.1 rootfs2":             "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
         "8845-65 12.8.1":                  "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
         "IDENTICAL_ALL":                   True,
+        "plaintext":                   "debug",
     },
 
     "root_account": {

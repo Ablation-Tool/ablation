@@ -114,13 +114,23 @@ TVS_ARCHITECTURE_78XX = {
 PHN_F15_DEBUG_USER_HASH = {
     "id":      "PHN-F15",
     "product": "Cisco 7861/78xx SIP 12.5.1SR1-4",
-    "severity": "HIGH if cracked — debug user has shell via Unix socket",
+    "severity": "HIGH — debug:debug credential confirmed, shell via Unix socket",
     "class":   "Credential Exposure / Debug Interface",
 
     "passwd_entry": "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:65532:100:debug:/tmp:/usr/sbin/debugsh",
     "hash_type":    "MD5crypt ($1$)",
+    "hash":         "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
+    "plaintext":    "debug",
+    "crack_method": "Cisco RE-derived wordlist — username=password pattern",
     "shell":        "/usr/sbin/debugsh",
     "socket":       "/tmp/debugshd_sock",
+
+    "credential": {
+        "username": "debug",
+        "password": "debug",
+        "verified": True,
+        "note": "Username equals password. Static across all 78xx UC and 8845-65 UC firmware versions.",
+    },
 
     "other_accounts": {
         "root":     "root:!:0:0:root:/home/root:/bin/sh  (LOCKED — PHN-F13 does NOT apply)",
@@ -135,10 +145,11 @@ PHN_F15_DEBUG_USER_HASH = {
     },
 
     "note": (
-        "If the MD5crypt hash is cracked, the debug user credential + debugsh "
-        "provides privileged diagnostic access. The socket-based architecture means "
-        "debugshd must be running and the attacker must reach /tmp/debugshd_sock. "
-        "Combined with a code execution primitive, this could provide persistent access."
+        "Credential cracked: debug:debug. MD5crypt($1$aoJQnypw$...) = 'debug'. "
+        "Username=password pattern — trivially guessable. Combined with enabled SSH "
+        "(sshAccess=1 in TFTP config), provides privileged diagnostic access to all "
+        "Cisco UC 78xx/8845-65 phones. debugshd must be running; attacker must reach "
+        "/tmp/debugshd_sock. Cracked 2026-09-01 via Cisco RE-derived wordlist."
     ),
 }
 
