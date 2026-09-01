@@ -206,3 +206,78 @@ C2960L_TAR_ANALYSIS = {
         "an attacker can manipulate the phone's or switch's trust anchor state."
     ),
 }
+
+# ---- 2960L web UI: ODM trust point mechanism and CSRF surface ----
+
+C2960L_WEB_UI_PKI_SURFACE = {
+    "source":    "c2960l-universalk9-tar.152-7.E0a.tar — html/ directory (directly extractable)",
+    "framework": "AngularJS 1.x SPA, commonServices.js + feature controllers",
+
+    "odm_mechanism": {
+        "description": (
+            "IOS web UI uses the '| format <path>.odm' pipe operator to transform CLI show output "
+            "into XML. The JS calls: getExecCmdOutput('show crypto pki trustpoints status | format "
+            "flash:/html/odm/aaaLdapTrustPoints.odm') — the ODM file on flash acts as an XML "
+            "transformation template. Result is parsed with x2js.xml_str2json()."
+        ),
+        "odm_files": {
+            "cryptoTrustPoints.odm": (
+                "Parses 'show crypto pki trustpoints status' — dynamic container with colon-delimited "
+                "trustpoint names. Used by crypto PKI trust point management UI."
+            ),
+            "aaaLdapTrustPoints.odm": (
+                "Same IOS command, 2017 copyright — used by AAA/LDAP feature to populate "
+                "trust point selector for LDAP server TLS configuration."
+            ),
+        },
+        "odm_path_derivation": (
+            "httpServerBasePath obtained from: "
+            "\"show ip http server status | i HTTP server base path\" — parsed as string at offset 23-29. "
+            "ODM path = httpServerBasePath + '/odm/' + odmFileName + '.odm'. "
+            "If httpServerBasePath can be influenced, ODM path can be redirected."
+        ),
+        "attack_surface": (
+            "ODM file is on flash. Attacker with flash write access (exec priv) can place malicious "
+            "ODM. The XML transformer trusts the ODM template; crafted ODM could inject XML into "
+            "parsed trustpoint data. Without flash write, surface is read-only."
+        ),
+    },
+
+    "csrf_token": {
+        "endpoint":     "GET /exec/show/clock/CR (or /esN/exec/show/clock/CR for cluster member N)",
+        "extraction":   "result.slice(result.search('csrf_token VALUE=') + 18, + 58) — 40-char token",
+        "usage":        "hidden_command=<cmd>&csrf_token=<token>&CMD=CR",
+        "scope":        "Required for all configuration commands and exec commands via hidden_command",
+        "implemented_in": "commonServices.js getConfigureToken()",
+        "note": (
+            "CSRF token is embedded in the HTML response of 'show clock'. The IOS web server "
+            "injects csrf_token VALUE=<40-char> into show command output responses. "
+            "XSS in the web UI → token extraction → arbitrary IOS CLI via hidden_command. "
+            "No SameSite cookie attribute observed (consistent with 2014-2017 era IOS)."
+        ),
+    },
+
+    "trust_point_injection": {
+        "flow": (
+            "AAA controller calls serverldapTrustPoint() → getShowCmdOutput() → "
+            "IOS exec runs 'show crypto pki trustpoints status | format .../aaaLdapTrustPoints.odm' → "
+            "XML result → X2JS parses → trustpoint name used as ldaptrstPointName/Value. "
+            "If a trustpoint name contains XML special chars (<, >, &, \"), the IOS formatter "
+            "must escape them. If not, X2JS receives malformed XML → parse error or injection "
+            "into the LDAP server configuration object."
+        ),
+        "status": "CANDIDATE — requires live device test to confirm IOS XML escaping behavior",
+    },
+
+    "hidden_command_surface": {
+        "pattern":    "POST data: hidden_command=<IOS-CLI>&csrf_token=<token>&CMD=CR",
+        "scope":      (
+            "Arbitrary IOS CLI execution as authenticated user. "
+            "Used for: write memory (wr), reload, led beacon, clear counters, and arbitrary "
+            "exec/config commands. "
+            "Crypto PKI config commands (no crypto pki trustpoint, crypto pki authenticate, "
+            "crypto pki enroll) would execute here if submitted by an authenticated session."
+        ),
+        "attack": "XSS → token steal + arbitrary hidden_command → add/remove PKI trust anchors",
+    },
+}
