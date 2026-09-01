@@ -188,6 +188,12 @@ KNOWN_HASHES = {
         "source": "ISE-Vuln-1 — Oracle dev DB link (db.properties, commented out; dev environment residue)",
         "decrypt": "ise_3des_decrypt",
     },
+    # ── FMC guest account (FMC-F2) ───────────────────────────────────────────
+    "2jmj7l5rSw0yVb/vlWAYkK/YBwk=": {
+        "plaintext": "",
+        "source": "FMC-F2 — guest account SHA-1(empty string) base64; auth-daemon accepts SHA1(\"\")",
+        "note": "Empty password; cwpass.xml guest credential",
+    },
 }
 
 
@@ -320,6 +326,31 @@ _CISCO_BASE_WORDS = [
     "U0l1_6v#k3c",        # ISE Oracle default SYSDBA password (ISE-Vuln-1, 3DES-decrypted)
     "irf",                # ISE IRF RabbitMQ administrator credential (ISE-Add-2)
     "handleruser",        # ISE Oracle PAP handler username (username=password pattern)
+
+    # ── CUCM Axis2 / Webdialer / AdminClient defaults ─────────────────────────
+    "axis2",              # CUCM-F1/F19 Axis2 admin password (admin:axis2, all WARs)
+    "xx",                 # CUCM-F68 AdminClient placeholder cred (-uxx -wxx) in soapservicecontrol.sh
+
+    # ── FTD MySQL etel_sys / csm_processes machine account ────────────────────
+    "lo3c2a3te",          # F-FTD-77: MySQL etel_sys URL telemetry (unique non-default password)
+    "csmdaemon",          # F-FTD-59: csm_processes machine account (AUTH_IS_MACHINE)
+
+    # ── CUCM dev JDBC credential ──────────────────────────────────────────────
+    "42lj5i",             # CUCM-F20: dev JDBC credential (dbuser:42lj5i; Cisco internal hostname nw096a-93)
+
+    # ── ISE middleware static credentials ─────────────────────────────────────
+    "721AzznFfen8pMjy",   # ISE-F4: Tomcat main shutdown secret (port 8005; /etc/sf/catalina_shutdown.conf)
+    "p#t91PMsjekd",       # ISE-F22: pi-profiler RabbitMQ (rabbitmq:p#t91PMsjekd)
+    "lab123",             # ISE-F22: pi-profiler Spring Actuator admin:lab123
+    "SW2YcwTIb9zpOOhoPsMm",  # ISE-F52: Grafana secret_key (grafana.ini)
+    "pass123",            # ISE-F60: ConfD cisco-user:pass123 (initial_config.py)
+
+    # ── FMC service credential material ──────────────────────────────────────
+    "KFY))7sd=[-ABR/]",   # FMC-F48: Vault JKS keystore password (vault-java-client-2.0.0-SNAPSHOT.jar)
+    "sourcefire",         # FMC-F36: SMTP Blowfish cipher key (Crypt::CBC -key => 'sourcefire')
+    "hxjnynvf",           # FMC-F17: SymmetricDS prior Sybase vms dba password (rotated from dmkebdpq)
+    "L2)_Ki*IDQbT2DMHw&tu[e<kba-kj}uGBb.myX_1",  # FMC-F17: SymmetricDS prior MySQL root (rotated)
+    "IlahU)[hO8Ug}jdX:)5zoZx[297l*{Qv@4]wVk]/",  # FMC-F17: SymmetricDS current MySQL root password
 ]
 
 
