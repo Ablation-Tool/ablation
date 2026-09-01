@@ -179,3 +179,80 @@ COVERAGE_7970_SCCP = {
         "7970 SCCP not separately verified — assumed same findings as 7965 SCCP."
     ),
 }
+
+# ---- 7945/7965 SCCP CVM vs SIP CVM full comparison ----
+
+CVM_SCCP_vs_SIP_COMPARISON = {
+    "cvm_sccp": {
+        "file":    "cvm45sccp.9-4-2ES9.sbn",
+        "sha256":  "a13eb1c354b17506a17f8f08c86971990062a31f3a888a9342155be9172f2c1d",
+        "size_compressed": 2219236,
+        "size_decompressed": 5426292,
+    },
+    "cvm_sip": {
+        "file":    "cvm45sip.9-4-2ES9.sbn",
+        "sha256":  "b71f79c1d845e4e0158f13fd7c16fab10d00173ad1a1977fb4fe50790309d220",
+        "size_compressed": 2691040,
+        "size_decompressed": 6805740,
+    },
+    "size_delta":   1379448,
+    "delta_reason": (
+        "SIP CVM includes SIP/SDP protocol stack, H.264 video codec support, "
+        "additional media handling layers. SCCP CVM has only SCCP call control."
+    ),
+    "secd_ipc_diff": {
+        "absent_in_sccp": ["secReq_getRand (sec_req_api_rand.c not compiled in)"],
+        "present_in_both": (
+            "All other 32 secReq_* IPC calls identical: AddEntity, Auth_N_Decr, "
+            "cancelCapf, clearCapf, CTLdelete, CTLupdate, DelEntity, fipsTest, "
+            "getCapf, getCapfStatus, getCertInfo, getCTLInfo, getCTLItem, getITLItem, "
+            "getProxySock, getSrvCertAttr, getTvsServer, initClient, initiateCapf, "
+            "Listen, LookupSrvr, secFileOp, setCapf, setEMCCStatus, setMode, "
+            "setTvsServer, setVPNCertificates, srtpFipsTest, startCapf, "
+            "VerifyMIDlet, vfyVPNCertificates"
+        ),
+    },
+    "rand_bytes_note": (
+        "RAND_BYTES IPC message exists in SCCP CVM but secReq_getRand() wrapper is absent. "
+        "Implication: SCCP CVM PRNG request path uses a different call site — "
+        "possibly inline RAND_BYTES message construction rather than the wrapper. "
+        "sec_req_api_rand.c was excluded from the SCCP CVM build."
+    ),
+}
+
+SCCP_XML_DTLS_DOWNGRADE = {
+    "finding_id": "PHN-F12",
+    "title": "7945/7965 SCCP: hasDtls/hasSsl flags in XmlCallManagersObject — XML config DTLS downgrade",
+    "class": "cip.xml.XmlCallManagersObject (CVM-native, not in JAR)",
+    "methods": ["getHasDtls()", "getHasSsl()"],
+    "absent_in_sip_cvm": True,
+
+    "mechanism": (
+        "SCCP CVM parses the TFTP-provisioned CallManager XML (typically SEPDefault.cnf.xml "
+        "or device-specific XML from CUCM). The XmlCallManagersObject has native methods "
+        "getHasDtls() and getHasSsl() that expose DTLS/SSL availability flags from this XML. "
+        "A malicious TFTP server (reachable via DHCP option 150 redirect, per PHN-F02 chain) "
+        "can provision XML with hasDtls=false and hasSsl=false, potentially causing the phone "
+        "to connect to CUCM without DTLS/TLS signaling encryption."
+    ),
+
+    "dtls_context": (
+        "DTLS strings in SCCP CVM are all VPN-path (AnyConnect). SCCP signaling uses TLS "
+        "(getHasSsl flag). The getHasDtls flag may govern VPN DTLS transport. "
+        "Either path: attacker-provisioned XML can disable the relevant encrypted channel."
+    ),
+
+    "chain": (
+        "PHN-F02 TOFU → DHCP 150 redirect → malicious ITLFile.tlv (trust anchor) AND "
+        "malicious SEPDefault.cnf.xml (hasSsl=false) → phone connects on unencrypted SCCP → "
+        "full signaling plaintext"
+    ),
+
+    "status": "CANDIDATE — requires live 7945/7965 SCCP test to confirm flag behavior",
+    "severity": "HIGH if confirmed — TLS signaling disabled via XML provisioning",
+}
+
+DSP_SCCP_IDENTITY = {
+    "note": "dsp45.9-4-2ES9.sbn SIP vs SCCP: only Cisco TLV sig block differs (0x7d-0x17c, 255 bytes). Payload after sig: IDENTICAL (sha256 fefb9b57...). PHN-F08/F09 candidates apply equally to SCCP.",
+    "apps45_note": "apps45.9-4-2ES9.sbn SIP vs SCCP: IDENTICAL payload from sig boundary. All MIPS native binaries shared across SIP and SCCP 9.4.2SR1-1.",
+}
