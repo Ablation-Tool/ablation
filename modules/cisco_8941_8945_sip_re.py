@@ -266,3 +266,35 @@ COMPARISON_8845_vs_8941 = {
         "TFTP provisioning path",
     ],
 }
+
+# ---- PHN-F11: Dropbear SSH 0.51 — systemic across all 8941/894x SIP/SCCP ----
+
+PHN_F11_DROPBEAR_SSH = {
+    "id":      "PHN-F11",
+    "title":   "Dropbear SSH 0.51 present in all 8941/894x firmware, no auth restrictions",
+    "version": "SSH-2.0-dropbear_0.51",
+    "debug_info": "WITH debug_info, not stripped — all four variants",
+    "cross_platform": {
+        "8941_SIP_9.3.4-17":    "sha256 af181f9b... (549,859 bytes)",
+        "8941_SCCP_9.3.4-17":   "sha256 6f623c7b... (549,863 bytes)",
+        "894x_SIP_9.4.2SR2-2":  "sha256 96a7f3b7... (549,847 bytes)",
+        "894x_SCCP_9.4.2SR2-2": "sha256 1bcb4334... (549,851 bytes)",
+    },
+    "init_invocation": "/usr/sbin/dropbear & (no -w, no -g flags in any variant)",
+    "root_login_enabled": True,
+    "password_auth_enabled": True,
+    "passwd_is_png": (
+        "In 894x: /etc/passwd, /etc/group are 38x65 PNG images �� auth data is in nvdata partition. "
+        "In 8941: same PNG pattern applies."
+    ),
+    "cves": [
+        "CVE-2012-0920: heap use-after-free in SSH client (0.52 fixes; 0.51 is vulnerable)",
+        "libtomcrypt 2008-era: multiple timing side channels",
+        "libtommath 2008-era: integer operation issues",
+    ],
+    "chain": (
+        "TCP 22 → dropbear password auth → nvdata user account → root shell → "
+        "direct libsecurity.so access → ITL/CTL manipulation → MITM"
+    ),
+    "severity": "HIGH — all deployed 8941/894x phones with nvdata credentials are SSH-accessible",
+}
