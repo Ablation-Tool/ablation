@@ -141,3 +141,30 @@ COMPARISON_7970_vs_7945_SCCP = {
     ],
     "version_gap": "9.2.1 (2011) vs 9.4.2SR1-1 (2015) — 4-year, 2-generation gap — security architecture unchanged",
 }
+
+# ─────────────────────────────────────────────────────────
+# SSL-C library — corrected from SIP analysis (2026-09-01)
+# ─────────────────────────────────────────────────────────
+SSL_STACK_APPS = {
+    "library": "SSL-C 2.3.1 by RSA Security",
+    "version_string": "SSLv3 part of SSL-C 2.3.1 03-Mar-2003",
+    "present_in": "apps70 MIPS binary (both SCCP and SIP — identical ELF payload)",
+
+    "note": (
+        "apps70 uses RSA SSL-C 2.3.1 (2003), NOT OpenSSL or CiscoSSL. "
+        "This is the non-call-control TLS layer in apps (TFTP, provisioning). "
+        "Call control TLS routes through secd daemon. "
+        "SSL-C 2.3.1 predates all major TLS protocol attacks and is EOL. "
+        "All other Cisco IP phone models use OpenSSL 0.9.8g or CiscoSSL — "
+        "7970/7971 is the only outlier using SSL-C."
+    ),
+
+    "vs_other_models": {
+        "7906/7911/7942/7962/7945/7965": "OpenSSL 0.9.8g 19 Oct 2007",
+        "78xx (PLATFORM_1)":             "CiscoSSL 1.0.2o.6.2.238-fips",
+        "78xx (PLATFORM_2)":             "CiscoSSL 6.0-fips-dev",
+        "89xx":                          "OpenSSL 0.9.8g - CiscoSSL 1.1.0-fips-dev",
+        "Jabber Windows 11.9.1":         "CiscoSSL 1.0.2k-fips",
+        "7970/7971":                     "SSL-C 2.3.1 (2003) — OUTLIER",
+    },
+}
