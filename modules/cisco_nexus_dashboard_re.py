@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F14 (HIGH)
+Findings: ND-F01 (CRITICAL) through ND-F16 (HIGH)
 """
 
 import socket
@@ -423,6 +423,97 @@ FINDINGS = {
         "services_affected": ["ndi (Nexus Dashboard Insights)", "ndfc (Fabric Controller)", "ndo (Orchestrator)"],
         "access_control": "world-readable cookie only (ND-F01)",
         "chain": "ND-F01 cookie -> clean-wipe all services -> full operational data destruction",
+    },
+    "ND-F15": {
+        "title": "signdata: Snakeoil + Dev TPM/LUKS Signing Keys + Pre-Signed Production Hardware Policies",
+        "severity": "CRITICAL",
+        "component": "signdata OCI container (policy-2/ directory, 87 total policies)",
+        "description": (
+            "The signdata container ships 7 public keys across three trust tiers "
+            "(release, dev, snakeoil) in ALL production ND firmware images. "
+            "Alongside the 7 public keys are 87 pre-signed TPM authorization policies "
+            "organized by PCR hash measurement. Policy categories by key:key_type: "
+            "snakeoil:production (4 entries for m6, qemu, ucs-c225m6-huu-4.2.2f), "
+            "snakeoil:password (4), snakeoil:limited (4), "
+            "dev:production (14 entries for UCS C225M6, QEMU, shim variants), "
+            "dev:password (14), dev:limited (11), "
+            "release:production (11), release:password (11), release:limited (14). "
+            "Key finding: snakeoil-signed TPM policies are pre-authorized for physical "
+            "UCS C225M6 hardware (ucs-c225m6-huu-4.2.2f, m6). The snakeoil and dev "
+            "public keys are in the trusted keychain — any firmware signed with the "
+            "corresponding snakeoil/dev private keys (likely in Cisco CI systems reachable "
+            "via ND-F06) will be accepted by production hardware. "
+            "info.json entries for dev:production hardware include: "
+            "'RELrelease-on-DEVprovisioned-ucs-c225m6-4.2.2a' — production ND releases "
+            "installed on hardware provisioned in dev mode accept dev-signed policies. "
+            "This combines with ND-F12 (AbraxasACIDev key in firmwared) to form a pattern: "
+            "Cisco ships dev/test signing keys across all firmware signing subsystems."
+        ),
+        "public_keys": {
+            "luks-release.pem": "RSA-2048 prod LUKS unlock key",
+            "tpmpass-release.pem": "RSA-2048 prod TPM passphrase key",
+            "luks-dev.pem": "RSA-2048 dev LUKS unlock key (in prod image)",
+            "tpmpass-dev.pem": "RSA-2048 dev TPM passphrase key (in prod image)",
+            "luks-snakeoil.pem": "RSA-2048 snakeoil LUKS key (in prod image)",
+            "tpmpass-snakeoil.pem": "RSA-2048 snakeoil TPM key (in prod image)",
+        },
+        "snakeoil_production_targets": [
+            "m6 (UCS C225M6 hardware)",
+            "ucs-c225m6-huu-4.2.2f (UCS C225M6 HUU firmware 4.2.2f)",
+            "qemu (QEMU VM)",
+        ],
+        "policy_dir": "signdata/policy-2/<pcr-hash>/",
+        "policy_files": ["tpm_luks.policy.signed", "tpm_passwd.policy.signed", "pcr_prod.bin", "pcr_tpm.bin", "pcr_limited.bin"],
+        "format_doc": "aci-github.cisco.com/atom/atomix/blob/master/docs/sb/signdata-format.md",
+        "chain": (
+            "ND-F06 CI pivot -> exfiltrate snakeoil/dev private keys from Jenkins -> "
+            "sign LUKS unlock request for UCS C225M6 hardware -> "
+            "physical appliance storage accessible offline"
+        ),
+    },
+    "ND-F16": {
+        "title": "confd Debug API at /api/debug/* — Trusted CA Injection + Device Credential Harvest",
+        "severity": "HIGH",
+        "component": "confd Go binary, port 19999 TLS, /api/debug/* endpoints",
+        "description": (
+            "confd (ND configuration daemon) binds to 0.0.0.0:19999 with TLS and exposes "
+            "all management endpoints under the path prefix /api/debug/. "
+            "The 'debug' prefix in production API paths is a strong indicator of reduced "
+            "authentication controls. Key endpoints: "
+            "(1) POST /api/debug/ndtrustedcas — inject custom CA certificate as "
+            "'ND Trusted CA'; requires only name + cert PEM; propagates via Kafka to "
+            "all ND services that validate TLS against ND's trust store; "
+            "(2) POST /api/debug/addapikey — add API key for managed network device "
+            "(deviceUserName = ACI fabric / Nexus switch credential); "
+            "(3) GET /api/debug/class/ndtrustedcas — enumerate all trusted CAs; "
+            "(4) GET /api/debug/apikeysbyname — retrieve existing device API keys. "
+            "confd uses MongoDB as its backend and Kafka for event distribution — "
+            "an injected trusted CA propagates cluster-wide. "
+            "All schemas have additionalProperties: true — likely permissive parsing."
+        ),
+        "port": 19999,
+        "bind": "0.0.0.0",
+        "tls": True,
+        "backend": "mongodb.mongodb.svc:27017",
+        "transport": "kafka (confd-topic)",
+        "debug_endpoints": {
+            "POST /api/debug/ndtrustedcas": "inject trusted CA cert cluster-wide",
+            "GET /api/debug/class/ndtrustedcas": "list all trusted CAs",
+            "POST /api/debug/addapikey": "add API key for managed device",
+            "POST /api/debug/bulkaddapikey": "bulk add device API keys",
+            "GET /api/debug/apikeysbyname": "retrieve device API keys by name",
+            "POST /api/debug/devusers": "manage device user RBAC",
+            "POST /api/debug/imports": "import full ND configuration",
+            "GET /api/debug/exports": "export full ND configuration",
+            "POST /api/debug/apigwjwt": "modify API gateway JWT signing keys",
+        },
+        "attack": (
+            "1. Reach confd:19999 from cluster network (mTLS required? — TBD by /certs/server.crt usage); "
+            "2. POST /api/debug/ndtrustedcas with attacker CA -> all ND services trust attacker certs; "
+            "3. Issue certs signed by attacker CA -> impersonate any ND microservice; "
+            "4. Alternate: GET /api/debug/apikeysbyname -> harvest credentials for managed ACI/Nexus devices"
+        ),
+        "chain": "ND-F03 mTLS cert -> confd debug API -> CA injection -> cluster-wide mTLS bypass",
     },
     "ND-F14": {
         "title": "apigw entrypoint.sh Logs Tyk Admin Secret to /logs/launcher.log at Every Startup",
