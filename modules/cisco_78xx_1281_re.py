@@ -113,6 +113,7 @@ PHN_F15_VERSION_DELTA = {
 
     "passwd_entry": "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:65532:100:debug:/tmp:/usr/sbin/debugsh",
     "hash":         "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
+    "plaintext":    "debug",
 
     "version_hash_identity": {
         "12.5.1SR1-4 rootfs1 (MSB)": "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",

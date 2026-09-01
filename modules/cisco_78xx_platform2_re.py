@@ -86,6 +86,8 @@ PHN_F15_PLATFORM2 = {
     "debug_passwd_entry": "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:65532:100:debug:/tmp:/usr/sbin/debugsh",
     "hash_type":  "MD5crypt ($1$)",
     "salt":       "aoJQnypw",
+    "plaintext":  "debug",
+    "credential": {"username": "debug", "password": "debug", "verified": True},
 
     "cross_platform_identity": {
         "PLATFORM_1_hash": "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
@@ -93,8 +95,8 @@ PHN_F15_PLATFORM2 = {
         "IDENTICAL": True,
         "note": (
             "Same salt, same hash across both hardware platforms. "
-            "This is a static embedded credential — not device-specific. "
-            "Cracking it once yields access to all 78xx phones of both hardware variants."
+            "Cracked 2026-09-01: password = 'debug' (username=password). "
+            "Single static credential covers all 78xx phones of both hardware variants."
         ),
     },
 }
