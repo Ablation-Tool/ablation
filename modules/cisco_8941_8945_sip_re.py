@@ -298,3 +298,101 @@ PHN_F11_DROPBEAR_SSH = {
     ),
     "severity": "HIGH — all deployed 8941/894x phones with nvdata credentials are SSH-accessible",
 }
+
+# ---- PHN-F13: Hardcoded empty-password root and QA accounts (all 9.3.x) ----
+
+PHN_F13_EMPTY_PASSWORD_ACCOUNTS = {
+    "id":      "PHN-F13",
+    "title":   "Hardcoded empty-password root and QA accounts in /etc/passwd — all 8941/8945 9.3.x",
+    "affected": [
+        "8941/8945 SIP 9.3.4-17", "8941/8945 SIP 9.3.1-18",
+        "8941/8945 SCCP 9.3.4-17", "8941/8945 SCCP 9.3.1-19",
+    ],
+    "passwd_content": (
+        "root::0:0:root:/:\n"
+        "bin:*:1:1:bin:/bin:\n"
+        "daemon:*:2:2:daemon:/sbin:\n"
+        "adm:*:3:4:adm:/var:\n"
+        "nobody:*:99:99:Nobody:/:\n"
+        "qa::18:544:Linux User,,,:qa:/bin/sh"
+    ),
+    "mechanism": (
+        "root and qa entries have empty password fields (no hash — not even '*' or '!'). "
+        "Dropbear 0.51 is started without -w (no root login restriction) and without -g "
+        "(no password auth restriction). SSH password auth with empty password succeeds. "
+        "TCP/22 → SSH root with empty password → root shell. No credentials needed."
+    ),
+    "qa_account": {
+        "username": "qa",
+        "uid": 18, "gid": 544,
+        "shell": "/bin/sh",
+        "comment": "Linux User,,, — QA testing account left in production firmware",
+    },
+    "not_affected": [
+        "8941/8945 9.4.2SR2-2 (SIP and SCCP): /etc/passwd is PNG anti-forensic file; auth is in nvdata partition",
+    ],
+    "patched_in":     "9.4.2SR2-2 generation — passwd moved to nvdata (runtime-mounted UBIFS/JFFS2)",
+    "chain": (
+        "TCP 22 → dropbear 0.51 → empty-password root → root shell → "
+        "libsecurity.so access → ITL/CTL wipe → PHN-F02 TOFU trigger → "
+        "attacker CA installed → TLS MITM"
+    ),
+    "severity": "CRITICAL — unauthenticated root shell over TCP on all deployed 8941/8945 9.3.x phones",
+    "note": (
+        "Comment in init.d/apps: 'VVD9111-D88/VVD9010-D88 AJet Yang 2011/04/20, "
+        "fix TT13068/CSCto29080' — dropbear invocation has a bug tracker reference, "
+        "confirming it was a known issue during development."
+    ),
+}
+
+# ---- 8941/8945 SIP 9.3.1-18 variant ----
+
+FIRMWARE_9_3_1_18_SIP = {
+    "model":   "Cisco IP Phone 8941/8945 SIP",
+    "version": "9.3.1-18",
+    "arch":    "ARM (ARM926EJ-S/ARMv5TEJ per libsecurity.so ELF attributes)",
+    "openssl": "0.9.8g 19 Oct 2007 (libcrypto.so.0.9.8g, 1,100,756 bytes — dynamic library)",
+    "container": "Cisco SGN format (9 .bin.sgn files + 1 BOOT .bin.sgn)",
+    "jffs2_offset": 0x1e2650,
+    "concat_size":  0x1a76918,
+    "file_count": 9,
+    "lib_layout": "lib/cisco_seclib/ subdirectory (differs from 9.3.4-17's top-level cisco_seclib/)",
+}
+
+LIBRARY_COMPARISON_9_3_1_18_vs_9_3_4_17 = {
+    "libsecurity_so": {
+        "version_9_3_1_18": {
+            "sha256": "498f01e4b094c69ea5f357d3b0ac278ca8c6f386a92302a086b17afe95491dab",
+            "size":   1067824,
+            "path":   "lib/cisco_seclib/libsecurity.so",
+            "openssl_embedded": "0.9.8g (statically linked — matches SCCP 9.3.1-19 architecture)",
+        },
+        "version_9_3_4_17": {
+            "sha256": "61315c885151a3c6c797e986a1284b345d8087be3e727ee5feb17a8a89760e54",
+            "size":   "smaller (OpenSSL in separate libseccommon.so)",
+            "openssl_in": "cisco_seclib/libseccommon.so (0.9.8k — newer)",
+        },
+        "cross_protocol_9_3_1_18": (
+            "libsecurity.so SHA256 498f01e4... matches 8941/8945 SCCP 9.3.1-19 exactly. "
+            "SIP/SCCP identical libsecurity.so pattern holds across all 9.3.x generations."
+        ),
+    },
+    "openssl_version_delta": {
+        "9_3_1_18": "0.9.8g 19 Oct 2007 (libcrypto.so.0.9.8g)",
+        "9_3_4_17": "0.9.8k 25 Mar 2009 (libseccommon.so embedded)",
+        "note": "9.3.4-17 ships newer OpenSSL but still pre-1.1.0. Both vulnerable to CVE-2009-3555.",
+    },
+    "layout_change": (
+        "9.3.1-18: security libs in lib/cisco_seclib/ (subdirectory). "
+        "9.3.4-17: security libs in cisco_seclib/ (top-level of jffs2). "
+        "Functional equivalence — only directory placement differs."
+    ),
+    "phn_f02_f03_f04_confirmed": True,
+    "phn_f13_confirmed": True,
+    "dropbear": {
+        "version": "SSH-2.0-dropbear_0.51",
+        "sha256":  "d37146180e53e27645aaa8b08f692f10979be70c5d305d64d7946f8e354ed189",
+        "size":    546538,
+        "init":    "/usr/sbin/dropbear & (no -w, no -g; RSA host key generated on first start)",
+    },
+}

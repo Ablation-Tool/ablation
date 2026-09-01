@@ -233,3 +233,17 @@ SCCP_VERSION_COMPARISON = {
         "9.3.1-19 has MORE OpenSSL CVE exposure than 9.3.4-17."
     ),
 }
+
+# ---- PHN-F13 cross-reference (SCCP confirmation) ----
+
+PHN_F13_SCCP_CONFIRMATION = {
+    "id":      "PHN-F13",
+    "cross_ref": "cisco_8941_8945_sip_re.py::PHN_F13_EMPTY_PASSWORD_ACCOUNTS",
+    "sccp_variants_confirmed": ["8941/8945 SCCP 9.3.4-17", "8941/8945 SCCP 9.3.1-19"],
+    "passwd_identical_to_sip": True,
+    "passwd_content": "root::0:0:root:/: and qa::18:544:Linux User,,,:qa:/bin/sh (both empty password)",
+    "note": (
+        "Same empty-password passwd file found in SCCP 9.3.4-17 and SCCP 9.3.1-19. "
+        "Combined with dropbear PHN-F11: unauthenticated root SSH on all deployed 8941/8945 SCCP 9.3.x."
+    ),
+}
