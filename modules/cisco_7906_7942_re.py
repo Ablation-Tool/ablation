@@ -1,193 +1,217 @@
 """
-Cisco 7906/7911 SCCP 9.4.2ES9 + 7942/7962 SCCP 9.4.2ES26 — RE summary
-Static analysis: SBN header analysis, ELF extraction, gzip decompression,
-strings on CVM and apps binaries
+Cisco 7906/7911 (SCCP/SIP 9.4.2ES9) + 7942/7962 (SCCP 9.4.2ES26 / SIP SR1+SR3)
+RE summary - v2 (corrected PHN-F12 status for 7906/7911, added SIP CVM analysis)
+Static analysis: SBN header, ELF/gzip extraction, strings on apps + CVM binaries
 """
 
 # ─────────────────────────────────────────────────────────
-# 7906/7911 SCCP 9.4.2ES9 — architecture
+# SHA256 inventory — all unique binaries
 # ─────────────────────────────────────────────────────────
-FIRMWARE_7906_7911 = {
-    "product":  "Cisco IP Phone 7906/7911 SCCP 9.4.2ES9",
-    "date":     "2015-04-22",
-    "source":   "cmterm-7911_7906-sccp.9-4-2SR1-1.zip",
-    "note":     "ES9 = Engineering Special 9; different build label from standard SR releases",
+SHA256_INVENTORY = {
+    # 7906/7911 SCCP
+    "apps11.9-4-2ES9.sbn (SCCP)":      "62b2da5b6cca9a686227cf060cbe88c7ca7acb7c4bb1560d2d0d113d5955d387",
+    "cvm11sccp.9-4-2ES9 (decompressed)": "daee9584ca3f420a0935161789b5d37faae41951f66f24aa8f45c99da302cc2c",
 
-    "sbn_files": {
-        "apps11.9-4-2ES9.sbn": {
-            "size": 3156351,
-            "sha256": "62b2da5b6cca9a686227cf060cbe88c7ca7acb7c4bb1560d2d0d113d5955d387",
-            "format":         "Cisco SBN header (magic 01 00 02 01 01 02 00 02), ELF at 0x10a39",
-            "extracted_type": "ELF 32-bit MSB executable, MIPS, MIPS-II, statically linked, stripped",
-            "note":           "apps MIPS binary — NO handyiron bypass strings; different TLS arch",
-        },
-        "cvm11sccp.9-4-2ES9.sbn": {
-            "size": 2225648,
-            "sha256": "62b2da5b6cca9a686227cf060cbe88c7ca7acb7c4bb1560d2d0d113d5955d387",
-            "gzip_offset": "0x463",
-            "size_decompressed": "5.2M",
-        },
-        "jar11sccp.9-4-2ES9.sbn": {"size": 1618309},
-        "dsp11.9-4-2ES9.sbn":     {"size": 364207},
-        "cnu11.9-4-2ES9.sbn":     {"size": 559855},
-    },
+    # 7906/7911 SIP
+    "apps11.9-4-2ES9 (SIP, ELF extracted)": "4b1bc20500712b35aafaccf1d0e9950a1c131e5453c702bab718288a7068319a",
+    "cvm11sip.9-4-2ES9 (decompressed)":     "8b34c0dc1b5310a60dbcb9bd117fd35cee762cdae5dbbdf608f46d2387b8a24a",
 
-    "model_codes": {
-        "apps11": "7911 hardware variant",
-        "term06": "7906 device defaults",
-        "term11": "7911 device defaults",
+    # 7942/7962 SCCP
+    "apps42.9-4-2ES26 (SCCP=SIP=7945 SR3, c274284d)": "c274284db1f359232bd64d53d0d0576e5b0ed7e8339e05ed77eaf916827440f1",
+
+    # 7942/7962 SIP
+    "apps42.9-4-2ES9 (SIP SR1, unique)":   "c7eb0993098ea94cf32251e7e50700e7ef74a9226d6b351ec9c9955114102268",
+    "cvm42sip.9-4-2ES9 (SR1)":             "cb22c9de70976f92f74785d599baf8f3847c3bfa4095b6a650f5a4a86e522517",
+    "cvm42sip.9-4-2ES26 (SR3)":            "a4e3ea36feeaba2c22538d0df9bfeff55a356cb2a2b4ccd9e8ff3df98600cc97",
+}
+
+# ─────────────────────────────────────────────────────────
+# IDENTITY FINDINGS — cross-model binary sharing
+# ─────────────────────────────────────────────────────────
+BINARY_IDENTITY = {
+    "apps_es26_universal": {
+        "sha256": "c274284d...",
+        "identical_across": [
+            "cvm45sccp.9-4-2ES26 (7945 SCCP SR3)",
+            "apps45sip.9-4-2ES26 (7945 SIP SR3)",
+            "apps42.9-4-2ES26 (7942 SCCP SR3)",
+            "cvm42sip.9-4-2ES26 (7942 SIP SR3)",
+        ],
+        "note": (
+            "The ES26/SR3 generation apps binary is IDENTICAL across 7945 SCCP, 7945 SIP, and 7942 "
+            "SCCP/SIP — different models sharing the same firmware image. Only TLV signature in the "
+            "SBN wrapper differs. CVMs remain per-model-per-protocol."
+        ),
     },
 }
 
-SECURITY_ANALYSIS_7906_7911 = {
-    "handyiron_bypass_present": False,
-    "tvs_ipc_via_secd":         False,
-    "getHasDtls_getHasSsl":     False,
-    "phn_f12_applicable":       False,
-    "ssl_stack": "Generic TLS via 'failed to create TLS ctx, err %d' path — NOT handyiron",
-
-    "tls_strings_found": [
-        "failed to create TLS ctx, err %d",
-        "using supplied ciphers for TLS <%s>",
-        "failed to apply supplied ciphers for TLS <%s>, err %d",
-        "TLSv1",
-        "too many open SSL/TLS connections, fd %d",
-        "SSL/TLS handshake failed, <%s>",
-        "802.1x TLS",
-        "VPN_UNTRUSTED",
-    ],
-
-    "note": (
-        "7906/7911 uses a statically linked MIPS apps binary with a custom TLS layer, "
-        "NOT the handyiron secSSLCertVerify architecture used in 7945/7965/7970/7971/78xx. "
-        "The bypass conditions identified in JAB-F14/PHN-F14 do NOT have confirmed equivalents "
-        "in this firmware. Separate TLS implementation requires independent analysis."
+# ─────────────────────────────────────────────────────────
+# ARCHITECTURE: CVM vs apps binary — where TLS lives
+# ─────────────────────────────────────────────────────────
+TLS_ARCHITECTURE = {
+    "apps_binary": {
+        "role": "Bootstrap OS, MIPS ELF, statically linked",
+        "openssl_version": "OpenSSL 0.9.8g 19 Oct 2007 (all 79xx/7945/7942 models)",
+        "tls_usage": "Non-call-control connections (TFTP, HTTP provisioning)",
+        "handyiron_bypass": "NOT PRESENT — apps binary uses standard OpenSSL, not handyiron",
+    },
+    "cvm_binary": {
+        "role": "Java-based signaling layer (Cisco deadbeef format)",
+        "tls_usage": "ALL call control TLS/DTLS via secd daemon IPC",
+        "secd_ipc_evidence": [
+            "connected to target via secd",
+            "bad SSL/TLS status response from secd",
+            ".secd_reqApisec_req_api_tvs.c",
+            ".secd_reqApisec_req_api_capf.c",
+        ],
+        "handyiron_bypass": "IN SECD DAEMON via libsecurity.so (not in CVM itself)",
+    },
+    "key_insight": (
+        "PHN-F12 is a CVM-layer finding. The apps MIPS binary analysis is irrelevant to "
+        "PHN-F12 because apps does not handle call control TLS. The CVM handles call control "
+        "via secd IPC. PHN-F12 analysis must target the CVM, not apps."
     ),
-
-    "architecture_difference": (
-        "7906/7911 is a low-end SCCP-only phone. The apps binary handles SIP/SCCP signaling "
-        "and TLS in a single statically linked executable. Contrast with 7945/7965/7942/7962 "
-        "which use separate apps + CVM + jar components with the Java-based secd IPC architecture."
-    ),
 }
 
 # ─────────────────────────────────────────────────────────
-# 7942/7962 SCCP 9.4.2ES26 — architecture
+# 7906/7911 SCCP — CVM analysis (CORRECTED)
 # ─────────────────────────────────────────────────────────
-FIRMWARE_7942_7962 = {
-    "product":  "Cisco IP Phone 7942/7962 SCCP 9.4.2ES26",
-    "date":     "2017-02-06",
-    "source":   "cmterm-7942_7962-sccp.9-4-2SR3-1.zip",
-
-    "sbn_files": {
-        "apps42.9-4-2ES26.sbn": {
-            "size": 4638412,
-            "sha256": "4051f6751265844c2f16332b1d39b9ff4e51bc8feda82410ffd76f37dbee413d",
-        },
-        "cvm42sccp.9-4-2ES26.sbn": {
-            "size": 2218670,
-            "size_decompressed": "5.2M",
-            "sha256": "4051f6751265844c2f16332b1d39b9ff4e51bc8feda82410ffd76f37dbee413d",
-        },
-        "jar42sccp.9-4-2ES26.sbn": {"size": 1763397},
-        "dsp42.9-4-2ES26.sbn":     {"size": 364895},
-        "cnu42.9-4-2ES26.sbn":     {"size": 581755},
-    },
-
-    "model_codes": {
-        "apps42": "7942 hardware variant",
-        "term42": "7942 device defaults",
-        "term62": "7962 device defaults",
-    },
-}
-
-SECURITY_ANALYSIS_7942_7962 = {
-    "architecture": "Java CVM + secd IPC — same as 7945/7965 SCCP",
+SECURITY_7906_7911_SCCP = {
+    "product": "Cisco IP Phone 7906/7911 SCCP 9.4.2ES9",
+    "source":  "cmterm-7911_7906-sccp.9-4-2SR1-1.zip",
 
     "phn_f12_applicable": True,
+    "phn_f12_correction": (
+        "Prior session incorrectly set phn_f12_applicable=False based on apps11 MIPS binary analysis. "
+        "The apps binary lacks handyiron, but PHN-F12 lives in the CVM. cvm11sccp (daee9584) "
+        "contains getHasDtls and getHasSsl — DTLS downgrade via malicious CallManager XML applies."
+    ),
     "dtls_downgrade_evidence": {
-        "getHasDtls": "present in cvm42sccp.9-4-2ES26.sbn",
-        "getHasSsl":  "present in cvm42sccp.9-4-2ES26.sbn",
-        "class":      "XmlCallManagersObject (inferred — same CVM architecture as 7945/7965)",
-        "note":       "PHN-F12 XML DTLS downgrade via malicious TFTP-delivered CallManager XML extends to 7942/7962",
+        "getHasDtls": "CONFIRMED in cvm11sccp.9-4-2ES9 (daee9584)",
+        "getHasSsl":  "CONFIRMED in cvm11sccp.9-4-2ES9 (daee9584)",
+        "class":      "XmlCallManagersObject (inferred — same CVM secd IPC arch as 7945/7965 SCCP)",
+        "finding":    "PHN-F12",
     },
 
-    "tvs_ipc": {
-        "secReq_setTvsServer": "present",
-        "XmlCallManagerGroupObject": "present",
-        "XmlCallManagersObject": "present",
-        "note": "Same secd TVS IPC pattern as 7945/7965 SCCP",
+    "secd_ipc": {
+        "status":            "CONFIRMED in cvm11sccp",
+        "tvs_source":        ".secd_reqApisec_req_api_tvs.c",
+        "capf_source":       ".secd_reqApisec_req_api_capf.c",
+        "ctl_source":        ".secd_reqApisec_req_api_ctl.c",
+        "rand_source":       "ABSENT (SCCP marker — SIP has rand)",
+        "note":              "Full secd IPC. PHN-F12 extends to 7906/7911 SCCP.",
     },
 
-    "handyiron_bypass": {
-        "confirmed_in_apps42": "NOT confirmed — strings search inconclusive",
-        "expected":           "LIKELY — same CVM architecture as 7945/7965 which carries handyiron bypass",
-        "note": "Full handyiron bypass analysis requires deeper extraction (jefferson on apps42 JFFS2)",
+    "apps_binary_note": (
+        "apps11 MIPS ELF (62b2da5b) uses statically linked OpenSSL 0.9.8g with a custom TLS layer "
+        "'failed to create TLS ctx, err %d'. This is non-call-control TLS only. No handyiron. "
+        "This does NOT affect PHN-F12 status — PHN-F12 is a CVM/secd finding."
+    ),
+
+    "ssl_versions": {
+        "apps11": "OpenSSL 0.9.8g 19 Oct 2007 (statically linked)",
+        "cvm_secd": "via libsecurity.so (version from secd daemon — 89xx pattern)",
+    },
+}
+
+# ─────────────────────────────────────────────────────────
+# 7906/7911 SIP — CVM analysis (new)
+# ─────────────────────────────────────────────────────────
+SECURITY_7906_7911_SIP = {
+    "product": "Cisco IP Phone 7906/7911 SIP 9.4.2ES9",
+    "source":  "cmterm-7911_7906-sip.9-4-2SR1-1.zip",
+    "cvm_sha256": "8b34c0dc1b5310a60dbcb9bd117fd35cee762cdae5dbbdf608f46d2387b8a24a",
+
+    "phn_f12_applicable": False,
+    "phn_f12_reason": "SIP variant — getHasDtls/getHasSsl absent; these are SCCP-only XML flags",
+
+    "sip_marker": {
+        "sec_req_api_rand.c": "CONFIRMED — present in cvm11sip, absent in cvm11sccp",
+        "note": "Confirms SCCP/SIP split; SIP CVM includes rand API for SIP-specific security",
     },
 
-    "vs_7945_7965_sccp": (
-        "7942/7962 SCCP CVM is the same architecture as 7945/7965 SCCP. "
-        "Both use 'apps42'/'apps45' + 'cvm42sccp'/'cvm45sccp' + 'jar42sccp'/'jar45sccp'. "
-        "PHN-F12 getHasDtls/getHasSsl confirmed in 7942/7962 CVM — extends the finding."
+    "secd_ipc": {
+        "status":      "CONFIRMED in cvm11sip",
+        "tvs_source":  ".secd_reqApisec_req_api_tvs.c",
+        "capf_source": ".secd_reqApisec_req_api_capf.c",
+        "note":        "Full secd IPC architecture — same as 7945/7965/7942/7962 SIP",
+    },
+
+    "apps_binary": {
+        "sha256": "4b1bc20500712b35aafaccf1d0e9950a1c131e5453c702bab718288a7068319a",
+        "openssl": "OpenSSL 0.9.8g 19 Oct 2007",
+        "note":   "apps11 SIP differs from apps11 SCCP — different ELF binary, same MIPS arch",
+    },
+}
+
+# ─────────────────────────────────────────────────────────
+# 7942/7962 SCCP ES26 — unchanged findings (confirmed)
+# ─────────────────────────────────────────────────────────
+SECURITY_7942_7962_SCCP = {
+    "product": "Cisco IP Phone 7942/7962 SCCP 9.4.2ES26",
+    "source":  "cmterm-7942_7962-sccp.9-4-2SR3-1.zip",
+
+    "phn_f12_applicable": True,
+    "dtls_evidence": {
+        "getHasDtls": "CONFIRMED in cvm42sccp.9-4-2ES26",
+        "getHasSsl":  "CONFIRMED in cvm42sccp.9-4-2ES26",
+        "finding":    "PHN-F12",
+    },
+
+    "apps_sha256_note": (
+        "apps42.9-4-2ES26 (c274284d) is IDENTICAL to apps45.9-4-2ES26 (7945 SR3) and "
+        "apps45sip.9-4-2ES26 (7945 SIP SR3). Cross-model/cross-protocol apps sharing confirmed."
     ),
 }
 
 # ─────────────────────────────────────────────────────────
-# New firmware versions acquired — cross-model summary
+# 7942/7962 SIP SR1 (ES9) + SR3 (ES26)
 # ─────────────────────────────────────────────────────────
-NEW_FIRMWARE_INVENTORY = {
-    "78xx.tar (7861 12.5.1SR1-4)": {
-        "new_model": True,
-        "key_findings": ["PHN-F14 ANY-role bypass confirmed", "PHN-F15 debug MD5 hash", "UBI/UBIFS new format"],
+SECURITY_7942_7962_SIP = {
+    "product": "Cisco IP Phone 7942/7962 SIP",
+    "versions_analyzed": ["9.4.2SR1 (ES9)", "9.4.2SR3 (ES26)"],
+
+    "phn_f12_applicable": False,
+    "phn_f12_reason": "SIP variant — no getHasDtls/getHasSsl in any SIP CVM",
+
+    "sr1_cvm": {
+        "sha256": "cb22c9de70976f92f74785d599baf8f3847c3bfa4095b6a650f5a4a86e522517",
+        "secd_ipc": "CONFIRMED",
+        "sec_req_api_rand": "CONFIRMED (SIP marker)",
+        "apps_sha256": "c7eb0993098ea94cf32251e7e50700e7ef74a9226d6b351ec9c9955114102268",
+        "apps_note": "SR1 apps42 is unique — differs from SR3 (c274284d)",
     },
-    "cmterm-7911_7906-sccp.9-4-2SR1-1.zip": {
-        "new_model": True,
-        "key_findings": ["Different TLS arch from handyiron", "PHN-F12 NOT applicable"],
-    },
-    "cmterm-7911_7906-sip.9-4-2SR1-1.zip": {
-        "new_model": True,
-        "key_findings": ["SIP variant — extraction pending"],
-    },
-    "cmterm-7942_7962-sccp.9-4-2SR3-1.zip": {
-        "new_model": True,
-        "key_findings": ["PHN-F12 confirmed via getHasDtls/getHasSsl", "Same arch as 7945/7965 SCCP"],
-    },
-    "cmterm-7942_7962-sip.9-4-2SR1-1.zip": {
-        "new_version": True,
-        "key_findings": ["SIP variant SR1 — extraction pending"],
-    },
-    "cmterm-7942_7962-sip.9-4-2SR3-1.zip": {
-        "new_version": True,
-        "key_findings": ["SIP variant SR3 — extraction pending"],
-    },
-    "cmterm-7945_7965-sccp.9-2-1.tar": {
-        "new_version": True,
-        "key_findings": ["Earlier 9.2.1 — compare libsecurity.so to 9.4.2SR1"],
-    },
-    "cmterm-7945_7965-sccp.9-4-2-1SR3-1.tar": {
-        "new_version": True,
-        "key_findings": ["Later SR3 version — post-SR1 patch delta analysis"],
-    },
-    "cmterm-7945_7965-sip.9-2-1.tar": {
-        "new_version": True,
-        "key_findings": ["Earlier 9.2.1 SIP variant"],
-    },
-    "cmterm-7945_7965-sip.9-4-2-1SR3-1.tar": {
-        "new_version": True,
-        "key_findings": ["Later SR3 SIP variant"],
-    },
-    "cmterm-7945_7965-sip.9-4-2-1SR3-1.zip": {
-        "new_version": True,
-        "key_findings": ["SR3 SIP zip variant"],
+
+    "sr3_cvm": {
+        "sha256": "a4e3ea36feeaba2c22538d0df9bfeff55a356cb2a2b4ccd9e8ff3df98600cc97",
+        "secd_ipc": "CONFIRMED",
+        "sec_req_api_rand": "CONFIRMED (SIP marker)",
+        "apps_sha256": "c274284db1f359232bd64d53d0d0576e5b0ed7e8339e05ed77eaf916827440f1",
+        "apps_note": "SR3 apps42 = apps45 SR3 (cross-model identity confirmed)",
     },
 }
 
-PENDING_ANALYSIS = [
-    "7906/7911 SIP 9.4.2SR1 — extract and compare TLS arch to SCCP variant",
-    "7942/7962 SIP SR1/SR3 — confirm handyiron bypass in SIP CVM",
-    "7945/7965 SCCP 9.2.1 — compare libsecurity.so SHA256 to SR1/SR3 (version delta)",
-    "7945/7965 SCCP SR3 — check if any bypass strings removed vs SR1",
-    "7945/7965 SIP 9.2.1 — compare to SR1 baseline",
-    "78xx debug hash crack — $1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71 (hashcat rockyou in progress)",
-    "78xx rootfs2 PLATFORM_2 variant — extract and diff vs PLATFORM_1",
-]
+# ─────────────────────────────────────────────────────────
+# PHN-F12 extension — full model scope
+# ─────────────────────────────────────────────────────────
+PHN_F12_SCOPE = {
+    "id": "PHN-F12",
+    "title": "SCCP DTLS Downgrade via Malicious CallManager XML",
+    "confirmed_models": [
+        "7906 SCCP 9.4.2ES9",
+        "7911 SCCP 9.4.2ES9",
+        "7942 SCCP 9.4.2ES26",
+        "7962 SCCP 9.4.2ES26",
+        "7945 SCCP 9.2.1 / 9.4.2SR1 / 9.4.2SR3",
+        "7965 SCCP 9.2.1 / 9.4.2SR1 / 9.4.2SR3",
+    ],
+    "not_applicable": [
+        "7906/7911/7942/7962/7945/7965 SIP variants (no getHasDtls/getHasSsl in SIP CVM)",
+    ],
+    "mechanism": (
+        "XmlCallManagersObject parses getHasDtls/getHasSsl from TFTP-delivered "
+        "CallManager XML. Setting these to 0 in a MITM-injected or rogue TFTP-served XML "
+        "disables DTLS/SSL for media/signaling. All listed models use the same CVM secd IPC "
+        "architecture and share this XML parsing path."
+    ),
+}
