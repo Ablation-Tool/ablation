@@ -219,3 +219,34 @@ BOOT894x_ANALYSIS = {
         "flash write primitives from OS level. Not further analyzed in this pass."
     ),
 }
+
+# ---- PHN-F11: Dropbear SSH 0.51 — systemic across all 8941/894x SIP/SCCP ----
+
+PHN_F11_DROPBEAR_SSH_894x_SIP = {
+    "id":      "PHN-F11",
+    "title":   "Dropbear SSH 0.51 present — no auth restrictions, root login enabled",
+    "version": "SSH-2.0-dropbear_0.51",
+    "binary":  "usr/sbin/dropbear (549,847 bytes)",
+    "sha256":  "96a7f3b7566c6a2e9c380a4f5f5c2fdde7d0ef1509c0a0b40cb1ef7c2cc9394f",
+    "init_invocation": "/usr/sbin/dropbear & (no -w, no -g flags)",
+    "debug_info": "WITH debug_info (not stripped)",
+    "root_login_enabled": True,
+    "password_auth_enabled": True,
+    "passwd_note": "/etc/passwd is a 38x65 PNG image; actual auth credentials in nvdata partition",
+    "host_key": "/etc/dropbear/dropbear_dss_host_key",
+    "cross_platform": {
+        "8941_SIP_9.3.4-17":    "sha256 af181f9b... (549,859 bytes)",
+        "8941_SCCP_9.3.4-17":   "sha256 6f623c7b... (549,863 bytes)",
+        "894x_SIP_9.4.2SR2-2":  "sha256 96a7f3b7566c6a2e9c380a4f5f5c2fdde7d0ef1509c0a0b40cb1ef7c2cc9394f (549,847 bytes)",
+        "894x_SCCP_9.4.2SR2-2": "sha256 1bcb4334... (549,851 bytes)",
+    },
+    "cves": [
+        "CVE-2012-0920: heap use-after-free in SSH client (0.52 fixes; 0.51 vulnerable)",
+        "libtomcrypt 2008-era: timing side channels in RSA/DSA",
+    ],
+    "chain": (
+        "TCP 22 → dropbear 0.51 password auth → nvdata credentials → root shell → "
+        "direct libsecurity.so access → CTL/ITL manipulation → PHN-F02 TOFU trigger"
+    ),
+    "severity": "HIGH — all deployed 894x SIP phones with nvdata credentials are SSH-accessible",
+}
