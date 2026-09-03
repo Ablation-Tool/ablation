@@ -27,11 +27,14 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F59 (MEDIUM). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F62 (MEDIUM). 13 attack chains.
   ND-F56 HIGH: CIMC creds + cluster passphrase as CLI argv — /proc/pid/cmdline exposure
   ND-F57 HIGH: CIMC SSH StrictHostKeyChecking=no — full bootstrap MITM surface
   ND-F58 HIGH: KexAlgorithms=+diffie-hellman-group1-sha1 — Logjam-vulnerable KEX fallback
   ND-F59 MEDIUM: curl --insecure for all Redfish BMC API calls
+  ND-F60 HIGH: spm-lcm CGo GPGME key_secret/subkey_secret — private signing key extraction
+  ND-F61 HIGH: spm-lcm contains firmwared code — enlarged blast radius (install/upgrade/kubectl)
+  ND-F62 MEDIUM: spm-lcm signature verify pipeline — 4-stage crypto; private key bypass via ND-F60
 """
 
 import socket
@@ -1924,6 +1927,110 @@ FINDINGS = {
             "virtual media mount",
         ],
         "combined_with": ["ND-F57", "ND-F58"],
+    },
+    "ND-F60": {
+        "title": "spm-lcm.bin: CGo GPGME key_secret + subkey_secret Bindings — Private Signing Key Extraction From kms_etcd Mount",
+        "severity": "HIGH",
+        "component": "spm-lcm container /bin/spm-lcm.bin (golang.cisco.com/bootstrap/cmd/spm-lcm), CGo GPGME bindings",
+        "description": (
+            "spm-lcm.bin (47MB, go1.19.10, CGo, -s -w stripped) exposes CGo bindings to two GPGME "
+            "private-key-access functions: Cfunc_key_secret and Cfunc_subkey_secret. "
+            "These GPGME functions return the secret key material for a GPG key or subkey. "
+            "The spm pod (which runs spm-lcm) mounts /data/services/kms_etcd from the host — "
+            "the same path that holds ALL cluster TLS private keys (ND-F50). The KMS etcd store "
+            "also holds the GPG keyring used to sign ND service packages and firmware images. "
+            "With code execution in the spm-lcm context + kms_etcd mount access, an attacker can "
+            "invoke the GPGME key_secret binding to extract the private signing key from the keyring, "
+            "then sign arbitrary service packages or firmware images that spm-lcm will accept as valid. "
+            "This bypasses the cryptographic signature verification enforced by "
+            "'error.missing.signature.file.cannot.install.app' and "
+            "'error.verify.error.verifying.signature.file'."
+        ),
+        "binary": "/tmp/nd-oci/spm-lcm/bin/spm-lcm.bin",
+        "build_path": "golang.cisco.com/bootstrap/cmd/spm-lcm",
+        "module": "golang.cisco.com/bootstrap (devel)",
+        "go_version": "go1.19.10",
+        "build_flags": "-ldflags=-w -s",
+        "cgo_bindings": {
+            "_cgo_4a87491e54c3_Cfunc_key_secret": "GPGME: retrieve secret key material from a GPG key",
+            "_cgo_4a87491e54c3_Cfunc_subkey_secret": "GPGME: retrieve secret key material from a GPG subkey",
+            "_cgo_4a87491e54c3_Cfunc_gogpgme_set_passphrase_cb": "GPGME: set passphrase callback (needed to unlock the private key)",
+        },
+        "privileged_mount": "/data/services/kms_etcd (ALL cluster TLS keys + GPG signing keyring)",
+        "combined_with": ["ND-F50"],
+        "source_ref": "aci-github.cisco.com/nd/spm@v0.0.0-20240326050141-a908b8ccc70b",
+    },
+    "ND-F61": {
+        "title": "spm-lcm.bin: Multi-Command Binary Contains firmwared Code — Enlarged Blast Radius from Any Code Exec in spm-lcm",
+        "severity": "HIGH",
+        "component": "spm-lcm container /bin/spm-lcm.bin, golang.cisco.com/spm/cmd/firmwared/errors.init",
+        "description": (
+            "spm-lcm.bin contains the firmwared error package "
+            "(golang.cisco.com/spm/cmd/firmwared/errors.init is initialized at startup), "
+            "indicating this binary implements both the lifecycle manager AND the firmwared "
+            "service package manager functions in a single 47MB binary. "
+            "firmwared is the ND service that manages service package installation, "
+            "upgrade, and lifecycle across all ND applications. "
+            "String evidence: 'expandServicePackageImagesToHelm success', "
+            "'failed to downloadReleaseServicePackages', "
+            "'error.failed.read.spec.file.firmwared.volume', "
+            "'error.firmwared.api.failed.error: Firmwared API: {{.appUrl}} failed'. "
+            "Code execution in spm-lcm therefore grants control over: "
+            "(1) service package install/activate/rollback for ALL ND apps, "
+            "(2) firmware upgrade orchestration (ND-F51 path), "
+            "(3) helm template expansion from app.yaml (potential injection), "
+            "(4) kubectl execution with root kubeconfig (ND-F50). "
+            "The firmwared API URL template '{{.appUrl}}' in error messages indicates "
+            "dynamic URL construction — if any portion is attacker-influenced, SSRF applies."
+        ),
+        "binary_size": "47MB",
+        "contains_packages": [
+            "golang.cisco.com/bootstrap/cmd/spm-lcm",
+            "golang.cisco.com/spm/cmd/firmwared (embedded)",
+        ],
+        "key_capabilities_from_strings": [
+            "expandServicePackageImagesToHelm — helm expansion from app.yaml",
+            "downloadReleaseServicePackages — fetches packages from remote URL",
+            "kubectl execution with error.failed.executing.kubectl",
+            "Firmwared API calls with dynamic appUrl",
+            "post-install hooks execution (error.failed.execute.post.install)",
+        ],
+        "combined_with": ["ND-F50", "ND-F51", "ND-F60"],
+        "source_ref": "aci-github.cisco.com/nd/spm@v0.0.0-20240326050141-a908b8ccc70b",
+    },
+    "ND-F62": {
+        "title": "spm-lcm.bin Signature Verification: 3-Stage Pipeline — Missing File vs. Crypto Verify Are Separate Error Paths",
+        "severity": "MEDIUM",
+        "component": "spm-lcm container /bin/spm-lcm.bin signature verification logic",
+        "description": (
+            "spm-lcm implements app signature verification as a 3-stage pipeline with distinct "
+            "error messages for each stage, confirming the full pipeline in source: "
+            "  Stage 1: FILE EXISTENCE CHECK — 'missing signature file, cannot install app' "
+            "  Stage 2: FILE READ — 'verify: error reading signature file :{{.err}}' "
+            "  Stage 3: UNMARSHAL — 'sign: error unmarshalling signature file :{{.err}}' "
+            "  Stage 4: CRYPTO VERIFY — 'verify: error verifying signature file :{{.err}}' "
+            "The separation of 'missing file' from 'verify error' into different error codes "
+            "means error handling for missing vs. crypto-failed signatures is distinct. "
+            "The CGo GPGME bindings (ND-F60) handle Stage 4. "
+            "The firmware image verification has its own path: "
+            "'failed to verify firmware image: {{.path}}' — confirming the upgrade-helper "
+            "ISO path (ND-F51) and the spm-lcm app install path use separate verify functions. "
+            "If Stage 1 (file existence) can be satisfied without a valid signature — "
+            "e.g., by placing an empty or malformed .sig file — Stages 2-4 still gate on "
+            "unmarshal and crypto verify. The crypto verify is NOT bypassable by file existence alone."
+        ),
+        "verification_stages": {
+            "1_existence": "error.missing.signature.file.cannot.install.app",
+            "2_read": "error.verify.error.reading.signature.file",
+            "3_unmarshal": "error.sign.error.unmarshalling.signature.file",
+            "4_crypto": "error.verify.error.verifying.signature.file",
+        },
+        "note": (
+            "The crypto verify stage uses GPGME (ND-F60 CGo bindings). "
+            "The private key extraction path (ND-F60) bypasses this gate entirely by "
+            "allowing legitimate signing of attacker-controlled packages."
+        ),
+        "combined_with": ["ND-F60", "ND-F51"],
     },
 }
 
