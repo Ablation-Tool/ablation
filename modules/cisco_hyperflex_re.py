@@ -1688,6 +1688,88 @@ FINDINGS = {
             "management layer with a startup validation check that aborts iscsisvc if auth is None."
         ),
     },
+    "HX-F40": {
+        "title": "Unauthenticated getDataEncryptionKeys Thrift RPC in storfs — DARE Key Exfiltration",
+        "severity": "CRITICAL",
+        "component": (
+            "storfs (storfs-core package, ELF 64-bit, ~20MB, not stripped). "
+            "Class: com::storvisor::sysmgmt::StPlatformEncProcessor. "
+            "Thread: sysmgmtNonBlockingEncThreadId (dedicated enc Thrift server thread)."
+        ),
+        "description": (
+            "The storfs binary hosts a dedicated Apache Thrift server "
+            "(stNonBlockingEncServer, TNonblockingServer) that exposes the StPlatformEnc service. "
+            "The process_getDataEncryptionKeys handler parses the incoming Thrift request, "
+            "calls readMessageEnd(), then immediately invokes the handler "
+            "StPlatformEncDispatcher::getDataEncryptionKeys without any authentication check. "
+            "The args struct StPlatformEnc_getDataEncryptionKeys_args contains no credential fields. "
+            "A successful call returns an HxEncryptionData object containing all Data Encryption Keys "
+            "(DEKs) for the cluster, which directly defeats the Data At Rest Encryption (DARE) feature. "
+            "The dispatchCall implementation is pure string-comparison method routing with no "
+            "Thrift-layer auth header validation. The server is started unconditionally by "
+            "SysMgmt_InitInternal alongside the main sysmgmt Thrift server."
+        ),
+        "code_evidence": {
+            "binary": "storfs (ELF 64-bit, not stripped, ~20MB)",
+            "handler_fn": "StPlatformEncProcessor::process_getDataEncryptionKeys @ 0x9ade70",
+            "dispatcher_fn": "StPlatformEncDispatcher::getDataEncryptionKeys @ 0xa2b9e0",
+            "args_read_fn": "StPlatformEnc_getDataEncryptionKeys_args::read @ 0x9a7510",
+            "args_struct": "StPlatformEnc_getDataEncryptionKeys_args (no auth fields in struct)",
+            "return_type": "HxEncryptionData (vtable _ZTVN...16HxEncryptionDataE @ 0x10b7ba0)",
+            "server_global": "stNonBlockingEncServer @ BSS:0x1bd0970",
+            "server_start_fn": "StartNonBlockingEncServer @ 0x8c2910",
+            "server_thread": "_ZL29sysmgmtNonBlockingEncThreadId (created by SysMgmt_InitInternal @ 0x8c1dc0)",
+            "dispatch_fn": "StPlatformEncProcessor::dispatchCall @ 0x9af4f0 — string-match dispatch, no auth",
+            "kv_key_fn": "KVGetDataEncryptionKey @ 0x61a8d0 (lower-level ZK/KV key retrieval)",
+            "auth_check": "NONE — no authentication before handler dispatch confirmed in disasm",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Bind stNonBlockingEncServer to 127.0.0.1 only. "
+            "Add a caller-identity verification step at the Thrift dispatch layer "
+            "(TLS mutual auth or a pre-dispatch token check). "
+            "If the StPlatformEnc service must remain a Thrift interface, require a session token "
+            "verified against the hx-auth service before returning DEK material. "
+            "Consider replacing the Thrift enc interface with a Unix-domain socket accessible "
+            "only to root-owned processes."
+        ),
+    },
+    "HX-F41": {
+        "title": "Unauthenticated setDataEncryptionKeys Thrift RPC in storfs — Key Replacement Attack",
+        "severity": "CRITICAL",
+        "component": (
+            "storfs (storfs-core package, ELF 64-bit, ~20MB, not stripped). "
+            "Class: com::storvisor::sysmgmt::StPlatformEncProcessor. "
+            "Thread: sysmgmtNonBlockingEncThreadId."
+        ),
+        "description": (
+            "The process_setDataEncryptionKeys handler in the StPlatformEncProcessor Thrift service "
+            "accepts an HxEncryptionData struct and calls the handler without authentication. "
+            "The args struct StPlatformEnc_setDataEncryptionKeys_args contains the HxEncryptionData "
+            "payload (new key material) but no credential or authorization fields. "
+            "An unauthenticated caller can replace the cluster Data Encryption Keys with "
+            "attacker-controlled values, rendering all encrypted storage volumes permanently "
+            "inaccessible — a complete data destruction primitive. Combined with HX-F40 "
+            "(unauthenticated key read), a full DEK exfiltrate-then-replace sequence is possible "
+            "from any host that can reach the storfs Thrift port."
+        ),
+        "code_evidence": {
+            "binary": "storfs (ELF 64-bit, not stripped, ~20MB)",
+            "handler_fn": "StPlatformEncProcessor::process_setDataEncryptionKeys @ 0x9ad880",
+            "args_read_fn": "StPlatformEnc_setDataEncryptionKeys_args::read @ 0x9a6f50",
+            "args_vtable": "_ZTVN...40StPlatformEnc_setDataEncryptionKeys_argsE @ 0x10b74b0",
+            "payload_type": "HxEncryptionData (attacker-controlled key_elements vector)",
+            "auth_check": "NONE — identical dispatch pattern to HX-F40, confirmed in disasm",
+            "server_global": "stNonBlockingEncServer @ BSS:0x1bd0970 (shared with HX-F40)",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Same remediation as HX-F40: bind to loopback, add TLS mutual auth or token check "
+            "at the Thrift dispatch layer. "
+            "Additionally: add write-quorum validation requiring multiple node signatures "
+            "before any DEK write is accepted, to prevent single-node key replacement attacks."
+        ),
+    },
 }
 
 
