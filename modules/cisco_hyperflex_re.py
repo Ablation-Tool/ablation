@@ -3442,6 +3442,74 @@ FINDINGS = {
         ),
     },
 
+    "HX-F70": {
+        "title": "ESX, vCenter, and UCSM Credentials Stored as AES-Encrypted Blobs in World-Readable ZK Nodes (ZKNodeService_StMgr)",
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-312",
+        "component": "stMgr-1.0.jar / ZKNodeService_StMgr / EsxAuthZKMgmtImpl / ZKEntryConstants",
+        "class": "Credentials in Unprotected Storage",
+        "confirmed": True,
+        "evidence": {
+            "zk_fields": (
+                "ZKEntryConstants defines these ZK credential fields: "
+                "'esx_username', 'esx_password' (ESX service account), "
+                "'url_vcenter_encrypted_user', 'url_vcenter_encrypted_password' (vCenter admin), "
+                "'ucsm_user', 'ucsm_pwd' (UCS Manager admin). "
+                "All stored via ZKNodeService_StMgr.setEsxCredentials(user, pass), "
+                "setVCenterEncryptedUser()/setVCenterEncryptedPassword(), "
+                "setUcsmEncryptedUser()/setUcsmEncryptedPassword()."
+            ),
+            "encryption": (
+                "EsxAuthZKMgmtImpl.setEsxCredentialsToZK(String user, String pass): "
+                "EncryptionUtil$.encryptData(user) → encryptedUser; "
+                "EncryptionUtil$.encryptData(pass) → encryptedPass; "
+                "zkSvc_Mgr.setEsxCredentials(encryptedUser, encryptedPass). "
+                "EsxAuthZKMgmtImpl.getEsxCredentialsFromZK(): "
+                "zkSvc_Mgr.getEsxCredentials() → (encUser, encPass); "
+                "EncryptionUtil$.decryptData(encUser) → plainUser; "
+                "EncryptionUtil$.decryptData(encPass) → plainPass. "
+                "EncryptionUtil$ uses symmetric AES with key from JCEKS keystore. "
+                "JCEKS keystore password = 'springpath' (hardcoded, HX-F58)."
+            ),
+            "zk_acl": (
+                "Per HX-F55: ZooKeeper curator client never sets ACLs — "
+                "all nodes created with OPEN_ACL_UNSAFE (world:anyone:cdrwa). "
+                "Any unauthenticated ZK client on port 2181 can read all credential fields. "
+                "Per HX-F69: ZK client auth (UUID token scheme) cannot be enabled via config — "
+                "Boolean.getBoolean API misuse permanently disables it."
+            ),
+            "recovery_chain": (
+                "1. zkctl (or any ZK client) reads esx_username, esx_password fields. "
+                "2. Load /etc/hyperflex/secure/hyperflex_keystore.jceks with password 'springpath'. "
+                "3. Extract AES key from keystore (EncryptionUtil key alias). "
+                "4. AES-decrypt both ciphertext blobs → plaintext ESX service account credentials. "
+                "Repeat for url_vcenter_encrypted_user/password and ucsm_user/ucsm_pwd. "
+                "Five credential pairs (ESX user, ESX pass, vCenter user, vCenter pass, "
+                "UCSM user, UCSM pass) all recoverable via the same keystore key."
+            ),
+        },
+        "impact": (
+            "Attacker with ZooKeeper port 2181 access recovers plaintext credentials for: "
+            "(1) ESX service account — root-equivalent access to all HyperFlex ESXi nodes; "
+            "(2) vCenter administrator account — full virtualization management plane control "
+            "(create/destroy/migrate VMs, snapshot, network policy); "
+            "(3) UCS Manager administrator account — complete UCS fabric control "
+            "(blade server chassis, fabric interconnects, policies, firmware, pools). "
+            "Three infrastructure layers compromised from a single unauthenticated ZK read."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Apply ZooKeeper node ACLs to all credential-holding paths "
+            "(digest ACL, stMgr service account only). "
+            "2. Store the encryption key outside ZooKeeper and outside the keystore that uses "
+            "a hardcoded password — use a hardware security module or OS-native secret store. "
+            "3. Use distinct encryption keys per credential class. "
+            "4. Rotate ESX, vCenter, and UCSM credentials immediately on any affected system. "
+            "5. Fix ZK client auth (HX-F69) to prevent unauthenticated connections."
+        ),
+    },
+
     "HX-F69": {
         "title": "ZK Client Auth Permanently Disabled Due to Boolean.getBoolean(value) API Misuse (ZkConnectionManager)",
         "severity": "LOW",
