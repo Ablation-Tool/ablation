@@ -1162,6 +1162,113 @@ FINDINGS = {
             "to ensure they do not expose its content through any API endpoint."
         ),
     },
+    "HX-F30": {
+        "title": "StorfsSupportBundle Servlet Exposes System Support Bundle Generation Without Authentication",
+        "severity": "HIGH",
+        "component": (
+            "ROOT.war / com.storvisor.sysmgmt.service.StorfsSupportBundle "
+            "(stCtlVM, URL pattern /storfs-support/*, no filter mapping)"
+        ),
+        "description": (
+            "The StorfsSupportBundle HttpServlet is registered at /storfs-support/* in ROOT.war "
+            "web.xml (servlet-mapping at line 67) but has no corresponding filter-mapping entry. "
+            "All authentication filters (AuditFilter, SPPrivilegedAuth, SessionAuth, KerberosAuth, "
+            "SPBasicAuth, SPAuth) are mapped only to /rest/*, /internalsupport/*, /upload/*, and "
+            "/v1/* — leaving /storfs-support/* unprotected. "
+            "The servlet accepts GET and POST. With no action parameter it returns an HTML page "
+            "with links to ?action=extended and ?action=light. When action=extended it executes "
+            "ProcessBuilder(['/bin/bash', '-c', 'exec /bin/storfs-support --extended > /dev/null']) "
+            "on the stCtlVM; when action=light it runs 'exec /bin/storfs-support > /dev/null'. "
+            "After waiting for the process to exit with code 0, it reads the newest .gz file from "
+            "/var/support/ and streams it as application/zip to the unauthenticated caller. "
+            "The storfs-support bundle contains system logs, network configuration, disk layout, "
+            "ZooKeeper state, and service credentials from the storage controller VM."
+        ),
+        "code_evidence": {
+            "servlet_class": "com.storvisor.sysmgmt.service.StorfsSupportBundle",
+            "web_xml_servlet_mapping": "/storfs-support/* (ROOT.war web.xml line 67)",
+            "auth_filter_mapping": "None — no filter-mapping for /storfs-support/* in ROOT.war",
+            "action_extended_command": "/bin/bash -c exec /bin/storfs-support --extended > /dev/null",
+            "action_light_command": "/bin/bash -c exec /bin/storfs-support > /dev/null",
+            "output_source": "/var/support/ (newest .gz file via FileUtils.getNewestGzFile)",
+            "content_type": "application/zip",
+            "bytecode_ref": (
+                "StorfsSupportBundle.processRequest offset 151-173 (extended branch), "
+                "offset 182-208 (light branch); string literals ldc #101 /bin/bash, "
+                "ldc #105 'exec /bin/storfs-support --extended > /dev/null', "
+                "ldc #110 'exec /bin/storfs-support > /dev/null', "
+                "ldc #166 /var/support/"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423 (stCtlVM, ROOT.war)"],
+        "remediation": (
+            "Add filter-mapping entries for /storfs-support/* identical to those for "
+            "/internalsupport/* (AuditFilter, SPPrivilegedAuth, SessionAuth, SPBasicAuth, SPAuth). "
+            "Require authentication before any support bundle operation on the stCtlVM."
+        ),
+    },
+    "HX-F31": {
+        "title": "StorvisorSupportBundle Servlet Enables Unauthenticated SSRF With ESXi Credential Exfiltration",
+        "severity": "HIGH",
+        "component": (
+            "ROOT.war / com.storvisor.sysmgmt.service.StorvisorSupportBundle "
+            "(stCtlVM, URL pattern /st-support/*, no filter mapping)"
+        ),
+        "description": (
+            "The StorvisorSupportBundle HttpServlet is registered at /st-support/* in ROOT.war "
+            "web.xml but has no filter-mapping entry — identical misconfiguration to HX-F30. "
+            "The servlet reads a host[] query parameter array from the request. For each hostname "
+            "it constructs the URL: https://HOSTNAME/cgi-bin/vm-support.cgi?manifests=Springpath:Springpath "
+            "(template string from BootstrapMethods constant pool entry #161: "
+            "'https://\\u0001/cgi-bin/vm-support.cgi?manifests=Springpath:Springpath'). "
+            "It then instantiates HostCredentialsAccess(), which connects to the local cluster "
+            "service (localhost) and retrieves stored ESXi host credentials "
+            "(EsxCredential.username, EsxCredential.password from ServiceAccess). "
+            "WebDownloader.getStream(url, username, password) calls "
+            "java.net.Authenticator.setDefault(new Authenticator(username, password)) then "
+            "new URL(url).openStream() — sending the ESXi credentials as an HTTP Basic "
+            "Authorization header in the outbound request to the attacker-supplied hostname. "
+            "The attacker controls the hostname via the host= request parameter, which is "
+            "interpolated directly into the HTTPS URL before the credential-authenticated request "
+            "is made. The response is streamed back as a zip entry named HOSTNAME.tar.gz."
+        ),
+        "code_evidence": {
+            "servlet_class": "com.storvisor.sysmgmt.service.StorvisorSupportBundle",
+            "web_xml_servlet_mapping": "/st-support/* (ROOT.war web.xml line 56)",
+            "auth_filter_mapping": "None — no filter-mapping for /st-support/* in ROOT.war",
+            "user_controlled_input": "host[] query parameter (HttpServletRequest.getParameterValues('host'))",
+            "url_template": (
+                "https://HOSTNAME/cgi-bin/vm-support.cgi?manifests=Springpath:Springpath "
+                "(BootstrapMethods #1, constant pool #161)"
+            ),
+            "credential_source": (
+                "HostCredentialsAccess() -> ServiceAccess('localhost') -> "
+                "EsxCredential.username + EsxCredential.password"
+            ),
+            "credential_dispatch": (
+                "WebDownloader.getStream(url, getUserName(), getPassword()) -> "
+                "java.net.Authenticator.setDefault(BasicAuthenticator) -> "
+                "new URL(url).openStream()  [Authorization: Basic header sent to attacker host]"
+            ),
+            "zip_entry_template": "HOSTNAME.tar.gz (BootstrapMethods #0, constant pool #159)",
+            "bytecode_ref": (
+                "StorvisorSupportBundle.processRequest offset 22-152: "
+                "getParameterValues('host') at offset 22-30, "
+                "HostCredentialsAccess.<init> at offset 56-63, "
+                "invokedynamic #1 URL construction at offset 130-135, "
+                "WebDownloader.getStream call at offset 137-152"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423 (stCtlVM, ROOT.war)"],
+        "remediation": (
+            "Add filter-mapping entries for /st-support/* identical to those for "
+            "/internalsupport/* (AuditFilter, SPPrivilegedAuth, SessionAuth, SPBasicAuth, SPAuth). "
+            "Validate that the host parameter matches the expected cluster node IP range before "
+            "constructing any outbound URL. Do not use java.net.Authenticator.setDefault() "
+            "(JVM-global side effect) for per-request authentication; use per-connection "
+            "credential injection instead."
+        ),
+    },
 }
 
 
