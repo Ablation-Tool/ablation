@@ -3961,55 +3961,221 @@ FINDINGS = {
         ),
     },
     "HX-F78": {
-        "title": "StMgr.executeValidateLogin Relays UCSM Admin Credentials as Plaintext Thrift Fields Over TSocket (localhost:9333)",
-        "severity": "MEDIUM",
-        "cvss": "5.5",
-        "cwe": "CWE-319",
-        "component": "hxdc-encryption WAR / StMgrClient / StMgr Thrift service / executeValidateLogin",
-        "class": "Credential Exposure — UCSM Admin Password Transmitted in Cleartext Over Loopback Thrift IPC",
+        "title": (
+            "StMgrClient.trustAll() Globally Disables TLS Certificate Validation in Encryption WAR JVM "
+            "via HttpsURLConnection.setDefaultSSLSocketFactory() with No-Op X509TrustManager"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": "hxdc / encryption-1.0.0 WAR / StMgrClient / trustAll()",
+        "class": "TLS Certificate Validation Bypass — Global JVM Override Exposes All Encryption WAR HTTPS Channels to MITM",
         "confirmed": True,
         "evidence": {
-            "thrift_signature": (
-                "StMgr.Iface.executeValidateLogin (thrift-stubs/com/storvisor/sysmgmt/StMgr$Iface.class): "
-                "executeValidateLogin(String ucsmHostname, String ucsmUsername, String ucsmPasswd, String lang). "
-                "executeValidateLogin_args field names from constant pool: "
-                "#12=ucsmHostname, #16=ucsmUsername, #19=ucsmPasswd, #22=lang."
+            "trustAll_bytecode": (
+                "StMgrClient.trustAll() (encryption-1.0.0/WEB-INF/classes/.../StMgrClient.class): "
+                "offset 6: new StMgrClient$1 (anonymous X509TrustManager). "
+                "offset 16: SSLContext.getInstance('TLS'). "
+                "offset 22-32: SSLContext.init(null, TrustManager[]{StMgrClient$1}, new SecureRandom()). "
+                "offset 36-39: HttpsURLConnection.setDefaultSSLSocketFactory(sslCtx.getSocketFactory()). "
+                "offset 42-52: HttpsURLConnection.setDefaultHostnameVerifier(new StMgrClient$2()). "
+                "setDefaultSSLSocketFactory and setDefaultHostnameVerifier are JVM-wide statics — "
+                "all subsequent HttpsURLConnection instances in the encryption WAR JVM inherit these overrides."
             ),
-            "caller_flow": (
-                "encryption WAR / AuthApiServiceImpl.validateUcsmLogin(UcsmCredentials): "
-                "Extracts ucsmCredentials.getUcsmHostname(), getUsername(), getPassword() at bytecode offsets 101-109. "
-                "Passes to ValidateLoginSource.validate(hostname, username, password, lang) "
-                "which calls StMgrClient.executeValidateLogin(hostname, username, password, lang). "
-                "StMgrClient.executeValidateLogin: logger.debug('calling executeValidateLogin') then "
-                "StMgr$Client.executeValidateLogin(ucsmHostname, ucsmUsername, ucsmPasswd, lang) "
-                "over ThriftClient TSocket transport."
+            "trust_manager_noop": (
+                "StMgrClient$1 implements javax.net.ssl.X509TrustManager: "
+                "checkClientTrusted() → return (offset 0: return, accepts any client cert). "
+                "checkServerTrusted() → return (offset 0: return, accepts any server cert, no chain validation). "
+                "getAcceptedIssuers() → null (offset 0: aconst_null; offset 1: areturn, non-standard — "
+                "JSSE implementations typically treat null as 'no accepted issuers', effectively accepting all)."
             ),
-            "transport_plaintext": (
-                "Same ThriftClient base class as HX-F77: TSocket -> TFramedTransport -> TBinaryProtocol. "
-                "stMgrPort = 9333 (localhost). No TLS. "
-                "UCSM admin password visible in plaintext in loopback TCP stream on port 9333."
+            "hostname_verifier_noop": (
+                "StMgrClient$2 implements javax.net.ssl.HostnameVerifier: "
+                "verify(String hostname, SSLSession session) → iconst_1; ireturn (always returns true). "
+                "Certificate CN/SAN never checked against target hostname."
             ),
-            "ucsm_credentials_model": (
-                "UcsmCredentials.toString() constant pool includes '    password:' label (Utf8 #53). "
-                "Object serializes all three fields — ucsmHostname, username, password — to string. "
-                "Any logger.debug(..., ucsmCredentials) call logs the cleartext password."
+            "openClient_call_site": (
+                "StMgrClient.openClient() offset 0: invokevirtual trustAll() — called before every connection. "
+                "offset 22-35: new THttpClient(stMgrHost + '/stmgr') — stmgr accessed via HTTPS THttpClient, "
+                "NOT TSocket. URL template: 'https://<stMgrHost>/stmgr' (InvokeDynamic #86 concat). "
+                "offset 38-44: HxSecurity.getInstance().getLocalSessionId() → localSessionId. "
+                "offset 52-57: THttpClient.setCustomHeader('X-RootSessionID', localSessionId). "
+                "offset 58: new TBinaryProtocol(transport)."
+            ),
+            "scope_of_bypass": (
+                "The encryption WAR JVM issues HTTPS connections to: stmgr (localhost), KMIP server "
+                "(external key management), vCenter (optional), Intersight (optional). "
+                "setDefaultSSLSocketFactory/setDefaultHostnameVerifier affect ALL HttpsURLConnection "
+                "instances in the same JVM process — the bypass is not scoped to stmgr. "
+                "KMIP operations (SEDConfiguration, executeEnableControllerSecuirty, "
+                "executeDisableControllerSecuirty, executeCreateKmipCertPolicy) are all issued from "
+                "this JVM after trustAll() pollutes the default socket factory."
+            ),
+            "ucsm_credential_exposure": (
+                "StMgr.executeValidateLogin(ucsmHostname, ucsmUsername, ucsmPasswd, lang) called from "
+                "AuthApiServiceImpl.validateUcsmLogin(UcsmCredentials) via ValidateLoginSource.validate(). "
+                "UCSM credentials transmitted over the HTTPS-without-cert-validation THttpClient channel. "
+                "An attacker performing MITM against the now-unvalidated TLS connection can intercept "
+                "UCSM admin credentials in transit. UcsmCredentials.toString() constant pool #52='    password:' "
+                "— any logger.debug(..., ucsmCredentials) also logs the cleartext password."
             ),
         },
         "impact": (
-            "UCSM (Unified Computing System Manager) admin credentials submitted to the encryption WAR's "
-            "/encrypt/v1/auth/validateUcsmLogin endpoint are relayed in plaintext over loopback Thrift. "
-            "Any process on the HX stCtlVM with loopback TCP access can observe UCSM admin credentials "
-            "by capturing traffic on localhost:9333 (tcpdump -i lo port 9333). "
-            "UCSM admin credentials provide full UCS domain control: server provisioning, "
-            "VLAN/VSAN management, firmware updates, and service profile assignment across all "
-            "compute nodes in the UCS domain."
+            "The encryption WAR is the trust boundary for HyperFlex drive encryption: it manages KMIP "
+            "key requests, SED controller security operations, and KEK lifecycle. "
+            "StMgrClient.trustAll() globally replaces the JVM default TLS socket factory with one that "
+            "accepts any certificate with no CN/SAN or chain validation. "
+            "A network-adjacent attacker (on the management network between the stCtlVM and its KMIP server) "
+            "can present a self-signed or revoked certificate and intercept all KMIP key material — "
+            "including the KEK passed to executeDisableControllerSecuirty — without triggering any error. "
+            "Additionally, UCSM admin credentials relayed via executeValidateLogin are exposed to the same MITM path. "
+            "Because setDefaultSSLSocketFactory operates at JVM scope (not per-connection), the bypass "
+            "persists for the lifetime of the encryption WAR process and cannot be reverted by individual callers."
         ),
         "versions_affected": ["6.0.2b-44423"],
         "remediation": (
-            "Replace TSocket with TSSLSocket with mutual TLS for stmgr Thrift IPC on port 9333. "
-            "The same transport upgrade should cover all internal stmgr callers. "
-            "UcsmCredentials.toString() should redact the password field "
-            "(replace with '<redacted>' or omit the password line) to prevent accidental log exposure."
+            "Remove trustAll() entirely. Replace with per-connection SSLContext pinned to the KMIP CA bundle "
+            "and stmgr's certificate. "
+            "For stmgr connectivity: configure THttpClient with an SSLContext that validates against the "
+            "HyperFlex internal CA. "
+            "For KMIP: enforce mutual TLS with operator-supplied KMIP CA in SEDConfiguration. "
+            "UcsmCredentials.toString() should redact the password field to eliminate log exposure. "
+            "Never call setDefaultSSLSocketFactory or setDefaultHostnameVerifier with accept-all implementations — "
+            "these are JVM-wide and bleed across all connection pools in the process."
+        ),
+    },
+    "HX-F79": {
+        "title": (
+            "stmgr.getStCtlVMSSHKeys Thrift RPC Decrypts and Returns Controller VM SSH Private Key "
+            "from ZooKeeper — Plaintext Key Material Exposed Over HTTPS IPC Channel"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.2",
+        "cwe": "CWE-312",
+        "component": "stmgr / StMgrImpl / getStCtlVMSSHKeys / SshUtils$.decryptSSHKey",
+        "class": "Sensitive Key Material Exposure — Controller VM SSH Private Key Returned in Thrift Response",
+        "confirmed": True,
+        "evidence": {
+            "thrift_method_signature": (
+                "StMgrImpl.getStCtlVMSSHKeys(Option<EntityRef>) → Future<SshKeyPair>. "
+                "Returns SshKeyPair.apply(pvtkey: String, pubkey: String). "
+                "pvtkey is the plaintext SSH private key of the target controller VM node."
+            ),
+            "decryption_chain_bytecode": (
+                "StMgrImpl.getStCtlVMSSHKeys bytecode: "
+                "offset 58: getstatic SshUtils$.MODULE$. "
+                "offset 62: invokevirtual zkSvc_NodeQueryMgr(). "
+                "offset 66: invokevirtual ZKQueryService_StNodeMgr.getStCtlSSHEncryptedPrivateKey(nodeId). "
+                "offset 69: invokevirtual SshUtils$.decryptSSHKey(encryptedKey) → byte[]. "
+                "offset 72-75: new String(bytes, 'UTF-8') — plaintext private key as String. "
+                "offset 83-100: same for public key via getStCtlSSHEncryptedPublicKey + decryptSSHKey. "
+                "offset 108-114: SshKeyPair$.apply(pvtkey, pubkey). "
+                "offset 117: Future$.value(sshKeyPair) — returned synchronously."
+            ),
+            "decryption_key_source": (
+                "SshUtils$.decryptSSHKey(String) calls EncryptionUtil$.MODULE$.decryptData(encryptedKey, getEncryptionKey()). "
+                "EncryptionUtil$.getEncryptionKey() → StorvisorKeystoreManager$.MODULE$.getEntry("
+                "SecurityConstants$.STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION) where "
+                "STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION = 'aes_encryption'. "
+                "StorvisorKeystore path: system property 'sysmgmt.common.security.springpath_keystore_file'. "
+                "Keystore password: /etc/hyperflex_shadow key 'keystore_password' "
+                "(SecurityConstants$ string constant #198 = '/etc/hyperflex_shadow', #200 = 'keystore_password')."
+            ),
+            "zk_storage": (
+                "Encrypted SSH private keys stored in ZooKeeper under paths read by "
+                "ZKQueryService_StNodeMgr.getStCtlSSHEncryptedPrivateKey(nodeId). "
+                "ZK is world-readable (HX-F55: OPEN_ACL_UNSAFE) and ZK auth is permanently disabled (HX-F69). "
+                "Any process with ZK access can read encrypted key material. "
+                "With /etc/hyperflex_shadow keystore_password + the JKS keystore file, "
+                "decryption does not require calling the stmgr Thrift RPC."
+            ),
+            "auth_gate": (
+                "stmgr is a Finagle HTTP/1.1 server. "
+                "Server$Authenticator filter checks 'X-RootSessionID' header on every request "
+                "(Server$Authenticator.checkRootSessionID(Request)). "
+                "On failure: Future.exception(new GeneralSecurityException('Authentication Failed!')). "
+                "JWT signing key is in ZK at world-readable path (HX-F71) — "
+                "auth gate does not constitute a compensating control in this threat model."
+            ),
+        },
+        "impact": (
+            "SSH private keys of HyperFlex stCtlVM nodes are stored AES-encrypted in ZooKeeper and "
+            "served decrypted over the stmgr Thrift HTTPS channel on request. "
+            "A caller with a valid root session ID can retrieve the plaintext private key for any node. "
+            "The decryption key (AES 'aes_encryption' entry in StorvisorKeystore) is protected only by "
+            "the keystore password from /etc/hyperflex_shadow — any local process with filesystem read "
+            "access can recover the keystore password, open the JKS keystore, extract the AES key, and "
+            "directly decrypt SSH private keys from ZK without involving the Thrift API. "
+            "Compromised controller VM SSH keys enable full lateral movement across all HX cluster nodes."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Do not return decrypted private key material over any IPC channel. "
+            "SSH key operations should remain server-side: if callers need to authenticate, "
+            "delegate the SSH session to stmgr rather than exporting the private key. "
+            "Protect /etc/hyperflex_shadow with strict DAC (0600, root-owned). "
+            "Consider PKCS#11 HSM-backed key storage to prevent offline AES key extraction from the JKS file."
+        ),
+    },
+    "HX-F80": {
+        "title": (
+            "StMgr.executeDisableControllerSecuirty Transmits SED Key Encryption Key (KEK) and UCSM "
+            "Admin Credentials Inline in Single Thrift Call Over HTTPS IPC Channel"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-312",
+        "component": "hxdc / encryption-1.0.0 WAR / EncryptionLocalSource / StMgrClient.executeDisableControllerSecuirty",
+        "class": "Sensitive Key Material Exposure — KEK and UCSM Credentials Co-Located in Single Thrift Args Object",
+        "confirmed": True,
+        "evidence": {
+            "thrift_signature": (
+                "StMgr.executeDisableControllerSecuirty(ucsmHostname, ucsmUsername, ucsmPasswd, kek, jobType, lang). "
+                "Field names from constant pool of executeDisableControllerSecuirty_args: "
+                "#12=ucsmHostname, #16=ucsmUsername, #19=ucsmPasswd, #22=kek, jobType, lang. "
+                "_Fields enum ordinals: UCSM_HOSTNAME(0), UCSM_USERNAME(1), UCSM_PASSWD(2), KEK(3), JOB_TYPE(4), LANG(5)."
+            ),
+            "kek_source_bytecode": (
+                "EncryptionLocalSource.enableOrDisableControllerSecurity(Boolean, Object, String) "
+                "when Boolean==false (disable path): "
+                "offset 53-66: QueryLocalKeyParser.getDeployedLocalKey(lang).getSecurityKey() → storedKey. "
+                "offset 73-85: storedKey.equals(requestBody.getSecurityKey()) — key verification gate. "
+                "offset 88-121: extracts LocalPolicyEntityBody.{getUcsmHostname, getUsername, getPassword, getSecurityKey}. "
+                "LocalPolicyEntityBody.getSecurityKey() mapped to kek field (arg position 4, Thrift fieldId=4). "
+                "StMgrClient.executeDisableControllerSecuirty(hostname, username, password, securityKey, "
+                "'encryptionLocalConfigDisable', lang) at offset 121."
+            ),
+            "kek_semantics": (
+                "kek = Key Encryption Key for the SED (Self-Encrypting Drive) controller security policy. "
+                "The KEK is the locally-set security passphrase that protects drive encryption keys "
+                "in the local encryption policy. Its compromise allows decryption of SED-protected data "
+                "without the KMIP external key manager."
+            ),
+            "transport_context": (
+                "Transport: StMgrClient.openClient() calls trustAll() at offset 0 then opens "
+                "THttpClient('https://<stMgrHost>/stmgr') — TLS cert validation globally disabled (HX-F78). "
+                "An attacker performing TLS MITM (made possible by HX-F78) intercepts a single Thrift message "
+                "containing UCSM admin credentials AND the SED KEK simultaneously. "
+                "KEK verification at EncryptionLocalSource offset 73-85 does not protect against MITM — "
+                "it only validates caller knowledge, not channel integrity."
+            ),
+        },
+        "impact": (
+            "The SED KEK and UCSM admin credentials are co-located in a single Thrift message body. "
+            "A network-adjacent attacker performing TLS MITM (trivially enabled by HX-F78's global "
+            "trust-all override) recovers both the drive encryption KEK and full UCSM administrative access "
+            "in one intercepted message. "
+            "KEK recovery enables offline decryption of SED-protected datastores. "
+            "UCSM admin credentials provide full UCS domain control: server provisioning, "
+            "VLAN/VSAN policy, firmware update, and service profile management across all compute nodes."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Separate the KEK and UCSM credential flows into distinct, independently authenticated operations. "
+            "Do not co-locate credentials and key material in the same Thrift call or message body. "
+            "The KEK should be passed through a dedicated authenticated channel with per-operation audit logging. "
+            "Fix the underlying TLS bypass (HX-F78) to ensure channel integrity; "
+            "separation of concerns alone is insufficient while HX-F78 is not addressed."
         ),
     },
 }
