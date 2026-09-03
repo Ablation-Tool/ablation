@@ -156,7 +156,34 @@ iscsisvc SCSI path analysis:
     0x276513 error path: Log_UserAlert + return -1 (no dynamic realloc — fixed allocation only)
     Exploitation impact: depends on whether EDTL drives subsequent memory write (vs SCSI CDB xfer len)
 
-Findings: HX-F01 (HIGH) through HX-F16 (MEDIUM).
+auth binary (hx-auth, 9.5MB ELF, not stripped, /opt/hyperflex/auth/auth):
+  Uses dgrijalva/jwt-go v4.0.0-preview1 (archived 2021-01, CVE-2020-26160 audience bypass)
+  Binary contains: *jwt.signingMethodNone, *jwt.unsafeNoneMagicConstant — alg:none path compiled in
+  JWT key (main.TokenSigningKey) in .bss, runtime-initialized — not hardcoded
+  Service: stSSOMgr on localhost:9334, Gorilla mux v1.7.1, PAM integration via CGo
+
+installerrestapi-1.0.0.war (60MB Java WAR, installer appliance):
+  web.xml comment: "Disable AAA Authentication for installer rest api"
+  SPBasicAuth (SSOBasicAuthImpl) + SPAuth (SSOAuthFilterImpl) filters commented out
+  No <security-constraint> elements — entire /rest/* surface unauthenticated
+  Endpoints: /rest/*, /upload, /internalsupport/*, /st-support/*, /storfs-support/*
+  REST resources: BootstrapResource, DeploymentResource, VirtPlatformResource
+  BootstrapResource: createCluster, expandCluster, shutdownCluster, deployNodes, executeCommand,
+                     runCommand, validateVcenterCredentials, getVcServerDetails, pings, getNodes
+  DeploymentResource: getResponseFromHxdpRest(HxCredDetails, url), deployNodes, createCluster,
+                      configInstaller, updateCatalog, checkDeployNodes
+  Executor.executeCommand: prefix allowlist = {stcli, sysmtool, mkfs.storfs}; Runtime.exec(String[])
+  pings(): Runtime.exec("timeout 1 ping -c 1 " + userInput) — BootstrapMethods #1 template confirmed
+           Runtime.exec(String) tokenizes by whitespace; no shell invocation; argument injection only
+  StorvisorFileUploader: /upload endpoint, multipart POST to /var/www/localhost/images/ (no auth)
+  WebDownloader.trustAllHttpsCertificates(): TrustAllManager + always-valid HostnameVerifier installed
+    globally via HttpsURLConnection.setDefaultSSLSocketFactory() — affects full installer JVM TLS stack
+  SecurityConfigurationManager (singleton Enum): reads keystore_password from
+    /etc/hyperflex/secure/hyperflex_security.properties -> Base64.getDecoder().decode() -> "springpath"
+  HostCredentialsAccess(): connects to localhost Thrift + reads /etc/hyperflex/secure/root_file.pub
+    .getUserName() / .getPassword() return EsxCredential.username / .password (ESXi host credentials)
+
+Findings: HX-F01 (HIGH) through HX-F22 (MEDIUM).
 """
 
 import socket
@@ -593,6 +620,190 @@ FINDINGS = {
             "build_path": "/mnt/vol1/jenkins/workspace/starship/master/diesel/code/apollo/",
         },
         "versions_affected": ["1.0.11-20250305 (connector bundle)"],
+    },
+
+    "HX-F17": {
+        "title": "auth Service Links Archived dgrijalva/jwt-go v4.0.0-preview1 with alg:none Path Compiled In",
+        "severity": "HIGH",
+        "component": "/opt/hyperflex/auth/auth (9.5MB ELF, not stripped)",
+        "description": (
+            "The HyperFlex stSSOMgr authentication service (hx-auth binary) uses "
+            "dgrijalva/jwt-go v4.0.0-preview1, a preview release of an archived Go JWT library "
+            "(archived by maintainer 2021-01, superseded by golang-jwt/jwt). "
+            "The binary contains the symbol strings '*jwt.signingMethodNone' and "
+            "'*jwt.unsafeNoneMagicConstant', confirming the alg:none signing path is "
+            "compiled into the binary. CVE-2020-26160 (audience claim validation bypass) "
+            "affects dgrijalva/jwt-go <4.0.0. An attacker who can present a token signed "
+            "with alg:none — accepted if the token parser does not explicitly reject it — "
+            "bypasses signature verification. The service accepts JWTs at localhost:9334 "
+            "(stSSOMgr) and issues tokens used across the HXDP REST API surface."
+        ),
+        "code_evidence": {
+            "library": "github.com/dgrijalva/jwt-go v4.0.0-preview1",
+            "symbols_confirmed": ["*jwt.signingMethodNone", "*jwt.unsafeNoneMagicConstant"],
+            "binary_path": "/opt/hyperflex/auth/auth",
+            "service": "stSSOMgr on localhost:9334",
+            "http_stack": "Gorilla mux v1.7.1",
+            "cve": "CVE-2020-26160 (jwt-go audience bypass, <4.0.0)",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance VMDK)"],
+        "remediation": (
+            "Replace dgrijalva/jwt-go with golang-jwt/jwt v4+ or v5. "
+            "Add explicit algorithm check at token parse: "
+            "jwt.ParseWithClaims(token, &claims, keyFunc, jwt.WithValidMethods([]string{\"RS256\"}))."
+        ),
+    },
+
+    "HX-F18": {
+        "title": "Installer REST API Entirely Unauthenticated — All Cluster Operations Exposed",
+        "severity": "CRITICAL",
+        "component": "installerrestapi-1.0.0.war (WEB-INF/web.xml)",
+        "description": (
+            "The HyperFlex installer appliance REST API at /rest/* has authentication "
+            "intentionally disabled. web.xml contains the comment "
+            "'Disable AAA Authentication for installer rest api' wrapping the entire "
+            "authentication filter block (SPBasicAuth and SPAuth). No <security-constraint> "
+            "elements are present. All REST endpoints — including cluster creation, expansion, "
+            "and shutdown; stcli command execution; vCenter credential validation; ESXi credential "
+            "retrieval; file upload; and HXDP REST proxying — are accessible to any host on "
+            "the management network without credentials. Applies to: "
+            "/rest/*, /upload, /internalsupport/*, /st-support/*, /storfs-support/*."
+        ),
+        "code_evidence": {
+            "web_xml_comment": "Disable AAA Authentication for installer rest api",
+            "commented_out_filters": [
+                "SPBasicAuth -> com.springpath.hx.aaa.filters.basicAuthFilter.SSOBasicAuthImpl",
+                "SPAuth -> com.springpath.hx.aaa.filters.ssoFilter.SSOAuthFilterImpl",
+            ],
+            "commented_out_filter_mappings": ["SPBasicAuth -> /rest/*", "SPAuth -> /rest/*"],
+            "unauthenticated_operations": [
+                "BootstrapResource: createCluster, expandCluster, shutdownCluster, deployNodes",
+                "BootstrapResource: executeCommand (stcli/sysmtool/mkfs.storfs allowlist)",
+                "BootstrapResource: validateVcenterCredentials, getVcServerDetails",
+                "BootstrapResource: pings (internal host enumeration)",
+                "DeploymentResource: getResponseFromHxdpRest (SSRF proxy to HXDP REST)",
+                "DeploymentResource: configInstaller, updateCatalog, deployNodesJob",
+                "StorvisorFileUploader: /upload (file write to /var/www/localhost/images/)",
+                "VirtPlatformResource: getVirtualMachines, getEvents, powerOnOffVM",
+            ],
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+        "remediation": (
+            "Re-enable the SPBasicAuth and SPAuth servlet filters in web.xml. "
+            "At minimum, gate all write-capable endpoints (createCluster, deployNodes, upload) "
+            "behind authentication. The installer appliance should not be network-accessible "
+            "outside of the dedicated HyperFlex management VLAN."
+        ),
+    },
+
+    "HX-F19": {
+        "title": "Unauthenticated pings() Endpoint Executes OS ping on Caller-Supplied IPs",
+        "severity": "MEDIUM",
+        "component": "installerrestapi-1.0.0.war / BootstrapResource.pings()",
+        "description": (
+            "BootstrapResource.pings(List<String>) calls Runtime.exec() on a concatenation "
+            "of the caller-supplied IP string with the template "
+            "'timeout 1 ping -c 1 <ip>' (confirmed via BootstrapMethods attribute #1 in "
+            "BootstrapResource.class). Because Runtime.exec(String) tokenizes by whitespace "
+            "without shell invocation, classic shell metacharacters do not achieve code "
+            "execution. However, the endpoint is unauthenticated (HX-F18) and accepts a "
+            "list of arbitrary IP strings, enabling: (1) internal management network host "
+            "enumeration — any IP that returns exit code 0 is added to the response; "
+            "(2) argument injection via embedded spaces — flags can be appended to the ping "
+            "command. The response is the list of IPs that were reachable."
+        ),
+        "code_evidence": {
+            "call_site": "BootstrapResource.pings() offset 0x40-0x55",
+            "exec_call": "java.lang.Runtime.getRuntime().exec(String) at bytecode offset 69",
+            "template": "timeout 1 ping -c 1 <userInput>",
+            "template_source": "BootstrapMethods attribute #1: '#2567 timeout 1 ping -c 1 \\u0001'",
+            "no_shell": "Runtime.exec(String) uses StringTokenizer — no shell metachar expansion",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+    },
+
+    "HX-F20": {
+        "title": "Unauthenticated HXDP REST Proxy Enables SSRF into Internal Cluster Services",
+        "severity": "HIGH",
+        "component": "installerrestapi-1.0.0.war / DeploymentResource.getResponseFromHxdpRest()",
+        "description": (
+            "DeploymentResource.getResponseFromHxdpRest(HxCredDetails creds, String urlPath) "
+            "accepts caller-supplied credentials and a URL path, proxies the request to the "
+            "internal HXDP REST API via the installer's Thrift client, and returns the raw "
+            "response. The endpoint is unauthenticated (HX-F18). An attacker on the management "
+            "network can use the installer as an authenticated relay into the deployed cluster's "
+            "REST API — issuing management operations against a live cluster without direct "
+            "network access to it, supplying any credentials in the HxCredDetails body. "
+            "WebDownloader.trustAllHttpsCertificates() (HX-F22) ensures no TLS validation "
+            "occurs on the outbound connection to the cluster."
+        ),
+        "code_evidence": {
+            "method_signature": (
+                "public JsonObject getResponseFromHxdpRest("
+                "com.storvisor.sysmgmt.bootstrap.model.HxCredDetails, java.lang.String)"
+            ),
+            "backing_service": "DeploymentServiceAccess.getResponseFromHxdpRest() -> StDeploy$Client Thrift",
+            "thrift_endpoint": "strings: 'Connecting to {}' + 'trustAll' -> /stdeploy",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+        "remediation": "Require authentication on all /rest/* endpoints (HX-F18 remediation covers this). "
+                       "Validate the URL path parameter against an allowlist; reject paths containing "
+                       "scheme prefixes, parent-directory sequences, and internal-only service identifiers.",
+    },
+
+    "HX-F21": {
+        "title": "Unauthenticated File Upload Writes to Installer Image Serving Directory",
+        "severity": "MEDIUM",
+        "component": "installerrestapi-1.0.0.war / StorvisorFileUploader (/upload)",
+        "description": (
+            "StorvisorFileUploader.doPost() at /upload accepts multipart POST requests "
+            "without authentication (HX-F18) and writes uploaded files to "
+            "/var/www/localhost/images/ (set via StorvisorFileUploadPath context parameter). "
+            "No path traversal sanitization is visible in the decompiled bytecode. "
+            "An attacker on the management network can write arbitrary files to the "
+            "installer image directory — potentially replacing firmware images served to "
+            "ESXi hosts during deployment or injecting malicious images that are automatically "
+            "consumed by the HyperFlex installation workflow."
+        ),
+        "code_evidence": {
+            "servlet_path": "/upload",
+            "target_dir": "/var/www/localhost/images/",
+            "context_param": "StorvisorFileUploadPath",
+            "upload_lib": "org.apache.commons.fileupload.servlet.ServletFileUpload",
+            "auth_present": False,
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+        "remediation": "Require authentication on /upload. "
+                       "Validate uploaded file type, name, and size before write. "
+                       "Write to a staging path; verify image integrity before promoting to the serving directory.",
+    },
+
+    "HX-F22": {
+        "title": "Installer JVM Globally Disables TLS Certificate Validation via TrustAllManager",
+        "severity": "MEDIUM",
+        "component": "installerrestapi-1.0.0.war / WebDownloader.trustAllHttpsCertificates()",
+        "description": (
+            "WebDownloader.trustAllHttpsCertificates() installs a no-op TrustManager "
+            "(TrustAllManager) and an always-accepting HostnameVerifier globally into "
+            "javax.net.ssl.HttpsURLConnection via setDefaultSSLSocketFactory() and "
+            "setDefaultHostnameVerifier(). Both DeploymentServiceAccess and DataServiceAccess "
+            "call trustAll before establishing Thrift connections to backend services, making "
+            "this the live execution path during all installer-to-cluster communication. "
+            "Any HTTPS connection from the installer JVM process — including cluster deployment "
+            "callbacks, catalog downloads, and HXDP REST proxy calls — is susceptible to "
+            "MITM on the management network."
+        ),
+        "code_evidence": {
+            "class": "com.storvisor.sysmgmt.service.WebDownloader",
+            "inner_class": "WebDownloader$TrustAllManager (implements javax.net.ssl.TrustManager)",
+            "install_site": "HttpsURLConnection.setDefaultSSLSocketFactory(sslCtx.getSocketFactory())",
+            "hostname_verifier": "WebDownloader$2 (always returns true)",
+            "callers": ["DeploymentServiceAccess.openClientConnection()", "DataServiceAccess.openClientConnection()"],
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+        "remediation": "Remove TrustAllManager and the global SSL socket factory override. "
+                       "Use a dedicated SSLContext loaded from the JCEKS keystore (HX-F13) for "
+                       "cluster connections; validate cluster certificates against a pinned CA.",
     },
 }
 

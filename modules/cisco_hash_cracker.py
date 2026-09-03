@@ -354,6 +354,11 @@ _CISCO_BASE_WORDS = [
     "L2)_Ki*IDQbT2DMHw&tu[e<kba-kj}uGBb.myX_1",  # FMC-F17: SymmetricDS prior MySQL root (rotated)
     "IlahU)[hO8Ug}jdX:)5zoZx[297l*{Qv@4]wVk]/",  # FMC-F17: SymmetricDS current MySQL root password
 
+    # ── HyperFlex HXDP 6.0.2b static keystore credential (HX-F12) ───────────
+    "springpath",            # HX-F12: PKCS12 + JCEKS keystore password; base64 c3ByaW5ncGF0aA==
+                             # in /usr/share/hyperflex/storfs-misc/hyperflex_security.properties;
+                             # unlocks CHAP decrypt (HX-F11) and vCenter client RSA key (HX-F13)
+
     # ── Nexus Dashboard 3.2.2m bootstrap (ND-F56) ────────────────────────────
     # admin_passwd hash in bootstrap JSON blob (interceptable via ND-F57 MITM on CIMC SSH)
     # ND documented defaults + common deployment patterns
