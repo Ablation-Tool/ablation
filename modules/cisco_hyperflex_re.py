@@ -2303,6 +2303,81 @@ FINDINGS = {
             "the change (skipACL removal requires ZK restart to take effect)."
         ),
     },
+
+    "HX-F51": {
+        "title": "iscsisvc Thrift Management Interface on Port 10210 Has No Authentication",
+        "severity": "HIGH",
+        "component": (
+            "iscsisvc (ELF 64-bit, C++, 16MB, not stripped, PIE). "
+            "Binary: /opt/hyperflex/hx-iscsi/iscsisvc. "
+            "Service: iscsisvc.service (managed by systemd, Wants=hxIscsiMgr.service). "
+            "Thrift server: IscsiSvcThriftServer wrapping IscsiSvcDispatcher. "
+            "Thrift transport: TServerSocket (plain TCP, no TLS). "
+            "Port: 10210 (tune default: iscsisvcListenPort=10210, iscsisvcEnabled=1). "
+            "Bind: 0.0.0.0 (TServerSocket(int port) — no host parameter)."
+        ),
+        "description": (
+            "The iscsisvc binary exposes a Thrift management interface on TCP port 10210 with no "
+            "authentication on any handler. The Thrift transport is TServerSocket (plain TCP, no TLS) "
+            "bound to 0.0.0.0:10210 by default. "
+            "IscsiSvcDispatcher implements the IscsiSvcIf interface with the following handlers: "
+            "testPing, createInitiatorGroup, modifyInitiatorGroup, deleteInitiatorGroup, "
+            "createLUN, modifyLUN, deleteLUN, createTarget, modifyTarget, deleteTarget, "
+            "createBulkInitiatorGroups, modifyBulkInitiatorGroups, deleteBulkInitiatorGroups, "
+            "createBulkLUNs, modifyBulkLUNs, deleteBulkLUNs, createBulkTargets, modifyBulkTargets, "
+            "deleteBulkTargets. "
+            "Disassembly of createLUN @ 0x228520 confirms no auth check: "
+            "entry reads tune[+0x1422] (fast-path flag) and jumps directly to istgt_notify_config_change "
+            "or setCRMEntry (ZK write) without any credential or token validation. "
+            "createInitiatorGroup @ 0x2282b0 has the identical pattern. "
+            "An unauthenticated Thrift client on any network interface can: "
+            "(1) create iSCSI LUNs mapped to arbitrary HyperFlex storage volumes; "
+            "(2) add attacker-controlled initiator IQNs to initiator groups (granting iSCSI access); "
+            "(3) delete existing LUNs and targets, destroying iSCSI connectivity for ESXi hosts; "
+            "(4) enumerate active iSCSI sessions and target configuration. "
+            "iSCSI config is persisted to ZooKeeper at /hxVolumesInv/istgt_conf (confirmed via "
+            "iscsisvc startup: -T iscsiConfigLocation=zk -T iscsiConfigPath=/hxVolumesInv/istgt_conf). "
+            "Combined with HX-F49 (ZK unauthenticated access): an attacker can also directly modify "
+            "the iSCSI config ZNode, bypassing the Thrift layer entirely."
+        ),
+        "code_evidence": {
+            "binary_path": "/opt/hyperflex/hx-iscsi/iscsisvc",
+            "tune_defaults": {
+                "iscsisvcEnabled": "tune[+0x1515] = 0x01 (enabled by default)",
+                "iscsisvcListenPort": "tune[+0x1518] = 10210 (0x27e2) — confirmed from .data section at file offset 0xe13618",
+                "iscsisvcNumThreads": "tune[+0x1524] = 2",
+            },
+            "thrift_transport": "TServerSocket (plain TCP) — TSSLServerSocket NOT present in binary",
+            "bind_address": "TServerSocket::TServerSocket(int port) called with no host string -> binds to 0.0.0.0",
+            "createLUN_no_auth": (
+                "0x228520: lea rax, [tune]\n"
+                "0x228527: cmp BYTE PTR [rax+0x1422], 0x0  (fast-path flag, unrelated to auth)\n"
+                "0x22852e: je 0x228548\n"
+                "0x228530: [fast path] -> jmp istgt_notify_config_change(op=4, flag=1, iqn, cfg)\n"
+                "0x228548: [normal path] -> setCRMEntry('CreateLUN', ...)  [no auth in either path]"
+            ),
+            "createInitiatorGroup_no_auth": (
+                "0x2282b0: identical pattern — no auth check before istgt_notify_config_change(op=1)"
+            ),
+            "thrift_handler_class": "IscsiSvcDispatcher @ 0x2280c0 (C1)/0x228090 (C2)",
+            "zk_config_path": "/hxVolumesInv/istgt_conf (confirmed in iscsisvc_start.sh -T iscsiConfigPath=)",
+            "iscsisvc_startup_cmd": (
+                "exec iscsisvc -T iscsiEnable=true -T iscsiConfigLocation=zk "
+                "-T iscsiConfigPath=/hxVolumesInv/istgt_conf -T crmZKEnsemble=$crmZKEnsemble ..."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Bind iscsisvc Thrift server to loopback (127.0.0.1) or the management-internal VLAN only. "
+            "Add token-based authentication on the Thrift handler interface, matching the pattern used "
+            "by the REST API auth filter layer. "
+            "Set iscsisvcEnabled=false if the Thrift interface is not required for external components "
+            "(hxIscsiMgr.service is a separate listener; verify which components require direct "
+            "iscsisvc Thrift access). "
+            "Add firewall rules blocking port 10210 from non-management interfaces as a short-term "
+            "mitigation."
+        ),
+    },
 }
 
 
