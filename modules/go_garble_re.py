@@ -72,40 +72,108 @@ def va_to_file_offset(va: int, load_segs: list) -> int:
 # pclntab detection
 # ---------------------------------------------------------------------------
 
-GO120_MAGIC = b"\xff\xfa\xff\xff"
-GO118_MAGIC = b"\xff\xfb\xff\xff"
-GO116_MAGIC = b"\xfb\xff\xff\xff"
-GO112_MAGIC = b"\xfa\xff\xff\xff"
+# go1.2-1.15: 0xFFFFFAFF | go1.16: 0xFFFFFAF0 | go1.18-1.19: 0xFFFFFAF1 | go1.20+: 0xFFFFFAF2
+# All little-endian for amd64. Previous values (\xff\xfb\xff\xff, \xfb\xff\xff\xff) were wrong.
+GO120_MAGIC = b"\xf2\xfa\xff\xff"  # go1.20+
+GO118_MAGIC = b"\xf1\xfa\xff\xff"  # go1.18-1.19
+GO116_MAGIC = b"\xf0\xfa\xff\xff"  # go1.16-1.17
+GO112_MAGIC = b"\xff\xfa\xff\xff"  # go1.2-1.15
 
 PCLNTAB_MAGICS = [GO120_MAGIC, GO118_MAGIC, GO116_MAGIC, GO112_MAGIC]
 
 
 def find_pclntab(data: bytes) -> tuple:
-    """Scan binary for pclntab magic. Returns (file_offset, magic_bytes) or (None, None)."""
+    """Scan binary for pclntab magic. Returns (file_offset, magic_bytes) or (None, None).
+
+    Validates quantum==1 and ptrsize==8 (amd64) to reject false positive matches
+    in code/data sections. Returns the first valid match.
+    """
     for magic in PCLNTAB_MAGICS:
-        idx = data.find(magic)
-        if idx != -1:
-            return idx, magic
+        start = 0
+        while True:
+            idx = data.find(magic, start)
+            if idx == -1:
+                break
+            if len(data) >= idx + 8:
+                quantum = data[idx + 6]
+                ptrsize = data[idx + 7]
+                if quantum == 1 and ptrsize == 8:
+                    return idx, magic
+            start = idx + 1
     return None, None
 
 
 def parse_pclntab_header(data: bytes, offset: int) -> dict:
-    """Parse pclntab header fields."""
-    magic = data[offset:offset+4]
-    # byte 4-5: zeros, byte 6: quantum (instruction size), byte 7: ptrsize
-    if len(data) < offset + 8:
+    """Parse pclntab header and extract function names for go1.18+ binaries.
+
+    go1.18+ layout (all uint64, little-endian):
+      [0]  magic(4) + pad(2) + quantum(1) + ptrsize(1)
+      [8]  nfunc
+      [16] nfiles
+      [24] textStart
+      [32] funcnametab_offset, funcnametab_len
+      [48] cutab_offset, cutab_len
+      [64] filetab_offset, filetab_len
+      [80] pctab_offset, pctab_len
+      [96] pclntab_offset, pclntab_len
+      [112] funcdata_offset, funcdata_len
+      [128] ftab array (nfunc+1) * [entryOff:uint32, funcOff:uint32]
+    """
+    if len(data) < offset + 16:
         return {}
+    magic = data[offset:offset+4]
     quantum = data[offset + 6]
     ptrsize = data[offset + 7]
-    # nfunc at offset 8
-    nfunc = struct.unpack_from("<Q", data, offset + 8)[0] if ptrsize == 8 else struct.unpack_from("<I", data, offset + 8)[0]
-    return {
+
+    is_go118 = magic in (b"\xf1\xfa\xff\xff", b"\xf2\xfa\xff\xff")
+    is_go116 = magic == b"\xf0\xfa\xff\xff"
+
+    if ptrsize == 8:
+        nfunc = struct.unpack_from("<Q", data, offset + 8)[0]
+    else:
+        nfunc = struct.unpack_from("<I", data, offset + 8)[0]
+
+    result = {
         "magic": magic.hex(),
         "quantum": quantum,
         "ptrsize": ptrsize,
         "nfunc": nfunc,
         "file_offset": offset,
+        "func_names": [],
     }
+
+    if not is_go118 or ptrsize != 8 or len(data) < offset + 144:
+        return result
+
+    # go1.18+: extract funcnametab to get function names
+    nfiles = struct.unpack_from("<Q", data, offset + 16)[0]
+    textstart = struct.unpack_from("<Q", data, offset + 24)[0]
+    funcnametab_off = struct.unpack_from("<Q", data, offset + 32)[0]
+    funcnametab_len = struct.unpack_from("<Q", data, offset + 40)[0]
+
+    result["nfiles"] = nfiles
+    result["textStart"] = hex(textstart)
+    result["funcnametab_off"] = funcnametab_off
+
+    # funcnametab is relative to start of pclntab in memory (not file offset)
+    name_start = offset + funcnametab_off
+    name_end = name_start + funcnametab_len
+    if name_end > len(data):
+        return result
+
+    namedata = data[name_start:name_end]
+    names = []
+    for raw in namedata.split(b'\x00'):
+        try:
+            s = raw.decode('utf-8')
+            if s and (s.startswith('golang.cisco') or s.startswith('main.') or
+                      s.startswith('aci-github') or '/' in s):
+                names.append(s)
+        except UnicodeDecodeError:
+            continue
+
+    result["func_names"] = sorted(set(names))
+    return result
 
 
 # ---------------------------------------------------------------------------

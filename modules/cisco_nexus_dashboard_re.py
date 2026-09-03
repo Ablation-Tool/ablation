@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F50 (CRITICAL). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F55 (INFO). 13 attack chains.
 """
 
 import socket
@@ -1640,6 +1640,152 @@ FINDINGS = {
         "additional_mounts": ["kms hostPath /data/services/kms_etcd", "firmwared volumes for firmware storage"],
         "chain": "ND-F12 peer:// SSRF -> firmwared HTTP -> trigger firmware handler -> OR direct code exec -> SA token = cluster-admin",
         "combined_with": ["ND-F12", "ND-F01", "ND-F30"],
+    },
+
+    # ─── upgrade-helper / firmware upgrade pipeline ──────────────────────────
+
+    "ND-F51": {
+        "title": "upgrade-helper Post-Activate: Atomix Binary Executed from User-Controlled ISO Mount Path",
+        "severity": "CRITICAL",
+        "component": "upgrade-helper post-activate/10-k8s-service-activate shell script",
+        "description": (
+            "The post-activate script (10-k8s-service-activate) for K8s service activation receives "
+            "the firmware ISO path as $3 (third positional argument). This path flows from keyhole's "
+            "firmware-update endpoint which takes 'filepath' as a URL query parameter. "
+            "The script does: "
+            "(1) mount -o loop $iso $cdrom (mounts attacker-controlled ISO) "
+            "(2) atomixbin=$cdrom/atomix (atomix binary FROM the mounted ISO — attacker-controlled) "
+            "(3) $atomixbin update $iso (executes attacker-controlled binary as root) "
+            "Additionally: cp $cdrom/manifestCert.pem /config/manifestCert.pem writes attacker-controlled "
+            "cert to /config, replacing the ND cluster trust anchor. "
+            "The script runs as root (upgrade-helper binary is called by installerd running as root). "
+            "Prerequisite: keyhole cookie auth (ND-F01 reads world-readable cookie) + ability to "
+            "write a malicious ISO to any path on the ND node filesystem."
+        ),
+        "script_path": "upgrade-helper/etc/scripts/post-activate/10-k8s-service-activate",
+        "controlled_inputs": {
+            "iso": "$3 from caller, traceable to keyhole /upgrade/update?filepath=",
+            "cdrom": "mktemp -d (attacker-provided ISO contents mounted here)",
+            "atomixbin": "$cdrom/atomix — binary FROM attacker-controlled ISO",
+        },
+        "code_sequence": (
+            "mount -o loop $iso $cdrom\n"
+            "atomixbin=$cdrom/atomix\n"
+            "$atomixbin update $iso\n"
+            "cp $cdrom/manifestCert.pem /config/manifestCert.pem"
+        ),
+        "impact": "Root code execution on ND master node + replace cluster trust anchor cert",
+        "combined_with": ["ND-F01", "ND-F45"],
+    },
+
+    "ND-F52": {
+        "title": "upgrade-helper Inter-Service HTTPS: verify=False on All Internal REST Calls",
+        "severity": "HIGH",
+        "component": "upgrade-helper/etc/scripts/pre-activate/3-k8s-pre-activate.py, appcommon.py",
+        "description": (
+            "All upgrade-helper Python scripts make HTTPS calls to internal K8s services with "
+            "requests.get(..., verify=False) and requests.post(..., verify=False). Affected services: "
+            "(1) firmwared.firmwared.svc:443/api/v1/firmware/applications "
+            "(2) resourcemgr.kubese.svc:443/api/config/delinstance "
+            "(3) resourcemgr.kubese.svc:443/api/config/class/appinstances "
+            "TLS certificate verification is disabled across ALL inter-service upgrade calls. "
+            "An attacker with the ability to manipulate K8s DNS or ARP (reachable from within the "
+            "cluster) can MITM the upgrade pipeline, injecting application lists or deletion "
+            "responses. The firmwared application list drives upgrade decisions (which apps to "
+            "delete, which to preserve) — a poisoned response can suppress or trigger deletion "
+            "of running services during the upgrade window."
+        ),
+        "affected_endpoints": [
+            "firmwared.firmwared.svc:443/api/v1/firmware/applications (GET, POST)",
+            "firmwared.firmwared.svc:443/api/v1/firmware/images (GET)",
+            "resourcemgr.kubese.svc:443/api/config/delinstance (POST)",
+            "resourcemgr.kubese.svc:443/api/config/class/appinstances (GET)",
+        ],
+        "code_pattern": "requests.get(url, verify=False, timeout=(15, 15))",
+        "combined_with": ["ND-F51"],
+    },
+
+    "ND-F53": {
+        "title": "upgrade-helper Migration State Tracked in Unauthenticated etcd — Replay/Bypass via etcdctl",
+        "severity": "HIGH",
+        "component": "upgrade-helper/etc/scripts/pre-activate/3-k8s-pre-activate.py check_migration_done()",
+        "description": (
+            "The upgrade-helper tracks whether K8s migration has been performed by reading/writing "
+            "a plain etcd key: /k8_migration_to_nd_done. This key is read via "
+            "/mnt/atom/k8/usr/local/bin/etcdctl get /k8_migration_to_nd_done "
+            "and written via etcdctl put /k8_migration_to_nd_done <hostname>. "
+            "Since ND uses etcd without auth (ND-F03, confirmed in start-kms.sh), any process with "
+            "etcdctl access can: "
+            "(1) DELETE the key to trigger migration re-run on next upgrade (replay) "
+            "(2) SET the key to permanently skip migration even on fresh installs "
+            "(3) SET the key to a different hostname to confuse multi-node upgrade coordination. "
+            "The etcd config is read from /etc/etcd.cfg (export statements) — this file reveals "
+            "the etcdctl client cert paths and endpoints used during upgrade."
+        ),
+        "etcd_key": "/k8_migration_to_nd_done",
+        "config_file": "/etc/etcd.cfg (exports: ETCDCTL_* env vars, client cert paths)",
+        "code": (
+            "ret, out = run('/mnt/atom/k8/usr/local/bin/etcdctl get /k8_migration_to_nd_done')\n"
+            "if out != '': return False  # migration already done — skip\n"
+            "ret, out = run('/mnt/atom/k8/usr/local/bin/etcdctl put /k8_migration_to_nd_done ' + socket.gethostname())"
+        ),
+        "combined_with": ["ND-F03"],
+    },
+
+    "ND-F54": {
+        "title": "upgrade-helper Pre-Activate: tempfile.mktemp() TOCTOU + Temp File Content Leak (Commented-Out Removal)",
+        "severity": "MEDIUM",
+        "component": "upgrade-helper/etc/scripts/pre-activate/3-k8s-pre-activate.py create_config_map()",
+        "description": (
+            "The create_config_map() function uses tempfile.mktemp() (deprecated, TOCTOU-unsafe) "
+            "to generate a temp filename, then opens that file to write K8s ConfigMap YAML. "
+            "tempfile.mktemp() returns a name without creating the file, creating a race between "
+            "filename generation and file creation where an attacker can place a symlink at the "
+            "returned path (e.g., to /config/syscfg.yaml or /etc/etcd.cfg) to trigger an overwrite. "
+            "Additionally: the cleanup line os.remove(tmp_file) is commented out (# os.remove(tmp_file)), "
+            "meaning K8s ConfigMap configuration files persist in /tmp/ after each upgrade pre-activate "
+            "run. These files contain pod specs, deployment configs, and ConfigMap data."
+        ),
+        "code": (
+            "tmp_file = tempfile.mktemp()  # INSECURE — TOCTOU between name generation and open()\n"
+            "with open(tmp_file, 'w') as f: yaml.dump(config, f)\n"
+            "# os.remove(tmp_file)  <-- COMMENTED OUT — file persists"
+        ),
+        "secondary_bug": "path typo: '/date/services/k8_secure/app_log_migration/' should be '/data/...' — PV specs written to /date/ (filesystem root)",
+        "combined_with": ["ND-F51"],
+    },
+
+    "ND-F55": {
+        "title": "upgrade-helper Go Binary: Built with -s -w (pclntab Stripped) — CI/CD Build Flag Evidence",
+        "severity": "INFO",
+        "component": "upgrade-helper binary /tmp/nd-oci-deep/upgrade-helper/bin/upgrade-helper",
+        "description": (
+            "The upgrade-helper binary (50MB, go1.19.10 + CGo, stripped ELF) was built with "
+            "'-ldflags=-w -s': -w removes DWARF debug info, -s removes the symbol table AND pclntab. "
+            "Build metadata from .go.buildinfo section: "
+            "  path: golang.cisco.com/spm/cmd/upgrade-helper "
+            "  module: golang.cisco.com/spm (devel) "
+            "  git revision: 8b9dab7faed55ceabb97d764b2fddcb5265f759b "
+            "  build time: 2025-06-09T16:14:28Z "
+            "  GOARCH=amd64, CGO_ENABLED=1 "
+            "Key dependencies: "
+            "  containerd v1.6.14 (CVE-2023-25153, CVE-2023-25173) "
+            "  containers/image v5.23.1 (OCI image pull/verify) "
+            "  containers/ocicrypt v1.1.5 (OCI encryption) "
+            "  coreos/etcd v3.3.15+incompatible (2019, multiple CVEs) "
+            "  proglottis/gpgme v0.1.3 (GPG signature verify, CGo) "
+            "  opencontainers/umoci v0.4.7 (OCI image manipulation) "
+            "The pclntab stripping means runtime stack traces are absent and RE requires "
+            "prologue-based function detection + semantic encoding."
+        ),
+        "binary_path": "/tmp/nd-oci-deep/upgrade-helper/bin/upgrade-helper",
+        "build_flags": "-ldflags=-w -s",
+        "go_version": "go1.19.10",
+        "cgo_deps": ["gpgme", "devicemapper (libdevmapper)"],
+        "notable_old_deps": {
+            "coreos/etcd": "v3.3.15 from 2019 — EOL, multiple CVEs",
+            "containerd": "v1.6.14 — CVE-2023-25153 (OCI image memory exhaustion)",
+        },
     },
 }
 
