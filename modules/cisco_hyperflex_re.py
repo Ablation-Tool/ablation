@@ -5011,6 +5011,79 @@ FINDINGS = {
             "operate with a known-static credential on auth failure."
         ),
     },
+    "HX-F94": {
+        "title": (
+            "ServiceAccessAuthFilterImpl.doFilter Always Calls chain.doFilter — "
+            "Missing X-ServiceAccessToken Header and Failed Token Validation "
+            "Both Pass Unauthenticated Requests to Downstream Filter Chain"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.1",
+        "cwe": "CWE-306",
+        "component": (
+            "authfilter / ServiceAccessAuthFilterImpl / doFilter / "
+            "service-to-service authentication gate"
+        ),
+        "class": "Missing Authentication for Critical Function — Service Access Token Not Enforced",
+        "confirmed": True,
+        "evidence": {
+            "doFilter_bypass_empty_token": (
+                "ServiceAccessAuthFilterImpl.doFilter offset 111-184: "
+                "token = getHeaderValue(\"X-ServiceAccessToken\"); "
+                "offset 119-124: if (StringUtils.isEmpty(token)) goto 184; "
+                "offset 184-187: chain.doFilter(req, resp). "
+                "When X-ServiceAccessToken header is absent or empty, "
+                "execution jumps directly to chain.doFilter — "
+                "the request is forwarded without any authentication."
+            ),
+            "doFilter_bypass_invalid_token": (
+                "doFilter offset 127-165: "
+                "jwt = SSOManager.validateServiceAccessToken(token.trim()); "
+                "offset 137-139: if (jwt == null) goto 153; "
+                "offset 153-164: log debug message; goto 184; "
+                "offset 184: chain.doFilter(req, resp). "
+                "When X-ServiceAccessToken is present but validation fails "
+                "(validateServiceAccessToken returns null), filter logs and "
+                "then forwards to chain.doFilter — no 401/403 response."
+            ),
+            "no_rejection_path": (
+                "Full doFilter analysis: the filter contains no code path "
+                "that calls response.sendError() or response.setStatus(401/403). "
+                "Both token-absent (offset 124->184) and token-invalid (offset 153->184) "
+                "terminate at the same chain.doFilter call at offset 184. "
+                "Only path that blocks: if Authenticated=True AND "
+                "validateClientIdIfPresent() returns false (offset 75->86->106 return without chain.doFilter). "
+                "The unauthenticated path has no blocking capability."
+            ),
+            "http_enabled": (
+                "authfilter/application.conf: hxSvcHttpEnabled=true, hyperVSvcHttpEnabled=true. "
+                "Service-to-service communication allowed over plaintext HTTP, "
+                "not requiring TLS. "
+                "Combined with the non-enforcing filter: any HTTP client can "
+                "reach service access endpoints without credentials."
+            ),
+        },
+        "impact": (
+            "Any client that can reach service-access endpoints (internal network, "
+            "or external if port-exposed) can invoke service-access operations "
+            "without providing an X-ServiceAccessToken. "
+            "The filter never produces a 401/403 response on the service access path — "
+            "it only enriches the request attributes on successful validation. "
+            "Downstream handlers receive requests with no Authenticated attribute set "
+            "and must independently enforce auth (if they do at all). "
+            "Combined with hxSvcHttpEnabled=true, plaintext HTTP probes "
+            "can exercise service-access endpoints without TLS."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace the passthrough pattern with an enforcement pattern: "
+            "when X-ServiceAccessToken is absent or validateServiceAccessToken returns null, "
+            "call response.sendError(HttpServletResponse.SC_UNAUTHORIZED) and return — "
+            "do NOT call chain.doFilter(). "
+            "Set hxSvcHttpEnabled=false and hyperVSvcHttpEnabled=false to require TLS "
+            "for all inter-service communication."
+        ),
+    },
 }
 
 
