@@ -5575,6 +5575,66 @@ FINDINGS = {
             "Set world:anyone:none ACL on all sensitive ZK paths as a defense-in-depth measure."
         ),
     },
+    "HX-F103": {
+        "title": (
+            "ZkConnectionManager.setAuthToken() Uses Boolean.getBoolean(propertyValue) Instead of "
+            "Boolean.parseBoolean(propertyValue) — ZooKeeper Client Authentication Permanently "
+            "Disabled Regardless of storfs.cfg Configuration"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.6",
+        "cwe": "CWE-303",
+        "component": (
+            "com.cisco.hxdp.zk.client.ZkConnectionManager / setAuthToken() / "
+            "zkcluster service — ZK connection management"
+        ),
+        "evidence": {
+            "wrong_api_call": (
+                "setAuthToken() offset 6-16: "
+                "getPropertyFromStorfsCfg('useZkAuth', 'false') -> String; "
+                "Boolean.getBoolean(thatString) -> Z. "
+                "Boolean.getBoolean(String name) reads a JVM system property by name, "
+                "NOT the boolean value of the string. "
+                "When storfs.cfg has useZkAuth=true, getPropertyFromStorfsCfg returns 'true'; "
+                "Boolean.getBoolean('true') checks System.getProperty('true') — "
+                "no such JVM property exists — returns false. "
+                "Auth token is NEVER applied regardless of configuration."
+            ),
+            "correct_api": (
+                "Fix requires Boolean.parseBoolean(propertyValue), which parses the string "
+                "value directly: Boolean.parseBoolean('true') -> true. "
+                "Boolean.getBoolean(name) is the wrong overload."
+            ),
+            "no_auth_in_local_manager": (
+                "ZkLocalConnectionManager.getConnectedClient() at offset 66: "
+                "CuratorFrameworkFactory.newClient('localhost:2181', retryPolicy). "
+                "Uses newClient() (not builder()); no setAuthToken() call in connection sequence. "
+                "Local ZK connections are always unauthenticated even if global auth were fixed."
+            ),
+            "skip_on_failure_config": (
+                "setAuthToken() exception handler at offset 139: "
+                "cfg.getBoolean('zkConfig.client.skipZkAuthOnFailure'). "
+                "When skipZkAuthOnFailure=true (reference.conf default), auth failure is silently "
+                "ignored and the unauthenticated client is used anyway. "
+                "Defense in depth fails at two layers."
+            ),
+            "distinct_from_hx_f102": (
+                "HX-F102 documents HxCuratorManager (gateway service) with orElse(Boolean.FALSE) default. "
+                "HX-F103 documents ZkConnectionManager (zkcluster service) with Boolean.getBoolean() misuse — "
+                "the configuration option is structurally inoperative, not merely defaulted off. "
+                "Different component, different root cause, same net effect."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace Boolean.getBoolean(value) with Boolean.parseBoolean(value) in "
+            "ZkConnectionManager.setAuthToken(). "
+            "Rewrite ZkLocalConnectionManager.getConnectedClient() to use CuratorFrameworkFactory.builder() "
+            "and apply setAuthToken() after connection. "
+            "Set zkConfig.client.skipZkAuthOnFailure=false in reference.conf so auth failures surface. "
+            "See HX-F102 for full ZK auth remediation guidance."
+        ),
+    },
 }
 
 
