@@ -1354,6 +1354,145 @@ FINDINGS = {
             "credential injection instead."
         ),
     },
+    "HX-F33": {
+        "title": "SPPrivilegeAuthImpl Trusts X-RootSessionID Header for User Identity — Localhost Caller Gets User Impersonation",
+        "severity": "HIGH",
+        "component": (
+            "authfilter-1.0.0.jar deployed as shared Tomcat lib; "
+            "com.springpath.hx.aaa.filters.privilegeAuthFilter.SSOPrivilegeAuthImpl.doFilter(); "
+            "all WARs on Tomcat (coreapi, auth, dataprotection, encryption, iscsi, securityservice, "
+            "slservice, backupservice, supportservice, hxupgrade)"
+        ),
+        "description": (
+            "SSOPrivilegeAuthImpl is the first servlet filter in every HyperFlex REST API WAR's "
+            "filter chain. When an inbound HTTP request includes the X-RootSessionID header, the "
+            "filter calls HxSecurity.getInstance().getLocalSessionId() and compares the header "
+            "value against the result. If they match, the filter does NOT perform JWT or credential "
+            "validation — instead it reads X-LoggedInUser, X-Scope, and X-RequestInitiator from "
+            "the same HTTP request and sets com.springpath.hx.aaa.authenticateduser to the "
+            "caller-supplied X-LoggedInUser value, then marks the request Authenticated=True "
+            "before passing to chain.doFilter(). The authenticated identity is fully "
+            "caller-controlled: any caller who can present a valid X-RootSessionID can "
+            "authenticate as any user including local/admin with any scope. The local session ID "
+            "is generated at service startup via HxSecurity and its storage location has not "
+            "been confirmed, but candidates include ZooKeeper state and local filesystem paths "
+            "under /etc/springpath/. Any process with localhost access, or any SSRF gadget in "
+            "the REST stack (see HX-F30, HX-F31), that can obtain or predict the local session "
+            "ID can submit requests authenticated as any cluster user, bypassing all JWT, "
+            "session cookie, Kerberos, and basic-auth filter stages. X-AllClients: ALL-CLIENTS "
+            "in the same filter additionally sets client scope to 'ALL-CLIENTS' without "
+            "per-user token validation, broadening ServiceAccessAuth scope."
+        ),
+        "code_evidence": {
+            "filter_class": (
+                "com.springpath.hx.aaa.filters.privilegeAuthFilter.SSOPrivilegeAuthImpl "
+                "(authfilter-1.0.0.jar; shared Tomcat lib)"
+            ),
+            "bypass_header": "X-RootSessionID",
+            "identity_control_header": "X-LoggedInUser (caller-controlled)",
+            "scope_control_header": "X-Scope: READ | MODIFY (caller-controlled)",
+            "initiator_header": "X-RequestInitiator (caller-controlled)",
+            "session_id_source": "HxSecurity.getInstance().getLocalSessionId()",
+            "attribute_set_on_bypass": (
+                "com.springpath.hx.aaa.authenticateduser = X-LoggedInUser; "
+                "com.springpath.hx.aaa.authenticateduserscope = X-Scope; "
+                "Authenticated = True"
+            ),
+            "all_clients_path": (
+                "X-AllClients: ALL-CLIENTS -> checkAndSetClientId() -> "
+                "com.springpath.hx.aaa.clientid = 'ALL-CLIENTS' (no token check)"
+            ),
+            "filter_position": "Position 2 of 7; before SessionAuth, KerberosAuth, ServiceAccessAuth, SPBasicAuth, SPAuth",
+            "log_sentinel": (
+                "'Got a good xRootSessionID, but one these headers were not set: {}, {}, {}' — "
+                "three companion headers required but caller-supplied"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423 (all JAX-RS REST API WARs via shared authfilter lib)"],
+        "remediation": (
+            "Accept X-RootSessionID only from 127.0.0.1 at the network layer. Derive authenticated "
+            "user identity from the local session record, not from caller-supplied X-LoggedInUser. "
+            "Rotate local session ID periodically and store it in a memory-only location. "
+            "Audit all requests that arrive with X-RootSessionID or X-AllClients headers."
+        ),
+    },
+    "HX-F34": {
+        "title": "All GET Requests Exempt from Audit Logging — Silent Read-Path Exfiltration Window",
+        "severity": "MEDIUM",
+        "component": (
+            "authfilter-1.0.0.jar/application.conf; "
+            "com.springpath.hx.aaa.filters.utils.AAAFilterHelper; "
+            "com.springpath.hx.aaa.filters.auditFilter.AuditFilterImpl; "
+            "config: sysmgmt.auditHttpVerbsToSkip = [\"GET\"]"
+        ),
+        "description": (
+            "AuditFilterImpl (position 1 of 7 in every WAR filter chain) checks "
+            "AAAFilterHelper.auditHttpVerbsToSkip before writing audit log entries. "
+            "The shipped configuration 'auditHttpVerbsToSkip = [\"GET\"]' means no GET request "
+            "to any HyperFlex REST API endpoint generates an audit log entry regardless of what "
+            "data is returned. This covers all read-path endpoints across coreapi (clusters, "
+            "datastores, nodes, snapshots, VMs, network config), dataprotection (replication "
+            "peers with credentials, groups, schedules), backupservice (policies, VM snapshots), "
+            "slservice (licensing), and all other WARs. An attacker with a valid token can "
+            "enumerate cluster topology, snapshot inventory, replication peer credentials "
+            "via GET /dataprotection/v1/peers, VM lists, and all other read-accessible data "
+            "with no audit trail. Combined with the 18-day token lifetime (HX-F35), this "
+            "provides a persistent silent reconnaissance window."
+        ),
+        "code_evidence": {
+            "config_path": "authfilter-1.0.0.jar/application.conf",
+            "config_key": "sysmgmt.auditHttpVerbsToSkip = [\"GET\"]",
+            "audit_filter": "com.springpath.hx.aaa.filters.auditFilter.AuditFilterImpl",
+            "helper_method": "AAAFilterHelper.isSkipHttpVerbForAudit(httpVerb)",
+            "example_silent_endpoints": (
+                "GET /coreapi/v1/clusters, GET /coreapi/v1/datastores, "
+                "GET /coreapi/v1/summary, GET /dataprotection/v1/peers, "
+                "GET /dataprotection/v1/storageVolumeGroup, GET /backupservice/v1/vms"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove GET from auditHttpVerbsToSkip. Audit all authenticated API requests "
+            "regardless of HTTP verb. Apply anomaly detection to per-session GET request volumes."
+        ),
+    },
+    "HX-F35": {
+        "title": "Default JWT Session Token Lifetime of 18 Days — Persistent Access After Single Credential Compromise",
+        "severity": "MEDIUM",
+        "component": (
+            "authfilter-1.0.0.jar/application.conf; "
+            "sysmgmt.defaultTokenLifeTime = 1555200000 ms (18 days)"
+        ),
+        "description": (
+            "HyperFlex REST API session tokens (JWT) have a default lifetime of 1,555,200,000 "
+            "milliseconds (18 days). A token obtained via credential compromise, phishing, or "
+            "SSRF-based impersonation (HX-F33) remains valid for 18 days without "
+            "re-authentication. Because the token format is JWT (stateless validation possible), "
+            "a password change does not invalidate existing tokens unless the server maintains "
+            "a revocation list. The idle timeout (1,800,000 ms = 30 min) mitigates dormant "
+            "sessions, but a low-volume attacker polling at sub-30-minute intervals keeps "
+            "the token active for the full 18-day window while generating no audit log entries "
+            "for GET-method polling (HX-F34). maxSessionsPerUser = 8 and maxTotalSessions = 16 "
+            "are low enough that an attacker holding a token does not noticeably consume session "
+            "capacity."
+        ),
+        "code_evidence": {
+            "config_path": "authfilter-1.0.0.jar/application.conf",
+            "defaultTokenLifeTime_ms": "1555200000",
+            "defaultTokenLifeTime_days": "18.0",
+            "defaultIdleTimeout_ms": "1800000 (30 min)",
+            "maxSessionsPerUser": "8",
+            "maxTotalSessions": "16",
+            "rateLimitWindow": "15 min, max 5 auth attempts",
+            "failedLoginLockout": "10 attempts then 120s lockout",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Reduce defaultTokenLifeTime to 8 hours (28800000 ms) maximum. "
+            "Implement server-side token revocation tied to password change events. "
+            "Invalidate all existing tokens when cluster admin credentials are rotated."
+        ),
+    },
 }
 
 
