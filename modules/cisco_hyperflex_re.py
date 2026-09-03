@@ -1831,6 +1831,69 @@ FINDINGS = {
             "require explicit operator confirmation via a separate signed request channel."
         ),
     },
+    "HX-F43": {
+        "title": "Unauthenticated Key Encryption Key (KEK) HTTP Endpoint on Port 35333",
+        "severity": "CRITICAL",
+        "component": (
+            "hxdp-connector (Go 1.23.4 binary, UPX-packed, 25MB unpacked, stripped .symtab). "
+            "Module: github-hyc.scm.engit.cisco.com/starship/diesel/encryption. "
+            "Source: diesel/code/diesel/encryption/encryption_handler.go. "
+            "Struct: (*EncryptionClient). Handler registered by StartEncryptionHandler on HTTP mux."
+        ),
+        "description": (
+            "The hxdp-connector binary listens on port 35333 and serves a Key Encryption Key (KEK) "
+            "retrieval endpoint via the getKeyEncryptionKeyHandler method. The registered HTTP handler "
+            "closure (getKeyEncryptionKeyHandler.func1, PC=0x9e9ec0) dispatches directly to an inner "
+            "handler at 0x9e9f20 with no authentication check before executing KEK retrieval. "
+            "The inner handler creates a KeyEncryptionKeyType struct (runtime.newobject), calls "
+            "barcelona/adio/json.NewContextWithSkipCustom (0x8746a0) and json.UnmarshalWithCtx "
+            "(0x874a20) to parse the request, then calls adcore.UnmarshalJsonToMo* (0x9884a0) to "
+            "serialize and return the KEK. There is no Authorization header read, no JWT token "
+            "validation, and no session check at any point in this dispatch chain. "
+            "The baseHandler method (PC=0x9e9ca0) is a 10-instruction value-packing stub that "
+            "immediately returns; it is not an auth middleware. "
+            "The apollo/base.appHandler.HandleWithAuth function is present in the binary (JWT "
+            "validation via jwt/v4 library) but is not wired to this handler. "
+            "Any unauthenticated caller that can reach port 35333 can retrieve the cluster KEK."
+        ),
+        "code_evidence": {
+            "binary": "hxdp-connector (UPX-unpacked, Go 1.23.4, stripped, 25.7MB)",
+            "port": 35333,
+            "handler_method": "(*EncryptionClient).getKeyEncryptionKeyHandler @ PC=0x9e9b40",
+            "registered_closure": "getKeyEncryptionKeyHandler.func1 @ PC=0x9e9ec0",
+            "inner_dispatch": "anonymous inner handler @ 0x9e9f20 (called from func1 with no auth check)",
+            "call_sequence": [
+                "0x9e9f50: runtime.newobject (allocate KeyEncryptionKeyType struct)",
+                "0x9e9fa0: barcelona/adio/json.NewContextWithSkipCustom @ 0x8746a0 (request parse context)",
+                "0x9e9fc0: barcelona/adio/json.UnmarshalWithCtx @ 0x874a20 (unmarshal request JSON)",
+                "0x9e9ff5: barcelona/adcore.UnmarshalJsonToMo* @ 0x9884a0 (serialize KEK response)",
+            ],
+            "auth_check": "NONE — no Authorization header read, no JWT parse, no middleware gate",
+            "baseHandler_confirmed_stub": (
+                "baseHandler @ 0x9e9ca0: 10 instructions, saves 6 args to stack, "
+                "packs rsi+r8 into rax+rbx, immediate ret — value-packing stub, not auth middleware"
+            ),
+            "HandleWithAuth_unused": (
+                "apollo/base.appHandler.HandleWithAuth present in binary "
+                "(jwt/v4 RSA validation via jwt.SigningMethodRSA) but not called from this handler chain"
+            ),
+            "kek_type_descriptor": "KeyEncryptionKeyType @ 0xfe1900 (struct, size confirmed by newobject call)",
+            "start_handler_fn": "StartEncryptionHandler @ PC=0x9e9ae0 (thin wrapper, no auth setup)",
+            "pclntab_source": (
+                "Function PCs confirmed via Go 1.23 pclntab (magic=0xfffffff1, "
+                "plain null-terminated funcnametab, textStart=0x401000)"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Gate the :35333 KEK endpoint with mutual TLS client certificate authentication "
+            "or require a signed bearer token (using the existing jwt/v4 RSA infrastructure "
+            "already in the binary via HandleWithAuth). "
+            "Bind the listener to 127.0.0.1 only if the KEK endpoint is only needed by "
+            "co-located processes. "
+            "Rotate any KEK material that may have been retrieved from exposed deployments."
+        ),
+    },
 }
 
 
