@@ -5242,6 +5242,165 @@ FINDINGS = {
             "to prevent forged setMetaData requests."
         ),
     },
+    "HX-F97": {
+        "title": (
+            "HXStigZKMonitor Executes apply_stig_current_node.py with ZooKeeper-Controlled "
+            "Argument via Runtime.exec(String) — Unauthenticated ZK Write Disables STIG "
+            "Compliance on ESXi and VM Nodes"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "6.5",
+        "cwe": "CWE-284",
+        "component": (
+            "hxSecuritySvcMgr / HXStigZKMonitor / applyStig / "
+            "/opt/hyperflex/storfs-stig/apply_stig_current_node.py"
+        ),
+        "class": "Unauthenticated ZK Write Triggers Privileged Script with Attacker-Controlled Argument",
+        "confirmed": True,
+        "evidence": {
+            "zk_watcher_setup": (
+                "HXStigZKMonitor constructor: "
+                "registerNodeCacheListenerForPath('/stig/esxi/isEnabled', lambda1); "
+                "registerNodeCacheListenerForPath('/stig/vm/isEnabled', lambda2). "
+                "Both NodeCache watchers call applyStig(zkData) on any ZK node change."
+            ),
+            "applyStig_exec": (
+                "applyStig(String zkData) at offsets 16-33: "
+                "scriptPath = '/opt/hyperflex/storfs-stig/apply_stig_current_node.py'; "
+                "cmd = scriptPath + ' ' + zkData;  // String concatenation "
+                "Process p = Runtime.getRuntime().exec(cmd);  // exec(String) - whitespace tokenization. "
+                "Runtime.exec(String) does NOT invoke /bin/sh; splits on whitespace via StringTokenizer. "
+                "Shell metacharacters (;, |, &&) are passed as literal args to the Python script. "
+                "ZK data becomes argument(s) to the script."
+            ),
+            "impact_scope": (
+                "Default ZK ACL world:anyone:cdrwa allows unauthenticated write. "
+                "Attacker writes 'false' to /stig/esxi/isEnabled → script invoked with arg 'false'. "
+                "Script is expected to disable STIG hardening for ESXi nodes. "
+                "If apply_stig_current_node.py uses shell=True internally with sys.argv[1], "
+                "shell injection is also possible — Python script source not available for confirmation."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Set ZK ACL on /stig/ path subtree to restrict writes to authenticated ZK sessions only. "
+            "Validate ZK data against an allowlist ('true'/'false') before passing to the script. "
+            "Replace Runtime.exec(String) with ProcessBuilder(['script', validatedArg]) "
+            "to prevent tokenization ambiguity."
+        ),
+    },
+    "HX-F98": {
+        "title": (
+            "HXCertificateZKMonitor Overwrites NGINX TLS Certificate and Private Key from "
+            "ZooKeeper Path /certificates/hxcertificate — Unauthenticated ZK Write Enables "
+            "MITM of All HTTPS Management Traffic with Explicit SFI Suppression"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.1",
+        "cwe": "CWE-284",
+        "component": (
+            "hxSecuritySvcMgr / HXCertificateZKMonitor / writeSslCert + writeSslKey + restartNginx / "
+            "/etc/nginx/server.crt + /etc/nginx/server.key"
+        ),
+        "class": "Unauthenticated ZK Write Replaces nginx TLS Cert/Key + Suppresses Integrity Check",
+        "confirmed": True,
+        "evidence": {
+            "zk_watcher_setup": (
+                "HXCertificateZKMonitor.registerNodeCacheListener(): "
+                "zkClient.registerNodeCacheListenerForPath('/certificates/hxcertificate', $1). "
+                "NodeCache watcher fires on any ZK data change to /certificates/hxcertificate."
+            ),
+            "nodeChanged_chain": (
+                "HXCertificateZKMonitor$1.nodeChanged() at offset 28-87: "
+                "zkClient.getDataInPath('/certificates/hxcertificate', Type<HxCertificate>) -> hxCert; "
+                "writeSslCert(hxCert.getCertificateString()); "
+                "writeSslKey(hxCert.getPrivateKeyString()); "
+                "restartNginx()."
+            ),
+            "writeSslCert_direct_write": (
+                "writeSslCert(String) at offsets 0-56: "
+                "File(NGINX_CERT_PATH).setReadable(true, false); "
+                "PrintWriter(NGINX_CERT_PATH, 'UTF-8').print(zkData); // direct unvalidated write "
+                "NGINX_CERT_PATH = '/etc/nginx/server.crt' (from application.conf nginx.CertificatePath)."
+            ),
+            "writeSslKey_direct_write": (
+                "writeSslKey(String): analogous to writeSslCert. "
+                "NGINX_KEY_PATH = '/etc/nginx/server.key' (from application.conf nginx.PrivateKeyPath)."
+            ),
+            "sfi_suppression": (
+                "After restartNginx() at offset 90: "
+                "logger.warn('Supressed SFI - Baseline Update for System File Integrity is Skipped!'). "
+                "System File Integrity monitoring is explicitly bypassed after cert/key write — "
+                "replacement is not flagged by integrity monitoring."
+            ),
+            "zk_access_model": (
+                "Default ZK ACL: world:anyone:cdrwa. "
+                "ZK port 2181 unauthenticated (confirmed in application.conf: defaultConnectionString='localhost:2181'). "
+                "HX-F95 confirms ZK listens on cluster IP with no mandatory auth."
+            ),
+            "exploit_scenario": (
+                "Attacker with ZK write access (port 2181, no auth required by default): "
+                "1. Construct HxCertificate JSON with attacker-controlled cert+key strings; "
+                "2. zkCli.sh -server <clusterIP>:2181 set /certificates/hxcertificate '<json>'; "
+                "3. NodeCache watcher fires; nginx cert/key replaced; nginx restarted; SFI suppressed; "
+                "4. All HTTPS traffic to HyperFlex management (port 443) is now MITM-able. "
+                "5. Attacker-controlled cert in place — login credentials harvested from HX Connect."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Set ZK ACL on /certificates/ subtree to restrict writes to authenticated sessions only. "
+            "Do not accept raw cert/key material from ZK without signature verification by a trusted CA. "
+            "Replace direct PrintWriter write with a CA-signed certificate rotation workflow. "
+            "Do not suppress SFI — cert changes must trigger an integrity baseline update, not skip it."
+        ),
+    },
+    "HX-F99": {
+        "title": (
+            "HXPasswordPolicyMonitor Applies Password Aging Policy from ZooKeeper Path "
+            "/apl/passwordPolicy/clusterPasswordPolicy — Unauthenticated ZK Write "
+            "Weakens Password Policy for admin and diag Accounts"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-284",
+        "component": (
+            "hxSecuritySvcMgr / HXPasswordPolicyMonitor / setPwMinDays / chage / "
+            "/apl/passwordPolicy/clusterPasswordPolicy"
+        ),
+        "class": "Unauthenticated ZK Write Modifies PAM Password Policy via chage",
+        "confirmed": True,
+        "evidence": {
+            "zk_watcher_setup": (
+                "HXPasswordPolicyMonitor constructor: "
+                "zkClient.registerNodeCacheListenerForPath(ZK_PATH, lambda). "
+                "ZK_PATH = '/apl/passwordPolicy/clusterPasswordPolicy' "
+                "(from application.conf passwordPolicy.passwordPolicyZkPath)."
+            ),
+            "setPwMinDays_exec": (
+                "setPwMinDays(int days): "
+                "CHAGE_CMD_TEMPLATE = 'chage -m %d %s' (from application.conf chageCmdTemplate). "
+                "For each user in USERS=[admin, diag]: "
+                "cmd = String.format(template, days, username).split(' '); "
+                "exec(String[]) - safe array form, no injection."
+            ),
+            "impact": (
+                "ZK data is parsed as JSON password policy object (Gson TYPE). "
+                "Attacker writes JSON setting minDays=0 or maxDays=99999 "
+                "to /apl/passwordPolicy/clusterPasswordPolicy. "
+                "Password aging (chage -m) for admin and diag accounts is set to attacker-controlled value. "
+                "Also modifies /etc/pam.d/common-password "
+                "(PAM_CONF_PATH = application.conf passwordPolicy.commonPasswordPamConfPath). "
+                "Weakens complexity/history enforcement across all local accounts."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Set ZK ACL on /apl/passwordPolicy/ to restrict writes to authenticated sessions. "
+            "Validate parsed policy values against minimum acceptable thresholds before applying. "
+            "Alert/log when password policy values are weakened below baseline."
+        ),
+    },
 }
 
 
