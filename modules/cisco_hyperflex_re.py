@@ -4674,6 +4674,64 @@ FINDINGS = {
             "See HX-F78 remediation for the authoritative fix template."
         ),
     },
+    "HX-F89": {
+        "title": (
+            "SedUcsmReadonlyUserMgr Stores Plaintext UCSM Credentials "
+            "(ucsmHostName + username + password) in ZooKeeper with OPEN_ACL_UNSAFE"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-312",
+        "component": (
+            "stmgr / SedUcsmReadonlyUserMgr / StClusterEncryptionUcsmReadonlyUser Thrift struct / "
+            "ZooKeeper ServiceDiscovery at /storvisor/ basePath with OPEN_ACL_UNSAFE"
+        ),
+        "class": "Cleartext Storage of Sensitive Information in World-Readable ZooKeeper Path",
+        "confirmed": True,
+        "evidence": {
+            "credential_struct": (
+                "StClusterEncryptionUcsmReadonlyUser Thrift struct fields (bytecode-verified): "
+                "ucsmHostName:String, username:String, password:String. "
+                "All three fields are public instance members. "
+                "Serialized via TJSONProtocol (plaintext JSON) by SedUcsmReadonlyUserMgrSerializer."
+            ),
+            "zk_path": (
+                "SedUcsmReadonlyUserMgr.init() registers via Curator ServiceDiscovery. "
+                "basePath = StMgrImpl.BASE_PATH = '/storvisor'. "
+                "Service discovery path: /storvisor/SedUcsmReadonlyUserMgr/instances/<uuid>. "
+                "Payload = JSON-serialized StClusterEncryptionUcsmReadonlyUser including plaintext password."
+            ),
+            "acl_context": (
+                "ZooKeeper cluster uses OPEN_ACL_UNSAFE (Id='world', Perms=ALL). "
+                "See HX-F55 (ZK OPEN_ACL_UNSAFE). "
+                "Any process with TCP access to ZK port 2181 can read /storvisor/... without credentials."
+            ),
+            "credential_role": (
+                "These are UCSM (UCS Manager) readonly credentials used for "
+                "drive encryption key management (SED — Self-Encrypting Drive). "
+                "Access to UCSM management plane from these credentials enables reading drive "
+                "encryption policy configuration and potentially key management parameters."
+            ),
+        },
+        "impact": (
+            "Plaintext UCSM management plane credentials stored in world-readable ZooKeeper. "
+            "Any process on the HyperFlex cluster — or any host with network access to ZK port 2181 "
+            "that is not blocked by iptables rules — can retrieve UCSM hostname, username, and password "
+            "without authentication. UCSM access via these credentials enables inspection of drive "
+            "encryption policy configuration and may expose additional management plane attack surface. "
+            "Compounded by HX-F55 (OPEN_ACL_UNSAFE on all ZK nodes) and HX-F69 (auth permanently disabled)."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Store UCSM credentials in the StorvisorKeystore (AES-encrypted JKS at "
+            "/etc/hyperflex_shadow — see HX-F41) rather than in ZooKeeper. "
+            "If ZooKeeper storage is required, encrypt the credential payload before storing "
+            "and decrypt only at retrieval time; do not store plaintext JSON. "
+            "Additionally, restrict ZooKeeper access to localhost or cluster-internal IPs only "
+            "and apply proper ACLs (see HX-F55 remediation). "
+            "Rotate UCSM readonly credentials after any disclosure event."
+        ),
+    },
 }
 
 
