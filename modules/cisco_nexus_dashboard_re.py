@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F67 (MEDIUM). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F72 (MEDIUM). 13 attack chains.
   ND-F56 HIGH: CIMC creds + cluster passphrase as CLI argv — /proc/pid/cmdline exposure
   ND-F57 HIGH: CIMC SSH StrictHostKeyChecking=no — full bootstrap MITM surface
   ND-F58 HIGH: KexAlgorithms=+diffie-hellman-group1-sha1 — Logjam-vulnerable KEX fallback
@@ -35,6 +35,16 @@ Findings: ND-F01 (CRITICAL) through ND-F67 (MEDIUM). 13 attack chains.
   ND-F60 HIGH: spm-lcm CGo GPGME key_secret/subkey_secret — private signing key extraction
   ND-F61 HIGH: spm-lcm contains firmwared code — enlarged blast radius (install/upgrade/kubectl)
   ND-F62 MEDIUM: spm-lcm signature verify pipeline — 4-stage crypto; private key bypass via ND-F60
+
+Cross-version RE (3.2.2m -> 4.3.1, nd-dk9.4.3.1.175.iso, go1.25.8, Aug 21 2026):
+  ND-F68 INFO:   ND-F64 FIXED — shell=True removed; findUsage now uses subprocess list form
+  ND-F69 HIGH:   ND-F57 PARTIAL FIX — line 158 upgraded HostKeyAlgorithms to rsa-sha2-256/512;
+                 line 229 (OOB path) still uses ssh-rsa; StrictHostKeyChecking=no persists both
+  ND-F70 HIGH:   ND-F58 PERSISTS — KexAlgorithms=+diffie-hellman-group1-sha1 line 164 unchanged
+  ND-F71 MEDIUM: firmwared extracted to standalone container in 4.3.1; spm-lcm now calls via API
+                 (GPGME CGo bindings removed from spm-lcm — ND-F60 surface moved, not eliminated)
+  ND-F72 MEDIUM: SECRETS path changed: /mnt/atom/logmgr/ -> /opt/cisco/logmgr/ (ND-F67 persists)
+                 ND-F56/F58/F65/F66 persist unchanged across both versions
 """
 
 import socket
@@ -2180,6 +2190,96 @@ FINDINGS = {
         "source_file": "logmgr:/usr/bin/log_sanitize.py",
         "file_path": "/mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt",
         "access_vector": "/mnt/atom is hostPath shared across pods — readable from any pod with mntatom mount",
+    },
+
+    # ── Cross-version RE: 3.2.2m -> 4.3.1 delta ─────────────────────────────────
+    "ND-F68": {
+        "title": "4.3.1 Fix: ND-F64 shell=True Command Injection Remediated",
+        "severity": "INFO",
+        "component": "logmgr/log_handler.py (4.3.1)",
+        "version_delta": "3.2.2m -> 4.3.1",
+        "fix_description": (
+            "findUsage() changed from f-string + shell=True to argv list form.\n"
+            "3.2.2m: cmd = 'df -h {} --output=pcent | tail -n1'.format(directory)\n"
+            "        proc = subprocess.run(cmd, shell=True, ...)\n"
+            "4.3.1:  cmd = ['df', '-h', directory, '--output=pcent']\n"
+            "        proc = subprocess.run(cmd, ...)  # no shell=True"
+        ),
+        "status": "FIXED in 4.3.1",
+        "note": "Injection path via K8s annotation hostPath -> findUsage(self.dir) eliminated",
+        "references": ["ND-F63", "ND-F64"],
+    },
+    "ND-F69": {
+        "title": "4.3.1 Partial Fix: HostKeyAlgorithms Hardened on Primary Path, OOB Path Still Uses ssh-rsa",
+        "severity": "HIGH",
+        "component": "bootstrap/scripts/bootstrap-common.expect (4.3.1)",
+        "version_delta": "3.2.2m -> 4.3.1",
+        "code_evidence": {
+            "line 158 (FIXED)":   "spawn ssh -l $user -o HostKeyAlgorithms=rsa-sha2-256,rsa-sha2-512 -o StrictHostKeyChecking=no ...",
+            "line 164 (UNFIXED)": "spawn ssh -l $user -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 $cimc",
+            "line 229 (UNFIXED)": "spawn ssh -l $user -o HostKeyAlgorithms=ssh-rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $oobip",
+        },
+        "analysis": (
+            "Line 158 (CIMC primary path) upgraded HostKeyAlgorithms from ssh-rsa to rsa-sha2-256,rsa-sha2-512. "
+            "Line 229 (OOB IP path) still uses ssh-rsa (deprecated RFC 8332). "
+            "StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null persist on ALL three spawn sites — "
+            "the MITM attack surface from ND-F57 is unchanged. "
+            "Pattern: single grep-and-replace fix, not an audit of all call sites."
+        ),
+        "status": "PARTIAL FIX — MITM surface (ND-F57) unchanged; OOB path still uses ssh-rsa",
+        "references": ["ND-F57"],
+    },
+    "ND-F70": {
+        "title": "4.3.1 Persists: Logjam KEX Fallback Unchanged — KexAlgorithms=+diffie-hellman-group1-sha1",
+        "severity": "HIGH",
+        "component": "bootstrap/scripts/bootstrap-common.expect (4.3.1)",
+        "version_delta": "3.2.2m -> 4.3.1",
+        "code_evidence": {
+            "bootstrap-common.expect:164 (4.3.1)": (
+                "spawn ssh -l $user -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                "-o KexAlgorithms=+diffie-hellman-group1-sha1 $cimc"
+            ),
+        },
+        "status": "UNFIXED — identical to 3.2.2m",
+        "references": ["ND-F58"],
+    },
+    "ND-F71": {
+        "title": "4.3.1 Architecture Change: firmwared Extracted to Standalone Container; GPGME Surface Relocated",
+        "severity": "MEDIUM",
+        "component": "spm-lcm (4.3.1) + firmwared container",
+        "version_delta": "3.2.2m -> 4.3.1",
+        "build_info": {
+            "3.2.2m_spm_lcm": "go1.19.10, path golang.cisco.com/bootstrap/cmd/spm-lcm",
+            "4.3.1_spm_lcm":  "go1.25.8, path golang.cisco.com/bootstrap/cmd/spm-lcm",
+        },
+        "analysis": (
+            "In 3.2.2m, spm-lcm contained firmwared code (golang.cisco.com/spm/cmd/firmwared/errors.init) "
+            "and CGo GPGME bindings (Cfunc_key_secret, Cfunc_subkey_secret) for private signing key access. "
+            "In 4.3.1: firmwared is a standalone container; spm-lcm calls it via API "
+            "('Firmwared API: {{.appUrl}} failed with error: {{.err}}'). "
+            "CGo GPGME bindings absent from 4.3.1 spm-lcm binary — moved to firmwared process. "
+            "ND-F60 class finding persists but requires firmwared binary analysis in 4.3.1."
+        ),
+        "pending": "firmwared 4.3.1 binary extraction and GPGME CGo analysis",
+        "references": ["ND-F60", "ND-F61"],
+    },
+    "ND-F72": {
+        "title": "4.3.1 Persists: Log Sanitization Bypasses Unchanged; SECRETS Path Relocated",
+        "severity": "MEDIUM",
+        "component": "logmgr/log_sanitize.py (4.3.1)",
+        "version_delta": "3.2.2m -> 4.3.1",
+        "secrets_path_change": {
+            "3.2.2m": "SECRETS = '/mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt'",
+            "4.3.1":  "SECRETS = '/opt/cisco/logmgr/etc/sanitize-config/sanitize-ts.txt'",
+        },
+        "persisting_findings": {
+            "ND-F65": "sanitizeTarball() unbounded recursion — tar bomb DoS",
+            "ND-F66": "done-flag bypass — os.path.exists(done_flag) skips sanitization permanently",
+            "ND-F67": "SECRETS file inventory exposed (path changed but pattern unchanged)",
+            "ND-F56": "node_join.expect argv[2]=token, argv[3]=password — unchanged",
+        },
+        "status": "ND-F65/F66/F67/F56 all UNFIXED in 4.3.1",
+        "references": ["ND-F65", "ND-F66", "ND-F67", "ND-F56"],
     },
 }
 
