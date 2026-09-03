@@ -4490,6 +4490,131 @@ FINDINGS = {
             "address systemically (see HX-F78 remediation)."
         ),
     },
+    "HX-F86": {
+        "title": (
+            "SupportbundleApiServiceImpl generateAndDeliverSupportBundle 'manifestFile' Parameter "
+            "Unsanitized Interpolation into Shell Command Enables OS Command Injection on All Cluster Nodes"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.9",
+        "cwe": "CWE-78",
+        "component": (
+            "supportservice-1.0.0 WAR / SupportbundleApiServiceImpl / "
+            "generateAndDeliverSupportBundle(AsupCliConfiguration) / "
+            "GenerationThread.run() / HxSupportSvcClient.executeCmd()"
+        ),
+        "class": "OS Command Injection — manifestFile Interpolated into Shell Command Sent to All Cluster VMs",
+        "confirmed": True,
+        "evidence": {
+            "injection_point": (
+                "AsupCliConfiguration.getManifestFile() → local var 6 in generateAndDeliverSupportBundle. "
+                "Constant pool #770/#771: 'asupcli post --type custom-asup --manifestfile \\u0001' — "
+                "makeConcatWithConstants at offset 544 interpolates manifestFile directly into command string. "
+                "No validation, no character filtering: only null and length > 0 checks (offsets 531-539). "
+                "Trigger: type == 'custom-asup' AND manifestFile != null AND len > 0."
+            ),
+            "execution_chain": (
+                "generateAndDeliverSupportBundle offset 581-603: "
+                "new GenerationThread(this, cmd, type, genStatus, config).start(). "
+                "GenerationThread.run() offset 175-180: "
+                "invokevirtual HxSupportSvcClient.executeCmd(this.cmd, nodeList). "
+                "HxSupportSvcClient.executeCmd() offset 14-20: "
+                "invokevirtual HxSupportSvc$Client.runCmdInAllVm(String cmd, List<String> args) — Thrift RPC."
+            ),
+            "shell_execution_proof": (
+                "GenerationThread.run() offset 87: ldc 'ps aux | grep \\'[a]supcli generate --type\\'' — "
+                "pipe and shell quoting syntax proves hxSupportSvc daemon executes commands via shell. "
+                "Constant pool #762/#763: 'nohup asupcli generate --type \\u0001 > /dev/null 2>&1 &' — "
+                "nohup, stdout redirection, and background execution operator are shell-only constructs."
+            ),
+            "cluster_wide_impact": (
+                "HxSupportSvc$Client.runCmdInAllVm() — method name 'InAllVm' indicates command is "
+                "dispatched to all virtual machines in the cluster via the hxSupportSvc Thrift service. "
+                "A single authenticated request injects commands on every node simultaneously."
+            ),
+            "payload_example": (
+                "POST /v1/supportbundle body: "
+                "{\"action\":\"generate\", \"type\":\"custom-asup\", \"manifestFile\":\"x; id; #\"} "
+                "→ shell executes: asupcli post --type custom-asup --manifestfile x; id; # "
+                "→ 'id' runs as the hxSupportSvc service user on every cluster node."
+            ),
+        },
+        "impact": (
+            "Authenticated attacker with any valid HyperFlex management credential can inject arbitrary OS "
+            "commands that execute on ALL cluster nodes simultaneously. "
+            "The hxSupportSvc daemon runs with sufficient privilege to access cluster state and credentials. "
+            "Shell metacharacters (;, &&, |, $(), backtick) in the manifestFile parameter are not filtered "
+            "before insertion into the command string, and the hxSupportSvc daemon executes via shell "
+            "(confirmed by pipe/nohup/redirection usage in adjacent code paths). "
+            "Authentication is required but any valid management user (not just admin) can trigger this endpoint."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Validate manifestFile against an allow-list of permitted characters before interpolation "
+            "(alphanumeric, hyphen, dot, forward slash only). "
+            "Alternatively, pass manifestFile as a separate Thrift argument rather than interpolating "
+            "it into a command string — the executeCmd signature accepts List<String> args for this purpose. "
+            "Do not construct shell command strings from user input; pass parameters as positional arguments "
+            "to a structured Thrift call that the daemon executes without shell interpretation."
+        ),
+    },
+    "HX-F87": {
+        "title": (
+            "supportservice-1.0.0 WAR Contains Three Independent trustAll() Implementations "
+            "Each Globally Disabling TLS Certificate Validation via HttpsURLConnection JVM Override"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": (
+            "supportservice-1.0.0 WAR / HxSupportSvcClient / HxSvcMgrClient / StMgrClient — "
+            "three independent trustAll() implementations, each with inner-class $1 (X509TrustManager) "
+            "and $2 (HostnameVerifier) no-op bypass"
+        ),
+        "class": "TLS Certificate Validation Bypass — Three Concurrent Global JVM Overrides in Support Service WAR",
+        "confirmed": True,
+        "evidence": {
+            "HxSupportSvcClient": (
+                "trustAll() offsets 39/52: HttpsURLConnection.setDefaultSSLSocketFactory + setDefaultHostnameVerifier JVM-WIDE. "
+                "openClient() offset 1: invokevirtual trustAll() before THttpClient('https://localhost/hxsupportsvc')."
+            ),
+            "HxSvcMgrClient": (
+                "trustAll() offsets 39/52: same global JVM override pattern. "
+                "openClientHttp() offset 1: invokevirtual trustAll() before THttpClient('http://\\u0001:9341'). "
+                "Thrift transport to hxSvcMgr on port 9341 is plain HTTP — bypass has no purpose for this transport "
+                "but globally disables TLS validation for all other HTTPS connections in the WAR JVM."
+            ),
+            "StMgrClient": (
+                "trustAll() offsets 39/52: same global JVM override pattern. "
+                "openClient() offset 1: invokevirtual trustAll() before THttpClient('https://localhost/stmgr'). "
+                "This is the sixth instance of the StMgrClient pattern (HX-F78 in encryption WAR, "
+                "this instance in supportservice WAR)."
+            ),
+            "cumulative_scope": (
+                "Each time any of the three client classes opens a connection, it re-executes the global JVM "
+                "SSLSocketFactory and HostnameVerifier overrides. In the supportservice JVM, whichever client "
+                "is instantiated first sets the global state; all subsequent clients reinforce it. "
+                "All HTTPS connections from the supportservice JVM — including any external call-home, "
+                "certificate fetch, or vendor ASUP upload channel — lose TLS validation."
+            ),
+        },
+        "impact": (
+            "Three independent trustAll() implementations in the support service WAR compound the global JVM "
+            "TLS bypass. The support service handles ASUP (automated support protocol) uploads, support bundle "
+            "delivery, and remote support configuration — all outbound channels that may carry system state "
+            "or telemetry to external endpoints. MITM against any of these channels is undetectable. "
+            "This is the sixth (StMgrClient), seventh (HxSupportSvcClient), and eighth (HxSvcMgrClient) "
+            "independent instances of this pattern across the HyperFlex WAR deployment."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove all three trustAll() implementations. "
+            "HxSvcMgrClient connects to HTTP (port 9341) — no SSL override is needed at all. "
+            "HxSupportSvcClient and StMgrClient connect to HTTPS localhost; "
+            "use a pinned CA-specific SSLSocketFactory scoped to the connection, not the JVM default. "
+            "This is the sixth, seventh, and eighth instance of the same root cause (see HX-F78 remediation)."
+        ),
+    },
 }
 
 
