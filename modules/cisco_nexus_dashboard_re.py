@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F37 (MEDIUM). 12 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F39 (HIGH). 12 attack chains.
 """
 
 import socket
@@ -1215,6 +1215,55 @@ FINDINGS = {
         "ports": {"sql_wire": 26257, "admin_http": 8088},
         "chain": "ND-F03 etcd KMS -> extract client.root.key -> cockroach sql --certs-dir=. --host=cockroachdb.cisco-ndfc.svc:26257 -> full NDFC DB",
         "combined_with": ["ND-F03", "ND-F30"],
+    },
+    "ND-F38": {
+        "title": "nodemgr Node Registration Endpoint authType:open — Unauthenticated ND Cluster Node Join",
+        "severity": "HIGH",
+        "component": "config-controller / nodemgr APIGW (nodemgr.tpl), nodectrlr-svc:8990 /api/action/v0/nodes/register",
+        "description": (
+            "The nodemgr APIGW configuration exposes /api/config/registernode with authType: open, "
+            "routing to nodectrlr-svc:8990/api/action/v0/nodes/register (HTTP, not HTTPS). "
+            "Node registration is the mechanism by which new ND cluster members are added. "
+            "The DenyAppUserRole middleware blocks application users, but authType: open means "
+            "no JWT or session token is required — the endpoint accepts unauthenticated requests. "
+            "The sibling endpoints for node RMA and failover both use authType: jwt, making "
+            "the open registration anomalous rather than intentional. "
+            "An attacker with APIGW network access can submit a node registration request for "
+            "an attacker-controlled host, potentially injecting a rogue ND node into the cluster "
+            "that would then receive cluster sync data, etcd peer connections, and KMS certificate material."
+        ),
+        "apigw_listen_path": "/api/config/registernode",
+        "backend": "http://nodectrlr-svc:8990/api/action/v0/nodes/register",
+        "auth_type": "open",
+        "sibling_endpoints": {
+            "/api/config/rmanode": "authType: jwt",
+            "/api/config/failovernode": "authType: jwt",
+        },
+        "impact": "Rogue node injection into ND cluster -> receive cluster sync, etcd peering, KMS cert material",
+        "chain": "POST /api/config/registernode (no auth) -> nodectrlr registers attacker host -> cluster sync to rogue node",
+    },
+    "ND-F39": {
+        "title": "securitymgr KMS CA Endpoint authType:open — Cluster CA Configuration Readable Without Authentication",
+        "severity": "HIGH",
+        "component": "securitymgr APIGW (securitymgr.yml), securitymgr-svc:8989 /api/config/ca",
+        "description": (
+            "The securitymgr APIGW exposes /sedgeapi/v1/kms/ca/ with authType: open, "
+            "routing to securitymgr-svc:8989/api/config/ca over HTTPS. "
+            "This endpoint exposes the ND KMS CA configuration — certificate chain details, "
+            "CA identity, and potentially CA operational parameters. "
+            "The securitymgr service manages the cluster's PKI root (KMS CA) and is the same "
+            "service that exposes the passphrase debug endpoint (ND-F17) and credential store dump (ND-F18). "
+            "Without authentication, any host that can reach the APIGW can GET /sedgeapi/v1/kms/ca/ "
+            "to enumerate the cluster CA configuration. "
+            "If the endpoint accepts POST/PUT (CA injection), an attacker could add a rogue CA "
+            "to the trust store without authentication, enabling MITM against all mTLS connections."
+        ),
+        "apigw_listen_path": "/sedgeapi/v1/kms/ca/",
+        "backend": "https://securitymgr-svc:8989/api/config/ca",
+        "auth_type": "open",
+        "impact": "CA config read (cert chain, CA identity); potential CA injection if endpoint is writable",
+        "combined_with": ["ND-F17", "ND-F18", "ND-F03"],
+        "chain": "GET /sedgeapi/v1/kms/ca/ (no auth) -> cluster CA chain enumeration -> pivot to ND-F17 passphrase dump",
     },
 }
 
