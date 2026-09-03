@@ -5084,6 +5084,88 @@ FINDINGS = {
             "for all inter-service communication."
         ),
     },
+    "HX-F95": {
+        "title": (
+            "HXPasswordMonitor Syncs System Passwords from ZooKeeper Path /user_credentials "
+            "for root/admin/diag Accounts — ZK Write Without Verified ACL Enforcement "
+            "Enables Unauthenticated Cluster-Wide Password Reset"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.8",
+        "cwe": "CWE-284",
+        "component": (
+            "hxSecuritySvcMgr / HXPasswordMonitor / PasswordOperations.setPasswordsFromZK / "
+            "setSystemPassword / /opt/hyperflex/setpasswd.sh — "
+            "ZooKeeper-triggered system account password synchronization"
+        ),
+        "class": "Improper Access Control — Unauthenticated ZK Write Triggers System Password Reset",
+        "confirmed": True,
+        "evidence": {
+            "zk_watcher_trigger": (
+                "HXPasswordMonitor constructor at offset 14-26: "
+                "zkClient.registerNodeCacheListenerForPath(ZK_PATH, lambda). "
+                "ZK_PATH = ApplicationConstants.passwordZkPath = "
+                "configured as 'sysmgmt.password.zkPath' from application.conf: '/user_credentials'. "
+                "Curator NodeCache watcher fires lambda$new$0 on any data change at /user_credentials."
+            ),
+            "lambda_trigger_chain": (
+                "lambda$new$0 at offset 0-44: "
+                "1. data = zkClient.getDataInPath('/user_credentials', Type<String>); "
+                "2. ops = new PasswordOperations(new CommandRunner()); "
+                "3. ops.setPasswordsFromZK(data). "
+                "No authentication check on the ZK data source before processing."
+            ),
+            "setPasswordsFromZK_flow": (
+                "PasswordOperations.setPasswordsFromZK(String zkData) at offset 0-45: "
+                "1. localShadow = readSPShadowFile() — reads local springpath shadow file; "
+                "2. if (zkData.equals(localShadow)) return (no-op if unchanged); "
+                "3. creds = mapCredentialsString(zkData) — parses ZK data into username->hash map; "
+                "4. setSystemPasswords(creds) — applies each credential pair."
+            ),
+            "setSystemPassword_exec": (
+                "setSystemPassword(String username, String password): "
+                "String[] cmd = [\"/opt/hyperflex/setpasswd.sh\", username, password]; "
+                "runner.run(cmd, 10000). "
+                "CommandRunner executes via String[] (no shell expansion). "
+                "Executed for each entry in the credential map from ZK data."
+            ),
+            "sync_scope": (
+                "application.conf: password.syncEnabled=true, "
+                "password.syncAccounts=[\"root\", \"admin\", \"diag\"]. "
+                "All three privileged accounts are within the synchronization scope. "
+                "Successful ZK write to /user_credentials results in simultaneous "
+                "password reset for root, admin, and diag across affected nodes."
+            ),
+            "zk_access_model": (
+                "check_zk.sh confirms ZK port 2181 accepts unauthenticated four-letter word commands "
+                "(echo srvr|nc $zks 2181, echo cons|nc $zks 2181, echo dump|nc $LEADER 2181) "
+                "without any authentication. "
+                "Default ZK ACL is world:anyone:cdrwa (full read+write for unauthenticated clients). "
+                "ZK SASL/Digest authentication is not confirmed configured for the HyperFlex ZK ensemble. "
+                "Exploitability depends on whether /user_credentials has restrictive ACLs set "
+                "at provisioning time — this is not confirmed from static analysis."
+            ),
+        },
+        "impact": (
+            "If ZK ACLs on /user_credentials are not restricted: "
+            "unauthenticated attacker reaching ZK port 2181 can write crafted credential data, "
+            "triggering HXPasswordMonitor to call setPasswords via /opt/hyperflex/setpasswd.sh "
+            "for root, admin, and diag accounts. "
+            "Attack surface: ZK 2181 is an internal cluster port but may be reachable from "
+            "compromised HyperFlex node, guest VM on storage network, or misconfigured firewall. "
+            "Impact: cluster-wide root account compromise across all stCtlVM nodes "
+            "using Curator's ServiceDiscovery (all nodes share the same ZK ensemble)."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Set ZK ACLs on /user_credentials to restrict writes to authenticated ZK sessions "
+            "used by the security service only (Digest or SASL auth). "
+            "Enable ZK requireClientAuthScheme=sasl or digest on the HyperFlex ZK ensemble. "
+            "Add an integrity check in setPasswordsFromZK: verify ZK data is signed by "
+            "a key known only to the security service before applying to system accounts. "
+            "Restrict ZK port 2181 to localhost or HyperFlex management VLAN only via firewall rules."
+        ),
+    },
 }
 
 
