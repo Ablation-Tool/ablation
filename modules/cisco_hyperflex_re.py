@@ -3266,6 +3266,130 @@ FINDINGS = {
             "4. Rotate Hyper-V credentials on any system where this ZK path was readable."
         ),
     },
+
+    "HX-F66": {
+        "title": "ESX/vCenter/ctlvm Passwords Passed as Base64-Encoded Command-Line Arguments (stDeploy)",
+        "severity": "MEDIUM",
+        "cvss": "5.5",
+        "cwe": "CWE-214",
+        "component": "stDeploy-1.0.jar / StDeployImpl / getEncodedPassword / secureboot script invocation",
+        "class": "Sensitive Information in Process Arguments",
+        "confirmed": True,
+        "evidence": {
+            "getEncodedPassword_impl": (
+                "StDeployImpl.getEncodedPassword(String pw) at offset 0-22: "
+                "pw.getBytes() -> Base64.encodeBase64String([B) -> new String(encoded). "
+                "Apache Commons Codec Base64 — standard encoding, NOT encryption, trivially reversible."
+            ),
+            "arg_construction": (
+                "Bytecode offset 64-185 in secureboot script method: "
+                "String[9] = [scriptPath, '--ctlvmIp', ctlvmIp, '--ctlvmPassword', "
+                "getEncodedPassword(ctlvmPassword), '--esxPassword', "
+                "getEncodedPassword(esxPassword.getOrElse('')), '--esxHosts', esxHostsCsv]. "
+                "Array passed to Seq.apply() then stringSeqToProcess() — "
+                "scala.sys.process.Process with args as separate tokens (no shell). "
+                "ProcessBuilder.lines() invoked — subprocess spawned with these argv tokens."
+            ),
+            "process_table_exposure": (
+                "Subprocess argv is readable via /proc/<pid>/cmdline (null-delimited). "
+                "ps(1) output includes full argv. Process audit logs (auditd execve) capture argv. "
+                "Base64 decode: echo '<encoded>' | base64 -d recovers plaintext password. "
+                "Three credential classes exposed: ESX root password (--esxPassword), "
+                "vCenter password (--vCenterPassword, also Base64 via getEncodedPassword at "
+                "offsets 86-103 and 97-115), ctlvm admin password (--ctlvmPassword)."
+            ),
+            "scope": (
+                "Pattern appears in at least two method bodies in StDeployImpl "
+                "(secureboot script method and addNodes path, offsets ~6388 and ~6953). "
+                "All three credential types encoded identically — same getEncodedPassword call."
+            ),
+        },
+        "impact": (
+            "Any process on the stCtlVM management node with /proc read access (default on Linux) "
+            "can recover ESX root, vCenter, and Controller VM passwords during active "
+            "cluster deployment or node-add operations. "
+            "ESX root compromise allows hypervisor-level control of all HyperFlex nodes. "
+            "vCenter compromise enables full virtualization management plane access. "
+            "ctlvm password grants access to the HyperFlex storage controller."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Use environment variables or a credential store (e.g., the JCEKS keystore) "
+            "to pass passwords to deployment scripts — not command-line arguments. "
+            "2. If args are required, use a named pipe or stdin pipe to the script. "
+            "3. Apply PR_SET_DUMPABLE=0 and restrict /proc/<pid> visibility for the deployment service. "
+            "4. Rotate ESX, vCenter, and ctlvm credentials after any deployment operation."
+        ),
+    },
+
+    "HX-F67": {
+        "title": "Passphrase-less RSA Key Regeneration Silently Overwrites /root/.ssh/id_rsa (stDeploy)",
+        "severity": "HIGH",
+        "cvss": "7.1",
+        "cwe": "CWE-321",
+        "component": "stDeploy-1.0.jar / StDeployImpl / $anonfun$regenerateKeys$1 / $anonfun$enableSecureShell$1",
+        "class": "Unprotected Credentials / Key Management Failure",
+        "confirmed": True,
+        "evidence": {
+            "regenerateKeys_impl": (
+                "$anonfun$regenerateKeys$1 bytecode (offset 0-50): "
+                "Seq('/bin/bash', '-c', "
+                "'/usr/bin/yes y | ssh-keygen -m PEM -t rsa -N \"\" -f /root/.ssh/id_rsa -q').!! "
+                "Flags: -N \"\" (empty passphrase), -f /root/.ssh/id_rsa (fixed output path), "
+                "-q (quiet, no stderr output). "
+                "'/usr/bin/yes y |' pipes 'y\\ny\\n...' to ssh-keygen overwrite prompt — "
+                "existing /root/.ssh/id_rsa unconditionally destroyed without backup. "
+                "Result is PEM RSA private key with no passphrase at /root/.ssh/id_rsa."
+            ),
+            "key_usage": (
+                "$anonfun$enableSecureShell$1 bytecode (offset 31-76): "
+                "Seq('/bin/bash', '-c', "
+                "'ssh -i /root/.ssh/id_rsa root@' + hostIp + "
+                "' /usr/share/secureshell-config/enable_secureshell.sh').!! "
+                "Key at /root/.ssh/id_rsa used for root@<esxHost> SSH — "
+                "authorizes the management node to run commands as root on all ESX hosts. "
+                "Key is implicitly trusted across the full cluster."
+            ),
+            "no_passphrase": (
+                "Private key stored at /root/.ssh/id_rsa with -N \"\" (no passphrase). "
+                "/root/.ssh/ permissions are 700 by default on Linux, but the file itself "
+                "is 600 — readable by root processes. Any root-level process or SUID binary "
+                "on the stCtlVM can read and use the key. "
+                "Key loss (theft, backup, coredump, snapshot) directly enables root SSH "
+                "to all ESX hosts in the cluster."
+            ),
+            "overwrite_behavior": (
+                "'/usr/bin/yes y |' ensures ssh-keygen answers 'y' to 'Overwrite (y/n)?'. "
+                "Prior key (if any, e.g., manually configured or from a previous deploy) "
+                "is destroyed with no notification. "
+                "authorized_keys on ESX hosts is updated separately — if the old public key "
+                "remains in authorized_keys after regeneration, the new private key will "
+                "not work until authorized_keys is also updated."
+            ),
+        },
+        "impact": (
+            "1. Key confidentiality: passphrase-less private key stored on management node — "
+            "any root-level process (including attacker with HX-F01 command injection) "
+            "can extract and reuse it to authenticate as root to all cluster ESX hosts. "
+            "2. Key integrity: silent overwrite destroys prior key without backup, "
+            "potentially breaking existing admin automation or leaving stale public keys "
+            "in ESX authorized_keys (authorized_keys drift). "
+            "3. Combined with HX-F55/HX-F65: attacker who reads ZK for Hyper-V creds "
+            "also gains passphrase-less SSH to ESX hosts via /root/.ssh/id_rsa, "
+            "yielding hypervisor root across the full cluster."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Generate the key with a passphrase and store it in a secrets manager "
+            "or the JCEKS keystore — load at runtime via ssh-agent or keystore API. "
+            "2. If passphrase-less is required for automation, restrict /root/.ssh/id_rsa "
+            "permissions to 0400 and ensure the management node's root account is "
+            "only accessible through audited channels. "
+            "3. Before regenerating, archive the existing key to a secure backup location. "
+            "4. After regeneration, atomically update all ESX host authorized_keys entries "
+            "before the old private key is destroyed."
+        ),
+    },
 }
 
 
