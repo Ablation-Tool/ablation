@@ -4812,6 +4812,125 @@ FINDINGS = {
             "Ensure cleanup runs in a finally block to guarantee deletion even on exception paths."
         ),
     },
+    "HX-F91": {
+        "title": (
+            "connector_ctl backup Produces Unencrypted Tarball of connector.db "
+            "Containing Intersight AccessKeyId and AccessKey — Planned Encryption Not Implemented"
+        ),
+        "severity": "HIGH",
+        "cvss": "6.5",
+        "cwe": "CWE-312",
+        "component": (
+            "hxdp Intersight Device Connector / connector_ctl backup operation / "
+            "connector.db SQLite database at <install-location>/db/connector.db"
+        ),
+        "class": "Cleartext Storage of Sensitive Information — Incomplete Security Control Implementation",
+        "confirmed": True,
+        "evidence": {
+            "backup_command": (
+                "connector_ctl backup <install-location> <target-dir>: "
+                "Line 42: 'tar -czf $3/connector.tgz $2/db/connector.db'. "
+                "Produces unencrypted gzip tarball of connector.db. "
+                "Line 44: '# TODO - encrypt pkg' — encryption was planned but not implemented."
+            ),
+            "credential_scope": (
+                "connector.db contains Intersight cloud management API credentials: "
+                "AccessKeyId and AccessKey (Intersight API key pair). "
+                "Confirmed by tech_support operation (line 23-24): "
+                "'sed /AccessKeyId/d $3/connector.db > ... && sed /AccessKey/d $3/connector.db > ...' "
+                "which explicitly strips these fields from tech-support output — "
+                "confirming their presence and sensitivity."
+            ),
+            "contrast_with_tech_support": (
+                "tech_support operation redacts AccessKeyId and AccessKey before copying. "
+                "backup operation copies connector.db WITHOUT redaction or encryption. "
+                "The asymmetry indicates the developer recognized credential sensitivity "
+                "for tech-support bundles but left the backup path unprotected."
+            ),
+            "backup_location": (
+                "Backup written to $3/connector.tgz where $3 is caller-supplied target directory. "
+                "No access controls enforced on the output tarball."
+            ),
+        },
+        "impact": (
+            "Any user or process with read access to the backup target directory can extract "
+            "connector.tgz and recover Intersight API credentials (AccessKeyId + AccessKey) in plaintext. "
+            "Intersight API access enables full remote management plane control: "
+            "cluster configuration, firmware upgrade orchestration, policy enforcement, "
+            "and potentially pivoting to other Cisco-managed infrastructure registered with the same Intersight account. "
+            "Backups are likely written to NFS-mounted shared storage (/nfs/SYSTEM/) accessible to all cluster nodes."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Implement the planned encryption for backup tarballs — use AES-GCM with a key derived "
+            "from the StorvisorKeystore (see HX-F41) or a cluster-unique backup key. "
+            "As an interim measure, redact AccessKeyId and AccessKey from the backup using the same "
+            "sed filtering already implemented for tech_support output. "
+            "Set restrictive permissions (0600) on the output tarball. "
+            "Remove the TODO comment and enforce the security control before release."
+        ),
+    },
+    "HX-F92": {
+        "title": (
+            "connector_ctl restore Extracts Untrusted Tarball Directly to Filesystem Root "
+            "with No Integrity Verification — Arbitrary File Write via Crafted Tarball"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-22",
+        "component": (
+            "hxdp Intersight Device Connector / connector_ctl restore operation / "
+            "tar extraction to -C / (filesystem root)"
+        ),
+        "class": "Path Traversal via Unsafe Archive Extraction — Arbitrary File Write",
+        "confirmed": True,
+        "evidence": {
+            "restore_command": (
+                "connector_ctl restore <install-location> <source-config>: "
+                "Line 62: 'tar xzf $3 -C /'. "
+                "Extracts the caller-supplied tarball ($3) directly to the filesystem root (/). "
+                "No integrity check (no signature, no HMAC, no hash comparison). "
+                "No path sanitization of tarball entries before extraction."
+            ),
+            "no_decryption": (
+                "Line 58: '# TODO - decrypt'. "
+                "Decryption was planned but not implemented — confirming the TODO in backup/restore pair. "
+                "Absence of decryption means any tarball is accepted regardless of origin."
+            ),
+            "path_traversal_vector": (
+                "GNU tar with -C / extracts entries relative to /. "
+                "Tarball entries with symlinks (e.g., 'db -> /etc/cron.d') redirect subsequent "
+                "file writes to arbitrary filesystem paths. "
+                "Absolute-path entries are stripped by default but symlink-based traversal "
+                "(tar CVE-2007-4131 class) survives. "
+                "Combined with lack of integrity check: attacker supplies crafted connector.tgz "
+                "containing symlink entries to overwrite /etc/cron.d/*, /etc/sudoers.d/*, "
+                "or connector binary at /opt/partner/cisco-hxdc-run/hxdc_latest/hxdp."
+            ),
+            "unquoted_variable": (
+                "Line 62: 'tar xzf $3 -C /' — $3 is unquoted. "
+                "Path containing spaces or shell metacharacters causes unpredictable behavior or injection."
+            ),
+        },
+        "impact": (
+            "An attacker who can supply a crafted tarball to connector_ctl restore "
+            "(via backup/restore Thrift RPC, NFS path manipulation, or post-initial-access file write) "
+            "can write arbitrary files to the root filesystem. "
+            "Overwriting /opt/partner/cisco-hxdc-run/hxdc_latest/hxdp replaces the connector binary "
+            "executed by upstart — local root or persistent backdoor. "
+            "Overwriting /etc/cron.d/ achieves code execution as root on next cron cycle. "
+            "All cluster nodes run the same connector and may be vulnerable simultaneously."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Implement the planned decryption and add HMAC-SHA256 signature verification "
+            "before tarball extraction. "
+            "Validate all tarball entry paths against an allowlist (e.g., only "
+            "./db/connector.db and no symlinks) before extraction. "
+            "Quote all shell variables in connector_ctl to prevent word-splitting/globbing injection. "
+            "Use tar --no-overwrite-dir --no-same-permissions and verify entry count matches expected."
+        ),
+    },
 }
 
 
