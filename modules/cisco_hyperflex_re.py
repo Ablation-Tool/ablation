@@ -3390,6 +3390,113 @@ FINDINGS = {
             "before the old private key is destroyed."
         ),
     },
+
+    "HX-F68": {
+        "title": "stNodeMgr Session Token Derived from Public Key File via Shell Subprocess",
+        "severity": "LOW",
+        "cvss": "3.3",
+        "cwe": "CWE-798",
+        "component": "stNodeMgr-1.0.jar / StNodeMgrImpl / $anonfun$sessionToken$1",
+        "class": "Hardcoded/Static Credential",
+        "confirmed": True,
+        "evidence": {
+            "token_init": (
+                "$anonfun$sessionToken$1 bytecode (offset 0-17): "
+                "scala.sys.process.stringToProcess('cat /etc/hyperflex/secure/root_file.pub').!! .trim "
+                "— string-mode shell execution (no Seq wrapping), string passed to /bin/sh -c. "
+                "Result stored in StNodeMgrImpl.sessionToken field at constructor offset 143-169: "
+                "Try { $anonfun$sessionToken$1() }.toOption.getOrElse($anonfun$sessionToken$2()). "
+                "Fallback ($anonfun$sessionToken$2): returns literal String 'invalid-token' on any failure."
+            ),
+            "token_usage": (
+                "sessionToken field (putfield #927) is set once at construction time. "
+                "Used as X-RootSessionID header in outgoing internal Thrift calls from stNodeMgr "
+                "to hxdp services (hxSecuritySvcMgr, hxdprestintServer). "
+                "Token = contents of /etc/hyperflex/secure/root_file.pub — a public key file "
+                "(.pub suffix), not a secret. Public key material is not secret by design."
+            ),
+            "fallback_token": (
+                "If /etc/hyperflex/secure/root_file.pub is absent or unreadable, "
+                "sessionToken = 'invalid-token' (hardcoded literal). "
+                "If the receiving service validates X-RootSessionID against the same file, "
+                "an absent root_file.pub causes all stNodeMgr Thrift calls to fail "
+                "with invalid-token — silent degradation of authentication."
+            ),
+        },
+        "impact": (
+            "The auth token for stNodeMgr-to-hxdp service calls is based on a PUBLIC key file. "
+            "Any process that can read /etc/hyperflex/secure/root_file.pub obtains the token "
+            "and can impersonate stNodeMgr to internal services. "
+            "The fallback to 'invalid-token' means authentication silently degrades if the file "
+            "is deleted or permissions are wrong, potentially blocking cluster operations "
+            "with no explicit error for the missing credential source."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Replace the static public-key-based token with a private secret "
+            "(e.g., a per-boot HMAC-SHA256 token stored in a tmpfs, or a short-lived JWT "
+            "signed by the keystore-resident private key at /etc/hyperflex/secure/hyperflex_keystore.jceks). "
+            "2. If the root_file.pub approach is retained, move token validation to a challenge-response "
+            "scheme where the server challenges with a nonce and stNodeMgr signs with its private key. "
+            "3. Remove the 'invalid-token' fallback — fail-closed, not fail-open on missing credentials."
+        ),
+    },
+
+    "HX-F69": {
+        "title": "ZK Client Auth Permanently Disabled Due to Boolean.getBoolean(value) API Misuse (ZkConnectionManager)",
+        "severity": "LOW",
+        "cvss": "3.1",
+        "cwe": "CWE-670",
+        "component": "zkClusterManager-1.0.jar / ZkConnectionManager / setAuthToken",
+        "class": "Incorrect Implementation — ZK Auth Inoperative",
+        "confirmed": True,
+        "evidence": {
+            "misuse": (
+                "ZkConnectionManager.setAuthToken() bytecode (offset 10-16): "
+                "String useZkAuthStr = GenericZkUtil.getPropertyFromStorfsCfg('useZkAuth', 'false'); "
+                "boolean useZkAuth = Boolean.getBoolean(useZkAuthStr). "
+                "Java.lang.Boolean.getBoolean(name) = Boolean.parseBoolean(System.getProperty(name)). "
+                "When storfs.cfg has 'useZkAuth=true': "
+                "  useZkAuthStr = 'true'; "
+                "  Boolean.getBoolean('true') = Boolean.parseBoolean(System.getProperty('true')); "
+                "  System.getProperty('true') = null (not a standard JVM property); "
+                "  result = false. Auth disabled regardless of storfs.cfg value. "
+                "Intended API: Boolean.parseBoolean(useZkAuthStr), not Boolean.getBoolean(useZkAuthStr)."
+            ),
+            "default_disabled": (
+                "When storfs.cfg is absent: getPropertyFromStorfsCfg returns default 'false'. "
+                "Boolean.getBoolean('false') = Boolean.parseBoolean(System.getProperty('false')) = false. "
+                "When storfs.cfg has useZkAuth=false: same result. "
+                "When storfs.cfg has useZkAuth=true: Boolean.getBoolean('true') = false (bug). "
+                "Only way to enable: start JVM with -DuseZkAuth=true system property "
+                "AND have storfs.cfg with useZkAuth=useZkAuth (self-referential). "
+                "Not documented; no admin can enable ZK auth via the intended config path."
+            ),
+            "consequence": (
+                "Client ZK authentication (addAuthInfo UUID scheme) is permanently disabled — "
+                "any process on the stCtlVM network can connect to ZooKeeper port 2181 "
+                "and read/write nodes without credentials. "
+                "Compounds HX-F55 (OPEN_ACL_UNSAFE): even if ACLs were fixed, "
+                "the ZK client auth token would not be attached to curator connections. "
+                "The skipZkAuthOnFailure=false default is a dead code path — "
+                "the auth failure branch (offset 121-172) is never reached."
+            ),
+        },
+        "impact": (
+            "ZK client authentication cannot be enabled via storfs.cfg configuration. "
+            "Administrators who believe they have enabled ZK auth by setting useZkAuth=true "
+            "in storfs.cfg have no protection — the config is silently ignored. "
+            "Combined with HX-F55 (OPEN_ACL_UNSAFE), all ZK nodes remain unauthenticated "
+            "and world-readable/writable regardless of configuration."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace Boolean.getBoolean(useZkAuthStr) with Boolean.parseBoolean(useZkAuthStr) "
+            "in ZkConnectionManager.setAuthToken(). "
+            "After the fix, validate that setting useZkAuth=true in storfs.cfg causes "
+            "addAuthInfo to be called with the cluster UUID token before each curator operation."
+        ),
+    },
 }
 
 
