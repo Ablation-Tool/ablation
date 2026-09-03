@@ -5635,6 +5635,77 @@ FINDINGS = {
             "See HX-F102 for full ZK auth remediation guidance."
         ),
     },
+    "HX-F104": {
+        "title": (
+            "ZKNodeService_StMgr Stores ESXi, vCenter, and UCSM Credentials in ZooKeeper as "
+            "Encrypted Payload Entries — All Three Credential Sets Accessible via "
+            "Unauthenticated ZK Read"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.8",
+        "cwe": "CWE-522",
+        "component": (
+            "com.storvisor.sysmgmt.stMgr.ZKNodeService_StMgr / "
+            "EsxAuthZKMgmtImpl / stMgr Thrift service — "
+            "cluster credential management via ZooKeeper"
+        ),
+        "evidence": {
+            "esx_credentials_in_zk": (
+                "ZKNodeService_StMgr fields: "
+                "STR_PAYLOAD_ENTRY_ESX_ENCRYPTED_USER, STR_PAYLOAD_ENTRY_ESX_ENCRYPTED_PASSWORD. "
+                "ZK keys: 'user_name', 'password' in 'credentials' payload node. "
+                "Written by EsxAuthZKMgmtImpl.updateAndSaveRandomEsxPasswordToZK() via "
+                "ZKNodeService_StMgr.setEsxCredentials(username, password). "
+                "Read by EsxAuthZKMgmtImpl.getEsxCredentialsFromZK() via "
+                "ZKNodeService_StMgr.getEsxCredentials() -> getOptionalValue_String(ESX_ENCRYPTED_USER/PASS)."
+            ),
+            "vcenter_credentials_in_zk": (
+                "ZKNodeService_StMgr fields: "
+                "STR_PAYLOAD_ENTRY_URL_VCENTER_ENCRYPTED_USER, STR_PAYLOAD_ENTRY_URL_VCENTER_ENCRYPTED_PASSWORD. "
+                "ZK key: 'vcuser'. vCenter SSO URL at ZK key 'opt_url_vcenter_sso'. "
+                "Full vCenter management credential set stored in same unauthenticated ZK node."
+            ),
+            "ucsm_credentials_in_zk": (
+                "ZKNodeService_StMgr fields: "
+                "STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_USER, STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_PASSWORD. "
+                "ZK keys: 'ucsmhost', 'ucsmuser', 'ucsmpwd'. "
+                "UCSM host, username, and password co-located in the same ZK credentials payload."
+            ),
+            "encryption_caveat": (
+                "All three credential sets use 'ENCRYPTED' prefix in field names — values are "
+                "not plaintext in ZK. EsxAuthZKMgmtImpl.getEsxCredentialsFromZK() performs "
+                "decryption after ZK read ('Failed to decrypt esx credential data' error path). "
+                "Decryption key source unconfirmed from available bytecode. "
+                "If decryption key follows HX-F101 pattern (key stored in same unauthenticated ZK), "
+                "effective severity elevates to CRITICAL (ZK read -> key + ciphertext -> plaintext). "
+                "If key derived from cluster UUID per HX-F96 pattern, UUID exposure (multiple "
+                "unauthenticated sources) enables decryption."
+            ),
+            "hardcoded_esx_username": (
+                "EsxAuthZKMgmtImpl constant pool offset 497: 'springpath'. "
+                "Service account username 'springpath' is hardcoded for ESXi login across all "
+                "HyperFlex deployments. Password is random and rotated, but fixed username "
+                "enables targeted credential attacks on any HyperFlex ESXi node."
+            ),
+            "zk_access_prerequisite": (
+                "ZK auth disabled by default (HX-F102) and structurally inoperative in "
+                "ZkConnectionManager (HX-F103). "
+                "ZK binds to cluster IP (HX-F95). "
+                "Attacker on management VLAN: "
+                "zkCli.sh -server <cluster-ip>:2181 get /storvisor/... -> "
+                "encrypted ESXi + vCenter + UCSM credentials in one ZK read session."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Enable ZK authentication (HX-F102/F103 remediation). "
+            "Isolate ZK port 2181 to localhost/management VLAN. "
+            "Ensure ESXi/vCenter/UCSM credential encryption keys are never stored "
+            "in the same unauthenticated ZK namespace as the ciphertext. "
+            "Audit the decryption key storage path for all three credential types. "
+            "Consider rotating all three credential sets after any ZK exposure incident."
+        ),
+    },
 }
 
 
