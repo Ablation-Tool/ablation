@@ -5520,6 +5520,61 @@ FINDINGS = {
             "Rotate Hyper-V credentials immediately if ZK was exposed."
         ),
     },
+    "HX-F102": {
+        "title": (
+            "ZooKeeper Client Authentication Disabled by Default in HyperFlex — "
+            "When Enabled, Auth Credential Incorporates Cluster UUID Derivable "
+            "from Unauthenticated REST API"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.6",
+        "cwe": "CWE-306",
+        "component": (
+            "hx-aaa / HxCuratorManager / createZkClient / isZKClientAuthEnabled / "
+            "ZooKeeper.addAuthInfo / storfs.cfg useZKAuth"
+        ),
+        "class": "ZK Auth Disabled by Default — Root Cause of ZK-Based Exposure Chain (F95/F97/F98/F99/F100/F101)",
+        "confirmed": True,
+        "evidence": {
+            "default_disabled": (
+                "HxCuratorManager static initializer: USE_ZK_AUTH = 'useZKAuth'. "
+                "isZKClientAuthEnabled() at offsets 97-138: "
+                "reads storfs.cfg lines; filters lines starting with 'useZKAuth'; "
+                "checks if value contains 'true'; returns orElse(Boolean.FALSE). "
+                "Default: false when 'useZKAuth=true' is not present in storfs.cfg. "
+                "createZkClient() at offset 64-67: if (!isZKClientAuthEnabled()) goto 161; "
+                "offset 161: stores client and returns — no auth info added."
+            ),
+            "auth_scheme_when_enabled": (
+                "createZkClient() when auth enabled (offsets 70-135): "
+                "clusterUuid = getClusterUuid() -> Files.readAllLines('/etc/hyperflex/clusteruuid').get(0); "
+                "clientId = config.getPropVal('sysmgmt.zkAuthClientId'); "
+                "authToken = clientId + clusterUuid; "
+                "ZooKeeper.addAuthInfo('UUID', authToken.getBytes(UTF_8)). "
+                "Auth scheme: 'UUID' (non-standard; not SASL). "
+                "Auth token: known config prefix + cluster UUID from /etc/hyperflex/clusteruuid. "
+                "Cluster UUID is exposed via unauthenticated /rest/v1/cluster endpoint (HX-F96). "
+                "An attacker who knows the clientId prefix and obtains the cluster UUID "
+                "can authenticate to ZK even when auth is enabled."
+            ),
+            "root_cause_of_chain": (
+                "This is the root architectural cause of: "
+                "HX-F95 (ZK password sync), HX-F97 (STIG bypass), HX-F98 (nginx cert MITM), "
+                "HX-F99 (password policy), HX-F100 (JWT key exposure), HX-F101 (Hyper-V creds). "
+                "All depend on unauthenticated ZK access. "
+                "Default install has ZK auth disabled."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Enable ZK authentication in all HyperFlex deployments: "
+            "set 'useZKAuth=true' in /etc/hyperflex/storfs.cfg on all nodes. "
+            "Replace the 'UUID' auth scheme with SASL/Kerberos or Digest with a strong, "
+            "randomly-generated secret (not derivable from cluster UUID). "
+            "Restrict ZK port 2181 to localhost or HyperFlex management VLAN via firewall. "
+            "Set world:anyone:none ACL on all sensitive ZK paths as a defense-in-depth measure."
+        ),
+    },
 }
 
 
