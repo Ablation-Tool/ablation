@@ -2537,23 +2537,33 @@ FINDINGS = {
                 "Compiled from StNodeMgr.java; no input validation at the interface layer."
             ),
             "service_architecture": (
-                "StNodeMgr is a Thrift service implemented in the storfs C++ binary. "
-                "com::storvisor::sysmgmt::StNonBlockingThriftServer instantiated twice: "
-                "(1) stNonBlockingServer — plaintext, runtime port (tune default 10207, storfs.cfg "
-                "     overrides to 9090 on appliance; StPlatform service); "
-                "(2) stNonBlockingEncServer — TLS, runtime port (tune default 10208; "
-                "     likely StNodeMgr or multiplexed service). "
-                "sysmtool C++ client hardcodes localhost:9090 for StPlatform calls. "
-                "StPlatformOperations::stNodeOps() symbol in storfs at 0x5e022 — "
-                "routes node-scoped operations through the StPlatform Thrift server at 9090 "
-                "as a sub-dispatcher, making StNodeMgr callable via StPlatform."
+                "StNodeMgr is a Java/Scala Finatra service (stNodeMgr-1.0.jar) running on "
+                "port 8997. Port read at startup via: "
+                "'cat /usr/share/hyperflex/storfs-misc/restintport.cfg | grep PORT' "
+                "(restintport.cfg contents: PORT=8997; confirmed from installer.qcow2). "
+                "Registered in ZooKeeper at path /storvisor/stNodeMgr. "
+                "Service waits for eth1 (data interface) before starting "
+                "(stNodeMgr.service ExecStartPre). "
+                "StNodeMgrImpl$ companion object constant 'SERVICE_PORT' stores runtime value. "
+                "ZK auth client ID: 'stNodeMgr' (sysmgmt.zkAuthClientId in application.conf)."
+            ),
+            "implementation": (
+                "StNodeMgrImpl.class (Scala) bytecode constants: "
+                "'Executing python script :' (log before exec); "
+                "'python3' (executable); "
+                "'Python script executed returned:' / 'Python script error returned:'. "
+                "Execution: Runtime.getRuntime().exec(String) called with 'python3' — "
+                "single-string exec form (no shell). Script content piped to process stdin "
+                "via Process.getOutputStream(). stdout captured via scala.io.Source.fromInputStream; "
+                "stderr captured separately. Process.waitFor() blocks until completion. "
+                "No timeout: an infinite loop in the script hangs the Thrift thread."
             ),
             "thrift_method": (
                 "StNodeMgr interface defines executePythonScript(1: string script) — "
                 "takes a raw Python script string with no further arguments. "
                 "Caller controls the ENTIRE script body. No sandboxing primitive at the "
                 "interface boundary (no allowed-modules list, no AST restriction, no timeout "
-                "constraint). Execution occurs in the process context of the storfs service."
+                "constraint). Execution occurs in the process context of the stNodeMgr JVM."
             ),
             "auth_posture": (
                 "Same X-RootSessionID header authentication as HX-F53. "
@@ -2563,13 +2573,12 @@ FINDINGS = {
             ),
         },
         "impact": (
-            "Attacker with network access to the management interface and knowledge of "
-            "X-RootSessionID (obtainable via HX-F13 keystore read or HX-F53) can submit "
-            "an arbitrary Python script to storfs via the StNodeMgr Thrift interface. "
-            "The script executes as the storfs process owner (root or springpath) on the "
-            "HyperFlex controller VM. Combined with HX-F53 (runCommand on hxSecuritySvcMgr), "
-            "two separate Thrift services independently expose OS-level code execution — "
-            "both protected by the same static shared secret."
+            "Attacker with network access to port 8997 on the controller VM management "
+            "interface and possession of X-RootSessionID (obtainable via HX-F13 keystore "
+            "read or HX-F55 ZK key forgery) can submit arbitrary Python code via the "
+            "StNodeMgr Thrift interface. Script executes as the stNodeMgr JVM process owner. "
+            "Script stdout/stderr returned in the Thrift response — confirms execution and "
+            "enables data exfiltration in a single round trip."
         ),
         "versions_affected": ["6.0.2b-44423"],
         "remediation": (
@@ -2578,8 +2587,7 @@ FINDINGS = {
             "mechanism (HMAC over script content with a key not accessible to remote callers). "
             "Migrate all internal Thrift services from static X-RootSessionID to per-session "
             "mTLS certificates so that token theft does not grant blanket access to all services. "
-            "Apply iptables DROP rules for Thrift management ports (9090, 10207, 10208) from "
-            "non-localhost sources."
+            "Apply iptables DROP rules for port 8997 from non-localhost sources."
         ),
     },
 
@@ -2817,6 +2825,64 @@ FINDINGS = {
             "an additional HMAC-signed challenge; destructive operations (shutdown, delete, purge) "
             "require a time-limited operator token issued via the authenticated REST API. "
             "Log all Thrift method calls with caller identity to nuclide.db or syslog."
+        ),
+    },
+
+    # ── HX-F59 ──────────────────────────────────────────────────────────────────
+    "HX-F59": {
+        "title": "SSH Private Keys Stored Plaintext and Encrypted in World-Readable ZooKeeper",
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-312",
+        "component": "stNodeMgr ZKService_StNodeMgr / ZKNodeService_StNodeMgr",
+        "class": "Cryptographic Key Exposure",
+        "confirmed": True,
+        "evidence": {
+            "zk_key_fields": (
+                "ZKService_StNodeMgr.class constant pool: "
+                "String 'ssh_encrypted_private_key' (#76); "
+                "String 'ssh_encrypted_public_key' (#80); "
+                "String 'ssh_plain_text_private_key' (#84); "
+                "String 'ssh_plain_text_public_key' (#88). "
+                "ZKNodeService_StNodeMgr.class: "
+                "'SSH encrypted private key not found in ZK' (#111); "
+                "'SSH encrypted public key not found in ZK' (#140). "
+                "Both encrypted and plaintext variants stored — plaintext variant "
+                "confirms unencrypted key material written to ZK in some code paths."
+            ),
+            "zk_path_structure": (
+                "StNodeMgrImpl$ companion object constants: ZK base path '/storvisor'; "
+                "service node 'stNodeMgr'; ZK server 'localhost:2181'. "
+                "SSH keys stored under /storvisor/stNodeMgr/<nodeId>/{ssh_plain_text_private_key, "
+                "ssh_encrypted_private_key, ssh_encrypted_public_key, ssh_plain_text_public_key}. "
+                "ZK ACL: same OPEN_ACL_UNSAFE world:anyone:cdrwa as /rest/aaa/jwt_signing_key "
+                "(HX-F55) — no CREATOR_ALL_ACL set on node creation."
+            ),
+            "zk_access": (
+                "ZK at localhost:2181 (application.conf: zkstandalonestr). "
+                "Management-network access confirmed consistent with HX-F55 analysis. "
+                "ZooKeeper client requires no auth to read world-readable nodes. "
+                "'zkctl get /storvisor/stNodeMgr/<uuid>/ssh_plain_text_private_key' "
+                "returns the key material directly."
+            ),
+        },
+        "impact": (
+            "An attacker with access to ZK port 2181 on any controller VM can extract "
+            "SSH private keys for all cluster nodes in a single ZK subtree walk. "
+            "ssh_plain_text_private_key exposes the raw PEM without requiring key derivation. "
+            "These keys authenticate inter-node SSH sessions used for cluster maintenance, "
+            "upgrade operations, and support bundle collection (HxSupportSvc.runCmdInAllVm). "
+            "Key material extraction enables lateral movement to all cluster controller VMs "
+            "without triggering password authentication failures or account lockout."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Set CREATOR_ALL_ACL on all ZK nodes under /storvisor/stNodeMgr/ at creation. "
+            "2. Remove the ssh_plain_text_private_key code path entirely — only the encrypted "
+            "variant should exist, and only with a key derivation key not stored in ZK. "
+            "3. Rotate all inter-node SSH keys after patching. "
+            "4. Firewall ZK port 2181 to cluster management VLAN only (not external management). "
+            "5. Audit all ZK subtrees for additional plaintext credential storage."
         ),
     },
 }
