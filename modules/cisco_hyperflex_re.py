@@ -1554,6 +1554,140 @@ FINDINGS = {
             "Invalidate all existing tokens when cluster admin credentials are rotated."
         ),
     },
+    "HX-F37": {
+        "title": "iSCSI CHAP Decrypt Key Material Co-located with Encrypted Secrets in /etc/hyperflex/secure/",
+        "severity": "HIGH",
+        "component": (
+            "iscsisvc (hx-iscsi package); custom Cisco extension to upstream istgt iSCSI target. "
+            "Source path: /opt/git/cypress/opensrc/istgt/src/chap_util.c"
+        ),
+        "description": (
+            "The iscsisvc binary decrypts CHAP secrets using a PKCS#12 keystore. "
+            "The keystore password is read from /etc/hyperflex/secure/hyperflex_security.properties "
+            "(XML element <entry key=\"keystore_password\">), and the keystore itself is at "
+            "/etc/hyperflex/secure/hyperflex_keystore.p12. Both artifacts are in the same directory "
+            "as other sensitive HyperFlex material (root_file.pub). Any principal with read access "
+            "to /etc/hyperflex/secure/ can extract the decryption key without ZooKeeper access, "
+            "then decrypt any CHAP secret read from ZooKeeper. The symmetric protection chain "
+            "is broken: the lock and the key are in the same box."
+        ),
+        "code_evidence": {
+            "binary": "iscsisvc (ELF 64-bit, not stripped, ~16MB)",
+            "decrypt_init_fn": "chap_decrypt_init @ 0x28ba30",
+            "key_path_fn": "hx_get_chap_key_path @ 0x28acb0",
+            "read_json_fn": "hx_read_chap_json_str @ 0x28acd0",
+            "keystore_password_file": "/etc/hyperflex/secure/hyperflex_security.properties",
+            "keystore_password_xml_key": "<entry key=\"keystore_password\">",
+            "keystore_file": "/etc/hyperflex/secure/hyperflex_keystore.p12",
+            "openssl_init_calls": (
+                "OPENSSL_init_crypto(0xc, NULL) [ADD_ALL_CIPHERS|ADD_ALL_DIGESTS]; "
+                "OPENSSL_init_crypto(0x2, NULL) [LOAD_CRYPTO_STRINGS]"
+            ),
+            "error_strings": [
+                "%sCHAP DECRYPT: Keystore password file not found",
+                "%sCHAP DECRYPT: Failure to parse keystore password",
+                "%sCHAP DECRYPT:decrypt_data error during fetching keystore password",
+                "%sCHAP DECRYPT:decrypt_data Invalid Keystore path",
+                "%sCHAP DECRYPT:decrypt_data Failure during keystore get",
+            ],
+            "sensitive_dir_also_contains": "root_file.pub (session bypass token, see HX-F33)",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Store the PKCS#12 keystore password in a separate hardware-backed secret store or "
+            "TPM-sealed location. Do not co-locate the keystore password with the keystore. "
+            "Restrict /etc/hyperflex/secure/ to root:root 0700 and audit all service accounts "
+            "that require read access."
+        ),
+    },
+    "HX-F38": {
+        "title": "iSCSI CHAP Credentials Stored in ZooKeeper at Predictable Path /chap/<target>",
+        "severity": "HIGH",
+        "component": (
+            "iscsisvc (hx-iscsi package); ZooKeeper credential store integration. "
+            "Source path: /opt/git/cypress/opensrc/istgt/src/chap_util.c"
+        ),
+        "description": (
+            "The iscsisvc binary reads iSCSI CHAP credentials from ZooKeeper at the path "
+            "/chap/<target_name> (format string /chap/%s). The ZK node contains a JSON object "
+            "{\"chapName\": \"...\", \"chapSecret\": \"<encrypted>\"}. The encrypted secret is "
+            "decryptable using key material from /etc/hyperflex/secure/ (see HX-F37). "
+            "ZooKeeper UUID-based auth is controlled by the CRMDB_ZKEnableUUIDAuth runtime flag "
+            "(not hardcoded on), making ZK node-level access control optional. "
+            "Both u-chap (initiator secret) and s-chap (target secret for mutual CHAP) are "
+            "loaded from this ZK path, meaning mutual CHAP secrets are equally exposed. "
+            "ZooKeeper Exhibitor is also accessible on port 8180 (see HX-F12)."
+        ),
+        "code_evidence": {
+            "binary": "iscsisvc (ELF 64-bit, not stripped, ~16MB)",
+            "zk_path_format": "/chap/%s",
+            "json_fields": ["chapName", "chapSecret"],
+            "chap_types": "u-chap (initiator), s-chap (mutual target secret)",
+            "zk_path_fn": "hx_get_chap_key_path @ 0x28acb0 — snprintf(buf, 0x100, '/chap/%s', name)",
+            "zk_read_fn": "hx_istgt_get_json @ 0x23a380 (called from hx_read_chap_json_str)",
+            "json_parse_fn": "cJSON_Parse / cJSON_GetObjectItem (chapName, chapSecret)",
+            "zk_auth_flag": "CRMDB_ZKEnableUUIDAuth (runtime function, not a compile-time constant)",
+            "error_strings": [
+                "%sHX_ISTGT_CF: Failed to get chap cred from zk.",
+                "%sHX_ISTGT_CF: Failed to parse JSON CHAP zk string %s.",
+                "%sHX_ISTGT_CF: Failed to get CHAP user name.",
+                "%sHX_ISTGT_CF: Failed to get CHAP secret.",
+                "%sHX_ISTGT_CF: Failed to get u-chap. err = %u",
+                "%sHX_ISTGT_CF: Failed to get s-chap. err = %u",
+            ],
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Enable CRMDB_ZKEnableUUIDAuth on all cluster nodes and set strict ACLs on /chap/* "
+            "ZooKeeper nodes. Alternatively, migrate CHAP credential storage off ZooKeeper into "
+            "a purpose-built secrets manager. Audit ZooKeeper ACL configuration at deployment time."
+        ),
+    },
+    "HX-F39": {
+        "title": "iSCSI Target Accepts AuthMethod None — Storage Accessible Without Authentication",
+        "severity": "HIGH",
+        "component": (
+            "iscsisvc (hx-iscsi package); custom Cisco extension to upstream istgt iSCSI target. "
+            "Affects both data sessions (AuthMethod) and discovery sessions (DiscoveryAuthMethod)."
+        ),
+        "description": (
+            "The iscsisvc binary accepts AuthMethod None and DiscoveryAuthMethod None as valid "
+            "per-LU and global configuration values. The AuthMethod Auto setting instructs the "
+            "target to allow the initiator to choose no authentication. Both are valid runtime "
+            "configurations persisted via ZooKeeper (/iscsi/config). When either is set, an "
+            "iSCSI initiator can log in without supplying CHAP credentials, gaining direct "
+            "block-level read/write access to storage volumes. The config parser also accepts "
+            "AuthGroup None and DiscoveryAuthGroup None for group-level auth bypass. "
+            "No compile-time enforcement requires CHAP — the protection is entirely deployment-dependent."
+        ),
+        "code_evidence": {
+            "binary": "iscsisvc (ELF 64-bit, not stripped, ~16MB)",
+            "auth_method_strings": [
+                "%sAuthMethod None",
+                "%sAuthMethod Auto",
+                "%sAuthMethod %s %s",
+                "%sDiscoveryAuthMethod None",
+                "%sDiscoveryAuthMethod Auto",
+                "%sDiscoveryAuthMethod %s %s",
+                "%sAuthGroup None",
+                "%sDiscoveryAuthGroup None",
+            ],
+            "auth_config_error": "%sAuthMethod is empty",
+            "config_zk_path": "/iscsi/config",
+            "initiator_auth_field": "lu->auth_chap %d (per-LU auth flag)",
+            "chap_combined_method": "CHAP,None (comma list — None is a valid member)",
+            "no_enforcement": (
+                "No hardcoded requirement for CHAP; auth method is loaded from ZK config at runtime"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Set AuthMethod CHAP and DiscoveryAuthMethod CHAP as mandatory defaults in the "
+            "HyperFlex installer and validate on every cluster upgrade. Remove None and Auto "
+            "from the set of accepted AuthMethod values, or enforce CHAP at the configuration "
+            "management layer with a startup validation check that aborts iscsisvc if auth is None."
+        ),
+    },
 }
 
 
