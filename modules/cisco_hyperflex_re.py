@@ -3085,6 +3085,187 @@ FINDINGS = {
             "4. Audit all ansible-playbook invocations across StMgrImpl for the same pattern."
         ),
     },
+
+    "HX-F63": {
+        "title": "Dead Code: whitelistCommands Field in HXSecuritySvcMgrImpl Never Enforced",
+        "severity": "LOW",
+        "cvss": "2.5",
+        "cwe": "CWE-1164",
+        "component": "hxSecuritySvcMgr-1.0.jar / HXSecuritySvcMgrImpl",
+        "class": "Abandoned Security Control",
+        "confirmed": True,
+        "evidence": {
+            "field_declaration": (
+                "HXSecuritySvcMgrImpl constructor (offset 10-29): "
+                "iconst_1 / anewarray String / ldc 'dpkg' / aastore / Arrays.asList() / "
+                "HashSet.<init>(Collection) / putfield whitelistCommands — "
+                "whitelistCommands = HashSet{\"dpkg\"}. "
+                "Offset 32-42: iconst_1 / anewarray String / ldc 'storfs-se-core' / aastore / "
+                "putfield allowedPkgPrefix — allowedPkgPrefix = String[]{\"storfs-se-core\"}."
+            ),
+            "never_read": (
+                "javap -private -c output: only 'putfield #28 // Field whitelistCommands' and "
+                "'putfield #34 // Field allowedPkgPrefix' appear in the entire class. "
+                "No 'getfield #28' or 'getfield #34' present anywhere. "
+                "Neither field is read in runCommand(), installPackage(), "
+                "containsSensitiveArgs(), getReplacement(), or any other method. "
+                "Both fields are written once at construction time and never consulted again."
+            ),
+            "actual_enforcement": (
+                "Whitelist enforcement delegated entirely to CommandValidatorUtil.validateCommand() "
+                "which maintains a hardcoded 34-entry switch table: "
+                "stcli, service, iptables, storfs-support, service_status.sh, rescan-scsi-bus, "
+                "restart, stop, start, ip, fping, dpkg, "
+                "/usr/share/secureshell-config/enable_secureshell.sh, bom-check.sh, "
+                "hyperflex, springpath, ifdown, ifup, sendasup, sendsch, "
+                "hxWindowsAgentLoggingWrapper, nfstool, "
+                "/opt/hyperflex/storfs-support/secure_disk_erase_internal.py, limit-lshell, "
+                "hxdpservices, /usr/share/hyperflex/storfs-misc/relinquish_node.py, "
+                "/opt/hyperflex/storfs-support/getEsxConnectionInfo.sh, "
+                "/usr/share/hyperflex/storfs-misc/hx-scripts/certificate_import_input_internal.sh, "
+                "/usr/share/hyperflex/storfs-misc/ntpsync.sh, /sbin/poweroff, fdisk, smartctl, "
+                "asupcli, /opt/springpath/storfs-support/get-stprocfs.sh. "
+                "Default case throws Exception (command rejected)."
+            ),
+        },
+        "impact": (
+            "The abandoned whitelistCommands field suggests an intent to restrict commands "
+            "at the class level that was refactored out or never wired up. "
+            "The per-class whitelist {'dpkg'} bears no relation to the 34-command "
+            "CommandValidatorUtil whitelist. If future refactoring removes CommandValidatorUtil "
+            "validation while the dead whitelistCommands field is mistakenly assumed to still "
+            "enforce restrictions, runCommand() would accept arbitrary commands."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove the dead whitelistCommands and allowedPkgPrefix fields from "
+            "HXSecuritySvcMgrImpl or wire them into the validation path. "
+            "Consolidate command validation into a single enforceable control. "
+            "Add a unit test that verifies CommandValidatorUtil.validateCommand() "
+            "throws on any command not in the explicit whitelist."
+        ),
+    },
+
+    "HX-F64": {
+        "title": "validateStcli Uses Blocklist Instead of Allowlist — Arbitrary stcli Subcommands Permitted",
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-184",
+        "component": "hxSecuritySvcMgr-1.0.jar / CommandValidatorUtil.validateStcli",
+        "class": "Incomplete Blocklist",
+        "confirmed": True,
+        "evidence": {
+            "validateStcli_bytecode": (
+                "CommandValidatorUtil.validateStcli(List<String>) at offset 0-81: "
+                "iconst_2 / anewarray / ldc 'cleaner' / aastore / ldc 'rebalance' / aastore / "
+                "Arrays.asList() → blockedList. "
+                "blockedList.contains(args.get(0)) → ifeq 82 (return). "
+                "If args[0] IS in {'cleaner', 'rebalance'}: fall through to athrow (Exception). "
+                "If args[0] is NOT in {'cleaner', 'rebalance'}: return (passes validation). "
+                "Any stcli subcommand except 'cleaner' and 'rebalance' passes."
+            ),
+            "call_path": (
+                "runCommand(cmd='stcli', args=['cluster','reregister']) → "
+                "CommandValidatorUtil.validate('stcli cluster reregister') → "
+                "validateCommand(fullStr) → split on space → cmd='stcli' → "
+                "case 0 in tableswitch → validateStcli(['cluster','reregister']). "
+                "args[0]='cluster' not in {'cleaner','rebalance'} → returns (passes). "
+                "ProcBuilder('stcli', ['cluster','reregister']).run() executes."
+            ),
+            "sensitive_args_redaction": (
+                "containsSensitiveArgs('stcli', ['cluster','reregister']) returns true "
+                "(case 2 in switch, offset 120-175: args.size()>=2 && args[0]=='cluster' "
+                "&& args[1]=='reregister'). This only redacts args from logs. "
+                "The command still executes with all args."
+            ),
+            "stcli_impact": (
+                "stcli is the HyperFlex cluster CLI. Unrestricted subcommands include: "
+                "stcli cluster info, stcli node list, stcli security passwd, "
+                "stcli dp snapshot, stcli dp clone, stcli network set, "
+                "stcli license set — all executable via authenticated Thrift runCommand()."
+            ),
+        },
+        "impact": (
+            "An attacker with a valid X-RootSessionID token can invoke any stcli subcommand "
+            "except 'cleaner' and 'rebalance' through hxSecuritySvcMgr.runCommand(). "
+            "This includes stcli commands that change cluster configuration, network settings, "
+            "credentials, snapshots, and licensing. "
+            "Blocklist design guarantees bypass by any subcommand added after the list was written."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace the blocklist with an explicit allowlist of permitted stcli subcommands. "
+            "Enumerate every stcli subcommand that runCommand() callers legitimately need, "
+            "add each to an allowlist Set, and reject anything not in the set. "
+            "Apply the same allowlist-over-blocklist principle to all other "
+            "CommandValidatorUtil.validateXxx() methods that use no arg validation."
+        ),
+    },
+
+    "HX-F65": {
+        "title": "Hyper-V Host Credentials Recoverable from World-Readable ZooKeeper Nodes (stSSOMgr)",
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-312",
+        "component": "stSSOMgr-1.0.jar / StSSOMgrImpl / ZK path /stSSOMgr/auth",
+        "class": "Credentials in Unprotected Storage",
+        "confirmed": True,
+        "evidence": {
+            "zk_layout": (
+                "StSSOMgrImpl$.MODULE$.zkAuthKey() = '/stSSOMgr/auth' (from application.conf). "
+                "StSSOMgrImpl$.MODULE$.zkEncryptionKey() = 'keyData'. "
+                "StSSOMgrImpl$.MODULE$.zkCredsKey() = 'creds'. "
+                "ZkPersistenceManager.write(zkAuthKey, zkEncryptionKey, base64EncodedKey, -1L): "
+                "stores AES session encryption key at ZK node /stSSOMgr/auth under field 'keyData'. "
+                "ZkPersistenceManager.write(zkAuthKey, zkCredsKey, encryptedHypervCreds, ttl): "
+                "stores encrypted Hyper-V credentials at ZK node /stSSOMgr/auth under field 'creds'."
+            ),
+            "key_generation": (
+                "getEncryptionKeyFromZK$3 (offset 12-27): "
+                "EncryptionUtil$.generateSecretKey() → secretKey.getEncoded() → "
+                "Base64.encodeBase64String(keyBytes) → stored as-is in ZK under 'keyData'. "
+                "getEncryptionKeyFromZK$2 (offset 88-116): on read: "
+                "Base64.decodeBase64(keyDataFromZK.getBytes()) → "
+                "new SecretKeySpec(bytes, 0, len, ENCRYPTION_KEY_ALGORITHM). "
+                "No additional protection beyond base64 encoding."
+            ),
+            "credential_encryption": (
+                "setHypervHostCreds$3 (offset 79-87): "
+                "EncryptionUtil$.encryptData(hypervPassword, aesKeyFromZK) → encryptedStr. "
+                "setHypervHostCreds$5 (offset 40-60): "
+                "ZkPersistenceManager.write(zkAuthKey='/stSSOMgr/auth', zkCredsKey='creds', "
+                "encryptedStr, ttlMillis). "
+                "Both keyData (AES key) and creds (encrypted with that key) stored in the "
+                "same ZK node /stSSOMgr/auth with OPEN_ACL_UNSAFE (world:anyone:cdrwa, HX-F55). "
+                "EncryptionUtil$.decryptData() uses the same AES key for decryption."
+            ),
+            "zk_acl": (
+                "Per HX-F55: ZooKeeper curator client at /etc/hyperflex/secure/zookeeper.properties "
+                "never calls withACL() — all nodes created with OPEN_ACL_UNSAFE. "
+                "zkctl (or any unauthenticated ZK client on port 2181) can read "
+                "/stSSOMgr/auth/keyData and /stSSOMgr/auth/creds without credentials. "
+                "Combined recovery: read keyData → base64-decode → AES key → "
+                "decrypt creds → plaintext Hyper-V password."
+            ),
+        },
+        "impact": (
+            "Any process or user with ZooKeeper access (port 2181) on the stCtlVM network "
+            "can recover Hyper-V host credentials without authentication. "
+            "Hyper-V credentials provide full access to the Windows hypervisor hosting HyperFlex "
+            "nodes in Hyper-V deployment scenarios: VM lifecycle control, storage access, "
+            "and lateral movement to all workloads on the Hyper-V cluster. "
+            "Combined with HX-F55 (ZK OPEN_ACL_UNSAFE), this requires no prior privileges."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Apply ZooKeeper ACLs to /stSSOMgr/auth (digest ACL, stSSOMgr service account only). "
+            "2. Store the AES encryption key outside ZooKeeper — in the JCEKS keystore at "
+            "/etc/hyperflex/secure/hyperflex_keystore.jceks (already used by EncryptionUtil$). "
+            "3. If credentials must be in ZK, use envelope encryption: encrypt the AES key "
+            "with the keystore-resident vcenter_client private key before storing in ZK. "
+            "4. Rotate Hyper-V credentials on any system where this ZK path was readable."
+        ),
+    },
 }
 
 
