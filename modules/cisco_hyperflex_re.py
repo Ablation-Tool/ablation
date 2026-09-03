@@ -4430,6 +4430,66 @@ FINDINGS = {
             "always returns CA-pinned, per-connection SSL contexts."
         ),
     },
+    "HX-F85": {
+        "title": (
+            "HxSecuritySvcMgrClient.trustAll() Globally Disables TLS Certificate Validation in "
+            "securityservice-1.0.0 WAR JVM via HttpsURLConnection.setDefaultSSLSocketFactory()"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": "securityservice-1.0.0 WAR / HxSecuritySvcMgrClient / trustAll() / HxSecuritySvcMgrClient$1 / HxSecuritySvcMgrClient$2",
+        "class": "TLS Certificate Validation Bypass — Fifth Global JVM Override in Security Service WAR",
+        "confirmed": True,
+        "evidence": {
+            "trustAll_bytecode": (
+                "HxSecuritySvcMgrClient.trustAll() (private): "
+                "Creates TrustManager[] array with HxSecuritySvcMgrClient$1 (no-op X509TrustManager). "
+                "offset 39: invokestatic HttpsURLConnection.setDefaultSSLSocketFactory(sslCtx.getSocketFactory()) — JVM-WIDE. "
+                "offset 52: invokestatic HttpsURLConnection.setDefaultHostnameVerifier(new HxSecuritySvcMgrClient$2()) — JVM-WIDE. "
+                "$1.checkServerTrusted() → return; $1.getAcceptedIssuers() → null. "
+                "$2.verify() → iconst_1 (always true)."
+            ),
+            "openClientHttp_bytecode": (
+                "openClientHttp(String host): "
+                "offset 1: invokevirtual trustAll() — first instruction before transport construction. "
+                "offset 9-15: new THttpClient('http://localhost:8055') when host is null. "
+                "offset 25-35: new THttpClient(InvokeDynamic 'http://\\u0001:8055') when host provided. "
+                "NOTE: Thrift transport is plain HTTP to port 8055, not HTTPS. "
+                "trustAll() side-effect globally disables TLS validation for all other HTTPS connections "
+                "in the securityservice WAR JVM."
+            ),
+            "thrift_service": "hxSecuritySvcMgr — port 8055; THttpClient (HTTP)",
+            "service_scope": (
+                "HxSecuritySvcMgrClient methods exposed to the JVM bypass: "
+                "backupDareKeys(THxSoftwareEncryptionBackupConfig), "
+                "restoreDareKeys(THxSoftwareEncryptionRestoreConfig), "
+                "checkSoftwareEncryptionCapable(String), "
+                "updateNtpServers(List<HxNtpServer>, String), clearNtpServers(String), "
+                "updateAuthBanner(String), applySTIG(String), changePassword(String, String, String), "
+                "updateSshConcurrentLoginLimit(int), updateSshIdleTimeout(int), updateSshBrokenTimeout(int). "
+                "Any HTTPS call made by this WAR after first openClientHttp() is unvalidated."
+            ),
+        },
+        "impact": (
+            "Fifth independent instance of the HttpsURLConnection global TLS bypass pattern "
+            "(HX-F78, HX-F82, HX-F83, HX-F84). "
+            "The securityservice WAR manages DARE encryption keys, NTP servers, SSH policy, STIG application, "
+            "password policy, and auth banners — the highest-sensitivity management plane in HyperFlex. "
+            "All HTTPS connections from this JVM after first client instantiation lose certificate validation, "
+            "exposing DARE key backup/restore operations and credential-bearing management traffic to MITM. "
+            "Unlike HX-F84 where trustAll() was public static, here it is private but still invoked on "
+            "every openClientHttp() call, meaning it re-runs the global override each time a new client opens."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove trustAll(). The Thrift transport to hxSecuritySvcMgr is HTTP (port 8055, localhost-only); "
+            "the global SSL bypass serves no purpose for this transport. "
+            "Scope any needed SSL context to external HTTPS calls using per-connection SSLSocketFactory. "
+            "This is the fifth instance of the same pattern across five WARs — "
+            "address systemically (see HX-F78 remediation)."
+        ),
+    },
 }
 
 
