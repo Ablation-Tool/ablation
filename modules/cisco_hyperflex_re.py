@@ -2059,6 +2059,119 @@ FINDINGS = {
             "Audit all adrest.HandleFuncPrefix and HandleFunc registrations for missing auth wiring."
         ),
     },
+
+    "HX-F47": {
+        "title": "Hardcoded AES-256 Symmetric Key in hx-auth Enables Offline Admin Password Recovery",
+        "severity": "HIGH",
+        "component": (
+            "hx-auth (ELF 64-bit, Go, 9.9MB, not stripped, debug_info present). "
+            "Binary path: /opt/hyperflex/storfs-packages/hx-auth (stCtlVM). "
+            "Affected functions: main.loginHandler @ 0x723800, main.changeHandler @ 0x722e20, "
+            "main.decrypt @ 0x7243c0."
+        ),
+        "description": (
+            "The hx-auth service (port 8082, handles /auth, /auth/change, /auth/verify, "
+            "/auth/sessionInfo, /auth/logout) uses a hardcoded 32-byte AES-256 symmetric key "
+            "to decrypt the admin password stored encrypted in the deployment config. "
+            "In main.loginHandler, the global main.KEY (a []byte containing the AES-encrypted password) "
+            "is decrypted via main.decrypt using the embedded key literal, then compared to the "
+            "submitted password with bytes.Equal. The same key is used in main.changeHandler "
+            "when updating the password. "
+            "Because the key is embedded in the binary, any party with read access to the hx-auth ELF "
+            "can decrypt the encrypted password from /config/conf.json (or any config backup) without "
+            "any additional credential. Combined with an initial access vector to the stCtlVM filesystem, "
+            "this yields the admin password in plaintext. "
+            "The encryption provides only obfuscation, not confidentiality — the key and algorithm "
+            "are fully recoverable from the binary."
+        ),
+        "code_evidence": {
+            "binary": "hx-auth (ELF64, Go, not stripped, /opt/hyperflex/storfs-packages/)",
+            "hardcoded_key_literal": "RHGocmgN90R4ShL_WnQ5GJSgGzADV678",
+            "key_length_bytes": 32,
+            "algorithm": "AES-256 (key length 0x20 passed to main.decrypt)",
+            "loginHandler_key_load": (
+                "main.loginHandler @ 0x7238be: lea rdi, [rip + 0xa8c7a]  "
+                "-> key string at VMA ~0x7c2b38; esi=0x20 (32 bytes); call main.decrypt @ 0x7243c0"
+            ),
+            "changeHandler_key_load": (
+                "main.changeHandler @ 0x722ef3: lea rdi, [rip + 0xa9645]  "
+                "-> same key literal; esi=0x20; call main.decrypt @ 0x7243c0"
+            ),
+            "decrypted_target": (
+                "main.KEY (global []byte @ VMA 0xa66290, 0x18 bytes in .data): "
+                "the AES-encrypted admin password loaded from /config/conf.json at startup"
+            ),
+            "comparison": (
+                "main.loginHandler: bytes.Equal(decrypt(main.KEY, hardcoded_key), submitted_password) "
+                "-> jne 0x7238fa (auth fail path)"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace the hardcoded symmetric key with a key derived per-deployment (e.g., from a "
+            "hardware TPM, UEFI secure variable, or injected at provisioning time). "
+            "Do not store the decryption key as a string literal in the binary. "
+            "Prefer password hashing (bcrypt/scrypt/argon2) over reversible encryption for stored credentials."
+        ),
+    },
+
+    "HX-F48": {
+        "title": "isMockDevMode Dev Mode Disables Secure Flag on Auth Cookies",
+        "severity": "MEDIUM",
+        "component": (
+            "hx-auth (ELF 64-bit, Go, 9.9MB, not stripped). "
+            "Inlined function: main.isMockDevMode (DW_AT_inline=1, DWARF offset 0x9678, decl_line=47). "
+            "Affected functions: main.AddCookie @ 0x723b00, main.RemoveCookie @ 0x723ca0."
+        ),
+        "description": (
+            "main.isMockDevMode is an always-inlined Go function that checks whether the deployed "
+            "configuration Mode contains the substring 'dev' (strings.Index(config.Mode, 'dev') >= 0). "
+            "It is inlined into main.AddCookie (call_line=103) and main.RemoveCookie (call_line=121). "
+            "When dev mode is active, both functions clear http.Cookie.Secure to false (0) before "
+            "calling net/http.SetCookie, removing the Secure attribute from all auth session cookies. "
+            "Without the Secure attribute, browsers transmit session cookies over plaintext HTTP, "
+            "enabling session token interception on any non-TLS path. "
+            "The Mode value is loaded from /config/conf.json at startup by main.readConfig. "
+            "The production default is 'prod'; any value containing 'dev' (e.g., 'development', 'dev') "
+            "activates the bypass. An attacker who can write /config/conf.json (via a path traversal, "
+            "SSRF write, or local access) can permanently disable the Secure attribute on session cookies."
+        ),
+        "code_evidence": {
+            "binary": "hx-auth (not stripped, debug_info, DWARF offset 0x9678 = main.isMockDevMode)",
+            "inline_mechanism": "DW_AT_inline=1 (always inlined, no standalone function entry in functab)",
+            "inline_site_1": {
+                "location": "main.AddCookie @ 0x723b00 (inline at 0x723bdf-0x723c08, call_line=103)",
+                "check": (
+                    "0x723bdf: mov rax, [rip+0x381fba]  -> Mode ptr @ 0xaa5ba0\n"
+                    "0x723be6: mov rdx, [rip+0x381fbb]  -> Mode len @ 0xaa5ba8\n"
+                    "0x723bed: mov edi, 3  (len('dev'))\n"
+                    "0x723bf5: lea rcx, [0x7c053f]  -> 'dev'\n"
+                    "0x723c00: call strings.Index @ 0x5314a0\n"
+                    "0x723c05: test rax, rax\n"
+                    "0x723c08: jl 0x723c12  (skip if not found)\n"
+                    "0x723c0a: mov byte ptr [rsp+0x90], 0  -> http.Cookie.Secure = false"
+                ),
+                "struct_offset": "http.Cookie starts at [rsp+0x20]; Secure bool at offset 0x70 = [rsp+0x90]",
+            },
+            "inline_site_2": {
+                "location": "main.RemoveCookie @ 0x723ca0 (inline at 0x723dbe-0x723de3, call_line=121)",
+                "effect": "same pattern: clears Secure on the expiration cookie sent to delete the session",
+            },
+            "mode_global": "config.Mode string ptr @ 0xaa5ba0, len @ 0xaa5ba8 (struct in .bss @ 0xaa5b60)",
+            "default_mode": (
+                "main.readConfig @ 0x7236ef: default Mode = 'prod' (4 bytes) "
+                "when /config/conf.json omits the Mode field"
+            ),
+            "comparison_string": "0x7c053f: 'dev' (3 bytes, substring of 'devexpGETalgnil0' rodata pack)",
+            "SetCookie_call": "net/http.SetCookie @ 0x6680e0 called after potential Secure clear",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove the dev mode cookie security downgrade. If a non-TLS dev environment is required, "
+            "gate the Secure=false behavior behind a build-time constant, not a runtime config string. "
+            "Ensure /config/conf.json is not writable by processes running as non-root or by web-accessible paths."
+        ),
+    },
 }
 
 
