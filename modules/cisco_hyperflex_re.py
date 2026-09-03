@@ -4313,6 +4313,123 @@ FINDINGS = {
             "once the class is loaded, the bypass cannot be reverted from application code."
         ),
     },
+    "HX-F83": {
+        "title": (
+            "HxSupportSvcClient.trustAll() Globally Disables TLS Certificate Validation in "
+            "slservice-1.0.0 WAR JVM via HttpsURLConnection.setDefaultSSLSocketFactory()"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": "slservice-1.0.0 WAR / HxSupportSvcClient / trustAll() / HxSupportSvcClient$1 / HxSupportSvcClient$2",
+        "class": "TLS Certificate Validation Bypass — Third Global JVM Override in Smart Licensing WAR",
+        "confirmed": True,
+        "evidence": {
+            "openClient_bytecode": (
+                "HxSupportSvcClient.openClient(): "
+                "offset 1: invokevirtual trustAll() — called before transport creation. "
+                "offset 5: new THttpClient('https://localhost/hxsupportsvc'). "
+                "offset 17: getRootSessionID(). "
+                "offset 28: THttpClient.setCustomHeader('X-RootSessionID', rootSessionId). "
+                "offset 34: new TBinaryProtocol(transport)."
+            ),
+            "trustAll_bytecode": (
+                "HxSupportSvcClient.trustAll() (private): "
+                "Creates SSLContext with HxSupportSvcClient$1 (no-op X509TrustManager). "
+                "Calls HttpsURLConnection.setDefaultSSLSocketFactory(sslCtx.getSocketFactory()) — JVM-WIDE. "
+                "Calls HttpsURLConnection.setDefaultHostnameVerifier(new HxSupportSvcClient$2()) — JVM-WIDE."
+            ),
+            "trust_manager_noop": (
+                "HxSupportSvcClient$1 implements X509TrustManager: "
+                "checkServerTrusted() → return (offset 0). getAcceptedIssuers() → null. "
+                "HxSupportSvcClient$2 implements HostnameVerifier: verify() → iconst_1 (always true)."
+            ),
+            "service_context": (
+                "HxSupportSvcClient connects to HxSupportSvc Thrift service at https://localhost/hxsupportsvc. "
+                "Methods: slRegisterSync (Cisco Smart Licensing registration), slDeregister, "
+                "slGetClusterLicenseTier, slGetAllStatus. "
+                "Smart Licensing registration transmits license token data — "
+                "after trustAll() sets global factory, any HTTPS connection in slservice-1.0.0 JVM loses cert validation."
+            ),
+        },
+        "impact": (
+            "Third independent instance of the HttpsURLConnection global TLS bypass pattern (HX-F78, HX-F82). "
+            "All HTTPS connections from the slservice-1.0.0 JVM process — including Smart Licensing calls to "
+            "Cisco's license server — are subject to TLS MITM after HxSupportSvcClient is first instantiated. "
+            "License token data and cluster identity information transmitted to the license server can be "
+            "intercepted and modified by a network-adjacent attacker without triggering any certificate error."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove trustAll(). Replace with a per-connection SSLContext configured with the appropriate "
+            "CA bundle for the hxsupportsvc localhost endpoint. "
+            "For Smart Licensing outbound calls, pin to Cisco's license server CA. "
+            "Do not call setDefaultSSLSocketFactory/setDefaultHostnameVerifier. "
+            "This is the third instance of the same pattern — address all four instances systematically "
+            "with a shared utility class that enforces per-connection, CA-pinned SSL contexts."
+        ),
+    },
+    "HX-F84": {
+        "title": (
+            "UpgradeSvcAccess.trustAll() Globally Disables TLS Certificate Validation in "
+            "hxupgrade-1.0.0 WAR JVM via HttpsURLConnection.setDefaultSSLSocketFactory()"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": "hxupgrade-1.0.0 WAR / UpgradeSvcAccess / trustAll() / UpgradeSvcAccess$1 / UpgradeSvcAccess$2",
+        "class": "TLS Certificate Validation Bypass — Fourth Global JVM Override in Upgrade Service WAR",
+        "confirmed": True,
+        "evidence": {
+            "openClientConnection_bytecode": (
+                "UpgradeSvcAccess.openClientConnection(String url, HttpHeaders headers): "
+                "offset 11: invokestatic trustAll() — called at connection open. "
+                "offset 15-25: new THttpClient(InvokeDynamic url concat) — HTTPS THttpClient. "
+                "offset 36-58: extracts Authorization header from HttpHeaders, "
+                "sets THttpClient.setCustomHeader('Authorization', authHeader)."
+            ),
+            "trustAll_bytecode": (
+                "UpgradeSvcAccess.trustAll() (public static): "
+                "Creates SSLContext with UpgradeSvcAccess$1 (no-op X509TrustManager). "
+                "offset 38: HttpsURLConnection.setDefaultSSLSocketFactory(sslCtx.getSocketFactory()) — JVM-WIDE. "
+                "offset 50: HttpsURLConnection.setDefaultHostnameVerifier(new UpgradeSvcAccess$2()) — JVM-WIDE. "
+                "NOTE: trustAll() is public static — callable from any context in the hxupgrade WAR."
+            ),
+            "trust_manager_noop": (
+                "UpgradeSvcAccess$1 implements X509TrustManager: "
+                "checkServerTrusted() → return. getAcceptedIssuers() → null. "
+                "UpgradeSvcAccess$2 implements HostnameVerifier: verify() → true."
+            ),
+            "service_context": (
+                "UpgradeSvcAccess connects to StUpgradeSvc Thrift service. "
+                "Methods: upgradeService(HxClusterUpgradeThriftPayload), checkClusterUpgradeValidations, "
+                "checkUpgradeService, getClusterVersionDetails, getUcsHfpVersions. "
+                "trustAll() is invoked on every openClientConnection() call. "
+                "The upgrade payload contains cluster topology and version data — "
+                "MITM against the upgrade Thrift channel could redirect upgrade source or corrupt cluster state."
+            ),
+        },
+        "impact": (
+            "Fourth independent instance of the HttpsURLConnection global TLS bypass pattern (HX-F78, HX-F82, HX-F83). "
+            "All HTTPS connections from the hxupgrade-1.0.0 JVM after UpgradeSvcAccess is first instantiated "
+            "lose TLS certificate validation. "
+            "UpgradeSvcAccess.trustAll() is public static — it is also callable directly by any code in "
+            "the hxupgrade WAR class space. "
+            "Upgrade operations (firmware upgrades, cluster expansion validation, UCS HFP version checks) "
+            "are subject to MITM without any certificate error, enabling supply chain interference "
+            "in the firmware update path."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove trustAll(). Scope the SSLContext to a per-connection factory pinned to the upgrade "
+            "service's CA. trustAll() being public static amplifies risk — remove the method entirely "
+            "rather than making it private. "
+            "All four instances (HX-F78, HX-F82, HX-F83, HX-F84) share the same root cause: "
+            "use of HttpsURLConnection.setDefaultSSLSocketFactory/setDefaultHostnameVerifier for a "
+            "convenience disable. Address systematically with a shared HttpClientFactory that "
+            "always returns CA-pinned, per-connection SSL contexts."
+        ),
+    },
 }
 
 
