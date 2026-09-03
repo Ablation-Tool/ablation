@@ -2378,6 +2378,76 @@ FINDINGS = {
             "mitigation."
         ),
     },
+    "HX-F52": {
+        "title": "JVM-Wide TLS Certificate Verification Disabled at Tomcat Startup via WebDownloader Static Initializer",
+        "severity": "HIGH",
+        "component": "restapi-wars (ROOT-war, supportservice-war, encryption-war)",
+        "cwe": "CWE-295",
+        "affected_classes": [
+            "com.storvisor.sysmgmt.service.WebDownloader",
+            "com.springpath.hx.iscsi.gateway.HxIscsiMgrClient",
+            "com.springpath.hx.encryption.clients.StMgrClient",
+        ],
+        "description": (
+            "Three WAR-deployed classes install a trust-all TLS context as JVM defaults via "
+            "HttpsURLConnection.setDefaultSSLSocketFactory() and setDefaultHostnameVerifier(). "
+            "WebDownloader does this in a static{} initializer that fires at class-load time, meaning "
+            "certificate verification is permanently disabled for the entire Tomcat JVM from the first "
+            "request that loads WebDownloader — before any user-triggered operation runs. "
+            "HxIscsiMgrClient.trustAll() and StMgrClient.trustAll() extend the same JVM-wide bypass "
+            "to the iSCSI management and encryption key management paths respectively. "
+            "After any of these initializers run, ALL outbound HTTPS connections from the Tomcat JVM "
+            "— including KMIP key server calls, vCenter API calls, and Intersight cloud API calls — "
+            "accept any certificate without verification."
+        ),
+        "evidence": {
+            "WebDownloader_static_init": (
+                "javap -c WebDownloader.class -> static{}:\n"
+                "  0: invokestatic #54  // Method trustAllHttpsCertificates:()V\n"
+                " 10: invokestatic #62  // Method javax/net/ssl/HttpsURLConnection.setDefaultHostnameVerifier\n"
+                "Called at class-load time, not deferred to a method call."
+            ),
+            "HxIscsiMgrClient_trustAll": (
+                "javap -verbose HxIscsiMgrClient.class constant pool:\n"
+                "  #895 = String http://\\u0001:9342  (plain HTTP backend, port 9342)\n"
+                "  invokestatic HttpsURLConnection.setDefaultSSLSocketFactory\n"
+                "  invokestatic HttpsURLConnection.setDefaultHostnameVerifier\n"
+                "JVM-wide static setters, not scoped to a single connection."
+            ),
+            "StMgrClient_trustAll": (
+                "javap -verbose StMgrClient.class constant pool:\n"
+                "  #659 = String https://\\u0001/stmgr  (HTTPS to encryption key manager)\n"
+                "  invokestatic HttpsURLConnection.setDefaultSSLSocketFactory\n"
+                "  invokestatic HttpsURLConnection.setDefaultHostnameVerifier\n"
+                "stMgrHost read from SEDConfiguration; if non-localhost, MITM on management VLAN "
+                "intercepts encryption key exchange with no cert pin to detect it."
+            ),
+            "affected_war_packages": [
+                "restapi-wars/ROOT-war/WEB-INF/classes/com/storvisor/sysmgmt/service/WebDownloader.class",
+                "restapi-wars/supportservice-war/WEB-INF/classes/.../WebDownloader.class",
+                "restapi-wars/iscsi-war/WEB-INF/classes/com/springpath/hx/iscsi/gateway/HxIscsiMgrClient.class",
+                "restapi-wars/encryption-war/WEB-INF/classes/com/springpath/hx/encryption/clients/StMgrClient.class",
+            ],
+        },
+        "impact": (
+            "An MITM attacker on the management network can impersonate KMIP key servers, vCenter, "
+            "or Intersight without any client-side detection. Encryption key material (SEDs, at-rest "
+            "encryption keys) can be intercepted or substituted. vCenter credentials passed over the "
+            "impersonated endpoint are exposed. The bypass is unconditional and permanent — no "
+            "configuration knob exists to restore verification without a code change."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace all three trustAll() / trustAllHttpsCertificates() implementations with "
+            "connection-scoped SSLContext instances that load the HyperFlex CA bundle. "
+            "Never call HttpsURLConnection.setDefaultSSLSocketFactory or setDefaultHostnameVerifier "
+            "— those are JVM-global and cannot be safely scoped. "
+            "Pin the KMIP server certificate (or at minimum verify the CA chain) in StMgrClient "
+            "given the sensitivity of key management traffic. "
+            "Add integration tests that assert a connection to a self-signed endpoint fails, "
+            "to prevent regression."
+        ),
+    },
 }
 
 
