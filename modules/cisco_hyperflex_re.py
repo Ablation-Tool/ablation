@@ -68,11 +68,38 @@ iscsisvc architecture (16MB PIE ELF, not stripped, statically compiled OpenSSL):
   Build path: /opt/git/cypress/opensrc/istgt/src/chap_util.c  (Cisco internal project "cypress")
   IoVisor: ESXi-side kernel driver (stHypervisorSvc VIB); iscsisvc manages IoVisor registrations
   Iscsi_RegisterIoVisor / Iscsi_GetRedirectionInfo / Iscsi_Redirect — connection redirect/LB
+  Binary protections:
+    PIE: YES (ELF Type DYN, FLAGS_1=PIE)
+    ASLR: YES (PIE binary)
+    Stack canaries: YES (__stack_chk_fail called extensively in all handlers)
+    NX/DEP: YES (GNU_STACK RW, not executable)
+    RELRO: PARTIAL (GNU_RELRO present, no BIND_NOW -> GOT remains writable post-load)
+    Note: partial RELRO = GOT overwrite remains viable exploitation primitive if heap write-primitive found
   conn_worker_ev_pdu_exec (0x282130) — iSCSI PDU execution handler
     Stack frame: 264 bytes (sub rsp,0x108); opcode read at [rsi], masked to 6-bit via 'and eax,0x3f'
     Sequence validation: bswap r13d; compare against connection struct at [rbx+0x128]+0xdc/0xe0
+    Pre-filter: bt rax,0x16 gates opcodes 0x01/0x02/0x04 through CmdSN seq validation before dispatch
+    Non-filtered opcodes (0x00,0x03,0x05,0x06,0x10) bypass seq validation, checked at cmp al,0x5 first
+    Jump table (relative offset, 4B entries): 0xb0bc6c; valid range opcodes 0x00-0x10; >0x10 -> error
+      0x00 NOP-Out       -> 0x2828b0 (conn_worker_ev_nop_send echo path via nop_send/CB/CB2)
+      0x01 SCSI Command  -> 0x282da8 -> istgt_iscsi_op_scsi (0x2751e0)
+      0x02 SCSI Task Mgmt-> 0x282be0
+      0x03 Login Request -> 0x282b80 -> istgt_iscsi_op_login (0x27c7e0)
+      0x04 Text Request  -> 0x282b20 -> istgt_iscsi_op_text (0x26d360)
+      0x05 SCSI Data-Out -> 0x282e40 (also 0x2830e0 pre-seq-check path)
+      0x06 Logout Request-> 0x282e10
+      0x07-0x0f reserved -> 0x282610 (error handler)
+      0x10 SNACK Request -> 0x2825c8
   istgt_iscsi_op_login (0x27c7e0) — RFC 3720 Login PDU handler
     Stack frame: 2248 bytes (sub rsp,0x8c8); parses T-bit, CSG/NSG, ISID, TSIH, CmdSN, ExpStatSN
+  istgt_iscsi_parse_params (0x29b990) — Text/Login key=value PDU data parser
+    Key buffer: xmalloc(0x41) = 65 bytes; enforces key_len <= 64 (cmp r15d,0x40; jg error)
+    Value buffer: xmalloc(0x2001) = 8193 bytes; enforces val_len <= 8192 (cmp r15d,0x2000; jg error)
+    Bounds checked BEFORE copy — text negotiation parser is SAFE
+  istgt_iscsi_op_data (0x276d60) — SCSI Data-Out handler
+    DataSegmentLength: 24-bit from PDU bytes [5:7] (max 0xFFFFFF = 16MB)
+    Bounds check at 0x276f37: rcx = BufferOffset + DataSegmentLength; cmp rcx, EDTL; ja error
+    memcpy at 0x276f77: dst=task_buf+offset, src=PDU_data_ptr, size=DataSegmentLength — SAFE
   chap_decrypt_init (0x28ba30) / chap_decrypt_cleanup — CHAP (MD5) authentication
   CHAP credential infrastructure:
     ZooKeeper path: /chap/<initiator-iqn>  JSON: {chapName: <base64-ciphertext>, chapSecret: <base64-ciphertext>}
