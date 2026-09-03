@@ -1894,6 +1894,171 @@ FINDINGS = {
             "Rotate any KEK material that may have been retrieved from exposed deployments."
         ),
     },
+
+    "HX-F44": {
+        "title": "Unauthenticated SSRF + ESXi Credential Exfiltration via /st-support/* (StorvisorSupportBundle)",
+        "severity": "CRITICAL",
+        "component": (
+            "ROOT-1.0.0.war, deployed under HX Connect REST API (Tomcat, stCtlVM port 443). "
+            "Servlet: com.storvisor.sysmgmt.rest.StorvisorSupportBundle. "
+            "Mapped to /st-support/* with NO auth filter. "
+            "web.xml: servlet-mapping present for /st-support/*, filter-mapping covers only "
+            "/rest/*, /internalsupport/*, /upload/*, /v1/* — /st-support/* has zero filter coverage."
+        ),
+        "description": (
+            "StorvisorSupportBundle handles /st-support/* with no authentication filter in the "
+            "Servlet filter chain. The servlet accepts a ?host=<ip> array parameter, constructs "
+            "a HostCredentialsAccess object to read stored ESXi credentials from "
+            "com/storvisor/sysmgmt/EsxCredential (username and password fields), then calls "
+            "WebDownloader.getStream(url_with_host_param, username, password) using those credentials "
+            "against the attacker-supplied host. The response is returned as a ZIP download. "
+            "An unauthenticated attacker can: (1) supply an arbitrary host and observe whether the "
+            "cluster's stored ESXi credentials are valid against attacker-controlled targets "
+            "(credential harvest via SSRF), and (2) proxy the credential usage against any host "
+            "reachable from the stCtlVM. "
+            "The auth filter gap is structural: web.xml defines filter-mappings for /rest/*, "
+            "/internalsupport/*, /upload/*, and /v1/* only. The /st-support/* path is never covered."
+        ),
+        "code_evidence": {
+            "war": "ROOT-1.0.0.war (stCtlVM, /opt/hyperflex/storfs-restapi/)",
+            "servlet_class": "com.storvisor.sysmgmt.rest.StorvisorSupportBundle",
+            "url_pattern": "/st-support/*",
+            "credential_source": "HostCredentialsAccess -> EsxCredential.username + EsxCredential.password",
+            "ssrf_sink": "WebDownloader.getStream(url_with_host_param, username, password)",
+            "auth_filter_gap": (
+                "web.xml filter-mappings: /rest/*, /internalsupport/*, /upload/*, /v1/* only. "
+                "/st-support/* has no filter-mapping entry — zero auth coverage."
+            ),
+            "parameter": "?host=<ip> (array of host IPs, attacker-controlled)",
+            "output": "ZIP of support bundle fetched from supplied host using stored ESXi credentials",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Add a filter-mapping entry for /st-support/* to the HX Connect auth filter chain in web.xml. "
+            "Validate that the host parameter matches a whitelist of known cluster node IPs. "
+            "Audit all stored ESXi credential usage paths for similar unfiltered servlet coverage."
+        ),
+    },
+
+    "HX-F45": {
+        "title": "Unauthenticated Support Bundle Command Execution via /storfs-support/* (StorfsSupportBundle)",
+        "severity": "HIGH",
+        "component": (
+            "ROOT-1.0.0.war, deployed under HX Connect REST API (Tomcat, stCtlVM port 443). "
+            "Servlet: com.storvisor.sysmgmt.rest.StorfsSupportBundle. "
+            "Mapped to /storfs-support/* with NO auth filter. "
+            "web.xml: same auth filter gap as /st-support/* — /storfs-support/* absent from filter-mappings."
+        ),
+        "description": (
+            "StorfsSupportBundle handles /storfs-support/* with no authentication filter. "
+            "The servlet forks /bin/storfs-support via ProcessBuilder based on the ?action= parameter: "
+            "action=extended -> ProcessBuilder([\"/bin/bash\", \"-c\", \"exec /bin/storfs-support --extended > /dev/null\"]), "
+            "any other value -> ProcessBuilder([\"/bin/bash\", \"-c\", \"exec /bin/storfs-support > /dev/null\"]). "
+            "No request parameter reaches the shell invocation (action is only used to select the "
+            "fixed command string), so there is no direct OS command injection via ?action=. "
+            "However, any unauthenticated caller can: (1) trigger collection of a full HXDP support "
+            "bundle (extended or light variant) by issuing requests to this endpoint, and (2) download "
+            "the resulting bundle (newest .gz from /var/support/ returned as application/zip). "
+            "The support bundle contains node configuration, logs, and diagnostic state that expose "
+            "cluster topology, credentials paths, and internal service details. "
+            "Triggering bundle generation without authentication is also a DoS vector: bundle "
+            "collection consumes significant I/O and CPU on the stCtlVM."
+        ),
+        "code_evidence": {
+            "war": "ROOT-1.0.0.war (stCtlVM, /opt/hyperflex/storfs-restapi/)",
+            "servlet_class": "com.storvisor.sysmgmt.rest.StorfsSupportBundle",
+            "url_pattern": "/storfs-support/*",
+            "process_builder_extended": (
+                "action=extended: ProcessBuilder([\"/bin/bash\", \"-c\", "
+                "\"exec /bin/storfs-support --extended > /dev/null\"])"
+            ),
+            "process_builder_light": (
+                "action=<other>: ProcessBuilder([\"/bin/bash\", \"-c\", "
+                "\"exec /bin/storfs-support > /dev/null\"])"
+            ),
+            "output_source": "newest .gz from /var/support/ returned as application/zip",
+            "injection": "NONE — action param selects fixed command string, no user data in shell args",
+            "auth_filter_gap": (
+                "web.xml filter-mappings: /rest/*, /internalsupport/*, /upload/*, /v1/* only. "
+                "/storfs-support/* has no filter-mapping entry — zero auth coverage."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Add a filter-mapping entry for /storfs-support/* to the auth filter chain in web.xml. "
+            "Move support bundle generation and download behind authenticated /v1/ endpoints. "
+            "Restrict ProcessBuilder invocations for system commands to roles that need them."
+        ),
+    },
+
+    "HX-F46": {
+        "title": "Unauthenticated Witness Service HTTP API on Port 9000 Allows Cluster Quorum Manipulation",
+        "severity": "HIGH",
+        "component": (
+            "hxdp-connector (Go 1.23.4 binary, UPX-packed, 25MB unpacked, stripped .symtab). "
+            "Module: github-hyc.scm.engit.cisco.com/starship/diesel/witness. "
+            "Source: diesel/code/diesel/witness/. "
+            "Server function: witness.StartWitnessServer @ PC=0xf41760. "
+            "Router: barcelona/adrest.(*RestMiddleware).HandleFunc @ PC=0x8eae80 (gorilla/mux wrapper)."
+        ),
+        "description": (
+            "The diesel/witness package starts an HTTP server bound to 0.0.0.0:9000 "
+            "(port constant 0x2328 written in main.main @ 0xf519cd). "
+            "Routes are registered via adrest.(*RestMiddleware).HandleFunc, which is a thin wrapper "
+            "around gorilla/mux.(*Route).addRegexpMatcher — it does not enforce any authentication. "
+            "The handler closures (baseHandler.func2 through func12) call (*witness).setState "
+            "and related witness operations directly with no token validation, no header check, "
+            "and no middleware gate. The apollo/base.appHandler.HandleWithAuth JWT infrastructure "
+            "present elsewhere in the binary is not wired to any witness route. "
+            "Exposed endpoints and their impact: "
+            "/Lock — seize the witness arbitration lock; "
+            "/Unlock, /ForceUnlock — release or force-release the lock; "
+            "/GetOwner — enumerate current lock owner (information disclosure); "
+            "/witnessdisable (prefix match) — disable external witness, eliminating stretch cluster HA; "
+            "/witnesstest (prefix match) — invoke witness connection test; "
+            "/Version — witness server version disclosure; "
+            "/HxCapabilities — capability state disclosure; "
+            "/executeHxHealthCheck — trigger health checks; "
+            "/health — service health. "
+            "An unauthenticated attacker on the management network can manipulate witness state to "
+            "cause split-brain scenarios in stretched HyperFlex clusters or disable HA protection."
+        ),
+        "code_evidence": {
+            "binary": "hxdp-connector (UPX-unpacked, Go 1.23.4, stripped, 25.7MB)",
+            "port": 9000,
+            "bind_address": "0.0.0.0 (format string '0.0.0.0:%d' in main.main @ 0xf42376)",
+            "port_assignment": "main.main @ 0xf519cd: mov qword ptr [rax + 0xa8], 0x2328 (9000 decimal)",
+            "server_function": "witness.StartWitnessServer @ PC=0xf41760",
+            "route_registration": "adrest.(*RestMiddleware).HandleFunc @ PC=0x8eae80 (gorilla/mux wrapper, no auth)",
+            "routes_handlefunc": [
+                "/health (7 bytes) -> handleHealth.func1 @ PC=0xf4c680",
+                "/Lock -> handleLock.func3 @ PC=0xf4a800",
+                "/Unlock -> handleUnLock.func5 @ PC=0xf48f80",
+                "/ForceUnlock -> handleUnLock.func7 @ PC=0xf47700",
+                "/GetOwner -> handleGetOwner.func9 @ PC=0xf464e0",
+                "/Version -> handleWitnessVersion.func11 @ PC=0xf454e0",
+                "/HxCapabilities -> func13 @ PC=0xf439e0",
+                "/executeHxHealthCheck -> func15/func14",
+            ],
+            "routes_handlefuncprefix": [
+                "/witnesstest (12 bytes) -> func @ PC=0xf422c8",
+                "/witnessdisable (15 bytes) -> func @ PC=0xf42345",
+            ],
+            "witness_state_fn": "(*witness).setState @ PC=0xf38f40 (called directly from handler closures)",
+            "auth_check": "NONE — adrest.HandleFunc is a pure gorilla/mux route wrapper; no JWT, no header check",
+            "HandleWithAuth_unused": (
+                "apollo/base.appHandler.HandleWithAuth with jwt/v4 RSA validation "
+                "is present in the binary but not wired to any witness route"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Bind the witness HTTP server to 127.0.0.1 if only co-located processes need it, "
+            "or gate all witness routes with the existing HandleWithAuth JWT middleware. "
+            "Apply network-level ACLs blocking external access to port 9000 on stCtlVM management interfaces. "
+            "Audit all adrest.HandleFuncPrefix and HandleFunc registrations for missing auth wiring."
+        ),
+    },
 }
 
 
