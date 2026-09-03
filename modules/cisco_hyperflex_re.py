@@ -1207,6 +1207,91 @@ FINDINGS = {
             "Require authentication before any support bundle operation on the stCtlVM."
         ),
     },
+    "HX-F32": {
+        "title": "Diesel Connector KEK Distribution Endpoint Binds to All Interfaces With No Confirmed Client Auth",
+        "severity": "HIGH",
+        "component": (
+            "hxdp-connector Go binary (UPX-packed, 25MB unpacked); "
+            "diesel/encryption package — StartEncryptionHandler / getKeyEncryptionKeyHandler; "
+            "graceful TLS server on :35333 (0.0.0.0, all interfaces)"
+        ),
+        "description": (
+            "The HyperFlex device connector binary launches a TLS HTTP server on :35333 (all "
+            "interfaces) via graceful.(*Server).ListenAndServeTLS. The server registers a "
+            "gorilla/mux route GET /v1/hyperflex/KeyEncryptionKeys handled by "
+            "(*EncryptionClient).getKeyEncryptionKeyHandler. The handler returns the cluster "
+            "Key Encryption Key (KEK) — the root key used to protect all data encryption keys "
+            "for the HyperFlex distributed storage layer. "
+            "decryptKek() is a method that copies 96 bytes of the EncryptionClient struct onto "
+            "the local stack frame and returns the plaintext KEK string at field offsets "
+            "+0x48/+0x50 (Go string header: ptr, len). The actual RSA decryption "
+            "((*DecryptObjectType).RsaDecrypt at 0xa05ea0, private key /etc/springpath/secure/root_file.pub) "
+            "is performed once at connector initialization; subsequent calls to decryptKek() "
+            "return the cached plaintext. "
+            "The connector_auth package (barcelona/adconnector/connector_auth) provides "
+            "clientAuthUsingHash / ClientAuthSha512 using SipHash MAC — but this auth layer "
+            "is applied to the WebSocket tunnel toward Cisco Intersight, not to the local "
+            ":35333 HTTP endpoint. The HTTP-layer auth middleware baseHandler is defined in "
+            "diesel/witness and is called from StartWitnessServer; its application to "
+            "StartEncryptionHandler routes could not be statically confirmed from binary "
+            "analysis. The server uses only server-side TLS (no static evidence of "
+            "tls.Config.ClientAuth = RequireAnyClientCert or RequireAndVerifyClientCert). "
+            "Any host on the network that can reach TCP port 35333 and complete a TLS "
+            "handshake with the server certificate can issue GET /v1/hyperflex/KeyEncryptionKeys "
+            "and receive the KEK. With the KEK, a network-adjacent attacker can decrypt all "
+            "data encryption keys protecting the HyperFlex storage cluster."
+        ),
+        "code_evidence": {
+            "binary": "hxdp-connector (UPX-packed Go 1.23.4 ELF, 25,743,512 bytes unpacked)",
+            "server_function": "graceful.(*Server).ListenAndServeTLS at functab PC 0x702ac0",
+            "bind_address": "':35333' — Go net.Listen default binds to 0.0.0.0:35333 (file 0xfa57d1 in .rodata)",
+            "route": (
+                "GET /v1/hyperflex/KeyEncryptionKeys — string at .rodata file 0xde0bfc, "
+                "directly adjacent (zero-gap) to 'Initializing encryption handler' log string "
+                "(file 0xde0bdd) in Go's packed string literal pool"
+            ),
+            "handler": (
+                "(*EncryptionClient).getKeyEncryptionKeyHandler — funcnametab at file 0x11a22f1; "
+                "closure (*EncryptionClient).getKeyEncryptionKeyHandler.func1 at file 0x11a2442"
+            ),
+            "key_retrieval": (
+                "(*EncryptionClient).decryptKek at functab PC 0xa05ee0: copies 96-byte "
+                "EncryptionClient struct frame (duffcopy at 0x47d44c), returns string at "
+                "offset +0x48 (ptr) / +0x50 (len) — plaintext KEK cached after init RSA decrypt"
+            ),
+            "rsa_decrypt": (
+                "(*DecryptObjectType).RsaDecrypt at functab PC 0xa05ea0; "
+                "private key path: /etc/springpath/secure/root_file.pub (file 0xdea2d2)"
+            ),
+            "connector_auth": (
+                "barcelona/adconnector/connector_auth — clientAuthUsingHash, ClientAuthSha512 "
+                "(SipHash MAC via dchest/siphash@v1.2.3); source: connector_auth.go; "
+                "APPLIED TO: WebSocket connector to Intersight, NOT to :35333 HTTP routes"
+            ),
+            "tls_config": (
+                "graceful.ListenAndServeTLS: server-side TLS only; no static evidence of "
+                "tls.Config.ClientAuth = RequireAnyClientCert in the :35333 configuration"
+            ),
+            "base_handler": (
+                "diesel/witness.StartWitnessServer.(*witness).baseHandler.func4.1 at functab "
+                "PC 0xe0ae20; application to encryption routes unconfirmed from binary analysis"
+            ),
+            "cipher_type_registry": (
+                "adsecret/barcelona cipher types at .rodata file 0xdbcdef: "
+                "Locked|STREET|simple|cisco.divide|pbkdf2|bcrypt|shared|system|Fanout|X25519 — "
+                "cisco.divide is a proprietary Cisco key-splitting scheme compiled into the binary"
+            ),
+        },
+        "versions_affected": ["hxdp-connector 1.0.11-20250305 (Go 1.23.4)"],
+        "remediation": (
+            "Bind :35333 to 127.0.0.1 if the KEK endpoint is only consumed by local "
+            "HyperFlex services. If network binding is required, enforce mTLS by setting "
+            "tls.Config.ClientAuth = RequireAndVerifyClientCert with a per-node CA. "
+            "Apply baseHandler auth middleware explicitly to all routes in "
+            "StartEncryptionHandler, not only to witness routes. Do not cache the plaintext "
+            "KEK in a heap-allocated struct — re-decrypt on demand and zero memory after use."
+        ),
+    },
     "HX-F31": {
         "title": "StorvisorSupportBundle Servlet Enables Unauthenticated SSRF With ESXi Credential Exfiltration",
         "severity": "HIGH",
