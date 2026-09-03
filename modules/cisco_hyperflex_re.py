@@ -65,12 +65,28 @@ Auto-upgrade NFS path:
   Secondary nodes pull from NFS at startup; no NFS write-protection enforced in code
 
 iscsisvc architecture (16MB PIE ELF, not stripped, statically compiled OpenSSL):
+  Build path: /opt/git/cypress/opensrc/istgt/src/chap_util.c  (Cisco internal project "cypress")
   IoVisor: ESXi-side kernel driver (stHypervisorSvc VIB); iscsisvc manages IoVisor registrations
   Iscsi_RegisterIoVisor / Iscsi_GetRedirectionInfo / Iscsi_Redirect — connection redirect/LB
-  conn_worker_ev_pdu_exec — iSCSI PDU execution handler
-  chap_decrypt_init / chap_decrypt_cleanup — CHAP (MD5) authentication only
+  conn_worker_ev_pdu_exec (0x282130) — iSCSI PDU execution handler
+    Stack frame: 264 bytes (sub rsp,0x108); opcode read at [rsi], masked to 6-bit via 'and eax,0x3f'
+    Sequence validation: bswap r13d; compare against connection struct at [rbx+0x128]+0xdc/0xe0
+  istgt_iscsi_op_login (0x27c7e0) — RFC 3720 Login PDU handler
+    Stack frame: 2248 bytes (sub rsp,0x8c8); parses T-bit, CSG/NSG, ISID, TSIH, CmdSN, ExpStatSN
+  chap_decrypt_init (0x28ba30) / chap_decrypt_cleanup — CHAP (MD5) authentication
+  CHAP credential infrastructure:
+    ZooKeeper path: /chap/<initiator-iqn>  JSON: {chapName: <base64-ciphertext>, chapSecret: <base64-ciphertext>}
+    Decrypt path (decrypt_data, 0x28bcf0):
+      1. get_keystore_passwd (0x28b7e0): reads <entry key="keystore_password"> from
+         /etc/hyperflex/secure/hyperflex_security.properties (fgets line scan)
+      2. d2i_PKCS12_fp("/etc/hyperflex/secure/hyperflex_keystore.p12"): loads PKCS#12
+      3. PKCS12_parse: extracts RSA private key
+      4. BIO base64-decode ciphertext, then RSA_private_decrypt(0x100, ct, pt, key, RSA_PKCS1_PADDING=1)
+    Both keystore and password file in same directory: /etc/hyperflex/secure/
   _add_dm_targets — dm-device mapper target manipulation
   PEM_write_PKCS8PrivateKey / crypt_keyslot_add_by_volume_key — LUKS integration
+  AkvStor DEK cache: AkvStor->kvDEKCache->kvDataEncryptionKeys[dekIndex].isSet — in-memory LUKS key cache
+  Encryption library toggle: /opt/hyperflex/storfs-core/encrypt/libcrypt_disabled.so vs libcrypt_enabled.so
 
 hxdp connector binary (Go, UPX-packed, stripped):
   Intersight cloud WebSocket endpoint: svc-static1.ucs-connect.com
@@ -78,7 +94,7 @@ hxdp connector binary (Go, UPX-packed, stripped):
   SUDI certificate authentication to Intersight
   Emulator mode path: /.device_connector_emulator/intersight/catalog/Version
 
-Findings: HX-F01 (HIGH) through HX-F10 (INFO).
+Findings: HX-F01 (HIGH) through HX-F11 (HIGH).
 """
 
 import socket
@@ -304,14 +320,16 @@ FINDINGS = {
         "component": "hx-iscsi / iscsisvc (16MB ELF, not stripped)",
         "description": (
             "iscsisvc provides iSCSI storage access with CHAP authentication "
-            "(chap_decrypt_init/chap_decrypt_cleanup). CHAP uses MD5 which is "
-            "cryptographically weak. No evidence of mutual CHAP (bidirectional) "
-            "in the function set. iSCSI sessions without strong authentication "
-            "are vulnerable to initiator spoofing if the storage network is accessible."
+            "(chap_decrypt_init at 0x28ba30 / chap_decrypt_cleanup). CHAP uses MD5 "
+            "which is cryptographically weak. No mutual CHAP (bidirectional) "
+            "in the symbol table. iSCSI sessions are vulnerable to initiator spoofing "
+            "if the storage network is accessible. CHAP credential storage and "
+            "decryption infrastructure is documented in HX-F11."
         ),
         "code_evidence": {
-            "chap_functions": "chap_decrypt_init, chap_decrypt_cleanup",
-            "pdu_exec": "conn_worker_ev_pdu_exec (main PDU handler)",
+            "chap_functions": "chap_decrypt_init (0x28ba30), chap_decrypt_cleanup",
+            "md5": "istgt_md5init / istgt_md5update / istgt_md5final",
+            "pdu_exec": "conn_worker_ev_pdu_exec (0x282130, 264-byte stack frame)",
             "redirect": "Iscsi_Redirect / Iscsi_GetRedirectionInfo (IoVisor-aware connection redirect)",
             "luks": "_add_dm_targets, crypt_keyslot_add_by_volume_key (LUKS integration)",
         },
@@ -340,6 +358,35 @@ FINDINGS = {
             "cloud_endpoint": "svc-static1.ucs-connect.com",
         },
         "versions_affected": ["1.0.11-20250305 (connector bundle)"],
+    },
+    "HX-F11": {
+        "title": "iSCSI CHAP Credential Recovery via Co-Located PKCS#12 Keystore",
+        "severity": "HIGH",
+        "component": "hx-iscsi / iscsisvc / /etc/hyperflex/secure/",
+        "description": (
+            "All iSCSI CHAP credentials (initiator name and secret) are stored in "
+            "ZooKeeper at /chap/<initiator-iqn> as base64-encoded RSA-2048 "
+            "ciphertexts (JSON keys: chapName, chapSecret). "
+            "decrypt_data() (iscsisvc:0x28bcf0) decrypts them using a private key "
+            "from /etc/hyperflex/secure/hyperflex_keystore.p12. The PKCS#12 "
+            "keystore password is read from /etc/hyperflex/secure/"
+            "hyperflex_security.properties (XML tag: <entry key=\"keystore_password\">). "
+            "Both files are in the same directory. Any process or user with read "
+            "access to /etc/hyperflex/secure/ can decrypt all iSCSI CHAP "
+            "credentials for all initiators. RSA_PKCS1_PADDING (v1.5) is used — "
+            "the decryption path is vulnerable to Bleichenbacher oracle attacks "
+            "if decryption errors are observable."
+        ),
+        "code_evidence": {
+            "keystore_path": "/etc/hyperflex/secure/hyperflex_keystore.p12",
+            "password_path": "/etc/hyperflex/secure/hyperflex_security.properties",
+            "xml_tag": "<entry key=\"keystore_password\">",
+            "zk_path": "/chap/<initiator-iqn>  {chapName: b64(RSA-enc), chapSecret: b64(RSA-enc)}",
+            "decrypt_data": "iscsisvc:0x28bcf0 -> PKCS12_parse -> RSA_private_decrypt(0x100, ct, pt, key, RSA_PKCS1_PADDING=1)",
+            "get_keystore_passwd": "iscsisvc:0x28b7e0 -> GetXmlTagValue -> base64 decode -> PKCS12 password",
+            "build_path": "/opt/git/cypress/opensrc/istgt/src/chap_util.c",
+        },
+        "versions_affected": ["6.0.2b-44423"],
     },
 }
 
