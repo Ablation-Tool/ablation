@@ -194,7 +194,45 @@ vcCertificateUtilities.py:
   SpringpathVMWare.getServiceInstance_VCenter_SDK_Via_Certificate() -> uses vcenter_client RSA key from JCEKS (HX-F13)
   Confirms HX-F13 vCenter client cert is the live auth credential for vCenter management operations
 
-Findings: HX-F01 (HIGH) through HX-F23 (MEDIUM).
+Findings: HX-F01 (HIGH) through HX-F27 (MEDIUM).
+
+springpath_env_parse.py tunes credential encryption:
+  AES-128-CBC; key = md5(Secret.class) as hex string = "1f6d13bcd7753f2d3b2e2da361b7afb5"
+  Secret.class path: /usr/share/hyperflex/storfs-misc/Secret.class (firmware-embedded static file)
+  Encrypted values stored in INI-format .tunes files:
+    /opt/hyperflex/springpath_default.tunes (cluster-wide defaults)
+    /opt/hyperflex/springpath_custom_cluster.tunes (cluster overrides)
+    /opt/hyperflex/springpath_custom_node.tunes (per-node overrides)
+  installer_passwd key: credentials.installer_passwd (read by deployNodes.py at startup)
+  AES key is static across all deployments of same firmware version — any extract of firmware
+  yields the key; no per-deployment key derivation.
+
+stSSOMgr (auth binary at /opt/hyperflex/auth/auth, 9.5MB):
+  Binds localhost:9334, TBinaryProtocol/TFramedTransport Thrift server (no auth)
+  Interface: StSSOMgr.Client.getHypervHostCreds() -> JSON string:
+    {"host": {"localadminusername": "<hyperv_admin>", "localadminusercred": "<base64_password>"}}
+  Credential source: ZooKeeper (fetched and cached by auth service)
+  Client (stssoclient.py): no authentication on Thrift connect; returns username + base64-decoded password
+
+hxinstaller (Go binary, /opt/hyperflex/hxinstaller/installer, 15MB, debug info, not stripped):
+  Source tree: bitbucket-eng-chn-sjc1.cisco.com/HXDP/installer-v2/server/
+  Source files: create_validate.go, deploy_validate.go, hypervBareMetal.go, hyperv.go,
+                hypervisor.go, validate.go, validate_hyperv.go, validate_login.go,
+                validate_serversIP.go, validate_ucsm.go, validate_vcenter.go
+  SQLite embedded (github.com/mattn/go-sqlite3 + CGo); DB path: installer.db
+  REST endpoints (gorilla mux, runtime-registered):
+    /api/validate_login, /api/upload_catalog, /api/update_catalog, /api/bundle_details
+    /api/validate_hyperv, /api/configInstaller, /api/catalog_version, /api/upload_catalog_version
+    /api/configure_server_ports, /api/servers/{serial}/disassociate, /api/resolve_mgmthostname
+    /api/restart, /api/servers, /api/config, /api/fields, /api/upload, /api/about
+    /api/proxy, /api/reset, /api/tech_support/poll, /disassoc_hv-installer
+    /rest/deployment/proxy?url=<target>  (explicit SSRF proxy)
+    /rest/deployment/upgradeClusterJobUCSM, /rest/deployment/updateCatalog
+    /rest/deployment/checkDeployNodesJob, /rest/validate/fqdn, /rest/validate/mgmthostname
+  Accepts: hxAdminPassword, vCenterPassword, esxPassword, cimcPassword fields in request bodies
+  Command execution: os/exec.Cmd — "Executing command :%s" log prefix
+    genisoimage via /usr/bin/genisoimagemanagement: builds hypervisorConfigData.iso
+    runOSInstallAndHypervConfig: OS install + Hyper-V network config execution path
 """
 
 import socket
@@ -849,6 +887,150 @@ FINDINGS = {
                        "generated at deployment time and stored in a protected location. "
                        "Do not expose the cluster UUID via any unauthenticated endpoint if it "
                        "doubles as an authentication credential for other internal services.",
+    },
+
+    "HX-F24": {
+        "title": "Tunes Credential Encryption AES Key Derived from Static Firmware-Embedded File",
+        "severity": "HIGH",
+        "component": (
+            "/usr/share/hyperflex/storfs-misc/springpath_env_parse.py + "
+            "/usr/share/hyperflex/storfs-misc/Secret.class"
+        ),
+        "description": (
+            "springpath_env_parse.parseEnvVariableTunes() uses AES-128-CBC to encrypt and "
+            "decrypt credential values stored in the springpath .tunes INI files "
+            "(/opt/hyperflex/springpath_default.tunes, springpath_custom_cluster.tunes, "
+            "springpath_custom_node.tunes). The AES key is derived as the MD5 hex digest "
+            "of Secret.class: md5('/usr/share/hyperflex/storfs-misc/Secret.class') = "
+            "'1f6d13bcd7753f2d3b2e2da361b7afb5'. Secret.class is a static firmware-embedded "
+            "file shipped in every HyperFlex 6.0.2b installation. The key is identical across "
+            "all deployments of the same firmware version — there is no per-deployment key "
+            "derivation, no salt, and no secret component outside the firmware image. "
+            "Any party with access to the firmware package can compute the key and decrypt "
+            "all credentials stored in the tunes infrastructure, including "
+            "credentials.installer_passwd (consumed by deployNodes.py at startup)."
+        ),
+        "code_evidence": {
+            "key_derivation": "key = hashlib.md5(open(Secret.class, 'rb').read()).hexdigest()",
+            "key_value": "1f6d13bcd7753f2d3b2e2da361b7afb5",
+            "secret_class_path": "/usr/share/hyperflex/storfs-misc/Secret.class",
+            "cipher": "AES-128-CBC (pycryptodome Crypto.Cipher.AES, MODE_CBC)",
+            "iv_handling": "IV prepended to ciphertext, base64-encoded",
+            "plaintext_pad": "PKCS#7 equivalent (pad to 16-byte boundary with pad char = chr(pad_len))",
+            "affected_credential": "credentials.installer_passwd (deployNodes.py)",
+            "source_file": "/usr/share/hyperflex/storfs-misc/springpath_env_parse.py",
+        },
+        "versions_affected": ["6.0.2b-44423 (stCtlVM + installer appliance)"],
+        "remediation": (
+            "Replace file-MD5-derived key with a per-deployment randomly generated AES key "
+            "stored in a protected keystore (e.g., the existing JCEKS keystore under "
+            "/etc/hyperflex/secure/). Secret.class should not serve as a key derivation input "
+            "since it is publicly distributed with the firmware."
+        ),
+    },
+
+    "HX-F25": {
+        "title": "Installer Go Binary Exposes Explicit SSRF Proxy Endpoint at /rest/deployment/proxy",
+        "severity": "HIGH",
+        "component": "/opt/hyperflex/hxinstaller/installer (Go binary, REST API)",
+        "description": (
+            "The HyperFlex installer Go binary (hxinstaller/installer) registers a REST "
+            "endpoint at /rest/deployment/proxy?url=<target>. The endpoint accepts an "
+            "arbitrary URL via the 'url' query parameter and proxies the request to the "
+            "specified target, returning the response. This is an explicit server-side "
+            "request forgery primitive built into the installer service. Combined with the "
+            "installer appliance's network position on the HyperFlex management network, "
+            "the endpoint provides access to internal services not directly reachable from "
+            "the attacker's network position. The auth posture of this endpoint in the Go "
+            "binary's own mux is not separately confirmed (distinct from the WAR's disabled "
+            "auth — HX-F18), but the endpoint is structurally an SSRF proxy regardless of "
+            "auth status."
+        ),
+        "code_evidence": {
+            "endpoint_string": "/rest/deployment/proxy?url=",
+            "binary": "/opt/hyperflex/hxinstaller/installer (Go, 15MB, not stripped)",
+            "source_tree": "bitbucket-eng-chn-sjc1.cisco.com/HXDP/installer-v2/server/",
+            "route_registration": "gorilla mux (runtime-assembled routes)",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+        "remediation": (
+            "Remove the /rest/deployment/proxy endpoint or gate it to internal use only. "
+            "If a proxy is required for cluster communication, restrict the target URL to "
+            "an allowlist of known internal service addresses and ports. "
+            "Log all proxy requests with full URL for audit."
+        ),
+    },
+
+    "HX-F26": {
+        "title": "stSSOMgr Thrift Service Exposes Hyper-V Host Admin Credentials Without Authentication",
+        "severity": "HIGH",
+        "component": "/opt/hyperflex/auth/auth (stSSOMgr service, localhost:9334)",
+        "description": (
+            "The HyperFlex auth binary runs the stSSOMgr Thrift service on localhost:9334 "
+            "using TBinaryProtocol/TFramedTransport with no authentication layer on the "
+            "Thrift connection. The StSSOMgr.getHypervHostCreds() RPC returns a JSON object "
+            "containing the Hyper-V host local admin username and base64-encoded password: "
+            "{'host': {'localadminusername': '<user>', 'localadminusercred': '<b64_pass>'}}. "
+            "Credentials are sourced from ZooKeeper. Any process on the installer appliance "
+            "or stCtlVM that can reach localhost:9334 — including code execution via HX-F18 "
+            "or HX-F19 — can retrieve Windows Hyper-V host admin credentials by opening a "
+            "raw Thrift connection without presenting any credential. This enables lateral "
+            "movement from the HyperFlex management plane to Hyper-V host infrastructure."
+        ),
+        "code_evidence": {
+            "service_port": "localhost:9334 (TSocket.TSocket('localhost', 9334))",
+            "transport": "TTransport.TFramedTransport (no auth wrapper)",
+            "rpc": "StSSOMgr.Client.getHypervHostCreds()",
+            "response_schema": (
+                "JSON: {'host': {'localadminusername': str, 'localadminusercred': str (base64)}}"
+            ),
+            "auth_on_connect": None,
+            "source_file": "/opt/hyperflex/stssoclient.py",
+            "service_binary": "/opt/hyperflex/auth/auth",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance + stCtlVM)"],
+        "remediation": (
+            "Add Thrift transport-level authentication to stSSOMgr (e.g., SASL/PLAIN or "
+            "a pre-shared token validated on every connection). Restrict port 9334 to "
+            "specific authorized callers via process-level controls or Unix domain socket "
+            "instead of TCP. Rotate the Hyper-V admin credentials independently of the "
+            "stSSOMgr credential vault."
+        ),
+    },
+
+    "HX-F27": {
+        "title": "Installer deployNodes.py Disables TLS Certificate Verification for All HTTP Calls",
+        "severity": "MEDIUM",
+        "component": "/opt/hyperflex/deployNodes.py",
+        "description": (
+            "deployNodes.py passes verify=False to every requests.get() and requests.post() "
+            "call — covering cluster deployment status polling, checkDeployNodes, and "
+            "deployNodes REST calls against the installer appliance. The verify=False flag "
+            "disables both certificate chain validation and hostname verification in the "
+            "Python requests library. All HTTPS connections from this script — including "
+            "those transmitting authentication credentials (Basic Auth via auth=authData) "
+            "and cluster deployment payloads — are susceptible to MITM on the management "
+            "network. The installer password (credentials.installer_passwd) is transmitted "
+            "as HTTP Basic Auth over these unvalidated HTTPS connections."
+        ),
+        "code_evidence": {
+            "pattern": "requests.get/post(url, auth=authData, verify=False, ...)",
+            "occurrences": [
+                "deploymentsUrl GET (line 148)",
+                "progressUrl GET (line 152)",
+                "checkDeployNodesUrl POST (lines 156, 164)",
+                "deployNodesUrl POST (lines 160, 169)",
+            ],
+            "credential_exposure": "auth=authData carries (opts.user, opts.password) = INSTALLER_PASSWD",
+            "source_file": "/opt/hyperflex/deployNodes.py",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
+        "remediation": (
+            "Remove verify=False. Load the installer appliance's self-signed certificate "
+            "(generated at deploy time) into a trusted bundle and pass verify='<path>' "
+            "to requests calls. If mutual TLS is required, use the vcenter_client key from "
+            "the JCEKS keystore (HX-F13) for client certificate auth."
+        ),
     },
 }
 
