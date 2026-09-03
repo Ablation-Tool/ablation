@@ -1770,6 +1770,67 @@ FINDINGS = {
             "before any DEK write is accepted, to prevent single-node key replacement attacks."
         ),
     },
+    "HX-F42": {
+        "title": "Unauthenticated StPlatform Thrift Interface — 80+ Cluster Management Operations Exposed",
+        "severity": "CRITICAL",
+        "component": (
+            "storfs (storfs-core package, ELF 64-bit, ~20MB, not stripped). "
+            "Class: com::storvisor::sysmgmt::StPlatformProcessor. "
+            "Server: sysmgmtNonBlockingServer (TNonblockingServer, started by SysMgmt_InitInternal). "
+            "Service IDL: com.storvisor.sysmgmt.StPlatform."
+        ),
+        "description": (
+            "The main StPlatform Apache Thrift service in storfs exposes 80+ cluster management "
+            "methods without any Thrift-layer authentication. The dispatchCall implementation "
+            "(StPlatformProcessor::dispatchCall) routes exclusively by method name string comparison "
+            "with no preceding token or credential check. Confirmed by disassembly of "
+            "process_formatDisks @ 0x9947d0: the pattern is identical to the StPlatformEnc handlers "
+            "(HX-F40/HX-F41) — RTTI type check, args parse, readMessageEnd, handler call, no auth. "
+            "Any caller that can reach the Thrift server port can invoke any of these operations. "
+            "The most destructive accessible methods include: formatDisks, shutdownCluster, "
+            "deleteDatastore, deleteDatastoreSnapshots, removeNode, removeDisk, clusterUpgrade, "
+            "enableZKAuth, resetZkConnectionString, setPlatformClusterAccessPolicy, "
+            "setPlatformMaintenanceMode, blacklistDisks, retireDisks, unclaimDisks, "
+            "revertDatastoreSnapshot, teardownNRNFS, setDataWriteThru."
+        ),
+        "code_evidence": {
+            "binary": "storfs (ELF 64-bit, not stripped, ~20MB)",
+            "confirmed_handler": "process_formatDisks @ 0x9947d0 (same auth-less pattern as HX-F40)",
+            "dispatch_fn": "StPlatformProcessor::dispatchCall — string-match routing, no auth gate",
+            "server_start_fn": "StartNonBlockingServer @ 0x8c27e0",
+            "server_thread": "_ZL26sysmgmtNonBlockingThreadId (created by SysMgmt_InitInternal @ 0x8c1dc0)",
+            "total_methods": "80+ process_* handlers in StPlatformProcessor",
+            "destructive_methods": [
+                "formatDisks — format all drives, destroys all data",
+                "shutdownCluster — immediate cluster shutdown (DoS)",
+                "deleteDatastore / deleteDatastoreSnapshots — datastore destruction",
+                "deleteFiles — arbitrary file deletion",
+                "removeNode / removeDisk — cluster topology modification",
+                "clusterUpgrade — trigger upgrade with attacker-controlled version map",
+                "enableZKAuth / resetZkConnectionString — ZooKeeper state manipulation",
+                "setPlatformClusterAccessPolicy — modify cluster access policies",
+                "setPlatformMaintenanceMode — partial DoS via forced maintenance",
+                "blacklistDisks / retireDisks / unclaimDisks — disk eviction",
+                "revertDatastoreSnapshot — rollback data to arbitrary snapshot",
+                "teardownNRNFS — tear down NFS replication",
+                "setDataWriteThru — toggle write-through caching",
+            ],
+            "read_only_methods_also_exposed": [
+                "getCluster, getNodes, getDisks, getDatastores — topology enumeration",
+                "getClusterStats, getCleanerStats, getEnospaceInfo — metrics leak",
+                "getAboutInfo — version/build disclosure",
+            ],
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Bind the StPlatform Thrift server to 127.0.0.1 only. "
+            "Add pre-dispatch authentication at the TNonblockingServer level using a shared secret "
+            "or mutual TLS. For write-path methods (formatDisks, deleteDatastore, etc.), require "
+            "a session token from hx-auth before the handler is invoked. "
+            "For cluster-level destructive operations (formatDisks, shutdownCluster, removeNode), "
+            "require explicit operator confirmation via a separate signed request channel."
+        ),
+    },
 }
 
 
