@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F48 (HIGH). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F49 (CRITICAL). 13 attack chains.
 """
 
 import socket
@@ -1499,6 +1499,40 @@ FINDINGS = {
         ),
         "chain": "Read site-manager federation-management.tpl from firmware -> base64 decode -> try admin:ins3965! on ND instances and admin:Ciscoins3965! on ACI APICs",
         "combined_with": ["ND-F18", "ND-F31"],
+    },
+    "ND-F49": {
+        "title": "system:mond ClusterRole in kube-system — Near-Cluster-Admin Monitoring Daemon with Staging hostPath",
+        "severity": "CRITICAL",
+        "component": "mond namespace kube-system (mond.tpl), ClusterRole system:mond, ServiceAccount mond",
+        "description": (
+            "The monitoring daemon (mond) defines ClusterRole system:mond with "
+            "apiGroups:['*'], resources:['*'], verbs:['get','watch','list','update','create','delete']. "
+            "Bound to ServiceAccount mond in namespace kube-system — the most privileged namespace. "
+            "kube-system SA tokens bypass most admission controls and have implicit elevated trust. "
+            "mond is a Prometheus-compatible monitoring service that scrapes K8s API metrics directly. "
+            "Critical hostPath mounts: "
+            "(1) {{staging}} = /data/services/k8_secure/staging/ — contains known_tokens.csv (ND-F42). "
+            "(2) /mnt/atom/k8/ — full K8s binary tree including kubectl. "
+            "(3) {{CertDir}} and cacerts.crt — all cluster certificates. "
+            "(4) /var/run/platform — platform runtime state. "
+            "This is the fifth near-cluster-admin ClusterRole in ND 3.2.2m (appmgr, eventmonitoring, "
+            "firmwared, sm, mond). The systemic pattern: every service that needs K8s API access "
+            "receives a wildcard resource ClusterRole rather than scoped permissions. "
+            "Running in kube-system with access to staging/known_tokens.csv + kubectl binary = "
+            "code exec in mond pod -> read static K8s tokens + arbitrary kubectl."
+        ),
+        "clusterrole_rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["get","watch","list","update","create","delete"]}],
+        "binding_subjects": [{"kind": "ServiceAccount", "name": "mond", "namespace": "kube-system"}],
+        "hostpath_mounts": [
+            "{{staging}} = /data/services/k8_secure/staging/ (known_tokens.csv)",
+            "/mnt/atom/k8/ (kubectl + K8s binaries)",
+            "{{CertDir}} (all cluster certs)",
+            "/var/run/platform (platform runtime)",
+            "/logs/k8 (K8s logs)",
+        ],
+        "systemic_note": "5th wildcard ClusterRole found; pattern: every K8s-integrated ND service gets near-cluster-admin",
+        "chain": "Code exec in mond pod -> read /data/services/k8_secure/staging/known_tokens.csv (ND-F42) -> static K8s bearer token -> cluster-admin; OR kube-system SA token -> cluster-admin",
+        "combined_with": ["ND-F42", "ND-F30", "ND-F40", "ND-F41", "ND-F47"],
     },
     "ND-F40": {
         "title": "system:eventmonitoring ClusterRole — Cluster-Admin Equivalent RBAC on Event Monitoring Service",
