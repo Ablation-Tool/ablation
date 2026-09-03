@@ -5706,6 +5706,61 @@ FINDINGS = {
             "Consider rotating all three credential sets after any ZK exposure incident."
         ),
     },
+    "HX-F105": {
+        "title": (
+            "ZKQueryService_StNodeMgr.getStCtlSSHEncryptedPrivateKey() Reads "
+            "STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY from ZooKeeper — "
+            "stCtlVM SSH Private Key Stored and Retrieved in Cleartext via "
+            "Unauthenticated ZK Read"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.1",
+        "cwe": "CWE-312",
+        "component": (
+            "com.storvisor.sysmgmt.stNodeMgr.ZKQueryService_StNodeMgr / "
+            "ZKNodeService_StNodeMgr / stNodeMgr service — "
+            "stCtlVM SSH key management via ZooKeeper"
+        ),
+        "evidence": {
+            "read_uses_plain_text_entry": (
+                "ZKQueryService_StNodeMgr.getStCtlSSHEncryptedPrivateKey(hostname): "
+                "offset 3: invokevirtual STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY:()String. "
+                "Despite method name 'Encrypted', implementation reads "
+                "STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY (ZK key: 'key') — the cleartext variant. "
+                "Returns raw private key string from ZK without decryption."
+            ),
+            "write_path_plain_text": (
+                "ZKNodeService_StNodeMgr.setSSHEncryptedPrivateKey(value, encrypted): "
+                "encrypted=false branch (offset 14): getNodeEntry_SSHPlainTextPrivateKey(value) -> "
+                "updateZKNodeEntry(). "
+                "Default $default$2() -> true (encrypted=true is the default write path). "
+                "Plain text path is explicitly written when encrypted=false is passed. "
+                "getStCtlSSHEncryptedPrivateKey reads this plain text path in production."
+            ),
+            "dual_entry_structure": (
+                "ZK contains two variants per stCtlVM host: "
+                "STR_PAYLOAD_ENTRY_SSH_ENCRYPTED_PRIVATE_KEY (encrypted, default write), "
+                "STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY (cleartext, read by production code). "
+                "SSH public key mirrored: SSH_ENCRYPTED_PUBLIC_KEY and SSH_PLAIN_TEXT_PUBLIC_KEY. "
+                "NonVMWStMgrImpl uses getStCtlSSHEncryptedPrivateKey() for SSH connection setup."
+            ),
+            "zk_access_prerequisite": (
+                "ZK auth disabled by default (HX-F102/F103). "
+                "Attack: zkCli.sh get /storvisor/stNodeMgr/<hostname>/... -> "
+                "SSH private key in plaintext -> "
+                "ssh -i key springpath@<stCtlVM-ip> -> full stCtlVM shell access."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Rename getStCtlSSHEncryptedPrivateKey to accurately reflect it reads plaintext. "
+            "Store only encrypted SSH private keys in ZK; require decryption before use. "
+            "Ensure setSSHEncryptedPrivateKey never uses encrypted=false in production code paths. "
+            "Enable ZK auth (HX-F102/F103 remediation). "
+            "Restrict ZK port 2181 to localhost/management VLAN. "
+            "Rotate all stCtlVM SSH key pairs after any ZK exposure incident."
+        ),
+    },
 }
 
 
