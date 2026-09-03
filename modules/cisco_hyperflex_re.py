@@ -1392,7 +1392,11 @@ FINDINGS = {
             "identity_control_header": "X-LoggedInUser (caller-controlled)",
             "scope_control_header": "X-Scope: READ | MODIFY (caller-controlled)",
             "initiator_header": "X-RequestInitiator (caller-controlled)",
-            "session_id_source": "HxSecurity.getInstance().getLocalSessionId()",
+            "session_id_source": (
+                "HxSecurity.getInstance().getLocalSessionId() reads "
+                "/etc/hyperflex/secure/root_file.pub via FileInputStream + BufferedReader + trim(); "
+                "field: localhostRootFilePub (static string, not rotated per-session)"
+            ),
             "attribute_set_on_bypass": (
                 "com.springpath.hx.aaa.authenticateduser = X-LoggedInUser; "
                 "com.springpath.hx.aaa.authenticateduserscope = X-Scope; "
@@ -1408,12 +1412,69 @@ FINDINGS = {
                 "three companion headers required but caller-supplied"
             ),
         },
+        "escalation_note": (
+            "The session ID is the STATIC CONTENTS of /etc/hyperflex/secure/root_file.pub — "
+            "not a dynamic per-session nonce. The file is likely the RSA public key also used "
+            "for KEK operations (see HX-F32: connector uses /etc/springpath/secure/root_file.pub; "
+            "these paths may be symlinked). A public key file is world-readable in many default "
+            "Linux configurations, making the bypass unconditionally exploitable from localhost "
+            "without requiring any guessing or brute force."
+        ),
         "versions_affected": ["6.0.2b-44423 (all JAX-RS REST API WARs via shared authfilter lib)"],
         "remediation": (
-            "Accept X-RootSessionID only from 127.0.0.1 at the network layer. Derive authenticated "
-            "user identity from the local session record, not from caller-supplied X-LoggedInUser. "
-            "Rotate local session ID periodically and store it in a memory-only location. "
-            "Audit all requests that arrive with X-RootSessionID or X-AllClients headers."
+            "Replace the static file-based session ID with a per-startup random token generated "
+            "in memory (crypto/rand, 256-bit minimum) not written to disk. Accept X-RootSessionID "
+            "only from 127.0.0.1 at the network firewall layer. Derive authenticated user identity "
+            "from the local session record, not from caller-supplied X-LoggedInUser. Restrict "
+            "permissions on /etc/hyperflex/secure/ to root:root 0600."
+        ),
+    },
+    "HX-F36": {
+        "title": "Hardcoded Candidate JWT Signing Key in hx-auth Authentication Binary",
+        "severity": "HIGH",
+        "component": (
+            "hx-auth Go binary (ELF64, dynamically linked, not stripped); "
+            "main.createToken / main.getjwtToken; port 8082"
+        ),
+        "description": (
+            "The hx-auth binary (handles login, token creation, logout, and password change on "
+            "port 8082) contains the literal string 'RHGocmgN90R4ShL_WnQ5GJSgGzADV678' at file "
+            "offset 0x3cc53f, embedded in the binary's string constant table between unrelated "
+            "Go runtime error strings. The binary implements JWT creation (main.createToken, "
+            "main.getjwtToken), JWT-based session management (main.AddCookie, main.RemoveCookie, "
+            "main.getUserSessionInfo), and references HS256/HS384/HS512/RS256/RS384/RS512/PS256 "
+            "algorithm identifiers in its string table. A 34-character URL-safe alphanumeric "
+            "string embedded in a JWT-issuing binary is consistent with a hardcoded HMAC signing "
+            "key for HS256 (minimum 256-bit / 32-byte key). If confirmed as the JWT signing "
+            "secret, any attacker can forge valid session tokens for any user and scope without "
+            "credentials, bypassing all authentication in every REST API WAR. The binary also "
+            "contains main.isMockDevMode, suggesting a development bypass path that may activate "
+            "when a flag or environment variable is set. The binary's full function symbol table "
+            "is accessible (not stripped, dynamically linked), enabling direct function-level "
+            "analysis without disassembly."
+        ),
+        "code_evidence": {
+            "binary": "hx-auth (ELF64, dynamically linked, debug info present, not stripped; 9,955,896 bytes)",
+            "candidate_secret": "RHGocmgN90R4ShL_WnQ5GJSgGzADV678",
+            "file_offset": "0x3cc53f",
+            "string_length_chars": "34",
+            "jwt_functions": "main.createToken, main.getjwtToken, main.getjwtToken.func1",
+            "jwt_algorithms_in_string_table": "ES256 ES384 ES512 HS256 HS384 HS512 RS256 RS384 RS512 PS256 PS384 PS512",
+            "auth_functions": (
+                "main.loginHandler, main.validateLogin, main.verifyHandler, "
+                "main.logoutHandler, main.getUserSessionInfo"
+            ),
+            "dev_mode_flag": "main.isMockDevMode (dev/test bypass path in production binary)",
+            "crypto_functions": "main.decrypt, NewCBCDecrypter (AES-CBC ticket decryption)",
+            "listen_port": ":8082 (embedded in binary string table)",
+        },
+        "versions_affected": ["6.0.2b-44423 (hx-auth binary)"],
+        "remediation": (
+            "Remove hardcoded signing key from hx-auth binary. Generate the JWT signing secret "
+            "from a per-deployment cryptographic random source (crypto/rand, 256-bit minimum) "
+            "and inject at service startup via environment variable or a secrets manager. "
+            "Disable and remove main.isMockDevMode code paths from production builds. "
+            "Rotate JWT signing secrets on any firmware upgrade or credential rotation event."
         ),
     },
     "HX-F34": {
