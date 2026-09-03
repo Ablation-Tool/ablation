@@ -183,7 +183,18 @@ installerrestapi-1.0.0.war (60MB Java WAR, installer appliance):
   HostCredentialsAccess(): connects to localhost Thrift + reads /etc/hyperflex/secure/root_file.pub
     .getUserName() / .getPassword() return EsxCredential.username / .password (ESXi host credentials)
 
-Findings: HX-F01 (HIGH) through HX-F22 (MEDIUM).
+ZooKeeper auth (zkClient.py / storfs-support/listzkdb.py):
+  ZKClient.__enter__ auth token = "postEvent;" + cluster_uuid
+  cluster_uuid source: /etc/hyperflex/clusteruuid
+  ZK UUID auth scheme bypassed by GET /rest/v1/cluster (unauthenticated) -> cluster UUID field
+  listzkdb.py uses paramiko.AutoAddPolicy() (SSH TOFU, no host key verification)
+  Credentials logged in exception output: "Paramiko ssh connect exception: %s, host: %s user: %s password: %s"
+
+vcCertificateUtilities.py:
+  SpringpathVMWare.getServiceInstance_VCenter_SDK_Via_Certificate() -> uses vcenter_client RSA key from JCEKS (HX-F13)
+  Confirms HX-F13 vCenter client cert is the live auth credential for vCenter management operations
+
+Findings: HX-F01 (HIGH) through HX-F23 (MEDIUM).
 """
 
 import socket
@@ -804,6 +815,40 @@ FINDINGS = {
         "remediation": "Remove TrustAllManager and the global SSL socket factory override. "
                        "Use a dedicated SSLContext loaded from the JCEKS keystore (HX-F13) for "
                        "cluster connections; validate cluster certificates against a pinned CA.",
+    },
+
+    "HX-F23": {
+        "title": "ZooKeeper UUID Authentication Token Derivable from Unauthenticated REST Endpoint",
+        "severity": "MEDIUM",
+        "component": "storfs-support/zkClient.py + /rest/v1/cluster (unauthenticated)",
+        "description": (
+            "HyperFlex ZooKeeper authentication uses a cluster UUID as the shared secret. "
+            "zkClient.py reads the UUID from /etc/hyperflex/clusteruuid and presents it to "
+            "ZooKeeper as auth scheme 'UUID' with the string 'postEvent;<cluster_uuid>'. "
+            "The cluster UUID is exposed without authentication at the HX Connect REST endpoint "
+            "GET /rest/v1/cluster, which returns the cluster UUID among other fields. "
+            "An attacker on the management network can obtain the ZK auth token from the "
+            "unauthenticated REST API and then authenticate to the ZooKeeper ensemble at "
+            "localhost:2181 (port typically reachable from the stCtlVM management interface). "
+            "Successful ZK access exposes: CHAP credential RSA ciphertexts (which are decryptable "
+            "via the PKCS12 keystore using the static 'springpath' password — HX-F11/HX-F12), "
+            "cluster topology, vCenter registration state, and storage configuration. "
+            "Whether ZK auth is enforced depends on the 'useZKAuth' flag in /etc/hyperflex/storfs.cfg."
+        ),
+        "code_evidence": {
+            "auth_scheme": "UUID",
+            "auth_string_template": "'postEvent;' + cluster_uuid",
+            "uuid_source_file": "/etc/hyperflex/clusteruuid",
+            "uuid_public_endpoint": "GET /rest/v1/cluster (no auth required)",
+            "zk_connect": "127.0.0.1:2181 (storfs.cfg: zkConnectString or crmZKEnsemble)",
+            "auth_flag": "useZKAuth in /etc/hyperflex/storfs.cfg",
+            "source_file": "/opt/hyperflex/storfs-support/zkClient.py",
+        },
+        "versions_affected": ["6.0.2b-44423 (installer appliance + stCtlVM)"],
+        "remediation": "Replace UUID-based ZK auth with a random per-cluster credential "
+                       "generated at deployment time and stored in a protected location. "
+                       "Do not expose the cluster UUID via any unauthenticated endpoint if it "
+                       "doubles as an authentication credential for other internal services.",
     },
 }
 
