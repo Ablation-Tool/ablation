@@ -2172,6 +2172,137 @@ FINDINGS = {
             "Ensure /config/conf.json is not writable by processes running as non-root or by web-accessible paths."
         ),
     },
+
+    "HX-F49": {
+        "title": "ZooKeeper Port 2181 Accessible from Management Network Without Client Authentication",
+        "severity": "HIGH",
+        "component": (
+            "ZooKeeper 3.8.1 (zookeeper_3.8.1_amd64.deb). "
+            "Service: exhibitor (manages ZK). Config: /etc/hyperflex/storfs.cfg (crmZKEnsemble). "
+            "Bind: eth1 (management/storage interface) since HyperFlex 5.5.1a. "
+            "Auth tunable: useZKAuth in /etc/hyperflex/storfs.cfg (default: absent/false)."
+        ),
+        "description": (
+            "ZooKeeper client port 2181 is bound to the eth1 management network interface on each "
+            "stCtlVM node, making it reachable from all other nodes in the cluster management network. "
+            "Client authentication is disabled by default: the setUseZkAuth.sh script must be explicitly "
+            "invoked post-deploy to set useZKAuth=true in storfs.cfg, and this is not part of the "
+            "default cluster bring-up procedure. "
+            "Without useZKAuth, any host on the management network can open a ZK client session and "
+            "perform unrestricted reads and writes across the entire ZNode tree. "
+            "ZooKeeper stores cluster election state (/election), node inventory (/storvisor/nodeInventory), "
+            "per-node member data (/members/<puuid>), cluster operational data (/cluster), and AAA session "
+            "tokens written by the auth filter. An attacker with management network access (e.g., via "
+            "a compromised HX edge node, vCenter integration credential, or CIMC interface) can: "
+            "(1) enumerate all cluster node management IPs and UUIDs from /storvisor/nodeInventory; "
+            "(2) read AAA session tokens from ZK to authenticate as any logged-in HyperFlex administrator; "
+            "(3) manipulate /election ZNodes to trigger leader re-election, disrupting cluster I/O; "
+            "(4) poison /members data to force node eviction from the storage cluster. "
+            "The setup-dnat-rule.sh script installs an iptables DNAT rule redirecting local connections "
+            "(127.0.0.1:2181 -> eth1_ip:2181) for backwards compatibility with tools that use localhost, "
+            "confirming the intentional bind to eth1. "
+            "The check_zk.sh cluster health tool demonstrates the expected access pattern: "
+            "it uses 'nc <management_ip> 2181' to issue srvr/cons/dump/wchs four-letter commands "
+            "and zkCli.sh to enumerate /election and /storvisor/nodeInventory from remote nodes."
+        ),
+        "code_evidence": {
+            "bind_interface": (
+                "setup-dnat-rule.sh: 'Starting 5.5.1a, ZK client port 2181 will only be bound on eth1 interface.'\n"
+                "iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 --dport 2181 -j DNAT --to-destination $eth1"
+            ),
+            "auth_opt_in": (
+                "setUseZkAuth.sh: checks grep useZKAuth=true /etc/hyperflex/storfs.cfg;\n"
+                "sets useZKAuth=true in storfs.cfg only when explicitly invoked.\n"
+                "No evidence of invocation in default cluster bring-up scripts."
+            ),
+            "remote_access_confirmed": (
+                "check_zk.sh get_zk_servers(): reads crmZKEnsemble from storfs.cfg -> node management IPs;\n"
+                "nc -z -w 5 $zks 2181 (liveness check from remote node);\n"
+                "echo srvr | nc $zks 2181 (role query);\n"
+                "echo cons | nc $zks 2181 (connection dump);\n"
+                "echo dump | nc $LEADER 2181 (ephemeral node + session watches dump);\n"
+                "zkCli.sh -server $zks:2181 -> ls /election; ls /storvisor/nodeInventory"
+            ),
+            "four_letter_whitelist": "zoo.cfg.defaults: 4lw.commands.whitelist=* (all commands enabled)",
+            "zk_version": "zookeeper_3.8.1_amd64.deb (ZK 3.8.1)",
+            "auth_provider_registered": (
+                "zoo.cfg.defaults: authProvider.1=org.apache.zookeeper.server.auth.UUIDAuthenticationProvider\n"
+                "Provider is registered but not enforced without requireClientAuthScheme — clients "
+                "connecting without credentials are accepted as anonymous."
+            ),
+            "znode_paths_at_risk": [
+                "/election — quorum leader election data (node IDs, epoch)",
+                "/storvisor/nodeInventory — all cluster node management IPs and UUIDs",
+                "/members/<puuid> — per-node membership and operational data",
+                "/cluster — cluster-wide operational state",
+                "AAA session token ZNodes — written by authfilter (path confirmed by AAAConfiguration.INSTANCE)",
+            ],
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Enable ZK client authentication by default: invoke setUseZkAuth.sh as part of cluster "
+            "initialization, not as a post-upgrade opt-in. "
+            "Restrict ZK 2181 to localhost or a dedicated ZK inter-node VLAN separate from the "
+            "management network. "
+            "Disable the all-commands 4LW whitelist (4lw.commands.whitelist=srvr,mntr at most). "
+            "Rotate AAA session tokens on any cluster where useZKAuth was not enabled from initial deploy."
+        ),
+    },
+
+    "HX-F50": {
+        "title": "ZooKeeper zoo.cfg.defaults Sets skipACL=yes — ZNode ACL Enforcement Globally Disabled",
+        "severity": "MEDIUM",
+        "component": (
+            "ZooKeeper 3.8.1 (zookeeper_3.8.1_amd64.deb). "
+            "Config file: /usr/share/zookeeper/conf/zoo.cfg.defaults (Exhibitor base template). "
+            "Runtime: zoo.cfg generated by Exhibitor from zoo.cfg.defaults at service start."
+        ),
+        "description": (
+            "zoo.cfg.defaults contains skipACL=yes, which instructs the ZooKeeper server to bypass "
+            "ACL evaluation on all client requests regardless of the ACLs set on individual ZNodes. "
+            "This is a server-global flag: no per-ZNode ACL can override it. "
+            "The consequence is that ZNode ACLs provide zero access control guarantees at runtime — "
+            "any connected ZK client (authenticated or not) can read and write any ZNode in the tree. "
+            "This is additive to HX-F49: even if useZKAuth=true is enabled (closing the unauthenticated "
+            "access gap), ACL-based data isolation between ZK clients remains completely absent. "
+            "Practical impact: a compromised storfs process, an iSCSI service, or any other ZK client "
+            "on the cluster can read AAA session tokens, election data, and node inventory regardless "
+            "of whatever ACLs the AAA service or cluster manager wrote on those ZNodes. "
+            "skipACL=yes appears to have been set to simplify cluster bring-up (ZK ACL setup requires "
+            "bootstrapping a shared secret across all nodes before first write), but the flag was never "
+            "removed for production deployments."
+        ),
+        "code_evidence": {
+            "config_line": "zoo.cfg.defaults:16: skipACL=yes",
+            "config_file_path": "/usr/share/zookeeper/conf/zoo.cfg.defaults",
+            "usage": (
+                "Exhibitor reads zoo.cfg.defaults as its ZooKeeper configuration template. "
+                "The generated zoo.cfg inherits all settings including skipACL=yes. "
+                "updateZKAuthConfigs.sh appends to com.netflix.exhibitor.zoo-cfg-extra in "
+                "/etc/exhibitor/exhibitor.properties — it does NOT remove skipACL=yes."
+            ),
+            "zk_acl_model": (
+                "ZooKeeper ACL model: each ZNode has an ACL list (scheme:id:perms). "
+                "skipACL=yes causes ZookeeperServer.checkACL() to return immediately without "
+                "evaluating any ACL entry. Reference: ZooKeeper source DataTree.java checkACL()."
+            ),
+            "interaction_with_f49": (
+                "Without skipACL=yes: enabling useZKAuth (HX-F49 remediation) + setting ZNode ACLs "
+                "could provide per-client data isolation. "
+                "With skipACL=yes: ACLs are meaningless even after auth is enabled. "
+                "Both findings must be remediated together to achieve ZNode-level access control."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove skipACL=yes from zoo.cfg.defaults. "
+            "After enabling client authentication (HX-F49 remediation), set ZNode ACLs on sensitive "
+            "paths (/election, /storvisor, /members, AAA token paths) to restrict access to "
+            "specific ZK auth identities (UUID-scheme IDs assigned per service). "
+            "Test ACL enforcement before and after Exhibitor restart to confirm zoo.cfg picks up "
+            "the change (skipACL removal requires ZK restart to take effect)."
+        ),
+    },
 }
 
 
