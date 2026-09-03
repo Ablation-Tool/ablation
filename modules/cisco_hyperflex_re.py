@@ -2448,6 +2448,77 @@ FINDINGS = {
             "to prevent regression."
         ),
     },
+    "HX-F53": {
+        "title": "hxSecuritySvcMgr Thrift Interface on Port 8055 Exposes runCommand RPC and DARE Key Operations",
+        "severity": "CRITICAL",
+        "component": "hxSecuritySvcMgr (port 8055, HTTP Thrift)",
+        "cwe": "CWE-306",
+        "affected_interface": "com.storvisor.sysmgmt.hxSecuritySvcMgr",
+        "description": (
+            "The hxSecuritySvcMgr service exposes a Thrift HTTP interface on port 8055. "
+            "The interface includes a runCommand(command: String, arguments: List<String>) RPC "
+            "that executes arbitrary OS commands on the HyperFlex controller VM. "
+            "Additional high-impact methods on the same interface include: "
+            "backupDareKeys / restoreDareKeys (DARE key exfiltration/replacement), "
+            "changePasswd / setUserPasswordWithChecks (credential reset), "
+            "configureZkHKD / configureStorageClientNetwork (cluster reconfiguration), "
+            "enableSecureBoot / applySTIG (security state manipulation), "
+            "installPackageHKD / installSECore / securePackageInstall (package installation), "
+            "syncToken / removeKey / initKmProxy (KMIP key management). "
+            "The WAR client (HxSecuritySvcMgrClient) connects to http://localhost:8055 and passes "
+            "X-RootSessionID from /etc/hyperflex/secure/root_file.pub. "
+            "Authentication is not confirmed server-side; the pattern matches other unauthenticated "
+            "Thrift endpoints in this codebase (port 10210 / HX-F51). "
+            "INPUT firewall policy is ACCEPT (HX-F description) — port 8055 is accessible from the "
+            "management network if the service binds on 0.0.0.0."
+        ),
+        "evidence": {
+            "runCommand_thrift_args": (
+                "thrift-stubs/com/storvisor/sysmgmt/hxSecuritySvcMgr$runCommand_args.class:\n"
+                "  field command: String  (OS command string)\n"
+                "  field arguments: List  (argument list)\n"
+                "Explicit arbitrary-command-execution Thrift RPC with no auth token in the args struct."
+            ),
+            "client_connection": (
+                "HxSecuritySvcMgrClient (securityservice-war):\n"
+                "  THttpClient(\"http://localhost:8055\")  [plain HTTP]\n"
+                "  setCustomHeader(\"X-RootSessionID\", HxSecurity.getLocalSessionId())\n"
+                "  setCustomHeader(\"X-OperationID\", ...)\n"
+                "Same auth pattern as HxIscsiMgrClient -> iscsiSvcMgr. "
+                "X-RootSessionID obtainable from /etc/hyperflex/secure/root_file.pub (see HX-F13)."
+            ),
+            "dare_key_methods": [
+                "backupDareKeys   — exports DARE keys to backup",
+                "restoreDareKeys  — replaces live DARE keys from backup",
+                "removeKey        — deletes encryption keys",
+                "initKmProxy      — reinitializes KMIP key management proxy",
+            ],
+            "firewall_context": (
+                "iptables_node_reset.rules: ':INPUT ACCEPT' — no inbound restrictions. "
+                "Port 8055 accessible from management network if hxSecuritySvcMgr binds on 0.0.0.0."
+            ),
+        },
+        "impact": (
+            "runCommand execution as the hxSecuritySvcMgr process user (expected: root or springpath) "
+            "enables full OS command execution on the HyperFlex controller VM. "
+            "backupDareKeys/restoreDareKeys enable DARE key exfiltration or key replacement attacks, "
+            "rendering stored data permanently inaccessible or readable by the attacker. "
+            "changePasswd allows authentication credential reset for all local users including root. "
+            "The X-RootSessionID auth token is static and obtainable via HX-F13 (keystore read), "
+            "enabling any authenticated REST API user to forge Thrift calls to this interface."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Bind hxSecuritySvcMgr to 127.0.0.1 only; add OS-level firewall rule blocking "
+            "external access to port 8055 as an immediate mitigation. "
+            "Implement Thrift-layer authentication that validates callers against a dynamic "
+            "per-session token rather than a static file-backed X-RootSessionID. "
+            "Remove runCommand from the externally-exposed Thrift interface entirely — internal "
+            "command execution should use an internal IPC mechanism not reachable via the network. "
+            "Rotate X-RootSessionID on each service restart and store in a secrets manager "
+            "rather than a world-readable file path."
+        ),
+    },
 }
 
 
