@@ -2885,6 +2885,206 @@ FINDINGS = {
             "5. Audit all ZK subtrees for additional plaintext credential storage."
         ),
     },
+
+    # ── HX-F60 ──────────────────────────────────────────────────────────────────
+    "HX-F60": {
+        "title": "World-Readable JCEKS Keystore with Hardcoded Password Exposes AES Key and vCenter Private Key",
+        "severity": "CRITICAL",
+        "cvss": "9.1",
+        "cwe": "CWE-321",
+        "component": "StorvisorKeystoreManager / SecurityConstants / hyperflex_keystore.jceks",
+        "class": "Hardcoded Cryptographic Key",
+        "confirmed": True,
+        "evidence": {
+            "keystore_file": (
+                "File: /etc/hyperflex/secure/hyperflex_keystore.jceks "
+                "Permissions: -rw-r--r-- (world-readable). "
+                "Type: Java JCE KeyStore (JCEKS), 2700 bytes. "
+                "Entries: 2 — 'aes_encryption' (SecretKeyEntry), 'vcenter_client' (PrivateKeyEntry). "
+                "Verified via: keytool -list -keystore hyperflex_keystore.jceks -storepass springpath -storetype JCEKS."
+            ),
+            "keystore_password": (
+                "Password file: /etc/hyperflex/secure/hyperflex_security.properties "
+                "(symlink -> /usr/share/hyperflex/storfs-misc/hyperflex_security.properties). "
+                "File permissions: world-readable. "
+                "Content: <entry key='keystore_password'>c3ByaW5ncGF0aA==</entry>. "
+                "Decoded: 'springpath' (the vendor/product name). "
+                "SecurityConstants$.class constant pool: "
+                "'STORVISOR_SECURITY_PROPERTY_KEYSTORE_PWD' = 'keystore_password' (#200); "
+                "'keystore_password' is the property key looked up in hyperflex_security.properties."
+            ),
+            "aes_key_usage": (
+                "EncryptionUtil$.decryptData(String) loads 'aes_encryption' entry from keystore "
+                "via StorvisorKeystoreManager$.getEntry('aes_encryption'). "
+                "This AES key decrypts ZK-stored credential fields: "
+                "'url_vcenter_encrypted_user', 'url_vcenter_encrypted_password', "
+                "'esx_username' (encrypted), 'esx_password' (encrypted), "
+                "'ucsm_user' (encrypted), 'ucsm_password' (encrypted). "
+                "All stored in ZK node under /storvisor/stMgr/<clusterUuid>/ "
+                "with OPEN_ACL_UNSAFE (world-readable, same root cause as HX-F55). "
+                "Method: getAndClearVCenterCredentialsFromZK reads + decrypts + deletes from ZK."
+            ),
+            "vcenter_client_cert": (
+                "'vcenter_client' PrivateKeyEntry: X.509 certificate for vCenter client auth. "
+                "Certificate SHA-256: "
+                "9D:FB:29:E4:B5:AC:A9:21:65:CC:71:C2:A6:81:7A:0C:BD:07:66:4D:4B:01:34:DD:DF:47:FE:79:AE:AC:1C:5A. "
+                "SecurityConstants$.STORVISOR_KEYSTORE_ENTRY_VCENTER_CLIENT = 'vcenter_client'. "
+                "Used for TLS client auth to vCenter SDK; extraction enables impersonation of "
+                "HyperFlex management plane to vCenter."
+            ),
+            "encryption_algorithm": (
+                "SecurityConstants$.ENCRYPTION_KEY_ALGORITHM = from config "
+                "('sysmgmt.common.security.encryption_key_algorithm'); "
+                "SecurityConstants$.ENCRYPTION_KEY_SIZE = configured value. "
+                "EncryptionUtil$ uses javax.crypto.Cipher.getInstance(algorithm) + "
+                "javax.xml.bind.DatatypeConverter.parseHexBinary() for hex-encoded ciphertext."
+            ),
+        },
+        "impact": (
+            "Any local user on a HyperFlex controller VM can: "
+            "(1) Read hyperflex_keystore.jceks (world-readable); "
+            "(2) Read the keystore password 'springpath' from hyperflex_security.properties (world-readable); "
+            "(3) Extract the AES encryption key (entry 'aes_encryption') from the JCEKS store; "
+            "(4) Extract the vCenter client private key (entry 'vcenter_client'); "
+            "(5) Read encrypted vCenter/ESX/UCSM credentials from world-readable ZK; "
+            "(6) Decrypt those credentials to plaintext using the extracted AES key. "
+            "Result: full vCenter admin password, ESX root password, and UCSM admin password "
+            "recovered. Combined with HX-F55 (ZK ACL) and HX-F59 (SSH keys), provides "
+            "complete cluster takeover from any controller VM foothold."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Change keystore password from 'springpath' to a randomly generated value "
+            "stored in a root-only readable file. "
+            "2. Set hyperflex_keystore.jceks permissions to 0640, owned by the storfs service user. "
+            "3. Set hyperflex_security.properties permissions to 0640. "
+            "4. Rotate the AES key (aes_encryption entry) and re-encrypt ZK credentials. "
+            "5. Rotate the vCenter client certificate (vcenter_client entry). "
+            "6. Consider hardware-backed key storage (TPM or HSM) for the AES key. "
+            "7. Address ZK ACL issues (HX-F55) to limit ZK exposure independently."
+        ),
+    },
+
+    # ── HX-F61 ──────────────────────────────────────────────────────────────────
+    "HX-F61": {
+        "title": "StUpgradeSvc checkforUpgrade location Parameter Unsanitized in SSH-Executed Shell Commands",
+        "severity": "MEDIUM",
+        "cvss": "6.3",
+        "cwe": "CWE-78",
+        "component": "StMgrImpl / stMgr-1.0.jar / StUpgradeSvc Thrift endpoint",
+        "class": "Command Injection",
+        "confirmed": True,
+        "evidence": {
+            "thrift_args": (
+                "StUpgradeSvc$checkforUpgrade_args.class constant pool: "
+                "String fields: 'location' (String), 'info' (boolean), "
+                "'force' (boolean), 'checksum' (String). "
+                "Method signature: checkforUpgrade(location: Option[String], info: Option[Boolean], "
+                "force: Option[Boolean], checksum: Option[String]) -> Future[Map]."
+            ),
+            "path_construction": (
+                "StMgrImpl.$anonfun$checkforUpgrade$2(StMgrImpl, Option, Path): Tuple3 "
+                "Signature confirms: location String is converted via "
+                "Paths.get(location, Array[String]()) at offset 22 in the static method body. "
+                "java.nio.file.Path normalizes '..' traversal but does NOT strip shell "
+                "metacharacters (;, $(), backticks, |, etc.)."
+            ),
+            "shell_command_construction": (
+                "StMgrImpl.$anonfun$installCatalogPkgOnNode$1(StMgrImpl, String, EntityRef): "
+                "StringBuilder builds: 'dpkg -i --force-confold' + location_str + "
+                "'/storfs-catalog_*.deb' (constant pool #44362, #44365). "
+                "Offset 34: ldc 'dpkg -i --force-confold'; "
+                "offset 40: aload_3 (location string); "
+                "offset 44: ldc '/storfs-catalog_*.deb'. "
+                "Built string passed to SshUtilsTrait.run(cmd, true, ...) at offset 104. "
+                "SshUtilsTrait.run() executes via JSch SSH session on remote cluster node — "
+                "the command string is interpreted by the remote shell."
+            ),
+            "upgrade_bundle_copy": (
+                "StMgrImpl.$anonfun$upgradeServiceInt$89: "
+                "'cp -v /opt/hyperflex/hxupgrade_bundle.tgz ' + file.getAbsolutePath() "
+                "(location as java.io.File) executed via SshUtilsTrait.run(). "
+                "'cp /opt/hyperflex/esxupgrade_bundle.zip ' + esxLocationStr also constructed. "
+                "Both run over SSH to cluster nodes."
+            ),
+        },
+        "impact": (
+            "An authenticated caller with X-RootSessionID can invoke checkforUpgrade with "
+            "location='/tmp/x; <cmd>' to inject arbitrary shell commands executed on remote "
+            "cluster nodes via SSH. Since StMgr runs as root and SSH sessions to cluster nodes "
+            "are root-authenticated (inter-node keys from ZK, see HX-F59), command injection "
+            "achieves root code execution on all target nodes in the cluster. "
+            "Authentication gate: X-RootSessionID required (reduces pre-requisites to prior "
+            "auth compromise, e.g., via HX-F55 JWT forgery)."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Validate location against an allowlist (absolute path, no shell metacharacters: "
+            "use regex [a-zA-Z0-9/_.-]+ with length limit). "
+            "2. Pass commands via exec(String[]) array form instead of shell string concatenation "
+            "— eliminates shell metacharacter interpretation entirely. "
+            "3. Validate checksum of the upgrade bundle before processing the location path. "
+            "4. Log checkforUpgrade invocations with caller identity and location value."
+        ),
+    },
+
+    # ── HX-F62 ──────────────────────────────────────────────────────────────────
+    "HX-F62": {
+        "title": "ESX and UCS Credentials Passed as Command-Line Arguments to Ansible (Process Table Exposure)",
+        "severity": "MEDIUM",
+        "cvss": "5.5",
+        "cwe": "CWE-214",
+        "component": "StMgrImpl / upgradeVibsOnHost / Ansible invocation",
+        "class": "Credentials in Process Arguments",
+        "confirmed": True,
+        "evidence": {
+            "command_construction": (
+                "StMgrImpl.$anonfun$upgradeVibsOnHost$6(StMgrImpl, String, String, String, "
+                "SshUtilsTrait, Component): "
+                "StringBuilder builds ansible-playbook command (offset 64): "
+                "'ansible-playbook -i localhost ' + STORFS_MISC_SCRIPT_DIR + PRE_VIB_UPGRADE_SCRIPT "
+                "+ ' -e target_host_ip=' + aload_1 (IP) "
+                "+ ' -e vib=' + vib "
+                "+ ' -e esx_user=' + aload_2 (username) "
+                "+ ' -e esx_password=' + getEncodedPassword(aload_3) (password). "
+                "Constant pool #43563: 'ansible-playbook -i localhost'; "
+                "#43569: ' -e esx_user='; #43571: ' -e esx_password='. "
+                "Log string (offset 197): UPGRADE: pre vib script to remove required vib with command = "
+                "— password REDACTED in log (#43577: 'esx_password=######') but FULL VALUE "
+                "present in the actual command string used for execution."
+            ),
+            "process_exposure": (
+                "Command is passed to SshUtilsTrait.run() which executes via JSch or local exec. "
+                "Process arguments are visible in /proc/<pid>/cmdline to all local users "
+                "and in 'ps auxww' output. Duration depends on ansible-playbook execution time "
+                "(typically 10-60 seconds for VIB operations). "
+                "getEncodedPassword() may URL-encode or base64 the password, but the "
+                "encoded form is directly usable with ansible-vault or the raw credential "
+                "can be recovered trivially."
+            ),
+            "affected_credentials": (
+                "ESX root password (esx_password) — used for all VIB upgrade operations. "
+                "ESX username (esx_user) — typically 'root'. "
+                "Same pattern confirmed in upgrade payload validation flow."
+            ),
+        },
+        "impact": (
+            "Any local user on a HyperFlex controller VM can recover ESX host credentials "
+            "by polling /proc or 'ps auxww' during a cluster upgrade operation. "
+            "ESX root credentials allow full hypervisor access, VM exfiltration, and "
+            "storage layer manipulation outside the HyperFlex management plane. "
+            "Combined with HX-F60 (keystore exposure), attack does not require upgrade timing — "
+            "the keystore path directly exposes the ESX encrypted password from ZK."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Pass ESX credentials via a temp file (mode 0600) or stdin instead of "
+            "command-line arguments: ansible-playbook -e @credentials_file.yml. "
+            "2. Delete the credentials file immediately after ansible-playbook exits. "
+            "3. Use ansible-vault encrypted variables for credential storage. "
+            "4. Audit all ansible-playbook invocations across StMgrImpl for the same pattern."
+        ),
+    },
 }
 
 
