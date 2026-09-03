@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F39 (HIGH). 12 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F41 (CRITICAL). 12 attack chains.
 """
 
 import socket
@@ -1264,6 +1264,53 @@ FINDINGS = {
         "impact": "CA config read (cert chain, CA identity); potential CA injection if endpoint is writable",
         "combined_with": ["ND-F17", "ND-F18", "ND-F03"],
         "chain": "GET /sedgeapi/v1/kms/ca/ (no auth) -> cluster CA chain enumeration -> pivot to ND-F17 passphrase dump",
+    },
+    "ND-F40": {
+        "title": "system:eventmonitoring ClusterRole — Cluster-Admin Equivalent RBAC on Event Monitoring Service",
+        "severity": "CRITICAL",
+        "component": "eventmonitoring namespace (eventmonitoring.tpl), ClusterRole system:eventmonitoring, ClusterRoleBinding eventmonitoring",
+        "description": (
+            "The eventmonitoring container defines ClusterRole system:eventmonitoring with "
+            "apiGroups:['*'], resources:['*'], verbs:['*'] — identical to system:appmgr (ND-F30). "
+            "The ClusterRoleBinding binds this role to system:serviceaccounts:eventmonitoring — "
+            "every pod in the eventmonitoring namespace carries a cluster-admin service account token. "
+            "The eventmonitoring service processes cluster event streams and has Kafka cert mounts "
+            "(/kafka-certs), making it reachable via Kafka topic injection. "
+            "Exploitation: code exec in any eventmonitoring pod -> SA token = cluster-admin. "
+            "Distinct from ND-F30: this is the eventmonitoring namespace, not the app namespaces. "
+            "Combined with ND-F23 (hardcoded Kafka JAAS credentials), an attacker can inject "
+            "malformed events via Kafka -> trigger eventmonitoring processing -> code path -> "
+            "extract the cluster-admin SA token."
+        ),
+        "clusterrole_rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+        "binding_subjects": ["system:serviceaccounts:eventmonitoring"],
+        "kafka_certs_mount": "volumeMount name=kafka-certs in eventmonitoring pod",
+        "chain": "ND-F23 Kafka JAAS creds -> inject event -> eventmonitoring pod exec -> SA token = cluster-admin",
+        "combined_with": ["ND-F23", "ND-F30"],
+    },
+    "ND-F41": {
+        "title": "system:firmwared ClusterRole — Cluster-Admin Equivalent RBAC on Firmware Update Daemon",
+        "severity": "CRITICAL",
+        "component": "firmwared namespace DaemonSet (firmwared.tpl), ClusterRole system:firmwared, ServiceAccount firmwared",
+        "description": (
+            "The firmwared container defines ClusterRole system:firmwared with "
+            "apiGroups:['*'], resources:['*'], verbs:['*'] bound to ServiceAccount firmwared in "
+            "namespace firmwared. firmwared is a DaemonSet — it runs on EVERY node in the cluster. "
+            "The pod already has known attack surface via ND-F12 (SSRF via peer:// URL parameter, "
+            "dev firmware signing key). Chaining: "
+            "ND-F01 (world-readable cookie) -> call acs with SSRF to reach firmwared HTTP port -> "
+            "OR: any code exec in firmwared DaemonSet pod -> cluster-admin SA token. "
+            "Because firmwared runs on every node as a DaemonSet, there is one firmwared pod per "
+            "ND cluster node. Compromising any single firmwared pod yields cluster-admin. "
+            "firmwared also mounts /data/services/kms_etcd (KMS hostPath) for cert access."
+        ),
+        "clusterrole_rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+        "binding_subjects": [{"kind": "ServiceAccount", "name": "firmwared", "namespace": "firmwared"}],
+        "daemonset": True,
+        "nodes_covered": "all ND cluster nodes (one pod per node)",
+        "additional_mounts": ["kms hostPath /data/services/kms_etcd", "firmwared volumes for firmware storage"],
+        "chain": "ND-F12 peer:// SSRF -> firmwared HTTP -> trigger firmware handler -> OR direct code exec -> SA token = cluster-admin",
+        "combined_with": ["ND-F12", "ND-F01", "ND-F30"],
     },
 }
 
