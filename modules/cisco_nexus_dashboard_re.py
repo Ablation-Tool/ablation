@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F72 (MEDIUM). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F72 (MEDIUM).
   ND-F56 HIGH: CIMC creds + cluster passphrase as CLI argv — /proc/pid/cmdline exposure
   ND-F57 HIGH: CIMC SSH StrictHostKeyChecking=no — full bootstrap MITM surface
   ND-F58 HIGH: KexAlgorithms=+diffie-hellman-group1-sha1 — Logjam-vulnerable KEX fallback
@@ -3132,10 +3132,10 @@ def probe_keyhole_cookie_auth(host: str = "127.0.0.1", port: int = 30020) -> dic
     return result
 
 
-# ─── Attack Chain Summary ────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
 
-ATTACK_CHAINS = {
+_UNUSED = {
     "chain_1_node_compromise": {
         "title": "Container Escape -> Node SSH Access",
         "steps": [
@@ -3360,15 +3360,6 @@ if __name__ == "__main__":
     for fid, f in FINDINGS.items():
         sev = f["severity"]
         print(f"[{sev:8}] {fid}: {f['title']}")
-
-    print()
-    print("Attack Chains:")
-    for cid, chain in ATTACK_CHAINS.items():
-        print(f"  {cid}: {chain['title']}")
-        print(f"    Entry: {chain['entry_requirement']}")
-        for step in chain["steps"][:3]:
-            print(f"      {step}")
-        print()
 
     if len(sys.argv) > 1:
         target = sys.argv[1]
