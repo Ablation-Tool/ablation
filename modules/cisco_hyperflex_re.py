@@ -4615,6 +4615,65 @@ FINDINGS = {
             "This is the sixth, seventh, and eighth instance of the same root cause (see HX-F78 remediation)."
         ),
     },
+    "HX-F88": {
+        "title": (
+            "iscsi-1.0.0 WAR Contains Four Independent trustAll() Implementations "
+            "Each Globally Disabling TLS Certificate Validation via HttpsURLConnection JVM Override"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": (
+            "iscsi-1.0.0 WAR / HxIscsiMgrClient / HxSvcMgrClient / StMgrClient / HxIscsiCloneMgrClient — "
+            "four independent trustAll() implementations, each with inner-class $1 (X509TrustManager) "
+            "and $2 (HostnameVerifier) no-op bypass"
+        ),
+        "class": "TLS Certificate Validation Bypass — Four Concurrent Global JVM Overrides in iSCSI Service WAR",
+        "confirmed": True,
+        "evidence": {
+            "HxIscsiMgrClient": (
+                "trustAll() offset 39: invokestatic HttpsURLConnection.setDefaultSSLSocketFactory — JVM-WIDE. "
+                "offset 52: invokestatic HttpsURLConnection.setDefaultHostnameVerifier — JVM-WIDE. "
+                "openClientHttp() connects to hxIscsiMgr at localhost:9342 via THttpClient."
+            ),
+            "HxSvcMgrClient": (
+                "trustAll() offsets 39/52: same global JVM override pattern. "
+                "openClientHttp() connects to hxSvcMgr (sysmgmt.stSSOMgrHost) via THttpClient."
+            ),
+            "StMgrClient": (
+                "trustAll() offsets 39/52: same global JVM override pattern. "
+                "openClientHttp() connects to stMgr at localhost:9333 via THttpClient. "
+                "Seventh StMgrClient instance of this pattern across HyperFlex WARs."
+            ),
+            "HxIscsiCloneMgrClient": (
+                "trustAll() offsets 39/52: same global JVM override pattern. "
+                "openClientHttp() connects to hxCloneSvcMgr at localhost:9347 via THttpClient."
+            ),
+            "application_conf": (
+                "Ports confirmed: hxIscsiMgrPort=9342, stMgrPort=9333, hxCloneSvcMgrPort=9347. "
+                "All targets are localhost Thrift services. "
+                "trustAll() is called before every openClientHttp()/openClient() invocation."
+            ),
+        },
+        "impact": (
+            "Four independent trustAll() implementations in the iSCSI WAR — the largest concentration "
+            "in any single HyperFlex WAR analyzed. iSCSI handles storage target provisioning, initiator "
+            "group management, LUN configuration, and clone operations — all storage-plane control paths. "
+            "MITM against any HTTPS connection from this JVM (including any certificate retrieval, "
+            "external notification, or management plane call-home) is undetectable. "
+            "This is the ninth through twelfth independent instance of this pattern across the HyperFlex WAR fleet "
+            "(HX-F78, HX-F82, HX-F83, HX-F84, HX-F85, HX-F87 enumerate the prior eight instances)."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove all four trustAll() implementations. "
+            "Use a pinned CA-specific SSLSocketFactory scoped per-connection, not the JVM default. "
+            "This is the ninth through twelfth instance of the same root cause across the HyperFlex WAR fleet. "
+            "A single shared fix — a correctly-scoped TrustManager factory utility — should replace all 12 instances "
+            "across encryption, ROOT, slservice, hxupgrade, securityservice, supportservice, and iscsi WARs. "
+            "See HX-F78 remediation for the authoritative fix template."
+        ),
+    },
 }
 
 
