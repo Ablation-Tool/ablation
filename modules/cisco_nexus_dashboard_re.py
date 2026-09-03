@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F41 (CRITICAL). 12 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F42 (HIGH). 12 attack chains.
 """
 
 import socket
@@ -1015,26 +1015,32 @@ FINDINGS = {
         "combined_with": ["ND-F29", "ND-F03", "ND-F01"],
     },
     "ND-F31": {
-        "title": "MSO executionservice Hardcoded DEBUG Log Level — Fabric Push Operations Logged Verbosely",
+        "title": "MSO Three Services Hardcoded DEBUG Log Level — APIC Site Creds + Fabric Push Ops + Schema Changes Logged",
         "severity": "HIGH",
-        "component": "cisco-mso / msc-executionservice deployment (msc-executionservice.yml)",
+        "component": "cisco-mso: msc-executionservice, msc-siteservice2, msc-schemaservice2",
         "description": (
-            "The MSO executionservice deployment sets ENV_DEFAULT_LOG_LEVEL: 'debug' as a container env var, "
-            "and a separate ConfigMap sets loglevel: debug for the cisco-mso namespace. "
-            "The executionservice is responsible for executing MSO multi-site network policy pushes "
-            "to remote fabric controllers — it handles device credentials, fabric authentication tokens, "
-            "and inter-site provisioning commands. At DEBUG log level, fabric push operations including "
-            "credential material, API tokens, and policy payloads are written to pod logs. "
-            "These logs are accessible via: kubectl logs -n cisco-mso <msc-executionservice-pod> "
-            "or via the ND techsupport bundle (ND-F01 chain). "
-            "This is not a runtime-configurable log level — it is hardcoded in the deployment spec."
+            "Three MSO microservices set ENV_DEFAULT_LOG_LEVEL: 'debug' as hardcoded container env vars. "
+            "The cisco-mso ConfigMap also sets loglevel: debug for the namespace. "
+            "msc-executionservice: executes multi-site policy pushes — logs fabric authentication tokens, "
+            "device credentials, and inter-site provisioning commands at DEBUG. "
+            "msc-siteservice2 (siteservice:4.4.3.1018): manages MSO connections to remote APIC sites — "
+            "stores and uses APIC controller admin credentials; DEBUG logging means site username/password "
+            "for every connected APIC site appears in pod logs. Also has a LOG_TOKEN env var (log shipping token). "
+            "msc-schemaservice2: handles ACI policy schema operations — DEBUG logs include policy "
+            "object details, tenant configurations, and endpoint group credentials. "
+            "All three log paths are accessible via kubectl logs -n cisco-mso or via the ND techsupport "
+            "bundle (ND-F01 chain). These log levels are hardcoded in deployment specs — not runtime-configurable."
         ),
-        "env_vars": {
-            "ENV_DEFAULT_LOG_LEVEL": "debug",
+        "affected_services": {
+            "msc-executionservice": "multi-site fabric policy push credentials",
+            "msc-siteservice2": "APIC site admin credentials (username/password per connected APIC controller)",
+            "msc-schemaservice2": "ACI policy schema data, tenant config",
         },
+        "env_vars": {"ENV_DEFAULT_LOG_LEVEL": "debug"},
+        "siteservice_extra": {"LOG_TOKEN": "log shipping token env var — potential credential for external log system"},
         "configmap": {"namespace": "cisco-mso", "loglevel": "debug"},
         "log_path": "/logs/cisco-mso/ (accessible via techsupport bundle, ND-F01)",
-        "chain": "ND-F01 techsupport bundle -> /logs/cisco-mso/executionservice* -> fabric push credentials in DEBUG logs",
+        "chain": "ND-F01 techsupport bundle -> /logs/cisco-mso/siteservice* -> APIC site admin credentials in DEBUG logs",
     },
     "ND-F32": {
         "title": "NDFC POAP Service in cisco-ndfc Namespace — Switch Provisioning Credentials in Debug Logs",
@@ -1264,6 +1270,37 @@ FINDINGS = {
         "impact": "CA config read (cert chain, CA identity); potential CA injection if endpoint is writable",
         "combined_with": ["ND-F17", "ND-F18", "ND-F03"],
         "chain": "GET /sedgeapi/v1/kms/ca/ (no auth) -> cluster CA chain enumeration -> pivot to ND-F17 passphrase dump",
+    },
+    "ND-F42": {
+        "title": "K8s API Server Static Token Auth File on Host Filesystem — apigw Reads Token from hostPath Mount",
+        "severity": "HIGH",
+        "component": "apigw pod (apigw.tpl) + kube-apiserver (kube-apiserver.tpl), staging hostPath /data/services/k8_secure/staging/",
+        "description": (
+            "The K8s API server is configured with --token-auth-file={{staging}}/known_tokens.csv, "
+            "enabling static bearer token authentication. "
+            "The apigw pod mounts the staging directory as a hostPath volume (name: srvrun) "
+            "at the same path inside the container (mountPath: {{staging}}). "
+            "The apigw postStart lifecycle hook reads the first token from known_tokens.csv and writes "
+            "it to /var/run/secrets/kubernetes.io/serviceaccount/token — making the apigw pod "
+            "use a static K8s bearer token rather than a projected service account token. "
+            "Static token auth has two security implications: "
+            "(1) Tokens never expire unless manually rotated — a compromised token is permanently valid. "
+            "(2) The token file is readable from any process with access to the staging hostPath, "
+            "including any pod with a ND-F01 techsupport bundle read or any container with hostPath "
+            "access to /data/services/k8_secure/staging/. "
+            "The CSV format is: <token>,<user>,<uid>,<groups> — all entries are exposed if the file is read."
+        ),
+        "staging_path": "/data/services/k8_secure/staging/ (hostPath, same inside container)",
+        "token_file": "known_tokens.csv",
+        "token_format": "<token>,<username>,<uid>,\"<group1>,<group2>\"",
+        "k8s_apiserver_flag": "--token-auth-file={{staging}}/known_tokens.csv",
+        "apigw_poststart": (
+            "IFS=',' read -ra TOKEN <<< $(< /data/services/k8_secure/staging/known_tokens.csv) "
+            "&& echo $TOKEN > /var/run/secrets/kubernetes.io/serviceaccount/token"
+        ),
+        "impact": "Static K8s bearer token never expires; all tokens in CSV exposed to staging-path readers",
+        "chain": "Node/container access -> read /data/services/k8_secure/staging/known_tokens.csv -> static K8s bearer token -> k8s API as whatever user is in the CSV",
+        "combined_with": ["ND-F01", "ND-F30"],
     },
     "ND-F40": {
         "title": "system:eventmonitoring ClusterRole — Cluster-Admin Equivalent RBAC on Event Monitoring Service",
