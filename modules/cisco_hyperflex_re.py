@@ -2711,6 +2711,114 @@ FINDINGS = {
             "shell forks. Audit /var/support/ for credential material in bundle output."
         ),
     },
+
+    # ── HX-F57 ──────────────────────────────────────────────────────────────────
+    "HX-F57": {
+        "title": "HxSupportSvc.runCmdInAllVm — Cluster-Wide Arbitrary Command Execution",
+        "severity": "CRITICAL",
+        "cvss": "9.1",
+        "cwe": "CWE-78",
+        "component": "HxSupportSvc Thrift service (https://localhost/hxsupportsvc)",
+        "class": "Authenticated Remote Code Execution / SSRF",
+        "confirmed": True,
+        "evidence": {
+            "thrift_stub": (
+                "HxSupportSvc$runCmdInAllVm_args.class (javap): "
+                "public String cmd; public List<String> ctlvmMgmtIps. "
+                "Method: runCmdInAllVm(1: string cmd, 2: list<string> ctlvmMgmtIps). "
+                "HxSupportSvc$runCmdInAllVmSync_args.class: same signature (synchronous variant)."
+            ),
+            "service_location": (
+                "HxSupportSvcClient.java constant pool (#122): "
+                "String 'https://localhost/hxsupportsvc' — HTTPS Thrift at reverse proxy port 443. "
+                "Auth: X-RootSessionID header read from /etc/hyperflex/secure/root_file.pub."
+            ),
+            "interface_design": (
+                "cmd parameter is an unstructured command string — no whitelist, no arg array, "
+                "no subprocess splitting in the interface spec. ctlvmMgmtIps is a caller-provided "
+                "list of management IP addresses where the command executes. "
+                "An authenticated caller controls both the command content AND the target host list."
+            ),
+            "ssrf_vector": (
+                "ctlvmMgmtIps is caller-controlled: an attacker can supply arbitrary IP addresses "
+                "outside the cluster — the service connects to each provided IP to dispatch the "
+                "command, turning this into a bidirectional SSRF with execution side-effects on "
+                "systems that accept the connection."
+            ),
+        },
+        "impact": (
+            "An attacker with a valid X-RootSessionID token (obtainable via HX-F13 keystore "
+            "read or HX-F55 ZK key forgery) can invoke runCmdInAllVm with arbitrary cmd and "
+            "arbitrary ctlvmMgmtIps, executing OS commands across all specified controller VMs. "
+            "The synchronous variant (runCmdInAllVmSync) returns command output. "
+            "Combined with cluster-fabric access, this is a one-call cluster root compromise."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "1. Validate ctlvmMgmtIps against a cluster-membership whitelist — reject any IP "
+            "not in the registered cluster node list. "
+            "2. Restrict cmd to a signed allowlist of support operations; reject arbitrary "
+            "shell strings at the Thrift interface boundary. "
+            "3. Require a separate elevated credential (HMAC-signed request, MFA token) for "
+            "all runCmdInAllVm calls — X-RootSessionID alone is insufficient authorization "
+            "for cluster-wide OS execution."
+        ),
+    },
+
+    # ── HX-F58 ──────────────────────────────────────────────────────────────────
+    "HX-F58": {
+        "title": "HxSvcMgr Destructive Thrift Operations Accessible with X-RootSessionID",
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-284",
+        "component": "HxSvcMgr Thrift service (http://localhost:9341/hxsvcmgr)",
+        "class": "Improper Access Control / Destructive Operations",
+        "confirmed": True,
+        "evidence": {
+            "thrift_stub_methods": (
+                "HxSvcMgr Thrift IDL (from thrift-stubs): "
+                "shutdownHxCluster — halt the entire HyperFlex cluster; "
+                "deleteHxDatastore(EntityRef) — permanently delete a datastore; "
+                "deleteHxVolume(EntityRef) — permanently delete a volume; "
+                "deleteHxVolumesOfNamespace(EntityRef) — batch delete all namespace volumes; "
+                "purgeZKOnDemand — wipe ZooKeeper state on demand; "
+                "deleteFiles(EntityRef, List<FileRef>) — delete files on HX filesystem; "
+                "clearIPWhitelistEntries — remove all IP whitelist restrictions."
+            ),
+            "access_control": (
+                "HxSvcMgrClient.class constant pool (#71): "
+                "String 'http://localhost:9341' — unencrypted HTTP Thrift. "
+                "Auth: X-RootSessionID header (#91). "
+                "Same static token that protects all other Thrift services. "
+                "No per-operation ACL — any caller with the token can invoke destructive methods."
+            ),
+            "single_auth_factor": (
+                "All 80+ HxSvcMgr operations — from read-only getHxCluster to destructive "
+                "shutdownHxCluster — share a single authorization gate: "
+                "possession of /etc/hyperflex/secure/root_file.pub content. "
+                "No role separation, no second factor, no confirmation challenge for "
+                "irreversible operations."
+            ),
+        },
+        "impact": (
+            "An attacker with X-RootSessionID can: "
+            "(1) deleteHxVolumesOfNamespace to wipe production storage; "
+            "(2) shutdownHxCluster to take down the entire cluster; "
+            "(3) purgeZKOnDemand to destroy cluster coordination state; "
+            "(4) clearIPWhitelistEntries to remove network access controls; "
+            "(5) setClusterAccessPolicy to weaken access policy. "
+            "All operations are authenticated but not authorization-tiered — data destruction "
+            "requires no higher privilege than a read query."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Introduce operation-class ACLs on HxSvcMgr: read-only operations (getHxCluster, "
+            "getHxNodes) remain accessible with X-RootSessionID; mutating operations require "
+            "an additional HMAC-signed challenge; destructive operations (shutdown, delete, purge) "
+            "require a time-limited operator token issued via the authenticated REST API. "
+            "Log all Thrift method calls with caller identity to nuclide.db or syslog."
+        ),
+    },
 }
 
 
