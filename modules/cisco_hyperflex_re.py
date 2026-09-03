@@ -5401,6 +5401,125 @@ FINDINGS = {
             "Alert/log when password policy values are weakened below baseline."
         ),
     },
+    "HX-F100": {
+        "title": (
+            "AAAStoreZKPersistAgent Stores JWT Signing Key in ZooKeeper at "
+            "/rest/aaa/jwt_signing_key — Unauthenticated ZK Read Enables "
+            "Forging of Arbitrary Session Tokens for Any HyperFlex User"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.8",
+        "cwe": "CWE-321",
+        "component": (
+            "hx-aaa / AAAStoreZKPersistAgent / fetchJWTSigningKey / ZooKeeperStore / "
+            "/rest/aaa/jwt_signing_key"
+        ),
+        "class": "JWT Signing Key in Unauthenticated ZooKeeper — Full Session Forgery",
+        "confirmed": True,
+        "evidence": {
+            "zk_path": (
+                "AAAStoreZKPersistAgent constructor at offsets 24-27: "
+                "AAAJWTSigningKey = '/rest/aaa/jwt_signing_key'. "
+                "fetchJWTSigningKey() at offset 33: "
+                "ZooKeeperStore.getValueVersionPairForKey('/rest/aaa/jwt_signing_key', Type<String>). "
+                "Returns the signing key string directly from ZK."
+            ),
+            "fetchJWTSigningKey_flow": (
+                "fetchJWTSigningKey() offsets 12-63: "
+                "new ZooKeeperStore() -> .getValueVersionPairForKey('/rest/aaa/jwt_signing_key', type); "
+                "if (pair != null) return (String) pair.getFirst(). "
+                "No authentication before the ZK read. "
+                "No encryption of the key at rest in ZK."
+            ),
+            "session_table_exposure": (
+                "AAASessionTablePath = '/rest/aaa/session_table'. "
+                "insertSession()/lookupAccessToken()/invalidateAccessToken() all operate on this path. "
+                "Active session access tokens for all logged-in users are stored in the same ZK namespace. "
+                "Unauthenticated ZK read exposes all active HyperFlex sessions."
+            ),
+            "failed_logins_exposure": (
+                "AAAFailedLoginsTablePath = '/rest/aaa/failed_logins_table'. "
+                "lookupFailedLogin()/updateFailedLogin()/removeFailedLogin() operate on this path. "
+                "Failed login state per user readable/writable from unauthenticated ZK. "
+                "Attacker can clear failed login counters to bypass lockout."
+            ),
+            "zk_access_model": (
+                "Default ZK ACL: world:anyone:cdrwa. "
+                "ZK port 2181 confirmed unauthenticated in application.conf (HX-F95 evidence). "
+                "No ZK authentication required to read /rest/aaa/jwt_signing_key."
+            ),
+            "exploit_scenario": (
+                "1. Read JWT signing key: "
+                "zkCli.sh -server <clusterIP>:2181 get /rest/aaa/jwt_signing_key; "
+                "2. Forge a JWT for 'admin' with any desired claims; "
+                "3. Use forged JWT as Bearer token against HyperFlex REST API on port 443; "
+                "4. Full unauthenticated admin access to cluster management, data, and configuration. "
+                "Alternatively: read /rest/aaa/session_table to harvest active admin sessions without "
+                "needing the signing key."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Never store JWT signing keys in ZooKeeper without authenticated ACLs. "
+            "Move the JWT signing key to a secrets store (e.g., /etc/hyperflex/secure/) "
+            "with filesystem permissions 0600 root:root, loaded at service startup. "
+            "Set ZK Digest or SASL ACLs on all /rest/aaa/ paths. "
+            "Rotate the JWT signing key immediately on any ZK exposure."
+        ),
+    },
+    "HX-F101": {
+        "title": (
+            "stSSOMgr Stores AES Encryption Key and Encrypted Hyper-V Credentials "
+            "in the Same ZooKeeper Namespace — Unauthenticated Read Recovers "
+            "Plaintext Hyper-V Domain Credentials"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-321",
+        "component": (
+            "stSSOMgr / StSSOMgrImpl / getEncryptionKeyFromZK / setHypervHostCreds / "
+            "ZkPersistenceManager / zkBasePath/zkAuthKey/zkEncryptionKey"
+        ),
+        "class": "Encryption Key and Ciphertext Co-Located in Unauthenticated ZooKeeper",
+        "confirmed": True,
+        "evidence": {
+            "key_generation_and_storage": (
+                "StSSOMgrImpl.$anonfun$getEncryptionKeyFromZK$3 at offsets 12-49: "
+                "key = EncryptionUtil$.generateSecretKey(); "
+                "b64Key = Base64.encodeBase64String(key.getEncoded()); "
+                "getZkPmInstance().write(zkAuthKey, zkEncryptionKey, b64Key, -1L). "
+                "On ZK read failure (first run), a new SecretKey is generated and written to ZK. "
+                "Config keys: sysmgmt.stSSOMgr.zkBasePath, sysmgmt.stSSOMgr.zkAuthKey, "
+                "sysmgmt.stSSOMgr.zkEncryptionKey."
+            ),
+            "creds_storage": (
+                "StSSOMgrImpl.$anonfun$setHypervHostCreds$3 at offsets 79-87: "
+                "encryptedCreds = EncryptionUtil$.encryptData(hypervCreds, secretKey); "
+                "written to ZK at path zkBasePath/zkAuthKey/zkCredsKey. "
+                "Config key: sysmgmt.stSSOMgr.zkCredsKey."
+            ),
+            "recovery_attack": (
+                "Attacker reads: "
+                "(1) {zkBasePath}/{zkAuthKey}/{zkEncryptionKey} -> Base64 AES key; "
+                "(2) {zkBasePath}/{zkAuthKey}/{zkCredsKey} -> encrypted Hyper-V credentials. "
+                "Decodes and decrypts: AES decrypt(encryptedCreds, Base64Decode(b64Key)) -> plaintext. "
+                "Result: Hyper-V domain admin credentials in plaintext. "
+                "Both reads require no authentication (default ZK ACL: world:anyone:cdrwa)."
+            ),
+            "zk_access_model": (
+                "Default ZK ACL: world:anyone:cdrwa. "
+                "Confirmed in HX-F95 evidence. ZK port 2181 open with no auth required."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Never store the AES key in the same data store as the ciphertext it protects. "
+            "Derive the Hyper-V credential encryption key from a cluster-secret in "
+            "/etc/hyperflex/secure/ (not ZK). "
+            "Apply ZK Digest or SASL ACLs to the stSSOMgr namespace. "
+            "Rotate Hyper-V credentials immediately if ZK was exposed."
+        ),
+    },
 }
 
 
