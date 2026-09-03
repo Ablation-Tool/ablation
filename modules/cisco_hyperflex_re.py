@@ -4178,6 +4178,141 @@ FINDINGS = {
             "separation of concerns alone is insufficient while HX-F78 is not addressed."
         ),
     },
+    "HX-F81": {
+        "title": (
+            "StorvisorSupportBundle /st-support/* Servlet Exposes Pre-Authentication SSRF — "
+            "User-Controlled 'host' Parameter Fetched with ESX Admin Credentials via JVM-Wide Authenticator"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-918",
+        "component": "ROOT-1.0.0 WAR / StorvisorSupportBundle / WebDownloader / HostCredentialsAccess",
+        "class": "Pre-Authentication SSRF with Credential Forwarding — ESX Admin Credentials Exposed via 401 Challenge to Attacker-Controlled Host",
+        "confirmed": True,
+        "evidence": {
+            "no_auth_filter": (
+                "ROOT-1.0.0/WEB-INF/web.xml filter-mapping: "
+                "AuditFilter, SPPrivilegedAuth, SessionAuth, SPBasicAuth, SPAuth are mapped to /rest/* and /internalsupport/* only. "
+                "No filter is mapped to /st-support/*. "
+                "StorvisorSupportBundle servlet registered at /st-support/* with no authentication or authorization filter. "
+                "All HTTP methods (doGet, doPost both delegate to processRequest) are pre-authentication accessible."
+            ),
+            "ssrf_bytecode": (
+                "StorvisorSupportBundle.processRequest(HttpServletRequest, HttpServletResponse): "
+                "offset 22-25: request.getParameterValues('host') → String[] hostArray. "
+                "offset 56-63: new HostCredentialsAccess() → ESX credentials from stmgr.getEsxCredential(). "
+                "loop: offset 104=aload hostValue, offset 130=InvokeDynamic #1:makeConcatWithConstants(hostValue) "
+                "→ url = 'https://<hostValue>/cgi-bin/vm-support.cgi?manifests=Springpath:Springpath' "
+                "(constant pool #161 = 'https://\\u0001/cgi-bin/vm-support.cgi?manifests=Springpath:Springpath'). "
+                "offset 149: WebDownloader.getStream(url, esxUser, esxPass) → InputStream. "
+                "offset 157: FileUtils.copyStream(inputStream, zipOut) → response body."
+            ),
+            "credential_forwarding": (
+                "WebDownloader.getStream(String url, String username, String password): "
+                "offset 0-9: new WebDownloader$1(username, password) — anonymous Authenticator subclass "
+                "that returns PasswordAuthentication(username, password) on getPasswordAuthentication(). "
+                "offset 9: Authenticator.setDefault(authenticator) — JVM-WIDE default authenticator. "
+                "offset 12-20: new URL(url).openStream() — fetches the attacker-controlled URL. "
+                "When attacker's server responds with 401 WWW-Authenticate: Basic, "
+                "the JVM Authenticator automatically provides ESX admin credentials in the retry request."
+            ),
+            "esxcredential_source": (
+                "HostCredentialsAccess(): new ServiceAccess('localhost') → stmgr.getEsxCredential() via ThriftClient. "
+                "EsxCredential.username and EsxCredential.password are VMware ESXi host credentials "
+                "stored in the stmgr service (ServiceAccess.getEsxCredential() → StMgr$Client.getEsxCredential())."
+            ),
+            "auth_bypass_scope": (
+                "No URL validation or allowlist on the 'host' parameter. "
+                "Multiple hosts supported: request.getParameterValues() returns array; all values fetched. "
+                "Response content of each fetched URL is streamed to attacker inside ZIP file (application/zip response). "
+                "URL.openStream() follows HTTP redirects — attacker can chain to internal targets via redirect."
+            ),
+        },
+        "impact": (
+            "Any unauthenticated network-reachable caller can: "
+            "(1) enumerate internal services by supplying internal hostnames/IPs as 'host' parameter values "
+            "and reading the response streams; "
+            "(2) exfiltrate ESX admin credentials by directing the server to an attacker-controlled HTTPS endpoint "
+            "that challenges with 401 WWW-Authenticate: Basic — the JVM Authenticator responds with "
+            "EsxCredential.username / EsxCredential.password automatically; "
+            "(3) read content from any https:// URL reachable from the stCtlVM management interface. "
+            "ESX admin credentials (VMware ESXi root or service account) provide full hypervisor control "
+            "over all compute hosts in the HyperFlex domain."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Add authentication filter mapping for /st-support/* matching the other servlet patterns. "
+            "Validate the 'host' parameter against a whitelist of known HyperFlex cluster node IPs. "
+            "Do not forward ESX credentials via Authenticator.setDefault() — this sets a JVM-wide authenticator. "
+            "Use a per-connection credential injection mechanism. "
+            "Consider removing StorvisorSupportBundle entirely if InternalSupportBundle (/internalsupport/*) "
+            "provides equivalent functionality with proper authentication."
+        ),
+    },
+    "HX-F82": {
+        "title": (
+            "WebDownloader.trustAllHttpsCertificates() Called in Class Static Initializer — "
+            "Global JVM TLS Certificate Validation Disabled in ROOT WAR at Class Load Time"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": "ROOT-1.0.0 WAR / WebDownloader / WebDownloader$TrustAllManager / WebDownloader$2",
+        "class": "TLS Certificate Validation Bypass — Second Global JVM Override in ROOT WAR, Triggered at Static Init",
+        "confirmed": True,
+        "evidence": {
+            "static_init_bytecode": (
+                "WebDownloader static initializer (ROOT-1.0.0/WEB-INF/classes/.../WebDownloader.class): "
+                "offset 0: invokestatic trustAllHttpsCertificates() — called at class load, before any instance. "
+                "offset 3-10: new WebDownloader$2(), HttpsURLConnection.setDefaultHostnameVerifier(verifier) — "
+                "JVM-wide hostname verifier override at static init."
+            ),
+            "trust_all_method_bytecode": (
+                "WebDownloader.trustAllHttpsCertificates(): "
+                "offset 7-14: new WebDownloader$TrustAllManager() — anonymous X509TrustManager. "
+                "offset 15-17: SSLContext.getInstance('SSL'). "
+                "offset 21-25: SSLContext.init(null, TrustManager[]{WebDownloader$TrustAllManager}, null). "
+                "offset 28-32: HttpsURLConnection.setDefaultSSLSocketFactory(sslCtx.getSocketFactory()) — JVM-WIDE."
+            ),
+            "trust_manager_noop": (
+                "WebDownloader$TrustAllManager implements javax.net.ssl.X509TrustManager: "
+                "checkServerTrusted() → return (offset 0: return). "
+                "checkClientTrusted() → return (offset 0: return). "
+                "getAcceptedIssuers() → null (aconst_null; areturn)."
+            ),
+            "hostname_verifier_noop": (
+                "WebDownloader$2 implements javax.net.ssl.HostnameVerifier: "
+                "verify(String, SSLSession) → iconst_1; ireturn (always true)."
+            ),
+            "scope_and_activation": (
+                "Difference from HX-F78: ROOT WAR WebDownloader overrides are set in the class static "
+                "initializer, not in an instance method. Any class loader that loads WebDownloader (e.g., "
+                "StorvisorSupportBundle or GenerationThread initializing it) triggers the global override. "
+                "StorvisorSupportBundle.doGet/doPost → processRequest → WebDownloader.getStream() "
+                "loads the class and fires the static init. "
+                "Once set, all HttpsURLConnection in the ROOT WAR JVM have no TLS validation for the lifetime "
+                "of the class (which is the lifetime of the JVM unless the class loader is discarded)."
+            ),
+        },
+        "impact": (
+            "Every HTTPS connection from the ROOT WAR JVM (management UI backend, "
+            "stmgr Thrift, vCenter, upgrade download, support bundle fetch) "
+            "accepts any certificate without chain or hostname validation from the point WebDownloader is first loaded. "
+            "Combined with HX-F81: an attacker directing SSRF to an attacker-controlled HTTPS host "
+            "benefits from the trust-all override — the server will follow the attacker's TLS endpoint "
+            "without any certificate error, making MITM on all HTTPS channels in the ROOT WAR JVM trivial. "
+            "This is a second independent instance of the same vulnerability class as HX-F78, "
+            "in a separate WAR and JVM process."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove WebDownloader.trustAllHttpsCertificates() and the class static initializer that calls it. "
+            "Use a dedicated SSLContext pinned to the HyperFlex internal CA for ESXi host connections. "
+            "The SSLContext should be per-connection or per-host, not set via setDefaultSSLSocketFactory(). "
+            "Class-level static initializers are especially dangerous for security-affecting state: "
+            "once the class is loaded, the bypass cannot be reverted from application code."
+        ),
+    },
 }
 
 
