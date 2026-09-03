@@ -5166,6 +5166,82 @@ FINDINGS = {
             "Restrict ZK port 2181 to localhost or HyperFlex management VLAN only via firewall rules."
         ),
     },
+    "HX-F96": {
+        "title": (
+            "HxSecureShellMain Uses AES/ECB with Cluster UUID as Encryption Key — "
+            "ECB Mode Leaks Block Patterns and Cluster UUID Is Observable "
+            "via Multiple Unauthenticated Interfaces"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-327",
+        "component": (
+            "hxSecuritySvcMgr / HxSecureShellMain.setMetaData / BasicEncryptionUtil / "
+            "AES/ECB/PKCS5Padding — SSH support access metadata encryption"
+        ),
+        "class": "Use of Weak Cryptographic Algorithm — AES/ECB with Predictable Key",
+        "confirmed": True,
+        "evidence": {
+            "ecb_mode": (
+                "BasicEncryptionUtil.encrypt/decrypt offset 33-35: "
+                "Cipher.getInstance(\"AES/ECB/PKCS5Padding\"). "
+                "ECB mode applies AES independently to each 16-byte block — "
+                "identical plaintext blocks produce identical ciphertext blocks. "
+                "No IV or nonce is used. Encryption is deterministic. "
+                "Block pattern leakage allows structural analysis of encrypted data "
+                "without knowledge of the key."
+            ),
+            "key_is_cluster_uuid": (
+                "HxSecureShellMain.setMetaData() at offset 0-4: "
+                "clusterUuid = getClusterUuid(); // local var #2. "
+                "At offset 47-48: BasicEncryptionUtil.decrypt(callerData, clusterUuid). "
+                "At offset 142-143: BasicEncryptionUtil.encrypt(reconstructedData, clusterUuid). "
+                "The AES key is SHA-256(clusterUUID.getBytes('UTF-8')) via getKeySpec(). "
+                "The cluster UUID is the sole key material — not a secret."
+            ),
+            "key_observability": (
+                "Cluster UUID is visible via: "
+                "(1) GET /rest/v1/cluster — unauthenticated in HX versions <4.5; "
+                "(2) ZooKeeper /storvisor/clusterConfig or /storvisor/platform nodes — "
+                "readable by unauthenticated ZK clients; "
+                "(3) Intersight cloud telemetry; "
+                "(4) HX Connect UI (authenticated); "
+                "(5) support bundles and ASUP data. "
+                "An attacker with any of these access paths obtains the encryption key."
+            ),
+            "use_context": (
+                "setMetaData(String encryptedCallerData): "
+                "1. Decrypts caller-supplied encrypted data using clusterUUID as key; "
+                "2. Validates decrypted value is a valid IP address; "
+                "3. Appends timeoutMillis: data = ip + ':' + timeout; "
+                "4. Re-encrypts with clusterUUID; "
+                "5. writeMetaToFile(encrypted); "
+                "6. execSecureShellCmd() -> /usr/share/secureshell-config/config_ssh.sh. "
+                "This is the TAC remote support access mechanism: "
+                "SWIMS sends an encrypted IP, service decrypts and grants SSH access for that IP. "
+                "An attacker with the cluster UUID can forge the encrypted IP payload and "
+                "grant SSH access to an attacker-controlled IP without Cisco TAC involvement."
+            ),
+        },
+        "impact": (
+            "Attacker who obtains the cluster UUID (via unauthenticated /rest/v1/cluster, ZK, "
+            "or ASUP data) can: "
+            "1. Decrypt SSH support session metadata to determine which IPs have active TAC access; "
+            "2. Forge a valid encrypted payload for setMetaData() containing an attacker IP, "
+            "triggering config_ssh.sh to authorize SSH access from that IP; "
+            "3. Effectively bypass the Cisco TAC access control mechanism and "
+            "self-authorize SSH access to the HyperFlex controller."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace AES/ECB with AES/GCM (authenticated encryption) to prevent pattern leakage "
+            "and add integrity protection. "
+            "Replace cluster UUID as key with a dedicated secret not derivable from observable system state — "
+            "use a node-specific secret stored in /etc/hyperflex/secure/ with restricted permissions. "
+            "Add HMAC signature verification on the caller-supplied payload before decryption "
+            "to prevent forged setMetaData requests."
+        ),
+    },
 }
 
 
