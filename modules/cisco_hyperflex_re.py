@@ -2519,6 +2519,69 @@ FINDINGS = {
             "rather than a world-readable file path."
         ),
     },
+
+    # ── HX-F54 ──────────────────────────────────────────────────────────────────
+    "HX-F54": {
+        "title": "StNodeMgr.executePythonScript Thrift RPC — Arbitrary Python Execution",
+        "severity": "CRITICAL",
+        "cvss": "9.8",
+        "cwe": "CWE-94",
+        "component": "storfs/stNodeMgr Thrift service",
+        "class": "Arbitrary Code Execution",
+        "confirmed": True,
+        "evidence": {
+            "thrift_stub": (
+                "thrift-stubs/com/storvisor/sysmgmt/StNodeMgr$executePythonScript_args.class — "
+                "javap output: 'public java.lang.String script' field; "
+                "setScript(java.lang.String) / getScript():String; "
+                "Compiled from StNodeMgr.java; no input validation at the interface layer."
+            ),
+            "service_architecture": (
+                "StNodeMgr is a Thrift service implemented in the storfs C++ binary. "
+                "com::storvisor::sysmgmt::StNonBlockingThriftServer instantiated twice: "
+                "(1) stNonBlockingServer — plaintext, runtime port (tune default 10207, storfs.cfg "
+                "     overrides to 9090 on appliance; StPlatform service); "
+                "(2) stNonBlockingEncServer — TLS, runtime port (tune default 10208; "
+                "     likely StNodeMgr or multiplexed service). "
+                "sysmtool C++ client hardcodes localhost:9090 for StPlatform calls. "
+                "StPlatformOperations::stNodeOps() symbol in storfs at 0x5e022 — "
+                "routes node-scoped operations through the StPlatform Thrift server at 9090 "
+                "as a sub-dispatcher, making StNodeMgr callable via StPlatform."
+            ),
+            "thrift_method": (
+                "StNodeMgr interface defines executePythonScript(1: string script) — "
+                "takes a raw Python script string with no further arguments. "
+                "Caller controls the ENTIRE script body. No sandboxing primitive at the "
+                "interface boundary (no allowed-modules list, no AST restriction, no timeout "
+                "constraint). Execution occurs in the process context of the storfs service."
+            ),
+            "auth_posture": (
+                "Same X-RootSessionID header authentication as HX-F53. "
+                "Static token read from /etc/hyperflex/secure/root_file.pub. "
+                "Identical to all other internal Thrift endpoints — single shared secret "
+                "for the entire internal management bus."
+            ),
+        },
+        "impact": (
+            "Attacker with network access to the management interface and knowledge of "
+            "X-RootSessionID (obtainable via HX-F13 keystore read or HX-F53) can submit "
+            "an arbitrary Python script to storfs via the StNodeMgr Thrift interface. "
+            "The script executes as the storfs process owner (root or springpath) on the "
+            "HyperFlex controller VM. Combined with HX-F53 (runCommand on hxSecuritySvcMgr), "
+            "two separate Thrift services independently expose OS-level code execution — "
+            "both protected by the same static shared secret."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove executePythonScript from the externally-accessible Thrift interface. "
+            "If internal script execution is required, gate it behind a signed-script "
+            "mechanism (HMAC over script content with a key not accessible to remote callers). "
+            "Migrate all internal Thrift services from static X-RootSessionID to per-session "
+            "mTLS certificates so that token theft does not grant blanket access to all services. "
+            "Apply iptables DROP rules for Thrift management ports (9090, 10207, 10208) from "
+            "non-localhost sources."
+        ),
+    },
 }
 
 
