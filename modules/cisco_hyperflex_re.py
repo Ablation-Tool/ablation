@@ -116,12 +116,47 @@ iscsisvc architecture (16MB PIE ELF, not stripped, statically compiled OpenSSL):
   Encryption library toggle: /opt/hyperflex/storfs-core/encrypt/libcrypt_disabled.so vs libcrypt_enabled.so
 
 hxdp connector binary (Go, UPX-packed, stripped):
+  Internal project names: apollo (connector codebase), starship (HXDP), diesel (build system)
+  Build server: /mnt/vol1/jenkins/workspace/starship/master/diesel/code/apollo/
   Intersight cloud WebSocket endpoint: svc-static1.ucs-connect.com
   HashiCorp Vault API paths embedded: /pki/root/sign-self-issued, /sys/revoke-force/{prefix}
   SUDI certificate authentication to Intersight
   Emulator mode path: /.device_connector_emulator/intersight/catalog/Version
+  Go pprof endpoint: /debug/pprof/, /debug/pprof/cmdline, /debug/pprof/profile
+  Cloud domain override env vars: ENV_ANDROMEDA_DOMAIN_NAME, ENV_SERVICE_DOMAIN_NAME, ENV_WEB_ELB_DOMAIN_NAME
+  Staging Intersight domains (hardcoded in binary): cntcicd.starshipcloud.com, staging.starshipcloud.com,
+    cntperf.starshipcloud.com, sretest.starshipcloud.com, cntqa.starshipcloud.com
+  adsecret cipher library: adsecret_cipher.CipherIntf / adsecret.CipherMsg / adsecret.DecryptReq (AES-GCM)
+  JWT: ECDSA (jwt/ecdsa.go source path embedded); stSSOMgr SSO service at localhost:9334
+  Cert paths: certs/cisco-root-ca.pem; config: /etc/springpath/visorhost, /etc/springpath/stMgr.cfg
+  Certificate: -----END+CERTIFICATE----- non-standard PEM footer variant present
 
-Findings: HX-F01 (HIGH) through HX-F11 (HIGH).
+Installer appliance filesystem (Cisco-HX-Data-Platform-Installer-v6.0.2b-44423-esx.ova, 24.2GB vdisk):
+  Build: BUILD_ID=44423, BUILD_DATE=20251107, BUILD_TYPE=release, BUILD_RELEASE=6.0.2b
+  /etc/hyperflex/secure/ (world-traversable, drwxr-xr-x):
+    hyperflex_keystore.jceks  (rw-r--r--, 2700 bytes; Java JCEKS magic 0xCECECECE)
+      Entry 1: aes_encryption (SecretKeyEntry — AES key for data-at-rest)
+      Entry 2: vcenter_client (PrivateKeyEntry; CN=*.cisco.com, OU=Engineering; self-signed; valid until 2055; SHA512withRSA)
+    hyperflex_security.properties -> /usr/share/hyperflex/storfs-misc/hyperflex_security.properties
+      Content: <entry key="keystore_password">c3ByaW5ncGF0aA==</entry>  (base64 -> "springpath")
+  nginx: conf.d + ngx_cisco_fips_module.so; server.key NOT pre-provisioned in installer (generated during deploy)
+  /opt/hyperflex/auth/auth — ELF 64-bit, dynamically linked, NOT stripped (symbols available)
+  auth.service: WorkingDirectory=/opt/hyperflex/auth; binds localhost:9334 (stSSOMgr)
+  deployNodes.py: reads credentials.installer_passwd via parseEnvVariableTunes()
+  stssoclient.py: thrift client to stSSOMgr on localhost:9334
+
+iscsisvc SCSI path analysis:
+  conn_worker_ev_nop_send (0x285f10): builds fixed NOP-In response (TTT=0xFFFFFFFF, opcode=0x20, F-bit)
+    via istgt_iscsi_send_response — no echo of NOP-Out DataSegment data; SAFE
+  istgt_iscsi_op_scsi (0x2751e0) EDTL handling (candidate — needs exploitation confirmation):
+    EDTL = bswap([r15+0x14]) -> [rsp+0x20]
+    Buffer adequacy check: lea eax,[rax+rsi*1+0x11000] at 0x2755b4 where rsi=EDTL (32-bit LEA)
+    Overflow: EDTL=0xFFFFFFFF causes LEA to wrap -> cmp [r14+0x2e8],0x10FF passes for most pre-allocs
+    On overflow: code proceeds with undersized buffer instead of triggering jl->0x276513 error path
+    0x276513 error path: Log_UserAlert + return -1 (no dynamic realloc — fixed allocation only)
+    Exploitation impact: depends on whether EDTL drives subsequent memory write (vs SCSI CDB xfer len)
+
+Findings: HX-F01 (HIGH) through HX-F16 (MEDIUM).
 """
 
 import socket
@@ -136,6 +171,12 @@ from typing import Optional
 
 
 # ─── Default Credentials ─────────────────────────────────────────────────────
+
+# Keystore password — static across all deployments (base64 in hyperflex_security.properties)
+HX_KEYSTORE_PASSWORD = "springpath"
+HX_KEYSTORE_JCEKS    = "/etc/hyperflex/secure/hyperflex_keystore.jceks"
+HX_KEYSTORE_P12      = "/etc/hyperflex/secure/hyperflex_keystore.p12"
+HX_KEYSTORE_PROPS    = "/etc/hyperflex/secure/hyperflex_security.properties"
 
 HX_DEFAULT_CREDS = [
     ("admin", "admin"),
@@ -259,7 +300,7 @@ FINDINGS = {
             "cert_path": "/etc/nginx/server.crt",
         },
         "versions_affected": ["6.0.2b-44423", "all prior releases"],
-        "note": "Key recovery from installer VMDK (/etc/nginx/server.key) is pending VMDK mount RE.",
+        "note": "nginx server.key is NOT pre-provisioned in the installer appliance; generated during cluster deploy. Factory cert thumbprint is evidence of shared cert; private key is not recoverable from installer VMDK.",
     },
     "HX-F05": {
         "title": "cisco-openssl post_install.sh References Stale Version String",
@@ -408,12 +449,150 @@ FINDINGS = {
             "keystore_path": "/etc/hyperflex/secure/hyperflex_keystore.p12",
             "password_path": "/etc/hyperflex/secure/hyperflex_security.properties",
             "xml_tag": "<entry key=\"keystore_password\">",
+            "confirmed_password": "springpath  (base64: c3ByaW5ncGF0aA== — confirmed via installer VMDK)",
             "zk_path": "/chap/<initiator-iqn>  {chapName: b64(RSA-enc), chapSecret: b64(RSA-enc)}",
             "decrypt_data": "iscsisvc:0x28bcf0 -> PKCS12_parse -> RSA_private_decrypt(0x100, ct, pt, key, RSA_PKCS1_PADDING=1)",
             "get_keystore_passwd": "iscsisvc:0x28b7e0 -> GetXmlTagValue -> base64 decode -> PKCS12 password",
             "build_path": "/opt/git/cypress/opensrc/istgt/src/chap_util.c",
         },
         "versions_affected": ["6.0.2b-44423"],
+    },
+    "HX-F12": {
+        "title": "Hardcoded Keystore Password 'springpath' Across All HyperFlex Keystores",
+        "severity": "HIGH",
+        "component": "/etc/hyperflex/secure/hyperflex_security.properties -> /usr/share/hyperflex/storfs-misc/",
+        "description": (
+            "The file /etc/hyperflex/secure/hyperflex_security.properties (a symlink to "
+            "/usr/share/hyperflex/storfs-misc/hyperflex_security.properties) contains "
+            "a single XML entry: <entry key=\"keystore_password\">c3ByaW5ncGF0aA==</entry>. "
+            "Decoded from base64: 'springpath' (the acquired company name). "
+            "This password unlocks both the PKCS#12 keystore used by iscsisvc for CHAP "
+            "credential decryption (HX-F11) and the JCEKS keystore "
+            "(/etc/hyperflex/secure/hyperflex_keystore.jceks) containing a vCenter client "
+            "RSA private key and an AES encryption key. The password is static across "
+            "all deployments and versions. The properties file is world-readable via the "
+            "world-traversable /etc/hyperflex/secure/ directory (drwxr-xr-x). "
+            "Any local process on stCtlVM can read both keystores and the password."
+        ),
+        "code_evidence": {
+            "properties_content": "<entry key=\"keystore_password\">c3ByaW5ncGF0aA==</entry>",
+            "decoded_password": "springpath",
+            "properties_symlink": "/etc/hyperflex/secure/hyperflex_security.properties -> /usr/share/hyperflex/storfs-misc/hyperflex_security.properties",
+            "directory_perms": "drwxr-xr-x 2 root root  /etc/hyperflex/secure/",
+            "jceks_perms": "-rw-r--r-- 1 root root 2700  hyperflex_keystore.jceks",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+    },
+    "HX-F13": {
+        "title": "World-Readable JCEKS Keystore Contains vCenter Client RSA Key and AES Encryption Key",
+        "severity": "HIGH",
+        "component": "/etc/hyperflex/secure/hyperflex_keystore.jceks",
+        "description": (
+            "The JCEKS keystore at /etc/hyperflex/secure/hyperflex_keystore.jceks "
+            "(world-readable, 2700 bytes) contains two entries decryptable with "
+            "the hardcoded password 'springpath' (HX-F12): "
+            "(1) 'vcenter_client': RSA private key with certificate CN=*.cisco.com, "
+            "OU=Engineering, O='Cisco, Inc.', self-signed, valid until 2055-10-31. "
+            "This wildcard certificate is used for authenticating the HyperFlex cluster "
+            "to vCenter. An attacker who extracts this key can impersonate the cluster "
+            "to any vCenter integration endpoint. "
+            "(2) 'aes_encryption': AES SecretKeyEntry — the symmetric key used for "
+            "HyperFlex data-at-rest encryption operations. Extracting this key provides "
+            "access to encrypted storage data without LUKS key derivation. "
+            "Both keys are accessible to any local process on stCtlVM via the world-readable "
+            "keystore file and the hardcoded password."
+        ),
+        "code_evidence": {
+            "jceks_magic": "0xCECECECE (Java KeyStore, JCEKS type)",
+            "entry_1": "alias=aes_encryption, type=SecretKeyEntry",
+            "entry_2": "alias=vcenter_client, type=PrivateKeyEntry",
+            "vcenter_cert_cn": "CN=*.cisco.com, OU=Engineering, O=\"Cisco, Inc.\", L=SanJose, ST=California, C=US",
+            "vcenter_cert_valid": "2025-11-06 through 2055-10-31 (30-year validity)",
+            "vcenter_cert_sig": "SHA512withRSA",
+            "vcenter_cert_serial": "7ee31744949b791",
+            "vcenter_cert_sha256": "9D:FB:29:E4:B5:AC:A9:21:65:CC:71:C2:A6:81:7A:0C:BD:07:66:4D:4B:01:34:DD:DF:47:FE:79:AE:AC:1C:5A",
+            "password": "springpath (see HX-F12)",
+            "keytool_cmd": "keytool -list -v -keystore hyperflex_keystore.jceks -storetype JCEKS -storepass springpath",
+        },
+        "versions_affected": ["6.0.2b-44423"],
+    },
+    "HX-F14": {
+        "title": "hxdp Connector Cloud Domain Overridable via Environment Variable",
+        "severity": "MEDIUM",
+        "component": "hxdp-connector bundle / bin/hxdp",
+        "description": (
+            "The hxdp connector binary reads ENV_ANDROMEDA_DOMAIN_NAME and "
+            "ENV_SERVICE_DOMAIN_NAME environment variables at runtime to resolve the "
+            "Intersight cloud endpoint. If either variable is set in the connector "
+            "process environment on stCtlVM, the connector will direct its WebSocket "
+            "management channel to the attacker-specified domain instead of "
+            "svc-static1.ucs-connect.com. An attacker with any path to modify the "
+            "connector process environment (compromised init system, writable service "
+            "unit, environment file injection) can redirect all device management traffic "
+            "to an attacker-controlled Intersight lookalike. "
+            "ENV_WEB_ELB_DOMAIN_NAME and ENV_WEB_ELB_DNS_NAME are additional domain "
+            "override variables also present in the binary."
+        ),
+        "code_evidence": {
+            "env_vars": [
+                "ENV_ANDROMEDA_DOMAIN_NAME",
+                "ENV_SERVICE_DOMAIN_NAME",
+                "ENV_WEB_ELB_DOMAIN_NAME",
+                "ENV_WEB_ELB_DNS_NAME",
+            ],
+            "default_endpoint": "svc-static1.ucs-connect.com (WebSocket)",
+            "binary": "bin/hxdp (Go, 1.0.11-20250305, UPX-packed, 25MB unpacked)",
+        },
+        "versions_affected": ["1.0.11-20250305 (connector bundle)"],
+    },
+    "HX-F15": {
+        "title": "Go Runtime pprof Debug Endpoints Embedded in hxdp Connector Binary",
+        "severity": "MEDIUM",
+        "component": "hxdp-connector bundle / bin/hxdp",
+        "description": (
+            "The hxdp connector binary imports net/http/pprof, registering "
+            "/debug/pprof/, /debug/pprof/cmdline, and /debug/pprof/profile "
+            "on the connector's HTTP listener. If the local HTTP service "
+            "(Create HTTP service at %s) does not require authentication for the "
+            "/debug/ namespace, these endpoints expose: running goroutine stacks, "
+            "heap memory profiles, and the connector process command-line arguments. "
+            "The connector handles SUDI certificates and Intersight credentials — "
+            "goroutine stack dumps may include these in-flight."
+        ),
+        "code_evidence": {
+            "pprof_paths": ["/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile"],
+            "log_string": "Create HTTP service at %s",
+            "restapi_string": "https://localhost/rest/",
+            "plugin_strings": ["plugin HttpRequest Start() called", "plugin Net Start() called"],
+        },
+        "versions_affected": ["1.0.11-20250305 (connector bundle)"],
+    },
+    "HX-F16": {
+        "title": "Non-Production Intersight Staging Domain Strings Hardcoded in Production Binary",
+        "severity": "LOW",
+        "component": "hxdp-connector bundle / bin/hxdp",
+        "description": (
+            "Five Cisco-internal non-production Intersight cloud domains are hardcoded "
+            "as string literals in the production hxdp connector binary: "
+            "cntcicd.starshipcloud.com (CI/CD), staging.starshipcloud.com (staging), "
+            "cntperf.starshipcloud.com (performance), sretest.starshipcloud.com (SRE test), "
+            "cntqa.starshipcloud.com (QA). These expose Cisco's internal cloud deployment "
+            "topology and environment naming. Combined with ENV_ANDROMEDA_DOMAIN_NAME (HX-F14), "
+            "any of these domains could be set as the connector target, directing a "
+            "deployed cluster to connect to Cisco's internal staging infrastructure."
+        ),
+        "code_evidence": {
+            "staging_domains": [
+                "cntcicd.starshipcloud.com",
+                "staging.starshipcloud.com",
+                "cntperf.starshipcloud.com",
+                "sretest.starshipcloud.com",
+                "cntqa.starshipcloud.com",
+            ],
+            "internal_names": "starship (project), apollo (connector code), diesel (build system)",
+            "build_path": "/mnt/vol1/jenkins/workspace/starship/master/diesel/code/apollo/",
+        },
+        "versions_affected": ["1.0.11-20250305 (connector bundle)"],
     },
 }
 
