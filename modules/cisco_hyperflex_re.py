@@ -3908,6 +3908,110 @@ FINDINGS = {
             "(Intersight tokens, vCenter passwords, OAuth secrets, SmartAccount credentials)."
         ),
     },
+    "HX-F77": {
+        "title": "hxCloneSvcMgr.createClone Passes VSS Credentials as Plaintext in TBinaryProtocol Thrift Fields Over Unencrypted TSocket (localhost:9347)",
+        "severity": "MEDIUM",
+        "cvss": "5.5",
+        "cwe": "CWE-319",
+        "component": "hxdc / hx-iscsi WAR / HxIscsiCloneMgrClient / hxCloneSvcMgr Thrift service",
+        "class": "Credential Exposure — VSS Credentials Transmitted in Cleartext Over Loopback Thrift IPC",
+        "confirmed": True,
+        "evidence": {
+            "thrift_signature": (
+                "hxCloneSvcMgr.Iface.createClone signature (hxCloneSvcMgr$Iface.class): "
+                "createClone(List<HxCloneConfig>, HxIscsiConsumerType, String username, String password, String serviceClientId). "
+                "createClone_args._Fields static initializer: "
+                "CLONE_LUN_CONFIG(ordinal=0, fieldId=1), CONSUMER_TYPE(ordinal=1, fieldId=2), "
+                "USERNAME(ordinal=2, fieldId=3), PASSWORD(ordinal=3, fieldId=4), SERVICE_CLIENT_ID(ordinal=4, fieldId=5)."
+            ),
+            "caller_local_vars": (
+                "HxIscsiCloneMgrClient.createClones local variable table (LVT): "
+                "slot 2 = vssUsername (String), slot 3 = vssPassword (String). "
+                "These are VSS (Volume Shadow Service) credentials for iSCSI clone operations on Windows/HyperV consumers. "
+                "Passed directly to hxCloneSvcMgr$Client.createClone() at bytecode offset 53."
+            ),
+            "transport_plaintext": (
+                "ThriftClient base class (com/springpath/hx/aaa/gateway/connect/ThriftClient.class) "
+                "constructs transport at openClient(): "
+                "new TSocket(host, port) -> new TFramedTransport(socket) -> new TBinaryProtocol(transport). "
+                "No TSSLSocket, no TLS wrapping. All Thrift field values serialized as TBinaryProtocol "
+                "byte stream over plaintext TCP. hxCloneSvcMgrPort = 9347 (localhost)."
+            ),
+            "logging": (
+                "HxIscsiCloneMgrClient.createClones: logger.debug('createClones: {}', cloneConfigList.toString()) "
+                "at bytecode offset 3 before RPC call. HxCloneConfig.toString() serializes config fields "
+                "but does not directly include username/password. "
+                "Credentials are still in plaintext on the wire."
+            ),
+        },
+        "impact": (
+            "Any process on the HX stCtlVM with loopback TCP access can observe VSS credentials "
+            "by capturing traffic on localhost:9347 (tcpdump -i lo port 9347). "
+            "VSS credentials are Windows domain or local administrator credentials used to invoke "
+            "Volume Shadow Service for consistent iSCSI LUN snapshots — valid for remote Windows host access. "
+            "Requires HyperV-consumer cluster configuration to be in use."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace TSocket with TSSLSocket using mutual TLS (client certificate pinned to stCtlVM CA) "
+            "for all internal Thrift IPC. Port 9347 (hxCloneSvcMgr) and all other localhost Thrift ports "
+            "should use the same TLS transport upgrade. "
+            "Alternatively, pass credentials as encrypted blobs and decrypt only within the Thrift server "
+            "using the JCEKS keystore key, never transmitting plaintext passwords over any transport."
+        ),
+    },
+    "HX-F78": {
+        "title": "StMgr.executeValidateLogin Relays UCSM Admin Credentials as Plaintext Thrift Fields Over TSocket (localhost:9333)",
+        "severity": "MEDIUM",
+        "cvss": "5.5",
+        "cwe": "CWE-319",
+        "component": "hxdc-encryption WAR / StMgrClient / StMgr Thrift service / executeValidateLogin",
+        "class": "Credential Exposure — UCSM Admin Password Transmitted in Cleartext Over Loopback Thrift IPC",
+        "confirmed": True,
+        "evidence": {
+            "thrift_signature": (
+                "StMgr.Iface.executeValidateLogin (thrift-stubs/com/storvisor/sysmgmt/StMgr$Iface.class): "
+                "executeValidateLogin(String ucsmHostname, String ucsmUsername, String ucsmPasswd, String lang). "
+                "executeValidateLogin_args field names from constant pool: "
+                "#12=ucsmHostname, #16=ucsmUsername, #19=ucsmPasswd, #22=lang."
+            ),
+            "caller_flow": (
+                "encryption WAR / AuthApiServiceImpl.validateUcsmLogin(UcsmCredentials): "
+                "Extracts ucsmCredentials.getUcsmHostname(), getUsername(), getPassword() at bytecode offsets 101-109. "
+                "Passes to ValidateLoginSource.validate(hostname, username, password, lang) "
+                "which calls StMgrClient.executeValidateLogin(hostname, username, password, lang). "
+                "StMgrClient.executeValidateLogin: logger.debug('calling executeValidateLogin') then "
+                "StMgr$Client.executeValidateLogin(ucsmHostname, ucsmUsername, ucsmPasswd, lang) "
+                "over ThriftClient TSocket transport."
+            ),
+            "transport_plaintext": (
+                "Same ThriftClient base class as HX-F77: TSocket -> TFramedTransport -> TBinaryProtocol. "
+                "stMgrPort = 9333 (localhost). No TLS. "
+                "UCSM admin password visible in plaintext in loopback TCP stream on port 9333."
+            ),
+            "ucsm_credentials_model": (
+                "UcsmCredentials.toString() constant pool includes '    password:' label (Utf8 #53). "
+                "Object serializes all three fields — ucsmHostname, username, password — to string. "
+                "Any logger.debug(..., ucsmCredentials) call logs the cleartext password."
+            ),
+        },
+        "impact": (
+            "UCSM (Unified Computing System Manager) admin credentials submitted to the encryption WAR's "
+            "/encrypt/v1/auth/validateUcsmLogin endpoint are relayed in plaintext over loopback Thrift. "
+            "Any process on the HX stCtlVM with loopback TCP access can observe UCSM admin credentials "
+            "by capturing traffic on localhost:9333 (tcpdump -i lo port 9333). "
+            "UCSM admin credentials provide full UCS domain control: server provisioning, "
+            "VLAN/VSAN management, firmware updates, and service profile assignment across all "
+            "compute nodes in the UCS domain."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace TSocket with TSSLSocket with mutual TLS for stmgr Thrift IPC on port 9333. "
+            "The same transport upgrade should cover all internal stmgr callers. "
+            "UcsmCredentials.toString() should redact the password field "
+            "(replace with '<redacted>' or omit the password line) to prevent accidental log exposure."
+        ),
+    },
 }
 
 
