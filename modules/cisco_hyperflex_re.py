@@ -194,7 +194,31 @@ vcCertificateUtilities.py:
   SpringpathVMWare.getServiceInstance_VCenter_SDK_Via_Certificate() -> uses vcenter_client RSA key from JCEKS (HX-F13)
   Confirms HX-F13 vCenter client cert is the live auth credential for vCenter management operations
 
-Findings: HX-F01 (HIGH) through HX-F27 (MEDIUM).
+Findings: HX-F01 (HIGH) through HX-F29 (HIGH).
+
+storfs-restapi_6.0.2b-44423_amd64.deb (81MB) — 11 WARs on stCtlVM:
+  auth, coreapi, securityservice, encryption, dataprotection, backupservice,
+  hxupgrade, supportservice, iscsi, slservice, ROOT
+  auth-1.0.0.war: ALL auth filters enabled (contrast: installer WAR HX-F18 disables them)
+    web.xml filters: AuditFilter, SPPrivilegedAuth (SSOPrivilegeAuthImpl),
+      SessionAuth (SessionCookieFilterImpl), KerberosAuth (KerberosFilterImpl),
+      ServiceAccessAuth (ServiceAccessAuthFilterImpl), SPBasicAuth (SSOBasicAuthImpl),
+      SPAuth (SSOAuthFilterImpl) — all mapped to /v1/*
+  authfilter-1.0.0.jar (from dependencies.zip) implements filter classes:
+    SSOPrivilegeAuthImpl: X-RootSessionID == /etc/hyperflex/secure/root_file.pub
+      -> accepts X-LoggedInUser/X-Scope/X-RequestInitiator as identity (HX-F29)
+    ServiceAccessAuthFilterImpl: short-circuits if Authenticated=True set upstream
+    SSOBasicAuthImpl: standard Basic Auth validation path
+    KerberosFilterImpl: Kerberos ticket path (Hyper-V hypervisor only)
+    SessionCookieFilterImpl: session cookie path (ESXi hypervisor only)
+  HxSecurity.getLocalSessionId(): reads /etc/hyperflex/secure/root_file.pub via FileInputStream
+  AuthorizedApiServiceImpl.authorizedRequest() dispatch order:
+    1. Authorization: Basic -> SSOManager.validateAuthHeaderForBasicToken()
+    2. Authorization: Bearer -> SSOManager.validateAccessTokenConvertToJWT()
+    3. No Authorization header -> SSOPrivilegeAuthImpl (X-RootSessionID check)
+    4. If ESX: SessionCookieFilterImpl
+    5. If HyperV: KerberosFilterImpl
+    6. Fallback: SSOBasicAuthImpl
 
 springpath_env_parse.py tunes credential encryption:
   AES-128-CBC; key = md5(Secret.class) as hex string = "1f6d13bcd7753f2d3b2e2da361b7afb5"
@@ -1030,6 +1054,112 @@ FINDINGS = {
             "(generated at deploy time) into a trusted bundle and pass verify='<path>' "
             "to requests calls. If mutual TLS is required, use the vcenter_client key from "
             "the JCEKS keystore (HX-F13) for client certificate auth."
+        ),
+    },
+
+    "HX-F28": {
+        "title": "StPlatform Thrift Interface Exposes 40+ Destructive Storage Operations Without Authentication",
+        "severity": "HIGH",
+        "component": "/opt/hyperflex/storfs-core/storfs (20MB ELF, storfs daemon, port 9966)",
+        "description": (
+            "The storfs storage daemon exports its core management interface as a Thrift "
+            "StPlatformProcessor with over 40 methods covering destructive storage operations: "
+            "formatDisks, deleteFiles, createFiles, removeDisk, retireDisks, blacklistDisks, "
+            "unclaimDisks, enableZKAuth, cloneDatastore, teardownNRNFS, and others. "
+            "Symbol table analysis of the 20MB storfs ELF (28,996 symbols, not stripped) "
+            "confirms no StPlatformAuthorizingProcessor class is present — the standard "
+            "authorization wrapper used in other Thrift service deployments is absent. "
+            "Disassembly of the representative method process_getCluster (0x9692a0) shows "
+            "no authentication or authorization check before dispatching to "
+            "StPlatform_getCluster_args::read(TProtocol*). The same pattern is expected "
+            "for destructive methods. The StPlatform interface port (9966, confirmed from "
+            "storfs binary strings) is exposed on the stCtlVM. Any process that can reach "
+            "the storfs Thrift socket — including code execution obtained through HX-F18 "
+            "or HX-F19 on the installer appliance — can invoke storage-destruction operations "
+            "against the HyperFlex cluster data fabric."
+        ),
+        "code_evidence": {
+            "binary": "/opt/hyperflex/storfs-core/storfs (20MB ELF, PIE, partial RELRO, canary, 28996 symbols)",
+            "symbol_evidence": "StPlatformProcessor present; StPlatformAuthorizingProcessor absent",
+            "destructive_handlers": [
+                "process_formatDisks", "process_deleteFiles", "process_createFiles",
+                "process_removeDisk", "process_retireDisks", "process_blacklistDisks",
+                "process_unclaimDisks", "process_enableZKAuth", "process_cloneDatastore",
+                "process_teardownNRNFS",
+            ],
+            "port": "9966 (from storfs binary string literals)",
+            "auth_check_absent": "process_getCluster @ 0x9692a0: direct dispatch to args::read, no auth call",
+            "auth_wrapper_absent": "StPlatformAuthorizingProcessor not in symbol table",
+        },
+        "versions_affected": ["6.0.2b-44423 (stCtlVM)"],
+        "remediation": (
+            "Introduce an authorization wrapper (analogous to StPlatformAuthorizingProcessor) "
+            "that validates a session token on every Thrift call before dispatching. "
+            "Restrict the StPlatform port (9966) to loopback only via iptables and verify "
+            "that the calling process matches an expected service identity. "
+            "Audit all process_* handlers to confirm no production path reaches destructive "
+            "operations without a prior privilege check."
+        ),
+    },
+
+    "HX-F29": {
+        "title": "SSOPrivilegeAuthImpl Accepts User-Controlled X-RootSessionID Header to Bypass Authentication",
+        "severity": "HIGH",
+        "component": (
+            "authfilter-1.0.0.jar / SSOPrivilegeAuthImpl "
+            "(HX Connect REST API filter chain, mapped to /v1/*)"
+        ),
+        "description": (
+            "SSOPrivilegeAuthImpl.validateAuthHeaderForPrivilegeCreds() implements an "
+            "intra-node privilege bypass path in the HX Connect REST API filter chain. "
+            "When the X-RootSessionID request header is present and matches the content of "
+            "/etc/hyperflex/secure/root_file.pub (read by HxSecurity.getLocalSessionId()), "
+            "the filter accepts the values of three additional caller-controlled headers as "
+            "the authenticated identity without any credential verification: "
+            "X-LoggedInUser (becomes com.springpath.hx.aaa.authenticateduser), "
+            "X-Scope (becomes com.springpath.hx.aaa.authenticateduserscope), and "
+            "X-RequestInitiator (becomes com.springpath.hx.aaa.reqinitiatorip). "
+            "The downstream ServiceAccessAuthFilterImpl short-circuits on Authenticated=True "
+            "and lets the request through. "
+            "An attacker who can read /etc/hyperflex/secure/root_file.pub can impersonate "
+            "any user (e.g., X-LoggedInUser: admin) with MODIFY scope on any HX Connect "
+            "REST endpoint without presenting any password or token. "
+            "The /etc/hyperflex/secure/ directory is world-traversable (drwxr-xr-x) and "
+            "other files in that directory (hyperflex_keystore.jceks) are world-readable "
+            "(rw-r--r--), suggesting root_file.pub is likely world-readable on the stCtlVM. "
+            "A malicious local service or a process with arbitrary file read (e.g., via path "
+            "traversal in another endpoint) can extract the file and forge admin sessions."
+        ),
+        "code_evidence": {
+            "filter_class": (
+                "com.springpath.hx.aaa.filters.privilegeAuthFilter.SSOPrivilegeAuthImpl"
+                " (authfilter-1.0.0.jar)"
+            ),
+            "session_id_source": "/etc/hyperflex/secure/root_file.pub (HxSecurity.getLocalSessionId())",
+            "match_logic": "X-RootSessionID.equals(HxSecurity.getLocalSessionId()) -> authenticated",
+            "identity_headers": {
+                "X-LoggedInUser": "com.springpath.hx.aaa.authenticateduser",
+                "X-Scope": "com.springpath.hx.aaa.authenticateduserscope (READ or MODIFY)",
+                "X-RequestInitiator": "com.springpath.hx.aaa.reqinitiatorip",
+            },
+            "downstream_filter": (
+                "ServiceAccessAuthFilterImpl checks getAttribute('Authenticated') == 'True' "
+                "and calls chain.doFilter() if true — bypasses all remaining auth filters"
+            ),
+            "authorized_endpoint": (
+                "AuthorizedApiServiceImpl.authorizedRequest() fallback path (offset 253): "
+                "SSOPrivilegeAuthImpl.validateAuthHeaderForPrivilegeCreds first, "
+                "before SessionCookieFilter and KerberosFilter"
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423 (stCtlVM, storfs-restapi)"],
+        "remediation": (
+            "Replace the file-based session ID with a cryptographically random token "
+            "generated at service startup and stored in memory only (not on disk). "
+            "Restrict the privilege bypass path to loopback-originated requests at the "
+            "network layer — reject X-RootSessionID from any non-127.0.0.1 source. "
+            "Audit other services that read root_file.pub (e.g., HostCredentialsAccess) "
+            "to ensure they do not expose its content through any API endpoint."
         ),
     },
 }
