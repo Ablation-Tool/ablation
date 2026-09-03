@@ -27,7 +27,7 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F46 (MEDIUM). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F48 (HIGH). 13 attack chains.
 """
 
 import socket
@@ -1424,6 +1424,81 @@ FINDINGS = {
         "impact": "Internal network reachability mapping from ND fabric node position",
         "chain": "ND-F01 cookie -> GET /keyhole/api/v1/ping?args=-c1%20<internal_target> -> ICMP probe from ND node",
         "combined_with": ["ND-F01"],
+    },
+    "ND-F47": {
+        "title": "sm-psp-infra ClusterRole — Near-Cluster-Admin RBAC on Site Manager Namespace",
+        "severity": "CRITICAL",
+        "component": "site-manager namespace (sm.tpl), ClusterRole sm-psp-infra, ClusterRoleBinding sm-infra-binding",
+        "description": (
+            "The site-manager deployment defines ClusterRole sm-psp-infra with "
+            "apiGroups:['*'], resources:['*'], verbs:['get','watch','list','create','update','patch','delete']. "
+            "This is effectively cluster-admin — all resource types, all API groups, all write verbs "
+            "except 'impersonate' and 'use'. The ClusterRoleBinding sm-infra-binding grants this role "
+            "to system:serviceaccounts:sm — every pod in the sm namespace. "
+            "The site-manager pod additionally mounts: "
+            "(1) issh-token PVC — SSH infrastructure credentials "
+            "(2) hostPath /certs/ssl — node SSL certificates "
+            "(3) hostPath /etc/cisco-certs — cluster CA bundle "
+            "(4) KMS certs via PVC "
+            "This is the fourth wildcard ClusterRole found in ND 3.2.2m (after appmgr/eventmonitoring/firmwared). "
+            "Site-manager handles multi-site APIC controller credentials — code exec in sm namespace = "
+            "cluster-admin + access to all connected ACI APIC credentials."
+        ),
+        "clusterrole_rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["get","watch","list","create","update","patch","delete"]}],
+        "binding_subjects": ["system:serviceaccounts:sm"],
+        "additional_mounts": ["issh-token PVC", "hostPath /certs/ssl", "hostPath /etc/cisco-certs", "kms PVC"],
+        "chain": "Code exec in sm namespace -> sm-psp-infra ClusterRole = near-cluster-admin; OR: ND-F01 cookie -> ND-F43 kubectl -> exec sm pod",
+        "combined_with": ["ND-F30", "ND-F40", "ND-F41"],
+    },
+    "ND-F48": {
+        "title": "Hardcoded Cisco Internal Lab Credentials in Shipped API Documentation — APIC Admin + ND Federation Admin",
+        "severity": "HIGH",
+        "component": "site-manager Helm API docs (federation-management.tpl + site-management.tpl)",
+        "description": (
+            "Two sets of real Cisco internal lab credentials are embedded as example request bodies "
+            "in the site-manager API documentation templates that ship in production firmware. "
+            "1. ND Federation member onboarding example (federation-management.tpl): "
+            "   host: 172.20.43.53, userName: 'admin', password: 'ins3965!' (base64: aW5zMzk2NSE=) "
+            "   Federation member status example includes: host 172.20.43.54, serial A8453219BDF2, "
+            "   name 'ins15-dev-ova52' (internal Cisco ND dev instance). "
+            "2. ACI APIC site onboarding example (site-management.tpl): "
+            "   host: 10.195.219.153:443, siteType: ACI, userName: 'admin', password: 'Ciscoins3965!' "
+            "   (base64: Q2lzY29pbnMzOTY1IQ==), siteName: 'sanity1'. "
+            "Both credentials follow the pattern: <product>ins<4digits>! — consistent with Cisco "
+            "internal test/sanity password convention. "
+            "The ACI APIC admin credential (Ciscoins3965!) is for a real Cisco APIC at 10.195.219.153 "
+            "used in ND sanity testing. "
+            "These credentials are accessible to any attacker who extracts the firmware and reads the "
+            "API documentation templates — no runtime execution needed. "
+            "Risk: if the same password pattern is reused in production deployments or other Cisco "
+            "test environments, credential stuffing is trivial."
+        ),
+        "credentials": {
+            "nd_federation": {
+                "host": "172.20.43.53",
+                "username": "admin",
+                "password": "ins3965!",
+                "base64": "aW5zMzk2NSE=",
+                "context": "ND federation member onboarding example",
+                "instance_name": "ins15-dev-ova5/ins15-dev-ova52",
+            },
+            "aci_apic": {
+                "host": "10.195.219.153:443",
+                "username": "admin",
+                "password": "Ciscoins3965!",
+                "base64": "Q2lzY29pbnMzOTY1IQ==",
+                "context": "ACI APIC site onboarding example (siteType=ACI, name=sanity1)",
+            },
+        },
+        "device_serial": "A8453219BDF2 (Cisco ND node serial from federation status example)",
+        "password_pattern": "<product>ins<4digits>! — consistent across both credentials; likely Cisco CI/CD test convention",
+        "impact": (
+            "Credential stuffing against Cisco ND and APIC deployments using pattern <x>ins<N>!; "
+            "ACI APIC admin access if 10.195.219.153 is reachable and credential not rotated; "
+            "reveals internal Cisco test infrastructure topology"
+        ),
+        "chain": "Read site-manager federation-management.tpl from firmware -> base64 decode -> try admin:ins3965! on ND instances and admin:Ciscoins3965! on ACI APICs",
+        "combined_with": ["ND-F18", "ND-F31"],
     },
     "ND-F40": {
         "title": "system:eventmonitoring ClusterRole — Cluster-Admin Equivalent RBAC on Event Monitoring Service",
