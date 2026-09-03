@@ -27,7 +27,11 @@ Container stack (atomix.yaml, 20 core + 200+ app containers):
   apps/cisco-ndfc: 32 NDFC (fabric controller) services
   apps/cisco-nir: 60+ NIR telemetry analysis services
 
-Findings: ND-F01 (CRITICAL) through ND-F55 (INFO). 13 attack chains.
+Findings: ND-F01 (CRITICAL) through ND-F59 (MEDIUM). 13 attack chains.
+  ND-F56 HIGH: CIMC creds + cluster passphrase as CLI argv — /proc/pid/cmdline exposure
+  ND-F57 HIGH: CIMC SSH StrictHostKeyChecking=no — full bootstrap MITM surface
+  ND-F58 HIGH: KexAlgorithms=+diffie-hellman-group1-sha1 — Logjam-vulnerable KEX fallback
+  ND-F59 MEDIUM: curl --insecure for all Redfish BMC API calls
 """
 
 import socket
@@ -1786,6 +1790,140 @@ FINDINGS = {
             "coreos/etcd": "v3.3.15 from 2019 — EOL, multiple CVEs",
             "containerd": "v1.6.14 — CVE-2023-25153 (OCI image memory exhaustion)",
         },
+    },
+    "ND-F56": {
+        "title": "bootstrap.expect + node_join.expect: CIMC Password and Cluster Join Passphrase as CLI argv — Visible in /proc/pid/cmdline",
+        "severity": "HIGH",
+        "component": "bootstrap/scripts/bootstrap.expect, bootstrap/scripts/node_join.expect",
+        "description": (
+            "Both bootstrap expect scripts pass credentials as positional CLI arguments, making them "
+            "visible to any local process that reads /proc/<pid>/cmdline during bootstrap execution. "
+            "bootstrap.expect: argv[2] = CIMC admin password; argv[3] = jsonblob_file path. "
+            "node_join.expect: argv[2] = cluster join passphrase ('token'), argv[3] = CIMC password. "
+            "The bootstrap JSON blob (argv[3] of bootstrap.expect) contains cluster init material: "
+            "  nodeName, nodeRole, clusterUUID, seedList, appNetwork, serviceNetwork, admin_passwd (hash). "
+            "Any co-resident process (container with hostPID, or any ND application user) with read access "
+            "to /proc can harvest the CIMC admin credential and the cluster join passphrase from a live "
+            "bootstrap or node-join operation. The passphrase controls cluster membership; CIMC admin "
+            "grants full BMC/IPMI access to the physical host."
+        ),
+        "code_evidence": {
+            "bootstrap.expect:13": "set password [lindex $argv 2]",
+            "bootstrap.expect:41": "set cimcprompt [ cimclogin $cimc $user $password ]",
+            "node_join.expect:7": "set token [lindex $argv 2]",
+            "node_join.expect:9": "set password [lindex $argv 3]",
+            "node_join.expect:23": 'send "acs node-join --passphrase $token\\n"',
+        },
+        "exposed_material": {
+            "CIMC_admin_password": "argv[2] in bootstrap.expect — full IPMI/BMC admin",
+            "cluster_join_passphrase": "argv[2] in node_join.expect — controls cluster membership",
+            "CIMC_password_node_join": "argv[3] in node_join.expect — duplicate CIMC admin",
+        },
+        "proc_read_vector": "/proc/<pid>/cmdline — readable by any process on the node",
+        "cluster_bootstrap_json_fields": [
+            "nodeName", "nodeRole", "clusterUUID", "seedList",
+            "appNetwork", "serviceNetwork", "admin_passwd",
+        ],
+    },
+    "ND-F57": {
+        "title": "bootstrap-common.expect cimclogin: StrictHostKeyChecking=no + UserKnownHostsFile=/dev/null — CIMC SSH Host Identity Never Verified",
+        "severity": "HIGH",
+        "component": "bootstrap/scripts/bootstrap-common.expect, proc cimclogin (line 159), proc oob_cimclogin (line 230)",
+        "description": (
+            "Both CIMC SSH connection procs in bootstrap-common.expect disable host key verification "
+            "unconditionally: StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null. "
+            "No host key pinning exists; the CIMC SSH server is never authenticated before credentials "
+            "and bootstrap JSON are sent. An attacker with network adjacency during provisioning can "
+            "MITM the CIMC SSH session and intercept: (1) CIMC admin credentials, (2) the full "
+            "bootstrap JSON blob containing clusterUUID, seedList, and admin_passwd hash, "
+            "(3) acs node-join passphrase (cluster membership secret). "
+            "The same pattern applies to the OOB path (oob_cimclogin, line 230), meaning both the "
+            "primary CIMC path and the out-of-band management path are MITM-exposed. "
+            "Combined with ND-F58 (broken KEX fallback), an active network adversary can both downgrade "
+            "the key exchange and intercept the session."
+        ),
+        "code_evidence": {
+            "bootstrap-common.expect:159": (
+                "spawn ssh -l $user -o HostKeyAlgorithms=ssh-rsa "
+                "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $cimc"
+            ),
+            "bootstrap-common.expect:165": (
+                "spawn ssh -l $user -o StrictHostKeyChecking=no "
+                "-o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 $cimc"
+            ),
+            "bootstrap-common.expect:230": (
+                "spawn ssh -l $user -o HostKeyAlgorithms=ssh-rsa "
+                "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $oobip"
+            ),
+        },
+        "mitm_intercept_material": [
+            "CIMC admin credentials",
+            "bootstrap JSON blob (clusterUUID, seedList, admin_passwd hash)",
+            "acs node-join passphrase",
+        ],
+        "affected_scripts": ["bootstrap.expect", "bootstrap-common.expect", "node_join.expect"],
+        "combined_with": ["ND-F58", "ND-F56"],
+    },
+    "ND-F58": {
+        "title": "bootstrap-common.expect cimclogin Fallback: KexAlgorithms=+diffie-hellman-group1-sha1 — Logjam-Vulnerable DH Key Exchange",
+        "severity": "HIGH",
+        "component": "bootstrap/scripts/bootstrap-common.expect, proc cimclogin fallback (line 162-165)",
+        "description": (
+            "When the initial CIMC SSH connection attempt encounters a 'diffie-hellman-group1' negotiation "
+            "failure, bootstrap-common.expect automatically retries with "
+            "'-o KexAlgorithms=+diffie-hellman-group1-sha1' enabled. "
+            "diffie-hellman-group1-sha1 uses 1024-bit DH (Oakley Group 2) which is the exact cipher "
+            "targeted by the Logjam attack (CVE-2015-4000) — precomputed DH discrete log tables at "
+            "1024-bit allow passive decryption of the session. "
+            "Trigger condition: the first SSH attempt fails KEX (e.g., because the CIMC presents only "
+            "DH group1 — common on older UCS firmware). The fallback fires automatically with no "
+            "operator intervention. "
+            "Because ND-F57 disables host key checking and this finding downgrades KEX to Logjam-vulnerable "
+            "DH, an adversary who can position on the management network during bootstrap can "
+            "MITM or passively decrypt the CIMC SSH session and recover all transmitted material."
+        ),
+        "code_evidence": {
+            "bootstrap-common.expect:162-165": (
+                '"diffie-hellman-group1" {\\n'
+                "    # retry with DH group1 enabled\\n"
+                "    spawn ssh -l $user -o StrictHostKeyChecking=no "
+                "-o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 $cimc"
+            ),
+        },
+        "cve": "CVE-2015-4000 (Logjam — 1024-bit DH discrete log precomputation)",
+        "trigger": "Automatic on KEX negotiation failure — no operator action required",
+        "combined_with": ["ND-F57"],
+    },
+    "ND-F59": {
+        "title": "bootstrap-common.expect + node_join.expect: curl --insecure for All Redfish BMC API Calls",
+        "severity": "MEDIUM",
+        "component": "bootstrap/scripts/bootstrap-common.expect verify_redfish_service, bootstrap/scripts/node_join.expect",
+        "description": (
+            "All Redfish API interactions in the bootstrap scripts use 'curl --insecure', disabling TLS "
+            "certificate verification on the BMC management interface. Redfish is the REST API layer for "
+            "CIMC (Cisco UCS BMC) — it controls power state, serial console, firmware update, and sensor "
+            "data. Without TLS verification, an adversary with management network adjacency can present "
+            "a self-signed cert and intercept Redfish API calls, including any credentials or session "
+            "tokens transmitted in the Redfish session. Combined with ND-F57 (CIMC SSH no host auth), "
+            "the entire bootstrap provisioning channel — both SSH and REST/Redfish — is unauthenticated "
+            "at the transport layer."
+        ),
+        "code_evidence": {
+            "bootstrap-common.expect:verify_redfish_service": (
+                "exec curl --max-time 3 --silent --insecure --fail $redfish_url"
+            ),
+            "node_join.expect:27": (
+                "if {[catch {exec curl --max-time 3 --silent --insecure --fail $redfish_url} ...]}"
+            ),
+        },
+        "redfish_capabilities_exposed": [
+            "power control (on/off/reset)",
+            "serial console access",
+            "BMC firmware update",
+            "sensor and health data",
+            "virtual media mount",
+        ],
+        "combined_with": ["ND-F57", "ND-F58"],
     },
 }
 
