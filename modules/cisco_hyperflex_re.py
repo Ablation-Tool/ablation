@@ -4931,6 +4931,86 @@ FINDINGS = {
             "Use tar --no-overwrite-dir --no-same-permissions and verify entry count matches expected."
         ),
     },
+    "HX-F93": {
+        "title": (
+            "StNodeMgrImpl.sessionToken Initialized via Shell Execution of "
+            "'cat /etc/hyperflex/secure/root_file.pub' — Static Fallback "
+            "'invalid-token' Used When File Is Absent or Unreadable"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-287",
+        "component": (
+            "stnodemgr / StNodeMgrImpl / sessionToken lazy val / "
+            "$anonfun$sessionToken$1 / $anonfun$sessionToken$2 — "
+            "inter-service authentication token initialization"
+        ),
+        "class": "Improper Authentication — Predictable Static Fallback Token",
+        "confirmed": True,
+        "evidence": {
+            "sessionToken_init": (
+                "StNodeMgrImpl constructor at offset 169: "
+                "scala.util.Try { $anonfun$sessionToken$1() }.toOption.getOrElse(\"invalid-token\"). "
+                "$anonfun$sessionToken$1: scala.sys.process.stringToProcess("
+                "\"cat /etc/hyperflex/secure/root_file.pub\").!!.trim — "
+                "executes cat via shell and uses stdout as the token. "
+                "$anonfun$sessionToken$2: returns literal String \"invalid-token\" on any exception "
+                "(FileNotFoundException, PermissionDenied, IOException, ProcessException). "
+                "Result stored in private final field sessionToken (field #927) at constructor offset 169."
+            ),
+            "fallback_literal": (
+                "The fallback string \"invalid-token\" is a fixed literal, not randomly generated. "
+                "If /etc/hyperflex/secure/root_file.pub is absent, unreadable, or the cat command "
+                "fails for any reason, all outbound inter-service calls from stNodeMgr carry "
+                "the predictable token \"invalid-token\"."
+            ),
+            "file_semantics": (
+                "The source file is /etc/hyperflex/secure/root_file.pub — .pub extension indicates "
+                "an RSA or EC public key. Using a public key as a shared authentication token "
+                "is a design flaw: the file is intended to be non-secret (public keys are shareable), "
+                "but treating its content as a bearer credential contradicts that expectation. "
+                "Attacker with any filesystem read capability can extract the token value directly."
+            ),
+            "shell_execution": (
+                "Token is obtained via scala.sys.process.stringToProcess(\"cat <path>\").!! — "
+                "single-argument string form which splits on whitespace and executes via "
+                "ProcessBuilder, not via Runtime.exec(String) single-string (shell) form. "
+                "No injection risk in this specific call since the path is hardcoded, "
+                "but the process execution adds startup latency and failure modes not present "
+                "with direct File.readAllBytes()."
+            ),
+            "port_init": (
+                "Companion lazy val port$1: bash -c "
+                "'cat /usr/share/hyperflex/storfs-misc/restintport.cfg | grep PORT' parsed on '=' -> index 1. "
+                "Fallback port$2: '8997'. "
+                "Companion lazy val cip$1: bash -c "
+                "'cat /etc/hyperflex/storfs.cfg | grep clusterIp' parsed on '=' -> index 1. "
+                "Fallback cip$2: 'localhost'. "
+                "All three (cip, port, sessionToken) are used together to make outbound calls "
+                "to the stmgr REST API at <clusterIp>:8997 using sessionToken as auth credential."
+            ),
+        },
+        "impact": (
+            "If /etc/hyperflex/secure/root_file.pub is absent (fresh node, failed deployment, "
+            "or intentional deletion), all stNodeMgr outbound calls to other cluster services "
+            "carry the static token 'invalid-token'. "
+            "A service that validates tokens via string equality rather than cryptographic "
+            "verification would accept this known value from any caller. "
+            "Additionally, the public key file (/etc/hyperflex/secure/root_file.pub) used as "
+            "a shared authentication secret is readable by any process with filesystem access, "
+            "meaning the actual token value (when the file exists) is also obtainable by a "
+            "local attacker without root privileges."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace the file-content bearer token with a proper inter-service authentication "
+            "mechanism (mTLS, signed JWT, or Finagle built-in token validation). "
+            "If file-based tokens must be retained, use a private key or a dedicated secret "
+            "file (not a .pub file) and read it with Java file I/O, not via shell cat. "
+            "Remove the 'invalid-token' fallback — service should fail-fast rather than "
+            "operate with a known-static credential on auth failure."
+        ),
+    },
 }
 
 
