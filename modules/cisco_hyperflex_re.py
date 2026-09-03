@@ -3565,6 +3565,173 @@ FINDINGS = {
             "addAuthInfo to be called with the cluster UUID token before each curator operation."
         ),
     },
+    "HX-F71": {
+        "title": "JWT Signing Key Stored in World-Readable/Writable ZK Path /rest/aaa/jwt_signing_key",
+        "severity": "CRITICAL",
+        "cvss": "9.8",
+        "cwe": "CWE-321",
+        "component": "hx-aaa / AAAStoreZKPersistAgent / setIfAbsentJWTSigningKey + fetchJWTSigningKey",
+        "class": "Cryptographic Key Exposure — Symmetric JWT Signing Key in Unauthenticated ZK",
+        "confirmed": True,
+        "evidence": {
+            "zk_path": (
+                "AAAStoreZKPersistAgent.class constant pool ldc #42: String '/rest/aaa/jwt_signing_key'. "
+                "Private field AAAJWTSigningKey holds this path. "
+                "fetchJWTSigningKey() reads via ZooKeeperStore.getValueForKey('/rest/aaa/jwt_signing_key'). "
+                "setIfAbsentJWTSigningKey() writes via ZooKeeperStore.setValueForKeyForVersion("
+                "'/rest/aaa/jwt_signing_key', value, -1) — version -1 = unconditional write. "
+                "Additional ZK paths: /rest/aaa/auth_order, /rest/aaa/failed_logins_table, "
+                "/rest/aaa/auth_window_size_in_mins, /rest/aaa/max_authentications_allowed_in_window."
+            ),
+            "open_acl_chain": (
+                "ZK node /rest/aaa/jwt_signing_key created under OPEN_ACL_UNSAFE (world:anyone:cdrwa) "
+                "as established in HX-F55 (ZkConnectionManager uses OPEN_ACL_UNSAFE for all node creation; "
+                "auth disabled via HX-F69 Boolean.getBoolean misuse). "
+                "Any process on the stCtlVM network (TCP 2181) can: "
+                "  (1) READ the signing key via zkCli.sh get /rest/aaa/jwt_signing_key "
+                "  (2) WRITE a replacement key via zkCli.sh set /rest/aaa/jwt_signing_key <attacker-key> "
+                "No ZK auth credential required due to HX-F55 + HX-F69."
+            ),
+            "jwt_usage": (
+                "SSOManager.validateAccessTokenConvertToJWT(token, user, ssoUrl) validates all "
+                "HyperFlex Connect REST API tokens using the key fetched from /rest/aaa/jwt_signing_key. "
+                "SSOManager.authenticateAndFetchEncryptedJWT() signs new tokens with the same key. "
+                "Single key for both sign and verify = symmetric algorithm (HMAC-SHA). "
+                "JsonWebTokenImpl.formatToken/parseToken: JWT payload contains fields "
+                "user, token, session, scope, issuedAt, tokenLifeTime, idleTimeout, "
+                "warnIdleTimeout, hypervisor — full session context."
+            ),
+            "exploit_path": (
+                "Read-key path: attacker on network reads /rest/aaa/jwt_signing_key from ZK port 2181. "
+                "Crafts HMAC-signed JWT with user='admin', scope='admin', any valid issuedAt/tokenLifeTime. "
+                "Presents forged token to HyperFlex Connect REST API — passes SSOAuthFilterImpl validation. "
+                "Full admin API access without credentials. "
+                "Write-key path: attacker writes attacker-controlled key to /rest/aaa/jwt_signing_key. "
+                "All subsequent legitimate tokens become invalid (DoS); attacker issues valid tokens. "
+                "setIfAbsentJWTSigningKey uses setValueForKeyForVersion with version=-1 (matches any) "
+                "— no CAS protection against concurrent replacement."
+            ),
+        },
+        "impact": (
+            "Attacker with network access to ZK port 2181 can extract the JWT HMAC signing key "
+            "and forge arbitrary admin session tokens for HyperFlex Connect REST API. "
+            "Full unauthenticated access to all /rest/v1/* endpoints including cluster configuration, "
+            "credential management, and intersight registration. "
+            "Write path enables key replacement for persistent token forgery or platform-wide DoS."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Store JWT signing key in filesystem keystore (JCEKS/PKCS12) on stCtlVM, not ZooKeeper. "
+            "If ZK storage is required, create node with CREATOR_ALL_ACL (not OPEN_ACL_UNSAFE) "
+            "and fix HX-F69 so ZK client authentication actually works. "
+            "Migrate to asymmetric signing (RS256/ES256): public key for verification, "
+            "private key never leaves stCtlVM keystore — eliminates key extraction threat entirely."
+        ),
+    },
+    "HX-F72": {
+        "title": "ServiceAccessAuthFilter Passes Through Requests with Invalid X-ServiceAccessToken Without Rejection",
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-284",
+        "component": "hx-aaa / authfilter / ServiceAccessAuthFilterImpl / doFilter",
+        "class": "Authentication Logic Error — Silent Pass-Through on Token Validation Failure",
+        "confirmed": True,
+        "evidence": {
+            "filter_logic": (
+                "ServiceAccessAuthFilterImpl.doFilter() bytecode: "
+                "Offset 111-117: reads X-ServiceAccessToken header. "
+                "Offset 119-124: if header isEmpty() -> ifne 184 (jumps to chain.doFilter). "
+                "Offset 127-165: if header present: calls SSOManager.validateServiceAccessToken(token); "
+                "  if null returned (invalid token): offset 153-165 logs debug, falls through to offset 184; "
+                "  if exception (SSOExceptionEx): offset 168-177 logs debug, falls through to offset 184. "
+                "Offset 184-187: chain.doFilter(request, response, chain) — request passed unconditionally. "
+                "No HTTP 401/403 response issued on token validation failure."
+            ),
+            "design_intent_vs_reality": (
+                "ServiceAccessAuthFilter is the service-to-service token layer in the filter chain. "
+                "When token validation fails, it is designed to fall through (not reject) "
+                "so the downstream SSOAuthFilter can authenticate the request as a user request. "
+                "HOWEVER: for endpoints where ServiceAccessAuthFilter is the terminal auth filter "
+                "(not followed by SSOAuthFilter), validation failure silently grants access. "
+                "Filter chain composition is defined in web.xml / Jakarta filter-mapping; "
+                "any endpoint mapped only to ServiceAccessAuthFilter lacks fallback auth."
+            ),
+            "bypass_surface": (
+                "Presenting a syntactically valid but cryptographically invalid X-ServiceAccessToken "
+                "(wrong HMAC, expired, unknown clientId) causes the filter to log debug and pass through. "
+                "The filter sets no request attributes on failure — "
+                "downstream code that checks for service identity attributes sees no identity, "
+                "which may be treated as anonymous/default rather than rejected. "
+                "The 'Authenticated=True' early-exit (offsets 43-85) is set by upstream filters only "
+                "when a valid session is already established; forged/absent tokens never reach it."
+            ),
+        },
+        "impact": (
+            "Endpoints guarded only by ServiceAccessAuthFilter accept requests with "
+            "invalid or absent X-ServiceAccessToken headers. "
+            "Internal service endpoints assumed to require inter-service token may be reachable "
+            "without valid credentials if they are not also covered by SSOAuthFilter."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "ServiceAccessAuthFilterImpl.doFilter() must explicitly return HTTP 401 "
+            "when X-ServiceAccessToken is present but validateServiceAccessToken returns null or throws. "
+            "Only absent header (no service-auth attempt) should fall through to downstream filters. "
+            "Audit filter-mapping in web.xml: all endpoints reachable from the network must have "
+            "SSOAuthFilter or equivalent in their filter chain, not ServiceAccessAuthFilter alone."
+        ),
+    },
+    "HX-F73": {
+        "title": "SshScpUtilImpl.sshToEsx Sources ESX SSH Credentials from VirtualPlatform.getNodeLogin In-Memory Cache",
+        "severity": "LOW",
+        "cvss": "3.1",
+        "cwe": "CWE-312",
+        "component": "stmgr-1.0.jar / SshScpUtilImpl / sshToEsx + anonfun$sshToEsx$1",
+        "class": "Credential Handling — ESX SSH Credentials in Process Heap from ZK-Backed Cache",
+        "confirmed": True,
+        "evidence": {
+            "bytecode_source": (
+                "SshScpUtilImpl.$anonfun$sshToEsx$1 bytecode: "
+                "Offset 1-8: getfield virtPlatform (VirtualPlatform interface). "
+                "Offset 4: invokeinterface VirtualPlatform.getNodeLogin() -> Tuple2[String, String]. "
+                "Offset 96-107: builds sshCred(host, keys=None, userPass=Some(Tuple2(user, pass))). "
+                "Offset 113: invokes sshToHost(sshCred) -> SshUtilsTrait. "
+                "keys=None (scala.None$.MODULE$) at offset 89: no SSH key auth used. "
+                "userPass=Some(Tuple2(_1=username, _2=password)) at offsets 96-107: password auth."
+            ),
+            "credential_source_chain": (
+                "VirtualPlatform.getNodeLogin() returns ESX (username, password) from the "
+                "in-memory ZK-backed credential cache in EsxAuthZKMgmtImpl (stmgr-1.0.jar). "
+                "These are the same credentials stored at ZK path under ZKEntryConstants.esx_username "
+                "and ZKEntryConstants.esx_password, AES-encrypted with JCEKS keystore "
+                "password 'springpath' (HX-F58). "
+                "Read path: ZK world-read (HX-F55) -> AES decrypt (HX-F58 key) -> cleartext in heap. "
+                "ESX SSH sessions to all cluster nodes authenticate with these credentials."
+            ),
+            "interaction_with_f67": (
+                "HX-F67 identified that StDeployImpl generates a passphrase-less RSA key "
+                "at /root/.ssh/id_rsa and uses it for SSH via enableSecureShell. "
+                "SshScpUtilImpl.sshToEsx uses a DIFFERENT path: password-based SSH auth "
+                "via VirtualPlatform.getNodeLogin(). These are two distinct SSH credential chains: "
+                "  (1) Initial setup / enableSecureShell: RSA key (passphrase-less, /root/.ssh/id_rsa) "
+                "  (2) Ongoing management: ESX password from ZK-backed EsxAuthZKMgmtImpl cache."
+            ),
+        },
+        "impact": (
+            "ESX SSH password credentials are held in process heap memory of stmgr JVM process. "
+            "Process heap dump (via jmap or /proc/<pid>/mem on stCtlVM) exposes ESX passwords. "
+            "The same credentials are extractable from ZK (HX-F55 + HX-F58 chain). "
+            "This finding documents the in-memory credential surface as a secondary extraction path."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace long-lived in-memory credential cache with on-demand ZK reads with "
+            "immediate cleartext discard after use. "
+            "Use SSH key authentication (already implemented in StDeployImpl for the enableSecureShell "
+            "path) for all stmgr-to-ESX SSH connections — eliminates password credential in heap. "
+            "Primary remediation is HX-F58 (rotate JCEKS keystore password from 'springpath')."
+        ),
+    },
 }
 
 
