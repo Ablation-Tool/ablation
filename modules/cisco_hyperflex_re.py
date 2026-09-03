@@ -4732,6 +4732,86 @@ FINDINGS = {
             "Rotate UCSM readonly credentials after any disclosure event."
         ),
     },
+    "HX-F90": {
+        "title": (
+            "StDeployImpl.getEncodedPassword() Uses Base64 Only (Not Encryption) — "
+            "Six Infrastructure Credential Types Written to /tmp/virtInfoXXXXXX.json "
+            "and Passed as CLI Arguments During Cluster Deployment"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.1",
+        "cwe": "CWE-312",
+        "component": (
+            "stmgr / StDeployImpl / getEncodedPassword / setupScriptConfigurationFiles / "
+            "setupVirtInfoConfigFile / postInstallControllerVMScript — deployment path credential handling"
+        ),
+        "class": "Cleartext Storage of Sensitive Information — Base64 Mistaken for Encryption in Deployment Pipeline",
+        "confirmed": True,
+        "evidence": {
+            "getEncodedPassword_impl": (
+                "StDeployImpl.getEncodedPassword(String): "
+                "Code: aload_1; invokestatic Base64.encodeBase64String(input.getBytes()); areturn. "
+                "Method performs Base64.encodeBase64String(input.getBytes()) — reversible encoding, not encryption. "
+                "Used at 18+ call sites across setupScriptConfigurationFiles, setupVirtInfoConfigFile, "
+                "and postInstallControllerVMScript lambda functions."
+            ),
+            "credentials_encoded": (
+                "Six credential fields from VirtClusterParams processed via getEncodedPassword: "
+                "VirtClusterParams.esxPassword (ESXi host password, offset 80), "
+                "VirtClusterParams.vCenterPassword (offset 98), "
+                "VirtClusterParams.ctlvmPassword (offset 116), "
+                "VirtClusterParams.ucsmPassword (offset 139), "
+                "VirtClusterParams.cimcPassword (offset 162), "
+                "VirtClusterParams.esxNewPassword (offset 185). "
+                "Hyper-V branch additionally encodes: ctlvmPassword (offset 625), "
+                "HxHypervDetails.localAdminPassword (offset 652), "
+                "ActiveDirectoryDetails.domainAdminPassword (offset 674), "
+                "ActiveDirectoryDetails.hxAdminPassword (offset 687), "
+                "ActiveDirectoryDetails.cdUserPassword (offset 700)."
+            ),
+            "file_write": (
+                "$anonfun$setupScriptConfigurationFiles$1 / $anonfun$setupVirtInfoConfigFile$1: "
+                "Base64-replaced VirtClusterParams copy serialized via JsonThriftSerializer.toString() "
+                "and written to File.createTempFile('virtInfo', '.json') via FileUtils.writeStringToFile(). "
+                "NetworkSettings JSON written to File.createTempFile('networkSettings', '.json'). "
+                "Both files in JVM default temp directory (typically /tmp). "
+                "Files deleted after use via deleteScriptConfigurationFiles -> deleteWithRetry -> "
+                "FileUtils.deleteQuietly(), but deletion is best-effort (exception before cleanup leaves files)."
+            ),
+            "cli_argument": (
+                "$anonfun$postInstallControllerVMScript$7: constructs command-line list "
+                "[script_path, '--json-config-file-networking', <networkSettings_file_path>, "
+                "'--ctlvmPassword', getEncodedPassword(ctlvmPassword), '--workFlowType', <type>] "
+                "and executes via scala.sys.process.stringSeqToProcess().lines(). "
+                "Base64-encoded ctlvmPassword visible in /proc/<pid>/cmdline and audit logs during execution."
+            ),
+            "sanitize_context": (
+                "sanitizeIfNotDebugMode(VirtClusterParams) called before debug log at offset 34 "
+                "in setupVirtInfoConfigFile$1 — plaintext redacted from debug logs only. "
+                "The JSON file write and CLI invocation use the Base64 version regardless of log level."
+            ),
+        },
+        "impact": (
+            "All six infrastructure credential types (ESXi, vCenter, CTLVM, UCSM, CIMC, ESXi-new) "
+            "are written in Base64 form to temporary files in /tmp during cluster deployment. "
+            "Base64 is trivially reversible: `echo <value> | base64 -d` recovers plaintext. "
+            "CTLVM password additionally exposed as command-line argument visible in /proc/<pid>/cmdline "
+            "for the duration of the deployment script execution. "
+            "Deletion is best-effort — exception path leaves virtInfo*.json and networkSettings*.json on disk. "
+            "Any local process running as any user can read /tmp files (world-readable by default) and "
+            "decode all credentials. Post-exploitation combined with HX-F55 (ZK open ACLs) and "
+            "HX-F89 (UCSM creds in ZK) enables full cluster credential harvest in a single pass."
+        ),
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace Base64 with AES-GCM encryption using the StorvisorKeystore key (see HX-F41) "
+            "for all credential fields before writing to temporary files or passing to deployment scripts. "
+            "Write temporary credential files with mode 0600 (owner-only). "
+            "Pass credentials via environment variables or a secure IPC channel instead of CLI arguments "
+            "to avoid /proc/pid/cmdline exposure. "
+            "Ensure cleanup runs in a finally block to guarantee deletion even on exception paths."
+        ),
+    },
 }
 
 
