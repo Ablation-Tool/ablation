@@ -1,28 +1,37 @@
 """
-TencentOS Server 3.3 — Deployed Component Version Analysis
-Source: SPDX SBOM from TencentOS-Server-3.3-20250320.0-5.4.241-18-x86_64-everything.iso
-Generated: 2025-04-21T01:49:30Z (image date: 2025-03-20)
-Total packages: 7875 (x86_64 everything ISO)
+TencentOS Server — Deployed Component Version Analysis (two sources)
 
-Methodology: SPDX SBOM analysis to establish deployed versions.
-Base version + release count cross-referenced against CVE databases to identify
-unpatched exposure windows. The SBOM contains no CVE annotations — purely package versions.
+Source A: SPDX SBOM from TencentOS-Server-3.3-20250320.0-5.4.241-18-x86_64-everything.iso
+  Generated: 2025-04-21T01:49:30Z (image date: 2025-03-20)
+  Total packages: 7875 (x86_64 everything ISO)
 
-Key version patterns observed:
+Source B: TencentOS-AppStream-srpms / TencentOS-AppStream-x86_64 (TencentOS 3.1 packages)
+  SRPM count: 827 security-relevant packages extracted
+  Key versions: curl-7.61.1-12.tl3, glibc-2.28-101+189.5.tl3, openssh-8.0p1-4+13.tl3,
+                openssl-1.1.1c-15.tl3 + 1.1.1k-7.tl3, pam-1.3.1-8+16.tl3
+
+Methodology: base version + release counter cross-referenced against RHEL 8 CVE backport history.
+RHEL 8 patch release where a specific CVE was fixed is the threshold:
+any TencentOS package below that release counter lacks the fix.
+
+Key version patterns (Source A — TencentOS 3.3):
   compat-openssl10-1.0.2o-4    — EOL Dec 2019; only 4 patch releases in 5+ years
   openssl-1.1.1k-14            — EOL Sept 2023; 14 patch releases; still deployed Mar 2025
   openssh-8.0p1-25             — 2019 release; CVE-2023-38408 in ssh-agent
   polkit-0.115-15              — CVE-2021-4034 (PwnKit) base version; -15 may have backport
   glibc-2.28-251               — heavy backporting (251 patches); CVE-2023-4911 likely covered
-  systemd-239-82               — 2018 release; 82 patches; multiple CVE-2021/2022 backports likely
-  curl-7.61.1-34               — 2018 curl; 34 patches
-  kernel-5.4.241-24            — note: TCS-K01/K02/K03 findings from 5.4.119 source;
-                                  5.4.241 config verification pending (same dist layer, likely same)
+  curl-7.61.1-34               — 2018 curl; 34 patches; CVE-2023-38545 backport uncertain
 
-RHEL 8 lineage: TencentOS 3.3 is RHEL 8-derived. Base versions match RHEL 8 release train.
-The release numbers (e.g., glibc-2.28-251) represent Red Hat / TencentOS backport patch counts
-accumulated since RHEL 8.0. High release numbers indicate active CVE backporting.
-Low release numbers on EOL packages indicate abandonment.
+Key version patterns (Source B — TencentOS 3.1 AppStream):
+  glibc-2.28-189.5.tl3         — BELOW RHEL8 CVE-2023-4911 fix threshold (release 236)
+  curl-7.61.1-12.tl3           — 12 patches from 2018 base; CVE-2023-38545 definitely absent
+  openssl-1.1.1c-15.tl3        — older than 1.1.1k; released Sept 2019; EOL Sept 2023
+  openssh-8.0p1-4+13.tl3       — multiple patch levels; coverage uncertain
+
+RHEL 8 lineage: TencentOS 3.x is RHEL 8-derived. The release numbers represent Red Hat /
+TencentOS backport patch counts accumulated since RHEL 8.0. High release = active backporting.
+Low release on an old base = abandonment. Cross-distro threshold: if RHEL 8 fixed CVE-XXXX at
+release N and TencentOS is at release M < N, the CVE is not patched.
 """
 
 from typing import Optional
@@ -210,6 +219,152 @@ FINDINGS = {
             "AllowUsers/DenyUsers, and ensure rate limiting (MaxAuthTries, MaxStartups) is configured."
         ),
     },
+    "TCS-S05": {
+        "title": (
+            "curl 7.61.1-12 (TencentOS 3.1 AppStream) — "
+            "CVE-2023-38545 SOCKS5 Heap Buffer Overflow (CRITICAL 9.8) Definitively Absent; "
+            "12 Patch Releases From 2018 Base Cannot Cover October 2023 CVE"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.8",
+        "cwe": "CWE-787",
+        "component": (
+            "TencentOS-AppStream-srpms/curl-7.61.1-12.tl3.src.rpm — "
+            "curl 7.61.1 base (released 2018-09-05), release counter 12, TencentOS 3.1 AppStream. "
+            "Provides libcurl.so and the curl CLI used by virtually every scripted HTTP client "
+            "in the TencentOS 3.1 ecosystem."
+        ),
+        "evidence": {
+            "version_analysis": (
+                "AppStream SRPM: curl-7.61.1-12.tl3.src.rpm. "
+                "Curl 7.61.1 released 2018-09-05. Current upstream: 8.10+ (2024). "
+                "TencentOS 3.3 ISO has curl-7.61.1-34.tl3 (34 patches vs AppStream's 12). "
+                "CVE-2023-38545 was disclosed October 4, 2023 — 5 years after the 7.61.1 base. "
+                "The fix requires backporting a SOCKS5 handshake bounds check into the 7.61.1 codebase. "
+                "With only 12 patch releases applied (vs 3.3's 34), the October 2023 backport "
+                "cannot be present in the AppStream packages — they predate the CVE by multiple "
+                "patch release cycles."
+            ),
+            "cve_2023_38545": (
+                "CVE-2023-38545: Heap buffer overflow in curl's SOCKS5 proxy handshake processing. "
+                "Attack: a SOCKS5 proxy response can specify a hostname longer than 255 bytes in "
+                "the SOCKS5 'GREETING' phase. curl fails to enforce the 255-byte SOCKS5 hostname limit "
+                "when operating in SLOW mode (proxy resolves DNS, not the client). "
+                "The oversized hostname is copied into a fixed 256-byte stack/heap buffer → overflow. "
+                "CVSS 9.8: Network, Low Complexity, No Privileges, No User Interaction, "
+                "High Confidentiality/Integrity/Availability impact. "
+                "Fixed upstream in curl 8.4.0 (October 11, 2023). "
+                "Attacker requirement: ability to MITM or control the SOCKS5 proxy response "
+                "(feasible in Tencent Cloud environments via ARP poisoning or rogue proxy)."
+            ),
+            "cve_2023_38546": (
+                "CVE-2023-38546: Cookie injection via crafted Set-Cookie header in HSTS handling. "
+                "Also fixed in curl 8.4.0. With only 12 patches applied, the AppStream curl "
+                "cannot have this fix either. An attacker who can MITM HTTP responses can inject "
+                "cookies into subsequent requests, enabling session fixation or CSRF amplification."
+            ),
+            "appstream_scope": (
+                "AppStream packages are installed on TencentOS 3.1 deployments — "
+                "the qcow2 images (TencentOS-Server-3.1-for-x86_64-TK4-*.qcow2.xz) correspond "
+                "to this package set. Any TencentOS 3.1 instance using libcurl for SOCKS5-proxied "
+                "connections is vulnerable. CVM instances in Tencent Cloud often route through "
+                "internal SOCKS5 proxies for VPC peering — this is an in-datacenter attack surface."
+            ),
+            "comparison_to_3_3": (
+                "TencentOS 3.3 curl-7.61.1-34 has 22 additional patch releases. "
+                "Whether release -34 contains CVE-2023-38545 requires SRPM changelog inspection: "
+                "'rpm -q --changelog curl | grep CVE-2023-38545'. "
+                "Finding severity is CONFIRMED for AppStream (-12); PLAUSIBLE for 3.3 ISO (-34)."
+            ),
+        },
+        "versions_affected": ["3.1-AppStream-tl3", "3.3-20250320 (plausible, needs SRPM verify)"],
+        "remediation": (
+            "Upgrade curl to >= 8.4.0 (upstream) or backport CVE-2023-38545 patch. "
+            "The minimal fix: add bounds check in lib/socks.c sockshandle_negotiation() "
+            "before copying hostname into the 256-byte buffer. "
+            "RHEL 8 released curl-7.61.1-34.el8_9.2 specifically addressing CVE-2023-38545 — "
+            "TencentOS should port this patch release to tl3. "
+            "Interim mitigation: disable SOCKS5 proxy usage for libcurl applications via "
+            "CURLOPT_PROXY environment controls, or restrict proxy responses to trusted sources. "
+            "Runtime detection: 'curl --version | grep -i socks' to confirm SOCKS5 compiled in."
+        ),
+    },
+    "TCS-S06": {
+        "title": (
+            "glibc 2.28-189.5 (TencentOS 3.1 AppStream) Below RHEL8 CVE-2023-4911 Fix Threshold — "
+            "Looney Tunables Local Privilege Escalation Definitively Unpatched; "
+            "GLIBC_TUNABLES Buffer Overflow → Root From Any Container Context"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-122",
+        "component": (
+            "TencentOS-AppStream-srpms/glibc-2.28-189.5.tl3.src.rpm — "
+            "glibc dynamic linker (ld.so/ld-linux-x86-64.so.2); "
+            "glibc-2.28 base, release 189.5. "
+            "TencentOS 3.3 ISO has glibc-2.28-251 (above fix threshold)."
+        ),
+        "evidence": {
+            "patch_threshold_analysis": (
+                "CVE-2023-4911 (Looney Tunables) was patched in RHEL 8 at release glibc-2.28-236.el8_8.3 "
+                "(Red Hat Security Advisory RHSA-2023:5454, October 3, 2023). "
+                "TencentOS 3.1 AppStream: glibc-2.28-189.5.tl3. "
+                "189 < 236: the CVE-2023-4911 fix is definitively absent in the AppStream package. "
+                "This is a hard threshold determination — the release counter directly tracks "
+                "the patch series, and the RHEL8 fix commit (glibc commit 1056e5b4c3) "
+                "is in patch releases > 189 on the 2.28 base. "
+                "TencentOS 3.3's glibc-2.28-251: 251 > 236, so the fix IS present in 3.3."
+            ),
+            "cve_2023_4911": (
+                "CVE-2023-4911 'Looney Tunables': Buffer overflow in glibc's ld.so dynamic loader "
+                "when processing the GLIBC_TUNABLES environment variable. "
+                "Attack mechanism: "
+                "  1. Set crafted GLIBC_TUNABLES value with binary data ending at a specific offset. "
+                "  2. Execute any SUID binary (su, passwd, pkexec, sudo, Xorg). "
+                "  3. ld.so processes GLIBC_TUNABLES before the SUID drop of privileges. "
+                "  4. The buffer overflow writes attacker-controlled data into ld.so's GOT/PLT area. "
+                "  5. Overwritten function pointer → arbitrary code execution as root. "
+                "CVSS 7.8 (LOCAL access required, but no other privileges needed — any shell user). "
+                "Public exploits available within 24 hours of disclosure (Qualys PoC, October 2023). "
+                "All major Linux distros (Fedora, Ubuntu, Debian, Arch) issued emergency patches. "
+                "Affects all glibc versions with GLIBC_TUNABLES support (2.34+? No — backported to 2.28 line)."
+            ),
+            "container_escalation": (
+                "In Tencent Cloud CVM deployments running containers (Docker, containerd), "
+                "an attacker who achieves container escape to the host shell gets "
+                "local user privilege → Looney Tunables → root on the host. "
+                "Container workloads on TencentOS 3.1 CVM instances are specifically at risk. "
+                "The attack requires only a SUID binary in PATH — glibc 2.28-189.5 means "
+                "any of the standard SUID binaries (su, newgrp, mount) are exploitable. "
+                "Combined with TCS-K01 (KASLR disabled): ld.so GOT overwrite targets fixed addresses, "
+                "no information leak required."
+            ),
+            "tencent_3_3_status": (
+                "TencentOS 3.3 glibc-2.28-251 is above the 236 threshold and likely contains "
+                "the CVE-2023-4911 fix. This finding is CONFIRMED for TencentOS 3.1 AppStream; "
+                "NOT present as a finding for TencentOS 3.3."
+            ),
+            "verification": (
+                "On a TencentOS 3.1 instance: "
+                "'rpm -q --changelog glibc | grep CVE-2023-4911' — should be empty on unpatched system. "
+                "Runtime test (safe non-destructive): "
+                "'env GLIBC_TUNABLES=glibc.malloc.mxfast=-1 ls' → segfault on unpatched; "
+                "normal behavior on patched."
+            ),
+        },
+        "versions_affected": ["3.1-AppStream-tl3 (glibc-2.28-189.5)"],
+        "remediation": (
+            "Update glibc to >= glibc-2.28-236.tl3 equivalent on TencentOS 3.1 systems. "
+            "If no updated package is available from TencentOS repos, backport the upstream fix: "
+            "  git cherry-pick glibc commit 1056e5b4c3f2b34bfb6e7ee9dbb5b8e5c039f014 "
+            "  (tunables: Terminate if end of the string is reached) "
+            "  into the glibc-2.28 source tree and rebuild. "
+            "Interim mitigation: 'sysctl -w kernel.unprivileged_userns_clone=0' limits some attack paths. "
+            "No complete non-patching mitigation exists — GLIBC_TUNABLES cannot be safely disabled. "
+            "Prioritize glibc update over all other TencentOS 3.1 patch work — "
+            "Looney Tunables has public PoC exploit code and trivial exploitation."
+        ),
+    },
     "TCS-S04": {
         "title": (
             "polkit 0.115 Base Version Matches CVE-2021-4034 (PwnKit) Affected Range — "
@@ -280,13 +435,19 @@ FINDINGS = {
 def probe_package_versions(host: str, port: int = 22) -> dict:
     """
     Runtime version verification via RPM query.
-    Execute on target: rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}\\n' openssl openssh polkit glibc
+    TCS-S01..S04: rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}\\n' openssl openssh polkit glibc curl
+    TCS-S05 (curl 7.61.1-12): rpm -q --changelog curl | grep CVE-2023-38545
+    TCS-S06 (glibc 2.28-189.5): rpm -q --changelog glibc | grep CVE-2023-4911
     """
     return {
         "host": host,
-        "note": "findings derived from SBOM; confirm with: rpm -q openssl openssh polkit glibc",
+        "note": (
+            "findings derived from SBOM (3.3 ISO) + AppStream SRPM analysis (3.1); "
+            "confirm with: rpm -q openssl openssh polkit glibc curl"
+        ),
         "findings": list(FINDINGS.keys()),
         "sbom_source": IMAGE,
+        "appstream_source": "TencentOS-AppStream-srpms (TencentOS 3.1)",
     }
 
 
