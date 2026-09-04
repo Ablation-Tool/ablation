@@ -1,8 +1,12 @@
 """
 Tencent Cloud Stargate Agent (sgagent) — RE Module
-Package: linux_stargate_installer (self-extracting bash + tgz)
-Binary corpus: sgagent64 (x86_64), sgagent32 (x86), sgagentarm64 (aarch64)
-Build date: 2021-01-21; installer created 2021-01-28
+Packages:
+  linux_stargate_installer (self-extracting bash + tgz)
+    Binary corpus: sgagent64 (x86_64), sgagent32 (x86), sgagentarm64 (aarch64)
+    Build date: 2021-01-21; installer created 2021-01-28
+  windows-stargate-installer.exe (PE32 WEXTRACT self-extractor, DigiCert signed 2020-05-20)
+    Binary corpus: sgagent.exe (i386), libcurl.dll (i386), jsoncpp.dll (i386)
+    sgagent.exe build timestamp: 0 (zeroed); libcurl.dll: 2014-10-08; jsoncpp.dll: 2018-06-15
 
 Stargate is Tencent Cloud's (qcloud) root-privileged monitoring/management agent
 deployed on TencentOS Server and CVM instances. It polls a Tencent-controlled
@@ -39,6 +43,16 @@ Binary (sgagent64) security profile:
   Stripped: YES
   Linked:   dynamically (GLIBC_2.2.5)
   Entry:    0x405228
+
+Windows component security profile (all three binaries — DllCharacteristics=0x0000):
+  sgagent.exe (i386): ASLR=NO  DEP=NO  CFGuard=NO  SafeSEH=NO  GS=NO  ImageBase=0x00400000
+  libcurl.dll (i386): ASLR=NO  DEP=NO  CFGuard=NO  SafeSEH=NO  GS=NO  ImageBase=0x61c00000  version=7.38.0
+  jsoncpp.dll (i386): ASLR=NO  DEP=NO  CFGuard=NO  SafeSEH=NO  GS=NO  ImageBase=0x62140000
+  Worse than Linux variants: Linux had NX=YES; Windows has DEP disabled (stack/heap executable)
+  Windows install path: C:\\Program Files\\QCloud\\Stargate\\
+  Windows service: StargateSvc (CreateServiceA -> ADVAPI32.DLL)
+  Windows execution method: ShellExecuteExA (SHELL32.DLL) — equivalent of Linux system()
+  Windows config: same base.conf format (useCA=0, url=http://update2.agent.tencentyun.com/interface.php)
 
 Dangerous imports (sgagent64):
   system@GLIBC_2.2.5  — 1 call site (0x404858 PLT, called at 0x405bec)
@@ -425,6 +439,197 @@ FINDINGS = {
             "using realpath() before any file system operation. "
             "Do not use creat() with an attacker-controlled path; "
             "if a module marker file is needed, write it to a fixed root-owned directory."
+        ),
+    },
+    # ── Windows-specific findings ─────────────────────────────────────────────
+    "TCS-F07": {
+        "title": (
+            "Windows StargateSvc Component Stack Has Zero Exploit Mitigations — "
+            "No ASLR, No DEP, No CFGuard, No SafeSEH, No GS on All Three Binaries; "
+            "Worse Than Linux Variants Which Had NX"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-693",
+        "component": (
+            "sgagent.exe (i386), libcurl.dll (i386), jsoncpp.dll (i386) — "
+            "Windows StargateSvc PE binary stack — DllCharacteristics=0x0000 on all three"
+        ),
+        "evidence": {
+            "mitigation_matrix": (
+                "PE DllCharacteristics field — per-binary Windows mitigation status:\n"
+                "  sgagent.exe: ASLR=NO  DEP=NO  CFGuard=NO  SafeSEH=NO  GS=NO  Fixed base=0x00400000\n"
+                "  libcurl.dll: ASLR=NO  DEP=NO  CFGuard=NO  SafeSEH=NO  GS=NO  Fixed base=0x61c00000\n"
+                "  jsoncpp.dll: ASLR=NO  DEP=NO  CFGuard=NO  SafeSEH=NO  GS=NO  Fixed base=0x62140000\n"
+                "DllCharacteristics=0x0000 means no mitigation bits are set in the PE optional header. "
+                "The Windows OS loader does not apply ASLR, DEP, CFGuard, or integrity checks "
+                "to any component in the service binary stack."
+            ),
+            "worse_than_linux": (
+                "Linux variants (sgagent64, sgagent32, sgagentarm64) all had NX=YES (GNU_STACK RW). "
+                "The Windows variant has DEP disabled (NX_COMPAT bit 0x0100 is not set). "
+                "Stack pages and heap pages are executable on Windows. "
+                "Direct shellcode injection requires no ROP chain — payload can be placed "
+                "in a stack buffer or heap allocation and jumped to directly. "
+                "No information-leak primitive required: image bases are fixed and static "
+                "(sgagent.exe=0x00400000 maps to the same virtual address on every boot)."
+            ),
+            "seh_exploitability": (
+                "No .sxdata section detected — SafeSEH table absent. "
+                "sgagent.exe imports SetUnhandledExceptionFilter (KERNEL32.dll) — "
+                "SEH-based exploitation is viable: a stack overflow that overwrites an SEH handler "
+                "record is not validated against a trusted handler table. "
+                "Classic SEH overwrite: overwrite nSEH+SEH chain, pop-pop-ret gadget at fixed address "
+                "in libcurl.dll or jsoncpp.dll (no ASLR) → shellcode on executable stack (no DEP)."
+            ),
+            "no_gs_cookies": (
+                "No __security_cookie symbols in any binary string table. "
+                "MSVC /GS stack protection not applied at compile time. "
+                "Stack buffer overflows produce direct return address overwrite "
+                "with no cookie-check gate between corruption and code execution."
+            ),
+            "service_context": (
+                "StargateSvc registered via CreateServiceA (ADVAPI32.DLL). "
+                "Windows services run as SYSTEM by default when no explicit account is specified. "
+                "Service binary at sgagent.exe is the memory corruption target; "
+                "successful exploitation yields SYSTEM-level code execution."
+            ),
+        },
+        "versions_affected": ["windows-2020-05-20"],
+        "remediation": (
+            "Recompile all three components with: "
+            "/GS (stack cookies), /DYNAMICBASE (ASLR), /NXCOMPAT (DEP), /SAFESEH (SafeSEH). "
+            "Add /guard:cf for Control Flow Guard (CFGuard). "
+            "Verify mitigations post-build with dumpbin /headers or sigcheck from Sysinternals. "
+            "For the libcurl.dll component, upgrade to a current release (see TCS-F08) and "
+            "ensure it is compiled with the same hardening flags."
+        ),
+    },
+    "TCS-F08": {
+        "title": (
+            "libcurl.dll 7.38.0 (2014) Loaded by SYSTEM Service — "
+            "Decade-Old Library With 100+ Accumulated CVEs, No ASLR/DEP, Fixed Load Address; "
+            "MitM HTTP Response Triggers Vulnerable Code Path in SYSTEM Context"
+        ),
+        "severity": "CRITICAL",
+        "cvss": "9.1",
+        "cwe": "CWE-1104",
+        "component": (
+            "libcurl.dll — version 7.38.0, PE timestamp 2014-10-08, "
+            "shipped in 2020-05-20 signed installer; loaded by StargateSvc at fixed base 0x61c00000"
+        ),
+        "evidence": {
+            "version_confirmation": (
+                "String extraction from libcurl.dll: "
+                "'CLIENT libcurl 7.38.0' (x3 occurrences) and 'libcurl/7.38.0'. "
+                "PE timestamp: Wed Oct 8 04:30:48 2014 (0x54350448). "
+                "curl 7.38.0 was released 2014-10-20. This binary was built just before release. "
+                "At time of installer signing (2020-05-20), this library was approximately 6 years old. "
+                "Approximately 120+ CVEs had been filed against libcurl between 7.38.0 and 7.70.0."
+            ),
+            "selected_cves": (
+                "High-severity CVEs in libcurl versions 7.38.0 through 7.50.x (non-exhaustive): "
+                "CVE-2016-9586: printf format string in libcurl 7.36.0-7.51.0 (CVSS 9.8). "
+                "CVE-2015-3145: heap-based buffer overflow in cookie parser (CVSS 9.8). "
+                "CVE-2016-8615: cookie injection via crafted server response. "
+                "CVE-2016-8620: strdup() on attacker-controlled glob expression (heap overflow). "
+                "CVE-2016-8621: out-of-bounds read in curl_getdate(). "
+                "CVE-2016-8624: OOB read in URL auth parsing. "
+                "CVE-2018-1000007: credential leak via HTTP redirect (auth header forwarding). "
+                "All of these affect the exact 7.38.0 version confirmed in libcurl.dll."
+            ),
+            "exploit_amplification": (
+                "libcurl.dll is loaded by StargateSvc, a SYSTEM-privileged Windows service. "
+                "libcurl.dll itself has DllCharacteristics=0x0000 (no ASLR, no DEP, fixed base 0x61c00000). "
+                "Any heap or stack corruption in libcurl.dll at 0x61c00000+offset → SYSTEM RCE "
+                "without requiring an information leak to defeat ASLR. "
+                "With DEP disabled, shellcode planted in heap/stack is directly executable — "
+                "no ROP chain required."
+            ),
+            "mitm_trigger_path": (
+                "TCS-F01 establishes: sgagent.exe makes HTTP requests to "
+                "http://update2.agent.tencentyun.com/interface.php with SSL disabled. "
+                "The HTTP response is processed by libcurl 7.38.0 (CVE-2016-9586 path: "
+                "printf format string in curl_msnprintf -> format string expansion on response data). "
+                "A MitM attacker on the network delivers a crafted HTTP response that triggers "
+                "a CVE in the 7.38.0 code path during response processing. "
+                "No prior authentication or credentials required — HTTP request originates from SYSTEM."
+            ),
+            "verifyhost_warning": (
+                "libcurl.dll contains the string: "
+                "'CURLOPT_SSL_VERIFYHOST no longer supports 1 as value!'. "
+                "This is the warning libcurl 7.28.1+ logs when CURLOPT_SSL_VERIFYHOST=1 is passed. "
+                "It confirms that if the Windows agent calls curl_easy_setopt with VERIFYHOST=1, "
+                "libcurl silently accepts any certificate (treats 1 the same as 0). "
+                "This matches the Linux TCS-F01 finding where CURLOPT_SSL_VERIFYHOST was set to 1 "
+                "instead of 2, producing the same weakened TLS posture."
+            ),
+        },
+        "versions_affected": ["windows-2020-05-20"],
+        "remediation": (
+            "Replace libcurl.dll with the current libcurl release (7.88+ as of 2023). "
+            "Compile with /GS, /DYNAMICBASE, /NXCOMPAT, /guard:cf. "
+            "Configure CURLOPT_SSL_VERIFYPEER=1, CURLOPT_SSL_VERIFYHOST=2, "
+            "CURLOPT_CAINFO pointing to a pinned certificate bundle. "
+            "Migrate update URL from http:// to https:// (see TCS-F01). "
+            "Establish a dependency update policy so third-party libraries cannot "
+            "reach end-of-support before the product ships."
+        ),
+    },
+    "TCS-F09": {
+        "title": (
+            "ShellExecuteExA Called with `.\\.installer.exe` Relative Path — "
+            "Binary Planting Attack When StargateSvc Installer Runs from Attacker-Writable Directory"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "6.7",
+        "cwe": "CWE-426",
+        "component": (
+            "sgagent.exe ShellExecuteExA call site — string '.\\.installer.exe' at file offset 0x85227; "
+            "SHELL32.DLL ShellExecuteExA in import table"
+        ),
+        "evidence": {
+            "relative_path_confirmed": (
+                "strings -t x sgagent.exe output: '0x85227  .\\.installer.exe'. "
+                "This is the path argument passed to ShellExecuteExA (imported from SHELL32.DLL). "
+                "The path is relative — no drive letter, no absolute prefix. "
+                "Windows shell execution resolves relative paths against the current working directory. "
+                "'SetCurrentDirectoryA' is also imported from KERNEL32.dll, "
+                "indicating the binary explicitly sets CWD before the ShellExecuteExA call."
+            ),
+            "install_context": (
+                "install.bat (extracted from WEXTRACT cabinet): "
+                "stops existing StargateSvc -> deletes old binary -> unzips stargate.zip to "
+                "C:\\Program Files\\QCloud -> runs sgagent.exe install -> sgagent.exe reset -> "
+                "sgagent.exe start. "
+                "The bat file runs from the directory where the installer was executed. "
+                "If an attacker with local write access places a malicious installer.exe in "
+                "the same directory (e.g., a user's Downloads folder), and the victim "
+                "runs the Stargate installer from that directory with elevation, "
+                "ShellExecuteExA loads and executes the attacker's binary."
+            ),
+            "privilege_context": (
+                "Service installation (CreateServiceA) requires Administrator or SYSTEM privileges. "
+                "The installer is therefore run with elevation by the user or a deployment system. "
+                "The ShellExecuteExA call for .\\.installer.exe inherits those elevated privileges. "
+                "Attacker-planted installer.exe executes with Administrator or SYSTEM privileges "
+                "depending on how the Stargate installer was invoked."
+            ),
+            "no_signature_verification": (
+                "No imports from Wintrust.dll (WinVerifyTrust) in sgagent.exe. "
+                "sgagent.exe does not verify the Authenticode signature of .\\.installer.exe "
+                "before executing it. Any executable at that path is run unconditionally."
+            ),
+        },
+        "versions_affected": ["windows-2020-05-20"],
+        "remediation": (
+            "Replace the relative path '.\\.installer.exe' with an absolute path "
+            "constructed from the known installation directory. "
+            "Before executing any binary via ShellExecuteExA or CreateProcess, "
+            "verify its Authenticode signature using WinVerifyTrust (wintrust.dll). "
+            "Alternatively, eliminate the installer.exe sub-invocation entirely and "
+            "perform the install steps directly in sgagent.exe to remove the "
+            "untrusted-path execution surface."
         ),
     },
 }
