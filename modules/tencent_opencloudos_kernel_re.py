@@ -23,6 +23,16 @@ Notable TencentOS-specific modifications (from delta config analysis):
   IOMMU default: OFF                  (# CONFIG_INTEL_IOMMU_DEFAULT_ON is not set)
   AMD SME active by default: OFF      (# CONFIG_AMD_MEM_ENCRYPT_ACTIVE_BY_DEFAULT is not set)
   BPF JIT: ALWAYS ON                  (CONFIG_BPF_JIT_ALWAYS_ON=y)
+
+Tencent kernel extensions (kernel/tkernel/):
+  ttools:        World-writable ptrace bypass device (/dev/ttools 0666) — TCS-K04
+  shield_mounts: Kernel-enforced mount path blocking (/proc/shield_mounts)
+  netbind:       Custom privileged port protection (prot_sock_flag array)
+  netatop:       Per-process network accounting (netlink)
+  trackgpu:      GPU request tracking per PID (fsnotify/netlink)
+  kpatch:        Live kernel patching (Red Hat kpatch adapted for OpenCloudOS)
+  irqlatency:    IRQ latency measurement
+  mbuf:          cgroup-level quality monitor buffer (kernel/cgroup/mbuf.c)
 """
 
 from typing import Optional
@@ -246,6 +256,90 @@ FINDINGS = {
             "Remove CONFIG_SECURITY_SELINUX_DISABLE=y to prevent runtime SELinux disable."
         ),
     },
+    "TCS-K04": {
+        "title": (
+            "ttools Kernel Module Exposes World-Writable Ptrace Bypass Device (/dev/ttools 0666) — "
+            "Any Unprivileged Process Can Self-Protect From ptrace Including Root Attacher; "
+            "Hook Fires Before CAP_SYS_PTRACE Check — Standard Forensic Tools Blind"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-732",
+        "component": (
+            "kernel/tkernel/ttools/ttools_module.c — "
+            "/dev/ttools (misc minor 254, mode 0666) — "
+            "ptrace_pre_hook global set to ttools_ptrace_hook"
+        ),
+        "evidence": {
+            "device_mode": (
+                "ttools_dev.mode = 0666 (world-writable misc device). "
+                "Any user-space process can open /dev/ttools without root or any capability. "
+                "The device exposes three ioctls via ttools_dev_ioctl(): "
+                "  TTOOLS_PTRACE_PROTECT   = _IO(0xEE, 0x00) — protect current->group_leader "
+                "  TTOOLS_PTRACE_UNPROTECT = _IO(0xEE, 0x01) — remove protection "
+                "  TTOOLS_GET_FD_REFS_CNT  = _IOWR(0xEE, 0x02, struct ttools_fd_ref) — fd refcount"
+            ),
+            "hook_mechanism": (
+                "ttools_init() sets ptrace_pre_hook = ttools_ptrace_hook. "
+                "ptrace_pre_hook is a kernel function pointer called from the ptrace syscall "
+                "path BEFORE any capability check (before ptrace_has_cap() / CAP_SYS_PTRACE). "
+                "ttools_ptrace_hook(): if (ttools_task_ptrace_protected(task->group_leader)) "
+                "  return -EPERM; "
+                "This EPERM is returned to the caller unconditionally — root cannot override it. "
+                "The protected list is a linked list walked under ttools_pids_lock (spinlock). "
+                "Protection is keyed on task->group_leader (thread group), not individual TID."
+            ),
+            "attack_scenario": (
+                "Attacker implant or malware on TencentOS can: "
+                "  1. open('/dev/ttools', O_RDWR)  [no privilege required] "
+                "  2. ioctl(fd, TTOOLS_PTRACE_PROTECT, 0)  [protects current thread group] "
+                "  3. close(fd)  [protection survives fd close — task_struct reference held] "
+                "Result: strace, gdb, PTRACE_ATTACH by root all return EPERM. "
+                "Standard incident response tools (strace, ltrace, gdb, perf record --pid) "
+                "are blind to the process. /proc/<pid>/mem reads for memory forensics are "
+                "also blocked via the ptrace path (ptrace_may_access → __ptrace_may_access → "
+                "ptrace permission checks that hit the same hook). "
+                "The Tencent Stargate agent (see TCS-F01..F09) is the most likely user of "
+                "this mechanism to protect itself from tenant-side forensic investigation."
+            ),
+            "potential_race": (
+                "ttools_ptrace_protect_task() calls kmalloc(GFP_KERNEL) outside the spinlock, "
+                "then acquires ttools_pids_lock for list insertion. The task_struct pointer "
+                "is stored directly (p_item->task = p_task) with no reference count increment. "
+                "If the task exits between allocation and list insertion, the stored pointer "
+                "becomes a dangling reference. Walking ttools_protected_pids in "
+                "ttools_task_ptrace_protected() after task exit = use-after-free read of "
+                "task_struct fields (task->group_leader). "
+                "Exploitability requires racing task exit with ptrace_protect, which is "
+                "difficult in practice but non-zero risk in multi-threaded scenarios."
+            ),
+            "source_file": "kernel/tkernel/ttools/ttools_module.c (author: Tencent)",
+            "module_version": "TTOOLS_VER = '2.0'",
+            "device_path": "/dev/ttools (miscdevice minor 254)",
+        },
+        "attack_chain": (
+            "Unprivileged access → open('/dev/ttools') → ioctl(TTOOLS_PTRACE_PROTECT) "
+            "→ process hidden from ptrace including root strace/gdb "
+            "→ incident response tooling blinded during live investigation. "
+            "Chain elevation: TCS-F01 (Stargate root cmd exec) → implant deploys on CVM "
+            "→ implant calls TTOOLS_PTRACE_PROTECT → IR teams cannot inspect implant memory "
+            "or syscall trace. "
+            "Combined with TCS-K01 (KASLR disabled): attacker exploits with predictable "
+            "kernel addresses while hiding the exploit process from forensic debuggers."
+        ),
+        "versions_affected": ["5.4.119-20"],
+        "remediation": (
+            "Change /dev/ttools device mode from 0666 to 0600 (root-only) or 0640 "
+            "(with restricted group). "
+            "This prevents unprivileged processes from self-registering for ptrace protection. "
+            "Alternatively, add a capability check (CAP_SYS_PTRACE or a custom capability) "
+            "at the ioctl entry point before inserting into ttools_protected_pids. "
+            "Fix the use-after-free risk: increment task_struct refcount (get_task_struct) "
+            "on insertion and decrement (put_task_struct) on removal. "
+            "Evaluate whether ttools ptrace protection is required for Stargate agent operation; "
+            "if so, restrict via CAP_SYS_PTRACE + seccomp policy rather than a world-writable device."
+        ),
+    },
 }
 
 
@@ -268,11 +362,34 @@ def probe_kernel_config(config_path: str) -> dict:
     return {"config_path": config_path, "findings": findings_triggered}
 
 
+def probe_ttools_device(device_path: str = "/dev/ttools") -> dict:
+    """
+    Check if ttools device is present and accessible without privilege.
+
+    Verification:
+      stat /dev/ttools -> mode 0666 + misc char device confirms TCS-K04
+      ls -la /proc/*/maps | grep ttools confirms ttools_protected_pids in use
+    """
+    import os, stat
+    result: dict = {"device_path": device_path, "finding": "TCS-K04"}
+    try:
+        st = os.stat(device_path)
+        result["mode"] = oct(stat.S_IMODE(st.st_mode))
+        result["is_char_dev"] = stat.S_ISCHR(st.st_mode)
+        result["world_writable"] = bool(stat.S_IMODE(st.st_mode) & 0o002)
+        result["confirmed"] = result["world_writable"] and result["is_char_dev"]
+    except OSError as e:
+        result["error"] = str(e)
+        result["confirmed"] = False
+    return result
+
+
 def probe(host: str, port: int = 22, timeout: int = 10) -> dict:
     """
     Placeholder — kernel config findings confirmed via source analysis.
     Runtime verification: check /proc/cmdline for 'kaslr'/'nokaslr',
-    /proc/sys/kernel/unprivileged_bpf_disabled, /sys/kernel/security/ima/policy.
+    /proc/sys/kernel/unprivileged_bpf_disabled, /sys/kernel/security/ima/policy,
+    stat /dev/ttools for TCS-K04.
     """
     return {
         "host": host,
