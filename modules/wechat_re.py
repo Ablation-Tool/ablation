@@ -54,6 +54,18 @@ Findings:
   F15 Session Save() wire format: u16-len(pskAccess)||u16-len(pskRefresh)||newSessionTicket
   F16 gILinkKey has ZERO static refs in libwechatnetwork.so — writer is in libapp.so
   F17 HybridEcdhClient::Encrypt VA 0x268d18 — HKDF→heap objs this+0x68/+0x70; BSS writer in session layer
+  F18 gILinkKey BSS writer localized to session-layer HKDF site VA 0x1ce290 (mmtls_probe.c)
+  F19 FULL_RELRO bypass via ptrace-injected mprotect — GOT hook: connect/send/recv (mmtls_inject.c)
+  F20 PSK ticket persisted to mmtls/%08llx (UIN-keyed) — 0-RTT exfil without live key; alert forge confirmed
+  F21 WeChat Web /webwxcheckupload unconditionally delivers server-generated AES key — no E2E; 34 instances
+
+WeChat Web (Browser) — index_212ea06.js (SHA256: 16445502380...):
+  API: POST /cgi-bin/mmwebwx-bin/webwxcheckupload (disguised as MD5 dedup check)
+  Response unconditionally returns: {AESKey: "<base64>", Signature, MediaId: "@crypt_xxx"}
+  Upload: POST /cgi-bin/mmwebwx-bin/webwxuploadmedia (AESKey embedded as plain JSON field)
+  JS anchor: index_212ea06.js:3753 "AESKey: res.AESKey,"
+  Verified: 34 global instances (CN, HK, SG, US, DE, AU); 10/10 control group negative
+  Security model: transport=YES, per-file-key=YES, API-obfuscation=YES, E2E=NO, forward-secrecy=NO
 """
 
 import subprocess
@@ -1394,6 +1406,114 @@ class WeChatREAnalyzer:
                 "        }\n"
                 "    }\n"
                 "});"
+            ),
+        })
+
+        findings.append({
+            "id": "WX-F21",
+            "title": (
+                "WeChat Web /webwxcheckupload Unconditionally Delivers Server-Generated AES Key "
+                "in Every Response — No E2E Encryption; Operator Retains Full-Plaintext Key; "
+                "34 Global Instances Verified (index_212ea06.js line 3753)"
+            ),
+            "severity": "HIGH",
+            "detail": (
+                "WeChat Web file transfer protocol analysis (browser JS layer).\n"
+                "Source: nick.txt research paper (Drive 1YepJ7fwiiSJawvoyZsZry4e9Su2tpdDw),\n"
+                "verified against 34 global WeChat Web servers (2026-09-04).\n"
+                "\n"
+                "PROTOCOL FLOW:\n"
+                "  Step 1 — Pre-upload disguised as dedup check:\n"
+                "    POST /cgi-bin/mmwebwx-bin/webwxcheckupload\n"
+                "    Body: {mediaid:'', size:<int>, md5sum:'<md5>', filetype:'doc', pass_ticket:'<tok>'}\n"
+                "    Response (unconditional, regardless of dedup state):\n"
+                "      {BaseResponse:{Ret:0}, AESKey:'<base64_256bit>', Signature:'<str>', MediaId:'@crypt_...'}\n"
+                "\n"
+                "  Step 2 — Upload with server-supplied key embedded in FormData:\n"
+                "    POST /cgi-bin/mmwebwx-bin/webwxuploadmedia (multipart/form-data)\n"
+                "    Field 'uploadmediarequest' (JSON):\n"
+                "      {BaseRequest:{...}, ClientMediaId:'...', TotalLen:<int>, StartPos:0,\n"
+                "       DataLen:<int>, MediaType:4, AESKey:'<base64>', Signature:'<str>'}\n"
+                "    AESKey copied verbatim: res.AESKey → uploadmediarequest.AESKey\n"
+                "\n"
+                "  Step 3 — Delivery: server returns MediaId (@crypt_xxx reference) embedded in\n"
+                "    WeChat message payload; recipient fetches content using same MediaId.\n"
+                "\n"
+                "JS SOURCE ANCHOR (index_212ea06.js — 578KB minified):\n"
+                "  line 3753: AESKey: res.AESKey,\n"
+                "  line 3754: Signature: res.Signature,\n"
+                "  AESKey appears exactly twice semantically:\n"
+                "    (1) AESKey: res.AESKey  — assign server key to upload params\n"
+                "    (2) AESKey: fileInfo.AESKey  — copy to upload builder struct\n"
+                "  Bundle SHA256: 16445502380... (byte-identical across all 34 verified instances)\n"
+                "\n"
+                "VERIFICATION SCOPE:\n"
+                "  34 WeChat Web servers confirmed: cert CN=wx.qq.com + bundle index_212ea06.js\n"
+                "  + AESKey pattern in /webwxcheckupload response.\n"
+                "  Geographic distribution: China Mainland, HK, Singapore, US, Germany, Australia.\n"
+                "  Control group: 10/10 non-WeChat servers return no AESKey field (negative confirmed).\n"
+                "  Detection tool: detector.py @ /media/cowboy/research/repos/api-encryption-detector/\n"
+                "\n"
+                "SECURITY MODEL:\n"
+                "  transport confidentiality  YES  (HTTPS/TLS to Tencent servers)\n"
+                "  per-file key isolation     YES  (unique AESKey per upload)\n"
+                "  API obfuscation            YES  (key delivered via dedup-check endpoint)\n"
+                "  end-to-end encryption      NO   (Tencent generates + holds all keys)\n"
+                "  forward secrecy            NO   (key persists server-side; no rotation)\n"
+                "  zero-knowledge             NO   (Tencent can decrypt any file at any time)\n"
+                "\n"
+                "DESIGN RATIONALE:\n"
+                "  Consistent with PRC Cybersecurity Law Art. 28 / Data Security Law Art. 35\n"
+                "  requiring telecommunications operators to provide access capability for\n"
+                "  national security authorities. Operator key retention is the compliance\n"
+                "  mechanism, not an implementation oversight.\n"
+                "\n"
+                "PRIOR WORK GAP:\n"
+                "  Citizen Lab MMTLS RE (2023): mobile transport layer only, no web JS analysis.\n"
+                "  WeChat iLink/QClaw RE: CDN at-rest layer, not key delivery protocol.\n"
+                "  ICFP Privacy Report: traffic metadata only.\n"
+                "  No prior published research characterized this JS-layer AESKey delivery behavior."
+            ),
+            "evidence": {
+                "paper_file": "nick.txt (Drive 1YepJ7fwiiSJawvoyZsZry4e9Su2tpdDw, 23931 bytes)",
+                "js_bundle": "index_212ea06.js SHA256:16445502380... line 3753: AESKey: res.AESKey",
+                "endpoint_check": "POST /cgi-bin/mmwebwx-bin/webwxcheckupload",
+                "endpoint_upload": "POST /cgi-bin/mmwebwx-bin/webwxuploadmedia",
+                "verified_instances": 34,
+                "control_group_negative": 10,
+                "detection_tool": "/media/cowboy/research/repos/api-encryption-detector/detector.py",
+                "cert_anchor": "CN=wx.qq.com",
+                "analysis_date": "2026-09-04",
+            },
+            "attack_chain": (
+                "Passive MitM on Tencent CDN or server-side access:\n"
+                "  → Intercept /webwxcheckupload response → extract AESKey field\n"
+                "  → AESKey decrypts file content for any captured /webwxuploadmedia session\n"
+                "  → Tencent infrastructure: direct server-side key access (no intercept needed)\n"
+                "Chain context (mobile + web):\n"
+                "  WX-F19 (FULL_RELRO GOT hook) captures MMTLS mobile transport keys\n"
+                "  WX-F21 (WebWX AESKey) captures WeChat Web file encryption keys\n"
+                "  Combined: full-spectrum Tencent communication content access\n"
+                "  (mobile MMTLS plaintext + web file encryption keys)"
+            ),
+            "mitmproxy_intercept": (
+                "# mitmproxy addon — capture WebWX AESKey from /webwxcheckupload responses\n"
+                "# Usage: mitmproxy -s wx_aeskey_capture.py\n"
+                "import json, mitmproxy.http\n"
+                "\n"
+                "class WxAESKeyCapture:\n"
+                "    def response(self, flow: mitmproxy.http.HTTPFlow):\n"
+                "        if 'webwxcheckupload' in flow.request.pretty_url:\n"
+                "            try:\n"
+                "                body = json.loads(flow.response.text)\n"
+                "                if 'AESKey' in body:\n"
+                "                    print(f'[WX-F21] AESKey: {body[\"AESKey\"]}')\n"
+                "                    print(f'[WX-F21] MediaId: {body.get(\"MediaId\", \"\")}') \n"
+                "                    print(f'[WX-F21] Signature: {body.get(\"Signature\", \"\")}')\n"
+                "            except Exception:\n"
+                "                pass\n"
+                "\n"
+                "addons = [WxAESKeyCapture()]"
             ),
         })
 
