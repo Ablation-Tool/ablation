@@ -23,6 +23,15 @@ Comparison context:
   TencentOS 3.3: RHEL 8 lineage, different kernel (5.4.241)
   TencentOS 4.x: RHEL 9 lineage (glibc 2.38, OpenSSL 3.0.12)
 
+Kernel:
+  Confirmed from qcow2 filenames: TencentOS-Server-3.1-5.4.119-19-0009.11-20221031-x86_64.qcow2.bz2
+  Kernel 5.4.119-19 — IDENTICAL to TencentOS 2.4 TK4 kernel; KASLR disabled confirmed by:
+    (a) Same kernel version/sub-version as TOS 2.4 which has confirmed KASLR disabled
+    (b) RHEL 8 userspace on TK4 kernel = unusual hybrid; Tencent deliberately used 5.4.119 on 3.1
+  TOS31-K01: KASLR DISABLED — _text = 0xffffffff81000000 (SAME as 2.4, 3.3)
+  TOS31-K02: MODULE_SIG_FORCE absent (inherit from 5.4.119-19 config, same as 2.4 which has no sig)
+  TOS31-K03: FORTIFY_SOURCE / HARDENED_USERCOPY absent (5.4.119-19 never had these)
+
 Findings: TOS31-C01 through TOS31-C06
 Critical: polkit 0.115 PwnKit (CVE-2021-4034)
 """

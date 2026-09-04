@@ -124,19 +124,21 @@ FINDINGS = {
         "cvss": "8.1",
         "cwe": "CWE-330",
         "component": (
-            "Confirmed disabled in: 5.4.119-19 (2.4), 5.4.241-24 (3.3), 6.6.47-12 (4.2); "
+            "Confirmed disabled in: 5.4.119-19 (2.4), 5.4.119-19-0009.11 (3.1), 5.4.241-24 (3.3), 6.6.47-12 (4.2); "
             "Confirmed enabled in: 6.6.110-42.4 (4.4), 6.6.119-51 (4.6); "
-            "Fix window: between 6.6.47 and 6.6.110"
+            "Fix window in 4.2 branch: 6.6.59–6.6.69"
         ),
         "description": (
             "KASLR was disabled as a deliberate policy choice across all TencentOS 2.x, 3.x, "
             "and 4.0/4.2 releases. The _text symbol sits at 0xffffffff81000000 on every "
             "affected system. This covers the primary cloud VM versions deployed on Tencent "
-            "Cloud from approximately 2021 through mid-2024. All kernel exploitation techniques "
-            "requiring known addresses (ROP, function pointer overwrite, struct field targeting) "
-            "work without an information-disclosure prerequisite on these versions."
+            "Cloud from approximately 2020 through early 2025. TencentOS 3.1 uses the same "
+            "5.4.119-19 TK4 kernel as 2.4, just with RHEL 8 userspace — KASLR equally disabled. "
+            "All kernel exploitation techniques requiring known addresses (ROP, function pointer "
+            "overwrite, struct field targeting) work without an information-disclosure prerequisite "
+            "on these versions."
         ),
-        "affected_versions": ["2.4 / 5.4.119", "3.3 / 5.4.241", "4.0 / unknown", "4.2 / 6.6.47"],
+        "affected_versions": ["2.4 / 5.4.119", "3.1 / 5.4.119 (TK4, same as 2.4)", "3.3 / 5.4.241", "4.0 / unknown", "4.2 / 6.6.47"],
         "fixed_versions": ["4.4 / 6.6.110", "4.6 / 6.6.119"],
         "references": ["CWE-330", "TOS24K-F01", "TOS33K-F01"],
     },
@@ -229,14 +231,17 @@ KASLR_TIMELINE = {
     "pre_6.6_kernels": {
         "disabled_confirmed": [
             "5.4.119-19 (TencentOS 2.4)",
+            "5.4.119-19-0009.11 (TencentOS 3.1 — same kernel as 2.4 TK4, RHEL 8 userspace)",
             "5.4.241-24.0017.23 (TencentOS 3.3 Aug 2025)",
             "5.4.241-24.0017.41.1 (TencentOS 3.3 Jul 2026)",
         ],
         "enabled_confirmed": [],
         "note": (
             "KASLR never enabled on 5.4.x branch. "
+            "TencentOS 3.1 ships 5.4.119-19 (TK4 kernel) with RHEL 8 userspace — same base as 2.4. "
             "TencentOS 3.3 is frozen at 5.4.241-24 upstream with Tencent's .0017.NN patch series; "
-            "KASLR was disabled across the entire 3.3 lifecycle (Jul 2024 through Jul 2026)."
+            "KASLR was disabled across the entire 3.3 lifecycle (Jul 2024 through Jul 2026). "
+            "Implication: TencentOS 2.4, 3.1, and 3.3 all share the same fixed kernel text base."
         ),
     },
     "policy_classification": (
