@@ -663,6 +663,148 @@ FINDINGS = {
             "Consistent access control across all file message types."
         ),
     },
+
+    "TAT-F09": {
+        "title": (
+            "Invoke API Authentication Signature Uses SHA1 (NIST-Deprecated Since 2013) — "
+            "RSA-PKCS1v15-SHA1 Over Concatenated Fields Without Delimiters; "
+            "Source: src/network/mod.rs build_extra_headers()"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.9",
+        "cwe": "CWE-327",
+        "component": (
+            "src/network/mod.rs build_extra_headers() lines 94-102; "
+            "Pkcs1v15Sign::new::<Sha1>() + Sha1::digest()"
+        ),
+        "evidence": {
+            "source_evidence": (
+                "src/network/mod.rs build_extra_headers():\n"
+                "  let data = format!('{}{}{}{}',\n"
+                "      record.machine_id, record.instance_id, rand_key, timestamp);\n"
+                "  let digest = Sha1::digest(data.as_bytes());\n"
+                "  let sigvec = private_key.sign(Pkcs1v15Sign::new::<Sha1>(), &digest);\n"
+                "  let signature = STANDARD.encode(sigvec.expect('rsa sign failed'));\n"
+                "  headers.insert('Signature', value(&signature));\n"
+                "\n"
+                "Authentication headers sent on every Invoke API call:\n"
+                "  MachineId: <machine_id>\n"
+                "  InstanceId: <instance_id>\n"
+                "  RandomKey: <32 random alphanumeric chars>\n"
+                "  Timestamp: <unix epoch seconds>\n"
+                "  Signature: <base64(RSA-PKCS1v15-SHA1(machine_id+instance_id+rand_key+ts))>"
+            ),
+            "sha1_weakness": (
+                "SHA1 was deprecated for digital signatures by NIST SP 800-131A Rev.2 (2019). "
+                "PKCS#1 v1.5 with SHA1 is vulnerable to:\n"
+                "  1. Chosen-prefix collision attacks (SHAttered, 2017): ~2^63 SHA1 operations "
+                "     to forge a signature collision, reduced from brute-force cost. "
+                "     Practical with GPU clusters; documented for PDF signatures.\n"
+                "  2. Theoretical length-extension attacks on the raw hash (mitigated by PKCS#1 "
+                "     padding but combined with SHA1 weakness, adds risk).\n"
+                "PKCS#1 v1.5 itself is deprecated in favor of PSS (RFC 8017). "
+                "The combination of PKCS1v15 + SHA1 is the weakest RSA signing configuration."
+            ),
+            "concatenation_ambiguity": (
+                "Signed data: format!('{}{}{}{}', machine_id, instance_id, rand_key, timestamp)\n"
+                "No separator between fields. Concatenation ambiguity:\n"
+                "  machine_id='abc', instance_id='defXY', rand_key='123', ts='456'\n"
+                "  signed: 'abcdefXY123456'\n"
+                "  vs machine_id='abcde', instance_id='fXY', rand_key='123', ts='456'\n"
+                "  signed: 'abcdefXY123456'\n"
+                "Identical signed payloads with different field values. "
+                "In practice, machine_id and instance_id have different format constraints "
+                "(machine_id is hardware-derived, instance_id='ins-XXXXXXXX'), limiting "
+                "practical collision. BUT: rand_key is 32 alphanumeric chars with no format "
+                "constraint — it can be chosen to bridge field boundaries if machine_id length "
+                "varies, creating a theoretical cross-instance signature portability issue."
+            ),
+            "attack_scenario": (
+                "SHA1 collision attack to forge signature:\n"
+                "1. Attacker observes legitimate Invoke API request (via MITM or log access)\n"
+                "2. Crafts two messages M1 and M2 that SHA1-collide\n"
+                "3. If attacker has signature for M1, it validates for M2 too\n"
+                "4. M2 can be constructed to authorize a different (machine_id, instance_id) pair\n"
+                "Cost: ~2^63 SHA1 ops (months of GPU cluster time). Practical for nation-state "
+                "actors; theoretical for commodity attackers. Risk level: MEDIUM."
+            ),
+        },
+        "versions_affected": ["all versions (source: current main branch)"],
+        "fixed_in_source": "Not documented in CHANGELOG.",
+        "remediation": (
+            "Replace SHA1 with SHA256 in RSA signature:\n"
+            "  use sha2::Sha256;\n"
+            "  use rsa::pkcs1v15::Pkcs1v15Sign;\n"
+            "  let digest = Sha256::digest(data.as_bytes());\n"
+            "  private_key.sign(Pkcs1v15Sign::new::<Sha256>(), &digest)\n"
+            "Preferably migrate to RSA-PSS (RSASSA-PSS) which is stronger than PKCS#1 v1.5:\n"
+            "  use rsa::pss::Pss;\n"
+            "  private_key.sign(Pss::new::<Sha256>(), &digest)\n"
+            "Also add field separators to signed data to prevent concatenation ambiguity:\n"
+            "  let data = format!('{}|{}|{}|{}', machine_id, instance_id, rand_key, ts);"
+        ),
+    },
+
+    "TAT-F10": {
+        "title": (
+            "update_file_permission() Passes Non-Null-Terminated &str Pointer to libc::chown() — "
+            "Undefined Behavior in Unsafe C FFI; config.dat Ownership Change May Silently Fail; "
+            "Source: src/common/mod.rs update_file_permission()"
+        ),
+        "severity": "LOW",
+        "cvss": "3.7",
+        "cwe": "CWE-119",
+        "component": (
+            "src/common/mod.rs update_file_permission() line 174; "
+            "unsafe { libc::chown(path.as_ptr() as *const c_char, uid, gid) }"
+        ),
+        "evidence": {
+            "source_evidence": (
+                "src/common/mod.rs update_file_permission():\n"
+                "  pub fn update_file_permission(path: &str) {\n"
+                "      let uid = unsafe { libc::getuid() };\n"
+                "      let gid = unsafe { libc::getgid() };\n"
+                "      unsafe { libc::chown(path.as_ptr() as *const c_char, uid, gid) }; // BUG\n"
+                "      let _ = set_permissions(path, Permissions::from_mode(0o600));\n"
+                "  }\n"
+                "\n"
+                "Called from config.rs save_config() after writing config.dat."
+            ),
+            "ub_explanation": (
+                "path.as_ptr() returns a *const u8 pointer to the string's content buffer. "
+                "Rust &str is NOT null-terminated — it is a (pointer, length) pair. "
+                "libc::chown() expects a C string: reads bytes until it finds '\\0'. "
+                "\n"
+                "Casting the &str pointer to *const c_char and passing to chown() is undefined "
+                "behavior: chown will read past the string's length until it finds a null byte "
+                "in adjacent memory. The actual path chown operates on depends on what bytes "
+                "follow 'config.dat' on the stack/heap.\n"
+                "\n"
+                "In practice: the string 'config.dat' is likely followed by a null byte in "
+                "most allocator layouts, causing chown to operate on the correct path by accident. "
+                "But this is not guaranteed and constitutes a memory safety violation in "
+                "Rust's unsafe code."
+            ),
+            "impact": (
+                "If chown reads a longer 'path' from adjacent memory:\n"
+                "  - Attempts to chown a non-existent path → silently ignored (ENOENT discarded)\n"
+                "  - set_permissions() still runs using the correct Rust path — so 0600 is set\n"
+                "  - Worst case: if adjacent memory contains a valid path, chown changes ownership "
+                "    of an unintended file (very unlikely given 'config.dat' context)\n"
+                "The primary risk is undefined behavior correctness, not a direct exploit path."
+            ),
+        },
+        "versions_affected": ["all versions (source: current main branch)"],
+        "fixed_in_source": "Not documented in CHANGELOG.",
+        "remediation": (
+            "Use CString for null-terminated path:\n"
+            "  use std::ffi::CString;\n"
+            "  let cpath = CString::new(path).expect('path contains null byte');\n"
+            "  unsafe { libc::chown(cpath.as_ptr(), uid, gid) };\n"
+            "Or use the nix crate's chown which handles &Path correctly:\n"
+            "  nix::unistd::chown(path, Some(Uid::from_raw(uid)), Some(Gid::from_raw(gid)))"
+        ),
+    },
 }
 
 # ─── Function Map ─────────────────────────────────────────────────────────────
@@ -722,7 +864,8 @@ def probe(binary_path: Optional[str] = None) -> dict:
         "findings": list(FINDINGS.keys()),
         "critical": [],
         "high": ["TAT-F01", "TAT-F04", "TAT-F06", "TAT-F08"],
-        "medium": ["TAT-F03", "TAT-F07"],
+        "medium": ["TAT-F03", "TAT-F07", "TAT-F09"],
+        "low": ["TAT-F10"],
         "low": [],
         "informational": ["TAT-F02_chain_only", "TAT-F05"],
         "note": (
