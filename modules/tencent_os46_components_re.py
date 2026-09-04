@@ -173,7 +173,54 @@ FINDINGS = [
             "bootstrap_source11": "https://github.com/Tencent/TencentKona-11/releases/download/kona11.0.26/",
             "bootstrap_source17": "https://github.com/Tencent/TencentKona-17/releases/download/TencentKona-17.0.14/",
         },
+        "patch_analysis": {
+            "CVE-2026-70907": (
+                "File: sun/security/ssl/ServerHello.java + ServerHandshakeContext.java\n"
+                "Fix: adds boolean sentHRR flag to ServerHandshakeContext. After sending\n"
+                "HelloRetryRequest (HRR), sets sentHRR=true. On next HRR attempt, checks\n"
+                "sentHRR and throws HANDSHAKE_FAILURE if true.\n"
+                "\n"
+                "Bug: TLS 1.3 server allowed sending a second HelloRetryRequest in the same\n"
+                "connection, violating RFC 8446 Section 4.1.4: 'A server MUST NOT send a\n"
+                "second HelloRetryRequest in the same connection.' Without the fix, a\n"
+                "malicious TLS 1.3 client can craft a ClientHello sequence that causes the\n"
+                "server's state machine to emit a second HRR, causing protocol state confusion.\n"
+                "Severity depends on exploitability of the double-HRR state — at minimum,\n"
+                "denial-of-service; at worst, cryptographic state confusion enabling downgrade."
+            ),
+            "CVE-2026-60589": (
+                "File: com/sun/org/apache/xml/internal/security/utils/resolver/implementations/\n"
+                "      ResolverDirectHTTP.java + ResolverLocalFilesystem.java\n"
+                "Fix: replaces startsWith('http:') check with proper scheme() extraction.\n"
+                "\n"
+                "Bug: XML Digital Signature URI resolver used string prefix check\n"
+                "('uriToResolve.startsWith(\"http:\")') to determine if an HTTP resolver\n"
+                "or filesystem resolver should handle a Reference URI. A crafted URI like\n"
+                "'http:///path' or a URI where the HTTP check failed could be misrouted to\n"
+                "the filesystem resolver — potential SSRF or local file inclusion in\n"
+                "applications that process XML Digital Signatures with external References.\n"
+                "ResolverLocalFilesystem exclusion was based on the same broken string check,\n"
+                "meaning HTTP URIs could accidentally fall through to filesystem resolution."
+            ),
+            "CVE-2026-61308": (
+                "File: sun/net/www/http/HttpClient.java + sun/net/www/protocol/http/HttpURLConnection.java\n"
+                "Fix: adds getHttpProxy() method and lastProxy tracking during HTTP redirections.\n"
+                "\n"
+                "Bug: HTTP redirect handling did not compare the proxy used for the initial\n"
+                "request against the proxy for the redirect target. This could cause proxy\n"
+                "authentication headers (Proxy-Authorization) set for one proxy to be forwarded\n"
+                "to a different proxy or redirect target — proxy credential leakage across\n"
+                "redirect boundaries in java.net.HttpURLConnection."
+            ),
+        },
         "attack_chain": (
+            "CVE-2026-70907 (TLS 1.3 double-HRR): JDK acting as TLS server; malicious client\n"
+            "triggers double HRR sequence → state confusion → service disruption or protocol downgrade.\n"
+            "Affected: any Java server using JSSE for TLS 1.3 (default in JDK 11+).\n"
+            "\n"
+            "CVE-2026-60589 (XML SSRF): application processes XML Signatures with external References\n"
+            "→ crafted URI bypasses resolver routing → filesystem read or internal HTTP request.\n"
+            "\n"
             "JVM deserialization chain: malicious input to Java-based service on TencentOS "
             "→ gadget chain in default classpath → code execution under JVM. "
             "Three concurrent JDKs: attacker targets oldest (Java 8) if not fully patched. "
