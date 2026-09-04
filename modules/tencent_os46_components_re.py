@@ -22,6 +22,9 @@ CVE backport status summary (4.6 vs 4.0):
   CVE-2024-5535 (OpenSSL OOB):     PATCHED at openssl-3.0.12-8.tl4 (Jun/Jul 2024)
   CVE-2024-6387 (regreSSHion):     PATCHED at openssh-9.3p2-12.tl4 (Jul 2024)
   CVE-2023-38545 (curl SOCKS5):    PATCHED at curl-8.4.0-1.tl4 (Oct 2023, version bump)
+  CVE-2021-4034 (PwnKit/polkit):   NOT APPLICABLE — polkit-123-5.tl4 uses 0.123 base
+                                    (fix was in upstream 0.120; TCS-S04 in tencent_os_components_re.py
+                                     covers 3.x polkit-0.115-15 only)
 
 Findings:
   TCS46-P01  OpenSSL 3.0.12 on EOL path (2026-09-07) — 3 days from analysis date
