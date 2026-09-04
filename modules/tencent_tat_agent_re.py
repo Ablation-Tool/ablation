@@ -23,6 +23,14 @@ Key function addresses (VA, confirmed via nm + disasm):
   0x4c5310  tat_agent::network::ws::handle_server_msg
   0x4abde0  tat_agent::cos::to_headers
 
+Source modules (v1.2.2, analyzed directly):
+  src/tssh/proxy.rs   — ProxyNew/ProxyData/ProxyClose WebSocket TCP proxy (PROXY_TTL=5min)
+  src/tssh/file.rs    — CreateFile/DeleteFile/ListPath/FileExist/FileInfo/WriteFile/ReadFile
+  src/tssh/session.rs — Session+Channel lifecycle, SESSION_TTL=5min
+  src/tssh/handler.rs — Handler<F,T> dispatch: Bson/Json over evbus + tokio::spawn
+  src/executor/unix.rs — exec_as_user: setgroups→setgid→setuid→setpgid; noexec bypass via sh -c
+  src/ontime/self_update.rs — update chain: HTTPS check → HTTP(?) download → md5 → ZipExtract → sh restart
+
 Comparison baseline: tencent_stargate_re.py (Stargate/sgagent v1.5.0)
   Stargate: plaintext HTTP, useCA=0, system(installPath), MD5 from plaintext channel → trivial MitM
   tat-agent: TLS everywhere (WSS/HTTPS), reqwest native-tls — attack surface shifts to:
@@ -31,6 +39,8 @@ Comparison baseline: tencent_stargate_re.py (Stargate/sgagent v1.5.0)
     (3) TOCTOU unfixed in 0.1.17 (TAT-F03)
     (4) HTTP IMDS for COS credential fetch (TAT-F04)
     (5) ShellCommand::prepare_cmd highest cmd_inject semantic score (TAT-F05)
+    (6) tssh ProxyNew SSRF — C2-directed TCP proxy to arbitrary IP:port (TAT-F06)
+    (7) tssh file API missing inspect_access on ListPath/FileExist/FileInfo (TAT-F07)
 """
 
 from typing import Optional
@@ -416,6 +426,152 @@ FINDINGS = {
             "arbitrary command execution follows through the existing shell execution path."
         ),
     },
+
+    "TAT-F06": {
+        "title": (
+            "tssh ProxyNew Handler Performs Unrestricted C2-Directed TCP Connect — "
+            "SSRF to VPC-Internal Services, IMDS (169.254.169.254), and Localhost; "
+            "Source: src/tssh/proxy.rs ProxyNew::process()"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.2",
+        "cwe": "CWE-918",
+        "component": (
+            "src/tssh/proxy.rs — Handler<Bson, ProxyNew>::process() -> "
+            "TcpStream::connect(format!('{}:{}', req.inner.data.ip, req.inner.data.port))"
+        ),
+        "evidence": {
+            "source_evidence": (
+                "proxy.rs ProxyNew::process():\n"
+                "  let addr = format!('{}:{}', req.inner.data.ip, req.inner.data.port);\n"
+                "  let stream = match TcpStream::connect(&addr).await {\n"
+                "      Ok(s) => Mutex::new(s),\n"
+                "      Err(e) => return self.reply_err(e).await,\n"
+                "  };\n"
+                "  // loop: reader.read() -> Tssh::reply(ProxyData); proxy_rx.recv() -> writer.write_all()\n"
+                "\n"
+                "No validation of ip or port before connect. The ip field is a raw String "
+                "from the BSON-encoded WebSocket message originating from the Tencent cloud C2. "
+                "PROXY_TTL = 5 minutes; PROXY_BUF_SIZE = 2048 bytes per read."
+            ),
+            "threat_model": (
+                "The tssh ProxyNew message is sent by the cloud console/API (ConnectForward). "
+                "An attacker who can send ProxyNew messages (via compromised Tencent cloud "
+                "account, rogue Tencent employee, or man-in-the-WebSocket-connection) can "
+                "direct the CVM agent to TCP-connect to any host:port reachable from the CVM:\n"
+                "\n"
+                "  Target                         Impact\n"
+                "  169.254.169.254:80             IMDS — TencentCloud/AWS credential endpoint\n"
+                "  localhost:6379                 Redis (no-auth default)\n"
+                "  localhost:8080                 Internal web services\n"
+                "  10.0.0.x:22/3306/5432          VPC-internal hosts not exposed externally\n"
+                "  169.254.0.23:80                TencentCloud qcloud metadata\n"
+                "\n"
+                "The ProxyData message type then bidirectionally relays bytes between the "
+                "attacker's WebSocket channel and the TCP stream — full duplex."
+            ),
+            "session_management": (
+                "Session lifetime: SESSION_TTL = 5 min; PROXY_TTL = 5 min. "
+                "Multiple simultaneous proxy channels per session are possible "
+                "(each gets a unique channel_id). "
+                "Legacy compat: if channel_id is empty, proxy_id is used — allows "
+                "connection to multiple distinct ip:port targets in one session."
+            ),
+            "chain": (
+                "TAT-F06 → TAT-F04 chain:\n"
+                "1. Attacker sends ProxyNew{ip='169.254.169.254', port=80}.\n"
+                "2. Agent connects and relays bytes.\n"
+                "3. Attacker sends HTTP GET /meta-data/cam/security-credentials/... via ProxyData.\n"
+                "4. Agent relays IMDS response back — TencentCloud SecretId/SecretKey/Token exposed.\n"
+                "5. Credentials used to access COS bucket containing command output history.\n"
+                "\n"
+                "This bypasses TAT-F04's requirement for ARP MitM — attacker controls the "
+                "proxy destination directly from the C2 channel."
+            ),
+        },
+        "versions_affected": ["all tssh-enabled versions (source >= 1.2.0)"],
+        "fixed_in_source": "Not documented in CHANGELOG as addressed.",
+        "remediation": (
+            "In ProxyNew::process(), validate ip against an allowlist or blocklist:\n"
+            "  - Block link-local (169.254.0.0/16), loopback (127.0.0.0/8), "
+            "RFC-1918 private ranges if proxy to internal hosts is not a required feature.\n"
+            "  - At minimum, block 169.254.169.254 (IMDS) and 169.254.0.23 (qcloud metadata).\n"
+            "  - Validate port is in expected range (not 0, not high-port privileged services).\n"
+            "  - Log all ProxyNew connections with ip/port for audit."
+        ),
+    },
+
+    "TAT-F07": {
+        "title": (
+            "tssh File API Missing inspect_access() on ListPath, FileExist, FileInfo — "
+            "PTY Session User Boundary Bypassed for Filesystem Enumeration; "
+            "Source: src/tssh/file.rs"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-284",
+        "component": (
+            "src/tssh/file.rs — Handler<Bson, ListPathReq>, FileExistReq, FileInfoReq "
+            "lack plugin.inspect_access() call present in WriteFileReq, DeleteFileReq, ReadFileReq"
+        ),
+        "evidence": {
+            "source_evidence": (
+                "file.rs access control parity:\n"
+                "\n"
+                "  WriteFileReq::process():\n"
+                "    plugin.inspect_access(path, PTY_INSPECT_WRITE).await  ← PRESENT\n"
+                "\n"
+                "  DeleteFileReq::process():\n"
+                "    plugin.inspect_access(path, PTY_INSPECT_WRITE).await  ← PRESENT\n"
+                "\n"
+                "  ReadFileReq::process():\n"
+                "    plugin.inspect_access(path, PTY_INSPECT_READ).await   ← PRESENT\n"
+                "\n"
+                "  ListPathReq::process():  ← NO inspect_access call\n"
+                "    read_dir(path).await   # direct filesystem read\n"
+                "\n"
+                "  FileExistReq::process(): ← NO inspect_access call\n"
+                "    Path::new(path).exists()\n"
+                "\n"
+                "  FileInfoReq::process():  ← NO inspect_access call\n"
+                "    metadata(path).await   # returns size, mode, timestamps, uid/gid"
+            ),
+            "impact": (
+                "inspect_access() gates filesystem operations based on the PTY session's "
+                "user context (the user the terminal was opened as). When a Tencent cloud "
+                "console operator opens a terminal as 'www-data' or a restricted user, "
+                "the intention is that file operations are constrained to that user's access. "
+                "\n"
+                "The three unchecked operations allow the cloud session to:\n"
+                "  ListPath('/root/')    — enumerate root's home directory\n"
+                "  ListPath('/etc/shadow') — observe file existence in any directory\n"
+                "  FileExist('/etc/shadow') — confirm sensitive file presence\n"
+                "  FileInfo('/etc/shadow') — read st_mode, st_size, st_uid, timestamps\n"
+                "\n"
+                "This leaks file tree structure, permissions, and metadata for files "
+                "the session's user cannot read, across the entire CVM filesystem."
+            ),
+            "note": (
+                "Exploitation requires an authenticated WebSocket session to the tssh "
+                "endpoint (cloud console access). The finding is relevant when "
+                "multi-tenant or restricted-privilege cloud sessions are in use. "
+                "A cloud console operator restricted to 'app_user' can still enumerate "
+                "root-owned directories and infer system configuration from metadata."
+            ),
+        },
+        "versions_affected": ["all tssh-enabled versions (source >= 1.2.0)"],
+        "fixed_in_source": "Not documented in CHANGELOG.",
+        "remediation": (
+            "Add inspect_access() calls consistently to all file operation handlers:\n"
+            "  ListPathReq::process():\n"
+            "    plugin.inspect_access(path, PTY_INSPECT_READ).await?;\n"
+            "  FileExistReq::process():\n"
+            "    plugin.inspect_access(path, PTY_INSPECT_READ).await?;\n"
+            "  FileInfoReq::process():\n"
+            "    plugin.inspect_access(path, PTY_INSPECT_READ).await?;\n"
+            "Consistent access control across all file message types."
+        ),
+    },
 }
 
 # ─── Function Map ─────────────────────────────────────────────────────────────
@@ -434,6 +590,19 @@ FUNCTION_MAP = {
     0x4c5310: ("ws::handle_server_msg",       61,  []),
     0x4c5b90: ("ws::handle_ping_notify_msg",  75,  []),
     0x4abde0: ("cos::to_headers",             32,  ["TAT-F04"]),
+    # tssh source-only (not in v0.1.17 binary — tssh added in 1.2.0)
+    "tssh/proxy.rs:ProxyNew::process": (
+        "Handler<Bson,ProxyNew>::process", None, ["TAT-F06"]
+    ),
+    "tssh/file.rs:ListPathReq::process": (
+        "Handler<Bson,ListPathReq>::process", None, ["TAT-F07"]
+    ),
+    "tssh/file.rs:FileExistReq::process": (
+        "Handler<Bson,FileExistReq>::process", None, ["TAT-F07"]
+    ),
+    "tssh/file.rs:FileInfoReq::process": (
+        "Handler<Bson,FileInfoReq>::process", None, ["TAT-F07"]
+    ),
 }
 
 # ─── Changelog Deltas ─────────────────────────────────────────────────────────
@@ -442,6 +611,10 @@ FUNCTION_MAP = {
 UNFIXED_IN_BINARY = {
     "v1.1.10": "Fix TOCTOU issue between self-update check restart and other task → TAT-F03",
     "v1.2.0": "Fix tat_install scripts: stop service order and TLS certificate validation",
+    # tssh module added in 1.2.0 — not present in binary v0.1.17
+    "v1.2.0 (tssh added)": "ProxyNew SSRF (TAT-F06) + file API missing access control (TAT-F07) "
+                           "introduced with tssh; not present in binary 0.1.17",
+    "v1.2.2 (still open)": "TAT-F06 + TAT-F07 not documented as fixed in CHANGELOG through v1.2.2",
 }
 
 # ─── Probe ────────────────────────────────────────────────────────────────────
@@ -457,19 +630,22 @@ def probe(binary_path: Optional[str] = None) -> dict:
         "load_va": hex(LOAD_VA),
         "findings": list(FINDINGS.keys()),
         "critical": [],
-        "high": ["TAT-F01", "TAT-F04"],
-        "medium": ["TAT-F03"],
+        "high": ["TAT-F01", "TAT-F04", "TAT-F06"],
+        "medium": ["TAT-F03", "TAT-F07"],
         "low": [],
         "informational": ["TAT-F02_chain_only", "TAT-F05"],
         "note": (
             "TAT-F02 severity is CRITICAL when chained with TAT-F01 (backend compromise). "
             "Standalone (no TAT-F01): requires attacker to serve malicious zip, "
-            "which requires HTTPS backend access."
+            "which requires HTTPS backend access. "
+            "TAT-F06 + TAT-F04 chain: ProxyNew to IMDS bypasses the ARP-MitM prerequisite of TAT-F04."
         ),
-        "chain": "TAT-F01 + TAT-F02 = backend compromise → HTTP download → ZipSlip → root RCE",
+        "chain_primary": "TAT-F01 + TAT-F02 = backend compromise → HTTP download → ZipSlip → root RCE",
+        "chain_ssrf": "TAT-F06 → TAT-F04 = cloud account compromise → ProxyNew IMDS → COS credential theft",
         "contrast_with_stargate": (
             "TCS-F01 (Stargate): direct network MitM → root RCE. "
             "TAT-F01+F02: backend server compromise required. "
-            "tat-agent is meaningfully more secure than Stargate on the update channel."
+            "tat-agent is meaningfully more secure than Stargate on the update channel. "
+            "tssh module (v1.2.0+) adds a new cloud-account-level attack surface via ProxyNew SSRF."
         ),
     }
