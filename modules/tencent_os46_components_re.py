@@ -15,6 +15,14 @@ Methodology: SRPM spec %changelog extraction via rpm2cpio + awk.
 Release-counter cross-referencing for CVE backport status.
 Findings below are CONFIRMED via spec changelog text and patch file presence.
 
+Container image verification (2026-09-04):
+  Source: TencentOS-Server-Container-Base-4.6-20260820.5.x86_64.tar.xz (Aug 20, 2026)
+  Method: OCI layer.tar → RPM SQLite rpmdb.sqlite header blob decode
+  Confirmed versions match SRPM analysis; notable differences:
+    systemd: 255-20.tl4.ap.3 in container (SRPM src shows .ap.4 — SRPM newer than Aug 20 image)
+    nss: 3.112-2.tl4 (upgraded from 4.2's 3.105-1; NSS 3.109+ fixes CVE-2023-6135)
+    No Kona JDK, no cfs-utils in base container (as expected; server image carries these)
+
 CVE backport status summary (4.6 vs 4.0):
   CVE-2024-2961 (glibc iconv OOB): PATCHED at glibc-2.38-8.tl4 (Apr 2024)
   CVE-2023-4911 (Looney Tunables): PATCHED at glibc-2.38-3.tl4 (Oct 2023)

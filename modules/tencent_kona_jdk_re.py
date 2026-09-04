@@ -1,14 +1,26 @@
 """
 Tencent Kona JDK — RE Module
-Package: java-8-konajdk-8.0.9-1.1.322 (from TencentOS 2.4)
+Primary analysis: java-8-konajdk-8.0.9-1.1.322 (latest in TencentOS 2.4 tencent-kona/ dir)
 Source: java-8-konajdk-8.0.9-1.1.322.src.rpm, TencentKona8.0.9.b1_jdk_linux-x86_64_8u322.tar.gz
 Build date: Feb 15 2022 (OpenJDK 8u322-b01 base, Jan 2022 CPU)
+
+Full version history in TencentOS 2.4 tencent-kona/ directory:
+  8.0.5-1.1.282  — OpenJDK 8u282 (Jan 2021 CPU); CVE-2022-21449 absent (predates disclosure)
+  8.0.5-2.1.282  — revision build of 8u282
+  8.0.6-3.1.292  — OpenJDK 8u292 (Apr 2021 CPU); CVE-2022-21449 still absent (predates Apr 2022)
+  8.0.9-1.1.322  — OpenJDK 8u322 (Jan 2022 CPU); CVE-2022-21449 present ← PRIMARY ANALYSIS
+
+CVE-2022-21449 (Psychic Signatures) affects ALL three available 8.x Kona versions:
+  all of 8u282, 8u292, 8u322 predate the fix in 8u333 (April 2022)
+
+TencentOS 4.2+ ships Kona JDK 8.0.20 (≈ 8u402, April 2024 CPU) — CVE-2022-21449 PATCHED.
+See tencent_os42_components_re.py TOS42-C03.
 
 Core: OpenJDK 8u322 rebranded as "OpenJDK Runtime Environment (Tencent Kona 8.0.9)"
       No SM2/SM3/SM4/TLCP extensions in this RPM — those ship separately as kona-crypto/kona-ssl JARs
       (Tencent open-sources them at https://github.com/Tencent/TencentKona-8/tree/8.0.9)
 
-Key binaries:
+Key binaries (from 8.0.9 tarball; partial extract due to bz2 truncation):
   jre/lib/amd64/libsunec.so        — ECC JNI (ECDH key agreement, ECDSA sign/verify, EC keypair gen)
   jre/lib/amd64/server/libjvm.so   — HotSpot JVM (17.4MB, not stripped)
   jre/lib/jsse.jar                 — TLS/SSL implementation
@@ -16,31 +28,40 @@ Key binaries:
   jre/lib/security/java.security   — Security policy (crypto.policy=unlimited, TLS 1.0/1.1 disabled)
 
 Findings: KJD-F01 through KJD-F04
-Critical: CVE-2022-21449 Psychic Signatures — ECDSA r=s=0 always validates in 8u322
+Critical: CVE-2022-21449 Psychic Signatures — ECDSA r=s=0 always validates in all TencentOS 2.4 Kona 8 builds
 """
 
 FINDINGS = {
     "KJD-F01": {
         "title": (
-            "Kona JDK 8.0.9 Pinned at OpenJDK 8u322 (Jan 2022 CPU) — "
-            "Missing April/July 2022 Security Patches; "
-            "CVE-2022-21449/CVE-2022-21476/CVE-2022-21496 Unpatched; "
-            "Fixed in 8u333 (April 2022) and 8u345 (July 2022)"
+            "All TencentOS 2.4 Kona JDK 8 Releases (8u282/8u292/8u322) Predate CVE-2022-21449 Fix — "
+            "Three Builds Available Locally (8.0.5/8.0.6/8.0.9); All Missing April 2022 CPU (8u333); "
+            "CVE-2022-21449/CVE-2022-21476/CVE-2022-21496 Unpatched Across All Three"
         ),
         "severity": "CRITICAL",
         "cvss": "7.5",
         "cwe": "CWE-295",
         "component": (
             "jre/lib/jsse.jar: sun.security.ec.ECDSASignature (ECDSA validation); "
-            "libjvm.so version string: 1.8.0_322-b1; "
-            "build timestamp: 2022-02-15"
+            "8.0.5-1.1.282 libjvm.so: 1.8.0_282-b08; "
+            "8.0.6-3.1.292 libjvm.so: 1.8.0_292-b10; "
+            "8.0.9-1.1.322 libjvm.so: 1.8.0_322-b01 (primary analysis)"
         ),
         "description": (
-            "Kona JDK 8.0.9-1.1.322 ships OpenJDK 8u322 (January 2022 CPU). The April 2022 CPU "
-            "(8u333) introduced critical ECDSA and other fixes not present here. The package was "
-            "never updated past 8u322 in the TencentOS 2.4 repository as of the analyzed version. "
-            "Most critical missing fix: CVE-2022-21449 (ECDSA signature validation bypass)."
+            "The TencentOS 2.4 tencent-kona repository contains three Kona JDK 8 releases: "
+            "8.0.5 (= 8u282, Jan 2021), 8.0.6 (= 8u292, Apr 2021), 8.0.9 (= 8u322, Jan 2022). "
+            "All three predate the April 2022 CPU (8u333) which introduced the CVE-2022-21449 fix. "
+            "The newest available build (8.0.9-1.1.322) is the primary analysis target; it was "
+            "never updated to 8u333+ in the TencentOS 2.4 stream. Any TencentOS 2.4 deployment "
+            "using any of these Kona JDK 8 builds is vulnerable to ECDSA signature bypass. "
+            "TencentOS 4.2+ ships 8.0.20 (≈ 8u402, Apr 2024 CPU) — patched. See TOS42-C03."
         ),
+        "affected_builds": {
+            "8.0.5-1.1.282": "OpenJDK 8u282 — CVE-2022-21449 present (predates 8u333 fix)",
+            "8.0.5-2.1.282": "OpenJDK 8u282 revision — same exposure",
+            "8.0.6-3.1.292": "OpenJDK 8u292 — CVE-2022-21449 present (predates 8u333 fix)",
+            "8.0.9-1.1.322": "OpenJDK 8u322 — CVE-2022-21449 present (predates 8u333 fix)",
+        },
         "missing_cves": [
             "CVE-2022-21449 — Psychic Signatures: ECDSA r=s=0 always validates (8u333 fix)",
             "CVE-2022-21476 — Deserialization bypass in java.net (8u333 fix)",
@@ -48,8 +69,8 @@ FINDINGS = {
             "CVE-2022-21443 — Provider check incomplete (8u333 fix)",
             "CVE-2022-21496 — JNDI URL deserialization (8u333 fix)",
         ],
-        "chain": "KJD-F01 + KJD-F02: confirmed CVE-2022-21449 absent in installed version",
-        "remediation": "Update to java-8-konajdk-8.0.9 build >= 8u333, or Kona JDK 11/17.",
+        "chain": "KJD-F01 + KJD-F02: confirmed CVE-2022-21449 absent in all TencentOS 2.4 Kona 8 installs",
+        "remediation": "Update to Kona JDK 8.0.20+ (as shipped in TencentOS 4.2), or Kona JDK 11/17.",
         "references": ["CVE-2022-21449", "JDK-8272494", "NVD CVSS 7.5"],
     },
     "KJD-F02": {
