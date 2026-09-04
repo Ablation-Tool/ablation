@@ -1208,6 +1208,128 @@ class WeChatREAnalyzer:
             ),
         })
 
+        findings.append({
+            "id": "WX-F18",
+            "title": (
+                "gILinkKey BSS Writer Localized to Session-Layer HKDF Site VA 0x1ce290 "
+                "(Distinct From HybridEcdhClient::Encrypt 0x268d18); "
+                "ptrace Single-Step Watchpoint Pattern From mmtls_probe.c"
+            ),
+            "severity": "INFO",
+            "detail": (
+                "mmtls_probe.c (Drive: 1qCFeC_S8QRUhd6zkvjIbS4hhVhn92KzB) documents the\n"
+                "exhaustive gILinkKey writer search:\n"
+                "\n"
+                "  HKDF_RET_VA = 0x1ce290  // return site after 'bl 0x1dc424' (HKDF call)\n"
+                "  GILINKKEY_VA = 0x3d4648 // BSS global, 72 bytes\n"
+                "\n"
+                "Discover mode: ptrace-attach WeChat, set BRK at 0x1ce290, single-step\n"
+                "through up to 4096 instructions reading gILinkKey after each step.\n"
+                "First step that changes gILinkKey content → regs.pc = writer_pc.\n"
+                "\n"
+                "This localizes the writer to the SESSION LAYER (~0x1ce000 region),\n"
+                "NOT inside HybridEcdhClient::Encrypt (0x268d18, WX-F17). The two HKDF\n"
+                "call sites are distinct:\n"
+                "  Session layer:    bl 0x1dc424 @ ret→0x1ce290  → writes gILinkKey BSS\n"
+                "  HybridEcdhClient: bl <HKDF> @ 0x2693a8        → writes heap objs (WX-F17)\n"
+                "\n"
+                "Key implication: gILinkKey extraction via ptrace watchpoint anchors to\n"
+                "the 0x1ce290 return site. Once writer_pc is confirmed, mmtls_probe hook\n"
+                "mode BRKs at writer_pc and emits JSON key lines on every handshake.\n"
+                "\n"
+                "AArch64 BRK behavior: BRK does NOT auto-advance PC on SIGTRAP;\n"
+                "single-step resumes from the BRK instruction itself (regs.pc == BRK site).\n"
+                "This differs from x86 INT3 which stops AFTER the breakpoint instruction."
+            ),
+            "evidence": {
+                "probe_file": "mmtls_probe.c (Drive 1qCFeC_S8QRUhd6zkvjIbS4hhVhn92KzB)",
+                "hkdf_ret_va": "0x1ce290 (session layer, return after bl 0x1dc424)",
+                "hkdf_hybrid_va": "0x2693a8 (HybridEcdhClient::Encrypt, writes heap — WX-F17)",
+                "gilinkkey_va": "0x3d4648 (BSS, 72 bytes)",
+                "step_limit": "4096 instructions max before declaring writer not found",
+                "brk_behavior": "AArch64 BRK → SIGTRAP at BRK insn, NOT at BRK+4",
+                "writer_confirm": "first step that changes gILinkKey → regs.pc = writer_pc",
+            },
+            "frida_hook": (
+                "// WX-F18: attach at session-layer HKDF return to watch gILinkKey writes\n"
+                "// Run after HKDF_RET_VA is confirmed via mmtls_probe discover mode\n"
+                "const BASE = Module.findBaseAddress('libwechatnetwork.so');\n"
+                "const HKDF_RET = BASE.add(0x1ce290);\n"
+                "const GILINKKEY = BASE.add(0x3d4648);\n"
+                "Interceptor.attach(HKDF_RET, {\n"
+                "    onEnter(args) {\n"
+                "        const key = GILINKKEY.readByteArray(72);\n"
+                "        const arr = new Uint8Array(key);\n"
+                "        const nonzero = arr.some(b => b !== 0);\n"
+                "        if (nonzero) {\n"
+                "            console.log('[WX-F18] gILinkKey at HKDF_RET: ' +\n"
+                "                Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join(''));\n"
+                "        }\n"
+                "    }\n"
+                "});"
+            ),
+        })
+
+        findings.append({
+            "id": "WX-F19",
+            "title": (
+                "FULL_RELRO Bypass via ptrace-Injected mprotect in mmtls_inject.c — "
+                "Android GOT Page Re-Made Writable From External Process; "
+                "Hooks connect/send/recv Without Modifying WeChat APK"
+            ),
+            "severity": "HIGH",
+            "detail": (
+                "mmtls_inject.c (Drive: 1kwk5MrJzbX8c7ZXDaC2pId6CK4ABoXmW) implements a\n"
+                "FULL_RELRO bypass technique for patching WeChat's .got.plt entries from an\n"
+                "external root process:\n"
+                "\n"
+                "Problem: Android's linker calls mprotect(PROT_READ) on .got.plt after all\n"
+                "relocations complete. PTRACE_POKEDATA into a read-only page returns EIO.\n"
+                "\n"
+                "Solution: Inject a mprotect(page, PAGE_SIZE, PROT_READ|PROT_WRITE) call\n"
+                "*inside the target process* via AArch64 register manipulation:\n"
+                "  1. ptrace-attach to WeChat PID (requires root + ptrace capability)\n"
+                "  2. PTRACE_GETREGSET(NT_PRSTATUS) → save all 31 GPRs + SP + PC\n"
+                "  3. Locate mprotect in WeChat's libc.so via /proc/pid/maps + ELF symbol scan\n"
+                "  4. Set x0=page_addr, x1=PAGE_SIZE, x2=PROT_READ|PROT_WRITE, PC=mprotect\n"
+                "  5. PTRACE_SETREGSET → single-step until mprotect returns (new PC != mprotect)\n"
+                "  6. PTRACE_POKEDATA to write hook function address into GOT slot\n"
+                "  7. Repeat mprotect injection to restore page to PROT_READ\n"
+                "  8. PTRACE_SETREGSET → restore saved register state\n"
+                "  9. ptrace-detach → WeChat resumes with hooks active\n"
+                "\n"
+                "Hooks installed: connect, send, recv, sendto, recvfrom in libwechatnetwork.so\n"
+                "These intercept all MMTLS socket I/O for plaintext capture.\n"
+                "\n"
+                "PAC (Pointer Authentication): no-op on Android 12 AVD emulator.\n"
+                "blr xN with plain (non-signed) addresses works on QEMU/AVD.\n"
+                "\n"
+                "GOT slot resolution: parse PT_DYNAMIC → DT_JMPREL/DT_SYMTAB/DT_STRTAB\n"
+                "from /proc/pid/mem live ELF image; scan R_AARCH64_JUMP_SLOT entries (type 1026)\n"
+                "for target symbols → runtime GOT addr = libwechatnetwork base + r_offset.\n"
+                "\n"
+                "Also: dumps gILinkKey (BASE+0x3d4648, 72B) via /proc/pid/mem on each\n"
+                "--dump-key-only invocation, providing a non-ptrace-single-step key extraction."
+            ),
+            "evidence": {
+                "inject_file": "mmtls_inject.c (Drive 1kwk5MrJzbX8c7ZXDaC2pId6CK4ABoXmW)",
+                "got_type": "R_AARCH64_JUMP_SLOT = 1026 (AArch64 ELF ABI)",
+                "relro_bypass": "ptrace-injected mprotect(PROT_READ|PROT_WRITE) inside target process",
+                "hooks": "connect, send, recv, sendto, recvfrom → libwechatnetwork.so PLT",
+                "pac_status": "PAC no-op on Android 12 QEMU/AVD (AVD does not enforce PAC)",
+                "gilinkkey_va": "0x3d4648 (BASE offset; inject.c uses GILIINKKEY_VA macro)",
+                "key_extraction": "--dump-key-only: /proc/pid/mem read at BASE+0x3d4648, 72 bytes",
+            },
+            "attack_chain": (
+                "Root on Android device → mmtls_inject <wechat_pid>\n"
+                "  → FULL_RELRO bypass → hook connect/send/recv installed\n"
+                "  → All MMTLS socket traffic captured in plaintext hook context\n"
+                "  → gILinkKey dumped on demand\n"
+                "Chain: TCS-F01 (Stargate MitM root) → Android ADB root → WX-F19 injection\n"
+                "enables WeChat MMTLS session key extraction on Tencent Cloud CVMs."
+            ),
+        })
+
         self.findings.extend(findings)
         return findings
 
