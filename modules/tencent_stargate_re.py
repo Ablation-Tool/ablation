@@ -157,51 +157,69 @@ FINDINGS = {
     },
     "TCS-F02": {
         "title": (
-            "sgagent64 Lacks Stack Canaries, PIE, and RELRO — "
-            "No Exploit Mitigations on a Root-Persistent Binary with strcpy/sprintf"
+            "Inconsistent Exploit Mitigations Across All Three Agent Binaries — "
+            "No Variant Has Full Stack Canary + PIE + RELRO; sgagent64 Has None"
         ),
         "severity": "HIGH",
         "cvss": "7.8",
         "cwe": "CWE-693",
         "component": (
-            "sgagent64 ELF binary — binary protection configuration"
+            "sgagent64 (x86_64), sgagent32 (i386), sgagentarm64 (AArch64) — "
+            "binary protection configuration — per-arch toolchain divergence"
         ),
         "evidence": {
-            "no_canary": (
-                "nm -D sgagent64: __stack_chk_fail not imported. "
-                "Binary was compiled without -fstack-protector. "
-                "Stack buffer overflows in any function have no canary detection before return."
+            "mitigation_matrix": (
+                "Per-binary exploit mitigation status:\n"
+                "  sgagent64  (x86_64): PIE=NO  RELRO=NONE    Canary=NO  NX=YES\n"
+                "  sgagent32  (i386):   PIE=NO  RELRO=NONE    Canary=YES NX=YES\n"
+                "  sgagentarm64 (arm64):PIE=NO  RELRO=PARTIAL Canary=NO  NX=YES\n"
+                "No single binary achieves full PIE + full RELRO + stack canary. "
+                "The variation indicates separate cross-compilation toolchains with different "
+                "compiler default flags, not a unified hardening policy."
             ),
-            "no_pie": (
-                "readelf -h sgagent64: Type = EXEC (not DYN). "
-                "Binary loads at fixed base address 0x400000. "
-                "ASLR provides no entropy for the binary itself. "
-                "ROP gadget addresses are static and predictable."
+            "sgagent64_worst_case": (
+                "sgagent64: readelf type=EXEC (fixed base 0x400000), no GNU_RELRO segment, "
+                "nm -D: __stack_chk_fail absent. "
+                "Binary compiled without -fstack-protector, -fpie, or -Wl,-z,relro. "
+                "ROP gadget addresses are static; GOT fully writable; stack overflows "
+                "return to attacker-controlled address without canary detection. "
+                "Worst-case exploit surface: any memory corruption produces reliable RCE."
             ),
-            "no_relro": (
-                "readelf -l sgagent64: no GNU_RELRO segment present. "
-                "The GOT/PLT is fully writable post-load. "
-                "A heap or stack write primitive resolves immediately to GOT overwrite "
-                "without needing to bypass partial RELRO."
+            "sgagent32_partial": (
+                "sgagent32: readelf type=EXEC (fixed base 0x08048000), no GNU_RELRO segment, "
+                "nm -D: __stack_chk_fail@GLIBC_2.4 present (canary enabled). "
+                "Stack-based ret overwrite requires defeating the canary (leak or brute-force). "
+                "GOT is still fully writable — heap or format-string write primitive bypasses "
+                "the canary by targeting GOT entries directly."
+            ),
+            "sgagentarm64_partial": (
+                "sgagentarm64: readelf type=EXEC (fixed base, no PIE), "
+                "GNU_RELRO segment present at 0x2448d0 (PARTIAL RELRO only — no BIND_NOW), "
+                "nm -D: __stack_chk_fail absent (no canary). "
+                "Partial RELRO marks only the .got section read-only after startup; "
+                ".got.plt entries remain writable during lazy binding. "
+                "No canary: AArch64 link register corruption undetected on return."
             ),
             "dangerous_imports": (
-                "Imported without bounds: strcpy, sprintf, sscanf, memcpy. "
-                "Binary processes externally-sourced strings from HTTP responses and "
-                "file system paths with these functions — any length miscalculation "
-                "produces an exploitable buffer overflow with no mitigation."
+                "All three binaries import without bounds: strcpy, sprintf, sscanf, memcpy. "
+                "sgagent32 additionally imports wmemcpy (wide string operations). "
+                "These process externally-sourced strings from HTTP responses and file system "
+                "paths — length miscalculation produces exploitable memory corruption "
+                "with at most one mitigation (canary in sgagent32 only)."
             ),
             "nx_present": (
-                "GNU_STACK segment: RW (no exec bit). NX is enforced. "
-                "Stack shellcode injection is blocked, but ROP/ret2libc chains are viable "
-                "given static binary addresses and no canary."
+                "GNU_STACK: RW (non-executable) in all three binaries. "
+                "Stack shellcode injection blocked across all architectures; "
+                "ret2libc / ROP / AROP viable given static load addresses."
             ),
         },
         "versions_affected": ["1.5.0"],
         "remediation": (
-            "Recompile with: -fstack-protector-strong -fpie -pie. "
-            "Add full RELRO: -Wl,-z,relro,-z,now. "
+            "Apply a unified hardening policy across all three toolchains: "
+            "-fstack-protector-strong -fpie -pie -Wl,-z,relro,-z,now -D_FORTIFY_SOURCE=2 -O2. "
+            "Verify mitigations post-build with checksec or readelf on each arch variant. "
             "Replace strcpy with strlcpy/strncpy+null, sprintf with snprintf with explicit bounds. "
-            "Enable FORTIFY_SOURCE=2: -D_FORTIFY_SOURCE=2 -O2."
+            "For arm64: replace partial RELRO (-Wl,-z,relro) with full RELRO (-Wl,-z,relro,-z,now)."
         ),
     },
     "TCS-F03": {
