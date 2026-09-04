@@ -289,6 +289,126 @@ FINDINGS = {
             "Consider systemd service with ProtectSystem=strict instead of raw cron."
         ),
     },
+    "TCS-F05": {
+        "title": (
+            "MD5 Module Integrity Verification Trivially Bypassed via MitM — "
+            "Attacker Controls Both Module Binary and Expected Hash from Same Untrusted HTTP Channel"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-354",
+        "component": (
+            "sgagent64 module download + MD5 check at 0x405a00-0x405af8 — "
+            "fread 4096-byte chunks -> MD5_Update -> MD5_Final -> hex-encode -> "
+            "memcmp(local_md5, remote_md5_from_json)"
+        ),
+        "evidence": {
+            "check_code": (
+                "0x405a2f: fread(buf, 1, 0x1000, fp) loop — reads downloaded file in 4096-byte chunks. "
+                "0x405a3d: call 0x40de90 — MD5_Final (finalize digest). "
+                "0x405a4c: call 0x40deb0 — convert digest to hex string -> stored at rsp+0x20. "
+                "0x405a55-0x405a5e: r8 = server-provided MD5 string (from JSON), rbx = local computed MD5. "
+                "0x405a5e: cmp length fields of local vs remote MD5 strings. "
+                "0x405a62: je 0x405ac8 -> memcmp(r8, rbx) — byte-by-byte comparison. "
+                "Error path: 'md5 check error, local: %s, remote: %s' (0x446fa8). "
+                "Success path: 'md5 check succ, digest: %s' (0x446be9). "
+                "The 'remote' MD5 value comes from the server JSON response parsed over plaintext HTTP "
+                "with SSL verification disabled (see TCS-F01)."
+            ),
+            "bypass_mechanism": (
+                "The module binary is downloaded over plaintext HTTP (TCS-F01). "
+                "The expected MD5 hash is also delivered over the same plaintext HTTP response JSON. "
+                "A MitM attacker controls both simultaneously: "
+                "1. Serve a malicious binary as the module content. "
+                "2. Compute MD5 of that binary. "
+                "3. Insert that MD5 as the 'remote' hash in the JSON response. "
+                "The local MD5 of the downloaded malicious binary matches the attacker-provided remote hash. "
+                "The check passes unconditionally. "
+                "MD5 is additionally cryptographically broken (known collision attacks, CWE-327), "
+                "but the channel trust failure alone is sufficient to bypass the check without collision."
+            ),
+            "cross_architecture": (
+                "sgagentarm64 contains identical strings: "
+                "'md5 check succ, digest: %s', 'md5 check error, local: %s, remote: %s'. "
+                "TCS-F05 applies to all three binary variants (sgagent32, sgagent64, sgagentarm64)."
+            ),
+            "impact": (
+                "MD5 integrity check provides zero security guarantee in the MitM threat model. "
+                "Attacker delivers arbitrary root-executable code to every Tencent Cloud CVM "
+                "running sgagent, with the verification step confirming the malicious binary as legitimate. "
+                "Chain with TCS-F01 for full unauthenticated remote code execution as root."
+            ),
+        },
+        "versions_affected": ["1.5.0"],
+        "remediation": (
+            "Replace MD5 with an asymmetric signature scheme: "
+            "sign module binaries with an ed25519 or RSA-PSS private key at build time; "
+            "embed the corresponding public key in the agent binary at compile time. "
+            "Verify the signature before executing any downloaded module. "
+            "The public key must be pinned inside the agent — not fetched from the update server. "
+            "This fix is independent from TCS-F01 and provides a second layer of defense "
+            "even if HTTPS is added (defense-in-depth against certificate compromise)."
+        ),
+    },
+    "TCS-F06": {
+        "title": (
+            "moduleId JSON Field Unsanitized in Path Construction — "
+            "Path Traversal via '../modules/' + moduleId Allows Arbitrary File Creation as Root"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.9",
+        "cwe": "CWE-22",
+        "component": (
+            "sgagent64 module install dispatch at 0x406a00-0x406a50 — "
+            "'../modules/' + moduleId -> access() -> creat()"
+        ),
+        "evidence": {
+            "path_construction": (
+                "0x406a00: lea 0x10(%rbp), %rdx — moduleId string from server JSON, no sanitization. "
+                "0x406a09: call 0x409690 ('_ZStplIcSt11char_traitsIcESaIcEESbIT_T0_T1_EPKS3_RKS6_@@Base'): "
+                "std::string operator+(\"../modules/\", moduleId) -> full_path at rsp+0x10. "
+                "0x409690 is a pure string concatenation — no filtering of '..' or '/' sequences. "
+                "0x406a15: access(\"../modules/\", F_OK) — existence check on base dir. "
+                "0x406a2c: access(full_path, F_OK) — existence check on full constructed path. "
+                "0x406a41: creat(full_path, 0x1a4=0644) — creates the file if it does not exist. "
+                "If moduleId = '../../etc/cron.d/evil': full_path = '../modules/../../etc/cron.d/evil' "
+                "= /etc/cron.d/evil relative to agent CWD (typically /usr/local/qcloud/stargate/admin/). "
+                "creat() creates /etc/cron.d/evil as an empty file owned by root."
+            ),
+            "json_parse_site": (
+                "moduleId parsed at 0x407f1b: mov $0x446dbe, %esi ('moduleId') -> call 0x43fcc0 "
+                "(JSON field lookup) -> return value stored in module struct at rsp+0x200. "
+                "No sanitization between JSON parse and path construction."
+            ),
+            "scope_limitation": (
+                "The creat() path controls only file creation (empty files, mode 0644). "
+                "Module binary content is written to installPath + '.STARGATE' (0x446c81), "
+                "not to the moduleId-derived path. "
+                "Impact is therefore limited to: "
+                "1. Creating empty files as root outside the modules directory. "
+                "2. Overwriting existing files with empty content (truncation via creat O_TRUNC). "
+                "creat() with O_CREAT|O_WRONLY|O_TRUNC on an existing file truncates it to zero length: "
+                "creat('/etc/passwd') destroys the system passwd file (all users lose auth). "
+                "creat('/root/.ssh/authorized_keys') destroys root's SSH authorized keys. "
+                "This is a file-clobber DoS primitive, not content-controlled RCE. "
+                "Severity is MEDIUM when considered independently from TCS-F01."
+            ),
+            "cross_architecture": (
+                "'../modules/' string present in sgagentarm64 strings. "
+                "Path traversal applies to all three binary variants."
+            ),
+        },
+        "versions_affected": ["1.5.0"],
+        "remediation": (
+            "Validate moduleId before path construction: "
+            "reject any moduleId containing '/' or '..'. "
+            "Use a strict allowlist: moduleId must match [A-Za-z0-9_\\-\\.]{1,128}. "
+            "Resolve the full path and verify it begins with the expected modules directory "
+            "using realpath() before any file system operation. "
+            "Do not use creat() with an attacker-controlled path; "
+            "if a module marker file is needed, write it to a fixed root-owned directory."
+        ),
+    },
 }
 
 
