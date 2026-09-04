@@ -227,9 +227,17 @@ KASLR_TIMELINE = {
         "note": "4.4 launched with KASLR enabled; no 4.4 images between 6.6.47 and 6.6.110",
     },
     "pre_6.6_kernels": {
-        "disabled_confirmed": ["5.4.119-19 (TencentOS 2.4)", "5.4.241-24 (TencentOS 3.3)"],
+        "disabled_confirmed": [
+            "5.4.119-19 (TencentOS 2.4)",
+            "5.4.241-24.0017.23 (TencentOS 3.3 Aug 2025)",
+            "5.4.241-24.0017.41.1 (TencentOS 3.3 Jul 2026)",
+        ],
         "enabled_confirmed": [],
-        "note": "KASLR never enabled on 5.4.x branch; all 2.4 and 3.3 deployments affected",
+        "note": (
+            "KASLR never enabled on 5.4.x branch. "
+            "TencentOS 3.3 is frozen at 5.4.241-24 upstream with Tencent's .0017.NN patch series; "
+            "KASLR was disabled across the entire 3.3 lifecycle (Jul 2024 through Jul 2026)."
+        ),
     },
     "policy_classification": (
         "Deliberate omission: consistent across 5.4.x and early 6.6.x; "
