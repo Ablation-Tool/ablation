@@ -44,13 +44,16 @@ Findings:
   F6  Three-repo build: mars(OSS) + mars-wechat(MMTLS) + mars-private(IP obfuscation)
   F7  libapp.so 38MB contains all business logic in compiled C++ (not Java/DEX)
   F8  .cso compressed .so format — WeChat's custom loader decompresses at runtime
-  F9  SQLCipher (not SQLite SEE) — PRAGMA key interface, HMAC per-page auth, standard tooling works
+  F9  SM4-GCM region forcing — MaybeChinaUser()+setMMtlsRegion JNI API; server can push region in alert
+  F9b SQLCipher (not SQLite SEE) — PRAGMA key interface, HMAC per-page auth, standard tooling works
   F10 Alert XML + dual ECDSA sigs; hardcoded 2020 Tencent alert at 0x42d3b; timestamp check bypassed
   F11 CGI function code table: 200+ reqid→name (sendmsg/newsync/pay) from alert XML body
   F12 HKDF derivation chain confirmed: 7 labels, trafficKeyPair=56B layout, PSK/app key labels
   F13 Deterministic nonce: xorNonce(nonce[8:12], LE32(seq)); NIST AES-GCM violation; keystream recovery
   F14 Server P-256 pubkey dual use: ECDH key exchange + ECDSA verify (same hardcoded key)
   F15 Session Save() wire format: u16-len(pskAccess)||u16-len(pskRefresh)||newSessionTicket
+  F16 gILinkKey has ZERO static refs in libwechatnetwork.so — writer is in libapp.so
+  F17 HybridEcdhClient::Encrypt VA 0x268d18 — HKDF→heap objs this+0x68/+0x70; BSS writer in session layer
 """
 
 import subprocess
@@ -564,6 +567,62 @@ class WeChatREAnalyzer:
             },
         })
 
+        # F9: SM4-GCM region forcing
+        findings.append({
+            "id": "WX-F9",
+            "title": "SM4-GCM Cipher Forcing via MaybeChinaUser() + setMMtlsRegion JNI API",
+            "severity": "MEDIUM",
+            "detail": (
+                "WeChat selects between AES-GCM (international) and SM4-GCM (GB/T 32907 Chinese national\n"
+                "standard) based on MaybeChinaUser() at VA 0x10ed74 (delegates to vtable[0x98] of region obj).\n"
+                "\n"
+                "Controllable override paths:\n"
+                "  1. JNI API (reflection from malicious same-device app):\n"
+                "     Java_com_tencent_mars_mm_MMLogic_setMMtlsRegion(JNIEnv, jobject, int region)\n"
+                "     Java_com_tencent_mars_mm_MMLogic_getMMtlsRegion(JNIEnv, jobject) -> int\n"
+                "  2. Server-push: 'receive region from alert: %_' log @ 0x331b2 — server can push\n"
+                "     a region code in MMTLS alert message to force SM4-GCM on any client.\n"
+                "  3. tlsregion.ini persisted to /data/data/com.tencent.mm/ — survives app restart.\n"
+                "\n"
+                "Attack scenarios:\n"
+                "  Forced SM4 on non-China client: inject server-originated region-push alert.\n"
+                "  SM4 cipher observation: SM4-GCM in traffic = client is in China-mode (metadata leak).\n"
+                "  Malicious app: call setMMtlsRegion via reflection to change cipher globally.\n"
+                "\n"
+                "Source files:\n"
+                "  mars-wechat/mars/mm-ext/src/mmtls/mmtls_lib/comm/mmtls_handshake_messages.cpp\n"
+                "  mars-wechat/mars/mm-ext/src/mmtls/mmtls_lib/comm/mmtls_alert.cpp"
+            ),
+            "evidence": {
+                "maybe_china_user_va": "0x10ed74 → vtable[0x98] of region object",
+                "jni_set_region": "Java_com_tencent_mars_mm_MMLogic_setMMtlsRegion",
+                "jni_get_region": "Java_com_tencent_mars_mm_MMLogic_getMMtlsRegion",
+                "server_push_log": "'receive region from alert: %_' @ 0x331b2",
+                "persist_file": "tlsregion.ini in WeChat data dir",
+                "sm4_cipher_string": "SM4_GCM_ENCRYPT no need decrypt here len:%d algo:%d",
+            },
+            "frida_hook": (
+                "// Detect SM4 cipher selection\n"
+                "var libnet = Process.getModuleByName('libwechatnetwork.so');\n"
+                "var getRegion = Module.findExportByName('libwechatnetwork.so',\n"
+                "    'Java_com_tencent_mars_mm_MMLogic_getMMtlsRegion');\n"
+                "if (getRegion) Interceptor.attach(getRegion, {\n"
+                "    onLeave: function(ret) {\n"
+                "        console.log('[WX-F9] getMMtlsRegion = ' + ret.toInt32() +\n"
+                "            ' (0=International/AES, 1=China/SM4)');\n"
+                "    }\n"
+                "});\n"
+                "// Detect region push from alert\n"
+                "var setRegion = Module.findExportByName('libwechatnetwork.so',\n"
+                "    'Java_com_tencent_mars_mm_MMLogic_setMMtlsRegion');\n"
+                "if (setRegion) Interceptor.attach(setRegion, {\n"
+                "    onEnter: function(args) {\n"
+                "        console.log('[WX-F9] setMMtlsRegion called with region=' + args[2].toInt32());\n"
+                "    }\n"
+                "});"
+            ),
+        })
+
         # F10: HKDF connection key derivation
         findings.append({
             "id": "WX-F10",
@@ -1066,6 +1125,85 @@ class WeChatREAnalyzer:
                 "      }, 100);\n"
                 "    }\n"
                 "  }\n"
+                "});"
+            ),
+        })
+
+        # F17: HybridEcdhClient::Encrypt — MMTLS Tier 1 key derivation internals
+        findings.append({
+            "id": "WX-F17",
+            "title": "HybridEcdhClient::Encrypt VA 0x268d18 — keys to heap objs, not gILinkKey; BSS writer in session layer",
+            "severity": "INFO",
+            "detail": (
+                "mmcrypto::HybridEcdhClient::Encrypt(const char*, size_t, std::string&)\n"
+                "VA: 0x268d18  Size: 0xcc8  dynsym #1540 (STB_GLOBAL, .text, hookable by name)\n"
+                "\n"
+                "Frame setup: stp x29,x30,[sp,#-0x60]! + sub sp,sp,#0x330 → total frame 0x390 bytes\n"
+                "x19 = this (HybridEcdhClient); x20 = plaintext len; x21 = output string&\n"
+                "\n"
+                "HybridEcdhClient layout (from constructor 0x268be0/0x268acc):\n"
+                "  +0x00 state(u32)  +0x04 mode(u32)\n"
+                "  +0x08 label_str1(std::string,24B)  +0x20 label_str2(24B)\n"
+                "  +0x38..+0x67 cipher state buffers (zeroed on construct)\n"
+                "  +0x68 ptr_cipher1 → heap-alloc string object (128B, malloc(0x80))\n"
+                "  +0x70 ptr_cipher2 → heap-alloc string object (128B)\n"
+                "\n"
+                "HKDF call at 0x2693a8:\n"
+                "  bl 0x3be240  ; OpenSslCryptoUtil::HKDF(string)\n"
+                "  x1 = 0x3d76f8  ; label string ptr\n"
+                "  x4 = sp+0x38   ; OUTPUT BUFFER — 56 bytes = trafficKeyPair\n"
+                "  w5 = 0x38      ; output length\n"
+                "\n"
+                "Success path (0x269414-0x2699d0):\n"
+                "  1. Validates HKDF output length == 56 at 0x269428\n"
+                "  2. Assembles 3 sub-keys (sp+0x68, sp+0x50, sp+0x38) into string at sp+0x1a8\n"
+                "  3. vtable[3](this+0x68, key_ptr, 32) at 0x26982c → writes to ptr_cipher1\n"
+                "  4. vtable[3](this+0x70, ptr, size)   at 0x269878 → writes to ptr_cipher2\n"
+                "  5. Sets this[0]=1 (key_valid flag) at 0x269978\n"
+                "  6. Delivers key bundle to session layer via bl 0x26dae8 at 0x2697f8\n"
+                "\n"
+                "KEY OBSERVATION: gILinkKey BSS 0x3d4648 is NOT written within this function.\n"
+                "Derived key ends up in heap objects at this+0x68, this+0x70.\n"
+                "The write to BSS gILinkKey comes from the CALLER (MMTLS session layer) after\n"
+                "HybridEcdhClient::Encrypt returns — confirms WX-F16 conclusion.\n"
+                "\n"
+                "Also: mmcrypto::HybridEcdhClient::Decrypt at VA 0x269a00, size=0x844."
+            ),
+            "evidence": {
+                "encrypt_va": "0x268d18",
+                "encrypt_size": "0xcc8",
+                "decrypt_va": "0x269a00",
+                "decrypt_size": "0x844",
+                "hkdf_call_va": "0x2693a8 (bl 0x3be240 = OpenSslCryptoUtil::HKDF)",
+                "hkdf_output_len": "56 bytes (trafficKeyPair)",
+                "cipher1_field": "this+0x68 → heap 0x80-byte string obj",
+                "cipher2_field": "this+0x70 → heap 0x80-byte string obj",
+                "key_valid_flag": "this[0] = 1 at VA 0x269978",
+                "session_deliver": "bl 0x26dae8 at VA 0x2697f8",
+                "giilinkkey_bss": "NOT written by this function; writer is in MMTLS session layer caller",
+            },
+            "frida_hook": (
+                "// Hook HybridEcdhClient::Encrypt to capture Tier-1 key derivation\n"
+                "var libnet = Process.getModuleByName('libwechatnetwork.so');\n"
+                "Interceptor.attach(libnet.base.add(0x268d18), {\n"
+                "    onEnter: function(args) {\n"
+                "        this.thisPtr   = args[0];\n"
+                "        this.plaintext = args[1];\n"
+                "        this.ptLen     = args[2].toInt32();\n"
+                "    },\n"
+                "    onLeave: function(retval) {\n"
+                "        // Dump cipher objects at this+0x68 and this+0x70\n"
+                "        try {\n"
+                "            var c1ptr = this.thisPtr.add(0x68).readPointer();\n"
+                "            var c2ptr = this.thisPtr.add(0x70).readPointer();\n"
+                "            if (!c1ptr.isNull())\n"
+                "                console.log('[WX-F17] cipher1(this+0x68):\\n' +\n"
+                "                    hexdump(c1ptr, {length: 64}));\n"
+                "            if (!c2ptr.isNull())\n"
+                "                console.log('[WX-F17] cipher2(this+0x70):\\n' +\n"
+                "                    hexdump(c2ptr, {length: 64}));\n"
+                "        } catch(e) { console.log('[WX-F17] dump err: ' + e); }\n"
+                "    }\n"
                 "});"
             ),
         })
