@@ -26,6 +26,12 @@ Persistent issues across 2.4 → 3.3:
 KERNEL_VERSION = "5.4.241-24.0017.41.1"
 KERNEL_BASE_ADDR = "0xffffffff81000000"
 
+# KASLR lifetime confirmation: all TencentOS 3.3 images analyzed — KASLR permanently disabled
+# 5.4.241-24.0017.23 (Aug 2025): # CONFIG_RANDOMIZE_BASE is not set
+# 5.4.241-24.0017.41.1 (Jul 2026): # CONFIG_RANDOMIZE_BASE is not set
+# The .0017.NN suffix tracks Tencent's internal patch counter on fixed 5.4.241 upstream
+# Conclusion: TencentOS 3.3 never enabled KASLR across its entire release lifecycle
+
 MITIGATIONS_ENABLED = {
     "PAGE_TABLE_ISOLATION": True,
     "RETPOLINE": True,
