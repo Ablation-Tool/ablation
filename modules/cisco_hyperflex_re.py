@@ -5761,6 +5761,67 @@ FINDINGS = {
             "Rotate all stCtlVM SSH key pairs after any ZK exposure incident."
         ),
     },
+    "HX-F106": {
+        "title": (
+            "StSSOMgrImpl Stores Symmetric Encryption Key and Encrypted Hyper-V Host Credentials "
+            "Both in Unauthenticated ZooKeeper — Key Readable at zkAuthKey/zkEncryptionKey "
+            "Enables Decryption of Hyper-V Host Credentials at zkAuthKey/zkCredsKey"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.8",
+        "cwe": "CWE-522",
+        "component": (
+            "com.storvisor.sysmgmt.stSSOMgr.StSSOMgrImpl / getEncryptionKeyFromZK() / "
+            "setHypervHostCreds() / getHypervHostCreds() — SSO Manager service"
+        ),
+        "evidence": {
+            "key_in_zk": (
+                "getEncryptionKeyFromZK() anonfun$1: "
+                "ZkPersistenceManager.read(zkAuthKey, zkEncryptionKey) -> Optional[Base64String]. "
+                "zkAuthKey from cfg 'sysmgmt.stSSOMgr.zkAuthKey'; "
+                "zkEncryptionKey from cfg 'sysmgmt.stSSOMgr.zkEncryptionKey'. "
+                "ZK node is unauthenticated (HX-F100, HX-F103). "
+                "Key format: Base64.encodeBase64String(SecretKey.getEncoded()) -> stored as ZK node value."
+            ),
+            "auto_generate_and_write": (
+                "getEncryptionKeyFromZK() anonfun$3 (error fallback): "
+                "If ZK read fails, EncryptionUtil$.generateSecretKey() generates new key; "
+                "Base64-encodes it; writes to ZkPersistenceManager.write(zkAuthKey, zkEncryptionKey, encodedKey, -1L). "
+                "Self-keying: the encryption key is created and persisted to ZK autonomously, "
+                "with no key management ceremony or HSM involvement."
+            ),
+            "encrypted_creds_also_in_zk": (
+                "setHypervHostCreds() anonfun$3: "
+                "After obtaining key via getEncryptionKeyFromZK(), encrypts credentials, "
+                "writes to ZkPersistenceManager.write(zkAuthKey, zkCredsKey, encryptedCreds, version). "
+                "zkCredsKey from cfg 'sysmgmt.stSSOMgr.zkCredsKey'. "
+                "getHypervHostCreds(): reads ZkPersistenceManager.read(zkAuthKey, zkCredsKey) -> decrypts."
+            ),
+            "attack_path": (
+                "ZK read at port 2181 (no auth, world:anyone:cdrwa). "
+                "Step 1: read node <zkAuthKey>/<zkEncryptionKey> -> Base64 SecretKey. "
+                "Step 2: read node <zkAuthKey>/<zkCredsKey> -> encrypted Hyper-V host creds. "
+                "Step 3: Base64.decode(key), construct SecretKeySpec, decrypt creds. "
+                "Result: plaintext Hyper-V hypervisor host credentials."
+            ),
+            "scope": (
+                "Affects Hyper-V deployments of HyperFlex (non-VMware). "
+                "Hyper-V host credentials are Windows local/domain admin credentials "
+                "for the hypervisor nodes in the HyperFlex cluster. "
+                "ESXi credential encryption path (EsxAuthZKMgmtImpl/ZKNodeService_StMgr) is separate; "
+                "its encryption key source is unconfirmed — see HX-F104 encryption caveat."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Do not store the symmetric encryption key in the same unauthenticated ZK as the ciphertext. "
+            "Use a key derivation path external to ZK (e.g., derived from a hardware secret, "
+            "sealed by a TPM, or stored in a separate secret store). "
+            "Enable ZK authentication (HX-F102/F103 remediation) as defense-in-depth. "
+            "Restrict ZK port 2181 to localhost only. "
+            "Rotate Hyper-V host credentials after any ZK exposure incident."
+        ),
+    },
 }
 
 
