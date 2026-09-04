@@ -12,6 +12,10 @@ TencentOS 4.6 in the TOS 4.x line:
   4.2 (2024): KASLR fixed at 6.6.70 (per tencent_kernel_cross_version.py)
   4.4 (Sep 2025): 6.6.110, KASLR enabled, openssh 9.3p2-15.tl4
   4.6 (Apr 2026): 6.6.119, KASLR enabled, openssh 9.3p2-15.tl4 (NO UPDATE FROM 4.4)
+  CVE-2025-26465 binary analysis: BuildID e01050f8b90fb107f41e0ec034dd691c055fd6b9
+    RHEL 9.5 fix: openssh-9.3p2-16.el9_5 (RHSA-2025:1677, Feb 2025)
+    TOS 4.6: -15.tl4 = BELOW RHEL fix counter; no forced-reject path found in SSHFP
+    matching code at 0x2ddc7-0x2de14 in stripped binary. Status: OPEN (UNCONFIRMED)
 
 systemd .ap series: systemd-255-20.tl4.ap.1 first seen in 4.6 — the Tencent self-patch
   series (.ap.N counter) previously confined to glibc, openssh, openssl on 3.x branches
