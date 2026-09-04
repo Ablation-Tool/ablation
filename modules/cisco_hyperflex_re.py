@@ -5822,6 +5822,64 @@ FINDINGS = {
             "Rotate Hyper-V host credentials after any ZK exposure incident."
         ),
     },
+    "HX-F107": {
+        "title": (
+            "LdapDriver.getAdUserPrincipal() Uses MessageFormat.format() Without LDAP Filter Escaping "
+            "to Construct sAMAccountName Search Filter — LDAP Injection via Login Username"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-90",
+        "component": (
+            "com.springpath.hx.aaa.gateway.adAuthenticator.LdapDriver / getAdUserPrincipal() "
+            "— Active Directory LDAP authentication gateway"
+        ),
+        "evidence": {
+            "injection_site": (
+                "getAdUserPrincipal() offset 37-53: "
+                "MessageFormat.format('(&(objectCategory=user)(sAMAccountName={0}))', "
+                "userContext.getUserAccountName()). "
+                "No LDAP filter escaping applied to the username before substitution. "
+                "LDAP metacharacters (*, (, ), \\, \\0) in the username are passed verbatim "
+                "into the filter string."
+            ),
+            "correct_api": (
+                "RFC 4515 requires special characters to be escaped before use in LDAP filters. "
+                "The correct approach is LdapConnection.encodeFilterValue(username) or "
+                "encodeForLDAP(username) before substitution. "
+                "MessageFormat.format() performs no LDAP escaping."
+            ),
+            "bind_vs_search_paths": (
+                "openLdapContext() at offset 64: LDAP bind uses getUserPrincipalName() (UPN form, user@domain). "
+                "getAdUserPrincipal() at offset 46: LDAP search uses getUserAccountName() (sAMAccountName form). "
+                "The bind and search inputs may derive from different parts of the username, "
+                "allowing a valid bind with crafted sAMAccountName for the search filter."
+            ),
+            "impact": (
+                "A domain user who authenticates successfully (LDAP bind with correct password) "
+                "can supply a crafted sAMAccountName portion that manipulates the search filter. "
+                "Filter injection can return a different user's directory object, "
+                "yielding that user's DN and group memberships to the HyperFlex authorization layer. "
+                "Example: sAMAccountName='*' -> filter '(&(objectCategory=user)(sAMAccountName=*)' "
+                "returns the first AD object in enumeration order rather than the authenticated user. "
+                "An attacker can obtain admin-group memberships of a HyperFlex admin user "
+                "while authenticating with their own (non-admin) AD password."
+            ),
+            "second_filter": (
+                "expandGroups() at constant pool #73: "
+                "filter '(&(objectCategory=group)(cn={0}))' also uses MessageFormat.format(). "
+                "Group CNs injected into this filter could enumerate arbitrary group objects."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Replace MessageFormat.format() with parameterized LDAP search using "
+            "SearchControls and a properly escaped filter. "
+            "Use OWASP ESAPI's Encoder.encodeForLDAP() or javax.naming attribute-level binding "
+            "instead of building filter strings with user input. "
+            "Apply the same fix to the group CN filter in expandGroups()."
+        ),
+    },
 }
 
 
