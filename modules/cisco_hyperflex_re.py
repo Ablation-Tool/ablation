@@ -5880,6 +5880,66 @@ FINDINGS = {
             "Apply the same fix to the group CN filter in expandGroups()."
         ),
     },
+    "HX-F108": {
+        "title": (
+            "ZKService_StNodeMgr Stores SSH Private Key in Plaintext in Unauthenticated ZooKeeper — "
+            "ZK Payload Entry 'ssh_plain_text_private_key' Readable by Any ZK Client on Port 2181"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-312",
+        "component": (
+            "com.storvisor.sysmgmt.stNodeMgr.ZKService_StNodeMgr (Scala interface) / "
+            "STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY / getNodeEntry_SSHPlainTextPrivateKey() "
+            "— StNodeMgr ZK key registry for inter-node SSH credentials"
+        ),
+        "evidence": {
+            "plaintext_key_constant": (
+                "ZKService_StNodeMgr.$init$() at offsets 17-19: "
+                "ldc 'ssh_plain_text_private_key' -> "
+                "_setter_$STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY_$eq(). "
+                "The ZK payload entry key for the plaintext SSH private key is 'ssh_plain_text_private_key'. "
+                "This is stored under the per-node ZK payload path (nodeId-scoped ZKNodeEntry). "
+                "Readable via ZK getData on the node's payload ZK path, "
+                "no authentication required (ZK ACL world:anyone:cdrwa — HX-F100)."
+            ),
+            "dual_representation": (
+                "ZKService_StNodeMgr exposes two parallel representations for SSH private keys: "
+                "1) 'ssh_encrypted_private_key' via getNodeEntry_SSHEncryptedPrivateKey() "
+                "2) 'ssh_plain_text_private_key' via getNodeEntry_SSHPlainTextPrivateKey(). "
+                "The plaintext variant is a design choice, not a fallback. "
+                "Both entries are registered in $init$ and are live ZK entries. "
+                "Analogous plaintext/encrypted pairs exist for the public key: "
+                "'ssh_plain_text_public_key' and 'ssh_encrypted_public_key'."
+            ),
+            "zk_acl_context": (
+                "ZooKeeper instance at port 2181 has world:anyone:cdrwa ACL by default (HX-F100). "
+                "No authentication is required to read any ZK node. "
+                "An attacker on the management network with TCP access to port 2181 can "
+                "enumerate all per-node ZK payload paths and extract the plaintext SSH private key "
+                "for any cluster node. "
+                "Typical ZK path pattern: <CLUSTER_ROOT>/nodes/<nodeId>/payload."
+            ),
+            "impact": (
+                "Plaintext SSH private key for HyperFlex cluster nodes readable from unauthenticated ZK. "
+                "These are the SSH keys used for inter-node management communication (stNodeMgr layer). "
+                "An attacker obtaining a node's SSH private key can authenticate as that node "
+                "to other cluster members, enabling lateral movement across all HyperFlex nodes "
+                "without cluster credentials. "
+                "Combined with ZK write access (world:anyone:cdrwa), attacker can also "
+                "overwrite SSH keys to inject attacker-controlled keys for persistent access."
+            ),
+        },
+        "versions_affected": ["6.0.2b-44423"],
+        "remediation": (
+            "Remove 'ssh_plain_text_private_key' ZK entries entirely. "
+            "If plaintext keys are required transiently, delete the ZK node immediately after consumption. "
+            "Only store SSH keys in the encrypted representation ('ssh_encrypted_private_key'). "
+            "Enable ZK authentication (HX-F102/F103 remediation) to require credentials for ZK reads. "
+            "Restrict ZK port 2181 to localhost-only or cluster-internal network segment. "
+            "Rotate all cluster SSH keys after any ZK exposure incident."
+        ),
+    },
 }
 
 
