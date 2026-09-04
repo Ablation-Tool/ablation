@@ -1330,6 +1330,73 @@ class WeChatREAnalyzer:
             ),
         })
 
+        findings.append({
+            "id": "WX-F20",
+            "title": (
+                "PSK Session Ticket Persisted to mmtls/%08llx File on Android Filesystem — "
+                "Session Resumption Material (0-RTT PSK) Exfiltrable Without Live Key Capture; "
+                "Alert Forge Path Confirmed via mmtls_crafter.py"
+            ),
+            "severity": "HIGH",
+            "detail": (
+                "mmtls_crafter.py (Drive: 1PDT1q0V5PB0UFalyp9OpYukpsZ85dVDb) consolidates\n"
+                "RE findings into a crafted-record test harness. Key new data points:\n"
+                "\n"
+                "1. PSK TICKET FILE PATH:\n"
+                "   mmtls/%08llx  (relative to WeChat data dir, keyed by UIN/account ID)\n"
+                "   On rooted device: /data/data/com.tencent.mm/mmtls/<uin_hex>\n"
+                "   Contains: HS_MODE_ZERO_RTT_PSK session ticket (MMTLS 0-RTT resumption)\n"
+                "   Implication: session resumption material survives app restart.\n"
+                "   Exfiltration does NOT require live capture or gILinkKey watchpoint —\n"
+                "   only filesystem read access to the WeChat data directory (root or backup).\n"
+                "   A replayed PSK ticket enables decryption of 0-RTT data in captured traffic.\n"
+                "\n"
+                "2. PROTOCOL CONSTANTS (confirmed from crafter docstring):\n"
+                "   Long-link: long.weixin.qq.com:80 (TCP)\n"
+                "   Short-link: short.weixin.qq.com:8080 (TCP)\n"
+                "   Nonce derivation: xorNonce(nonce[8:12], LE32(seq)) — see WX-F13\n"
+                "   trafficKeyPair: 56 bytes from HKDF, 7 labels — see WX-F12\n"
+                "   Cipher select: AES-GCM-256 (H1/international) or SM4-GCM (H2/CN) — WX-F9\n"
+                "   Server key dual-use: P-256 for both ECDH + ECDSA — WX-F14\n"
+                "\n"
+                "3. ALERT FORGE TEST PATH (from crafter):\n"
+                "   alert_record(level=2, type=0x74) → FALLBACK_NO_MMTLS trigger\n"
+                "   alert_record(level=2, type=0x73) → PSK_DELETE (forces PSK ticket eviction)\n"
+                "   mmtls_crafter sends these directly to Tencent longlink servers.\n"
+                "   PSK_DELETE (0x73) combined with ticket file capture: force ticket rotation\n"
+                "   and capture the fresh ticket for offline 0-RTT replay."
+            ),
+            "evidence": {
+                "crafter_file": "mmtls_crafter.py (Drive 1PDT1q0V5PB0UFalyp9OpYukpsZ85dVDb)",
+                "psk_path": "mmtls/%08llx relative to WeChat data dir (UIN-keyed hex filename)",
+                "psk_mode": "HS_MODE_ZERO_RTT_PSK (0-RTT session resumption)",
+                "alert_fallback_wire": "bytes([0x15]) + u24_BE(3) + bytes([0x02]) + u16_LE(0x74)",
+                "alert_psk_delete_wire": "bytes([0x15]) + u24_BE(3) + bytes([0x02]) + u16_LE(0x73)",
+                "longlink": "long.weixin.qq.com:80 (TCP plaintext outer, MMTLS inner)",
+                "shortlink": "short.weixin.qq.com:8080",
+            },
+            "frida_hook": (
+                "// WX-F20: capture PSK ticket write to mmtls/%08llx on handshake complete\n"
+                "// Hook fopen to detect ticket writes\n"
+                "const fopen = Module.findExportByName('libc.so', 'fopen');\n"
+                "Interceptor.attach(fopen, {\n"
+                "    onEnter(args) {\n"
+                "        const path = args[0].readUtf8String();\n"
+                "        if (path && path.includes('mmtls/')) {\n"
+                "            const mode = args[1].readUtf8String();\n"
+                "            console.log('[WX-F20] PSK ticket file: ' + path + ' mode=' + mode);\n"
+                "            this.psk_path = path;\n"
+                "        }\n"
+                "    },\n"
+                "    onLeave(retval) {\n"
+                "        if (this.psk_path && !retval.isNull()) {\n"
+                "            console.log('[WX-F20] ticket FILE* opened: ' + retval);\n"
+                "        }\n"
+                "    }\n"
+                "});"
+            ),
+        })
+
         self.findings.extend(findings)
         return findings
 
