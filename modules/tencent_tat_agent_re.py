@@ -40,7 +40,8 @@ Comparison baseline: tencent_stargate_re.py (Stargate/sgagent v1.5.0)
     (4) HTTP IMDS for COS credential fetch (TAT-F04)
     (5) ShellCommand::prepare_cmd highest cmd_inject semantic score (TAT-F05)
     (6) tssh ProxyNew SSRF — C2-directed TCP proxy to arbitrary IP:port (TAT-F06)
-    (7) tssh file API missing inspect_access on ListPath/FileExist/FileInfo (TAT-F07)
+    (7) tssh PluginComp::execute() missing setgroups — root supplementary groups retained (TAT-F08)
+    (8) tssh file API missing inspect_access on ListPath/FileExist/FileInfo (TAT-F07)
 """
 
 from typing import Optional
@@ -501,6 +502,96 @@ FINDINGS = {
         ),
     },
 
+    "TAT-F08": {
+        "title": (
+            "tssh PluginComp::execute() Missing setgroups() Before Privilege Drop — "
+            "Child Process Retains Root Supplementary Groups After setgid/setuid; "
+            "Same Bug Class as CHANGELOG 1.1.10 Fix for Main Executor; "
+            "Reintroduced in tssh Code Path (Added v1.2.0)"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-269",
+        "component": (
+            "src/tssh/pty/unix.rs — PluginComp::execute() — "
+            "libc::setgid() + libc::setuid() without libc::setgroups() in fork child"
+        ),
+        "evidence": {
+            "source_evidence": (
+                "tssh/pty/unix.rs PluginComp::execute() (the fork path):\n"
+                "  let pid = libc::fork();\n"
+                "  if pid == 0 {\n"
+                "      let _ = env::set_current_dir(cwd_path);\n"
+                "      libc::setgid(user.primary_group_id());  // ← gid drop\n"
+                "      libc::setuid(user.uid());                // ← uid drop\n"
+                "      // NO setgroups() call before setgid/setuid\n"
+                "      match f() { ... }   // ← closure runs with hybrid privilege\n"
+                "  }"
+            ),
+            "correct_implementation": (
+                "executor/unix.rs exec_as_user() (the FIXED main executor path):\n"
+                "  // Fix from CHANGELOG 1.1.10: setgroups before setgid/setuid\n"
+                "  if unsafe { libc::setgroups(groups.len(), groups.as_ptr()) } != 0 {\n"
+                "      return Err(io::Error::last_os_error());\n"
+                "  }\n"
+                "  if unsafe { libc::setgid(gid) } != 0 { return Err(...); }\n"
+                "  if unsafe { libc::setuid(uid) } != 0 { return Err(...); }\n"
+                "  if unsafe { libc::setpgid(0, 0) } != 0 { return Err(...); }"
+            ),
+            "posix_requirement": (
+                "POSIX: setgroups() must be called BEFORE setuid(). Once setuid() drops root,\n"
+                "the process no longer has CAP_SETGID and cannot call setgroups() to clear\n"
+                "supplementary groups. The tssh execute() path reverses this (setgid/setuid,\n"
+                "no setgroups) — the fork child's supplementary group list is inherited from\n"
+                "the root parent and cannot be changed after setuid()."
+            ),
+            "supplementary_group_impact": (
+                "TAT agent (root daemon) typically has supplementary groups including:\n"
+                "  - docker (access to /var/run/docker.sock → container breakout)\n"
+                "  - adm (read access to /var/log/*)\n"
+                "  - wheel (sudo access on some configurations)\n"
+                "  - disk (raw disk access)\n"
+                "  - Any custom groups assigned to the tat_agent service account\n"
+                "\n"
+                "A tssh ExecCmdReq or CreateFileReq session opened as 'www-data' or 'app_user'\n"
+                "runs the closure with uid=www-data, gid=www-data, supplementary=root-groups.\n"
+                "If root is in the docker group, the closure can access Docker socket despite\n"
+                "www-data having no docker group membership."
+            ),
+            "affected_operations": (
+                "Operations using PluginComp::execute() (missing setgroups):\n"
+                "  1. ExecCmdReq: StdCommand::new('bash').args(['-c', cmd]) — runs bash\n"
+                "     as target user but with root supplementary groups\n"
+                "  2. CreateFileReq: create_dir_all(parent) + create_dir/create_file(path)\n"
+                "     — creates files/dirs with root supplementary group membership\n"
+                "\n"
+                "Operations using execute_stream() (CORRECT — uses configure_command):\n"
+                "  - ExecCmdStreamReq: calls init_command + configure_command which includes\n"
+                "    pre_exec(exec_as_user()) with correct setgroups sequence"
+            ),
+            "changelog_context": (
+                "CHANGELOG 1.1.10: 'Fix setgroups when exec command and login'\n"
+                "This fix was applied to executor/unix.rs exec_as_user().\n"
+                "CHANGELOG 1.2.0: tssh module added (including PluginComp::execute()).\n"
+                "The tssh execute() implementation does not inherit the setgroups fix from\n"
+                "exec_as_user() — it uses a direct fork/setgid/setuid pattern instead,\n"
+                "reintroducing the same bug class 2 releases after it was fixed."
+            ),
+        },
+        "versions_affected": ["source >= 1.2.0 (tssh module introduction)"],
+        "fixed_in_source": "Not fixed in v1.2.2 (the bug is in the current source).",
+        "remediation": (
+            "In PluginComp::execute() fork child, add setgroups() before setgid/setuid:\n"
+            "  let groups: Vec<libc::gid_t> = user.groups().unwrap_or_default()\n"
+            "      .iter().map(|g| g.gid()).collect();\n"
+            "  libc::setgroups(groups.len(), groups.as_ptr());  // MUST be first\n"
+            "  libc::setgid(user.primary_group_id());\n"
+            "  libc::setuid(user.uid());\n"
+            "Refactor to reuse exec_as_user() from executor/unix.rs to avoid "
+            "future divergence between execution paths."
+        ),
+    },
+
     "TAT-F07": {
         "title": (
             "tssh File API Missing inspect_access() on ListPath, FileExist, FileInfo — "
@@ -630,7 +721,7 @@ def probe(binary_path: Optional[str] = None) -> dict:
         "load_va": hex(LOAD_VA),
         "findings": list(FINDINGS.keys()),
         "critical": [],
-        "high": ["TAT-F01", "TAT-F04", "TAT-F06"],
+        "high": ["TAT-F01", "TAT-F04", "TAT-F06", "TAT-F08"],
         "medium": ["TAT-F03", "TAT-F07"],
         "low": [],
         "informational": ["TAT-F02_chain_only", "TAT-F05"],
