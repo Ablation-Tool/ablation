@@ -340,6 +340,70 @@ FINDINGS = {
             "if so, restrict via CAP_SYS_PTRACE + seccomp policy rather than a world-writable device."
         ),
     },
+    "TCS-K05": {
+        "title": (
+            "shield_mounts /proc/tkernel/shield_mounts memcpy Heap Overflow — "
+            "dev_name Checked Against PATH_MAX (4096) but dest is SHIELD_PATH_MAX (1024); "
+            "Root Write to /proc Triggers 3KB Kernel Heap Overflow; "
+            "Source: kernel/tkernel/shield_mounts.c:133-137"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-122",
+        "component": (
+            "shield_mounts_parse() → memcpy(item->dev_name, token, strlen(token)+1); "
+            "shield_mounts.c:133: len check uses PATH_MAX-1=4095; dest is dev_name[1024]; "
+            "shield_mounts.c:141: memcpy(item->mnt_path, buf, strlen(buf)+1); no length check"
+        ),
+        "evidence": {
+            "overflow_site_1": (
+                "shield_mounts.c:133: if (!token || ... || strlen(token) > (PATH_MAX-1)) { goto error; } "
+                "PATH_MAX = 4096 → allows strlen(token) up to 4095. "
+                "shield_mounts.c:137: memcpy(item->dev_name, token, strlen(token)+1). "
+                "item->dev_name is char[SHIELD_PATH_MAX=1024]. "
+                "If strlen(token) is 1025–4095, memcpy writes up to 4096 bytes into 1024-byte buffer. "
+                "Overflow amount: up to 3072 bytes on the kernel heap."
+            ),
+            "overflow_site_2": (
+                "shield_mounts.c:141: buf = strim(buf); memcpy(item->mnt_path, buf, strlen(buf)+1). "
+                "item->mnt_path is char[SHIELD_PATH_MAX=1024]. "
+                "No length check exists for mnt_path at all — the only upstream check "
+                "was for dev_name. An attacker can supply a 4095-byte mount path and "
+                "overflow mnt_path by 3072 bytes."
+            ),
+            "off_by_one_extra": (
+                "shield_mounts.c:191: buffer[cnt] = 0. "
+                "buffer is alloc'd as __get_free_pages(GFP_KERNEL, order=1) = 8192 bytes. "
+                "Guard: cnt > PAGE_SIZE*(1<<order) = 8192. "
+                "cnt can be exactly 8192; buffer[8192] = 0 writes 1 byte past 8192-byte allocation. "
+                "Off-by-one NULL byte write on kernel heap — second exploitation primitive."
+            ),
+        },
+        "write_constraint": (
+            "/proc/tkernel/shield_mounts created with mode=0 (shield_mounts.c:239). "
+            "Root access or CAP_SYS_ADMIN required to write the proc file. "
+            "Exploitation path: root → kernel escalation (for setuid bypass, container escape, "
+            "or as an element in a broader privilege chain). "
+            "On TencentOS where KASLR is disabled (5.4.x kernels), heap metadata at known "
+            "offsets simplifies the overflow-to-code-exec chain."
+        ),
+        "chain": (
+            "TCS-K05 + TCS-K01 (KASLR disabled): "
+            "root writes 4095-byte dev_name → 3KB heap overflow in kmalloc-2048 slab → "
+            "overwrite adjacent object (function pointer, struct cred, security blob); "
+            "heap layout predictable from fixed kernel base; "
+            "combined with FORTIFY_SOURCE absent (TCS-K03 analog): no detection"
+        ),
+        "remediation": (
+            "Fix dev_name check: replace PATH_MAX-1 with SHIELD_PATH_MAX-1 (1023). "
+            "Add mnt_path length check before memcpy (line 141). "
+            "Fix off-by-one: use `buffer[cnt-1 < cnt ? cnt-1 : cnt-1] = 0` or "
+            "allocate cnt+1 bytes instead of PAGE_SIZE*(1<<order). "
+            "Simplest: replace memcpy with strlcpy(dest, src, SHIELD_PATH_MAX)."
+        ),
+        "source_file": "kernel/tkernel/shield_mounts.c",
+        "versions_affected": ["5.4.119-20 (OpenCloudOS)", "5.4.119-19 (TencentOS 2.4/3.1)", "5.4.241-24 (TencentOS 3.3)"],
+    },
 }
 
 
