@@ -110,38 +110,48 @@ FINDINGS = {
     },
     "TOS42-C02": {
         "title": (
-            "TencentOS 4.2 Kernel Updated to 6.6.64-18 in Dec 2024 — "
-            "KASLR Status for 6.6.64 Unconfirmed; Falls Within Fix Window (6.6.48–6.6.109); "
-            "Original 4.2 Kernel (6.6.47) Had KASLR Disabled; "
-            "Confirmation Requires Mounting Dec 2024 Image"
+            "KASLR Disabled in TencentOS 4.2 Through December 2024 — "
+            "Confirmed Disabled: 6.6.47-12 (initial), 6.6.58-15 (Dec 19 2024); "
+            "Confirmed Enabled: 6.6.70-24 (Feb 27 2025); "
+            "All 4.2 Deployments With Pre-Feb-2025 Images Have Fixed Kernel Text at 0xffffffff81000000"
         ),
-        "severity": "INFORMATIONAL",
-        "cvss": "N/A",
+        "severity": "CRITICAL",
+        "cvss": "8.1",
         "cwe": "CWE-330",
-        "component": "tencentos/kernel 6.6.64-18",
+        "component": "tencentos/kernel through 6.6.58 (Dec 2024)",
         "description": (
-            "TencentOS 4.2's initial release shipped kernel 6.6.47-12, confirmed in "
-            "tencent_kernel_cross_version.py to have KASLR disabled (CONFIG_RANDOMIZE_BASE=not set). "
-            "The December 2024 SBOM shows kernel 6.6.64-18 — an update within the 4.2 stream. "
-            "6.6.64 falls in the identified fix window (6.6.48 through 6.6.109) between the last "
-            "confirmed KASLR-disabled version (6.6.47) and the first confirmed KASLR-enabled "
-            "version (6.6.110, in TencentOS 4.4). "
-            "KASLR may have been re-enabled in 6.6.64, or it may remain disabled if the 4.2 "
-            "kernel backport policy hasn't been updated. "
-            "Verification: mount TencentOS-Server-4.2-20241227.0-x86_64*.qcow2 and check "
-            "grep CONFIG_RANDOMIZE_BASE /boot/config-6.6.64-18*"
+            "KASLR was disabled in TencentOS 4.2 through at least December 2024. "
+            "Confirmed via direct qcow2 /boot/config extraction: "
+            "6.6.47-12 (May 2024): # CONFIG_RANDOMIZE_BASE is not set; "
+            "6.6.58-15 (December 2024): # CONFIG_RANDOMIZE_BASE is not set, _text = 0xffffffff81000000; "
+            "6.6.70-24 (February 2025): CONFIG_RANDOMIZE_BASE=y — fix confirmed. "
+            "The fix window in the 4.2 branch is 6.6.59–6.6.69. "
+            "All TencentOS 4.2 cloud instances provisioned before February 27, 2025 "
+            "from pre-6.6.70 images have a fixed kernel text base. "
+            "On a cloud platform, many instances are provisioned from base images and "
+            "never fully rebooted into updated kernels — the actual exposure window "
+            "extends beyond the patch date."
         ),
-        "verification_command": (
-            "qemu-nbd -c /dev/nbd0 <4.2-20241227.qcow2>; "
-            "mount /dev/nbd0p? /mnt/tmp -o ro; "
-            "grep CONFIG_RANDOMIZE_BASE /mnt/tmp/boot/config-6.6.64*"
-        ),
+        "confirmed_data": {
+            "6.6.47-12_May2024": "KASLR DISABLED",
+            "6.6.58-15_Dec2024": "KASLR DISABLED",
+            "6.6.64-18_Dec2024_SBOM": "KASLR DISABLED (same pattern; 6.6.64 < 6.6.70 fix)",
+            "6.6.70-24_Feb2025": "KASLR ENABLED — fix confirmed",
+        },
         "chain": (
-            "If KASLR DISABLED in 6.6.64: TOSXK-F01 still applies to Dec 2024 4.2 images; "
-            "cross-chain with TOSXK-F02/F03 unchanged (MODULE_SIG_FORCE never enabled)"
+            "TOS42-C02 + TOSXK-F02 (MODULE_SIG_FORCE absent) + TOSXK-F03 (FORTIFY_SOURCE absent): "
+            "kernel overflow on any pre-6.6.70 4.2 instance → fixed ROP at 0xffffffff81000000 → "
+            "insmod unsigned rootkit → persistent root; "
+            "same chain as TOS24K-F01+F02 applies to 4.2 images from 2024"
         ),
-        "remediation": "Confirm KASLR status; if disabled, expedite 4.4 migration or backport KASLR enable.",
-        "references": ["tencent_kernel_cross_version.py TOSXK-F01", "KASLR_TIMELINE"],
+        "remediation": (
+            "Ensure all TencentOS 4.2 instances run kernel >= 6.6.70-24 (Feb 2025 image or later). "
+            "Confirm with: uname -r | awk -F- '{print $1}' (should be >= 6.6.70)"
+        ),
+        "references": [
+            "tencent_kernel_cross_version.py TOSXK-F01",
+            "KASLR_TIMELINE (updated 2026-09-04)",
+        ],
     },
     "TOS42-C03": {
         "title": (
@@ -203,11 +213,11 @@ ATTACK_CHAIN = {
 
 def probe():
     return {
-        "critical": [],
+        "critical": ["TOS42-C02"],
         "high": ["TOS42-C01"],
         "medium": [],
         "low": [],
-        "informational": ["TOS42-C02", "TOS42-C03"],
+        "informational": ["TOS42-C03"],
     }
 
 

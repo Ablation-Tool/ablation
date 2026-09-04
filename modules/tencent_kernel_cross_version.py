@@ -4,10 +4,18 @@ Versions analyzed: 2.4 / 3.3 / 4.2 / 4.4 / 4.6
 Kernels: 5.4.119-19 / 5.4.241-24 / 6.6.47-12 / 6.6.110-42.4 / 6.6.119-51
 Sources: qcow2 images extracted via qemu-nbd; config + System.map from each /boot
 
-Key finding: KASLR was an explicit Tencent policy decision, not an oversight.
-  - Disabled: TencentOS 2.4, 3.3, 4.2 (spanning 5.4.119 through 6.6.47)
-  - Re-enabled: TencentOS 4.4 (6.6.110) and 4.6 (6.6.119)
-  - Fix window: somewhere between 6.6.47 (4.2, disabled) and 6.6.110 (4.4, enabled)
+KASLR timeline — confirmed data points (all from qcow2 /boot/config-* extraction):
+  5.4.119-19 (TencentOS 2.4, May 2021):       DISABLED
+  5.4.241-24 (TencentOS 3.3, Jun 2024):        DISABLED
+  6.6.47-12  (TencentOS 4.2 initial, May 2024):DISABLED
+  6.6.58-15  (TencentOS 4.2, Dec 2024):        DISABLED  ← new data point 2026-09-04
+  6.6.70-24  (TencentOS 4.2, Feb 2025):        ENABLED   ← new data point 2026-09-04
+  6.6.110-42.4 (TencentOS 4.4):                ENABLED
+  6.6.119-51 (TencentOS 4.6):                  ENABLED
+
+  Fix point in 4.2 branch: between 6.6.58 and 6.6.70 (Dec 2024 → Feb 2025)
+  Fix point in 4.4 branch: 6.6.110 (separate patch stream; earlier versions not available)
+  Implication: all TencentOS 4.2 deployments with images before Feb 2025 have KASLR disabled.
 
 Persistent across ALL analyzed versions:
   FORTIFY_SOURCE:       never enabled
@@ -207,13 +215,27 @@ FINDINGS = {
 }
 
 KASLR_TIMELINE = {
-    "disabled_until": "TencentOS 4.2 / kernel 6.6.47",
-    "fix_window": "6.6.48 – 6.6.109 (62 patch versions)",
-    "first_enabled": "TencentOS 4.4 / kernel 6.6.110",
+    "4.2_branch": {
+        "disabled_confirmed": ["6.6.47-12 (May 2024)", "6.6.58-15 (Dec 2024)"],
+        "enabled_confirmed": ["6.6.70-24 (Feb 2025)"],
+        "fix_window": "6.6.59 – 6.6.69",
+        "deployment_impact": "All 4.2 images before Feb 2025 have KASLR disabled",
+    },
+    "4.4_branch": {
+        "disabled_confirmed": [],
+        "enabled_confirmed": ["6.6.110-42.4 (4.4 initial)"],
+        "note": "4.4 launched with KASLR enabled; no 4.4 images between 6.6.47 and 6.6.110",
+    },
+    "pre_6.6_kernels": {
+        "disabled_confirmed": ["5.4.119-19 (TencentOS 2.4)", "5.4.241-24 (TencentOS 3.3)"],
+        "enabled_confirmed": [],
+        "note": "KASLR never enabled on 5.4.x branch; all 2.4 and 3.3 deployments affected",
+    },
     "policy_classification": (
         "Deliberate omission: consistent across 5.4.x and early 6.6.x; "
         "not a build system accident; consistent with Tencent's public comments on "
-        "performance-vs-security tradeoffs in cloud kernel configurations"
+        "performance-vs-security tradeoffs in cloud kernel configurations; "
+        "both 4.2 and 4.4 branches corrected independently in different minor versions"
     ),
 }
 
