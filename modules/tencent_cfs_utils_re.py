@@ -1,11 +1,18 @@
 """
 cfs-utils (Tencent Cloud File System mount helper) — RE Module
-Source: cfs-utils-1.0.4-5.tl4.src.rpm
+Source: cfs-utils-1.0.4-5.tl4.src.rpm (primary analysis)
+        1.0.3-4.tl4 (TencentOS 4.4): CFS-F01 CONFIRMED — serialize_stunnel_config()
+        identical vulnerable pattern at same line numbers (confirmed 2026-09-04)
+        1.0.2-3.tl2 (TencentOS 2.4 TK4): CFS-F01 CONFIRMED — same pattern
+        1.0.1-2.tl2 / 1.0.0-1.tl2: earlier versions; same architecture assumed
 Binary: Python3 scripts; mount helper at /sbin/mount.cfs (mount_cfs/__init__.py, 1672 lines)
         watchdog at /usr/sbin/cfs-mount-watchdog (watchdog/__init__.py, 1084 lines)
 
 Mount mechanism: runs as root via Linux mount helper convention (suid mount.cfs or called by
 kernel mount(2) via /sbin/mount.<fstype>). TLS mode uses stunnel as a loopback TLS proxy.
+
+CFS-F01 affected versions: 1.0.0 through 1.0.4 (ALL known versions; unfixed as of 2026-09-04)
+CFS-F01 confirmed in: 1.0.4-5.tl4 (TencentOS 4.6), 1.0.3-4.tl4 (4.4), 1.0.2-3.tl2 (2.4 TK4)
 
 Findings: CFS-F01 through CFS-F05
 Attack chain: cert= newline injection → stunnel config → exec= directive → root RCE (F01)
@@ -57,6 +64,15 @@ FINDINGS = {
             "into the stunnel config file. os.path.abspath() + character whitelist is not "
             "sufficient; explicit newline rejection is required."
         ),
+        "affected_versions": [
+            "1.0.0-1.tl2 (TencentOS 2.4)",
+            "1.0.1-2.tl2 (TencentOS 2.4)",
+            "1.0.2-3.tl2 (TencentOS 2.4 TK4 — SBOM confirmed)",
+            "1.0.2-3.tl3 (TencentOS 3.1)",
+            "1.0.3-4.tl4 (TencentOS 4.4 — source confirmed 2026-09-04)",
+            "1.0.4-5.tl4 (TencentOS 4.6 — primary analysis source)",
+        ],
+        "fix_status": "UNFIXED as of 2026-09-04 — all known versions affected",
         "references": ["CWE-78", "CVE-2022-0492 (analogous K8s mount escape pattern)"],
     },
     "CFS-F02": {
