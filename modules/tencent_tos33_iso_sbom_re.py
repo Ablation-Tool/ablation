@@ -115,52 +115,52 @@ KERNEL_LINEAGE = {
 FINDINGS = {
     "TOS33-F01": {
         "title": (
-            "libssh 0.9.6-14 CVE-2023-48795 Terrapin Frozen Across All TOS 3.3 Builds; "
-            "Fix Available in libssh 0.9.8 (January 2024); TOS 3.3 Jun 2024 Launched "
-            "6 Months Post-Fix and Never Updated; Still 0.9.6-14 in Aug 2025 (20 Months Post-Fix)"
+            "CORRECTED: libssh 0.9.6-14 CVE-2023-48795 Terrapin Fix IS Backported by Tencent; "
+            "Binary Strings Confirm kex-strict Extension Present in TOS 3.3 Aug 2025 qcow2; "
+            "SBOM-Only Inference (0.9.6 < 0.9.8) Was Wrong — Release Counter -14 Includes Backport"
         ),
-        "severity": "MEDIUM",
-        "cvss": "5.9",
-        "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
-        "cwe": "CWE-354",
-        "component": "libssh-0.9.6-14 (all 6 TOS 3.3 builds, Jun 2024 through Aug 2025)",
+        "severity": "INFO",
+        "cvss": "0.0",
+        "status": "CORRECTED — prior MEDIUM finding was wrong",
+        "component": "libssh-0.9.6-14 (TOS 3.3 qcow2, Aug 2025)",
         "description": (
-            "CVE-2023-48795 (Terrapin attack) disclosed December 2023. "
-            "libssh 0.9.8 released January 2024 — backport of Terrapin fix for the 0.9.x branch. "
-            "libssh 0.9.6 does not contain this fix. "
+            "ORIGINAL FINDING (now corrected): TOS33-F01 previously asserted libssh 0.9.6-14 "
+            "was Terrapin-vulnerable because 0.9.6 < 0.9.8 (upstream fix version). "
             "\n"
-            "TOS 3.3 uses the 0.9.x branch of libssh (vs TOS 4.x which uses 0.10.x). "
-            "Across all 6 available TOS 3.3 builds: "
-            "  Jun 2024: 0.9.6-14 — 6 months post-fix, still unfixed "
-            "  Aug 2024: 0.9.6-14 — 7 months post-fix "
-            "  Dec 2024: 0.9.6-14 — 12 months post-fix "
-            "  Mar 2025: 0.9.6-14 — 15 months post-fix "
-            "  May 2025: 0.9.6-14 — 17 months post-fix "
-            "  Aug 2025: 0.9.6-14 — 20 months post-fix "
+            "CORRECTION via binary analysis of TOS 3.3 Aug 2025 qcow2 "
+            "(mounted at /dev/nbd1p2, libssh.so.4.8.7): "
+            "  strings libssh.so.4.8.7 | grep kex-strict: "
+            "    kex-strict-c-v00@openssh.com  <- CLIENT-SIDE strict-kex marker "
+            "    kex-strict-s-v00@openssh.com  <- SERVER-SIDE strict-kex marker "
+            "    Client supports strict kex, enabling. "
+            "    Server supports strict kex, enabling. "
             "\n"
-            "This mirrors the TOS 4.x libssh 0.10.5 freeze (TOS40-F01 / TOS46-C01) but on "
-            "the 0.9.x branch. Both branches exhibit the same pattern: Terrapin fix available "
-            "for the relevant branch, Tencent has not applied it across multiple major releases. "
+            "These are the exact strings introduced by the CVE-2023-48795 Terrapin fix. "
+            "Their presence confirms that Tencent backported the fix into 0.9.6-14 — "
+            "the release counter -14 accumulates CVE backports applied to the 0.9.6 base "
+            "rather than tracking upstream release versions. "
             "\n"
-            "Terrapin attack impact: MitM of SSH session → truncate handshake → "
-            "disable chacha20-poly1305 ETM or CBC-ETM negotiation → "
-            "keystroke-timing countermeasures off → inference of typed credentials."
+            "This is consistent with Tencent's pattern on both series: "
+            "  0.9.6-14 (TOS 3.3): Terrapin fix backported into 0.9.6 package "
+            "  0.10.5-6 (TOS 4.4/4.6): Terrapin fix backported into 0.10.5 package "
+            "  0.10.5-3 (TOS 4.0/4.2): Terrapin fix NOT present (see TOS40-F01 / TOS42-F01) "
+            "\n"
+            "The earlier analysis treated -14 as just a packaging counter. It is a security "
+            "patch counter: each increment represents CVE backports applied to the frozen "
+            "upstream version. Binary string verification is the correct method; SBOM "
+            "version comparison alone cannot distinguish patched from unpatched at this counter level."
         ),
-        "chain": (
-            "TOS33-F01: MitM on SSH session with libssh client (git-over-SSH, automation tools) → "
-            "Terrapin truncates handshake → security features downgraded → "
-            "keystroke timing side-channel enables credential inference"
+        "verification_method": (
+            "TOS 3.3 Aug 2025 qcow2 mounted via qemu-nbd /dev/nbd1; "
+            "strings /mnt/tos33/usr/lib64/libssh.so.4.8.7 | grep -E 'kex-strict'; "
+            "Result: 4 matching strings including both c-v00 and s-v00 extension markers."
         ),
-        "remediation": (
-            "Update libssh to 0.9.8+. "
-            "Alternatively upgrade the TOS 3.3 system to TOS 4.x which uses libssh 0.10.x "
-            "(though the 0.10.x Terrapin fix requires 0.10.6, and TOS 4.x ships 0.10.5 — "
-            "same unpatched state on a different branch). "
-            "Interim: cipher policy restricting chacha20-poly1305@openssh.com and *-etm variants."
-        ),
-        "references": ["CVE-2023-48795", "libssh 0.9.8 release notes",
-                       "TOS40-F01 (tencent_tos40_container_re.py)",
-                       "TOS46-C01 (tencent_tos46_components_re.py)"],
+        "references": [
+            "CVE-2023-48795",
+            "TOS46-SRPM-F01 (tencent_tos46_srpm_re.py) — 0.10.5 SRPM patch file confirmation",
+            "TOS40-F01 (tencent_tos40_container_re.py) — -3 remains open",
+            "TOS42-F01 (tencent_tos42_iso_sbom_re.py) — -3 remains open across 7 builds",
+        ],
     },
     "TOS33-F02": {
         "title": (
@@ -206,49 +206,58 @@ FINDINGS = {
     },
     "TOS33-F03": {
         "title": (
-            "openssh 8.0p1 Frozen Across All TOS 3.3 Builds (Jun 2024 - Aug 2025); "
-            "8.0p1 Dates from 2019; CVE-2023-38408 Agent Forwarding RCE Affects <8.9p1; "
-            "TOS 3.3 Remains Vulnerable to Agent Forwarding RCE Through Latest Available Build"
+            "CORRECTED: openssh 8.0p1-25 CVE-2023-38408 PKCS#11 Whitelist IS Backported; "
+            "ssh-agent Binary Confirms -P pkcs11_whitelist Flag and Refusal Logic Present; "
+            "Upstream Fix Mechanism from 8.9p1 Backported Into TOS 3.3 8.0p1-25"
         ),
-        "severity": "HIGH",
-        "cvss": "9.8",
-        "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-        "cwe": "CWE-20",
-        "component": "openssh-8.0p1-24 (Jun 2024); openssh-8.0p1-25 (Aug 2024 - Aug 2025)",
+        "severity": "INFO",
+        "cvss": "0.0",
+        "status": "CORRECTED — prior HIGH/9.8 finding was wrong",
+        "component": "openssh-8.0p1-25 (TOS 3.3 Aug 2025 qcow2)",
         "description": (
-            "OpenSSH 8.0p1 was released April 2019. "
-            "TOS 3.3 ships 8.0p1 across all 6 builds spanning Jun 2024 to Aug 2025 — "
-            "the upstream version is frozen at 5-year-old code. "
+            "ORIGINAL FINDING (now corrected): TOS33-F03 previously asserted TOS 3.3 openssh "
+            "8.0p1-25 was vulnerable to CVE-2023-38408 (agent forwarding PKCS#11 RCE) because "
+            "8.0p1 < 8.9p1 (upstream fix version). "
             "\n"
-            "CVE-2023-38408 (Qualys, July 2023): "
-            "Remote code execution in ssh-agent via untrusted PKCS#11 provider loading. "
-            "Attack requirements: victim connects to attacker-controlled SSH server with "
-            "ForwardAgent=yes enabled. "
-            "Exploitability: CVSS 9.8 (critical). "
-            "Fix: openssh 8.9p1 (February 2022). TOS 3.3 at 8.0p1 is below the fix boundary. "
+            "CORRECTION via binary analysis of TOS 3.3 Aug 2025 qcow2 "
+            "(mounted at /dev/nbd1p2, ssh-agent binary): "
+            "  strings /usr/bin/ssh-agent | grep -E 'pkcs11|whitelist|refusing': "
+            "    [-P pkcs11_whitelist]          <- CLI flag present "
+            "    failing PKCS#11 provider ... realpath: %s "
+            "    refusing PKCS#11 provider %.100s: not whitelisted  <- enforcement present "
+            "    Allow use of key %s? "
             "\n"
-            "The release counter advanced from -24 to -25 between Jun and Aug 2024. "
-            "The Qualys advisory includes a working PoC; the CVE is actively exploited. "
+            "The -P pkcs11_whitelist flag is the specific mechanism OpenSSH 8.9p1 introduced "
+            "to fix CVE-2023-38408: restrict PKCS#11 library loading to an allowlist. "
+            "The refusal string 'not whitelisted' confirms the enforcement path is active "
+            "in the TOS 3.3 build. Tencent backported this fix into 8.0p1-25. "
             "\n"
-            "CONTRAST with TOS 4.x: TOS 4.x ships openssh 9.3p2 which is above the fix "
-            "boundary for CVE-2023-38408 but potentially affected by CVE-2025-26465 "
-            "(see TOS46-C02 in tencent_tos46_components_re.py)."
+            "Additionally, Terrapin fix strings confirmed in TOS 3.3 sshd: "
+            "  kex-strict-s-v00@openssh.com present in /usr/sbin/sshd "
+            "\n"
+            "Pattern: like libssh, Tencent backports CVE fixes into frozen upstream versions "
+            "rather than upgrading to the upstream fix release. The -25 counter accumulates "
+            "security patches applied to the 8.0p1 base. Binary analysis is required to "
+            "determine actual patch status; version-number comparison alone is insufficient."
         ),
-        "chain": (
-            "TOS33-F03: Developer on TOS 3.3 uses ssh -A (agent forwarding) to production server → "
-            "connects through or to an attacker-controlled intermediate → "
-            "CVE-2023-38408 PKCS#11 load via agent protocol → "
-            "arbitrary code execution in ssh-agent on developer machine → "
-            "all private keys stored in agent accessible to attacker → "
-            "lateral movement to all servers accessible with forwarded agent credentials"
+        "verification_method": (
+            "TOS 3.3 Aug 2025 qcow2 mounted via qemu-nbd /dev/nbd1; "
+            "strings /mnt/tos33/usr/bin/ssh-agent | grep -iE 'pkcs11|whitelist|refusing'; "
+            "strings /mnt/tos33/usr/sbin/sshd | grep kex-strict; "
+            "Both return positive results confirming backported fixes."
         ),
-        "remediation": (
-            "Upgrade to TOS 4.x (openssh 9.3p2, above CVE-2023-38408 fix boundary). "
-            "Interim: disable agent forwarding (ForwardAgent=no in ~/.ssh/config). "
-            "On existing TOS 3.3 systems, TOS cannot backport the fix to 8.0p1 — "
-            "the bug was fixed upstream in 8.9p1, requiring a 9-minor-version jump."
+        "remaining_concern": (
+            "OpenSSH 8.0p1 base is still a 2019-era codebase. While CVE-2023-38408 appears "
+            "patched, the full set of CVEs between 8.0p1 and 8.9p1 has not been verified "
+            "by binary inspection. There may be additional backports or gaps. "
+            "Comprehensive assessment requires enumerating all openssh CVEs in the 8.0-8.9 "
+            "range and checking each via binary string or behavioral probe."
         ),
-        "references": ["CVE-2023-38408", "Qualys advisory QVA-2023-001", "openssh 8.9p1 release notes"],
+        "references": [
+            "CVE-2023-38408",
+            "openssh 8.9p1 release notes (PKCS#11 allowlist introduced)",
+            "TOS33-F01 CORRECTION (same backport pattern in libssh)",
+        ],
     },
     "TOS33-F04": {
         "title": (
@@ -300,9 +309,9 @@ if __name__ == "__main__":
     print(json.dumps({
         "source": "SPDX ISO SBOMs, TOS 3.3 TK4 x86_64 minimal (6 builds, Jun 2024 - Aug 2025)",
         "method": "pkg:rpm purl extraction from packages[] array",
-        "libssh_freeze": "0.9.6-14 across all 6 builds (20 months post-Terrapin fix)",
+        "libssh_status": "0.9.6-14 — Terrapin fix CONFIRMED BACKPORTED via binary string analysis (kex-strict strings present)",
         "openssl_eol": "1.1.1k, EOL Sep 2023 — still shipped Aug 2025 (24 months post-EOL)",
-        "openssh_freeze": "8.0p1 (2019-era, CVE-2023-38408 vulnerable)",
+        "openssh_status": "8.0p1-25 — CVE-2023-38408 PKCS#11 whitelist CONFIRMED BACKPORTED via binary string analysis",
         "kernel_progression": "5.4.119-19 (launch) -> 5.4.241-24 (Dec 2024 upgrade)",
         "findings": [{"id": k, "severity": v["severity"]} for k, v in FINDINGS.items()],
     }, indent=2))
