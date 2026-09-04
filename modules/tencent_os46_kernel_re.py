@@ -1,22 +1,31 @@
 """
-TencentOS Server 4.6 Kernel 6.6.119-51.3.tl4 — RE Module
-Source: qcow2 TencentOS-Server-GenericCloud-4.6-20260720.1.x86_64.qcow2
-Kernel: 6.6.119-51.3.tl4.x86_64 (built 2026-07-14 17:09:05 CST)
-Builder: mockbuild@VM-81-29-TS3
-Extracted: /boot/vmlinuz → vmlinux ELF (61,860,508 bytes, stripped)
-Config:    /boot/config-6.6.119-51.3.tl4.x86_64 (230KB)
-System.map confirmed: 0xffffffff81644e20 shellguard_bprm_check
+TencentOS Server 4.x Kernel Security Analysis — RE Module
+Primary source:  qcow2 TencentOS-Server-GenericCloud-4.6-20260720.1.x86_64.qcow2
+  Kernel: 6.6.119-51.3.tl4.x86_64 (built 2026-07-14 17:09:05 CST)
+  Builder: mockbuild@VM-81-29-TS3
+  Extracted: /boot/vmlinuz → vmlinux ELF (61,860,508 bytes, stripped)
+  Config: /boot/config-6.6.119-51.3.tl4.x86_64 (230KB)
+  System.map confirmed: 0xffffffff81644e20 shellguard_bprm_check
+
+Cross-version confirmation: TencentOS-Server-GenericCloud-4.2-20250227.0.x86_64.qcow2
+  Kernel: 6.6.70-24.tl4 (Feb 2025 GenericCloud image, nbd mount, Feb 2025)
+  Key packages: openssl-3.0.12-16.tl4, openssh-9.3p2-15.tl4 (CVE-2024-6387 patched),
+                glibc-2.38-29.tl4, polkit-123-2.tl4, sudo-1.9.15p5-1.tl4
+  Notable: shellguard LSM absent in 4.2 — introduced between 6.6.70 and 6.6.119
+           tat-agent and stargate NOT in base GenericCloud image (provisioned at CVM deploy time)
+           TCS4-K03/K04/K05/K07/K08 all confirmed in 4.2
 
 Comparison baseline: tencent_opencloudos_kernel_re.py (kernel 5.4.119-20)
   5.4.119: KASLR disabled, IMA disabled, BPF_KPROBE_OVERRIDE enabled
-  6.6.119: KASLR enabled (fixed), IMA enabled (partial), BPF_KPROBE_OVERRIDE still present,
-           + new custom LSM 'shellguard' (binary integrity monitor, runtime-disableable)
+  6.6.x:   KASLR enabled (fixed), IMA enabled (partial), BPF_KPROBE_OVERRIDE still present,
+           shellguard custom LSM added in 4.6 (absent in 4.2)
 
 Method:
-  - Static config grep (230KB kernel.config)
+  - Static config grep (230KB kernel.config, both versions)
   - vmlinux extraction from bzImage (gzip at offset 0x42d1)
   - Capstone disassembly of shellguard functions via System.map VAs
   - pyelftools segment map for VA→file_offset translation
+  - RPM sqlite blob parsing for package version extraction (4.2 qcow2)
 """
 
 from typing import Optional
@@ -54,8 +63,51 @@ BASELINE_DELTA = {
         "TCS4-K05: FORTIFY_SOURCE disabled — compile-time buffer overflow protection absent",
         "TCS4-K06: SECURITY_LOCKDOWN_LSM absent — no kernel lockdown mode",
         "TCS4-K07: HARDENED_USERCOPY + SLAB_FREELIST_RANDOM/HARDENED all disabled — "
-                  "heap exploit mitigations absent; confirmed in 6.6.80-29 config",
+                  "heap exploit mitigations absent; confirmed in 6.6.70-24 (4.2) + 6.6.80-29 (4.6)",
+        "TCS4-K08: KALLSYMS_ALL=y + DMESG_RESTRICT not set — all kernel symbols exported; "
+                  "dmesg world-readable; KASLR weakened; confirmed in 4.2+4.6",
     ],
+}
+
+# ─── TencentOS 4.2 Comparison (kernel 6.6.70-24.tl4) ─────────────────────────
+
+TCS42_KERNEL_DELTA = {
+    "source": (
+        "TencentOS-Server-GenericCloud-4.2-20250227.0.x86_64.qcow2 (Feb 2025). "
+        "Kernel: 6.6.70-24.tl4. RPM database: sqlite3 via nbd mount."
+    ),
+    "key_packages": {
+        "openssl":       "3.0.12-16.tl4",
+        "openssh":       "9.3p2-15.tl4 (CVE-2024-6387 regreSSHion backported, confirmed in RPM blob)",
+        "curl":          "8.4.0-10.tl4",
+        "glibc":         "2.38-29.tl4",
+        "polkit":        "123-2.tl4",
+        "sudo":          "1.9.15p5-1.tl4",
+        "systemd":       "255-13.tl4.ap.1",
+        "kernel":        "6.6.70-24.tl4",
+        "pam":           "1.5.3-9.tl4",
+    },
+    "vs_4_6": {
+        "shellguard_absent": (
+            "shellguard LSM NOT present in 6.6.70-24.tl4 config. "
+            "shellguard was introduced between 6.6.70 and 6.6.119. "
+            "TCS4-K01 (shellguard disable bypass) and TCS4-K06 (shellguard audit mode) "
+            "do NOT apply to 4.2. "
+            "4.2 has NO binary integrity monitoring at the kernel level."
+        ),
+        "shared_gaps": [
+            "TCS4-K03: BPF_KPROBE_OVERRIDE=y, BPF_UNPRIV_DEFAULT_OFF not set",
+            "TCS4-K04: MODULE_SIG_FORCE not set, KEXEC_SIG not set, LOCKDOWN_LSM not set",
+            "TCS4-K05: FORTIFY_SOURCE not set, IO_STRICT_DEVMEM not set",
+            "TCS4-K07: SLAB_FREELIST_RANDOM/HARDENED + HARDENED_USERCOPY all disabled",
+            "TCS4-K08: KALLSYMS_ALL=y + DMESG_RESTRICT not set",
+        ],
+        "tat_agent_absent": (
+            "tat-agent and stargate NOT installed in GenericCloud base image. "
+            "407 packages total — minimal cloud image. "
+            "tat-agent/stargate provisioned at CVM deployment time by Tencent cloud-init."
+        ),
+    },
 }
 
 # ─── shellguard LSM — Function Map ────────────────────────────────────────────
@@ -225,7 +277,7 @@ FINDINGS = {
                 "there is no kernel-enforced binary integrity check."
             ),
         },
-        "versions_affected": ["6.6.119-51.3.tl4"],
+        "versions_affected": ["6.6.70-24.tl4 (4.2)", "6.6.119-51.3.tl4 (4.6)"],
         "remediation": (
             "Enable CONFIG_IMA_APPRAISE=y for signature enforcement. "
             "Change CONFIG_IMA_DEFAULT_HASH='sha256' to avoid SHA1 collision risk. "
@@ -282,7 +334,7 @@ FINDINGS = {
                 "Without lockdown, even a BPF JIT spraying attack is unrestricted."
             ),
         },
-        "versions_affected": ["6.6.119-51.3.tl4"],
+        "versions_affected": ["6.6.70-24.tl4 (4.2)", "6.6.119-51.3.tl4 (4.6)"],
         "remediation": (
             "Same as TCS-K03: remove CONFIG_BPF_KPROBE_OVERRIDE from production build. "
             "Set sysctl kernel.unprivileged_bpf_disabled=2 at boot (permanent disable). "
@@ -343,7 +395,7 @@ FINDINGS = {
                 "Full persistence achieved; survives standard forensic investigation."
             ),
         },
-        "versions_affected": ["6.6.119-51.3.tl4"],
+        "versions_affected": ["6.6.70-24.tl4 (4.2)", "6.6.119-51.3.tl4 (4.6)"],
         "remediation": (
             "Enable CONFIG_KEXEC_SIG=y — requires kernel to verify kexec'd kernel signature. "
             "Enable CONFIG_MODULE_SIG_FORCE=y — reject unsigned modules at load time. "
@@ -396,7 +448,7 @@ FINDINGS = {
                 "beyond the first 1MB (STRICT_DEVMEM restricts RAM only, not I/O regions)."
             ),
         },
-        "versions_affected": ["6.6.119-51.3.tl4"],
+        "versions_affected": ["6.6.70-24.tl4 (4.2)", "6.6.119-51.3.tl4 (4.6)"],
         "remediation": (
             "Enable CONFIG_FORTIFY_SOURCE=y — restores upstream default. "
             "Enable CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y and CONFIG_INIT_ON_FREE_DEFAULT_ON=y "
@@ -479,13 +531,15 @@ FINDINGS = {
             ),
             "cross_kernel_version": (
                 "Config confirmed in 6.6.80-29.tl4 (from kernel-core SRPM). "
-                "6.6.119-51.3.tl4 config (qcow2 source) was analyzed separately and "
-                "does not list HARDENED_USERCOPY, SLAB_FREELIST_RANDOM, or SLAB_FREELIST_HARDENED "
-                "in CONFIG_SECURITY_POSTURE — consistent with them being disabled in that version too. "
-                "Pattern: TencentOS 4.x appears to globally disable all three across kernel versions."
+                "6.6.119-51.3.tl4 config (qcow2 source) analyzed separately — consistent. "
+                "6.6.70-24.tl4 (TencentOS 4.2 Feb 2025 GenericCloud qcow2) confirmed:\n"
+                "  # CONFIG_SLAB_FREELIST_RANDOM is not set\n"
+                "  # CONFIG_SLAB_FREELIST_HARDENED is not set\n"
+                "  # CONFIG_HARDENED_USERCOPY is not set\n"
+                "Pattern: TencentOS 4.x globally disables all three across all confirmed kernel versions."
             ),
         },
-        "versions_affected": ["6.6.80-29.tl4", "6.6.119-51.3.tl4 (inferred)"],
+        "versions_affected": ["6.6.70-24.tl4 (4.2)", "6.6.80-29.tl4 (4.6 SRPM)", "6.6.119-51.3.tl4 (4.6 qcow2)"],
         "remediation": (
             "Enable CONFIG_HARDENED_USERCOPY=y — restores slab boundary enforcement on "
             "kernel↔user copy operations. ~1% overhead on high-throughput network/IO paths.\n"
@@ -495,6 +549,77 @@ FINDINGS = {
             "Minimal overhead (~0.1%) on kmalloc-heavy paths.\n"
             "All three have upstream defaults of enabled in Linux 5.x+. "
             "Re-enabling requires a kernel rebuild; no userspace-visible behavior change."
+        ),
+    },
+
+    "TCS4-K08": {
+        "title": (
+            "CONFIG_KALLSYMS_ALL=y and CONFIG_SECURITY_DMESG_RESTRICT Not Set — "
+            "All Kernel Symbols Exported and dmesg World-Readable; "
+            "Weakens KASLR and Leaks Runtime Kernel Addresses to Unprivileged Users; "
+            "Confirmed in 6.6.70-24 (4.2), 6.6.80-29 (4.6 SRPM), 6.6.119-51 (4.6 qcow2)"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.5",
+        "cwe": "CWE-200",
+        "component": (
+            "CONFIG_KALLSYMS_ALL=y, "
+            "# CONFIG_SECURITY_DMESG_RESTRICT is not set"
+        ),
+        "evidence": {
+            "config_lines": (
+                "Confirmed in all three TencentOS 4.x kernel configs analyzed:\n"
+                "  6.6.70-24.tl4 (4.2 Feb 2025 GenericCloud qcow2):\n"
+                "    CONFIG_KALLSYMS_ALL=y\n"
+                "    # CONFIG_SECURITY_DMESG_RESTRICT is not set\n"
+                "  6.6.80-29.tl4 (4.6 kernel-core SRPM):\n"
+                "    CONFIG_KALLSYMS_ALL=y\n"
+                "    # CONFIG_SECURITY_DMESG_RESTRICT is not set\n"
+                "  6.6.119-51.3.tl4 (4.6 qcow2): same"
+            ),
+            "kallsyms_all": (
+                "CONFIG_KALLSYMS_ALL=y exports ALL kernel symbols to /proc/kallsyms — "
+                "including unexported symbols not normally visible (data objects, "
+                "internal function pointers, per-cpu variables). "
+                "Without KALLSYMS_ALL, only exported symbols are enumerable. "
+                "With KALLSYMS_ALL + root access: full kernel symbol map post-ASLR aslr offset is "
+                "readable from /proc/kallsyms (root sees real addresses). "
+                "Useful for ROP gadget construction after initial kernel access is established. "
+                "Non-root sees zeroed addresses in modern kernels (since 4.4)."
+            ),
+            "dmesg_restrict": (
+                "# CONFIG_SECURITY_DMESG_RESTRICT is not set → "
+                "dmesg is readable by ANY unprivileged user without CAP_SYS_ADMIN. "
+                "Kernel log messages frequently contain:\n"
+                "  - Pointer-formatted addresses via %px (explicit real-address print format)\n"
+                "  - Stack traces on WARN_ON/BUG that include kernel function addresses\n"
+                "  - Driver debug output with kmalloc'd object addresses\n"
+                "  - Crash/oops output with register values and instruction pointers\n"
+                "Modern kernel %p hashes pointer output for non-root (since 4.15 perf hardening), "
+                "but %px, slab debug output, and many drivers still use unhardened formats. "
+                "dmesg visible to all users = kernel address oracle for any code path that logs."
+            ),
+            "combined_kaslr_impact": (
+                "KASLR is enabled in TencentOS 4.x (TCS-K01 fixed). "
+                "These two configs reduce KASLR effectiveness:\n"
+                "  1. dmesg world-readable → any kernel log with %px leaks aslr offset to user\n"
+                "  2. KALLSYMS_ALL → root post-compromise can enumerate full symbol space "
+                "     including unexported kernel internals for ROP chain construction\n"
+                "Combined: aslr offset leak via dmesg → full kernel symbol resolution via /proc/kallsyms "
+                "(KALLSYMS_ALL provides unexported gadget addresses) → reliable kernel exploitation "
+                "from any %px log-containing code path reachable as a non-root user."
+            ),
+        },
+        "versions_affected": ["6.6.70-24.tl4 (4.2)", "6.6.80-29.tl4 (4.6 SRPM)", "6.6.119-51.3.tl4 (4.6 qcow2)"],
+        "remediation": (
+            "Set CONFIG_SECURITY_DMESG_RESTRICT=y — restricts dmesg to CAP_SYS_ADMIN. "
+            "This is a build-time change; no runtime alternative. "
+            "Runtime partial mitigation: "
+            "  sysctl kernel.dmesg_restrict=1 (but this can be reversed by root). "
+            "Disable KALLSYMS_ALL by setting CONFIG_KALLSYMS_ALL=n — "
+            "reduces non-exported symbol enumeration. "
+            "Both changes require kernel rebuild. "
+            "Runtime mitigation for dmesg only: sysctl kernel.dmesg_restrict=1 in sysctl.d."
         ),
     },
 
@@ -599,6 +724,8 @@ CONFIG_SECURITY_POSTURE = {
     "HARDENED_USERCOPY":                ("DISABLED", "TCS4-K07", "Slab boundary enforcement absent"),
     "SLAB_FREELIST_RANDOM":             ("DISABLED", "TCS4-K07", "Sequential freelist, grooming trivial"),
     "SLAB_FREELIST_HARDENED":           ("DISABLED", "TCS4-K07", "Freelist ptrs unencrypted"),
+    "KALLSYMS_ALL":                     ("ENABLED",  "TCS4-K08", "All unexported symbols enumerable; aids post-compromise ROP"),
+    "SECURITY_DMESG_RESTRICT":          ("DISABLED", "TCS4-K08", "dmesg world-readable; kernel addr leak to unprivileged users"),
 }
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
@@ -627,6 +754,9 @@ def probe_kernel_config(config_path: str) -> dict:
         # TCS4-K06: shellguard present (block mode concern)
         if "shellguard" in cfg.lower():
             findings_triggered.append("TCS4-K06")
+        # TCS4-K08: KALLSYMS_ALL + DMESG_RESTRICT not set
+        if "CONFIG_KALLSYMS_ALL=y" in cfg and "# CONFIG_SECURITY_DMESG_RESTRICT is not set" in cfg:
+            findings_triggered.append("TCS4-K08")
         # Check for improvements vs baseline
         improvements = []
         if "CONFIG_RANDOMIZE_BASE=y" in cfg:
@@ -649,7 +779,7 @@ def probe(binary_path: Optional[str] = None) -> dict:
         "findings": list(FINDINGS.keys()),
         "critical": [],
         "high": ["TCS4-K01", "TCS4-K03", "TCS4-K04"],
-        "medium": ["TCS4-K02", "TCS4-K05", "TCS4-K06", "TCS4-K07"],
+        "medium": ["TCS4-K02", "TCS4-K05", "TCS4-K06", "TCS4-K07", "TCS4-K08"],
         "low": [],
         "improvements_vs_5_4_119": BASELINE_DELTA["fixed"],
         "chain": (
