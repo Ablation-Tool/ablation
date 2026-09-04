@@ -3,7 +3,8 @@ TencentOS Server 4.6 libcrypto.so.3 SM Cipher Suite Binary RE Module
 Binary: libcrypto.so.3 (from TOS 4.6 qcow2 /usr/lib64/libcrypto.so.3)
         openssl-3.0.12-27.tl4 build (4.4MB binary, full OpenSSL provider framework)
 Source: /dev/nbd10 mount of TOS 4.6 qcow2
-Method: ELF dynsym + string scan + OID registry analysis
+Method: ELF dynsym + string scan + OID registry analysis + capstone disassembly
+        + EVP_CIPHER struct function pointer extraction
 Analysis date: 2026-09-04
 
 Chinese national cryptographic algorithms in libcrypto.so.3:
@@ -226,4 +227,91 @@ LIBCRYPTO_TOS46_METADATA = {
     "provider_source_refs": {
         0x330541: "providers/implementations/ciphers/sm4_gcm.c",
     },
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SM4 IMPLEMENTATION BINARY DETAILS (confirmed via disassembly + data analysis)
+# ──────────────────────────────────────────────────────────────────────────────
+
+SM4_IMPLEMENTATION_BINARY = {
+    "sbox": {
+        "file_offset": 0x361780,
+        "size": 256,
+        "first_16_bytes": "d690e9fecce13db716b614c228fb2c05",
+        "standard_match": True,
+        "note": "Exact match with OSCCA SM4 standard S-box (GB/T 32907-2016, Annex A)",
+    },
+    "fk_constants": {
+        "file_offset_start": 0x3342d0,
+        "constants": [0xA3B1BAC6, 0x56AA3350, 0x677D9197, 0xB27022DC],
+        "note": "SM4 family key constants (FK[0]-FK[3]) used in key schedule MK XOR step",
+        "file_offsets": {
+            "FK0": 0x3342d0,
+            "FK1": 0x3342d4,
+            "FK2": 0x3342d8,
+            "FK3": 0x3342dc,
+        },
+    },
+    "evp_sm4_cbc_struct": {
+        "file_offset": 0x3f43e0,
+        "function_pointers": {
+            "init_fn":       {"offset_in_struct": 0x20, "va": 0x18a8c0},
+            "do_cipher_fn":  {"offset_in_struct": 0x28, "va": 0x18a720},
+            "cleanup_fn":    {"offset_in_struct": 0x30, "va": 0x0},       # NULL
+            "ctrl_fn":       {"offset_in_struct": 0x50, "va": 0x188280},
+        },
+        "ctx_size": 0x104,  # 260 bytes per cipher context
+    },
+    "sm4_cbc_init_fn": {
+        "va": 0x18a8c0,
+        "description": "SM4-CBC key initialization — loads key, calls key schedule",
+        "calls": {
+            0x187ec0: "EVP_CIPHER_CTX_get_cipher_data() — get cipher-specific ctx",
+            0x196ad0: "sm4_set_key_enc() — SM4 key expansion entry point",
+            0x1e90d0: "sm4_set_key_inner() — bit-level key schedule",
+        },
+        "returns": 1,  # always success
+        "key_disassembly": [
+            "endbr64",
+            "push r13; push r12; push rbp; push rbx",
+            "call 0x187ec0   ; get cipher data ptr",
+            "mov r13d, [rax] ; save something from cipher data",
+            "call 0x196ad0   ; sm4_set_key_enc",
+            "call 0x187ec0   ; get cipher data ptr again",
+            "lea rdi, [rax+4]; point to key buffer at ctx+4",
+            "call 0x1e90d0   ; expand key schedule",
+            "mov eax, 1; ret",
+        ],
+    },
+    "sm4_cbc_do_cipher_fn": {
+        "va": 0x18a720,
+        "description": "SM4-CBC encrypt/decrypt — processes input blocks",
+        "length_check": {
+            "instruction": "cmp rcx, 0x3fffffff",
+            "limit": 0x3fffffff,
+            "note": "Input length bounded at ~1GB per call (prevents integer overflow in loop)",
+        },
+        "iv_access_offset": 0x28,  # lea r14, [rdi + 0x28] — IV in cipher context
+        "calls": {
+            0x187e80: "EVP_CIPHER_CTX_get_flags()",
+            0x187ec0: "EVP_CIPHER_CTX_get_cipher_data()",
+        },
+    },
+    "sm4_set_key_fn": {
+        "va": 0x196ad0,
+        "description": "SM4 key setup — zero-fills local state, loads SBOX/FK ptr, calls SM4_set_key",
+        "note": "Uses XMM registers (pxor/movaps) for efficient zero-fill of 160-byte key context",
+        "sbox_ptr_load": "lea rsi, [rip + 0x18517c]  ; -> SBOX/CK table ptr",
+        "calls": {
+            0x1bf2c0: "SM4_set_key() — actual round key computation",
+        },
+    },
+    "security_notes": [
+        "Standard SM4 S-box confirmed — no backdoored S-box substitution",
+        "Standard FK constants confirmed — key schedule matches spec",
+        "SM4-CBC IV stored at EVP cipher context +0x28",
+        "No constant-time guarantees: table lookups with secret-dependent indices (S-box) "
+        "are vulnerable to cache-timing side-channel attacks (Flush+Reload, Prime+Probe)",
+        "1GB per-call length limit in do_cipher prevents overflow but not DoS via very long inputs",
+    ],
 }
