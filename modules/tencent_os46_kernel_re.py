@@ -53,6 +53,8 @@ BASELINE_DELTA = {
         "TCS4-K04: MODULE_SIG without FORCE — unsigned modules still loadable",
         "TCS4-K05: FORTIFY_SOURCE disabled — compile-time buffer overflow protection absent",
         "TCS4-K06: SECURITY_LOCKDOWN_LSM absent — no kernel lockdown mode",
+        "TCS4-K07: HARDENED_USERCOPY + SLAB_FREELIST_RANDOM/HARDENED all disabled — "
+                  "heap exploit mitigations absent; confirmed in 6.6.80-29 config",
     ],
 }
 
@@ -403,6 +405,99 @@ FINDINGS = {
         ),
     },
 
+    "TCS4-K07": {
+        "title": (
+            "HARDENED_USERCOPY, SLAB_FREELIST_RANDOM, and SLAB_FREELIST_HARDENED All Disabled — "
+            "Three Complementary Heap Exploit Mitigations Absent; "
+            "Confirmed in 6.6.80-29.tl4 config; Likely Applies to All TencentOS 4.x Kernels"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.5",
+        "cwe": "CWE-122",
+        "component": (
+            "# CONFIG_HARDENED_USERCOPY is not set, "
+            "# CONFIG_SLAB_FREELIST_RANDOM is not set, "
+            "# CONFIG_SLAB_FREELIST_HARDENED is not set"
+        ),
+        "evidence": {
+            "config_lines": (
+                "From boot/config-6.6.80-29.tl4.x86_64 (kernel-core RPM, extracted):\n"
+                "  # CONFIG_SLAB_FREELIST_RANDOM is not set\n"
+                "  # CONFIG_SLAB_FREELIST_HARDENED is not set\n"
+                "  # CONFIG_HARDENED_USERCOPY is not set\n"
+                "\n"
+                "All three are disabled simultaneously. Each is independently enabled in "
+                "upstream kernels and in most enterprise Linux distributions (RHEL, Fedora, Ubuntu)."
+            ),
+            "hardened_usercopy": (
+                "HARDENED_USERCOPY validates the length of copy_to_user() and copy_from_user() "
+                "calls against the size of the slab object they're operating on. "
+                "Without it:\n"
+                "  - A heap spray that allocates a target object adjacent to a sensitive struct "
+                "    can over-read past the object boundary via a copy_to_user() call\n"
+                "  - Kernel heap over-reads that cross slab cache boundaries become exploitable\n"
+                "  - Documented exploitation path: CVE-2017-18344 (timer_create mmap_sem "
+                "    over-read) was directly blocked by HARDENED_USERCOPY on hardened kernels.\n"
+                "HARDENED_USERCOPY adds ~1% overhead on copy-heavy paths."
+            ),
+            "slab_freelist_random": (
+                "SLAB_FREELIST_RANDOM randomizes the initial order of slab freelist entries at "
+                "cache initialization. Without it, slab freelists are sequential — an attacker "
+                "can reliably predict the address of the next allocated object in the same cache. "
+                "Predictable allocation order is a prerequisite for:\n"
+                "  - Heap feng shui (grooming a target struct adjacent to an overflow)\n"
+                "  - Use-after-free exploitation (predict address before realloc)\n"
+                "  - Cross-cache attacks that depend on deterministic slab layout"
+            ),
+            "slab_freelist_hardened": (
+                "SLAB_FREELIST_HARDENED XOR-encodes freelist pointers with a per-cache secret "
+                "and the address of the freelist entry. Without it:\n"
+                "  - Freelist pointers in kmem_cache_cpu.freelist are plaintext kernel VA\n"
+                "  - A heap over-read leaks the freelist pointer → bypasses KASLR for the slab region\n"
+                "  - A controlled write to a freelist pointer achieves arbitrary address allocation "
+                "    (write-what-where via the next kmalloc() call)\n"
+                "The combination of SLAB_FREELIST_RANDOM + HARDENED absent = textbook SLUB "
+                "arbitrary-write exploit setup, as described in Cong Wang's 2021 'SLUB allocator "
+                "internals and exploitation techniques' research."
+            ),
+            "combined_impact": (
+                "All three mitigations disabled simultaneously:\n"
+                "1. SLAB_FREELIST_RANDOM absent → predictable freelist ordering\n"
+                "2. SLAB_FREELIST_HARDENED absent → freelist pointer plaintext (leakable)\n"
+                "3. HARDENED_USERCOPY absent → cross-slab over-read possible\n"
+                "\n"
+                "Full heap exploit chain:\n"
+                "  UAF or heap overflow → read freelist pointer (no HARDENED protection) → "
+                "  compute next allocation address (no RANDOM, sequential layout) → "
+                "  poison freelist pointer (no HARDENED XOR protection) → "
+                "  arbitrary write via next kmalloc() → kernel privilege escalation\n"
+                "\n"
+                "Note: KASLR is enabled in 6.6.x (TCS-K01 fixed), so the base address of the "
+                "kernel text is randomized. However, slab objects have known virtual addresses "
+                "relative to each other once any slab leak is achieved — KASLR provides weaker "
+                "protection against heap-only exploits than text-segment exploits."
+            ),
+            "cross_kernel_version": (
+                "Config confirmed in 6.6.80-29.tl4 (from kernel-core SRPM). "
+                "6.6.119-51.3.tl4 config (qcow2 source) was analyzed separately and "
+                "does not list HARDENED_USERCOPY, SLAB_FREELIST_RANDOM, or SLAB_FREELIST_HARDENED "
+                "in CONFIG_SECURITY_POSTURE — consistent with them being disabled in that version too. "
+                "Pattern: TencentOS 4.x appears to globally disable all three across kernel versions."
+            ),
+        },
+        "versions_affected": ["6.6.80-29.tl4", "6.6.119-51.3.tl4 (inferred)"],
+        "remediation": (
+            "Enable CONFIG_HARDENED_USERCOPY=y — restores slab boundary enforcement on "
+            "kernel↔user copy operations. ~1% overhead on high-throughput network/IO paths.\n"
+            "Enable CONFIG_SLAB_FREELIST_RANDOM=y — randomizes initial freelist order at "
+            "cache creation. Zero runtime overhead (one-time randomization at init).\n"
+            "Enable CONFIG_SLAB_FREELIST_HARDENED=y — XOR-encodes freelist pointers. "
+            "Minimal overhead (~0.1%) on kmalloc-heavy paths.\n"
+            "All three have upstream defaults of enabled in Linux 5.x+. "
+            "Re-enabling requires a kernel rebuild; no userspace-visible behavior change."
+        ),
+    },
+
     "TCS4-K06": {
         "title": (
             "shellguard Audit Mode Default Unknown — block=0 (Audit Only) Logs Mismatch "
@@ -501,6 +596,9 @@ CONFIG_SECURITY_POSTURE = {
     "SELINUX":                          ("ENABLED",  None,       "Default active"),
     "SELINUX_BOOTPARAM":                ("ENABLED",  None,       "Can disable via kernel cmdline"),
     "USER_NS":                          ("ENABLED",  "TCS4-K03", "Unprivileged user namespaces"),
+    "HARDENED_USERCOPY":                ("DISABLED", "TCS4-K07", "Slab boundary enforcement absent"),
+    "SLAB_FREELIST_RANDOM":             ("DISABLED", "TCS4-K07", "Sequential freelist, grooming trivial"),
+    "SLAB_FREELIST_HARDENED":           ("DISABLED", "TCS4-K07", "Freelist ptrs unencrypted"),
 }
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
@@ -551,7 +649,7 @@ def probe(binary_path: Optional[str] = None) -> dict:
         "findings": list(FINDINGS.keys()),
         "critical": [],
         "high": ["TCS4-K01", "TCS4-K03", "TCS4-K04"],
-        "medium": ["TCS4-K02", "TCS4-K05", "TCS4-K06"],
+        "medium": ["TCS4-K02", "TCS4-K05", "TCS4-K06", "TCS4-K07"],
         "low": [],
         "improvements_vs_5_4_119": BASELINE_DELTA["fixed"],
         "chain": (
