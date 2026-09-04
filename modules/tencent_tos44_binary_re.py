@@ -220,6 +220,80 @@ CROSS_VERSION_SECURITY_POSTURE = {
 # TOS 4.4 QCOW2 BUILD INVENTORY
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ──────────────────────────────────────────────────────────────────────────────
+# TLCP CERT LOAD — X.509 KEY USAGE VALIDATION (binary confirmed)
+# ──────────────────────────────────────────────────────────────────────────────
+
+TLCP_CERT_KEYUSAGE_VALIDATION = {
+    "finding_id": "TOS44-F08",
+    "severity": "INFO",
+    "title": "TLCP cert loading validates X.509 KeyUsage bits before accepting cert",
+    "SSL_CTX_use_sign_certificate": {
+        "va": 0x42ab0,
+        "size": 541,
+        "key_usage_check": {
+            "instruction": "test al, 0x80",
+            "bit": 7,
+            "meaning": "digitalSignature (0x80 in RFC 5280 KeyUsage)",
+            "check_fn_va": 0x23190,
+            "check_fn_description": "X509_get_key_usage() or X509_check_purpose() — returns flags byte",
+            "fail_target": 0x42b70,
+        },
+        "flow_summary": (
+            "1. Null-check X509* arg  "
+            "2. call 0x23190 (X509_key_usage_flags)  "
+            "3. test al, 0x80 (digitalSignature bit)  "
+            "4. if 0: error (cert not suitable for signing)  "
+            "5. call 0x4b940 (ecx=0x60010, TLCP sign key check)  "
+            "6. call 0x50050 (ecx=0x60012, TLCP sign cert store)  "
+            "7. call 0x24030 (get key from cert)"
+        ),
+    },
+    "SSL_CTX_use_enc_certificate": {
+        "va": 0x426f0,
+        "size": 525,
+        "key_usage_check": {
+            "instruction": "test al, 0x20",
+            "bit": 5,
+            "meaning": "keyEncipherment (0x20 in RFC 5280 KeyUsage)",
+            "check_fn_va": 0x23190,
+            "fail_target": 0x427a8,
+        },
+        "flow_summary": (
+            "Parallel structure to sign cert — checks keyEncipherment bit (0x20) "
+            "instead of digitalSignature (0x80)"
+        ),
+    },
+    "security_analysis": {
+        "correct_behavior": True,
+        "rationale": (
+            "Checking KeyUsage before accepting a cert prevents cert confusion: "
+            "an attacker presenting a CA cert (keyUsage: keyCertSign) as a TLCP signing cert "
+            "would fail at bit 7 check since CA certs typically don't have digitalSignature. "
+            "Similarly, an encryption cert must have keyEncipherment — presenting a signing-only "
+            "cert as an encryption cert would fail at bit 5."
+        ),
+        "residual_risk": (
+            "KeyUsage is a certificate extension. If the X.509 cert doesn't include a KeyUsage "
+            "extension at all (it's optional in RFC 5280), X509_get_key_usage() typically returns "
+            "all bits set (no restrictions). A cert without KeyUsage extension would pass both "
+            "checks. Verify whether 0x23190 handles missing KeyUsage extension correctly."
+        ),
+    },
+    "disable_api_confirmation": {
+        "SSL_CTX_disable_tlcp": {
+            "va": 0x39f60,
+            "disassembly": ["endbr64", "mov dword ptr [rdi + 0x680], 0", "ret"],
+            "note": "Writes 0 to SSL_CTX*+0x680 (mirror of SSL_CTX_enable_tlcp which writes 1)",
+        },
+        "SSL_disable_tlcp": {
+            "va": 0x39f80,
+            "disassembly": ["endbr64", "mov dword ptr [rdi + 0x1dd8], 0", "ret"],
+            "note": "Writes 0 to SSL*+0x1dd8 (mirror of SSL_enable_tlcp which writes 1)",
+        },
+    },
+}
+
 TOS44_BUILD_INVENTORY = {
     "builds": [
         "TencentOS-Server-GenericCloud-4.4-20250331.0.x86_64.qcow2",
