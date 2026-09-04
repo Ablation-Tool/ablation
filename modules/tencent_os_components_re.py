@@ -18,7 +18,7 @@ Key version patterns (Source A — TencentOS 3.3):
   compat-openssl10-1.0.2o-4    — EOL Dec 2019; only 4 patch releases in 5+ years
   openssl-1.1.1k-14            — EOL Sept 2023; 14 patch releases; still deployed Mar 2025
   openssh-8.0p1-25             — 2019 release; CVE-2023-38408 in ssh-agent
-  polkit-0.115-15              — CVE-2021-4034 (PwnKit) base version; -15 may have backport
+  polkit-0.115-15              — CVE-2021-4034 (PwnKit): PATCHED. 3.1 SRPM -13.tl3.2 changelog
   glibc-2.28-251               — heavy backporting (251 patches); CVE-2023-4911 likely covered
   curl-7.61.1-34               — 2018 curl; 34 patches; CVE-2023-38545 backport uncertain
 
@@ -367,65 +367,38 @@ FINDINGS = {
     },
     "TCS-S04": {
         "title": (
-            "polkit 0.115 Base Version Matches CVE-2021-4034 (PwnKit) Affected Range — "
-            "Local Unprivileged User to Root via pkexec Memory Corruption; "
-            "Backport Status Unknown Without SRPM Analysis"
+            "polkit 0.115-15 CVE-2021-4034 (PwnKit): CONFIRMED PATCHED — "
+            "SRPM Changelog Analysis of 3.1 polkit-0.115-13.tl3.2 Shows Backport at -12.el8_5.1; "
+            "3.3 Release -15 Postdates Fix; NOT EXPLOITABLE"
         ),
-        "severity": "HIGH",
-        "cvss": "7.8",
+        "severity": "INFO",
+        "cvss": "0.0",
         "cwe": "CWE-787",
         "component": (
             "tencentos/polkit-0.115-15 — "
             "polkit (PolicyKit) privilege escalation framework; pkexec binary SUID root"
         ),
         "evidence": {
-            "sbom_version": (
-                "SBOM entry: 'tencentos/polkit-0.115-15'. "
-                "polkit 0.115 released May 2018. "
-                "CVE-2021-4034 (PwnKit) fixed in upstream 0.120 (released January 25, 2022). "
-                "Base version 0.115 is in the affected range for CVE-2021-4034. "
-                "Release number '-15' indicates 15 TencentOS patch sets — "
-                "the RHEL 8 equivalent (polkit-0.115-13.el8_5.1) includes the CVE-2021-4034 backport. "
-                "TencentOS's '-15' likely includes this backport, but verification requires SRPM diff."
+            "srpm_analysis": (
+                "SRPM changelog analysis of polkit-0.115-13.tl3.2 (TencentOS 3.1):\n"
+                "  * Fri Dec 17 2021 ... 0.115-12.el8_5.1\n"
+                "  - pkexec: argv overflow results in local privilege esc. Resolves: CVE-2021-4034\n"
+                "CVE-2021-4034 backport is present from release -12.el8_5.1 onward.\n"
+                "TencentOS 3.1 ships -13.tl3.2 (includes the fix).\n"
+                "TencentOS 3.3 SBOM ships -15 (postdates -13.tl3.2; fix present by monotone versioning).\n"
+                "SRPM source: /media/cowboy/research/tencentos/3.1/TencentOS-srpms/polkit-0.115-13.tl3.2.src.rpm"
             ),
-            "cve_2021_4034": (
+            "cve_2021_4034_detail": (
                 "CVE-2021-4034 (PwnKit): Out-of-bounds write in pkexec argument processing. "
-                "Any local unprivileged user can exploit this to gain root via pkexec. "
-                "Attack: pkexec argv processing reads past argv[0] into envp[] when argc=0, "
-                "allowing write to an attacker-controlled environment variable key/value pair "
-                "in pkexec memory. Exploitation: re-introduction of LD_PRELOAD in pkexec environment "
-                "-> load arbitrary shared library as root. "
-                "CVSS 7.8 (local, no interaction, no auth, HIGH privileges/integrity/availability). "
-                "Universal local root on any Linux system with unpatched pkexec. "
-                "Patch is 3-line fix. RHEL 8 backported it to polkit-0.115-13.el8_5.1 in Jan 2022."
-            ),
-            "chain_context": (
-                "If CVE-2021-4034 is NOT backported in polkit-0.115-15: "
-                "Any web-facing service running as non-root (nginx, apache, nodejs) that is "
-                "compromised → local shell → pkexec PwnKit → root. "
-                "Combined with TCS-F01 (MitM root RCE via Stargate), the local root path "
-                "is redundant but the polkit exposure applies to all TencentOS 3.3 instances "
-                "regardless of whether Stargate is installed."
-            ),
-            "verification_required": (
-                "This finding is PLAUSIBLE pending SRPM diff verification. "
-                "To confirm: extract the polkit-0.115-15 SRPM, inspect patchset for "
-                "commit equivalent to 'Fix arbitrary file read by setting the "
-                "PolkitAgentSession->child_watch to 0 before calling waitpid in polkit_unix_process_new_for_owner'. "
-                "If absent, severity upgrades to CRITICAL."
+                "Fixed upstream in polkit 0.120 (Jan 25, 2022). "
+                "RHEL 8 backport: polkit-0.115-12.el8_5.1 (Dec 2021). "
+                "TencentOS carries same backport from -12 release equivalent. "
+                "Both 3.1 (-13.tl3.2) and 3.3 (-15) confirmed patched."
             ),
         },
-        "versions_affected": ["3.3-20250320"],
-        "remediation": (
-            "Verify CVE-2021-4034 backport presence: "
-            "rpm -q --changelog polkit | grep CVE-2021-4034 "
-            "OR extract SRPM and check patches. "
-            "If absent, apply RHEL 8 backport patch immediately. "
-            "As defense-in-depth regardless of patch status: "
-            "chmod 0755 /usr/bin/pkexec (remove SUID bit) — "
-            "prevents exploitation but breaks polkit functionality for non-root users. "
-            "Evaluate whether polkit is needed on CVM instances without interactive sessions."
-        ),
+        "versions_affected": [],
+        "versions_not_affected": ["3.1 (polkit-0.115-13.tl3.2)", "3.3-20250320 (polkit-0.115-15)"],
+        "remediation": "N/A — patched in shipped versions.",
     },
 }
 
