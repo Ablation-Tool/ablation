@@ -96,6 +96,23 @@ COMPONENT_VERSIONS_BY_BUILD = {
         "bash":         "5.2.15-2",
         "xz":           "5.4.4-1",
     },
+    "20241227": {
+        "kernel":       "6.6.64-18",
+        "openssh":      "9.3p2-15",
+        "libssh":       "0.10.5-3",
+        "openssl-libs": "3.0.12-15",
+        "glibc":        "2.38-25",
+        "sudo":         "1.9.15p5-1",
+        "pam":          "1.5.3-9",
+        "systemd":      "255-13",
+        "bash":         "5.2.15-2",
+        "xz":           "5.4.4-1",
+        "note": (
+            "openssh counter jumped from -13 to -15 — matching TOS 4.4/4.6 final levels. "
+            "libssh remains 0.10.5-3 — zero progression across entire 4.2 series. "
+            "Source: TencentOS-Server-4.2-20241227.0-x86_64-everything.iso.spdx.json"
+        ),
+    },
 }
 
 LIBSSH_FREEZE_CONTEXT = {
