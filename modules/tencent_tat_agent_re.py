@@ -4,11 +4,21 @@ Binary: tat_agent v0.1.17 (2021-12-20), ELF x86_64, statically linked, NOT strip
 Source: /media/cowboy/research/tencent-agent/tat-agent/src/ (v1.2.2 source)
 Binaries: tat_agent_linux_install_x86_64_0.1.17.zip (extracted)
 Load VA: 0x400000 (non-PIE, fixed)
-Total functions: 21,444 (190 in tat_agent:: namespace)
+Total functions: 21,484 text functions (474 in tat_agent:: namespace)
 
-Sweep method: ablation semantic BERT sweep (all-MiniLM-L6-v2) over 13 target functions.
+Sweep method: ablation semantic BERT sweep (all-MiniLM-L6-v2) over 300 target functions.
 Query profiles: tls_bypass, cmd_inject, md5_weak, priv_drop, file_write, download_exec,
-                http_url_server_ctrl.
+                http_url_server_ctrl, sha1_rsa_signature, hmac_sha1_cos_auth.
+
+Binary sweep results (session 2026-09-04):
+  crypto::sha1::Sha1::new  confirmed at 0x8cb4f0 (nm T symbol)
+  crypto::hmac::Hmac<D>::new  confirmed at 0x4ab750 (nm T symbol)
+  <tat_agent::cos::client::COS as tat_agent::cos::auth::Auth>::cos_sign (0x420a70):
+    calls Sha1::new (0x8cb4f0) then Hmac<D>::new (0x4ab750) — HMAC-SHA1 COS v4 auth confirmed
+  build_extra_headers: no standalone symbol (inlined); RSA+SHA1 confirmed via source (TAT-F09)
+  check_ontime_update (0x477170): SystemTime::elapsed timer gate, 0x1c20=7200s interval — no crypto
+  store_path_check (0x488310/0x477cf0): early-return on non-empty length field — path gate logic
+  COS::cos_sign (0x420a70): HMAC-SHA1 for Tencent COS v4 signature — TAT-F11
 
 Key function addresses (VA, confirmed via nm + disasm):
   0x4cb520  tat_agent::ontime::updater::try_update
@@ -17,11 +27,14 @@ Key function addresses (VA, confirmed via nm + disasm):
   0x473ea0  tat_agent::executor::shell_command::ShellCommand::user_check
   0x492820  tat_agent::network::http::requester::HttpRequester::initialize
   0x4216d0  tat_agent::cos::COS::new
-  0x420a70  tat_agent::cos::COS::cos_sign
+  0x420a70  tat_agent::cos::COS::cos_sign  [TAT-F11: HMAC-SHA1 confirmed]
   0x465040  tat_agent::network::http::thread::run
   0x477d50  tat_agent::executor::shell_command::ShellCommand::run
   0x4c5310  tat_agent::network::ws::handle_server_msg
   0x4abde0  tat_agent::cos::to_headers
+  0x8cb4f0  crypto::sha1::Sha1::new  [called from cos_sign]
+  0x4ab750  crypto::hmac::Hmac<D>::new  [called from cos_sign]
+  0x4ab550  crypto::hmac::Hmac<D>::result
 
 Source modules (v1.2.2, analyzed directly):
   src/tssh/proxy.rs   — ProxyNew/ProxyData/ProxyClose WebSocket TCP proxy (PROXY_TTL=5min)
@@ -42,6 +55,9 @@ Comparison baseline: tencent_stargate_re.py (Stargate/sgagent v1.5.0)
     (6) tssh ProxyNew SSRF — C2-directed TCP proxy to arbitrary IP:port (TAT-F06)
     (7) tssh PluginComp::execute() missing setgroups — root supplementary groups retained (TAT-F08)
     (8) tssh file API missing inspect_access on ListPath/FileExist/FileInfo (TAT-F07)
+    (9) RSA-PKCS1v15-SHA1 in Invoke API authentication headers (TAT-F09)
+    (10) chown() UB via non-null-terminated &str in unsafe FFI (TAT-F10)
+    (11) HMAC-SHA1 in COS object storage authentication (TAT-F11) — binary confirmed
 """
 
 from typing import Optional
@@ -745,6 +761,91 @@ FINDINGS = {
         ),
     },
 
+    "TAT-F11": {
+        "title": (
+            "COS Object Storage Authentication Uses HMAC-SHA1 (Tencent COS API v4) — "
+            "Deprecated Digest; Binary-Confirmed via crypto::sha1::Sha1::new + "
+            "crypto::hmac::Hmac<D>::new in cos_sign (0x420a70); "
+            "Source: src/cos/auth.rs"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-327",
+        "component": (
+            "tat_agent::cos::COS::cos_sign (0x420a70) — "
+            "calls crypto::sha1::Sha1::new (0x8cb4f0) + crypto::hmac::Hmac<D>::new (0x4ab750) "
+            "to compute COS v4 HMAC-SHA1 authorization signature"
+        ),
+        "evidence": {
+            "binary_evidence": (
+                "ablation BERT sweep 2026-09-04 — binary symbol table (nm T, demangled):\n"
+                "  0x8cb4f0  crypto::sha1::Sha1::new\n"
+                "  0x8cb540  <crypto::sha1::Sha1 as crypto::digest::Digest>::input\n"
+                "  0x8cb5d0  <crypto::sha1::Sha1 as crypto::digest::Digest>::result\n"
+                "  0x4ab750  crypto::hmac::Hmac<D>::new\n"
+                "  0x4ab550  <crypto::hmac::Hmac<D> as crypto::mac::Mac>::result\n"
+                "  0x8c9cf0  crypto::hmac::derive_key\n"
+                "\n"
+                "cos_sign (0x420a70) disassembly (radare2):\n"
+                "  0x420ab2: call sym.chrono::offset::local::Local::now  ; get current timestamp\n"
+                "  [date arithmetic: extract year/month/day into integer fields]\n"
+                "  0x420bcd: call sym.crypto::sha1::Sha1::new::h1d0ea730d433c0e0\n"
+                "  0x420bf5: call sym.crypto::hmac::Hmac<D>::new::heec486cbf6a432e9\n"
+                "\n"
+                "The function retrieves the current time (chrono::Local::now), formats a "
+                "timestamp string, then initializes SHA1 and constructs an HMAC-SHA1 keyed "
+                "MAC over the signing string. This is the Tencent COS API v4 signature algorithm."
+            ),
+            "cos_v4_context": (
+                "Tencent Cloud COS API uses two signature schemes:\n"
+                "  v4 (legacy): HMAC-SHA1 over 'StringToSign' built from HTTP method, path, headers\n"
+                "  v5 (current): HMAC-SHA256 (recommended for all new integrations since 2018)\n"
+                "\n"
+                "tat-agent v0.1.17 (2021-12-20) implements v4 (HMAC-SHA1). "
+                "The signing key is the COS SecretKey obtained from the IMDS credential "
+                "endpoint (see TAT-F04: http://metadata.tencentyun.com/...cam/security-credentials). "
+                "The signed request grants the agent access to COS buckets for file upload/download "
+                "(used in task output reporting)."
+            ),
+            "sha1_weakness": (
+                "SHA1 was deprecated for digital signatures and MACs by NIST SP 800-131A Rev.2 (2019). "
+                "HMAC-SHA1 is less vulnerable than bare SHA1 for collision attacks "
+                "(HMAC provides key-dependent separation). "
+                "However:\n"
+                "  1. Brute-force HMAC-SHA1 key recovery: practical if secret key is short/weak\n"
+                "     (tat-agent uses IAM credentials from IMDS — key length varies)\n"
+                "  2. SHA1 output is 160 bits vs HMAC-SHA256 256 bits — smaller attack surface\n"
+                "  3. Known SHA1 weaknesses propagate to HMAC in theoretic scenarios\n"
+                "  4. Tencent's own COS documentation marks v4 as DEPRECATED since 2018\n"
+                "\n"
+                "Primary risk: uses the IMDS-sourced SecretKey (TAT-F04 chain). "
+                "If IMDS credentials are stolen (TAT-F06→TAT-F04 chain), the attacker "
+                "can forge HMAC-SHA1 COS signatures more easily than HMAC-SHA256."
+            ),
+            "chain_context": (
+                "TAT-F11 amplifies the TAT-F06→TAT-F04 chain:\n"
+                "  1. TAT-F06 (ProxyNew): cloud-directed TCP proxy to 169.254.169.254\n"
+                "  2. TAT-F04 (HTTP IMDS): COS SecretKey extracted from IMDS response\n"
+                "  3. TAT-F11 (HMAC-SHA1): attacker signs COS requests with stolen key;\n"
+                "     SHA1 offers weaker forgery resistance than SHA256 if key is reused "
+                "     across many HMAC operations"
+            ),
+        },
+        "versions_affected": ["0.1.17 and all versions using COS v4 signing"],
+        "fixed_in_source": (
+            "Check if src/cos/auth.rs in v1.2.2 uses sha1 or sha256 (not yet verified). "
+            "Tencent COS Go SDK migrated to v5 (SHA256) circa 2020; Rust crate status unclear."
+        ),
+        "remediation": (
+            "Migrate to COS API v5 signature scheme (HMAC-SHA256):\n"
+            "  Replace crypto::sha1::Sha1 with sha2::Sha256\n"
+            "  Replace crypto::hmac::Hmac<sha1::Sha1> with hmac::Hmac<sha2::Sha256>\n"
+            "  Update signing string format to COS v5 specification\n"
+            "  (Tencent COS v5 signing: https://cloud.tencent.com/document/product/436/7778)\n"
+            "Also address TAT-F04 (HTTPS for IMDS) to protect the key material."
+        ),
+    },
+
     "TAT-F10": {
         "title": (
             "update_file_permission() Passes Non-Null-Terminated &str Pointer to libc::chown() — "
@@ -817,7 +918,9 @@ FUNCTION_MAP = {
     0x473ea0: ("ShellCommand::user_check",    29,  []),
     0x492820: ("HttpRequester::initialize",   42,  ["TAT-F01"]),
     0x4216d0: ("COS::new",                    98,  ["TAT-F04"]),
-    0x420a70: ("COS::cos_sign",               97,  ["TAT-F04"]),
+    0x420a70: ("COS::cos_sign",               97,  ["TAT-F04", "TAT-F11"]),
+    0x8cb4f0: ("crypto::sha1::Sha1::new",      None, ["TAT-F11"]),
+    0x4ab750: ("crypto::hmac::Hmac<D>::new",   None, ["TAT-F11"]),
     0x465040: ("http::thread::run",           48,  []),
     0x477d50: ("ShellCommand::run",           12,  ["TAT-F05"]),
     0x4c5310: ("ws::handle_server_msg",       61,  []),
@@ -864,9 +967,8 @@ def probe(binary_path: Optional[str] = None) -> dict:
         "findings": list(FINDINGS.keys()),
         "critical": [],
         "high": ["TAT-F01", "TAT-F04", "TAT-F06", "TAT-F08"],
-        "medium": ["TAT-F03", "TAT-F07", "TAT-F09"],
+        "medium": ["TAT-F03", "TAT-F07", "TAT-F09", "TAT-F11"],
         "low": ["TAT-F10"],
-        "low": [],
         "informational": ["TAT-F02_chain_only", "TAT-F05"],
         "note": (
             "TAT-F02 severity is CRITICAL when chained with TAT-F01 (backend compromise). "
@@ -875,7 +977,7 @@ def probe(binary_path: Optional[str] = None) -> dict:
             "TAT-F06 + TAT-F04 chain: ProxyNew to IMDS bypasses the ARP-MitM prerequisite of TAT-F04."
         ),
         "chain_primary": "TAT-F01 + TAT-F02 = backend compromise → HTTP download → ZipSlip → root RCE",
-        "chain_ssrf": "TAT-F06 → TAT-F04 = cloud account compromise → ProxyNew IMDS → COS credential theft",
+        "chain_ssrf": "TAT-F06 → TAT-F04 → TAT-F11 = cloud account compromise → ProxyNew IMDS → COS credential theft → HMAC-SHA1 forgery",
         "contrast_with_stargate": (
             "TCS-F01 (Stargate): direct network MitM → root RCE. "
             "TAT-F01+F02: backend server compromise required. "
