@@ -18,16 +18,20 @@ PATCH COUNT: 66 (heavy Tencent patching, far above upstream vsftpd)
   Upstream vsftpd 3.0.5 has ~0-5 distro patches typically.
   TOS 4.6 has 66 — indicates heavy Tencent feature additions/hardening.
 
-SECCOMP: prctl PR_SET_SECCOMP present — syscall sandboxing active
+SECCOMP: prctl PR_SET_SECCOMP present in binary — DISABLED by default
+         patch 0034 sets tunable_seccomp_sandbox = 0 in tunables.c
+         Binary has seccomp code but feature is OFF in default operation.
+         (Corrected: initial analysis incorrectly stated seccomp active)
 CAPABILITIES: cap_get_proc, cap_set_flag, cap_set_proc — privilege reduction
 PRIV_REDUCTION: prctl PR_SET_NO_NEW_PRIVS — new privilege suppression
+SUPERSEDED: Full 66-patch audit in tencent_tos46_vsftpd_patch_audit_re.py
 CHROOT: chroot() for local user jailing
 PAM: pam_shells.so + password-auth + pam_loginuid (tight PAM stack)
 DEFAULT CONFIG: anonymous_enable=NO, local_enable=YES, write_enable=YES
                (anon disabled by default — secure baseline)
 
 FINDINGS:
-  TOS46-FTP-F01 (INFO)     seccomp + capabilities + NO_NEW_PRIVS hardening confirmed
+  TOS46-FTP-F01 (MEDIUM/5.3) seccomp DISABLED by default (patch 0034); corrected
   TOS46-FTP-F02 (MEDIUM/5.1) chroot_local_user: chroot jail breakout via writable homedir
   TOS46-FTP-F03 (INFO)     66 Tencent patches — feature-heavy, not just CVE backports
   TOS46-FTP-F04 (INFO)     FTPS: full SSL/TLS support with ALPN and DH param callback
@@ -45,7 +49,8 @@ VSFTPD_BINARY = {
     "build_date": "2025-01-15",
     "format": "ELF 64-bit LSB pie executable, x86-64, stripped",
     "pie": True,
-    "seccomp": True,
+    "seccomp_code_present": True,
+    "seccomp_enabled_default": False,
     "capabilities": ["CAP_NET_BIND_SERVICE", "cap_get_proc", "cap_set_flag", "cap_set_proc"],
     "no_new_privs": True,
     "ssl_library": "OpenSSL (OPENSSL_init_ssl, TLS_server_method)",
@@ -59,46 +64,36 @@ VSFTPD_BINARY = {
 
 VSFTPD_HARDENING_CONFIRMED = {
     "finding_id": "TOS46-FTP-F01",
-    "severity": "INFO",
+    "severity": "MEDIUM",
+    "cvss_v3": 5.3,
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
     "title": (
-        "vsftpd-3.0.5-6.tl4 hardening stack confirmed: seccomp sandboxing, "
-        "Linux capabilities for privilege reduction, prctl(PR_SET_NO_NEW_PRIVS), "
-        "chroot isolation, and tight PAM stack (pam_shells + pam_loginuid)"
+        "vsftpd-3.0.5-6.tl4: seccomp syscall sandboxing DISABLED by default "
+        "(patch 0034 sets tunable_seccomp_sandbox = 0); binary has seccomp code "
+        "but it is off — exploitation does not need to bypass seccomp; "
+        "see tencent_tos46_vsftpd_patch_audit_re.py for full analysis"
     ),
     "description": (
-        "Binary imports and strings confirm vsftpd on TOS 4.6 runs with the "
-        "following hardening mechanisms active: "
+        "CORRECTION: initial binary analysis noted 'prctl PR_SET_SECCOMP' string "
+        "presence and assumed seccomp was active. Patch audit shows 0034 explicitly "
+        "disables it: tunable_seccomp_sandbox default changed 1 → 0 in tunables.c. "
         "\n"
-        "1. seccomp (prctl PR_SET_SECCOMP): syscall filtering restricts vsftpd "
-        "   worker processes to a whitelist of system calls. Exploitation of a "
-        "   memory corruption bug requires bypassing the seccomp filter before "
-        "   reaching execve() or other dangerous syscalls. "
+        "Remaining hardening (confirmed from binary + patch 0047 Makefile): "
+        "  - PIE + FULL RELRO (-fPIE -pie -Wl,-z,relro -Wl,-z,now) "
+        "  - Stack canary (-fstack-protector) + FORTIFY_SOURCE=2 "
+        "  - Linux capabilities drop (cap_get_proc/cap_set_proc) "
+        "  - prctl(PR_SET_NO_NEW_PRIVS) "
+        "  - PAM stack: pam_shells.so + pam_loginuid.so + password-auth "
         "\n"
-        "2. Linux capabilities (cap_get_proc + cap_set_proc): vsftpd drops "
-        "   unnecessary capabilities (e.g., CAP_SYS_ADMIN) and retains only "
-        "   CAP_NET_BIND_SERVICE for port 21. Per-process capability reduction. "
-        "\n"
-        "3. prctl(PR_SET_NO_NEW_PRIVS): prevents child processes from gaining "
-        "   higher privileges via execve+setuid, SUID bits, or file capabilities. "
-        "   Applies after privilege drop — even if an attacker achieves code execution "
-        "   in a vsftpd worker, they cannot escalate via SUID binaries. "
-        "\n"
-        "4. chroot(): local user sessions are optionally chrooted to their home "
-        "   directory when chroot_local_user=YES is configured. "
-        "\n"
-        "5. PAM stack: pam_shells.so (user must have a valid shell), "
-        "   pam_loginuid.so (sets loginuid for audit trail), password-auth. "
-        "   ftpusers deny-list via pam_listfile.so. "
-        "\n"
-        "Default config: anonymous_enable=NO (anonymous FTP disabled by default)."
+        "seccomp can be re-enabled via seccomp_sandbox=YES in vsftpd.conf. "
+        "Test for compatibility with the running kernel before enabling."
     ),
     "binary_evidence": [
         "prctl PR_SET_NO_NEW_PRIVS",
-        "prctl PR_SET_SECCOMP failed",
+        "prctl PR_SET_SECCOMP failed (unreachable by default)",
         "cap_init", "cap_set_flag", "cap_set_proc",
-        "chroot",
-        "Can't change from guest user.",
     ],
+    "correction": "Initial analysis incorrect — seccomp DISABLED by patch 0034",
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
