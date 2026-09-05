@@ -1824,15 +1824,19 @@ CROSS_DISTRO_E2_F03_VSFTPD_ROOT = {
         "VTi 15.0.02 vsftpd.conf confirmed identical to VTi 15.0.04: "
         "local_root=/, write_enable=YES, local_enable=YES, anonymous_enable=NO, "
         "chroot_local_user=NO, allow_writeable_chroot=YES. "
-        "Other distros: vsftpd.conf not in partial extract (only init.d scripts). "
+        "OpenPLi 9.2 MIPS (vuzero + vuduo2) vsftpd.conf CONFIRMED: "
+        "local_root=/, write_enable=YES, local_enable=YES — IDENTICAL config to VTi. "
         "vsftpd binary is a VU+ custom build (TVFS extension) shared across all distributions "
         "via the VU+ BSP — same binary SHA on VTi 15.0.02 and 15.0.04. "
         "The local_root=/ config is a VU+ BSP default, not a VTi addition. "
         "TVFS extension in VU+-specific binary present in all 7 distros (see CROSS_DISTRO_VSFTPD)."
     ),
-    "scope": "All 7 VU+ distros. VTi 15.0.02 confirmed by vsftpd.conf. Other distros: same VU+ BSP config "
-             "expected but vsftpd.conf not extracted. DM4U: separate vsftpd build (ARM32/AArch64 binaries), "
-             "config not extracted — E2-F03 applicability to DM4U unknown.",
+    "scope": (
+        "All 7 VU+ distros. VTi 15.0.02 + OpenPLi 9.2 MIPS confirmed by vsftpd.conf extract. "
+        "OpenATV/OpenBH/OpenViX/Pure2: vsftpd.conf not in partial extract but same VU+ BSP config expected. "
+        "DM4U: separate vsftpd build (ARM32/AArch64 binaries), config not extracted — "
+        "E2-F03 applicability to DM4U unknown (DM4U uses Dream Multimedia BSP, not VU+ BSP)."
+    ),
 }
 
 CROSS_DISTRO_E2_F12_TERMINAL = {
@@ -1919,13 +1923,13 @@ CROSS_DISTRO_E2_F10_ROOT_PASSWORD = {
             "SSH/22 dropbear -B (blank password allowed): unauthenticated root SSH",
         ],
         "openpli-9.2-mips-vuzero": [
-            "FTP/21 vsftpd (inetd): unauthenticated root",
-            "Telnet/23 BusyBox telnetd (securetty includes pts/0-3): unauthenticated root shell",
-            "SSH/22 dropbear (DROPBEAR_EXTRA_ARGS='' — blank passwords NOT allowed): SSH login fails",
+            "FTP/21 vsftpd local_root=/ write_enable=YES (vsftpd.conf CONFIRMED): unauthenticated root",
+            "Telnet/23 BusyBox telnetd (securetty: pts/0-3 CONFIRMED, NOT pts/0-63): unauthenticated root shell",
+            "SSH/22 dropbear (DROPBEAR_EXTRA_ARGS='' CONFIRMED — blank passwords NOT allowed): SSH login fails",
         ],
         "dm4u-dm900": [
             "WebInterface (port 80): auth.py check_passwd() returns True on empty hash (DM4U-F01)",
-            "SSH/FTP: config not in extract — service auth posture unknown",
+            "FTP/SSH: vsftpd.conf + dropbear config not in extract (partial firmware) — service auth posture unknown",
         ],
     },
     "scope": "CONFIRMED VTi 15.0.04, OpenPLi 9.2 (MIPS + ARM32), DM4U DM900/DM920. "
