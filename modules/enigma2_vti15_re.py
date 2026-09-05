@@ -1,12 +1,17 @@
 """
-Enigma2 VTi 15.0.04 RE Module
+Enigma2 VTi 15.0.04 RE Module — Extended to Cross-Distro Analysis
 Target: 82.84.145.15 (VU+ satellite DVR, ARM Cortex-A15)
 Firmware: VTi 15.0.04 (rootfs extracted from vti15.0.04-vuplus-cortexa15hf-neon-vfpv4.zip)
 Binary: /usr/bin/enigma2 — ARM32 EABI5, hard-float, stripped, 3.0MB
 SHA256: 3416e03a2b63e4e9ac5b1bcfdf437810664f7d245582436cf0aad2330a53cf5a
 Build date: 2025-07-15 (file mtime in rootfs)
 Method: static firmware extraction + OpenWebif Python source analysis + BERT sweep
-Analysis date: 2026-09-04
+Analysis date: 2026-09-04 (VTi 15.0.04 primary); 2026-09-05 (cross-distro)
+
+Cross-distro scope: 75 firmware images, 7 distributions (VTi 15.0.02/15.0.04, OpenATV 7.6/8.0b,
+OpenBH 6.0, OpenPLi 9.2, OpenViX 6.9.002, Pure2 7.6) — see CROSS_DISTRO_* dicts below.
+Method: rootfs.tar.bz2 extraction + ablation BERT sweep (seed from VTi 15.0.04 known VAs)
+        + ARM32/Thumb ISA detection + manual constant search + pyc string extraction
 
 Stack: Enigma2 (DVB OS) + OpenWebif plugin (Python 2.7 + TwistedWeb 25.5.0) + vsftpd
        (vsftpd 3.0.2, custom VU+ build with TVFS extension, inetd-launched on port 21)
@@ -1514,4 +1519,171 @@ E2_BIN_F04_VSFTPD_RE = {
         "All security risk from vsftpd is configuration-level (E2-F03, E2-F06, E2-F10). "
         "Binary RE of vsftpd is complete."
     ),
+}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CROSS-DISTRO RE — 75 firmware images across 7 distributions
+# ──────────────────────────────────────────────────────────────────────────────
+# Source: /media/cowboy/research/enigma2-firmware/ (75 ZIP/tar.xz images)
+# Method: rootfs.tar.bz2 extraction + ablation BERT sweep (all-MiniLM-L6-v2)
+#         + ARM32/Thumb ISA detection + manual verification of key VAs
+#         + pyc string constant extraction for Python-layer analysis
+# Date:   2026-09-05
+
+CROSS_DISTRO_BINARY_INVENTORY = {
+    "distros_analyzed": [
+        "VTi 15.0.04 (reference, vuzero4k)",
+        "VTi 15.0.02 (vuzero4k)",
+        "OpenATV 7.6 (vuzero4k)",
+        "OpenATV 8.0beta (vuzero4k)",
+        "OpenBH 6.0 (vuzero4k)",
+        "OpenPLi 9.2 (vuduo4k)",
+        "OpenViX 6.9.002 (vuzero4k)",
+        "Pure2 7.6 (vuzero4k)",
+    ],
+    "total_firmware_images": 75,
+    "enigma2_binaries": {
+        "vti-15.0.04":  {"size_bytes": 3145728, "sha256": "3416e03a2b63", "isa": "arm32"},
+        "vti-15.0.02":  {"size_bytes": 3080192, "sha256": "5eece5c23a9b", "isa": "arm32"},
+        "openatv-7.6":  {"size_bytes": 3563520, "sha256": "f767703c8ea8", "isa": "arm32"},
+        "openatv-8.0b": {"size_bytes": 1343488, "sha256": "bd4a30260f99", "isa": "thumb"},
+        "openbh-6.0":   {"size_bytes": 1140164, "sha256": "65b97b7f65ab", "isa": "thumb"},
+        "openpli-9.2":  {"size_bytes": 2621440, "sha256": "8baf299c6b05", "isa": "arm32"},
+        "openvix-6.9":  {"size_bytes": 1155072, "sha256": "2bf7ccd22b1b", "isa": "thumb"},
+        "pure2-7.6":    {"size_bytes": 1245184, "sha256": "9d9784b13bfb", "isa": "thumb"},
+    },
+    "isa_split": (
+        "ARM32 mode: VTi 15.0.02/15.0.04 (3.0-3.4MB), OpenATV 7.6 (3.4MB), OpenPLi 9.2 (2.5MB). "
+        "Thumb16 mode: OpenATV 8.0b, OpenBH 6.0, OpenViX 6.9, Pure2 7.6 (1.1-1.3MB). "
+        "Smaller Thumb builds are slimmer distro variants; ARM32 builds are full-featured."
+    ),
+}
+
+CROSS_DISTRO_BERT_SWEEP = {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "seed_functions": {
+        "ipc_buf_alloc_fn_0x25e2bc": (
+            "VTi 15.0.04 fn@0x25e2bc — calloc(1, 0x220) IPC buffer allocator. "
+            "Disassembly: mov r0,#1; mov r1,#0x220; bl calloc. 41 instructions."
+        ),
+        "dvb_dispatch_fn_0x25eca8": (
+            "VTi 15.0.04 fn@0x25eca8 — DVB type-1 service reference dispatcher. "
+            "Slot size field=0x3c (60 bytes). 15 instructions."
+        ),
+    },
+    "homolog_results": {
+        "vti-15.0.02":  {"ipc_buf_alloc": ("0xb2f04", 0.963), "dvb_dispatch": ("0xdab44", 0.801)},
+        "openatv-7.6":  {"ipc_buf_alloc": ("0x91c7c", 0.954), "dvb_dispatch": ("0xd3844", 0.811)},
+        "openatv-8.0b": {"ipc_buf_alloc": ("0x54b4bc", 0.920), "dvb_dispatch": ("0x552b02", 0.784)},
+        "openbh-6.0":   {"ipc_buf_alloc": ("0x46b864", 0.917), "dvb_dispatch": ("0x40b362", 0.763)},
+        "openpli-9.2":  {"ipc_buf_alloc": ("0x156b9c", 0.957), "dvb_dispatch": ("0xd22f0", 0.806)},
+        "openvix-6.9":  {"ipc_buf_alloc": ("0x41921c", 0.916), "dvb_dispatch": ("0x3bb380", 0.775)},
+        "pure2-7.6":    {"ipc_buf_alloc": ("0x451b1c", 0.925), "dvb_dispatch": ("0x419b8c", 0.773)},
+    },
+    "sweep_notes": (
+        "Scores 0.916-0.963 for ipc_buf_alloc across all distros — high confidence structural homologs. "
+        "Caveat: BERT structural similarity does not guarantee same buffer size constant. "
+        "Manual verification required: MOV r1,#0x220 search found this constant only in "
+        "VTi 15.0.02 (0x24e124) and OpenATV 7.6 (2 offsets). "
+        "OpenPLi, OpenBH, OpenViX, Pure2 have different IPC implementations. "
+        "VTi 15.0.02 actual IPC allocator: fn@0x25e0f4 (confirmed by MOV r1,#0x220 search; "
+        "BERT top match at 0xb2f04 was a false positive — corpus capped at 4000 of 8151 functions)."
+    ),
+}
+
+CROSS_DISTRO_E2_F01_GETIPV6 = {
+    "finding_id": "E2-F01",
+    "cross_distro_status": "OPEN in all 7 distributions",
+    "evidence": (
+        "httpserver.pyc from all distros contains 'getipv6' string constant. "
+        "VTi 15.0.02 source confirmed identical to 15.0.04 (line 323: request.uri == '/web/getipv6'). "
+        "This auth bypass is in the shared OpenWebif codebase — all distros affected."
+    ),
+}
+
+CROSS_DISTRO_E2_F07_IPKG = {
+    "finding_id": "E2-F07",
+    "cross_distro_status": "OPEN in all 7 distributions",
+    "evidence": (
+        "ipkg.pyc from all distros contains: 'eConsoleAppContainer' string (5 hits each), "
+        "'command' arg parsing, 'execute' method call. "
+        "VTi 15.0.02 source confirmed identical injection path: "
+        "cmd = '/usr/bin/opkg ' + action + force; self.container.execute(cmd). "
+        "action = request.args['command'][0] — unvalidated. "
+        "All 7 distributions ship the same OpenWebif ipkg controller."
+    ),
+}
+
+CROSS_DISTRO_E2_F09_BOUQUET = {
+    "finding_id": "E2-F09",
+    "cross_distro_status": "SPLIT — open in VTi/OpenPLi, FIXED in 5 other distros",
+    "open_distros": ["VTi 15.0.02", "VTi 15.0.04", "OpenPLi 9.2"],
+    "fixed_distros": ["OpenATV 7.6", "OpenATV 8.0beta", "OpenBH 6.0", "OpenViX 6.9", "Pure2 7.6"],
+    "fix_mechanism": (
+        "Fixed distros replaced os.popen('tar cvf ...') with Python tarfile module. "
+        "BouquetEditor.pyc strings in fixed distros: 'tarfile', 'tarfilename', '.tar', "
+        "'webbouqueteditor_backup.tar' — no popen or tar subprocess strings. "
+        "Open distros: popen string present in pyc; VTi source confirms line 579: "
+        "popen('tar cvf %s %s' % (backupFilename, tarFiles)). "
+        "tarfile module is not injectable via Filename= parameter."
+    ),
+    "evidence_fixed": "BouquetEditor.pyc: 'tarfile' module strings present, no popen/subprocess strings",
+    "evidence_open": "BouquetEditor.pyc: popen string present; VTi 15.0.02 source lines 579/608/622 confirmed",
+}
+
+CROSS_DISTRO_VSFTPD = {
+    "finding_id": "E2-BIN-F04 cross-distro",
+    "vsftpd_binaries": {
+        "vti-15.0.04": {"size": "88K", "sha256": "7a63c61ff78d", "site_chmod": True, "ubfx_mode_sanitize": True},
+        "vti-15.0.02": {"size": "88K", "sha256": "7a63c61ff78d", "site_chmod": True, "ubfx_mode_sanitize": True,
+                        "note": "IDENTICAL binary to VTi 15.0.04"},
+        "openatv-7.6":  {"size": "49K", "sha256": "8d80069e9863", "site_chmod": False, "ubfx_mode_sanitize": False,
+                         "note": "SITE CHMOD not supported — no SITE/CHMOD strings in binary"},
+        "openatv-8.0b": {"size": "51K", "sha256": "78f263eda6e9", "site_chmod": False, "ubfx_mode_sanitize": True,
+                         "note": "ubfx present but no SITE handler — mode sanitization for different purpose"},
+        "openbh-6.0":   {"size": "51K", "sha256": "7c2ac840b319", "site_chmod": False, "ubfx_mode_sanitize": True,
+                         "note": "SITE CHMOD not supported"},
+        "openpli-9.2":  {"size": "87K", "sha256": "1d969958da32", "site_chmod": True, "ubfx_mode_sanitize": True,
+                         "ubfx_offsets": ["0xef9c", "0xefc0"],
+                         "note": "SITE CHMOD supported; ubfx mode sanitization at both wrappers"},
+        "openvix-6.9":  {"size": "51K", "sha256": "b9f8cb38db3e", "site_chmod": False, "ubfx_mode_sanitize": False,
+                         "note": "SITE CHMOD not supported"},
+        "pure2-7.6":    {"size": "49K", "sha256": "fa959d465308", "site_chmod": False, "ubfx_mode_sanitize": False,
+                         "note": "SITE CHMOD not supported"},
+    },
+    "conclusion": (
+        "SITE CHMOD attack surface exists only in VTi 15.0.02/15.0.04 and OpenPLi 9.2. "
+        "All three have ubfx r1,r1,#0,#9 mode sanitization stripping setuid/setgid/sticky bits. "
+        "E2-BIN-F04 CLEAN verdict extends to OpenPLi 9.2 (ubfx at 0xef9c, 0xefc0). "
+        "VTi 15.0.02 is identical binary to VTi 15.0.04 — E2-BIN-F04 CLEAN by identity."
+    ),
+}
+
+CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
+    "finding_id": "E2-BIN-F01 cross-distro",
+    "ipc_0x220_constant": {
+        "vti-15.0.04": {"file_offset": "0x24e2ec", "va": "0x25e2bc", "confirmed": True},
+        "vti-15.0.02": {"file_offset": "0x24e124", "va": "0x25e0f4", "confirmed": True,
+                        "note": "fn@0x25e0f4 disassembly: push {r3-r8,sb,lr}; mov r0,#1; "
+                                "mov r1,#0x220; bl calloc — IDENTICAL structure to VTi 15.0.04"},
+        "openatv-7.6":  {"file_offsets": ["0x195c70", "0x1ddd04"], "confirmed": True,
+                         "note": "Two ARM32 MOV r1,#0x220 hits — allocator plus one reuse"},
+        "openatv-8.0b": {"confirmed": False, "note": "No MOV r1,#0x220 or MOVW r1,#0x220 found"},
+        "openbh-6.0":   {"confirmed": False, "note": "No 0x220 constant found"},
+        "openpli-9.2":  {"confirmed": False,
+                         "note": "No calloc(1,0x220) pattern. BERT top match (0x156b9c) is a "
+                                 "list iterator — confirmed false positive. IPC mechanism differs."},
+        "openvix-6.9":  {"confirmed": False, "note": "No 0x220 constant found"},
+        "pure2-7.6":    {"confirmed": False, "note": "No 0x220 constant found"},
+    },
+    "verdict": {
+        "vti-15.0.02": "NOT_EXPLOITABLE — 0x220 ceiling confirmed identical to VTi 15.0.04",
+        "openatv-7.6":  "NOT_EXPLOITABLE PROBABLE — 0x220 constant present; same ceiling expected",
+        "others": (
+            "UNVERIFIED — IPC mechanism differs from VTi/OpenATV; 0x220 ceiling cannot be assumed. "
+            "E2-BIN-F01 scope: VTi-specific IPC protocol. Smaller Thumb enigma2 builds likely "
+            "use different protocol stack. Separate analysis required for each."
+        ),
+    },
 }
