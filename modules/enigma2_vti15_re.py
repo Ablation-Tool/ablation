@@ -24,6 +24,8 @@ FINDINGS SUMMARY:
   E2-F07 (CRITICAL/9.8)  Command injection: /ipkg?command=install&package=<INJECTION>
                           eConsoleAppContainer.execute() → execvp("/bin/sh",["/bin/sh","-c",cmd])
                           package= param directly concatenated into shell command, no sanitization
+  E2-F08 (HIGH/8.1)      REST filesystem: /fs endpoint, root='/', read any file + dir listing +
+                          POST writes new files to any writable dir; separate surface from E2-F02
 
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
@@ -739,6 +741,67 @@ E2_BIN_F02_SYSTEM_DVB_CI = {
         "Unreachable from network. The DVB CI/CAM handler is triggered by physical "
         "hardware events (CAM module insertion / APDU exchange), not by HTTP requests. "
         "Even if r6 were user-controlled, there is no network path to this function."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-F08: Unrestricted filesystem read + write via /fs REST endpoint
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_F08_REST_FS_ACCESS = {
+    "finding_id": "E2-F08",
+    "severity": "HIGH",
+    "cvss_v3": 8.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "status": "CONFIRMED",
+    "title": "OpenWebif /fs endpoint: unrestricted filesystem read + directory listing + file write",
+    "component": "OpenWebif controllers/rest_fs_access.py — RESTFilesystemController",
+    "source_path": "/usr/lib/enigma2/python/Plugins/Extensions/OpenWebif/controllers/rest_fs_access.py",
+    "route": "/fs",
+    "auth_required": False,
+    "registration": {
+        "root_py_line": 56,
+        "root": "'/'",
+        "resource_prefix": "'/fs'",
+        "note": "root='/' exposes entire filesystem with no directory restriction",
+    },
+    "path_resolution": (
+        "rq_path = urlparse.unquote(request.path)\n"
+        "file_path = os.path.join(self._root, rq_path[len('/fs') + 1:])\n"
+        "# os.path.join('/', 'etc/shadow') = '/etc/shadow'\n"
+        "# No realpath allowlist, no directory restriction beyond os.path.exists() check"
+    ),
+    "capabilities": {
+        "GET_directory": "GET /fs/ → full filesystem tree JSON listing",
+        "GET_file": "GET /fs/<path> → serve any readable file (overlaps E2-F02, adds dir listing)",
+        "POST_write": (
+            "POST /fs/<existing_dir>?filename=<name> + body data=<content> "
+            "→ creates new file; basename-only (split('/')[-1]) prevents path traversal in filename; "
+            "target dir must exist, target file must not exist"
+        ),
+        "DELETE": "DELETE /fs/<path> → disabled (_do_delete=False in registration); returns 'WOULD remove'",
+    },
+    "novel_vs_e2_f02": (
+        "E2-F02 (/file?action=download) = file read only. "
+        "E2-F08 (/fs) adds: (1) directory listing of entire filesystem tree, "
+        "(2) file creation in any writable directory. "
+        "Both require auth=False (E2-F04) or auth bypass (E2-F01 does NOT apply to /fs)."
+    ),
+    "write_impact": (
+        "Writable on VU+ VTi: /tmp, /var/volatile, /media/hdd (external storage). "
+        "If /etc/cron.d/ writable (depends on overlayfs config), POST creates cron-based persistence. "
+        "Requires auth=False + writable target dir + target filename must not already exist."
+    ),
+    "exploit_path": (
+        "GET /fs/ HTTP/1.1 → full filesystem listing\n"
+        "GET /fs/etc/shadow HTTP/1.1 → shadow file read\n"
+        "POST /fs/media/hdd?filename=backdoor.sh (multipart data=#!/bin/sh\\nid) → write to external HDD"
+    ),
+    "source_audit_coverage": (
+        "All OpenWebif controllers audited: transcoding (safe — config whitelist), "
+        "grab (safe — whitelist+int cast), mediaplayer (safe — enum dispatch), "
+        "owibranding (safe — hardcoded os.popen args), web.py (safe — no eConsole/system calls). "
+        "No additional injection points beyond E2-F07 and E2-F08 found."
     ),
 }
 
