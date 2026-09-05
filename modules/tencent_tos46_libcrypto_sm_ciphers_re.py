@@ -121,29 +121,82 @@ SM4_LEGACY_EXPORTS = {
 SM2_KEY_EXCHANGE = {
     "finding_id": "TOS46-CRYPTO-F03",
     "algorithm_strings_confirmed": {
-        0x323db8: "sm2",
-        0x323dc8: "sm2dhe",
-        "kx-sm2 context": "KxSM2/kx-sm2 cipher string for TLCP key exchange selection",
+        0x323daf: "KxSM2",
+        0x323db5: "kx-sm2",
+        0x323dbc: "KxSM2DHE",
+        0x323dc5: "kx-sm2dhe",
+        0x323dcf: "AuthSM2",
+        0x323dd7: "auth-sm2",
+        0x3271fc: "SM2:1.2.156.10197.1.301",
+        0x327274: "SM2DH",
     },
     "sm2_curve": {
         "name": "SM2 (GB/T 32918)",
         "size": "256-bit prime field",
         "comparable_to": "NIST P-256",
         "oid": "1.2.156.10197.1.301",
-        "nid": "NID_sm2 in OpenSSL",
+        "string_at_0x3271fc": "SM2:1.2.156.10197.1.301",
     },
-    "sm2_operations": [
-        "SM2 digital signature (ECDSA variant with SM3 hash)",
-        "SM2 public key encryption (hybrid encryption for TLCP enc_cert)",
-        "SM2-DHE ephemeral key exchange (ECDHE variant with SM2 curve)",
-    ],
-    "exported_sm2_syms_count": 19,
-    "note": (
-        "SM2 is a Chinese national standard curve used for both key agreement (TLCP "
-        "enc_cert key encapsulation) and digital signature (TLCP sign_cert). "
-        "OpenSSL 3.0 includes upstream SM2 support; TencentOS adds the TLCP-specific "
-        "dual-cert model on top."
+    "public_api_model": (
+        "OpenSSL 3.0 does NOT export SM2_* functions directly. "
+        "SM2 is accessed via EVP_PKEY_CTX with key type 'SM2' (NID_sm2). "
+        "readelf -Ws confirms 0 exported FUNC symbols matching SM2. "
+        "Prior count of '19 exported SM2 syms' was incorrect."
     ),
+    "internal_sm2_functions": {
+        "crypto_operations": {
+            0x0035e208: "sm2_sig_verify — provider dispatch, signature verification",
+            0x0035e220: "ossl_sm2_internal_verify — core EC-DSA verify (SM2 variant)",
+            0x0035e240: "ossl_sm2_compute_z_digest — Z=H(ENTL||ID||a||b||xG||yG||xA||yA)",
+            0x00363a20: "ossl_sm2_plaintext_size — ciphertext length → plaintext length",
+            0x00363a40: "ossl_sm2_decrypt — SM2 hybrid decryption (C1||C2||C3 format)",
+            0x00363a60: "ossl_sm2_encrypt — SM2 hybrid encryption",
+            0x00363a80: "sm2_asym_encrypt — provider KEYENCRYPT dispatch",
+            0x00366180: "ossl_sm2_key_private_check — private key in range [1, n-1]",
+            0x00366e58: "sm2_sig_gen — provider dispatch, signature generation",
+            0x00366e70: "ossl_sm2_internal_sign — core EC-DSA sign (SM2 variant)",
+            0x00366e90: "sm2sig_signature_init — signature context init",
+            0x00366ea8: "sm2sig_newctx — allocate SM2 signature context",
+            0x00366ec0: "sm2sig_set_mdname — set message digest (SM3 by default)",
+        },
+        "key_exchange": {
+            0x00365d60: "SM2_compute_key — legacy SM2 key agreement (compatibility API)",
+            0x00365d70: "sm2dh_derive — SM2-DHE derivation (TLCP ephemeral KE)",
+            0x00366168: "sm2_gen_init — key generation initialization",
+        },
+        "serialization": {
+            0x00364060: "sm2_to_type_specific_no_pub_der_encode",
+            0x00365840: "sm2_to_type_specific_no_pub_pem_encode",
+            0x00364490: "sm22text_encode — SM2 key to text format",
+            0x00364590: "sm22blob_encode — SM2 key to blob format (TencentOS extension)",
+            0x00364e40: "sm2_to_SubjectPublicKeyInfo_pem_encode",
+            0x00364e80: "sm2_to_SubjectPublicKeyInfo_der_encode",
+            0x00364ec0: "sm2_to_PrivateKeyInfo_pem_encode",
+            0x00364f00: "sm2_to_PrivateKeyInfo_der_encode",
+            0x00364f40: "sm2_to_EncryptedPrivateKeyInfo_pem_encode",
+            0x00364f80: "sm2_to_EncryptedPrivateKeyInfo_der_encode",
+        },
+        "source_file_refs": {
+            0x3249da: "crypto/sm2/sm2_sign.c",
+            0x326fee: "crypto/sm2/sm2_crypt.c",
+            0x32770f: "crypto/sm2/sm2_kmeth.c — TencentOS-added key method",
+            0x3277b2: "crypto/sm2/sm2_key.c",
+            0x32d588: "providers/implementations/asymciphers/sm2_enc.c",
+            0x330d40: "providers/implementations/exchange/sm2dh_exch.c",
+            0x3316e0: "providers/implementations/signature/sm2_sig.c",
+        },
+    },
+    "security_note": (
+        "sm2sig_set_mdname (0x366ec0) allows applications to choose any digest with SM2. "
+        "If an application specifies a weak MD (SHA-1, MD5) instead of SM3, signature "
+        "security is reduced. The default is SM3 (SM2-SM3, string at 0x323a1c). "
+        "No enforcement of SM3-only in the libcrypto implementation layer."
+    ),
+    "tencent_extensions": [
+        "crypto/sm2/sm2_kmeth.c — new file (TencentOS patch), SM2 key method for TLCP dual-cert",
+        "sm22text_encode / sm22blob_encode — non-upstream encoding helpers",
+        "'sm2-initiator' role string — TLCP handshake role assignment",
+    ],
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
