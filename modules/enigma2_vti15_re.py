@@ -1887,11 +1887,13 @@ DM4U_BINARY_INVENTORY = {
         },
         "notable_imports": {
             "popen": (
-                "1 caller at VA=0xf8448. Function at ~0xf8428 (ARM32). "
-                "r0 (command) = [original_r0 + 0x18] — C++ object field, NOT a literal string. "
-                "Context: C++ method call; command comes from object state, not HTTP input. "
-                "Likely internal system status query (proc, hwinfo). Injection unconfirmed — "
-                "requires tracing all callers of fn@0xf8428 to determine command source."
+                "1 caller at VA=0xf8448, 1 caller of the wrapper fn@0xf8428 (at VA=0xf84ec). "
+                "Command chain: strdup(*(r1)) → str r0,[r4,#0x18] → popen. "
+                "strdup is PLT stub at 0xc4f54 (index 364). "
+                "Command is a strdup copy of a pre-existing string from a runtime object — "
+                "NOT user-controlled (no HTTP input reaches this path). "
+                "Single-caller wrapper confirms internal system status query (e.g. hardware info). "
+                "Verdict: CLEAN — popen not injectable from network."
             ),
             "execvp": (
                 "1 caller — consistent with eConsoleAppContainer::execute() pattern from VTi. "
