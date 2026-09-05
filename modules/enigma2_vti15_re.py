@@ -75,6 +75,13 @@ BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F04 (INFO/CLEAN) vsftpd 3.0.2: no sprintf/strcpy; all snprintf/strncpy bounded;
                            SITE CHMOD mode sanitized (ubfx strips setuid/setgid); RE complete
 
+DM4U-SPECIFIC FINDINGS:
+  DM4U-F01 (HIGH)         DM4U WebInterface: auth=True by default but trivially bypassed.
+                           Factory root::18929 (empty hash); auth.py:20 returns True on empty hash.
+                           TPM gate: WebInterface requires genuine Dreambox hardware (L3 cert chain).
+                           Chain: genuine DM4U → auth=True → root+empty password → authenticated
+                           → IPKG.py opkg flag injection (E2-F07 equivalent, list-form exec).
+
 PLT MAP (12-byte stubs, base 0x78d20):
   sprintf (0x7a688): 248 callers — 245 literal fmt, 3 dynamic; format-string injection ruled out
   strcpy  (0x79ec0): 229 callers — 12 dynamic src; traced to internal device state
@@ -1876,16 +1883,26 @@ DM4U_WEBIF_ANALYSIS = {
         "https_auth": "ENABLED (ConfigYesNo(default=True))",
         "anti_hijack": "ENABLED (ConfigOnOff(default=True))",
         "extended_security": "ENABLED (ConfigOnOff(default=True))",
-        "contrast_with_vti": (
-            "VTi/OpenWebif: auth=False by default (E2-F04 CRITICAL). "
-            "DM4U: auth=True by default — auth must be disabled by user to expose E2-F07 equivalent. "
-            "Source: plugin.py lines 50-63."
+        "tpm_gate": (
+            "CRITICAL: startServerInstance() requires hardware TPM attestation before WebInterface starts. "
+            "plugin.py: l3c=tpm.getData(eTPM.DT_LEVEL3_CERT); l3k=validate_certificate(l3c,l2k); "
+            "random=get_random(); value=tpm.computeSignature(random); decrypt_block(value,l3k). "
+            "If any step fails, returns False — WebInterface does NOT start. "
+            "Non-genuine hardware (emulators, clones) cannot launch the WebInterface at all."
         ),
-        "implication": (
-            "DM4U E2-F07 equivalent is NOT unauthenticated by default. "
-            "Requires auth bypass (credential theft, brute force, or auth misconfiguration). "
-            "Severity reduced to MEDIUM for default-config devices. "
-            "DM4U ships with stronger security defaults than any VU+ distribution."
+        "empty_root_bypass": (
+            "Despite auth=True, root password is empty on factory DM900: "
+            "shadow entry: root::18929:0:99999:7::: "
+            "auth.py check_passwd(): if cryptedpass == '': return True — line 20. "
+            "Any credential (including empty password) passes when root shadow hash is empty. "
+            "Attack: Authorization: Basic cm9vdDo= (root:empty) → authenticated → E2-F07 equivalent."
+        ),
+        "contrast_with_vti": (
+            "VTi/OpenWebif: auth=False by default, no TPM gate, no anti_hijack — weakest posture. "
+            "DM4U: auth=True by default, TPM attestation gate, anti_hijack=True. "
+            "Net result on genuine DM4U: auth required but trivially bypassed (root::). "
+            "Net result on non-genuine hardware: WebInterface inaccessible entirely. "
+            "DM4U architecture is more defensible but factory credential is the same vulnerability."
         ),
     },
     "dm900_dm920": {
@@ -1945,6 +1962,36 @@ DM4U_WEBIF_ANALYSIS = {
                 "despite different hardware (AArch64 vs Thumb ARM32). Both E2-F07 equivalent "
                 "and tar slip vulnerability are confirmed present.",
     },
+}
+
+DM4U_AUTH_BYPASS = {
+    "finding_id": "DM4U-F01",
+    "severity": "HIGH",
+    "title": "DM4U WebInterface: auth enabled by default but trivially bypassed via empty root credential",
+    "status": "CONFIRMED — factory-fresh DM900/DM920 (build 2021-10-29)",
+    "tpm_gate": (
+        "WebInterface only starts on genuine Dreambox hardware (TPM L3 cert chain). "
+        "eTPM.DT_LEVEL3_CERT → validate_certificate → computeSignature → decrypt_block. "
+        "Non-genuine hardware: WebInterface does not start (returns False). "
+        "Reduces remote attack surface to genuine hardware only."
+    ),
+    "auth_bypass": (
+        "On genuine DM4U: auth=True by default, BUT factory root shadow is empty (root::). "
+        "auth.py check_passwd() line 20: 'if cryptedpass == \"\": return True'. "
+        "Any HTTP Basic credential with username=root passes auth immediately. "
+        "Attack: GET /ipkg?command=install&package=<payload> with 'Authorization: Basic cm9vdDo=' (root:) → 200 OK."
+    ),
+    "chain": (
+        "1. Device is genuine DM4U (TPM gate passes, WebInterface starts). "
+        "2. Auth enabled — 401 on unauthenticated request. "
+        "3. Send Authorization: Basic root:empty → check_passwd('root','') → cryptedpass='' → return True. "
+        "4. Authenticated → /ipkg endpoint accessible. "
+        "5. E2-F07 equivalent (opkg flag injection, list-form exec, no shell expansion). "
+        "Net: auth is a UI-level control, not a security control, when root credential is empty."
+    ),
+    "shadow_evidence": "root::18929:0:99999:7::: (DM4U-Official-DM900-20211029.tar.xz /etc/shadow)",
+    "auth_code_evidence": "auth.py:6-21 — check_passwd() returns True on empty cryptedpass without verifying supplied password",
+    "remediation": "Set root password during first-boot wizard. DM4U UI does not force this on factory reset.",
 }
 
 DM4U_VSFTPD_ANALYSIS = {
