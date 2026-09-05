@@ -38,6 +38,10 @@ FINDINGS SUMMARY:
   E2-F11 (MEDIUM/5.3)    FileController ?dir= endpoint: unauthenticated filesystem directory
                           enumeration; path param unsanitized (no realpath/sanitise_filename_slashes);
                           pattern= goes raw into glob.glob() allowing * ? [] expansion across any path
+  E2-F12 (MEDIUM/5.4)    root.py registers /terminal as ReverseProxyResource(::1, 4200) — port 4200
+                          firewall bypassed; shellinabox accessible via port 80; HTTPS mismatch
+                          unverified; chains with E2-F10 (empty root) → browser root shell on factory
+                          devices; status CANDIDATE pending live proxy verification
 
 INETD SERVICE INVENTORY (services besides OpenWebif):
   vsftpd (port 21):  E2-F03 (local_root=/, write_enable=YES); E2-F10 (no-password root by default)
@@ -91,7 +95,11 @@ SOURCE AUDIT COMPLETENESS (all OpenWebif controllers):
   rest.py, rest_api_controller.py, rest_configuration_api.py: CLEAN
   api.py:            CLEAN
   base.py:           CLEAN — base class only
-  wol.py:            CLEAN — Wake-on-LAN only
+  wol.py + wolsetup: CLEAN — Wake-on-LAN; location= validated against ConfigList choices whitelist
+  root.py:           CLEAN (no shell calls); NOTABLE: /terminal → proxy.ReverseProxyResource(::1, 4200)
+                     — E2-F12; shellinabox HTTP→HTTPS proxy status CANDIDATE
+  models/grab.py:    CLEAN — execute(GRAB_PATH, *args) multi-arg exec form (no shell; contrast E2-F07)
+  models/*.py:       CLEAN — config/read-write only; owibranding.py uses hardcoded os.popen args
   utilities.py:      CLEAN — helper functions
   BouquetEditor.py:  E2-F09 documented above
 """
@@ -1203,6 +1211,75 @@ E2_F11_FILE_DIR_ENUM = {
         "1. Apply the same sanitise_filename_slashes(os.path.realpath(path)) to the dir= branch. "
         "2. Restrict enumerable paths to a whitelist (e.g. /media, /var/enigma2). "
         "3. Enforce auth on FileController regardless of E2-F04 global default."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-F12: /terminal route proxies shellinabox — port 4200 firewall bypass (CANDIDATE)
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_F12_TERMINAL_PROXY = {
+    "finding_id": "E2-F12",
+    "severity": "MEDIUM",
+    "cvss_v3": 5.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "status": "CANDIDATE",
+    "title": "/terminal route proxies shellinabox — port 4200 firewall bypassed via port 80",
+    "component": "OpenWebif controllers/root.py — RootController route registration",
+    "source_path": "/usr/lib/enigma2/python/Plugins/Extensions/OpenWebif/controllers/root.py",
+    "route": "/terminal",
+    "auth_required": False,
+    "auth_note": "Subject to E2-F04 auth=False default on port 80. proxy.ReverseProxyResource inside AuthResource tree.",
+    "vulnerable_registration": (
+        "# root.py line 80-81:\n"
+        "if os.path.exists('/usr/bin/shellinaboxd'):\n"
+        "    self.putChild('terminal', proxy.ReverseProxyResource('::1', 4200, '/'))"
+    ),
+    "mechanism": (
+        "Twisted proxy.ReverseProxyResource connects to shellinaboxd on localhost:4200 "
+        "and forwards HTTP requests. Port 4200 is firewalled externally — "
+        "port 80 OpenWebif is not. The proxy registers under AuthResource (E2-F04 applies). "
+        "With auth=False (default), /terminal is accessible to unauthenticated LAN clients."
+    ),
+    "shellinabox_config": {
+        "daemon_path": "/usr/bin/shellinaboxd",
+        "port": 4200,
+        "start_args": "--cert $SHELLINABOX_CONFIG_DIR -q --background=$PIDFILE -p 4200 --user-css ...",
+        "no_auth_flag": "ABSENT — standard Linux PAM/shadow auth enforced",
+        "https_mode": "shellinaboxd launches with --cert flag; likely HTTPS-only on port 4200",
+    },
+    "http_https_mismatch": (
+        "proxy.ReverseProxyResource makes plain HTTP connections to backend. "
+        "shellinaboxd with --cert flag serves HTTPS on port 4200. "
+        "Plain HTTP to an HTTPS port may fail at TLS layer. "
+        "Proxy may return 502 Bad Gateway or HTTPS redirect. "
+        "CANDIDATE — live verification required to confirm proxy works."
+    ),
+    "impact_if_proxy_works": {
+        "factory_fresh_chain": (
+            "E2-F04 (auth=False) + E2-F12 (port bypass) + E2-F10 (empty root password) "
+            "→ browser-accessible shellinabox shell at GET /terminal/ "
+            "→ Linux login: root + empty password "
+            "→ root shell in browser over port 80. "
+            "No exploit chain needed — factory default credentials + proxy = root shell."
+        ),
+        "configured_device": (
+            "Shellinabox login page exposed on port 80 instead of firewalled port 4200. "
+            "Credential brute-force surface expanded from (blocked) port 4200 to (open) port 80."
+        ),
+    },
+    "impact_if_proxy_fails": (
+        "502/503 response from /terminal reveals shellinabox is running internally. "
+        "Minimal info disclosure — not a functional bypass."
+    ),
+    "cvss_ac_h_rationale": (
+        "AC:H because live verification needed. If proxy confirmed working: "
+        "chain with E2-F10 achieves root shell with factory defaults → AC:L, C/I/A:H."
+    ),
+    "remediation": (
+        "1. Remove /terminal route from root.py, or place it behind mandatory auth regardless of E2-F04. "
+        "2. Bind shellinaboxd to localhost-only with --address=127.0.0.1 to limit blast radius. "
+        "3. Add shellinaboxd to inetd and add auth check in the OpenWebif /terminal handler."
     ),
 }
 
