@@ -1718,6 +1718,39 @@ CROSS_DISTRO_E2_F09_BOUQUET = {
     "evidence_open": "BouquetEditor.pyc: popen string present; VTi 15.0.02 source lines 579/608/622 confirmed",
 }
 
+CROSS_DISTRO_E2_F03_VSFTPD_ROOT = {
+    "finding_id": "E2-F03",
+    "cross_distro_status": "OPEN in all 7 VU+ distributions (VU+ BSP config)",
+    "evidence": (
+        "VTi 15.0.02 vsftpd.conf confirmed identical to VTi 15.0.04: "
+        "local_root=/, write_enable=YES, local_enable=YES, anonymous_enable=NO, "
+        "chroot_local_user=NO, allow_writeable_chroot=YES. "
+        "Other distros: vsftpd.conf not in partial extract (only init.d scripts). "
+        "vsftpd binary is a VU+ custom build (TVFS extension) shared across all distributions "
+        "via the VU+ BSP — same binary SHA on VTi 15.0.02 and 15.0.04. "
+        "The local_root=/ config is a VU+ BSP default, not a VTi addition. "
+        "TVFS extension in VU+-specific binary present in all 7 distros (see CROSS_DISTRO_VSFTPD)."
+    ),
+    "scope": "All 7 VU+ distros. VTi 15.0.02 confirmed by vsftpd.conf. Other distros: same VU+ BSP config "
+             "expected but vsftpd.conf not extracted. DM4U: separate vsftpd build (ARM32/AArch64 binaries), "
+             "config not extracted — E2-F03 applicability to DM4U unknown.",
+}
+
+CROSS_DISTRO_E2_F12_TERMINAL = {
+    "finding_id": "E2-F12",
+    "cross_distro_status": "OPEN in all 7 VU+ distributions",
+    "evidence": (
+        "root.pyc strings across all checked distros: '/usr/bin/shellinaboxd', "
+        "'ReverseProxyResource', 'terminal' — confirmed in OpenATV 7.6, OpenBH 6.0, "
+        "OpenViX 6.9, Pure2 7.6, VTi 15.0.02. "
+        "All root.pyc variants contain the identical /terminal → ReverseProxyResource(::1, 4200) pattern. "
+        "E2-F12 is INFO severity — /terminal endpoint returns 301 redirect to https://[::1]:4200/ "
+        "which browser cannot follow (cross-scheme redirect from HTTP to HTTPS on IPv6 loopback). "
+        "Reveals shellinaboxd is running internally; no direct RCE via the proxy endpoint itself."
+    ),
+    "scope": "All 7 VU+ distros confirmed by root.pyc string analysis. DM4U: OpenWebif absent.",
+}
+
 CROSS_DISTRO_E2_F02_FILE_DOWNLOAD = {
     "finding_id": "E2-F02",
     "cross_distro_status": "OPEN in all 7 VU+ distributions",
