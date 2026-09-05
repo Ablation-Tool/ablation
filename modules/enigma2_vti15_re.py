@@ -1950,8 +1950,12 @@ CROSS_DISTRO_E2_F10_ROOT_PASSWORD = {
             "SSH/22 dropbear (DROPBEAR_EXTRA_ARGS='' CONFIRMED — blank passwords NOT allowed): SSH login fails",
         ],
         "dm4u-dm900": [
-            "WebInterface (port 80): auth.py check_passwd() returns True on empty hash (DM4U-F01)",
-            "FTP/SSH: vsftpd.conf + dropbear config not in extract (partial firmware) — service auth posture unknown",
+            "WebInterface (port 80): auth.py check_passwd() returns True on empty hash (DM4U-F01); "
+            "LAN auth bypass via localauth=False (DM4U-F03); FileStreamer arbitrary read (DM4U-F04); "
+            "Uploader path traversal write (DM4U-F05 CRITICAL); BouquetEditor tar slip (DM4U-F06)",
+            "FTP/21 vsftpd (no local_root=, home=/root, chroot_local_user=NO → cd / full FS): root login + blank password CONFIRMED",
+            "SSH/22 dropbear (-i -B via xinetd, blank passwords allowed): root SSH CONFIRMED",
+            "Telnet/23 busybox-telnetd (xinetd, securetty pts/0-9): root telnet + blank password CONFIRMED",
         ],
     },
     "scope": (
