@@ -44,11 +44,10 @@ FINDINGS SUMMARY:
                           Filename= param; path.exists() gate bypassed via E2-F08 or E2-F03;
                           commented-out path.join() confinement; 2-step chain to RCE as root
   E2-F10 (HIGH/8.6)      Factory-default root has no password: /etc/shadow root entry ships
-                          with empty hash — unconfigured devices trivially pwned as root via 3 paths:
-                          (1) FTP/21 vsftpd (local_root=/), (2) Telnet/23 BusyBox v1.23.2
-                          (securetty includes pts/0-63, root PTY login allowed),
-                          (3) SSH/22 dropbear -B (allows blank-password logins);
-                          live device has changed the password but factory-fresh VTi 15.0.04 ships root::
+                          with empty hash — CROSS-DISTRO: VTi 15.0.04 + OpenPLi 9.2 (MIPS+ARM32) + DM4U DM900;
+                          VTi paths: FTP/21 + Telnet/23 (pts/0-63 in securetty) + SSH/22 (dropbear -B);
+                          OpenPLi paths: FTP/21 + Telnet/23 (pts/0-3) — SSH not -B (blank login fails);
+                          live device has changed the password but factory image ships root::
   E2-F11 (MEDIUM/5.3)    FileController ?dir= endpoint: unauthenticated filesystem directory
                           enumeration; path param unsanitized (no realpath/sanitise_filename_slashes);
                           pattern= goes raw into glob.glob() allowing * ? [] expansion across any path
@@ -1734,7 +1733,13 @@ CROSS_DISTRO_E2_F09_BOUQUET = {
         "tarfile module is not injectable via Filename= parameter."
     ),
     "evidence_fixed": "BouquetEditor.pyc: 'tarfile' module strings present, no popen/subprocess strings",
-    "evidence_open": "BouquetEditor.pyc: popen string present; VTi 15.0.02 source lines 579/608/622 confirmed",
+    "evidence_open": (
+        "VTi 15.0.02: source lines 579/608/622 confirmed popen + 'tar cvf %s %s'. "
+        "OpenPLi 9.2 MIPS vuzero BouquetEditor.pyc (SHA 25083a4d5fc8, 20062 bytes): "
+        "strings confirmed: 'popen)', 'tar cvf %s %sTz', 'webbouqueteditor_backup.tarc', "
+        "'RESTORE', 'restoreFiles' — same popen injection path as VTi. "
+        "OpenPLi 9.2 ARM32 BouquetEditor.pyc: expected identical (same OpenWebif codebase)."
+    ),
 }
 
 CROSS_DISTRO_E2_F03_VSFTPD_ROOT = {
@@ -1820,17 +1825,35 @@ CROSS_DISTRO_E2_F08_REST_FS = {
 
 CROSS_DISTRO_E2_F10_ROOT_PASSWORD = {
     "finding_id": "E2-F10",
-    "cross_distro_status": "VTi 15.0.04 specific — not confirmed in other distros",
+    "cross_distro_status": "OPEN in VTi 15.0.04 + OpenPLi 9.2 — NOT VTi-specific",
     "evidence": (
-        "VTi 15.0.04 (build 2025-07-15): /etc/shadow root:: (empty hash). E2-F10 CONFIRMED. "
-        "VTi 15.0.02 (build date unknown): shadow root entry has sha512 hash set — E2-F10 NOT present. "
-        "Other distros: /etc/shadow not in firmware extract (only enigma2 binary + OpenWebif extracted). "
-        "VU+ convention: factory images may ship with empty root or a build-specific default. "
-        "The empty root is specific to the build shipped on the live device (82.84.145.15, VTi 15.0.04). "
-        "Cannot extend to other distros without shadow extraction."
+        "VTi 15.0.04 (build 2025-07-15): root::20285 (empty hash). CONFIRMED. "
+        "VTi 15.0.02: sha512 hash set — NOT present. "
+        "OpenPLi 9.2 MIPS vuzero (build 2024): root::20695 — CONFIRMED. "
+        "OpenPLi 9.2 ARM32 vuduo4k (build 2024): root::20695 — CONFIRMED. "
+        "OpenPLi ships with the same date (20695 = 2026-08-17 epoch days) across both ISAs. "
+        "VTi/OpenPLi convention: factory image ships with empty root hash. "
+        "DM4U DM900: root::18929 — CONFIRMED (2021-10-29 build); already in DM4U_AUTH_BYPASS. "
+        "Other VU+ distros: shadow not extracted — status unknown."
     ),
-    "scope": "CONFIRMED VTi 15.0.04 only. VTi 15.0.02 has password set (different build). "
-             "Other distros: shadow not extracted — status unknown.",
+    "service_paths": {
+        "vti-15.0.04": [
+            "FTP/21 vsftpd (local_root=/): unauthenticated root",
+            "Telnet/23 BusyBox v1.23.2 (securetty includes pts/0-63): unauthenticated root shell",
+            "SSH/22 dropbear -B (blank password allowed): unauthenticated root SSH",
+        ],
+        "openpli-9.2-mips-vuzero": [
+            "FTP/21 vsftpd (inetd): unauthenticated root",
+            "Telnet/23 BusyBox telnetd (securetty includes pts/0-3): unauthenticated root shell",
+            "SSH/22 dropbear (DROPBEAR_EXTRA_ARGS='' — blank passwords NOT allowed): SSH login fails",
+        ],
+        "dm4u-dm900": [
+            "WebInterface (port 80): auth.py check_passwd() returns True on empty hash (DM4U-F01)",
+            "SSH/FTP: config not in extract — service auth posture unknown",
+        ],
+    },
+    "scope": "CONFIRMED VTi 15.0.04, OpenPLi 9.2 (MIPS + ARM32), DM4U DM900/DM920. "
+             "VTi 15.0.02: NOT present. Other VU+ distros: shadow not extracted.",
 }
 
 CROSS_DISTRO_E2_F11_GLOB_INJECTION = {
