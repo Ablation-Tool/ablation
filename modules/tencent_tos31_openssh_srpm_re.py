@@ -40,7 +40,8 @@ OPENSSH_SRPM_INVENTORY_TOS31 = {
         "terminal_version": True,
         "cvs_2023_38408_patch": False,
         "cvs_2023_48795_patch": False,
-        "pkcs11_whitelist": False,
+        "pkcs11_whitelist_cve_fix": False,
+        "pkcs11_whitelist_mechanism": True,  # present in 8.0p1 baseline via pkcs11-uri.patch
     },
 }
 
@@ -52,7 +53,14 @@ OPENSSH_PATCH_AUDIT_13 = {
     ],
     "cve_2023_38408_patch": "ABSENT",
     "cve_2023_48795_patch": "ABSENT",
-    "pkcs11_whitelist_flag": "ABSENT (no '-P pkcs11_whitelist' in spec or patches)",
+    "pkcs11_whitelist_mechanism": (
+        "PRESENT via openssh-8.0p1-pkcs11-uri.patch (baseline 8.0p1 feature). "
+        "Binary confirmed: mechanism is present. Default = '/usr/lib*/*,/usr/local/lib*/*'. "
+        "NOTE: the CVE fix is the default changing to empty (deny-all). "
+        "The 8.0p1 default allows /usr/lib*/* — CVE-2023-38408 is still OPEN. "
+        "Prior SRPM analysis incorrectly stated mechanism ABSENT; corrected by binary RE "
+        "(see tencent_tos31_binary_re.py F04 for full analysis)."
+    ),
     "latest_cve_in_set": "CVE-2021-41617 (privilege escalation)",
     "updates_srpms_openssh": "ABSENT (no openssh in Updates-srpms for TOS 3.1)",
 }
@@ -63,7 +71,7 @@ COUNTER_DELTA_TOS31_TO_TOS33 = {
     "counter_delta": 11,
     "elapsed_months": "~32 months",
     "patches_added_in_delta_confirmed_by_TOS33_binary": [
-        "CVE-2023-38408 PKCS#11 whitelist (strings: '-P pkcs11_whitelist', 'refusing PKCS#11 provider ... not whitelisted')",
+        "CVE-2023-38408 fix: default whitelist changed to empty/deny-all (mechanism was already present in 8.0p1 via pkcs11-uri.patch, but default was /usr/lib*/*; TOS 3.3 -25 sets deny-all default)",
         "CVE-2023-48795 Terrapin kex-strict (strings: 'kex-strict-s-v00@openssh.com')",
         "Other fixes in CVE and stability categories (OpenSSL API updates, FIPS changes, etc.)",
     ],
@@ -79,23 +87,27 @@ COUNTER_DELTA_TOS31_TO_TOS33 = {
 FINDINGS = {
     "TOS31-OPENSSH-F01": {
         "title": (
-            "TOS 3.1 openssh 8.0p1-13 (Terminal Version) Predates CVE-2023-38408; "
-            "PKCS#11 Whitelist Mechanism Absent — ssh-agent Agent Forwarding RCE Open; "
-            "No openssh Update Path in TOS 3.1 Update Channel"
+            "TOS 3.1 openssh 8.0p1-13 (Terminal) CVE-2023-38408 OPEN — "
+            "default pkcs11_whitelist allows /usr/lib*/*; deny-all fix not applied; "
+            "no openssh update path in TOS 3.1 channel"
         ),
         "severity": "HIGH",
-        "cvss": "9.8",
-        "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-        "cwe": "CWE-20",
-        "component": "openssh-8.0p1-13.tl3 (TOS 3.1 terminal version, Oct 2021)",
+        "cvss": "7.3",
+        "cvss_vector": "AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "cwe": "CWE-426",
+        "component": "openssh-8.0p1-13.tl3 (TOS 3.1 terminal version, Jan 2022)",
         "description": (
             "CVE-2023-38408 (Qualys, July 2023): Remote code execution in ssh-agent "
-            "via untrusted PKCS#11 provider loading. Fix requires the PKCS#11 provider "
-            "allowlist (-P pkcs11_whitelist) introduced in OpenSSH 8.9p1. "
+            "via untrusted PKCS#11 provider loading during agent forwarding. "
+            "Fix = default whitelist changed to empty (deny-all). "
+            "Binary RE correction (2026-09-04): pkcs11_whitelist mechanism IS present "
+            "in OpenSSH 8.0p1 as a baseline feature (via pkcs11-uri.patch). "
+            "Compiled-in default: '/usr/lib*/*,/usr/local/lib*/*' — not deny-all. "
+            "CVE status remains OPEN: the attack succeeds via /usr/lib*/* paths. "
             "\n"
             "TOS 3.1 status: "
             "  openssh-8.0p1-13.tl3 is the highest counter SRPM in TencentOS-srpms. "
-            "  Changelog date: October 26, 2021 — 21 months before CVE-2023-38408 disclosure. "
+            "  Binary build date: January 11, 2022 — 18 months before CVE-2023-38408 disclosure. "
             "  Patch audit: no CVE-2023-38408.patch, no pkcs11_whitelist implementation. "
             "  Updates-srpms: no openssh package — no update path in TOS 3.1 update channel. "
             "\n"
