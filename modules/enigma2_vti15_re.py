@@ -1600,6 +1600,7 @@ CROSS_DISTRO_BERT_SWEEP = {
         "openpli-9.2":  {"ipc_buf_alloc": ("0x156b9c", 0.957), "dvb_dispatch": ("0xd22f0", 0.806)},
         "openvix-6.9":  {"ipc_buf_alloc": ("0x41921c", 0.916), "dvb_dispatch": ("0x3bb380", 0.775)},
         "pure2-7.6":    {"ipc_buf_alloc": ("0x451b1c", 0.925), "dvb_dispatch": ("0x419b8c", 0.773)},
+        "openpli-scarthgap": {"ipc_buf_alloc": ("0x1d840c", 0.961), "dvb_dispatch": ("0xd41bc", 0.812)},
     },
     "sweep_notes": (
         "Scores 0.916-0.963 for ipc_buf_alloc across all distros — high confidence structural homologs. "
@@ -1716,8 +1717,11 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
                                  "uno4kse=75f4ae4d, zero4k=73d0a4b5) — all 6595 ARM32 prologues, no 0x220."},
         "openpli-scarthgap": {"confirmed": False,
                                "sha256": "29e4b27dcf84", "size_bytes": 2689816, "arm32_prologues": 6996,
+                               "bert_ipc_homolog": ("0x1d840c", 0.961),
+                               "bert_ipc_verified": "FALSE_POSITIVE — vtable-dispatch function, not allocator",
                                "note": "OpenPLi dev branch (2026-09-04). ARM32, 6996 prologues. "
-                                       "No MOV r1,#0x220. "
+                                       "No MOV r1,#0x220. BERT ipc_buf_alloc homolog at 0x1d840c (0.961) "
+                                       "is a vtable-dispatch function — same false-positive pattern as OpenPLi 9.2. "
                                        "E2-F09: FIXED (tarfile module). E2-F07: OPEN (eConsoleAppContainer). "
                                        "vsftpd: SITE CHMOD + ubfx #0,#9 at 0xef80 — CLEAN (SHA 508e21ca4a20)."},
         "openvix-6.9":  {"confirmed": False, "note": "No 0x220 constant found"},
