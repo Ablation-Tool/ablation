@@ -1129,8 +1129,14 @@ CONFIRMED_9222232_ADDRS = {
     #
     # BLAST RADIUS (if strncpy bound > 32):
     #   Overflow from gp_obj+0x2b1 into gp_obj+0x2d1 (32-byte boundary)
-    #   Corrupts string fields representing other VPN policy attributes
-    #   (ACL names, DNS settings, banner strings — TBD from further RE)
+    #   Corrupts string fields representing other VPN policy attributes.
+    #   FIELD MAPPING (from binary — strncpy dst analysis + stride pattern in gp_attr_kv_parser):
+    #     gp_obj+0x2b1 (32 bytes): group_policy_name  [CONFIRMED strncpy bound=32 at 0x1a30894]
+    #     gp_obj+0x2d1 (16 bytes): first adjacent field — 6 refs at 0x1a32d8b/0x1a32d94 (ACL candidate)
+    #     gp_obj+0x2e1 (16 bytes): second adjacent field — 3 refs, paired with +0x2c1 and +0x3e2
+    #     gp_obj+0x300 (ptr):      third field — qword pointer, 3 refs at 0x1a46313
+    #   Blast radius thresholds: OU= byte 33+ hits +0x2d1; byte 49+ hits +0x2e1.
+    #   Policy effect: ACL name / address-pool / DNS field corruption → VPN policy bypass.
     #   Overflow is on the heap (gp_obj heap-allocated) → potential heap metadata corruption
     #
     # SEVERITY ADJUSTMENT:
