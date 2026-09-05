@@ -1562,8 +1562,10 @@ CROSS_DISTRO_BINARY_INVENTORY = {
                          "multi_hw": "OpenPLi 9.2 has 6+ distinct enigma2 binaries by hardware platform "
                                      "(duo4k=8baf299c, duo4kse=8afe6f75, solo4k=da43dddb, ultimo4k=31ce3ff9, "
                                      "uno4k=f89c75a6, uno4kse=75f4ae4d, zero4k=73d0a4b5). "
-                                     "BERT sweep run on vuduo4k only. vsftpd is same binary (732c6fb8) "
-                                     "across all 4K variants — SITE CHMOD analysis universal."},
+                                     "BERT sweep run on all 7 hardware variants (cap=2000 funcs each). "
+                                     "All 6 non-duo4k hardware produce identical BERT results (ipc@0xcc00c, "
+                                     "dvb@0xd22f0) — shared early-text code region. "
+                                     "vsftpd same binary (732c6fb8) across all 4K variants — SITE CHMOD analysis universal."},
         "openvix-6.9":  {"size_bytes": 1155072, "sha256": "2bf7ccd22b1b", "isa": "thumb"},
         "pure2-7.6":    {"size_bytes": 1245184, "sha256": "9d9784b13bfb", "isa": "thumb"},
         "dm4u-dm900":   {"size_bytes": 6032460, "sha256": "92965306a9ab", "isa": "thumb",
@@ -1597,7 +1599,13 @@ CROSS_DISTRO_BERT_SWEEP = {
         "openatv-7.6":  {"ipc_buf_alloc": ("0x91c7c", 0.954), "dvb_dispatch": ("0xd3844", 0.811)},
         "openatv-8.0b": {"ipc_buf_alloc": ("0x54b4bc", 0.920), "dvb_dispatch": ("0x552b02", 0.784)},
         "openbh-6.0":   {"ipc_buf_alloc": ("0x46b864", 0.917), "dvb_dispatch": ("0x40b362", 0.763)},
-        "openpli-9.2":  {"ipc_buf_alloc": ("0x156b9c", 0.957), "dvb_dispatch": ("0xd22f0", 0.806)},
+        "openpli-9.2 vuduo4k":  {"ipc_buf_alloc": ("0x156b9c", 0.957), "dvb_dispatch": ("0xd22f0", 0.806),
+                             "ipc_verified": "FALSE_POSITIVE — list iterator, not allocator"},
+        "openpli-9.2 all-hw (cap=2000)": {"ipc_buf_alloc": ("0xcc00c", 0.950), "dvb_dispatch": ("0xd22f0", 0.783),
+                             "note": "All 6 hardware variants (duo4kse/solo4k/ultimo4k/uno4k/uno4kse/zero4k) "
+                                     "return identical results at cap=2000 — shared early-text code region. "
+                                     "fn@0xcc00c is a recursive linked-list destructor (size=0x20/node, NOT IPC allocator). "
+                                     "dvb_dispatch@0xd22f0 consistent with vuduo4k result."},
         "openvix-6.9":  {"ipc_buf_alloc": ("0x41921c", 0.916), "dvb_dispatch": ("0x3bb380", 0.775)},
         "pure2-7.6":    {"ipc_buf_alloc": ("0x451b1c", 0.925), "dvb_dispatch": ("0x419b8c", 0.773)},
         "openpli-scarthgap": {"ipc_buf_alloc": ("0x1d840c", 0.961), "dvb_dispatch": ("0xd41bc", 0.812)},
@@ -1607,7 +1615,7 @@ CROSS_DISTRO_BERT_SWEEP = {
         "Caveat: BERT structural similarity does not guarantee same buffer size constant. "
         "Manual verification required: MOV r1,#0x220 search found this constant only in "
         "VTi 15.0.02 (0x24e124) and OpenATV 7.6 (2 offsets). "
-        "OpenPLi, OpenBH, OpenViX, Pure2 have different IPC implementations. "
+        "OpenPLi (all 7 VU+ hardware variants + scarthgap), OpenBH, OpenViX, Pure2 have different IPC implementations. "
         "VTi 15.0.02 actual IPC allocator: fn@0x25e0f4 (confirmed by MOV r1,#0x220 search; "
         "BERT top match at 0xb2f04 was a false positive — corpus capped at 4000 of 8151 functions)."
     ),
