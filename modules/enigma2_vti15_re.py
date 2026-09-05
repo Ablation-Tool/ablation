@@ -34,12 +34,17 @@ FINDINGS SUMMARY:
                           with empty hash — unconfigured devices trivially FTP-pwned as root;
                           inetd.conf also runs telnetd as root (port 23); live device has changed
                           the password but factory-fresh VTi 15.0.04 ships with root::
+  E2-F11 (MEDIUM/5.3)    FileController ?dir= endpoint: unauthenticated filesystem directory
+                          enumeration; path param unsanitized (no realpath/sanitise_filename_slashes);
+                          pattern= goes raw into glob.glob() allowing * ? [] expansion across any path
 
 INETD SERVICE INVENTORY (services besides OpenWebif):
   vsftpd (port 21):  E2-F03 (local_root=/, write_enable=YES); E2-F10 (no-password root by default)
   telnetd (port 23): BusyBox v1.23.2, runs as root; securetty may block PTY root login
   streamproxy (port 8001): HTTP Basic Auth enforced; forwards to enigma2 /web/stream endpoint;
-                            7972-byte binary; has strcpy + sprintf imports but auth gates access
+                            7972-byte binary; strcpy + sprintf are dead imports (0 BL call sites in .text);
+                            upstream request built via snprintf(buf, 0x100, ...) — bounded, no overflow;
+                            see E2-BIN-F03
 
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
@@ -77,7 +82,9 @@ SOURCE AUDIT COMPLETENESS (all OpenWebif controllers):
   web.py:            CLEAN — no eConsole/system calls
   ajax.py:           CLEAN — enigma2 service API only
   stream.py:         CLEAN — DVB service reference, not shell
-  file.py:           E2-F02 surface — arbitrary file read (already documented)
+  file.py:           E2-F02 (file download) + E2-F11 (dir= enumeration, glob injection)
+                     file= param: sanitise_filename_slashes(realpath(...)) — some sanitization
+                     dir= param: UNSANITIZED — goes raw to glob.glob(); no realpath; E2-F11
   mobile.py:         CLEAN — no injection primitives
   AT.py, ER.py, SR.py: CLEAN
   rest.py, rest_api_controller.py, rest_configuration_api.py: CLEAN
@@ -823,6 +830,80 @@ E2_BIN_F02_SYSTEM_DVB_CI = {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-BIN-F03: streamproxy — no overflow (CLEAN)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# Binary: /usr/bin/streamproxy (port 8001), 7972 bytes, ARM32 EABI5 ET_EXEC, stripped
+# PLT layout correction: PLT[0] resolver = 20 bytes (4 instructions + 4-byte data word)
+#   at 0x10888-0x1089b. First stub at 0x1089c (not 0x10894). Stubs 12 bytes each.
+#   Corrected stub addresses: snprintf=0x10998, strcpy=0x10920, sprintf=0x109d4.
+# BL scan (ARM mode, full .text): 0 callers to strcpy (0x10920), 0 to sprintf (0x109d4).
+#   Both symbols appear in PLT/GOT but are dead imports — no call sites in .text.
+# Upstream HTTP request build (the only complex string operation):
+#   0x10bfc: mov r1, #0x100     ; snprintf size limit = 256 bytes
+#   0x10c00: ldr r2, [pc, #...]  ; format = "GET /web/stream?StreamService=%s HTTP/1.0\r\n..."
+#   0x10c04: add r0, sp, #0x4b0  ; dest buffer at sp+0x4b0 (stack frame = 0x6b0 = 1712 bytes)
+#   0x10c0c: add r3, sp, #0xb5   ; StreamService data
+#   0x10c10: bl  #0x10998         ; snprintf — confirmed via PLT map
+# snprintf limits output to 256 bytes. Destination has 0x200 bytes before frame end. Safe.
+# HTTP auth forwarded to enigma2 on localhost:80 (enigma2 validates credentials).
+# StreamService parameter passed via %s in snprintf — if it contains \r\n, header injection
+#   into localhost:80 request is theoretically possible, but target is local enigma2 only.
+
+E2_BIN_F03_STREAMPROXY_CLEAN = {
+    "finding_id": "E2-BIN-F03",
+    "severity": "INFO",
+    "status": "CLEAN",
+    "title": "streamproxy (port 8001): no buffer overflow — snprintf bounded, strcpy/sprintf dead imports",
+    "binary": "/usr/bin/streamproxy",
+    "binary_size_bytes": 7972,
+    "plt_correction": (
+        "PLT resolver for this binary occupies 20 bytes (4 ARM instructions + 4-byte GOT offset word). "
+        "First stub at 0x1089c. Stub stride = 12 bytes. "
+        "snprintf = stub 21 = 0x1089c + 21*12 = 0x10998. "
+        "strcpy = stub 11 = 0x10920. sprintf = stub 26 = 0x109d4."
+    ),
+    "strcpy_callers": 0,
+    "sprintf_callers": 0,
+    "dead_import_note": (
+        "strcpy and sprintf appear in PLT/GOT (imported by the linker) but have "
+        "0 BL call sites in .text. They are dead imports — likely pulled in by "
+        "C runtime initialization code, not by application logic."
+    ),
+    "string_ops_analysis": {
+        "upstream_request_build": {
+            "call_va": "0x10c10",
+            "plt_target": "0x10998 (snprintf)",
+            "r1_size": 0x100,
+            "format_string": "GET /web/stream?StreamService=%s HTTP/1.0\\r\\n...",
+            "dest_buffer": "sp+0x4b0 (512 bytes to frame end at sp+0x6b0)",
+            "verdict": "Bounded — snprintf(buf, 256, format, user_data). No overflow.",
+        },
+        "subsequent_ops": [
+            {"va": "0x10c18", "target": "strlen (0x10968)", "use": "get built request length"},
+            {"va": "0x10c28", "target": "write (0x109b0)", "use": "send to enigma2 upstream"},
+        ],
+    },
+    "auth_mechanism": (
+        "streamproxy reads Authorization: header from client. "
+        "Forwards auth header to enigma2 at localhost:80 in the upstream request. "
+        "enigma2 validates credentials. If upstream returns 401, streamproxy returns 401 to client. "
+        "No local shadow/pam auth in streamproxy itself."
+    ),
+    "residual_surface": (
+        "StreamService value passed via %s into upstream HTTP request. "
+        "If value contains \\r\\n, can inject headers into the localhost:80 request. "
+        "Target is localhost enigma2 only (not SSRF to external). "
+        "Requires valid credentials. Not a standalone finding."
+    ),
+    "conclusion": (
+        "streamproxy is not an attack surface beyond requiring valid credentials. "
+        "All exploitable attack paths go through port 80/443 OpenWebif directly. "
+        "Binary RE complete."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
 # FINDING E2-F08: Unrestricted filesystem read + write via /fs REST endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -1025,6 +1106,80 @@ E2_F09_BOUQUETEDITOR_POPEN = {
     "cvss_ac_h_rationale": (
         "AC:H because attacker must first create a file with semicolon in name via a secondary step "
         "(E2-F08 or E2-F03). If E2-F08 or E2-F03 is already exploited, this becomes trivial chaining."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-F11: FileController dir= — unauthenticated directory enumeration + glob injection
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_F11_FILE_DIR_ENUM = {
+    "finding_id": "E2-F11",
+    "severity": "MEDIUM",
+    "cvss_v3": 5.3,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "status": "CONFIRMED",
+    "title": "FileController ?dir= endpoint: unauthenticated filesystem enumeration with glob injection",
+    "component": "OpenWebif controllers/file.py — FileController.render() dir= branch",
+    "source_path": "/usr/lib/enigma2/python/Plugins/Extensions/OpenWebif/controllers/file.py",
+    "route": "/file?dir=<path>&pattern=<glob>&nofiles=1",
+    "auth_required": False,
+    "auth_note": "Same auth gate as all OpenWebif endpoints. Auth=False by default (E2-F04).",
+    "vulnerable_code": (
+        "if 'dir' in request.args:\n"
+        "    path = request.args['dir'][0]          # unsanitized — no realpath, no sanitise_filename_slashes\n"
+        "    pattern = request.args.get('pattern', ['*'])[0]  # user-controlled glob pattern\n"
+        "    files = glob.glob(path + '/' + pattern)  # arbitrary path + arbitrary glob\n"
+        "    return json.dumps({'result': True, 'dirs': directories, 'files': files})\n"
+    ),
+    "asymmetric_sanitization": (
+        "The file= branch applies sanitise_filename_slashes(os.path.realpath(filename)) "
+        "before any filesystem access. The dir= branch applies NO sanitization — path goes "
+        "directly into glob.glob(). Same controller, different code paths, different trust models."
+    ),
+    "capabilities": {
+        "directory_listing": "GET /file?dir=/etc → JSON list of all files and subdirs under /etc",
+        "root_listing": "GET /file?dir=/ → list all top-level directories",
+        "glob_expansion": (
+            "GET /file?dir=/proc&pattern=*/cmdline → lists /proc/<pid>/cmdline for all processes\n"
+            "GET /file?dir=/&pattern=etc/shadow → confirms /etc/shadow existence (POSIX allows // prefix)\n"
+            "GET /file?dir=/&pattern=**/id_rsa → Python 2.7 glob does NOT support **, no recursion"
+        ),
+        "file_existence_oracle": (
+            "glob.glob() returns empty list if no match. "
+            "Attacker can confirm any file path existence without reading content."
+        ),
+        "nofiles_flag": (
+            "?nofiles=1 suppresses file entries; returns only directory names. "
+            "Useful for quiet directory tree exploration."
+        ),
+    },
+    "vs_e2_f02": (
+        "E2-F02 (/file?action=download) reads file content. "
+        "E2-F11 (/file?dir=) provides targeted enumeration before download: "
+        "enumerate /home to find user dirs, then E2-F02 to download ~/.ssh/id_rsa. "
+        "Together they are a full read-enumerate-exfil primitive."
+    ),
+    "notable_absences": {
+        "no_path_restriction": "No chroot, no allowed-path whitelist, no os.path.realpath to prevent symlink traversal",
+        "no_delete": "action=delete branch returns 'TODO: DELETE FILE: %s' — not implemented",
+        "python27_glob": "Python 2.7 glob does not support ** recursive match; traversal limited to explicit paths",
+    },
+    "exploit_path": (
+        "GET /file?dir=/etc HTTP/1.1 → enumerates /etc (shadow, vsftpd.conf, passwd visible)\n"
+        "GET /file?dir=/proc&pattern=*/status → enumerates all running processes\n"
+        "GET /file?dir=/var/volatile&pattern=* → enumerates volatile runtime config\n"
+        "GET /file?dir=/home&pattern=*/.ssh HTTP/1.1 → finds SSH key directories if present"
+    ),
+    "chain": (
+        "E2-F04 (auth=False default) → E2-F11 (enumerate target paths) "
+        "→ E2-F02 or E2-F08 (download specific file) "
+        "→ credential exfil → authenticated access to additional services."
+    ),
+    "remediation": (
+        "1. Apply the same sanitise_filename_slashes(os.path.realpath(path)) to the dir= branch. "
+        "2. Restrict enumerable paths to a whitelist (e.g. /media, /var/enigma2). "
+        "3. Enforce auth on FileController regardless of E2-F04 global default."
     ),
 }
 
