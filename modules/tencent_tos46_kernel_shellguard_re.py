@@ -76,8 +76,35 @@ SHELLGUARD_SYMBOL_MAP = {
 
     # Internal helpers
     "shellguard_check_binary":     0xffffffff81644c00,  # deep enforcement path
+    "shellguard_permitted_file":   0xffffffff816441e0,  # pre-filter: snprintf path + get_user_pages_remote
     "shellguard_get_binary_hash":  0xffffffff816438c0,  # reads file, computes MD5 hex
-    "shellguard_path_match":       0xffffffff817bf270,  # glob pattern matcher
+    "shellguard_path_match":       0xffffffff817bf270,  # glob pattern matcher = glob_match()
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# KERNEL FUNCTION RESOLUTION (via __ksymtab / __ksymtab_gpl in vmlinux ELF)
+# Confirmed by scanning ksymtab relative-offset entries against target VAs.
+# ──────────────────────────────────────────────────────────────────────────────
+
+KERNEL_FUNCTION_RESOLUTION = {
+    # used in shellguard_check_binary (0xffffffff81644c00)
+    0xffffffff813e0f10: "kmalloc_trace",           # kmalloc(0x400, GFP_KERNEL|__GFP_ZERO=0xdc0)
+    0xffffffff813dc5b0: "kfree",                   # kfree(buf) on all exit paths
+    0xffffffff81db8ab0: "mutex_lock",              # sig_list_mutex acquire
+    0xffffffff81db7800: "mutex_unlock",            # sig_list_mutex release
+    0xffffffff817bf270: "glob_match",              # entry->comm, entry->path pattern matching
+    0xffffffff81d9bc60: "memcmp",                  # hash comparison (33 bytes; non-const-time)
+    # used in shellguard_permitted_file (0xffffffff816441e0)
+    0xffffffff81da2320: "snprintf",                # snprintf(buf, 1023, "%s", bprm->filename)
+    0xffffffff81395f40: "get_user_pages_remote",   # read 1 page from bprm->mm at bprm->p
+    0xffffffff81db9e10: "down_read",               # down_read(&mm->mmap_lock)
+    0xffffffff811a2130: "up_read",                 # up_read(&mm->mmap_lock)
+    # used in shellguard_get_binary_hash (0xffffffff816438c0)
+    0xffffffff81469520: "kernel_read",             # reads binary file content
+    0xffffffff811300c0: "__task_pid_nr_ns",        # audit: get pid for log
+    # VA NOT shellguard: standard kernel functions at confirmed addresses
+    0xffffffff81466790: "filp_open",               # NOT called by shellguard directly
+    0xffffffff813a5860: "access_process_vm",       # NOT called by shellguard directly
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -133,28 +160,36 @@ enabled_path:
 CHECK_BINARY_ANALYSIS = {
     "va": 0xffffffff81644c00,
     "logic": """
-; Allocate kernel buffer (0xdc0=3520 bytes, GFP_KERNEL|__GFP_ZERO=0xdc0)
-; [TBD: exact allocation mechanism under further analysis]
-; Try primary path: shellguard_get_binary_hash(bprm, buf)
-0xffffffff81644c54: call 0xffffffff816441e0   ; primary check (TBD)
-                     ; returns 0: falls to exit with r13=-22 (EINVAL = DENY)
-                     ; non-zero: proceed to sig_list verification
+; kmalloc_trace(kmalloc_caches[KMALLOC_NORMAL][10], GFP_KERNEL|__GFP_ZERO=0xdc0, 0x400)
+;   = kmalloc(1024, GFP_KERNEL|__GFP_ZERO) — 1024-byte zero-initialized heap buffer
+;   rdi = kmalloc_caches[10] (global runtime ptr to slab cache for 1024-byte objects)
+;   esi = 0xdc0 = GFP_KERNEL(0xcc0)|__GFP_ZERO(0x100) — zeroed kernel allocation
+;   edx = 0x400 = 1024 — allocation size
+;   returns char *buf; freed with kfree(0xffffffff813dc5b0) on all exit paths
+0xffffffff81644c54: call shellguard_permitted_file(bprm, buf)   ; 0xffffffff816441e0
+;   internal: snprintf(buf, 1023, "%s", bprm->filename) — exec path into buffer
+;   internal: down_read(&bprm->mm->mmap_lock) +
+;             get_user_pages_remote(bprm->mm, bprm->p, 1, 0, pages, NULL) +
+;             up_read() — reads 1 page from user stack (argv[0])
+;   returns 0: binary not in quick-permit path → kfree(buf), return -22 (EINVAL=DENY)
+;   returns non-zero: binary in watch entry → proceed to full sig_list verification
 
-; If primary path fails: sig_list check
-; Acquire sig_list_mutex, walk sig_list for (comm, path) match via path_match_fn
-0xffffffff81644cc9: call path_match_fn(entry->comm, current_cred)
-0xffffffff81644cdc: call path_match_fn(entry->path, buf)
-; Both must match (AND condition)
+; sig_list walk: mutex_lock(sig_list_mutex) at 0xffffffff81644c96
+;   via 0xffffffff81db8ab0 = mutex_lock
+0xffffffff81644cc9: call glob_match(entry->comm, current->comm)  ; 0xffffffff817bf270
+0xffffffff81644cdc: call glob_match(entry->path, bprm->filename)  ; 0xffffffff817bf270
+; Both must match (AND condition: comm glob AND path glob)
 
 ; If match found: read binary hash and compare
 0xffffffff81644cf8: call shellguard_get_binary_hash(bprm->file, rsp+7)
-                    ; Reads file, computes MD5, writes 32-char hex + null into rsp+7
-0xffffffff81644d11: call memcmp(rsp+7, sig_entry->stored_md5_hex, 33)
+                    ; Reads file via kernel_read(0xffffffff81469520), computes MD5
+                    ; Writes 32-char hex + null into rsp+7
+0xffffffff81644d11: call memcmp(rsp+7, sig_entry->stored_md5_hex, 33)  ; 0xffffffff81d9bc60
                     ; 33 bytes = 32 hex chars + null terminator
-; If memcmp == 0 (hashes match): release mutex, return 0 (ALLOW)
+; If memcmp == 0 (hashes match): mutex_unlock(0xffffffff81db7800), return 0 (ALLOW)
 ; If no match in sig_list:
 ;   r13d = -13 (ENOENT = sig not found)
-;   release mutex
+;   mutex_unlock
 ;   emit audit log via printk(KERN_INFO, ...)
 ;   if block_mode == 1: return -13 (DENY)
 ;   if block_mode == 0: return 0 (ALLOW, audit-only)
