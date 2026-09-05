@@ -38,10 +38,10 @@ FINDINGS SUMMARY:
   E2-F11 (MEDIUM/5.3)    FileController ?dir= endpoint: unauthenticated filesystem directory
                           enumeration; path param unsanitized (no realpath/sanitise_filename_slashes);
                           pattern= goes raw into glob.glob() allowing * ? [] expansion across any path
-  E2-F12 (MEDIUM/5.4)    root.py registers /terminal as ReverseProxyResource(::1, 4200) — port 4200
-                          firewall bypassed; shellinabox accessible via port 80; HTTPS mismatch
-                          unverified; chains with E2-F10 (empty root) → browser root shell on factory
-                          devices; status CANDIDATE pending live proxy verification
+  E2-F12 (LOW/2.7)       root.py registers /terminal as ReverseProxyResource(::1, 4200) — NOT_FUNCTIONAL;
+                          shellinaboxd uses --cert (HTTPS-only, v2.20); plain HTTP proxy gets 301
+                          redirect to https://[::1]:4200/ which browser cannot follow; info disclosure
+                          only (confirms shellinabox running internally)
 
 INETD SERVICE INVENTORY (services besides OpenWebif):
   vsftpd (port 21):  E2-F03 (local_root=/, write_enable=YES); E2-F10 (no-password root by default)
@@ -1242,11 +1242,11 @@ E2_F11_FILE_DIR_ENUM = {
 
 E2_F12_TERMINAL_PROXY = {
     "finding_id": "E2-F12",
-    "severity": "MEDIUM",
-    "cvss_v3": 5.4,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
-    "status": "CANDIDATE",
-    "title": "/terminal route proxies shellinabox — port 4200 firewall bypassed via port 80",
+    "severity": "LOW",
+    "cvss_v3": 2.7,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "status": "NOT_FUNCTIONAL",
+    "title": "/terminal route proxies shellinabox — proxy fails due to HTTP→HTTPS mismatch; 301 redirect info disclosure only",
     "component": "OpenWebif controllers/root.py — RootController route registration",
     "source_path": "/usr/lib/enigma2/python/Plugins/Extensions/OpenWebif/controllers/root.py",
     "route": "/terminal",
@@ -1270,33 +1270,33 @@ E2_F12_TERMINAL_PROXY = {
         "no_auth_flag": "ABSENT — standard Linux PAM/shadow auth enforced",
         "https_mode": "shellinaboxd launches with --cert flag; likely HTTPS-only on port 4200",
     },
+    "shellinabox_startup_command": (
+        "From /etc/init.d/shellinabox.sh: "
+        "shellinaboxd --cert /etc/shellinabox -q --background=$PIDFILE -p 4200 --user-css Normal:+/etc/shellinabox/vti.css. "
+        "d_ssl() generates /etc/shellinabox/certificate.pem at startup (openssl self-signed, CN=vuplus.box). "
+        "shellinaboxd version: 2.20+git0+5c7fb5cde2-r007."
+    ),
     "http_https_mismatch": (
-        "proxy.ReverseProxyResource makes plain HTTP connections to backend. "
-        "shellinaboxd with --cert flag serves HTTPS on port 4200. "
-        "Plain HTTP to an HTTPS port may fail at TLS layer. "
-        "Proxy may return 502 Bad Gateway or HTTPS redirect. "
-        "CANDIDATE — live verification required to confirm proxy works."
+        "shellinaboxd 2.20 with --cert: serves HTTPS on port 4200. "
+        "When a plain HTTP connection arrives (TLS not initiated), shellinaboxd returns: "
+        "HTTP/1.1 301 Moved Permanently → Location: https://[::1]:4200/ (redirects to HTTPS at same address). "
+        "proxy.ReverseProxyResource receives this 301 and forwards it to the browser. "
+        "Browser cannot follow the redirect to https://[::1]:4200/ (IPv6 localhost only reachable from server). "
+        "Result: browser receives a 301 response revealing shellinabox is running, but cannot reach the UI. "
+        "NOT FUNCTIONAL as a shell access bypass — only reveals backend service existence."
     ),
-    "impact_if_proxy_works": {
-        "factory_fresh_chain": (
-            "E2-F04 (auth=False) + E2-F12 (port bypass) + E2-F10 (empty root password) "
-            "→ browser-accessible shellinabox shell at GET /terminal/ "
-            "→ Linux login: root + empty password "
-            "→ root shell in browser over port 80. "
-            "No exploit chain needed — factory default credentials + proxy = root shell."
-        ),
-        "configured_device": (
-            "Shellinabox login page exposed on port 80 instead of firewalled port 4200. "
-            "Credential brute-force surface expanded from (blocked) port 4200 to (open) port 80."
-        ),
-    },
-    "impact_if_proxy_fails": (
-        "502/503 response from /terminal reveals shellinabox is running internally. "
-        "Minimal info disclosure — not a functional bypass."
+    "actual_behavior": (
+        "proxy.ReverseProxyResource sends plain HTTP GET to shellinaboxd:4200. "
+        "shellinaboxd 2.20 with --cert returns HTTP 301 to https://[::1]:4200/. "
+        "Twisted proxy forwards 301 to browser. "
+        "Browser cannot follow redirect (IPv6 localhost is the server itself). "
+        "Effective result: browser receives Location: https://[::1]:4200/ — dead link. "
+        "Info disclosure: confirms shellinabox is running on port 4200 internally."
     ),
-    "cvss_ac_h_rationale": (
-        "AC:H because live verification needed. If proxy confirmed working: "
-        "chain with E2-F10 achieves root shell with factory defaults → AC:L, C/I/A:H."
+    "info_disclosure_value": (
+        "301 response with Location header reveals shellinaboxd running on port 4200. "
+        "Attacker who can SSH or pivot to localhost can now target port 4200 directly. "
+        "But this is not accessible from the LAN via the HTTP proxy."
     ),
     "remediation": (
         "1. Remove /terminal route from root.py, or place it behind mandatory auth regardless of E2-F04. "
