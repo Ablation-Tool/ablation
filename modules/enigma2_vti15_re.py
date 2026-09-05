@@ -1757,6 +1757,24 @@ CROSS_DISTRO_BERT_SWEEP = {
     },
 }
 
+CROSS_DISTRO_E2_F05_EVAL = {
+    "finding_id": "E2-F05",
+    "cross_distro_status": "OPEN in all 7 VU+ distributions (REQUIRES_CHAINING)",
+    "evidence": (
+        "config.pyc contains 'eval' string in all 8 checked extracts "
+        "(OpenATV 7.6/8.0b, OpenBH 6.0, OpenViX 6.9, Pure2 7.6, "
+        "OpenPLi 9.2 vuzero/vuduo2/vuduo4k). "
+        "eval() in getConfigs() is shared OpenWebif code — not VTi-specific. "
+        "Exploitability requires write access to /etc/enigma2/settings.xml "
+        "via E2-F03 (vsftpd local_root=/) or E2-F08 (REST filesystem write, VTi-only). "
+        "Severity bounded by chaining requirement."
+    ),
+    "scope": (
+        "All 7 VU+ distros. E2-F08 (rest_fs_access.py) chaining path is VTi-only; "
+        "E2-F03 chaining path applies to all distros with local_root=/ vsftpd config."
+    ),
+}
+
 CROSS_DISTRO_E2_F01_GETIPV6 = {
     "finding_id": "E2-F01",
     "cross_distro_status": "OPEN in all 7 distributions",
