@@ -9,7 +9,7 @@ Method: static firmware extraction + OpenWebif Python source analysis + BERT swe
 Analysis date: 2026-09-04
 
 Stack: Enigma2 (DVB OS) + OpenWebif plugin (Python 2.7 + TwistedWeb 25.5.0) + vsftpd
-       + custom Twisted-based "Moshi-Moshi" FTP server (source not located publicly)
+       (vsftpd 3.0.2, custom VU+ build with TVFS extension, inetd-launched on port 21)
 
 TwistedWeb 25.5.0 release: May 2025 — places device build date >= May 2025.
 OpenWebif version: confirmed VTi 15.x fork (httpserver.py auth logic differs from OpenLD upstream).
@@ -20,7 +20,8 @@ FINDINGS SUMMARY:
   E2-F03 (HIGH/8.6)      FTP full filesystem: vsftpd local_root=/ + write_enable=YES
   E2-F04 (MEDIUM/6.5)    Auth disabled by default: ConfigYesNo(default=False)
   E2-F05 (MEDIUM/5.3)    eval() in getConfigs() reads server-side XML (not direct user input)
-  E2-F06 (INFO)          Moshi-Moshi FTP: custom Twisted server, TVFS, source unlocated
+  E2-F06 (INFO)          Moshi-Moshi FTP: vsftpd 3.0.2 custom VU+ build (TVFS), inetd-launched;
+                          banner set at runtime by VTi config layer (not in rootfs snapshot)
   E2-F07 (CRITICAL/9.8)  Command injection: /ipkg?command=install&package=<INJECTION>
                           eConsoleAppContainer.execute() → execvp("/bin/sh",["/bin/sh","-c",cmd])
                           package= param directly concatenated into shell command, no sanitization
@@ -170,11 +171,12 @@ E2_F03_VSFTPD_LOCAL_ROOT = {
         ),
     },
     "ftp_note": (
-        "Port 21 banner is 'Moshi-Moshi FTP server ready.' (custom Twisted-based server). "
-        "vsftpd is installed at /usr/sbin/vsftpd but the running server on port 21 is "
-        "the Moshi-Moshi server (FEAT: TVFS, custom banner). "
-        "vsftpd config applies when vsftpd is invoked — verify whether vsftpd or Moshi-Moshi "
-        "is the active daemon on the target."
+        "Port 21 banner 'Moshi-Moshi FTP server ready.' IS vsftpd. "
+        "inetd.conf: 'ftp stream tcp nowait root /usr/sbin/vsftpd vsftpd'. "
+        "vsftpd binary strings confirm: TVFS FEAT string + 'vsftpd: version 3.0.2'. "
+        "Banner not in rootfs snapshot — written at runtime by VTi config layer "
+        "(ftpd_banner or banner_file directive; not in static /etc/vsftpd.conf). "
+        "This IS vsftpd; E2-F03 config (local_root=/, write_enable=YES) applies directly."
     ),
     "remediation": (
         "Set chroot_local_user=YES and local_root to a restricted path (e.g. /media/hdd). "
@@ -268,42 +270,54 @@ E2_F05_EVAL_GETCONFIGS = {
 E2_F06_MOSHI_MOSHI_FTP = {
     "finding_id": "E2-F06",
     "severity": "INFO",
-    "status": "FINGERPRINTED",
-    "title": "Moshi-Moshi FTP server — custom Twisted-based FTP, source unlocated",
+    "status": "RESOLVED",
+    "title": "Moshi-Moshi FTP server IDENTIFIED: vsftpd 3.0.2 custom VU+ build with TVFS",
     "port": 21,
     "banner": "220 Moshi-Moshi FTP server ready.",
     "feat_response": "AUTH TLS TVFS MLST MLSD UTF8",
     "contact": "ftp-bugs@Moshi-Moshi.",
-    "identification": {
-        "TVFS_extension": (
-            "TVFS (Trivial Virtual File Store, RFC 3659 Section 7) is present. "
-            "The Twisted FTP implementation in twisted.protocols.ftp supports TVFS. "
-            "Combined with the custom banner and the presence of Python 2.7 + Twisted "
-            "in the VTi rootfs, this is a Twisted-based FTP server with custom branding."
+    "resolution": {
+        "daemon": "vsftpd",
+        "version": "3.0.2",
+        "build_type": "custom VU+ build with TVFS extension",
+        "launch_mechanism": "inetd — /etc/inetd.conf: 'ftp stream tcp nowait root /usr/sbin/vsftpd vsftpd'",
+        "binary_evidence": {
+            "path": "/usr/sbin/vsftpd",
+            "strings_evidence": [
+                "vsftpd: version 3.0.2",
+                "TVFS (in FEAT response string at binary offset 0x14370)",
+                "banner_file (config directive key)",
+                "ftpd_banner (config directive key)",
+            ],
+            "Moshi_banner_not_in_binary": True,
+        },
+        "banner_source": (
+            "'Moshi-Moshi FTP server ready.' not present in /usr/sbin/vsftpd binary "
+            "or anywhere in the rootfs snapshot. Banner is set at runtime via "
+            "ftpd_banner or banner_file directive written by VTi config management "
+            "(enigma2 settings framework writes service configs on boot). "
+            "Static /etc/vsftpd.conf has ftpd_banner commented out — runtime config "
+            "not captured in rootfs snapshot."
         ),
-        "not_vsftpd": (
-            "vsftpd is installed at /usr/sbin/vsftpd but its default banner is not "
-            "'Moshi-Moshi'. No ftpd_banner directive in /etc/vsftpd.conf. "
-            "vsftpd does not emit TVFS in FEAT."
+        "tvfs_source": (
+            "TVFS FEAT string is at binary offset 0x14370, adjacent to other FEAT entries "
+            "(AUTH SSL, AUTH TLS, EPRT, EPSV, MDTM, PASV, etc.). "
+            "This is part of vsftpd's FEAT response, compiled into the binary. "
+            "Standard vsftpd 3.0.2 does not include TVFS — this is a VU+ custom build."
         ),
-        "source_search_result": (
-            "Searched: oe-alliance/enigma2-plugins, OpenLD/enigma2, OpenPLi, OpenATV, "
-            "VTi repos, GitHub code search, web search. "
-            "FTPBrowser IPK (ftpbrowser_ipk) contains only .pyc client-side code "
-            "(FTPServerManager manages server connection profiles, not a server). "
-            "Moshi-Moshi FTP source is private or embedded in an unpublished VTi plugin."
+        "prior_hypothesis_refuted": (
+            "Prior hypothesis: Twisted-based custom server using twisted.protocols.ftp. "
+            "Refuted by: inetd.conf explicitly launches /usr/sbin/vsftpd on port 21. "
+            "TVFS and AUTH TLS are vsftpd FEAT capabilities, not Twisted-specific. "
+            "Twisted FTP module is present in rootfs (twisted/protocols/ftp.pyo) but "
+            "is not the active server."
         ),
     },
-    "security_posture": (
-        "AUTH TLS in FEAT indicates TLS upgrade capability (FTPS). "
-        "Without source, deeper analysis requires binary extraction from the running device. "
-        "If Moshi-Moshi uses Twisted's standard FTPShell with root=/, "
-        "the same local_root=/ impact as E2-F03 applies."
-    ),
-    "re_todo": (
-        "Extract /usr/bin/* from live target via E2-F02 (/file endpoint). "
-        "Search for Moshi-Moshi binary. Run BERT sweep on that binary with "
-        "Twisted FTP pattern queries."
+    "impact_on_e2_f03": (
+        "E2-F03 (vsftpd local_root=/ + write_enable=YES) applies directly. "
+        "The Moshi-Moshi banner server IS vsftpd; no separate server exists. "
+        "Config at /etc/vsftpd.conf (local_root=/, write_enable=YES, no chroot) "
+        "governs the active daemon on port 21."
     ),
 }
 
