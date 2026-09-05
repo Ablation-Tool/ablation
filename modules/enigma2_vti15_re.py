@@ -1576,7 +1576,7 @@ CROSS_DISTRO_BINARY_INVENTORY = {
     "isa_split": (
         "ARM32 mode: VTi 15.0.02/15.0.04 (3.0-3.4MB), OpenATV 7.6 (3.4MB), OpenPLi 9.2 (2.5MB). "
         "Thumb16 mode: OpenATV 8.0b, OpenBH 6.0, OpenViX 6.9, Pure2 7.6 (1.1-1.3MB); "
-        "DM4U DM900 (6.0MB — Thumb16 with 82 ARM32 interwork stubs). "
+        "DM4U DM900 (6.0MB — Thumb16 primary: 1060 Thumb16 PUSH+LR + 3 Thumb2 PUSH.W = 1063 prologues; 82 ARM32 interwork stubs). "
         "AArch64: DM4U DMone/DMtwo (8.7MB, different SoC generation). "
         "Smaller Thumb builds are slimmer distro variants; ARM32 builds are full-featured."
     ),
@@ -1609,6 +1609,13 @@ CROSS_DISTRO_BERT_SWEEP = {
         "openvix-6.9":  {"ipc_buf_alloc": ("0x41921c", 0.916), "dvb_dispatch": ("0x3bb380", 0.775)},
         "pure2-7.6":    {"ipc_buf_alloc": ("0x451b1c", 0.925), "dvb_dispatch": ("0x419b8c", 0.773)},
         "openpli-scarthgap": {"ipc_buf_alloc": ("0x1d840c", 0.961), "dvb_dispatch": ("0xd41bc", 0.812)},
+        "dm4u-dm900":   {"ipc_buf_alloc": ("0x1bc72", 0.908), "dvb_dispatch": ("N/A", 0.0),
+                         "note": "Thumb2-aware scan: 1063 prologues (1060 Thumb16 + 3 Thumb2 PUSH.W). "
+                                 "fn@0x1bc72 verified valid Thumb2 (push {r3,r6,lr}; ldr r1,[pc,#8]; bvc) — "
+                                 "complex conditional function, NOT allocator. Cross-ISA ARM32→Thumb BERT false positive."},
+        "dm4u-dmone":   {"ipc_buf_alloc": ("0x55b3c8", 0.943), "dvb_dispatch": ("N/A", 0.0),
+                         "note": "AArch64, cap=2000. Cross-ISA ARM32→AArch64 BERT false positive "
+                                 "(destructor/cleanup function). Different IPC implementation."},
     },
     "sweep_notes": (
         "Scores 0.916-0.963 for ipc_buf_alloc across all distros — high confidence structural homologs. "
@@ -1761,10 +1768,12 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
                                  "BERT ipc_buf_alloc homolog at 0x451b1c (score 0.925) — garbled. "
                                  "Different IPC implementation — E2-BIN-F01 out of scope."},
         "dm4u-dm900":   {"confirmed": False,
-                         "note": "No MOV r1,#0x220 (ARM32) or MOVW r1,#0x220 (Thumb2) found. "
-                                 "Thumb BERT sweep (1060 prologues, cap 4000): ipc homolog at "
-                                 "VA=0x1bc72 score=0.908 — disassembly garbled (misaligned Thumb16 "
-                                 "scan hitting Thumb2 interwork boundary). Different IPC implementation."},
+                         "note": "No MOVW r0/r1,#0x220 found. Thumb2-aware prologue scan: "
+                                 "1060 Thumb16 PUSH+LR + 3 Thumb2 PUSH.W+LR = 1063 total. "
+                                 "BERT ipc_buf_alloc homolog at VA=0x1bc72 (score=0.908) — "
+                                 "fn@0x1bc72 is push {r3,r6,lr}; ldr r1,[pc,#8]; bvc (complex conditional "
+                                 "function, NOT allocator). Disassembly valid Thumb2, not garbled. "
+                                 "Different IPC implementation — E2-BIN-F01 out of scope."},
         "dm4u-dmone":   {"confirmed": False,
                          "note": "No MOVZ w1,#0x220 (AArch64) found. AArch64 BERT sweep "
                                  "(first 2000 of 11,207 prologues): ipc_buf_alloc homolog at "
