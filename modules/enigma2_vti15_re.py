@@ -350,7 +350,7 @@ def run_bert_sweep():
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
     import numpy as np
-    from modules.semantic_search import SemanticSearcher, describe_function
+    from modules.semantic_search import describe_function
     from sentence_transformers import SentenceTransformer
     import capstone
 
@@ -383,7 +383,6 @@ def run_bert_sweep():
 
     # Encode corpus
     model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
-    searcher = SemanticSearcher(model)
 
     descs = []
     for fn in functions:
@@ -456,6 +455,69 @@ E2_ATTACK_CHAIN = {
     "prerequisites": "LAN access to port 80",
     "controlled_env_only": True,
 }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BERT SWEEP RESULTS — enigma2 ARM32 (8151 function candidates, 7 profiles)
+# Saved: /home/cowboy/VDT/intel/82.84.145.15/bert_sweep_enigma2.json
+# Run date: 2026-09-04
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# NOTE: vaddr column uses heuristic load offset 0x10000 (no segment map available).
+# Real entry point: 0x7d0e4. Use offsets for relative comparison; verify actual
+# addresses by disassembling at (file_offset = vaddr - 0x10000).
+#
+# CROSS-PROFILE HITS (appear in 3+ query profiles — highest priority for manual RE):
+#
+#   0x00169ef8  [stack_buffer_overflow #1 (0.3582), format_string #2 (0.1552),
+#                auth_state_machine #3 (0.0944), python_c_extension_boundary #3 (0.2096)]
+#               → PRIORITY-1: 4 independent profiles converge; file_offset = 0x159ef8
+#
+#   0x0016f0a0  [format_string #1 (0.1562), stack_buffer_overflow #2 (0.3558),
+#                python_c_extension_boundary #4 (0.2080)]
+#               → PRIORITY-2: 3 profiles; file_offset = 0x15f0a0
+#
+#   0x0016ecf0  [stack_buffer_overflow #3 (0.3551), stream_parser #4 (0.2217)]
+#               → file_offset = 0x15ecf0
+#
+# QUERY RESULTS SUMMARY:
+#
+#   memcpy_no_bounds      : top 0x0018243c (0.1983), 0x00251ef0 (0.1846)
+#   format_string         : top 0x0016f0a0 (0.1562), 0x00169ef8 (0.1552)
+#   auth_state_machine    : top 0x001af480 (0.0977), 0x000e787c (0.0973)
+#   stack_buffer_overflow : top 0x00169ef8 (0.3582), 0x0016f0a0 (0.3558) — SCORES HIGH
+#   integer_overflow_len  : top 0x000ff1bc (0.2266), 0x0022dd64 (0.2050)
+#   stream_parser         : top 0x00182030 (0.2310), 0x0016d180 (0.2265)
+#   python_c_ext_boundary : top 0x000ecb84 (0.2105), 0x0016fbb0 (0.2098)
+#
+# NEXT STEP: manual ARM32 disassembly at file_offset 0x159ef8 and 0x15f0a0.
+# Extract via: dd if=enigma2 bs=1 skip=$((0x159ef8)) count=256 | capstone-tool -a arm -m 32
+
+E2_BERT_SWEEP_PRIORITY = [
+    {
+        "priority": 1,
+        "vaddr_heuristic": "0x00169ef8",
+        "file_offset_hex": "0x159ef8",
+        "profiles_hit": ["stack_buffer_overflow", "format_string", "auth_state_machine", "python_c_extension_boundary"],
+        "top_score": 0.3582,
+        "rationale": "4 independent query profiles converge — highest cross-profile density in sweep",
+    },
+    {
+        "priority": 2,
+        "vaddr_heuristic": "0x0016f0a0",
+        "file_offset_hex": "0x15f0a0",
+        "profiles_hit": ["format_string", "stack_buffer_overflow", "python_c_extension_boundary"],
+        "top_score": 0.3558,
+        "rationale": "3 profiles; format string + stack pattern adjacent to priority-1 function",
+    },
+    {
+        "priority": 3,
+        "vaddr_heuristic": "0x0016ecf0",
+        "file_offset_hex": "0x15ecf0",
+        "profiles_hit": ["stack_buffer_overflow", "stream_parser"],
+        "top_score": 0.3551,
+        "rationale": "stack buffer + stream parser pattern; likely packet/input parsing path",
+    },
+]
 
 E2_ATTACK_CHAIN_SHORT = {
     "chain_id": "E2-CHAIN-2",
