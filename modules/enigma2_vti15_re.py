@@ -1576,13 +1576,26 @@ CROSS_DISTRO_BINARY_INVENTORY = {
         "dm4u-dmone":   {"size_bytes": 8691288, "sha256": "3faee9c2c504", "isa": "aarch64",
                          "note": "AArch64 ELF64. 11,207 STP x29,x30 prologues. DMone=DMtwo binary."},
         "openpli-9.2-vuzero": {"size_bytes": 3450368, "sha256": "969ea7e8a897", "isa": "mips32",
-                                "note": "MIPS32 ELF32. Non-4K hardware (VU+ Zero). IPC: no ADDIU $a1,$zero,0x220 "
-                                        "(calloc pattern); 62 ADDIU/ORI with imm=0x220 as stack offsets only. "
+                                "text_va": "0x469b30", "text_size": "0x1a40f0",
+                                "plt_callers": {"memcpy": 538, "snprintf": 90, "malloc": 47,
+                                                "sprintf": 34, "strcpy": 24, "strncpy": 9,
+                                                "vsnprintf": 2, "strcat": 0},
+                                "absent_imports": ["system", "popen", "gets", "scanf"],
+                                "econsole_execute_va": "0x471c3c",
+                                "note": "MIPS32 LE ELF32. Non-4K hardware (VU+ Zero). .text: 0x469b30-0x60dc20. "
+                                        "eConsoleAppContainer::execute at 0x471c3c (within .text). "
+                                        "PLT caller profile: memcpy dominant (538); snprintf(90)>sprintf(34) "
+                                        "indicates bounded format string preference; strcpy(24) low relative to "
+                                        "ARM32 builds; strcat=0 (C++ std::string used). "
+                                        "IPC: no ADDIU $a1,$zero,0x220 (calloc pattern); "
+                                        "62 ADDIU/ORI with imm=0x220 as stack offsets only. "
                                         "vsftpd: SHA ed60eb74f5f5, 119K MIPS32, SITE CHMOD + ANDI $a1,$a1,#0x1ff "
                                         "(9-bit mask via delay-slot, CLEAN). Extracted from UBI/UBIFS image."},
         "openpli-9.2-vuduo2": {"size_bytes": 3450368, "sha256": "983a473c9a28", "isa": "mips32",
-                                "note": "MIPS32 ELF32. Non-4K hardware (VU+ Duo 2). Same codebase as vuzero, "
+                                "note": "MIPS32 LE ELF32. Non-4K hardware (VU+ Duo 2). Same codebase as vuzero, "
                                         "hardware-specific build (same size, different SHA). "
+                                        "PLT callers and eConsoleAppContainer::execute VA expected identical to vuzero "
+                                        "(shared codebase, only hardware config differs). "
                                         "vsftpd: SHA ed60eb74f5f5 — IDENTICAL to vuzero (CLEAN). "
                                         "Extracted from UBI/UBIFS image."},
     },
@@ -1858,11 +1871,28 @@ DM4U_BINARY_INVENTORY = {
 DM4U_WEBIF_ANALYSIS = {
     "plugin": "WebInterface (DM4U fork, not OpenWebif)",
     "path": "/usr/lib/enigma2/python/Plugins/Extensions/WebInterface/",
+    "auth_default": {
+        "http_auth": "ENABLED (ConfigYesNo(default=True))",
+        "https_auth": "ENABLED (ConfigYesNo(default=True))",
+        "anti_hijack": "ENABLED (ConfigOnOff(default=True))",
+        "extended_security": "ENABLED (ConfigOnOff(default=True))",
+        "contrast_with_vti": (
+            "VTi/OpenWebif: auth=False by default (E2-F04 CRITICAL). "
+            "DM4U: auth=True by default — auth must be disabled by user to expose E2-F07 equivalent. "
+            "Source: plugin.py lines 50-63."
+        ),
+        "implication": (
+            "DM4U E2-F07 equivalent is NOT unauthenticated by default. "
+            "Requires auth bypass (credential theft, brute force, or auth misconfiguration). "
+            "Severity reduced to MEDIUM for default-config devices. "
+            "DM4U ships with stronger security defaults than any VU+ distribution."
+        ),
+    },
     "dm900_dm920": {
         "webif_present": True,
         "openwebif": False,
         "E2_F07_equivalent": {
-            "status": "OPEN",
+            "status": "OPEN (auth required by default)",
             "component": "IPKG.py (WebInterface/WebChilds/IPKG.py)",
             "pattern": (
                 "Command whitelist: SIMPLECMDS = ('list','list_installed','list_upgradable','update','upgrade'); "
@@ -1875,8 +1905,9 @@ DM4U_WEBIF_ANALYSIS = {
                 "Impact: malicious package install or opkg flag injection, not direct shell exec."
             ),
             "severity": "MEDIUM",
-            "note": "Lower severity than OpenWebif E2-F07 — command is whitelist-validated, "
-                    "package arg uses list form (no /bin/sh -c), opkg flag injection only",
+            "note": "Lower severity than OpenWebif E2-F07 — (1) command is whitelist-validated, "
+                    "(2) package arg uses list form (no /bin/sh -c), opkg flag injection only, "
+                    "(3) auth ENABLED by default (contrast with VTi auth=False default).",
         },
         "E2_F09_equivalent": {
             "status": "DIFFERENT_VULNERABILITY_CLASS",
