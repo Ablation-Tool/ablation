@@ -15,7 +15,8 @@ TwistedWeb 25.5.0 release: May 2025 — places device build date >= May 2025.
 OpenWebif version: confirmed VTi 15.x fork (httpserver.py auth logic differs from OpenLD upstream).
 
 FINDINGS SUMMARY:
-  E2-F01 (CRITICAL/9.8)  Auth bypass: /web/getipv6 hardcoded URI skips all auth checks
+  E2-F01 (LOW/4.0)       Auth bypass: /web/getipv6 hardcoded URI skips auth for that endpoint only;
+                          returns device public IPv6 address (info disclosure); NOT a gateway to full API
   E2-F02 (HIGH/8.6)      Arbitrary file read: /file?action=download&file=<abspath>
   E2-F03 (HIGH/8.6)      FTP full filesystem: vsftpd local_root=/ + write_enable=YES
   E2-F04 (MEDIUM/6.5)    Auth disabled by default: ConfigYesNo(default=False)
@@ -101,41 +102,58 @@ SOURCE AUDIT COMPLETENESS (all OpenWebif controllers):
 
 E2_F01_AUTH_BYPASS_GETIPV6 = {
     "finding_id": "E2-F01",
-    "severity": "CRITICAL",
-    "cvss_v3": 9.8,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "severity": "LOW",
+    "cvss_v3": 4.0,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
     "status": "CONFIRMED",
-    "title": "OpenWebif AuthResource hardcoded /web/getipv6 URI bypass",
+    "title": "OpenWebif AuthResource hardcoded /web/getipv6 URI bypass — info disclosure only",
     "component": "OpenWebif httpserver.py — AuthResource.getChildWithDefault()",
     "source_path": "/usr/lib/enigma2/python/Plugins/Extensions/OpenWebif/httpserver.py",
     "vulnerable_code": (
-        "if ((host == 'localhost' or host == '127.0.0.1' or host == '::ffff:127.0.0.1' "
-        "or host == '::1') and not config.OpenWebif.auth_for_streaming.value) "
+        "# httpserver.py lines 322-324:\n"
+        "if ((host == 'localhost' or ...) and not config.OpenWebif.auth_for_streaming.value) "
         "or request.uri == '/web/getipv6':\n"
         "    return self.resource.getChildWithDefault(path, request)"
     ),
     "mechanism": (
-        "The condition is evaluated with Python short-circuit OR semantics. "
-        "The localhost/streaming block applies only when both (a) the source IP is "
-        "loopback AND (b) auth_for_streaming is False. The second clause "
-        "'request.uri == /web/getipv6' has no IP restriction — any remote IP "
-        "accessing /web/getipv6 receives the full resource tree without authentication."
+        "The condition `request.uri == '/web/getipv6'` has no IP restriction — any remote IP "
+        "accessing exactly /web/getipv6 bypasses auth for that endpoint. "
+        "The bypass is NARROWLY SCOPED: Twisted's resource traversal calls "
+        "AuthResource.getChildWithDefault(path='web', request) once for the 'web' segment. "
+        "The bypass returns self.resource.getChildWithDefault('web', request) = WebResource. "
+        "Twisted then navigates WebResource → getipv6 normally. "
+        "Other requests (/file, /ipkg, /fs, etc.) have different path segments and "
+        "request.uri values — they are not bypassed by this condition."
+    ),
+    "endpoint_response": (
+        "P_getipv6() in controllers/web.py line 727:\n"
+        "  return {'firstpublic': iface['firstpublic']}\n"
+        "Returns the device's first public IPv6 address only. "
+        "Purpose: designed for inadyn-mt (dynamic DNS client) to query device IPv6 without auth."
     ),
     "exploit": {
-        "method": "HTTP GET /web/getipv6",
-        "result": "200 OK + JSON response body (no credentials required from any IP)",
+        "method": "HTTP/HTTPS GET /web/getipv6",
+        "result": '{"firstpublic": "<device_public_ipv6>"}',
         "curl": "curl -s http://82.84.145.15/web/getipv6",
-        "escalation": (
-            "The bypass returns the Twisted Resource object, not merely the getipv6 "
-            "endpoint. The resource tree walk happens AFTER the bypass, so the bypass "
-            "grants the full resource context. Whether the returned child is narrowly "
-            "scoped to getipv6 or exposes sibling resources depends on Twisted's "
-            "getChildWithDefault routing — requires live verification."
-        ),
+        "impact": "Leaks device public IPv6 address to any unauthenticated remote caller.",
     },
-    "affected_versions": "VTi 15.0.04 confirmed. Likely all versions shipping this httpserver.py.",
-    "remediation": "Remove the 'or request.uri == /web/getipv6' clause. Auth check must be unconditional for remote IPs.",
-    "chain": "E2-F04 (auth=False default) + E2-F01 (bypass) → unauthenticated full API access from LAN",
+    "https_behavior": (
+        "On port 443, https_auth=True by default. E2-F01 still bypasses auth for /web/getipv6 "
+        "on HTTPS. Only leaks the IPv6 address — no path to arbitrary API access on HTTPS without creds."
+    ),
+    "affected_versions": "VTi 15.0.04 confirmed. Applies to both port 80 and port 443.",
+    "remediation": "Remove the 'or request.uri == /web/getipv6' clause. If inadyn-mt requires this, implement a separate lightweight endpoint with its own auth token.",
+    "chain": (
+        "Standalone info disclosure on port 443 (auth normally required). "
+        "On port 80 where E2-F04 applies (auth=False default), E2-F01 is redundant — full API "
+        "is already unauthenticated. E2-F01 has no escalation path to RCE or file read."
+    ),
+    "original_severity_correction": (
+        "Initial assessment rated CRITICAL/9.8. Corrected after source analysis: "
+        "Twisted getChildWithDefault() is called per-segment; the bypass fires only "
+        "for the request whose URI is exactly '/web/getipv6'. The response is the single "
+        "getipv6 JSON blob. Not a gateway to arbitrary API access or file read."
+    ),
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -530,15 +548,19 @@ E2_ATTACK_CHAIN = {
     "chain_id": "E2-CHAIN-1",
     "title": "Unauthenticated LAN → root shell via OpenWebif + eval injection",
     "steps": [
-        "1. E2-F04: auth=False default — no credentials needed for LAN access",
-        "2. E2-F01: /web/getipv6 bypass — even if auth enabled, this URI skips check",
+        "1. E2-F04: auth=False default — no credentials needed for LAN access to port 80",
+        "2. E2-F11: GET /file?dir=/etc → enumerate filesystem to identify targets",
         "3. E2-F02: GET /file?action=download&file=/etc/shadow — exfil password hashes",
         "4. hashcat/john against common Enigma2 default passwords (dreambox, root, vuplus)",
         "5. E2-F03: FTP login as root → PUT to /etc/enigma2/settings.xml with eval payload",
         "6. E2-F05: GET /api/config?key=<poisoned_key> → eval() → RCE as root",
     ],
-    "prerequisites": "LAN access to port 80",
+    "prerequisites": "LAN access to port 80. auth=False default (E2-F04) required.",
     "controlled_env_only": True,
+    "note": (
+        "E2-F01 removed from this chain: narrowly scoped to /web/getipv6 (IPv6 info disclosure only). "
+        "Not an escalation path to file read or RCE."
+    ),
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -608,10 +630,11 @@ E2_ATTACK_CHAIN_SHORT = {
     "chain_id": "E2-CHAIN-2",
     "title": "Unauthenticated LAN → file exfil (no cred needed)",
     "steps": [
-        "1. E2-F04 + E2-F01: auth=False or /web/getipv6 bypass",
+        "1. E2-F04: auth=False default — port 80 open by default",
         "2. E2-F02: GET /file?action=download&file=/etc/passwd",
     ],
-    "prerequisites": "LAN access to port 80",
+    "prerequisites": "LAN access to port 80. auth=False (E2-F04) required.",
+    "note": "E2-F01 removed: narrowly scoped to /web/getipv6 IPv6 leak, not a file read enabler.",
 }
 
 E2_ATTACK_CHAIN_IPKG = {
