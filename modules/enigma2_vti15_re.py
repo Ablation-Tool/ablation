@@ -30,6 +30,16 @@ FINDINGS SUMMARY:
   E2-F09 (HIGH/8.0)      BouquetEditor /bouqueteditor/web/restore: os.popen() injection via
                           Filename= param; path.exists() gate bypassed via E2-F08 or E2-F03;
                           commented-out path.join() confinement; 2-step chain to RCE as root
+  E2-F10 (HIGH/8.6)      Factory-default root has no password: /etc/shadow root entry ships
+                          with empty hash — unconfigured devices trivially FTP-pwned as root;
+                          inetd.conf also runs telnetd as root (port 23); live device has changed
+                          the password but factory-fresh VTi 15.0.04 ships with root::
+
+INETD SERVICE INVENTORY (services besides OpenWebif):
+  vsftpd (port 21):  E2-F03 (local_root=/, write_enable=YES); E2-F10 (no-password root by default)
+  telnetd (port 23): BusyBox v1.23.2, runs as root; securetty may block PTY root login
+  streamproxy (port 8001): HTTP Basic Auth enforced; forwards to enigma2 /web/stream endpoint;
+                            7972-byte binary; has strcpy + sprintf imports but auth gates access
 
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
@@ -842,6 +852,57 @@ E2_F08_REST_FS_ACCESS = {
         "owibranding (safe — hardcoded os.popen args), web.py (safe — no eConsole/system calls). "
         "BouquetEditor.py audit found E2-F09 (popen injection in restoreFiles). "
         "See E2-F09 for full source audit completeness."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-F10: Factory-default root has no password (HIGH)
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_F10_ROOT_NO_PASSWORD = {
+    "finding_id": "E2-F10",
+    "severity": "HIGH",
+    "cvss_v3": 8.6,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "status": "POPULATION",
+    "title": "VTi 15.0.04 ships with empty root password — factory-fresh devices trivially FTP-accessible as root",
+    "evidence": {
+        "shadow_entry": "root::20285:0:99999:7:::",
+        "shadow_path": "/etc/shadow",
+        "second_field": "EMPTY (no password hash)",
+        "pam": "ABSENT — no /etc/pam.d/ directory; auth goes directly against /etc/shadow",
+        "vsftpd_config": "local_enable=YES, write_enable=YES, userlist_enable=NO, chroot_local_user=NO",
+        "telnetd": "BusyBox v1.23.2, inetd-launched as root on port 23",
+    },
+    "population_vs_live": {
+        "rootfs_template": "Empty root password hash — this is the VTi 15.0.04 factory default",
+        "live_device": (
+            "Live target 82.84.145.15 returns '530 Login incorrect' on root+empty password FTP. "
+            "Owner has set a non-default root password at runtime. "
+            "Live shadow is written to overlayfs / runtime storage, not in rootfs snapshot."
+        ),
+        "population_impact": (
+            "Any VTi 15.0.04 device that has not had its root password explicitly configured "
+            "ships with empty root password. FTP login as root with blank password = full "
+            "filesystem RW access. Combined with inetd telnetd = root shell without credentials."
+        ),
+    },
+    "live_status": "VERIFIED MITIGATED on 82.84.145.15 (owner changed password)",
+    "telnetd_note": (
+        "telnetd (port 23, BusyBox v1.23.2) runs as root via inetd. "
+        "BusyBox login checks /etc/securetty; /dev/pts/* not in securetty (only 'console' listed). "
+        "Root telnet login LIKELY blocked by securetty on this build. "
+        "Unverified without live access — empty password factory default still applies."
+    ),
+    "chain": (
+        "Factory-fresh device: "
+        "FTP root (blank password) → E2-F03 (local_root=/, write_enable=YES) → "
+        "write /etc/cron.d/ → persistence → root shell without any exploit chain."
+    ),
+    "remediation": (
+        "1. Ship with a randomly-generated per-device root password (printed on the device label). "
+        "2. Require root password configuration on first boot via VTi setup wizard. "
+        "3. Add root to vsftpd userlist_file with userlist_deny=YES + userlist_enable=YES as a failsafe."
     ),
 }
 
