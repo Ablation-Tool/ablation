@@ -8,10 +8,14 @@ Build date: 2025-07-15 (file mtime in rootfs)
 Method: static firmware extraction + OpenWebif Python source analysis + BERT sweep
 Analysis date: 2026-09-04 (VTi 15.0.04 primary); 2026-09-05 (cross-distro)
 
-Cross-distro scope: 75 firmware images, 7 distributions (VTi 15.0.02/15.0.04, OpenATV 7.6/8.0b,
-OpenBH 6.0, OpenPLi 9.2, OpenViX 6.9.002, Pure2 7.6) — see CROSS_DISTRO_* dicts below.
-Method: rootfs.tar.bz2 extraction + ablation BERT sweep (seed from VTi 15.0.04 known VAs)
-        + ARM32/Thumb ISA detection + manual constant search + pyc string extraction
+Cross-distro scope: 75 firmware images, 7 VU+ distributions (VTi 15.0.02/15.0.04, OpenATV 7.6/8.0b,
+OpenBH 6.0, OpenPLi 9.2, OpenViX 6.9.002, Pure2 7.6) + 4 DM4U images (DM900/DM920 ARM32-Thumb,
+DMone/DMtwo AArch64) — see CROSS_DISTRO_* and DM4U_* dicts below.
+Method: rootfs.tar.bz2/tar.xz extraction + ablation BERT sweep (seed from VTi 15.0.04 known VAs)
+        + ARM32/Thumb/AArch64 ISA detection + manual constant search + pyc string extraction
+Multi-hardware: OpenPLi 9.2 vsftpd identical (SHA 732c6fb8) across all 4K VU+ hardware variants.
+                VTi 15.0.02 stock vs standard ZIP: same binary (SHA 5eece5c2).
+                DM4U DM900=DM920 (SHA 92965306), DMone=DMtwo (SHA 3faee9c2) — two binary families.
 
 Stack: Enigma2 (DVB OS) + OpenWebif plugin (Python 2.7 + TwistedWeb 25.5.0) + vsftpd
        (vsftpd 3.0.2, custom VU+ build with TVFS extension, inetd-launched on port 21)
@@ -1541,21 +1545,37 @@ CROSS_DISTRO_BINARY_INVENTORY = {
         "OpenPLi 9.2 (vuduo4k)",
         "OpenViX 6.9.002 (vuzero4k)",
         "Pure2 7.6 (vuzero4k)",
+        "DM4U DM900 (ARM32-Thumb, 2021-10-29)",
+        "DM4U DM920 (ARM32-Thumb, 2021-10-29 — identical binary to DM900)",
+        "DM4U DMone (AArch64, 2022-02-24)",
+        "DM4U DMtwo (AArch64, 2022-02-24 — identical binary to DMone)",
     ],
-    "total_firmware_images": 75,
+    "total_firmware_images": 79,
     "enigma2_binaries": {
         "vti-15.0.04":  {"size_bytes": 3145728, "sha256": "3416e03a2b63", "isa": "arm32"},
-        "vti-15.0.02":  {"size_bytes": 3080192, "sha256": "5eece5c23a9b", "isa": "arm32"},
+        "vti-15.0.02":  {"size_bytes": 3080192, "sha256": "5eece5c23a9b", "isa": "arm32",
+                         "note": "VTi-15.0.02-vuzero4k.zip == VTi_15-0-02_vuzero4k_stock.zip (same binary)"},
         "openatv-7.6":  {"size_bytes": 3563520, "sha256": "f767703c8ea8", "isa": "arm32"},
         "openatv-8.0b": {"size_bytes": 1343488, "sha256": "bd4a30260f99", "isa": "thumb"},
         "openbh-6.0":   {"size_bytes": 1140164, "sha256": "65b97b7f65ab", "isa": "thumb"},
-        "openpli-9.2":  {"size_bytes": 2621440, "sha256": "8baf299c6b05", "isa": "arm32"},
+        "openpli-9.2":  {"size_bytes": 2621440, "sha256": "8baf299c6b05", "isa": "arm32",
+                         "multi_hw": "OpenPLi 9.2 has 6+ distinct enigma2 binaries by hardware platform "
+                                     "(duo4k=8baf299c, duo4kse=8afe6f75, solo4k=da43dddb, ultimo4k=31ce3ff9, "
+                                     "uno4k=f89c75a6, uno4kse=75f4ae4d, zero4k=73d0a4b5). "
+                                     "BERT sweep run on vuduo4k only. vsftpd is same binary (732c6fb8) "
+                                     "across all 4K variants — SITE CHMOD analysis universal."},
         "openvix-6.9":  {"size_bytes": 1155072, "sha256": "2bf7ccd22b1b", "isa": "thumb"},
         "pure2-7.6":    {"size_bytes": 1245184, "sha256": "9d9784b13bfb", "isa": "thumb"},
+        "dm4u-dm900":   {"size_bytes": 6032460, "sha256": "92965306a9ab", "isa": "thumb",
+                         "note": "Mixed ISA: 82 ARM32 prologues + 1060 Thumb prologues. DM900=DM920 binary."},
+        "dm4u-dmone":   {"size_bytes": 8691288, "sha256": "3faee9c2c504", "isa": "aarch64",
+                         "note": "AArch64 ELF64. 11,207 STP x29,x30 prologues. DMone=DMtwo binary."},
     },
     "isa_split": (
         "ARM32 mode: VTi 15.0.02/15.0.04 (3.0-3.4MB), OpenATV 7.6 (3.4MB), OpenPLi 9.2 (2.5MB). "
-        "Thumb16 mode: OpenATV 8.0b, OpenBH 6.0, OpenViX 6.9, Pure2 7.6 (1.1-1.3MB). "
+        "Thumb16 mode: OpenATV 8.0b, OpenBH 6.0, OpenViX 6.9, Pure2 7.6 (1.1-1.3MB); "
+        "DM4U DM900 (6.0MB — Thumb16 with 82 ARM32 interwork stubs). "
+        "AArch64: DM4U DMone/DMtwo (8.7MB, different SoC generation). "
         "Smaller Thumb builds are slimmer distro variants; ARM32 builds are full-featured."
     ),
 }
@@ -1651,12 +1671,28 @@ CROSS_DISTRO_VSFTPD = {
                          "note": "SITE CHMOD not supported"},
         "pure2-7.6":    {"size": "49K", "sha256": "fa959d465308", "site_chmod": False, "ubfx_mode_sanitize": False,
                          "note": "SITE CHMOD not supported"},
+        "dm4u-dm900":   {"size": "109K", "sha256": "b55ea9d0c7b0", "site_chmod": True,
+                         "ubfx_mode_sanitize": True,
+                         "ubfx_offsets": ["0x14290", "0x142c8"],
+                         "isa": "arm32", "encoding": "ubfx r1,r1,#0,#9",
+                         "note": "ARM32 vsftpd. SITE CHMOD present. ARM32 ubfx at both wrappers — "
+                                 "same protection as VTi 15.0.04. CLEAN. DM900=DM920 identical binary."},
+        "dm4u-dmone":   {"size": "117K", "sha256": "see_dmone_vsftpd", "site_chmod": True,
+                         "ubfx_mode_sanitize": True,
+                         "sanitize_va": "fn@0x414840",
+                         "sanitize_insn": "and w1, w1, #0x1ff",
+                         "isa": "aarch64", "encoding": "and w1,w1,#0x1ff",
+                         "note": "AArch64 vsftpd. SITE CHMOD present (strings at 0x418490-0x4184d8). "
+                                 "Mode sanitization: and w1,w1,#0x1ff at fn@0x414840 before bl #0x403860 "
+                                 "(fchmod). 9-bit mask equivalent to ARM32 ubfx #0,#9. CLEAN. "
+                                 "DMone=DMtwo identical binary."},
     },
     "conclusion": (
-        "SITE CHMOD attack surface exists only in VTi 15.0.02/15.0.04 and OpenPLi 9.2. "
-        "All three have ubfx r1,r1,#0,#9 mode sanitization stripping setuid/setgid/sticky bits. "
-        "E2-BIN-F04 CLEAN verdict extends to OpenPLi 9.2 (ubfx at 0xef9c, 0xefc0). "
-        "VTi 15.0.02 is identical binary to VTi 15.0.04 — E2-BIN-F04 CLEAN by identity."
+        "SITE CHMOD attack surface: VTi 15.0.02/15.0.04, OpenPLi 9.2, DM4U DM900/DM920, DM4U DMone/DMtwo. "
+        "All have 9-bit mode sanitization (ubfx #0,#9 or and #0x1ff) stripping setuid/setgid/sticky bits. "
+        "E2-BIN-F04 CLEAN verdict extends to all DM4U variants. "
+        "OpenPLi 9.2 vsftpd (SHA 732c6fb8) is the same binary across all tested 4K hardware variants. "
+        "VTi 15.0.02 is identical binary to VTi 15.0.04 — CLEAN by identity."
     ),
 }
 
@@ -1676,14 +1712,160 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
                                  "list iterator — confirmed false positive. IPC mechanism differs."},
         "openvix-6.9":  {"confirmed": False, "note": "No 0x220 constant found"},
         "pure2-7.6":    {"confirmed": False, "note": "No 0x220 constant found"},
+        "dm4u-dm900":   {"confirmed": False,
+                         "note": "No MOV r1,#0x220 (ARM32) or MOVW r1,#0x220 (Thumb2) found. "
+                                 "Thumb BERT sweep (1060 prologues, cap 4000): ipc homolog at "
+                                 "VA=0x1bc72 score=0.908 — disassembly garbled (misaligned Thumb16 "
+                                 "scan hitting Thumb2 interwork boundary). Different IPC implementation."},
+        "dm4u-dmone":   {"confirmed": False,
+                         "note": "No MOVZ w1,#0x220 (AArch64) found. AArch64 BERT sweep "
+                                 "(first 2000 of 11,207 prologues): ipc_buf_alloc homolog at "
+                                 "VA=0x55b3c8 score=0.943 — disassembly shows destructor/cleanup, "
+                                 "BERT false positive (cross-ISA ARM32→AArch64 seed). "
+                                 "Different IPC implementation — not VTi IPC protocol."},
     },
     "verdict": {
         "vti-15.0.02": "NOT_EXPLOITABLE — 0x220 ceiling confirmed identical to VTi 15.0.04",
         "openatv-7.6":  "NOT_EXPLOITABLE PROBABLE — 0x220 constant present; same ceiling expected",
+        "dm4u-all":     "UNVERIFIED — DM4U uses different IPC implementation; 0x220 ceiling N/A",
         "others": (
             "UNVERIFIED — IPC mechanism differs from VTi/OpenATV; 0x220 ceiling cannot be assumed. "
             "E2-BIN-F01 scope: VTi-specific IPC protocol. Smaller Thumb enigma2 builds likely "
             "use different protocol stack. Separate analysis required for each."
+        ),
+    },
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DM4U ANALYSIS (4 firmware images: DM900, DM920, DMone, DMtwo)
+# ──────────────────────────────────────────────────────────────────────────────
+
+DM4U_BINARY_INVENTORY = {
+    "vendor": "Dream Multimedia (DM4U)",
+    "images": [
+        {"model": "DM900", "build_date": "2021-10-29", "sha256_enigma2": "92965306a9ab", "sha256_vsftpd": "b55ea9d0c7b0"},
+        {"model": "DM920", "build_date": "2021-10-29", "sha256_enigma2": "92965306a9ab", "sha256_vsftpd": "b55ea9d0c7b0",
+         "note": "Identical binary to DM900"},
+        {"model": "DMone", "build_date": "2022-02-24", "sha256_enigma2": "3faee9c2c504", "isa": "aarch64"},
+        {"model": "DMtwo", "build_date": "2022-02-24", "sha256_enigma2": "3faee9c2c504", "isa": "aarch64",
+         "note": "Identical binary to DMone"},
+    ],
+    "enigma2_sizes": {"DM900/DM920": "6.0MB (ELF32-ARM, Thumb-primary)", "DMone/DMtwo": "8.7MB (ELF64-AArch64)"},
+    "vsftpd_sizes":  {"DM900/DM920": "109K (ARM32)", "DMone/DMtwo": "117K (AArch64)"},
+}
+
+DM4U_WEBIF_ANALYSIS = {
+    "plugin": "WebInterface (DM4U fork, not OpenWebif)",
+    "path": "/usr/lib/enigma2/python/Plugins/Extensions/WebInterface/",
+    "dm900_dm920": {
+        "webif_present": True,
+        "openwebif": False,
+        "E2_F07_equivalent": {
+            "status": "OPEN",
+            "component": "IPKG.py (WebInterface/WebChilds/IPKG.py)",
+            "pattern": (
+                "Command whitelist: SIMPLECMDS = ('list','list_installed','list_upgradable','update','upgrade'); "
+                "PACKAGECMDS = ('info','status','install','remove'). "
+                "package param: self.getArg('package') — user-controlled, no sanitization. "
+                "Exec path: cmd = [IPKG_PATH, basename(IPKG_PATH), self.command] + parms → "
+                "IPKGConsoleStream(request, cmd) → eConsoleAppContainer. "
+                "Attack vector: package= argument injection (opkg flag injection via '--dest /etc malicious'). "
+                "Different from OpenWebif E2-F07 (no shell expansion — list-form exec). "
+                "Impact: malicious package install or opkg flag injection, not direct shell exec."
+            ),
+            "severity": "MEDIUM",
+            "note": "Lower severity than OpenWebif E2-F07 — command is whitelist-validated, "
+                    "package arg uses list form (no /bin/sh -c), opkg flag injection only",
+        },
+        "E2_F09_equivalent": {
+            "status": "DIFFERENT_VULNERABILITY_CLASS",
+            "component": "WebBouquetEditor/WebComponents/Sources/BouquetEditor.py",
+            "pattern": (
+                "Backup: call(['tar', '-cvf', backupFilename] + tarFiles) — list form, no injection. "
+                "RESTORE: backupFilename = tarFilename (user-controlled path, no sanitization). "
+                "Check: 'tmp/.webouquetedit' in check_output(['tar', '-tf', backupFilename]). "
+                "Extract: call(['tar', '-xvf', backupFilename, '-C', '/']) — root extraction "
+                "with no --no-absolute-names or --strip-components protection. "
+                "Vulnerability: tar slip — attacker-controlled archive with absolute paths "
+                "extracts to arbitrary filesystem locations. Different from OpenWebif E2-F09 "
+                "(OpenWebif uses os.popen shell injection; DM4U uses list-form tar slip)."
+            ),
+            "severity": "HIGH",
+            "note": "Tar slip / path traversal on restore, not command injection. "
+                    "Requires attacker to supply a crafted tar archive to the restore endpoint.",
+        },
+    },
+    "dmone_dmtwo": {
+        "webif_present": "NOT_VERIFIED",
+        "note": "WebInterface Python files not found in DMone rootfs during extraction — "
+                "only enigma2 and vsftpd binaries extracted. OpenWebif or WebInterface presence "
+                "on DMone/DMtwo is UNCONFIRMED.",
+    },
+}
+
+DM4U_VSFTPD_ANALYSIS = {
+    "finding_id": "E2-BIN-F04 DM4U extension",
+    "dm900_dm920": {
+        "isa": "ARM32 (vsftpd binary is ARM32, enigma2 is Thumb-primary)",
+        "site_chmod": True,
+        "mode_sanitize": "ubfx r1,r1,#0,#9",
+        "ubfx_offsets": ["0x14290", "0x142c8"],
+        "verdict": "CLEAN — same 9-bit mode mask as VTi/OpenPLi",
+    },
+    "dmone_dmtwo": {
+        "isa": "AArch64",
+        "site_chmod": True,
+        "site_chmod_strings": {
+            "CHMOD":                  "VA=0x418490",
+            "SITE CHMOD needs 2 args": "VA=0x418498",
+            "SITE CHMOD command failed": "VA=0x4184b8",
+            "SITE CHMOD command ok":  "VA=0x4184d8",
+        },
+        "mode_sanitize": "and w1, w1, #0x1ff",
+        "mode_sanitize_va": "fn@0x414840",
+        "mode_sanitize_disasm": (
+            "0x414840: stp x29, x30, [sp, #-0x10]! "
+            "0x414844: and w1, w1, #0x1ff  ← 9-bit mask "
+            "0x414848: mov x29, sp "
+            "0x41484c: bl #0x403860  ← fchmod syscall wrapper "
+            "0x414850: cbnz w0, #0x414860 "
+            "0x414854: ldp x29, x30, [sp], #0x10 "
+            "0x414858: ret"
+        ),
+        "verdict": "CLEAN — and w1,w1,#0x1ff equivalent to ARM32 ubfx r1,r1,#0,#9 (both 9-bit)",
+    },
+}
+
+DM4U_BERT_SWEEP = {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "seeds": "VTi 15.0.04 ARM32 functions (ipc_buf_alloc_0x25e2bc, dvb_dispatch_0x25eca8)",
+    "dm900_thumb_sweep": {
+        "prologues": 1060,
+        "corpus_size": 641,
+        "ipc_buf_alloc_homolog": {"va": "0x1bc72", "score": 0.908},
+        "dvb_dispatch_homolog": {"va": "0x1bfec", "score": 0.754},
+        "ipc_0x220_constant": False,
+        "caveat": (
+            "DM900 enigma2 mixed ISA — 82 ARM32 + 1060 Thumb16 prologues. "
+            "Thumb16 prologue scanner hits Thumb2 (32-bit) instruction boundaries: "
+            "BERT top match at 0x1bc72 disassembly is garbled (bvc, ldm r4,... misaligned). "
+            "Cross-ISA Thumb16 scanning on Thumb2 binary is unreliable. "
+            "No 0x220 IPC constant — DM4U uses different IPC protocol stack."
+        ),
+    },
+    "dmone_aarch64_sweep": {
+        "total_prologues": 11207,
+        "corpus_size": 2000,
+        "ipc_buf_alloc_homolog": {"va": "0x55b3c8", "score": 0.943},
+        "dvb_dispatch_homolog":  {"va": "0x5544b8", "score": 0.795},
+        "ipc_0x220_constant": False,
+        "caveat": (
+            "Cross-ISA seed (ARM32) → target (AArch64): structural BERT patterns diverge. "
+            "Top match at 0x55b3c8 (score 0.943) is a destructor/cleanup function "
+            "(two BLR via vtable, tail-call branch) — confirmed BERT false positive. "
+            "No MOVZ w1,#0x220 found — different IPC implementation. "
+            "11,207 prologues total; only first 2,000 swept (corpus cap). "
+            "Cross-ISA homolog tracking with BERT is UNRELIABLE for ARM32→AArch64."
         ),
     },
 }
