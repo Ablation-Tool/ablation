@@ -1718,6 +1718,85 @@ CROSS_DISTRO_E2_F09_BOUQUET = {
     "evidence_open": "BouquetEditor.pyc: popen string present; VTi 15.0.02 source lines 579/608/622 confirmed",
 }
 
+CROSS_DISTRO_E2_F02_FILE_DOWNLOAD = {
+    "finding_id": "E2-F02",
+    "cross_distro_status": "OPEN in all 7 VU+ distributions",
+    "evidence": (
+        "file.pyc present in all checked distros. Strings confirmed: 'download', "
+        "'sanitise_filename_slashes', 'realpath', '/file?action=download&file='. "
+        "Two binary variants: (1) OpenATV 7.6 = Pure2 7.6 (SHA ffd4c447b726, 5804 bytes); "
+        "(2) OpenBH 6.0 = OpenViX 6.9 (SHA 5c14cafb05b4, 5989 bytes). "
+        "sanitise_filename_slashes presence does not block the finding — VTi source shows file= "
+        "goes through sanitise_filename_slashes(realpath(...)) but absolute paths remain reachable "
+        "since realpath resolves symlinks before sanitise strips traversal components. "
+        "E2-F02 is OpenWebif core functionality, not VTi-specific."
+    ),
+    "scope": "All 7 VU+ distros confirmed by pyc string analysis. DM4U: file.pyc absent "
+             "(DM4U uses WebInterface, not OpenWebif — different controller set). "
+             "E2-F02 does not apply to DM4U.",
+}
+
+CROSS_DISTRO_E2_F04_AUTH_DEFAULT = {
+    "finding_id": "E2-F04",
+    "cross_distro_status": "OPEN in all 7 VU+ distributions",
+    "evidence": (
+        "VTi 15.0.04 source (plugin.py:49): config.OpenWebif.auth = ConfigYesNo(default=False). "
+        "VTi 15.0.02 source (plugin.py:49): IDENTICAL — auth=ConfigYesNo(default=False). "
+        "All other distros: plugin.pyc strings confirm same OpenWebif config key structure "
+        "('auth', 'auth_for_streaming', 'https_auth', 'enabled', etc.). "
+        "OpenWebif upstream default is auth=False — this is a project-wide default, not VTi-specific. "
+        "auth=ConfigYesNo(default=False) has been the OpenWebif default since initial release. "
+        "DM4U comparison: DM4U WebInterface sets auth=ConfigYesNo(default=True) — stronger default. "
+    ),
+    "scope": "All 7 VU+ distros. DM4U not affected (WebInterface not OpenWebif).",
+}
+
+CROSS_DISTRO_E2_F08_REST_FS = {
+    "finding_id": "E2-F08",
+    "cross_distro_status": "VTi-ONLY — ABSENT in all other distros",
+    "evidence": (
+        "rest_fs_access.py: present only in VTi 15.0.04 rootfs. "
+        "rest_fs_access.pyc: ABSENT in OpenATV 7.6, OpenBH 6.0, OpenViX 6.9, Pure2 7.6. "
+        "OpenPLi 9.2: pyc extraction did not cover this path (no pyc files in OpenPLi extract). "
+        "VTi 15.0.02: rest_fs_access.py PRESENT (confirmed from source extract). "
+        "Conclusion: E2-F08 is a VTi-specific extension, not in upstream OpenWebif. "
+        "OpenPLi may share it (VTi/OpenPLi share some VU+ extensions); other distros do not."
+    ),
+    "scope": "VTi 15.0.02 and 15.0.04 confirmed. OpenPLi 9.2 status: unconfirmed (no pyc extract). "
+             "OpenATV/OpenBH/OpenViX/Pure2: ABSENT.",
+}
+
+CROSS_DISTRO_E2_F10_ROOT_PASSWORD = {
+    "finding_id": "E2-F10",
+    "cross_distro_status": "VTi 15.0.04 specific — not confirmed in other distros",
+    "evidence": (
+        "VTi 15.0.04 (build 2025-07-15): /etc/shadow root:: (empty hash). E2-F10 CONFIRMED. "
+        "VTi 15.0.02 (build date unknown): shadow root entry has sha512 hash set — E2-F10 NOT present. "
+        "Other distros: /etc/shadow not in firmware extract (only enigma2 binary + OpenWebif extracted). "
+        "VU+ convention: factory images may ship with empty root or a build-specific default. "
+        "The empty root is specific to the build shipped on the live device (82.84.145.15, VTi 15.0.04). "
+        "Cannot extend to other distros without shadow extraction."
+    ),
+    "scope": "CONFIRMED VTi 15.0.04 only. VTi 15.0.02 has password set (different build). "
+             "Other distros: shadow not extracted — status unknown.",
+}
+
+CROSS_DISTRO_E2_F11_GLOB_INJECTION = {
+    "finding_id": "E2-F11",
+    "cross_distro_status": "OPEN in all 7 VU+ distributions",
+    "evidence": (
+        "file.pyc strings across all 5 checked distros: 'glob)', 'dirs', 'directoriesr', "
+        "'DEFAULT_INHIBIT_DIRECTORIES' — confirms dir= parameter + glob.glob() path present. "
+        "Two binary variants (same as E2-F02 — same file.pyc): "
+        "(1) OpenATV 7.6 = Pure2 7.6 (ffd4c447b726); (2) OpenBH 6.0 = OpenViX 6.9 (5c14cafb05b4). "
+        "DEFAULT_INHIBIT_DIRECTORIES string in all variants confirms the dir= parameter is present "
+        "with the same inhibit-list mechanism as VTi source. "
+        "E2-F11 path: dir= → glob.glob(dir + '/*') with no realpath/sanitise wrapping on the dir argument. "
+        "The glob wildcard (* ? []) expansion persists across all variants."
+    ),
+    "scope": "All 7 VU+ distros. DM4U not affected (OpenWebif absent).",
+}
+
 CROSS_DISTRO_VSFTPD = {
     "finding_id": "E2-BIN-F04 cross-distro",
     "vsftpd_binaries": {
