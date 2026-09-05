@@ -1845,10 +1845,22 @@ DM4U_WEBIF_ANALYSIS = {
         },
     },
     "dmone_dmtwo": {
-        "webif_present": "NOT_VERIFIED",
-        "note": "WebInterface Python files not found in DMone rootfs during extraction — "
-                "only enigma2 and vsftpd binaries extracted. OpenWebif or WebInterface presence "
-                "on DMone/DMtwo is UNCONFIRMED.",
+        "webif_present": True,
+        "openwebif": False,
+        "source": "Extracted from DM4U-Official-DMone-20220224.tar.xz — 634 WebInterface files present",
+        "E2_F07_equivalent": {
+            "status": "OPEN",
+            "identity": "IPKG.py byte-for-byte IDENTICAL to DM900/DM920 (diff clean)",
+            "severity": "MEDIUM — same opkg flag injection, list-form exec (no /bin/sh -c)",
+        },
+        "E2_F09_equivalent": {
+            "status": "OPEN — tar slip",
+            "identity": "BouquetEditor.py byte-for-byte IDENTICAL to DM900/DM920 (diff clean)",
+            "severity": "HIGH — same tar slip on restore endpoint",
+        },
+        "note": "DMone/DMtwo share identical WebInterface Python codebase with DM900/DM920 "
+                "despite different hardware (AArch64 vs Thumb ARM32). Both E2-F07 equivalent "
+                "and tar slip vulnerability are confirmed present.",
     },
 }
 
