@@ -45,6 +45,9 @@ FINDINGS SUMMARY:
 
 INETD SERVICE INVENTORY (services besides OpenWebif):
   vsftpd (port 21):  E2-F03 (local_root=/, write_enable=YES); E2-F10 (no-password root by default)
+                     Binary RE: E2-BIN-F04 (CLEAN) — no memory corruption; SITE CHMOD mode sanitized
+                     PLT: snprintf(×6, all bounded), strncpy(×7, literal n), memcpy(0 direct BL callers)
+                     No sprintf/strcpy/system/exec in PLT; TVFS = FEAT-only, no command handler
   telnetd (port 23): BusyBox v1.23.2, runs as root; securetty may block PTY root login
   streamproxy (port 8001): HTTP Basic Auth enforced; forwards to enigma2 /web/stream endpoint;
                             7972-byte binary; strcpy + sprintf are dead imports (0 BL call sites in .text);
@@ -54,6 +57,9 @@ INETD SERVICE INVENTORY (services besides OpenWebif):
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
   E2-BIN-F02 (INFO)       system() at 0x261a10 in DVB CI handler — no network reachability
+  E2-BIN-F03 (INFO/CLEAN) streamproxy: strcpy/sprintf dead imports; snprintf bounded at 0x100
+  E2-BIN-F04 (INFO/CLEAN) vsftpd 3.0.2: no sprintf/strcpy; all snprintf/strncpy bounded;
+                           SITE CHMOD mode sanitized (ubfx strips setuid/setgid); RE complete
 
 PLT MAP (12-byte stubs, base 0x78d20):
   sprintf (0x7a688): 248 callers — 245 literal fmt, 3 dynamic; format-string injection ruled out
@@ -1376,5 +1382,120 @@ E2_BIN_SYSTEM_SHUTDOWN_ANALYSIS = {
         "Prior session incorrectly attributed execvp callers to this function. "
         "Corrected: execvp at 0x83f24 is in eConsoleAppContainer (E2-F07 path). "
         "system() at 0x90284 is the shutdown mechanism. These are separate code paths."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-BIN-F04: vsftpd 3.0.2 binary RE — CLEAN (INFO)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# Binary: /usr/sbin/vsftpd (port 21), 89380 bytes, ARM32 EABI5 ET_EXEC, stripped
+# SHA256: 7a63c61ff78da27bcf5a2a6411905a16c81025b3b83cb34277293d38dd24323b
+# LOAD segment: vaddr=0x10000, file_off=0x0
+# .text: VA=0x12200, size=0xf904 (63748 bytes)
+# PLT: resolver 20 bytes, first stub at 0x11bfc, stride 12
+#
+# DANGEROUS IMPORT SURVEY:
+#   sprintf:  ABSENT from PLT — not imported
+#   strcpy:   ABSENT from PLT — not imported
+#   snprintf: PLT 0x11fc8 — 6 callers:
+#             0x1e6fc, 0x1e728, 0x1e758, 0x1e798, 0x1f2b4 → r1=#0x20 (32-byte limit)
+#             0x2032c → r1=#0xd (13-byte limit, set at 0x202f0; timezone string formatter)
+#             ALL 6 callers: n is a compile-time literal. No user-controlled size.
+#   strncpy:  PLT 0x11ff8 — 7 callers (cluster 0x205b0-0x2064c):
+#             All use literal n values: r2=#3 or r2=#5 for IP address octet parsing.
+#             All safe — no user-controlled n or dest size.
+#   memcpy:   PLT 0x11ce0 — 0 direct BL callers (compiler-inlined or unused direct calls)
+#   fchmod:   PLT 0x121f0 — 1 caller at 0x1f2f0 (within wrapper fn@0x1f2e8):
+#             ubfx r1, r1, #0, #9  ; mask mode to bits[8:0] (rwxrwxrwx only, no setuid/setgid)
+#             bl fchmod(fd, masked_mode)
+#             Called from fn@0x14424 (post-upload file permission handler) via function pointer.
+#             NOT the SITE CHMOD handler — this sets file permissions after a STOR upload.
+#   chmod:    PLT 0x12178 — 0 BL callers; 1 B (tail-call) from chmod_wrapper at 0x1f310:
+#             ubfx r1, r1, #0, #9  ; same mask (no setuid/setgid/sticky)
+#             b chmod_plt            ; tail-call to path-based chmod()
+#             chmod_wrapper (0x1f30c) has 0 BL callers — dispatched via function pointer.
+#             This IS the SITE CHMOD path; mode sanitized at binary level.
+#   atoi:     PLT 0x12118 — 6 callers (all in IP address / timezone octet parsing, 0x205e4-0x20670)
+#             NOT in SITE CHMOD handler — mode parsed by internal octal converter, not atoi.
+#
+# SITE CHMOD BINARY ANALYSIS:
+#   Mode argument: ubfx r1, r1, #0, #9 strips setuid (bit11), setgid (bit10), sticky (bit9).
+#   Maximum mode set: 0777 (rwxrwxrwx). Attacker cannot plant setuid root binaries via SITE CHMOD.
+#   Path argument: processed by vsftpd path resolution before handler call; no binary-level injection.
+#   Risk is configuration-level (no chroot_local_user → full filesystem chmod) — captured in E2-F03.
+#
+# SITE CHMOD DISPATCH:
+#   Table at 0x15a28: [CHMOD_str, needs_2_args_str, handler_addr, fail_str, ok_str, UMASK_str, ...]
+#   handler_addr = 0x358e8 (outside binary text section — indicates function-pointer dispatch via
+#   a data structure not a direct BL; actual chmod_wrapper at 0x1f30c confirmed by B tail-call trace)
+#
+# PLT NOTABLE ABSENCES: no system(), no popen(), no exec*() — vsftpd does not shell-exec anything.
+# libcap functions present (cap_set_proc, cap_init, cap_set_flag, cap_free, cap_get_proc) —
+# POSIX capabilities for privilege drop (cap_net_bind_service → non-root bind port 21).
+#
+# TVFS: string at file offset 82799 is a FEAT response entry ("TVFS").
+# No TVFS-specific command handler found — TVFS is a naming-convention advertisement per RFC 3659 §7.
+# The custom VU+ TVFS extension adds one line to the FEAT response only; no new code path.
+
+E2_BIN_F04_VSFTPD_RE = {
+    "finding_id": "E2-BIN-F04",
+    "severity": "INFO",
+    "status": "CLEAN",
+    "title": "vsftpd 3.0.2 binary RE: no memory corruption — all string ops bounded, SITE CHMOD mode sanitized",
+    "binary": "/usr/sbin/vsftpd",
+    "binary_size_bytes": 89380,
+    "sha256": "7a63c61ff78da27bcf5a2a6411905a16c81025b3b83cb34277293d38dd24323b",
+    "plt_map": {
+        "resolver_size_bytes": 20,
+        "first_stub_va": "0x11bfc",
+        "stub_stride_bytes": 12,
+        "snprintf": "0x11fc8",
+        "strncpy": "0x11ff8",
+        "memcpy": "0x11ce0",
+        "fchmod": "0x121f0",
+        "chmod": "0x12178",
+        "atoi": "0x12118",
+        "syscall": "0x11f2c",
+        "notable_absences": ["system", "popen", "execl", "execvp", "execve", "sprintf", "strcpy"],
+    },
+    "string_op_analysis": {
+        "snprintf_callers": 6,
+        "snprintf_size_args": {
+            "0x1e6fc": "r1=0x20 (32 bytes)",
+            "0x1e728": "r1=0x20 (32 bytes)",
+            "0x1e758": "r1=0x20 (32 bytes)",
+            "0x1e798": "r1=0x20 (32 bytes)",
+            "0x1f2b4": "r1=0x20 (32 bytes)",
+            "0x2032c": "r1=0x0d (13 bytes, set at 0x202f0; timezone string formatter)",
+        },
+        "strncpy_callers": 7,
+        "strncpy_n_args": "all literal: r2=#3 or r2=#5 (IP address octet parsing, 0x205b0-0x2064c)",
+        "memcpy_direct_bl_callers": 0,
+        "verdict": "No unbound string operations. No user-controlled size argument in any call.",
+    },
+    "chmod_analysis": {
+        "mode_sanitization": "ubfx r1, r1, #0, #9 at both fchmod_wrapper (0x1f2e8) and chmod_wrapper (0x1f30c)",
+        "effect": "Mode masked to bits[8:0] = rwxrwxrwx only. setuid/setgid/sticky bits stripped.",
+        "fchmod_wrapper_va": "0x1f2e8",
+        "fchmod_caller": "0x1461c in fn@0x14424 (post-STOR file permission setter)",
+        "chmod_wrapper_va": "0x1f30c",
+        "chmod_callers": "0 BL callers; invoked via function pointer from SITE command dispatch",
+        "path_handling": "Path resolved by vsftpd before handler call; no binary-level path injection",
+        "risk_locus": "Configuration (no chroot_local_user in E2-F03) not binary",
+    },
+    "tvfs_extension": {
+        "string_file_offset": 82799,
+        "string_value": "TVFS",
+        "implementation": "FEAT response string only — no TVFS command handler found in binary",
+        "conclusion": "TVFS is a naming-convention advertisement (RFC 3659 §7). Zero new attack surface.",
+    },
+    "conclusion": (
+        "vsftpd 3.0.2 custom VU+ binary is CLEAN for binary-level memory corruption. "
+        "All string operations use bounded functions with compile-time literal size arguments. "
+        "sprintf and strcpy are not imported. No shell-exec in PLT. "
+        "SITE CHMOD mode is sanitized at binary level (ubfx strips setuid/setgid bits). "
+        "All security risk from vsftpd is configuration-level (E2-F03, E2-F06, E2-F10). "
+        "Binary RE of vsftpd is complete."
     ),
 }
