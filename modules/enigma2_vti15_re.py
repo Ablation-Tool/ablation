@@ -2350,6 +2350,177 @@ DM4U_AUTH_BYPASS = {
     "remediation": "Set root password during first-boot wizard. DM4U UI does not force this on factory reset.",
 }
 
+DM4U_SERVICE_CONFIG = {
+    "finding_id": "DM4U-F02",
+    "title": "DM4U xinetd service config: FTP/SSH/Telnet all accessible with root empty password",
+    "status": "CONFIRMED — DM4U-Official-DM900-20211029.tar.xz",
+    "launch_mechanism": "xinetd (not inetd, not standalone) — /etc/xinetd.d/ configs",
+    "services": {
+        "ftp_21": {
+            "xinetd_config": "service ftp { server=/usr/sbin/vsftpd; user=root; socket_type=stream; flags=IPv6 }",
+            "vsftpd_conf": (
+                "listen=NO, listen_ipv6=NO (xinetd-launched). "
+                "anonymous_enable=NO, local_enable=YES, write_enable=YES. "
+                "NO local_root= (defaults to user home: /root for root). "
+                "chroot_local_user=NO — root can navigate to / after login. "
+                "allow_writeable_chroot=YES. No userlist_enable. "
+                "FTP root login with blank password → home /root + navigable to full FS. "
+                "write_enable=YES → arbitrary file write as root after navigation to /."
+            ),
+            "access_path": "FTP root: (blank password) → cd / → full read/write filesystem",
+        },
+        "ssh_22": {
+            "xinetd_config": "service ssh { server=/usr/sbin/dropbear; server_args=-i -B; user=root }",
+            "dropbear_extra_args": "-i (inetd mode) -B (blank passwords allowed)",
+            "access_path": "SSH root@dm4u (blank password) → root shell",
+        },
+        "telnet_23": {
+            "xinetd_config": "service telnet { server=/usr/sbin/telnetd; user=root }",
+            "securetty": "pts/0 through pts/9 listed — root PTY login allowed",
+            "access_path": "Telnet root (blank password) → root shell via pts/0-9",
+        },
+    },
+    "note": (
+        "DAEMON='/bin/true' in /etc/default/dropbear is a legacy SysV init artifact. "
+        "xinetd is the actual launcher; dropbear -i starts per-connection, ignoring DAEMON. "
+        "All three root access paths confirmed by service config extraction."
+    ),
+}
+
+DM4U_WEBIF_LAN_AUTH_BYPASS = {
+    "finding_id": "DM4U-F03",
+    "severity": "HIGH",
+    "cvss_v3": 8.1,
+    "title": "DM4U WebInterface: LAN clients bypass HTTP auth by default",
+    "status": "CONFIRMED — plugin.py localauth=ConfigOnOff(default=False)",
+    "evidence": {
+        "config": "config.plugins.Webinterface.localauth = ConfigOnOff(default=False)",
+        "code": (
+            "isAuthenticated() in HTTPAuthResource: "
+            "if not config.plugins.Webinterface.localauth.value: "
+            "    if self._isLocalClient(host.ip): return True. "
+            "LAN = any IP in the device's configured network interface subnets."
+        ),
+        "effect": (
+            "Any client on the same LAN subnet bypasses HTTP Basic auth entirely. "
+            "auth=True is the default (http.auth=ConfigYesNo(default=True)), but localauth=False "
+            "means LAN clients never see the auth check. "
+            "Net: unauthenticated LAN API access to all DM4U WebInterface endpoints."
+        ),
+    },
+    "session_note": (
+        "extended_security=True (default) adds sessionid CSRF protection for /web/, /opkg, /ipkg. "
+        "LAN client first fetches /web/session (in SESSION_EXCEPTIONS, no sessionid required) "
+        "to obtain a UUID4, then uses it in subsequent requests. "
+        "CSRF protection is not an auth control — full unauthenticated access path remains."
+    ),
+    "chain": "LAN → no auth check → full API access without credentials",
+}
+
+DM4U_WEBIF_FILE_READ = {
+    "finding_id": "DM4U-F04",
+    "severity": "HIGH",
+    "cvss_v3": 7.5,
+    "title": "DM4U WebInterface: arbitrary file read via /file endpoint (FileStreamer)",
+    "status": "CONFIRMED — FileStreamer.py",
+    "evidence": {
+        "endpoint": "GET /file?file=<path>",
+        "code": (
+            "path = dir + filename  # dir from ?dir= or ?root= param (may be empty). "
+            "No realpath(), no whitelist, no path restriction. "
+            "os_path.exists(path) → static.File(path) → HTTP download."
+        ),
+        "examples": [
+            "GET /file?file=/etc/shadow → downloads /etc/shadow",
+            "GET /file?dir=/&file=etc/shadow → downloads /etc/shadow",
+            "GET /file?file=/etc/passwd",
+        ],
+    },
+    "auth": "Unauthenticated from LAN (DM4U-F03 localauth=False bypass)",
+    "chain": "DM4U-F03 (LAN bypass) → DM4U-F04 (file read) → /etc/shadow exfil",
+}
+
+DM4U_WEBIF_UPLOAD_TRAVERSAL = {
+    "finding_id": "DM4U-F05",
+    "severity": "CRITICAL",
+    "cvss_v3": 9.1,
+    "title": "DM4U WebInterface: upload path traversal — arbitrary file write via ../filename",
+    "status": "CONFIRMED — Uploader.py",
+    "evidence": {
+        "endpoint": "POST /upload (multipart/form-data)",
+        "parameters": {"path": "target upload directory", "file": "file content"},
+        "code": (
+            "uploaddir = req.args['path'][0]  # e.g. '/tmp/'. "
+            "filename_from_header via regex: search('.*?filename=\"(.*?)\"', req.content.getvalue()). "
+            "fn = os_path.join(uploaddir, filename_group)  # NO basename() call. "
+            "restricted_paths check only applies to overwrite flag — NOT to new file creation. "
+            "if fn and (overwrite or not os_path.exists(fn)): os_open(fn, O_WRONLY|O_CREAT)."
+        ),
+        "bypass": (
+            "restricted_paths = {'/bin/', '/boot/', '/dev/', '/etc/', ...}. "
+            "Check: 'if overwrite and uploaddir in self.restricted_paths' — only for overwrite. "
+            "New file (not overwrite): path restriction is NOT enforced. "
+            "Attack: path=/tmp/ + filename=../etc/cron.d/evil → "
+            "fn = os.path.join('/tmp/', '../etc/cron.d/evil') = '/tmp/../etc/cron.d/evil' → /etc/cron.d/evil. "
+            "/tmp/ is not in restricted_paths, and new-file creation bypasses the check entirely."
+        ),
+        "post_write": "os_chmod(fn, 0755) — file is written and made executable.",
+    },
+    "auth": "Unauthenticated from LAN (DM4U-F03 localauth=False bypass)",
+    "chain": "DM4U-F03 (LAN bypass) → DM4U-F05 (path traversal write to /etc/cron.d/) → root RCE via cron",
+}
+
+DM4U_WEBIF_BOUQUETEDITOR_RESTORE = {
+    "finding_id": "DM4U-F06",
+    "severity": "HIGH",
+    "cvss_v3": 8.1,
+    "title": "DM4U WebBouquetEditor: tar slip via restore endpoint (path traversal on extraction)",
+    "status": "CONFIRMED — BouquetEditor.py restoreFiles()",
+    "evidence": {
+        "endpoint": "GET /bouqueteditor/web/restore?Filename=<path>",
+        "code": (
+            "restoreFiles(param): tarFilename = param. "
+            "Gate: 'tmp/.webouquetedit' in check_output(['tar', '-tf', tarFilename]). "
+            "Extract: call(['tar', '-xvf', tarFilename, '-C', '/']). "
+            "No --no-absolute-names, no --strip-components, no member path validation."
+        ),
+        "bypass": (
+            "Gate only checks that the string 'tmp/.webouquetedit' appears anywhere in tar -tf output. "
+            "A crafted archive containing BOTH 'tmp/.webouquetedit' AND '../etc/cron.d/evil' passes. "
+            "Tar extracts all members with -C / → arbitrary write to full filesystem."
+        ),
+    },
+    "full_chain": (
+        "1. DM4U-F03 (LAN auth bypass). "
+        "2. DM4U-F05 (POST /upload with path=/tmp/, filename=evil.tar, content=crafted_tar_with_gate+payload). "
+        "3. GET /bouqueteditor/web/restore?Filename=/tmp/evil.tar. "
+        "4. Gate check: 'tmp/.webouquetedit' in tar -tf output → passes. "
+        "5. tar -xvf /tmp/evil.tar -C / → writes /etc/cron.d/evil → cron executes as root. "
+        "Total: 3-request unauthenticated LAN → root RCE."
+    ),
+    "compare": "Different from VTi E2-F09 (OpenWebif uses os.popen shell injection on filename; DM4U uses tar slip). Both result in root code execution.",
+    "auth": "Unauthenticated from LAN (DM4U-F03 localauth=False bypass)",
+}
+
+DM4U_IPKG_CLEAN = {
+    "finding_id": "DM4U-IPKG",
+    "title": "DM4U WebInterface IPKG.py: multi-arg execute — NOT injectable",
+    "status": "CLEAN",
+    "evidence": (
+        "IPKG.py buildCmd: cmd = [IPKG_PATH, basename(IPKG_PATH), self.command] + parms. "
+        "Execute: self.container.execute(*cmd). "
+        "Multi-arg form passes package as separate argv element — no shell expansion. "
+        "Contrast: VTi E2-F07 uses eConsoleAppContainer(single_string_cmd) → shell=True → injectable. "
+        "DM4U uses execute(*list) → no /bin/sh -c → injection NOT possible."
+    ),
+    "anti_hijack": (
+        "config.plugins.Webinterface.anti_hijack = ConfigOnOff(default=True). "
+        "GET requests to /ipkg are rejected with 405 when anti_hijack=True. "
+        "POST required — additional barrier but not a security boundary since "
+        "the list-form exec doesn't inject regardless of HTTP method."
+    ),
+}
+
 DM4U_VSFTPD_ANALYSIS = {
     "finding_id": "E2-BIN-F04 DM4U extension",
     "dm900_dm920": {
