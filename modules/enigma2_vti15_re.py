@@ -1923,16 +1923,20 @@ CROSS_DISTRO_E2_F08_REST_FS = {
 
 CROSS_DISTRO_E2_F10_ROOT_PASSWORD = {
     "finding_id": "E2-F10",
-    "cross_distro_status": "OPEN in VTi 15.0.04 + OpenPLi 9.2 — NOT VTi-specific",
+    "cross_distro_status": "OPEN in 5 of 7 VU+ distros confirmed — NOT VTi-specific",
     "evidence": (
         "VTi 15.0.04 (build 2025-07-15): root::20285 (empty hash). CONFIRMED. "
         "VTi 15.0.02: sha512 hash set — NOT present. "
+        "OpenATV 7.6 (rootfs-openatv76): root::15069 — CONFIRMED. "
+        "OpenBH 6.0 (rootfs.tar.bz2 from firmware zip): root::15069 — CONFIRMED. "
         "OpenPLi 9.2 MIPS vuzero (build 2024): root::20695 — CONFIRMED. "
         "OpenPLi 9.2 ARM32 vuduo4k (build 2024): root::20695 — CONFIRMED. "
-        "OpenPLi ships with the same date (20695 = 2026-08-17 epoch days) across both ISAs. "
-        "VTi/OpenPLi convention: factory image ships with empty root hash. "
+        "Pure2 7.6 (dm900 firmware zip rootfs.tar.bz2): root:$5$CcFdFlOdaPfP$... (sha256crypt) — NOT present. "
+        "OpenViX 6.9: firmware image not downloaded — status unknown. "
+        "OpenATV 8.0b: full rootfs not extracted — status unknown. "
         "DM4U DM900: root::18929 — CONFIRMED (2021-10-29 build); already in DM4U_AUTH_BYPASS. "
-        "Other VU+ distros: shadow not extracted — status unknown."
+        "Pattern: OpenATV 7.6/OpenBH 6.0 share the same epoch date (15069), suggesting coordinated "
+        "release. Pure2 7.6 is the outlier — hash set at build time."
     ),
     "service_paths": {
         "vti-15.0.04": [
@@ -1950,8 +1954,11 @@ CROSS_DISTRO_E2_F10_ROOT_PASSWORD = {
             "FTP/SSH: vsftpd.conf + dropbear config not in extract (partial firmware) — service auth posture unknown",
         ],
     },
-    "scope": "CONFIRMED VTi 15.0.04, OpenPLi 9.2 (MIPS + ARM32), DM4U DM900/DM920. "
-             "VTi 15.0.02: NOT present. Other VU+ distros: shadow not extracted.",
+    "scope": (
+        "CONFIRMED OPEN: VTi 15.0.04, OpenATV 7.6, OpenBH 6.0, OpenPLi 9.2 (MIPS + ARM32), DM4U DM900/DM920. "
+        "CONFIRMED NOT present: VTi 15.0.02 (sha512 hash), Pure2 7.6 (sha256crypt hash). "
+        "UNKNOWN: OpenViX 6.9, OpenATV 8.0b — no full rootfs."
+    ),
 }
 
 CROSS_DISTRO_E2_F11_GLOB_INJECTION = {
