@@ -1639,7 +1639,8 @@ CROSS_DISTRO_E2_F09_BOUQUET = {
     "finding_id": "E2-F09",
     "cross_distro_status": "SPLIT — open in VTi/OpenPLi, FIXED in 5 other distros",
     "open_distros": ["VTi 15.0.02", "VTi 15.0.04", "OpenPLi 9.2"],
-    "fixed_distros": ["OpenATV 7.6", "OpenATV 8.0beta", "OpenBH 6.0", "OpenViX 6.9", "Pure2 7.6"],
+    "fixed_distros": ["OpenATV 7.6", "OpenATV 8.0beta", "OpenBH 6.0", "OpenViX 6.9", "Pure2 7.6",
+                      "OpenPLi scarthgap-dev"],
     "fix_mechanism": (
         "Fixed distros replaced os.popen('tar cvf ...') with Python tarfile module. "
         "BouquetEditor.pyc strings in fixed distros: 'tarfile', 'tarfilename', '.tar', "
@@ -1708,8 +1709,17 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
         "openatv-8.0b": {"confirmed": False, "note": "No MOV r1,#0x220 or MOVW r1,#0x220 found"},
         "openbh-6.0":   {"confirmed": False, "note": "No 0x220 constant found"},
         "openpli-9.2":  {"confirmed": False,
-                         "note": "No calloc(1,0x220) pattern. BERT top match (0x156b9c) is a "
-                                 "list iterator — confirmed false positive. IPC mechanism differs."},
+                         "note": "No calloc(1,0x220) pattern on vuduo4k. BERT top match (0x156b9c) is a "
+                                 "list iterator — confirmed false positive. IPC mechanism differs. "
+                                 "Confirmed absent in ALL 7 hardware variants (duo4kse=8afe6f75, "
+                                 "solo4k=da43dddb, ultimo4k=31ce3ff9, uno4k=f89c75a6, "
+                                 "uno4kse=75f4ae4d, zero4k=73d0a4b5) — all 6595 ARM32 prologues, no 0x220."},
+        "openpli-scarthgap": {"confirmed": False,
+                               "sha256": "29e4b27dcf84", "size_bytes": 2689816, "arm32_prologues": 6996,
+                               "note": "OpenPLi dev branch (2026-09-04). ARM32, 6996 prologues. "
+                                       "No MOV r1,#0x220. "
+                                       "E2-F09: FIXED (tarfile module). E2-F07: OPEN (eConsoleAppContainer). "
+                                       "vsftpd: SITE CHMOD + ubfx #0,#9 at 0xef80 — CLEAN (SHA 508e21ca4a20)."},
         "openvix-6.9":  {"confirmed": False, "note": "No 0x220 constant found"},
         "pure2-7.6":    {"confirmed": False, "note": "No 0x220 constant found"},
         "dm4u-dm900":   {"confirmed": False,
