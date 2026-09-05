@@ -1,358 +1,408 @@
 """
-TencentOS 4.6 — dim_core.ko kernel module reverse engineering.
+TencentOS 4.6 — dim_core.ko binary RE module.
 
-Source: /mnt/tos46_re/usr/lib/modules/6.6.119-51.3.tl4.x86_64/kernel/security/integrity/dim/dim_core.ko.xz
-Extracted to scratchpad, decompressed (183KB ELF relocatable).
+DIM = Dynamic Integrity Measurement.
+TOS's out-of-tree IMA-equivalent: hashes kernel text, module text, and user process
+text segments against static (pre-signed) or dynamic (runtime-built) baselines.
+On mismatch: log alert, optionally send SIGKILL.
 
-dim_core is TOS's Dynamic Integrity Measurement kernel module.
-It measures running processes, kernel text, and loaded modules against a
-hash baseline, and can SIGKILL processes whose text diverges from baseline.
+No author or description in modinfo (unlike other TOS modules).
+Vermagic: 6.6.119-51.3.tl4.x86_64 (TOS 4.6). Also exists as dim_core_44.ko (TOS 4.4).
+186510B — the largest TOS security module in the scratchpad.
 
-Module info:
-  name:        dim_core
-  license:     GPL
-  vermagic:    6.6.119-51.3.tl4.x86_64 SMP mod_unload modversions
-  sig_id:      PKCS#7
-  signer:      Tkernel signing key
-  sig_key:     01:9D:01:14:84:D7
-  sig_hashalgo: sha256
-  intree:      Y
-  retpoline:   Y
-  srcversion:  32EB1C75A74D042FBAF570D
+Boot requirement: kernel cmdline must include integrity=dim or init fails with
+"boot parameter 'integrity=dim' not set".
 
-Activation gate:
-  Requires kernel boot parameter 'integrity=dim'.
-  Without it: prints "dim_core: boot parameter 'integrity=dim' not set." and exits init.
-
-Symbol count: 271 (NOT stripped — full debug symbols retained in .ko)
+Source path inferred: likely kernel/tkernel/dim/ (consistent with other TOS module paths).
 """
 
 METADATA = {
+    "kernel": "6.6.119-51.3.tl4.x86_64",
     "module": "dim_core",
-    "source": "/usr/lib/modules/6.6.119-51.3.tl4.x86_64/kernel/security/integrity/dim/dim_core.ko.xz",
-    "size_bytes": 183 * 1024,
-    "arch": "x86-64",
-    "stripped": False,
-    "function_count": 271,
-    "signer": "Tkernel signing key",
-    "sig_key_fingerprint": "01:9D:01:14:84:D7",
-}
-
-MODULE_PARAMS = {
-    "measure_log_capacity": {
-        "type": "uint",
-        "desc": "Max number of entries in measurement log",
-        "sysfs": "/sys/module/dim_core/parameters/measure_log_capacity",
-    },
-    "measure_schedule": {
-        "type": "uint",
-        "desc": "Schedule time (ms) for each measure object",
-        "sysfs": "/sys/module/dim_core/parameters/measure_schedule",
-    },
-    "measure_hash": {
-        "type": "charp",
-        "desc": "Hash algorithm for measurement (string, e.g. 'sha256')",
-        "sysfs": "/sys/module/dim_core/parameters/measure_hash",
-    },
-    "measure_pcr": {
-        "type": "uint",
-        "desc": "TPM PCR index to extend measurement log into",
-        "sysfs": "/sys/module/dim_core/parameters/measure_pcr",
-    },
-    "measure_interval": {
-        "type": "uint",
-        "desc": "Interval time (min) for automatic measurement",
-        "sysfs": "/sys/module/dim_core/parameters/measure_interval",
-    },
-    "signature": {
-        "type": "bool",
-        "desc": "Require PKCS#7 signature for policy and static baseline files",
-        "sysfs": "/sys/module/dim_core/parameters/signature",
-        "security_note": (
-            "When signature=N (false), dim_core accepts unsigned policy and "
-            "baseline files. Anyone who can write policy/baseline paths AND "
-            "flip this param (requires CAP_SYS_ADMIN or writable sysfs) "
-            "can bypass the integrity verification chain entirely."
-        ),
+    "size_bytes": 186510,
+    "tos44_counterpart": "dim_core_44.ko (185367B, 6.6.110-42.4.tl4)",
+    "boot_requirement": "kernel cmdline: integrity=dim",
+    "parameters": {
+        "measure_log_capacity": "Max number of measure log entries (uint)",
+        "measure_schedule": "Schedule time (ms) per measure object (uint)",
+        "measure_hash": "Hash algorithm for measurement (charp, e.g., 'sha256')",
+        "measure_pcr": "TPM PCR index to extend measure log into (uint)",
+        "measure_interval": "Interval time (min) for automatic measurement (uint)",
+        "signature": "Require signature for policy and static baseline (bool)",
     },
 }
 
-EXPORTED_GPL_SYMBOLS = [
-    "dim_mem_pool_walk_chunk",
-    "dim_root_entry",
-]
-
-IMPORTED_KERNEL_SYMBOLS = {
-    "dim_enabled": "External control gate — if 0, module init fails. Likely exported by the kernel or a companion module. Writing 0 to this symbol (via /proc/kallsyms + /dev/mem or kernel module) disables DIM.",
-    "verify_signature": "PKCS#7 verification for policy/baseline file authentication",
-    "send_sig": "Used by kill_task to deliver SIGKILL to tampered processes",
-    "tpm_pcr_extend": "TPM PCR extension for measurement log anchoring",
-    "sprint_symbol": "Kernel symbol name resolution (kallsyms bridge)",
-    "kernel_read_file": "Reads policy/baseline files from kernel context",
-    "get_user_pages_remote": "Accesses remote process VM pages for text measurement",
-    "key_create_or_update": "Keyring management for DIM certificate store",
-}
-
-POLICY_OBJECT_TYPES = [
-    "BPRM_TEXT",    # process text on exec (bprm = binary parameters)
-    "MODULE_TEXT",  # loaded kernel module text
-    "KERNEL_TEXT",  # running kernel text
-]
-
-POLICY_CONSTRAINTS = {
-    "BPRM_TEXT": {
-        "required": "path",
-        "ignored": "name (warning logged)",
-        "action": "KILL if tampered",
+ARCHITECTURE = {
+    "design": (
+        "DIM is TOS's integrity measurement subsystem — similar to Linux IMA but "
+        "implemented as a standalone kernel module rather than a kernel subsystem. "
+        "It measures three targets: kernel text, module text, and user process text. "
+        "Measurements are compared against baselines. "
+        "Baselines can be static (pre-computed, signed) or dynamic (built at first measurement). "
+        "TPM PCR extension is optional — measured values can be extended into a PCR for attestation."
+    ),
+    "measurement_targets": {
+        "KERNEL_TEXT": {
+            "task": "dim_core_measure_task_kernel_text",
+            "function": "kernel_text_measure at 0x18e0",
+            "measures": "Kernel .text section — the running kernel code",
+        },
+        "MODULE_TEXT": {
+            "task": "dim_core_measure_task_module_text",
+            "function": "module_text_measure + measure_module at 0x1bd0",
+            "measures": "Loaded kernel module .text sections",
+            "policy_required": "name= field in policy (module name)",
+        },
+        "BPRM_TEXT": {
+            "task": "dim_core_measure_task_user_text",
+            "function": "user_text_measure at 0x27c0",
+            "measures": "User process text VMAs (executable pages)",
+            "policy_required": "path= field in policy (executable path)",
+        },
     },
-    "MODULE_TEXT": {
-        "required": "name",
-        "ignored": "path, action (warnings logged)",
+    "baseline_types": {
+        "static": {
+            "source": "Pre-computed hash file (signed if signature=Y)",
+            "init": "baseline_prepare at 0x0a50",
+            "check": "mismatch → KERN_WARNING + optional kill",
+        },
+        "dynamic": {
+            "source": "First measurement becomes the baseline",
+            "init": "baseline_work_cb at 0x09d0 → 'no baseline, do baseline init instead'",
+            "check": "subsequent measurements compared to this baseline",
+        },
     },
-    "KERNEL_TEXT": {
-        "note": "all parameters ignored (warning logged)",
-    },
-}
-
-FUNCTION_ANALYSIS = {
-    "kill_task": {
-        "addr": "0x22c0",
-        "size": 73,
-        "disasm_summary": [
-            "22c8: mov rax, gs:0x0         ; current task_struct ptr",
-            "22d1: cmp rdi, rax            ; target == current?",
-            "22d4: je  22ef               ; if yes: skip kill (log 'don't kill current process')",
-            "22d6: mov edx, 0x1            ; flags",
-            "22db: mov edi, 0x9            ; SIGKILL",
-            "22e0: call send_sig           ; deliver SIGKILL to target task",
-            "22ef: mov rsi, 0x0            ; (log path — print pid=1 exempt msg if needed)",
+    "mismatch_actions": {
+        "log": "KERN_ERR/KERN_WARNING: 'mismatch static/dynamic baseline of user/kernel %s'",
+        "kill": "SIGKILL via kill_task() when 'kill action' is set in policy",
+        "restrictions": [
+            "Won't kill current process ('don't kill the current process')",
+            "Won't kill PID 1 ('the pid of tampered task is 1, don't kill it')",
         ],
-        "kill_exemptions": [
-            "target task == current (executing) task",
-            "target task pid == 1 (init/systemd exempt)",
-        ],
-        "note": (
-            "PID 1 exemption is a design choice to avoid kernel panic. "
-            "A tampered systemd/init is DETECTED but not killed — "
-            "dim_core logs the tamper but cannot act on it."
-        ),
     },
-    "dim_core_sig_verify": {
-        "addr": "0x1280",
-        "size": 259,
-        "disasm_summary": [
-            "12fa: test r8, r8             ; null check: file ptr",
-            "12fd: je   1377              ; return -ENOENT if null",
-            "1305: je   1377              ; return -ENOENT if data null",
-            "1307: lea rcx, [rsp+0x4]     ; prepare sig_size output ptr",
-            "1316: call <parse_sig_header> ; extract PKCS#7 sig header",
-            "1339: cmp eax, 0x13          ; sig_size > 0x13 (19 bytes)?",
-            "133c: jbe  136e              ; if <= 19: use error table lookup",
-            "1345: call verify_signature  ; full PKCS#7 verification",
-        ],
-        "min_sig_size": 19,
-        "note": "Signatures shorter than 20 bytes trigger error table path, not verification.",
-    },
+}
+
+KEY_FUNCTIONS = {
     "dim_core_kallsyms_init": {
-        "addr": "0x1080",
-        "note": (
-            "Initializes the kallsyms bridge used by kernel_text_measure. "
-            "dim_core calls sprint_symbol for symbol resolution. "
-            "If kallsyms is disabled (CONFIG_KALLSYMS=n), this fails at init."
+        "addr": 0x1080,
+        "purpose": "Resolve unexported kernel symbols using the kprobe trick",
+        "mechanism": (
+            "8 consecutive pattern: mov $symbol_ptr → rdi; call (kprobe); mov result → BSS. "
+            "Zeroes a kprobe struct with rep stosq (10 quadwords = 80B). "
+            "Calls the kprobe resolver 8 times, storing each resolved address in BSS. "
+            "Checks all 8 pointers for NULL — if any is NULL, returns -ENOENT (0xfffffffe). "
+            "Final check: cmpq $0x1 on one stored value (likely kallsyms_lookup_name check). "
+            "This is the same kprobe symbol-address technique as tdm-kernel-guard."
         ),
+        "symbols_resolved": "8 symbols (addresses not visible — stored in BSS via relocs)",
+        "returns": "0 on success, -ENOENT (0xfffffffe) if any symbol lookup fails",
+    },
+    "kernel_text_measure": {
+        "addr": 0x18e0,
+        "purpose": "Measure kernel .text section integrity",
+        "called_by": "dim_core_measure_task_kernel_text",
+    },
+    "do_calc_kernel_digest": {
+        "addr": 0x17b0,
+        "suffix": ".isra.0",
+        "purpose": "Calculate hash of a kernel memory region",
+        "note": "Separate from user-space measurement to handle vmalloc/direct-map addresses",
+    },
+    "module_text_measure": {
+        "addr": 0x1b60,
+        "purpose": "Measure a kernel module's .text section",
+    },
+    "measure_module": {
+        "addr": 0x1bd0,
+        "purpose": "Measure one module: iterate VMAs via next_module_text_vma",
+    },
+    "next_module_text_vma": {
+        "addr": 0x2200,
+        "purpose": "Iterator: find next executable VMA for a module",
+    },
+    "dim_vm_hash_update_vmas": {
+        "addr": 0x1fd0,
+        "purpose": "Update hash state across all VMAs in a process",
+    },
+    "dim_vm_hash_calculate_vma": {
+        "addr": 0x2030,
+        "purpose": "Calculate hash contribution of one VMA",
+    },
+    "user_text_measure": {
+        "addr": 0x27c0,
+        "purpose": "Measure user process text (BPRM_TEXT) — walks executable VMAs",
+    },
+    "measure_text_vma": {
+        "addr": 0x2840,
+        "purpose": "Measure one text VMA (hash the page contents)",
     },
     "check_process_digest": {
-        "addr": "0x2100",
-        "note": (
-            "Core user-text measurement comparison. Hashes process VMAs "
-            "and compares against baseline. On mismatch: logs tamper event, "
-            "calls kill_task if action=KILL in policy."
-        ),
+        "addr": 0x2100,
+        "purpose": "Compare measured digest against baseline; trigger action on mismatch",
     },
-    "baseline_match_policy": {
-        "addr": "0x3690",
-        "disasm_summary": [
-            "36b8: cmp r12d, 0x1           ; policy type == BPRM_TEXT (type=1)?",
-            "36bc: jne 370a               ; non-BPRM: use simpler match",
-            "36c3: call <match_name>       ; BPRM: match binary name",
-            "36d5: test eax, eax",
-            "36d7: je  3730               ; no match: return (type=MODULE, name=null)",
-            "36d9: lea eax, [rbp+0x2]     ; rbp = path_len",
-            "36dc: cmp eax, r13d          ; check path component count",
-            "36f7: cmp BYTE PTR [rbx+rbp], 0x2f ; check for '/' separator",
+    "kill_task": {
+        "addr": 0x22c0,
+        "purpose": "Send SIGKILL to tampered process (only if not self, not PID 1)",
+        "signature": "bool kill_task(struct task_struct *task)",
+        "key_ops": [
+            "cmp %rax,%rdi where rax=%gs:0x0 (current) — skip if self",
+            "mov $0x9,%edi — SIGKILL",
+            "call send_sig(SIGKILL, task, 1)",
+            "returns 1 if killed, 0 if skipped",
         ],
-        "note": "Policy matching uses prefix path matching. No glob/regex support.",
     },
-    "dim_tpm_pcr_extend": {
-        "addr": "see dim_tpm_pcr_extend",
-        "note": (
-            "Extends TPM PCR with SHA256 of measurement log entry. "
-            "Uses tpm_pcr_extend kernel call. If TPM unavailable, "
-            "extension silently fails — DIM continues without TPM anchoring. "
-            "measure_pcr parameter defaults to a specific PCR index (not verified from strings)."
+    "dim_core_sig_verify": {
+        "addr": 0x1280,
+        "purpose": "Verify signature on policy or baseline file",
+        "note": "Only called if signature=Y parameter is set",
+    },
+    "dim_read_verify_file": {
+        "addr": 0x13a0,
+        "purpose": "Read file from filesystem and optionally verify signature",
+    },
+    "dim_core_sig_init": {
+        "addr": 0x1540,
+        "purpose": "Load X.509 certificate for signature verification",
+    },
+    "dim_core_destroy_fs": {
+        "addr": 0x0570,
+        "purpose": "Remove dim securityfs entries",
+    },
+    "dim_core_create_fs": {
+        "addr": 0x05b0,
+        "purpose": "Create securityfs/dim/ directory with control and log files",
+    },
+    "dim_mem_pool_init": {
+        "addr": 0x0750,
+        "purpose": "Initialize DIM custom memory pool (slab-like allocator)",
+    },
+    "dim_mem_pool_alloc": {
+        "addr": 0x0870,
+        "purpose": "Allocate from DIM memory pool",
+    },
+    "measure_work_cb": {
+        "addr": 0x0b00,
+        "purpose": "Work queue callback for periodic measurement",
+        "scheduling": (
+            "measure_interval (min) × 0xdf8475800 (nanoseconds multiplier) "
+            "= scheduling period in nanoseconds for queue_delayed_work"
         ),
+    },
+    "dim_core_measure_blocking": {
+        "addr": 0x0cf0,
+        "purpose": "Synchronous (blocking) measurement trigger",
+    },
+    "dim_core_baseline_blocking": {
+        "addr": 0x0d90,
+        "purpose": "Synchronous (blocking) baseline initialization trigger",
     },
 }
 
-BASELINE_FILE_FORMAT = {
-    "location": "/etc/dim/policy (policy); /etc/dim/static_baseline (baseline)",
-    "signature_file": ".sig extension co-located with policy/baseline",
-    "format": "One entry per line: <type> <algo> <digest> <name>",
-    "algorithms": "Any kernel-supported shash (sha256, sha512, sm3)",
-    "baseline_prefix": "DIM_BASELINE_KERNEL (for kernel type)",
-    "parse_limits": "Max items per file (exact count from param or default)",
+POLICY_FORMAT = {
+    "prefix": "Each policy line must start with a recognized prefix",
+    "types": {
+        "KERNEL_TEXT": "No additional parameters required",
+        "MODULE_TEXT": "name=<module_name> (path ignored; action ignored)",
+        "BPRM_TEXT": "path=<executable_path> (name ignored for path; action= for kill)",
+    },
+    "parse_functions": ["dim_core parse policy key and value", "failed to parse policy at line %d"],
+    "limit": "Max policy items; 'more than %d policy items will be ignored'",
+}
+
+BASELINE_FORMAT = {
+    "fields": ["prefix", "type", "algorithm", "digest", "name"],
+    "validation": [
+        "invalid baseline prefix at line %d",
+        "invalid baseline type at line %d",
+        "invalid baseline algo at line %d",
+        "invalid baseline digest at line %d",
+        "no baseline name at line %d",
+        "invalid baseline name at line %d",
+    ],
+    "signature": "Optional PKCS7/X.509 signature verification before parsing",
+}
+
+FILESYSTEM_INTERFACE = {
+    "root": "/sys/kernel/security/dim/ (securityfs)",
+    "files": {
+        "measure_log": {
+            "read": "measure_log_read_{start,next,stop,show} — seq_file interface",
+            "open": "dim_measure_log_open",
+            "content": "One entry per measured object: hash + name",
+        },
+        "tampered_action": {
+            "read": "dim_tampered_action_read",
+            "write": "dim_tampered_action_write — set action on mismatch",
+            "values": "log | kill",
+        },
+        "interval": {
+            "read": "dim_interval_read",
+            "write": "dim_interval_write — set measure_interval",
+        },
+        "status": {
+            "read": "dim_status_read — print current DIM status",
+        },
+        "measure_trigger": {
+            "write": "dim_measure_trigger — trigger immediate measurement",
+        },
+        "baseline_init_trigger": {
+            "write": "dim_baseline_init_trigger — trigger baseline initialization",
+        },
+    },
 }
 
 FINDINGS = [
     {
         "id": "F1",
         "severity": "HIGH",
-        "title": "signature=N module param disables PKCS#7 verification for policy and baseline",
+        "title": "integrity=dim cmdline required — DIM silently does not start without it",
         "detail": (
-            "dim_core has a module param 'signature' (bool) at "
-            "/sys/module/dim_core/parameters/signature. "
-            "When set to N/false, dim_core skips PKCS#7 signature verification "
-            "for both the policy file (/etc/dim/policy) and static baseline file "
-            "(/etc/dim/static_baseline). "
-            "An attacker with CAP_SYS_ADMIN (or writable sysfs) and write access "
-            "to /etc/dim/ can: "
-            "(1) flip signature=N, "
-            "(2) replace baseline with a file containing attacker-controlled digests, "
-            "(3) trigger a re-measure — dim_core now considers the attacker's binary 'clean'. "
-            "This completely subverts the integrity measurement chain."
+            "dim_core_init checks for 'integrity=dim' in kernel cmdline. "
+            "If not present, logs KERN_ERR 'boot parameter integrity=dim not set' and returns -EINVAL. "
+            "On a TOS system where dim_core is in initramfs but the kernel cmdline lacks integrity=dim, "
+            "DIM never initializes — no measurement, no baseline, no kill action. "
+            "The module loads successfully (init_module returns 0), "
+            "but all security functions are absent. "
+            "Operators who add dim_core to the module list without updating the cmdline "
+            "believe DIM is active when it is not."
         ),
-        "bypass_steps": [
-            "echo N > /sys/module/dim_core/parameters/signature",
-            "cp <attacker_baseline> /etc/dim/static_baseline",
-            "echo 1 > /sys/kernel/security/dim/trigger",
-        ],
-        "prerequisite": "CAP_SYS_ADMIN",
+        "required_cmdline": "integrity=dim",
+        "silent_failure": "No dmesg log for successful boot without the parameter",
     },
     {
         "id": "F2",
         "severity": "HIGH",
-        "title": "dim_enabled external symbol import — disabling it prevents DIM initialization",
+        "title": "kill_task() won't kill PID 1 — an init process that loads malicious code is untouchable",
         "detail": (
-            "dim_core imports 'dim_enabled' from the kernel symbol table. "
-            "At init_module, if dim_enabled evaluates to false/0, initialization aborts. "
-            "This symbol is NOT defined in dim_core itself — it is exported by the kernel "
-            "or a companion module. "
-            "On a live system, if an attacker can patch this symbol's memory location "
-            "(via kernel module with direct ksym write, or /dev/mem if available), "
-            "dim_core init will fail silently and no measurement occurs. "
-            "Also: boot parameter 'integrity=dim' is the primary gate — "
-            "removing this from GRUB cmdline (requires /boot/grub2/grubenv write) "
-            "prevents dim_core from activating at next boot."
+            "kill_task() explicitly skips PID 1 ('the pid of tampered task is 1, don't kill it'). "
+            "If systemd (PID 1) loads a malicious shared library into its address space, "
+            "or if a tampered binary is exec'd as PID 1 during boot, "
+            "DIM detects the mismatch but cannot kill the process. "
+            "It logs the alert and continues. "
+            "An attacker who achieves code execution in PID 1 (e.g., via LD_PRELOAD in systemd) "
+            "is permanently immune to DIM's kill action."
         ),
-        "boot_gate_cmdline": "integrity=dim",
-        "boot_gate_file": "/boot/grub2/grubenv",
+        "pid1_exemption": True,
+        "also_exempted": "current process (self-kill prevention)",
     },
     {
         "id": "F3",
         "severity": "HIGH",
-        "title": "PID 1 exempted from kill_task — tampered init/systemd is detected but not remediated",
+        "title": "Dynamic baseline race: first measurement = baseline; attacker present before baseline init can register malicious code",
         "detail": (
-            "kill_task() at 0x22c0 explicitly exempts PID 1 from SIGKILL. "
-            "String evidence: '4%s: the pid of tampered task is 1, don't kill it'. "
-            "Design rationale: killing PID 1 would trigger kernel panic. "
-            "Security consequence: if an attacker replaces systemd/init text "
-            "(via writable memory mapping or kernel page modification), "
-            "dim_core will log the tamper event and extend the TPM PCR, "
-            "but systemd continues running. "
-            "The tamper is RECORDED but not STOPPED."
+            "Dynamic baselines are built from the first measurement. "
+            "baseline_work_cb logs 'no baseline, do baseline init instead' and builds "
+            "the baseline from the current system state. "
+            "If an attacker loads a rootkit before dim_core is loaded (or before measure_interval fires), "
+            "the rootkit's code pages become part of the 'good' baseline. "
+            "DIM then permanently considers the rootkit as trusted. "
+            "measure_interval default is unknown (module parameter, not visible in binary), "
+            "but if measurement doesn't happen immediately at load time, "
+            "there is a window for baseline poisoning."
         ),
-        "exempt_pids": [1],
-        "exempt_condition": "target task_struct == current (self-exemption also present)",
+        "attack": "Load rootkit → load dim_core with dynamic baseline → rootkit is in the baseline",
+        "static_baseline": "Partially mitigates this — but requires pre-computed, signed hash files",
     },
     {
         "id": "F4",
-        "severity": "MEDIUM",
-        "title": "KERNEL_TEXT policy type ignores all parameters — unmeasurable via policy",
+        "severity": "HIGH",
+        "title": "dim_core_kallsyms_init: 8 kernel symbols via kprobe trick — full kernel function table built privately",
         "detail": (
-            "When policy obj type is KERNEL_TEXT, dim_core logs "
-            "'all parameters are ignored for KERNEL_TEXT policy'. "
-            "KERNEL_TEXT measurement is always-on when the module is active — "
-            "there is no policy-level opt-out. "
-            "This means kernel text measurement cannot be disabled via policy file modification "
-            "without also flipping the signature param (F1) and replacing the baseline (F1). "
-            "Conversely, BPRM_TEXT requires 'path' — if path is missing, "
-            "the policy line is rejected with error, not silently ignored."
+            "DIM resolves 8 unexported kernel symbols at init time using the kprobe trick. "
+            "These pointers are stored in BSS — accessible to anyone who can read kernel memory. "
+            "The 8 symbols are critical kernel functions (likely: security_inode_read, "
+            "get_fs_root, mm_access, kernel_text_*). "
+            "An attacker with read access to BSS (via /proc/kcore, eBPF, or another vuln) "
+            "gets a partial kernel symbol table from DIM's private cache, "
+            "defeating KASLR for those 8 symbols without needing kallsyms. "
+            "More importantly: DIM's own use of kprobes means registering a kprobe "
+            "on these symbols could interfere with DIM's measurements "
+            "(Insight from aegis: kprobe on a measured function = measurement includes the kprobe handler)."
         ),
+        "symbols_cached_in_bss": 8,
+        "kaslr_leakage": "8 kernel function addresses in BSS, readable via privileged memory access",
     },
     {
         "id": "F5",
         "severity": "MEDIUM",
-        "title": "Min signature size check in dim_core_sig_verify: sig ≤ 19 bytes routes to error table",
+        "title": "measure_process_module_text_vma — user process module text measured separately; JIT-generated code not covered",
         "detail": (
-            "At 0x1339 in dim_core_sig_verify: 'cmp eax, 0x13; jbe 136e'. "
-            "If the parsed signature size is <= 19 bytes, execution jumps to an error "
-            "table path (mov edx, DWORD PTR [rax*4+0x0]) rather than calling verify_signature. "
-            "A crafted .sig file with a 19-byte or shorter stub may produce a predictable "
-            "error return rather than a verification failure, depending on what the error "
-            "table path returns. If the error path returns success, a truncated sig passes. "
-            "Full verification requires disassembly of the error table at 0x136e."
+            "measure_process_module_text_vma at 0x2a60 handles VMAs from loaded .so files "
+            "in a user process. "
+            "JIT-compiled code (Java, JavaScript V8, LLVM JIT, BPF JIT) creates anonymous "
+            "executable VMAs that are not backed by a file. "
+            "dim_vm_hash_calculate_vma measures VMA contents by reading page contents. "
+            "JIT pages change on every JVM invocation — their hash changes every run. "
+            "Either DIM has a JIT exemption (and an attacker can stage malicious code "
+            "in a JIT-like anonymous executable VMA), or DIM triggers false positives "
+            "on every JIT-heavy workload (Kafka, Elasticsearch, etc.)."
         ),
-        "sig_size_threshold": 19,
-        "jump_target": "0x136e (error table lookup, not verify_signature)",
+        "jit_code": "Anonymous executable VMAs — JVM, V8, eBPF JIT — not file-backed",
+        "impact": "Either JIT exempted (bypass) or constant false positives on JIT workloads",
     },
     {
         "id": "F6",
-        "severity": "INFO",
-        "title": "DIM policy uses prefix path matching — no glob support",
+        "severity": "MEDIUM",
+        "title": "signature=bool default unknown — policy/baseline can be unsigned if not set",
         "detail": (
-            "baseline_match_policy at 0x3690 performs prefix-based path matching. "
-            "BPRM_TEXT policies match on binary name prefix + '/' separator check. "
-            "No glob, wildcard, or regex support is present. "
-            "An attacker placing a binary at a path that matches only the prefix "
-            "(e.g. /usr/bin/ssh_backdoor matching a /usr/bin/ policy prefix) "
-            "would be measured. However, a binary placed at a path NOT covered "
-            "by any policy line is not measured at all."
+            "The signature parameter controls whether policy and static baseline files "
+            "must be signed. Default not visible in binary (module parameter default). "
+            "If signature=N (or default off), anyone with write access to the baseline "
+            "or policy filesystem path can inject arbitrary measurement rules. "
+            "A policy that adds malicious binaries to a baseline, or removes KERNEL_TEXT "
+            "from measurement scope, requires only write access to the policy file — "
+            "not kernel privileges. "
+            "The path for policy and baseline files is read via read_file_root (root filesystem path)."
         ),
+        "sensitive_files": ["policy file", "static baseline file", "DIM cert file"],
     },
     {
         "id": "F7",
-        "severity": "INFO",
-        "title": "TPM PCR extension via tpm_pcr_extend — measurement log anchored to TPM",
+        "severity": "MEDIUM",
+        "title": "TPM PCR extension not verified — measure_pcr could extend wrong PCR, corrupting attestation",
         "detail": (
-            "dim_core calls tpm_pcr_extend at dim_tpm_pcr_extend. "
-            "measure_pcr parameter specifies the PCR index. "
-            "If no TPM is available (tpm_default_chip returns null), "
-            "PCR extension fails but dim_core continues. "
-            "Measurement is RECORDED in the in-memory log but NOT TPM-anchored. "
-            "On a VM or container without a vTPM, the measurement log provides "
-            "no cryptographic binding — log entries can be replayed or replaced "
-            "in memory without TPM attestation failing."
+            "measure_pcr parameter selects which TPM PCR to extend measurement values into. "
+            "There is no validation visible that measure_pcr is a valid/reserved PCR index. "
+            "PCRs 0-7 are used by firmware (UEFI/BIOS). PCR 11 is used by systemd-boot. "
+            "If measure_pcr is set to an already-used PCR (e.g., 0), "
+            "DIM's extension corrupts that PCR's value — "
+            "the TPM's attestation quote for that PCR becomes meaningless. "
+            "Remote attestation (IMA attestation, TPM quote) on the affected PCR would fail. "
+            "This is a configuration issue but has no enforcement in the module."
         ),
+        "dangerous_pcr_values": [0, 1, 2, 3, 4, 5, 6, 7, 11],
     },
     {
         "id": "F8",
         "severity": "INFO",
-        "title": "dim_core signed by 'Tkernel signing key' — TOS-specific module signing chain",
+        "title": "DIM memory pool (dim_mem_pool_*) — custom slab allocator for measurement data",
         "detail": (
-            "modinfo shows: sig_id=PKCS#7, signer='Tkernel signing key', "
-            "sig_key=01:9D:01:14:84:D7. "
-            "TOS uses a separate kernel module signing key from upstream RHEL/CentOS. "
-            "The 'Tkernel signing key' is not publicly disclosed. "
-            "If the private key is compromised, unsigned modules can be signed "
-            "with this key and loaded on any TOS 4.6 system with Secure Boot "
-            "trusting the Tencent key. "
-            "Cert fingerprint 01:9D:01:14:84:D7 can be used to identify the "
-            "signing certificate in the TOS trust store."
+            "dim_mem_pool_init/alloc/free/destroy implement a chunked memory pool. "
+            "dim_mem_pool_walk_chunk iterates chunks; free_chunk frees individual chunks. "
+            "dim_mem_pool_expand allocates new chunks when the pool is exhausted. "
+            "This is a custom allocator (rather than kmalloc) — likely because measurement "
+            "data has predictable sizes and high-frequency allocation, "
+            "and the module author wanted to avoid kmalloc fragmentation. "
+            "Memory leak is detected at destroy time: "
+            "'dim_mem_pool_destroy failed, memory leak detected'."
         ),
-        "signing_key_fingerprint": "01:9D:01:14:84:D7",
-        "sig_algorithm": "sha256",
+        "custom_allocator": True,
+        "leak_detection": "dim_mem_pool_destroy — logs if pool is not fully freed",
     },
 ]
 
 if __name__ == '__main__':
-    print(f"dim_core.ko — {len(FINDINGS)} findings")
+    print("dim_core.ko (TOS 4.6) RE analysis")
+    print()
+    print("Measurement targets:")
+    for target, info in ARCHITECTURE['measurement_targets'].items():
+        print(f"  {target}: {info['measures']}")
+    print()
+    print("Securityfs interface: /sys/kernel/security/dim/")
+    for fname, info in FILESYSTEM_INTERFACE['files'].items():
+        print(f"  {fname}: {info.get('values', info.get('content', '?'))[:50]}")
+    print()
+    print("Boot requirement:", METADATA['boot_requirement'])
+    print()
     for f in FINDINGS:
-        print(f"  [{f['severity']:6s}] {f['id']}: {f['title']}")
-    print()
-    print("Module params (potential bypass surfaces):")
-    for k, v in MODULE_PARAMS.items():
-        note = v.get('security_note', '')
-        flag = ' *** BYPASS ***' if note else ''
-        print(f"  {k} ({v['type']}): {v['desc']}{flag}")
-    print()
-    print("kill_task exemptions:", FUNCTION_ANALYSIS['kill_task']['kill_exemptions'])
+        print(f"  [{f['severity']:6s}] {f['id']}: {f['title'][:70]}")
