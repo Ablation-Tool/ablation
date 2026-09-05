@@ -55,7 +55,9 @@ INETD SERVICE INVENTORY (services besides OpenWebif):
                             see E2-BIN-F03
 
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
-  E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
+  E2-BIN-F01 (LOW/2.5)    Unbounded strcpy into 4KB stack at 0x25eca8 — NOT_EXPLOITABLE;
+                           DVB type-1 slot (size=0x3c=60 bytes), IPC buffer=0x220 bytes;
+                           4096-byte overflow threshold unreachable via any protocol path
   E2-BIN-F02 (INFO)       system() at 0x261a10 in DVB CI handler — no network reachability
   E2-BIN-F03 (INFO/CLEAN) streamproxy: strcpy/sprintf dead imports; snprintf bounded at 0x100
   E2-BIN-F04 (INFO/CLEAN) vsftpd 3.0.2: no sprintf/strcpy; all snprintf/strncpy bounded;
@@ -778,11 +780,11 @@ E2_PLT_DANGEROUS_IMPORTS = {
 
 E2_BIN_F01_STRCPY_4K_STACK = {
     "finding_id": "E2-BIN-F01",
-    "severity": "MEDIUM",
-    "cvss_v3": 5.0,
-    "cvss_vector": "CVSS:3.1/AV:A/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
-    "status": "CANDIDATE",
-    "title": "Unbounded strcpy into 4096-byte stack buffer in enigma2 service dispatcher",
+    "severity": "LOW",
+    "cvss_v3": 2.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:H/UI:N/S:U/C:N/I:N/A:N",
+    "status": "NOT_EXPLOITABLE",
+    "title": "Unbounded strcpy into 4096-byte stack buffer — protocol-bounded input, no practical overflow",
     "binary": "/usr/bin/enigma2",
     "fn_va": "0x0025eca8",
     "dispatch_table_va": "0x000328c0",
@@ -794,25 +796,39 @@ E2_BIN_F01_STRCPY_4K_STACK = {
         "dest": "sp (4096-byte stack frame)",
         "src": "r0 (first function argument — device path)",
         "no_length_check": True,
-        "saved_lr_offset": 4096 + 4,  # sp+4096=old_fp, sp+4100=saved_lr (approx)
+        "saved_lr_offset": 4096 + 4,
     },
-    "reachability": (
-        "Registered in enigma2 service dispatch table at 0x000328c0. "
-        "Function takes a device path as first argument and copies it unbounded. "
-        "Reachable via enigma2 socket/D-Bus IPC from Python OpenWebif handlers "
-        "that construct service references. Practical string length from HTTP layer "
-        "is constrained by service reference format — not confirmed > 4096."
+    "dispatch_table_analysis": {
+        "table_va": "0x000328b0",
+        "slot_index": 1,
+        "fn_ptr": "0x25eca8",
+        "slot_size_field": 0x3c,
+        "slot_size_note": (
+            "size=0x3c (60 bytes) is the expected message size for this slot. "
+            "This slot handles DVB service type-1 references: "
+            "format '1:0:svcid:tsid:onid:ns:0:0:0:0:' — all numeric, max ~60-80 chars. "
+            "HTTP stream services (type 4097) route to a different slot. "
+            "HTTP user input cannot supply > 60-char strings to this specific handler."
+        ),
+        "ipc_buffer_analysis": (
+            "fn@0x25e2bc (IPC dispatcher) allocates 0x220 (544) bytes per message "
+            "(mov r1, #0x220; bl malloc at 0x25e2f4). "
+            "Even without the slot size constraint, max protocol message = 544 bytes. "
+            "644-byte payload cannot overflow a 4096-byte buffer."
+        ),
+    },
+    "reachability_verdict": (
+        "NOT_EXPLOITABLE. The vulnerable function handles DVB type-1 service references only. "
+        "DVB service references are pure-numeric colon-separated identifiers (~40-60 chars). "
+        "HTTP stream URIs (attacker-supplied long strings) route to a different slot/handler. "
+        "IPC protocol message buffer = 0x220 (544 bytes) — insufficient to overflow 4096-byte dest. "
+        "The 4096-byte stack frame is generous over-allocation for the ~60-byte actual input. "
+        "strcpy remains a code-quality defect; no exploit path exists via any reachable input."
     ),
-    "exploit_path": (
-        "Supply a device path > 4096 bytes via a crafted eServiceReference string "
-        "through the OpenWebif API (e.g. POST to zap/setvolume or equivalent). "
-        "Overflow corrupts saved LR at sp+0x1004. On pop {r4, pc}, PC = attacker value. "
-        "No PIE, no ASLR on VU+ ARM receiver — fixed addresses."
-    ),
-    "downgrade_from": "system() call at 0x261a10 (no pointer refs — unreachable from network)",
+    "downgrade_from": "MEDIUM/CANDIDATE — downgraded after IPC protocol buffer analysis (0x220 max) and dispatch table slot size analysis (0x3c for DVB type-1 slot)",
     "remediation": (
-        "Replace strcpy with strlcpy(sp, arg0, 0x1000). "
-        "Alternatively, validate string length at service registry entry point before dispatch."
+        "Replace strcpy with strlcpy(sp, arg0, 0x1000) as belt-and-suspenders defense. "
+        "Low urgency — no practical exploit path."
     ),
 }
 
