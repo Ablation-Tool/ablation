@@ -8,12 +8,14 @@ Build date: 2025-07-15 (file mtime in rootfs)
 Method: static firmware extraction + OpenWebif Python source analysis + BERT sweep
 Analysis date: 2026-09-04 (VTi 15.0.04 primary); 2026-09-05 (cross-distro)
 
-Cross-distro scope: 75 firmware images, 7 VU+ distributions (VTi 15.0.02/15.0.04, OpenATV 7.6/8.0b,
+Cross-distro scope: 81 firmware images, 7 VU+ distributions (VTi 15.0.02/15.0.04, OpenATV 7.6/8.0b,
 OpenBH 6.0, OpenPLi 9.2, OpenViX 6.9.002, Pure2 7.6) + 4 DM4U images (DM900/DM920 ARM32-Thumb,
-DMone/DMtwo AArch64) — see CROSS_DISTRO_* and DM4U_* dicts below.
-Method: rootfs.tar.bz2/tar.xz extraction + ablation BERT sweep (seed from VTi 15.0.04 known VAs)
-        + ARM32/Thumb/AArch64 ISA detection + manual constant search + pyc string extraction
-Multi-hardware: OpenPLi 9.2 vsftpd identical (SHA 732c6fb8) across all 4K VU+ hardware variants.
+DMone/DMtwo AArch64) + 2 OpenPLi 9.2 non-4K MIPS (vuzero, vuduo2) + OpenPLi scarthgap dev
+— see CROSS_DISTRO_* and DM4U_* dicts below.
+Method: rootfs.tar.bz2/tar.xz/UBI-UBIFS extraction + ablation BERT sweep (seed from VTi 15.0.04 known VAs)
+        + ARM32/Thumb/AArch64/MIPS32 ISA detection + manual constant search + pyc string extraction
+Multi-hardware: OpenPLi 9.2 vsftpd identical (SHA 732c6fb8) across all 4K VU+ hardware variants;
+                SHA ed60eb74 for MIPS32 non-4K (vuzero=vuduo2).
                 VTi 15.0.02 stock vs standard ZIP: same binary (SHA 5eece5c2).
                 DM4U DM900=DM920 (SHA 92965306), DMone=DMtwo (SHA 3faee9c2) — two binary families.
 
@@ -1550,7 +1552,7 @@ CROSS_DISTRO_BINARY_INVENTORY = {
         "DM4U DMone (AArch64, 2022-02-24)",
         "DM4U DMtwo (AArch64, 2022-02-24 — identical binary to DMone)",
     ],
-    "total_firmware_images": 79,
+    "total_firmware_images": 81,
     "enigma2_binaries": {
         "vti-15.0.04":  {"size_bytes": 3145728, "sha256": "3416e03a2b63", "isa": "arm32"},
         "vti-15.0.02":  {"size_bytes": 3080192, "sha256": "5eece5c23a9b", "isa": "arm32",
@@ -1572,13 +1574,24 @@ CROSS_DISTRO_BINARY_INVENTORY = {
                          "note": "Mixed ISA: 82 ARM32 prologues + 1060 Thumb prologues. DM900=DM920 binary."},
         "dm4u-dmone":   {"size_bytes": 8691288, "sha256": "3faee9c2c504", "isa": "aarch64",
                          "note": "AArch64 ELF64. 11,207 STP x29,x30 prologues. DMone=DMtwo binary."},
+        "openpli-9.2-vuzero": {"size_bytes": 3450368, "sha256": "969ea7e8a897", "isa": "mips32",
+                                "note": "MIPS32 ELF32. Non-4K hardware (VU+ Zero). IPC: no ADDIU $a1,$zero,0x220 "
+                                        "(calloc pattern); 62 ADDIU/ORI with imm=0x220 as stack offsets only. "
+                                        "vsftpd: SHA ed60eb74f5f5, 119K MIPS32, SITE CHMOD + ANDI $a1,$a1,#0x1ff "
+                                        "(9-bit mask via delay-slot, CLEAN). Extracted from UBI/UBIFS image."},
+        "openpli-9.2-vuduo2": {"size_bytes": 3450368, "sha256": "983a473c9a28", "isa": "mips32",
+                                "note": "MIPS32 ELF32. Non-4K hardware (VU+ Duo 2). Same codebase as vuzero, "
+                                        "hardware-specific build (same size, different SHA). "
+                                        "vsftpd: SHA ed60eb74f5f5 — IDENTICAL to vuzero (CLEAN). "
+                                        "Extracted from UBI/UBIFS image."},
     },
     "isa_split": (
-        "ARM32 mode: VTi 15.0.02/15.0.04 (3.0-3.4MB), OpenATV 7.6 (3.4MB), OpenPLi 9.2 (2.5MB). "
+        "ARM32 mode: VTi 15.0.02/15.0.04 (3.0-3.4MB), OpenATV 7.6 (3.4MB), OpenPLi 9.2 4K (2.5MB). "
         "Thumb16 mode: OpenATV 8.0b, OpenBH 6.0, OpenViX 6.9, Pure2 7.6 (1.1-1.3MB); "
         "DM4U DM900 (6.0MB — Thumb16 primary: 1060 Thumb16 PUSH+LR + 3 Thumb2 PUSH.W = 1063 prologues; 82 ARM32 interwork stubs). "
         "AArch64: DM4U DMone/DMtwo (8.7MB, different SoC generation). "
-        "Smaller Thumb builds are slimmer distro variants; ARM32 builds are full-featured."
+        "MIPS32: OpenPLi 9.2 non-4K hardware (vuzero=969ea7e8, vuduo2=983a473c, 3.45MB each). "
+        "Smaller Thumb builds are slimmer distro variants; ARM32/MIPS32 builds are full-featured."
     ),
 }
 
@@ -1609,10 +1622,12 @@ CROSS_DISTRO_BERT_SWEEP = {
         "openvix-6.9":  {"ipc_buf_alloc": ("0x41921c", 0.916), "dvb_dispatch": ("0x3bb380", 0.775)},
         "pure2-7.6":    {"ipc_buf_alloc": ("0x451b1c", 0.925), "dvb_dispatch": ("0x419b8c", 0.773)},
         "openpli-scarthgap": {"ipc_buf_alloc": ("0x1d840c", 0.961), "dvb_dispatch": ("0xd41bc", 0.812)},
-        "dm4u-dm900":   {"ipc_buf_alloc": ("0x1bc72", 0.908), "dvb_dispatch": ("N/A", 0.0),
-                         "note": "Thumb2-aware scan: 1063 prologues (1060 Thumb16 + 3 Thumb2 PUSH.W). "
-                                 "fn@0x1bc72 verified valid Thumb2 (push {r3,r6,lr}; ldr r1,[pc,#8]; bvc) — "
-                                 "complex conditional function, NOT allocator. Cross-ISA ARM32→Thumb BERT false positive."},
+        "dm4u-dm900":   {"ipc_buf_alloc": ("0x1c1f4", 0.906), "dvb_dispatch": ("0x1bfec", 0.735),
+                         "note": "Thumb2-aware scan: 1063 prologues (1060 Thumb16 + 3 Thumb2 PUSH.W), "
+                                 "642 valid (≥3 instrs). ipc top: 0x1c1f4(0.906), 0x1bc72(0.903) — "
+                                 "cross-ISA ARM32→Thumb BERT false positives. "
+                                 "dvb score 0.735 notably lower than all other distros (0.763-0.811) — "
+                                 "confirms different DVB dispatch implementation."},
         "dm4u-dmone":   {"ipc_buf_alloc": ("0x55b3c8", 0.943), "dvb_dispatch": ("N/A", 0.0),
                          "note": "AArch64, cap=2000. Cross-ISA ARM32→AArch64 BERT false positive "
                                  "(destructor/cleanup function). Different IPC implementation."},
@@ -1703,12 +1718,21 @@ CROSS_DISTRO_VSFTPD = {
                                  "Mode sanitization: and w1,w1,#0x1ff at fn@0x414840 before bl #0x403860 "
                                  "(fchmod). 9-bit mask equivalent to ARM32 ubfx #0,#9. CLEAN. "
                                  "DMone=DMtwo identical binary."},
+        "openpli-9.2-mips": {"size": "119K", "sha256": "ed60eb74f5f5", "site_chmod": True,
+                              "isa": "mips32",
+                              "sanitize_insns": "andi $a1,$a1,#0x1ff at VA=0x411614,0x41163c (delay slot of JAL fchmod); "
+                                                "andi $a0,$a0,#0x1ff at VA=0x4128bc",
+                              "note": "MIPS32 vsftpd (119096 bytes). SITE CHMOD present (strings at 0x15288). "
+                                      "Mode sanitization: ANDI with 9-bit mask (#0x1ff) in JAL delay slots before "
+                                      "fchmod call — identical semantic to ARM32 ubfx. CLEAN. "
+                                      "vuzero=vuduo2 identical binary (SHA ed60eb74)."},
     },
     "conclusion": (
-        "SITE CHMOD attack surface: VTi 15.0.02/15.0.04, OpenPLi 9.2, DM4U DM900/DM920, DM4U DMone/DMtwo. "
-        "All have 9-bit mode sanitization (ubfx #0,#9 or and #0x1ff) stripping setuid/setgid/sticky bits. "
-        "E2-BIN-F04 CLEAN verdict extends to all DM4U variants. "
-        "OpenPLi 9.2 vsftpd (SHA 732c6fb8) is the same binary across all tested 4K hardware variants. "
+        "SITE CHMOD attack surface: VTi 15.0.02/15.0.04, OpenPLi 9.2 (4K+MIPS), DM4U DM900/DM920, DM4U DMone/DMtwo. "
+        "All have 9-bit mode sanitization (ARM: ubfx #0,#9; AArch64: and #0x1ff; MIPS: andi #0x1ff) "
+        "stripping setuid/setgid/sticky bits. "
+        "E2-BIN-F04 CLEAN verdict extends to all DM4U variants and MIPS non-4K hardware. "
+        "OpenPLi 9.2 vsftpd: SHA 732c6fb8 (4K ARM32), SHA ed60eb74 (non-4K MIPS32) — both CLEAN. "
         "VTi 15.0.02 is identical binary to VTi 15.0.04 — CLEAN by identity."
     ),
 }
@@ -1767,6 +1791,11 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
                          "note": "No MOVW r0/r1,#0x220 found. Thumb2 ISA (1295 prologues). "
                                  "BERT ipc_buf_alloc homolog at 0x451b1c (score 0.925) — garbled. "
                                  "Different IPC implementation — E2-BIN-F01 out of scope."},
+        "openpli-9.2-mips": {"confirmed": False,
+                              "note": "OpenPLi 9.2 vuzero/vuduo2 (MIPS32 ELF32). No ADDIU $a1,$zero,0x220 "
+                                      "(calloc size pattern). 62 ADDIU/ORI imm=0x220 hits — all stack offsets "
+                                      "($sp+0x220, $r16+0x220) or pointer arithmetic, not heap allocation args. "
+                                      "Different IPC implementation — E2-BIN-F01 out of scope."},
         "dm4u-dm900":   {"confirmed": False,
                          "note": "No MOVW r0/r1,#0x220 found. Thumb2-aware prologue scan: "
                                  "1060 Thumb16 PUSH+LR + 3 Thumb2 PUSH.W+LR = 1063 total. "
