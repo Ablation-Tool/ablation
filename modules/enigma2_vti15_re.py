@@ -37,6 +37,7 @@ FINDINGS SUMMARY:
   E2-F07 (CRITICAL/9.8)  Command injection: /ipkg?command=install&package=<INJECTION>
                           eConsoleAppContainer.execute() → execvp("/bin/sh",["/bin/sh","-c",cmd])
                           package= param directly concatenated into shell command, no sanitization
+                          Scope: all 7 VU+ distros + OpenPLi 9.2 MIPS non-4K (vuzero/vuduo2) confirmed
   E2-F08 (HIGH/8.1)      REST filesystem: /fs endpoint, root='/', read any file + dir listing +
                           POST writes new files to any writable dir; separate surface from E2-F02
   E2-F09 (HIGH/8.0)      BouquetEditor /bouqueteditor/web/restore: os.popen() injection via
@@ -1655,7 +1656,7 @@ CROSS_DISTRO_E2_F01_GETIPV6 = {
 
 CROSS_DISTRO_E2_F07_IPKG = {
     "finding_id": "E2-F07",
-    "cross_distro_status": "OPEN in all 7 distributions",
+    "cross_distro_status": "OPEN in all 7 distributions + MIPS non-4K hardware (OpenPLi 9.2 vuzero/vuduo2)",
     "evidence": (
         "ipkg.pyc from all distros contains: 'eConsoleAppContainer' string (5 hits each), "
         "'command' arg parsing, 'execute' method call. "
@@ -1664,6 +1665,19 @@ CROSS_DISTRO_E2_F07_IPKG = {
         "action = request.args['command'][0] — unvalidated. "
         "All 7 distributions ship the same OpenWebif ipkg controller."
     ),
+    "mips_hardware": {
+        "affected": ["openpli-9.2-vuzero", "openpli-9.2-vuduo2"],
+        "status": "OPEN",
+        "evidence": (
+            "ipkg.pyc (Python 3.11 magic=0x0d0d610a) strings confirm identical injection path: "
+            "'eConsoleAppContainer', 'execute', 'package', '/usr/bin/opkg', "
+            "'install', 'forceinstall', 'remove' — same key strings as ARM32 OpenPLi 9.2. "
+            "eConsoleAppContainer::execute at 0x00471c3c in MIPS enigma2 binary (nm confirmed). "
+            "E2-F07 scope extends to all OpenPLi 9.2 hardware: 4K ARM32 + non-4K MIPS32."
+        ),
+        "note": "pyc is Python 3.11 bytecode (magic 3425); string extraction via `strings` confirmed "
+                "identical OpenWebif ipkg controller shipped cross-ISA.",
+    },
 }
 
 CROSS_DISTRO_E2_F09_BOUQUET = {
