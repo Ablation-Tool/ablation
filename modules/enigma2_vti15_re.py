@@ -44,9 +44,11 @@ FINDINGS SUMMARY:
                           Filename= param; path.exists() gate bypassed via E2-F08 or E2-F03;
                           commented-out path.join() confinement; 2-step chain to RCE as root
   E2-F10 (HIGH/8.6)      Factory-default root has no password: /etc/shadow root entry ships
-                          with empty hash — unconfigured devices trivially FTP-pwned as root;
-                          inetd.conf also runs telnetd as root (port 23); live device has changed
-                          the password but factory-fresh VTi 15.0.04 ships with root::
+                          with empty hash — unconfigured devices trivially pwned as root via 3 paths:
+                          (1) FTP/21 vsftpd (local_root=/), (2) Telnet/23 BusyBox v1.23.2
+                          (securetty includes pts/0-63, root PTY login allowed),
+                          (3) SSH/22 dropbear -B (allows blank-password logins);
+                          live device has changed the password but factory-fresh VTi 15.0.04 ships root::
   E2-F11 (MEDIUM/5.3)    FileController ?dir= endpoint: unauthenticated filesystem directory
                           enumeration; path param unsanitized (no realpath/sanitise_filename_slashes);
                           pattern= goes raw into glob.glob() allowing * ? [] expansion across any path
@@ -60,7 +62,8 @@ INETD SERVICE INVENTORY (services besides OpenWebif):
                      Binary RE: E2-BIN-F04 (CLEAN) — no memory corruption; SITE CHMOD mode sanitized
                      PLT: snprintf(×6, all bounded), strncpy(×7, literal n), memcpy(0 direct BL callers)
                      No sprintf/strcpy/system/exec in PLT; TVFS = FEAT-only, no command handler
-  telnetd (port 23): BusyBox v1.23.2, runs as root; securetty may block PTY root login
+  telnetd (port 23): BusyBox v1.23.2, runs as root; securetty ALLOWS PTY root (pts/0-63 listed)
+  dropbear (port 22): SSH server, DROPBEAR_EXTRA_ARGS="-B" (allows blank-password logins); E2-F10
   streamproxy (port 8001): HTTP Basic Auth enforced; forwards to enigma2 /web/stream endpoint;
                             7972-byte binary; strcpy + sprintf are dead imports (0 BL call sites in .text);
                             upstream request built via snprintf(buf, 0x100, ...) — bounded, no overflow;
@@ -1072,19 +1075,35 @@ E2_F10_ROOT_NO_PASSWORD = {
     "live_status": "VERIFIED MITIGATED on 82.84.145.15 (owner changed password)",
     "telnetd_note": (
         "telnetd (port 23, BusyBox v1.23.2) runs as root via inetd. "
-        "BusyBox login checks /etc/securetty; /dev/pts/* not in securetty (only 'console' listed). "
-        "Root telnet login LIKELY blocked by securetty on this build. "
-        "Unverified without live access — empty password factory default still applies."
+        "CORRECTION: /etc/securetty includes pts/0-63 (64 entries). "
+        "Root telnet login via PTY IS ALLOWED by securetty. "
+        "Factory-fresh device: root:: (empty hash) → BusyBox login accepts empty password → "
+        "immediate root shell via telnet, no password required."
+    ),
+    "dropbear_note": (
+        "dropbear SSH server (port 22) runs on startup via /etc/init.d/dropbear. "
+        "DROPBEAR_EXTRA_ARGS='-B' — dropbear -B flag: 'allow logins to accounts with blank passwords'. "
+        "Factory-fresh device: root:: (empty hash) + dropbear -B → root SSH login with no password. "
+        "Host keys generated on first boot into /var/lib/dropbear/ (readonly_rootfs=1 path). "
+        "Three unauthenticated root paths on factory-fresh VTi 15.0.04: "
+        "(1) FTP port 21 (vsftpd, local_root=/), "
+        "(2) Telnet port 23 (BusyBox telnetd, securetty allows pts/0-63), "
+        "(3) SSH port 22 (dropbear -B, blank password allowed)."
     ),
     "chain": (
-        "Factory-fresh device: "
-        "FTP root (blank password) → E2-F03 (local_root=/, write_enable=YES) → "
-        "write /etc/cron.d/ → persistence → root shell without any exploit chain."
+        "Factory-fresh device (3 equivalent paths): "
+        "(A) FTP root (blank password) → E2-F03 (local_root=/, write_enable=YES) → "
+        "write /etc/cron.d/ → persistence → root shell; "
+        "(B) Telnet root (blank password) → immediate root shell; "
+        "(C) SSH root (dropbear -B, blank password) → immediate root shell. "
+        "All three paths require no exploit chain — empty credential = full root."
     ),
     "remediation": (
         "1. Ship with a randomly-generated per-device root password (printed on the device label). "
         "2. Require root password configuration on first boot via VTi setup wizard. "
-        "3. Add root to vsftpd userlist_file with userlist_deny=YES + userlist_enable=YES as a failsafe."
+        "3. Remove -B flag from dropbear (disallow blank passwords). "
+        "4. Add root to vsftpd userlist_file with userlist_deny=YES + userlist_enable=YES as a failsafe. "
+        "5. Review securetty to remove pts/* entries if telnet root is not required."
     ),
 }
 
