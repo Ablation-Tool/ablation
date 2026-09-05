@@ -1705,10 +1705,25 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
         "vti-15.0.02": {"file_offset": "0x24e124", "va": "0x25e0f4", "confirmed": True,
                         "note": "fn@0x25e0f4 disassembly: push {r3-r8,sb,lr}; mov r0,#1; "
                                 "mov r1,#0x220; bl calloc — IDENTICAL structure to VTi 15.0.04"},
-        "openatv-7.6":  {"file_offsets": ["0x195c70", "0x1ddd04"], "confirmed": True,
-                         "note": "Two ARM32 MOV r1,#0x220 hits — allocator plus one reuse"},
+        "openatv-7.6":  {"file_offsets": ["0x195c70", "0x1ddd04"],
+                         "vas": ["0x1a5c70", "0x1edd04"], "confirmed": True,
+                         "allocator_fn": "0x1a5c60",
+                         "note": "Two ARM32 MOV r1,#0x220 hits (file offsets mapped to VAs via segment "
+                                 "base 0x10000+offset). fn@0x1a5c60 is the IPC buffer ctor: push {r4,lr}; "
+                                 "mov r4,r0; bl 0x1a5c34 (vtable init); mov r0,r4; mov r1,#0x220; "
+                                 "bl 0x86320 (ARM32 PLT GOT-indirect — operator new or custom allocator); "
+                                 "mov r0,r4; pop {r4,pc}. C++ IPC buffer object with fixed 0x220-byte "
+                                 "allocation — same ceiling as VTi. Site 2 (fn@0x1edc84, VA=0x1edd04) is "
+                                 "a network handler that also passes 0x220 as arg — not the allocator. "
+                                 "BERT homolog at 0x91c7c (score 0.954) is a false positive (structural "
+                                 "mismatch — seed is calloc(1,0x220) wrapper, OpenATV uses C++ ctor)."},
         "openatv-8.0b": {"confirmed": False, "note": "No MOV r1,#0x220 or MOVW r1,#0x220 found"},
-        "openbh-6.0":   {"confirmed": False, "note": "No 0x220 constant found"},
+        "openbh-6.0":   {"confirmed": False,
+                         "note": "No MOVW r0/r1,#0x220 found. Thumb2 ISA (1243 prologues, exec_seg "
+                                 "p_offset=0 maps entire file to 0x35a000). Full per-prologue BL scan "
+                                 "(1243 functions, Thumb2-aware): max allocation size seen r0=0xd7 (215 bytes). "
+                                 "No sizes in 0x100..0x400 range. Different IPC implementation confirmed — "
+                                 "E2-BIN-F01 out of scope for all Thumb2 builds (OpenBH/OpenViX/Pure2/OpenATV 8.0b)."},
         "openpli-9.2":  {"confirmed": False,
                          "note": "No calloc(1,0x220) pattern on vuduo4k. BERT top match (0x156b9c) is a "
                                  "list iterator — confirmed false positive. IPC mechanism differs. "
@@ -1724,8 +1739,19 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
                                        "is a vtable-dispatch function — same false-positive pattern as OpenPLi 9.2. "
                                        "E2-F09: FIXED (tarfile module). E2-F07: OPEN (eConsoleAppContainer). "
                                        "vsftpd: SITE CHMOD + ubfx #0,#9 at 0xef80 — CLEAN (SHA 508e21ca4a20)."},
-        "openvix-6.9":  {"confirmed": False, "note": "No 0x220 constant found"},
-        "pure2-7.6":    {"confirmed": False, "note": "No 0x220 constant found"},
+        "openatv-8.0b": {"confirmed": False,
+                         "note": "No MOVW r0/r1,#0x220 found. Thumb2 ISA (1508 Thumb16 prologues). "
+                                 "Full per-prologue BL scan: max allocation size seen r0=0xd7. "
+                                 "Different IPC implementation — E2-BIN-F01 out of scope."},
+        "openvix-6.9":  {"confirmed": False,
+                         "note": "No MOVW r0/r1,#0x220 found. Thumb2 ISA (1244 prologues). "
+                                 "BERT ipc_buf_alloc homolog at 0x41921c (score 0.916) — "
+                                 "Thumb2 disassembly garbled at that VA (Thumb16 prologue scan "
+                                 "hits Thumb2 interwork boundary). Different IPC implementation."},
+        "pure2-7.6":    {"confirmed": False,
+                         "note": "No MOVW r0/r1,#0x220 found. Thumb2 ISA (1295 prologues). "
+                                 "BERT ipc_buf_alloc homolog at 0x451b1c (score 0.925) — garbled. "
+                                 "Different IPC implementation — E2-BIN-F01 out of scope."},
         "dm4u-dm900":   {"confirmed": False,
                          "note": "No MOV r1,#0x220 (ARM32) or MOVW r1,#0x220 (Thumb2) found. "
                                  "Thumb BERT sweep (1060 prologues, cap 4000): ipc homolog at "
@@ -1740,13 +1766,14 @@ CROSS_DISTRO_IPC_BUFFER_ANALYSIS = {
     },
     "verdict": {
         "vti-15.0.02": "NOT_EXPLOITABLE — 0x220 ceiling confirmed identical to VTi 15.0.04",
-        "openatv-7.6":  "NOT_EXPLOITABLE PROBABLE — 0x220 constant present; same ceiling expected",
-        "dm4u-all":     "UNVERIFIED — DM4U uses different IPC implementation; 0x220 ceiling N/A",
-        "others": (
-            "UNVERIFIED — IPC mechanism differs from VTi/OpenATV; 0x220 ceiling cannot be assumed. "
-            "E2-BIN-F01 scope: VTi-specific IPC protocol. Smaller Thumb enigma2 builds likely "
-            "use different protocol stack. Separate analysis required for each."
-        ),
+        "openatv-7.6":  "NOT_EXPLOITABLE CONFIRMED — 0x220 allocator at fn@0x1a5c60 (C++ IPC buffer "
+                        "ctor with PLT call); same 0x220-byte ceiling as VTi; "
+                        "DVB type-1 slot 0x3c bytes → ceiling unreachable",
+        "thumb-distros": ("OUT_OF_SCOPE — OpenBH 6.0/OpenViX 6.9/Pure2 7.6/OpenATV 8.0b confirmed: "
+                          "no 0x220 IPC constant (MOVW scan + per-prologue BL size scan). "
+                          "Max allocation size r0=0xd7. Different IPC stack. E2-BIN-F01 N/A."),
+        "dm4u-all":     "OUT_OF_SCOPE — DM4U (ARM32-Thumb DM900/DM920 + AArch64 DMone/DMtwo) confirmed different IPC; 0x220 absent.",
+        "openpli-all":  "OUT_OF_SCOPE — OpenPLi 9.2 (all 7 VU+ hardware) + scarthgap dev: no 0x220. Different IPC stack.",
     },
 }
 
