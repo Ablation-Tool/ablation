@@ -1911,6 +1911,58 @@ DM4U_BINARY_INVENTORY = {
         },
         "absent_imports": ["system", "gets", "scanf"],
     },
+    "dmone_plt_profile": {
+        "isa": "AArch64 (ELF64, e_machine=0xb7). PLT stubs 16 bytes each, resolver 32 bytes. "
+               "BL scan: mask=0xFC000000, opcode=0x94000000. RELA.plt 24-byte entries.",
+        "plt_callers": {
+            "sprintf": 1784, "memcpy": 365, "snprintf": 43, "malloc": 37,
+            "sscanf": 28, "strcpy": 7, "strncpy": 7, "fgets": 2, "popen": 2,
+            "execvp": 1, "system": 1, "asprintf": 1, "fscanf": 1, "vasprintf": 1,
+        },
+        "notable_imports": {
+            "system": (
+                "1 caller at VA=0x579a34 within eNetworkService::setWoL (fn prologue 0x579584). "
+                "Command built by concatenating hardcoded format strings from rodata: "
+                "\"ethtool -s \" (0x9b5550) + interface_name + \" wol \" (0x9b5560) + mode_byte. "
+                "interface_name: loaded from network service object ([x19+0x40] → string field), "
+                "populated from E2ConfigParser (device network config file), NOT from HTTP input. "
+                "mode_byte: loaded from hardware capabilities list ([x19+0x24]), one byte (e.g. 'g'). "
+                "Log format string at 0x9b5568: '[eNetworkService::setWoL] %s'. "
+                "eNetworkService::setWoL is an internal D-Bus/IPC handler — not directly HTTP-reachable "
+                "without first triggering through the network settings UI (authenticated path). "
+                "Verdict: CLEAN — system() command is hardware-derived, not HTTP-injectable."
+            ),
+            "popen_1": (
+                "Caller at VA=0x554714, wrapper fn at 0x5546f8 (1 caller at 0x5547a4). "
+                "popen mode='re'. Command: loaded from [this+0x30] (object member, lazy-init). "
+                "Init sequence: ldr x0,[x0,#0x30]; cbnz x0,#0x554810 (skip init if non-null); "
+                "else: ldr x0,[x1] → bl #0x51d5b0 (strdup) → str x0,[x19,#0x30]. "
+                "x1 comes from caller argument — a pre-stored command string in the calling object. "
+                "Pattern: hardware status query, command string set at object construction. "
+                "Verdict: CLEAN — command is object-internal, not HTTP-injectable."
+            ),
+            "popen_2": (
+                "Caller at VA=0x576c60, fn at 0x576c20 (1 caller at 0x57aee0). "
+                "popen mode='r'. Command: built by bl #0x52e5e0 (string format fn) at VA=0x57aecc. "
+                "Format: \"ethtool \" (0x9b55e8) + interface_name. "
+                "interface_name: loaded from network interface object ([x19+0x40] string field) "
+                "via the same E2ConfigParser path as the system() site above. "
+                "ethtool query reads interface WoL capabilities — internal hardware probe. "
+                "Verdict: CLEAN — command contains only the configured interface name (e.g. 'eth0'), "
+                "not HTTP input. Both popen callers are ethtool-family hardware queries."
+            ),
+            "execvp": (
+                "1 caller — eConsoleAppContainer::execute() pattern, same as DM900. "
+                "List-form exec, reachable via WebInterface /ipkg endpoint (DM4U E2-F07 equivalent, MEDIUM). "
+                "No direct shell expansion."
+            ),
+            "sprintf_note": (
+                "1784 callers (vs 1730 DM900 — consistent for 8.3MB vs 6MB binary). "
+                "Same Qt/QSqlQuery pattern. Not systematically verified."
+            ),
+        },
+        "absent_imports": ["gets", "scanf"],
+    },
 }
 
 DM4U_WEBIF_ANALYSIS = {
