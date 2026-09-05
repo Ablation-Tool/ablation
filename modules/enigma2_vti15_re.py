@@ -1871,8 +1871,44 @@ DM4U_BINARY_INVENTORY = {
         {"model": "DMtwo", "build_date": "2022-02-24", "sha256_enigma2": "3faee9c2c504", "isa": "aarch64",
          "note": "Identical binary to DMone"},
     ],
-    "enigma2_sizes": {"DM900/DM920": "6.0MB (ELF32-ARM, Thumb-primary)", "DMone/DMtwo": "8.7MB (ELF64-AArch64)"},
+    "enigma2_sizes": {"DM900/DM920": "6.0MB (ELF32-ARM32, e_entry=0xd0e84 ARM mode, not Thumb)", "DMone/DMtwo": "8.7MB (ELF64-AArch64)"},
     "vsftpd_sizes":  {"DM900/DM920": "109K (ARM32)", "DMone/DMtwo": "117K (AArch64)"},
+    "dm900_plt_profile": {
+        "isa_correction": (
+            "ARM32 (not Thumb-primary as initially classified). e_entry=0xd0e84 (even=ARM mode). "
+            ".text at VA=0xc7a18 confirmed ARM32 (push {r4,lr} = 0xe92d4010). "
+            "PLT is ARM32 3-instruction stubs (add ip,pc,#PAGE; add ip,ip,#OFF; ldr pc,[ip,#OFF]!). "
+            "Scan used ARM32 BL opcode 0xEB."
+        ),
+        "plt_callers": {
+            "sprintf": 1730, "memcpy": 205, "snprintf": 43, "malloc": 28,
+            "sscanf": 27, "strncpy": 8, "strcpy": 8, "asprintf": 3,
+            "fscanf": 1, "execvp": 1, "vsnprintf": 1, "popen": 1, "vasprintf": 1,
+        },
+        "notable_imports": {
+            "popen": (
+                "1 caller at VA=0xf8448. Function at ~0xf8428 (ARM32). "
+                "r0 (command) = [original_r0 + 0x18] — C++ object field, NOT a literal string. "
+                "Context: C++ method call; command comes from object state, not HTTP input. "
+                "Likely internal system status query (proc, hwinfo). Injection unconfirmed — "
+                "requires tracing all callers of fn@0xf8428 to determine command source."
+            ),
+            "execvp": (
+                "1 caller — consistent with eConsoleAppContainer::execute() pattern from VTi. "
+                "execvp path confirmed: fn@0xf8448 → execvp(argv). "
+                "Not directly injectable from network without the WebInterface chain (DM4U-F01)."
+            ),
+            "sprintf_note": (
+                "1730 callers — 7x higher than VTi 15.0.04 (248 callers). "
+                "DM4U binary is 2x larger (6MB vs 3MB) but sprintf is 7x more frequent. "
+                "DM4U uses Qt and QSqlQuery (confirmed in PLT: _ZN9QSqlQuery4execEv). "
+                "Qt applications heavily use QString+sprintf for UI string formatting. "
+                "High sprintf count increases format string injection risk surface. "
+                "Not systematically verified (1730 sites too many for manual trace)."
+            ),
+        },
+        "absent_imports": ["system", "gets", "scanf"],
+    },
 }
 
 DM4U_WEBIF_ANALYSIS = {
