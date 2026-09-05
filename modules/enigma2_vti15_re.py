@@ -1332,13 +1332,24 @@ E2_F12_TERMINAL_PROXY = {
     ),
     "info_disclosure_value": (
         "301 response with Location header reveals shellinaboxd running on port 4200. "
-        "Attacker who can SSH or pivot to localhost can now target port 4200 directly. "
-        "But this is not accessible from the LAN via the HTTP proxy."
+        "Attacker who can reach port 4200 directly (e.g. LAN + no firewall on 4200) "
+        "gets a browser-based login shell at https://[device]:4200/."
+    ),
+    "direct_port_4200_access": (
+        "shellinaboxd at port 4200 is a standalone HTTPS web terminal. "
+        "If reachable from LAN (no firewall on 4200): HTTPS login shell at https://device:4200/. "
+        "Auth: standard Linux PAM/shadow. "
+        "With factory root:: (E2-F10): blank password accepted → root shell in browser. "
+        "securetty includes pts/0-63 → root PTY login allowed. "
+        "This is a 4th root access path on factory-fresh VTi 15.0.04 "
+        "(in addition to FTP/21, Telnet/23, SSH/22). "
+        "Firewall posture on port 4200: unknown (not in rootfs — depends on iptables/firmware config). "
+        "OpenWebif proxy confirms the internal service — attacker could use any LAN pivot to hit 4200."
     ),
     "remediation": (
         "1. Remove /terminal route from root.py, or place it behind mandatory auth regardless of E2-F04. "
-        "2. Bind shellinaboxd to localhost-only with --address=127.0.0.1 to limit blast radius. "
-        "3. Add shellinaboxd to inetd and add auth check in the OpenWebif /terminal handler."
+        "2. Firewall port 4200 to localhost-only (iptables -A INPUT -p tcp --dport 4200 -s 127.0.0.1 -j ACCEPT; DROP). "
+        "3. Set root password to prevent unauthenticated shell access."
     ),
 }
 
@@ -1680,6 +1691,70 @@ CROSS_DISTRO_BERT_SWEEP = {
         "VTi 15.0.02 actual IPC allocator: fn@0x25e0f4 (confirmed by MOV r1,#0x220 search; "
         "BERT top match at 0xb2f04 was a false positive — corpus capped at 4000 of 8151 functions)."
     ),
+    "vulnerability_pattern_sweep": {
+        "run_date": "2026-09-05",
+        "model": "all-MiniLM-L6-v2",
+        "corpus_cap": 4000,
+        "actionable_threshold": 0.50,
+        "queries": {
+            "strcpy_stack_overflow": {
+                "vti-15.0.02":  ("0xb99bc",  0.156),
+                "openatv-7.6":  ("0x12743c", 0.190),
+                "openatv-8.0b": ("0x4180d6", 0.160),
+                "openbh-6.0":   ("0x368158", 0.155),
+                "openpli-9.2":  ("0x127c10", 0.173),
+                "openvix-6.9":  ("0x38c0fe", 0.158),
+                "pure2-7.6":    ("0x3c9676", 0.155),
+                "verdict": "CLEAN — max 0.190, all below threshold",
+            },
+            "ipc_buf_alloc_pattern": {
+                "vti-15.0.02":  ("0xd7c0c",  0.315),
+                "openatv-7.6":  ("0xaec5c",  0.314),
+                "openatv-8.0b": ("0x4180d6", 0.274),
+                "openbh-6.0":   ("0x3c786e", 0.271),
+                "openpli-9.2":  ("0x10c86c", 0.301),
+                "openvix-6.9":  ("0x38c0fe", 0.301),
+                "pure2-7.6":    ("0x3802ac", 0.251),
+                "verdict": "CLEAN — max 0.315. High scores expected: allocator query semantically matches any malloc wrapper. No vulnerability signal.",
+            },
+            "dvb_service_dispatch": {
+                "vti-15.0.02":  ("0xdf320",  0.259),
+                "openatv-7.6":  ("0xd916c",  0.286),
+                "openatv-8.0b": ("0x47daca", 0.243),
+                "openbh-6.0":   ("0x3ca7b0", 0.234),
+                "openpli-9.2":  ("0xd2bc0",  0.274),
+                "openvix-6.9":  ("0x3ca09c", 0.256),
+                "pure2-7.6":    ("0x38b3ca", 0.249),
+                "verdict": "CLEAN — max 0.286. Consistent with DVB dispatch homologs found; no strcpy-to-slot vulnerability signature.",
+            },
+            "format_string_candidate": {
+                "vti-15.0.02":  ("0x16c5f0", 0.215),
+                "openatv-7.6":  ("0xfae9c",  0.219),
+                "openatv-8.0b": ("0x4be9da", 0.197),
+                "openbh-6.0":   ("0x3dd9f4", 0.198),
+                "openpli-9.2":  ("0x95204",  0.218),
+                "openvix-6.9":  ("0x4150d4", 0.183),
+                "pure2-7.6":    ("0x38f4d6", 0.194),
+                "verdict": "CLEAN — max 0.219. Corroborates ARM32 PIC analysis: no HTTP-injectable format string signatures.",
+            },
+            "network_recv_nocheck": {
+                "vti-15.0.02":  ("0xac260",  0.203),
+                "openatv-7.6":  ("0x12743c", 0.231),
+                "openatv-8.0b": ("0x4be9da", 0.195),
+                "openbh-6.0":   ("0x36d794", 0.172),
+                "openpli-9.2":  ("0x1270ac", 0.229),
+                "openvix-6.9":  ("0x4085e4", 0.179),
+                "pure2-7.6":    ("0x37c636", 0.178),
+                "verdict": "CLEAN — max 0.231. No unbounded recv-to-stack pattern detected.",
+            },
+        },
+        "summary": (
+            "All 5 vulnerability pattern queries scored below 0.32 across all 7 distros (4000-function corpus each). "
+            "No actionable binary vulnerability candidates. "
+            "Cross-distro enigma2 ARM32 binary surface: CLEAN at semantic sweep resolution. "
+            "Manual verification of E2-BIN-F01 (IPC buffer) proceeds via homolog addresses above."
+        ),
+    },
 }
 
 CROSS_DISTRO_E2_F01_GETIPV6 = {
@@ -1819,7 +1894,8 @@ CROSS_DISTRO_E2_F08_REST_FS = {
         "Conclusion: E2-F08 is a VTi-specific extension, not in upstream OpenWebif. "
         "OpenPLi may share it (VTi/OpenPLi share some VU+ extensions); other distros do not."
     ),
-    "scope": "VTi 15.0.02 and 15.0.04 confirmed. OpenPLi 9.2 status: unconfirmed (no pyc extract). "
+    "scope": "VTi 15.0.02 and 15.0.04 confirmed. OpenPLi 9.2 MIPS vuzero: ABSENT (confirmed from full UBIFS extract). "
+             "OpenPLi 9.2 ARM32: not in extract (expected ABSENT — same codebase as MIPS). "
              "OpenATV/OpenBH/OpenViX/Pure2: ABSENT.",
 }
 
