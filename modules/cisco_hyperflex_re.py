@@ -6821,6 +6821,149 @@ HX_F124 = {
 }
 
 
+HX_F125 = {
+    "id": "HX-F125",
+    "title": (
+        "HyperFlex Witness OVA 1.1.3: Static root SHA-512 Hash Baked at Build Time; "
+        "Non-VMware Firstboot Path Skips Password Replacement — SSH Root Login via Cracked Hash"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "cwe": "CWE-259",
+    "component": "HyperFlex Witness OVA 1.1.3 (Ubuntu 16.04.5 LTS, /etc/shadow, /usr/share/springpath/storfs-misc/firstboot.sh)",
+    "versions_affected": "Witness OVA 1.1.3 (confirmed); earlier OVA versions expected",
+    "description": (
+        "The Witness OVA 1.1.3 disk image ships with a static root password hash baked into "
+        "/etc/shadow at image build time. The hash (SHA-512, salt N.7KFx5x) carries a last-change "
+        "date of epoch day 18137 (2019-08-24), approximately two years before the OVA was "
+        "generated (2021-07-30). The same hash is present in all copies of this OVA version.\n\n"
+        "firstboot.sh sets the root password from the OVF property "
+        "hx.7root_password.Cisco_HX_Witness_Appliance on VMware deployments. "
+        "Two failure modes leave the baked-in hash intact or introduce a separate weakness:\n\n"
+        "1. Non-VMware hypervisors (KVM, Hyper-V, bare metal): the dmidecode check for 'VMware' "
+        "fails, the function runs 'chage -d 0 root' and returns — the baked-in hash is "
+        "unchanged. sshd_config has PermitRootLogin yes with default PasswordAuthentication, "
+        "so a cracked hash enables SSH root login.\n\n"
+        "2. Empty OVF property on VMware: 'passwd -d root' runs unconditionally before "
+        "the OVF property value is read. If hx_7root_password_Cisco_HX_Witness_Appliance "
+        "is empty, chpasswd is not called and set_user_creds returns 1. Root now has no "
+        "password hash. pam_unix.so nullok_secure allows empty-password console login; "
+        "PermitEmptyPasswords no blocks SSH. VMware console access suffices for root login."
+    ),
+    "evidence": {
+        "shadow_hash": (
+            "/etc/shadow:\n"
+            "  root:$6$N.7KFx5x$rPpagnP9U3w7DYKJ2I/KzbAr5QvLzWKjjbzgbKx1myYSgXsD4k87OwquTpXRNhLfKS6GFdcA8.mGBduhdKH3g/:18137:0:99999:7:::\n"
+            "  date 18137 = 2019-08-24 (epoch day); OVA tarball headers = 2021-07-30"
+        ),
+        "firstboot_non_vmware": (
+            "firstboot.sh set_user_creds():\n"
+            "  dmidecode --string system-product-name | grep -i VMware\n"
+            "  if [ $? -ne 0 ]; then  # not VMware\n"
+            "    chage -d 0 root     # forces expiry; hash NOT replaced\n"
+            "    touch /var/.firstboot\n"
+            "    return 0\n"
+            "  fi"
+        ),
+        "firstboot_empty_ovf": (
+            "firstboot.sh set_user_creds() VMware path:\n"
+            "  passwd -d $USERNAME  # unconditionally deletes hash\n"
+            "  ...\n"
+            "  USER_PASS='${hx_7root_password_Cisco_HX_Witness_Appliance}'\n"
+            "  if [ ! -z '$USER_PASS' ]; then\n"
+            "    chpasswd --crypt-method SHA512\n"
+            "  else\n"
+            "    return 1  # passwd -d already ran; hash gone; chpasswd skipped\n"
+            "  fi"
+        ),
+        "ssh_config": (
+            "/etc/ssh/sshd_config:\n"
+            "  PermitRootLogin yes\n"
+            "  PermitEmptyPasswords no\n"
+            "  #PasswordAuthentication yes (default = yes)\n"
+            "=> Cracked hash enables SSH root login on non-VMware or hash-persisted deployments"
+        ),
+        "pam": (
+            "/etc/pam.d/common-auth:\n"
+            "  auth [success=1 default=ignore] pam_unix.so nullok_secure\n"
+            "/etc/securetty: console, :0, :0.0, :0.1, :1\n"
+            "=> Empty-password root login available on VMware console (not SSH)"
+        ),
+        "os_eol": (
+            "Ubuntu 16.04.5 LTS: end-of-life April 2021. "
+            "OVA generated July 2021 on already-EOL OS — no security updates available post-deploy."
+        ),
+    },
+}
+
+HX_F126 = {
+    "id": "HX-F126",
+    "title": (
+        "HyperFlex Witness OVA 1.1.3: Exhibitor REST API Unauthenticated on All Interfaces "
+        "(port 8180) — ZK Node Browse/Write and Cluster Restart Without Credentials"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.6",
+    "cwe": "CWE-306",
+    "component": "HyperFlex Witness OVA 1.1.3 (exhibitor-1.5.2.c, /usr/share/exhibitor/exhibitor.conf, exhibitor.defaults)",
+    "versions_affected": "Witness OVA 1.1.3 (confirmed); earlier OVA versions expected",
+    "description": (
+        "Exhibitor (ZooKeeper management daemon, v1.5.2.c) runs on the Witness OVA with its "
+        "REST API bound to all network interfaces on port 8180. No authentication is configured. "
+        "The Exhibitor REST API provides unauthenticated read/write access to ZooKeeper node "
+        "data via a built-in browser, cluster restart capability (effective DoS for quorum), "
+        "and ZK configuration modification.\n\n"
+        "The bind-all behavior is conditional: the exhibitor.conf upstart script sets "
+        "LISTEN_ADDR only when the host is a storage controller VM (CTLVM=true). For a pure "
+        "Witness appliance (which has no /etc/init/storfs.conf, no storfs-core, and a single "
+        "ethernet interface), CTLVM=false and LISTEN_ADDR remains empty — Exhibitor uses the "
+        "default bind of 0.0.0.0.\n\n"
+        "Additionally, the ZK configuration written by Exhibitor sets "
+        "4lw.commands.whitelist=*, exposing all ZooKeeper four-letter administrative commands "
+        "(stat, dump, envi, conf, mntr, ruok) on port 2181 without authentication."
+    ),
+    "evidence": {
+        "exhibitor_conf_binding": (
+            "exhibitor.conf:\n"
+            "  CTLVM=false\n"
+            "  [ -f /etc/init/storfs.conf ] && [ -d /opt/springpath/storfs-core/ ] &&\n"
+            "  [ $(ifquery -l | grep eth[0-9] | wc -l) -ge 2 ] && CTLVM=true\n"
+            "  if $CTLVM; then\n"
+            "    LISTEN_ADDR='--listenaddress $ETH1'  # storage net only\n"
+            "  fi\n"
+            "  # Witness OVA: CTLVM=false -> LISTEN_ADDR='' -> 0.0.0.0:8180\n"
+            "  exec java ... --port $EXHIBITOR_PORT $LISTEN_ADDR"
+        ),
+        "no_auth": (
+            "exhibitor.conf startup flags: no --security, no --security-arguments\n"
+            "exhibitor.defaults: no auth provider configured\n"
+            "=> Exhibitor REST API requires no credentials"
+        ),
+        "api_impact": (
+            "GET  /exhibitor/v1/zookeeper/list?key=/   -> list all ZK nodes\n"
+            "GET  /exhibitor/v1/zookeeper/node?key=/X  -> read ZK node /X\n"
+            "POST /exhibitor/v1/zookeeper/node?key=/X  -> write ZK node /X\n"
+            "GET  /exhibitor/v1/cluster/restart/<ip>   -> restart ZK (quorum DoS)\n"
+            "POST /exhibitor/v1/config/set             -> modify ZK configuration"
+        ),
+        "zk_4lw": (
+            "zoo-cfg-extra in exhibitor.defaults:\n"
+            "  4lw.commands.whitelist=*\n"
+            "=> echo stat | nc <witness-ip> 2181 returns ZK server stats unauthenticated\n"
+            "   echo dump | nc <witness-ip> 2181 lists ephemeral nodes and sessions"
+        ),
+        "eval_risk": (
+            "check_and_fix_witness.py (cron, runs as root):\n"
+            "  witnessNodeCfg = curl http://<witnessIp>:8180/exhibitor/v1/cluster/state/<ip>\n"
+            "  return eval(witnessNodeCfg.replace('false','False').replace('true','True'))\n"
+            "If the Exhibitor response is attacker-controlled (MITM on local curl), "
+            "eval() executes arbitrary Python as root."
+        ),
+        "version": "exhibitor-1.5.2.c.jar (confirmed in /usr/share/exhibitor/)",
+    },
+}
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
