@@ -6964,6 +6964,83 @@ HX_F126 = {
 }
 
 
+HX_F127 = {
+    "id": "HX-F127",
+    "title": (
+        "HyperFlex HXDP 5.x/6.x: ZooKeeper /rest/aaa/session_table Stores All Active "
+        "HX Connect Session Tokens; Readable Without Authentication via HX-F100 World ACL "
+        "— Full Session Hijacking of Any Logged-In User"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cwe": "CWE-522",
+    "component": (
+        "HyperFlex HXDP 5.5.2b (storfs-mgmt, /opt/springpath/clearsession.py); "
+        "ZooKeeper ensemble (clientPort 2181, world:anyone:cdrwa ACL via HX-F100)"
+    ),
+    "versions_affected": "HXDP 5.x, 6.x (confirmed in 5.5.2b extract); earlier versions expected",
+    "description": (
+        "HX Connect (the cluster management REST API) persists all active session tokens "
+        "in the ZooKeeper ensemble at path /rest/aaa/session_table as a JSON structure "
+        "keyed by access token with per-entry fields including userName and session metadata. "
+        "The ZK namespace carries a world:anyone:cdrwa ACL (HX-F100) that grants "
+        "unauthenticated read access to every node in the /rest/ subtree. Any host with "
+        "network connectivity to ZooKeeper port 2181 can retrieve the complete session table "
+        "without credentials, obtaining all active access tokens for all logged-in users.\n\n"
+        "A retrieved token authenticates to HX Connect at the same privilege level as the "
+        "original session: an admin session token grants full cluster management access "
+        "(node add/remove, datastores, replication policy, firmware upgrade). Tokens "
+        "remain valid until the legitimate session expires or clearsession.py is invoked.\n\n"
+        "Secondary impact: ZK paths /rest/aaa/auth_window_size_in_mins and "
+        "/rest/aaa/max_authentications_allowed_in_window (rate-limit parameters for the "
+        "HX Connect authentication endpoint) are also in the world-writable /rest/ subtree. "
+        "An unauthenticated attacker can write these nodes directly to disable the "
+        "brute-force rate limiter before or instead of harvesting live sessions."
+    ),
+    "evidence": {
+        "session_table_path": "/rest/aaa/session_table",
+        "session_table_structure": (
+            "# From clearsession.py (storfs-mgmt, opt/springpath/clearsession.py):\n"
+            "AAASessionTablePath = '/rest/aaa/session_table'\n"
+            "sessionTableJSON, version = getDataJSON(zk, AAASessionTablePath)\n"
+            "sessionTable = JSONIntoDataConverter(sessionTableJSON)\n"
+            "for accessToken, sessionInfo in list(sessionTable.items()):\n"
+            "    if sessionInfo['userName'] == username:\n"
+            "        del sessionTable[accessToken]\n"
+            "# => session table is {accessToken: {userName: ..., ...}, ...}\n"
+            "#    each key is a live HX Connect access token"
+        ),
+        "acl_chain": (
+            "HX-F100: setAcls(['world:anyone:cdrwa'], '/') on ZK startup\n"
+            "=> /rest/aaa/session_table inherits world:anyone:cdrwa\n"
+            "=> unauthenticated zk.get('/rest/aaa/session_table') returns full token map"
+        ),
+        "rate_limit_paths": (
+            "# From setaaalimits.py:\n"
+            "AAA_RATE_LIMIT_AUTH_WINDOW_SIZE_IN_MINS_KEY = "
+            "'/rest/aaa/auth_window_size_in_mins'\n"
+            "AAA_RATE_LIMIT_AUTH_MAX_AUTHENTICATIONS_ALLOWED_IN_WINDOW_KEY = "
+            "'/rest/aaa/max_authentications_allowed_in_window'\n"
+            "# Both in /rest/ subtree -> world-writable via HX-F100\n"
+            "# Write window=300, max_auths=999 to disable brute-force limiting"
+        ),
+        "exploit_primitive": (
+            "# Harvest all sessions with kazoo or zkCli.sh:\n"
+            "# zkCli.sh -server <hx-ctlvm>:2181 get /rest/aaa/session_table\n"
+            "# => JSON returned; extract any accessToken value\n"
+            "# curl -k -H 'hx-auth-token: <token>' "
+            "https://<hx-ctlvm>/rest/clusters/local/summary"
+        ),
+        "write_auth_required": (
+            "clearsession.py uses AuthenticatedZKClientManager for the write path "
+            "(delete stale token). Reading the session table does not require write "
+            "permission — world:anyone:cdrwa includes 'r' (read). "
+            "Session hijacking requires only read access to /rest/aaa/session_table."
+        ),
+    },
+}
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
