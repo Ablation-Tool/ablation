@@ -2612,7 +2612,7 @@ def dump_postgres_kong_database(host: str, port: int = POSTGRES_PORT) -> Optiona
 #         uses the SAME key material. Compromise of one ISO compromises the
 #         AI agent identity for ALL ISE 3.3.0 deployments.
 
-ISE_AI_KEY_PEM_PATH = "ise-ai-key.pem"   # at ISO root; deployed path TBD
+ISE_AI_KEY_PEM_PATH = "ise-ai-key.pem"   # at ISO root; runtime path managed by kairos-common/v3/pkg/ca — not statically derivable without container inspection
 ISE_AI_KEY_MODULUS_PREFIX = "00:e8:66:da:e6:d1:d5:d5:d0:0a:a2:e0:1a:5c:ed"   # confirms identity
 
 

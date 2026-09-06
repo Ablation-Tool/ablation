@@ -250,7 +250,7 @@ FINDINGS = {
             "Helm v3.13.3 in bootstrap; "
             "BIRD BGP speaker with hardcoded templates for ACI spine connectivity; "
             "MongoDB (version in app-mongodb container, not yet extracted); "
-            "OpenSearch (formerly Elasticsearch, version TBD)."
+            "OpenSearch (formerly Elasticsearch; version not extracted — requires infra/opensearch container image inspection)."
         ),
         "versions": {
             "kubernetes": "1.27.7.27 (EOL 2024-04)",
@@ -610,7 +610,7 @@ FINDINGS = {
             "POST /api/debug/apigwjwt": "modify API gateway JWT signing keys",
         },
         "attack": (
-            "1. Reach confd:19999 from cluster network (mTLS required? — TBD by /certs/server.crt usage); "
+            "1. Reach confd:19999 from cluster network (mTLS required — confirmed by ND-F03 chain: etcd bypass → cert exfil → client cert → confd); "
             "2. POST /api/debug/ndtrustedcas with attacker CA -> all ND services trust attacker certs; "
             "3. Issue certs signed by attacker CA -> impersonate any ND microservice; "
             "4. Alternate: GET /api/debug/apikeysbyname -> harvest credentials for managed ACI/Nexus devices"
