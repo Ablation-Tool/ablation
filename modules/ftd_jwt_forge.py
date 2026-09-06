@@ -29,7 +29,9 @@ Root cause chain (F-FTD-97 → F-FTD-102 → F-FTD-106):
   CRITICAL CORRECTION: JWT signing key is 16 bytes, NOT 32.
     EncryptionUtil.AES_KEY_SIZE = 128 (bits = 16 bytes). The Neo4j value is an
     AES-encrypted form. The actual 16-byte JWT key is derived via a transformation
-    NOT reversible from the Neo4j value alone (AES key derivation details TBD).
+    NOT reversible from the Neo4j value alone without the master AES key used by
+    EncryptionKeyBootstrap.init() — exact AES wrapping key not found in bytecode RE.
+    Attack path bypasses this: extract raw key from JVM heap directly (see ftd_jwt_key_extraction.py).
 
   CONFIRMED JWT signing key (FTD 7.0.0-94, heap scan 2026-08-24):
     hex: 9c42f9fd11a9fcfc26b5bc5325fd51c5

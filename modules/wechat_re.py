@@ -1913,7 +1913,8 @@ waitForLib("libwechatnetwork.so", function(mod) {{
 
     // -----------------------------------------------------------------------
     // Hook 1f: MMTLS handshake completion handler (fn@0x304378)
-    // Called by: MMTLS state machine via stored fn ptr (BLR, exact call site TBD)
+    // Called by: MMTLS state machine via BLR from GOT[0x3d00f8]; exact static BLR VA
+    //   resolved at runtime via this.returnAddress (logged by mars_boost invoke hook above).
     //   Registered/re-registered by fn@0x303fb0 at 0x304294 via GOT[0x3d00f8].
     // x0 = struct_base (= [NetCore+0x170] = gILinkKey-0x48)
     // Entry checks: [x0+0x20] = mars_boost callback table_ptr (0 → early log+return)

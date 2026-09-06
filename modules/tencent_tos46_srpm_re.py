@@ -147,7 +147,9 @@ CVE_DETAILS = {
             "Allows server to send malformed SCP pull request pointing outside intended directory. "
             "Fix: null check, '/' reject, and explicit '.' / '..' reject added to scp.c."
         ),
-        "cvss": "TBD (MEDIUM expected — server-controlled path)",
+        "cvss": "4.8 / MEDIUM",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N",
+        "cvss_rationale": "Network-accessible (AV:N), MitM position or rogue server required (AC:H); limited to data client pulls via scp (C:L/I:L), no availability impact",
     },
     "CVE-2026-59843": {
         "component": "libssh",
@@ -167,7 +169,9 @@ CVE_DETAILS = {
             "loop forever and become unresponsive (process-level DoS). "
             "Two-patch fix: -1 adds the max_packet_size=0 guard; -2 handles related edge cases."
         ),
-        "cvss": "TBD (MEDIUM expected — requires network position; DoS only)",
+        "cvss": "5.9 / MEDIUM",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+        "cvss_rationale": "MitM or rogue server required (AC:H); pure availability impact — infinite loop hangs libssh client process; no data exposure or integrity impact",
     },
     "CVE-2025-26465": {
         "component": "openssh",
@@ -202,7 +206,9 @@ CVE_DETAILS = {
             "Impact: root operator uses 'scp host:/setuid-binary .' — receives a setuid binary "
             "on the local filesystem that any local user can then execute for privilege escalation."
         ),
-        "cvss": "TBD (MEDIUM-HIGH — requires root scp usage to trigger; resulting local priv-esc)",
+        "cvss": "6.3 / MEDIUM",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:H/UI:R/S:U/C:H/I:H/A:N",
+        "cvss_rationale": "Local vector (AV:L); requires root to scp without -p (PR:H, UI:R); setuid binary lands on filesystem → local users exploit for full local priv-esc (C:H/I:H); no availability impact",
         "adapted_by": "PkgAgent/deepseek-v4 (modified to adapt to opencloudos-stream)",
     },
     "CVE-2026-35414": {
@@ -220,7 +226,9 @@ CVE_DETAILS = {
             "can authenticate as any user on any server that trusts the signing CA, "
             "bypassing per-user / per-host authorization controls enforced via principals."
         ),
-        "cvss": "TBD (HIGH expected — CA trust model bypass; auth bypass under specific conditions)",
+        "cvss": "8.2 / HIGH",
+        "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:N",
+        "cvss_rationale": "Attacker needs valid certificate from a trusted CA (PR:L), must craft empty-principals cert (AC:H); scope changes (S:C) because compromise affects users/hosts across the CA trust domain; full auth bypass → C:H/I:H",
         "adapted_by": "PkgAgent/deepseek-v4 (modified to adapt to opencloudos-stream)",
     },
 }
