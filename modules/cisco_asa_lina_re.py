@@ -2428,6 +2428,207 @@ SAML_REPLAY_SURFACE = {
     'attack_window_sec':      300,    # typical SAML NotOnOrAfter = 5 minutes
 }
 
+# ── 9.22 addition: TERAVM SAML replay debug command ──────────────────────────
+#
+# ASA 9.22.2.32 WebVPN debug command dispatch table (offset 0x4bce7dd):
+# Entry 245 (0xf5):
+#   string:  "Allow TERAVM SAML replay <0/1>: Current setting: %s"
+#   handler: toggles an in-memory flag that disables SAML assertion replay protection
+#
+# Context:
+#   The table is indexed by debug sub-command number. Entries 0–244 are present
+#   in 9.16; entry 245 is new in 9.22. TERAVM is Cisco's traffic-generation
+#   appliance used in lab/QA environments; the debug command was added to allow
+#   TERAVM to replay the same SAML assertion across multiple test sessions
+#   without triggering the replay detector.
+#
+# Security impact:
+#   Any admin with 'debug webvpn' privilege (level 15 or debug-capable level)
+#   can issue: "debug webvpn 245 1" to disable replay protection for all SAML
+#   tunnel groups until next reload. With replay disabled, the SAML_REPLAY_SURFACE
+#   window expands from the 5-minute NotOnOrAfter bound to unlimited — a captured
+#   SAML assertion remains valid indefinitely.
+#
+# Not in 9.14.2.14 or 9.16.1 — 9.22 introduction confirmed by absence of the
+# string "TERAVM" in both earlier binaries (exhaustive strings search).
+#
+TERAVM_SAML_REPLAY_DEBUG = {
+    'table_offset':  0x4bce7dd,  # WebVPN debug dispatch table in 9.22.2.32
+    'entry_index':   245,         # 0xf5
+    'string':        'Allow TERAVM SAML replay <0/1>: Current setting: %s',
+    'introduced':    '9.22',
+    'absent_in':     ['9.14.2.14', '9.16.1'],
+    'cli_trigger':   'debug webvpn 245 1',
+    'privilege':     'level 15 or debug-capable privilege level',
+    'effect':        'disables SAML assertion replay protection globally until reload',
+    'chained_with':  'SAML_REPLAY_SURFACE',
+    'severity':      'HIGH — admin-triggered; requires privileged CLI access',
+    'note': (
+        'Intended for TERAVM lab use. In production, an admin with debug rights '
+        'can silently weaken SAML posture. No SNMP trap or syslog event is '
+        'generated when the debug flag is toggled — blue team blind spot.'
+    ),
+}
+
+# ── 9.22 addition: QUIC protocol inspection proxy ────────────────────────────
+#
+# lina 9.22.2.32 introduces a full QUIC inspection and proxy layer.
+# Not present in 9.16.1 (absence confirmed).
+#
+# Cisco QUIC magic bytes (used for Cisco-proprietary QUIC variant identification):
+#   quiccscoH9  — client-to-server initial magic
+#   cscoquicH9  — server-to-client initial magic
+#
+# Key new functions (stripped; identified via string cross-reference):
+#   snp_fp_quic_proxy          — top-level QUIC proxy dispatch
+#   snp_quic_trk_decrypt_try   — attempt QUIC record decrypt (stateful tracker)
+#   snp_quic_trk_encrypt_try   — attempt QUIC record encrypt
+#   snp_quic_trk_decrypt       — QUIC decrypt with established keys
+#   snp_quic_trk_encrypt        — QUIC encrypt with established keys
+#   snp_quic_trk_decrypt_cb    — decrypt callback (QUIC handshake interception)
+#   snp_quic_trk_encrypt_cb    — encrypt callback
+#   snp_quic_proxy_send_ack    — inject QUIC ACK frame on behalf of endpoint
+#   snp_quic_proxy_bypass      — bypass QUIC inspection for exempt flows
+#
+# Attack surface notes:
+#   1. QUIC parser handles variable-length integer encoding (QUIC spec §16) and
+#      multi-frame packet aggregation — new parsing code, no analogous code in
+#      9.16 to compare against; no patch history to audit.
+#   2. snp_quic_trk_decrypt_try precedes key establishment: state machine
+#      must correctly reject pre-handshake decrypt attempts.
+#   3. snp_quic_proxy_bypass exists as an explicit bypass path — worth confirming
+#      its trigger conditions cannot be reached by client-controlled packet fields.
+#   4. QUIC uses UDP; ASA UDP state table handling is separate from TCP. ASA's
+#      existing UDP connection limits apply, but QUIC initial packets (unfragmented,
+#      1280 byte minimum MTU) can be spoofed trivially — amplification risk if
+#      the proxy sends large responses to unvalidated source addresses.
+#
+QUIC_INSPECTION_SURFACE = {
+    'introduced':   '9.22',
+    'absent_in':    ['9.14.2.14', '9.16.1'],
+    'magic_cs':     b'quiccscoH9',  # client→server
+    'magic_sc':     b'cscoquicH9',  # server→client
+    'functions': [
+        'snp_fp_quic_proxy',
+        'snp_quic_trk_decrypt_try',
+        'snp_quic_trk_encrypt_try',
+        'snp_quic_trk_decrypt',
+        'snp_quic_trk_encrypt',
+        'snp_quic_trk_decrypt_cb',
+        'snp_quic_trk_encrypt_cb',
+        'snp_quic_proxy_send_ack',
+        'snp_quic_proxy_bypass',
+    ],
+    'protocol':     'QUIC (UDP, IETF RFC 9000 + Cisco proprietary variant)',
+    'severity':     'NEW SURFACE — unreviewed parser; prioritize for fuzzing',
+    'note': (
+        'First QUIC implementation in lina; no prior version for differential '
+        'analysis. snp_quic_trk_decrypt_cb is the highest-priority function — '
+        'handshake interception implies key material handling.'
+    ),
+}
+
+# ── 9.22 addition: SAML Lua API extensions ───────────────────────────────────
+#
+# ASA 9.22.2.32 adds a SAML Lua scripting API layer not present in 9.16.1.
+# Strings absent in 9.16 and present in 9.22:
+#
+#   SAML_SP_CONSUME_ASSERTION       — Lua function; feeds SAML assertion into SP state machine
+#   SAML_SP_PRODUCE_AUTHN_REQ       — Lua function; generates AuthnRequest from Lua context
+#   SAML_SP_VALIDATE_RELAYSTATE_HASH — Lua function; validates RelayState HMAC
+#   ACS_VULNERABLE_NO_SAML          — error label; ACS endpoint reached without SAML context
+#   'Bypassing redirect of SAML ACS request: %s' — debug log; logs when ACS redirect skipped
+#
+# SAML_SP_VALIDATE_RELAYSTATE_HASH is the most security-relevant addition:
+#   RelayState is an opaque string passed through IdP; without validation it is
+#   an open redirect vector (attacker-controlled destination after SSO).
+#   The new hash validation function binds RelayState to a server-side HMAC —
+#   this is a security improvement, but it also means:
+#     a) The HMAC key must be generated correctly (entropy, storage, rotation).
+#     b) Lua scripts can call SAML_SP_CONSUME_ASSERTION directly — if any
+#        WebVPN Lua customization is in place, it could bypass normal SP flow.
+#
+# ACS_VULNERABLE_NO_SAML appears as an internal error label, not a client-facing
+# string. Its presence suggests the ACS endpoint is now reachable in a non-SAML
+# context (possibly during Lua script execution before SAML config is applied).
+#
+SAML_LUA_API_SURFACE = {
+    'introduced': '9.22',
+    'absent_in':  ['9.14.2.14', '9.16.1'],
+    'lua_functions': [
+        'SAML_SP_CONSUME_ASSERTION',
+        'SAML_SP_PRODUCE_AUTHN_REQ',
+        'SAML_SP_VALIDATE_RELAYSTATE_HASH',
+    ],
+    'error_labels': [
+        'ACS_VULNERABLE_NO_SAML',
+        'Bypassing redirect of SAML ACS request: %s',
+    ],
+    'relaystate_validation': 'HMAC-based — improvement over 9.16 (no validation)',
+    'risk': (
+        'Lua SAML API allows customization scripts to call SP state machine '
+        'functions directly. Misconfigured Lua could call SAML_SP_CONSUME_ASSERTION '
+        'with externally-sourced assertion data, bypassing the lasso validation layer.'
+    ),
+    'priority': 'audit WebVPN Lua customization configs on 9.22 deployments',
+}
+
+# ── Message-Authenticator evolution: 9.14 → 9.16 → 9.22 ─────────────────────
+#
+# Ref count of Message-Authenticator string/function references across versions:
+#   9.14.2.14 : 2 refs — attribute recognized but not enforced on responses
+#   9.16.1    : 2 refs — same as 9.14; no enforcement change
+#   9.22.2.32 : 20 refs — BlastRADIUS (CVE-2024-3596) mitigation added
+#
+# 9.22 enforcement additions (inferred from ref expansion):
+#   - Message-Authenticator now required on Access-Challenge and Access-Accept
+#   - Verification failure triggers reject rather than silent accept
+#   - Generation added to Access-Request path (previously optional)
+#   - Additional refs likely in RADIUS proxy and ISE integration paths
+#
+# CVE-2024-3596 (BlastRADIUS, July 2024):
+#   MD5-MITM on the RADIUS shared secret allows forging Access-Accept responses
+#   without knowing the PSK. Message-Authenticator (RFC 3579) adds an HMAC-MD5
+#   over the entire packet using the PSK — forging it requires knowing the PSK.
+#   Enforcement closes the injection window.
+#
+# ASA versions affected: any 9.x prior to the 9.22+ backport (vendor advisory
+# confirms fix in 9.18.4.x, 9.12.4.x, 9.14.4.x, 9.16.4.x).
+# lina 9.14.2.14 and 9.16.1 in this corpus predate the fix.
+#
+ISE_RADIUS_STRINGS_9_16 = {
+    'added_in':   '9.16',
+    'absent_in':  '9.14.2.14',
+    'strings': [
+        'ERROR_ISE_RADIUS_ERROR',
+        'idfw-radius',
+        'AGENT__AUTHENTICATION__AUTH_REQUEST__AUTH_TYPE__AUTH_TYPE_RADIUS',
+    ],
+    'significance': (
+        'ISE RADIUS integration strings appear first in 9.16 — Cisco ISE posture '
+        'assessment over RADIUS was added in this branch. The protobuf-style '
+        'AUTH_TYPE string suggests a gRPC or protobuf serialization path for '
+        'ISE communication, separate from the RFC 2865 RADIUS path.'
+    ),
+}
+
+MESSAGE_AUTHENTICATOR_EVOLUTION = {
+    'cve': 'CVE-2024-3596',
+    'common_name': 'BlastRADIUS',
+    'timeline': {
+        '9.14.2.14': {'refs': 2, 'enforced': False, 'note': 'recognized, not enforced'},
+        '9.16.1':    {'refs': 2, 'enforced': False, 'note': 'same as 9.14; no change'},
+        '9.22.2.32': {'refs': 20, 'enforced': True,  'note': 'BlastRADIUS mitigation added'},
+    },
+    'fix_versions': ['9.12.4.x', '9.14.4.x', '9.16.4.x', '9.18.4.x', '9.22+'],
+    'attack': (
+        'MD5-MITM on RADIUS UDP stream; forge Access-Accept without PSK. '
+        'Message-Authenticator HMAC-MD5 closes this when enforced. '
+        '9.14.2.14 and 9.16.1 in corpus are pre-fix; 9.22.2.32 is post-fix.'
+    ),
+    'rfc': 'RFC 3579 §3.2',
+}
+
 # ── CCO supply chain note (from ASDM analysis) ────────────────────────────────
 # ASDM class efw (idx 10833, ASDM 7.20.2) sets JVM-global SSL bypass:
 #   HttpsURLConnection.setDefaultSSLSocketFactory(trust_all_ctx)
