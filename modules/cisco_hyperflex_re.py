@@ -6279,6 +6279,158 @@ FINDINGS = {
             "Use ssl.create_default_context() for vCenter connection."
         ),
     },
+    "HX-F115": {
+        "title": (
+            "PAM SSO pam_springpath.py: Global ssl._create_unverified_context Patch + "
+            "ZK-Poisonable vCenter URL Enables vCenter Credential Theft During SSH Auth"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-295",
+        "component": (
+            "storfs-pam_5.5.2b-43453_x86_64.deb / "
+            "/usr/share/storfs-pam/pam_springpath.py (PAM SSO module, vc- user SSH auth)"
+        ),
+        "evidence": {
+            "ssl_global_patch": (
+                "pam_springpath.py line 117: "
+                "    ssl._create_default_https_context = ssl._create_unverified_context. "
+                "Patches the Python ssl module globally in the pam_python interpreter process "
+                "before calling pyVmomi SmartConnect(host=vc, user=user, pwd=pwd). "
+                "All subsequent HTTPS connections in the same Python process inherit "
+                "disabled certificate verification."
+            ),
+            "vc_url_from_zk": (
+                "pam_sm_authenticate lines 103-113: stclient = StClient() connects to "
+                "stMgr Thrift on localhost:443; vc = stclient.getVirtualCenter() fetches "
+                "the VC URL from ZooKeeper via stMgr. ZK ACLs are world:anyone:cdrwa "
+                "(HX-F100). An attacker with ZK write access poisons the stored VC URL "
+                "to a malicious HTTPS endpoint. On next vc- user SSH authentication, "
+                "pam_springpath.py connects with ssl._create_unverified_context, sending "
+                "plaintext vCenter credentials (pamh.authtok) in the SmartConnect request."
+            ),
+            "chain": (
+                "HX-F100 (ZK world:anyone:cdrwa) -> poison vCenter URL in ZK -> "
+                "next vc- SSH login triggers pam_springpath.py -> ssl._create_unverified_context "
+                "-> SmartConnect to attacker VC endpoint -> vCenter admin credentials exfiltrated."
+            ),
+            "pam_success_on_stmgr_failure": (
+                "pam_sm_authenticate lines 113-114: on stMgr exception the module returns "
+                "pamh.PAM_SUCCESS without setting ROLE env var. "
+                "Downstream code expecting ROLE=ADMIN/NONADMIN fails open. "
+                "Infrastructure disruption (ZK down, stMgr crash) bypasses role assignment."
+            ),
+            "module_status_552b": (
+                "common-auth-sso ships with pam_springpath.py commented out: "
+                "    # auth  [success=1 default=ignore]  pam_python.so pam_springpath.py debug. "
+                "Module is installed by post-install.sh (lines 241-242) but not activated "
+                "in 5.5.2b default config. Activation state varies by deployment or STIG apply."
+            ),
+        },
+        "versions_affected": ["5.5.2b-43453 (storfs-pam)", "prior versions with SSO enabled"],
+        "remediation": (
+            "Replace ssl._create_default_https_context monkey-patch with explicit "
+            "ssl_context=ssl.create_default_context() passed to SmartConnect. "
+            "Do not read the VC URL from ZooKeeper without integrity verification; "
+            "store it in a signed config file or protected internal endpoint. "
+            "Return PAM_AUTH_ERR (not PAM_SUCCESS) when stMgr is unavailable."
+        ),
+    },
+    "HX-F116": {
+        "title": (
+            "storfs-pam post-install.sh: SSO Chroot Jail Disabled (modifySshdConf Commented Out); "
+            "tomcat8 ACL on pam_tally2 Tallylog Enables Brute-Force Counter Manipulation"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-732",
+        "component": (
+            "storfs-pam_5.5.2b-43453_x86_64.deb / "
+            "/usr/share/storfs-pam/post-install.sh"
+        ),
+        "evidence": {
+            "chroot_disabled": (
+                "post-install.sh line 279 (commented out): "
+                "    #modifySshdConf /etc/ssh/sshd_config /usr/share/$name/jail.config "
+                "    # This will overwrite cisco openssl modification, so don't overwrite. "
+                "jail.config appends 'Match group stsso / ChrootDirectory /var/jail/' to sshd_config. "
+                "With modifySshdConf disabled, this Match block is never applied. "
+                "SSO users in the stsso group (vc- users mapped to UID 5000 by libnss_ato) "
+                "can SSH into stCtlVM without chroot confinement and access the full filesystem."
+            ),
+            "tally_log_acl": (
+                "post-install.sh line 255: "
+                "    setfacl -m u:tomcat8:rw /var/log/tallylog. "
+                "The pam_tally2 login failure counter file is writable by the tomcat8 service. "
+                "Tomcat8 runs the HX Connect REST API on port 443. "
+                "A compromised HX Connect process can write to tallylog, zeroing failed-attempt "
+                "counters for any account and bypassing pam_tally2 lockout (deny=10, unlock_time=120). "
+                "Removes brute-force rate-limiting on both SSH and nginx authentication."
+            ),
+            "nss_ato_global": (
+                "modifyNsswitchConf() (line 276) replaces /etc/nsswitch.conf system-wide "
+                "with 'passwd: compat ato'. libnss_ato.so.2 maps ALL unknown usernames to "
+                "stsso (UID 5000, GID 5000), affecting all NSS lookups on the system."
+            ),
+            "jail_proc_mount": (
+                "setupJailDirectory() line 115: mount -o bind /proc $JAIL_ROOT/proc. "
+                "A bind-mounted /proc inside chroot allows traversal to host filesystem "
+                "via /proc/PID/root and /proc/PID/fd for processes running outside the jail. "
+                "/bin/bash is copied into the jail (line 212), providing a shell."
+            ),
+        },
+        "versions_affected": ["5.5.2b-43453 (storfs-pam)"],
+        "remediation": (
+            "Remove setfacl grant for tomcat8 on tallylog. "
+            "Re-enable modifySshdConf after CiscoSSH modification (sequential, not exclusive). "
+            "Mount /proc into jail read-only; remove bash from jail binary set."
+        ),
+    },
+    "HX-F117": {
+        "title": (
+            "storfs-stig commonStigFunctions.py toBool() Uses Python eval() on INI Values — "
+            "Arbitrary Code Execution if stig_parameters.ini Is Modified"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "6.7",
+        "cwe": "CWE-95",
+        "component": (
+            "storfs-stig_5.5.2b-43453_x86_64.deb / "
+            "/opt/springpath/storfs-stig/commonStigFunctions.py"
+        ),
+        "evidence": {
+            "eval_site": (
+                "commonStigFunctions.py line 67: "
+                "    def toBool(val): return eval(val). "
+                "Called via funcMap = {'bool': toBool} when a stig_parameters.ini key has "
+                "type annotation 'bool'. Active example: "
+                "    Config.HostAgent.plugins.solo.enableMob:False~bool. "
+                "Substituting "
+                "    Config.HostAgent.plugins.solo.enableMob:__import__('os').system('id')~bool "
+                "causes os.system() to execute at STIG apply time."
+            ),
+            "execution_context": (
+                "apply_stig_current_node.py is invoked by check_and_enable_stig.py via "
+                "os.system('python3 .../apply_stig_current_node.py esxi'). "
+                "check_and_enable_stig.py queries http://localhost:8000/securityservice/v1/stig "
+                "using useRootSessionId=True. STIG apply runs with root-equivalent privileges "
+                "and pyVmomi vCenter API access. Code injected via eval() executes as root "
+                "with vCenter credentials available in process environment."
+            ),
+            "config_file": (
+                "/opt/springpath/storfs-stig/stig_parameters.ini. "
+                "Permissions not set explicitly by DEB (inherits umask). "
+                "If ZK-based config management or stMgr Ansible writes STIG params via a "
+                "path that intersects this file, the eval() becomes a ZK-write-to-RCE chain."
+            ),
+        },
+        "versions_affected": ["5.5.2b-43453 (storfs-stig)", "versions with STIG feature"],
+        "remediation": (
+            "Replace eval(val) with: return val.strip().lower() in ('true', '1', 'yes'). "
+            "Set stig_parameters.ini to root:root 0640. "
+            "Never use eval() on configuration file values."
+        ),
+    },
 }
 
 
