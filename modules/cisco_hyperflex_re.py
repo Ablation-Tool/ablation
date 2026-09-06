@@ -6142,6 +6142,143 @@ FINDINGS = {
         "versions_affected": ["5.5.2b-43453 (explicit path fn)", "6.0.2b-44423 (refactored)"],
         "remediation": "See HX-F11 remediation — CHAP credential decryption architecture unchanged.",
     },
+    "HX-F113": {
+        "title": (
+            "VC Plugin ThumbprintTrustManager Unconditionally Trusts All TLS Certificates "
+            "— add-then-contains Logic Bug Makes checkServerTrusted a No-Op"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": (
+            "HyperFlex-VC-HTML-Plugin-2.2.0.zip / ciscohx-service.jar / "
+            "com.ciscohx.vcplugin.service.utils.ssl.ThumbprintTrustManager"
+        ),
+        "evidence": {
+            "broken_check_logic": (
+                "ThumbprintTrustManager.checkThumbprint(X509Certificate): "
+                "1. Computes SHA-1 thumbprint of presented cert. "
+                "2. Calls _thumbprints.add(thumbprint) — unconditionally adds to trusted set. "
+                "3. Calls _thumbprints.contains(thumbprint) — ALWAYS returns true (just added). "
+                "4. If false branch (never reached): throws CertificateException. "
+                "The add-before-contains pattern means any certificate is implicitly added to "
+                "the trust set before being checked — no certificate is ever rejected. "
+                "Functionally identical to returning void from checkServerTrusted."
+            ),
+            "bytecode_evidence": (
+                "ThumbprintTrustManager.checkThumbprint bytecode: "
+                "offset 0: getThumbprint() -> offset 5: _thumbprints.add(thumb) -> "
+                "offset 14: pop -> offset 15: _thumbprints.add(thumb) [again] -> "
+                "offset 24: ifne 47 -> offset 37: logger.error / throw CertificateException. "
+                "The contains() check at line 24 is against the same set that was just mutated "
+                "by add() — the check is always true."
+            ),
+            "trust_manager_hierarchy": (
+                "TrustedService.getSSLSocketFactory() creates SSLContext('TLSv1.2') "
+                "initialized with ThumbprintTrustManager. "
+                "RestService.getConnection() calls TrustedService.getSSLSocketFactory() (offset 40) "
+                "then sets a custom HostnameVerifier (RestService$1, anonymous inner class) "
+                "on every outbound HTTPS connection to the HX cluster. "
+                "All plugin-to-cluster REST calls (GET/POST/PUT/DELETE) use this TLS context."
+            ),
+            "scope": (
+                "Every HTTPS connection from the vCenter plugin service (ciscohx-service.jar) "
+                "to HyperFlex cluster REST APIs is affected: cluster info, datastores, nodes, "
+                "snapshots, VMs, network config, licensing, iSCSI configuration. "
+                "An attacker on the management network can MITM all plugin-to-cluster communication "
+                "without any certificate credential."
+            ),
+            "session_cookie_exposure": (
+                "RestService.setDefaultHeaders() adds 'X-SessionCookie: <value>' to all requests. "
+                "MITM of plugin-to-cluster traffic exposes vCenter session cookies "
+                "to the attacker."
+            ),
+            "related_tls_bypass": (
+                "install_vc_plugin.py additionally uses "
+                "requests.get(url, auth=('admin', admin_pass), verify=False) "
+                "and ssl._create_unverified_context() — TLS bypass at the installer level as well."
+            ),
+        },
+        "versions_affected": ["HyperFlex-VC-HTML-Plugin-2.2.0 (2.2.0)"],
+        "remediation": (
+            "Fix ThumbprintTrustManager.checkThumbprint: check set membership BEFORE adding. "
+            "Replace: add(thumb); if not contains(thumb): throw. "
+            "With: if not contains(thumb): log; throw. "
+            "Only add thumbprints via the explicit setThumbprint() path from registered ServerInfo. "
+            "Alternatively, validate against a CA-signed trust store rather than thumbprint pinning."
+        ),
+    },
+    "HX-F114": {
+        "title": (
+            "VC Plugin Installer install_vc_plugin.py: Shell Injection via stcli-Supplied "
+            "Management IP in get_server_thumbprint() — Credential Exposure via verify=False "
+            "and AutoAddPolicy SSH MITM"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.8",
+        "cwe": "CWE-78",
+        "component": (
+            "HyperFlex-VC-HTML-Plugin-2.2.0.zip / install_vc_plugin.py "
+            "(plugin installer, run on stCtlVM)"
+        ),
+        "evidence": {
+            "shell_injection_site": (
+                "get_server_thumbprint(host): "
+                "subprocess.Popen("
+                "    'openssl s_client -connect %s:443 ... | openssl x509 ...' % (host), "
+                "    shell=True, ...). "
+                "The 'host' parameter comes from get_cluster_mgmt_ip() which executes: "
+                "    Popen('stcli node list --summary | awk /mgmtClusterIp/ {print $2}', shell=True). "
+                "stcli output is passed unsanitized into the second shell command. "
+                "If an attacker controls ZooKeeper (world:anyone:cdrwa — HX-F100) "
+                "they can poison the cluster management IP stored in ZK, causing stcli "
+                "to return a crafted string containing shell metacharacters. "
+                "The crafted string is then interpolated into the openssl shell command, "
+                "achieving OS command execution under the plugin installer's user context."
+            ),
+            "chained_via_zk": (
+                "HX-F100 (ZK ACL world:anyone:cdrwa) + HX-F114: "
+                "ZK write access → poison mgmtClusterIp → stcli returns crafted IP → "
+                "shell=True subprocess → arbitrary command execution on stCtlVM "
+                "during plugin installation."
+            ),
+            "tls_verify_false": (
+                "get_from_hx(admin_pass, url): requests.get(url, auth=('admin', admin_pass), verify=False). "
+                "Called with HTTP (not HTTPS) URLs: "
+                "  http://<HOST>/coreapi/v1/hypervisor/vcenter "
+                "  http://<HOST>/coreapi/v1/hypervisor/controllervms. "
+                "Admin password transmitted in HTTP Basic Auth over cleartext HTTP. "
+                "Management network MITM recovers admin credentials without TLS interception."
+            ),
+            "ssh_mitm": (
+                "check_connection() and copy_file() use "
+                "paramiko.AutoAddPolicy() — accepts any SSH host key. "
+                "Plugin ZIP is copied to all stCtlVMs as root via SFTP. "
+                "Network MITM on plugin distribution installs malicious plugin on all nodes. "
+                "Root SSH credentials transmitted over unverified SSH connection."
+            ),
+            "admin_pass_scope": (
+                "ADMIN_PASS (storage controller admin password) is used as: "
+                "  (1) HTTP Basic Auth credential for coreapi calls "
+                "  (2) SSH password for stCtlVM plugin copy. "
+                "Single credential loss via MITM provides both REST API and SSH access "
+                "to all cluster controller VMs."
+            ),
+            "ssl_context_bypass": (
+                "perform_vc_extension_task(): "
+                "ssl._create_unverified_context() used for vCenter SmartConnect. "
+                "vCenter SOAP API credentials transmitted over unverified TLS."
+            ),
+        },
+        "versions_affected": ["HyperFlex-VC-HTML-Plugin-2.2.0 (install_vc_plugin.py)"],
+        "remediation": (
+            "get_server_thumbprint: use subprocess.Popen with list args (not shell=True). "
+            "Validate host against IP address format before use in any command. "
+            "get_from_hx: change URLs from http:// to https:// and set verify=True. "
+            "copy_file: replace AutoAddPolicy with RejectPolicy + explicit known_hosts validation. "
+            "Use ssl.create_default_context() for vCenter connection."
+        ),
+    },
 }
 
 
