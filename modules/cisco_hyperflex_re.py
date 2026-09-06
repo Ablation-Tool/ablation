@@ -6431,6 +6431,70 @@ FINDINGS = {
             "Never use eval() on configuration file values."
         ),
     },
+    "HX-F118": {
+        "title": (
+            "Cross-Version: TrustAll X509TrustManager and WebDownloader$TrustAllManager "
+            "Confirmed in storfs-restapi 5.5.2b-43453 WARs — HX-F27/F28/F29/F30 Predate 6.0.2b"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.4",
+        "cwe": "CWE-295",
+        "component": (
+            "storfs-restapi_5.5.2b-43453_x86_64.deb / "
+            "hxupgrade-1.0.0.war, ROOT-1.0.0.war, supportservice-1.0.0.war (Tomcat, stCtlVM port 443)"
+        ),
+        "evidence": {
+            "hxupgrade_552b": (
+                "hxupgrade-1.0.0.war / WEB-INF/classes/com/springpath/hxupgrade/service/UpgradeSvcAccess$1.class. "
+                "Bytecode confirms blank X509TrustManager: "
+                "    checkClientTrusted(): 0=return "
+                "    checkServerTrusted(): 0=return "
+                "    getAcceptedIssuers(): 0=aconst_null; 1=areturn. "
+                "Package prefix 'com.springpath' (not 'com.cisco.hx') confirms this is the "
+                "Springpath-era implementation, predating the 6.0.2b com.cisco.hxdp.* repackaging. "
+                "The anonymous class UpgradeSvcAccess$2 is also present (typically HostnameVerifier stub)."
+            ),
+            "root_war_552b": (
+                "ROOT-1.0.0.war / com.storvisor.sysmgmt.service.WebDownloader$TrustAllManager. "
+                "Named TrustAllManager class confirmed in 5.5.2b. "
+                "Also present: WebDownloader$1, WebDownloader$2 (HostnameVerifier stubs). "
+                "com.storvisor namespace (Springpath internal brand) in 5.5.2b "
+                "vs com.cisco.hx.* in 6.0.2b — same pattern, different package path."
+            ),
+            "supportservice_552b": (
+                "supportservice-1.0.0.war / com.springpath.hx.support.util.WebDownloader$TrustAllManager. "
+                "Identical to ROOT-1.0.0.war pattern but in the support service WAR. "
+                "Used by SupportBundleApiServiceImpl to download support bundle artifacts "
+                "over unverified TLS connections."
+            ),
+            "auth_war_552b": (
+                "auth-1.0.0.war: new in 5.5.2b corpus, not present in 6.0.2b analysis. "
+                "Contains com.springpath.hx.aaa.api.impl.ServiceAccountUtil.checkRequestFromTrustedService() "
+                "which validates service-to-service requests by checking AAA context attributes "
+                "(authenticateduser, reqinitiatorip, authenticateduserscope). "
+                "Context attributes are set by authfilter — ServiceAccessAuthFilterImpl determines "
+                "trust. Cross-references HX-F34 (service-to-service auth bypass via localhost)."
+            ),
+            "version_attribution": (
+                "storfs-restapi_5.5.2b-43453_x86_64.deb mtime: 2025-04-28. "
+                "WAR classes compile-time from source tree using com.springpath.* namespace. "
+                "5.5.2b → 6.0.2b transition: namespace changed from com.springpath.* to com.cisco.hx.* "
+                "but security pattern preserved. TrustAll vulnerabilities existed at minimum since "
+                "HXDP 5.5.2b; likely earlier given the Springpath-era namespace."
+            ),
+        },
+        "versions_affected": [
+            "5.5.2b-43453 (storfs-restapi)", "6.0.2b-44423 (storfs-restapi)",
+            "all intermediate and prior releases",
+        ],
+        "remediation": (
+            "See HX-F27, HX-F28, HX-F29, HX-F30 for remediation of individual WAR TrustManagers. "
+            "Root cause: shared internal Thrift client library copies across all WARs "
+            "each embed their own TrustAll implementation. Fix at the shared library layer: "
+            "introduce a single verified SSLSocketFactory using an internal CA trust store "
+            "and distribute it to all WARs as a shared Tomcat lib."
+        ),
+    },
 }
 
 
