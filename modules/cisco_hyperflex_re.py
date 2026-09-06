@@ -6671,6 +6671,62 @@ HX_F121 = {
     },
 }
 
+HX_F122 = {
+    "id": "HX-F122",
+    "title": (
+        "hx-iscsi storageClientNetworkConfigure.py / add-iscsi-rules.sh: "
+        "Shell Injection via ZK-Sourced iSCSI Cluster IP Written Unsanitized to iscsi1.cfg "
+        "and Evaluated by if-up.d Hook as root"
+    ),
+    "severity": "HIGH",
+    "cvss": "7.8",
+    "cwe": "CWE-78",
+    "component": "hx-iscsi_5.5.2b-43453 (storageClientNetworkConfigure.py, add-iscsi-rules.sh, configureNetworking.py)",
+    "versions_affected": "5.5.2b-43453 (confirmed); earlier versions expected",
+    "description": (
+        "Three compounding injection points in the hx-iscsi network configuration pipeline "
+        "enable command injection as root via unsanitized ZK-sourced values.\n\n"
+        "Primary path: storageClientNetworkConfigure.py accepts --clusterip from CLI (sourced "
+        "from ZK via stcli/Ansible) and writes it directly to /etc/springpath/iscsi1.cfg as "
+        "'iscsi1cip=<CLUSTERIP>' with no ipaddress validation. add-iscsi-rules.sh (installed "
+        "as /etc/network/if-up.d hook) reads this value via sed and passes it to bash eval: "
+        "'eval \"ip rule add from $iscsiCip table isp2 priority $rulePriority\"'. "
+        "A CLUSTERIP value of '10.0.0.1; cmd' or '$(cmd)' executes cmd as root on the next "
+        "iSCSI interface up event.\n\n"
+        "Secondary path: configureNetworking.py builds 'ifup ' + INTERFACE and "
+        "'fping -I %s %s' % (INTERFACE, GATEWAY) then passes them to subprocess.call(..., "
+        "shell=True) with no validation. INTERFACE and GATEWAY come from --interface/--gateway "
+        "CLI args, also ZK-sourced."
+    ),
+    "evidence": {
+        "primary_injection_site": (
+            "storageClientNetworkConfigure.py line 293:\n"
+            "  cipcfgcontent = 'iscsi1cip=' + NetworkSetup.CLUSTERIP + '\\n'\n"
+            "  (CLUSTERIP from --clusterip argv, no ipaddress.ip_address() validation)\n"
+            "  self.update_controller_file('/etc/springpath/iscsi1.cfg', cipcfgcontent)\n"
+            "add-iscsi-rules.sh lines 13+17:\n"
+            "  iscsiCip=`sed -n -e '/iscsi1cip=/ s/.*\\= *//p' $ISCSI_CFG`\n"
+            "  eval \"ip rule add from $iscsiCip table isp2 priority $rulePriority\"\n"
+            "  (if-up.d hook — executes as root on iSCSI interface up)"
+        ),
+        "secondary_injection_sites": (
+            "configureNetworking.py line 269: command = 'ifup ' + NetworkSetup.INTERFACE\n"
+            "configureNetworking.py line 282: command = 'fping -I %s %s' % (INTERFACE, GATEWAY)\n"
+            "Both passed to subprocess.call(command, shell=True) at line 165"
+        ),
+        "chain": (
+            "HX-F100 (ZK world:anyone:cdrwa) -> write cluster IP in ZK -> "
+            "stcli/Ansible reads poisoned IP -> invokes storageClientNetworkConfigure.py --clusterip '10.0.0.1;cmd' -> "
+            "writes to iscsi1.cfg -> if-up.d executes add-iscsi-rules.sh -> "
+            "bash eval expands injection -> root RCE on trigger of iSCSI ifup"
+        ),
+        "trigger_condition": (
+            "add-iscsi-rules.sh executes on each iSCSI interface ifup event. "
+            "Network reconfiguration, interface bounce, or initial cluster setup triggers it."
+        ),
+    },
+}
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
