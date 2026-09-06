@@ -96,9 +96,11 @@ from typing import Optional
 TARGET = "tencent-stargate"
 VERSIONS_AFFECTED = ["1.5.0"]  # base.conf: version = 1.5.0; build 2021-01-21
 BINARY_SHA256 = {
-    "sgagent64": "unknown",   # sgagent64 from stargate.tgz — sha256 TBD
-    "sgagent32": "unknown",
-    "sgagentarm64": "unknown",
+    "sgagent64": "not_retained",   # binary extracted during analysis session; tarball needed for recompute
+    "sgagent32": "not_retained",
+    "sgagentarm64": "not_retained",
+    # Source: stargate.tgz (Tencent Cloud agent package, version 1.5.0, 2021-01-21)
+    # To recompute: tar -xzf stargate.tgz && sha256sum sgagent64
 }
 
 # ─── Findings ─────────────────────────────────────────────────────────────────
