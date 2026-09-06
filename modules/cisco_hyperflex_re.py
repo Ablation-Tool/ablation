@@ -6727,6 +6727,99 @@ HX_F122 = {
     },
 }
 
+HX_F123 = {
+    "id": "HX-F123",
+    "title": (
+        "HyperFlex Witness 1.0.135: Initial Admin Password Logged to Container Output "
+        "in Cleartext — Readable by Any IOx/Container Runtime Administrator"
+    ),
+    "severity": "MEDIUM",
+    "cvss": "5.5",
+    "cwe": "CWE-312",
+    "component": "hyperflex-witness binary (hx-witness-docker-x86-1.0.135, hx-witness-iox-x86-1.0.135)",
+    "versions_affected": "1.0.135 (confirmed)",
+    "description": (
+        "The HyperFlex Witness appliance generates a random initial admin password on first "
+        "boot and writes it to container stdout/logs (per the IOx package_config.ini comment: "
+        "'Review the container logs'). The binary embeds the string 'Default Username : admin' "
+        "as a display prompt, and the DefaultPass struct field (json:'defaultpass') tracks "
+        "whether the initial password has been changed. Anyone with access to the IOx App "
+        "container runtime logs (IOS-XE show app-hosting log, IOx Local Manager) can retrieve "
+        "the initial admin password in cleartext. The username is always 'admin' unless "
+        "overridden via WitnessUsername= in package_config.ini."
+    ),
+    "evidence": {
+        "package_config_comment": (
+            "package_config.ini line 15: "
+            "'# If not defined, a strong, randomized password will be generated on startup. "
+            "Review the container logs.'"
+        ),
+        "hardcoded_username": (
+            "Binary string: 'Default Username : admin' — default username is always 'admin'. "
+            "Changeable only via WitnessUsername= in package_config.ini before deployment."
+        ),
+        "default_pass_struct": (
+            "Binary struct field: DefaultPass, json:\"defaultpass\" — tracks first-login state. "
+            "home.html JavaScript reads {{.default}} to force password change on first login "
+            "(client-side enforcement only, see HX-F124)."
+        ),
+        "log_access_paths": (
+            "IOS-XE: 'show app-hosting log appid hx-witness'; "
+            "IOx Local Manager console output; "
+            "Docker: 'docker logs <container-id>'. "
+            "Anyone with read access to these interfaces reads the cleartext password."
+        ),
+        "bcrypt_confirmed": (
+            "golang.org/x/crypto/bcrypt embedded — passwords are bcrypt-hashed at rest. "
+            "The cleartext exposure is at log-write time before hashing, not via DB read."
+        ),
+    },
+}
+
+HX_F124 = {
+    "id": "HX-F124",
+    "title": (
+        "HyperFlex Witness 1.0.135: Client-Side-Only Default Password Change Enforcement "
+        "in home.html — JavaScript Disable Bypasses First-Login Gate"
+    ),
+    "severity": "LOW",
+    "cvss": "3.1",
+    "cwe": "CWE-602",
+    "component": "hyperflex-witness binary (templates/home.html)",
+    "versions_affected": "1.0.135 (confirmed)",
+    "description": (
+        "When the Witness admin logs in with the initial (default) password, home.html uses "
+        "JavaScript to enforce a password change: if (defaultpass.trim() === 'true') it hides "
+        "all navigation elements except the Change Password form. This is enforced entirely "
+        "in client-side JavaScript. Disabling JavaScript in the browser or intercepting the "
+        "response (Burp, curl) bypasses the gate, allowing access to all management functions "
+        "(cert management, port updates, lock data download) without changing the default password."
+    ),
+    "evidence": {
+        "js_gate_code": (
+            "templates/home.html:\n"
+            "  var defaultpass = '{{.default}}';\n"
+            "  if (defaultpass.trim() === 'true') {\n"
+            "    homeElement.style.display = 'none';\n"
+            "    passElement.style.display = 'block'; // only show Change Password\n"
+            "    portElement.style.display = 'none';\n"
+            "    vcertElement.style.display = 'none';\n"
+            "    mcertElement.style.display = 'none';\n"
+            "    lockElement.style.display = 'none';\n"
+            "  }"
+        ),
+        "bypass": (
+            "JavaScript disabled -> all elements visible -> direct navigation to "
+            "/generatecert, /port, /lockinfo, /downloadlock without password change. "
+            "Server-side does not re-check first-login state on individual endpoint handlers."
+        ),
+        "management_surface": (
+            "Accessible via bypass: /generatecert (replace TLS cert), /port (change listener port), "
+            "/lockinfo + /downloadlock (cluster UUID and node topology), /uploadcert"
+        ),
+    },
+}
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
