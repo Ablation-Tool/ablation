@@ -5940,6 +5940,208 @@ FINDINGS = {
             "Rotate all cluster SSH keys after any ZK exposure incident."
         ),
     },
+    "HX-F109": {
+        "title": (
+            "Cross-Version: Hardcoded JWT Signing Key and Mock Dev Mode Present in HXDP 5.5.2b "
+            "— HX-F17 and HX-F36 Predate 6.0.2b by at Least One Major Release"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.8",
+        "cwe": "CWE-321",
+        "component": (
+            "auth_x86_64.deb (HXDP 5.5.2b-43453) / "
+            "5.5.2b auth binary at /opt/springpath/auth/auth (Go, ELF64, not stripped, "
+            "BuildID 5hwbBsBuASqHskl20qO4)"
+        ),
+        "evidence": {
+            "jwt_key_in_552b": (
+                "String 'RHGocmgN90R4ShL_WnQ5GJSgGzADV678' confirmed present in 5.5.2b auth "
+                "binary via strings(1) — identical to the key in 6.0.2b (HX-F36). "
+                "The key is embedded in the Go string literal table between runtime error strings "
+                "in both versions."
+            ),
+            "jwt_library_552b": (
+                "5.5.2b auth binary imports github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 "
+                "(confirmed via embedded module metadata: "
+                "'dep github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 h1:CaO/...'). "
+                "Same library version as 6.0.2b. CVE-2020-26160 (audience bypass) "
+                "and alg:none path (main.signingMethodNone, main.unsafeNoneMagicConstant) "
+                "present in both versions."
+            ),
+            "mock_dev_mode_552b": (
+                "main.isMockDevMode present in 5.5.2b auth binary symbol table "
+                "(confirmed via strings/nm). Same dev bypass path in both 5.5.2b and 6.0.2b."
+            ),
+            "build_date": "5.5.2b auth binary mtime: Aug 17 2021 (built ~2021)",
+            "install_path_552b": "/opt/springpath/auth/auth (5.5.2b) vs /opt/hyperflex/auth/auth (6.0.2b)",
+            "affected_range": "HXDP 5.5.2b-43453 through 6.0.2b-44423 confirmed; likely earlier",
+        },
+        "versions_affected": ["5.5.2b-43453", "6.0.2b-44423"],
+        "remediation": "See HX-F17 and HX-F36 remediation. Applies to all versions in affected range.",
+    },
+    "HX-F110": {
+        "title": (
+            "Cross-Version: Springpath-to-HyperFlex Path Rebranding — CHAP/ZK Credential "
+            "Architecture Predates HXDP 5.5.2b; HX-F11/F12/F23 Are Springpath-Era Design Decisions"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-312",
+        "component": (
+            "hx-iscsi_5.5.2b-43453_x86_64.deb / iscsisvc (BuildID sha1=5371897e) + "
+            "auth_x86_64.deb 5.5.2b / /etc/springpath/secure/"
+        ),
+        "evidence": {
+            "path_matrix": {
+                "5.5.2b_keystore": "/etc/springpath/secure/springpath_keystore.p12",
+                "6.0.2b_keystore": "/etc/hyperflex/secure/hyperflex_keystore.p12",
+                "5.5.2b_properties": "/etc/springpath/secure/springpath_security.properties",
+                "6.0.2b_properties": "/etc/hyperflex/secure/hyperflex_security.properties",
+                "5.5.2b_clusteruuid": "/etc/springpath/clusteruuid",
+                "6.0.2b_clusteruuid": "/etc/hyperflex/clusteruuid",
+                "5.5.2b_auth_path": "/opt/springpath/auth/auth",
+                "6.0.2b_auth_path": "/opt/hyperflex/auth/auth",
+                "5.5.2b_tmppath": "/var/log/springpath (auth conf.json TmpPath)",
+            },
+            "springpath_literal_in_552b": (
+                "String 'springpath' confirmed in 5.5.2b iscsisvc binary "
+                "(the hardcoded keystore password — HX-F12). "
+                "Adjacent strings at file offset 0xae381d confirm path context: "
+                "'.hx_read_chap_json_str.../etc/springpath/secure/springpath_security.properties'"
+            ),
+            "architectural_continuity": (
+                "Same CHAP credential decryption architecture in both versions: "
+                "hx_read_chap_json_str (5.5.2b) / decrypt_data+get_keystore_passwd (6.0.2b) "
+                "both read PKCS12 keystore using the 'springpath' password, "
+                "decrypt ZK-stored RSA ciphertexts for CHAP credentials. "
+                "Only path prefix changed (springpath→hyperflex); crypto approach unchanged."
+            ),
+            "chap_functions_552b": [
+                "hx_get_chap_key_path (0x36ed60)",
+                "hx_read_chap_json_str (symbol table confirmed)",
+                "hx_istgt_get_chap_authinfo (0x36f130)",
+                "chap_decrypt_init (0x36fde0)",
+                "chap_decrypt_cleanup (0x36ff70)",
+                "decrypt_data (0x370090)",
+                "get_keystore_passwd (0x36fb00)",
+            ],
+            "origin": (
+                "Cisco acquired Springpath in 2017. The 'springpath' password and "
+                "/etc/springpath/ path hierarchy are Springpath-era design decisions "
+                "inherited across all HyperFlex releases. The 6.0.2b rebrand to 'hyperflex' "
+                "paths changed filenames but not the cryptographic architecture or password."
+            ),
+        },
+        "versions_affected": ["5.5.2b-43453", "6.0.2b-44423", "all intermediate releases"],
+        "remediation": "See HX-F11, HX-F12, HX-F23 remediations. Applies to entire HXDP release history.",
+    },
+    "HX-F111": {
+        "title": (
+            "HXDP 5.5.2b Ships CiscoSSL 1.0.2u (EOL December 2019) as System libssl "
+            "— SSH FIPS Mode Disabled via Inline sed Workaround in post_install.sh"
+        ),
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-1104",
+        "component": (
+            "cisco-openssl_1.0.2u_x86_64.deb (HXDP 5.5.2b) / "
+            "/lib/x86_64-linux-gnu/libssl.so.1.0.0 + libcrypto.so.1.0.0 + /usr/sbin/sshd"
+        ),
+        "evidence": {
+            "version_matrix": {
+                "5.5.2b": "CiscoSSL 1.0.2u (OpenSSL 1.0.2u base) — EOL 2019-12-31",
+                "6.0.2b": "CiscoSSL 1.1.1za.7.2.587 (OpenSSL 1.1.1 base) — EOL 2023-09-11",
+            },
+            "library_files_552b": [
+                "libssl.so.1.0.0 (replaces system)",
+                "libcrypto.so.1.0.0 (replaces system)",
+                "sshd (replaces /usr/sbin/sshd)",
+            ],
+            "fips_disable_workaround": (
+                "5.5.2b post_install.sh line: "
+                "\"sed -i 's/^CiscoSSHFipsMode/#CiscoSSHFipsMode/g' /etc/ssh/sshd_config\" "
+                "Comment: 'Temporary workaround until we move to ecdsa key that works for "
+                "CVM, host, CCP'. "
+                "In 6.0.2b: CiscoSSHFipsMode yes (enabled, workaround removed). "
+                "FIPS mode was disabled on all 5.5.2b stCtlVMs by the installer."
+            ),
+            "gost_engine_comment": (
+                "post_install.sh comment: 'This is being done because the gost engine did not "
+                "get included in the openssl.cnf during ciscossl 1.0.2o build.' "
+                "Confirms the 1.0.2 lineage was maintained through at least 1.0.2o → 1.0.2u "
+                "with known build issues."
+            ),
+            "eol_lag": (
+                "OpenSSL 1.0.2u shipped in 5.5.2b (build date April 2025) — "
+                "5+ years after the 2019 EOL date. "
+                "Upgrade to 1.1.1 in 6.0.2b still insufficient (1.1.1 EOL Sept 2023 — "
+                "now also EOL at time of 6.0.2b release)."
+            ),
+            "install_mechanism": (
+                "Same backupAndCopy() pattern as 6.0.2b: moves original lib to orig.libssl.so.1.0.0 "
+                "before replacing with Cisco private build. Original not recoverable post-install "
+                "without the backup file."
+            ),
+        },
+        "versions_affected": ["5.5.2b-43453 and earlier"],
+        "remediation": (
+            "Upgrade to 6.0.2b or later which uses CiscoSSL 1.1.1za. "
+            "Long-term: migrate to OpenSSL 3.x before 1.1.1 private patches cease. "
+            "Audit all stCtlVMs running 5.5.2b for CiscoSSHFipsMode=disabled state "
+            "post-upgrade from 5.5.2b."
+        ),
+    },
+    "HX-F112": {
+        "title": (
+            "5.5.2b iscsisvc Exposes Explicit hx_get_chap_key_path Function — "
+            "CHAP Credential File Path Derivation Refactored but Architecture Preserved in 6.0.2b"
+        ),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
+        "cwe": "CWE-312",
+        "component": (
+            "hx-iscsi_5.5.2b-43453_x86_64.deb / iscsisvc (not stripped); "
+            "function hx_get_chap_key_path at 0x36ed60"
+        ),
+        "evidence": {
+            "552b_function_names": {
+                "hx_get_chap_key_path":     "0x36ed60 — derives filesystem path for CHAP key file",
+                "hx_read_chap_json_str":    "symbol — reads CHAP credential JSON string",
+                "hx_istgt_get_chap_authinfo": "0x36f130 — assembles authinfo from ZK JSON + keystore",
+                "chap_decrypt_init":        "0x36fde0",
+                "chap_decrypt_cleanup":     "0x36ff70",
+                "decrypt_data":             "0x370090",
+                "get_keystore_passwd":      "0x36fb00",
+            },
+            "602b_function_names": {
+                "chap_decrypt_init":    "0x28ba30",
+                "chap_decrypt_cleanup": "symbol",
+                "decrypt_data":         "0x28bcf0",
+                "get_keystore_passwd":  "0x28b7e0",
+            },
+            "architectural_delta": (
+                "5.5.2b names the CHAP path derivation explicitly (hx_get_chap_key_path), "
+                "confirming CHAP credentials stored at a filesystem path per-initiator "
+                "in addition to ZK. "
+                "6.0.2b refactored the CHAP path derivation into the decrypt_data flow, "
+                "removing the explicit function but preserving the same ZK+PKCS12 architecture "
+                "(HX-F11: ZK at /chap/<initiator-iqn>, decrypt via springpath keystore). "
+                "The refactoring obscured but did not fix the vulnerability."
+            ),
+            "zk_path_confirmed_552b": (
+                "String '/chap/%s' present in 5.5.2b iscsisvc — "
+                "ZK path for CHAP credentials identical across versions."
+            ),
+            "identity_map_552b": (
+                "5.5.2b iscsisvc LOAD segments: "
+                "LOAD1 offset=0x0 vaddr=0x0 filesz=0xd74a70 (identity-mapped), "
+                "LOAD2 offset=0xd75380 vaddr=0xf75380. "
+                "Same identity-map pattern as 6.0.2b for direct file-offset→VA translation."
+            ),
+        },
+        "versions_affected": ["5.5.2b-43453 (explicit path fn)", "6.0.2b-44423 (refactored)"],
+        "remediation": "See HX-F11 remediation — CHAP credential decryption architecture unchanged.",
+    },
 }
 
 
