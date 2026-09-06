@@ -6572,6 +6572,105 @@ FINDINGS = {
     },
 }
 
+HX_F120 = {
+    "id": "HX-F120",
+    "title": (
+        "gateway-1.0.0.jar VcClient.getServiceInstance: ignoreCert=true Disables TLS "
+        "Verification for vCenter Session Cookie Validation — ZK-Poisonable VC URL Enables MITM"
+    ),
+    "severity": "HIGH",
+    "cvss": "7.4",
+    "cwe": "CWE-295",
+    "component": "storfs-mgmt gateway-1.0.0.jar (AAA service)",
+    "versions_affected": "5.5.2b-43453 (confirmed); earlier versions expected",
+    "description": (
+        "The gateway Java AAA service uses VcClient.getServiceInstance() to validate every "
+        "HX Connect REST API session cookie against vCenter. At bytecode offset 53, iconst_1 "
+        "(true) is pushed as the ignoreCert argument to the vim25 ServiceInstance constructor: "
+        "ServiceInstance(URL, sessionCookie, ignoreCert=true). This disables all TLS certificate "
+        "validation for the VC connection used during session cookie verification. The VC URL is "
+        "fetched from ZooKeeper via StMgrClient.getVCUrl(), making it poisonable via HX-F100. "
+        "An attacker controlling ZK can redirect session cookie validation to a rogue vCenter, "
+        "capture any session cookie presented during authentication, and forge HxSession objects "
+        "with arbitrary username and role claims."
+    ),
+    "evidence": {
+        "bytecode_proof": (
+            "VcClient.getServiceInstance() private method:\n"
+            "  offset 52: aload_1 (sessionCookie)\n"
+            "  offset 53: iconst_1 (boolean true = ignoreCert)\n"
+            "  offset 54: invokespecial ServiceInstance.<init>(URL, String, Z)\n"
+            "vim25 SDK signature: ServiceInstance(URL url, String sessionStr, boolean ignoreCert)"
+        ),
+        "vc_url_from_zk": (
+            "offset 10: invokevirtual StMgrClient.getVCUrl() — fetches VC URL from ZK via stMgr. "
+            "ZK ACLs are world:anyone:cdrwa (HX-F100). URL appended with '/sdk' before use."
+        ),
+        "session_cookie_flow": (
+            "validateSessionCookieAndFetchSessionInfo(String sessionCookie) -> "
+            "getServiceInstance(sessionCookie) -> ServiceInstance(vcUrl+'/sdk', sessionCookie, true) -> "
+            "getUserName(si) + getScopes(si) -> HxSession(username, scopes)"
+        ),
+        "cross_version": (
+            "com.springpath.hx.aaa.gateway namespace (5.5.2b); same pattern expected in "
+            "com.cisco.hx.aaa.gateway (6.0.2b). Distinct from HX-F113 (VC plugin) and "
+            "HX-F115 (PAM SSO) — this is the gateway REST API authentication path."
+        ),
+        "chain": "HX-F100 -> poison ZK VC URL -> rogue vCenter -> intercept session cookies -> forge HxSession",
+    },
+}
+
+HX_F121 = {
+    "id": "HX-F121",
+    "title": (
+        "stNodeMgr ZKNodeService Stores Inter-Node SSH Private Keys in ZooKeeper "
+        "Including Plaintext Variant — World-Readable via HX-F100 ACL Bypass"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "cwe": "CWE-312",
+    "component": "stNodeMgr-1.0.jar (node management service)",
+    "versions_affected": "5.5.2b-43453 (confirmed); earlier versions expected",
+    "description": (
+        "ZKNodeService_StNodeMgr and ZKService_StNodeMgr define four SSH key payload fields "
+        "stored in the /stNodeMgr ZooKeeper namespace: STR_PAYLOAD_ENTRY_SSH_ENCRYPTED_PRIVATE_KEY, "
+        "STR_PAYLOAD_ENTRY_SSH_ENCRYPTED_PUBLIC_KEY, STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY, "
+        "and STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PUBLIC_KEY. The PLAIN_TEXT private key field stores "
+        "the inter-node SSH private key in cleartext in ZooKeeper. Given the world:anyone:cdrwa "
+        "ACL on all HX ZK namespaces (HX-F100), any node or process with ZK port 2181 access can "
+        "read this private key and use it for lateral movement to all stCtlVMs in the cluster. "
+        "The encrypted variant is also present — decryptable via AES/ECB with the hardcoded "
+        "'springpath' keystore key (HX-F11)."
+    ),
+    "evidence": {
+        "zk_fields": (
+            "ZKService_StNodeMgr constant pool:\n"
+            "  #18: STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY\n"
+            "  #19: STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PUBLIC_KEY\n"
+            "  #15: STR_PAYLOAD_ENTRY_SSH_ENCRYPTED_PRIVATE_KEY\n"
+            "getNodeEntry_SSHPlainTextPrivateKey(), getNodeEntry_SSHEncryptedPrivateKey() confirm read paths"
+        ),
+        "accessor_methods": (
+            "setSSHEncryptedPrivateKey(), setSSHPlainTextPrivateKey() write paths; "
+            "isKeyEncrypted boolean field determines which variant is stored per node"
+        ),
+        "zk_acl_chain": (
+            "ZK port 2181 reachable -> world:anyone:cdrwa (HX-F100) -> "
+            "read STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY -> "
+            "SSH private key for inter-node auth -> lateral movement to all stCtlVMs"
+        ),
+        "encrypted_fallback": (
+            "Encrypted variant: AES/ECB key from hardcoded keystore password 'springpath' (HX-F11). "
+            "Both paths yield the same private key material."
+        ),
+        "scope_vs_f119": (
+            "HX-F119 covers vCenter/ESXi/UCSM credentials in /stMgr namespace. "
+            "This finding covers SSH inter-node keys in /stNodeMgr namespace — "
+            "distinct credential class enabling direct shell access rather than VC/UCSM API access."
+        ),
+    },
+}
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
