@@ -6495,6 +6495,81 @@ FINDINGS = {
             "and distribute it to all WARs as a shared Tomcat lib."
         ),
     },
+    "HX-F119": {
+        "title": (
+            "Cross-Version: ZKNodeService_StMgr Stores Encrypted vCenter, ESXi, and UCSM "
+            "Credentials in ZooKeeper — World-Readable via HX-F100 ACL Bypass"
+        ),
+        "severity": "HIGH",
+        "cvss": "8.1",
+        "cwe": "CWE-312",
+        "component": (
+            "stMgr-1.0.jar (storfs-mgmt_5.5.2b-43453_amd64.deb) / "
+            "com.storvisor.sysmgmt.stMgr.ZKNodeService_StMgr (ZK credential storage)"
+        ),
+        "evidence": {
+            "zk_credential_fields_552b": (
+                "ZKNodeService_StMgr constant pool (5.5.2b stMgr-1.0.jar) defines: "
+                "  STR_PAYLOAD_ENTRY_URL_VCENTER_SSO — vCenter SSO URL "
+                "  STR_PAYLOAD_ENTRY_URL_VCENTER_ENCRYPTED_USER — encrypted vCenter username "
+                "  STR_PAYLOAD_ENTRY_URL_VCENTER_ENCRYPTED_PASSWORD — encrypted vCenter password "
+                "  STR_PAYLOAD_ENTRY_ESX_ENCRYPTED_USER — encrypted ESXi username "
+                "  STR_PAYLOAD_ENTRY_ESX_ENCRYPTED_PASSWORD — encrypted ESXi password "
+                "  STR_PAYLOAD_ENTRY_UCSM_HOST — Cisco UCS Manager hostname "
+                "  STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_USER — encrypted UCSM username "
+                "  STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_PASSWORD — encrypted UCSM password "
+                "  STR_PAYLOAD_ENTRY_USER_CREDENTIALS — cluster user credentials "
+                "All stored in the /stMgr ZooKeeper namespace."
+            ),
+            "access_via_zk_acl": (
+                "ZooKeeper ACL is world:anyone:cdrwa (HX-F100 confirmed in both 5.5.2b and 6.0.2b). "
+                "Any process that can reach ZK port 2181 can read all stMgr ZK nodes. "
+                "Network access to port 2181 is required — management network exposure varies by deployment. "
+                "ZK server runs on all stCtlVMs; exposed within the storage management VLAN."
+            ),
+            "encryption_weakness": (
+                "Entries marked 'ENCRYPTED' use the same encryption infrastructure as CHAP keys: "
+                "AES/ECB with key derived from hardcoded keystore password 'springpath' (HX-F11). "
+                "A ZK read + keystore decryption yields plaintext vCenter admin, ESXi admin, "
+                "and UCSM admin credentials — full Cisco infrastructure admin credential set."
+            ),
+            "ucsm_escalation": (
+                "UCSM (Cisco UCS Manager) manages physical blade servers and fabric interconnects. "
+                "UCSM admin credentials from ZK provide: "
+                "  - Service profile modification (vNIC, boot policy, firmware) "
+                "  - BMC/KVM console access to all UCS blades "
+                "  - Fabric interconnect management (spanning tree, VLANs, zoning) "
+                "  - IPMI/SNMP credential harvest from blade BMCs. "
+                "UCSM compromise is independent of vCenter/ESXi compromise and expands "
+                "from storage controller ZK compromise to physical datacenter infrastructure."
+            ),
+            "chain": (
+                "ZK port 2181 reachable (management VLAN) -> "
+                "world:anyone:cdrwa read on /stMgr/* nodes -> "
+                "read STR_PAYLOAD_ENTRY_UCSM_ENCRYPTED_PASSWORD -> "
+                "decrypt with AES/ECB keystore-derived key (HX-F11) -> "
+                "plaintext UCSM admin credentials -> physical infrastructure admin."
+            ),
+            "version_attribution": (
+                "stMgr-1.0.jar from storfs-mgmt_5.5.2b-43453_amd64.deb (mtime 2025-04-28). "
+                "com.storvisor namespace confirms Springpath-era origin. "
+                "Same class in 6.0.2b under com.cisco.hxdp namespace with identical fields. "
+                "UCSM credential storage in ZK existed since at minimum HXDP 5.5.2b."
+            ),
+        },
+        "versions_affected": [
+            "5.5.2b-43453 (storfs-mgmt)", "6.0.2b-44423 (storfs-mgmt)",
+            "all intermediate and prior releases with UCSM integration",
+        ],
+        "remediation": (
+            "Migrate vCenter/ESXi/UCSM credentials out of ZooKeeper into a secrets manager "
+            "or a dedicated credential store with per-service ACLs. "
+            "Apply ZK ACLs per node class: "
+            "  /stMgr/credentials/** — digest:hxservice:rwcda (not world:anyone). "
+            "Use separate encryption keys per credential class rather than the shared "
+            "keystore-derived key. See HX-F100 for ZK ACL remediation guidance."
+        ),
+    },
 }
 
 
