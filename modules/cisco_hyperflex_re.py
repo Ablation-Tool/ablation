@@ -7826,10 +7826,92 @@ HX_F135 = {
     ),
 }
 
+HX_F136 = {
+    "id": "HX-F136",
+    "title": (
+        "HyperFlex Witness OVA 1.1.3: firstboot.sh eval export Executes Unsanitized OVF Property "
+        "Values as Root — Hypervisor Admin Shell Command Injection"
+    ),
+    "severity": "HIGH",
+    "cvss": "7.2",
+    "cwe": "CWE-78",
+    "component": (
+        "HyperFlex Witness OVA 1.1.3 "
+        "(/usr/share/springpath/storfs-misc/firstboot.sh, /etc/init.d/firstboot)"
+    ),
+    "versions_affected": "Witness OVA 1.1.3 (confirmed); earlier versions expected",
+    "description": (
+        "firstboot.sh (run as root by /etc/init.d/firstboot at boot) uses Python to parse the "
+        "VMware OVF environment from guestinfo.ovfEnv (via vmtoolsd) and outputs shell variable "
+        "assignments that are fed directly to eval. Property keys are sanitized only by replacing "
+        "dots with underscores; property values are sanitized only by escaping double-quote "
+        "characters. Neither backticks nor $() command substitution are escaped.\n\n"
+        "When eval processes output of the form key=\"$(cmd)\" or key=\"`cmd`\", the shell "
+        "executes cmd as root. This occurs in three code paths:\n\n"
+        "1. Main body (first boot only, line 224): eval export `getprops_from_ovfxml $OVFENV`\n"
+        "2. configure_network() (every boot if guestinfo.ovfEnv changed): same eval pattern\n"
+        "3. set_user_creds() (first boot, called from main): same eval pattern\n\n"
+        "The attack requires control over OVF properties at deploy time (attacker constructs "
+        "malicious OVA/OVF) or control over the VMware guest's guestinfo.ovfEnv at the "
+        "hypervisor layer (ESXi root or vCenter admin can modify extra VM configuration, "
+        "including guestinfo keys). On next reboot, configure_network compares new guestinfo "
+        "content with /var/ovf.xml.old; if changed, eval executes the modified properties.\n\n"
+        "The init.d/firstboot script depends on open-vm-tools being started first, and "
+        "runs before SSH, nginx, or the network service, giving code execution before any "
+        "network-based monitoring can observe it."
+    ),
+    "evidence": {
+        "escape_gap": (
+            "getprops_from_ovfxml() Python snippet:\n"
+            "  value = property.getAttribute('oe:value')\n"
+            "  value = value.replace('\"', r'\\\"')  # escapes \" only\n"
+            "  print('{0}=\"{1}\"'.format(key, value))\n\n"
+            "Missing escapes: backtick (`), $(), newline, semicolon, pipe in value.\n"
+            "Missing escapes in key: all metacharacters except '.' (replaced with '_')."
+        ),
+        "eval_call_sites": (
+            "Line  85: eval export `getprops_from_ovfxml $OVFENV`  # configure_network()\n"
+            "Line 179: eval export `getprops_from_ovfxml $OVFENV`  # set_user_creds()\n"
+            "Line 224: eval export `getprops_from_ovfxml $OVFENV`  # main body\n\n"
+            "Line 224 executes only on first boot (guard: [ -f /var/.firstboot ] -> exit).\n"
+            "Line 85 (configure_network) executes on every boot if guestinfo.ovfEnv changed:\n"
+            "  vmtoolsd --cmd='info-get guestinfo.ovfEnv' > $OVFENV\n"
+            "  if [[ -f $OVFENV_OLD && $(cmp --silent $OVFENV $OVFENV_OLD) ]]; then\n"
+            "    return  # skip if unchanged\n"
+            "  else\n"
+            "    eval export `getprops_from_ovfxml $OVFENV`  # EXECUTES if changed\n"
+            "  fi"
+        ),
+        "poc_payload": (
+            "OVF property with value injection:\n"
+            "  <Property oe:key='hx_1ip0_Cisco_HX_Witness_Appliance'\n"
+            "            oe:value='$(id>/tmp/pwned)'/>\n\n"
+            "Resulting eval input: hx_1ip0_Cisco_HX_Witness_Appliance=\"$(id>/tmp/pwned)\"\n"
+            "eval executes: id > /tmp/pwned  (as root)\n\n"
+            "Persistent post-deploy vector (hypervisor admin):\n"
+            "  Modify VM extra config: guestinfo.ovfEnv = <modified XML with injection>\n"
+            "  On next Witness VM reboot: configure_network() detects change, eval executes."
+        ),
+        "boot_order": (
+            "/etc/init.d/.depend.start:\n"
+            "  firstboot: open-vm-tools\n"
+            "  (SSH, nginx, cron not listed as firstboot dependencies)\n"
+            "=> firstboot.sh and injection execute before SSH is listening"
+        ),
+    },
+    "remediation": (
+        "Replace eval with direct variable assignment from the Python parser without shell "
+        "interpretation. Parse OVF XML entirely in Python, write a safe environment file "
+        "(/etc/firstboot.env), and source it with 'set -a; source /etc/firstboot.env; set +a' "
+        "after validating each key against [a-zA-Z0-9_] and each value against expected format.\n"
+        "Do not use backtick or $() expansion anywhere in the OVF parsing path."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135,
+    HX_F135, HX_F136,
 ]:
     FINDINGS[_f["id"]] = _f
 
