@@ -9161,12 +9161,102 @@ HX_F155 = {
     ),
 }
 
+HX_F156 = {
+    "id": "HX-F156",
+    "title": (
+        "Systemic TLS Certificate Verification Bypass Across "
+        "HyperFlex Management Scripts in storfs-misc"
+    ),
+    "severity": "HIGH",
+    "cvss_score": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-misc",
+    "file": (
+        "usr/share/hyperflex/storfs-misc/hx-scripts/add_vswitch.py, "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/esx_util.py, "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/iscsiVolumeAccessCheck.py, "
+        "usr/share/hyperflex/storfs-misc/pci_passthru.py, "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/install_vc_plugin.py, "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/check_vswitch.py, "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/node_replace.py"
+    ),
+    "lines": "multiple per file",
+    "description": (
+        "TLS certificate verification is disabled systemically across the entire "
+        "management script layer in the storfs-misc package. This is not an "
+        "isolated oversight — it is a repeated architectural pattern across at "
+        "least 7 scripts that collectively cover vSwitch configuration, ESX "
+        "connectivity checks, iSCSI volume access, PCI passthrough, vCenter "
+        "plugin installation, node replacement, and HX REST API access.\n\n"
+        "Techniques used across the affected scripts:\n\n"
+        "1. Global SSL context monkey-patch (3 scripts): "
+        "'ssl._create_default_https_context = ssl._create_unverified_context' — "
+        "disables cert validation for ALL SSL connections in the process\n"
+        "  - add_vswitch.py lines 15, 21\n"
+        "  - esx_util.py lines 41, 47\n"
+        "  - iscsiVolumeAccessCheck.py lines 36, 42\n\n"
+        "2. Per-request verify=False (4 scripts): "
+        "'requests.get/post(..., verify=False)' — disables cert validation for "
+        "specific requests\n"
+        "  - check_vswitch.py lines 397, 510, 522, 532, 547 "
+        "(sends 'admin' credentials with verify=False)\n"
+        "  - install_vc_plugin.py line 386 "
+        "(sends 'admin' credentials with verify=False)\n"
+        "  - esx_util.py line 247 (sends 'admin' credentials with verify=False)\n"
+        "  - node_replace.py lines 182, 193, 256, 296, 314 "
+        "(sends 'root' credentials with verify=False)\n\n"
+        "3. urllib3 warning suppression (3 scripts): "
+        "'requests.packages.urllib3.disable_warnings()' — hides SSL errors in logs\n"
+        "  - esx_util.py line 27\n"
+        "  - install_vc_plugin.py line 26\n"
+        "  - check_vswitch.py line 29\n\n"
+        "Combined: admin and root credentials for ESX, vCenter, and HyperFlex "
+        "REST APIs are transmitted over TLS without certificate verification in "
+        "every management operation covered by these scripts. An adjacently-"
+        "positioned MiTM attacker on the management or data network can present "
+        "a self-signed certificate and capture ESX root passwords, vCenter admin "
+        "credentials, and HyperFlex API tokens during any of these operations.\n\n"
+        "This finding documents the systemic scope of the same vulnerability "
+        "class already documented in HX-F142 (stCli), HX-F148 (upgrade client), "
+        "HX-F149 (switchToArbitrator), and HX-F151 (config-ctlvm). Every layer "
+        "of the management stack disables TLS verification."
+    ),
+    "proof": (
+        "# Confirm systemic verify=False pattern across management scripts:\n"
+        "grep -rn 'verify=False\\|_create_unverified\\|disable_warnings' "
+        "/usr/share/hyperflex/storfs-misc/hx-scripts/ "
+        "/usr/share/hyperflex/storfs-misc/pci_passthru.py\n"
+        "# Expected: hits in add_vswitch.py, esx_util.py, iscsiVolumeAccessCheck.py,\n"
+        "# pci_passthru.py, install_vc_plugin.py, check_vswitch.py, node_replace.py\n\n"
+        "# Confirm admin credentials sent with verify=False:\n"
+        "grep -n 'verify=False' /usr/share/hyperflex/storfs-misc/hx-scripts/check_vswitch.py\n"
+        "# Expected: auth=('admin', password), verify=False at multiple call sites"
+    ),
+    "remediation": (
+        "1. Establish an internal CA trust chain: bundle the HyperFlex internal "
+        "   CA certificate in the storfs-misc package and pass "
+        "'verify=/etc/hyperflex/secure/ca.pem' to all requests calls.\n"
+        "2. Remove all 'ssl._create_default_https_context = "
+        "   ssl._create_unverified_context' monkey-patches. Python's default "
+        "   SSL context validates certificates.\n"
+        "3. Remove all 'urllib3.disable_warnings()' calls — SSL warnings exist "
+        "   to surface certificate errors for investigation.\n"
+        "4. Implement a shared utility function for authenticated HTTPS requests "
+        "   with proper certificate validation, and replace all verify=False "
+        "   instances with calls to this utility.\n"
+        "5. Apply the same fix class to HX-F142, HX-F148, HX-F149, HX-F151 — "
+        "   this is a systemic architectural issue requiring a systemic fix, not "
+        "   per-file patches."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
-    HX_F151, HX_F152, HX_F153, HX_F154, HX_F155,
+    HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
 ]:
     FINDINGS[_f["id"]] = _f
 
