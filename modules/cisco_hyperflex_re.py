@@ -7608,9 +7608,117 @@ HX_F133 = {
     ),
 }
 
+HX_F134 = {
+    "id": "HX-F134",
+    "title": (
+        "HyperFlex HXDP Cross-Version Analysis: storfs-core Binary Vulnerabilities Present from "
+        "3.0.1i (2018) Through 5.5.2b (2024); Hardcoded AES Key and ZK World-Write Confirmed in 6.0.2b; "
+        "6.0.2b Partial ZK Auth Mitigation Bypassable via skipZkAuthOnFailure Default"
+    ),
+    "severity": "INFORMATIONAL",
+    "cvss": "N/A",
+    "cwe": "N/A",
+    "component": (
+        "storfs-core (all versions), storfs-mgmt stMgr-1.0.jar (4.0.2f+), "
+        "zkClusterManager-1.0.jar (6.0.2b+)"
+    ),
+    "evidence": {
+        "version_matrix": {
+            "3.0.1i-29888": {
+                "date": "2018-11",
+                "binary_size_mb": 11,
+                "stripped": True,
+                "install_path": "/opt/springpath/storfs-core/storfs",
+                "HX_F131_smb_strcpy": "PRESENT (strings: smb_get_case_sensitive_file_path)",
+                "HX_F132_redirect_injection": "PRESENT (strings: /opt/springpath/storfs-hyperv/redirect_client.sh)",
+                "HX_F130_springpath_key": "NOT CHECKED (storfs-mgmt_*.deb absent in this build)",
+                "HX_F133_zk_cluster_write": "LIKELY (cluster paths present in all versions)",
+            },
+            "4.0.2f-35930": {
+                "date": "2021-06",
+                "binary_size_mb": 13,
+                "stripped": True,
+                "install_path": "/opt/springpath/storfs-core/storfs",
+                "HX_F131_smb_strcpy": "PRESENT (strings: smb_get_case_sensitive_file_path)",
+                "HX_F132_redirect_injection": "PRESENT (strings: /opt/springpath/storfs-hyperv/redirect_client.sh)",
+                "HX_F130_springpath_key": "CONFIRMED — EsxAuthZKMgmtImpl.class #496 Utf8 springpath; $anonfun$loginToNode$2 returns 'springpath'",
+                "HX_F133_zk_cluster_write": "LIKELY",
+            },
+            "5.0.2e-42642": {
+                "date": "2023-09",
+                "binary_size_mb": 18,
+                "stripped": False,
+                "install_path": "/opt/springpath/storfs-core/storfs",
+                "HX_F131_smb_strcpy": "CONFIRMED — symbols: smb_get_case_sensitive_file_path @ 0x2b0900",
+                "HX_F132_redirect_injection": "CONFIRMED — symbols: vfs_redirect_client @ 0x2f8e70, redirect_client @ 0x2fd840",
+                "HX_F130_springpath_key": "PRESUMED (same stMgr codebase as 4.0.2f/5.5.2b)",
+                "HX_F133_zk_cluster_write": "LIKELY",
+            },
+            "5.5.2b-43453": {
+                "date": "2024-10",
+                "binary_size_mb": 18,
+                "stripped": False,
+                "install_path": "/opt/springpath/storfs-core/storfs",
+                "HX_F131_smb_strcpy": "CONFIRMED — smb_get_case_sensitive_file_path @ 0x2bb020; strcpy at 0x2bb10d",
+                "HX_F132_redirect_injection": "CONFIRMED — vfs_redirect_client @ 0x303590; redirect_client @ 0x307f70; sp_system @ 0x8c0310",
+                "HX_F130_springpath_key": "CONFIRMED — EsxAuthZKMgmtImpl constant pool #N Utf8 springpath; ZK path /storvisor2/stCluster",
+                "HX_F133_zk_cluster_write": "CONFIRMED — CRMApiGetPnodes @ 0x710ef0; /cluster/pnodes; kvEnableNullIO",
+            },
+            "6.0.2b-44423": {
+                "date": "2025-11",
+                "binary_size_mb": 20,
+                "stripped": False,
+                "install_path": "/opt/hyperflex/storfs-core/storfs",
+                "HX_F131_smb_strcpy": "ABSENT — smb_get_case_sensitive_file_path not in binary; SMB code refactored out of storfs-core",
+                "HX_F132_redirect_injection": "ABSENT — vfs_redirect_client, redirect_client, redirect_client.sh not in storfs-core",
+                "HX_F130_springpath_key": "CONFIRMED — stMgr-1.0.jar EsxAuthZKMgmtImpl.class #495 Utf8 springpath; $anonfun$loginToNode$2",
+                "HX_F133_zk_cluster_write": "CONFIRMED — /cluster/pnodes, kvEnableNullIO strings present in storfs binary",
+                "zk_partial_auth_mitigation": (
+                    "zkClusterManager-1.0.jar (new in 6.0.2b) — ZkConnectionManager adds optional ZK client auth:\n"
+                    "  addAuthInfo(authToken=clusterUuid) if useZkAuth=true AND clusterUuid file present.\n"
+                    "  DEFAULT: skipZkAuthOnFailure=true in reference.conf — auth failures silently bypassed.\n"
+                    "  BYPASS: auth adds a client credential for ZK SASL/digest but does NOT change the\n"
+                    "  world:anyone:cdrwa ACL on existing ZK nodes (HX-F100). Any unauthenticated client\n"
+                    "  still reads/writes all paths. Partial mitigation does not close HX-F100/F133."
+                ),
+            },
+        },
+        "timeline_summary": {
+            "HX_F131_F132": (
+                "Introduced: <= 3.0.1i (Nov 2018, earliest version sampled). "
+                "Present through: 5.5.2b (Oct 2024, ~6 year exposure window). "
+                "Resolved: 6.0.2b (Nov 2025) — SMB path handling removed from storfs-core."
+            ),
+            "HX_F130": (
+                "Introduced: <= 4.0.2f (Jun 2021, earliest version with storfs-mgmt DEB). "
+                "Present through: 6.0.2b (Nov 2025, latest version confirmed). "
+                "Status: NOT FIXED in 6.0.2b."
+            ),
+            "HX_F133_HX_F100": (
+                "Introduced: <= 5.5.2b (earliest version where ZK paths confirmed confirmed). "
+                "Present through: 6.0.2b (Nov 2025). "
+                "6.0.2b adds optional client auth (skipZkAuthOnFailure=true by default). "
+                "Status: NOT FIXED — world:anyone:cdrwa ACL on ZK nodes unchanged."
+            ),
+        },
+        "branding_change": (
+            "Install path changed from /opt/springpath/ (≤5.5.2b) to /opt/hyperflex/ (6.0.2b). "
+            "Java package namespaces: com.storvisor.* (≤5.5.2b) alongside com.cisco.hxdp.* (6.0.2b new classes). "
+            "stMgr/EsxAuthZKMgmtImpl retain com.storvisor.* namespace in 6.0.2b — legacy codebase unchanged."
+        ),
+    },
+    "impact": "N/A — cross-version analysis record.",
+    "remediation": (
+        "HX-F131/F132: Resolved by removing SMB code from storfs-core in 6.0.2b. "
+        "Customers on 5.x must upgrade to 6.0.2b+ or apply network-layer SMB/445 access controls. "
+        "HX-F130: Not fixed in any sampled version — requires key rotation + secrets manager. "
+        "HX-F100/F133: Not fixed in 6.0.2b — requires ZK ACL enforcement per path, not just client auth."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
-    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133,
+    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
 ]:
     FINDINGS[_f["id"]] = _f
 
