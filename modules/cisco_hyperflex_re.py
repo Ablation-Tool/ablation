@@ -8448,11 +8448,150 @@ HX_F143 = {
     ),
 }
 
+HX_F144 = {
+    "id": "HX-F144",
+    "title": "Admin Session Token root_file.pub World-Readable (chmod 644)",
+    "severity": "HIGH",
+    "cvss_score": 7.1,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-732",
+    "component": "storfs-misc",
+    "file": "usr/share/hyperflex/storfs-misc/set_shared_key.sh",
+    "lines": "10-13",
+    "description": (
+        "set_shared_key.sh creates the X-RootSessionID token file (root_file.pub) "
+        "with chmod 644 — world-readable by all local users. The token grants "
+        "admin-level access to all HyperFlex management APIs. The nginx internal "
+        "listener (port 8997, rest_internal.conf) injects this token as "
+        "X-RootSessionID into every proxied request to backend services on "
+        "localhost:8000 (all REST APIs: rest, aaa, coreapi, dataprotection, "
+        "backupservice, encryption, volume, securityservice, supportservice, "
+        "slservice, upgrade) and localhost:9333 (stMgr Thrift). Any local user "
+        "on the CVM (Controller VM) can read the token directly and authenticate "
+        "as the internal root service account to all management plane APIs without "
+        "any password. The token persists across reboots until explicitly rotated."
+    ),
+    "proof": (
+        "# Any local CVM user:\n"
+        "TOKEN=$(cat /etc/hyperflex/secure/root_file.pub)  # or /etc/root_file.pub\n"
+        "# Direct to REST API backend:\n"
+        "curl -sk https://localhost/rest/v1/clusters -H \"X-RootSessionID: $TOKEN\"\n"
+        "# Direct to stMgr Thrift endpoint:\n"
+        "curl -sk http://localhost:9333/stMgr -H \"X-RootSessionID: $TOKEN\" \\\n"
+        "  -H \"Content-Type: application/x-thrift\"\n"
+        "# Via nginx internal listener (auto-injects the token):\n"
+        "curl -sk https://localhost:8997/rest/v1/clusters"
+    ),
+    "remediation": (
+        "1. Change the file permission to 0640 (root:springpath group readable) "
+        "   or 0600 (root-only) on line 12 of set_shared_key.sh.\n"
+        "2. Use a dedicated service account group (e.g. 'hxservice') for processes "
+        "   that legitimately need the token; do not make it world-readable.\n"
+        "3. Audit all scripts and services that read root_file.pub and ensure they "
+        "   run under accounts that are members of the restricted group.\n"
+        "4. Rotate the token on each cluster upgrade and each cluster restart."
+    ),
+}
+
+HX_F145 = {
+    "id": "HX-F145",
+    "title": "X-RootSessionID Token Generated with 15-bit $RANDOM Entropy",
+    "severity": "MEDIUM",
+    "cvss_score": 6.3,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-338",
+    "component": "storfs-misc",
+    "file": "usr/share/hyperflex/storfs-misc/set_shared_key.sh",
+    "lines": "9-11",
+    "description": (
+        "set_shared_key.sh derives the X-RootSessionID admin token as "
+        "'<product_uuid>-$RANDOM'. Bash $RANDOM produces values in [0, 32767] — "
+        "only 15 bits of entropy. The product_uuid is the VMware VM UUID, "
+        "obtainable from the hypervisor's managed object database, from VMware "
+        "vCenter, or from the BIOS DMI table via 'dmidecode -s system-uuid' on "
+        "any node in the cluster. An attacker with knowledge of the product_uuid "
+        "can enumerate the full token space in at most 32,768 attempts, each "
+        "attempt requiring a single HTTP request to an internal service. At "
+        "1,000 req/s this brute-force completes in under 33 seconds. The resulting "
+        "token grants full admin access to all HyperFlex management APIs "
+        "(see HX-F144)."
+    ),
+    "proof": (
+        "# Product UUID is readable from BIOS DMI table on any CVM:\n"
+        "PRODUCT_UUID=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')\n"
+        "# Brute-force token space (32768 values):\n"
+        "for i in $(seq 0 32767); do\n"
+        "  TOKEN=\"${PRODUCT_UUID}-${i}\"\n"
+        "  STATUS=$(curl -s -o /dev/null -w '%{http_code}' \\\n"
+        "    https://localhost/rest/v1/clusters \\\n"
+        "    -H \"X-RootSessionID: $TOKEN\")\n"
+        "  if [ \"$STATUS\" = \"200\" ]; then\n"
+        "    echo \"FOUND: $TOKEN\"; break\n"
+        "  fi\n"
+        "done"
+    ),
+    "remediation": (
+        "1. Replace $RANDOM with cryptographically secure entropy: "
+        "   'sharedkey=$(openssl rand -hex 32)' or Python "
+        "   'secrets.token_hex(32)' — 256 bits.\n"
+        "2. Do not incorporate the product_uuid into the token; a predictable "
+        "   prefix reduces the effective entropy even if the suffix is strong.\n"
+        "3. Ensure the generated token meets a minimum entropy requirement of "
+        "   128 bits before writing to root_file.pub."
+    ),
+}
+
+HX_F146 = {
+    "id": "HX-F146",
+    "title": "18-Day Default Session Token Lifetime in HyperFlex AAA Configuration",
+    "severity": "MEDIUM",
+    "cvss_score": 4.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N",
+    "cwe": "CWE-613",
+    "component": "storfs-support",
+    "file": "WEB-INF/classes/application.conf",
+    "lines": "28",
+    "description": (
+        "The HyperFlex AAA service configures a default session token lifetime "
+        "of 1,555,200,000 milliseconds (18 days) via 'defaultTokenLifeTime' in "
+        "application.conf and HxAAAConfig.json. An idle timeout of 30 minutes "
+        "(defaultIdleTimeout = 1,800,000 ms) is also configured, but any session "
+        "activity (including background polling from the HX Connect UI) resets "
+        "the idle timer. An attacker who obtains a valid session token — via the "
+        "TLS MITM described in HX-F142, from a compromised client machine, or "
+        "from session logs — retains admin access for up to 18 days without "
+        "needing to re-authenticate, spanning multiple password rotation cycles. "
+        "The same 18-day lifetime appears in both the legacy HxAAAConfig.json "
+        "(auth-war) and the active application.conf (support-war), confirming "
+        "this is not a dead configuration path."
+    ),
+    "proof": (
+        "# Verify token lifetime in application.conf:\n"
+        "grep defaultTokenLifeTime /usr/share/hyperflex/storfs-support/WEB-INF/classes/application.conf\n"
+        "# Expected: defaultTokenLifeTime = 1555200000\n"
+        "# Conversion: 1555200000 ms / 1000 / 60 / 60 / 24 = 18.0 days\n"
+        "python3 -c \"print(1555200000/1000/60/60/24, 'days')\"  # 18.0 days\n"
+        "# Token issued via POST /aaa/v1/auth remains valid 18 days after issuance\n"
+        "# regardless of admin password change during that window."
+    ),
+    "remediation": (
+        "1. Reduce defaultTokenLifeTime to 3600000 ms (1 hour) for admin "
+        "   sessions, aligned with NIST SP 800-63B session duration guidance.\n"
+        "2. Implement absolute session expiration independent of idle timeout: "
+        "   once a token is issued, it MUST expire at defaultTokenLifeTime "
+        "   regardless of activity.\n"
+        "3. Invalidate all outstanding tokens when an account password is "
+        "   changed or rotated.\n"
+        "4. Log token issuance and expiration to the audit log for forensic "
+        "   reconstruction of session activity windows."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
-    HX_F143,
+    HX_F143, HX_F144, HX_F145, HX_F146,
 ]:
     FINDINGS[_f["id"]] = _f
 
