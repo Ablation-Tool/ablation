@@ -9597,6 +9597,46 @@ HX_F165 = {
     "tags": ["tls-key", "zookeeper", "exhibitor", "chain-hx-f155", "private-key", "cwe-312", "critical"],
 }
 
+HX_F166 = {
+    "id": "HX-F166",
+    "title": "Hardcoded Default ESXi Password 'springpath' in Networking Configuration Script",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-798",
+    "component": "storfs-deploy/ansible/configureNetworking_VCenter.py",
+    "description": (
+        "configureNetworking_VCenter.py sets the class-level ESXi password default as a hardcoded "
+        "literal: ESX_PWD = 'springpath' (line 319). This is the ESXi root password used for all "
+        "ESXi host operations: vSphere connections (line 731, 809), hardware identification "
+        "(line 1331), and iSCSI configuration (line 731). Any HyperFlex deployment that has not "
+        "explicitly provided an ESXi password (via --esx-password flag or JSON config) will use "
+        "'springpath' to authenticate to the ESXi hypervisor layer. Combined with HX-F159 "
+        "(stctl VM default password 'Cisco123'), this gives unauthenticated attackers two separate "
+        "hardcoded defaults: 'springpath' for the ESXi hypervisor and 'Cisco123' for the storage "
+        "controller VM root account. ESX_PWD = 'springpath' is loaded at class definition time "
+        "before any user input; it is the active credential if the caller omits the password argument. "
+        "CTL_PWD on line 315 also calls parseEnvVariableTunes('credentials.stctl_vm_passwd'), "
+        "confirming the tunes-based 'Cisco123' credential is the stctl default (consistent with HX-F159)."
+    ),
+    "evidence": [
+        "configureNetworking_VCenter.py:319: ESX_PWD = 'springpath'  # class-level default",
+        "configureNetworking_VCenter.py:315: CTL_PWD = parseEnvVariableTunes('credentials.stctl_vm_passwd')  # decrypts to 'Cisco123' per HX-F159",
+        "configureNetworking_VCenter.py:731: uses SpringpathNetworkingSetup_VCenter.ESX_PWD in vSphere connect",
+        "configureNetworking_VCenter.py:1331: isHXHardware(esx_host, ESX_USER, ESX_PWD)  # ESXi auth with hardcoded default",
+        "help text line 387: '--esx-password - ESXi password (defaults to \"springpath\")'",
+        "help text line 389: '--ctl-password - controller password (defaults to \"springpath\")'",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the hardcoded ESX_PWD default. Require --esx-password as a mandatory argument with "
+        "no default. Enforce a password-change policy on first deployment that prevents the default "
+        "value from persisting. Audit all scripts that reference ESX_PWD to ensure the default "
+        "never reaches a production ESXi host connection."
+    ),
+    "tags": ["hardcoded-password", "esxi", "springpath", "default-credentials", "cwe-798", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9604,7 +9644,7 @@ for _f in [
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
-    HX_F163, HX_F164, HX_F165,
+    HX_F163, HX_F164, HX_F165, HX_F166,
 ]:
     FINDINGS[_f["id"]] = _f
 
