@@ -10802,6 +10802,94 @@ HX_F194 = {
     "tags": ["ssh", "host-key", "mitm", "cwe-295", "paramiko", "high"],
 }
 
+HX_F195 = {
+    "id": "HX-F195",
+    "title": "support.py Hard-codes Bearer Token and Repository UUID for Cisco upload.hyperflex.io",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+    "cwe": "CWE-798",
+    "component": "storfs-misc/hx-scripts/support.py",
+    "description": (
+        "support.py lines 317-319 embed a hard-coded API bearer token and repository UUID "
+        "for Cisco's external support upload service upload.hyperflex.io: "
+        "`token = 'd5c08af6de7b6c8f732fd1f25ff54fa84d7beede'` and "
+        "`url = 'https://upload.hyperflex.io/admin/api2/repos/be407e72-bbcb-41a7-bd0c-2fbdd3abfa74/...'`. "
+        "The token is sent as `Authorization: Token d5c08af6de7b6c8f732fd1f25ff54fa84d7beede` "
+        "in all interactions with the service: ping, folder creation, and bundle upload. "
+        "Anyone with access to the firmware image can extract these credentials and "
+        "authenticate to Cisco's upload.hyperflex.io infrastructure, potentially: "
+        "(1) reading or listing other customers' uploaded support bundles in the same repo, "
+        "(2) uploading malicious files to the shared repository, "
+        "(3) enumerating the upload service's directory structure. "
+        "The token is static across all HyperFlex deployments running this firmware version. "
+        "A separate fallback in `verifyConnectivity()` appends a hardcoded IP `38.140.50.205` "
+        "for `upload.hyperflex.io` to `/etc/hosts` when DNS fails, "
+        "then connects to that IP with `verify=False` — a TOFU write to the hosts file "
+        "that persists until `cleanup()` runs at process exit."
+    ),
+    "evidence": [
+        "support.py line 317: token = 'd5c08af6de7b6c8f732fd1f25ff54fa84d7beede' (hardcoded)",
+        "support.py line 319: url includes repo UUID 'be407e72-bbcb-41a7-bd0c-2fbdd3abfa74' (hardcoded)",
+        "support.py line 304: entry = '38.140.50.205\\t upload.hyperflex.io' written to /etc/hosts on DNS failure",
+        "Token used for createFolder(), uploadSupportBundle(), verifyConnectvity()",
+        "All HTTPS calls to upload.hyperflex.io use verify=False — server identity unverified",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace the hard-coded token with a per-deployment credential provisioned at cluster "
+        "setup time and stored in a secrets manager or protected file (not source code). "
+        "Rotate the hard-coded token immediately as it is embedded in shipped firmware. "
+        "The fallback hosts-file write should be removed; DNS failure should surface as "
+        "a hard error rather than a TOFU IP insertion."
+    ),
+    "tags": ["hardcoded-credential", "external-service", "cwe-798", "api-token", "high"],
+}
+
+HX_F196 = {
+    "id": "HX-F196",
+    "title": "STIG Tool Skips ESXiVPsDisabledProtocols: SSLv3/TLSv1.0/TLSv1.1 Left Enabled on ESXi Hosts",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-327",
+    "component": "storfs-misc/hx-scripts/stig_security_settings_hx.py, stig_config.ini",
+    "description": (
+        "stig_security_settings_hx.py line 192 comments out the "
+        "`UserVars.ESXiVPsDisabledProtocols` setting: "
+        "`# 'UserVars.ESXiVPsDisabledProtocols': str(getValue('esxi', 'ESXiVPsDisabledProtocols'))`. "
+        "The corresponding `stig_config.ini` line is also commented out: "
+        "`#ESXiVPsDisabledProtocols:sslv3,tlsv1,tlsv1.1`. "
+        "DISA ESXi STIG (ESXI-67-000030, ESXI-70-000085) requires that SSLv3, TLSv1.0, "
+        "and TLSv1.1 be disabled on all ESXi hosts. "
+        "When HyperFlex applies STIG hardening via `stig_security_settings_hx.py`, "
+        "these protocols remain enabled because the setting is never pushed to ESXi. "
+        "A cluster that has undergone STIG hardening is left believing it is compliant "
+        "while ESXi hosts still accept SSLv3 and TLS 1.0 connections. "
+        "POODLE (CVE-2014-3566) and BEAST attacks apply to SSLv3/TLS 1.0 sessions. "
+        "The comment in the source suggests intentional omission — possibly a compatibility "
+        "decision — rather than an oversight, meaning it survived code review."
+    ),
+    "evidence": [
+        "stig_security_settings_hx.py line 192: # 'UserVars.ESXiVPsDisabledProtocols': ... (commented out)",
+        "stig_config.ini: #ESXiVPsDisabledProtocols:sslv3,tlsv1,tlsv1.1 (commented out)",
+        "All other STIG settings in the [esxi] section are applied; this one is selectively skipped",
+        "DISA STIG ESXI-67-000030 / ESXI-70-000085 require disabling SSLv3/TLSv1.0/TLSv1.1",
+        "SSLv3 vulnerable to POODLE (CVE-2014-3566); TLS 1.0 vulnerable to BEAST",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Uncomment `ESXiVPsDisabledProtocols:sslv3,tlsv1,tlsv1.1` in `stig_config.ini` "
+        "and uncomment the corresponding `UserVars.ESXiVPsDisabledProtocols` line "
+        "in `stig_security_settings_hx.py`. "
+        "Verify that all ESXi hosts reject SSLv3, TLSv1.0, and TLSv1.1 handshakes "
+        "after STIG hardening completes. "
+        "Update the STIG compliance report to accurately reflect the actual protocol "
+        "configuration rather than the intended configuration."
+    ),
+    "tags": ["tls", "stig", "legacy-protocol", "cwe-327", "esxi", "medium"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10819,6 +10907,7 @@ for _f in [
     HX_F185, HX_F186, HX_F187,
     HX_F188, HX_F189, HX_F190,
     HX_F191, HX_F192, HX_F193, HX_F194,
+    HX_F195, HX_F196,
 ]:
     FINDINGS[_f["id"]] = _f
 
