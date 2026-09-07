@@ -9554,6 +9554,49 @@ HX_F164 = {
     "tags": ["ssh-keys", "tmp", "world-readable", "root-access", "paramiko", "cwe-312"],
 }
 
+HX_F165 = {
+    "id": "HX-F165",
+    "title": "TLS Private Key and Certificate Stored in ZooKeeper Readable via Unauthenticated Exhibitor API",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-312",
+    "component": "hxSvcMgr (storfs-mgmt), Exhibitor ZooKeeper REST API (chain: HX-F155)",
+    "description": (
+        "hxSvcMgr stores the TLS private key and certificate for the HyperFlex management service "
+        "in ZooKeeper: sslKeyZKPath = '/storvisor/ssl/key' and sslCertZKPath = '/storvisor/ssl/certificate' "
+        "(hxSvcMgr-1.0/conf/application.conf lines 130-131). "
+        "The Exhibitor ZooKeeper REST API (HX-F155) provides unauthenticated read access to any ZK node. "
+        "Chain: reach port 8180 (DNAT-forwarded per HX-F155) -> "
+        "GET /exhibitor/v1/explorer/node?key=/storvisor/ssl/key -> "
+        "decode bytes64 field -> extract TLS private key PEM. "
+        "An attacker with the private key can: (1) decrypt all captured TLS management traffic, "
+        "(2) perform MITM against the management API (all TLS bypasses in HX-F142/F148/F151/F156 "
+        "become unnecessary — the private key enables full passive decryption), "
+        "(3) forge JWT tokens if the key overlaps with the JWT signing key (as suggested by "
+        "the single hyperflex_keystore.jceks in HX-F154). "
+        "The certificate path /storvisor/ssl/certificate similarly exposes the public cert chain, "
+        "confirming the identity material used for MITM."
+    ),
+    "evidence": [
+        "hxSvcMgr-1.0/conf/application.conf:130: sslCertZKPath = '/storvisor/ssl/certificate'",
+        "hxSvcMgr-1.0/conf/application.conf:131: sslKeyZKPath = '/storvisor/ssl/key'",
+        "Chain: GET http://<ip>:8180/exhibitor/v1/explorer/node?key=/storvisor/ssl/key",
+        "-> response: {bytes64: '<b64 TLS private key>', ...}",
+        "-> decode bytes64 -> PEM private key",
+        "Exhibitor unauthenticated: confirmed HX-F155; DNAT rule exposes 8180 on eth0",
+        "Related: HX-F154 (springpath keystore password); HX-F163 (Hyper-V creds via same path)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Do not store TLS private key material in ZooKeeper. Use a dedicated secrets manager "
+        "(HashiCorp Vault, HSM) or encrypt ZK data at rest with a deployment-unique key. "
+        "Restrict Exhibitor API to localhost-only. Remove the DNAT rule forwarding port 8180 "
+        "to the management interface (HX-F155 remediation)."
+    ),
+    "tags": ["tls-key", "zookeeper", "exhibitor", "chain-hx-f155", "private-key", "cwe-312", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9561,7 +9604,7 @@ for _f in [
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
-    HX_F163, HX_F164,
+    HX_F163, HX_F164, HX_F165,
 ]:
     FINDINGS[_f["id"]] = _f
 
