@@ -10167,6 +10167,131 @@ HX_F179 = {
     "tags": ["token-lifetime", "session-management", "cwe-613", "high"],
 }
 
+HX_F180 = {
+    "id": "HX-F180",
+    "title": "Session Pool Exhaustion DoS — maxTotalSessions=16 Cluster-Wide Cap",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+    "cwe": "CWE-400",
+    "component": "auth-war/WEB-INF/classes/application.conf",
+    "description": (
+        "application.conf sets `maxTotalSessions = 16` with `maxSessionsPerUser = 8`. "
+        "The 16-session global cap covers all users across the entire cluster management plane. "
+        "An attacker with credentials for two accounts can open 8 sessions each, exhausting "
+        "the global pool and preventing all other users (including administrators) from "
+        "authenticating. "
+        "Combined with `defaultTokenLifeTime = 1555200000ms` (18 days — HX-F179), "
+        "a session pool hold can persist for 18 days without any forced expiry. "
+        "The `failedLoginLockoutTimeInSec = 120` (2-minute lockout) and "
+        "`maxFailedLogins = 10` parameters also mean an attacker can perform 10 "
+        "authentication attempts per 2 minutes against any account without triggering "
+        "a persistent lockout — effective credential brute-force rate of ~3600 attempts/hour."
+    ),
+    "evidence": [
+        "auth-war/WEB-INF/classes/application.conf:52: maxSessionsPerUser = 8",
+        "auth-war/WEB-INF/classes/application.conf:53: maxTotalSessions = 16",
+        "auth-war/WEB-INF/classes/application.conf:47: defaultTokenLifeTime = 1555200000",
+        "auth-war/WEB-INF/classes/application.conf:51: maxFailedLogins = 10",
+        "auth-war/WEB-INF/classes/application.conf:55: failedLoginLockoutTimeInSec = 120",
+        "2 accounts x 8 sessions = 16 = pool exhausted; all other auths rejected",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Increase `maxTotalSessions` to at least 200 for a realistic multi-administrator cluster. "
+        "Implement idle session reaping that is independent of `defaultIdleTimeout` UI behavior. "
+        "Reduce `maxSessionsPerUser` to 3-4 and enforce it. "
+        "Increase `maxFailedLogins` lockout duration from 120s to 900s (15 min) "
+        "to raise the cost of credential brute-force."
+    ),
+    "tags": ["dos", "session-exhaustion", "brute-force", "cwe-400", "medium"],
+}
+
+HX_F181 = {
+    "id": "HX-F181",
+    "title": "LUKS Encryption Key Derived from Disk UUID — Physical Access Bypasses Encryption",
+    "severity": "HIGH",
+    "cvss": 7.0,
+    "cvss_vector": "CVSS:3.1/AV:P/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-321",
+    "component": "storfs-appliance/sw-sed.py",
+    "description": (
+        "sw-sed.py uses the disk UUID (as returned by `mkfs.storfs -- --list`) as the "
+        "LUKS passphrase for all storage drives: "
+        "`child.sendline(disk_uuid)` for both passphrase entry and verification during "
+        "`cryptsetup luksFormat`, and again during `cryptsetup luksOpen`. "
+        "The disk UUID is stored in the drive's device metadata and is readable from "
+        "the LUKS header itself without any authentication. "
+        "An attacker with physical access to a removed disk can: "
+        "(1) read the UUID from drive partition metadata or UUID field in `blkid` output; "
+        "(2) use it directly as the LUKS passphrase to decrypt the volume. "
+        "Any local process with access to `blkid` output (readable without root on many "
+        "configurations) can also derive the passphrase for any mounted volume. "
+        "LUKS provides no security guarantees when the passphrase is collocated with "
+        "the encrypted data."
+    ),
+    "evidence": [
+        "sw-sed.py:115: child.sendline(disk_uuid)  # LUKS format passphrase = disk UUID",
+        "sw-sed.py:117: child.sendline(disk_uuid)  # LUKS format passphrase verification = disk UUID",
+        "sw-sed.py:143: child.sendline(duuids[disk_name])  # LUKS open passphrase = disk UUID",
+        "disk_uuid sourced from mkfs.storfs -- --list col[0] (line 103)",
+        "LUKS header contains unencrypted UUID and key material hash; passphrase derivable",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Generate LUKS passphrases using a cryptographically secure random source "
+        "(`os.urandom(32)`) and store them in a key management system (KMIP/Vault), "
+        "NOT derived from any disk property. "
+        "Alternatively, integrate with a TPM-backed key escrow so the disk UUID "
+        "is at most a non-secret index into the key store — not the passphrase itself. "
+        "At minimum, derive the passphrase via HKDF from a cluster-secret + disk UUID "
+        "so the disk UUID alone is not sufficient."
+    ),
+    "tags": ["crypto", "luks", "disk-encryption", "physical-access", "cwe-321", "high"],
+}
+
+HX_F182 = {
+    "id": "HX-F182",
+    "title": "ESX Password Exposed in Ansible Extra-Vars Process Arguments",
+    "severity": "HIGH",
+    "cvss": 6.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-factory/ansible/factory_deploy.py",
+    "description": (
+        "factory_deploy.py passes the ESX password as a plaintext Ansible extra-var "
+        "in the process argument list. After the script masks the password in its log "
+        "output (line 49-50), it restores the base64-encoded password (line 51) and "
+        "passes it directly to os.execlpe via `--extra-vars esxPassword=<b64pw>` "
+        "(lines 81-90). "
+        "The base64-encoded password appears verbatim in `ps aux` and `/proc/<pid>/cmdline` "
+        "for the duration of the Ansible playbook execution. "
+        "Any local user with access to the process list can read the value and decode it "
+        "with `echo '<b64pw>' | base64 -d` to recover the ESX root password. "
+        "The password is not flagged as a no_log variable in the playbook, so it also "
+        "appears in Ansible verbose logs at `-vvvv` (the hardcoded verbosity level "
+        "at line 90)."
+    ),
+    "evidence": [
+        "factory_deploy.py:46-51: b64 encode then restore password after log masking",
+        "factory_deploy.py:81-90: os.execlpe passes --extra-vars esxPassword=<b64pw>",
+        "factory_deploy.py:90: -vvvv verbosity hardcoded — Ansible logs all extra-vars",
+        "factory_deploy.py:85: --extra-vars esxUserName=%s (also exposed)",
+        "Attack: ps aux | grep factory_deploy -> base64 decode --extra-vars value",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Pass credentials to Ansible via vault-encrypted vars file or environment variable "
+        "(`ANSIBLE_EXTRA_VARS_FILE`) rather than command-line `--extra-vars`. "
+        "If command-line passing is unavoidable, use Ansible Vault to encrypt the "
+        "esxPassword var and pass the vault password file reference, not the plaintext. "
+        "Remove `-vvvv` hardcoded verbosity or mark `esxPassword` with `no_log: true` "
+        "in all tasks that reference it. "
+        "Use a named pipe or stdin-based injection to avoid the value appearing in /proc/cmdline."
+    ),
+    "tags": ["process-args", "credential-exposure", "ansible", "esx", "cwe-214", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10179,6 +10304,7 @@ for _f in [
     HX_F171, HX_F172, HX_F173, HX_F174,
     HX_F175, HX_F176,
     HX_F177, HX_F178, HX_F179,
+    HX_F180, HX_F181, HX_F182,
 ]:
     FINDINGS[_f["id"]] = _f
 
