@@ -11130,6 +11130,61 @@ HX_F201 = {
     "tags": ["hardcoded-credential", "default-password", "springpath", "esxi", "cwe-1392", "high"],
 }
 
+HX_F202 = {
+    "id": "HX-F202",
+    "title": "nginx /sbdl/ Location Aliases /tmp/ Over HTTP With No Authentication",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-284",
+    "component": "storfs-misc/nginx.conf / HTTP server (port 80) / location /sbdl/",
+    "description": (
+        "nginx.conf configures a `location /sbdl/` block in the HTTP (port 80) server "
+        "with `alias /tmp/;` and `auth_basic off`. "
+        "The HTTP server's catch-all `location /` redirects to HTTPS, but nginx "
+        "location specificity rules cause `/sbdl/` to match before the redirect — "
+        "requests to `http://<node>/sbdl/<filename>` are served directly without "
+        "redirecting to HTTPS and without authentication. "
+        "Any file in `/tmp/` is readable by any network-reachable client with no "
+        "credentials and no TLS. "
+        "Files known to reside in `/tmp/` during HyperFlex operations include: "
+        "upgrade bundles at predictable paths (`/tmp/hxupgrade_bundle.tgz`, "
+        "`/tmp/storfs-packages*.tgz`, `/tmp/HX-ESXi-*.zip`) confirmed by the "
+        "9997_post_upgrade_cleanup_ESX.py cleanup script; "
+        "support bundle staging files created by the support bundle collection workflow; "
+        "any ansible or process temp files written there during cluster operations. "
+        "The comment in nginx.conf labels this location 'support bundle download', "
+        "confirming the intent — but the scope of the alias is the entire /tmp/ directory, "
+        "not a scoped subdirectory. "
+        "The same HTTP server block exposes `/support` (aliased to `/var/support/`), "
+        "`/images`, and `/logs` without authentication, and a `/upload` endpoint "
+        "proxied to localhost:8000 with no auth and `client_max_body_size 8000m` "
+        "(8 GB limit)."
+    ),
+    "evidence": [
+        "nginx.conf line 62-66 (HTTP server block, port 80):",
+        "  location /sbdl/ { alias /tmp/; auth_basic off; }",
+        "No deny rules, no auth_request gate, no IP restriction",
+        "HTTP location /sbdl/ is more specific than location / (redirect) — not HTTPS-redirected",
+        "9997_post_upgrade_cleanup_ESX.py filesDir confirms /tmp/hxupgrade_bundle.tgz et al. as known residents",
+        "nginx.conf line 68-73: location /support { auth_basic off; alias /var/support/; allow all; }",
+        "nginx.conf line 94-98: location /upload { auth_basic off; allow all; proxy_pass http://localhost:8000; }",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace `alias /tmp/;` with a scoped subdirectory dedicated to "
+        "support bundle staging (e.g., `alias /opt/hyperflex/sbdl-staging/;`) "
+        "with permissions preventing other processes from writing there. "
+        "Gate the endpoint with `auth_request /auth;` to require a valid HX session token. "
+        "If unauthenticated support bundle download is a product requirement, "
+        "scope it to a one-time download token issued at bundle-creation time and "
+        "serve it over HTTPS only. "
+        "Move /support, /images, /logs, and /upload into the HTTPS server block with "
+        "auth_request gates."
+    ),
+    "tags": ["nginx", "unauthenticated", "file-disclosure", "tmp", "http", "cwe-284", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11150,6 +11205,7 @@ for _f in [
     HX_F195, HX_F196,
     HX_F197, HX_F198,
     HX_F199, HX_F200, HX_F201,
+    HX_F202,
 ]:
     FINDINGS[_f["id"]] = _f
 
