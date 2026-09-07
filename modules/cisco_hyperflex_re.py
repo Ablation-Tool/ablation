@@ -6953,11 +6953,21 @@ HX_F126 = {
             "   echo dump | nc <witness-ip> 2181 lists ephemeral nodes and sessions"
         ),
         "eval_risk": (
-            "check_and_fix_witness.py (cron, runs as root):\n"
-            "  witnessNodeCfg = curl http://<witnessIp>:8180/exhibitor/v1/cluster/state/<ip>\n"
-            "  return eval(witnessNodeCfg.replace('false','False').replace('true','True'))\n"
-            "If the Exhibitor response is attacker-controlled (MITM on local curl), "
-            "eval() executes arbitrary Python as root."
+            "/usr/share/zookeeper/bin/check_and_fix_witness.py (root cron: */1 * * * *):\n\n"
+            "Vulnerability 1 — eval() on stMgr.cfg:\n"
+            "  data = open('/etc/springpath/stMgr.cfg').read().replace('\\n', '')\n"
+            "  dataDict = eval(data)   # executes data as Python\n"
+            "  => any process that can write /etc/springpath/stMgr.cfg gets root every minute\n\n"
+            "Vulnerability 2 — eval() on Exhibitor HTTP response:\n"
+            "  witnessNodeIp = dataDict['0']  # from stMgr.cfg\n"
+            "  raw = curl http://{witnessNodeIp}:8180/exhibitor/v1/cluster/state/{witnessNodeIp}\n"
+            "  witnessNodeCfg = raw.replace('false','False').replace('true','True')\n"
+            "  return eval(witnessNodeCfg)   # executes HTTP response as Python\n"
+            "  => attacker controlling the Exhibitor response (ZK write via HX-F126, or network\n"
+            "     MITM on loopback call) executes arbitrary Python as root at 1-minute intervals.\n\n"
+            "Cron evidence: /etc/cron.d/zkwitnesscleanup -> "
+            "/usr/share/zookeeper/bin/zkwitnesscleanup.cron\n"
+            "  */1 * * * * root python /usr/share/zookeeper/bin/check_and_fix_witness.py"
         ),
         "version": "exhibitor-1.5.2.c.jar (confirmed in /usr/share/exhibitor/)",
     },
