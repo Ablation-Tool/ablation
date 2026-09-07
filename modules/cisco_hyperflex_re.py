@@ -11239,6 +11239,58 @@ HX_F203 = {
     "tags": ["cimc", "oob-management", "process-table", "cwe-214", "ansible", "high"],
 }
 
+HX_F204 = {
+    "id": "HX-F204",
+    "title": "Factory OVA Deployment Disables Both TLS and OVF Package Verification via ovftool Flags",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+    "cwe": "CWE-354",
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/ansible/library/deployOva.py / "
+        "ovftool invocation"
+    ),
+    "description": (
+        "deployOva.py constructs an ovftool command with both `--noSSLVerify` and "
+        "`--disableVerification` flags for controller VM deployment during factory provisioning. "
+        "The full ovftool invocation at line 71-73: "
+        "`/usr/bin/ovftool --allowExtraConfig --acceptAllEulas --disableVerification "
+        "--noSSLVerify --datastore=... vi://esxUserName:esxEncodedPassword@hostname`. "
+        "`--noSSLVerify` disables TLS certificate verification for the ESXi connection, "
+        "allowing MITM of the transport layer. "
+        "`--disableVerification` disables OVF manifest, certificate, and checksum "
+        "verification for the OVA package itself. "
+        "Combined, an on-path attacker can intercept the factory deployment connection "
+        "and substitute a trojanized controller VM OVA without detection. "
+        "The controller VM is the HyperFlex storage controller — its compromise "
+        "gives full access to the cluster's data path, encryption keys, and "
+        "cluster management APIs from the first boot. "
+        "The ESXi credentials are also embedded in the `vi://user:pass@host` URL "
+        "passed as a CLI argument to ovftool, making them visible in "
+        "`/proc/<pid>/cmdline` during deployment."
+    ),
+    "evidence": [
+        "deployOva.py line 71-73: ovftool --allowExtraConfig --acceptAllEulas --disableVerification --noSSLVerify ... vi://user:pass@host",
+        "--noSSLVerify: TLS cert verification disabled for ESXi connection",
+        "--disableVerification: OVF manifest, cert, and checksum verification disabled",
+        "vi://user:pass@host URL with credentials in process argument list",
+        "Target: controller VM (HyperFlex storage controller) — cluster data-path root",
+        "deployOva.py line 77: Popen(shlex.split(cmd), shell=False) — credentials in /proc/<pid>/cmdline",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove `--noSSLVerify` and `--disableVerification` from the ovftool invocation. "
+        "For factory environments with self-signed ESXi certs, pre-distribute the "
+        "factory CA certificate and configure ovftool's `--sslCertThumbprint` or "
+        "`--sslCipherList` options rather than disabling verification entirely. "
+        "Sign factory OVA packages with a Cisco-controlled private key and verify "
+        "signatures at deployment time. "
+        "Replace the `vi://user:pass@host` URL form with a credentials file approach "
+        "or environment variable injection to avoid process table exposure."
+    ),
+    "tags": ["ovftool", "factory", "tls", "package-verification", "cwe-354", "cwe-295", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11259,7 +11311,7 @@ for _f in [
     HX_F195, HX_F196,
     HX_F197, HX_F198,
     HX_F199, HX_F200, HX_F201,
-    HX_F202, HX_F203,
+    HX_F202, HX_F203, HX_F204,
 ]:
     FINDINGS[_f["id"]] = _f
 
