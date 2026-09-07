@@ -7918,10 +7918,62 @@ HX_F136 = {
     ),
 }
 
+HX_F137 = {
+    "id": "HX-F137",
+    "title": (
+        "HyperFlex HXDP 6.0.2b storfs-core: xdr_WRITEVPLUS3args Unbounded malloc from Network-Supplied "
+        "Vector Count — Unauthenticated NFS RPC Null-Deref DoS"
+    ),
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cwe": "CWE-789",
+    "versions_affected": "6.0.2b (confirmed; custom WRITEVPLUS3 RPC absent in 5.5.2b — NFS surface not present)",
+    "component": "storfs-core ELF x86-64, custom NFS3 extended protocol (program 3)",
+    "evidence": {
+        "symbol": "xdr_WRITEVPLUS3args @ 0x31d920 (storfs binary, 6.0.2b)",
+        "vector_count_decode": (
+            "0x31d9a7: lea 0x28(%rbx), %rsi\n"
+            "0x31d9ad: call xdr_uint32          # reads 32-bit count from RPC wire stream\n"
+            "           -- no upper bound check --\n"
+            "0x31d9d4: mov 0x28(%rbx), %r12d    # r12d = attacker-controlled count"
+        ),
+        "malloc_path": (
+            "0x31db1d (XDR_DECODE branch):\n"
+            "  mov  %r12d, %edi               # zero-extend count to 64-bit\n"
+            "  imul $0x48, %rdi, %rdi         # rdi = count * 0x48\n"
+            "  call malloc                    # malloc(count * 0x48)\n"
+            "  mov  %rax, 0x40(%rbx)          # store result — NO NULL check\n"
+            "0x31d9f8: loop writes into 0x40(%rbx) without NULL guard"
+        ),
+        "crash_trigger": (
+            "WRITEVPLUS3 RPC with count=0xFFFFFFFF:\n"
+            "  malloc(0x47FFFFFFB8) -> NULL (OOM)\n"
+            "  loop at 0x31d9f8 dereferences NULL -> SIGSEGV\n"
+            "  storfs-core exits; NFS service unavailable"
+        ),
+        "auth_requirement": (
+            "NFS3 AUTH_SYS (unix credentials) — no real authentication.\n"
+            "Any host with IP-level NFS access can send arbitrary RPC calls."
+        ),
+        "custom_procedure": (
+            "WRITEVPLUS3 is a Springpath-proprietary NFS extension (not standard NFS3).\n"
+            "Dispatched via nfs3_program_3 at 0x2fcba0 for procedure 0x22.\n"
+            "Not present in 5.5.2b — exclusive to 6.0.2b+ NFS code path."
+        ),
+    },
+    "remediation": (
+        "Add an upper-bound check on the vector count before the malloc call:\n"
+        "  if (count > NFS_MAXIOVEC) { return FALSE; }\n"
+        "where NFS_MAXIOVEC matches the cluster's negotiated max write size / 512.\n"
+        "Add a NULL check after malloc: if (!ptr) { return FALSE; }\n"
+        "Apply throughout all custom NFS XDR decoders that allocate from wire-supplied counts."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136,
+    HX_F135, HX_F136, HX_F137,
 ]:
     FINDINGS[_f["id"]] = _f
 
