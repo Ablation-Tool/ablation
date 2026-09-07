@@ -12480,6 +12480,101 @@ HX_F222 = {
     "tags": ["sshpass", "credentials", "process-args", "cwe-214", "medium"],
 }
 
+HX_F225 = {
+    "id": "HX-F225",
+    "title": "Hardcoded ESXi Root Credential 'springpath' as Default in Deployment Script and Test Config File",
+    "severity": "HIGH",
+    "cvss_score": 8.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": ["CWE-798", "CWE-312"],
+    "component": (
+        "storfs-deploy/ansible/configureNetworking_VCenter.py + "
+        "storfs-deploy/ansible/stctlvm_ip.json"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "The ESXi host root password is hardcoded as the string `springpath` at the "
+        "class attribute level in `configureNetworking_VCenter.py` (line 319: "
+        "`ESX_PWD = \"springpath\"`), making it the effective default for all "
+        "HyperFlex cluster deployments that do not explicitly pass `--esx-password`. "
+        "The sister script for SCVM networking properly reads its credential from the "
+        "encrypted tunes file (line 315: "
+        "`CTL_PWD = parseEnvVariableTunes(\"credentials.stctl_vm_passwd\")`), "
+        "confirming the `ESX_PWD` hardcoding is an oversight rather than design. "
+        "Additionally, `stctlvm_ip.json` — a development test configuration file "
+        "committed to the deployment package — ships in production firmware and "
+        "contains plaintext root credentials for both ESXi and the storage controller "
+        "VM (`root:springpath`), along with internal Springpath/Storvisor development "
+        "infrastructure details: server hostname `sysmgmt-006b.eng.storvisor.com`, "
+        "internal IP `10.64.31.41`, gateway `10.64.24.1`, DNS `10.64.1.7`, "
+        "and internal domain `eng.storvisor.com`."
+    ),
+    "evidence": [
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/configureNetworking_VCenter.py",
+            "lines": "315-319",
+            "snippet": (
+                "CTL_PWD = parseEnvVariableTunes(\"credentials.stctl_vm_passwd\")  # dynamic\n"
+                "CTL_PRIV_KEY = None\n"
+                "USER_CTL_PWD = None\n"
+                "ESX_USER = \"root\"\n"
+                "ESX_PWD = \"springpath\"  # hardcoded"
+            ),
+            "note": (
+                "SCVM password read from encrypted tunes file; ESXi root password "
+                "hardcoded as literal string. CLI help text confirms: "
+                "'--esx-password - ESXi password (defaults to \"springpath\")'."
+            ),
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json",
+            "lines": "1-17",
+            "snippet": (
+                "{\n"
+                "  \"esxi\": {\"server\": \"sysmgmt-006b.eng.storvisor.com\",\n"
+                "            \"user\": \"root\", \"password\": \"springpath\"},\n"
+                "  \"stctlvm\": {\"user\": \"root\", \"password\": \"springpath\",\n"
+                "               \"ipv4\": \"10.64.31.41\", \"netmask\": \"255.255.248.0\",\n"
+                "               \"gateway\": \"10.64.24.1\", \"domain\": \"eng.storvisor.com\",\n"
+                "               \"nameserver\": [\"10.64.1.7\"]}\n"
+                "}"
+            ),
+            "note": (
+                "Development test fixture committed to the deployment Ansible package; "
+                "ships in production firmware at /opt/hyperflex/storfs-deploy/ansible/; "
+                "contains plaintext root credentials and internal Storvisor development "
+                "infrastructure details"
+            ),
+        },
+    ],
+    "impact": (
+        "Any HyperFlex cluster deployed without explicitly passing a non-default "
+        "`--esx-password` flag retains `springpath` as the ESXi root password. "
+        "This credential is publicly known from the firmware source. "
+        "ESXi management interfaces (SSH on port 22, vSphere API on port 443) are "
+        "typically network-reachable, giving any attacker who knows the default "
+        "full root access to each ESXi hypervisor in the cluster — all VMs, "
+        "datastores, and network interfaces. "
+        "The `stctlvm_ip.json` file also exposes the internal Storvisor/Springpath "
+        "development network topology, aiding reconnaissance against the former "
+        "acquisition's engineering infrastructure."
+    ),
+    "remediation": (
+        "1. Remove the `ESX_PWD = \"springpath\"` default; require `--esx-password` "
+        "as a mandatory argument with no default, or source it from the encrypted "
+        "tunes file via `parseEnvVariableTunes()` like `CTL_PWD`. "
+        "2. Delete `stctlvm_ip.json` from the deployment package; replace with a "
+        "template file containing placeholder values and a prominent comment that "
+        "credentials must be set before use. "
+        "3. Audit all class-level attribute defaults in the deployment scripts for "
+        "additional hardcoded credentials."
+    ),
+    "tags": [
+        "credentials", "default-password", "springpath", "esxi-root", "cwe-798",
+        "cwe-312", "dev-artifact", "high",
+    ],
+}
+
 HX_F223 = {
     "id": "HX-F223",
     "title": "ESXi Password Exposed in Ansible Verbose Log via Hardcoded -vvvv Flag",
@@ -12693,6 +12788,7 @@ for _f in [
     HX_F219, HX_F220,
     HX_F221, HX_F222,
     HX_F223, HX_F224,
+    HX_F225,
 ]:
     FINDINGS[_f["id"]] = _f
 
