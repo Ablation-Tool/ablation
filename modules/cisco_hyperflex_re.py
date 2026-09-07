@@ -7729,7 +7729,7 @@ HX_F135 = {
         "stSSOMgr-1.0.jar (com.storvisor.sysmgmt.stSSOMgr.StSSOMgrImpl), "
         "common-1.0.jar (EncryptionUtil, SecurityConstants)"
     ),
-    "versions_affected": "6.0.2b (confirmed); 5.x expected (stSSOMgr present across versions)",
+    "versions_affected": "4.0.2f (confirmed); 6.0.2b (confirmed); 5.x expected (identical config in all analyzed versions)",
     "description": (
         "stSSOMgr (SSO manager service) stores Hyper-V host credentials encrypted with an AES key "
         "in ZooKeeper. Both the ciphertext and the key material used to derive the AES key are "
