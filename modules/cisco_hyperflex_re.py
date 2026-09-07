@@ -10427,6 +10427,100 @@ HX_F185 = {
     "tags": ["session-token", "zookeeper", "privilege-escalation", "cwe-312", "critical"],
 }
 
+HX_F186 = {
+    "id": "HX-F186",
+    "title": "SSO Manager Stores Hypervisor Credentials and Encryption Key Collocated in ZooKeeper",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-312",
+    "component": "storfs-mgmt/stSSOMgr-1.0/conf/application.conf; stSSOMgr-1.0.jar",
+    "description": (
+        "The SSO Manager service stores hypervisor credentials (vCenter/ESX passwords) "
+        "and the encryption key that protects those credentials in adjacent ZooKeeper "
+        "paths under the same base path. "
+        "application.conf defines: `zkBasePath = '/stSSOMgr'`, `zkCredsKey = 'creds'` "
+        "(credentials at `/stSSOMgr/creds`), and `zkEncryptionKey = 'keyData'` "
+        "(encryption key at `/stSSOMgr/keyData`). "
+        "The JAR confirms these operations: "
+        "`getEncryptionKeyFromZK` reads the key, `setHypervHostCreds` writes encrypted "
+        "credentials to ZK. "
+        "Because both the ciphertext and the decryption key are in the same ZooKeeper "
+        "tree, any actor who can read ZK (unauthenticated at localhost:2181 — HX-F185, "
+        "or via cluster UUID — HX-F183) can: "
+        "(1) read the encrypted credentials from `/stSSOMgr/creds`; "
+        "(2) read the encryption key from `/stSSOMgr/keyData`; "
+        "(3) decrypt the credentials offline. "
+        "This pattern — storing key and ciphertext together — voids all encryption "
+        "guarantees regardless of the encryption algorithm used."
+    ),
+    "evidence": [
+        "stSSOMgr-1.0/conf/application.conf:10: zkBasePath = '/stSSOMgr'",
+        "stSSOMgr-1.0/conf/application.conf:11: zkAuthKey = '/auth'",
+        "stSSOMgr-1.0/conf/application.conf:12: zkCredsKey = 'creds'",
+        "stSSOMgr-1.0/conf/application.conf:13: zkEncryptionKey = 'keyData'",
+        "stSSOMgr-1.0.jar: getEncryptionKeyFromZK (method confirmed in JAR)",
+        "stSSOMgr-1.0.jar: setHypervHostCreds (method confirmed in JAR)",
+        "ZK read: /stSSOMgr/keyData = encryption key; /stSSOMgr/creds = encrypted HyperV/ESX credentials",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Never store the encryption key and encrypted data in the same storage system. "
+        "Hypervisor credentials should be stored in a dedicated secrets manager (Vault, "
+        "KMIP server) that is independent of ZooKeeper. "
+        "The encryption key should be hardware-protected (TPM, HSM) or derived from a "
+        "root secret that is not accessible to the same threat actor who can read ZK. "
+        "At minimum, restrict ZK ACLs on `/stSSOMgr/` subtree to the SSO manager "
+        "service account only."
+    ),
+    "tags": ["zookeeper", "hypervisor-creds", "key-colocation", "cwe-312", "critical"],
+}
+
+HX_F187 = {
+    "id": "HX-F187",
+    "title": "Password Sync Service Propagates root/admin/diag Credentials Across Cluster",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-522",
+    "component": "storfs-mgmt/hxSupportSvc-1.0/conf/application.conf",
+    "description": (
+        "hxSupportSvc-1.0/conf/application.conf enables `passwordSyncEnabled = true` "
+        "for `passwordSyncAccounts = ['root', 'admin', 'diag']`. "
+        "This means the support service actively synchronizes the operating system "
+        "passwords for the three highest-privilege accounts (root, admin, diag) across "
+        "all cluster nodes via the management network. "
+        "The synchronization mechanism uses SSH (confirmed by `SshScpUtil$sshCred` class "
+        "in the JAR and `sshScpRetries = 3` config). "
+        "This design creates a flat credential model: compromising the OS password on "
+        "any single cluster node recovers credentials for root, admin, and diag on "
+        "every other node, because they are forced to be identical. "
+        "Additionally, the password hash or plaintext must be transmitted during sync; "
+        "combined with the systemic TLS bypass (HX-F157/HX-F165), the credential "
+        "transmission is susceptible to interception. "
+        "The `diag` user is barred from JWT auth (`barredUsers` in application.conf) "
+        "but may have shell/SSH access on all nodes via password sync."
+    ),
+    "evidence": [
+        "hxSupportSvc-1.0/conf/application.conf:8: passwordSyncEnabled = true",
+        "hxSupportSvc-1.0/conf/application.conf:9: passwordSyncAccounts = ['root', 'admin', 'diag']",
+        "hxSupportSvc-1.0.jar: HxSupportSvcImpl$sshCred class (SSH credential model)",
+        "hxSupportSvc-1.0.jar: SshScpUtil$sshCred (SSH-based sync mechanism)",
+        "auth-war application.conf:42: barredUsers = ['root', 'local/root', 'diag', 'local/diag']",
+        "Compromise of any node root/admin/diag -> same creds on all cluster nodes",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Disable password synchronization (`passwordSyncEnabled = false`) and manage "
+        "node credentials independently with unique per-node passwords. "
+        "If cross-node authentication is required, use SSH key distribution with "
+        "unique per-node key pairs rather than shared passwords. "
+        "Remove `root` and `admin` from the sync list immediately; synchronizing "
+        "these accounts creates a cluster-wide single point of credential failure."
+    ),
+    "tags": ["password-sync", "lateral-movement", "root", "cwe-522", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10441,7 +10535,7 @@ for _f in [
     HX_F177, HX_F178, HX_F179,
     HX_F180, HX_F181, HX_F182,
     HX_F183, HX_F184,
-    HX_F185,
+    HX_F185, HX_F186, HX_F187,
 ]:
     FINDINGS[_f["id"]] = _f
 
