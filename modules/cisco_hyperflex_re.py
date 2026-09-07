@@ -10941,6 +10941,53 @@ HX_F197 = {
     "tags": ["weak-random", "world-readable-token", "authentication-bypass", "cwe-330", "cwe-732", "critical"],
 }
 
+HX_F198 = {
+    "id": "HX-F198",
+    "title": "On-Prem Artifact Downloads Bypass TLS and Verify Checksum Over Same Untrusted Channel",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+    "cwe": "CWE-354",
+    "component": "storfs-deploy/ansible/roles/download/tasks/download-artifacts.yml",
+    "description": (
+        "download-artifacts.yml conditionally disables TLS verification for on-premises "
+        "deployments: `Disable certificate verification for onprem deployment: set_fact: "
+        "check_certs: no when: deployment_env == 'onprem'`. "
+        "Both the artifact (`artifactUrl`) and its checksum (`checksumUrl`) are fetched "
+        "with `validate_certs: '{{ check_certs }}'`. "
+        "When `check_certs: no`, both the artifact and its integrity checksum are "
+        "retrieved over the same MITM-susceptible channel. "
+        "An on-path attacker can serve a trojanized artifact alongside a matching "
+        "checksum file — the `get_url` `checksum:` parameter will verify that the "
+        "artifact matches the attacker-provided checksum, confirming successful "
+        "substitution rather than detecting it. "
+        "This defeats the integrity verification entirely: the checksum confirms "
+        "consistency between attacker-controlled data, not authenticity. "
+        "The download role installs VIBs, packages, and catalog artifacts on all "
+        "cluster ESX hosts. Successful MITM during on-prem deployment yields "
+        "code execution on every node that processes the download role."
+    ),
+    "evidence": [
+        "download-artifacts.yml: set_fact check_certs: no when: deployment_env == 'onprem'",
+        "download-artifacts-internal.yml: get_url url={{ item.checksumUrl }} validate_certs={{ check_certs }}",
+        "download-artifacts-internal.yml: get_url url={{ item.artifactUrl }} validate_certs={{ check_certs }} checksum={{ checksumType }}:{{ checksum_value.stdout }}",
+        "Checksum fetched from same unverified TLS endpoint as artifact — MITM serves matching pair",
+        "Artifacts installed as VIBs/packages on all cluster ESX hosts via download role",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the on-prem TLS bypass (`check_certs: no`). "
+        "If on-prem environments lack externally-trusted CAs, distribute the HyperFlex "
+        "cluster CA certificate to the ansible control node and configure `validate_certs: yes` "
+        "with `ca_cert: /path/to/ca.crt`. "
+        "The checksum file should be served from a separate, independently-authenticated "
+        "channel (or signed with a known public key) rather than from the same download server. "
+        "A signature verification step (GPG detached sig) after download provides stronger "
+        "integrity than same-channel checksum alone."
+    ),
+    "tags": ["tls", "artifact-download", "checksum-bypass", "cwe-354", "ansible", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10959,7 +11006,7 @@ for _f in [
     HX_F188, HX_F189, HX_F190,
     HX_F191, HX_F192, HX_F193, HX_F194,
     HX_F195, HX_F196,
-    HX_F197,
+    HX_F197, HX_F198,
 ]:
     FINDINGS[_f["id"]] = _f
 
