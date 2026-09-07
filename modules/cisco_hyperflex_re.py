@@ -9793,6 +9793,76 @@ HX_F170 = {
     "tags": ["ssh-host-key", "hardcoded-creds", "rdm", "paramiko", "cwe-295", "cwe-798"],
 }
 
+HX_F171 = {
+    "id": "HX-F171",
+    "title": "OS Command Injection via Unsanitized Password in scpFile.py Shell Invocation",
+    "severity": "HIGH",
+    "cvss": 8.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-78",
+    "component": "storfs-deploy/ansible/library/scpFile.py",
+    "description": (
+        "scpFile.py constructs an scp command by string-concatenating user-supplied parameters "
+        "(remotevm_password, remotevm_hostname, remotevm_username, filename, dest) and executes "
+        "the result with subprocess.Popen(cmd, shell=True). No sanitization or quoting is applied "
+        "to any parameter. An attacker who can invoke this Ansible module with a crafted "
+        "remotevm_password value (e.g. `x; id > /tmp/pwned #`) achieves arbitrary command "
+        "execution with the privileges of the Ansible runner process. Additionally, "
+        "`sshpass -p <password>` exposes the plaintext password in the process argument list "
+        "for the duration of the transfer (CWE-214), and -o StrictHostKeyChecking=no "
+        "-o UserKnownHostsFile=/dev/null disables all SSH host key verification (CWE-295)."
+    ),
+    "evidence": [
+        "scpFile.py:112: cmd = 'sshpass -p '+remotevm_password+' scp -q -o StrictHostKeyChecking=no ...' + remotevm_username+'@'+remotevm_hostname+':'+filename+' '+dest",
+        "scpFile.py:116: p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, ...)",
+        "scpFile.py:69: remotevm_password=dict(required=True, type='str', no_log=True)  # no sanitization",
+        "scpFile.py:112-114: all 5 user-supplied params string-concatenated into shell command",
+        "Payload example: remotevm_password='x; touch /tmp/pwnd; #' -> executes touch /tmp/pwnd",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace shell=True with a list-form Popen invocation — pass each argument as a separate "
+        "list element so the shell never interprets them. Use paramiko SCP or native Python SCP "
+        "libraries instead of sshpass subprocess. Remove StrictHostKeyChecking=no."
+    ),
+    "tags": ["command-injection", "scp", "shell", "sshpass", "cwe-78", "cwe-214", "cwe-295"],
+}
+
+HX_F172 = {
+    "id": "HX-F172",
+    "title": "AES-ECB Mode Encryption with Cluster UUID as Predictable Key in convertUUIDAndEncryptData.py",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-327",
+    "component": "storfs-deploy/ansible/library/convertUUIDAndEncryptData.py",
+    "description": (
+        "encryptData() in convertUUIDAndEncryptData.py uses AES in ECB mode. ECB is deterministic "
+        "and mode-unsafe: identical 16-byte plaintext blocks produce identical ciphertext blocks, "
+        "enabling plaintext structure recovery without the key. The encryption key is derived as "
+        "SHA-256(cluster_uuid)[0:16]. The cluster UUID is a semi-public identifier present in "
+        "HX API responses, UI pages, log files, and Exhibitor ZK paths. An attacker who can "
+        "enumerate the cluster UUID (low bar — available unauthenticated via Exhibitor at "
+        "/exhibitor/v1/cluster/status) can recompute the key and decrypt any data encrypted "
+        "with this function. The combination of ECB mode (structural leakage) and a predictable "
+        "key (UUID-derived) renders this encryption scheme cryptographically broken."
+    ),
+    "evidence": [
+        "convertUUIDAndEncryptData.py:34: key = hashlib.sha256(bytes(encryption_key, 'utf-8')).digest()",
+        "convertUUIDAndEncryptData.py:35: final_key = key[0:16]  # truncated SHA-256 of cluster UUID",
+        "convertUUIDAndEncryptData.py:38: cipher = AES.new(final_key, AES.MODE_ECB)  # ECB — no IV",
+        "Key source: cluster_uuid from Ansible params — same UUID available at /exhibitor/v1/cluster/status",
+        "ECB structural leak: two identical 16-byte plaintext blocks -> same ciphertext block",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace AES-ECB with AES-GCM (authenticated) or AES-CBC with a random IV. "
+        "Derive the key from a secret value (not the cluster UUID) using PBKDF2 or HKDF with "
+        "adequate iterations and a random salt. Store the salt alongside the ciphertext."
+    ),
+    "tags": ["weak-crypto", "aes-ecb", "predictable-key", "cluster-uuid", "cwe-327", "cwe-321"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9802,6 +9872,7 @@ for _f in [
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
     HX_F163, HX_F164, HX_F165, HX_F166,
     HX_F167, HX_F168, HX_F169, HX_F170,
+    HX_F171, HX_F172,
 ]:
     FINDINGS[_f["id"]] = _f
 
