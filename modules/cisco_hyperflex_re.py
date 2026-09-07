@@ -10890,6 +10890,57 @@ HX_F196 = {
     "tags": ["tls", "stig", "legacy-protocol", "cwe-327", "esxi", "medium"],
 }
 
+HX_F197 = {
+    "id": "HX-F197",
+    "title": "Root Session Token Generated with 15-bit Entropy ($RANDOM) and Stored World-Readable",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-330",
+    "component": "storfs-misc/set_shared_key.sh",
+    "description": (
+        "set_shared_key.sh generates the `X-RootSessionID` authentication token used by "
+        "stSSOMgr and all `useRootSessionId=True` API callers: "
+        "`sharedkey=$nodeid-$RANDOM` where `nodeid` is read from "
+        "`/opt/hyperflex/etc/product_uuid`. "
+        "Bash `$RANDOM` generates integers in [0, 32767] — 15 bits of entropy, "
+        "32,768 possible values total. The `product_uuid` is the VMware VM UUID, "
+        "readable from BIOS data (`dmidecode -s system-uuid`) by any local user. "
+        "An attacker with the product UUID can enumerate the full keyspace in under "
+        "one second and obtain a valid `X-RootSessionID` token. "
+        "The generated file is then made world-readable: `chmod 644 root_file.pub`. "
+        "Any local user can read the token directly without brute-force. "
+        "The token is placed at `/etc/root_file.pub` before `migrate-secureconfig.sh` "
+        "moves it to `/etc/hyperflex/secure/root_file.pub`, meaning it is world-readable "
+        "in `/etc/` first and potentially in the secure directory as well. "
+        "The token is used with `X-RootSessionID` header in HTTP requests to the "
+        "management API at `http://localhost:8000` — bypassing normal JWT authentication "
+        "for certificate management, inventory, STIG settings, and cluster lifecycle "
+        "operations. Affected callers: `nginxCertManager.py`, `synchronizeSyslog.py`, "
+        "`schScripts.py`, `SLEvaluationJob.py`, `update-inventory.py`, `hsu_utils.py`, "
+        "upgrade hook `5997_stig_setting_ESX.py`."
+    ),
+    "evidence": [
+        "set_shared_key.sh line 11: sharedkey=$nodeid-$RANDOM (15-bit entropy)",
+        "set_shared_key.sh line 13: chmod 644 $dest_folder/root_file.pub (world-readable)",
+        "nodeid = product_uuid read from /opt/hyperflex/etc/product_uuid (VM UUID, derivable from dmidecode)",
+        "StTransportBase.py line 26: X-RootSessionID loaded from /etc/hyperflex/secure/root_file.pub",
+        "commonFunctions.py line 42: headers['X-RootSessionID'] = rootSessionId",
+        "Token bypasses JWT auth for certificate, STIG, inventory, and cluster lifecycle APIs",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace `$RANDOM` with a cryptographically secure random generator: "
+        "`sharedkey=$(openssl rand -hex 32)`. "
+        "Change the file permissions to 600 (root-only): `chmod 600 root_file.pub`. "
+        "Ensure the migration script preserves restrictive permissions when moving the file "
+        "to `/etc/hyperflex/secure/`. "
+        "Consider replacing the file-based `X-RootSessionID` scheme with a time-limited "
+        "token issued by the AAA service, eliminating the static shared secret entirely."
+    ),
+    "tags": ["weak-random", "world-readable-token", "authentication-bypass", "cwe-330", "cwe-732", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10908,6 +10959,7 @@ for _f in [
     HX_F188, HX_F189, HX_F190,
     HX_F191, HX_F192, HX_F193, HX_F194,
     HX_F195, HX_F196,
+    HX_F197,
 ]:
     FINDINGS[_f["id"]] = _f
 
