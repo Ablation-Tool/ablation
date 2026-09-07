@@ -10521,6 +10521,127 @@ HX_F187 = {
     "tags": ["password-sync", "lateral-movement", "root", "cwe-522", "high"],
 }
 
+HX_F188 = {
+    "id": "HX-F188",
+    "title": "Unauthenticated Access to Web Access Logs via /logs nginx Path",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "cwe": "CWE-284",
+    "component": "storfs-misc/nginx.conf",
+    "description": (
+        "nginx.conf maps the `/logs` path to `/var/www/localhost/logs` without "
+        "authentication: `auth_basic off; allow all; alias /var/www/localhost/logs`. "
+        "HTTP access logs for the management web interface are readable by any "
+        "unauthenticated remote client. "
+        "Access logs record: API endpoint paths (/coreapi/v1/clusters/, "
+        "/rest/v1/clusters/, etc.), client IP addresses, HTTP methods, response "
+        "codes, and response sizes. Depending on the nginx log_format configuration, "
+        "these logs may also include: request headers (Authorization, X-RootSessionID), "
+        "query strings containing sensitive parameters, and user agent strings. "
+        "Because `auditHttpVerbsToSkip = ['GET']` (HX-F178) means GET operations "
+        "are not audited by the management application, the nginx access log may be "
+        "the only record of read operations — and it is accessible without credentials. "
+        "Logs are accessible at `http://<ctlvm>/logs/<logfilename>` — log filenames "
+        "are typically predictable (access.log, access.log.1, etc.)."
+    ),
+    "evidence": [
+        "nginx.conf: location /logs { auth_basic off; allow all; alias /var/www/localhost/logs; }",
+        "auth-war application.conf:49: auditHttpVerbsToSkip = ['GET'] (GET audit gap HX-F178)",
+        "HTTP access logs may contain Authorization bearer tokens and X-RootSessionID values",
+        "Attack: GET http://<ctlvm>/logs/access.log -> API call history without credentials",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Restrict access to `/logs` using `auth_basic` with proper credentials, or "
+        "`allow 127.0.0.1; deny all` to limit to localhost-only access. "
+        "Review the nginx `log_format` to ensure token values and sensitive headers "
+        "are not logged. "
+        "If external log access is required, serve logs via an authenticated endpoint."
+    ),
+    "tags": ["log-access", "auth-bypass", "nginx", "cwe-284", "medium"],
+}
+
+HX_F189 = {
+    "id": "HX-F189",
+    "title": "Unauthenticated File Upload to Management Backend via /upload nginx Path",
+    "severity": "HIGH",
+    "cvss": 8.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-434",
+    "component": "storfs-misc/nginx.conf",
+    "description": (
+        "nginx.conf proxies the `/upload` path to `http://localhost:8000` without "
+        "authentication: `auth_basic off; allow all; proxy_pass http://localhost:8000`. "
+        "The HyperFlex management backend at localhost:8000 handles `/upload` requests "
+        "without any authentication gating at the nginx layer. "
+        "If the `/upload` handler on port 8000 accepts arbitrary file content without "
+        "server-side validation, this allows an unauthenticated attacker to: "
+        "(1) upload malicious firmware packages during cluster upgrade operations; "
+        "(2) upload crafted configuration files to overwrite cluster settings; "
+        "(3) trigger path traversal if the upload handler constructs file paths "
+        "from client-supplied filenames without normalization. "
+        "The nginx configuration explicitly allows `client_max_body_size 8000m` (8GB), "
+        "indicating the upload handler is designed for large firmware/OVA files. "
+        "The upgrade-war and enc-war web applications also expose `/upload` via their "
+        "servlet configurations, confirming this path reaches the upgrade pipeline."
+    ),
+    "evidence": [
+        "nginx.conf: location /upload { auth_basic off; allow all; proxy_pass http://localhost:8000; }",
+        "nginx.conf: client_max_body_size 8000m  (8GB upload limit suggests firmware/OVA use case)",
+        "upgrade-war/WEB-INF/web.xml: jersey servlet covers /v1/* including upload paths",
+        "Attack surface: POST http://<ctlvm>/upload + any file content = unauthenticated upload to mgmt backend",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Add authentication to the `/upload` nginx location — at minimum, require a "
+        "valid JWT token in the Authorization header before proxying to localhost:8000. "
+        "The backend handler at `/upload` must independently validate the caller's "
+        "authorization, file content type (magic bytes, not extension), and file path "
+        "to prevent directory traversal. "
+        "Restrict upload operations to management sessions using the AAA service."
+    ),
+    "tags": ["file-upload", "auth-bypass", "nginx", "rce-surface", "cwe-434", "high"],
+}
+
+HX_F190 = {
+    "id": "HX-F190",
+    "title": "Unauthenticated Access to Support Bundle Directory via /support nginx Path",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-284",
+    "component": "storfs-misc/nginx.conf",
+    "description": (
+        "nginx.conf maps `/support` to `/var/support/` without authentication: "
+        "`auth_basic off; allow all; alias /var/support/`. "
+        "HyperFlex support bundles are stored in `/var/support/` and contain: "
+        "cluster configuration data, network topology, node inventory, log files "
+        "(including the API access logs from `/var/www/localhost/logs/`), "
+        "and potentially configuration files with sensitive data. "
+        "Support bundles are automatically generated during diagnostics and "
+        "upgrade operations. An attacker can download the full support bundle "
+        "at `http://<ctlvm>/support/<bundle_filename>` without credentials. "
+        "Support bundle filenames are typically timestamped and predictable in format. "
+        "Chain with HX-F178 (GET audit gap): the download leaves no audit trail."
+    ),
+    "evidence": [
+        "nginx.conf: location /support { auth_basic off; allow all; alias /var/support/; }",
+        "Support bundles contain cluster config, logs, and node inventory",
+        "Attack: GET http://<ctlvm>/support/<bundle>.tar.gz -> full diagnostic data exfil",
+        "Chain: HX-F190 + HX-F178 (no audit) = undetected exfil of cluster intelligence",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Restrict the `/support` path with `auth_basic` authentication requiring valid "
+        "credentials before serving support bundle files. "
+        "Alternatively, restrict to localhost: `allow 127.0.0.1; deny all`. "
+        "If remote support access is needed, use the authenticated `/storfs-support` "
+        "path (which does have auth_basic enabled) instead of `/support`."
+    ),
+    "tags": ["support-bundle", "auth-bypass", "nginx", "data-exfil", "cwe-284", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10536,6 +10657,7 @@ for _f in [
     HX_F180, HX_F181, HX_F182,
     HX_F183, HX_F184,
     HX_F185, HX_F186, HX_F187,
+    HX_F188, HX_F189, HX_F190,
 ]:
     FINDINGS[_f["id"]] = _f
 
