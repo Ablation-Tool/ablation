@@ -9956,6 +9956,43 @@ HX_F174 = {
     "tags": ["hardcoded-creds", "keystore", "springpath", "password-reuse", "cwe-321", "cwe-798"],
 }
 
+HX_F175 = {
+    "id": "HX-F175",
+    "title": "Plaintext SSH Password Written to stderr/Queue on Paramiko Connection Failure in uninstall_cluster.py",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-312",
+    "component": "storfs-deploy/ansible/uninstall_cluster.py",
+    "description": (
+        "execute_ssh() in uninstall_cluster.py catches paramiko connection exceptions and "
+        "constructs a stderr string that includes the plaintext password: "
+        "`stderr = ('Paramiko ssh connect exception: %s, host %s user: %s password: %s' % "
+        "(e, address, username, password))`. This string is then placed into a queue "
+        "(`q.put([stdout, stderr, -1])`) for downstream consumption and logging. "
+        "Any SSH connection failure (wrong host key due to the AutoAddPolicy MITM vector, "
+        "authentication failure, network error) causes the password to be written to "
+        "the result queue and potentially propagated to log files, syslog, or exception "
+        "handlers that display or store the result. "
+        "Combined with `paramiko.AutoAddPolicy()` at line 64 (MITM accepted silently), "
+        "an attacker intercepting the SSH connection can trigger a connection failure "
+        "and cause the credential to be exposed in the queue/log output."
+    ),
+    "evidence": [
+        "uninstall_cluster.py:64: client.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "uninstall_cluster.py:69: stderr = ('...password: %s' % (e, address, username, password))",
+        "uninstall_cluster.py:71: q.put([stdout, stderr, -1])  # password propagated to caller",
+        "logger.error at line 67-68 also logs exception details (potentially including auth failure text)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the password field from the exception string entirely — log only "
+        "the exception type and address. Never include credentials in log messages or "
+        "exception strings. Fix the AutoAddPolicy to use a known_hosts or pinned host key."
+    ),
+    "tags": ["cleartext-creds", "logging", "ssh", "paramiko", "cwe-312", "cwe-532", "cwe-295"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9966,6 +10003,7 @@ for _f in [
     HX_F163, HX_F164, HX_F165, HX_F166,
     HX_F167, HX_F168, HX_F169, HX_F170,
     HX_F171, HX_F172, HX_F173, HX_F174,
+    HX_F175,
 ]:
     FINDINGS[_f["id"]] = _f
 
