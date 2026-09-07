@@ -9397,13 +9397,53 @@ HX_F160 = {
     "tags": ["cmdline-exposure", "ansible", "esx", "password", "cwe-214", "factory"],
 }
 
+HX_F161 = {
+    "id": "HX-F161",
+    "title": "Diagnostic Account Not Barred from Upgrade/Encryption/Support WAR APIs (Incomplete barredUsers)",
+    "severity": "HIGH",
+    "cvss": 7.2,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-269",
+    "component": "upgrade-war, enc-war, encryption-war, support-war: application.conf",
+    "description": (
+        "The auth-war and authfilter JAR correctly define barredUsers as "
+        "[\"root\", \"local/root\", \"diag\", \"local/diag\"], preventing the diagnostic account "
+        "from authenticating to management APIs. However, four other WARs (upgrade, enc, "
+        "encryption, support) define barredUsers as only [\"root\", \"local/root\"], omitting "
+        "the diag entries. The diag account is a real cluster-level account: it appears in "
+        "passwordSyncAccounts = [\"root\", \"admin\", \"diag\"] across hxSvcMgr, stMgr, and "
+        "hxSupportSvc application.conf files, meaning the same password is maintained on all "
+        "cluster nodes. Because diag is not barred from the upgrade, encryption, and support "
+        "APIs, an attacker who obtains the diag credential can authenticate to endpoints that "
+        "should be restricted to admin-class users: encryption key operations, firmware upgrades, "
+        "and support bundle access."
+    ),
+    "evidence": [
+        "authfilter/application.conf: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]",
+        "auth-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]",
+        "upgrade-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\"]  # diag absent",
+        "enc-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\"]  # diag absent",
+        "encryption-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\"]  # diag absent",
+        "support-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\"]  # diag absent",
+        "hxSvcMgr application.conf: passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]  # diag is a live synced account",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Add \"diag\" and \"local/diag\" to barredUsers in all WAR application.conf files. "
+        "Audit all per-WAR application.conf overrides against the reference authfilter config "
+        "to ensure consistent security policy enforcement. Treat the authfilter config as the "
+        "authoritative source for barredUsers."
+    ),
+    "tags": ["diag-account", "access-control", "barred-users", "upgrade-api", "encryption-api", "cwe-269"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
-    HX_F157, HX_F158, HX_F159, HX_F160,
+    HX_F157, HX_F158, HX_F159, HX_F160, HX_F161,
 ]:
     FINDINGS[_f["id"]] = _f
 
