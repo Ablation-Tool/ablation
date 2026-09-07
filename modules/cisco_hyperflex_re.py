@@ -10642,6 +10642,166 @@ HX_F190 = {
     "tags": ["support-bundle", "auth-bypass", "nginx", "data-exfil", "cwe-284", "high"],
 }
 
+HX_F191 = {
+    "id": "HX-F191",
+    "title": "changepasswd.sh Passes Credentials as Process Arguments and Suppresses All passwd Errors",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "mgmt/opt/hyperflex/changepasswd.sh",
+    "description": (
+        "changepasswd.sh receives the old password as `$2` and new password as `$3` "
+        "(positional shell arguments). Both values are visible in the process argument list "
+        "for the duration of script execution. A local attacker can read them via `/proc/<pid>/cmdline` "
+        "or `ps auxww` during the execution window. "
+        "A second defect compounds this: the script unconditionally executes `exit 0` after the "
+        "`passwd` heredoc invocation regardless of passwd's return code. "
+        "If `passwd` fails (wrong current password, password complexity violation, "
+        "PAM module rejection), the Scala caller receives a zero exit status and treats "
+        "the password change as successful. The actual password is not changed, but the "
+        "cluster's state machine advances as if it were — creating a silent inconsistency "
+        "where credentials are in an unknown state. "
+        "The script comment explicitly acknowledges this: "
+        "`# Supress passwd return codes here, otherwise scala will complain`."
+    ),
+    "evidence": [
+        "changepasswd.sh line 2-5: user=${1}, old_pass=${2}, pass=${3} — positional args",
+        "changepasswd.sh line 17-18: `# Supress passwd return codes here` followed by `exit 0`",
+        "Old and new passwords are visible via /proc/<pid>/cmdline while the script runs",
+        "A failed passwd invocation returns success to the Scala layer, masking auth inconsistency",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Pass passwords via stdin or a file descriptor rather than positional arguments. "
+        "Remove the unconditional `exit 0` and propagate `passwd`'s actual return code: "
+        "capture the return code with `RESULT=$?` and `exit $RESULT`. "
+        "The Scala caller must be updated to handle non-zero exit codes from password changes."
+    ),
+    "tags": ["credentials-in-args", "process-exposure", "cwe-214", "cwe-390", "medium"],
+}
+
+HX_F192 = {
+    "id": "HX-F192",
+    "title": "gen-self-signed-cert.sh Hardcodes commonName=hyperflex Across All Cluster Nodes",
+    "severity": "LOW",
+    "cvss": 3.7,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "cwe": "CWE-297",
+    "component": "storfs-misc/gen-self-signed-cert.sh",
+    "description": (
+        "gen-self-signed-cert.sh generates the nginx TLS certificate with a hardcoded "
+        "`commonName=hyperflex` regardless of the actual node hostname or IP. "
+        "Every controller VM in the cluster receives a certificate with the identical CN. "
+        "The script does correctly populate `subjectAltName = DNS:${DOMAIN}` (the SAN), "
+        "but CN and SAN mismatches cause TLS validation failures in clients that check CN "
+        "rather than only SANs. The companion script `gen-self-signed-cert_ui.sh` "
+        "correctly uses `commonName=${DOMAIN}`. "
+        "The generated certificates have 5-year validity (`-days 1825`), "
+        "extending the window during which a compromised certificate remains exploitable. "
+        "With the systemic `verify=False` / `ssl._create_unverified_context` pattern "
+        "present throughout HyperFlex management scripts (HX-F168), this CN defect is "
+        "never caught at runtime — both defects reinforce each other."
+    ),
+    "evidence": [
+        "gen-self-signed-cert.sh line 16: commonName=hyperflex (hardcoded)",
+        "gen-self-signed-cert.sh line 21: -days 1825 (5-year validity)",
+        "gen-self-signed-cert_ui.sh uses commonName=${DOMAIN} (correct behavior)",
+        "Every ctlvm generates identical CN; inter-node TLS identity not verifiable by CN",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Change `commonName=hyperflex` to `commonName=${DOMAIN}` in gen-self-signed-cert.sh, "
+        "aligning it with the ui variant. "
+        "Reduce certificate validity from 1825 days to 365 days (or 90 days) "
+        "and implement certificate rotation automation. "
+        "Remediation of CWE-297 is only complete when the systemic TLS bypass (HX-F168) "
+        "is also addressed."
+    ),
+    "tags": ["tls", "certificate", "hardcoded-cn", "cwe-297", "low"],
+}
+
+HX_F193 = {
+    "id": "HX-F193",
+    "title": "node_replace.py Globally Overrides ssl._create_default_https_context at Module Import",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-misc/hx-scripts/node_replace.py",
+    "description": (
+        "node_replace.py lines 37-44 override Python's default HTTPS context at module load: "
+        "`ssl._create_default_https_context = ssl._create_unverified_context`. "
+        "This is more severe than per-request `verify=False` (HX-F168): it globally disables "
+        "TLS certificate verification for all HTTPS connections opened by this process, "
+        "including any library or dependency that uses the default context. "
+        "The script is responsible for node replacement operations — it connects to "
+        "vCenter, cluster management IPs, ESX hosts, and remote controller VMs. "
+        "Under this override, an on-path attacker can present any certificate and intercept "
+        "credentials, commands, and cluster configuration data on all of these connections. "
+        "The comment `# Handle target environment that doesn't support HTTPS verification` "
+        "indicates this was intentionally introduced as an environment workaround, "
+        "not detected and reverted."
+    ),
+    "evidence": [
+        "node_replace.py line 37: _create_unverified_https_context = ssl._create_unverified_context",
+        "node_replace.py line 44: ssl._create_default_https_context = _create_unverified_https_context",
+        "Global override affects all HTTPS calls: checkLogin, getAbout, getControllers, clusterRefresh, getClusterDetails",
+        "Comment: '# Handle target environment that doesn't support HTTPS verification'",
+        "Script connects to vCenter (port 443), cluster management, ESX hosts, remote ctlvms",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the global ssl._create_default_https_context override. "
+        "Install valid cluster CA certificates and configure requests with `verify=/path/to/ca.crt`. "
+        "If self-signed certificates are in use, generate them with correct hostnames (see HX-F192) "
+        "and distribute the CA to management scripts rather than bypassing verification."
+    ),
+    "tags": ["tls", "ssl-bypass", "global-override", "cwe-295", "high"],
+}
+
+HX_F194 = {
+    "id": "HX-F194",
+    "title": "SSH Host Key Verification Disabled via AutoAddPolicy in Node Management Scripts",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-misc/hx-scripts/node_replace.py, hx-scripts/install_vc_plugin.py",
+    "description": (
+        "Both node_replace.py and install_vc_plugin.py create paramiko SSH clients with "
+        "`set_missing_host_key_policy(paramiko.AutoAddPolicy())`, silently accepting any "
+        "host key on first connection without validation. "
+        "node_replace.py uses this pattern at three call sites: "
+        "`check_connection()` (line 237), `sshToHost()` (line 324), and inline at line 666. "
+        "install_vc_plugin.py uses it in `check_connection()` (line 348) and `copy_file()` (line 355). "
+        "The affected operations include: "
+        "(1) root SSH access to cluster controller VMs during node replacement, "
+        "(2) root SSH access to ESX hypervisor hosts, "
+        "(3) SFTP transfer of the vCenter plugin ZIP to all cluster nodes as root. "
+        "Under AutoAddPolicy, an on-path attacker can present a forged host key, "
+        "intercept the root password, and receive the plugin ZIP — which is then deployed "
+        "cluster-wide. Combined with the global TLS bypass (HX-F193), no SSH or HTTPS "
+        "connection from these management scripts verifies peer identity."
+    ),
+    "evidence": [
+        "node_replace.py line 237: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "node_replace.py line 324: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "node_replace.py line 666: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "install_vc_plugin.py line 348: ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "install_vc_plugin.py line 482: copy_file() uses SFTP as root to all cluster nodes",
+        "Root credentials and plugin packages transmitted over unverified SSH sessions",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace AutoAddPolicy with RejectPolicy or WarningPolicy. "
+        "Pre-populate known_hosts with cluster node fingerprints during cluster setup. "
+        "For SFTP plugin distribution, use an authenticated internal package repository "
+        "over HTTPS rather than SCP/SFTP with ad-hoc host key acceptance."
+    ),
+    "tags": ["ssh", "host-key", "mitm", "cwe-295", "paramiko", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10658,6 +10818,7 @@ for _f in [
     HX_F183, HX_F184,
     HX_F185, HX_F186, HX_F187,
     HX_F188, HX_F189, HX_F190,
+    HX_F191, HX_F192, HX_F193, HX_F194,
 ]:
     FINDINGS[_f["id"]] = _f
 
