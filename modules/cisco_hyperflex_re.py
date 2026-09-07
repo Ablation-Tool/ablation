@@ -7716,9 +7716,120 @@ HX_F134 = {
     ),
 }
 
+HX_F135 = {
+    "id": "HX-F135",
+    "title": (
+        "HyperFlex HXDP 6.0.2b stSSOMgr: Hyper-V Host Credentials and AES Encryption Key "
+        "Stored in ZooKeeper World-Readable Nodes — Plaintext Credential Recovery"
+    ),
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cwe": "CWE-312",
+    "component": (
+        "stSSOMgr-1.0.jar (com.storvisor.sysmgmt.stSSOMgr.StSSOMgrImpl), "
+        "common-1.0.jar (EncryptionUtil, SecurityConstants)"
+    ),
+    "versions_affected": "6.0.2b (confirmed); 5.x expected (stSSOMgr present across versions)",
+    "description": (
+        "stSSOMgr (SSO manager service) stores Hyper-V host credentials encrypted with an AES key "
+        "in ZooKeeper. Both the ciphertext and the key material used to derive the AES key are "
+        "written to ZK nodes with no client-side ACLs set. Any authenticated ZK client (or "
+        "unauthenticated client on 5.x) can read both values and recover plaintext Hyper-V "
+        "host credentials.\n\n"
+        "ZK paths:\n"
+        "  /stSSOMgr/creds     — AES-encrypted Hyper-V credentials (hex-encoded ciphertext)\n"
+        "  /stSSOMgr/keyData   — key material for deriving the AES secret key\n\n"
+        "Encryption scheme (EncryptionUtil.keyToSpec / encryptData):\n"
+        "  1. keyData string -> SHA-256(keyData.getBytes('UTF-8')) -> 16 bytes -> SecretKeySpec('AES')\n"
+        "  2. Cipher.getInstance('AES') — Java default = AES/ECB/PKCS5Padding\n"
+        "  3. ciphertext = DatatypeConverter.printHexBinary(cipher.doFinal(plaintext))\n\n"
+        "AES/ECB mode has no IV; the same plaintext always produces the same ciphertext block. "
+        "An attacker who reads both ZK nodes can reconstruct the AES key and decrypt in one step.\n\n"
+        "On 5.x, ZK has no client authentication (HX-F100); the nodes are accessible without "
+        "credentials. On 6.x, ZK partial auth uses the known 'springpath' key (HX-F130); "
+        "addAuthInfo(clusterUuid) is optional and skipZkAuthOnFailure=true. Even when auth "
+        "is present, node ACLs are not set — world:anyone:cdrwa remains the effective ACL. "
+        "Either path yields read access to /stSSOMgr/keyData and /stSSOMgr/creds."
+    ),
+    "evidence": {
+        "zk_path_config": (
+            "stSSOMgr-1.0/conf/application.conf:\n"
+            "  stSSOMgr {\n"
+            "    zkBasePath      = '/stSSOMgr'\n"
+            "    zkAuthKey       = '/auth'\n"
+            "    zkCredsKey      = 'creds'\n"
+            "    zkEncryptionKey = 'keyData'\n"
+            "  }\n"
+            "=> Hyper-V creds at ZK node /stSSOMgr/creds\n"
+            "=> AES key material at ZK node /stSSOMgr/keyData"
+        ),
+        "getEncryptionKeyFromZK_bytecode": (
+            "StSSOMgrImpl.scala (StSSOMgrImpl$$anonfun$$nestedInanonfun$getEncryptionKeyFromZK$3$1):\n"
+            "  On InventoryConfigMismatch/InventoryFail: retry getEncryptionKeyFromZK()\n"
+            "  On other failure: log 'getEncryptionKeyInZK failed executing getZkPmInstance.write()'\n"
+            "  Error msg: 'getEncryptionKeyInZK failed executing getZkPmInstance.read(). "
+            "This may not be an error. Attemping to create a new enc key and set'\n"
+            "  => key is auto-generated on first run and written to /stSSOMgr/keyData"
+        ),
+        "setHypervHostCreds_bytecode": (
+            "StSSOMgrImpl.scala setHypervHostCreds(creds: String): Future[Unit]:\n"
+            "  On failure: log 'setHypervHostCreds failed executing getZkPmInstance.write()'\n"
+            "  Error msg: 'Failed to set hyperv host creds. write failed'\n"
+            "  => encrypted creds written to ZK node /stSSOMgr/creds"
+        ),
+        "encryption_util_bytecode": (
+            "EncryptionUtil.keyToSpec(keyString: String): SecretKeySpec:\n"
+            "  sha = MessageDigest.getInstance('SHA-256').digest(keyString.getBytes('UTF-8'))\n"
+            "  keyBytes = Arrays.copyOf(sha, ENCRYPTION_KEY_SIZE)  // 16 bytes (AES-128)\n"
+            "  return new SecretKeySpec(keyBytes, 'AES')\n\n"
+            "EncryptionUtil.encryptData(data: String): String:\n"
+            "  cipher = Cipher.getInstance(SecurityConstants.ENCRYPTION_KEY_ALGORITHM())\n"
+            "  // ENCRYPTION_KEY_ALGORITHM = 'AES' -> Java default = AES/ECB/PKCS5Padding\n"
+            "  cipher.init(ENCRYPT_MODE, getEncryptionKey())\n"
+            "  return DatatypeConverter.printHexBinary(cipher.doFinal(data.getBytes()))\n\n"
+            "EncryptionUtil.decryptData(encryptedData: String): byte[]:\n"
+            "  ciphertext = DatatypeConverter.parseHexBinary(encryptedData)\n"
+            "  cipher = Cipher.getInstance(SecurityConstants.ENCRYPTION_KEY_ALGORITHM())\n"
+            "  cipher.init(DECRYPT_MODE, keyToSpec(zkKey))\n"
+            "  return cipher.doFinal(ciphertext)"
+        ),
+        "attack_steps": (
+            "1. Connect to ZK port 2181 (no auth on 5.x; 'springpath' digest auth on 6.x)\n"
+            "2. Read /stSSOMgr/keyData -> keyDataStr\n"
+            "3. keyBytes = SHA-256(keyDataStr.getBytes('UTF-8'))[:16]\n"
+            "4. Read /stSSOMgr/creds -> hexCiphertext\n"
+            "5. ciphertext = bytes.fromhex(hexCiphertext)\n"
+            "6. plaintext = AES-ECB-PKCS5Padding.decrypt(ciphertext, keyBytes)\n"
+            "7. plaintext = Hyper-V host username:password"
+        ),
+        "security_constants": (
+            "SecurityConstants$.class (common-1.0.jar):\n"
+            "  #237 = Utf8  AES\n"
+            "  #238 = String #237 // AES\n"
+            "  ENCRYPTION_KEY_ALGORITHM field -> 'AES'\n"
+            "  STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION = 'aes_encryption'\n"
+            "  Keystore file: /etc/hyperflex/secure/springpath_keystore_aes.jceks"
+        ),
+        "zk_acl_status": (
+            "ZkConnectionManager (zkClusterManager-1.0.jar, 6.0.2b):\n"
+            "  addAuthInfo(scheme='uuid', auth=clusterUuid) added if useZkAuth=true\n"
+            "  skipZkAuthOnFailure=true (default) — auth failure does not abort connection\n"
+            "  No ACL-setting calls on /stSSOMgr/* paths observed in any analyzed JAR\n"
+            "=> world:anyone:cdrwa effective on /stSSOMgr/creds and /stSSOMgr/keyData"
+        ),
+    },
+    "remediation": (
+        "1. Set ZK ACLs on /stSSOMgr/* to auth:stSSOMgr:rw (restrict to stSSOMgr identity).\n"
+        "2. Switch EncryptionUtil cipher from 'AES' (ECB) to 'AES/GCM/NoPadding' with random IV.\n"
+        "3. Do not store key material in the same ZK tree as ciphertext; use a separate "
+        "secrets manager (Vault, KMS) or derive the key from a host-local secret not stored in ZK."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
+    HX_F135,
 ]:
     FINDINGS[_f["id"]] = _f
 
