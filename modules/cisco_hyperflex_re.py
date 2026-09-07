@@ -9437,13 +9437,52 @@ HX_F161 = {
     "tags": ["diag-account", "access-control", "barred-users", "upgrade-api", "encryption-api", "cwe-269"],
 }
 
+HX_F162 = {
+    "id": "HX-F162",
+    "title": "Incomplete Servlet Filter Chain in Upgrade/Support/Encryption WARs (Missing KerberosAuth and ServiceAccessAuth)",
+    "severity": "MEDIUM",
+    "cvss": 6.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:L/A:N",
+    "cwe": "CWE-284",
+    "component": "upgrade-war, support-war, encryption-war: WEB-INF/web.xml",
+    "description": (
+        "The reference WARs (coreapi, auth) deploy a 7-filter servlet chain: AuditFilter, "
+        "SPPrivilegedAuth, SessionAuth, KerberosAuth, ServiceAccessAuth, SPBasicAuth, SPAuth. "
+        "Three production WARs deviate: upgrade-war and support-war are missing both KerberosAuth "
+        "(KerberosFilterImpl) and ServiceAccessAuth (ServiceAccessAuthFilterImpl), leaving a "
+        "5-filter chain. encryption-war is missing only ServiceAccessAuth, leaving a 6-filter chain. "
+        "ServiceAccessAuth enforces service-to-service authorization checks on top of authentication. "
+        "Its absence from the encryption WAR means authenticated principals (including those "
+        "authenticated via the incomplete barredUsers list per HX-F161) can invoke encryption key "
+        "management endpoints without the service-level authorization gate. Missing KerberosAuth "
+        "in upgrade-war and support-war means Windows/AD users cannot use Kerberos tokens for "
+        "upgrade and support operations, and any Kerberos-specific access controls are absent."
+    ),
+    "evidence": [
+        "coreapi/restapi-war web.xml: 7 filters — AuditFilter, SPPrivilegedAuth, SessionAuth, KerberosAuth, ServiceAccessAuth, SPBasicAuth, SPAuth",
+        "auth-war web.xml: 7 filters (same as coreapi)",
+        "encryption-war web.xml: 6 filters — MISSING ServiceAccessAuth",
+        "upgrade-war web.xml: 5 filters — MISSING KerberosAuth AND ServiceAccessAuth",
+        "support-war web.xml: 5 filters — MISSING KerberosAuth AND ServiceAccessAuth",
+        "Encryption WAR manages key operations; absent ServiceAccessAuth = no service-account gate on key management",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Add KerberosFilterImpl and ServiceAccessAuthFilterImpl to all WARs that handle sensitive "
+        "operations (upgrade, encryption, support). Use the coreapi/auth-war filter chain as the "
+        "reference template. Enforce consistent filter chain policy via a shared parent web.xml "
+        "or shared filter configuration."
+    ),
+    "tags": ["servlet-filter", "kerberos", "service-access-auth", "encryption-api", "upgrade-api", "cwe-284"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
-    HX_F157, HX_F158, HX_F159, HX_F160, HX_F161,
+    HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
 ]:
     FINDINGS[_f["id"]] = _f
 
