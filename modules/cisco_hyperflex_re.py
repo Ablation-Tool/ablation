@@ -9917,6 +9917,45 @@ HX_F173 = {
     "tags": ["auth-bypass", "world-readable", "session-id", "nginx", "admin", "cwe-732", "cwe-334", "critical"],
 }
 
+HX_F174 = {
+    "id": "HX-F174",
+    "title": "Java Keystore Password Hard-Coded as 'springpath' in hyperflex_security.properties",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-321",
+    "component": "storfs-misc/hyperflex_security.properties, storfs-misc (keystore: hyperflex_keystore.jceks)",
+    "description": (
+        "hyperflex_security.properties contains the Java keystore password obfuscated with "
+        "base64 only: `keystore_password = c3ByaW5ncGF0aA==` which decodes to 'springpath'. "
+        "This is the same password used as ssl_cert_passwd in springpath_default.tunes (HX-F159) "
+        "and as the ESX_PWD class-level default in configureNetworking_VCenter.py (HX-F166). "
+        "An attacker who reads hyperflex_security.properties can unlock hyperflex_keystore.jceks "
+        "and extract the TLS private key and other cryptographic material stored therein. "
+        "The properties file is shipped at /usr/share/hyperflex/storfs-misc/ and is migrated to "
+        "/etc/hyperflex/secure/ by migrate-secureconfig.sh alongside the keystore. "
+        "The firmware-wide reuse of 'springpath' across TLS certificate storage, keystore, "
+        "and ESX host authentication creates a single password that unlocks multiple "
+        "independent cryptographic boundaries."
+    ),
+    "evidence": [
+        "hyperflex_security.properties: <entry key='keystore_password'>c3ByaW5ncGF0aA==</entry>",
+        "base64.b64decode('c3ByaW5ncGF0aA==') = b'springpath'  # VERIFIED",
+        "springpath_default.tunes: ssl_cert_passwd -> 'springpath' (same password, HX-F159)",
+        "configureNetworking_VCenter.py:319: ESX_PWD = 'springpath' (HX-F166)",
+        "migrate-secureconfig.sh:15: /etc/hyperflex_keystore.jceks -> /etc/hyperflex/secure/",
+        "keytool -list -keystore hyperflex_keystore.jceks -storepass springpath  # unlocks keystore",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Generate a unique, random keystore password per deployment. Store it using "
+        "OS-level credential management (not base64 in a properties file). "
+        "Rotate all uses of 'springpath' across TLS cert storage, keystore, and ESX "
+        "authentication — they must not share a password. Use distinct credentials per domain."
+    ),
+    "tags": ["hardcoded-creds", "keystore", "springpath", "password-reuse", "cwe-321", "cwe-798"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9926,7 +9965,7 @@ for _f in [
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
     HX_F163, HX_F164, HX_F165, HX_F166,
     HX_F167, HX_F168, HX_F169, HX_F170,
-    HX_F171, HX_F172, HX_F173,
+    HX_F171, HX_F172, HX_F173, HX_F174,
 ]:
     FINDINGS[_f["id"]] = _f
 
