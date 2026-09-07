@@ -9322,13 +9322,88 @@ HX_F158 = {
     "tags": ["command-injection", "shell", "vcenter", "password", "cwe-78", "cwe-214"],
 }
 
+HX_F159 = {
+    "id": "HX-F159",
+    "title": "AES Encryption Key Derived from Static Firmware File; Default stctl VM Password Recoverable (Cisco123)",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-321",
+    "component": "storfs-misc: springpath_env_parse.py, springpath_default.tunes, Secret.class",
+    "description": (
+        "springpath_env_parse.py derives the AES-256-CBC key for credential decryption from the MD5 "
+        "hash of Secret.class, a static Java bytecode file shipped in every HyperFlex firmware image. "
+        "Because Secret.class is public, its MD5 is a fixed constant per firmware version "
+        "(1f6d13bcd7753f2d3b2e2da361b7afb5 for HXDP 6.0.2b). springpath_default.tunes stores "
+        "three encrypted credentials encrypted with this key: stctl_vm_passwd, installer_passwd, "
+        "and ssl_cert_passwd. Decryption of the firmware-resident ciphertext yields: "
+        "stctl_vm_passwd = 'Cisco123' (storage controller VM root password), "
+        "installer_passwd = 'Cisco123' (same), ssl_cert_passwd = 'springpath' (consistent with "
+        "HX-F154 hardcoded keystore password). Any deployment that has not explicitly rotated "
+        "these defaults retains root SSH access via 'Cisco123'. The AES key does not vary "
+        "per deployment — it is fixed by the firmware image content."
+    ),
+    "evidence": [
+        "springpath_env_parse.py:30-35: ENV_VARIABLE_STCTL_PASS = base_path + '/dependencies/Secret.class'",
+        "springpath_env_parse.py:51: hash_md5.update(chunk)  # md5(Secret.class) is the AES key",
+        "springpath_env_parse.py:61: cipher = AES.new(key, AES.MODE_CBC, iv)",
+        "springpath_env_parse.py:84-85: if tokens[1] in ['stctl_vm_passwd','ssl_cert_passwd','installer_passwd']: decrypt(md5(Secret.class), value)",
+        "springpath_default.tunes: stctl_vm_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=",
+        "springpath_default.tunes: ssl_cert_passwd=yWK4pTIUEr0TCjpQdp9sb/KW404x6Id/6ImlCOWdG7s=",
+        "springpath_default.tunes: installer_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=",
+        "VERIFIED: md5(Secret.class)=1f6d13bcd7753f2d3b2e2da361b7afb5; decrypt(stctl_vm_passwd)='Cisco123'",
+        "VERIFIED: decrypt(ssl_cert_passwd)='springpath' (matches HX-F154 hardcoded keystore password)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace file-derived key with a per-deployment secret generated at provisioning time and "
+        "stored in a hardware-backed keystore (TPM or HSM). Rotate default credentials on first boot "
+        "using a provisioning-time random generator. Remove hardcoded defaults from all .tunes files "
+        "and enforce password change on first login."
+    ),
+    "tags": ["hardcoded-key", "aes", "default-password", "stctl", "cwe-321", "cwe-798", "critical"],
+}
+
+HX_F160 = {
+    "id": "HX-F160",
+    "title": "ESX Password Exposed in Ansible Extra-Vars Cmdline (factory_deploy.py CWE-214)",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-factory/ansible/factory_deploy.py",
+    "description": (
+        "factory_deploy.py invokes the Ansible factory playbook via os.execlpe(), passing the ESX "
+        "password as a plaintext --extra-vars argument (line 87: 'esxPassword=%s' % password). "
+        "The Ansible process cmdline is visible in /proc/<pid>/cmdline and ps aux to any process "
+        "on the same host. The -vvvv verbose flag is hardcoded (line 91), causing Ansible to echo "
+        "all extra-vars — including the password — to its log output and stdout. Combined, these "
+        "expose the ESXi root password to local process enumeration and log scraping."
+    ),
+    "evidence": [
+        "factory_deploy.py:81-91: os.execlpe('./factory_deploy.yml', 'factory_deploy.yml',",
+        "  '--extra-vars', 'esxPassword=%s' % (password),",
+        "  '-vvvv', os.environ)  # verbose flag always set",
+        "factory_deploy.py:33: -p/--password positional argument accepted; passed to factory_deploy_node()",
+        "factory_deploy.py:97-103: README usage: ./factory_deploy.py -e <ip> -u <user> -p <password>",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Pass credentials via Ansible vault or a temporary file with restricted permissions rather "
+        "than command-line --extra-vars. Remove -vvvv from production invocations or sanitize "
+        "extra-vars from verbose output. Use ANSIBLE_VAULT_PASSWORD_FILE or a callback plugin "
+        "that redacts sensitive variables from logs."
+    ),
+    "tags": ["cmdline-exposure", "ansible", "esx", "password", "cwe-214", "factory"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
-    HX_F157, HX_F158,
+    HX_F157, HX_F158, HX_F159, HX_F160,
 ]:
     FINDINGS[_f["id"]] = _f
 
