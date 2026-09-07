@@ -10988,6 +10988,148 @@ HX_F198 = {
     "tags": ["tls", "artifact-download", "checksum-bypass", "cwe-354", "ansible", "high"],
 }
 
+HX_F199 = {
+    "id": "HX-F199",
+    "title": "GET Requests Excluded From Audit Logging — Unauthenticated Read Operations Leave No Trail",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-778",
+    "component": "authfilter/application.conf / auditHttpVerbsToSkip",
+    "description": (
+        "authfilter/application.conf sets `auditHttpVerbsToSkip = [\"GET\"]`, "
+        "which instructs the HyperFlex authentication filter to skip audit "
+        "log generation for all HTTP GET requests. "
+        "The HyperFlex management REST API exposes cluster topology, datastore "
+        "contents, VM inventory, network configuration, and credentials via "
+        "read-only GET endpoints. "
+        "An authenticated attacker (or any user with a valid session) can "
+        "enumerate and exfiltrate all cluster data using GET requests without "
+        "generating a single audit event. "
+        "GET-based exfiltration (inventory enumeration, credential scraping via "
+        "GET /coreapi/v1/config, datastore listing) is the standard low-noise "
+        "reconnaissance path — excluding it from audit renders the audit log "
+        "useless for detecting insider threats and post-compromise enumeration. "
+        "The upgrade-war component carries the same setting, extending the "
+        "coverage gap to the upgrade API surface."
+    ),
+    "evidence": [
+        "authfilter/application.conf line 43: auditHttpVerbsToSkip = [\"GET\"]",
+        "upgrade-war/WEB-INF/classes/application.conf line 43: auditHttpVerbsToSkip = [\"GET\"]",
+        "Same configuration present in both main auth filter and upgrade-war — not an oversight in one component",
+        "HX REST API exposes cluster data, credentials, and config via GET endpoints",
+        "No audit event generated for GET /coreapi/v1/*, /rest/*, /upgrade/* read operations",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove GET from auditHttpVerbsToSkip or scope the exclusion to "
+        "high-volume benign paths (health checks, metrics polls) by URI "
+        "rather than HTTP verb. "
+        "Security-sensitive GET endpoints (credential reads, cluster config "
+        "retrieval, user enumeration) must generate audit events regardless "
+        "of HTTP verb. "
+        "Consider differential audit tiers: suppress noisy polling GET paths "
+        "while retaining audit on data-bearing GET paths."
+    ),
+    "tags": ["audit", "logging", "cwe-778", "get", "exfiltration", "medium"],
+}
+
+HX_F200 = {
+    "id": "HX-F200",
+    "title": "Divergent barredUsers Policy Allows diag Account Through Upgrade-War Auth Filter",
+    "severity": "HIGH",
+    "cvss": 7.2,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-863",
+    "component": "authfilter/application.conf vs upgrade-war/WEB-INF/classes/application.conf",
+    "description": (
+        "The HyperFlex authentication filter and the upgrade-war component "
+        "each carry their own `barredUsers` list that blocks specific privileged "
+        "accounts from authenticating. "
+        "authfilter/application.conf: `barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]`. "
+        "upgrade-war/WEB-INF/classes/application.conf: `barredUsers = [\"root\", \"local/root\"]`. "
+        "The `diag` and `local/diag` accounts are explicitly blocked by the main "
+        "authentication filter but are absent from the upgrade-war barred list. "
+        "`diag` is a privileged diagnostic account present on all HyperFlex nodes. "
+        "An actor with diag credentials can authenticate via the upgrade API surface "
+        "(/upgrade/*, /rest/about, upgrade-war-hosted endpoints) even while the "
+        "main cluster API correctly rejects the same credentials. "
+        "The security policy intent is to bar diag from all authenticated access; "
+        "the implementation inconsistency creates a functional bypass limited to "
+        "the upgrade-war service."
+    ),
+    "evidence": [
+        "authfilter/application.conf line 42: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]",
+        "upgrade-war/WEB-INF/classes/application.conf line 48: barredUsers = [\"root\", \"local/root\"]",
+        "diag and local/diag absent from upgrade-war barredUsers — not blocked by upgrade filter",
+        "upgrade-war hosts /upgrade/* and /rest/about endpoints with separate auth configuration",
+        "Security policy intent: bar diag from all cluster API access — not enforced by upgrade-war",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Synchronize barredUsers across all components that perform authentication. "
+        "Both authfilter and upgrade-war must bar the same set of privileged accounts: "
+        "[\"root\", \"local/root\", \"diag\", \"local/diag\"]. "
+        "Consider centralizing the barredUsers list in a single configuration source "
+        "consumed by all authenticating components to prevent future drift. "
+        "Audit other web application components in the HX stack for barredUsers "
+        "configurations and verify consistency."
+    ),
+    "tags": ["authorization", "diag", "barredusers", "cwe-863", "upgrade-war", "high"],
+}
+
+HX_F201 = {
+    "id": "HX-F201",
+    "title": "Hardcoded Default ESXi Password 'springpath' Used if No Override Provided",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-1392",
+    "component": (
+        "storfs-deploy/ansible/roles/compute/files/configureNetworking_VCenter.py / "
+        "SpringpathNetworkingSetup_VCenter class"
+    ),
+    "description": (
+        "configureNetworking_VCenter.py declares `ESX_PWD = \"springpath\"` as a "
+        "class-level default (line 319). "
+        "This value is used directly for SSH and vCenter API authentication against "
+        "cluster ESXi hosts at lines 731, 809, and 1331 before any credential override "
+        "is applied. "
+        "If the script is invoked without an `--esx-password` argument or without a "
+        "JSON config file containing `esxPassword`, all ESXi host authentication "
+        "proceeds with the literal string `springpath` — the inherited default "
+        "credential from HyperFlex's Springpath acquisition heritage. "
+        "The same default appears in help text for `--ctl-password` (controller password). "
+        "ESXi hosts that were provisioned without explicit password override and that "
+        "still carry the Springpath default are accessible to anyone who knows this "
+        "widely-published default. "
+        "The credential is embedded in four separately-packaged copies of the script "
+        "(ansible/configureNetworking_VCenter.py, roles/compute/files/, "
+        "roles/esx/files/, roles/springpathvm/files/, roles/upgrademigration/files/), "
+        "amplifying the exposure surface."
+    ),
+    "evidence": [
+        "configureNetworking_VCenter.py line 319: ESX_PWD = \"springpath\"",
+        "configureNetworking_VCenter.py line 387-389: help text confirms 'springpath' default for ESXi and controller",
+        "Line 731: ssh_connect(host, SpringpathNetworkingSetup_VCenter.ESX_USER, SpringpathNetworkingSetup_VCenter.ESX_PWD)",
+        "Line 809: same class method uses ESX_PWD directly",
+        "Line 1331: isHXHardware(esx_host, ESX_USER, ESX_PWD) — hardware probe with default credential",
+        "Script present in 5 Ansible role directories — same hardcoded default in all copies",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the hardcoded default from the class definition. "
+        "If no ESXi password is supplied via argument or config file, the script "
+        "must exit with an error rather than proceeding with a known default. "
+        "Audit deployed HyperFlex clusters for ESXi hosts where the root or service "
+        "account password was never changed from the Springpath-era default 'springpath'. "
+        "Rotate credentials on any such host immediately. "
+        "Consider credential validation at cluster bootstrapping to detect and reject "
+        "the default value."
+    ),
+    "tags": ["hardcoded-credential", "default-password", "springpath", "esxi", "cwe-1392", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11007,6 +11149,7 @@ for _f in [
     HX_F191, HX_F192, HX_F193, HX_F194,
     HX_F195, HX_F196,
     HX_F197, HX_F198,
+    HX_F199, HX_F200, HX_F201,
 ]:
     FINDINGS[_f["id"]] = _f
 
