@@ -11783,6 +11783,106 @@ HX_F213 = {
     "tags": ["zookeeper", "sso", "token-forgery", "encryption-key", "cwe-312", "high"],
 }
 
+HX_F214 = {
+    "id": "HX-F214",
+    "title": "SSH RSA Private Keys and ESXi Credentials Written to World-Accessible /tmp/ During Upgrade",
+    "severity": "HIGH",
+    "cvss_score": 8.8,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": ["CWE-312", "CWE-732"],
+    "component": "storfs-deploy / upgradeclusterposthooks / 0007_create_authorized_keys_for_admin_ESX.py + ansible/commonFunctions.py",
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "During HyperFlex cluster upgrade, the Ansible upgrade hook "
+        "`0007_create_authorized_keys_for_admin_ESX.py` reads SSH RSA private keys from "
+        "`/tmp/sshKeyPair*.json` and ESXi host credentials from `/tmp/upgradeHooksCreds*.json`. "
+        "Both files reside in `/tmp/` (mode 1777), which is world-accessible to all local users "
+        "on the controller VM. The RSA private key material (PEM format, `-----BEGIN RSA PRIVATE KEY-----`) "
+        "enables SSH authentication as root to all cluster storage controller nodes. The ESXi password "
+        "grants access to the hypervisor layer across the cluster. "
+        "The post-upgrade cleanup hook (`9997_post_upgrade_cleanup_ESX.py`) only removes the remote "
+        "upgrade bundle directory; it does not delete the `/tmp/sshKeyPair*.json` or "
+        "`/tmp/upgradeHooksCreds*.json` files, leaving them on disk after upgrade completion. "
+        "Additionally, `commonFunctions.py` logs the ESXi password to the INFO log on command "
+        "failure: `logging.info('Failed to run command %s on %s', command, node)` where `command` "
+        "includes the plaintext password as a positional argument."
+    ),
+    "evidence": [
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/upgradeclusterposthooks/files/0007_create_authorized_keys_for_admin_ESX.py",
+            "lines": "17-23",
+            "snippet": (
+                "JSON_PARAMS_DIR = \"/tmp/\"\n"
+                "JSON_CREDS_FILE_MATCH = JSON_PARAMS_DIR + \"upgradeHooksCreds*.json\"\n"
+                "JSON_SSH_KEY_FILE_MATCH = JSON_PARAMS_DIR + \"sshKeyPair*.json\"\n"
+                "BEGIN_RSA_PRIVATE_KEY = '-----BEGIN RSA PRIVATE KEY-----'\n"
+                "END_RSA_PRIVATE_KEY = '-----END RSA PRIVATE KEY-----'"
+            ),
+            "note": "RSA private key constants confirm PEM key material is stored in the JSON file",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/upgradeclusterposthooks/files/0007_create_authorized_keys_for_admin_ESX.py",
+            "lines": "93, 96, 102",
+            "snippet": (
+                "esxi_password = creds.get('esxPassword').strip()  # plaintext from /tmp/upgradeHooksCreds*.json\n"
+                "sshCreds = load_hxvm_credentials()  # RSA private key from /tmp/sshKeyPair*.json\n"
+                "command = \"{0} {1} {2} {3}\".format(authKeyCopyingScript, esxi_ip, esxi_username, esxi_password)"
+            ),
+            "note": "ESXi password in plaintext; also passed as command-line argument (process table exposure)",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/commonFunctions.py",
+            "lines": "644-669",
+            "snippet": (
+                "def load_hxvm_credentials():\n"
+                "    credsFile = getMatchingFileName('/tmp/sshKeyPair*.json')\n"
+                "    with open(credsFile) as f:\n"
+                "        data = json.load(f)\n"
+                "    ...\n"
+                "def run_command_on_node(node, private_key, command):\n"
+                "    updated_private_key = private_key.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----')\n"
+                "    keytempfile = io.StringIO(updated_private_key)\n"
+                "    key = paramiko.RSAKey.from_private_key(keytempfile)\n"
+                "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+                "    client.connect(hostname=node, username='root', pkey=key)\n"
+                "    ...\n"
+                "    logging.info('Failed to run command %s on %s', command, node)  # password in command string"
+            ),
+            "note": "RSA key loaded directly from /tmp/ JSON; on failure the command (with ESXi password) is INFO-logged",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/upgradeclusterposthooks/files/9997_post_upgrade_cleanup_ESX.py",
+            "lines": "20, 29-35",
+            "snippet": (
+                "removeFilesDir = \"rm -rf \"\n"
+                "def deleteUpgradeBundles():\n"
+                "    run_command_on_node(node, private_key, removeFilesDir+filesDir)  # remote bundle dir only"
+            ),
+            "note": "Cleanup hook does not remove /tmp/sshKeyPair*.json or /tmp/upgradeHooksCreds*.json",
+        },
+    ],
+    "impact": (
+        "Any local user on the HX controller VM during or after an upgrade can read "
+        "`/tmp/sshKeyPair*.json` to obtain the RSA private key used for root SSH access to all "
+        "cluster storage nodes. Reading `/tmp/upgradeHooksCreds*.json` yields the ESXi root "
+        "password, enabling hypervisor-layer access across the entire cluster. "
+        "Because the files are not deleted post-upgrade, the exposure window extends indefinitely. "
+        "INFO-level logging of the ESXi password on command failure broadens the exposure surface "
+        "to any system or user with access to the application log files."
+    ),
+    "remediation": (
+        "1. Write credential and key files to a mode-0600 directory under `/root/` or "
+        "a dedicated secrets path, not `/tmp/`. "
+        "2. Explicitly delete `/tmp/sshKeyPair*.json` and `/tmp/upgradeHooksCreds*.json` at the "
+        "end of the upgrade hook that creates them (or in `9997_post_upgrade_cleanup_ESX.py`). "
+        "3. Do not interpolate passwords into command strings passed to INFO-level log calls; "
+        "log only the command name and target host. "
+        "4. Where possible, use agent-forwarding or short-lived certificates instead of "
+        "persisted RSA private key files."
+    ),
+    "tags": ["upgrade", "credentials", "private-key", "tmp", "esxi", "cwe-312", "cwe-732", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11807,6 +11907,7 @@ for _f in [
     HX_F205, HX_F206, HX_F207,
     HX_F208, HX_F209, HX_F210,
     HX_F211, HX_F212, HX_F213,
+    HX_F214,
 ]:
     FINDINGS[_f["id"]] = _f
 
