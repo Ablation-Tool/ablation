@@ -8300,10 +8300,105 @@ HX_F141 = {
     ),
 }
 
+HX_F142 = {
+    "id": "HX-F142",
+    "title": (
+        "HyperFlex HXDP 6.0.2b storfs-mgmt-cli — Global TLS Certificate Verification Disabled "
+        "Across All Management Client Code Exposes X-RootSessionID Token to MITM"
+    ),
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-295",
+    "versions_affected": "6.0.2b (confirmed); all versions shipping storfs-mgmt-cli stCli egg",
+    "component": (
+        "storfs-mgmt-cli package (stCli-1.0-py3.11.egg: StTransportBase.py, commonFunctions.py, stCli.py)"
+    ),
+    "description": (
+        "All HyperFlex management client code in stCli-1.0-py3.11.egg disables TLS "
+        "certificate verification before making API connections. The bypass is applied "
+        "globally (modifying the process-level SSL default context) before any connection "
+        "is established, affecting all subsequent TLS connections in the same process.\n\n"
+        "Affected code locations (3 independent sites):\n\n"
+        "1. StTransportBase.init_transport() (line 85):\n"
+        "   ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "   Applied before every Thrift-over-HTTPS connection (ports 9341, 9333, etc.)\n\n"
+        "2. stCli.py main entry point (line 13509):\n"
+        "   ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "   Applied before the CLI connects to HX Connect REST API (port 443)\n\n"
+        "3. commonFunctions.runRestQueries() (lines 29-33):\n"
+        "   requests.packages.urllib3.disable_warnings(InsecureRequestWarning)\n"
+        "   verify=False (function default, passed to all requests.get/post/put calls)\n"
+        "   Warnings actively suppressed to prevent detection.\n\n"
+        "Consequence: any TLS MITM between stCli and the HyperFlex management server "
+        "succeeds silently. The attacker can present an arbitrary certificate and the "
+        "client will accept it.\n\n"
+        "Critically, the root administrative session token is transmitted over these "
+        "unverified connections. When no SSO or user session is available, the client "
+        "reads /etc/hyperflex/secure/root_file.pub and sends it as the X-RootSessionID "
+        "HTTP header:\n\n"
+        "  commonFunctions.py lines 38-42:\n"
+        "    with open('/etc/hyperflex/secure/root_file.pub') as f:\n"
+        "        rootSessionId = f.readlines()[0].strip()\n"
+        "    headers = {'X-RootSessionID': rootSessionId,\n"
+        "               'X-LoggedInUser': 'admin',\n"
+        "               'X-Scope': 'READ,MODIFY',\n"
+        "               'X-RequestInitiator': 'Internal'}\n\n"
+        "The X-RootSessionID token grants root-level administrative access to the entire "
+        "HyperFlex cluster management plane. An attacker who intercepts this token can "
+        "replay it against the actual management server to execute arbitrary cluster "
+        "management operations.\n\n"
+        "Attack scenario: Attacker on the HX management VLAN performs ARP poisoning "
+        "between ctlVM and HX Connect management server → intercepts stCli HTTPS traffic "
+        "→ accepts via fake TLS cert → captures X-RootSessionID → replays to gain full "
+        "cluster admin access."
+    ),
+    "proof_of_concept": (
+        "# MitM attack: attacker on HX management network\n"
+        "# 1. ARP poison the path from ctlVM to HX Connect (port 443)\n"
+        "# 2. Start TLS interceptor with self-signed cert\n"
+        "#    → client accepts ANY cert (ssl._create_unverified_context)\n"
+        "# 3. Capture HTTP headers from proxied request\n"
+        "#    Request headers include:\n"
+        "#    X-RootSessionID: <token from /etc/hyperflex/secure/root_file.pub>\n"
+        "#    X-LoggedInUser: admin\n"
+        "#    X-Scope: READ,MODIFY\n"
+        "# 4. Replay captured token to actual HX Connect server:\n"
+        "curl -k -H 'X-RootSessionID: <captured_token>' \\\n"
+        "     -H 'X-LoggedInUser: admin' \\\n"
+        "     -H 'X-Scope: READ,MODIFY' \\\n"
+        "     https://<hx_connect_ip>/rest/v1/cluster\n"
+        "# → full cluster admin access\n\n"
+        "# Underlying bypass - process-global, no way to override downstream:\n"
+        "import ssl\n"
+        "ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "# ALL subsequent ssl.create_default_context() calls now return unverified contexts"
+    ),
+    "files": [
+        "/opt/hyperflex/storfs-mgmt-cli/stCli-1.0-py3.11.egg/stCli/StTransportBase.py",
+        "/opt/hyperflex/storfs-mgmt-cli/stCli-1.0-py3.11.egg/stCli/commonFunctions.py",
+        "/opt/hyperflex/storfs-mgmt-cli/stCli-1.0-py3.11.egg/stCli/stCli.py",
+        "/etc/hyperflex/secure/root_file.pub",
+    ],
+    "remediation": (
+        "1. Remove all three ssl._create_default_https_context bypass assignments. "
+        "   The management server's certificate must be verified against the cluster CA.\n"
+        "2. Replace verify=False in commonFunctions.runRestQueries with "
+        "   verify='/etc/hyperflex/certs/cluster-ca.pem' (the cluster CA cert path).\n"
+        "3. Remove requests.packages.urllib3.disable_warnings(InsecureRequestWarning) — "
+        "   suppressing warnings hides the insecure state from operators.\n"
+        "4. Rotate the X-RootSessionID token (root_file.pub) at minimum on cluster "
+        "   upgrade and preferably on each session boundary; bind it to the issuing "
+        "   node's IP so replay from a different host is rejected.\n"
+        "5. Pin the cluster management CA certificate in the stCli egg and validate "
+        "   the server's certificate chain against it on every connection."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141,
+    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
 ]:
     FINDINGS[_f["id"]] = _f
 
