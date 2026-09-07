@@ -10380,6 +10380,53 @@ HX_F184 = {
     "tags": ["log-exposure", "cluster-uuid", "zookeeper", "cwe-532", "medium"],
 }
 
+HX_F185 = {
+    "id": "HX-F185",
+    "title": "All Active JWT Session Tokens Stored in Unauthenticated ZooKeeper",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-312",
+    "component": "mgmt/opt/hyperflex/clearsession.py; ZooKeeper /rest/aaa/session_table",
+    "description": (
+        "All active JWT session tokens for all users are stored in a single ZooKeeper "
+        "node at path `/rest/aaa/session_table`. "
+        "The node contains a JSON object mapping `accessToken -> sessionInfo` where "
+        "sessionInfo includes `userName`. "
+        "ZooKeeper at localhost:2181 is accessible by any local process without "
+        "authentication (the ZKClient class uses `KazooClient(hosts=host)` with no "
+        "`add_auth` call — HX-F183 auth scheme only applies when `useZKAuth=true` in "
+        "storfs.cfg, which may not be the default deployment). "
+        "An attacker who executes code as any local user can: "
+        "(1) connect to ZK at localhost:2181; "
+        "(2) read `/rest/aaa/session_table`; "
+        "(3) harvest all active JWT tokens including administrator sessions; "
+        "(4) use those tokens for API calls that are not audited (GET — HX-F178) "
+        "for up to 18 days (HX-F179). "
+        "Alternatively, if ZK auth is enabled, the cluster UUID is the shared secret "
+        "(HX-F183) — recoverable via HX-F173/HX-F177/HX-F184 — granting ZK access "
+        "with the same result."
+    ),
+    "evidence": [
+        "clearsession.py:14: AAASessionTablePath = '/rest/aaa/session_table'",
+        "clearsession.py:45: sessionTableJSON, version = getDataJSON(zk, AAASessionTablePath)",
+        "clearsession.py:48: for accessToken, sessionInfo in list(sessionTable.items())",
+        "zkclient.py:42: KazooClient(hosts=self.host, max_retries=5)  # no add_auth",
+        "Attack: kazoo.client.KazooClient('localhost:2181').start(); zk.get('/rest/aaa/session_table')",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Do not store active JWT tokens in ZooKeeper. Maintain session state in a "
+        "memory-only structure with a secure session database backed by a "
+        "properly access-controlled store (Redis with auth, encrypted database). "
+        "If ZooKeeper must be used for session data, enforce ZK ACLs on the "
+        "`/rest/aaa/` subtree with per-service credentials, not the shared cluster UUID. "
+        "Enable `useZKAuth=true` cluster-wide as a compensating control while "
+        "the above is implemented."
+    ),
+    "tags": ["session-token", "zookeeper", "privilege-escalation", "cwe-312", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10394,6 +10441,7 @@ for _f in [
     HX_F177, HX_F178, HX_F179,
     HX_F180, HX_F181, HX_F182,
     HX_F183, HX_F184,
+    HX_F185,
 ]:
     FINDINGS[_f["id"]] = _f
 
