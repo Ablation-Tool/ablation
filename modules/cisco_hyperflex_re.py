@@ -8395,10 +8395,64 @@ HX_F142 = {
     ),
 }
 
+HX_F143 = {
+    "id": "HX-F143",
+    "title": "ESX Root Password Exposed in Process Command Line via factory_deploy.py",
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-factory",
+    "file": "opt/hyperflex/storfs-factory/ansible/factory_deploy.py",
+    "lines": "46-91",
+    "description": (
+        "factory_deploy.py accepts the ESX root password via the -p/--password "
+        "command-line flag. The script base64-encodes the password and attempts "
+        "log-time redaction (line 50: opts.esxPassword = 'XXXXXXXX') before "
+        "restoring the encoded value (line 51: opts.esxPassword = save). The "
+        "password is then passed verbatim as an ansible --extra-vars argument via "
+        "os.execlpe() (lines 81-91): "
+        "'esxPassword=%s' % (password). This spawns ansible-playbook with the "
+        "base64-encoded ESX root credential in its argv. Base64 is trivially "
+        "reversible. During factory deployment any local CVM process with read "
+        "access to /proc can extract the plaintext ESX root password from "
+        "/proc/<ansible-pid>/cmdline. The credential is also visible in 'ps aux' "
+        "output to any local user. ESX root credentials grant full hypervisor "
+        "access across all HyperFlex nodes."
+    ),
+    "proof": (
+        "# Read cmdline of ansible process launched by factory_deploy.py\n"
+        "# factory_deploy.py spawns ansible via os.execlpe (replaces itself):\n"
+        "#   os.execlpe('./factory_deploy.yml', 'factory_deploy.yml',\n"
+        "#              '--extra-vars', 'esxIp=<ip>',\n"
+        "#              '--extra-vars', 'esxUserName=root',\n"
+        "#              '--extra-vars', 'esxPassword=<base64>',  <-- exposed here\n"
+        "#              '-vvvv', os.environ)\n"
+        "# Recovery:\n"
+        "cat /proc/$(pgrep -f factory_deploy.yml)/cmdline | tr '\\0' '\\n' | \\\n"
+        "  grep esxPassword | cut -d= -f2 | base64 -d\n"
+        "# OR via ps:\n"
+        "ps aux | grep factory_deploy.yml | grep -o 'esxPassword=[^ ]*' | \\\n"
+        "  cut -d= -f2 | base64 -d"
+    ),
+    "remediation": (
+        "1. Pass the ESX password via an environment variable or a Vault-managed "
+        "   secret reference instead of --extra-vars on the command line.\n"
+        "2. Use ansible-vault to encrypt the credential at rest and pass only the "
+        "   vault password file path as a cmdline argument.\n"
+        "3. If --extra-vars must be used, write credentials to a temporary file "
+        "   with mode 0600 and pass '@/tmp/secret.yml' instead of inline values; "
+        "   shred the file immediately after os.execlpe returns.\n"
+        "4. The base64 encoding on line 46-51 provides no security benefit and "
+        "   should not be described as obfuscation in documentation."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
+    HX_F143,
 ]:
     FINDINGS[_f["id"]] = _f
 
