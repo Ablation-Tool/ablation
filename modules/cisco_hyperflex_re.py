@@ -11612,6 +11612,117 @@ HX_F210 = {
     "tags": ["zookeeper", "authentication", "cluster-uuid", "cwe-287", "medium"],
 }
 
+HX_F211 = {
+    "id": "HX-F211",
+    "title": "SSO Session ID and Authorization Header Logged in Plaintext to Debug Log",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-532",
+    "component": (
+        "stcli-egg/stCli/StTransportBase.py, "
+        "storfs-misc/setup_kerberos.py, "
+        "storfs-misc/livemigration.py"
+    ),
+    "description": (
+        "The stcli transport base class logs both the SSO session ID and the "
+        "Authorization HTTP header value in plaintext at DEBUG level before "
+        "including them in outbound Thrift API requests. "
+        "StTransportBase.py line 111: "
+        "`logging.debug('Setting X-SSOSessionID: %s', sso_session_id)` — "
+        "SSO session token written to the rotating debug log. "
+        "StTransportBase.py line 114: "
+        "`logging.debug('Setting Authorization header: %s', authorization_header)` — "
+        "Authorization header value (bearer token, basic auth, or session token "
+        "passed via environment variable `Authorization`) written to debug log. "
+        "The same pattern is replicated verbatim in setup_kerberos.py lines 128/131 "
+        "and livemigration.py lines matching the same call sites. "
+        "The debug logger is configured with a RotatingFileHandler at DEBUG level "
+        "(StTransportBase.py lines 61-67), writing to paths including "
+        "`/var/log/hyperflex/pollds.log` (dsStats.py) and service-specific logs. "
+        "A local attacker with read access to the log files can extract valid "
+        "session tokens for replay against the HyperFlex management API without "
+        "re-authenticating."
+    ),
+    "evidence": [
+        "StTransportBase.py line 111: logging.debug('Setting X-SSOSessionID: %s', sso_session_id)",
+        "StTransportBase.py line 114: logging.debug('Setting Authorization header: %s', authorization_header)",
+        "StTransportBase.py lines 61-67: RotatingFileHandler configured at DEBUG level",
+        "setup_kerberos.py line 128: logger.debug('Setting X-SSOSessionID: %s', sso_session_id)",
+        "setup_kerberos.py line 131: logger.debug('Setting Authorization header: %s', authorization_header)",
+        "StMgrTransport.py line 26: self.scheme = 'https' (stMgr uses TLS)",
+        "setup_kerberos.py line 114: url = '%s://%s:%s' % ('http', ...) — HxHyperVSvcMgr transport cleartext HTTP",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the credential values from debug log statements in "
+        "`StTransportBase.py`, `setup_kerberos.py`, and `livemigration.py`. "
+        "Replace with opaque indicators: `logging.debug('X-SSOSessionID set')` "
+        "and `logging.debug('Authorization header set')`. "
+        "Audit all logging calls that include HTTP header values and session tokens "
+        "for credential leakage. "
+        "For the HxHyperVSvcMgr connection in setup_kerberos.py (port 9340), "
+        "migrate from plain HTTP to HTTPS to prevent localhost interception "
+        "by malicious processes on the controller VM."
+    ),
+    "tags": ["credential-leak", "logging", "session-token", "cwe-532", "medium"],
+}
+
+HX_F212 = {
+    "id": "HX-F212",
+    "title": "OS Command Injection via Unescaped vCenter Password in Shell Command",
+    "severity": "MEDIUM",
+    "cvss": 6.3,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-78",
+    "component": "storfs-misc/hx-scripts/reRegisterClusterToVC.py",
+    "description": (
+        "The cluster re-registration script constructs a shell command by "
+        "directly embedding the user-supplied vCenter password into a format "
+        "string, then executes it with `shell=True`, enabling OS command injection "
+        "via shell metacharacters in the password field. "
+        "reRegisterClusterToVC.py line 39-44: "
+        "`cmdStr = 'priv stcli cluster reregister ... "
+        "--vcenter-password \\'{}\\''.format(..., vCenterUserPass)`. "
+        "Line 54: `proc = Popen(cmd, shell=True, stderr=PIPE, stdout=PIPE)`. "
+        "The password is collected via `getpass.getpass()` at line 98 with no "
+        "input sanitization. "
+        "Single-quote wrapping (`--vcenter-password '{}' `) does not prevent "
+        "injection if the password contains a single quote character — the shell "
+        "would terminate the quoted string early and interpret subsequent characters "
+        "as shell commands. "
+        "Dollar-sign characters in the password (`$VARIABLE`) cause shell variable "
+        "expansion, potentially disclosing environment variables or altering the "
+        "command. "
+        "An operator whose vCenter account password contains shell metacharacters "
+        "(single quote, backslash, dollar sign) would trigger command execution "
+        "outside the intended `priv stcli` invocation, running with the privileges "
+        "of the controller VM management process (typically root)."
+    ),
+    "evidence": [
+        "reRegisterClusterToVC.py line 39-44: cmdStr = 'priv stcli cluster reregister ... --vcenter-password \\'{}\\''.format(..., vCenterUserPass)",
+        "reRegisterClusterToVC.py line 54: proc = Popen(cmd, shell=True, stderr=PIPE, stdout=PIPE)",
+        "reRegisterClusterToVC.py line 98: vc_pass = getpass.getpass('Enter vCenter Password: ') — no sanitization",
+        "Shell injection vector: password \"p'ass\" causes: --vcenter-password 'p'ass'",
+        "Shell injection vector: password \"p$HOME\" causes $HOME expansion in shell context",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace `shell=True` with `shell=False` and pass the command as a list: "
+        "`cmd_list = ['priv', 'stcli', 'cluster', 'reregister', "
+        "'--vcenter-datacenter', vCenterDC, '--vcenter-cluster', vCenterCluster, "
+        "'--vcenter-url', vCenterUrl, '--vcenter-user', vCenterUser, "
+        "'--vcenter-password', vCenterUserPass]`; "
+        "`proc = Popen(cmd_list, stderr=PIPE, stdout=PIPE)`. "
+        "With `shell=False`, the password is passed directly to the process "
+        "argument vector without shell interpretation, preventing injection "
+        "regardless of password content. "
+        "This also prevents password exposure in `/proc/<pid>/cmdline` since "
+        "the process table shows separate argv elements rather than a shell string."
+    ),
+    "tags": ["command-injection", "shell", "vcenter", "cwe-78", "medium"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11635,6 +11746,7 @@ for _f in [
     HX_F202, HX_F203, HX_F204,
     HX_F205, HX_F206, HX_F207,
     HX_F208, HX_F209, HX_F210,
+    HX_F211, HX_F212,
 ]:
     FINDINGS[_f["id"]] = _f
 
