@@ -12022,6 +12022,166 @@ HX_F216 = {
     "tags": ["factory", "credentials", "process-args", "esxi", "noSSLVerify", "cwe-214", "medium"],
 }
 
+HX_F217 = {
+    "id": "HX-F217",
+    "title": "Cluster Credential AES Encryption Key Statically Derived from World-Readable Shipped Firmware File",
+    "severity": "HIGH",
+    "cvss_score": 6.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": ["CWE-321"],
+    "component": "storfs-misc/springpath_env_parse.py + springpath_default.tunes",
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "`springpath_env_parse.py` encrypts and decrypts sensitive credential values in tunes "
+        "configuration files using AES-256-CBC. The encryption key is derived exclusively from "
+        "the MD5 hexdigest of `/usr/share/hyperflex/storfs-misc/Secret.class`, a compiled Java "
+        "class file shipped with the firmware at a world-readable path (`-rwxr-xr-x`). "
+        "Because `Secret.class` is static and identical across all HXDP 6.0.2b deployments, "
+        "the AES key is the same for every HyperFlex cluster running this firmware version. "
+        "The key derivation is: `key = hashlib.md5(Secret.class_bytes).hexdigest()` "
+        "(32-char hex string as UTF-8 = 32-byte AES-256 key). "
+        "Proof: for HXDP 6.0.2b, `md5(Secret.class)` = `1f6d13bcd7753f2d3b2e2da361b7afb5`. "
+        "Applying this key to the AES-CBC blobs in `springpath_default.tunes` yields: "
+        "`stctl_vm_passwd` = `Cisco123`, `ssl_cert_passwd` = `springpath`. "
+        "Any attacker with access to the firmware image (publicly distributed) and any cluster's "
+        "tunes file can decrypt all cluster credentials without any cluster-specific secret."
+    ),
+    "evidence": [
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/springpath_env_parse.py",
+            "lines": "30-35, 45-53, 69-87",
+            "snippet": (
+                "ENV_VARIABLE_STCTL_PASS = \"/usr/share/hyperflex/storfs-misc/Secret.class\"\n"
+                "def md5(fname):\n"
+                "    hash_md5 = hashlib.md5()\n"
+                "    with open(fname, 'rb') as f:\n"
+                "        for chunk in iter(lambda: f.read(4096), b''): hash_md5.update(chunk)\n"
+                "    return hash_md5.hexdigest()\n"
+                "def decrypt(key, enc):\n"
+                "    enc = base64.b64decode(enc)\n"
+                "    iv = enc[:16]\n"
+                "    cipher = AES.new(key.encode('utf8'), AES.MODE_CBC, iv)\n"
+                "    return unpad(cipher.decrypt(enc[16:]))\n"
+                "if tokens[1] in ('stctl_vm_passwd', 'ssl_cert_passwd', 'installer_passwd'):\n"
+                "    file_md5 = md5(ENV_VARIABLE_STCTL_PASS)\n"
+                "    decoded = decrypt(file_md5, value)\n"
+                "    return decoded"
+            ),
+            "note": "Key = MD5(Secret.class); static across all 6.0.2b deployments",
+        },
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/Secret.class",
+            "lines": "n/a",
+            "snippet": "Permissions: -rwxr-xr-x (world-readable)\nMD5: 1f6d13bcd7753f2d3b2e2da361b7afb5",
+            "note": "World-readable shipped binary; its MD5 is the AES key",
+        },
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/springpath_default.tunes",
+            "lines": "credentials section",
+            "snippet": (
+                "[credentials]\n"
+                "stctl_vm_uname=root\n"
+                "stctl_vm_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=\n"
+                "ssl_cert_passwd=yWK4pTIUEr0TCjpQdp9sb/KW404x6Id/6ImlCOWdG7s=\n"
+                "installer_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU="
+            ),
+            "note": "Decrypts to: stctl_vm_passwd=Cisco123, ssl_cert_passwd=springpath (verified)",
+        },
+    ],
+    "impact": (
+        "An attacker with access to the HXDP firmware image (publicly distributed) can derive "
+        "the AES key without any cluster access and use it to decrypt credentials from any "
+        "cluster's tunes files obtained via other means (backup access, log exfiltration, "
+        "ZooKeeper read). "
+        "The tunes files themselves reside on the controller VM; on a live cluster, any local "
+        "user who can read `/opt/hyperflex/springpath_custom_cluster.tunes` can decrypt all "
+        "cluster credentials including the SSH root password for all nodes and the SSL certificate "
+        "private key passphrase."
+    ),
+    "remediation": (
+        "1. Generate a unique per-cluster encryption key at install time using a CSPRNG; "
+        "do not derive the key from any shipped file. "
+        "2. Store the per-cluster key in a hardware-backed secret store (TPM, HSM, or at minimum "
+        "a root-owned directory with mode 0600). "
+        "3. Do not use MD5 as a key derivation function; use PBKDF2, scrypt, or HKDF with "
+        "a random salt. "
+        "4. Consider using an OS-level secret store (libsecret, vault, or credential manager) "
+        "instead of encrypted flat files."
+    ),
+    "tags": ["credentials", "aes", "static-key", "Secret.class", "tunes", "cwe-321", "high"],
+}
+
+HX_F218 = {
+    "id": "HX-F218",
+    "title": "Default Cluster Node SSH Root Password 'Cisco123' Shipped in Firmware Default Tunes",
+    "severity": "CRITICAL",
+    "cvss_score": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": ["CWE-798"],
+    "component": "storfs-misc/springpath_default.tunes",
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "The shipped `springpath_default.tunes` file sets the default cluster controller VM "
+        "SSH password (`stctl_vm_passwd`) and installer password (`installer_passwd`) to "
+        "`Cisco123`. This password is used by `springpath_env_parse.py` for SSH authentication "
+        "to all cluster storage controller nodes (`stctl_vm_uname=root`). "
+        "The value is AES-encrypted in the tunes file but the encryption key is statically "
+        "derived from the shipped `Secret.class` file (see HX-F217), making the default "
+        "credential recoverable from the firmware image. "
+        "Proof of default credential: decrypting `stctl_vm_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=` "
+        "with key `1f6d13bcd7753f2d3b2e2da361b7afb5` (MD5 of Secret.class) yields `Cisco123`. "
+        "Separately: the SSL certificate private key passphrase `ssl_cert_passwd` decrypts to `springpath`. "
+        "Any cluster that has not overridden these defaults in `springpath_custom_cluster.tunes` "
+        "or `springpath_custom_node.tunes` accepts `Cisco123` as the root SSH password for "
+        "all storage controller VMs."
+    ),
+    "evidence": [
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/springpath_default.tunes",
+            "lines": "credentials section",
+            "snippet": (
+                "stctl_vm_uname=root\n"
+                "stctl_vm_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=\n"
+                "ssl_cert_passwd=yWK4pTIUEr0TCjpQdp9sb/KW404x6Id/6ImlCOWdG7s=\n"
+                "installer_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU="
+            ),
+            "note": "Verified decryption: stctl_vm_passwd=Cisco123, ssl_cert_passwd=springpath",
+        },
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/springpath_env_parse.py",
+            "lines": "75-88",
+            "snippet": (
+                "def parseEnvVariableTunes(env_variable):\n"
+                "    value = parseEnvVariableTunesFile(ENV_VARIABLES_FILE_CUSTOM_NODE, ...)\n"
+                "    if not value:\n"
+                "        value = parseEnvVariableTunesFile(ENV_VARIABLES_FILE_CUSTOM_CLUSTER, ...)\n"
+                "    if not value:\n"
+                "        value = parseEnvVariableTunesFile(ENV_VARIABLES_FILE_DEFAULT, ...)  # springpath_default.tunes\n"
+                "    decoded = decrypt(file_md5, value)\n"
+                "    return decoded"
+            ),
+            "note": "Default tunes used when neither custom_node nor custom_cluster overrides exist",
+        },
+    ],
+    "impact": (
+        "Any cluster where the default `stctl_vm_passwd` has not been overridden accepts SSH "
+        "root authentication with `Cisco123`. This grants full operating system access to all "
+        "storage controller VMs. The same credential is used programmatically across multiple "
+        "management scripts (node_replace.py, post_install.py, support.py, validation_validator.py), "
+        "meaning a single credential enables broad cluster-wide access. "
+        "The SSL certificate passphrase `springpath` also compromises the cluster TLS private "
+        "key if the certificate password protection is the only barrier to key access."
+    ),
+    "remediation": (
+        "1. Remove hardcoded default credentials from the shipped firmware. "
+        "2. Generate a cryptographically random per-cluster password at initial provisioning "
+        "and store it in a secrets manager, never in a flat tunes file. "
+        "3. Require password change on first boot before any cluster node is reachable via SSH. "
+        "4. Audit all existing deployments that may still use the `Cisco123` default."
+    ),
+    "tags": ["default-credentials", "ssh", "root", "Cisco123", "cwe-798", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -12048,6 +12208,7 @@ for _f in [
     HX_F211, HX_F212, HX_F213,
     HX_F214,
     HX_F215, HX_F216,
+    HX_F217, HX_F218,
 ]:
     FINDINGS[_f["id"]] = _f
 
