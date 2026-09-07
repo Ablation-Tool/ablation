@@ -12480,6 +12480,189 @@ HX_F222 = {
     "tags": ["sshpass", "credentials", "process-args", "cwe-214", "medium"],
 }
 
+HX_F223 = {
+    "id": "HX-F223",
+    "title": "ESXi Password Exposed in Ansible Verbose Log via Hardcoded -vvvv Flag",
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": ["CWE-532", "CWE-214"],
+    "component": (
+        "storfs-factory/ansible/factory_deploy.py"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "factory_deploy.py passes the base64-encoded ESXi password as an Ansible "
+        "`--extra-vars` argument with a hardcoded `-vvvv` verbosity flag. "
+        "Ansible's `-vvvv` level logs `--extra-vars` values to stdout and to any "
+        "configured log file, permanently recording `esxPassword=<base64>` in "
+        "plain text. Base64 is not encryption and is trivially reversed. "
+        "Line 87: `\"esxPassword=%s\" % (password)` constructs the extra-vars string. "
+        "Line 90: `-vvvv` is a hardcoded literal argument — verbosity cannot be "
+        "reduced at runtime. "
+        "The script masks the password at line 49 before logging its own parameters "
+        "(line 50), but the Ansible invocation at line 81 passes the unmasked "
+        "base64 value directly: `os.execlpe(\"./factory_deploy.yml\", ..., "
+        "\"--extra-vars\", \"esxPassword=%s\" % (password), ..., \"-vvvv\", ...)`."
+    ),
+    "evidence": [
+        {
+            "file": "factory/opt/hyperflex/storfs-factory/ansible/factory_deploy.py",
+            "lines": "79-91",
+            "snippet": (
+                "def factory_deploy_node(ip, user, password, config_ssd):\n"
+                "    set_env()\n"
+                "    os.execlpe(\"./factory_deploy.yml\", \"factory_deploy.yml\",\n"
+                "                \"--extra-vars\",\n"
+                "                \"esxIp=%s\" % (ip),\n"
+                "                \"--extra-vars\",\n"
+                "                \"esxUserName=%s\" % (user),\n"
+                "                \"--extra-vars\",\n"
+                "                \"esxPassword=%s\" % (password),\n"
+                "                \"--extra-vars\",\n"
+                "                \"configSSD=%s\" % (config_ssd),\n"
+                "                \"-vvvv\",\n"
+                "                os.environ)"
+            ),
+            "note": (
+                "password is base64-encoded ESXi credential; -vvvv is hardcoded "
+                "and cannot be disabled; os.execlpe also exposes the value in "
+                "/proc/<pid>/cmdline during process lifetime"
+            ),
+        },
+        {
+            "file": "factory/opt/hyperflex/storfs-factory/ansible/factory_deploy.py",
+            "lines": "46-51",
+            "snippet": (
+                "save = base64.b64encode(bytes(opts.esxPassword,'utf-8')).decode('utf-8')\n"
+                "opts.esxPassword = \"XXXXXXXX\"\n"
+                "logging.info(\"Using Parameters %s\", opts)\n"
+                "opts.esxPassword = save"
+            ),
+            "note": (
+                "Masking at line 49-50 only protects the local logging.info call; "
+                "password is restored to base64 at line 51 and passed unmasked "
+                "to Ansible invocation"
+            ),
+        },
+    ],
+    "impact": (
+        "Any user with read access to the Ansible log file, or the ability to run "
+        "`ps aux`/read `/proc/<pid>/cmdline` during factory deployment, obtains the "
+        "base64-encoded ESXi root password. Decoding is one `base64 -d` command. "
+        "The credential grants root access to the target ESXi host. "
+        "Ansible's -vvvv log output persists after the process exits."
+    ),
+    "remediation": (
+        "1. Remove the hardcoded `-vvvv` flag; use `-v` or no verbosity flag in "
+        "production deployments. "
+        "2. Pass credentials via Ansible Vault or environment variables rather than "
+        "`--extra-vars` to prevent log exposure. "
+        "3. If `--extra-vars` must be used, set `no_log: true` on the receiving task "
+        "in the playbook to suppress credential values from Ansible's verbose output."
+    ),
+    "tags": ["credentials", "ansible", "verbose-logging", "cwe-532", "cwe-214", "medium"],
+}
+
+HX_F224 = {
+    "id": "HX-F224",
+    "title": "Diagnostic Account Not Barred from Upgrade, Support, and Encryption Services",
+    "severity": "HIGH",
+    "cvss_score": 8.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": ["CWE-284"],
+    "component": (
+        "upgrade-war/WEB-INF/classes/application.conf + "
+        "support-war/WEB-INF/classes/application.conf + "
+        "encryption-war/WEB-INF/classes/application.conf + "
+        "enc-war/WEB-INF/classes/application.conf"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "The `diag` and `local/diag` accounts are barred from authentication in "
+        "`auth-war` and `authfilter` (`barredUsers = [\"root\", \"local/root\", \"diag\", "
+        "\"local/diag\"]`), but the `barredUsers` list in upgrade-war, support-war, "
+        "encryption-war, and enc-war omits both `diag` entries: "
+        "`barredUsers = [\"root\", \"local/root\"]`. "
+        "Each WAR hosts its own `/aaa/v1/auth` endpoint (in its `authUrls` list, "
+        "which allows unauthenticated access for token issuance). "
+        "An authenticated `diag` request to the upgrade-war `/aaa/v1/auth` succeeds "
+        "and returns a valid JWT because the barring logic is applied per-WAR, "
+        "not centrally. "
+        "The `diag` account is a real HXLOCAL account: it appears in "
+        "`passwordSyncAccounts` alongside `root` and `admin` in three separate "
+        "management service configs, confirming it holds cluster-managed credentials. "
+        "Affected services include cluster upgrade orchestration (upgrade-war), "
+        "support bundle generation and upload (support-war), and certificate "
+        "encryption key management (encryption-war, enc-war)."
+    ),
+    "evidence": [
+        {
+            "file": "auth-war/WEB-INF/classes/application.conf",
+            "lines": "42",
+            "snippet": (
+                "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]"
+            ),
+            "note": "Main auth WAR: diag barred",
+        },
+        {
+            "file": "upgrade-war/WEB-INF/classes/application.conf",
+            "lines": "48",
+            "snippet": (
+                "barredUsers = [\"root\", \"local/root\"]"
+            ),
+            "note": "Upgrade WAR: diag NOT barred; /aaa/v1/auth in authUrls at line 44",
+        },
+        {
+            "file": "support-war/WEB-INF/classes/application.conf",
+            "lines": "48",
+            "snippet": (
+                "barredUsers = [\"root\", \"local/root\"]"
+            ),
+            "note": "Support WAR: diag NOT barred; exposes support bundle generation",
+        },
+        {
+            "file": "encryption-war/WEB-INF/classes/application.conf",
+            "lines": "48",
+            "snippet": (
+                "barredUsers = [\"root\", \"local/root\"]"
+            ),
+            "note": "Encryption WAR: diag NOT barred; exposes certificate key management",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-mgmt/hxSvcMgr-1.0/conf/application.conf",
+            "lines": "21",
+            "snippet": (
+                "passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]"
+            ),
+            "note": "diag is a real HXLOCAL account with cluster-synced credentials",
+        },
+    ],
+    "impact": (
+        "A network-accessible attacker with `diag` account credentials can "
+        "authenticate to the upgrade, support, and encryption service endpoints "
+        "that the auth policy is intended to restrict. "
+        "Via upgrade-war: trigger cluster upgrade operations or extract upgrade "
+        "state. "
+        "Via support-war: initiate support bundle collection (aggregates cluster "
+        "logs, configs) and upload to `upload.hyperflex.io` (see HX-F220). "
+        "Via encryption-war/enc-war: access certificate encryption key material. "
+        "The `diag` account's credentials are cluster-synced with root and admin "
+        "(same passwordSyncAccounts list), increasing credential overlap risk."
+    ),
+    "remediation": (
+        "1. Add `\"diag\"` and `\"local/diag\"` to the `barredUsers` list in "
+        "upgrade-war, support-war, encryption-war, and enc-war "
+        "`application.conf` files, mirroring the auth-war configuration. "
+        "2. Centralize the `barredUsers` policy in the shared authentication "
+        "filter (`authfilter`) rather than maintaining per-WAR copies that can "
+        "diverge. "
+        "3. Audit all other WAR `application.conf` files for similar divergence "
+        "from the auth-war baseline `barredUsers` list."
+    ),
+    "tags": ["authentication", "diag-account", "access-control", "cwe-284", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -12509,6 +12692,7 @@ for _f in [
     HX_F217, HX_F218,
     HX_F219, HX_F220,
     HX_F221, HX_F222,
+    HX_F223, HX_F224,
 ]:
     FINDINGS[_f["id"]] = _f
 
