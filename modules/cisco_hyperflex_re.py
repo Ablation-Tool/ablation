@@ -8837,11 +8837,192 @@ HX_F150 = {
     ),
 }
 
+HX_F151 = {
+    "id": "HX-F151",
+    "title": (
+        "Global Python SSL Context Monkey-Patched to Unverified in config-ctlvm.py, "
+        "Disabling TLS Certificate Validation for All vSphere SDK Connections"
+    ),
+    "severity": "MEDIUM",
+    "cvss_score": 6.8,
+    "cvss_vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-appliance",
+    "file": "usr/share/hyperflex/storfs-appliance/config-ctlvm.py",
+    "lines": "533-534",
+    "description": (
+        "The appliance controller VM configuration script (config-ctlvm.py) "
+        "monkey-patches the global Python SSL context in its main() function "
+        "before any connection is established (lines 533-534):\n\n"
+        "'ssl._create_default_https_context = ssl._create_unverified_context'\n\n"
+        "Unlike request-level 'verify=False' flags (HX-F142, HX-F148, HX-F149), "
+        "this technique replaces the default SSL context factory for the entire "
+        "Python process. Every SSL connection subsequently made by ANY library in "
+        "the process — including pyVmomi's 'connect.Connect()' at line 504, "
+        "urllib, httplib, and any vSphere SDK operation — will use an unverified "
+        "context with no server certificate validation.\n\n"
+        "The script connects to the ESX host via pyVmomi: "
+        "'connect.Connect(host=args.host, user=args.user, pwd=args.password)' "
+        "(line 504). With the global SSL context replaced, this vSphere SDK "
+        "connection sends the ESX root password and the resulting vSphere session "
+        "token over TLS without verifying the server's certificate. An "
+        "adjacently-positioned MiTM attacker can present a self-signed certificate "
+        "and capture both the ESX root credentials and the vSphere session, "
+        "gaining full ESX hypervisor access.\n\n"
+        "The script is invoked by storfs-appliance scripts during USB NIC "
+        "configuration and extra-config operations, which run as root."
+    ),
+    "proof": (
+        "# Confirm global SSL monkey-patch:\n"
+        "grep -n 'ssl._create_default_https_context\\|_create_unverified_context' "
+        "/usr/share/hyperflex/storfs-appliance/config-ctlvm.py\n"
+        "# Expected: lines 533-534 in main() before any connection is made\n\n"
+        "# Confirm pyVmomi vSphere connection with no cert validation:\n"
+        "python3 -c \"\n"
+        "import ssl\n"
+        "ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "from pyVim import connect\n"
+        "# connect.Connect() will now bypass cert validation:\n"
+        "si = connect.Connect(host='<esxi_ip>', user='root', pwd='<password>')\n"
+        "print('Connected without cert validation:', si)\""
+    ),
+    "remediation": (
+        "1. Remove lines 533-534 entirely. Python's default SSL context already "
+        "   validates certificates.\n"
+        "2. For self-signed ESX certificates, create a custom SSLContext with "
+        "   'context.verify_mode = ssl.CERT_REQUIRED' and load the ESX server "
+        "   certificate into the trust store: "
+        "'context.load_verify_locations(/etc/hyperflex/secure/esxi_cert.pem)'.\n"
+        "3. Apply the same remediation class as HX-F142, HX-F148, HX-F149: "
+        "   no HyperFlex component should globally or per-connection disable "
+        "   TLS certificate verification."
+    ),
+}
+
+HX_F152 = {
+    "id": "HX-F152",
+    "title": (
+        "ESX Root Password Exposed in config-ctlvm.py Command-Line Argument"
+    ),
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-appliance",
+    "file": "usr/share/hyperflex/storfs-appliance/config-ctlvm.py",
+    "lines": "427-429",
+    "description": (
+        "The appliance controller VM configuration script (config-ctlvm.py) "
+        "accepts the ESX host root password via the '-p'/'--password' command-line "
+        "option (lines 427-429: 'parser.add_argument(\"-p\", \"--password\", ...)'). "
+        "When the script is invoked with '-p <password>', the plaintext ESX root "
+        "password is visible in the process table to any local user via 'ps aux' "
+        "or '/proc/<pid>/cmdline' for the lifetime of the Python interpreter.\n\n"
+        "The password is used at line 506 to authenticate to the ESX host via "
+        "the pyVmomi SDK: 'connect.Connect(host=args.host, user=args.user, "
+        "pwd=args.password)'. Combined with HX-F151 (global SSL bypass), the "
+        "ESX root password is both visible locally via the process table AND "
+        "exposed to network interception during the TLS-unverified vSphere "
+        "SDK connection.\n\n"
+        "Same vulnerability class as HX-F143 (factory_deploy.py), HX-F147 "
+        "(changepasswd.sh), and HX-F150 (switchToArbitrator.py)."
+    ),
+    "proof": (
+        "# Observe ESX password in process table during config-ctlvm.py invocation:\n"
+        "while true; do\n"
+        "  ps auxww | grep config-ctlvm | grep -v grep\n"
+        "done\n"
+        "# Expected output:\n"
+        "# root <pid> ... python3 config-ctlvm.py -e -p RootP@ssw0rd -u root -H <host>\n\n"
+        "# Confirm -p/--password option definition:\n"
+        "grep -n 'password' /usr/share/hyperflex/storfs-appliance/config-ctlvm.py | head -5"
+    ),
+    "remediation": (
+        "1. Remove '-p'/'--password' command-line option. Supply the ESX password "
+        "   via stdin (read -rs ESX_PASS) or a securely-permissioned credentials "
+        "   file (mode 0600).\n"
+        "2. The stored-credentials path (lines 491-492) reads the password from "
+        "   a config file via 'get_host_info()' — this avoids cmdline exposure "
+        "   and is the correct model. Remove the option to override via cmdline "
+        "   and always use the stored-credentials path.\n"
+        "3. Apply the same fix class as HX-F143, HX-F147, HX-F150."
+    ),
+}
+
+HX_F153 = {
+    "id": "HX-F153",
+    "title": (
+        "SED Drive Key Encryption Key (KEK) Exposed in sedutil-cli "
+        "Command-Line Arguments via sed-client.sh"
+    ),
+    "severity": "HIGH",
+    "cvss_score": 7.0,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-214",
+    "component": "storfs-appliance",
+    "file": "usr/share/hyperflex/storfs-appliance/sed-client.sh",
+    "lines": "535, 630, 696",
+    "description": (
+        "The SED (Self-Encrypting Drive) client script (sed-client.sh) passes "
+        "the drive Key Encryption Key (KEK) as a positional command-line argument "
+        "to the sedutil-cli binary in at least three functions:\n\n"
+        "- sed_enable_security() line 535: "
+        "'sedutil --enable-band 0 \"$KEK\" \"$DISK\"'\n"
+        "- sed_secure_erase() line 630: "
+        "'sedutil --erase-band 0 \"$KEK\" \"$DISK\"'\n"
+        "- sed_lock_disk() line 696: "
+        "'sedutil --lock-band 0 \"$KEK\" \"$DISK\"'\n\n"
+        "The wrapper function 'sedutil()' at line 223 executes the binary via "
+        "'$SEDUTIL $ARGS' — the entire argument list including the KEK is "
+        "passed directly to the process and visible in '/proc/<pid>/cmdline' "
+        "for the duration of the sedutil-cli invocation.\n\n"
+        "The KEK is the authentication key for all TCG OPAL SED drives in the "
+        "HyperFlex cluster. An attacker with local access who can read "
+        "'/proc/<pid>/cmdline' during a sed_enable_security, sed_secure_erase, "
+        "or sed_lock_disk operation captures the KEK for all cluster drives. "
+        "With the KEK and subsequent physical or logical drive access, the "
+        "attacker can: (1) unlock SED bands and read all encrypted drive data; "
+        "(2) erase drives (sed_secure_erase); (3) re-key drives, denying the "
+        "cluster access to its own encrypted data.\n\n"
+        "The sedsvc Go service (HX-F141) retrieves the KEK from ZooKeeper and "
+        "delivers it to the encryption WAR. This finding documents the propagation "
+        "of that KEK to disk via cmdline args in the shell layer."
+    ),
+    "proof": (
+        "# During a disk encryption enable or rekey operation, observe the KEK:\n"
+        "while true; do\n"
+        "  for pid in $(pgrep sedutil-cli); do\n"
+        "    cat /proc/$pid/cmdline 2>/dev/null | tr '\\0' ' '\n"
+        "  done\n"
+        "done\n"
+        "# Expected: 'sedutil-cli --enable-band 0 <kek_value> /dev/sdX'\n\n"
+        "# Confirm KEK as cmdline arg in sed-client.sh:\n"
+        "grep -n '\"\\$KEK\"' /usr/share/hyperflex/storfs-appliance/sed-client.sh\n"
+        "# Expected: lines 535, 630, 696 (enable-band, erase-band, lock-band)"
+    ),
+    "remediation": (
+        "1. sedutil-cli should accept the KEK via stdin rather than cmdline args. "
+        "   Pass via heredoc or process substitution: "
+        "'echo \"$KEK\" | sedutil --enable-band-stdin 0 \"$DISK\"' "
+        "   (requires sedutil-cli modification or use of a wrapper that accepts "
+        "   the key via stdin and passes it to the binary's expected protocol).\n"
+        "2. If the sedutil-cli binary cannot be modified, create a wrapper binary "
+        "   that accepts the key via stdin or a named pipe (mode 0600) and "
+        "   internally passes it to sedutil using an environment variable or "
+        "   an OS-level mechanism that does not appear in the process table.\n"
+        "3. Ensure all KEK-using functions in sed-client.sh are updated "
+        "   consistently — sed_enable_security, sed_disable_security, "
+        "   sed_secure_erase, sed_lock_disk, and rekey_bandmaster all pass "
+        "   the KEK as an argument and require the same fix."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
+    HX_F151, HX_F152, HX_F153,
 ]:
     FINDINGS[_f["id"]] = _f
 
