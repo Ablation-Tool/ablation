@@ -7970,10 +7970,79 @@ HX_F137 = {
     ),
 }
 
+HX_F138 = {
+    "id": "HX-F138",
+    "title": (
+        "HyperFlex HXDP 6.0.2b stNodeMgr setStretchedConfig Thrift RPC — "
+        "Unsanitized AUXZK_IP Written to Sourced Shell Config → Root Command Injection"
+    ),
+    "severity": "CRITICAL",
+    "cvss": "8.8",
+    "cvss_vector": "AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-78",
+    "versions_affected": "6.0.2b (confirmed); 5.5.2b not checked",
+    "component": "storfs-mgmt stNodeMgr-1.0 (Scala/Finagle Thrift service, port 10207)",
+    "evidence": {
+        "thrift_method": (
+            "StNodeMgrImpl.setStretchedConfig(String auxZkIp, boolean preferredSite)\n"
+            "  — no auth check; immediately wraps in futurePool:\n"
+            "  0: aload_0\n"
+            "  1: invokevirtual  // futurePool\n"
+            "  4: aload_0\n"
+            "  5: aload_1        // auxZkIp (attacker-controlled String)\n"
+            "  6: iload_2\n"
+            "  7: invokedynamic  // apply$mcV$sp -> writeStretchedCfgAndRestartService\n"
+            "  15: areturn"
+        ),
+        "injection_site": (
+            "writeStretchedCfgAndRestartService (StNodeMgrImpl.class):\n"
+            "  31: new    StringBuilder\n"
+            "  41: ldc    \"AUXZK_IP=\"               # prefix\n"
+            "  44: invokevirtual StringBuilder.append(String)  # appends AUXZK_IP=\n"
+            "  47: aload_1                            # attacker-supplied auxZkIp — NO validation\n"
+            "  48: invokevirtual StringBuilder.append(String)  # appends raw value\n"
+            "  51: invokevirtual StringBuilder.toString\n"
+            "  ...writes list as /etc/hyperflex/stretched.cfg\n"
+            "  ...calls startSystemdService(\"hxArbitratorSvcMgr\")"
+        ),
+        "shell_source": (
+            "auxzk-start.sh (storfs-stretched_6.0.2b-44423_amd64.deb):\n"
+            "  line 7:  . /etc/hyperflex/stretched.cfg    # POSIX source — executes as shell\n"
+            "  line 51: setup_aux_if ${AUXZK_IP}          # then uses AUXZK_IP in iptables/ip link\n"
+            "  Script runs as root (mounts chroot, iptables, chroot /bin/bash)"
+        ),
+        "crash_trigger": (
+            "setStretchedConfig('$(id>/tmp/pwned.txt)', false)  via Thrift on port 10207:\n"
+            "  -> /etc/hyperflex/stretched.cfg contains:  AUXZK_IP=$(id>/tmp/pwned.txt)\n"
+            "  -> hxArbitratorSvcMgr restarts\n"
+            "  -> auxzk-start.sh line 7 sources the file\n"
+            "  -> shell expands $(...) as command substitution -> executes as root"
+        ),
+        "auth_requirement": (
+            "Thrift method setStretchedConfig has no token/auth check at the method level.\n"
+            "stNodeMgr exposes a sessionToken() that reads /etc/hyperflex/secure/root_file.pub,\n"
+            "but this token is not validated in setStretchedConfig or its lambda.\n"
+            "Port 10207 is not in the firewall_allowed_ports list in application.conf,\n"
+            "suggesting cluster-internal network access is sufficient (AV:A).\n"
+            "If port 10207 is reachable from the management network, CVSS becomes 9.8 (AV:N)."
+        ),
+    },
+    "remediation": (
+        "1. Validate auxZkIp against a strict IPv4/IPv6 regex before any string operation.\n"
+        "   Reject inputs containing shell metacharacters ($, `, ;, &, |, >, <, \\n, \\r).\n"
+        "2. Do not write shell-variable-assignment syntax to files that are sourced.\n"
+        "   Use a key=value properties parser in auxzk-start.sh instead of `. stretched.cfg`.\n"
+        "   Replace `AUXZK_IP=$(...)` expansion with explicit validated env var export.\n"
+        "3. Add Finagle request filter enforcing session token on all stNodeMgr Thrift methods\n"
+        "   that modify cluster configuration (setStretchedConfig, initializeZookeeper, etc.).\n"
+        "4. Restrict port 10207 to cluster storage network; block from management/ESXi network."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136, HX_F137,
+    HX_F135, HX_F136, HX_F137, HX_F138,
 ]:
     FINDINGS[_f["id"]] = _f
 
