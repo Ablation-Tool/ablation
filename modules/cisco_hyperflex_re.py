@@ -11185,6 +11185,60 @@ HX_F202 = {
     "tags": ["nginx", "unauthenticated", "file-disclosure", "tmp", "http", "cwe-284", "critical"],
 }
 
+HX_F203 = {
+    "id": "HX-F203",
+    "title": "CIMC and ESXi Credentials Passed as CLI Arguments to hx_edge — Visible in Process Table",
+    "severity": "HIGH",
+    "cvss": 7.0,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-214",
+    "component": (
+        "storfs-deploy/ansible/roles/cimc/tasks/configure.yml / "
+        "hx_edge gen-inventory command"
+    ),
+    "description": (
+        "cimc/tasks/configure.yml executes the `hx_edge` binary with CIMC and ESXi "
+        "credentials passed as positional CLI arguments on two code paths. "
+        "Code path 1 (line 109, when basePath == ''): "
+        "`hx_edge --cimc-password='{{ cimcPassword | b64decode }}' "
+        "--host-password='{{ esxPassword | b64decode }}'`. "
+        "Code path 2 (line 120, when basePath != ''): "
+        "`hx_edge --cimc-password='{{ cimcPassword | b64decode }}' "
+        "--host-password='{{ hostPassword }}'`. "
+        "The second code path passes `hostPassword` without base64 decoding, "
+        "suggesting it may already be plaintext. "
+        "CIMC (Cisco Integrated Management Controller) is out-of-band management "
+        "infrastructure — its credentials grant hardware-level control independent "
+        "of the operating system (power cycle, KVM console, firmware update, sensor access). "
+        "Both code paths use `no_log: True` in Ansible to suppress task output "
+        "in the playbook log, but `no_log` does not prevent the spawned subprocess "
+        "from appearing in `/proc/<pid>/cmdline` or `ps aux` output on the target node "
+        "during the window the command runs. "
+        "Any local user on the HyperFlex node can read CIMC credentials from the "
+        "process table during deployment or CIMC re-provisioning operations."
+    ),
+    "evidence": [
+        "configure.yml line 109: command: hx_edge --cimc-password='{{ cimcPassword | b64decode }}' --host-password='{{ esxPassword | b64decode }}'",
+        "configure.yml line 120: command: hx_edge --cimc-password='{{ cimcPassword | b64decode }}' --host-password='{{ hostPassword }}'",
+        "no_log: True suppresses Ansible playbook log only — does not clear /proc/<pid>/cmdline",
+        "hxEdge resolved at line 14: /bin/hx_edge or {basePath}/packages/hx_imc_mfg/hx_edge.py",
+        "CIMC credentials = hardware-level out-of-band management access (power, KVM, firmware)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Pass credentials via environment variables or a temporary credentials file "
+        "with 0600 permissions rather than as CLI arguments. "
+        "For the hx_edge binary: add a `--cimc-password-file` flag that reads from "
+        "a file path, or read from stdin. "
+        "The file should be created with mkstemp, written, passed by path, and "
+        "deleted immediately after the subprocess exits. "
+        "Environment variable delivery (`CIMC_PASSWORD=xxx hx_edge ...`) prevents "
+        "process table exposure on Linux since environment variables are not visible "
+        "to other users in /proc/<pid>/environ by default."
+    ),
+    "tags": ["cimc", "oob-management", "process-table", "cwe-214", "ansible", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11205,7 +11259,7 @@ for _f in [
     HX_F195, HX_F196,
     HX_F197, HX_F198,
     HX_F199, HX_F200, HX_F201,
-    HX_F202,
+    HX_F202, HX_F203,
 ]:
     FINDINGS[_f["id"]] = _f
 
