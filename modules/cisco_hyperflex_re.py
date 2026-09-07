@@ -11723,6 +11723,66 @@ HX_F212 = {
     "tags": ["command-injection", "shell", "vcenter", "cwe-78", "medium"],
 }
 
+HX_F213 = {
+    "id": "HX-F213",
+    "title": "SSO Manager Encryption Key and Credentials Stored in Unauthenticated ZooKeeper",
+    "severity": "HIGH",
+    "cvss": 7.1,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-312",
+    "component": (
+        "storfs-mgmt/stSSOMgr-1.0/conf/application.conf"
+    ),
+    "description": (
+        "The HyperFlex SSO Manager stores three categories of sensitive material "
+        "in ZooKeeper: authentication keys, session credentials, and the session "
+        "token encryption key. With ZooKeeper running unauthenticated by default "
+        "(see `useZKAuth = False`, the default in storfs.cfg), any local process "
+        "on the controller VM can read these values without credentials. "
+        "stSSOMgr-1.0/conf/application.conf defines: "
+        "`zkBasePath = '/stSSOMgr'`; "
+        "`zkAuthKey = '/auth'` — authentication key at ZK path `/stSSOMgr/auth`; "
+        "`zkCredsKey = 'creds'` — session credential store at `/stSSOMgr/creds`; "
+        "`zkEncryptionKey = 'keyData'` — session token encryption key at "
+        "`/stSSOMgr/keyData`. "
+        "The `token_duration_seconds = 1555200` (18 days) from line 4 "
+        "matches `defaultTokenLifeTime = 1555200000` in authfilter/application.conf, "
+        "confirming these are the same long-lived session tokens used across "
+        "all cluster management services. "
+        "An attacker with local process access to the controller VM can: "
+        "(1) read the encryption key from `/stSSOMgr/keyData` to decrypt or forge "
+        "valid 18-day SSO session tokens, bypassing all management API authentication; "
+        "(2) enumerate active session credentials from `/stSSOMgr/creds`, enabling "
+        "credential replay without brute force. "
+        "This is distinct from the SSL private key exposure (HX-F209) — "
+        "SSO key compromise enables authentication bypass; SSL key enables "
+        "TLS impersonation — both resulting from the same unauthenticated ZK default."
+    ),
+    "evidence": [
+        "stSSOMgr-1.0/conf/application.conf line 12: zkBasePath = '/stSSOMgr'",
+        "stSSOMgr-1.0/conf/application.conf line 13: zkAuthKey = '/auth'",
+        "stSSOMgr-1.0/conf/application.conf line 14: zkCredsKey = 'creds'",
+        "stSSOMgr-1.0/conf/application.conf line 15: zkEncryptionKey = 'keyData'",
+        "stSSOMgr-1.0/conf/application.conf line 4: token_duration_seconds = 1555200 (18 days)",
+        "authfilter/application.conf: defaultTokenLifeTime = 1555200000 — confirms 18-day cross-service tokens",
+        "0008_cleanup_historical_job_ESX.py line 128: useZKAuth = False (ZK unauthenticated default)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Enable ZooKeeper authentication (`useZKAuth=True`) as the default at "
+        "provisioning time (see also HX-F209). "
+        "Apply ZooKeeper ACLs restricting `/stSSOMgr/keyData`, `/stSSOMgr/creds`, "
+        "and `/stSSOMgr/auth` to the stSSOMgr service account only — no world-readable "
+        "ACL on these paths. "
+        "Store the session token encryption key in a dedicated key management store "
+        "(hardware or software KMS/KMIP) rather than ZooKeeper, which was designed "
+        "for distributed coordination, not secrets management. "
+        "Consider reducing the token lifetime from 18 days to a shorter duration "
+        "consistent with security policy to limit the window a stolen token remains valid."
+    ),
+    "tags": ["zookeeper", "sso", "token-forgery", "encryption-key", "cwe-312", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11746,7 +11806,7 @@ for _f in [
     HX_F202, HX_F203, HX_F204,
     HX_F205, HX_F206, HX_F207,
     HX_F208, HX_F209, HX_F210,
-    HX_F211, HX_F212,
+    HX_F211, HX_F212, HX_F213,
 ]:
     FINDINGS[_f["id"]] = _f
 
