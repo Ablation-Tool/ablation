@@ -8656,11 +8656,89 @@ HX_F147 = {
     ),
 }
 
+HX_F148 = {
+    "id": "HX-F148",
+    "title": (
+        "TLS Certificate Verification Disabled in Upgrade REST Client "
+        "(swagger_api_client.py) Exposes X-RootSessionID and Credentials to MITM "
+        "During Cluster Upgrade Operations"
+    ),
+    "severity": "MEDIUM",
+    "cvss_score": 6.8,
+    "cvss_vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-mgmt / storfs-upgrade-bootstrap",
+    "file": "opt/hyperflex/restClientModule/swagger_api_client.py",
+    "lines": "101-114, 210",
+    "description": (
+        "The HyperFlex upgrade REST client (SwaggerClient in swagger_api_client.py) "
+        "disables TLS certificate verification at three distinct points, then "
+        "transmits the X-RootSessionID admin token and authentication credentials "
+        "over the unverified TLS session during cluster upgrade operations.\n\n"
+        "Lines 101-102: 'pkg.rest.urllib3.disable_warnings()' suppresses SSL "
+        "certificate warnings globally for the swagger package, and "
+        "'pkg.configuration.verify_ssl = False' disables certificate verification "
+        "at the package configuration level for all subsequent requests.\n\n"
+        "Lines 107-108: A local Configuration() object for swagger_coreapi is "
+        "instantiated with 'configuration.verify_ssl = False', disabling "
+        "verification for cluster lifecycle management, cluster monitoring, "
+        "inventory discovery, and internal API endpoints.\n\n"
+        "Lines 113-114: A local AgentConfiguration() object for swagger_upgrade_agent "
+        "is instantiated with 'agentConfig.verify_ssl = False', disabling "
+        "verification for all upgrade agent REST calls.\n\n"
+        "Line 133: The X-RootSessionID token (read from "
+        "/etc/hyperflex/secure/root_file.pub via get_local_root_session_id()) "
+        "is set as a default header on every API call made through the "
+        "unverified client: "
+        "'rest_conn.set_default_header(header_name=\"X-RootSessionID\", "
+        "header_value=root_session_id)'. An adjacently-positioned MiTM attacker "
+        "can intercept this token during any upgrade operation and use it to "
+        "gain admin access to all HyperFlex management APIs (see HX-F144).\n\n"
+        "Line 210: The _get_auth_token() method invokes curl with the '-k' flag "
+        "('curl ... -k') to request a JWT from the AAA endpoint at "
+        "POST /aaa/v1/auth. The JSON body contains username and password "
+        "fields; with certificate verification disabled, a MiTM attacker can "
+        "capture plaintext credentials and the returned JWT in a single "
+        "interception.\n\n"
+        "Same vulnerability class as HX-F142 (stCli global TLS bypass) but "
+        "limited to the upgrade code path; upgrade operations typically run "
+        "with direct hypervisor access, making adjacent-network positioning "
+        "feasible for an attacker with ESXi host access."
+    ),
+    "proof": (
+        "# Confirm verify_ssl = False in upgrade REST client:\n"
+        "grep -n 'verify_ssl' "
+        "/opt/hyperflex/restClientModule/swagger_api_client.py\n"
+        "# Expected: lines 102, 108, 114 all set verify_ssl = False\n\n"
+        "# Confirm X-RootSessionID sent with disabled verification:\n"
+        "grep -n 'X-RootSessionID\\|verify_ssl\\|disable_warnings' "
+        "/opt/hyperflex/restClientModule/swagger_api_client.py\n\n"
+        "# Confirm curl -k in auth token request:\n"
+        "grep '_get_auth_token\\|curl.*-k' "
+        "/opt/hyperflex/restClientModule/swagger_api_client.py\n"
+        "# MiTM interception during upgrade: position on management VLAN,\n"
+        "# ARP-spoof between CVM nodes; capture X-RootSessionID in REST headers\n"
+        "# and JWT + credentials from AAA auth request body."
+    ),
+    "remediation": (
+        "1. Remove all 'verify_ssl = False' assignments; set 'verify_ssl = True' "
+        "   (the urllib3/swagger default). Bundle the HyperFlex internal CA "
+        "   certificate and set 'ssl_ca_cert' to its path in each Configuration "
+        "   object.\n"
+        "2. Replace 'curl ... -k' with 'curl --cacert /etc/hyperflex/secure/ca.pem' "
+        "   or use the requests library with 'verify=/path/to/ca.pem'.\n"
+        "3. Remove 'urllib3.disable_warnings()' — these warnings exist precisely "
+        "   to flag certificate validation failures in logs.\n"
+        "4. Apply the same remediation class as HX-F142: no HyperFlex internal "
+        "   service should disable TLS certificate verification."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
-    HX_F143, HX_F144, HX_F145, HX_F146, HX_F147,
+    HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148,
 ]:
     FINDINGS[_f["id"]] = _f
 
