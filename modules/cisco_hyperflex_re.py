@@ -12335,6 +12335,151 @@ HX_F220 = {
     "tags": ["hardcoded-token", "external-service", "support", "seafile", "cwe-798", "critical"],
 }
 
+HX_F221 = {
+    "id": "HX-F221",
+    "title": "SSH Host Key Verification Disabled Globally in Ansible Configuration and Across Cluster Management Scripts",
+    "severity": "HIGH",
+    "cvss_score": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": ["CWE-297"],
+    "component": (
+        "storfs-deploy/ansible/ansible.cfg + storfs-factory/ansible/ansible.cfg + "
+        "addhost.yml + replaceNode.sh + setstaticip.py + scpFile.py + run-validate-hw.sh"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "SSH host key verification is disabled across the entire Ansible-based cluster "
+        "management and factory provisioning stack. Two global `ansible.cfg` files set "
+        "`ssh_args = ... -o UserKnownHostsFile=/dev/null` as a default for all Ansible "
+        "SSH connections, meaning no operation in the deploy or factory Ansible stack "
+        "verifies the SSH host key of any remote target. "
+        "The same pair `StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null` appears "
+        "explicitly in five additional scripts: "
+        "`addhost.yml` (ESXi host addition to cluster), "
+        "`replaceNode.sh` (node replacement, 3 occurrences), "
+        "`setstaticip.py` (CIMC static IP configuration), "
+        "`scpFile.py` (file transfer to cluster nodes), and "
+        "`run-validate-hw.sh` (hardware validation, 2 occurrences). "
+        "An attacker with a network-layer MITM position between the controller VM and any "
+        "ESXi, CIMC, or cluster node target can intercept any of these SSH connections and "
+        "present a fraudulent host key, receiving the transmitted credentials in plaintext."
+    ),
+    "evidence": [
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/ansible.cfg",
+            "lines": "19",
+            "snippet": "ssh_args = -o ServerAliveInterval=60 -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null",
+            "note": "Global deploy-phase setting; affects ALL Ansible SSH operations in storfs-deploy",
+        },
+        {
+            "file": "factory/opt/hyperflex/storfs-factory/ansible/ansible.cfg",
+            "lines": "19",
+            "snippet": "ssh_args = -o ServerAliveInterval=60 -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null",
+            "note": "Global factory-phase setting; affects ALL Ansible SSH operations in storfs-factory",
+        },
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/addhost.yml",
+            "lines": "50",
+            "snippet": "ansible_ssh_common_args='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'",
+            "note": "Used during ESXi host addition; propagates cluster-scope SSH credentials to potentially rogue host",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/replaceNode.sh",
+            "lines": "159, 165, 176",
+            "snippet": (
+                "sshpass -p $PASSWD ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${USERNAME}@$ESXHOST $*\n"
+                "sshpass -p $PASSWD scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $files ${USERNAME}@$ESXHOST:$dest"
+            ),
+            "note": "Node replacement script; also passes PASSWD as sshpass command-line argument",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/library/setstaticip.py",
+            "lines": "61",
+            "snippet": 'cmd = "ssh -l %s %s -oKexAlgorithms=... -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" % (cimc_user, cimc_addr)',
+            "note": "CIMC (server management controller) configuration; allows MITM on BMC access",
+        },
+    ],
+    "impact": (
+        "An attacker with a network-layer MITM position can intercept any Ansible-managed SSH "
+        "connection (deploy, factory provisioning, host addition, node replacement, hardware "
+        "validation) and present a fraudulent server host key. The SSH client will silently "
+        "accept the rogue key and transmit the authentication credential (password or key "
+        "material) to the attacker. This affects the full lifecycle of cluster management: "
+        "initial factory deployment, cluster expansion, node replacement, and hardware validation."
+    ),
+    "remediation": (
+        "1. Remove `-o UserKnownHostsFile=/dev/null` from both `ansible.cfg` files; "
+        "configure a proper known_hosts file with pre-populated host keys. "
+        "2. For factory and provisioning operations where host keys are unknown, use host "
+        "key scanning at network-layer setup time and populate known_hosts before enabling SSH. "
+        "3. Remove `StrictHostKeyChecking=no` from all individual scripts; replace with "
+        "`StrictHostKeyChecking=yes` and populate known_hosts during cluster configuration. "
+        "4. At minimum, use TOFU (Trust On First Use) rather than permanent bypass."
+    ),
+    "tags": ["ssh", "host-key", "ansible", "mitm", "cwe-297", "high"],
+}
+
+HX_F222 = {
+    "id": "HX-F222",
+    "title": "SSH Password Exposed as sshpass Command-Line Argument in Node Management Scripts",
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": ["CWE-214"],
+    "component": (
+        "storfs-deploy/ansible/library/scpFile.py + storfs-deploy/ansible/replaceNode.sh"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "Node management scripts pass SSH credentials to `sshpass` as a `-p <password>` "
+        "command-line argument, making the plaintext password visible to any local user "
+        "reading `/proc/<pid>/cmdline` or running `ps aux` on the controller VM. "
+        "`scpFile.py` lines 112-114 construct: "
+        "`cmd = 'sshpass -p ' + remotevm_password + ' scp -q -o StrictHostKeyChecking=no ... '` "
+        "and execute it via `subprocess.call(cmd, shell=True)`. "
+        "`replaceNode.sh` uses the same pattern at lines 159, 165, 172, and 176: "
+        "`sshpass -p $PASSWD ssh/scp -q -o StrictHostKeyChecking=no ...`."
+    ),
+    "evidence": [
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/library/scpFile.py",
+            "lines": "112-114",
+            "snippet": (
+                "cmd = \"sshpass -p \" + remotevm_password + \" scp -q -o StrictHostKeyChecking=no "
+                "-o UserKnownHostsFile=/dev/null \" + remotevm_username + \"@\" + remotevm_hostname + \":\" + filename + \" \" + dest"
+            ),
+            "note": "Password in sshpass -p arg; shell=True also present",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/storfs-deploy/ansible/replaceNode.sh",
+            "lines": "159, 165, 172, 176",
+            "snippet": (
+                "sshpass -p $PASSWD ssh -q -o StrictHostKeyChecking=no ... ${USERNAME}@$ESXHOST $*\n"
+                "sshpass -p $PASSWD scp -q -o StrictHostKeyChecking=no ... ${USERNAME}@$SCVMIP:$dest"
+            ),
+            "note": "PASSWD variable expanded as direct -p argument in 4 separate locations",
+        },
+    ],
+    "impact": (
+        "During node replacement or file transfer operations, any local user on the "
+        "controller VM can read the plaintext SSH credentials from the sshpass process "
+        "command-line arguments. The credentials (ESXi root or SCVM SSH password) grant "
+        "full hypervisor or storage controller access. "
+        "The `shell=True` in scpFile.py also means the password string is subject to "
+        "shell metacharacter interpretation (see HX-F215 for the equivalent pattern in "
+        "swagger_api_client.py)."
+    ),
+    "remediation": (
+        "1. Use `sshpass -f <password_file>` instead of `-p <password>` to avoid process "
+        "argument exposure; write the password to a mode-0600 temporary file under `/root/`. "
+        "2. Prefer SSH key-based authentication over password authentication for all "
+        "inter-node management operations. "
+        "3. In `scpFile.py`, use paramiko's `SCPClient` directly instead of constructing "
+        "shell commands with `shell=True`."
+    ),
+    "tags": ["sshpass", "credentials", "process-args", "cwe-214", "medium"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -12363,6 +12508,7 @@ for _f in [
     HX_F215, HX_F216,
     HX_F217, HX_F218,
     HX_F219, HX_F220,
+    HX_F221, HX_F222,
 ]:
     FINDINGS[_f["id"]] = _f
 
