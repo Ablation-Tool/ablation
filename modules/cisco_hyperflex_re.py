@@ -8587,11 +8587,80 @@ HX_F146 = {
     ),
 }
 
+HX_F147 = {
+    "id": "HX-F147",
+    "title": "Old and New Plaintext Passwords Exposed in changepasswd.sh and mkpasswd.sh Command-Line Arguments",
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-mgmt",
+    "file": "opt/hyperflex/changepasswd.sh, opt/hyperflex/mkpasswd.sh",
+    "lines": "3-5, 10",
+    "description": (
+        "Two scripts in the HyperFlex management layer expose plaintext "
+        "passwords as positional command-line arguments, making them "
+        "visible to any local user via 'ps aux' or '/proc/<pid>/cmdline'.\n\n"
+        "changepasswd.sh (lines 3-5) accepts three positional arguments: "
+        "$1=user, $2=old_pass, $3=pass. Both the current (old) and new "
+        "password are passed as separate unencoded cmdline arguments: "
+        "'changepasswd.sh <user> <oldpassword> <newpassword>'. The script "
+        "invokes 'sudo -u <user> passwd' via heredoc, but the plaintext "
+        "passwords persist in the process table for the lifetime of the "
+        "shell invocation — readable from /proc/<pid>/cmdline. "
+        "This affects the root, admin, and diag accounts, which are "
+        "enumerated in passwordSyncAccounts in storfs-mgmt application.conf "
+        "and synced across all cluster nodes on every password rotation.\n\n"
+        "mkpasswd.sh (line 10) accepts the plaintext password as $1 and "
+        "invokes 'echo ${1} | mkpasswd -m sha-256 -s'. The unquoted "
+        "variable expansion is passed as a cmdline argument, exposing the "
+        "plaintext password in the process table before the shell pipes it "
+        "to mkpasswd. This script is called as part of the same password "
+        "management flow that feeds setpasswd.sh (which consumes the "
+        "pre-hashed output).\n\n"
+        "Unlike HX-F143 (factory_deploy.py, single deployment-time "
+        "password), this path is triggered on every cluster password "
+        "rotation for privileged accounts, increasing the exposure window "
+        "across the operational lifetime of the cluster."
+    ),
+    "proof": (
+        "# On any CVM with a local shell account, during a password change:\n"
+        "# Terminal 1 — trigger a password change (as admin or via HX Connect):\n"
+        "# Terminal 2 — observe the cmdline before the process exits:\n"
+        "while true; do\n"
+        "  ps auxww | grep changepasswd.sh | grep -v grep\n"
+        "done\n"
+        "# Expected output:\n"
+        "# root <pid> ... /bin/bash ./changepasswd.sh admin OldP@ssw0rd NewP@ssw0rd\n\n"
+        "# Alternatively, read from procfs:\n"
+        "cat /proc/<pid>/cmdline | tr '\\0' ' '\n"
+        "# Output: /bin/bash changepasswd.sh admin OldP@ssw0rd NewP@ssw0rd\n\n"
+        "# Confirm passwordSyncAccounts scope:\n"
+        "grep passwordSyncAccounts "
+        "/opt/hyperflex/storfs-mgmt/stMgr-1.0/conf/application.conf\n"
+        "# Expected: passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]"
+    ),
+    "remediation": (
+        "1. Replace positional argument password passing with stdin-only "
+        "   delivery: read passwords from a named pipe, environment "
+        "   variable (with immediate unset), or a securely-permissioned "
+        "   temp file — never as $2/$3 cmdline arguments.\n"
+        "2. For changepasswd.sh: invoke 'passwd' directly via PAM or "
+        "   use 'chpasswd' with a pre-hashed credential supplied via "
+        "   stdin (echo 'user:newhash' | chpasswd -e), bypassing the "
+        "   old-password verification path that requires plaintext.\n"
+        "3. For mkpasswd.sh: pass the plaintext password via stdin "
+        "   rather than $1: 'read -rs pass; echo \"$pass\" | mkpasswd -m sha-256 -s'.\n"
+        "4. Apply the same fix class as HX-F143 (factory_deploy.py): "
+        "   never pass credentials as argv elements to child processes."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
-    HX_F143, HX_F144, HX_F145, HX_F146,
+    HX_F143, HX_F144, HX_F145, HX_F146, HX_F147,
 ]:
     FINDINGS[_f["id"]] = _f
 
