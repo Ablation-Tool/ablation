@@ -8734,11 +8734,114 @@ HX_F148 = {
     ),
 }
 
+HX_F149 = {
+    "id": "HX-F149",
+    "title": (
+        "TLS Certificate Verification Disabled in switchToArbitrator.py "
+        "Exposes X-RootSessionID Token During Stretched Cluster Switchover"
+    ),
+    "severity": "MEDIUM",
+    "cvss_score": 6.8,
+    "cvss_vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-stretched",
+    "file": "usr/share/hyperflex/storfs-stretched/switchToArbitrator.py",
+    "lines": "134",
+    "description": (
+        "The stretched cluster switchover script (switchToArbitrator.py) disables "
+        "TLS certificate verification for all REST calls via 'verify=False' in the "
+        "'restWithRetry' function (line 134): "
+        "'resp = restFn(url=restUrl, data=data, auth=auth, headers=headers, verify=False)'. "
+        "This applies to all calls routed through 'runRestQuery()' — every REST "
+        "endpoint queried during the switchover workflow.\n\n"
+        "The 'runRestQuery()' function (lines 111-115) injects 'X-RootSessionID' "
+        "as a default header on every call. The ROOT_SESSION_ID is read at startup "
+        "from '/etc/hyperflex/secure/root_file.pub' (line 163). With certificate "
+        "verification disabled, an adjacently-positioned MiTM attacker can intercept "
+        "this admin token during any stretched cluster switchover operation, gaining "
+        "full admin access to all HyperFlex management APIs (see HX-F144).\n\n"
+        "Same vulnerability class as HX-F142 (stCli global TLS bypass) and HX-F148 "
+        "(upgrade client TLS bypass). This path is triggered during "
+        "decommissioning of the Witness VM and migration to an Intersight or "
+        "custom arbitrator — an infrequent but high-privilege operation."
+    ),
+    "proof": (
+        "# Confirm verify=False in restWithRetry:\n"
+        "grep -n 'verify' "
+        "/usr/share/hyperflex/storfs-stretched/switchToArbitrator.py\n"
+        "# Expected: line 134: verify=False in the restFn call\n\n"
+        "# Confirm X-RootSessionID sent with verify=False:\n"
+        "grep -n 'X-RootSessionID\\|ROOT_SESSION_ID' "
+        "/usr/share/hyperflex/storfs-stretched/switchToArbitrator.py\n"
+        "# MiTM during switchover: position on management VLAN,\n"
+        "# ARP-spoof between CVM and target endpoint,\n"
+        "# capture X-RootSessionID from the request headers."
+    ),
+    "remediation": (
+        "1. Remove 'verify=False' from the 'restFn' call in 'restWithRetry'; "
+        "   pass 'verify=/etc/hyperflex/secure/ca.pem' (the internal CA bundle) "
+        "   to validate server certificates.\n"
+        "2. Apply the same fix class as HX-F142 and HX-F148: no HyperFlex internal "
+        "   client should disable TLS certificate verification."
+    ),
+}
+
+HX_F150 = {
+    "id": "HX-F150",
+    "title": (
+        "Arbitrator Password Exposed in switchToArbitrator.py Command-Line Argument"
+    ),
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-stretched",
+    "file": "usr/share/hyperflex/storfs-stretched/switchToArbitrator.py",
+    "lines": "60-62",
+    "description": (
+        "The 'switchToArbitrator.py' script accepts the Intersight or custom "
+        "arbitrator password via the '--arbitrator-password' command-line option "
+        "(line 61: 'p.add_option(\"--arbitrator-password\", dest=\"password\", ...)'). "
+        "When invoked with this flag, the plaintext password is visible in the "
+        "process table to any local user via 'ps aux' or '/proc/<pid>/cmdline' "
+        "for the lifetime of the Python interpreter invocation.\n\n"
+        "The script also accepts a non-interactive path via '--force' combined "
+        "with '--arbitrator-username' and '--arbitrator-password' (lines 353-354: "
+        "'hxsvcclient.switchToAuxZk(aux_ip, site, arb_ip, username, password)'), "
+        "which is the automation/scripting invocation path — the path most likely "
+        "to have the password supplied as a cmdline argument rather than "
+        "interactively via 'getpass'. In the interactive path, the password is "
+        "correctly read via 'getpass()' (lines 392, 409, 417) and not exposed.\n\n"
+        "Same vulnerability class as HX-F143 (factory_deploy.py ESX password) "
+        "and HX-F147 (changepasswd.sh old/new password)."
+    ),
+    "proof": (
+        "# Observe password in process table during non-interactive switchover:\n"
+        "# Terminal 1 — trigger switchover with --force:\n"
+        "# python3 switchToArbitrator.py --force --arbitrator-ip <IP> \\\n"
+        "#   --arbitrator-username admin --arbitrator-password MyS3cret ...\n"
+        "# Terminal 2 — observe before process exits:\n"
+        "ps auxww | grep switchToArbitrator | grep -v grep\n"
+        "# Expected output includes '--arbitrator-password MyS3cret'\n\n"
+        "# Also readable from procfs:\n"
+        "cat /proc/<pid>/cmdline | tr '\\0' ' '"
+    ),
+    "remediation": (
+        "1. Remove '--arbitrator-password' command-line option. For scripted/automated "
+        "   invocations, supply the password via a securely-permissioned environment "
+        "   variable or a credentials file with mode 0600.\n"
+        "2. For interactive use, the 'getpass()' path already handles password "
+        "   input correctly — retain that and remove the CLI option.\n"
+        "3. Apply the same fix class as HX-F143 and HX-F147: never accept "
+        "   secrets as positional or named command-line arguments."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
-    HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148,
+    HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
 ]:
     FINDINGS[_f["id"]] = _f
 
