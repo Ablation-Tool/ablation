@@ -11453,6 +11453,165 @@ HX_F207 = {
     "tags": ["ssh", "host-key", "mitm", "ansible", "sshpass", "cwe-295", "high"],
 }
 
+HX_F208 = {
+    "id": "HX-F208",
+    "title": "SSH Credentials Inserted Into Debug Log via Exception Error String",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-532",
+    "component": (
+        "storfs-misc/uninstall_cluster.py, storfs-misc/listzkdb.py"
+    ),
+    "description": (
+        "Two scripts construct Paramiko SSH exception error strings that include "
+        "the SSH password in plaintext, and those strings are written to the "
+        "debug log on any connection failure. "
+        "uninstall_cluster.py line 69: `stderr = ('Paramiko ssh connect "
+        "exception: %s, host %s user: %s password: %s' % (e, address, username, "
+        "password))`. "
+        "This string is placed into a multiprocessing Queue at line 72, then read "
+        "by `_executeCmdOverSSH` at line 548 into a local `stderr` variable. "
+        "Line 560 evaluates `if (verbose or ret is None or (int(ret) != 0))` — "
+        "this condition is True when the connection fails (ret=-1). "
+        "Line 564 calls `logging.debug(msg)` with a message that includes `stderr`, "
+        "writing the password to the rotating file handler configured at "
+        "DEBUG level (RotatingFileHandler imported at line 34). "
+        "listzkdb.py line 44 contains an identical pattern: "
+        "`stderr = ('Paramiko ssh connect exception: %s, host: %s user: %s "
+        "password: %s' % (e, server, username, password))` — returned to caller "
+        "on connection failure. "
+        "If the SSH user is root with default credential `Cisco123` (established "
+        "in the spring_default.tunes AES decryption), the credential is written "
+        "to the debug log on any SSH connectivity issue."
+    ),
+    "evidence": [
+        "uninstall_cluster.py line 69: stderr = ('Paramiko ssh connect exception: %s, host %s user: %s password: %s' % (e, address, username, password))",
+        "uninstall_cluster.py line 72: q.put([stdout, stderr, -1])",
+        "uninstall_cluster.py line 553: stderr += output[1] (queue consumer appends password-containing string)",
+        "uninstall_cluster.py line 560-564: if (verbose or ret is None or (int(ret) != 0)): ... logging.debug(msg) where msg includes stderr",
+        "listzkdb.py line 44: identical error-string construction in execute_cmd_over_ssh()",
+        "logger configured with RotatingFileHandler at DEBUG level (line 34, 601)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the `password` field from exception error strings in both files. "
+        "Replace with a placeholder: `'Paramiko ssh connect exception: %s, "
+        "host: %s user: %s password: [REDACTED]' % (e, address, username)`. "
+        "Audit all logging calls that include stderr output for credential leakage. "
+        "For uninstall_cluster.py, filter the queue output before logging to strip "
+        "any field matching the pattern `password: <value>`."
+    ),
+    "tags": ["credential-leak", "logging", "paramiko", "cwe-532", "medium"],
+}
+
+HX_F209 = {
+    "id": "HX-F209",
+    "title": "ZooKeeper Authentication Disabled by Default Exposes SSL Private Key",
+    "severity": "MEDIUM",
+    "cvss": 6.7,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-284",
+    "component": (
+        "upgrade-hooks/.../0008_cleanup_historical_job_ESX.py, "
+        "stcli-egg/stCli/postEvent.py, "
+        "storfs-mgmt/hxSvcMgr-1.0/conf/application.conf"
+    ),
+    "description": (
+        "ZooKeeper authentication is disabled by default across the HyperFlex "
+        "cluster. The `useZKAuth` flag is read from `/etc/springpath/storfs.cfg` "
+        "or `/etc/hyperflex/storfs.cfg` and defaults to `False` when the key is "
+        "absent (0008_cleanup_historical_job_ESX.py line 128: "
+        "`useZKAuth = False`; postEvent.py line 194: `useZKAuth = False`). "
+        "With ZK auth disabled, no ACLs are enforced on ZooKeeper znodes. "
+        "The SSL private key is stored in ZooKeeper at the path configured in "
+        "hxSvcMgr-1.0/conf/application.conf line 131: "
+        "`sslKeyZKPath = '/storvisor/ssl/key'`. "
+        "Any process that can reach ZooKeeper on port 2181 — bound to "
+        "`127.0.0.1:2181` but accessible to all local processes on the "
+        "controller VM — can read the private key without credentials. "
+        "The TLS certificate is at `/storvisor/ssl/certificate` (line 130). "
+        "An attacker with local access to the controller VM can extract the "
+        "cluster TLS private key directly from ZooKeeper, enabling impersonation "
+        "of the HyperFlex management interface."
+    ),
+    "evidence": [
+        "0008_cleanup_historical_job_ESX.py line 128: useZKAuth = False (default before storfs.cfg read)",
+        "postEvent.py line 194: useZKAuth = False (same default in second codebase)",
+        "hxSvcMgr-1.0/conf/application.conf line 131: sslKeyZKPath = '/storvisor/ssl/key'",
+        "hxSvcMgr-1.0/conf/application.conf line 130: sslCertZKPath = '/storvisor/ssl/certificate'",
+        "0008_cleanup_historical_job_ESX.py line 108: KazooClient(hosts=zk_connection_str) — no auth passed when useZKAuth=False",
+        "ZooKeeper binds on 127.0.0.1:2181 — accessible to all controller VM processes",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Set `useZKAuth=True` in storfs.cfg as the default configuration at "
+        "provisioning time, not as an optional post-upgrade step. "
+        "Apply ZooKeeper ACLs on sensitive znodes (including `/storvisor/ssl/key` "
+        "and `/storvisor/ssl/certificate`) so they are only readable by the "
+        "specific service accounts that require them. "
+        "Consider storing the cluster TLS private key in a dedicated secrets "
+        "manager (Vault, KMIP) rather than ZooKeeper, which is a distributed "
+        "coordination service not designed for secrets storage."
+    ),
+    "tags": ["zookeeper", "tls-key", "default-config", "cwe-284", "medium"],
+}
+
+HX_F210 = {
+    "id": "HX-F210",
+    "title": "ZooKeeper Authentication Token Derived from World-Readable Cluster UUID File",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-287",
+    "component": (
+        "upgrade-hooks/.../0008_cleanup_historical_job_ESX.py, "
+        "stcli-egg/stCli/postEvent.py"
+    ),
+    "description": (
+        "When ZooKeeper authentication is enabled (`useZKAuth=True`), the "
+        "authentication token is constructed as the cluster UUID read from a "
+        "plaintext file, providing no meaningful access control. "
+        "0008_cleanup_historical_job_ESX.py lines 111-115: "
+        "`auth = self.getZkAuthToken()` reads from `/etc/springpath/clusteruuid`; "
+        "`auth_data = 'zkjobdelete;' + auth`; "
+        "`self.zkClient.add_auth('UUID', auth_data)`. "
+        "postEvent.py lines 176-180: identical pattern reading from "
+        "`/etc/hyperflex/clusteruuid`. "
+        "The `getZkAuthToken()` method (0008_cleanup_historical_job_ESX.py "
+        "line 146) opens the clusteruuid file directly with no permission check "
+        "beyond the OS filesystem ACL. "
+        "The cluster UUID is not a secret: it is the same value stored in "
+        "`/etc/hyperflex/stMgr.cfg` (cluster.stmgrCfg), distributed across all "
+        "cluster nodes, and referenced in multiple configuration files. "
+        "Any local user who can read `/etc/springpath/clusteruuid` can construct "
+        "the full ZK auth token `'zkjobdelete;' + uuid` and authenticate to "
+        "ZooKeeper with the same privileges as privileged cluster services, "
+        "defeating the purpose of enabling ZK auth."
+    ),
+    "evidence": [
+        "0008_cleanup_historical_job_ESX.py line 113: auth_data = 'zkjobdelete;' + auth",
+        "0008_cleanup_historical_job_ESX.py line 115: self.zkClient.add_auth('UUID', auth_data)",
+        "0008_cleanup_historical_job_ESX.py line 151-153: reads /etc/springpath/clusteruuid as auth token source",
+        "postEvent.py line 180: self.zkClient.add_auth('UUID', auth_data) — same pattern",
+        "postEvent.py line 219-221: reads /etc/hyperflex/clusteruuid",
+        "hxSvcMgr-1.0/conf/application.conf line 100: clusterUuidFile = '/etc/hyperflex/clusteruuid' (referenced cluster-wide)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace the cluster UUID as the ZK authentication secret with a "
+        "cryptographically random credential generated at cluster provisioning "
+        "time and stored with appropriate filesystem permissions (mode 0600, "
+        "owned by the service account). "
+        "The auth file should not be the same UUID used for cluster identity "
+        "and distributed in cluster configuration. "
+        "Use ZooKeeper's built-in `digest` authentication scheme with a "
+        "service-specific username and hashed password rather than a custom "
+        "'UUID' scheme with a predictable token."
+    ),
+    "tags": ["zookeeper", "authentication", "cluster-uuid", "cwe-287", "medium"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11475,6 +11634,7 @@ for _f in [
     HX_F199, HX_F200, HX_F201,
     HX_F202, HX_F203, HX_F204,
     HX_F205, HX_F206, HX_F207,
+    HX_F208, HX_F209, HX_F210,
 ]:
     FINDINGS[_f["id"]] = _f
 
