@@ -9993,6 +9993,54 @@ HX_F175 = {
     "tags": ["cleartext-creds", "logging", "ssh", "paramiko", "cwe-312", "cwe-532", "cwe-295"],
 }
 
+HX_F176 = {
+    "id": "HX-F176",
+    "title": "Privileged Proxy Port 8997 Binds to All Interfaces; nginx Auto-Injects Admin Session ID",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-284",
+    "component": "storfs-misc/rest_internal.conf, storfs-misc/restintport.cfg, storfs-misc/genrestconf.sh",
+    "description": (
+        "rest_internal.conf configures nginx to listen on port 8997 (from restintport.cfg) "
+        "with `listen *:PORT ssl` — binding to ALL network interfaces, not just loopback. "
+        "For every request received on port 8997, nginx automatically injects "
+        "`proxy_set_header X-RootSessionID <session_id>` before proxying to the backend "
+        "at localhost:8000 (management API). nginx proxy_set_header overwrites any "
+        "client-supplied X-RootSessionID with the real admin session ID. "
+        "Consequently, ANY client that can establish a TCP connection to port 8997 "
+        "on any ctlVM interface receives admin-level authenticated access to the full "
+        "HyperFlex REST API (/rest, /aaa, /coreapi, /dataprotection, /backupservice, "
+        "/encryption, /volume, /securityservice, /supportservice, /slservice, /upgrade, "
+        "/upload, /stMgr) without supplying credentials. "
+        "Port 8997 is used by the stCli tool from remote hosts (stCli.sh: "
+        "springpath_host=clusterIp; springpath_port=8997) confirming the port is "
+        "network-accessible. The design intent comment ('Data network on custom port') "
+        "assumes network isolation, but the binding is *:8997 — no interface restriction. "
+        "An attacker on any network segment that can reach the ctlVM on port 8997 "
+        "has unauthenticated admin access to the entire cluster management API."
+    ),
+    "evidence": [
+        "rest_internal.conf:4: listen *:PORT ssl;  # PORT=8997 from restintport.cfg",
+        "restintport.cfg: PORT=8997",
+        "rest_internal.conf:42: proxy_set_header X-RootSessionID SESSIONID;  # injected for ALL requests",
+        "rest_internal.conf:72: proxy_set_header X-RootSessionID SESSIONID;  # stMgr path also",
+        "genrestconf.sh: comment: 'binding is available only for Data network on custom port'",
+        "stCli.sh:12: export springpath_host=${clusterIp}; export springpath_port=8997",
+        "Attack: curl -k https://<ctlvm>:8997/coreapi/v1/clusters -> 200 admin response",
+        "rest_internal.conf covers: /rest /aaa /coreapi /dataprotection /backupservice /encryption /volume /securityservice /supportservice /slservice /upgrade /upload /stMgr",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Change `listen *:PORT ssl` to `listen 127.0.0.1:PORT ssl` to restrict port 8997 "
+        "to loopback only. The stCli tool should connect via the standard port 443 with "
+        "explicit credentials rather than the privileged proxy port. "
+        "If the data network must be used, bind explicitly to the data interface IP "
+        "rather than wildcard, and add a firewall rule restricting access to the ctlVM itself."
+    ),
+    "tags": ["auth-bypass", "privileged-port", "nginx", "session-injection", "network", "cwe-284", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10003,7 +10051,7 @@ for _f in [
     HX_F163, HX_F164, HX_F165, HX_F166,
     HX_F167, HX_F168, HX_F169, HX_F170,
     HX_F171, HX_F172, HX_F173, HX_F174,
-    HX_F175,
+    HX_F175, HX_F176,
 ]:
     FINDINGS[_f["id"]] = _f
 
