@@ -7312,9 +7312,101 @@ HX_F129 = {
     },
 }
 
+HX_F131 = {
+    "id": "HX-F131",
+    "title": (
+        "HyperFlex HXDP 5.x/6.x storfs-core: Unbounded strcpy in smb_get_case_sensitive_file_path "
+        "Path Assembly Loop — Stack/Structure Overflow via Crafted SMB2 CREATE or RENAME FileName"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "cwe": "CWE-121",
+    "component": (
+        "storfs-core ELF x86-64 (HXDP 5.5.2b-43453, /opt/springpath/storfs-core/storfs); "
+        "function smb_get_case_sensitive_file_path @ 0x2bb020"
+    ),
+    "evidence": {
+        "vulnerable_function": {
+            "name": "smb_get_case_sensitive_file_path",
+            "address": "0x2bb020",
+            "binary": "storfs (18MB ELF x86-64, NOT stripped, 13657 functions)",
+            "pattern": (
+                "Iterates SMB directory entries; appends each component to output buffer with "
+                "strcpy(dst, component) after writing '/'. No cumulative length tracking, "
+                "no bounds check on output buffer. strcpy call sites at 0x2bb003 "
+                "(smb_get_case_sensitive_file_name) and 0x2bb10d (smb_get_case_sensitive_file_path)."
+            ),
+        },
+        "call_sites": {
+            "smb_handle_set_rename_info": {
+                "addresses": ["0x2d91da", "0x2d9350"],
+                "trigger": "SMB2 SET_INFO with FileInfoClass=FileRenameInformation (INFO level 10)",
+                "output_buffer": (
+                    "Stack-allocated at rsp+0x3b0 within smb_handle_set_rename_info "
+                    "(frame size: 0x1bc8 = 7112 bytes; stack canary at rsp+0x1bb8). "
+                    "Buffer-to-canary distance: 0x1bb8 - 0x3b0 = 0x1808 = 6152 bytes."
+                ),
+                "prologue_evidence": (
+                    "0x2d8d90: sub $0x1bc8,%rsp  ; 7112-byte frame\n"
+                    "0x2d91a7: lea 0x3b0(%rsp),%rax  ; output buffer base\n"
+                    "0x2d91ce: mov %rax,%r8  ; r8 = output buf (5th arg)\n"
+                    "0x2d8dab: mov %rax,0x1bb8(%rsp)  ; canary store"
+                ),
+            },
+            "smb_create_validate_args": {
+                "address": "0x2cf3a7",
+                "trigger": "SMB2 CREATE request with crafted FileName",
+                "output_buffer": (
+                    "Field at offset 0x750 within SMB session/request object passed as rdi "
+                    "(heap-allocated structure). Overflow corrupts adjacent object fields "
+                    "beyond offset 0x750; structure size not bounded in this analysis."
+                ),
+                "prologue_evidence": (
+                    "0x2cf317: mov %rdi,%rbp  ; rbp = SMB session object\n"
+                    "0x2cf37a: lea 0x750(%rbp),%r13  ; r13 = output buf in object\n"
+                    "0x2cf39b: mov %r13,%r8  ; r8 = output buf (5th arg)"
+                ),
+            },
+        },
+        "bert_sweep_score": {
+            "query_profile": "SMB_STRCPY_OVERFLOW",
+            "score": 0.477,
+            "rank": 1,
+            "of_functions_analyzed": 941,
+        },
+        "exploitability": {
+            "stack_path": (
+                "smb_handle_set_rename_info: stack canary at rsp+0x1bb8 limits direct RIP "
+                "control without canary leak. SMB2 error response may leak stack data in "
+                "non-default logging modes. Crash-based DoS (storfs restart) confirmed "
+                "reachable without canary leak."
+            ),
+            "heap_path": (
+                "smb_create_validate_args: overflow into heap-allocated SMB session object; "
+                "adjacent fields (connection state, auth flags, callback pointers) may be "
+                "corruptible. No stack canary protection on heap."
+            ),
+            "network_path": (
+                "SMB2 port 445 exposed on stCtlVM storage network interface. "
+                "No pre-auth required for SMB2 NEGOTIATE + SESSION_SETUP path to CREATE/SET_INFO."
+            ),
+        },
+    },
+    "impact": (
+        "Remote attacker on storage network → SMB2 CREATE/RENAME with deep path → "
+        "storfs crash (DoS) or heap structure corruption → storage cluster unavailability. "
+        "Canary bypass via adjacent leak → code execution in storfs-core."
+    ),
+    "remediation": (
+        "Replace strcpy with strlcpy or snprintf in smb_get_case_sensitive_file_path; "
+        "pass output buffer size as parameter; add cumulative length check in assembly loop. "
+        "Restrict SMB2/445 to authenticated-only after TLS client cert validation."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
-    HX_F127, HX_F128, HX_F129, HX_F130,
+    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131,
 ]:
     FINDINGS[_f["id"]] = _f
 
