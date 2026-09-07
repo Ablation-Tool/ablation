@@ -10292,6 +10292,94 @@ HX_F182 = {
     "tags": ["process-args", "credential-exposure", "ansible", "esx", "cwe-214", "high"],
 }
 
+HX_F183 = {
+    "id": "HX-F183",
+    "title": "Cluster UUID as ZooKeeper Authentication Token — Same Value as AES Encryption Key",
+    "severity": "HIGH",
+    "cvss": 7.8,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-798",
+    "component": "stcli-egg/stCli/postEvent.py; storfs-misc/upgrade-hooks/.../0008_cleanup_historical_job_ESX.py",
+    "description": (
+        "The cluster UUID (`/etc/hyperflex/clusteruuid`) is used as the shared "
+        "authentication token for the ZooKeeper ensemble. "
+        "`add_auth('UUID', '<clientId>;<cluster_uuid>')` is called with the cluster UUID "
+        "as the credential material. This is the same UUID used as the AES encryption key "
+        "in convertUUIDAndEncryptData.py (HX-F172): "
+        "SHA-256(cluster_uuid)[0:16] = AES key. "
+        "The cluster UUID is therefore the load-bearing secret for two independent "
+        "security controls: (1) ZooKeeper access control and (2) data-at-rest encryption. "
+        "An attacker who recovers the cluster UUID via any path (API, process inspection, "
+        "log file, `/sbdl/` nginx path — HX-F177) can: "
+        "(a) authenticate to ZooKeeper and read/write all cluster state "
+        "(session tokens, node configuration, distributed locks, scheduling data); "
+        "(b) decrypt all AES-ECB-protected configuration values. "
+        "Because ZooKeeper is configured via application.conf `zkAuthClientId` fields "
+        "across multiple services (aaa, hxSvcMgr, stNodeMgr, hxLicenseSvc, hxtoolbox), "
+        "ZK auth bypass affects the entire management plane."
+    ),
+    "evidence": [
+        "postEvent.py:178-180: auth_data = 'postEvent;' + cluster_uuid; zkClient.add_auth('UUID', auth_data)",
+        "0008_cleanup_historical_job_ESX.py:114-116: auth_data = 'zkjobdelete;' + cluster_uuid; add_auth('UUID', auth_data)",
+        "postEvent.py:213: /etc/hyperflex/clusteruuid (auth token source)",
+        "0008_cleanup_historical_job_ESX.py:152: /etc/springpath/clusteruuid (auth token source)",
+        "convertUUIDAndEncryptData.py:key = hashlib.sha256(bytes(cluster_uuid, 'utf-8')).digest()[0:16] (same UUID -> AES key)",
+        "application.conf: zkAuthClientId = 'aaa'/'hxSvcMgr'/'stNodeMgr'/'hxLicenseSvc' — all use UUID scheme",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Issue independent cryptographic credentials for ZooKeeper authentication "
+        "and AES key derivation. The ZK auth token should be a randomly generated "
+        "secret stored in a secrets manager, not the cluster UUID. "
+        "Rotate the cluster UUID without impacting encryption or ZK auth by decoupling "
+        "UUID-as-identifier from UUID-as-secret. "
+        "Use dedicated per-service ZK credentials derived from a cluster master secret, "
+        "not a shared UUID."
+    ),
+    "tags": ["zookeeper", "auth", "shared-secret", "cluster-uuid", "cwe-798", "high"],
+}
+
+HX_F184 = {
+    "id": "HX-F184",
+    "title": "ZooKeeper Authentication Token Logged in Plaintext at INFO Level",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-532",
+    "component": "storfs-misc/upgrade-hooks/.../0008_cleanup_historical_job_ESX.py; stcli-egg/stCli/postEvent.py",
+    "description": (
+        "When ZooKeeper authentication is enabled (`useZKAuth=true` in storfs.cfg), "
+        "the full authentication token (including the cluster UUID) is logged at "
+        "INFO level before the `add_auth` call. "
+        "0008_cleanup_historical_job_ESX.py line 115: "
+        "`logger.info('Setting ZK Auth {}'.format(auth_data))` where auth_data = "
+        "`'zkjobdelete;<cluster_uuid>'`. "
+        "postEvent.py line 179: "
+        "`self.logger.debug('Setting ZK Auth {}'.format(auth_data))` — "
+        "also in DEBUG logs. "
+        "INFO-level logs are typically forwarded to SIEM/syslog, stored persistently "
+        "in `/var/log/hyperflex/`, and included in support bundles downloadable via "
+        "the `/sbdl/` nginx path (HX-F177). "
+        "An attacker who reads any log file recovers the cluster UUID, which is also "
+        "the AES encryption key (HX-F172) and ZK auth token (HX-F183)."
+    ),
+    "evidence": [
+        "0008_cleanup_historical_job_ESX.py:115: logger.info('Setting ZK Auth {}'.format(auth_data))",
+        "postEvent.py:179: self.logger.debug('Setting ZK Auth {}'.format(auth_data))",
+        "auth_data format: '<clientId>;<cluster_uuid>'",
+        "Chain: log file in /var/log/ -> /sbdl/<logfile> (HX-F177) -> cluster UUID -> ZK auth + AES decrypt",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace `logger.info/debug('Setting ZK Auth {}'.format(auth_data))` with "
+        "`logger.info('Setting ZK Auth for client: <clientId>')` — log only the "
+        "client identity, never the credential material. "
+        "Mask credentials in all log statements before writing: "
+        "`auth_data_masked = auth_data.split(';')[0] + ';***'`."
+    ),
+    "tags": ["log-exposure", "cluster-uuid", "zookeeper", "cwe-532", "medium"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -10305,6 +10393,7 @@ for _f in [
     HX_F175, HX_F176,
     HX_F177, HX_F178, HX_F179,
     HX_F180, HX_F181, HX_F182,
+    HX_F183, HX_F184,
 ]:
     FINDINGS[_f["id"]] = _f
 
