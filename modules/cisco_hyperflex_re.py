@@ -9721,6 +9721,78 @@ HX_F168 = {
     "tags": ["hardcoded-creds", "tls-bypass", "deploy", "installer", "cwe-798", "cwe-295", "requests"],
 }
 
+HX_F169 = {
+    "id": "HX-F169",
+    "title": "ESX Password Exposed in Remote Process Arguments During Authorized Keys Upgrade Hook",
+    "severity": "HIGH",
+    "cvss": 6.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-214",
+    "component": "storfs-deploy/ansible/roles/upgradeclusterposthooks/files/0007_create_authorized_keys_for_admin_ESX.py",
+    "description": (
+        "The upgrade post-hook 0007_create_authorized_keys_for_admin_ESX.py formats the ESX "
+        "password as a positional argument when invoking copyAuthKeysForAdmin.py on each node: "
+        "`command = '{script} {esxi_ip} {esxi_username} {esxi_password}'.format(...)`. "
+        "The resulting command string is then executed on the remote node via paramiko SSH "
+        "(run_command_on_node), making the ESX password visible in the process argument list "
+        "(ps aux / /proc/<pid>/cmdline) on the target node for the duration of the command. "
+        "The plaintext password is also sent in the SSH exec_command payload over a connection "
+        "that uses paramiko.AutoAddPolicy(), exposing it to MITM. The ESX credentials originate "
+        "from /tmp/upgradeHooksCreds*.json, which stores them in plaintext in /tmp."
+    ),
+    "evidence": [
+        "0007_create_authorized_keys_for_admin_ESX.py:74: esxi_username = creds.get('esxUser').strip()",
+        "0007_create_authorized_keys_for_admin_ESX.py:75: esxi_password = creds.get('esxPassword').strip()",
+        "0007_create_authorized_keys_for_admin_ESX.py:82: command = '{0} {1} {2} {3}'.format(authKeyCopyingScript, esxi_ip, esxi_username, esxi_password)",
+        "0007_create_authorized_keys_for_admin_ESX.py:84: run_command_on_node(node, private_key, command)",
+        "JSON_CREDS_FILE_MATCH = '/tmp/upgradeHooksCreds*.json' -- plaintext creds file in /tmp",
+        "commonFunctions.py: run_command_on_node uses paramiko.AutoAddPolicy() (HX-F164)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Pass credentials via environment variable or stdin, not command-line arguments. "
+        "Move the credential file out of /tmp and apply 0600 permissions. "
+        "Fix the underlying AutoAddPolicy issue (see HX-F164)."
+    ),
+    "tags": ["cleartext-creds", "process-args", "esx", "upgrade-hook", "cwe-214", "cwe-295"],
+}
+
+HX_F170 = {
+    "id": "HX-F170",
+    "title": "Host Key Trust Bypass and Hard-Coded Default Credential in RDM Management SSH Connections",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-deploy/ansible/configureRDMs.py",
+    "description": (
+        "configureRDMs.py contains two functions — offlineRDMsinGuest() and hardBlackListDisks() "
+        "— that connect to storage controller VMs via SSH using paramiko.AutoAddPolicy(), "
+        "which accepts any host key without verification. Both functions fetch the ctlVM password "
+        "via parseEnvVariableTunes('credentials.stctl_vm_passwd'), which decrypts to 'Cisco123' "
+        "(the firmware-wide default, as confirmed in HX-F159). A network attacker who can "
+        "intercept SSH traffic on the storage management network during an RDM configuration "
+        "operation can impersonate the target ctlVM, receive the SSH connection (AutoAddPolicy "
+        "accepts the attacker's host key), and capture root:Cisco123 credentials. The attacker "
+        "can then replay those credentials against any node in the cluster."
+    ),
+    "evidence": [
+        "configureRDMs.py:399: client.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "configureRDMs.py:401: guest_passwd = parseEnvVariableTunes('credentials.stctl_vm_passwd')",
+        "configureRDMs.py:402: client.connect(hostname, username=guest_uname, password=guest_passwd)",
+        "configureRDMs.py:425: client.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "configureRDMs.py:427: guest_passwd = parseEnvVariableTunes('credentials.stctl_vm_passwd')",
+        "configureRDMs.py:428: client.connect(hostname, username=guest_uname, password=guest_passwd)",
+        "springpath_default.tunes: stctl_vm_passwd -> 'Cisco123' (see HX-F159)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace AutoAddPolicy with known_hosts or certificate-pinned host key verification. "
+        "Rotate stctl_vm_passwd from the firmware default before any production deployment."
+    ),
+    "tags": ["ssh-host-key", "hardcoded-creds", "rdm", "paramiko", "cwe-295", "cwe-798"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9729,7 +9801,7 @@ for _f in [
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
     HX_F163, HX_F164, HX_F165, HX_F166,
-    HX_F167, HX_F168,
+    HX_F167, HX_F168, HX_F169, HX_F170,
 ]:
     FINDINGS[_f["id"]] = _f
 
