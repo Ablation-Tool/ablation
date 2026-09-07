@@ -9017,12 +9017,156 @@ HX_F153 = {
     ),
 }
 
+HX_F154 = {
+    "id": "HX-F154",
+    "title": (
+        "Hardcoded Java KeyStore Password 'springpath' in "
+        "hyperflex_security.properties — Universal Across All HyperFlex Deployments"
+    ),
+    "severity": "CRITICAL",
+    "cvss_score": 8.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-798",
+    "component": "storfs-misc",
+    "file": "usr/share/hyperflex/storfs-misc/hyperflex_security.properties",
+    "lines": "5",
+    "description": (
+        "The HyperFlex security properties file (hyperflex_security.properties) "
+        "contains a base64-encoded Java KeyStore password hardcoded in the "
+        "firmware image:\n\n"
+        "'<entry key=\"keystore_password\">c3ByaW5ncGF0aA==</entry>'\n\n"
+        "Decoded: 'c3ByaW5ncGF0aA==' → 'springpath' (the original company name "
+        "before the Cisco acquisition). Because this value is in the firmware "
+        "package (storfs-misc deb), it is identical across every HyperFlex "
+        "deployment — no per-installation generation or rotation.\n\n"
+        "The keystore password protects 'hyperflex_keystore.jceks', the Java "
+        "KeyStore containing:\n"
+        "1. The TLS private key and certificate for internal REST API services\n"
+        "2. The AES secret key used for JWT token signing and verification "
+        "   (HyperFlex uses a symmetric HMAC key in the keystore to sign JWT "
+        "   tokens issued by the AAA service)\n"
+        "3. Trust anchors for inter-service TLS\n\n"
+        "An attacker who can read '/etc/hyperflex/secure/hyperflex_keystore.jceks' "
+        "(accessible via HX-F144's world-readable root_file.pub to authenticate, "
+        "or via any other authenticated path) can open the keystore with password "
+        "'springpath' and extract:\n"
+        "- The JWT signing key → forge arbitrary admin JWT tokens valid indefinitely\n"
+        "- The TLS private key → perform TLS MiTM for internal REST services\n\n"
+        "The migrate-secureconfig.sh script moves the properties file to "
+        "'/etc/hyperflex/secure/' but preserves file permissions and does not "
+        "rotate the keystore password."
+    ),
+    "proof": (
+        "# Decode the hardcoded keystore password:\n"
+        "python3 -c \"import base64; print(base64.b64decode('c3ByaW5ncGF0aA==').decode())\"\n"
+        "# Output: springpath\n\n"
+        "# Verify in deployed system:\n"
+        "grep keystore_password /etc/hyperflex/secure/hyperflex_security.properties\n"
+        "# Expected: <entry key=\"keystore_password\">c3ByaW5ncGF0aA==</entry>\n\n"
+        "# Extract keystore contents with keytool using the known password:\n"
+        "keytool -list -keystore /etc/hyperflex/secure/hyperflex_keystore.jceks "
+        "-storetype jceks -storepass springpath\n"
+        "# Lists all key entries including JWT signing key and TLS private keys\n\n"
+        "# Extract JWT signing key to forge tokens:\n"
+        "keytool -exportcert -keystore /etc/hyperflex/secure/hyperflex_keystore.jceks "
+        "-storetype jceks -storepass springpath -alias hxjwtkey -file jwt.key"
+    ),
+    "remediation": (
+        "1. Generate a unique keystore password per deployment during cluster "
+        "   initialization (e.g., 'python3 -c \"import secrets; "
+        "   print(secrets.token_hex(32))\"') and write it to the properties "
+        "   file during first boot — never ship a hardcoded default.\n"
+        "2. Store the per-deployment keystore password in a location that is not "
+        "   world-readable: mode 0600, owned by the HyperFlex service account.\n"
+        "3. Rotate the keystore password and regenerate the keystore on any "
+        "   suspected compromise.\n"
+        "4. As an immediate mitigation: change the keystore password on all "
+        "   deployed systems from 'springpath' to a randomly-generated value "
+        "   using 'keytool -storepasswd -keystore hyperflex_keystore.jceks'."
+    ),
+}
+
+HX_F155 = {
+    "id": "HX-F155",
+    "title": (
+        "Unauthenticated Exhibitor ZooKeeper REST API on Port 8180 "
+        "Exposes Cluster Configuration and ZooKeeper Node Data"
+    ),
+    "severity": "HIGH",
+    "cvss_score": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-306",
+    "component": "storfs-misc / storfs-deploy",
+    "file": (
+        "usr/share/hyperflex/storfs-misc/hx-scripts/node_replace.py, "
+        "opt/hyperflex/storfs-deploy/ansible/library/exhibitorCfg.py"
+    ),
+    "lines": "413, 425, 442 (node_replace.py); 27 (exhibitorCfg.py)",
+    "description": (
+        "The HyperFlex Exhibitor ZooKeeper manager REST API at port 8180 is "
+        "accessed without authentication by multiple management scripts. "
+        "Exhibitor (Netflix/Sonatype) provides a REST API for ZooKeeper "
+        "configuration and node browsing; HyperFlex uses it without enabling "
+        "Exhibitor's authentication mechanisms.\n\n"
+        "node_replace.py (lines 413, 425, 442) makes unauthenticated HTTP GET "
+        "requests to Exhibitor:\n"
+        "  requests.get('http://localhost:8180/exhibitor/v1/explorer/node"
+        "?key=%2Fcluster%2Fpnodes')\n"
+        "  requests.get('http://localhost:8180/exhibitor/v1/explorer/node"
+        "?key=%2Fcluster%2Fmembers')\n"
+        "  requests.get('http://localhost:8180/exhibitor/v1/config/get-state')\n\n"
+        "exhibitorCfg.py (line 27) connects to remote cluster nodes' Exhibitor "
+        "APIs using the node IP from stMgr.cfg — not just localhost:\n"
+        "  requests.get('http://' + serverIp + ':8180/exhibitor/v1/config/"
+        "get-state')\n\n"
+        "The iptables rules in zkchangehandler.sh and add-witness-iptable-rules.sh "
+        "DNAT port 8180 from eth0 to eth1: 'iptables -t nat -A PREROUTING -p tcp "
+        "-d $ETH0 --dport 8180 -j DNAT --to-dest $ETH1'. This exposes the "
+        "Exhibitor API on the CVM management interface during witness/arbitrator "
+        "configuration changes.\n\n"
+        "Exploitable capabilities via unauthenticated Exhibitor REST API:\n"
+        "- GET /exhibitor/v1/explorer/node?key=<path>: read any ZooKeeper node "
+        "  including cluster membership, encryption configuration paths, and "
+        "  any keys stored in ZK\n"
+        "- GET /exhibitor/v1/config/get-state: read Exhibitor/ZK config\n"
+        "- POST /exhibitor/v1/config/set: modify ZooKeeper cluster configuration "
+        "  (if write API is unauthenticated)\n\n"
+        "Same vulnerability class as HX-F141 (sedsvc unauthenticated on port "
+        "8012); different exposure: cluster configuration vs. drive erasure."
+    ),
+    "proof": (
+        "# From the CVM or from the data network after DNAT rules are active:\n"
+        "# Read ZooKeeper node data (cluster membership):\n"
+        "curl -s 'http://localhost:8180/exhibitor/v1/explorer/node"
+        "?key=%2Fcluster%2Fmembers'\n"
+        "# Read Exhibitor/ZK cluster configuration:\n"
+        "curl -s 'http://localhost:8180/exhibitor/v1/config/get-state' | python3 -m json.tool\n"
+        "# Test write capability:\n"
+        "curl -s -X POST 'http://localhost:8180/exhibitor/v1/explorer/node-data' \\\n"
+        "  -H 'Content-Type: application/json' \\\n"
+        "  -d '{\"key\":\"/test\",\"value\":\"test\",\"isNew\":true}'"
+    ),
+    "remediation": (
+        "1. Enable Exhibitor's built-in security provider: set "
+        "'--security-provider-classname' to a provider that requires auth, "
+        "or configure 'BasicAuthSecurityProvider' with a strong password.\n"
+        "2. Bind Exhibitor to localhost only (127.0.0.1:8180) — do not allow "
+        "cross-node access to the Exhibitor HTTP API; use ZooKeeper's native "
+        "SASL/DIGEST authentication for cluster coordination instead.\n"
+        "3. Remove the iptables DNAT rules for port 8180 from management "
+        "   interface to data interface — Exhibitor should not be externally "
+        "   reachable.\n"
+        "4. Restrict Exhibitor to read-only endpoints, or replace the write "
+        "   paths with authenticated admin-only API calls."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
-    HX_F151, HX_F152, HX_F153,
+    HX_F151, HX_F152, HX_F153, HX_F154, HX_F155,
 ]:
     FINDINGS[_f["id"]] = _f
 
