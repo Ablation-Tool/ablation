@@ -11883,6 +11883,145 @@ HX_F214 = {
     "tags": ["upgrade", "credentials", "private-key", "tmp", "esxi", "cwe-312", "cwe-732", "high"],
 }
 
+HX_F215 = {
+    "id": "HX-F215",
+    "title": "Shell Injection via Unsanitized Password in Curl Command (SwaggerClient._get_auth_token)",
+    "severity": "MEDIUM",
+    "cvss_score": 5.7,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:H/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": ["CWE-78"],
+    "component": "restClientModule/swagger_api_client.py",
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "`SwaggerClient._get_auth_token()` constructs a curl command string by concatenating "
+        "`json.dumps(body)` into a single-quoted shell argument and executes it with `shell=True`. "
+        "The `body` dict contains the `username` and `password` fields. A single-quote character "
+        "(`'`) in either value terminates the shell single-quote boundary, allowing the remainder "
+        "of the value to be interpreted as unquoted shell content. "
+        "Proof of injection: password value `'; id; echo '` produces the shell command "
+        "`curl -d '{\"password\": \"'; id; echo '\"}' ...` in which `; id;` executes as a separate "
+        "shell command in the context of the upgrade orchestration process. "
+        "The function is reached via `auth_type='token'` in the `SwaggerClient` constructor, "
+        "which is the path used when programmatic authentication to the HX REST API is required "
+        "during upgrade operations."
+    ),
+    "evidence": [
+        {
+            "file": "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py",
+            "lines": "204-220",
+            "snippet": (
+                "def _get_auth_token(self, body):\n"
+                "    # TODO: use swagger for aaa\n"
+                "    curl_cmd = \"curl -H \\\"Content-Type: application/json\\\" -X POST\" +\\\n"
+                "               \" -d '\" + json.dumps(body, ensure_ascii=False) + \"'\" +\\\n"
+                "               ' ' + \"https://\" + self.server + \"/aaa/v1/auth?\" +\\\n"
+                "               \"grant_type=password -k\"\n"
+                "    auth_response = subprocess.Popen(curl_cmd,\n"
+                "                                     stdout=subprocess.PIPE,\n"
+                "                                     stderr=subprocess.PIPE,\n"
+                "                                     shell=True).communicate()[0]"
+            ),
+            "note": "Single-quote delimiter around json.dumps(body) is broken by any ' in password or username",
+        },
+        {
+            "file": "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py",
+            "lines": "68-72",
+            "snippet": (
+                "elif auth_type == 'token':\n"
+                "    if username not in body:\n"
+                "        body['username'] = username\n"
+                "    if password not in body:\n"
+                "        body['password'] = password\n"
+                "    auth_resp = self._get_auth_token(body=body)"
+            ),
+            "note": "Username and password flow into body dict passed to _get_auth_token",
+        },
+    ],
+    "impact": (
+        "An operator or process that sets a cluster credential containing a single-quote character "
+        "triggers command execution in the upgrade orchestration process context. "
+        "The upgrade orchestration process runs with elevated privileges; injected commands "
+        "inherit those privileges. The `-k` flag already present in the curl command confirms "
+        "TLS verification is also disabled for this authentication call."
+    ),
+    "remediation": (
+        "Replace the `shell=True` curl subprocess with a native Python HTTP request using "
+        "`urllib.request` or `http.client`. The `_get_auth_token` method already has a TODO "
+        "comment indicating the intent to replace this with a swagger call — implement it. "
+        "If the curl invocation must be kept, use `shlex.quote()` on each interpolated value "
+        "and pass the command as a list with `shell=False`."
+    ),
+    "tags": ["shell-injection", "curl", "shell=True", "upgrade", "cwe-78", "medium"],
+}
+
+HX_F216 = {
+    "id": "HX-F216",
+    "title": "ESXi Credentials Exposed as Plaintext ovftool Command-Line Arguments During Factory Deploy",
+    "severity": "MEDIUM",
+    "cvss_score": 5.5,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": ["CWE-214"],
+    "component": "storfs-factory/ansible/library/deployOva.py",
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "During factory deployment, `deployOva.py` constructs an ovftool command that embeds "
+        "the ESXi username and URL-encoded password directly in a `vi://` URL passed as a "
+        "command-line argument: "
+        "`/usr/bin/ovftool ... vi://<user>:<esxEncodedPassword>@<hostname>`. "
+        "The credential string is visible to any local user via `ps aux` or `/proc/<pid>/cmdline` "
+        "for the duration of the ovftool process (OVA deployments can take several minutes). "
+        "The `log.info()` call that follows records the full stdout/stderr of the ovftool run; "
+        "if ovftool echoes the source URL in its output (e.g., on connection failure), "
+        "the credentials are also written to the log file at INFO level. "
+        "Additionally, `--noSSLVerify` is passed to ovftool, disabling TLS certificate "
+        "validation for the vSphere connection during controller VM deployment."
+    ),
+    "evidence": [
+        {
+            "file": "storfs-factory/ansible/library/deployOva.py",
+            "lines": "71-81",
+            "snippet": (
+                "cmd = \"/usr/bin/ovftool --allowExtraConfig --acceptAllEulas "
+                "--disableVerification --noSSLVerify --datastore='\" + datastore +\n"
+                "   \"' --network=\\\"\" + network + \"\\\" --name=\" + name + \" \" + ovalocation + \" vi:\\/\\/ \" +  esxUserName +\n"
+                "  \":\" + esxEncodedPassword + \"@\" + hostname\n"
+                "log.info(\"Deploying controller VM using ovftool for \" + modelNumber)\n"
+                "cmd = subprocess.Popen(shlex.split(cmd), shell=False, ...)\n"
+                "out, err = cmd.communicate()\n"
+                "log.info(\"Deploying controller VM using ovftool. Return code: {0} output: {1} err: {2}\"\n"
+                "         .format(str(cmd.returncode), str(out), str(err)))"
+            ),
+            "note": "vi:// URL with esxEncodedPassword in positional args; noSSLVerify also present",
+        },
+        {
+            "file": "storfs-factory/ansible/library/deployOva.py",
+            "lines": "40-42",
+            "snippet": (
+                "esxPassword = (base64.b64decode(module.params['esxPassword']).strip())\n"
+                "try:\n"
+                "    esxPassword = esxPassword.decode('utf-8')"
+            ),
+            "note": "Password is base64-decoded at runtime; the decoded plaintext is what appears in the process args",
+        },
+    ],
+    "impact": (
+        "Any local user on the factory provisioning host can read ESXi root credentials from "
+        "`/proc/<ovftool_pid>/cmdline` or `ps aux` during OVA deployment. "
+        "ESXi root credentials grant full hypervisor access, enabling VM inspection, disk "
+        "access, and potential lateral movement to all VMs on the host. "
+        "The `--noSSLVerify` flag compounds the risk by allowing a network attacker to "
+        "MITM the vSphere connection during initial controller VM deployment."
+    ),
+    "remediation": (
+        "1. Pass ESXi credentials to ovftool via an options file (`--optionFile`) or "
+        "environment variables rather than command-line arguments. "
+        "2. Remove `--noSSLVerify` and configure a trusted CA for factory provisioning. "
+        "3. Do not log raw stdout/stderr of processes that may contain credential material; "
+        "log only return code and sanitized status."
+    ),
+    "tags": ["factory", "credentials", "process-args", "esxi", "noSSLVerify", "cwe-214", "medium"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11908,6 +12047,7 @@ for _f in [
     HX_F208, HX_F209, HX_F210,
     HX_F211, HX_F212, HX_F213,
     HX_F214,
+    HX_F215, HX_F216,
 ]:
     FINDINGS[_f["id"]] = _f
 
