@@ -9251,12 +9251,84 @@ HX_F156 = {
     ),
 }
 
+HX_F157 = {
+    "id": "HX-F157",
+    "title": "SSH Host Key Validation Bypass via paramiko.AutoAddPolicy() in STIG Enforcement Scripts",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "stig_security_settings.py, stig_security_settings_hx.py, post_install.py",
+    "description": (
+        "Three scripts use paramiko.AutoAddPolicy() for SSH connections, silently accepting any "
+        "host key without verification. The affected scripts are the STIG compliance enforcement "
+        "tools — the very components responsible for applying security hardening across cluster nodes. "
+        "An attacker with a position between the controller VM and an ESXi host can intercept the "
+        "SSH session used to apply STIG settings, exfiltrate root credentials, and suppress or "
+        "forge the compliance commands. The same pattern appears in checkSSHLogin() and sshToHost() "
+        "in stig_security_settings.py (lines 364, 382), stig_security_settings_hx.py (lines 476, "
+        "494), and post_install.py (line 712)."
+    ),
+    "evidence": [
+        "stig_security_settings.py:364: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "stig_security_settings.py:382: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "stig_security_settings.py:383: ssh.connect(host, username=username, password=password)",
+        "stig_security_settings.py:406: sshToHost(host, 'root', password, cmd)  # applies PAM changes",
+        "stig_security_settings_hx.py:476: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "stig_security_settings_hx.py:494: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "post_install.py:712: ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "stig_security_settings.py:32: ssl._create_default_https_context = _create_unverified_https_context  # co-present",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace AutoAddPolicy() with RejectPolicy() or WarningPolicy(). Load known host keys from "
+        "a pre-seeded known_hosts file before connecting. The STIG scripts should themselves be held "
+        "to STIG SSH host-key requirements."
+    ),
+    "tags": ["ssh", "mitm", "stig", "paramiko", "host-key", "cwe-295"],
+}
+
+HX_F158 = {
+    "id": "HX-F158",
+    "title": "OS Command Injection via vCenter Password in Shell Command String (reRegisterClusterToVC.py)",
+    "severity": "HIGH",
+    "cvss": 7.8,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-78",
+    "component": "storfs-misc/hx-scripts/reRegisterClusterToVC.py",
+    "description": (
+        "reRegisterClusterToVC.py constructs a shell command by string-formatting the vCenter "
+        "password directly into the cmdStr variable (line 44) and executes it with Popen(shell=True) "
+        "(line 54). A password containing shell metacharacters (semicolons, backticks, $(...)) "
+        "yields arbitrary command execution as the process owner. The silent-mode code path "
+        "(reRegisterToVcSilentMode, line 107) decodes the password from base64 before injection "
+        "(line 111), enabling a caller to supply a crafted base64 string that decodes to a shell "
+        "payload. This is also CWE-214: the vCenter password appears verbatim in /proc/<pid>/cmdline "
+        "throughout the stcli subprocess lifetime."
+    ),
+    "evidence": [
+        "reRegisterClusterToVC.py:39-44: cmdStr = \"priv stcli cluster reregister ... --vcenter-password '{}' \".format(..., vCenterUserPass)",
+        "reRegisterClusterToVC.py:54: proc = Popen(cmd, shell=True, stderr=PIPE, stdout=PIPE)",
+        "reRegisterClusterToVC.py:111: vc_pass = base64.b64decode(vc_pass).decode('utf-8')  # decoded before shell injection",
+        "reRegisterClusterToVC.py:44: password embedded unescaped in single-quoted shell argument",
+        "Example payload: password = \"x'; id > /tmp/pwned; echo '\" -> executes id",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Pass command arguments as a list to Popen with shell=False: "
+        "['priv', 'stcli', 'cluster', 'reregister', '--vcenter-password', vCenterUserPass]. "
+        "Never interpolate credentials into shell command strings. Remove shell=True."
+    ),
+    "tags": ["command-injection", "shell", "vcenter", "password", "cwe-78", "cwe-214"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
+    HX_F157, HX_F158,
 ]:
     FINDINGS[_f["id"]] = _f
 
