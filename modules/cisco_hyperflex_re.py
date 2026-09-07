@@ -9476,6 +9476,84 @@ HX_F162 = {
     "tags": ["servlet-filter", "kerberos", "service-access-auth", "encryption-api", "upgrade-api", "cwe-284"],
 }
 
+HX_F163 = {
+    "id": "HX-F163",
+    "title": "Hyper-V Host Admin Credentials in ZooKeeper /stSSOMgr/auth/creds Readable via Unauthenticated Exhibitor API",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-306",
+    "component": "stSSOMgr, Exhibitor ZooKeeper REST API (chain: HX-F155)",
+    "description": (
+        "The stSSOMgr service stores Hyper-V host admin credentials as a JSON blob in ZooKeeper at "
+        "path /stSSOMgr/auth/creds (zkBasePath='/stSSOMgr', zkAuthKey='/auth', zkCredsKey='creds' "
+        "per stSSOMgr-1.0/conf/application.conf). The blob contains 'host.localadminusername' and "
+        "'host.localadminusercred' (base64-encoded admin password). The Exhibitor ZooKeeper REST API "
+        "(HX-F155) exposes unauthenticated read access to any ZK node via "
+        "GET /exhibitor/v1/explorer/node?key=<path>, which returns bytes64: base64(nodeData). "
+        "Chain: reach port 8180 (DNAT-forwarded from eth0 per HX-F155) -> "
+        "GET /exhibitor/v1/explorer/node?key=/stSSOMgr/auth/creds -> "
+        "decode bytes64 -> JSON with admin username + b64(password) -> "
+        "decode b64 -> plaintext Hyper-V host admin password. "
+        "stssoclient.py fetch_creds() confirms the JSON schema: "
+        "auth_json['host']['localadminusername'] and auth_json['host']['localadminusercred']. "
+        "Similarly, /stSSOMgr/auth/keyData stores SSO encryption key material also readable "
+        "via the same unauthenticated path."
+    ),
+    "evidence": [
+        "stSSOMgr-1.0/conf/application.conf:12-15: zkBasePath='/stSSOMgr', zkAuthKey='/auth', zkCredsKey='creds', zkEncryptionKey='keyData'",
+        "stssoclient.py:77-86: hyperv_creds = stssoclient.getHypervHostCreds(); auth_json['host']['localadminusercred']",
+        "create_node_info.py:111: host_info['username'], host_info['password'] = ssoClient.fetch_creds()",
+        "create_hv_sb.py:42-47: sso_creds = st_sso_client.getHypervHostCreds() # Hyper-V creds from ZK",
+        "Chain: GET http://<ip>:8180/exhibitor/v1/explorer/node?key=/stSSOMgr/auth/creds",
+        "-> decode bytes64 -> JSON {host: {localadminusername, localadminusercred}} -> decode b64 -> plaintext password",
+        "Exhibitor unauthenticated: confirmed by HX-F155 (no auth headers in node_replace.py, exhibitorCfg.py)",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Protect the Exhibitor API with authentication and authorization (add a shared secret or "
+        "bind to localhost only; remove the DNAT iptables rule). Encrypt ZK node data at rest for "
+        "sensitive paths. Rotate Hyper-V admin credentials after patch deployment."
+    ),
+    "tags": ["zookeeper", "exhibitor", "hyperv-creds", "chain-hx-f155", "unauth-read", "cwe-306", "critical"],
+}
+
+HX_F164 = {
+    "id": "HX-F164",
+    "title": "SSH RSA Private Keys Stored World-Accessible in /tmp/sshKeyPair*.json",
+    "severity": "HIGH",
+    "cvss": 7.8,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-312",
+    "component": "storfs-deploy/ansible/commonFunctions.py",
+    "description": (
+        "commonFunctions.py stores RSA SSH private keys as JSON in /tmp/sshKeyPair*.json (line 645: "
+        "credsFile = getMatchingFileName('/tmp/sshKeyPair*.json')). The /tmp directory on Linux "
+        "uses sticky-bit permissions — files may not be deleted by other users but ARE readable by "
+        "default unless the writing process explicitly restricts permissions. These keys are used "
+        "by run_command_on_node() (line 654) to authenticate as root to all HyperFlex cluster nodes "
+        "(paramiko.SSHClient.connect(hostname=node, username='root', pkey=key)). Any local process "
+        "or user that can read the sshKeyPair file gains root SSH access to all cluster nodes. "
+        "run_command_on_node() also uses AutoAddPolicy() (MITM risk, same pattern as HX-F157)."
+    ),
+    "evidence": [
+        "commonFunctions.py:645: credsFile = getMatchingFileName('/tmp/sshKeyPair*.json')",
+        "commonFunctions.py:646-649: with open(credsFile) as f: data = json.load(f)",
+        "commonFunctions.py:654: creds[<node>] = private_key",
+        "commonFunctions.py:659-661: key = paramiko.RSAKey.from_private_key(io.StringIO(private_key))",
+        "commonFunctions.py:662: client.connect(hostname=node, username='root', pkey=key)  # root on all nodes",
+        "commonFunctions.py:656: client.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
+        "9997_post_upgrade_cleanup_ESX.py:27: creds = load_hxvm_credentials()  # invokes the /tmp path",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Write sshKeyPair JSON to a permissions-restricted file (chmod 600) or use a dedicated "
+        "credential store rather than /tmp. Delete the key file immediately after use. Replace "
+        "AutoAddPolicy() with strict host verification."
+    ),
+    "tags": ["ssh-keys", "tmp", "world-readable", "root-access", "paramiko", "cwe-312"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9483,6 +9561,7 @@ for _f in [
     HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
+    HX_F163, HX_F164,
 ]:
     FINDINGS[_f["id"]] = _f
 
