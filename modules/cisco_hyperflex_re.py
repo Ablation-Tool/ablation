@@ -9863,6 +9863,60 @@ HX_F172 = {
     "tags": ["weak-crypto", "aes-ecb", "predictable-key", "cluster-uuid", "cwe-327", "cwe-321"],
 }
 
+HX_F173 = {
+    "id": "HX-F173",
+    "title": "World-Readable Root Session ID File Enables Admin API Authentication Bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-732",
+    "component": "storfs-misc/set_shared_key.sh, storfs-misc/genrestconf.sh, storfs-misc/rest_internal.conf",
+    "description": (
+        "set_shared_key.sh generates the HyperFlex root session ID as "
+        "`sharedkey=$product_uuid-$RANDOM` (15 bits of additional entropy above "
+        "the semi-public product UUID) and writes it to /etc/hyperflex/secure/root_file.pub "
+        "with explicit `chmod 644` — making the file world-readable by all local users. "
+        "genrestconf.sh reads this token and injects it into the nginx proxy config as "
+        "`proxy_set_header X-RootSessionID <token>`, causing nginx to add admin "
+        "authentication to all internally proxied requests. "
+        "runRestQueries(useRootSessionId=True) in multiple scripts reads the same file "
+        "and constructs requests with X-RootSessionID, X-LoggedInUser: admin, "
+        "X-Scope: READ,MODIFY, and X-RequestInitiator: Internal headers. "
+        "A local attacker (diag account, daemon user, web process) can: "
+        "(1) read /etc/hyperflex/secure/root_file.pub (mode 0644); "
+        "(2) send any REST API request with X-RootSessionID: <token> and "
+        "X-LoggedInUser: admin to gain full admin-level READ+MODIFY access to "
+        "the HyperFlex coreapi; "
+        "(3) enumerate, modify, or destroy cluster configuration, credentials, "
+        "encryption keys, and node membership. "
+        "Additionally, the $RANDOM portion of the key is only 15 bits (0-32767), "
+        "so even without file read, an attacker who knows the product_uuid can "
+        "brute-force the full key space in at most 32768 guesses."
+    ),
+    "evidence": [
+        "set_shared_key.sh:11: sharedkey=$nodeid-$RANDOM  # nodeid = product_uuid",
+        "set_shared_key.sh:12: echo $sharedkey > $dest_folder/root_file.pub",
+        "set_shared_key.sh:13: chmod 644 $dest_folder/root_file.pub  # world-readable confirmed",
+        "genrestconf.sh:8: SESSIONFILE=/etc/hyperflex/secure/root_file.pub",
+        "genrestconf.sh:31: sed 's/SESSIONID/$SESSIONID/g' rest_internal.conf -> /etc/nginx/conf.d/restnginx.conf",
+        "rest_internal.conf:42: proxy_set_header X-RootSessionID SESSIONID;",
+        "commonFunctions.py:615-620: useRootSessionId=True -> X-RootSessionID + X-LoggedInUser:admin + X-Scope:READ,MODIFY",
+        "migrate-secureconfig.sh:15: /etc/root_file.pub -> /etc/hyperflex/secure/ (legacy path may persist)",
+        "Forged request: GET https://<hx>/coreapi/v1/clusters -H 'X-RootSessionID:<token>' -H 'X-LoggedInUser:admin'",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Change chmod to 0600 (owner-read only) in set_shared_key.sh immediately. "
+        "Replace $RANDOM with /dev/urandom-sourced entropy: "
+        "`sharedkey=$(head -c 32 /dev/urandom | base64 | tr -d '/+=')`. "
+        "Add cryptographic HMAC validation of X-RootSessionID at the API filter layer "
+        "rather than trusting the header value verbatim. "
+        "Audit all paths that read root_file.pub to ensure they run as appropriately "
+        "privileged users."
+    ),
+    "tags": ["auth-bypass", "world-readable", "session-id", "nginx", "admin", "cwe-732", "cwe-334", "critical"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9872,7 +9926,7 @@ for _f in [
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
     HX_F163, HX_F164, HX_F165, HX_F166,
     HX_F167, HX_F168, HX_F169, HX_F170,
-    HX_F171, HX_F172,
+    HX_F171, HX_F172, HX_F173,
 ]:
     FINDINGS[_f["id"]] = _f
 
