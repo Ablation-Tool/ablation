@@ -11291,6 +11291,112 @@ HX_F204 = {
     "tags": ["ovftool", "factory", "tls", "package-verification", "cwe-354", "cwe-295", "high"],
 }
 
+HX_F205 = {
+    "id": "HX-F205",
+    "title": "Controller VM Default Password 'Cisco123' Recoverable From Firmware-Shipped AES Key",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-321",
+    "component": (
+        "storfs-misc/springpath_env_parse.py / springpath_default.tunes / "
+        "storfs-misc/Secret.class"
+    ),
+    "description": (
+        "springpath_env_parse.py derives the AES-CBC decryption key for "
+        "controller VM credentials from `MD5(/usr/share/hyperflex/storfs-misc/Secret.class)`. "
+        "`Secret.class` is a Java class file shipped as firmware — identical across "
+        "all HXDP 6.0.2b installations. "
+        "springpath_default.tunes ships with three AES-CBC encrypted credentials: "
+        "`stctl_vm_passwd`, `ssl_cert_passwd`, and `installer_passwd`. "
+        "The comment at springpath_env_parse.py line 43-44 states: "
+        "'Secret is derived by using complex text which is not easy to guess or read.' "
+        "This claim is false — the key source is a public firmware file. "
+        "Decryption using `MD5(Secret.class) = 1f6d13bcd7753f2d3b2e2da361b7afb5`: "
+        "stctl_vm_passwd → 'Cisco123' (controller VM root password). "
+        "installer_passwd → 'Cisco123' (same encrypted value, same decrypted password). "
+        "ssl_cert_passwd → 'springpath'. "
+        "Any actor with access to the firmware image (publicly extractable) can derive "
+        "the decryption key in under 1 second and recover all three credentials. "
+        "The controller VM (stCtlVM) is the HyperFlex storage controller — root access "
+        "to it gives full control over the cluster's data path, encryption key management, "
+        "ZooKeeper state, and management API. "
+        "Every HXDP 6.0.2b cluster that has not had its stCtlVM root password explicitly "
+        "rotated is accessible with the credential 'Cisco123' recovered from this analysis."
+    ),
+    "evidence": [
+        "springpath_env_parse.py line 35: ENV_VARIABLE_STCTL_PASS = '/usr/share/hyperflex/storfs-misc/Secret.class'",
+        "springpath_env_parse.py line 84-86: if 'stctl_vm_passwd': file_md5 = md5(Secret.class); decoded = decrypt(file_md5, value)",
+        "springpath_default.tunes line 87: stctl_vm_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=",
+        "springpath_default.tunes line 88: ssl_cert_passwd=yWK4pTIUEr0TCjpQdp9sb/KW404x6Id/6ImlCOWdG7s=",
+        "springpath_default.tunes line 90: installer_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU=",
+        "MD5(Secret.class) = 1f6d13bcd7753f2d3b2e2da361b7afb5 (computed from shipped firmware)",
+        "AES-CBC decrypt(key=1f6d13bcd7753f2d3b2e2da361b7afb5, enc=stctl_vm_passwd) → b'Cisco123'",
+        "AES-CBC decrypt(key=1f6d13bcd7753f2d3b2e2da361b7afb5, enc=ssl_cert_passwd) → b'springpath'",
+        "springpath_env_parse.py comment: 'Secret is derived by using complex text which is not easy to guess or read' — false claim",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Replace the file-MD5 key derivation with a genuine per-cluster secret "
+        "generated at provisioning time and stored in a hardware security module or "
+        "platform-specific secure storage (TPM, vTPM, UEFI secure variable). "
+        "Rotate the stCtlVM root password on all deployed clusters immediately. "
+        "Remove the stctl_vm_passwd, ssl_cert_passwd, and installer_passwd values "
+        "from springpath_default.tunes in the firmware image — any credential that "
+        "ships identically in every firmware package is a shared cluster secret by design. "
+        "Post-rotation, the new password must be stored outside the firmware image, "
+        "generated uniquely per cluster, and inaccessible to unprivileged cluster processes."
+    ),
+    "tags": ["hardcoded-key", "aes", "controller-vm", "cisco123", "cwe-321", "cwe-798", "critical"],
+}
+
+HX_F206 = {
+    "id": "HX-F206",
+    "title": "ESXi Kickstart Provisioning Sets Root Password to 'springpath' Across All Nodes",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-1392",
+    "component": (
+        "storfs-deploy/ansible/ks-default.cfg / ESXi kickstart provisioning"
+    ),
+    "description": (
+        "ks-default.cfg is the kickstart script used for scripted ESXi installation "
+        "on all HyperFlex compute nodes. "
+        "Line 12: `rootpw springpath`. "
+        "This directive sets the ESXi root password to the literal string `springpath` "
+        "on every node installed via this kickstart file. "
+        "The `configureNetworking_VCenter.py` script's default `ESX_PWD = 'springpath'` "
+        "(HX-F201) is directly derived from this kickstart default — the script assumes "
+        "that nodes not yet provisioned with a custom password will still carry the "
+        "kickstart default. "
+        "ESXi root is the hypervisor management account with full control over all VMs, "
+        "datastores, and host configuration. "
+        "Any ESXi node where the post-installation password rotation step failed, "
+        "was skipped, or was not enforced remains accessible with `root`/`springpath`. "
+        "The credential is identical across all HyperFlex nodes provisioned from this "
+        "kickstart template, eliminating any per-node secret."
+    ),
+    "evidence": [
+        "ks-default.cfg line 12: rootpw springpath",
+        "ks-default.cfg is the scripted ESXi installation file for all HyperFlex cluster nodes",
+        "configureNetworking_VCenter.py ESX_PWD = 'springpath' default confirms this is the operational default",
+        "ESXi root provides full hypervisor control: VM power, datastores, host networking, firewall",
+        "No per-node unique credential — all nodes share the same kickstart-set password",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the `rootpw springpath` directive from ks-default.cfg. "
+        "Replace with a placeholder or a randomly generated per-node password "
+        "injected at provisioning time via Ansible `--extra-vars` or from a "
+        "credentials vault. "
+        "Enforce post-provisioning password rotation as a required deployment step. "
+        "Audit all deployed HyperFlex clusters for ESXi nodes where the root "
+        "password has not been changed from the kickstart default."
+    ),
+    "tags": ["kickstart", "esxi", "default-password", "springpath", "cwe-1392", "high"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -11312,6 +11418,7 @@ for _f in [
     HX_F197, HX_F198,
     HX_F199, HX_F200, HX_F201,
     HX_F202, HX_F203, HX_F204,
+    HX_F205, HX_F206,
 ]:
     FINDINGS[_f["id"]] = _f
 
