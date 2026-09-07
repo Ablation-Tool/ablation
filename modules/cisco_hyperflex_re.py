@@ -9637,6 +9637,90 @@ HX_F166 = {
     "tags": ["hardcoded-password", "esxi", "springpath", "default-credentials", "cwe-798", "critical"],
 }
 
+HX_F167 = {
+    "id": "HX-F167",
+    "title": "TLS Verification Disabled in Ansible Playbook curl Calls for Security-Critical ctlVM Operations",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-295",
+    "component": "storfs-deploy/ansible/roles/postinstall_controllervm/tasks/configure.yml, storagenode.yml",
+    "description": (
+        "Multiple Ansible playbook tasks invoke curl with the -k flag (disable TLS verification) "
+        "when communicating with the storage controller VM securityservice endpoints. The affected "
+        "operations include: removing authentication keys (POST /securityservice/v1/removeauthkey), "
+        "setting a security baseline (POST /securityservice/v1/sfi/baseline), enabling SSH access "
+        "(PUT /securityservice/v1/secureshell), and cluster registration. These are called with "
+        "admin credentials (-u admin:{{ ctlvmPassword | b64decode }}) over unverified TLS. "
+        "An attacker performing MITM can intercept auth key removal, inject their own auth key, "
+        "modify the security baseline before it is applied, or extract admin credentials. "
+        "The -k pattern extends the systemic TLS bypass (HX-F156) from Python scripts to "
+        "Ansible playbook curl calls, covering the deployment and provisioning pipeline."
+    ),
+    "evidence": [
+        "configure.yml:31: curl -k ... DELETE /securityservice/v1/removeauthkey -u admin:{{ ctlvmPassword | b64decode }}",
+        "configure.yml:57: curl -k ... POST /securityservice/v1/sfi/baseline -u admin:{{ ctlvmPassword | b64decode }}",
+        "configure.yml:69: curl -k ... PUT /securityservice/v1/secureshell?status=true -u admin:{{ ctlvmPassword }}",
+        "storage_client.yml:49: curl -k ... POST /securityservice/v1/configurescn -u admin:{{ ctlvmPassword }}",
+        "storagenode.yml:44: curl -k ... GET /securityservice/v1/secureshell -u admin:{{ ctlvmPassword | b64decode }}",
+        "storagenode.yml:77: curl -k ... GET /coreapi/v1/clusters -u admin:{{ ctlvmPassword | b64decode }}",
+        "configure.yml:43: curl -k ... DELETE /securityservice/v1/removeauthkey for ansible user",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Remove the -k flag from all curl invocations in Ansible playbooks. Pin the ctlVM TLS "
+        "certificate or add the CA cert to curl's certificate store (--cacert). If a self-signed "
+        "cert is used, pre-distribute the cert fingerprint and use --pinnedpubkey instead."
+    ),
+    "tags": ["tls-bypass", "ansible", "curl", "securityservice", "cwe-295", "deploy"],
+}
+
+HX_F168 = {
+    "id": "HX-F168",
+    "title": "Deployment API Hard-Coded Credential Default and TLS Bypass in deployNodes.py",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-798",
+    "component": "storfs-deploy/ansible/deployNodes.py",
+    "description": (
+        "deployNodes.py retrieves the installer password at module load time via "
+        "parseEnvVariableTunes('credentials.installer_passwd'), which decrypts to 'Cisco123' "
+        "(same AES key and tunes file as HX-F159). This decrypted password is then set as the "
+        "default value for the --password command-line option (line 44). When invoked without "
+        "an explicit --password argument, all REST API calls to the deployment appliance "
+        "(https://<appliance>/rest/deployment/) authenticate with root:Cisco123. Additionally, "
+        "every requests call in the file uses verify=False explicitly, and the script calls "
+        "requests.packages.urllib3.disable_warnings() at startup to suppress the resulting "
+        "InsecureRequestWarning. An attacker with network access to the deployment appliance "
+        "can authenticate with the default credentials during or after deployment. The "
+        "verify=False pattern means MITM can intercept the deployment API session and manipulate "
+        "cluster configuration payloads. The disable_warnings() call ensures no logs or terminal "
+        "output reflects the insecure TLS state."
+    ),
+    "evidence": [
+        "deployNodes.py:14: sys.path.append('/usr/share/hyperflex/storfs-misc/')",
+        "deployNodes.py:17: from springpath_env_parse import parseEnvVariableTunes",
+        "deployNodes.py:28: INSTALLER_PASSWD = parseEnvVariableTunes('credentials.installer_passwd')",
+        "deployNodes.py:43-44: p.add_option('--password', dest='password', default=INSTALLER_PASSWD, ...)",
+        "deployNodes.py:88: requests.packages.urllib3.disable_warnings()",
+        "deployNodes.py:147: authData=(opts.user, opts.password)  # user defaults to 'root'",
+        "deployNodes.py:148: r = requests.get(deploymentsUrl, auth=authData, verify=False)",
+        "deployNodes.py:154: r = requests.get(progressUrl, auth=authData, verify=False)",
+        "deployNodes.py:157: r = requests.post(checkDeployNodesUrl, ..., auth=authData, verify=False, ...)",
+        "deployNodes.py:160: r = requests.post(deployNodesUrl, ..., auth=authData, verify=False, ...)",
+        "springpath_default.tunes: installer_passwd=DC4R6Rv9Zv8RhHJfuWeEAVqNUhdieK7vJMiXv3tPYDU= -> 'Cisco123'",
+    ],
+    "affected_versions": ["HXDP 6.0.2b"],
+    "remediation": (
+        "Require --password to be explicitly provided; do not default to the tunes credential. "
+        "Remove verify=False from all requests calls and trust the system CA store or pin the "
+        "deployment appliance certificate. Remove disable_warnings() — warnings exist for a reason. "
+        "Rotate the installer_passwd from the firmware-wide default."
+    ),
+    "tags": ["hardcoded-creds", "tls-bypass", "deploy", "installer", "cwe-798", "cwe-295", "requests"],
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -9645,6 +9729,7 @@ for _f in [
     HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
     HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
     HX_F163, HX_F164, HX_F165, HX_F166,
+    HX_F167, HX_F168,
 ]:
     FINDINGS[_f["id"]] = _f
 
