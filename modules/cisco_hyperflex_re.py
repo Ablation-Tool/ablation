@@ -7495,9 +7495,122 @@ HX_F132 = {
     ),
 }
 
+HX_F133 = {
+    "id": "HX-F133",
+    "title": (
+        "HyperFlex HXDP 5.x/6.x storfs-core: ZooKeeper World-Write on /cluster/* Paths Enables "
+        "Cluster Topology Poisoning, Runtime Behavior Override, and Operation Injection via CRMApiGetPnodes"
+    ),
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cwe": "CWE-285",
+    "component": (
+        "storfs-core ZooKeeper client; ZooKeeper ensemble (clientPort 2181); "
+        "CRM subsystem (CRMApiGetPnodes @ 0x710ef0, CRMDB_GetAllPnodes @ 0x809f40); "
+        "world:anyone:cdrwa ACL inherited from HX-F100"
+    ),
+    "evidence": {
+        "zk_path_inventory": {
+            "topology_paths": [
+                "/cluster/pnodes",
+                "/cluster/pnodes/%s",
+                "/cluster/pnodes/%s/disks/%s",
+                "/cluster/members",
+                "/cluster/master",
+                "/cluster/vnodes/%u",
+            ],
+            "runtime_control_paths": [
+                "/cluster/tunes/kvEnableNullIO",
+                "/cluster/tunes/sysmClusterShutdownOnCritical",
+                "/cluster/tunes/disableAutoRebalance",
+                "/cluster/tunes/disableRebalance",
+                "/cluster/tunes/crmEnableZKBatchRead",
+                "/cluster/tunes/numFTVnodes",
+                "/cluster/tunes/hbVersion",
+                "/cluster/tunes/clusterType",
+            ],
+            "operation_injection_paths": [
+                "/cluster/clusterops/req_%ld",
+                "/cluster/clusterops/%s%010lu",
+                "/cluster/dvreqs/dvr%010d",
+                "/cluster/ft_dvs/%d_%s",
+            ],
+            "health_reporting_paths": [
+                "/cluster/health",
+                "/cluster/clientdata/health",
+                "/cluster/clientdata/status",
+                "/cluster/uptimestatus",
+            ],
+            "version_paths": [
+                "/cluster/version",
+                "/stCluster/%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+            ],
+        },
+        "read_path": {
+            "function": "CRMApiGetPnodes",
+            "address": "0x710ef0",
+            "asm_evidence": (
+                "0x710fd4: lea rsi, [0xc9c187]  ; '/cluster/pnodes'\n"
+                "0x710fde: call CRMDBFlush\n"
+                "0x711047: call CRMDB_GetAllPnodes @ 0x809f40"
+            ),
+            "behavior": (
+                "Reads /cluster/pnodes from ZK; populates CRM pnode list used for all "
+                "storage I/O routing, replication targeting, and rebalancing decisions. "
+                "No authentication check on ZK read; ACL enforcement absent per HX-F100."
+            ),
+        },
+        "attack_chains": {
+            "topology_poisoning": (
+                "Write crafted JSON to /cluster/pnodes/<fake-uuid> → "
+                "CRMApiGetPnodes returns ghost node → "
+                "storfs routes I/O to non-existent node → "
+                "I/O timeouts, data unavailability."
+            ),
+            "null_io_activation": (
+                "Write '1' to /cluster/tunes/kvEnableNullIO → "
+                "storfs-core treats all I/O as successful without writing to disk → "
+                "silent data loss. "
+                "Write '1' to /cluster/tunes/sysmClusterShutdownOnCritical → "
+                "fabricate a critical event → force cluster shutdown."
+            ),
+            "operation_injection": (
+                "Write a node-removal operation payload to /cluster/clusterops/req_<N> → "
+                "CRM processes the fake operation → "
+                "legitimate storage node removed from cluster membership → "
+                "cluster degraded, data under-replicated."
+            ),
+            "rebalance_suppression": (
+                "Write '1' to /cluster/tunes/disableRebalance → "
+                "prevents data rebalancing after node additions/removals → "
+                "long-term data distribution skew → capacity exhaustion on subset of nodes."
+            ),
+        },
+        "write_primitive": (
+            "From HX-F100: ZK 2181 open, world:anyone:cdrwa ACL on all paths.\n"
+            "kazoo write:\n"
+            "  zk.ensure_path('/cluster/tunes/kvEnableNullIO')\n"
+            "  zk.set('/cluster/tunes/kvEnableNullIO', b'1')"
+        ),
+    },
+    "impact": (
+        "Network-adjacent attacker with ZK access (port 2181) → "
+        "write to /cluster/tunes, /cluster/pnodes, /cluster/clusterops → "
+        "silent data loss (kvEnableNullIO), cluster shutdown, topology poisoning, "
+        "operation injection. No auth required. Impact: entire HyperFlex cluster."
+    ),
+    "remediation": (
+        "Apply per-path ZK ACLs: restrict /cluster/* to stCtlVM node IPs via SASL/digest auth. "
+        "Block 2181 from non-cluster hosts. "
+        "Validate ZK node data schema in CRM read paths — reject unexpected node types/fields. "
+        "Fix root cause: apply world:anyone:r ACL (read-only) as minimum interim control; "
+        "remove cdrwa from world principal."
+    ),
+}
+
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
-    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132,
+    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133,
 ]:
     FINDINGS[_f["id"]] = _f
 
