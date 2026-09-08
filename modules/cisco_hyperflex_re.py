@@ -14516,6 +14516,105 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F254 = {
+    "id": "HX-F254",
+    "title": "Hardcoded IPMI Backdoor Account Created During Node Replacement",
+    "cwe": "CWE-798",
+    "severity": "HIGH",
+    "cvss": 8.1,
+    "component": "mgmt/opt/hyperflex/storfs-deploy/ansible/replaceNode.sh",
+    "description": (
+        "replaceNode.sh creates an IPMI user account 'spadmin' (user ID 10) on every "
+        "HyperFlex node during node replacement and sets its password to the hardcoded "
+        "value 'springpath' via ipmitool. The account is granted Administrator-level "
+        "privileges (privilege level 4) on IPMI channel 1 and explicitly enabled. "
+        "IPMI (port 623/UDP) provides out-of-band management including power control, "
+        "serial-over-LAN console access, sensor readings, and hardware-level system "
+        "administration. Any attacker with network access to the IPMI/BMC management "
+        "interface can authenticate as 'spadmin'/'springpath' and gain full out-of-band "
+        "control of every replaced HyperFlex node regardless of OS-level authentication. "
+        "The hardcoded password is embedded in production firmware and applied "
+        "programmatically during the node replacement workflow."
+    ),
+    "evidence": (
+        "replaceNode.sh line 271-276:\n"
+        "  echo 'Adding Springpath User to Appliance using ipmitool'\n"
+        "  runCmdOnEsx /opt/cisco/support/ipmitool user set name 10 spadmin\n"
+        "  runCmdOnEsx /opt/cisco/support/ipmitool user set password 10 springpath  # hardcoded\n"
+        "  runCmdOnEsx /opt/cisco/support/ipmitool user priv 10 4 1  # Administrator on channel 1\n"
+        "  runCmdOnEsx /opt/cisco/support/ipmitool user enable 10\n\n"
+        "runCmdOnEsx executes commands on the target ESXi host via SSH."
+    ),
+    "reproduction": (
+        "Identify a HyperFlex node's IPMI IP from the management network. "
+        "Attempt IPMI authentication: ipmitool -I lanplus -H <ipmi_ip> -U spadmin -P springpath sdr. "
+        "If node replacement was run, this succeeds and grants out-of-band administrative access."
+    ),
+    "remediation": (
+        "Remove the hardcoded password from replaceNode.sh. Generate a per-node random password "
+        "using 'openssl rand -hex 16' and store it in the cluster's credential vault. "
+        "Alternatively, require the IPMI admin password as an Ansible vault secret rather "
+        "than embedding it in the playbook. Audit all deployed nodes for the 'spadmin' account "
+        "and rotate its password immediately."
+    ),
+    "references": ["CWE-798", "CWE-1393"],
+}
+
+HX_F255 = {
+    "id": "HX-F255",
+    "title": "Developer Credentials and Internal Network Information in Production Firmware Artifact",
+    "cwe": "CWE-798",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "component": "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json",
+    "description": (
+        "The file stctlvm_ip.json ships in the production firmware package at "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json and contains hardcoded "
+        "root credentials ('password': 'springpath') for both an ESXi server and the "
+        "stCtlVM. The file also discloses internal Cisco engineering infrastructure: "
+        "the ESXi server hostname 'sysmgmt-006b.eng.storvisor.com' (pre-acquisition "
+        "Springpath engineering domain), internal IP 10.64.31.41, gateway 10.64.24.1, "
+        "and internal DNS server 10.64.1.7. This file is readable by any user with "
+        "filesystem access to the stCtlVM and provides both the default developer password "
+        "and internal network topology information."
+    ),
+    "evidence": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json:\n"
+        "  {\n"
+        "    \"esxi\": {\n"
+        "      \"server\": \"sysmgmt-006b.eng.storvisor.com\",\n"
+        "      \"user\": \"root\",\n"
+        "      \"password\": \"springpath\"    // hardcoded root password\n"
+        "    },\n"
+        "    \"stctlvm\": {\n"
+        "      \"user\": \"root\",\n"
+        "      \"password\": \"springpath\",   // hardcoded root password\n"
+        "      \"ipv4\": \"10.64.31.41\",       // internal eng network\n"
+        "      \"nameserver\": [\"10.64.1.7\"]  // internal DNS\n"
+        "    }\n"
+        "  }"
+    ),
+    "reproduction": (
+        "On a deployed stCtlVM: cat /opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json. "
+        "Attempt SSH root@<hyperflex-node> with password 'springpath' — 'springpath' "
+        "is the legacy default password used before Cisco-specific defaults were established."
+    ),
+    "remediation": (
+        "Remove stctlvm_ip.json from the production firmware package. "
+        "This file is a development artifact and should not ship with production releases. "
+        "Ensure all pre-production configuration files containing credentials are excluded "
+        "from the build pipeline via .gitignore or build exclusion rules."
+    ),
+    "references": ["CWE-798", "CWE-312"],
+}
+
+for _f in [
+    HX_F254,
+    HX_F255,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
