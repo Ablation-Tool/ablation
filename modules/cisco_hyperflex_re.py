@@ -14811,66 +14811,200 @@ HX_F259 = {
 
 HX_F260 = {
     "id": "HX-F260",
-    "title": "Global TLS Trust-All Manager and Hostname Verifier Bypass in ROOT REST API WAR",
+    "title": "Global TLS Trust-All and Hostname Verifier Bypass via WebDownloader Static Init (ROOT + supportservice WARs)",
     "cwe": "CWE-295",
     "severity": "HIGH",
     "cvss": 7.4,
-    "component": "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war",
+    "component": (
+        "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/supportservice-1.0.0.war"
+    ),
     "description": (
-        "WebDownloader.java in ROOT-1.0.0.war installs a global TLS bypass in a static "
-        "initializer that executes at class load time. The static block calls "
-        "trustAllHttpsCertificates() which constructs an SSLContext initialized with a "
-        "no-op TrustAllManager (checkServerTrusted: Code: 0: return) and installs it via "
-        "HttpsURLConnection.setDefaultSSLSocketFactory(). The static block also installs "
-        "WebDownloader$2 as the global HostnameVerifier via "
-        "HttpsURLConnection.setDefaultHostnameVerifier(); this verifier unconditionally "
-        "returns true (bytecode: iconst_1; ireturn). Unlike per-connection TrustManager "
-        "bypasses, these global defaults affect ALL HttpsURLConnection instances in the "
-        "webapp's JVM context regardless of which code initiates the connection. This "
-        "makes the ROOT webapp's entire outbound HTTPS surface vulnerable to TLS MitM."
+        "WebDownloader.java appears in two REST API WARs — ROOT-1.0.0.war "
+        "(com.storvisor.sysmgmt.service.WebDownloader) and supportservice-1.0.0.war "
+        "(com.springpath.hx.support.util.WebDownloader) — and both carry identical static "
+        "initializer blocks that execute at class-load time. Each static block calls "
+        "trustAllHttpsCertificates(), which constructs an SSLContext with a no-op "
+        "TrustAllManager (checkServerTrusted: Code: 0: return) and installs it globally "
+        "via HttpsURLConnection.setDefaultSSLSocketFactory(). The block also installs a "
+        "HostnameVerifier (WebDownloader$2) via setDefaultHostnameVerifier(); that "
+        "verifier unconditionally returns true (iconst_1; ireturn). Both calls install "
+        "JVM-wide defaults that affect every HttpsURLConnection in the webapp context, "
+        "not only those created by WebDownloader. The complete HTTPS surface of both "
+        "webapps is susceptible to TLS MITM."
     ),
     "evidence": (
-        "ROOT-1.0.0.war: WebDownloader.class (WebDownloader.java):\n"
+        "ROOT-1.0.0.war: com.storvisor.sysmgmt.service.WebDownloader (javap -c):\n"
         "\n"
-        "  private static void trustAllHttpsCertificates() {\n"
-        "    TrustManager[] tmArr = new TrustManager[]{ new TrustAllManager() };\n"
-        "    SSLContext sc = SSLContext.getInstance(\"SSL\");\n"
-        "    sc.init(null, tmArr, null);\n"
-        "    HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory()); // GLOBAL\n"
-        "  }\n"
-        "\n"
-        "  static {\n"
-        "    trustAllHttpsCertificates();  // global default SSL factory override\n"
-        "    HttpsURLConnection.setDefaultHostnameVerifier(new HostnameVerifier() {\n"
-        "      public boolean verify(String h, SSLSession s) { return true; } // always true\n"
-        "    });\n"
-        "  }\n"
-        "\n"
-        "  // TrustAllManager (inner class, bytecode):\n"
-        "  public void checkServerTrusted(X509Certificate[], String) { return; }  // no-op\n"
-        "  public X509Certificate[] getAcceptedIssuers() { return null; }          // null\n"
-        "\n"
-        "  // WebDownloader$2 (HostnameVerifier, bytecode):\n"
-        "  public boolean verify(String hostname, SSLSession session);\n"
+        "  static {};\n"
         "    Code:\n"
-        "       0: iconst_1  // load int 1 (= true)\n"
-        "       1: ireturn   // return true unconditionally"
+        "       0: invokestatic  #54  // trustAllHttpsCertificates:()V\n"
+        "       3: new           #59  // class WebDownloader$2 (HostnameVerifier)\n"
+        "      10: invokestatic  #62  // HttpsURLConnection.setDefaultHostnameVerifier\n"
+        "\n"
+        "  TrustAllManager.checkServerTrusted: Code: 0: return   // no-op\n"
+        "  WebDownloader$2.verify: Code: 0: iconst_1; 1: ireturn // always true\n"
+        "\n"
+        "supportservice-1.0.0.war: com.springpath.hx.support.util.WebDownloader — "
+        "identical static initializer (invokestatic #54 trustAllHttpsCertificates, "
+        "invokestatic #62 setDefaultHostnameVerifier); same TrustAllManager no-op "
+        "and WebDownloader$2 always-true verifier confirmed by javap."
     ),
     "reproduction": (
-        "Position a MitM between the ROOT webapp and any downstream HTTPS target "
-        "(catalog download, update check, external REST call). Present a self-signed "
-        "certificate with a mismatched hostname. Connection is established without error. "
-        "The global default is set at class load, so no special configuration is needed."
+        "Position a MitM between either webapp and any downstream HTTPS target. "
+        "Present a self-signed certificate with a mismatched hostname. "
+        "Connection succeeds without error. No special configuration required; "
+        "the global override is set at class load."
     ),
     "remediation": (
-        "Remove the trustAllHttpsCertificates() method and its static initializer call "
-        "from WebDownloader.java entirely. Replace with proper certificate validation "
-        "using the HyperFlex cluster trust store at "
+        "Remove trustAllHttpsCertificates() and its static initializer call from "
+        "both WebDownloader implementations. Replace with proper certificate "
+        "validation against the cluster trust store at "
         "/etc/hyperflex/secure/hyperflex_keystore.jceks. "
-        "Remove the global hostname verifier override; use per-connection configuration "
-        "where certificate flexibility is genuinely required."
+        "Remove the global hostname verifier override."
     ),
     "references": ["CWE-295", "CWE-297"],
+}
+
+HX_F261 = {
+    "id": "HX-F261",
+    "title": "No-op TrustManagers in REST API WAR Inter-Service Client Factories (9 Classes, 4 WARs)",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/encryption-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/securityservice-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/supportservice-1.0.0.war"
+    ),
+    "description": (
+        "Nine anonymous TrustManager implementations across four REST API WARs implement "
+        "X509TrustManager with an empty checkServerTrusted method (bytecode: Code: 0: return) "
+        "and a null-returning getAcceptedIssuers. These are passed to per-connection "
+        "SSLContext instances used by the inter-service client factories that call back to "
+        "storfs-mgmt Thrift and HyperFlex service endpoints. No certificate chain is "
+        "validated before the connection proceeds. An attacker in a position to intercept "
+        "inter-service traffic (compromised cluster node, ARP poisoning on the management "
+        "VLAN) can terminate these connections with a forged certificate and read or "
+        "modify the plaintext. Affected classes: ROOT-1.0.0.war — HxSupportSvcAccess$1, "
+        "ServiceAccess$1; encryption-1.0.0.war — StMgrClient$1; securityservice-1.0.0.war "
+        "— StMgrClient$1, HxSecuritySvcMgrClient$1, HxSvcMgrClient$1; "
+        "supportservice-1.0.0.war — HxSupportSvcClient$1, StMgrClient$1, HxSvcMgrClient$1."
+    ),
+    "evidence": (
+        "Representative bytecode (identical pattern in all 9 classes):\n"
+        "\n"
+        "  ROOT-1.0.0.war: com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$1\n"
+        "  implements javax.net.ssl.X509TrustManager\n"
+        "\n"
+        "  public void checkServerTrusted(X509Certificate[], String) throws CertificateException;\n"
+        "    Code:\n"
+        "       0: return        // no-op; no certificate check performed\n"
+        "\n"
+        "  public X509Certificate[] getAcceptedIssuers();\n"
+        "    Code:\n"
+        "       0: aconst_null\n"
+        "       1: areturn       // returns null; all issuers implicitly accepted\n"
+        "\n"
+        "  Full affected set (javap-verified, checkServerTrusted: Code: 0: return):\n"
+        "  ROOT-1.0.0.war:\n"
+        "    com.storvisor.sysmgmt.bootstrap.util.HxSupportSvcAccess$1\n"
+        "    com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$1\n"
+        "  encryption-1.0.0.war:\n"
+        "    com.springpath.hx.encryption.clients.StMgrClient$1\n"
+        "  securityservice-1.0.0.war:\n"
+        "    com.springpath.hx.security.gateway.StMgrClient$1\n"
+        "    com.springpath.hx.security.gateway.HxSecuritySvcMgrClient$1\n"
+        "    com.springpath.hx.security.gateway.HxSvcMgrClient$1\n"
+        "  supportservice-1.0.0.war:\n"
+        "    com.springpath.hx.support.clients.HxSupportSvcClient$1\n"
+        "    com.springpath.hx.support.clients.StMgrClient$1\n"
+        "    com.springpath.hx.support.clients.HxSvcMgrClient$1"
+    ),
+    "reproduction": (
+        "ARP-poison or route-redirect the management VLAN between two cluster nodes. "
+        "Present a self-signed certificate on the forged endpoint. "
+        "The affected client factory will accept it without error, "
+        "completing the TLS handshake against the attacker-controlled certificate."
+    ),
+    "remediation": (
+        "Replace all anonymous TrustManager implementations in these client factories "
+        "with proper validation against the HyperFlex cluster trust store at "
+        "/etc/hyperflex/secure/hyperflex_keystore.jceks. "
+        "Extract a shared validated SSLContext factory (see "
+        "X509ExtendedTrustManager_Storvisor in common-1.0.jar which already implements "
+        "the correct pattern when certificateCheckingEnabled=true) and use it "
+        "consistently across all inter-service clients."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F262 = {
+    "id": "HX-F262",
+    "title": "Always-True HostnameVerifiers in REST API WAR Inter-Service Client Factories (9 Classes, 4 WARs)",
+    "cwe": "CWE-297",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/encryption-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/securityservice-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/supportservice-1.0.0.war"
+    ),
+    "description": (
+        "Nine anonymous HostnameVerifier implementations across four REST API WARs "
+        "unconditionally return true from verify(String hostname, SSLSession session), "
+        "suppressing hostname validation on per-connection TLS. These are companion "
+        "classes to the no-op TrustManagers in HX-F261 — the same client factory "
+        "anonymous inner class sequence ($1 = TrustManager bypass, $2 = HostnameVerifier "
+        "bypass). Even if a certificate is presented by the correct issuer, the hostname "
+        "in the certificate Subject/SAN is never compared against the connection target, "
+        "enabling certificate reuse across cluster nodes. Affected classes: "
+        "ROOT-1.0.0.war — HxSupportSvcAccess$2, ServiceAccess$2; "
+        "encryption-1.0.0.war — StMgrClient$2; securityservice-1.0.0.war — "
+        "StMgrClient$2, HxSecuritySvcMgrClient$2, HxSvcMgrClient$2; "
+        "supportservice-1.0.0.war — HxSupportSvcClient$2, StMgrClient$2, HxSvcMgrClient$2."
+    ),
+    "evidence": (
+        "Representative bytecode (identical in all 9 classes):\n"
+        "\n"
+        "  ROOT-1.0.0.war: com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$2\n"
+        "  implements javax.net.ssl.HostnameVerifier\n"
+        "\n"
+        "  public boolean verify(String hostname, SSLSession session);\n"
+        "    Code:\n"
+        "       0: iconst_1   // push int 1 (true)\n"
+        "       1: ireturn    // return true; hostname never inspected\n"
+        "\n"
+        "  Full affected set (javap-verified, verify: iconst_1; ireturn):\n"
+        "  ROOT-1.0.0.war:\n"
+        "    com.storvisor.sysmgmt.bootstrap.util.HxSupportSvcAccess$2\n"
+        "    com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$2\n"
+        "  encryption-1.0.0.war:\n"
+        "    com.springpath.hx.encryption.clients.StMgrClient$2\n"
+        "  securityservice-1.0.0.war:\n"
+        "    com.springpath.hx.security.gateway.StMgrClient$2\n"
+        "    com.springpath.hx.security.gateway.HxSecuritySvcMgrClient$2\n"
+        "    com.springpath.hx.security.gateway.HxSvcMgrClient$2\n"
+        "  supportservice-1.0.0.war:\n"
+        "    com.springpath.hx.support.clients.HxSupportSvcClient$2\n"
+        "    com.springpath.hx.support.clients.StMgrClient$2\n"
+        "    com.springpath.hx.support.clients.HxSvcMgrClient$2"
+    ),
+    "reproduction": (
+        "Obtain any valid HyperFlex cluster node certificate (e.g., from one storage "
+        "controller). Present it on a different node or on an attacker-controlled "
+        "endpoint. The HostnameVerifier accepts it because verify() always returns true."
+    ),
+    "remediation": (
+        "Replace the anonymous HostnameVerifier implementations with "
+        "HttpsURLConnection.getDefaultHostnameVerifier() or an "
+        "OkHostnameVerifier-equivalent that validates the certificate CN/SAN against "
+        "the actual target hostname. Do not disable hostname verification in production "
+        "inter-service channels."
+    ),
+    "references": ["CWE-297"],
 }
 
 for _f in [
@@ -14881,6 +15015,8 @@ for _f in [
     HX_F258,
     HX_F259,
     HX_F260,
+    HX_F261,
+    HX_F262,
 ]:
     FINDINGS[_f["id"]] = _f
 
