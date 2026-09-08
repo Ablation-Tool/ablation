@@ -13595,6 +13595,70 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F238 = {
+    "id": "HX-F238",
+    "title": "Encryption Service Omits Diagnostic Account from barredUsers; Bypasses Auth-War Block (CWE-284)",
+    "severity": "MEDIUM",
+    "cvss": "5.4",
+    "component": "enc-war/WEB-INF/classes/application.conf + auth-war/WEB-INF/classes/application.conf",
+    "description": (
+        "The HyperFlex auth-war (AAA service) explicitly bars the diagnostic accounts "
+        "'diag' and 'local/diag' from authenticating by listing them in barredUsers: "
+        "[\"root\", \"local/root\", \"diag\", \"local/diag\"]. "
+        "The enc-war (encryption service, com.springpath.hx.encryption) uses a separate "
+        "AAA configuration in enc-war/WEB-INF/classes/application.conf that only bars "
+        "[\"root\", \"local/root\"] — omitting 'diag' and 'local/diag'. "
+        "The enc-war registers the same auth filter chain as the restapi-war (SSOPrivilegedAuth, "
+        "SessionAuth, KerberosAuth, SPBasicAuth, SPAuth — see enc-war WEB-INF/web.xml) "
+        "and each WAR enforces its own barredUsers list independently. "
+        "Because the enc-war's SPBasicAuth filter (SSOBasicAuthImpl) checks only the "
+        "enc-war's own barredUsers, the 'diag' account can authenticate directly via "
+        "HTTP Basic Auth to the encryption service endpoints (/encryption/v1/*) "
+        "that the auth-war would otherwise block. "
+        "Additionally, the enc-war filter chain omits the ServiceAccessAuthFilterImpl "
+        "filter that is registered in the restapi-war, providing no service-level access "
+        "control gate on the encryption management API. "
+        "Accessible endpoints include disk encryption status (GET /v1/disks), "
+        "node SED status (GET /v1/nodes, GET /v1/status), certificate details "
+        "(GET /v1/certstatus, GET /v1/certificates), and KMIP policy reads (GET /v1/policy). "
+        "The 'diag' account is a platform diagnostic account that may have weaker "
+        "credentials than admin accounts and is often shared across support personnel."
+    ),
+    "affected_versions": "HXDP 6.0.2b (all supported platforms)",
+    "poc": (
+        "POST https://<host>:443/encryption/v1/auth "
+        "with Authorization: Basic <base64(diag:password)> "
+        "Expected: 401 Forbidden (diag barred). Actual: auth-war blocks session tokens "
+        "for diag, but direct Basic Auth to enc-war succeeds because diag is not in "
+        "enc-war's barredUsers list. Compare response with "
+        "POST https://<host>:443/aaa/v1/auth (returns 403 for diag)."
+    ),
+    "remediation": (
+        "Add 'diag' and 'local/diag' to the barredUsers list in "
+        "enc-war/WEB-INF/classes/application.conf to match the auth-war's policy. "
+        "Register the ServiceAccessAuthFilterImpl filter in enc-war's web.xml. "
+        "Centralize barredUsers enforcement in a single auth service rather than "
+        "duplicating per-WAR with divergent lists."
+    ),
+    "references": [
+        "CWE-284: Improper Access Control",
+        "enc-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\"]",
+        "auth-war/WEB-INF/classes/application.conf: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]",
+        "enc-war/WEB-INF/web.xml: missing ServiceAccessAuthFilterImpl",
+    ],
+    "tags": [
+        "access-control", "cwe-284", "diagnostic-account", "barred-users",
+        "encryption-service", "filter-chain", "medium",
+    ],
+}
+
+
+for _f in [
+    HX_F238,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
