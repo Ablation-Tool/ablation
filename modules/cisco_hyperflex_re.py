@@ -13831,6 +13831,57 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F242 = {
+    "id": "HX-F242",
+    "title": "stCli Thrift Transport Globally Disables TLS Certificate Verification (CWE-295)",
+    "severity": "HIGH",
+    "cvss": "7.4",
+    "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "component": "stcli-egg/stCli/StTransportBase.py",
+    "cwe": "CWE-295",
+    "description": (
+        "StTransportBase.init_transport() applies ssl._create_default_https_context = "
+        "ssl._create_unverified_context as a global Python process-level patch before establishing "
+        "any Thrift-over-HTTPS connection. This disables certificate verification for ALL subsequent "
+        "HTTPS connections in the stcli process lifetime, including connections that transmit "
+        "X-RootSessionID tokens and cluster management commands. The patch is wrapped in a bare "
+        "'except: pass' that silently swallows any exception from the assignment. stcli is the "
+        "primary admin CLI used for all HyperFlex cluster management operations."
+    ),
+    "evidence": {
+        "file": "stcli-egg/stCli/StTransportBase.py",
+        "line_85": "ssl._create_default_https_context = ssl._create_unverified_context",
+        "line_86": "except:  # bare except swallows all errors",
+        "line_87": "    pass",
+        "comment_line_83": "# Ignore SSL cert verification",
+        "line_116_119": (
+            "root_session_id = get_local_root_session_id()  # reads /etc/hyperflex/secure/root_file.pub\n"
+            "headers.update({'X-RootSessionID': root_session_id})  # transmitted without cert verification"
+        ),
+        "thrift_transport": "THttpClient.THttpClient(url) opened after global SSL patch",
+        "transport_users": "StMgrTransport, StDataSvcMgrTransport (subclasses of StTransportBase)",
+    },
+    "impact": (
+        "Any process on the same network segment that presents a self-signed certificate for the "
+        "stMgr HTTPS endpoint can intercept and modify all stcli admin commands. X-RootSessionID "
+        "tokens transmitted by stcli are captured by the attacker. Because the bypass is "
+        "process-global, any Python library loaded into stcli that makes HTTPS connections "
+        "(e.g., requests via urllib3) also skips verification."
+    ),
+    "remediation": (
+        "Remove the ssl._create_default_https_context assignment. If the stMgr service uses a "
+        "self-signed certificate, create a per-connection SSLContext with the cluster CA bundle "
+        "and pass it explicitly to THttpClient rather than patching the global default."
+    ),
+    "references": ["CWE-295", "CVE-2014-3566"],
+}
+
+for _f in [
+    HX_F242,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
