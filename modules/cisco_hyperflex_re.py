@@ -17219,6 +17219,63 @@ HX_F298 = {
 }
 
 
+HX_F299 = {
+    "id": "HX-F299",
+    "title": (
+        "ssl._create_unverified_context() Used for Firmware and Catalog File Downloads "
+        "in download.py; Deployed 4x Across Upgrade/Deploy Roles"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/esx/files/download.py (L65), "
+        "roles/compute/files/download.py (L65), "
+        "roles/upgradedeployvm/files/download.py (L65), "
+        "roles/upgrademigration/files/download.py (L65) "
+        "— all MD5: 55432be580b68b00c58cd2935bd2bd97"
+    ),
+    "description": (
+        "download.py, the utility that fetches HyperFlex firmware packages, catalog "
+        "files, and upgrade bundles over HTTPS, creates an unverified SSL context via "
+        "ssl._create_unverified_context() and passes it to urlopen() for all downloads. "
+        "Certificate validation is explicitly bypassed — the debug log message "
+        "\"Using SSL unverified context\" confirms intentional behavior. "
+        "The script downloads binary payloads with HTTP Range resumption support, "
+        "supporting partial downloads up to 5 retries. An Authorization header with "
+        "Basic Auth credentials can be passed via the basic_auth parameter. "
+        "The absence of TLS verification means a network-adjacent attacker can substitute "
+        "any downloaded file — firmware images, upgrade bundles, or catalog packages — "
+        "with a malicious payload. Because the downloaded content is written to disk and "
+        "subsequently executed or applied to cluster nodes, this creates an integrity "
+        "bypass for the firmware update pipeline. "
+        "Four identical copies are deployed across upgrade and deployment roles: "
+        "esx/, compute/, upgradedeployvm/, and upgrademigration/."
+    ),
+    "evidence": (
+        "  download.py L61-66 (download_file function):\n"
+        "    if hasattr(ssl, '_create_unverified_context'):\n"
+        "        logging.info('Using SSL unverified context')  # explicit intent\n"
+        "        sslContext = ssl._create_unverified_context()\n"
+        "    else:\n"
+        "        sslContext = None\n"
+        "\n"
+        "  download.py L77-83 (urlopen with unverified context + auth header):\n"
+        "    req = Request(url)\n"
+        "    req.add_header('Range', 'bytes=' + str(download) + '-')\n"
+        "    if basic_auth is not None:\n"
+        "        req.add_header('Authorization', 'Basic %s' % basic_auth)\n"
+        "    req = urlopen(req, context=sslContext)  # no cert validation\n"
+        "\n"
+        "  4 identical copies (MD5: 55432be580b68b00c58cd2935bd2bd97):\n"
+        "    roles/esx/files/download.py\n"
+        "    roles/compute/files/download.py\n"
+        "    roles/upgradedeployvm/files/download.py\n"
+        "    roles/upgrademigration/files/download.py"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17265,6 +17322,7 @@ for _f in [
     HX_F296,
     HX_F297,
     HX_F298,
+    HX_F299,
 ]:
     FINDINGS[_f["id"]] = _f
 
