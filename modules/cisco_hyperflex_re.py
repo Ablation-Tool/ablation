@@ -15345,7 +15345,7 @@ HX_F268 = {
 
 HX_F269 = {
     "id": "HX-F269",
-    "title": "SSH Host Key Verification Disabled via AutoAddPolicy in 20+ Management Scripts (12 Files)",
+    "title": "SSH Host Key Verification Disabled via AutoAddPolicy in 30+ Management Scripts (17 Files)",
     "cwe": "CWE-322",
     "severity": "HIGH",
     "cvss": 7.4,
@@ -15381,6 +15381,11 @@ HX_F269 = {
         "  storfs-misc/validation/springpath_ssh.py:46\n"
         "  storfs-misc/validation/springpath_hardware_validator.py:96\n"
         "  storfs-misc/validation/springpath_networking.py:648\n"
+        "  storfs-misc/validation/springpath_security.py:115, :128\n"
+        "  storfs-misc/validation/springpath_validation_util.py:31, :45\n"
+        "  storfs-misc/validation/springpath_vmware.py:325, :355\n"
+        "  storfs-misc/validation/springpath_validation_validator.py:2190\n"
+        "  storfs-misc/validation/commonFunctions.py:273, :660\n"
         "  storfs-misc/upgrade-hooks/.../0006_RestoreNFSAccessRules_ESX.py:89\n"
         "  storfs-misc/upgrade-hooks/.../9998_remove_host_authorized_keys_ESX.py:24\n"
         "  storfs-factory/utils/commonFunctions.py:273, :660\n"
