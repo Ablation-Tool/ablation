@@ -13473,6 +13473,62 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F236 = {
+    "id": "HX-F236",
+    "title": "OS Command Injection in mount_stboot.py via stboot_ds Ansible Parameter (CWE-78)",
+    "severity": "HIGH",
+    "cvss": "7.2",
+    "component": "storfs-deploy/ansible/library/mount_stboot.py",
+    "description": (
+        "The Ansible module mount_stboot.py at "
+        "/opt/hyperflex/storfs-deploy/ansible/library/mount_stboot.py "
+        "concatenates the stboot_ds Ansible parameter directly into a shell command "
+        "string passed to subprocess.Popen with shell=True. "
+        "At line 28, stboot_ds = module.params['stboot_ds'] receives the value "
+        "from the Ansible playbook without validation. "
+        "Line 30 builds: cmd_str = stboot_start + ' ' + stboot_ds, and "
+        "line 31 appends a pipe to awk: "
+        "cmd_str = cmd_str + \" | awk -F= '/STBOOT_NFS_VOLUME/ { print $2 }'\". "
+        "Line 32 executes: subprocess.Popen(cmd_str, shell=True, ...). "
+        "The stboot_ds parameter specifies an NFS datastore name and is declared "
+        "required=True, type='str' — no allowlist, no shell escaping, no quoting. "
+        "A deployment administrator who controls Ansible inventory variables can "
+        "inject shell metacharacters through stboot_ds (e.g., \"ds_name; id\") to "
+        "execute arbitrary commands as the process owner during the stboot NFS "
+        "volume mount phase of cluster initialization."
+    ),
+    "affected_versions": "HXDP 6.0.2b (all supported platforms)",
+    "poc": (
+        "In Ansible playbook: set stboot_ds to "
+        "\"SpringpathDS; id > /tmp/pwn\". "
+        "The executed shell command becomes: "
+        "/opt/hxtools/bin/stboot-start.sh SpringpathDS; id > /tmp/pwn "
+        "| awk -F= '/STBOOT_NFS_VOLUME/ { print $2 }'"
+    ),
+    "remediation": (
+        "Replace subprocess.Popen(cmd_str, shell=True) with a list-form invocation: "
+        "subprocess.Popen([stboot_start, stboot_ds], stdout=subprocess.PIPE) "
+        "and handle the awk filtering in Python rather than via shell pipeline. "
+        "Alternatively, validate stboot_ds against an alphanumeric-plus-hyphen "
+        "allowlist before constructing the command string."
+    ),
+    "references": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command",
+        "mount_stboot.py lines 28-32",
+    ],
+    "tags": [
+        "command-injection", "cwe-78", "shell-true", "ansible-module",
+        "deployment", "stboot", "nfs", "high",
+    ],
+}
+
+
+for _f in [
+    HX_F236,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
