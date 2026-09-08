@@ -14407,6 +14407,60 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F252 = {
+    "id": "HX-F252",
+    "title": "Global Python SSL Bypass and SSH Host Key Verification Disabled in STIG Hardening Script",
+    "cwe": "CWE-295",
+    "severity": "MEDIUM",
+    "cvss": 6.8,
+    "component": "misc/usr/share/hyperflex/storfs-misc/hx-scripts/stig_security_settings.py",
+    "description": (
+        "The STIG security hardening script disables SSL certificate verification globally "
+        "via ssl._create_default_https_context = ssl._create_unverified_context and suppresses "
+        "urllib3 warnings with requests.packages.urllib3.disable_warnings(). This affects all "
+        "HTTPS connections made by the script, including those to vCenter and ESXi hosts during "
+        "STIG hardening operations. Additionally, both SSH helper functions (checkSSHLogin and "
+        "sshToHost) set paramiko.AutoAddPolicy(), trusting the host key of any SSH server "
+        "without verification. sshToHost() is used to execute security configuration commands "
+        "on ESXi nodes. A network-positioned attacker can impersonate a target ESXi host during "
+        "STIG hardening to intercept credentials and STIG configuration commands, or respond to "
+        "checkSSHLogin() calls to confirm login success for spoofed hosts."
+    ),
+    "evidence": (
+        "stig_security_settings.py lines 19-32:\n"
+        "  import ssl\n"
+        "  requests.packages.urllib3.disable_warnings()\n"
+        "  _create_unverified_https_context = ssl._create_unverified_context\n"
+        "  ssl._create_default_https_context = _create_unverified_https_context  # global bypass\n\n"
+        "Line 362-366 (checkSSHLogin):\n"
+        "  ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  ssh.connect(kwargs['host'], username=..., password=...)\n\n"
+        "Line 380-382 (sshToHost):\n"
+        "  ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  ssh.connect(host, username=username, password=password)\n"
+        "  stdin, stdout, stderr = ssh.exec_command(cmd)  # executes STIG hardening commands"
+    ),
+    "reproduction": (
+        "Position a MITM between stCtlVM and an ESXi target during STIG hardening. "
+        "When stig_security_settings.py runs and calls sshToHost(esxi_host, username, password, cmd), "
+        "the MITM intercepts the SSH handshake and presents its own host key. "
+        "AutoAddPolicy accepts it without prompt, exposing ESXi credentials and STIG commands."
+    ),
+    "remediation": (
+        "Remove the ssl._create_default_https_context override and use proper certificate validation. "
+        "Replace paramiko.AutoAddPolicy() with RejectPolicy() or load known host keys from "
+        "/etc/ssh/ssh_known_hosts before connecting. Do not disable urllib3 warnings; fix the "
+        "underlying certificate issue instead."
+    ),
+    "references": ["CWE-295", "CWE-297"],
+}
+
+for _f in [
+    HX_F252,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
