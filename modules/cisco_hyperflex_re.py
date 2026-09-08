@@ -13366,6 +13366,113 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F234 = {
+    "id": "HX-F234",
+    "title": "OS command injection in scpFile.py Ansible module via five unvalidated string parameters passed to shell=True subprocess",
+    "severity": "HIGH",
+    "component": "ansible/library/scpFile.py",
+    "description": (
+        "The Ansible module scpFile.py constructs a shell command by string "
+        "concatenation of five caller-supplied parameters — remotevm_hostname, "
+        "remotevm_username, remotevm_password, filename, and dest — without "
+        "quoting or metacharacter validation, then passes the result to "
+        "subprocess.Popen(cmd, shell=True). "
+        "Command construction (lines 112-114):\n"
+        "  Receive: cmd = 'sshpass -p '+remotevm_password+' scp ... '+remotevm_username+'@'+remotevm_hostname+':'+filename+' '+dest\n"
+        "  Send:    cmd = 'sshpass -p '+remotevm_password+' scp ... '+filename+' '+remotevm_username+'@'+remotevm_hostname+':'+dest\n"
+        "Any parameter containing a shell metacharacter (;, $(), ``, >, |, &) "
+        "causes arbitrary command execution in the context of the calling process. "
+        "The module accepts input as an Ansible module (from playbook tasks), "
+        "AND as a standalone CLI via argparse when not run inside Ansible. "
+        "The standalone path means any local OS user who can invoke the script "
+        "directly can supply crafted arguments. "
+        "stDeploy invokes this module during cluster deployment to transfer files "
+        "between the stCtlVM and remote ESXi hosts; the deployment parameters "
+        "(including hostname and destination path) originate from the HyperFlex "
+        "Connect API request body provided by the admin user."
+    ),
+    "evidence": {
+        "file": "ansible/library/scpFile.py",
+        "injection_line_receive": "112: cmd = \"sshpass -p \"+remotevm_password+\" scp ... \"+remotevm_username+\"@\"+remotevm_hostname+\":\"+filename+\" \"+dest",
+        "injection_line_send": "114: cmd = \"sshpass -p \"+remotevm_password+\" scp ... \"+filename+\" \"+remotevm_username+\"@\"+remotevm_hostname+\":\"+dest",
+        "exec_line": "116: subprocess.Popen(cmd, shell=True, ...)",
+        "no_validation": "Lines 99-105: all five parameters retrieved from module.params with only .strip() applied",
+        "standalone_mode": "Lines 78-96: argparse fallback allows direct CLI invocation with same injection surface",
+    },
+    "cwe": ["CWE-78"],
+    "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cvss_score": 7.8,
+    "fix": (
+        "Replace string concatenation with a list-based subprocess call: "
+        "subprocess.Popen(['sshpass', '-p', remotevm_password, 'scp', '-q', "
+        "'-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', "
+        "'{}@{}:{}'.format(remotevm_username, remotevm_hostname, filename), dest], "
+        "shell=False). "
+        "Validate hostname against an IP/FQDN pattern and reject shell metacharacters "
+        "in all path arguments before constructing the command."
+    ),
+    "tags": [
+        "command-injection", "cwe-78", "ansible", "shell-true",
+        "sshpass", "scp", "deployment", "high",
+    ],
+}
+
+
+HX_F235 = {
+    "id": "HX-F235",
+    "title": "SSH/SCP password exposed in process command line via sshpass -p in scpFile.py — visible to all local users via /proc/PID/cmdline",
+    "severity": "MEDIUM",
+    "component": "ansible/library/scpFile.py",
+    "description": (
+        "scpFile.py passes the remote VM password as a positional command-line "
+        "argument to sshpass: 'sshpass -p <password> scp ...'. "
+        "On Linux, all command-line arguments are readable from "
+        "/proc/<pid>/cmdline by any user who can read that file (world-readable "
+        "for processes owned by other users in default configurations). "
+        "During the window that sshpass is executing, any local OS user can run "
+        "'cat /proc/<pid>/cmdline | tr \\0 \" \"' or 'ps aux' to capture the "
+        "plaintext SSH password. "
+        "The Ansible argument spec marks the parameter no_log=True (line 69), "
+        "which prevents Ansible from logging it, but does not affect the "
+        "/proc/cmdline exposure — sshpass is invoked by subprocess.Popen which "
+        "is completely outside Ansible's log-suppression mechanism. "
+        "On the stCtlVM, the 'diag' account (excluded from barredUsers in "
+        "upgrade/support/encryption WARs per HX-F228) has local login access. "
+        "A diag user can monitor /proc to capture ESXi host admin passwords "
+        "during deployment or file transfer operations."
+    ),
+    "evidence": {
+        "file": "ansible/library/scpFile.py",
+        "credential_in_cmdline": "112-116: sshpass -p <remotevm_password> scp ... passed to shell=True Popen",
+        "no_log_annotation": "line 69: remotevm_password=dict(..., no_log=True) — suppresses Ansible logs only",
+        "proc_exposure": "/proc/<pid>/cmdline — world-readable on default Linux; password visible during sshpass execution",
+        "local_access_vector": "diag account has local stCtlVM access per HX-F228 barredUsers gap",
+    },
+    "cwe": ["CWE-214", "CWE-312"],
+    "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cvss_score": 5.5,
+    "fix": (
+        "Use SSH key-based authentication instead of password authentication for "
+        "inter-node file transfers. If password auth is required, use sshpass "
+        "via stdin (echo <pwd> | sshpass -d 0 scp ...) or write the password "
+        "to a restrictively-permissioned temp file and use sshpass -f <file>. "
+        "The long-term fix is to replace sshpass with SSH key pairs generated "
+        "at cluster initialization time."
+    ),
+    "tags": [
+        "credential-exposure", "cwe-214", "cwe-312", "sshpass",
+        "process-cmdline", "proc-filesystem", "medium", "deployment",
+    ],
+}
+
+
+for _f in [
+    HX_F234,
+    HX_F235,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
