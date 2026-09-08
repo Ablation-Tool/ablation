@@ -15940,6 +15940,66 @@ HX_F278 = {
     "references": ["CWE-295"],
 }
 
+HX_F279 = {
+    "id": "HX-F279",
+    "title": (
+        "TLS Certificate Validation Disabled via curl -k in swagger_api_client.py "
+        "AAA Token Authentication Path and Admin Credentials Exposed in Shell Command"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py (L204-216) — "
+        "_get_auth_token() method; curl subprocess call with -k flag and "
+        "credentials embedded in shell command string"
+    ),
+    "description": (
+        "The swagger_api_client.py _get_auth_token() method acquires AAA authentication "
+        "tokens by invoking curl via subprocess.Popen(shell=True) with the -k flag, "
+        "which disables TLS certificate verification for the POST to /aaa/v1/auth. "
+        "The curl command includes the full JSON authentication body containing the "
+        "admin username and password as a shell command string: "
+        "'curl ... -d '{\"username\": ..., \"password\": ...}' ... -k'. "
+        "This exposes admin credentials to other local processes via /proc/PID/cmdline "
+        "for the duration of the subprocess call. "
+        "The -k flag is a separate TLS bypass from the verify_ssl=False Python client "
+        "configuration already documented in HX-F263 — this path is used when "
+        "auth_type='token' for the AAA token flow that authenticates to coreapi "
+        "and upgradeagent endpoints."
+    ),
+    "evidence": (
+        "  swagger_api_client.py L207-216:\n"
+        "\n"
+        "    curl_cmd = (\n"
+        "        \"curl -H \\\"Content-Type: application/json\\\" -X POST\"\n"
+        "        \" -d '\" + json.dumps(body, ensure_ascii=False) + \"'\"\n"
+        "        \" \" + \"https://\" + self.server + \"/aaa/v1/auth?\"\n"
+        "        \"grant_type=password -k\"\n"
+        "    )\n"
+        "    auth_response = subprocess.Popen(curl_cmd, stdout=subprocess.PIPE,\n"
+        "                                     stderr=subprocess.PIPE,\n"
+        "                                     shell=True).communicate()[0]\n"
+        "\n"
+        "  -k: curl flag that skips TLS certificate verification (equivalent to verify=False)\n"
+        "  body = {'username': <admin_user>, 'password': <admin_password>}\n"
+        "  Credentials visible in /proc/PID/cmdline and shell process list during call."
+    ),
+    "reproduction": (
+        "1. ARP-poison the management network to MITM the AAA endpoint. "
+        "Present a forged certificate. The -k flag causes curl to accept it.\n"
+        "2. Separately: while the curl subprocess runs, read /proc/PID/cmdline "
+        "of the spawned shell process to extract the JSON body with admin credentials."
+    ),
+    "remediation": (
+        "Replace the curl subprocess approach with a proper HTTPS Python request using "
+        "the cluster CA bundle for verification. Use the swagger-generated client "
+        "(which already handles TLS) rather than raw curl. "
+        "This also eliminates the credential exposure in the process table."
+    ),
+    "references": ["CWE-295", "CWE-312"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15966,6 +16026,7 @@ for _f in [
     HX_F276,
     HX_F277,
     HX_F278,
+    HX_F279,
 ]:
     FINDINGS[_f["id"]] = _f
 
