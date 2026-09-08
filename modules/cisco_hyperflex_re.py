@@ -13299,6 +13299,73 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F233 = {
+    "id": "HX-F233",
+    "title": "OS command injection via --gateway and --interface in iSCSI network configuration scripts using shell=True fping invocation",
+    "severity": "HIGH",
+    "component": (
+        "hx-iscsi: configureNetworking.py / storageClientNetworkConfigure.py"
+    ),
+    "description": (
+        "Two iSCSI network configuration scripts inject command-line arguments "
+        "directly into a shell-executed fping command string. "
+        "configureNetworking.py update_interfaces_file() constructs: "
+        "\"fping -I %s %s\" % (NetworkSetup.INTERFACE, NetworkSetup.GATEWAY) "
+        "and passes it to execute_command() which calls "
+        "subprocess.call(command, shell=True). "
+        "storageClientNetworkConfigure.py configure_new_network() similarly "
+        "constructs: \"fping -I eth-iscsi1 %s\" % (NetworkSetup.GATEWAY) "
+        "with the same shell=True path. "
+        "Both INTERFACE and GATEWAY are populated from command-line arguments "
+        "(--interface, --gateway) with no shell-metacharacter validation. "
+        "configureNetworking.py is invoked by stNodeMgr-1.0 "
+        "(configureNetworkScript=/opt/hyperflex/hx-iscsi/configureNetworking.py "
+        "in stNodeMgr conf/application.conf) and from the Ansible upgrademigration "
+        "role via ansible.builtin.command with {{ iscsiInterface }} and "
+        "{{ iscsi_ipaddr }} template values. "
+        "A privileged API caller who can supply a gateway IP address during iSCSI "
+        "network configuration (e.g., via POST /coreapi/v1/clusters/.../services/iscsi) "
+        "can inject shell commands by embedding semicolons or backticks: "
+        "--gateway '10.0.0.1; <payload>' causes execute_command() to run "
+        "<payload> as root on the stCtlVM. "
+        "The script runs as the stCtlVM system user (typically root or hxdp "
+        "service account) since it modifies network configuration files."
+    ),
+    "evidence": {
+        "file_1": "hx-iscsi/configureNetworking.py",
+        "injection_line_1": "321: command = \"fping -I %s %s\" %(NetworkSetup.INTERFACE, NetworkSetup.GATEWAY)",
+        "file_2": "hx-iscsi/storageClientNetworkConfigure.py",
+        "injection_line_2": "220: command = \"fping -I eth-iscsi1 %s\" %(NetworkSetup.GATEWAY)",
+        "execute_method": "execute_command() at line 177: subprocess.call(command, shell=True)",
+        "parameter_source": "sys.argv[1:] via parse_cmdline_args() --gateway / --interface",
+        "caller_config": "stNodeMgr-1.0/conf/application.conf: configureNetworkScript = /opt/hyperflex/hx-iscsi/configureNetworking.py",
+        "ansible_caller": "upgrademigration/tasks/configure-networks.yml: python3 /opt/hyperflex/hx-iscsi/configureNetworking.py --interface {{ iscsiInterface }}",
+        "no_validation": "get_args() returns raw sys.argv values without character filtering",
+    },
+    "cwe": ["CWE-78"],
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H",
+    "cvss_score": 7.2,
+    "fix": (
+        "Replace string formatting with a list-based subprocess call without "
+        "shell=True: subprocess.call(['fping', '-I', NetworkSetup.INTERFACE, "
+        "NetworkSetup.GATEWAY], ...). "
+        "Validate INTERFACE and GATEWAY against an interface-name regex and "
+        "IPv4/IPv6 address format before constructing any command. "
+        "Apply the same fix to storageClientNetworkConfigure.py."
+    ),
+    "tags": [
+        "command-injection", "cwe-78", "iscsi", "shell-true",
+        "fping", "post-auth", "network-config", "high",
+    ],
+}
+
+
+for _f in [
+    HX_F233,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
