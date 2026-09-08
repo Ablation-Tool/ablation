@@ -17795,6 +17795,133 @@ HX_F308 = {
 }
 
 
+HX_F309 = {
+    "id": "HX-F309",
+    "title": (
+        "TLS Certificate Validation Disabled in Five Additional hx-scripts Cluster "
+        "Utility Scripts Including EAM Status, vSwitch Management, and Plugin Update"
+    ),
+    "cwe": "CWE-295",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/hx-scripts/ "
+        "(check_eam_status.py:L13-22, cleanup_passthru.py:L22-28, "
+        "add_vswitch.py:L15-21, modify_plugin.py:L24/52, addIscsiNetworkToVMs.py:L47-53)"
+    ),
+    "description": (
+        "Five additional hx-scripts cluster utility scripts disable TLS certificate "
+        "validation. "
+        "check_eam_status.py (ESX Agent Manager health check) applies the "
+        "ssl._create_default_https_context monkey-patch at L13-19 and calls "
+        "requests.packages.urllib3.disable_warnings() at L22. "
+        "cleanup_passthru.py (PCI passthrough cleanup) applies the monkey-patch at L22-28. "
+        "add_vswitch.py (vSwitch management) applies the monkey-patch at L15-21. "
+        "modify_plugin.py (vCenter plugin modification) calls disable_warnings at L24 "
+        "and applies the monkey-patch at L52. "
+        "addIscsiNetworkToVMs.py (iSCSI network configuration for VMs) applies the "
+        "monkey-patch at L47-53."
+    ),
+    "evidence": (
+        "  hx-scripts/check_eam_status.py L13-22:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "\n"
+        "  hx-scripts/cleanup_passthru.py L22-28:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "\n"
+        "  hx-scripts/add_vswitch.py L15-21:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "\n"
+        "  hx-scripts/modify_plugin.py L24, L52:\n"
+        "    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  hx-scripts/addIscsiNetworkToVMs.py L47-53:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context"
+    ),
+}
+
+HX_F310 = {
+    "id": "HX-F310",
+    "title": (
+        "TLS and SSH Host Key Validation Disabled Across Seven Cluster Validation "
+        "Scripts Including springpath_security.py and Hardware and Network Validators"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/validation/ "
+        "(springpath_validation_validator.py:L2190/6778, "
+        "springpath_lib_validate_cluster_node_model.py:L43/205/235, "
+        "springpath_ssh.py:L46, springpath_networking.py:L28/648, "
+        "springpath_security.py:L115/128, "
+        "springpath_validation_util.py:L31/45, "
+        "springpath_hardware_validator.py:L96)"
+    ),
+    "description": (
+        "Seven pre-deployment and maintenance cluster validation scripts disable TLS "
+        "certificate validation or SSH host key verification. "
+        "springpath_validation_validator.py uses AutoAddPolicy at L2190 and passes "
+        "verify=False with admin credentials at L6778. "
+        "springpath_lib_validate_cluster_node_model.py passes verify=False with cluster "
+        "credentials in three distinct REST calls: at L43 (cluster_user_name + "
+        "cluster_password), at L205 (clusterUser + decodedClusterPassword — indicating "
+        "the password was decoded from base64 before being transmitted over a connection "
+        "that itself disables TLS validation), and at L235 (clusterUser + clusterPassword). "
+        "springpath_ssh.py (SSH utility module used by multiple validators) uses "
+        "AutoAddPolicy at L46 — all validation SSH sessions created through this module "
+        "inherit the bypass. "
+        "springpath_networking.py applies the ssl._create_default_https_context "
+        "monkey-patch at L28 and uses AutoAddPolicy at L648. "
+        "springpath_security.py — the cluster security validation module — uses "
+        "AutoAddPolicy at both L115 and L128, disabling SSH host key verification "
+        "across all of its security assessment SSH sessions. "
+        "springpath_validation_util.py uses AutoAddPolicy at L31 and L45. "
+        "springpath_hardware_validator.py uses AutoAddPolicy at L96."
+    ),
+    "evidence": (
+        "  validation/springpath_validation_validator.py L2190:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  validation/springpath_validation_validator.py L6778:\n"
+        "    requests.get(url, auth=(\"admin\", password), verify=False)\n"
+        "\n"
+        "  validation/springpath_lib_validate_cluster_node_model.py L43:\n"
+        "    requests.get(url, auth=(cluster_user_name, cluster_password),\n"
+        "                 verify=False, timeout=30)\n"
+        "  validation/springpath_lib_validate_cluster_node_model.py L205:\n"
+        "    requests.get(url, auth=(clusterUser, decodedClusterPassword),\n"
+        "                 verify=False, timeout=30)\n"
+        "  validation/springpath_lib_validate_cluster_node_model.py L235:\n"
+        "    requests.get(url, auth=(clusterUser, clusterPassword),\n"
+        "                 verify=False, timeout=30)\n"
+        "\n"
+        "  validation/springpath_ssh.py L46:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  validation/springpath_networking.py L28:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "  validation/springpath_networking.py L648:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  validation/springpath_security.py L115, L128:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  validation/springpath_validation_util.py L31, L45:\n"
+        "    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "    s.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  validation/springpath_hardware_validator.py L96:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17851,6 +17978,8 @@ for _f in [
     HX_F306,
     HX_F307,
     HX_F308,
+    HX_F309,
+    HX_F310,
 ]:
     FINDINGS[_f["id"]] = _f
 
