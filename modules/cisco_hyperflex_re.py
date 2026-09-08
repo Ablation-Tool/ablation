@@ -14002,6 +14002,67 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F245 = {
+    "id": "HX-F245",
+    "title": "AES-CBC Credential Encryption Key Derived from Firmware-Shipped Test Artifact (CWE-321)",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "component": "misc/usr/share/hyperflex/storfs-misc/",
+    "cwe": "CWE-321",
+    "description": (
+        "springpath_env_parse.py derives the AES-CBC key for stctl_vm_passwd, ssl_cert_passwd, "
+        "and installer_passwd by computing the MD5 hash of the file "
+        "/usr/share/hyperflex/storfs-misc/Secret.class. That file is a 282-byte Java class "
+        "compiled from Test.java (class name 'Test') containing a single hardcoded static field "
+        "'secreteKey = 4346757647632874372L' (note: misspelled 'secrete'). Because Secret.class "
+        "is fixed content shipped in the firmware package, its MD5 is constant across all HXDP "
+        "6.0.2b deployments: 1f6d13bcd7753f2d3b2e2da361b7afb5. Any attacker with access to the "
+        "publicly downloadable firmware image can derive the AES key and decrypt all three "
+        "protected credentials. The file is also world-readable on the deployed system, enabling "
+        "the same attack from any local process."
+    ),
+    "evidence": {
+        "file": "factory/opt/hyperflex/storfs-factory/utils/springpath_env_parse.py",
+        "line_45_53": "def md5(fname): hash_md5.update(chunk)  # MD5 of Secret.class",
+        "line_84_86": (
+            "if tokens[1] in ['stctl_vm_passwd','ssl_cert_passwd','installer_passwd']:\n"
+            "    file_md5 = md5(ENV_VARIABLE_STCTL_PASS)  # = md5('/usr/share/...Secret.class')\n"
+            "    decoded = decrypt(file_md5, value)"
+        ),
+        "decrypt_func": "AES.new(key.encode('utf8'), AES.MODE_CBC, iv)  # mode is CBC but key is fixed",
+        "secret_class_path": "/usr/share/hyperflex/storfs-misc/Secret.class",
+        "secret_class_md5": "1f6d13bcd7753f2d3b2e2da361b7afb5",
+        "secret_class_content": (
+            "Compiled from Test.java; class Test { "
+            "static { secreteKey = 4346757647632874372L; } }"
+        ),
+        "secret_class_size_bytes": 282,
+    },
+    "impact": (
+        "All three credentials protected by this encryption scheme (controller VM root password, "
+        "SSL certificate password, installer password) are recoverable by any party with access "
+        "to the HXDP 6.0.2b firmware image. The encryption key is universally fixed: "
+        "1f6d13bcd7753f2d3b2e2da361b7afb5. An attacker who reads any encrypted tunes file "
+        "(springpath_custom_cluster.tunes, springpath_custom_node.tunes) from a deployed cluster "
+        "can decrypt the stctl_vm_passwd to obtain the stCtlVM root password."
+    ),
+    "remediation": (
+        "Replace the md5(Secret.class) key derivation with a per-deployment key stored in a "
+        "hardware-backed secret store (e.g., TPM or vTPM). At minimum, generate a random key "
+        "during cluster initialization and store it in /etc/hyperflex/secure/ rather than "
+        "deriving it from a fixed file. Remove Secret.class from the firmware distribution. "
+        "Rotate all credentials protected by the current scheme."
+    ),
+    "references": ["CWE-321", "CWE-326", "CWE-330"],
+}
+
+for _f in [
+    HX_F245,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
