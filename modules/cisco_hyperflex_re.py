@@ -18317,6 +18317,64 @@ HX_F318 = {
 }
 
 
+HX_F319 = {
+    "id": "HX-F319",
+    "title": (
+        "Hardcoded 'springpath' Password Protects All Cluster Java Keystores Including "
+        "TLS Private Keys; Stored Plaintext in hxSecuritySvcMgr Config and "
+        "Base64-Encoded in hyperflex_security.properties"
+    ),
+    "cwe": "CWE-321",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "component": (
+        "jar-extract/hxSecuritySvcMgr/application.conf:L111 (keyStorePass); "
+        "misc/usr/share/hyperflex/storfs-misc/hyperflex_security.properties:L5 "
+        "(keystore_password); "
+        "jar-extract/common-dep/reference.conf:L38-41 (keystore file paths)"
+    ),
+    "description": (
+        "The password 'springpath' is used to protect all Java keystores that contain "
+        "HyperFlex cluster TLS private keys and certificates, stored in two locations "
+        "with two different encoding choices — both trivially recoverable. "
+        "hxSecuritySvcMgr/application.conf stores keyStorePass = 'springpath' in "
+        "plaintext at L111 for the syslog TLS client keystore "
+        "(/tmp/syslogClientKeystore.jks). "
+        "hyperflex_security.properties stores keystore_password = c3ByaW5ncGF0aA== "
+        "(base64('springpath')) at L5, which is the password for the four main "
+        "cluster keystores defined in common-dep/reference.conf: "
+        "hyperflex_keystore.p12 (PKCS#12), "
+        "hyperflex_keystore.jceks (JCEKS, primary), "
+        "springpath_keystore.jks (JKS, deprecated), and "
+        "springpath_keystore_aes.jceks (AES). "
+        "All four keystores reside at /etc/hyperflex/secure/ on the controller VM. "
+        "The 'springpath' password is hardcoded and identical across all HyperFlex "
+        "deployments. An attacker with filesystem read access to the controller VM "
+        "can extract TLS private keys from any keystore using 'keytool' or 'openssl pkcs12' "
+        "with the known password. Private key extraction enables decryption of captured "
+        "HyperFlex management plane TLS traffic and impersonation of any cluster "
+        "service. 'springpath' is the former company name acquired by Cisco, publicly "
+        "known and easily guessable."
+    ),
+    "evidence": (
+        "  hxSecuritySvcMgr/application.conf L111:\n"
+        "    keyStorePass = \"springpath\"  # plaintext syslog keystore password\n"
+        "    clientKeyStorePath = \"/tmp/syslogClientKeystore.jks\"\n"
+        "\n"
+        "  hyperflex_security.properties L5:\n"
+        "    <entry key=\"keystore_password\">c3ByaW5ncGF0aA==</entry>\n"
+        "    # base64 decode: c3ByaW5ncGF0aA== -> \"springpath\"\n"
+        "\n"
+        "  common-dep/reference.conf L38-41 (keystores unlocked by this password):\n"
+        "    springpath_pkcs_keystore_file = \"/etc/hyperflex/secure/hyperflex_keystore.p12\"\n"
+        "    springpath_keystore_file = \"/etc/hyperflex/secure/hyperflex_keystore.jceks\"\n"
+        "    springpath_keystore_file_deprecated = \"/etc/hyperflex/secure/springpath_keystore.jks\"\n"
+        "    springpath_keystore_file_aes = \"/etc/hyperflex/secure/springpath_keystore_aes.jceks\"\n"
+        "    springpath_trust_store_path = \"/etc/hyperflex/secure/truststore.ts\""
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -18383,6 +18441,7 @@ for _f in [
     HX_F316,
     HX_F317,
     HX_F318,
+    HX_F319,
 ]:
     FINDINGS[_f["id"]] = _f
 
