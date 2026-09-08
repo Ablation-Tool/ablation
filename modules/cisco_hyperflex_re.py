@@ -16908,6 +16908,76 @@ HX_F293 = {
 }
 
 
+HX_F294 = {
+    "id": "HX-F294",
+    "title": (
+        "Ansible Deployment Layer Invokes curl -k with Controller VM Admin Credentials "
+        "Decoded at Template Render Time Across 8 Playbook Tasks"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/storagenode.yml (L44, L77), "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/postinstall_controllervm/tasks/"
+        "storage_client.yml (L49), "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/postinstall_controllervm/tasks/"
+        "configure.yml (L31, L43, L57, L69), "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/check_securitysvc_state/tasks/"
+        "check_hxSecuritySvc_status.yml (L19)"
+    ),
+    "description": (
+        "Eight Ansible playbook tasks in the HyperFlex post-install and upgrade pipeline "
+        "invoke curl with the -k flag (disabling TLS certificate verification) and embed "
+        "the controller VM admin password directly in the command line via the Jinja2 "
+        "expression {{ ctlvmPassword | b64decode }}. "
+        "The b64decode filter decodes the base64-obfuscated password at template render "
+        "time and injects the plaintext value as part of the -u admin:<password> argument. "
+        "The resulting curl subprocess exposes the decoded admin password in "
+        "/proc/<pid>/cmdline and ps aux output for the duration of the HTTP call. "
+        "These tasks configure the security service (secure shell enablement, SFI baseline, "
+        "auth key removal), query cluster state, and check security service boot status — "
+        "all sensitive operations authenticated with the credential that provides full "
+        "administrative access to the HyperFlex controller VM. "
+        "Developer awareness of the credential exposure is evident: all eight tasks carry "
+        "no_log: True to suppress Ansible log output. However, no_log: True explicitly does "
+        "not protect against process table visibility — the Ansible documentation notes that "
+        "it only removes the value from the task results logged to disk. "
+        "An additional instance (check_hxSecuritySvc_status.yml:19) uses curl -k with "
+        "http://localhost:8000/ (cleartext HTTP) for a security service status check."
+    ),
+    "evidence": (
+        "  storagenode.yml L44:\n"
+        "    command: \"/usr/bin/curl -k ... https://.../securityservice/v1/secureshell\n"
+        "              -u admin:{{ ctlvmPassword | b64decode }}\"\n"
+        "    no_log: True  # hides from Ansible logs; does NOT protect process table\n"
+        "\n"
+        "  storagenode.yml L77:\n"
+        "    command: \"/usr/bin/curl --retry 5 ... -k ... https://.../coreapi/v1/clusters\n"
+        "              -u admin:{{ ctlvmPassword | b64decode }}\"\n"
+        "    no_log: True\n"
+        "\n"
+        "  postinstall_controllervm/tasks/storage_client.yml L49:\n"
+        "    command: \"/usr/bin/curl -k ... https://.../securityservice/v1/configurescn\n"
+        "              -u admin:{{ ctlvmPassword | b64decode }} ...\"\n"
+        "\n"
+        "  postinstall_controllervm/tasks/configure.yml L31, L43, L57, L69:\n"
+        "    4 additional tasks: removeauthkey (root), removeauthkey (ansible),\n"
+        "    sfi/baseline POST, secureshell PUT — all curl -k with decoded ctlvmPassword\n"
+        "\n"
+        "  check_securitysvc_state/tasks/check_hxSecuritySvc_status.yml L19:\n"
+        "    command: \"/usr/bin/curl -k 'http://localhost:8000/securityservice/v1/\n"
+        "              secureboot/getStatus' -u admin:{{ ctlvmPassword | b64decode }}\"\n"
+        "    # Uses cleartext http:// for a security status check\n"
+        "\n"
+        "  All 8 tasks: curl -k (no cert validation) + plaintext admin credentials\n"
+        "  visible in /proc/<pid>/cmdline during execution.\n"
+        "  no_log: True on storagenode.yml tasks indicates developer awareness of\n"
+        "  credential exposure risk — logging mitigation applied, process table missed."
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16949,6 +17019,7 @@ for _f in [
     HX_F291,
     HX_F292,
     HX_F293,
+    HX_F294,
 ]:
     FINDINGS[_f["id"]] = _f
 
