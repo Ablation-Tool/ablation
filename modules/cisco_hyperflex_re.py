@@ -12741,105 +12741,6 @@ HX_F223 = {
     "tags": ["credentials", "ansible", "verbose-logging", "cwe-532", "cwe-214", "medium"],
 }
 
-HX_F224 = {
-    "id": "HX-F224",
-    "title": "Diagnostic Account Not Barred from Upgrade, Support, and Encryption Services",
-    "severity": "HIGH",
-    "cvss_score": 8.1,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
-    "cwe": ["CWE-284"],
-    "component": (
-        "upgrade-war/WEB-INF/classes/application.conf + "
-        "support-war/WEB-INF/classes/application.conf + "
-        "encryption-war/WEB-INF/classes/application.conf + "
-        "enc-war/WEB-INF/classes/application.conf"
-    ),
-    "firmware_version": "HXDP 6.0.2b",
-    "description": (
-        "The `diag` and `local/diag` accounts are barred from authentication in "
-        "`auth-war` and `authfilter` (`barredUsers = [\"root\", \"local/root\", \"diag\", "
-        "\"local/diag\"]`), but the `barredUsers` list in upgrade-war, support-war, "
-        "encryption-war, and enc-war omits both `diag` entries: "
-        "`barredUsers = [\"root\", \"local/root\"]`. "
-        "Each WAR hosts its own `/aaa/v1/auth` endpoint (in its `authUrls` list, "
-        "which allows unauthenticated access for token issuance). "
-        "An authenticated `diag` request to the upgrade-war `/aaa/v1/auth` succeeds "
-        "and returns a valid JWT because the barring logic is applied per-WAR, "
-        "not centrally. "
-        "The `diag` account is a real HXLOCAL account: it appears in "
-        "`passwordSyncAccounts` alongside `root` and `admin` in three separate "
-        "management service configs, confirming it holds cluster-managed credentials. "
-        "Affected services include cluster upgrade orchestration (upgrade-war), "
-        "support bundle generation and upload (support-war), and certificate "
-        "encryption key management (encryption-war, enc-war)."
-    ),
-    "evidence": [
-        {
-            "file": "auth-war/WEB-INF/classes/application.conf",
-            "lines": "42",
-            "snippet": (
-                "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]"
-            ),
-            "note": "Main auth WAR: diag barred",
-        },
-        {
-            "file": "upgrade-war/WEB-INF/classes/application.conf",
-            "lines": "48",
-            "snippet": (
-                "barredUsers = [\"root\", \"local/root\"]"
-            ),
-            "note": "Upgrade WAR: diag NOT barred; /aaa/v1/auth in authUrls at line 44",
-        },
-        {
-            "file": "support-war/WEB-INF/classes/application.conf",
-            "lines": "48",
-            "snippet": (
-                "barredUsers = [\"root\", \"local/root\"]"
-            ),
-            "note": "Support WAR: diag NOT barred; exposes support bundle generation",
-        },
-        {
-            "file": "encryption-war/WEB-INF/classes/application.conf",
-            "lines": "48",
-            "snippet": (
-                "barredUsers = [\"root\", \"local/root\"]"
-            ),
-            "note": "Encryption WAR: diag NOT barred; exposes certificate key management",
-        },
-        {
-            "file": "mgmt/opt/hyperflex/storfs-mgmt/hxSvcMgr-1.0/conf/application.conf",
-            "lines": "21",
-            "snippet": (
-                "passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]"
-            ),
-            "note": "diag is a real HXLOCAL account with cluster-synced credentials",
-        },
-    ],
-    "impact": (
-        "A network-accessible attacker with `diag` account credentials can "
-        "authenticate to the upgrade, support, and encryption service endpoints "
-        "that the auth policy is intended to restrict. "
-        "Via upgrade-war: trigger cluster upgrade operations or extract upgrade "
-        "state. "
-        "Via support-war: initiate support bundle collection (aggregates cluster "
-        "logs, configs) and upload to `upload.hyperflex.io` (see HX-F220). "
-        "Via encryption-war/enc-war: access certificate encryption key material. "
-        "The `diag` account's credentials are cluster-synced with root and admin "
-        "(same passwordSyncAccounts list), increasing credential overlap risk."
-    ),
-    "remediation": (
-        "1. Add `\"diag\"` and `\"local/diag\"` to the `barredUsers` list in "
-        "upgrade-war, support-war, encryption-war, and enc-war "
-        "`application.conf` files, mirroring the auth-war configuration. "
-        "2. Centralize the `barredUsers` policy in the shared authentication "
-        "filter (`authfilter`) rather than maintaining per-WAR copies that can "
-        "diverge. "
-        "3. Audit all other WAR `application.conf` files for similar divergence "
-        "from the auth-war baseline `barredUsers` list."
-    ),
-    "tags": ["authentication", "diag-account", "access-control", "cwe-284", "high"],
-}
-
 for _f in [
     HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
     HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
@@ -12869,7 +12770,7 @@ for _f in [
     HX_F217, HX_F218,
     HX_F219, HX_F220,
     HX_F221, HX_F222,
-    HX_F223, HX_F224,
+    HX_F223,
     HX_F225, HX_F226,
 ]:
     FINDINGS[_f["id"]] = _f
