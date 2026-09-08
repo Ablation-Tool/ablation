@@ -13942,6 +13942,66 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F244 = {
+    "id": "HX-F244",
+    "title": "Factory-Default Credential 'springpath' Hardcoded Across ESXi and stCtlVM Components (CWE-798)",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "component": "mgmt/opt/hyperflex/storfs-deploy/ansible/",
+    "cwe": "CWE-798",
+    "description": (
+        "The HyperFlex firmware ships with hardcoded root credentials root:springpath in at least "
+        "two forms: (1) stctlvm_ip.json contains plaintext root:springpath for both the ESXi "
+        "host (sysmgmt-006b.eng.storvisor.com) and the stCtlVM controller VM; (2) six copies of "
+        "configureNetworking_VCenter.py across Ansible roles (esx, compute, springpathvm, "
+        "upgradedeployvm, upgrademigration, upgrademigration) each declare ESX_PWD = 'springpath' "
+        "as a class-level constant used for pyVmomi SmartConnect authentication. The constant is "
+        "overridden only if the JSON config provides esxPassword or the caller passes --esx-password; "
+        "absent those overrides, all ESXi connections use the hardcoded default. The same 'springpath' "
+        "password is the documented default for --ctl-password (controller root password)."
+    ),
+    "evidence": {
+        "file_1": "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json",
+        "json_esxi_creds": '{"server":"sysmgmt-006b.eng.storvisor.com","user":"root","password":"springpath"}',
+        "json_stctlvm_creds": '{"user":"root","password":"springpath","ipv4":"10.64.31.41"}',
+        "file_2": "mgmt/opt/hyperflex/storfs-deploy/ansible/configureNetworking_VCenter.py",
+        "line_319": 'ESX_PWD = "springpath"  # class-level constant',
+        "line_731": "self._initialize_ESXi(esx_host, ESX_USER, ESX_PWD)  # uses hardcoded default",
+        "line_1331": "isHXHardware(esx_host, ESX_USER, ESX_PWD)  # hardware check with default pw",
+        "line_2643": "connect.SmartConnect(host=..., user=ESX_USER, pwd=ESX_PWD)",
+        "copies": (
+            "ansible/roles/esx/files/configureNetworking_VCenter.py, "
+            "ansible/roles/compute/files/configureNetworking_VCenter.py, "
+            "ansible/roles/springpathvm/files/configureNetworking_VCenter.py, "
+            "ansible/roles/upgradedeployvm/files/configureNetworking_VCenter.py, "
+            "ansible/roles/upgrademigration/files/configureNetworking_VCenter.py"
+        ),
+    },
+    "impact": (
+        "root:springpath is the factory-default credential for both ESXi hosts and stCtlVM "
+        "controller VMs in HyperFlex clusters. Clusters where this password was not explicitly "
+        "changed after deployment are accessible to any attacker who knows this credential. "
+        "The stctlvm_ip.json file also discloses internal Springpath/Cisco development network "
+        "topology (host sysmgmt-006b.eng.storvisor.com, IP range 10.64.24.0/21, domain "
+        "eng.storvisor.com)."
+    ),
+    "remediation": (
+        "Remove stctlvm_ip.json from the firmware distribution package. Replace the ESX_PWD "
+        "class constant with a required parameter that has no default; fail the script if the "
+        "ESX password is not explicitly provided. Require customers to change root passwords "
+        "on all ESXi hosts and stCtlVM controllers as a mandatory post-deployment step enforced "
+        "by the deployment workflow."
+    ),
+    "references": ["CWE-798", "CWE-1392", "CWE-312"],
+}
+
+for _f in [
+    HX_F244,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
