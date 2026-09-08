@@ -13529,6 +13529,72 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F237 = {
+    "id": "HX-F237",
+    "title": "Root Credentials Encrypted with AES-ECB Using Publicly Derivable Cluster-UUID Key (CWE-327)",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "component": "storfs-deploy/ansible/library/convertUUIDAndEncryptData.py + softwareEncryptionPackageInstall.yml",
+    "description": (
+        "The Ansible module convertUUIDAndEncryptData.py encrypts sensitive deployment data "
+        "using AES in ECB mode with a key derived from the publicly accessible cluster UUID. "
+        "The encryption key is computed as: key = SHA-256(cluster_UUID)[0:16], "
+        "where cluster_UUID is the HX cluster UUID returned without authentication "
+        "by GET /rest/v1/cluster (see HX-F004). "
+        "The cipher is initialized at line 38 of convertUUIDAndEncryptData.py as: "
+        "cipher = AES.new(final_key, AES.MODE_ECB). "
+        "ECB mode applies the same key to each 16-byte block independently with no IV, "
+        "revealing identical ciphertext blocks for identical plaintext blocks. "
+        "The data encrypted under this scheme includes the root password of the storage "
+        "controller VM (stCtlVM). In softwareEncryptionPackageInstall.yml the plaintext is: "
+        '\'{ "ip": "<DataIP>","user": "root","password": "<stctl_vm_passwd>"}\'. '
+        "The encrypted blob is sent as encData to the internal security service API. "
+        "An attacker who can observe any API call carrying this blob (or read it from "
+        "Ansible logs, ZooKeeper, or deployment artifacts) can: (1) fetch the cluster UUID "
+        "from the unauthenticated /rest/v1/cluster endpoint, (2) derive the AES key as "
+        "SHA-256(uuid)[0:16], (3) decrypt the blob and recover the root password of the "
+        "storage controller VM. The same module also encrypts SSH keys for root authorized "
+        "key management (configure.yml) and storage client credentials (storage_client.yml, "
+        "synctoken.yml) under the same broken scheme."
+    ),
+    "affected_versions": "HXDP 6.0.2b (all supported platforms)",
+    "poc": (
+        "1. curl -sk https://<target>/rest/v1/cluster | python3 -c "
+        "\"import sys,json; d=json.load(sys.stdin); print(d['uuid'])\""
+        " -> cluster_uuid\n"
+        "2. python3 -c \"import hashlib,base64; uuid='<cluster_uuid>'; "
+        "key=hashlib.sha256(uuid.encode()).digest()[:16]; "
+        "from Crypto.Cipher import AES; from Crypto.Util.Padding import unpad; "
+        "ct=base64.b64decode('<encData>'); "
+        "pt=unpad(AES.new(key,AES.MODE_ECB).decrypt(ct),16); print(pt)\""
+        " -> root password"
+    ),
+    "remediation": (
+        "Replace AES-ECB with AES-GCM or AES-CBC-HMAC. "
+        "Generate a random 256-bit key at cluster initialization time and store it in "
+        "/etc/hyperflex/secure/ (existing secure storage path) rather than deriving "
+        "it from the publicly visible cluster UUID. "
+        "The cluster UUID must never serve as a cryptographic secret."
+    ),
+    "references": [
+        "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+        "CWE-321: Use of Hard-coded Cryptographic Key",
+        "convertUUIDAndEncryptData.py line 34-38",
+        "softwareEncryptionPackageInstall.yml: se_storage_client_enc_vars contains root password",
+    ],
+    "tags": [
+        "cryptographic-weakness", "cwe-327", "aes-ecb", "key-derivation",
+        "cluster-uuid", "root-password", "deployment", "critical",
+    ],
+}
+
+
+for _f in [
+    HX_F237,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
