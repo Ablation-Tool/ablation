@@ -14809,6 +14809,70 @@ HX_F259 = {
     "references": ["CWE-200", "CWE-540"],
 }
 
+HX_F260 = {
+    "id": "HX-F260",
+    "title": "Global TLS Trust-All Manager and Hostname Verifier Bypass in ROOT REST API WAR",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war",
+    "description": (
+        "WebDownloader.java in ROOT-1.0.0.war installs a global TLS bypass in a static "
+        "initializer that executes at class load time. The static block calls "
+        "trustAllHttpsCertificates() which constructs an SSLContext initialized with a "
+        "no-op TrustAllManager (checkServerTrusted: Code: 0: return) and installs it via "
+        "HttpsURLConnection.setDefaultSSLSocketFactory(). The static block also installs "
+        "WebDownloader$2 as the global HostnameVerifier via "
+        "HttpsURLConnection.setDefaultHostnameVerifier(); this verifier unconditionally "
+        "returns true (bytecode: iconst_1; ireturn). Unlike per-connection TrustManager "
+        "bypasses, these global defaults affect ALL HttpsURLConnection instances in the "
+        "webapp's JVM context regardless of which code initiates the connection. This "
+        "makes the ROOT webapp's entire outbound HTTPS surface vulnerable to TLS MitM."
+    ),
+    "evidence": (
+        "ROOT-1.0.0.war: WebDownloader.class (WebDownloader.java):\n"
+        "\n"
+        "  private static void trustAllHttpsCertificates() {\n"
+        "    TrustManager[] tmArr = new TrustManager[]{ new TrustAllManager() };\n"
+        "    SSLContext sc = SSLContext.getInstance(\"SSL\");\n"
+        "    sc.init(null, tmArr, null);\n"
+        "    HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory()); // GLOBAL\n"
+        "  }\n"
+        "\n"
+        "  static {\n"
+        "    trustAllHttpsCertificates();  // global default SSL factory override\n"
+        "    HttpsURLConnection.setDefaultHostnameVerifier(new HostnameVerifier() {\n"
+        "      public boolean verify(String h, SSLSession s) { return true; } // always true\n"
+        "    });\n"
+        "  }\n"
+        "\n"
+        "  // TrustAllManager (inner class, bytecode):\n"
+        "  public void checkServerTrusted(X509Certificate[], String) { return; }  // no-op\n"
+        "  public X509Certificate[] getAcceptedIssuers() { return null; }          // null\n"
+        "\n"
+        "  // WebDownloader$2 (HostnameVerifier, bytecode):\n"
+        "  public boolean verify(String hostname, SSLSession session);\n"
+        "    Code:\n"
+        "       0: iconst_1  // load int 1 (= true)\n"
+        "       1: ireturn   // return true unconditionally"
+    ),
+    "reproduction": (
+        "Position a MitM between the ROOT webapp and any downstream HTTPS target "
+        "(catalog download, update check, external REST call). Present a self-signed "
+        "certificate with a mismatched hostname. Connection is established without error. "
+        "The global default is set at class load, so no special configuration is needed."
+    ),
+    "remediation": (
+        "Remove the trustAllHttpsCertificates() method and its static initializer call "
+        "from WebDownloader.java entirely. Replace with proper certificate validation "
+        "using the HyperFlex cluster trust store at "
+        "/etc/hyperflex/secure/hyperflex_keystore.jceks. "
+        "Remove the global hostname verifier override; use per-connection configuration "
+        "where certificate flexibility is genuinely required."
+    ),
+    "references": ["CWE-295", "CWE-297"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -14816,6 +14880,7 @@ for _f in [
     HX_F257,
     HX_F258,
     HX_F259,
+    HX_F260,
 ]:
     FINDINGS[_f["id"]] = _f
 
