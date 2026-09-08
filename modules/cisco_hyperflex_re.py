@@ -13882,6 +13882,66 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F243 = {
+    "id": "HX-F243",
+    "title": "stSSOMgr Thrift Interface Exposes Hyper-V Host Credentials Without Authentication (CWE-306)",
+    "severity": "HIGH",
+    "cvss": "7.8",
+    "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "component": "stcli-egg/com/storvisor/sysmgmt/stSSOMgr/StSSOMgr.py",
+    "cwe": "CWE-306",
+    "description": (
+        "The stSSOMgr Thrift service exposes a getHypervHostCreds() RPC method on TCP port 9334 "
+        "(localhost) that returns Hyper-V host administrator credentials without requiring any "
+        "authentication token or caller identity. The Thrift interface definition takes no "
+        "authentication parameters for this method. Any process running on the stCtlVM controller "
+        "that can connect to localhost:9334 can invoke getHypervHostCreds() and receive the "
+        "Hyper-V host local admin username and credential (base64-encoded plaintext) stored in "
+        "ZooKeeper. The service uses plain TSocket/TFramedTransport with TBinaryProtocol "
+        "(no TLS), providing no confidentiality for the credential in transit."
+    ),
+    "evidence": {
+        "file": "stcli-egg/com/storvisor/sysmgmt/stSSOMgr/StSSOMgr.py",
+        "interface_definition": "def getHypervHostCreds(self): pass  # no auth params",
+        "client_file": "mgmt/opt/hyperflex/stssoclient.py",
+        "client_line_47_48": (
+            "tp = TSocket.TSocket(self.host, self.port)  # host='localhost', port=9334\n"
+            "self.transport = TTransport.TFramedTransport(tp)  # no TLS"
+        ),
+        "client_line_83_84": (
+            "pwd_b64 = auth_json['host']['localadminusercred']\n"
+            "user_key = base64.b64decode(pwd_b64)  # plaintext after decode"
+        ),
+        "callers": (
+            "mgmt/opt/hyperflex/stssoclient.py, "
+            "misc/usr/share/hyperflex/storfs-misc/update-inventory.py, "
+            "misc/usr/share/hyperflex/storfs-misc/copy_hv_tools.py, "
+            "misc/usr/share/hyperflex/storfs-misc/validation/stssoclient.py"
+        ),
+    },
+    "impact": (
+        "Any local process on the stCtlVM controller can retrieve Hyper-V host administrator "
+        "credentials by connecting to port 9334 and calling getHypervHostCreds(). Combined with "
+        "a local code execution primitive (e.g., via a Popen shell=True injection in an Ansible "
+        "library module), an attacker can escalate from controller-level access to full Hyper-V "
+        "hypervisor-level access on all cluster nodes."
+    ),
+    "remediation": (
+        "Require callers to present a valid X-RootSessionID or SSO session token before "
+        "stSSOMgr serves credential retrieval requests. Alternatively, restrict getHypervHostCreds "
+        "to callers identified by a known process identity (e.g., via Unix domain socket with "
+        "SO_PEERCRED). Replace TSocket with TSSLSocket using a mutual-TLS client certificate "
+        "for transport-level caller authentication."
+    ),
+    "references": ["CWE-306", "CWE-319"],
+}
+
+for _f in [
+    HX_F243,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
