@@ -16000,6 +16000,115 @@ HX_F279 = {
     "references": ["CWE-295", "CWE-312"],
 }
 
+HX_F280 = {
+    "id": "HX-F280",
+    "title": (
+        "Global JVM TLS Certificate Validation Bypass via trustAll() in hxupgrade WAR "
+        "(UpgradeSvcAccess.openClientConnection Calls HttpsURLConnection JVM Override)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "restapi/opt/hyperflex/storfs-restapi/hxupgrade-1.0.0.war — "
+        "com.springpath.hxupgrade.service.UpgradeSvcAccess.trustAll() "
+        "(static, called at offset 11 in openClientConnection); "
+        "com.springpath.hxupgrade.service.UpgradeSvcAccess$1 (TrustManager, no-op checkServerTrusted)"
+    ),
+    "description": (
+        "The hxupgrade WAR's UpgradeSvcAccess.openClientConnection() calls the static "
+        "trustAll() method (bytecode offset 11: invokestatic trustAll:()V) before "
+        "establishing every Thrift connection to the upgrade service. "
+        "trustAll() performs a global JVM override: "
+        "(1) instantiates UpgradeSvcAccess$1 (no-op X509TrustManager, checkServerTrusted: Code: 0: return); "
+        "(2) initializes an SSLContext with this TrustManager; "
+        "(3) calls HttpsURLConnection.setDefaultSSLSocketFactory() with the result — "
+        "JVM-WIDE, affecting all HTTPS connections in the process after first connection; "
+        "(4) calls HttpsURLConnection.setDefaultHostnameVerifier() with UpgradeSvcAccess$2 — "
+        "JVM-WIDE. "
+        "The upgrade WAR handles all HyperFlex firmware upgrade operations — "
+        "the most security-critical management path. Every upgrade sequence globally disables "
+        "TLS for the entire JVM from the first openClientConnection call onwards."
+    ),
+    "evidence": (
+        "  openClientConnection() bytecode (offset 11):\n"
+        "    11: invokestatic  trustAll:()V  // global JVM bypass on every connection\n"
+        "\n"
+        "  trustAll() bytecode:\n"
+        "    new UpgradeSvcAccess$1 (TrustManager, no-op checkServerTrusted)\n"
+        "    invokevirtual SSLContext.init([KeyManager;[TrustManager;SecureRandom)\n"
+        "    invokestatic HttpsURLConnection.setDefaultSSLSocketFactory  // JVM-WIDE\n"
+        "    new UpgradeSvcAccess$2 (HostnameVerifier, iconst_1; ireturn)\n"
+        "    invokestatic HttpsURLConnection.setDefaultHostnameVerifier   // JVM-WIDE\n"
+        "\n"
+        "  UpgradeSvcAccess$1.checkServerTrusted bytecode:\n"
+        "    Code: 0: return  // no certificate validation"
+    ),
+    "reproduction": (
+        "ARP-poison or route-redirect the management VLAN during any cluster upgrade. "
+        "Present a self-signed certificate to the upgrade service THttpClient. "
+        "openClientConnection() calls trustAll() before THttpClient.open(), "
+        "so the JVM-wide bypass is active before the connection is established."
+    ),
+    "remediation": (
+        "Remove trustAll() and replace with a properly scoped TrustManager "
+        "that validates against the cluster CA at /etc/hyperflex/secure/hyperflex_keystore.jceks. "
+        "Remove the setDefaultSSLSocketFactory and setDefaultHostnameVerifier calls entirely "
+        "and use per-connection SSLSocketFactory scoped to each THttpClient. "
+        "This is the same root cause as HX-F82 et al.; apply the same fix template."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F281 = {
+    "id": "HX-F281",
+    "title": (
+        "Always-True HostnameVerifier in hxupgrade WAR "
+        "(UpgradeSvcAccess$2, Called by trustAll() as JVM Default)"
+    ),
+    "cwe": "CWE-297",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "restapi/opt/hyperflex/storfs-restapi/hxupgrade-1.0.0.war — "
+        "com.springpath.hxupgrade.service.UpgradeSvcAccess$2 "
+        "(HostnameVerifier, installed as JVM default by trustAll())"
+    ),
+    "description": (
+        "UpgradeSvcAccess$2 implements HostnameVerifier.verify() to unconditionally return "
+        "true (bytecode: iconst_1; ireturn). It is installed as the JVM-wide default "
+        "via HttpsURLConnection.setDefaultHostnameVerifier() in trustAll() (see HX-F280). "
+        "After the first openClientConnection() call, all HTTPS connections in the upgrade "
+        "WAR process accept any hostname without verification. Combined with the no-op "
+        "TrustManager bypass in HX-F280, both certificate chain and hostname checks are "
+        "globally disabled for the duration of the upgrade process."
+    ),
+    "evidence": (
+        "  UpgradeSvcAccess$2:\n"
+        "  implements javax.net.ssl.HostnameVerifier\n"
+        "\n"
+        "  public boolean verify(String, SSLSession);\n"
+        "    Code:\n"
+        "       0: iconst_1\n"
+        "       1: ireturn\n"
+        "\n"
+        "  Installed by trustAll() via:\n"
+        "    invokestatic HttpsURLConnection.setDefaultHostnameVerifier:(HostnameVerifier)V\n"
+        "  Called from openClientConnection() on every upgrade service connection."
+    ),
+    "reproduction": (
+        "Present a certificate with any CN/SAN mismatch to the upgrade service endpoint. "
+        "UpgradeSvcAccess$2 returns true unconditionally. "
+        "Combined with HX-F280, no TLS validation of any kind is performed."
+    ),
+    "remediation": (
+        "Remove UpgradeSvcAccess$2 along with the setDefaultHostnameVerifier call in "
+        "trustAll(). Use OkHttpClient or HttpsURLConnection with standard hostname "
+        "verification enabled per-connection. See HX-F262 for the fix pattern."
+    ),
+    "references": ["CWE-297"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16027,6 +16136,8 @@ for _f in [
     HX_F277,
     HX_F278,
     HX_F279,
+    HX_F280,
+    HX_F281,
 ]:
     FINDINGS[_f["id"]] = _f
 
