@@ -14609,9 +14609,213 @@ HX_F255 = {
     "references": ["CWE-798", "CWE-312"],
 }
 
+HX_F256 = {
+    "id": "HX-F256",
+    "title": "No-Op X509TrustManager in Java Inter-Service Thrift and REST Clients",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": "mgmt/opt/hyperflex/storfs-mgmt/dependencies/lib/common-1.0.jar",
+    "description": (
+        "Three anonymous X509TrustManager implementations in common-1.0.jar have empty "
+        "checkServerTrusted() and checkClientTrusted() method bodies (bytecode: 0: return). "
+        "StMgrThriftClientFactory$$anon$1 is used for all Thrift TLS connections to the "
+        "Storage Manager service. StDataSvcClientFactory$$anon$1 is used for Thrift TLS "
+        "connections to the Data Service Manager. ScopeResolver$1 (in the REST client "
+        "SSO scope resolver) also returns null from getAcceptedIssuers() and performs no "
+        "certificate validation. Any server certificate is accepted unconditionally, exposing "
+        "all inter-service communication to TLS MitM. Services using these factories include "
+        "hxSvcMgr, hxSecuritySvcMgr, stSSOMgr, hxIscsiMgr, and stNodeMgr."
+    ),
+    "evidence": (
+        "common-1.0.jar: StMgrThriftClientFactory$$anon$1 (StMgrThriftClientFactory.scala):\n"
+        "  public void checkClientTrusted(X509Certificate[], String) { return; }  // no-op\n"
+        "  public void checkServerTrusted(X509Certificate[], String) { return; }  // no-op\n"
+        "  public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }\n"
+        "\n"
+        "common-1.0.jar: StDataSvcClientFactory$$anon$1 (StDataSvcMgrThriftClientFactory.scala):\n"
+        "  public void checkClientTrusted(X509Certificate[], String) { return; }  // no-op\n"
+        "  public void checkServerTrusted(X509Certificate[], String) { return; }  // no-op\n"
+        "\n"
+        "common-1.0.jar: ScopeResolver$1 (ScopeResolver.java):\n"
+        "  public void checkServerTrusted(X509Certificate[], String) { return; }  // no-op\n"
+        "  public X509Certificate[] getAcceptedIssuers() { return null; }          // null\n"
+        "\n"
+        "javap bytecode confirmation:\n"
+        "  public void checkServerTrusted(java.security.cert.X509Certificate[], java.lang.String);\n"
+        "    Code:\n"
+        "       0: return"
+    ),
+    "reproduction": (
+        "Position a MitM between any two HyperFlex management services (stMgr, "
+        "hxSvcMgr, stSSOMgr) and present a self-signed TLS certificate. The "
+        "connection is accepted without certificate validation. Can be triggered via "
+        "ARP poisoning or DNS spoofing on the management VLAN."
+    ),
+    "remediation": (
+        "Replace anonymous TrustManager implementations with proper certificate chain "
+        "validation using the cluster's internal CA. Use TrustManagerFactory.getInstance("
+        "TrustManagerFactory.getDefaultAlgorithm()) initialized with the HyperFlex "
+        "keystore at /etc/hyperflex/secure/hyperflex_keystore.jceks. "
+        "Remove the no-op anonymous inner class pattern from all client factories."
+    ),
+    "references": ["CWE-295", "CWE-297"],
+}
+
+HX_F257 = {
+    "id": "HX-F257",
+    "title": "Hardcoded IPMI Credentials in Storage Manager Node Position Service",
+    "cwe": "CWE-798",
+    "severity": "HIGH",
+    "cvss": 7.2,
+    "component": "mgmt/opt/hyperflex/storfs-mgmt/stMgr-1.0/lib/stMgr-1.0.jar",
+    "description": (
+        "StMgrUtil$.computeNodePositions() in stMgr-1.0.jar has hardcoded IPMI credentials "
+        "as Scala default parameter lambdas. Three anonymous functions provide the default "
+        "values: $anonfun$computeNodePositions$1() returns 'spadmin' (IPMI username) and "
+        "$anonfun$computeNodePositions$2/3() both return 'springpath' (IPMI password). "
+        "computeNodePositions() is invoked to determine the physical slot position of each "
+        "node in the chassis by querying the IPMI/BMC interface using the SMCIPMI script. "
+        "These credentials match those provisioned by replaceNode.sh (HX-F254), confirming "
+        "'spadmin'/'springpath' is the uniform factory IPMI credential across the platform. "
+        "The Storage Manager service runs as root on each stCtlVM and uses these credentials "
+        "to authenticate to every node's BMC (port 623/UDP)."
+    ),
+    "evidence": (
+        "stMgr-1.0.jar: StMgrUtil$.class (StMgrUtil.scala):\n"
+        "\n"
+        "  // Scala default parameter lambdas for computeNodePositions():\n"
+        "  public static final java.lang.String $anonfun$computeNodePositions$1();\n"
+        "    Code:\n"
+        "       0: ldc_w  #2214  // String spadmin\n"
+        "       3: areturn\n"
+        "\n"
+        "  public static final java.lang.String $anonfun$computeNodePositions$2();\n"
+        "    Code:\n"
+        "       0: ldc_w  #2216  // String springpath\n"
+        "       3: areturn\n"
+        "\n"
+        "  public static final java.lang.String $anonfun$computeNodePositions$3();\n"
+        "    Code:\n"
+        "       0: ldc_w  #2216  // String springpath\n"
+        "       3: areturn\n"
+        "\n"
+        "  // Method declaration:\n"
+        "  public scala.collection.immutable.Map computeNodePositions(\n"
+        "      java.lang.String, scala.Option<String>, scala.Option<String>);"
+    ),
+    "reproduction": (
+        "Access any HyperFlex node's IPMI interface on port 623/UDP. "
+        "Authenticate with username 'spadmin', password 'springpath'. "
+        "Confirm Administrator-level access to out-of-band management: "
+        "ipmitool -I lanplus -H <node-bmc-ip> -U spadmin -P springpath chassis power status"
+    ),
+    "remediation": (
+        "Remove hardcoded default parameters from computeNodePositions(). "
+        "IPMI credentials must be generated per-deployment and stored in the cluster's "
+        "ZooKeeper credential store. Rotate all 'spadmin'/'springpath' credentials on "
+        "deployed clusters by removing and re-provisioning user ID 10 with a random password."
+    ),
+    "references": ["CWE-798", "CWE-1393"],
+}
+
+HX_F258 = {
+    "id": "HX-F258",
+    "title": "Hardcoded Default ESX Password in EsxAuthZKMgmtImpl Account Management",
+    "cwe": "CWE-798",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": "mgmt/opt/hyperflex/storfs-mgmt/stMgr-1.0/lib/stMgr-1.0.jar",
+    "description": (
+        "EsxAuthZKMgmtImpl.$anonfun$removeHostLocalUserAccount$2() in stMgr-1.0.jar returns "
+        "the hardcoded string 'springpath' as the default ESX host password used during local "
+        "user account removal operations. The method removeHostLocalUserAccount(java.lang.String) "
+        "removes a local user account from an ESXi node; the lambda supplies the authentication "
+        "credential when no password override is provided. The same class also references "
+        "'Force create hxuser password' and 'springpath' in proximity, indicating 'springpath' "
+        "is the bootstrap password for the 'hxuser' account created on ESX nodes during initial "
+        "cluster provisioning. If 'hxuser' accounts are not subsequently rotated, any actor with "
+        "network access to the ESXi management interface can authenticate as 'hxuser' with this "
+        "password."
+    ),
+    "evidence": (
+        "stMgr-1.0.jar: EsxAuthZKMgmtImpl.class (EsxAuthZKMgmtImpl.scala):\n"
+        "\n"
+        "  public static final java.lang.String $anonfun$removeHostLocalUserAccount$2();\n"
+        "    Code:\n"
+        "       0: ldc_w  #497  // String springpath\n"
+        "       3: areturn\n"
+        "\n"
+        "  // Called from:\n"
+        "  public java.lang.Object removeHostLocalUserAccount(java.lang.String);\n"
+        "\n"
+        "  // Related log strings in same class (binary extract):\n"
+        "  'Force create hxuser password'\n"
+        "  'springpath'"
+    ),
+    "reproduction": (
+        "On a deployed HyperFlex cluster, attempt: "
+        "ssh hxuser@<esxi-host-mgmt-ip>  (password: springpath). "
+        "If the cluster has not rotated the hxuser account after provisioning, "
+        "this authenticates to the ESXi shell."
+    ),
+    "remediation": (
+        "Remove the hardcoded 'springpath' default from $anonfun$removeHostLocalUserAccount$2. "
+        "The account management operations must require an explicit credential argument "
+        "retrieved from the ZooKeeper credential store. Rotate 'hxuser' passwords on all "
+        "deployed ESXi nodes using esxcli system account set -i hxuser -p <random>."
+    ),
+    "references": ["CWE-798", "CWE-1393"],
+}
+
+HX_F259 = {
+    "id": "HX-F259",
+    "title": "Internal Cisco Engineering Infrastructure Hostnames in Production Support Service",
+    "cwe": "CWE-200",
+    "severity": "LOW",
+    "cvss": 3.3,
+    "component": "mgmt/opt/hyperflex/storfs-mgmt/hxSupportSvc-1.0/lib/hxSupportSvc-1.0.jar",
+    "description": (
+        "hxSupportSvc-1.0.jar ships with hardcoded references to Cisco internal engineering "
+        "infrastructure that should not appear in production firmware. The support service JAR "
+        "contains 'https://proxy.esl.cisco.com' (Cisco's internal engineering HTTPS proxy) and "
+        "the error string 'Unable to reach eng.storvisor.com/swims host', where 'swims' is the "
+        "Springpath Software Inventory and Management System on the pre-acquisition engineering "
+        "domain. A diagnostic log message states: 'SCHConfigMgr.getDefault() - looks like this "
+        "cluster is within hyperflex, assuming non-prod', revealing that the firmware switches "
+        "to a non-production ASUP/telemetry configuration based on network-layer detection of "
+        "Cisco internal infrastructure reachability. An attacker controlling DNS resolution for "
+        "eng.storvisor.com could potentially trigger this non-production code path on deployed "
+        "clusters."
+    ),
+    "evidence": (
+        "hxSupportSvc-1.0.jar: SCHConfigMgr.class (binary strings extract):\n"
+        "\n"
+        "  'https://proxy.esl.cisco.com'\n"
+        "  'Unable to reach eng.storvisor.com/swims host'\n"
+        "  'ZSCHConfigMgr.getDefault() - looks like this cluster is within hyperflex,"
+        " assuming non-prod'"
+    ),
+    "reproduction": (
+        "Decompile hxSupportSvc-1.0.jar and search for the string 'proxy.esl.cisco.com'. "
+        "Verify with: strings hxSupportSvc-1.0.jar | grep -E 'esl.cisco|storvisor.com'"
+    ),
+    "remediation": (
+        "Remove all hardcoded internal Cisco engineering infrastructure references from "
+        "production firmware builds. The non-production code path gated on "
+        "eng.storvisor.com reachability should be removed or disabled in production builds. "
+        "Proxy configuration should be externalized to a configuration file, not hardcoded."
+    ),
+    "references": ["CWE-200", "CWE-540"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
+    HX_F256,
+    HX_F257,
+    HX_F258,
+    HX_F259,
 ]:
     FINDINGS[_f["id"]] = _f
 
