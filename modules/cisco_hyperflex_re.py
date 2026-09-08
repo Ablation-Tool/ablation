@@ -15687,6 +15687,8 @@ HX_F274 = {
         "  pci_passthru.py L786:\n"
         "    ssl._create_default_https_context = ssl._create_unverified_context\n"
         "    (inside main(), before connect.Connect() for PCI passthrough config)\n"
+        "    Note: identical file also deployed at "
+        "usr/share/hyperflex/storfs-misc/pci_passthru.py (see HX-F278)\n"
         "\n"
         "  All four follow the 'try/except: pass' pattern — the bypass is silent even "
         "if ssl module is unavailable, with no fallback to verified mode."
@@ -15866,6 +15868,78 @@ HX_F277 = {
     "references": ["CWE-295", "CWE-347"],
 }
 
+HX_F278 = {
+    "id": "HX-F278",
+    "title": (
+        "Global Python SSL Monkey-Patch (ssl._create_default_https_context) in "
+        "storfs-misc hx-scripts and stcli Operational Tools (5 Files)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "usr/share/hyperflex/storfs-misc/hx-scripts/stig_security_settings.py (L32), "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/post_install.py (L80), "
+        "usr/share/hyperflex/storfs-misc/hx-scripts/node_replace.py (L45), "
+        "stcli-egg/stCli/stCli.py (L13509, __main__ entry point), "
+        "usr/share/hyperflex/storfs-misc/pci_passthru.py (L786)"
+    ),
+    "description": (
+        "Five additional HyperFlex operational tools apply the "
+        "ssl._create_default_https_context = ssl._create_unverified_context "
+        "monkey-patch at process startup, disabling TLS certificate validation "
+        "for all HTTPS connections in the process. "
+        "stig_security_settings.py applies STIG hardening to cluster nodes — "
+        "the script that enforces security policy cannot validate the TLS "
+        "certificates of the endpoints it configures. "
+        "post_install.py and node_replace.py apply post-cluster and node "
+        "replacement operations while similarly bypassing TLS. "
+        "stCli.py applies the bypass in its __main__ entry point, affecting "
+        "any HTTPS connection made by the stcli command-line tool itself "
+        "(separate from the StTransportBase.py bypass already documented in HX-F267). "
+        "pci_passthru.py configures PCI passthrough on ESX nodes with TLS disabled "
+        "(same file as factory/utils/pci_passthru.py in HX-F274, deployed in storfs-misc). "
+        "All five use the 'try/except: pass' pattern — the bypass is silent on failure."
+    ),
+    "evidence": (
+        "  stig_security_settings.py L30-32:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    (applied before all STIG configuration API calls)\n"
+        "\n"
+        "  post_install.py L78-80:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    (applied before all post-installation REST calls)\n"
+        "\n"
+        "  node_replace.py L43-45:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    (applied before all node-replacement REST and SSH operations)\n"
+        "\n"
+        "  stCli.py L13507-13509:\n"
+        "    if __name__ == '__main__':\n"
+        "        ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (applied at CLI entry — disables TLS for the entire stcli process)\n"
+        "\n"
+        "  pci_passthru.py L784-787:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (applied before connect.Connect() to ESX for PCI passthrough config)"
+    ),
+    "reproduction": (
+        "During any of these operations (STIG hardening, post-install, node replace, "
+        "stcli commands, PCI passthrough config), ARP-poison the management network. "
+        "Present a forged certificate. The bypassed ssl context will accept it."
+    ),
+    "remediation": (
+        "Remove all ssl._create_default_https_context assignments. "
+        "Use ssl.create_default_context() with CERT_REQUIRED and the cluster CA "
+        "for each HTTPS connection. See HX-F267 for the shared root cause and "
+        "authoritative fix pattern."
+    ),
+    "references": ["CWE-295"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15891,6 +15965,7 @@ for _f in [
     HX_F275,
     HX_F276,
     HX_F277,
+    HX_F278,
 ]:
     FINDINGS[_f["id"]] = _f
 
