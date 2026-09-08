@@ -13231,6 +13231,74 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F232 = {
+    "id": "HX-F232",
+    "title": "Java keystore password stored as Base64 of 'springpath' in hyperflex_security.properties — static credential identical across all deployments",
+    "severity": "HIGH",
+    "component": "securityutilities-1.0.0.jar / SecurityConfigurationManager / hyperflex_security.properties",
+    "description": (
+        "The file /etc/hyperflex/secure/hyperflex_security.properties is shipped "
+        "by the storfs-misc package with entry: "
+        "<entry key=\"keystore_password\">c3ByaW5ncGF0aA==</entry>. "
+        "Base64-decoding c3ByaW5ncGF0aA== yields the string 'springpath'. "
+        "SecurityConfigurationManager (com.cisco.hxdp.sysmgmt.securityutilities."
+        "keystore.SecurityConfigurationManager) reads this file at "
+        "/etc/hyperflex/secure/hyperflex_security.properties, extracts the "
+        "keystore_password property, and decodes it via java.util.Base64.getDecoder(). "
+        "HXKeystoreServiceImpl (com.cisco.hxdp.sysmgmt.securityutilities.keystore."
+        "HXKeystoreServiceImpl) calls SecurityConfigurationManager.getInstance()."
+        "getKeystorePassword() and uses the resulting char[] to open the JCEKS "
+        "keystore at /etc/hyperflex/secure/hyperflex_keystore.jceks. "
+        "Because the password is static and identical on every HyperFlex installation, "
+        "any attacker who obtains a copy of hyperflex_keystore.jceks — from a "
+        "firmware image, a backup, or via the world-readable permission pattern "
+        "established in the same secure/ directory (see HX-F229) — can immediately "
+        "open the keystore and extract all stored private keys and certificates, "
+        "including vCenter TLS private keys and any cluster-wide signing materials "
+        "stored by the sysmgmt stack. "
+        "The password 'springpath' is also the default SSH password hardcoded in "
+        "cleanNasStaleMounts.py (--password default='springpath'), confirming its "
+        "role as a system-wide static credential rather than a generated secret."
+    ),
+    "evidence": {
+        "properties_file": "/etc/hyperflex/secure/hyperflex_security.properties",
+        "properties_key": "keystore_password",
+        "encoded_value": "c3ByaW5ncGF0aA==",
+        "decoded_value": "springpath",
+        "reader_class": "com.cisco.hxdp.sysmgmt.securityutilities.keystore.SecurityConfigurationManager",
+        "reader_jar": "securityutilities-1.0.0.jar",
+        "constant_pool_path": "#35 = String // /etc/hyperflex/secure/hyperflex_security.properties",
+        "constant_pool_key": "#41 = String // keystore_password",
+        "base64_decode_method": "java.util.Base64.getDecoder().decode() at getKeystorePassword()",
+        "consumer_class": "com.cisco.hxdp.sysmgmt.securityutilities.keystore.HXKeystoreServiceImpl",
+        "keystore_path": "#25 = String // /etc/hyperflex/secure/hyperflex_keystore.jceks",
+        "migration_source": "/etc/hyperflex_security.properties (migrated by migrate-secureconfig.sh)",
+        "secondary_reference": "cleanNasStaleMounts.py: argparse default='springpath' for SSH --password",
+    },
+    "cwe": ["CWE-321", "CWE-259"],
+    "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 7.1,
+    "fix": (
+        "Generate a unique keystore password per deployment at first-boot time "
+        "(e.g., via /dev/urandom) and store it with restricted permissions (chmod 600, "
+        "root-only). Remove the static 'springpath' default from the shipped package. "
+        "The same credential must be rotated in any derived keystore files "
+        "(hyperflex_keystore.jceks, hyperflex_keystore.jks) on first boot."
+    ),
+    "tags": [
+        "hardcoded-credential", "cwe-321", "cwe-259", "keystore",
+        "static-password", "springpath", "jceks", "tls-private-key",
+        "high", "firmware-ships-credential",
+    ],
+}
+
+
+for _f in [
+    HX_F232,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
