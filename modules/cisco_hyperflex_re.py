@@ -17043,6 +17043,116 @@ HX_F295 = {
 }
 
 
+HX_F296 = {
+    "id": "HX-F296",
+    "title": (
+        "Global SSL Monkey-Patch, AutoAddPolicy (2 Instances), and verify=False in "
+        "configureNetworking_VCenter.py; Deployed 6x Across Ansible Roles"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/configureNetworking_VCenter.py and "
+        "5 identical copies in roles/ "
+        "(upgrademigration/files/, esx/files/, springpathvm/files/, compute/files/, "
+        "roles/configureNetworking_VCenter.py — all MD5: 3c40deeda3c4e3d5e38c2265247819d8)"
+    ),
+    "description": (
+        "configureNetworking_VCenter.py, the HyperFlex vCenter network configuration "
+        "script invoked across multiple deployment and upgrade Ansible roles, contains "
+        "three distinct security validation bypasses. "
+        "A module-level monkey-patch at L6364 disables TLS certificate validation for all "
+        "HTTPS connections in the process. "
+        "Two instances of AutoAddPolicy at L5181 and L5226 disable SSH host key validation "
+        "for node SSH connections during network reconfiguration. "
+        "A verify=False parameter at L5445 in updateUdevRulesForIscsi disables TLS for "
+        "iSCSI configuration REST calls. "
+        "The same file is deployed in 6 locations across the Ansible role structure — "
+        "roles for initial deployment (esx/, springpathvm/, compute/), migration "
+        "(upgrademigration/), and the shared ansible/ directory. "
+        "This file handles vCenter operations including port group reconfiguration, "
+        "distributed switch setup, VMkernel adapter configuration, and iSCSI initiator "
+        "setup — all performed without TLS validation or SSH host key verification."
+    ),
+    "evidence": (
+        "  configureNetworking_VCenter.py L6364 (module-level monkey-patch):\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  configureNetworking_VCenter.py L5181:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  configureNetworking_VCenter.py L5226:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  configureNetworking_VCenter.py L5445:\n"
+        "    self.updateUdevRulesForIscsi(..., verify=False)\n"
+        "\n"
+        "  6 identical copies (MD5: 3c40deeda3c4e3d5e38c2265247819d8):\n"
+        "    ansible/configureNetworking_VCenter.py\n"
+        "    ansible/roles/esx/files/configureNetworking_VCenter.py\n"
+        "    ansible/roles/springpathvm/files/configureNetworking_VCenter.py\n"
+        "    ansible/roles/compute/files/configureNetworking_VCenter.py\n"
+        "    ansible/roles/upgrademigration/files/configureNetworking_VCenter.py\n"
+        "    ansible/roles/esx/files/configureNetworking_VCenter.py  (duplicate)"
+    ),
+}
+
+HX_F297 = {
+    "id": "HX-F297",
+    "title": (
+        "ssl._create_unverified_context() Used for ESX SmartConnect Authentication and "
+        "OVA Upload in esx_deploy_ova.py; Deployed 3x Across Upgrade/Deploy Roles"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/esx/files/esx_deploy_ova.py "
+        "(L127, L400); identical copies in roles/compute/files/ and "
+        "roles/upgradedeployvm/files/ — all MD5: 980d730fe544fd0da361b629affb4611"
+    ),
+    "description": (
+        "esx_deploy_ova.py, the Ansible script that deploys the HyperFlex controller VM "
+        "OVA to ESX hosts, disables TLS certificate validation via "
+        "ssl._create_unverified_context() at two critical points. "
+        "At L127, ssl._create_unverified_context() is passed as the sslContext parameter "
+        "to pyVmomi SmartConnect — disabling certificate verification when authenticating "
+        "to vSphere to obtain the deployment lease. "
+        "At L400, ssl._create_unverified_context() is used as the SSL context for "
+        "urlopen() during the OVA binary file upload to the ESX datastore. "
+        "The OVA upload bypass is particularly severe: a network-adjacent attacker who "
+        "intercepts the connection can substitute a malicious VM image for the authentic "
+        "HyperFlex controller VM OVA being uploaded. "
+        "The script accepts ESX credentials via command-line arguments (args.user, "
+        "args.password), compounding the credential exposure surface. "
+        "Three identical copies are deployed: esx/files/, compute/files/, and "
+        "upgradedeployvm/files/ — covering initial deployment, compute node addition, "
+        "and VM upgrade phases."
+    ),
+    "evidence": (
+        "  esx_deploy_ova.py L125-133 (SmartConnect with unverified context):\n"
+        "    if args.host:\n"
+        "        context = ssl._create_unverified_context()\n"
+        "        si = SmartConnect(host=args.host, user=args.user, pwd=args.password,\n"
+        "                          port=args.port, sslContext=context)\n"
+        "\n"
+        "  esx_deploy_ova.py L396-408 (OVA binary upload with unverified context):\n"
+        "    if hasattr(ssl, '_create_unverified_context'):\n"
+        "        sslContext = ssl._create_unverified_context()\n"
+        "    else:\n"
+        "        sslContext = None\n"
+        "    req = Request(url, ovffile, headers, method=method)\n"
+        "    urlopen(req, context=sslContext)  # OVA binary uploaded without cert check\n"
+        "\n"
+        "  3 copies (MD5: 980d730fe544fd0da361b629affb4611):\n"
+        "    roles/esx/files/esx_deploy_ova.py\n"
+        "    roles/compute/files/esx_deploy_ova.py\n"
+        "    roles/upgradedeployvm/files/esx_deploy_ova.py"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17086,6 +17196,8 @@ for _f in [
     HX_F293,
     HX_F294,
     HX_F295,
+    HX_F296,
+    HX_F297,
 ]:
     FINDINGS[_f["id"]] = _f
 
