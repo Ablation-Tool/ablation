@@ -13102,6 +13102,135 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F230 = {
+    "id": "HX-F230",
+    "title": "nginx internal REST relay port 8997 bound to all interfaces injects root session token into all proxied requests",
+    "severity": "CRITICAL",
+    "component": "nginx / rest_internal.conf / restintport.cfg",
+    "description": (
+        "The nginx TLS virtual host generated from rest_internal.conf uses "
+        "'listen *:PORT ssl;' — a wildcard bind on all network interfaces. "
+        "The PORT placeholder is substituted with 8997 by genrestconf.sh at "
+        "system initialisation. Both proxy location blocks in the generated "
+        "config unconditionally set 'proxy_set_header X-RootSessionID SESSIONID;' "
+        "where SESSIONID is the root session token read from "
+        "/etc/hyperflex/secure/root_file.pub. "
+        "Any client that can reach TCP 8997 on the stCtlVM — whether local "
+        "or network-adjacent — has this header automatically injected by nginx "
+        "into every request forwarded to the Tomcat back-end on localhost:8000 "
+        "and the stMgr service on localhost:9333. "
+        "The SSOPrivilegeAuthImpl filter (doFilter offsets 49–65) validates "
+        "X-RootSessionID against the stored root session ID and, when it matches, "
+        "marks the request as authenticated; it then unconditionally calls "
+        "FilterChain.doFilter() regardless. "
+        "Because nginx supplies the header on behalf of the connecting client, "
+        "the client does not need to know or supply the token itself — it receives "
+        "implicit root-level API authentication purely by connecting to port 8997. "
+        "All API paths are covered: /rest, /aaa, /coreapi, /dataprotection, "
+        "/encryption, /volume, /supportservice, /upgrade, /upload, /stMgr, /stmgr."
+    ),
+    "evidence": {
+        "file_nginx_template": "rest_internal.conf",
+        "listen_directive": "listen *:PORT ssl;",
+        "port_file": "restintport.cfg",
+        "port_value": "PORT=8997",
+        "header_injection_block_1": "location ~ ^/(rest|aaa|coreapi|...) { proxy_set_header X-RootSessionID SESSIONID; }",
+        "header_injection_block_2": "location ~ ^/(stMgr|stmgr) { proxy_set_header X-RootSessionID SESSIONID; }",
+        "proxy_backend_rest": "proxy_pass http://localhost:8000;",
+        "proxy_backend_stmgr": "proxy_pass http://localhost:9333;",
+        "token_source": "SESSIONID substituted from /etc/hyperflex/secure/root_file.pub by genrestconf.sh",
+        "filter_class": "SSOPrivilegeAuthImpl.doFilter() offsets 49-65: validates X-RootSessionID, always calls chain",
+        "affected_paths": [
+            "/rest", "/aaa", "/coreapi", "/dataprotection/v1",
+            "/dataprotection", "/backupservice", "/encryption",
+            "/volume", "/securityservice", "/supportservice",
+            "/slservice", "/upgrade", "/upload", "/stMgr", "/stmgr",
+        ],
+    },
+    "cwe": ["CWE-284", "CWE-923"],
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cvss_score": 9.8,
+    "fix": (
+        "Change the listen directive to 'listen 127.0.0.1:8997 ssl;' so the "
+        "internal relay port is reachable only from localhost. "
+        "Alternatively, firewall port 8997 to block non-local access at the "
+        "host level. "
+        "The X-RootSessionID injection is intended for intra-host automation; "
+        "exposing it on the external interface removes authentication for all "
+        "REST API endpoints."
+    ),
+    "tags": [
+        "nginx", "wildcard-bind", "implicit-auth", "cwe-284", "cwe-923",
+        "rest-api", "port-8997", "root-session-token", "critical",
+        "unauthenticated-api-access",
+    ],
+}
+
+
+HX_F231 = {
+    "id": "HX-F231",
+    "title": "configure_ssh.py reads root session token from legacy /etc/springpath/ path divergent from active /etc/hyperflex/ path",
+    "severity": "MEDIUM",
+    "component": "ansible/library/configure_ssh.py",
+    "description": (
+        "The Ansible deployment module configure_ssh.py reads the root session "
+        "token from '/etc/springpath/secure/root_file.pub'. "
+        "The token writer, set_shared_key.sh, writes to "
+        "'/etc/hyperflex/secure/root_file.pub'. "
+        "The stCli transport layer (StTransportBase.get_local_root_session_id) "
+        "also reads from the /etc/hyperflex/ path. "
+        "If no symlink or compatibility bind exists between /etc/springpath/ and "
+        "/etc/hyperflex/, configure_ssh.py raises FileNotFoundError on startup "
+        "and exits before issuing the SSH enable/disable API call. "
+        "On an unpatched HyperFlex install where /etc/springpath/secure/ exists "
+        "as a legacy writable directory, a local attacker can create "
+        "/etc/springpath/secure/root_file.pub with an arbitrary value; "
+        "configure_ssh.py will then present that attacker-controlled string as "
+        "X-RootSessionID to port 8997. "
+        "If the attacker-controlled value matches the real root session token "
+        "(recoverable from /etc/hyperflex/secure/root_file.pub which is chmod 644, "
+        "see HX-F229), configure_ssh.py makes privileged API calls as admin. "
+        "This is distinct from HX-F229: the vector here is the Ansible path "
+        "divergence rather than direct token read, and it surfaces the hardcoded "
+        "privilege headers (X-LoggedInUser: admin, X-Scope: READ,MODIFY, "
+        "X-RequestInitiator: Internal) in configure_ssh.py."
+    ),
+    "evidence": {
+        "reader_path": "/etc/springpath/secure/root_file.pub",
+        "writer_path": "/etc/hyperflex/secure/root_file.pub",
+        "reader_file": "ansible/library/configure_ssh.py line 8",
+        "writer_file": "set_shared_key.sh (writes /etc/hyperflex/secure/root_file.pub)",
+        "stcli_reader": "stCli/StTransportBase.get_local_root_session_id() reads /etc/hyperflex/secure/root_file.pub",
+        "hardcoded_headers": {
+            "X-LoggedInUser": "admin",
+            "X-Scope": "READ,MODIFY",
+            "X-RequestInitiator": "Internal",
+        },
+        "target_endpoint": "https://localhost:8997/coreapi/v1/clusters/{uuid}/services/ssh?enable={}",
+    },
+    "cwe": ["CWE-706", "CWE-284"],
+    "cvss_vector": "AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 6.3,
+    "fix": (
+        "Update configure_ssh.py line 8 to read from "
+        "'/etc/hyperflex/secure/root_file.pub' to match the active token path. "
+        "If /etc/springpath/ legacy paths must be supported, add a symlink "
+        "at deploy time rather than duplicating path references across tools."
+    ),
+    "tags": [
+        "path-inconsistency", "legacy-path", "ansible", "cwe-706", "cwe-284",
+        "root-session-token", "privilege-escalation", "medium",
+    ],
+}
+
+
+for _f in [
+    HX_F230,
+    HX_F231,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
