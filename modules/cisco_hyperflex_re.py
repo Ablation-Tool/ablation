@@ -17153,6 +17153,72 @@ HX_F297 = {
 }
 
 
+HX_F298 = {
+    "id": "HX-F298",
+    "title": (
+        "SSL Monkey-Patch in 7 Additional Ansible ESX Upgrade/Deploy Scripts; "
+        "ssl.CERT_NONE and verify=False in EAM Removal and Compute Unregister Scripts"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/upgradepostrelinquishnode/files/ "
+        "(0005_remove_eam_ESX.py:L207/220/227/242/340/390, "
+        "0004_configure_iscsi_upgrade_ESX.py:L57, "
+        "0006_config_advanced_settings_vmx_ESX.py:L44); "
+        "roles/upgradenodeposthooks/files/ "
+        "(0004_unregister_compute_nodes_ESX.py:L124/220/252, "
+        "0005_configure_iscsi_upgrade_compute_ESX.py:L52, "
+        "0006_RestoreNFSAccessRules_ESX.py:L89/130); "
+        "ansible/enableSnapshotSchedule.py:L152"
+    ),
+    "description": (
+        "Seven additional Ansible ESX scripts across the upgradepostrelinquishnode, "
+        "upgradenodeposthooks, and ansible root roles disable TLS certificate validation. "
+        "All seven apply the ssl._create_default_https_context monkey-patch at script "
+        "initialization. "
+        "Two scripts apply additional explicit bypass mechanisms: "
+        "0005_remove_eam_ESX.py (ESXi Agents Manager removal during node relinquishment) "
+        "combines the monkey-patch with ssl.CERT_NONE at L340, disable_warnings at L390, "
+        "and verify=False in three distinct REST calls at L207, L220, and L227 for "
+        "vCenter MOB (Managed Object Browser) login, session management, and logout. "
+        "0004_unregister_compute_nodes_ESX.py similarly combines monkey-patch with "
+        "ssl.CERT_NONE at L220 and disable_warnings at L252. "
+        "0006_RestoreNFSAccessRules_ESX.py adds AutoAddPolicy SSH bypass at L89 in "
+        "addition to the monkey-patch. "
+        "enableSnapshotSchedule.py applies the monkey-patch to snapshot scheduling "
+        "API calls. "
+        "Together with HX-F295, these findings document the ssl monkey-patch across "
+        "14 Ansible ESX hook scripts covering the full upgrade and deployment lifecycle."
+    ),
+    "evidence": (
+        "  0005_remove_eam_ESX.py (upgradepostrelinquishnode — EAM removal):\n"
+        "    L207:  requests.get(url, auth=(username, password), verify=False)\n"
+        "    L220:  requests.post(url, ..., cookies=session, verify=False)\n"
+        "    L227:  requests.get('https://.../mob/logout', cookies=session, verify=False)\n"
+        "    L242:  ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    L340:  context.verify_mode = ssl.CERT_NONE\n"
+        "    L390:  urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n"
+        "\n"
+        "  0004_unregister_compute_nodes_ESX.py (upgradenodeposthooks):\n"
+        "    L124:  ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    L220:  context.verify_mode = ssl.CERT_NONE\n"
+        "    L252:  urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n"
+        "\n"
+        "  0006_RestoreNFSAccessRules_ESX.py (upgradenodeposthooks):\n"
+        "    L89:   ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "    L130:  ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  Remaining 4 scripts (single monkey-patch each):\n"
+        "    0006_config_advanced_settings_vmx_ESX.py:L44\n"
+        "    0004_configure_iscsi_upgrade_ESX.py:L57\n"
+        "    0005_configure_iscsi_upgrade_compute_ESX.py:L52\n"
+        "    enableSnapshotSchedule.py:L152"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17198,6 +17264,7 @@ for _f in [
     HX_F295,
     HX_F296,
     HX_F297,
+    HX_F298,
 ]:
     FINDINGS[_f["id"]] = _f
 
