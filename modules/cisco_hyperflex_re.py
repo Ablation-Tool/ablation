@@ -14461,6 +14461,61 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F253 = {
+    "id": "HX-F253",
+    "title": "Shell Injection via Unsanitized CLI Args in iSCSI Network Configuration Scripts",
+    "cwe": "CWE-78",
+    "severity": "MEDIUM",
+    "cvss": 6.3,
+    "component": (
+        "iscsi/opt/hyperflex/hx-iscsi/configureNetworking.py; "
+        "iscsi/opt/hyperflex/hx-iscsi/storageClientNetworkConfigure.py"
+    ),
+    "description": (
+        "Both iSCSI network configuration scripts accept --interface and --gateway CLI arguments "
+        "and interpolate them directly into shell commands executed with shell=True, with no "
+        "sanitization or validation. In configureNetworking.py: "
+        "command = 'fping -I %s %s' %(NetworkSetup.INTERFACE, NetworkSetup.GATEWAY). "
+        "In storageClientNetworkConfigure.py: "
+        "command = 'fping -I eth-iscsi1 %s' %(NetworkSetup.GATEWAY). "
+        "Both scripts also construct 'ip route add'/'ip route del' and interface configuration "
+        "commands from these same variables. Ansible invokes these scripts from network "
+        "configuration variables (iscsi_interface, gateway). An attacker able to influence "
+        "inventory variables during iSCSI network provisioning can inject shell metacharacters "
+        "to execute arbitrary commands on the stCtlVM."
+    ),
+    "evidence": (
+        "configureNetworking.py:\n"
+        "  NetworkSetup.INTERFACE = args['--interface']  # from sys.argv, no sanitization\n"
+        "  NetworkSetup.GATEWAY = args['--gateway']\n"
+        "  command = 'fping -I %s %s' %(NetworkSetup.INTERFACE, NetworkSetup.GATEWAY)\n"
+        "  subprocess.call(command, shell=True)  # line 177\n\n"
+        "storageClientNetworkConfigure.py:\n"
+        "  NetworkSetup.GATEWAY = args['--gateway']  # from sys.argv, no sanitization\n"
+        "  command = 'fping -I eth-iscsi1 %s' %(NetworkSetup.GATEWAY)\n"
+        "  subprocess.call(command, shell=True)  # line 142/154"
+    ),
+    "reproduction": (
+        "python configureNetworking.py --interface eth-iscsi1 --gateway '192.168.1.1; id>/tmp/pwned'. "
+        "The fping command becomes 'fping -I eth-iscsi1 192.168.1.1; id>/tmp/pwned' and "
+        "the second command executes. In Ansible context, set iscsi_gateway variable to "
+        "the injection payload."
+    ),
+    "remediation": (
+        "Pass interface and gateway as list elements to subprocess: "
+        "subprocess.call(['fping', '-I', NetworkSetup.INTERFACE, NetworkSetup.GATEWAY]). "
+        "Validate that interface matches a known interface pattern ([a-z0-9-]+) "
+        "and gateway matches an IP address pattern before use."
+    ),
+    "references": ["CWE-78"],
+}
+
+for _f in [
+    HX_F253,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
