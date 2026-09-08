@@ -17606,6 +17606,195 @@ HX_F305 = {
 }
 
 
+HX_F306 = {
+    "id": "HX-F306",
+    "title": (
+        "Root and Admin Credentials Transmitted in Cleartext Over HTTP to "
+        "/rest/appliances Endpoint in Three Cluster Utility Scripts"
+    ),
+    "cwe": "CWE-319",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/hx-scripts/support.py:L154-157; "
+        "misc/usr/share/hyperflex/storfs-misc/hx-scripts/check_vswitch.py:L394-397; "
+        "misc/usr/share/hyperflex/storfs-misc/hx-scripts/whitelist.py:L13-16"
+    ),
+    "description": (
+        "Three hx-scripts cluster utility scripts submit root or admin credentials via "
+        "HTTP Basic Authentication to the HyperFlex controller REST API, transmitting "
+        "credentials in cleartext on the network. "
+        "support.py defines admin_user = 'root' at L26 and sends root + password via "
+        "HTTP Basic Auth to http://{clusterIp}/rest/appliances at L156-157. "
+        "check_vswitch.py sends auth=('admin', password) to "
+        "http://{clusterIp}/rest/appliances at L396-397. "
+        "whitelist.py defines admin_user = 'root' at L10 and sends root + password to "
+        "http://{clusterIp}/rest/appliances at L15-16. "
+        "All three scripts call the same /rest/appliances endpoint, which is accessed "
+        "via HTTP rather than HTTPS, making the HTTP Basic Auth header (base64-encoded "
+        "credentials) visible to any network observer on the management VLAN. "
+        "Additionally, support.py disables TLS validation for the external support bundle "
+        "upload service at https://upload.hyperflex.io and at a hardcoded external IP "
+        "38.140.50.205 (L296-301), both with verify=False."
+    ),
+    "evidence": (
+        "  support.py L26:\n"
+        "    admin_user = 'root'\n"
+        "  support.py L154-157:\n"
+        "    def getControllers(clusterIp, password):\n"
+        "        r = requests.get(\"http://{}/rest/appliances\".format(clusterIp),\n"
+        "                         auth=(admin_user, password), verify=False)\n"
+        "\n"
+        "  support.py L296-301:\n"
+        "    url = \"https://upload.hyperflex.io/admin/api2/ping\"\n"
+        "    r = requests.get(url, verify=False)\n"
+        "    url = \"https://38.140.50.205/admin/api2/ping\"\n"
+        "    r = requests.get(url, verify=False)\n"
+        "\n"
+        "  check_vswitch.py L394-397:\n"
+        "    def getControllers(clusterIp, password):\n"
+        "        r = requests.get(\"http://{}/rest/appliances\".format(clusterIp),\n"
+        "                         auth=('admin', password), verify=False)\n"
+        "\n"
+        "  whitelist.py L10, L13-16:\n"
+        "    admin_user = 'root'\n"
+        "    def getDisks(clusterIp, password):\n"
+        "        r = requests.get(\"http://{}/rest/appliances\".format(clusterIp),\n"
+        "                         auth=(admin_user, password), verify=False)"
+    ),
+}
+
+HX_F307 = {
+    "id": "HX-F307",
+    "title": (
+        "TLS Certificate Validation Disabled Across 8 hx-scripts Cluster Utility Scripts "
+        "Including Both STIG Enforcement Scripts, Post-Install, and Node Replace"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/hx-scripts/ "
+        "(stig_security_settings.py:L21/26-32/364, "
+        "stig_security_settings_hx.py:L21/29-35/476, "
+        "post_install.py:L74-80/83/700, "
+        "node_replace.py:L23/39-45/182, "
+        "esx_util.py:L27/41-47/247, "
+        "iscsiVolumeAccessCheck.py:L36/41-42, "
+        "install_vc_plugin.py:L26/348/386/531, "
+        "nginxCertManager.py:L110)"
+    ),
+    "description": (
+        "Eight hx-scripts cluster utility scripts disable TLS certificate validation "
+        "across cluster management, STIG enforcement, node operations, and certificate "
+        "management functions. "
+        "stig_security_settings.py and stig_security_settings_hx.py — the two HyperFlex "
+        "STIG compliance enforcement scripts — each apply all three bypass patterns: "
+        "requests.packages.urllib3.disable_warnings() at L21, the "
+        "ssl._create_default_https_context monkey-patch at L26-32 (stig) / L29-35 (hx), "
+        "and paramiko.AutoAddPolicy() at L364 (stig) / L476 (hx). Both STIG enforcement "
+        "scripts cannot verify the TLS identity of the ESX hosts they are hardening. "
+        "post_install.py applies the monkey-patch (L74-80), disable_warnings (L83), and "
+        "verify=False with admin credentials (L700). "
+        "node_replace.py applies all three bypass patterns and uses verify=False with "
+        "admin credentials at L182. "
+        "esx_util.py applies all three bypass patterns and uses verify=False with admin "
+        "credentials at L247. "
+        "iscsiVolumeAccessCheck.py applies the monkey-patch at L36-42. "
+        "install_vc_plugin.py calls disable_warnings at L26, AutoAddPolicy at L348, "
+        "verify=False at L386, and ssl._create_unverified_context() directly at L531 "
+        "for vCenter SmartConnect during vCenter plugin installation. "
+        "nginxCertManager.py passes verify=False to all REST calls that manage nginx "
+        "TLS certificates at L110."
+    ),
+    "evidence": (
+        "  hx-scripts/stig_security_settings.py L21, L26-32, L364:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  hx-scripts/stig_security_settings_hx.py L21, L29-35, L476:\n"
+        "    (identical patterns to stig_security_settings.py)\n"
+        "\n"
+        "  hx-scripts/post_install.py L74-80, L83, L700:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)\n"
+        "    requests.get(url, auth=(admin_user, password), verify=False)\n"
+        "\n"
+        "  hx-scripts/node_replace.py L23, L39-45, L182:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    requests.get(url, auth=(admin_user, password), verify=False)\n"
+        "\n"
+        "  hx-scripts/esx_util.py L27, L41-47, L247:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "    requests.get(url, auth=(admin_user, password), verify=False)\n"
+        "\n"
+        "  hx-scripts/iscsiVolumeAccessCheck.py L36-42:\n"
+        "    _create_unverified_https_context = ssl._create_unverified_context\n"
+        "    ssl._create_default_https_context = _create_unverified_https_context\n"
+        "\n"
+        "  hx-scripts/install_vc_plugin.py L26, L348, L386, L531:\n"
+        "    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)\n"
+        "    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "    requests.get(url, auth=('admin', admin_pass), verify=False)\n"
+        "    context = ssl._create_unverified_context()\n"
+        "    si = SmartConnect(host=VCENTER, ..., sslContext=context)\n"
+        "\n"
+        "  hx-scripts/nginxCertManager.py L110:\n"
+        "    resp = restFn(url=restUrl, data=data, auth=auth, headers=headers, verify=False)"
+    ),
+}
+
+HX_F308 = {
+    "id": "HX-F308",
+    "title": (
+        "TLS Certificate Validation Disabled in storfs-misc Top-Level Utility Scripts "
+        "Including ZK Database Lister, NAS Mount Cleanup, and PCI Passthrough"
+    ),
+    "cwe": "CWE-295",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/ "
+        "(uninstall_cluster.py:L64, listzkdb.py:L41, "
+        "cleanNasStaleMounts.py:L20, pci_passthru.py:L786-787)"
+    ),
+    "description": (
+        "Four top-level storfs-misc utility scripts disable SSH host key verification "
+        "or TLS certificate validation. "
+        "uninstall_cluster.py (another copy of the cluster uninstall script, separate "
+        "from the ansible/uninstall_cluster.py and library/uninstall_cluster.py copies) "
+        "uses AutoAddPolicy at L64 for SSH connections to storage nodes. "
+        "listzkdb.py (ZooKeeper database inspection utility) uses AutoAddPolicy at L41 "
+        "for SSH connections — host key verification disabled for a tool that reads "
+        "cluster-wide ZooKeeper data including security configuration paths. "
+        "cleanNasStaleMounts.py (NAS stale mount cleanup utility) uses AutoAddPolicy "
+        "at L20 for SSH connections to storage nodes. "
+        "pci_passthru.py (PCI passthrough device configuration) applies the "
+        "ssl._create_default_https_context monkey-patch at L786-787 before connecting "
+        "to vSphere APIs."
+    ),
+    "evidence": (
+        "  storfs-misc/uninstall_cluster.py L64:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  storfs-misc/listzkdb.py L41:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  storfs-misc/cleanNasStaleMounts.py L20:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  storfs-misc/pci_passthru.py L786-787:\n"
+        "    ssl._create_default_https_context = \\\n"
+        "            ssl._create_unverified_context"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17659,6 +17848,9 @@ for _f in [
     HX_F303,
     HX_F304,
     HX_F305,
+    HX_F306,
+    HX_F307,
+    HX_F308,
 ]:
     FINDINGS[_f["id"]] = _f
 
