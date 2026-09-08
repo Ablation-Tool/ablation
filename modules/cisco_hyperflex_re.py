@@ -16451,6 +16451,91 @@ HX_F286 = {
     "references": ["CWE-295"],
 }
 
+HX_F287 = {
+    "id": "HX-F287",
+    "title": (
+        "Root Session Key File World-Readable (chmod 644) and Derived from "
+        "Weak 16-bit $RANDOM Entropy (set_shared_key.sh)"
+    ),
+    "cwe": "CWE-732",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/set_shared_key.sh (L11-L13) — "
+        "/etc/hyperflex/secure/root_file.pub (stSSOMgr shared root session key)"
+    ),
+    "description": (
+        "set_shared_key.sh generates the HyperFlex root session key and stores it "
+        "at /etc/hyperflex/secure/root_file.pub with world-readable permissions "
+        "(chmod 644). The key is derived as: sharedkey=$nodeid-$RANDOM, where "
+        "$nodeid is the product UUID (a fixed, device-specific identifier) and "
+        "$RANDOM is bash's 16-bit PRNG producing at most 65,536 distinct values. "
+        "The file is used by stSSOMgr and consumed by stCli, swagger_api_client.py, "
+        "nginxCertManager.py, commonFunctions.py (factory, misc, deploy, validation), "
+        "and all management scripts that set X-RootSessionID: <key> to authenticate "
+        "to the HyperFlex REST management API with full READ,MODIFY scope as admin. "
+        "Two independent vulnerabilities exist: "
+        "(1) CWE-732: Any local user or process on the HyperFlex node can read "
+        "root_file.pub (mode 644) and obtain the root session key, then make "
+        "authenticated REST API calls as admin. "
+        "(2) CWE-338: Even without local file access, an attacker who knows the "
+        "product UUID (available via SNMP, Intersight, or other management channels) "
+        "can brute-force the 65,536-entry $RANDOM space to reconstruct the key. "
+        "This collapses admin-level REST API authentication to a 16-bit brute-force "
+        "for network-adjacent attackers with any knowledge of the device UUID."
+    ),
+    "evidence": (
+        "  set_shared_key.sh:\n"
+        "\n"
+        "  dest_folder=${1:-'/etc/'}\n"
+        "  nodeid=`cat /opt/hyperflex/etc/product_uuid`\n"
+        "  sharedkey=$nodeid-$RANDOM        # $RANDOM: 0-65535 (16 bits)\n"
+        "  echo $sharedkey > $dest_folder/root_file.pub\n"
+        "  chmod 644 $dest_folder/root_file.pub   # world-readable\n"
+        "\n"
+        "  Consumers (use X-RootSessionID for admin auth):\n"
+        "    stcli-egg/stCli/commonFunctions.py:38\n"
+        "    stcli-egg/stCli/StTransportBase.py\n"
+        "    factory/utils/commonFunctions.py\n"
+        "    misc/hx-scripts/nginxCertManager.py\n"
+        "    misc/update-inventory.py\n"
+        "    misc/livemigration.py\n"
+        "    misc/setup_kerberos.py\n"
+        "    misc/validation/commonFunctions.py\n"
+        "    mgmt/restClientModule/swagger_api_client.py\n"
+        "    deploy/ansible/commonFunctions.py\n"
+        "    stcli-egg/stCli/SLEvaluationJob.py\n"
+        "\n"
+        "  Auth header constructed by consumers:\n"
+        "    headers = {'X-RootSessionID': rootSessionId,\n"
+        "               'X-LoggedInUser': 'admin',\n"
+        "               'X-Scope': 'READ,MODIFY', ...}\n"
+        "\n"
+        "  Key brute-force space: 65,536 (2^16 $RANDOM values)\n"
+        "  Key format: <product_uuid>-<0..65535>"
+    ),
+    "reproduction": (
+        "Local read (CWE-732): cat /etc/hyperflex/secure/root_file.pub. "
+        "Submit X-RootSessionID: <key> header to any management API endpoint "
+        "with X-LoggedInUser: admin, X-Scope: READ,MODIFY — receive admin-level response. "
+        "Remote brute-force (CWE-338): obtain product UUID from any management channel. "
+        "Iterate sharedkey = UUID + '-' + str(n) for n in range(65536). "
+        "Test each against /rest/v1/clusters with X-RootSessionID header. "
+        "Match on 200 response."
+    ),
+    "remediation": (
+        "1. Change chmod 644 to chmod 600 (owner-readable only, root-owned). "
+        "2. Replace $RANDOM with a cryptographically secure random source: "
+        "sharedkey=$(openssl rand -base64 32) or "
+        "sharedkey=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))'). "
+        "3. Do not include the deterministic product UUID in the key derivation. "
+        "4. Rotate all deployed root_file.pub values after fix deployment. "
+        "5. Consider replacing the shared-key-in-file pattern with a proper "
+        "service-account token issued by stSSOMgr with a short TTL."
+    ),
+    "references": ["CWE-732", "CWE-338", "CWE-330"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16485,6 +16570,7 @@ for _f in [
     HX_F284,
     HX_F285,
     HX_F286,
+    HX_F287,
 ]:
     FINDINGS[_f["id"]] = _f
 
