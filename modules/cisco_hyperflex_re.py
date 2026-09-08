@@ -19,7 +19,8 @@ Extraction method:
 Default credentials (HX Connect REST API):
   POST /rest/v1/tokens {username, password} -> hx-auth-token
   Brute: admin/admin, admin/C1sco12345, admin/Cisco123, admin/HXpassword1!,
-         hxadmin/C1sco12345, admin/Password1!, root/password1!, root/Cisco123
+         hxadmin/C1sco12345, admin/Password1!, root/password1!, root/Cisco123,
+         root/springpath, spadmin/springpath (IPMI: HX-F254)
 
 Unauthenticated endpoints (HX Connect <4.5):
   GET /rest/v1/cluster  — cluster UUID, version, node count
