@@ -15638,6 +15638,164 @@ HX_F273 = {
     "references": ["CWE-297"],
 }
 
+HX_F274 = {
+    "id": "HX-F274",
+    "title": (
+        "Global Python SSL Monkey-Patch in storfs-factory Ansible Provisioning Modules "
+        "(3 Files: configureEsx, factory_datastore, reserveMem)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/ansible/library/configureEsx.py (L68), "
+        "factory/opt/hyperflex/storfs-factory/ansible/library/factory_datastore.py (L229), "
+        "factory/opt/hyperflex/storfs-factory/ansible/library/reserveMem.py (L62)"
+    ),
+    "description": (
+        "Three Ansible module files in the storfs-factory provisioning package apply the "
+        "ssl._create_default_https_context = ssl._create_unverified_context monkey-patch, "
+        "disabling TLS certificate validation process-wide before connecting to ESX hosts "
+        "via the VMware vSphere API (pyVmomi). The provisioning phase is particularly "
+        "sensitive — configureEsx.py configures firewall and power policies on ESX nodes, "
+        "factory_datastore.py creates factory datastores and reads boot disk configurations, "
+        "and reserveMem.py allocates reserved memory. An attacker on the provisioning network "
+        "can MITM any ESX API call during factory deployment, intercepting ESX credentials "
+        "or injecting arbitrary vSphere API responses to alter provisioning outcomes "
+        "(e.g., misconfigure firewall rules, manipulate datastore targets). "
+        "This is the same monkey-patch pattern found in stcli-egg/StTransportBase.py (HX-F267) "
+        "and appliance/config-ctlvm.py (HX-F267), now confirmed in the factory provisioning layer."
+    ),
+    "evidence": (
+        "Bytecode-extracted pattern (identical across all three files):\n"
+        "\n"
+        "  configureEsx.py L68:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (inside main(), before ConnectVimHost() — disables cert validation for ESX API)\n"
+        "\n"
+        "  factory_datastore.py L229:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (inside main(), before SmartConnect to ESX for datastore operations)\n"
+        "\n"
+        "  reserveMem.py L62:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (inside main(), before ESX API call for memory reservation config)\n"
+        "\n"
+        "  All three follow the 'try/except: pass' pattern — the bypass is silent even "
+        "if ssl module is unavailable, with no fallback to verified mode."
+    ),
+    "reproduction": (
+        "During factory provisioning, ARP-poison the provisioning network between "
+        "the installer and ESX hosts. Present a forged ESX HTTPS certificate. "
+        "configureEsx, factory_datastore, and reserveMem will accept it without error "
+        "and proceed with provisioning against the attacker-controlled endpoint."
+    ),
+    "remediation": (
+        "Remove all three ssl._create_default_https_context assignments. "
+        "Use ssl.create_default_context() with verify_mode=ssl.CERT_REQUIRED and "
+        "the ESX host's trusted CA. For pyVmomi, set sslContext explicitly in SmartConnect. "
+        "This is the same root cause as HX-F267; apply the same fix pattern."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F275 = {
+    "id": "HX-F275",
+    "title": (
+        "Paramiko AutoAddPolicy in storfs-factory Ansible Module "
+        "factory_datastore.py — SSH Host Key Not Verified During Provisioning"
+    ),
+    "cwe": "CWE-322",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/ansible/library/factory_datastore.py (L131)"
+    ),
+    "description": (
+        "The factory_datastore Ansible module calls paramiko.AutoAddPolicy() when "
+        "establishing SSH connections to ESX hosts to retrieve boot disk configurations "
+        "(via 'localcli --formatter=json storage core device list'). "
+        "AutoAddPolicy accepts any host key without verification. "
+        "During initial factory provisioning — when no prior host key record exists — "
+        "this is exactly when host identity verification is most critical, "
+        "as the provisioner has no out-of-band baseline to compare against. "
+        "An attacker on the provisioning network can impersonate an ESX host, "
+        "intercept the SSH session, and return falsified boot disk data to redirect "
+        "factory datastore creation to attacker-controlled storage targets."
+    ),
+    "evidence": (
+        "  factory_datastore.py L128-132:\n"
+        "\n"
+        "    def getBootDisk(host, user, pwd):\n"
+        "        sshclient = paramiko.SSHClient()\n"
+        "        sshclient.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "        sshclient.connect(host, username=user, password=pwd, allow_agent=False)\n"
+        "        stdin, stdout, stderr = sshclient.exec_command(\n"
+        "            'localcli --formatter=json storage core device list')"
+    ),
+    "reproduction": (
+        "During factory provisioning, ARP-poison the management network between "
+        "the provisioning system and an ESX node. Present a server offering any SSH host key. "
+        "AutoAddPolicy will accept it; the SSH connection proceeds and returns "
+        "attacker-controlled boot disk JSON output without error."
+    ),
+    "remediation": (
+        "Replace AutoAddPolicy with RejectPolicy. Pre-stage ESX host keys in a "
+        "known_hosts file generated during initial bare-metal bootstrap (before "
+        "factory provisioning runs). Pass the known_hosts path to "
+        "sshclient.load_host_keys() and use RejectPolicy to reject mismatches. "
+        "This is the same root cause as HX-F269."
+    ),
+    "references": ["CWE-322"],
+}
+
+HX_F276 = {
+    "id": "HX-F276",
+    "title": (
+        "TLS Certificate Verification Disabled (verify=False) in storfs-stretched "
+        "switchToArbitrator.py Cluster Failover Script"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "usr/share/hyperflex/storfs-stretched/switchToArbitrator.py (L134)"
+    ),
+    "description": (
+        "The switchToArbitrator.py script, which executes cluster arbitrator failover "
+        "in stretched HyperFlex deployments, passes verify=False to all REST calls "
+        "in its restWithRetry() helper function. This script contacts the HyperFlex "
+        "management REST API to coordinate witness/arbitrator node transitions — "
+        "a high-privilege operation that reconfigures cluster quorum. "
+        "Disabling TLS verification during arbitrator failover means the REST "
+        "endpoint identity is never confirmed; an attacker on the stretched network "
+        "can intercept failover commands or inject fabricated REST responses to "
+        "redirect quorum transitions to an attacker-controlled node."
+    ),
+    "evidence": (
+        "  switchToArbitrator.py L130-135:\n"
+        "\n"
+        "    def restWithRetry(restFn, restUrl, data, auth, headers,\n"
+        "                      retryCount, retryInterval):\n"
+        "        count = 0\n"
+        "        while count < retryCount:\n"
+        "            try:\n"
+        "                resp = restFn(url=restUrl, data=data, auth=auth,\n"
+        "                              headers=headers, verify=False)"
+    ),
+    "reproduction": (
+        "During a stretched-cluster arbitrator switchover event, intercept REST traffic "
+        "from switchToArbitrator.py. Present a forged certificate. "
+        "The script accepts it and proceeds with failover against the attacker-controlled endpoint."
+    ),
+    "remediation": (
+        "Replace verify=False with verify=<ca_bundle_path> pointing to the "
+        "HyperFlex cluster CA bundle. This is the same root cause as HX-F263 "
+        "through HX-F271 (systemic verify=False in management scripts)."
+    ),
+    "references": ["CWE-295"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15659,6 +15817,9 @@ for _f in [
     HX_F271,
     HX_F272,
     HX_F273,
+    HX_F274,
+    HX_F275,
+    HX_F276,
 ]:
     FINDINGS[_f["id"]] = _f
 
