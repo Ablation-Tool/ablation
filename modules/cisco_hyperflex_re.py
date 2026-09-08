@@ -15451,6 +15451,72 @@ HX_F270 = {
     "references": ["CWE-312", "CWE-215"],
 }
 
+HX_F271 = {
+    "id": "HX-F271",
+    "title": "Systemic TLS Verification Bypass (verify=False) Across 13 storfs-misc Management Scripts (60+ Instances)",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "usr/share/hyperflex/storfs-misc/hx-scripts/ (8 files), "
+        "usr/share/hyperflex/storfs-misc/validation/ (4 files), "
+        "usr/share/hyperflex/storfs-misc/upgrade-hooks/ (1 file)"
+    ),
+    "description": (
+        "Across 13 Python management scripts in the storfs-misc package, "
+        "requests library calls universally pass verify=False, disabling TLS "
+        "certificate verification for all HTTPS connections to the HyperFlex "
+        "management REST API and external endpoints. The pattern is systemic — "
+        "over 60 individual call sites in post-install, support, upgrade, "
+        "cluster-node-replace, validation, and certificate management scripts. "
+        "Particularly significant: nginxCertManager.py passes verify=False when "
+        "uploading newly signed certificates to the REST endpoint, meaning the "
+        "certificate rotation workflow — which exists to improve TLS security — "
+        "is itself susceptible to TLS MITM during the upload. Scripts that use "
+        "admin credentials for REST authentication (support.py, post_install.py, "
+        "node_replace.py) expose those credentials to interception."
+    ),
+    "evidence": (
+        "Confirmed files and call counts (grep for verify=False):\n"
+        "  hx-scripts/support.py                   — 16 instances\n"
+        "  hx-scripts/post_install.py               — 10 instances\n"
+        "  hx-scripts/check_vswitch.py              — 7 instances\n"
+        "  hx-scripts/node_replace.py               — 5 instances\n"
+        "  hx-scripts/whitelist.py                  — 3 instances\n"
+        "  hx-scripts/nginxCertManager.py           — 1 instance (cert upload path)\n"
+        "  hx-scripts/esx_util.py                   — 1 instance\n"
+        "  hx-scripts/install_vc_plugin.py          — 1 instance\n"
+        "  validation/springpath_lib_validate_cluster_node_model.py — 3 instances\n"
+        "  validation/commonFunctions.py            — 1 instance\n"
+        "  validation/springpath_validation_validator.py — 1 instance\n"
+        "  validation/springpath_vmware.py          — 2 instances\n"
+        "  upgrade-hooks/.../0005_remove_eam_ESX.py — 3 instances\n"
+        "\n"
+        "Representative pattern (post_install.py):\n"
+        "  r = requests.get('https://' + mgmtIp, verify=False)\n"
+        "  r = requests.post(url, auth=(admin_user, password), verify=False)\n"
+        "\n"
+        "Certificate manager irony (nginxCertManager.py L110):\n"
+        "  resp = restFn(url=restUrl, data=data, auth=auth, headers=headers,\n"
+        "                verify=False)  # cert upload with TLS bypass"
+    ),
+    "reproduction": (
+        "MitM the management network during any HyperFlex management operation "
+        "(post-install, node replace, validation, cert rotation). Present a "
+        "forged certificate. Any of the 13 affected scripts will accept it and "
+        "transmit admin credentials or management tokens without error."
+    ),
+    "remediation": (
+        "Audit all requests calls in storfs-misc and replace verify=False with "
+        "verify=<ca_bundle_path> pointing to the cluster CA. Centralize TLS "
+        "configuration in a shared utility that enforces certificate verification "
+        "by default — this prevents future regressions. The cluster CA bundle "
+        "is available at /etc/hyperflex/secure/hyperflex_keystore.jceks "
+        "or the PEM equivalent."
+    ),
+    "references": ["CWE-295"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15469,6 +15535,7 @@ for _f in [
     HX_F268,
     HX_F269,
     HX_F270,
+    HX_F271,
 ]:
     FINDINGS[_f["id"]] = _f
 
