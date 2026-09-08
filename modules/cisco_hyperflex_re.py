@@ -15641,8 +15641,8 @@ HX_F273 = {
 HX_F274 = {
     "id": "HX-F274",
     "title": (
-        "Global Python SSL Monkey-Patch in storfs-factory Ansible Provisioning Modules "
-        "(3 Files: configureEsx, factory_datastore, reserveMem)"
+        "Global Python SSL Monkey-Patch in storfs-factory Provisioning Modules "
+        "(4 Files: configureEsx, factory_datastore, reserveMem, pci_passthru)"
     ),
     "cwe": "CWE-295",
     "severity": "HIGH",
@@ -15650,24 +15650,27 @@ HX_F274 = {
     "component": (
         "factory/opt/hyperflex/storfs-factory/ansible/library/configureEsx.py (L68), "
         "factory/opt/hyperflex/storfs-factory/ansible/library/factory_datastore.py (L229), "
-        "factory/opt/hyperflex/storfs-factory/ansible/library/reserveMem.py (L62)"
+        "factory/opt/hyperflex/storfs-factory/ansible/library/reserveMem.py (L62), "
+        "factory/opt/hyperflex/storfs-factory/utils/pci_passthru.py (L786)"
     ),
     "description": (
-        "Three Ansible module files in the storfs-factory provisioning package apply the "
+        "Four storfs-factory provisioning module files apply the "
         "ssl._create_default_https_context = ssl._create_unverified_context monkey-patch, "
         "disabling TLS certificate validation process-wide before connecting to ESX hosts "
         "via the VMware vSphere API (pyVmomi). The provisioning phase is particularly "
         "sensitive — configureEsx.py configures firewall and power policies on ESX nodes, "
         "factory_datastore.py creates factory datastores and reads boot disk configurations, "
-        "and reserveMem.py allocates reserved memory. An attacker on the provisioning network "
+        "reserveMem.py allocates reserved memory, and pci_passthru.py configures PCI "
+        "passthrough devices for ESX hosts. An attacker on the provisioning network "
         "can MITM any ESX API call during factory deployment, intercepting ESX credentials "
         "or injecting arbitrary vSphere API responses to alter provisioning outcomes "
-        "(e.g., misconfigure firewall rules, manipulate datastore targets). "
-        "This is the same monkey-patch pattern found in stcli-egg/StTransportBase.py (HX-F267) "
-        "and appliance/config-ctlvm.py (HX-F267), now confirmed in the factory provisioning layer."
+        "(e.g., misconfigure firewall rules, manipulate datastore targets, assign wrong PCI "
+        "passthrough devices). This is the same monkey-patch pattern found in "
+        "stcli-egg/StTransportBase.py (HX-F267) and appliance/config-ctlvm.py (HX-F267), "
+        "now confirmed in four factory provisioning modules."
     ),
     "evidence": (
-        "Bytecode-extracted pattern (identical across all three files):\n"
+        "Pattern identical across all four files:\n"
         "\n"
         "  configureEsx.py L68:\n"
         "    ssl._create_default_https_context = ssl._create_unverified_context\n"
@@ -15681,7 +15684,11 @@ HX_F274 = {
         "    ssl._create_default_https_context = ssl._create_unverified_context\n"
         "    (inside main(), before ESX API call for memory reservation config)\n"
         "\n"
-        "  All three follow the 'try/except: pass' pattern — the bypass is silent even "
+        "  pci_passthru.py L786:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (inside main(), before connect.Connect() for PCI passthrough config)\n"
+        "\n"
+        "  All four follow the 'try/except: pass' pattern — the bypass is silent even "
         "if ssl module is unavailable, with no fallback to verified mode."
     ),
     "reproduction": (
@@ -15796,6 +15803,69 @@ HX_F276 = {
     "references": ["CWE-295"],
 }
 
+HX_F277 = {
+    "id": "HX-F277",
+    "title": (
+        "ovftool Invoked with --noSSLVerify and --disableVerification During "
+        "Controller VM Deployment (deployOva.py) — TLS and OVF Integrity Both Bypassed"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/ansible/library/deployOva.py (L71-73) — "
+        "ovftool called with --noSSLVerify --disableVerification during initial "
+        "HyperFlex controller VM OVA deployment to ESX hosts"
+    ),
+    "description": (
+        "The deployOva Ansible module invokes /usr/bin/ovftool with two bypass flags: "
+        "--noSSLVerify disables TLS certificate validation for the ESX vSphere connection, "
+        "and --disableVerification disables OVF manifest signature verification for the "
+        "OVA being deployed. Combined, these flags mean that: "
+        "(1) the ESX host is not authenticated — an on-path attacker can impersonate the "
+        "target ESX host and intercept or redirect the deployment; and "
+        "(2) the OVA package integrity is not verified — a tampered or unsigned OVA "
+        "containing malicious content will be accepted and deployed as the HyperFlex "
+        "controller VM without any integrity signal. "
+        "This is the initial controller VM deployment step — the first privileged code "
+        "to run on a new node. Compromise at this stage produces a persistently backdoored "
+        "HyperFlex node that retains the backdoor through normal cluster operation."
+    ),
+    "evidence": (
+        "  deployOva.py L71-73:\n"
+        "\n"
+        "    cmd = (\n"
+        "        \"/usr/bin/ovftool --allowExtraConfig --acceptAllEulas \"\n"
+        "        \"--disableVerification --noSSLVerify \"\n"
+        "        \"--datastore='\" + datastore + \"' \"\n"
+        "        \"--network=\\\"\" + network + \"\\\" \"\n"
+        "        \"--name=\" + name + \" \" + ovalocation + \" \"\n"
+        "        \"vi:\\/\\/\" + esxUserName + \":\" + esxEncodedPassword + \"@\" + hostname\n"
+        "    )\n"
+        "    cmd = subprocess.Popen(shlex.split(cmd), shell=False, ...)\n"
+        "\n"
+        "  --disableVerification: skips OVF manifest certificate/signature check\n"
+        "  --noSSLVerify: disables TLS validation for the vi:// connection to ESX\n"
+        "\n"
+        "  OVA source paths (group_vars/all/main.yml):\n"
+        "    springpath_stctlvm_mfg: /opt/hyperflex/storfs-factory-stctlvm/stCtlVM.ova\n"
+        "    springpath_stctlvm_cust: /opt/hyperflex/packages/stCtlVM.ova"
+    ),
+    "reproduction": (
+        "During factory provisioning, ARP-poison the provisioning network to intercept "
+        "the ovftool vi:// connection from the installer to the ESX target. "
+        "Present a forged ESX certificate and accept the deployment. "
+        "The installer proceeds with no TLS error and no OVF integrity check."
+    ),
+    "remediation": (
+        "Remove --noSSLVerify and --disableVerification from the ovftool invocation. "
+        "Configure ovftool to use the ESX trusted CA certificate (--sslCertFile). "
+        "Sign the stCtlVM.ova package so ovftool can validate the manifest signature "
+        "before deployment."
+    ),
+    "references": ["CWE-295", "CWE-347"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15820,6 +15890,7 @@ for _f in [
     HX_F274,
     HX_F275,
     HX_F276,
+    HX_F277,
 ]:
     FINDINGS[_f["id"]] = _f
 
