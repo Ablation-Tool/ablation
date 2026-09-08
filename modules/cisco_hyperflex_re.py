@@ -14226,6 +14226,60 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
+HX_F249 = {
+    "id": "HX-F249",
+    "title": "Global JVM SSL Bypass via trust-all TrustManager in HyperFlex Upgrade Service",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": "upgrade-war/WEB-INF/classes/com/springpath/hxupgrade/service/UpgradeSvcAccess",
+    "description": (
+        "UpgradeSvcAccess.openClientConnection() calls trustAll() before opening "
+        "any Thrift/HTTPS transport. trustAll() installs a no-op X509TrustManager "
+        "(checkServerTrusted returns immediately without checking) and a no-op "
+        "HostnameVerifier (verify() always returns true) as JVM-wide defaults via "
+        "HttpsURLConnection.setDefaultSSLSocketFactory() and "
+        "HttpsURLConnection.setDefaultHostnameVerifier(). Because these are global "
+        "JVM statics, every subsequent HTTPS request made anywhere in the upgrade "
+        "service process — including firmware download, catalog validation, and "
+        "inter-service communication — is rendered vulnerable to MITM attack. "
+        "A network-positioned attacker can intercept upgrade traffic and substitute "
+        "malicious firmware images or manipulate cluster state during the upgrade workflow."
+    ),
+    "evidence": (
+        "upgrade-war/WEB-INF/classes/com/springpath/hxupgrade/service/"
+        "UpgradeSvcAccess.class openClientConnection():\n"
+        "  11: invokestatic #154 // Method trustAll:()V\n\n"
+        "trustAll() body:\n"
+        "  new UpgradeSvcAccess$1  // X509TrustManager: checkServerTrusted() { return; }\n"
+        "  SSLContext.init(null, [trustManager], new SecureRandom())\n"
+        "  HttpsURLConnection.setDefaultSSLSocketFactory(ctx.getSocketFactory())\n"
+        "  new UpgradeSvcAccess$2  // HostnameVerifier: verify() { return true; }\n"
+        "  HttpsURLConnection.setDefaultHostnameVerifier(hostnameVerifier)\n\n"
+        "UpgradeSvcAccess$1.checkServerTrusted: Code: 0: return\n"
+        "UpgradeSvcAccess$2.verify: Code: 0: iconst_1; 1: ireturn"
+    ),
+    "reproduction": (
+        "Position a TLS MITM proxy between the stCtlVM and the Thrift upgrade endpoint. "
+        "Trigger a cluster upgrade via the HyperFlex Connect UI or REST API. "
+        "Observe that the upgrade service connects to the MITM proxy without "
+        "certificate validation errors. Substitute a crafted firmware package in "
+        "the MITM response."
+    ),
+    "remediation": (
+        "Remove the trustAll() call and use the JVM's default trust store. "
+        "Install the HyperFlex CA certificate into the upgrade service trust store "
+        "and validate server identity against it. Do not set global JVM-wide SSL "
+        "defaults; configure verification per-connection using a dedicated SSLContext."
+    ),
+    "references": ["CWE-295", "CWE-297"],
+}
+
+for _f in [
+    HX_F249,
+]:
+    FINDINGS[_f["id"]] = _f
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
