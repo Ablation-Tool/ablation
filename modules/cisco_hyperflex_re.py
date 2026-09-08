@@ -18164,6 +18164,159 @@ HX_F315 = {
 }
 
 
+HX_F316 = {
+    "id": "HX-F316",
+    "title": (
+        "Hardcoded Default Credential 'springpath' Used as ESX Root Password Default "
+        "in Six configureNetworking_VCenter.py Copies and Set as IPMI BMC Password "
+        "in replaceNode.sh"
+    ),
+    "cwe": "CWE-798",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/configureNetworking_VCenter.py:L319 "
+        "(and 5 identical copies at roles/esx/files/, roles/upgrademigration/files/, "
+        "and 3 additional paths); "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/replaceNode.sh:L274"
+    ),
+    "description": (
+        "The password string 'springpath' is hardcoded as the default ESX root "
+        "credential and unconditionally set as an IPMI BMC user password across "
+        "the HyperFlex deployment and maintenance toolchain. "
+        "configureNetworking_VCenter.py (6 identical copies) defines "
+        "ESX_USER = 'root' and ESX_PWD = 'springpath' at L319 as the class-level "
+        "default. The deployment documentation embedded in the script specifies "
+        "that '--esx-password ESXi password (defaults to springpath)' — if the "
+        "operator does not provide an explicit ESX password, all ESX hosts in the "
+        "cluster are accessed with root:springpath. "
+        "replaceNode.sh unconditionally sets IPMI user 10 (named 'spadmin') to "
+        "password 'springpath' via ipmitool at L274 during node replacement. "
+        "The IPMI BMC port (623/UDP) provides out-of-band access independent of "
+        "the host OS — an attacker with access to the management network can "
+        "authenticate to the BMC of any node that has had replaceNode.sh executed "
+        "against it using spadmin:springpath, gaining full server control including "
+        "remote KVM, power cycling, and firmware update capabilities regardless "
+        "of any OS-level security controls."
+    ),
+    "evidence": (
+        "  configureNetworking_VCenter.py L319 (6 identical copies):\n"
+        "    ESX_USER = \"root\"\n"
+        "    ESX_PWD = \"springpath\"\n"
+        "\n"
+        "  configureNetworking_VCenter.py L387-389 (deployment docstring):\n"
+        "    --esx-password - ESXi password (defaults to \"springpath\").\n"
+        "    --ctl-password - controller password (defaults to \"springpath\")\n"
+        "\n"
+        "  replaceNode.sh L270-279:\n"
+        "    # Adding Springpath User to Appliance using ipmitool\n"
+        "    runCmdOnEsx /opt/cisco/support/ipmitool user set name 10 spadmin\n"
+        "    # password for user 10 is being changed\n"
+        "    runCmdOnEsx /opt/cisco/support/ipmitool user set password 10 springpath\n"
+        "    runCmdOnEsx /opt/cisco/support/ipmitool user priv 10 4 1\n"
+        "    runCmdOnEsx /opt/cisco/support/ipmitool user enable 10\n"
+        "    # user ID 10, privilege 4 (Administrator), channel 1"
+    ),
+}
+
+HX_F317 = {
+    "id": "HX-F317",
+    "title": (
+        "replaceNode.sh Disables SSH Host Key Verification and Uses sshpass for "
+        "All ESX SSH/SCP Operations; wget --no-check-certificate With Password "
+        "as Command-Line Argument"
+    ),
+    "cwe": "CWE-322",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/replaceNode.sh "
+        "(L159, L165, L172, L176, L602)"
+    ),
+    "description": (
+        "replaceNode.sh disables SSH host key verification for all SSH and SCP "
+        "operations against ESX hosts and controller VMs during node replacement. "
+        "The runCmdOnEsx, scpToEsx, scpToStCtlVM, and runCmdOnStctlVM functions "
+        "(L159, L165, L172, L176) all use sshpass -p $PASSWD with "
+        "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null. "
+        "sshpass -p passes the SSH password via command line argument, making it "
+        "visible in /proc/<pid>/cmdline and ps aux. StrictHostKeyChecking=no "
+        "accepts any SSH host key, making all SSH/SCP operations in the node "
+        "replacement workflow vulnerable to MITM attacks. UserKnownHostsFile=/dev/null "
+        "prevents any known-hosts persistence, ensuring no memory of previously "
+        "verified host keys. "
+        "At L602, the script waits for an ESX host to come back online using "
+        "wget --no-check-certificate (disabling TLS validation) with "
+        "--http-password $PASSWD passed as a command-line argument, making the "
+        "ESX root password visible in the wget process table entry. "
+        "Additionally, L328 embeds ESX credentials directly in a vSphere VMware URL: "
+        "vi://${USERNAME}:${PASSWD}@${ESXHOST}/ for OVF deployment."
+    ),
+    "evidence": (
+        "  replaceNode.sh L156-159:\n"
+        "    PASSWD=$(springpath_env_parse.py \"credentials.stctl_vm_passwd\")\n"
+        "    function runCmdOnEsx() {\n"
+        "        sshpass -p $PASSWD ssh -q \\\n"
+        "          -o StrictHostKeyChecking=no \\\n"
+        "          -o UserKnownHostsFile=/dev/null ${USERNAME}@$ESXHOST $*\n"
+        "    }\n"
+        "\n"
+        "  replaceNode.sh L165 (scpToEsx), L172 (scpToStCtlVM),\n"
+        "  L176 (runCmdOnStctlVM): identical StrictHostKeyChecking=no pattern\n"
+        "\n"
+        "  replaceNode.sh L328:\n"
+        "    ${SCVMIMAGE} vi://${USERNAME}:${PASSWD}@${ESXHOST}/\n"
+        "\n"
+        "  replaceNode.sh L602:\n"
+        "    wget -q -O /dev/null --no-check-certificate \\\n"
+        "      https://$ESXHOST/mob \\\n"
+        "      --http-user $USERNAME --http-password $PASSWD"
+    ),
+}
+
+HX_F318 = {
+    "id": "HX-F318",
+    "title": (
+        "switchToArbitrator.py Disables TLS Validation for All Intersight Arbitrator "
+        "REST Calls and Accepts Arbitrator Password as Command-Line Argument"
+    ),
+    "cwe": "CWE-295",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "stretched/usr/share/hyperflex/storfs-stretched/switchToArbitrator.py "
+        "(L60-61, L134)"
+    ),
+    "description": (
+        "switchToArbitrator.py — the HyperFlex stretched cluster Intersight arbitrator "
+        "switchover script — passes verify=False in all REST calls to the arbitrator "
+        "service via the restWithRetry function at L134. "
+        "The script accepts the Intersight arbitrator password as a command-line "
+        "argument via --arbitrator-password at L60-61, making the credential visible "
+        "in /proc/<pid>/cmdline and ps aux during switchover operations. "
+        "TLS validation is disabled for the REST calls that perform the cluster "
+        "quorum arbitrator switchover — a security-critical operation for stretched "
+        "cluster split-brain prevention. An MITM can serve fraudulent arbitrator "
+        "responses to manipulate which cluster site is granted quorum."
+    ),
+    "evidence": (
+        "  switchToArbitrator.py L60-61:\n"
+        "    p.add_option('--arbitrator-password', dest='password', default='',\n"
+        "                 type='string', help='The password of the intersight arbitrator')\n"
+        "\n"
+        "  switchToArbitrator.py L128-135:\n"
+        "    def restWithRetry(restFn, restUrl, data, auth, headers,\n"
+        "                      retryCount, retryInterval):\n"
+        "        count = 0\n"
+        "        while count < retryCount:\n"
+        "            try:\n"
+        "                resp = restFn(url=restUrl, data=data, auth=auth,\n"
+        "                             headers=headers, verify=False)\n"
+        "            ..."
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -18227,6 +18380,9 @@ for _f in [
     HX_F313,
     HX_F314,
     HX_F315,
+    HX_F316,
+    HX_F317,
+    HX_F318,
 ]:
     FINDINGS[_f["id"]] = _f
 
