@@ -14281,6 +14281,71 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F250 = {
+    "id": "HX-F250",
+    "title": "Shell Injection via Unsanitized CLI Args in Factory ESX Provisioning Scripts",
+    "cwe": "CWE-78",
+    "severity": "MEDIUM",
+    "cvss": 6.3,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/ansible/roles/factory_esx/files/ds-create.py; "
+        "factory/opt/hyperflex/storfs-factory/ansible/roles/factory_esx/files/createSpringpathDS.py; "
+        "factory/opt/hyperflex/storfs-factory/ansible/roles/plainesx/files/createSpringpathDS.py"
+    ),
+    "description": (
+        "Three factory provisioning scripts accept datastore volume name (-v) and disk device "
+        "path (-d) as CLI arguments and interpolate them directly into shell command strings "
+        "executed with shell=True, with no sanitization or validation. "
+        "In ds-create.py: volume is injected into 'vmkfstools -Ph /vmfs/volumes/<volume>' and "
+        "'vmkfstools -C ... -S <volume>'; device is split on '/' and the last segment is injected "
+        "into 'esxcli storage core device list -d <devname>'. "
+        "In createSpringpathDS.py (both factory_esx and plainesx roles): device is split on '/' "
+        "and the last segment is injected into 'esxcli storage core device list -d <devname>'. "
+        "Ansible invokes these scripts from task variables such as sp_volume_name and device_path, "
+        "which derive from external inputs including host serial numbers and inventory variables. "
+        "An attacker able to influence Ansible inventory variables can inject shell metacharacters "
+        "to execute arbitrary commands on the ESXi management plane during factory provisioning."
+    ),
+    "evidence": (
+        "factory_esx/files/ds-create.py:\n"
+        "  parser.add_option('-v', '--volume', dest='sp_volume')  # -v CLI arg, no sanitization\n"
+        "  parser.add_option('-d', '--device', dest='device')\n"
+        "  def volume_exists(volume):\n"
+        "      cmd = 'vmkfstools -Ph /vmfs/volumes/' + volume + ' 1> /dev/null'\n"
+        "      status = subprocess.call(cmd, shell=True)\n"
+        "  def create_volume(dev_path, volume, options):\n"
+        "      cmd = '... vmkfstools -C ' + options + ' ' + dev_path + ' -S ' + volume\n"
+        "      status = subprocess.call(cmd, shell=True)\n"
+        "  def is_dev_usb(device):\n"
+        "      devname = device.split('/')[-1]\n"
+        "      cmd_str = 'esxcli storage core device list -d ' + devname + ' | awk ...'\n"
+        "      cmd = subprocess.Popen(cmd_str, shell=True, ...)\n\n"
+        "factory_esx/files/createSpringpathDS.py and plainesx/files/createSpringpathDS.py:\n"
+        "  devname = device.split('/')[-1]\n"
+        "  cmd_str = 'esxcli storage core device list -d ' + devname\n"
+        "  cmd = subprocess.Popen(cmd_str, shell=True, ...)"
+    ),
+    "reproduction": (
+        "Invoke ds-create.py with a crafted volume name: "
+        "python ds-create.py -v 'x; id > /tmp/pwned' -d /vmfs/devices/disks/mpx.vmhba0. "
+        "The vmkfstools command string becomes 'vmkfstools -Ph /vmfs/volumes/x; id > /tmp/pwned'. "
+        "In Ansible context, set sp_volume_name: 'x; id > /tmp/pwned' in inventory or group_vars."
+    ),
+    "remediation": (
+        "Pass volume name and device path as list elements to subprocess (remove shell=True). "
+        "Example: subprocess.call(['vmkfstools', '-Ph', '/vmfs/volumes/' + volume, '1>/dev/null']). "
+        "Validate that volume names match [A-Za-z0-9_-]+ and device paths match a known prefix "
+        "before constructing any command string."
+    ),
+    "references": ["CWE-78"],
+}
+
+for _f in [
+    HX_F250,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
