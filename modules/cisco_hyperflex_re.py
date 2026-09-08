@@ -16737,6 +16737,73 @@ HX_F290 = {
 }
 
 
+HX_F291 = {
+    "id": "HX-F291",
+    "title": (
+        "All Cluster Credentials Base64-Encoded (Not Encrypted) and Written to World-Readable "
+        "Temporary JSON Files During Deployment (StDeployImpl.setupScriptConfigurationFiles)"
+    ),
+    "cwe": "CWE-261",
+    "severity": "HIGH",
+    "cvss": 7.1,
+    "component": (
+        "jar-extract/stDeploy/com/storvisor/sysmgmt/stDeploy/StDeployImpl.class "
+        "(getEncodedPassword, setupScriptConfigurationFiles)"
+    ),
+    "description": (
+        "StDeployImpl.setupScriptConfigurationFiles() encodes all cluster deployment "
+        "credentials using Base64 via getEncodedPassword(), then serializes the modified "
+        "VirtClusterParams object to JSON and writes it to a temporary file created with "
+        "File.createTempFile(\"virtInfo\", \".json\") in the default system temp directory (/tmp). "
+        "Base64 is an encoding scheme, not encryption — any process with read access to the "
+        "file can trivially recover the plaintext. "
+        "Affected credentials: vCenterPassword, ctlvmPassword (controller VM), ucsmPassword "
+        "(UCS Manager), cimcPassword (Cisco Integrated Management Controller), esxNewPassword, "
+        "esxPassword, localAdminPassword (Hyper-V), domainAdminPassword (Active Directory), "
+        "hxAdminPassword, and cdUserPassword — spanning the full set of infrastructure and "
+        "hypervisor credentials for a HyperFlex cluster deployment. "
+        "Java createTempFile() does not set restrictive permissions by default; on Linux systems "
+        "with a 022 umask, the resulting file is created 644 (world-readable). "
+        "The deleteScriptConfigurationFiles() cleanup call is only invoked in the success path "
+        "of executeScriptJob — a deployment failure mid-execution leaves the credential files "
+        "on disk indefinitely. "
+        "Additionally, esxPassword and ctlvmPassword are passed as explicit command-line "
+        "arguments (--esxPassword, --ctlvmPassword) with their Base64-encoded values, making "
+        "them visible in /proc/<pid>/cmdline and ps output for the duration of script execution."
+    ),
+    "evidence": (
+        "  StDeployImpl.getEncodedPassword (bytecodes: #1923-#1929):\n"
+        "    return Base64.encodeBase64String(password.getBytes())  // not encryption\n"
+        "\n"
+        "  StDeployImpl.$anonfun$setupScriptConfigurationFiles$1 (bytecodes ~L1316-1388):\n"
+        "    // Credentials Base64-encoded and inserted into VirtClusterParams:\n"
+        "    encoded_vCenterPassword   = getEncodedPassword(vCenterPassword.get())\n"
+        "    encoded_ctlvmPassword     = getEncodedPassword(ctlvmPassword.get())\n"
+        "    encoded_ucsmPassword      = getEncodedPassword(ucsmPassword.getOrElse(\"\"))\n"
+        "    encoded_cimcPassword      = getEncodedPassword(cimcPassword.getOrElse(\"\"))\n"
+        "    encoded_esxNewPassword    = getEncodedPassword(esxNewPassword.getOrElse(\"\"))\n"
+        "    encoded_localAdminPwd     = getEncodedPassword(localAdminPassword)\n"
+        "    encoded_domainAdminPwd    = getEncodedPassword(domainAdminPassword)\n"
+        "    encoded_hxAdminPwd        = getEncodedPassword(hxAdminPassword)\n"
+        "    encoded_cdUserPwd         = getEncodedPassword(cdUserPassword)\n"
+        "\n"
+        "    // VirtClusterParams with Base64 creds serialized to JSON, written to /tmp:\n"
+        "    virtInfoJson = JsonThriftSerializer.toString(updatedParams)\n"
+        "    tmpFile      = File.createTempFile(\"virtInfo\", \".json\")  // world-readable\n"
+        "    FileUtils.writeStringToFile(tmpFile, virtInfoJson)\n"
+        "\n"
+        "  Command-line args (constant pool #7138, #7140):\n"
+        "    \"--ctlvmPassword\" <base64>  // visible in ps aux, /proc/<pid>/cmdline\n"
+        "    \"--esxPassword\"  <base64>  // same\n"
+        "\n"
+        "  deleteScriptConfigurationFiles called ONLY in try-success path of\n"
+        "  executeScriptJob — deployment failure leaves virtInfo*.json on disk.\n"
+        "\n"
+        "  Base64 decode: echo 'dkNlbnRlclBhc3N3b3Jk' | base64 -d  # vCenterPassword"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16775,6 +16842,7 @@ for _f in [
     HX_F288,
     HX_F289,
     HX_F290,
+    HX_F291,
 ]:
     FINDINGS[_f["id"]] = _f
 
