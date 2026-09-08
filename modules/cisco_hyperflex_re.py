@@ -16978,6 +16978,71 @@ HX_F294 = {
 }
 
 
+HX_F295 = {
+    "id": "HX-F295",
+    "title": (
+        "Global SSL Monkey-Patch in 7 Ansible ESX Upgrade Hook Scripts Including "
+        "STIG Enforcement Scripts; ssl.CERT_NONE + disable_warnings in eam Cleanup Script"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/upgradeclusterposthooks/files/ "
+        "(5999_apply_host_adv_settings_ESX.py:98, 6000_apply_stig_settings_ESX.py:99, "
+        "5997_stig_setting_ESX.py:102, 0004_setup_vswitch_security_policy_ESX.py:96, "
+        "0005_cleanup_eam_ESX.py:68,133,152); "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/upgradeclusterprehooks/files/ "
+        "(0009_set_nfs_queue_depth_ESX.py:44, "
+        "0003_disable_nfs_datastore_remount_on_host_reboot_ESX.py:35)"
+    ),
+    "description": (
+        "Seven Ansible ESX upgrade hook scripts apply the "
+        "ssl._create_default_https_context = ssl._create_unverified_context monkey-patch "
+        "at process startup, disabling TLS certificate validation for all HTTPS connections "
+        "made by the process. "
+        "The most consequential instances are in the STIG enforcement scripts: "
+        "6000_apply_stig_settings_ESX.py and 5997_stig_setting_ESX.py apply DISA STIG "
+        "security settings to ESX hosts — the scripts enforcing TLS and security policy "
+        "on managed hosts cannot themselves validate the TLS certificates of those hosts. "
+        "0005_cleanup_eam_ESX.py (ESXi Agents Manager cleanup, runs post-cluster-upgrade) "
+        "applies three independent TLS bypass mechanisms: the global monkey-patch at L68, "
+        "an explicit ssl.CERT_NONE context created via ssl.create_default_context() with "
+        "verify_mode overridden at L133, and unconditional "
+        "urllib3.disable_warnings(InsecureRequestWarning) at L152. "
+        "These scripts execute during cluster upgrade phases, connecting to vSphere hosts "
+        "to apply configuration changes — an MITM during upgrade can intercept vCenter "
+        "and ESX credentials and manipulate the configuration being applied."
+    ),
+    "evidence": (
+        "  upgradeclusterposthooks/6000_apply_stig_settings_ESX.py L99:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (STIG enforcement script — disables the TLS validation it aims to configure)\n"
+        "\n"
+        "  upgradeclusterposthooks/5997_stig_setting_ESX.py L102:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  upgradeclusterposthooks/5999_apply_host_adv_settings_ESX.py L98:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  upgradeclusterposthooks/0004_setup_vswitch_security_policy_ESX.py L96:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  upgradeclusterposthooks/0005_cleanup_eam_ESX.py (3 bypass mechanisms):\n"
+        "    L68:  ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    L131: context = ssl.create_default_context()\n"
+        "    L133: context.verify_mode = ssl.CERT_NONE  # explicit CERT_NONE\n"
+        "    L152: urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n"
+        "\n"
+        "  upgradeclusterprehooks/0009_set_nfs_queue_depth_ESX.py L44:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  upgradeclusterprehooks/0003_disable_nfs_datastore_remount_on_host_reboot_ESX.py L35:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17020,6 +17085,7 @@ for _f in [
     HX_F292,
     HX_F293,
     HX_F294,
+    HX_F295,
 ]:
     FINDINGS[_f["id"]] = _f
 
