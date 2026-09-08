@@ -14868,32 +14868,35 @@ HX_F260 = {
 
 HX_F261 = {
     "id": "HX-F261",
-    "title": "No-op TrustManagers in REST API WAR Inter-Service Client Factories (9 Classes, 4 WARs)",
+    "title": "No-op TrustManagers in REST API WAR Inter-Service Client Factories (13 Classes, 6 WARs)",
     "cwe": "CWE-295",
     "severity": "HIGH",
     "cvss": 7.4,
     "component": (
         "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war, "
         "restapi/opt/hyperflex/storfs-restapi/encryption-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/iscsi-1.0.0.war, "
         "restapi/opt/hyperflex/storfs-restapi/securityservice-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/slservice-1.0.0.war, "
         "restapi/opt/hyperflex/storfs-restapi/supportservice-1.0.0.war"
     ),
     "description": (
-        "Nine anonymous TrustManager implementations across four REST API WARs implement "
+        "Thirteen anonymous TrustManager implementations across six REST API WARs implement "
         "X509TrustManager with an empty checkServerTrusted method (bytecode: Code: 0: return) "
         "and a null-returning getAcceptedIssuers. These are passed to per-connection "
         "SSLContext instances used by the inter-service client factories that call back to "
         "storfs-mgmt Thrift and HyperFlex service endpoints. No certificate chain is "
         "validated before the connection proceeds. An attacker in a position to intercept "
         "inter-service traffic (compromised cluster node, ARP poisoning on the management "
-        "VLAN) can terminate these connections with a forged certificate and read or "
-        "modify the plaintext. Affected classes: ROOT-1.0.0.war — HxSupportSvcAccess$1, "
-        "ServiceAccess$1; encryption-1.0.0.war — StMgrClient$1; securityservice-1.0.0.war "
-        "— StMgrClient$1, HxSecuritySvcMgrClient$1, HxSvcMgrClient$1; "
-        "supportservice-1.0.0.war — HxSupportSvcClient$1, StMgrClient$1, HxSvcMgrClient$1."
+        "VLAN) can terminate these connections with a forged certificate and read or modify "
+        "the plaintext. Affected classes: ROOT — HxSupportSvcAccess$1, ServiceAccess$1; "
+        "encryption — StMgrClient$1; iscsi — StMgrClient$1, HxSvcMgrClient$1, "
+        "HxIscsiMgrClient$1, HxIscsiCloneMgrClient$1; securityservice — StMgrClient$1, "
+        "HxSecuritySvcMgrClient$1, HxSvcMgrClient$1; slservice — HxSupportSvcClient$1; "
+        "supportservice — HxSupportSvcClient$1, StMgrClient$1, HxSvcMgrClient$1."
     ),
     "evidence": (
-        "Representative bytecode (identical pattern in all 9 classes):\n"
+        "Representative bytecode (identical pattern in all 13 classes):\n"
         "\n"
         "  ROOT-1.0.0.war: com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$1\n"
         "  implements javax.net.ssl.X509TrustManager\n"
@@ -14913,10 +14916,17 @@ HX_F261 = {
         "    com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$1\n"
         "  encryption-1.0.0.war:\n"
         "    com.springpath.hx.encryption.clients.StMgrClient$1\n"
+        "  iscsi-1.0.0.war:\n"
+        "    com.springpath.hx.iscsi.gateway.StMgrClient$1\n"
+        "    com.springpath.hx.iscsi.gateway.HxSvcMgrClient$1\n"
+        "    com.springpath.hx.iscsi.gateway.HxIscsiMgrClient$1\n"
+        "    com.springpath.hx.iscsi.gateway.HxIscsiCloneMgrClient$1\n"
         "  securityservice-1.0.0.war:\n"
         "    com.springpath.hx.security.gateway.StMgrClient$1\n"
         "    com.springpath.hx.security.gateway.HxSecuritySvcMgrClient$1\n"
         "    com.springpath.hx.security.gateway.HxSvcMgrClient$1\n"
+        "  slservice-1.0.0.war:\n"
+        "    com.springpath.hx.sl.clients.HxSupportSvcClient$1\n"
         "  supportservice-1.0.0.war:\n"
         "    com.springpath.hx.support.clients.HxSupportSvcClient$1\n"
         "    com.springpath.hx.support.clients.StMgrClient$1\n"
@@ -14942,18 +14952,20 @@ HX_F261 = {
 
 HX_F262 = {
     "id": "HX-F262",
-    "title": "Always-True HostnameVerifiers in REST API WAR Inter-Service Client Factories (9 Classes, 4 WARs)",
+    "title": "Always-True HostnameVerifiers in REST API WAR Inter-Service Client Factories (13 Classes, 6 WARs)",
     "cwe": "CWE-297",
     "severity": "HIGH",
     "cvss": 7.4,
     "component": (
         "restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war, "
         "restapi/opt/hyperflex/storfs-restapi/encryption-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/iscsi-1.0.0.war, "
         "restapi/opt/hyperflex/storfs-restapi/securityservice-1.0.0.war, "
+        "restapi/opt/hyperflex/storfs-restapi/slservice-1.0.0.war, "
         "restapi/opt/hyperflex/storfs-restapi/supportservice-1.0.0.war"
     ),
     "description": (
-        "Nine anonymous HostnameVerifier implementations across four REST API WARs "
+        "Thirteen anonymous HostnameVerifier implementations across six REST API WARs "
         "unconditionally return true from verify(String hostname, SSLSession session), "
         "suppressing hostname validation on per-connection TLS. These are companion "
         "classes to the no-op TrustManagers in HX-F261 — the same client factory "
@@ -14961,13 +14973,14 @@ HX_F262 = {
         "bypass). Even if a certificate is presented by the correct issuer, the hostname "
         "in the certificate Subject/SAN is never compared against the connection target, "
         "enabling certificate reuse across cluster nodes. Affected classes: "
-        "ROOT-1.0.0.war — HxSupportSvcAccess$2, ServiceAccess$2; "
-        "encryption-1.0.0.war — StMgrClient$2; securityservice-1.0.0.war — "
-        "StMgrClient$2, HxSecuritySvcMgrClient$2, HxSvcMgrClient$2; "
-        "supportservice-1.0.0.war — HxSupportSvcClient$2, StMgrClient$2, HxSvcMgrClient$2."
+        "ROOT — HxSupportSvcAccess$2, ServiceAccess$2; encryption — StMgrClient$2; "
+        "iscsi — StMgrClient$2, HxSvcMgrClient$2, HxIscsiMgrClient$2, HxIscsiCloneMgrClient$2; "
+        "securityservice — StMgrClient$2, HxSecuritySvcMgrClient$2, HxSvcMgrClient$2; "
+        "slservice — HxSupportSvcClient$2; "
+        "supportservice — HxSupportSvcClient$2, StMgrClient$2, HxSvcMgrClient$2."
     ),
     "evidence": (
-        "Representative bytecode (identical in all 9 classes):\n"
+        "Representative bytecode (identical in all 13 classes):\n"
         "\n"
         "  ROOT-1.0.0.war: com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$2\n"
         "  implements javax.net.ssl.HostnameVerifier\n"
@@ -14983,10 +14996,17 @@ HX_F262 = {
         "    com.storvisor.sysmgmt.bootstrap.util.ServiceAccess$2\n"
         "  encryption-1.0.0.war:\n"
         "    com.springpath.hx.encryption.clients.StMgrClient$2\n"
+        "  iscsi-1.0.0.war:\n"
+        "    com.springpath.hx.iscsi.gateway.StMgrClient$2\n"
+        "    com.springpath.hx.iscsi.gateway.HxSvcMgrClient$2\n"
+        "    com.springpath.hx.iscsi.gateway.HxIscsiMgrClient$2\n"
+        "    com.springpath.hx.iscsi.gateway.HxIscsiCloneMgrClient$2\n"
         "  securityservice-1.0.0.war:\n"
         "    com.springpath.hx.security.gateway.StMgrClient$2\n"
         "    com.springpath.hx.security.gateway.HxSecuritySvcMgrClient$2\n"
         "    com.springpath.hx.security.gateway.HxSvcMgrClient$2\n"
+        "  slservice-1.0.0.war:\n"
+        "    com.springpath.hx.sl.clients.HxSupportSvcClient$2\n"
         "  supportservice-1.0.0.war:\n"
         "    com.springpath.hx.support.clients.HxSupportSvcClient$2\n"
         "    com.springpath.hx.support.clients.StMgrClient$2\n"
@@ -15007,6 +15027,217 @@ HX_F262 = {
     "references": ["CWE-297"],
 }
 
+HX_F263 = {
+    "id": "HX-F263",
+    "title": "TLS Certificate Verification Disabled in Python Management REST Client (swagger_api_client.py)",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py",
+    "description": (
+        "swagger_api_client.py in the storfs-mgmt Python management layer disables TLS "
+        "certificate verification on all outbound HTTPS connections to the HyperFlex REST "
+        "API and upgrade agent endpoints. Three separate assignment sites set verify_ssl = "
+        "False: once on the package-level configuration object (affecting all default "
+        "swagger clients in the package), once on a per-call Configuration() for the "
+        "coreapi client, and once on AgentConfiguration() for the upgrade_agent client. "
+        "The module also suppresses urllib3 InsecureRequestWarning via "
+        "urllib3.disable_warnings(), preventing any log-level indication that verification "
+        "is skipped. These connections authenticate with root session tokens read from "
+        "/etc/hyperflex/secure/root_file.pub; suppressing TLS verification exposes those "
+        "tokens to interception on the management network."
+    ),
+    "evidence": (
+        "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py:\n"
+        "\n"
+        "  def generate_client_methods(self, name):\n"
+        "    pkg = __import__('swagger_' + str(name))\n"
+        "    pkg.rest.urllib3.disable_warnings()          # suppress InsecureRequestWarning\n"
+        "    pkg.configuration.verify_ssl = False         # (1) global package config\n"
+        "\n"
+        "    if client_name == 'swagger_coreapi':\n"
+        "      configuration = Configuration()\n"
+        "      configuration.verify_ssl = False           # (2) coreapi client\n"
+        "\n"
+        "    if client_name == 'swagger_upgrade_agent':\n"
+        "      agentConfig = AgentConfiguration()\n"
+        "      agentConfig.verify_ssl = False             # (3) upgrade agent client\n"
+        "\n"
+        "  BASE_URL_FORMAT = 'https://{}/{}'             # HTTPS with verify disabled\n"
+        "  Endpoints: coreapi/v1, upgradeagent/v1"
+    ),
+    "reproduction": (
+        "MitM the management network between the storfs-mgmt process and the REST API "
+        "listeners (coreapi/v1, upgradeagent/v1). Present a self-signed certificate. "
+        "swagger_api_client accepts it without error. Root session tokens transmitted "
+        "in the session are captured by the interceptor."
+    ),
+    "remediation": (
+        "Remove all verify_ssl = False assignments. Configure each Swagger client with "
+        "the cluster CA certificate bundle at /etc/hyperflex/secure/hyperflex_keystore.jceks "
+        "as the trusted CA store. Remove the urllib3.disable_warnings() call."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F264 = {
+    "id": "HX-F264",
+    "title": "TLS Certificate Verification Disabled in deployNodes.py REST Deployment Client",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": "mgmt/opt/hyperflex/deployNodes.py",
+    "description": (
+        "deployNodes.py passes verify=False to every requests.get() and requests.post() "
+        "call made during cluster deployment. The affected calls include retrieving the "
+        "deployment status URL, posting to the deploy-nodes endpoint, and posting to "
+        "the check-deploy-nodes endpoint. These calls authenticate with the installer "
+        "password (read from credentials.installer_passwd in the tunes config) passed "
+        "as HTTP Basic Auth credentials. With verify=False, TLS certificate validation "
+        "is completely suppressed; an on-path attacker during cluster deployment can "
+        "intercept the installer password by presenting a forged certificate."
+    ),
+    "evidence": (
+        "mgmt/opt/hyperflex/deployNodes.py:\n"
+        "\n"
+        "  INSTALLER_PASSWD = parseEnvVariableTunes('credentials.installer_passwd')\n"
+        "  authData = (opts.user, opts.password)   # default = INSTALLER_PASSWD\n"
+        "\n"
+        "  r = requests.get(deploymentsUrl, auth=authData, verify=False)           # L148\n"
+        "  r = requests.get(progressUrl,    auth=authData, verify=False)           # L152\n"
+        "  r = requests.post(checkDeployNodesUrl, json.dumps(data),\n"
+        "                    auth=authData, verify=False, headers=headers)         # L156\n"
+        "  r = requests.post(deployNodesUrl, json.dumps(data),\n"
+        "                    auth=authData, verify=False, headers=headers)         # L160\n"
+        "  # ... (2 additional post calls with verify=False at L164, L169)"
+    ),
+    "reproduction": (
+        "During initial cluster deployment (factory or re-deploy flow), MitM the "
+        "network between the management controller and the deployment REST endpoint. "
+        "Present a self-signed certificate. deployNodes.py accepts it and transmits "
+        "the installer password in the Basic Auth header."
+    ),
+    "remediation": (
+        "Replace verify=False with verify=<path_to_ca_bundle> pointing to the cluster "
+        "CA certificate. The cluster CA is available at "
+        "/etc/hyperflex/secure/hyperflex_keystore.jceks or the PEM equivalent."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F265 = {
+    "id": "HX-F265",
+    "title": "Weak Key Derivation for Encrypted Tunes Credentials (MD5 of Static Firmware File)",
+    "cwe": "CWE-327",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": "mgmt/opt/hyperflex/restClientModule/../springpath_env_parse.py",
+    "description": (
+        "Credentials stored in HyperFlex tunes config files (installer_passwd, "
+        "stctl_vm_passwd, ssl_cert_passwd) are AES-CBC-encrypted, but the encryption "
+        "key is derived by computing the MD5 hash of the contents of a static firmware "
+        "file: /usr/share/hyperflex/storfs-misc/Secret.class. MD5 is a general-purpose "
+        "hash function — not a key derivation function — and provides no iterations, "
+        "no salt, and no work factor. Because Secret.class is a static file shipped "
+        "with every HyperFlex deployment of the same firmware version, any attacker "
+        "with access to the firmware image (or to the installed file system) can "
+        "compute the same MD5 value and use it as the AES key to decrypt all encrypted "
+        "tunes credentials without brute-force. The key is deterministic and identical "
+        "across all clusters running the same firmware version."
+    ),
+    "evidence": (
+        "storfs-factory/utils/springpath_env_parse.py:\n"
+        "\n"
+        "  # 'Secret is derived by using complex text which is not easy to guess'\n"
+        "  def md5(fname):\n"
+        "    hash_md5 = hashlib.md5()\n"
+        "    with open(fname, 'rb') as f:\n"
+        "      for chunk in iter(lambda: f.read(4096), b''): hash_md5.update(chunk)\n"
+        "    return hash_md5.hexdigest()         # returns MD5 hex string as AES key\n"
+        "\n"
+        "  def decrypt(key, enc):\n"
+        "    enc = base64.b64decode(enc)\n"
+        "    iv = enc[:16]\n"
+        "    cipher = AES.new(key.encode('utf8'), AES.MODE_CBC, iv)  # MD5 hex as key\n"
+        "    return unpad(cipher.decrypt(enc[16:]))\n"
+        "\n"
+        "  # Triggered when token == 'installer_passwd', 'stctl_vm_passwd', 'ssl_cert_passwd'\n"
+        "  file_md5 = md5('/usr/share/hyperflex/storfs-misc/Secret.class')\n"
+        "  decoded = decrypt(file_md5, value)   # key = MD5(static firmware file)"
+    ),
+    "reproduction": (
+        "Extract /usr/share/hyperflex/storfs-misc/Secret.class from the HXDP 6.0.2b "
+        "firmware image. Compute MD5 of its contents. Read the base64-encoded credential "
+        "values from /opt/hyperflex/springpath_custom_node.tunes (or cluster/default). "
+        "Decrypt with AES-CBC using the MD5 hex string as the key. "
+        "Key is static across all clusters on the same firmware version."
+    ),
+    "remediation": (
+        "Replace MD5(static_file) key derivation with a proper KDF: use PBKDF2-HMAC-SHA256 "
+        "or Argon2 with a per-cluster random salt stored separately from the encrypted values. "
+        "Alternatively, use a hardware-backed key store (TPM, secure enclave) if available "
+        "on the target hardware. Do not derive encryption keys from static firmware artifacts."
+    ),
+    "references": ["CWE-327", "CWE-916"],
+}
+
+HX_F266 = {
+    "id": "HX-F266",
+    "title": "OS Command Injection via Unsanitized Tunes Variable in isHXHardwareForESX() (commonFunctions.py)",
+    "cwe": "CWE-78",
+    "severity": "HIGH",
+    "cvss": 7.8,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/utils/commonFunctions.py, "
+        "factory/opt/hyperflex/storfs-factory/utils/springpath_env_parse.py"
+    ),
+    "description": (
+        "isHXHardwareForESX() in commonFunctions.py constructs a shell command by string "
+        "concatenation of a value read directly from the tunes configuration files without "
+        "sanitization, then executes the command with Popen(shell=True). The injected value "
+        "comes from getHXNicGrepString() which calls parseEnvVariableTunes('hx.nic_description_string'), "
+        "reading the raw string value from /opt/hyperflex/springpath_custom_node.tunes, "
+        "springpath_custom_cluster.tunes, or springpath_default.tunes — in that priority "
+        "order. If an attacker can write a shell metacharacter sequence to "
+        "hx.nic_description_string in any of these tunes files (e.g., via a cluster "
+        "configuration API call or direct file write on a compromised node), the injected "
+        "payload executes as the factory deployment process user when isHXHardwareForESX() "
+        "is invoked during hardware enumeration."
+    ),
+    "evidence": (
+        "factory/opt/hyperflex/storfs-factory/utils/commonFunctions.py, lines 302-306:\n"
+        "\n"
+        "  def isHXHardwareForESX():\n"
+        "    cmd = ('localcli --formatter=json network nic list | sort -k2 | grep \"'\n"
+        "           + getHXNicGrepString()      # unsanitized tunes value\n"
+        "           + '\" | grep -v Down | wc -l')\n"
+        "    res = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)  # shell=True\n"
+        "\n"
+        "  def getHXNicGrepString():\n"
+        "    nic_description = parseEnvVariableTunes('hx.nic_description_string')\n"
+        "    return nic_description    # raw value, no quoting or sanitization\n"
+        "\n"
+        "  # Injection example — tunes value: \"; id >/tmp/pwn; #\n"
+        "  # Resulting cmd:\n"
+        "  # localcli ... | grep \"\"; id >/tmp/pwn; #\" | grep -v Down | wc -l\n"
+        "  # id executes in the deployment process context"
+    ),
+    "reproduction": (
+        "Write hx.nic_description_string = \"; id >/tmp/pwn; # to "
+        "/opt/hyperflex/springpath_custom_node.tunes in the [hx] section. "
+        "Trigger the factory deployment flow or any path that calls isHXHardwareForESX(). "
+        "Observe /tmp/pwn created with the output of id."
+    ),
+    "remediation": (
+        "Replace shell=True with a list-form Popen call. Split the pipeline into discrete "
+        "subprocess calls with arguments passed as lists, never as shell-expanded strings. "
+        "If shell=True is unavoidable, sanitize the tunes value through "
+        "shlex.quote() before interpolation. Validate that tunes values conform to an "
+        "allowlist (e.g., alphanumeric + spaces + hyphens only for NIC description strings)."
+    ),
+    "references": ["CWE-78"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15017,6 +15248,10 @@ for _f in [
     HX_F260,
     HX_F261,
     HX_F262,
+    HX_F263,
+    HX_F264,
+    HX_F265,
+    HX_F266,
 ]:
     FINDINGS[_f["id"]] = _f
 
