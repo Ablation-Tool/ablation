@@ -15343,6 +15343,114 @@ HX_F268 = {
     "references": ["CWE-295"],
 }
 
+HX_F269 = {
+    "id": "HX-F269",
+    "title": "SSH Host Key Verification Disabled via AutoAddPolicy in 20+ Management Scripts (12 Files)",
+    "cwe": "CWE-322",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "usr/share/hyperflex/storfs-misc/ (12 Python files), "
+        "factory/opt/hyperflex/storfs-factory/utils/commonFunctions.py, "
+        "factory/opt/hyperflex/storfs-factory/ansible/library/factory_datastore.py"
+    ),
+    "description": (
+        "Over 20 Paramiko SSH client instances across 12 HyperFlex management, "
+        "upgrade, and validation scripts set the host key policy to "
+        "paramiko.AutoAddPolicy(), which automatically accepts any SSH server's "
+        "host key on first connection without user confirmation or verification. "
+        "This disables SSH host key authentication entirely: an on-path attacker "
+        "can present a forged host key and intercept all SSH sessions, including "
+        "those that transmit cluster node passwords and administrator credentials. "
+        "Particularly significant: stig_security_settings.py and "
+        "stig_security_settings_hx.py — the scripts responsible for applying STIG "
+        "security hardening to HyperFlex nodes — use AutoAddPolicy() when "
+        "connecting to nodes to apply the hardening, meaning the STIG compliance "
+        "enforcement path is itself susceptible to the MITM attacks it is intended "
+        "to prevent."
+    ),
+    "evidence": (
+        "Confirmed AutoAddPolicy instances (paramiko grep):\n"
+        "  storfs-misc/uninstall_cluster.py:64\n"
+        "  storfs-misc/listzkdb.py:41\n"
+        "  storfs-misc/cleanNasStaleMounts.py:20\n"
+        "  storfs-misc/hx-scripts/stig_security_settings.py:364, :382\n"
+        "  storfs-misc/hx-scripts/stig_security_settings_hx.py:476\n"
+        "  storfs-misc/hx-scripts/post_install.py:712, :1219\n"
+        "  storfs-misc/hx-scripts/node_replace.py:237, :324, :666, :674\n"
+        "  storfs-misc/validation/springpath_ssh.py:46\n"
+        "  storfs-misc/validation/springpath_hardware_validator.py:96\n"
+        "  storfs-misc/validation/springpath_networking.py:648\n"
+        "  storfs-misc/upgrade-hooks/.../0006_RestoreNFSAccessRules_ESX.py:89\n"
+        "  storfs-misc/upgrade-hooks/.../9998_remove_host_authorized_keys_ESX.py:24\n"
+        "  storfs-factory/utils/commonFunctions.py:273, :660\n"
+        "  storfs-factory/ansible/library/factory_datastore.py:131\n"
+        "\n"
+        "Representative pattern:\n"
+        "  client = paramiko.SSHClient()\n"
+        "  client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  client.connect(address, username=username, password=password)"
+    ),
+    "reproduction": (
+        "ARP-spoof the management network to intercept SSH connections from a "
+        "management node to any cluster node. Present a forged host key on the "
+        "intercepting endpoint. AutoAddPolicy causes paramiko to accept the key "
+        "unconditionally and proceed with the SSH handshake. Capture the "
+        "plaintext password after it is sent in the SSH authentication exchange."
+    ),
+    "remediation": (
+        "Replace paramiko.AutoAddPolicy() with paramiko.RejectPolicy() or "
+        "paramiko.WarningPolicy(). Load known cluster node host keys from a "
+        "pre-populated known_hosts file (e.g., /etc/ssh/ssh_known_hosts or a "
+        "cluster-specific store) using SSHClient.load_host_keys() before "
+        "connecting. Refuse connections to hosts whose keys are not pre-loaded."
+    ),
+    "references": ["CWE-322", "CWE-297"],
+}
+
+HX_F270 = {
+    "id": "HX-F270",
+    "title": "SSH Password Logged in Cleartext in Error Handler (uninstall_cluster.py)",
+    "cwe": "CWE-312",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "component": "usr/share/hyperflex/storfs-misc/uninstall_cluster.py",
+    "description": (
+        "The execute_ssh() function in uninstall_cluster.py constructs a detailed "
+        "error string that includes the plaintext SSH password when a paramiko "
+        "connection fails. The string is assigned to the stderr variable and queued "
+        "via q.put(). Depending on how the caller handles the queue output, this "
+        "password-containing string may be written to log files, printed to stdout, "
+        "or transmitted over the cluster management channel. Any log aggregation "
+        "system or monitoring solution that captures this output will store the "
+        "password in cleartext."
+    ),
+    "evidence": (
+        "usr/share/hyperflex/storfs-misc/uninstall_cluster.py, lines 66-72:\n"
+        "\n"
+        "  def execute_ssh(address, cmd, q, username, password, logger, ...):\n"
+        "    try:\n"
+        "      client.connect(address, username=username, password=password, ...)\n"
+        "    except Exception, e:\n"
+        "      logger.error('Exception during SSH connect in paramiko')\n"
+        "      logger.error('Exception thrown is %s' % e)\n"
+        "      stderr = ('Paramiko ssh connect exception: %s, host %s user: %s "
+        "password: %s' % (e, address, username, password))  # password in cleartext\n"
+        "      q.put([stdout, stderr, -1])   # passed to caller, may reach logs"
+    ),
+    "reproduction": (
+        "Trigger an SSH connection failure (e.g., firewall the target node) "
+        "during cluster uninstall. Observe the error log or queue output "
+        "containing the plaintext SSH password."
+    ),
+    "remediation": (
+        "Remove the password field from the error string. Use a fixed message "
+        "such as 'SSH connect failed for user %s on %s' % (username, address). "
+        "Never include credentials in log messages or error strings."
+    ),
+    "references": ["CWE-312", "CWE-215"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15359,6 +15467,8 @@ for _f in [
     HX_F266,
     HX_F267,
     HX_F268,
+    HX_F269,
+    HX_F270,
 ]:
     FINDINGS[_f["id"]] = _f
 
