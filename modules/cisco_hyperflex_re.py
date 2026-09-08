@@ -13718,6 +13718,65 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F240 = {
+    "id": "HX-F240",
+    "title": "OVA Deployment Disables Signature Verification and TLS; ESXi Password Exposed in Process Cmdline (CWE-347, CWE-214)",
+    "severity": "HIGH",
+    "cvss": "7.4",
+    "component": "storfs-deploy/ansible/library/deployOva.py",
+    "description": (
+        "The deployOva.py Ansible module deploys the HyperFlex storage controller VM "
+        "(stCtlVM) OVA to ESXi hosts during cluster initialization. "
+        "The ovftool invocation at lines 71-78 passes two security-disabling flags: "
+        "(1) --noSSLVerify: TLS certificate verification is disabled for the ESXi "
+        "connection used to upload the OVA. "
+        "(2) --disableVerification: OVA digital signature verification is disabled, "
+        "meaning the authenticity and integrity of the deployed VM image are never checked. "
+        "The combination allows a man-in-the-middle on the management network to "
+        "substitute a malicious OVA during deployment and have it accepted unconditionally "
+        "as the storage controller VM. "
+        "Additionally, the ESXi authentication credentials are passed in the ovftool "
+        "command-line URL as: vi://<esxUserName>:<esxEncodedPassword>@<hostname>. "
+        "This password is visible in /proc/pid/cmdline while ovftool runs, exposing "
+        "the ESXi host administrator password to any process that can read /proc. "
+        "The OVA source location (ovalocation) comes from Ansible module params and "
+        "may be an HTTPS URL; under --noSSLVerify, this URL is fetched without TLS "
+        "certificate validation, further enabling OVA source substitution."
+    ),
+    "affected_versions": "HXDP 6.0.2b (all supported platforms)",
+    "poc": (
+        "1. ARP-spoof or DNS-redirect the ESXi hostname to attacker host. "
+        "2. Serve a malicious OVA from that host. "
+        "3. ovftool accepts the self-signed cert (--noSSLVerify) and does not verify "
+        "the OVA signature (--disableVerification). Malicious stCtlVM deployed. "
+        "4. Read /proc/$(pgrep ovftool)/cmdline during deployment to extract ESXi password."
+    ),
+    "remediation": (
+        "Remove --disableVerification and --noSSLVerify from the ovftool invocation. "
+        "Install a CA-signed certificate on ESXi hosts or pin the expected thumbprint. "
+        "Replace the vi://user:pass@host URL form with environment variable or stdin "
+        "credential injection to prevent cmdline password exposure (CWE-214). "
+        "Sign OVA images with Cisco's signing key and enforce signature verification "
+        "during deployment."
+    ),
+    "references": [
+        "CWE-347: Improper Verification of Cryptographic Signature",
+        "CWE-214: Invocation of Process Using Visible Sensitive Information",
+        "deployOva.py lines 71-78: --noSSLVerify, --disableVerification, vi://user:pass@host",
+    ],
+    "tags": [
+        "ova-deployment", "cwe-347", "cwe-214", "ovftool", "no-ssl-verify",
+        "disable-verification", "password-in-cmdline", "esxi", "high",
+    ],
+}
+
+
+for _f in [
+    HX_F240,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
