@@ -18074,6 +18074,96 @@ HX_F313 = {
 }
 
 
+HX_F314 = {
+    "id": "HX-F314",
+    "title": (
+        "factory_deploy.py Base64-Encodes ESX Password With Ineffective Masking "
+        "Then Passes Encoded Credential as Ansible --extra-vars Process Argument"
+    ),
+    "cwe": "CWE-261",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/ansible/factory_deploy.py "
+        "(L46-51, L87)"
+    ),
+    "description": (
+        "factory_deploy.py encodes the ESX password with base64.b64encode() at L46-48 "
+        "before passing it to ansible-playbook via os.execlpe. "
+        "The code applies an ineffective masking pattern: the plaintext password is "
+        "temporarily replaced with the string 'XXXXXXXX' (L49) solely to sanitize "
+        "the opts object in a logging.info call (L50), then immediately reassigned "
+        "to the base64-encoded value (L51) before actual use. "
+        "The base64-encoded password is then passed to ansible-playbook via "
+        "os.execlpe as --extra-vars 'esxPassword=<base64>' (L87), making the encoded "
+        "credential visible in /proc/<pid>/cmdline and ps aux for the duration of "
+        "the factory deployment Ansible run. "
+        "Base64 encoding is not encryption — the credential is trivially recoverable "
+        "by anyone who can read the process arguments. The masking step does not "
+        "protect the credential at any point; it only prevents the plaintext from "
+        "appearing in the Python logging output while allowing the encoded form to "
+        "propagate to the process table."
+    ),
+    "evidence": (
+        "  factory_deploy.py L46-51:\n"
+        "    try:\n"
+        "        save = base64.b64encode(opts.esxPassword)\n"
+        "    except TypeError:\n"
+        "        save = base64.b64encode(bytes(opts.esxPassword,'utf-8')).decode('utf-8')\n"
+        "    opts.esxPassword = \"XXXXXXXX\"  # mask for logging\n"
+        "    logging.info(\"Using Parameters %s\", opts)  # logs with XXXXXXXX\n"
+        "    opts.esxPassword = save  # immediately restores base64 value\n"
+        "\n"
+        "  factory_deploy.py L87-89:\n"
+        "    os.execlpe(\"./factory_deploy.yml\", \"factory_deploy.yml\",\n"
+        "               \"--extra-vars\",\n"
+        "               \"esxPassword=%s\" % (password), ..."
+    ),
+}
+
+HX_F315 = {
+    "id": "HX-F315",
+    "title": (
+        "TLS Certificate Validation Disabled in config-ctlvm.py Appliance "
+        "Controller VM Configuration Script"
+    ),
+    "cwe": "CWE-295",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "appliance/usr/share/hyperflex/storfs-appliance/config-ctlvm.py "
+        "(L533-534)"
+    ),
+    "description": (
+        "config-ctlvm.py — the HyperFlex appliance controller VM configuration script "
+        "invoked during controller VM setup and hardware configuration — applies the "
+        "ssl._create_default_https_context monkey-patch at L533-534 inside a try/except "
+        "block at the start of main(). The try/except silently swallows AttributeError "
+        "on Python versions where _create_unverified_context is not available, but on "
+        "all HyperFlex-deployed Python versions the patch applies, replacing the "
+        "default HTTPS context process-wide for all subsequent requests in the script. "
+        "config-ctlvm.py accepts a --password argument at L427 (via argparse with "
+        "help=SUPPRESS), receives authentication credentials for vSphere/CIMC "
+        "connections, and makes REST calls to vSphere APIs using the now-unverified "
+        "SSL context."
+    ),
+    "evidence": (
+        "  config-ctlvm.py L533-534:\n"
+        "    def main():\n"
+        "        try:\n"
+        "            ssl._create_default_https_context = \\\n"
+        "                    ssl._create_unverified_context\n"
+        "        except:\n"
+        "            pass\n"
+        "\n"
+        "  config-ctlvm.py L427-429:\n"
+        "    parser.add_argument('-p', '--password',\n"
+        "            action = 'store',\n"
+        "            help = argparse.SUPPRESS)  # hidden credential argument"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -18135,6 +18225,8 @@ for _f in [
     HX_F311,
     HX_F312,
     HX_F313,
+    HX_F314,
+    HX_F315,
 ]:
     FINDINGS[_f["id"]] = _f
 
