@@ -14110,6 +14110,60 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
+HX_F247 = {
+    "id": "HX-F247",
+    "title": "OS Command Injection via Unvalidated Volume Name in create_vmfs5_usb.py",
+    "cwe": "CWE-78",
+    "severity": "MEDIUM",
+    "cvss": 6.3,
+    "component": "storfs-deploy/ansible/roles/esx/files/create_vmfs5_usb.py",
+    "description": (
+        "create_vmfs5_usb.py builds a vmkfstools command by substituting the "
+        "volume_name and device_path arguments directly into a shell command "
+        "string executed with shell=True. No sanitization or allow-list "
+        "validation is applied to either argument before substitution. "
+        "volume_name is taken from the -v command-line flag (default "
+        "'SpringpathDS'); device_path is derived from the auto-detected or "
+        "operator-supplied -d boot device path. An attacker who can influence "
+        "the Ansible variable springpath_ds_name (e.g., by injecting "
+        "shell metacharacters into a cluster serial number or deployment "
+        "configuration field that flows into the Ansible inventory) can "
+        "achieve arbitrary command execution on the ESXi host as the user "
+        "running the deployment playbook. An identical copy of this file "
+        "exists at roles/compute/files/create_vmfs5_usb.py."
+    ),
+    "evidence": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/esx/files/"
+        "create_vmfs5_usb.py line 65:\n"
+        "  ret = subprocess.call(\n"
+        '      "vmkfstools -C vmfs5 -S %s %s" % (volume_name, device_path),\n'
+        "      shell=True)\n\n"
+        "main() line 77: volume_name = opts.volume_name  # from -v argparse flag\n\n"
+        "roles/esx/tasks/init-datastore.yml line 94:\n"
+        "  springpath_ds_name: SpringpathDS-{{ host_serial_number }}\n"
+        "  script: create_vmfs5_usb.py -v '{{ springpath_ds_name }}'"
+    ),
+    "reproduction": (
+        "1. Inject a shell metacharacter sequence into the volume name, e.g., "
+        "volume_name = 'SpringpathDS-X; touch /tmp/pwned'.\n"
+        "2. Run: python3 create_vmfs5_usb.py -v 'SpringpathDS-X; touch /tmp/pwned' -d /dev/sda\n"
+        "3. Shell executes: vmkfstools -C vmfs5 -S SpringpathDS-X; touch /tmp/pwned /dev/sda:1\n"
+        "4. /tmp/pwned is created on the ESXi host."
+    ),
+    "remediation": (
+        "Replace shell=True invocation with an argument list: "
+        "subprocess.call(['vmkfstools', '-C', 'vmfs5', '-S', volume_name, device_path]). "
+        "Validate volume_name against the allowed character set "
+        "([A-Za-z0-9_.-]) before use."
+    ),
+    "references": ["CWE-78"],
+}
+
+for _f in [
+    HX_F247,
+]:
+    FINDINGS[_f["id"]] = _f
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
