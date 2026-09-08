@@ -17922,6 +17922,158 @@ HX_F310 = {
 }
 
 
+HX_F311 = {
+    "id": "HX-F311",
+    "title": (
+        "upgrade-hxos.sh Base64-Encodes vCenterPassword, esxPassword, and ctlvmPassword "
+        "Into a Non-Deleted Temp File and Globally Disables Ansible SSH Host Key Checking"
+    ),
+    "cwe": "CWE-261",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/upgrade-hxos.sh "
+        "(L97-110, L119-120)"
+    ),
+    "description": (
+        "upgrade-hxos.sh encodes vCenterPassword, esxPassword, and ctlvmPassword using "
+        "base64.b64encode() and writes them to a temp file using "
+        "tempfile.NamedTemporaryFile(prefix='virtJson_', mode='w', delete=False). "
+        "delete=False means the file persists after the handle closes; combined with the "
+        "default Python temp file mode (0600 is not guaranteed under all umask settings), "
+        "the base64-encoded credentials remain on disk in /tmp until explicitly cleaned up. "
+        "Base64 encoding is not encryption — the credentials are trivially recoverable by "
+        "anyone who can read the file. This extends the deployment-time CWE-261 pattern "
+        "(HX-F291, StDeployImpl.getEncodedPassword) to the upgrade lifecycle. "
+        "Additionally, upgrade-hxos.sh sets ANSIBLE_HOST_KEY_CHECKING = 'False' in the "
+        "environment before invoking ansible-playbook, globally disabling SSH host key "
+        "verification for all Ansible SSH sessions during the cluster upgrade. This is "
+        "equivalent to setting AutoAddPolicy on every paramiko SSH session in the entire "
+        "upgrade Ansible playbook execution, including connections to storage nodes, "
+        "ESX hosts, vCenter, and CIMC."
+    ),
+    "evidence": (
+        "  upgrade-hxos.sh L97-110:\n"
+        "    virt = {\n"
+        "        \"vCenterPassword\": base64.b64encode(\n"
+        "            opts.vcenterPassword.encode('utf-8')).decode(),\n"
+        "        \"esxPassword\": base64.b64encode(\n"
+        "            opts.esxPassword.encode('utf-8')).decode(),\n"
+        "        \"ctlvmPassword\": base64.b64encode(\n"
+        "            opts.ctlvmPassword.encode('utf-8')).decode()\n"
+        "    }\n"
+        "    with tempfile.NamedTemporaryFile(\n"
+        "        prefix='virtJson_', mode='w', delete=False) as temp:\n"
+        "        temp.writelines(json.dumps(virt))\n"
+        "\n"
+        "  upgrade-hxos.sh L119-120:\n"
+        "    newenviron = os.environ\n"
+        "    newenviron['ANSIBLE_HOST_KEY_CHECKING'] = 'False'"
+    ),
+}
+
+HX_F312 = {
+    "id": "HX-F312",
+    "title": (
+        "firstboot.sh Reads Root Password From VMware guestinfo OVF Environment "
+        "Property; Masking Step Can Fail Leaving Password Exposed in Hypervisor"
+    ),
+    "cwe": "CWE-312",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/firstboot.sh "
+        "(L75, L180, L183, L190-196)"
+    ),
+    "description": (
+        "The HyperFlex controller VM firstboot.sh script reads the root password for "
+        "initial provisioning from the VMware OVF environment property "
+        "hx.8root_password.Cisco_HX_Installer_Appliance via "
+        "vmtoolsd --cmd 'info-get guestinfo.ovfenv'. "
+        "The property value is extracted via eval export from the OVF XML, making the "
+        "password briefly available as a shell environment variable (visible in "
+        "/proc/<pid>/environ). "
+        "After setting the password with chpasswd, the script attempts to mask the "
+        "property by removing it from guestinfo with vmtoolsd --cmd 'info-set "
+        "guestinfo.ovfenv'. This masking step is not atomic and can fail — L195-196 "
+        "shows the script logs 'Masking password in vmtoolsd not successful' and "
+        "continues without the property being removed. "
+        "If masking fails, the root password remains readable in VMware guestinfo "
+        "from any process with vmtoolsd access and from the vSphere/vCenter API "
+        "for the lifetime of the VM, exposing it to any vCenter administrator or "
+        "automation system with read access to the VM's guest properties."
+    ),
+    "evidence": (
+        "  firstboot.sh L75:\n"
+        "    vmtoolsd --cmd='info-get guestinfo.ovfEnv' > $OVFENV\n"
+        "\n"
+        "  firstboot.sh L179-183:\n"
+        "    eval export `getprops_from_ovfxml $OVFENV`\n"
+        "    USER_PASS=\"${hx_8root_password_Cisco_HX_Installer_Appliance}\"\n"
+        "    ...\n"
+        "    echo $USERNAME:$USER_PASS | chpasswd --crypt-method $CRYPT_METHOD\n"
+        "\n"
+        "  firstboot.sh L190-196:\n"
+        "    OVFFILTER=\"<Property oe:key=\\\"hx.8root_password...\\\"\"\n"
+        "    OVFCONTENTS=$(sed \"/$OVFFILTER/d\" <<< \"$OVFCONTENTS\")\n"
+        "    vmtoolsd --cmd \"info-set guestinfo.ovfenv $OVFCONTENTS\" &> /dev/null\n"
+        "    VMTOOLSD_SET_STATUS=$?\n"
+        "    if [ $VMTOOLSD_SET_STATUS -ne 0 ]; then\n"
+        "        log \"Masking password in vmtoolsd not successful. Error code is ...\"\n"
+        "    fi"
+    ),
+}
+
+HX_F313 = {
+    "id": "HX-F313",
+    "title": (
+        "HyperFlex Upgrade and Deployment Shell Scripts Accept Admin and Root "
+        "Passwords as Command-Line Arguments Visible in Process Listing"
+    ),
+    "cwe": "CWE-214",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/ "
+        "(upgrade-hxos.sh:L39-43, storagenode.sh:L23-24, "
+        "postStorageCluster.sh:L22-24, deployCimc.sh:L30-31)"
+    ),
+    "description": (
+        "Four HyperFlex upgrade and deployment shell scripts accept admin and root "
+        "credentials as command-line arguments via Python optparse, making the passwords "
+        "visible in /proc/<pid>/cmdline and ps aux output for the duration of script "
+        "execution. "
+        "upgrade-hxos.sh accepts --ctlvmAdminPassword (controller VM admin password), "
+        "--ctlvmPassword (controller VM root password), and --esxiPassword (ESXi root "
+        "password) as positional command-line arguments at L39-43. "
+        "storagenode.sh accepts --ctlvmPassword (controller VM password) at L23-24. "
+        "postStorageCluster.sh accepts --ctlvmPassword and ESXi host password at L22-24. "
+        "deployCimc.sh accepts --host-password (host root password) at L30-31. "
+        "All four scripts are invoked by the HyperFlex deployment and upgrade orchestration "
+        "system, where these password arguments are constructed programmatically from "
+        "cluster configuration. Any local process or user with /proc access can read "
+        "the plaintext credential values while the scripts are running."
+    ),
+    "evidence": (
+        "  upgrade-hxos.sh L39-43:\n"
+        "    p.add_option('--ctlvmAdminPassword', ..., help='Controller VM admin password')\n"
+        "    p.add_option('--ctlvmPassword', ..., help='Controller VM root password')\n"
+        "    p.add_option('--esxiPassword', ..., help='ESXi password')\n"
+        "\n"
+        "  storagenode.sh L23-24:\n"
+        "    p.add_option('--ctlvmPassword', ..., help='Controller VM password')\n"
+        "\n"
+        "  postStorageCluster.sh L22-24:\n"
+        "    p.add_option('--ctlvmPassword', ..., help='Controller VM password')\n"
+        "    p.add_option('--esxiPassword', ..., help='ESXi host password')\n"
+        "\n"
+        "  deployCimc.sh L30-31:\n"
+        "    p.add_option('--host-password', dest='hostPassword', ...,\n"
+        "                 help='Host root password')"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17980,6 +18132,9 @@ for _f in [
     HX_F308,
     HX_F309,
     HX_F310,
+    HX_F311,
+    HX_F312,
+    HX_F313,
 ]:
     FINDINGS[_f["id"]] = _f
 
