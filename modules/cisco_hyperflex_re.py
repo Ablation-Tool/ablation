@@ -16251,6 +16251,140 @@ HX_F283 = {
     "references": ["CWE-295"],
 }
 
+HX_F284 = {
+    "id": "HX-F284",
+    "title": (
+        "Hardcoded Keystore Password 'springpath' in hyperflex_security.properties "
+        "(Base64-Obfuscated, Unlocks AES Credential Encryption Keystore)"
+    ),
+    "cwe": "CWE-259",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/hyperflex_security.properties (L4) — "
+        "keystore_password entry; com/storvisor/sysmgmt/common/security/SecurityConstants — "
+        "STORVISOR_KEYSTORE_FILE_AES, STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION"
+    ),
+    "description": (
+        "hyperflex_security.properties stores the Java KeyStore password using "
+        "base64 encoding only: keystore_password=c3ByaW5ncGF0aA== (decodes to "
+        "'springpath', the original Springpath Inc. company name). "
+        "SecurityConstants references the STORVISOR_KEYSTORE_FILE_AES keystore "
+        "and STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION entry, which protects the "
+        "AES key used to encrypt vCenter, ESX, and UCSM credentials stored in "
+        "ZooKeeper (ZK keys: url_vcenter_encrypted_user, "
+        "url_vcenter_encrypted_password, ucsm_encrypted_user, "
+        "ucsm_encrypted_password). An attacker with read access to the "
+        "hyperflex_security.properties file (world-readable under /usr/share/) "
+        "and the keystore file can trivially extract the AES encryption key and "
+        "decrypt all stored management credentials. The 'encryption' protecting "
+        "every credential in the ZooKeeper cluster configuration store is "
+        "completely nullified by this single hardcoded, base64-only-obfuscated "
+        "password. The password predates Cisco's acquisition of Springpath and "
+        "has not been changed."
+    ),
+    "evidence": (
+        "  misc/usr/share/hyperflex/storfs-misc/hyperflex_security.properties:\n"
+        "  <?xml version='1.0' encoding='UTF-8' standalone='no'?>\n"
+        "  <!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>\n"
+        "  <properties version='1.0'>\n"
+        "    <comment>These are Springpath security-related properties</comment>\n"
+        "    <entry key='keystore_password'>c3ByaW5ncGF0aA==</entry>\n"
+        "  </properties>\n"
+        "\n"
+        "  $ echo 'c3ByaW5ncGF0aA==' | base64 -d\n"
+        "  springpath\n"
+        "\n"
+        "  SecurityConstants.class constant pool (common-dep JAR):\n"
+        "    #33 = STORVISOR_SECURITY_PROPERTY_KEYSTORE_PWD (reads 'keystore_password')\n"
+        "    #37 = STORVISOR_KEYSTORE_FILE_AES (AES keystore file)\n"
+        "    #40 = STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION (AES key entry)\n"
+        "\n"
+        "  ZKEntryConstants.class ZK path keys for credential storage:\n"
+        "    url_vcenter_encrypted_password\n"
+        "    url_vcenter_encrypted_user\n"
+        "    ucsm_encrypted_password\n"
+        "    ucsm_encrypted_user"
+    ),
+    "reproduction": (
+        "1. Read /usr/share/hyperflex/storfs-misc/hyperflex_security.properties. "
+        "2. Base64-decode keystore_password value: echo 'c3ByaW5ncGF0aA==' | base64 -d -> 'springpath'. "
+        "3. Locate keystore file at the path specified by sysmgmt.common.security.springpath_keystore_file_aes. "
+        "4. keytool -list -keystore <file> -storepass springpath (or programmatic load). "
+        "5. Extract STORVISOR_KEYSTORE_ENTRY_AES_ENCRYPTION key entry. "
+        "6. Use extracted AES key to decrypt ZK entries: url_vcenter_encrypted_password, ucsm_encrypted_password."
+    ),
+    "remediation": (
+        "Replace the hardcoded 'springpath' keystore password with a randomly "
+        "generated password that is unique per deployment. Store the password "
+        "in a hardware-protected secrets store or TPM rather than a plaintext "
+        "properties file under /usr/share/. Rotate all credentials encrypted "
+        "with the compromised AES key. Rename the property from 'keystore_password' "
+        "to a non-descriptive key to reduce discoverability. Audit all deployments "
+        "that shipped with this credential since the Springpath acquisition."
+    ),
+    "references": ["CWE-259", "CWE-312"],
+}
+
+HX_F285 = {
+    "id": "HX-F285",
+    "title": (
+        "AES/ECB/PKCS5Padding Used in BasicEncryptionUtil "
+        "(hxSecuritySvcMgr — Deterministic, Pattern-Leaking Cipher Mode)"
+    ),
+    "cwe": "CWE-327",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "component": (
+        "jar-extract/hxSecuritySvcMgr — "
+        "com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.util.BasicEncryptionUtil"
+    ),
+    "description": (
+        "BasicEncryptionUtil in the hxSecuritySvcMgr component uses the cipher "
+        "transformation AES/ECB/PKCS5Padding for all encrypt/decrypt operations. "
+        "ECB (Electronic Code Book) mode is deterministic: identical 16-byte "
+        "plaintext blocks always produce identical ciphertext blocks with the same "
+        "key. This means (1) repeated patterns in plaintext are visible in the "
+        "ciphertext, (2) the same plaintext encrypted twice with the same key "
+        "produces the same output, enabling ciphertext comparison attacks, and "
+        "(3) ECB is vulnerable to block-level replay and substitution attacks. "
+        "The key derivation path hashes the input string with SHA-256 before "
+        "constructing a SecretKeySpec, so key derivation is reasonable — the "
+        "weakness is exclusively the ECB block mode. Any credential or sensitive "
+        "value encrypted with this class can be partially analyzed via ciphertext "
+        "pattern matching if the same key is reused across multiple encryptions."
+    ),
+    "evidence": (
+        "  BasicEncryptionUtil.class constant pool:\n"
+        "    #54 = Utf8  AES\n"
+        "    #80 = Utf8  AES/ECB/PKCS5Padding\n"
+        "    (confirmed as cipher transformation string via ldc at offset 33)\n"
+        "\n"
+        "  Key derivation in getKeySpec(String key):\n"
+        "    key.getBytes('UTF-8') ->\n"
+        "    MessageDigest.getInstance('SHA-256').digest(keyBytes) ->\n"
+        "    Arrays.copyOf(hash, 16) ->\n"
+        "    new SecretKeySpec(bytes, 'AES')\n"
+        "\n"
+        "  Cipher.getInstance('AES/ECB/PKCS5Padding') used for both\n"
+        "  ENCRYPT_MODE and DECRYPT_MODE operations."
+    ),
+    "reproduction": (
+        "Capture two ciphertext values encrypted with BasicEncryptionUtil using "
+        "the same key where the first 16 bytes of plaintext are identical "
+        "(e.g., two passwords starting with the same prefix). In ECB mode, "
+        "the first ciphertext block will be identical in both outputs, "
+        "confirming partial plaintext match without decrypting."
+    ),
+    "remediation": (
+        "Replace AES/ECB/PKCS5Padding with AES/GCM/NoPadding (preferred) or "
+        "AES/CBC/PKCS5Padding. For GCM, generate a 96-bit random IV per "
+        "encryption using SecureRandom and prepend it to the ciphertext. "
+        "This eliminates both determinism and pattern leakage."
+    ),
+    "references": ["CWE-327"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16282,6 +16416,8 @@ for _f in [
     HX_F281,
     HX_F282,
     HX_F283,
+    HX_F284,
+    HX_F285,
 ]:
     FINDINGS[_f["id"]] = _f
 
