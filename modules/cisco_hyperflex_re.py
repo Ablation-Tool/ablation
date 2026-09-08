@@ -15517,6 +15517,127 @@ HX_F271 = {
     "references": ["CWE-295"],
 }
 
+HX_F272 = {
+    "id": "HX-F272",
+    "title": (
+        "No-op TrustManagers in hxSecuritySvcMgr Thrift Service JAR "
+        "(com.cisco.hxdp Namespace, 2 Classes)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-mgmt/hxSecuritySvcMgr-1.0/lib/"
+        "hxSecuritySvcMgr-1.0.jar — "
+        "com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.stMgr.StMgrClient$1, "
+        "com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.hxSvcMgr.HxSvcMgrClient$1"
+    ),
+    "description": (
+        "Two anonymous X509TrustManager implementations in the hxSecuritySvcMgr "
+        "Thrift service JAR implement checkServerTrusted as a no-op (bytecode: "
+        "Code: 0: return). These classes are in the com.cisco.hxdp.sysmgmt "
+        "namespace — the post-Cisco-acquisition codebase layer — distinct from "
+        "the com.springpath.hx and com.storvisor.sysmgmt packages covered in "
+        "HX-F261. The hxSecuritySvcMgr service manages certificate lifecycle, "
+        "security policy enforcement, and authentication state for the HyperFlex "
+        "cluster; its outbound Thrift connections to stMgr and hxSvcMgr use "
+        "these bypassed TrustManagers, meaning the security service itself "
+        "cannot detect MITM against its control-plane calls."
+    ),
+    "evidence": (
+        "Bytecode-verified via javap (both classes identical pattern):\n"
+        "\n"
+        "  com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.stMgr.StMgrClient$1\n"
+        "  implements javax.net.ssl.X509TrustManager\n"
+        "\n"
+        "  public void checkServerTrusted(X509Certificate[], String) throws CertificateException;\n"
+        "    Code:\n"
+        "       0: return        // no-op; no certificate check performed\n"
+        "\n"
+        "  com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.hxSvcMgr.HxSvcMgrClient$1\n"
+        "  implements javax.net.ssl.X509TrustManager\n"
+        "\n"
+        "  public void checkServerTrusted(X509Certificate[], String) throws CertificateException;\n"
+        "    Code:\n"
+        "       0: return        // no-op; no certificate check performed\n"
+        "\n"
+        "Package prefix com.cisco.hxdp confirms this is post-acquisition code, "
+        "not the original Springpath codebase. The same bypass pattern present "
+        "in Springpath-origin code (HX-F261) was carried forward into Cisco-authored code."
+    ),
+    "reproduction": (
+        "ARP-poison or route-redirect the management VLAN. "
+        "Present a forged certificate on the stMgr (localhost:9333) or "
+        "hxSvcMgr endpoint. hxSecuritySvcMgr will accept it without error."
+    ),
+    "remediation": (
+        "Replace both anonymous TrustManager implementations with validation "
+        "against the cluster trust store at /etc/hyperflex/secure/hyperflex_keystore.jceks. "
+        "The presence of this pattern in com.cisco.hxdp-namespaced code indicates "
+        "the vulnerability was introduced during Cisco development, not only inherited "
+        "from the Springpath acquisition."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F273 = {
+    "id": "HX-F273",
+    "title": (
+        "Always-True HostnameVerifiers in hxSecuritySvcMgr Thrift Service JAR "
+        "(com.cisco.hxdp Namespace, 2 Classes)"
+    ),
+    "cwe": "CWE-297",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-mgmt/hxSecuritySvcMgr-1.0/lib/"
+        "hxSecuritySvcMgr-1.0.jar — "
+        "com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.stMgr.StMgrClient$2, "
+        "com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.hxSvcMgr.HxSvcMgrClient$2"
+    ),
+    "description": (
+        "Two anonymous HostnameVerifier implementations in the hxSecuritySvcMgr "
+        "Thrift service JAR implement verify() to unconditionally return true "
+        "(bytecode: iconst_1; ireturn). These companion classes to the no-op "
+        "TrustManagers in HX-F272 complete the dual-bypass pattern — even if "
+        "certificate chain validation were re-enabled, hostname mismatch would "
+        "still be accepted. Both classes are in the com.cisco.hxdp.sysmgmt "
+        "namespace, confirming the pattern was written into Cisco-authored code, "
+        "not only inherited from the Springpath acquisition."
+    ),
+    "evidence": (
+        "Bytecode-verified via javap (both classes identical pattern):\n"
+        "\n"
+        "  com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.stMgr.StMgrClient$2\n"
+        "  implements javax.net.ssl.HostnameVerifier\n"
+        "\n"
+        "  public boolean verify(String, SSLSession);\n"
+        "    Code:\n"
+        "       0: iconst_1\n"
+        "       1: ireturn        // unconditionally returns true\n"
+        "\n"
+        "  com.cisco.hxdp.sysmgmt.hxSecuritySvcMgr.gateway.hxSvcMgr.HxSvcMgrClient$2\n"
+        "  implements javax.net.ssl.HostnameVerifier\n"
+        "\n"
+        "  public boolean verify(String, SSLSession);\n"
+        "    Code:\n"
+        "       0: iconst_1\n"
+        "       1: ireturn        // unconditionally returns true"
+    ),
+    "reproduction": (
+        "Present a certificate with any CN/SAN mismatch on the stMgr or hxSvcMgr "
+        "endpoint. hxSecuritySvcMgr will accept it. Combined with the no-op "
+        "TrustManagers in HX-F272, no TLS validation of any kind is performed."
+    ),
+    "remediation": (
+        "Remove both always-true HostnameVerifier implementations. "
+        "Use HttpsURLConnection default hostname verification or "
+        "OkHttpClient with standard verification. "
+        "See HX-F262 remediation for the shared fix pattern."
+    ),
+    "references": ["CWE-297"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15536,6 +15657,8 @@ for _f in [
     HX_F269,
     HX_F270,
     HX_F271,
+    HX_F272,
+    HX_F273,
 ]:
     FINDINGS[_f["id"]] = _f
 
