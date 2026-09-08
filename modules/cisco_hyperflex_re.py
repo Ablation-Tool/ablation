@@ -16385,6 +16385,72 @@ HX_F285 = {
     "references": ["CWE-327"],
 }
 
+HX_F286 = {
+    "id": "HX-F286",
+    "title": (
+        "TLS Verification Disabled by Default in stCli REST Utility "
+        "(stcli-egg/stCli/commonFunctions.py — verify=False Default Parameter + "
+        "InsecureRequestWarning Suppressed)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "stcli-egg/stCli/commonFunctions.py (L8, L29, L33) — "
+        "restWithRetry() and runRestQueries() shared REST utility for stCli"
+    ),
+    "description": (
+        "stcli/commonFunctions.py defines the shared REST utility functions "
+        "restWithRetry() and runRestQueries() with verify=False as the default "
+        "parameter value. All callers across the stCli codebase that do not "
+        "explicitly pass verify=True inherit TLS certificate validation disabled. "
+        "The default-false pattern is structurally worse than call-site hardcoding: "
+        "future callers require explicit opt-in to security, reversing the secure "
+        "default. Additionally, runRestQueries() unconditionally calls "
+        "requests.packages.urllib3.disable_warnings(InsecureRequestWarning) on "
+        "every invocation — even when verify=True is passed explicitly — silencing "
+        "all urllib3 SSL warnings process-wide for the duration of the stCli session. "
+        "stCli is the primary HyperFlex cluster management CLI, making REST calls "
+        "to the management plane APIs. An on-path attacker on the management network "
+        "can present a forged TLS certificate to intercept any stCli REST call. "
+        "This is the stcli-egg counterpart to the factory-path verify=False at "
+        "storfs-factory/utils/commonFunctions.py:588 (HX-F283)."
+    ),
+    "evidence": (
+        "  stcli-egg/stCli/commonFunctions.py:\n"
+        "\n"
+        "  L8: def restWithRetry(restFn, restUrl, data, auth, headers,\n"
+        "                        retryCount=0, retryInterval=6,\n"
+        "                        proxies=None, verify=False):\n"
+        "      # verify=False is the default — all callers inherit TLS bypass\n"
+        "      response = restFn(url=restUrl, data=data, auth=auth,\n"
+        "                        headers=headers, proxies=proxies,\n"
+        "                        verify=verify, timeout=REQUEST_TIMEOUT)\n"
+        "\n"
+        "  L29: def runRestQueries(restUrl, requestType='get', ...,\n"
+        "                          proxies=None, verify=False):\n"
+        "       # verify=False default here too\n"
+        "  L33:   requests.packages.urllib3.disable_warnings(InsecureRequestWarning)\n"
+        "         # warnings suppressed unconditionally, even when verify=True"
+    ),
+    "reproduction": (
+        "Invoke any stCli command that makes a management API call. "
+        "ARP-spoof to intercept the HTTPS connection. Present a self-signed "
+        "certificate. stCli will connect without error or warning — "
+        "verify=False default and disabled InsecureRequestWarning ensure "
+        "neither validation nor warning occurs."
+    ),
+    "remediation": (
+        "Change both function signatures to verify=True as the default. "
+        "Remove the unconditional disable_warnings call, or restrict it to "
+        "only when verify=False is explicitly passed. Where stCli calls "
+        "management APIs on the local cluster, pass the cluster CA bundle "
+        "as verify='/path/to/cluster-ca.crt'. See HX-F283 for the factory-path "
+        "equivalent fix."
+    ),
+    "references": ["CWE-295"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16418,6 +16484,7 @@ for _f in [
     HX_F283,
     HX_F284,
     HX_F285,
+    HX_F286,
 ]:
     FINDINGS[_f["id"]] = _f
 
