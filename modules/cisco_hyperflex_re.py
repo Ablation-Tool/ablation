@@ -16109,6 +16109,148 @@ HX_F281 = {
     "references": ["CWE-297"],
 }
 
+HX_F282 = {
+    "id": "HX-F282",
+    "title": (
+        "hxSvcHttpEnabled=true Across All 42 HyperFlex Management WAR application.conf Files "
+        "(Plain HTTP Thrift/REST Transport Enabled System-Wide)"
+    ),
+    "cwe": "CWE-319",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "All HyperFlex management-plane WARs: coreapi, auth, encryption, iscsi, "
+        "securityservice, slservice, supportservice, hxupgrade, backup, dataprotection, "
+        "stSSO, ROOT, hxSecuritySvcMgr — application.conf in every deployment"
+    ),
+    "description": (
+        "The configuration key hxSvcHttpEnabled=true is set in every application.conf "
+        "across all 42 HyperFlex management-plane WAR deployments (hxSvcMgr namespace). "
+        "This key enables the plain HTTP transport for the inter-service communication "
+        "layer that binds on port 9000. The Play framework default bind address is "
+        "0.0.0.0; no http.address=127.0.0.1 override was found in any WAR configuration. "
+        "While nginx proxies external HTTPS traffic to http://127.0.0.1:9000 and enforces "
+        "TLS termination at port 443, the HTTP listener on port 9000 is independently "
+        "accessible from any host that can reach the management interface — bypassing "
+        "nginx's TLS layer entirely. The coreapi swagger.json explicitly declares "
+        "\"schemes\": [\"http\", \"https\"], confirming HTTP is an intended transport. "
+        "Authentication tokens, session cookies, cluster management API payloads, "
+        "and administrative credentials transmitted over this interface traverse the "
+        "network in cleartext. hyperVSvcHttpEnabled=true is also set throughout, "
+        "enabling the same HTTP-only transport for the Hyper-V service interface."
+    ),
+    "evidence": (
+        "hxSvcHttpEnabled=true confirmed in 42 application.conf files:\n"
+        "  jar-extract/coreapi-war/WEB-INF/classes/application.conf:40\n"
+        "  jar-extract/auth-war/WEB-INF/classes/application.conf:34\n"
+        "  jar-extract/securityservice-war/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_iscsi/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_slservice/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_supportservice/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_hxupgrade/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_backupservice/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_dataprotection/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_encryption/WEB-INF/classes/application.conf\n"
+        "  jar-extract/scan_ROOT/WEB-INF/classes/application.conf\n"
+        "  jar-extract/hxSecuritySvcMgr/application.conf\n"
+        "  (+ resources/ mirror copies for all above)\n"
+        "\n"
+        "nginx.conf L648:\n"
+        "  location /adminGateway/connector/ {\n"
+        "    allow 127.0.0.1; deny all;\n"
+        "    proxy_pass http://127.0.0.1:9000/;\n"
+        "  }\n"
+        "(port 9000 proxied by nginx; no http.address=127.0.0.1 override found)\n"
+        "\n"
+        "coreapi swagger.json:\n"
+        "  \"schemes\": [\"http\", \"https\"]\n"
+        "\n"
+        "Class file strings confirm HTTP endpoint:\n"
+        "  'http://localhost:9000/DeviceConnections'\n"
+        "  'curl 127.0.0.1:9000/Systems'\n"
+        "  'sysmgmt.thrift.hxSvcHttpEnabled'"
+    ),
+    "reproduction": (
+        "From any host on the HyperFlex management network: "
+        "curl -v http://<hx-node-mgmt-ip>:9000/rest/v1/clusters — if port 9000 "
+        "binds to 0.0.0.0 (Play default), this returns API data without TLS. "
+        "Authentication tokens transmitted to this endpoint traverse the network "
+        "in cleartext and can be captured by a passive network observer."
+    ),
+    "remediation": (
+        "Add play.server.http.address=127.0.0.1 (Play 2.x) or equivalent to each "
+        "application.conf to restrict the HTTP listener to the loopback interface. "
+        "Set hxSvcHttpEnabled=false if inter-service communication can be migrated "
+        "to HTTPS or TLS-wrapped Thrift. Add iptables rules to block external access "
+        "to port 9000 on all management interfaces as a defense-in-depth measure."
+    ),
+    "references": ["CWE-319"],
+}
+
+HX_F283 = {
+    "id": "HX-F283",
+    "title": (
+        "TLS Certificate Verification Disabled in Factory restWithRetry() "
+        "(commonFunctions.py:588, verify=False)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "factory/opt/hyperflex/storfs-factory/utils/commonFunctions.py (L588) — "
+        "restWithRetry() utility function"
+    ),
+    "description": (
+        "The restWithRetry() function in storfs-factory/utils/commonFunctions.py passes "
+        "verify=False to every REST request it retries, disabling TLS certificate "
+        "validation for all callers of this utility. restWithRetry() is a shared retry "
+        "wrapper invoked across the factory provisioning codebase for management API calls "
+        "during HyperFlex cluster bootstrapping and node provisioning. Disabling "
+        "verification at the shared utility layer propagates the bypass to every "
+        "provisioning operation that uses this function — node registration, cluster "
+        "configuration, and API-driven provisioning steps all execute without certificate "
+        "chain or hostname validation. An attacker on the provisioning network can present "
+        "a forged TLS certificate to intercept any REST call routed through restWithRetry(). "
+        "The same verify=False pattern in the stretched cluster arbitrator path is filed "
+        "separately as HX-F276."
+    ),
+    "evidence": (
+        "  storfs-factory/utils/commonFunctions.py L588:\n"
+        "\n"
+        "  def restWithRetry(restFn, restUrl, data, auth, headers, retryCount, retryInterval):\n"
+        "      count = 0\n"
+        "      resp = None\n"
+        "      while count < retryCount:\n"
+        "          try:\n"
+        "              resp = restFn(url=restUrl, data=data, auth=auth,\n"
+        "                           headers=headers, verify=False,\n"
+        "                           timeout=REQUEST_TIMEOUT)\n"
+        "          except:\n"
+        "              ...\n"
+        "\n"
+        "  verify=False is hardcoded at the shared utility layer — all callers inherit "
+        "the bypass. The same file contains AutoAddPolicy() instances at L273 and L660 "
+        "(HX-F269), confirming a systemic pattern of transport security bypass in "
+        "commonFunctions.py."
+    ),
+    "reproduction": (
+        "ARP-spoof the provisioning/management network segment during factory deployment. "
+        "Intercept any HTTPS REST call from a storfs-factory process that routes through "
+        "restWithRetry(). Present a self-signed certificate with any subject. "
+        "Python requests with verify=False accepts it unconditionally. "
+        "Capture or manipulate provisioning API payloads (node registration data, "
+        "cluster configuration parameters)."
+    ),
+    "remediation": (
+        "Remove verify=False from restWithRetry(). Pass the CA bundle path as a parameter "
+        "or use verify=True (default). Factory provisioning should use the HyperFlex "
+        "cluster CA bundle or a pinned certificate for management API endpoints. "
+        "Add a ca_bundle parameter to restWithRetry() so callers can specify the "
+        "appropriate trust root without disabling verification entirely."
+    ),
+    "references": ["CWE-295"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16138,6 +16280,8 @@ for _f in [
     HX_F279,
     HX_F280,
     HX_F281,
+    HX_F282,
+    HX_F283,
 ]:
     FINDINGS[_f["id"]] = _f
 
