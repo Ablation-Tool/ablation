@@ -14164,6 +14164,68 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
+HX_F248 = {
+    "id": "HX-F248",
+    "title": "SSH Private Keys Stored in Plaintext in Unauthenticated ZooKeeper",
+    "cwe": "CWE-312",
+    "severity": "HIGH",
+    "cvss": 7.8,
+    "component": "storfs-mgmt/stnodemgr/ZKService_StNodeMgr",
+    "description": (
+        "The stNodeMgr service stores stCtlVM SSH private keys in ZooKeeper "
+        "under a payload entry keyed as 'ssh_plain_text_private_key'. "
+        "ZooKeeper is bound to localhost:2181 (confirmed by application.conf: "
+        "zkHost = 'localhost:2181') and is accessible without authentication. "
+        "The diagnostic tool listzkdb.py connects with KazooClient(read_only=True) "
+        "and no add_auth() call, confirming that ZK data nodes carry no ACLs "
+        "enforcing confidentiality. Any process on the stCtlVM host (including "
+        "attacker code running under any local user account) can connect to "
+        "localhost:2181, enumerate the stNodeMgr ZK subtree, and retrieve the "
+        "plaintext SSH private key used for root authentication to all stCtlVM "
+        "nodes in the cluster. The SSH connection is also made with "
+        "AutoAddPolicy() (no host key verification), removing the second "
+        "authentication factor."
+    ),
+    "evidence": (
+        "stnodemgr-decompile/com/storvisor/sysmgmt/stNodeMgr/ZKService_StNodeMgr.class "
+        "static initializer:\n"
+        '  ldc #85  // String "ssh_plain_text_private_key"\n'
+        "  invokeinterface STR_PAYLOAD_ENTRY_SSH_PLAIN_TEXT_PRIVATE_KEY setter\n\n"
+        "Also stores: ssh_encrypted_private_key, ssh_encrypted_public_key, "
+        "ssh_plain_text_public_key.\n\n"
+        "misc/usr/share/hyperflex/storfs-misc/listzkdb.py line 540:\n"
+        "  zkClient = KazooClient(hosts=ensemble, read_only=True)\n"
+        "  zkClient.start()  # no add_auth() call\n\n"
+        "application.conf: zkHost = 'localhost:2181'\n\n"
+        "commonFunctions.py run_command_on_node():\n"
+        "  client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  client.connect(hostname=node, username='root', pkey=key)"
+    ),
+    "reproduction": (
+        "1. On the stCtlVM, connect to ZK: python3 -c \""
+        "from kazoo.client import KazooClient; "
+        "k = KazooClient(hosts='localhost:2181'); k.start(); "
+        "print(k.get('/storvisor/nodes')[0])\"\n"
+        "2. Parse the JSON payload and extract the 'ssh_plain_text_private_key' field.\n"
+        "3. Use the extracted key to SSH as root to any node: "
+        "ssh -i <extracted_key> root@<node_dataip>"
+    ),
+    "remediation": (
+        "Apply ZooKeeper ACLs to the stNodeMgr subtree restricting read access "
+        "to authenticated identities only. Encrypt the SSH private key before "
+        "storing it in ZK and decrypt only in memory at use time. "
+        "Remove the 'ssh_plain_text_private_key' ZK field entirely; "
+        "the 'ssh_encrypted_private_key' field should be sufficient. "
+        "Configure paramiko with a known-hosts file instead of AutoAddPolicy."
+    ),
+    "references": ["CWE-312", "CWE-306", "CWE-295"],
+}
+
+for _f in [
+    HX_F248,
+]:
+    FINDINGS[_f["id"]] = _f
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
