@@ -13659,6 +13659,65 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F239 = {
+    "id": "HX-F239",
+    "title": "Global Python SSL Context Patched to Unverified in vcenter.py; Process-Wide TLS Bypass (CWE-295)",
+    "severity": "MEDIUM",
+    "cvss": "5.9",
+    "component": "storfs-deploy/ansible/library/vcenter.py",
+    "description": (
+        "At line 389 of vcenter.py, the deployment module unconditionally replaces the "
+        "global Python SSL context with an unverified context: "
+        "ssl._create_default_https_context = ssl._create_unverified_context. "
+        "This patch is applied once at module initialization and persists for the "
+        "entire lifetime of the Python process. Unlike per-request verify=False which "
+        "scopes the bypass to a single connection, this global patch disables TLS "
+        "certificate verification for ALL HTTPS connections made by any code running "
+        "in the same process after line 389 executes, including connections made by "
+        "imported libraries. "
+        "The vcenter.py module handles vCenter and ESXi credentials passed via Ansible "
+        "module params (hostname, username, password, esxi_password — all base64-encoded). "
+        "These credentials are passed to pyVmomi SmartConnect calls at lines 414, 422, "
+        "426, 429, 432 under the now-unverified SSL context. An attacker positioned on "
+        "the management network can intercept the HTTPS handshake with a rogue vCenter "
+        "or ESXi certificate and receive plaintext vCenter administrator credentials "
+        "before authentication completes. "
+        "The patch is wrapped in try/except pass (lines 389-391) which silently swallows "
+        "any error during the patch — if the patch fails, code proceeds as if TLS is "
+        "verified while it may not be."
+    ),
+    "affected_versions": "HXDP 6.0.2b (all supported platforms)",
+    "poc": (
+        "ARP-spoof or DNS-redirect vcenter_hostname to attacker-controlled host "
+        "with a self-signed cert. Run the vcenter Ansible module (used during "
+        "cluster deployment). Observe that SmartConnect completes without "
+        "certificate error and vCenter credentials are captured in the TLS session."
+    ),
+    "remediation": (
+        "Remove ssl._create_default_https_context = ssl._create_unverified_context. "
+        "If self-signed certificates are required, scope the unverified context to "
+        "the specific SmartConnect call by passing sslContext=ssl._create_unverified_context() "
+        "to the individual pyVmomi connection, not the global default. "
+        "For production vCenter deployments, install a CA-signed certificate and pass "
+        "the CA bundle path rather than disabling verification entirely."
+    ),
+    "references": [
+        "CWE-295: Improper Certificate Validation",
+        "vcenter.py line 389: ssl._create_default_https_context = ssl._create_unverified_context",
+    ],
+    "tags": [
+        "tls-bypass", "cwe-295", "ssl-global-patch", "vcenter",
+        "credential-interception", "deployment", "medium",
+    ],
+}
+
+
+for _f in [
+    HX_F239,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
