@@ -12898,9 +12898,101 @@ HX_F227 = {
     ],
 }
 
+HX_F228 = {
+    "id": "HX-F228",
+    "title": "Diagnostic Account Not Barred from Upgrade, Support, and Encryption REST APIs",
+    "severity": "MEDIUM",
+    "cvss_score": 6.5,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": ["CWE-284", "CWE-732"],
+    "component": (
+        "upgrade-war/WEB-INF/classes/application.conf, "
+        "support-war/WEB-INF/classes/application.conf (implicit), "
+        "encryption-war/WEB-INF/classes/resources/application.conf"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "The `barredUsers` configuration list, consumed by `SSOBasicAuthImpl` and "
+        "`SSOAuthFilterImpl` to block specific accounts from API authentication, is "
+        "inconsistent across the HyperFlex management WAR deployments. "
+        "The `auth-war` and `coreapi-war` both specify "
+        "`barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]`, "
+        "explicitly preventing the diagnostic service account from authenticating "
+        "to the AAA and cluster lifecycle management APIs. "
+        "The `upgrade-war`, `support-war`, and `encryption-war` all specify only "
+        "`barredUsers = [\"root\", \"local/root\"]`, omitting `\"diag\"` and "
+        "`\"local/diag\"`. "
+        "As a result, the `diag` account — which has local OS privileges and a "
+        "known credential surface (see HX-F218) — can authenticate via HTTP Basic "
+        "Auth or SSO token to: "
+        "(1) cluster upgrade endpoints (`POST /v1/cluster/upgrade/*`, "
+        "`POST /v1/cluster/upgradeValidateUcsmCreds`); "
+        "(2) support bundle generation (`POST /supportBundle`); and "
+        "(3) SED/KMIP encryption management endpoints "
+        "(`POST /v1/encryption/certificates/upload`, "
+        "`GET /v1/encryption/localKey`, "
+        "`POST /v1/encryption/ucsmReadonlyUser/*`). "
+        "The `auth-war` barring of `diag` demonstrates the design intent: "
+        "the diagnostic account must not be permitted to use management APIs. "
+        "The omission in three other WARs is an incomplete enforcement of that policy."
+    ),
+    "evidence": [
+        {
+            "file": "auth-war/WEB-INF/classes/application.conf (and coreapi-war)",
+            "lines": "42",
+            "snippet": (
+                'barredUsers = ["root", "local/root", "diag", "local/diag"]'
+            ),
+            "note": "Correct: auth-war and coreapi-war bar the diag account",
+        },
+        {
+            "file": "upgrade-war/WEB-INF/classes/application.conf",
+            "lines": "44",
+            "snippet": (
+                'barredUsers = ["root", "local/root"]'
+            ),
+            "note": "Missing diag and local/diag — allows diag auth to cluster upgrade APIs",
+        },
+        {
+            "file": "encryption-war/WEB-INF/classes/resources/application.conf",
+            "lines": "44",
+            "snippet": (
+                'barredUsers = ["root", "local/root"]'
+            ),
+            "note": "Missing diag and local/diag — allows diag auth to encryption key APIs",
+        },
+    ],
+    "impact": (
+        "An actor in possession of the `diag` account credential can authenticate "
+        "to the cluster upgrade API (triggering or aborting a cluster-wide upgrade), "
+        "the support bundle API (invoking arbitrary command execution on all nodes "
+        "via HX-F227), and the encryption API (reading or modifying SED/KMIP "
+        "configuration). The upgrade and encryption APIs have cluster-wide blast "
+        "radius. The configuration inconsistency also means the `diag` account "
+        "can acquire a valid HyperFlex SSO session token for these three WARs, "
+        "enabling API-based post-authentication actions that the platform's design "
+        "explicitly intended to prevent."
+    ),
+    "remediation": (
+        "Add `\"diag\"` and `\"local/diag\"` to the `barredUsers` list in "
+        "`upgrade-war/WEB-INF/classes/application.conf`, "
+        "`support-war/WEB-INF/classes/application.conf`, and "
+        "`encryption-war/WEB-INF/classes/resources/application.conf` to match "
+        "the policy enforced in `auth-war` and `coreapi-war`. "
+        "Consider centralizing the `barredUsers` list into a shared configuration "
+        "resource to prevent future per-WAR inconsistencies."
+    ),
+    "tags": [
+        "access-control", "barred-users", "diag-account", "cwe-284",
+        "cwe-732", "inconsistent-policy", "upgrade-war", "support-war",
+        "encryption-war", "medium",
+    ],
+}
+
 for _f in [
     HX_F225, HX_F226,
     HX_F227,
+    HX_F228,
 ]:
     FINDINGS[_f["id"]] = _f
 
