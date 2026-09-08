@@ -17352,6 +17352,260 @@ HX_F300 = {
 }
 
 
+HX_F301 = {
+    "id": "HX-F301",
+    "title": (
+        "TLS Certificate Validation Disabled Across 9 Additional Ansible Library Modules "
+        "Including vCenter Connectivity, HA/DRS Configuration, and OVA Deployment"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/library/ "
+        "(reserveMem.py:L62, vcenter.py:L297/389/456, configureEsx.py:L68, "
+        "deployOva.py:L97, setstaticip.py:L291, factory_datastore.py:L131/229, "
+        "configureHaDrs.py:L153/194, addExtraConfig.py:L47, springpathHclConf.py:L70)"
+    ),
+    "description": (
+        "Nine Ansible library modules disable TLS or SSH host key validation across "
+        "cluster lifecycle operations. vcenter.py — the dedicated vCenter connectivity "
+        "module — combines all three bypass patterns: verify=False in a REST call at L297, "
+        "ssl._create_default_https_context monkey-patch at L389 before SmartConnect, and "
+        "requests.packages.urllib3.disable_warnings() at L456. "
+        "reserveMem.py (memory reservation during controller deployment) applies the "
+        "monkey-patch at L62. "
+        "configureEsx.py (ESX host configuration) applies the monkey-patch at L68. "
+        "deployOva.py (OVA template deployment) calls disable_warnings() at L97. "
+        "setstaticip.py (static IP assignment during cluster bootstrapping) calls "
+        "disable_warnings() at L291. "
+        "factory_datastore.py (factory datastore creation) uses AutoAddPolicy for SSH "
+        "at L131 and applies the monkey-patch at L229. "
+        "configureHaDrs.py (High Availability and Distributed Resource Scheduler "
+        "configuration) applies the monkey-patch at L153 and calls disable_warnings() "
+        "at L194. "
+        "addExtraConfig.py (VM extra configuration) applies the monkey-patch at L47. "
+        "springpathHclConf.py (HCL validation) applies the monkey-patch at L70."
+    ),
+    "evidence": (
+        "  library/vcenter.py L297:\n"
+        "    requests.put(url, data=json.dumps(body), headers=headers, verify=False)\n"
+        "  library/vcenter.py L389:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "  library/vcenter.py L456:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "\n"
+        "  library/reserveMem.py L62:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/configureEsx.py L68:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/deployOva.py L97:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "\n"
+        "  library/setstaticip.py L291:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "\n"
+        "  library/factory_datastore.py L131:\n"
+        "    sshclient.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  library/factory_datastore.py L229:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/configureHaDrs.py L153:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "  library/configureHaDrs.py L194:\n"
+        "    requests.packages.urllib3.disable_warnings()\n"
+        "\n"
+        "  library/addExtraConfig.py L47:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/springpathHclConf.py L70:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context"
+    ),
+}
+
+HX_F302 = {
+    "id": "HX-F302",
+    "title": (
+        "TLS Validation and SSH Host Key Verification Disabled in Secure Boot "
+        "State Management Ansible Module"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/library/secureBoot.py "
+        "(L22, L107, L145, L171, L248)"
+    ),
+    "description": (
+        "The secureBoot.py Ansible library module — responsible for querying and setting "
+        "the UEFI Secure Boot state on HyperFlex controller VMs — disables TLS certificate "
+        "validation and SSH host key verification across all its operations. "
+        "L22 unconditionally suppresses InsecureRequestWarning at module import: "
+        "urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning). "
+        "L107 uses AutoAddPolicy for SSH connections to controller nodes. "
+        "L145 passes verify=False in the REST POST that sets the Secure Boot state. "
+        "L171 passes verify=False in the REST GET that reads the Secure Boot state. "
+        "L248 applies the ssl._create_default_https_context monkey-patch for SmartConnect. "
+        "All three bypass patterns — disable_warnings, AutoAddPolicy, and verify=False — "
+        "are present in a single module whose explicit function is to enforce a security "
+        "policy (UEFI Secure Boot) on cluster nodes. An MITM positioned between the "
+        "Ansible controller and target can serve a fraudulent Secure Boot state response, "
+        "causing the module to report the feature as enabled when it is not, or to set an "
+        "attacker-controlled boot policy."
+    ),
+    "evidence": (
+        "  library/secureBoot.py L22:\n"
+        "    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n"
+        "\n"
+        "  library/secureBoot.py L107:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  library/secureBoot.py L145:\n"
+        "    post_req = requests.post(setstatus_url,\n"
+        "        data=json.dumps(secureboot_state),\n"
+        "        auth=(controller_username, controller_password),\n"
+        "        headers=header, verify=False)\n"
+        "\n"
+        "  library/secureBoot.py L171:\n"
+        "    response = requests.get(getstatus_url,\n"
+        "        auth=(controller_username, controller_password),\n"
+        "        headers=header, verify=False)\n"
+        "\n"
+        "  library/secureBoot.py L248:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context"
+    ),
+}
+
+HX_F303 = {
+    "id": "HX-F303",
+    "title": (
+        "SSH Host Key Verification Disabled in Top-Level Ansible uninstall_cluster.py "
+        "and configureRDMs.py Scripts"
+    ),
+    "cwe": "CWE-322",
+    "severity": "MEDIUM",
+    "cvss": 5.9,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/uninstall_cluster.py:L64; "
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/configureRDMs.py:L399,L425"
+    ),
+    "description": (
+        "Two top-level Ansible scripts use paramiko.AutoAddPolicy() for SSH connections "
+        "to cluster nodes. These are distinct from the library/uninstall_cluster.py and "
+        "library/configureRDMs.py variants in the ansible library/ directory — separate "
+        "files that duplicate the pattern. "
+        "uninstall_cluster.py (cluster uninstall, invoked during decommission) uses "
+        "AutoAddPolicy at L64 for SSH connections to storage nodes. "
+        "configureRDMs.py (Raw Device Mapping configuration for vSphere) uses AutoAddPolicy "
+        "at L399 and L425, accepting any SSH host key for node connections during RDM "
+        "setup. AutoAddPolicy accepts any host key on first connection without verification, "
+        "making both operations vulnerable to MITM interception."
+    ),
+    "evidence": (
+        "  ansible/uninstall_cluster.py L64:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  ansible/configureRDMs.py L399:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "  ansible/configureRDMs.py L425:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())"
+    ),
+}
+
+HX_F304 = {
+    "id": "HX-F304",
+    "title": (
+        "TLS Private Key Stored in ZooKeeper Data Path Without Confirmed ACL Protection"
+    ),
+    "cwe": "CWE-312",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-mgmt/hxSvcMgr-1.0/conf/application.conf "
+        "(security.sslKeyZKPath, security.sslCertZKPath)"
+    ),
+    "description": (
+        "hxSvcMgr-1.0/conf/application.conf configures the HyperFlex service manager to "
+        "store the TLS private key and certificate in ZooKeeper data nodes: "
+        "sslKeyZKPath = \"/storvisor/ssl/key\" and sslCertZKPath = \"/storvisor/ssl/certificate\". "
+        "ZooKeeper's default ACL model assigns OPEN_ACL_UNSAFE (world:anyone with all "
+        "permissions) to newly created nodes unless explicitly overridden. No ZK TLS "
+        "configuration (zookeeper.ssl.*, clientCnxnSocket, ssl.quorum.*) is present in "
+        "any application.conf or zoo.cfg within the firmware image, indicating ZK traffic "
+        "transits port 2181 unencrypted. "
+        "The ZK ensemble spans all three controller VMs; SSL key material written to "
+        "/storvisor/ssl/key is replicated in cleartext across the cluster network. "
+        "Any ZK-connected client or service on a cluster node — regardless of whether it "
+        "has a valid service clientId — can read /storvisor/ssl/key if the node's ACL was "
+        "created with OPEN_ACL_UNSAFE. The private key enables decryption of captured "
+        "HyperFlex management plane TLS traffic and impersonation of the management API "
+        "endpoint."
+    ),
+    "evidence": (
+        "  hxSvcMgr-1.0/conf/application.conf:\n"
+        "    security {\n"
+        "        sslCertZKPath = \"/storvisor/ssl/certificate\"\n"
+        "        sslKeyZKPath = \"/storvisor/ssl/key\"\n"
+        "    }\n"
+        "\n"
+        "  No ZK TLS configuration found in firmware image:\n"
+        "    grep -r 'zookeeper.ssl\\|clientCnxnSocket\\|ssl.quorum' -- 0 results\n"
+        "\n"
+        "  ZK ensemble config (hxSvcMgr-1.0/conf/application.conf):\n"
+        "    zk {\n"
+        "        connectPort = 2181\n"
+        "        ensembleSize = 3\n"
+        "    }"
+    ),
+}
+
+HX_F305 = {
+    "id": "HX-F305",
+    "title": (
+        "Cluster-Wide Automatic Password Synchronization Enabled for Privileged "
+        "System Accounts root, admin, and diag Across Three Services"
+    ),
+    "cwe": "CWE-266",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-mgmt/hxSvcMgr-1.0/conf/application.conf:L20-21; "
+        "mgmt/opt/hyperflex/storfs-mgmt/hxSupportSvc-1.0/conf/application.conf:L8-9; "
+        "mgmt/opt/hyperflex/storfs-mgmt/stMgr-1.0/conf/application.conf:L25-26"
+    ),
+    "description": (
+        "Three HyperFlex management services — hxSvcMgr, hxSupportSvc, and stMgr — are "
+        "configured with passwordSyncEnabled = true and passwordSyncAccounts = "
+        "[\"root\", \"admin\", \"diag\"]. This configuration causes password changes to the "
+        "root, admin, and diag system accounts on any single cluster node to propagate "
+        "automatically to all other nodes in the cluster via ZooKeeper coordination. "
+        "The diag account is the HyperFlex diagnostic maintenance account with elevated "
+        "access to storage and system management functions. "
+        "Automatic cluster-wide propagation of root, admin, and diag credential changes "
+        "means that a single-node privilege escalation that allows password modification "
+        "immediately cascades to all cluster nodes without additional exploitation steps. "
+        "Conversely, any process capable of triggering a password sync event through the "
+        "ZK coordination path can force credential rotation across the cluster, creating "
+        "a denial-of-authentication condition."
+    ),
+    "evidence": (
+        "  hxSvcMgr-1.0/conf/application.conf L20-21:\n"
+        "    passwordSyncEnabled = true\n"
+        "    passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]\n"
+        "\n"
+        "  hxSupportSvc-1.0/conf/application.conf L8-9:\n"
+        "    passwordSyncEnabled = true\n"
+        "    passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]\n"
+        "\n"
+        "  stMgr-1.0/conf/application.conf L25-26:\n"
+        "    passwordSyncEnabled = true\n"
+        "    passwordSyncAccounts = [\"root\", \"admin\", \"diag\"]"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17400,6 +17654,11 @@ for _f in [
     HX_F298,
     HX_F299,
     HX_F300,
+    HX_F301,
+    HX_F302,
+    HX_F303,
+    HX_F304,
+    HX_F305,
 ]:
     FINDINGS[_f["id"]] = _f
 
