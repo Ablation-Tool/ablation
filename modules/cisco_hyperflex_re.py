@@ -15238,6 +15238,111 @@ HX_F266 = {
     "references": ["CWE-78"],
 }
 
+HX_F267 = {
+    "id": "HX-F267",
+    "title": "Global Python SSL Context Monkey-Patch in stCli Thrift Transport and storfs-appliance (ssl._create_default_https_context)",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/stcli-1.0.0.egg/stCli/StTransportBase.py, "
+        "usr/share/hyperflex/storfs-appliance/config-ctlvm.py"
+    ),
+    "description": (
+        "Two Python components in HXDP 6.0.2b assign ssl._create_default_https_context = "
+        "ssl._create_unverified_context, replacing the Python standard library's global "
+        "HTTPS context factory with one that accepts any certificate without validation. "
+        "This is a process-level monkey-patch: once executed, every subsequent HTTPS "
+        "connection in the Python process — regardless of which library initiates it — "
+        "uses the unverified context. StTransportBase.init_transport() applies the patch "
+        "in the stCli Thrift client layer, affecting six transport classes: "
+        "StMgrTransport, HxSvcMgrTransport, StDataSvcMgrTransport, HxSupportSvcTransport, "
+        "HxArbitratorSvcTransport, and HxRoboControllerTransport. These transports "
+        "authenticate with the local root session token from "
+        "/etc/hyperflex/secure/root_file.pub, set as X-RootSessionID in the HTTP headers. "
+        "config-ctlvm.py in storfs-appliance applies the same patch unconditionally at "
+        "module scope. Both patches include a try/except that silently suppresses any "
+        "AttributeError, so the bypass is silent even when applied."
+    ),
+    "evidence": (
+        "stCli/StTransportBase.py (stcli-1.0.0.egg):\n"
+        "\n"
+        "  def init_transport(self, urlDestPath, host, port, scheme='https', testOnly=False):\n"
+        "    # Ignore SSL cert verification\n"
+        "    # On 16.04, openssh client cert validation is strict by default\n"
+        "    try:\n"
+        "      ssl._create_default_https_context = ssl._create_unverified_context  # L85\n"
+        "    except:\n"
+        "      pass                  # silent even on AttributeError\n"
+        "\n"
+        "  # Called by all 6 stCli transport classes:\n"
+        "  # StMgrTransport, HxSvcMgrTransport, StDataSvcMgrTransport,\n"
+        "  # HxSupportSvcTransport, HxArbitratorSvcTransport, HxRoboControllerTransport\n"
+        "\n"
+        "usr/share/hyperflex/storfs-appliance/config-ctlvm.py:\n"
+        "  ssl._create_default_https_context = ssl._create_unverified_context  # L533-534"
+    ),
+    "reproduction": (
+        "MitM the management network between any stCli operation and the local REST "
+        "API endpoints. Present a self-signed certificate. stCli accepts it and transmits "
+        "the X-RootSessionID token in the HTTP header without error."
+    ),
+    "remediation": (
+        "Remove both ssl._create_default_https_context assignments. In StTransportBase, "
+        "create an SSLContext using ssl.create_default_context() with the cluster CA "
+        "certificate loaded from /etc/hyperflex/secure/hyperflex_keystore.jceks "
+        "or its PEM equivalent, then pass it explicitly to THttpClient. Do not use global "
+        "monkey-patching to configure TLS behavior."
+    ),
+    "references": ["CWE-295"],
+}
+
+HX_F268 = {
+    "id": "HX-F268",
+    "title": "TLS Verification Defaulted to False in stCli REST Utility Functions (runRestQueries/restWithRetry)",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": "mgmt/opt/hyperflex/stcli-1.0.0.egg/stCli/commonFunctions.py",
+    "description": (
+        "Both REST utility functions in stCli/commonFunctions.py default verify=False, "
+        "disabling TLS certificate verification for all HTTPS requests made through "
+        "these functions. runRestQueries() additionally calls "
+        "requests.packages.urllib3.disable_warnings(InsecureRequestWarning) at call time, "
+        "suppressing any urllib3 warning that would otherwise appear in logs. "
+        "When useRootSessionId=True, runRestQueries reads the root session token from "
+        "/etc/hyperflex/secure/root_file.pub and adds it as X-RootSessionID to the "
+        "request headers — this privileged token is transmitted over an HTTPS connection "
+        "with no certificate validation."
+    ),
+    "evidence": (
+        "stCli/commonFunctions.py:\n"
+        "\n"
+        "  def restWithRetry(..., verify=False):              # L8: default verify=False\n"
+        "    response = restFn(..., verify=verify, ...)       # L13: passed through\n"
+        "\n"
+        "  def runRestQueries(..., verify=False):             # L29: default verify=False\n"
+        "    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)  # L33\n"
+        "    if useRootSessionId:\n"
+        "      rootSessionId = open('/etc/hyperflex/secure/root_file.pub').read()\n"
+        "      headers = {'X-RootSessionID': rootSessionId,  # root token in clear\n"
+        "                 'X-LoggedInUser': 'admin',         # hardcoded user identity\n"
+        "                 'X-Scope': 'READ,MODIFY'}\n"
+        "    return restWithRetry(requests.get/post/put, ..., verify=verify)  # verify=False"
+    ),
+    "reproduction": (
+        "MitM the management network. Present a self-signed certificate to any stCli "
+        "REST call that uses useRootSessionId=True. The root session token is visible "
+        "in the captured HTTP headers. No error or warning is logged."
+    ),
+    "remediation": (
+        "Change the default value of verify from False to the path of the cluster CA "
+        "certificate bundle. Remove the urllib3.disable_warnings call. Callers that "
+        "currently pass no verify argument will automatically get proper verification."
+    ),
+    "references": ["CWE-295"],
+}
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -15252,6 +15357,8 @@ for _f in [
     HX_F264,
     HX_F265,
     HX_F266,
+    HX_F267,
+    HX_F268,
 ]:
     FINDINGS[_f["id"]] = _f
 
