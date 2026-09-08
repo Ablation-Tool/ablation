@@ -16804,6 +16804,110 @@ HX_F291 = {
 }
 
 
+HX_F292 = {
+    "id": "HX-F292",
+    "title": (
+        "TLS Certificate Verification Disabled Across All Deployment REST API Calls in "
+        "deployNodes.py; Admin Credentials Exposed in Process Command Line"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/deployNodes.py (L89, L148, L152, L156, L160, L164, L169)"
+    ),
+    "description": (
+        "deployNodes.py, the Ansible-driven script that initiates and monitors HyperFlex "
+        "cluster deployment via the REST API, disables TLS certificate validation for all "
+        "HTTPS requests. "
+        "requests.packages.urllib3.disable_warnings() at L89 unconditionally suppresses "
+        "InsecureRequestWarning before any HTTP call is made. "
+        "All six REST calls — deploymentsUrl (GET), progressUrl (GET), checkDeployNodesUrl "
+        "(POST, twice), and deployNodesUrl (POST, twice) — pass verify=False explicitly. "
+        "The HTTP Basic Auth credential tuple authData=(opts.user, opts.password) is "
+        "submitted to all these endpoints with certificate validation disabled, allowing "
+        "a network-adjacent attacker to intercept the deployment admin credentials via MITM. "
+        "Additionally, the --user and --password arguments are consumed from the command line "
+        "(argparse options L41-43), making the deployment credentials visible in "
+        "/proc/<pid>/cmdline and ps aux output for the duration of the script's execution. "
+        "The script also writes cluster configuration to a timestamped file at "
+        "/opt/hyperflex/json-config-file-<datetime>.json (L119-131) with no cleanup — "
+        "the file persists on disk after deployment completion."
+    ),
+    "evidence": (
+        "  deployNodes.py L89:\n"
+        "    requests.packages.urllib3.disable_warnings()  # unconditional\n"
+        "\n"
+        "  deployNodes.py L41-43 (argparse):\n"
+        "    p.add_option('--user', dest='user', ...)\n"
+        "    p.add_option('--password', dest='password', ...)\n"
+        "\n"
+        "  deployNodes.py L147-169 (all REST calls with verify=False):\n"
+        "    authData = (opts.user, opts.password)\n"
+        "    r = requests.get(deploymentsUrl, auth=authData, verify=False)\n"
+        "    r = requests.get(progressUrl, auth=authData, verify=False)\n"
+        "    r = requests.post(checkDeployNodesUrl, ..., auth=authData, verify=False, ...)\n"
+        "    r = requests.post(deployNodesUrl, ..., auth=authData, verify=False, ...)\n"
+        "\n"
+        "  deployNodes.py L119-131 (persistent config file, no cleanup):\n"
+        "    configFileName = '/opt/hyperflex/json-config-file-' + dt + '.json'\n"
+        "    os.chmod(os.path.dirname(configFileName), 0o755)  # dir executable\n"
+        "    json.dump(dataInput, outfile, indent=4)  # written, never deleted"
+    ),
+}
+
+HX_F293 = {
+    "id": "HX-F293",
+    "title": (
+        "Cleartext Old and New Passwords Exposed as Positional Command-Line Arguments in "
+        "changepasswd.sh Linux Password Change Script"
+    ),
+    "cwe": "CWE-214",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "component": (
+        "mgmt/opt/hyperflex/changepasswd.sh"
+    ),
+    "description": (
+        "changepasswd.sh, the HyperFlex Linux user password change script, accepts the "
+        "username, current password, and new password as positional arguments: "
+        "$1=user, $2=old_pass, $3=pass. "
+        "All three values are visible in /proc/<pid>/cmdline and ps aux output for the "
+        "duration of the script's execution. "
+        "The current (old) password exposure is particularly sensitive — it provides a "
+        "second window of exposure for a credential that may be in active use by services. "
+        "The script passes both passwords directly to the passwd utility via a heredoc, "
+        "which does not expose them as additional process arguments but they remain in the "
+        "parent shell process's command line. "
+        "This script is deployed in the management package and is invoked by the HyperFlex "
+        "management plane (stMgr/stCli) when password rotation operations are performed "
+        "on controller VM Linux accounts."
+    ),
+    "evidence": (
+        "  mgmt/opt/hyperflex/changepasswd.sh (full script):\n"
+        "    #!/usr/bin/env bash\n"
+        "    user=${1}       # visible in /proc/<pid>/cmdline, ps aux\n"
+        "    old_pass=${2}   # current plaintext password — exposed\n"
+        "    pass=${3}       # new plaintext password — exposed\n"
+        "\n"
+        "    sudo -u \"${user}\" passwd << EOD\n"
+        "    ${old_pass}\n"
+        "    ${pass}\n"
+        "    ${pass}\n"
+        "    EOD\n"
+        "    exit 0\n"
+        "\n"
+        "  Process table exposure:\n"
+        "    $ ps aux | grep changepasswd\n"
+        "    root  1234  ... /bin/bash /opt/hyperflex/changepasswd.sh admin OldPass1 NewPass1\n"
+        "\n"
+        "  Additional note: make_set_passwd.sh (ansible/library/) takes a base64-encoded\n"
+        "  password as $2 and decodes it in a subshell — the base64 value itself is\n"
+        "  visible in ps (trivially decoded)."
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16843,6 +16947,8 @@ for _f in [
     HX_F289,
     HX_F290,
     HX_F291,
+    HX_F292,
+    HX_F293,
 ]:
     FINDINGS[_f["id"]] = _f
 
