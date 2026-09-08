@@ -16615,6 +16615,128 @@ HX_F288 = {
     "references": ["CWE-285", "CWE-306"],
 }
 
+HX_F289 = {
+    "id": "HX-F289",
+    "title": (
+        "TLS Completely Disabled via ssl.CERT_NONE + ssl.PROTOCOL_SSLv23 and Global "
+        "Monkey-Patch in Validation VMware Layer (springpath_vmware.py)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "usr/share/hyperflex/storfs-misc/validation/springpath_vmware.py "
+        "(L69, L458-460, L585, L619)"
+    ),
+    "description": (
+        "springpath_vmware.py, the HyperFlex validation module that verifies ESX and "
+        "vCenter connectivity before cluster operations, disables TLS certificate "
+        "validation through three independent bypass mechanisms. "
+        "First, a module-level monkey-patch (L69) replaces the default HTTPS context "
+        "with ssl._create_unverified_context for all HTTPS connections in the process. "
+        "Second, the getHostSystem() method explicitly constructs an SSLContext using the "
+        "deprecated ssl.PROTOCOL_SSLv23 protocol (accepts SSLv2, SSLv3, and TLS without "
+        "restriction) and sets verify_mode=ssl.CERT_NONE before passing it to "
+        "pyVmomi SmartConnect for ESX host authentication — an explicit, "
+        "intentionally constructed insecure context rather than a bypass of a default. "
+        "Third, two vCenter REST API calls (getvCenterRestSessionId L585, "
+        "getvCenterNTPDetails L619) pass verify=False when authenticating to vCenter "
+        "with plaintext credentials. "
+        "The combination of deprecated protocol acceptance and explicit CERT_NONE "
+        "means a network-adjacent attacker can present any certificate, including "
+        "one generated at runtime, to intercept ESX and vCenter credentials during "
+        "cluster validation. The monkey-patch additionally affects all urllib/httplib "
+        "calls made transitively by imported modules."
+    ),
+    "evidence": (
+        "  springpath_vmware.py L66-72 (module level, executed on import):\n"
+        "    try:\n"
+        "        ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    except AttributeError:\n"
+        "        pass\n"
+        "\n"
+        "  springpath_vmware.py L456-460 (getHostSystem, ESX SmartConnect):\n"
+        "    # Added ssl Context to avoid \"host is not a VIM server\"\n"
+        "    # https://github.com/vmware/pyvmomi/issues/694\n"
+        "    sslContext = ssl.SSLContext(ssl.PROTOCOL_SSLv23)  # deprecated\n"
+        "    sslContext.verify_mode = ssl.CERT_NONE             # explicit CERT_NONE\n"
+        "    hostSi = SmartConnect(host=ipAddress, user=esxUserName, pwd=esxPassword,\n"
+        "                          sslContext=sslContext)\n"
+        "\n"
+        "  springpath_vmware.py L583-587 (getvCenterRestSessionId):\n"
+        "    session = requests.post(session_url,\n"
+        "                       auth=(vcenter_user, vcenter_password),\n"
+        "                       headers=req_headers, verify=False)\n"
+        "\n"
+        "  springpath_vmware.py L617-619 (getvCenterNTPDetails):\n"
+        "    resp = requests.get(timesync_url,\n"
+        "           verify=False, headers=req_headers)\n"
+        "\n"
+        "  ssl.PROTOCOL_SSLv23 is deprecated in Python 3.10+; accepts SSLv2/SSLv3\n"
+        "  in older Python versions when not further restricted.\n"
+        "  verify_mode=ssl.CERT_NONE explicitly disables both peer authentication\n"
+        "  and hostname checking for the constructed context."
+    ),
+}
+
+HX_F290 = {
+    "id": "HX-F290",
+    "title": (
+        "verify=False Hardcoded in restWithRetry and Unconditional InsecureRequest "
+        "Warning Suppression in Validation Shared Library (validation/commonFunctions.py)"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "usr/share/hyperflex/storfs-misc/validation/commonFunctions.py "
+        "(L588, L610-611)"
+    ),
+    "description": (
+        "validation/commonFunctions.py is the shared utility library imported by all "
+        "HyperFlex cluster validation scripts (springpath_security.py, "
+        "springpath_validation_util.py, springpath_vmware.py, "
+        "springpath_validation_validator.py, and others). "
+        "It contains two independent TLS bypass patterns that apply to every caller. "
+        "restWithRetry() at L588 hardcodes verify=False as a positional argument — "
+        "there is no default parameter that a caller could override; all REST retry "
+        "operations in the validation layer unconditionally skip certificate validation. "
+        "runRestQueries() at L610-611 unconditionally calls "
+        "requests.packages.urllib3.disable_warnings(InsecureRequestWarning) before "
+        "every REST query, suppressing the only runtime signal that TLS validation "
+        "is disabled. "
+        "Because commonFunctions.py is a shared library imported across all validation "
+        "scripts, these bypasses affect the entire cluster validation pathway, including "
+        "the certificate checks performed on ESX hosts and ZooKeeper before and during "
+        "cluster expansion, node replacement, and STIG hardening operations. "
+        "Unlike the stcli version (HX-F286) where verify=False is a default parameter "
+        "that callers could theoretically override, the validation version hardcodes it "
+        "as a non-overridable positional argument."
+    ),
+    "evidence": (
+        "  validation/commonFunctions.py L583-592 (restWithRetry):\n"
+        "    while count < retryCount:\n"
+        "        try:\n"
+        "            resp = restFn(url=restUrl, data=data, auth=auth,\n"
+        "                         headers=headers, verify=False,  # hardcoded positional\n"
+        "                         timeout=REQUEST_TIMEOUT)\n"
+        "        except:\n"
+        "            logging.error('Caught exception while running REST query')\n"
+        "            pass\n"
+        "\n"
+        "  validation/commonFunctions.py L608-611 (runRestQueries):\n"
+        "    import requests\n"
+        "    from requests.packages.urllib3.exceptions import InsecureRequestWarning\n"
+        "    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)\n"
+        "    # executed unconditionally on every call, before any request\n"
+        "\n"
+        "  validation/commonFunctions.py MD5: 83da5598606376c7c6a028a86a84a1a4\n"
+        "  Distinct from stcli-egg/stCli/commonFunctions.py (HX-F286);\n"
+        "  applies to all cluster validation and pre-deployment check scripts."
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -16651,6 +16773,8 @@ for _f in [
     HX_F286,
     HX_F287,
     HX_F288,
+    HX_F289,
+    HX_F290,
 ]:
     FINDINGS[_f["id"]] = _f
 
