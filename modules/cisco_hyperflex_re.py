@@ -14062,6 +14062,54 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
+HX_F246 = {
+    "id": "HX-F246",
+    "title": "AES-ECB Mode Used for Cluster Data Encryption",
+    "cwe": "CWE-327",
+    "severity": "MEDIUM",
+    "cvss": 5.3,
+    "component": "storfs-deploy/ansible/library/convertUUIDAndEncryptData.py",
+    "description": (
+        "The encryptData() function encrypts arbitrary cluster deployment data "
+        "using AES in ECB mode. ECB mode is deterministic and stateless: "
+        "identical plaintext blocks produce identical ciphertext blocks, leaking "
+        "structure in any plaintext longer than one 16-byte block. The function "
+        "is called during cluster provisioning to encrypt data passed via the "
+        "data_to_encrypt Ansible module parameter, which may include credentials "
+        "or configuration blobs. The encryption key is SHA-256(cluster_uuid)[0:16]; "
+        "the cluster UUID is accessible to any authenticated node in the cluster, "
+        "removing key confidentiality for co-tenant or compromised-node attackers."
+    ),
+    "evidence": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/library/convertUUIDAndEncryptData.py "
+        "lines 34-38:\n"
+        "  key = hashlib.sha256(bytes(encryption_key, 'utf-8')).digest()\n"
+        "  final_key = key[0:16]\n"
+        "  padded_data = pad(bytes(data, 'utf-8'), AES.block_size, style='pkcs7')\n"
+        "  cipher = AES.new(final_key, AES.MODE_ECB)\n"
+        "  encrypted_data = cipher.encrypt(padded_data)"
+    ),
+    "reproduction": (
+        "1. Capture two ciphertexts encrypted with the same key where both "
+        "plaintexts share a repeated 16-byte block (e.g., JSON with a repeated "
+        "field value). "
+        "2. Observe that the corresponding ciphertext blocks are identical, "
+        "confirming ECB mode and enabling frequency analysis or block rearrangement."
+    ),
+    "remediation": (
+        "Replace AES.MODE_ECB with AES.MODE_GCM or AES.MODE_CBC with a random IV. "
+        "For GCM, prepend the 12-byte nonce to the ciphertext and authenticate the "
+        "associated data. Do not truncate the SHA-256 output; use the full 256-bit "
+        "digest as an AES-256 key."
+    ),
+    "references": ["CWE-327"],
+}
+
+for _f in [
+    HX_F246,
+]:
+    FINDINGS[_f["id"]] = _f
+
 
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
