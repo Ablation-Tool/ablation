@@ -13777,6 +13777,60 @@ for _f in [
     FINDINGS[_f["id"]] = _f
 
 
+HX_F241 = {
+    "id": "HX-F241",
+    "title": "Hypervisor and SSH Passwords Passed as ansible-playbook --extra-vars Command-Line Arguments (CWE-214)",
+    "severity": "MEDIUM",
+    "cvss": "5.5",
+    "component": "storfs-deploy/ansible/ansible_role.py",
+    "description": (
+        "The deployment orchestration script ansible_role.py builds the ansible-playbook "
+        "invocation at lines 99-131 and passes sensitive credentials as --extra-vars "
+        "command-line arguments: "
+        "\"hypervisorPassword={}\".format(opts.hypervisorPassword) at line 109 and "
+        "\"password={}\".format(opts.password) at line 130. "
+        "The hypervisorPassword is the vSphere, ESXi, or Hyper-V administrator password. "
+        "The password is the SSH credential used in ssh_pass deployment mode. "
+        "subprocess.run() is called with shell=False (list form), but this does not "
+        "prevent the arguments from appearing in /proc/pid/cmdline. "
+        "Any local process with access to /proc (default on Linux) can read the "
+        "ansible-playbook process cmdline and extract both credentials while the "
+        "deployment is running. "
+        "The deployment runs as root during cluster installation. The process cmdline "
+        "remains readable for the full deployment duration (typically minutes). "
+        "The pattern appears in both normal deployment mode (hypervisorPassword) and "
+        "ssh_pass mode (password), covering multiple deployment scenarios."
+    ),
+    "affected_versions": "HXDP 6.0.2b (all supported platforms)",
+    "poc": (
+        "During cluster deployment, run: "
+        "cat /proc/$(pgrep -f ansible-playbook)/cmdline | tr '\\0' '\\n' | grep -A1 Password"
+        " -> hypervisorPassword=<plaintext_password>"
+    ),
+    "remediation": (
+        "Replace --extra-vars 'password=...' with a temporary secrets file and pass "
+        "its path via --extra-vars '@/tmp/secrets.yml', then shred the file after use. "
+        "Alternatively, set sensitive variables via the ANSIBLE_EXTRA_VARS environment "
+        "variable or use Ansible Vault for encrypted variable files. "
+        "Both opts.hypervisorPassword and opts.password should follow this pattern."
+    ),
+    "references": [
+        "CWE-214: Invocation of Process Using Visible Sensitive Information",
+        "ansible_role.py lines 109, 130: hypervisorPassword and password as --extra-vars",
+    ],
+    "tags": [
+        "credential-exposure", "cwe-214", "ansible", "cmdline", "hypervisor-password",
+        "extra-vars", "deployment", "medium",
+    ],
+}
+
+
+for _f in [
+    HX_F241,
+]:
+    FINDINGS[_f["id"]] = _f
+
+
 # ─── Probe Functions ──────────────────────────────────────────────────────────
 
 def _ssl_ctx() -> ssl.SSLContext:
