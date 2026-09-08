@@ -17276,6 +17276,82 @@ HX_F299 = {
 }
 
 
+HX_F300 = {
+    "id": "HX-F300",
+    "title": (
+        "TLS Certificate Validation Disabled Across 11 Ansible Library and ESX Hook "
+        "Scripts Including STIG Enforcement, Self-Signed Cert Management, and CIMC Control"
+    ),
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "cvss": 7.4,
+    "component": (
+        "mgmt/opt/hyperflex/storfs-deploy/ansible/library/ "
+        "(stig.py:L53/82/126, enableEsxSelfSignedCert.py:L80, destroyStCtlVM.py:L304, "
+        "assert_host_connected.py:L117, powerCycleCIMC.py:L100, cimcSettings.py:L306, "
+        "setStCtlPasswd.py:L123, uninstall_cluster.py:L64, configureRDMs.py:L399/425); "
+        "ansible/roles/upgradeclusterposthooks/files/9998_remove_host_authorized_keys_ESX.py:L24; "
+        "ansible/roles/upgradeclusterprehooks/files/9951_enable_AHCI_driver_ESX.py:L88"
+    ),
+    "description": (
+        "Eleven Ansible library modules and ESX upgrade hook scripts disable TLS or SSH "
+        "host key validation across operations that span the full cluster lifecycle. "
+        "stig.py (STIG enforcement Ansible module) applies the ssl._create_default_https_context "
+        "monkey-patch at L126 and passes verify=False in two REST calls that submit controller "
+        "admin credentials via HTTP Basic Auth — the STIG compliance module cannot validate "
+        "the TLS certificate of the controller it is hardening. "
+        "enableEsxSelfSignedCert.py applies the monkey-patch while enabling self-signed "
+        "certificate support on ESX hosts — the script managing certificate trust policy "
+        "bypasses its own TLS validation. "
+        "destroyStCtlVM.py (controller VM destruction during cluster teardown) applies the "
+        "monkey-patch before connecting to vCenter. "
+        "assert_host_connected.py (cluster join validation) applies the monkey-patch. "
+        "powerCycleCIMC.py, cimcSettings.py, and setStCtlPasswd.py unconditionally call "
+        "requests.packages.urllib3.disable_warnings() — affecting CIMC power operations, "
+        "CIMC settings configuration, and controller VM password changes respectively. "
+        "uninstall_cluster.py and configureRDMs.py (Raw Device Mapping configuration) "
+        "each use AutoAddPolicy for SSH connections to cluster nodes. "
+        "9998_remove_host_authorized_keys_ESX.py (removes SSH keys from ESX hosts — "
+        "a post-upgrade security cleanup operation) uses AutoAddPolicy, allowing an MITM "
+        "to impersonate the target ESX host during authorized-key removal. "
+        "9951_enable_AHCI_driver_ESX.py (AHCI driver enablement) uses AutoAddPolicy."
+    ),
+    "evidence": (
+        "  library/stig.py L53, L82:\n"
+        "    requests.get(getstatus_url, auth=(username, password), ..., verify=False)\n"
+        "    requests.post(set_url, auth=(username, password), ..., verify=False)\n"
+        "    L126: ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/enableEsxSelfSignedCert.py L80:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "    (script enables self-signed certs on ESX while bypassing own TLS validation)\n"
+        "\n"
+        "  library/destroyStCtlVM.py L304:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/assert_host_connected.py L117:\n"
+        "    ssl._create_default_https_context = ssl._create_unverified_context\n"
+        "\n"
+        "  library/powerCycleCIMC.py L100, library/cimcSettings.py L306,\n"
+        "  library/setStCtlPasswd.py L123:\n"
+        "    requests.packages.urllib3.disable_warnings()  # unconditional\n"
+        "\n"
+        "  library/uninstall_cluster.py L64:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  library/configureRDMs.py L399, L425:\n"
+        "    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "\n"
+        "  upgradeclusterposthooks/9998_remove_host_authorized_keys_ESX.py L24:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+        "    (SSH host key validation bypassed during authorized-key removal)\n"
+        "\n"
+        "  upgradeclusterprehooks/9951_enable_AHCI_driver_ESX.py L88:\n"
+        "    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())"
+    ),
+}
+
+
 for _f in [
     HX_F254,
     HX_F255,
@@ -17323,6 +17399,7 @@ for _f in [
     HX_F297,
     HX_F298,
     HX_F299,
+    HX_F300,
 ]:
     FINDINGS[_f["id"]] = _f
 
