@@ -391,6 +391,58 @@ Continued Q1656 12.11.118 CGI analysis:
 
 #   deviceselftest.cgi: Status: 401 Unauthorized string — self-enforcing. NOT a finding.
 
+#   serverreport.cgi (shell script): No auth enforcement — no Apache override, no group check,
+#     no REMOTE_USER test. Sources lib/functions.sh (__whoami returns script name, not HTTP user).
+#     Inherits parent dir default: Require axis-group-file (viewer+).
+#     httpd-auth-preview-mode.conf sets axis-preview-mode-allowed for preview mode (separate gate).
+#     For authenticated normal mode: viewer can invoke all serverreport modes.
+#     Modes and data collected:
+#       text (default): calls /usr/sbin/gen_serverreport.sh → outputs full server diagnostic:
+#         product name (parhandclient Brand.ProdFullName), serial number (bootblocktool SERNO),
+#         processor serial (/sys/devices/soc0/serial_number), device time (TimeService1 D-Bus),
+#         action engine configs (find /usr/local/ -type f → XML + conf), network config,
+#         firmware version, installed packages, running services, memory status.
+#         gen_serverreport.sh censors password fields but collects all configuration.
+#       zip: same as text + packages as ZIP archive with filename Axis_SR_<date>_<MAC>
+#       zip_with_image: same + live JPEG snapshot from jpeg_snapshot binary
+#       tar_all: merge_logs_in_dir for /usr/local/, /var/lib/syslog-ng/, /var/log/ →
+#         includes ALL rotated logs: info.log*, warning.log*, error.log*, critical.log*,
+#         segfault.log*; audit.json (find … -name "audit.json") explicitly collected.
+#         Also: syslog.complete, syslog.startup, messages, persist-all.log, dmesg.startup,
+#         /mnt/flash/messages, memory_status.csv. Archived as tar with full content.
+#       tar_kernel_log: primary + secondary kernel logs via /usr/bin/klog, secondary-klog.
+#     FINDING F-AXSRVRPT-01 (static analysis): viewer-level server diagnostic report access.
+#       Viewer downloads full diagnostic bundle including device serial, MAC, network config,
+#       all system logs (syslog, dmesg, kernel log), and — via tar_all — audit.json (the
+#       same file that auditlog.cgi properly protects with admin-only getegid/getgrnam check).
+#       VAPIX documentation specifies serverreport.cgi requires operator privilege minimum.
+#       Pattern: no auth library, no Apache override → viewer+ default inherited.
+#       zip_with_image mode also triggers live JPEG snapshot at viewer level.
+
+#   systemlog.cgi (shell script): No auth enforcement — no Apache override, no group check.
+#     No Require directive found in any conf for /axis-cgi/systemlog.cgi.
+#     Sources admin/lib/systemlog.sh (log-reading utility, no auth) and
+#       admin/lib/adp.sh (path setup, logger wrappers only — no auth).
+#     Reads from /var/log/info.log*, /var/log/warning.log*, /var/log/error.log*,
+#       /var/log/critical.log*, /var/log/segfault.log* — all rotated log files.
+#     Accepts params: format=text|html, tail=N, appname=<name>, search_txt=<query>.
+#     __check_arbitrary_args enforces only allowed param names — not auth levels.
+#     FINDING F-AXSYSLOG-01 (static analysis): viewer-level system log access.
+#       Viewer reads AXIS system log (all severity levels) at viewer level.
+#       Logs include authentication events, service start/stop, configuration changes,
+#       error traces, segfault records. VAPIX specifies operator+ for log endpoints.
+#       Pattern: shell script CGI with no auth, no override → viewer+ inherited.
+#       Impact: viewer maps system events, tracks admin activity, reads error traces.
+
+#   remoteservice.cgi (22544 bytes ELF): uses libpolicykit_parhand.so.1 for param access.
+#     Methods: getConfig (reads RemoteService.* params), setConfig, getProxy, setProxy.
+#     Params: root.RemoteService.{Enabled,ServerList,ProxyServer,ProxyPort,ProxyLogin,
+#       ProxyPassword,DSCP,BackOffFactorMin/Span,BackOffMaxSec,TimeSyncEnabled}.
+#     policykit_parhand APAC model: anonymous (unlisted) → getparameter only; setparameter
+#       requires explicit daemon entry — wwwv not listed → set calls DENIED by APAC.
+#     getProxy returns ProxyLogin/Server/Port but NOT ProxyPassword (write-only type).
+#     Result: viewer can READ non-credential remote service config; cannot SET. Not filed.
+
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
