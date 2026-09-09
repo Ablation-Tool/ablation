@@ -1138,6 +1138,90 @@ AXIS Switch findings (D8248/D8208-R 8.90.1904) — SEPARATE from AXIS OS Bugcrow
   See /media/cowboy/research/axis/extracted/AXIS-SWITCH-FINDINGS.md for full F1-F7 list.
   Disclose directly to AXIS (not Bugcrowd) — switch firmware outside AXIS OS scope.
 
+  ptz/ptzupgrader.cgi (18456 bytes): calls com.axis.PTZDriverManagement1 + com.axis.PTZ.Coordinator.
+    Links libcgihelper.so (CGI parsing only — no auth enforcement).
+    PTZ.conf: context="default" allow at bus layer — D-Bus bus open.
+    PTZDriverManagement1.conf: context="default" allow at bus layer — D-Bus bus open.
+    APAC policy: ptzdrivermanagement1.activate/deactivate are in admin-minimum section (line 755-758,
+      same block as com.axis.usermanagement1.vapix.adduser/removeuser at lines ~735). www OS user NOT
+      in admin section. DENIED by APAC inside PTZDriverManagement1 daemon.
+    ptzaurus (PTZ.Coordinator daemon): APAC v1, admin-level gate. ptz.coordinator.setconfiguration
+      in admin section (line 770). www DENIED.
+    NEGATIVE. APAC admin-section gates PTZDriverManagement1 and PTZ.Coordinator operations for www.
+
+  ptz/ptzuploader.cgi (18440 bytes): same D-Bus targets (PTZDriverManagement1 + PTZ.Coordinator).
+    Same APAC analysis — www DENIED for both services.
+    NEGATIVE.
+
+  packagemanager.cgi (100512 bytes): calls com.axis.PackageManager.LicenseKeyConf1 + com.axis.AcapManager1.
+    F-AXPKG-01 REFUTED (libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault call).
+    AddLicenseKey/RemoveLicenseKey for LicenseKeyConf1: in admin section (lines 706-707). www DENIED.
+    acapmanager1.install/acapmanager1.uninstall: in admin section (lines 688-689). www DENIED.
+    REMOTE_USER present in env — audit logging only (same pattern as factorydefault.cgi).
+    No auth library (no libcgiparser/libjsoncgi/libaxcgijson). No Apache auth override.
+    NEGATIVE. APAC admin-section gates all write operations inside AcapManager1 and PackageManager1.
+
+  mediaclip.cgi (10256 bytes): links libmediaclip_lib.so.1.
+    Operations in binary: play_clip, stop_clip, download_clip, upload_clip, remove_clip.
+    libmediaclip_lib.so.1: 0 auth strings (no admin/viewer/operator/401/403/Unauthorized/REMOTE_USER).
+      Only export of note: dbus_check_supported_file (reads D-Bus for supported clip format check).
+    No Apache conf for mediaclip.cgi found in /etc/apache2/. Default: viewer+ access.
+    playclip.cgi (10256 bytes): same libmediaclip_lib.so.1, same auth profile.
+    stopclip.cgi (10256 bytes): same libmediaclip_lib.so.1.
+    mediaclip2.cgi (14344 bytes): auth=1 (one auth string) — libjsoncgi.so.0 likely. NEGATIVE separately.
+    VAPIX specifies operator+ for mediaclip upload and remove operations; viewer+ for play/stop.
+    No enforcement in libmediaclip_lib or CGI binary for the HTTP caller's privilege level.
+    CANDIDATE F-AXCLIP-01: viewer can upload and remove media clips via mediaclip.cgi without
+      operator auth. Requires confirmation that upload_clip accepts arbitrary content and that
+      remove_clip operates on system-accessible paths rather than just user-uploaded temp files.
+      Not filed pending operation characterization.
+
+  local_del.cgi (shell script): deletes files from /usr/html/local/{viewer|operator|administrator}/.
+    expr path check: only deletes files matching /usr/html/local/(viewer|operator|administrator)/[^/]+$.
+    Path-constrained — cannot traverse outside /usr/html/local/. Not a privilege bypass.
+    Not filed.
+
+  local_list.cgi (shell script): lists files in /usr/html/local/ upload directories. Read-only.
+    Not filed.
+
+  res_finder.cgi (shell script): reads camera resolution capabilities via parhandclient.
+    Read-only: resolution values, max zoom. Not filed.
+
+  imagesize.cgi (10248 bytes): auth=1 (has auth enforcement string). NEGATIVE.
+
+  param_authenticate.cgi (0-byte stub): TransferProxy or Transfer to unknown socket; socket not found.
+    Not characterized — socket target absent from systemd units in extracted firmware.
+
+  login.cgi (shell script, 255 bytes), logout.cgi (49 bytes): authentication infrastructure CGIs.
+    login.cgi: session auth flow (redirect after login). logout.cgi: session teardown.
+    401.cgi (shell script): returns Status: 401 Unauthorized. Auth infrastructure, not a finding.
+    Not filed.
+
+  stclient.cgi (symlink → /usr/sbin/stclient.cgi, 30808 bytes): AVHS relay client CGI.
+    Links libcgiparser.so (CGI parsing only — does NOT auto-enforce auth per F-AXHTEST-01 analysis).
+    Links libuser_manager.so.0: user_manager_vapix_auth_user_basic — authenticates the relay
+      server's own VAPIX credential identity, NOT the HTTP caller making the CGI request.
+    No Apache auth override found. Default: viewer+ access.
+    Operations identified: action=deletecert (delete AVHS relay TLS certificate).
+    cert_set_write, cert_set_insert_cert, cert_set_insert_ca — PKI manipulation operations.
+    APAC: stclient: com.axis.avhs.* — stclient OS user has blanket AVHS D-Bus access.
+      Apache-executed stclient.cgi runs as www user (not stclient OS user); D-Bus auth may differ.
+    CANDIDATE: if HTTP caller (viewer) can trigger cert deletion or cert injection via stclient.cgi
+      without auth, this is a PKI manipulation finding. Not filed — operation map incomplete.
+      Further: stclient.cgi is the CGI binary itself, not a shell wrapper; caller identity
+      at D-Bus layer is www (Apache process), not stclient (the daemon OS user).
+
+  deviceselftest.cgi (59496 bytes): CANDIDATE status unresolved.
+    "Status: 401 Unauthorized" string present — but no getgrnam, no REMOTE_USER auth check,
+    no auth library (only libjsoncpp.so.27 for JSON parsing). Mechanism for 401 is unclear.
+    Uses fork/execv to run system test scripts. No D-Bus refs.
+    Apache: appears in httpd-auth-preview-mode.conf inside inactive IfDefine PREVIEWMODE block.
+      No Require override in normal-mode conf. Default: viewer+ access.
+    Earlier analysis (commented block line 430) called NEGATIVE based on 401 string alone.
+    Active analysis retains CANDIDATE — 401 string present but self-enforcing mechanism unconfirmed.
+    Low-medium severity if exploitable (triggers system self-test; brief service interruptions possible).
+    NOT filed pending live device verification.
+
 Standalone:
     cd ~/ablation
     python3 modules/axis_os_aarch64_re.py --bin /media/cowboy/research/axis/extracted/Q1656_12_11_118/rootfs/usr/html/axis-cgi/packagemanager.cgi
