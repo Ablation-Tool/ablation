@@ -197,6 +197,26 @@ Continued Q1656 12.11.118 CGI analysis:
     disrupts surveillance coverage. Masks do not auto-restore after disable.
     NOTE: admin/ in axis-cgi is a self-referential symlink (-> .) — no admin-restricted directory.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXMASK-01.md
+  dynamicoverlay.cgi (dynamictext daemon) + dynamicoverlay/*.cgi (dynamic_overlayd daemon):
+    Two separate TransferProxy routes cover Dynamic Overlay API v1.x and v1.8.
+    dynamic_overlayd_transfer.conf: <LocationMatch "/axis-cgi/dynamicoverlay/\w+\.cgi">
+      TransferProxy /run/dynamic_overlayd/transfer (no auth directive in block, inherits viewer+).
+    dynamictext_transfer.conf: <LocationMatch "/axis-cgi/dynamicoverlay.cgi">
+      TransferProxy /run/dynamictext/transfer (same — no override, viewer+).
+    dynamic_overlayd (/usr/bin/dynamic_overlayd): apac_check_auth absent, libapac.so.0 absent,
+      no 403/401 response (only HTTP/1.0 200 OK). Write ops: addText, addImage, setText, setImage,
+      CreateTextOverlay, CreateImageOverlay. API ID=dynamicoverlay version=1.8.
+      Audit strings: dynamicoverlay.addText, dynamicoverlay.addImage, dynamicoverlay.setText.
+    dynamictext (/usr/bin/dynamictext): apac_check_auth absent, no 403/401 response. Write ops:
+      set_dynamic_text, settext. Reads caller group via sc_set_group (libstatuscache.so.1) — no
+      enforcement follows. Only HTTP/1.0 200 OK response path.
+    D-Bus: no dedicated dynamicoverlay D-Bus service; dynamic_overlayd uses internal IPC only.
+    FINDING F-AXDOVL-01 (static analysis): viewer can add text/image overlays to live streams,
+    modify existing overlays, and delete overlays. VAPIX doc specifies operator-minimum for write.
+    Impact: viewer injects "SYSTEM OFFLINE" text or opaque image overlays visible to all VMS
+    consumers; modifications persist until operator resets; affects all stream copies and recordings.
+    Same root pattern as F-AXMASK-01 (TransferProxy bypass + no APAC in daemon).
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXDOVL-01.md
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
