@@ -262,6 +262,29 @@ Continued Q1656 12.11.118 CGI analysis:
     All inherit viewer+ default auth; all use validateaddr's localhost-only check (except ping).
     No RFC1918 blocking. Camera's privileged network position (management VLAN, OT) exposed.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXNETPROBE-01.md
+  axis-cgi/audio/level.cgi: AArch64 ELF (39,000 bytes), source audio-level-cgi/1.0.3/src/main.c.
+    No auth library (no libaxcgijson.so, libcgiparser.so, libjsoncgi.so.0).
+    No Apache Require override — inherits parent directory default: Require axis-group-file (viewer+).
+    Connects to PipeWire audio subsystem directly via pw_main_loop_*, g_bus_get_sync NOT called —
+      bypasses D-Bus/APAC enforcement chain entirely. Third distinct bypass pattern:
+      (1) TransferProxy-no-APAC, (2) shell-no-validateaddr, (3) raw-PipeWire-no-auth.
+    Parameters: audioinputid, audiodeviceid, format.
+    Output: multipart JavaScript stream: window.parent.update(peak, ..., channels[])
+      encoding peak dBFS per channel in real-time. Output also supports raw channel array.
+    audio/receive.cgi and audio/transmit.cgi: 0-byte stubs; served via TransferProxy
+      (transfer.conf LocationMatch); real handler is in downstream daemon.
+    audio/streamingcapabilities.cgi: libcgiparser.so, no override, calls com.axis.Audio1
+      (D-Bus context=default open) + com.axis.AudioControl (group=operator restricted at bus).
+      Read-only capabilities query; AudioControl writes blocked at bus layer. Not a finding.
+    audiomixer.cgi: calls com.axis.AudioMixer2/AudioMixer. AudioMixer D-Bus policy:
+      context=default DENY; only operator/audiomixer/actionengined groups allowed. Not a finding.
+    FINDING F-AXAUDIO-01 (static analysis): viewer-level real-time audio level monitoring.
+      Viewer retrieves live peak dBFS readings from camera microphone(s) without operator auth.
+      Can enumerate multiple audio inputs via audioinputid parameter.
+      Reveals audio presence/activity in camera surveillance zone (speech, motion sound detection).
+      VAPIX specification requires operator privilege for audio monitoring configuration.
+      Impact: viewer detects audio activity in secured area; audio-level oracle for surveillance bypass.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXAUDIO-01.md
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
