@@ -65,6 +65,19 @@ Confirmed findings:
                  VAPIX docs specify operator+ for serverreport.cgi; shell CGI inherits viewer+ default
                  Cross-validated: Q1656 12.11.118, A8207-VE 11.11.220. Platform-wide shell script pattern.
                  STATUS: CONFIRMED static analysis. Not filed to Bugcrowd.
+  F-AXRADAR-01  Viewer-level radar auto-tracking configuration control — Q1686-DLE 12.2.59
+                 radar-autotracking.cgi: TransferPostWSProxy /run/radar/autotrackingsocket, no Require override
+                 radar-autotracking.socket: SocketGroup=www, ListenDatagram=/run/radar/autotrackingsocket
+                 radar-autotracking daemon: 0 APAC refs, 0 incoming auth strings
+                   (3 "auth strings" = outgoing curl 401 + C++ operator() — not auth enforcement)
+                 APAC policy: radar-autotracking: section = outgoing D-Bus grants, not auth gate
+                   www: section has no radar or autotracking entries
+                 Operations exposed to viewer: setTrackingEnabled, setReturnToHomeEnabled,
+                   setGuardTourEnabled, setObjectTypesToTrack (small/human/vehicle/unidentified),
+                   setCameraPanOffset, setCameraTiltOffset, setCameraZoomDegree
+                 Impact: viewer disables auto-tracking of intruders; excludes humans from tracked objects;
+                   miscalibrates camera-radar alignment (PTZ offsets); disables return-to-home
+                 STATUS: CONFIRMED static analysis (Q1686-DLE 12.2.59). Not filed to Bugcrowd.
   F-AXC1710-01  Unauthenticated broadcast/capture/reboot on port 7234 — InformaCast integration
                  Binary: /usr/bin/informacast-client (Rust, tokio); Apache VirtualHost on 0.0.0.0:7234
                  Activated when admin enables InformaCast: .path unit watches
@@ -1291,6 +1304,39 @@ AXIS Switch findings (D8248/D8208-R 8.90.1904) — SEPARATE from AXIS OS Bugcrow
     Active analysis retains CANDIDATE — 401 string present but self-enforcing mechanism unconfirmed.
     Low-medium severity if exploitable (triggers system self-test; brief service interruptions possible).
     NOT filed pending live device verification.
+
+Q1686-DLE 12.2.59 (AArch64, radar-integrated panoramic camera) analysis:
+  F-AXRADAR-01 CONFIRMED (see confirmed findings header above).
+  Unique surface vs Q1656: radar/ directory (11 CGIs), radar-autotracking.cgi, licenseplateoverlay.cgi.
+  radar/control.cgi: TransferPostWSProxy /run/radar/zonessocket (SocketGroup=www).
+    radar-zones daemon: 4 APAC refs, 8 auth strings (has APAC v1 — denies www for write ops).
+    radar-zones owns zone configuration (detection zones). APAC gates write operations. NEGATIVE for zones.
+  radar/radaranalytics.cgi, radar/properties.cgi, radar/protobuf.cgi:
+    TransferPostWSProxy/TransferProxy /run/radar/radarscenesocket (SocketGroup=www).
+    radar-scene-provider daemon: 3 APAC refs, 3 auth strings (APAC v1 present).
+    Scene data is read-only via these endpoints; APAC gates radar1 write ops. NEGATIVE.
+  radar/uploadradarimage.cgi, radar/replaceradarimage.cgi: TransferPostWSProxy /run/radar/zonessocket.
+    Same radar-zones daemon (APAC v1). NEGATIVE.
+  radar/downloadradarimage.cgi: Transfer (GET) /run/radar/zonessocket. NEGATIVE (APAC in daemon).
+  radar-autotracking.cgi: F-AXRADAR-01 — 0 APAC refs in daemon, SocketGroup=www, no auth override.
+  licenseplateoverlay.cgi: ELF, links libaxcgijson.so — auto-enforces operator+. NEGATIVE.
+  F-AXUSRMGR-01: NOT present in 12.2.59 (config_server_reverseproxy.conf absent). Confirms scope.
+
+F9114-R Mk II 12.11.77 (AArch64, fisheye) unique CGI analysis:
+  groupview.cgi: getgrnam + 401/403 + "admin" string — self-enforcing OS group check. NEGATIVE.
+  thermometry.cgi (129136 bytes): libcgihelper.so (parse-only) + "User is not authorized" +
+    401/403 strings from cgi_request.c. Calls com.axis.Thermographyd1 via gdbus.
+    Auth mechanism: binary self-enforces (has auth error strings with no APAC refs externally).
+    CANDIDATE — mechanism not fully resolved from static analysis.
+
+P3245-V / P3945-R / P3947-R (AXIS OS 11.x) unique CGI analysis:
+  supervisedio.cgi: libaxcgijson.so — operator+ auto-enforced. NEGATIVE.
+  ledcontrol/ CGIs: 0-byte stubs, TransferProxy /var/run/blinkenlights/transfer (SocketGroup not www-direct).
+    blinkenlights daemon: getgrnam + embedded accessControl (admin:3;operator:1 per-operation).
+    set.cgi, stop.cgi: admin-only. getleds, getstatus: operator+. Daemon self-enforces. NEGATIVE.
+  sceneprofile.cgi (P3945/P3947): common across cameras, needs analysis.
+  sipcertrefresh.cgi (P3945/P3947): SIP certificate refresh. Not analyzed; likely operator+ minimum.
+  daynight.cgi (M3138-LVE): scene management. Not analyzed.
 
 Standalone:
     cd ~/ablation
