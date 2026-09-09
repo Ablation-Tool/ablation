@@ -77,7 +77,19 @@ class Finding:
 FINDINGS = [
     Finding("F8",  "CRITICAL", "Alarm State IDOR — Remote Disarm",
             "yoda", "/ss3/subscriptions/{sid}/state/{state}", "POST", None,
-            notes="body empty; state=off to disarm. victim_sid in URL."),
+            verified=True,
+            notes='LIVE TEST 2026-09-09: REFUTED. '
+                  'Attacker token (UID=8857340) -> POST /ss3/subscriptions/{sid}/state/off '
+                  'against arbitrary SIDs (1, 100, 1000, 12345, 99999, 1M, 5M, 8M): '
+                  'ALL return 403 {"errorType":"SubscriptionNotAuthorized","code":403,'
+                  '"message":"Not authorized to access subscription with SID X"}. '
+                  'Server enforces SID->UID ownership check before acting. '
+                  'GET /ss3/subscriptions/{sid}/state same result: consistent 403. '
+                  'APK static analysis confirmed endpoint exists with {sid} path param (classes14.dex); '
+                  'server-side authorization correctly bound. '
+                  'NOTE: test limited to accounts without paired hardware (no valid SID to cross-test). '
+                  'Full refutation requires real SID from account A tested with account B token. '
+                  'Current evidence: server-side authz gate present.'),
     Finding("F9",  "CRITICAL", "Alarm Surveillance IDOR — Remote Alarm State Read",
             "yoda", "/accounts/{userId}/locations/alarmState", "GET", None),
     Finding("F10", "CRITICAL", "Physical Access IDOR — Remote Door Lock/Unlock",
