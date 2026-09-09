@@ -635,6 +635,40 @@ TRAX_QUERIES = {
 }
 
 
+CGIPARSER_QUERIES = {
+    'strcpy_overflow': (
+        'CGI_PARAM | calls: strcpy malloc strlen CGI_split_namval | '
+        'vuln: CGI parameter name or value copied with strcpy into fixed-size or malloc-sized buffer; '
+        'URL-decoded length may exceed original encoded length'
+    ),
+    'sscanf_fmt_overflow': (
+        'CGI_SCAN | calls: __isoc99_sscanf strtol CGI_decode | '
+        'vuln: CGI parameter value parsed with sscanf using %s format specifier into fixed buffer; '
+        'no field width limit on %s → stack overflow from query string value'
+    ),
+    'decode_overflow': (
+        'CGI_DECODE | calls: CGI_decode memcpy strncpy | '
+        'vuln: URL-decoded CGI parameter value written into fixed-size buffer; '
+        'URL encoding expands (e.g., %XX = 3 chars → 1 char after decode) but decode output '
+        'can still exceed dest if dest is sized by encoded length rather than decoded max'
+    ),
+    'fgets_injection': (
+        'CGI_BODY | calls: fgets fread CGI_get_name_value_pair | '
+        'vuln: POST body read from stdin into fixed buffer; Content-Length from header not '
+        'validated against fgets buffer size → overflow or injection in multipart body'
+    ),
+}
+
+
+def analyze_libcgiparser(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/lib/libcgiparser.so')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'libcgiparser.so: {len(plt_map)//2} PLT entries, {len(strs_map)} strings', flush=True)
+    return _semantic_sweep(path, plt_map, model, CGIPARSER_QUERIES, strs_map)
+
+
 def analyze_mod_trax(rootfs_dir: str, model) -> dict:
     path = os.path.join(rootfs_dir, 'usr/lib/apache2/modules/mod_trax.so')
     sections = _read_elf_sections(path)
@@ -659,6 +693,7 @@ ANALYZERS = {
     'libwssecurity_url_access.so':     analyze_libwssecurity_url_access,
     'mod_authz_axisgroupfile.so':      analyze_mod_authz_axisgroupfile,
     'mod_trax.so':                     analyze_mod_trax,
+    'libcgiparser.so':                 analyze_libcgiparser,
 }
 
 
