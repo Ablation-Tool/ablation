@@ -45,10 +45,26 @@ Confirmed findings:
   F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
                  Apache config_server_reverseproxy.conf: AuthMerging Off + anonymous=true
                  -> Require all granted -> dev-conf-service anonymous API allows SET
-                 Confirmed 11/11 firmwares (12.9.57→12.11.118; not in 12.2.59)
+                 Confirmed 12/12 firmwares (12.9.57→12.11.118; not in 12.2.59)
                  Products: cameras (5), video decoder (1), security radar (1), body worn (1),
-                           PACS door controllers (3) — platform-wide, all product categories
+                           PACS door controllers (3), network display speaker (1) — platform-wide
                  A1210/A1710/A1810 door controllers: pre-auth policy downgrade chains to door relay control
+  F-AXC1710-01  Unauthenticated broadcast/capture/reboot on port 7234 — InformaCast integration
+                 Binary: /usr/bin/informacast-client (Rust, tokio); Apache VirtualHost on 0.0.0.0:7234
+                 Activated when admin enables InformaCast: .path unit watches
+                   /etc/dynamic/informacast-client/enabled -> informacast-client-enable.service writes
+                   "Define INFORMACAST_ENABLED" to Apache param.d/ -> httpd reload -> VirtualHost active
+                 All 5 endpoints on port 7234 have Require all granted (no IP restriction):
+                   /broadcast — play audio through speaker (InformaCast XML payload)
+                   /capture   — capture audio from microphone
+                   /clear     — stop current broadcast
+                   /reboot    — device reboot
+                   /status    — device status
+                 Any host on the network can reboot the device or inject audio when InformaCast enabled.
+                 Apache VirtualHost does Include httpd-basic-auth.conf but each Location immediately
+                 overrides with Require all granted (parent-auth-then-child-override pattern).
+                 Firmware: AXIS C1710 Network Display Speaker 12.11.77 (mx8mm AArch64)
+                 File: /etc/apache2/conf.d/informacast-client.conf
 
 D1110 Video Decoder 4K 12.11.77 analysis (AArch64):
   All 5 existing findings confirmed (F-AXNETD-01, F-AXPARAM-01, F-AXACTION-01/02, F-AXUSRMGR-01)
@@ -88,9 +104,27 @@ Cross-product analysis (new firmwares this session):
   BW W800 Body Worn Camera 12.10.59 (AArch64):
     F-AXUSRMGR-01 confirmed. recording-uploader/content-uploader: Go binaries, Azure/Swift upload.
     bws-storage-gen-passphrase: uses /dev/urandom — passphrase entropy is sound.
+  C1710 Network Display Speaker 12.11.77 (AArch64, mx8mm):
+    F-AXUSRMGR-01 confirmed (config_server_reverseproxy.conf identical pattern).
+    F-AXNETD-01 confirmed (identity="%s", g_strescape in PLT zero callers).
+    F-AXC1710-01: InformaCast integration opens unauthenticated port 7234 — see confirmed findings.
+    Unique CGIs: siren_and_light.cgi (D-Bus to siren-and-light-service), speaker-display-preview.cgi
+      (LVGL PNG snapshot), findmydevice.cgi, sipcertrefresh.cgi.
+    Informacast binary: Rust/tokio/hyper (audio-rust-workspace 0.33.18).
+    InformaCast port 7234 routing: Apache UnixSocket proxy to /run/informacast-client/httpproxy.
   Vienna Q6215-LE 10.9 CSB (ARMv7hf):
     F-AXNETD-01 confirmed (identity="%s", g_strescape zero callers). No dev-conf → F-AXUSRMGR-01 N/A.
     1024-bit RSA keys in /usr/etc/ssl/ (obsolete, not directly exploitable without key material).
+  W101 Body Worn Camera 12.9.57 (Ambarella S5L):
+    F-AXUSRMGR-01 confirmed (config_server_reverseproxy.conf identical pattern).
+    BWC-specific Apache config (httpd-bwc.inc): recordings/live-view require ssl-verify-client or BWS session.
+    bwc/pairing.cgi: Require all granted (unauthenticated), backend has request limit, PIN auth only.
+    bwc/recordings.cgi: Require ssl-verify-client — well protected.
+    record/list.cgi, record/export/: Require ssl-verify-client — well protected.
+    bwc/status.cgi, access.cgi, certmgmt.cgi, samgmt.cgi: Require ssl-verify-client.
+    Disk encryption CGIs (changediskpassphrase/enable/disable): default Require axis-group-file (viewer+).
+    Unique binaries: bwa-manager (PIN pairing, session tokens), bwc-auditd, bwc-paramd, bwc-power-manager.
+    bwa-manager: pairing window 5min default (PAIRING_WINDOW_TIMEOUT=300), Request limit reached enforced.
   M3945-R 12.11.77 (AArch64):
     All 5 findings confirmed. api-def_data-transformation_v1.yaml: JQ expressions at operator
     level — libjq in-process execution, no shell escape possible; DoS-only theoretical.
