@@ -29,6 +29,14 @@ Confirmed findings:
                  D1110 12.11.77, A1210/A1710/A1810 12.11.106.1: confirmed
                  Note: binary named "netd" on PACS controllers (not "axnetd")
   F-AXPKG-01     REFUTED: libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault
+  F-AXTEST-01    HTTP SSRF via diagnostic httptest.cgi — viewer privilege, no RFC-1918 filter
+                 httptest.cgi links libhttp_smtp_notify.so (same as F-AXACTION-01)
+                 validateaddr binary only blocks loopback; RFC-1918 unrestricted
+                 tcptest.cgi (shell script): TCP-level probe via /usr/bin/tcptest
+                 smtptest.cgi: SMTP connection test, same loopback-only filter
+                 Auth: axis-group-file (viewer, operator, admin) — lower than F-AXACTION-01
+                 Direct exploitation, no action rule setup required
+                 New bugcrowd report: bugcrowd-F-AXTEST-01.md
   F-AXSTC-01     stclient: relay-server-triggered VAPIX user add/modify/remove (HIGH)
   F-AXSTC-02     REFUTED: g_spawn arg is hardcoded /usr/bin/checkprogress.sh
   F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
