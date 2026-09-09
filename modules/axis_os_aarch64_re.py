@@ -565,8 +565,50 @@ Continued Q1656 12.11.118 CGI analysis:
   viewarea/info.cgi: 2 auth strings — self-enforcing. NEGATIVE.
   ptz/cookietest.cgi (14344 bytes): "Operator" string + vapix_get_param_int + user_group check
     — self-enforcing via OS group check. NEGATIVE.
-  ptz/ptzsetactivedrivermode.cgi (shell script, 7452 bytes): no auth strings, no admin/operator
-    check found. Changes PTZ driver mode config files. Auth level TBD pending further analysis.
+  ptz/ptzsetactivedrivermode.cgi (shell script): calls gdbus to com.axis.PTZ.Coordinator
+    (.GetConfiguration, .SetConfiguration, .GetAvailableConfigurations). No shell-level auth check.
+    D-Bus bus layer: com.axis.PTZ.conf context="default" open (any caller can send).
+    ptzaurus daemon (owns com.axis.PTZ.Coordinator): apac_check_auth/apac_init/libapac.so.0
+    present (APAC v1). Embedded permission strings: viewer:1;operator:1;admin:3;ptzadm:3
+    — SetConfiguration is admin-level (3). Viewer (www user) DENIED by APAC inside ptzaurus.
+    NEGATIVE. APAC inside daemon gates the call even though D-Bus bus layer is open.
+
+  restart.cgi (10248 bytes ELF): calls com.axis.FirmwareManager1 via sd_bus_call_method.
+    REMOTE_USER/REMOTE_ADDR used for logging only. fwmgr.conf D-Bus gate: admin group only.
+    NEGATIVE. Same D-Bus bus-layer block as factorydefault.cgi.
+
+  rootpwdsetvalue.cgi (shell script, 221 bytes): reads System.RootPwdSet parameter (bool flag
+    indicating if root password has been set). READ-only output. Not a write operation.
+    Not a finding.
+
+  time.cgi (47192 bytes): links libjsoncgi.so.0 (operator-minimum enforcing). NEGATIVE.
+
+  supervisedio.cgi (55496 bytes): links libaxcgijson.so (operator-minimum enforcing). NEGATIVE.
+
+  upnp.cgi (43096 bytes): links libjsoncgi.so.0. NEGATIVE.
+  analyticsmetadataconfig.cgi (14440 bytes): links libjsoncgi.so.0. NEGATIVE.
+  remotesyslog.cgi (47200 bytes): links libjsoncgi.so.0. NEGATIVE.
+  mdnssd.cgi (55384 bytes): links libjsoncgi.so.0. NEGATIVE.
+  streamprofile.cgi (26640 bytes): has admin auth string — self-enforcing. NEGATIVE.
+
+  capturemode.cgi (18440 bytes): calls com.axis.CaptureMode1.
+    CaptureMode1.conf: no full context="default" allow — only addon group and capturemoded/root
+    have access to write interfaces. www user (Apache) not in addon group. DENIED at bus layer.
+    NEGATIVE.
+
+  apidiscovery.cgi (18504 bytes): read-only API discovery (com.axis.ApiDiscovery1).
+    Returns list of supported VAPIX API endpoints. No write operations. Not a finding.
+  browserlang.cgi (6152 bytes): browser language preference write. No D-Bus, no auth.
+    Writes UI display language preference only. Not a security finding.
+  base64encode.cgi (10256 bytes): base64 encode/decode utility. No D-Bus, no auth.
+    No security impact. Not a finding.
+  session.cgi, createsession.cgi, removesession.cgi, wssession.cgi (10256 bytes each):
+    manage HTTP sessions for the authenticated user's own session. REMOTE_USER used for
+    session ownership; not a privilege bypass. Not findings.
+  alwaysmulti.cgi (1826 bytes shell script): calls com.axis.AlwaysMulticast1.GenerateSdp
+    via dbus-send. Generates SDP for existing multicast streams (read operation). Not a finding.
+  systemready.cgi (22552 bytes): system readiness status. Read-only. Not a finding.
+
   shockdetection/ (all 0-byte stubs): TransferProxy to /var/run/posd/transfer.
     posd binary: apac_check_auth present. BUT no posd.socket file found in systemd — posd creates
     socket itself. Without SocketGroup=www in a socket unit, socket permissions depend on posd's
