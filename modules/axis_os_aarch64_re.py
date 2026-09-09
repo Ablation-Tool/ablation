@@ -16,12 +16,15 @@ Prologue detection: STP X29,X30,[SP,#-N]! (0x?d 0x7b 0b?? 0xa9) — standard AAP
 PLT resolution: RELA sections (R_AARCH64_JUMP_SLOT 0x402) + .dynstr.
 
 Confirmed findings:
-  F-AXNETD-01    WPA supplicant config injection (netd) — already documented
-  F-AXPKG-01     packagemanager.cgi: xmlReadMemory called without XML_PARSE_NOENT
-                 -> XXE if ACAP manifest can reference external entities
-  F-AXSTC-01     stclient: relay-server-triggered VAPIX user add/modify/remove
-                 (user_manager_vapix_add_user etc — relay server trust)
-  F-AXSTC-02     stclient: g_spawn_command_line_sync call — check arg provenance
+  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 6/6 firmwares
+                 identity="%s", password="%s" unescaped; g_strescape linked zero callers
+  F-AXPKG-01     REFUTED: libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault
+  F-AXSTC-01     stclient: relay-server-triggered VAPIX user add/modify/remove (HIGH)
+  F-AXSTC-02     REFUTED: g_spawn arg is hardcoded /usr/bin/checkprogress.sh
+  F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
+                 Apache config_server_reverseproxy.conf: AuthMerging Off + anonymous=true
+                 -> Require all granted -> dev-conf-service anonymous API allows SET
+                 Confirmed 5/6 firmwares (12.11.77 and 12.11.118; not in 12.2.59)
 
 Standalone:
     cd ~/ablation
