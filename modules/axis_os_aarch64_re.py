@@ -442,10 +442,39 @@ Continued Q1656 12.11.118 CGI analysis:
 #         Also: syslog.complete, syslog.startup, messages, persist-all.log, dmesg.startup,
 #         /mnt/flash/messages, memory_status.csv. Archived as tar with full content.
 #       tar_kernel_log: primary + secondary kernel logs via /usr/bin/klog, secondary-klog.
+#     gen_serverreport.sh (2296 lines) data inventory — confirmed via static read:
+#       Hardware identity: product name, serial (bootblocktool SERNO), processor serial
+#         (/sys/devices/soc0/serial_number), board info, DRAM info, MAC (zip filename).
+#       Runtime state: uptime, boot count, reboot count (UsageStatistics1 D-Bus),
+#         firmware history (/lib/persistent/var/lib/system/system-status/fwhistory),
+#         memory cgroup peaks (system/services/acap slices).
+#       System logs (all rotated): /var/log/info.log*, warning.log*, error.log*,
+#         critical.log*, segfault.log*, /var/lib/syslog-ng/syslog.log*.
+#       Access log: /var/log/auth.log* — authentication events.
+#       Audit log: /var/lib/syslog-ng/audit.log* — security event records.
+#       Kernel logs: klog (primary), secondary-klog, pstore console-ramoops-0 (previous
+#         kernel log), dmesg-ramoops-0 (kernel crash log), bootloader log.
+#       Full Axis Parameter List: parhandclient --maskpasswords getgroup root - NAMEVALUESECTIONS
+#         dumps ENTIRE root.* namespace — network config, event rules, stream profiles,
+#         SMTP settings, PTZ positions, all service params. Passwords masked; all else exposed.
+#       VAPIX user list: UserManagement1.Vapix.ListUsers — full list of VAPIX accounts
+#         with usernames AND roles (viewer/operator/admin). Complete credential target list.
+#       ONVIF user list: UserManagement1.System.ListOnvifUsers — all ONVIF accounts + roles.
+#       Installed certificates: PolicyKitCert.ListInstalledCerts — cert ID, CN, filename,
+#         keystore for every installed TLS certificate.
+#       Certificate sets: PolicyKitCert.ListInstalledCertSets — set IDs and assigned cert IDs.
+#       Straightenimage config: /etc/straightenimage/straightenimage.conf (if present).
+#       Remote camera control connections.
+#       Audio + stream cache snapshots (active stream routing state).
 #     FINDING F-AXSRVRPT-01 (static analysis): viewer-level server diagnostic report access.
 #       Viewer downloads full diagnostic bundle including device serial, MAC, network config,
-#       all system logs (syslog, dmesg, kernel log), and — via tar_all — audit.json (the
-#       same file that auditlog.cgi properly protects with admin-only getegid/getgrnam check).
+#       complete VAPIX user list (usernames + roles), complete ONVIF user list,
+#       all installed TLS certificate CNs, full parameter namespace (passwords masked),
+#       all system logs, access log (auth events), audit log, kernel logs and crash dumps,
+#       and — via tar_all — audit.json (the same file that auditlog.cgi properly protects
+#       with admin-only getegid/getgrnam check).
+#       VAPIX user enumeration is the highest-impact item: viewer extracts all account names
+#       and privilege levels, enabling targeted credential attacks against admin/operator accounts.
 #       VAPIX documentation specifies serverreport.cgi requires operator privilege minimum.
 #       Pattern: no auth library, no Apache override → viewer+ default inherited.
 #       zip_with_image mode also triggers live JPEG snapshot at viewer level.
@@ -479,8 +508,20 @@ Continued Q1656 12.11.118 CGI analysis:
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
   clientnotes/set.cgi: stores group/key/value in /etc/clientnotes/data.conf (GLib keyfile).
     Default viewer access. No path traversal (g_key_file_set_string escapes). Not filed.
-  applicationss/upload.cgi: ACAP install via AcapManager1.Install D-Bus. Auth level TBD.
-  custfwcerts.cgi: installCertificate/removeCertificate. D-Bus backed. Auth TBD.
+  applications/upload.cgi: ACAP install via AcapManager1.Install — NEGATIVE.
+    gdbus call to com.axis.AcapManager1.Install with caller_info=(user,addr,port) audit arg.
+    D-Bus policy (acapmanager.conf): context="default" allow (bus layer open).
+    APAC inside AcapManager1: install action is in wwwa section (admin minimum, line 681).
+    apac2_check_username validates HTTP username from forwarded CGI env (not SO_PEERCRED).
+    Caller_info argument is audit logging only — not bypassing auth.
+    Applications/control.cgi (start/stop/uninstall): start/stop = operator min (line 820);
+      uninstall = admin min (line 688). APAC enforced. NOT a bypass.
+    Applications/config.cgi (SetAllowUnsigned): admin section only (lines 760-763). NEGATIVE.
+  secure_boot/custfwcerts.cgi: installCertificate/removeCertificate — NEGATIVE.
+    D-Bus: com.axis.CustomFirmwareCertificates1 in fwmgr.conf.
+    fwmgr.conf policy: only user="root" and group="admin" allowed — NO context="default".
+    www user (wwwv/wwwo) DENIED at D-Bus bus layer for all CustomFirmwareCertificates1 calls.
+    Apache path: /secure_boot/ — no special Apache auth override found but D-Bus gate sufficient.
 
 Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
