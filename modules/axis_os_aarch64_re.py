@@ -345,6 +345,52 @@ Continued Q1656 12.11.118 CGI analysis:
 #         video surveillance integrity compromised without physical access.
 #     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXSTRAIGHT-01.md
 
+#   customhttpheader.cgi (22808 bytes): No auth library (libaxcgijson/libcgiparser/libjsoncgi all absent).
+#     No Apache auth override: grep of /etc/apache2/ for customhttpheader returns nothing.
+#     Links libcgihelper.so (CGI parsing utility — no auth enforcement; exports cgi_request_parse,
+#       cgi_response_print only; no operator/admin/viewer/401/403 strings in library).
+#     Links libpolicykit_system.so.7 — calls only policykit_system_reload_service (privilege
+#       escalation to reload Apache after write), NOT policykit_system_check_auth (auth gate).
+#     Reads http_user, http_user_realms CGI env vars — used for logging ("%s: running as: %s")
+#       NOT for enforcement: binary has no 401/403/Unauthorized/Forbidden output strings.
+#     Operation: reads/writes /etc/httpconf/customheader.conf via g_key_file_* GLib functions.
+#       Supports methods: list, remove, remove_custom_headers. Direct file write, no D-Bus.
+#     customheader.conf default content (the file being writable):
+#       0=X-Content-Type-Options:nosniff
+#       1=X-Frame-Options:SAMEORIGIN
+#       2=X-XSS-Protection:1; mode=block
+#       3=Content-Security-Policy:default-src 'self'; frame-ancestors 'self'; ... (full CSP)
+#       4=Referrer-Policy:strict-origin-when-cross-origin
+#     These are the browser security headers Apache injects into all camera HTTP responses.
+#     POST body: JSON {"method":"remove","params":{"customheaders":["3"]}} removes CSP by index.
+#     After write, policykit_system_reload_service reloads Apache — changes take effect immediately.
+#     FINDING F-AXCUSTHDR-01 (static analysis): viewer can remove browser security headers.
+#       Viewer can DELETE CSP, X-Frame-Options, X-XSS-Protection, Referrer-Policy from all
+#       camera HTTP responses. After reload:
+#         - No CSP: stored XSS in admin web UI becomes exploitable cross-origin
+#         - No X-Frame-Options: clickjacking against admin login frame
+#         - No X-Content-Type-Options: MIME-type confusion attacks
+#       Viewer can also ADD arbitrary custom headers (e.g. Access-Control-Allow-Origin: *)
+#         to enable cross-origin data exfiltration of camera APIs from attacker-controlled page.
+#       No chain required: viewer deletes CSP, then any stored XSS (if present) in admin UI
+#         executes. Standalone: viewer weakens camera HTTP security posture without admin auth.
+#       Auth gap: libcgihelper.so provides no auth enforcement; polkit call is reload-only.
+
+#   auditlog.cgi (14344 bytes): Self-enforcing via getegid() / getgrnam("admin") OS-level group
+#     check. Suexec sets process EGID = authenticated HTTP user's primary group GID. Viewer (wwwv)
+#     EGID = viewer GID (103) ≠ admin GID (101) → "Only an admin can access the audit logs."
+#     No Apache override needed; the OS-level group check is the enforcement. NOT a finding.
+
+#   trafficcamerainstallation.cgi (453048 bytes): Has Status: 401 Unauthorized / Status: 403
+#     Forbidden strings — self-enforcing. Also has admin/viewer strings for role check. NOT a finding.
+
+#   networkspeakerpairing.cgi (35104 bytes): 0 APAC refs. No Apache override. BUT:
+#     com.axis.NetworkSpeakerPairing.conf D-Bus policy: <policy group="admin"> only — no
+#     context="default" open. System bus default denies wwwv/wwwo method calls to this service.
+#     D-Bus DENY at bus layer for viewer/operator. NOT a finding.
+
+#   deviceselftest.cgi: Status: 401 Unauthorized string — self-enforcing. NOT a finding.
+
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
