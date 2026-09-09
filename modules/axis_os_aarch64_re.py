@@ -617,11 +617,13 @@ Continued Q1656 12.11.118 CGI analysis:
   systemready.cgi (22552 bytes): system readiness status. Read-only. Not a finding.
 
   shockdetection/ (all 0-byte stubs): TransferProxy to /var/run/posd/transfer.
-    posd binary: apac_check_auth present. BUT no posd.socket file found in systemd — posd creates
-    socket itself. Without SocketGroup=www in a socket unit, socket permissions depend on posd's
-    umask/explicit chmod. If socket is not www-accessible, TransferProxy fails at connection layer.
-    Shock APAC policy: no direct shock detection entries in any www* section found.
-    Status: UNCERTAIN — socket accessibility unresolved without live device test.
+    posd binary: apac_check_auth, apac_init, libapac.so.0 (APAC v1, SO_PEERCRED). Same daemon as
+      orientation/ stubs — orientation/ already confirmed NEGATIVE (posd APAC v1, Unauthorized strings).
+    No posd.socket file in systemd — posd creates socket itself. No SocketGroup=www in socket unit;
+      socket created by posd with its own umask/perms, likely not www-accessible.
+    APAC policy: no shock detection entries in www: section (line 666). Even if Apache could reach
+      the socket, APAC v1 inside posd would deny www OS user for all shock operations.
+    NEGATIVE (dual gate: socket likely inaccessible to www, and APAC v1 denies www regardless).
   applications/upload.cgi: ACAP install via AcapManager1.Install — NEGATIVE.
     gdbus call to com.axis.AcapManager1.Install with caller_info=(user,addr,port) audit arg.
     D-Bus policy (acapmanager.conf): context="default" allow (bus layer open).
@@ -890,12 +892,18 @@ Continued Q1656 12.11.118 CGI analysis:
       No Apache auth override in standard conf. Appears in httpd-auth-preview-mode.conf
         inside <IfDefine PREVIEWMODE> — that block is INACTIVE in normal Apache operation.
       Default: viewer+ access.
-    Candidate finding: viewer can download all system logs, camera parameters, network config,
-      and a JPEG snapshot via serverreport.cgi. Server report contains device config, firmware
-      version, network settings, package list, and log excerpts. Requires confirmation of what
-      gen_serverreport.sh exposes and whether viewer-level access is in scope for Bugcrowd.
-    STATUS: CANDIDATE — not yet filed. Impact partially overlaps with expected viewer access
-      (JPEG snapshot, stream info). Primary severity lever is the tar_all mode (full log archive).
+    FINDING F-AXSRVRPT-01 (static analysis): viewer-level server diagnostic report access.
+      Viewer downloads full diagnostic bundle: device serial (bootblocktool SERNO), processor serial,
+      MAC address, complete VAPIX user list (all usernames + privilege roles), complete ONVIF user list,
+      all installed TLS certificate CNs, full root.* parameter tree (passwords masked), all system logs
+      (info/warning/error/critical/segfault rotated), auth.log (authentication events), audit.json
+      (via tar_all — same audit data that auditlog.cgi admin-gates with getgrnam), kernel crash logs.
+      VAPIX user enumeration is the highest-impact item: viewer extracts all account names and roles,
+      enabling targeted credential attacks against admin/operator accounts.
+      Pattern: shell script CGI, no auth library, no Apache override → viewer+ default inherited.
+      VAPIX documentation specifies operator+ minimum for serverreport.cgi.
+      zip_with_image mode also triggers live JPEG snapshot at viewer level.
+      STATUS: CONFIRMED static analysis. Not yet filed to Bugcrowd.
 
   audioanalytics.cgi (47200 bytes): calls com.axis.AudioAnalytics D-Bus service.
     D-Bus conf: context="default" allow — bus layer open. APAC enforced in daemon.
@@ -1171,10 +1179,15 @@ AXIS Switch findings (D8248/D8208-R 8.90.1904) — SEPARATE from AXIS OS Bugcrow
     mediaclip2.cgi (14344 bytes): auth=1 (one auth string) — libjsoncgi.so.0 likely. NEGATIVE separately.
     VAPIX specifies operator+ for mediaclip upload and remove operations; viewer+ for play/stop.
     No enforcement in libmediaclip_lib or CGI binary for the HTTP caller's privilege level.
-    CANDIDATE F-AXCLIP-01: viewer can upload and remove media clips via mediaclip.cgi without
-      operator auth. Requires confirmation that upload_clip accepts arbitrary content and that
-      remove_clip operates on system-accessible paths rather than just user-uploaded temp files.
-      Not filed pending operation characterization.
+    BUT: mediaclip daemon has apac_check_auth + apac_init + libapac.so.0 (APAC v1, SO_PEERCRED).
+      D-Bus conf: context="default" allow at bus layer — open to www.
+      APAC inside daemon: checks www OS user identity. www: section has no mediaclip.* entries.
+        actionengined: section has com.axis.mediaclip.* (line 11) — for actionengined OS user, not www.
+        operator section (line 831): com.axis.mediaclip.* — for HTTP operator/admin OS users, not www process.
+        Viewer section (lines 887-888): only startplayingclip/stopplayingclip — play/stop only.
+      www user → DENIED for addclip, removeconfiguration, getmetadata write ops.
+    F-AXCLIP-01 REFUTED: APAC v1 in mediaclip daemon blocks www OS user for upload/remove ops.
+    NEGATIVE.
 
   local_del.cgi (shell script): deletes files from /usr/html/local/{viewer|operator|administrator}/.
     expr path check: only deletes files matching /usr/html/local/(viewer|operator|administrator)/[^/]+$.
@@ -1202,14 +1215,14 @@ AXIS Switch findings (D8248/D8208-R 8.90.1904) — SEPARATE from AXIS OS Bugcrow
     Links libuser_manager.so.0: user_manager_vapix_auth_user_basic — authenticates the relay
       server's own VAPIX credential identity, NOT the HTTP caller making the CGI request.
     No Apache auth override found. Default: viewer+ access.
-    Operations identified: action=deletecert (delete AVHS relay TLS certificate).
-    cert_set_write, cert_set_insert_cert, cert_set_insert_ca — PKI manipulation operations.
-    APAC: stclient: com.axis.avhs.* — stclient OS user has blanket AVHS D-Bus access.
-      Apache-executed stclient.cgi runs as www user (not stclient OS user); D-Bus auth may differ.
-    CANDIDATE: if HTTP caller (viewer) can trigger cert deletion or cert injection via stclient.cgi
-      without auth, this is a PKI manipulation finding. Not filed — operation map incomplete.
-      Further: stclient.cgi is the CGI binary itself, not a shell wrapper; caller identity
-      at D-Bus layer is www (Apache process), not stclient (the daemon OS user).
+    Operations: action=deletecert; cert_set_write/insert_cert/insert_ca/create_set — PKI ops via
+      cert_msg_send_req → g_dbus_connection_call_sync → com.axis.AVHS D-Bus service.
+    D-Bus (AVHS.conf): context="default" allow — bus layer open to www.
+    APAC: stclient: section (line 544) = daemon OS user grants (for stclient OS user, not www).
+      Apache-executed stclient.cgi runs as www OS user. www: section has NO AVHS entries.
+      APAC inside AVHS daemon sees www → denied for all AVHS operations.
+    NEGATIVE. APAC blocks www OS user for com.axis.AVHS calls. stclient: grants do not apply
+      to Apache-invoked CGI (www OS user ≠ stclient OS user).
 
   deviceselftest.cgi (59496 bytes): CANDIDATE status unresolved.
     "Status: 401 Unauthorized" string present — but no getgrnam, no REMOTE_USER auth check,
