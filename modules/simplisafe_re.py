@@ -151,6 +151,15 @@ FINDINGS = [
                      'POST /v1/metrics -> 200 {"partialSuccess":{}}. '
                      'All three OTLP endpoints accept unauthenticated injection. '
                      'No auth extension configured on OTel Collector OTLP receiver.'),
+    Finding("F24", "HIGH",    "App-Hub Swagger UI + Full OpenAPI Spec Exposed Without Auth",
+            "app_hub", "/docs + /v1/swagger", "GET", None,
+            verified=True,
+            evidence='GET /docs -> 200 Swagger UI 4.6.2; GET /v1/swagger -> 200 149KB OpenAPI spec 58 paths. '
+                     'GET /health -> 200 {"leia":"error","jyn":"error","comlink":"error"} (internal codenames). '
+                     'Admin OAuth scope disclosed: https://app-hub.aser.simplisafe.com/admin:config. '
+                     '10 new IDOR endpoints not in APK RE: DELETE /cameras/{uuid}, '
+                     'DELETE /recordings/{clipId}, POST /subscriptions/{sid}/cancellations, '
+                     'POST /ss3/{serial}/ota-requests, PATCH /cameras/{uuid}/settings.'),
 ]
 
 
@@ -199,6 +208,53 @@ def _print(tag, status, msg):
 
 
 # ─── Unauthenticated Surface ────────────────────────────────────────────────────
+
+def probe_apphub_swagger():
+    """F24: App-hub Swagger UI + spec exposed without auth; reveals internal codenames and admin scope."""
+    import urllib.request, ssl as _ssl
+    ctx = _ssl.create_default_context()
+    base = "https://app-hub.prd.aser.simplisafe.com"
+    print("\n=== F24 — App-Hub Swagger UI + Spec Exposure ===")
+
+    # /docs — Swagger UI
+    try:
+        r = urllib.request.urlopen(
+            urllib.request.Request(base + "/docs", headers={"User-Agent": "Mozilla/5.0"}),
+            context=ctx, timeout=8)
+        body = r.read(200).decode(errors='replace')
+        if 'swagger' in body.lower():
+            _print("HIGH", r.status_code, f"app_hub/docs -> Swagger UI (no auth)")
+    except Exception:
+        pass
+
+    # /v1/swagger — full spec
+    try:
+        r = urllib.request.urlopen(
+            urllib.request.Request(base + "/v1/swagger",
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"}),
+            context=ctx, timeout=10)
+        raw = r.read()
+        spec = json.loads(raw)
+        path_count = len(spec.get('paths', {}))
+        _print("HIGH", r.status_code,
+               f"app_hub/v1/swagger -> {len(raw)//1024}KB OpenAPI spec {path_count} paths "
+               f"| admin scope: app-hub.aser.simplisafe.com/admin:config")
+    except Exception:
+        pass
+
+    # /health — internal codenames
+    try:
+        r = urllib.request.urlopen(
+            urllib.request.Request(base + "/health", headers={"User-Agent": "Mozilla/5.0"}),
+            context=ctx, timeout=8)
+        body = r.read(256).decode(errors='replace')
+        d = json.loads(body)
+        errors = [k for k, v in d.items() if v == "error"]
+        _print("HIGH", r.status_code,
+               f"app_hub/health internal codenames; services in ERROR: {errors}")
+    except Exception:
+        pass
+
 
 def probe_otel_injection():
     """F23: Verify unauthenticated OTLP injection across all three signal types."""
@@ -312,6 +368,9 @@ def probe_unauth():
 
     # F23: OTel full-signal injection
     probe_otel_injection()
+
+    # F24: App-hub Swagger + spec exposure
+    probe_apphub_swagger()
 
 
 # ─── IDOR Test Suite ────────────────────────────────────────────────────────────
