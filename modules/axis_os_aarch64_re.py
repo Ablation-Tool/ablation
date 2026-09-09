@@ -8,6 +8,7 @@ Targets:
   BW_W800_12.10.59 rootfs (AArch64, body worn camera)
   D2110-VE_12_9_57 rootfs (ARMv7hf, security radar)
   A1210_12_11_106 rootfs (ARMv7hf, AXIS A1210 Network Door Controller, Genetec Track)
+  A1710_12_11_106 rootfs (ARMv7hf, AXIS A1710-B Network Door Controller, Genetec Track)
   Vienna Q6215-LE_10.9_CSB rootfs (ARMv7hf, unreleased police CSB)
   BWL EAP 2.0.1 (rsignal Rust AArch64)
 
@@ -22,19 +23,20 @@ Prologue detection: STP X29,X30,[SP,#-N]! (0x?d 0x7b 0b?? 0xa9) — standard AAP
 PLT resolution: RELA sections (R_AARCH64_JUMP_SLOT 0x402) + .dynstr.
 
 Confirmed findings:
-  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 7/7 firmwares
+  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 9/9 firmwares
                  identity="%s", password="%s" unescaped; g_strescape linked zero callers
-                 D1110 12.11.77: identity="%s", g_strescape in PLT confirmed
+                 D1110 12.11.77, A1210 12.11.106.1, A1710 12.11.106.1: confirmed
+                 Note: binary named "netd" on PACS controllers (not "axnetd")
   F-AXPKG-01     REFUTED: libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault
   F-AXSTC-01     stclient: relay-server-triggered VAPIX user add/modify/remove (HIGH)
   F-AXSTC-02     REFUTED: g_spawn arg is hardcoded /usr/bin/checkprogress.sh
   F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
                  Apache config_server_reverseproxy.conf: AuthMerging Off + anonymous=true
                  -> Require all granted -> dev-conf-service anonymous API allows SET
-                 Confirmed 9/9 firmwares (12.9.57→12.11.118; not in 12.2.59)
+                 Confirmed 10/10 firmwares (12.9.57→12.11.118; not in 12.2.59)
                  Products: cameras (5), video decoder (1), security radar (1), body worn (1),
-                           PACS door controller (1) — platform-wide, all product categories
-                 A1210 door controller: pre-auth policy downgrade chains to door relay control
+                           PACS door controllers (2) — platform-wide, all product categories
+                 A1210/A1710 door controllers: pre-auth policy downgrade chains to door relay control
 
 D1110 Video Decoder 4K 12.11.77 analysis (AArch64):
   All 5 existing findings confirmed (F-AXNETD-01, F-AXPARAM-01, F-AXACTION-01/02, F-AXUSRMGR-01)
@@ -51,7 +53,17 @@ Cross-product analysis (new firmwares this session):
     All 5 findings confirmed. PACS-specific libs: libosdp.so (RS-485 only, not network),
     libpacsio-*.so, librelaydoor-*.so (door relay API), liblibwiegand.so, libteeacl.so.
     /nbix/ and /nbixweb/ endpoints: Require admin, websocket only — properly secured.
+    /nbixagent endpoint: Require all granted at Apache level (CMS integration path).
+    served binary validates X-API-Key header vs registered operative agent clientToken (min 12 chars).
+    portal-op interface (lock/unlock/access), accesspoint-op (requestAnonymousAccess, setAuthorizationState)
+    reachable via /nbixagent but gated by X-API-Key check in served. No default/hardcoded token.
     Genetec Synergis Softwire 12.2.10001.0 embedded in firmware (not analyzed).
+  A1710-B Network Door Controller 12.11.106.1 (ARMv7hf, Genetec Track):
+    All 5 findings confirmed. Same PACS lib set as A1210 (libosdp, libpacsio, librelaydoor, etc).
+    Same /nbixagent CMS integration endpoint — X-API-Key gated, same model as A1210.
+    netd binary confirms F-AXNETD-01 (identity="%s", g_strescape in PLT zero callers).
+    F-AXACTION-01/02 confirmed (libtcpnotify.so + libhttp_smtp_notify.so in actionengine_plugins/).
+    relay-conf/relaydoor-conf schemas present: multi-relay hardware (A1710 supports 2 doors).
   D2110-VE Security Radar 12.9.57 (ARMv7hf):
     F-AXUSRMGR-01 confirmed (extends version floor to 12.9.x).
     api-def_remote-object-storage_v1.yaml: operator can GET azure/s3 config objects (secret:true
