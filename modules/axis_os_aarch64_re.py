@@ -934,6 +934,174 @@ Continued Q1656 12.11.118 CGI analysis:
       "Status: 401 Unauthorized" — self-enforcing rejection path in handler binary.
     NEGATIVE. FastCGI handler enforces privilege check internally (401 + role strings).
 
+  restart.cgi (10248 bytes): calls sd_bus_call_method Reboot2 on com.axis.FirmwareManager1.
+    REMOTE_USER appears in audit log string only: "VAPIX user %s from IP-address %s initiated device restart".
+    No Apache auth override. No auth library. No APAC. No 401/403 rejection path.
+    D-Bus policy (fwmgr.conf): com.axis.FirmwareManager1 allows only root, group="admin".
+    Apache runs as www (www group). www is NOT in admin group (admin group: wwwa,wwwao,...,root).
+    D-Bus bus layer DENIES www from calling FirmwareManager1 before reaching daemon.
+    NEGATIVE. D-Bus bus-layer policy blocks www from FirmwareManager1 (admin group required).
+
+  hardfactorydefault.cgi (10256 bytes): calls sd_bus_call_method FactoryDefault "Hard" on FirmwareManager1.
+    Same fwmgr.conf D-Bus policy — admin group only. www denied at bus layer.
+    REMOTE_USER used for audit log only (same pattern as factorydefault.cgi).
+    NEGATIVE. D-Bus bus-layer policy blocks www (same as restart.cgi).
+
+  firmwaremanagement.cgi (30736 bytes): also calls com.axis.FirmwareManager1. REMOTE_USER logging-only.
+    In httpd-auth-preview-mode.conf (INACTIVE in normal operation) — no effective auth override.
+    Blocked at D-Bus bus layer — same admin-group-only fwmgr.conf policy.
+    NEGATIVE. D-Bus blocks www from FirmwareManager1.
+
+  rootpwdsetvalue.cgi (221-byte shell script): reads root.System.RootPwdSet via parhandclient --nocgi get.
+    Read-only: returns "root.System.RootPwdSet=true/false" — whether root password has been set.
+    No write operation, no auth required. Viewer-accessible by design.
+    NEGATIVE. Read-only parhand query; no privilege escalation.
+
+  alwaysmulti.cgi (shell script): calls dbus-send --dest=com.axis.AlwaysMulticast1 GenerateSdp.
+    AlwaysMulticast1 D-Bus conf: only always-multicast user + root + always-multicast group allowed.
+    NO context="default" allow — www user DENIED at D-Bus bus layer.
+    NEGATIVE. Bus-layer policy blocks www from AlwaysMulticast1.
+
+  oak.cgi (22528 bytes): calls com.axis.AVHS via D-Bus + curl HMAC-signed request to AXIS relay.
+    External AXIS Video Hosting System relay registration. No local authorization issue.
+    NEGATIVE. External service operation, no local privilege bypass.
+
+  networkspeakerpairing.cgi (35104 bytes): calls com.axis.PolicyKitCert + com.axis.NetworkSpeakerPairing.
+    PolicyKit enforcement — PolicyKit denies www user.
+    NEGATIVE. PolicyKit gates network speaker pairing operations.
+
+  streamstatus.cgi (26752 bytes): reads from com.axis.Streamer, com.axis.JpegStreamer1, com.axis.MediaCGI1.
+    Read-only stream status queries (cached properties). Viewer-accessible by VAPIX design.
+    NEGATIVE. Read-only streaming status; viewer access is intended.
+
+  wssession.cgi / rtspwssession.cgi (symlink, 10256 bytes): creates RTSP WebSocket sessions.
+    Apache conf: Require axis-rtsp-ws-session viewer — explicitly viewer-permitted.
+    REMOTE_USER for logging only; no privilege escalation path.
+    NEGATIVE. Viewer RTSP WebSocket session creation is VAPIX-intended.
+
+  session.cgi (18440 bytes): no D-Bus refs visible. Apache conf: Require axis-rtsp-ws-session viewer.
+    NEGATIVE. Viewer-accessible by design.
+
+  ntp.cgi (75856 bytes): calls com.axis.NTP1. D-Bus bus layer OPEN (context="default" allow).
+    Links libjsoncgi.so.0 — self-enforcing operator+ minimum at CGI layer.
+    NEGATIVE. libjsoncgi enforces operator+ before D-Bus call.
+
+  time.cgi (47192 bytes): calls com.axis.TimeService1. D-Bus bus layer OPEN.
+    Links libjsoncgi.so.0 — self-enforcing operator+ minimum.
+    NEGATIVE. libjsoncgi enforces operator+ before D-Bus call.
+
+  ssh.cgi (10320 bytes): calls com.axis.SSH. Links libjsoncgi.so.0.
+    NEGATIVE. libjsoncgi enforces operator+ minimum.
+
+  remotesyslog.cgi (47200 bytes): calls com.axis.RemoteSyslog1.
+    D-Bus conf: context="default" allows main interface.
+    remote-syslogd daemon: apac_check_auth, apac_init, libapac.so.0 — APAC v1 enforcement.
+    NEGATIVE. Daemon APAC v1 gates remote syslog config operations.
+
+  upnp.cgi (43096 bytes): calls com.axis.UPnP. D-Bus bus layer OPEN (context="default").
+    Links libjsoncgi.so.0 — self-enforcing operator+.
+    NEGATIVE. libjsoncgi enforces operator+ before D-Bus call.
+
+  mdnssd.cgi (55384 bytes): calls com.axis.MDNSDiscovery1, com.axis.MDNSSD.
+    D-Bus bus layers OPEN (both confs have context="default" allow).
+    Links libjsoncgi.so.0 — self-enforcing operator+.
+    NEGATIVE. libjsoncgi enforces operator+ before D-Bus call.
+
+  power-settings.cgi (51296 bytes): calls com.axis.PowerControl.Measurement, com.axis.Tio1.
+    PowerSettings1 D-Bus conf: context="default" DENY — bus layer explicitly blocks www.
+    NEGATIVE. D-Bus bus-layer explicit deny for context="default".
+
+  supervisedio.cgi (55496 bytes): calls com.axis.IOSupervised.Supervised.
+    io2d_dbus.conf: only iod + root — NO context="default" allow. www user DENIED at bus layer.
+    NEGATIVE. D-Bus bus-layer policy blocks www from IOSupervised.
+
+  capturemode.cgi (18440 bytes): calls com.axis.CaptureMode1. D-Bus bus OPEN.
+    Links libcgiparser.so — self-enforcing operator+ minimum.
+    NEGATIVE. libcgiparser enforces operator+ minimum.
+
+  clearviewcontrol.cgi (18528 bytes): calls com.axis.WiperService.
+    WiperService D-Bus conf: context="default" allow — bus layer open.
+    wiper-service daemon: apac_check_auth, apac_init (3 hits) — APAC v1 enforcement.
+    NEGATIVE. APAC v1 in wiper-service daemon gates all wiper operations.
+
+  analyticsmetadataconfig.cgi (14440 bytes): calls com.axis.MetadataServer1.
+    Links libjsoncgi.so.0 — self-enforcing operator+.
+    NEGATIVE. libjsoncgi enforces operator+.
+
+  featureflag.cgi (39120 bytes): calls com.axis.FeatureFlagService1.
+    D-Bus conf: context="default" DENY send_destination + allows ONLY Get/GetAll (read-only methods).
+    Links libjsoncgi.so.0 — self-enforcing operator+ for write operations.
+    NEGATIVE. Bus layer restricts to read-only; libjsoncgi gates write paths.
+
+  lightcontrol.cgi (39008 bytes): calls ll_* library functions (liblightlogic.so, not D-Bus).
+    Links libaxcgijson.so — self-enforcing operator+ minimum.
+    NEGATIVE. libaxcgijson enforces operator+ minimum before light hardware API calls.
+
+  audiomixer.cgi (34904 bytes): calls com.axis.AudioMixer2.
+    AudioMixer D-Bus conf: context="default" DENY — bus layer blocks www for write ops.
+    Only read-only Introspect/Properties.Get/GetAll allowed by default.
+    NEGATIVE. D-Bus bus-layer deny for write operations.
+
+  audiodevicecontrol.cgi (55392 bytes): calls com.axis.AudioControl.
+    AudioControl D-Bus conf: context="default" DENY send_destination.
+    NEGATIVE. D-Bus bus-layer deny blocks www from AudioControl write operations.
+
+  regionalsettings.cgi (14352 bytes): calls com.axis.RegionalSettings1. D-Bus bus OPEN.
+    Links libcgiparser.so — self-enforcing operator+.
+    NEGATIVE. libcgiparser enforces operator+.
+
+  overlaymodifiers.cgi (10336 bytes): lists available overlay modifier tokens (date, time, ptzinfo, etc).
+    Links libcgiparser.so — self-enforcing operator+.
+    NEGATIVE. libcgiparser enforces operator+. (Also read-only metadata, no write surface.)
+
+  remoteservice.cgi (22544 bytes): calls libpolicykit_parhand.so.1 — PolicyKit enforcement.
+    NEGATIVE. PolicyKit gates remote service configuration operations.
+
+  stclient.cgi (30 bytes, shell): Links libcgiparser.so.
+    NEGATIVE. libcgiparser enforces operator+ minimum.
+
+  image_stabilization.cgi (92360 bytes): has getgrnam, admin, viewer, 401/403 strings.
+    NEGATIVE. Self-enforcing via OS group check + explicit 401/403 rejection.
+
+  auditlog.cgi (14344 bytes): has getgrnam + "Only an admin can access the audit logs."
+    NEGATIVE. Admin-only enforced internally; explicit rejection message.
+
+  deviceselftest.cgi (59496 bytes): no Apache auth override (preview-mode block inactive).
+    Uses fork/execv to run system tests; libjsoncpp.so.27 (JSON parse, not auth).
+    "Status: 401 Unauthorized" present but origin unclear; no auth library, no D-Bus refs.
+    CANDIDATE — no visible auth enforcement mechanism. Live verification required.
+    May trigger brief service interruptions if viewer can call it. Low-medium severity.
+
+  systemlog.cgi / accesslog.cgi: shell scripts, read /var/log entries (system and auth logs).
+    No Apache auth override. Default: viewer+ access.
+    Viewer access to system/auth logs is standard VAPIX viewer behavior — not a bypass.
+    NEGATIVE. Viewer log access is VAPIX-intended.
+
+  shuttergain.cgi, getshuttergain.cgi: links libcgiparser.so. NEGATIVE.
+  streamprofile.cgi: getgrnam + self-enforcing role check. NEGATIVE.
+  ptzcoordcalc.cgi: links libcgiparser.so (read-only coord calculation). NEGATIVE.
+  apidiscovery.cgi: links libcgiparser.so. NEGATIVE.
+  browserlang.cgi: links libcgiparser.so. NEGATIVE.
+  base64encode.cgi: links libcgiparser.so. NEGATIVE.
+
+  videostreamingindicator.cgi (0-byte stub): TransferMethodProxy (POST-only) to
+    /run/video-streaming-indicator/transfer.
+    video-streaming-indicator.socket: ListenDatagram=/run/video-streaming-indicator/transfer,
+      SocketMode=0660, SocketGroup=www — Apache (www group) can connect.
+    video-streaming-indicator daemon (/usr/bin/video-streaming-indicator, 43056 bytes):
+      0 APAC refs, 0 auth strings.
+      Uses VDO API (vdo_stream_get, vdo_stream_attach, vdo_stream_get_event) and Cairo graphics.
+      confutils_set_file_contents_with_sync — writes configuration state.
+      No auth library, no REMOTE_USER, no 401/403.
+    No Apache auth override (no Location/Require for videostreamingindicator.cgi).
+    Default: viewer+ access.
+    FINDING F-AXVSI-01 (static analysis): viewer can POST to videostreamingindicator.cgi
+      to control the camera's video streaming indicator (recording/streaming status overlay
+      shown in the video feed). TransferMethodProxy → SocketGroup=www → 0-auth daemon.
+      Impact: viewer can toggle or manipulate the streaming indicator state visible to all
+      VMS consumers, creating false "not recording" indicators while recording continues
+      or false "recording" indicators while idle. Affects privacy indication and compliance.
+
 Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
   W101 = AXIS W101 Bodyworn Camera (Ambarella S5L, HardwareID 908.2/908.21/908.22)
