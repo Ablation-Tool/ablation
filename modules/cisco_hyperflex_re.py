@@ -324,59 +324,8 @@ UCSM_CREDS = [
 # ─── Findings ────────────────────────────────────────────────────────────────
 
 FINDINGS = {
+
     "HX-F001": {
-        "title": "Installer REST API Entirely Unauthenticated — All Cluster Operations Exposed",
-        "severity": "CRITICAL",
-        "component": "installerrestapi-1.0.0.war (WEB-INF/web.xml)",
-        "description": (
-            "The HyperFlex installer appliance REST API at /rest/* has authentication "
-            "intentionally disabled. web.xml contains the comment "
-            "'Disable AAA Authentication for installer rest api' wrapping the entire "
-            "authentication filter block (SPBasicAuth and SPAuth). No <security-constraint> "
-            "elements are present. All REST endpoints — including cluster creation, expansion, "
-            "and shutdown; stcli command execution; vCenter credential validation; ESXi credential "
-            "retrieval; file upload; and HXDP REST proxying — are accessible to any host on "
-            "the management network without credentials. Applies to: "
-            "/rest/*, /upload, /internalsupport/*, /st-support/*, /storfs-support/*."
-        ),
-        "code_evidence": {
-            "web_xml_comment": "Disable AAA Authentication for installer rest api",
-            "commented_out_filters": [
-                "SPBasicAuth -> com.springpath.hx.aaa.filters.basicAuthFilter.SSOBasicAuthImpl",
-                "SPAuth -> com.springpath.hx.aaa.filters.ssoFilter.SSOAuthFilterImpl",
-            ],
-            "commented_out_filter_mappings": ["SPBasicAuth -> /rest/*", "SPAuth -> /rest/*"],
-            "unauthenticated_operations": [
-                "BootstrapResource: createCluster, expandCluster, shutdownCluster, deployNodes",
-                "BootstrapResource: executeCommand (stcli/sysmtool/mkfs.storfs allowlist)",
-                "BootstrapResource: validateVcenterCredentials, getVcServerDetails",
-                "BootstrapResource: pings (internal host enumeration)",
-                "DeploymentResource: getResponseFromHxdpRest (SSRF proxy to HXDP REST)",
-                "DeploymentResource: configInstaller, updateCatalog, deployNodesJob",
-                "StorvisorFileUploader: /upload (file write to /var/www/localhost/images/)",
-                "VirtPlatformResource: getVirtualMachines, getEvents, powerOnOffVM",
-            ],
-        },
-        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
-        "remediation": (
-            "Re-enable the SPBasicAuth and SPAuth servlet filters in web.xml. "
-            "At minimum, gate all write-capable endpoints (createCluster, deployNodes, upload) "
-            "behind authentication. The installer appliance should not be network-accessible "
-            "outside of the dedicated HyperFlex management VLAN."
-        ),
-    },
-
-
-
-
-
-
-
-
-
-
-
-    "HX-F002": {
         "title": (
             "Unauthenticated DARE Key Thrift RPCs in storfs — "
             "Encryption Key Exfiltration and Replacement (CWE-306)"
@@ -425,7 +374,7 @@ FINDINGS = {
             "only to root-owned processes."
         ),
     },
-    "HX-F003": {
+    "HX-F002": {
         "title": "Unauthenticated StPlatform Thrift Interface — 80+ Cluster Management Operations Exposed",
         "severity": "CRITICAL",
         "component": (
@@ -450,7 +399,7 @@ FINDINGS = {
         ),
         "code_evidence": {
             "binary": "storfs (ELF 64-bit, not stripped, ~20MB)",
-            "confirmed_handler": "process_formatDisks @ 0x9947d0 (same auth-less pattern as HX-F002)",
+            "confirmed_handler": "process_formatDisks @ 0x9947d0 (same auth-less pattern as HX-F001)",
             "dispatch_fn": "StPlatformProcessor::dispatchCall — string-match routing, no auth gate",
             "server_start_fn": "StartNonBlockingServer @ 0x8c27e0",
             "server_thread": "_ZL26sysmgmtNonBlockingThreadId (created by SysMgmt_InitInternal @ 0x8c1dc0)",
@@ -486,71 +435,8 @@ FINDINGS = {
             "require explicit operator confirmation via a separate signed request channel."
         ),
     },
-    "HX-F004": {
-        "title": "Unauthenticated Key Encryption Key (KEK) HTTP Endpoint on Port 35333",
-        "severity": "CRITICAL",
-        "component": (
-            "hxdp-connector (Go 1.23.4 binary, UPX-packed, 25MB unpacked, stripped .symtab). "
-            "Module: github-hyc.scm.engit.cisco.com/starship/diesel/encryption. "
-            "Source: diesel/code/diesel/encryption/encryption_handler.go. "
-            "Struct: (*EncryptionClient). Handler registered by StartEncryptionHandler on HTTP mux."
-        ),
-        "description": (
-            "The hxdp-connector binary listens on port 35333 and serves a Key Encryption Key (KEK) "
-            "retrieval endpoint via the getKeyEncryptionKeyHandler method. The registered HTTP handler "
-            "closure (getKeyEncryptionKeyHandler.func1, PC=0x9e9ec0) dispatches directly to an inner "
-            "handler at 0x9e9f20 with no authentication check before executing KEK retrieval. "
-            "The inner handler creates a KeyEncryptionKeyType struct (runtime.newobject), calls "
-            "barcelona/adio/json.NewContextWithSkipCustom (0x8746a0) and json.UnmarshalWithCtx "
-            "(0x874a20) to parse the request, then calls adcore.UnmarshalJsonToMo* (0x9884a0) to "
-            "serialize and return the KEK. There is no Authorization header read, no JWT token "
-            "validation, and no session check at any point in this dispatch chain. "
-            "The baseHandler method (PC=0x9e9ca0) is a 10-instruction value-packing stub that "
-            "immediately returns; it is not an auth middleware. "
-            "The apollo/base.appHandler.HandleWithAuth function is present in the binary (JWT "
-            "validation via jwt/v4 library) but is not wired to this handler. "
-            "Any unauthenticated caller that can reach port 35333 can retrieve the cluster KEK."
-        ),
-        "code_evidence": {
-            "binary": "hxdp-connector (UPX-unpacked, Go 1.23.4, stripped, 25.7MB)",
-            "port": 35333,
-            "handler_method": "(*EncryptionClient).getKeyEncryptionKeyHandler @ PC=0x9e9b40",
-            "registered_closure": "getKeyEncryptionKeyHandler.func1 @ PC=0x9e9ec0",
-            "inner_dispatch": "anonymous inner handler @ 0x9e9f20 (called from func1 with no auth check)",
-            "call_sequence": [
-                "0x9e9f50: runtime.newobject (allocate KeyEncryptionKeyType struct)",
-                "0x9e9fa0: barcelona/adio/json.NewContextWithSkipCustom @ 0x8746a0 (request parse context)",
-                "0x9e9fc0: barcelona/adio/json.UnmarshalWithCtx @ 0x874a20 (unmarshal request JSON)",
-                "0x9e9ff5: barcelona/adcore.UnmarshalJsonToMo* @ 0x9884a0 (serialize KEK response)",
-            ],
-            "auth_check": "NONE — no Authorization header read, no JWT parse, no middleware gate",
-            "baseHandler_confirmed_stub": (
-                "baseHandler @ 0x9e9ca0: 10 instructions, saves 6 args to stack, "
-                "packs rsi+r8 into rax+rbx, immediate ret — value-packing stub, not auth middleware"
-            ),
-            "HandleWithAuth_unused": (
-                "apollo/base.appHandler.HandleWithAuth present in binary "
-                "(jwt/v4 RSA validation via jwt.SigningMethodRSA) but not called from this handler chain"
-            ),
-            "kek_type_descriptor": "KeyEncryptionKeyType @ 0xfe1900 (struct, size confirmed by newobject call)",
-            "start_handler_fn": "StartEncryptionHandler @ PC=0x9e9ae0 (thin wrapper, no auth setup)",
-            "pclntab_source": (
-                "Function PCs confirmed via Go 1.23 pclntab (magic=0xfffffff1, "
-                "plain null-terminated funcnametab, textStart=0x401000)"
-            ),
-        },
-        "versions_affected": ["6.0.2b-44423"],
-        "remediation": (
-            "Gate the :35333 KEK endpoint with mutual TLS client certificate authentication "
-            "or require a signed bearer token (using the existing jwt/v4 RSA infrastructure "
-            "already in the binary via HandleWithAuth). "
-            "Bind the listener to 127.0.0.1 only if the KEK endpoint is only needed by "
-            "co-located processes. "
-            "Rotate any KEK material that may have been retrieved from exposed deployments."
-        ),
-    },
 
-    "HX-F005": {
+    "HX-F003": {
         "title": "Unauthenticated SSRF + ESXi Credential Exfiltration via /st-support/* (StorvisorSupportBundle)",
         "severity": "CRITICAL",
         "component": (
@@ -603,83 +489,9 @@ FINDINGS = {
     # ── HX-F54 ──────────────────────────────────────────────────────────────────
 
     # ── HX-F006 ──────────────────────────────────────────────────────────────────
-    "HX-F006": {
-        "title": "JWT HS256 Signing Key Stored Unauthenticated in ZooKeeper",
-        "severity": "CRITICAL",
-        "cvss": "9.1",
-        "cwe": "CWE-312",
-        "component": "authfilter / gateway-1.0.0.jar / ZooKeeper",
-        "class": "Cryptographic Key Exposure / Token Forgery",
-        "confirmed": True,
-        "evidence": {
-            "zk_path": (
-                "AAAStoreZKPersistAgent.class constant pool (#43): "
-                "String '/rest/aaa/jwt_signing_key' — the ZooKeeper node where the "
-                "HS256 JWT signing key is written and read."
-            ),
-            "zk_connection": (
-                "application.conf: zkHost='localhost:2181', zkPort='2181', "
-                "zkDefaultConnectionString='localhost:2181'. ZooKeeper runs on "
-                "the HyperFlex controller VM management interface. Port 2181 is "
-                "accessible from the management VLAN (no firewall rule restricts "
-                "cross-node access within the HX cluster fabric)."
-            ),
-            "key_flow": (
-                "JsonWebTokenImpl (common-1.0.0.jar) uses HMAC-SHA256 (HS256) signing. "
-                "Key is generated by EncryptionUtil.generateNewSigningKey(). "
-                "SSOManager.setIfAbsentJWTSigningKey() calls AAAStoreZKPersistAgent "
-                "which calls ZKKeyValueStoreFactory -> ZooKeeperStore -> HxCurator. "
-                "HxCurator reads ZK connection from HxCuratorManager which pulls "
-                "sysmgmt.storfsCfg and reads sysmgmt.zkAuthClientId. "
-                "The 'useZKAuth' flag adds a UUID-based auth token to the Curator "
-                "connection, but ZooKeeper ACLs on the /rest/aaa/ subtree are not "
-                "set to CREATOR_ALL_ACL — default ZK world:anyone:r ACL applies, "
-                "making the node readable without auth."
-            ),
-            "zk_world_readable": (
-                "ZooKeeper nodes written by CuratorFramework without explicit ACL "
-                "argument default to ZooDefs.Ids.OPEN_ACL_UNSAFE (world:anyone:cdrwa). "
-                "HxCurator.createValue/setValue do not pass ACL parameters — "
-                "confirmed by javap bytecode: CuratorFramework.create().forPath(path, data) "
-                "with no .withACL() call. Result: any client that can reach ZK port 2181 "
-                "can read /rest/aaa/jwt_signing_key."
-            ),
-            "forgery_impact": (
-                "The signing key enables forging JWT tokens for any username. "
-                "barredUsers=['root','local/root','diag','local/diag'] in application.conf "
-                "blocks those specific users from the /aaa/v1/auth flow, but a forged JWT "
-                "with subject='users/admin' (or any valid admin account) bypasses the "
-                "authentication flow entirely — the JWT is validated by signature check "
-                "against the same key, not by re-authenticating the credential."
-            ),
-        },
-        "impact": (
-            "An attacker with access to the management network can connect to ZK port 2181 "
-            "on any HyperFlex controller VM, read /rest/aaa/jwt_signing_key, and forge "
-            "HS256 JWT tokens for any administrative user. This grants full authenticated "
-            "access to the HyperFlex REST API without valid credentials. Forged tokens "
-            "bypass all credential-based controls including rate-limiting "
-            "(rateLimitAuthMaxAuthenticationsAllowedInWindow=5) and failed-login lockout "
-            "(failedLoginLockoutTimeInSec=120)."
-        ),
-        "versions_affected": ["6.0.2b-44423"],
-        "remediation": (
-            "1. Firewall ZK port 2181 to localhost only (iptables INPUT -p tcp --dport 2181 "
-            "-s 127.0.0.1 -j ACCEPT; -j DROP). "
-            "2. Set CREATOR_ALL_ACL on the /rest/aaa/ ZK subtree so only the process that "
-            "created the node can read it. "
-            "3. Migrate from HS256 (symmetric) to RS256 (asymmetric): sign with private key, "
-            "verify with public key — ZK only needs to store the public key, key theft no "
-            "longer enables forgery. "
-            "4. Rotate the signing key on each node restart and invalidate all sessions."
-        ),
-    },
 
-    # ── HX-F56 ──────────────────────────────────────────────────────────────────
 
-    # ── HX-F57 ──────────────────────────────────────────────────────────────────
 
-    # ── HX-F58 ──────────────────────────────────────────────────────────────────
 
     # ── HX-F60 ──────────────────────────────────────────────────────────────────
 
@@ -687,7 +499,7 @@ FINDINGS = {
 
 
 
-    "HX-F007": {
+    "HX-F004": {
         "title": (
             "HXCertificateZKMonitor Overwrites NGINX TLS Certificate and Private Key from "
             "ZooKeeper Path /certificates/hxcertificate — Unauthenticated ZK Write Enables "
@@ -755,8 +567,8 @@ FINDINGS = {
     },
 }
 
-HX_F008 = {
-    "id": "HX-F008",
+HX_F005 = {
+    "id": "HX-F005",
     "title": (
         "HyperFlex HXDP 5.x/6.x: ZooKeeper /user_credentials Path Stores SHA-256 crypt(3) "
         "Hashes for root, admin, and diag Accounts; Readable Without Authentication via "
@@ -824,8 +636,8 @@ HX_F008 = {
 }
 
 
-HX_F009 = {
-    "id": "HX-F009",
+HX_F006 = {
+    "id": "HX-F006",
     "title": (
         "HyperFlex HXDP 5.x/6.x: ZooKeeper /storvisor2/stCluster Stores AES/ECB-Encrypted "
         "ESXi, vCenter, and UCSM Credentials; Hardcoded Key 'springpath' Confirmed in "
@@ -836,7 +648,7 @@ HX_F009 = {
     "cwe": "CWE-321",
     "component": (
         "HyperFlex HXDP 5.5.2b (stMgr-1.0.jar, common-1.0.jar, hxSecuritySvcMgr-1.0.jar); "
-        "ZooKeeper ensemble (clientPort 2181, world:anyone:cdrwa ACL via HX-F100)"
+        "ZooKeeper ensemble (clientPort 2181, world:anyone:cdrwa ACL — ZK default OPEN_ACL_UNSAFE)"
     ),
     "versions_affected": (
         "HXDP 5.x, 6.x (confirmed in 5.5.2b extract); all versions with ZK credential storage "
@@ -852,7 +664,7 @@ HX_F009 = {
         "EsxAuthZKMgmtImpl class constant pool (Utf8 entry between "
         "'Failed to initialize root esx credentials' and 'Successfully logged in to ESX node'). "
         "BasicEncryptionUtil applies AES/ECB/PKCS5Padding with SHA-256 key derivation from "
-        "the caller-supplied string. Since the ZK ACL is world:anyone:cdrwa (HX-F100), "
+        "the caller-supplied string. Since the ZK ACL is world:anyone:cdrwa (ZK OPEN_ACL_UNSAFE default), "
         "any unauthenticated ZK client on port 2181 can read the payload and decrypt all "
         "credentials offline with a 10-line Python script. "
         "Scope: ESXi admin → direct hypervisor console on all cluster nodes. "
@@ -876,7 +688,7 @@ HX_F009 = {
             "ucsm_hostname": "Cisco UCS Manager hostname (plaintext)",
             "ucsm_user": "AES/ECB encrypted UCSM username",
             "ucsm_pwd": "AES/ECB encrypted UCSM password",
-            "user_credentials": "OS account SHA-256 crypt hashes (see HX-F008)",
+            "user_credentials": "OS account SHA-256 crypt hashes (see HX-F005)",
         },
         "field_name_source": (
             "ZKEntryConstants.class from common-1.0.jar Utf8 constant pool: "
@@ -947,7 +759,7 @@ HX_F009 = {
         ),
         "upgrade_from_hxf119": (
             "HX-F119 documented encrypted credential storage in 'the /stMgr ZK namespace' "
-            "(path inferred, not confirmed). HX-F009 confirms: "
+            "(path inferred, not confirmed). HX-F006 confirms: "
             "  (1) Exact ZK path: /storvisor2/stCluster (not /stMgr) "
             "  (2) Exact field names from ZKEntryConstants.class "
             "  (3) AES key 'springpath' confirmed in EsxAuthZKMgmtImpl constant pool "
@@ -977,8 +789,8 @@ HX_F009 = {
 }
 
 
-HX_F010 = {
-    "id": "HX-F010",
+HX_F007 = {
+    "id": "HX-F007",
     "title": (
         "HyperFlex HXDP 6.0.2b storfs-misc — Predictable AES Key Derived from Shipped Firmware File "
         "Decrypts Stored Credentials Including Default ctlVM Root Password"
@@ -1072,8 +884,8 @@ HX_F010 = {
     ),
 }
 
-HX_F011 = {
-    "id": "HX-F011",
+HX_F008 = {
+    "id": "HX-F008",
     "title": (
         "HyperFlex HXDP 6.0.2b storfs-appliance sedsvc — Unauthenticated HTTP API on Port 8012 "
         "Exposes SED Drive Cryptographic Erasure and Node KEK to Any Network Client"
@@ -1161,8 +973,8 @@ HX_F011 = {
     ),
 }
 
-HX_F012 = {
-    "id": "HX-F012",
+HX_F009 = {
+    "id": "HX-F009",
     "title": "Privileged Proxy Port 8997 Binds to All Interfaces; nginx Auto-Injects Admin Session ID",
     "severity": "CRITICAL",
     "cvss": 9.8,
@@ -1209,8 +1021,8 @@ HX_F012 = {
     "tags": ["auth-bypass", "privileged-port", "nginx", "session-injection", "network", "cwe-284", "critical"],
 }
 
-HX_F013 = {
-    "id": "HX-F013",
+HX_F010 = {
+    "id": "HX-F010",
     "title": "Unauthenticated Access to /tmp/ Directory via Unauthenticated /sbdl/ nginx Path",
     "severity": "CRITICAL",
     "cvss": 9.1,
@@ -1257,8 +1069,8 @@ HX_F013 = {
 }
 
 
-HX_F014 = {
-    "id": "HX-F014",
+HX_F011 = {
+    "id": "HX-F011",
     "title": "Root Session Token Generated with 15-bit Entropy ($RANDOM) and Stored World-Readable",
     "severity": "CRITICAL",
     "cvss": 9.1,
@@ -1309,13 +1121,13 @@ HX_F014 = {
 }
 
 for _f in [
+    HX_F005,
+    HX_F006,
+    HX_F007,
     HX_F008,
     HX_F009,
     HX_F010,
     HX_F011,
-    HX_F012,
-    HX_F013,
-    HX_F014,
 ]:
     FINDINGS[_f["id"]] = _f
 # ─── Consolidated Meta-Findings ─────────────────────────────────────────────
