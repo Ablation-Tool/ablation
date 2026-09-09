@@ -658,10 +658,56 @@ def analyze_libax_daemon(lib_dir: str, model) -> dict:
 
     return {
         'library': 'libax_daemon.so',
+        'result': 'NO_FINDING — axsd_set_uid_gid (0x1dc0) implements correct setgid→initgroups→setuid sequence',
         'confirmed_findings': [],
-        'semantic_sweep': _semantic_sweep(lib, {}, {}, model, {
+        'semantic_sweep': _semantic_sweep(lib, AXDAEMON_PLT, AXDAEMON_FUNCS, model, {
             k: v for k, v in BERT_QUERIES.items()
             if k in ('privilege_drop', 'ipc_uid_auth', 'format_string_log')
+        }),
+    }
+
+
+def analyze_libaxevent(lib_dir: str, model) -> dict:
+    lib = os.path.join(lib_dir, 'libaxevent.so')
+    if not os.path.exists(lib):
+        return {'error': f'Not found: {lib}'}
+
+    return {
+        'library': 'libaxevent.so',
+        'confirmed_findings': [f for f in FINDINGS if 'AXEVENT' in f['id']],
+        'known_functions': {hex(va): info for va, info in AXEVENT_FUNCS.items()},
+        'note': (
+            'ax_event_element_item_parse_xml (0x9070) passes caller XML string directly to '
+            'xmlnode_parse_string with no pre-validation. Zero internal callers — pure API surface. '
+            'ax_event_handler_subscribe uses structured declaration API, not XML.'
+        ),
+        'semantic_sweep': _semantic_sweep(lib, AXEVENT_PLT_KEY, AXEVENT_FUNCS, model, {
+            k: v for k, v in BERT_QUERIES.items()
+            if k in ('format_string_log', 'ipc_uid_auth')
+        }),
+    }
+
+
+def analyze_libvdo(lib_dir: str, model) -> dict:
+    lib = os.path.join(lib_dir, 'libvdo.so.1.17')
+    if not os.path.exists(lib):
+        return {'error': f'Not found: {lib}'}
+
+    return {
+        'library': 'libvdo.so.1.17',
+        'result': 'NO_FINDING',
+        'confirmed_findings': [],
+        'note': (
+            'BERT sweep: 593 prologue-rooted functions, 5 vulnerability queries. '
+            'Top scores all < 0.50. '
+            'vdo_map_new_from_variant: strict size guards (cmp x0, #0x20 → b.ne bail). '
+            'vdo_fido_extract_buffer: type + min-size checks, no copy. '
+            'vdo_read / vdo_read_exactly: standard loop-to-completion wrappers. '
+            'Actual attack surface in fido_extract_message (external import).'
+        ),
+        'semantic_sweep': _semantic_sweep(lib, {}, {}, model, {
+            k: v for k, v in BERT_QUERIES.items()
+            if k in ('stack_buffer_overflow', 'format_string_log')
         }),
     }
 
@@ -699,6 +745,14 @@ def main():
     if args.all or (args.lib and 'ax_daemon' in args.lib):
         print('[*] Analyzing libax_daemon.so...', flush=True)
         results['libax_daemon.so'] = analyze_libax_daemon(args.lib_dir, model)
+
+    if args.all or (args.lib and 'axevent' in args.lib):
+        print('[*] Analyzing libaxevent.so...', flush=True)
+        results['libaxevent.so'] = analyze_libaxevent(args.lib_dir, model)
+
+    if args.all or (args.lib and 'vdo' in args.lib):
+        print('[*] Analyzing libvdo.so...', flush=True)
+        results['libvdo.so.1.17'] = analyze_libvdo(args.lib_dir, model)
 
     if not results:
         ap.error('Specify --lib <name> or --all')
