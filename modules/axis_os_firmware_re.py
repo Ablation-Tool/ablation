@@ -2,8 +2,9 @@
 axis_os_firmware_re — AXIS OS firmware binary RE module (ARM32 Thumb)
 
 Targets: P3245-V_11_11_220.bin extracted rootfs (ARTPEC-7, armhf)
-Binaries: actionengined, ws-datastreamingd, parhand
+Binaries: actionengined, ws-datastreamingd, parhand, sipd, monolith
 Plugins: libhttp_smtp_notify.so, libtcpnotify.so
+Apache: libwssecurity_url_access.so, mod_authz_axisgroupfile.so, mod_trax.so
 
 Architecture: ARM32 Thumb-2 PIE stripped ELFs.
 Prologue detection: Thumb PUSH-with-LR (0x?? 0xB5) and Thumb-2 wide
@@ -15,13 +16,16 @@ Findings:
                  URL → curl_easy_setopt with no RFC-1918/loopback filter
   F-AXACTION-02: Arbitrary TCP SSRF via TCP notify action (libtcpnotify.so)
                  getaddrinfo+connect to arbitrary host:port from action rule config
+  F-AXDEVCONF-01: InstallAPI YAML file write via D-Bus (dev-conf-service)
+  F-AXDEVCONF-02: setfacl spawn with potentially attacker-controlled UDS path (dev-conf-service)
+  F-AXMONO-01: 1028-byte stack frame + auth bypass path in monolith RTSP HTTP auth checker
 
 Standalone:
     cd ~/ablation
     python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin actionengined
-    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin ws-datastreamingd
-    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin libhttp_smtp_notify.so
-    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin libtcpnotify.so
+    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin libwssecurity_url_access.so
+    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin mod_authz_axisgroupfile.so
+    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin mod_trax.so
     python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --all --out findings.json
 """
 
@@ -519,17 +523,142 @@ def analyze_monolith(rootfs_dir: str, model) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Apache module + auth library analyzers
+# ---------------------------------------------------------------------------
+
+# mod_authz_urlaccess.so → libwssecurity_url_access.so
+# URL ACL policy: g_str_has_prefix prefix matching against /var/run/wsd/url_policy
+# Reload: stat + gettimeofday + g_mutex (TOCTOU candidate on policy file)
+URLACCESS_QUERIES = {
+    'url_prefix_bypass': (
+        'URL_ACL | calls: g_str_has_prefix g_hash_table_lookup g_strsplit | '
+        'vuln: URL path checked with prefix-only match; unnormalized paths like //onvif/ or '
+        '/./onvif/ may bypass the ACL before Apache normalizes the request URI'
+    ),
+    'policy_toctou': (
+        'POLICY_RELOAD | calls: stat gettimeofday g_mutex_lock g_key_file_load_from_file | '
+        'vuln: policy file stat-then-load TOCTOU; attacker who can write /var/run/wsd/url_policy '
+        'between stat() and load wins the race and injects allow-all policy'
+    ),
+    'keyfile_inject': (
+        'KEYFILE_PARSE | calls: g_key_file_get_string_list g_key_file_get_groups keyfile_encode | '
+        'vuln: URL policy key-file fields parsed without escaping; if any user-controlled value '
+        'reaches url_policy content, group/user injection possible'
+    ),
+    'anon_access': (
+        'ANON_AUTH | calls: g_strcmp0 g_str_equal g_hash_table_lookup | '
+        'vuln: anonymous user token compared; bypass if empty string or NULL passes comparison'
+    ),
+}
+
+
+def analyze_libwssecurity_url_access(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/lib/libwssecurity_url_access.so')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'libwssecurity_url_access.so: {len(plt_map)//2} PLT entries, {len(strs_map)} strings',
+          flush=True)
+    return _semantic_sweep(path, plt_map, model, URLACCESS_QUERIES, strs_map)
+
+
+# mod_authz_axisgroupfile.so
+# VAPIX group-based authorization: PTZ_FLAG/VIEW_FLAG/OPER_FLAG/ADMIN_FLAG
+# Group file parsed with apr_strtok; strstr for membership; timing-unsafe comparisons
+AXISGROUPFILE_QUERIES = {
+    'group_timing_bypass': (
+        'GROUP_AUTH | calls: strcmp strncmp strcasecmp ap_cstr_casecmp strstr | '
+        'vuln: group name or username compared with timing-unsafe function; '
+        'timing side channel leaks valid group names; constant-time compare absent'
+    ),
+    'groupfile_overflow': (
+        'GROUPFILE_PARSE | calls: ap_varbuf_cfg_getline apr_file_gets apr_strtok __sprintf_chk | '
+        'vuln: group file line read into variable buffer; if varbuf expands from attacker-controlled '
+        'group file content, heap corruption or OOB read possible'
+    ),
+    'vapix_flag_logic': (
+        'VAPIX_FLAGS | calls: axisgroupfile_authz_group_mapping axisgroupfile_authz_handle_group_access | '
+        'vuln: ADMIN_FLAG/OPER_FLAG/PTZ_FLAG/VIEW_FLAG assignment logic; incorrect OR/AND of flags '
+        'could grant elevated VAPIX privilege (admin) to operator-only group'
+    ),
+    'groupfile_toctou': (
+        'GROUPFILE_RELOAD | calls: apr_stat gettimeofday apr_thread_mutex_lock apr_file_open | '
+        'vuln: group file stat-then-open TOCTOU; race window between stat() and open() '
+        'could let attacker swap group file to grant unauthorized group membership'
+    ),
+    'ssl_header_bypass': (
+        'SSL_BYPASS | calls: ap_ssl_conn_is_ssl apr_table_get ap_note_auth_failure | '
+        'vuln: authorization decision differs for SSL vs non-SSL connections; '
+        'Proxy-Authorization header accepted on plain-text connection may bypass cert requirement'
+    ),
+}
+
+
+def analyze_mod_authz_axisgroupfile(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/lib/apache2/modules/mod_authz_axisgroupfile.so')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'mod_authz_axisgroupfile.so: {len(plt_map)//2} PLT entries, {len(strs_map)} strings',
+          flush=True)
+    return _semantic_sweep(path, plt_map, model, AXISGROUPFILE_QUERIES, strs_map)
+
+
+# mod_trax.so — Apache proxy/relay module for VAPIX to backend FDIP daemon
+# PCRE URL routing; CGI_encode for parameter encoding; fdipc_send for IPC
+TRAX_QUERIES = {
+    'pcre_route_bypass': (
+        'TRAX_ROUTE | calls: pcre_exec pcre_compile strcmp strstr | '
+        'vuln: URL routed via pcre_exec regex; regex bypass (catastrophic backtrack or '
+        'incomplete anchoring) allows unauthorized backend service access through TRAX proxy'
+    ),
+    'cgi_encode_bypass': (
+        'CGI_ENCODE | calls: CGI_encode apr_pstrcat apr_pstrdup __snprintf_chk | '
+        'vuln: CGI_encode applied to HTTP query params before IPC forwarding; '
+        'encoding bypass (double-encode, null byte, percent-literal) injects raw chars into FDIP message'
+    ),
+    'fdipc_inject': (
+        'FDIP_IPC | calls: fdipc_send fdipc_client_socket apr_table_get apr_socket_connect | '
+        'vuln: HTTP header or query param value forwarded via fdipc_send to backend daemon; '
+        'if IPC protocol lacks framing, injected newlines or length fields corrupt IPC stream'
+    ),
+    'proxy_header_inject': (
+        'PROXY_FORWARD | calls: apr_table_addn apr_table_set apr_table_get add_transfer_proxy | '
+        'vuln: hop-by-hop or X-Forwarded-* headers forwarded to backend without stripping; '
+        'backend may trust attacker-supplied X-Forwarded-For or Proxy-Authorization'
+    ),
+    'socket_timeout_race': (
+        'TRAX_SOCKET | calls: set_transfer_timeout apr_socket_timeout_set apr_pollset_poll | '
+        'vuln: timeout configured per-request; very short timeout causes connection abort '
+        'mid-transfer leaving partial data in FDIP buffer — potential desync or smuggling'
+    ),
+}
+
+
+def analyze_mod_trax(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/lib/apache2/modules/mod_trax.so')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'mod_trax.so: {len(plt_map)//2} PLT entries, {len(strs_map)} strings', flush=True)
+    return _semantic_sweep(path, plt_map, model, TRAX_QUERIES, strs_map)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 ANALYZERS = {
-    'actionengined':           analyze_actionengined,
-    'ws-datastreamingd':       analyze_ws_datastreamingd,
-    'parhand':                 analyze_parhand,
-    'libhttp_smtp_notify.so':  analyze_libhttp_smtp_notify,
-    'libtcpnotify.so':         analyze_libtcpnotify,
-    'sipd':                    analyze_sipd,
-    'monolith':                analyze_monolith,
+    'actionengined':                   analyze_actionengined,
+    'ws-datastreamingd':               analyze_ws_datastreamingd,
+    'parhand':                         analyze_parhand,
+    'libhttp_smtp_notify.so':          analyze_libhttp_smtp_notify,
+    'libtcpnotify.so':                 analyze_libtcpnotify,
+    'sipd':                            analyze_sipd,
+    'monolith':                        analyze_monolith,
+    'libwssecurity_url_access.so':     analyze_libwssecurity_url_access,
+    'mod_authz_axisgroupfile.so':      analyze_mod_authz_axisgroupfile,
+    'mod_trax.so':                     analyze_mod_trax,
 }
 
 
