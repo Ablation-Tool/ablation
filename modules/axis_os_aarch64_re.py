@@ -1065,8 +1065,12 @@ Continued Q1656 12.11.118 CGI analysis:
   remoteservice.cgi (22544 bytes): calls libpolicykit_parhand.so.1 — PolicyKit enforcement.
     NEGATIVE. PolicyKit gates remote service configuration operations.
 
-  stclient.cgi (30 bytes, shell): Links libcgiparser.so.
-    NEGATIVE. libcgiparser enforces operator+ minimum.
+  stclient.cgi (30808 bytes ELF): links libcgiparser.so (parse-only, no auth enforcement per F-AXHTEST-01).
+    cert ops: cert_msg_send_req → g_dbus_connection_call_sync → com.axis.AVHS D-Bus service.
+    AVHS.conf: context="default" allow at bus layer (open to www).
+    stclient: APAC section (line 544) = grants for stclient daemon OS user — NOT for Apache-invoked
+      CGI running as www. www: section has NO AVHS entries. APAC v1 inside AVHS daemon denies www.
+    NEGATIVE. APAC blocks www OS user for all com.axis.AVHS calls.
 
   image_stabilization.cgi (92360 bytes): has getgrnam, admin, viewer, 401/403 strings.
     NEGATIVE. Self-enforcing via OS group check + explicit 401/403 rejection.
@@ -1074,11 +1078,15 @@ Continued Q1656 12.11.118 CGI analysis:
   auditlog.cgi (14344 bytes): has getgrnam + "Only an admin can access the audit logs."
     NEGATIVE. Admin-only enforced internally; explicit rejection message.
 
-  deviceselftest.cgi (59496 bytes): no Apache auth override (preview-mode block inactive).
-    Uses fork/execv to run system tests; libjsoncpp.so.27 (JSON parse, not auth).
-    "Status: 401 Unauthorized" present but origin unclear; no auth library, no D-Bus refs.
-    CANDIDATE — no visible auth enforcement mechanism. Live verification required.
-    May trigger brief service interruptions if viewer can call it. Low-medium severity.
+  deviceselftest.cgi (59496 bytes): dual-gate lockdown — NEGATIVE.
+    Apache: only in <IfDefine PREVIEWMODE> block (httpd-auth-preview-mode.conf) — no route
+      in normal production Apache config. CGI is not reachable from Apache in standard operation.
+    Binary self-gate: "System is not in preview mode." emitted with "Status: 401 Unauthorized"
+      when preview mode flag is absent. Binary checks runtime mode independently of Apache.
+      String sequence confirms: preview mode absence → self-401, not a parameter-check 401.
+    Uses fork/execv to run /plugins/*.plugin scripts; libjsoncpp.so.27 (JSON parse).
+    Apache-inaccessible in production + binary self-enforces. No viable bypass vector.
+    NEGATIVE.
 
   systemlog.cgi / accesslog.cgi: shell scripts, read /var/log entries (system and auth logs).
     No Apache auth override. Default: viewer+ access.
