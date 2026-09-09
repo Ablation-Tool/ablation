@@ -152,7 +152,17 @@ Continued Q1656 12.11.118 CGI analysis:
     libjsoncgi.so.0 implements role enforcement (viewer/operator/admin strings) but specific
     role required for SetActive cannot be confirmed without disassembly.
     Flagged for live testing: if viewer can call SetActive, relay-attached cameras vulnerable.
-  io/virtualinput.cgi, io/output.cgi, com/serial.cgi: all empty stubs.
+  io/virtualinput.cgi, io/output.cgi, io/port.cgi, com/serial.cgi: all empty stubs — TransferProxy /var/run/iod/iodsocket.
+  virtualinput/activate.cgi, virtualinput/deactivate.cgi: SHELL SCRIPTS — NOT empty stubs.
+    Path: /usr/html/axis-cgi/virtualinput/activate.cgi (NOT under io/)
+    → calls gdbus call -y -d com.axis.VirtualInput -o /com/axis/VirtualInput/Port/$port -m Activate
+    virtualinputd: no APAC, no PolicyKit; D-Bus policy context="default" open to all peers.
+    Apache: no Location/Directory override for virtualinput/ — inherits Require axis-group-file (viewer+).
+    NO TransferProxy coverage (transfer.conf matches io/virtualinput.cgi, not axis-cgi/virtualinput/).
+    FINDING F-AXVINPUT-01 (unverified live): viewer can trigger virtual input port 1-64.
+    Impact: any action rule bound to a virtual input fires (recording, PTZ preset, HTTP notify,
+    relay output, door controller unlock on PACS products). Viewer triggers operator-level actions.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXVINPUT-01.md (not yet written).
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
@@ -165,6 +175,32 @@ Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
   W101 = AXIS W101 Bodyworn Camera (Ambarella S5L, HardwareID 908.2/908.21/908.22)
   W101 rootfs squashfs extraction started for unique CGI analysis.
+
+Companion Bullet LE 9.80.132 (MIPS32, MPQT format) additional analysis:
+  axisns.cgi: com.axis.AxisNS add/delete — registers device with AXIS relay via HMAC-signed HTTP.
+    D-Bus: context="default" open. axisns binary: g_hmac_new (custom HMAC auth to external relay).
+    No local authorization issue; operation affects external service registration only.
+  date.cgi: action=set calls com.axis.PolicyKitSystem.SetTimeOfDay.
+    PolicyKitSystem D-Bus: context="default" open BUT service uses PolicyKit for auth internally.
+    Comment: "we'll reject callers using PolicyKit" — viewer DENIED at PolicyKit layer.
+  image_param.cgi: deprecated (logged warning "will be removed with LTS 10.x, expected Q1 2020").
+    Still present in 9.80.132. Calls org.freedesktop.DBus.Properties.Set on com.axis.ImageControl.
+    ImageControl D-Bus: context="default" open. imaged binary: viewer:1 permission string present.
+    Image property writes at viewer level theoretically possible; not filed without specific exploit.
+  vaconfig.cgi + com.axis.RuleEngine: RuleEngine has no APAC; any D-Bus peer can call AddApplication/Start.
+    Requires pre-installed analytics app in /usr/local/packages/. Viewer can reconfigure app XML.
+    Not filed as standalone (requires precondition).
+
+AXISP12 Thermal Camera (MIPS32, MPQT format, squashfs offset 4188020, 54MB extracted):
+  Same MPQT firmware family as Companion Bullet LE. CGI set identical + call_overlay_upload.cgi.
+  call_overlay_upload.cgi: BMP file upload for video overlay. file_upload + bmp2overlay.
+    Path hardened: /var/volatile/tmp/ check + [a-zA-Z0-9./_()-] filename whitelist.
+    Not filed.
+  Unique D-Bus services vs Q1656: com.axis.TriggerData, com.axis.VideoControl (both context="default").
+    triggerd: no APAC confirmed (no output from apac strings grep).
+    No HTTP CGI found that calls TriggerData directly. Not filed without CGI path.
+  debug-shell-wrapper: MIPS32 binary — sets root password + calls /bin/login via serial console only.
+    systemd debug-shell.service.d override; ConditionPathExists=/dev/console. Not an HTTP vector.
 
 AXIS Switch findings (D8248/D8208-R 8.90.1904) — SEPARATE from AXIS OS Bugcrowd scope:
   F7: Hardcoded AES-256-CBC key __D3b4gW0r1d@@ for admin credential storage (.axtra-cmd)
