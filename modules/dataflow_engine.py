@@ -4,12 +4,19 @@ dataflow_engine.py — MFP worklist engine + analysis instances for binary RE.
 Implements Nielson/Nielson/Hankin §2.4.1 Table 2.8: generic Monotone Framework
 worklist algorithm over (L, flow, E, ι, f_.) instances. Terminates via ACC.
 
+Also implements Muchnick §7.3/§7.4/§12.6:
+  DomTree          — immediate dominator tree (Cooper-Harvey-Kennedy iterative)
+  LoopInfo         — natural loop detection from dominator back edges
+  SCCPAnalysis     — sparse conditional constant propagation (Wegman-Zadeck)
+
 Lattice instances
 -----------------
 ConstPropAnalysis    — ARM32/ARM64 register constant propagation
                        Resolves pool loads, immediate chains, and GOT-seeded values.
 ReachingDefsAnalysis — ARM32/ARM64 register reaching definitions
                        Produces ud-chains for any (reg, call-site) pair.
+SCCPAnalysis         — conditional CP; only propagates through executable edges.
+                       Fixes the switch-table (tbh) fragmentation problem.
 
 Quick start
 -----------
@@ -23,6 +30,18 @@ Quick start
   rd = ReachingDefsAnalysis(data, base_addr=0, arch='arm32')
   mfp_o, _ = rd.solve(func_addr=0x1e6ae)
   defs = rd.ud_chain(mfp_o, 'r0', 0x1ed80)      # set of definition addresses
+
+  # Dominator tree + loop info
+  cfg = CFGBuilder(make_arch('thumb'), data, 0).build(0x1e6ae)
+  dom = DomTree(cfg)
+  loops = LoopInfo(cfg, dom)
+  print(loops.loop_depth(0x1ed68))   # nesting depth of a block
+  print(dom.back_edges())            # (tail, header) pairs
+
+  # SCCP — sparse conditional CP
+  sccp = SCCPAnalysis(data, base_addr=0, arch='thumb')
+  cp_vals, exec_edges = sccp.solve(func_addr=0x1e6ae)
+  print(sccp.const_at(cp_vals, 'r7', 0x1ed68))  # only if edge proven executable
 """
 
 from __future__ import annotations
@@ -1045,3 +1064,564 @@ class ReachingDefsAnalysis:
         for (r, lbl) in state:
             out.setdefault(r, set()).add(lbl)
         return out
+
+
+# ─── Dominator Tree (Cooper-Harvey-Kennedy 2001) ──────────────────────────────
+
+class DomTree:
+    """
+    Immediate dominator computation — Cooper, Harvey, Kennedy 2001.
+
+    Iterative O(n²) algorithm. Converges in ~2-3 passes on reducible CFGs,
+    which covers virtually all compiled firmware functions.
+
+    Usage:
+      cfg = CFGBuilder(...).build(func_addr)
+      dom = DomTree(cfg)
+      dom.dominates(a, b)     -> bool
+      dom.idom(n)             -> int | None  (None for entry)
+      dom.back_edges()        -> [(tail, header), ...]
+      dom.rpo()               -> [label, ...]  (reverse post-order)
+    """
+
+    def __init__(self, cfg: CFG):
+        self.cfg = cfg
+        self._idom: Dict[int, int] = {}   # label → immediate dominator label
+        self._rpo: List[int] = []
+        self._rpo_num: Dict[int, int] = {}
+        if cfg.blocks:
+            self._compute()
+
+    def _compute(self) -> None:
+        entry = self.cfg.entry
+
+        # 1. Iterative DFS to get post-order, then reverse for RPO
+        visited: Set[int] = set()
+        post: List[int] = []
+        stack: List[Tuple[int, bool]] = [(entry, False)]
+
+        while stack:
+            n, processed = stack.pop()
+            if processed:
+                post.append(n)
+                continue
+            if n in visited or n not in self.cfg.blocks:
+                continue
+            visited.add(n)
+            stack.append((n, True))
+            for s in reversed(self.cfg.blocks[n].succs):
+                if s not in visited and s in self.cfg.blocks:
+                    stack.append((s, False))
+
+        self._rpo = list(reversed(post))
+        self._rpo_num = {n: i for i, n in enumerate(self._rpo)}
+
+        # 2. CHA fixed-point: idom[entry] = entry; others start undefined
+        idom: Dict[int, Optional[int]] = {n: None for n in self.cfg.blocks}
+        idom[entry] = entry
+
+        changed = True
+        while changed:
+            changed = False
+            for n in self._rpo:
+                if n == entry:
+                    continue
+                # processed predecessors only
+                preds = [
+                    p for p in self.cfg.blocks[n].preds
+                    if p in self.cfg.blocks and idom.get(p) is not None
+                ]
+                if not preds:
+                    continue
+                new_idom = preds[0]
+                for p in preds[1:]:
+                    new_idom = self._intersect(p, new_idom, idom)
+                if idom[n] != new_idom:
+                    idom[n] = new_idom
+                    changed = True
+
+        self._idom = {k: v for k, v in idom.items() if v is not None}
+
+    def _intersect(self, b1: int, b2: int, idom: Dict[int, Optional[int]]) -> int:
+        """Walk both fingers up the dominator tree until they meet (CHA §3)."""
+        while b1 != b2:
+            while self._rpo_num.get(b1, 0) > self._rpo_num.get(b2, 0):
+                b1 = idom[b1]
+            while self._rpo_num.get(b2, 0) > self._rpo_num.get(b1, 0):
+                b2 = idom[b2]
+        return b1
+
+    def idom(self, n: int) -> Optional[int]:
+        """Immediate dominator of n. None for the entry block."""
+        v = self._idom.get(n)
+        if v is None or v == n:
+            return None
+        return v
+
+    def dominates(self, a: int, b: int) -> bool:
+        """True if a dominates b (reflexive: a dominates itself)."""
+        cur = b
+        seen: Set[int] = set()
+        while True:
+            if cur == a:
+                return True
+            parent = self._idom.get(cur)
+            if parent is None or parent == cur or cur in seen:
+                return False
+            seen.add(cur)
+            cur = parent
+
+    def back_edges(self) -> List[Tuple[int, int]]:
+        """
+        CFG edges (tail, header) where header dominates tail.
+        These are the loop back edges (Muchnick §7.4).
+        """
+        result = []
+        for (src, dst) in self.cfg.flow:
+            if dst in self.cfg.blocks and self.dominates(dst, src):
+                result.append((src, dst))
+        return result
+
+    def rpo(self) -> List[int]:
+        """Block labels in reverse post-order — the standard worklist iteration order."""
+        return list(self._rpo)
+
+    def children(self, n: int) -> List[int]:
+        """Blocks whose immediate dominator is n (dominator tree children)."""
+        return [b for b, d in self._idom.items() if d == n and b != n]
+
+    def dom_frontier(self) -> Dict[int, Set[int]]:
+        """
+        Dominance frontiers for all blocks — the set of blocks where a block's
+        dominance ends. Required for SSA phi-function placement (Muchnick §8.11).
+        """
+        df: Dict[int, Set[int]] = {n: set() for n in self.cfg.blocks}
+        for n in self.cfg.blocks:
+            if len(self.cfg.blocks[n].preds) >= 2:
+                for pred in self.cfg.blocks[n].preds:
+                    runner = pred
+                    while runner != self._idom.get(n) and runner is not None:
+                        df[runner].add(n)
+                        parent = self._idom.get(runner)
+                        if parent is None or parent == runner:
+                            break
+                        runner = parent
+        return df
+
+
+# ─── Natural Loop Detection (Muchnick §7.4) ───────────────────────────────────
+
+@dataclass
+class Loop:
+    header: int                   # single loop header (entry point)
+    back_edge_tails: List[int]    # tails b of back edges b→header
+    body: Set[int]                # all blocks in loop body (includes header)
+
+
+class LoopInfo:
+    """
+    Natural loop detection from a DomTree's back edges.
+
+    A natural loop for back edge (b→h):
+      body = {n | n can reach b via backward CFG without crossing h} ∪ {h}
+
+    Multiple back edges to the same header merge into one loop (Muchnick §7.4).
+
+    Usage:
+      loops = LoopInfo(cfg, dom)
+      loops.loop_depth(block_label)     -> int (nesting depth)
+      loops.loops_containing(label)     -> [Loop, ...]
+      loops.is_loop_header(label)       -> bool
+      loops.is_reducible()              -> bool
+    """
+
+    def __init__(self, cfg: CFG, dom: DomTree):
+        self.cfg = cfg
+        self.dom = dom
+        self.loops: List[Loop] = []
+        self._header_map: Dict[int, Loop] = {}
+        self._block_loops: Dict[int, List[Loop]] = {}
+        self._compute()
+
+    def _compute(self) -> None:
+        back = self.dom.back_edges()
+        header_to_tails: Dict[int, List[int]] = {}
+        for (b, h) in back:
+            header_to_tails.setdefault(h, []).append(b)
+
+        for header, tails in header_to_tails.items():
+            body = self._natural_loop_body(header, tails)
+            loop = Loop(header=header, back_edge_tails=list(tails), body=body)
+            self.loops.append(loop)
+            self._header_map[header] = loop
+            for n in body:
+                self._block_loops.setdefault(n, []).append(loop)
+
+    def _natural_loop_body(self, header: int, tails: List[int]) -> Set[int]:
+        body: Set[int] = {header}
+        worklist: deque = deque()
+        for b in tails:
+            if b not in body:
+                body.add(b)
+                worklist.append(b)
+        while worklist:
+            n = worklist.popleft()
+            for pred in self.cfg.blocks[n].preds:
+                if pred in self.cfg.blocks and pred not in body:
+                    body.add(pred)
+                    worklist.append(pred)
+        return body
+
+    def is_loop_header(self, block: int) -> bool:
+        return block in self._header_map
+
+    def loops_containing(self, block: int) -> List[Loop]:
+        return self._block_loops.get(block, [])
+
+    def loop_depth(self, block: int) -> int:
+        return len(self.loops_containing(block))
+
+    def is_reducible(self) -> bool:
+        """
+        CFG is reducible iff every cycle has a unique dominating header.
+        Equivalent: every retreating DFS edge is also a dominator back edge.
+        Reducible CFGs arise from structured control flow — essentially all
+        compiled (non-obfuscated) firmware (Muchnick §7.5).
+        """
+        back = set(self.dom.back_edges())
+        visited: Set[int] = set()
+        on_stack: Set[int] = set()
+        stack: List[Tuple[int, List[int]]] = [(self.cfg.entry, list(self.cfg.blocks[self.cfg.entry].succs))]
+        visited.add(self.cfg.entry)
+        on_stack.add(self.cfg.entry)
+
+        while stack:
+            n, succs = stack[-1]
+            if succs:
+                s = succs.pop()
+                if s not in self.cfg.blocks:
+                    continue
+                if s in on_stack:
+                    if (n, s) not in back:
+                        return False
+                elif s not in visited:
+                    visited.add(s)
+                    on_stack.add(s)
+                    stack.append((s, list(self.cfg.blocks[s].succs)))
+            else:
+                stack.pop()
+                on_stack.discard(n)
+
+        return True
+
+
+# ─── SCCP — Sparse Conditional Constant Propagation (Muchnick §12.6) ──────────
+
+def _arm_flags(rn: int, op2: int, subtract: bool = True) -> Dict[str, bool]:
+    """Compute ARM N, Z, C, V flags for CMP rn, op2 (rn - op2) or TST (rn & op2)."""
+    if subtract:
+        result = rn - op2
+        unsigned_result = (rn & 0xFFFFFFFF) - (op2 & 0xFFFFFFFF)
+        signed_rn   = rn   if rn   < 0x80000000 else rn   - 0x100000000
+        signed_op2  = op2  if op2  < 0x80000000 else op2  - 0x100000000
+        signed_res  = signed_rn - signed_op2
+        n = bool((result & 0x80000000))
+        z = ((result & 0xFFFFFFFF) == 0)
+        c = (unsigned_result >= 0)
+        v = (signed_res < -0x80000000 or signed_res > 0x7FFFFFFF)
+    else:
+        result = rn & op2
+        n = bool(result & 0x80000000)
+        z = ((result & 0xFFFFFFFF) == 0)
+        c = False
+        v = False
+    return {'n': n, 'z': z, 'c': c, 'v': v}
+
+
+def _eval_arm_cond(cond: str, flags: Dict[str, bool]) -> Optional[bool]:
+    """Return True/False if condition is determined; None if unknown condition code."""
+    n, z, c, v = flags['n'], flags['z'], flags['c'], flags['v']
+    return {
+        'eq':  z,
+        'ne':  not z,
+        'cs':  c,   'hs': c,
+        'cc':  not c, 'lo': not c,
+        'mi':  n,
+        'pl':  not n,
+        'vs':  v,
+        'vc':  not v,
+        'hi':  (c and not z),
+        'ls':  (not c or z),
+        'ge':  (n == v),
+        'lt':  (n != v),
+        'gt':  (not z and n == v),
+        'le':  (z or n != v),
+    }.get(cond)
+
+
+class SCCPAnalysis:
+    """
+    Sparse Conditional Constant Propagation — Wegman & Zadeck 1991, Muchnick §12.6.
+
+    Unlike dense ConstPropAnalysis (which propagates through all edges regardless
+    of executability), SCCP tracks per-edge executability:
+      - Start with only the entry's outgoing edges executable.
+      - When a conditional branch's condition register is a constant,
+        only the taken edge is marked executable.
+      - Blocks with no executable in-edges remain ⊥ (unreachable / None).
+
+    This eliminates the switch-table contamination problem: blocks beyond an
+    opaque branch with TOP condition are still reached (both edges open), but
+    blocks beyond a branch with a KNOWN constant condition are precisely pruned.
+
+    No SSA form required. Block-granularity (not instruction-granularity) SCCP.
+    """
+
+    def __init__(
+        self,
+        data: bytes,
+        base_addr: int,
+        arch: str = 'arm32',
+        got_seed: Optional[Dict[int, int]] = None,
+    ):
+        self._arch = make_arch(arch)
+        self._data = data
+        self._base = base_addr
+        self._got = got_seed or {}
+        self._builder = CFGBuilder(self._arch, data, base_addr)
+
+    def solve(
+        self,
+        func_addr: int,
+        initial_regs: Optional[Dict[str, int]] = None,
+    ) -> Tuple[Dict[int, Any], Set[Tuple[int, int]]]:
+        """
+        Returns:
+          cp_vals:    block_label → register state dict (None = unreachable / ⊥)
+          exec_edges: set of (src, dst) proven executable CFG edges
+        """
+        cfg = self._builder.build(func_addr)
+        if not cfg.blocks:
+            return {}, set()
+
+        arch = self._arch
+        all_regs = arch.all_regs()
+
+        cp_vals: Dict[int, Any] = {lbl: None for lbl in cfg.blocks}
+        exec_edges: Set[Tuple[int, int]] = set()
+
+        # Seed entry block
+        extremal: Dict[str, Any] = {r: _TOP for r in all_regs}
+        if initial_regs:
+            extremal.update(initial_regs)
+        cp_vals[cfg.entry] = extremal
+
+        # Worklists
+        flow_wl: deque = deque()        # CFG edges to process
+        block_wl: deque = deque()       # blocks to re-evaluate
+
+        # Seed: process entry block immediately
+        block_wl.append(cfg.entry)
+
+        def _join_z(a, b):
+            if a is _TOP or b is _TOP:
+                return _TOP
+            if a == b:
+                return a
+            return _TOP
+
+        def _join(a, b):
+            if a is None:
+                return b
+            if b is None:
+                return a
+            return {r: _join_z(a.get(r, _TOP), b.get(r, _TOP)) for r in all_regs}
+
+        def _leq_z(a, b) -> bool:
+            if b is _TOP:
+                return True
+            if a is _TOP:
+                return False
+            return a == b
+
+        def _leq(a, b) -> bool:
+            if a is None:
+                return True
+            if b is None:
+                return False
+            return all(_leq_z(a.get(r, _TOP), b.get(r, _TOP)) for r in all_regs)
+
+        def _exit_state(lbl: int) -> Any:
+            """Transfer function: block entry → block exit."""
+            st = cp_vals.get(lbl)
+            if st is None:
+                return None
+            return _cp_transfer_block(
+                cfg.blocks[lbl], st, arch, self._data, self._base, self._got
+            )
+
+        def _resolve_condition(block: BasicBlock, exit_st) -> Optional[bool]:
+            """
+            Return True if conditional branch is taken, False if not taken,
+            None if undecidable (register is TOP or condition code unrecognised).
+            """
+            if exit_st is None or not block.insns:
+                return None
+            last = block.insns[-1]
+            if not arch.is_conditional_branch(last):
+                return None
+
+            # Find most recent CMP/TST before branch (scan backward)
+            cmp_insn = None
+            for i in range(len(block.insns) - 2, -1, -1):
+                mn = block.insns[i].mnemonic.lower()
+                if mn.startswith(('cmp', 'tst', 'cmn', 'teq')):
+                    cmp_insn = block.insns[i]
+                    break
+                # flag-clobbering instructions invalidate the search
+                if not mn.startswith(('b', 'ldr', 'str', 'push', 'pop', 'nop')):
+                    if arch.dest_reg(block.insns[i]) is not None:
+                        pass  # dest reg writes don't touch flags; keep scanning
+            if cmp_insn is None:
+                return None
+
+            try:
+                ops = cmp_insn.operands
+            except Exception:
+                return None
+            if len(ops) < 2:
+                return None
+
+            def _reg_val(op) -> Optional[int]:
+                if hasattr(op, 'reg') and op.type in (
+                    C_ARM.ARM_OP_REG, C_ARM64.ARM64_OP_REG
+                ):
+                    name = cmp_insn.reg_name(op.reg).lower()
+                    v = exit_st.get(name, _TOP)
+                    return None if (v is _TOP or v is None) else v
+                if hasattr(op, 'imm') and op.type in (
+                    C_ARM.ARM_OP_IMM, C_ARM64.ARM64_OP_IMM
+                ):
+                    return op.imm
+                return None
+
+            rn_val = _reg_val(ops[0])
+            op2_val = _reg_val(ops[1])
+            if rn_val is None or op2_val is None:
+                return None
+
+            cmp_mn = cmp_insn.mnemonic.lower()
+            subtract = not cmp_mn.startswith('tst')
+            flags = _arm_flags(rn_val & 0xFFFFFFFF, op2_val & 0xFFFFFFFF, subtract)
+
+            # Extract condition code from branch mnemonic
+            branch_mn = last.mnemonic.lower()
+            if isinstance(arch, THUMB2Config):
+                bare = arch._bare(branch_mn)
+                cond = branch_mn.replace('.w', '')
+                if bare == 'b':
+                    cond = cond[len(bare):]
+                else:
+                    cond = ''
+            elif isinstance(arch, ARM32Config):
+                bare = 'b'
+                cond = branch_mn[1:] if branch_mn.startswith('b') else ''
+            else:
+                cond = branch_mn[1:] if branch_mn.startswith('b') else ''
+
+            return _eval_arm_cond(cond, flags)
+
+        while flow_wl or block_wl:
+            # Drain flow worklist first
+            while flow_wl:
+                edge = flow_wl.popleft()
+                src, dst = edge
+                if edge in exec_edges:
+                    continue
+                exec_edges.add(edge)
+
+                # Recompute dst entry state from all executable predecessor exits
+                new_entry = None
+                for p in cfg.blocks[dst].preds:
+                    if (p, dst) in exec_edges:
+                        new_entry = _join(new_entry, _exit_state(p))
+
+                if not _leq(new_entry, cp_vals.get(dst)):
+                    cp_vals[dst] = new_entry
+                    block_wl.append(dst)
+
+            # Process one block
+            if block_wl:
+                n = block_wl.popleft()
+                if n not in cfg.blocks:
+                    continue
+                block = cfg.blocks[n]
+                state = cp_vals.get(n)
+                if state is None:
+                    continue
+
+                exit_st = _cp_transfer_block(
+                    block, state, arch, self._data, self._base, self._got
+                )
+
+                if not block.insns:
+                    for s in block.succs:
+                        flow_wl.append((n, s))
+                    continue
+
+                last = block.insns[-1]
+
+                if arch.is_return(last):
+                    pass  # no successors
+
+                elif arch.is_call(last):
+                    fall = last.address + last.size
+                    if fall in cfg.blocks:
+                        flow_wl.append((n, fall))
+
+                elif arch.is_unconditional_branch(last):
+                    tgt = arch.branch_target(last)
+                    if tgt and tgt in cfg.blocks:
+                        flow_wl.append((n, tgt))
+
+                elif arch.is_conditional_branch(last):
+                    taken = _resolve_condition(block, exit_st)
+                    tgt = arch.branch_target(last)
+                    fall = last.address + last.size
+
+                    if taken is True and tgt and tgt in cfg.blocks:
+                        flow_wl.append((n, tgt))
+                    elif taken is False and fall in cfg.blocks:
+                        flow_wl.append((n, fall))
+                    else:
+                        # Unknown condition: both edges executable
+                        for s in block.succs:
+                            flow_wl.append((n, s))
+                else:
+                    for s in block.succs:
+                        flow_wl.append((n, s))
+
+        return cp_vals, exec_edges
+
+    def const_at(self, cp_vals: Dict[int, Any], reg: str, block_label: int) -> Optional[int]:
+        """Constant value of reg at block_label entry, or None (TOP or unreachable)."""
+        state = cp_vals.get(block_label)
+        if state is None:
+            return None
+        v = state.get(reg, _TOP)
+        return None if (v is _TOP or v is None) else v
+
+    def reachable_blocks(
+        self, cp_vals: Dict[int, Any], exec_edges: Set[Tuple[int, int]]
+    ) -> Set[int]:
+        """Set of block labels with at least one executable incoming edge (or entry)."""
+        cfg = self._builder.build(list(cp_vals.keys())[0]) if cp_vals else None
+        reachable = set()
+        for (src, dst) in exec_edges:
+            reachable.add(src)
+            reachable.add(dst)
+        # entry is always reachable
+        for lbl, st in cp_vals.items():
+            if st is not None:
+                reachable.add(lbl)
+        return reachable
