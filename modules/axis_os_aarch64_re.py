@@ -715,9 +715,85 @@ Continued Q1656 12.11.118 CGI analysis:
       impact limited to info disclosure of connection metadata.
 
   ptz/ptzsetactivedrivermode.cgi (shell script, 7452 bytes): changes PTZ driver mode
-    config files (copies framework.conf for MODE0/MODE1 PTZ). No auth strings found.
-    Pending full auth analysis — shell scripts may have group checks in body beyond
-    what grep surfaces. Status: UNCONFIRMED.
+    config files (copies framework.conf for MODE0/MODE1 PTZ). Calls gdbus to
+    com.axis.PTZ.Coordinator. com.axis.PTZ.conf: context="default" allow — D-Bus bus layer open.
+    ptzaurus daemon: apac_check_auth/apac_init/libapac.so.0 (APAC v1). Embedded permission
+    strings "viewer:1;operator:1;admin:3;ptzadm:3" — SetConfiguration = admin-level (3).
+    APAC inside daemon gates the call using D-Bus SO_PEERCRED (ptzaurus process identity).
+    NEGATIVE. APAC v1 inside ptzaurus blocks non-admin callers at daemon layer.
+
+  record/record.cgi, record/stop.cgi, record/continuous/*.cgi, record/recording_group/*.cgi:
+    0-byte stubs. TransferProxy to /run/indexer/transfer.
+    indexer daemon (User=storage, Group=storage, RuntimeDirectory=indexer mode=0755):
+      apac2_init, apac2_release, libapac2.so.0 — APAC v2 enforcement.
+    record/remove.cgi, record/storage/*.cgi: FastCGI proxy to /run/osr-main/manager.socket.
+      Apache sets RequestHeader X-Remote-User for forwarded HTTP username.
+      osr-main daemon: apac2_check_username, apac2_init, libapac2.so.0 — APAC v2.
+    NEGATIVE. Both indexer and osr-main enforce APAC v2 on forwarded HTTP username.
+
+  debug/debug.cgi (0-byte stub): Transfer /var/run/dbg-cgi/ctrl-cgi-socket.
+    Uses Transfer directive (raw socket, not TransferProxy). No Require override found.
+    No dbg-cgi binary found anywhere in Q1656_12_11_118 rootfs — binary absent.
+    Socket at /var/run/dbg-cgi/ — path does not exist unless binary present.
+    PENDING / NOT FILED. Binary missing from extracted firmware; cannot characterize
+    operations or auth posture without it. Revisit on firmware with debug package installed.
+
+  disks/*.cgi (27 CGIs total — checkdisk, format, getcapabilities, gethealth, job, list,
+    lock, mount, repair; networkshare/add|bind|job|list|modify|remove|schemaversions|test|unbind;
+    properties/changediskpassphrase|disablediskencryption|enablediskencryption|getdiskalertlevels
+    |schemaversions|setcleanupmaxage|setcleanuppolicy|setdiskalertlevels|setrequiredfs):
+    All 0-byte stubs. TransferProxy to /var/run/disks/transfer.
+    storage_manager binary (412152 bytes): apac2_check_username, apac2_init, apac2_release,
+      libapac2.so.0 — APAC v2 enforcement on forwarded HTTP username.
+    D-Bus conf (com.axis.storage.StorageManager1.conf): storage + root only; no context="default".
+    D-Bus conf (storage.conf): context="default" allow for com.axis.Storage — bus layer open.
+    But socket-based CGI path through storage_manager enforces APAC v2 regardless.
+    NEGATIVE. APAC v2 in storage_manager gates all disk management operations.
+
+  lensparams/*.cgi (13 CGIs, 64-byte shell scripts): exec ./lensparams $opt.
+    lensparams binary (31168 bytes): calls com.axis.LensDistortionCorrection2.ch{N} via D-Bus.
+    D-Bus conf (LensDistortionCorrection2.conf): only root and imaged users allowed.
+      NO context="default" — www user DENIED at D-Bus bus layer.
+    NEGATIVE. D-Bus bus layer blocks www user before reaching lensparams binary.
+
+  geolocation/get.cgi, geolocation/set.cgi (30744 bytes each): call com.axis.GeoLocation1.
+    Both link libcgiparser.so (AXIS CGI auth enforcement library — requires operator+).
+    GeoLocation1 D-Bus conf: context="default" open but DENY DBus.Properties by default;
+      explicit operator+ users (wwwaop, wwwap, wwwa, wwwao, wwwaov, wwwaovp, wwwav, wwwavp)
+      allowed for Properties interface.
+    NEGATIVE. libcgiparser.so enforces operator minimum before D-Bus call.
+
+  geoorientation/geoorientation.cgi (26664 bytes): calls com.axis.GeoLocation1.
+    Links libcgiparser.so (operator+ enforcing auth library).
+    NEGATIVE. libcgiparser.so enforces operator minimum.
+
+  orientation/getlateralvalue.cgi, getlongitudinalvalue.cgi, getschemaversions.cgi:
+    0-byte stubs. TransferProxy to /var/run/posd/transfer (transfer_orientation.conf).
+    posd daemon (71768 bytes, Position Service): apac_check_auth, apac_init, apac_release,
+      libapac.so.0 — APAC v1 enforcement. "Unauthorized Access",
+      "com.axis.Orientation1.Unauthorized" error strings confirm auth is enforced.
+    NEGATIVE. APAC v1 in posd gates all orientation read/write operations.
+
+  com/ptz.cgi, com/ptzconfig.cgi, com/ptzqueue.cgi, com/serial.cgi (0-byte stubs):
+    com/ptz*.cgi: TransferProxy to /var/run/ptz/vapixdsocket.
+    com/serial.cgi: Transfer /var/run/ptz/vapixdsocket (same daemon).
+    ptz-vapix.socket: SocketUser=www, SocketGroup=www, SocketMode=0660 — Apache can connect.
+    ptzvapixd daemon (211672 bytes): getgrnam (group membership check), Forbidden, 403 Not Allowed,
+      com.axis.Ptz.Error.Unauthorized, "removeallserverpresets: Unauthorized: %d".
+    ptzvapixd enforces auth internally via OS group checks. com.axis.PTZ.Coordinator.UserGroups.GetGroups
+      confirms the daemon queries the PTZ user group policy before executing operations.
+    NEGATIVE. ptzvapixd internal auth (getgrnam + explicit Unauthorized/Forbidden responses)
+      gates all PTZ VAPIX and serial relay operations.
+
+  jpg/image.cgi (0-byte stub): Transfer /var/run/jpeg-streamer/transfer.
+  mjpg/video.cgi (0-byte stub): Transfer /var/run/jpeg-streamer/transfer.
+    jpeg-streamer daemon (96584 bytes, User=jpeg-streamer): streaming daemon for JPEG snapshots
+      and MJPEG video streams. No APAC refs, no auth library.
+    http_user present (http_request_new_from_transfer parses HTTP request metadata).
+    No 401/403/Unauthorized strings — no rejection path found.
+    NEGATIVE. These are the camera video/image access endpoints; viewer+ is the correct
+      VAPIX privilege level for live video access. No write operations or privilege-escalating
+      operations exposed via these stubs. Streaming-only endpoints, auth enforced at Apache layer.
 
 Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
