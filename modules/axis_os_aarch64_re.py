@@ -5,12 +5,18 @@ Targets:
   Q1656_12_11_118 rootfs (AArch64 PIE stripped ELFs)
   D1110_12_11_77 rootfs (AArch64, AXIS D1110 Video Decoder 4K)
   M3945-R_12_11_77 rootfs (AArch64, fixed mini dome camera)
+  M3138-LVE_12_11_77 rootfs (AArch64, AXIS M3138-LVE fixed mini dome)
   BW_W800_12.10.59 rootfs (AArch64, body worn camera)
+  BW_W101_12.9.57 rootfs (Ambarella S5L, body worn camera)
+  BW_W102_12.10.59 rootfs (AArch64, body worn camera)
+  BW_W110_12.10.59 rootfs (AArch64, body worn camera)
+  BW_W120_12.10.59 rootfs (AArch64, body worn camera)
   D2110-VE_12_9_57 rootfs (ARMv7hf, security radar)
   A1210_12_11_106 rootfs (ARMv7hf, AXIS A1210 Network Door Controller, Genetec Track)
   A1710_12_11_106 rootfs (ARMv7hf, AXIS A1710-B Network Door Controller, Genetec Track)
   A1810_12_11_106 rootfs (ARMv7hf, AXIS A1810-B Network Door Controller, Genetec Track)
   Vienna Q6215-LE_10.9_CSB rootfs (ARMv7hf, unreleased police CSB)
+  AXISP12_Thermal 9.80.105 rootfs (MIPS32, AXIS P12 thermal camera)
   BWL EAP 2.0.1 (rsignal Rust AArch64)
 
 Binaries:
@@ -63,7 +69,8 @@ Confirmed findings:
                  Report bundle: all VAPIX usernames+roles, ONVIF users, TLS cert CNs, all system logs
                    (info/warn/error/crit/segfault rotated), auth.log, audit.json, kernel crash logs
                  VAPIX docs specify operator+ for serverreport.cgi; shell CGI inherits viewer+ default
-                 Cross-validated: Q1656 12.11.118, A8207-VE 11.11.220. Platform-wide shell script pattern.
+                 Cross-validated: Q1656 12.11.118, A8207-VE 11.11.220, Vienna Q6215-LE 10.9,
+                   BW_W102/W110/W120 12.10.59. Platform-wide shell script pattern across 9.x–12.x.
                  STATUS: CONFIRMED static analysis. Not filed to Bugcrowd.
   F-AXSUPVIO-01 Viewer-level supervised I/O control — Vienna Q6215-LE 10.9 CSB (ARMv7hf)
                  supervisedio.cgi: 0-byte stub, TransferProxy /run/iod/supervisediosocket, no Require override
@@ -213,6 +220,63 @@ Cross-product analysis (new firmwares this session):
   M3945-R 12.11.77 (AArch64):
     All 5 findings confirmed. api-def_data-transformation_v1.yaml: JQ expressions at operator
     level — libjq in-process execution, no shell escape possible; DoS-only theoretical.
+  M3138-LVE_12_11_77 (AArch64, AXIS M3138-LVE fixed mini dome, 12.11.77):
+    F-AXNETD-01 confirmed: identity="%s", g_strescape in netd.
+    F-AXIO-01 cross-validated: io_cgi.socket SocketGroup=www confirmed, io_cgi 0 APAC refs.
+    F-AXUSRMGR-01 confirmed: config_server_reverseproxy.conf present, same anonymous=true pattern.
+    F-AXDOVL-01 cross-validated: dynamic_overlay_cgi.socket SocketGroup=www, dynamic_overlayd 0 APAC.
+    F-AXLED-01 cross-validated: led-controller-cgi.socket SocketGroup=www, blinkenlights 0 APAC.
+    Negative results (unique CGIs):
+      daynight.cgi (342KB ELF): self-enforcing via embedded operator/admin/viewer strings. NEGATIVE.
+      sceneprofile.cgi (342KB ELF): same self-enforcing pattern. NEGATIVE.
+  AXISP12_Thermal 9.80.105 (MIPS32, AXIS P12 thermal camera):
+    F-AXNETD-01 confirmed: identity="%s", password="%s", g_strescape in /usr/sbin/netd (MIPS32 9.80).
+    F-AXIO-01 cross-validated at AXIS OS 9.x: io_cgi.socket SocketGroup=www confirmed,
+      io_cgi binary 0 APAC refs. Extends F-AXIO-01 floor to AXIS OS 9.x.
+    F-AXDOVL-01 cross-validated at AXIS OS 9.x: dynamic_overlay_cgi.socket SocketGroup=www confirmed,
+      dynamic_overlayd 0 APAC refs. Same pattern confirmed back to 9.80 MIPS32.
+    F-AXLED-01 cross-validated at AXIS OS 9.x: led-controller-cgi.socket SocketGroup=www confirmed,
+      blinkenlights (/usr/bin/blinkenlights) 0 APAC refs. All ledcontrol/ CGIs (getleds.cgi,
+      getstatus.cgi, set.cgi, stop.cgi, getschemaversions.cgi) are 0-byte stubs via TransferProxy.
+      Embedded accessControl XML (admin:3;operator:1) is legacy parameter metadata only;
+      blinkenlights has no reader for HTTP caller identity — 0 auth enforcement strings.
+    F-AXUSRMGR-01: N/A — no reverseproxy conf in AXIS OS 9.80; config_server_reverseproxy.conf
+      absent in 9.x; anonymous=true bypass path requires this file.
+    No supervisedio_cgi.socket (physical supervised I/O is Q6215-LE / I/O-port-equipped models only).
+    No direct-gdbus ledlimit.cgi shell pattern (9.80 uses blinkenlights via fdipc socket, not shell gdbus).
+    Negative results:
+      image_param.cgi (shell, 2367 bytes, deprecated since LTS 10.x): calls com.axis.ImageControl
+        (image2d daemon) via dbus-send. image2d has operator:3;admin:3;viewer:1 parameter ACL data
+        embedded but 0 real APAC refs (3 matches all from "capacitor" substring false positive).
+        com.axis.ImageControl.conf: context="default" allow send_destination (bus open to www).
+        Enforcement mechanism unclear from static analysis. CANDIDATE-UNRESOLVED.
+      wsd.socket: SocketGroup=www; wsd binary 0 APAC refs but has WS-Security OASIS strings
+        (username token, password digest). ONVIF WS-Security handles its own auth layer.
+        Treat as NEGATIVE pending runtime confirmation.
+  BW_W102_12.10.59 / BW_W110_12.10.59 / BW_W120_12.10.59 (AArch64, body worn cameras, 12.10.59):
+    F-AXNETD-01 confirmed: identity="%s", g_strescape in netd (all three variants).
+    F-AXSRVRPT-01 cross-validated: serverreport.cgi shell script (5167 bytes), no auth strings.
+      Extends platform-wide finding to BW body-worn cameras at 12.10.59.
+    F-AXDOVL-01 cross-validated: dynamic_overlay_cgi.socket + dynamicoverlay-cgi.socket (two sockets)
+      both SocketGroup=www, dynamic_overlayd 0 APAC refs. BW cameras expose dual overlay sockets.
+    F-AXLED-01 cross-validated: led-controller-cgi.socket SocketGroup=www.
+    F-AXIO-01: N/A — body-worn cameras have no physical I/O port hardware; io_cgi.socket absent.
+    F-AXUSRMGR-01: N/A — no reverseproxy conf; BW cameras use BWS/certificate auth model not
+      the standard dev-conf anonymous API path.
+    Recording surface (osr-main, osr-playback): NEGATIVE.
+      osr-main (/usr/bin/osr-main, Go binary): apac2_check_username, apac2_init, libapac2.so.0 present.
+        Reads X-Remote-User HTTP header; enforces APAC v2 on record/remove.cgi operations.
+      osr-playback (/usr/bin/osr-playback, Go binary): same apac2_check_username + libapac2.so.0.
+        Reads X-Remote-User; enforces APAC v2 on recording export operations.
+      Apache auth for recording endpoints: record/list.cgi and export/properties.cgi require
+        ssl-verify-client (mutual TLS client certificate — httpd-bwc.inc <Location> block).
+        record/export/exportrecording.cgi requires axis-bws-session (body worn session token).
+        Standard viewer/operator/admin bypass pattern does not apply to BW recording access.
+      osr-manager.socket, osr-retrieve.socket, osr-search.socket: SocketGroup=www.
+        Despite www-accessible sockets, APAC v2 in backends + client-cert/BWS-session at Apache
+        layer prevent viewer-privilege bypass via socket access.
+    bwc/pairing.cgi: Require all granted (unauthenticated), consistent with W101 analysis.
+      Backend bwa-manager enforces PIN auth + 5-min pairing window + request rate limit.
   AXIS LPV 3.0.8 ARTPEC9 (ACAP):
     upload.cgi operator-level: CSV plate list upload; implementation in fflprapp (32MB AArch64).
     cloud.cgi/cloud2.cgi/cloud3.cgi admin-level: curl to %s://%s/ — SSRF if host is user-controlled.
