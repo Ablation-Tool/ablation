@@ -49,6 +49,22 @@ Confirmed findings:
                  Products: cameras (5), video decoder (1), security radar (1), body worn (1),
                            PACS door controllers (3), network display speaker (1) — platform-wide
                  A1210/A1710/A1810 door controllers: pre-auth policy downgrade chains to door relay control
+  F-AXVOUT-01   Viewer-level video output configuration control — A8207-VE 11.11.220 (encoder-specific)
+                 videooutput/ 25 CGIs: TransferMethodProxy /run/video_outputd/transfer, no Require override
+                 video_outputd.socket: SocketGroup=www, SocketMode=0660
+                 video_outputd binary: 0 apac refs, 0 auth strings (getgrnam is socket setup only)
+                 APAC policy: video_outputd: section = outgoing D-Bus grants, no auth gate for www
+                 Viewer can: setactivemode, setmirroring, setpip, setquadview, setrotation,
+                   setenabled, setvideosource, addsequenceelement, clearsequence, etc.
+                 Impact: reroute camera feeds on connected VMS monitors; disrupt monitoring integrity
+                 STATUS: CONFIRMED static analysis (A8207-VE 11.11.220). Not filed to Bugcrowd.
+  F-AXSRVRPT-01 Viewer-level server diagnostic report access — platform-wide
+                 serverreport.cgi: shell script, no auth library, no Apache override (viewer+ default)
+                 Report bundle: all VAPIX usernames+roles, ONVIF users, TLS cert CNs, all system logs
+                   (info/warn/error/crit/segfault rotated), auth.log, audit.json, kernel crash logs
+                 VAPIX docs specify operator+ for serverreport.cgi; shell CGI inherits viewer+ default
+                 Cross-validated: Q1656 12.11.118, A8207-VE 11.11.220. Platform-wide shell script pattern.
+                 STATUS: CONFIRMED static analysis. Not filed to Bugcrowd.
   F-AXC1710-01  Unauthenticated broadcast/capture/reboot on port 7234 — InformaCast integration
                  Binary: /usr/bin/informacast-client (Rust, tokio); Apache VirtualHost on 0.0.0.0:7234
                  Activated when admin enables InformaCast: .path unit watches
@@ -132,6 +148,39 @@ Cross-product analysis (new firmwares this session):
     upload.cgi operator-level: CSV plate list upload; implementation in fflprapp (32MB AArch64).
     cloud.cgi/cloud2.cgi/cloud3.cgi admin-level: curl to %s://%s/ — SSRF if host is user-controlled.
     config_axisa1001.cgi: a1001_url config param; admin-set URL passed to curl — admin SSRF.
+
+A8207-VE 11.11.220 analysis (ARMv7hf, ARTPEC-6, 8-channel video encoder):
+  F-AXIO-01 cross-validated: io/output.cgi TransferProxy to /var/run/iod/iodsocket confirmed.
+    io_cgi.socket: SocketGroup=www, ListenDatagram=/run/iod/iodsocket.
+    io_cgi binary: 0 apac refs, 0 operator/admin/viewer/401/403 strings.
+    CONFIRMED cross-product at AXIS OS 11.x.
+  F-AXVIN-01 cross-validated: virtualinput/ shell CGIs call gdbus → com.axis.VirtualInput directly.
+    activate.cgi, deactivate.cgi: POSIX shell, calls gdbus -y com.axis.VirtualInput.Port.Activate/Deactivate.
+    No Apache auth override for /axis-cgi/virtualinput/ (no Require directive found).
+    VirtualInput.conf: context="default" allow. virtualinputd: 0 apac refs, 0 auth strings.
+    ADDITIONAL PATH: separate from /axis-cgi/io/virtualinput.cgi TransferProxy path in Q1656.
+    CONFIRMED cross-product at AXIS OS 11.x, with second CGI path.
+  FINDING F-AXVOUT-01 (A8207-VE static analysis): viewer-level video output configuration control.
+    videooutput/ directory: 25 CGIs (setactivemode, setmirroring, setpip, setquadview, setrotation,
+      setenabled, setvideosource, addsequenceelement, removesequenceelement, updatesequenceelement,
+      clearsequence, and GET variants) — all 0-byte TransferMethodProxy stubs.
+    video_outputd_transfer.conf: <LocationMatch "/axis-cgi/videooutput/\w+\.cgi">
+      TransferMethodProxy /run/video_outputd/transfer — no Require directive.
+    video_outputd.socket: SocketMode=0660, SocketGroup=www — Apache can connect.
+    video_outputd binary: 0 apac refs, 0 operator/admin/viewer/401/403/REMOTE_USER strings.
+      getgrnam present only for socket setup (fdipc_server_socket_with_user_group) — NOT per-request auth.
+    APAC policy: video_outputd: section grants overlay + basicdeviceinfo (outgoing calls, not auth gate).
+      www: section has no videooutput entries.
+    D-Bus conf (VideoOutputd): context="default" allow send_destination — bus layer open.
+    Impact: viewer changes active video output mode, video sources, display layout (PIP/quad/sequence),
+      mirroring, rotation, and enable/disable state for HDMI/BNC monitor outputs. On encoder in VMS
+      deployment: viewer reroutes which camera feeds appear on connected security monitors.
+    STATUS: CONFIRMED static analysis. Not yet filed to Bugcrowd.
+  audiomixer.cgi: "Authorization failed." + "Authentication failed." in cgi_request.c.
+    Uses sd_bus for D-Bus. No Apache auth override. No getgrnam, no REMOTE_USER in binary.
+    Auth mechanism unclear from static analysis. CANDIDATE — not yet resolved.
+  F-AXSRVRPT-01 cross-validated: serverreport.cgi present, same shell script pattern.
+    CONFIRMED cross-product at AXIS OS 11.x.
 
 Continued Q1656 12.11.118 CGI analysis:
   236 total CGI endpoints enumerated across all subdirectories.
