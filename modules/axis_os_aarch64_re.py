@@ -664,6 +664,46 @@ Continued Q1656 12.11.118 CGI analysis:
         while streaming continues. Write is persistent (config file updated).
         VAPIX specifies operator-minimum for indicator control; daemon enforces none.
 
+  privacymask.cgi (0-byte stub): TransferProxy to /var/run/maskd/transfer.
+    Apache conf (transfer_maskd.conf):
+      TransferProxy /axis-cgi/privacymask.cgi /var/run/maskd/transfer
+      No Require override — viewer+ by default.
+    Note: /axis-cgi/admin/ is a symlink to '.' — /axis-cgi/admin/privacymask.cgi
+      resolves to the same 0-byte stub; both CGI paths use the same socket.
+    Socket unit (privacy-mask.socket): ListenDatagram=/run/maskd/transfer,
+      SocketMode=0660, SocketUser=maskd, SocketGroup=www.
+      Apache (www group) can connect.
+    maskd daemon (351856 bytes, User=maskd):
+      http_user, http_remote_addr, http_remote_port — reads HTTP request fields for LOGGING.
+        Pattern matches factorydefault.cgi logging-only REMOTE_USER usage — NOT an auth gate.
+      getgrnam — called by libfdipc.so at socket setup time (socket group assignment), not HTTP auth.
+      libfdipc.so: exports fdipc_recv and fdipc_recv_with_uid.
+        maskd uses fdipc_recv (NOT fdipc_recv_with_uid) — deliberately opts out of caller UID check.
+        If maskd wanted to gate on caller identity, it would use fdipc_recv_with_uid.
+      0 strings: apac, apac_check_auth, libapac, REMOTE_USER propagation to auth gate,
+        operator, admin, viewer privilege check, 401, 403, Unauthorized, Forbidden, deny.
+      No Apache auth override. No auth library. No APAC. No D-Bus daemon chain — maskd
+        directly owns com.axis.Maskd.PrivacyMask and processes FDIPC requests itself.
+    FINDING F-AXMASK-01 (static analysis): viewer-level privacy mask create/delete/modify.
+      Viewer authenticates at Apache level (viewer+), Apache forwards request via
+      TransferProxy to maskd socket (SocketGroup=www). maskd calls fdipc_recv (no UID check),
+      reads http_user for log entry only, and executes the privacy mask operation without
+      any privilege enforcement.
+      Operations:
+        Create mask — viewer adds a black/pixelated overlay block covering a region of the
+          camera's video output.
+        Delete mask — viewer removes masks that operators/admins configured to protect
+          sensitive areas (GDPR-protected zones, restricted rooms, privacy screens).
+        Modify mask — change existing mask geometry, shape, or pixelation.
+      Impact:
+        1. Privacy mask destruction — viewer deletes configured privacy masks on cameras
+           protecting sensitive zones (changing rooms, medical bays, private offices).
+           Defeats GDPR compliance controls.
+        2. Video blackout — viewer creates masks covering the entire camera frame, blinding
+           the surveillance feed without touching the recording system.
+        3. VAPIX specifies operator-minimum for privacymask.cgi write operations; maskd
+           enforces none; access is indistinguishable between viewer and admin at the daemon.
+
   factorydefault.cgi / hardfactorydefault.cgi (10256 bytes each): both call
     com.axis.FirmwareManager1.FactoryDefault("Soft"/"Hard") via sd_bus_call_method.
     REMOTE_USER / REMOTE_ADDR used for audit logging only ("VAPIX user %s from IP %s
@@ -794,6 +834,75 @@ Continued Q1656 12.11.118 CGI analysis:
     NEGATIVE. These are the camera video/image access endpoints; viewer+ is the correct
       VAPIX privilege level for live video access. No write operations or privilege-escalating
       operations exposed via these stubs. Streaming-only endpoints, auth enforced at Apache layer.
+
+  customhttpheader.cgi (22808 bytes): manages custom HTTP response headers injected by Apache.
+    Default headers in /etc/httpconf/customheader.conf:
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: SAMEORIGIN
+      X-XSS-Protection: 1; mode=block
+      Content-Security-Policy: default-src 'self'; frame-ancestors 'self'; ...
+      Referrer-Policy: strict-origin-when-cross-origin
+    CGI operations: "list" (enumerate headers), "remove" (delete a header entry).
+      CGI_REQUEST_RESTRICT_POST — POST-only; JSON body {"method": "remove", "params": {...}}.
+      Success: "customheader-cgi: success: %s". Config written to /etc/httpconf/customheader.conf.
+    Auth:
+      0 matches: apac, REMOTE_USER, operator, admin, viewer, 401, 403, Unauthorized, getgrnam.
+      No auth library (no libaxcgijson, libjsoncgi, libcgiparser, libapac).
+      No Apache auth override (grep returned empty).
+      Default: viewer+ access.
+    FINDING F-AXHDR-01 (static analysis): viewer-level removal of security HTTP response headers.
+      Viewer sends POST to /axis-cgi/customhttpheader.cgi with {"method": "remove"} to
+      remove X-Frame-Options, Content-Security-Policy, X-XSS-Protection, etc. from the
+      camera's HTTP response header set. Config file /etc/httpconf/customheader.conf updated.
+      Impact:
+        1. X-Frame-Options removal — camera web UI can be embedded in attacker-controlled
+           iframes. Enables clickjacking attacks against admin/operator sessions: trick admin
+           into clicking a button that performs a privileged action (user add, config change)
+           while appearing to click something innocuous on the outer page.
+        2. Content-Security-Policy removal — removes script-src 'self' restriction. If any
+           XSS payload exists in camera web UI (input fields, log viewers, username display),
+           attacker can execute scripts in admin session context after CSP is removed.
+        3. X-XSS-Protection removal — disables browser's built-in XSS filter for the camera UI.
+        4. Changes are persistent across camera sessions and reboots (config file write).
+        5. The headers managed include http_force_rtsp_auth and http_auth_info_header — these
+           may affect RTSP authentication enforcement (requires further characterization).
+      Note: attack requires attacker to have viewer credentials AND a simultaneous admin session
+        to the same camera. Severity is medium given the multi-step nature.
+
+  serverreport.cgi (5167 bytes, shell script): generates diagnostic bundle.
+    Sources /usr/html/axis-cgi/lib/functions.sh (utility functions — NO auto auth enforcement).
+    Operations (mode= query parameter):
+      text (default): full server report text (generated by /usr/sbin/gen_serverreport.sh)
+      zip: server report as downloadable zip archive
+      zip_with_image: zip + current JPEG camera snapshot (via /usr/sbin/jpeg_snapshot)
+      tar_all: ALL log files merged (syslog, startup log, /var/log/, /var/lib/syslog-ng/,
+        persist-all.log, /mnt/flash/messages, memory status CSV, DAD app log)
+      tar_kernel_log: primary and secondary kernel logs
+    Auth:
+      No auth check in script. functions.sh provides no auto-enforcing auth.
+      No Apache auth override in standard conf. Appears in httpd-auth-preview-mode.conf
+        inside <IfDefine PREVIEWMODE> — that block is INACTIVE in normal Apache operation.
+      Default: viewer+ access.
+    Candidate finding: viewer can download all system logs, camera parameters, network config,
+      and a JPEG snapshot via serverreport.cgi. Server report contains device config, firmware
+      version, network settings, package list, and log excerpts. Requires confirmation of what
+      gen_serverreport.sh exposes and whether viewer-level access is in scope for Bugcrowd.
+    STATUS: CANDIDATE — not yet filed. Impact partially overlaps with expected viewer access
+      (JPEG snapshot, stream info). Primary severity lever is the tar_all mode (full log archive).
+
+  audioanalytics.cgi (47200 bytes): calls com.axis.AudioAnalytics D-Bus service.
+    D-Bus conf: context="default" allow — bus layer open. APAC enforced in daemon.
+    APAC policy: com.axis.audioanalytics.settings.* restricted to:
+      wwwa,wwwao,wwwaop,wwwaov,wwwaovp,wwwavp,wwwap,wwwav — operator and above.
+      www (Apache process user) NOT in this section.
+    audioanalytics.cgi binary (0 APAC refs): calls g_dbus_proxy_call_sync as www user.
+      www user not in APAC for settings.* → APAC DENIES write operations from www.
+    NEGATIVE. APAC in audio-analytics daemon denies www user for write operations.
+
+  shockdetection/{setenabled,getenabled,setsensitivitylevel,getsensitivitylevel}.cgi:
+    TransferProxy to /var/run/posd/transfer (transfer_shockd.conf).
+    Same posd daemon as orientation/ — APAC v1, apac_check_auth, Unauthorized strings.
+    NEGATIVE. posd APAC v1 gates all shock detection operations.
 
 Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
