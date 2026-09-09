@@ -4,6 +4,11 @@ axis_os_aarch64_re — AXIS OS AArch64 firmware binary RE module
 Targets:
   Q1656_12_11_118 rootfs (AArch64 PIE stripped ELFs)
   D1110_12_11_77 rootfs (AArch64, AXIS D1110 Video Decoder 4K)
+  M3945-R_12_11_77 rootfs (AArch64, fixed mini dome camera)
+  BW_W800_12.10.59 rootfs (AArch64, body worn camera)
+  D2110-VE_12_9_57 rootfs (ARMv7hf, security radar)
+  A1210_12_11_106 rootfs (ARMv7hf, AXIS A1210 Network Door Controller, Genetec Track)
+  Vienna Q6215-LE_10.9_CSB rootfs (ARMv7hf, unreleased police CSB)
   BWL EAP 2.0.1 (rsignal Rust AArch64)
 
 Binaries:
@@ -26,7 +31,10 @@ Confirmed findings:
   F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
                  Apache config_server_reverseproxy.conf: AuthMerging Off + anonymous=true
                  -> Require all granted -> dev-conf-service anonymous API allows SET
-                 Confirmed 6/7 firmwares (12.11.77 x5 incl. D1110, 12.11.118; not in 12.2.59)
+                 Confirmed 9/9 firmwares (12.9.57→12.11.118; not in 12.2.59)
+                 Products: cameras (5), video decoder (1), security radar (1), body worn (1),
+                           PACS door controller (1) — platform-wide, all product categories
+                 A1210 door controller: pre-auth policy downgrade chains to door relay control
 
 D1110 Video Decoder 4K 12.11.77 analysis (AArch64):
   All 5 existing findings confirmed (F-AXNETD-01, F-AXPARAM-01, F-AXACTION-01/02, F-AXUSRMGR-01)
@@ -37,6 +45,31 @@ D1110 Video Decoder 4K 12.11.77 analysis (AArch64):
   ONVIF WebSocket missing auth (/onvif/rtsp-over-websocket has no Require directive):
     RTSP server auth (rtspauth.conf Asterisk realm, Paths=*) mitigates — low severity, not filed
   No novel D1110-specific critical findings.
+
+Cross-product analysis (new firmwares this session):
+  A1210 Network Door Controller 12.11.106.1 (ARMv7hf, Genetec Track):
+    All 5 findings confirmed. PACS-specific libs: libosdp.so (RS-485 only, not network),
+    libpacsio-*.so, librelaydoor-*.so (door relay API), liblibwiegand.so, libteeacl.so.
+    /nbix/ and /nbixweb/ endpoints: Require admin, websocket only — properly secured.
+    Genetec Synergis Softwire 12.2.10001.0 embedded in firmware (not analyzed).
+  D2110-VE Security Radar 12.9.57 (ARMv7hf):
+    F-AXUSRMGR-01 confirmed (extends version floor to 12.9.x).
+    api-def_remote-object-storage_v1.yaml: operator can GET azure/s3 config objects (secret:true
+    fields presumably masked by dev-conf). api-def_coordinate-conversion_v1.yaml: viewer-accessible.
+    uploadradarimage.cgi: operator-level file upload (implementation in libradar-cgi.so via transferCgi).
+  BW W800 Body Worn Camera 12.10.59 (AArch64):
+    F-AXUSRMGR-01 confirmed. recording-uploader/content-uploader: Go binaries, Azure/Swift upload.
+    bws-storage-gen-passphrase: uses /dev/urandom — passphrase entropy is sound.
+  Vienna Q6215-LE 10.9 CSB (ARMv7hf):
+    F-AXNETD-01 confirmed (identity="%s", g_strescape zero callers). No dev-conf → F-AXUSRMGR-01 N/A.
+    1024-bit RSA keys in /usr/etc/ssl/ (obsolete, not directly exploitable without key material).
+  M3945-R 12.11.77 (AArch64):
+    All 5 findings confirmed. api-def_data-transformation_v1.yaml: JQ expressions at operator
+    level — libjq in-process execution, no shell escape possible; DoS-only theoretical.
+  AXIS LPV 3.0.8 ARTPEC9 (ACAP):
+    upload.cgi operator-level: CSV plate list upload; implementation in fflprapp (32MB AArch64).
+    cloud.cgi/cloud2.cgi/cloud3.cgi admin-level: curl to %s://%s/ — SSRF if host is user-controlled.
+    config_axisa1001.cgi: a1001_url config param; admin-set URL passed to curl — admin SSRF.
 
 Standalone:
     cd ~/ablation
