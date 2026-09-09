@@ -13,13 +13,27 @@ Libraries analyzed:
 
 Confirmed findings (see ~/VDT/axis-os-re/VULNERABILITIES-axis-os.md):
   F-AXPARAM-01  MEDIUM: Value written unescaped as name="value" to .conf files
-  F-AXHTTP-03   LOW: GIO watch deregistered on UID mismatch → local DoS
-  F-AXEVENT-01  CANDIDATE: ax_event_element_item_parse_xml passes XML to
-                xmlnode_parse_string without validation; caller-controlled input
+                FIRMWARE VERIFICATION: RCE escalation REFUTED — parhand reads conf via
+                custom DSL parser (not shell); libdbus-send.so uses dbus C API (no system());
+                $VALUE injection reaches dbus arg level only, not shell. Stays MEDIUM.
+  F-AXHTTP-03   LOW-CANDIDATE: GIO watch deregistered on UID mismatch → local DoS
+                (requires on-device test to confirm; not verified in firmware)
+  F-AXEVENT-01  CLOSED: ax_event_element_item_parse_xml has ZERO firmware callers —
+                confirmed by full rootfs scan. ONVIF Subscribe uses libwseventfilters.so +
+                libsoap.so, never reaches this API. Attack surface is ACAP only (out of scope).
 
 Refuted:
   F-AXHTTP-01   REFUTED: auth IS enforced — UID mismatch returns FALSE (drops request)
   F-AXHTTP-02   REFUTED: strlen guard at 0x29d8 before 8-byte pointer advance
+  F-AXDAEMON-01 REFUTED: privilege drop sequence correct; setreuid(-1,0) path is error recovery
+
+Firmware analysis (P3245-V_11_11_220.bin extracted rootfs):
+  param daemon:   parhand (/usr/bin/parhand), not axpard
+  param.cgi:      proxied via Unix socket to /usr/bin/param.cgi-transfer
+  parhand confs:  custom DSL (group/param/dbus fields), parser = Standard2parser
+  libdbus-send.so: parses dbus arg strings and calls dbus C API directly — no system()
+  ONVIF events:  libwseventfilters.so (libsoap.so) + libwsevent.so — no libaxevent.so involvement
+  dynamic param dir: /etc/dynamic/param/ written by libaxparameter.so, read by parhand DSL parser
 
 Standalone:
     cd ~/ablation
@@ -326,13 +340,18 @@ FINDINGS = [
         'detail': (
             'ax_parameter_set and ax_parameter_add both pass the caller-supplied value '
             'to cli_setCustomParam via D-Bus without any escaping or length limit. '
-            'The parameter daemon writes values using the format string "%s=\\"%s\\"" '
-            '(confirmed in strings). A value containing \\" or \\n creates additional '
-            'key=value lines in /etc/dynamic/param/<group>/<name>.conf. '
-            'Impact depends on whether these .conf files are sourced by shell scripts '
-            '(common in embedded Linux initialization). If sourced: arbitrary command injection. '
-            'Attack path: VAPIX param.cgi update → ACAP app → ax_parameter_set → daemon → '
-            'injected .conf → shell source.'
+            'The parameter daemon (parhand) writes values using the format string "%s=\\"%s\\"" '
+            '(confirmed in strings) to /etc/dynamic/param/<group>/<name>.conf. '
+            'A value containing \\" or \\n creates additional key=value lines in the conf file. '
+            'FIRMWARE VERIFIED: parhand reads these conf files with a custom DSL parser '
+            '(Standard2parser), NOT via shell sourcing. The dbus callback field uses '
+            'libdbus-send.so which calls the dbus C API directly — no system() or popen(). '
+            '$VALUE injection can corrupt the dbus argument but cannot reach shell. '
+            'RCE escalation chain REFUTED by firmware analysis. '
+            'Impact: conf file corruption → wrong parameter values → potential '
+            'misconfiguration (MEDIUM). '
+            'Attack path: VAPIX param.cgi update → ax_parameter_set → parhand → '
+            'injected .conf → parhand parser reads extra key=value → misconfiguration.'
         ),
         'evidence': [
             'Strings: "%s=\\"%s\\""',
@@ -420,30 +439,30 @@ FINDINGS = [
     {
         'id': 'F-AXEVENT-01',
         'class': 'XML-INJ',
-        'severity': 'CANDIDATE',
+        'severity': 'CLOSED',
         'library': 'libaxevent.so',
         'functions': ['ax_event_element_item_parse_xml @ 0x9070'],
         'confirmed': False,
-        'title': 'XML event template passed to xmlnode_parse_string without validation',
+        'title': 'XML event template: CLOSED — zero first-party callers confirmed by firmware scan',
         'detail': (
             'ax_event_element_item_parse_xml (0x9070, 84 bytes) takes a raw XML string '
-            'as its first argument and passes it directly to xmlnode_parse_string with '
-            'NO validation before the call (first substantive instruction IS the bl). '
-            'The function has zero internal callers within libaxevent.so — it is a pure '
-            'API function consumed by external code (ONVIF daemon or ACAP applications). '
-            'ax_event_handler_subscribe does NOT use this path; it uses the structured '
-            'declaration API. If external ONVIF subscription XML reaches this function, '
-            'the caller controls the full XML string with no library-side sanitization. '
-            'Impact depends on xmlnode_parse_string behavior with malformed input.'
+            'and passes it directly to xmlnode_parse_string with no validation. '
+            'FIRMWARE VERIFIED: full rootfs scan found zero binaries or libraries calling '
+            'this function. Only libaxevent.so itself defines it. '
+            'ONVIF Subscribe request handling uses libwseventfilters.so → libsoap.so '
+            '(WS-Eventing filter parsing) — does NOT import or call libaxevent functions. '
+            'Attack surface exists ONLY for ACAP applications (third-party, out of scope). '
+            'No first-party ONVIF daemon uses this API. CLOSED.'
         ),
         'evidence': [
             '0x9070: stp x29, x30, [sp, #-0x20]!',
-            '0x907c: bl #0x4830   ; xmlnode_parse_string(x0) — first real instruction',
-            'No validation between prologue and xmlnode_parse_string call',
-            'Zero internal callers found by scanning entire text section',
-            'ax_event_handler_subscribe (0x5cc0) does not bl to 0x9070 or PLT[32]',
+            '0x907c: bl #0x4830   ; xmlnode_parse_string(x0) — no validation before',
+            'Firmware rootfs scan: only libaxevent.so contains this symbol (confirmed with strings)',
+            'libwseventfilters.so NEEDED: libsoap.so, libevent2.so, libglib, libwsevent, libwsdutil',
+            'libwseventfilters.so does NOT import libaxevent.so — ONVIF path verified independent',
+            'onvif-mqtt-event binary: does not call ax_event_element_item_parse_xml',
         ],
-        'remediation': 'Validate XML string before passing to xmlnode_parse_string; reject empty/oversized inputs.',
+        'remediation': 'N/A for first-party code. ACAP SDK documentation should warn callers to validate XML.',
     },
 ]
 
