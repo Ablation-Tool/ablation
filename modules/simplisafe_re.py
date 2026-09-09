@@ -193,7 +193,11 @@ FINDINGS = [
                   'PinGroup returned in plaintext. duressPin = panic/coercion PIN (cancels dispatch). '
                   'If sid not validated against JWT sub: attacker reads all victim alarm PINs OR sets them to known values. '
                   'Impact: silent disarm (own PIN), frame-up (change to victim\'s PIN after burglary). '
-                  'Test: GET /v1/subscriptions/{victim_sid}/pins?cached=false with own token; 200 = CRITICAL.'),
+                  'Test: GET /v1/subscriptions/{victim_sid}/pins?cached=false with own token; 200 = CRITICAL. '
+                  'ADDITIONAL PATH: GET /ss3/subscriptions/{sid}/settings?settingsType=PINS (or settingsType=all) '
+                  'returns PinSettings{master: MasterPin{pin}, duress: DuressPin{pin}, customPins: List<CustomPin{name,pin,id}>}. '
+                  'Both paths return plaintext PINs. PinSettings model (classes14.dex/common/PinSettings.java) '
+                  'confirmed via MasterPin.pin/DuressPin.pin/CustomPin.pin String fields — no encryption layer.'),
     Finding("F28", "CRITICAL", "Scheduled Arm/Disarm Manipulation IDOR via locationId",
             "app_hub", "/v1/scheduledEvents/locations/{locationId}", "GET+PUT", None,
             verified=False,
