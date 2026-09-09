@@ -285,6 +285,37 @@ Continued Q1656 12.11.118 CGI analysis:
       VAPIX specification requires operator privilege for audio monitoring configuration.
       Impact: viewer detects audio activity in secured area; audio-level oracle for surveillance bypass.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXAUDIO-01.md
+
+#   axis-cgi/straightenimage/: All CGIs are 0-byte stubs served via TransferProxy to
+#     /run/straightenimage-cgi/transfer. No Apache auth override in any conf.
+#     TransferProxy target: straightenimage-cgi daemon (User=straightenimage-cgi).
+#     Socket unit: SocketGroup=www, SocketMode=0660 — any Apache process (www group) can connect.
+#     Apache auth: inherits parent directory default (viewer+).
+#     straightenimage-cgi binary: 0 APAC refs. No auth check before D-Bus forwarding.
+#     D-Bus target: com.axis.StraightenImage (straightenimage_dbus.conf context=default OPEN;
+#       comment: "Authorization is done inside the service using APAC").
+#     Main daemon: straightenimage (5 APAC refs, enforces APAC). BUT caller identity seen by
+#       APAC is straightenimage-cgi (the daemon's OS user), not the HTTP user (wwwv/wwwo/wwwa).
+#     APAC policy: straightenimage-cgi: com.axis.straightenimage.* — blanket access to all methods.
+#     APAC policy: com.axis.horizonstraightening.write.enabled is in wwwa (admin) section.
+#     Bypass: viewer HTTP request → TransferProxy (www group socket) → straightenimage-cgi
+#       (0 APAC, runs as daemon user) → calls com.axis.StraightenImage as privileged process →
+#       APAC grants blanket access to straightenimage-cgi process identity → operation executes.
+#     Write operations accessible to viewer:
+#       enable.cgi    — enables horizon straightening
+#       disable.cgi   — disables horizon straightening
+#       autoadjust.cgi   — auto-adjusts horizon from accelerometer
+#       manualadjust.cgi — manually sets horizon angle (angle param)
+#       restart.cgi   — restarts straightening service
+#     FINDING F-AXSTRAIGHT-01 (static analysis): viewer-level image straightening write ops.
+#       Viewer can enable/disable/adjust the camera's horizon correction without operator auth.
+#       APAC policy explicitly restricts horizonstraightening.write to admin; daemon has 5 APAC
+#       refs but caller identity laundering via straightenimage-cgi intermediary bypasses check.
+#       Pattern: same class as F-AXMASK-01 (TransferProxy + no-APAC CGI daemon + www socket).
+#       Impact: viewer distorts camera's recorded image by disabling/adjusting horizon correction;
+#         video surveillance integrity compromised without physical access.
+#     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXSTRAIGHT-01.md
+
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
