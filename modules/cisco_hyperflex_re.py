@@ -436,32 +436,6 @@ FINDINGS = {
                        "scheme prefixes, parent-directory sequences, and internal-only service identifiers.",
     },
 
-    "HX-F21": {
-        "title": "Unauthenticated File Upload Writes to Installer Image Serving Directory",
-        "severity": "MEDIUM",
-        "component": "installerrestapi-1.0.0.war / StorvisorFileUploader (/upload)",
-        "description": (
-            "StorvisorFileUploader.doPost() at /upload accepts multipart POST requests "
-            "without authentication and writes uploaded files to "
-            "/var/www/localhost/images/ (set via StorvisorFileUploadPath context parameter). "
-            "No path traversal sanitization is visible in the decompiled bytecode. "
-            "An attacker on the management network can write arbitrary files to the "
-            "installer image directory — potentially replacing firmware images served to "
-            "ESXi hosts during deployment or injecting malicious images that are automatically "
-            "consumed by the HyperFlex installation workflow."
-        ),
-        "code_evidence": {
-            "servlet_path": "/upload",
-            "target_dir": "/var/www/localhost/images/",
-            "context_param": "StorvisorFileUploadPath",
-            "upload_lib": "org.apache.commons.fileupload.servlet.ServletFileUpload",
-            "auth_present": False,
-        },
-        "versions_affected": ["6.0.2b-44423 (installer appliance)"],
-        "remediation": "Require authentication on /upload. "
-                       "Validate uploaded file type, name, and size before write. "
-                       "Write to a staging path; verify image integrity before promoting to the serving directory.",
-    },
 
     "HX-F22": {
         "title": "Installer JVM Globally Disables TLS Certificate Validation via TrustAllManager",
@@ -825,54 +799,6 @@ FINDINGS = {
             "constructing any outbound URL. Do not use java.net.Authenticator.setDefault() "
             "(JVM-global side effect) for per-request authentication; use per-connection "
             "credential injection instead."
-        ),
-    },
-    "HX-F36": {
-        "title": "Hardcoded Candidate JWT Signing Key in hx-auth Authentication Binary",
-        "severity": "HIGH",
-        "component": (
-            "hx-auth Go binary (ELF64, dynamically linked, not stripped); "
-            "main.createToken / main.getjwtToken; port 8082"
-        ),
-        "description": (
-            "The hx-auth binary (handles login, token creation, logout, and password change on "
-            "port 8082) contains the literal string 'RHGocmgN90R4ShL_WnQ5GJSgGzADV678' at file "
-            "offset 0x3cc53f, embedded in the binary's string constant table between unrelated "
-            "Go runtime error strings. The binary implements JWT creation (main.createToken, "
-            "main.getjwtToken), JWT-based session management (main.AddCookie, main.RemoveCookie, "
-            "main.getUserSessionInfo), and references HS256/HS384/HS512/RS256/RS384/RS512/PS256 "
-            "algorithm identifiers in its string table. A 34-character URL-safe alphanumeric "
-            "string embedded in a JWT-issuing binary is consistent with a hardcoded HMAC signing "
-            "key for HS256 (minimum 256-bit / 32-byte key). If confirmed as the JWT signing "
-            "secret, any attacker can forge valid session tokens for any user and scope without "
-            "credentials, bypassing all authentication in every REST API WAR. The binary also "
-            "contains main.isMockDevMode, suggesting a development bypass path that may activate "
-            "when a flag or environment variable is set. The binary's full function symbol table "
-            "is accessible (not stripped, dynamically linked), enabling direct function-level "
-            "analysis without disassembly."
-        ),
-        "code_evidence": {
-            "binary": "hx-auth (ELF64, dynamically linked, debug info present, not stripped; 9,955,896 bytes)",
-            "candidate_secret": "RHGocmgN90R4ShL_WnQ5GJSgGzADV678",
-            "file_offset": "0x3cc53f",
-            "string_length_chars": "34",
-            "jwt_functions": "main.createToken, main.getjwtToken, main.getjwtToken.func1",
-            "jwt_algorithms_in_string_table": "ES256 ES384 ES512 HS256 HS384 HS512 RS256 RS384 RS512 PS256 PS384 PS512",
-            "auth_functions": (
-                "main.loginHandler, main.validateLogin, main.verifyHandler, "
-                "main.logoutHandler, main.getUserSessionInfo"
-            ),
-            "dev_mode_flag": "main.isMockDevMode (dev/test bypass path in production binary)",
-            "crypto_functions": "main.decrypt, NewCBCDecrypter (AES-CBC ticket decryption)",
-            "listen_port": ":8082 (embedded in binary string table)",
-        },
-        "versions_affected": ["6.0.2b-44423 (hx-auth binary)"],
-        "remediation": (
-            "Remove hardcoded signing key from hx-auth binary. Generate the JWT signing secret "
-            "from a per-deployment cryptographic random source (crypto/rand, 256-bit minimum) "
-            "and inject at service startup via environment variable or a secrets manager. "
-            "Disable and remove main.isMockDevMode code paths from production builds. "
-            "Rotate JWT signing secrets on any firmware upgrade or credential rotation event."
         ),
     },
     "HX-F38": {
@@ -4118,84 +4044,6 @@ HX_F125 = {
     },
 }
 
-HX_F126 = {
-    "id": "HX-F126",
-    "title": (
-        "HyperFlex Witness OVA 1.1.3: Exhibitor REST API Unauthenticated on All Interfaces "
-        "(port 8180) — ZK Node Browse/Write and Cluster Restart Without Credentials"
-    ),
-    "severity": "HIGH",
-    "cvss": "8.6",
-    "cwe": "CWE-306",
-    "component": "HyperFlex Witness OVA 1.1.3 (exhibitor-1.5.2.c, /usr/share/exhibitor/exhibitor.conf, exhibitor.defaults)",
-    "versions_affected": "Witness OVA 1.1.3 (confirmed); earlier OVA versions expected",
-    "description": (
-        "Exhibitor (ZooKeeper management daemon, v1.5.2.c) runs on the Witness OVA with its "
-        "REST API bound to all network interfaces on port 8180. No authentication is configured. "
-        "The Exhibitor REST API provides unauthenticated read/write access to ZooKeeper node "
-        "data via a built-in browser, cluster restart capability (effective DoS for quorum), "
-        "and ZK configuration modification.\n\n"
-        "The bind-all behavior is conditional: the exhibitor.conf upstart script sets "
-        "LISTEN_ADDR only when the host is a storage controller VM (CTLVM=true). For a pure "
-        "Witness appliance (which has no /etc/init/storfs.conf, no storfs-core, and a single "
-        "ethernet interface), CTLVM=false and LISTEN_ADDR remains empty — Exhibitor uses the "
-        "default bind of 0.0.0.0.\n\n"
-        "Additionally, the ZK configuration written by Exhibitor sets "
-        "4lw.commands.whitelist=*, exposing all ZooKeeper four-letter administrative commands "
-        "(stat, dump, envi, conf, mntr, ruok) on port 2181 without authentication."
-    ),
-    "evidence": {
-        "exhibitor_conf_binding": (
-            "exhibitor.conf:\n"
-            "  CTLVM=false\n"
-            "  [ -f /etc/init/storfs.conf ] && [ -d /opt/springpath/storfs-core/ ] &&\n"
-            "  [ $(ifquery -l | grep eth[0-9] | wc -l) -ge 2 ] && CTLVM=true\n"
-            "  if $CTLVM; then\n"
-            "    LISTEN_ADDR='--listenaddress $ETH1'  # storage net only\n"
-            "  fi\n"
-            "  # Witness OVA: CTLVM=false -> LISTEN_ADDR='' -> 0.0.0.0:8180\n"
-            "  exec java ... --port $EXHIBITOR_PORT $LISTEN_ADDR"
-        ),
-        "no_auth": (
-            "exhibitor.conf startup flags: no --security, no --security-arguments\n"
-            "exhibitor.defaults: no auth provider configured\n"
-            "=> Exhibitor REST API requires no credentials"
-        ),
-        "api_impact": (
-            "GET  /exhibitor/v1/zookeeper/list?key=/   -> list all ZK nodes\n"
-            "GET  /exhibitor/v1/zookeeper/node?key=/X  -> read ZK node /X\n"
-            "POST /exhibitor/v1/zookeeper/node?key=/X  -> write ZK node /X\n"
-            "GET  /exhibitor/v1/cluster/restart/<ip>   -> restart ZK (quorum DoS)\n"
-            "POST /exhibitor/v1/config/set             -> modify ZK configuration"
-        ),
-        "zk_4lw": (
-            "zoo-cfg-extra in exhibitor.defaults:\n"
-            "  4lw.commands.whitelist=*\n"
-            "=> echo stat | nc <witness-ip> 2181 returns ZK server stats unauthenticated\n"
-            "   echo dump | nc <witness-ip> 2181 lists ephemeral nodes and sessions"
-        ),
-        "eval_risk": (
-            "/usr/share/zookeeper/bin/check_and_fix_witness.py (root cron: */1 * * * *):\n\n"
-            "Vulnerability 1 — eval() on stMgr.cfg:\n"
-            "  data = open('/etc/springpath/stMgr.cfg').read().replace('\\n', '')\n"
-            "  dataDict = eval(data)   # executes data as Python\n"
-            "  => any process that can write /etc/springpath/stMgr.cfg gets root every minute\n\n"
-            "Vulnerability 2 — eval() on Exhibitor HTTP response:\n"
-            "  witnessNodeIp = dataDict['0']  # from stMgr.cfg\n"
-            "  raw = curl http://{witnessNodeIp}:8180/exhibitor/v1/cluster/state/{witnessNodeIp}\n"
-            "  witnessNodeCfg = raw.replace('false','False').replace('true','True')\n"
-            "  return eval(witnessNodeCfg)   # executes HTTP response as Python\n"
-            "  => attacker controlling the Exhibitor response (ZK write via HX-F126, or network\n"
-            "     MITM on loopback call) executes arbitrary Python as root at 1-minute intervals.\n\n"
-            "Cron evidence: /etc/cron.d/zkwitnesscleanup -> "
-            "/usr/share/zookeeper/bin/zkwitnesscleanup.cron\n"
-            "  */1 * * * * root python /usr/share/zookeeper/bin/check_and_fix_witness.py"
-        ),
-        "version": "exhibitor-1.5.2.c.jar (confirmed in /usr/share/exhibitor/)",
-    },
-}
-
-
 HX_F127 = {
     "id": "HX-F127",
     "title": (
@@ -5233,81 +5081,6 @@ HX_F149 = {
 
 
 
-HX_F155 = {
-    "id": "HX-F155",
-    "title": (
-        "Unauthenticated Exhibitor ZooKeeper REST API on Port 8180 "
-        "Exposes Cluster Configuration and ZooKeeper Node Data"
-    ),
-    "severity": "HIGH",
-    "cvss_score": 7.5,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-306",
-    "component": "storfs-misc / storfs-deploy",
-    "file": (
-        "usr/share/hyperflex/storfs-misc/hx-scripts/node_replace.py, "
-        "opt/hyperflex/storfs-deploy/ansible/library/exhibitorCfg.py"
-    ),
-    "lines": "413, 425, 442 (node_replace.py); 27 (exhibitorCfg.py)",
-    "description": (
-        "The HyperFlex Exhibitor ZooKeeper manager REST API at port 8180 is "
-        "accessed without authentication by multiple management scripts. "
-        "Exhibitor (Netflix/Sonatype) provides a REST API for ZooKeeper "
-        "configuration and node browsing; HyperFlex uses it without enabling "
-        "Exhibitor's authentication mechanisms.\n\n"
-        "node_replace.py (lines 413, 425, 442) makes unauthenticated HTTP GET "
-        "requests to Exhibitor:\n"
-        "  requests.get('http://localhost:8180/exhibitor/v1/explorer/node"
-        "?key=%2Fcluster%2Fpnodes')\n"
-        "  requests.get('http://localhost:8180/exhibitor/v1/explorer/node"
-        "?key=%2Fcluster%2Fmembers')\n"
-        "  requests.get('http://localhost:8180/exhibitor/v1/config/get-state')\n\n"
-        "exhibitorCfg.py (line 27) connects to remote cluster nodes' Exhibitor "
-        "APIs using the node IP from stMgr.cfg — not just localhost:\n"
-        "  requests.get('http://' + serverIp + ':8180/exhibitor/v1/config/"
-        "get-state')\n\n"
-        "The iptables rules in zkchangehandler.sh and add-witness-iptable-rules.sh "
-        "DNAT port 8180 from eth0 to eth1: 'iptables -t nat -A PREROUTING -p tcp "
-        "-d $ETH0 --dport 8180 -j DNAT --to-dest $ETH1'. This exposes the "
-        "Exhibitor API on the CVM management interface during witness/arbitrator "
-        "configuration changes.\n\n"
-        "Exploitable capabilities via unauthenticated Exhibitor REST API:\n"
-        "- GET /exhibitor/v1/explorer/node?key=<path>: read any ZooKeeper node "
-        "  including cluster membership, encryption configuration paths, and "
-        "  any keys stored in ZK\n"
-        "- GET /exhibitor/v1/config/get-state: read Exhibitor/ZK config\n"
-        "- POST /exhibitor/v1/config/set: modify ZooKeeper cluster configuration "
-        "  (if write API is unauthenticated)\n\n"
-        "Same vulnerability class as HX-F141 (sedsvc unauthenticated on port "
-        "8012); different exposure: cluster configuration vs. drive erasure."
-    ),
-    "proof": (
-        "# From the CVM or from the data network after DNAT rules are active:\n"
-        "# Read ZooKeeper node data (cluster membership):\n"
-        "curl -s 'http://localhost:8180/exhibitor/v1/explorer/node"
-        "?key=%2Fcluster%2Fmembers'\n"
-        "# Read Exhibitor/ZK cluster configuration:\n"
-        "curl -s 'http://localhost:8180/exhibitor/v1/config/get-state' | python3 -m json.tool\n"
-        "# Test write capability:\n"
-        "curl -s -X POST 'http://localhost:8180/exhibitor/v1/explorer/node-data' \\\n"
-        "  -H 'Content-Type: application/json' \\\n"
-        "  -d '{\"key\":\"/test\",\"value\":\"test\",\"isNew\":true}'"
-    ),
-    "remediation": (
-        "1. Enable Exhibitor's built-in security provider: set "
-        "'--security-provider-classname' to a provider that requires auth, "
-        "or configure 'BasicAuthSecurityProvider' with a strong password.\n"
-        "2. Bind Exhibitor to localhost only (127.0.0.1:8180) — do not allow "
-        "cross-node access to the Exhibitor HTTP API; use ZooKeeper's native "
-        "SASL/DIGEST authentication for cluster coordination instead.\n"
-        "3. Remove the iptables DNAT rules for port 8180 from management "
-        "   interface to data interface — Exhibitor should not be externally "
-        "   reachable.\n"
-        "4. Restrict Exhibitor to read-only endpoints, or replace the write "
-        "   paths with authenticated admin-only API calls."
-    ),
-}
-
 HX_F156 = {
     "id": "HX-F156",
     "title": (
@@ -6158,7 +5931,6 @@ HX_F221 = {
 for _f in [
     HX_F120,
     HX_F125,
-    HX_F126,
     HX_F127,
     HX_F128,
     HX_F130,
@@ -6171,7 +5943,6 @@ for _f in [
     HX_F142,
     HX_F148,
     HX_F149,
-    HX_F155,
     HX_F156,
     HX_F157,
     HX_F167,
