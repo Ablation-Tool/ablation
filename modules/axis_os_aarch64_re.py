@@ -241,6 +241,27 @@ Continued Q1656 12.11.118 CGI analysis:
     Impact: internal SMTP infrastructure enumeration, TCP port scan via SMTP timing,
     email origination from camera IP using attacker-supplied server credentials.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXSMTP-01.md
+  tcptest.cgi: shell script, no auth library, no Apache override (viewer+).
+    Accepts address + port parameters. Calls validateaddr (blocks 127.x.x.x only,
+    no RFC1918 check) then /usr/bin/tcptest to make TCP connection to arbitrary host:port.
+    Returns "Test successful." on open port; error text on closed/filtered.
+    FINDING (part of F-AXNETPROBE-01): viewer-level TCP port scan oracle.
+  ftptest.cgi: shell script, no auth library, no Apache override (viewer+).
+    Accepts address, proto (ftp/sftp), port, username, password, uploadpath parameters.
+    Calls validateaddr then curl to upload /tmp/.test.XXXXXX file to arbitrary FTP/SFTP server.
+    Creates file from camera's IP to viewer-supplied FTP host using viewer-supplied credentials.
+    SFTP mode accepts publickeyfp/publickeysha256 host key bypass.
+    FINDING (part of F-AXNETPROBE-01): viewer-level FTP SSRF / credential probe.
+  pingtest.cgi: shell script, no auth library, no Apache override (viewer+).
+    Accepts ip parameter with NO validateaddr call (no localhost check either).
+    Executes /usr/bin/ping "$ip" directly. Returns "got response" or "no response".
+    FINDING (part of F-AXNETPROBE-01): viewer-level ICMP host discovery probe.
+    NOTE: pingtest.cgi has no validateaddr call — unique among the *test.cgi set.
+  F-AXNETPROBE-01: consolidated — viewer operates 5-protocol probe suite from camera:
+    httptest (HTTP), smtptest (SMTP), tcptest (TCP), ftptest (FTP/SFTP), pingtest (ICMP).
+    All inherit viewer+ default auth; all use validateaddr's localhost-only check (except ping).
+    No RFC1918 blocking. Camera's privileged network position (management VLAN, OT) exposed.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXNETPROBE-01.md
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
