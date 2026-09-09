@@ -588,6 +588,95 @@ Continued Q1656 12.11.118 CGI analysis:
     www user (wwwv/wwwo) DENIED at D-Bus bus layer for all CustomFirmwareCertificates1 calls.
     Apache path: /secure_boot/ — no special Apache auth override found but D-Bus gate sufficient.
 
+  videostreamingindicator.cgi (0-byte stub): TransferMethodProxy to
+    /run/video-streaming-indicator/transfer. Apache conf (video-streaming-indicator.conf):
+    <LocationMatch "/axis-cgi/videostreamingindicator.cgi">
+      TransferMethodProxy /run/video-streaming-indicator/transfer
+    </LocationMatch>
+    No Require override — inherits parent: viewer+. TransferMethodProxy = POST-only forwarding.
+    Socket unit (video-streaming-indicator.socket): SocketGroup=www, SocketMode=0660,
+      SocketUser=videostreamingindicator. Apache (www group) can connect.
+    video-streaming-indicator daemon (/usr/bin/video-streaming-indicator):
+      0 auth strings. Not linked to APAC (0 apac refs). Does NOT use D-Bus — communicates
+      directly via VDO stream APIs (vdo_stream_get, vdo_stream_attach, vdo_stream_get_event_fd)
+      and libaxoverlay2 (cairo_create, cairo_set_source_rgba, cairo_fill, etc.).
+      Config fields processed: Active, Color, BgColor, Size, PositionType, Indicator.
+        Active: bool — enables/disables the on-screen streaming indicator overlay.
+        Color/BgColor: RGBA overlay colors.
+        Size: overlay dimension.
+        PositionType: overlay screen position.
+      Writes config to /etc/video-streaming-indicator/overlay.conf (confutils_set_file_contents_with_sync).
+      No mechanism to identify HTTP caller role: 0 strings matching REMOTE_USER, http_user,
+        operator, admin, viewer in binary.
+      APAC policy entry "videostreamingindicator:" = daemon's own outgoing APAC grants, not
+        an incoming HTTP caller check. Daemon enforces no privilege gate on received requests.
+    4th distinct bypass pattern: non-D-Bus daemon (VDO/overlay only) → APAC structurally
+      unreachable; SocketGroup=www; no Apache auth override; no CGI auth library.
+    FINDING F-AXVSI-01 (static analysis): viewer-level video streaming indicator control.
+      Viewer sends POST to /axis-cgi/videostreamingindicator.cgi with {"Active": false} to
+      disable the on-screen indicator that signals active video streaming. Also configures:
+        Color, BgColor (appearance), Size, PositionType (positioning).
+      Impact: viewer disables the visual streaming indicator on deployed cameras without
+        operator auth. In privacy-sensitive deployments (retail, office, court, health):
+        indicator signals to subjects they are being recorded. Viewer removes this signal
+        while streaming continues. Write is persistent (config file updated).
+        VAPIX specifies operator-minimum for indicator control; daemon enforces none.
+
+  factorydefault.cgi / hardfactorydefault.cgi (10256 bytes each): both call
+    com.axis.FirmwareManager1.FactoryDefault("Soft"/"Hard") via sd_bus_call_method.
+    REMOTE_USER / REMOTE_ADDR used for audit logging only ("VAPIX user %s from IP %s
+    initiated factory default") — NOT an auth gate.
+    D-Bus gate (fwmgr.conf): only user="root" and group="admin" allowed for FirmwareManager1.
+      NO context="default". www user (Apache, viewer/operator) DENIED at D-Bus bus layer.
+      D-Bus call returns bus permission error; CGI returns Status: 500 Internal Error.
+    NEGATIVE. D-Bus bus-layer blocks all non-admin callers.
+
+  firmwaremanagement.cgi / firmwareupgrade.cgi: both call com.axis.FirmwareManager1 methods.
+    Same fwmgr.conf D-Bus gate applies. NEGATIVE.
+
+  audiomixer.cgi (34904 bytes): calls com.axis.AudioMixer2 / com.axis.AudioMixer via sd_bus.
+    AudioMixer D-Bus conf (com.axis.AudioMixer.conf): context="default": DENY.
+      Only operator group, audiomixer user, actionengined, root allowed.
+      www user (Apache) not in operator group — DENIED at D-Bus bus layer.
+    NEGATIVE.
+
+  dnsupdate.cgi (shell script): accepts ?add=NAME or ?delete=NAME from QUERY_STRING.
+    Calls dnsupdate.script add "$val" all / dnsupdate.script delete "$val".
+    In dnsupdate.script: $val is the DNS NAME (FQDN), not the IP. Camera's own interface
+      addresses are used (net_all_addrs: eth0/wlan0 global-scope addresses).
+      dnsupdate_validate() validates NAME field: FQDN chars only, max 253 chars.
+    No Apache override, no auth check in script. Viewer+ by default.
+    Security: viewer can trigger DDNS registration for an arbitrary hostname pointing
+      to the camera's actual interface IPs. If DNSUPDATE_SERVER is not configured
+      (default: DNSUPDATE_NOSERVER=";"), server line is commented out and nsupdate
+      uses SOA resolver — limited exploitability without a configured DDNS server.
+    Not filed: requires DDNS server configured; viewer triggers DDNS update for
+      camera's OWN IPs; no ability to inject attacker-controlled IP addresses.
+
+  stclient.cgi (symlink → /usr/sbin/stclient.cgi, 30808 bytes): AVHS relay client CGI.
+    Links: libcgiparser.so (parse only), libuser_manager.so.0, OpenSSL, GLib D-Bus.
+    Auth strings: user_manager_vapix_auth_user_basic — validates VAPIX credentials.
+      This is likely used to authenticate the AVHS relay-server identity, not the HTTP caller.
+    Cert operations: cert_set_write, cert_set_insert_cert, cert_set_insert_ca, cert_set_copy_set,
+      cert_msg_add_op, cert_set_create_set — manages AVHS relay TLS certificate sets.
+    D-Bus: calls com.axis.AVHS and com.axis.BasicDeviceInfo1.
+    AVHS D-Bus conf: context="default" allow send_destination — bus layer open to www.
+    No APAC refs, no operator/admin/viewer strings, no Apache override.
+    Pending: specific HTTP operations exposed by stclient.cgi not fully characterized.
+      If viewer can trigger cert writes (cert_set_write/insert) without auth, that is
+      a PKI manipulation finding. Further analysis required — NOT filed without operation map.
+
+  connection_list.cgi (shell script, 3927 bytes): reads active TCP/UDP connections via
+    /proc/net/tcp6 and /proc/net/udp6. No auth check, no Apache override. Viewer+.
+    Lists: remote IP, protocol, service(port), state (ESTABLISHED/LISTEN), PID/process.
+    Not filed: read-only; network connection list is standard operational info;
+      impact limited to info disclosure of connection metadata.
+
+  ptz/ptzsetactivedrivermode.cgi (shell script, 7452 bytes): changes PTZ driver mode
+    config files (copies framework.conf for MODE0/MODE1 PTZ). No auth strings found.
+    Pending full auth analysis — shell scripts may have group checks in body beyond
+    what grep surfaces. Status: UNCONFIRMED.
+
 Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
   W101 = AXIS W101 Bodyworn Camera (Ambarella S5L, HardwareID 908.2/908.21/908.22)
