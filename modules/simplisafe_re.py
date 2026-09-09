@@ -102,6 +102,11 @@ FINDINGS = [
     Finding("F15", "MEDIUM",   "Internal Architecture Disclosure via Health Endpoints",
             "beta_hub", "/health", "GET", None, verified=True,
             evidence="DynamoDB tables, Kafka topics, MySQL via Falcon client, JWKS cycle"),
+    Finding("F18", "CRITICAL", "Live Camera View IDOR — WebRTC Session Hijack",
+            "app_hub", "/v2/cameras/{uuid}/{sid}/live-view", "GET", None,
+            notes="Returns LiveKit JWT + AWS KVS signed endpoint + TURN creds. "
+                  "Chain: camera UUID enum (F-cam) -> this endpoint -> LiveKit room join. "
+                  "channelARN reveals AWS account ID. iceServers reveal TURN credentials."),
     Finding("F17", "CRITICAL", "SocketLink Real-Time Surveillance IDOR",
             "socketlink", "wss://socketlink.prd.aser.simplisafe.com/socket.io/", "WS",
             {"type": "com.simplisafe.connection.identify",
