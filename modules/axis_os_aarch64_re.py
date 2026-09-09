@@ -148,10 +148,16 @@ Continued Q1656 12.11.118 CGI analysis:
   ftptest.cgi: SSRF + FTP file upload via curl. Added to F-AXTEST-01.
   portmanagement.cgi (io/): SetActive/SetState/StartActionSequence — physical I/O control.
     D-Bus: com.axis.IOControl.State. Policy: context="default" allows ALL processes.
-    No polkit, no REMOTE_USER check in binary. Default Apache Require axis-group-file (viewer).
-    libjsoncgi.so.0 implements role enforcement (viewer/operator/admin strings) but specific
-    role required for SetActive cannot be confirmed without disassembly.
-    Flagged for live testing: if viewer can call SetActive, relay-attached cameras vulnerable.
+    No APAC (apac_check_auth absent). No REMOTE_USER/operator/viewer strings in binary.
+    No GetConnectionUnixUser in io2d — daemon cannot identify D-Bus peer on method calls.
+    io2d embedded XML access control (admin:3;operator:1 for Active) applies to legacy
+    param.cgi path (confcached), NOT to IOControl.State D-Bus interface. Two separate paths.
+    Apache: no portmanagement.cgi Location override — inherits Require axis-group-file (viewer+).
+    FINDING F-AXIO-01 (static analysis): viewer can call SetActive/SetDirection on physical I/O.
+    VAPIX doc specifies operator-minimum; implementation enforces viewer-minimum.
+    Impact: relay-equipped cameras (Q1656, P3245, P3945, etc.) — viewer flips physical relays.
+    On door-controller-wired installations, viewer can trigger gate/door release.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXIO-01.md
   io/virtualinput.cgi, io/output.cgi, io/port.cgi, com/serial.cgi: all empty stubs — TransferProxy /var/run/iod/iodsocket.
   virtualinput/activate.cgi, virtualinput/deactivate.cgi: SHELL SCRIPTS — NOT empty stubs.
     Path: /usr/html/axis-cgi/virtualinput/activate.cgi (NOT under io/)
