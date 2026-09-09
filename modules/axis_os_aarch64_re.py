@@ -65,6 +65,31 @@ Confirmed findings:
                  VAPIX docs specify operator+ for serverreport.cgi; shell CGI inherits viewer+ default
                  Cross-validated: Q1656 12.11.118, A8207-VE 11.11.220. Platform-wide shell script pattern.
                  STATUS: CONFIRMED static analysis. Not filed to Bugcrowd.
+  F-AXSUPVIO-01 Viewer-level supervised I/O control — Vienna Q6215-LE 10.9 CSB (ARMv7hf)
+                 supervisedio.cgi: 0-byte stub, TransferProxy /run/iod/supervisediosocket, no Require override
+                 supervisedio_cgi.socket: SocketGroup=www, ListenDatagram=/run/iod/supervisediosocket
+                 supervisedio_cgi binary: 0 APAC refs, 0 auth strings; uses fdipc_recv JSON protocol
+                 APAC policy: no supervisedio entry in policy.conf
+                 Operations exposed to viewer: SetSupervised, SetSupervisedRanges, GetSupervisedReadout,
+                   GetSupervisedStates, GetSupervisedPortNumbers
+                 Impact: viewer disables tamper-detection supervision on I/O circuits; changes resistance
+                   thresholds used to detect cut/short-circuit tamper conditions on alarm wiring;
+                   blind spot in physical security tamper monitoring without physical access
+                 STATUS: CONFIRMED static analysis (Q6215-LE 10.9 CSB). Not filed to Bugcrowd.
+  F-AXLEDLIM-01 Viewer-level LED intensity control — Vienna Q6215-LE 10.9 CSB (ARMv7hf)
+                 ledlimit.cgi: shell script, no auth check, no Apache Require override
+                 Calls: gdbus call --system --dest=com.axis.LightController /com/axis/LightController/led/0
+                   com.axis.LightController.Common.SetIndividualLEDIntensity $ID $INTENSITY manual
+                 com.axis.LightController D-Bus conf: context="default" allow send_destination — bus open to www
+                 lightd binary (BusName=com.axis.LightController): 0 APAC refs, 0 auth strings
+                 APAC policy: no LightController entry in policy.conf
+                 Operations exposed to viewer: SetIndividualLEDIntensity, GetIndividualLEDIntensity
+                 Impact: viewer sets IR LED intensity to 0 — disables night vision illumination;
+                   or maximizes IR output to blind/saturate camera sensor; modifies status LED behavior;
+                   Q6215-LE is outdoor PTZ with IR illuminators for night surveillance
+                 Distinct from F-AXLED-01 (blinkenlights socket, status LEDs): this path uses D-Bus
+                   directly to com.axis.LightController (lightd), controls IR illuminator hardware
+                 STATUS: CONFIRMED static analysis (Q6215-LE 10.9 CSB). Not filed to Bugcrowd.
   F-AXRADAR-01  Viewer-level radar auto-tracking configuration control — Q1686-DLE 12.2.59
                  radar-autotracking.cgi: TransferPostWSProxy /run/radar/autotrackingsocket, no Require override
                  radar-autotracking.socket: SocketGroup=www, ListenDatagram=/run/radar/autotrackingsocket
@@ -144,6 +169,37 @@ Cross-product analysis (new firmwares this session):
   Vienna Q6215-LE 10.9 CSB (ARMv7hf):
     F-AXNETD-01 confirmed (identity="%s", g_strescape zero callers). No dev-conf → F-AXUSRMGR-01 N/A.
     1024-bit RSA keys in /usr/etc/ssl/ (obsolete, not directly exploitable without key material).
+    F-AXIO-01 cross-validated at AXIS OS 10.x: io_cgi.socket SocketGroup=www confirmed,
+      io_cgi binary 0 APAC refs confirmed, io/ stubs confirmed.
+    F-AXVIN-01 cross-validated at AXIS OS 10.x: virtualinput/ shell CGIs calling gdbus confirmed.
+    F-AXSRVRPT-01 cross-validated at AXIS OS 10.x: serverreport.cgi shell script same pattern.
+    F-AXDOVL-01 cross-validated at AXIS OS 10.x: dynamicoverlay/dynamicoverlay.cgi is 0-byte stub,
+      dynamic_overlay_cgi.socket SocketGroup=www, dynamic_overlayd 0 APAC refs. Same pattern as Q1656.
+    FINDING F-AXSUPVIO-01: Viewer-level supervised I/O control (see confirmed findings header).
+    FINDING F-AXLEDLIM-01: Viewer-level LED intensity control (see confirmed findings header).
+    Negative results (unique to 10.9 analysis):
+      speed_test.cgi: ptzaurus daemon has apac_check_auth + libapac.so.0 (APAC v1). NEGATIVE.
+      recordedtour/: tour-handler.socket and tour-player.socket have no SocketGroup=www. NEGATIVE.
+      date.cgi (shell): set action calls com.axis.PolicyKitSystem.SetTimeOfDay via PolicyKit;
+        policykit-system.settime is in wwwa section (admin minimum). www blocked. NEGATIVE.
+      overlay_set.cgi / overlay_del.cgi (shells): call parhandclient → policykit-parhand.setparameter;
+        in wwwa section (admin minimum). www blocked. NEGATIVE.
+      ipfilter.cgi (shell): calls busctl to com.axis.Net1; netd has apac_check_auth + libapac.so.0;
+        com.axis.net1.* in wwwa section (admin minimum). www blocked. NEGATIVE.
+      lightcontrol.cgi: libaxcgijson.so auto-enforces operator+. NEGATIVE.
+      clearviewcontrol.cgi: libaxcgijson.so auto-enforces operator+. NEGATIVE.
+      privacymask.cgi / admin/privacymask.cgi: maskd has apac_check_auth + libapac.so.0. NEGATIVE.
+        Note: /axis-cgi/admin/ is NOT a protected directory in apache (no Directory block for it).
+        Protection comes from maskd APAC v1, not Apache auth override.
+      legacyoverlay.cgi: ELF with g_getenv + Status:403/401 strings — self-enforces via REMOTE_USER. NEGATIVE.
+      streamingfeature.cgi: ELF with g_getenv + Status:403/401 strings — self-enforces via REMOTE_USER. NEGATIVE.
+      dynamicoverlay.cgi (root): 17860-byte ELF (NOT a stub), has 401/403 strings — self-enforcing. NEGATIVE.
+      motion/motiondata.cgi: 0-byte stub, TransferProxy /var/run/motion/datasocket. Motion daemon is
+        a service (not socket unit), creates socket as motion:motion — no SocketGroup=www. NEGATIVE.
+      call_overlay_upload.cgi: shell, no HTTP auth check (file_upload checks multipart realm token
+        only, not REMOTE_USER); call_overlay upload writes to overlay dir but parhandclient
+        activation requires admin APAC (policykit-parhand.setparameter). Limited path NEGATIVE.
+      audiomixer.cgi: same sd_bus + "Authorization failed." pattern as A8207-VE. CANDIDATE unresolved.
   W101 Body Worn Camera 12.9.57 (Ambarella S5L):
     F-AXUSRMGR-01 confirmed (config_server_reverseproxy.conf identical pattern).
     BWC-specific Apache config (httpd-bwc.inc): recordings/live-view require ssl-verify-client or BWS session.
