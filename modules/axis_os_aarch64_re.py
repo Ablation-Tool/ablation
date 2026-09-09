@@ -217,6 +217,30 @@ Continued Q1656 12.11.118 CGI analysis:
     consumers; modifications persist until operator resets; affects all stream copies and recordings.
     Same root pattern as F-AXMASK-01 (TransferProxy bypass + no APAC in daemon).
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXDOVL-01.md
+  httptest.cgi: libcgiparser.so (no enforcement), no Apache override (viewer+).
+    Parameters: address (required URL), proxy_host, proxy_port, proxy_login, proxy_password,
+    validate_server_cert. Scheme validation only (Only HTTP and HTTPS URL are valid).
+    No RFC1918/loopback blocking: no strings for 127., 10., 192.168., 169.254., private in
+    binary or libhttp_smtp_notify.so. Returns Status: %d %s upstream code to caller.
+    Uses curl via libhttp_smtp_notify.so (send_http_notification). libformatname.so linked.
+    Viewer-supplied proxy_host routes camera outbound traffic through attacker proxy.
+    FINDING F-AXHTEST-01 (static analysis): viewer-level HTTP SSRF — camera makes
+    outbound HTTP/HTTPS request to viewer-specified URL; status code returned to caller;
+    no private-IP blocking; proxy override allows viewer to intercept camera notifications.
+    Impact: internal network reachability probe, REST API interaction from camera IP,
+    cloud metadata endpoint access (169.254.169.254), notification credential capture.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXHTEST-01.md
+  smtptest.cgi: libcgiparser.so (no enforcement), no Apache override (viewer+).
+    Parameters: mailserver (required), port, encryption, user, login. Uses curl SMTP stack
+    (libhttp_smtp_notify.so: curl_easy_setopt, send_smtp_notification, init_curl).
+    Only restriction: "Local host not allowed" — likely 127.x.x.x only; no RFC1918 block.
+    Email-address validation regex present but no server address filtering beyond localhost.
+    FINDING F-AXSMTP-01 (static analysis): viewer-level SMTP SSRF — camera makes outbound
+    SMTP connection to viewer-specified mailserver:port; timing oracle for TCP port scan;
+    viewer can send test notifications via attacker-controlled mail servers.
+    Impact: internal SMTP infrastructure enumeration, TCP port scan via SMTP timing,
+    email origination from camera IP using attacker-supplied server credentials.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXSMTP-01.md
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
