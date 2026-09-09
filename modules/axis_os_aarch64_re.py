@@ -146,29 +146,38 @@ Continued Q1656 12.11.118 CGI analysis:
     D-Bus: com.axis.NetworkSpeakerPairing. Could be SSRF if pairing makes outbound TCP.
     Not filed without confirmation of TCP connection behavior.
   ftptest.cgi: SSRF + FTP file upload via curl. Added to F-AXTEST-01.
-  portmanagement.cgi (io/): SetActive/SetState/StartActionSequence — physical I/O control.
-    D-Bus: com.axis.IOControl.State. Policy: context="default" allows ALL processes.
-    No APAC (apac_check_auth absent). No REMOTE_USER/operator/viewer strings in binary.
-    No GetConnectionUnixUser in io2d — daemon cannot identify D-Bus peer on method calls.
-    io2d embedded XML access control (admin:3;operator:1 for Active) applies to legacy
-    param.cgi path (confcached), NOT to IOControl.State D-Bus interface. Two separate paths.
-    Apache: no portmanagement.cgi Location override — inherits Require axis-group-file (viewer+).
-    FINDING F-AXIO-01 (static analysis): viewer can call SetActive/SetDirection on physical I/O.
-    VAPIX doc specifies operator-minimum; implementation enforces viewer-minimum.
-    Impact: relay-equipped cameras (Q1656, P3245, P3945, etc.) — viewer flips physical relays.
-    On door-controller-wired installations, viewer can trigger gate/door release.
+  io/portmanagement.cgi: LINKS libjsoncgi.so.0 (auth-enforcing library — enforces operator+).
+    Auth protected. NOT the bypass path. Previous annotation was incorrect.
+  io/input.cgi, io/output.cgi, io/port.cgi, io/virtualinput.cgi: all 0-byte stubs.
+    TransferProxy: transfer.conf LocationMatch /axis-cgi/io/(input|output|port|virtualinput)\.cgi
+      → /var/run/iod/iodsocket (same as /run/iod/iodsocket via /var/run→/run symlink)
+    io_cgi.socket: ListenDatagram=/run/iod/iodsocket, SocketGroup=www, SocketMode=0660
+      → Apache (www group) can connect; viewer HTTP auth level has no effect on socket access.
+    io_cgi daemon (0 APAC refs, no auth strings, no X-Remote-User check):
+      Owns com.axis.IOControl.State directly (no conf, no D-Bus intermediary).
+      Write handlers: handle-set-state, handle-set-active, handle-set-direction,
+        handle-set-enabled, handle-set-name, handle-set-usage, handle-set-virtual.
+      Output params: action (set state), active/activelow (HIGH/LOW), close, checkactive.
+      No APAC policy entry for io_cgi or com.axis.iocontrol.* in policy.conf.
+    Apache: no Require override in LocationMatch block → inherits parent: viewer+.
+    FINDING F-AXIO-01 (static analysis): viewer can write physical I/O output state.
+      Viewer sends: GET /axis-cgi/io/output.cgi?action=1/ → activates I/O output port.
+      VAPIX doc specifies operator-minimum for write; io_cgi enforces NO auth at all.
+      Impact: relay-equipped cameras — viewer flips physical relay outputs.
+        On door-controller-wired installations: viewer can trigger gate/door release.
+        On alarm-wired installations: viewer can trigger false alarm notifications.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXIO-01.md
-  io/virtualinput.cgi, io/output.cgi, io/port.cgi, com/serial.cgi: all empty stubs — TransferProxy /var/run/iod/iodsocket.
-  virtualinput/activate.cgi, virtualinput/deactivate.cgi: SHELL SCRIPTS — NOT empty stubs.
-    Path: /usr/html/axis-cgi/virtualinput/activate.cgi (NOT under io/)
+  virtualinput/activate.cgi, virtualinput/deactivate.cgi: SHELL SCRIPTS — NOT stubs.
+    Path: /usr/html/axis-cgi/virtualinput/activate.cgi
     → calls gdbus call -y -d com.axis.VirtualInput -o /com/axis/VirtualInput/Port/$port -m Activate
-    virtualinputd: no APAC, no PolicyKit; D-Bus policy context="default" open to all peers.
-    Apache: no Location/Directory override for virtualinput/ — inherits Require axis-group-file (viewer+).
-    NO TransferProxy coverage (transfer.conf matches io/virtualinput.cgi, not axis-cgi/virtualinput/).
-    FINDING F-AXVINPUT-01 (unverified live): viewer can trigger virtual input port 1-64.
-    Impact: any action rule bound to a virtual input fires (recording, PTZ preset, HTTP notify,
-    relay output, door controller unlock on PACS products). Viewer triggers operator-level actions.
-    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXVINPUT-01.md (not yet written).
+    virtualinputd: 0 APAC refs.
+    D-Bus: NO com.axis.VirtualInput*.conf in /usr/share/dbus-1/system.d/
+      Without a conf, D-Bus system bus default policy applies: DENY send to unregistered names.
+      gdbus call from suexec'd www user (wwwv) would be REJECTED at D-Bus layer.
+    Apache: no Location/Directory override → viewer+, but D-Bus access denied anyway.
+    NO TransferProxy coverage (transfer.conf has io/virtualinput.cgi, not virtualinput/).
+    FINDING F-AXVINPUT-01: D-Bus policy UNCERTAIN — no conf; call may fail at bus layer.
+      Live verification required before filing. Current status: UNCONFIRMED.
   zipstream/setstrength.cgi, setfpsmode.cgi, setgop.cgi, setminfps.cgi, setprofile.cgi:
     AArch64 ELF binaries, source: zipstream-cgi/1.7.2. All 5 CGIs call com.axis.Video1 /
     com.axis.Video1.Channel D-Bus properties: ZStrength, ZFpsMode, ZGopMode, ZMaxGopLength,
@@ -217,6 +226,26 @@ Continued Q1656 12.11.118 CGI analysis:
     consumers; modifications persist until operator resets; affects all stream copies and recordings.
     Same root pattern as F-AXMASK-01 (TransferProxy bypass + no APAC in daemon).
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXDOVL-01.md
+  overlaywidget/overlaywidget.cgi: 0-byte stub.
+    widgetd_transfer.conf: <LocationMatch "/axis-cgi/overlaywidget/\w+\.cgi">
+      TransferProxy /run/widgetd/transfer (no auth directive, inherits viewer+).
+    widgetd.socket: SocketGroup=www, SocketMode=0660 — Apache can connect.
+    widgetd (/usr/bin/widgetd): 0 APAC refs. Write ops: addWidget, axo_create_overlay,
+      axo_adjust_overlay, axo_props_set_anchor_point, axo_props_set_is_background_overlay.
+      Also calls com.axis.GeoLocation1, com.axis.PrioritizedTextOverlay, com.axis.PTZ.Coordinator
+      to populate widget data — these are READ-only calls from widgetd.
+    FINDING F-AXWIDGET-01 (static analysis): viewer can add/modify data visualization widgets
+      as video overlays (geolocation data widgets, graphs, etc.) without operator auth.
+      Same pattern as F-AXMASK-01/F-AXDOVL-01: TransferProxy + www-group socket + 0-APAC daemon.
+  airquality/: all CGIs are 0-byte stubs (config.cgi, download.cgi, metadata.cgi, statistics.cgi, status.cgi).
+    airqualityd_transfer.conf: <LocationMatch "/axis-cgi/airquality/\w+\.cgi">
+      TransferProxy /run/airqualityd/transfer (no auth directive, inherits viewer+).
+    airqualityd.socket: SocketGroup=www, SocketMode=0660 — Apache can connect.
+    airqualityd (/usr/bin/airqualityd): 0 APAC refs. Has set_property handlers and
+      "API failed to set configuration" — confirms write capability via config.cgi.
+    FINDING F-AXAIRQ-01 (static analysis): viewer can write air quality sensor configuration
+      (calibration, thresholds, intervals) via airquality/config.cgi without operator auth.
+      Low-medium severity (sensor config, not access control).
   httptest.cgi: libcgiparser.so (no enforcement), no Apache override (viewer+).
     Parameters: address (required URL), proxy_host, proxy_port, proxy_login, proxy_password,
     validate_server_cert. Scheme validation only (Only HTTP and HTTPS URL are valid).
