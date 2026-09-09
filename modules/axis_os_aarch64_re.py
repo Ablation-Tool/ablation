@@ -236,16 +236,47 @@ Continued Q1656 12.11.118 CGI analysis:
       to populate widget data — these are READ-only calls from widgetd.
     FINDING F-AXWIDGET-01 (static analysis): viewer can add/modify data visualization widgets
       as video overlays (geolocation data widgets, graphs, etc.) without operator auth.
-      Same pattern as F-AXMASK-01/F-AXDOVL-01: TransferProxy + www-group socket + 0-APAC daemon.
+      APAC policy: widgetd: com.axis.overlay2.* / com.axis.graphics2.* -- blanket write access.
+      Identity-launder: viewer HTTP -> widgetd (www socket) -> overlay2/graphics2 as widgetd identity.
+      com.axis.Overlay2.conf / com.axis.Graphics2.conf: context=default OPEN at bus layer.
+      APAC inside overlay2d sees widgetd identity -- grants all com.axis.overlay2.* methods.
+      Write ops reach AXIS Overlay2 service (video stream graphics layer) at viewer level.
+      Impact: viewer injects overlay graphics, graphs, position data into all camera streams.
+      Variations: SkLineGraphWidget (graph), WidgetCompositionSurface (composite), axo_create_overlay.
+  ledcontrol/: all CGIs are 0-byte stubs (getleds.cgi, getschemaversions.cgi, getstatus.cgi, set.cgi, stop.cgi).
+    transfer.conf: <LocationMatch "/axis-cgi/ledcontrol/\w+\.cgi">
+      TransferProxy /var/run/blinkenlights/transfer (no auth directive, inherits viewer+).
+    led-controller-cgi.socket: ListenDatagram=/run/blinkenlights/transfer,
+      SocketMode=0660, SocketGroup=www -- Apache (www group) can connect.
+    blinkenlights (/usr/bin/blinkenlights): 0 APAC refs.
+      IS the LED controller daemon directly (no CGI intermediary).
+      Owns D-Bus name com.axis.LEDController; calls com.axis.Configuration.Legacy.
+      D-Bus introspection XML embedded: color, set (as, i direction=in), BootColor, ColorName args.
+      accessControl XML embedded: admin:3 and admin:3;operator:1 -- legacy config METADATA only.
+      No auth header reading: 0 strings matching http_user, REMOTE_USER, X-Remote, auth_info.
+      No enforcement mechanism: binary has no mechanism to identify HTTP caller role.
+      setuid/setgid called at startup for privilege drop (daemon init only, not per-request auth).
+      write ops: color set, flash effect (bwc-front-indicator-flash), BootColor config, stop sequence.
+    Apache: no Require override in LocationMatch block -- inherits parent: viewer+.
+    FINDING F-AXLED-01 (static analysis): viewer can control camera LED state without operator auth.
+      Viewer calls /axis-cgi/ledcontrol/set.cgi to set LED color, flash effects, status sequences.
+      VAPIX doc specifies operator-minimum for LED control; blinkenlights enforces no auth.
+      Impact: viewer changes camera status LED color (green/red/amber/off), triggers flash patterns,
+        modifies IR illumination boot behavior. Physical indicator manipulation visible on device.
+      Root: blinkenlights is the production LED daemon; TransferProxy gives Apache direct socket
+        access; daemon has accessControl metadata but no reader for HTTP user identity.
   airquality/: all CGIs are 0-byte stubs (config.cgi, download.cgi, metadata.cgi, statistics.cgi, status.cgi).
     airqualityd_transfer.conf: <LocationMatch "/axis-cgi/airquality/\w+\.cgi">
       TransferProxy /run/airqualityd/transfer (no auth directive, inherits viewer+).
-    airqualityd.socket: SocketGroup=www, SocketMode=0660 — Apache can connect.
-    airqualityd (/usr/bin/airqualityd): 0 APAC refs. Has set_property handlers and
-      "API failed to set configuration" — confirms write capability via config.cgi.
-    FINDING F-AXAIRQ-01 (static analysis): viewer can write air quality sensor configuration
-      (calibration, thresholds, intervals) via airquality/config.cgi without operator auth.
-      Low-medium severity (sensor config, not access control).
+    airqualityd.socket: SocketGroup=www, SocketMode=0660 -- Apache can connect.
+    airqualityd (/usr/bin/airqualityd): 0 APAC refs.
+      Auth strings PRESENT: HTTP/1.0 401 Unauthorized, <h1>Unauthorized</h1>,
+        <title>401 Unauthorized</title>, Forbidden permission response,
+        http_user_realms, Administrator, Operator, Viewer.
+      Self-enforcing: reads http_user_realms CGI env var, returns 401/403 on privilege gap.
+    F-AXAIRQ-01 REFUTED: airqualityd is self-enforcing at HTTP layer.
+      Socket accessible from Apache but daemon blocks unauthorized callers.
+      NOT a bypass. NOT filed.
   httptest.cgi: libcgiparser.so (no enforcement), no Apache override (viewer+).
     Parameters: address (required URL), proxy_host, proxy_port, proxy_login, proxy_password,
     validate_server_cert. Scheme validation only (Only HTTP and HTTPS URL are valid).
