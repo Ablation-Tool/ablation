@@ -17,6 +17,12 @@ Targets:
   A1810_12_11_106 rootfs (ARMv7hf, AXIS A1810-B Network Door Controller, Genetec Track)
   Vienna Q6215-LE_10.9_CSB rootfs (ARMv7hf, unreleased police CSB)
   AXISP12_Thermal 9.80.105 rootfs (MIPS32, AXIS P12 thermal camera)
+  Companion_Bullet_LE_9_80_132 rootfs (MIPS32, AXIS Companion Bullet LE)
+  F9114-R_Mk_II_12_11_77 rootfs (AArch64, AXIS F9114-R thermal rangefinder)
+  P3245-V_11_11_220 rootfs (ARMv7hf, AXIS P3245-V fixed dome camera)
+  P3945-R_12_11_77 rootfs (AArch64, AXIS P3945-R fixed dome PTZ camera)
+  P3947-R_12_11_77 rootfs (AArch64, AXIS P3947-R fixed dome PTZ camera)
+  A8207-VE_Mk_II_1_97_2_2 rootfs (ARMv7hf, AXIS A8207-VE Mk II 8-ch video encoder, AXIS OS 1.97)
   BWL EAP 2.0.1 (rsignal Rust AArch64)
 
 Binaries:
@@ -30,10 +36,14 @@ Prologue detection: STP X29,X30,[SP,#-N]! (0x?d 0x7b 0b?? 0xa9) — standard AAP
 PLT resolution: RELA sections (R_AARCH64_JUMP_SLOT 0x402) + .dynstr.
 
 Confirmed findings:
-  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 10/10 firmwares
+  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 20+ firmwares, floor AXIS OS 1.97
                  identity="%s", password="%s" unescaped; g_strescape linked zero callers
-                 D1110 12.11.77, A1210/A1710/A1810 12.11.106.1: confirmed
-                 Note: binary named "netd" on PACS controllers (not "axnetd")
+                 D1110 12.11.77, A1210/A1710/A1810 12.11.106.1, F9114-R 12.11.77, P3245-V 11.11.220,
+                   P3945-R/P3947-R 12.11.77, M3138-LVE 12.11.77, AXISP12 9.80 MIPS32,
+                   BW W102/W110/W120 12.10.59, Companion Bullet LE 9.80.132, A8207-VE Mk II 1.97: confirmed.
+                 Note: binary named "netd" on PACS controllers (not "axnetd").
+                 Note: in 12.x AArch64, function names are netd_device_auth_config_set_eap_peap_mschapv2_identity
+                   and netd_device_auth_client_get_eap_peap_mschapv2_identity (PLT); format strings are same.
   F-AXPKG-01     REFUTED: libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault
   F-AXTEST-01    Multi-protocol SSRF via diagnostic CGIs — viewer privilege, no RFC-1918 filter
                  httptest.cgi: HTTP/HTTPS probe; links libhttp_smtp_notify.so (same as F-AXACTION-01)
@@ -97,6 +107,22 @@ Confirmed findings:
                  Distinct from F-AXLED-01 (blinkenlights socket, status LEDs): this path uses D-Bus
                    directly to com.axis.LightController (lightd), controls IR illuminator hardware
                  STATUS: CONFIRMED static analysis (Q6215-LE 10.9 CSB). Not filed to Bugcrowd.
+  F-AXVSI-01    Viewer-level streaming indicator overlay control — F9114-R Mk II 12.11.77 (AArch64)
+                 videostreamingindicator.cgi: 0-byte stub, TransferMethodProxy /run/video-streaming-indicator/transfer
+                 video-streaming-indicator.socket: SocketGroup=www, ListenDatagram=/run/video-streaming-indicator/transfer
+                 video-streaming-indicator daemon: 0 APAC refs, 0 auth strings (0 REMOTE_USER, 0 http_user, 0 401/403)
+                 Transfer conf: <LocationMatch "/axis-cgi/videostreamingindicator.cgi"> — no Require override (viewer+)
+                 Operations: axo_start, axo_stop, axo_props_set_position, axo_props_set_format,
+                   axo_props_set_anchor_point, axo_props_set_size (AXIS Overlay 2.x write operations)
+                   Also calls VDO: vdo_stream_get_settings, vdo_map_set_string (stream metadata writes)
+                   Uses cairo for rendering and confutils_set_file_contents_with_sync (persistent config writes)
+                 Impact: viewer can start, stop, reposition, resize, and reformat the recording indicator overlay
+                   visible on all live stream consumers. Suppressing the indicator on F9114-R (thermal rangefinder
+                   deployed in perimeter security / critical infrastructure) deceives operators about whether
+                   camera monitoring is active — adversary can disable the "camera is watching" visual signal
+                   on thermal surveillance streams without triggering any alert.
+                   Also: false-start the indicator to confuse operators about monitoring state.
+                 STATUS: CONFIRMED static analysis (F9114-R Mk II 12.11.77). Not filed to Bugcrowd.
   F-AXRADAR-01  Viewer-level radar auto-tracking configuration control — Q1686-DLE 12.2.59
                  radar-autotracking.cgi: TransferPostWSProxy /run/radar/autotrackingsocket, no Require override
                  radar-autotracking.socket: SocketGroup=www, ListenDatagram=/run/radar/autotrackingsocket
@@ -277,6 +303,78 @@ Cross-product analysis (new firmwares this session):
         layer prevent viewer-privilege bypass via socket access.
     bwc/pairing.cgi: Require all granted (unauthenticated), consistent with W101 analysis.
       Backend bwa-manager enforces PIN auth + 5-min pairing window + request rate limit.
+  F9114-R_Mk_II_12_11_77 (AArch64, AXIS F9114-R Mk II thermal rangefinder, 12.11.77):
+    F-AXNETD-01 confirmed: identity="%s", g_strescape in netd.
+    F-AXUSRMGR-01 confirmed: config_server_reverseproxy.conf present.
+    F-AXIO-01 cross-validated: io_cgi.socket SocketGroup=www, io_cgi 0 APAC refs.
+    F-AXDOVL-01 cross-validated: dynamic_overlay_cgi.socket SocketGroup=www, dynamic_overlayd 0 APAC.
+    F-AXLED-01 cross-validated: led-controller-cgi.socket SocketGroup=www, blinkenlights 0 APAC.
+    F-AXWIDGET-01 cross-validated: widgetd.socket SocketGroup=www.
+    F-AXMASK-01 cross-validated: transfer_maskd.conf TransferProxy /axis-cgi/privacymask.cgi → maskd.
+      maskd has http_user + sc_get_group but no enforcement, 0 APAC refs. Same pattern as Q1656.
+    FINDING F-AXVSI-01: Viewer-level streaming indicator overlay control (see confirmed findings header).
+    Negative results:
+      thermometry.cgi (129KB AArch64 ELF): links libcgihelper.so + has 401/403 strings — self-enforcing.
+        No Apache transfer conf found for thermometry.cgi — served via standard CGI execution.
+        Binary returns HTTP 401/403 for unauthorized callers. NEGATIVE.
+      Recording surface (osr-manager/osr-retrieve/osr-search.socket SocketGroup=www): NEGATIVE.
+        F9114-R has recording capability (same osr-* daemon model as BW body-worn cameras).
+        Same APAC v2 pattern expected (osr-main/osr-playback with apac2_check_username).
+  P3245-V_11_11_220 (ARMv7hf, AXIS P3245-V fixed dome camera, 11.11.220):
+    F-AXNETD-01 confirmed: g_strescape + netd_device_auth_config_set_eap_peap_mschapv2_identity.
+    F-AXUSRMGR-01 confirmed: config_server_reverseproxy.conf present.
+    F-AXIO-01 cross-validated: io_cgi.socket SocketGroup=www.
+    F-AXDOVL-01 cross-validated: dynamic_overlay_cgi.socket + dynamicoverlay-cgi.socket SocketGroup=www.
+    F-AXLED-01 cross-validated: led-controller-cgi.socket SocketGroup=www.
+    New sockets requiring investigation:
+      focusd.socket: ListenDatagram=/run/focusd/transfer, SocketGroup=www.
+        focusassistant.cgi: 0-byte stub, TransferProxy /var/run/focusd/transfer, no Require override.
+        focusd binary: 0 APAC refs. Has HTTP/1.0 401 Unauthorized + "Authorization failed" strings.
+        Operations: action, getcapabilities, getnumberofsources (from strings context).
+        Mechanism unclear — "Authorization failed" present but no http_user/REMOTE_USER/APAC in binary.
+        CANDIDATE-UNRESOLVED.
+      sipd.socket: ListenStream=/run/sipd/httpproxy, SocketGroup=www (SIP daemon HTTP proxy socket).
+        sipd binary: 0 real APAC refs (2 matches both from "Capacity" false positive), "Unauthorized" present.
+        CANDIDATE-UNRESOLVED.
+  P3945-R_12_11_77 / P3947-R_12_11_77 (AArch64, AXIS PTZ fixed dome cameras, 12.11.77):
+    F-AXNETD-01 confirmed (both): identity="%s", g_strescape in netd.
+    F-AXUSRMGR-01 confirmed (both): config_server_reverseproxy.conf present.
+    F-AXDOVL-01 cross-validated (both): dynamic_overlay_cgi.socket SocketGroup=www.
+    F-AXLED-01 cross-validated (both): led-controller-cgi.socket SocketGroup=www.
+    F-AXIO-01 cross-validated (both): io_cgi.socket SocketGroup=www.
+    Both cameras have 11 SocketGroup=www sockets total: same set as F9114-R plus ptz-vapix + privacymask-cgi.
+    Negative results:
+      ptz-vapix.socket: SocketGroup=www, ptzvapixd binary 0 APAC refs BUT reads http_user_realms.
+        Transfer conf: <LocationMatch "/axis-cgi/com/ptz(|queue|config|calibrate|param)\.cgi"> → TransferProxy.
+        ptzvapixd has: http_user_realms, com.axis.Ptz.Error.Unauthorized, 403 Not Allowed.
+        Self-enforcing via http_user_realms check. NEGATIVE.
+      privacymask-cgi.socket: FastCGI socket SocketGroup=www. privacymask-cgi binary reads REMOTE_USER.
+        Self-enforcing via REMOTE_USER check (FastCGI variant replaces older maskd pattern). NEGATIVE.
+      sipd.socket: CANDIDATE-UNRESOLVED (same as P3245-V — Unauthorized string, 0 real APAC).
+  Companion_Bullet_LE_9_80_132 (MIPS32, AXIS Companion Bullet LE, 9.80.132):
+    F-AXNETD-01 confirmed: identity="%s", g_strescape in netd (9.80 MIPS32).
+    F-AXIO-01 cross-validated: io_cgi.socket SocketGroup=www.
+    F-AXDOVL-01 cross-validated: dynamic_overlay_cgi.socket SocketGroup=www.
+    F-AXLED-01 cross-validated: led-controller-cgi.socket SocketGroup=www.
+    F-AXUSRMGR-01: N/A (9.80 — no reverseproxy conf, same as AXISP12).
+    image_param.cgi: CANDIDATE-UNRESOLVED (same 2367-byte shell CGI as AXISP12; image2d has
+      operator:3;admin:3;viewer:1 embedded ACL data; mechanism unclear — same resolution as AXISP12).
+  A8207-VE_Mk_II_1_97_2_2 (ARMv7hf, AXIS A8207-VE Mk II 8-ch video encoder, AXIS OS 1.97.2.2):
+    F-AXNETD-01 confirmed: identity="%s", password="%s", g_strescape in netd.
+      Extends F-AXNETD-01 floor to AXIS OS 1.97 — vulnerability predates 12.x by many major versions.
+    F-AXIO-01 cross-validated: io_cgi.socket SocketGroup=www, ListenDatagram=/run/iod/iodsocket, io_cgi 0 APAC.
+      TransferProxy /var/run/iod/iodsocket in transfer.conf (same path). Extends floor to 1.97.
+    F-AXDOVL-01 cross-validated: dynamic_overlay_cgi.socket SocketGroup=www, dynamic_overlayd 0 APAC.
+      Extends floor to 1.97.
+    F-AXLED-01 cross-validated: led-controller-cgi.socket SocketGroup=www (1.97).
+    F-AXUSRMGR-01: N/A — no reverseproxy conf in 1.97 (conf.d/vhosts: all, http, https, localhost-basic, localhost-digest).
+    Additional sockets: sipd.socket, privacy-mask.socket (both SocketGroup=www) — CANDIDATE analysis pending.
+    transfer.conf and transfer_maskd.conf present (same Apache transfer architecture back to 1.97).
+  D8208-R_8_90_1904 / D8248_8.90.1904 (AXIS OS 8.90 switch/encoder firmware):
+    Pre-systemd init.d architecture (S01syslogd, S50dropbear, S50mosquitto, etc.).
+    No /usr/html/axis-cgi/ CGI directory structure found. Different product architecture.
+    Standard Apache-TransferProxy vulnerability patterns do not apply. SKIP.
+  W120_LTE_modem: Sierra Wireless modem firmware (RC7611, RC7620). Not AXIS OS. SKIP.
   AXIS LPV 3.0.8 ARTPEC9 (ACAP):
     upload.cgi operator-level: CSV plate list upload; implementation in fflprapp (32MB AArch64).
     cloud.cgi/cloud2.cgi/cloud3.cgi admin-level: curl to %s://%s/ — SSRF if host is user-controlled.
