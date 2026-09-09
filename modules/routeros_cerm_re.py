@@ -105,7 +105,12 @@ ACME error strings (evidence of JSON parse depth):
   "could not request validation - invalid challenge object"
 
 ----- FINDINGS SUMMARY -----
-MTIK-CERM-F01 HIGH   8.1  CRL SSRF — attacker-controlled AIA hostname drives outbound HTTP from router
+MTIK-CERM-F01 REFUTED    CRL SSRF — code path confirmed; no standalone exploitability.
+                           Trigger requires admin credentials to import cert. An admin
+                           already has /tool fetch for arbitrary outbound HTTP requests.
+                           Security delta over existing privileged capability = 0.
+                           Live test (46.100.104.111, RouterOS 7.3.1): no pre-auth trigger
+                           found. Downgraded from HIGH/8.1 → not a finding.
 MTIK-CERM-F02 HIGH   7.5  x509ValidatePath + readCertFromStr — DER chain from network input; parser attack surface
 MTIK-CERM-F03 MEDIUM 6.5  ACME JSON parsing — json::StreamParser processes ACME server JSON; 5 call sites
 MTIK-CERM-F04 MEDIUM 5.3  srand(tv.tv_usec) — 20-bit entropy PRNG seed at startup
@@ -307,9 +312,9 @@ POC_STATUS = {
 FINDINGS = [
     {
         'id':       'MTIK-CERM-F01',
-        'severity': 'HIGH',
-        'cvss':     8.1,
-        'title':    'CRL SSRF — X.509 AIA extension hostname drives outbound HTTP from router',
+        'severity': 'REFUTED',
+        'cvss':     0.0,
+        'title':    'CRL SSRF — code path confirmed; no standalone exploitability (post-auth, zero delta vs /tool fetch)',
         'detail': (
             'cerm fetches Certificate Revocation Lists via nv::Http::newRequest() and '
             'nv::Connection::aconnect(). The CRL distribution point URI is constructed '
@@ -353,11 +358,14 @@ FINDINGS = [
             'Short-term: log all outbound CRL fetch attempts with the certificate issuer.'
         ),
         'status': (
-            'CONFIRMED (code path traced: AIA extract → URI build → HTTP connect). '
-            'PoC tooling complete: ~/mikrotik-re/crl_ssrf_gen.py. '
-            'Live test pending: requires RouterOS 7.x instance. '
-            'Version scope: 7.x only (cerm absent in 6.x — verified on 185.109.248.85 / 6.49.2). '
-            'See POC_STATUS for test procedure.'
+            'REFUTED as standalone finding. Code path is real and fully traced '
+            '(AIA extract → URI build at 0x8055890 → nv::Http::newRequest at 0x8056ecd → '
+            'nv::Connection::aconnect at 0x8056f1e). '
+            'Exploitability requires admin credentials to import the crafted cert. '
+            'Admin already has /tool fetch for arbitrary outbound HTTP — security delta = 0. '
+            'Live test on 46.100.104.111 (RouterOS 7.3.1): no pre-auth trigger path '
+            'in default configuration. Originally rated HIGH/8.1; downgraded to not-a-finding. '
+            'Retain code path documentation for future pre-auth trigger research.'
         ),
         'cve': None,
     },
