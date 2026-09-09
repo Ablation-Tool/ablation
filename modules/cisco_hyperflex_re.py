@@ -517,35 +517,6 @@ FINDINGS = {
                        "cluster connections; validate cluster certificates against a pinned CA.",
     },
 
-    "HX-F23": {
-        "title": "ZooKeeper Uses Cluster UUID as Authentication Token — Same UUID Exposed by Unauthenticated REST Endpoint",
-        "severity": "MEDIUM",
-        "component": "storfs-support/zkClient.py + /rest/v1/cluster (unauthenticated)",
-        "description": (
-            "HyperFlex ZooKeeper authentication uses the cluster UUID as the shared secret. "
-            "zkClient.py presents the UUID to ZooKeeper as auth scheme 'UUID' with the string "
-            "'postEvent;<cluster_uuid>'. The ZooKeeper authentication mechanism is therefore "
-            "only as strong as the confidentiality of the cluster UUID — which is a design flaw. "
-            "The cluster UUID is also the value returned by the unauthenticated HX Connect "
-            "REST endpoint GET /rest/v1/cluster, meaning the ZK auth token is publicly disclosed "
-            "by the management API. Whether ZK auth is enforced depends on the 'useZKAuth' flag "
-            "in /etc/hyperflex/storfs.cfg."
-        ),
-        "code_evidence": {
-            "auth_scheme": "UUID",
-            "auth_string_template": "'postEvent;' + cluster_uuid",
-            "uuid_source_file": "/etc/hyperflex/clusteruuid",
-            "uuid_public_endpoint": "GET /rest/v1/cluster (no auth required)",
-            "zk_connect": "127.0.0.1:2181 (storfs.cfg: zkConnectString or crmZKEnsemble)",
-            "auth_flag": "useZKAuth in /etc/hyperflex/storfs.cfg",
-            "source_file": "/opt/hyperflex/storfs-support/zkClient.py",
-        },
-        "versions_affected": ["6.0.2b-44423 (installer appliance + stCtlVM)"],
-        "remediation": "Replace UUID-based ZK auth with a random per-cluster credential "
-                       "generated at deployment time and stored in a protected location. "
-                       "Do not expose the cluster UUID via any unauthenticated endpoint if it "
-                       "doubles as an authentication credential for other internal services.",
-    },
 
     "HX-F24": {
         "title": "Tunes Credential Encryption AES Key Derived from Static Firmware-Embedded File",
@@ -2159,61 +2130,6 @@ FINDINGS = {
     },
 
     # ── HX-F61 ──────────────────────────────────────────────────────────────────
-    "HX-F64": {
-        "title": "validateStcli Uses Blocklist Instead of Allowlist — Arbitrary stcli Subcommands Permitted",
-        "severity": "MEDIUM",
-        "cvss": "5.3",
-        "cwe": "CWE-184",
-        "component": "hxSecuritySvcMgr-1.0.jar / CommandValidatorUtil.validateStcli",
-        "class": "Incomplete Blocklist",
-        "confirmed": True,
-        "evidence": {
-            "validateStcli_bytecode": (
-                "CommandValidatorUtil.validateStcli(List<String>) at offset 0-81: "
-                "iconst_2 / anewarray / ldc 'cleaner' / aastore / ldc 'rebalance' / aastore / "
-                "Arrays.asList() → blockedList. "
-                "blockedList.contains(args.get(0)) → ifeq 82 (return). "
-                "If args[0] IS in {'cleaner', 'rebalance'}: fall through to athrow (Exception). "
-                "If args[0] is NOT in {'cleaner', 'rebalance'}: return (passes validation). "
-                "Any stcli subcommand except 'cleaner' and 'rebalance' passes."
-            ),
-            "call_path": (
-                "runCommand(cmd='stcli', args=['cluster','reregister']) → "
-                "CommandValidatorUtil.validate('stcli cluster reregister') → "
-                "validateCommand(fullStr) → split on space → cmd='stcli' → "
-                "case 0 in tableswitch → validateStcli(['cluster','reregister']). "
-                "args[0]='cluster' not in {'cleaner','rebalance'} → returns (passes). "
-                "ProcBuilder('stcli', ['cluster','reregister']).run() executes."
-            ),
-            "sensitive_args_redaction": (
-                "containsSensitiveArgs('stcli', ['cluster','reregister']) returns true "
-                "(case 2 in switch, offset 120-175: args.size()>=2 && args[0]=='cluster' "
-                "&& args[1]=='reregister'). This only redacts args from logs. "
-                "The command still executes with all args."
-            ),
-            "stcli_impact": (
-                "stcli is the HyperFlex cluster CLI. Unrestricted subcommands include: "
-                "stcli cluster info, stcli node list, stcli security passwd, "
-                "stcli dp snapshot, stcli dp clone, stcli network set, "
-                "stcli license set — all executable via authenticated Thrift runCommand()."
-            ),
-        },
-        "impact": (
-            "An attacker with a valid X-RootSessionID token can invoke any stcli subcommand "
-            "except 'cleaner' and 'rebalance' through hxSecuritySvcMgr.runCommand(). "
-            "This includes stcli commands that change cluster configuration, network settings, "
-            "credentials, snapshots, and licensing. "
-            "Blocklist design guarantees bypass by any subcommand added after the list was written."
-        ),
-        "versions_affected": ["6.0.2b-44423"],
-        "remediation": (
-            "Replace the blocklist with an explicit allowlist of permitted stcli subcommands. "
-            "Enumerate every stcli subcommand that runCommand() callers legitimately need, "
-            "add each to an allowlist Set, and reject anything not in the set. "
-            "Apply the same allowlist-over-blocklist principle to all other "
-            "CommandValidatorUtil.validateXxx() methods that use no arg validation."
-        ),
-    },
 
     "HX-F65": {
         "title": "Hyper-V Host Credentials Recoverable from World-Readable ZooKeeper Nodes (stSSOMgr)",
@@ -3554,86 +3470,6 @@ FINDINGS = {
             "Use tar --no-overwrite-dir --no-same-permissions and verify entry count matches expected."
         ),
     },
-    "HX-F93": {
-        "title": (
-            "StNodeMgrImpl.sessionToken Initialized via Shell Execution of "
-            "'cat /etc/hyperflex/secure/root_file.pub' — Static Fallback "
-            "'invalid-token' Used When File Is Absent or Unreadable"
-        ),
-        "severity": "MEDIUM",
-        "cvss": "5.3",
-        "cwe": "CWE-287",
-        "component": (
-            "stnodemgr / StNodeMgrImpl / sessionToken lazy val / "
-            "$anonfun$sessionToken$1 / $anonfun$sessionToken$2 — "
-            "inter-service authentication token initialization"
-        ),
-        "class": "Improper Authentication — Predictable Static Fallback Token",
-        "confirmed": True,
-        "evidence": {
-            "sessionToken_init": (
-                "StNodeMgrImpl constructor at offset 169: "
-                "scala.util.Try { $anonfun$sessionToken$1() }.toOption.getOrElse(\"invalid-token\"). "
-                "$anonfun$sessionToken$1: scala.sys.process.stringToProcess("
-                "\"cat /etc/hyperflex/secure/root_file.pub\").!!.trim — "
-                "executes cat via shell and uses stdout as the token. "
-                "$anonfun$sessionToken$2: returns literal String \"invalid-token\" on any exception "
-                "(FileNotFoundException, PermissionDenied, IOException, ProcessException). "
-                "Result stored in private final field sessionToken (field #927) at constructor offset 169."
-            ),
-            "fallback_literal": (
-                "The fallback string \"invalid-token\" is a fixed literal, not randomly generated. "
-                "If /etc/hyperflex/secure/root_file.pub is absent, unreadable, or the cat command "
-                "fails for any reason, all outbound inter-service calls from stNodeMgr carry "
-                "the predictable token \"invalid-token\"."
-            ),
-            "file_semantics": (
-                "The source file is /etc/hyperflex/secure/root_file.pub — .pub extension indicates "
-                "an RSA or EC public key. Using a public key as a shared authentication token "
-                "is a design flaw: the file is intended to be non-secret (public keys are shareable), "
-                "but treating its content as a bearer credential contradicts that expectation. "
-                "Attacker with any filesystem read capability can extract the token value directly."
-            ),
-            "shell_execution": (
-                "Token is obtained via scala.sys.process.stringToProcess(\"cat <path>\").!! — "
-                "single-argument string form which splits on whitespace and executes via "
-                "ProcessBuilder, not via Runtime.exec(String) single-string (shell) form. "
-                "No injection risk in this specific call since the path is hardcoded, "
-                "but the process execution adds startup latency and failure modes not present "
-                "with direct File.readAllBytes()."
-            ),
-            "port_init": (
-                "Companion lazy val port$1: bash -c "
-                "'cat /usr/share/hyperflex/storfs-misc/restintport.cfg | grep PORT' parsed on '=' -> index 1. "
-                "Fallback port$2: '8997'. "
-                "Companion lazy val cip$1: bash -c "
-                "'cat /etc/hyperflex/storfs.cfg | grep clusterIp' parsed on '=' -> index 1. "
-                "Fallback cip$2: 'localhost'. "
-                "All three (cip, port, sessionToken) are used together to make outbound calls "
-                "to the stmgr REST API at <clusterIp>:8997 using sessionToken as auth credential."
-            ),
-        },
-        "impact": (
-            "If /etc/hyperflex/secure/root_file.pub is absent (fresh node, failed deployment, "
-            "or intentional deletion), all stNodeMgr outbound calls to other cluster services "
-            "carry the static token 'invalid-token'. "
-            "A service that validates tokens via string equality rather than cryptographic "
-            "verification would accept this known value from any caller. "
-            "Additionally, the public key file (/etc/hyperflex/secure/root_file.pub) used as "
-            "a shared authentication secret is readable by any process with filesystem access, "
-            "meaning the actual token value (when the file exists) is also obtainable by a "
-            "local attacker without root privileges."
-        ),
-        "versions_affected": ["6.0.2b-44423"],
-        "remediation": (
-            "Replace the file-content bearer token with a proper inter-service authentication "
-            "mechanism (mTLS, signed JWT, or Finagle built-in token validation). "
-            "If file-based tokens must be retained, use a private key or a dedicated secret "
-            "file (not a .pub file) and read it with Java file I/O, not via shell cat. "
-            "Remove the 'invalid-token' fallback — service should fail-fast rather than "
-            "operate with a known-static credential on auth failure."
-        ),
-    },
     "HX-F94": {
         "title": (
             "ServiceAccessAuthFilterImpl.doFilter Always Calls chain.doFilter — "
@@ -4714,57 +4550,6 @@ FINDINGS = {
             "post-upgrade from 5.5.2b."
         ),
     },
-    "HX-F112": {
-        "title": (
-            "5.5.2b iscsisvc Exposes Explicit hx_get_chap_key_path Function — "
-            "CHAP Credential File Path Derivation Refactored but Architecture Preserved in 6.0.2b"
-        ),
-        "severity": "MEDIUM",
-        "cvss": "5.3",
-        "cwe": "CWE-312",
-        "component": (
-            "hx-iscsi_5.5.2b-43453_x86_64.deb / iscsisvc (not stripped); "
-            "function hx_get_chap_key_path at 0x36ed60"
-        ),
-        "evidence": {
-            "552b_function_names": {
-                "hx_get_chap_key_path":     "0x36ed60 — derives filesystem path for CHAP key file",
-                "hx_read_chap_json_str":    "symbol — reads CHAP credential JSON string",
-                "hx_istgt_get_chap_authinfo": "0x36f130 — assembles authinfo from ZK JSON + keystore",
-                "chap_decrypt_init":        "0x36fde0",
-                "chap_decrypt_cleanup":     "0x36ff70",
-                "decrypt_data":             "0x370090",
-                "get_keystore_passwd":      "0x36fb00",
-            },
-            "602b_function_names": {
-                "chap_decrypt_init":    "0x28ba30",
-                "chap_decrypt_cleanup": "symbol",
-                "decrypt_data":         "0x28bcf0",
-                "get_keystore_passwd":  "0x28b7e0",
-            },
-            "architectural_delta": (
-                "5.5.2b names the CHAP path derivation explicitly (hx_get_chap_key_path), "
-                "confirming CHAP credentials stored at a filesystem path per-initiator "
-                "in addition to ZK. "
-                "6.0.2b refactored the CHAP path derivation into the decrypt_data flow, "
-                "removing the explicit function but preserving the same ZK+PKCS12 architecture "
-                "(HX-F11: ZK at /chap/<initiator-iqn>, decrypt via springpath keystore). "
-                "The refactoring obscured but did not fix the vulnerability."
-            ),
-            "zk_path_confirmed_552b": (
-                "String '/chap/%s' present in 5.5.2b iscsisvc — "
-                "ZK path for CHAP credentials identical across versions."
-            ),
-            "identity_map_552b": (
-                "5.5.2b iscsisvc LOAD segments: "
-                "LOAD1 offset=0x0 vaddr=0x0 filesz=0xd74a70 (identity-mapped), "
-                "LOAD2 offset=0xd75380 vaddr=0xf75380. "
-                "Same identity-map pattern as 6.0.2b for direct file-offset→VA translation."
-            ),
-        },
-        "versions_affected": ["5.5.2b-43453 (explicit path fn)", "6.0.2b-44423 (refactored)"],
-        "remediation": "See HX-F11 remediation — CHAP credential decryption architecture unchanged.",
-    },
     "HX-F113": {
         "title": (
             "VC Plugin ThumbprintTrustManager Unconditionally Trusts All TLS Certificates "
@@ -4957,101 +4742,6 @@ FINDINGS = {
             "Do not read the VC URL from ZooKeeper without integrity verification; "
             "store it in a signed config file or protected internal endpoint. "
             "Return PAM_AUTH_ERR (not PAM_SUCCESS) when stMgr is unavailable."
-        ),
-    },
-    "HX-F116": {
-        "title": (
-            "storfs-pam post-install.sh: SSO Chroot Jail Disabled (modifySshdConf Commented Out); "
-            "tomcat8 ACL on pam_tally2 Tallylog Enables Brute-Force Counter Manipulation"
-        ),
-        "severity": "MEDIUM",
-        "cvss": "5.3",
-        "cwe": "CWE-732",
-        "component": (
-            "storfs-pam_5.5.2b-43453_x86_64.deb / "
-            "/usr/share/storfs-pam/post-install.sh"
-        ),
-        "evidence": {
-            "chroot_disabled": (
-                "post-install.sh line 279 (commented out): "
-                "    #modifySshdConf /etc/ssh/sshd_config /usr/share/$name/jail.config "
-                "    # This will overwrite cisco openssl modification, so don't overwrite. "
-                "jail.config appends 'Match group stsso / ChrootDirectory /var/jail/' to sshd_config. "
-                "With modifySshdConf disabled, this Match block is never applied. "
-                "SSO users in the stsso group (vc- users mapped to UID 5000 by libnss_ato) "
-                "can SSH into stCtlVM without chroot confinement and access the full filesystem."
-            ),
-            "tally_log_acl": (
-                "post-install.sh line 255: "
-                "    setfacl -m u:tomcat8:rw /var/log/tallylog. "
-                "The pam_tally2 login failure counter file is writable by the tomcat8 service. "
-                "Tomcat8 runs the HX Connect REST API on port 443. "
-                "A compromised HX Connect process can write to tallylog, zeroing failed-attempt "
-                "counters for any account and bypassing pam_tally2 lockout (deny=10, unlock_time=120). "
-                "Removes brute-force rate-limiting on both SSH and nginx authentication."
-            ),
-            "nss_ato_global": (
-                "modifyNsswitchConf() (line 276) replaces /etc/nsswitch.conf system-wide "
-                "with 'passwd: compat ato'. libnss_ato.so.2 maps ALL unknown usernames to "
-                "stsso (UID 5000, GID 5000), affecting all NSS lookups on the system."
-            ),
-            "jail_proc_mount": (
-                "setupJailDirectory() line 115: mount -o bind /proc $JAIL_ROOT/proc. "
-                "A bind-mounted /proc inside chroot allows traversal to host filesystem "
-                "via /proc/PID/root and /proc/PID/fd for processes running outside the jail. "
-                "/bin/bash is copied into the jail (line 212), providing a shell."
-            ),
-        },
-        "versions_affected": ["5.5.2b-43453 (storfs-pam)"],
-        "remediation": (
-            "Remove setfacl grant for tomcat8 on tallylog. "
-            "Re-enable modifySshdConf after CiscoSSH modification (sequential, not exclusive). "
-            "Mount /proc into jail read-only; remove bash from jail binary set."
-        ),
-    },
-    "HX-F117": {
-        "title": (
-            "storfs-stig commonStigFunctions.py toBool() Uses Python eval() on INI Values — "
-            "Arbitrary Code Execution if stig_parameters.ini Is Modified"
-        ),
-        "severity": "MEDIUM",
-        "cvss": "6.7",
-        "cwe": "CWE-95",
-        "component": (
-            "storfs-stig_5.5.2b-43453_x86_64.deb / "
-            "/opt/springpath/storfs-stig/commonStigFunctions.py"
-        ),
-        "evidence": {
-            "eval_site": (
-                "commonStigFunctions.py line 67: "
-                "    def toBool(val): return eval(val). "
-                "Called via funcMap = {'bool': toBool} when a stig_parameters.ini key has "
-                "type annotation 'bool'. Active example: "
-                "    Config.HostAgent.plugins.solo.enableMob:False~bool. "
-                "Substituting "
-                "    Config.HostAgent.plugins.solo.enableMob:__import__('os').system('id')~bool "
-                "causes os.system() to execute at STIG apply time."
-            ),
-            "execution_context": (
-                "apply_stig_current_node.py is invoked by check_and_enable_stig.py via "
-                "os.system('python3 .../apply_stig_current_node.py esxi'). "
-                "check_and_enable_stig.py queries http://localhost:8000/securityservice/v1/stig "
-                "using useRootSessionId=True. STIG apply runs with root-equivalent privileges "
-                "and pyVmomi vCenter API access. Code injected via eval() executes as root "
-                "with vCenter credentials available in process environment."
-            ),
-            "config_file": (
-                "/opt/springpath/storfs-stig/stig_parameters.ini. "
-                "Permissions not set explicitly by DEB (inherits umask). "
-                "If ZK-based config management or stMgr Ansible writes STIG params via a "
-                "path that intersects this file, the eval() becomes a ZK-write-to-RCE chain."
-            ),
-        },
-        "versions_affected": ["5.5.2b-43453 (storfs-stig)", "versions with STIG feature"],
-        "remediation": (
-            "Replace eval(val) with: return val.strip().lower() in ('true', '1', 'yes'). "
-            "Set stig_parameters.ini to root:root 0640. "
-            "Never use eval() on configuration file values."
         ),
     },
     "HX-F118": {
@@ -5350,54 +5040,6 @@ HX_F122 = {
     },
 }
 
-HX_F123 = {
-    "id": "HX-F123",
-    "title": (
-        "HyperFlex Witness 1.0.135: Initial Admin Password Logged to Container Output "
-        "in Cleartext — Readable by Any IOx/Container Runtime Administrator"
-    ),
-    "severity": "MEDIUM",
-    "cvss": "5.5",
-    "cwe": "CWE-312",
-    "component": "hyperflex-witness binary (hx-witness-docker-x86-1.0.135, hx-witness-iox-x86-1.0.135)",
-    "versions_affected": "1.0.135 (confirmed)",
-    "description": (
-        "The HyperFlex Witness appliance generates a random initial admin password on first "
-        "boot and writes it to container stdout/logs (per the IOx package_config.ini comment: "
-        "'Review the container logs'). The binary embeds the string 'Default Username : admin' "
-        "as a display prompt, and the DefaultPass struct field (json:'defaultpass') tracks "
-        "whether the initial password has been changed. Anyone with access to the IOx App "
-        "container runtime logs (IOS-XE show app-hosting log, IOx Local Manager) can retrieve "
-        "the initial admin password in cleartext. The username is always 'admin' unless "
-        "overridden via WitnessUsername= in package_config.ini."
-    ),
-    "evidence": {
-        "package_config_comment": (
-            "package_config.ini line 15: "
-            "'# If not defined, a strong, randomized password will be generated on startup. "
-            "Review the container logs.'"
-        ),
-        "hardcoded_username": (
-            "Binary string: 'Default Username : admin' — default username is always 'admin'. "
-            "Changeable only via WitnessUsername= in package_config.ini before deployment."
-        ),
-        "default_pass_struct": (
-            "Binary struct field: DefaultPass, json:\"defaultpass\" — tracks first-login state. "
-            "home.html JavaScript reads {{.default}} to force password change on first login "
-            "(client-side enforcement only, see HX-F124)."
-        ),
-        "log_access_paths": (
-            "IOS-XE: 'show app-hosting log appid hx-witness'; "
-            "IOx Local Manager console output; "
-            "Docker: 'docker logs <container-id>'. "
-            "Anyone with read access to these interfaces reads the cleartext password."
-        ),
-        "bcrypt_confirmed": (
-            "golang.org/x/crypto/bcrypt embedded — passwords are bcrypt-hashed at rest. "
-            "The cleartext exposure is at log-write time before hashing, not via DB read."
-        ),
-    },
-}
 
 HX_F125 = {
     "id": "HX-F125",
@@ -5850,55 +5492,6 @@ HX_F130 = {
     ),
 }
 
-HX_F129 = {
-    "id": "HX-F129",
-    "title": (
-        "HyperFlex HXDP 5.x/6.x: Hardcoded Keystore Password 'springpath' in "
-        "hxSecuritySvcMgr syslog TLS Configuration — CWE-259"
-    ),
-    "severity": "MEDIUM",
-    "cvss": "5.3",
-    "cwe": "CWE-259",
-    "component": (
-        "HyperFlex HXDP 5.5.2b (hxSecuritySvcMgr-1.0, embedded application.conf "
-        "syslog section)"
-    ),
-    "versions_affected": "HXDP 5.x, 6.x (confirmed in 5.5.2b extract); earlier versions expected",
-    "description": (
-        "The hxSecuritySvcMgr daemon uses a JKS keystore to hold the TLS client certificate "
-        "and private key for syslog-ng mTLS connections. The keystore password is hardcoded "
-        "as the string 'springpath' in the embedded application.conf (fields keyStorePass, "
-        "javax.net.ssl.keyStorePassword, javax.net.ssl.trustStorePassword). The keystore "
-        "files are written to /tmp at runtime (clientKeyStorePath, serverTrustStorePath) "
-        "and any local user can read the files and extract the TLS private key using the "
-        "known password. This allows spoofing the syslog client identity or conducting "
-        "a MitM on the syslog channel, suppressing or altering audit log delivery."
-    ),
-    "evidence": {
-        "config_path": "hxSecuritySvcMgr-1.0.jar!/application.conf (embedded)",
-        "hardcoded_values": (
-            "syslog {\n"
-            "  keyStorePass = 'springpath'\n"
-            "  clientKeyStorePath = '/tmp/syslogClientKeystore.jks'\n"
-            "  serverTrustStorePath = '/tmp/testTruststore.jks'\n"
-            "  javaKeyStorePasswordProperty = 'javax.net.ssl.keyStorePassword'\n"
-            "  javaTrustStorePasswordProperty = 'javax.net.ssl.trustStorePassword'\n"
-            "}"
-        ),
-        "exploit": (
-            "# Extract client key from runtime keystore:\n"
-            "keytool -list -keystore /tmp/syslogClientKeystore.jks -storepass springpath\n"
-            "keytool -exportcert -keystore /tmp/syslogClientKeystore.jks "
-            "-storepass springpath -alias client_cert -file client.crt\n"
-            "# /tmp readable by any local user (world-readable default on Debian)"
-        ),
-        "scope": (
-            "Impact limited to syslog TLS identity — does not grant cluster management "
-            "access. Audit log integrity loss prevents forensic detection of other findings "
-            "in this chain."
-        ),
-    },
-}
 
 HX_F131 = {
     "id": "HX-F131",
@@ -6995,166 +6588,8 @@ HX_F149 = {
     ),
 }
 
-HX_F150 = {
-    "id": "HX-F150",
-    "title": (
-        "Arbitrator Password Exposed in switchToArbitrator.py Command-Line Argument"
-    ),
-    "severity": "MEDIUM",
-    "cvss_score": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-214",
-    "component": "storfs-stretched",
-    "file": "usr/share/hyperflex/storfs-stretched/switchToArbitrator.py",
-    "lines": "60-62",
-    "description": (
-        "The 'switchToArbitrator.py' script accepts the Intersight or custom "
-        "arbitrator password via the '--arbitrator-password' command-line option "
-        "(line 61: 'p.add_option(\"--arbitrator-password\", dest=\"password\", ...)'). "
-        "When invoked with this flag, the plaintext password is visible in the "
-        "process table to any local user via 'ps aux' or '/proc/<pid>/cmdline' "
-        "for the lifetime of the Python interpreter invocation.\n\n"
-        "The script also accepts a non-interactive path via '--force' combined "
-        "with '--arbitrator-username' and '--arbitrator-password' (lines 353-354: "
-        "'hxsvcclient.switchToAuxZk(aux_ip, site, arb_ip, username, password)'), "
-        "which is the automation/scripting invocation path — the path most likely "
-        "to have the password supplied as a cmdline argument rather than "
-        "interactively via 'getpass'. In the interactive path, the password is "
-        "correctly read via 'getpass()' (lines 392, 409, 417) and not exposed.\n\n"
-        "Same vulnerability class as HX-F143 (factory_deploy.py ESX password) "
-        "and HX-F147 (changepasswd.sh old/new password)."
-    ),
-    "proof": (
-        "# Observe password in process table during non-interactive switchover:\n"
-        "# Terminal 1 — trigger switchover with --force:\n"
-        "# python3 switchToArbitrator.py --force --arbitrator-ip <IP> \\\n"
-        "#   --arbitrator-username admin --arbitrator-password MyS3cret ...\n"
-        "# Terminal 2 — observe before process exits:\n"
-        "ps auxww | grep switchToArbitrator | grep -v grep\n"
-        "# Expected output includes '--arbitrator-password MyS3cret'\n\n"
-        "# Also readable from procfs:\n"
-        "cat /proc/<pid>/cmdline | tr '\\0' ' '"
-    ),
-    "remediation": (
-        "1. Remove '--arbitrator-password' command-line option. For scripted/automated "
-        "   invocations, supply the password via a securely-permissioned environment "
-        "   variable or a credentials file with mode 0600.\n"
-        "2. For interactive use, the 'getpass()' path already handles password "
-        "   input correctly — retain that and remove the CLI option.\n"
-        "3. Apply the same fix class as HX-F143 and HX-F147: never accept "
-        "   secrets as positional or named command-line arguments."
-    ),
-}
 
-HX_F151 = {
-    "id": "HX-F151",
-    "title": (
-        "Global Python SSL Context Monkey-Patched to Unverified in config-ctlvm.py, "
-        "Disabling TLS Certificate Validation for All vSphere SDK Connections"
-    ),
-    "severity": "MEDIUM",
-    "cvss_score": 6.8,
-    "cvss_vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
-    "cwe": "CWE-295",
-    "component": "storfs-appliance",
-    "file": "usr/share/hyperflex/storfs-appliance/config-ctlvm.py",
-    "lines": "533-534",
-    "description": (
-        "The appliance controller VM configuration script (config-ctlvm.py) "
-        "monkey-patches the global Python SSL context in its main() function "
-        "before any connection is established (lines 533-534):\n\n"
-        "'ssl._create_default_https_context = ssl._create_unverified_context'\n\n"
-        "Unlike request-level 'verify=False' flags (HX-F142, HX-F148, HX-F149), "
-        "this technique replaces the default SSL context factory for the entire "
-        "Python process. Every SSL connection subsequently made by ANY library in "
-        "the process — including pyVmomi's 'connect.Connect()' at line 504, "
-        "urllib, httplib, and any vSphere SDK operation — will use an unverified "
-        "context with no server certificate validation.\n\n"
-        "The script connects to the ESX host via pyVmomi: "
-        "'connect.Connect(host=args.host, user=args.user, pwd=args.password)' "
-        "(line 504). With the global SSL context replaced, this vSphere SDK "
-        "connection sends the ESX root password and the resulting vSphere session "
-        "token over TLS without verifying the server's certificate. An "
-        "adjacently-positioned MiTM attacker can present a self-signed certificate "
-        "and capture both the ESX root credentials and the vSphere session, "
-        "gaining full ESX hypervisor access.\n\n"
-        "The script is invoked by storfs-appliance scripts during USB NIC "
-        "configuration and extra-config operations, which run as root."
-    ),
-    "proof": (
-        "# Confirm global SSL monkey-patch:\n"
-        "grep -n 'ssl._create_default_https_context\\|_create_unverified_context' "
-        "/usr/share/hyperflex/storfs-appliance/config-ctlvm.py\n"
-        "# Expected: lines 533-534 in main() before any connection is made\n\n"
-        "# Confirm pyVmomi vSphere connection with no cert validation:\n"
-        "python3 -c \"\n"
-        "import ssl\n"
-        "ssl._create_default_https_context = ssl._create_unverified_context\n"
-        "from pyVim import connect\n"
-        "# connect.Connect() will now bypass cert validation:\n"
-        "si = connect.Connect(host='<esxi_ip>', user='root', pwd='<password>')\n"
-        "print('Connected without cert validation:', si)\""
-    ),
-    "remediation": (
-        "1. Remove lines 533-534 entirely. Python's default SSL context already "
-        "   validates certificates.\n"
-        "2. For self-signed ESX certificates, create a custom SSLContext with "
-        "   'context.verify_mode = ssl.CERT_REQUIRED' and load the ESX server "
-        "   certificate into the trust store: "
-        "'context.load_verify_locations(/etc/hyperflex/secure/esxi_cert.pem)'.\n"
-        "3. Apply the same remediation class as HX-F142, HX-F148, HX-F149: "
-        "   no HyperFlex component should globally or per-connection disable "
-        "   TLS certificate verification."
-    ),
-}
 
-HX_F152 = {
-    "id": "HX-F152",
-    "title": (
-        "ESX Root Password Exposed in config-ctlvm.py Command-Line Argument"
-    ),
-    "severity": "MEDIUM",
-    "cvss_score": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-214",
-    "component": "storfs-appliance",
-    "file": "usr/share/hyperflex/storfs-appliance/config-ctlvm.py",
-    "lines": "427-429",
-    "description": (
-        "The appliance controller VM configuration script (config-ctlvm.py) "
-        "accepts the ESX host root password via the '-p'/'--password' command-line "
-        "option (lines 427-429: 'parser.add_argument(\"-p\", \"--password\", ...)'). "
-        "When the script is invoked with '-p <password>', the plaintext ESX root "
-        "password is visible in the process table to any local user via 'ps aux' "
-        "or '/proc/<pid>/cmdline' for the lifetime of the Python interpreter.\n\n"
-        "The password is used at line 506 to authenticate to the ESX host via "
-        "the pyVmomi SDK: 'connect.Connect(host=args.host, user=args.user, "
-        "pwd=args.password)'. The password is visible in the process table for the "
-        "lifetime of the Python interpreter.\n\n"
-        "Same vulnerability class as HX-F143 (factory_deploy.py), HX-F147 "
-        "(changepasswd.sh), and HX-F150 (switchToArbitrator.py)."
-    ),
-    "proof": (
-        "# Observe ESX password in process table during config-ctlvm.py invocation:\n"
-        "while true; do\n"
-        "  ps auxww | grep config-ctlvm | grep -v grep\n"
-        "done\n"
-        "# Expected output:\n"
-        "# root <pid> ... python3 config-ctlvm.py -e -p RootP@ssw0rd -u root -H <host>\n\n"
-        "# Confirm -p/--password option definition:\n"
-        "grep -n 'password' /usr/share/hyperflex/storfs-appliance/config-ctlvm.py | head -5"
-    ),
-    "remediation": (
-        "1. Remove '-p'/'--password' command-line option. Supply the ESX password "
-        "   via stdin (read -rs ESX_PASS) or a securely-permissioned credentials "
-        "   file (mode 0600).\n"
-        "2. The stored-credentials path (lines 491-492) reads the password from "
-        "   a config file via 'get_host_info()' — this avoids cmdline exposure "
-        "   and is the correct model. Remove the option to override via cmdline "
-        "   and always use the stored-credentials path.\n"
-        "3. Apply the same fix class as HX-F143, HX-F147, HX-F150."
-    ),
-}
 
 HX_F153 = {
     "id": "HX-F153",
@@ -7611,44 +7046,6 @@ HX_F161 = {
     "tags": ["diag-account", "access-control", "barred-users", "upgrade-api", "encryption-api", "cwe-269"],
 }
 
-HX_F162 = {
-    "id": "HX-F162",
-    "title": "Incomplete Servlet Filter Chain in Upgrade/Support/Encryption WARs (Missing KerberosAuth and ServiceAccessAuth)",
-    "severity": "MEDIUM",
-    "cvss": 6.5,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:L/A:N",
-    "cwe": "CWE-284",
-    "component": "upgrade-war, support-war, encryption-war: WEB-INF/web.xml",
-    "description": (
-        "The reference WARs (coreapi, auth) deploy a 7-filter servlet chain: AuditFilter, "
-        "SPPrivilegedAuth, SessionAuth, KerberosAuth, ServiceAccessAuth, SPBasicAuth, SPAuth. "
-        "Three production WARs deviate: upgrade-war and support-war are missing both KerberosAuth "
-        "(KerberosFilterImpl) and ServiceAccessAuth (ServiceAccessAuthFilterImpl), leaving a "
-        "5-filter chain. encryption-war is missing only ServiceAccessAuth, leaving a 6-filter chain. "
-        "ServiceAccessAuth enforces service-to-service authorization checks on top of authentication. "
-        "Its absence from the encryption WAR means authenticated principals (including those "
-        "authenticated via the incomplete barredUsers list per HX-F161) can invoke encryption key "
-        "management endpoints without the service-level authorization gate. Missing KerberosAuth "
-        "in upgrade-war and support-war means Windows/AD users cannot use Kerberos tokens for "
-        "upgrade and support operations, and any Kerberos-specific access controls are absent."
-    ),
-    "evidence": [
-        "coreapi/restapi-war web.xml: 7 filters — AuditFilter, SPPrivilegedAuth, SessionAuth, KerberosAuth, ServiceAccessAuth, SPBasicAuth, SPAuth",
-        "auth-war web.xml: 7 filters (same as coreapi)",
-        "encryption-war web.xml: 6 filters — MISSING ServiceAccessAuth",
-        "upgrade-war web.xml: 5 filters — MISSING KerberosAuth AND ServiceAccessAuth",
-        "support-war web.xml: 5 filters — MISSING KerberosAuth AND ServiceAccessAuth",
-        "Encryption WAR manages key operations; absent ServiceAccessAuth = no service-account gate on key management",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Add KerberosFilterImpl and ServiceAccessAuthFilterImpl to all WARs that handle sensitive "
-        "operations (upgrade, encryption, support). Use the coreapi/auth-war filter chain as the "
-        "reference template. Enforce consistent filter chain policy via a shared parent web.xml "
-        "or shared filter configuration."
-    ),
-    "tags": ["servlet-filter", "kerberos", "service-access-auth", "encryption-api", "upgrade-api", "cwe-284"],
-}
 
 HX_F163 = {
     "id": "HX-F163",
@@ -7962,40 +7359,6 @@ HX_F171 = {
     "tags": ["command-injection", "scp", "shell", "sshpass", "cwe-78", "cwe-214", "cwe-295"],
 }
 
-HX_F172 = {
-    "id": "HX-F172",
-    "title": "AES-ECB Mode Encryption with Cluster UUID as Predictable Key in convertUUIDAndEncryptData.py",
-    "severity": "MEDIUM",
-    "cvss": 5.9,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-327",
-    "component": "storfs-deploy/ansible/library/convertUUIDAndEncryptData.py",
-    "description": (
-        "encryptData() in convertUUIDAndEncryptData.py uses AES in ECB mode. ECB is deterministic "
-        "and mode-unsafe: identical 16-byte plaintext blocks produce identical ciphertext blocks, "
-        "enabling plaintext structure recovery without the key. The encryption key is derived as "
-        "SHA-256(cluster_uuid)[0:16]. The cluster UUID is a semi-public identifier present in "
-        "HX API responses, UI pages, log files, and Exhibitor ZK paths. An attacker who can "
-        "enumerate the cluster UUID (low bar — available unauthenticated via Exhibitor at "
-        "/exhibitor/v1/cluster/status) can recompute the key and decrypt any data encrypted "
-        "with this function. The combination of ECB mode (structural leakage) and a predictable "
-        "key (UUID-derived) renders this encryption scheme cryptographically broken."
-    ),
-    "evidence": [
-        "convertUUIDAndEncryptData.py:34: key = hashlib.sha256(bytes(encryption_key, 'utf-8')).digest()",
-        "convertUUIDAndEncryptData.py:35: final_key = key[0:16]  # truncated SHA-256 of cluster UUID",
-        "convertUUIDAndEncryptData.py:38: cipher = AES.new(final_key, AES.MODE_ECB)  # ECB — no IV",
-        "Key source: cluster_uuid from Ansible params — same UUID available at /exhibitor/v1/cluster/status",
-        "ECB structural leak: two identical 16-byte plaintext blocks -> same ciphertext block",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Replace AES-ECB with AES-GCM (authenticated) or AES-CBC with a random IV. "
-        "Derive the key from a secret value (not the cluster UUID) using PBKDF2 or HKDF with "
-        "adequate iterations and a random salt. Store the salt alongside the ciphertext."
-    ),
-    "tags": ["weak-crypto", "aes-ecb", "predictable-key", "cluster-uuid", "cwe-327", "cwe-321"],
-}
 
 HX_F173 = {
     "id": "HX-F173",
@@ -8090,42 +7453,6 @@ HX_F174 = {
     "tags": ["hardcoded-creds", "keystore", "springpath", "password-reuse", "cwe-321", "cwe-798"],
 }
 
-HX_F175 = {
-    "id": "HX-F175",
-    "title": "Plaintext SSH Password Written to stderr/Queue on Paramiko Connection Failure in uninstall_cluster.py",
-    "severity": "MEDIUM",
-    "cvss": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-312",
-    "component": "storfs-deploy/ansible/uninstall_cluster.py",
-    "description": (
-        "execute_ssh() in uninstall_cluster.py catches paramiko connection exceptions and "
-        "constructs a stderr string that includes the plaintext password: "
-        "`stderr = ('Paramiko ssh connect exception: %s, host %s user: %s password: %s' % "
-        "(e, address, username, password))`. This string is then placed into a queue "
-        "(`q.put([stdout, stderr, -1])`) for downstream consumption and logging. "
-        "Any SSH connection failure (wrong host key due to the AutoAddPolicy MITM vector, "
-        "authentication failure, network error) causes the password to be written to "
-        "the result queue and potentially propagated to log files, syslog, or exception "
-        "handlers that display or store the result. "
-        "Combined with `paramiko.AutoAddPolicy()` at line 64 (MITM accepted silently), "
-        "an attacker intercepting the SSH connection can trigger a connection failure "
-        "and cause the credential to be exposed in the queue/log output."
-    ),
-    "evidence": [
-        "uninstall_cluster.py:64: client.set_missing_host_key_policy(paramiko.AutoAddPolicy())",
-        "uninstall_cluster.py:69: stderr = ('...password: %s' % (e, address, username, password))",
-        "uninstall_cluster.py:71: q.put([stdout, stderr, -1])  # password propagated to caller",
-        "logger.error at line 67-68 also logs exception details (potentially including auth failure text)",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Remove the password field from the exception string entirely — log only "
-        "the exception type and address. Never include credentials in log messages or "
-        "exception strings. Fix the AutoAddPolicy to use a known_hosts or pinned host key."
-    ),
-    "tags": ["cleartext-creds", "logging", "ssh", "paramiko", "cwe-312", "cwe-532", "cwe-295"],
-}
 
 HX_F176 = {
     "id": "HX-F176",
@@ -8222,45 +7549,6 @@ HX_F177 = {
     "tags": ["auth-bypass", "file-read", "tmp", "nginx", "ssh-keys", "cwe-284", "critical"],
 }
 
-HX_F180 = {
-    "id": "HX-F180",
-    "title": "Session Pool Exhaustion DoS — maxTotalSessions=16 Cluster-Wide Cap",
-    "severity": "MEDIUM",
-    "cvss": 5.3,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
-    "cwe": "CWE-400",
-    "component": "auth-war/WEB-INF/classes/application.conf",
-    "description": (
-        "application.conf sets `maxTotalSessions = 16` with `maxSessionsPerUser = 8`. "
-        "The 16-session global cap covers all users across the entire cluster management plane. "
-        "An attacker with credentials for two accounts can open 8 sessions each, exhausting "
-        "the global pool and preventing all other users (including administrators) from "
-        "authenticating. "
-        "Combined with `defaultTokenLifeTime = 1555200000ms` (18 days — HX-F179), "
-        "a session pool hold can persist for 18 days without any forced expiry. "
-        "The `failedLoginLockoutTimeInSec = 120` (2-minute lockout) and "
-        "`maxFailedLogins = 10` parameters also mean an attacker can perform 10 "
-        "authentication attempts per 2 minutes against any account without triggering "
-        "a persistent lockout — effective credential brute-force rate of ~3600 attempts/hour."
-    ),
-    "evidence": [
-        "auth-war/WEB-INF/classes/application.conf:52: maxSessionsPerUser = 8",
-        "auth-war/WEB-INF/classes/application.conf:53: maxTotalSessions = 16",
-        "auth-war/WEB-INF/classes/application.conf:47: defaultTokenLifeTime = 1555200000",
-        "auth-war/WEB-INF/classes/application.conf:51: maxFailedLogins = 10",
-        "auth-war/WEB-INF/classes/application.conf:55: failedLoginLockoutTimeInSec = 120",
-        "2 accounts x 8 sessions = 16 = pool exhausted; all other auths rejected",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Increase `maxTotalSessions` to at least 200 for a realistic multi-administrator cluster. "
-        "Implement idle session reaping that is independent of `defaultIdleTimeout` UI behavior. "
-        "Reduce `maxSessionsPerUser` to 3-4 and enforce it. "
-        "Increase `maxFailedLogins` lockout duration from 120s to 900s (15 min) "
-        "to raise the cost of credential brute-force."
-    ),
-    "tags": ["dos", "session-exhaustion", "brute-force", "cwe-400", "medium"],
-}
 
 HX_F186 = {
     "id": "HX-F186",
@@ -8477,44 +7765,6 @@ HX_F190 = {
     "tags": ["support-bundle", "auth-bypass", "nginx", "data-exfil", "cwe-284", "high"],
 }
 
-HX_F191 = {
-    "id": "HX-F191",
-    "title": "changepasswd.sh Passes Credentials as Process Arguments and Suppresses All passwd Errors",
-    "severity": "MEDIUM",
-    "cvss": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-214",
-    "component": "mgmt/opt/hyperflex/changepasswd.sh",
-    "description": (
-        "changepasswd.sh receives the old password as `$2` and new password as `$3` "
-        "(positional shell arguments). Both values are visible in the process argument list "
-        "for the duration of script execution. A local attacker can read them via `/proc/<pid>/cmdline` "
-        "or `ps auxww` during the execution window. "
-        "A second defect compounds this: the script unconditionally executes `exit 0` after the "
-        "`passwd` heredoc invocation regardless of passwd's return code. "
-        "If `passwd` fails (wrong current password, password complexity violation, "
-        "PAM module rejection), the Scala caller receives a zero exit status and treats "
-        "the password change as successful. The actual password is not changed, but the "
-        "cluster's state machine advances as if it were — creating a silent inconsistency "
-        "where credentials are in an unknown state. "
-        "The script comment explicitly acknowledges this: "
-        "`# Supress passwd return codes here, otherwise scala will complain`."
-    ),
-    "evidence": [
-        "changepasswd.sh line 2-5: user=${1}, old_pass=${2}, pass=${3} — positional args",
-        "changepasswd.sh line 17-18: `# Supress passwd return codes here` followed by `exit 0`",
-        "Old and new passwords are visible via /proc/<pid>/cmdline while the script runs",
-        "A failed passwd invocation returns success to the Scala layer, masking auth inconsistency",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Pass passwords via stdin or a file descriptor rather than positional arguments. "
-        "Remove the unconditional `exit 0` and propagate `passwd`'s actual return code: "
-        "capture the return code with `RESULT=$?` and `exit $RESULT`. "
-        "The Scala caller must be updated to handle non-zero exit codes from password changes."
-    ),
-    "tags": ["credentials-in-args", "process-exposure", "cwe-214", "cwe-390", "medium"],
-}
 
 HX_F193 = {
     "id": "HX-F193",
@@ -9158,223 +8408,9 @@ HX_F207 = {
     "tags": ["ssh", "host-key", "mitm", "ansible", "sshpass", "cwe-295", "high"],
 }
 
-HX_F209 = {
-    "id": "HX-F209",
-    "title": "ZooKeeper Authentication Disabled by Default Exposes SSL Private Key",
-    "severity": "MEDIUM",
-    "cvss": 6.7,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N",
-    "cwe": "CWE-284",
-    "component": (
-        "upgrade-hooks/.../0008_cleanup_historical_job_ESX.py, "
-        "stcli-egg/stCli/postEvent.py, "
-        "storfs-mgmt/hxSvcMgr-1.0/conf/application.conf"
-    ),
-    "description": (
-        "ZooKeeper authentication is disabled by default across the HyperFlex "
-        "cluster. The `useZKAuth` flag is read from `/etc/springpath/storfs.cfg` "
-        "or `/etc/hyperflex/storfs.cfg` and defaults to `False` when the key is "
-        "absent (0008_cleanup_historical_job_ESX.py line 128: "
-        "`useZKAuth = False`; postEvent.py line 194: `useZKAuth = False`). "
-        "With ZK auth disabled, no ACLs are enforced on ZooKeeper znodes. "
-        "The SSL private key is stored in ZooKeeper at the path configured in "
-        "hxSvcMgr-1.0/conf/application.conf line 131: "
-        "`sslKeyZKPath = '/storvisor/ssl/key'`. "
-        "Any process that can reach ZooKeeper on port 2181 — bound to "
-        "`127.0.0.1:2181` but accessible to all local processes on the "
-        "controller VM — can read the private key without credentials. "
-        "The TLS certificate is at `/storvisor/ssl/certificate` (line 130). "
-        "An attacker with local access to the controller VM can extract the "
-        "cluster TLS private key directly from ZooKeeper, enabling impersonation "
-        "of the HyperFlex management interface."
-    ),
-    "evidence": [
-        "0008_cleanup_historical_job_ESX.py line 128: useZKAuth = False (default before storfs.cfg read)",
-        "postEvent.py line 194: useZKAuth = False (same default in second codebase)",
-        "hxSvcMgr-1.0/conf/application.conf line 131: sslKeyZKPath = '/storvisor/ssl/key'",
-        "hxSvcMgr-1.0/conf/application.conf line 130: sslCertZKPath = '/storvisor/ssl/certificate'",
-        "0008_cleanup_historical_job_ESX.py line 108: KazooClient(hosts=zk_connection_str) — no auth passed when useZKAuth=False",
-        "ZooKeeper binds on 127.0.0.1:2181 — accessible to all controller VM processes",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Set `useZKAuth=True` in storfs.cfg as the default configuration at "
-        "provisioning time, not as an optional post-upgrade step. "
-        "Apply ZooKeeper ACLs on sensitive znodes (including `/storvisor/ssl/key` "
-        "and `/storvisor/ssl/certificate`) so they are only readable by the "
-        "specific service accounts that require them. "
-        "Consider storing the cluster TLS private key in a dedicated secrets "
-        "manager (Vault, KMIP) rather than ZooKeeper, which is a distributed "
-        "coordination service not designed for secrets storage."
-    ),
-    "tags": ["zookeeper", "tls-key", "default-config", "cwe-284", "medium"],
-}
 
-HX_F210 = {
-    "id": "HX-F210",
-    "title": "ZooKeeper Authentication Token Derived from World-Readable Cluster UUID File",
-    "severity": "MEDIUM",
-    "cvss": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-287",
-    "component": (
-        "upgrade-hooks/.../0008_cleanup_historical_job_ESX.py, "
-        "stcli-egg/stCli/postEvent.py"
-    ),
-    "description": (
-        "When ZooKeeper authentication is enabled (`useZKAuth=True`), the "
-        "authentication token is constructed as the cluster UUID read from a "
-        "plaintext file, providing no meaningful access control. "
-        "0008_cleanup_historical_job_ESX.py lines 111-115: "
-        "`auth = self.getZkAuthToken()` reads from `/etc/springpath/clusteruuid`; "
-        "`auth_data = 'zkjobdelete;' + auth`; "
-        "`self.zkClient.add_auth('UUID', auth_data)`. "
-        "postEvent.py lines 176-180: identical pattern reading from "
-        "`/etc/hyperflex/clusteruuid`. "
-        "The `getZkAuthToken()` method (0008_cleanup_historical_job_ESX.py "
-        "line 146) opens the clusteruuid file directly with no permission check "
-        "beyond the OS filesystem ACL. "
-        "The cluster UUID is not a secret: it is the same value stored in "
-        "`/etc/hyperflex/stMgr.cfg` (cluster.stmgrCfg), distributed across all "
-        "cluster nodes, and referenced in multiple configuration files. "
-        "Any local user who can read `/etc/springpath/clusteruuid` can construct "
-        "the full ZK auth token `'zkjobdelete;' + uuid` and authenticate to "
-        "ZooKeeper with the same privileges as privileged cluster services, "
-        "defeating the purpose of enabling ZK auth."
-    ),
-    "evidence": [
-        "0008_cleanup_historical_job_ESX.py line 113: auth_data = 'zkjobdelete;' + auth",
-        "0008_cleanup_historical_job_ESX.py line 115: self.zkClient.add_auth('UUID', auth_data)",
-        "0008_cleanup_historical_job_ESX.py line 151-153: reads /etc/springpath/clusteruuid as auth token source",
-        "postEvent.py line 180: self.zkClient.add_auth('UUID', auth_data) — same pattern",
-        "postEvent.py line 219-221: reads /etc/hyperflex/clusteruuid",
-        "hxSvcMgr-1.0/conf/application.conf line 100: clusterUuidFile = '/etc/hyperflex/clusteruuid' (referenced cluster-wide)",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Replace the cluster UUID as the ZK authentication secret with a "
-        "cryptographically random credential generated at cluster provisioning "
-        "time and stored with appropriate filesystem permissions (mode 0600, "
-        "owned by the service account). "
-        "The auth file should not be the same UUID used for cluster identity "
-        "and distributed in cluster configuration. "
-        "Use ZooKeeper's built-in `digest` authentication scheme with a "
-        "service-specific username and hashed password rather than a custom "
-        "'UUID' scheme with a predictable token."
-    ),
-    "tags": ["zookeeper", "authentication", "cluster-uuid", "cwe-287", "medium"],
-}
 
-HX_F211 = {
-    "id": "HX-F211",
-    "title": "SSO Session ID and Authorization Header Logged in Plaintext to Debug Log",
-    "severity": "MEDIUM",
-    "cvss": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": "CWE-532",
-    "component": (
-        "stcli-egg/stCli/StTransportBase.py, "
-        "storfs-misc/setup_kerberos.py, "
-        "storfs-misc/livemigration.py"
-    ),
-    "description": (
-        "The stcli transport base class logs both the SSO session ID and the "
-        "Authorization HTTP header value in plaintext at DEBUG level before "
-        "including them in outbound Thrift API requests. "
-        "StTransportBase.py line 111: "
-        "`logging.debug('Setting X-SSOSessionID: %s', sso_session_id)` — "
-        "SSO session token written to the rotating debug log. "
-        "StTransportBase.py line 114: "
-        "`logging.debug('Setting Authorization header: %s', authorization_header)` — "
-        "Authorization header value (bearer token, basic auth, or session token "
-        "passed via environment variable `Authorization`) written to debug log. "
-        "The same pattern is replicated verbatim in setup_kerberos.py lines 128/131 "
-        "and livemigration.py lines matching the same call sites. "
-        "The debug logger is configured with a RotatingFileHandler at DEBUG level "
-        "(StTransportBase.py lines 61-67), writing to paths including "
-        "`/var/log/hyperflex/pollds.log` (dsStats.py) and service-specific logs. "
-        "A local attacker with read access to the log files can extract valid "
-        "session tokens for replay against the HyperFlex management API without "
-        "re-authenticating."
-    ),
-    "evidence": [
-        "StTransportBase.py line 111: logging.debug('Setting X-SSOSessionID: %s', sso_session_id)",
-        "StTransportBase.py line 114: logging.debug('Setting Authorization header: %s', authorization_header)",
-        "StTransportBase.py lines 61-67: RotatingFileHandler configured at DEBUG level",
-        "setup_kerberos.py line 128: logger.debug('Setting X-SSOSessionID: %s', sso_session_id)",
-        "setup_kerberos.py line 131: logger.debug('Setting Authorization header: %s', authorization_header)",
-        "StMgrTransport.py line 26: self.scheme = 'https' (stMgr uses TLS)",
-        "setup_kerberos.py line 114: url = '%s://%s:%s' % ('http', ...) — HxHyperVSvcMgr transport cleartext HTTP",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Remove the credential values from debug log statements in "
-        "`StTransportBase.py`, `setup_kerberos.py`, and `livemigration.py`. "
-        "Replace with opaque indicators: `logging.debug('X-SSOSessionID set')` "
-        "and `logging.debug('Authorization header set')`. "
-        "Audit all logging calls that include HTTP header values and session tokens "
-        "for credential leakage. "
-        "For the HxHyperVSvcMgr connection in setup_kerberos.py (port 9340), "
-        "migrate from plain HTTP to HTTPS to prevent localhost interception "
-        "by malicious processes on the controller VM."
-    ),
-    "tags": ["credential-leak", "logging", "session-token", "cwe-532", "medium"],
-}
 
-HX_F212 = {
-    "id": "HX-F212",
-    "title": "OS Command Injection via Unescaped vCenter Password in Shell Command",
-    "severity": "MEDIUM",
-    "cvss": 6.3,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:N",
-    "cwe": "CWE-78",
-    "component": "storfs-misc/hx-scripts/reRegisterClusterToVC.py",
-    "description": (
-        "The cluster re-registration script constructs a shell command by "
-        "directly embedding the user-supplied vCenter password into a format "
-        "string, then executes it with `shell=True`, enabling OS command injection "
-        "via shell metacharacters in the password field. "
-        "reRegisterClusterToVC.py line 39-44: "
-        "`cmdStr = 'priv stcli cluster reregister ... "
-        "--vcenter-password \\'{}\\''.format(..., vCenterUserPass)`. "
-        "Line 54: `proc = Popen(cmd, shell=True, stderr=PIPE, stdout=PIPE)`. "
-        "The password is collected via `getpass.getpass()` at line 98 with no "
-        "input sanitization. "
-        "Single-quote wrapping (`--vcenter-password '{}' `) does not prevent "
-        "injection if the password contains a single quote character — the shell "
-        "would terminate the quoted string early and interpret subsequent characters "
-        "as shell commands. "
-        "Dollar-sign characters in the password (`$VARIABLE`) cause shell variable "
-        "expansion, potentially disclosing environment variables or altering the "
-        "command. "
-        "An operator whose vCenter account password contains shell metacharacters "
-        "(single quote, backslash, dollar sign) would trigger command execution "
-        "outside the intended `priv stcli` invocation, running with the privileges "
-        "of the controller VM management process (typically root)."
-    ),
-    "evidence": [
-        "reRegisterClusterToVC.py line 39-44: cmdStr = 'priv stcli cluster reregister ... --vcenter-password \\'{}\\''.format(..., vCenterUserPass)",
-        "reRegisterClusterToVC.py line 54: proc = Popen(cmd, shell=True, stderr=PIPE, stdout=PIPE)",
-        "reRegisterClusterToVC.py line 98: vc_pass = getpass.getpass('Enter vCenter Password: ') — no sanitization",
-        "Shell injection vector: password \"p'ass\" causes: --vcenter-password 'p'ass'",
-        "Shell injection vector: password \"p$HOME\" causes $HOME expansion in shell context",
-    ],
-    "affected_versions": ["HXDP 6.0.2b"],
-    "remediation": (
-        "Replace `shell=True` with `shell=False` and pass the command as a list: "
-        "`cmd_list = ['priv', 'stcli', 'cluster', 'reregister', "
-        "'--vcenter-datacenter', vCenterDC, '--vcenter-cluster', vCenterCluster, "
-        "'--vcenter-url', vCenterUrl, '--vcenter-user', vCenterUser, "
-        "'--vcenter-password', vCenterUserPass]`; "
-        "`proc = Popen(cmd_list, stderr=PIPE, stdout=PIPE)`. "
-        "With `shell=False`, the password is passed directly to the process "
-        "argument vector without shell interpretation, preventing injection "
-        "regardless of password content. "
-        "This also prevents password exposure in `/proc/<pid>/cmdline` since "
-        "the process table shows separate argv elements rather than a shell string."
-    ),
-    "tags": ["command-injection", "shell", "vcenter", "cwe-78", "medium"],
-}
 
 HX_F213 = {
     "id": "HX-F213",
@@ -9536,144 +8572,7 @@ HX_F214 = {
     "tags": ["upgrade", "credentials", "private-key", "tmp", "esxi", "cwe-312", "cwe-732", "high"],
 }
 
-HX_F215 = {
-    "id": "HX-F215",
-    "title": "Shell Injection via Unsanitized Password in Curl Command (SwaggerClient._get_auth_token)",
-    "severity": "MEDIUM",
-    "cvss_score": 5.7,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:H/PR:H/UI:N/S:U/C:H/I:H/A:N",
-    "cwe": ["CWE-78"],
-    "component": "restClientModule/swagger_api_client.py",
-    "firmware_version": "HXDP 6.0.2b",
-    "description": (
-        "`SwaggerClient._get_auth_token()` constructs a curl command string by concatenating "
-        "`json.dumps(body)` into a single-quoted shell argument and executes it with `shell=True`. "
-        "The `body` dict contains the `username` and `password` fields. A single-quote character "
-        "(`'`) in either value terminates the shell single-quote boundary, allowing the remainder "
-        "of the value to be interpreted as unquoted shell content. "
-        "Proof of injection: password value `'; id; echo '` produces the shell command "
-        "`curl -d '{\"password\": \"'; id; echo '\"}' ...` in which `; id;` executes as a separate "
-        "shell command in the context of the upgrade orchestration process. "
-        "The function is reached via `auth_type='token'` in the `SwaggerClient` constructor, "
-        "which is the path used when programmatic authentication to the HX REST API is required "
-        "during upgrade operations."
-    ),
-    "evidence": [
-        {
-            "file": "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py",
-            "lines": "204-220",
-            "snippet": (
-                "def _get_auth_token(self, body):\n"
-                "    # TODO: use swagger for aaa\n"
-                "    curl_cmd = \"curl -H \\\"Content-Type: application/json\\\" -X POST\" +\\\n"
-                "               \" -d '\" + json.dumps(body, ensure_ascii=False) + \"'\" +\\\n"
-                "               ' ' + \"https://\" + self.server + \"/aaa/v1/auth?\" +\\\n"
-                "               \"grant_type=password -k\"\n"
-                "    auth_response = subprocess.Popen(curl_cmd,\n"
-                "                                     stdout=subprocess.PIPE,\n"
-                "                                     stderr=subprocess.PIPE,\n"
-                "                                     shell=True).communicate()[0]"
-            ),
-            "note": "Single-quote delimiter around json.dumps(body) is broken by any ' in password or username",
-        },
-        {
-            "file": "mgmt/opt/hyperflex/restClientModule/swagger_api_client.py",
-            "lines": "68-72",
-            "snippet": (
-                "elif auth_type == 'token':\n"
-                "    if username not in body:\n"
-                "        body['username'] = username\n"
-                "    if password not in body:\n"
-                "        body['password'] = password\n"
-                "    auth_resp = self._get_auth_token(body=body)"
-            ),
-            "note": "Username and password flow into body dict passed to _get_auth_token",
-        },
-    ],
-    "impact": (
-        "An operator or process that sets a cluster credential containing a single-quote character "
-        "triggers command execution in the upgrade orchestration process context. "
-        "The upgrade orchestration process runs with elevated privileges; injected commands "
-        "inherit those privileges. The `-k` flag already present in the curl command confirms "
-        "TLS verification is also disabled for this authentication call."
-    ),
-    "remediation": (
-        "Replace the `shell=True` curl subprocess with a native Python HTTP request using "
-        "`urllib.request` or `http.client`. The `_get_auth_token` method already has a TODO "
-        "comment indicating the intent to replace this with a swagger call — implement it. "
-        "If the curl invocation must be kept, use `shlex.quote()` on each interpolated value "
-        "and pass the command as a list with `shell=False`."
-    ),
-    "tags": ["shell-injection", "curl", "shell=True", "upgrade", "cwe-78", "medium"],
-}
 
-HX_F216 = {
-    "id": "HX-F216",
-    "title": "ESXi Credentials Exposed as Plaintext ovftool Command-Line Arguments During Factory Deploy",
-    "severity": "MEDIUM",
-    "cvss_score": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": ["CWE-214"],
-    "component": "storfs-factory/ansible/library/deployOva.py",
-    "firmware_version": "HXDP 6.0.2b",
-    "description": (
-        "During factory deployment, `deployOva.py` constructs an ovftool command that embeds "
-        "the ESXi username and URL-encoded password directly in a `vi://` URL passed as a "
-        "command-line argument: "
-        "`/usr/bin/ovftool ... vi://<user>:<esxEncodedPassword>@<hostname>`. "
-        "The credential string is visible to any local user via `ps aux` or `/proc/<pid>/cmdline` "
-        "for the duration of the ovftool process (OVA deployments can take several minutes). "
-        "The `log.info()` call that follows records the full stdout/stderr of the ovftool run; "
-        "if ovftool echoes the source URL in its output (e.g., on connection failure), "
-        "the credentials are also written to the log file at INFO level. "
-        "Additionally, `--noSSLVerify` is passed to ovftool, disabling TLS certificate "
-        "validation for the vSphere connection during controller VM deployment."
-    ),
-    "evidence": [
-        {
-            "file": "storfs-factory/ansible/library/deployOva.py",
-            "lines": "71-81",
-            "snippet": (
-                "cmd = \"/usr/bin/ovftool --allowExtraConfig --acceptAllEulas "
-                "--disableVerification --noSSLVerify --datastore='\" + datastore +\n"
-                "   \"' --network=\\\"\" + network + \"\\\" --name=\" + name + \" \" + ovalocation + \" vi:\\/\\/ \" +  esxUserName +\n"
-                "  \":\" + esxEncodedPassword + \"@\" + hostname\n"
-                "log.info(\"Deploying controller VM using ovftool for \" + modelNumber)\n"
-                "cmd = subprocess.Popen(shlex.split(cmd), shell=False, ...)\n"
-                "out, err = cmd.communicate()\n"
-                "log.info(\"Deploying controller VM using ovftool. Return code: {0} output: {1} err: {2}\"\n"
-                "         .format(str(cmd.returncode), str(out), str(err)))"
-            ),
-            "note": "vi:// URL with esxEncodedPassword in positional args; noSSLVerify also present",
-        },
-        {
-            "file": "storfs-factory/ansible/library/deployOva.py",
-            "lines": "40-42",
-            "snippet": (
-                "esxPassword = (base64.b64decode(module.params['esxPassword']).strip())\n"
-                "try:\n"
-                "    esxPassword = esxPassword.decode('utf-8')"
-            ),
-            "note": "Password is base64-decoded at runtime; the decoded plaintext is what appears in the process args",
-        },
-    ],
-    "impact": (
-        "Any local user on the factory provisioning host can read ESXi root credentials from "
-        "`/proc/<ovftool_pid>/cmdline` or `ps aux` during OVA deployment. "
-        "ESXi root credentials grant full hypervisor access, enabling VM inspection, disk "
-        "access, and potential lateral movement to all VMs on the host. "
-        "The `--noSSLVerify` flag compounds the risk by allowing a network attacker to "
-        "MITM the vSphere connection during initial controller VM deployment."
-    ),
-    "remediation": (
-        "1. Pass ESXi credentials to ovftool via an options file (`--optionFile`) or "
-        "environment variables rather than command-line arguments. "
-        "2. Remove `--noSSLVerify` and configure a trusted CA for factory provisioning. "
-        "3. Do not log raw stdout/stderr of processes that may contain credential material; "
-        "log only return code and sanitized status."
-    ),
-    "tags": ["factory", "credentials", "process-args", "esxi", "noSSLVerify", "cwe-214", "medium"],
-}
 
 HX_F217 = {
     "id": "HX-F217",
@@ -10072,122 +8971,29 @@ HX_F221 = {
     "tags": ["ssh", "host-key", "ansible", "mitm", "cwe-297", "high"],
 }
 
-HX_F223 = {
-    "id": "HX-F223",
-    "title": "ESXi Password Exposed in Ansible Verbose Log via Hardcoded -vvvv Flag",
-    "severity": "MEDIUM",
-    "cvss_score": 5.5,
-    "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": ["CWE-532", "CWE-214"],
-    "component": (
-        "storfs-factory/ansible/factory_deploy.py"
-    ),
-    "firmware_version": "HXDP 6.0.2b",
-    "description": (
-        "factory_deploy.py passes the base64-encoded ESXi password as an Ansible "
-        "`--extra-vars` argument with a hardcoded `-vvvv` verbosity flag. "
-        "Ansible's `-vvvv` level logs `--extra-vars` values to stdout and to any "
-        "configured log file, permanently recording `esxPassword=<base64>` in "
-        "plain text. Base64 is not encryption and is trivially reversed. "
-        "Line 87: `\"esxPassword=%s\" % (password)` constructs the extra-vars string. "
-        "Line 90: `-vvvv` is a hardcoded literal argument — verbosity cannot be "
-        "reduced at runtime. "
-        "The script masks the password at line 49 before logging its own parameters "
-        "(line 50), but the Ansible invocation at line 81 passes the unmasked "
-        "base64 value directly: `os.execlpe(\"./factory_deploy.yml\", ..., "
-        "\"--extra-vars\", \"esxPassword=%s\" % (password), ..., \"-vvvv\", ...)`."
-    ),
-    "evidence": [
-        {
-            "file": "factory/opt/hyperflex/storfs-factory/ansible/factory_deploy.py",
-            "lines": "79-91",
-            "snippet": (
-                "def factory_deploy_node(ip, user, password, config_ssd):\n"
-                "    set_env()\n"
-                "    os.execlpe(\"./factory_deploy.yml\", \"factory_deploy.yml\",\n"
-                "                \"--extra-vars\",\n"
-                "                \"esxIp=%s\" % (ip),\n"
-                "                \"--extra-vars\",\n"
-                "                \"esxUserName=%s\" % (user),\n"
-                "                \"--extra-vars\",\n"
-                "                \"esxPassword=%s\" % (password),\n"
-                "                \"--extra-vars\",\n"
-                "                \"configSSD=%s\" % (config_ssd),\n"
-                "                \"-vvvv\",\n"
-                "                os.environ)"
-            ),
-            "note": (
-                "password is base64-encoded ESXi credential; -vvvv is hardcoded "
-                "and cannot be disabled; os.execlpe also exposes the value in "
-                "/proc/<pid>/cmdline during process lifetime"
-            ),
-        },
-        {
-            "file": "factory/opt/hyperflex/storfs-factory/ansible/factory_deploy.py",
-            "lines": "46-51",
-            "snippet": (
-                "save = base64.b64encode(bytes(opts.esxPassword,'utf-8')).decode('utf-8')\n"
-                "opts.esxPassword = \"XXXXXXXX\"\n"
-                "logging.info(\"Using Parameters %s\", opts)\n"
-                "opts.esxPassword = save"
-            ),
-            "note": (
-                "Masking at line 49-50 only protects the local logging.info call; "
-                "password is restored to base64 at line 51 and passed unmasked "
-                "to Ansible invocation"
-            ),
-        },
-    ],
-    "impact": (
-        "Any user with read access to the Ansible log file, or the ability to run "
-        "`ps aux`/read `/proc/<pid>/cmdline` during factory deployment, obtains the "
-        "base64-encoded ESXi root password. Decoding is one `base64 -d` command. "
-        "The credential grants root access to the target ESXi host. "
-        "Ansible's -vvvv log output persists after the process exits."
-    ),
-    "remediation": (
-        "1. Remove the hardcoded `-vvvv` flag; use `-v` or no verbosity flag in "
-        "production deployments. "
-        "2. Pass credentials via Ansible Vault or environment variables rather than "
-        "`--extra-vars` to prevent log exposure. "
-        "3. If `--extra-vars` must be used, set `no_log: true` on the receiving task "
-        "in the playbook to suppress credential values from Ansible's verbose output."
-    ),
-    "tags": ["credentials", "ansible", "verbose-logging", "cwe-532", "cwe-214", "medium"],
-}
 
 for _f in [
-    HX_F120, HX_F121, HX_F122, HX_F123, HX_F124, HX_F125, HX_F126,
-    HX_F127, HX_F128, HX_F129, HX_F130, HX_F131, HX_F132, HX_F133, HX_F134,
-    HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
-    HX_F143, HX_F144, HX_F145, HX_F146, HX_F147, HX_F148, HX_F149, HX_F150,
-    HX_F151, HX_F152, HX_F153, HX_F154, HX_F155, HX_F156,
-    HX_F157, HX_F158, HX_F159, HX_F160, HX_F161, HX_F162,
+    HX_F120, HX_F121, HX_F122, HX_F125, HX_F126,
+    HX_F127, HX_F128, HX_F130, HX_F131, HX_F132, HX_F133,     HX_F135, HX_F136, HX_F137, HX_F138, HX_F139, HX_F140, HX_F141, HX_F142,
+    HX_F148, HX_F149,
+    HX_F153, HX_F154, HX_F155, HX_F156,
+    HX_F157, HX_F158, HX_F159, HX_F161,
     HX_F163, HX_F164, HX_F165, HX_F166,
-    HX_F167, HX_F168, HX_F169, HX_F170,
-    HX_F171, HX_F172, HX_F173, HX_F174,
-    HX_F175, HX_F176,
-    HX_F177, HX_F178, HX_F179,
-    HX_F180, HX_F181, HX_F182,
-    HX_F183, HX_F184,
-    HX_F185, HX_F186, HX_F187,
+    HX_F167, HX_F168, HX_F170,
+    HX_F171, HX_F173, HX_F174,
+    HX_F176,
+    HX_F177,     HX_F186, HX_F187,
     HX_F188, HX_F189, HX_F190,
-    HX_F191, HX_F192, HX_F193, HX_F194,
-    HX_F195, HX_F196,
-    HX_F197, HX_F198,
-    HX_F199, HX_F200, HX_F201,
+    HX_F193, HX_F194,
+    HX_F195,     HX_F197, HX_F198,
+    HX_F200, HX_F201,
     HX_F202, HX_F203, HX_F204,
     HX_F205, HX_F206, HX_F207,
-    HX_F208, HX_F209, HX_F210,
-    HX_F211, HX_F212, HX_F213,
+    HX_F213,
     HX_F214,
-    HX_F215, HX_F216,
     HX_F217, HX_F218,
     HX_F219, HX_F220,
-    HX_F221, HX_F222,
-    HX_F223,
-    HX_F225, HX_F226,
-]:
+    HX_F221, ]:
     FINDINGS[_f["id"]] = _f
 
 HX_F227 = {
@@ -10313,96 +9119,6 @@ HX_F227 = {
     ],
 }
 
-HX_F228 = {
-    "id": "HX-F228",
-    "title": "Diagnostic Account Not Barred from Upgrade, Support, and Encryption REST APIs",
-    "severity": "MEDIUM",
-    "cvss_score": 6.5,
-    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
-    "cwe": ["CWE-284", "CWE-732"],
-    "component": (
-        "upgrade-war/WEB-INF/classes/application.conf, "
-        "support-war/WEB-INF/classes/application.conf (implicit), "
-        "encryption-war/WEB-INF/classes/resources/application.conf"
-    ),
-    "firmware_version": "HXDP 6.0.2b",
-    "description": (
-        "The `barredUsers` configuration list, consumed by `SSOBasicAuthImpl` and "
-        "`SSOAuthFilterImpl` to block specific accounts from API authentication, is "
-        "inconsistent across the HyperFlex management WAR deployments. "
-        "The `auth-war` and `coreapi-war` both specify "
-        "`barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]`, "
-        "explicitly preventing the diagnostic service account from authenticating "
-        "to the AAA and cluster lifecycle management APIs. "
-        "The `upgrade-war`, `support-war`, and `encryption-war` all specify only "
-        "`barredUsers = [\"root\", \"local/root\"]`, omitting `\"diag\"` and "
-        "`\"local/diag\"`. "
-        "As a result, the `diag` account — which has local OS privileges and a "
-        "known credential surface (see HX-F218) — can authenticate via HTTP Basic "
-        "Auth or SSO token to: "
-        "(1) cluster upgrade endpoints (`POST /v1/cluster/upgrade/*`, "
-        "`POST /v1/cluster/upgradeValidateUcsmCreds`); "
-        "(2) support bundle generation (`POST /supportBundle`); and "
-        "(3) SED/KMIP encryption management endpoints "
-        "(`POST /v1/encryption/certificates/upload`, "
-        "`GET /v1/encryption/localKey`, "
-        "`POST /v1/encryption/ucsmReadonlyUser/*`). "
-        "The `auth-war` barring of `diag` demonstrates the design intent: "
-        "the diagnostic account must not be permitted to use management APIs. "
-        "The omission in three other WARs is an incomplete enforcement of that policy."
-    ),
-    "evidence": [
-        {
-            "file": "auth-war/WEB-INF/classes/application.conf (and coreapi-war)",
-            "lines": "42",
-            "snippet": (
-                'barredUsers = ["root", "local/root", "diag", "local/diag"]'
-            ),
-            "note": "Correct: auth-war and coreapi-war bar the diag account",
-        },
-        {
-            "file": "upgrade-war/WEB-INF/classes/application.conf",
-            "lines": "44",
-            "snippet": (
-                'barredUsers = ["root", "local/root"]'
-            ),
-            "note": "Missing diag and local/diag — allows diag auth to cluster upgrade APIs",
-        },
-        {
-            "file": "encryption-war/WEB-INF/classes/resources/application.conf",
-            "lines": "44",
-            "snippet": (
-                'barredUsers = ["root", "local/root"]'
-            ),
-            "note": "Missing diag and local/diag — allows diag auth to encryption key APIs",
-        },
-    ],
-    "impact": (
-        "An actor in possession of the `diag` account credential can authenticate "
-        "to the cluster upgrade API (triggering or aborting a cluster-wide upgrade), "
-        "the support bundle API (invoking arbitrary command execution on all nodes "
-        "via HX-F227), and the encryption API (reading or modifying SED/KMIP "
-        "configuration). The upgrade and encryption APIs have cluster-wide blast "
-        "radius. The configuration inconsistency also means the `diag` account "
-        "can acquire a valid HyperFlex SSO session token for these three WARs, "
-        "enabling API-based post-authentication actions that the platform's design "
-        "explicitly intended to prevent."
-    ),
-    "remediation": (
-        "Add `\"diag\"` and `\"local/diag\"` to the `barredUsers` list in "
-        "`upgrade-war/WEB-INF/classes/application.conf`, "
-        "`support-war/WEB-INF/classes/application.conf`, and "
-        "`encryption-war/WEB-INF/classes/resources/application.conf` to match "
-        "the policy enforced in `auth-war` and `coreapi-war`. "
-        "Consider centralizing the `barredUsers` list into a shared configuration "
-        "resource to prevent future per-WAR inconsistencies."
-    ),
-    "tags": [
-        "access-control", "barred-users", "diag-account", "cwe-284",
-        "cwe-732", "inconsistent-policy", "upgrade-war", "support-war",
-        "encryption-war", "medium",
-    ],
-}
 
 HX_F229 = {
     "id": "HX-F229",
@@ -10509,9 +9225,7 @@ HX_F229 = {
 }
 
 for _f in [
-    HX_F225, HX_F226,
     HX_F227,
-    HX_F228,
     HX_F229,
 ]:
     FINDINGS[_f["id"]] = _f
@@ -11240,59 +9954,7 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
-HX_F247 = {
-    "id": "HX-F247",
-    "title": "OS Command Injection via Unvalidated Volume Name in create_vmfs5_usb.py",
-    "cwe": "CWE-78",
-    "severity": "MEDIUM",
-    "cvss": 6.3,
-    "component": "storfs-deploy/ansible/roles/esx/files/create_vmfs5_usb.py",
-    "description": (
-        "create_vmfs5_usb.py builds a vmkfstools command by substituting the "
-        "volume_name and device_path arguments directly into a shell command "
-        "string executed with shell=True. No sanitization or allow-list "
-        "validation is applied to either argument before substitution. "
-        "volume_name is taken from the -v command-line flag (default "
-        "'SpringpathDS'); device_path is derived from the auto-detected or "
-        "operator-supplied -d boot device path. An attacker who can influence "
-        "the Ansible variable springpath_ds_name (e.g., by injecting "
-        "shell metacharacters into a cluster serial number or deployment "
-        "configuration field that flows into the Ansible inventory) can "
-        "achieve arbitrary command execution on the ESXi host as the user "
-        "running the deployment playbook. An identical copy of this file "
-        "exists at roles/compute/files/create_vmfs5_usb.py."
-    ),
-    "evidence": (
-        "mgmt/opt/hyperflex/storfs-deploy/ansible/roles/esx/files/"
-        "create_vmfs5_usb.py line 65:\n"
-        "  ret = subprocess.call(\n"
-        '      "vmkfstools -C vmfs5 -S %s %s" % (volume_name, device_path),\n'
-        "      shell=True)\n\n"
-        "main() line 77: volume_name = opts.volume_name  # from -v argparse flag\n\n"
-        "roles/esx/tasks/init-datastore.yml line 94:\n"
-        "  springpath_ds_name: SpringpathDS-{{ host_serial_number }}\n"
-        "  script: create_vmfs5_usb.py -v '{{ springpath_ds_name }}'"
-    ),
-    "reproduction": (
-        "1. Inject a shell metacharacter sequence into the volume name, e.g., "
-        "volume_name = 'SpringpathDS-X; touch /tmp/pwned'.\n"
-        "2. Run: python3 create_vmfs5_usb.py -v 'SpringpathDS-X; touch /tmp/pwned' -d /dev/sda\n"
-        "3. Shell executes: vmkfstools -C vmfs5 -S SpringpathDS-X; touch /tmp/pwned /dev/sda:1\n"
-        "4. /tmp/pwned is created on the ESXi host."
-    ),
-    "remediation": (
-        "Replace shell=True invocation with an argument list: "
-        "subprocess.call(['vmkfstools', '-C', 'vmfs5', '-S', volume_name, device_path]). "
-        "Validate volume_name against the allowed character set "
-        "([A-Za-z0-9_.-]) before use."
-    ),
-    "references": ["CWE-78"],
-}
 
-for _f in [
-    HX_F247,
-]:
-    FINDINGS[_f["id"]] = _f
 
 HX_F248 = {
     "id": "HX-F248",
@@ -11570,53 +10232,6 @@ HX_F254 = {
     "references": ["CWE-798", "CWE-1393"],
 }
 
-HX_F255 = {
-    "id": "HX-F255",
-    "title": "Developer Credentials and Internal Network Information in Production Firmware Artifact",
-    "cwe": "CWE-798",
-    "severity": "MEDIUM",
-    "cvss": 5.5,
-    "component": "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json",
-    "description": (
-        "The file stctlvm_ip.json ships in the production firmware package at "
-        "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json and contains hardcoded "
-        "root credentials ('password': 'springpath') for both an ESXi server and the "
-        "stCtlVM. The file also discloses internal Cisco engineering infrastructure: "
-        "the ESXi server hostname 'sysmgmt-006b.eng.storvisor.com' (pre-acquisition "
-        "Springpath engineering domain), internal IP 10.64.31.41, gateway 10.64.24.1, "
-        "and internal DNS server 10.64.1.7. This file is readable by any user with "
-        "filesystem access to the stCtlVM and provides both the default developer password "
-        "and internal network topology information."
-    ),
-    "evidence": (
-        "mgmt/opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json:\n"
-        "  {\n"
-        "    \"esxi\": {\n"
-        "      \"server\": \"sysmgmt-006b.eng.storvisor.com\",\n"
-        "      \"user\": \"root\",\n"
-        "      \"password\": \"springpath\"    // hardcoded root password\n"
-        "    },\n"
-        "    \"stctlvm\": {\n"
-        "      \"user\": \"root\",\n"
-        "      \"password\": \"springpath\",   // hardcoded root password\n"
-        "      \"ipv4\": \"10.64.31.41\",       // internal eng network\n"
-        "      \"nameserver\": [\"10.64.1.7\"]  // internal DNS\n"
-        "    }\n"
-        "  }"
-    ),
-    "reproduction": (
-        "On a deployed stCtlVM: cat /opt/hyperflex/storfs-deploy/ansible/stctlvm_ip.json. "
-        "Attempt SSH root@<hyperflex-node> with password 'springpath' — 'springpath' "
-        "is the legacy default password used before Cisco-specific defaults were established."
-    ),
-    "remediation": (
-        "Remove stctlvm_ip.json from the production firmware package. "
-        "This file is a development artifact and should not ship with production releases. "
-        "Ensure all pre-production configuration files containing credentials are excluded "
-        "from the build pipeline via .gitignore or build exclusion rules."
-    ),
-    "references": ["CWE-798", "CWE-312"],
-}
 
 HX_F256 = {
     "id": "HX-F256",
@@ -11728,54 +10343,6 @@ HX_F257 = {
     "references": ["CWE-798", "CWE-1393"],
 }
 
-HX_F258 = {
-    "id": "HX-F258",
-    "title": "Hardcoded Default ESX Password in EsxAuthZKMgmtImpl Account Management",
-    "cwe": "CWE-798",
-    "severity": "MEDIUM",
-    "cvss": 5.9,
-    "component": "mgmt/opt/hyperflex/storfs-mgmt/stMgr-1.0/lib/stMgr-1.0.jar",
-    "description": (
-        "EsxAuthZKMgmtImpl.$anonfun$removeHostLocalUserAccount$2() in stMgr-1.0.jar returns "
-        "the hardcoded string 'springpath' as the default ESX host password used during local "
-        "user account removal operations. The method removeHostLocalUserAccount(java.lang.String) "
-        "removes a local user account from an ESXi node; the lambda supplies the authentication "
-        "credential when no password override is provided. The same class also references "
-        "'Force create hxuser password' and 'springpath' in proximity, indicating 'springpath' "
-        "is the bootstrap password for the 'hxuser' account created on ESX nodes during initial "
-        "cluster provisioning. If 'hxuser' accounts are not subsequently rotated, any actor with "
-        "network access to the ESXi management interface can authenticate as 'hxuser' with this "
-        "password."
-    ),
-    "evidence": (
-        "stMgr-1.0.jar: EsxAuthZKMgmtImpl.class (EsxAuthZKMgmtImpl.scala):\n"
-        "\n"
-        "  public static final java.lang.String $anonfun$removeHostLocalUserAccount$2();\n"
-        "    Code:\n"
-        "       0: ldc_w  #497  // String springpath\n"
-        "       3: areturn\n"
-        "\n"
-        "  // Called from:\n"
-        "  public java.lang.Object removeHostLocalUserAccount(java.lang.String);\n"
-        "\n"
-        "  // Related log strings in same class (binary extract):\n"
-        "  'Force create hxuser password'\n"
-        "  'springpath'"
-    ),
-    "reproduction": (
-        "On a deployed HyperFlex cluster, attempt: "
-        "ssh hxuser@<esxi-host-mgmt-ip>  (password: springpath). "
-        "If the cluster has not rotated the hxuser account after provisioning, "
-        "this authenticates to the ESXi shell."
-    ),
-    "remediation": (
-        "Remove the hardcoded 'springpath' default from $anonfun$removeHostLocalUserAccount$2. "
-        "The account management operations must require an explicit credential argument "
-        "retrieved from the ZooKeeper credential store. Rotate 'hxuser' passwords on all "
-        "deployed ESXi nodes using esxcli system account set -i hxuser -p <random>."
-    ),
-    "references": ["CWE-798", "CWE-1393"],
-}
 
 HX_F260 = {
     "id": "HX-F260",
@@ -14916,22 +13483,17 @@ HX_F319 = {
 
 for _f in [
     HX_F254,
-    HX_F255,
     HX_F256,
     HX_F257,
-    HX_F258,
-    HX_F259,
     HX_F260,
     HX_F261,
     HX_F262,
     HX_F263,
     HX_F264,
-    HX_F265,
     HX_F266,
     HX_F267,
     HX_F268,
     HX_F269,
-    HX_F270,
     HX_F271,
     HX_F272,
     HX_F273,
@@ -14946,7 +13508,6 @@ for _f in [
     HX_F282,
     HX_F283,
     HX_F284,
-    HX_F285,
     HX_F286,
     HX_F287,
     HX_F288,
@@ -14954,8 +13515,6 @@ for _f in [
     HX_F290,
     HX_F291,
     HX_F292,
-    HX_F293,
-    HX_F294,
     HX_F295,
     HX_F296,
     HX_F297,
@@ -14973,9 +13532,6 @@ for _f in [
     HX_F309,
     HX_F310,
     HX_F311,
-    HX_F312,
-    HX_F313,
-    HX_F314,
     HX_F315,
     HX_F316,
     HX_F317,
