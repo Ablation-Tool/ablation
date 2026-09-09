@@ -169,6 +169,19 @@ Continued Q1656 12.11.118 CGI analysis:
     Impact: any action rule bound to a virtual input fires (recording, PTZ preset, HTTP notify,
     relay output, door controller unlock on PACS products). Viewer triggers operator-level actions.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXVINPUT-01.md (not yet written).
+  zipstream/setstrength.cgi, setfpsmode.cgi, setgop.cgi, setminfps.cgi, setprofile.cgi:
+    AArch64 ELF binaries, source: zipstream-cgi/1.7.2. All 5 CGIs call com.axis.Video1 /
+    com.axis.Video1.Channel D-Bus properties: ZStrength, ZFpsMode, ZGopMode, ZMaxGopLength,
+    ZMinFps, ZProfile, ZProfileLevel. No APAC in any CGI, no REMOTE_USER, no auth strings.
+    video-service daemon: apac_check_auth absent, libapac.so.0 absent, GetConnectionUnixUser absent.
+    D-Bus policy (com.axis.Video1.conf): context="default" open — any peer can send to service.
+    Apache: no zipstream/ Directory or Location override — inherits Require axis-group-file (viewer+).
+    $ grep -r zipstream /etc/apache2/ → no output.
+    FINDING F-AXZIP-01 (static analysis): viewer can set all live video encoding parameters.
+    VAPIX doc specifies operator-minimum; implementation enforces viewer-minimum.
+    Impact: viewer degrades stream quality (max compression), drops frame rate, changes GOP/profile —
+    affects all stream consumers and VMS recordings. Global settings, not per-stream.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXZIP-01.md
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
