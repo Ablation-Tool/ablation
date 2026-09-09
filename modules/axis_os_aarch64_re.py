@@ -182,6 +182,21 @@ Continued Q1656 12.11.118 CGI analysis:
     Impact: viewer degrades stream quality (max compression), drops frame rate, changes GOP/profile —
     affects all stream consumers and VMS recordings. Global settings, not per-stream.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXZIP-01.md
+  privacymask.cgi: served via TransferProxy (mod_axis_transfer) to maskd Unix socket.
+    TransferProxy NOT subject to <Proxy "*"> Require axis-group admin (FastCGI-only rule).
+    Apache: no privacymask.cgi Location override — inherits Require axis-group-file (viewer+).
+    maskd binary: apac_check_auth absent, libapac.so.0 absent, no "operator"/"viewer"/"admin"
+    enforcement strings, no HTTP 403/401 response code. Only returns 200/204/503.
+    maskd reads http_user + sc_get_group (from libstatuscache.so.1) but never enforces group.
+    Write operations confirmed in maskd: disable_all, enable_all, base_create_mask, base_remove_mask.
+    Audit log: "API Activity: %s@%s%s%s:%s updated privacymask (%s)." — logs but does not gate.
+    D-Bus: com.axis.PrivacyShield1 context="default" open.
+    FINDING F-AXMASK-01 (static analysis): viewer can disable all privacy masks, delete masks,
+    add new masks, re-enable masks. VAPIX doc specifies operator-minimum for write operations.
+    Impact: viewer exposes masked areas (personal/proprietary), bypasses GDPR/compliance masks,
+    disrupts surveillance coverage. Masks do not auto-restore after disable.
+    NOTE: admin/ in axis-cgi is a self-referential symlink (-> .) — no admin-restricted directory.
+    Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXMASK-01.md
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
