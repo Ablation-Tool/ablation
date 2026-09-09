@@ -88,11 +88,45 @@ def _read_elf_sections(path: str) -> dict:
     return sections
 
 
+def _arm32_imm12(imm12: int) -> int:
+    """Decode ARM32 data-processing 12-bit immediate: ROR(imm8, rot*2)."""
+    rot  = ((imm12 >> 8) & 0xf) * 2
+    imm8 = imm12 & 0xff
+    if rot == 0:
+        return imm8
+    return ((imm8 >> rot) | (imm8 << (32 - rot))) & 0xffffffff
+
+
+def _decode_plt_stub(data: bytes, stub_va: int) -> int | None:
+    """
+    Decode ARM32 3-instruction PLT stub at stub_va:
+      add ip, pc, #K1   (E28FC???)
+      add ip, ip, #K2   (E28CC???)
+      ldr pc, [ip,#K3]! (E5BCF???)
+    Returns GOT VA or None if pattern doesn't match.
+    PC during first add = stub_va + 8 (ARM pipeline).
+    """
+    w0 = struct.unpack_from('<I', data, stub_va)[0]
+    w1 = struct.unpack_from('<I', data, stub_va + 4)[0]
+    w2 = struct.unpack_from('<I', data, stub_va + 8)[0]
+    if ((w0 & 0xfffff000) == 0xE28FC000 and
+            (w1 & 0xfffff000) == 0xE28CC000 and
+            (w2 & 0xfffff000) == 0xE5BCF000):
+        k1 = _arm32_imm12(w0 & 0xfff)
+        k2 = _arm32_imm12(w1 & 0xfff)
+        k3 = w2 & 0xfff
+        return (stub_va + 8 + k1 + k2 + k3) & 0xffffffff
+    return None
+
+
 def _build_plt_map(path: str, sections: dict) -> dict:
     """
-    Build PLT address → symbol name map from .rel.plt entries.
-    ARM32 PLT layout: 20-byte header + 12-byte stubs.
-    Returns {plt_addr: symbol_name}.
+    Build PLT address → symbol name map by decoding actual ARM32 PLT stubs.
+    Handles both 12-byte (3-instruction) and 16-byte (4-word) stubs correctly.
+    Uses GOT VA decoded from each stub's add/add/ldr instruction sequence,
+    cross-referenced against .rel.plt entries — avoids the n*12 formula
+    that breaks whenever a 16-byte stub shifts subsequent entries.
+    Returns {plt_addr: symbol_name, plt_addr+1: symbol_name}.
     """
     plt_info  = sections.get('.plt', {})
     relplt    = sections.get('.rel.plt', {})
@@ -106,46 +140,64 @@ def _build_plt_map(path: str, sections: dict) -> dict:
         data = f.read()
 
     # Read dynstr
-    ds_off  = dynstr['off']
-    ds_size = dynstr['size']
-    dynstr_data = data[ds_off: ds_off + ds_size]
+    dynstr_data = data[dynstr['off']: dynstr['off'] + dynstr['size']]
 
     # Read dynsym entries (ELF32 Sym: name(4) value(4) size(4) info(1) other(1) shndx(2))
-    sym_off  = dynsym['off']
-    sym_size = 16  # ELF32 Sym entry size
+    sym_size = 16
     syms = {}
     for i in range(dynsym['size'] // sym_size):
-        s = sym_off + i * sym_size
+        s = dynsym['off'] + i * sym_size
         name_off = struct.unpack_from('<I', data, s)[0]
         end = dynstr_data.find(b'\x00', name_off)
-        name = dynstr_data[name_off:end].decode('latin-1')
-        syms[i] = name
+        syms[i] = dynstr_data[name_off:end].decode('latin-1')
 
-    # Read .rel.plt entries (ELF32 Rel: offset(4) info(4))
-    rel_off  = relplt['off']
-    rel_size = relplt['size']
-    entries = []
-    for i in range(rel_size // 8):
-        r = rel_off + i * 8
+    # Build GOT VA → symbol name from .rel.plt
+    got_to_sym: dict[int, str] = {}
+    for i in range(relplt['size'] // 8):
+        r = relplt['off'] + i * 8
         r_offset = struct.unpack_from('<I', data, r)[0]
-        r_info   = struct.unpack_from('<I', data, r + 4)[0]
-        sym_idx  = r_info >> 8
-        entries.append((r_offset, sym_idx))
+        sym_idx  = struct.unpack_from('<I', data, r + 4)[0] >> 8
+        got_to_sym[r_offset] = syms.get(sym_idx, f'sym_{sym_idx}')
 
-    # Sort by GOT offset to get canonical PLT order (matches stub index)
-    entries.sort(key=lambda x: x[0])
-
+    # Walk PLT stubs by decoding instructions (not by formula).
+    # Skip 20-byte PLT header; advance 12 or 16 bytes per stub.
     plt_base = plt_info['addr']
-    plt_header = 20  # ARM PLT header
-    stub_size  = 12  # ARM PLT stub (ldr pc,[pc,#x]; nop; .word)
+    plt_end  = plt_base + plt_info['size']
+    stub_va  = plt_base + 20
 
-    result = {}
-    for n, (_, sym_idx) in enumerate(entries):
-        plt_addr = plt_base + plt_header + n * stub_size
-        sym_name = syms.get(sym_idx, f'sym_{sym_idx}')
-        result[plt_addr] = sym_name
-        # Also add +1 for Thumb interworking (BLX to odd address)
-        result[plt_addr + 1] = sym_name
+    result: dict[int, str] = {}
+    while stub_va + 12 <= plt_end:
+        got_va = _decode_plt_stub(data, stub_va)
+        if got_va is not None:
+            sym = got_to_sym.get(got_va)
+            if sym is not None:
+                result[stub_va]     = sym
+                result[stub_va + 1] = sym
+            stub_va += 12
+            continue
+
+        # 16-byte stub: leading word before the 3-instruction block.
+        # PC during the add at (stub_va+4) = (stub_va+4)+8 = stub_va+12.
+        if stub_va + 16 <= plt_end:
+            w0b = struct.unpack_from('<I', data, stub_va + 4)[0]
+            w1b = struct.unpack_from('<I', data, stub_va + 8)[0]
+            w2b = struct.unpack_from('<I', data, stub_va + 12)[0]
+            if ((w0b & 0xfffff000) == 0xE28FC000 and
+                    (w1b & 0xfffff000) == 0xE28CC000 and
+                    (w2b & 0xfffff000) == 0xE5BCF000):
+                k1 = _arm32_imm12(w0b & 0xfff)
+                k2 = _arm32_imm12(w1b & 0xfff)
+                k3 = w2b & 0xfff
+                got_va = (stub_va + 12 + k1 + k2 + k3) & 0xffffffff
+                sym = got_to_sym.get(got_va)
+                if sym is not None:
+                    result[stub_va]     = sym
+                    result[stub_va + 1] = sym
+                stub_va += 16
+                continue
+
+        # Unrecognised; advance 4 bytes and retry.
+        stub_va += 4
 
     return result
 
