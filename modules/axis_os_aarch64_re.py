@@ -168,16 +168,23 @@ Continued Q1656 12.11.118 CGI analysis:
         On alarm-wired installations: viewer can trigger false alarm notifications.
     Report: /home/cowboy/VDT/axis-os-re/bugcrowd-F-AXIO-01.md
   virtualinput/activate.cgi, virtualinput/deactivate.cgi: SHELL SCRIPTS — NOT stubs.
-    Path: /usr/html/axis-cgi/virtualinput/activate.cgi
+    Path: /usr/html/axis-cgi/virtualinput/activate.cgi, deactivate.cgi
     → calls gdbus call -y -d com.axis.VirtualInput -o /com/axis/VirtualInput/Port/$port -m Activate
-    virtualinputd: 0 APAC refs.
-    D-Bus: NO com.axis.VirtualInput*.conf in /usr/share/dbus-1/system.d/
-      Without a conf, D-Bus system bus default policy applies: DENY send to unregistered names.
-      gdbus call from suexec'd www user (wwwv) would be REJECTED at D-Bus layer.
-    Apache: no Location/Directory override → viewer+, but D-Bus access denied anyway.
-    NO TransferProxy coverage (transfer.conf has io/virtualinput.cgi, not virtualinput/).
-    FINDING F-AXVINPUT-01: D-Bus policy UNCERTAIN — no conf; call may fail at bus layer.
-      Live verification required before filing. Current status: UNCONFIRMED.
+    virtualinputd (/usr/bin/virtualinputd, 22616 bytes): 0 APAC refs, 0 auth strings.
+      No operator/admin/viewer/401/403/Unauthorized/Forbidden/getgrnam in binary.
+    D-Bus: com.axis.VirtualInput.conf in /usr/share/dbus-1/system.d/
+      context="default" allow send_destination/receive_sender — bus layer OPEN to www user.
+    Apache: no Location/Directory override → viewer+ (default axis-group-file).
+    NO TransferProxy coverage (transfer.conf covers io/virtualinput.cgi only, not virtualinput/).
+    APAC policy: empty for virtualinput — no entry in policy.conf.
+    FINDING F-AXVIN-01 (static analysis): viewer triggers virtual input port Activate/Deactivate
+      on com.axis.VirtualInput D-Bus service via Apache-executed gdbus shell script.
+      Shell runs as www, bus layer open at context="default", virtualinputd enforces no auth.
+      Impact: viewer fires virtual input triggers that downstream ACAP apps, VMS event rules,
+      and physical I/O automation rules may act on — can trigger recording, alarms, relay ops.
+      VAPIX doc specifies operator-minimum for virtual input write ops.
+      Distinct from F-AXIO-01: that path uses TransferProxy → io_cgi daemon;
+      this path is direct gdbus invocation from Apache-executed shell script, no io_cgi involved.
   zipstream/setstrength.cgi, setfpsmode.cgi, setgop.cgi, setminfps.cgi, setprofile.cgi:
     AArch64 ELF binaries, source: zipstream-cgi/1.7.2. All 5 CGIs call com.axis.Video1 /
     com.axis.Video1.Channel D-Bus properties: ZStrength, ZFpsMode, ZGopMode, ZMaxGopLength,
@@ -903,6 +910,29 @@ Continued Q1656 12.11.118 CGI analysis:
     TransferProxy to /var/run/posd/transfer (transfer_shockd.conf).
     Same posd daemon as orientation/ — APAC v1, apac_check_auth, Unauthorized strings.
     NEGATIVE. posd APAC v1 gates all shock detection operations.
+
+  media.cgi (0-byte stub): TransferProxy to /var/run/media-cgi/transfer.
+    media-cgi.socket: SocketUser=media-cgi, SocketGroup=media-cgi, SocketMode=0660.
+    SocketGroup=media-cgi — Apache runs as www group, NOT media-cgi group.
+    Apache CANNOT connect to this socket; mod_axis_transfer connect() will fail.
+    NEGATIVE. Socket group excludes www — Apache has no access to media-cgi socket.
+
+  param.cgi (0-byte stub): TransferProxy to /run/param-cgi/socket (ListenStream).
+    param.cgi-transfer binary (/usr/bin/param.cgi-transfer, 56208 bytes):
+      http_user_realms= — reads and enforces HTTP user group from request.
+      http_user= — reads forwarded HTTP username.
+      getgrnam — OS group membership check.
+      Embedded role strings: Administrator, Operator, Viewer, PTZOperator.
+      Source ref: dynparam_admin_transfer.c — dedicated param auth transfer handler.
+      "unauthorized in an iteration, breaking" — explicit auth rejection path.
+    NEGATIVE. param.cgi-transfer is self-enforcing: http_user_realms + getgrnam
+      gates parameter read/write operations by forwarded HTTP user group.
+
+  onscreencontrols.cgi: FastCGI proxy to /run/onscreencontrols/fcgi/axis-onscreencontrols_fcgi.socket.
+    onscreencontrols.conf: SetHandler "proxy:unix:/run/onscreencontrols/..." — no Require directive shown.
+    onscreencontrols binary (/usr/bin/onscreencontrols): admin, operator, viewer strings present.
+      "Status: 401 Unauthorized" — self-enforcing rejection path in handler binary.
+    NEGATIVE. FastCGI handler enforces privilege check internally (401 + role strings).
 
 Body Worn System bundle (12.9.57) enumerated:
   Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
