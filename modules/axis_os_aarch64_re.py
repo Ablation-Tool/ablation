@@ -506,8 +506,73 @@ Continued Q1656 12.11.118 CGI analysis:
   param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
     System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
     ProxyPassword: type="password:writeonly" — even admin cannot read it back.
+  paramlist.cgi: shell script (987 bytes). No Apache override, no auth library, no group check.
+    Dumps: /usr/share/axis-release/variables then parhandclient getgroup root - NAMEVALUESECTIONS
+    or NAMEVALUE (depending on ?sections param). Full root.* namespace except password fields
+    (masked via sed regex: passwd=, Password=, Pass=, Passphrase=, Key1-4=). Includes:
+    network config, SMTP settings, event rules, stream profiles, PTZ positions, service params.
+    FINDING F-AXPARAMLIST-01 (static analysis): viewer-level full parameter namespace dump.
+      Viewer queries ?sections=sections to get full root.* parameter tree with section headings.
+      Passwords masked; all other config values exposed including: network interface config,
+      DNS/NTP servers, SMTP server/auth config, event rule parameters, stream profile names.
+      This is the same data as F-AXSRVRPT-01's "Axis Parameter List" section, but as a
+      direct targeted endpoint without the overhead of a full server report.
+      Pattern: legacy shell script CGI, no Require override, viewer+ inherited.
   clientnotes/set.cgi: stores group/key/value in /etc/clientnotes/data.conf (GLib keyfile).
     Default viewer access. No path traversal (g_key_file_set_string escapes). Not filed.
+  shuttergain.cgi (43160 bytes): calls com.axis.ShuttergainControl — D-Bus context="default" open.
+    No Apache override (grep of /etc/apache2/ for shuttergain: 0 results). Default: viewer+.
+    CGI enforcements: (1) Content-Type: must be application/json (Rejected: invalid content type);
+      (2) Sec-Fetch-Site: same-origin check (Rejected: cross-origin request). NO privilege check.
+    Enforcements in CGI: CORS/content-type only. REMOTE_USER/REMOTE_ADDR/REMOTE_PORT used for
+      audit logging only: "API Activity: %s@%s%s%s:%s updated shuttergain.%s (%s)."
+    shuttergaind daemon: 0 APAC refs. Shuttergaind.conf: context="default" allow send_destination.
+    APAC policy: 0 entries for com.axis.shuttergaincontrol.*.
+    Write operations: setShutter (shutter speed), setGain (ISO/sensor gain).
+    FINDING F-AXSHUTTERGAIN-01 (static analysis): viewer-level exposure control write.
+      Viewer can set camera shutter speed and gain via shuttergain.cgi setShutter/setGain.
+      VAPIX specifies operator minimum for exposure parameter writes.
+      No privilege check in CGI (CORS/content-type only); no APAC in daemon; D-Bus open.
+      Impact: viewer can over-expose or under-expose camera image (max gain = sensor noise;
+        min shutter = motion blur; strobe attack: rapid shutter cycling disrupts capture).
+        Changes are persistent until operator resets. Affects all stream consumers.
+      Bypass: CORS check (Sec-Fetch-Site) bypassed by direct curl (browser header, not API).
+  lightcontrol.cgi (39008 bytes): links libaxcgijson.so — NEGATIVE. Operator-minimum enforced.
+  irissetup.cgi (shell script): $(id -nG | grep -qw admin) || __cgi_errhd 403 — admin-only.
+    NEGATIVE. OS group check in script body.
+  image_stabilization.cgi (92360 bytes): 2 auth strings — self-enforcing. NEGATIVE.
+  regionalsettings.cgi (14352 bytes): 0 auth strings, calls com.axis.RegionalSettings1.
+    D-Bus (RegionalSettings1.conf): context="default" allow — bus layer open.
+    regional-settingsd daemon: apac_check_auth/apac_init/libapac.so.0 present (APAC v1, SO_PEERCRED).
+    APAC policy: setconfiguration in wwwa,...,wwwo,wwwop,wwwov,wwwovp section (operator minimum).
+    Viewer (wwwv) not in any settconfiguration section → APAC DENIES. NEGATIVE.
+  temperaturecontrol.cgi (0-byte stub): TransferProxy to /var/run/temperature_ctrld/transfer.
+    temperature_ctrld: apac_check_auth present (APAC v1). All temp operations (setpowerconsumer,
+    getpowerconsumers, resetpowerconsumer) in wwwa,...,wwwav (admin minimum) APAC section.
+    NEGATIVE. APAC denies viewer and operator calls.
+  streamstatus.cgi (26752 bytes): 0 auth strings. Calls com.axis.Streamer, JpegStreamer1,
+    HTTPStreamProperties, MediaCGI1, VdoStreamInfo. READ-only stream status query.
+    No Apache override. Viewer+ by default. Not filed (read-only, expected viewer access).
+  power-settings.cgi (51296 bytes): links libaxcgijson.so — NEGATIVE. Operator-minimum enforced.
+  mqtt/client.cgi, mqtt/event.cgi (195KB, 191KB): 6 auth strings each — self-enforcing. NEGATIVE.
+  basicdeviceinfo.cgi (22656 bytes): 3 auth strings — self-enforcing. NEGATIVE.
+  pwdgrp.cgi (30888 bytes): 7 auth strings — self-enforcing password management. NEGATIVE.
+  ssh.cgi (10320 bytes): 1 auth string — self-enforcing. NEGATIVE.
+  usergroup.cgi (shell script, 193 bytes): returns $REMOTE_USER and $USER_GROUPS for calling HTTP
+    user. Reflects the requesting user's own identity/groups. NOT a privilege escalation; intended
+    viewer-accessible for UI session display. Not filed.
+  viewarea/configure.cgi: links libaxcgijson.so — NEGATIVE. Operator-minimum enforced.
+  viewarea/info.cgi: 2 auth strings — self-enforcing. NEGATIVE.
+  ptz/cookietest.cgi (14344 bytes): "Operator" string + vapix_get_param_int + user_group check
+    — self-enforcing via OS group check. NEGATIVE.
+  ptz/ptzsetactivedrivermode.cgi (shell script, 7452 bytes): no auth strings, no admin/operator
+    check found. Changes PTZ driver mode config files. Auth level TBD pending further analysis.
+  shockdetection/ (all 0-byte stubs): TransferProxy to /var/run/posd/transfer.
+    posd binary: apac_check_auth present. BUT no posd.socket file found in systemd — posd creates
+    socket itself. Without SocketGroup=www in a socket unit, socket permissions depend on posd's
+    umask/explicit chmod. If socket is not www-accessible, TransferProxy fails at connection layer.
+    Shock APAC policy: no direct shock detection entries in any www* section found.
+    Status: UNCERTAIN — socket accessibility unresolved without live device test.
   applications/upload.cgi: ACAP install via AcapManager1.Install — NEGATIVE.
     gdbus call to com.axis.AcapManager1.Install with caller_info=(user,addr,port) audit arg.
     D-Bus policy (acapmanager.conf): context="default" allow (bus layer open).
