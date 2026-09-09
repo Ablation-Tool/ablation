@@ -2,7 +2,7 @@
 axis_os_firmware_re — AXIS OS firmware binary RE module (ARM32 Thumb)
 
 Targets: P3245-V_11_11_220.bin extracted rootfs (ARTPEC-7, armhf)
-Binaries: actionengined, ws-datastreamingd, parhand, sipd, monolith
+Binaries: actionengined, ws-datastreamingd, parhand, sipd, monolith, netd, firewall-confd
 Plugins: libhttp_smtp_notify.so, libtcpnotify.so
 Apache: libwssecurity_url_access.so, mod_authz_axisgroupfile.so, mod_trax.so
 
@@ -26,6 +26,8 @@ Standalone:
     python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin libwssecurity_url_access.so
     python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin mod_authz_axisgroupfile.so
     python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin mod_trax.so
+    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin netd
+    python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --bin firewall-confd
     python3 modules/axis_os_firmware_re.py ~/VDT/axis-os-re/extracted/rootfs --all --out findings.json
 """
 
@@ -679,6 +681,107 @@ def analyze_mod_trax(rootfs_dir: str, model) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# netd — Network configuration daemon
+# D-Bus interface: com.axis.Net.IPFilter (SetIPFilterInputConfig: policy + addresses[])
+# WPA supplicant control via wpa_ctrl_request (EAP identity, PSK, cert paths)
+# IP filter config: %srule filter ip %s policy %s → /etc/netd/ipfilter.conf
+# firewall-confd reads config, applies iptables rules via /run/iptables/*.rules
+# ---------------------------------------------------------------------------
+
+NETD_QUERIES = {
+    'ipfilter_cidr_inject': (
+        'IPFILTER_CONFIG | calls: g_string_append_printf g_string_new fopen fwrite confutils | '
+        'vuln: CIDR address string from SetIPFilterInputConfig D-Bus call formatted into '
+        '%srule filter ip %s policy %s without newline or special-char validation; '
+        'attacker-controlled address field containing \\n injects iptables-restore syntax '
+        'into /run/iptables/iptables.rules via firewall-confd — arbitrary firewall rule injection'
+    ),
+    'wpa_ctrl_identity_inject': (
+        'WPA_CTRL | calls: wpa_ctrl_request snprintf g_strdup_printf | '
+        'vuln: EAP identity or PSK string from VAPIX config used as argument in wpa_supplicant '
+        'control-socket command (SET_NETWORK N identity "...") without escaping quote or newline; '
+        'injected newline appends second wpa_supplicant command — DISABLE_NETWORK or SAVE_CONFIG'
+    ),
+    'wpa_psk_passphrase': (
+        'WPA_PSK | calls: wpa_ctrl_request strncpy g_strdup | '
+        'vuln: WPA personal passphrase (netd_device_auth_config_set_wpa_personal_key) passed '
+        'unescaped to SET_NETWORK N psk command; PSK is 8-63 printable chars — space/quote/newline valid'
+    ),
+    'popen_system_exec': (
+        'NETD_EXEC | calls: system popen g_spawn_sync g_spawn_async | '
+        'vuln: shell command or argv element derived from user-controlled network config; '
+        'popen/system call with network interface name, service name, or DHCP option value'
+    ),
+    'policykit_service_inject': (
+        'POLICYKIT_SVC | calls: policykit_system_restart_service policykit_system_start_service | '
+        'vuln: service name argument to policykit_system_restart_service derived from D-Bus param; '
+        'if caller can supply arbitrary service name, attacker restarts arbitrary systemd unit'
+    ),
+    'dbus_addr_parse': (
+        'DBUS_IPFILTER | calls: g_variant_get g_variant_iter_loop g_variant_get_string | '
+        'vuln: D-Bus addresses array (as) iterated without length or content validation; '
+        'each address string passed directly to config writer — no CIDR regex enforcement at parse stage'
+    ),
+}
+
+
+def analyze_netd(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/sbin/netd')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'netd: {len(plt_map)//2} PLT entries, {len(strs_map)} strings', flush=True)
+    return _semantic_sweep(path, plt_map, model, NETD_QUERIES, strs_map)
+
+
+# ---------------------------------------------------------------------------
+# firewall-confd — Iptables rule applicator
+# Reads /etc/firewall-confd/firewall-confd.conf; writes iptables-restore format
+# to /run/iptables/iptables.rules; applies via iptables/ip6tables CLI
+# Rule format: -A INPUT %s -j DROP/ACCEPT where %s is CIDR address filter clause
+# ---------------------------------------------------------------------------
+
+FIREWALLCONFD_QUERIES = {
+    'iptables_rule_format': (
+        'IPTABLES_FORMAT | calls: g_string_append_printf g_string_new snprintf | '
+        'vuln: config-supplied address written into -A INPUT %s -j ACCEPT/DROP rule string; '
+        'if address contains newline, injected line is appended inside *filter block '
+        'and iptables-restore accepts it as valid iptables rule — arbitrary INPUT chain rule injection'
+    ),
+    'config_parse_inject': (
+        'CONF_PARSE | calls: g_file_get_contents g_key_file_load_from_data g_key_file_get_string | '
+        'vuln: /etc/firewall-confd/firewall-confd.conf value read without escaping; '
+        'if config group or key value contains stanza break (e.g., \\n[new_group]\\n), '
+        'key-file parser misattributes attacker data to different config section'
+    ),
+    'iptables_cli_exec': (
+        'IPTABLES_EXEC | calls: g_spawn_sync g_spawn_async system popen | '
+        'vuln: iptables or iptables-restore invoked with address or rule file path from config; '
+        'if path or argv element is attacker-controlled, injection into iptables argv or shell command'
+    ),
+    'addr_cidr_validate': (
+        'CIDR_VALIDATE | calls: inet_pton inet_addr inet_ntop g_regex_match | '
+        'vuln: absence of inet_pton validation for config addresses allows non-CIDR content '
+        'to reach -A INPUT %s — network address must be validated to RFC-4632 CIDR before format'
+    ),
+    'rules_file_write': (
+        'RULES_WRITE | calls: fopen fwrite rename confutils_set_file_contents_with_sync_mode | '
+        'vuln: /run/iptables/iptables.rules written with config-derived content; '
+        'if write is not atomic (no tmpfile+rename), concurrent read by iptables-restore sees partial file'
+    ),
+}
+
+
+def analyze_firewall_confd(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/libexec/firewall-confd')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'firewall-confd: {len(plt_map)//2} PLT entries, {len(strs_map)} strings', flush=True)
+    return _semantic_sweep(path, plt_map, model, FIREWALLCONFD_QUERIES, strs_map)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -694,6 +797,8 @@ ANALYZERS = {
     'mod_authz_axisgroupfile.so':      analyze_mod_authz_axisgroupfile,
     'mod_trax.so':                     analyze_mod_trax,
     'libcgiparser.so':                 analyze_libcgiparser,
+    'netd':                            analyze_netd,
+    'firewall-confd':                  analyze_firewall_confd,
 }
 
 
