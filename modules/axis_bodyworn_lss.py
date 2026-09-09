@@ -4,7 +4,7 @@ CONTROLLED ENVIRONMENT ONLY
 
 Affected: AXIS Body Worn Live Self-hosted Server, appId 414710 (package.conf: APPID="")
 Versions: 1.0.0 (D3110 armv7hf), 1.5.1 (W401 aarch64), 2.0.0 (Oct 2025), 2.0.1 (Feb 2026)
-Arch: Go static binary (1.5.1=11.8MB, 2.0.1=13.1MB) + rsignal (Rust) + coturn
+Arch: Go static binary (1.5.1=11.8MB, 2.0.1=13.1MB) + rsignal 1.15.0 (Rust/actix-http 3.11.0) + coturn
 
 WebRTC/coturn relay + JWT signaling on body-worn camera docks.
 coturn bundles libgssapi_krb5.so.2, libkrb5.so.3 (Kerberos) + libmicrohttpd.so.12.
@@ -13,6 +13,18 @@ Prometheus metrics ports :9446 and :9641 proxied at viewer level with no auth ch
 VAPIXServiceAccounts1.GetCredentials present from 1.0.0 (all versions), not just 2.0.x.
 LD_LIBRARY_PATH hardcoded to coturn/lib before exec()ing turnserver — lib substitution path.
 pre-uninstall.sh deletes cert set on BOTH uninstall AND upgrade -> TLS gap during upgrade.
+
+rsignal 1.15.0 (2026-01-19 build, aarch64-unknown-linux-gnu, release):
+  DontCareVerifier in src/tls_agent.rs — TLS bypass mode present in binary symbol table.
+  ValidationScheme enum: Bearer | ImplicitBearer | NoAuth | InvalidAuth.
+  Endpoints: /client, /target, /licenses (::auto_assigned/licenses), /onboarding (stub).
+  Anonymous targets blocked; client endpoint security violations logged with source.
+  DPoP (RFC 9449) + Bearer token auth supported.
+
+Go binary (bws-webrtc-acap):
+  github.com/axteams-one/bws-webrtc-acap/internal/httputil.NewInsecureClient present.
+  github.com/axteams-one/bws-webrtc-acap/internal/rsignal.(*Authorizer) — authorization component.
+  ENV_AXIS_SIGNAL_SERVER_TARGET_CA_PATH (2.0.1) / ENV_AXIS_SIGNAL_SERVER_CA_PATH (2.0.0) control CA bundle.
 """
 
 # CONTROLLED ENVIRONMENT ONLY
