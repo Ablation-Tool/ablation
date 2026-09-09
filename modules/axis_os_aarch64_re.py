@@ -3,6 +3,7 @@ axis_os_aarch64_re — AXIS OS AArch64 firmware binary RE module
 
 Targets:
   Q1656_12_11_118 rootfs (AArch64 PIE stripped ELFs)
+  D1110_12_11_77 rootfs (AArch64, AXIS D1110 Video Decoder 4K)
   BWL EAP 2.0.1 (rsignal Rust AArch64)
 
 Binaries:
@@ -16,15 +17,26 @@ Prologue detection: STP X29,X30,[SP,#-N]! (0x?d 0x7b 0b?? 0xa9) — standard AAP
 PLT resolution: RELA sections (R_AARCH64_JUMP_SLOT 0x402) + .dynstr.
 
 Confirmed findings:
-  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 6/6 firmwares
+  F-AXNETD-01    WPA supplicant config injection (netd) — confirmed 7/7 firmwares
                  identity="%s", password="%s" unescaped; g_strescape linked zero callers
+                 D1110 12.11.77: identity="%s", g_strescape in PLT confirmed
   F-AXPKG-01     REFUTED: libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault
   F-AXSTC-01     stclient: relay-server-triggered VAPIX user add/modify/remove (HIGH)
   F-AXSTC-02     REFUTED: g_spawn arg is hardcoded /usr/bin/checkprogress.sh
   F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
                  Apache config_server_reverseproxy.conf: AuthMerging Off + anonymous=true
                  -> Require all granted -> dev-conf-service anonymous API allows SET
-                 Confirmed 5/6 firmwares (12.11.77 and 12.11.118; not in 12.2.59)
+                 Confirmed 6/7 firmwares (12.11.77 x5 incl. D1110, 12.11.118; not in 12.2.59)
+
+D1110 Video Decoder 4K 12.11.77 analysis (AArch64):
+  All 5 existing findings confirmed (F-AXNETD-01, F-AXPARAM-01, F-AXACTION-01/02, F-AXUSRMGR-01)
+  Unique surfaces checked: GStreamer rtspsrc pipeline, ONVIF WebSocket proxy (no Require),
+  HDMI CEC dbus plugin, HID action handler, Nexus WS bridge, EdgeFileManager
+  VideoUri API (decoder_v4.yaml): only minLength/maxLength, no scheme restriction — but
+    external-media plugin explicitly creates rtspsrc element; http:// fails at GStreamer layer
+  ONVIF WebSocket missing auth (/onvif/rtsp-over-websocket has no Require directive):
+    RTSP server auth (rtspauth.conf Asterisk realm, Paths=*) mitigates — low severity, not filed
+  No novel D1110-specific critical findings.
 
 Standalone:
     cd ~/ablation
