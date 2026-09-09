@@ -29,14 +29,17 @@ Confirmed findings:
                  D1110 12.11.77, A1210/A1710/A1810 12.11.106.1: confirmed
                  Note: binary named "netd" on PACS controllers (not "axnetd")
   F-AXPKG-01     REFUTED: libxml2 2.13+ disables XXE by default; no xmlSubstituteEntitiesDefault
-  F-AXTEST-01    HTTP SSRF via diagnostic httptest.cgi — viewer privilege, no RFC-1918 filter
-                 httptest.cgi links libhttp_smtp_notify.so (same as F-AXACTION-01)
-                 validateaddr binary only blocks loopback; RFC-1918 unrestricted
+  F-AXTEST-01    Multi-protocol SSRF via diagnostic CGIs — viewer privilege, no RFC-1918 filter
+                 httptest.cgi: HTTP/HTTPS probe; links libhttp_smtp_notify.so (same as F-AXACTION-01)
+                 ftptest.cgi (shell script): FTP/SFTP probe via curl; uploads test file to internal FTP
+                   - accepts address, port, proto (ftp|sftp), username, password, uploadpath
+                   - can submit attacker-controlled credentials to internal FTP servers
                  tcptest.cgi (shell script): TCP-level probe via /usr/bin/tcptest
-                 smtptest.cgi: SMTP connection test, same loopback-only filter
-                 Auth: axis-group-file (viewer, operator, admin) — lower than F-AXACTION-01
+                 smtptest.cgi: SMTP connection test, same libhttp_smtp_notify.so loopback-only filter
+                 All 4 CGIs: validateaddr blocks only loopback; RFC-1918/link-local unrestricted
+                 Auth: axis-group-file (viewer, operator, admin) — no operator or admin required
                  Direct exploitation, no action rule setup required
-                 New bugcrowd report: bugcrowd-F-AXTEST-01.md
+                 Bugcrowd report updated: bugcrowd-F-AXTEST-01.md (4 vectors)
   F-AXSTC-01     stclient: relay-server-triggered VAPIX user add/modify/remove (HIGH)
   F-AXSTC-02     REFUTED: g_spawn arg is hardcoded /usr/bin/checkprogress.sh
   F-AXUSRMGR-01  Pre-auth passphrase complexity write via ?anonymous=true bypass
@@ -95,6 +98,44 @@ Cross-product analysis (new firmwares this session):
     upload.cgi operator-level: CSV plate list upload; implementation in fflprapp (32MB AArch64).
     cloud.cgi/cloud2.cgi/cloud3.cgi admin-level: curl to %s://%s/ — SSRF if host is user-controlled.
     config_axisa1001.cgi: a1001_url config param; admin-set URL passed to curl — admin SSRF.
+
+Continued Q1656 12.11.118 CGI analysis:
+  236 total CGI endpoints enumerated across all subdirectories.
+  file_upload.cgi: --allowed-dirs="" means "all directories forbidden" (binary help confirms).
+    File goes to /tmp (default-dir). Not a finding.
+  oak.cgi: Owner Authentication Key (OAK) retrieval for O3C tunnel.
+    Contacts oakcgi.o3c.axis.com/v1 using HMAC-SHA1 PSK derived from AXISNSKEY (bootblock).
+    Method: getOAK. Uses default Require axis-group-file. Viewer can call — OAK not sensitive
+    without Axis account + ADM, not independently exploitable.
+  remoteservice.cgi: polkit-backed admin API for O3C relay params. Standard design.
+  networkspeakerpairing.cgi: address param + util_address_is_valid (likely loopback-only like validateaddr).
+    D-Bus: com.axis.NetworkSpeakerPairing. Could be SSRF if pairing makes outbound TCP.
+    Not filed without confirmation of TCP connection behavior.
+  ftptest.cgi: SSRF + FTP file upload via curl. Added to F-AXTEST-01.
+  portmanagement.cgi (io/): SetActive/SetState/StartActionSequence — physical I/O control.
+    D-Bus: com.axis.IOControl.State. Policy: context="default" allows ALL processes.
+    No polkit, no REMOTE_USER check in binary. Default Apache Require axis-group-file (viewer).
+    libjsoncgi.so.0 implements role enforcement (viewer/operator/admin strings) but specific
+    role required for SetActive cannot be confirmed without disassembly.
+    Flagged for live testing: if viewer can call SetActive, relay-attached cameras vulnerable.
+  io/virtualinput.cgi, io/output.cgi, com/serial.cgi: all empty stubs.
+  param.cgi: viewer-readable params include only boolean/status fields (System.RootPwdSet,
+    System.CaptureModeSet). Sensitive params (RemoteService, WebService.UsernameToken): admin:3 only.
+    ProxyPassword: type="password:writeonly" — even admin cannot read it back.
+  clientnotes/set.cgi: stores group/key/value in /etc/clientnotes/data.conf (GLib keyfile).
+    Default viewer access. No path traversal (g_key_file_set_string escapes). Not filed.
+  applicationss/upload.cgi: ACAP install via AcapManager1.Install D-Bus. Auth level TBD.
+  custfwcerts.cgi: installCertificate/removeCertificate. D-Bus backed. Auth TBD.
+
+Body Worn System bundle (12.9.57) enumerated:
+  Contains 5 firmware images: W100, W101, W102, W110, W120 + W120 LTE modem FW (Sierra Wireless SWI9X07H)
+  W101 = AXIS W101 Bodyworn Camera (Ambarella S5L, HardwareID 908.2/908.21/908.22)
+  W101 rootfs squashfs extraction started for unique CGI analysis.
+
+AXIS Switch findings (D8248/D8208-R 8.90.1904) — SEPARATE from AXIS OS Bugcrowd scope:
+  F7: Hardcoded AES-256-CBC key __D3b4gW0r1d@@ for admin credential storage (.axtra-cmd)
+  See /media/cowboy/research/axis/extracted/AXIS-SWITCH-FINDINGS.md for full F1-F7 list.
+  Disclose directly to AXIS (not Bugcrowd) — switch firmware outside AXIS OS scope.
 
 Standalone:
     cd ~/ablation
