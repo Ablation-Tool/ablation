@@ -453,6 +453,71 @@ def analyze_parhand(rootfs_dir: str, model) -> dict:
     return _semantic_sweep(path, plt_map, model, param_queries, strs_map)
 
 
+SIP_QUERIES = {
+    'sip_overflow': (
+        'SIP | calls: recv read sscanf sscanf g_strsplit | '
+        'vuln: SIP message header or URI parsed into fixed buffer without length check'
+    ),
+    'sip_format': (
+        'SIP | calls: sprintf printf snprintf g_strdup_printf | '
+        'vuln: SIP header field value used as format string or in unbounded sprintf'
+    ),
+    'sip_uri_inject': (
+        'SIP_URI | calls: strncpy strncat strcpy g_strlcpy | '
+        'vuln: SIP URI or Contact header copied to fixed-size buffer — off-by-one or no-null-terminator'
+    ),
+    'sip_auth': (
+        'SIP_AUTH | calls: strcmp memcmp strncmp g_ascii_strncasecmp | '
+        'vuln: authentication digest compared with timing-unsafe function; nonce validation bypass'
+    ),
+    'sip_realloc': (
+        'SIP_BUF | calls: realloc malloc memcpy | '
+        'vuln: SIP message body length from Content-Length header used as realloc size without validation'
+    ),
+}
+
+MONOLITH_QUERIES = {
+    'rtsp_overflow': (
+        'RTSP | calls: g_strdup_printf snprintf strncpy memcpy | '
+        'vuln: RTSP request line or header copied to fixed buffer; URL length unchecked'
+    ),
+    'rtsp_auth_bypass': (
+        'RTSP_AUTH | calls: g_strcmp0 g_ascii_strncasecmp memcmp strcmp | '
+        'vuln: Authorization header value compared with timing-unsafe function or constant-time bypass'
+    ),
+    'http_inject': (
+        'HTTP | calls: g_strdup_printf snprintf g_strsplit | '
+        'vuln: CGI parameter value reflected into HTTP response without escaping — XSS or header injection'
+    ),
+    'media_factory': (
+        'MEDIA | calls: g_object_new g_object_ref gst_element_factory_make | '
+        'vuln: GStreamer pipeline created from user-controlled URI without validating element names'
+    ),
+    'stream_auth': (
+        'STREAM_AUTH | calls: strcmp g_strcmp0 g_hash_table_lookup | '
+        'vuln: stream authentication check uses constant-time-unsafe compare; viewer bypass possible'
+    ),
+}
+
+
+def analyze_sipd(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/bin/sipd')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'sipd: {len(plt_map)//2} PLT entries, {len(strs_map)} strings', flush=True)
+    return _semantic_sweep(path, plt_map, model, SIP_QUERIES, strs_map)
+
+
+def analyze_monolith(rootfs_dir: str, model) -> dict:
+    path = os.path.join(rootfs_dir, 'usr/bin/monolith')
+    sections = _read_elf_sections(path)
+    plt_map  = _build_plt_map(path, sections)
+    strs_map = _get_strings_map(path, sections)
+    print(f'monolith: {len(plt_map)//2} PLT entries, {len(strs_map)} strings', flush=True)
+    return _semantic_sweep(path, plt_map, model, MONOLITH_QUERIES, strs_map)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -463,6 +528,8 @@ ANALYZERS = {
     'parhand':                 analyze_parhand,
     'libhttp_smtp_notify.so':  analyze_libhttp_smtp_notify,
     'libtcpnotify.so':         analyze_libtcpnotify,
+    'sipd':                    analyze_sipd,
+    'monolith':                analyze_monolith,
 }
 
 
