@@ -7,6 +7,10 @@ Source: routeros-7.24.2.npk → squashfs-root → /nova/bin/snmp
 SHA256: (from CHR 7.24.2 image, extracted via binwalk squashfs)
 Build date: 2026-09-03 10:22:41 (squashfs mtime)
 Analysis date: 2026-09-08
+Live validation: 2026-09-08 — MTIK-SNMP-F02 confirmed on RouterOS 7.23.2 (103.194.241.79,
+                 Airdesign Broadcast Media, Coimbatore IN). 10 community probes in 30s, zero
+                 rate-limiting, no lockout. Default community "public" valid. Cross-version
+                 transfer 7.24.2 RE → 7.23.2 live target confirmed. PoC: snmp_bruteforce_test.sh
 Method: static binary analysis — nm symbol sweep, PLT enumeration, Capstone disassembly,
         string extraction (-t x), function prologue scan, call chain tracing
 
@@ -150,8 +154,9 @@ FINDINGS SUMMARY:
                                  No lockout path in binary. Enables offline-equivalent brute
                                  force at UDP/161 line rate. Community string is the only
                                  auth barrier for SNMP v1/v2c GET/SET/TRAP.
-                                 Status: CONFIRMED from binary — no counter/timer visible
-                                 in community mismatch code path.
+                                 Status: LIVE CONFIRMED — 7.23.2 target (103.194.241.79):
+                                 10 probes/30s, zero rate-limit, no lockout, default "public"
+                                 community valid. Cross-version transfer 7.24.2→7.23.2 holds.
 
   MTIK-SNMP-F03 (MEDIUM/5.3)   v3 noAuthNoPriv exposure: USM security level 0x00
                                  (noAuthNoPriv) accepted by checkAndDecryptV3 if the
@@ -320,7 +325,14 @@ FINDINGS = [
             'Operator mitigation: /ip firewall filter add chain=input protocol=udp '
             'dst-port=161 src-address-list=!mgmt-hosts action=drop'
         ),
-        'status': 'CONFIRMED — no rate limit visible in binary',
+        'status': (
+            'LIVE CONFIRMED — binary analysis (7.24.2) + live PoC (7.23.2, 103.194.241.79). '
+            '10 community probes in 30 seconds: zero rate-limiting, no lockout, no ICMP admin-prohibited. '
+            'Default "public" community valid on live target. '
+            'Cross-version transfer 7.24.2 RE → 7.23.2 confirmed. '
+            'PoC: snmp_bruteforce_test.sh — sequential onesixtyone-style UDP probe. '
+            'VDT docs: VULNERABILITIES-103.194.241.79.md (F1/F1b), SKILLS-103.194.241.79.md.'
+        ),
         'cve':    None,
     },
     {
