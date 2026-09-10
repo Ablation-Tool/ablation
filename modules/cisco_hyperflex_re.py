@@ -1130,5 +1130,10 @@ for _f in [
     HX_F011,
 ]:
     FINDINGS[_f["id"]] = _f
-# ─── Consolidated Meta-Findings ─────────────────────────────────────────────
+
+FINDINGS_LIST = list(FINDINGS.values())
+
+if __name__ == "__main__":
+    for fid, f in FINDINGS.items():
+        print(f"[{f['severity']:8s}] {fid}: {f['title'][:80]}")
 
