@@ -426,4 +426,49 @@ UCSC_F12 = {
     ),
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12]
+# ─────────────────────────────────────────────────────────
+# UCSC-F13 — ucssh (vsh) management shell binary is SUID root; -R flag allows unrestricted output redirection
+# ─────────────────────────────────────────────────────────
+UCSC_F13 = {
+    "id":       "UCSC-F13",
+    "title":    "ucssh (vsh) management shell is SUID root with -R 'allow redirection anywhere' flag — arbitrary file write as root via CLI output redirection",
+    "status":   "CONFIRMED (SUID bit) — /opt/cisco/core/sam/bin/ucssh in OVA disk1 VMDK",
+    "severity": "HIGH",
+
+    "binary":      "opt/cisco/core/sam/bin/ucssh",
+    "permissions": "-rwsr-sr-x root root 162737 Feb 26 2017",
+    "suid":        "Set-user-ID and set-group-ID bits set — executes as root regardless of calling user",
+
+    "relevant_flags": {
+        "-c <cmd>":      "Execute a single CLI command",
+        "-f <cmdsfile>": "Execute commands from a file",
+        "-R":            "Allow redirection anywhere — disables path restrictions on output redirection",
+        "-a":            "All commands allowed (roles disabled) — bypasses UCS role-based access control",
+        "-n":            "No pagination",
+        "--ucs-mgmt":    "Start UCS Management Shell mode",
+    },
+
+    "risk": (
+        "Any OS user can invoke ucssh directly as a SUID binary. "
+        "With the -R flag, UCS CLI 'show' commands that include user-controllable data "
+        "can be redirected to any OS path (e.g., /etc/cron.d, /etc/sudoers.d) as root. "
+        "The -a flag disables role checking, making all CLI commands available to any caller. "
+        "The -f flag reads CLI commands from a caller-supplied file path."
+    ),
+
+    "vsh_perm_escape": (
+        "/opt/cisco/bin/vsh_perm (admin's login shell) contains a hardcoded escape branch: "
+        "when called with exactly '-c /isan/bin/xmlsa' as argument, exec /bin/bash is triggered. "
+        "This is an SCP/SFTP subsystem path used by UCS domain operations. "
+        "vsh_perm is not SUID; the ucssh binary it normally invokes is. "
+        "Source: /opt/cisco/bin/vsh_perm lines: s1='-c /isan/bin/xmlsa'; "
+        "if [ \"$s1\" != \"$*\" ]; then exec $SHELL --ucs-mgmt; else exec /bin/bash $*; fi"
+    ),
+
+    "umask_note": (
+        "vsh_perm sets 'umask 000' before exec'ing ucssh. "
+        "Any files created during the management session have 0o666 permissions (world-writable by default)."
+    ),
+}
+
+FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13]
