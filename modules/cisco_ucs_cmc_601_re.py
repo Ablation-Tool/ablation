@@ -405,6 +405,84 @@ CMC_F9 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# CMC-F10 — Hardcoded MTS read-only credential in mts.cfg
+# ─────────────────────────────────────────────────────────
+CMC_F10 = {
+    "id":       "CMC-F10",
+    "title":    "Hardcoded MTS read-only credential 'emcuser:emcNbv12345' in mts.cfg — identical across all CMC 6.0.x deployments",
+    "status":   "CONFIRMED — etc/mts.cfg in CMC 6.0(2.260026) rootfs (plaintext); encrypted as etc/mts.cfg.enc in 6.0(1.251006) with static magic '#!##!#$!'",
+    "severity": "HIGH",
+
+    "cleartext_credential": {
+        "file":     "etc/mts.cfg",
+        "version":  "CMC 6.0.2+ (mts.cfg is plaintext)",
+        "MTS_RO_USER":     "emcuser",
+        "MTS_RO_PASSWORD": "emcNbv12345",
+        "MTS_USER":        "admin",
+        "MTS_PASSWORD":    "",
+        "MTS_REST_ADDR":   "localhost:8075",
+        "MTS_IP":          "127.20.0.1",
+        "MTS_PROTOCOL":    "http",
+    },
+
+    "encrypted_601_note": (
+        "In CMC 6.0.1, the same configuration was stored as etc/mts.cfg.enc — a base64-encoded "
+        "AES blob. The encryption was performed by cmc/bin/encryptfile using libcommoncryptutil.so "
+        "with a FIXED STATIC MAGIC credential '#!##!#$!' hardcoded in the binary. "
+        "String evidence: 'At this time fixed static MAGIC is used, (Supplied %s)' in encryptfile. "
+        "Anyone with access to the encryptfile binary can decrypt mts.cfg.enc with this magic."
+    ),
+
+    "6.0.2_regression": (
+        "In CMC 6.0.2, the encryptfile binary and libcommoncryptutil.so were removed and mts.cfg "
+        "was shipped in cleartext. The encryption provided only obscurity (known static key); "
+        "removing it exposes the same hardcoded credential without even the base64 step."
+    ),
+
+    "mts_api": (
+        "The MTS (MTS switch / Aldrin3S) REST API listens at localhost:8075. "
+        "emcuser with MTS_RO_PRIVILEGE=1 has read access to switch configuration and state. "
+        "admin with empty password controls the MTS management operations."
+    ),
+
+    "internal_tftp": {
+        "MTS_AUTO_UPGRADE_TFTP_IP": "10.193.66.120",
+        "note": "Cisco internal TFTP server IP hardcoded in production firmware. "
+                "Auto-upgrade disabled by default (MTS_AUTO_UPGRADE_ENABLE=0) but "
+                "configuration is settable via the authenticated MTS REST API."
+    },
+}
+
+# ─────────────────────────────────────────────────────────
+# CMC-F11 — TPM test binaries shipped in production CMC 6.0.2 rootfs
+# ─────────────────────────────────────────────────────────
+CMC_F11 = {
+    "id":       "CMC-F11",
+    "title":    "TPM diagnostic test binaries in /usr/bin of production CMC 6.0.2 firmware — attack surface for TPM security model",
+    "status":   "CONFIRMED — usr/bin/tpm_test, tpm_test_key_install, tpm_test_tcg_{001-004} in CMC 6.0(2.260026) rootfs; absent from 6.0(1.251006)",
+    "severity": "MEDIUM",
+
+    "binaries": {
+        "usr/bin/tpm_test":            "253688 bytes — TPM test harness",
+        "usr/bin/tpm_test_key_install": "216808 bytes — TPM key installation test",
+        "usr/bin/tpm_test_tcg_001":    "208552 bytes — TCG specification test 001",
+        "usr/bin/tpm_test_tcg_002":    "208552 bytes — TCG specification test 002",
+        "usr/bin/tpm_test_tcg_003":    "216744 bytes — TCG specification test 003",
+        "usr/bin/tpm_test_tcg_004":    "216744 bytes — TCG specification test 004",
+    },
+
+    "introduced_in": "6.0(2.260026) — absent from 6.0(1.251006)",
+
+    "note": (
+        "TPM test binaries intended for validation are shipped in the production CMC rootfs. "
+        "These binaries interact with TPM2 hardware directly. "
+        "An attacker with code execution on the CMC (e.g., via CMC-F1 root SSH or CMC-F2 JRPC) "
+        "can invoke these test utilities to probe TPM key management, "
+        "potentially exposing sealed secrets or interfering with measured boot state."
+    ),
+}
+
 CMC_KEY_BINARIES = {
     "redfish (2.1MB)":             "Redfish API server, uses libmhd + GnuTLS, libgnutls.so.30",
     "libjolt_inf.so":              "Redfish + JRPC method implementations, -fno-stack-protector",
