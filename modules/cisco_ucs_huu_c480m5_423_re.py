@@ -4,6 +4,14 @@ Source: ucs-c480m5-huu-4.2.3r.iso (/media/cowboy/research/Cisco-UCS/)
 ISO built: 2026-07-28 (rootfs timestamp: 20260728224455)
 Structure: bzImage + initrd + rootfs.img (squashfs lz4, 136MB, 4395 inodes)
            + ucs-c480m5-huu-container-4.2.3r.squashfs (531MB lz4)
+
+Direct ISO verification (2026-09-10):
+  rootfs.img extracted via unsquashfs (3343 files, 598 directories)
+  F1: decrypt-file key confirmed at /usr/sbin/decrypt-file — format string plaintext
+  F2: /etc/init.d/hsu-init lines 28-35 — entire sig verification block commented out;
+      touch /opt/cisco/secureboot_enabled set but hsu-verify-digest never called
+  F3: Redfish Flask API root execution — confirmed from container squashfs
+  Note: DEBUG=yes telnetd path (hsu-init line 50) is disabled by default (DEBUG=no in hsu-profile.sh)
 """
 
 FIRMWARE = {
