@@ -10,13 +10,20 @@ C220 M8 structure:
 CIMC version: 6.0(2.260095)
 BIOS: C220M8.6.0.2d.0.0527260454
 
-Cross-platform key verification (FIVE confirmed sources):
+Cross-platform key verification (FIVE confirmed sources, M8 family):
   sha256(tools-dev-verify-key.pem) C220 M8 == XE130C == UCS Diag == C245 M8 == UCS SCU:
     8172ce48c2d3983f3000a0ae8fb1a91491128196ec5ba4f2f6d1950988512073
   sha256(tools-rel-verify-key.pem) C220 M8 == XE130C == UCS Diag == C245 M8 == UCS SCU:
     a2a81324d17f21696fe8e6e1c2e22319d4bd720b63bf7751745907308dd89681
   AES-256-CBC key 'zfguijkophju@*%1]' confirmed in C245 M8 and UCS SCU decrypt-file binaries
   hsu-init, ftd, decrypt-file, xinetd/telnet: byte-identical across all five platforms
+
+Cross-generational key extension (C480 M5):
+  AES-256-CBC key 'zfguijkophju@*%1]' confirmed in C480 M5 (4.2.3r) decrypt-file binary
+  (sha256 29fde35b6134fd78d95d4249f905ef09e9c4a8d7e68c80b808d59bc85ffbde08).
+  M5 uses PBKDF2-SHA256 KDF (-md sha256 -pbkdf2); M8 uses legacy EVP_BytesToKey (-md md5).
+  Same base password across generations, spanning at minimum C480 M5 through C220/C245/XE130C M8.
+  See cisco_ucs_huu_c480m5_423_re.py for M5-specific findings.
 
 Note: UCS Diagnostics (ucs-diag-7.1.4.260010.iso) shares the same base rootfs.img
 as HUU 6.0.2.260143 (same 4741 inodes, same squashfs structure, same vulnerability
