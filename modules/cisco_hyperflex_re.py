@@ -1131,6 +1131,99 @@ for _f in [
 ]:
     FINDINGS[_f["id"]] = _f
 
+# ─── storfs-restapi 6.0.2b (Tomcat 10 WAR stack) ────────────────────────────
+
+HX_F012 = {
+    "id":       "HX-F012",
+    "title":    "storfs-restapi 6.0.2b: defaultTokenLifeTime hardcoded to 1,555,200,000 ms "
+                "(18 days) across all REST API WAR configs — stolen token valid for 18 days",
+    "status":   "CONFIRMED — WEB-INF/classes/application.conf in auth/coreapi/encryption/"
+                "supportservice/securityservice-1.0.0.war in storfs-restapi_6.0.2b-44423_amd64.deb",
+    "severity": "HIGH",
+
+    "config_value": "defaultTokenLifeTime = 1555200000",
+    "computed":     "1,555,200,000 ms = 1,555,200 s = 25,920 min = 432 h = 18 days",
+
+    "affected_wars": [
+        "auth-1.0.0.war",
+        "coreapi-1.0.0.war",
+        "encryption-1.0.0.war",
+        "supportservice-1.0.0.war",
+        "securityservice-1.0.0.war",
+    ],
+
+    "impact": (
+        "Any HX Connect REST API bearer token (obtained via /aaa/v1/auth with valid credentials, "
+        "default creds, or credential stuffing) remains valid for 18 days without re-authentication. "
+        "HX-F005 yields hxadmin credential hash from ZooKeeper — cracking that hash and obtaining "
+        "a token grants 18-day persistent REST API access. Token revocation via /aaa/v1/revoke "
+        "exists but is not automatic. The defaultIdleTimeout (30 min) triggers on inactivity, "
+        "but a polling attacker avoids it with periodic GETs."
+    ),
+
+    "source_file":  "WEB-INF/classes/application.conf (identical across all WARs)",
+    "config_path":  "/opt/hyperflex/storfs-restapi/<war>/WEB-INF/classes/application.conf",
+    "tags":         ["long-token-lifetime", "session-management", "cwe-613", "high"],
+}
+
+HX_F013 = {
+    "id":       "HX-F013",
+    "title":    "storfs-restapi 6.0.2b: hxSvcHttpEnabled=true and hyperVSvcHttpEnabled=true "
+                "in all WAR configs — internal REST API service traffic uses unencrypted HTTP",
+    "status":   "CONFIRMED — application.conf across all storfs-restapi WARs",
+    "severity": "HIGH",
+
+    "config_values": {
+        "hxSvcHttpEnabled":     "true",
+        "hyperVSvcHttpEnabled": "true",
+    },
+
+    "impact": (
+        "Inter-service communication on the stCtlVM and between HyperFlex nodes uses HTTP "
+        "(not HTTPS) when these flags are true. Any attacker with network access to the "
+        "stCtlVM management interface (typically accessible from ESXi hosts, vCenter, "
+        "and adjacent management network segments) can intercept plaintext service "
+        "authentication tokens and credentials. "
+        "Combined with HX-F006 (ZooKeeper stores ESXi/vCenter credentials), an attacker "
+        "on the management VLAN can passively harvest service credentials exchanged over HTTP."
+    ),
+
+    "deployment_scope": (
+        "Applies to all HXDP 6.0.2b stCtlVM deployments. The flags are hardcoded true "
+        "in the shipped config with no documented override mechanism."
+    ),
+
+    "source_file": "WEB-INF/classes/application.conf (all WARs)",
+    "tags":        ["cleartext-service", "http-not-https", "cwe-319", "high"],
+}
+
+HX_F014 = {
+    "id":       "HX-F014",
+    "title":    "storfs-restapi 6.0.2b: common.lib ships Cisco internal build toolchain path "
+                "/build/sptoolchain in production package — build environment disclosure",
+    "status":   "CONFIRMED — common.lib in storfs-restapi_6.0.2b-44423_amd64.deb",
+    "severity": "LOW",
+
+    "artifact":  "/opt/hyperflex/storfs-restapi/common.lib (Bash script, 644)",
+    "leak":      'TCROOT="/build/sptoolchain"',
+    "also_leaks": [
+        "HCL_CONF path: $SRCDIR/src/scripts/catalog/springpath-hcl.conf",
+        "Installer OVA path: /build/sptoolchain/springpath/installer/2.5.1/hx-master-os.ova",
+        "HyperV OVA path: /build/sptoolchain/springpath/hyperv/hx-master-os.ova",
+    ],
+    "impact": (
+        "Reveals Cisco/Springpath internal build system path, toolchain layout, and "
+        "internal project names (springpath, sptoolchain). Enables targeted directory traversal "
+        "or path confusion on any system that uses this path variable at runtime. "
+        "Build path leaks are entry points for supply chain reconnaissance."
+    ),
+    "source_file": "/opt/hyperflex/storfs-restapi/common.lib",
+    "tags":        ["build-path-leak", "info-disclosure", "cwe-209", "low"],
+}
+
+for _f in [HX_F012, HX_F013, HX_F014]:
+    FINDINGS[_f["id"]] = _f
+
 FINDINGS_LIST = list(FINDINGS.values())
 
 if __name__ == "__main__":
