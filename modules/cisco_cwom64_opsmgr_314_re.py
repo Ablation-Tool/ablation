@@ -168,28 +168,43 @@ CWOM_F3 = {
 # ─────────────────────────────────────────────────────────
 CWOM_F4 = {
     "id":       "CWOM-F4",
-    "title":    "CWOM64 migration script xl-backup.sh hardcodes MariaDB root password 'vmturbo' — "
-                "'mysql -uroot -pvmturbo' in update64_package-3.16.0.iso migration/xl-backup.sh",
-    "status":   "CONFIRMED — xl-backup.sh extracted from migration.tar in update64_package-3.16.0.iso",
+    "title":    "CWOM64 'vmturbo' hardcoded as MariaDB root password in initialization, migration, "
+                "and upgrade toolchain — three independent scripts in update64_package-3.16.0.iso",
+    "status":   "CONFIRMED — configure_mariadb.sh (bin.tar), xl-backup.sh (migration.tar), "
+                "turboupgrade.sh, and turboupgrade.sh in update64_package-3.16.0.iso",
     "severity": "CRITICAL",
 
     "password":     "vmturbo",
     "credential":   "MariaDB root user",
 
-    "source": {
-        "iso":     "update64_package-3.16.0.iso",
-        "archive": "migration.tar",
-        "file":    "migration/xl-backup.sh",
-        "snippet": "mapfile -t schemas < <(mysql -uroot -pvmturbo -s --skip-column-names -e \"${SQL_COMMAND}\")",
+    "occurrences": {
+        "configure_mariadb.sh": {
+            "archive": "bin.tar",
+            "snippet": "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'vmturbo' WITH GRANT OPTION; "
+                       "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY 'vmturbo' WITH GRANT OPTION;",
+            "role":    "Sets the MariaDB root password to 'vmturbo' during initial deployment — root cause",
+        },
+        "xl-backup.sh": {
+            "archive": "migration.tar",
+            "snippet": "mapfile -t schemas < <(mysql -uroot -pvmturbo -s --skip-column-names -e \"${SQL_COMMAND}\")",
+            "role":    "Uses 'vmturbo' in production backup operations — breaks if changed",
+        },
+        "turboupgrade.sh": {
+            "archive": "(root of ISO)",
+            "snippet": "sed -i '/prometheus-mysql-exporter:/,/prometheus/c\\  prometheus-mysql-exporter:\\n    enabled: false\\n    mysql:\\n      user: root\\n      pass: vmturbo' ${chartsFile}",
+            "role":    "Writes 'pass: vmturbo' in plaintext into the live Kubernetes CR (charts_v1alpha1_xl_cr.yaml) during upgrades",
+        },
     },
 
     "scope": (
         "The 'vmturbo' password is the default MariaDB root credential across all CWOM/Turbonomic "
-        "deployments. Combined with CWOM-F1 (same password for Linux root and turbo), "
+        "deployments. configure_mariadb.sh establishes it at install time; xl-backup.sh reads it for "
+        "production backup operations; turboupgrade.sh writes it into the live Kubernetes Custom Resource. "
+        "The credential appears at all three lifecycle stages (install, operate, upgrade), creating "
+        "an operational dependency that resists change. "
+        "Combined with CWOM-F1 (same password for Linux root and turbo), "
         "'vmturbo' is the single default credential spanning all three authentication boundaries: "
-        "Linux OS (root), application service account (turbo), and database (MariaDB root). "
-        "The MariaDB root account has unrestricted access to all databases including the "
-        "Turbonomic application data (target topology, workload data, integrated service credentials)."
+        "Linux OS (root), application service account (turbo), and database (MariaDB root)."
     ),
 
     "xl_backup_also_exposes": [
@@ -199,13 +214,14 @@ CWOM_F4 = {
     ],
 
     "analysis": (
-        "The backup script uses the hardcoded credential for production database operations — "
-        "not just initialization. Any operator running the official Cisco-provided backup procedure "
-        "on an instance that has changed the MariaDB root password will fail. "
-        "This creates pressure to KEEP the default password, as changing it breaks the official tooling "
-        "unless the migration script is manually updated. "
-        "The pattern across CWOM-F1 through CWOM-F4 shows that 'vmturbo' is an operational dependency "
-        "embedded in the product's management toolchain, not just an install-time convenience."
+        "The 'vmturbo' credential is embedded at three lifecycle stages: initial install (set by "
+        "configure_mariadb.sh), ongoing operations (read by xl-backup.sh for backups), and upgrades "
+        "(written into the Kubernetes CR by turboupgrade.sh as a plaintext Helm value). "
+        "Changing the password breaks the official backup procedure unless xl-backup.sh is manually "
+        "patched, and the upgrade script will overwrite any custom Helm CR value with 'vmturbo' on "
+        "the next upgrade run. The product's own toolchain creates pressure to maintain the default. "
+        "The prometheus-mysql-exporter Helm CR entry exposes the credential in plaintext on the "
+        "running Kubernetes cluster, readable by any pod with cluster-reader or higher RBAC permissions."
     ),
 }
 
