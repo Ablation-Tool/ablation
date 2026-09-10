@@ -45,7 +45,7 @@ FIRMWARE = {
         "ucsfi.10.5.1.I60.2b.F.bin": "FI NX-OS 10.5.1 image — mknbi-linux-1.2 (analyzed in cisco_ucs_fi6500_602b_re.py)",
         "ucs-manager-k9.6.0.2b.bin": "UCSM 6.0.2b — SN format (analyzed in cisco_ucsm_602b_re.py)",
     },
-    "findings": [],
+    "findings": ["FIINFRA-F1"],
 }
 
 IOM_STRUCTURE = {
@@ -73,8 +73,46 @@ SECURITY_NOTES = {
     ),
 }
 
-FINDINGS = []
+# ─────────────────────────────────────────────────────────
+# FIINFRA-F1: FI and X-Direct infrastructure bundles use Cisco SN format with no
+#              cryptographic payload verification — NX-OS and UCSM images replaceable
+# ─────────────────────────────────────────────────────────
+FIINFRA_F1 = {
+    "id":       "FIINFRA-F1",
+    "title":    "FI 6500 and X-Direct infra bundles use Cisco SN format with no cryptographic "
+                "payload verification — FI NX-OS (1.5GB) and UCSM (1.1GB) images replaceable "
+                "by stripping the 808/812-byte header and reattaching with corrected checksum",
+    "status":   "CONFIRMED — SN header analysis of both bundles",
+    "severity": "MEDIUM",
+
+    "sn_format": {
+        "magic":      "0x6401534e (big-endian)",
+        "header":     "6500 infra: 808 bytes; X-Direct: 812 bytes",
+        "checksum":   "8-byte field at header offset +8 (no cryptographic signing)",
+    },
+
+    "critical_components": {
+        "ucsfi.10.5.1.I60.2b.F.bin": "FI NX-OS 10.5.1 (1.5GB) — entire switch OS",
+        "ucs-manager-k9.6.0.2b.bin": "UCSM 6.0.2b (1.1GB) — management plane",
+        "ucs-2400-6400.6.0.2b.bin":  "IOM NX-OS (344MB) — also nested SN format, same issue",
+        "ucs-2500-6400.6.0.2b.bin":  "IOM NX-OS (394MB) — also nested SN format",
+    },
+
+    "impact": (
+        "An attacker who can intercept or replace the infra bundle file (via UCSM bundle upload, "
+        "NFS/HTTP staging path, Intersight integration, or direct file system access on the FI) "
+        "can substitute modified FI NX-OS or UCSM images. The SN header checksum is not "
+        "cryptographically signed — reattaching the original header with a corrected checksum "
+        "produces a bundle that passes Cisco's format validation. "
+        "FI NX-OS compromise gives persistent access to the management and data plane of every "
+        "blade/rack in the domain; UCSM compromise gives persistent access to the management plane."
+    ),
+
+    "cross_reference": "BCSERIES-F1 in cisco_ucs_b_c_series_bundle_602b_re.py — same SN format issue across all bundle types",
+}
+
+FINDINGS = [FIINFRA_F1]
 
 if __name__ == "__main__":
-    print("[ANALYZED] UCS 6500 + X-Direct infra bundles — no novel standalone findings")
-    print("           Cross-referenced to cisco_ucs_fi6500_602b_re.py and cisco_ucsm_602b_re.py")
+    for f in FINDINGS:
+        print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")

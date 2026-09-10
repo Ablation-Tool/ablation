@@ -501,3 +501,9 @@ CMC_KEY_BINARIES = {
     "uemd (614KB)":                "UEM (Unified Embedded Management) daemon",
     "platform_ohms (757KB)":       "Platform hardware monitoring",
 }
+
+FINDINGS = [CMC_F1, CMC_F2, CMC_F3, CMC_F4, CMC_F5, CMC_F6, CMC_F7, CMC_F8, CMC_F9, CMC_F10, CMC_F11]
+
+if __name__ == "__main__":
+    for f in FINDINGS:
+        print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")
