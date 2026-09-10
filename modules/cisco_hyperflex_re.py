@@ -363,7 +363,8 @@ FINDINGS = {
             "kv_key_fn": "KVGetDataEncryptionKey @ 0x61a8d0 (lower-level ZK/KV key retrieval)",
             "auth_check": "NONE — no authentication before handler dispatch confirmed in disasm",
         },
-        "versions_affected": ["6.0.2b-44423"],
+        "versions_affected": ["6.0.2b-44423", "5.5.2b-43453"],
+        "version_note": "5.5.2b confirmed: StPlatformEnc_getDataEncryptionKeys_* Thrift class names present in storfs binary",
         "remediation": (
             "Bind stNonBlockingEncServer to 127.0.0.1 only. "
             "Add a caller-identity verification step at the Thrift dispatch layer "
@@ -425,7 +426,8 @@ FINDINGS = {
                 "getAboutInfo — version/build disclosure",
             ],
         },
-        "versions_affected": ["6.0.2b-44423"],
+        "versions_affected": ["6.0.2b-44423", "5.5.2b-43453"],
+        "version_note": "5.5.2b confirmed: same Thrift class symbols in storfs binary; KVGetDataEncryptionKey present",
         "remediation": (
             "Bind the StPlatform Thrift server to 127.0.0.1 only. "
             "Add pre-dispatch authentication at the TNonblockingServer level using a shared secret "
@@ -1199,12 +1201,15 @@ HX_F013 = {
 
 HX_F014 = {
     "id":       "HX-F014",
-    "title":    "storfs-restapi 6.0.2b: common.lib ships Cisco internal build toolchain path "
-                "/build/sptoolchain in production package — build environment disclosure",
-    "status":   "CONFIRMED — common.lib in storfs-restapi_6.0.2b-44423_amd64.deb",
+    "title":    "HXDP common.lib ships Cisco internal build toolchain path /build/sptoolchain "
+                "in production packages — present in storfs-core 5.5.2b and storfs-restapi 6.0.2b",
+    "status":   "CONFIRMED — common.lib in storfs-core_5.5.2b-43453 AND storfs-restapi_6.0.2b-44423",
     "severity": "LOW",
 
-    "artifact":  "/opt/hyperflex/storfs-restapi/common.lib (Bash script, 644)",
+    "artifacts": [
+        "/opt/springpath/storfs-core/common.lib (storfs-core 5.5.2b-43453)",
+        "/opt/hyperflex/storfs-restapi/common.lib (storfs-restapi 6.0.2b-44423)",
+    ],
     "leak":      'TCROOT="/build/sptoolchain"',
     "also_leaks": [
         "HCL_CONF path: $SRCDIR/src/scripts/catalog/springpath-hcl.conf",
@@ -1213,12 +1218,12 @@ HX_F014 = {
     ],
     "impact": (
         "Reveals Cisco/Springpath internal build system path, toolchain layout, and "
-        "internal project names (springpath, sptoolchain). Enables targeted directory traversal "
+        "internal project names (springpath, sptoolchain). Present across at least two "
+        "major HXDP release lines (5.5 and 6.0). Enables targeted directory traversal "
         "or path confusion on any system that uses this path variable at runtime. "
         "Build path leaks are entry points for supply chain reconnaissance."
     ),
-    "source_file": "/opt/hyperflex/storfs-restapi/common.lib",
-    "tags":        ["build-path-leak", "info-disclosure", "cwe-209", "low"],
+    "tags":      ["build-path-leak", "info-disclosure", "cwe-209", "cross-version", "low"],
 }
 
 for _f in [HX_F012, HX_F013, HX_F014]:
