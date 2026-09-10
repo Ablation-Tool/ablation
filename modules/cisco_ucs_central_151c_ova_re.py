@@ -1,6 +1,14 @@
 """
-Cisco UCS Central 1.5.1c OVA + Passreset ISO — RE Module
+Cisco UCS Central 1.5.1c OVA — Runtime Confirmation Sub-Module
 Sources: ucs-central.1.5.1c.ova, ucs-central-passreset.1.5.1c.iso (/media/cowboy/research/Cisco-UCS/)
+Canonical module: cisco_ucs_central_151_re.py (17 findings; UCSC-F1 through UCSC-F17)
+
+Sub-module purpose: confirm that kickstart-level findings from cisco_ucs_central_151_re.py
+survive to the deployed running system. Evidence source is the mounted OVA disk (disk1.raw),
+not the installer ISO. Findings here are not additive to the total count — they are
+runtime-layer evidence for UCSC-F1, UCSC-F3, UCSC-F7, UCSC-F11, and UCSC-F3 respectively.
+IDs use UCSC-OVA-* prefix to avoid namespace collision with the canonical module.
+
 OVA date: 2015 (CentOS 6 base)
 Contents:
   disk1.vmdk (40GB virtual) — CentOS 6 root: OS + UCS Central application stack
@@ -15,20 +23,24 @@ Application: Cisco UCS Central 1.5.1c (sam.config credential store, /opt/cisco/ 
 """
 
 FIRMWARE = {
-    "target":  "Cisco UCS Central",
-    "version": "1.5.1c",
-    "source":  "ucs-central.1.5.1c.ova",
-    "disk1":   "40GB virtual (CentOS 6 root + UCS Central app)",
-    "disk2":   "40GB virtual (data volume)",
-    "findings": ["UCSC-F1", "UCSC-F2", "UCSC-F3", "UCSC-F4"],
+    "target":        "Cisco UCS Central",
+    "version":       "1.5.1c",
+    "source":        "ucs-central.1.5.1c.ova",
+    "disk1":         "40GB virtual (CentOS 6 root + UCS Central app)",
+    "disk2":         "40GB virtual (data volume)",
+    "role":          "runtime-confirmation sub-module — see cisco_ucs_central_151_re.py for canonical findings",
+    "findings":      ["UCSC-OVA-F1", "UCSC-OVA-F2", "UCSC-OVA-F3", "UCSC-OVA-F4", "UCSC-OVA-F5"],
+    "canonical_ref": "cisco_ucs_central_151_re.py (UCSC-F1, UCSC-F3, UCSC-F7, UCSC-F11, UCSC-F3)",
 }
 
 # ─────────────────────────────────────────────────────────
-# UCSC-F1: Hardcoded AES-128 passphrase for all sam.config credential encryption
-#          — every UCS Central deployment uses the same key
+# UCSC-OVA-F1: Hardcoded AES-128 passphrase for all sam.config credential encryption
+#               — runtime confirmation from mounted disk1.raw; canonical: UCSC-F1
 # ─────────────────────────────────────────────────────────
 UCSC_F1 = {
-    "id":       "UCSC-F1",
+    "id":           "UCSC-OVA-F1",
+    "canonical_ref": "UCSC-F1 in cisco_ucs_central_151_re.py",
+    "evidence_source": "deployed OVA disk (disk1.raw mounted at /mnt/ucsc-ova-root)",
     "title":    "UCS Central sam.config credential encryption uses hardcoded passphrase "
                 "'theKeyForEncryptingTheSharedSecret' — AES-128-CBC via openssl enc; "
                 "decrypts adminPasswd and sharedSecret on every deployment",
@@ -84,11 +96,13 @@ UCSC_F1 = {
 }
 
 # ─────────────────────────────────────────────────────────
-# UCSC-F2: Hardcoded root password hash in kickstart AND deployed OVA
-#          — build-time MD5-crypt hash identical to runtime shadow entry
+# UCSC-OVA-F2: Hardcoded root password hash in kickstart AND deployed OVA
+#               — runtime confirmation from mounted disk1.raw; canonical: UCSC-F3
 # ─────────────────────────────────────────────────────────
 UCSC_F2 = {
-    "id":       "UCSC-F2",
+    "id":            "UCSC-OVA-F2",
+    "canonical_ref": "UCSC-F3 in cisco_ucs_central_151_re.py",
+    "evidence_source": "deployed OVA disk — /root/anaconda-ks.cfg AND /etc/shadow confirm kickstart hash survives to runtime",
     "title":    "UCS Central 1.5.1c root MD5-crypt hash '$1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/' "
                 "hardcoded in kickstart and deployed unchanged to /etc/shadow",
     "status":   "CONFIRMED — /root/anaconda-ks.cfg AND /etc/shadow from mounted disk1.raw",
@@ -116,11 +130,13 @@ UCSC_F2 = {
 }
 
 # ─────────────────────────────────────────────────────────
-# UCSC-F3: admin account has empty password field in deployed OVA
-#          — shadow entry is 'admin::17223' (no hash, no lock)
+# UCSC-OVA-F3: admin account has empty password field in deployed OVA
+#               — runtime confirmation from mounted disk1.raw; canonical: UCSC-F7
 # ─────────────────────────────────────────────────────────
 UCSC_F3 = {
-    "id":       "UCSC-F3",
+    "id":            "UCSC-OVA-F3",
+    "canonical_ref": "UCSC-F7 in cisco_ucs_central_151_re.py",
+    "evidence_source": "deployed OVA disk — /etc/shadow confirms empty admin password in running system",
     "title":    "UCS Central 1.5.1c admin account deployed with empty /etc/shadow password field "
                 "('admin::17223') — local console login requires no password",
     "status":   "CONFIRMED — /etc/shadow from mounted disk1.raw",
@@ -146,10 +162,13 @@ UCSC_F3 = {
 }
 
 # ─────────────────────────────────────────────────────────
-# UCSC-F4: Three accounts with unrestricted NOPASSWD sudo + ALL users allowed credential scripts
+# UCSC-OVA-F4: Three accounts with unrestricted NOPASSWD sudo + ALL users allowed credential scripts
+#               — runtime confirmation from mounted disk1.raw; canonical: UCSC-F11
 # ─────────────────────────────────────────────────────────
 UCSC_F4 = {
-    "id":       "UCSC-F4",
+    "id":            "UCSC-OVA-F4",
+    "canonical_ref": "UCSC-F11 in cisco_ucs_central_151_re.py",
+    "evidence_source": "deployed OVA disk — /etc/sudoers.d/cisco-sudo confirms sudoers in running system",
     "title":    "UCS Central sudoers grants NOPASSWD:ALL to admin, root, and samdme; "
                 "ALL users allowed NOPASSWD execution of decryptpasswd.pl and credential management scripts",
     "status":   "CONFIRMED — /etc/sudoers.d/cisco-sudo from mounted disk1.raw",
@@ -234,11 +253,13 @@ SAM_CONFIG_ARCH = {
 }
 
 # ─────────────────────────────────────────────────────────
-# UCSC-F5: passreset ISO ks_upgrade.cfg resets root to the same known hardcoded hash
-#          — "password recovery" restores a predictable, pre-cracked credential state
+# UCSC-OVA-F5: passreset ISO ks_upgrade.cfg resets root to the same known hardcoded hash
+#               — runtime confirmation from passreset ISO; canonical: UCSC-F3
 # ─────────────────────────────────────────────────────────
 UCSC_F5 = {
-    "id":       "UCSC-F5",
+    "id":            "UCSC-OVA-F5",
+    "canonical_ref": "UCSC-F3 in cisco_ucs_central_151_re.py",
+    "evidence_source": "ucs-central-passreset.1.5.1c.iso — ks_upgrade.cfg confirms passreset restores same hash",
     "title":    "UCS Central 1.5.1c passreset ISO ks_upgrade.cfg resets root to the same "
                 "hardcoded MD5-crypt hash '$1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/' — "
                 "the recovery procedure restores a known-plaintext credential state",
@@ -268,10 +289,9 @@ UCSC_F5 = {
     ),
 }
 
-FIRMWARE["findings"].append("UCSC-F5")
-
 FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5]
 
 if __name__ == "__main__":
     for f in FINDINGS:
         print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")
+        print(f"              canonical: {f['canonical_ref']}")
