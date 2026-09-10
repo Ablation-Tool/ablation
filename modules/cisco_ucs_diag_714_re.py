@@ -18,7 +18,7 @@ FIRMWARE = {
         "sdu_container": "ucs-sdu-container-7.1.4.260010.squashfs — 2026-03-17, Python 3.13",
         "hsu_keys_dir":  "hsu-keys/ in rootfs — 4 RSA-2048 public key PEM/DER pairs",
     },
-    "findings": ["DIAG-F1", "DIAG-F2"],
+    "findings": ["DIAG-F1", "DIAG-F2", "DIAG-F3"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -105,6 +105,51 @@ DIAG_F2 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# DIAG-F3: decrypt-file in SDU container contains the same hardcoded PBKDF2 key
+#          — 6th confirmed UCS component spanning HUU + SCU + SDU (Diagnostics) product lines
+# ─────────────────────────────────────────────────────────
+DIAG_F3 = {
+    "id":       "DIAG-F3",
+    "title":    "UCS SDU 7.1.4 decrypt-file contains hardcoded PBKDF2 AES-256 key 'zfguijkophju@*%1]' — "
+                "6th confirmed UCS component; key now spans HUU + SCU + SDU product lines",
+    "status":   "CONFIRMED — strings ./usr/sbin/decrypt-file from ucs-sdu-container-7.1.4.260010-base.tar.gz",
+    "severity": "CRITICAL",
+
+    "key":  "zfguijkophju@*%1]",
+
+    "decrypt_commands_in_binary": [
+        "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 -in %s -out %s.gz -k zfguijkophju@*%1] -nosalt 2>&1",
+        "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 -in %s -out %s -k zfguijkophju@*%1] -nosalt 2>&1",
+    ],
+
+    "confirmed_6_components": [
+        "ucs-xe130cm8-huu-6.0.2.260143  (HUU XE130C M8 — cisco_ucs_huu_xe130cm8_602_re.py)",
+        "ucs-c220m8-huu-6.0.2.260143    (HUU C220 M8  — cisco_ucs_huu_cross_model_re.py)",
+        "ucs-c245m8-huu-6.0.2.260180    (HUU C245 M8  — cisco_ucs_huu_cross_model_re.py)",
+        "ucs-c480m5-huu-4.2.3r          (HUU C480 M5  — cisco_ucs_huu_cross_model_re.py)",
+        "ucs-scu-7.1.7.260200           (SCU 7.1.7    — cisco_ucs_scu_717_re.py)",
+        "ucs-diag-7.1.4.260010          (SDU/Diag     — this module)",
+    ],
+
+    "product_line_scope": (
+        "The key is now confirmed across THREE distinct UCS bootable utility product lines: "
+        "HUU (Hardware Update Utility), SCU (Software Configuration Utility), "
+        "and SDU/Diagnostics (Software Diagnostic Utility). "
+        "All three serve different operational purposes (firmware update, OS configuration, diagnostics) "
+        "but share the same hsu/gunicorn architecture and the same decrypt-file binary with identical key. "
+        "This confirms the key is a shared infrastructure constant built into the common "
+        "UCS bootable utility framework, not an artifact of any single product or version."
+    ),
+
+    "two_decrypt_modes": (
+        "The SDU decrypt-file exposes two separate openssl invocations: "
+        "(1) decrypt to .gz (gzip'd output) and (2) decrypt to raw output. "
+        "This is consistent with the binary supporting both compressed and uncompressed payloads, "
+        "identical to the HUU and SCU decrypt-file binaries."
+    ),
+}
+
 SDU_CONTAINER_NOTES = {
     "version":      "7.1.4.260010 (2026-03-17)",
     "python":       "3.13",
@@ -113,7 +158,7 @@ SDU_CONTAINER_NOTES = {
     "note":         "No novel credential or auth findings in SDU container",
 }
 
-FINDINGS = [DIAG_F1, DIAG_F2]
+FINDINGS = [DIAG_F1, DIAG_F2, DIAG_F3]
 
 if __name__ == "__main__":
     for f in FINDINGS:
