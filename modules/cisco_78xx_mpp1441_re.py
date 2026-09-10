@@ -378,6 +378,65 @@ PHN_F17 = {
 }
 
 # ─────────────────────────────────────────────────────────
+# PHN-F18 — TLS verification fully disabled in libatls.so curl path (init_tl_curl)
+# ─────────────────────────────────────────────────────────
+PHN_F18 = {
+    "id":      "PHN-F18",
+    "title":   "TLS cert and hostname verification unconditionally disabled in libatls.so curl connection path",
+    "status":  "CONFIRMED — static analysis of libatls.so:init_tl_curl (78xx MPP 14.4.1)",
+    "severity": "HIGH",
+
+    "affected_library": "libatls.so (28KB ARM32) — init_tl_curl (0x3400)",
+    "called_from":      "atls_connect (0x1b18) → init_tl_curl → [all HTTPS connections via libatls.so]",
+
+    "disassembly_evidence": {
+        "0x3618": "curl_easy_setopt(curl, 0x40, 0)  CURLOPT_SSL_VERIFYPEER=0  [disable cert verification]",
+        "0x366c": "curl_easy_setopt(curl, 0x51, 0)  CURLOPT_SSL_VERIFYHOST=0  [disable hostname verification]",
+        "condition": "UNCONDITIONAL — no branch before either setopt call; always disabled",
+    },
+
+    "impact": (
+        "CURLOPT_SSL_VERIFYPEER=0: OpenSSL peer certificate chain verification disabled. "
+        "Any cert (self-signed, wrong CA, expired, revoked) is accepted. "
+        "CURLOPT_SSL_VERIFYHOST=0: hostname matching disabled. "
+        "Cert presented by attacker server for any CN/SAN is accepted. "
+        "Combined: any MITM on the curl-based HTTPS path succeeds without any cryptographic obstacle."
+    ),
+
+    "affected_connections": (
+        "All HTTPS sessions initiated via atls_connect → init_tl_curl. "
+        "libatls.so is linked by edge_gateway for Webex cloud connectivity. "
+        "Affected endpoints include wdm-a.wbx2.com (Webex Device Manager), "
+        "uds.<domain> (CUCM User Data Service), and minerva.<domain> cloud services."
+    ),
+
+    "separate_from_phn_f17": (
+        "PHN-F17 affects the direct SSL_CTX_set_cert_verify_callback path (sec_validate_cert DER size gate). "
+        "PHN-F18 affects the libcurl transport layer independently. "
+        "Both paths exist in edge_gateway; they cover different connection types (direct SSL vs HTTP-via-curl). "
+        "PHN-F18 is unconditional; PHN-F17 requires attacker to present cert with DER > 8168 bytes."
+    ),
+
+    "libatls_curl_init_sequence": {
+        "0x3504": "curl_easy_init()  — get curl handle",
+        "0x3554": "curl_easy_setopt(curl, 0x400, url)  CURLOPT_URL",
+        "0x3620": "curl_easy_setopt(curl, 0x40, 0)   CURLOPT_SSL_VERIFYPEER=0",
+        "0x366c": "curl_easy_setopt(curl, 0x51, 0)   CURLOPT_SSL_VERIFYHOST=0",
+        "0x38ac": "curl_easy_setopt(curl, opt, slist)  CURLOPT_HTTPHEADER",
+        "0x38f4": "store curl handle at handle->curl; store slist at handle->slist",
+    },
+
+    "custom_curl_classicalonprem_note": (
+        "libcurl.so (Cisco fork) contains strings 'for classicalonprem, disable CURLOPT_SSL_VERIFYHOST' "
+        "and 'for non-classicalonprem, CURLOPT_SSL_VERIFYHOST remain unchanged'. "
+        "These strings are in libcurl.so .rodata at offset 0x615ff-0x6163f. "
+        "init_tl_curl (in libatls.so) sets CURLOPT_SSL_VERIFYHOST=0 unconditionally, suggesting "
+        "the classicalonprem string logic either controls a separate higher-level wrapper or is dead/vestigial. "
+        "CURLOPT_SSL_VERIFYPEER=0 is not guarded by classicalonprem at all."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
 # Boot sequence and service map
 # ─────────────────────────────────────────────────────────
 BOOT_SEQUENCE = {
