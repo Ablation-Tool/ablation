@@ -1,0 +1,179 @@
+"""
+Cisco UCS 6500 Series Fabric Interconnect Infrastructure Bundle 6.0(2b)A — RE Module
+Source: ucs-6500-k9-bundle-infra.6.0.2b.A.bin (/media/cowboy/research/Cisco-UCS/)
+Bundle format: Cisco proprietary header (808 bytes) + gzip-compressed tar
+Tar content: ./isan/plugin_img/ucsfi.10.5.1.I60.2b.F.bin (99MB, mknbi-linux-1.2-6)
+FI image structure: netboot header + ELF kernel (gzip@0x3FB1) + NX-OS CPIO initramfs (gzip@0x8EE800)
+"""
+
+FIRMWARE = {
+    "target":     "Cisco UCS 6500 Series Fabric Interconnect",
+    "version":    "6.0(2b)A",
+    "source":     "ucs-6500-k9-bundle-infra.6.0.2b.A.bin",
+    "bundle_hdr": "808-byte proprietary header (magic: 6401534e), filename + version metadata",
+    "payload":    "ucsfi.10.5.1.I60.2b.F.bin (mknbi-linux-1.2-6 format)",
+    "os_base":    "NX-OS / ISAN, x86-64, CPIO initramfs + DNF/RPM package bootstrap",
+    "key_rpms":   "nginx-1.25.4, pam-plugin-debug-1.3.0, python3-debugger-3.8.20",
+    "findings":   ["FI6500-F1", "FI6500-F2", "FI6500-F3", "FI6500-F4"],
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F1: sudoers NOPASSWD /usr/bin/strings /proc/*/environ
+#            — any authenticated user can dump env vars of all processes
+# ─────────────────────────────────────────────────────────
+FI6500_F1 = {
+    "id":       "FI6500-F1",
+    "title":    "NX-OS FI sudoers grants NOPASSWD 'strings /proc/*/environ' to all authenticated users — "
+                "any non-admin session can read environment variables of every process including root-owned daemons",
+    "status":   "CONFIRMED — /etc/sudoers in CPIO initramfs of ucsfi.10.5.1.I60.2b.F.bin",
+    "severity": "HIGH",
+
+    "sudoers_entry": (
+        "Cmnd_Alias COUNT_VSH_SH_CMNDS = /usr/bin/strings /proc/*/environ\n"
+        "ALL,!root,!admin ALL = NOPASSWD:COUNT_VSH_SH_CMNDS"
+    ),
+
+    "impact": (
+        "Any authenticated NX-OS user who escalates to the Linux host layer "
+        "(via vsh_perm shell, SSH, or any other code execution path) can run:\n"
+        "  sudo /usr/bin/strings /proc/*/environ\n"
+        "This dumps the environment of every running process on the system. "
+        "NX-OS daemons, management plane processes, and cloud connector agents "
+        "may store session tokens, SNMP secrets, cluster keys, or Intersight credentials "
+        "in environment variables. No password required; no restriction on process scope."
+    ),
+
+    "cisco_bug": "CSCwm11251 — 'multiple FI host sudo root escalations' (referenced in sudoers comment above BCM shell rule)",
+
+    "note": (
+        "This rule is labeled in the sudoers comment block as a fix for CSCwm11251. "
+        "Cisco removed the bcm-shell NOPASSWD rule as a known escalation vector, "
+        "but COUNT_VSH_SH_CMNDS was retained. The original bcm-shell rule was:\n"
+        "  /usr/bin/ssh -l root -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "
+        "-q lc[0-9]* /lc/isan/bcm/bcm-shell\n"
+        "Retained NOPASSWD rules with escalation potential include strings /proc/*/environ, "
+        "loadplugin, and mknbi-insieme."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F2: NOPASSWD loadplugin from bootflash/volatile/slot
+#            — any authenticated user can load arbitrary NX-OS plugins
+# ─────────────────────────────────────────────────────────
+FI6500_F2 = {
+    "id":       "FI6500-F2",
+    "title":    "NX-OS FI sudoers grants NOPASSWD loadplugin from bootflash/volatile/slot storage to all "
+                "authenticated users — if bootflash is writable, arbitrary NX-OS plugin load achievable",
+    "status":   "CONFIRMED — /etc/sudoers LOADPLUGIN_CMNDS in ucsfi.10.5.1.I60.2b.F.bin",
+    "severity": "HIGH",
+
+    "sudoers_entry": (
+        "Cmnd_Alias LOADPLUGIN_CMNDS = \\\n"
+        "    /isan/sbin/loadplugin /bootflash/*, \\\n"
+        "    /isan/sbin/loadplugin /volatile/*, \\\n"
+        "    /isan/sbin/loadplugin /slot[0-9]/*, \\\n"
+        "    /isanboot/sbin/loadplugin /bootflash/*, \\\n"
+        "    /isanboot/sbin/loadplugin /volatile/*, \\\n"
+        "    /isanboot/sbin/loadplugin /slot[0-9]/*\n"
+        "ALL,!root,!admin ALL = NOPASSWD:LOADPLUGIN_CMNDS"
+    ),
+
+    "impact": (
+        "loadplugin installs and activates NX-OS plugin packages. "
+        "Any non-admin authenticated user can load a plugin from bootflash or volatile storage "
+        "without a password. Attack path:\n"
+        "  1. Gain any authenticated NX-OS session\n"
+        "  2. Transfer a malicious plugin .bin to bootflash (via copy, scp, or any write path)\n"
+        "  3. sudo /isan/sbin/loadplugin /bootflash/<malicious>.bin\n"
+        "  4. Plugin executes within the NX-OS service plane at elevated privilege\n"
+        "The wildcard on /volatile/* is broader — volatile storage is an in-memory tmpfs "
+        "writable by any process, so no bootflash write access is required for the volatile path."
+    ),
+
+    "volatile_path_note": (
+        "/volatile/* is in-memory tmpfs. Any process that can write to /volatile can "
+        "drop a plugin file and load it via NOPASSWD loadplugin. "
+        "This collapses the attack chain: code-exec-as-any-user → plugin-load → "
+        "NX-OS service plane execution."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F3: admin and %network-admin have NOPASSWD:ALL sudo
+#            — any admin credential compromise = unrestricted root
+# ─────────────────────────────────────────────────────────
+FI6500_F3 = {
+    "id":       "FI6500-F3",
+    "title":    "NX-OS FI sudoers grants NOPASSWD:ALL to admin user and network-admin group — "
+                "credential compromise of either escalates directly to unrestricted root",
+    "status":   "CONFIRMED — /etc/sudoers in ucsfi.10.5.1.I60.2b.F.bin",
+    "severity": "MEDIUM",
+
+    "sudoers_entries": [
+        "root ALL = (ALL) NOPASSWD:ALL",
+        "admin ALL = (ALL) NOPASSWD:ALL",
+        "%network-admin ALL = (ALL) NOPASSWD:ALL",
+    ],
+
+    "account_model": (
+        "The NX-OS admin account (/etc/passwd: admin:x:2002:503::/var/home/admin:/isan/bin/vsh_perm) "
+        "uses NX-OS vsh_perm as its shell — authentication goes through libpam_aaa_auth.so. "
+        "When the admin session drops to the host Linux layer (e.g., via 'run bash' or debug access), "
+        "admin ALL = (ALL) NOPASSWD:ALL provides direct root escalation. "
+        "The network-admin group broadens this to any NX-OS network-admin role member."
+    ),
+
+    "attack_path": (
+        "NX-OS network-admin login → run bash (or any Linux shell access) → "
+        "sudo su or sudo bash → unrestricted root on the FI host. "
+        "No password prompt at any step post-authentication."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F4: Debug packages (pam-plugin-debug, python3-debugger) in production firmware
+# ─────────────────────────────────────────────────────────
+FI6500_F4 = {
+    "id":       "FI6500-F4",
+    "title":    "Debug packages pam-plugin-debug-1.3.0 and python3-debugger-3.8.20 shipped in production "
+                "UCS 6500 FI 6.0(2b)A firmware — expands debug attack surface on production infrastructure",
+    "status":   "CONFIRMED — DNF yumdb entries in CPIO initramfs: pam-plugin-debug and python3-debugger installed",
+    "severity": "LOW",
+
+    "installed_debug_packages": [
+        "pam-plugin-debug-1.3.0-r5-corei7_64 (SHA: 506f4d9a6cdb0f7de49817d36d88826fec289d38)",
+        "python3-debugger-3.8.20-r0-corei7_64 (SHA: 40f4a431709f5656b43f0bfe2bf1764aa15b731a)",
+    ],
+
+    "pam_debug_impact": (
+        "pam-plugin-debug provides PAM module debugging capability. "
+        "In production, this can be configured (via PAM stack editing) to log authentication tokens, "
+        "debug auth decisions, or bypass auth checks during troubleshooting. "
+        "Its presence means the attack surface includes PAM debug interfaces "
+        "that would not exist in a hardened production image."
+    ),
+
+    "python_debugger_impact": (
+        "python3-debugger (pdb and related modules) is installed alongside the production Python 3.8. "
+        "An attacker with any Python execution path can invoke pdb to attach to running Python processes, "
+        "inspect their memory, and modify execution — without needing gdb or external debugging tools."
+    ),
+}
+
+# Account summary from /etc/passwd + /etc/shadow
+ACCOUNTS = {
+    "root":         {"uid": 0,    "shell": "/bin/bash",           "shadow": "requires password"},
+    "ftp":          {"uid": 15,   "shell": "/isanboot/bin/nobash", "shadow": "*"},
+    "sshd":         {"uid": 17,   "shell": "/isanboot/bin/nobash", "shadow": "*"},
+    "admin":        {"uid": 2002, "shell": "/isan/bin/vsh_perm",   "shadow": "!:12498:0:99999:7 (NX-OS managed)"},
+    "adminbackup":  {"uid": None, "shell": None,                   "shadow": "!:13419:0:99999:7 (no expiry)"},
+    "svc-nxapi":    {"uid": 498,  "shell": "/isan/bin/vsh_perm",   "shadow": "*"},
+    "svc-nxsdk":    {"uid": 500,  "shell": "/isan/bin/vsh_perm",   "sudo": "NOPASSWD:/isan/bin/vsh"},
+    "svc-nxcloud":  {"uid": 501,  "shell": "/isan/bin/vsh_perm",   "sudo": "NOPASSWD:/isan/bin/vsh"},
+}
+
+FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4]
+
+if __name__ == "__main__":
+    for f in FINDINGS:
+        print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")
