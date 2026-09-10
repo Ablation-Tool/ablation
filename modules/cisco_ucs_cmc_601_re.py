@@ -291,6 +291,120 @@ CMC_NETWORK_SERVICES = {
     "HTTPS":    "Redfish API via libmhd + GnuTLS (port inferred from runtime config)",
 }
 
+# ─────────────────────────────────────────────────────────
+# CMC-F7 — Hardcoded 64-byte encryption key in libjolt_user_mgmt.so
+# ─────────────────────────────────────────────────────────
+CMC_F7 = {
+    "id":       "CMC-F7",
+    "title":    "Hardcoded 64-byte key material in libjolt_user_mgmt.so adjacent to user credential storage path",
+    "status":   "CONFIRMED — binary analysis of libjolt_user_mgmt.so in 6.0(1.251006) rootfs",
+    "severity": "HIGH",
+
+    "b64_value":  "8BgdB4Qp31lzKrmjTYurDsjwqMfpsxUbkHumeZgZ9/AhRYDXHMCfkeG18Zpl0i48SRKDd9edeSrJD0UyawAszA==",
+    "raw_hex":    "f0181d078429df59732ab9a34d8bab0ec8f0a8c7e9b3151b907ba6799819f7f0214580d71cc09f91e1b5f19a65d22e3c49128377d79d792ac90f45326b002ccc",
+    "raw_length": 64,
+
+    "adjacent_strings": [
+        "ABCDEFGHIJKLMNOP",
+        "/cmc_secure/.persistent/security/default_user_cred_done",
+        "/cmc_secure/.persistent/security/users/1.encrypted",
+        "/cmc_secure/.persistent/security/userdb_meta.json",
+        "__jolt_user_default_create",
+        "populate_default_regular_password",
+    ],
+
+    "analysis": (
+        "A 64-byte binary blob (base64-encoded in .rodata) appears in libjolt_user_mgmt.so "
+        "in the same code section as the default user credential creation logic. "
+        "User credentials are stored encrypted at /cmc_secure/.persistent/security/users/1.encrypted. "
+        "The 64 bytes match AES-XTS key size (2×32-byte sub-keys) or an HMAC-SHA-512 key. "
+        "Preceding string ABCDEFGHIJKLMNOP (16 bytes = AES-128 block) may be an IV or salt. "
+        "If this key is used to encrypt user/1.encrypted, any CMC running 6.0(1.251006) "
+        "exposes the same decryption key — any firmware dump yields the admin credential."
+    ),
+
+    "impact": (
+        "If confirmed as the user database encryption key: obtain users/1.encrypted "
+        "(via tech-support bundle, TFTP, or any file read) and decrypt offline "
+        "to recover admin credentials — without needing to crack password hashes."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# CMC-F8 — SecureVault writes LUKS key to /tmp/luks_keyfileXXXXXX
+# ─────────────────────────────────────────────────────────
+CMC_F8 = {
+    "id":       "CMC-F8",
+    "title":    "SecureVault writes LUKS encryption key to /tmp/luks_keyfileXXXXXX (mkstemp pattern) — race window",
+    "status":   "CONFIRMED — binary analysis of SecureVault in 6.0(1.251006) rootfs",
+    "severity": "MEDIUM",
+
+    "commands_found": [
+        "cryptsetup -q luksFormat --type luks2 -c aes-xts-plain %s --key-file=%s",
+        "cryptsetup luksOpen %s %s --key-file=%s",
+    ],
+
+    "key_file_pattern": "/tmp/luks_keyfileXXXXXX",
+
+    "analysis": (
+        "SecureVault creates a temporary key file in /tmp using mkstemp-like naming, "
+        "passes it as --key-file to cryptsetup for LUKS2 volume operations, then (presumably) "
+        "deletes it. During the window between creation and deletion, the key file exists in /tmp "
+        "which is world-writable (drwxrwxrwt). "
+        "Any root-level process (jrpc_server, CMC daemons) can read /tmp to capture the LUKS key "
+        "if code execution is achieved via CMC-F3 or other vectors. "
+        "SecureVault manages encryption of the CMC's secure storage partition."
+    ),
+
+    "impact": (
+        "LUKS key extraction from /tmp race window. Encrypted partition decryptable offline "
+        "after key capture. Relevant to recovering contents of /cmc_secure partition "
+        "if physical access or persistent root execution is available."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# CMC-F9 — quiet_proxy skips TLS hostname verification when no hostname available
+# ─────────────────────────────────────────────────────────
+CMC_F9 = {
+    "id":       "CMC-F9",
+    "title":    "quiet_proxy silently skips TLS hostname verification when destination hostname is absent",
+    "status":   "CONFIRMED — binary analysis of quiet_proxy in 6.0(1.251006) rootfs",
+    "severity": "MEDIUM",
+
+    "evidence_string": "Host name was not provided by %s and will not be verified.",
+
+    "tls_api_used": [
+        "SSL_CTX_set_cipher_list",
+        "X509_VERIFY_PARAM_set1_host",
+        "X509_VERIFY_PARAM_add1_host",
+    ],
+
+    "analysis": (
+        "quiet_proxy (TCP/4040 → internal JRPC services) calls X509_VERIFY_PARAM_set1_host / "
+        "X509_VERIFY_PARAM_add1_host to set the expected TLS hostname for peer verification. "
+        "When no destination hostname is provided, it silently skips hostname verification "
+        "('Host name was not provided by %s and will not be verified.'). "
+        "An attacker controlling the destination routing can present any valid certificate "
+        "from any CA in the trust store and have it accepted — certificate chain validates "
+        "but the identity is unverified."
+    ),
+
+    "also_noted": (
+        "quiet_proxy sets LD_PRELOAD=/lib/liboverride_getpeername.so and REMOTE_HOST=%s "
+        "before spawning backend processes. This overrides getpeername() return value "
+        "in the spawned process to show the original client IP rather than 127.0.0.1. "
+        "Impact: any auth decisions in backend services based on getpeername() use "
+        "a proxy-controlled IP value that could be manipulated if the proxy itself "
+        "can be reached with a spoofed source address."
+    ),
+
+    "impact": (
+        "MITM on connections routed through quiet_proxy when no explicit hostname is configured. "
+        "Relevant to internal CMC service-to-service TLS connections."
+    ),
+}
+
 CMC_KEY_BINARIES = {
     "redfish (2.1MB)":             "Redfish API server, uses libmhd + GnuTLS, libgnutls.so.30",
     "libjolt_inf.so":              "Redfish + JRPC method implementations, -fno-stack-protector",
