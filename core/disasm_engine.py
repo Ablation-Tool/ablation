@@ -293,22 +293,21 @@ class DisasmEngine:
         if not HAS_CAPSTONE or not self.md:
             yield from self._fallback_disasm_stream(code, base_addr, count)
             return
-        # disasm_iter() is a true C iterator — no internal list allocation.
-        # disasm() builds the full list before Python sees a single instruction;
-        # on 105MB lina .text (~800K insns) that's ~120MB of wasted allocation.
-        for i, insn in enumerate(self.md.disasm_iter(code, base_addr)):
+        # disasm_lite() is the streaming API in Capstone 5+; disasm_iter was removed.
+        # Returns (address, size, mnemonic, op_str) tuples — no .bytes attribute.
+        for i, (address, size, mnemonic, op_str) in enumerate(self.md.disasm_lite(code, base_addr)):
             if count and i >= count:
                 return
             yield InsnRecord(
-                address=insn.address,
-                mnemonic=insn.mnemonic,
-                op_str=insn.op_str,
-                size=insn.size,
-                raw=insn.bytes.hex(),
-                is_branch=self._is_branch(insn),
-                is_call=self._is_call(insn),
-                is_ret=self._is_ret(insn),
-                branch_type=self._branch_type(insn) if self._is_branch(insn) else None,
+                address=address,
+                mnemonic=mnemonic,
+                op_str=op_str,
+                size=size,
+                raw='',
+                is_branch=mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge','ja','jb','jae','jbe','jc','jnc','js','jns','jo','jno','jp','jnp','jcxz','jecxz','jrcxz','loop','loope','loopne'),
+                is_call=mnemonic == 'call',
+                is_ret=mnemonic in ('ret','retn','retf'),
+                branch_type=('conditional' if mnemonic.startswith('j') and mnemonic != 'jmp' else 'unconditional') if mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge','ja','jb','jae','jbe','jc','jnc','js','jns','jo','jno','jp','jnp','jcxz','jecxz','jrcxz') else None,
             )
 
     def _fallback_disasm_stream(self, code, base_addr, count):
