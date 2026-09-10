@@ -181,7 +181,40 @@ UCSC21_F5 = {
     ),
 }
 
-FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5]
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F6: OVA signing certificate expired 2026-06-29 while 2.1.2b remains
+#             the current distributed version — 73+ days with expired code-signing cert
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F6 = {
+    "id":       "UCSC21-F6",
+    "title":    "UCS Central 2.1.2b OVA signing certificate expired 2026-06-29 (IdenTrust EV, "
+                "Cisco Systems Inc.) — current release distributed with expired signature cert",
+    "status":   "CONFIRMED — ucs-central.2.1.2b.cert (openssl x509 -noout -text); cert expired 73+ days ago",
+    "severity": "LOW",
+
+    "cert_subject":   "C=US, ST=California, L=San Jose, O=Cisco Systems Inc., CN=Cisco Systems Inc.",
+    "cert_issuer":    "C=US, O=IdenTrust, CN=TrustID EV Code Signing CA 4",
+    "cert_not_before": "2023-06-30",
+    "cert_not_after":  "2026-06-29",
+    "confirmed_expired": "2026-09-10 (73 days past expiry)",
+
+    "ova_manifest":  "ucs-central.2.1.2b.mf — SHA256 hashes of OVF + disk1.vmdk + disk2.vmdk",
+    "sig_algorithm": "sha256WithRSAEncryption (cert signing); SHA256 (manifest file hashes)",
+
+    "impact": (
+        "VMware vCenter and ESXi OVA import validates the signing certificate at import time. "
+        "When the cert is expired and no RFC 3161 countersignature timestamp is present, "
+        "strict certificate enforcement will reject the OVA or require the operator to "
+        "explicitly bypass signature verification — a security downgrade step. "
+        "The expiry also means Cisco can no longer use this certificate to re-sign future "
+        "builds of 2.1.2b or issue corrected OVAs with the same identity anchor. "
+        "As of 2026-09-10, 2.1.2b_EVAL.iso is the only available installer; the OVA with "
+        "the expired cert is the only VM deployment artifact for this version."
+    ),
+}
+
+FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6]
+FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 
 if __name__ == "__main__":
     for f in FINDINGS:
