@@ -220,4 +220,82 @@ UCSFI_F7 = {
     "ftp_note":       "Comment in xinetd config states 'Make sure the FTP server can be used only by EOBC' — design intent is intra-chassis only.",
 }
 
-FINDINGS = [UCSFI_F1, UCSFI_F2, UCSFI_F3, UCSFI_F4, UCSFI_F5, UCSFI_F6, UCSFI_F7]
+# ─────────────────────────────────────────────────────────
+# UCSFI-F8 — nginx DME backend runs as root
+# ─────────────────────────────────────────────────────────
+UCSFI_F8 = {
+    "id":       "UCSFI-F8",
+    "title":    "UCSM nginx DME backend process runs as root — any nginx exploit or path traversal grants root access",
+    "status":   "CONFIRMED — /isan/etc/dme/nginx.tar.gz → nginx/conf/sysmgr_be_dme.conf in UCSM 10.5.1",
+    "severity": "HIGH",
+
+    "config_file":    "nginx/conf/sysmgr_be_dme.conf (extracted from /isan/etc/dme/nginx.tar.gz)",
+    "user_directive": "user  root;",
+    "note":           "The production UCSM nginx config (sysmgr_be_dme.conf) sets user=root. "
+                      "This overrides the default nginx behavior of dropping privileges after bind. "
+                      "Worker processes handle all API requests as root.",
+
+    "load_module":    "/isan/lib/ngx_http_reqfwder_module.so",
+    "module_routes":  ["/api/", "/api_local/"],
+    "module_note":    "Custom closed-source module handles DME API routing. "
+                      "Any vulnerability in ngx_http_reqfwder_module.so executes as root.",
+
+    "master_process": "off — no master/worker privilege separation; single process runs as root.",
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSFI-F9 — X-Real-IP trusted from 0.0.0.0/0 — IP access control bypass
+# ─────────────────────────────────────────────────────────
+UCSFI_F9 = {
+    "id":       "UCSFI-F9",
+    "title":    "nginx DME backend trusts X-Real-IP from any source — IP-based access controls can be spoofed",
+    "status":   "CONFIRMED — nginx/conf/sysmgr_be_dme.conf in UCSM 10.5.1",
+    "severity": "MEDIUM",
+
+    "nginx_directives": [
+        "set_real_ip_from 0.0.0.0/0;",
+        "real_ip_header X-Real-IP;",
+        "real_ip_recursive on;",
+    ],
+
+    "note": "set_real_ip_from 0.0.0.0/0 instructs nginx to replace $remote_addr with the X-Real-IP header value "
+            "for connections from ANY source IP. If the upstream proxy or any inline component makes access decisions "
+            "based on $remote_addr (e.g., restricting /api/ to management subnets), an attacker can override the "
+            "apparent source IP by injecting X-Real-IP.",
+
+    "cors_origin":   "Access-Control-Allow-Origin: http://127.0.0.1:8000 — globally applied to all responses.",
+    "cors_headers":  "Access-Control-Allow-Headers includes 'devcookie' — non-standard auth header.",
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSFI-F10 — Visore DevCookie stored in localStorage; ACI codebase debug artifacts
+# ─────────────────────────────────────────────────────────
+UCSFI_F10 = {
+    "id":       "UCSFI-F10",
+    "title":    "UCSM REST API auth token stored in localStorage and sent as DevCookie header — XSS yields full API access; production JS contains debugger statement and commented eval with double-unescape",
+    "status":   "CONFIRMED — nginx/html/visore/js/visore.js in UCSM 10.5.1",
+    "severity": "MEDIUM",
+
+    "auth_mechanism": {
+        "login_endpoint":   "/api/aaaLogin.xml?gui-token-request=yes",
+        "login_body":       "<aaaUser pwd='...' name='...'/>",
+        "token_storage":    "localStorage['apic-cookie'] (not httpOnly cookie — XSS-readable)",
+        "token_header":     "'DevCookie' : State.token  (sent with every API request)",
+        "challenge_token":  "localStorage['apic-challenge'] (CSRF challenge token)",
+    },
+
+    "codebase_origin": "visore.html copyright: '(c) 2012-2013 Insieme Networks, Inc.' "
+                       "Insieme was acquired by Cisco for ACI (~$863M, 2012). "
+                       "The UCSM object model browser reuses ACI's Visore tool.",
+
+    "debug_artifacts": {
+        "debugger_statement":    "debugger; — active breakpoint in production JS path",
+        "commented_eval":        "//eval('Resolver.' + lFunc)(lQuery ? unescape(unescape(lQuery)) : '')",
+        "double_unescape_note":  "Commented eval with double-unescape of URL query param — if re-enabled: URL → double-decoded JS eval injection",
+        "document_write_sink":   "layer.document.write('<p>' + text + '</p>') — unescaped text in document.write path",
+    },
+
+    "jquery_versions": ["jquery-ui-1.7.1 (2009)", "jquery-ui-1.10.4 (both present in CSS includes)"],
+}
+
+FINDINGS = [UCSFI_F1, UCSFI_F2, UCSFI_F3, UCSFI_F4, UCSFI_F5, UCSFI_F6, UCSFI_F7, UCSFI_F8, UCSFI_F9, UCSFI_F10]
