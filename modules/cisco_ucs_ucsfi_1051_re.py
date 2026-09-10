@@ -1,8 +1,9 @@
 """
 Cisco UCS 6500 Series Fabric Interconnect — UCSM / NX-OS RE findings
 Source: ucs-6500-k9-bundle-infra.6.0.2b.A.bin
-Format: Cisco SN header (0x200 bytes, magic d\\x01SN) + gzip tar at 0x328
-Payload: ucsfi.10.5.1.I60.2b.F.bin (mknbi-linux-1.2-6, 1515MB)
+Cross-verified: ucs-x-direct-k9-infra.6.0.2b.A.bin ships identical ucsfi.10.5.1.I60.2b.F.bin payload
+Format: Cisco SN header (magic d\\x01SN, 808 bytes for 6500 / 812 for X-Direct) + gzip tar
+Payload: ucsfi.10.5.1.I60.2b.F.bin (mknbi-linux-1.2-6, 1515MB, 1589095936 bytes, same in both bundles)
   PE bootloader at 0x400
   gzip kernel at 0x3FB1 → x86-64 Linux ELF, statically linked, stripped
   gzip CPIO rootfs at 0x8EE800 (177MB NX-OS rootfs)
@@ -10,9 +11,10 @@ NX-OS version: 10.5.1.I60.2b.F
 """
 
 FIRMWARE = {
-    "target":      "Cisco UCS 6500 Series Fabric Interconnect — UCSM Management Plane",
+    "target":      "Cisco UCS 6500 Series and X-Direct Fabric Interconnect — UCSM Management Plane",
     "nxos_ver":    "10.5.1.I60.2b.F",
     "source_pkg":  "ucs-6500-k9-bundle-infra.6.0.2b.A.bin",
+    "also_in":     "ucs-x-direct-k9-infra.6.0.2b.A.bin (same ucsfi payload, identical byte count)",
     "payload":     "ucsfi.10.5.1.I60.2b.F.bin (mknbi-linux-1.2-6, 1515MB)",
     "rootfs":      "gzip CPIO at ucsfi offset 0x8EE800 (177MB)",
     "kernel":      "gzip x86-64 ELF at ucsfi offset 0x3FB1 — statically linked, stripped",
