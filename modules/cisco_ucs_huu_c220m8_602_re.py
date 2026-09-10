@@ -250,3 +250,7 @@ HUU_F6 = {
 }
 
 FINDINGS = [HUU_F1, HUU_F2, HUU_F3, HUU_F4, HUU_F5, HUU_F6]
+
+if __name__ == "__main__":
+    for f in FINDINGS:
+        print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")
