@@ -1,6 +1,6 @@
 """
-Cisco UCS Central 1.5.1c OVA — RE Module
-Source: ucs-central.1.5.1c.ova (/media/cowboy/research/Cisco-UCS/)
+Cisco UCS Central 1.5.1c OVA + Passreset ISO — RE Module
+Sources: ucs-central.1.5.1c.ova, ucs-central-passreset.1.5.1c.iso (/media/cowboy/research/Cisco-UCS/)
 OVA date: 2015 (CentOS 6 base)
 Contents:
   disk1.vmdk (40GB virtual) — CentOS 6 root: OS + UCS Central application stack
@@ -227,7 +227,44 @@ SAM_CONFIG_ARCH = {
     "privkey_path":   "/opt/cisco/certs/privKey.pem",
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4]
+# ─────────────────────────────────────────────────────────
+# UCSC-F5: passreset ISO ks_upgrade.cfg resets root to the same known hardcoded hash
+#          — "password recovery" restores a predictable, pre-cracked credential state
+# ─────────────────────────────────────────────────────────
+UCSC_F5 = {
+    "id":       "UCSC-F5",
+    "title":    "UCS Central 1.5.1c passreset ISO ks_upgrade.cfg resets root to the same "
+                "hardcoded MD5-crypt hash '$1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/' — "
+                "the recovery procedure restores a known-plaintext credential state",
+    "status":   "CONFIRMED — ks_upgrade.cfg from ucs-central-passreset.1.5.1c.iso (146MB, bootable)",
+    "severity": "HIGH",
+
+    "passreset_iso": "ucs-central-passreset.1.5.1c.iso",
+    "iso_label":     "UCSCentral-Reset",
+
+    "ks_upgrade_cfg_rootpw": "rootpw --iscrypted $1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/",
+    "hash":                  "$1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/ (same as OVA root, UCSC-F2)",
+
+    "isolinux_boot_path": {
+        "default_label": "ks=cdrom:/ks.cfg (ks.cfg has no rootpw — fresh install path)",
+        "upgrade_path":  "ks=cdrom:/ks_upgrade.cfg triggered manually for upgrade/recovery (sets root hash)",
+    },
+
+    "analysis": (
+        "The passreset ISO is Cisco's documented recovery mechanism for locked-out UCS Central "
+        "1.5.1c deployments. The upgrade kickstart (ks_upgrade.cfg) resets root to the same "
+        "static MD5-crypt hash documented in UCSC-F2. Any operator who runs the passreset procedure "
+        "returns their deployment to the known-hash state, regardless of what password root had before. "
+        "An attacker who has cracked the hash (or knows the plaintext from prior compromise of any "
+        "1.5.1c deployment) can predict the post-recovery credential state. "
+        "The passreset tool, designed as a security recovery mechanism, is itself a credential backdoor "
+        "that re-instates a Cisco engineering default with known distribution."
+    ),
+}
+
+FIRMWARE["findings"].append("UCSC-F5")
+
+FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5]
 
 if __name__ == "__main__":
     for f in FINDINGS:
