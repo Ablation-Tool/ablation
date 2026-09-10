@@ -471,4 +471,86 @@ UCSC_F13 = {
     ),
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13]
+# ─────────────────────────────────────────────────────────
+# UCSC-F14 — Hardcoded RC4 encryption key 'dwefsAvfsdkfqweqyrmfvsfwth' in samcrypt/libosiris.so
+# ─────────────────────────────────────────────────────────
+UCSC_F14 = {
+    "id":       "UCSC-F14",
+    "title":    "Hardcoded RC4 encryption key 'dwefsAvfsdkfqweqyrmfvsfwth' (KeyCode E001) in samcrypt binary and libosiris.so — all samcrypt-encrypted files decryptable",
+    "status":   "CONFIRMED — strings /opt/cisco/bin/samcrypt and /opt/cisco/core/sam/lib/libosiris.so in OVA disk1 VMDK",
+    "severity": "HIGH",
+
+    "binary":    "opt/cisco/bin/samcrypt",
+    "library":   "opt/cisco/core/sam/lib/libosiris.so (and central-mgr, operation-mgr copies)",
+    "algorithm": "RC4 (RC4_set_key from OpenSSL; symbol RC4_1_CIPHER_KEYCODE)",
+
+    "hardcoded_key":  "dwefsAvfsdkfqweqyrmfvsfwth",
+    "keycode":        "E001 (KeyCode 1 = RC4_1_CIPHER_KEY; CURRENT_CIPHER_KEY maps to same value)",
+
+    "binary_interface": "samcrypt [infile] [outfile] [KeyCode]  -- third arg selects key by code",
+
+    "libosiris_functions": [
+        "utils::encryptFile(infile, outfile, KeyCode)",
+        "utils::encryptBuffer(Buffer, Buffer, bool)",
+        "utils::encryptProp(String, String, bool)",
+    ],
+
+    "decryption": (
+        "RC4 is symmetric — encrypt and decrypt use the same key. "
+        "Any file encrypted by samcrypt with KeyCode E001 can be decrypted: "
+        "python3 -c \"from Crypto.Cipher import ARC4; c=ARC4.new(b'dwefsAvfsdkfqweqyrmfvsfwth'); "
+        "open('out','wb').write(c.decrypt(open('enc','rb').read()))\" "
+        "Note: RC4 is stateful — decryption must process from byte 0 of the ciphertext."
+    ),
+
+    "context": (
+        "samcrypt is used by UCS Central service components (libosiris.so is loaded by core, "
+        "central-mgr, and operation-mgr). Files encrypted with samcrypt include properties, "
+        "configurations, and potentially credentials stored in the application databases. "
+        "Combined with world-readable sam.config (0644), any OS user can decrypt application "
+        "data files protected by samcrypt."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F15 — upd_admin_passwd.sh trusts world-writable /tmp/shadow as source for admin password
+# ─────────────────────────────────────────────────────────
+UCSC_F15 = {
+    "id":       "UCSC-F15",
+    "title":    "upd_admin_passwd.sh reads admin password hash from world-writable /tmp/shadow and overwrites /etc/shadow — admin password injectable via /tmp race",
+    "status":   "CONFIRMED — /opt/cisco/bin/upd_admin_passwd.sh in OVA disk1 VMDK",
+    "severity": "HIGH",
+
+    "script": "opt/cisco/bin/upd_admin_passwd.sh",
+    "script_content": [
+        "ADMIN_PASSWD=$(awk -F: '$1 == \"admin\" {print $2}' /tmp/shadow)",
+        "/opt/cisco/bin/schelper.pl -s main -k adminPasswd -v $ADMIN_PASSWD -r",
+        "mv /tmp/shadow /etc/shadow",
+        "mv /tmp/passwd /etc/passwd",
+        "mv /tmp/group /etc/group",
+    ],
+
+    "vulnerability": (
+        "The script reads the admin password hash from /tmp/shadow (world-writable) "
+        "without integrity checking. Any OS user who writes a crafted /tmp/shadow "
+        "before this script executes sets the admin OS password to a known hash. "
+        "The script then overwrites /etc/shadow, /etc/passwd, and /etc/group with "
+        "the /tmp/ versions — replacing system auth files with attacker-controlled content."
+    ),
+
+    "trigger_context": (
+        "Invoked during UCS Central admin password reset operations and potentially "
+        "via the passreset ISO flow. The /tmp path is accessible to all OS users "
+        "including the Apache daemon (uid daemon), postgres, and samdme."
+    ),
+
+    "impact": (
+        "An attacker with any OS-level shell (e.g., via UCSC-F9 CGI injection as daemon) "
+        "can: write /tmp/shadow with admin:<known_md5_hash>:17223:... and /tmp/passwd and /tmp/group "
+        "copying the originals, then wait for or trigger upd_admin_passwd.sh to run. "
+        "On completion, admin's password is set to the attacker's known hash → admin shell access "
+        "→ NOPASSWD:ALL sudo (UCSC-F11) → root."
+    ),
+}
+
+FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15]
