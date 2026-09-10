@@ -335,4 +335,95 @@ UCSC_F10 = {
     ),
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10]
+# ─────────────────────────────────────────────────────────
+# UCSC-F11 — Sudoers grants any OS user NOPASSWD /bin/chown -R * + admin/samdme have NOPASSWD:ALL
+# ─────────────────────────────────────────────────────────
+UCSC_F11 = {
+    "id":       "UCSC-F11",
+    "title":    "Sudoers misconfiguration: /bin/chown -R * NOPASSWD for all OS users enables local root; admin and samdme accounts have unrestricted NOPASSWD:ALL sudo",
+    "status":   "CONFIRMED — /etc/sudoers in OVA disk1 VMDK",
+    "severity": "CRITICAL",
+
+    "sudoers_file": "etc/sudoers",
+
+    "nopasswd_all_accounts": [
+        "admin  ALL = NOPASSWD:ALL  -- admin OS account has unrestricted root; no password required",
+        "samdme ALL = NOPASSWD:ALL  -- application service account has unrestricted root; no password required",
+        "root   ALL = NOPASSWD:ALL",
+    ],
+
+    "sudo_cmnds_for_all_users": (
+        "ALL ALL = NOPASSWD:SUDO_CMNDS applies to every OS user without a password. "
+        "SUDO_CMNDS includes /bin/chown -R * — any OS user can recursively chown any file or directory as root."
+    ),
+
+    "chown_lpe_path": (
+        "Apache runs as 'daemon' (User daemon in httpd.conf). "
+        "Any code executing as daemon (e.g., via UCSC-F9 recvbackup.cgi command injection) can: "
+        "'sudo /bin/chown -R daemon:daemon /etc/cron.d' — take ownership of cron.d, "
+        "write a cron job as daemon, which executes as root on the next cron cycle. "
+        "Alternatively: 'sudo /bin/chown -R daemon:daemon /etc/sudoers.d' — write "
+        "'daemon ALL = NOPASSWD:ALL' to sudoers.d, then 'sudo /bin/bash' = root shell."
+    ),
+
+    "also_in_sudo_cmnds": [
+        "/opt/cisco/bin/regenerate-certs.pl  -- any user can regenerate TLS certs and stop Apache (DoS)",
+        "/opt/cisco/bin/decryptpasswd.pl      -- any user can print cleartext shared secret (redundant with world-readable sam.config + hardcoded key UCSC-F1)",
+        "/opt/cisco/bin/restore.sh -p *       -- any user can trigger restore with wildcard password arg",
+        "/bin/kill                             -- any user can kill any process as root",
+    ],
+
+    "env_file_note": (
+        "Defaults env_file = /opt/cisco/core/env/core.env (0644, world-readable). "
+        "core.env sets LD_LIBRARY_PATH and PATH for sudo sessions. "
+        "If core.env is writable by any user (not confirmed at static analysis time), "
+        "injecting LD_LIBRARY_PATH into sudo sessions enables library hijacking."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F12 — RC4 explicitly enabled in Apache SSLCipherSuite; TLSv1.0/1.1 permitted
+# ─────────────────────────────────────────────────────────
+UCSC_F12 = {
+    "id":       "UCSC-F12",
+    "title":    "Apache SSLCipherSuite explicitly enables RC4 (RC4+RSA); SSLProtocol allows TLSv1.0 and TLSv1.1; DHE-RSA-AES256-SHA (PFS) explicitly excluded",
+    "status":   "CONFIRMED — /opt/cisco/core/apache/conf/extra/httpd-ssl.conf in OVA disk1 VMDK",
+    "severity": "MEDIUM",
+
+    "config_file": "opt/cisco/core/apache/conf/extra/httpd-ssl.conf",
+
+    "active_cipher_suite": "ALL:!DHE-RSA-AES256-SHA:!ADH:!EXPORT40:!EXPORT56:!LOW:!MEDIUM:!eNULL:RC4+RSA:+HIGH:+EXP",
+
+    "weaknesses": {
+        "RC4+RSA": (
+            "RC4 explicitly added to active cipher set. RC4 stream cipher is cryptographically broken "
+            "(NOMORE attack 2015; RFC 7465 prohibits RC4 in TLS since 2015). "
+            "A client and server can negotiate RC4-MD5 or RC4-SHA even with 'HIGH' ciphers available."
+        ),
+        "!DHE-RSA-AES256-SHA": (
+            "The only DHE (Diffie-Hellman Ephemeral) cipher is explicitly excluded, "
+            "disabling Perfect Forward Secrecy for RSA key exchange sessions. "
+            "Recorded TLS sessions can be decrypted if the server private key is obtained."
+        ),
+        "SSLProtocol All -SSLv2 -SSLv3": (
+            "TLSv1.0 and TLSv1.1 remain permitted. "
+            "TLSv1.0 is vulnerable to POODLE-over-TLS (CVE-2014-3566 variant) and BEAST (CVE-2011-3389). "
+            "PCI-DSS prohibited TLSv1.0 in 2018; NIST SP 800-52r2 requires TLSv1.2 minimum."
+        ),
+    },
+
+    "commented_variants": [
+        "#SSLCipherSuite ALL:!ADH:!EXPORT56:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP:+eNULL  (includes eNULL — no encryption)",
+        "#SSLCipherSuite ALL:!aNULL:!ADH:!eNULL:!LOW:!EXP:RC4+RSA:+HIGH:+MEDIUM",
+        "#SSLCipherSuite HIGH:RC4:+HIGH+TLSv1:MEDIUM:!MD5:!aNULL:!eNULL",
+        "#SSLCipherSuite ALL:!ADH:!EXPORT40:!EXPORT56:!LOW:!MEDIUM:!eNULL:RC4+RSA:+HIGH:+EXP",
+    ],
+
+    "note": (
+        "Multiple commented variants show iterative weakening over time. "
+        "One commented line includes '+eNULL' (no-encryption ciphers). "
+        "The active production config retains RC4 and excludes PFS."
+    ),
+}
+
+FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12]
