@@ -255,4 +255,84 @@ UCSC_F8 = {
             "at opt/cisco/core/apache/conf/httpd.conf use the production paths (/opt/apache).",
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8]
+# ─────────────────────────────────────────────────────────
+# UCSC-F9 — recvbackup.cgi OS command injection via unsanitized URL parameters
+# ─────────────────────────────────────────────────────────
+UCSC_F9 = {
+    "id":       "UCSC-F9",
+    "title":    "recvbackup.cgi OS command injection — $targetDir and $file from URL query string passed unsanitized into backtick shell exec and sudo invocation",
+    "status":   "CONFIRMED — /opt/cisco/core/apache/ucsmoperations/recvbackup.cgi and /opt/cisco/bin/ucsm_copy_backup.sh in OVA disk1 VMDK",
+    "severity": "CRITICAL",
+
+    "cgi_script": "opt/cisco/core/apache/ucsmoperations/recvbackup.cgi (Perl)",
+    "endpoint":   "/ucsmoperations/file-<file>/recvbackup.txt?targetDir=<dir>&targetFile=<tf>&maxIndex=<n>",
+
+    "url_parsing": (
+        "URI regex: /\\/ucsmoperations\\/file-(.*)\\//  -> $file (no path validation) "
+        "query string: targetDir=<X> -> $targetDir (no sanitization)"
+    ),
+
+    "injection_points": [
+        "`mkdir -p $targetDir`  -- $targetDir interpolated into backtick shell; any shell metachar executes",
+        "`sudo $COPY_BACKUP $targetDir $targetFile $maxIndex $file`  -- all four vars unsanitized, sudo level",
+    ],
+
+    "injection_payload_example": "targetDir=foo;id>/tmp/pwn",
+    "arbitrary_write": (
+        "open(OUTF, \">$file\") writes STDIN verbatim to the path extracted from the URI. "
+        "No path prefix restriction — $file can be any path writable by the Apache daemon user."
+    ),
+
+    "sudo_script": "opt/cisco/bin/ucsm_copy_backup.sh",
+    "sudo_escalation": (
+        "ucsm_copy_backup.sh runs as root via sudoers. It uses $DIR_NAME unquoted in: "
+        "'chown root:root ${DIR_NAME}/*', "
+        "'chmod 777 -R ${DIR_NAME}/..' (recursively world-writes the parent directory), "
+        "and all file operations. Shell metacharacters in $targetDir execute at root."
+    ),
+
+    "access_precondition": (
+        "Endpoint is under /xmlInternal with SSLVerifyClient require — "
+        "requires a TLS client certificate issued to a UCSM domain member. "
+        "Pre-existing UCSM client certificate required to reach the CGI."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F10 — sendimage.cgi path traversal via externalrep/../ prefix bypass
+# ─────────────────────────────────────────────────────────
+UCSC_F10 = {
+    "id":       "UCSC-F10",
+    "title":    "sendimage.cgi path traversal — 'externalrep/' prefix check bypassed by 'externalrep/../' allowing reads of arbitrary files",
+    "status":   "CONFIRMED — /opt/cisco/core/apache/ucsmoperations/sendimage.cgi in OVA disk1 VMDK",
+    "severity": "HIGH",
+
+    "cgi_script": "opt/cisco/core/apache/ucsmoperations/sendimage.cgi (Perl)",
+    "endpoint":   "/ucsmoperations/file-<file>/sendimage.txt",
+
+    "url_parsing": "URI regex: /\\/ucsmoperations\\/file-(.*)\\// -> $file",
+
+    "prefix_check": "$file !~ /^externalrep/ -> fails transaction",
+    "substitution": "$file =~ s/^externalrep/\\/bootflash\\/images/",
+
+    "bypass": (
+        "Payload: file-externalrep/../../../etc/shadow "
+        "Step 1 prefix check: 'externalrep/../../../etc/shadow' starts with 'externalrep' — PASSES. "
+        "Step 2 substitution: s/^externalrep/\\/bootflash\\/images/ → '/bootflash/images/../../../etc/shadow'. "
+        "Step 3 open(INF, \"$file\"): Perl's open() resolves the path — reads /etc/shadow and streams it to client."
+    ),
+
+    "reachable_files": [
+        "/etc/shadow (root password hash + admin empty field)",
+        "/etc/passwd",
+        "/opt/cisco/core/apache/conf/httpd.conf",
+        "any file readable by the Apache daemon user",
+    ],
+
+    "access_precondition": (
+        "Same as UCSC-F9: endpoint under /xmlInternal with SSLVerifyClient require. "
+        "TLS client certificate required."
+    ),
+}
+
+FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10]
