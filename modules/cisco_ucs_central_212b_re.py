@@ -9,7 +9,7 @@ FIRMWARE = {
     "source":   "ucs-central.2.1.2b_EVAL.iso",
     "base_os":  "AlmaLinux 9 (x86_64)",
     "installer": "kickstart.cfg + ucsCentral/ payload directory on ISO",
-    "findings":  ["UCSC21-F1", "UCSC21-F2", "UCSC21-F3", "UCSC21-F4"],
+    "findings":  ["UCSC21-F1", "UCSC21-F2", "UCSC21-F3", "UCSC21-F4", "UCSC21-F5"],
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
