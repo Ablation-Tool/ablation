@@ -4,6 +4,15 @@ Source: intersight-appliance-installer-kvm-1.1.7-0.a.tar.gz
 Format: 8x QCOW2 disks (45GB virtual each); disk1 = AlmaLinux 9 OS volume
 OS: AlmaLinux 9, kernel 5.14.0-687.5.3.el9_8 (RHEL 9.8 ABI)
 LVM: almalinux VG (root 14G + home 6G + opt_cisco 9G + tmp 5G + var_tmp 5G)
+
+Filesystem access method:
+  sudo qemu-nbd --connect=/dev/nbd0 disk1.qcow2
+  sudo vgchange -ay almalinux
+  sudo mount /dev/mapper/almalinux-root /mnt/intersight-root
+  sudo mount /dev/mapper/almalinux-opt_cisco /mnt/intersight-cisco
+
+opt_cisco layout (disk1): OpenSSL 1.1 build tree (ssl/), setup scripts (bin/), empty dc/ volume
+Full app stack (etcd/mongo/rabbit/consul/vault/k8s) lives on separate disks (disk3-disk8).
 """
 
 FIRMWARE = {
@@ -15,7 +24,7 @@ FIRMWARE = {
     "lvm_layout":  "almalinux VG: root(14G) home(6G) opt_cisco(9G) tmp(5G) var_tmp(5G)",
     "app_stack":   "etcd + MongoDB + RabbitMQ + Consul + Vault + Kubernetes + Jenkins (from get_dev_name.sh)",
     "custom_ssh":  "CiscoSSH 1.19.92 / OpenSSH 10.2p1 (Cisco fork at /usr/local/bin/ssh)",
-    "findings":    ["ISA-F1", "ISA-F2", "ISA-F3", "ISA-F4"],
+    "findings":    ["ISA-F1", "ISA-F2", "ISA-F3", "ISA-F4", "ISA-F5", "ISA-F6"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -58,36 +67,59 @@ ISA_F1 = {
 }
 
 # ─────────────────────────────────────────────────────────
-# ISA-F2 — Cisco TAC backdoor SSH account 'tac' with /bin/bash in all deployments
+# ISA-F2 — Cisco TAC backdoor account 'tac' with pam_cisco_ct.so auth + NOPASSWD ALL sudo
 # ─────────────────────────────────────────────────────────
 ISA_F2 = {
     "id":       "ISA-F2",
-    "title":    "Cisco TAC SSH backdoor account 'tac' with /bin/bash shell present in all appliance deployments",
-    "status":   "CONFIRMED — /etc/passwd + /etc/shadow in disk1",
-    "severity": "MEDIUM",
+    "title":    "Cisco TAC backdoor account 'tac' authenticates via pam_cisco_ct.so (Consent Token) "
+                "and has unrestricted NOPASSWD:ALL sudo — full root on any Intersight Appliance via CT",
+    "status":   "CONFIRMED — /etc/passwd + /etc/shadow + /etc/sudoers.d/tac + /etc/pam.d/sshd + "
+                "/etc/security/pam_cisco_ct.ini + /usr/lib64/security/pam_cisco_ct.so in disk1",
+    "severity": "HIGH",
 
     "passwd_entry": "tac:x:1004:1004:Cisco TAC access:/home/tac:/bin/bash",
-    "shadow_entry": "tac:!!:20622:::::::",
-    "group_entry":  "tac:x:1004:",
+    "shadow_entry": "tac:!!:20622:7::7:30::",
+    "sudoers_entry": "tac ALL=(ALL:ALL) NOPASSWD: ALL  (/etc/sudoers.d/tac)",
 
-    "analysis": (
-        "The 'tac' account exists in all Intersight Appliance deployments (baked into the installer image). "
-        "Shadow entry !! = no password; authentication requires an SSH key that Cisco TAC controls. "
-        "The comment field 'Cisco TAC access' explicitly documents the intent: "
-        "Cisco TAC can SSH into any deployed Intersight Appliance with this account. "
-        "The account has /bin/bash shell — full interactive access, not a restricted shell. "
-        "Customers deploying the on-premises appliance (chosen specifically for data sovereignty) "
-        "receive a system with a Cisco-controlled SSH entry point."
+    "pam_stack": (
+        "/etc/pam.d/sshd uses 'auth substack password-auth-ct'.\n"
+        "password-auth-ct inserts:\n"
+        "  auth [success=done user_unknown=ignore perm_denied=1 default=ok] pam_cisco_ct.so\n"
+        "pam_cisco_ct.ini: users = tac (CT auth applies ONLY to the tac user).\n"
+        "If pam_cisco_ct.so returns success → authentication complete, pam_unix skipped.\n"
+        "If pam_cisco_ct.so returns perm_denied → skip 1 line (past pam_unix.so sufficient).\n"
+        "CT authentication: challenge-response using RSA signature. "
+        "Device generates nonce, Cisco signs it with CT DEV private key, user pastes token."
     ),
 
-    "sudo_membership": "tac not in sudoers or wheel — limited to tac user's own privileges",
+    "ct_cert": {
+        "subject":  "O=Cisco, OU=DEV, CN=CT-IntersightAppliance-Debug-Access",
+        "issuer":   "CN=CT-IntersightAppliance-IMG-SIGNING, OU=RELEASE, O=Cisco",
+        "notBefore": "2023-02-28",
+        "notAfter":  "2053-02-20",
+        "embedded_in": "/etc/security/pam_cisco_ct.ini as product_ct_signing_x509_cert",
+    },
+
+    "analysis": (
+        "The 'tac' account authenticates via Cisco's Consent Token (CT) system, not password/SSH keys. "
+        "The CT flow: (1) device generates nonce via ct_local_generate_challenge, "
+        "(2) user sends nonce to Cisco TAC, (3) Cisco signs nonce with CT DEV private key, "
+        "(4) signed token pasted as SSH 'password', (5) pam_cisco_ct.so verifies RSA sig against "
+        "the embedded DEV certificate, (6) if valid → authenticated. "
+        "The DEV certificate (OU=DEV) is valid for 30 years (2023-2053). "
+        "It is the SAME certificate in every Intersight Appliance deployment — "
+        "scoped only by product_name/product_key_name, not per-device or per-customer. "
+        "Any party possessing Cisco's CT DEV private key for CT-IntersightAppliance-Debug-Access "
+        "can authenticate as 'tac' on ANY Intersight Appliance worldwide."
+    ),
 
     "impact": (
-        "Persistent remote access capability for Cisco personnel to any deployed Intersight Appliance. "
-        "The account is pre-provisioned; no customer action activates or authorizes it. "
-        "Customers who deploy on-premises for data sovereignty have no mechanism "
-        "to remove this account without breaking the appliance management model. "
-        "SSH key is Cisco-controlled — compromise of Cisco's TAC SSH keys = access to all appliances."
+        "Authentication as 'tac' + NOPASSWD sudo = unrestricted root. "
+        "The appliance is the control plane for all connected UCS infrastructure and stores "
+        "Intersight cloud connection credentials. "
+        "Scope: every Intersight On-Premises Appliance deployment globally. "
+        "Revocation requires appliance software update to replace the embedded certificate — "
+        "no runtime revocation mechanism visible in pam_cisco_ct.ini."
     ),
 }
 
@@ -197,12 +229,98 @@ ISA_F4 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# ISA-F5 — ansible, admin, and tac all have NOPASSWD:ALL sudo
+#           — triple privilege escalation surface on locked accounts
+# ─────────────────────────────────────────────────────────
+ISA_F5 = {
+    "id":       "ISA-F5",
+    "title":    "ansible, admin, and tac each have NOPASSWD:ALL sudo via sudoers.d — "
+                "three separate locked accounts with unrestricted root escalation paths",
+    "status":   "CONFIRMED — /etc/sudoers.d/{ansible,admin,tac} in disk1",
+    "severity": "HIGH",
+
+    "sudoers_entries": {
+        "/etc/sudoers.d/ansible": "ansible ALL=(ALL:ALL) NOPASSWD: ALL",
+        "/etc/sudoers.d/admin":   "admin ALL=(ALL:ALL) NOPASSWD: ALL",
+        "/etc/sudoers.d/tac":     "tac ALL=(ALL:ALL) NOPASSWD: ALL",
+    },
+
+    "account_state": {
+        "ansible": "shadow !! (locked), /bin/bash shell — no password auth possible",
+        "admin":   "shadow !! (locked), /usr/local/bin/diag.py shell — restricted login shell",
+        "tac":     "shadow !! (locked), /bin/bash shell — pam_cisco_ct.so auth (see ISA-F2)",
+    },
+
+    "analysis": (
+        "All three accounts are locked (!! shadow) — no direct password SSH auth. "
+        "Each is accessible via a different mechanism: "
+        "'tac' via CT token (ISA-F2), 'ansible' via SSH key injection or Ansible playbook, "
+        "'admin' via diag.py restricted shell with authenticated CT/console access. "
+        "All three grant root on first sudo call (no password challenge). "
+        "The sudoers.d fragmentation means each account's privilege was added independently — "
+        "not a single decision but three separate grants across the account lifecycle."
+    ),
+
+    "impact": (
+        "Any one of three accounts, if accessed, immediately yields root. "
+        "The ansible account is of particular interest: if any Ansible playbook on a jump host "
+        "or CI/CD pipeline stores credentials for the Intersight Appliance, "
+        "those credentials bypass the password requirement and grant root directly."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# ISA-F6 — cloud-init almalinux user has NOPASSWD:ALL sudo
+#           — SSH key injection via hypervisor = root
+# ─────────────────────────────────────────────────────────
+ISA_F6 = {
+    "id":       "ISA-F6",
+    "title":    "cloud-init default user 'almalinux' has NOPASSWD:ALL sudo — "
+                "hypervisor-level SSH key injection yields unrestricted root",
+    "status":   "CONFIRMED — /etc/cloud/cloud.cfg in disk1",
+    "severity": "MEDIUM",
+
+    "cloud_cfg_entry": (
+        "default_user:\n"
+        "  name: almalinux\n"
+        "  lock_passwd: True\n"
+        "  groups: [adm, systemd-journal]\n"
+        "  sudo: ['ALL=(ALL) NOPASSWD:ALL']\n"
+        "  shell: /bin/bash"
+    ),
+
+    "analysis": (
+        "Cloud-init creates the 'almalinux' user with NOPASSWD:ALL sudo on first boot. "
+        "The account's password is locked (lock_passwd: True) — authentication is SSH key only. "
+        "Cloud-init injects SSH keys from the hypervisor's guestinfo or OVF environment. "
+        "Attack vector: an attacker with access to the KVM hypervisor (e.g., compromised vCenter, "
+        "libvirt socket, or cloud-init datasource) can inject an arbitrary SSH public key "
+        "into cloud-init metadata before first boot. On boot, cloud-init creates the "
+        "almalinux account with the attacker's key. SSH as almalinux → sudo -s → root. "
+        "This is a pre-boot hypervisor-level privilege escalation path."
+    ),
+
+    "setup_script_note": (
+        "setup-services.sh checks OVF env for skip-init flag via vmtoolsd: "
+        "'vmtoolsd --cmd info-get guestinfo.ovfEnv'. "
+        "A hypervisor operator can also set skip-init=True to suppress Ansible playbook execution, "
+        "potentially leaving the appliance in a partial state exploitable during initialization."
+    ),
+
+    "impact": (
+        "Hypervisor access → cloud-init key injection → root on Intersight Appliance. "
+        "Relevant in multi-tenant environments or where vCenter/libvirt credentials are shared."
+    ),
+}
+
 ISA_ACCOUNTS = {
-    "root":    {"uid": 0,    "shadow": "!! (locked)",   "shell": "/bin/bash",       "sudo": "via wheel if added"},
-    "ansible": {"uid": 1001, "shadow": "!! (locked)",   "shell": "/bin/bash",       "sudo": "not in sudoers"},
-    "admin":   {"uid": 1002, "shadow": "!! (locked)",   "shell": "/usr/local/bin/diag.py", "sudo": "not in sudoers"},
-    "andro":   {"uid": 1003, "shadow": "!! (locked)",   "shell": "/sbin/nologin",   "sudo": "%andro ALL=(ALL) NOPASSWD: ALL"},
-    "tac":     {"uid": 1004, "shadow": "!! (key-based)", "shell": "/bin/bash",      "sudo": "not in sudoers"},
+    "root":      {"uid": 0,    "shadow": "!! (locked)", "shell": "/bin/bash",             "sudo": "direct root"},
+    "ansible":   {"uid": 1001, "shadow": "!! (locked)", "shell": "/bin/bash",             "sudo": "NOPASSWD:ALL (sudoers.d/ansible)"},
+    "admin":     {"uid": 1002, "shadow": "!! (locked)", "shell": "/usr/local/bin/diag.py","sudo": "NOPASSWD:ALL (sudoers.d/admin)"},
+    "andro":     {"uid": 1003, "shadow": "!! (locked)", "shell": "/sbin/nologin",         "sudo": "%andro ALL=(ALL) NOPASSWD: ALL (/etc/sudoers)"},
+    "tac":       {"uid": 1004, "shadow": "!! (CT auth)","shell": "/bin/bash",             "sudo": "NOPASSWD:ALL (sudoers.d/tac)"},
+    "almalinux": {"uid": None, "shadow": "locked (cloud-init SSH key)", "shell": "/bin/bash", "sudo": "ALL=(ALL) NOPASSWD:ALL (cloud.cfg)"},
 }
 
 ISA_CUSTOM_SSH = {
@@ -211,7 +329,7 @@ ISA_CUSTOM_SSH = {
     "note":    "Cisco fork of OpenSSH 10.2p1 in /usr/local/bin, overrides system OpenSSH in PATH",
 }
 
-FINDINGS = [ISA_F1, ISA_F2, ISA_F3, ISA_F4]
+FINDINGS = [ISA_F1, ISA_F2, ISA_F3, ISA_F4, ISA_F5, ISA_F6]
 
 if __name__ == "__main__":
     for f in FINDINGS:
