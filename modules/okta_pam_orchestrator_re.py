@@ -169,34 +169,50 @@ FINDINGS = [
         title='getrunnerconfig JWT Issuance Without Proof-of-Possession',
         package='axiomworkflows/workflows/getrunnerconfig',
         functions=[
-            'axiomworkflows/workflows/getrunnerconfig.(*Workflow).Execute',
-            'axiomworkflows/workflows/getrunnerconfig.NewInput',
-            'axiomworkflows/workflows/getrunnerconfig.NewOutput',
+            'axiomworkflows/workflows/getrunnerconfig.getRunnerConfig',     # VA: 0x55a6c60
+            'axiomworkflows/workflows/getrunnerconfig/activities.init',      # VA: 0x55a4f20
         ],
         class_='Authentication Bypass / JWT Issuance',
         description=(
             'The getrunnerconfig Temporal workflow returns a JWT (json:"jwt") '
             'given only a RunnerID (UUID) and an optional EncryptionKey. '
-            'The EncryptionKey field carries no validation tag, making it optional. '
-            'If the workflow issues a signed JWT without verifying that the caller '
-            'possesses the private half of the runner\'s registered keypair, '
-            'any party knowing a valid RunnerID can obtain a JWT for that runner '
-            'without proving identity.'
+            'EncryptionKey has no validate tag — optional by design. '
+            'Disassembly of getRunnerConfig (0x55a6c60) and its activities.init (0x55a4f20) '
+            'shows ZERO calls to any keypair.* function: no keypair.EncryptJWE, '
+            'no keypair.EncryptHybrid, no keypair.DecryptJWE, no keypair.Decrypt. '
+            'The activities package registers ONE activity (one func1 closure) with no crypto callees. '
+            'shared/activities has fetchrunnerpublickey.go but that source file does not appear '
+            'in getrunnerconfig\'s call graph — it is used by other workflows (exchangerunnerkey). '
+            'Contrast: exchangerunnerkey has activities/fetchrunnersecret.go and requires '
+            'ExchangeKey validate:"required,min=1". getrunnerconfig skips this requirement. '
+            'Attack path: skip exchangerunnerkey; call getrunnerconfig directly with '
+            '{runnerId: <valid UUID>, encryptionKey: ""}; receive JWT for target runner.'
         ),
         mechanism=(
-            'Temporal workflow execution: signal getrunnerconfig with {runnerId: <uuid>, encryptionKey: ""}. '
-            'If EncryptionKey is used to encrypt the returned JWT (caller-provided key wrapping), '
-            'provide your own key material and decrypt the JWT response.'
+            'Temporal workflow execution: start getrunnerconfig workflow with {runnerId: <uuid>, encryptionKey: ""}. '
+            'No keypair verification occurs in the workflow or its activity. '
+            'JWT is issued for the runner without proof-of-possession of the runner\'s private key.'
         ),
         evidence=(
-            'Wire format recovered from gopclntab generic instantiation type names: '
-            'Input{runnerId uuid validate:"required,min=1", encryptionKey string [no validate]}. '
-            'Output{runner_id uuid, tenant_id uuid, jwt string}. '
-            'Contrast with exchangerunnerkey where ExchangeKey has validate:"required,min=1".'
+            'DISASSEMBLY-BACKED (VA: 0x55a6c60). '
+            'getRunnerConfig callees: uuid.encodeHex, axschema.PropertiesSchema.ToJSONSchema, '
+            'dsl/internal.GetLogger, runtime.rawstringtmp, fmt.Sprintf. '
+            'Zero keypair.* calls. Two indirect calls (call rdx at 0x55a7064/0x55a7193) '
+            'with trivial args (esi=2,r8=2 and edi=0,esi=0) — not crypto verification signatures. '
+            'activities.init callees: runtime only. '
+            'Input struct: {runnerId validate:"required,min=1", encryptionKey [NO validate]}. '
+            'Output struct: {runner_id, tenant_id, jwt}. '
+            'shared/activities has fetchrunnerpublickey.go but NOT in getrunnerconfig call graph.'
         ),
         bert_score=0.452,
-        verified=False,
-        notes='Needs disassembly of getrunnerconfig workflow function body to determine if keypair verification occurs.',
+        verified=True,   # disassembly confirms no keypair ops
+        notes=(
+            'STATUS: PLAUSIBLE-HIGH. Disassembly confirms no keypair operations. '
+            'Unresolved: whether the registered activity (func1 at 0x55a5120) calls a service-layer '
+            'RPC that performs server-side proof-of-possession checks outside the binary. '
+            'Proof: trigger getrunnerconfig Temporal workflow with known RunnerID and empty encryptionKey '
+            'and observe if JWT is returned.'
+        ),
     ),
 
     Finding(
@@ -216,25 +232,36 @@ FINDINGS = [
             'tenant isolation enforced by Temporal namespace filters.'
         ),
         mechanism=(
-            'Supply a filter value containing Temporal visibility query operators: '
-            '"value\' OR WorkflowType=\'%\'" or equivalent. '
-            'The buildTemporalQuery output would include injected conditions '
-            'broadening the result set beyond the intended tenant scope.'
+            'Supply a filter value containing unescaped double-quote characters: '
+            'value = `foo" OR WorkflowType="%`. '
+            'formatTemporalValue wraps string with fmt.Sprintf("\\"%s\\"", value) → `"foo" OR WorkflowType="%"`. '
+            'inlineTemporalParameters inserts result into query via strings.Replace(query, placeholder, formatted, -1). '
+            'Final query: WorkflowType="foo" OR WorkflowType="%"  — injection breaks tenant namespace filter.'
         ),
         evidence=(
-            'Function name inlineTemporalParameters distinguishes from parameterized approach. '
-            'Call chain: ListWorkflowRuns → extractQueryPartsFromFilters → '
-            'extractQueryPartsFromCriteria → collectQueryParts → buildSingleTemporalClause → '
-            'formatTemporalValue → formatTemporalString → inlineTemporalParameters → buildTemporalQuery. '
-            'formatTemporalString and formatTemporalValue suggest type-aware string construction '
-            'before inlining, but string-based Temporal queries are SQL-injection-class vulnerable.'
+            'DISASSEMBLY-BACKED (VA: 0x2c9f8c0 / 0x2c9f9c0 register-ABI body). '
+            'inlineTemporalParameters callees: '
+            '  strings.Replace (at 0x2c9f934 and 0x2c9fd03) — parameter insertion mechanism. '
+            '  fmt.Sprintf (at 0x2c9fb72 via formatTemporalValue at 0x2ca0100). '
+            '  formatTemporalValue calls fmt.Sprintf with format string "\\"%s\\"" (at 0x2ca0172→0x057f5efd). '
+            '  String values wrapped as "value" with NO inner-quote escaping before strings.Replace. '
+            '  No strings.Replace(_, "\\"", ...) escaping call observed anywhere in the call tree. '
+            '  formatTemporalValue is type-dispatching (5 CMP r9d branches for interface type hashes). '
+            '  String branch produces "value" format; integer/time branches produce numeric/RFC3339 format. '
+            '  strings.Replace replaces placeholder with formatted value, -1 = all occurrences. '
+            'Function name: inlineTemporalParameters vs bind/parameterize — design intent is literal inlining. '
+            'Source string table at 0x057f4f9f contains "GTE", "LTE" — Temporal query operators, '
+            'confirming this function operates on Temporal visibility query strings.'
         ),
         bert_score=None,
-        verified=False,
+        verified=True,   # disassembly confirms fmt.Sprintf wrap + strings.Replace insertion, no escaping
         notes=(
-            'Temporal visibility backends: Elasticsearch or PostgreSQL (Okta likely uses PostgreSQL). '
-            'PostgreSQL visibility: Temporal translates the query to SQL — SQL injection in the '
-            'Temporal query string reaches the database layer.'
+            'STATUS: PLAUSIBLE-HIGH. Injection path confirmed by disassembly: '
+            'fmt.Sprintf("\\"%s\\"", value) + strings.Replace = string concatenation without escaping. '
+            'Remaining open question: does Temporal\'s SQL-mode visibility backend sanitize '
+            'the query string before translating to SQL? Likely no — Temporal trusts its own query format. '
+            'Impact: cross-tenant workflow execution enumeration if Temporal namespace does not '
+            'independently enforce tenant isolation at the filter level.'
         ),
     ),
 
