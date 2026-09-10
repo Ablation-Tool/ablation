@@ -162,7 +162,56 @@ CWOM_F3 = {
     ),
 }
 
-FINDINGS = [CWOM_F1, CWOM_F2, CWOM_F3]
+# ─────────────────────────────────────────────────────────
+# CWOM-F4: MariaDB root password hardcoded as 'vmturbo' in migration/xl-backup.sh
+#          — database root credential exposed in update ISO migration scripts
+# ─────────────────────────────────────────────────────────
+CWOM_F4 = {
+    "id":       "CWOM-F4",
+    "title":    "CWOM64 migration script xl-backup.sh hardcodes MariaDB root password 'vmturbo' — "
+                "'mysql -uroot -pvmturbo' in update64_package-3.16.0.iso migration/xl-backup.sh",
+    "status":   "CONFIRMED — xl-backup.sh extracted from migration.tar in update64_package-3.16.0.iso",
+    "severity": "CRITICAL",
+
+    "password":     "vmturbo",
+    "credential":   "MariaDB root user",
+
+    "source": {
+        "iso":     "update64_package-3.16.0.iso",
+        "archive": "migration.tar",
+        "file":    "migration/xl-backup.sh",
+        "snippet": "mapfile -t schemas < <(mysql -uroot -pvmturbo -s --skip-column-names -e \"${SQL_COMMAND}\")",
+    },
+
+    "scope": (
+        "The 'vmturbo' password is the default MariaDB root credential across all CWOM/Turbonomic "
+        "deployments. Combined with CWOM-F1 (same password for Linux root and turbo), "
+        "'vmturbo' is the single default credential spanning all three authentication boundaries: "
+        "Linux OS (root), application service account (turbo), and database (MariaDB root). "
+        "The MariaDB root account has unrestricted access to all databases including the "
+        "Turbonomic application data (target topology, workload data, integrated service credentials)."
+    ),
+
+    "xl_backup_also_exposes": [
+        "kubectl get secrets -n turbonomic redis → Redis authentication secret",
+        "kubectl get secrets -n turbonomic master-key-secret → Turbonomic master encryption key",
+        "kubectl get secrets -n turbonomic auth-secret → Authentication secrets",
+    ],
+
+    "analysis": (
+        "The backup script uses the hardcoded credential for production database operations — "
+        "not just initialization. Any operator running the official Cisco-provided backup procedure "
+        "on an instance that has changed the MariaDB root password will fail. "
+        "This creates pressure to KEEP the default password, as changing it breaks the official tooling "
+        "unless the migration script is manually updated. "
+        "The pattern across CWOM-F1 through CWOM-F4 shows that 'vmturbo' is an operational dependency "
+        "embedded in the product's management toolchain, not just an install-time convenience."
+    ),
+}
+
+FIRMWARE["findings"].append("CWOM-F4")
+
+FINDINGS = [CWOM_F1, CWOM_F2, CWOM_F3, CWOM_F4]
 
 if __name__ == "__main__":
     for f in FINDINGS:
