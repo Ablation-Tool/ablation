@@ -296,6 +296,88 @@ PHN_F16 = {
 }
 
 # ─────────────────────────────────────────────────────────
+# PHN-F17 — TLS cert validation bypass via oversized DER cert (edge_gateway)
+# ─────────────────────────────────────────────────────────
+PHN_F17 = {
+    "id":      "PHN-F17",
+    "title":   "TLS certificate validation bypass via oversized DER cert in edge_gateway Webex cloud path",
+    "status":  "CONFIRMED — static analysis of libsecureapi.so + edge_gateway (78xx MPP 14.4.1)",
+    "severity": "HIGH",
+
+    "affected_binary": "/usr/sbin/edge_gateway (416KB ARM32, runs as root)",
+    "affected_library": "libsecureapi.so (57KB ARM32) — sec_validate_cert (0xaa04), sec_validate_cert_der (0xa8e4)",
+
+    "call_chain": (
+        "edge_gateway:sub_0001cff4 calls SSL_CTX_set_cert_verify_callback(ctx, sub_0001cfb0, NULL). "
+        "sub_0001cfb0 is the callback: X509_STORE_CTX_get0_cert(ctx) → sec_validate_cert(cert, 0x15) → return. "
+        "No inversion. The callback returns sec_validate_cert's value directly to OpenSSL. "
+        "OpenSSL cert_verify_callback convention: 1=accept, 0=reject."
+    ),
+
+    "sec_validate_cert_flow": {
+        "step1": "i2d_X509(cert, NULL) — get DER size (r0)",
+        "step2": "check: if (DER_size + 24) > 8192: return 1  [BUG: returns accept instead of reject]",
+        "step3": "CRYPTO_malloc(DER_size) — allocate buffer",
+        "step4": "i2d_X509(cert, &buf) — serialize to DER",
+        "step5": "sec_validate_cert_der(buf, DER_size, mode=0x15) — dispatch to security daemon",
+        "step6": "CRYPTO_free(buf); return sec_validate_cert_der result",
+    },
+
+    "sec_validate_cert_der_flow": {
+        "0xa900": "if NULL ptr or len <= 0: dummySecPrint; return 1  [BUG: returns accept]",
+        "0xa92c": "getSecReq() failure: dummySecPrint; return -1 (0xFFFFFFFF)  [BUG: non-zero = accept]",
+        "0xa954": "if (len + 24) > 8192: dummySecPrint; freeSecReq; return 1  [BUG: returns accept]",
+        "0xa9a0": "sendSecReq(req, 0x22, 0x78) — send to security daemon",
+        "0xa9b8": "recvSecRep(req) — receive daemon verdict; r5 = verdict",
+        "0xa9e4": "return r5  [only this path invokes the security daemon]",
+    },
+
+    "bug": (
+        "All error paths in both sec_validate_cert and sec_validate_cert_der return non-zero (1 or -1). "
+        "OpenSSL's SSL_CTX_set_cert_verify_callback interprets any non-zero return as 'cert accepted'. "
+        "The intended behavior is that these paths return 0 (reject). "
+        "The oversized-DER path (len + 24 > 8168) is the most reliably attacker-controlled trigger: "
+        "a MITM attacker presenting a cert with padded X.509 extensions > 8168 bytes DER causes "
+        "sec_validate_cert to return 1 without invoking sendSecReq/recvSecRep, bypassing all "
+        "cert validation for edge_gateway's Webex cloud registration connection to wdm-a.wbx2.com."
+    ),
+
+    "exploit_condition": (
+        "Attacker controls network path between phone and wdm-a.wbx2.com "
+        "(local network MITM or upstream BGP hijack). "
+        "Presents TLS cert with DER encoding > 8168 bytes (e.g., cert with 200+ SAN entries, "
+        "large OID extension blobs, or padded custom extensions). "
+        "Result: edge_gateway completes TLS handshake with attacker-controlled cert — "
+        "Webex device registration and OAuth token exchange proceed against attacker server."
+    ),
+
+    "secondary_triggers": [
+        "NULL X509* from X509_STORE_CTX_get0_cert (peer presented empty cert chain)",
+        "i2d_X509 DER serialization failure (malformed internal OpenSSL cert object)",
+        "getSecReq exhaustion (security daemon request pool full or daemon crashed) — returns -1 (accepted)",
+    ],
+
+    "plt_evidence": {
+        "edge_gateway:0xa7b4":  "X509_STORE_CTX_get0_cert (PLT)",
+        "edge_gateway:0xa964":  "SSL_CTX_set_cert_verify_callback (PLT)",
+        "edge_gateway:0xab5c":  "sec_validate_cert (PLT → libsecureapi.so)",
+        "libsecureapi:0xaa04":  "sec_validate_cert — confirmed entry VA, 316B",
+        "libsecureapi:0xa8e4":  "sec_validate_cert_der — confirmed entry VA, 288B",
+        "libsecureapi:plt_3":   "sec_validate_cert_der (PLT entry 0x2dfc — intra-SO PIC call)",
+        "libsecureapi:plt_35":  "i2d_X509 (PLT 0x2f7c)",
+        "libsecureapi:plt_72":  "sendSecReq (PLT 0x312c)",
+        "libsecureapi:plt_115": "recvSecRep (PLT 0x333c)",
+        "libsecureapi:plt_86":  "CRYPTO_malloc (PLT 0x31e0)",
+        "libsecureapi:plt_140": "CRYPTO_free (PLT 0x3468)",
+        "libsecureapi:plt_11":  "freeSecReq (PLT 0x2e5c)",
+    },
+
+    "impacted_connection": "Webex Device Manager (WDM) registration — wdm-a.wbx2.com (hardcoded in edge_gateway strings)",
+    "trust_store_bypassed": "gds_trustlist.pem (4 CA roots including Cisco RXC-R2) — completely bypassed when DER > 8168B",
+    "daemon_privileges":    "edge_gateway runs as root with CAP_DAC_OVERRIDE+CAP_NET_ADMIN+CAP_IPC_OWNER+CAP_SYS_NICE",
+}
+
+# ─────────────────────────────────────────────────────────
 # Boot sequence and service map
 # ─────────────────────────────────────────────────────────
 BOOT_SEQUENCE = {
