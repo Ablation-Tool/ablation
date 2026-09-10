@@ -1,7 +1,8 @@
 """
 Cisco UCS HUU 6.0.2.260143 — RE findings
 Primary source: ucs-c220m8-huu-6.0.2.260143.iso
-Cross-verified: ucs-xe130cm8-huu-6.0.2.260143.iso (Cisco XE130C, newest platform)
+Cross-verified: ucs-xe130cm8-huu-6.0.2.260143.iso (XE130C), ucs-diag-7.1.4.260010.iso,
+                ucs-c245m8-huu-6.0.2.260180.iso (C245 M8 — 4th confirmed platform)
 
 C220 M8 structure:
   rootfs.img     — squashfs v4.0 xz (148MB, 5935 inodes, created 2018-03-09)
@@ -9,39 +10,45 @@ C220 M8 structure:
 CIMC version: 6.0(2.260095)
 BIOS: C220M8.6.0.2d.0.0527260454
 
-Cross-platform key verification (three confirmed sources):
-  sha256(tools-dev-verify-key.pem) C220 M8 == XE130C == UCS Diag:
+Cross-platform key verification (FOUR confirmed sources):
+  sha256(tools-dev-verify-key.pem) C220 M8 == XE130C == UCS Diag == C245 M8:
     8172ce48c2d3983f3000a0ae8fb1a91491128196ec5ba4f2f6d1950988512073
-  sha256(tools-rel-verify-key.pem) C220 M8 == XE130C == UCS Diag:
+  sha256(tools-rel-verify-key.pem) C220 M8 == XE130C == UCS Diag == C245 M8:
     a2a81324d17f21696fe8e6e1c2e22319d4bd720b63bf7751745907308dd89681
-  hsu-init, ftd, decrypt-file, xinetd/telnet: byte-identical across all three
+  AES-256-CBC key 'zfguijkophju@*%1]' confirmed in C245 M8 decrypt-file binary
+  hsu-init, ftd, decrypt-file, xinetd/telnet: byte-identical across all four
 
 Note: UCS Diagnostics (ucs-diag-7.1.4.260010.iso) shares the same base rootfs.img
 as HUU 6.0.2.260143 (same 4741 inodes, same squashfs structure, same vulnerability
 surface). The SDU container (ucs-sdu-container-7.1.4.260010.squashfs) is the
 application layer, containing vendor hardware diagnostic tools (Marvell, NVIDIA,
 Intel, LSI, Microchip). The base Linux userspace vulnerabilities are shared.
+
+C245 M8 also contains tools-verify-key.pem (alias for tools-rel-verify-key.pem,
+same SHA256: a2a81324...) — an additional filename referencing the same key.
 """
 
 FIRMWARE = {
     "target":           "Cisco UCS HUU and Diagnostics Shared Base Rootfs",
-    "version":          "6.0.2.260143 (HUU) / 7.1.4.260010 (UCS Diag)",
+    "version":          "6.0.2.260143 (HUU C220/XE130C) / 6.0.2.260180 (HUU C245) / 7.1.4.260010 (UCS Diag)",
     "primary_source":   "ucs-c220m8-huu-6.0.2.260143.iso",
     "cross_verified": [
         "ucs-xe130cm8-huu-6.0.2.260143.iso",
         "ucs-diag-7.1.4.260010.iso",
+        "ucs-c245m8-huu-6.0.2.260180.iso",
     ],
     "rootfs_c220m8":    "rootfs.img — squashfs v4.0 xz, 148MB, 5935 inodes, 2018-03-09",
     "container_c220m8": "ucs-c220m8-huu-container-6.0.2.260143.squashfs — squashfs v4.0 zlib, 937MB, 643 inodes, 2026-06-17",
     "rootfs_xe130c":    "rootfs.img — squashfs v4.0 xz, 141MB, 4741 inodes, 2026-06-17",
     "rootfs_diag":      "rootfs.img — squashfs v4.0 xz, 141MB, 4741 inodes, 2026-03-17 (UCS Diagnostics)",
+    "rootfs_c245m8":    "rootfs.img — squashfs (ucs-c245m8-huu-6.0.2.260180.iso); identical key infrastructure confirmed",
     "cimc_ver":         "6.0(2.260095)",
     "bios_ver":         "C220M8.6.0.2d.0.0527260454",
     "features":         {"NonInteractiveSupport": True, "RedfishSupport": True, "UISupport": True},
     "platform_scope":   (
         "The base Linux rootfs is shared across Cisco UCS C-Series HUU, XE-Series HUU, and UCS Diagnostics ISO. "
-        "All findings below apply to at minimum: C220 M8 (6.0.2), XE130C (6.0.2), and UCS Diag (7.1.4). "
-        "Presumably also C245 M8 HUU, UCS SCU, and any other Cisco utility using the same shared base rootfs."
+        "All findings below apply to at minimum: C220 M8 (6.0.2), XE130C (6.0.2), UCS Diag (7.1.4), and C245 M8 (6.0.2). "
+        "Presumably also UCS SCU and any other Cisco utility ISO using the same shared base rootfs."
     ),
 }
 
