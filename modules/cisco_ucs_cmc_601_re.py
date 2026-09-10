@@ -1,20 +1,56 @@
 """
-Cisco UCS X-Series Chassis Management Controller (CMC) 6.0(1.251006) — RE findings
-Source: esu-firmware-6.0.1.251006.tar.gz → CMC/6.0.1.251006/chassisA.img
-Extraction: binwalk → CPIO at 0x21DB2F0 (294MB ARM64 rootfs)
-Kernel: ARM64 Linux at 0x1AC4C70 (17MB)
+Cisco UCS X-Series Chassis Management Controller (CMC) 6.0(1) / 6.0(2) — RE findings
+Sources:
+  esu-firmware-6.0.1.251006.tar.gz → CMC/6.0.1.251006/chassisA.img (142MB, ARM64)
+  esu-firmware-6.0.2.260026.tar.gz → CMC/6.0.2.260026/chassisA.img (150MB, ARM64)
+  esu-firmware-6.0.2.260143.tar.gz → CMC/6.0.2.260036/chassisA.img (150MB, ARM64)
+
+Extraction:
+  6.0.1: binwalk → CPIO at 0x21DB2F0 (294MB ARM64 rootfs)
+  6.0.2.260036: binwalk → CPIO at 0x2A04055 (296MB ARM64 rootfs)
+
+Patch delta (260026 → 260036, from esu-firmware-6.0.2.260143):
+  CMC-F1 PATCHED: root shadow = '*' (locked) in 260036; was MD5 hash in 260026/260143
+  CMC-F2 PATCHED: admin account removed from /etc/passwd in 260036
+  CMC-F7 PATCHED: libjolt_user_mgmt.so no longer contains the 64-byte static key;
+                   key generation logic now references error path + character set table
+                   (dynamically generated)
+  CMC-F3 UNFIXED: jrpc_server TCP/4037 'not secured' in /etc/services — unchanged
+  CMC-F4 PARTIAL: /workspace/.firmware removed from 260036 rootfs; TFTP still active
+                   with -c flag on UDP/69; /workspace/core and /workspace/techsupport remain
+                   world-writable (777) — firmware staging path removed but attack surface remains
+  CMC-F5 UNFIXED: jrpc_server still -fno-stack-protector
+  CMC-F6 UNFIXED: mosquitto allow_anonymous true on Unix socket
+  CMC-F8 UNFIXED: /tmp/luks_keyfileXXXXXX still in SecureVault binary
+  CMC-F9 UNFIXED: quiet_proxy 'will not be verified' string still present
+  CMC-F10 UNFIXED: emcuser:emcNbv12345 still in mts.cfg plaintext
+  CMC-F11 UNFIXED: TPM test binaries still in /usr/bin
 """
 
 FIRMWARE = {
     "target":      "Cisco UCS X-Series Chassis Management Controller (CMC)",
-    "version":     "6.0(1.251006)",
-    "build_date":  "Thu Dec 4 05:17:43 UTC 2025",
-    "source_pkg":  "esu-firmware-6.0.1.251006.tar.gz",
-    "image":       "CMC/6.0.1.251006/chassisA.img",
-    "rootfs":      "CPIO initramfs at img offset 0x21DB2F0 (294MB)",
-    "kernel":      "ARM64 Linux at img offset 0x1AC4C70 (17MB)",
+    "versions": {
+        "6.0.1.251006": {
+            "source": "esu-firmware-6.0.1.251006.tar.gz",
+            "image":  "CMC/6.0.1.251006/chassisA.img",
+            "rootfs": "CPIO at 0x21DB2F0 (294MB)",
+            "build":  "2025-12-04",
+        },
+        "6.0.2.260026": {
+            "source": "esu-firmware-6.0.2.260026.tar.gz",
+            "image":  "CMC/6.0.2.260026/chassisA.img",
+            "rootfs": "CPIO at 0x21DB2F0 (294MB)",
+            "build":  "2026-03-06",
+        },
+        "6.0.2.260036": {
+            "source": "esu-firmware-6.0.2.260143.tar.gz",
+            "image":  "CMC/6.0.2.260036/chassisA.img",
+            "rootfs": "CPIO at 0x2A04055 (296MB)",
+            "build":  "2026-06-17 (layout change: kernel+rootfs offsets shifted)",
+        },
+    },
     "arch":        "AArch64 (ARM64), little-endian",
-    "compiler":    "GNU C11 14.2.1 20241119, -O2, -mlittle-endian, -mabi=lp64",
+    "compiler":    "GNU C11 14.2.1 20241119, -fno-stack-protector (jrpc_server/libjolt_inf.so); -fstack-protector-all (pam_cmc.so)",
 }
 
 # ─────────────────────────────────────────────────────────
@@ -23,11 +59,12 @@ FIRMWARE = {
 CMC_F1 = {
     "id":       "CMC-F1",
     "title":    "Static root MD5 credential embedded in CMC firmware — SSH root login enabled",
-    "status":   "CONFIRMED — /etc/shadow + /etc/ssh/sshd_config in 6.0(1.251006) rootfs",
+    "status":   "CONFIRMED — /etc/shadow + /etc/ssh/sshd_config in 6.0(1.251006) and 6.0(2.260026) rootfs; PATCHED in 6.0(2.260036)",
     "severity": "CRITICAL",
 
     "shadow_entry": "root:$1$1Bg658L8$RZ4QarfYI9Xjfz2uJDx5B0:::::::",
     "hash_type":    "MD5crypt ($1$) — crackable offline; no salt uniqueness across units",
+    "patch_260036": "root shadow = '*' (locked) in 6.0.2.260036 — password hash removed; BUT sshd_config still has PermitRootLogin=yes and PasswordAuthentication=yes; pam_cmc.so auth path unconfirmed",
 
     "sshd_config_excerpt": {
         "PermitRootLogin":           "yes",
@@ -60,7 +97,7 @@ CMC_F1 = {
 CMC_F2 = {
     "id":       "CMC-F2",
     "title":    "admin account carries empty password field with root group membership (GID=0)",
-    "status":   "CONFIRMED — /etc/passwd and /etc/shadow in 6.0(1.251006) rootfs",
+    "status":   "CONFIRMED — /etc/passwd and /etc/shadow in 6.0(1.251006) and 6.0(2.260026) rootfs; PATCHED in 6.0(2.260036) (admin account removed)",
     "severity": "HIGH",
 
     "passwd_entry": "admin::500:0:admin:/tmp:/isan/bin/vsh",
@@ -157,10 +194,10 @@ CMC_F4 = {
     },
 
     "workspace_permissions": {
-        "/workspace":           "drwxr-xr-x (755) — readable",
-        "/workspace/.firmware": "drwxrwxrwx (777) — world-writable",
-        "/workspace/core":      "drwxrwxrwx (777) — world-writable",
-        "/workspace/techsupport": "drwxrwxrwx (777) — world-writable",
+        "/workspace":             "drwxr-xr-x (755) — readable",
+        "/workspace/.firmware":   "drwxrwxrwx (777) — world-writable (6.0.1 and 6.0.2.260026; REMOVED in 6.0.2.260036)",
+        "/workspace/core":        "drwxrwxrwx (777) — world-writable (all versions)",
+        "/workspace/techsupport": "drwxrwxrwx (777) — world-writable (all versions)",
     },
 
     "impact": (
@@ -297,7 +334,7 @@ CMC_NETWORK_SERVICES = {
 CMC_F7 = {
     "id":       "CMC-F7",
     "title":    "Hardcoded 64-byte key material in libjolt_user_mgmt.so adjacent to user credential storage path",
-    "status":   "CONFIRMED — binary analysis of libjolt_user_mgmt.so in 6.0(1.251006) rootfs",
+    "status":   "CONFIRMED — binary analysis of libjolt_user_mgmt.so in 6.0(1.251006) and 6.0(2.260026) rootfs; PATCHED in 6.0(2.260036) (key now dynamically generated)",
     "severity": "HIGH",
 
     "b64_value":  "8BgdB4Qp31lzKrmjTYurDsjwqMfpsxUbkHumeZgZ9/AhRYDXHMCfkeG18Zpl0i48SRKDd9edeSrJD0UyawAszA==",
