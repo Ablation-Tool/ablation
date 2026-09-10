@@ -633,3 +633,8 @@ FINDINGS = [
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17,
 ]
+
+
+if __name__ == "__main__":
+    for f in FINDINGS:
+        print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")
