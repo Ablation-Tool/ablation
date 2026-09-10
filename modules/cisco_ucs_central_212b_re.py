@@ -146,7 +146,42 @@ UCSC21_F4 = {
     "context": "passwordChange.sh executes from passreset ISO recovery; requires console/boot access.",
 }
 
-FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4]
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F5: imghdrScript.sh prepends /tmp/cisco/ to LD_LIBRARY_PATH
+#             before executing imghdr — local attacker can inject library
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F5 = {
+    "id":       "UCSC21-F5",
+    "title":    "imghdrScript.sh prepends /tmp/cisco/ to LD_LIBRARY_PATH before executing "
+                "imghdr binary — library injection during ISAN firmware image verification",
+    "status":   "CONFIRMED — ucsCentral/imghdrScript.sh in ucs-central.2.1.2b_EVAL.iso",
+    "severity": "MEDIUM",
+
+    "vulnerable_code": (
+        "# imghdrScript.sh:\n"
+        "export LD_LIBRARY_PATH=\"/opt/cisco/operation-mgr/sam/lib/libimghdr/:"
+        "/tmp/cisco/:$OLD_LD_LIBRARY_PATH\""
+    ),
+
+    "impact": (
+        "/tmp/cisco/ is under world-writable /tmp/. "
+        "A local attacker with write access to /tmp can create /tmp/cisco/ and place "
+        "a malicious .so matching any library that imghdr loads. "
+        "The dynamic linker finds the malicious library first. "
+        "imghdrScript.sh is invoked by isanadd during ISAN firmware image verification. "
+        "During a UCS Central software update, update scripts run as root — "
+        "library injection executes as root."
+    ),
+
+    "imghdr_symbols": (
+        "imghdr is a 32-bit ELF with full debug symbols. "
+        "Key exports: cs_dc3sup2_verify_image, cs_verify_key_signature, "
+        "rsalib_signature_verify, cs_bios_verify_digital_signature. "
+        "Debug symbols provide a complete map of the verification API."
+    ),
+}
+
+FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5]
 
 if __name__ == "__main__":
     for f in FINDINGS:
