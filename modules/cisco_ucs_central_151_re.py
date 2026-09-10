@@ -553,4 +553,83 @@ UCSC_F15 = {
     ),
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8, UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15]
+# ─────────────────────────────────────────────────────────
+# UCSC-F16 — vm-common.pl chmod 666 on /var/log/vm-setup.log + shared secret logged in cleartext
+# Source: OVA runtime filesystem (ucs-central.1.5.1c.ova disk1)
+# ─────────────────────────────────────────────────────────
+UCSC_F16 = {
+    "id":       "UCSC-F16",
+    "title":    "vm-common.pl executes chmod 666 on /var/log/vm-setup.log and logs plaintext shared secret — world-readable log exposes cluster credential",
+    "status":   "CONFIRMED — /opt/cisco/bin/vm-common.pl:540 + OVA disk1 filesystem (/var/log/vm-setup.log -rwxrw-rw-)",
+    "severity": "HIGH",
+
+    "source_file": "opt/cisco/bin/vm-common.pl",
+    "logfile":     "/var/log/vm-setup.log",
+    "observed_perms": "-rwxrw-rw- root root (world-readable + world-writable) confirmed in OVA disk1",
+
+    "chmod_line": (
+        "vm-common.pl line 540: `$chmod 666 $logfile` — executed as root during any "
+        "vm-common.pl invoked operation (shared secret update, cluster add, peer secret sync). "
+        "Sets /var/log/vm-setup.log to 0666 (world-readable, world-writable)."
+    ),
+    "secret_logging": (
+        "updateSharedSecretOnPeer() in vm-common.pl calls: "
+        "logger(\"Calling $update_peer_secret $peer_ip '$inputs{$secret}'\") "
+        "before executing the peer secret sync. "
+        "$inputs{$secret} is the plaintext shared secret value. "
+        "The logger() function appends to $logfile (/var/log/vm-setup.log). "
+        "Result: shared secret is written in cleartext to a world-readable file."
+    ),
+    "encryption_key": (
+        "vm-common.pl line 462: my $encKey = \"theKeyForEncryptingTheSharedSecret\" — "
+        "same key used in UCSC-F1. AES-128 errors from openssl enc also append to $logfile "
+        "(stderr redirect: 2>>$logfile), further populating the world-readable log."
+    ),
+    "access": "Any local OS user (daemon, postgres, samdme) can read /var/log/vm-setup.log.",
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F17 — cluster_add.sh reads samdme SSH password from world-writable /tmp/tp
+# Source: OVA runtime filesystem (ucs-central.1.5.1c.ova disk1)
+# ─────────────────────────────────────────────────────────
+UCSC_F17 = {
+    "id":       "UCSC-F17",
+    "title":    "cluster_add.sh, update_peer_secret.sh, and cluster_ipcheck.sh read samdme SSH password from world-writable /tmp/tp via Expect login proc",
+    "status":   "CONFIRMED — /opt/cisco/bin/cluster_add.sh, update_peer_secret.sh, cluster_ipcheck.sh in OVA disk1",
+    "severity": "HIGH",
+
+    "affected_scripts": [
+        "opt/cisco/bin/cluster_add.sh",
+        "opt/cisco/bin/update_peer_secret.sh",
+        "opt/cisco/bin/cluster_ipcheck.sh",
+    ],
+    "authfile":  "/tmp/tp",
+    "tmp_perms": "world-writable (drwxrwxrwx on /tmp in OVA)",
+
+    "expect_pattern": (
+        "All three scripts define: set authFile \"/tmp/tp\"\n"
+        "proc login {} {\n"
+        "    set input [ open $authFile \"r\"]\n"
+        "    gets $input line\n"
+        "    send \"$line\\r\"\n"
+        "    close $input\n"
+        "}\n"
+        "cluster_add.sh calls login when SSH returns \" password:\" — "
+        "sends the content of /tmp/tp as the samdme SSH password."
+    ),
+    "toctou": (
+        "/tmp/tp is created transiently by the calling process (Tomcat/Java application layer) "
+        "before the Expect script is invoked. The file lives in world-writable /tmp. "
+        "Any local OS user (daemon, postgres) can: "
+        "1. inotify-watch /tmp for tp creation, "
+        "2. read /tmp/tp during the window between creation and script completion, "
+        "3. obtain the samdme SSH password for the cluster peer node."
+    ),
+    "samdme_sudo": "samdme has NOPASSWD:ALL in sudoers (see UCSC-F11) — SSH credential grants root on peer node.",
+}
+
+FINDINGS = [
+    UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
+    UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
+    UCSC_F16, UCSC_F17,
+]
