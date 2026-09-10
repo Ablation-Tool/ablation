@@ -1,20 +1,28 @@
 """
-Cisco UCS Central Password Reset ISO 1.5.1c — RE Module
-Source: ucs-central-passreset.1.5.1c.iso (/media/cowboy/research/Cisco-UCS/)
-Format: Anaconda kickstart-based Red Hat installer ISO
-Key files:
-  ks.cfg             — default kickstart (no rootpw, basic config only)
+Cisco UCS Central 1.5.1c — RE Module
+Sources:
+  ucs-central-passreset.1.5.1c.iso (/media/cowboy/research/Cisco-UCS/) — passreset ISO (2017-02-26)
+  ucs-central.1.5.1c.iso (/media/cowboy/research/Cisco-UCS/) — full installer ISO (1.1GB)
+Format: Anaconda kickstart-based Red Hat installer ISO (both)
+Key files (passreset ISO):
+  ks.cfg             — default kickstart (no rootpw)
   ks_upgrade.cfg     — upgrade-path kickstart (hardcoded root hash)
   images/stage2.img  — Squashfs v3.0 with Anaconda Python runtime
   images/stage2.img/usr/lib/anaconda/ucscentral.py  — UCS Central config module
   images/stage2.img/usr/lib/anaconda/iw/ucscentralreset_gui.py — Password reset GUI
+Key files (full installer ISO):
+  ks.cfg             — FULL INSTALLER kickstart (hardcoded root hash — same hash as passreset ks_upgrade.cfg)
+  ks_upgrade.cfg     — upgrade-path kickstart (hardcoded root hash — same hash)
+  ucsCentral/        — update bundle scripts (updateBundle.sh, bashfunctions.sh, bundle_unpack.sh)
 """
 
 FIRMWARE = {
-    "target":   "Cisco UCS Central Password Reset ISO",
+    "target":   "Cisco UCS Central Password Reset ISO + Full Installer",
     "version":  "1.5.1c",
-    "source":   "ucs-central-passreset.1.5.1c.iso",
-    "iso_date": "2017-02-26",
+    "sources": [
+        "ucs-central-passreset.1.5.1c.iso (passreset, 2017-02-26)",
+        "ucs-central.1.5.1c.iso (full installer, 1.1GB)",
+    ],
     "base":     "Red Hat / Anaconda kickstart installer (CentOS 6 era)",
     "findings": ["UCSC-F1", "UCSC-F2", "UCSC-F3"],
 }
@@ -83,17 +91,24 @@ UCSC_F1 = {
 }
 
 # ─────────────────────────────────────────────────────────
-# UCSC-F2: Hardcoded MD5-crypt root hash in ks_upgrade.cfg
-#          — upgrade-path kickstart sets root password to Cisco-controlled value
+# UCSC-F2: Hardcoded MD5-crypt root hash in BOTH ks.cfg (full installer) and ks_upgrade.cfg
+#          — every fresh install AND every upgrade sets root to a Cisco-controlled static password
 # ─────────────────────────────────────────────────────────
 UCSC_F2 = {
     "id":       "UCSC-F2",
-    "title":    "ks_upgrade.cfg contains hardcoded MD5-crypt root password hash — "
-                "upgrade-path kickstart sets root to a Cisco-controlled static password on every system",
-    "status":   "CONFIRMED — ks_upgrade.cfg in ucs-central-passreset.1.5.1c.iso root",
-    "severity": "HIGH",
+    "title":    "UCS Central 1.5.1c ks.cfg (full installer) and ks_upgrade.cfg (upgrade) both contain "
+                "identical hardcoded MD5-crypt root hash — every installation sets root to a static Cisco-controlled password",
+    "status":   "CONFIRMED — ks.cfg:rootpw in ucs-central.1.5.1c.iso (full installer) "
+                "AND ks_upgrade.cfg in ucs-central-passreset.1.5.1c.iso (passreset ISO) — identical hash both",
+    "severity": "CRITICAL",
 
     "kickstart_rootpw_line": "rootpw --iscrypted $1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/",
+
+    "affected_paths": {
+        "full_install":  "ucs-central.1.5.1c.iso → ks.cfg:rootpw (default boot path — ALL fresh installs)",
+        "upgrade":       "ucs-central.1.5.1c.iso → ks_upgrade.cfg:rootpw (upgrade path)",
+        "passreset_iso": "ucs-central-passreset.1.5.1c.iso → ks_upgrade.cfg:rootpw (upgrade path)",
+    },
 
     "hash_details": {
         "format":    "MD5-crypt ($1$ prefix, hashcat mode 500, john format md5crypt)",
@@ -103,18 +118,20 @@ UCSC_F2 = {
     },
 
     "impact": (
-        "The upgrade-path kickstart (ks_upgrade.cfg) sets the root password of the target UCS Central "
-        "system to this static hash on every upgrade. All UCS Central systems upgraded via this ISO path "
-        "share the same root password (whatever this hash resolves to). "
-        "SSH is opened during the upgrade: 'firewall --enabled --port=22:tcp'. "
-        "Anyone who cracks the hash gains root SSH access to every UCS Central system that used this ISO. "
-        "ks_upgrade.cfg is not used in the default boot path (which uses ks.cfg with no rootpw). "
-        "It is invoked when the upgrade mode is explicitly selected or passed as a kernel parameter."
+        "The SAME hardcoded MD5-crypt root hash appears in ks.cfg (the DEFAULT full-install kickstart) "
+        "AND ks_upgrade.cfg (the upgrade kickstart) across both the full installer ISO and the passreset ISO. "
+        "This is not limited to the upgrade path: every fresh UCS Central 1.5.1c installation via the default "
+        "boot path sets root to this static Cisco-controlled hash. "
+        "SSH is opened during install: 'firewall --enabled --port=22:tcp'. "
+        "Cracking the hash yields root SSH access to every UCS Central 1.5.1c deployment globally. "
+        "UCS Central manages all UCS Manager domains — root on UCS Central is root on the entire fabric. "
+        "The full installer also ships: 'selinux --disabled', "
+        "and a debug binary check that enables serial console (agetty ttyS0 19200)."
     ),
 
     "crack_attempts": (
-        "Hash was not cracked with rockyou.txt, common Cisco passwords, mask attacks (Cisco?d?d?d?d, ?u?l?l?l?l?l?d?d). "
-        "Password is likely non-trivial. Recommend extended GPU-based cracking with hashcat mode 500."
+        "Hash not cracked with rockyou.txt, common Cisco passwords, mask attacks "
+        "(Cisco?d?d?d?d, ?u?l?l?l?l?l?d?d). Recommend extended GPU-based cracking with hashcat mode 500."
     ),
 }
 
