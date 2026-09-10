@@ -100,6 +100,12 @@ UCSC_F2 = {
     "shadow_entry":      "root:$1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/:14959:0:99999:7:::",
     "last_changed":      "14959 (days since epoch = 2010-12-06 — hash never rotated)",
 
+    "confirmed_in_4_artifacts": [
+        "ucs-central.1.5.1c.ova       — /root/anaconda-ks.cfg (kickstart) AND /etc/shadow (deployed)",
+        "ucs-central.1.5.1c.iso       — ks.cfg (fresh install path) AND ks_upgrade.cfg (upgrade path)",
+        "ucs-central-passreset.1.5.1c.iso — ks_upgrade.cfg (recovery/passreset upgrade path)",
+    ],
+
     "analysis": (
         "The build-time kickstart hash is identical to the deployed shadow entry. "
         "The hash was never rotated post-install. MD5-crypt is crackable on commodity hardware "
