@@ -267,125 +267,156 @@ FINDINGS = [
 
     Finding(
         id='F3',
-        title='AQL Identifier Injection via ValidateSQLIdentifier in ArangoDB Query Builder',
+        title='AQL Identifier Injection — ValidateSQLIdentifier Dead Code (Zero Callers)',
         package='axfilters',
         functions=AQL_FILTER_CHAIN,
         class_='AQL Injection / Identifier Injection',
         description=(
-            'The axfilters package constructs ArangoDB Query Language (AQL) queries '
-            'from user-supplied filter criteria. Values are parameterized via mergeBindVars '
-            '(bind variables — correct). However, identifiers (field names, collection names) '
-            'are validated by ValidateSQLIdentifier — a SQL-oriented validator. '
-            'AQL identifier syntax differs from SQL: AQL uses backtick-delimited identifiers '
-            'and supports @@collection syntax for bind collection names. '
-            'A SQL-safe identifier may be AQL-unsafe, allowing identifier injection into '
-            'the filter clause if the field name path (e.g., "doc.fieldName") is '
-            'user-controlled and not AQL-escaped.'
+            'The axfilters package constructs ArangoDB Query Language (AQL) queries from '
+            'user-supplied filter criteria. Values are parameterized via mergeBindVars '
+            '(bind variables — correct for values). However, field identifiers are inserted '
+            'into the AQL query string via fmt.Sprintf in buildFinalQuery without any '
+            'validation or escaping. ValidateSQLIdentifier (VA: 0x2c9aa80) is an exported '
+            'function present in the binary but has ZERO callers — it is dead code. '
+            'CompileFilterForAql also has zero CALL-instruction callers (may be interface-dispatched). '
+            'No function in the binary calls ValidateSQLIdentifier before building the AQL filter. '
+            'Field identifiers flow from the Filter struct into buildFinalQuery\'s fmt.Sprintf '
+            'unvalidated, enabling AQL identifier injection if field names are user-controlled.'
         ),
         mechanism=(
-            'Submit a filter criterion where the field name contains AQL-special characters: '
-            'fieldName = "malicious.path`[* FILTER 1==1 RETURN doc //". '
-            'processSingleCriterion passes through ValidateSQLIdentifier '
-            '(which allows dot-separated identifiers and alphanumerics). '
-            'buildFinalQuery assembles: FILTER doc.malicious.path`[* FILTER 1==1 RETURN doc // == @bindVar. '
-            'AQL would parse the backtick as start of a quoted identifier, breaking the query structure.'
+            'axfilters.ValidateSQLIdentifier (VA: 0x2c9aa80) — ZERO callers in binary. '
+            'buildFinalQuery (VA: 0x2c9a320 ABI Internal) calls fmt.Sprintf (0x9b2080) '
+            'at 0x2c9a926 with format string " %s " (4 bytes at 0x057f5ef9) to interpolate '
+            'a field value directly into the AQL clause, then strings.Join (0x9ea1e0 at 0x2c9a960) '
+            'joins clauses with "AND" separator. '
+            'Injection payload: fieldName="x` FILTER 1==1 RETURN doc //" '
+            '→ AQL: FILTER x` FILTER 1==1 RETURN doc // "value" — backtick breaks identifier parsing, '
+            'injected FILTER clause executes, line comment suppresses trailing syntax.'
         ),
         evidence=(
-            'ValidateSQLIdentifier in axfilters — a SQL validator name in an AQL-building package. '
-            'mergeBindVars confirms values are parameterized (injection is at identifier layer, not value). '
-            'AQL supports: FOR doc IN collection FILTER doc.<field> == @var RETURN doc. '
-            'Field path components are concatenated by processSingleCriterion into the FILTER clause.'
+            'DISASSEMBLY-BACKED. '
+            'ValidateSQLIdentifier VA: 0x2c9aa80 — exhaustive CALL-instruction scan of all '
+            'PT_LOAD segments: 0 callers found. Dead code. '
+            'CompileFilterForAql VA: 0x2c98580 — 0 direct CALL callers (interface/reflect dispatch). '
+            'buildFinalQuery ABI Internal at 0x2c9a320: '
+            '  single fmt.Sprintf call at 0x2c9a926 (RAX=0x057f5ef9 format=" %s ", RBX=4, RDI=1). '
+            '  single strings.Join call at 0x2c9a960 (separator "AND" from 0x057f486d, len=3). '
+            '  No calls to ValidateSQLIdentifier, no escaping functions observed. '
+            'Format string raw bytes at 0x057f5ef9: 20 25 73 20 22 25 73 22 → " %s \\"%s\\"".'
         ),
         bert_score=None,
-        verified=False,
+        verified=True,   # ValidateSQLIdentifier confirmed dead code; fmt.Sprintf insertion confirmed
         notes=(
-            'ArangoDB injection class is similar to MongoDB query injection but with distinct syntax. '
-            'If processSingleCriterion properly escapes field names before insertion, no injection. '
-            'Need disassembly of processSingleCriterion to check escaping logic.'
+            'STATUS: PLAUSIBLE-HIGH. '
+            'ValidateSQLIdentifier is dead code — present but never called anywhere in the binary. '
+            'fmt.Sprintf inserts criterion data into AQL without any identifier validation or escaping. '
+            'Exploitability depends on: whether field names in axfilters Filter structs are '
+            'user-controlled (from OPA policy data) or hardcoded in REGO rules. '
+            'If OPA policy data (bundle JSON) is user-influenced, field names are attacker-controlled. '
+            'Proof: send a CompileFilterForAql request with a Filter containing a field name '
+            'with AQL-special characters (backtick, bracket, RETURN keyword) and observe query execution.'
         ),
     ),
 
     Finding(
         id='F4',
-        title='PostgreSQL pg_hba.conf Read Access via canAccessHbaFileRules',
+        title='pg_hba_file_rules Query Scope — REFUTED: Internal Use, Data Not Exposed in API',
         package='axplugins/postgresql',
         functions=[
-            'postgresql.(*Client).canAccessHbaFileRules',
-            'postgresql.(*Client).ValidatePermissions',
-            'postgresql.(*Client).validateSessionTermination',
+            'postgresql.(*Client).canAccessHbaFileRules',   # inlined; no separate gopclntab entry
+            'postgresql.(*Plugin).ValidatePermissions',      # VA: 0x355db80
         ],
-        class_='Sensitive File Read / Information Disclosure',
+        class_='Information Disclosure / REFUTED',
         description=(
-            'The PostgreSQL plugin implements canAccessHbaFileRules — a check for whether '
-            'the orchestrator\'s database user can read pg_hba.conf (the PostgreSQL '
-            'host-based authentication configuration). '
-            'pg_hba.conf reveals all authentication methods, allowed hosts, and database '
-            'access rules for the PostgreSQL instance. '
-            'This access is a prerequisite for attacks targeting PostgreSQL authentication '
-            'methods (e.g., md5 downgrade, trust rule identification). '
-            'If the orchestrator service account has pg_catalog.pg_hba_file_rules access '
-            'and this function is reachable via the PAM API, the HBA config is readable '
-            'by any caller with PAM resource access.'
+            'REFUTED. The PostgreSQL plugin executes a CTE query reading auth_method from '
+            'pg_hba_file_rules to determine what authentication methods apply to the '
+            'orchestrator\'s service account. The query: '
+            'COALESCE((SELECT array_agg(auth_method ORDER BY line_number) FROM pg_hba_file_rules '
+            'WHERE %s = ANY(user_name) OR \'all\' = ANY(user_name)), ARRAY[]::text[]) '
+            'AS potential_auth_methods. '
+            'ValidatePermissions uses this internally to check privilege sufficiency. '
+            'The pg_hba auth_method values are NOT returned in API responses — '
+            'only a list of MISSING permissions (error strings) is returned to callers. '
+            'canAccessHbaFileRules (inlined, not in gopclntab) probes with '
+            'SELECT 1 FROM pg_hba_file_rules LIMIT 1 — boolean only.'
         ),
         mechanism=(
-            'SELECT line_number, auth_method, user_name, address, database FROM pg_catalog.pg_hba_file_rules; '
-            'This view requires superuser or pg_read_all_settings privilege. '
-            'If the orchestrator\'s service account holds this privilege (required for PAM credential rotation), '
-            'then the HBA rules are readable through the PAM management interface.'
+            'REFUTED — pg_hba_file_rules data is read internally but not exposed. '
+            'ValidatePermissions reports: "The PostgreSQL user is missing the following permissions: %s" '
+            'and "SELECT on pg_hba_file_rules (requires SUPERUSER, or GRANT SELECT + EXECUTE on '
+            'pg_catalog.pg_hba_file_rules)" — permission NAMES only, not pg_hba data. '
+            'The potential_auth_methods CTE is used to determine privilege checks; '
+            'the actual auth_method values from pg_hba are not propagated to API responses.'
         ),
         evidence=(
-            'canAccessHbaFileRules function in postgresql.(*Client) — unique to orchestrator plugin. '
-            'ValidatePermissions calls canAccessHbaFileRules to check orchestrator\'s privilege scope. '
-            'The orchestrator requires superuser-equivalent privileges for credential rotation, '
-            'making pg_hba_file_rules view readable as a side effect of the required permission set.'
+            'DISASSEMBLY-BACKED (REFUTED). '
+            'Full query bytes at 0x58c9272: '
+            '"COALESCE(\\n           (SELECT array_agg(auth_method ORDER BY line_number)\\n'
+            '            FROM pg_hba_file_rules\\n'
+            '            WHERE %s = ANY(user_name) OR \'all\' = ANY(user_name)),..." '
+            'ValidatePermissions (0x355db80) returns missing-permission error strings, '
+            'not raw pg_hba data. String at 0x355e032: '
+            '"The PostgreSQL user is missing the following permissions: %s". '
+            'String at 0x58c12bd: "SELECT on pg_hba_file_rules (requires SUPERUSER, '
+            'or GRANT SELECT + EXECUTE on pg_catalog.pg_hba_file_rules)" — in error message. '
+            'canAccessHbaFileRules probe: "SELECT 1 FROM pg_hba_file_rules LIMIT 1" at 0x586981f — boolean.'
         ),
         bert_score=None,
         verified=False,
         notes=(
-            'Impact depends on whether PAM management API exposes pg_hba contents in responses. '
-            'IntegrationOutput may include HBA access result in the response body. '
-            'Separate from credential rotation: check the oracledb plugin\'s IntegrationOutput '
-            'which is present only in oracledb (not other plugins) and may expose similar config.'
+            'VERDICT: REFUTED. pg_hba_file_rules is queried internally for permission checking, '
+            'not exposed in API responses. '
+            'The orchestrator service account requires superuser-level PostgreSQL privileges '
+            '(legitimate for credential rotation), and canAccessHbaFileRules is a standard '
+            'health-check function. No novel exploit path identified. '
+            'IntegrationOutput (oracledb-specific) remains unexamined — check separately.'
         ),
     ),
 
     Finding(
         id='F5',
-        title='singlerotate Credentials Field Accepts Empty Value',
+        title='singlerotate Credentials Field — Missing validate Tag (REFUTED: Plugin Guards Exist)',
         package='axiomworkflows/workflows/rotatecredentials/childworkflows/singlerotate',
         functions=[
             'axiomworkflows/workflows/rotatecredentials/childworkflows/singlerotate.(*Workflow).Execute',
             'axiomworkflows/workflows/rotatecredentials/childworkflows/singlerotate/activities.RotateCredentials',
         ],
-        class_='Input Validation Failure / Credential Corruption',
+        class_='Input Validation Failure / REFUTED',
         description=(
-            'The singlerotate child workflow Input struct includes a Credentials field '
-            '(json:"credentials") with no validate tag. '
-            'The parent rotatecredentials workflow dispatches singlerotate as child workflows '
-            'via executeRotationsAsChildWorkflows. '
-            'If the Credentials field reaches the DB plugin\'s RotateCredentials method '
-            'while empty or malformed, the target database account\'s password may be set '
-            'to an empty string, disabling authentication for that account.'
+            'REFUTED. The singlerotate Input.Credentials field (json:"credentials") has no validate tag, '
+            'meaning Temporal does not reject empty credentials at the workflow layer. '
+            'However, DB plugins implement runtime guards: '
+            '"new password is required for password rotation" (Oracle/PostgreSQL) and '
+            '"expected string credentials (user\'s new password) were not provided" (MySQL/MariaDB/MSSQL). '
+            'An empty credentials field causes a plugin error and workflow failure — '
+            'it does not silently set the DB password to an empty string.'
         ),
         mechanism=(
-            'Trigger rotatecredentials workflow with controlled input where credentials '
-            'is an empty string. The child singlerotate executes without rejecting empty credentials. '
-            'DB plugin\'s RotateCredentials (mysql, mariadb, mssql, postgresql, etc.) '
-            'executes ALTER USER ... IDENTIFIED BY \'\' or equivalent.'
+            'REFUTED — plugin-level checks exist. '
+            'The Credentials field IS the new password encoded as a string (confirmed by error string '
+            '"expected string credentials (user\'s new password) were not provided"). '
+            'Missing validate tag is a defense-in-depth gap (no early workflow rejection), '
+            'not an exploitable vulnerability. '
+            'Operational impact only: workflow starts and retries before failing, creating audit log noise.'
         ),
         evidence=(
-            'singlerotate.Input struct: {runnerId, encryptionKey validate:"required", '
-            'credentials [NO validate], target validate:"required", IntegrationMetadata}. '
-            'encryptionKey and target are validated as required; credentials is not. '
-            'All 7 DB plugins implement RotateCredentials — none shown to independently '
-            'validate non-empty credential before issuing the ALTER statement.'
+            'DISASSEMBLY-BACKED (REFUTED). '
+            'String at 0x587d59d: "new password is required for password rotation" (Oracle/PG plugin). '
+            'String at 0x58a5986: "expected string credentials (user\'s new password) were not provided" '
+            '(MySQL/MariaDB/MSSQL plugin). '
+            'Both strings confirm runtime credential validation at the plugin layer. '
+            'singlerotate.Input struct (from generic type instantiation): '
+            '{RunnerID validate:"required,min=1", EncryptionKey validate:"required", '
+            'Credentials [NO validate tag], Target validate:"required"}. '
+            'Credentials = new password encoded as string; empty string blocked at plugin layer.'
         ),
         bert_score=0.530,
         verified=False,
         notes=(
-            'The 0.530 BERT score was on auditRotationResults matching credential_rotation_race pattern. '
-            'The audit activity AuditRotationInput includes the rotation Output — '
-            'check if audit log records the (empty) new credential value.'
+            'VERDICT: REFUTED. Plugin guards prevent empty-password DB corruption. '
+            'Defense-in-depth gap (missing validate tag on Credentials field) is a code quality '
+            'issue, not a novel security vulnerability. '
+            'The BERT score of 0.530 matched auditRotationResults, not the primary candidate function.'
         ),
     ),
 
