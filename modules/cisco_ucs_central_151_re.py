@@ -143,4 +143,116 @@ UCSC_F5 = {
             "the active root account is reachable if the hash is cracked.",
 }
 
-FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5]
+# ─────────────────────────────────────────────────────────
+# OVA ANALYSIS — ucs-central.1.5.1c.ova (1.4GB)
+# Source: OVA → VMDK disk1 (40GB, LVM VolGroup00/LogVol00, ext3, RHEL 5)
+# Additional findings from running system filesystem
+# ─────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F6 — Pre-generated SSH host keys identical across all UCS Central 1.5.1c deployments
+# ─────────────────────────────────────────────────────────
+UCSC_F6 = {
+    "id":       "UCSC-F6",
+    "title":    "Pre-generated SSH host private keys shipped in UCS Central 1.5.1c OVA — identical across all deployments",
+    "status":   "CONFIRMED — /etc/ssh/ssh_host_{rsa,dsa,ed25519}_key extracted from OVA disk1 VMDK",
+    "severity": "CRITICAL",
+
+    "host_keys": {
+        "ssh_host_rsa_key":     "2048-bit RSA, generated 2010-12-16, 1675 bytes",
+        "ssh_host_dsa_key":     "1024-bit DSA, generated 2010-12-16, 668 bytes",
+        "ssh_host_ed25519_key": "Ed25519, generated 2015-08-10, 419 bytes",
+    },
+    "fingerprints": {
+        "RSA": "SHA256:liLiF/1EHY0VU4x4aCaCvx+CMIF0z4Aau9RZYdqSv2g",
+        "DSA": "SHA256:oycZt0JQhmMvNBLzs/mZbU1U+XrbBAx/z4pZehB+NII",
+    },
+    "rsa_key_prefix": "MIIEogIBAAKCAQEA9hs4GweVFGy9CQ...",
+
+    "impact": (
+        "Every UCS Central 1.5.1c VM deployed from this OVA uses the same three SSH host key pairs. "
+        "An attacker who extracts the private keys from the OVA can: "
+        "(1) MITM any SSH connection to any UCS Central 1.5.1c deployment, "
+        "(2) Impersonate any UCS Central 1.5.1c instance (client trusts known fingerprint), "
+        "(3) Decrypt any previously recorded SSH session to/from UCS Central 1.5.1c "
+        "if the session was captured before key rotation."
+    ),
+
+    "sshd_config": {
+        "Protocol":                     "2",
+        "PasswordAuthentication":        "yes",
+        "UsePAM":                       "yes",
+        "X11Forwarding":                "yes",
+        "PermitRootLogin":              "(not set — OpenSSH 6.6p1 default: without-password)",
+        "ChallengeResponseAuthentication": "no",
+    },
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F7 — admin OS account has empty shadow password + libvmpam ucs-prefix bypass
+# ─────────────────────────────────────────────────────────
+UCSC_F7 = {
+    "id":       "UCSC-F7",
+    "title":    "OS 'admin' account has empty shadow entry; libvmpam.so skips authentication for 'ucs-' prefixed usernames via PAM bypass path",
+    "status":   "CONFIRMED — /etc/shadow and /usr/lib/libvmpam.so in OVA disk1 VMDK",
+    "severity": "HIGH",
+
+    "shadow_entry": "admin::17223:0:99999:7:::  (empty password field)",
+    "admin_shell":  "/opt/cisco/bin/vsh_perm (bash script → /opt/cisco/core/sam/bin/ucssh restricted shell)",
+
+    "pam_config": {
+        "file": "/etc/pam.d/sshd and /etc/pam.d/login (identical)",
+        "lines": [
+            "auth [system_err=ignore buf_err=ignore default=done] /usr/lib/libvmpam.so debug",
+            "auth sufficient pam_unix.so debug",
+            "account required pam_unix.so debug",
+        ],
+    },
+
+    "libvmpam_behavior": (
+        "libvmpam.so is a custom VMware/Cisco PAM module that forwards auth to a socket-based service. "
+        "String evidence: 'Skipping PAM authentication for user %s', 'ucs-', 'ucs login prefix removed %s'. "
+        "Users with 'ucs-' prefix have authentication skipped by libvmpam (returns PAM_SUCCESS without password check). "
+        "With action [default=done], PAM_SUCCESS from libvmpam exits the auth chain as success."
+    ),
+
+    "bypass_path": (
+        "Authenticating as 'ucs-admin' (with ucs- prefix) via SSH or console: "
+        "libvmpam strips prefix, skips authentication, returns PAM_SUCCESS → auth chain exits as success. "
+        "Session runs as 'admin' user in the vsh_perm restricted shell. "
+        "NOTE: 'ucs-admin' must exist as a system user or libvmpam must map it — verification requires live testing."
+    ),
+
+    "pam_unix_empty_password_note": (
+        "pam_unix.so without 'nullok' flag denies empty passwords — so admin's empty shadow entry "
+        "is NOT directly exploitable via pam_unix. The bypass path is libvmpam's ucs- prefix skip."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F8 — Build server path and internal directory structure leaked in shipped configs
+# ─────────────────────────────────────────────────────────
+UCSC_F8 = {
+    "id":       "UCSC-F8",
+    "title":    "Cisco build server path '/ramfs/buildsa/170226-115116-rev960-FCSc/...' embedded in shipped Apache config files",
+    "status":   "CONFIRMED — /opt/cisco/core/apache/conf/original/*.conf in OVA disk1 VMDK",
+    "severity": "LOW",
+
+    "affected_files": [
+        "opt/cisco/core/apache/conf/original/httpd.conf",
+        "opt/cisco/core/apache/conf/original/extra/httpd-multilang-errordoc.conf",
+        "opt/cisco/core/apache/conf/original/extra/httpd-ssl.conf",
+        "opt/cisco/core/apache/conf/original/extra/httpd-dav.conf",
+    ],
+    "leaked_path":  "/ramfs/buildsa/170226-115116-rev960-FCSc/core/sam/src/.release/vhome/opt/apache",
+    "build_server": "buildsa",
+    "build_stamp":  "170226-115116 (2017-02-26 11:51:16)",
+    "build_label":  "rev960-FCSc",
+
+    "note": "Production Apache config ships with Cisco build server paths as DocumentRoot, ServerRoot, "
+            "and Alias targets. These expose the Cisco internal build infrastructure layout. "
+            "The 'original' configs are backup copies included in the OVA; the active configs "
+            "at opt/cisco/core/apache/conf/httpd.conf use the production paths (/opt/apache).",
+}
+
+FINDINGS = [UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8]
