@@ -25,7 +25,7 @@ FIRMWARE = {
     "app_stack":   "etcd + MongoDB + RabbitMQ + Consul + Vault + Kubernetes + Jenkins (from get_dev_name.sh)",
     "custom_ssh":  "CiscoSSH 1.19.92 / OpenSSH 10.2p1 (Cisco fork at /usr/local/bin/ssh)",
     "findings":    ["ISA-F1", "ISA-F2", "ISA-F3", "ISA-F4", "ISA-F5", "ISA-F6",
-                    "ISA-F7", "ISA-F8", "ISA-F9", "ISA-F10"],
+                    "ISA-F7", "ISA-F8", "ISA-F9", "ISA-F10", "ISA-F11", "ISA-F12"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -537,8 +537,116 @@ ISA_CUSTOM_SSH = {
     "note":    "Cisco fork of OpenSSH 10.2p1 in /usr/local/bin, overrides system OpenSSH in PATH",
 }
 
+# ─────────────────────────────────────────────────────────
+# ISA-F11 — Kafka security disabled by default (kafka_security_enable: "false")
+# Source: disk3 ansible/appliance vars/kafka_cluster_vars.yml
+# ─────────────────────────────────────────────────────────
+ISA_F11 = {
+    "id":       "ISA-F11",
+    "title":    "Intersight Appliance Ansible installer deploys Kafka with kafka_security_enable "
+                "set to 'false' — Kafka cluster runs without authentication or TLS; any process "
+                "on the cluster network can produce or consume from all telemetry topics",
+    "status":   "CONFIRMED — vars/kafka_cluster_vars.yml in disk3 ansible/appliance installer "
+                "(intersight-appliance-installer-kvm-1.1.7-0.a/software/ansible/appliance/)",
+    "severity": "MEDIUM",
+
+    "vars_file": "vars/kafka_cluster_vars.yml",
+    "setting":   "kafka_security_enable: \"false\"",
+
+    "topic_classes": {
+        "ivy_topics":     ["AD.read.ivy", "AD.response.ivy", "AD.writebronze.ivy", "AD.writegold.ivy",
+                           "AD.servicebroadcast.ivy", "AD.streaming.ivy", "AD.streamingevent.ivy",
+                           "druid-NetworkInterfaces", "druid-PhysicalEntities"],
+        "druid_topics":   ["druid-ucsEtherPortStat", "druid-ucsPsuStats", "druid-hxConnect",
+                           "druid-ucsComponentStat", "druid-vmwareEsxiStat", "druid-NetworkInterfaces"],
+        "metrics_topics": ["AD.writebronze.ivy", "druid-NetworkInterfaces", "druid-PhysicalEntities"],
+    },
+
+    "bootstrap_servers": "kafka0:9092,kafka1:9092,...,kafkaN:9092 (cluster-internal headless service)",
+
+    "impact": (
+        "Kafka without security means any process reachable to the Kafka service endpoints can: "
+        "(1) consume all telemetry topics — UCS power, storage, network, HyperFlex, ESXi stats, "
+        "and account-level Andromeda event streams (AD.* topics). "
+        "(2) produce arbitrary messages to any topic — injecting false telemetry into Druid "
+        "analytics, corrupting the UCS telemetry pipeline, or injecting malicious events "
+        "into the Ivy/Andromeda management service bus. "
+        "The AD.write* topics carry Bronze/Gold tier Andromeda device write operations — "
+        "injection here could corrupt the Intersight management data plane."
+    ),
+
+    "scope_note": (
+        "Kafka bootstrap addresses are cluster-internal (headless service) — "
+        "external access is not directly exposed. "
+        "Risk materializes under: pod compromise, cluster SSRF, or cluster network access. "
+        "The druid Kafka NodePort exposure (ISA-F12) provides a secondary path "
+        "via Druid's native Kafka consumer that may bypass this cluster boundary."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# ISA-F12 — Druid analytics services exposed as NodePort without authentication
+# Source: disk3 ansible/appliance vars/druid_vars.yml
+# ─────────────────────────────────────────────────────────
+ISA_F12 = {
+    "id":       "ISA-F12",
+    "title":    "Intersight Appliance Druid analytics services configured as NodePort — "
+                "coordinator (:30081), broker (:30082), overlord (:31090), router (:30880) "
+                "accessible on all Kubernetes node IPs without authentication",
+    "status":   "CONFIRMED — vars/druid_vars.yml in disk3 ansible/appliance installer "
+                "(intersight-appliance-installer-kvm-1.1.7-0.a/software/ansible/appliance/); "
+                "service_type: NodePort explicit for coordinator, broker, overlord, router",
+    "severity": "HIGH",
+
+    "nodeport_services": {
+        "coordinator": {"container_port": 8081, "node_port": 30081, "function": "segment management + replication"},
+        "broker":      {"container_port": 8082, "node_port": 30082, "function": "query endpoint"},
+        "overlord":    {"container_port": 8090, "node_port": 31090, "function": "ingestion task management"},
+        "router":      {"container_port": 8880, "node_port": 30880, "function": "query routing + web console"},
+    },
+
+    "clusterip_services": {
+        "historical":    8083,
+        "middlemanager": 8091,
+    },
+
+    "druid_auth_default": "None — Apache Druid does not require authentication by default",
+
+    "telemetry_topics_ingested": [
+        "druid-ucsEtherPortStat (UCS ethernet port statistics per device)",
+        "druid-ucsPsuStats (power supply unit stats — energy, temperature per chassis)",
+        "druid-hxConnect (HyperFlex storage metrics — capacity, dedup, compression, latency)",
+        "druid-ucsComponentStat (UCS component temp/power per rack/blade/chassis/serial)",
+        "druid-vmwareEsxiStat (VMware ESXi VM stats — accountId, deviceId, power state, storage)",
+        "druid-NetworkInterfaces (network interface statistics)",
+    ],
+
+    "impact": (
+        "Druid is deployed as NodePort on all Kubernetes node IPs. "
+        "The Kubernetes cluster nodes in the Intersight Appliance are part of the management network. "
+        "Any host on the management network can reach the Druid query interface (broker :30082, "
+        "router :30880) and the task management interface (overlord :31090) without authentication. "
+        "Via the broker/router, an attacker can: "
+        "  (1) Query any Druid datasource — read all UCS telemetry including accountId-tagged "
+        "      device inventory, power consumption, storage capacity, VM metadata. "
+        "  (2) Access the Druid web console (router :30880) for datasource management. "
+        "Via the overlord (:31090), an attacker can: "
+        "  (3) Submit, cancel, or modify Druid ingestion tasks — disrupting telemetry pipeline. "
+        "  (4) Pivot to the configured Kafka cluster (ISA-F11) via Druid's Kafka supervisor API. "
+        "The accountId dimension in all topics scopes data to specific Cisco Intersight accounts — "
+        "an attacker without an accountId can still enumerate all accountIds in the Druid metadata."
+    ),
+
+    "retention_scope": (
+        "Default retention: 1 month (druid_datasource_defaults). "
+        "HX and UCS component stats: 12 months. "
+        "VMware ESXi stats: 12 months. "
+        "An attacker can query up to 12 months of cross-account telemetry history."
+    ),
+}
+
 FINDINGS = [ISA_F1, ISA_F2, ISA_F3, ISA_F4, ISA_F5, ISA_F6,
-            ISA_F7, ISA_F8, ISA_F9, ISA_F10]
+            ISA_F7, ISA_F8, ISA_F9, ISA_F10, ISA_F11, ISA_F12]
 
 if __name__ == "__main__":
     for f in FINDINGS:
