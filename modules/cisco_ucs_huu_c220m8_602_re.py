@@ -249,7 +249,133 @@ HUU_F6 = {
     "platforms": ["C220 M8 (ucs-c220m8-huu-6.0.2.260143.iso)", "XE130C (ucs-xe130cm8-huu-6.0.2.260143.iso)"],
 }
 
-FINDINGS = [HUU_F1, HUU_F2, HUU_F3, HUU_F4, HUU_F5, HUU_F6]
+# ─────────────────────────────────────────────────────────
+# HUU-F7 — IMG_VERIFY not set in default profile — container signature verification is dead code
+# ─────────────────────────────────────────────────────────
+HUU_F7 = {
+    "id":       "HUU-F7",
+    "title":    "IMG_VERIFY unset in hsu-profile.sh — imgverify exits 0 without verification; container tar.gz integrity check is dead code",
+    "status":   "CONFIRMED — /etc/profile.d/hsu-profile.sh and /usr/sbin/imgverify in HUU 6.0.2.260143 rootfs; /etc/init.sh in container",
+    "severity": "CRITICAL",
+
+    "profile_script": "etc/profile.d/hsu-profile.sh",
+    "profile_exports": [
+        "PATH, PYTHONPATH, ISO_MNTPATH, MNTPATH, WORKBASE, CONTAINER_MNT_TYPE, DEBUG, NO_AT_BRIDGE, HSU_STANDALONE_OS",
+        "IMG_VERIFY is NOT exported — absent from hsu-profile.sh",
+    ],
+
+    "imgverify_bypass": (
+        "imgverify line 6: if [ \"$IMG_VERIFY\" != \"1\" ]; then exit 0; fi\n"
+        "When IMG_VERIFY is unset (empty string), the condition is true and the script exits 0 (success) "
+        "before any cryptographic operation. The openssl dgst -verify call is never reached."
+    ),
+
+    "hsu_init_call": (
+        "hsu-init (compressed_base branch):\n"
+        "  if ! imgverify /tmp/*-container-*-base.tar.gz >> /tmp/imgverify.log 2>&1\n"
+        "  then\n"
+        "      fatal \"Base container signature verification failed!\"\n"
+        "  fi\n"
+        "Because imgverify exits 0, the fatal branch is never reached. "
+        "Any container tar.gz passes verification unconditionally."
+    ),
+
+    "impact": (
+        "The container verification in hsu-init is entirely bypassed. "
+        "An attacker who can substitute the container squashfs or its extracted tar.gz "
+        "(e.g., via the ISO image manipulation path enabled by HUU-F1) will pass the "
+        "verification gate without any cryptographic check. "
+        "Combined with HUU-F1 (hardcoded decrypt key) and HUU-F2 (dev key fallback), "
+        "this completes an unsigned container execution path."
+    ),
+
+    "note": (
+        "ftd uses a different check: [ \"$IMG_VERIFY\" -eq 1 ] (integer comparison). "
+        "When IMG_VERIFY is unset, bash evaluates empty string as 0 for -eq, so [ \"\" -eq 1 ] is false "
+        "and ftd also skips verification. Both verification scripts have the same bypass condition "
+        "but via different comparison operators."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU-F8 — Timestamp-derived MD5 password for huu_user stored in plaintext
+# ─────────────────────────────────────────────────────────
+HUU_F8 = {
+    "id":       "HUU-F8",
+    "title":    "container init.sh creates huu_user with timestamp-derived MD5 password stored in plaintext at /tmp/huu.cred — password brutable from known boot time",
+    "status":   "CONFIRMED — /etc/init.sh in HUU C220 M8 6.0.2 container (ucs-c220m8-huu-container-6.0.2.260143)",
+    "severity": "HIGH",
+
+    "container_script": "etc/init.sh (HUU container, not rootfs)",
+    "create_user_function": [
+        "create_user() {",
+        "  USERNAME=\"huu_user\"",
+        "  PASSWORD=$(date +%s%N | md5sum | cut -c1-12)",
+        "  echo \"$USERNAME:$PASSWORD\" > /tmp/huu.cred",
+        "  chroot $ROOTFS_DIR sh -c \"useradd $USERNAME\"",
+        "  chroot $ROOTFS_DIR sh -c \"echo '$USERNAME:$PASSWORD' | chpasswd\"",
+        "}",
+    ],
+
+    "password_entropy": (
+        "date +%s%N outputs Unix timestamp with nanoseconds (e.g., 1699000000123456789). "
+        "The nanosecond field has ~30 bits of entropy but is correlated with the boot timestamp "
+        "which is logged in multiple locations (/tmp/log, /opt/cisco/rootfs_init_end_time, "
+        "syslog, Redfish logs). An attacker who knows the approximate boot time (±1 second) "
+        "faces a search space of ~10^9 nanosecond values, each requiring one MD5 call and "
+        "a 12-char prefix extraction. At typical GPU speeds this is seconds to minutes."
+    ),
+
+    "plaintext_storage": (
+        "/tmp/huu.cred contains USERNAME:PASSWORD in plaintext. "
+        "/tmp/ is accessible from within the HUU container environment. "
+        "Any process running in the container (including those reachable via "
+        "HUU-F3/HUU-F5 telnet or HUU-F6 USB RNDIS) can read /tmp/huu.cred."
+    ),
+
+    "account_persistence": (
+        "huu_user is created in the rootfs chroot via useradd + chpasswd. "
+        "The account has SSH access (sshd running on the rootfs, PasswordAuthentication enabled by default). "
+        "The credential enables SSH login to the rootfs environment during the HUU session."
+    ),
+
+    "scope": "Container init.sh — applies to all HUU versions sharing this container initialization script.",
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU-F9 — remove_sign predictable temp file path — symlink race to arbitrary file overwrite
+# ─────────────────────────────────────────────────────────
+HUU_F9 = {
+    "id":       "HUU-F9",
+    "title":    "remove_sign creates temp file at predictable /tmp/<basename>.tmp path (no PID suffix) — symlink race enables arbitrary file overwrite as root",
+    "status":   "CONFIRMED — /usr/sbin/remove_sign in HUU 6.0.2.260143 rootfs",
+    "severity": "MEDIUM",
+
+    "script":    "usr/sbin/remove_sign (shell script)",
+    "temp_path": "tmp_dst_file=/tmp/`basename $src_file`.tmp",
+
+    "script_excerpt": [
+        "tmp_dst_file=/tmp/`basename $src_file`.tmp",
+        "cp -p $src_file $tmp_dst_file",
+        "...",
+        "mv $tmp_dst_file $dst_file",
+    ],
+
+    "race_condition": (
+        "The temp path /tmp/<basename>.tmp is predictable from the source filename. "
+        "If an attacker pre-creates a symlink at /tmp/<basename>.tmp pointing to a target file "
+        "(e.g., /etc/shadow, /etc/sudoers), the cp -p call follows the symlink and overwrites "
+        "the target with the source file content. remove_sign runs as root during HUU boot. "
+        "Contrast with ftd which uses /tmp/<name>.tmp.$$ (PID-suffixed, unique)."
+    ),
+
+    "compare_ftd": (
+        "ftd: tmp_dst_file=/tmp/`basename $src_file`.tmp.$$ — PID suffix prevents symlink collision. "
+        "remove_sign omits the $$ suffix — same pattern, different security outcome."
+    ),
+}
+
+FINDINGS = [HUU_F1, HUU_F2, HUU_F3, HUU_F4, HUU_F5, HUU_F6, HUU_F7, HUU_F8, HUU_F9]
 
 if __name__ == "__main__":
     for f in FINDINGS:
