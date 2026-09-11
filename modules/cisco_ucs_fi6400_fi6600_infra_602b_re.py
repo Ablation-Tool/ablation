@@ -32,7 +32,7 @@ FIRMWARE = {
         "ucs-2400-6400.6.0.2b.bin":   "UCS 2400/6400 IOM firmware",
         "ucs-2500-6400.6.0.2b.bin":   "UCS 2500/6400 IOM firmware",
     },
-    "findings": ["FI64XX-F1"],
+    "findings": ["FI64XX-F1", "FI64XX-F2", "FI64XX-F3"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -69,6 +69,79 @@ FI64XX_F1 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# FI64XX-F2: IMAGE_STRIP_3K_CMNDS wildcard — extractimage + mknbi-insieme
+#             NOPASSWD with wildcard args (FI 6400/6600-specific sudoers entry)
+# ─────────────────────────────────────────────────────────
+FI64XX_F2 = {
+    "id":       "FI64XX-F2",
+    "title":    "FI 6400/6600 sudoers grants NOPASSWD:IMAGE_STRIP_3K_CMNDS — "
+                "/isan/bin/extractimage * and /isan/bin/mknbi-insieme * with wildcard args",
+    "status":   "CONFIRMED — extracted from /etc/sudoers in FI 6400 rootfs",
+    "severity": "HIGH",
+
+    "sudoers_file":   "etc/sudoers",
+    "cmnd_alias": (
+        "Cmnd_Alias IMAGE_STRIP_3K_CMNDS = "
+        "/isan/bin/extractimage *, /isan/bin/mknbi-insieme *"
+    ),
+    "nopasswd_grant": "NOPASSWD:IMAGE_STRIP_3K_CMNDS",
+
+    "primitive": {
+        "extractimage": (
+            "extractimage with wildcard args allows any authenticated ISAN user to invoke the "
+            "image extraction utility against arbitrary target paths — potentially extracting "
+            "image content to attacker-controlled locations or triggering memory-unsafe parsing."
+        ),
+        "mknbi_insieme": (
+            "mknbi-insieme (together NBI image builder) with wildcard args allows crafting "
+            "arbitrary network-boot images. Wildcard includes --output, --kernel, --append and "
+            "other flags; a malformed invocation can overwrite target flash regions or cause "
+            "memory corruption in the builder."
+        ),
+    },
+
+    "scope_note": (
+        "This sudoers alias is present in the FI 6400 rootfs; it is absent from the FI 6500 "
+        "sudoers analyzed in cisco_ucs_fi6500_602b_re.py, making this entry FI6400/6600-specific."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# FI64XX-F3: dcos_sshd_config.template enables Protocol 2,1 (SSHv1)
+#             Config reset from template re-enables SSHv1 on production SSH
+# ─────────────────────────────────────────────────────────
+FI64XX_F3 = {
+    "id":       "FI64XX-F3",
+    "title":    "dcos_sshd_config.template sets Protocol 2,1 — SSHv1 re-enabled if "
+                "production config is regenerated from template",
+    "status":   "CONFIRMED — extracted from isan/etc/dcos_sshd_config.template in FI 6400 rootfs",
+    "severity": "MEDIUM",
+
+    "template_file":    "isan/etc/dcos_sshd_config.template",
+    "deployed_file":    "isan/etc/dcos_sshd_config",
+    "template_value":   "Protocol 2,1",
+    "deployed_value":   "Protocol 2",
+
+    "description": (
+        "The production dcos_sshd_config (used by the externally-facing dcos_sshd on port 22) "
+        "correctly sets Protocol 2 only. However the on-disk template "
+        "isan/etc/dcos_sshd_config.template contains Protocol 2,1, enabling both SSHv1 and "
+        "SSHv2. Any code path that regenerates or overwrites dcos_sshd_config from this "
+        "template — cluster recovery, factory reset, version downgrade, or a script using "
+        "the template as a base — re-enables SSHv1 on the production management SSH daemon. "
+        "SSHv1 is cryptographically broken (MITM, session hijacking via CRC32 compensation "
+        "attack, CBC IV prediction)."
+    ),
+
+    "template_also_includes": {
+        "StrictModes": "no",
+        "PermitRootLogin": "no",
+        "PasswordAuthentication": "yes",
+        "LoginGraceTime": "600",
+    },
+}
+
 CROSS_REFERENCE = {
     "primary_analysis": "cisco_ucs_fi6500_602b_re.py",
     "infra_bundle_analysis": "cisco_ucs_fi6500_infra_602b_re.py",
@@ -79,7 +152,7 @@ CROSS_REFERENCE = {
     ),
 }
 
-FINDINGS = [FI64XX_F1]
+FINDINGS = [FI64XX_F1, FI64XX_F2, FI64XX_F3]
 
 if __name__ == "__main__":
     for f in FINDINGS:
