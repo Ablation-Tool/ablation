@@ -308,6 +308,18 @@ UCSC_F9 = {
         "requires a TLS client certificate issued to a UCSM domain member. "
         "Pre-existing UCSM client certificate required to reach the CGI."
     ),
+
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "scope_212b": (
+        "Confirmed in core-2.1.2-b.x86_64.rpm: "
+        "opt/cisco/core/apache/ucsmoperations/recvbackup.cgi — identical injection pattern; "
+        "$targetDir and $targetFile unsanitized from URL query string into backtick shell. "
+        "httpd-ssl.conf (extra/httpd-ssl.conf lines 210-213): "
+        "ScriptAliasMatch ^/ucsmoperations/file-(.*)/recvbackup.txt -> recvbackup.cgi; "
+        "<Directory /opt/cisco/core/apache/ucsmoperations> SSLVerifyClient require — "
+        "same access precondition as 1.5.1c."
+    ),
 }
 
 # ─────────────────────────────────────────────────────────
@@ -1712,12 +1724,138 @@ UCSC_F35 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F36 — recvfile.cgi arbitrary file write, unauthenticated
+# No path sanitization; no auth; Allow from all; overwrites any file writable
+# by Apache daemon (daemon user); confirmed in 1.5.1c + 2.1.2b (identical files)
+# Source: opt/cisco/core/apache/operations/recvfile.cgi (both RPMs)
+# httpd.conf: <Directory /opt/apache/operations> Allow from all (no SSLVerifyClient)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F36 = {
+    "id":       "UCSC-F36",
+    "title":    "recvfile.cgi arbitrary file write — REQUEST_URI captures absolute path unsanitized; "
+                "open(OUTF, \">$file\") overwrites any daemon-writable file; unauthenticated (Allow from all)",
+    "status":   "CONFIRMED — opt/cisco/core/apache/operations/recvfile.cgi; "
+                "httpd.conf <Directory /opt/apache/operations>: Allow from all, no SSLVerifyClient; "
+                "identical in 1.5.1c and 2.1.2b",
+    "severity": "CRITICAL",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "cgi_script": "opt/cisco/core/apache/operations/recvfile.cgi (Perl)",
+    "endpoint":   "POST /operations/file-<absolute_path>/recvfile.txt",
+
+    "url_parsing": (
+        "Regex: /\\/operations\\/file-(.*)\\//recvfile\\.txt/ -> $file = $1\n"
+        "No further sanitization. No use strict. No -T taint flag on shebang (#!/usr/bin/perl, not -wT).\n"
+        "Example: REQUEST_URI=/operations/file-/etc/passwd/recvfile.txt -> $file='/etc/passwd'"
+    ),
+
+    "sink_lines": [
+        "open(INF, \"$file\");        # reads existing file (truncation race)",
+        "open(OUTF, \">$file\");      # overwrites $file with request body (STDIN)",
+        "while (read (STDIN, $buffer, 65536) and print OUTF $buffer) { ... }",
+    ],
+
+    "access_control": (
+        "httpd.conf <Directory /opt/apache/operations>:\n"
+        "  SetHandler sam-cgi\n"
+        "  Order allow,deny\n"
+        "  Allow from all\n"
+        "No AuthType, no Require, no SSLVerifyClient. Network-reachable with zero credentials."
+    ),
+
+    "writable_targets": [
+        "/etc/passwd          — inject uid=0 account (no shadow required if empty passwd field)",
+        "/etc/cron.d/<name>   — write cron job executing as root",
+        "/opt/cisco/sam.config — overwrite adminPasswd/sharedSecret with known ciphertext (UCSC-F1)",
+        "/home/samdme/.ssh/authorized_keys — inject RSA public key -> SSH as samdme -> root (UCSC-F11)",
+        "/opt/cisco/cert/default.key — replace CA private key (cert dir world-writable: UCSC-F33)",
+        "/etc/sudoers         — if daemon has write access via cert dir chmod -R 777 path",
+    ],
+
+    "comparison_note": (
+        "recvimage.cgi, recvlic.cgi, and importconfig.cgi all apply $safe_filename_chars = 'a-zA-Z0-9_.-' "
+        "and strip path separators before open(). recvfile.cgi has no equivalent sanitization — "
+        "the pattern appears intentionally different, likely for internal-only file transfer that was "
+        "never removed from the unauthenticated endpoint."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F37 — sendfile.cgi arbitrary file read, unauthenticated
+# No path sanitization in /operations/file-X/sendfile.txt branch (1.5.1c) or
+# path traversal via ../../../ in /backupfile/, /techsupport/, /corefile/ (2.1.2b);
+# Allow from all; streams any daemon-readable file to HTTP client
+# Source: opt/cisco/core/apache/operations/sendfile.cgi (both RPMs)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F37 = {
+    "id":       "UCSC-F37",
+    "title":    "sendfile.cgi arbitrary file read — REQUEST_URI captures absolute path or "
+                "path-traversable prefix; open(INF, \"$file\") streams any daemon-readable file; "
+                "unauthenticated (Allow from all)",
+    "status":   "CONFIRMED — opt/cisco/core/apache/operations/sendfile.cgi; "
+                "httpd.conf <Directory /opt/apache/operations>: Allow from all, no SSLVerifyClient; "
+                "identical file in 1.5.1c and 2.1.2b; exposed URL pattern differs per httpd.conf",
+    "severity": "CRITICAL",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "cgi_script": "opt/cisco/core/apache/operations/sendfile.cgi (Perl)",
+
+    "url_routing": {
+        "1.5.1c": (
+            "ScriptAliasMatch ^/operations/file-(.*)/sendfile.txt -> sendfile.cgi\n"
+            "Branch: REQUEST_URI =~ /\\/operations\\/file-(.*)\\//sendfile\\.txt/ -> $file = $1\n"
+            "No prefix prepended — $file IS the absolute path from URL.\n"
+            "Payload: GET /operations/file-/etc/shadow/sendfile.txt -> reads /etc/shadow"
+        ),
+        "2.1.2b": (
+            "ScriptAliasMatch ^/backupfile/(.*) -> sendfile.cgi (httpd.conf line 97)\n"
+            "ScriptAliasMatch ^/techsupport/(.*) -> sendfile.cgi (httpd.conf line 98)\n"
+            "ScriptAliasMatch ^/corefile/(.*) -> sendfile.cgi (httpd.conf line 99)\n"
+            "Branches prepend fixed base dirs but $1 is unsanitized:\n"
+            "  /backupfile/../../etc/shadow -> $file='/bootflash/backup/../../etc/shadow' -> /etc/shadow\n"
+            "  /techsupport/../../../etc/shadow -> $file='/workspace/techsupport/../../../etc/shadow' -> /etc/shadow\n"
+            "  /corefile/../../etc/shadow -> $file='/bootflash/sysdebug/coremgmt/logs/../../etc/shadow'\n"
+            "Note: /operations/file-X/sendfile.txt ScriptAlias absent from 2.1.2b httpd.conf; "
+            "backupfile/techsupport/corefile routes are the exposed attack surface."
+        ),
+    },
+
+    "sink_line": "open(INF, \"$file\"); ... while (read (INF, $buffer, 65536) and print $buffer) { ... }",
+
+    "access_control": (
+        "httpd.conf <Directory /opt/apache/operations>:\n"
+        "  SetHandler sam-cgi\n"
+        "  Order allow,deny\n"
+        "  Allow from all\n"
+        "No AuthType, no Require, no SSLVerifyClient. Network-reachable with zero credentials."
+    ),
+
+    "readable_targets": [
+        "/etc/shadow                — root and samdme password hashes",
+        "/opt/cisco/sam.config     — adminPasswd + sharedSecret (decryptable: UCSC-F1)",
+        "/etc/odbc.ini             — PostgreSQL DSN + credentials",
+        "/home/samdme/.ssh/id_rsa  — samdme private key (if generated); samdme -> root via UCSC-F11",
+        "/opt/cisco/cert/default.key — CA private key (UCSC-F33 world-readable)",
+        "/opt/cisco/core/apache/conf/httpd.conf — full Apache config",
+        "/opt/cisco/core/apache/conf/extra/httpd-ssl.conf — SSL vhost config, cert paths, CA config",
+    ],
+
+    "combined_impact": (
+        "UCSC-F36 + UCSC-F37 together: unauthenticated read-then-write cycle on any daemon-accessible file. "
+        "Read /etc/shadow to recover password hashes; write /etc/passwd to inject uid=0 account; "
+        "read sam.config for encrypted credentials then decrypt with UCSC-F1 key; "
+        "write authorized_keys for SSH as samdme then sudo root (UCSC-F11)."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
+    UCSC_F36, UCSC_F37,
 ]
 
 
