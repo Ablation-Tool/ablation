@@ -172,7 +172,108 @@ ACCOUNTS = {
     "svc-nxcloud":  {"uid": 501,  "shell": "/isan/bin/vsh_perm",   "sudo": "NOPASSWD:/isan/bin/vsh"},
 }
 
-FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4]
+# ─────────────────────────────────────────────────────────
+# FI6500-F5 — dcos_sshd_config StrictModes no — world-writable authorized_keys accepted
+# ─────────────────────────────────────────────────────────
+FI6500_F5 = {
+    "id":       "FI6500-F5",
+    "title":    "NX-OS production SSH (dcos_sshd_config) sets StrictModes no — insecure authorized_keys file permissions are not enforced; world-writable keys accepted",
+    "status":   "CONFIRMED — /isan/etc/dcos_sshd_config in FI6400/6500/6600 NX-OS rootfs",
+    "severity": "MEDIUM",
+
+    "config_file": "isan/etc/dcos_sshd_config",
+    "directive":   "StrictModes no",
+
+    "impact": (
+        "With StrictModes no, OpenSSH does not check that the user's home directory and "
+        "authorized_keys file are owned by the user or have safe permissions. "
+        "If an attacker can write to /root/.ssh/authorized_keys (e.g., via the NOPASSWD chown "
+        "finding in UCSC or any writable path to that directory), sshd will accept the injected "
+        "key even if the file is world-writable. On a system with multiple NOPASSWD sudo rules "
+        "(FI6500-F1 through F3), StrictModes no removes the last permission-based gate on "
+        "key-based root access."
+    ),
+
+    "contrast": (
+        "The internal non-production sshd_config (isan/etc/sshd_config) sets StrictModes yes. "
+        "Production and debug configurations have inverted StrictModes settings."
+    ),
+
+    "applies_to": ["FI 6400 (FI64XX-F1 — identical binary)", "FI 6500", "FI 6600 (FI64XX-F1 — identical binary)"],
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F6 — xmlsa hardcoded sudo reboot sequence — NETCONF/xmlagent triggers FI host reboot
+# ─────────────────────────────────────────────────────────
+FI6500_F6 = {
+    "id":       "FI6500-F6",
+    "title":    "xmlsa (NETCONF + xmlagent SSH subsystem) contains hardcoded sudo reboot sequence — authenticated NETCONF 'reload' command triggers FI host reboot as root",
+    "status":   "CONFIRMED — strings /isan/bin/xmlsa in FI6400/6500/6600 NX-OS rootfs",
+    "severity": "MEDIUM",
+
+    "binary":  "isan/bin/xmlsa (ELF x86-64, stripped)",
+    "subsystems": [
+        "Subsystem xmlagent /isan/bin/xmlsa  (in dcos_sshd_config and sshd_config)",
+        "Subsystem netconf  /isan/bin/xmlsa  (in dcos_sshd_config)",
+    ],
+
+    "hardcoded_commands": [
+        "/usr/bin/sudo /usr/bin/killall incrond",
+        "/usr/bin/sudo /usr/bin/timeout 45s /bin/bash -c '/opt/stop-ucsm-container.sh reload > /bootflash/sysdebug/reload.txt 2>&1'",
+        "/usr/bin/sudo /usr/bin/timeout 5s /bin/umount -a -d -f -r -tnoproc,noprocfs,nosysfs,nodevpts,nodevfs  >> /bootflash/sysdebug/reload.txt 2>&1",
+        "/usr/bin/sudo /sbin/reboot -d -f",
+    ],
+
+    "impact": (
+        "Any SSH session authenticated as a user with NETCONF or xmlagent subsystem access can "
+        "trigger a full FI host reboot by issuing a NETCONF 'reload' RPC or XML reload command. "
+        "The reload sequence: kills incrond, calls stop-ucsm-container.sh (container teardown), "
+        "force-unmounts all filesystems, then executes /sbin/reboot -d -f. "
+        "This is a persistent availability impact: an authenticated attacker can force reboot "
+        "the FI at any time, interrupting all fabric traffic and management operations."
+    ),
+
+    "ucsm_container_script": (
+        "/opt/stop-ucsm-container.sh is passed 'reload' as argument. "
+        "If this script has a command injection path in its argument handling, "
+        "xmlsa's hardcoded sudo call becomes a local command injection vector "
+        "for any user who can trigger the reload path."
+    ),
+
+    "applies_to": ["FI 6400 (FI64XX-F1 — identical binary)", "FI 6500", "FI 6600 (FI64XX-F1 — identical binary)"],
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F7 — internal ISAN sshd_config PermitRootLogin yes with LoginGraceTime 600
+# ─────────────────────────────────────────────────────────
+FI6500_F7 = {
+    "id":       "FI6500-F7",
+    "title":    "Internal ISAN sshd_config sets PermitRootLogin yes, PasswordAuthentication yes, LogLevel DEBUG3, LoginGraceTime 600 — root SSH login via password enabled; 10-minute auth window",
+    "status":   "CONFIRMED — /isan/etc/sshd_config in FI6400/6500/6600 NX-OS rootfs",
+    "severity": "MEDIUM",
+
+    "config_file": "isan/etc/sshd_config",
+    "key_directives": {
+        "PermitRootLogin":    "yes — explicit root login enabled",
+        "PasswordAuthentication": "yes — password auth enabled for root",
+        "LogLevel":           "DEBUG3 — verbose logging exposes auth attempts, session keys",
+        "LoginGraceTime":     "600 — 10-minute window per connection for authentication",
+        "StrictModes":        "yes — file permission checks enforced",
+    },
+
+    "note": (
+        "The internal sshd (isan/sbin/sshd) uses this config. "
+        "Whether it is exposed on the management interface or only localhost is runtime-dependent. "
+        "The production SSH daemon (isan/sbin/dcos_sshd + isan/etc/dcos_sshd_config) sets "
+        "PermitRootLogin no. The DEBUG3 log level is the most significant standalone element: "
+        "detailed session negotiation data, keys exchanged, and auth decisions are logged to syslog, "
+        "creating a credential exposure path via log aggregation."
+    ),
+
+    "applies_to": ["FI 6400 (FI64XX-F1 — identical binary)", "FI 6500", "FI 6600 (FI64XX-F1 — identical binary)"],
+}
+
+FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5, FI6500_F6, FI6500_F7]
 
 if __name__ == "__main__":
     for f in FINDINGS:
