@@ -425,124 +425,15 @@ UCSC21_F10 = {
     ),
 }
 
-# UCSC-F23 (snmpd_base.conf hardcoded internalUser:authpassword + public community) and
-# UCSC-F24 (update_peer_secret.sh shared_secret as CLI arg) are confirmed identical in
-# 1.5.1c and 2.1.2b — documented in cisco_ucs_central_151_re.py as canonical findings.
-
-# ─────────────────────────────────────────────────────────────────────────────
-# UCSC21-F11: image_unpack.sh (operation-mgr-2.1.2-b.x86_64.rpm) uses
-#              'tar zxkPpmvf -' with -P flag on firmware image extraction —
-#              same absolute-path traversal class as UCSC-F20 (bundle_unpack.sh),
-#              independent code path in image download pipeline; no signature check
-# Source: opt/cisco/bin/image_unpack.sh in operation-mgr-2.1.2-b.x86_64.rpm
-# ─────────────────────────────────────────────────────────────────────────────
-UCSC21_F11 = {
-    "id":       "UCSC21-F11",
-    "title":    "image_unpack.sh uses 'tar zxkPpmvf -' with -P flag on firmware image extraction "
-                "— absolute path entries in image archive not stripped; writes to arbitrary "
-                "filesystem paths without signature verification; same class as UCSC-F20 "
-                "in the image download code path (distinct from bundle install path)",
-    "status":   "CONFIRMED — opt/cisco/bin/image_unpack.sh in operation-mgr-2.1.2-b.x86_64.rpm",
-    "severity": "MEDIUM",
-
-    "source_file":    "opt/cisco/bin/image_unpack.sh",
-    "installed_path": "/opt/cisco/bin/image_unpack.sh",
-    "rpm":            "operation-mgr-2.1.2-b.x86_64.rpm",
-
-    "vulnerable_code": (
-        "/bin/dd if=${BUNDLE_BASE_DIR}/${IMAGE_NAME} skip=1 bs=$BS | tar zxkPpmvf -\n"
-        "# -P = absolute paths; cd to TARGET first but -P ignores that for leading-/ entries\n"
-        "# No signature check before extraction"
-    ),
-
-    "path_traversal": (
-        "image_unpack.sh handles platform types 10-17 (blade chassis, third-party, catalog images). "
-        "For those types, the script cds to ${TARGET} (a firmware staging directory), then pipes "
-        "the image payload to 'tar zxkPpmvf -'. "
-        "The -P flag preserves absolute paths — archive entries beginning with '/' are extracted "
-        "to their absolute path on the filesystem, bypassing the TARGET directory entirely. "
-        "-k prevents overwriting EXISTING files, but new files with absolute paths are created anywhere. "
-        "A malicious firmware image bundle can embed arbitrary filesystem writes as root."
-    ),
-
-    "no_signature_check": (
-        "image_unpack.sh calls imghdrScript.sh only for metadata queries "
-        "(name, platform, type, header length). "
-        "No cryptographic verification of image content occurs in this script. "
-        "The caller (UCS Central download manager) validates images via isanadd, "
-        "but image_unpack.sh can be called directly by any root-equivalent process."
-    ),
-
-    "debug_plugin_path": (
-        "For platform=7, type=4 (debug-plugin image): TARGET is set to ${FILES_DIR} "
-        "(not the subdirectory). "
-        "Debug-plugin images are copied to the workspace root without content verification. "
-        "Engineering backdoor path present in production image install logic."
-    ),
-
-    "class_reference": "Same vulnerability class as UCSC-F20 (bundle_unpack.sh tar -P). "
-                       "Two independent code paths: UCSC-F20 = bundle installation, "
-                       "UCSC21-F11 = image download unpack.",
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# UCSC21-F12: validate-backup.sh uses POSIX cksum (CRC32) for backup file
-#              integrity verification — cryptographically forgeable; attacker
-#              with write access to backup storage (NFS share) can replace backup
-#              content and recalculate CRC to pass validation
-# Source: opt/cisco/bin/validate-backup.sh in operation-mgr-2.1.2-b.x86_64.rpm
-# ─────────────────────────────────────────────────────────────────────────────
-UCSC21_F12 = {
-    "id":       "UCSC21-F12",
-    "title":    "validate-backup.sh uses POSIX cksum (CRC32) for backup integrity verification "
-                "— attacker with write access to backup storage recalculates CRC and updates "
-                ".mf sidecar file; forged backup passes validation and is restored",
-    "status":   "CONFIRMED — opt/cisco/bin/validate-backup.sh in operation-mgr-2.1.2-b.x86_64.rpm",
-    "severity": "MEDIUM",
-
-    "source_file":    "opt/cisco/bin/validate-backup.sh",
-    "installed_path": "/opt/cisco/bin/validate-backup.sh",
-    "rpm":            "operation-mgr-2.1.2-b.x86_64.rpm",
-
-    "vulnerable_code": (
-        "CKSUM=`/bin/cat ${MF_FILE_NAME}.mf`\n"
-        "COMPUTECKSUM=`/usr/bin/cksum ${FILE_NAME} | /usr/bin/cut -d' ' -f1`\n"
-        "if [ \"${CKSUM}\" != \"${COMPUTECKSUM}\" ]; then\n"
-        "    exit 1\n"
-        "fi"
-    ),
-
-    "integrity_weakness": (
-        "POSIX cksum computes a CRC-32 checksum. CRC-32 is not cryptographically secure — "
-        "it is a polynomial hash designed for error detection, not authentication. "
-        "An attacker who can modify the backup file can trivially recalculate the CRC-32 "
-        "using any standard tool (cksum, python3 binascii.crc32, etc.) and overwrite the "
-        ".mf sidecar file with the forged value. "
-        "The validation check passes, and the forged backup is accepted for restore."
-    ),
-
-    "attack_surface": (
-        "UCS Central uses NFS for shared storage in clustered deployments "
-        "(see switch_to_nfs.sh in core-2.1.2-b.x86_64.rpm). "
-        "An attacker with access to the NFS share (local network, misconfigured NFS export, "
-        "or post-initial-access lateral movement) can:\n"
-        "1. Read and modify the backup .tgz file\n"
-        "2. Calculate cksum of the modified file\n"
-        "3. Overwrite the .mf sidecar with the new CRC\n"
-        "4. UCS Central restore accepts the backup — attacker controls restored system state"
-    ),
-
-    "restore_impact": (
-        "UCS Central backups contain: managed domain configuration, policy definitions, "
-        "LDAP/AAA config, user accounts, and potentially credential data. "
-        "A forged restore payload can introduce backdoor accounts, weakened policies, "
-        "or configuration changes that persist across subsequent legitimate updates."
-    ),
-}
+# Cross-version findings confirmed identical in 1.5.1c and 2.1.2b — canonical in 151_re.py:
+#   UCSC-F23: snmpd_base.conf hardcoded internalUser:authpassword + public community
+#   UCSC-F24: update_peer_secret.sh shared_secret as CLI arg
+#   UCSC-F25: image_unpack.sh tar -P absolute-path traversal (operation-mgr RPM)
+#   UCSC-F26: validate-backup.sh CRC32 backup integrity (operation-mgr RPM)
 
 FINDINGS = [
     UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6,
-    UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10, UCSC21_F11, UCSC21_F12,
+    UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10,
 ]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 
