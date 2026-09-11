@@ -45,7 +45,19 @@ UCSC_F1 = {
                       "with this known static key. "
                       "The shared secret is also used to encrypt restorePass (remote backup password).",
 
-    "also_encrypted_with_same_key": ["restorePass"],
+    "cross_component": (
+        "Confirmed in multiple independent components across both versions:\n"
+        "  1.5.1c: usr/lib/anaconda/ucscentral.py line 55 (passreset ISO)\n"
+        "  2.1.2b: opt/cisco/bin/vm-common.pl line 462 (core-2.1.2-b.x86_64.rpm)\n"
+        "  2.1.2b: opt/cisco/bin/restore.sh extracts key at runtime via grep on vm-common.pl:\n"
+        "    encrypt_key=$(grep 'my \\$encKey' /opt/cisco/bin/vm-common.pl | sed 's/.*= \"\\(.*\\)\";/\\1/')\n"
+        "  2.1.2b: cluster_validate.sh populate_config() uses this key to encrypt/verify sam.config "
+        "    adminPasswd and sharedSecret (see UCSC-F31). "
+        "The key is a universal encryption constant across all UCS Central components, "
+        "not scoped to the passreset ISO."
+    ),
+
+    "also_encrypted_with_same_key": ["restorePass", "adminPasswd (sam.config)", "sharedSecret (sam.config)"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -515,6 +527,18 @@ UCSC_F14 = {
         "configurations, and potentially credentials stored in the application databases. "
         "Combined with world-readable sam.config (0644), any OS user can decrypt application "
         "data files protected by samcrypt."
+    ),
+
+    "backup_encryption_path": (
+        "Confirmed as the backup file encryption key in 2.1.2b:\n"
+        "  restore.sh line ~97: ${vmbindir}/samcrypt ${binfile} ${tarfile} E001\n"
+        "  libosiris.so utils::getEncryptionKeyRC4('E001') at 0x9da8c compares input\n"
+        "  against rodata string 'E001' (0x10b2c9) and returns pointer to 'dwefsAvfsdkfqweqyrmfvsfwth'\n"
+        "  (rodata 0x10b2a1). The RC4 key for ALL samcrypt legacy backup files is this same constant.\n"
+        "  RC4 is symmetric — any backup file produced by samcrypt E001 is decryptable with:\n"
+        "    python3 -c \"from Crypto.Cipher import ARC4; "
+        "c=ARC4.new(b'dwefsAvfsdkfqweqyrmfvsfwth'); "
+        "open('out','wb').write(c.decrypt(open('backup.bin','rb').read()))\""
     ),
 }
 
@@ -1109,8 +1133,11 @@ UCSC_F27 = {
                 "and passes it to sec::CallSystem() — single-quote injection via keyRing name "
                 "achieves OS command injection on UCS Central from a managed domain admin",
     "status":   "CONFIRMED — disassembly of libsvc_sam_controllerAG.so + libsamsec.so in "
-                "core-1.5.1-c.x86_64.rpm and central-mgr-1.5.1-c.x86_64.rpm",
+                "core-1.5.1-c.x86_64.rpm and central-mgr-1.5.1-c.x86_64.rpm; "
+                "capConfPeerVMPolicies and CallSystem are ABSENT from 2.1.2b controllerAG — "
+                "1.5.1c-specific",
     "severity": "HIGH",
+    "versions_affected": ["1.5.1c"],
 
     "call_chain": (
         "comm::CommWkr::capConfPeerVMPolicies(method::Method*) "
@@ -1191,7 +1218,7 @@ UCSC_F28 = {
     "stack_canary": "absent — __stack_chk_fail not referenced in any application binary; "
                     "GCC 4.1.2 default: -fno-stack-protector",
     "relro":       "1.5.1c: absent (no GNU_RELRO segment, no BIND_NOW); "
-                   "2.1.2b: GNU_RELRO on svc_centralMgr_dme + svc_pol_dme only; "
+                   "2.1.2b: GNU_RELRO on svc_centralMgr_dme + svc_pol_dme + svc_idm_dme; "
                    "GOT writable at runtime in all other binaries",
     "nx":          "present (GNU_STACK RW, not RWE) — NX/DEP is enabled",
 
@@ -1237,7 +1264,9 @@ UCSC_F29 = {
                 "without application-level enforcement; no binary hardening; "
                 "2.1.2b present in all packages",
     "status":   "CONFIRMED — opt/cisco/*/sam/bin/pam_proxy_test_client in "
-                "central-mgr, policy-mgr, identifier-mgr, service-reg (1.5.1c + 2.1.2b)",
+                "central-mgr, policy-mgr (1.5.1c); central-mgr, policy-mgr, "
+                "identifier-mgr, service-reg (2.1.2b — identifier-mgr212b and service-reg212b "
+                "confirmed via package extraction)",
     "severity": "LOW",
 
     "installed_path": "/opt/cisco/*/sam/bin/pam_proxy_test_client",
@@ -1257,11 +1286,235 @@ UCSC_F29 = {
             "Diagnostic binaries should not be shipped in production packages.",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F30: cluster_add.sh and cluster_validate.sh perform zero SSH host key
+#            verification during cluster formation — known_hosts cleared before
+#            every peer SSH session; Expect auto-accepts any host key with
+#            'send "yes\r"'; complete MITM surface for inter-node cluster traffic
+# Source: opt/cisco/bin/cluster_add.sh + cluster_validate.sh in
+#         core-2.1.2-b.x86_64.rpm; equivalent in 1.5.1c OVA disk1
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F30 = {
+    "id":       "UCSC-F30",
+    "title":    "cluster_validate.sh clears SSH known_hosts before every peer connection and "
+                "cluster_add.sh auto-accepts any host key via Expect 'send \"yes\\r\"' — "
+                "zero SSH host verification during cluster formation; complete MITM surface",
+    "status":   "CONFIRMED — opt/cisco/bin/cluster_validate.sh + cluster_add.sh in "
+                "core-2.1.2-b.x86_64.rpm; cluster_add.sh also present in 1.5.1c OVA disk1",
+    "severity": "HIGH",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "source_files": [
+        "opt/cisco/bin/cluster_validate.sh",
+        "opt/cisco/bin/cluster_add.sh",
+    ],
+
+    "known_hosts_clear": (
+        "cluster_validate.sh communicate() function:\n"
+        "  log info \"Clearing known_hosts file before ssh to peer node\"\n"
+        "  echo > ${KNOWN_HOSTS}\n"
+        "KNOWN_HOSTS is sourced from bashfunctions.sh (samdme user's ~/.ssh/known_hosts). "
+        "This deliberately empties the known_hosts file before every cluster formation or "
+        "peer communication sequence, ensuring no cached host key exists to detect a MITM."
+    ),
+
+    "expect_auto_accept": (
+        "cluster_add.sh (Expect script) handles the SSH host key prompt:\n"
+        "  expect {\n"
+        "    \"Are you sure you want to continue connecting\" { send \"yes\\r\"; exp_continue }\n"
+        "    ...\n"
+        "  }\n"
+        "Any host key presented by a peer (or MITM at PEER_IP) is unconditionally accepted. "
+        "The accepted key is written into the now-empty known_hosts file, "
+        "trusting the MITM for all subsequent SSH/SCP/rsync operations in the same session."
+    ),
+
+    "subsequent_operations_trusted": (
+        "After cluster_add.sh accepts the MITM's host key into known_hosts, "
+        "all subsequent unauthenticated-SSH operations in cluster_validate.sh trust it:\n"
+        "  scp samdme@${PEER_IP}:${SAM_CONFIG} /tmp/peer_config   # downloads peer's sam.config\n"
+        "  rsync -azO --delete -e ssh samdme@${PEER_IP}:/opt/cisco/cert /opt/cisco/  # cert copy\n"
+        "  ssh samdme@${PEER_IP} [validate commands]               # remote validation\n"
+        "A MITM can serve crafted sam.config, malicious certificates, and false validation results."
+    ),
+
+    "impact": (
+        "An attacker on the network path between two UCS Central nodes during cluster formation "
+        "can MITM the inter-node SSH session with zero detection. "
+        "The MITM can serve: (1) crafted sam.config containing known-key-encrypted credentials "
+        "(see UCSC-F31), (2) attacker-controlled TLS certificates that replace /opt/cisco/cert/, "
+        "(3) false validation results that allow a compromised node to join the cluster. "
+        "The attack requires network position (ARP spoofing or rogue switch port) during "
+        "the cluster formation window, which is a known operation logged in change management."
+    ),
+
+    "no_fix_in_later_version": (
+        "The pattern is identical in 1.5.1c (OVA disk1) and 2.1.2b (core RPM). "
+        "No StrictHostKeyChecking configuration or fingerprint pinning was added between versions."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F31: cluster_validate.sh populate_config() copies encrypted credentials
+#            from peer node's sam.config to local sam.config without validation;
+#            encryption key 'theKeyForEncryptingTheSharedSecret' is hardcoded
+#            and known (UCSC-F1) — attacker controlling the peer node can inject
+#            arbitrary adminPasswd and sharedSecret into the target cluster node
+# Source: opt/cisco/bin/cluster_validate.sh in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F31 = {
+    "id":       "UCSC-F31",
+    "title":    "cluster_validate.sh populate_config() writes encrypted credentials from peer's "
+                "sam.config to local sam.config without integrity validation — attacker controlling "
+                "peer node crafts credentials encrypted with the known static key (UCSC-F1) "
+                "to poison the joining node's adminPasswd and sharedSecret",
+    "status":   "CONFIRMED — opt/cisco/bin/cluster_validate.sh populate_config() + copy_certs() "
+                "in core-2.1.2-b.x86_64.rpm",
+    "severity": "HIGH",
+    "versions_affected": ["2.1.2b"],
+
+    "source_file": "opt/cisco/bin/cluster_validate.sh",
+
+    "vulnerable_code": (
+        "populate_config() function:\n"
+        "  local PASSWORD_ENC=$($SCREADER ${SAMKEY_PASSWORD} ${PEER_CONFIG_FILE})\n"
+        "  local SECRET_ENC=$($SCREADER ${SAMKEY_SECRET} ${PEER_CONFIG_FILE})\n"
+        "  $SCHELPER -r -s main -k ${SAMKEY_PASSWORD} -v $PASSWORD_ENC\n"
+        "  $SCHELPER -r -s main -k ${SAMKEY_SECRET} -v $SECRET_ENC\n"
+        "PEER_CONFIG_FILE = /tmp/peer_config (downloaded from peer via SCP, see UCSC-F30). "
+        "The values read from PEER_CONFIG_FILE are written directly to the local sam.config "
+        "via schelper — no MAC, no signature, no validation of the ciphertext."
+    ),
+
+    "encryption_key_known": (
+        "Credentials in sam.config are encrypted with AES-128 using the hardcoded key "
+        "'theKeyForEncryptingTheSharedSecret' (confirmed in vm-common.pl line 462; see UCSC-F1). "
+        "An attacker with knowledge of this key can produce validly-encrypted ciphertext "
+        "for any adminPasswd or sharedSecret value:\n"
+        "  echo 'attacker_passwd' | openssl enc -e "
+        "-k 'theKeyForEncryptingTheSharedSecret' -a -aes128\n"
+        "The resulting ciphertext, placed in a crafted sam.config, passes all checks "
+        "and is written to the victim node's sam.config as the new admin password or shared secret."
+    ),
+
+    "cert_replacement": (
+        "copy_certs() in cluster_validate.sh:\n"
+        "  /usr/bin/rsync -azO --delete -e ssh samdme@${PEER_IP}:/opt/cisco/cert /opt/cisco/\n"
+        "Replaces ALL certificates in /opt/cisco/cert/ with those from the peer node. "
+        "--delete removes local certs not present on the peer. "
+        "If the peer is attacker-controlled, this replaces CACertificate.pem, Combined.pem, "
+        "privKey.pem, and all enrolled certs with attacker certs — enabling TLS impersonation "
+        "of the UCS Central management interface and federation endpoints."
+    ),
+
+    "attack_scenario": (
+        "Attacker controls a UCS node (e.g., a rogue second node, or a compromised node) "
+        "that is presented as the cluster peer during formation:\n"
+        "1. Host rogue SSH server at PEER_IP with crafted sam.config\n"
+        "2. cluster_validate.sh clears known_hosts (UCSC-F30) and calls cluster_add.sh\n"
+        "3. cluster_add.sh auto-accepts rogue SSH host key\n"
+        "4. scp downloads crafted sam.config from rogue server to /tmp/peer_config\n"
+        "5. populate_config() writes attacker-chosen adminPasswd+sharedSecret to local sam.config\n"
+        "6. rsync copies attacker-controlled TLS certs to /opt/cisco/cert/\n"
+        "Outcome: victim UCS Central node boots with attacker's admin password and attacker's "
+        "TLS certificate — full authentication bypass on the management plane."
+    ),
+
+    "nfs_mount_surface": (
+        "validate_nfs() also mounts an NFS share using PEER_IP from peer's config file:\n"
+        "  mount -t nfs $NFS_SERV_IP:$NFS_SERV_DIR /bootflash -o soft,rw,intr,proto=tcp\n"
+        "NFS_SERV_IP is read from the peer's sam.config (unvalidated). "
+        "Attacker-controlled sam.config can redirect the NFS mount to an attacker-controlled server."
+    ),
+
+    "dependency": "UCSC-F30 (SSH host bypass) is the prerequisite for remote exploitation. "
+                  "UCSC-F1 provides the static encryption key required to craft valid ciphertexts.",
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F32: cluster_add.sh 'eval spawn ssh -l $admin_user $peer_ip' — Tcl eval
+#            with unsanitized admin_user allows Tcl command injection via bracket
+#            notation; attacker-supplied admin_user containing '[exec cmd]' is
+#            evaluated as Tcl code before SSH is spawned, executing arbitrary
+#            commands in the Expect interpreter as samdme
+# Source: opt/cisco/bin/cluster_add.sh in core-2.1.2-b.x86_64.rpm;
+#         equivalent in 1.5.1c OVA disk1 (also in update_peer_secret.sh,
+#         cluster_ipcheck.sh)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F32 = {
+    "id":       "UCSC-F32",
+    "title":    "cluster_add.sh uses 'eval spawn ssh -l $admin_user $peer_ip' — Tcl eval "
+                "interprets bracket-notation [exec cmd] in admin_user as a command substitution; "
+                "local command injection in the Expect interpreter as samdme before SSH is spawned",
+    "status":   "CONFIRMED — opt/cisco/bin/cluster_add.sh in core-2.1.2-b.x86_64.rpm; "
+                "equivalent pattern in update_peer_secret.sh and cluster_ipcheck.sh; "
+                "also present in 1.5.1c OVA disk1",
+    "severity": "HIGH",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "source_files": [
+        "opt/cisco/bin/cluster_add.sh",
+        "opt/cisco/bin/update_peer_secret.sh",
+        "opt/cisco/bin/cluster_ipcheck.sh",
+    ],
+
+    "vulnerable_code": (
+        "#!/usr/bin/expect\n"
+        "set admin_user [lindex $argv 1]  # argv[1] = PEER_USER from cluster_validate.sh\n"
+        "...\n"
+        "eval spawn ssh -l $admin_user $peer_ip\n"
+        "# Tcl 'eval' concatenates arguments and re-evaluates as a Tcl command.\n"
+        "# $admin_user is substituted before eval, then the resulting string is parsed as Tcl.\n"
+        "# Tcl bracket notation [cmd] in the substituted string triggers command substitution."
+    ),
+
+    "injection_mechanism": (
+        "Tcl 'eval spawn ssh -l $admin_user $peer_ip' is equivalent to:\n"
+        "  spawn ssh -l <literal_admin_user_value> $peer_ip\n"
+        "when admin_user is clean. When admin_user contains Tcl metacharacters:\n"
+        "  admin_user = 'admin [exec id > /tmp/pwned]'\n"
+        "Tcl eval sees: spawn ssh -l admin [exec id > /tmp/pwned] <PEER_IP>\n"
+        "The [exec id > /tmp/pwned] fragment is evaluated as a Tcl command substitution "
+        "BEFORE spawn receives its arguments. 'exec' in Tcl executes an OS command. "
+        "Result: arbitrary OS command executes as samdme before the SSH connection is attempted."
+    ),
+
+    "call_chain": (
+        "cluster_validate.sh communicate():\n"
+        "  ${CLUSTERADD} ${PEER_IP} ${PEER_USER} ${PEER_PASSWORD}\n"
+        "CLUSTERADD=/opt/cisco/bin/cluster_add.sh; PEER_USER is taken from the CLI args "
+        "of cluster_validate.sh, which is called from the UCS Central Java application layer "
+        "(Tomcat) during cluster formation. "
+        "If the admin username input in the cluster formation UI is not sanitized upstream, "
+        "a cluster admin who sets their username to 'admin [exec cmd]' achieves OS code execution."
+    ),
+
+    "samdme_privilege": (
+        "cluster_add.sh runs as samdme. samdme has NOPASSWD:ALL in sudoers (UCSC-F11). "
+        "Tcl exec'd commands run as samdme → sudo escalation to root is available "
+        "without additional exploitation."
+    ),
+
+    "other_affected_scripts": (
+        "update_peer_secret.sh and cluster_ipcheck.sh use the identical 'eval spawn ssh' "
+        "pattern with unsanitized argv input. Both are in the same cluster management path."
+    ),
+
+    "no_sanitization": (
+        "admin_user is taken directly from $argv and interpolated into the eval string. "
+        "No character stripping, no quoting of the Tcl variable, no list-based spawn call "
+        "(which would be safe: 'spawn ssh -l $admin_user $peer_ip' without eval). "
+        "Safe alternative: spawn ssh -l $admin_user $peer_ip [no eval; Tcl does not perform "
+        "command substitution in 'spawn' argument list when called without eval]."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
+    UCSC_F30, UCSC_F31, UCSC_F32,
 ]
 
 
