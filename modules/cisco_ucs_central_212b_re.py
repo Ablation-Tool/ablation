@@ -316,7 +316,123 @@ UCSC21_F8 = {
     ),
 }
 
-FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6, UCSC21_F7, UCSC21_F8]
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F9: samcrypt.sh passes AES-256 passkey as 4th command-line argument —
+#             plaintext key visible in process table (ps aux) to any local user;
+#             backup decryption path forces deprecated MD5-based EVP_BytesToKey KDF
+# Source: opt/cisco/bin/samcrypt.sh in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F9 = {
+    "id":       "UCSC21-F9",
+    "title":    "samcrypt.sh passes AES-256 encryption passkey as 4th CLI argument "
+                "— plaintext key visible in ps aux to all local OS users; "
+                "backup decryption path uses MD5-based EVP_BytesToKey (OpenSSL 1.0 legacy KDF)",
+    "status":   "CONFIRMED — opt/cisco/bin/samcrypt.sh in core-2.1.2-b.x86_64.rpm",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/samcrypt.sh",
+    "installed_path": "/opt/cisco/bin/samcrypt.sh",
+
+    "vulnerable_code": (
+        "passkey=$4\n"
+        "$OPENSSL enc -in $inputfile -out $outputfile -d -aes256 -pass pass:${passkey}\n"
+        "# passkey is argv[4] — visible in ps aux and /proc/<pid>/cmdline"
+    ),
+
+    "process_exposure": (
+        "samcrypt.sh is the sole crypto wrapper for UCS Central configuration file encryption. "
+        "Callers pass the passkey as a positional argument ($4). "
+        "Any local OS user (daemon, postgres, samdme, local attacker) can read "
+        "/proc/<pid>/cmdline or ps aux output and extract the live passkey during any "
+        "encrypt or decrypt operation. "
+        "The passkey protects UCS Central configuration backups and runtime config encryption — "
+        "exposure during an active backup or restore operation reveals the key used to encrypt "
+        "all configuration state."
+    ),
+
+    "md5_kdf_path": (
+        "The decryptDataWithMd5Hash function explicitly forces -md md5:\n"
+        "  $OPENSSL enc -in $inputfile -out $outputfile -d -aes256 -md md5 -pass pass:${passkey}\n"
+        "This is the backup decryption path for 'full state backup which encrypted with "
+        "PasswordEncryptionKey using openSSL 1.0.1' (comment in script). "
+        "EVP_BytesToKey with MD5 is a single-round non-iterated KDF — any passkey derived "
+        "via this path is vulnerable to offline brute-force at GPU-feasible rates. "
+        "MD5 support in OpenSSL 3.x is FIPS-disabled by default; the bundled CiscoSSL 1.1.1l "
+        "enables it unconditionally."
+    ),
+
+    "input_output_unquoted": (
+        "inputfile=$2 and outputfile=$3 are unquoted throughout. "
+        "Word-splitting occurs if caller passes a path with whitespace — "
+        "openssl receives extra token as a flag, causing silent encrypt/decrypt failure."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F10: ucscToken.py writes debug challenge token to /tmp/challenge.plugin
+#              via open() which follows symlinks — pre-created symlink causes
+#              os.chown(root:15374) + os.chmod(0o640) to be applied to symlink target;
+#              first character always '0' (known prefix, reduces effective token entropy)
+# Source: opt/cisco/bin/ucscToken.py in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F10 = {
+    "id":       "UCSC21-F10",
+    "title":    "ucscToken.py creates /tmp/challenge.plugin with open() + os.chown/chmod — "
+                "symlink at /tmp/challenge.plugin causes chown(root:15374) + chmod(0o640) "
+                "to be applied to the symlink target (arbitrary file ownership change); "
+                "challenge token first character hardcoded to '0'",
+    "status":   "CONFIRMED — opt/cisco/bin/ucscToken.py in core-2.1.2-b.x86_64.rpm",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/ucscToken.py",
+    "installed_path": "/opt/cisco/bin/ucscToken.py",
+
+    "vulnerable_code": (
+        "fp = open('/tmp/challenge.plugin', 'w')  # follows symlinks\n"
+        "fp.write(challengeStr)\n"
+        "fp.close()\n"
+        "os.chown(\"/tmp/challenge.plugin\", 0, 15374)  # follows symlink\n"
+        "os.chmod(\"/tmp/challenge.plugin\", 0o640)      # follows symlink"
+    ),
+
+    "symlink_attack": (
+        "Attack sequence:\n"
+        "1. Attacker creates /tmp/challenge.plugin -> /etc/cron.d/evil (or any writable-by-root target)\n"
+        "2. ucscToken.py runs (triggered by daemon startup or token refresh cycle)\n"
+        "3. open('/tmp/challenge.plugin', 'w') follows symlink; Python creates/overwrites symlink target\n"
+        "4. challengeStr (12 uppercase chars prefixed with '0') written to target path\n"
+        "5. os.chown('/tmp/challenge.plugin', 0, 15374) follows symlink; target gets uid=0 gid=15374\n"
+        "6. os.chmod('/tmp/challenge.plugin', 0o640) follows symlink; target gets rw-r-----\n"
+        "Impact: arbitrary file's content overwritten + ownership changed to root:15374 + "
+        "mode set to 0640. Targeting /etc/passwd, /etc/shadow, /etc/sudoers.d/, sshd_config, "
+        "cron directories — depending on attacker's goal (DoS or privilege path preparation)."
+    ),
+
+    "token_entropy": (
+        "challengeStr is 12 uppercase ASCII characters from random.SystemRandom() (CSPRNG). "
+        "The first character is unconditionally overwritten: c[0] = '0'. "
+        "Result: token is always '0' followed by 11 random uppercase chars. "
+        "Effective space: 26^11 = ~3.6 trillion instead of 26^12 = ~95 trillion. "
+        "An attacker who knows the /tmp/challenge.plugin format can brute-force 62× faster. "
+        "The token is used as the debug-plugin challenge response (dplugin authentication "
+        "in updateBin.sh — see UCSC21-F7 area / UCSC-F19)."
+    ),
+
+    "file_permissions": (
+        "/tmp/challenge.plugin: uid=0 gid=15374 mode=0640. "
+        "Any process with effective GID 15374 can read the challenge token without root. "
+        "The dplugin flow reads this token; group 15374 is the intended consumer."
+    ),
+}
+
+# UCSC-F23 (snmpd_base.conf hardcoded internalUser:authpassword + public community) and
+# UCSC-F24 (update_peer_secret.sh shared_secret as CLI arg) are confirmed identical in
+# 1.5.1c and 2.1.2b — documented in cisco_ucs_central_151_re.py as canonical findings.
+
+FINDINGS = [
+    UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6,
+    UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10,
+]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 
 if __name__ == "__main__":
