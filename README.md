@@ -6,6 +6,7 @@
 </p>
 
 ---
+After disassembly, before CFG analysis. It encodes what a function does semantically (opcode category sequences + Markov transitions + call targets + strings) into a BERT vector. This sidesteps the hardest problems (indirect calls, obfuscated CFGs, stripped symbols) by asking a different question: not "what is this function named" but "what does this function behaviorally resemble." That's why it finds homologs across versions even when address, name, and instruction sequence all changed.
 
 Ablation reads firmware and figures out what each piece of code *does* — not what it looks like, but what job it's performing. Then it can answer the question: "Does this device still have the vulnerable code in it?" — even if that code has been moved around, renamed, or recompiled into a slightly different form. It does that check in under two minutes, automatically, without a human having to read a single line of assembly.
 
