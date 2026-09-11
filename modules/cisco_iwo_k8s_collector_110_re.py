@@ -13,7 +13,7 @@ FIRMWARE = {
         "intersight/kubeturbo:8.15.2.1     — collector (kubeturbo)",
         "intersight/pasadena:1.0.11-20250604055421206 — connector (DC/IWO bridge)",
     ],
-    "findings": ["IWO-F1"],
+    "findings": ["IWO-F1", "IWO-F2", "IWO-F3"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -62,7 +62,66 @@ IWO_F1 = {
     ),
 }
 
-FINDINGS = [IWO_F1]
+# ─────────────────────────────────────────────────────────
+# IWO-F2: turboServer configured as plaintext HTTP in ConfigMap
+#          All cluster topology data sent to topology-processor:8080 without TLS
+# ─────────────────────────────────────────────────────────
+IWO_F2 = {
+    "id":       "IWO-F2",
+    "title":    "IWO ConfigMap sets turboServer to cleartext HTTP (http://topology-processor:8080) "
+                "— all cluster topology data transmitted unencrypted within the cluster network",
+    "status":   "CONFIRMED — templates/configmap.yaml iwoServerVersion block",
+    "severity": "MEDIUM",
+
+    "configmap_value": '"turboServer": "http://topology-processor:8080"',
+
+    "data_in_transit": (
+        "The kubeturbo collector continuously sends pod resource usage, node specs, "
+        "deployment metadata, and service endpoint data to topology-processor over HTTP. "
+        "In a default Kubernetes cluster without NetworkPolicy restrictions, any pod "
+        "in any namespace can establish a connection to topology-processor:8080 and "
+        "receive or inject data. The proxy port (9004 on the pasadena container) uses "
+        "a separate channel; the topology data path is unencrypted."
+    ),
+
+    "threat": (
+        "In a compromised cluster or shared-tenant environment, an attacker with a pod in "
+        "any namespace can sniff the kubeturbo → topology-processor channel to exfiltrate "
+        "full cluster topology (node capacity, pod placements, resource limits). "
+        "A malicious pod could also inject false topology data to cause IWO to make "
+        "incorrect optimization decisions (VM migration, pod eviction, resource reservation)."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# IWO-F3: Container images pulled from public Docker Hub without digest pinning
+#          intersight/pasadena and intersight/kubeturbo referenced by mutable tag only
+# ─────────────────────────────────────────────────────────
+IWO_F3 = {
+    "id":       "IWO-F3",
+    "title":    "IWO Helm chart pulls intersight/pasadena and intersight/kubeturbo from Docker Hub "
+                "by mutable tag — no digest pinning; Docker Hub account compromise enables "
+                "malicious image delivery to cluster-admin ServiceAccount",
+    "status":   "CONFIRMED — values.yaml connectorImage.repository + collectorImage.repository",
+    "severity": "LOW",
+
+    "images": {
+        "connector": "intersight/pasadena:1.0.11-20250604055421206 (pullPolicy: IfNotPresent)",
+        "collector":  "intersight/kubeturbo:8.15.2.1 (pullPolicy: IfNotPresent)",
+    },
+
+    "note": (
+        "IfNotPresent mitigates casual tag drift — the image is pulled only if not cached locally. "
+        "But: (1) fresh deployments always pull, (2) image replacement on the registry after "
+        "deletion of the local cache triggers a re-pull, (3) Kubernetes nodes with no cached "
+        "copy pull on first scheduling. "
+        "Combining a compromised Docker Hub account with the cluster-admin ServiceAccount binding "
+        "(IWO-F1) means a malicious replacement image immediately has full cluster access. "
+        "Fix: pin with @sha256:<digest> in the repository field, or mirror to a private registry."
+    ),
+}
+
+FINDINGS = [IWO_F1, IWO_F2, IWO_F3]
 
 if __name__ == "__main__":
     for f in FINDINGS:
