@@ -59,6 +59,10 @@ FIRMWARE = {
         "All findings below apply to at minimum: C220 M8 (6.0.2), XE130C (6.0.2), UCS Diag (7.1.4), C245 M8 (6.0.2), and UCS SCU (7.1.7). "
         "Five distinct firmware packages confirmed sharing the same cryptographic key infrastructure."
     ),
+    "findings": [
+        "HUU-F1", "HUU-F2", "HUU-F3", "HUU-F4", "HUU-F5", "HUU-F6",
+        "HUU-F7", "HUU-F8", "HUU-F9", "HUU-F10", "HUU-F11",
+    ],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -375,7 +379,129 @@ HUU_F9 = {
     ),
 }
 
-FINDINGS = [HUU_F1, HUU_F2, HUU_F3, HUU_F4, HUU_F5, HUU_F6, HUU_F7, HUU_F8, HUU_F9]
+# ─────────────────────────────────────────────────────────
+# HUU-F10 — BMC timezone string written unsanitized to timefile; init.sh evaluates
+#            timefile content as shell command — BMC compromise enables root code exec
+# ─────────────────────────────────────────────────────────
+HUU_F10 = {
+    "id":       "HUU-F10",
+    "title":    "set_timezone() writes BMC-provided timezone string to timefile without sanitization; "
+                "init.sh evaluates timefile via command substitution as root — BMC timezone injection "
+                "executes arbitrary commands in container host context",
+    "status":   "CONFIRMED — /etc/init-huu.sh set_timezone() and /etc/init.sh start_hsu_agent() "
+                "in HUU C220 M8 6.0.2 container (ucs-c220m8-huu-container-6.0.2.260143)",
+    "severity": "HIGH",
+
+    "files": {
+        "init_huu_sh": "etc/init-huu.sh (container)",
+        "init_sh":     "etc/init.sh (container)",
+    },
+
+    "injection_point": {
+        "function":     "set_timezone() in init-huu.sh",
+        "relevant_lines": [
+            'echo "export TZ=UTC" > $TIME_FILE',
+            'time_zone=$(jq -r ".timezone" time_response.json)',
+            'if [ ! -z "$time_zone" ]; then',
+            '    echo "export TZ=$time_zone" > $TIME_FILE',
+        ],
+        "bmc_source":   "time_response.json is received from BMC via: "
+                        "/opt/cisco/tsa_ucs -R -r 66 -l time_response.json",
+        "no_sanitize":  "time_zone is taken from jq output and written directly to timefile — "
+                        "no character filtering, quoting, or validation",
+    },
+
+    "evaluation_point": {
+        "function":     "start_hsu_agent() in init.sh",
+        "line":         "chroot \"${MNTPATH}\" sh -c "
+                        "\"cd ${WORKBASE} && $(cat ${MNTPATH}/${WORKBASE}/logs/timefile) && "
+                        "python ${WORKBASE}/hsu-redfish.py ...\"",
+        "mechanism":    "$(cat timefile) is evaluated in the OUTER shell (init.sh context, running as root) "
+                        "before the chroot is entered. timefile content is executed as shell commands.",
+    },
+
+    "timefile_path": "/root/hsu/logs/timefile (inside container = ${MNTPATH}/root/hsu/logs/timefile from outer shell)",
+
+    "normal_content": 'export TZ=UTC',
+
+    "payload_example": (
+        "BMC returns: {\"timezone\": \"UTC; id\"}\n"
+        "jq extracts: UTC; id\n"
+        "timefile written: export TZ=UTC; id\n"
+        "init.sh evaluates: cd /root/hsu && export TZ=UTC; id && python hsu-redfish.py\n"
+        "Result: id runs as root before Python app starts"
+    ),
+
+    "threat_model": (
+        "Attack requires control of the BMC-side tsa_ucs response, either through: "
+        "(1) BMC compromise, or (2) MITM of the internal tsa_ucs/BT (Block Transfer) channel. "
+        "The tsa_ucs binary communicates with the BMC via IPMI Block Transfer (BT interface) "
+        "or USB NIC side-channel. An operator with physical access to the IMC or a compromised "
+        "BMC firmware can poison the get_system_timezone response."
+    ),
+
+    "scope": "Applies to all HUU versions using this container init-huu.sh / init.sh pair — "
+             "C220 M8 6.0.2 confirmed; likely spans entire HUU container product line.",
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU-F11 — hsu.tgz.enc in C220 M8 6.0.2 container decrypts with the same hardcoded key
+#            (PBKDF2-SHA256 mode) — Python Redfish app source (220 files) fully recoverable
+# ─────────────────────────────────────────────────────────
+HUU_F11 = {
+    "id":       "HUU-F11",
+    "title":    "C220 M8 6.0.2 container ships hsu.tgz.enc (31MB Python Redfish app) encrypted "
+                "with the same hardcoded key 'zfguijkophju@*%1]' via PBKDF2-SHA256-AES-256-CBC — "
+                "same decryption as C480 M5 4.3.2, full Python app source recoverable",
+    "status":   "CONFIRMED — openssl decryption succeeded; 220 Python files extracted from "
+                "root/hsu.tgz.enc in ucs-c220m8-huu-container-6.0.2.260143",
+    "severity": "CRITICAL",
+
+    "file":          "root/hsu.tgz.enc (inside ucs-c220m8-huu-container-6.0.2.260143.squashfs)",
+    "size":          "31MB (vs 12.5MB in C480 M5 4.3.2 — M8 container has 220 files, M5 had 160)",
+    "decrypt_cmd":   (
+        "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 "
+        "-in root/hsu.tgz.enc -k 'zfguijkophju@*%1]' -nosalt | tar -tz"
+    ),
+
+    "kdf_note": (
+        "The C220 M8 6.0.2 container's own decrypt-file binary (rootfs-level) uses EVP_BytesToKey "
+        "(-md md5, no -pbkdf2). The hsu.tgz.enc Python app archive uses PBKDF2-SHA256 (same as "
+        "C480 M5 4.3.2 hsu.tgz.enc). Both KDF modes use the same base password. "
+        "Two different KDF modes with the same key in the same firmware package."
+    ),
+
+    "cross_version_scope": (
+        "The same password decrypts hsu.tgz.enc across both C480 M5 4.3.2 (PBKDF2-SHA256) "
+        "and C220 M8 6.0.2 (PBKDF2-SHA256). This extends HUU-F1 / HUU432-F1 to the entire "
+        "HUU Python application layer — all Redfish hook source code is recoverable regardless "
+        "of platform generation."
+    ),
+
+    "python_app_contents": [
+        "hsu/AMD_GPU_Hook.py", "hsu/AMD_Radeon_Hook.py", "hsu/Intel_GPU_Hook.py",
+        "hsu/VIC_Hook.py", "hsu/Noe_Valley_Hook.py", "hsu/INTEL_SECURE_X8_Hook.py",
+        "hsu/emulex_hook.py", "hsu/PCH_Hook.py", "hsu/NON_RAID_Hook.py",
+        "hsu/PLXSwitch_Hook.py", "hsu/storage.py", "hsu/StorageApp.py",
+        "hsu/StorageApi.py", "hsu/raid.py", "hsu/disks.py", "hsu/rotate_key.py",
+        "hsu/host_bmc_transport.py", "hsu/ipmi_cmd.py", "hsu/health.py",
+        "hsu/health_engine.py", "hsu/system.py", "hsu/RedfishUtils.py",
+        "hsu/HuuServiceRoot.py", "hsu/LaunchModeService.py",
+        "+ 196 additional Python files (hooks, API layers, utilities)",
+    ],
+
+    "note": (
+        "This is a scope extension of HUU-F1 (decrypt-file hardcoded key) and HUU432-F1 "
+        "(C480 M5 hsu.tgz.enc). The finding demonstrates that Cisco uses the same hardcoded "
+        "password across both the rootfs-level encryption tool AND the Python application archive, "
+        "spanning multiple product generations (at minimum C480 M5 through C220/C245/XE130C M8). "
+        "The full Python Redfish application — including all firmware update hooks, storage API, "
+        "RAID configuration, health monitoring — is recoverable offline with the known key."
+    ),
+}
+
+FINDINGS = [HUU_F1, HUU_F2, HUU_F3, HUU_F4, HUU_F5, HUU_F6, HUU_F7, HUU_F8, HUU_F9,
+            HUU_F10, HUU_F11]
 
 if __name__ == "__main__":
     for f in FINDINGS:
