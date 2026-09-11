@@ -2885,6 +2885,84 @@ UCSC_F61 = {
                   "img_verify_signature @ export table; string '/etc/pub.pem')",
 }
 
+# ─────────────────────────────────────────────────────────
+# UCSC-F62 — FI6400 nginx enables deprecated TLS 1.0 and 1.1
+# ─────────────────────────────────────────────────────────
+UCSC_F62 = {
+    "id":       "UCSC-F62",
+    "title":    "UCS FI6400 nginx configuration enables TLS 1.0 and TLS 1.1 in addition to TLS 1.2 "
+                "and 1.3 — both TLS 1.0 and 1.1 were deprecated by RFC 8996 (March 2021) due to "
+                "cryptographic weaknesses (BEAST, POODLE, CRIME; weak MAC constructions); clients "
+                "that negotiate TLS 1.0 or 1.1 to the FI6400 management interface are exposed to "
+                "downgrade and protocol-level attacks against the management channel",
+    "status":   "CONFIRMED — source analysis; "
+                "fi6400-extract/rootfs/etc/nginx/nginx.conf: "
+                "'ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;' — TLSv1 and TLSv1.1 "
+                "explicitly listed; default server listens on port 80 (plaintext) and HTTPS; "
+                "RFC 8996 prohibited TLS 1.0/1.1 negotiation in 2021",
+    "severity": "LOW",
+    "source_pkg": "ucs-6400-k9-bundle-infra.6.0.2b.A → ucsfi.10.5.1.I60.2b.F.bin rootfs",
+    "source_ref": "fi6400-extract/rootfs/etc/nginx/nginx.conf (ssl_protocols directive)",
+}
+
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F63 — ROOT WAR /upload servlet filter bypass — unauthenticated file write
+# ─────────────────────────────────────────────────────────
+UCSC_F63 = {
+    "id":       "UCSC-F63",
+    "title":    "HyperFlex ROOT webapp StorvisorFileUploader servlet is mapped to the exact path "
+                "'/upload' while all auth filters (SPAuth/SSOAuthFilterImpl, SPBasicAuth, "
+                "SessionAuth, KerberosAuth, SPPrivilegedAuth) are mapped only to '/upload/*' — "
+                "in Servlet 2.4 spec, path-prefix pattern '/upload/*' does not match the exact "
+                "path '/upload', so a POST to '/upload' invokes the file-upload servlet with no "
+                "filter applied; an unauthenticated attacker can write arbitrary multipart content "
+                "to '/tmp/hxupgrade_bundle.tgz' (HX upgrade path) or '/tmp/esxiupgrade_bundle.zip' "
+                "(ESXi upgrade path) by setting the 'uploadType' parameter to 'ESXI'",
+    "status":   "CONFIRMED — source analysis; "
+                "ROOT/WEB-INF/web.xml: servlet-mapping url-pattern='/upload' (exact); "
+                "all six filter-mappings for /upload use url-pattern='/upload/*' (path-prefix); "
+                "Servlet 2.4 spec §SRV.11.2: '/upload/*' matches '/upload/' and '/upload/x' "
+                "but not '/upload' (no trailing slash, no suffix); "
+                "StorvisorFileUploader.doPost(): reads uploadType param, sets filePath to "
+                "hxFilePath ('/tmp/hxupgrade_bundle.tgz') or esxiFilePath ('/tmp/esxiupgrade_bundle.zip'); "
+                "FileItem.write(new File(filePath)) writes uploaded bytes to that path verbatim; "
+                "no content-type, magic-byte, or signature check on the uploaded file; "
+                "maxFileSize=4294967296 (4 GB); no internal auth check in doPost()",
+    "severity": "HIGH",
+    "source_pkg": "ROOT WAR (HyperFlex initial setup webapp)",
+    "source_ref": "ROOT/WEB-INF/web.xml (servlet-mapping /upload, filter-mappings /upload/*); "
+                  "ROOT/WEB-INF/classes/com/storvisor/sysmgmt/service/StorvisorFileUploader.class "
+                  "(doPost: FileItem.write at offset 249)",
+}
+
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F64 — operation-mgr nfs_conf.sh iptables command injection via CLIENT_IP
+# ─────────────────────────────────────────────────────────
+UCSC_F64 = {
+    "id":       "UCSC-F64",
+    "title":    "operation-mgr nfs_conf.sh inserts the CLIENT_IP argument directly into iptables "
+                "commands without quoting or sanitization — 'CLIENT_IP=$2' is expanded unquoted "
+                "inside 'iptables -D RH-Firewall-1-INPUT -s ${CLIENT_IP}' and companion add/delete "
+                "rule commands; an attacker who controls the CLIENT_IP argument (passed by the "
+                "operation-mgr when configuring NFS exports) can inject arbitrary iptables rule "
+                "parameters or shell metacharacters, potentially bypassing firewall rules or "
+                "achieving OS command execution in the context of the process invoking the script",
+    "status":   "CONFIRMED — source analysis; "
+                "operation-mgr151c/opt/cisco/bin/nfs_conf.sh: CLIENT_IP=$2 assigned from positional "
+                "argument with no validation; used unquoted in iptables -D/-A/-I invocations as "
+                "'-s ${CLIENT_IP}'; no tr/sed sanitization, no regex guard, no quote wrapping; "
+                "iptables -s accepts CIDR notation but shell word-splitting on whitespace or "
+                "semicolons in CLIENT_IP allows argument injection or command termination; "
+                "script runs as root (iptables requires root); same pattern present in 212b",
+    "severity": "MEDIUM",
+    "source_pkg": "operation-mgr151c (UCS Central operation manager)",
+    "source_ref": "operation-mgr151c/opt/cisco/bin/nfs_conf.sh (CLIENT_IP=$2, unquoted expansion "
+                  "in iptables -s ${CLIENT_IP} invocations)",
+}
+
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2895,6 +2973,7 @@ FINDINGS = [
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
     UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60, UCSC_F61,
+    UCSC_F62, UCSC_F63, UCSC_F64,
 ]
 
 
