@@ -1229,6 +1229,112 @@ HX_F014 = {
 for _f in [HX_F012, HX_F013, HX_F014]:
     FINDINGS[_f["id"]] = _f
 
+# ── HX-F015 ──────────────────────────────────────────────────────────────────
+HX_F015 = {
+    "id":       "HX-F015",
+    "title":    "storfs-restapi production WARs (securityservice, encryption) call "
+                "HttpsURLConnection.setDefaultSSLSocketFactory() and setDefaultHostnameVerifier() "
+                "in StMgrClient.trustAll() and HxSecuritySvcMgrClient.trustAll() — "
+                "JVM-wide TLS certificate validation permanently disabled after first client open",
+    "status":   "CONFIRMED — constant pool of StMgrClient.class and HxSecuritySvcMgrClient.class "
+                "from storfs-restapi_6.0.2b-44423_amd64.deb securityservice/encryption WARs",
+    "severity": "HIGH",
+
+    "affected_classes": {
+        "securityservice.war": [
+            "com.springpath.hx.security.gateway.StMgrClient (HOST=localhost, PORT=9333)",
+            "com.springpath.hx.security.gateway.HxSecuritySvcMgrClient (HOST=localhost, PORT=8055)",
+        ],
+        "encryption.war": [
+            "com.springpath.hx.encryption.clients.StMgrClient (HOST=localhost, PORT=9333)",
+        ],
+    },
+    "jvm_global_calls": [
+        "javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(nullTrustFactory)",
+        "javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(alwaysTrueVerifier)",
+    ],
+    "impact": (
+        "Both calls are JVM-level singletons — once either client calls openClient(), every "
+        "subsequent HTTPS connection from the Tomcat JVM process (vCenter extension registration "
+        "via registerVCenter(), KMIP server connections from encryption.war, UCSM REST API calls, "
+        "Consent Token sync via HxSecuritySvcMgrClient.syncToken()) accepts any certificate. "
+        "Distinct from installer appliance WebDownloader pattern (already noted in module): "
+        "this is the production cluster WAR path."
+    ),
+    "exploitation": (
+        "Network attacker on management VLAN: (1) ARP-poison or BGP-inject to intercept outbound "
+        "HTTPS from stCtlVM Tomcat; (2) present any self-signed cert; (3) capture vCenter, KMIP, "
+        "or UCSM credentials transmitted after the first StMgr client open triggers trustAll()."
+    ),
+    "tags": ["tls-bypass", "jvm-global", "mitm", "cwe-295", "high"],
+}
+
+# ── HX-F016 ──────────────────────────────────────────────────────────────────
+HX_F016 = {
+    "id":       "HX-F016",
+    "title":    "zkclient.py setData() creates ZooKeeper paths via ensure_path() with no ACL "
+                "argument — defaults to OPEN_ACL_UNSAFE; all storfs-core ZK paths world-writable "
+                "by any authenticated ZooKeeper client on the cluster network",
+    "status":   "CONFIRMED — zkclient.py setData() in storfs-core_5.5.2b-43453_x86_64.deb; "
+                "kazoo ensure_path() default ACL is OPEN_ACL_UNSAFE when acl param omitted",
+    "severity": "MEDIUM",
+
+    "code_path": "/opt/springpath/storfs-core/zkclient.py",
+    "vulnerable_method": "ZKClient.setData(path, data, version=-1)",
+    "vulnerable_call":   "self.zkClient.ensure_path(path)  # no acl= arg -> OPEN_ACL_UNSAFE",
+    "zk_endpoint":       "localhost:2181 (from /etc/springpath/storfs.cfg zkConnectString)",
+    "impact": (
+        "ZK paths created by storfs-core (cluster config, encryption key references, node "
+        "inventory, BIOS policy paths) default to world-writable ACL. Any process that can "
+        "connect to ZooKeeper on port 2181 — which has no authentication by default — can "
+        "overwrite these paths. Combined with HX-F005 (ZK stores user credential hashes) and "
+        "HX-F006 (ZK stores AES-encrypted cluster credentials), write access enables "
+        "credential and config tampering without any ZK auth token."
+    ),
+    "zk_note": (
+        "The existing auth token scheme (postEvent; + cluster_uuid from /rest/v1/cluster) "
+        "is the read bypass; OPEN_ACL_UNSAFE write means no token is required to overwrite "
+        "existing nodes set by setDataWithRetry()."
+    ),
+    "tags": ["zookeeper", "acl", "no-auth", "cwe-732", "medium"],
+}
+
+# ── HX-F017 ──────────────────────────────────────────────────────────────────
+HX_F017 = {
+    "id":       "HX-F017",
+    "title":    "storfs-core ships libcrypt_disabled.so stub that emits ASSERT NOT REACHED "
+                "panic for all SECrypt operations — replacement of production crypto library "
+                "at /opt/springpath/storfs-core/encrypt/ silently disables DARE without "
+                "clearing invSecEncSystem=true tunable",
+    "status":   "CONFIRMED — strings from libcrypt_disabled.so in storfs-core_5.5.2b-43453; "
+                "source path /opt/git/cypress/src/encrypt/crypt_disabled.c present",
+    "severity": "MEDIUM",
+
+    "stub_path":      "/opt/springpath/storfs-core/encrypt/libcrypt_disabled.so",
+    "source_path":    "/opt/git/cypress/src/encrypt/crypt_disabled.c",
+    "exported_syms": [
+        "SECrypt_Encrypt", "SECrypt_Decrypt", "SECrypt_EncryptAuth", "SECrypt_DecryptAuth",
+        "SECrypt_EncryptIOV", "SECrypt_DecryptIOV", "SECrypt_RandBytes", "SECrypt_RandBytesLocked",
+        "SECrypt_Base64Encode", "SECrypt_Base64Decode", "SECrypt_IsSupported",
+        "SECrypt_IsRandThreadSafe", "SECrypt_CleanupThreadState", "SECrypt_PrintStats",
+    ],
+    "stub_behavior":  "All functions emit 'ASSERT NOT REACHED: ' then abort — not silent NOP",
+    "encryption_config_flag": "/opt/springpath/storfs-core/encryption.tunes: invSecEncSystem=true",
+    "impact": (
+        "Attacker with write access to /opt/springpath/storfs-core/encrypt/ (or via LD_PRELOAD "
+        "injection, package downgrade through update mechanism, or TOCTOU during deb install) "
+        "can substitute libcrypt_disabled.so as the active crypto library. Result: all DARE "
+        "encrypt/decrypt operations abort the storfs process rather than encrypting data. "
+        "invSecEncSystem=true remains set — monitoring and compliance tooling sees encryption "
+        "as enabled while storage is written plaintext. No data exfiltration required to "
+        "disable protection; a single file replace achieves it."
+    ),
+    "tags": ["stub-library", "dare-bypass", "filesystem-write", "cwe-311", "medium"],
+}
+
+for _f in [HX_F015, HX_F016, HX_F017]:
+    FINDINGS[_f["id"]] = _f
+
 FINDINGS_LIST = list(FINDINGS.values())
 
 if __name__ == "__main__":
