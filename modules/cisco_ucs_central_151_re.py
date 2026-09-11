@@ -1509,12 +1509,145 @@ UCSC_F32 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F33: cert-gen.pl executes 'chmod -R 777 /opt/cisco/cert' after every
+#            certificate generation — TLS private key, CA cert, and all derived
+#            certs become world-readable and world-writable; any local OS user
+#            can replace the UCS Central TLS identity and CA
+# Source: opt/cisco/bin/cert-gen.pl in core-1.5.1-c.x86_64.rpm (line 221) and
+#         core-2.1.2-b.x86_64.rpm (same line); both confirmed
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F33 = {
+    "id":       "UCSC-F33",
+    "title":    "cert-gen.pl executes 'chmod -R 777 /opt/cisco/cert' after every certificate "
+                "generation — CA private key, TLS identity cert, and all derived certs become "
+                "world-readable and world-writable; any local OS user can replace UCS Central TLS",
+    "status":   "CONFIRMED — opt/cisco/bin/cert-gen.pl line 221 in core-1.5.1-c.x86_64.rpm; "
+                "identical line confirmed in core-2.1.2-b.x86_64.rpm",
+    "severity": "CRITICAL",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "source_file":  "opt/cisco/bin/cert-gen.pl",
+    "trigger_line": "system(\"chmod -R 777 /opt/cisco/cert\");  # final line of cert-gen.pl",
+
+    "invocations": (
+        "cert-gen.pl is called from:\n"
+        "  network.pl line 701: system(\"$certgen\")  — during network IP reconfiguration\n"
+        "  network.pl line 832: system(\"$certgen\")  — after NTP sync (cert datetime check)\n"
+        "  network.pl line 857: system(\"$certgen\")  — on every network.pl invocation\n"
+        "  vm-common.pl: our $certgen = \"$binpath/cert-gen.pl\" — referenced as default certgen\n"
+        "  regenerate-certs.pl: calls cert-gen.pl directly\n"
+        "Triggered on: first boot, IP address change, NTP resync, certificate rotation. "
+        "After each invocation, the /opt/cisco/cert/ tree is set to 0777 permanently "
+        "until the next reboot (no subsequent chmod to restrict permissions)."
+    ),
+
+    "affected_files": [
+        "/opt/cisco/cert/default.key   → symlinked as privKey.pem (CA/server private key)",
+        "/opt/cisco/cert/default.crt   → symlinked as CACertificate.pem (CA certificate)",
+        "/opt/cisco/cert/Combined.pem  (cert+key bundle for Apache TLS termination)",
+        "/opt/cisco/cert/privKey.pem   (symlink to default.key)",
+        "/opt/cisco/cert/CACertificate.pem  (symlink to default.crt)",
+        "/opt/cisco/cert/CACertChain.pem",
+        "/opt/cisco/cert/ThirdPartyCA.pem",
+        "/opt/cisco/cert/seq           (CA serial number file)",
+        "/opt/cisco/cert/.$$client.cnf (temp openssl config — race condition target)",
+    ],
+
+    "impact": (
+        "After any cert-gen.pl invocation, every local OS user (daemon, postgres, samdme) can:\n"
+        "1. Read /opt/cisco/cert/default.key (CA private key) — enables offline signing of "
+        "   arbitrary client certificates trusted by all managed UCS domains\n"
+        "2. Overwrite /opt/cisco/cert/default.key with an attacker-controlled key — "
+        "   next Apache restart loads attacker's key for all TLS connections\n"
+        "3. Overwrite /opt/cisco/cert/Combined.pem — immediate TLS subversion without restart\n"
+        "   (Apache reads this on each request in some configurations)\n"
+        "4. Overwrite /opt/cisco/cert/CACertificate.pem — UCS Manager domains trusting this CA "
+        "   will accept attacker-signed client certs\n"
+        "5. Write a malicious /opt/cisco/cert/.$$client.cnf before mkpkcs10req.sh reads it — "
+        "   openssl generates a CSR with attacker-controlled Subject/SAN/extensions\n"
+        "Result: full TLS identity takeover for UCS Central management plane from any local OS user."
+    ),
+
+    "privilege_path": (
+        "Any process with any shell foothold (e.g., UCSC-F9 CGI injection as daemon, "
+        "or any CVE in the Tomcat/Java layer) can immediately:\n"
+        "  cat /opt/cisco/cert/default.key  → extract CA private key\n"
+        "  cp attacker.key /opt/cisco/cert/default.key  → replace CA key\n"
+        "No privilege escalation required — chmod 777 makes it accessible to all."
+    ),
+
+    "note": (
+        "The chmod -R 777 appears intentional — likely added for service account access "
+        "(samdme, daemon, postgres all need cert files). The correct fix is targeted ACLs "
+        "for specific service accounts, not world-writable on the entire cert tree."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F34: cert-gen.pl send_to_ca() uses 'curl --insecure' for all certificate
+#            exchange with the CA endpoint — TLS verification disabled during
+#            CA cert bootstrap; MITM can serve forged CA certificate to any
+#            UCSM node performing cert enrollment
+# Source: opt/cisco/bin/cert-gen.pl in core-1.5.1-c.x86_64.rpm (line 144) and
+#         core-2.1.2-b.x86_64.rpm; confirmed in both
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F34 = {
+    "id":       "UCSC-F34",
+    "title":    "cert-gen.pl send_to_ca() uses 'curl --insecure' for certificate exchange with "
+                "UCS Central CA endpoint — TLS verification disabled during CA cert bootstrap; "
+                "MITM serves forged CA cert accepted without validation",
+    "status":   "CONFIRMED — opt/cisco/bin/cert-gen.pl send_to_ca() line 144 in "
+                "core-1.5.1-c.x86_64.rpm and core-2.1.2-b.x86_64.rpm",
+    "severity": "HIGH",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "source_file": "opt/cisco/bin/cert-gen.pl",
+
+    "vulnerable_code": (
+        "sub send_to_ca {\n"
+        "    my $url = \"https://$vpod::inputs{$vpod::regIp}:$vpod::inputs{$vpod::commsport}"
+        "/xmlInternal/apache/cert\";\n"
+        "    ...\n"
+        "    my $resp = `$vpod::curl $url --insecure -s -d '$xml'`;\n"
+        "    return $resp;\n"
+        "}"
+    ),
+
+    "operations_affected": [
+        "get_ca_cert() — initial CA certificate fetch from UCS Central registration endpoint",
+        "create_csr_and_sign() — CSR submission and signed cert retrieval",
+        "Both are POST requests to https://<regIp>:<commsport>/xmlInternal/apache/cert",
+    ],
+
+    "attack_scenario": (
+        "During UCSM node registration with UCS Central, cert-gen.pl contacts the CA endpoint. "
+        "An attacker on the network path between UCSM and UCS Central can:\n"
+        "1. Intercept the HTTPS connection (curl --insecure accepts any cert)\n"
+        "2. Respond with a forged XML body: outCert='<attacker_cert>' outResDigest='<hash>'\n"
+        "3. cert-gen.pl writes the forged cert to /opt/cisco/cert/ as CACertificate.pem\n"
+        "4. UCSM then trusts the attacker's CA cert for all subsequent mutual TLS operations\n"
+        "The validate_hash_from_xml() check provides partial protection — it validates the "
+        "response digest — but requires knowing the shared secret to forge a valid digest. "
+        "Since the shared secret is known (UCSC-F1), the attacker can compute a valid digest "
+        "for their forged cert and pass this validation."
+    ),
+
+    "shared_secret_link": (
+        "create_hash_for_xml() computes the authentication hash as:\n"
+        "  $hash = crypt($shared_secret . $regIp, $hash) # MD5-crypt via openssl passwd -1\n"
+        "Since shared_secret is decryptable from sam.config using the known static key "
+        "(UCSC-F1: 'theKeyForEncryptingTheSharedSecret'), an attacker can compute the correct "
+        "digest for any cert content and forge a valid response that passes validate_hash_from_xml()."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
-    UCSC_F30, UCSC_F31, UCSC_F32,
+    UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34,
 ]
 
 
