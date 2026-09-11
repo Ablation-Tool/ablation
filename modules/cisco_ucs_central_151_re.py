@@ -2856,6 +2856,35 @@ UCSC_F60 = {
                   "encryption/WEB-INF/web.xml",
 }
 
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F61 — UCS FI6400 firmware image signature verification uses 1024-bit RSA key
+# ─────────────────────────────────────────────────────────
+UCSC_F61 = {
+    "id":       "UCSC-F61",
+    "title":    "UCS FI6400 firmware image signature verification uses a 1024-bit RSA public key "
+                "at /etc/pub.pem — RSA-1024 is considered cryptographically broken (NIST deprecated "
+                "in 2010; estimated factorable with nation-state resources); isanboot/bin/imghdr.aci "
+                "reads this key to verify firmware signatures before loading; an attacker who can "
+                "factor the 1024-bit modulus obtains a signing key capable of producing valid "
+                "signatures for arbitrary firmware images accepted by all FI6400 units using this "
+                "public key",
+    "status":   "CONFIRMED — source analysis; "
+                "fi6400-extract/rootfs/etc/pub.pem: RSA public key, 1024-bit modulus "
+                "(openssl rsa: 'Public-Key: (1024 bit)', exponent 65537); "
+                "isanboot/bin/imghdr.aci (ELF 32-bit, stripped, x86): binary grep confirms "
+                "'/etc/pub.pem' string literal; exports img_verify_signature, img_verify_signature2, "
+                "rsalib_signature_verify, cs_verify_dc3sup2_pkg, cs_dc3sup2_verify_image, "
+                "cs_dc3sup2_digital_signature_valid; error string 'Invalid modulus size %d, expecting %d' "
+                "confirms key size enforcement; Verify OK!! / Verify failed!! output strings; "
+                "key present only in FI6400 rootfs — not found in CMC or HyperFlex components",
+    "severity": "HIGH",
+    "source_pkg": "ucs-6400-k9-bundle-infra.6.0.2b.A → ucsfi.10.5.1.I60.2b.F.bin rootfs",
+    "source_ref": "fi6400-extract/rootfs/etc/pub.pem (1024-bit RSA, modulus starts 00:be:be:f6:6e:69:e7:bf); "
+                  "fi6400-extract/rootfs/isanboot/bin/imghdr.aci (ELF shared object, x86, stripped; "
+                  "img_verify_signature @ export table; string '/etc/pub.pem')",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2865,7 +2894,7 @@ FINDINGS = [
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
-    UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60,
+    UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60, UCSC_F61,
 ]
 
 
