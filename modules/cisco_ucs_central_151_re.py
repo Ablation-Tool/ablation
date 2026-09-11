@@ -2059,13 +2059,62 @@ UCSC_F41 = {
             "However, their universality across ALL deployments makes them trivially known.",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F42 — HyperFlex encryption service barredUsers list omits 'diag' and
+#             'local/diag'; all other HyperFlex REST APIs explicitly bar these
+#             accounts; diag can authenticate to SED disk encryption management
+# Source: encryption/WEB-INF/classes/application.conf (both copies)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F42 = {
+    "id":       "UCSC-F42",
+    "title":    "HyperFlex SED encryption REST API (encryption/v1) omits 'diag'/'local/diag' "
+                "from barredUsers — diag can authenticate to disk encryption management "
+                "endpoints when explicitly barred from all other HyperFlex REST APIs",
+    "status":   "CONFIRMED — encryption/WEB-INF/classes/application.conf line 48 and "
+                "encryption/WEB-INF/classes/resources/application.conf line 48; "
+                "both copies: barredUsers = [\"root\", \"local/root\"] (diag absent); "
+                "coreapi application.conf: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]; "
+                "storfs-restapi auth-war: same four entries",
+    "severity": "MEDIUM",
+    "affected_service": "encryption WAR — /encryption/v1/*",
+    "barred_users_encryption": ["root", "local/root"],
+    "barred_users_coreapi":    ["root", "local/root", "diag", "local/diag"],
+    "exposed_endpoints": [
+        "GET  /encryption/v1/disks         — all disk SED status across cluster nodes",
+        "GET  /encryption/v1/certstatus    — per-node KMIP certificate serial numbers",
+        "GET  /encryption/v1/kmipcertpolicy — KMIP cert policy configuration",
+        "POST /encryption/v1/testkmipconn  — test KMIP server connectivity (reveals KMIP server details)",
+        "GET  /encryption/v1/status        — overall SED/encryption FSM state",
+        "GET  /encryption/v1/nodes         — per-node encryption state",
+        "POST /encryption/v1/certificates  — upload/manage KMIP client certificates",
+    ],
+    "technical_detail": (
+        "The HyperFlex REST API stack uses a shared AAA filter chain (SPBasicAuth, SPAuth, "
+        "SessionAuth, SPPrivilegedAuth, KerberosAuth, AuditFilter) applied via web.xml to "
+        "all /v1/* endpoints. Each WAR carries its own application.conf which the filter "
+        "implementation reads to determine policy.\n"
+        "encryption/WEB-INF/classes/application.conf:\n"
+        "  barredUsers = [\"root\", \"local/root\"]\n"
+        "coreapi/WEB-INF/classes/application.conf:\n"
+        "  barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]\n"
+        "The diag account is a system diagnostic account (HyperFlex internal use). "
+        "Omission from the encryption service's barredUsers is a copy-paste gap — "
+        "one of the two earlier application.conf templates was used without the diag entries."
+    ),
+
+    "note": "The encryption service also uniquely includes a KerberosAuth filter "
+            "(com.springpath.hx.aaa.filters.kerberosFilter.KerberosFilterImpl) not "
+            "present in other services' web.xml. With hxSvcHttpEnabled=true in all "
+            "configs, Kerberos tickets could be passed over plaintext HTTP.",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
-    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41,
+    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
 ]
 
 
