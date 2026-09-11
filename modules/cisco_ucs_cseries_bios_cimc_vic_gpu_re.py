@@ -319,7 +319,7 @@ C3260_SAS_EXPANDER = {
         "integrity_check": "The SEEPROM integrity check update failed.",
         "success": "The SEEPROM is updated to latest version!",
     },
-    "source_path_leak": "..\src\diag\diag_hdd_test.c",
+    "source_path_leak": r"..\src\diag\diag_hdd_test.c",
     "sas_features": ["SAS Attached", "SAS2 Enabled", "SAS2 SSC", "SAS2 CenterSSC", "I-Comsas"],
 }
 
