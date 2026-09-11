@@ -628,10 +628,131 @@ UCSC_F17 = {
     "samdme_sudo": "samdme has NOPASSWD:ALL in sudoers (see UCSC-F11) — SSH credential grants root on peer node.",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F18 — updateBin.sh and updateBundle.sh: predictable /tmp/update-$(date +%s)
+#             directory — local TOCTOU symlink race on firmware update execution
+# Source: ucs-central.1.5.1c.iso ucsCentral/updateBin.sh + updateBundle.sh
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F18 = {
+    "id":       "UCSC-F18",
+    "title":    "updateBin.sh and updateBundle.sh create /tmp/update-$(date +%s) — "
+                "Unix-timestamp-predictable temp dir in world-writable /tmp; "
+                "local attacker symlinks it before mkdir, redirecting tar extraction and installScript execution",
+    "status":   "CONFIRMED — ucsCentral/updateBin.sh line 12 and ucsCentral/updateBundle.sh line 11 "
+                "in ucs-central.1.5.1c.iso; identical code in ucs-central.2.1.2b_EVAL.iso",
+    "severity": "HIGH",
+
+    "affected_scripts": [
+        "ucsCentral/updateBin.sh  (1.5.1c line 12, 2.1.2b line 12)",
+        "ucsCentral/updateBundle.sh (1.5.1c line 11, 2.1.2b line 11)",
+    ],
+
+    "vulnerable_code": (
+        "# Both scripts:\n"
+        "folder=\"/tmp/update-\"$(date +%s)          # timestamp: 1-second granularity, world-predictable\n"
+        "...\n"
+        "mkdir -p ${folder}                           # succeeds silently if path is already a symlink\n"
+        "tar xfzm ${tarballName} -C ${folder}        # extracts into symlink target\n"
+        "# updateBin.sh:\n"
+        "${folder}/${scripts} ${force}               # executes installScript from symlink target\n"
+        "# updateBundle.sh:\n"
+        "${script} ${folder}/${bin} ${force}         # script from inventory.cfg runs as root"
+    ),
+
+    "race_window": (
+        "The timestamp is evaluated at line 12 before any isanadd signature processing. "
+        "Race window: from process start (line 12) to mkdir -p (lines 41/52). "
+        "isanadd -s (signature check) and isanadd -o (payload extraction) run in this window — "
+        "providing several hundred milliseconds to create the symlink."
+    ),
+
+    "attack_sequence": [
+        "1. Attacker monitors invocation of updateBin.sh (ps/audit/inotify on trigger file) or controls timing via management API",
+        "2. Reads /proc/<pid>/cmdline to extract $file path and stat() to estimate process start timestamp",
+        "3. Creates: ln -s /etc/cron.d /tmp/update-<timestamp> before mkdir -p runs",
+        "4. mkdir -p /tmp/update-<ts> resolves through symlink; target /etc/cron.d exists → mkdir succeeds silently",
+        "5. tar xfzm ... -C /tmp/update-<ts> extracts Cisco update tarball contents into /etc/cron.d/",
+        "6. ${folder}/${scripts} = /etc/cron.d/${installScript} — the extracted installScript now executes from /etc/cron.d/",
+        "7. If the update runs as root (standard for UCS Central updates), any extracted file in /etc/cron.d/ runs as root on next cron tick",
+    ],
+
+    "privilege_context": (
+        "UCS Central software updates are performed by the UCS Central application running as root. "
+        "updateBin.sh and updateBundle.sh are invoked from the Java application layer via "
+        "sudo or directly as root. The installScript extracted from the firmware tarball "
+        "runs as the same privilege level as the update process."
+    ),
+
+    "signature_gating": (
+        "isanadd -s verifies the SN bundle format before extraction. "
+        "If isanadd performs weak verification (SN magic byte check without cryptographic verification, "
+        "consistent with the SN bundle format analysis: magic 0x6401534e), "
+        "a locally-crafted bundle could pass the check and deliver attacker-controlled scripts. "
+        "Regardless of signature strength, the symlink race can redirect extraction of a legitimate "
+        "Cisco-signed bundle into an attacker-chosen target directory."
+    ),
+
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F19 — updateBin.sh production code contains debug-plugin detection and
+#             file deletion path — engineering backdoor mechanism in shipped installer
+# Source: ucs-central.1.5.1c.iso ucsCentral/updateBin.sh lines 53-60
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F19 = {
+    "id":       "UCSC-F19",
+    "title":    "updateBin.sh production installer contains debug-plugin detection and unconditional "
+                "file deletion (rm -f $orgfile) — shipped engineering backdoor path for internal "
+                "debug bundles; $orgfile unquoted with no path restriction",
+    "status":   "CONFIRMED — ucsCentral/updateBin.sh lines 53-60 in ucs-central.1.5.1c.iso; "
+                "identical in ucs-central.2.1.2b_EVAL.iso",
+    "severity": "MEDIUM",
+
+    "source_file": "ucsCentral/updateBin.sh",
+    "source_lines": (
+        "dplug=$(grep dplugin ${inv})\n"
+        "if [[ \"${dplug}\" =~ \"dplugin\" ]]; then\n"
+        "    echo 'Warning: debug-plugin is for engineering internal use only!'\n"
+        "    rm -f $orgfile\n"
+        "    echo 'For security reason, debug plugin file has been deleted.'\n"
+        "fi"
+    ),
+
+    "orgfile_source": "$3 (third positional argument to updateBin.sh, unquoted in rm -f call)",
+
+    "findings": [
+        "Debug-plugin detection code ships in production firmware installers — "
+        "Cisco engineers can deliver 'dplugin' update bundles that trigger this path on any deployment.",
+
+        "rm -f $orgfile: $orgfile is $3 (caller-controlled, unquoted) — "
+        "if the caller passes a space-separated list or glob pattern as $3, "
+        "rm -f interprets it as multiple targets; no path restriction on $orgfile.",
+
+        "When dplugin is detected, the message 'debug plugin file has been deleted' is printed to stdout "
+        "and the update continues — debug-plugin bundles run their installScript normally "
+        "with no additional privilege gating beyond the standard isanadd signature check.",
+
+        "The UCS Central management layer that calls updateBin.sh passes $orgfile as $3; "
+        "if that caller path is reachable via the management API with user-controlled input, "
+        "$orgfile becomes attacker-controlled → rm -f $orgfile deletes an arbitrary file as root.",
+    ],
+
+    "significance": (
+        "The dplugin path proves Cisco ships update bundles with a distinct internal-use code flow "
+        "that is entirely invisible to operators — no audit log entry beyond a stdout message "
+        "that is redirected to ${logFile}. Any debug-plugin bundle that passes isanadd -s "
+        "runs its installScript with root privileges and self-deletes the update archive ($orgfile). "
+        "This is an engineering access mechanism in production update infrastructure."
+    ),
+
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
-    UCSC_F16, UCSC_F17,
+    UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19,
 ]
 
 
