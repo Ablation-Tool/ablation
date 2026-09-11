@@ -425,17 +425,113 @@ UCSC21_F10 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F11: gen_snmpv3_auth.sh uses #!/usr/bin/bash -x — SNMPv3 auth/priv
+#              passwords passed as positional args trace to stderr; default
+#              algorithms MD5 (auth) and DES (priv) both deprecated
+# Source: opt/cisco/bin/gen_snmpv3_auth.sh + gen_snmpconf_defn.sh in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F11 = {
+    "id":       "UCSC21-F11",
+    "title":    "gen_snmpv3_auth.sh shebang '#!/usr/bin/bash -x' traces all commands to stderr — "
+                "SNMPv3 auth ($3) and priv ($5) passwords appear in stderr output; "
+                "default auth algorithm MD5 and priv algorithm DES (both RFC 7630-deprecated)",
+    "status":   "CONFIRMED — opt/cisco/bin/gen_snmpv3_auth.sh and gen_snmpconf_defn.sh "
+                "in core-2.1.2-b.x86_64.rpm",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/gen_snmpv3_auth.sh",
+    "installed_path": "/opt/cisco/bin/gen_snmpv3_auth.sh",
+
+    "trace_exposure": (
+        "#!/usr/bin/bash -x enables errexit trace mode — every executed command is printed to stderr. "
+        "gen_snmpv3_auth.sh receives passwords as positional arguments: "
+        "VAL_AUTHPASSWD=$3 and VAL_PRIVPASSWD=$5. "
+        "The bash trace emits: '+ VAL_AUTHPASSWD=<plaintext>' and '+ VAL_PRIVPASSWD=<plaintext>' "
+        "for every invocation. "
+        "UCS Central update and config scripts redirect stderr to /var/log/application.install.log "
+        "via '>> $logFile 2>&1' (pattern in updateBin.sh, updateBundle.sh, sync_snmpconf.sh). "
+        "Any invocation of gen_snmpv3_auth.sh with this redirect writes SNMPv3 credentials "
+        "in plaintext to the application install log. "
+        "The -x shebang is also present in sync_snmpconf.sh, which calls gen_snmpv3_auth.sh "
+        "and redirects its own output — double trace exposure."
+    ),
+
+    "default_algorithms": (
+        "gen_snmpconf_defn.sh sets: DEFAULT_AUTHPROTO='MD5' and DEFAULT_PRIVPROTO='DES'. "
+        "MD5 for SNMPv3 HMAC authentication is deprecated by RFC 7630 (2015). "
+        "DES for SNMPv3 privacy is deprecated by RFC 7630; 56-bit key, practically broken. "
+        "Any SNMPv3 user configured via gen_snmpv3_auth.sh without explicit proto override "
+        "is created with MD5+DES by default."
+    ),
+
+    "snmpd_persist_conf": (
+        "Credentials are written as plaintext createUser directives to "
+        "/etc/snmp/snmpd_gen_persist.conf by gen_snmpv3_auth.sh. "
+        "See UCSC21-F12 for the world-writable permissions set on this file."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F12: sync_snmpconf.sh sets snmpd_gen_persist.conf to chmod 666 —
+#              world-readable/writable plaintext SNMPv3 credentials
+# Source: opt/cisco/bin/sync_snmpconf.sh in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F12 = {
+    "id":       "UCSC21-F12",
+    "title":    "sync_snmpconf.sh sets /etc/snmp/snmpd_gen_persist.conf and snmpd_gen.conf "
+                "to mode 666 (world-read/write) before reading into active snmpd config — "
+                "plaintext SNMPv3 createUser credentials permanently world-readable; "
+                "world-writable allows local OS user to inject arbitrary SNMPv3 identities",
+    "status":   "CONFIRMED — opt/cisco/bin/sync_snmpconf.sh in core-2.1.2-b.x86_64.rpm",
+    "severity": "HIGH",
+
+    "source_file":    "opt/cisco/bin/sync_snmpconf.sh",
+    "installed_path": "/opt/cisco/bin/sync_snmpconf.sh",
+
+    "vulnerable_code": (
+        "${SUDO_CMD} ${CHMOD_CMD} 666 $SNMPD_GEN_CONF_FILE        # /etc/snmp/snmpd_gen.conf\n"
+        "${SUDO_CMD} ${CHMOD_CMD} 666 $SNMPD_GEN_PERSIST_CONF_FILE # /etc/snmp/snmpd_gen_persist.conf\n"
+        "${SUDO_CMD} ${CAT_CMD} $SNMPD_GEN_PERSIST_CONF_FILE | "
+        "${SUDO_CMD} ${TEE_CMD} $SNMPD_PERSIST_CONF_FILE"
+    ),
+
+    "impact": (
+        "snmpd_gen_persist.conf is the Cisco-managed template containing plaintext SNMPv3 "
+        "createUser directives written by gen_snmpv3_auth.sh. "
+        "sync_snmpconf.sh sets it to 0666 before reading it. "
+        "These permissions persist after sync completes — the file remains world-readable "
+        "and world-writable until the next explicit permission change. "
+        "World-readable: any local OS process (postgres, samdme, compromised daemon) "
+        "can read all configured SNMPv3 auth and priv passphrases in plaintext. "
+        "World-writable: any local OS user can inject createUser directives, "
+        "adding rogue SNMPv3 identities that get committed to the active config on next sync. "
+        "snmpd_gen.conf (also set to 0666) contains access control and view directives; "
+        "world-writable allows escalating SNMPv3 access from read-only to read-write."
+    ),
+
+    "compound_path": (
+        "Combined with UCSC21-F11 (bash -x credential trace): "
+        "SNMPv3 credentials are (1) written plaintext to 0666-accessible file by gen_snmpv3_auth.sh, "
+        "(2) echoed to stderr via bash -x trace, and (3) propagated to active snmpd config by sync_snmpconf.sh. "
+        "Three independent paths to the same plaintext credential."
+    ),
+}
+
 # Cross-version findings confirmed identical in 1.5.1c and 2.1.2b — canonical in 151_re.py:
 #   UCSC-F23: snmpd_base.conf hardcoded internalUser:authpassword + public community
 #   UCSC-F24: update_peer_secret.sh shared_secret as CLI arg
 #   UCSC-F25: image_unpack.sh tar -P absolute-path traversal (operation-mgr RPM)
 #   UCSC-F26: validate-backup.sh CRC32 backup integrity (operation-mgr RPM)
+#   UCSC-F18: updateBin.sh + updateBundle.sh TOCTOU /tmp/update-$(date +%s) race
+#             (updateExtractedBundle_standalone.sh has identical pattern — new in 2.1.2b)
 
 FINDINGS = [
     UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6,
-    UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10,
+    UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10, UCSC21_F11, UCSC21_F12,
 ]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
+FIRMWARE["finding_count"] = len(FINDINGS)
 
 if __name__ == "__main__":
     for f in FINDINGS:
