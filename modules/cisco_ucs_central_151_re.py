@@ -1849,13 +1849,67 @@ UCSC_F37 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F38 — sam-copy.exp auto-accepts SSH host key during backup SCP/SFTP;
+#             pass-wrapper.sh passes remote password as CLI arg → ps-visible;
+#             MITM on management network intercepts admin backup credentials
+# Source: opt/cisco/bin/sam-copy.exp + opt/cisco/bin/pass-wrapper.sh (both RPMs)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F38 = {
+    "id":       "UCSC-F38",
+    "title":    "sam-copy.exp auto-accepts SSH host key during backup SCP/SFTP transfer; "
+                "pass-wrapper.sh passes remote server password as CLI arg to sam-copy.exp; "
+                "MITM on management network intercepts admin remote server credentials",
+    "status":   "CONFIRMED — opt/cisco/bin/sam-copy.exp + opt/cisco/bin/pass-wrapper.sh + "
+                "opt/cisco/bin/download-common.sh in both core-1.5.1-c.x86_64.rpm and "
+                "core-2.1.2-b.x86_64.rpm (diff: shebang path only + minor k option)",
+    "severity": "HIGH",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "host_key_bypass": (
+        "sam-copy.exp sam_scp proc:\n"
+        "  expect { \"*yes*?*\" { send \"yes\\r\"; exp_continue } }\n"
+        "No SSH host key verification for backup SCP/SFTP operations. "
+        "Distinct from UCSC-F30 (cluster_add.sh) — separate Expect script, separate code path; "
+        "same vulnerability class. Triggered on every admin-initiated backup/restore/export."
+    ),
+
+    "password_exposure": (
+        "pass-wrapper.sh line 7:\n"
+        "  ${bindir}/sam-copy.exp ${proto} ${direction} ${server} ${localfile} ${remotefile} ${user} ${pass}\n"
+        "Remote server password appears as argv[6] of sam-copy.exp process — visible in "
+        "/proc/<pid>/cmdline and 'ps aux' output to any local user with /proc access. "
+        "sam-copy.exp receives it from download-common.sh getopts -P flag or interactive 'read -s -p'.\n"
+        "Flow: admin runs backup → file-copy.sh -P <pass> → pass-wrapper.sh → sam-copy.exp <pass>"
+    ),
+
+    "receive_perms": (
+        "sam-copy.exp change_perms proc (copyin direction only):\n"
+        "  spawn /bin/chmod a+rw $localfile\n"
+        "Every file received via copyin gets chmod a+rw applied. "
+        "On restore, backup files written to /opt/cisco/cert/ or other sensitive paths become "
+        "world-writable after transfer — amplifies impact of a MITM-served malicious restore payload."
+    ),
+
+    "mitm_impact": (
+        "On management VLAN without DHCP snooping or ARP inspection:\n"
+        "1. ARP spoof targeting admin workstation to impersonate backup server\n"
+        "2. sam-copy.exp auto-accepts attacker's SSH host key (no verification)\n"
+        "3. Admin's remote server password transmitted to attacker's server\n"
+        "4. Attacker serves malicious restore payload on copyin — file written by daemon user, "
+        "   then change_perms makes it world-readable/writable.\n"
+        "Combined with UCSC-F1 (known encryption key): attacker also serves forged sam.config "
+        "with crafted adminPasswd ciphertext → credential replacement on restore."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
-    UCSC_F36, UCSC_F37,
+    UCSC_F36, UCSC_F37, UCSC_F38,
 ]
 
 
