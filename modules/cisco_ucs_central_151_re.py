@@ -2550,6 +2550,54 @@ UCSC_F52 = {
                   "hsu-agent-436-data/var/cisco/hsu-agent/hsu_plugin.json",
 }
 
+UCSC_F53 = {
+    "id":       "UCSC-F53",
+    "title":    "UCS Central libosiris.so contains hardcoded RC4 encryption key used to protect "
+                "all sensitive MO fields across 30+ managed object classes — LDAP bind passwords, "
+                "RADIUS shared secrets, TACACS+ keys, SNMP auth/priv passwords, iSCSI CHAP "
+                "credentials, firmware server passwords, PKI key rings, and database configuration "
+                "are all RC4-encrypted with the static key 'dwefsAvfsdkfqweqyrmfvsfwth'",
+    "status":   "CONFIRMED — binary analysis; central-mgr151c and central-mgr212b (both versions); "
+                "libosiris.so imports RC4_set_key, exports EncryptionContext::getImportKeyCode(), "
+                "encryptFile(), decryptBuffer(); string 'dwefsAvfsdkfqweqyrmfvsfwth' appears at "
+                "offset 3773 immediately before 'encryptFile' and 'Missing Key Code!!!' error message; "
+                "central-mgr.in.xsd confirms 30+ moClass entries with encrypted=\"true\" that rely "
+                "on this encryption: aaaEpUser, aaaLdapProvider, aaaRadiusProvider, aaaTacacsPlusProvider, "
+                "aaaUser, aaaUserData, aaaRemoteUser, commSnmpUser, commSnmpTrapData, computeUser, "
+                "configDbConfig (database credentials), firmwareDownloader, iscsiAuthProfile, "
+                "mgmtBackup, pkiKeyRing, and 15+ others; same key in 1.5.1c and 2.1.2b",
+    "severity": "HIGH",
+    "source_pkg": "central-mgr (central-mgr151c, central-mgr212b)",
+    "technical_detail": (
+        "libosiris.so is a core shared library in the UCS Central SAM subsystem, linked by libauth.so "
+        "and the SAM agent binaries. It implements RC4-based file encryption for the management plane.\n\n"
+        "Hardcoded key: dwefsAvfsdkfqweqyrmfvsfwth (26 bytes)\n\n"
+        "Function chain:\n"
+        "  EncryptionContext::getImportKeyCode() -> returns the static key string\n"
+        "  encryptFile(char* src, char* dst, char* key) -> RC4-encrypts src->dst\n"
+        "  decryptBuffer(Buffer& in, Buffer& out, bool) -> RC4-decrypts in->out\n\n"
+        "All MOs with encrypted=\"true\" in central-mgr.in.xsd have their sensitive attribute values "
+        "(passwords, shared secrets, private keys) stored encrypted with this key in the Sybase "
+        "database (libsybdb.so/libtdsodbc.so client) or on-disk config files.\n\n"
+        "Impact: an attacker with read access to the UCS Central database, a configuration export "
+        "(mgmtExport), or a backup archive can RC4-decrypt all credential fields offline using "
+        "the static key. No brute force required. RC4 is a broken stream cipher with no authentication; "
+        "same-key reuse across all installations means decryption is universal across all UCS Central "
+        "1.5.1c and 2.1.2b deployments.\n\n"
+        "High-value targets in the encrypted MO set:\n"
+        "  configDbConfig  — database connection credentials\n"
+        "  aaaLdapProvider — LDAP bind password (domain enumeration pivot)\n"
+        "  aaaRadiusProvider / aaaTacacsPlusProvider — shared secrets (RADIUS/TACACS+ auth bypass)\n"
+        "  commSnmpUser    — SNMPv3 auth/priv passwords\n"
+        "  pkiKeyRing      — PKI private key material\n"
+        "  iscsiAuthProfile — iSCSI CHAP initiator/target secrets\n"
+        "  firmwareDownloader — firmware server SCP/FTP credentials"
+    ),
+    "source_ref": "central-mgr151c/opt/cisco/central-mgr/sam/lib/libosiris.so (offset 3773); "
+                  "central-mgr212b/opt/cisco/central-mgr/sam/lib/libosiris.so (same key); "
+                  "central-mgr151c/opt/cisco/www/schema/central-mgr.in.xsd (encrypted=\"true\" MOs)",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2558,7 +2606,7 @@ FINDINGS = [
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
-    UCSC_F50, UCSC_F51, UCSC_F52,
+    UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53,
 ]
 
 
