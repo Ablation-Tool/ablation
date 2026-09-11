@@ -2293,6 +2293,59 @@ UCSC_F45 = {
     ),
 }
 
+UCSC_F46 = {
+    "id":       "UCSC-F46",
+    "title":    "HyperFlex REST API storfs-restapi Tomcat process permanently disables TLS certificate "
+                "verification JVM-globally via HttpsURLConnection.setDefaultSSLSocketFactory(trustAll) "
+                "and setDefaultHostnameVerifier(acceptAll) — 16 gateway client classes across 6 of 11 "
+                "WARs call trustAll() on every HTTP Thrift connection, setting JVM-wide defaults that "
+                "persist for the lifetime of the process; all outbound HTTPS connections after any "
+                "management operation skip certificate validation",
+    "status":   "CONFIRMED — strings/javap analysis; 16 classes across iscsi/supportservice/ROOT/"
+                "securityservice/slservice/hxupgrade WARs all contain setDefaultSSLSocketFactory + "
+                "setDefaultHostnameVerifier calls setting process-global trust-all TLS state",
+    "severity": "HIGH",
+    "source_pkg": "storfs-restapi deb (storfs-packages-6.0.2b-44423.tgz)",
+    "affected_warf": [
+        "iscsi WAR (4 classes): HxIscsiMgrClient, HxIscsiCloneMgrClient, HxSvcMgrClient, StMgrClient",
+        "supportservice WAR (4 classes): HxSvcMgrClient, StMgrClient, HxSupportSvcClient, WebDownloader",
+        "ROOT WAR (3 classes): WebDownloader, HxSupportSvcAccess, ServiceAccess",
+        "securityservice WAR (3 classes): HxSvcMgrClient, HxSecuritySvcMgrClient, StMgrClient",
+        "slservice WAR (1 class)",
+        "hxupgrade WAR (1 class)",
+    ],
+    "technical_detail": (
+        "Each affected gateway client class contains a trustAll() method that:\n"
+        "  1. Creates an X509TrustManager stub overriding checkClientTrusted/checkServerTrusted/getAcceptedIssuers "
+        "     (all no-ops or return null)\n"
+        "  2. Initializes an SSLContext.getInstance('TLS') with the trust-all manager\n"
+        "  3. Calls HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory()) — GLOBAL\n"
+        "  4. Creates a HostnameVerifier stub that unconditionally returns true\n"
+        "  5. Calls HttpsURLConnection.setDefaultHostnameVerifier(verifier) — GLOBAL\n"
+        "These static calls modify the JVM process default, not a per-connection setting. "
+        "Once any management operation in these 6 WARs executes, ALL subsequent HTTPS connections "
+        "from the storfs-restapi Tomcat JVM bypass certificate verification. "
+        "The 11 WARs share a single Tomcat process; the global state persists until process restart.\n"
+        "Affected outbound HTTPS connections include: vCenter API (VM management, backup snapshots), "
+        "UCS Manager API (hardware inventory), KMIP server (SED disk encryption key operations — "
+        "securityservice WAR), smart licensing authority, any external HTTPS endpoint the process "
+        "contacts. An attacker with MITM position on the management network can present a self-signed "
+        "certificate and intercept credentials or session tokens exchanged over these connections.\n"
+        "The pattern is present in every HTTP Thrift gateway client; it is invoked on every API call "
+        "that uses HTTP transport (sysmgmt.hxSvcHttpEnabled=true default in application.conf)."
+    ),
+    "instance_example": {
+        "class":    "com.springpath.hx.iscsi.gateway.HxIscsiMgrClient.openClientHttp()",
+        "sequence": [
+            "trustAll();  // sets JVM-global SSLSocketFactory + HostnameVerifier",
+            "host = AAAConfiguration.getPropVal('sysmgmt.hxIscsiMgrHost') ?? 'localhost'",
+            "transport = new THttpClient(host + ':9342');",
+            "transport.setCustomHeader('X-RootSessionID', HxSecurity.getLocalSessionId());",
+            "cl = new iscsiSvcMgr.Client(new TBinaryProtocol(transport));",
+        ],
+    },
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2300,7 +2353,7 @@ FINDINGS = [
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
-    UCSC_F43, UCSC_F44, UCSC_F45,
+    UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46,
 ]
 
 
