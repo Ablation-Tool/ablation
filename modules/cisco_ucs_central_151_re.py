@@ -993,11 +993,109 @@ UCSC_F24 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F25 — image_unpack.sh (operation-mgr) uses 'tar zxkPpmvf -' with -P flag
+#             on firmware image extraction — absolute path entries not stripped;
+#             no per-file signature check; same class as UCSC-F20 (bundle_unpack.sh)
+# Source: opt/cisco/bin/image_unpack.sh in operation-mgr-1.5.1-c.x86_64.rpm
+#         (functionally identical in operation-mgr-2.1.2-b.x86_64.rpm;
+#          2.1.2b adds platform=21 and uses imghdrScript.sh wrapper)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F25 = {
+    "id":       "UCSC-F25",
+    "title":    "image_unpack.sh (operation-mgr) uses 'tar zxkPpmvf -' with -P flag on firmware "
+                "image extraction — absolute path entries write to arbitrary filesystem paths "
+                "without signature verification; same class as UCSC-F20 in the image download "
+                "code path independent from bundle install path",
+    "status":   "CONFIRMED — opt/cisco/bin/image_unpack.sh in operation-mgr-1.5.1-c.x86_64.rpm; "
+                "functionally identical in operation-mgr-2.1.2-b.x86_64.rpm",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/image_unpack.sh",
+    "installed_path": "/opt/cisco/bin/image_unpack.sh",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "vulnerable_code": (
+        "/bin/dd if=${BUNDLE_BASE_DIR}/${IMAGE_NAME} skip=1 bs=$BS | tar zxkPpmvf -\n"
+        "# -P = absolute paths; new absolute-path archive entries written outside TARGET dir\n"
+        "# No signature check before extraction"
+    ),
+
+    "path_traversal": (
+        "image_unpack.sh cds to ${TARGET} before piping to tar, but the -P flag causes tar "
+        "to honor absolute paths in the archive — leading / is NOT stripped. "
+        "Archive entries beginning with '/' extract to their absolute path on the filesystem "
+        "regardless of the working directory. "
+        "-k prevents overwriting existing files but does not prevent creation of new files "
+        "at arbitrary absolute paths. "
+        "A crafted firmware image with absolute-path tar entries achieves root write anywhere."
+    ),
+
+    "debug_plugin_path": (
+        "For platform=7, type=4 (debug-plugin image): TARGET is set to ${FILES_DIR} "
+        "instead of the firmware subdirectory. "
+        "Debug-plugin images are copied to the workspace root without content verification. "
+        "Engineering code path in production firmware image install logic."
+    ),
+
+    "class_reference": (
+        "Same vulnerability class as UCSC-F20 (bundle_unpack.sh tar -P). "
+        "Independent code path: UCSC-F20 handles bundle installation; "
+        "UCSC-F25 handles image download unpack."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F26 — validate-backup.sh uses POSIX cksum (CRC32) for backup file
+#             integrity verification — cryptographically forgeable;
+#             attacker with backup storage access (NFS share) recalculates CRC
+#             and passes forged backup through restore validation
+# Source: opt/cisco/bin/validate-backup.sh in operation-mgr-1.5.1-c.x86_64.rpm
+#         (functionally identical in operation-mgr-2.1.2-b.x86_64.rpm)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F26 = {
+    "id":       "UCSC-F26",
+    "title":    "validate-backup.sh uses POSIX cksum (CRC32) for backup integrity — "
+                "CRC32 is not cryptographically secure and is trivially forgeable; "
+                "attacker with NFS share write access replaces backup content "
+                "and recalculates CRC; forged restore payload passes validation",
+    "status":   "CONFIRMED — opt/cisco/bin/validate-backup.sh in operation-mgr-1.5.1-c.x86_64.rpm; "
+                "functionally identical in operation-mgr-2.1.2-b.x86_64.rpm",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/validate-backup.sh",
+    "installed_path": "/opt/cisco/bin/validate-backup.sh",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "vulnerable_code": (
+        "CKSUM=`/bin/cat ${MF_FILE_NAME}.mf`\n"
+        "COMPUTECKSUM=`/usr/bin/cksum ${FILE_NAME} | /usr/bin/cut -d' ' -f1`\n"
+        "if [ \"${CKSUM}\" != \"${COMPUTECKSUM}\" ]; then exit 1; fi"
+    ),
+
+    "integrity_weakness": (
+        "POSIX cksum computes CRC-32 — a polynomial hash for error detection, not authentication. "
+        "An attacker who modifies the backup file can recalculate the CRC-32 "
+        "(python3: import binascii; print(binascii.crc32(data) & 0xFFFFFFFF)) "
+        "and overwrite the .mf sidecar file. "
+        "Validation passes; the forged backup is accepted for restore."
+    ),
+
+    "attack_surface": (
+        "UCS Central uses NFS for shared storage in clustered deployments "
+        "(confirmed: ucsCentral/switch_to_nfs.sh in core-1.5.1-c.x86_64.rpm). "
+        "Attacker with write access to the NFS share can: "
+        "modify backup .tgz → recalculate cksum → overwrite .mf → trigger UCS Central restore. "
+        "Backup content: managed domain config, policy definitions, LDAP/AAA config, user accounts. "
+        "Forged restore introduces backdoor accounts or weakened policies that persist post-restore."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
-    UCSC_F23, UCSC_F24,
+    UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26,
 ]
 
 
