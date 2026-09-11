@@ -749,10 +749,148 @@ UCSC_F19 = {
     "versions_affected": ["1.5.1c", "2.1.2b"],
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F20 — bundle_unpack.sh uses `tar -P` (absolute paths) on firmware bundle
+#             payload extraction — path traversal to arbitrary filesystem paths
+# Source: ucsCentral/bundle_unpack.sh line 94 (1.5.1c), line 120 + 244 (2.1.2b)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F20 = {
+    "id":       "UCSC-F20",
+    "title":    "bundle_unpack.sh extracts firmware bundle tar payload with 'tar -P' (absolute paths) — "
+                "if tar payload contains absolute-path entries, files are written outside the intended "
+                "temp directory to arbitrary filesystem paths",
+    "status":   "CONFIRMED — ucsCentral/bundle_unpack.sh lines 93-94 in ucs-central.1.5.1c.iso; "
+                "same -P flag at lines 120 and 244 in ucs-central.2.1.2b_EVAL.iso (two extraction paths)",
+    "severity": "HIGH",
+
+    "source_file": "ucsCentral/bundle_unpack.sh",
+    "vulnerable_code": (
+        "cd ${TMP_FILES_DIR}\n"
+        "/bin/dd if=${BUNDLE_BASE_DIR}/${BUNDLE_NAME} skip=1 bs=$BS | tar zxkPpmvf -\n"
+        "# -P = absolute paths: leading / NOT stripped; archive entries with /etc/... paths\n"
+        "#      extract to /etc/... on the filesystem, not to ${TMP_FILES_DIR}/etc/...\n"
+        "# Second extraction path (inner images):\n"
+        "cd ${TARGET}; /bin/dd if=${TMP_FILES_DIR}/${i} skip=1 bs=$BS | tar zxkPpmvf -"
+    ),
+
+    "flag_breakdown": {
+        "-P": "absolute paths — tar does NOT strip leading / from archive entries",
+        "-k": "keep existing files — does NOT overwrite existing files",
+        "-p": "preserve permissions from archive",
+        "-m": "don't restore modification times",
+        "-v": "verbose output",
+        "f -": "read archive from stdin (piped from dd)",
+    },
+
+    "attack_scenario": (
+        "An attacker who can supply a crafted firmware bundle (either by exploiting weak SN signature "
+        "verification as shown by FIINFRA-F1, by invoking bundle_unpack.sh directly after any "
+        "initial access, or via the management API with spoofed bundle content) includes a tar.gz "
+        "payload containing entries like:\n"
+        "  /etc/cron.d/cisco_update   (new cron job, not blocked by -k since file is new)\n"
+        "  /etc/sudoers.d/cisco       (adds NOPASSWD:ALL rule)\n"
+        "  /root/.ssh/authorized_keys (adds SSH public key)\n"
+        "The -k flag does not protect against creation of NEW files in world-accessible directories. "
+        "Any directory writable by root (which includes most of /etc/) is a valid extraction target. "
+        "The second extraction path (line 190/244) runs inside ${TARGET} (installables directory) "
+        "with the same -P flag."
+    ),
+
+    "signature_gating": (
+        "bundle_unpack.sh itself contains NO signature check. "
+        "isanadd -s is called in updateBundle.sh BEFORE calling bundle_unpack.sh. "
+        "If isanadd -s performs only header-format validation (SN magic byte check, not crypto — "
+        "consistent with FIINFRA-F1 finding: SN format has no cryptographic payload verification), "
+        "a locally crafted bundle with the correct SN header format but a malicious tar payload "
+        "passes the gate. "
+        "Additionally, bundle_unpack.sh can be invoked directly (it's a standalone script in "
+        "/opt/cisco/bin/) without going through updateBundle.sh — no signature check at all."
+    ),
+
+    "mitigation_gap": (
+        "The -k flag prevents overwriting of existing files (e.g., /etc/passwd, /etc/shadow). "
+        "It does NOT prevent creation of new files anywhere on the filesystem. "
+        "Any new file planted in /etc/cron.d/, /etc/cron.daily/, /etc/sudoers.d/, "
+        "or /root/.ssh/ represents a complete privilege escalation vector."
+    ),
+
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F21 — bundle_unpack.sh executes bundle_extsvc.sh from extracted bundle
+#             content without additional signature verification
+# Source: ucsCentral/bundle_unpack.sh lines 253-255 (1.5.1c)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F21 = {
+    "id":       "UCSC-F21",
+    "title":    "bundle_unpack.sh makes bundle_extsvc.sh executable and runs it from extracted bundle "
+                "content (chmod +x + exec) — no per-file signature check; bundle extended service "
+                "script executes with update process privileges",
+    "status":   "CONFIRMED — ucsCentral/bundle_unpack.sh lines 253-255 in ucs-central.1.5.1c.iso; "
+                "same pattern in ucs-central.2.1.2b_EVAL.iso",
+    "severity": "MEDIUM",
+
+    "source_file":  "ucsCentral/bundle_unpack.sh",
+    "source_lines": (
+        "if [ -e \"${TMP_FILES_DIR}/${BUNDLE_EXTSVC}\" ]; then\n"
+        "    /bin/chmod +x ${TMP_FILES_DIR}/${BUNDLE_EXTSVC}\n"
+        "    ${TMP_FILES_DIR}/${BUNDLE_EXTSVC}\n"
+        "fi\n"
+        "# BUNDLE_EXTSVC='bundle_extsvc.sh' (hardcoded)"
+    ),
+
+    "impact": (
+        "A firmware bundle that passes the SN signature check (or is delivered directly to "
+        "bundle_unpack.sh) and contains a file named 'bundle_extsvc.sh' will have that file "
+        "executed as root with no additional verification. "
+        "The bundle_extsvc.sh script runs in the context of bundle_unpack.sh after all images "
+        "have been moved to their target directories — it has full filesystem access. "
+        "Design intent is for the extsvc script to 'update the system with future knowledge "
+        "about the provider firmware' (comment at line ~136). "
+        "No code signing, no content verification, no sandboxing."
+    ),
+
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F22 — bundle_unpack.sh runs chmod a+w /opt/cisco/download -R on every
+#             platform=18 firmware image installation
+# Source: ucsCentral/bundle_unpack.sh line 149 (1.5.1c), line 203 (2.1.2b)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F22 = {
+    "id":       "UCSC-F22",
+    "title":    "bundle_unpack.sh runs 'chmod a+w /opt/cisco/download -R' during platform=18 "
+                "firmware image installation — recursively world-writes the download directory "
+                "on every provider image update",
+    "status":   "CONFIRMED — ucsCentral/bundle_unpack.sh line 149 in ucs-central.1.5.1c.iso; "
+                "line 203 in ucs-central.2.1.2b_EVAL.iso",
+    "severity": "LOW",
+
+    "source_file": "ucsCentral/bundle_unpack.sh",
+    "source_line": "chmod a+w /opt/cisco/download -R",
+    "trigger":     "BUNDLE_PLATFORM=18 (provider image type, e.g., UCSM domain firmware)",
+
+    "impact": (
+        "/opt/cisco/download is the symlink staging directory for downloadable firmware images. "
+        "After every platform=18 bundle unpack (which includes UCSM domain firmware updates), "
+        "all files and subdirectories under /opt/cisco/download become world-writable. "
+        "Any local OS user (daemon via UCSC-F9, postgres, samdme) can replace staged firmware "
+        "images in the download directory with malicious binaries. "
+        "The next time a managed UCSM domain downloads an image from UCS Central, "
+        "it receives the attacker-substituted firmware. "
+        "Combined with UCSC-F15 (arbitrary /tmp/shadow injection → admin password control), "
+        "an attacker can escalate from daemon-level access to replacing all staged UCSM firmware."
+    ),
+
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
-    UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19,
+    UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
 ]
 
 
