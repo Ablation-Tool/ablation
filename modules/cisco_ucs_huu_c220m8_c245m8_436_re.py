@@ -29,7 +29,8 @@ FIRMWARE = {
     "cimc":      {"C220 M8": "4.3(6.260054)", "C245 M8": "4.3(6.250053)"},
     "base_os":   "BusyBox/Buildroot Linux (rootfs.img created 2018-03-09, shipped in 2024+ ISOs)",
     "findings":  ["HUU436-F1", "HUU436-F2", "HUU436-F3", "HUU436-F4", "HUU436-F5", "HUU436-F6",
-                  "HUU436-F7", "HUU436-F8", "HUU436-F9", "HUU436-F10", "HUU436-F11"],
+                  "HUU436-F7", "HUU436-F8", "HUU436-F9", "HUU436-F10", "HUU436-F11",
+                  "HUU436-F12", "HUU436-F13", "HUU436-F14"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -466,9 +467,135 @@ HUU436_F11 = {
             "the Python app inside the container as hsu.tgz.enc.",
 }
 
+# ─────────────────────────────────────────────────────────
+# HUU436-F12: /security/tam_bypass sentinel — file creation disables TSM hardware module,
+#              forces hsu_decrypt_data to PBKDF2 software path with known hardcoded key
+# ─────────────────────────────────────────────────────────
+HUU436_F12 = {
+    "id":       "HUU436-F12",
+    "title":    "libhsu_helper.so checks /security/tam_bypass sentinel before using TSM hardware — "
+                "file creation on BMC forces hsu_decrypt_data to PBKDF2 software path, neutralizing "
+                "TSM hardware security boundary when combined with known hardcoded key",
+    "status":   "CONFIRMED — /security/tam_bypass string in libhsu_helper.so from hsu_agent.cpk "
+                "(ucs-c220m8-huu-container-4.3.6.260054.squashfs); "
+                "adjacent: /security/tam_init_done (init completion sentinel), "
+                "'Cannot get TSM service' error string (software fallback path confirmed)",
+    "severity": "HIGH",
+
+    "sentinels": {
+        "/security/tam_bypass":   "triggers software PBKDF2 decrypt instead of TSM hardware",
+        "/security/tam_init_done": "marks TSM hardware initialization complete",
+    },
+
+    "software_fallback": {
+        "function":     "hsu_decrypt_data / hsu_encrypt_data (libhsu_helper.so)",
+        "key_material": "PBKDF2-SHA256 + AES-256-CBC with hardcoded key 'zfguijkophju@*%1]' (HUU436-F1)",
+        "error_string": "'Cannot get TSM service' — logged when TSM unavailable, software path taken",
+    },
+
+    "impact": (
+        "The TSM (Trusted Security Module) is the hardware boundary for key operations on the IMC BMC. "
+        "If /security/tam_bypass exists, libhsu_helper.so uses the PBKDF2 software path for all "
+        "hsu_encrypt_data and hsu_decrypt_data calls. "
+        "Combined with the known hardcoded PBKDF2 key 'zfguijkophju@*%1]' (HUU436-F1), "
+        "creating this file eliminates the TSM as a security layer: key operations rely entirely "
+        "on the software key already known to external parties. "
+        "Any process on the BMC with write access to /security/ can create this file."
+    ),
+
+    "prerequisite":  "BMC filesystem write access (root-level on IMC) to /security/",
+    "cross_product": "libhsu_helper.so ships across all HUU 4.3.6 variants and likely 6.0.2 "
+                     "(same library, same TAM bypass pattern — not yet confirmed in 6.0.2 binary).",
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU436-F13: /var/nuova/BIOS/HaltHost sentinel — file creation triggers host OS shutdown
+#              via hsu_agent; file-based host DoS primitive on any BMC write access
+# ─────────────────────────────────────────────────────────
+HUU436_F13 = {
+    "id":       "HUU436-F13",
+    "title":    "hsu_agent reads /var/nuova/BIOS/HaltHost sentinel to trigger host system shutdown — "
+                "creating this file on the BMC causes immediate host OS halt via hsu_agent "
+                "without host OS involvement",
+    "status":   "CONFIRMED — /var/nuova/BIOS/HaltHost string in libhsu_helper.so from hsu_agent.cpk "
+                "(ucs-c220m8-huu-container-4.3.6.260054.squashfs); "
+                "co-located with /var/nuova/BIOS/ConfigPolicy, rotateKey.json, hsu-config.json",
+    "severity": "HIGH",
+
+    "sentinel_path":   "/var/nuova/BIOS/HaltHost",
+
+    "bios_directory_contents": {
+        "/var/nuova/BIOS/ConfigPolicy":    "BIOS configuration policy file",
+        "/var/nuova/BIOS/hsu-config.json": "HSU configuration JSON",
+        "/var/nuova/BIOS/rotateKey.json":  "BIOS key rotation config",
+        "/var/nuova/BIOS/HaltHost":        "sentinel: presence triggers host halt via hsu_agent",
+        "/nv/etc/BIOS/bt/OneTimeConfigPolicy": "one-time BIOS config applied and removed on next boot",
+    },
+
+    "impact": (
+        "hsu_agent runs as root on the IMC BMC (no User= in systemd unit, HUU436-F6). "
+        "It monitors /var/nuova/BIOS/HaltHost to determine whether to halt the host. "
+        "An attacker with BMC local write access can create this file to trigger an unconditional "
+        "host OS shutdown via the BMC firmware update agent — no host OS involvement required, "
+        "no IPMI authentication bypassed, no host-visible trace. "
+        "Bypasses host-side controls (power policies, watchdogs, OS-level shutdown guards). "
+        "Persistent DoS: if the file survives reboot on /var/nuova/ (non-volatile storage), "
+        "the host will halt on every hsu_agent initialization."
+    ),
+
+    "prerequisite": "BMC local write access to /var/nuova/BIOS/ (root on IMC)",
+    "persistence":  "/var/nuova/ is on the non-volatile store (nv partition on Cisco IMC BMC) — "
+                    "survives BMC power cycle unless file is explicitly deleted.",
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU436-F14: libhsu_plugin_swupdate.so stages BIOS update at predictable /tmp/ path without
+#              re-verification; TOCTOU allows local BMC process to substitute malicious BIOS image
+# ─────────────────────────────────────────────────────────
+HUU436_F14 = {
+    "id":       "HUU436-F14",
+    "title":    "libhsu_plugin_swupdate.so stages BIOS update package at hardcoded "
+                "/tmp/hsu/hsu_cnt_repo/firmware/bios/non_btg_bios.pkg on the BMC — "
+                "world-writable /tmp/ enables TOCTOU BIOS image substitution before installation",
+    "status":   "CONFIRMED — /tmp/hsu/hsu_cnt_repo/firmware/bios/non_btg_bios.pkg string "
+                "in libhsu_plugin_swupdate.so from hsu_agent.cpk "
+                "(ucs-c220m8-huu-container-4.3.6.260054.squashfs)",
+    "severity": "HIGH",
+
+    "staging_path":  "/tmp/hsu/hsu_cnt_repo/firmware/bios/non_btg_bios.pkg",
+    "staging_fs":    "/tmp/ (tmpfs, world-writable by default on Linux BMC OS)",
+
+    "related_error_paths": {
+        "/tmp/hsu_error.log": "error log written by swupdate, llf, drives plugins — world-accessible",
+        "/tmp/board-update/run-update.pkg_version_match": "version match sentinel used by llf plugin",
+        "/tmp/local_repo/cmc.img": "CMC image staging path (libhsu_plugin_cmc.so)",
+    },
+
+    "toctou_window": (
+        "hsu_agent downloads the BIOS firmware image to /tmp/hsu/hsu_cnt_repo/firmware/bios/ "
+        "and then passes the path to libhsu_plugin_swupdate.so for installation. "
+        "The imgverify bypass (HUU436-F9) means the staged file is not signature-verified. "
+        "Between download completion and installation call, a local BMC process can:"
+        " (1) watch for /tmp/hsu/hsu_cnt_repo/firmware/bios/non_btg_bios.pkg to appear,"
+        " (2) replace it with a malicious BIOS image, "
+        " (3) hsu_agent installs the replaced image as the BIOS firmware. "
+        "Result: attacker-controlled BIOS installed on the physical host without host OS involvement."
+    ),
+
+    "btg_note": (
+        "'non_btg_bios.pkg' naming suggests this path is for non-Boot Guard (non-BTG) platforms. "
+        "Platforms with Intel Boot Guard might use a separate path for BTG-verified images. "
+        "The non_btg path explicitly targets hardware where BIOS signature enforcement is absent."
+    ),
+
+    "prerequisite":  "BMC local process with /tmp/ write access (any non-root process on IMC BMC)",
+    "impact_level":  "BIOS firmware persistence — survives OS reinstall, host-side detection",
+}
+
 FINDINGS = [
     HUU436_F1, HUU436_F2, HUU436_F3, HUU436_F4, HUU436_F5, HUU436_F6,
     HUU436_F7, HUU436_F8, HUU436_F9, HUU436_F10, HUU436_F11,
+    HUU436_F12, HUU436_F13, HUU436_F14,
 ]
 
 if __name__ == "__main__":
