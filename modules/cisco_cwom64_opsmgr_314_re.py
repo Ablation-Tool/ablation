@@ -25,7 +25,7 @@ FIRMWARE = {
     "source":  "cwom64-opsmgr-3.14.1.ova",
     "os":      "Rocky Linux 9.5 (Blue Onyx)",
     "lvm_vg":  "ibmturbo",
-    "findings": ["CWOM-F1", "CWOM-F2", "CWOM-F3"],
+    "findings": ["CWOM-F1", "CWOM-F2", "CWOM-F3", "CWOM-F4"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -224,8 +224,6 @@ CWOM_F4 = {
         "running Kubernetes cluster, readable by any pod with cluster-reader or higher RBAC permissions."
     ),
 }
-
-FIRMWARE["findings"].append("CWOM-F4")
 
 FINDINGS = [CWOM_F1, CWOM_F2, CWOM_F3, CWOM_F4]
 
