@@ -15,7 +15,7 @@ FIRMWARE = {
     "versions":  {"cwom": "3.16.0", "turbonomic": "8.18.0", "nerdctl": "2.0.2"},
     "base_os":   "Rocky Linux (CentOS 7 successor; CentOS 7 EOL 2024-06-30 — blocked via banner-eol.txt)",
     "k8s_ns":    "turbonomic",
-    "findings":  ["CWOM-F1", "CWOM-F2", "CWOM-F3"],
+    "findings":  ["CWOM-F1", "CWOM-F2", "CWOM-F3", "CWOM-F4", "CWOM-F5"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -167,6 +167,113 @@ CWOM_F3 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# CWOM-F4: turboupgrade.sh embeds 'pass: vmturbo' into Kubernetes CR YAML via sed
+#          — MariaDB root credential written to on-disk operator CR manifest
+# ─────────────────────────────────────────────────────────
+CWOM_F4 = {
+    "id":       "CWOM-F4",
+    "title":    "turboupgrade.sh writes 'user: root, pass: vmturbo' into the t8c operator CR YAML "
+                "via a sed substitution on every upgrade — MariaDB root credential persists in "
+                "/opt/turbonomic/kubernetes/operator/deploy/crds/charts_v1alpha1_xl_cr.yaml on disk; "
+                "readable by any user with access to the operator config directory",
+    "status":   "CONFIRMED — turboupgrade.sh line 125 in update64_package-3.16.0.iso",
+    "severity": "MEDIUM",
+
+    "vulnerable_code": (
+        "# turboupgrade.sh line 125:\n"
+        "sed -i '/prometheus-mysql-exporter:/,/prometheus/c\\  prometheus-mysql-exporter:\\n"
+        "    enabled: false\\n\\    mysql:\\n\\      user: root\\n\\      pass: vmturbo\\n"
+        "\\  prometheus:' ${chartsFile}\n\n"
+        "# chartsFile = /opt/turbonomic/kubernetes/operator/deploy/crds/charts_v1alpha1_xl_cr.yaml"
+    ),
+
+    "credential": {
+        "user":     "root",
+        "password": "vmturbo",
+        "target":   "MariaDB on CWOM appliance",
+        "written_to": "/opt/turbonomic/kubernetes/operator/deploy/crds/charts_v1alpha1_xl_cr.yaml",
+    },
+
+    "context": (
+        "The sed command overwrites the prometheus-mysql-exporter section in the Helm CR YAML "
+        "with enabled=false plus hardcoded MariaDB root credentials. "
+        "Even with enabled=false, the credential string is written to the YAML file on disk "
+        "and persists across upgrades. "
+        "Any user or process with read access to /opt/turbonomic/kubernetes/ — which includes "
+        "the service account mounting the operator config — can extract the credential. "
+        "This is a second occurrence of the vmturbo root credential in a different upgrade "
+        "code path from CWOM-F1 (xl-backup.sh). The upgrade script applies this sed on every "
+        "upgrade run regardless of whether prometheus-mysql-exporter is in use."
+    ),
+
+    "scope": "turboupgrade.sh in update64_package-3.16.0.iso (CWOM 3.16.0 / Turbonomic 8.18.0)",
+}
+
+# ─────────────────────────────────────────────────────────
+# CWOM-F5: yaml.tar ships legacy Helm v2 Tiller RBAC manifest binding tiller SA to cluster-admin
+#          — if applied, Tiller gRPC port accessible from any pod for full-cluster workload deployment
+# ─────────────────────────────────────────────────────────
+CWOM_F5 = {
+    "id":       "CWOM-F5",
+    "title":    "CWOM 3.16.0 yaml.tar ships yaml/helm/rbac_service_account.yaml binding Tiller "
+                "ServiceAccount (kube-system) to cluster-admin ClusterRole — Helm v2 Tiller is "
+                "deprecated since 2019; if this manifest is applied during CWOM cluster setup, "
+                "Tiller's gRPC port (44134/tcp) accepts arbitrary chart installs from any pod "
+                "without authentication, providing full cluster-admin code execution",
+    "status":   "CONFIRMED — yaml/helm/rbac_service_account.yaml extracted from yaml.tar in "
+                "update64_package-3.16.0.iso; turboupgrade.sh line 44 extracts yaml.tar to "
+                "/opt/turbonomic/kubernetes/; manifest deploy not confirmed auto-applied",
+    "severity": "HIGH",
+
+    "manifest_content": (
+        "apiVersion: v1\n"
+        "kind: ServiceAccount\n"
+        "metadata:\n"
+        "  name: tiller\n"
+        "  namespace: kube-system\n"
+        "---\n"
+        "apiVersion: rbac.authorization.k8s.io/v1\n"
+        "kind: ClusterRoleBinding\n"
+        "metadata:\n"
+        "  name: tiller\n"
+        "roleRef:\n"
+        "  apiGroup: rbac.authorization.k8s.io\n"
+        "  kind: ClusterRole\n"
+        "  name: cluster-admin\n"
+        "subjects:\n"
+        "  - kind: ServiceAccount\n"
+        "    name: tiller\n"
+        "    namespace: kube-system"
+    ),
+
+    "deployment_path": (
+        "turboupgrade.sh line 44: tar -C /opt/turbonomic/kubernetes/ -xf /mnt/iso/yaml.tar\n"
+        "Extracts to: /opt/turbonomic/kubernetes/yaml/helm/rbac_service_account.yaml\n"
+        "Not explicitly applied by turboupgrade.sh — documented for admin execution during "
+        "initial cluster setup. CWOM installation guides instruct 'kubectl create -f "
+        "/opt/turbonomic/kubernetes/yaml/helm/rbac_service_account.yaml'."
+    ),
+
+    "impact": (
+        "Tiller (Helm v2 server) provides a gRPC interface (default port 44134) that accepts "
+        "Chart install requests without cluster-level authentication — any pod in any namespace "
+        "with network access to kube-system can install arbitrary Helm charts. "
+        "Combined with the cluster-admin binding, this provides full Kubernetes API access "
+        "from any successfully deployed chart workload. "
+        "Helm v3 (released November 2019) eliminated Tiller; its continued presence in a "
+        "2026 shipping ISO indicates this RBAC setup is intended for deployments that haven't "
+        "migrated to Helm v3."
+    ),
+
+    "tiller_rce_path": (
+        "Any pod: socat TCP:kube-system-svc:44134 STDIO — connects to Tiller gRPC\n"
+        "helm 2.x install --host http://tiller-deploy.kube-system:44134 ./evil-chart\n"
+        "Deploys arbitrary container with cluster-admin ServiceAccount token."
+    ),
+}
+
+
 BACKUP_SECRETS_EXPORTED = [
     "master-key-secret",
     "auth-secret",
@@ -175,7 +282,7 @@ BACKUP_SECRETS_EXPORTED = [
     "redis",
 ]
 
-FINDINGS = [CWOM_F1, CWOM_F2, CWOM_F3]
+FINDINGS = [CWOM_F1, CWOM_F2, CWOM_F3, CWOM_F4, CWOM_F5]
 
 if __name__ == "__main__":
     for f in FINDINGS:
