@@ -2667,6 +2667,88 @@ UCSC_F55 = {
     "source_ref": "cmc-260036-rootfs/etc/mosquitto-broker.conf; cmc-260036-rootfs/etc/mosquitto/mosquitto.conf",
 }
 
+UCSC_F56 = {
+    "id":       "UCSC-F56",
+    "title":    "HyperFlex SSOPrivilegeAuthImpl accepts X-RootSessionID header to authenticate any "
+                "request as any user without a JWT — the session ID is read from "
+                "/etc/hyperflex/secure/root_file.pub at runtime; if that file is world-readable "
+                "(the .pub extension convention suggests it is), any local process can forge "
+                "X-RootSessionID + X-LoggedInUser (arbitrary, including root) + X-Scope: MODIFY, "
+                "causing SSOAuthFilterImpl to short-circuit JWT validation and grant full API access; "
+                "the barredUsers list (root, diag) is also bypassed on this code path",
+    "status":   "CONFIRMED — source analysis; "
+                "SSOPrivilegeAuthImpl.validateAuthHeaderForPrivilegeCreds() bytecode: "
+                "reads X-RootSessionID header; calls HxSecurity.getLocalSessionId() which opens "
+                "/etc/hyperflex/secure/root_file.pub and reads line 0; compares with String.equals(); "
+                "if match: sets com.springpath.hx.aaa.authenticateduser=X-LoggedInUser, "
+                "com.springpath.hx.aaa.authenticateduserscope=X-Scope, Authenticated=True; "
+                "SSOAuthFilterImpl.doFilter() at offset 127 short-circuits to filterChain.doFilter() "
+                "when Authenticated=True without any JWT validation; "
+                "SSOManager.barredUsers check occurs only during credential auth path, not on this path; "
+                "HxSecurity.class constant pool #33=/etc/hyperflex/secure/root_file.pub confirmed; "
+                "no X-LoggedInUser content validation found in filter chain",
+    "severity": "HIGH",
+    "source_pkg": "auth-jar (HyperFlex REST API authentication filters)",
+    "technical_detail": (
+        "Filter chain (web.xml order): AuditFilter → SPPrivilegedAuth → SessionCookieFilter → "
+        "KerberosAuth → SPBasicAuth → SPAuth (SSOAuthFilterImpl)\n\n"
+        "SSOPrivilegeAuthImpl.validateAuthHeaderForPrivilegeCreds() logic:\n"
+        "  1. Read X-RootSessionID header\n"
+        "  2. Call HxSecurity.getLocalSessionId() — reads /etc/hyperflex/secure/root_file.pub\n"
+        "  3. If X-RootSessionID == file contents AND X-LoggedInUser + X-Scope + X-RequestInitiator present:\n"
+        "     - setAttribute('com.springpath.hx.aaa.authenticateduser', X-LoggedInUser)\n"
+        "     - setAttribute('com.springpath.hx.aaa.authenticateduserscope', scope)\n"
+        "     - setAttribute('Authenticated', 'True')\n"
+        "     - return true\n\n"
+        "SSOAuthFilterImpl.doFilter() offset 101-130:\n"
+        "  if getAttribute('Authenticated') == 'True': filterChain.doFilter() [no JWT check]\n\n"
+        "Attack: read /etc/hyperflex/secure/root_file.pub, send:\n"
+        "  X-RootSessionID: <file contents>\n"
+        "  X-LoggedInUser: admin  (or any username, barredUsers not checked)\n"
+        "  X-Scope: MODIFY\n"
+        "  X-RequestInitiator: 127.0.0.1\n"
+        "→ Full authenticated API access without a valid JWT token\n\n"
+        "File permission verification requires live system access; the .pub extension is consistent "
+        "with world-readable SSH public key conventions on Linux systems."
+    ),
+    "source_ref": (
+        "auth-jar/com/springpath/hx/aaa/filters/privilegeAuthFilter/SSOPrivilegeAuthImpl.class; "
+        "auth-jar/com/springpath/hx/aaa/filters/ssoFilter/SSOAuthFilterImpl.class; "
+        "core-jar/com/springpath/hx/aaa/core/HxSecurity.class"
+    ),
+}
+
+UCSC_F57 = {
+    "id":       "UCSC-F57",
+    "title":    "HyperFlex JWT defaultTokenLifeTime is 18 days (1555200000ms) with session keepalive "
+                "on every authenticated request — sessions never expire under normal use; stolen "
+                "Bearer tokens remain valid for 18+ days without forced rotation",
+    "status":   "CONFIRMED — source analysis; application.conf: defaultTokenLifeTime = 1555200000 "
+                "(18.0 days); SSOAuthFilterImpl.doFilter() calls AuthFilter.keepSessionAlive() on "
+                "every authenticated request with valid JWT, extending the token lifetime; "
+                "no short-lived access token + long-lived refresh token pattern; single token "
+                "is both access and session credential; SSOManager.defaultServiceAuthTokenLifeTime "
+                "field also referenced in SaJwtSerializer.toJwtString",
+    "severity": "LOW",
+    "source_pkg": "auth-jar (HyperFlex REST API authentication), common-jar (SSOManager)",
+    "technical_detail": (
+        "application.conf: defaultTokenLifeTime = 1555200000  # 1,555,200 seconds = 18.0 days\n\n"
+        "SSOAuthFilterImpl.doFilter() offset 237:\n"
+        "  AuthFilter.keepSessionAlive(authType, sessionId)  -- extends token on every request\n\n"
+        "Impact: a stolen Bearer token intercepted from any HyperFlex API call (MITM, log leak, "
+        "shoulder-surf) remains valid for up to 18 days and gets extended on each use. "
+        "Standard practice is 15-60 minute access tokens with separate refresh tokens. "
+        "The 18-day single-token design means credential revocation requires explicit "
+        "server-side session invalidation (ZK-backed session store), which operators "
+        "typically do not perform after incident response."
+    ),
+    "source_ref": (
+        "auth-jar/application.conf (defaultTokenLifeTime); "
+        "auth-jar/com/springpath/hx/aaa/filters/ssoFilter/SSOAuthFilterImpl.class (keepSessionAlive); "
+        "common-jar/com/springpath/hx/aaa/common/SSOManager.class (defaultTokenLifeTime field)"
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2676,6 +2758,7 @@ FINDINGS = [
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
+    UCSC_F56, UCSC_F57,
 ]
 
 
