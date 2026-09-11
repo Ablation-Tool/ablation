@@ -5,7 +5,7 @@ ISOs: ucs-central.1.5.1c.iso (1.1GB), ucs-central.1.5.1c.ova (1.4GB),
 Platform: UCS Central management appliance; manages multiple UCSM domains
 
 7 findings: 0C/2H/2M/3L
-Cumulative: 594 [54C+190H+180M+167L]
+Cumulative: 594 [54C+190H+180M+170L]
 """
 
 # ============================================================
@@ -264,7 +264,7 @@ MODULE_SUMMARY = {
         "ucs-central.2.1.2b_EVAL.iso",
     ],
     "finding_counts": {"CRITICAL": 0, "HIGH": 2, "MEDIUM": 2, "LOW": 3},
-    "cumulative_counts": {"CRITICAL": 54, "HIGH": 190, "MEDIUM": 180, "LOW": 167},
+    "cumulative_counts": {"CRITICAL": 54, "HIGH": 190, "MEDIUM": 180, "LOW": 170},
     "cumulative_total": 594,
     "root_password_hashes": {
         "1.5.1c_md5crypt": "$1$ToWcsC4R$XaYfvve4hPK/EhCIEuXlE/",
