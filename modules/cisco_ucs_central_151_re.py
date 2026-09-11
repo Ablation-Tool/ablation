@@ -2749,6 +2749,57 @@ UCSC_F57 = {
     ),
 }
 
+UCSC_F58 = {
+    "id":       "UCSC-F58",
+    "title":    "CMC libcisco_signature.so allow_dev_keys global initialized to 1 in production "
+                "firmware — firmware update validation calls code_sign_verify_signature() with "
+                "allow_dev_keys=1, accepting firmware signed with Cisco developer keys in addition "
+                "to production keys; any entity with Cisco development signing key access can "
+                "install arbitrary firmware on production CMC chassis management controllers",
+    "status":   "CONFIRMED — source analysis; "
+                "libcisco_signature.so .data section at 0x12008 (allow_dev_keys): "
+                "initial value 0x01 (uint32=1, true); "
+                "cs_rommon_verify_buffer_raw_sign_revocation() offset a4ec: "
+                "cbnz w23, a5a4 — when allow_dev_keys!=0 skips non-dev path, "
+                "jumps to a5a4 which prints SHA2 hash then calls "
+                "code_sign_verify_signature(buf, len, keydb, envSize, allow_dev_keys=1) at a5d4; "
+                "non-dev path (a4f0-a50c) calls code_sign_verify_signature(..., allow_dev_keys=0); "
+                "_cs_rommon_verify_cmc_buffer.constprop.0 at b948 loads allow_dev_keys from "
+                "11000+3960 data pointer into w6 and passes as 7th arg to cs_rommon_verify_buffer; "
+                "updated daemon at validate_image_signature offset 6560 calls "
+                "cs_rommon_platform_allow_dev_keys(1) which writes 1 to allow_dev_keys+8",
+    "severity": "HIGH",
+    "source_pkg": "cmc-260036",
+    "technical_detail": (
+        "libcisco_signature.so .data segment (readelf -l confirms LOAD):\n"
+        "  0x12000: __dso_handle = 0x00012000\n"
+        "  0x12008: allow_dev_keys = 0x00000001  <-- initialized TRUE\n\n"
+        "cs_rommon_verify_buffer_raw_sign_revocation() execution path:\n"
+        "  a474: mov w23, w6  (w6 = allow_dev_keys = 1)\n"
+        "  a4ec: cbnz w23, a5a4  (non-zero → dev key path)\n"
+        "  [a4f0-a50c skipped]: code_sign_verify_signature(..., allow_dev_keys=0)\n"
+        "  a5a4: printf('Computed Hash SHA2: '); print_hash(); putchar(\\n)\n"
+        "  a5d4: code_sign_verify_signature(..., allow_dev_keys=1)  ← accepts dev keys\n\n"
+        "validate_image_signature() in updated:\n"
+        "  6548: mov w20, #1\n"
+        "  654c: mov w0, w20\n"
+        "  6560: bl cs_rommon_platform_allow_dev_keys  [stores 1 → allow_dev_keys+8]\n\n"
+        "Impact: All CMC chassis running this firmware version accept developer-signed firmware "
+        "images. Cisco development signing keys are internal assets; if obtainable through insider "
+        "access, supply-chain compromise, or key leakage, an attacker can permanently backdoor "
+        "any UCS CMC through a legitimate-looking firmware update that passes signature validation."
+    ),
+    "source_ref": (
+        "cmc-260036-rootfs/lib/libcisco_signature.so "
+        "(nm: allow_dev_keys @0x12008, .data initial value 0x01; "
+        "cs_rommon_platform_allow_dev_keys @0x9880; "
+        "cs_rommon_verify_buffer_raw_sign_revocation @0xa420; "
+        "_cs_rommon_verify_cmc_buffer.constprop.0 @0xb8a0); "
+        "cmc-260036-rootfs/cmc/bin/updated "
+        "(validate_image_signature @0x6490)"
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2758,7 +2809,7 @@ FINDINGS = [
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
-    UCSC_F56, UCSC_F57,
+    UCSC_F56, UCSC_F57, UCSC_F58,
 ]
 
 
