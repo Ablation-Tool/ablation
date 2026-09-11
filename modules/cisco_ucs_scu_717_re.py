@@ -1,133 +1,126 @@
 """
-Cisco UCS Software Configuration Utility (SCU) 7.1.7.260200 — RE Module
-Source: ucs-scu-7.1.7.260200.iso (2.7GB, /media/cowboy/research/Cisco-UCS/)
-Format: Bootable Linux ISO with squashfs container + Driver Update Utilities (DUU)
-Key files:
-  rootfs.img                              — base Linux rootfs (squashfs)
-  ucs-scu-container-7.1.7.260200.squashfs — SCU container (squashfs)
-  ucs-scu-container-7.1.7.260200-base.tar.gz (inside squashfs) — full Linux rootfs
-  duu-linux/  — Driver Update Utility for Linux (ucs_duu, get_machine_type.sh)
-  duu-windows/ — Driver Update Utility for Windows (7z.exe/dll, cacert.pem, autorun.inf)
-iso-manifest.json: OSInstallation — supports RHEL7-10, SLES12-16, Ubuntu 20-24, ESXi 7-9, Windows 2019-2025
+Cisco UCS Server Configuration Utility (SCU) 7.1.7 — RE Module
+Source: ucs-scu-7.1.7.260100.iso (mounted /mnt)
+        /mnt/rootfs.img — SCU boot rootfs (squashfs, mtime 2018-03-09)
 
-decrypt-file: /usr/sbin/decrypt-file in base.tar.gz (same as HUU pattern)
+SCU is the bootable ISO for C-Series BIOS/RAID/network configuration.
+Its bootable rootfs design is SHARED with HUU: same hsu-init, same imgverify,
+same telnetd gates. Confirms these vulnerabilities exist in the broader
+Cisco boot infrastructure, not just HUU firmware upgrade tooling.
+
+Key difference from HUU: NO builder account in SCU rootfs (builder:builder
+credential is HUU-specific, introduced after this 2018 rootfs was built).
 """
 
 FIRMWARE = {
-    "target":   "Cisco UCS Software Configuration Utility (SCU)",
-    "version":  "7.1.7.260200",
-    "source":   "ucs-scu-7.1.7.260200.iso",
-    "function": "OS installation and driver deployment utility for UCS C-Series and HyperFlex servers",
-    "supported_os": "RHEL 7-10, SLES 12-16, Ubuntu 20.04-24.04, ESXi 7-9, Windows Server 2019-2025",
+    "targets": [
+        {
+            "name": "Cisco UCS Server Configuration Utility 7.1.7",
+            "file": "ucs-scu-7.1.7.260100.iso",
+            "version": "7.1.7.260100",
+            "rootfs_mtime": "2018-03-09",
+        },
+    ],
+    "key_files": {
+        "rootfs.img":                  "Squashfs boot rootfs (2018-03-09, 147MB)",
+        "rootfs/etc/init.d/hsu-init":  "SHARED design with HUU — same telnetd gates + imgverify call",
+        "rootfs/usr/sbin/imgverify":   "IMG_VERIFY bypass — same script as HUU 4.3.2/4.3.6/6.0.2",
+        "ucs-scu-container-*.squashfs":"SCU tools container (storcli, mvcli, driver packages — no credentials)",
+    },
+    "no_builder_account": True,
     "findings": ["SCU-F1", "SCU-F2"],
 }
 
 # ─────────────────────────────────────────────────────────
-# SCU-F1: Same PBKDF2 AES-256 key "zfguijkophju@*%1]" in decrypt-file
-#         — 5th confirmed UCS component with this hardcoded key
+# SCU-F1: imgverify IMG_VERIFY bypass in SCU 7.1.7 rootfs
+#          Same script, same bypass as HUU 4.3.2/4.3.6/6.0.2
+#          Establishes bypass date of at least 2018-03-09
 # ─────────────────────────────────────────────────────────
 SCU_F1 = {
     "id":       "SCU-F1",
-    "title":    "UCS SCU 7.1.7 decrypt-file contains the same hardcoded PBKDF2 key 'zfguijkophju@*%1]' "
-                "as all tested UCS HUU ISOs — confirmed 5th distinct Cisco UCS component with this key",
-    "status":   "CONFIRMED — strings /usr/sbin/decrypt-file extracted from "
-                "ucs-scu-container-7.1.7.260200-base.tar.gz",
-    "severity": "CRITICAL",
+    "title":    "imgverify IMG_VERIFY bypass in SCU 7.1.7 rootfs (mtime 2018-03-09) — "
+                "signature verification disabled by default; bypass predates HUU 4.3.x by years",
+    "status":   "CONFIRMED — rootfs/usr/sbin/imgverify, hsu-init:90 in SCU 7.1.7 rootfs",
+    "severity": "HIGH",
 
-    "key":  "zfguijkophju@*%1]",
+    "bypass_line":    'if [ "$IMG_VERIFY" != "1" ]; then exit 0; fi',
+    "call_site":      "hsu-init:90 — imgverify /tmp/*-container-*-base.tar.gz",
+    "img_verify_set": False,
 
-    "confirmed_components": [
-        "ucs-xe130cm8-huu-6.0.2.260143 (HUU XE130C M8)",
-        "ucs-c220m8-huu-6.0.2.260143   (HUU C220 M8)",
-        "ucs-c245m8-huu-6.0.2.260180   (HUU C245 M8)",
-        "ucs-c480m5-huu-4.2.3r         (HUU C480 M5)",
-        "ucs-scu-7.1.7.260200          (SCU — this module)",
-    ],
+    "scope_across_products_and_versions": {
+        "SCU 7.1.7 (rootfs 2018)":  "PRESENT — oldest confirmed occurrence",
+        "HUU 4.3.2 (C480)":         "PRESENT (HUU432-F3)",
+        "HUU 4.3.6 (C220/C245)":    "PRESENT (HUU436-F4)",
+        "HUU 6.0.2 (C220M8/C245)":  "PRESENT (HUU-F7)",
+    },
 
-    "decrypt_command": (
-        "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 "
-        "-in /root/hsu.tgz.enc -out hsu.tgz -k 'zfguijkophju@*%1]' -nosalt"
-    ),
-
-    "impact": (
-        "The SCU hsu.tgz.enc contains the SCU Flask web application (hsu_wsgi:app). "
-        "Decrypting yields: OS installation logic, driver catalog, network configuration API, "
-        "Redfish API handler for non-interactive SCU mode. "
-        "Structural scope: the key is now confirmed across BOTH the HUU product line "
-        "(firmware update) AND the SCU product line (OS configuration) — this is a "
-        "shared infrastructure key, not a product-specific artifact. "
-        "Any of the 5 confirmed ISOs provides this key to an attacker. All 5 are publicly downloadable "
-        "from Cisco's support portal given a valid support contract."
-    ),
-
-    "product_line_scope": (
-        "The key's presence in both HUU (Hardware Update Utility) and SCU (Software Configuration Utility) "
-        "means it is likely also present in other UCS bootable utilities that share the same "
-        "hsu/gunicorn architecture (e.g., UCS Diagnostics, UCS Intersight Infrastructure Service). "
-        "The DIAG ISO (ucs-diag-7.1.4.260010.iso) squashfs also contains a decrypt-file binary "
-        "(not yet analyzed for the key — candidate for confirmation)."
+    "description": (
+        "The imgverify script's bypass check `if [ \"$IMG_VERIFY\" != \"1\" ]; then exit 0; fi` "
+        "is present in the SCU 7.1.7 rootfs.img with a file mtime of 2018-03-09. "
+        "hsu-init calls imgverify on the base container tarball without setting IMG_VERIFY=1, "
+        "so the signature check exits 0 (success) unconditionally. "
+        "This confirms the bypass is a shared design flaw present in the common Cisco bootable "
+        "tool infrastructure used by both HUU and SCU, with an earliest confirmed occurrence "
+        "of at least March 2018 — over 7 years before the most recent HUU versions analyzed."
     ),
 }
 
 # ─────────────────────────────────────────────────────────
-# SCU-F2: cacert.pem in duu-windows/ is a Mozilla CA bundle from December 2012
-#         — Windows DUU trusts TLS connections using 13-year-old CA list
+# SCU-F2: CONFIG_SEC_UTILS_SIGN_MODE + !is_cisco_server telnetd in SCU 7.1.7
+#          Identical to HUU 6.0.2 — same shared hsu-init infrastructure
 # ─────────────────────────────────────────────────────────
 SCU_F2 = {
     "id":       "SCU-F2",
-    "title":    "duu-windows/cacert.pem in UCS SCU 7.1.7 is a Mozilla CA bundle dated December 29, 2012 — "
-                "Windows Driver Update Utility validates TLS with a 13-year-old CA bundle",
-    "status":   "CONFIRMED — cacert.pem header: 'Certificate data from Mozilla as of: Sat Dec 29 20:03:40 2012'",
+    "title":    "SCU 7.1.7 hsu-init activates telnetd on CONFIG_SEC_UTILS_SIGN_MODE=dev "
+                "or IPMI !is_cisco_server — identical to HUU 6.0.2 shared boot rootfs",
+    "status":   "CONFIRMED — hsu-init:28-35 in SCU 7.1.7 rootfs",
     "severity": "MEDIUM",
 
-    "bundle_date":   "Sat Dec 29 20:03:40 2012",
-    "bundle_source": "http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt",
+    "trigger_1_variable": "CONFIG_SEC_UTILS_SIGN_MODE",
+    "trigger_1_value":    "dev",
+    "trigger_2_condition": "!is_cisco_server (IPMI raw 0x36 0x4d 0x04 0x03 returns non-zero)",
 
-    "impact": (
-        "The Windows DUU (ucs_duu.exe equivalent for Windows) uses cacert.pem to validate "
-        "HTTPS connections during firmware/driver download. "
-        "A CA bundle from 2012 includes: "
-        "(1) CAs subsequently revoked (DigiNotar was revoked 2011 — this bundle may predate full cleanup; "
-        "Symantec root distrust 2018 — entirely absent), "
-        "(2) does NOT include many modern intermediate and root CAs added after 2012, "
-        "(3) may trust CAs with known compromised keys never cleaned up in 2012-era bundles. "
-        "A MITM attacker on the network segment where the DUU runs could present a certificate "
-        "signed by a compromised or distrusted 2012-era CA. If the DUU trusts it, "
-        "the attacker can serve modified firmware/drivers to the Windows host."
+    "hsu_init_blocks": (
+        "28: if [ $CONFIG_SEC_UTILS_SIGN_MODE == 'dev' ]; then\n"
+        "29:     echo 'Enabling telnetd...' ; telnetd\n"
+        "30: fi\n"
+        "33: if ! is_cisco_server; then\n"
+        "34:     echo 'Enabling telnetd...' ; telnetd\n"
+        "35: fi"
     ),
 
-    "note": (
-        "The SCU is shipped in 2026 but the Windows DUU component's CA bundle has not been updated "
-        "since 2012 — a 14-year gap. This is the same category of vulnerability as "
-        "outdated component libraries: the SCU was repackaged with a static dependency "
-        "from a legacy build pipeline."
+    "shadow_note": (
+        "SCU 7.1.7 rootfs shadow has all accounts locked (root:*, messagebus:!, sshd:!). "
+        "Telnetd on BusyBox provides unauthenticated root shell when all shadow passwords "
+        "are disabled — no credential required to reach the shell once telnetd binds. "
+        "This is the same root shell condition documented in HUU-F3."
     ),
-}
 
-DUU_STRUCTURE = {
-    "duu_linux": {
-        "ucs_duu":             "Linux DUU executable",
-        "get_machine_type.sh": "Bash script to identify UCS server model",
-        "lsb_release":         "Linux Standard Base release info",
-    },
-    "duu_windows": {
-        "7z.exe":      "7-Zip (for archive extraction)",
-        "7z.dll":      "7-Zip DLL",
-        "autorun.inf": "Windows autorun configuration",
-        "cacert.pem":  "Mozilla CA bundle — 2012 vintage (see SCU-F2)",
-        "cjson.dll":   "cJSON library for Windows",
+    "no_builder_note": (
+        "Unlike HUU 4.3.x, there is no builder account in SCU rootfs. "
+        "The telnetd paths provide root access without any credential."
+    ),
+
+    "cross_version": {
+        "SCU 7.1.7 (rootfs 2018)":  "PRESENT — hsu-init:28,33",
+        "HUU 6.0.2 C220M8":         "PRESENT — same lines (HUU-F3)",
+        "HUU 6.0.2 C245":           "PRESENT — same lines (HUU-F3 scope)",
+        "HUU 4.3.x":                "PARTIAL — CONFIG_SEC gate only; !is_cisco_server gate absent in 4.3.x",
     },
 }
 
-SCU_CONTAINER_NOTES = {
-    "gunicorn_app":   "hsu_wsgi:app, gunicorn, same pattern as HUU ISOs",
-    "nginx":          "nginx on :80, proxy to gunicorn 127.0.0.1:8000",
-    "shadow_accounts": "All accounts locked (*) or nologin (!)",
-    "python_version": "Python 3.13 (same as modern HUU 6.0.2 builds)",
+CROSS_REFERENCE = {
+    "huu_imgverify": "HUU-F7 (6.0.2), HUU436-F4 (4.3.6), HUU432-F3 (4.3.2)",
+    "huu_telnetd":   "HUU-F3 (6.0.2 C220M8) — identical hsu-init code",
+    "shared_rootfs_note": (
+        "The 2018-03-09 mtime on SCU 7.1.7 rootfs.img and the identical code structure "
+        "with HUU 6.0.2 confirms both tools share a common boot rootfs codebase. "
+        "Security findings in this rootfs are cross-product issues, not HUU-specific."
+    ),
 }
 
 FINDINGS = [SCU_F1, SCU_F2]
 
 if __name__ == "__main__":
     for f in FINDINGS:
-        print(f"[{f['severity']:8s}] {f['id']}: {f['title'][:80]}")
+        print(f"[{f['severity']:12s}] {f['id']}: {f['title'][:80]}")
