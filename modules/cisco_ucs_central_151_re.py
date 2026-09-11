@@ -2800,6 +2800,62 @@ UCSC_F58 = {
     ),
 }
 
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F59 — HyperFlex encryption service StMgrClient sets JVM-global TLS trust bypass
+# ─────────────────────────────────────────────────────────
+UCSC_F59 = {
+    "id":       "UCSC-F59",
+    "title":    "HyperFlex encryption service StMgrClient calls trustAll() which installs an "
+                "X509TrustManager that accepts any certificate and a HostnameVerifier that always "
+                "returns true as JVM-wide global defaults via HttpsURLConnection.setDefaultSSLSocketFactory() "
+                "and setDefaultHostnameVerifier() — affects all HTTPS connections from the encryption "
+                "service JVM, not just the stMgr connection; attacker with network position between "
+                "HyperFlex nodes can MITM the SED key management Thrift/HTTPS channel to intercept "
+                "or replace KMIP credentials (kmip_password, kmip_server_cert) and SED security keys",
+    "status":   "CONFIRMED — source analysis; "
+                "StMgrClient$1 (X509TrustManager): checkServerTrusted() is empty (return); "
+                "getAcceptedIssuers() returns null; "
+                "StMgrClient$2 (HostnameVerifier): verify() returns iconst_1 (true) unconditionally; "
+                "StMgrClient.trustAll(): calls HttpsURLConnection.setDefaultSSLSocketFactory() and "
+                "setDefaultHostnameVerifier() — JVM static globals, affect ALL HttpsURLConnections; "
+                "stMgr URL: 'https://\\u0001/stmgr' (Thrift over HTTPS to SEDConfiguration.stMgrHost); "
+                "constant pool confirms kmip_password, kmip_server_cert, security_key, kek, "
+                "deployed_security_key, executeRekey operations transmitted over this channel; "
+                "encryption/WEB-INF/web.xml: same SPPrivilegedAuth + SSOAuthFilterImpl filter chain",
+    "severity": "HIGH",
+    "source_pkg": "encryption WAR (HyperFlex SED/KMIP encryption management)",
+    "source_ref": "encryption/WEB-INF/classes/com/springpath/hx/encryption/clients/StMgrClient.class; "
+                  "encryption/WEB-INF/classes/com/springpath/hx/encryption/clients/StMgrClient$1.class; "
+                  "encryption/WEB-INF/classes/com/springpath/hx/encryption/clients/StMgrClient$2.class",
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F60 — KerberosFilterImpl discards validation result, never blocks
+# ─────────────────────────────────────────────────────────
+UCSC_F60 = {
+    "id":       "UCSC-F60",
+    "title":    "HyperFlex encryption WAR KerberosFilterImpl.doFilter() calls "
+                "validateKerberosTicketAndPermission() then discards the result with POP — "
+                "the filter always proceeds to filterChain.doFilter() regardless of whether "
+                "Kerberos validation succeeds or fails; Kerberos authentication in the encryption "
+                "service provides no access gating, only optional session enrichment",
+    "status":   "CONFIRMED — source analysis; "
+                "KerberosFilterImpl.doFilter() offset 106-124: "
+                "invokevirtual validateKerberosTicketAndPermission (offset 121); "
+                "offset 124: pop (return value discarded); "
+                "offset 125: goto 146 (unconditional jump to filterChain.doFilter()); "
+                "exception handler (128): SSOException caught, logged, continues to filterChain.doFilter() at 146; "
+                "only init guard: if hypervisor != HyperV skips to filterChain.doFilter() directly; "
+                "Authenticated=True set only on valid Kerberos ticket (enrichment path); "
+                "SSOAuthFilterImpl remains the sole blocking gate; "
+                "encryption/WEB-INF/web.xml: KerberosAuth filter registered and mapped to /v1/*",
+    "severity": "LOW",
+    "source_pkg": "auth-jar (KerberosFilterImpl) + encryption WAR web.xml",
+    "source_ref": "auth-jar/com/springpath/hx/aaa/filters/kerberosFilter/KerberosFilterImpl.class; "
+                  "encryption/WEB-INF/web.xml",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2809,7 +2865,7 @@ FINDINGS = [
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
-    UCSC_F56, UCSC_F57, UCSC_F58,
+    UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60,
 ]
 
 
