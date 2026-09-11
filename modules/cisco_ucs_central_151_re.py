@@ -477,11 +477,14 @@ UCSC_F13 = {
 UCSC_F14 = {
     "id":       "UCSC-F14",
     "title":    "Hardcoded RC4 encryption key 'dwefsAvfsdkfqweqyrmfvsfwth' (KeyCode E001) in samcrypt binary and libosiris.so — all samcrypt-encrypted files decryptable",
-    "status":   "CONFIRMED — strings /opt/cisco/bin/samcrypt and /opt/cisco/core/sam/lib/libosiris.so in OVA disk1 VMDK",
+    "status":   "CONFIRMED — strings /opt/cisco/bin/samcrypt and /opt/cisco/core/sam/lib/libosiris.so in OVA disk1 VMDK; "
+                "confirmed in 2.1.2b: central-mgr-2.1.2-b.x86_64.rpm and policy-mgr-2.1.2-b.x86_64.rpm both ship "
+                "libosiris.so with the same key",
     "severity": "HIGH",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
 
     "binary":    "opt/cisco/bin/samcrypt",
-    "library":   "opt/cisco/core/sam/lib/libosiris.so (and central-mgr, operation-mgr copies)",
+    "library":   "opt/cisco/core/sam/lib/libosiris.so (and central-mgr, policy-mgr, operation-mgr copies)",
     "algorithm": "RC4 (RC4_set_key from OpenSSL; symbol RC4_1_CIPHER_KEYCODE)",
 
     "hardcoded_key":  "dwefsAvfsdkfqweqyrmfvsfwth",
