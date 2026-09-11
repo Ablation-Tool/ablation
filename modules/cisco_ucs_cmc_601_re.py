@@ -52,7 +52,8 @@ FIRMWARE = {
     "arch":        "AArch64 (ARM64), little-endian",
     "compiler":    "GNU C11 14.2.1 20241119, -fno-stack-protector (jrpc_server/libjolt_inf.so); -fstack-protector-all (pam_cmc.so)",
     "findings":    ["CMC-F1", "CMC-F2", "CMC-F3", "CMC-F4", "CMC-F5", "CMC-F6",
-                    "CMC-F7", "CMC-F8", "CMC-F9", "CMC-F10", "CMC-F11", "CMC-F12", "CMC-F13"],
+                    "CMC-F7", "CMC-F8", "CMC-F9", "CMC-F10", "CMC-F11", "CMC-F12", "CMC-F13",
+                    "CMC-F14"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -621,8 +622,58 @@ CMC_F13 = {
     },
 }
 
+# ─────────────────────────────────────────────────────────
+# CMC-F14 — Hardcoded IPMI credentials root:root in CMC management scripts —
+#            IPMI root password exposed in cleartext across dfu.common and
+#            showtechsupport_common; credential visible in process list during execution
+# ─────────────────────────────────────────────────────────
+CMC_F14 = {
+    "id":       "CMC-F14",
+    "title":    "Hardcoded IPMI credentials 'root:root' embedded in CMC DFU shell and "
+                "showtechsupport scripts — five ipmitool invocations pass -U root -P root "
+                "in cleartext; credential visible in ps(1) output during execution",
+    "status":   "CONFIRMED — /lib/libdfu/dfu.common and /cmc/bin/showtechsupport_common "
+                "in 6.0(2.260036) rootfs",
+    "severity": "HIGH",
+
+    "affected_scripts": {
+        "/lib/libdfu/dfu.common": [
+            "cmd_sel():     su -c \"ipmitool -U root -P root -H localhost sel list\"",
+            "cmd_sensors(): /cmc/bin/ipmitool -I lan -U root -P root -H 127.0.0.1 sensor",
+        ],
+        "/cmc/bin/showtechsupport_common": [
+            "line 294: ipmitool -I lan -U root -P root -H 127.0.0.1 fru",
+            "line 295: ipmitool -I lan -U root -P root -H 127.0.0.1 sdr elist",
+            "line 296: ipmitool -I lan -U root -P root -H 127.0.0.1 sensor",
+        ],
+    },
+
+    "exposure": (
+        "ipmitool -I lan authenticates over UDP/623 (IPMI LAN) to 127.0.0.1. "
+        "If the CMC IPMI BMC binds to the management network interface with the same "
+        "credential, an attacker with OOB network access can authenticate as IPMI root "
+        "and perform: chassis power control, SEL read/clear, FRU read, SDR read, "
+        "raw IPMI command injection. "
+        "Credential is also exposed in /proc/<pid>/cmdline and ps(1) output for the "
+        "duration of each ipmitool invocation."
+    ),
+
+    "ipmi_impact": [
+        "chassis power on/off/cycle (chassis control raw 0x00 0x02)",
+        "SEL clear (removes audit trail)",
+        "FRU read (full hardware inventory without auth)",
+        "SDR read (all sensor thresholds and identities)",
+        "Raw IPMI command execution (OEM commands, watchdog manipulation)",
+    ],
+
+    "version_status": {
+        "6.0.2.260036": "CONFIRMED — both scripts present with root:root credential",
+        "6.0.1.251006": "LIKELY — same script patterns in prior version rootfs",
+    },
+}
+
 FINDINGS = [CMC_F1, CMC_F2, CMC_F3, CMC_F4, CMC_F5, CMC_F6, CMC_F7, CMC_F8, CMC_F9, CMC_F10, CMC_F11,
-            CMC_F12, CMC_F13]
+            CMC_F12, CMC_F13, CMC_F14]
 
 if __name__ == "__main__":
     for f in FINDINGS:
