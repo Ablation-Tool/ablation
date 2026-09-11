@@ -26,7 +26,8 @@ FIRMWARE = {
     "source":   "ucs-c480m5-huu-4.3.2.260020.iso",
     "cimc":     "4.3(2.260020)",
     "base_os":  "Buildroot/BusyBox Linux (rootfs.img created 2025-12-01)",
-    "findings": ["HUU432-F1", "HUU432-F2", "HUU432-F3", "HUU432-F4", "HUU432-F5"],
+    "findings": ["HUU432-F1", "HUU432-F2", "HUU432-F3", "HUU432-F4", "HUU432-F5",
+                 "HUU432-F6", "HUU432-F7"],
 }
 
 # ─────────────────────────────────────────────────────────

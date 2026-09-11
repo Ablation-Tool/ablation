@@ -28,7 +28,8 @@ FIRMWARE = {
     ],
     "cimc":      {"C220 M8": "4.3(6.260054)", "C245 M8": "4.3(6.250053)"},
     "base_os":   "BusyBox/Buildroot Linux (rootfs.img created 2018-03-09, shipped in 2024+ ISOs)",
-    "findings":  ["HUU436-F1", "HUU436-F2", "HUU436-F3", "HUU436-F4", "HUU436-F5", "HUU436-F6"],
+    "findings":  ["HUU436-F1", "HUU436-F2", "HUU436-F3", "HUU436-F4", "HUU436-F5", "HUU436-F6",
+                  "HUU436-F7", "HUU436-F8", "HUU436-F9"],
 }
 
 # ─────────────────────────────────────────────────────────

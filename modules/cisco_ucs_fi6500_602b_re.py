@@ -14,7 +14,8 @@ FIRMWARE = {
     "payload":    "ucsfi.10.5.1.I60.2b.F.bin (mknbi-linux-1.2-6 format)",
     "os_base":    "NX-OS / ISAN, x86-64, CPIO initramfs + DNF/RPM package bootstrap",
     "key_rpms":   "nginx-1.25.4, pam-plugin-debug-1.3.0, python3-debugger-3.8.20",
-    "findings":   ["FI6500-F1", "FI6500-F2", "FI6500-F3", "FI6500-F4"],
+    "findings":   ["FI6500-F1", "FI6500-F2", "FI6500-F3", "FI6500-F4",
+                   "FI6500-F5", "FI6500-F6", "FI6500-F7", "FI6500-F8"],
 }
 
 # ─────────────────────────────────────────────────────────
