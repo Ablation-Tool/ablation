@@ -3029,6 +3029,36 @@ UCSC_F66 = {
 }
 
 
+# ─────────────────────────────────────────────────────────
+# UCSC-F67 — bundle_unpack.sh executes bundle_extsvc.sh from extracted bundle without integrity check
+# ─────────────────────────────────────────────────────────
+UCSC_F67 = {
+    "id":       "UCSC-F67",
+    "title":    "operation-mgr bundle_unpack.sh executes 'bundle_extsvc.sh' extracted from a firmware "
+                "bundle without verifying its integrity — after extraction, the script checks only for "
+                "file existence and executes it directly ('chmod +x; ./bundle_extsvc.sh'); "
+                "imghdr is called for platform/len/name header metadata only; the img_verify_signature "
+                "exports in imghdr.aci are not invoked for bundle_extsvc.sh; an attacker who can "
+                "supply a malicious bundle (e.g. via the /tmp/hxupgrade_bundle.tgz write path) "
+                "can include an arbitrary bundle_extsvc.sh that executes as the operation-mgr process "
+                "user when the upgrade workflow invokes bundle_unpack.sh",
+    "status":   "CONFIRMED — source analysis; "
+                "operation-mgr151c/opt/cisco/bin/bundle_unpack.sh lines 253-255: "
+                "'if [ -e \\\"${TMP_FILES_DIR}/${BUNDLE_EXTSVC}\\\" ]; then'; "
+                "'/bin/chmod +x ${TMP_FILES_DIR}/${BUNDLE_EXTSVC}'; "
+                "'${TMP_FILES_DIR}/${BUNDLE_EXTSVC}' — direct unquoted execution; "
+                "BUNDLE_EXTSVC='bundle_extsvc.sh' (line 30); "
+                "imghdr calls: platform (line 53), len (lines 92/154/187/277), name (line 188) — "
+                "none invoke img_verify_signature; imghdr.aci exports img_verify_signature and "
+                "rsalib_signature_verify but they are not called in this script path; "
+                "same pattern present in operation-mgr212b/opt/cisco/bin/bundle_unpack.sh",
+    "severity": "HIGH",
+    "source_pkg": "operation-mgr151c (UCS Central operation manager)",
+    "source_ref": "operation-mgr151c/opt/cisco/bin/bundle_unpack.sh "
+                  "(lines 30,253-255: BUNDLE_EXTSVC definition and execution without signature check)",
+}
+
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -3039,7 +3069,7 @@ FINDINGS = [
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
     UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60, UCSC_F61,
-    UCSC_F62, UCSC_F63, UCSC_F64, UCSC_F65, UCSC_F66,
+    UCSC_F62, UCSC_F63, UCSC_F64, UCSC_F65, UCSC_F66, UCSC_F67,
 ]
 
 
