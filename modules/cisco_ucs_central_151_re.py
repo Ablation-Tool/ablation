@@ -2297,20 +2297,21 @@ UCSC_F46 = {
     "id":       "UCSC-F46",
     "title":    "HyperFlex REST API storfs-restapi Tomcat process permanently disables TLS certificate "
                 "verification JVM-globally via HttpsURLConnection.setDefaultSSLSocketFactory(trustAll) "
-                "and setDefaultHostnameVerifier(acceptAll) — 16 gateway client classes across 6 of 11 "
+                "and setDefaultHostnameVerifier(acceptAll) — 17 gateway client classes across 7 of 11 "
                 "WARs call trustAll() on every HTTP Thrift connection, setting JVM-wide defaults that "
                 "persist for the lifetime of the process; all outbound HTTPS connections after any "
                 "management operation skip certificate validation",
-    "status":   "CONFIRMED — strings/javap analysis; 16 classes across iscsi/supportservice/ROOT/"
-                "securityservice/slservice/hxupgrade WARs all contain setDefaultSSLSocketFactory + "
-                "setDefaultHostnameVerifier calls setting process-global trust-all TLS state",
+    "status":   "CONFIRMED — strings/javap analysis; 17 classes across iscsi/supportservice/ROOT/"
+                "securityservice/slservice/hxupgrade/encryption WARs all contain setDefaultSSLSocketFactory"
+                " + setDefaultHostnameVerifier calls setting process-global trust-all TLS state",
     "severity": "HIGH",
     "source_pkg": "storfs-restapi deb (storfs-packages-6.0.2b-44423.tgz)",
-    "affected_warf": [
+    "affected_wars": [
         "iscsi WAR (4 classes): HxIscsiMgrClient, HxIscsiCloneMgrClient, HxSvcMgrClient, StMgrClient",
         "supportservice WAR (4 classes): HxSvcMgrClient, StMgrClient, HxSupportSvcClient, WebDownloader",
         "ROOT WAR (3 classes): WebDownloader, HxSupportSvcAccess, ServiceAccess",
         "securityservice WAR (3 classes): HxSvcMgrClient, HxSecuritySvcMgrClient, StMgrClient",
+        "encryption WAR (1 class): StMgrClient — manages KMIP certs and SED disk encryption keys",
         "slservice WAR (1 class)",
         "hxupgrade WAR (1 class)",
     ],
@@ -2346,6 +2347,123 @@ UCSC_F46 = {
     },
 }
 
+UCSC_F47 = {
+    "id":       "UCSC-F47",
+    "title":    "HyperFlex storfs.py launch wrapper hardcodes LD_LIBRARY_PATH=/root — the storfs "
+                "storage daemon launch script sets LD_LIBRARY_PATH to /root (root home directory) "
+                "at module level before execvp into the storfs binary; if /root permissions are "
+                "permissive or an attacker can write files there, arbitrary shared objects are "
+                "loaded into the storfs process on next service restart",
+    "status":   "CONFIRMED — source analysis; storfs.py line 31: os.environ['LD_LIBRARY_PATH'] = '/root'; "
+                "storfs.conf launches storfs.py as root with no setuid directive; storfs binary "
+                "inherits the environment and searches /root first for shared libraries",
+    "severity": "MEDIUM",
+    "source_pkg": "storfs-core-data deb (storfs-packages-6.0.2b-44423.tgz)",
+    "technical_detail": (
+        "storfs.py sets LD_LIBRARY_PATH to /root unconditionally at module scope (line 31), "
+        "before any argument parsing or privilege checks. The Upstart job storfs.conf (no setuid "
+        "directive) runs storfs.py as root. storfs.py then calls os.execvp('/opt/springpath/storfs-core/storfs', ...) "
+        "which inherits the modified environment. The storfs binary dynamic linker resolves "
+        "shared libraries by searching LD_LIBRARY_PATH first: /root is searched before /lib, "
+        "/usr/lib, and other system paths.\n"
+        "Impact: A local process with write access to /root (or if /root permissions are not 0700) "
+        "can plant a .so file whose name matches any library linked by storfs (e.g., libstorfs.so, "
+        "libstdc++.so.6, libc.so.6). The malicious .so is loaded on the next storfs restart. "
+        "Since storfs is the primary storage daemon for the HyperFlex controller VM, code execution "
+        "in this context provides access to all storage data paths.\n"
+        "The /root path is not a legitimate shared library directory and its presence is a "
+        "development artifact that was never removed from production code."
+    ),
+    "source_ref": "storfs-core-data/opt/springpath/storfs-core/storfs.py:31",
+}
+
+UCSC_F48 = {
+    "id":       "UCSC-F48",
+    "title":    "UCS Central bundle_unpack.sh uses tar --absolute-names (-P) on bundle payload — "
+                "the firmware bundle unpack script extracts the tar payload inside Cisco bundles "
+                "with the -P flag (preserve absolute paths), allowing tar members with absolute "
+                "paths to be written to arbitrary filesystem locations rather than being confined "
+                "to the working directory",
+    "status":   "CONFIRMED — source analysis; bundle_unpack.sh: tar zxkPpmvf - (P flag present); "
+                "applied to all four bundle types (switch/chassis/third-party/provider) during "
+                "image installation; both 1.5.1c and 2.1.2b versions affected",
+    "severity": "MEDIUM",
+    "source_pkg": "operation-mgr (operation-mgr151c, operation-mgr212b)",
+    "technical_detail": (
+        "bundle_unpack.sh processes firmware bundles via:\n"
+        "  cd ${TMP_FILES_DIR}\n"
+        "  /bin/dd if=${BUNDLE_BASE_DIR}/${BUNDLE_NAME} skip=1 bs=$BS | tar zxkPpmvf -\n"
+        "The -P flag (--absolute-names) instructs GNU tar not to strip leading '/' from member "
+        "names. Without -P, GNU tar strips leading slashes, confining extraction to the working "
+        "directory. With -P, a tar member named '/etc/cron.d/malicious' is written to "
+        "'/etc/cron.d/malicious' rather than './etc/cron.d/malicious'.\n"
+        "The -k flag (keep, do not overwrite existing files) limits overwrite of existing system "
+        "files, but new files at arbitrary absolute paths can be created. Attackers who can "
+        "supply a bundle with a valid Cisco image header wrapping a crafted tar payload can "
+        "write arbitrary new files to the UCS Central appliance filesystem during bundle "
+        "installation. Plausible new-file targets: /etc/cron.d/, /etc/init/, /etc/sudoers.d/, "
+        "/root/.ssh/authorized_keys (if not present).\n"
+        "The bundle_extsvc.sh execution at line:\n"
+        "  ${TMP_FILES_DIR}/${BUNDLE_EXTSVC}\n"
+        "provides a direct code execution path: if the tar payload includes bundle_extsvc.sh, "
+        "the script is made executable and run immediately after extraction."
+    ),
+    "source_ref": "operation-mgr151c/opt/cisco/bin/bundle_unpack.sh",
+}
+
+UCSC_F49 = {
+    "id":       "UCSC-F49",
+    "title":    "UCS Central bundle_unpack.sh recursively sets world-writable permissions on "
+                "firmware staging and download directories — chmod 777 applied to unpacking "
+                "scratch directories and chmod a+w /opt/cisco/download -R applied to the "
+                "permanent download directory after every provider image installation",
+    "status":   "CONFIRMED — source analysis; bundle_unpack.sh: chmod 777 ${TMP_FILES_DIR}; "
+                "chmod 777 ${TMP_IMAGES_DIR}; chmod 777 ${TMP_SCRATCH_DIR}; "
+                "chmod a+w /opt/cisco/download -R (permanent, not cleaned up)",
+    "severity": "LOW",
+    "source_pkg": "operation-mgr (operation-mgr151c, operation-mgr212b)",
+    "technical_detail": (
+        "bundle_unpack.sh applies chmod 777 to three scratch directories during bundle processing "
+        "and, for provider-type images (PLATFORM==18), applies chmod a+w /opt/cisco/download -R "
+        "to make the persistent download directory world-writable. The download directory stores "
+        "softlinks pointing to installed firmware images. A local attacker with any shell access "
+        "can:\n"
+        "  1. Replace softlinks in /opt/cisco/download/ with symlinks pointing to attacker-controlled "
+        "files, poisoning subsequent firmware operations that follow these links.\n"
+        "  2. Write files into the scratch directories during the window when they are world-writable "
+        "to inject content that is subsequently processed or linked into the installable tree.\n"
+        "The scratch directory window is transient but /opt/cisco/download remains world-writable "
+        "after any provider image has been installed."
+    ),
+    "source_ref": "operation-mgr151c/opt/cisco/bin/bundle_unpack.sh",
+}
+
+UCSC_F50 = {
+    "id":       "UCSC-F50",
+    "title":    "UCS Central sam-copy.sh passes file transfer credentials as plaintext command-line "
+                "arguments — the Tcl/Expect file transfer script accepts passwords via argv[6] "
+                "and environment variable SAM_COPY_PASSWD; passwords passed as argv[6] are visible "
+                "in process listings (ps aux) to any local user",
+    "status":   "CONFIRMED — source analysis; sam-copy.sh (Tcl/Expect script): "
+                "set pass [lindex $argv 6]; password sourced from CLI arg when SAM_COPY_PASSWD "
+                "env var absent; script handles SCP, SFTP, FTP, TFTP protocols with explicit "
+                "password handling; both 1.5.1c and 2.1.2b versions affected",
+    "severity": "LOW",
+    "source_pkg": "operation-mgr (operation-mgr151c, operation-mgr212b)",
+    "technical_detail": (
+        "sam-copy.sh is a Tcl/Expect script invoked as:\n"
+        "  sam-copy.sh <protocol> <copyin|copyout> <server> <localfile> <remotefile> <user> [<passwd>]\n"
+        "When passwd is supplied as argv[6], it is passed to the scp/sftp/ftp/tftp spawn commands "
+        "and visible in /proc/<pid>/cmdline and ps aux output. Any local process with /proc read "
+        "access (typically all local users) can read the password mid-transfer.\n"
+        "The fallback is SAM_COPY_PASSWD environment variable, but callers that use argv[6] "
+        "expose the credential. This script is called by the operation-mgr Java DME daemon for "
+        "inter-domain file transfers (firmware images, backup files), so the credentials belong "
+        "to remote system accounts (peer UCS domains, external storage servers)."
+    ),
+    "source_ref": "operation-mgr151c/opt/cisco/bin/sam-copy.sh",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2353,7 +2471,8 @@ FINDINGS = [
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
-    UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46,
+    UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
+    UCSC_F50,
 ]
 
 
