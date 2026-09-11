@@ -300,7 +300,94 @@ ARCHITECTURE_NOTES = {
     ),
 }
 
-FINDINGS = [HUU436_F1, HUU436_F2, HUU436_F3, HUU436_F4, HUU436_F5, HUU436_F6]
+# ─────────────────────────────────────────────────────────
+# HUU436-F7: builder:builder hardcoded credential in all HUU 4.3.6 container base tarballs
+#             DES crypt hash .gLibiNXn0P12 — cracked: password = "builder"
+#             Absent in HUU 6.0.2 (fixed)
+# ─────────────────────────────────────────────────────────
+HUU436_F7 = {
+    "id":       "HUU436-F7",
+    "title":    "HUU 4.3.6 container base tarballs (C220, C220-039, C245) ship hardcoded "
+                "builder:builder credential (DES crypt .gLibiNXn0P12) — absent in HUU 6.0.2",
+    "status":   "CONFIRMED — huu436-c220-base/etc/shadow, huu436-c220-039-base/etc/shadow, "
+                "huu436-c245-base/etc/shadow; cracked via python3 crypt module",
+    "severity": "CRITICAL",
+
+    "shadow_entry":   "builder:.gLibiNXn0P12:15069::",
+    "hash_type":      "DES crypt (13 chars, 2-char salt '.g')",
+    "cracked_pass":   "builder",
+    "uid_gid":        "999:999",
+    "home_shell":     "/home/builder — /bin/sh",
+
+    "affected_variants": [
+        "huu436-c220-base/etc/shadow",
+        "huu436-c220-039-base/etc/shadow",
+        "huu436-c245-base/etc/shadow",
+    ],
+
+    "scope_across_versions": {
+        "HUU 4.3.2 (C480 M5)":    ".gLibiNXn0P12 — PRESENT (same hash, uid 998)",
+        "HUU 4.3.6 (C220/C245)":  ".gLibiNXn0P12 — PRESENT (uid 999)",
+        "HUU 6.0.2 (all M8)":     "builder ABSENT — FIXED",
+    },
+
+    "description": (
+        "All HUU 4.3.6 container base tarballs contain /etc/shadow with an active builder account. "
+        "The DES crypt hash '.gLibiNXn0P12' decodes to password 'builder' using 2-char salt '.g'. "
+        "During an active HUU upgrade session the container OS is reachable; builder provides "
+        "shell access with /bin/sh. Fixed in HUU 6.0.2 (builder account absent)."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU436-F8: cis@123co default root password artifact in container init.sh
+# ─────────────────────────────────────────────────────────
+HUU436_F8 = {
+    "id":       "HUU436-F8",
+    "title":    "HUU 4.3.6 container init.sh contains commented-out usermod with default root "
+                "password 'cis@123co' — development credential artifact in shipping firmware",
+    "status":   "CONFIRMED — etc/init.sh line 94 in all three HUU 4.3.6 variants",
+    "severity": "MEDIUM",
+
+    "source_file": "etc/init.sh",
+    "source_line": 94,
+    "artifact":    "# chroot $ROOTFS_DIR sh -c \"usermod --password $(openssl passwd cis@123co) root\"",
+    "password":    "cis@123co",
+    "current_root": "root:* (disabled — the commented line is not executed)",
+
+    "note": (
+        "Plaintext credential artifact embedded in the production init script. "
+        "Not present in HUU 4.3.2 C480 init.sh. Specific to the 4.3.6 variants."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU436-F9: imgverify exits 0 when IMG_VERIFY != "1" in HUU 4.3.6 container rootfs
+#             Extends HUU-F7 scope to 4.3.6; same bypass confirmed in SCU 7.1.7 (2018) and HUU 4.3.2
+# ─────────────────────────────────────────────────────────
+HUU436_F9 = {
+    "id":       "HUU436-F9",
+    "title":    "imgverify in HUU 4.3.6 container rootfs exits 0 when IMG_VERIFY != '1' — "
+                "hsu-init calls imgverify without setting IMG_VERIFY; bypass in every HUU examined",
+    "status":   "CONFIRMED — huu436-c220-rootfs/usr/sbin/imgverify + hsu-init:75",
+    "severity": "HIGH",
+
+    "bypass_line":    'if [ "$IMG_VERIFY" != "1" ]; then exit 0; fi',
+    "call_site":      "hsu-init:75 — imgverify /tmp/ucs-*-container-*-base.tar.gz",
+    "img_verify_set": False,
+
+    "cross_version": {
+        "SCU 7.1.7 (rootfs 2018)":  "PRESENT — oldest confirmed occurrence",
+        "HUU 4.3.2 (C480 M5)":      "PRESENT",
+        "HUU 4.3.6 (C220/C245)":    "PRESENT — this finding",
+        "HUU 6.0.2 (all M8)":       "PRESENT (HUU-F7) — never patched",
+    },
+}
+
+FINDINGS = [
+    HUU436_F1, HUU436_F2, HUU436_F3, HUU436_F4, HUU436_F5, HUU436_F6,
+    HUU436_F7, HUU436_F8, HUU436_F9,
+]
 
 if __name__ == "__main__":
     for f in FINDINGS:
