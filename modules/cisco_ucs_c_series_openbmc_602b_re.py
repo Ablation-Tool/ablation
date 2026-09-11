@@ -22,6 +22,17 @@ xz stream inventory (21 streams total):
   18: ARM32 ELF — xyz.openbmc_project.software.Activation D-Bus service (armhf)
   19-20: binary data
 
+Corrected xz stream inventory (session 14 full scan):
+  Total streams: 725 (not 21 as initially logged — streams 21+ are additional OpenBMC services)
+  Composition: 208 ARM32 ELF binaries | 80 text segments | 434 binary blobs | 3 unreadable
+  Stream 33: bios_config D-Bus service (Password/SecureBoot/BootOrder interfaces)
+  Stream 40: sdbusplus + OpenSSL TLS service (EVP_sha256, EVP_aes_256_cbc, X509)
+  Stream 109: SASL PLAIN authentication strings (cyrus-sasl/openldap component)
+  Stream 299: SCP firmware download script with eval injection + /tmp/scp.args TOCTOU
+  Stream 432: HPKE OpenSSL implementation strings (hpke_do_middle, psk_id_hash, base_nonce)
+  Stream 640: PAM authentication module (pam_sm_authenticate, @PAMERR@ unfilled template var)
+  Stream 700: tokenizer with /bin/sh execution
+
 Key finding: Cisco C-Series CIMC runs OpenBMC with Cisco-specific D-Bus extensions.
 All xz streams are bare (no per-stream integrity wrapper); protected only by outer SN MD5
 (same BCSERIES-F1 vulnerability applies).
@@ -44,7 +55,7 @@ FIRMWARE = {
                        "confirmed different from plugin-level algorithm",
     },
     "architecture": "OpenBMC on ARMv7-A hard-float (armhf); systemd + D-Bus",
-    "findings":    ["CSERIES-F1", "CSERIES-F2", "CSERIES-F3", "CSERIES-F4"],
+    "findings":    ["CSERIES-F1", "CSERIES-F2", "CSERIES-F3", "CSERIES-F4", "CSERIES-F5", "CSERIES-F6"],
 }
 
 CSERIES_F1 = {
@@ -185,4 +196,92 @@ CSERIES_F4 = {
                     "CIMC reads EEPROM and passes raw bytes to FruReader parser; "
                     "malformed EEPROM data → parser crashes or corrupts dpu service heap",
     "attack_prerequisite": "Physical access to server or out-of-band EEPROM write capability",
+}
+
+CSERIES_F5 = {
+    "id":       "CSERIES-F5",
+    "title":    "SCP firmware download script uses eval on unvalidated $target parameter from "
+                "/tmp/scp.args — copy-paste validation bug leaves target path unvalidated; "
+                "TOCTOU via world-writable /tmp/ enables command injection as root",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — full shell script extracted from xz stream 299 (ARM32 PIE ELF "
+                "container with embedded shell scripts); target validation regex confirms "
+                "copy-paste bug; eval and /tmp/scp.args pattern confirmed verbatim",
+    "cwe":      ["CWE-78 (OS Command Injection)", "CWE-377 (Insecure Temporary File)", "CWE-367 (TOCTOU)"],
+    "file":     "xz stream 299 @ offset 224440940 — embedded in ARM32 PIE ELF",
+    "verbatim_bug": {
+        "intended_check": "validate $target with pattern ^[a-zA-Z0-9_./-]+$",
+        "actual_code":    "[[ ! $filename =~ ^[a-zA-Z0-9_./-]+$ ]]  # checks $filename, NOT $target",
+        "consequence":    "$target passes through to eval with no sanitization",
+    },
+    "verbatim_injection": (
+        'scp_command="scp $scp_options $username@$serverAddress:$sourceFilePath $target '
+        '>> \\"$log_file\\" 2>&1 < /dev/null &"\n'
+        'eval "$scp_command"'
+    ),
+    "toctou": {
+        "temp_file":    "/tmp/scp.args",
+        "access":       "world-writable /tmp/ — any local shell user can create/overwrite before service reads",
+        "format":       "key=value lines: serverAddress, username, sourceFilePath, target",
+        "exploited_via": "target variable injected into eval-executed scp_command",
+    },
+    "dbus_interface": {
+        "service":    "xyz.openbmc_project.Software.Download",
+        "object":     "/xyz/openbmc_project/software",
+        "interfaces": ["xyz.openbmc_project.Common.DownloadProgress"],
+        "trigger_note": "Script triggered by Download service; D-Bus policy determines who can "
+                        "initiate download (auth model not yet confirmed from policy file)",
+    },
+    "exploit_sketch": (
+        '# TOCTOU: race /tmp/scp.args before service creates it\n'
+        'echo -e "serverAddress=x\\nusername=x\\nsourceFilePath=x\\n'
+        'target=/tmp/x; id>/tmp/pwned #" > /tmp/scp.args\n'
+        '# Then trigger firmware download via Redfish/D-Bus\n'
+        '# eval executes "id > /tmp/pwned" as Download service user (root on OpenBMC)'
+    ),
+    "other_embedded_scripts": {
+        "ipmitool_raw_user_create": (
+            "ipmitool raw 0x2c 0xF2 0x52 0xa5 0x0/1 creates NvBluefieldUefi0/1 IPMI users "
+            "via raw IPMI command — bypasses standard ipmi user management and audit logging"
+        ),
+        "aspeed_cs0_reset": (
+            "echo 1 > /sys/class/watchdog/watchdog1/access_cs0 post-shutdown resets ASPEED "
+            "chip select to primary flash CS0 — confirms ASPEED BMC with dual-SPI flash"
+        ),
+    },
+    "note": "Stream 299 ELF also embeds pwmake/pwscore (libpwquality), scmp_sys_resolver "
+            "(libseccomp syscall resolver), ipmitool raw commands, and systemd service install "
+            "scripts — confirms CIMC uses seccomp sandboxing and has IPMI raw OEM extensions.",
+}
+
+CSERIES_F6 = {
+    "id":       "CSERIES-F6",
+    "title":    "OpenBMC bios_config D-Bus service exposes Password, SecureBoot, and BootOrder "
+                "interfaces — if D-Bus policy allows non-admin access, CIMC shell user can read "
+                "BIOS password hash or disable Secure Boot without physical access",
+    "severity": "MEDIUM",
+    "status":   "CANDIDATE — bios_config D-Bus vtable symbols confirmed from xz stream 33 "
+                "(ARM32 shared object, sdbusplus + boost::asio); D-Bus policy not yet extracted",
+    "cwe":      ["CWE-284 (Improper Access Control)", "CWE-269 (Improper Privilege Management)"],
+    "file":     "xz stream 33 @ offset 212917602",
+    "dbus_interfaces": {
+        "service": "xyz.openbmc_project.bios_config (Manager service)",
+        "Password": {
+            "vtable": "_ZTVN9sdbusplus6server3xyz15openbmc_project11bios_config8PasswordE",
+            "threat": "read BIOS password hash or overwrite BIOS password via D-Bus property setter",
+        },
+        "SecureBoot": {
+            "vtable": "_ZTVN9sdbusplus6server3xyz15openbmc_project11bios_config10SecureBootE",
+            "threat": "disable Secure Boot via D-Bus property without requiring physical BIOS menu access",
+        },
+        "BootOrder": {
+            "vtable": "_ZTVN9sdbusplus6server3xyz15openbmc_project11bios_config9BootOrderE",
+            "threat": "modify boot device priority to boot from attacker-controlled media",
+        },
+    },
+    "exploit_sketch": (
+        "busctl get-property xyz.openbmc_project.BiosConfigManager "
+        "/xyz/openbmc_project/bios_config/manager "
+        "xyz.openbmc_project.BIOSConfig.Manager BaseBIOSTable"
+    ),
 }
