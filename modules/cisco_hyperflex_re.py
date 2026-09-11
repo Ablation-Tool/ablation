@@ -1332,7 +1332,47 @@ HX_F017 = {
     "tags": ["stub-library", "dare-bypass", "filesystem-write", "cwe-311", "medium"],
 }
 
-for _f in [HX_F015, HX_F016, HX_F017]:
+# ── HX-F018 ──────────────────────────────────────────────────────────────────
+HX_F018 = {
+    "id":       "HX-F018",
+    "title":    "hxupgrade.war UpgradeSvcAccess.trustAll() calls HttpsURLConnection."
+                "setDefaultSSLSocketFactory() and setDefaultHostnameVerifier() — JVM-wide "
+                "TLS bypass in the firmware upgrade service; MITM of upgrade HTTPS connections "
+                "enables malicious firmware delivery to stCtlVM",
+    "status":   "CONFIRMED — constant pool of UpgradeSvcAccess.class and anonymous inner "
+                "classes $1/$2 from storfs-restapi_6.0.2b-44423_amd64.deb hxupgrade.war",
+    "severity": "HIGH",
+
+    "class_path":  "com.springpath.hxupgrade.service.UpgradeSvcAccess",
+    "inner_classes": {
+        "UpgradeSvcAccess$1": "implements javax.net.ssl.X509TrustManager — empty "
+                              "checkClientTrusted() and checkServerTrusted(); calls parent trustAll()",
+        "UpgradeSvcAccess$2": "implements javax.net.ssl.HostnameVerifier — verify() returns true; "
+                              "enclosing method = UpgradeSvcAccess.trustAll()",
+    },
+    "jvm_global_calls": [
+        "javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(nullTrustFactory)  // bytecode offset 38",
+        "javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(alwaysTrueVerifier) // bytecode offset 50",
+    ],
+    "distinction_from_HX_F015": (
+        "HX-F015 covers securityservice.war + encryption.war (internal localhost connections: "
+        "StMgr on 9333, HxSecuritySvcMgr on 8055). HX-F018 is the upgrade service — "
+        "UpgradeSvcAccess makes HTTPS connections to external firmware repositories "
+        "(software.cisco.com or internal proxy). trustAll() before external download "
+        "allows MITM to substitute any firmware image for a legitimate Cisco package."
+    ),
+    "impact": (
+        "Attacker on management VLAN intercepts HTTPS firmware download from hxupgrade.war "
+        "and serves a malicious package. Because the JVM-wide override applies at the Java "
+        "runtime level, any certificate (self-signed, expired, wrong CN) is accepted. "
+        "Successful MITM delivers attacker-controlled .deb/.pkg to stCtlVM and executes "
+        "as part of the upgrade flow, achieving persistent code execution on the HyperFlex "
+        "storage controller VM."
+    ),
+    "tags": ["tls-bypass", "jvm-global", "mitm", "firmware-supply-chain", "cwe-295", "high"],
+}
+
+for _f in [HX_F015, HX_F016, HX_F017, HX_F018]:
     FINDINGS[_f["id"]] = _f
 
 FINDINGS_LIST = list(FINDINGS.values())
