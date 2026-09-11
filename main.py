@@ -30,6 +30,9 @@ Usage:
     ./ablation --axis-license PATH - licensekey_verify bypass vectors (SipThirdPartyIntegration)
     ./ablation --axis-bodyworn PATH - BodyWornLiveSelfHosted WebRTC/TURN/JWT attack surface
     ./ablation --axis-frida PATH   - Frida license bypass script for AXIS ACAP binary
+    ./ablation --fujitsu           - Fujitsu PRIMERGY/PRIMEQUEST iRMC firmware RE: all 13 findings (F1-F13)
+    ./ablation --fujitsu-chain     - Print critical exploit chain (F1->F5->RCE / F13 DDNS->execdaemon)
+    ./ablation --fujitsu-json      - Dump all findings as JSON to /tmp/fujitsu-irmc-re.json
     ./ablation --mcp-fuzz          - Grammar-guided MCP tool schema fuzzer (prompt injection discovery)
     ./ablation --mcp-fuzz-dry-run  - Print one sample MCP manifest (no Atheris required)
     ./ablation --func-db-seed      - Seed function ID DB from all confirmed RE sources
@@ -297,6 +300,14 @@ try:
 except ImportError:
     HAS_API_RE = False
     api_re_run = None
+
+try:
+    from modules.fujitsu_irmc_re import ALL_FINDINGS as FUJITSU_FINDINGS, SUMMARY as FUJITSU_SUMMARY
+    HAS_FUJITSU_RE = True
+except ImportError:
+    HAS_FUJITSU_RE = False
+    FUJITSU_FINDINGS = None
+    FUJITSU_SUMMARY = None
 
 
 MACSTADIUM_ASAS = [
@@ -1111,6 +1122,10 @@ def main():
     parser.add_argument('--api-re-depth', choices=['quick', 'normal', 'deep'], default='normal', help='api-re depth (default: normal)')
     parser.add_argument('--api-re-focus', choices=['injection', 'schema', 'state', 'jwt', 'auth', 'bola'], help='api-re focus dimension')
     parser.add_argument('--api-re-output', metavar='FILE', help='Write api-re JSON report to file')
+
+    parser.add_argument('--fujitsu', action='store_true', help='Fujitsu PRIMERGY/PRIMEQUEST iRMC firmware RE: print all 13 findings (F1-F13)')
+    parser.add_argument('--fujitsu-chain', action='store_true', help='Print Fujitsu critical exploit chain summary')
+    parser.add_argument('--fujitsu-json', action='store_true', help='Dump Fujitsu findings JSON to /tmp/fujitsu-irmc-re.json')
 
     args = parser.parse_args()
     
@@ -2086,6 +2101,29 @@ def main():
             with open(args.api_re_output, "w") as fh:
                 json.dump(out, fh, indent=2)
             print(f"[+] Report: {args.api_re_output}")
+
+    elif getattr(args, 'fujitsu', False) or getattr(args, 'fujitsu_chain', False) or getattr(args, 'fujitsu_json', False):
+        if not HAS_FUJITSU_RE:
+            print("[-] fujitsu_irmc_re module not available")
+            sys.exit(1)
+        if getattr(args, 'fujitsu_chain', False):
+            print("[FUJITSU iRMC] CRITICAL CHAIN:")
+            print(FUJITSU_SUMMARY['chain'])
+            print()
+            print("CRITICAL findings:", ', '.join(FUJITSU_SUMMARY['critical']))
+            print("HIGH findings:    ", ', '.join(FUJITSU_SUMMARY['high']))
+            print("MEDIUM findings:  ", ', '.join(FUJITSU_SUMMARY['medium']))
+            print("PENDING:          ", ', '.join(FUJITSU_SUMMARY['pending']))
+        elif getattr(args, 'fujitsu_json', False):
+            out_path = "/tmp/fujitsu-irmc-re.json"
+            with open(out_path, "w") as fh:
+                json.dump({'findings': FUJITSU_FINDINGS, 'summary': FUJITSU_SUMMARY}, fh, indent=2, default=str)
+            print(f"[+] Report: {out_path}")
+        else:
+            for f in FUJITSU_FINDINGS:
+                print(f"[{f['severity']:50s}] {f['id']}: {f['title']}")
+            print()
+            print("CHAIN:", FUJITSU_SUMMARY['chain'])
 
     else:
         ablation.run_autonomous()
