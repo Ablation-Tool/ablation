@@ -20,8 +20,9 @@ FIRMWARE = {
     "iso_build":   "20260728224455",
     "rootfs":      "rootfs.img — squashfs v4.0 lz4, 136MB, 4395 inodes",
     "container":   "ucs-c480m5-huu-container-4.2.3r.squashfs — 531MB lz4",
-    "findings":    ["HUU-M5-F1", "HUU-M5-F2", "HUU-M5-F3"],
-    "key_package": "root/hsu.tgz.enc — AES-256-CBC, decrypted with same key as M8 family",
+    "findings":    ["HUU-M5-F1", "HUU-M5-F2", "HUU-M5-F3", "HUU-M5-F4"],
+    "key_package": "root/hsu.tgz.enc — AES-256-CBC PBKDF2-SHA256 WITH SALT (Salted__ header, 2.1MB); "
+                   "later builds (4.3.2+) regressed to -nosalt, removing per-encryption salt uniqueness",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -142,7 +143,56 @@ HUU_M5_F3 = {
     ),
 }
 
-FINDINGS = [HUU_M5_F1, HUU_M5_F2, HUU_M5_F3]
+# ─────────────────────────────────────────────────────────────────────────────
+# HUU-M5-F4: C480M5 4.2.3r hsu.tgz.enc uses salted PBKDF2-SHA256 — same
+#             password zfguijkophju@*%1] but WITH salt (Salted__ header, 2.1MB);
+#             later builds (4.3.2+) regressed to -nosalt, removing per-encryption
+#             uniqueness. Also establishes earliest confirmed hsu.tgz.enc instance.
+# ─────────────────────────────────────────────────────────────────────────────
+HUU_M5_F4 = {
+    "id":       "HUU-M5-F4",
+    "title":    "C480M5 4.2.3r hsu.tgz.enc uses salted PBKDF2-SHA256; 4.3.2+ regressed to "
+                "-nosalt — cryptographic regression removes per-encryption salt uniqueness "
+                "across all HUU M5/M8 builds",
+    "status":   "CONFIRMED — file header 5361 6c74 6564 5f5f ('Salted__'), decrypt verified, "
+                "4.3.2+ confirmed -nosalt via M5-F1 / HUU436-F11",
+    "severity": "HIGH",
+
+    "4.2.3r_format": {
+        "file":        "root/hsu.tgz.enc (container squashfs)",
+        "size":        "2.1MB (vs 29–31MB in 4.3.6 / 6.0.2)",
+        "header":      "5361 6c74 6564 5f5f — standard OpenSSL 'Salted__' magic",
+        "kdf":         "PBKDF2-SHA256 with random 8-byte salt (standard openssl enc default)",
+        "decrypt_cmd": "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 "
+                       "-in root/hsu.tgz.enc -k 'zfguijkophju@*%1]'",
+        "app_files":   "149 entries — earlier simpler app: nihuu.py, json_api.py, "
+                       "python_api.py, server_linux.py, validate_catalog.py, nginx.conf",
+    },
+
+    "4.3.2_regression": {
+        "kdf":         "PBKDF2-SHA256 WITHOUT salt (-nosalt flag explicit)",
+        "size":        "29MB (4.3.6) / 31MB (6.0.2) — app significantly expanded",
+        "decrypt_cmd": "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 -nosalt "
+                       "-in root/hsu.tgz.enc -k 'zfguijkophju@*%1]'",
+        "impact":      "nosalt → ciphertext is deterministic for a given plaintext and key; "
+                       "enables precomputed block-level correlation without salt randomization",
+    },
+
+    "timeline": {
+        "4.2.3r": "SALTED — per-encryption uniqueness present",
+        "4.3.2":  "NOSALT regression introduced — confirmed by HUU432-F1 kdf_m5 field",
+        "4.3.6":  "NOSALT — confirmed by HUU436-F11",
+        "6.0.2":  "NOSALT — confirmed by HUU-F11",
+    },
+
+    "dead_code_note": (
+        "nihuu.py:519 execute_tsa_command() — shell=True cmd concatenation with mode/file_name/index; "
+        "defined in class but zero callers in 4.2.3r codebase. "
+        "Wired and active in 6.0.2 host_bmc_transport.py."
+    ),
+}
+
+FINDINGS = [HUU_M5_F1, HUU_M5_F2, HUU_M5_F3, HUU_M5_F4]
 
 if __name__ == "__main__":
     for f in FINDINGS:
