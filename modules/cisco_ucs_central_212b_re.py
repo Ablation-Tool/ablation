@@ -266,7 +266,57 @@ UCSC21_F7 = {
     ),
 }
 
-FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6, UCSC21_F7]
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F8: csl_update.sh hardcodes /var/mount_to/ucsCentral/newRPMList as
+#             dnf install input — unsanitized package list injection surface;
+#             also leaks internal Cisco Artifactory URL
+# Source: ucsCentral/csl_update.sh in ucs-central.2.1.2b_EVAL.iso
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F8 = {
+    "id":       "UCSC21-F8",
+    "title":    "csl_update.sh reads package list from hardcoded path /var/mount_to/ucsCentral/newRPMList "
+                "and passes contents unsanitized to 'dnf install -y'; Cisco internal Artifactory URL "
+                "engci-maven-master.cisco.com hardcoded in production installer",
+    "status":   "CONFIRMED — ucsCentral/csl_update.sh lines 67, 270-273 in ucs-central.2.1.2b_EVAL.iso",
+    "severity": "LOW",
+
+    "source_file": "ucsCentral/csl_update.sh",
+
+    "vulnerable_code": (
+        "newInstallablesFile=\"/var/mount_to/ucsCentral/newRPMList\"  # hardcoded, NOT from $file_system_to_dir arg\n"
+        "if [ -f $newInstallablesFile ]; then\n"
+        "    dnf install -y $( cat $newInstallablesFile )  # unquoted command substitution, no sanitization\n"
+        "fi"
+    ),
+
+    "injection_surface": (
+        "The ISO mount point is taken from the -d argument ($file_system_to_dir), but newRPMList is "
+        "always read from the hardcoded path /var/mount_to/ucsCentral/newRPMList. "
+        "If /var/mount_to/ is accessible before the ISO is mounted (or after it is unmounted), "
+        "an attacker who can write /var/mount_to/ucsCentral/newRPMList controls the package list "
+        "passed to 'dnf install -y'. "
+        "The ISO content itself (newRPMList = 'net-snmp-utils') is legitimate, "
+        "but the unquoted $( cat $newInstallablesFile ) means newlines and shell-interpreted sequences "
+        "in the file are passed as separate dnf arguments. "
+        "Injection examples: '--enablerepo=malicious-repo' (enables attacker repo), "
+        "'/path/to/local.rpm' (installs local RPM as root)."
+    ),
+
+    "internal_url_leak": (
+        "Line 67: INTERNAL_REPO_URL=\"https://engci-maven-master.cisco.com/artifactory\" "
+        "Cisco's internal Maven/Artifactory server URL is hardcoded in the shipped production installer. "
+        "This exposes the internal artifact repository hostname and URL pattern."
+    ),
+
+    "additional_note": (
+        "csl_update.sh version 1.9.1, copyright 2022-2023 Cisco Systems. "
+        "The script uses GPG key ID 'e233794d-58684680' (RPM-GPG-KEY-CSL-AlmaLinux{,-9}) "
+        "to validate CSL package signatures. "
+        "Absent in 1.5.1c (new script for the AlmaLinux 9 base OS migration in 2.1.x)."
+    ),
+}
+
+FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6, UCSC21_F7, UCSC21_F8]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 
 if __name__ == "__main__":
