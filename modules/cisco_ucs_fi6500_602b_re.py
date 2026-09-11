@@ -16,7 +16,7 @@ FIRMWARE = {
     "key_rpms":   "nginx-1.25.4, pam-plugin-debug-1.3.0, python3-debugger-3.8.20",
     "findings":   ["FI6500-F1", "FI6500-F2", "FI6500-F3", "FI6500-F4",
                    "FI6500-F5", "FI6500-F6", "FI6500-F7", "FI6500-F8",
-                   "FI6500-F9"],
+                   "FI6500-F9", "FI6500-F10", "FI6500-F11", "FI6500-F12"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -385,7 +385,122 @@ FI6500_F9 = {
     ],
 }
 
-FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5, FI6500_F6, FI6500_F7, FI6500_F8, FI6500_F9]
+# ─────────────────────────────────────────────────────────
+# FI6500-F10: SUID cmosio — unprivileged CMOS dump and factory reset
+# Source: fi6400-extract/rootfs/isanboot/bin/cmosio (x86-64 ELF, SUID root)
+# ─────────────────────────────────────────────────────────
+FI6500_F10 = {
+    "id":       "FI6500-F10",
+    "title":    "NX-OS FI /isanboot/bin/cmosio ships SUID root — any authenticated user "
+                "can dump CMOS content (-d), reset CMOS to factory defaults (-R), or "
+                "change boot mode (-w bootmode g|p|p2g|g2p) without elevated privileges",
+    "status":   "CONFIRMED — cmosio ELF in fi6400 rootfs (SUID 4755); source build tag "
+                "@@TGT@@ucs/x86_64/final/cmosio/supe-boot/cmosio.bin; /dev/cmos opened directly",
+    "severity": "HIGH",
+
+    "binary_path":  "/isanboot/bin/cmosio",
+    "file_mode":    "SUID 4755 (root owner)",
+    "device_path":  "/dev/cmos",
+    "operations": {
+        "-d":                      "Dump full CMOS RAM contents to stdout",
+        "-R":                      "Reset CMOS to factory defaults on next reboot — clears boot config",
+        "-w bootmode g|p|p2g|g2p": "Change supervisor boot mode (gold/provisioned image selection)",
+        "-w ip|mask|gw <addr>":    "Write IP/netmask/gateway to CMOS (management network override)",
+        "-w server <addr>":        "Write TFTP/boot server address to CMOS",
+        "write-offset / read-offset": "Direct CMOS byte read/write by offset",
+    },
+    "impact": (
+        "Any user with a shell on the FI (e.g., via a prior finding) can: (1) dump CMOS "
+        "RAM to extract boot configuration and any stored network credentials; "
+        "(2) trigger factory reset via CMOS clearing, reverting the FI to default config "
+        "on next reboot and breaking production connectivity; (3) switch supervisor to gold "
+        "image bypassing provisioned NX-OS image. The -w bootmode p2g switch causes the "
+        "supervisor to boot the gold/recovery image, bypassing any hardened provisioned image."
+    ),
+    "applies_to": ["FI 6400", "FI 6500 (FI64XX-F1)", "FI 6600 (FI64XX-F1)"],
+    "tags":      ["suid", "hardware-access", "cmos", "dos", "cwe-276", "high"],
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F11: SUID security_hash_type.py — PAM password hash algorithm downgrade
+# Source: fi6400-extract/rootfs/isan/python3/scripts/security_hash_type.py (SUID root)
+# ─────────────────────────────────────────────────────────
+FI6500_F11 = {
+    "id":       "FI6500-F11",
+    "title":    "NX-OS FI /isan/python3/scripts/security_hash_type.py ships SUID root — "
+                "any authenticated user can downgrade the FI password hash algorithm from "
+                "scrypt to SHA-256 by passing -type sha256 without elevated privileges",
+    "status":   "CONFIRMED — security_hash_type.py in fi6400 rootfs with SUID 4755; "
+                "modifies /etc/pam.d/passwd inline; accepts -type {scrypt|pbkdf2|sha256}",
+    "severity": "MEDIUM",
+
+    "script_path":  "/isan/python3/scripts/security_hash_type.py",
+    "file_mode":    "SUID 4755 (root owner)",
+    "pam_file":     "/etc/pam.d/passwd",
+    "shadow_file":  "/etc/shadow",
+    "opasswd_file": "/etc/security/nxos_opasswd",
+    "operations": {
+        "-type sha256":        "Downgrades pam_unix hash algorithm from scrypt/pbkdf2 to SHA-256",
+        "-type scrypt":        "Upgrades hash algorithm to scrypt (correct; the safe direction)",
+        "PAM -pwhistory 1":    "Enables password history enforcement",
+        "PAM_CREATE -pwhistory_create <user> -passwd_hash <hash>": (
+            "Creates shadow entry for user with supplied hash if not in opasswd; "
+            "writes to /etc/shadow when user not found in opasswd"
+        ),
+    },
+    "impact": (
+        "Any user with a shell can run `security_hash_type.py -type sha256` to downgrade the "
+        "FI's PAM password hashing from scrypt to SHA-256. SHA-256 crypt hashes are "
+        "significantly faster to crack than scrypt. After downgrade, newly set passwords use "
+        "SHA-256; existing scrypt hashes remain but new admin password resets are weaker. "
+        "The PAM_CREATE operation with an attacker-supplied hash can also write a shadow "
+        "entry with a known-cleartext password to /etc/shadow."
+    ),
+    "applies_to": ["FI 6400", "FI 6500 (FI64XX-F1)", "FI 6600 (FI64XX-F1)"],
+    "tags":      ["suid", "pam", "hash-downgrade", "cwe-916", "medium"],
+}
+
+# ─────────────────────────────────────────────────────────
+# FI6500-F12: SUID isan_etc_dcos_sshd.py — SSH cipher/kex downgrade
+# Source: fi6400-extract/rootfs/isan/python3/scripts/isan_etc_dcos_sshd.py (SUID root)
+# ─────────────────────────────────────────────────────────
+FI6500_F12 = {
+    "id":       "FI6500-F12",
+    "title":    "NX-OS FI /isan/python3/scripts/isan_etc_dcos_sshd.py ships SUID root — "
+                "any authenticated user can configure FI SSH daemon to weak ciphers, MACs, "
+                "or kex algorithms including CBC-mode ciphers, SHA-1 MACs, and DH-group14-sha1",
+    "status":   "CONFIRMED — isan_etc_dcos_sshd.py in fi6400 rootfs with SUID 4755; "
+                "writes to /isan/etc/dcos_sshd_config* via glob; weak cipher set documented in script",
+    "severity": "MEDIUM",
+
+    "script_path":  "/isan/python3/scripts/isan_etc_dcos_sshd.py",
+    "file_mode":    "SUID 4755 (root owner)",
+    "config_target": "glob /isan/etc/dcos_sshd_config* (all VDC configs)",
+    "weak_ciphers": [
+        "aes128-cbc", "aes192-cbc", "aes256-cbc",
+    ],
+    "weak_kex": [
+        "diffie-hellman-group14-sha1",
+    ],
+    "weak_macs": [
+        "hmac-sha1", "hmac-sha1-etm@openssh.com",
+    ],
+    "note": "STRONG mode also includes diffie-hellman-group14-sha1 — both weak and strong "
+            "SSH profiles retain SHA-1-based Diffie-Hellman key exchange",
+    "impact": (
+        "Any user with a shell can invoke the SUID script to switch all FI SSH daemon configs "
+        "to the weak cipher profile, enabling CBC-mode ciphers (BEAST/POODLE-class attacks) "
+        "and SHA-1 MACs on all subsequent SSH sessions. The STRONG cipher profile does not "
+        "remove diffie-hellman-group14-sha1 — DH-1024/SHA-1 remains available in all modes. "
+        "This affects all VDC configs simultaneously via the glob pattern."
+    ),
+    "applies_to": ["FI 6400", "FI 6500 (FI64XX-F1)", "FI 6600 (FI64XX-F1)"],
+    "tags":      ["suid", "ssh", "weak-crypto", "cwe-326", "medium"],
+}
+
+FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5,
+            FI6500_F6, FI6500_F7, FI6500_F8, FI6500_F9,
+            FI6500_F10, FI6500_F11, FI6500_F12]
 
 if __name__ == "__main__":
     for f in FINDINGS:
