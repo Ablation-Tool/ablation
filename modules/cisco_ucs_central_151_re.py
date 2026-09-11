@@ -2598,6 +2598,75 @@ UCSC_F53 = {
                   "central-mgr151c/opt/cisco/www/schema/central-mgr.in.xsd (encrypted=\"true\" MOs)",
 }
 
+UCSC_F54 = {
+    "id":       "UCSC-F54",
+    "title":    "CMC xinetd TFTP server runs as root with -c (create) flag — unauthenticated file "
+                "write to /workspace and unauthenticated read of /workspace/techsupport diagnostic "
+                "bundles; both IPv4 and IPv6 listeners enabled on UDP/69",
+    "status":   "CONFIRMED — source analysis; cmc-260036-rootfs xinetd.conf: two TFTP service blocks "
+                "(flags=IPv4 and flags=IPv6), both with disable=no, user=root, group=root; "
+                "server_args=-4/-6 -c -v -s /workspace; -c flag enables file creation; "
+                "TFTP has no authentication by default; /workspace contains core/ and techsupport/ "
+                "subdirectories; techsupport/ may contain diagnostic bundles with configuration data; "
+                "xinetd monitored by doctor_cmc watchdog (always running)",
+    "severity": "HIGH",
+    "source_pkg": "cmc-260036",
+    "technical_detail": (
+        "xinetd.conf (CMC) configures two TFTP services:\n"
+        "  service tftp (IPv4):\n"
+        "    disable = no; user = root; group = root\n"
+        "    server_args = -4 -c -v -s /workspace\n"
+        "  service tftp (IPv6):\n"
+        "    disable = no; user = root; group = root\n"
+        "    server_args = -6 -c -v -s /workspace\n\n"
+        "The -c flag for tftpd enables file creation — clients can PUT new files to /workspace. "
+        "Standard TFTP has no authentication mechanism. Any host with network access to the CMC "
+        "management interface can:\n"
+        "  GET /workspace/techsupport/* — read diagnostic bundles, potentially containing "
+        "network topology, configuration exports, and credential material\n"
+        "  GET /workspace/core/*        — read core dump files (process memory)\n"
+        "  PUT /workspace/<any>         — write arbitrary files as root\n\n"
+        "Written files are created as root-owned. If any CMC daemon reads from /workspace paths "
+        "(e.g., firmware update workflows, scripted maintenance tasks), uploaded content could "
+        "influence execution. The cicd_update.sh update path reads from /tmp/cmcapppkg.sh, not "
+        "/workspace, but other daemons may reference this path.\n\n"
+        "xinetd is in the doctor_cmc process watchdog list — the service restarts automatically."
+    ),
+    "source_ref": "cmc-260036-rootfs/etc/xinetd.conf",
+}
+
+UCSC_F55 = {
+    "id":       "UCSC-F55",
+    "title":    "CMC Mosquitto MQTT broker runs as root with allow_anonymous true — any local "
+                "process on the CMC can publish or subscribe to all MQTT topics without credentials",
+    "status":   "CONFIRMED — source analysis; cmc-260036-rootfs etc/mosquitto-broker.conf: "
+                "user root; per_listener_settings true; listener 0 /var/run/mymqtt.sock; "
+                "allow_anonymous true; cmc/bin/* binaries link libmosquitto.so.1 and publish "
+                "to /var/run/mymqtt.sock for telemetry; no ACL file configured",
+    "severity": "MEDIUM",
+    "source_pkg": "cmc-260036",
+    "technical_detail": (
+        "mosquitto-broker.conf (CMC):\n"
+        "  per_listener_settings true\n"
+        "  user root\n"
+        "  log_dest file /var/cmc/log/mosquitto.log\n"
+        "  listener 0 /var/run/mymqtt.sock\n"
+        "  allow_anonymous true\n\n"
+        "The broker runs as root (user=root directive). The listener is a Unix domain socket "
+        "at /var/run/mymqtt.sock — accessible to any local process on the CMC with filesystem "
+        "access. No ACL file is configured, and allow_anonymous=true disables credential checks.\n\n"
+        "Any process running on the CMC (post-exploitation, container escape, or compromised daemon) "
+        "can connect to the socket and:\n"
+        "  - Subscribe to all topics (including telemetry, event, and control channels)\n"
+        "  - Publish to any topic (potentially injecting false telemetry or triggering actions)\n\n"
+        "CMC binaries (cmc/bin/* with libmosquitto linkage) publish MQTT data for telemetry. "
+        "The attack surface is local-only (Unix socket), but the absence of any authentication "
+        "means a single compromised non-root process on the CMC gains full pub/sub access to "
+        "the MQTT broker running as root."
+    ),
+    "source_ref": "cmc-260036-rootfs/etc/mosquitto-broker.conf; cmc-260036-rootfs/etc/mosquitto/mosquitto.conf",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2606,7 +2675,7 @@ FINDINGS = [
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
-    UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53,
+    UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
 ]
 
 
