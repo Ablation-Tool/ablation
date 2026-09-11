@@ -3065,6 +3065,62 @@ UCSC_F67 = {
 }
 
 
+# ─────────────────────────────────────────────────────────
+# UCSC-F68 — FI6400 sudoers COUNT_VSH_SH_CMNDS allows any user to read all process environments
+# ─────────────────────────────────────────────────────────
+UCSC_F68 = {
+    "id":       "UCSC-F68",
+    "title":    "UCS FI6400 sudoers grants every non-root/non-admin user NOPASSWD execution of "
+                "'sudo /usr/bin/strings /proc/*/environ' — the COUNT_VSH_SH_CMNDS alias permits "
+                "the exact pattern with glob wildcard matching any PID, allowing any local user to "
+                "invoke 'sudo /usr/bin/strings /proc/<pid>/environ' on any running process; "
+                "if privileged processes (running as root or other service accounts) store "
+                "credentials, tokens, or keys in environment variables, any authenticated user "
+                "on the FI can extract them without password",
+    "status":   "CONFIRMED — source analysis; "
+                "fi6400-extract/rootfs/etc/sudoers: "
+                "Cmnd_Alias COUNT_VSH_SH_CMNDS = /usr/bin/strings /proc/*/environ; "
+                "sudoers rule: ALL,!root,!admin ALL = NOPASSWD:COUNT_VSH_SH_CMNDS; "
+                "sudo glob /proc/*/environ matches /proc/<any_pid>/environ since * matches "
+                "any path component without /; allows reading environment of root-owned daemons "
+                "and service account processes (samdme, svc-nxsdk, etc.); "
+                "identical configuration in isan/etc/default/sudoers",
+    "severity": "MEDIUM",
+    "source_pkg": "ucs-6400-k9-bundle-infra.6.0.2b.A → ucsfi.10.5.1.I60.2b.F.bin rootfs",
+    "source_ref": "fi6400-extract/rootfs/etc/sudoers (COUNT_VSH_SH_CMNDS alias + NOPASSWD rule "
+                  "for ALL,!root,!admin); fi6400-extract/rootfs/isan/etc/default/sudoers (identical)",
+}
+
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F69 — FI6400 sudoers IMAGE_STRIP_3K_CMNDS allows arbitrary argument to extractimage/mknbi-insieme as root
+# ─────────────────────────────────────────────────────────
+UCSC_F69 = {
+    "id":       "UCSC-F69",
+    "title":    "UCS FI6400 sudoers grants every non-root/non-admin user NOPASSWD execution of "
+                "'/isan/bin/extractimage *' and '/isan/bin/mknbi-insieme *' as root — the bare "
+                "trailing wildcard in IMAGE_STRIP_3K_CMNDS allows any argument list; "
+                "extractimage and mknbi-insieme process firmware image files and operate on "
+                "paths derived from their arguments; any local user can invoke these with "
+                "arbitrary path arguments as root, enabling privileged file read/write on paths "
+                "these utilities access, or exploitation of any input-handling vulnerabilities "
+                "in these binaries with root privilege",
+    "status":   "CONFIRMED — source analysis; "
+                "fi6400-extract/rootfs/etc/sudoers: "
+                "Cmnd_Alias IMAGE_STRIP_3K_CMNDS = /isan/bin/extractimage *, /isan/bin/mknbi-insieme *; "
+                "sudoers rule: ALL,!root,!admin ALL = NOPASSWD:IMAGE_STRIP_3K_CMNDS; "
+                "trailing bare wildcard (*) in sudo Cmnd_Alias permits any argument string; "
+                "context: alias added for '3k img strip' (3000-series image optimization); "
+                "comment # CSCwm11251: multiple FI host sudo root escalations immediately above "
+                "a different (commented-out) entry confirms Cisco is aware of sudo escalation risks "
+                "in this file but IMAGE_STRIP_3K_CMNDS remains active",
+    "severity": "HIGH",
+    "source_pkg": "ucs-6400-k9-bundle-infra.6.0.2b.A → ucsfi.10.5.1.I60.2b.F.bin rootfs",
+    "source_ref": "fi6400-extract/rootfs/etc/sudoers (IMAGE_STRIP_3K_CMNDS alias + NOPASSWD rule); "
+                  "fi6400-extract/rootfs/isan/etc/default/sudoers (identical)",
+}
+
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -3076,6 +3132,7 @@ FINDINGS = [
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
     UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60, UCSC_F61,
     UCSC_F62, UCSC_F63, UCSC_F64, UCSC_F65, UCSC_F66, UCSC_F67,
+    UCSC_F68, UCSC_F69,
 ]
 
 
