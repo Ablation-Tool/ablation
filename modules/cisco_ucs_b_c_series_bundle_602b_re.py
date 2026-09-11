@@ -211,12 +211,16 @@ BCSERIES_F2 = {
     "known_plaintext_attack": {
         "tool":        "bkcrack 1.8.1",
         "target_entry": "H200_NVL/CEC/cec1736-ecfw-00.02.0192.0000-n00-rel-prod.fwpkg",
-        "plaintext":   "bytes 0x00-0x36 of CEC .fwpkg: Cisco SN magic + header_size + filename (55 bytes)",
-        "z_reduction": "48 bytes consumed; attack on 158845 Z-values at index 6",
-        "status":      "RUNNING — rooster screen session bkcrack_attack; output: "
-                       "bkcrack-run2.txt in scratchpad",
-        "outcome_on_success": "internal ZipCrypto keys recovered; password recoverable via "
-                              "bkcrack -r or dictionary search; full VBIOS ROM + CEC fw extractable",
+        "attempt_1": {
+            "plaintext":   "Cisco SN header guess: 6401534e 034c0000 + filename (55 bytes at offset 0)",
+            "z_reduction": "48 bytes consumed successfully (appears to succeed)",
+            "attack_result": "FAILED — Could not find the keys after exhausting all 158845 Z-values",
+            "conclusion": "CEC .fwpkg does NOT start with Cisco SN format; .fwpkg is NVIDIA-specific",
+        },
+        "next_approach": "Obtain NVIDIA fwpkg format spec or find uncompressed plaintext bytes; "
+                         "alternatively extract ZIP password from B-Series main gzip (offset 271658615) "
+                         "which contains the CIMC/BMC firmware that processes the ZIPs",
+        "viability":    "CONFIRMED — ZipCrypto is the cipher; attack is viable given correct plaintext",
     },
 
     "build_artifact": {
