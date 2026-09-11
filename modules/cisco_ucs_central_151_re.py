@@ -2067,15 +2067,13 @@ UCSC_F41 = {
 # ─────────────────────────────────────────────────────────────────────────────
 UCSC_F42 = {
     "id":       "UCSC-F42",
-    "title":    "HyperFlex REST API platform: 5 of 8 WAR services omit 'diag'/'local/diag' "
+    "title":    "HyperFlex REST API platform: 8 of 11 WAR services omit 'diag'/'local/diag' "
                 "from barredUsers — diag can authenticate to disk encryption, data protection, "
-                "backup, software encryption/DARE, and firmware upgrade APIs",
+                "backup, DARE software encryption, firmware upgrade, STIG removal, cluster "
+                "bootstrap, and smart licensing APIs",
     "status":   "CONFIRMED — barredUsers = [\"root\", \"local/root\"] (diag absent) in: "
-                "encryption/WEB-INF/classes/application.conf, "
-                "dataprotection/WEB-INF/classes/application.conf, "
-                "backupservice/WEB-INF/classes/application.conf, "
-                "securityservice/WEB-INF/classes/application.conf, "
-                "hxupgrade/WEB-INF/classes/application.conf (all both copies WEB-INF/classes/ and resources/); "
+                "encryption, dataprotection, backupservice, securityservice, hxupgrade, "
+                "slservice, supportservice, ROOT — all both copies (WEB-INF/classes/ and resources/); "
                 "coreapi, auth-war, iscsi correctly use: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]",
     "severity": "HIGH",
     "affected_services": {
@@ -2084,6 +2082,9 @@ UCSC_F42 = {
         "backupservice":   "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
         "securityservice": "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
         "hxupgrade":       "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "slservice":       "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "supportservice":  "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "ROOT":            "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
         "coreapi":         "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"] — correct",
         "auth-war":        "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"] — correct",
         "iscsi":           "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"] — correct",
@@ -2130,24 +2131,46 @@ UCSC_F42 = {
             "GET /upgrade/ucsAvailablePackages      — enumerate available UCS packages",
             "GET /upgrade/validations               — upgrade validation results",
         ],
+        "supportservice": [
+            "PUT /stig/apply                        — apply STIG security hardening",
+            "PUT /stig/remove                       — remove STIG security hardening",
+            "PUT /stig/check                        — check STIG compliance state",
+            "GET/PUT /asup                          — AutoSupport configuration",
+            "GET/PUT /remotesupport                 — remote support (TAC tunnel) config",
+            "GET/POST/DELETE /supportbundle         — support bundle generation/deletion",
+        ],
+        "slservice": [
+            "POST /license/register                 — register smart license",
+            "POST /license/renew                    — renew smart license",
+            "GET/PUT /license/tier                  — license tier management",
+        ],
+        "ROOT": [
+            "GET/POST /cluster                      — cluster configuration (bootstrap)",
+            "GET /clusterCreationProgress           — cluster creation progress",
+            "PUT /cluster/network/configure         — configure cluster network",
+            "PUT /clusters/recreate/{name}          — recreate a named cluster",
+            "GET /nodes                             — node discovery/listing",
+            "GET/POST /internalsupport/*            — internal support bundle aggregation",
+        ],
     },
     "technical_detail": (
-        "All 8 HyperFlex REST API WARs share the same AAA filter chain (AuditFilter, "
-        "SPPrivilegedAuth, SessionAuth, SPBasicAuth, SPAuth applied via web.xml /v1/*). "
-        "Each WAR's application.conf independently sets barredUsers, which the filter "
-        "implementation reads to block specific system accounts from authenticating.\n"
-        "The diag account is blocked in coreapi, auth-war, and iscsi (4 entries: "
-        "root, local/root, diag, local/diag). The 5 remaining WARs use only 2 entries "
-        "(root, local/root), leaving diag able to authenticate.\n"
-        "The encryption and dataprotection WARs also include a KerberosAuth filter "
-        "(com.springpath.hx.aaa.filters.kerberosFilter.KerberosFilterImpl) absent from "
-        "other WARs; with hxSvcHttpEnabled=true in all configs, Kerberos tickets can be "
-        "passed over plaintext HTTP to these services.\n"
-        "The diag account exists in the HyperFlex PAM stack (spauthenticate with "
-        "service=nginx) and is intended for diagnostic use only. Its credentials are "
-        "known or derivable from diagnostic tooling. Access to securityservice enables "
-        "DARE software encryption key manipulation and Secure Boot state changes. "
-        "Access to hxupgrade enables firmware upgrade initiation. "
+        "All 11 HyperFlex REST API WARs share the same AAA filter chain (AuditFilter, "
+        "SPPrivilegedAuth, SessionAuth, SPBasicAuth, SPAuth applied via web.xml /v1/* or "
+        "/rest/*). Each WAR's application.conf independently sets barredUsers, which the "
+        "filter implementation reads to block specific system accounts from authenticating.\n"
+        "The diag account is blocked in only 3 of 11 WARs: coreapi, auth-war, iscsi "
+        "(4 entries: root, local/root, diag, local/diag). The remaining 8 WARs use only "
+        "2 entries (root, local/root), leaving diag able to authenticate.\n"
+        "The encryption, dataprotection, and ROOT WARs also include a KerberosAuth filter "
+        "(com.springpath.hx.aaa.filters.kerberosFilter.KerberosFilterImpl); with "
+        "hxSvcHttpEnabled=true in all configs, Kerberos tickets can be passed over "
+        "plaintext HTTP.\n"
+        "The diag account exists in the HyperFlex PAM stack (service=nginx) and is intended "
+        "for diagnostic use only. Its credentials are known or derivable from HyperFlex "
+        "diagnostic tooling. Access to supportservice enables STIG hardening removal. "
+        "Access to securityservice enables DARE software encryption key manipulation and "
+        "Secure Boot state toggle. Access to hxupgrade enables firmware upgrade initiation. "
+        "Access to ROOT /rest/* exposes cluster bootstrap and cluster recreation operations. "
         "Access to dataprotection enables VM failover/migration without authorization."
     ),
 }
@@ -2225,6 +2248,51 @@ UCSC_F44 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# UCSC-F45 — StorvisorFileUploader servlet at /upload, auth filters at /upload/* — URL pattern mismatch
+# ─────────────────────────────────────────────────────────
+UCSC_F45 = {
+    "id":       "UCSC-F45",
+    "title":    "ROOT WAR StorvisorFileUploader servlet mapped to '/upload' but all auth filters "
+                "mapped to '/upload/*' — Servlet spec URL pattern mismatch leaves the firmware "
+                "upgrade bundle upload endpoint unauthenticated; POST to /upload writes "
+                "attacker-controlled data to /tmp/hxupgrade_bundle.tgz or /tmp/esxiupgrade_bundle.zip",
+    "status":   "CONFIRMED — ROOT-1.0.0.war WEB-INF/web.xml: "
+                "servlet-mapping /upload (exact), filter-mapping /upload/* (wildcard); "
+                "context-param HXFileUploadPath=/tmp/hxupgrade_bundle.tgz, "
+                "ESXiFileUploadPath=/tmp/esxiupgrade_bundle.zip; "
+                "no auth check in StorvisorFileUploader.class",
+    "severity": "HIGH",
+    "source_file": "storfs-restapi/opt/hyperflex/storfs-restapi/ROOT-1.0.0.war/WEB-INF/web.xml",
+    "servlet_class": "com.storvisor.sysmgmt.service.StorvisorFileUploader",
+    "upload_paths": {
+        "hxupgrade_bundle": "/tmp/hxupgrade_bundle.tgz",
+        "esxi_bundle":      "/tmp/esxiupgrade_bundle.zip",
+    },
+    "url_patterns": {
+        "servlet_mapping": "/upload",
+        "filter_mapping":  "/upload/*",
+    },
+    "technical_detail": (
+        "ROOT-1.0.0.war defines 6 filters (AuditFilter, SPPrivilegedAuth, SessionAuth, "
+        "KerberosAuth, SPBasicAuth, SPAuth) that are mapped to URL pattern '/upload/*'. "
+        "The StorvisorFileUploader servlet is mapped to the exact path '/upload'.\n"
+        "Per the Servlet 2.4 spec (Section 12.2), a URL pattern ending in '/*' matches "
+        "only paths that start with the prefix followed by '/'. The exact path '/upload' "
+        "does NOT match '/upload/*' (there is no '/' after 'upload'). Tomcat implements "
+        "this strictly: a request to exactly '/upload' hits the servlet without traversing "
+        "any of the auth filter mappings.\n"
+        "StorvisorFileUploader.doPost() reads the 'uploadType' request parameter: "
+        "if 'ESXI', the file is written to esxiFilePath (/tmp/esxiupgrade_bundle.zip); "
+        "otherwise, it is written to hxFilePath (/tmp/hxupgrade_bundle.tgz). The upload "
+        "size limit is set via maxFileSize (from Apache Commons FileUpload). "
+        "No authentication, session, or CSRF check is present in the servlet class itself.\n"
+        "The uploaded bundles are the input to the hxupgrade service's upgrade pipeline. "
+        "An unauthenticated attacker with network access to the HyperFlex management "
+        "interface can overwrite the pending upgrade bundle with arbitrary content."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2232,7 +2300,7 @@ FINDINGS = [
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
-    UCSC_F43, UCSC_F44,
+    UCSC_F43, UCSC_F44, UCSC_F45,
 ]
 
 
