@@ -1903,13 +1903,59 @@ UCSC_F38 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F39 — snmp_update_peer.sh StrictHostKeyChecking=no during SNMP peer sync;
+#             sync_snmpconf.sh sudo chmod 666 on SNMP config files (world-readable
+#             + world-writable); SNMP community strings and internalUser:authpassword
+#             exposed to any local process; MITM enables malicious SNMP config injection
+# Source: opt/cisco/bin/snmp_update_peer.sh + opt/cisco/bin/sync_snmpconf.sh
+#         (identical in 1.5.1c and 2.1.2b; diff: shebang path only)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F39 = {
+    "id":       "UCSC-F39",
+    "title":    "snmp_update_peer.sh uses StrictHostKeyChecking=no for peer SNMP config sync; "
+                "sync_snmpconf.sh sudo-chmodds SNMP config files to 666 — "
+                "SNMP credentials (internalUser:authpassword, public community) world-readable/writable; "
+                "MITM during peer sync replaces SNMP config",
+    "status":   "CONFIRMED — opt/cisco/bin/snmp_update_peer.sh line 10 + "
+                "opt/cisco/bin/sync_snmpconf.sh lines 11-12; "
+                "identical in 1.5.1c and 2.1.2b (diff: shebang path only)",
+    "severity": "MEDIUM",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "stricthostkeychecking": (
+        "snmp_update_peer.sh line 10:\n"
+        "  SSH_OPTIONS=\"-o StrictHostKeyChecking=no -o ConnectionAttempts=3 -o ConnectTimeout=3 -o ServerAliveInterval=3\"\n"
+        "Used in lines 15-16: sudo scp ${SSH_OPTIONS} ${SNMPD_GEN_CONF_FILE} samdme@${PEER_IP}:${SNMPD_CONF_DIR}\n"
+        "Used in line 19: sudo ssh ${SSH_OPTIONS} samdme@${PEER_IP} 'bash -s' </opt/cisco/bin/sync_snmpconf.sh\n"
+        "No host key verification — MITM attack intercepts SCP transfer; attacker replaces "
+        "snmpd_gen.conf on peer with malicious config. On line 19, attacker controls the "
+        "executed script on the target if SSH session is intercepted before auth completes."
+    ),
+
+    "world_writable_config": (
+        "sync_snmpconf.sh lines 11-12:\n"
+        "  ${SUDO_CMD} ${CHMOD_CMD} 666 $SNMPD_GEN_CONF_FILE         # /etc/snmp/snmpd_gen.conf\n"
+        "  ${SUDO_CMD} ${CHMOD_CMD} 666 $SNMPD_GEN_PERSIST_CONF_FILE # /etc/snmp/snmpd_gen_persist.conf\n"
+        "Both files set 666 (rw-rw-rw-) after every snmpd restart. "
+        "Any local OS user (daemon, postgres, etc.) can:\n"
+        "  1. READ /etc/snmp/snmpd_gen.conf → internalUser:authpassword + public community (UCSC-F23)\n"
+        "  2. WRITE arbitrary SNMP config → add write community, modify auth params, redirect traps"
+    ),
+
+    "related": "UCSC-F23 (hardcoded internalUser:authpassword in snmpd_base.conf); "
+               "UCSC-F30 (cluster SSH host key bypass); UCSC-F38 (backup SCP host key bypass). "
+               "Third independent SSH host-key-bypass code path in three distinct operations "
+               "(cluster formation, backup, SNMP sync).",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
-    UCSC_F36, UCSC_F37, UCSC_F38,
+    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39,
 ]
 
 
