@@ -2464,6 +2464,92 @@ UCSC_F50 = {
     "source_ref": "operation-mgr151c/opt/cisco/bin/sam-copy.sh",
 }
 
+UCSC_F51 = {
+    "id":       "UCSC-F51",
+    "title":    "HSU agent systemd service loads EnvironmentFile from world-writable /tmp path — "
+                "hsu_agent.service specifies EnvironmentFile=-/tmp/hsu-agent/hsu_env; the init script "
+                "creates the /tmp/hsu-agent/ directory and hsu_env file but applies no restrictive "
+                "permissions; a local attacker who pre-creates /tmp/hsu-agent/hsu_env before service "
+                "start can inject LD_PRELOAD or other environment variables into the root-privileged "
+                "hsu_agent process",
+    "status":   "CONFIRMED — source analysis; hsu_agent.service: "
+                "ExecStartPre=/usr/local/bin/hsu_agent.sh start; EnvironmentFile=-/tmp/hsu-agent/hsu_env; "
+                "No User= directive (runs as root); hsu_agent.sh init_config(): mkdir -p /tmp/hsu-agent/ "
+                "(no -m flag, default umask), touch /tmp/hsu-agent/hsu_env (does not clear content); "
+                "no chmod/fchmod/umask call on the directory or env file; "
+                "jemalloc conditional overwrites file only when /usr/local/lib/libjemalloc.so.2 is "
+                "present — absent jemalloc, attacker content survives into EnvironmentFile load; "
+                "hsu_agent binary strings: no chmod/fchmod/umask symbol found",
+    "severity": "MEDIUM",
+    "source_pkg": "hsu-agent-436",
+    "technical_detail": (
+        "hsu_agent.service (systemd unit, no User= directive → runs as root):\n"
+        "  ExecStartPre=/usr/local/bin/hsu_agent.sh start\n"
+        "  ExecStart=/usr/local/bin/hsu_agent\n"
+        "  EnvironmentFile=-/tmp/hsu-agent/hsu_env\n"
+        "  Restart=always; RestartSec=5s\n\n"
+        "hsu_agent.sh init_config() sequence:\n"
+        "  mkdir -p /tmp/hsu-agent/           # no -m; default umask → dir is 755\n"
+        "  touch /tmp/hsu-agent/hsu_env       # only updates mtime if file exists\n"
+        "  if [ -e /usr/local/lib/libjemalloc.so.2 ]; then\n"
+        "      echo LD_PRELOAD=.../libjemalloc.so.2 > /tmp/hsu-agent/hsu_env\n"
+        "  fi\n\n"
+        "Attack: local user writes LD_PRELOAD=/tmp/evil.so to /tmp/hsu-agent/hsu_env before service "
+        "start. touch preserves the content. If jemalloc is absent the file is loaded as-is into "
+        "ExecStart environment. The Restart=always policy provides a 5-second race window on every "
+        "daemon crash — an attacker who can trigger a crash gets repeated opportunities.\n\n"
+        "Affected: hsu-agent-436 deployed on UCS rack servers as part of HyperFlex / UCS management stack."
+    ),
+    "source_ref": "hsu-agent-436-data/usr/lib/systemd/system/hsu_agent.service; "
+                  "hsu-agent-436-data/usr/local/bin/hsu_agent.sh",
+}
+
+UCSC_F52 = {
+    "id":       "UCSC-F52",
+    "title":    "HSU agent Unix domain socket /tmp/hsu-agent/hsu-socket is world-accessible with no "
+                "authentication — the root-privileged daemon creates the socket with default umask "
+                "permissions (no chmod/fchmod call), accepts JSON method dispatch without credentials, "
+                "and exposes operations including OS installation, OOB firmware activation, inband "
+                "firmware update, host reboot, and hardware diagnostics to any local user",
+    "status":   "CONFIRMED — binary analysis; hsu_agent: bind() on /tmp/hsu-agent/hsu-socket; "
+                "no chmod/fchmod/umask symbol in binary (strings scan exhaustive); socket created "
+                "in /tmp/hsu-agent/ directory with default 755 permissions (world-traversable); "
+                "socket file inherits process umask → world-readable/writable (srwxr-xr-x); "
+                "method dispatch strings: stop, start-diagnostics, cancel-diagnostics, oob-activate, "
+                "huu-inband-operation, get-fw-inventory, get-inventory-state, update-status, "
+                "scu-os-install, resume-hsu-max; no token/auth/key field in dispatch interface; "
+                "hsu_plugin.json: 9 components (CIMC, BIOS, Board_Controller, VIC 1385/1387/1455/1457/"
+                "1495/1497); disruption=Host_Reboot for 8 of 9 components",
+    "severity": "MEDIUM",
+    "source_pkg": "hsu-agent-436",
+    "technical_detail": (
+        "The HSU agent listens on /tmp/hsu-agent/hsu-socket (Unix domain socket, AF_UNIX).\n"
+        "The directory /tmp/hsu-agent/ is created by hsu_agent.sh with mkdir -p (no -m flag), "
+        "defaulting to 755. The binary calls bind() on the socket path but no chmod/fchmod/umask "
+        "call is present in the binary. Under a typical root umask of 022, the socket file is "
+        "created with srwxr-xr-x — world-readable and world-writable.\n\n"
+        "The server dispatches based on a 'method' JSON field with no authentication check:\n"
+        "  stop                  — terminates the daemon (availability DoS)\n"
+        "  start-diagnostics     — triggers hardware diagnostics\n"
+        "  cancel-diagnostics    — cancels running diagnostics\n"
+        "  oob-activate          — triggers out-of-band firmware activation\n"
+        "  huu-inband-operation  — triggers HUU inband firmware update\n"
+        "  scu-os-install        — triggers OS installation on the server\n"
+        "  get-fw-inventory      — reads firmware inventory\n"
+        "  update-status         — reads update task status\n\n"
+        "Any local user (including containers with /tmp mounted, or processes in the UCS management "
+        "namespace) can connect to the socket and dispatch methods. The scu-os-install method "
+        "invokes the SCU OS installation workflow — effectively wiping and reinstalling the host OS. "
+        "Firmware update methods (BIOS, VIC, Board_Controller) trigger host reboots per "
+        "hsu_plugin.json disruption='Host_Reboot'.\n\n"
+        "The stop command is documented in hsu_agent.sh itself, confirming socket accessibility:\n"
+        "  echo '{\"method\":\"stop\"}' | ncat -U /tmp/hsu-agent/hsu-socket"
+    ),
+    "source_ref": "hsu-agent-436-data/usr/local/bin/hsu_agent (binary); "
+                  "hsu-agent-436-data/usr/local/bin/hsu_agent.sh; "
+                  "hsu-agent-436-data/var/cisco/hsu-agent/hsu_plugin.json",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2472,7 +2558,7 @@ FINDINGS = [
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
-    UCSC_F50,
+    UCSC_F50, UCSC_F51, UCSC_F52,
 ]
 
 
