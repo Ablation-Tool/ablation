@@ -18,6 +18,18 @@ FIRMWARE = {
     "installer":   "Anaconda (RHEL 6.x era), Python 2 syntax",
     "core_module": "usr/lib/anaconda/ucscentral.py",
     "selinux":     "selinux --disabled (explicit in ks_upgrade.cfg)",
+    "findings":    [
+        "UCSC-F1", "UCSC-F2", "UCSC-F3", "UCSC-F4", "UCSC-F5", "UCSC-F6", "UCSC-F7",
+        "UCSC-F8", "UCSC-F9", "UCSC-F10", "UCSC-F11", "UCSC-F12", "UCSC-F13", "UCSC-F14",
+        "UCSC-F15", "UCSC-F16", "UCSC-F17", "UCSC-F18", "UCSC-F19", "UCSC-F20", "UCSC-F21",
+        "UCSC-F22", "UCSC-F23", "UCSC-F24", "UCSC-F25", "UCSC-F26", "UCSC-F27", "UCSC-F28",
+        "UCSC-F29", "UCSC-F30", "UCSC-F31", "UCSC-F32", "UCSC-F33", "UCSC-F34", "UCSC-F35",
+        "UCSC-F36", "UCSC-F37", "UCSC-F38", "UCSC-F39", "UCSC-F40", "UCSC-F41", "UCSC-F42",
+        "UCSC-F43", "UCSC-F44", "UCSC-F45", "UCSC-F46", "UCSC-F47", "UCSC-F48", "UCSC-F49",
+        "UCSC-F50", "UCSC-F51", "UCSC-F52", "UCSC-F53", "UCSC-F54", "UCSC-F55", "UCSC-F56",
+        "UCSC-F57", "UCSC-F58", "UCSC-F59", "UCSC-F60", "UCSC-F61", "UCSC-F62", "UCSC-F63",
+        "UCSC-F64", "UCSC-F65", "UCSC-F66", "UCSC-F67", "UCSC-F68", "UCSC-F69",
+    ],
 }
 
 # ─────────────────────────────────────────────────────────
