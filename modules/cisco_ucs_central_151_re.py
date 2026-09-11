@@ -887,10 +887,114 @@ UCSC_F22 = {
     "versions_affected": ["1.5.1c", "2.1.2b"],
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F23 — snmpd_base.conf ships with SNMPv3 internalUser hardcoded password
+#             'authpassword' (full MIB read, authNoPriv) + SNMPv2c community 'public'
+# Source: etc/snmp/snmpd_base.conf in core-1.5.1-c.x86_64.rpm (identical in 2.1.2b;
+#         2.1.2b adds udp6:161 agent address)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F23 = {
+    "id":       "UCSC-F23",
+    "title":    "snmpd_base.conf hardcodes SNMPv3 user 'internalUser' with password 'authpassword' "
+                "and full MIB read access (-V all, authNoPriv) — network-accessible SNMP client "
+                "with static credentials reads entire UCS Central MIB; "
+                "SNMPv2c community 'public' enabled by default on UDP 161",
+    "status":   "CONFIRMED — etc/snmp/snmpd_base.conf in core-1.5.1-c.x86_64.rpm and "
+                "core-2.1.2-b.x86_64.rpm (identical content; 2.1.2b adds udp6:161)",
+    "severity": "HIGH",
+
+    "source_file":    "etc/snmp/snmpd_base.conf",
+    "installed_path": "/etc/snmp/snmpd_base.conf",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "hardcoded_credentials": {
+        "snmpv3_user":       "internalUser",
+        "snmpv3_auth_alg":   "MD5",
+        "snmpv3_password":   "authpassword",
+        "snmpv3_access":     "authuser read internalUser authNoPriv -V all \"\"",
+        "snmpv2c_community": "public",
+        "snmpv2c_access":    "rocommunity public default -V vro (1.5.1c: IPv4 only; 2.1.2b adds rocommunity6)",
+    },
+
+    "snmpv3_impact": (
+        "createUser internalUser MD5 authpassword\n"
+        "authuser read internalUser authNoPriv -V all \"\"\n\n"
+        "internalUser has read access to the full OID tree ('.1'). "
+        "An SNMP client with username=internalUser and password=authpassword can enumerate: "
+        "system identity, running process list (hrSWRunTable), network interface config, "
+        "UCS Central-specific MIB entries (OID .1.3.6.1.4.1.9.9.719) via the dlmod plugin "
+        "(libsvc_sam_extSnmpPlugin.so), storage layout, and all load/CPU metrics. "
+        "authNoPriv = authenticated but traffic not encrypted — packets traverse the network "
+        "in cleartext; capture reveals all queried MIB data."
+    ),
+
+    "snmpv2c_impact": (
+        "rocommunity public default -V vro\n"
+        "The 'vro' view exposes system OIDs, network interface stats, storage info, "
+        "process table (HOST-RESOURCES), load averages, and UCS-specific MIB. "
+        "Any host that can reach UDP 161 queries the vro view without credentials."
+    ),
+
+    "dlmod_note": (
+        "dlmod svc_sam_extSnmpPlugin /opt/cisco/central-mgr/sam/lib/libsvc_sam_extSnmpPlugin.so\n"
+        "The dynamic SNMP module exposes UCS Central management OIDs (1.3.6.1.4.1.9.9.719). "
+        "internalUser's -V all access includes this plugin's subtree."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F24 — update_peer_secret.sh passes cluster shared_secret as 2nd CLI arg
+#             — visible in ps aux on local node; also transmitted in remote SSH command
+#             as 'sudo schelper.pl -v <secret>' (visible in peer ps + SSH audit log)
+# Source: opt/cisco/bin/update_peer_secret.sh in core-1.5.1-c.x86_64.rpm
+#         (byte-identical in core-2.1.2-b.x86_64.rpm)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F24 = {
+    "id":       "UCSC-F24",
+    "title":    "update_peer_secret.sh passes cluster shared_secret as 2nd CLI argument "
+                "— secret visible in ps aux on local node and in "
+                "'sudo schelper.pl -v <secret>' SSH command on peer node (ps + audit log exposure)",
+    "status":   "CONFIRMED — opt/cisco/bin/update_peer_secret.sh in core-1.5.1-c.x86_64.rpm; "
+                "byte-identical in core-2.1.2-b.x86_64.rpm",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/update_peer_secret.sh",
+    "installed_path": "/opt/cisco/bin/update_peer_secret.sh",
+    "script_type":    "Tcl/Expect (#!/usr/bin/expect)",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "vulnerable_code": (
+        "set shared_secret [lindex $argv 1]  # argv[1] — visible in ps aux\n"
+        "send \"sudo /opt/cisco/bin/schelper.pl -r -s main -k sharedSecret -v $shared_secret\\r\"\n"
+        "# secret interpolated into remote command string — visible in peer ps + SSH audit log"
+    ),
+
+    "local_exposure": (
+        "The cluster shared_secret is passed as the 2nd positional argument. "
+        "During the window between process start and exit (includes SSH round trip), "
+        "any local OS user can read /proc/<pid>/cmdline or ps aux to extract the plaintext secret."
+    ),
+
+    "remote_exposure": (
+        "The secret is embedded in the remote command sent to the peer via SSH expect: "
+        "'sudo /opt/cisco/bin/schelper.pl -r -s main -k sharedSecret -v <plaintext_secret>'. "
+        "On the peer node, this command is visible in ps aux during execution. "
+        "SSH implementations that log executed remote commands write the secret to the peer's "
+        "auth log."
+    ),
+
+    "dead_code_note": (
+        "The script defines login{} which reads credentials from hardcoded /tmp/tp (world-accessible /tmp). "
+        "login{} is never called in the main execution flow — SSH auth uses samdme's key. "
+        "Dead code; noted for completeness."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
+    UCSC_F23, UCSC_F24,
 ]
 
 
