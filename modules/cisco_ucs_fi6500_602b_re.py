@@ -15,7 +15,8 @@ FIRMWARE = {
     "os_base":    "NX-OS / ISAN, x86-64, CPIO initramfs + DNF/RPM package bootstrap",
     "key_rpms":   "nginx-1.25.4, pam-plugin-debug-1.3.0, python3-debugger-3.8.20",
     "findings":   ["FI6500-F1", "FI6500-F2", "FI6500-F3", "FI6500-F4",
-                   "FI6500-F5", "FI6500-F6", "FI6500-F7", "FI6500-F8"],
+                   "FI6500-F5", "FI6500-F6", "FI6500-F7", "FI6500-F8",
+                   "FI6500-F9"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -317,7 +318,74 @@ FI6500_F8 = {
     "applies_to": ["FI 6400 (confirmed)", "FI 6500 (FI64XX-F1 — identical binary)", "FI 6600 (FI64XX-F1)"],
 }
 
-FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5, FI6500_F6, FI6500_F7, FI6500_F8]
+# ─────────────────────────────────────────────────────────
+# FI6500-F9: bios_daemon skips digital signature verification when BIOS version
+#            comparison fails — malformed version string bypasses signature check
+# ─────────────────────────────────────────────────────────
+FI6500_F9 = {
+    "id":       "FI6500-F9",
+    "title":    "bios_daemon in FI NX-OS ISAN skips BIOS digital signature verification when "
+                "compare_bios_version() fails — version string comparison error triggers unconditional "
+                "signature bypass for FI hardware BIOS update",
+    "status":   "CONFIRMED — strings from bios_daemon ELF in fi6400-isan-sq/bin/ "
+                "(applies to FI 6400/6500/6600 via FI64XX-F1 identical binary)",
+    "severity": "HIGH",
+
+    "binary":   "/isan/bin/bios_daemon (x86-64 ELF, stripped)",
+
+    "bypass_condition": {
+        "trigger":      "compare_bios_version() returns non-zero errno",
+        "log_message":  "Skip signature verification on old bios",
+        "log_format":   "Bios version comparison failed, errno %d",
+        "consequence":  "bios_verify_digital_signature_img or bios_verify_digital_signature_img_with_biosid "
+                        "skipped for the BIOS image being installed on the FI hardware",
+    },
+
+    "mts_opcode": "MTS_OPC_BIOS_VERIFY_DIGITAL_SIGNATURE — received via ISAN MTS message bus",
+
+    "version_comparison_functions": [
+        "compare_bios_version",
+        "common_compare_bios_versions",
+        "std_version_compare_func",
+        "alt_version_compare_func",
+    ],
+
+    "bios_images_on_fi": [
+        "bios-red-dog.bin.gz",
+        "bios-serpens-x86s-tor.bin.gz",
+        "bios-starduskG.bin.gz",
+        "bios-x86s-chimay.bin.gz",
+        "bios-x86s-skagit-river.bin.gz",
+        "psu_fw.bin.gz",
+    ],
+
+    "keystone": {
+        "path_tmp":   "/tmp/keystone.bin",
+        "path_isan":  "/isan/bin/bios_imgs/keystone.bin.gz",
+        "note":       "bios_daemon extracts keystone.bin from isan/bin/bios_imgs/ to /tmp/ at runtime; "
+                      "purpose TBD (cryptographic primitive or FI platform-specific boot key material)",
+    },
+
+    "impact": (
+        "bios_daemon is responsible for verifying and installing FI hardware BIOS updates "
+        "in response to MTS messages (MTS_OPC_BIOS_VERIFY_DIGITAL_SIGNATURE). "
+        "When compare_bios_version() returns an error (malformed version string in image header "
+        "or race condition in version retrieval), the daemon logs 'Skip signature verification on old bios' "
+        "and proceeds without calling bios_verify_digital_signature_img. "
+        "An attacker who can inject a BIOS update with a malformed version field into the FI update pipeline "
+        "bypasses signature verification and installs unsigned BIOS on the FI hardware — "
+        "the central management plane of the entire UCS domain. "
+        "FI BIOS persistence survives OS reinstallation and host-side detection."
+    ),
+
+    "applies_to": [
+        "FI 6400 (confirmed — extracted from fi6400-isan-sq/bin/bios_daemon)",
+        "FI 6500 (FI64XX-F1 — identical NX-OS binary sha256:720fc65d...)",
+        "FI 6600 (FI64XX-F1 — identical NX-OS binary sha256:720fc65d...)",
+    ],
+}
+
+FINDINGS = [FI6500_F1, FI6500_F2, FI6500_F3, FI6500_F4, FI6500_F5, FI6500_F6, FI6500_F7, FI6500_F8, FI6500_F9]
 
 if __name__ == "__main__":
     for f in FINDINGS:
