@@ -34,7 +34,7 @@ FIRMWARE = {
     ],
     "supported_os": "RHEL 7-10, SLES 12-16, Ubuntu 20.04-24.04, ESXi 7-9, Windows Server 2019-2025",
     "no_builder_account": True,
-    "findings": ["SCU-F1", "SCU-F2", "SCU-F3", "SCU-F4"],
+    "findings": ["SCU-F1", "SCU-F2", "SCU-F3", "SCU-F4", "SCU-F5"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -176,7 +176,48 @@ DUU_STRUCTURE = {
     },
 }
 
-FINDINGS = [SCU_F1, SCU_F2, SCU_F3, SCU_F4]
+# ─────────────────────────────────────────────────────────
+# SCU-F5: /hsu-keys/ ships BOTH DEV and REL RSA-2048 verification public keys;
+#          run_mode='DEV' in /opt/cisco/run_mode selects DEV key via hsu-set-verify-key;
+#          same DEV key modulus across container/rootfs/tools categories (cross-category reuse)
+# ─────────────────────────────────────────────────────────
+SCU_F5 = {
+    "id":       "SCU-F5",
+    "title":    "SCU 7.1.7 bootable rootfs ships both DEV and REL RSA-2048 signature verification "
+                "keys in /hsu-keys/; /opt/cisco/run_mode='DEV' switches firmware acceptance to "
+                "developer-signed images via hsu-set-verify-key",
+    "status":   "CONFIRMED — /hsu-keys/ in scu-7.1.7.260100 bootable rootfs; "
+                "hsu-init:54 reads run_mode, hsu-init:58 calls hsu-set-verify-key with DEV key",
+    "severity": "HIGH",
+
+    "key_directory":  "/hsu-keys/ (6 public key files: container/rootfs/tools × dev/rel)",
+    "dev_key_sha256": {
+        "container-dev-verify-key.pem": "8172ce48c2d3983f3000a0ae8fb1a91491128196ec5ba4f2f6d1950988512073",
+        "rootfs-dev-verify-key.pem":    "(same modulus as container-dev — cross-category reuse of single DEV key pair)",
+        "tools-dev-verify-key.pem":     "(same modulus as container-dev — single Cisco-wide DEV key)",
+    },
+    "rel_key_sha256": {
+        "container-rel-verify-key.pem": "a2a81324d17f21696fe8e6e1c2e22319d4bd720b63bf7751745907308dd89681",
+    },
+    "key_type": "RSA-2048 public keys",
+
+    "activation_path": {
+        "file":        "/opt/cisco/run_mode",
+        "trigger":     "hsu-init:53: run_mode=`cat /opt/cisco/run_mode`",
+        "dev_branch":  "if [ $run_mode == 'DEV' ]; then hsu-set-verify-key /tmp/tools-dev-verify-key.der; "
+                       "export IMGVERIFY_PUB_KEY_FILE=/hsu-keys/tools-dev-verify-key.pem",
+        "default":     "/opt/cisco/run_mode absent from shipped rootfs — set at runtime by installer/BMC",
+    },
+
+    "cross_product_note": (
+        "Same DEV key pattern seen across SCU and HUU 4.3.2 (HUU432-F2 documents FTD dev key "
+        "fallback). SCU explicitly stores DEV key as a named file in production rootfs; HUU432 "
+        "shows the fallback path in ftd binary. Both confirm Cisco ships production hardware "
+        "with an active DEV signing channel."
+    ),
+}
+
+FINDINGS = [SCU_F1, SCU_F2, SCU_F3, SCU_F4, SCU_F5]
 
 if __name__ == "__main__":
     for f in FINDINGS:
