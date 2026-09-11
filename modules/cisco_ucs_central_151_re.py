@@ -1949,13 +1949,58 @@ UCSC_F39 = {
                "(cluster formation, backup, SNMP sync).",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F40 — sam-copy.sh (operation-mgr RPM) auto-accepts SSH host key during
+#             firmware image SCP/SFTP transfers (fourth distinct host-key-bypass
+#             code path); distinct from UCSC-F38 (backup, sam-copy.exp/core RPM)
+#             and UCSC-F39 (SNMP peer sync, snmp_update_peer.sh/core RPM)
+# Source: opt/cisco/bin/sam-copy.sh in operation-mgr RPM (1.5.1c + 2.1.2b)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F40 = {
+    "id":       "UCSC-F40",
+    "title":    "sam-copy.sh (operation-mgr RPM) auto-accepts SSH host key during "
+                "firmware image SCP/SFTP transfers; fourth independent SSH host-key-bypass "
+                "code path across UCS Central; MITM enables firmware image tampering "
+                "during remote copy operations",
+    "status":   "CONFIRMED — operation-mgr RPM opt/cisco/bin/sam-copy.sh line 69 "
+                "(1.5.1c) / line 69 (2.1.2b); diff: minor SCP arg quoting, TFTP binary "
+                "change (busybox → system tftp); host-key-bypass logic identical",
+    "severity": "MEDIUM",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "host_key_bypass": (
+        "sam-copy.sh line 69: expect { ... \"*yes*?*\" { send \"yes\\r\" } ... }\n"
+        "Applies to: sam_scp (SCP) and sam_sftp (SFTP) proc — any 'yes/no' host key "
+        "prompt auto-accepted without verification.\n"
+        "sam_ftp: FTP protocol — no SSH, no host key; not in scope.\n"
+        "sam_tftp: TFTP — no auth at all; not in scope.\n"
+        "Operation: called for firmware image download/upload; attacker controlling "
+        "network between UCS Central and firmware server intercepts SCP/SFTP session, "
+        "presents rogue host key, delivers malicious firmware image."
+    ),
+
+    "distinction_from_f38": (
+        "UCSC-F38 (sam-copy.exp, core RPM): backup SCP/SFTP; password always CLI arg "
+        "(ps-visible); change_perms sets a+rw on copyin files.\n"
+        "UCSC-F40 (sam-copy.sh, operation-mgr RPM): firmware image transfer; password "
+        "via argv[6] OR $SAM_COPY_PASSWD env var (env var path avoids ps exposure); "
+        "change_perms sets 644 on copyin files (less permissive than UCSC-F38).\n"
+        "Both have identical host-key-bypass logic; different RPM, different operation, "
+        "different caller chain."
+    ),
+
+    "related": "UCSC-F30 (cluster SSH host-key bypass); UCSC-F38 (backup SCP sam-copy.exp); "
+               "UCSC-F39 (SNMP peer sync snmp_update_peer.sh). All four bypass SSH host key "
+               "verification across cluster, backup, SNMP, and firmware-transfer code paths.",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
-    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39,
+    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40,
 ]
 
 
