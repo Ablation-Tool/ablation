@@ -51,6 +51,8 @@ FIRMWARE = {
     },
     "arch":        "AArch64 (ARM64), little-endian",
     "compiler":    "GNU C11 14.2.1 20241119, -fno-stack-protector (jrpc_server/libjolt_inf.so); -fstack-protector-all (pam_cmc.so)",
+    "findings":    ["CMC-F1", "CMC-F2", "CMC-F3", "CMC-F4", "CMC-F5", "CMC-F6",
+                    "CMC-F7", "CMC-F8", "CMC-F9", "CMC-F10", "CMC-F11", "CMC-F12", "CMC-F13"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -539,7 +541,88 @@ CMC_KEY_BINARIES = {
     "platform_ohms (757KB)":       "Platform hardware monitoring",
 }
 
-FINDINGS = [CMC_F1, CMC_F2, CMC_F3, CMC_F4, CMC_F5, CMC_F6, CMC_F7, CMC_F8, CMC_F9, CMC_F10, CMC_F11]
+# ─────────────────────────────────────────────────────────
+# CMC-F12 — cicd_update.sh stagecicd executes supplied shell script without
+#            signature verification — bypasses img-valid gate enforced by dc_update.sh
+# ─────────────────────────────────────────────────────────
+CMC_F12 = {
+    "id":       "CMC-F12",
+    "title":    "cicd_update.sh stagecicd copies and executes supplied shell script without "
+                "signature verification — inconsistent update security vs dc_update.sh which "
+                "calls img-valid before extraction",
+    "status":   "CONFIRMED — /cmc/bin/cicd_update.sh in 6.0(2.260036) rootfs; "
+                "updated daemon calls cicd_update.sh (confirmed via strings /cmc/bin/updated)",
+    "severity": "HIGH",
+
+    "vulnerable_path": {
+        "script":    "cicd_update.sh stagecicd <path>",
+        "execution": "cp $2 /tmp/cmcapppkg.sh; mv /tmp/cmcapppkg.sh /cicd; sh /cicd/cmcapppkg.sh /cicd/staging",
+        "no_sig_check": "No img-valid call before sh execution — arbitrary shell script runs as root",
+        "contrast": "dc_update.sh calls $VALIDATION_BINARY -v -i \"$SOURCE_IMAGE\" and exits on failure; "
+                    "ism_update.sh calls img-valid for each subpackage — cicd path has no equivalent gate",
+    },
+
+    "trigger_chain": {
+        "caller":   "updated daemon (/cmc/bin/updated) — calls '/cmc/bin/cicd_update.sh <args>'",
+        "daemon":   "updated started by doctor_cmc via /etc/init.d/updated on CMC boot",
+        "jrpc_link": "updated daemon references JRPC_RET_SESS_INVALID and JOLT_RET_INVALID_PARAM "
+                     "— receives CICD update requests via JRPC interface (port 4037/4038)",
+        "no_auth":  "jrpc_server is explicitly marked 'not secured' in /etc/services (CMC-F3) — "
+                    "JRPC request to trigger CICD update requires no authentication",
+    },
+
+    "post_exec_flow": (
+        "After sh /cicd/cmcapppkg.sh runs: rsync -aq /cicd/staging/* / replaces entire "
+        "CMC filesystem; CMC daemons restart from attacker-controlled content. "
+        "Persistence across reboots via 'cicd_update.sh savenewcmcpkg' → cp to /flash."
+    ),
+
+    "version_status": {
+        "6.0.2.260036": "CONFIRMED — cicd_update.sh present, stagecicd path has no signature check",
+        "6.0.2.260026": "PRESENT — cicd_update.sh in rootfs, stagecicd path identical",
+    },
+}
+
+# ─────────────────────────────────────────────────────────
+# CMC-F13 — cli user (UID 0, restricted shell ecmc_shell) granted NOPASSWD sudo
+#            for all commands — trivial restricted-shell escape to unrestricted root
+# ─────────────────────────────────────────────────────────
+CMC_F13 = {
+    "id":       "CMC-F13",
+    "title":    "CMC sudoers grants 'cli ALL = (ALL) NOPASSWD:ALL' to cli user (UID 0, "
+                "shell=ecmc_shell) — sudo bypasses restricted shell, yielding unrestricted "
+                "root execution from CMC CLI access",
+    "status":   "CONFIRMED — /etc/sudoers and /etc/passwd in 6.0(2.260036) rootfs",
+    "severity": "HIGH",
+
+    "passwd_entry":   "cli:x:0:0:x:/tmp:/cmc/bin/ecmc_shell",
+    "shadow_entry":   "cli:*:::::::  (password locked — no direct login)",
+    "sudoers_entry":  "cli ALL = (ALL) NOPASSWD:ALL",
+
+    "escalation": (
+        "cli user is UID 0 but constrained to ecmc_shell (CMC restricted CLI). "
+        "NOPASSWD:ALL in sudoers allows 'sudo /bin/bash' or 'sudo /bin/sh' from within "
+        "ecmc_shell — any command reachable from the restricted CLI that launches a subprocess "
+        "can be leveraged as a shell escape. Once in unrestricted sh, all CMC management "
+        "binaries and root filesystem are accessible."
+    ),
+
+    "attack_scenario": (
+        "Attacker authenticates to CMC CLI (SSH as cli — password locked, but if SSHKeys "
+        "or other auth mechanism grants access), or gains ecmc_shell via CMC-F1/F2/F3, "
+        "then runs: sudo /bin/bash → unrestricted root shell. "
+        "Alternatively: any ecmc_shell command that invokes a helper binary with shell "
+        "metacharacter injection achieves the same result."
+    ),
+
+    "version_status": {
+        "6.0.2.260036": "CONFIRMED",
+        "6.0.1.251006": "LIKELY — same sudoers pattern observed across CMC versions",
+    },
+}
+
+FINDINGS = [CMC_F1, CMC_F2, CMC_F3, CMC_F4, CMC_F5, CMC_F6, CMC_F7, CMC_F8, CMC_F9, CMC_F10, CMC_F11,
+            CMC_F12, CMC_F13]
 
 if __name__ == "__main__":
     for f in FINDINGS:
