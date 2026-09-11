@@ -24,7 +24,8 @@ FIRMWARE = {
     "lvm_layout":  "almalinux VG: root(14G) home(6G) opt_cisco(9G) tmp(5G) var_tmp(5G)",
     "app_stack":   "etcd + MongoDB + RabbitMQ + Consul + Vault + Kubernetes + Jenkins (from get_dev_name.sh)",
     "custom_ssh":  "CiscoSSH 1.19.92 / OpenSSH 10.2p1 (Cisco fork at /usr/local/bin/ssh)",
-    "findings":    ["ISA-F1", "ISA-F2", "ISA-F3", "ISA-F4", "ISA-F5", "ISA-F6"],
+    "findings":    ["ISA-F1", "ISA-F2", "ISA-F3", "ISA-F4", "ISA-F5", "ISA-F6",
+                    "ISA-F7", "ISA-F8", "ISA-F9", "ISA-F10"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -314,6 +315,213 @@ ISA_F6 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────
+# ISA-F7 — /etc/kubernetes/ansible.kubeconfig deployed world-readable (mode 0644)
+#           containing kube_admin_password (system:masters cluster admin bearer token)
+# Source: disk3 LVM file_cisco/cisco — Ansible installer playbooks
+# ─────────────────────────────────────────────────────────
+ISA_F7 = {
+    "id":       "ISA-F7",
+    "title":    "Intersight Appliance installer deploys /etc/kubernetes/ansible.kubeconfig "
+                "with mode 0644 (world-readable); file contains kube_admin_password bearer token "
+                "granting system:masters (cluster admin) Kubernetes API access",
+    "status":   "CONFIRMED — tasks/setup-kubernetes-user-credentials.yml + "
+                "kubernetes/config/ansible-kubeconfig.j2 in disk3 file_cisco/cisco LVM",
+    "severity": "HIGH",
+
+    "installer_task": (
+        "# tasks/setup-kubernetes-user-credentials.yml:\n"
+        "- name: Backup ansible-user's kubeconfig\n"
+        "  become: true\n"
+        "  copy:\n"
+        "    src: ~ansible/.kube/config\n"
+        "    dest: /etc/kubernetes/ansible.kubeconfig\n"
+        "    mode: 0644   # ← world-readable"
+    ),
+
+    "kubeconfig_template": (
+        "# kubernetes/config/ansible-kubeconfig.j2:\n"
+        "users:\n"
+        "- user:\n"
+        "    token: {{ kube_admin_password }}   # system:masters admin token\n"
+        "  name: admin\n"
+        "current-context: admin"
+    ),
+
+    "token_generation": (
+        "kube_admin_password is generated via 'openssl rand -hex 16' "
+        "(tasks/get-kube-credentials.yml) and stored separately in etcd per token name. "
+        "Static bearer token — non-expiring, only invalidated by API server restart. "
+        "The token is written to /var/lib/kubernetes/token.csv (mode 0600, root-only) — "
+        "but the kubeconfig backup at /etc/kubernetes/ansible.kubeconfig (mode 0644) "
+        "is readable by any local user without privilege escalation."
+    ),
+
+    "impact": (
+        "Any local user on the Intersight Appliance can read "
+        "/etc/kubernetes/ansible.kubeconfig and extract the kube_admin_password bearer token. "
+        "Presenting this token to the Kubernetes API server authenticates as 'admin' in "
+        "system:masters — full cluster admin: create/delete pods, read secrets across all "
+        "namespaces, deploy arbitrary workloads. "
+        "The Intersight Appliance Kubernetes cluster runs the full application stack "
+        "(etcd, MongoDB, RabbitMQ, Consul, Vault, Equinox cloud connector). "
+        "Cluster admin access = read all application secrets stored in Kubernetes Secrets."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# ISA-F8 — Kubernetes API server uses --token-auth-file (static token CSV)
+#           deprecated K8s 1.19, removed K8s 1.29; tokens non-expiring + non-revocable
+#           without full API server restart
+# Source: disk3 LVM file_cisco/cisco — Ansible installer playbooks
+# ─────────────────────────────────────────────────────────
+ISA_F8 = {
+    "id":       "ISA-F8",
+    "title":    "Intersight Appliance kube-apiserver starts with --token-auth-file=/var/lib/kubernetes/token.csv — "
+                "static CSV token auth deprecated in Kubernetes 1.19, removed in 1.29; "
+                "tokens are non-expiring and cannot be invalidated without restarting the API server",
+    "status":   "CONFIRMED — kubernetes/config/kube-apiserver.service.tls.j2 line 35 + "
+                "kubernetes/config/token.j2 in disk3 file_cisco/cisco LVM",
+    "severity": "MEDIUM",
+
+    "apiserver_flag": "--token-auth-file=/var/lib/kubernetes/token.csv",
+
+    "token_csv_template": (
+        "# kubernetes/config/token.j2 — written to /var/lib/kubernetes/token.csv (mode 0600):\n"
+        "{{ kube_admin_password }},admin,admin,system:masters\n"
+        "{{ kube_readonly_password }},kube-readonly,kube-readonly\n"
+        "{{ kubelet_bootstrap_token }},kubelet-bootstrap,10001,\"system:bootstrappers\"\n"
+        "# format: token,username,uid[,group1[,group2...]]\n"
+        "# kube_admin_password → system:masters (cluster admin)\n"
+        "# kubelet_bootstrap_token → system:bootstrappers (node join)"
+    ),
+
+    "deprecation_timeline": (
+        "K8s 1.19 (Aug 2020): static token file authentication marked deprecated. "
+        "K8s 1.29 (Dec 2023): --token-auth-file flag removed from kube-apiserver. "
+        "Intersight Appliance 1.1.7 (2025): still uses this mechanism. "
+        "Static tokens in token.csv have no expiry field — they are valid indefinitely "
+        "until the file is edited and the API server is restarted. "
+        "Token rotation requires: (1) edit token.csv, (2) restart kube-apiserver. "
+        "There is no online token revocation path."
+    ),
+
+    "compound_risk": (
+        "Paired with ISA-F7: the world-readable ansible.kubeconfig exposes the "
+        "kube_admin_password token value. Since static tokens cannot be rotated "
+        "without an API server restart (service disruption), a leaked token provides "
+        "persistent cluster admin access until the operator takes an explicit disruptive action. "
+        "The absence of token expiry means there is no automatic credential rotation."
+    ),
+
+    "impact": (
+        "An attacker who reads /etc/kubernetes/ansible.kubeconfig (ISA-F7) obtains a "
+        "bearer token that cannot be expired on a schedule — only manually invalidated "
+        "via API server restart. In post-incident scenarios, silent token theft may go "
+        "undetected: no audit log entry for bearer-token auth beyond the request log, "
+        "no expiry-based trip wire, no certificate revocation equivalent."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# ISA-F9 — DNS and Equinox service kubeconfigs provisioned with kube_admin_password
+#           (cluster admin token) via 'For now, use admin credentials' comment
+# Source: disk3 LVM file_cisco/cisco — Ansible installer playbooks
+# ─────────────────────────────────────────────────────────
+ISA_F9 = {
+    "id":       "ISA-F9",
+    "title":    "Intersight Appliance installer provisions /etc/kubernetes/dns.kubeconfig and "
+                "/etc/kubernetes/equinox.kubeconfig with kube_admin_password (system:masters) "
+                "acknowledged by inline 'For now, use admin credentials' comment",
+    "status":   "CONFIRMED — tasks/setup-kubernetes-user-credentials.yml lines 107-132 "
+                "in disk3 file_cisco/cisco LVM",
+    "severity": "MEDIUM",
+
+    "playbook_excerpt": (
+        "# tasks/setup-kubernetes-user-credentials.yml lines 107-132:\n"
+        "\n"
+        "    # For now, use admin credentials.\n"
+        "    - name: Generate dns kubeconfig\n"
+        "      ...password: '{{ kube_admin_password }}'\n"
+        "      dest: /etc/kubernetes/dns.kubeconfig\n"
+        "\n"
+        "    # For now use admin credentials.\n"
+        "    - name: Generate equinox kubeconfig\n"
+        "      ...password: '{{ kube_admin_password }}'\n"
+        "      dest: /etc/kubernetes/equinox.kubeconfig"
+    ),
+
+    "service_context": {
+        "dns": "CoreDNS service configuration — read access to cluster DNS records sufficient",
+        "equinox": "Intersight cloud connector — bridges on-premises appliance to Cisco Intersight cloud; "
+                   "requires cluster coordination but NOT cluster admin privilege",
+    },
+
+    "principle_of_least_privilege": (
+        "Both services were acknowledged as over-privileged at time of coding ('For now'). "
+        "DNS management requires get/watch/list on ConfigMaps in kube-system, not system:masters. "
+        "The Equinox cloud connector requires read access to namespaces and deployments — "
+        "a custom ClusterRole scoped to those resources is sufficient. "
+        "Provisioning both with the cluster admin token widens the blast radius of "
+        "any compromise of either service's kubeconfig file or process."
+    ),
+
+    "impact": (
+        "A vulnerability in CoreDNS or the Equinox cloud connector that allows reading "
+        "/etc/kubernetes/dns.kubeconfig or /etc/kubernetes/equinox.kubeconfig "
+        "yields system:masters cluster admin access — the same privilege level "
+        "as the full ansible admin. "
+        "The Equinox connector is of particular interest: it maintains connectivity to "
+        "Cisco Intersight cloud, and a compromised Equinox process with cluster admin "
+        "can read all Kubernetes Secrets including stored cloud API credentials."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# ISA-F10 — MongoDB TLS mode defaults to 'preferTLS' — accepts plaintext connections
+# Source: disk3 LVM file_cisco/cisco — Ansible installer playbooks
+# ─────────────────────────────────────────────────────────
+ISA_F10 = {
+    "id":       "ISA-F10",
+    "title":    "Intersight Appliance Ansible installer sets mongodb_tls_mode to 'preferTLS' — "
+                "MongoDB accepts non-TLS plaintext connections when TLS handshake fails or is "
+                "not initiated by the client",
+    "status":   "CONFIRMED — vars/mongodb-tls-params.yml in disk3 file_cisco/cisco LVM",
+    "severity": "LOW",
+
+    "vars_file": "vars/mongodb-tls-params.yml",
+    "setting":   "mongodb_tls_mode: \"preferTLS\"",
+
+    "tls_mode_behavior": (
+        "MongoDB TLS modes:\n"
+        "  disabled   — no TLS, all connections plaintext\n"
+        "  allowTLS   — accepts both TLS and non-TLS\n"
+        "  preferTLS  — accepts both TLS and non-TLS (client negotiation-dependent)\n"
+        "  requireTLS — rejects any non-TLS connection\n"
+        "'preferTLS' is functionally equivalent to 'allowTLS' — a client connecting "
+        "without TLS is not rejected. The 'require' is advisory from the server's perspective."
+    ),
+
+    "deployment_context": (
+        "MongoDB is part of the Intersight Appliance application stack. "
+        "In a correctly deployed appliance, all pod-to-MongoDB connections should use TLS "
+        "via the onprem-ca.crt trust chain. "
+        "preferTLS leaves a fallback path: any pod or local process that connects to MongoDB "
+        "without TLS (e.g., a debug tool, a misconfigured service, or a container with "
+        "a missing CA bundle) receives plaintext MongoDB traffic including collection data. "
+        "requireTLS would eliminate this fallback without requiring client changes for "
+        "correctly configured services."
+    ),
+
+    "impact": (
+        "Low — requires network access to the MongoDB port within the cluster. "
+        "In a shared-namespace or compromised pod scenario, a process connecting to MongoDB "
+        "without TLS succeeds, allowing unencrypted data transfer and potential "
+        "credential capture on the cluster network."
+    ),
+}
+
+
 ISA_ACCOUNTS = {
     "root":      {"uid": 0,    "shadow": "!! (locked)", "shell": "/bin/bash",             "sudo": "direct root"},
     "ansible":   {"uid": 1001, "shadow": "!! (locked)", "shell": "/bin/bash",             "sudo": "NOPASSWD:ALL (sudoers.d/ansible)"},
@@ -329,7 +537,8 @@ ISA_CUSTOM_SSH = {
     "note":    "Cisco fork of OpenSSH 10.2p1 in /usr/local/bin, overrides system OpenSSH in PATH",
 }
 
-FINDINGS = [ISA_F1, ISA_F2, ISA_F3, ISA_F4, ISA_F5, ISA_F6]
+FINDINGS = [ISA_F1, ISA_F2, ISA_F3, ISA_F4, ISA_F5, ISA_F6,
+            ISA_F7, ISA_F8, ISA_F9, ISA_F10]
 
 if __name__ == "__main__":
     for f in FINDINGS:
