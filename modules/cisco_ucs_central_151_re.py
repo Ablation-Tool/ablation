@@ -2862,27 +2862,33 @@ UCSC_F60 = {
 # ─────────────────────────────────────────────────────────
 UCSC_F61 = {
     "id":       "UCSC-F61",
-    "title":    "UCS FI6400 firmware image signature verification uses a 1024-bit RSA public key "
-                "at /etc/pub.pem — RSA-1024 is considered cryptographically broken (NIST deprecated "
-                "in 2010; estimated factorable with nation-state resources); isanboot/bin/imghdr.aci "
-                "reads this key to verify firmware signatures before loading; an attacker who can "
-                "factor the 1024-bit modulus obtains a signing key capable of producing valid "
-                "signatures for arbitrary firmware images accepted by all FI6400 units using this "
-                "public key",
+    "title":    "UCS Fabric Interconnect firmware image signature verification uses a 1024-bit RSA "
+                "public key at /etc/pub.pem across all four FI product lines (FI6400, FI6500, FI6600, "
+                "UCS X-Direct) — RSA-1024 is cryptographically broken (NIST deprecated 2010; "
+                "estimated factorable with nation-state resources); isanboot/bin/imghdr.aci reads "
+                "this key to verify firmware signatures before loading; all four bundles in version "
+                "6.0.2b.A ship the identical ucsfi.10.5.1.I60.2b.F.bin (1589095936 bytes), confirming "
+                "a single shared weak key covers the entire current UCS FI product line; an attacker "
+                "who factors the 1024-bit modulus obtains a signing key capable of producing valid "
+                "firmware signatures accepted by every FI6400, FI6500, FI6600, and X-Direct unit",
     "status":   "CONFIRMED — source analysis; "
                 "fi6400-extract/rootfs/etc/pub.pem: RSA public key, 1024-bit modulus "
-                "(openssl rsa: 'Public-Key: (1024 bit)', exponent 65537); "
-                "isanboot/bin/imghdr.aci (ELF 32-bit, stripped, x86): binary grep confirms "
-                "'/etc/pub.pem' string literal; exports img_verify_signature, img_verify_signature2, "
-                "rsalib_signature_verify, cs_verify_dc3sup2_pkg, cs_dc3sup2_verify_image, "
-                "cs_dc3sup2_digital_signature_valid; error string 'Invalid modulus size %d, expecting %d' "
-                "confirms key size enforcement; Verify OK!! / Verify failed!! output strings; "
-                "key present only in FI6400 rootfs — not found in CMC or HyperFlex components",
+                "(openssl rsa: 'Public-Key: (1024 bit)', exponent 65537, "
+                "modulus 00:be:be:f6:6e:69:e7:bf...); "
+                "cross-platform scope confirmed: ucs-6400-k9-bundle-infra.6.0.2b.A, "
+                "ucs-6500-k9-bundle-infra.6.0.2b.A, ucs-6600-k9-bundle-infra.6.0.2b.A, "
+                "ucs-x-direct-k9-infra.6.0.2b.A — all four bundles contain "
+                "ucsfi.10.5.1.I60.2b.F.bin at identical size 1589095936 bytes; "
+                "isanboot/bin/imghdr.aci (ELF 32-bit, stripped, x86): string '/etc/pub.pem'; "
+                "exports: img_verify_signature, rsalib_signature_verify, "
+                "cs_dc3sup2_digital_signature_valid; 'Invalid modulus size %d, expecting %d' "
+                "confirms key size enforcement at verification time",
     "severity": "HIGH",
-    "source_pkg": "ucs-6400-k9-bundle-infra.6.0.2b.A → ucsfi.10.5.1.I60.2b.F.bin rootfs",
+    "source_pkg": "ucs-6400/6500/6600-k9-bundle-infra.6.0.2b.A + ucs-x-direct-k9-infra.6.0.2b.A "
+                  "→ ucsfi.10.5.1.I60.2b.F.bin (all identical, 1589095936 bytes)",
     "source_ref": "fi6400-extract/rootfs/etc/pub.pem (1024-bit RSA, modulus starts 00:be:be:f6:6e:69:e7:bf); "
-                  "fi6400-extract/rootfs/isanboot/bin/imghdr.aci (ELF shared object, x86, stripped; "
-                  "img_verify_signature @ export table; string '/etc/pub.pem')",
+                  "fi6400-extract/rootfs/isanboot/bin/imghdr.aci; "
+                  "bundle tar listing confirms identical ucsfi.bin across all four FI product bundles",
 }
 
 # ─────────────────────────────────────────────────────────
