@@ -333,6 +333,127 @@ FINDING_F4_AIKIDO_LOADER_CHANGE = {
 
 
 # =============================================================================
+# FINDING F5
+# PCIe M85-SB dual-ASIC Palo boot path -- Beverly TAM does not cover Palo firmware
+# Severity: MEDIUM
+# =============================================================================
+# The PCIe M85-SB bridge image contains both Beverly (M85) TAM-enforced paths
+# and Palo-family (M83) firmware boot capability. Beverly has AIKIDO + TAM
+# IDevID enforcement. Palo-family predates the TAM module entirely.
+# The 'fwboot - boot palo firmware image from memory' U-Boot command is
+# present in the production image. If this command can be triggered via the
+# manufacturing firmware path or I2C boot console, Palo firmware loads from
+# memory without TAM verification, bypassing Beverly's full security posture.
+# The 'ignore_palocfg' string suggests a mechanism to skip Palo config entirely.
+
+FINDING_F5_PALO_BOOT_TAM_BYPASS = {
+    "id": "CSERIES-MOD3-F5",
+    "title": "PCIe M85-SB Palo boot path bypasses Beverly TAM integrity enforcement",
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM",
+    "component": "PCIe M85-SB VIC 5.4.2.47-48 -- dual-ASIC boot architecture",
+    "cve": None,
+    "evidence": {
+        "palo_in_beverly_image": [
+            "Palo Firmware",
+            "Palo Boot version %s",
+            "fwboot  - boot palo firmware image from memory",
+            "ignore_palocfg",
+            "VIC-FW-Beverly",
+            "VIC-FW-Beverly_LDWM",
+        ],
+        "tam_fpga_integration": [
+            "Error: tam_lib_get_aikido_fpga_version() 0x%02X",
+            "Error: vic_tam_fpga_reg_read()",
+            "fpga_target    : 0x%02X",
+        ],
+        "aikido_diagnostic": [
+            "(Power cycle the adapter and run 'vic_sb_fpga -s %d -x')",
+        ],
+    },
+    "mechanism": (
+        "PCIe M85-SB is a dual-ASIC bridge image covering Beverly (M85) and Palo (M83). "
+        "Beverly runtime: AIKIDO FPGA-resident integrity + TAM IDevID + SUDI. "
+        "Palo boot path ('fwboot - boot palo firmware image from memory'): "
+        "Palo firmware predates the TAM module; no TAM verification applied. "
+        "The 'ignore_palocfg' boot option permits skipping Palo config entirely. "
+        "Manufacturing firmware path (confirmed in F1) may be the activation surface "
+        "for triggering the Palo boot path from a Beverly-booted card."
+    ),
+    "impact": (
+        "Palo firmware loaded from memory executes without TAM integrity verification, "
+        "IDevID binding, or SUDI attestation. "
+        "The card's trusted identity (IDevID) is tied to Beverly; "
+        "Palo firmware bypasses this identity model. "
+        "Requires activation of manufacturing boot path or physical I2C console access."
+    ),
+    "affected_devices": [
+        "UCSC-PCIE-C25Q-04 (PCIe M85-SB VIC, fw 5.4.2.47-48)",
+    ],
+    "remediation": (
+        "Restrict 'fwboot' and Palo boot commands to manufacturing mode only. "
+        "Ensure manufacturing firmware path is disabled in production images. "
+        "Verify AIKIDO FPGA integrity check applies to all boot paths, including Palo."
+    ),
+}
+
+
+# =============================================================================
+# FINDING F6
+# AIKIDO integrity is FPGA-resident -- FPGA downgrade (F3) degrades AIKIDO
+# Severity: LOW
+# =============================================================================
+# tam_lib_get_aikido_fpga_version() and vic_tam_fpga_reg_read() confirm the
+# AIKIDO firmware integrity enforcement mechanism is embedded in the VIC FPGA,
+# not the MIPS host firmware. The FPGA dual-image (GOLDEN/UPGRADE from F3)
+# has a direct bearing on AIKIDO: downgrading the FPGA image downgrades the
+# AIKIDO security posture that enforces firmware integrity.
+# F3 and F6 compound: FPGA downgrade -> older AIKIDO -> weaker integrity checks.
+
+FINDING_F6_AIKIDO_FPGA_DOWNGRADE = {
+    "id": "CSERIES-MOD3-F6",
+    "title": "AIKIDO integrity enforcement is FPGA-resident -- FPGA downgrade degrades AIKIDO",
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "component": "PCIe M85-SB VIC 5.4.2.47-48 -- AIKIDO FPGA integration",
+    "cve": None,
+    "evidence": {
+        "fpga_aikido_functions": [
+            "Error: tam_lib_get_aikido_fpga_version() 0x%02X",
+            "Error: vic_tam_fpga_reg_read()",
+            "fpga_target    : 0x%02X",
+        ],
+        "fpga_no_rollback": [
+            "UPGRADE Version   : Downgrading or Same Version",
+        ],
+        "diagnostic_command": [
+            "(Power cycle the adapter and run 'vic_sb_fpga -s %d -x')",
+        ],
+    },
+    "mechanism": (
+        "AIKIDO firmware integrity verification is FPGA-resident (tam_lib_get_aikido_fpga_version). "
+        "FPGA dual-image (GOLDEN/UPGRADE) permits downgrade without version enforcement (F3). "
+        "FPGA downgrade installs an older AIKIDO implementation with less strict integrity checks. "
+        "The 'vic_sb_fpga -s %d -x' diagnostic command provides direct FPGA interaction, "
+        "and is included in a user-visible error recovery path."
+    ),
+    "impact": (
+        "FPGA version rollback (via F3 downgrade path) weakens the AIKIDO "
+        "integrity enforcer embedded in that FPGA version. "
+        "Older AIKIDO may accept modified MIPS firmware that newer AIKIDO rejects. "
+        "Compounding with F3: two-step attack -- FPGA downgrade then MIPS firmware replacement."
+    ),
+    "affected_devices": [
+        "UCSC-PCIE-C25Q-04 (PCIe M85-SB VIC, fw 5.4.2.47-48)",
+    ],
+    "remediation": (
+        "Enforce FPGA minimum version (required for AIKIDO versioning). "
+        "Lock FPGA downgrade path before AIKIDO version bound is established at manufacture."
+    ),
+}
+
+
+# =============================================================================
 # ZERO-HIT SURVEY LOG
 # All members scanned, null result = logged result
 # =============================================================================
@@ -350,10 +471,12 @@ ZERO_HIT_CSERIES_MOD3 = {
         "string_density_at_400mb": "926 strings, all random-looking (encrypted/compressed)",
         "verdict": "OPAQUE -- no plain-text string tables in any region",
         "note": (
-            "ConnectX-7 32.x firmware uses full-image encryption or non-standard "
-            "string storage. Class-similar to ConnectX M6 PCIe variants (M84/M85). "
-            "Security primitives (mjtag, lifecycle, Rollback fuse) documented in "
-            "B-Series VIC Module 1 under ConnectX M6 class."
+            "NC3220 firmware (32.46.1006) was fully analyzed in a dedicated prior session "
+            "as cisco_ucs_cseries_nc3220_bluefield_re.py (4 findings: NC3220-F1 through F4). "
+            "The C-Series bundle version is the same 32.46.1006 in SN-wrapped format. "
+            "Inner content is a TAR(XZ(446MB ARM bundle)) -- XZ compression explains 0 ASCII hits "
+            "in outer SN gzip layer scan. BlueField-3 DPU findings (ROTPK bypass, BL2 soft fail, "
+            "HTTP CRL) from prior analysis apply."
         ),
     },
     "pcie_m84_vic": {
@@ -451,13 +574,15 @@ MODULE_SUMMARY = {
     "session": 29,
     "component": "C-Series PCIe VIC TAM/IDevID + large-file survey",
     "findings_this_module": {
-        "total": 4,
-        "breakdown": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 2, "LOW": 2},
+        "total": 6,
+        "breakdown": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 3, "LOW": 3},
         "ids": [
             "CSERIES-MOD3-F1",
             "CSERIES-MOD3-F2",
             "CSERIES-MOD3-F3",
             "CSERIES-MOD3-F4",
+            "CSERIES-MOD3-F5",
+            "CSERIES-MOD3-F6",
         ],
     },
     "zero_hit_log": [
@@ -471,7 +596,7 @@ MODULE_SUMMARY = {
         "BIOS blobs (12 platforms, Intel UEFI)",
     ],
     "cumulative_all": {
-        "total": 521,
-        "breakdown": {"CRITICAL": 54, "HIGH": 177, "MEDIUM": 160, "LOW": 130},
+        "total": 523,
+        "breakdown": {"CRITICAL": 54, "HIGH": 177, "MEDIUM": 161, "LOW": 131},
     },
 }
