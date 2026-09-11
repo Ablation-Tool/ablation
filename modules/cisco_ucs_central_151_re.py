@@ -484,7 +484,10 @@ UCSC_F14 = {
     "versions_affected": ["1.5.1c", "2.1.2b"],
 
     "binary":    "opt/cisco/bin/samcrypt",
-    "library":   "opt/cisco/core/sam/lib/libosiris.so (and central-mgr, policy-mgr, operation-mgr copies)",
+    "library":   "opt/cisco/core/sam/lib/libosiris.so (and all application package copies); "
+                 "ALSO confirmed in libsamsec.so and libcore.so in all application packages "
+                 "(central-mgr, policy-mgr, identifier-mgr, service-reg, operation-mgr) — "
+                 "3 distinct library carriers; key is ubiquitous across the entire service stack",
     "algorithm": "RC4 (RC4_set_key from OpenSSL; symbol RC4_1_CIPHER_KEYCODE)",
 
     "hardcoded_key":  "dwefsAvfsdkfqweqyrmfvsfwth",
@@ -1091,11 +1094,174 @@ UCSC_F26 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F27: sec::CallSystem() exported by libsamsec.so (security library) —
+#            thin system() wrapper; called from comm::CommWkr::capConfPeerVMPolicies()
+#            in libsvc_sam_controllerAG.so with unsanitized keyRing-derived filename
+#            in a shell command; single-quote injection via keyRing name achieves
+#            OS command injection on the UCS Central management server
+# Source: core-1.5.1-c.x86_64.rpm / central-mgr-1.5.1-c.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F27 = {
+    "id":       "UCSC-F27",
+    "title":    "comm::CommWkr::capConfPeerVMPolicies() in libsvc_sam_controllerAG.so builds "
+                "a shell command via snprintf with an unsanitized keyRing-derived cert path "
+                "and passes it to sec::CallSystem() — single-quote injection via keyRing name "
+                "achieves OS command injection on UCS Central from a managed domain admin",
+    "status":   "CONFIRMED — disassembly of libsvc_sam_controllerAG.so + libsamsec.so in "
+                "core-1.5.1-c.x86_64.rpm and central-mgr-1.5.1-c.x86_64.rpm",
+    "severity": "HIGH",
+
+    "call_chain": (
+        "comm::CommWkr::capConfPeerVMPolicies(method::Method*) "
+        "→ sec::GetCertFilename(base::Buffer&, const base::String& keyRing) "
+        "→ sec::GetKeyRingPrefix(base::Buffer&, const base::String& keyRing) "
+        "  [appends SvcConfigParams::CERT_ENROLL_PATH + keyRing.c_str() — no sanitization] "
+        "→ appends '.crt' "
+        "→ snprintf(buf, 0x400, format, '/tmp/https_cert_diff', cert_path, "
+        "   '/opt/cisco/cert/CACertificate.pem') "
+        "→ sec::CallSystem(buf)  [thin wrapper: system(buf)]"
+    ),
+
+    "shell_command_template": (
+        "file=%s;if [ '%s' == `readlink %s` ]; then touch $file;else rm -f $file; fi\n"
+        "# %s #1 = /tmp/https_cert_diff (static)\n"
+        "# %s #2 = <CERT_ENROLL_PATH>/<keyRing_name>.crt  (user-controlled keyRing name)\n"
+        "# %s #3 = /opt/cisco/cert/CACertificate.pem (static)"
+    ),
+
+    "injection_payload": (
+        "keyRing name: legit'; touch /tmp/pwned; echo '\n"
+        "Resulting command: "
+        "file=/tmp/https_cert_diff;if [ '<CERT_PATH>/legit'; touch /tmp/pwned; echo '.crt' == "
+        "`readlink /opt/cisco/cert/CACertificate.pem` ]; then touch $file;else rm -f $file; fi\n"
+        "Result: touch /tmp/pwned executes as samdme (root-equivalent) on UCS Central"
+    ),
+
+    "sec_callsystem": (
+        "libsamsec.so exports sec::CallSystem(const char*) at offset 0x3bdd0 — a 6-byte function "
+        "that passes its argument directly to system(). No logging, no privilege drop, no shell "
+        "character filtering. The function is part of the public sec:: namespace API."
+    ),
+
+    "no_sanitization": (
+        "sec::GetKeyRingPrefix() clears buffer, appends CERT_ENROLL_PATH, then calls "
+        "base::String::c_str() virtual method on the keyRing argument and appends the raw string. "
+        "No character filtering (single-quote, backtick, semicolon, etc.) at any point in the chain. "
+        "The 1024-byte snprintf buffer prevents truncation for typical keyRing names."
+    ),
+
+    "trust_boundary": (
+        "keyRing is a UCS Manager data model object (pki::KeyRing) that managed domain admins "
+        "can create with arbitrary names. UCS Central calls capConfPeerVMPolicies() when enforcing "
+        "cert policies on managed domains. A compromised UCSM domain or rogue domain admin can "
+        "trigger OS command injection on the UCS Central management server — cross-domain privilege "
+        "escalation."
+    ),
+
+    "affected_libs": [
+        "opt/cisco/central-mgr/sam/lib/libsamsec.so (defines sec::CallSystem at 0x3bdd0)",
+        "opt/cisco/core/sam/lib/libsvc_sam_controllerAG.so (capConfPeerVMPolicies at 0x65de6, "
+        "calls sec::CallSystem at 0x6642c)",
+    ],
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F28: All UCS Central 1.5.1c application service binaries compiled with
+#            GCC 4.1.2 (2008, RHEL 5) — no PIE, no stack canaries, no RELRO;
+#            in 2.1.2b: still no PIE, no stack canaries; partial RELRO on DME
+#            binaries only; all 12+ networked daemons (UCSM XML federation)
+#            have zero stack memory corruption mitigations
+# Source: all 1.5.1c + 2.1.2b application RPMs
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F28 = {
+    "id":       "UCSC-F28",
+    "title":    "All UCS Central application service binaries compiled without PIE, stack "
+                "canaries, or RELRO — zero memory corruption mitigations across 12+ UCSM "
+                "federation daemons in 1.5.1c; 2.1.2b adds partial RELRO on DME binaries "
+                "only, still no PIE or stack canaries",
+    "status":   "CONFIRMED — ELF headers and symbol tables across all 1.5.1c + 2.1.2b "
+                "application RPMs (central-mgr, policy-mgr, identifier-mgr, service-reg, "
+                "operation-mgr) and shared libraries",
+    "severity": "MEDIUM",
+
+    "compiler":    "GCC 4.1.2 20080704 (Red Hat 4.1.2-55) — 2008, RHEL 5 era",
+    "elf_type":    "EXEC (not DYN) — no PIE; fixed load address; ASLR provides no benefit "
+                   "for the executable itself (shared libs may be randomized)",
+    "stack_canary": "absent — __stack_chk_fail not referenced in any application binary; "
+                    "GCC 4.1.2 default: -fno-stack-protector",
+    "relro":       "1.5.1c: absent (no GNU_RELRO segment, no BIND_NOW); "
+                   "2.1.2b: GNU_RELRO on svc_centralMgr_dme + svc_pol_dme only; "
+                   "GOT writable at runtime in all other binaries",
+    "nx":          "present (GNU_STACK RW, not RWE) — NX/DEP is enabled",
+
+    "binaries_affected": [
+        "svc_centralMgr_dme, svc_pol_dme, svc_idm_dme, svc_reg_dme, svc_ops_dme (DMEs)",
+        "svc_sam_cloudAG, svc_sam_controllerAG, svc_sam_imgMgmtAG, svc_sam_licenseAG",
+        "svc_sam_pkiAG, svc_sam_secAG, svc_sam_sessionmgrAG, svc_sam_snmpTrapAG",
+        "ucssh (SUID — already covered by UCSC-F13)",
+        "pam_proxy_test_client, curl, openssl (bundled test/utility binaries)",
+    ],
+
+    "dangerous_lib_functions": (
+        "Shared library sweep across central-mgr/sam/lib/: "
+        "strcpy in 26/31 libraries; sprintf in 19/31; strcat in 17/31; "
+        "system() in libclicommon.so, libcliservice.so, libmodel.so, libosiris.so, libsamsec.so; "
+        "popen() in libcliservice.so, libosiris.so; "
+        "execve/execv/execl/execlp in libcliservice.so, libcurl.so, libosiris.so, "
+        "libtsJavaAcc_libFNP.so, libtsJavaAcc.so, libucsshedit.so. "
+        "Any stack buffer overflow in any calling function → direct RIP control."
+    ),
+
+    "impact": (
+        "UCSM XML federation is processed by these daemons: managed domains push XML MO updates "
+        "over TCP. Any memory corruption vulnerability in the federation message parsers runs "
+        "without stack canary or ASLR-for-executable protection — return-oriented programming "
+        "chains are stable across deployments. With GOT writable (1.5.1c), GOT-overwrite attacks "
+        "reach system() and exec* without ROP."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F29: pam_proxy_test_client test/diagnostic binary deployed in production
+#            across all application packages (central-mgr, policy-mgr,
+#            identifier-mgr, service-reg, operation-mgr); provides direct PAM
+#            auth proxy access without application-level enforcement; no binary
+#            hardening; 2.1.2b equivalent present in all packages
+# Source: all 1.5.1c + 2.1.2b application RPMs
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F29 = {
+    "id":       "UCSC-F29",
+    "title":    "pam_proxy_test_client diagnostic binary deployed in production across "
+                "all UCS Central application packages — direct PAM auth proxy exercise "
+                "without application-level enforcement; no binary hardening; "
+                "2.1.2b present in all packages",
+    "status":   "CONFIRMED — opt/cisco/*/sam/bin/pam_proxy_test_client in "
+                "central-mgr, policy-mgr, identifier-mgr, service-reg (1.5.1c + 2.1.2b)",
+    "severity": "LOW",
+
+    "installed_path": "/opt/cisco/*/sam/bin/pam_proxy_test_client",
+    "binary_size":    "8617 bytes (GCC 4.1.2, not stripped)",
+    "purpose":        "multi-threaded PAM proxy stress/functional test client (connect_to_server + pthread_create)",
+    "exports":        "none — uses srand() for pseudorandom session generation",
+
+    "risk": (
+        "A local user on the UCS Central server can invoke pam_proxy_test_client to directly "
+        "exercise the PAM authentication proxy without going through the normal UCS Central "
+        "application login flow. If the PAM proxy has authentication bypass conditions or "
+        "rate-limit gaps, this utility provides a local tool to test/exploit them. "
+        "No binary hardening (no PIE, no canary, no RELRO) — consistent with UCSC-F28."
+    ),
+
+    "note": "Similar to CMC-F11 (TPM test binaries in production rootfs). "
+            "Diagnostic binaries should not be shipped in production packages.",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
-    UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26,
+    UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
 ]
 
 
