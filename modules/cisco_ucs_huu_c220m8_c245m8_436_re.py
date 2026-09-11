@@ -29,7 +29,7 @@ FIRMWARE = {
     "cimc":      {"C220 M8": "4.3(6.260054)", "C245 M8": "4.3(6.250053)"},
     "base_os":   "BusyBox/Buildroot Linux (rootfs.img created 2018-03-09, shipped in 2024+ ISOs)",
     "findings":  ["HUU436-F1", "HUU436-F2", "HUU436-F3", "HUU436-F4", "HUU436-F5", "HUU436-F6",
-                  "HUU436-F7", "HUU436-F8", "HUU436-F9"],
+                  "HUU436-F7", "HUU436-F8", "HUU436-F9", "HUU436-F10", "HUU436-F11"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -385,9 +385,90 @@ HUU436_F9 = {
     },
 }
 
+# ─────────────────────────────────────────────────────────
+# HUU436-F10 — BMC timezone string written unsanitized to timefile; init.sh evaluates
+#              timefile content as shell command — same pattern as HUU-F10 (6.0.2)
+# ─────────────────────────────────────────────────────────
+HUU436_F10 = {
+    "id":       "HUU436-F10",
+    "title":    "HUU 4.3.6 container init-huu.sh set_timezone() writes BMC-provided timezone string "
+                "to timefile without sanitization; init.sh evaluates timefile via $(cat) as root — "
+                "cross-generation scope extension of HUU-F10 (6.0.2)",
+    "status":   "CONFIRMED — etc/init-huu.sh + etc/init.sh in all three HUU 4.3.6 container bases "
+                "(C220 260054, C220 250039, C245 250053); byte-identical to 6.0.2 pattern",
+    "severity": "HIGH",
+
+    "files": {
+        "init_huu_sh": "etc/init-huu.sh (container base tar.gz)",
+        "init_sh":     "etc/init.sh (container base tar.gz)",
+    },
+
+    "evidence": {
+        "timefile_var":       "export TIME_FILE=/root/hsu/logs/timefile  (init-huu.sh:10)",
+        "set_timezone_write": "echo \"export TZ=$time_zone\" > $TIME_FILE  (init-huu.sh:402)",
+        "bmc_source":         "time_zone=$(jq -r \".timezone\" time_response.json)  (init-huu.sh:400)",
+        "evaluation":         "$(cat ${MNTPATH}/${WORKBASE}/logs/timefile)  (init.sh:57)",
+    },
+
+    "cross_version": {
+        "HUU 4.3.6 (C220 M8 260054)": "CONFIRMED — init-huu.sh:392/402/403",
+        "HUU 4.3.6 (C220 M8 250039)": "CONFIRMED — same container init scripts",
+        "HUU 4.3.6 (C245 M8 250053)": "CONFIRMED — same container init scripts",
+        "HUU 6.0.2 (all M8)":         "CONFIRMED — HUU-F10 (root finding)",
+    },
+
+    "note": "Scope extension of HUU-F10. The timefile injection was introduced at or before 4.3.6 "
+            "and remains in 6.0.2. The attack requires BMC control or tsa_ucs channel MITM.",
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU436-F11 — hsu.tgz.enc in HUU 4.3.6 containers decrypts with the same hardcoded key
+#              — three builds confirmed; 29MB Python Redfish app per build
+# ─────────────────────────────────────────────────────────
+HUU436_F11 = {
+    "id":       "HUU436-F11",
+    "title":    "HUU 4.3.6 container base tarballs ship root/hsu.tgz.enc (29MB Python Redfish app) "
+                "encrypted with hardcoded key 'zfguijkophju@*%1]' via PBKDF2-SHA256-AES-256-CBC — "
+                "confirmed across C220 M8 (250039, 260054) and C245 M8 (250053)",
+    "status":   "CONFIRMED — openssl decryption succeeded on all three 4.3.6 container bases; "
+                "yields UILoggerApp.py, health.py, and full Redfish app source",
+    "severity": "CRITICAL",
+
+    "decrypt_cmd":  (
+        "openssl enc -aes-256-cbc -d -md sha256 -pbkdf2 "
+        "-in root/hsu.tgz.enc -k 'zfguijkophju@*%1]' -nosalt | tar -tz"
+    ),
+
+    "builds_confirmed": {
+        "C220 M8 4.3.6.260054": {
+            "file": "huu436-c220-base/root/hsu.tgz.enc",
+            "size": "29MB",
+        },
+        "C220 M8 4.3.6.250039": {
+            "file": "huu436-c220-039-base/root/hsu.tgz.enc",
+            "size": "29MB",
+        },
+        "C245 M8 4.3.6.250053": {
+            "file": "huu436-c245-base/root/hsu.tgz.enc",
+            "size": "29MB",
+        },
+    },
+
+    "cross_version_scope": (
+        "Same key (PBKDF2-SHA256-AES-256-CBC, no salt) decrypts hsu.tgz.enc across: "
+        "C480M5 4.3.2 (HUU432-F1), C220M8 6.0.2 (HUU-F11), C220M8 4.3.6, C245M8 4.3.6. "
+        "At minimum four platform generations confirmed. The Python Redfish application source "
+        "is recoverable offline across the entire documented HUU product line."
+    ),
+
+    "note": "Scope extension of HUU432-F1 and HUU-F11. The 4.3.6 container differs from 6.0.2 "
+            "architecturally (hsu_agent replaces Redfish in production), but both still ship "
+            "the Python app inside the container as hsu.tgz.enc.",
+}
+
 FINDINGS = [
     HUU436_F1, HUU436_F2, HUU436_F3, HUU436_F4, HUU436_F5, HUU436_F6,
-    HUU436_F7, HUU436_F8, HUU436_F9,
+    HUU436_F7, HUU436_F8, HUU436_F9, HUU436_F10, HUU436_F11,
 ]
 
 if __name__ == "__main__":
