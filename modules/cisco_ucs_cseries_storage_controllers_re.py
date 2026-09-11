@@ -283,4 +283,105 @@ LAGUNA_F6 = {
     }.items()},
 }
 
-FINDINGS = [MIAMI_F1, MIAMI_F2, MIAMI_F3, RIOBEACH_F4, DDECKRAID_F5, LAGUNA_F6]
+MSWITCH_CONTROLLERS = {
+    "nvme-mswitch-m6":   {"sn_off": 949757440, "hsize": 796, "version": "3.70.0.4F"},
+    "mswitch-hddext-3":  {"sn_off": 940618752, "hsize": 800, "version": "3.70.0.4F"},
+    "mswitch-hddext-2":  {"sn_off": 941485568, "hsize": 800, "version": "3.70.0.4F"},
+    "mswitch-hddext-1":  {"sn_off": 942352384, "hsize": 800, "version": "3.70.0.4F"},
+}
+
+MSWITCH_FIRMWARE = {
+    "blob_size":   2114560,
+    "blob_md5":    "cf58a7b1a6daa5398859378b6be8edda",  # IDENTICAL across all 4 variants
+    "header_magic": "4d534343 5f4d4420 = 'MSCC_MD ' (Microsemi Chipset)",
+    "build_timestamp": "2021-03-12 20:30:47",  # embedded at blob offset 48
+    "vendor":      "Microsemi (Microchip Technology) Switchtec NVMe switch",
+    "version_format": "Major %02X. Minor %02X. Type %01X. Build %03X",
+    "shared_debug_cli": [
+        "pcifnint: Send interrupt to host (ALSO in Miami SmartIOC 2200 firmware)",
+        "pcifnstat [-c[CAP name]]: PCIe function statistics",
+        "debug = %x Cache Error Dump: cp0_status",
+        "version fw_part fw_dump ver tlb xip reset rd_32 wr_32",
+    ],
+    "codebase_note": "pcifnint/pcifnstat CLI identical to Miami SmartIOC 2200 -- "
+                     "confirms shared Microchip firmware codebase across NVMe switch and SAS HBA product lines",
+}
+
+PM8533_CONTROLLERS = {
+    "C240-PM8533": {
+        "sn_name": "ucs-c-storage-nvme-C240-PM8533.1.8.0.58-24B3.bi...",
+        "sn_off":  1233422848, "hsize": 776,
+        "blob_size": 3039729, "blob_md5": "5bbd846e90406d3bfad4c106f312f188",
+        "note": "Largest PM8533 blob (3MB) -- C240-specific platform configuration",
+    },
+    "C220-PM8533": {
+        "sn_off": 1234626048, "hsize": 776,
+        "blob_size": 1529369, "blob_md5": "b99cfce394c0f34eaff6b8eda6f754f8",
+    },
+    "C480-PM8533-F1": {
+        "sn_off": 1119950848, "hsize": 784,
+        "blob_size": 1529915, "blob_md5": "aa9925cd82c1e4b7f801099e1bcdd8ad",
+    },
+    "C480-PM8533-F2": {
+        "sn_off": 1119347200, "hsize": 784,
+        "blob_size": 1529915, "blob_md5": "aa9925cd82c1e4b7f801099e1bcdd8ad",  # IDENTICAL to F1
+    },
+    "C480-PM8533-F3": {
+        "sn_off": 1118743552, "hsize": 784,
+        "blob_size": 1529915, "blob_md5": "aa9925cd82c1e4b7f801099e1bcdd8ad",  # IDENTICAL to F1/F2
+    },
+    "C480-PM8533-R": {
+        "sn_off": 1232819200, "hsize": 784,
+        "blob_size": 1529846, "blob_md5": "e206ea69b729d4ccb6fc47a856bd2497",
+        "note": "Recovery image variant (R); slightly smaller than F1/F2/F3",
+    },
+}
+
+# NVME-F1: mswitch all 4 variants share identical firmware + shared codebase with Miami
+NVME_F1 = {
+    "id":       "NVME-F1",
+    "title":    "All four Microsemi Switchtec NVMe switch entries (nvme-mswitch-m6, hddext-1/2/3) "
+                "carry identical firmware (MD5 cf58a7b1a6daa5398859378b6be8edda, 2.1MB, "
+                "'MSCC_MD ' Microsemi magic); build timestamp 2021-03-12 embedded at blob offset 48 "
+                "-- firmware is 4+ years old in the 2026 bundle; "
+                "debug CLI strings pcifnint and pcifnstat are IDENTICAL to those in Miami SmartIOC 2200 "
+                "(Miami firmware, offset 205724 in mswitch matches Miami debug CLI format) -- "
+                "Microchip Technology supplies both the NVMe switch (Switchtec/PM49xxx) and "
+                "the SAS HBA/RAID (SmartIOC/SmartROC) and ships a shared firmware debug layer; "
+                "a vulnerability in the shared debug CLI code simultaneously affects NVMe switch "
+                "and SAS controller product lines; single binary covers 4 mswitch variants "
+                "(main switch + 3 HDD extension modes)",
+    "severity": "MEDIUM",
+    "status":   "CONFIRMED -- MD5 cf58a7b1 identical for all 4 mswitch SN entries; "
+                "2021-03-12 timestamp and pcifnint string verified in blob",
+    "cwe":      ["CWE-912 (Hidden Functionality)", "CWE-1104 (Use of Unmaintained Third Party Components)"],
+    "build_date":   "2021-03-12",
+    "bundle_year":  2026,
+    "age_years":    5,
+}
+
+# PM8533-F2: C480 F1/F2/F3 share identical firmware; PMC Sierra vendor identified
+NVME_F2 = {
+    "id":       "NVME-F2",
+    "title":    "PMC Sierra PM8533 NVMe switch/controller entries share firmware within platform family: "
+                "C480-PM8533-F1, F2, F3 (three port function entries) are identical "
+                "(MD5 aa9925cd, 1,529,915 bytes); C480-PM8533-R (recovery) is distinct; "
+                "C240-PM8533 blob is largest (3,039,729 bytes -- C240 has more NVMe bays "
+                "requiring larger controller configuration); C220-PM8533 and C480 variants differ; "
+                "'PMC\\x00' magic (504d4300) at blob offset 0 exposes PMC Sierra/Microchip "
+                "as the NVMe switch silicon vendor across C240/C220/C480 platforms; "
+                "version field at blob offset 4-7: 09 09 17 00 03 00 00 00 "
+                "(version 9.9.23.0 build 3 or similar interpretation)",
+    "severity": "LOW",
+    "status":   "CONFIRMED -- MD5 aa9925cd identical for C480 F1/F2/F3; 504d4300 magic confirmed",
+    "cwe":      ["CWE-200 (Exposure of Sensitive Information to an Unauthorized Actor)"],
+    "pmc_magic": "504d4300 = 'PMC\\x00'",
+    "platform_blobs": {
+        "C240": "unique 3MB",
+        "C220": "unique 1.5MB",
+        "C480-F1/F2/F3": "identical 1.5MB (MD5 aa9925cd)",
+        "C480-R": "recovery variant 1.5MB (different)",
+    },
+}
+
+FINDINGS = [MIAMI_F1, MIAMI_F2, MIAMI_F3, RIOBEACH_F4, DDECKRAID_F5, LAGUNA_F6, NVME_F1, NVME_F2]
