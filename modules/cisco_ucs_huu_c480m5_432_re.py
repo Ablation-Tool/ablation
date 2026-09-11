@@ -273,7 +273,69 @@ ARCHITECTURE_NOTES = {
     ),
 }
 
-FINDINGS = [HUU432_F1, HUU432_F2, HUU432_F3, HUU432_F4, HUU432_F5]
+# ─────────────────────────────────────────────────────────
+# HUU432-F6: builder:builder hardcoded credential in C480M5 4.3.2 container base
+#             Identical DES crypt hash to HUU 4.3.6 variants — spans entire 4.3.x line
+# ─────────────────────────────────────────────────────────
+HUU432_F6 = {
+    "id":       "HUU432-F6",
+    "title":    "C480M5 4.3.2 container base ships hardcoded builder:builder DES crypt credential "
+                "(identical hash to HUU 4.3.6) — builder:builder present across entire HUU 4.3.x line",
+    "status":   "CONFIRMED — huu432-c480-base/etc/shadow; absent in huu602-c220-base/etc/shadow",
+    "severity": "CRITICAL",
+
+    "shadow_entry":   "builder:.gLibiNXn0P12:20423::",
+    "hash_type":      "DES crypt (13 chars, 2-char salt '.g')",
+    "cracked_pass":   "builder",
+    "uid_gid":        "998:998",
+    "home_shell":     "/home/builder — /bin/sh",
+
+    "scope_across_versions": {
+        "HUU 4.3.2 (C480 M5)":     ".gLibiNXn0P12 — PRESENT (uid 998) — this finding",
+        "HUU 4.3.6 (C220)":        ".gLibiNXn0P12 — PRESENT (uid 999) — HUU436-F7",
+        "HUU 4.3.6 (C220-039)":    ".gLibiNXn0P12 — PRESENT (uid 999) — HUU436-F7",
+        "HUU 4.3.6 (C245)":        ".gLibiNXn0P12 — PRESENT (uid 999) — HUU436-F7",
+        "HUU 6.0.2 (all M8)":      "builder ABSENT — FIXED",
+    },
+
+    "uid_note": (
+        "uid 998 in 4.3.2 vs 999 in 4.3.6 — different Debian base image version. "
+        "gnats user (uid 41) present in 4.3.2, absent in 4.3.6, shifting uid allocations. "
+        "Hash and shell identical."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# HUU432-F7: imgverify IMG_VERIFY bypass in C480M5 4.3.2 container rootfs
+#             Same bypass as SCU 7.1.7 (2018), HUU 4.3.6, HUU 6.0.2 — never patched
+# ─────────────────────────────────────────────────────────
+HUU432_F7 = {
+    "id":       "HUU432-F7",
+    "title":    "imgverify in C480M5 4.3.2 container rootfs exits 0 when IMG_VERIFY != '1' — "
+                "hsu-init calls imgverify without setting IMG_VERIFY; bypass spans all HUU versions",
+    "status":   "CONFIRMED — rootfs/usr/sbin/imgverify and hsu-init in huu432-c480",
+    "severity": "HIGH",
+
+    "bypass_line":    'if [ "$IMG_VERIFY" != "1" ]; then exit 0; fi',
+    "call_site":      "hsu-init — imgverify /tmp/ucs-*-container-*-base.tar.gz",
+    "img_verify_set": False,
+
+    "cross_version": {
+        "SCU 7.1.7.260100 (rootfs 2018)": "PRESENT — oldest confirmed occurrence (SCU-F3)",
+        "HUU 4.3.2 (C480 M5)":            "PRESENT — this finding",
+        "HUU 4.3.6 (C220/C245)":          "PRESENT (HUU436-F9)",
+        "HUU 6.0.2 (all M8)":             "PRESENT — never patched (HUU-F7)",
+    },
+
+    "description": (
+        "Container tarball signature verification has been effectively disabled across "
+        "the entire examined HUU lifecycle (2018 SCU through 6.0.2). The bypass is the "
+        "same one-liner in every version examined. The imgverify call in hsu-init is "
+        "structurally correct but can never fail because IMG_VERIFY is never set to '1'."
+    ),
+}
+
+FINDINGS = [HUU432_F1, HUU432_F2, HUU432_F3, HUU432_F4, HUU432_F5, HUU432_F6, HUU432_F7]
 
 if __name__ == "__main__":
     for f in FINDINGS:
