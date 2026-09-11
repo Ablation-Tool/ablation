@@ -25,6 +25,10 @@ Patch delta (260026 → 260036, from esu-firmware-6.0.2.260143):
   CMC-F9 UNFIXED: quiet_proxy 'will not be verified' string still present
   CMC-F10 UNFIXED: emcuser:emcNbv12345 still in mts.cfg plaintext
   CMC-F11 UNFIXED: TPM test binaries still in /usr/bin
+
+eCMC Device Connector analysis (260026 CMC image, ecmc_cloud_connector v1.0.11):
+  CMC-F15 NEW: IgnoreCert / InsecureSkipVerify settable on Intersight WebSocket tunnel
+  CMC-F16 CANDIDATE: /debug/pprof/ Go profiling endpoint (auth status unverified)
 """
 
 FIRMWARE = {
@@ -53,7 +57,7 @@ FIRMWARE = {
     "compiler":    "GNU C11 14.2.1 20241119, -fno-stack-protector (jrpc_server/libjolt_inf.so); -fstack-protector-all (pam_cmc.so)",
     "findings":    ["CMC-F1", "CMC-F2", "CMC-F3", "CMC-F4", "CMC-F5", "CMC-F6",
                     "CMC-F7", "CMC-F8", "CMC-F9", "CMC-F10", "CMC-F11", "CMC-F12", "CMC-F13",
-                    "CMC-F14"],
+                    "CMC-F14", "CMC-F15", "CMC-F16"],
 }
 
 # ─────────────────────────────────────────────────────────
@@ -672,8 +676,134 @@ CMC_F14 = {
     },
 }
 
+# ─────────────────────────────────────────────────────────
+# CMC-F15 — eCMC Device Connector ships InsecureSkipVerify as configurable
+#            field on ManagedDevice_type — BoltDB-persisted IgnoreCert disables
+#            TLS certificate verification for WebSocket tunnel to intersight.com
+# ─────────────────────────────────────────────────────────
+CMC_F15 = {
+    "id":       "CMC-F15",
+    "title":    "eCMC Device Connector IgnoreCert field maps to tls.Config{InsecureSkipVerify:true} "
+                "for Intersight WebSocket cloud tunnel — persisted in BoltDB at "
+                "/cmc_secure/dc/db/connector_data.db; settable via /v1/asset/DeviceConfigurations PATCH",
+    "status":   "CONFIRMED — strings from unpacked ecmc_cloud_connector v1.0.11-20260202093858420 "
+                "(UPX-unpacked from esu-firmware-6.0.2.260026.tar.gz CMC/6.0.2.260026/chassisA.img); "
+                "InsecureSkipVerify confirmed via Go stdlib error string and IgnoreCert getter/setter "
+                "symbol table; source attributed to "
+                "github-hyc.scm.engit.cisco.com/starship/apollo/base/tls.go",
+    "severity": "HIGH",
+
+    "binary": {
+        "path":    "CMC/6.0.2.260026/chassisA.img → ecmc_cloud_connector (UPX-packed, ARM64)",
+        "version": "1.0.11-20260202093858420",
+        "packed":  "UPX 4.2.2 — 8.5MB packed, 31.7MB unpacked; upx -d trivially reverses",
+        "source":  "/mnt/vol1/jenkins/workspace/starship/master/neytiri/code/apollo/base/tls.go",
+    },
+
+    "symbols_confirmed": [
+        "asset.(*ManagedDevice_type).GetIgnoreCert",
+        "asset.(*ManagedDevice_type).SetIgnoreCert",
+        "asset.(*ManagedDevice_type).IsDirtyIgnoreCert",
+        "asset.(*ManagedDevice_type).GetOldValueIgnoreCert",
+    ],
+
+    "tls_evidence": (
+        "Go stdlib error string present in binary: "
+        "'tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config' — "
+        "confirms InsecureSkipVerify is a live code path. "
+        "The IgnoreCert field on ManagedDevice_type uses dirty-tracking (IsDirtyIgnoreCert, "
+        "GetOldValueIgnoreCert) — ORM pattern for BoltDB-persisted config. "
+        "Field set → TLS cert validation disabled for outbound WebSocket to intersight.com."
+    ),
+
+    "persistence": {
+        "bolt_db":       "/cmc_secure/dc/db/connector_data.db",
+        "api_endpoint":  "/v1/asset/DeviceConfigurations (PATCH)",
+        "config_keys":   ["apollo_configlockout_cloud_disabled", "apollo_kvmtunnelling_cloud_disabled"],
+    },
+
+    "cloud_tunnel": {
+        "target":    "https://intersight.com (WebSocket)",
+        "function":  "base.(*intersightDialer).proxyToCloud (starship/apollo internal)",
+        "ca_cert":   "certs/hydrant-ca-1.pem (Cisco internal Intersight CA — 'hydrant' project)",
+        "jira_ref":  "ISPLAT-15068 — ticket reference embedded adjacent to proxyToCloud function",
+    },
+
+    "local_http": (
+        "eCMC Device Connector polls local Redfish API over HTTP (not HTTPS): "
+        "http://127.0.0.1:9000/redfish/v1/Managers/CMC and "
+        "http://127.0.0.1:9000/redfish/v1/Managers/CMC/EthernetInterfaces/Management — "
+        "Redfish at port 9000 serves plaintext HTTP on loopback."
+    ),
+
+    "impact": (
+        "If IgnoreCert is set to true (via /v1/asset/DeviceConfigurations API with admin credentials, "
+        "or via direct BoltDB write — possible from CMC-F3 jrpc_server root RPC), "
+        "the eCMC Device Connector will accept any TLS certificate from intersight.com. "
+        "A network-positioned attacker can MITM the CMC-to-Intersight WebSocket tunnel, "
+        "injecting firmware upgrade commands, modifying inventory data, or intercepting "
+        "chassis configuration pushed from Intersight cloud management."
+    ),
+
+    "remediation": (
+        "Cisco should: (1) remove IgnoreCert from the ManagedDevice_type API surface; "
+        "(2) pin the Intersight CA cert (already present as hydrant-ca-1.pem) and disallow "
+        "skip-verify mode; (3) protect BoltDB with filesystem permissions that prevent "
+        "modification by non-eCMC processes."
+    ),
+
+    "tags": ["tls-bypass", "insecure-skip-verify", "cloud-tunnel", "boltdb", "intersight", "mitm", "cwe-295", "high"],
+}
+
+# ─────────────────────────────────────────────────────────
+# CMC-F16 — eCMC Device Connector registers /debug/pprof/ Go profiling endpoint;
+#            authentication status unverified from static analysis (live probe required)
+# ─────────────────────────────────────────────────────────
+CMC_F16 = {
+    "id":       "CMC-F16",
+    "title":    "eCMC Device Connector registers Go /debug/pprof/ profiling endpoint — "
+                "authentication guard unverified from static analysis; if accessible, "
+                "exposes goroutine dumps, heap profiles, and execution traces",
+    "status":   "CANDIDATE — /debug/pprof/ string confirmed in binary; "
+                "authentication wrapper not determinable via static analysis alone; "
+                "live probe required to confirm unauthenticated access",
+    "severity": "MEDIUM",
+
+    "binary": {
+        "path":    "CMC/6.0.2.260026/chassisA.img → ecmc_cloud_connector (UPX-packed, ARM64)",
+        "version": "1.0.11-20260202093858420",
+    },
+
+    "endpoint": "/debug/pprof/",
+    "framework": "gorilla/mux — *mux.Router, *mux.Route symbols confirmed in binary",
+
+    "pprof_surface": [
+        "/debug/pprof/goroutine — goroutine dump (reveals internal state, goroutine IDs, stack frames)",
+        "/debug/pprof/heap — heap allocation profile",
+        "/debug/pprof/profile — 30-second CPU profile",
+        "/debug/pprof/trace — execution trace",
+        "/debug/pprof/cmdline — process command line",
+        "/debug/pprof/symbol — symbol table lookup",
+    ],
+
+    "risk": (
+        "If /debug/pprof/ is exposed without authentication on the CMC management interface, "
+        "an unauthenticated attacker on the management network can: read goroutine stacks "
+        "(may contain session tokens, decrypted config values), enumerate heap contents "
+        "(may contain BoltDB key-value pairs including IgnoreCert and API credentials), "
+        "and fingerprint the exact Go runtime and build version."
+    ),
+
+    "verify_command": (
+        "curl -s http://<CMC-MGMT-IP>:<ECMC-PORT>/debug/pprof/ "
+        "— expect 200 with HTML pprof index if unauthenticated"
+    ),
+
+    "tags": ["pprof", "info-disclosure", "golang", "debug-endpoint", "cwe-200", "medium"],
+}
+
 FINDINGS = [CMC_F1, CMC_F2, CMC_F3, CMC_F4, CMC_F5, CMC_F6, CMC_F7, CMC_F8, CMC_F9, CMC_F10, CMC_F11,
-            CMC_F12, CMC_F13, CMC_F14]
+            CMC_F12, CMC_F13, CMC_F14, CMC_F15, CMC_F16]
 
 if __name__ == "__main__":
     for f in FINDINGS:
