@@ -2067,45 +2067,162 @@ UCSC_F41 = {
 # ─────────────────────────────────────────────────────────────────────────────
 UCSC_F42 = {
     "id":       "UCSC-F42",
-    "title":    "HyperFlex SED encryption REST API (encryption/v1) omits 'diag'/'local/diag' "
-                "from barredUsers — diag can authenticate to disk encryption management "
-                "endpoints when explicitly barred from all other HyperFlex REST APIs",
-    "status":   "CONFIRMED — encryption/WEB-INF/classes/application.conf line 48 and "
-                "encryption/WEB-INF/classes/resources/application.conf line 48; "
-                "both copies: barredUsers = [\"root\", \"local/root\"] (diag absent); "
-                "coreapi application.conf: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]; "
-                "storfs-restapi auth-war: same four entries",
-    "severity": "MEDIUM",
-    "affected_service": "encryption WAR — /encryption/v1/*",
-    "barred_users_encryption": ["root", "local/root"],
-    "barred_users_coreapi":    ["root", "local/root", "diag", "local/diag"],
-    "exposed_endpoints": [
-        "GET  /encryption/v1/disks         — all disk SED status across cluster nodes",
-        "GET  /encryption/v1/certstatus    — per-node KMIP certificate serial numbers",
-        "GET  /encryption/v1/kmipcertpolicy — KMIP cert policy configuration",
-        "POST /encryption/v1/testkmipconn  — test KMIP server connectivity (reveals KMIP server details)",
-        "GET  /encryption/v1/status        — overall SED/encryption FSM state",
-        "GET  /encryption/v1/nodes         — per-node encryption state",
-        "POST /encryption/v1/certificates  — upload/manage KMIP client certificates",
-    ],
+    "title":    "HyperFlex REST API platform: 5 of 8 WAR services omit 'diag'/'local/diag' "
+                "from barredUsers — diag can authenticate to disk encryption, data protection, "
+                "backup, software encryption/DARE, and firmware upgrade APIs",
+    "status":   "CONFIRMED — barredUsers = [\"root\", \"local/root\"] (diag absent) in: "
+                "encryption/WEB-INF/classes/application.conf, "
+                "dataprotection/WEB-INF/classes/application.conf, "
+                "backupservice/WEB-INF/classes/application.conf, "
+                "securityservice/WEB-INF/classes/application.conf, "
+                "hxupgrade/WEB-INF/classes/application.conf (all both copies WEB-INF/classes/ and resources/); "
+                "coreapi, auth-war, iscsi correctly use: barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]",
+    "severity": "HIGH",
+    "affected_services": {
+        "encryption":      "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "dataprotection":  "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "backupservice":   "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "securityservice": "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "hxupgrade":       "barredUsers = [\"root\", \"local/root\"] — diag NOT barred",
+        "coreapi":         "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"] — correct",
+        "auth-war":        "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"] — correct",
+        "iscsi":           "barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"] — correct",
+    },
+    "exposed_endpoints": {
+        "encryption": [
+            "GET  /encryption/v1/disks         — SED disk status across cluster nodes",
+            "GET  /encryption/v1/certstatus    — per-node KMIP certificate serial numbers",
+            "GET  /encryption/v1/kmipcertpolicy — KMIP cert policy",
+            "POST /encryption/v1/testkmipconn  — test KMIP connectivity (reveals KMIP server)",
+            "GET  /encryption/v1/status        — SED/encryption FSM state",
+            "GET  /encryption/v1/nodes         — per-node encryption state",
+            "POST /encryption/v1/certificates  — upload/manage KMIP client certificates",
+        ],
+        "dataprotection": [
+            "PUT /vms/{vmId}/failover          — trigger VM failover",
+            "PUT /vms/{vmId}/migrate           — migrate protected VM",
+            "PUT /vms/{vmId}/testFailover      — initiate test failover",
+            "GET/POST/DELETE /peers/           — manage DR peer clusters",
+            "GET/POST /dataProtectionGroup     — manage data protection groups",
+            "GET/DELETE /dataProtectionGroup/{groupId}/snapshots/{snapshotId}",
+            "PUT /schedule/actions             — modify replication schedule",
+        ],
+        "backupservice": [
+            "GET/POST/PUT /policy/backup       — backup policy management",
+            "PUT /vms/{vmId}/localRestore      — restore VM from local snapshot",
+            "PUT /vms/{vmId}/restoreFromRemote — restore VM from remote backup",
+            "POST /snapshots/checkpoint        — create checkpoint snapshot",
+        ],
+        "securityservice": [
+            "GET /software-encryption/dare/overview — DARE encryption state",
+            "POST /software-encryption/dare/backup  — backup DARE encryption keys",
+            "PUT /software-encryption/dare/key      — modify DARE encryption key",
+            "PUT /software-encryption/dare/rekey    — initiate DARE re-keying",
+            "GET /software-encryption/dare/config   — DARE configuration",
+            "POST /secureboot/setStatus             — modify Secure Boot state",
+            "GET /secureboot/getStatus              — Secure Boot status",
+        ],
+        "hxupgrade": [
+            "POST /upgrade                          — initiate firmware upgrade",
+            "GET /upgrade/check                     — upgrade pre-check",
+            "GET /upgrade/clusterVersionDetails     — current cluster firmware versions",
+            "POST /upgrade/validateucsmcreds        — validate UCS Manager credentials",
+            "GET /upgrade/ucsAvailablePackages      — enumerate available UCS packages",
+            "GET /upgrade/validations               — upgrade validation results",
+        ],
+    },
     "technical_detail": (
-        "The HyperFlex REST API stack uses a shared AAA filter chain (SPBasicAuth, SPAuth, "
-        "SessionAuth, SPPrivilegedAuth, KerberosAuth, AuditFilter) applied via web.xml to "
-        "all /v1/* endpoints. Each WAR carries its own application.conf which the filter "
-        "implementation reads to determine policy.\n"
-        "encryption/WEB-INF/classes/application.conf:\n"
-        "  barredUsers = [\"root\", \"local/root\"]\n"
-        "coreapi/WEB-INF/classes/application.conf:\n"
-        "  barredUsers = [\"root\", \"local/root\", \"diag\", \"local/diag\"]\n"
-        "The diag account is a system diagnostic account (HyperFlex internal use). "
-        "Omission from the encryption service's barredUsers is a copy-paste gap — "
-        "one of the two earlier application.conf templates was used without the diag entries."
+        "All 8 HyperFlex REST API WARs share the same AAA filter chain (AuditFilter, "
+        "SPPrivilegedAuth, SessionAuth, SPBasicAuth, SPAuth applied via web.xml /v1/*). "
+        "Each WAR's application.conf independently sets barredUsers, which the filter "
+        "implementation reads to block specific system accounts from authenticating.\n"
+        "The diag account is blocked in coreapi, auth-war, and iscsi (4 entries: "
+        "root, local/root, diag, local/diag). The 5 remaining WARs use only 2 entries "
+        "(root, local/root), leaving diag able to authenticate.\n"
+        "The encryption and dataprotection WARs also include a KerberosAuth filter "
+        "(com.springpath.hx.aaa.filters.kerberosFilter.KerberosFilterImpl) absent from "
+        "other WARs; with hxSvcHttpEnabled=true in all configs, Kerberos tickets can be "
+        "passed over plaintext HTTP to these services.\n"
+        "The diag account exists in the HyperFlex PAM stack (spauthenticate with "
+        "service=nginx) and is intended for diagnostic use only. Its credentials are "
+        "known or derivable from diagnostic tooling. Access to securityservice enables "
+        "DARE software encryption key manipulation and Secure Boot state changes. "
+        "Access to hxupgrade enables firmware upgrade initiation. "
+        "Access to dataprotection enables VM failover/migration without authorization."
     ),
+}
 
-    "note": "The encryption service also uniquely includes a KerberosAuth filter "
-            "(com.springpath.hx.aaa.filters.kerberosFilter.KerberosFilterImpl) not "
-            "present in other services' web.xml. With hxSvcHttpEnabled=true in all "
-            "configs, Kerberos tickets could be passed over plaintext HTTP.",
+# ─────────────────────────────────────────────────────────
+# UCSC-F43 — storfs.py sets LD_LIBRARY_PATH='/root' before exec'ing StorFS binary
+# ─────────────────────────────────────────────────────────
+UCSC_F43 = {
+    "id":       "UCSC-F43",
+    "title":    "storfs.py sets LD_LIBRARY_PATH='/root' before exec'ing the StorFS storage "
+                "daemon — /root is unconventionally prepended to the dynamic linker search "
+                "path, preferentially loading any .so placed there over system libraries",
+    "status":   "CONFIRMED — storfs-core-552/opt/springpath/storfs-core/storfs.py line 31: "
+                "os.environ['LD_LIBRARY_PATH'] = '/root'",
+    "severity": "LOW",
+    "source_file": "opt/springpath/storfs-core/storfs.py",
+    "source_line": 31,
+    "source_text": "os.environ['LD_LIBRARY_PATH'] = '/root'",
+    "technical_detail": (
+        "storfs.py is a Python wrapper that reads hardware and tune configuration, "
+        "then calls os.execvp('/opt/springpath/storfs-core/storfs', args) to replace "
+        "itself with the StorFS storage daemon. Before execvp, line 31 sets "
+        "LD_LIBRARY_PATH to '/root' (the root user's home directory).\n"
+        "The dynamic linker resolves LD_LIBRARY_PATH before standard library paths "
+        "(rpath, /etc/ld.so.cache, /lib, /usr/lib). Any shared library placed in /root "
+        "matching a StorFS dependency name (e.g. libssl.so.1.1, libz.so.1) would be "
+        "loaded instead of the system library.\n"
+        "Since StorFS runs as root and /root is mode 700, exploitation requires root-level "
+        "write access. The value '/root' is a development artifact (testing with local "
+        "libraries) that was never replaced before shipping. No legitimate runtime "
+        "libraries should be in /root."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F44 — storfsevents.py embeds FIFO data unsanitized into initctl command string
+# ─────────────────────────────────────────────────────────
+UCSC_F44 = {
+    "id":       "UCSC-F44",
+    "title":    "storfsevents.py process_event() embeds FIFO-sourced event fields directly "
+                "into an initctl emit command string without sanitization — argument injection "
+                "into Upstart event dispatch via crafted records written to /tmp/storfseventsfifo",
+    "status":   "CONFIRMED — storfs-core-552/opt/springpath/storfs-core/storfsevents.py "
+                "lines 164-169: event_id and event_args embedded in format string, "
+                "Command.execute() calls shlex.split() on the result",
+    "severity": "LOW",
+    "source_file": "opt/springpath/storfs-core/storfsevents.py",
+    "source_lines": [164, 165, 166, 169],
+    "source_text": (
+        "event_id, event_ts, event_desc, event_args = stevent.split('::')[:4]\n"
+        "cmd='{} emit --no-wait {} ST_EVENT_ID={} ST_EVENT_TIME={} "
+        "ST_EVENT_DESC=\"{}\" ST_EVENT_ARGS=\"{}\".format(\n"
+        "    exe, event_id, event_id, event_ts, event_desc, event_args)\n"
+        "v = Command(logger=logger).execute(cmd=cmd)"
+    ),
+    "fifo_path": "/tmp/storfseventsfifo",
+    "technical_detail": (
+        "storfsevents.py reads the StorFS event FIFO at /tmp/storfseventsfifo "
+        "(configurable, default path in /tmp). Events are '::'‐delimited 4-field records: "
+        "event_id::event_ts::event_desc::event_args.\n"
+        "process_event() builds an initctl command string using .format() with all four "
+        "fields embedded directly without escaping. Command.execute() calls shlex.split() "
+        "on this string (shell=False), then passes the resulting token list to subprocess.Popen.\n"
+        "Injected spaces in event_id split into additional initctl arguments. "
+        "Injected double-quotes in event_args close the quoted token and inject new "
+        "argument tokens. With shell=False, this does not execute arbitrary OS commands, "
+        "but enables injection of extra arguments to /sbin/initctl, allowing an attacker "
+        "with write access to the FIFO to emit arbitrary Upstart events with controlled "
+        "environment variables, which can trigger registered Upstart job handlers.\n"
+        "The FIFO resides in /tmp (world-accessible), created by EventFifo.__enter__ via "
+        "os.mkfifo(). FIFO permissions are set by the service's umask at startup. "
+        "If storfsevents.py starts before the StorFS binary attempts to write the FIFO, "
+        "a timing window exists where a local process could write a crafted event record "
+        "before the legitimate event is produced."
+    ),
 }
 
 FINDINGS = [
@@ -2115,6 +2232,7 @@ FINDINGS = [
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
     UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41, UCSC_F42,
+    UCSC_F43, UCSC_F44,
 ]
 
 
