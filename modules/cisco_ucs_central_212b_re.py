@@ -518,6 +518,101 @@ UCSC21_F12 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F13: vm-common.pl hardcodes AES-128 encryption key as literal string —
+#              universal key for all UCS Central sharedSecret encryption;
+#              sudo-accessible decryptpasswd.pl exposes it to any local OS user
+# Source: opt/cisco/bin/vm-common.pl line 480 + sudoers.rpmnew in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F13 = {
+    "id":       "UCSC21-F13",
+    "title":    "vm-common.pl hardcodes AES-128 sharedSecret encryption key as "
+                "'theKeyForEncryptingTheSharedSecret' — universal key for all deployments; "
+                "sudoers NOPASSWD grants all OS users 'sudo /opt/cisco/bin/decryptpasswd.pl', "
+                "which decrypts and prints the plaintext sharedSecret to stdout",
+    "status":   "CONFIRMED — opt/cisco/bin/vm-common.pl line 480 + etc/sudoers.rpmnew "
+                "in core-2.1.2-b.x86_64.rpm",
+    "severity": "HIGH",
+
+    "source_file":      "opt/cisco/bin/vm-common.pl",
+    "installed_path":   "/opt/cisco/bin/vm-common.pl",
+    "hardcoded_key":    "theKeyForEncryptingTheSharedSecret",
+    "key_line":         "my $encKey = \"theKeyForEncryptingTheSharedSecret\";  # line 480",
+
+    "crypto_context": (
+        "vm-common.pl is the central Perl library for UCS Central configuration management. "
+        "decryptPass() uses the hardcoded $encKey to AES-128 decrypt the sharedSecret field "
+        "from /opt/cisco/sam.config: "
+        "`$echo \"$encrypted\" | $openssl enc -d -k $encKey -a -aes128 2>> $logfile`. "
+        "encryptPass() uses the same key to encrypt. "
+        "The key is a constant literal in the shipped RPM — identical across every UCS Central "
+        "installation worldwide. Extracting the RPM from cisco.com yields the key without any "
+        "system access."
+    ),
+
+    "sudo_escalation": (
+        "sudoers.rpmnew: ALL ALL = NOPASSWD:SUDO_CMNDS where SUDO_CMNDS includes "
+        "/opt/cisco/bin/decryptpasswd.pl. "
+        "decryptpasswd.pl calls decryptPass(getValFromSamConfig('sharedSecret')) and prints "
+        "the result to stdout. "
+        "Combined: any local OS user (postgres, samdme, web server process, low-priv attacker) "
+        "runs 'sudo /opt/cisco/bin/decryptpasswd.pl' and receives the plaintext sharedSecret. "
+        "No root password required, no special group membership required."
+    ),
+
+    "openssl_kdf": (
+        "openssl enc -k uses EVP_BytesToKey with MD5 (same weak KDF documented in UCSC21-F9). "
+        "The sharedSecret is AES-128 encrypted with MD5-derived key material from the literal string. "
+        "Offline brute-force of any captured sam.config ciphertext is GPU-feasible given the "
+        "known key literal and MD5 KDF."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F14: sudoers grants ALL OS users NOPASSWD /bin/chown -R * —
+#              any local user can change ownership of any filesystem path to any user
+# Source: etc/sudoers.rpmnew in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F14 = {
+    "id":       "UCSC21-F14",
+    "title":    "sudoers.rpmnew grants ALL OS users NOPASSWD execution of '/bin/chown -R *' — "
+                "any local OS user can invoke 'sudo /bin/chown -R <uid>:<gid> <any-path>' "
+                "as root; trivial escalation to any sensitive file",
+    "status":   "CONFIRMED — etc/sudoers.rpmnew line 'ALL ALL = NOPASSWD:SUDO_CMNDS' "
+                "where SUDO_CMNDS includes '/bin/chown -R *' in core-2.1.2-b.x86_64.rpm",
+    "severity": "CRITICAL",
+
+    "source_file":    "etc/sudoers.rpmnew",
+    "installed_path": "/etc/sudoers",
+
+    "vulnerable_rule": (
+        "Cmnd_Alias SUDO_CMNDS = ..., /bin/chown -R *, ...\n"
+        "ALL ALL = NOPASSWD:SUDO_CMNDS"
+    ),
+
+    "impact": (
+        "The sudo wildcard '/bin/chown -R *' permits any argument after '-R '. "
+        "Any local OS user (postgres, samdme, tomcat, web process, attacker with shell) can run: "
+        "  sudo /bin/chown -R $(id -u):$(id -g) /etc/shadow    # own /etc/shadow -> read/write any hash\n"
+        "  sudo /bin/chown -R $(id -u):$(id -g) /etc/sudoers   # own sudoers -> rewrite privileges\n"
+        "  sudo /bin/chown -R $(id -u):$(id -g) /root          # own root home -> read SSH keys\n"
+        "  sudo /bin/chown -R $(id -u):$(id -g) /opt/cisco     # own all UCS Central binaries\n"
+        "After chown, the attacker's non-root process can read, modify, or execute the file. "
+        "On AlmaLinux 9 with SELinux enforcing (kickstart.cfg: selinux --enforcing), "
+        "chown alone may not be sufficient for all targets (SELinux type labels constrain access). "
+        "However, /etc/sudoers rewrite, root SSH key read, and sam.config rewrite are viable "
+        "depending on SELinux policy in effect."
+    ),
+
+    "additional_sudo_findings": (
+        "The SUDO_CMNDS alias also grants ALL users NOPASSWD: "
+        "/opt/cisco/bin/restore.sh -p * (restore with arbitrary path argument), "
+        "/opt/cisco/bin/update.sh (full update pipeline with root), "
+        "/opt/cisco/bin/updateExtractedBundle.sh (bundle activation as root). "
+        "These are lower-severity variants of the same NOPASSWD overreach."
+    ),
+}
+
 # Cross-version findings confirmed identical in 1.5.1c and 2.1.2b — canonical in 151_re.py:
 #   UCSC-F23: snmpd_base.conf hardcoded internalUser:authpassword + public community
 #   UCSC-F24: update_peer_secret.sh shared_secret as CLI arg
@@ -529,6 +624,7 @@ UCSC21_F12 = {
 FINDINGS = [
     UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6,
     UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10, UCSC21_F11, UCSC21_F12,
+    UCSC21_F13, UCSC21_F14,
 ]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 FIRMWARE["finding_count"] = len(FINDINGS)
