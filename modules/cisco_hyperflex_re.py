@@ -1372,7 +1372,87 @@ HX_F018 = {
     "tags": ["tls-bypass", "jvm-global", "mitm", "firmware-supply-chain", "cwe-295", "high"],
 }
 
-for _f in [HX_F015, HX_F016, HX_F017, HX_F018]:
+
+# ── HX-F019 ──────────────────────────────────────────────────────────────────
+HX_F019 = {
+    "id":       "HX-F019",
+    "title":    "supportservice.war WebDownloader static initializer calls trustAllHttpsCertificates() "
+                "at class load time — JVM-wide TLS bypass installed before any getStream() call; "
+                "getStream() additionally sets Authenticator.setDefault() with caller-supplied "
+                "username/password as JVM-global HTTP authenticator for ASUP/callhome connections",
+    "status":   "CONFIRMED — bytecode of WebDownloader.class and WebDownloader$1.class from "
+                "storfs-restapi_6.0.2b-44423_amd64.deb supportservice.war",
+    "severity": "HIGH",
+
+    "class_path":   "com.springpath.hx.support.util.WebDownloader",
+    "static_init": {
+        "trigger":  "JVM class load of WebDownloader (first use of any WebDownloader method)",
+        "sequence": [
+            "static {} calls trustAllHttpsCertificates() — offset 0",
+            "trustAllHttpsCertificates() builds SSLContext with TrustAllManager (null-trust X509TrustManager), "
+            "calls HttpsURLConnection.setDefaultSSLSocketFactory(nullTrustFactory)",
+            "static {} then instantiates WebDownloader$2 (HostnameVerifier always-true), "
+            "calls HttpsURLConnection.setDefaultHostnameVerifier(alwaysTrueVerifier) — offset 10",
+        ],
+        "persistence": (
+            "Static initializer runs once and is not reversible within the JVM lifetime. "
+            "Unlike HX-F015 (method-triggered) and HX-F018 (method-triggered), this bypass "
+            "is installed PERMANENTLY at class load time — independent of whether getStream() "
+            "is ever called. All HTTPS connections in the storfs-restapi Tomcat JVM are affected "
+            "from the moment WebDownloader is first referenced."
+        ),
+    },
+    "get_stream_bypass": {
+        "signature":    "public static InputStream getStream(String url, String username, String password)",
+        "sequence": [
+            "offset 0-9: new WebDownloader$1(username, password) — anonymous Authenticator subclass",
+            "offset 9: Authenticator.setDefault(authenticator) — JVM-global HTTP authenticator override",
+            "offset 12-20: new URL(url).openStream() — opens the (TLS-bypassed) connection",
+        ],
+        "authenticator_inner_class": (
+            "WebDownloader$1 extends java.net.Authenticator; overrides getPasswordAuthentication() "
+            "to return new PasswordAuthentication(username, password.toCharArray()). "
+            "Authenticator.setDefault() installs this as the JVM-global HTTP auth handler: "
+            "any HTTP 401/407 challenge from ANY host in the JVM triggers credential delivery."
+        ),
+    },
+    "inner_classes": {
+        "WebDownloader$TrustAllManager": "implements javax.net.ssl.X509TrustManager — "
+                                         "getAcceptedIssuers() returns null; "
+                                         "checkClientTrusted() and checkServerTrusted() are empty",
+        "WebDownloader$1":  "extends java.net.Authenticator — getPasswordAuthentication() returns "
+                            "PasswordAuthentication(username, password); installed JVM-global via setDefault()",
+        "WebDownloader$2":  "implements javax.net.ssl.HostnameVerifier — verify() always true",
+    },
+    "distinction_from_hx_f015_f018": (
+        "HX-F015: securityservice.war + encryption.war — method-triggered trustAll, internal localhost. "
+        "HX-F018: hxupgrade.war — method-triggered trustAll, external firmware download. "
+        "HX-F019: static initializer — class-load-time bypass, permanent; also adds "
+        "Authenticator.setDefault() with caller credentials as JVM-global HTTP authenticator. "
+        "WebDownloader is used on the ASUP/callhome/support bundle transfer path "
+        "(SupportbundleApiServiceImpl, GenerationThread) — attacker on management VLAN intercepts "
+        "support bundle uploads (cluster configs, secrets in logs) and injects responses."
+    ),
+    "impact": (
+        "1. JVM-wide TLS certificate validation disabled permanently from class load — "
+        "affects all six WARs in the same Tomcat instance. "
+        "2. MITM of ASUP support bundle HTTPS uploads intercepts cluster configs, credentials, "
+        "and diagnostic data destined for Cisco TAC. "
+        "3. Authenticator.setDefault() installs attacker-supplied credentials as JVM-global HTTP "
+        "authenticator — if any other HTTP connection in the JVM receives a 401 challenge "
+        "(from an attacker-controlled server), those credentials are delivered automatically."
+    ),
+    "asup_path": [
+        "SupportbundleApiServiceImpl invokes GenerationThread",
+        "GenerationThread calls asupcli (ASUP CLI) and WebDownloader.getStream() for manifest download",
+        "AsupCliConfiguration.getManifestFile() provides the URL — URL sourced from REST API input",
+        "trustAllHttpsCertificates() already active (class-load) — any cert accepted",
+    ],
+    "tags": ["tls-bypass", "jvm-global", "static-init", "authenticator-bypass",
+             "asup", "callhome", "mitm", "cwe-295", "high"],
+}
+
+for _f in [HX_F015, HX_F016, HX_F017, HX_F018, HX_F019]:
     FINDINGS[_f["id"]] = _f
 
 FINDINGS_LIST = list(FINDINGS.values())
