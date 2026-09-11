@@ -1642,12 +1642,82 @@ UCSC_F34 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F35: clusterserver binary listens on TCP 3111 with source IP-only trust —
+#            samdme SSH keys, sam.config, and ODBC credentials transferred in
+#            plaintext; IP trust bypassed by ARP spoofing on management VLAN;
+#            malicious client receives sam.config + SSH keys, or injects
+#            unauthorized SSH public key into samdme authorized_keys
+# Source: opt/cisco/bin/clusterserver + clusterclient in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F35 = {
+    "id":       "UCSC-F35",
+    "title":    "clusterserver listens on TCP 3111 with source IP-only trust — "
+                "samdme SSH keys, sam.config (adminPasswd + sharedSecret), and ODBC config "
+                "transferred in plaintext; ARP spoof bypasses IP trust; "
+                "malicious client receives credentials or injects SSH key into authorized_keys",
+    "status":   "CONFIRMED — strings + disassembly of opt/cisco/bin/clusterserver and "
+                "opt/cisco/bin/clusterclient in core-2.1.2-b.x86_64.rpm",
+    "severity": "HIGH",
+    "versions_affected": ["2.1.2b"],
+
+    "binary_server": "opt/cisco/bin/clusterserver",
+    "binary_client": "opt/cisco/bin/clusterclient",
+
+    "protocol": (
+        "clusterserver: TCP, AF_INET (IPv4), port 3111 (0xc27 — confirmed via htons disassembly)\n"
+        "Binding IP: popen('/bin/grep oobIpAddr /opt/cisco/sam.config | awk -F= ...')\n"
+        "Trust check: inet_addr-based source IP comparison — 'Not a trusted client. Good bye' "
+        "message on failure; no encryption, no authentication tokens, no TLS\n"
+        "clusterclient: USAGE: <binary> <server_ip> — connects to server_ip:3111"
+    ),
+
+    "data_transferred": (
+        "Confirmed via clusterclient string table:\n"
+        "  /home/samdme/.ssh/id_rsa.pub       — samdme RSA public key (sent to peer)\n"
+        "  /home/samdme/.ssh/authorized_keys  — samdme authorized_keys (synchronized)\n"
+        "  /opt/cisco/sam.config              — full sam.config (adminPasswd + sharedSecret)\n"
+        "  /tmp/peer_config                   — peer's sam.config written here after receive\n"
+        "  /etc/odbc.ini                      — PostgreSQL ODBC config (DSN, credentials)\n"
+        "  /tmp/peer_odbc.ini                 — peer's ODBC config written here\n"
+        "All transferred in plaintext TCP stream — no session encryption."
+    ),
+
+    "trust_bypass": (
+        "clusterserver's trust check compares the client source IP to the expected peer IP "
+        "read from sam.config. On a management VLAN without 802.1X port authentication or "
+        "DHCP snooping, an attacker can:\n"
+        "1. ARP-spoof to claim the expected peer IP\n"
+        "2. Connect to clusterserver:3111 on the target node — trust check passes\n"
+        "3. Receive sam.config (adminPasswd + sharedSecret encrypted with known static key) "
+        "   and samdme SSH keys in plaintext\n"
+        "Since adminPasswd and sharedSecret are encrypted with 'theKeyForEncryptingTheSharedSecret' "
+        "(UCSC-F1), decryption is immediate after capture."
+    ),
+
+    "ssh_key_injection": (
+        "clusterclient sends /home/samdme/.ssh/authorized_keys to clusterserver for sync. "
+        "clusterserver writes the received key data to its local authorized_keys path. "
+        "An attacker impersonating the clusterclient (ARP spoof on the client side) can "
+        "send a crafted authorized_keys containing the attacker's RSA public key — "
+        "injected into samdme's authorized_keys on the target node. "
+        "samdme has NOPASSWD:ALL sudo (UCSC-F11) → SSH as samdme → root."
+    ),
+
+    "attack_window": (
+        "The clusterserver process runs only during cluster formation/validation operations, "
+        "not as a persistent daemon. The attack window is limited to the period when "
+        "cluster_validate.sh is executing. This window is identifiable via change management "
+        "records (cluster formation is a logged administrative operation)."
+    ),
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
-    UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34,
+    UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
 ]
 
 
