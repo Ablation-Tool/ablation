@@ -1994,13 +1994,78 @@ UCSC_F40 = {
                "verification across cluster, backup, SNMP, and firmware-transfer code paths.",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC-F41 — Hardcoded SCSI-3 Persistent Group Reservation (PGR) keys
+#             across all 5 sg_PGR_*.sh HA fencing scripts; keys identical
+#             in all UCS Central HA deployments; SAN-level fencing bypass
+# Source: opt/cisco/bin/sg_PGR_{register,clearAllAndRegister,reserve,release,
+#         unregister}.sh (core RPM, 1.5.1c + 2.1.2b)
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC_F41 = {
+    "id":       "UCSC-F41",
+    "title":    "Hardcoded SCSI-3 PGR keys '123abc1' (Fabric A) and '123abc2' (Fabric B) "
+                "in all HA storage fencing scripts — identical across all UCS Central HA "
+                "deployments; attacker with SAN access preempts reservations using known "
+                "keys, disabling HA fencing and enabling split-brain data corruption",
+    "status":   "CONFIRMED — opt/cisco/bin/sg_PGR_{register,clearAllAndRegister,reserve,"
+                "release,unregister}.sh in core RPM; keys identical in 1.5.1c + 2.1.2b "
+                "(only shebang line differs: /bin/bash vs /usr/bin/bash)",
+    "severity": "MEDIUM",
+    "versions_affected": ["1.5.1c", "2.1.2b"],
+
+    "pgr_keys": {
+        "fabric_A": "123abc1",
+        "fabric_B": "123abc2",
+    },
+
+    "source_files": [
+        "opt/cisco/bin/sg_PGR_register.sh",
+        "opt/cisco/bin/sg_PGR_clearAllAndRegister.sh",
+        "opt/cisco/bin/sg_PGR_reserve.sh",
+        "opt/cisco/bin/sg_PGR_release.sh",
+        "opt/cisco/bin/sg_PGR_unregister.sh",
+    ],
+
+    "technical_detail": (
+        "SCSI-3 PGR is the HA storage fencing mechanism in UCS Central clustered deployments. "
+        "Nodes register with the shared storage device using a key, then make write-exclusive "
+        "reservations — the node holding the reservation controls storage; the other is fenced.\n"
+        "sg_PGR_register.sh: sg_persist --out --register --param-sark=123abc1 <device>\n"
+        "sg_PGR_reserve.sh:  sg_persist --out --reserve --param-rk=123abc1 --prout-type=1 <device>\n"
+        "sg_PGR_clearAllAndRegister.sh: sg_persist -C -K 123abc1 --out <device> (CLEAR ALL then register)\n"
+        "All keys hardcoded to '123abc1' (A) / '123abc2' (B) — no per-deployment uniqueness."
+    ),
+
+    "attack_path": (
+        "Requires SAN/iSCSI access to the shared storage device.\n"
+        "1. Attacker queries SCSI PGR state: sg_persist <device> (no auth, SAN access only)\n"
+        "2. Attacker clears all registrations using known key:\n"
+        "     sg_persist -C -K 123abc1 --out <device>\n"
+        "   Both cluster nodes are now deregistered — HA fencing inoperable.\n"
+        "3. Attacker registers competing key, claiming storage:\n"
+        "     sg_persist --out --register --param-sark=123abc1 <device>\n"
+        "   Result: split-brain; both nodes may write to shared storage simultaneously "
+        "→ database corruption.\n"
+        "4. Alternatively: keep one node fenced permanently by holding the reservation, "
+        "forcing the other into standby regardless of cluster health."
+    ),
+
+    "prerequisite": "Direct SAN/iSCSI/FC access to the UCS Central shared storage LUN. "
+                    "Not exploitable from the network management plane alone.",
+
+    "note": "These keys serve the same SCSI PGR role as node-specific keys in production "
+            "storage stacks, but are deliberately simplified (single numeric sequence) "
+            "in UCS Central — suggesting they were never intended to be a security boundary. "
+            "However, their universality across ALL deployments makes them trivially known.",
+}
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
     UCSC_F16, UCSC_F17, UCSC_F18, UCSC_F19, UCSC_F20, UCSC_F21, UCSC_F22,
     UCSC_F23, UCSC_F24, UCSC_F25, UCSC_F26, UCSC_F27, UCSC_F28, UCSC_F29,
     UCSC_F30, UCSC_F31, UCSC_F32, UCSC_F33, UCSC_F34, UCSC_F35,
-    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40,
+    UCSC_F36, UCSC_F37, UCSC_F38, UCSC_F39, UCSC_F40, UCSC_F41,
 ]
 
 
