@@ -613,6 +613,49 @@ UCSC21_F14 = {
     ),
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F15: pass-reset.pl unsanitized $userid in backtick exec and system()
+#              shell command string — command injection if management API passes
+#              user-supplied identifier without validation
+# Source: opt/cisco/bin/pass-reset.pl in core-2.1.2-b.x86_64.rpm
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F15 = {
+    "id":       "UCSC21-F15",
+    "title":    "pass-reset.pl passes $userid unsanitized into backtick 'id $user' "
+                "and system() shell string with embedded $user — OS command injection "
+                "if caller supplies user-controlled userid argument",
+    "status":   "CONFIRMED — opt/cisco/bin/pass-reset.pl in core-2.1.2-b.x86_64.rpm; "
+                "caller chain to user-supplied input not confirmed from static analysis",
+    "severity": "MEDIUM",
+
+    "source_file":    "opt/cisco/bin/pass-reset.pl",
+    "installed_path": "/opt/cisco/bin/pass-reset.pl",
+
+    "vulnerable_code": (
+        "my $userExists = `id $user 2> /dev/null | wc -l`;   # backtick — $user unquoted\n"
+        "$pw =~ s/\\$/\\\\$/g;\n"
+        "system(\"cat /etc/shadow.orig | perl -pe 's|$user:.*?:|$user:$pw:|' > /etc/shadow\");"
+        "  # system() with shell string — $user uninterpolated before shell"
+    ),
+
+    "injection_vectors": (
+        "Vector 1 (backtick): $userid = 'foo; touch /tmp/pwned' executes 'id foo; touch /tmp/pwned'. "
+        "Vector 2 (system + shell): $userid = 'root|reboot' breaks the perl -pe pattern delimiter "
+        "and injects into the shell pipeline. "
+        "Vector 3 (shadow overwrite): $pw substitution uses | as sed delimiter; $userid containing "
+        "| or newlines can corrupt /etc/shadow structure."
+    ),
+
+    "context": (
+        "pass-reset.pl is the UCS Central admin password reset utility. "
+        "It is invoked with positional args: pass-reset.pl <userid> <passhash>. "
+        "The script runs as root (password file modification requires root). "
+        "If the management application (Java or C++ layer) invokes this with a "
+        "user-supplied userid from a web form, CLI, or REST API without shell escaping, "
+        "any metachar in the userid yields OS command execution as root."
+    ),
+}
+
 # Cross-version findings confirmed identical in 1.5.1c and 2.1.2b — canonical in 151_re.py:
 #   UCSC-F23: snmpd_base.conf hardcoded internalUser:authpassword + public community
 #   UCSC-F24: update_peer_secret.sh shared_secret as CLI arg
@@ -624,7 +667,7 @@ UCSC21_F14 = {
 FINDINGS = [
     UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6,
     UCSC21_F7, UCSC21_F8, UCSC21_F9, UCSC21_F10, UCSC21_F11, UCSC21_F12,
-    UCSC21_F13, UCSC21_F14,
+    UCSC21_F13, UCSC21_F14, UCSC21_F15,
 ]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 FIRMWARE["finding_count"] = len(FINDINGS)
