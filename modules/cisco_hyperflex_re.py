@@ -1384,6 +1384,10 @@ HX_F019 = {
                 "storfs-restapi_6.0.2b-44423_amd64.deb supportservice.war",
     "severity": "HIGH",
 
+    "class_paths": [
+        "com.springpath.hx.support.util.WebDownloader (supportservice.war)",
+        "com.storvisor.sysmgmt.service.WebDownloader (ROOT.war)",
+    ],
     "class_path":   "com.springpath.hx.support.util.WebDownloader",
     "static_init": {
         "trigger":  "JVM class load of WebDownloader (first use of any WebDownloader method)",
@@ -1399,7 +1403,10 @@ HX_F019 = {
             "Unlike HX-F015 (method-triggered) and HX-F018 (method-triggered), this bypass "
             "is installed PERMANENTLY at class load time — independent of whether getStream() "
             "is ever called. All HTTPS connections in the storfs-restapi Tomcat JVM are affected "
-            "from the moment WebDownloader is first referenced."
+            "from the moment WebDownloader is first referenced. "
+            "ROOT.war contains an identical copy (com.storvisor.sysmgmt.service.WebDownloader) "
+            "with bytecode-identical static initializer — two independent class-load triggers "
+            "in the same Tomcat JVM, either sufficient to permanently poison JVM TLS state."
         ),
     },
     "get_stream_bypass": {
