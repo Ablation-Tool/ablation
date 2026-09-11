@@ -22,6 +22,8 @@ FIRMWARE = {
     "boot_modes":  ["NATIVE", "DOCKERS", "DOCKERC", "UCS", "CONVERGED_TOR"],
     "tmpfs_size":  "9048M — rootfs copied to tmpfs on boot",
     "codebase":    "Includes Andiamo Systems (2002) xinetd infrastructure — acquired by Cisco 2004",
+    "findings":    ["UCSFI-F1", "UCSFI-F2", "UCSFI-F3", "UCSFI-F4", "UCSFI-F5",
+                    "UCSFI-F6", "UCSFI-F7", "UCSFI-F8", "UCSFI-F9", "UCSFI-F10"],
 }
 
 # ─────────────────────────────────────────────────────────
