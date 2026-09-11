@@ -2963,6 +2963,72 @@ UCSC_F64 = {
 }
 
 
+# ─────────────────────────────────────────────────────────
+# UCSC-F65 — HyperFlex executeCommand denylist bypass via internal whitespace
+# ─────────────────────────────────────────────────────────
+UCSC_F65 = {
+    "id":       "UCSC-F65",
+    "title":    "HyperFlex ROOT webapp Executor.executeCommand() denylist is bypassable by inserting "
+                "extra internal whitespace in a blocked command — isSupportedCommand() checks "
+                "unsupportedCommands.contains(command.trim()), which only strips leading/trailing "
+                "whitespace; the command tokenizer uses whitespace-splitting regex so 'stcli cluster  upgrade' "
+                "(double space) is tokenized identically to 'stcli cluster upgrade' but fails the "
+                "contains() check; all 25 blocked stcli subcommands (cluster create, cluster upgrade, "
+                "cluster shutdown, security password set, node add, dp peer add/edit/delete, cleaner/rebalance "
+                "ops) can be unblocked by inserting an extra space between any two words; requires "
+                "authenticated access to /rest/commands",
+    "status":   "CONFIRMED — source analysis; "
+                "Executor.isSupportedCommand(): unsupportedCommands.contains(command.trim()) at offset 6-18; "
+                "trim() only removes leading/trailing whitespace, not internal; "
+                "Executor.executeCommand(): tokenizer regex '([^\\\"\\\\S*|\\\".+?\\\")\\\\s*' at offset 347-388 "
+                "splits on all whitespace sequences, so 'stcli cluster  upgrade' tokens to "
+                "['stcli','cluster','upgrade'] — identical argv to the blocked command; "
+                "Runtime.exec(String[], String[]) at offset 446; "
+                "Executor$1 unsupportedCommands list: 25 entries, all single-space-separated; "
+                "example bypass: POST /rest/commands {\"command\":\"stcli cluster  shutdown\"} "
+                "(double space between 'cluster' and 'shutdown') → executes stcli cluster shutdown",
+    "severity": "HIGH",
+    "source_pkg": "ROOT WAR (HyperFlex bootstrap webapp)",
+    "source_ref": "ROOT/WEB-INF/classes/com/storvisor/sysmgmt/bootstrap/util/Executor.class "
+                  "(isSupportedCommand: offset 6 List.contains with trim only; executeCommand: "
+                  "offset 347 regex tokenizer, offset 446 Runtime.exec array form); "
+                  "ROOT/WEB-INF/classes/com/storvisor/sysmgmt/bootstrap/util/Executor$1.class "
+                  "(unsupportedCommands: 25 exact single-space strings)",
+}
+
+
+# ─────────────────────────────────────────────────────────
+# UCSC-F66 — HyperFlex executeCommand denylist covers only stcli — sysmtool/hxcli/mkfs.storfs unconstrained
+# ─────────────────────────────────────────────────────────
+UCSC_F66 = {
+    "id":       "UCSC-F66",
+    "title":    "HyperFlex ROOT webapp authenticated CLI execution API at POST /rest/commands permits "
+                "any subcommand of sysmtool, hxcli, and mkfs.storfs without restriction — the "
+                "Executor$1 denylist contains 25 entries exclusively for stcli subcommands; "
+                "sysmtool, hxcli, and mkfs.storfs have zero denylist entries; mkfs.storfs is a "
+                "Springpath storage filesystem formatter — an authenticated attacker can invoke "
+                "'mkfs.storfs <device>' to destroy storage volumes; sysmtool and hxcli expose "
+                "cluster management and diagnostic operations with no web-API-level restriction",
+    "status":   "CONFIRMED — source analysis; "
+                "Executor.executeCommand() offset 277-323: startsWith check admits 'stcli', 'sysmtool', "
+                "'hxcli', 'mkfs.storfs'; Executor$1.unsupportedCommands: all 25 entries are "
+                "'stcli *' strings — sysmtool/hxcli/mkfs.storfs not present; "
+                "isSupportedCommand() returns true for any sysmtool/hxcli/mkfs.storfs command; "
+                "endpoint: POST /rest/commands (JSON body {command, user, role, category}); "
+                "protected by SSOAuthFilterImpl (authenticated access only); "
+                "BootstrapResource: getCommands()/getAdvCommands()/getBasicCommands() enumerate "
+                "available command set at GET /rest/commands",
+    "severity": "HIGH",
+    "source_pkg": "ROOT WAR (HyperFlex bootstrap webapp)",
+    "source_ref": "ROOT/WEB-INF/classes/com/storvisor/sysmgmt/bootstrap/util/Executor.class "
+                  "(executeCommand offset 277-323: four-prefix allowlist); "
+                  "ROOT/WEB-INF/classes/com/storvisor/sysmgmt/bootstrap/util/Executor$1.class "
+                  "(unsupportedCommands: stcli-only, no sysmtool/hxcli/mkfs.storfs entries); "
+                  "ROOT/WEB-INF/classes/com/storvisor/sysmgmt/bootstrap/rest/BootstrapResource.class "
+                  "(@Path('/rest') @POST @Path('/commands') executeCommand)",
+}
+
+
 FINDINGS = [
     UCSC_F1, UCSC_F2, UCSC_F3, UCSC_F4, UCSC_F5, UCSC_F6, UCSC_F7, UCSC_F8,
     UCSC_F9, UCSC_F10, UCSC_F11, UCSC_F12, UCSC_F13, UCSC_F14, UCSC_F15,
@@ -2973,7 +3039,7 @@ FINDINGS = [
     UCSC_F43, UCSC_F44, UCSC_F45, UCSC_F46, UCSC_F47, UCSC_F48, UCSC_F49,
     UCSC_F50, UCSC_F51, UCSC_F52, UCSC_F53, UCSC_F54, UCSC_F55,
     UCSC_F56, UCSC_F57, UCSC_F58, UCSC_F59, UCSC_F60, UCSC_F61,
-    UCSC_F62, UCSC_F63, UCSC_F64,
+    UCSC_F62, UCSC_F63, UCSC_F64, UCSC_F65, UCSC_F66,
 ]
 
 
