@@ -213,7 +213,60 @@ UCSC21_F6 = {
     ),
 }
 
-FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6]
+# ─────────────────────────────────────────────────────────────────────────────
+# UCSC21-F7: updateBin.sh unconditionally runs usermod -s /bin/bash root on every
+#             UCS Central software update — silently reverts root shell hardening
+# Source: ucsCentral/updateBin.sh line 90 in ucs-central.2.1.2b_EVAL.iso
+# ─────────────────────────────────────────────────────────────────────────────
+UCSC21_F7 = {
+    "id":       "UCSC21-F7",
+    "title":    "updateBin.sh in 2.1.2b runs '/usr/sbin/usermod -s /bin/bash root' unconditionally "
+                "after every firmware update — silently re-enables root login shell, "
+                "reverting any /sbin/nologin hardening; regression introduced in 2.1.2b (absent in 1.5.1c)",
+    "status":   "CONFIRMED — ucsCentral/updateBin.sh line 90 in ucs-central.2.1.2b_EVAL.iso; "
+                "line absent in ucsCentral/updateBin.sh from ucs-central.1.5.1c.iso",
+    "severity": "MEDIUM",
+
+    "source_file":   "ucsCentral/updateBin.sh",
+    "source_line":   "/usr/sbin/usermod -s /bin/bash root >> /dev/null 2>&1",
+    "line_number":   90,
+    "output":        ">> /dev/null 2>&1 — stdout and stderr silently discarded; no operator-visible indication",
+
+    "regression": (
+        "This line is present in 2.1.2b updateBin.sh (line 90) and absent in 1.5.1c updateBin.sh. "
+        "It runs unconditionally — after every invocation of updateBin.sh regardless of what "
+        "component was updated, whether the update succeeded or failed, and whether root's "
+        "current shell was already /bin/bash."
+    ),
+
+    "impact": (
+        "CIS Benchmark for RHEL (and AlmaLinux 9) recommends setting root's shell to "
+        "/sbin/nologin to prevent interactive root login. Hardening guides for Cisco UCS Central "
+        "may specify the same. Any operator who hardens root's shell after deployment "
+        "will have that change silently reverted by the next UCS Central software update. "
+        "On AlmaLinux 9 (2.1.2b's base OS), sshd with PermitRootLogin=prohibit-password "
+        "allows root login via SSH key; re-enabling /bin/bash as root's shell means "
+        "that hardening assumption is invalidated post-update without operator awareness. "
+        "The >> /dev/null 2>&1 redirect ensures no log entry is produced."
+    ),
+
+    "sshd_interaction": (
+        "If PermitRootLogin is set to 'prohibit-password' (common default) and an operator "
+        "sets root's shell to /sbin/nologin to prevent root login entirely, "
+        "a UCS Central update restores /bin/bash — making root logins via SSH key functional again. "
+        "The update log shows only the update component messages; "
+        "the usermod line produces no output (both stdout and stderr discarded)."
+    ),
+
+    "contrast_151c": (
+        "In 1.5.1c, updateBin.sh (line 90 equivalent) is: '# cleanup the extracted files'. "
+        "The usermod line was introduced specifically in 2.1.2b. "
+        "This suggests 2.1.2b required forcing root's shell to /bin/bash for some update script "
+        "to function, and the fix was committed without a time-limited scope guard."
+    ),
+}
+
+FINDINGS = [UCSC21_F1, UCSC21_F2, UCSC21_F3, UCSC21_F4, UCSC21_F5, UCSC21_F6, UCSC21_F7]
 FIRMWARE["findings"] = [f["id"] for f in FINDINGS]
 
 if __name__ == "__main__":
