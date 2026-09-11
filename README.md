@@ -193,6 +193,111 @@ This runs in under two minutes on a 94MB stripped binary.
 
 ---
 
+## How a reverse engineering tool works
+
+A RE tool is a pipeline that transforms raw bytes into human-understandable structure — from bit pattern to behavior. Every major tool (IDA, Ghidra, Binary Ninja, radare2) is built from the same eight stages.
+
+```
+Binary on disk
+      │
+      ▼
+┌─────────────────┐
+│  1. Loader      │  parse format → map sections into memory model
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  2. Disassembler│  bytes → instructions (linear sweep or recursive descent)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  3. CFG Builder │  instructions → basic blocks → edges (branch targets)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  4. Call Graph  │  function boundary detection → caller/callee graph
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  5. Lift to IR  │  assembly → architecture-agnostic intermediate rep
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  6. Data Flow   │  track values through registers/memory (taint, types)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  7. Decompiler  │  IR → C-like pseudocode (structure recovery, vars, types)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  8. Symbol/Xref │  name resolution, cross-reference index, string refs
+└─────────────────┘
+```
+
+**1. Loader** reads ELF/PE/Mach-O headers. Extracts sections (`.text`, `.data`, `.bss`, `.rodata`), entry point VA, import table (API surface), export table, segment permissions (R/W/X). Everything downstream depends on knowing what bytes are code vs. data vs. padding.
+
+**2. Disassembler** — two strategies, both flawed:
+
+```
+Linear sweep:        march forward blindly — fast, misses data islands in code
+Recursive descent:   follow branch targets — accurate, misses indirect branches + dead code
+```
+
+Modern tools combine both with heuristics (prologue patterns, exception handler tables). Ablation uses Capstone — multi-arch, embeddable, fast.
+
+**3. CFG (Control Flow Graph)** — a basic block is a maximal instruction sequence with single entry, single exit (ends in branch/call/ret/hlt). Edges connect blocks via branch targets. Everything else — decompiler, taint analysis, semantic similarity — runs on top of this graph.
+
+**4. Call Graph** — function boundary detection in stripped binaries uses prologue heuristics (`push rbp; mov rbp, rsp`, `sub rsp, N`) and exception tables (PE `.pdata`, ELF `.eh_frame`). Leaf functions doing IO/crypto/network are high-value targets.
+
+**5. IR Lifting** — why: `mov eax, [rbp-8]` (x86) and `ldr w0, [x29, #-8]` (ARM64) do the same thing. Lifting to one IR means write the analysis once, run it everywhere.
+
+| IR | Used by | Tradeoff |
+|----|---------|----------|
+| VEX | angr, Valgrind | precise flag effects, memory modeled |
+| PCODE | Ghidra | reversible register transfer language |
+| ESIL | radare2 | stack-based expression evaluator |
+| BinFuse categories | Ablation | lossy but BERT-friendly (`mov → DATA_TRANSFER_OP`) |
+
+The lossier the IR, the less precise the analysis — but the more robust to recompilation noise.
+
+**6. Data Flow Analysis** — tracks where values come from and where they go:
+
+```
+taint source: recv() return value (attacker-controlled length)
+      │
+      ▼  mov ecx, eax     ← ECX tainted
+      │
+      ▼  call memcpy      ← tainted value reaches length arg → vuln candidate
+```
+
+Used for taint analysis (attacker input → dangerous sink), type recovery (value passed to `socket()` → must be int), and constant propagation (resolve indirect calls).
+
+**7. Decompiler** reconstructs C-like pseudocode from IR + CFG:
+
+```
+CFG → structure recovery:   loops (back edges), if/else (dominator tree)
+Registers → variables:      SSA form, phi nodes, stack slot coalescence
+Operations → types:         int vs. pointer vs. float propagated through ops
+Addresses → names:          FLIRT signatures, import names, user labels
+```
+
+Output is always an approximation — compilers discard type info, names, comments. Good decompilers (Hex-Rays, Ghidra HLIL, BN MLIL) guess well on common patterns and fail on obfuscation.
+
+**8. Symbol resolution + xref index** — FLIRT/BSim match stripped functions to known library signatures. The xref index lets you ask "who writes to this global?" in O(1).
+
+### Where Ablation sits
+
+Ablation operates at **stage 2.5** — after disassembly, before full CFG analysis. It encodes what a function *does* semantically (opcode category sequences + Markov transitions + call targets + strings) into a BERT vector. This sidesteps the hardest problems (indirect calls, obfuscated CFGs, stripped symbols) by asking a different question: not "what is this function named" but "what does this function behaviorally resemble." That is why it finds homologs across versions even when address, name, and instruction sequence all changed.
+
+---
+
 ## Architecture
 
 ```
