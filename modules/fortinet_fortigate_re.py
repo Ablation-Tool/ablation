@@ -1277,6 +1277,134 @@ return 0
 }
 
 # ─────────────────────────────────────────────────────────
+# FGT-F21 — ioctl 0x9005 unauth kernel global read + 0x9009 conditional read
+# ─────────────────────────────────────────────────────────
+FGT_F21_IOCTL_0x9005_UNAUTH_GLOBAL_READ = {
+    "id": "FGT-F21",
+    "product": "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "LOW-MEDIUM — unauth kernel data disclosure; runtime impact depends on global content",
+    "class": "Unauth kernel global read via ioctl 0x9005 (and 0x9009 conditionally)",
+
+    "0x9005_x86_800": {
+        "foff_handler": "0x55c6b0",
+        "source_vma": "0xffffffff8188a410",
+        "source_foff": "0x188a410 (in vmlinux .data section, zero in static image)",
+        "source_note": "0x30 bytes before the object table at 0xffffffff8188a440",
+        "transfer": "copy_to_user(user_ptr, &global, 4) -- 4 bytes unconditional",
+        "privilege_gate": "ABSENT -- no privilege check before copy_to_user",
+        "disasm": [
+            "mov edx, 4",
+            "mov rsi, 0xffffffff8188a410  ; source global",
+            "mov rdi, r12                 ; user dst",
+            "call copy_to_user            ; 0x80601b00",
+            "xor ebx, ebx                 ; return 0",
+        ],
+    },
+
+    "0x9009_x86_800": {
+        "foff_handler": "0x55c5ef",
+        "global_vma": "0xffffffff8188a410 (same as 0x9005)",
+        "condition": "object[+0x30] == 3 (signed 32-bit comparison)",
+        "disasm": [
+            "call copy_from_user(stack, user, 4)   ; read index",
+            "cmp edi, 0x40                          ; bounds check",
+            "call object_lookup(index)",
+            "movsxd rbx, [rax+0x30]                ; read object[+0x30]",
+            "cmp ebx, 3",
+            "jne epilogue                           ; if != 3, return field value directly",
+            "movsxd rbx, [rip+0x132dddd]           ; rip+offset = 0xffffffff8188a410",
+            "jmp epilogue                           ; return global value",
+        ],
+        "dual_behavior": (
+            "If object[+0x30] != 3: returns object[+0x30] itself (leaks object field). "
+            "If object[+0x30] == 3: returns the runtime global at 0x8188a410 (leaks Fortinet global). "
+            "Either case: no privilege check."
+        ),
+    },
+
+    "runtime_global_significance": (
+        "0xffffffff8188a410 is 0x30 bytes before the 64-slot Fortinet object table (0x8188a440). "
+        "At runtime: populated by Fortinet daemon init. "
+        "In static vmlinux: zero (BSS). "
+        "Could contain: slot count, version tag, init flag, or a kernel pointer. "
+        "If it contains a kernel pointer: FGT-F21 enables KASLR bypass for any local process."
+    ),
+
+    "arm64_800": {
+        "foff_handler": "0x2dfb28",
+        "source_foff_in_image": "0x10f17c0 (in ARM64 image BSS, beyond file at 0x10b4a00)",
+        "source_note": "PC-relative ADRP offset 0xe12000 from ioctl handler -> BSS global",
+        "confirmed": True,
+    },
+
+    "status": "CONFIRMED class, runtime value unknown (BSS in static binary). KASLR bypass potential if global contains kernel pointer.",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F22 — ioctl 0x9007 unauth kernel string-write primitive
+# ─────────────────────────────────────────────────────────
+FGT_F22_IOCTL_0x9007_STRING_WRITE = {
+    "id": "FGT-F22",
+    "product": "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "HIGH — unauth controlled heap allocation + kernel string write; DoS confirmed (FGT-F16); escalation path depends on 0x55db6d semantics",
+    "class": "Unauth controlled kernel heap allocation + string injection via ioctl 0x9007",
+
+    "x86_800": {
+        "foff_handler": "0x55c73d",
+        "input_layout": {
+            "bytes_0_3": "index (DWORD) -- passed to 0x55db6d",
+            "bytes_4_7": "size (DWORD) -- controls allocation size",
+            "bytes_8_15": "user_ptr (QWORD) -- source of string data",
+        },
+        "total_input": "16 bytes from user, no privilege check",
+        "flow": [
+            "copy_from_user(stack, user, 16)         ; read 16 bytes",
+            "lea edi, [size + 1]                     ; 32-bit ADD -> wraps to 0 if size=0xffffffff",
+            "movsxd rdi, edi                         ; sign-extend",
+            "kmalloc(rdi, GFP_KERNEL|0xc0)           ; allocates size+1 bytes",
+            "copy_from_user(kmalloc_buf, user_ptr, size)  ; copies string from user ptr",
+            "kmalloc_buf[size] = 0x00                ; null-terminate",
+            "call 0x55db6d(index, kmalloc_buf)       ; Fortinet string-op with index+buf",
+            "call 0x42774f(kmalloc_buf)              ; release/unmap heap buf",
+        ],
+        "privilege_gate": "ABSENT",
+        "integer_overflow": (
+            "If size=0xffffffff: lea edi=[0xffffffff+1]=0 (32-bit wrap). "
+            "kmalloc(0) returns valid SLUB ptr (~64 bytes). "
+            "Then copy_from_user(kmalloc_buf, user_ptr, 0xffffffff). "
+            "Fortinet custom copy_from_user: memset(heap, 0, SIZE_MAX) via rep stosq -> CRASH. "
+            "This is the FGT-F16 DoS primitive specifically triggered via ioctl 0x9007 with size=0xffffffff."
+        ),
+        "post_overflow_null_write": (
+            "After copy_from_user: `mov byte ptr [r12 + rax], 0` where r12=kmalloc_buf, rax=size. "
+            "For size=0xffffffff: writes 0 to kmalloc_buf+0xffffffff (4GB past allocation head). "
+            "For normal sizes: legitimate null terminator at end of allocated region."
+        ),
+        "0x55db6d_call_note": (
+            "0x55db6d receives (index, kernel_string_ptr). "
+            "If it performs any object-table lookup via index, user controls the string stored at "
+            "an indexed kernel object slot. This is a potential kernel string-injection primitive "
+            "if the string is later interpreted (format string, path, configuration key)."
+        ),
+    },
+
+    "arm64_800": {
+        "foff_handler": "0x2dfa2c",
+        "equivalent_overflow": "add w0, w0, #1 on w0=0xffffffff wraps to 0 (same 32-bit wrap)",
+        "arm64_dos_status": "NOT confirmed -- standard ARM64 copy_from_user rejects SIZE_MAX (access_ok correct). Integer overflow to kmalloc(0) occurs but error path returns EFAULT cleanly.",
+        "note": "ARM64 0x9007 has the overflow but lacks the DoS crash. Heap primitives (0x55db6d equivalent) still present if size is valid.",
+    },
+
+    "chaining_note": (
+        "Chain: FGT-F22 (string inject via 0x9007) -> FGT-F19 (field write via 0x9004) -> FGT-F20 (field read via 0x9003). "
+        "FGT-F22 injects a string at index N, FGT-F19 writes to object[N+0x44], FGT-F20 reads object fields back. "
+        "If 0x55db6d stores the string in the object table, FGT-F22+FGT-F20 enables reading back the injected string to confirm write."
+    ),
+
+    "status": "CONFIRMED class (unauth heap allocation + string write). DoS path confirmed via FGT-F16. Injection impact requires dynamic analysis of 0x55db6d.",
+}
+
+# ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
 EXTRACTION_COMMANDS = {
