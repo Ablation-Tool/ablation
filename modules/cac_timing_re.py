@@ -50,33 +50,35 @@ SLOT_ID     = "04"  # Card Auth -- no PIN required
 # PKCS11 session management
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _card_atr_present() -> bool:
+    """True if opensc-tool --atr succeeds (card actually responding)."""
+    r = subprocess.run(["opensc-tool", "--atr"],
+                       capture_output=True, timeout=5)
+    return r.returncode == 0 and len(r.stdout.strip()) > 0
+
+
 def wait_for_card(lib_path: str = PKCS11_LIB, timeout_s: float = 120.0) -> None:
-    """Block until a card with a token is present. Prints a prompt once."""
-    lib = PyKCS11.PyKCS11Lib()
-    lib.load(lib_path)
+    """Block until card ATR is readable. Prints prompt once."""
     deadline = time.monotonic() + timeout_s
     shown    = False
     while time.monotonic() < deadline:
         try:
-            slots = lib.getSlotList(tokenPresent=True)
-            if slots:
+            if _card_atr_present():
                 if shown:
-                    print("  Card detected.")
+                    print("  Card detected.", flush=True)
                 return
         except Exception:
             pass
         if not shown:
-            print("  [Waiting for CAC card insertion...]", flush=True)
+            print("  [Insert CAC card to continue...]", flush=True)
             shown = True
         time.sleep(0.5)
-    raise TimeoutError(f"no card inserted within {timeout_s}s")
+    raise TimeoutError(f"no card detected within {timeout_s}s")
 
 
-def card_is_present(lib_path: str = PKCS11_LIB) -> bool:
+def card_is_present() -> bool:
     try:
-        lib = PyKCS11.PyKCS11Lib()
-        lib.load(lib_path)
-        return len(lib.getSlotList(tokenPresent=True)) > 0
+        return _card_atr_present()
     except Exception:
         return False
 
