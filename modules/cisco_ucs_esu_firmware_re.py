@@ -1,275 +1,238 @@
 """
-Cisco UCS X-Series ESU (Ethernet Switch Unit) Firmware RE Module 1
-Bundles: esu-firmware-6.0.1.251006.tar.gz, esu-firmware-6.0.2.260143.tar.gz (+ 260026/260034)
-Platform: UCSXE-ECMC-10G (eChassis Management Controller); chassis codename: PANDORA
+Cisco UCS ESU (Extended Service Unit) Firmware Bundle RE
 
-7 findings: 0C/1H/2M/4L
-Cumulative: 587 [54C+188H+178M+167L]
+Targets: esu-firmware-6.0.1.251006.tar.gz
+         esu-firmware-6.0.2.260026.tar.gz
+         esu-firmware-6.0.2.260034.tar.gz
+         esu-firmware-6.0.2.260143.tar.gz
+         UCS XE ESU firmware bundles for UCSXE-ECMC-10G platform
+         Components: CMC, PSU (3 models), pdbFPGA, eCMCFPGA, MTS, slamlatch
+Files:   Catalog.json (update manifest, md5sums, plugin dispatch)
+         CMC/6.0.2.260036/chassisA.img (CMC firmware, 55AA boot magic)
+         PSU/*.bin (*_unsigned.bin for all 3 PSU models)
+         slamlatch/v*/tSHL-PP-APP-FW-*.upg (CUPG magic header)
+         eCMCFPGA/, pdbFPGA/ (FPGA .spi images)
+         MTS/*/image_*_official_key.bin
+Session: 39
 """
-
-# ============================================================
-# TARGET
-# ============================================================
-
-ESU_TARGET = {
-    "platform": "UCSXE-ECMC-10G",
-    "platform_desc": "X-Series Enterprise Chassis ESU (Ethernet Switch Unit) firmware bundle",
-    "chassis_codename": "PANDORA",
-    "firmware_dest_base": "/tmp/firmware/PANDORA/",
-    "bundles_surveyed": [
-        "esu-firmware-6.0.1.251006.tar.gz",
-        "esu-firmware-6.0.2.260143.tar.gz",
-    ],
-    "oob_update_plugin": "swupdate",
-}
-
-ESU_COMPONENT_MAP = {
-    "pdbFPGA": {
-        "desc": "PDB (Power Distribution Board) FPGA",
-        "codename": "direhorse",
-        "version_6_0_2": "V202",
-        "file_6_0_2": "direhorse_top_V202_250829_update_URP_REL_na.spi",
-        "format": "SPI flash image (URP = Upgrade/Recovery Package)",
-        "signed": True,
-        "note": "rel/na = release, no authentication variant",
-    },
-    "CMC": {
-        "desc": "Chassis Management Controller",
-        "version_6_0_2": "6.0(2.260036)",
-        "file_6_0_2": "chassisA.img",
-        "format": "IA-32 BIOS option ROM extension (magic 55AA)",
-        "size_mb": 150,
-        "dst_version_bug": "destination path hardcodes version 0.0.0.0 regardless of packaged version",
-        "signed": "unknown",
-    },
-    "PSU_QCS": {
-        "desc": "2400W AC PSU (QCS manufacturer)",
-        "manufacturer_prefix": "QCS",
-        "version_6_0_2": "1.6.0.0,3.5.0.0",
-        "file_6_0_2": "QCS_UCSXE-PSU-2400W_1.6.0.0_3.5.0.0_combined_unsigned.bin",
-        "format": "cpio archive containing Pri+Sec firmware",
-        "cpio_contents": [
-            "QCS_UCSXE-PSU-2400W_Pri_V1.6.0_26Nov2025.bin (24KB)",
-            "QCS_UCSXE-PSU-2400W_Sec_V3.5.0_26Nov2025.bin (94KB)",
-        ],
-        "signed": False,
-        "part_number": "341-101668-01",
-    },
-    "PSU_MEG_AC": {
-        "desc": "2400W AC PSU (MEG manufacturer)",
-        "manufacturer_prefix": "MEG",
-        "version_6_0_2": "4.0.2.0,4.0.0.0",
-        "file_6_0_2": "MEG_UCSXE-PSU-2400W_4.0.2.0_4.0.0.0_combined_unsigned.bin",
-        "format": "cpio archive containing Pri+Sec firmware",
-        "signed": False,
-    },
-    "PSU_MEG_DC": {
-        "desc": "2400W DC PSU (MEG manufacturer)",
-        "manufacturer_prefix": "MEG",
-        "version_6_0_2": "4.0.0.0,4.0.0.0",
-        "file_6_0_2": "MEG_UCSXE-PSU-2400WDC_4.0.0.0_4.0.0.0_combined_unsigned.bin",
-        "format": "cpio archive",
-        "signed": False,
-    },
-    "eCMCFPGA": {
-        "desc": "eCMC FPGA",
-        "codename": "toruk",
-        "version_6_0_2": "V200",
-        "file_6_0_2": "toruk_top_250425_V200_update_URP_REL_na.spi",
-        "format": "SPI flash image (URP/REL)",
-        "size_mb": 1.2,
-        "signed": "URP rel_na format; na = no authentication",
-    },
-    "MTS": {
-        "desc": "MTS (Multi-Topology Switch) -- Marvell/Prestera Aldrin3S ASIC",
-        "asic": "Marvell Aldrin3S",
-        "version_6_0_2": "1.0.2.2",
-        "file_6_0_2": "image_Aldrin3S_1.0.2.2_official_key.bin",
-        "format": "obfuscated/encrypted binary (0xFDCFFFFF header, 55MB)",
-        "official_key_in_name": True,
-        "strings_hint": "'~key', 'keydA', '<MTSM', ']MTS', 'QVMTS', 'akey' -- key-related strings",
-        "signed": True,
-    },
-    "slamlatch": {
-        "desc": "Slam Latch Controller (mechanical blade latch firmware)",
-        "version_6_0_2": "V24",
-        "file_6_0_2": "tSHL-PP-APP-FW-v25082018.upg",
-        "format": "binary upgrade image (.upg)",
-        "size_kb": 27,
-        "new_in_6_0_2": True,
-        "signed": "unknown",
-    },
-    "eCMC_Device_Connector": {
-        "desc": "eCMC Device Connector",
-        "codenames": ["Neyitri", "Vitraya"],
-        "version_6_0_2": "1.0.11 (two variants)",
-        "build_neyitri": "1.0.11-20260202093858420",
-        "build_vitraya": "1.0.11-20260304181905197",
-    },
-}
-
-# ============================================================
-# OOB TRANSFER SECURITY
-# ============================================================
-
-OOB_TRANSFER = {
-    "secure_copy_enabled": False,
-    "all_components_affected": True,
-    "note": "Catalog.json has 'secure-copy': {'enabled': false} for every firmware entry",
-    "implication": "firmware blobs transferred in plaintext during OOB update; MITM on management network intercepts and replaces firmware",
-}
-
-PSU_UNSIGNED_ANALYSIS = {
-    "unsigned_count": 3,
-    "total_psu_variants": 3,
-    "all_psu_unsigned": True,
-    "spans_versions": "confirmed unsigned in both 6.0.1.251006 and 6.0.2.260143",
-    "file_name_pattern": "*_combined_unsigned.bin",
-    "explicit_disclosure": "the word 'unsigned' is part of the filename; not an artifact",
-    "cpio_format": "PSU firmware packaged as cpio (not raw binary); extracts Pri + Sec binaries",
-    "pri_sec_architecture": "2400W PSUs have dual firmware banks (Primary + Secondary with independent versioning)",
-}
-
-# ============================================================
-# FINDINGS
-# ============================================================
-
-FINDINGS = [
-    {
-        "id": "ESU-F1",
-        "severity": "HIGH",
-        "title": "ALL_PSU_FIRMWARE_EXPLICITLY_UNSIGNED_ACROSS_MULTIPLE_ESU_VERSIONS",
-        "detail": (
-            "All three 2400W PSU firmware variants (QCS AC, MEG AC, MEG DC) ship without "
-            "cryptographic signatures. Filenames contain '_combined_unsigned' -- the absence of "
-            "signature verification is explicitly named in the production artifact. "
-            "Unsigned PSU firmware spans at least two ESU versions: "
-            "6.0.1.251006 (QCS 1.5.0.0, MEG AC 4.0.2.0) and 6.0.2.260143 (QCS 1.6.0.0, MEG AC 4.0.2.0, MEG DC 4.0.0.0). "
-            "PSU firmware is packaged as cpio archives containing Pri+Sec binaries with separate versions "
-            "(QCS Pri 1.6.0, Sec 3.5.0). "
-            "The update delivery mechanism (swupdate plugin, secure-copy=false) transfers these unsigned "
-            "images over plaintext to /tmp/firmware/PANDORA/PSU/. "
-            "A MITM on the UCSM/CMC management network can replace unsigned PSU firmware with a malicious image. "
-            "PSU firmware controls 2400W power delivery, voltage rails, and thermal management "
-            "for the entire X-Series blade chassis. Malicious PSU firmware can cause "
-            "power surges, voltage manipulation, or thermal overvoltage on all blades."
-        ),
-    },
-    {
-        "id": "ESU-F2",
-        "severity": "MEDIUM",
-        "title": "ALL_OOB_FIRMWARE_TRANSFERS_USE_SECURE_COPY_FALSE_PLAINTEXT_DELIVERY",
-        "detail": (
-            "Catalog.json specifies 'secure-copy': {'enabled': false} for all 7 firmware components: "
-            "pdbFPGA, CMC, PSU (3 variants), eCMCFPGA, MTS, slamlatch. "
-            "The swupdate plugin transfers firmware blobs to /tmp/firmware/PANDORA/<component>/ "
-            "over the management network without encryption. "
-            "A network-adjacent attacker on the UCSM management VLAN can intercept and replace any firmware "
-            "image in transit, including the CMC (chassisA.img, 150MB), FPGA images (toruk, direhorse), "
-            "and the slamlatch controller. "
-            "Only PSU firmware is marked unsigned in filename; the others may have their own integrity checks "
-            "independent of the transfer mechanism, but the transport provides no confidentiality or integrity."
-        ),
-    },
-    {
-        "id": "ESU-F3",
-        "severity": "MEDIUM",
-        "title": "CMC_DESTINATION_PATH_HARDCODES_VERSION_0_0_0_0_REGARDLESS_OF_PACKAGED_VERSION",
-        "detail": (
-            "Catalog.json for the CMC component specifies: "
-            "dst_location = '/tmp/firmware/PANDORA/CMC/0.0.0.0/' "
-            "but packaged_version = '6.0(2.260036)'. "
-            "The destination path version field is hardcoded to 0.0.0.0 instead of the actual version. "
-            "Consequence: multiple CMC firmware versions would overwrite the same path during sequential updates. "
-            "If the update orchestration uses the destination path for version tracking, "
-            "0.0.0.0 would be recorded as the CMC version after every update regardless of what was installed. "
-            "Cross-version ESU bundles with different CMC versions (6.0.1.251006 vs 6.0.2.260036) "
-            "would write to the same /tmp/firmware/PANDORA/CMC/0.0.0.0/ path, "
-            "potentially allowing an older CMC image to replace a newer one silently."
-        ),
-    },
-    {
-        "id": "ESU-F4",
-        "severity": "LOW",
-        "title": "AVATAR_CODENAME_FAMILY_IN_X_SERIES_CHASSIS_FIRMWARE",
-        "detail": (
-            "X-Series chassis firmware uses consistent AVATAR/Pandora codenames: "
-            "chassis = PANDORA (the moon from Avatar); "
-            "eCMC FPGA = toruk (Toruk Makto, great leonopteryx); "
-            "PDB FPGA = direhorse (Direhorses of Pandora); "
-            "eCMC Device Connector variant 1 = Neyitri (Neytiri, Na'vi character); "
-            "eCMC Device Connector variant 2 = Vitraya (Vitraya Ramunong, Tree of Souls). "
-            "All codenames appear in production artifact filenames and catalog data shipped to customers. "
-            "The two Device Connector codenames (Neyitri/Vitraya) suggest different hardware revisions "
-            "of the eCMC in the X-Series chassis."
-        ),
-    },
-    {
-        "id": "ESU-F5",
-        "severity": "LOW",
-        "title": "FPGA_URP_FORMAT_USES_REL_NA_NO_AUTHENTICATION_VARIANT",
-        "detail": (
-            "Both FPGA SPI images use the URP (Upgrade/Recovery Package) format with the '_REL_na' suffix: "
-            "toruk_top_250425_V200_update_URP_REL_na.spi (1.2MB) and "
-            "direhorse_top_V202_250829_update_URP_REL_na.spi (1.3MB). "
-            "'REL' = release build; 'na' = no authentication. "
-            "The explicit 'na' (no authentication) suffix indicates these FPGA images do not use "
-            "the URP authentication path. The authenticated URP variant would use '_auth' or similar. "
-            "FPGA bitstream authentication is not enforced for eCMC and PDB FPGAs in the X-Series chassis."
-        ),
-    },
-    {
-        "id": "ESU-F6",
-        "severity": "LOW",
-        "title": "MTS_ALDRIN3S_SWITCH_ASIC_FIRMWARE_OBFUSCATED_55MB_ONLY_SIGNED_COMPONENT",
-        "detail": (
-            "MTS (Multi-Topology Switch) firmware (image_Aldrin3S_1.0.2.2_official_key.bin, 55MB) "
-            "is the only ESU component with 'official_key' in its filename, indicating signature. "
-            "The binary has an unusual header (0xFDCFFFFF) and appears obfuscated or encrypted -- "
-            "not raw FPGA bitstream or ELF. "
-            "String fragments: '~key', 'keydA', '<MTSM', ']MTS', 'QVMTS', 'akey' "
-            "suggest key material or key identifiers embedded in the image. "
-            "The Marvell Aldrin3S is a 400GbE switch ASIC used as the ESU's switching fabric. "
-            "The 55MB size and obfuscation level is inconsistent with typical small ASIC firmware blobs. "
-            "Version progression: 1.0.1.3 (6.0.1) -> 1.0.2.2 (6.0.2)."
-        ),
-    },
-    {
-        "id": "ESU-F7",
-        "severity": "LOW",
-        "title": "SLAMLATCH_CONTROLLER_FIRMWARE_NEW_IN_6_0_2_FORMAT_UNK",
-        "detail": (
-            "slamlatch firmware (tSHL-PP-APP-FW-v25082018.upg, 27KB) is absent from ESU 6.0.1.251006 "
-            "and first appears in ESU 6.0.2.260143. "
-            "The slamlatch is the mechanical blade latch controller for the X-Series chassis "
-            "that detects and controls blade insertion/ejection. "
-            "The .upg format is opaque; file identifies as 'data'. "
-            "No signature mechanism identified from filename or catalog. "
-            "Platform version encoded in filename: v25082018 = version date 2025-08-20-18 "
-            "(year-month-day-hour). "
-            "The catalog lists packaged_version as 'V24' while the filename encodes v25082018 "
-            "-- version string inconsistency between catalog and filename."
-        ),
-    },
-]
-
-# ============================================================
-# MODULE SUMMARY
-# ============================================================
 
 MODULE_SUMMARY = {
     "module": "cisco_ucs_esu_firmware_re",
-    "platform": "UCSXE-ECMC-10G (PANDORA chassis)",
-    "bundles": ["esu-firmware-6.0.1.251006", "esu-firmware-6.0.2.260143"],
-    "finding_counts": {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 4},
-    "cumulative_counts": {"CRITICAL": 54, "HIGH": 188, "MEDIUM": 178, "LOW": 167},
-    "cumulative_total": 587,
-    "codenames_discovered": {
-        "chassis": "PANDORA",
-        "eCMC_FPGA": "toruk",
-        "PDB_FPGA": "direhorse",
-        "eCMC_DC_v1": "Neyitri",
-        "eCMC_DC_v2": "Vitraya",
+    "firmware": (
+        "esu-firmware-6.0.1.251006.tar.gz / "
+        "esu-firmware-6.0.2.260026.tar.gz / "
+        "esu-firmware-6.0.2.260034.tar.gz / "
+        "esu-firmware-6.0.2.260143.tar.gz"
+    ),
+    "components": {
+        "Catalog.json": (
+            "Update manifest; 8 firmware components; "
+            "secure-copy: {enabled: false} on ALL components; "
+            "integrity: md5sum only; "
+            "no SHA-256, no RSA signature field, no downgrade protection"
+        ),
+        "PSU firmware (3 models)": (
+            "QCS_UCSXE-PSU-2400W, MEG_UCSXE-PSU-2400W, MEG_UCSXE-PSU-2400WDC; "
+            "all named *_combined_unsigned.bin; "
+            "explicit absent signature in filename AND catalog"
+        ),
+        "CMC/6.0.2.260036/chassisA.img": (
+            "55 AA magic (bootable image header); "
+            "MD5 = 2b80736a5c0... (260143) vs bc64937116e... (260034); "
+            "no signature field in catalog"
+        ),
+        "slamlatch .upg": (
+            "CUPG magic header; proprietary Cisco update format; "
+            "no visible crypto verification strings in binary"
+        ),
+        "MTS image": (
+            "image_Aldrin3S_*_official_key.bin naming suggests key-signed; "
+            "catalog shows MD5 as sole integrity check regardless"
+        ),
     },
-    "avatar_codename_family": True,
+    "finding_count": "6F [0C+3H+3M+0L]",
+    "cumulative": "759 [72C+255H+240M+192L]",
 }
+
+
+FINDINGS = [
+    {
+        "id": "F1",
+        "severity": "HIGH",
+        "title": "Secure-copy transport disabled for all 8 ESU firmware components",
+        "description": (
+            "Catalog.json in all four ESU bundle versions specifies "
+            "'secure-copy': {'enabled': false} for every firmware component: "
+            "pdbFPGA, CMC, PSU (3 models), eCMCFPGA, MTS, slamlatch. "
+            "The 'swupdate' OOB plugin is used for delivery; "
+            "with secure-copy disabled, firmware binaries are transferred "
+            "over unencrypted transport. "
+            "An attacker with MITM position on the management network during "
+            "an ESU update session can substitute any firmware component in transit "
+            "with a malicious binary. "
+            "The MD5 check in Catalog.json is read from the same Catalog.json "
+            "that the attacker can also modify."
+        ),
+        "evidence": {
+            "catalog_field": "secure-copy: {enabled: false} on all 8 components (6.0.1 through 6.0.2.260143)",
+            "components": "pdbFPGA, CMC, PSU x3, eCMCFPGA, MTS, slamlatch",
+        },
+        "impact": (
+            "MITM during ESU update delivers malicious firmware to CMC, PSU, or FPGA components "
+            "on the UCSXE-ECMC-10G chassis. "
+            "CMC compromise = chassis management control. "
+            "PSU compromise = power delivery control and potential hardware damage."
+        ),
+        "remediation": "Enable secure-copy on firmware delivery. Verify firmware over authenticated TLS.",
+    },
+    {
+        "id": "F2",
+        "severity": "HIGH",
+        "title": "PSU firmware explicitly unsigned across all ESU versions",
+        "description": (
+            "All three PSU firmware files across all four ESU versions are named "
+            "'*_combined_unsigned.bin': "
+            "QCS_UCSXE-PSU-2400W_1.6.0.0_3.5.0.0_combined_unsigned.bin (6.0.2), "
+            "MEG_UCSXE-PSU-2400W_4.0.2.0_4.0.0.0_combined_unsigned.bin, "
+            "MEG_UCSXE-PSU-2400WDC_4.0.0.0_4.0.0.0_combined_unsigned.bin. "
+            "In 6.0.1, PSU firmware was QCS_UCSXE-PSU-2400W_1.5.0.0_3.4.0.0_combined_unsigned.bin "
+            "(same naming convention). "
+            "The Catalog.json has no signature field for PSU components, "
+            "only MD5 checksums. "
+            "The PSU binary header (c7 71 54 00 ...) contains embedded product string "
+            "'QCS_UCSXE-PSU-2400W_Pri_V1.6.0_26Nov2025.bin' with no crypto material. "
+            "PSU firmware update via swupdate delivers an unsigned binary with no "
+            "on-device signature verification."
+        ),
+        "evidence": {
+            "filenames": (
+                "esu-firmware-6.0.1.251006: QCS_UCSXE-PSU-2400W_1.5.0.0_3.4.0.0_combined_unsigned.bin; "
+                "esu-firmware-6.0.2.*: same pattern, updated version number"
+            ),
+            "header_bytes": "c7 71 54 00 82 ff 80 81 ... (custom PSU format, no RSA field)",
+            "catalog_integrity": "md5sum only, no signature field",
+        },
+        "impact": (
+            "Malicious PSU firmware can be flashed without signature verification. "
+            "PSU firmware controls power delivery, monitoring, and protection circuits. "
+            "Malicious PSU firmware can induce hardware damage or persistent implant "
+            "at the power supply level, surviving OS reinstallation."
+        ),
+        "remediation": (
+            "Apply digital signatures to PSU firmware images before distribution. "
+            "Implement on-device RSA signature verification before PSU firmware application."
+        ),
+    },
+    {
+        "id": "F3",
+        "severity": "HIGH",
+        "title": "MD5-only integrity checking for CMC, FPGA, and MTS firmware updates",
+        "description": (
+            "Catalog.json uses md5sum as the sole integrity check for all firmware components: "
+            "CMC chassisA.img, pdbFPGA .spi, eCMCFPGA .spi, MTS image, slamlatch .upg. "
+            "MD5 is broken for collision resistance: "
+            "identical-prefix collision attacks can produce two files with the same MD5. "
+            "With secure-copy disabled (F1), an attacker can replace a firmware binary "
+            "and compute a matching MD5 in the Catalog.json. "
+            "The MTS component is named 'image_Aldrin3S_1.0.2.2_official_key.bin' "
+            "suggesting an intended key-signing mechanism, "
+            "but the catalog verifies only MD5."
+        ),
+        "evidence": {
+            "catalog_fields": "md5sum present; no sha256, no sha512, no rsa_signature field",
+            "mts_filename": "image_Aldrin3S_1.0.2.2_official_key.bin (name implies key, catalog uses MD5)",
+            "cmc_md5_diff": (
+                "CMC md5 changed between 6.0.2.260034 (bc64937116e...) and "
+                "6.0.2.260143 (2b80736a5c0...) -- confirms live firmware updates"
+            ),
+        },
+        "impact": (
+            "MD5 collision allows substituting malicious CMC or FPGA firmware while "
+            "passing the catalog integrity check. "
+            "CMC compromise gives chassis management control."
+        ),
+        "remediation": "Replace MD5 with SHA-256 or SHA-512 in Catalog.json. Add RSA signatures for critical components.",
+    },
+    {
+        "id": "F4",
+        "severity": "MEDIUM",
+        "title": "slamlatch firmware uses proprietary CUPG format with no visible signature mechanism",
+        "description": (
+            "slamlatch/v25082018/tSHL-PP-APP-FW-v25082018.upg uses a proprietary 'CUPG' "
+            "magic header format (bytes: 43 55 50 47 01 00 00 00 ...). "
+            "Binary strings analysis yields no crypto-related strings (no RSA, SHA, cert, verify, key). "
+            "The slamlatch appears to be firmware for a physical chassis latch mechanism. "
+            "With only MD5 catalog integrity (F3) and no secure-copy (F1), "
+            "the CUPG format provides no additional security. "
+            "The CUPG format is not publicly documented."
+        ),
+        "evidence": {
+            "header": "43 55 50 47 01 00 00 00 ff ff ff ff (CUPG magic)",
+            "strings_output": "No crypto/signature strings found in binary",
+        },
+        "impact": (
+            "Malicious slamlatch firmware can be delivered without verification. "
+            "Physical chassis latch control compromised."
+        ),
+        "remediation": "Document CUPG format. Add RSA signature verification to slamlatch update path.",
+    },
+    {
+        "id": "F5",
+        "severity": "MEDIUM",
+        "title": "CMC firmware update with bootable-image header (55 AA) and MD5-only integrity",
+        "description": (
+            "CMC/6.0.2.260036/chassisA.img has the 55 AA boot magic header "
+            "followed by structured data (00 05 80 05 80 5f 01 00 ...). "
+            "CMC is the Chassis Management Controller for the UCSXE-ECMC-10G. "
+            "The 55 AA header indicates the image is bootable/executable by the CMC processor. "
+            "Catalog.json verifies only MD5 with no digital signature for this image. "
+            "chassisA.img changed between 6.0.2.260034 and 6.0.2.260143, "
+            "confirming active development and frequent update paths."
+        ),
+        "evidence": {
+            "header_hex": "55 aa 00 05 80 05 80 5f 01 00 00 00 (55 AA boot magic)",
+            "catalog_integrity": "md5sum=2b80736a5c00b9c96a7a0c4f7c64e304 only",
+            "update_history": "MD5 differs between 6.0.2.260034 and 6.0.2.260143",
+        },
+        "impact": (
+            "A crafted chassisA.img with a matching MD5 collision or MITM-replaced binary "
+            "achieves arbitrary code execution on the CMC processor with chassis management access."
+        ),
+        "remediation": "Add RSA signature verification for CMC firmware before execution.",
+    },
+    {
+        "id": "F6",
+        "severity": "MEDIUM",
+        "title": "No firmware version downgrade protection in ESU catalog",
+        "description": (
+            "Catalog.json specifies 'packaged_version' for each component "
+            "but contains no minimum version requirement, no version comparison policy, "
+            "and no anti-rollback field. "
+            "The swupdate plugin receives the firmware path and version from Catalog.json "
+            "without on-device version-gate enforcement. "
+            "An attacker who can deliver a crafted ESU tarball with an older vulnerable "
+            "component version can downgrade the target component to a known-vulnerable state. "
+            "PSU versions in ESU: 6.0.1 (1.5.0.0) vs 6.0.2 (1.6.0.0) -- "
+            "downgrading via modified catalog is structurally possible."
+        ),
+        "evidence": {
+            "catalog_field": "packaged_version present; no min_version or rollback_protection field",
+            "version_example": "PSU 1.5.0.0 (6.0.1) vs 1.6.0.0 (6.0.2) -- rollback possible",
+        },
+        "impact": (
+            "Rollback to vulnerable component firmware versions by delivering a "
+            "modified catalog with an older packaged_version. "
+            "Enables re-exploitation of patched vulnerabilities in PSU, FPGA, or CMC firmware."
+        ),
+        "remediation": "Add minimum version enforcement in the swupdate plugin. Implement secure anti-rollback counters in CMC and PSU.",
+    },
+]
+
+
+if __name__ == "__main__":
+    print(f"Module: {MODULE_SUMMARY['module']}")
+    print(f"Findings: {MODULE_SUMMARY['finding_count']}")
+    print(f"Cumulative: {MODULE_SUMMARY['cumulative']}")
+    print()
+    for f in FINDINGS:
+        print(f"  [{f['severity']}] {f['id']}: {f['title']}")
