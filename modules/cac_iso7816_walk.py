@@ -70,25 +70,32 @@ KNOWN_FIDS = {
 
 # ── Card presence ─────────────────────────────────────────────────────────────
 
+def _card_atr_present() -> bool:
+    """True if opensc-tool can read the ATR (card actually responding)."""
+    r = subprocess.run(
+        ["opensc-tool", "--atr"],
+        capture_output=True, timeout=5)
+    # prints ATR on stdout and exits 0 when card is present and responding
+    return r.returncode == 0 and len(r.stdout.strip()) > 0
+
+
 def wait_for_card(lib_path: str = PKCS11_LIB, timeout_s: float = 120.0) -> None:
-    """Block until a card is present in the reader. Prompts once."""
-    lib = PyKCS11.PyKCS11Lib()
-    lib.load(lib_path)
+    """Block until card ATR is readable. Uses opensc-tool as the oracle."""
     deadline = time.monotonic() + timeout_s
     shown    = False
     while time.monotonic() < deadline:
         try:
-            if lib.getSlotList(tokenPresent=True):
+            if _card_atr_present():
                 if shown:
-                    print("  Card detected.")
+                    print("  Card detected.", flush=True)
                 return
         except Exception:
             pass
         if not shown:
-            print("  [Waiting for CAC card insertion...]", flush=True)
+            print("  [Insert CAC card to continue...]", flush=True)
             shown = True
         time.sleep(0.5)
-    raise TimeoutError(f"no card inserted within {timeout_s}s")
+    raise TimeoutError(f"no card detected within {timeout_s}s")
 
 
 # ── APDU sender ───────────────────────────────────────────────────────────────
