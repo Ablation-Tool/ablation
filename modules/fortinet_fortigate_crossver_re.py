@@ -98,12 +98,19 @@ FGT_512_KEY_CROSS_VERSION = {
         "ALL instances use RSA-512 which is cryptographically broken regardless of modulus uniqueness."
     ),
 
-    "factoring_note": (
-        "Each distinct modulus requires an independent factoring run. "
-        "Two moduli = two factoring jobs. "
-        "Modulus-A (from fgt_512.crt public cert) factors once -> private key for all x86-64 FGT + FortiExtender. "
-        "Modulus-B (from FGT_ARM64 fgt_512.crt) factors once -> private key for all ARM64 FGT."
-    ),
+    "extracted_factors": {
+        "note":       "Both private keys are in plaintext firmware; no factoring required. Factors extracted directly.",
+        "modulus_A": {
+            "n":  "0xcfb821074c9adfd7951f8edab0229d295bb714b118eca5f687995afd5dc0f2ddedb07e1c0ca300f6846d3d9b958f5ad5ae67d0610d335447ef6b49157d41d2ad",
+            "p":  "107095045731422606421607340394827291322211240411133720933781117103784129141009",
+            "q":  "101583971568060441777466531308110073456717166856706173952340766593938766839773",
+        },
+        "modulus_B": {
+            "n":  "0xb5ed8433938a7d0044b98b73aa98e5f92747a8811361d1dc9d0da381c22900045bc0d21fdf4594b74de6b1fd879207ce7901730ea29f1de7568a45cf398199cf",
+            "p":  "97636374099857130169741076853870851523592073731019969402232674075263464647081",
+            "q":  "97589981580399376801631665110380745102239180441911007493594721563758635549367",
+        },
+    },
 }
 
 
