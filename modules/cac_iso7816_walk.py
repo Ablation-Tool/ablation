@@ -463,25 +463,42 @@ def general_authenticate_slot04() -> dict:
     import os as _os
     result = {}
 
-    # Build DA template: 7C [82 00  81 10 <16 random bytes>]
-    # 82 = Response tag (empty = requesting signature)
-    # 81 = Challenge tag (16 random bytes we're asking the card to sign)
-    challenge = _os.urandom(16)
-    inner     = bytes([0x82, 0x00, 0x81, 0x10]) + challenge
-    da        = bytes([0x7C, len(inner)]) + inner
-    lc        = len(da)
-    apdu_hex  = f"00870{0x7:01X}9E{lc:02X}{da.hex()}00"
+    # NIST SP 800-73-4: tag 81 must contain a full RSA-2048 formatted message
+    # block (256 bytes). Raw 16-byte data returns 6A80 (incorrect command data).
+    # Build PKCS#1 v1.5 padded block: 00 01 FF...FF 00 DigestInfo SHA-256-hash
+    import hashlib as _hl
+    nonce   = _os.urandom(32)
+    dgst    = _hl.sha256(nonce).digest()
+    # DigestInfo for SHA-256 (PKCS#1 DER prefix)
+    di_hdr  = bytes.fromhex("3031300d060960864801650304020105000420")
+    di      = di_hdr + dgst                             # 51 bytes
+    pad_len = 256 - len(di) - 3                         # 202 bytes
+    pkcs1   = bytes([0x00, 0x01]) + bytes([0xFF] * pad_len) + bytes([0x00]) + di
 
-    result["challenge_hex"] = challenge.hex()
+    # DA template: 7C [82 00  81 <len> <padded-block>]
+    inner_82 = bytes([0x82, 0x00])
+    inner_81 = bytes([0x81, 0x82, 0x01, 0x00]) + pkcs1  # extended BER length (256)
+    inner    = inner_82 + inner_81
+    # Outer 7C tag with extended length
+    da       = bytes([0x7C, 0x82, (len(inner) >> 8) & 0xFF, len(inner) & 0xFF]) + inner
+    # Extended APDU: Lc as 3 bytes (00 HH LL)
+    lc_ext   = bytes([0x00, (len(da) >> 8) & 0xFF, len(da) & 0xFF])
+    apdu_hex = "0087079E" + lc_ext.hex() + da.hex() + "0000"
+
+    result["nonce_hex"]   = nonce.hex()
+    result["digest_hex"]  = dgst.hex()
+    result["pkcs1_head"]  = pkcs1[:8].hex()
+
     resp, sw = apdu(apdu_hex)
     result["sw"]   = sw
-    result["resp"] = resp.hex()
+    result["resp"] = resp.hex() if resp else ""
 
     if sw != "9000":
-        # Try just the minimal: 7C 02 82 00 (request witness, no challenge)
-        resp2, sw2 = apdu(f"0087079E047C028200")
+        # Fallback: minimal witness request (7C 02 82 00) - requests card to
+        # generate a nonce we sign, per SP 800-73-4 mutual auth flow
+        resp2, sw2 = apdu("0087079E047C028200")
         result["witness_sw"]   = sw2
-        result["witness_resp"] = resp2.hex()
+        result["witness_resp"] = resp2.hex() if resp2 else ""
         return result
 
     # Parse 7C response
@@ -654,9 +671,11 @@ def run():
                 p11_sign = {"error": str(e)}
 
         # Login with PIN and read PIN-gated objects
+        # PyKCS11.CKU_USER = 1. Some PyKCS11 builds return a raw CKR int on
+        # failure instead of a proper PyKCS11Error; catch both forms.
         PIN = "123456"
         try:
-            session.login(PyKCS11.CKU_USER, PIN)
+            session.login(1, PIN)  # CKU_USER=1; avoid enum formatting bug
             for obj in session.findObjects([(PyKCS11.CKA_CLASS, PyKCS11.CKO_DATA)]):
                 try:
                     attrs = session.getAttributeValue(obj, [PyKCS11.CKA_LABEL, PyKCS11.CKA_VALUE])
@@ -667,7 +686,21 @@ def run():
                     pass
             session.logout()
         except Exception as e:
-            p11_errors.append(f"login: {e}")
+            # Extract raw CKR code if PyKCS11 formats it as int
+            ckr = getattr(e, "args", [None])[0]
+            ckr_labels = {
+                0x000000A0: "CKR_PIN_INCORRECT",
+                0x000000A4: "CKR_PIN_LOCKED",
+                0x000000A6: "CKR_PIN_EXPIRED",
+                0x00000100: "CKR_USER_ALREADY_LOGGED_IN",
+                0x00000101: "CKR_USER_NOT_LOGGED_IN",
+                0x00000102: "CKR_USER_PIN_NOT_INITIALIZED",
+            }
+            if isinstance(ckr, int):
+                label = ckr_labels.get(ckr, f"CKR=0x{ckr:08X}")
+                p11_errors.append(f"login: {label}")
+            else:
+                p11_errors.append(f"login: {e}")
 
         session.closeSession()
         print(f"  Data objects: {len(p11_data)}")
