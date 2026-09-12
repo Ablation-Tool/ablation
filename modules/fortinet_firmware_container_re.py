@@ -51,6 +51,8 @@ HARDWARE_CONTAINER_FORMAT = {
                 "bytes":    "f3 be de 9e",
                 "products": ["FGT-1000C", "FGT-1500D"],
                 "era":      "high-end x86-64 FortiGate physical",
+                "storage_as_le": "9e de be f3 (bytes on disk, little-endian view)",
+                "decompressed_size": "256MB for FGT_1500D v6.4.x",
             },
             "family_D": {
                 "bytes":    "82 ce ae 9c",
@@ -64,35 +66,50 @@ HARDWARE_CONTAINER_FORMAT = {
             },
         },
         "encryption_note": (
-            "All inner binaries have entropy consistent with encryption (>7.9 bits/byte). "
-            "64-byte periodicity confirmed: 70.5% of 64-byte blocks match at the same "
-            "position across versions -- consistent with XOR cipher with 64-byte key "
-            "OR NAND flash page-alignment artifacts. Cannot distinguish without known plaintext."
+            "FGT 1500D family_C: entropy 7.602 bits/byte (sample: bytes 40:1MB+40). "
+            "Lower than AES-CBC (7.99) -- consistent with stream cipher or compressed content. "
+            "Cross-version XOR diff analysis (4 versions, v6.4.3-v6.4.7): "
+            "  bytes 0-36: XOR = 0x00 (INVARIANT -- cleartext header, identical across versions). "
+            "  bytes 37-47: XOR = variable (version-specific fields: build, timestamp, CRC). "
+            "  bytes 48+: XOR = CONSTANT (0x09 vs 6.4.6, 0x76 vs 6.4.5, 0x0d vs 6.4.3). "
+            "CONSTANT XOR DIFF FROM BYTE 48 CONFIRMS STREAM CIPHER: "
+            "  ciphertext[i] = plaintext_base[i] XOR keystream[i], keystream is identical "
+            "  across all versions. The version-specific byte difference (0x09/0x76/0x0d) "
+            "  is XOR'd into a fixed-position field (bytes 37-47) before the main payload. "
+            "  Main payload from byte 48+ uses the SAME keystream regardless of version. "
+            "Key period: period=64 shows 20.12% match vs expected 0.39% for random data; "
+            "  no XZ magic found in first 1MB post-header -- not simply XZ with forged CRC."
         ),
     },
 
     "cleartext_header": {
-        "finding":       "CONFIRMED for FGT 1500D family",
-        "method":        "XOR key-cancellation: XOR two firmwares of same HW, different versions",
+        "finding":       "CONFIRMED for FGT 1500D family (4-version cross analysis)",
+        "method":        "XOR key-cancellation: XOR same-product different-version inner binaries",
         "invariant_region": {
-            "bytes":     "0-39",
-            "content":   "ALL ZERO in the XOR output (key cancels; plaintext is identical)",
-            "implication": (
-                "Bytes 0-39 of the inner binary are identical across all versions of FGT 1500D "
-                "(v6.0.6, v6.2.15, v6.4.13, v7.0.5, v7.2.x). This is either: "
-                "(a) a fixed product header present in cleartext before the encrypted payload, "
-                "(b) an encrypted header where the plaintext bytes 0-39 are the same for all "
-                "versions (product ID / magic), or (c) padding/alignment. "
-                "Most likely: fixed cleartext product header identifying the hardware model."
+            "bytes":     "0-36",
+            "content":   "ALL ZERO in XOR output -- bytes 0-36 identical across v6.4.3/v6.4.5/v6.4.6/v6.4.7",
+            "structure": (
+                "0x00-0x03: magic (9e de be f3 = family_C). "
+                "0x04-0x0b: unknown 8 bytes (size or CRC in big-endian?). "
+                "0x0c-0x0f: possible timestamp (0x686498d2 LE = ~1751613394 = 2025-07-04 epoch). "
+                "0x10-0x23: additional header fields (all invariant = same for all product versions). "
+                "0x24-0x36: last 19 invariant bytes -- possibly model ID, hardware revision, padding."
             ),
         },
         "variable_region": {
-            "bytes":      "40+",
-            "content":    "Non-zero XOR output; version-specific differences visible from byte ~40",
-            "implication": (
-                "The encrypted payload begins at approximately byte 40. Version-specific content "
-                "(version number, build timestamp, rootfs hash) starts here."
-            ),
+            "bytes":      "37-47",
+            "content":    "Version-specific fields: build number, minor version, checksum fragment",
+            "xor_diffs":  {
+                "v6.4.7_vs_v6.4.6": "bytes 37-47: 00000000000309717171717174740909",
+                "v6.4.7_vs_v6.4.5": "bytes 37-47: 0000000000030c0b0b0b0b0b71707676",
+                "v6.4.7_vs_v6.4.3": "bytes 37-47: 000000000002080f0f0f0e0971710d0d",
+            },
+            "note": "First diff at byte 37 (0x03 between 6.4.7 and 6.4.6). Transition completes by byte 47.",
+        },
+        "payload_region": {
+            "bytes":      "48+",
+            "content":    "Stream-cipher encrypted firmware payload (keystream fixed across versions)",
+            "evidence":   "XOR diff is CONSTANT (0x09, 0x76, 0x0d) for all versions from byte 48+",
         },
     },
 
@@ -199,23 +216,48 @@ BERT_CLUSTER_FAMILIES = {
         ),
     },
 
-    "cluster_12_keyring_leaf": {
+    "cluster_12_lsm_hook_dispatcher": {
         "fw_score":   0.109,
         "rank":       2,
         "size":       49,
-        "label":      "KEYRING_LEAF_FUNCTIONS",
+        "label":      "LSM_HOOK_DISPATCHER_FAMILY",
+        "correction": (
+            "Previously labeled KEYRING_LEAF_FUNCTIONS. Disassembly of top members "
+            "(0x558854, 0x5585c5, 0x557d25, 0x558735) shows IDENTICAL structural pattern: "
+            "  1. Load global hook head pointer via [rip + offset] -> r14. "
+            "  2. Test r14 for null (no hooks registered -> return). "
+            "  3. Loop: load [r14] (hlist_head.next), call [r14+0x18] (function pointer). "
+            "  4. If return != 0, continue; else return. "
+            "This is the standard Linux kernel security_hook_list dispatch pattern. "
+            "Each function in this cluster dispatches ONE specific LSM hook type "
+            "(one per hook: file_open, bprm_check, kernel_load_data, etc.). "
+            "NOT a key leaf function family."
+        ),
         "dominance":  "unknown(40) + control_flow_heavy(7) + xor_heavy(1)",
         "key_members": {
-            "0x558854": {"fw_sim": 0.140, "role": "unknown", "note": "Top fw_sig; near fos_keyring"},
-            "0x5585c5": {"fw_sim": 0.123, "role": "unknown", "note": "Short leaf, fos_keyring region"},
-            "0x557d25": {"fw_sim": 0.121, "role": "unknown", "note": "Short leaf, fos_keyring region"},
+            "0x558854": {
+                "fw_sim": 0.140,
+                "pattern": "push r14+r13+r12+rbx | load hlist_head | loop: call [r14+0x18] | ret",
+                "interpretation": "LSM hook dispatcher: 3 parameters (rdi=obj, rsi=arg1, rdx=arg2_or_flag)",
+            },
+            "0x5585c5": {
+                "fw_sim": 0.123,
+                "pattern": "same as 0x558854, different global head pointer (different hook)",
+                "interpretation": "LSM hook dispatcher: esi=int32 variant (file access mode?)",
+            },
+            "0x557d25": {
+                "fw_sim": 0.121,
+                "pattern": "same pattern, rdi+rsi+rdx 3-arg variant",
+                "interpretation": "LSM hook dispatcher: different hook type",
+            },
         },
-        "analysis": (
-            "Dense cluster of short functions (mostly 'unknown' role = < 5 visible call targets). "
-            "All in fos_keyring / fortism_ioctl region (0x557d25-0x558854). "
-            "Likely: key slot getters/setters, key type predicates, key metadata accessors. "
-            "One xor_heavy member -- could be a key mixing or XOR-MAC operation. "
-            "These are the leaf functions called by the Cluster 0 dispatcher."
+        "security_implication": (
+            "LSM hook dispatchers are the bridge between kernel subsystems and the fortism "
+            "security module. If the hook head pointer (global variable) can be zeroed or "
+            "redirected (e.g., via arbitrary write primitive), ALL fortism security checks for "
+            "that hook type are silently skipped -- the null-check on r14 returns immediately. "
+            "Target: locate the global hook head pointer offsets (rip+offset from instructions) "
+            "and map to kernel symbol table for each hook type."
         ),
     },
 
@@ -259,24 +301,60 @@ BERT_CLUSTER_FAMILIES = {
         ),
     },
 
-    "cluster_10_enc_key_builder": {
+    "cluster_10_enc_key_description_builder": {
         "fw_score":   0.054,
         "rank":       4,
         "size":       73,
-        "label":      "ENC_KEY_BUILDER_FAMILY",
+        "label":      "ENC_KEY_DESCRIPTION_BUILDER_FAMILY",
+        "correction": (
+            "Label was ENC_KEY_BUILDER_FAMILY. Disassembly of the anchor function (foff=0x55339b) "
+            "reveals it builds KEY DESCRIPTION STRINGS, not cryptographic key material. "
+            "The name 'ENC_KEY_BUILDER' arose from a cluster proximity heuristic (abs(foff-0x55339b)<0x200) "
+            "applied to all member functions -- NOT from actual content analysis of 0x55339b itself."
+        ),
         "dominance":  "unknown(50) + control_flow_heavy(16) + dispatcher(6)",
-        "confirmed_hooks": ["ENC_KEY_BUILDER at foff=0x55339b (x2 within cluster)"],
+        "anchor_function_0x55339b": {
+            "disasm_findings": [
+                "kmalloc allocation (size = max(0x20, rcx+9))",
+                "movabs rax, 0x59454b5f434e45 -- writes 'ENC_KEY' (7 bytes) to buffer via [rbx]",
+                "Calls strlen(rbx) to measure prefix length",
+                "Calls snprintf/strlcat to append a suffix from rdx (caller-provided string)",
+                "Calls 0x80573e4c with the assembled description string",
+                "Stack canary check before return",
+            ],
+            "interpretation": (
+                "Builds a keyring key description string of the form 'ENC_KEY<suffix>' "
+                "where suffix comes from the caller. Used to look up or request a key from "
+                "the Linux kernel keyring subsystem by description name. "
+                "NOT a cryptographic key derivation function -- no crypto ops observed. "
+                "The actual AES/HMAC key material lives in the kernel keyring, retrieved "
+                "by description, not computed by this function."
+            ),
+            "key_type_variant": (
+                "r15d param: if 0 -> 'ENC_KEY' prefix; if nonzero -> different prefix string "
+                "(branch at 0x805533f4 to 0x805534b1). "
+                "Adjacent function 0x5532c1 validates key description: "
+                "  strncmp(desc, 'trusted:', 8) -> Linux keyring 'trusted' type (TPM-backed). "
+                "  strncmp(desc, 'user:', 5) -> Linux keyring 'user' type (software-backed). "
+                "  If neither matches: return EOPNOTSUPP (-95). "
+                "String constants at rodata: 'hmac(sha256)', 'sha256', 'user:', 'trusted:'."
+            ),
+        },
+        "confirmed_hooks": ["ENC_KEY_BUILDER proximity tag at foff=0x55339b, 0x5532c1"],
         "key_members": {
-            "0x556ce8": {"fw_sim": 0.131, "role": "unknown", "note": "near ENC_KEY_BUILDER"},
+            "0x556ce8": {
+                "fw_sim":  0.131,
+                "pattern": "same LSM hook dispatcher pattern as C12 members",
+                "note": "LSM dispatcher, not key builder -- included via proximity tag artifact",
+            },
             "0x44e088": {"fw_sim": 0.118, "role": "control_flow_heavy", "note": "fortism_init region"},
         },
-        "analysis": (
-            "Key construction family centered on foff=0x55339b (ENC_KEY_BUILDER confirmed in "
-            "prior session as the fos_keyring key material builder). "
-            "control_flow_heavy dominance (16/73) suggests complex key validation paths: "
-            "key length checks, algorithm validation, key slot availability tests. "
-            "Functions in fortism_init region (0x44e088) = initialization path that seeds "
-            "the key material at boot time before any filesystem mount."
+        "security_implication": (
+            "The keyring key type discrimination (trusted: vs user:) at foff=0x5532c1 is load-bearing. "
+            "On KVM systems without TPM, only 'user:' type keys are available -- these are "
+            "software-backed and may be extractable from kernel memory once the rootfs is mounted. "
+            "Key description format: 'ENC_KEY' + suffix -- knowing the suffix allows targeted "
+            "keyring key extraction via /proc/keys or keyctl after gaining kernel read primitive."
         ),
     },
 
@@ -386,6 +464,31 @@ CONTAINER_FINDINGS = [
     "HYPOTHESIS: timing race between boot and ioctl delivery. Requires physical access or "
     "live kernel exploit to time. "
     "Severity: MEDIUM (speculative; requires timing precision + existing kernel access)",
+
+    "FHWC-F07: Hardware container (family_C, FGT 1500D) stream cipher confirmed via cross-version "
+    "XOR differential analysis (4 versions v6.4.3-v6.4.7). "
+    "Header structure: bytes 0-36 invariant (cleartext product header). "
+    "Bytes 37-47: version-specific fields (build number, patch version, CRC fragment). "
+    "Bytes 48+: constant XOR diff across all versions = FIXED KEYSTREAM (stream cipher). "
+    "XOR diff values: 0x09 (6.4.7 vs 6.4.6), 0x76 (6.4.7 vs 6.4.5), 0x0d (6.4.7 vs 6.4.3). "
+    "Key period signal: 20.12% of byte-pairs match at period=64 (vs 0.39% random baseline). "
+    "Entropy: 7.602 bits/byte (below AES-grade 7.99; consistent with stream cipher or compressed data). "
+    "NO XZ magic found in first 1MB post-header (contradicts 'forged-CRC XZ' README note). "
+    "Severity: HIGH -- stream cipher with fixed keystream enables known-plaintext key recovery "
+    "once plaintext at byte 48 is identified (e.g., via JFFS2/SquashFS magic at payload start).",
+
+    "FHWC-F08: ENC_KEY is a kernel keyring KEY DESCRIPTION STRING, not cryptographic key material. "
+    "Architecture: fos_keyring stores firmware decryption key in Linux kernel keyring "
+    "under description 'ENC_KEY<suffix>'. Two key types supported: "
+    "  'user:' = software-backed kernel keyring (KVM VMs without TPM). "
+    "  'trusted:' = TPM-sealed key (physical hardware with TPM). "
+    "Algorithms in rodata adjacent to keyring code: 'hmac(sha256)', 'sha256'. "
+    "No AES instructions in fortism region -- encryption delegated to kernel crypto API. "
+    "Key discriminator at foff=0x5532c1: validates key type prefix; returns EOPNOTSUPP for "
+    "any key not matching 'trusted:' or 'user:'. "
+    "Attack vector: on KVM systems with user: key type, kernel memory read primitive -> "
+    "keyctl(KEYCTL_READ, key_serial) extracts the AES key material directly. "
+    "Severity: HIGH (KVM-specific key extraction path; requires kernel read primitive)",
 ]
 
 
@@ -430,11 +533,55 @@ ANALYSIS_STATUS = {
         "whitening":        "APPLIED (WhiteningTransform PCA whitening)",
         "n_funcs_swept":    929,
         "top_fw_sim_score": 0.144,
+        "cluster_corrections": [
+            "C12: was KEYRING_LEAF_FUNCTIONS -- corrected to LSM_HOOK_DISPATCHER_FAMILY "
+            "(linked-list security hook iteration pattern; no crypto content).",
+            "C10: was ENC_KEY_BUILDER_FAMILY -- corrected to ENC_KEY_DESCRIPTION_BUILDER_FAMILY "
+            "(builds key description strings for kernel keyring lookup; no AES/crypto ops). "
+            "The 'ENC_KEY_BUILDER' label was a proximity heuristic artifact, not content-derived.",
+            "C0: IOCTL_POLICY_DISPATCH_FAMILY -- confirmed correct (ioctl 0x9007 DoS confirmed).",
+            "C13: LSM_HOOK_INIT_FAMILY -- confirmed correct (key-state dispatch at 0x56131e).",
+        ],
         "note": (
             "fw_sim scores are lower than ideal (top=0.144 vs >0.8 for confirmed homologs). "
             "Cause: the firmware CONTAINER decryption code is in userspace (not this kernel). "
             "Kernel vmlinux only has the GATE (fortism_kernel_load_data) not the CIPHER. "
-            "The cipher code is in imagize/fwupgrade in the (encrypted) rootfs."
+            "The cipher code is in imagize/fwupgrade in the (encrypted) rootfs. "
+            "BERT clustering correctly identified the 4 GATE function families; "
+            "the CIPHER family is absent from the kernel search space by design."
+        ),
+    },
+
+    "boot_partition_analysis": {
+        "source":  "FGT_VM64_KVM-v8.0.0.F-build0167 virtioa.raw, partition 1 (ext4, 256MB)",
+        "files": {
+            "flatkc":         "7.97MB, ARM64 flat kernel image",
+            "rootfs.gz":      "91.4MB, encrypted (magic cbd2efa3, ARM64 build)",
+            "datafs.tar.gz":  "21MB, gzip standard -- ACCESSIBLE",
+            "hash_bin.sha256": "410 SHA256 entries for rootfs binaries (for UEFI secure boot verify)",
+            ".db":            "JSON integrity manifest (lists flatkc, rootfs.gz, etc. with digests)",
+            ".db.x":          "PKCS#7/CMS signature over .db (DER-encoded, Fortinet PKI chain)",
+        },
+        "datafs_contents": {
+            "accessible_elfs": [
+                "lib/libips.so.new  (x86-64, stripped, 54MB -- IPS/intrusion prevention engine)",
+                "lib/libav.so.new   (x86-64, stripped -- antivirus engine)",
+            ],
+            "cert_files": [
+                "etc/fgt2.key  (RSA-2048 private key -- CROSSVER-F01: identical across FGT 7.4.12 x86-64 and ARM64 8.0.0)",
+                "etc/fgt_512.key  (RSA-512 private key, pipeline modulus-B for ARM64)",
+                "etc/cacert.pem  (CA certificate bundle)",
+            ],
+            "no_key_material": "No 'ENC_KEY' material found in datafs -- rootfs decryption key not stored here",
+        },
+        "key_location_hypothesis": (
+            "ENC_KEY material for KVM rootfs decryption is likely: "
+            "(a) Hardcoded in flatkc (ARM64 kernel flat image, 7.97MB, not analyzed). "
+            "(b) Derived from VM disk UUID or hardware serial at boot time. "
+            "(c) Injected by the hypervisor via SMBIOS/DMI tables. "
+            "Path to confirm: analyze flatkc binary with ARM64 capstone sweep, "
+            "search for 16/32-byte data blobs (AES key candidates) in the fos_keyring init "
+            "function region."
         ),
     },
 }
