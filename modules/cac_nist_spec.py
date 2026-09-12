@@ -342,6 +342,95 @@ PROPRIETARY_FINDINGS = [
 ]
 
 # ---------------------------------------------------------------------------
+# 5b. Confirmed dynamic behavior findings (empirical, this card)
+# ---------------------------------------------------------------------------
+
+BEHAVIORAL_FINDINGS = [
+    {
+        "id":    "F-GA-9E",
+        "title": "GA slot 9E (Card Auth) NR signing confirmed via PKCS11",
+        "ins":   0x87,
+        "p2":    0x9E,
+        "role":  "NR",
+        "sw":    "9000",
+        "path":  "PKCS11 (opensc-pkcs11.so)",
+        "timing_ms": 228,
+        "sig_len":   256,
+        "always_auth": False,
+        "desc":  "RSA-2048 sign with Card Auth key (slot 9E) without PIN; NR accessible as per PIV spec",
+        "note":  "Raw pyscard T=0 returns 6A80 for ALL GA templates due to extended-APDU barrier; PKCS11 only path",
+        "surface": "NR-accessible signing oracle; attacker with card can sign arbitrary data without PIN",
+    },
+    {
+        "id":    "F-GA-9A",
+        "title": "GA slot 9A (PIV Auth) confirmed working via PKCS11 with PIN",
+        "ins":   0x87,
+        "p2":    0x9A,
+        "role":  "CH",
+        "sw":    "9000",
+        "path":  "PKCS11 (opensc-pkcs11.so) + PIN login",
+        "timing_ms": 237,
+        "sig_len":   256,
+        "desc":  "RSA-2048 sign with PIV Auth key (slot 9A); requires CH (VERIFY PIN first)",
+    },
+    {
+        "id":    "F-GETCHAL",
+        "title": "INS=0x84 GET CHALLENGE causes card hardware reset",
+        "ins":   0x84,
+        "cla":   0x00,
+        "sw":    "CARD_RESET",
+        "desc":  "GET CHALLENGE (ISO 7816-4 INS=0x84) does not return 6D00; causes T=0 transaction failure that drops pcscd connection and forces card reinsertion",
+        "note":  "Behavior: pcscard returns 'Transaction failed' then subsequent fresh_conn() throws NoCardException -- card has reset or entered unresponsive state",
+        "finding_class": "Structural JavaCard implementation bug; GET CHALLENGE handler not implemented in PIV facade; causes state machine error at T=0 layer",
+    },
+    {
+        "id":    "F-VERIFY-P2",
+        "title": "VERIFY PIN reference: P2=0x80 only",
+        "ins":   0x20,
+        "cla":   0x00,
+        "sw":    "9000",
+        "desc":  "VERIFY with P2=0x80 (global PIN ref) and 8-byte data [PIN + 0xFF padding] returns 9000; P2=0x00 returns 6A88 (reference data not found)",
+        "retry_query": "VERIFY P2=0x80 no data = SW 63Cx where x=retry count remaining; confirmed 63C3 (3 retries = max)",
+    },
+    {
+        "id":    "F-CRD",
+        "title": "CHANGE REFERENCE DATA (INS=0x24 P2=0x80) confirmed working",
+        "ins":   0x24,
+        "cla":   0x00,
+        "sw":    "9000",
+        "desc":  "INS=0x24 P2=0x80 with old_pin(8B) + new_pin(8B) returns 9000; validated same-value change",
+        "note":  "PIV spec command, not proprietary; absent from struct_re bare sweep because bare transmit returns 6A88 (P2 ref not set without P2=0x80)",
+    },
+    {
+        "id":    "F-ACA-AID",
+        "title": "ACA applet not card-edge addressable",
+        "desc":  "All ACA AID variants (A000000396*) return 6A82 (file not found); ACA is an internal applet only -- only PIV facade (A000000308000010000100) is exposed",
+        "note":  "Prior XXXX transport errors on AID SELECT were connection-state artifacts; fresh-conn shows clean 6A82",
+    },
+    {
+        "id":    "F-MODULE-INFO",
+        "title": "GET PROPERTIES (INS=0xCA) not exposed in PIV context",
+        "ins":   0xCA,
+        "cla":   0x00,
+        "sw":    "6D00",
+        "desc":  "ACA Module Info service GET PROPERTIES (CMVP #2545 Table 12) returns 6D00 in PIV AID context; service only accessible via ACA internal interface (not card-edge)",
+    },
+    {
+        "id":    "F-CLA80",
+        "title": "CLA=0x80 sweep: zero responses in PIV context",
+        "desc":  "All 256 INS codes under CLA=0x80 return 6D00/6E00/SKIP in PIV AID; HID proprietary class byte not active via PIV facade",
+    },
+    {
+        "id":    "F-EXT-AUTH",
+        "title": "EXTERNAL AUTHENTICATE (INS=0x82) reachable without prior challenge",
+        "ins":   0x82,
+        "cla":   0x00,
+        "sw":    "6A86",
+        "desc":  "INS=0x82 P1=0x00 P2=0x00 returns 6A86 (incorrect P1/P2); command is reachable and parsed; requires correct P1/P2 and prior GET CHALLENGE sequence",
+    },
+]
+
+# ---------------------------------------------------------------------------
 # 6. CSP inventory (Table 9)
 # ---------------------------------------------------------------------------
 
@@ -448,12 +537,25 @@ def load_sweep_results(path: str) -> list[dict]:
     return []
 
 
+def _int_or_hex(val, default: int = 0) -> int:
+    """Coerce a value that may be int or hex string like '00'/'0x00' to int."""
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        val = val.strip()
+        try:
+            return int(val, 16)
+        except ValueError:
+            return default
+    return default
+
+
 def delta_report(sweep: list[dict]) -> None:
     """Cross-reference dynamic sweep findings with spec."""
     spec_ins = {}
     for svc in SERVICES:
         for ie in svc.get("ins_map", []):
-            key = (ie.get("cla", 0x00), ie.get("ins", 0))
+            key = (_int_or_hex(ie.get("cla", 0x00)), _int_or_hex(ie.get("ins", 0)))
             spec_ins[key] = {"service": svc["name"], "roles": svc["roles"], "nir": svc.get("nir", False)}
 
     print("\n=== DELTA: SPEC vs SWEEP ===\n")
@@ -463,33 +565,36 @@ def delta_report(sweep: list[dict]) -> None:
     proprietary = []
 
     for entry in sweep:
-        ins = entry.get("ins", 0)
-        cla = entry.get("cla", 0x00)
-        sw  = entry.get("sw", "")
+        ins = _int_or_hex(entry.get("ins", 0))
+        cla = _int_or_hex(entry.get("cla", 0x00))
+        sw  = str(entry.get("sw", ""))
         key = (cla, ins)
 
         if key in spec_ins:
             spec_confirmed.append((cla, ins, sw, spec_ins[key]["service"]))
         else:
-            proprietary.append((cla, ins, sw, entry.get("desc", "")))
+            proprietary.append((cla, ins, sw, str(entry.get("desc", ""))))
 
     for key, svc_info in spec_ins.items():
         cla, ins = key
-        found = any(e.get("ins") == ins and e.get("cla", 0x00) == cla for e in sweep)
+        found = any(
+            _int_or_hex(e.get("ins", 0)) == ins and _int_or_hex(e.get("cla", 0x00)) == cla
+            for e in sweep
+        )
         if not found:
             spec_missing.append((cla, ins, svc_info["service"]))
 
     print(f"Spec commands confirmed by sweep: {len(spec_confirmed)}")
     for cla, ins, sw, svc in sorted(spec_confirmed):
-        print(f"  CLA={cla:02X} INS={ins:02X} SW={sw:4s}  [{svc}]")
+        print(f"  CLA={cla:02X} INS={ins:02X} SW={sw:<6}  [{svc}]")
 
-    print(f"\nSpec commands NOT seen in sweep (may be role-gated): {len(spec_missing)}")
+    print(f"\nSpec commands NOT seen in sweep (may be role-gated or need data): {len(spec_missing)}")
     for cla, ins, svc in sorted(spec_missing):
         print(f"  CLA={cla:02X} INS={ins:02X}           [{svc}]")
 
     print(f"\nProspective proprietary / unspecced commands: {len(proprietary)}")
     for cla, ins, sw, desc in sorted(proprietary):
-        print(f"  CLA={cla:02X} INS={ins:02X} SW={sw:4s}  {desc[:80]}")
+        print(f"  CLA={cla:02X} INS={ins:02X} SW={sw:<6}  {desc[:80]}")
 
 
 # ---------------------------------------------------------------------------
@@ -576,6 +681,11 @@ def print_summary() -> None:
         sw = p.get('sw_without_auth', p.get('sw', '????'))
         print(f"  INS=0x{p['ins']:02X}  role={p['role']:6s}  sw={sw}  {p['desc']}")
 
+    print(f"\nBEHAVIORAL FINDINGS ({len(BEHAVIORAL_FINDINGS)}):")
+    for f in BEHAVIORAL_FINDINGS:
+        ins_str = f"INS=0x{f['ins']:02X}  " if "ins" in f else "              "
+        print(f"  [{f['id']:12s}]  {ins_str}{f['desc'][:80]}")
+
     print(f"\nSELF-TESTS ({len(SELF_TESTS)}):")
     for st in SELF_TESTS:
         print(f"  {st['algo']:<20}  {st['type']}")
@@ -602,6 +712,7 @@ def main() -> None:
             "services": SERVICES,
             "csps": CSPS,
             "proprietary_findings": PROPRIETARY_FINDINGS,
+            "behavioral_findings": BEHAVIORAL_FINDINGS,
             "self_tests": SELF_TESTS,
         }
         print(json.dumps(spec, indent=2))
