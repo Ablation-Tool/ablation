@@ -21,6 +21,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Optional
 
 import PyKCS11
@@ -66,6 +67,29 @@ KNOWN_FIDS = {
     0x9010: "EF.Face",
     0x6020: "EF.Printed_Info",
 }
+
+# ── Card presence ─────────────────────────────────────────────────────────────
+
+def wait_for_card(lib_path: str = PKCS11_LIB, timeout_s: float = 120.0) -> None:
+    """Block until a card is present in the reader. Prompts once."""
+    lib = PyKCS11.PyKCS11Lib()
+    lib.load(lib_path)
+    deadline = time.monotonic() + timeout_s
+    shown    = False
+    while time.monotonic() < deadline:
+        try:
+            if lib.getSlotList(tokenPresent=True):
+                if shown:
+                    print("  Card detected.")
+                return
+        except Exception:
+            pass
+        if not shown:
+            print("  [Waiting for CAC card insertion...]", flush=True)
+            shown = True
+        time.sleep(0.5)
+    raise TimeoutError(f"no card inserted within {timeout_s}s")
+
 
 # ── APDU sender ───────────────────────────────────────────────────────────────
 
@@ -532,6 +556,8 @@ def run():
     print("=" * 72)
     print("CAC ISO 7816 File System Walker + Deep ASN.1 Analysis")
     print("=" * 72)
+
+    wait_for_card()
 
     # ════════════════════════════════════════════════════════════════════════
     # PHASE 1: All PyKCS11 operations (before any opensc-tool call)
