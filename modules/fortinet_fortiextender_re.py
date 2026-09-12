@@ -242,6 +242,80 @@ FEXT_F03_DEBUG_SYMBOLS = {
 
 
 # ---------------------------------------------------------
+# FEXT-F04: RSA-1024 private key in plaintext (fgt.key)
+#           Cross-product: FGA-F01 (same pattern)
+# ---------------------------------------------------------
+FEXT_F04_FGT_1024_KEY = {
+    "id":       "FEXT-F04",
+    "product":  "Fortinet FortiExtender 511F v7.0.3",
+    "severity": "HIGH -- RSA-1024 private key in plaintext rootfs; 1024-bit RSA deprecated/broken",
+    "class":    "Hardcoded credential / private key exposure",
+    "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key), CWE-326 (Inadequate Encryption Strength)",
+    "cross_product": "FGA-F01 (FortiGate ARM64 fgt2.key -- same pattern, different product/key)",
+
+    "key_material": {
+        "file":     "rootfs/etc/fgt.key",
+        "format":   "PKCS#1 RSAPrivateKey (BEGIN RSA PRIVATE KEY)",
+        "key_bits": "1024",
+        "modulus_prefix": "00:d4:b8:17:3f:a8:74:a1:fa:39:aa:cd:84:7b:81:",
+    },
+
+    "broken_crypto": (
+        "RSA-1024 was deprecated by NIST in 2010. Practical factoring attacks against "
+        "1024-bit RSA were demonstrated in 2009-2017 range. Cloud-scale factoring of RSA-1024 "
+        "is feasible for well-resourced actors. "
+        "Shipping a 1024-bit private key in production firmware in 2022 is a significant regression."
+    ),
+
+    "scope": (
+        "The fgt.key is used by the Kore TLS stack at runtime (Kore config: certs = /tmp/fgt_b.crt + /tmp/fgt_b.key). "
+        "Runtime copies generated from this base key or used directly for TLS session setup. "
+        "Compromise allows HTTPS MITM of the management interface."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FEXT-F05: RSA-512 private keys in plaintext (fgt_512.key, fgt_lenc.key)
+#           CRITICAL: 512-bit RSA factored in hours
+# ---------------------------------------------------------
+FEXT_F05_FGT_512_KEY = {
+    "id":       "FEXT-F05",
+    "product":  "Fortinet FortiExtender 511F v7.0.3",
+    "severity": "CRITICAL -- RSA-512 private key in plaintext; factored in hours; shared across all FortiExtender 511F devices",
+    "class":    "Cryptographically broken hardcoded key",
+    "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key), CWE-326 (Inadequate Encryption Strength)",
+    "cross_product": "FGA-F02 (FortiGate ARM64 fgt_512.key -- same pattern, DIFFERENT modulus; product-specific keys)",
+
+    "key_material": {
+        "fgt_512.key": {
+            "format":         "PKCS#1 RSAPrivateKey (BEGIN RSA PRIVATE KEY)",
+            "key_bits":       "512",
+            "file_md5":       "1158fa1e43c915520a051fe4bebf90d6",
+            "modulus_prefix": "00:cf:b8:21:07:4c:9a:df:d7:95:1f:8e:da:b0:22:",
+        },
+        "fgt_lenc.key": {
+            "note":           "Identical to fgt_512.key (same modulus, same file content, different filename)",
+        },
+    },
+
+    "cross_product_note": (
+        "FortiExtender fgt_512.key has a DIFFERENT 512-bit modulus from FortiGate ARM64 fgt_512.key "
+        "(ARM64 modulus prefix: 00:b5:ed:84:33:93:8a:7d:00:44:b9:8b:73:aa:98). "
+        "Fortinet uses separate RSA-512 keys per product line, but all use the same broken key size. "
+        "Both keys are factored independently -- attacker needs target product's public key, "
+        "then factors it to obtain that product's private key."
+    ),
+
+    "factoring_path": (
+        "Extract modulus from fgt_512.crt (public cert, present alongside fgt_512.key). "
+        "Factor using CADO-NFS or MSIEVE (~hours on modern CPU / ~$50 on cloud). "
+        "Recovered private key enables TLS MITM + device impersonation in Fortinet Security Fabric."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -257,6 +331,8 @@ ANALYSIS_STATUS = {
         "FEXT-F01: CRITICAL -- Kore authentication commented out in apgui.conf; system_api_req_handler calls rest_generic_request_dispatch with zero auth check; entire API unauthenticated",
         "FEXT-F02: CRITICAL -- /api/4.2/monitor/terminal/ws unauthenticated WebSocket PTY; 2-request pre-auth RCE as admin (POST create PTY + WS attach)",
         "FEXT-F03: LOW -- libapgui.so and extenderd NOT stripped; full symbol table in production firmware",
+        "FEXT-F04: HIGH -- fgt.key RSA-1024 plaintext in rootfs/etc; deprecated key size shipped in production",
+        "FEXT-F05: CRITICAL -- fgt_512.key + fgt_lenc.key RSA-512 plaintext; 512-bit RSA factored in hours; different modulus from FGA-F02 but same broken key size",
         "Process runas admin -- no privilege separation between web server and OS",
         "Management API binds to 0.0.0.0:80/443 -- reachable from any network interface including LTE WAN",
     ],
