@@ -971,6 +971,29 @@ ioctl(fd, 0x9007, &payload);
     },
 
     "status": "CRITICAL — DoS confirmed by structural analysis; same memset(heap,0,SIZE_MAX) bug in 8.0.0 copy_from_user",
+
+    "arm64_architecture_note": {
+        "image_file": "FGT_ARM64_KVM-v8.0.0.F-build0167-FORTINET.qcow2 -> flatkc_arm64",
+        "ioctl_0x9007_arm64_foff": "0x2dfa2c",
+        "arm64_integer_overflow": (
+            "SAME overflow present: `add w0, w0, #1` on w0=0xffffffff -> w0=0 (32-bit). "
+            "`sxtw x0, w0` -> x0=0. `bl kmalloc(0)` -> SLUB ptr."
+        ),
+        "arm64_dos_status": (
+            "NOT confirmed. ARM64 uses standard Linux ARM64 copy_from_user at 0x93d9c0. "
+            "access_ok correctly uses ARM64 overflow-safe pattern (adds+csel+csinv+sbcs+cset). "
+            "For SIZE_MAX len: `adds x1, x1, x19` (src + SIZE_MAX) sets Carry for any nonzero src. "
+            "`csel x2, xzr, x2, hi` zeros addr_limit on overflow, causing sbcs check to fail. "
+            "access_ok returns FAIL -> branch to EFAULT error path WITHOUT any memset. "
+            "ARM64 error path at 0x2dfb7c/0x2dfb90 returns EFAULT only. "
+            "Kernel panic does NOT occur. FGT-F16 DoS is x86-64 specific (custom Fortinet copy_from_user bug)."
+        ),
+        "arm64_kmalloc_0_note": (
+            "Integer overflow (kmalloc(0)) does occur in ARM64 as in x86-64. "
+            "However without the follow-on SIZE_MAX copy_from_user crash, "
+            "the SLUB ptr is freed cleanly -> no exploitable primitive."
+        ),
+    },
 }
 
 # ─────────────────────────────────────────────────────────
@@ -1100,17 +1123,31 @@ FGT_F19_IOCTL_0x9004_UNAUTH_WRITE = {
     "class":    "Unprivileged write to kernel object field via fortism ioctl 0x9004",
 
     "versions": {
-        "7412": {
+        "7412_x86": {
             "foff_cmp_0x9004":   "0x5520c7",
             "foff_write_insn":   "0x55210b",
             "write_insn":        "mov dword ptr [rax + 0x44], r12d",
             "object_lookup":     "0x5528b8",
         },
-        "800": {
+        "800_x86": {
             "foff_cmp_0x9004":   "0x55c58b",
             "foff_write_insn":   "0x55c5cf",
             "write_insn":        "mov dword ptr [rax + 0x44], ebx",
             "object_lookup":     "0x55ce3b",
+        },
+        "800_arm64": {
+            "image_file":        "FGT_ARM64_KVM-v8.0.0.F-build0167-FORTINET.qcow2 -> flatkc_arm64",
+            "foff_cmp_0x9004":   "0x2df76c (movz w0, #0x9004; cmp w19, w0)",
+            "foff_write_insn":   "0x2df7e0",
+            "write_insn":        "str w19, [x0, #0x44]  (ARM64 DWORD store)",
+            "object_lookup":     "0x2e03f0",
+            "access_ok":         "correct — standard Linux ARM64 pattern (adds+csel+csinv+sbcs+cset)",
+            "privilege_gate":    "absent — same as x86-64 (no gate before 0x9004 path)",
+            "note": (
+                "ARM64 handler is structurally identical to x86-64. "
+                "MOV+CMP instruction pair used in place of x86 direct CMP immediate. "
+                "FGT-F19 confirmed cross-architecture."
+            ),
         },
     },
 
@@ -1185,11 +1222,17 @@ FGT_F20_IOCTL_0x9003_UNAUTH_READ = {
     "class":    "Unprivileged read of kernel object internal fields via fortism ioctl 0x9003",
 
     "versions": {
-        "7412": {
+        "7412_x86": {
             "foff_handler_entry": "0x55220e",
         },
-        "800": {
+        "800_x86": {
             "foff_handler_entry": "0x55c6cd",
+        },
+        "800_arm64": {
+            "foff_handler_entry":   "0x2df964",
+            "read_method":          "ldp x2,x3,[x0+4]; stp to stack; ldr/str for remainder",
+            "copy_to_user":         "0x93df80 (standard Linux ARM64 copy_to_user)",
+            "confirmed":            True,
         },
     },
 
