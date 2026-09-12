@@ -526,7 +526,15 @@ FGT_F11_IOCTL_HEAP_OVERFLOW = {
     },
 
     "ioctl_commands": {
-        "0x9002": "reads per-CPU task ptr gs:[0x14d80]; copy_from_user 4 bytes -> calls 0x55aeaf",
+        "0x9002": (
+            "PRIVILEGE-GATED: reads task_struct[0x4a0] security blob; calls 0x30b461 to get "
+            "current task's Fortinet security context; compares to global object 0xffffffff81646ac0 "
+            "(magic check = 'is this a Fortinet privileged process?'). "
+            "If gate passes: copy_from_user 4 bytes; user 4-byte value sign-extended to 64-bit index "
+            "and passed to 0xcb8f67 (potential OOB if index < 0 or > array bound); then 0x55aeaf "
+            "does lock-inc/lock-dec on a refcount (race condition if security object freed between ops). "
+            "Gate failure -> -EPERM. Security implication: if gate bypassable, OOB + refcount-race reachable."
+        ),
         "0x9003": "copy_from_user 0x24 bytes; validated word0 <= 0x40; reads+writes struct fields",
         "0x9004": "copy_from_user 8 bytes; validates word0 <= 0x40; word1 stored at struct+0x44 UNCHECKED",
         "0x9005": "copy_to_user(user_ptr, 0xffffffff81889310, 4) — kernel memory INFO LEAK (see FGT-F15)",
