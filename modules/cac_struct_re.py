@@ -106,10 +106,31 @@ class CardConn:
 
     def transmit(self, apdu: list[int]) -> tuple[bytes, str]:
         """Send APDU, chain GET RESPONSE if SW=61xx. Return (data, sw)."""
-        data, sw1, sw2 = self.conn.transmit(apdu)
+        try:
+            data, sw1, sw2 = self.conn.transmit(apdu)
+        except Exception:
+            # Certain APDUs cause T=0 transaction failure at transport layer.
+            # Reconnect and return sentinel so sweep continues.
+            try:
+                self.conn.disconnect()
+            except Exception:
+                pass
+            try:
+                self.conn = self.reader.createConnection()
+                self.conn.connect()
+                # Re-select PIV to restore context
+                aid = [0xA0,0x00,0x00,0x03,0x08,0x00,0x00,0x10,0x00,0x01,0x00]
+                self.conn.transmit([0x00,0xA4,0x04,0x00,len(aid)]+aid+[0x00])
+            except Exception:
+                pass
+            return b"", "XXXX"  # sentinel: transport error, not card SW
+
         if sw1 == 0x61:
-            data2, sw1, sw2 = self.conn.transmit([0x00, 0xC0, 0x00, 0x00, sw2])
-            data = data + data2
+            try:
+                data2, sw1, sw2 = self.conn.transmit([0x00, 0xC0, 0x00, 0x00, sw2])
+                data = data + data2
+            except Exception:
+                pass
         return bytes(data), f"{sw1:02X}{sw2:02X}"
 
     def select_piv(self) -> str:
@@ -186,7 +207,7 @@ def decode_atr(card: CardConn) -> dict:
 # Track 1: APDU behavioral sweep
 # ──────────────────────────────────────────────────────────────────────────────
 
-SKIP_SW = {"6D00", "6E00", "6800", "6881", ""}  # "not supported" family
+SKIP_SW = {"6D00", "6E00", "6800", "6881", "", "XXXX"}  # "not supported" + transport errors
 
 def sweep_ins(card: CardConn, context: str, cla: int = 0x00,
               p1: int = 0x00, p2: int = 0x00,
