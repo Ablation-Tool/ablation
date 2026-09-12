@@ -1380,28 +1380,49 @@ FGT_F22_IOCTL_0x9007_STRING_WRITE = {
             "For size=0xffffffff: writes 0 to kmalloc_buf+0xffffffff (4GB past allocation head). "
             "For normal sizes: legitimate null terminator at end of allocated region."
         ),
-        "0x55db6d_call_note": (
-            "0x55db6d receives (index, kernel_string_ptr). "
-            "If it performs any object-table lookup via index, user controls the string stored at "
-            "an indexed kernel object slot. This is a potential kernel string-injection primitive "
-            "if the string is later interpreted (format string, path, configuration key)."
-        ),
+        "0x55db6d_analysis": {
+            "function": "String query oracle -- NOT an injection primitive",
+            "prototype": "int query(int index, const char *kernel_string)",
+            "flow": [
+                "bounds check: index <= 0x40",
+                "object_lookup: rbx = *(index * 8 - 0x7e775bc0) -- separate table from 0x9003/0x9004",
+                "read object[+0x30]: if == 3 -> early path (0x55dc44); if == 2 -> early path (0x55dc34)",
+                "call 0xcd7331(string) -- strlen / string hash",
+                "call 0x454280(0, string) -- hash -> bucket index (result & 0xf, then shl 4)",
+                "walk doubly-linked list at object[+0x3a8 + bucket*0x10]",
+                "compare hash and string (0xcd724f) against each list entry",
+                "return value: bit from object[+0x390] >> 1 & 1 (0 or 1 boolean)",
+            ],
+            "semantics": (
+                "Looks up a string key in a per-object hash table. "
+                "Returns a single bit from object[+0x390] -- a status/capability flag. "
+                "The user string is the QUERY KEY, not an injected value. "
+                "No persistent write: heap buffer freed by 0x42774f after lookup. "
+                "0x9007 is a boolean oracle: 'does this string key exist in object N's table?'"
+            ),
+            "object_table_note": (
+                "0x55db6d uses a DIFFERENT object table base than 0x9003/0x9004/0x9009. "
+                "0x55db6d: base = (index * 8) + 0xffffffff817aa440. "
+                "0x9003/0x9004/0x9009: base = 0xffffffff8188a440 (via 0x55ce3b). "
+                "Both objects share the [+0x30] field with sentinel values 2 and 3 -- same object class."
+            ),
+        },
     },
 
     "arm64_800": {
         "foff_handler": "0x2dfa2c",
         "equivalent_overflow": "add w0, w0, #1 on w0=0xffffffff wraps to 0 (same 32-bit wrap)",
         "arm64_dos_status": "NOT confirmed -- standard ARM64 copy_from_user rejects SIZE_MAX (access_ok correct). Integer overflow to kmalloc(0) occurs but error path returns EFAULT cleanly.",
-        "note": "ARM64 0x9007 has the overflow but lacks the DoS crash. Heap primitives (0x55db6d equivalent) still present if size is valid.",
+        "note": "ARM64 0x9007 has the overflow but lacks the DoS crash. Boolean oracle primitive still present for valid sizes.",
     },
 
-    "chaining_note": (
-        "Chain: FGT-F22 (string inject via 0x9007) -> FGT-F19 (field write via 0x9004) -> FGT-F20 (field read via 0x9003). "
-        "FGT-F22 injects a string at index N, FGT-F19 writes to object[N+0x44], FGT-F20 reads object fields back. "
-        "If 0x55db6d stores the string in the object table, FGT-F22+FGT-F20 enables reading back the injected string to confirm write."
-    ),
+    "revised_impact": {
+        "primary": "DoS (FGT-F16 path) -- size=0xffffffff causes kernel crash via rep stosq (x86-64 only)",
+        "secondary": "Boolean oracle -- enumerate what string keys exist in each kernel object's internal hash table",
+        "no_injection": "0x55db6d does NOT store user data in the kernel. The string is query-only; heap buffer freed on return.",
+    },
 
-    "status": "CONFIRMED class (unauth heap allocation + string write). DoS path confirmed via FGT-F16. Injection impact requires dynamic analysis of 0x55db6d.",
+    "status": "CONFIRMED -- DoS primitive via FGT-F16 path. Boolean query oracle confirmed (returns 0/1 capability bit from kernel object). Injection vector NOT present.",
 }
 
 # ─────────────────────────────────────────────────────────
