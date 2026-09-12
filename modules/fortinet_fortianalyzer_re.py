@@ -254,6 +254,45 @@ FAZ_F04_LOCAL_MCP_SERVER_11345 = {
 
 
 # ---------------------------------------------------------
+# FAZ-F05: Log search filter passthrough to fazsvcd C daemon
+# ---------------------------------------------------------
+FAZ_F05_LOGSEARCH_FILTER_PASSTHROUGH = {
+    "id":       "FAZ-F05",
+    "product":  "Fortinet FortiAnalyzer 8.0.0",
+    "severity": "UNCONFIRMED -- requires C daemon analysis; surface confirmed open",
+    "class":    "Potential SQL/query injection via log search filter passthrough",
+
+    "description": (
+        "The logsearch_run endpoint at POST /p/logview/logsearch_run/ passes the user-supplied "
+        "'filter' field directly to the fazsvcd C daemon at :31723 via JSON-RPC without any "
+        "Python-layer sanitization. Whether fazsvcd constructs SQL queries using this string "
+        "without parameterization is unconfirmed (binary in encrypted rootfs.gz). "
+        "The surface is confirmed open from static analysis."
+    ),
+
+    "source": "proj/logview/views/log_search.py -- logsearch_run",
+
+    "filter_flow": {
+        "input":    "request.body['filter'] -- user-controlled string",
+        "augment":  "if is_local_event and adom != 'root': filter += ' adom=' + current_adom",
+        "backend":  "FazAPI.add({'adom': adom, 'params': [{'filter': _filter, ...}]})",
+        "proxy":    "JSON-RPC to http://127.0.0.1:31723/fazsvcd via jsonrpc.ServiceProxy",
+        "sanitize": "NONE in Python layer",
+    },
+
+    "auth_gate": "@login_required + @r_required_any(ADMINPRIV_LOG_VIEWER or ADMINPRIV_SYSTEM_SYS_SETTING)",
+
+    "exploitation_note": (
+        "If fazsvcd passes filter directly into ClickHouse/SQL query string (not parameterized), "
+        "an authenticated log viewer could inject arbitrary SQL. "
+        "Confirmation requires binary analysis of fazsvcd or dynamic testing."
+    ),
+
+    "remediation": "Validate/restrict filter syntax in the Python layer before forwarding to the daemon.",
+}
+
+
+# ---------------------------------------------------------
 # Kernel + rootfs analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
