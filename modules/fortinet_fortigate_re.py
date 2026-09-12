@@ -1104,12 +1104,32 @@ ret
         "resolution_needed": "Dynamic tracing (ftrace/kprobe on hook entry) to identify call site",
     },
 
-    "status": (
-        "CANDIDATE — hook always returns 0 (never blocks); "
-        "impact is auth bypass (CRITICAL) if hook is an access-control gate, "
-        "or benign if hook is a cleanup/free path. "
-        "Dynamic analysis required to confirm hook type."
+    "called_function_0x42774f_full_analysis": (
+        "0x42774f is a PAGE TABLE WALK function, not a refcount or security check. "
+        "It computes: page_index = (rdi + 0x80000000) >> 12; "
+        "pte_ptr = pagetable_base + page_index * 64; "
+        "then tests the PRESENT bit (bit 0) of pte_ptr->flags. "
+        "Two indirect calls at the entry (via 0x81626bc0 and 0x81626bd0) are likely "
+        "virt_to_page or pfn_to_page trampolines. "
+        "The overall operation is: pre-touch the pages backing the security context objects "
+        "to ensure they are resident in memory (page fault avoidance). "
+        "This is a performance optimization, NOT a security enforcement operation."
     ),
+
+    "resolution": (
+        "RESOLVED-NOT-EXPLOITABLE. "
+        "FGT-F18 is a MEMORY PRE-TOUCH hook, not an access-control hook. "
+        "The function walks page tables for rsi->0xc0->0x60 and rsi->0xc0 (two nested security "
+        "context objects), verifying/touching their physical pages, then returns 0. "
+        "Unconditional return 0 is correct for this operation class -- it does not "
+        "make a security permit/deny decision at all. "
+        "The original BERT hit (7 patterns including AUTH_BYPASS, PRIV_ESC) was a FALSE POSITIVE: "
+        "the semantic embedding matched the pattern of 'function that always allows' but "
+        "the function is not an authorization gate. "
+        "No CVE-worthy finding. Downgraded from CANDIDATE to INFO."
+    ),
+
+    "status": "RESOLVED-NOT-EXPLOITABLE -- page-table pre-touch hook; no security decision made; BERT false positive",
 }
 
 # ─────────────────────────────────────────────────────────
