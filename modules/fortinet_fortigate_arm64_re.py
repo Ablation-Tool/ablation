@@ -152,11 +152,19 @@ FGA_F02_FGT_512_BROKEN_KEY = {
         "it is used for the same FortiGate device identity purpose but at 512-bit key strength."
     ),
 
-    "factoring_path": (
-        "From the DER-encoded certificate in fgt_512.crt, extract the 512-bit modulus. "
-        "Factor using Cado-NFS (CPU) or cloud-scale factoring (~$100 AWS). "
-        "Recovered private key enables same MITM attack as FGA-F01 but with trivial factoring cost."
-    ),
+    "private_key_extracted": {
+        "attack_path": (
+            "The private key (fgt_512.key) is in PLAINTEXT in the firmware. "
+            "No cryptographic attack needed -- extract from QCOW2 -> datafs.tar.gz -> etc/fgt_512.key. "
+            "Factoring the 512-bit modulus from the cert alone would also work (hours via CADO-NFS), "
+            "but the plaintext key is directly readable without any crypto."
+        ),
+        "n": "0xb5ed8433938a7d0044b98b73aa98e5f92747a8811361d1dc9d0da381c22900045bc0d21fdf4594b74de6b1fd879207ce7901730ea29f1de7568a45cf398199cf",
+        "p": "97636374099857130169741076853870851523592073731019969402232674075263464647081",
+        "q": "97589981580399376801631665110380745102239180441911007493594721563758635549367",
+        "e": 65537,
+        "factors_confirmed": "p * q == n: True",
+    },
 }
 
 
