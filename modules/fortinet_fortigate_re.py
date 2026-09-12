@@ -1016,6 +1016,224 @@ xor ebx, ebx                   ; return 0 on success
 }
 
 # ─────────────────────────────────────────────────────────
+# FGT-F18: LSM hook unconditional zero return (CANDIDATE)
+# Affects: FortiOS 8.0.0 (foff 0x55b4b0); 7.4.12 homolog not yet located
+# ─────────────────────────────────────────────────────────
+FGT_F18_LSM_HOOK_ZERO_RETURN = {
+    "id":       "FGT-F18",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "CANDIDATE — class TBD pending hook type identification",
+    "class":    "LSM hook unconditional zero return — potential auth bypass",
+
+    "vmlinux_800": {
+        "buildid":      "474e550043e6c79f25c4e6509765325de60ad04e",
+        "foff_hook":    "0x55b4b0",
+        "vma_hook":     "0xffffffff8055b4b0",
+        "rodata_position": "fortism LSM hooks table + 0x60 (sixth pointer slot from base 0x123cc68)",
+    },
+
+    "disassembly": """\
+push rbp
+mov rbp, rsp
+push rbx
+mov rbx, qword ptr [rsi + 0xc0]    ; deref arg1+0xc0 -> inner struct (rbx)
+mov rdi, qword ptr [rbx + 0x60]    ; load child ptr from inner struct+0x60
+call 0xffffffff8042774f              ; touch/reference child ptr (page-table walk)
+mov rdi, rbx                         ; restore inner struct
+call 0xffffffff8042774f              ; touch/reference inner struct
+xor eax, eax                         ; UNCONDITIONAL: return 0 (allow)
+pop rbx
+pop rbp
+ret
+""",
+
+    "called_function_0x42774f": (
+        "Page-table-based memory reference function. "
+        "Takes a kernel VA in rdi. Computes page-table entry via "
+        "(va + 0x80000000) >> 12 << 6 + table_base, checks a flag at entry+8 bit 0, "
+        "then conditionally calls 0x42694b with entry+0x18. "
+        "Appears to be a kmap/memory-touch operation, NOT a security check. "
+        "Return value ignored by the hook."
+    ),
+
+    "bert_evidence": (
+        "BERT sweep hit 7 patterns: AUTH_BYPASS, KEY_MGMT, CRYPTO_WEAK, PRIV_ESC, "
+        "RACE_CONDITION, SIGNED_VERIFY_BYPASS, INTEGER_OVERFLOW. "
+        "Highest cross-query hit count in the 929-function corpus. "
+        "Score 0.387 (RACE_CONDITION query)."
+    ),
+
+    "hook_identification": {
+        "method": "rodata hook table scan — hook at table_base+0x60",
+        "args_observed": "(rdi=?, rsi=struct_with_inner_at_0xc0)",
+        "possible_hooks": [
+            "fortism_cred_free (cleanup — zero return correct)",
+            "fortism_bprm_committing_creds (setup — zero return allows)",
+            "fortism_task_free (cleanup — zero return correct)",
+            "fortism_inode_free_security (cleanup — zero return correct)",
+        ],
+        "dangerous_if": (
+            "Hook is fortism_inode_permission, fortism_file_permission, "
+            "fortism_task_kill, or any access-control hook. "
+            "In those cases: unconditional zero return bypasses ALL fortism "
+            "mandatory access control for the affected operation system-wide."
+        ),
+        "resolution_needed": "Dynamic tracing (ftrace/kprobe on hook entry) to identify call site",
+    },
+
+    "status": (
+        "CANDIDATE — hook always returns 0 (never blocks); "
+        "impact is auth bypass (CRITICAL) if hook is an access-control gate, "
+        "or benign if hook is a cleanup/free path. "
+        "Dynamic analysis required to confirm hook type."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F19: Ioctl 0x9004 unauth write to kernel object field+0x44
+# Affects: FortiOS 7.4.12 AND 8.0.0 (same pattern)
+# ─────────────────────────────────────────────────────────
+FGT_F19_IOCTL_0x9004_UNAUTH_WRITE = {
+    "id":       "FGT-F19",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 + 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "HIGH — conditional (impact determined by runtime object+0x44 semantics)",
+    "class":    "Unprivileged write to kernel object field via fortism ioctl 0x9004",
+
+    "versions": {
+        "7412": {
+            "foff_cmp_0x9004":   "0x5520c7",
+            "foff_write_insn":   "0x55210b",
+            "write_insn":        "mov dword ptr [rax + 0x44], r12d",
+            "object_lookup":     "0x5528b8",
+        },
+        "800": {
+            "foff_cmp_0x9004":   "0x55c58b",
+            "foff_write_insn":   "0x55c5cf",
+            "write_insn":        "mov dword ptr [rax + 0x44], ebx",
+            "object_lookup":     "0x55ce3b",
+        },
+    },
+
+    "attack_flow": """\
+; User-supplied struct: { uint32_t index; int32_t new_value; }
+; Call: ioctl(any_fd, 0x9004, &user_struct)
+;
+; ioctl 0x9004 path (no privilege check):
+copy_from_user(&kbuf, user_ptr, 8)   ; read 8 bytes: [0:4]=index, [4:8]=new_value
+mov edi, kbuf[0:4]                    ; index
+cmp edi, 0x40                          ; bounds check: index <= 64
+ja  -> EINVAL
+call object_lookup(index)             ; rax = object_table[index * 8]
+; object_lookup: rax = [0x8188a440 + index * 8]  (runtime-populated)
+test rax, rax
+je  -> ENULL
+movsxd rbx, kbuf[4:8]                 ; sign-extend new_value
+mov dword ptr [rax + 0x44], ebx       ; WRITE: object->field_0x44 = new_value
+return 0
+""",
+
+    "privilege_comparison": {
+        "0x9002": "PRIVILEGED — gate: task_struct security blob == Fortinet sentinel 0xffffffff81646b40 (8.0.0)",
+        "0x9003": "UNPRIVILEGED — read path (see FGT-F20)",
+        "0x9004": "UNPRIVILEGED — write path (THIS FINDING)",
+        "0x9005": "UNPRIVILEGED — info leak (FGT-F15/F17)",
+        "0x9007": "UNPRIVILEGED — heap alloc+copy (FGT-F11/F16)",
+        "0x9009": "UNPRIVILEGED — read field+0x30 from object",
+    },
+
+    "object_table": {
+        "vma":          "0xffffffff8188a440",
+        "foff_800":     "0x188a440 (DATA section)",
+        "slot_count":   65,
+        "slot_size":    8,
+        "runtime_note": (
+            "All 65 slots are NULL in the static binary. "
+            "Populated at runtime by Fortinet daemons (miglogd, fcnacd, etc.) "
+            "calling fortism's registration interface. "
+            "Objects are accessible as soon as any daemon registers them."
+        ),
+    },
+
+    "field_0x44_analysis": {
+        "object_0x9003_readable_range": "fields +4 through +32 (28 bytes — see FGT-F20)",
+        "field_0x44_position": "+68 bytes from object base — outside 0x9003 readable range",
+        "field_0x30_via_0x9009": "readable via ioctl 0x9009 (sign-extended, returned directly)",
+        "unknown": (
+            "field+0x44 semantics require dynamic analysis or daemon source. "
+            "Candidates: security_level, capability_mask, mode_flags, refcount. "
+            "Writing -1 (0xffffffff) or 0 may escalate or suppress security enforcement."
+        ),
+    },
+
+    "status": (
+        "CONFIRMED attack primitive — any process can write 32-bit value to "
+        "kernel object field+0x44 via bounded (0..0x40) index. "
+        "Impact = HIGH if field+0x44 is a security-relevant flag; "
+        "MEDIUM if it is an application-layer counter. "
+        "Exploitability confirmed once runtime object structure is known."
+    ),
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F20: Ioctl 0x9003 unauth read of 28 bytes from kernel object
+# Affects: FortiOS 7.4.12 AND 8.0.0 (same pattern)
+# ─────────────────────────────────────────────────────────
+FGT_F20_IOCTL_0x9003_UNAUTH_READ = {
+    "id":       "FGT-F20",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 + 8.0.0 VM64-KVM (fortism kernel module)",
+    "severity": "MEDIUM — kernel object fields exposed without privilege check",
+    "class":    "Unprivileged read of kernel object internal fields via fortism ioctl 0x9003",
+
+    "versions": {
+        "7412": {
+            "foff_handler_entry": "0x55220e",
+        },
+        "800": {
+            "foff_handler_entry": "0x55c6cd",
+        },
+    },
+
+    "attack_flow": """\
+; User-supplied struct: { uint32_t index; uint8_t pad[32]; }  (36 bytes total)
+; Call: ioctl(any_fd, 0x9003, &user_struct)  -> fills user_struct with object data
+;
+; ioctl 0x9003 path (no privilege check):
+copy_from_user(&kbuf, user_ptr, 36)   ; read 36 bytes: [0:4]=index
+mov edi, kbuf[0:4]
+cmp edi, 0x40
+ja  -> EINVAL
+call object_lookup(index)             ; rax = object_table[index * 8]
+test rax, rax
+je  -> ENULL
+; Selectively copy object fields into kbuf:
+kbuf[8:16]  = object[4:12]    ; via mov rdx,[rax+4]; mov [rbp-0x58],rdx
+kbuf[16:24] = object[12:20]   ; via mov rdx,[rax+0xc]
+kbuf[24:32] = object[20:28]   ; via mov rdx,[rax+0x14]
+kbuf[32:36] = object[28:32]   ; via mov eax,[rax+0x1c] (DWORD only)
+copy_to_user(user_ptr, &kbuf, 36)     ; return 28 bytes of object data to user
+return 0
+""",
+
+    "leaked_object_layout": {
+        "+0x00": "NOT leaked (first 4 bytes of object — possibly magic/type)",
+        "+0x04": "leaked at user_out[8:16]",
+        "+0x0c": "leaked at user_out[16:24]",
+        "+0x14": "leaked at user_out[24:32]",
+        "+0x1c": "leaked at user_out[32:36] (DWORD only, 4 bytes)",
+    },
+
+    "utility": (
+        "Combined with FGT-F19 (0x9004 write), allows read-before-write: "
+        "attacker reads object state via 0x9003, infers object type from field values, "
+        "then writes targeted value to field+0x44 via 0x9004. "
+        "Also useful for runtime object discovery: "
+        "iterate index 0..0x40 with 0x9003 to find populated slots."
+    ),
+
+    "status": "CONFIRMED attack primitive — 28 bytes of runtime kernel object data readable by any process via bounded index; impact scales with what data the registered objects contain",
+}
+
+# ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
 EXTRACTION_COMMANDS = {
