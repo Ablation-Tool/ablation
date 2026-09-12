@@ -366,6 +366,339 @@ FGT_F08_API_SURFACE = {
 }
 
 # ─────────────────────────────────────────────────────────
+# FGT-F09: FortiOS 8.0.0 — rootfs AES encryption (new in 8.x)
+# ─────────────────────────────────────────────────────────
+FGT_F09_ROOTFS_ENCRYPTION = {
+    "id":       "FGT-F09",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM",
+    "build":    "0167",
+    "severity": "INFORMATIONAL",
+    "class":    "Firmware Protection (AES rootfs encryption — new in 8.0.0)",
+
+    "description": (
+        "FortiOS 8.0.0 (April 2026) introduced AES encryption of the rootfs.gz initramfs. "
+        "Previous versions (through at least 7.4.12) used the forged-CRC XZ technique (FGT-F01) "
+        "on individual archives inside an otherwise unencrypted cpio. "
+        "In 8.0.0, the entire rootfs.gz is encrypted before being placed on the boot partition. "
+        "Entropy measurement of the first 65536 bytes returns 7.9973 bits/byte (maximum = true AES, "
+        "compressed data peaks at ~7.95). The bootline is unchanged: initrd=/rootfs.gz. "
+        "The decryption key is embedded in or derived at boot time by the flatkc kernel (7.7MB bzImage). "
+        "For VM images the key must be static (no TPM/hardware binding possible)."
+    ),
+
+    "rootfs_entropy":   "7.9973 bits/byte",
+    "rootfs_size":      "92MB (vs 57MB in 7.0.9)",
+    "kernel":           "flatkc (7.7MB x86-64 bzImage/EFI stub, starts MZ)",
+    "partition_layout": "P1 256MB ext2 (boot) | P2 1.7GB Linux | P3 64MB EFI — new EFI partition vs 7.0.9",
+    "introduced_in":    "8.0.0 (build 0167, April 2026)",
+    "last_unencrypted": "7.0.9 (confirmed unencrypted) — 7.4.12 is ALSO encrypted (entropy 8.0000 bits/byte, true AES); encryption was introduced between 7.0.9 and 7.4.12",
+
+    "hash_bin_sha256": (
+        "New in 8.0.0: hash_bin.sha256 (39KB) on the boot partition contains SHA256 hashes "
+        "for every file in the decrypted rootfs. Useful for enumerating expected filesystem contents "
+        "without decryption. Sample entries include open-vm-tools plugins and /bin/* binaries."
+    ),
+
+    "key_extraction_vectors": [
+        "Extract vmlinux from flatkc bzImage: scripts/extract-vmlinux flatkc > vmlinux",
+        "Search vmlinux for AES key schedule / 128/256-bit key constants",
+        "Look for initrd decryption routine called before cpio extraction in kernel init path",
+        "Check EFI partition (P3, 64MB FAT) for key material or signed boot components",
+    ],
+
+    "status": "PENDING — key not yet extracted. Fall back to 7.4.12 for RE.",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F10: Integer overflow in ENC_KEY key description builder
+# FortiOS 7.4.12 vmlinux — Ablation BERT sweep hit (AUTH_BYPASS, KEY_MGMT, CRYPTO_WEAK)
+# vmlinux text_foff=0x54972b  vma=0xffffffff8054972b
+# ─────────────────────────────────────────────────────────
+FGT_F10_ENCKEY_INTOVERFLOW = {
+    "id":       "FGT-F10",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism kernel module)",
+    "severity": "HIGH",
+    "class":    "Integer Overflow -> Heap Overflow (kernel, ENC_KEY key description builder)",
+
+    "description": (
+        "The fortism LSM module builds a key description string for request_key(\"ENC_KEY\", ...) "
+        "at vmlinux vma 0xffffffff8054972b. It prepends the 7-byte literal \"ENC_KEY\" "
+        "to a caller-supplied suffix (r15=src, rbx=length) and allocates the buffer with: "
+        "`lea r13d, [rbx + 9]; cmp r13d, 0x20; cmovb r13d, eax; call kmalloc(r13d, GFP_KERNEL)`. "
+        "The `lea r13d, [rbx + 9]` is a 32-bit operation: if the caller supplies rbx >= 0xfffffff7, "
+        "r13d wraps (e.g., rbx=0xffffffff7 -> r13d=0). kmalloc(0) returns a valid cache-aligned "
+        "pointer and the subsequent memcpy writes rbx bytes into it, producing a kernel heap overflow. "
+        "Exploitability depends on whether any codepath leading to this function propagates "
+        "an attacker-controlled length without a prior 32-bit truncation of its own."
+    ),
+
+    "vmlinux": {
+        "binary": "FortiOS 7.4.12 vmlinux (extracted from flatkc bzImage)",
+        "buildid": "04e76032db077d34808fc39b7515bca8d93e17ca",
+        "vma":    "0xffffffff8054972b",
+        "foff":   "0x54972b",
+        "section": ".text",
+    },
+
+    "asm_key_sequence": """
+; At 0xffffffff8054972b — key description builder:
+movabs rax, 0x59454b5f434e45  ; rax = "ENC_KEY\0" (7 bytes, little-endian)
+mov qword ptr [r12], rax       ; store "ENC_KEY" into heap buffer
+mov rdi, r12
+call strlen                    ; strlen("ENC_KEY") = 7, result in rax
+lea rdi, [r12 + rax + 1]      ; point past "ENC_KEY\0"
+mov rdx, rbx                  ; LENGTH = caller-controlled rbx (full 64-bit)
+mov rsi, r15                  ; src = caller-controlled r15
+call memcpy                   ; OVERFLOW if kmalloc got truncated-to-32-bit size
+; Alloc sequence (earlier in same function):
+lea r13d, [rbx + 9]          ; r13d = (rbx+9) mod 2^32  <-- OVERFLOW HERE
+cmp r13d, 0x20
+mov eax, 0x20
+cmovb r13d, eax              ; minimum 0x20 bytes
+mov edi, r13d
+mov esi, 0x6080c0            ; GFP_KERNEL | GFP_NOFS
+call kmalloc                 ; allocates ONLY r13d bytes, not rbx+9
+""",
+
+    "ablation_bert_queries_matched": [
+        "AUTH_BYPASS", "KEY_MGMT", "CRYPTO_WEAK", "PRIV_ESC", "SIGNED_VERIFY_BYPASS",
+    ],
+    "bert_max_score": 0.418,
+    "bert_sweep_region": "fos_keyring_enc_key (text_foff 0x540000-0x570000)",
+
+    "impact": (
+        "Kernel heap overflow in the ENC_KEY key registration path. "
+        "If exploitable, allows kernel memory corruption during system boot "
+        "or when the keyring registration path is re-invoked (e.g., module reload). "
+        "Potential privilege escalation or kernel code execution."
+    ),
+
+    "constraints": [
+        "Caller must propagate a 64-bit length > 0xfffffff6 without prior truncation",
+        "Requires access to a codepath that invokes the ENC_KEY registration function",
+        "Kernel SLUB allocator mitigations (KASAN, hardened usercopy) may prevent exploitation on hardened builds",
+    ],
+
+    "status": "CANDIDATE — caller chain not yet traced; 32-bit truncation not confirmed reachable from external input",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F11: Fortinet proprietary ioctl handler — second field of 8-byte payload unchecked
+# FortiOS 7.4.12 vmlinux — Ablation BERT sweep hit (BUFFER_OVERFLOW, RACE_CONDITION)
+# vmlinux text_foff=0x552080  vma=0xffffffff80552080
+# ─────────────────────────────────────────────────────────
+FGT_F11_IOCTL_UNVALIDATED_FIELD = {
+    "id":       "FGT-F11",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism kernel module)",
+    "severity": "HIGH",
+    "class":    "Insufficient Input Validation in Proprietary ioctl (kernel privilege escalation surface)",
+
+    "description": (
+        "A fortism kernel module ioctl handler at vma 0xffffffff80552080 implements "
+        "Fortinet-proprietary ioctl commands 0x9002-0x9009. "
+        "For command 0x9004, the handler calls copy_from_user (0x5f6bed) with size=8 (edx=8), "
+        "reading two 32-bit fields from userspace into [rbp-0x68] (word0) and [rbp-0x64] (word1). "
+        "It validates only word0: `cmp dword ptr [rbp-0x68], 0x40; ja error`. "
+        "Word1 at [rbp-0x64] is consumed without any bounds check via "
+        "`movsxd r12, dword ptr [rbp-0x64]` and stored into an internal structure at +0x44. "
+        "For command 0x9009, a similar pattern reads 4 bytes, validates <= 0x40, "
+        "then reads a field from a result structure at +0x30 without re-validating it. "
+        "The ioctl device node and required privilege level to open it have not yet been identified."
+    ),
+
+    "vmlinux": {
+        "binary":  "FortiOS 7.4.12 vmlinux (extracted from flatkc bzImage)",
+        "buildid": "04e76032db077d34808fc39b7515bca8d93e17ca",
+        "vma":     "0xffffffff80552080",
+        "foff":    "0x552080",
+        "section": ".text",
+    },
+
+    "ioctl_commands": {
+        "0x9002": "reads per-CPU data from gs:[0x14d80], calls 0x30b461 (netlink?)",
+        "0x9003": "jumps to 0x55220e",
+        "0x9004": "copy_from_user 8 bytes; validates word0 <= 0x40; word1 UNCHECKED",
+        "0x9005": "jumps to 0x5521f0",
+        "0x9007": "jumps to 0x55227e",
+        "0x9009": "copy_from_user 4 bytes; validates <= 0x40; reads struct field without revalidation",
+    },
+
+    "asm_key_sequence": """
+; ioctl 0x9004 path at 0xffffffff80552080:
+cmp ebx, 0x9004
+jne ...
+mov edx, 8              ; read 8 bytes from userspace
+mov rsi, r12            ; userspace pointer
+lea rdi, [rbp - 0x68]   ; kernel destination (two 32-bit fields)
+call copy_from_user
+test rax, rax
+jne error_path          ; copy_from_user failed
+
+mov edi, dword ptr [rbp - 0x68]   ; word0 from userspace
+cmp edi, 0x40                      ; bounds check word0 (must be <= 64)
+ja error_path                      ; word0 validated
+
+call 0x5528b8           ; allocate/lookup structure using word0
+
+movsxd r12, dword ptr [rbp - 0x64]  ; word1 from userspace — NO BOUNDS CHECK
+mov dword ptr [rax + 0x44], r12d    ; store word1 directly into result structure
+""",
+
+    "ablation_bert_queries_matched": ["BUFFER_OVERFLOW", "RACE_CONDITION"],
+    "bert_max_score": 0.440,
+    "bert_sweep_region": "fortism_init + fos_keyring_enc_key",
+
+    "impact": (
+        "An unprivileged user (or Fortinet CLI user with device node access) can write an "
+        "arbitrary signed 32-bit value into an internal fortism structure at offset +0x44 "
+        "without any range validation. Depending on how this field is used (index, size, "
+        "pointer offset), this may enable heap manipulation or privilege escalation."
+    ),
+
+    "pending": [
+        "Identify device node path (likely /dev/fortism or /dev/fgtguard) and required open() privileges",
+        "Trace how the value stored at structure+0x44 is subsequently used (index into array? length for kmalloc?)",
+        "Test ioctl 0x9004 with word1 = 0x7fffffff (max positive int32)",
+    ],
+
+    "status": "CANDIDATE — device node access and downstream use of the unchecked field not yet confirmed",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F12: Null pointer dereference in fortism type-7 chain walker
+# FortiOS 7.4.12 vmlinux — Ablation BERT sweep; fortism hook at 0x551407
+# ─────────────────────────────────────────────────────────
+FGT_F12_FORTISM_NULL_CHAIN = {
+    "id":       "FGT-F12",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism LSM module)",
+    "severity": "MEDIUM",
+    "class":    "Null Pointer Dereference in LSM Hook (kernel panic / DoS)",
+
+    "description": (
+        "The fortism hook at vma 0xffffffff80551407 (likely fortism_inode_setattr or "
+        "fortism_path_rename based on its type dispatch) contains a type-7 branch that walks "
+        "a linked list via `[r13+0x30]->next`. The null check at 0x80551480 (`test rdx, rdx; je`) "
+        "fires for the first element only. The chain-walk at 0x5514c7 does: "
+        "`mov rax, [r13+0x30]; mov rax, [rax]; mov [r13+0x30], rax` with only a sentinel-value "
+        "check (`cmp rax, 0x8165f620`) before the dereference, not a null check. "
+        "If the linked list contains a null mid-chain (uninitialized allocation or concurrent modification), "
+        "the kernel dereferences null and panics. The sentinel is Fortinet-specific and not "
+        "the standard Linux list head pattern."
+    ),
+
+    "vmlinux": {
+        "vma":    "0xffffffff80551407",
+        "foff":   "0x551407",
+        "type_dispatch_at": "0xffffffff8055146d",
+        "chain_walk_at":    "0xffffffff805514c7",
+    },
+
+    "asm_key_sequence": """
+; type-7 dispatch at 0xffffffff8055146d:
+mov eax, dword ptr [r13 + 0x58]   ; type field
+cmp eax, 7
+jne other_cases
+; type-7 path:
+mov eax, dword ptr [r14 + 0x428]  ; field in outer structure
+test eax, eax
+jne 0xffffffff80551971             ; if set, take alternate path
+mov rax, [r13 + 0x30]             ; DEREF 1 — load list head (checked for null earlier)
+mov rax, [rax]                    ; DEREF 2 — load next pointer — NULL IF MID-CHAIN NULL
+mov [r13 + 0x30], rax             ; advance list
+mov [r13 + 0x50], 0               ; clear field
+mov [r13 + 0x40], 0
+mov [r13 + 0x48], 0
+; check for sentinel (not null):
+cmp rax, 0xffffffff8165f620       ; SENTINEL CHECK — skips null
+je sentinel_exit
+""",
+
+    "impact": "Kernel panic via null-ptr dereference -> system reboot. Reachable on any path that creates a fortism object with type=7 and a partial list.",
+    "status": "CANDIDATE — trigger condition (type=7 with mid-chain null) not yet exercised",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F13: fortism global security flag set without capability check
+# FortiOS 7.4.12 vmlinux — fortism hook at 0x55e297
+# ─────────────────────────────────────────────────────────
+FGT_F13_FORTISM_GLOBAL_FLAG = {
+    "id":       "FGT-F13",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism LSM module)",
+    "severity": "MEDIUM",
+    "class":    "Missing Privilege Check Before Global Security Flag Write",
+
+    "description": (
+        "The fortism hook at vma 0xffffffff8055e297 (confirmed by function pointer in "
+        "fortism LSM hook structure at .rodata 0x123d3b8) acquires a mutex on the global "
+        "fortism state at 0x816609e0, writes the value 1 to a global flag at "
+        "`[rip + 0x1102763]` (= approximately 0xffffffff81661ffa), then releases the mutex. "
+        "There is no capability check (no capable(), no ns_capable(), no CAP_SYS_ADMIN) "
+        "before the mutex acquisition. If this hook is invoked via an LSM path reachable "
+        "from a Fortinet CLI user context that does not have full kernel capability, "
+        "it can flip the global enforcement flag, potentially disabling fortism enforcement system-wide."
+    ),
+
+    "vmlinux": {
+        "vma":   "0xffffffff8055e297",
+        "foff":  "0x55e297",
+        "rodata_hook_ptr_at": "0x123d3b8",
+        "global_flag_approx_vma": "0xffffffff81661ffa",
+    },
+
+    "asm": """
+0xffffffff8055e297  mov rdi, 0xffffffff816609e0   ; mutex addr
+0xffffffff8055e29e  call mutex_lock               ; no capability check before this
+0xffffffff8055e2a3  test eax, eax
+0xffffffff8055e2a5  js fail
+0xffffffff8055e2ab  mov dword ptr [rip + 0x1102763], 1  ; GLOBAL FLAG SET
+0xffffffff8055e2b5  mov rdi, 0xffffffff816609e0
+0xffffffff8055e2bc  call mutex_unlock
+0xffffffff8055e2c1  mov eax, 1
+0xffffffff8055e2c6  pop rbp
+0xffffffff8055e2c7  ret
+""",
+
+    "impact": "If reachable from unprivileged context: globally disables fortism LSM enforcement for all processes on the system.",
+    "status": "CANDIDATE — LSM hook invocation context (which file operation triggers this) not yet mapped",
+}
+
+# ─────────────────────────────────────────────────────────
+# FGT-F14: fortism_inode_alloc_security partial failure -> memory leak
+# FortiOS 7.4.12 vmlinux — hooks at 0x5511f5 (alloc) and 0x5511d0 (free)
+# ─────────────────────────────────────────────────────────
+FGT_F14_FORTISM_INODE_MEMLEAK = {
+    "id":       "FGT-F14",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism LSM module)",
+    "severity": "LOW",
+    "class":    "Memory Leak in LSM inode_alloc_security Error Path",
+
+    "description": (
+        "The fortism inode security allocation hook at vma 0xffffffff805511f5 allocates two "
+        "kernel objects: a primary security blob (r12) and an inner structure at [r12+0x60]. "
+        "On failure of the inner allocation, the code jumps to 0x80551267 without freeing r12 "
+        "and without zeroing [r12+0x60] before storing r12 into the inode's security pointer "
+        "[rbx+0xc0]. The corresponding free hook at 0xffffffff805511d0 calls kfree([r12+0x60]) "
+        "then kfree(r12). If the inner alloc failed and [r12+0x60] was never initialized to zero "
+        "before the jump, the free hook operates on garbage memory at [r12+0x60], "
+        "potentially freeing an arbitrary kernel pointer. "
+        "NOTE: In the observed disassembly, [r12+0x60] is stored BEFORE the null check "
+        "(0x551248 stores, 0x551250 checks, 0x551252 stores r12 into inode). "
+        "If the second alloc is null, the inode's [+0xc0] does NOT get r12 stored "
+        "(store is at 0x551252, AFTER the failure jump at 0x551250), so r12 leaks without a crash."
+    ),
+
+    "vmlinux": {
+        "alloc_hook_vma": "0xffffffff805511f5",
+        "free_hook_vma":  "0xffffffff805511d0",
+        "inner_alloc_failure_jump": "0xffffffff80551267",
+        "inode_secblob_store": "0xffffffff80551252",
+    },
+
+    "impact": "Kernel memory leak of one kmalloc slab object per inode creation under memory pressure. No immediate security impact; contributes to slab exhaustion over time.",
+    "status": "CONFIRMED — code flow analyzed; triggers under kmalloc failure (memory pressure or KASAN injection)",
+}
+
+# ─────────────────────────────────────────────────────────
 # Attack chain: FortiGate VM RE -> exploitation
 # ─────────────────────────────────────────────────────────
 ATTACK_CHAIN = {
