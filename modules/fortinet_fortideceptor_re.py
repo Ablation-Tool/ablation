@@ -211,27 +211,36 @@ tar_data = gzip.decompress(obj1_gz)  # may be large
 FAD_F02_VTB_IOCTL_MISSING_CAP = {
     "id":       "FAD-F02",
     "product":  "Fortinet FortiDeceptor 8.0.4 (vtb.ko kernel module, Linux 6.1)",
-    "severity": "MEDIUM -- cmd 0x89f0 reads 0x5ff8 bytes from user space with no capability gate; all other cmds gated on CAP_NET_ADMIN",
-    "class":    "Missing Privilege Check (CWE-862) / Kernel ioctl asymmetric authorization",
+    "severity": "LOW -- cmd 0x89f0 is a READ-ONLY query (info disclosure); missing CAP_NET_ADMIN lets unprivileged process enumerate vtb tunnel server table",
+    "class":    "Missing Privilege Check (CWE-862) / Kernel ioctl asymmetric authorization -- information disclosure",
     "cwe":      "CWE-862 (Missing Authorization)",
 
     "description": (
         "vtb_tunnel_ioctl_private handles 4 SIOCDEVPRIVATE commands (0x89f0-0x89f3). "
         "Commands 0x89f1, 0x89f2, and 0x89f3 each gate on ns_capable(ns, CAP_NET_ADMIN=0xc) "
         "before any user-to-kernel data transfer. "
-        "Command 0x89f0 does NOT check ns_capable: it calls kmalloc(0x5ff8, GFP_KERNEL) "
-        "then copy_from_user(buf, user_arg+0x10, 0x5ff8) with no privilege gate. "
-        "The asymmetry is structurally inconsistent -- the same privilege model is applied to "
-        "all sibling commands but omitted for 0x89f0, which handles the largest user-supplied buffer."
+        "Command 0x89f0 does NOT check ns_capable. "
+        "Flow: copy_from_user(kernel_buf, user_arg+0x10, 0x5ff8) reads query filter; "
+        "then walks the vtb kernel linked list, builds a result table (up to 255 entries x 0x60 bytes each), "
+        "then copy_to_user(user_arg->ptr, kernel_buf, 0x5ff8) returns the result. "
+        "cmd 0x89f0 is a READ QUERY -- it reads vtb tunnel server table (IPs, ports, weights) "
+        "into user space. No kernel state is modified. "
+        "Missing privilege gate allows any process with an AF_INET socket to enumerate "
+        "the FortiADC load balancer server pool configuration without CAP_NET_ADMIN. "
+        "Loop is hard-bounded at 255 entries; 255 * 0x60 = 0x3BC0 < 0x5ff8 (no OOB)."
     ),
 
     "command_map": {
         "0x89f0": {
             "capability_check": "ABSENT",
-            "copy_from_user":   "kmalloc(0x5ff8, GFP_KERNEL) then copy_from_user(buf, user_arg+0x10, 0x5ff8)",
-            "copy_to_user":     "copy_to_user(user_arg+0x10, result, 0x5ff8) at offset 0x680",
-            "operation":        "Read/write vtb tunnel configuration (ketama continuum + server table)",
-            "note":             "Largest user-supplied buffer; only command without capability gate",
+            "direction":        "READ (query kernel state, return to user)",
+            "copy_from_user":   "kmalloc(0x5ff8, GFP_KERNEL) then copy_from_user(buf, user_arg+0x10, 0x5ff8) -- reads query filter from user",
+            "kernel_op":        "Walk vtb linked list; build result table (max 255 entries x 0x60 bytes = 0x3BC0 bytes; loop at 0x310-0x3da hardcoded cmp $0xff,%r14)",
+            "copy_to_user":     "copy_to_user(user_arg->ptr, kernel_buf, 0x5ff8) at offset 0x41b -- returns vtb server table to user",
+            "operation":        "Query vtb tunnel server table (ketama continuum): returns server IPs, ports, weights, tunnel IDs for each registered backend",
+            "no_oob":           "CONFIRMED: 255 * 0x60 = 0x3BC0 < 0x5ff8 (loop cannot overflow allocated buffer)",
+            "no_kernel_write":  "CONFIRMED: loop writes to output buffer only; does not modify vtb kernel state",
+            "note":             "Read-only query missing privilege gate; info disclosure only",
         },
         "0x89f1": {
             "capability_check": "ns_capable(netns, CAP_NET_ADMIN=0xc) at offset 0xdd",
@@ -281,10 +290,13 @@ FAD_F02_VTB_IOCTL_MISSING_CAP = {
         "practical_context":  "FortiDeceptor is typically single-user (root/admin only) -- unprivileged user privilege escalation unlikely in practice; finding is structural (design flaw), not immediately exploitable",
     },
 
-    "data_flow_risk": {
-        "0x5ff8_user_data":  "0x5ff8 = 24568 bytes from user. After copy_from_user, data is interpreted as a vtb tunnel info structure and written into the ketama load-balance continuum and server table",
-        "continuum_write":   "At 0x310-0x3da: loop iterates up to 0xff (255) entries from user-supplied data, each 0x60 bytes, writing into kernel vtb state -- any pointer-like field could influence kernel memory writes",
-        "no_size_validation": "No upper-bound check on count or size before the loop at 0x3d3 (cmp $0xff,%r14; jne 0x310)",
+    "data_flow": {
+        "direction":         "KERNEL -> USER (info disclosure, not user -> kernel injection)",
+        "user_input":        "0x5ff8 bytes from user as QUERY FILTER (not written into kernel state)",
+        "kernel_read":       "Loop at 0x310-0x3da walks vtb list_head linked list, reads kernel vtb entries",
+        "output_build":      "Each 0x60-byte output slot is filled from kernel vtb entry fields (r15+0x20, r15+0x28, etc.) and stack buffer derived from user query filter",
+        "loop_bound":        "cmp $0xff,%r14; jne 0x310 -- hardcoded 255-entry maximum; no overflow possible",
+        "disclosed_fields":  "Each 0x60-byte entry: 0x10 bytes from vtb list entry (memcpy at 0x339); word fields at +0x28/+0x2a/+0x2c (likely port numbers); 8 qword fields from stack (IPs/endpoints); 2 dword fields (weights/flags)",
     },
 
     "vs_fortism": (
@@ -374,7 +386,7 @@ ANALYSIS_STATUS = {
     "hypervisor":  "KVM + Xen both supported (kvm.ko, xen-gntalloc.ko, xen-pciback.ko present)",
     "unique_findings": [
         "FAD-F01: SBVM hardcoded DES key 'S3crtMsG' -- all 18 decoy templates decryptable",
-        "FAD-F02: vtb.ko cmd 0x89f0 missing CAP_NET_ADMIN; reads 0x5ff8 bytes from user space without privilege gate; cmds 0x89f1/f2/f3 all gated",
+        "FAD-F02: vtb.ko cmd 0x89f0 missing CAP_NET_ADMIN; READ-ONLY query returning vtb server table (IPs/ports/weights) to unprivileged caller; no OOB, no kernel write; cmds 0x89f1/f2/f3 all gated",
         "fgt601v1.qcow2 recovered -- FortiGate fingerprint artifacts exposed",
         "No fortism -- different kernel attack surface from FGT/FFW/FWB",
         "FAD rootfs fully accessible -- only non-encrypted Fortinet 8.0.x VM image",
