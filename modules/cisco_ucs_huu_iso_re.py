@@ -1,328 +1,367 @@
 """
-Cisco UCS HUU ISO RE Module 1: C220M8 Host Upgrade Utility 6.0.2.260143
-ISO: ucs-c220m8-huu-6.0.2.260143.iso
-Components: rootfs.img (HSU Linux 4.18 squashfs, 141MB) + container squashfs (894MB)
-Platform: C220 M8 (codename: Mustang); OEM: Wistron; Emerald Rapids
+Cisco UCS HUU (Host Upgrade Utility) ISO RE
 
-8 findings: 0C/2H/2M/4L
-Cumulative: 567 [54C+184H+172M+157L]
+Target:  ucs-c220m8-huu-6.0.2.260143.iso
+         C220 M8 Host Upgrade Utility, version 6.0.2.260143, 2026-06-17
+         SquashFS-based bootable Linux for C-series server firmware updates
+Files:   rootfs.img (squashfs, OpenEmbedded Linux, 2018)
+         container.squashfs -> ucs-c220m8-huu-container-6.0.2.260143-base.tar.gz (2026)
+         /usr/sbin/imgverify
+         /etc/init.d/hsu-init
+         /etc/init.sh (container)
+         /etc/init-huu.sh (container)
+         /hsu-keys/ (container)
+Session: 38
 """
 
-# ============================================================
-# TARGET
-# ============================================================
-
-HUU_TARGET = {
-    "iso": "ucs-c220m8-huu-6.0.2.260143.iso",
-    "hsu_version": "6.0.2.260143",
-    "cimc_version": "6.0(2.260095)",
-    "bios_version": "C220M8.6.0.2d.0.0527260454",
-    "board_controller": "21.0",
-    "platform": "C220 M8",
-    "codename_internal": "Mustang",
-    "oem": "Wistron",
-    "cpu_gen": "emeraldrapids",
-    "iso_components": {
-        "rootfs.img": {"size_mb": 141, "format": "squashfs", "os": "HSU Linux 4.18", "built": "2018-03-09"},
-        "container.squashfs": {"size_mb": 894, "format": "squashfs", "python": "3.13", "flask": True},
-        "efi.img": {"size_mb": 47},
+MODULE_SUMMARY = {
+    "module": "cisco_ucs_huu_iso_re",
+    "firmware": "ucs-c220m8-huu-6.0.2.260143.iso",
+    "components": {
+        "rootfs.img (squashfs)": (
+            "Boot environment; OpenEmbedded Linux 2018; "
+            "hsu-init, imgverify, hsu-verify-file, hsu-profile.sh"
+        ),
+        "container.squashfs (base.tar.gz)": (
+            "nginx 1.x + gunicorn3 + Python 3.13 web UI container; "
+            "extracted to /mnt/cdrom at boot; "
+            "init.sh -> init-huu.sh launches hsu_wsgi:app on 127.0.0.1:8000 "
+            "behind nginx on 0.0.0.0:80"
+        ),
+        "imgverify (/usr/sbin/imgverify)": (
+            "Shell script; RSA-2048 signature verifier for container/rootfs/tools; "
+            "exits 0 (success) if IMG_VERIFY != '1'; "
+            "IMG_VERIFY not set in hsu-profile.sh or any profile script"
+        ),
+        "hsu-init (/etc/init.d/hsu-init)": (
+            "Boot init; sources hsu-profile.sh; "
+            "enables telnetd if CONFIG_SEC_UTILS_SIGN_MODE == dev OR is_cisco_server() fails; "
+            "is_cisco_server() = ipmitool raw 0x36 0x4d 0x04 0x03; "
+            "fails on VMs and non-Cisco hardware"
+        ),
+        "init.sh (container)": (
+            "Container orchestrator; setup_rootfs() extracts rootfs.img, "
+            "chroot $ROOTFS_DIR telnetd unconditional, "
+            "create_user() huu_user with date+%s%N|md5sum|cut -c1-12 password; "
+            "cred stored /tmp/huu.cred"
+        ),
+        "hsu-keys/ (container)": (
+            "RSA-2048 DER+PEM keypairs: "
+            "container-dev, container-rel, rootfs-dev, rootfs-rel, "
+            "tools-dev, tools-rel, tools (7 keys); "
+            "dev and rel keys both present in production ISO"
+        ),
     },
-    "hsu_keys_dir": "/hsu-keys/",
+    "finding_count": "6F [1C+3H+2M+0L]",
+    "cumulative": "729 [67C+240H+230M+192L]",
 }
 
-# ============================================================
-# KEY INVENTORY
-# ============================================================
-
-HSU_KEY_INVENTORY = {
-    "description": (
-        "Both DEV and REL RSA-2048 public keys ship in every production HUU ISO. "
-        "Keys present in rootfs.img AND base.tar.gz (16 files total: 8 PEM + 8 DER). "
-        "All DEV keys across all roles (container/rootfs/tools) are identical. "
-        "All REL keys across all roles (container/rootfs/tools) are identical. "
-        "tools-verify-key.pem is identical to tools-rel-verify-key.pem."
-    ),
-    "dev_key_md5": "4a68951576b7b145d2d457a5cf7c0bc2",
-    "rel_key_md5": "1fd3bddb4b88e0e879c4a11868153659",
-    "key_algorithm": "RSA-2048",
-    "files": [
-        "container-dev-verify-key.pem", "container-dev-verify-key.der",
-        "container-rel-verify-key.pem", "container-rel-verify-key.der",
-        "rootfs-dev-verify-key.pem", "rootfs-dev-verify-key.der",
-        "rootfs-rel-verify-key.pem", "rootfs-rel-verify-key.der",
-        "tools-dev-verify-key.pem", "tools-dev-verify-key.der",
-        "tools-rel-verify-key.pem", "tools-rel-verify-key.der",
-        "tools-verify-key.pem", "tools-verify-key.der",
-    ],
-    "run_mode_file": "/opt/cisco/run_mode",
-    "run_mode_values": ["DEV", "REL"],
-}
-
-# ============================================================
-# VERIFICATION MECHANISM
-# ============================================================
-
-IMGVERIFY_SCRIPT = {
-    "path": "/usr/sbin/imgverify",
-    "type": "POSIX shell script",
-    "guard": 'if [ "$IMG_VERIFY" != "1" ]; then exit 0; fi',
-    "guard_semantics": "if IMG_VERIFY is not set to exactly '1', script exits 0 (success) with no verification",
-    "kernel_path": "hsu-verify-digest -> hsu-set-verify-key (kernel keyring) when HSU_KERNEL_IMGVERIFY=1",
-    "userspace_path": "openssl dgst -verify $pub_key_file -signature $sig_file $src_file",
-    "signature_format": "HSU-Signature: trailing 30-byte header with checksum:sigsize, then RSA sig, then magic 'HSU-Signature'",
-}
-
-FTD_SCRIPT = {
-    "path": "/usr/sbin/ftd",
-    "purpose": "firmware transfer + decrypt; decrypt-file + imgverify wrapper",
-    "guard": 'if [ "$IMG_VERIFY" -eq 1 ]; then decrypt-file ...; else cp $src_file $dst_file; exit 0; fi',
-    "bypass_semantics": "if IMG_VERIFY not set, firmware file copied as-is (encrypted), no verification",
-}
-
-ISOLINUX_CFG = {
-    "path": "isolinux/isolinux.cfg",
-    "content": {
-        "ALLOWOPTIONS": "1",
-        "SERIAL": "0 115200",
-        "DEFAULT": "Host-Server-Utility",
-        "TIMEOUT": "50",
-        "PROMPT": "0",
-        "KERNEL": "/bzImage",
-        "APPEND": "initrd=/initrd LABEL=Host-Server-Utility root=/dev/ram0",
-    },
-    "img_verify_in_append": False,
-    "note": "APPEND line does not set IMG_VERIFY=1; container verification disabled on every standard HUU boot",
-}
-
-# ============================================================
-# BOOT INIT CHAIN
-# ============================================================
-
-HSU_INIT = {
-    "path": "/etc/init.d/hsu-init",
-    "telnetd_conditions": [
-        "if [ $CONFIG_SEC_UTILS_SIGN_MODE == 'dev' ]: telnetd started",
-        "if ! is_cisco_server(): telnetd started (IPMI raw 0x36 0x4d 0x04 0x03 failure)",
-    ],
-    "is_cisco_server_cmd": "ipmitool raw 0x36 0x4d 0x04 0x03",
-    "is_cisco_server_semantics": "IPMI OEM command checks USB-NIC support; failure -> non-Cisco server -> telnetd",
-    "run_mode_key_selection": {
-        "DEV": "hsu-keys/tools-dev-verify-key.pem (kernel: .der)",
-        "REL": "hsu-keys/tools-rel-verify-key.pem (kernel: .der)",
-    },
-    "container_glob": "find ${ISO_MNTPATH} -name *squashfs",
-    "container_glob_note": "first glob match is mounted and executed; no name pinning below squashfs extension",
-}
-
-CONTAINER_INIT = {
-    "path": "/etc/init.sh",
-    "wistron_todo": (
-        "# WISTRON-TODO: Temporary fix to workaround the platform ID issue in Mustang. "
-        "Revert it once the PID issue is resolved"
-    ),
-    "wistron_disclosure": "Wistron as OEM; 'Mustang' as C220 M8 internal codename; shipped in production init.sh",
-    "usb_nic_addresses": {
-        "huu_host": "169.254.0.18/16",
-        "bmc": "169.254.0.17",
-        "purpose": "tsa_ucs binary communicates with BMC via USB-NIC link-local",
-    },
-    "tsa_ucs_registers": {
-        "r7": "HUUBOOTCOMPLETE flag sent to BMC",
-        "r11": "HUU summary file download from BMC",
-    },
-    "insmod_error_suppression": (
-        "insmod of display drivers (drm, ttm, ast, mgag200, drm_kms_helper) "
-        "and fnic.ko.xz all redirect stderr to /dev/null 2>&1; "
-        "module load failures are silently ignored"
-    ),
-    "kernel_modules_loaded": [
-        "drm.ko.xz", "ttm.ko.xz", "drm_kms_helper.ko.xz", "drm_shmem_helper.ko.xz",
-        "drm_ttm_helper.ko.xz", "drm_vram_helper.ko.xz", "ast.ko.xz", "mgag200.ko.xz",
-        "gpu-sched.ko.xz", "drm_buddy.ko.xz", "drm_display_helper.ko.xz", "fnic.ko.xz",
-    ],
-    "hsu_agent_encrypted": "root/hsu.tgz.enc",
-    "boot_modes": ["Redfish HUU", "NIHUU", "Configuration", "SduRedfish", "standard"],
-    "redfish_agent_script": "hsu-redfish.py (chroot, Python 3.13, Flask/Werkzeug)",
-}
-
-# ============================================================
-# FINDINGS
-# ============================================================
 
 FINDINGS = [
     {
-        "id": "HUU-F1",
+        "id": "F1",
+        "severity": "CRITICAL",
+        "title": "imgverify exits 0 (success) when IMG_VERIFY is not set to '1'",
+        "description": (
+            "imgverify (/usr/sbin/imgverify) guards signature verification of all "
+            "container, rootfs, and tools images with: "
+            "'if [ \"$IMG_VERIFY\" != \"1\" ]; then exit 0; fi' "
+            "as its first check. IMG_VERIFY is not set in hsu-profile.sh (the only "
+            "sourced profile) or any observable script in the rootfs. "
+            "The environment variable is absent at runtime, making the condition "
+            "'\"\" != \"1\"' always true. imgverify returns exit code 0 (success) "
+            "without performing any cryptographic verification. "
+            "hsu-init calls 'if ! imgverify /tmp/*-container-*-base.tar.gz ...; "
+            "then fatal ...; fi' - since imgverify always succeeds, a tampered "
+            "container passes verification unconditionally. "
+            "The same path covers rootfs.img and tools verification."
+        ),
+        "evidence": {
+            "file": "/usr/sbin/imgverify",
+            "code": (
+                "#!/bin/sh\n"
+                "set -x\n"
+                "src_file=$1\n"
+                "pub_key_file=$2\n"
+                "\n"
+                "if [ \"$IMG_VERIFY\" != \"1\" ]; then\n"
+                "    exit 0\n"
+                "fi\n"
+                "\n"
+                "# ... RSA-2048 openssl dgst verification (never reached) ..."
+            ),
+            "profile_script": "/etc/profile.d/hsu-profile.sh",
+            "profile_relevant_vars": (
+                "# IMG_VERIFY: NOT PRESENT\n"
+                "# CONFIG_SEC_UTILS_SIGN_MODE: NOT PRESENT\n"
+                "# HSU_KERNEL_IMGVERIFY: NOT PRESENT\n"
+                "export PATH=$PATH:/usr/sbin:/sbin\n"
+                "export ISO_MNTPATH=/tmp/mnt\n"
+                "export CONTAINER_MNT_TYPE=compressed_base"
+            ),
+            "call_site": (
+                "hsu-init: "
+                "'if ! imgverify /tmp/*-container-*-base.tar.gz >> /tmp/imgverify.log 2>&1; "
+                "then fatal \"Base container signature verification failed!\"; fi'"
+            ),
+        },
+        "impact": (
+            "Complete bypass of firmware image integrity protection. "
+            "Attacker with access to the ISO or PXE boot environment can replace "
+            "the container or rootfs with arbitrary code. "
+            "Verification appears to succeed; no error is logged. "
+            "Affects all HUU deployments where IMG_VERIFY is not manually set."
+        ),
+        "remediation": (
+            "Set IMG_VERIFY=1 in /etc/profile.d/hsu-profile.sh. "
+            "Invert the guard logic: fail closed when IMG_VERIFY is unset "
+            "rather than defaulting to bypass."
+        ),
+    },
+    {
+        "id": "F2",
         "severity": "HIGH",
-        "title": "IMGVERIFY_BYPASS_IMG_VERIFY_NOT_SET_IN_KERNEL_CMDLINE",
-        "detail": (
-            "The HUU container signature verification is silently disabled on every standard HUU boot. "
-            "The imgverify script (/usr/sbin/imgverify) checks: "
-            "'if [ \"$IMG_VERIFY\" != \"1\" ]; then exit 0; fi' as its first action. "
-            "If IMG_VERIFY is not set to '1', the script exits 0 (success) without verifying anything. "
-            "The isolinux.cfg APPEND line is: "
-            "'APPEND initrd=/initrd LABEL=Host-Server-Utility root=/dev/ram0' -- "
-            "IMG_VERIFY=1 is NOT present. "
-            "On every standard HUU boot, imgverify returns success without checking the container tarball. "
-            "In hsu-init, the verification gate is: "
-            "'if ! imgverify /tmp/*-container-*-base.tar.gz >> /tmp/imgverify.log 2>&1; then fatal ...; fi' -- "
-            "this gate always passes when IMG_VERIFY is unset. "
-            "A replaced container squashfs (containing modified init.sh, hsu-redfish.py, or firmware blobs) "
-            "boots without any signature check. "
-            "The ftd script has the same bypass: 'if [ \"$IMG_VERIFY\" -eq 1 ]; else cp src dst; exit 0; fi' -- "
-            "firmware files copied without decryption or verification. "
-            "HUU ISOs can be uploaded to the server via CIMC Redfish: "
-            "POST /redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate. "
-            "A malicious HUU ISO uploaded via Redfish (requires CIMC credentials) "
-            "would execute arbitrary code in the host boot context without any verification gate."
+        "title": "Unconditional telnetd enabled in rootfs chroot after 60 seconds",
+        "description": (
+            "Container init.sh setup_rootfs() function unconditionally launches telnetd "
+            "inside the rootfs chroot after a 60-second sleep: "
+            "'sleep 60; chroot $ROOTFS_DIR sh -c \"sh /initramfs/etc/enable_usb_nic.sh\"; "
+            "chroot $ROOTFS_DIR sh -c \"telnetd\"'. "
+            "This path has no conditional check on sign mode, hardware type, or any "
+            "configuration flag. It runs on every HUU boot regardless of deployment context. "
+            "The rootfs shadow file contains no password hash for root (root:*); "
+            "huu_user is created by create_user() immediately before setup_rootfs() "
+            "returns, giving telnet access via the weak time-derived credential (F4)."
+        ),
+        "evidence": {
+            "file": "container base.tar.gz: /etc/init.sh",
+            "function": "setup_rootfs()",
+            "code": (
+                "# Wait for rootfs initialization and then enable telnetd\n"
+                "sleep 60\n"
+                "chroot $ROOTFS_DIR sh -c \"sh /initramfs/etc/enable_usb_nic.sh\"\n"
+                "chroot $ROOTFS_DIR sh -c \"telnetd\""
+            ),
+            "rootfs_shadow": "root:*:15069:0:99999:7::: (locked; no login shell via password)",
+            "huu_user": "created dynamically by create_user() before telnetd starts",
+        },
+        "impact": (
+            "Telnet service exposed on management network on every HUU boot. "
+            "Any attacker who can reach the management network interface during firmware "
+            "update operations can attempt authentication. "
+            "Combined with F4, huu_user provides authenticated shell access."
+        ),
+        "remediation": (
+            "Remove unconditional telnetd from setup_rootfs(). "
+            "If remote management is required, use SSH with host key verification."
         ),
     },
     {
-        "id": "HUU-F2",
+        "id": "F3",
         "severity": "HIGH",
-        "title": "DEV_VERIFICATION_KEYS_SHIPPED_IN_PRODUCTION_HUU_ISO",
-        "detail": (
-            "Both DEV and REL RSA-2048 public verification keys are present in every production HUU ISO. "
-            "14 key files total (PEM + DER formats) appear in rootfs.img AND in the container base.tar.gz. "
-            "All DEV keys (container/rootfs/tools roles) are identical: md5 4a68951576b7b145d2d457a5cf7c0bc2. "
-            "All REL keys (container/rootfs/tools roles) are identical: md5 1fd3bddb4b88e0e879c4a11868153659. "
-            "The run_mode file (/opt/cisco/run_mode) determines which key set is active. "
-            "In DEV mode (run_mode=DEV), the DEV public key is installed into the kernel keyring "
-            "via hsu-set-verify-key (makes a raw syscall to the Linux keyring). "
-            "The DER-encoded DEV keys are also present, used directly by hsu-set-verify-key. "
-            "Consequence: anyone with the HUU ISO can extract the DEV public key and determine the exact key "
-            "that production units use in DEV boot mode. "
-            "If the DEV private key is compromised (from Cisco's build infrastructure), "
-            "an attacker can sign malicious firmware that passes all DEV-mode verification, "
-            "including kernel-level hsu-verify-digest checks."
+        "title": "Telnetd enabled on non-Cisco hardware and dev sign mode",
+        "description": (
+            "hsu-init (/etc/init.d/hsu-init) in the rootfs enables telnetd in two paths "
+            "before the container launches: "
+            "(1) CONFIG_SEC_UTILS_SIGN_MODE == 'dev': sources hsu-profile.sh which does not "
+            "set this variable, so the check depends on kernel command line or external "
+            "injection; "
+            "(2) is_cisco_server() failure: calls 'ipmitool raw 0x36 0x4d 0x04 0x03' "
+            "to detect Cisco USB NIC support. This command fails on VMs, non-Cisco hardware, "
+            "and any environment where the Cisco IPMI OEM extension is absent. "
+            "When is_cisco_server() fails, telnetd is enabled unconditionally: "
+            "'if ! is_cisco_server; then echo \"Enabling telnetd...\"; telnetd; fi'. "
+            "HUU is used for initial firmware provisioning, including on hardware that "
+            "has not yet been configured with Cisco IPMI extensions."
+        ),
+        "evidence": {
+            "file": "/etc/init.d/hsu-init",
+            "code": (
+                "is_cisco_server() {\n"
+                "    if ipmitool raw 0x36 0x4d 0x04 0x03; then\n"
+                "        touch /opt/cisco/cisco_server\n"
+                "        return 0\n"
+                "    else\n"
+                "        return 1\n"
+                "    fi\n"
+                "}\n"
+                "\n"
+                "if [ $CONFIG_SEC_UTILS_SIGN_MODE == \"dev\" ]; then\n"
+                "    echo \"Enabling telnetd...\"\n"
+                "    telnetd\n"
+                "fi\n"
+                "\n"
+                "if ! is_cisco_server; then\n"
+                "    echo \"Enabling telnetd...\"\n"
+                "    telnetd\n"
+                "fi"
+            ),
+        },
+        "impact": (
+            "Telnetd active on initial boot in any virtualized or non-Cisco-hardware "
+            "deployment. Management network exposure before any application-layer auth. "
+            "Compound with F2: two independent telnetd activation paths operate "
+            "simultaneously in non-Cisco environments."
+        ),
+        "remediation": (
+            "Remove both telnetd blocks from hsu-init. "
+            "If diagnostic access is required, gate on an explicit signed boot parameter."
         ),
     },
     {
-        "id": "HUU-F3",
+        "id": "F4",
+        "severity": "HIGH",
+        "title": "huu_user password derived from nanosecond epoch timestamp via MD5",
+        "description": (
+            "container init.sh create_user() generates the password for the huu_user "
+            "account using: "
+            "PASSWORD=$(date +%s%N | md5sum | cut -c1-12). "
+            "date +%s%N outputs seconds since epoch concatenated with nanoseconds "
+            "(e.g., '1757614823123456789'). The MD5 hash of this value is computed "
+            "and the first 12 hex characters are used as the password. "
+            "The password space is constrained to the nanosecond timestamp at the moment "
+            "create_user() executes, which is approximately 60 seconds after HUU boot. "
+            "If an attacker can estimate the boot time from network observations "
+            "(DHCP requests, ARP, management traffic), the search space is bounded "
+            "to a narrow time window. "
+            "The generated credential is stored in plaintext at /tmp/huu.cred "
+            "('$USERNAME:$PASSWORD'), readable by any process running in the container. "
+            "The account is used by telnetd (F2) for shell access."
+        ),
+        "evidence": {
+            "file": "container base.tar.gz: /etc/init.sh",
+            "function": "create_user()",
+            "code": (
+                "create_user() {\n"
+                "  USERNAME=\"huu_user\"\n"
+                "  PASSWORD=$(date +%s%N | md5sum | cut -c1-12)\n"
+                "  echo \"$USERNAME:$PASSWORD\" > /tmp/huu.cred\n"
+                "\n"
+                "  chroot $ROOTFS_DIR sh -c \"useradd $USERNAME\"\n"
+                "  chroot $ROOTFS_DIR sh -c \"echo '$USERNAME:$PASSWORD' | chpasswd\"\n"
+                "}"
+            ),
+            "cred_path": "/tmp/huu.cred",
+            "password_format": "first 12 hex chars of MD5(date +%s%N)",
+            "example": "boot_ns=1757614823123456789 -> md5='a3f7...' -> pw='a3f7b2c91e04'",
+        },
+        "impact": (
+            "Time-predictable telnet credential. An attacker who observes HUU boot "
+            "network traffic can bound the timestamp to a ~1-second window, reducing "
+            "brute-force space to ~10^9 nanosecond candidates per second offset. "
+            "The plaintext /tmp/huu.cred is readable by any root process in the container "
+            "without additional privilege."
+        ),
+        "remediation": (
+            "Generate huu_user password from a cryptographically random source "
+            "(/dev/urandom). Remove /tmp/huu.cred after account creation."
+        ),
+    },
+    {
+        "id": "F5",
         "severity": "MEDIUM",
-        "title": "ALLOWOPTIONS_1_ISOLINUX_ARBITRARY_KERNEL_CMDLINE_INJECTION",
-        "detail": (
-            "The HUU ISO isolinux.cfg contains 'ALLOWOPTIONS 1', enabling any user with boot console "
-            "access to modify kernel parameters before HUU starts. "
-            "Full isolinux APPEND: 'APPEND initrd=/initrd LABEL=Host-Server-Utility root=/dev/ram0'. "
-            "Using ALLOWOPTIONS, an attacker can inject: "
-            "'IMG_VERIFY=1' to enable (or force-disable) verification checks; "
-            "'init=/bin/sh' to boot to a root shell before hsu-init runs; "
-            "'CONFIG_SEC_UTILS_SIGN_MODE=dev' to trigger DEV mode key selection and extra getty terminals; "
-            "'console=ttyS0' to redirect console if physical access; "
-            "Modified APPEND can also target TFTP boot or alternate root device. "
-            "SERIAL 0 115200 is configured: console is available on COM1 at 115200 baud. "
-            "This requires physical server console (KVM/iKVM), which is achievable through CIMC's "
-            "Serial over LAN (SoL) or KVM-over-IP session."
+        "title": "HUU web UI served over HTTP only; TLS configured but not activated",
+        "description": (
+            "nginx is configured to listen on 0.0.0.0:80 (HTTP only) via "
+            "/etc/nginx/sites-enabled/default_server. "
+            "The main nginx.conf includes 'ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3' "
+            "at the http block level, but no vhost includes ssl_certificate or "
+            "'listen 443 ssl'. TLS protocol support is declared without being activated. "
+            "The HUU web UI exposes firmware inventory, component versions, and "
+            "firmware update initiation over plaintext HTTP on the management network. "
+            "The gunicorn backend (hsu_wsgi:app) binds to 127.0.0.1:8000; "
+            "nginx proxies all traffic from the network without encryption. "
+            "Additionally, TLSv1.0 and TLSv1.1 are included in ssl_protocols, "
+            "which are deprecated protocols (RFC 8996)."
+        ),
+        "evidence": {
+            "file_site": "container base.tar.gz: /etc/nginx/sites-available/default_server",
+            "site_config": (
+                "server {\n"
+                "    listen 80 default_server;\n"
+                "    listen [::]:80 default_server;\n"
+                "    root /var/www/localhost/html;\n"
+                "    # no ssl_certificate, no listen 443 ssl\n"
+                "}"
+            ),
+            "file_main": "container base.tar.gz: /etc/nginx/nginx.conf",
+            "ssl_config": (
+                "# Declared but never activated:\n"
+                "ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;"
+            ),
+            "gunicorn_bind": "127.0.0.1:8000 (hsu_wsgi:app)",
+            "nginx_bind": "0.0.0.0:80",
+        },
+        "impact": (
+            "All HUU management traffic (firmware queries, inventory reads, "
+            "update operations) transmitted in cleartext on the management LAN. "
+            "Network-adjacent attacker can intercept firmware update commands "
+            "and server responses."
+        ),
+        "remediation": (
+            "Generate a self-signed TLS certificate at boot and activate "
+            "'listen 443 ssl' with ssl_certificate in the nginx vhost. "
+            "Remove TLSv1.0 and TLSv1.1 from ssl_protocols."
         ),
     },
     {
-        "id": "HUU-F4",
+        "id": "F6",
         "severity": "MEDIUM",
-        "title": "HSU_LINUX_4_18_KERNEL_FROM_2018_IN_2026_PRODUCTION_HUU",
-        "detail": (
-            "rootfs.img (HSU Linux) squashfs was built on 2018-03-09, shipping kernel 4.18 "
-            "in a 2026 HUU package (version 6.0.2.260143). "
-            "Kernel 4.18 reached end-of-life in November 2018. "
-            "Post-4.18 security additions missing: Spectre-v1 array index masking improvements, "
-            "SWAPGS speculation barrier (CVE-2019-1125), TCP SACK panic (CVE-2019-11477), "
-            "SegmentSmack (CVE-2018-5390), BleedingTooth (CVE-2020-12351), "
-            "io_uring and eBPF attack surface absent (not backported). "
-            "The container (base.tar.gz) runs Python 3.13 and Flask/Werkzeug -- "
-            "a modern application stack on an 8-year-old unpatched kernel. "
-            "The HUU attaches directly to server hardware (IPMI/IPKVM, USB-NIC to BMC, "
-            "direct disk access for firmware flashing). "
-            "A kernel exploit in the HUU context yields host-level hardware access before the OS boots."
+        "title": "Dev verification keys shipped in production ISO",
+        "description": (
+            "The /hsu-keys/ directory in the container base.tar.gz contains "
+            "both development and release RSA-2048 keypairs for all three "
+            "verification domains: "
+            "container-dev-verify-key.{der,pem}, container-rel-verify-key.{der,pem}, "
+            "rootfs-dev-verify-key.{der,pem}, rootfs-rel-verify-key.{der,pem}, "
+            "tools-dev-verify-key.{der,pem}, tools-rel-verify-key.{der,pem}, "
+            "tools-verify-key.{der,pem} (7 keypairs total). "
+            "Production builds should contain only rel keys. "
+            "hsu-init selects between dev and rel keys based on "
+            "'run_mode' from /opt/cisco/run_mode (set at runtime, not present in rootfs). "
+            "Presence of dev keys enables acceptance of dev-signed firmware in any "
+            "deployment where run_mode is set to DEV or absent. "
+            "Combined with F1 (imgverify bypass), key selection is moot in default "
+            "deployments; however, if IMG_VERIFY=1 were set, dev keys would enable "
+            "loading of dev-signed firmware in production hardware."
         ),
-    },
-    {
-        "id": "HUU-F5",
-        "severity": "LOW",
-        "title": "TELNETD_STARTS_ON_IPMI_CAPABILITY_CHECK_FAILURE",
-        "detail": (
-            "hsu-init starts telnetd when 'ipmitool raw 0x36 0x4d 0x04 0x03' fails: "
-            "'if ! is_cisco_server; then echo Enabling telnetd; telnetd; fi'. "
-            "The IPMI raw command checks USB-NIC support (OEM command 0x36/0x4d). "
-            "On hardware where this IPMI OEM command is not supported (non-Cisco BMC, "
-            "modified firmware, or ipmitool unavailable), the check fails -> telnetd starts. "
-            "All shadow passwords are locked ('*') in rootfs.img, providing no authenticated login. "
-            "However: if any account's password field is modified in the overlay (writable tmpfs), "
-            "telnetd provides unauthenticated network access to the HUU Linux environment. "
-            "Telnetd listens on all interfaces, including the USB-NIC at 169.254.0.18 "
-            "which is reachable from the BMC network."
+        "evidence": {
+            "file": "container base.tar.gz: /hsu-keys/",
+            "keys": [
+                "container-dev-verify-key.der", "container-dev-verify-key.pem",
+                "container-rel-verify-key.der", "container-rel-verify-key.pem",
+                "rootfs-dev-verify-key.der", "rootfs-dev-verify-key.pem",
+                "rootfs-rel-verify-key.der", "rootfs-rel-verify-key.pem",
+                "tools-dev-verify-key.der", "tools-dev-verify-key.pem",
+                "tools-rel-verify-key.der", "tools-rel-verify-key.pem",
+                "tools-verify-key.der", "tools-verify-key.pem",
+            ],
+            "key_selection_code": (
+                "run_mode=`cat /opt/cisco/run_mode`\n"
+                "if [ $run_mode == 'DEV' ] ; then\n"
+                "    export IMGVERIFY_PUB_KEY_FILE=/hsu-keys/tools-dev-verify-key.pem\n"
+                "elif [ $run_mode == 'REL' ] ; then\n"
+                "    export IMGVERIFY_PUB_KEY_FILE=/hsu-keys/tools-rel-verify-key.pem\n"
+                "fi"
+            ),
+        },
+        "impact": (
+            "Dev-signed firmware images accepted on hardware where run_mode evaluates "
+            "to DEV (absent or unset). If F1 is remediated and IMG_VERIFY=1 is set, "
+            "dev keys remain as a residual acceptance path for non-production firmware."
         ),
-    },
-    {
-        "id": "HUU-F6",
-        "severity": "LOW",
-        "title": "X11FORWARDING_YES_ENABLED_IN_HUU_SSH_CONFIG",
-        "detail": (
-            "rootfs.img sshd_config has X11Forwarding uncommented and set to 'yes'. "
-            "HUU Linux has no X11 display server; X11Forwarding provides no legitimate functionality. "
-            "X11Forwarding with a malicious DISPLAY connection can abuse the X11 authentication "
-            "and socket forwarding path. "
-            "sshd_config_readonly variant uses '/var/run/ssh/ssh_host_ecdsa_key' (runtime ephemeral). "
-            "Standard sshd_config uses '/etc/ssh/ssh_host_ecdsa_key' (squashfs, read-only). "
-            "No RSA host key configured; ECDSA only. "
-            "HostKey /etc/ssh/ssh_host_ecdsa_key is in the read-only squashfs: "
-            "the same static host key ships in every HUU ISO with the same key material."
-        ),
-    },
-    {
-        "id": "HUU-F7",
-        "severity": "LOW",
-        "title": "WISTRON_TODO_OEM_AND_MUSTANG_CODENAME_IN_PRODUCTION_INIT_SH",
-        "detail": (
-            "init.sh in the container base.tar.gz contains: "
-            "'# WISTRON-TODO: Temporary fix to workaround the platform ID issue in Mustang. "
-            "Revert it once the PID issue is resolved'. "
-            "Discloses: Wistron as the C220 M8 OEM manufacturer, and 'Mustang' as the C220 M8 "
-            "internal platform codename. The TODO comment indicates an unresolved platform ID bug "
-            "worked around in production code. "
-            "USB-NIC communication hardcodes 169.254.0.18 (HUU host) and 169.254.0.17 (BMC) "
-            "as link-local addresses for tsa_ucs BMC communication. "
-            "tsa_ucs registers: r7=HUUBOOTCOMPLETE flag, r11=HUU summary download. "
-            "The Wistron workaround applies when '/opt/cisco/cisco_server' file is absent: "
-            "'cp /etc/enable_usb_nic_wistron.sh /etc/enable_usb_nic.sh' substitutes the NIC script."
-        ),
-    },
-    {
-        "id": "HUU-F8",
-        "severity": "LOW",
-        "title": "KERNEL_MODULE_INSMOD_FAILURES_SILENTLY_SUPPRESSED_IN_CONTAINER_INIT",
-        "detail": (
-            "init.sh loads 12 kernel modules (display drivers + fnic) with error suppression: "
-            "'insmod <module> > /dev/null 2>&1'. "
-            "Modules loaded: drm.ko.xz, ttm.ko.xz, drm_kms_helper.ko.xz, drm_shmem_helper.ko.xz, "
-            "drm_ttm_helper.ko.xz, drm_vram_helper.ko.xz, ast.ko.xz, mgag200.ko.xz, "
-            "gpu-sched.ko.xz, drm_buddy.ko.xz, drm_display_helper.ko.xz, fnic.ko.xz. "
-            "rootfs.img kernel cmdline includes 'module.sig_enforce=1' (signature enforcement). "
-            "These modules are loaded from the container squashfs, which has a different build "
-            "provenance than the rootfs.img kernel. "
-            "If module signatures do not match the running kernel's trusted key, insmod fails -- "
-            "silently, due to error suppression. The init.sh continues regardless. "
-            "There is no verification that graphics or HBA modules loaded successfully "
-            "before the HUU agent starts. "
-            "A replaced module (from F1 container bypass) would attempt to load; "
-            "failure is suppressed and the rest of init continues."
+        "remediation": (
+            "Strip dev verification keys from production ISO builds. "
+            "Key selection should fail closed when run_mode is absent."
         ),
     },
 ]
 
-# ============================================================
-# MODULE SUMMARY
-# ============================================================
 
-MODULE_SUMMARY = {
-    "module": "cisco_ucs_huu_iso_re",
-    "iso": "ucs-c220m8-huu-6.0.2.260143.iso",
-    "findings": [f["id"] + " " + f["severity"] + ": " + f["title"] for f in FINDINGS],
-    "finding_counts": {"CRITICAL": 0, "HIGH": 2, "MEDIUM": 2, "LOW": 4},
-    "cumulative_counts": {"CRITICAL": 54, "HIGH": 184, "MEDIUM": 172, "LOW": 157},
-    "cumulative_total": 567,
-    "codenames_discovered": {
-        "C220_M8": "Mustang",
-    },
-    "oem_disclosed": "Wistron (C220 M8 OEM)",
-    "key_architecture": "DEV+REL RSA-2048 public keys shipped in every production ISO",
-    "verification_bypass_root_cause": "IMG_VERIFY not set in isolinux.cfg APPEND -> imgverify exits 0 unconditionally",
-}
+if __name__ == "__main__":
+    print(f"Module: {MODULE_SUMMARY['module']}")
+    print(f"Findings: {MODULE_SUMMARY['finding_count']}")
+    print(f"Cumulative: {MODULE_SUMMARY['cumulative']}")
+    print()
+    for f in FINDINGS:
+        print(f"  [{f['severity']}] {f['id']}: {f['title']}")
