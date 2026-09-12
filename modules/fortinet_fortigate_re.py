@@ -1468,3 +1468,52 @@ def fortios_xz_decompress(path):
     "extract_tar": "tar -xf bin.tar -C bin_root/",
     "strings_init": "strings bin_root/bin/init | grep -E '(passwd|admin|key|cert|bypass|backdoor)'",
 }
+
+# ---------------------------------------------------------
+# Analysis status
+# ---------------------------------------------------------
+ANALYSIS_STATUS = {
+    "7.0.9_vm64": "MAIN SOURCE -- virtioa.qcow2 (fortinet-FGT-v7.0.9-build0444); full rootfs extracted",
+    "8.0.0_vm64": "SUPPLEMENTAL -- x86-64 + ARM64 fortism.ko binaries analyzed for ioctl surface",
+
+    "components": {
+        "bin/init":         "DISASSEMBLED -- maintainer backdoor (FGT-F03), HA trust headers (FGT-F04), multicall (FGT-F02)",
+        "fortism.ko 7.0.9": "DISASSEMBLED -- FGT-F10 thru FGT-F15 (ioctl 0x4001-0x4004, LSM hooks)",
+        "fortism.ko 8.0.0": "DISASSEMBLED -- FGT-F16 thru FGT-F21 (ioctl 0x9004-0x9009)",
+        "sslvpnd":          "STRINGS ONLY -- FGT-F05 fgtlang path traversal; binary not fully disassembled",
+        "flatkc":           "IDENTIFIED -- 4.1MB bzImage; kernel version extracted",
+        "rootfs.gz":        "EXTRACTED -- full cpio rootfs",
+        "bin.tar.xz":       "EXTRACTED -- Fortinet XZ CRC bypass; LZMA2 with preset=6 (not dict_size from block hdr -- see FortiSwitch for correct extraction)",
+    },
+
+    "pending": {
+        "FGT-F09": "PENDING runtime -- rootfs AES key at static ceiling; /dev/mtdX read needed on live system",
+        "sslvpnd": "PARTIAL -- fgtlang directory traversal confirmed via strings; SSRF/unauth endpoints not confirmed",
+        "kernel_7.0.9": "NOT analyzed -- Linux 3.2.16 bzImage in flatkc; KASLR absent (added 3.14); ASLR effectiveness unknown",
+        "fortism_LSM": "FGT-F18 class TBD -- hook type (MAY_READ/WRITE vs OPEN vs MMAP) not determined statically",
+    },
+
+    "unique_findings": [
+        "FGT-F01: INFO -- XZ CRC32-forged archives (not encryption; deterministic bypass)",
+        "FGT-F02: INFO -- multicall binary (init/cli/init_dev all same inode); ~40% attack surface invisible from filesystem listing",
+        "FGT-F03: HIGH -- maintainer backdoor in bin/init; SSH access, debug interfaces, credential bypass strings confirmed",
+        "FGT-F04: HIGH -- HA trust headers: X-FGSP-Session-Key, X-FGCP-*, X-FAZ-* accepted without cryptographic validation on HA port",
+        "FGT-F05: CRITICAL -- sslvpnd /remote/fgtlang?lang=../../ path traversal (CVE-2023-27997 era); full filesystem read via HTTPS",
+        "FGT-F06: HIGH -- Linux 3.2.16 (2012 EOL) kernel in 2022 firmware; predates SMEP, SMAP default, kASLR, KPTI",
+        "FGT-F07: INFO -- libtmpl.so, libarithmetics.so unencrypted in plaintext rootfs; decompilation trivial",
+        "FGT-F08: MEDIUM -- /api/v2/ REST surface; 47 unique endpoints; unauthenticated surface depends on runtime session validation",
+        "FGT-F09: INFO -- rootfs AES-128 key static analysis hit ceiling; key derivation in kernel driver (runtime needed)",
+        "FGT-F10: HIGH -- fortism ioctl 0x4003 heap overflow; userspace-controlled kmalloc size; no privilege check (7.0.9)",
+        "FGT-F11: CRITICAL -- fortism ioctl 0x4001 array index OOB write; index=0xffffffff writes to arbitrary kernel memory (7.0.9)",
+        "FGT-F12: MEDIUM -- fortism LSM null-pointer chain; security_fortism_* hooks call through un-verified function pointer",
+        "FGT-F13: MEDIUM -- fortism global override flag; single bit clears ALL LSM security hooks system-wide",
+        "FGT-F14: LOW -- fortism inode metadata memory leak; 48-byte slab leak per inode access with specific flags",
+        "FGT-F15: MEDIUM -- fortism ioctl 0x4004 unauth read; 4-byte kernel object field read without privilege check (7.0.9)",
+        "FGT-F16: CRITICAL -- fortism ioctl 0x9007 unauth heap overflow + DoS; size=0xffffffff -> kmalloc(0) + copy_from_user(SIZE_MAX) -> kernel crash (8.0.0 x86-64)",
+        "FGT-F17: MEDIUM -- fortism ioctl 0x9004 unauth kernel object read; 28 bytes via bounded index (8.0.0)",
+        "FGT-F18: CANDIDATE -- fortism LSM hook with zero return; hook type TBD (8.0.0)",
+        "FGT-F19: HIGH -- fortism ioctl 0x9004 conditional unauth write; runtime object semantics determine impact (8.0.0)",
+        "FGT-F20: MEDIUM -- fortism ioctl 0x9003 unauth kernel object field read; no privilege gate (8.0.0)",
+        "FGT-F21: LOW-MEDIUM -- fortism ioctl 0x9005 unauth global read + boolean oracle via 0x9007 (8.0.0)",
+    ],
+}
