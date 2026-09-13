@@ -336,17 +336,117 @@ FAD_F07_BUILD_PATH_DISCLOSURE = {
 
 
 # ---------------------------------------------------------
+# FAD-F08: fnginx_new RDP gateway -- plaintext credential IPC via frds protocol
+# ---------------------------------------------------------
+FAD_F08_FNGINX_PLAINTEXT_CRED_IPC = {
+    "id":       "FAD-F08",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "MEDIUM -- RDP proxy decrypts CredSSP NLA credentials then forwards in plaintext via internal frds IPC; no credential zeroing",
+    "class":    "Plaintext credential exposure in IPC (CWE-312)",
+
+    "description": (
+        "fnginx_new acts as an RDP gateway (client-facing TLS + CredSSP NLA terminator). "
+        "After the NLA handshake, the decrypted credentials (username, password) are passed "
+        "to the backend connection handler via the custom Fortinet frds (Fortinet RDP Service) "
+        "protocol. The frds IPC carries credentials in plaintext without any encryption or "
+        "MAC. The credentials are not zeroed from the send-side buffer after the frds message "
+        "is written (frds_credential_event_write does not zero), and not zeroed from the receive "
+        "buffer after parsing (frds_cmd_credential_read does not zero). Both credential buffers "
+        "persist in memory until overwritten by subsequent operations."
+    ),
+
+    "disasm_evidence": {
+        "frds_credential_event_write_0x29fb83": {
+            "wire_format":    "uint32_le total_size | uint8 cmd_type=0x01 | uint16_le username_len | uint16_le password_len | username_bytes | password_bytes",
+            "note":           "Raw plaintext; no encryption; no integrity check",
+        },
+        "frds_cmd_credential_read_0x29fc8d": {
+            "call_path":      "frds_process_clt_cmd (0x2a0d40) jump table -> frds_cmd_credential_read for cmd byte 0x01 (estimated)",
+            "parsing":        "uint16_le username_len -> struct+0x2; uint16_le password_len -> struct+0x4",
+            "username_ptr":   "frds_buf_cur_ptr() -> stored at struct+0x8 (pointer into live wire buffer, no copy)",
+            "password_ptr":   "frds_buf_cur_ptr() -> stored at struct+0x10 (pointer into live wire buffer, no copy)",
+            "null_term_bug":  "movb $0x0,(ptr+len-1): overwrites LAST BYTE of credential -- truncates final char for any non-null-terminated encoding; benign if credentials are null-terminated ASCII in frds format",
+            "no_zeroing":     "No memset or zeroing of credentials after use",
+        },
+        "frds_process_clt_cmd_dispatch": {
+            "cmd_types_dispatched": "0..0x1c (28 types): connect, mouse, kbd, cut_text, credential, input_focus, ...",
+            "success_path":         "on ret==0 from handler: call *rcx(cmd_struct, callback_ctx, ...) -- callback receives raw credential pointers",
+        },
+    },
+
+    "attack_surface": {
+        "memory_disclosure": "Any OOB read or UAF in fnginx_new during active RDP sessions exposes plaintext user:password in process memory",
+        "coredump":          "If fnginx_new crashes during an RDP session, a coredump contains plaintext credentials",
+        "inter_process":     "frds IPC not encrypted; if the IPC socket/pipe is a Unix domain socket with permissive permissions, a local process can intercept",
+    },
+
+    "vs_fad_f04": "FAD-F04 was surface identification; FAD-F08 is the confirmed plaintext credential flow from disassembly",
+
+    "libfmladminauth_admin_new_pwd_shm": {
+        "status":   "ANALYZED -- no SHM in implementation; function handles CLI-side password change workflow",
+        "zeroing":  "PROPER: both plaintext password buffers zeroed via rep stos (r15=0) after make_new_passwd returns",
+        "verdict":  "No finding -- credentials properly zeroed; lower risk than name suggests",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FAD-F09: httproxy embeds HAProxy 1.5.19 (2016) -- CVE-2019-18277 HTTP smuggling
+# ---------------------------------------------------------
+FAD_F09_HAPROXY_SMUGGLING = {
+    "id":       "FAD-F09",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "HIGH -- HAProxy 1.5.19 (2016-12-25) embedded in httproxy; CVE-2019-18277 Transfer-Encoding smuggling; 10-year-old codebase; custom nghttp2 H2 bridging unaudited",
+    "class":    "HTTP request smuggling (CWE-444)",
+
+    "version_evidence": {
+        "binary":          "/bin/httproxy (14MB, stripped, PIE, x86-64)",
+        "version_string":  "HA-Proxy version 1.5.19 2016/12/25",
+        "version_string2": " version 1.5.19, released 2016/12/25",
+        "source_paths":    "src/haproxy.c, src/proto_http.c, src/channel.c, src/session.c, src/acl.c (embedded in binary strings)",
+    },
+
+    "cve_mapping": {
+        "CVE-2019-18277": {
+            "description": "HAProxy before 2.0.6 incorrectly handles HTTP/1 Transfer-Encoding header; allows request smuggling past WAF rules and backend servers",
+            "affected":    "All HAProxy < 2.0.6; httproxy 1.5.19 is 5 major versions behind the fix",
+            "vector":      "Network; requires attacker to control HTTP request to the load-balanced backend",
+            "impact":      "Bypass WAF policies in FortiADC; poison request queue at backend server; access backend responses destined for other clients",
+        },
+    },
+
+    "nghttp2_surface": {
+        "symbols":   "nghttp2_session_*, nghttp2_submit_request, nghttp2_pack_settings_payload",
+        "note":      "Fortinet added HTTP/2 support on top of the HAProxy 1.5.x codebase. H2->H1 downgrade bridging is custom Fortinet code. H2 body length is trusted as Content-Length for H1 backend connections -- classic H2.CL smuggling surface.",
+        "h2_te_cl":  "H2 requests have no Transfer-Encoding; when downgraded to H1, Content-Length derived from H2 :content-length pseudo-header; attacker controls value -> backend sees different body length than FortiADC",
+    },
+
+    "header_indicators": {
+        "both_present":  "Both 'Transfer-Encoding: chunked' and 'Content-Length:' format strings confirmed in binary",
+        "hdr_val":       "hdr_val(content-length) -- header value extraction function (HAProxy internal)",
+        "te_chunked":    "'Transfer-Encoding: chunked' emitted in requests; parser handles both",
+    },
+
+    "chain": (
+        "External attacker sends crafted HTTP request with ambiguous TE/CL headers -> "
+        "FortiADC WAF evaluates based on its TE interpretation -> backend server evaluates based on CL -> "
+        "WAF bypass + backend request queue poisoning"
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "rootfs":           "FULLY EXTRACTED -- ext4, no encryption; 100% file access",
     "kernel_vmlinux":   "38MB ELF x86-64 stripped, BuildID=4900fe17c0cf36e910d0af94849e74f251b426c5",
-    "fnginx_new":       "SURFACE ONLY -- NOT stripped, 17MB, 1264 RDP/CredSSP symbols; deep analysis pending",
+    "fnginx_new":       "COMPLETE -- NOT stripped, 17MB; frds_cmd_credential_read disassembled; plaintext credential IPC confirmed (FAD-F08)",
     "restapi":          "STRINGS + SYMBOL SURFACE -- Go binary, stripped; 21MB; JWT middleware identified",
-    "libfmladminauth":  "SYMBOL TABLE ONLY -- NOT stripped; admin_auth family exported; code not disassembled",
+    "libfmladminauth":  "ANALYZED -- admin_new_pwd_shm disassembled; proper credential zeroing; no finding; (see FAD-F08 notes)",
     "authd":            "STRINGS ONLY -- stripped",
     "mysql":            "STRINGS ONLY -- stripped; default_password_lifetime present",
-    "httproxy":         "NOT ANALYZED -- 14MB stripped (main ADC engine; highest functional surface)",
+    "httproxy":         "ANALYZED -- HAProxy 1.5.19 (2016) identified; nghttp2 H2 bridging; CVE-2019-18277 applicable (FAD-F09)",
 
     "unique_findings": [
         "FAD-F01: HIGH -- gin-jwt is_password_reset_url JWT bypass + /api/user/force_password_reset route; pre-auth password reset possible (needs runtime verification)",
@@ -356,6 +456,8 @@ ANALYSIS_STATUS = {
         "FAD-F05: LOW -- gdb, strace, perf, strings in production image; post-compromise capability amplification",
         "FAD-F06: LOW -- TLS 1.0/3DES/RSA-KEX enabled by default in restapi Go GODEBUG; weak TLS posture",
         "FAD-F07: INFO -- build paths and CGO_LDFLAGS with all library names embedded in restapi binary",
+        "FAD-F08: MEDIUM -- fnginx_new frds_cmd_credential_read: RDP proxy passes NLA credentials in plaintext via internal frds IPC; no zeroing; struct+0x8=username_ptr, struct+0x10=password_ptr into live wire buffer",
+        "FAD-F09: HIGH -- httproxy embeds HAProxy 1.5.19 (2016-12-25); CVE-2019-18277 TE smuggling (all HAProxy < 2.0.6); custom nghttp2 H2->H1 bridging introduces additional H2.CL smuggling surface",
     ],
 
     "vs_other_products": {
@@ -367,11 +469,9 @@ ANALYSIS_STATUS = {
     },
 
     "high_priority_pending": [
-        "httproxy (14MB): main ADC engine -- HTTP request smuggling, header injection, WAF bypass surface",
-        "fnginx_new CredSSP path: frds_cmd_credential_read disassembly -- credential interception in RDP proxy",
         "FAD-F01 runtime verification: POST /api/user/force_password_reset without auth",
         "FAD-F02 runtime verification: GET /api/debug/pprof/goroutine without auth",
-        "libfmladminauth.so: admin_new_pwd_shm -- shared memory password storage; potential info leak",
         "SAML handler: saml_pre_login_handler / saml_sso_handler for open redirect or assertion injection",
+        "httproxy SAML/OAuth2 surface: libshibsp-lite.so.6 + libxmltooling-lite.so.6 linked -- SAML XML parsing in load balancer path",
     ],
 }
