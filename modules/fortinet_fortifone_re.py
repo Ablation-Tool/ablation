@@ -91,7 +91,7 @@ FFF_F01_SHARED_LOCAL_TLS_KEY = {
 FFF_F02_SHARED_MTLS_CLIENT_CERT = {
     "id":       "FFF-F02",
     "product":  "Fortinet FortiFone Desktop v8.0 build 67",
-    "severity": "MEDIUM -- shared mTLS client certificate across all installations; passphrase derivable from static source; any attacker with the .deb can authenticate as 'FortiFone client' to FortiVoice PBX",
+    "severity": "HIGH -- shared mTLS client certificate across all installations; passphrase CONFIRMED (desktopapp#2025); RSA-4096 private key extracted; cert valid until 2026-10-12; any attacker with the .deb can authenticate as FortiFone client to any FortiVoice PBX",
     "class":    "Shared cryptographic private key (CWE-321) + hardcoded passphrase derivation key (CWE-798)",
 
     "description": (
@@ -106,23 +106,33 @@ FFF_F02_SHARED_MTLS_CLIENT_CERT = {
     ),
 
     "pkcs12_metadata": {
-        "file":         "/opt/FortiFone/resources/fortifone_desktop_1_c2_v0.bin",
-        "size":         "5251 bytes",
-        "mac_algo":     "SHA-256 (hashcat mode 23210)",
-        "mac":          "daaedd82cddf4d3515d3f9e6ad476806ab76233db0c5c0942f86520e71aa1711",
-        "salt":         "d5f5d794d8836b6f (8 bytes)",
-        "iterations":   2048,
+        "file":           "/opt/FortiFone/resources/fortifone_desktop_1_c2_v0.bin",
+        "size":           "5251 bytes",
+        "mac_algo":       "SHA-256 (hashcat mode 23210)",
+        "mac":            "daaedd82cddf4d3515d3f9e6ad476806ab76233db0c5c0942f86520e71aa1711",
+        "salt":           "d5f5d794d8836b6f (8 bytes)",
+        "iterations":     2048,
+        "passphrase":     "desktopapp#2025 (CONFIRMED)",
+        "cert_subject":   "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiFone, CN=Desktop, email=support@fortinet.com",
+        "cert_issuer":    "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=Certificate Authority, CN=support",
+        "cert_serial":    "25329860295994376138532541552003771964419869235",
+        "cert_valid_from": "2025-09-16",
+        "cert_valid_until": "2026-10-12 (CURRENTLY VALID)",
+        "private_key":    "RSA-4096 (EXTRACTED; shared across all FortiFone Desktop v8.0 b67 installations)",
+        "crl_url":        "http://pki.fortinet.com/cert/crl/Fortinet_CA.crl",
     },
 
     "passphrase_derivation": {
-        "encrypted_file":   "assets/fortiCsc.bin in app.asar (45 bytes total)",
-        "content":          "base64 ciphertext: wGbPqZRhvhGxESR+n4HcFo8DAIc/GoTsmvQwVkk= + garbage bytes",
+        "encrypted_file":   "assets/fortiCsc.bin in app.asar (45 bytes)",
+        "raw_file_content": "b'T1PcwGbPqZRhvhGxESR+n4HcFo8DAIc/GoTsmvQwVkk=\\n' (base64-encoded AES output)",
         "algorithm":        "AES-256-CBC",
         "key_derivation":   "k = SHA256(CONFIG_M_NUM) where CONFIG_M_NUM = 'fortinet desktop app' (hardcoded in .env)",
         "key_hex":          "04b1fc0a0fab47aa36ad4414373f0e61a670fc33446fb01afe124c40ba361c32",
-        "iv":               "c066cfa99461be11b111247e9f81dc16 (first 16 bytes of decoded ciphertext)",
-        "passphrase_status": "PENDING -- fortiCsc.bin in this build produces 13-byte ciphertext (not block-aligned); file may be truncated in this package build",
-        "crack_target":     "hashcat -m 23210 $pfxng$2$2048$8$d5f5d794d8836b6f$<mac> <pfx_data>",
+        "iv_hex":           "4f53dcc066cfa99461be11b111247e9f (first 16 bytes after base64 decode of file)",
+        "ciphertext_hex":   "81dc168f0300873f1a84ec9af4305649 (bytes 16-32 after base64 decode)",
+        "plaintext_hex":    "6465736b746f70617070233230323501",
+        "passphrase":       "desktopapp#2025 (CONFIRMED -- AES-256-CBC decrypt + PKCS7 strip; \\x01 padding)",
+        "verification":     "pkcs12.load_key_and_certificates(pfx_data, b'desktopapp#2025') -> SUCCESS",
     },
 
     "code_references": {
@@ -276,8 +286,8 @@ ANALYSIS_STATUS = {
     "package":          "ANALYZED -- .deb fully extracted; postinst reviewed; 45 files cataloged",
     "asar":             "PARTIALLY ANALYZED -- 172MB ASAR, 6.1MB header (JSON file listing); key JS files extracted and reviewed",
     "server_key":       "EXTRACTED -- RSA-2048 private key confirmed shared (FFF-F01)",
-    "pkcs12":           "EXTRACTED -- 5251-byte PKCS12 identified as mTLS client cert; passphrase PENDING (FFF-F02)",
-    "fortiCsc_bin":     "ANALYZED -- AES-256-CBC key derivation from SHA256('fortinet desktop app'); ciphertext block-alignment issue in this build",
+    "pkcs12":           "COMPLETE -- passphrase CONFIRMED (desktopapp#2025); RSA-4096 private key extracted; CN=Desktop, valid 2025-09-16 to 2026-10-12 (FFF-F02)",
+    "fortiCsc_bin":     "COMPLETE -- AES-256-CBC decrypt confirmed; IV=4f53dcc066cfa99461be11b111247e9f; plaintext=desktopapp#2025",
     "fescrambler":      "ANALYZED -- XOR+base64 protocol obfuscation; magic byte 0x1f; reversible (FFF-F03)",
     "ca_chain":         "EXTRACTED -- fortinet-ca2 RSA-8192 + fortinet-subca2001 RSA-2048; no private keys (FFF-F04)",
     "ci_artifact":      "IDENTIFIED -- macOS codesign script in production bundle; WWDR Team ID extracted (FFF-F05)",
@@ -285,7 +295,7 @@ ANALYSIS_STATUS = {
 
     "unique_findings": [
         "FFF-F01: LOW -- shared RSA-2048 TLS private key (server.key) in all v8.0b67 installations; localhost HTTPS IPC",
-        "FFF-F02: MEDIUM -- shared PKCS12 mTLS client cert for FortiVoice PBX; passphrase derived from SHA256('fortinet desktop app'); any .deb possessor can impersonate FortiFone client",
+        "FFF-F02: HIGH -- shared PKCS12 mTLS client cert; passphrase CONFIRMED (desktopapp#2025 via AES-256-CBC+SHA256('fortinet desktop app')); RSA-4096 private key extracted; cert valid to 2026-10-12; all FortiFone Desktop v8.0b67 installations share one mTLS identity",
         "FFF-F03: INFO -- FEScrambler XOR obfuscation (magic=0x1f) on FortiVoice PBX protocol; single-byte XOR over TLS; security through obscurity only",
         "FFF-F04: INFO -- Fortinet internal CA chain (fortinet-ca2 RSA-8192, valid 2016-2056) bundled for server cert validation; no private key material",
         "FFF-F05: LOW -- CI/CD script (init-macOS-codesign-notary-keychain.sh) + .gitlab-ci.yml + .devops in production asar; WWDR Team ID AH4XFXJ7DK exposed",
@@ -299,8 +309,8 @@ ANALYSIS_STATUS = {
     },
 
     "pending": {
-        "PKCS12_passphrase": "PENDING -- hashcat -m 23210 with Fortinet-specific wordlist; MAC=daaedd82..., salt=d5f5d794d8836b6f, iter=2048",
-        "PKCS12_cert_identity": "PENDING -- cannot inspect cert content without passphrase; CN and validity unknown",
+        "PKCS12_passphrase": "CONFIRMED -- desktopapp#2025; AES-256-CBC decrypt of fortiCsc.bin with SHA256('fortinet desktop app')",
+        "PKCS12_cert_identity": "CONFIRMED -- CN=Desktop, O=Fortinet, OU=FortiFone; valid 2025-09-16 to 2026-10-12; RSA-4096",
         "FortiVoice_protocol": "PARTIAL -- FEScrambler decoded; API endpoint mapping not complete",
         "keytar_services":    "NOT ANALYZED -- keytar stores account passwords in OS keychain under service 'fortifone-*'",
     },
