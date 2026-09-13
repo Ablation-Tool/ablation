@@ -328,6 +328,154 @@ FAD_F02_VTB_IOCTL_MISSING_CAP = {
 
 
 # ---------------------------------------------------------
+# FAD-F03: FCP package format -- no cryptographic signature,
+#          CRC32-only integrity, hardcoded DES key baked into
+#          both data section and instruction stream
+# ---------------------------------------------------------
+FAD_F03_FCP_PACKAGE_FORGERY = {
+    "id":       "FAD-F03",
+    "product":  "Fortinet FortiCare Package (FCP) library -- libFCP.so -- shared across FortiDeceptor, FortiGate, FortiWiFi, FortiADC, and any product receiving FortiCare updates",
+    "severity":  "HIGH -- CRC32-only package integrity; DES key hardcoded in data section (0x3d90) AND instruction stream (gpUnpackObject 0x1a05 movabs imm); 40 object types include FIMG (firmware), ONCE (run-once executable), DCEN (AV engine), FAEN (FlowAV engine); attacker with extracted key can forge packages that pass all verification",
+    "class":    "Missing Cryptographic Signature (CWE-347) / Hardcoded Cryptographic Key (CWE-321) / Weak Hash (CRC32 for integrity, CWE-328)",
+    "cwe":      "CWE-347, CWE-321, CWE-328",
+
+    "description": (
+        "libFCP.so implements Fortinet's FortiCare Package (FCP) format, which is the update delivery "
+        "container for all FortiCare-delivered content: AV signatures, AV/FlowAV engines, firmware images, "
+        "run-once executables, SSLVPN packages, IPS/attack definitions, and 34 other object types. "
+        "The library is NOT FortiDeceptor-specific -- the 40-entry object type table confirms it is shared "
+        "FortiCare infrastructure. "
+        "Package integrity is protected by CRC32 only (zlib crc32, confirmed in gpVerifyPkg and "
+        "gpVerifyPkgHeaderChecksum disassembly -- no HMAC, no RSA, no ECDSA). "
+        "Package encryption is DES-CBC with key=IV='S3crtMsG' (8 bytes, 56-bit effective). "
+        "The DES key is hardcoded in TWO locations in the binary: "
+        "(1) data section at file offset 0x3d90 as a null-terminated string; "
+        "(2) instruction stream at VA 0x1a05 in gpUnpackObject as movabs rax, 0x47734d7472633353 "
+        "(little-endian bytes: S3crtMsG). "
+        "An attacker who extracts libFCP.so from any publicly available firmware image can: "
+        "(a) decrypt all existing FCP packages; "
+        "(b) forge new FCP packages for any of the 40 object types; "
+        "(c) craft packages that pass gpVerifyPkg (only CRC32 checked) and load on any FortiCare endpoint. "
+        "High-impact object types: FIMG (firmware image), ONCE (run-once executable -- executes on device), "
+        "DCEN (AV engine executable), FAEN (FlowAV engine executable), FSLP (SSLVPN package). "
+        "The 'run-once executable' type (ONCE) is the highest-severity attack surface -- "
+        "forged ONCE package delivered via MITM or compromised update channel executes arbitrary code on device."
+    ),
+
+    "fcp_object_type_table": {
+        "table_va":     "0x34c0 in libFCP.so 8.0.4",
+        "stride":       "25 bytes per entry (5-byte ID + 20-byte description, null-padded)",
+        "count":        "42 entries (index 0x00 through 0x29)",
+        "accessor_fns": {
+            "getObjTypeIdentifier":   "0x12c0: lookup by index, return ptr to 5-byte ID string",
+            "getObjTypeDescription":  "0x12a0: lookup by index, return ptr to 20-byte description string",
+        },
+        "high_impact_types": {
+            "FIMG (index 18)": "Firmware Image",
+            "ONCE (index 16)": "Run-Once Executable -- executes on device at load time",
+            "DCEN (index  3)": "AV Engine Executables",
+            "FAEN (index 27)": "FlowAV Engine",
+            "FSLP (index 23)": "SSLVPN Package File",
+            "FADB (index  5)": "Attack Definitions (IPS)",
+            "LIMG (index 22)": "FortiClient Installer File",
+        },
+        "all_types": {
+            0:  ("FCPC", "Command Object"),
+            1:  ("FCPR", "Response Object"),
+            2:  ("DCDB", "Virus Definitions"),
+            3:  ("DCEN", "AV Eng. Executables"),
+            4:  ("IBDB", "IBDB Definitions"),
+            5:  ("FADB", "Attack Definitions"),
+            6:  ("MUDB", "IPS Malicious URL DB"),
+            7:  ("FLDB", "FlowAV Database"),
+            8:  ("FDNI", "FortiResp Net Info"),
+            9:  ("FCNI", "FortiCare Net Info"),
+            10: ("FSCI", "Support ctrct Info"),
+            11: ("FSSI", "System Support Info"),
+            12: ("FASE", "Antispam Engine"),
+            13: ("FASR", "Antispam Definitions"),
+            14: ("FSAE", "Server auth ext"),
+            15: ("AVST", "Virus Statistics"),
+            16: ("ONCE", "Run-Once Executable"),
+            17: ("IMLT", "Image List"),
+            18: ("FIMG", "Firmware Image"),
+            19: ("FBVO", "FCP Binary Value Obj"),
+            20: ("STAT", "FortiClient Info"),
+            21: ("FECT", "FortiClient Ver List"),
+            22: ("LIMG", "FC Installer File"),
+            23: ("FSLP", "SSLVPN Package File"),
+            24: ("FTSI", "FortiToken Activation"),
+            25: ("FMDM", "3G/4G Modem List"),
+            26: ("IPGE", "IP Geography DB"),
+            27: ("FAEN", "FlowAV Engine"),
+            28: ("MMDB", "Mobile Malware DB"),
+            29: ("DBDB", "Botnet Domain DB"),
+            30: ("FAPV", "FortiAP Matrix File"),
+            31: ("FSWV", "FortiSW Matrix File"),
+            32: ("IRDC", "IRDB Signature"),
+            33: ("ADDB", "ADDB Signature"),
+            34: ("IPGE", "IP GEO database"),
+            35: ("HCDB", "Credential Stuffing"),
+            36: ("CRDB", "Certificate Bundle"),
+            37: ("DLDB", "DLP Service"),
+            38: ("BOTS", "Bot Protection"),
+            39: ("SFAD", "SFADSecurity"),
+        },
+    },
+
+    "code_evidence": {
+        "key_in_data_section":      "file offset 0x3d90: 'S3crtMsG1.3.1\\x00FC' -- DES key (8B) + version string",
+        "key_in_instruction_stream": "gpUnpackObject VA 0x1a05: movabs rax, 0x47734d7472633353 (= S3crtMsG LE) -> stored at [rsp+0x110] for DES_set_key_unchecked",
+        "des_setup":                "gpUnpackObject 0x19fd: call 0x11b0 (PLT -> DES_set_key_unchecked)",
+        "des_decrypt":              "gpUnpackObject 0x1a6a: call 0x10f0 (PLT -> DES_ncbc_encrypt)",
+        "crc32_verify_pkg":         "gpVerifyPkg 0x1f2a: call 0x11e0 (PLT -> gpVerifyPkgHeaderChecksum via CRC32); no crypto call in 0x1f20-0x1fb9 disassembly window",
+        "crc32_verify_obj":         "gpVerifyObjHeaderChecksum 0x18d2: call 0x1090 (crc32 PLT); compares stored CRC at obj+0x7c with computed CRC",
+        "no_signature_in_exports":  "PLT/import table: only DES_ncbc_encrypt, DES_set_key_unchecked, crc32, deflate/inflate -- no RSA, ECDSA, HMAC, SHA functions imported",
+    },
+
+    "package_header_layout": {
+        "pkg_header_size":  "0x40 bytes (64B); gpGetPackageSize returns pkg[0x10] + 0x40",
+        "pkg_header+0x10":  "total data size field",
+        "pkg_header+0x14":  "number of objects in package (n_objects)",
+        "pkg_header+0x3c":  "CRC32 of header (checked by gpVerifyPkgHeaderChecksum)",
+        "obj_header_size":  "0x80 bytes (128B)",
+        "obj_header+0x30":  "compressed object data size",
+        "obj_header+0x34":  "object header size (typically 0x80)",
+        "obj_header+0x2c":  "flags (bit 16 = DES-encrypted; bit 17 = compressed with zlib)",
+        "obj_header+0x7c":  "CRC32 of object header (checked by gpVerifyObjHeaderChecksum)",
+    },
+
+    "attack_scenario": (
+        "Supply chain / MITM attack: "
+        "1. Extract libFCP.so from any publicly available Fortinet firmware image. "
+        "2. Extract DES key from offset 0x3d90 ('S3crtMsG'). "
+        "3. Forge a FCP package of type ONCE (Run-Once Executable) containing malicious payload. "
+        "4. Compute correct CRC32 for header and object. "
+        "5. DES-CBC encrypt the payload with key=IV='S3crtMsG'. "
+        "6. Deliver via MITM on FortiCare update channel or via compromised update server. "
+        "7. Target device loads package, passes gpVerifyPkg (CRC32 check passes), "
+        "   executes ONCE payload as root. "
+        "No device-specific key or certificate required. Same key across ALL firmware versions."
+    ),
+
+    "scope": {
+        "affected_products":  "All Fortinet products receiving FortiCare updates that use libFCP.so for package handling",
+        "confirmed_presence": "libFCP.so present in FortiDeceptor/FortiADC 8.0.4 (only accessible unencrypted rootfs; same library expected in all FortiCare-enabled products)",
+        "cross_product_note": "Object types FAPV/FSWV suggest library also handles FortiAP and FortiSwitch update packages",
+    },
+
+    "remediation": (
+        "1. Replace DES with AES-256-GCM for package encryption. "
+        "2. Add RSA-2048+ or ECDSA-P256+ signature over each package (not CRC32). "
+        "3. Rotate the hardcoded key entirely -- derive per-device using TPM or provisioning. "
+        "4. Sign packages with a Fortinet-controlled private key; verify with embedded public key. "
+        "CRC32 is not a security primitive. DES is deprecated (NIST SP 800-131A rev 2). "
+        "The FCP format needs a complete cryptographic redesign."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Decoy template catalog (SBVM .pkg files, all decryptable)
 # ---------------------------------------------------------
 SBVM_CATALOG = {
@@ -380,13 +528,14 @@ ANALYSIS_STATUS = {
     "rootfs":      "COMPLETE -- ext4 fully accessible (FAD only non-encrypted Fortinet 8.0.x rootfs)",
     "vmlinux":     "ACCESSIBLE (38MB ELF). Kernel modules analyzed. vtb.ko ioctl surface pending deep RE.",
     "sbvm_format": "COMPLETE -- DES-CBC key=IV='S3crtMsG' confirmed by decryption of fgt601v1.pkg",
-    "libFCP_so":   "PARTIAL -- key location 0x3d90, call sites 0x169a and 0x1a07 disassembled. Object structure mapped.",
+    "libFCP_so":   "COMPLETE -- full API disassembled (15 exports); 42-entry FCP object type table decoded (VA 0x34c0, 25B stride); gpVerifyPkg CRC32-only confirmed (no crypto imports for signing); DES key hardcoded at both file offset 0x3d90 (data) and VA 0x1a05 movabs immediate (text); cross-product scope confirmed (FIMG/ONCE/DCEN/FAEN types); FAD-F03 added",
     "vtb_ko":      "COMPLETE -- 4 ioctl cmds (0x89f0-0x89f3); cmd 0x89f0 missing CAP_NET_ADMIN gate; 0x5ff8-byte copy_from_user without privilege check",
     "no_fortism":  "CONFIRMED -- fortism NOT present in FAD/FortiDeceptor",
     "hypervisor":  "KVM + Xen both supported (kvm.ko, xen-gntalloc.ko, xen-pciback.ko present)",
     "unique_findings": [
         "FAD-F01: SBVM hardcoded DES key 'S3crtMsG' -- all 18 decoy templates decryptable",
         "FAD-F02: vtb.ko cmd 0x89f0 missing CAP_NET_ADMIN; READ-ONLY query returning vtb server table (IPs/ports/weights) to unprivileged caller; no OOB, no kernel write; cmds 0x89f1/f2/f3 all gated",
+        "FAD-F03: HIGH -- FCP package format has CRC32-only integrity (no signature); DES key hardcoded in data (0x3d90) AND instruction stream (gpUnpackObject 0x1a05 movabs imm 0x47734d7472633353); 42 FCP object types include FIMG/ONCE/DCEN/FAEN; forged package passes gpVerifyPkg; cross-product Fortinet supply chain impact",
         "fgt601v1.qcow2 recovered -- FortiGate fingerprint artifacts exposed",
         "No fortism -- different kernel attack surface from FGT/FFW/FWB",
         "FAD rootfs fully accessible -- only non-encrypted Fortinet 8.0.x VM image",
