@@ -333,6 +333,105 @@ FSW_F05_PLAINTEXT_ROOTFS = {
 
 
 # ---------------------------------------------------------
+# FSW-F06: /bin/init attack surface -- no-stack-protector + unsafe function density + CANDIDATE command injection
+# ---------------------------------------------------------
+FSW_F06_INIT_ATTACK_SURFACE = {
+    "id":       "FSW-F06",
+    "product":  "Fortinet FortiSwitch 224E-POE v7.2.0",
+    "severity": "HIGH -- 12MB stripped ARM32 monolith with no stack protector; 836 strcpy + 424 sprintf call sites; any network-reachable buffer overflow = direct RCE",
+    "class":    "Missing stack protector + unsafe function density (CWE-121, CWE-676)",
+
+    "description": (
+        "/bin/init is a 12MB stripped ARM32 ELF that implements ALL management daemons "
+        "(httpd, cmdbsvr, ctrld, fdsmgmtd, etc.) as symlinked entry points. "
+        "Compiled with GCC 4.9.3 (Buildroot 2016), no -fstack-protector-strong, no FORTIFY_SOURCE, "
+        "no RELRO, no PIE (static base). "
+        "BERT semantic sweep (all-MiniLM-L6-v2, WhiteningTransform) across 9,464 functions with 10 "
+        "vulnerability query profiles (BUFFER_OVERFLOW, FORMAT_STRING, COMMAND_INJECT, AUTH_BYPASS, "
+        "INTEGER_OVERFLOW, HTTP_PARSE, STACK_OVERFLOW, SNMP_PARSE, TYPE_CONFUSION, UNAUTH_ACCESS) "
+        "returned max similarity 0.237 -- below automated high-confidence threshold (0.35+). "
+        "Manual PLT-based call site enumeration found: 128 system() calls, 3 popen() calls, "
+        "836 strcpy() calls, 424 sprintf() calls, 1 vsprintf() call, 543 strncpy() calls. "
+        "With no stack protector anywhere in the binary, ANY stack-based buffer overflow is directly "
+        "exploitable: no canary to detect/abort, return address overwrite succeeds on first attempt."
+    ),
+
+    "attack_surface_metrics": {
+        "binary_size":       "12,615,168 bytes (12MB) ARM32 ELF",
+        "total_functions":   "9,464 prologues found (ARM32 STMFD pattern scan)",
+        "system_calls":      128,
+        "popen_calls":       3,
+        "strcpy_calls":      836,
+        "sprintf_calls":     424,
+        "vsprintf_calls":    1,
+        "strncpy_calls":     543,
+        "snprintf_calls":    2163,
+        "memcpy_calls":      1877,
+        "stack_protector":   "ABSENT -- compiled with GCC 4.9.3 without -fstack-protector-strong",
+        "ASLR":              "Limited -- ARM32 PIE not used; binary loaded at static address; kernel has no KASLR (FSW-F01)",
+        "RELRO":             "ABSENT -- GOT fully writable at runtime",
+    },
+
+    "bert_sweep_results": {
+        "model":         "sentence-transformers/all-MiniLM-L6-v2 + WhiteningTransform",
+        "functions":     9464,
+        "queries":       10,
+        "top_sim":       0.237,
+        "interpretation": (
+            "Max cosine similarity 0.237 for STACK_OVERFLOW query against function at foff=0x5dad24 "
+            "(8 insns, tiny stub, disassembly shows simple field store -- BERT false positive). "
+            "Multi-profile hits (3+ queries): foff=0x5dad24 (4 queries, fp), "
+            "foff=0x37373c (3 queries: BUFFER_OVERFLOW, AUTH_BYPASS, SNMP_PARSE; 97-insn refcount teardown function). "
+            "No function scored above 0.30 on any single query. "
+            "Semantic sweep: NEGATIVE (no high-confidence automated vulnerability finds). "
+            "Negative result documented: the BERT signal-to-noise ratio on ARM32 stripped code "
+            "is lower than x86-64 (fewer semantic cues in normalized instruction mix). "
+            "Attack surface metrics (above) remain valid regardless of sweep result."
+        ),
+    },
+
+    "candidate_command_injection": {
+        "id":       "FSW-F06a (CANDIDATE -- requires authenticated management access path confirmation)",
+        "function": "0x6356f4 (foff=0x6256f4) and 0x635810",
+        "template": "ifconfig %s hw ether %s 2> /dev/null",
+        "vma_fmt1": "0x971878: '%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx' (MAC formatter)",
+        "vma_fmt2": "0x9718a4: 'ifconfig %s hw ether %s 2> /dev/null'",
+        "analysis": (
+            "Function at 0x6356f4 receives (r0=interface_name_ptr, r1=mac_bytes_ptr). "
+            "First snprintf: format MAC bytes as 'xx:xx:xx:xx:xx:xx' into 30-byte stack buffer. "
+            "Second snprintf: 'ifconfig %s hw ether %s' with r3=[fp-0xc0] (first param) and buf1 (MAC string). "
+            "system() then executes the result. "
+            "The %s for interface name comes from struct pointer (r0=struct_ptr at caller 0x6358bc, "
+            "struct found via linked-list iteration matching struct[0xdc] against a search key). "
+            "If the struct's interface name field (at struct base) can be populated with shell "
+            "metacharacters via management plane (CLI, SNMP, web), this is authenticated command injection. "
+            "Caller 2 (0x636cc8): r0=[fp-0x20] (struct pointer), r1=struct+0xed (MAC). "
+            "Confirmation requires tracing how struct[base] interface name field is populated -- "
+            "management CLI set commands are the expected source."
+        ),
+        "status": "CANDIDATE -- ifconfig template confirmed; struct source requires CLI/SNMP write path tracing",
+    },
+
+    "no_canary_impact": (
+        "With no stack protector, any of the 836 strcpy() call sites where the destination is "
+        "a stack buffer and the source length is user-controlled is directly exploitable: "
+        "no stack canary = no abort on overflow = return address overwrite on first attempt. "
+        "Combined with no kernel KASLR (fixed kernel VA 0x61008000) and no RELRO (writable GOT), "
+        "a confirmed stack overflow chains to: overwrite return address -> ROP pivot -> "
+        "GOT overwrite of trusted function (e.g., strlen, strncpy) -> arbitrary code execution as root. "
+        "All management daemons run as root (single monolith with no privilege separation)."
+    ),
+
+    "remediation": (
+        "Immediate: recompile with -fstack-protector-strong and -D_FORTIFY_SOURCE=2. "
+        "Replace all strcpy/sprintf calls in network-parsing paths with strncpy/snprintf+bounds check. "
+        "Longer term: privilege-separate management daemons (httpd, SNMP, CLI) into separate processes "
+        "with minimal capabilities. Enable PIE+ASLR for all daemons. Upgrade to GCC 12+ with -fanalyzer."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -340,7 +439,7 @@ ANALYSIS_STATUS = {
     "kernel_config":   "EXTRACTED -- gzip at 0x2c64d0; ARM3 config confirms all mitigation absences",
     "ramdisk":         "EXTRACTED -- ext2, 87MB; /bin.tar.xz -> 174 binaries via Fortinet XZ CRC bypass",
     "af_admin.ko":     "FULLY DISASSEMBLED -- NOT stripped; 6 functions mapped; cap asymmetry confirmed",
-    "init_monolith":   "SURFACE ONLY -- 12MB stripped ARM32 monolith; strings analyzed; not fully disassembled",
+    "init_monolith":   "BERT SWEEP COMPLETE -- 9,464 functions; 10 query profiles; max sim 0.237 (negative); PLT call-site enumeration done; ifconfig CANDIDATE documented in FSW-F06a",
     "tls_keys":        "EXTRACTED -- fsw.key + fsw.crt + 802.1x.key + 802.1x.crt all plaintext in ext2",
 
     "unique_findings": [
@@ -349,6 +448,7 @@ ANALYSIS_STATUS = {
         "FSW-F03: HIGH -- shared 2048-bit RSA private key across all devices of same firmware version; enables HTTPS MITM; key extractable without device from public firmware image",
         "FSW-F04: MEDIUM -- default admin password 'ENC XXUp2ozpdysrQ' in system.conf.def; found verbatim in /bin/init binary; FSW-specific encoding not standard FortiOS AES-CBC",
         "FSW-F05: INFO -- plaintext ext2 ramdisk (gzip uImage); easiest rootfs extraction path in Fortinet product line; no encryption layer",
+        "FSW-F06: HIGH -- /bin/init 12MB monolith: no stack protector; 836 strcpy + 424 sprintf call sites; BERT sweep negative (max 0.237); ifconfig command injection CANDIDATE (FSW-F06a, authenticated)",
         "802.1x cert (auth-cert.fortinet.com) expired 2022-05-24 -- shared across all devices; expired cert blocks 802.1x auth requiring valid chain",
         "CONFIG_SECURITY=not set -- NO LSM framework; no secondary enforcement layer for any privilege escalation",
         "CONFIG_STRICT_DEVMEM=not set -- /dev/mem grants full physical memory access to any process",
