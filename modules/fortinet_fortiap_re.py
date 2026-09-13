@@ -276,6 +276,78 @@ FAP_F05_LUCI_EMPTY_AUTH = {
 
 
 # ---------------------------------------------------------
+# FAP-F06: Command injection via LOGIN_PASSWD_ENC in libsysapi.so
+# ---------------------------------------------------------
+FAP_F06_PASSWD_CMD_INJECTION = {
+    "id":       "FAP-F06",
+    "product":  "Fortinet FortiAP 23JF v7.2.0",
+    "severity": "MEDIUM standalone; HIGH chained with FAP-F02 (unauth -> full RCE)",
+    "class":    "Command injection via unsanitized password variable (CWE-78)",
+
+    "description": (
+        "libsysapi.so implements the apply handler for the LOGIN_PASSWD_ENC configuration variable. "
+        "When LOGIN_PASSWD_ENC is set (via cfg -a LOGIN_PASSWD_ENC=VALUE or /api/v1/cfg-set), "
+        "the handler at offset 0x22304 in libsysapi.so: "
+        "(1) decodes the encoded value via fgt_decode(input, decode_buf, 256, 0); "
+        "(2) passes the decoded value unsanitized to snprintf: "
+        "snprintf(cmd, 256, \"/bin/passwd -p '%s' > /dev/null\", decode_buf); "
+        "(3) executes the command: system(cmd). "
+        "If decode_buf contains a single quote ('), the shell command escapes the quote context "
+        "and allows arbitrary command execution. "
+        "An identical pattern exists in cfg binary at 0x400e68 (passwd_apply) using sprintf (unbounded). "
+        "The cfg binary pattern uses sprintf without size limit (buffer overflow risk secondary to injection). "
+        "libsysapi.so also stores the identical format string at file+0x44db8, confirming both codebases "
+        "implement the same vulnerable pattern."
+    ),
+
+    "disasm_evidence": {
+        "libsysapi_so": {
+            "handler_vma":    "0x22304 (strcmp against 'LOGIN_PASSWD_ENC' to route to this path)",
+            "fgt_decode":     "0x22344: bl fgt_decode@plt (decodes encoded password to plaintext)",
+            "snprintf_call":  "0x22364: bl snprintf@plt (format='/bin/passwd -p \\%s\\' > /dev/null', arg=decoded_password)",
+            "system_call":    "0x2236c: bl system@plt (executes assembled command)",
+            "format_string":  "file+0x44db8: '/bin/passwd -p '\\%s' > /dev/null'",
+            "empty_path":     "0x22374: bl system@plt (executes '/bin/passwd -d admin > /dev/null' if value empty)",
+        },
+        "cfg_binary": {
+            "passwd_apply_vma": "0x400e68 (local symbol, 100 bytes)",
+            "sprintf_call":     "0x4017e8: '/bin/passwd -p '\\%s' > /dev/null\\n'",
+            "system_call":      "0x400ea8: bl system@plt",
+            "note":             "LOCAL symbol (not exported); called via libsysapi.so dl_iterate_phdr callback scan",
+        },
+    },
+
+    "injection_path": {
+        "trigger_var":    "LOGIN_PASSWD_ENC",
+        "attack_vector":  "POST /api/v1/cfg-set (authenticated) or cfg CLI command",
+        "payload_format": "fgt_encode(\"X'; CMD; #\") -- encoded value decoding to injection payload",
+        "result":         "arbitrary OS command executed as admin (uid=0) on the AP",
+    },
+
+    "chain_with_fap_f02": {
+        "step_1": "SSH to port 22 with admin/empty (FAP-F02: unauthenticated access)",
+        "step_2": "cfg -a LOGIN_PASSWD_ENC=<fgt_encoded_payload> or POST /api/v1/cfg-set",
+        "step_3": "libsysapi.so snprintf+system executes injected command as root",
+        "result": "Full unauthenticated RCE (FAP-F02 -> FAP-F06 chain)",
+    },
+
+    "open_questions": [
+        "Does is_valid_passwd (exported from libsysapi.so at VMA 0x42720) reject single quotes? If called by the web API layer before cfg, the injection is web-mitigated.",
+        "Does fgt_decode ever produce single quotes from a valid encoded input? Depends on encoding algorithm (likely simple XOR/base64 -- single quotes survive).",
+        "Does /api/v1/cfg-set call is_valid_passwd before forwarding to cfg? Not confirmed (fap_backend.so analysis stopped at restGetCfg/restSetCfg surface).",
+        "Is cfg -a LOGIN_PASSWD_ENC reachable via fapcli (restricted shell)? fapcli is stripped; execv is present.",
+    ],
+
+    "remediation": (
+        "Replace snprintf(cmd, N, format, decoded_password) + system(cmd) with setuid/setgid password change API "
+        "or with an allowlist character check that rejects shell metacharacters (', \", \\, ;, |, &, >, <, $, `) "
+        "before constructing the command. "
+        "Prefer execve([\"/bin/passwd\", \"-p\", decoded_password, NULL]) to avoid shell interpretation entirely."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -293,9 +365,12 @@ ANALYSIS_STATUS = {
         "FAP-F03: LOW -- Python 2.7 (EOL January 2020) with urllib2 in captive portal auth code; EOL dependency handling untrusted network input",
         "FAP-F04: LOW -- /api/v1/download file parameter validated with regex ^.*$ (allows ../ sequences); Kore chroot likely prevents traversal but validator is wrong",
         "FAP-F05: HIGH -- LuCI web interface (port 80/443) with rpcd root/$p$root -> admin empty password -> full device configuration read+write",
+        "FAP-F06: MEDIUM/HIGH -- command injection in libsysapi.so LOGIN_PASSWD_ENC handler: fgt_decode -> snprintf -> system with no quote sanitization; HIGH chained with FAP-F02",
         "Qualcomm IPQ60xx (ARM64) with UBIFS/squashfs storage -- different from all other analyzed Fortinet products (MIPS/ARM32/x86-64)",
         "fap_backend.so NOT stripped -- full symbol table in production binary (36 REST handler functions visible)",
         "cwp_auth.py uses Python 2 urllib2 -- captive portal code makes HTTP requests for untrusted CP users using EOL library",
+        "libsysapi.so uses dl_iterate_phdr for ELF callback discovery -- framework scans loaded ELF binaries for *_apply symbols to register as variable apply callbacks",
+        "cfg binary passwd_apply (0x400e68) uses sprintf (no size limit) vs libsysapi.so snprintf(256) -- identical injection, secondary overflow risk",
     ],
 
     "vs_other_products": {
