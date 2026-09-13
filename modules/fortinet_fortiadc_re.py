@@ -1,0 +1,377 @@
+"""
+Fortinet FortiADC 8.0.4-B0136 RE
+Source: FortiADC-KVM 8.0.4 image
+Architecture: x86-64
+OS: Linux 6.1.0 (clang 18.1.8 / LLD 18.1.8, built 2026-08-31)
+Rootfs: ext4 (rootfs.cpio) -- FULLY ACCESSIBLE (no encryption)
+"""
+
+# ---------------------------------------------------------
+# Platform identity
+# ---------------------------------------------------------
+PLATFORM = {
+    "product":      "Fortinet FortiADC VM64-KVM",
+    "version":      "8.0.4 build 0136",
+    "build_date":   "2026-08-31",
+    "arch":         "x86-64",
+    "kernel":       "Linux 6.1 (PREEMPT_DYNAMIC, clang 18.1.8 / LLD 18.1.8)",
+    "builder":      "root@b2580fc2344b",
+    "toolchain":    "clang 18.1.8 / LLD 18.1.8 (not GCC; full LLVM build)",
+
+    "image_layout": {
+        "rootfs":       "ext4 filesystem via rootfs.cpio (891MB), UUID=30085e5e-a424-4309-b713-b9e136be7faf",
+        "p1":           "716MB partition (p1.raw)",
+        "boot":         "2.1GB boot.raw",
+        "rootfs_dir":   "Fully extracted to $SCPAD/fad-804/rootfs/ -- no encryption",
+    },
+
+    "web_stack": {
+        "nginx_binary":     "/bin/nginx (standard nginx)",
+        "fnginx_new":       "/bin/fnginx_new (17MB, NOT STRIPPED -- 1264+ RDP/CredSSP symbols; custom Fortinet nginx build with embedded FreeRDP gateway)",
+        "fnginxctld":       "/bin/fnginxctld (1.7MB, NOT STRIPPED -- control daemon)",
+        "restapi":          "/bin/restapi (21MB, stripped, Go binary with CGO -- core REST API)",
+        "restapi_cmdd":     "/bin/restapi_cmdd (3MB, stripped, Go binary -- CLI API handler with os/exec)",
+        "migadmin":         "/migadmin/ -- PHP/Python legacy admin interface (nginx + php-fpm + uwsgi)",
+        "fortiai":          "/migadmin/fortiai/ -- Django/Python AI chatbot backend served via uwsgi at /ai",
+    },
+
+    "notable_binaries": {
+        "/bin/mysqld":      "25MB stripped -- MySQL database server (full RDBMS on ADC device)",
+        "/bin/httproxy":    "14MB stripped -- HTTP proxy (main ADC load balancing engine)",
+        "/bin/authd":       "stripped -- authentication daemon; uses libfmladminauth.so",
+        "/bin/authclient":  "stripped -- auth client binary",
+        "/bin/sshd-auth":   "stripped -- SSH authentication daemon",
+        "/bin/adfsproxy":   "5.5MB stripped -- ADFS (Active Directory Federation Services) proxy",
+        "/bin/cm_client":   "11MB stripped -- cluster management client",
+        "/bin/acme-client": "6.4MB stripped -- ACME (Let's Encrypt) certificate management",
+        "/bin/gdb":         "7.5MB -- GDB debugger PRESENT IN PRODUCTION IMAGE",
+        "/bin/strace":      "2MB -- strace PRESENT IN PRODUCTION IMAGE",
+        "/bin/strings":     "1.5MB -- strings utility PRESENT IN PRODUCTION IMAGE",
+        "/bin/perf":        "9MB -- Linux perf PRESENT IN PRODUCTION IMAGE",
+    },
+
+    "auth_library":     "/lib/libfmladminauth.so (NOT STRIPPED, exports: admin_auth, admin_auth_two_factor, admin_login, admin_get_cookie, admin_ldap_auth, admin_new_pwd_shm, acquire_service_ticket, admin_auth_struct)",
+    "oauth_library":    "/lib/liboauth2.so",
+
+    "rest_api_arch": {
+        "backend":          "restapi binary listening on Unix sockets /tmp/restapi_1.socket + /tmp/restapi_2.socket",
+        "auth_framework":   "gin-jwt (Go middleware): JWT tokens, HMAC-SHA256 or RSA signing",
+        "jwt_exempt_fn":    "module/gin-jwt.is_password_reset_url -- determines which URLs bypass JWT auth",
+        "saml_handlers":    ["saml_pre_login_handler", "saml_logout_handler", "saml_sso_handler"],
+        "cgo_calls":        "login_via_rest_api, logout_via_rest_api -> libfmladminauth.so",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FAD-F01: gin-jwt middleware pre-auth bypass via is_password_reset_url
+# ---------------------------------------------------------
+FAD_F01_JWT_PASSWORD_RESET_BYPASS = {
+    "id":       "FAD-F01",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "HIGH -- gin-jwt middleware explicitly exempts password-reset URLs from JWT verification; /api/user/force_password_reset may be pre-auth reachable",
+    "class":    "Authentication bypass via JWT middleware URL exemption (CWE-287)",
+
+    "description": (
+        "The restapi Go binary uses the gin-jwt middleware (module/gin-jwt.GinJWTMiddleware). "
+        "The middleware contains a custom function `module/gin-jwt.is_password_reset_url` that identifies "
+        "URLs to exempt from JWT verification. "
+        "The route `/api/user/force_password_reset` exists in the binary's route table and appears in "
+        "the exempt-URL logic. "
+        "If this route is accessible without a valid JWT token (i.e., is_password_reset_url returns true "
+        "for it) AND if it allows resetting any admin user's password without the current password, "
+        "this would constitute a pre-authentication admin account takeover. "
+        "The adjacent route `/api/user/change_passwd` is also present and likely requires auth. "
+        "The route `/user/loginchangepwd_alert` appears to be another pre-auth path."
+    ),
+
+    "binary_evidence": {
+        "jwt_middleware":       "module/gin-jwt.(*GinJWTMiddleware).MiddlewareFunc -- go binary",
+        "exempt_fn":            "module/gin-jwt.is_password_reset_url -- checks URL against exempt list",
+        "checkrpath_fn":        "module/gin-jwt.checkrpath -- secondary URL path check",
+        "route_strings": [
+            "/api/user/force_password_reset",
+            "/api/user/change_passwd",
+            "/user/loginchangepwd_alert",
+            "/user/samlSpMetadataExport",
+        ],
+    },
+
+    "verification_required": (
+        "Static analysis confirms the function exists and the route is present. "
+        "Runtime verification needed: "
+        "POST /api/user/force_password_reset with no Cookie/Authorization header. "
+        "Expected behavior if vulnerable: 200 response with password reset logic executed. "
+        "If protected: 401 Unauthorized."
+    ),
+
+    "impact_if_confirmed": (
+        "Pre-auth admin password reset -> full management plane compromise. "
+        "FortiADC manages load balancing, SSL termination, and authentication offloading "
+        "for backend applications -- compromise of management plane leads to traffic interception, "
+        "credential capture from auth-offloaded backends, and VIP/VS manipulation."
+    ),
+
+    "remediation": (
+        "Require old-password confirmation in force_password_reset even for admin accounts. "
+        "Remove force_password_reset from JWT exempt URL list or require a time-limited reset token "
+        "delivered via email/OTP. "
+        "Audit all URLs in is_password_reset_url() against the principle of least privilege."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAD-F02: Go pprof debug endpoints exposed at /api/debug/pprof/*
+# ---------------------------------------------------------
+FAD_F02_PPROF_EXPOSURE = {
+    "id":       "FAD-F02",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "MEDIUM -- Go profiling endpoints in production binary; internal state disclosure if unauthenticated",
+    "class":    "Debug endpoint exposure (CWE-215)",
+
+    "description": (
+        "The restapi Go binary imports `net/http/pprof` and registers profiling endpoints. "
+        "Confirmed endpoint strings in binary: "
+        "/api/debug/pprof/goroutine, /api/debug/pprof/block, "
+        "/api/debug/pprof/trace, /api/debug/pprof/mutex. "
+        "These endpoints are handled by the catch-all nginx `location ~ /api` block "
+        "and forwarded to restapi. Whether restapi's gin-jwt middleware applies to /api/debug/pprof/* "
+        "is not statically confirmed. "
+        "If accessible without auth: goroutine dump leaks all running goroutine stack traces "
+        "(reveals internal logic and potentially sensitive data in stack frames); "
+        "trace endpoint can reveal timing of crypto operations; heap profile leaks memory layout."
+    ),
+
+    "endpoints": [
+        "/api/debug/pprof/goroutine -- all goroutine stack traces",
+        "/api/debug/pprof/block     -- blocking goroutine profiles",
+        "/api/debug/pprof/trace     -- CPU trace (can run for arbitrary duration)",
+        "/api/debug/pprof/mutex     -- mutex contention profile",
+    ],
+
+    "verification_required": "GET /api/debug/pprof/goroutine without auth -- 200 = vulnerable, 401/404 = protected",
+
+    "remediation": (
+        "Remove net/http/pprof import from production build. "
+        "If pprof is required for diagnostics, protect behind localhost-only access or admin-only auth. "
+        "Add explicit nginx deny rules for /api/debug/pprof/* from external interfaces."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAD-F03: admin-bypass-vdom-check explicit bypass string
+# ---------------------------------------------------------
+FAD_F03_ADMIN_BYPASS_VDOM = {
+    "id":       "FAD-F03",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "MEDIUM -- explicit admin-bypass-vdom-check mechanism in restapi binary; context unclear; potential privilege escalation within VDOM architecture",
+    "class":    "VDOM access control bypass (CWE-284)",
+
+    "description": (
+        "The restapi binary contains the string `admin-bypass-vdom-check` as a functional token "
+        "(not just a comment or log message -- it appears adjacent to route logic). "
+        "FortiADC uses a virtual domain (VDOM) architecture for multi-tenancy isolation. "
+        "The bypass string suggests a code path where VDOM membership/access checks are explicitly skipped. "
+        "If this bypass can be triggered by a non-root-VDOM admin or by a specially crafted request, "
+        "it would allow cross-VDOM access -- reading/modifying configurations in VDOMs the admin "
+        "is not authorized for."
+    ),
+
+    "binary_evidence": {
+        "string":   "admin-bypass-vdom-check",
+        "file":     "/bin/restapi",
+        "context":  "Adjacent to 'Restricted login access' and 'login session vdom: %s' format strings",
+    },
+
+    "verification_required": (
+        "Disassemble the code path that references 'admin-bypass-vdom-check' to determine "
+        "when and how the bypass is triggered. "
+        "Check if it's reachable via a header (X-Bypass-Vdom-Check?), URL parameter, or request attribute."
+    ),
+
+    "remediation": "Audit and remove or restrict the VDOM bypass code path; require explicit root admin privilege for cross-VDOM operations.",
+}
+
+
+# ---------------------------------------------------------
+# FAD-F04: fnginx_new embeds FreeRDP gateway with CredSSP
+# ---------------------------------------------------------
+FAD_F04_FREERDP_CREDSSP_EMBEDDED = {
+    "id":       "FAD-F04",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "INFO -- fnginx_new is NOT stripped with 1264 RDP/CredSSP symbols; significant attack surface requires dedicated analysis",
+    "class":    "Embedded protocol gateway (RDP/CredSSP) in web server binary (CWE-441, proxy attack surface)",
+
+    "description": (
+        "The custom Fortinet nginx binary /bin/fnginx_new (17MB, NOT STRIPPED) contains "
+        "1264 symbols related to RDP, CredSSP, and FreeRDP. "
+        "Confirmed symbol classes: credssp_AcquireCredentialsHandleA/W, credssp_InitializeSecurityContextA/W, "
+        "credssp_EncryptMessage, credssp_DecryptMessage, credssp_VerifySignature, "
+        "frds_cmd_credential_read, frds_cmd_connect_ok_read, frds_cmd_cursor_*. "
+        "The CredSSP protocol is used for Windows RDP Network Level Authentication (NLA) credential delegation. "
+        "FortiADC acts as an RDP gateway/SSL VPN portal that proxies Windows RDP connections "
+        "and handles NLA credential exchange on behalf of clients. "
+        "CredSSP credential handling in a stripped proxy binary is a high-value target: "
+        "any vulnerability in the NLA handshake or credential decryption path could allow "
+        "credential theft from users connecting to RDP targets via the FortiADC gateway."
+    ),
+
+    "symbol_evidence": {
+        "count":    "1264 RDP/CredSSP-related symbols",
+        "sample": [
+            "credssp_AcquireCredentialsHandleA",
+            "credssp_AcquireCredentialsHandleW",
+            "credssp_InitializeSecurityContextA",
+            "credssp_InitializeSecurityContextW",
+            "credssp_EncryptMessage",
+            "credssp_DecryptMessage",
+            "credssp_MakeSignature",
+            "credssp_VerifySignature",
+            "credssp_FreeCredentialsHandle",
+            "frds_cmd_credential_read",
+            "frds_cmd_connect_ok_read",
+            "frds_cmd_cursor_chached_read",
+            "admin_plugin_init",
+        ],
+        "note": "fnginx_new NOT STRIPPED -- full symbol table preserved in production binary",
+    },
+
+    "pending_analysis": [
+        "frds_cmd_credential_read: disassemble to confirm plaintext credential handling vs. encrypted storage",
+        "CredSSP NLA exchange: trace full NLA flow in fnginx_new to identify key material in memory",
+        "access_token_handler (VMA 0x15017d): analyze JWT/access token handling within nginx module",
+        "RDP session hijacking: check if active sessions can be hijacked via the credential cache",
+    ],
+
+    "remediation": "Audit credential handling in frds_cmd_credential_read; ensure NLA credentials are not logged or stored; review CredSSP implementation against known CVEs (CVE-2018-0886 CredSSP RCE).",
+}
+
+
+# ---------------------------------------------------------
+# FAD-F05: Debug tooling in production image
+# ---------------------------------------------------------
+FAD_F05_DEBUG_TOOLS_IN_PRODUCTION = {
+    "id":       "FAD-F05",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "LOW -- debug tooling installed in production firmware; post-compromise forensic evasion and lateral movement enablement",
+    "class":    "Debug tools in production (CWE-489)",
+
+    "tools": {
+        "/bin/gdb":     "7.5MB -- GNU Debugger; allows live process introspection, memory dumping, breakpoints",
+        "/bin/strace":  "2MB -- system call tracer; allows credential interception from any running process",
+        "/bin/strings": "1.5MB -- binary analysis tool",
+        "/bin/perf":    "9MB -- Linux perf profiler; kernel/user space performance tracing",
+        "/bin/tcpdump": "standard network capture tool (expected but listed for completeness)",
+    },
+
+    "post_compromise_impact": (
+        "gdb + ptrace: attach to restapi or authd process, dump in-memory session tokens, "
+        "JWT signing keys, and admin credentials without touching disk. "
+        "strace -e trace=read,write -p <authd_pid>: intercept all authentication data in real time. "
+        "These tools are present in the attack environment -- not required to be staged separately."
+    ),
+
+    "remediation": "Remove gdb, strace, strings, perf from production firmware; these are build artifacts, not runtime requirements.",
+}
+
+
+# ---------------------------------------------------------
+# FAD-F06: Weak TLS defaults (TLS 1.0, 3DES, RSA key exchange)
+# ---------------------------------------------------------
+FAD_F06_WEAK_TLS_DEFAULTS = {
+    "id":       "FAD-F06",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "LOW -- weak TLS cipher/version defaults in restapi Go binary GODEBUG settings",
+    "class":    "Insecure TLS configuration (CWE-327)",
+
+    "description": (
+        "The restapi Go binary's embedded GODEBUG defaults include: "
+        "tls10server=1 (TLS 1.0 enabled for server), "
+        "tls3des=1 (3DES ciphers enabled), "
+        "tlsrsakex=1 (RSA key exchange enabled -- no forward secrecy), "
+        "tlsunsafeekm=1 (unsafe keying material export enabled). "
+        "These are backward-compatibility shims that enable deprecated protocols. "
+        "TLS 1.0 is vulnerable to BEAST, POODLE (partial), and other downgrade attacks. "
+        "3DES (SWEET32 -- CVE-2016-2183) allows birthday attacks after ~780GB of traffic. "
+        "RSA key exchange (no forward secrecy) means session key compromise exposes all past traffic."
+    ),
+
+    "godebug_evidence": {
+        "source":   "restapi binary, embedded build metadata",
+        "value":    "DefaultGODEBUG=asynctimerchan=1,...,tls10server=1,tls3des=1,...,tlsrsakex=1,tlsunsafeekm=1,...",
+    },
+
+    "remediation": "Build restapi with tls10server=0, tls3des=0, tlsrsakex=0. Enforce TLS 1.2 minimum with ECDHE cipher suites.",
+}
+
+
+# ---------------------------------------------------------
+# FAD-F07: Build path disclosure in restapi
+# ---------------------------------------------------------
+FAD_F07_BUILD_PATH_DISCLOSURE = {
+    "id":       "FAD-F07",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "INFO -- internal build paths in production binary; developer infrastructure disclosure",
+    "class":    "Information disclosure (CWE-209)",
+
+    "paths": {
+        "go_root":   "/root/FortiADC_test/FortiADC/webserver/go/go1.24.4.linux-amd64/src/...",
+        "build_dir": "/root/FortiADC_test/FortiADC/",
+        "lib_paths": "/fortidev10-amd64//lib, /root/FortiADC_test/FortiADC/cooked//lib",
+        "go_ver":    "go1.24.4",
+    },
+
+    "cgo_ldflags_disclosure": (
+        "CGO_LDFLAGS embedded in binary reveals all linked C libraries: "
+        "-lbase -lsdn -lcmfcore -lcmfquery -lmiggui -lcmdb_plugin -lfmailrt++ -ladc_shm "
+        "-lfmladminauth -lnocmdbbase -llbstatus -lwafmor -lwaf -ljansson -lcgo -lsysapi "
+        "-ladfs -lntp -lwad -lssli -lsslhw -lrs_profile -lautolearn -lxml2 -lwjelement "
+        "-lhlci -llicvmware (VMware license library present)"
+    ),
+
+    "note": "go1.24.4 -- a 2025 Go release; confirms active mainline Go development on modern toolchain.",
+}
+
+
+# ---------------------------------------------------------
+# Analysis status
+# ---------------------------------------------------------
+ANALYSIS_STATUS = {
+    "rootfs":           "FULLY EXTRACTED -- ext4, no encryption; 100% file access",
+    "kernel_vmlinux":   "38MB ELF x86-64 stripped, BuildID=4900fe17c0cf36e910d0af94849e74f251b426c5",
+    "fnginx_new":       "SURFACE ONLY -- NOT stripped, 17MB, 1264 RDP/CredSSP symbols; deep analysis pending",
+    "restapi":          "STRINGS + SYMBOL SURFACE -- Go binary, stripped; 21MB; JWT middleware identified",
+    "libfmladminauth":  "SYMBOL TABLE ONLY -- NOT stripped; admin_auth family exported; code not disassembled",
+    "authd":            "STRINGS ONLY -- stripped",
+    "mysql":            "STRINGS ONLY -- stripped; default_password_lifetime present",
+    "httproxy":         "NOT ANALYZED -- 14MB stripped (main ADC engine; highest functional surface)",
+
+    "unique_findings": [
+        "FAD-F01: HIGH -- gin-jwt is_password_reset_url JWT bypass + /api/user/force_password_reset route; pre-auth password reset possible (needs runtime verification)",
+        "FAD-F02: MEDIUM -- Go pprof endpoints /api/debug/pprof/* in production binary; internal state disclosure if unauthenticated",
+        "FAD-F03: MEDIUM -- admin-bypass-vdom-check explicit bypass string in restapi; VDOM isolation bypass risk",
+        "FAD-F04: INFO -- fnginx_new NOT STRIPPED with 1264 FreeRDP/CredSSP symbols; RDP gateway credential handling = high-value pending target",
+        "FAD-F05: LOW -- gdb, strace, perf, strings in production image; post-compromise capability amplification",
+        "FAD-F06: LOW -- TLS 1.0/3DES/RSA-KEX enabled by default in restapi Go GODEBUG; weak TLS posture",
+        "FAD-F07: INFO -- build paths and CGO_LDFLAGS with all library names embedded in restapi binary",
+    ],
+
+    "vs_other_products": {
+        "FGT/FMG/FAZ":  "All use fortism LSM + encrypted rootfs; FAD has NO encryption, fully readable ext4",
+        "FAP":          "ARM64 OpenWRT base; FAD is x86-64 Linux 6.1 with full Go REST stack",
+        "FSW":          "ARM32 kernel, basic auth; FAD has SAML/OAuth2/CredSSP/JWT -- vastly larger auth surface",
+        "FAC":          "Authentication-focused; FAD's SAML/ADFS proxy and CredSSP make it a credential broker",
+        "toolchain":    "All other products use GCC/G++; FAD uses full LLVM (clang 18.1.8 / LLD 18.1.8)",
+    },
+
+    "high_priority_pending": [
+        "httproxy (14MB): main ADC engine -- HTTP request smuggling, header injection, WAF bypass surface",
+        "fnginx_new CredSSP path: frds_cmd_credential_read disassembly -- credential interception in RDP proxy",
+        "FAD-F01 runtime verification: POST /api/user/force_password_reset without auth",
+        "FAD-F02 runtime verification: GET /api/debug/pprof/goroutine without auth",
+        "libfmladminauth.so: admin_new_pwd_shm -- shared memory password storage; potential info leak",
+        "SAML handler: saml_pre_login_handler / saml_sso_handler for open redirect or assertion injection",
+    ],
+}
