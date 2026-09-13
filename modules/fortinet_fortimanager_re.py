@@ -54,7 +54,22 @@ CROSS_PRODUCT_CONFIRMED = {
         "FAZ-F04: Local MCP server :11345 auth unknown",
         "FAZ-F05: Log search filter passthrough to C daemon",
     ],
-    "verification":  "Python app files diff empty; macros.py IMG_TYPE is the only delta",
+    "does_not_apply_to_fmg": {
+        "FAZ-F06": "SOAR TLS bypass -- macros.py CONFIG_SOAR=0 in FMG; SOAR connector code present but feature-flagged off",
+        "FAZ-F07": "SOAR WEBHOOK SSRF -- same reason; SOAR disabled in FMG",
+        "FAZ-F08": "SOAR Redis credential store -- same reason; SOAR disabled in FMG",
+        "FAZ-F09": "Apache backend proxy and ClickHouse binary -- APPLIES to FMG (same apache2 config, same ClickHouse binary)",
+    },
+    "macros_diff": {
+        "IMG_TYPE":       "1 (FAZ) vs 2 (FMG)",
+        "CONFIG_PROD_NAME": "FortiAnalyzer-VM64-KVM vs FortiManager-VM64-KVM",
+        "CONFIG_SOAR":    "1 (FAZ) vs 0 (FMG)",
+        "CONFIG_SIEM":    "1 (FAZ) vs 0 (FMG)",
+        "HAVE_UPD_WEBSPAM": "absent (FAZ) vs 1 (FMG)",
+        "FAZ_S_DISABLED": "absent (FAZ) vs 0 (FMG -- for enabling FAZ service mode on FMG)",
+        "FAZ_S_ENABLED":  "absent (FAZ) vs 1 (FMG)",
+    },
+    "verification":  "diff -rq of Python trees returns 2 files: _c2pygui.so (binary) and macros.py (above)",
     "reference":     "fortinet_fortianalyzer_re.py",
 }
 
@@ -101,8 +116,15 @@ FMG_F01_REDIS_CROSS_SESSION_AMPLIFIED = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":  "COMPLETE -- identical to FAZ; see FAZ module for full findings",
-    "vmlinuz":       "BLOCKED -- payload encrypted (same format as FAZ)",
-    "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ)",
-    "rootfs_ext":    "ACCESSIBLE (extracted) -- Python app confirmed identical to FAZ",
+    "vmlinuz":       {
+        "status":  "BLOCKED -- payload encrypted",
+        "version": "Linux 6.12.32 PREEMPT_DYNAMIC (built 2026-04-20 10:50:40 PDT); RO-rootFS",
+        "builder": "root@e2770389c733 (different container from FAZ root@49192c769448, same day build)",
+    },
+    "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ, magic 0x5b6758cb...)",
+    "rootfs_ext":    "ACCESSIBLE (extracted, 247MB) -- Python app confirmed identical to FAZ via diff; SOAR connectors ABSENT",
+    "syntax_ext":    "ACCESSIBLE -- same structure as FAZ (fmg_cmdb_syntax.json 611KB, etc.)",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
+    "unique_findings": ["FMG-F01"],
+    "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
