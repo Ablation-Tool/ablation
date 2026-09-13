@@ -483,6 +483,113 @@ FWB_F07_SHIBBOLETH_EOL = {
 
 
 # ---------------------------------------------------------
+# FWB-F08: FortiWeb MCP WAF -- security pattern DB analysis
+# ---------------------------------------------------------
+FWB_F08_MCP_WAF_PATTERNS = {
+    "id":       "FWB-F08",
+    "product":  "Fortinet FortiWeb 8.0.0",
+    "severity": "INFO -- FortiWeb ships an MCP traffic WAF with 23 attack pattern categories; the GenericAPIKey pattern (20-50 alphanumeric chars) is over-broad and will cause false positives on standard auth tokens, JWTs, and UUIDs",
+    "class":    "Security product architecture disclosure + WAF pattern analysis (CWE-693 Protection Mechanism Failure via over-broad patterns)",
+
+    "description": (
+        "FortiWeb ships /data/etc/mcp_security_db.json (version 1.00010, updated 2025-09-15), "
+        "a WAF pattern database for inspecting MCP (Model Context Protocol) traffic. "
+        "FortiWeb acts as an MCP-aware WAF proxy -- it monitors tools/call requests, tools/list "
+        "responses, and prompts/get responses across 4 MCP protocol versions "
+        "(2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25). "
+        "The secretsDetection.GenericAPIKey pattern '[A-Za-z0-9]{20,50}' matches any 20-50 char "
+        "alphanumeric string -- this will match JWTs, UUIDs, session tokens, and legitimate API keys, "
+        "causing legitimate MCP tool calls to be blocked. Any MCP pattern that triggers "
+        "a false positive reveals a bypass: encode arguments to exceed the pattern width, use "
+        "Unicode normalization, or inject whitespace to break the regex match."
+    ),
+
+    "mcp_methods_monitored": {
+        "tools/call request": ["/params/arguments (keys scan)", "/params/arguments (values scan -- 8 pattern groups)"],
+        "prompts/get request": ["/params/name (values scan)"],
+        "tools/list response": ["/result/tools/description (16 pattern groups)"],
+        "prompts/get response": ["/result/messages/content/text (17 pattern groups)"],
+    },
+
+    "pattern_groups": [
+        "hiddenInstructions", "dataExfiltration", "secretsDetection", "maliciousContent",
+        "sensitiveFileAccess", "codeInjection", "dataAnonymization", "steganography",
+        "promptInjection", "maliciousCodeExecution", "sqlInjection", "toxicLanguage",
+        "dataHarvesting", "testPatterns", "competitorBlocking", "refusalDetection",
+        "biasDetection", "jsonValidation", "languageFiltering", "mcpSpecificAttacks",
+        "resourceExhaustion", "modelManipulation", "attackTargetKeywords",
+    ],
+
+    "over_broad_patterns": {
+        "GenericAPIKey": "[A-Za-z0-9]{20,50} -- matches JWTs, UUIDs, session tokens, auth headers, model names",
+        "IPAddress":     "[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3} -- matches any IPv4 including localhost, internal IPs in scan results",
+        "URL":           "Broad URL regex including HTTP(S) -- will match most tool responses that reference endpoints",
+        "BankAccount":   "[0-9]{8,12} -- matches any 8-12 digit number (phone numbers, ZIP codes, timestamps)",
+    },
+
+    "mcpSpecificAttacks_bypass": {
+        "ToolEnumeration":     "Pattern targets 'list tools' phrase; bypassed by using synonyms: 'show capabilities', 'what can you do'",
+        "ProtocolVersionBypass": "Pattern targets 'version override' phrase; bypass via indirect reference",
+    },
+
+    "mcp_versions_supported": ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"],
+
+    "attack_surface": (
+        "FortiWeb's MCP WAF is positioned as an inline proxy between AI clients and MCP servers. "
+        "If an attacker can enumerate the over-broad patterns and find inputs that trigger false "
+        "positives (e.g., legitimate tool calls blocked), they can extract partial WAF rule knowledge. "
+        "More critically: if the WAF pattern blocks legitimate MCP tool responses (due to GenericAPIKey "
+        "matching auth tokens in tool output), the WAF effectively becomes a denial-of-service for "
+        "AI-integrated workflows -- a WAF misconfiguration that breaks legitimate AI tool calls."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FWB-F09: FortiWeb WVS (w3af REST API) -- permissive-auth-by-default
+# ---------------------------------------------------------
+FWB_F09_WVS_NO_AUTH = {
+    "id":       "FWB-F09",
+    "product":  "Fortinet FortiWeb 8.0.0 (wvs.tar.xz -- embedded w3af 1.x REST API)",
+    "severity": "CANDIDATE -- w3af REST API at 127.0.0.1:5000 bypasses all auth if PASSWORD not configured at startup; if FortiWeb launches WVS without a password, any process with loopback access can submit arbitrary scan targets including file:// URLs (local file read) and internal services (SSRF)",
+    "class":    "Authentication bypass via missing configuration (CWE-287) + SSRF via scan target injection",
+
+    "description": (
+        "FortiWeb ships wvs.tar.xz on its p1 partition (59MB). "
+        "The package contains a complete w3af REST API server. "
+        "The auth decorator (w3af/core/ui/api/utils/auth.py:requires_auth) has a permissive default: "
+        "if 'PASSWORD' is NOT in app.config, the decorator immediately calls the wrapped function "
+        "without any credential check. "
+        "The API default bind is 127.0.0.1:5000 with no default password. "
+        "The scan endpoint (POST /scans/) accepts arbitrary target_urls. "
+        "w3af explicitly warns: 'arbitrary file reads through file:// protocol specifications in "
+        "target URLs' are possible without auth. "
+        "If FortiWeb launches WVS without the -p (password) flag or a YAML config with PASSWORD, "
+        "any process or SSRF chain that reaches 127.0.0.1:5000 can initiate arbitrary scans."
+    ),
+
+    "code_evidence": {
+        "auth_bypass_path":  "wvs/.wvs-engine/w3af/core/ui/api/utils/auth.py lines 40-43",
+        "bypass_condition":  "if not 'PASSWORD' in app.config: return f(*args, **kwargs)  # no auth",
+        "default_config":    "DEFAULTS = {'USERNAME': 'admin', 'HOST': '127.0.0.1', 'PORT': 5000, 'DISABLE_SSL': False}  # no PASSWORD default",
+        "scan_endpoint":     "POST /scans/ -- @requires_auth -- accepts {scan_profile, target_urls: []}",
+        "upstream_warning":  "w3af cli.py: 'Running this API on a public IP might expose your system to vulnerabilities such as arbitrary file reads through file:// protocol specifications in target URLs'",
+    },
+
+    "attack_chain": (
+        "FortiWeb admin SSRF (any URL field -> 127.0.0.1:5000) -> "
+        "POST /scans/ with target_urls=['file:///etc/passwd'] -> "
+        "w3af reads file:// target, results at GET /scans/<id>/kb/ -> "
+        "local file disclosure from FortiWeb filesystem"
+    ),
+
+    "blocker": "Cannot confirm at static analysis whether FortiWeb sets a WVS password at startup (startup scripts in encrypted rootfs); this remains CANDIDATE pending runtime confirmation",
+
+    "remediation": "FortiWeb should always pass a randomly-generated SHA512 password hash to w3af_api at startup; bind w3af_api to a Unix domain socket instead of TCP loopback if feasible; restrict /scans/ to http(s) scheme targets only.",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -499,13 +606,13 @@ ANALYSIS_STATUS = {
         "etc/cmf_cmdline.py": "CLI command bridge: reads file from sys.argv[1] -> pipes to /bin/cli admin cmd_line; not directly exposed",
         "etc/saml/shibboleth/": "Shibboleth SP 2.x config files (attribute-map.xml with 2.0 namespace) (FWB-F07)",
         "etc/mcp_schema/": "MCP protocol schemas: 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25 -- FortiWeb has MCP server/client capability",
-        "etc/mcp_security_db.json": "FortiWeb MCP security patterns DB (patterns_group, request/response scan targets); NOT yet fully analyzed",
+        "etc/mcp_security_db.json": "ANALYZED -- FortiWeb MCP WAF pattern DB v1.00010 (2025-09-15); 23 pattern groups; monitors tools/call+tools/list+prompts/get across 4 MCP protocol versions; GenericAPIKey pattern over-broad (FWB-F08)",
         "etc/globalcert/": "Fortinet_Factory2.cer, defaultcert.cer, snca2.cer referenced in wassd_ws.py",
         "etc/filebeat/": "Filebeat config; cert/key managed by wassd_ws.py cloud channel",
         "etc/mysql/": "MariaDB config: MyISAM engine, port 3306, socket /tmp/mysql.sock, no credentials in config",
         "etc/aws_cloud_connector.py": "AWS EC2 API client; takes key_id, access_key as params (from CLI/config, not hardcoded)",
         "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
-        "lib_packge/": "python-libs.tar.xz, wvs.tar.xz (Web Vulnerability Scanner library)",
+        "lib_packge/": "wvs.tar.xz ANALYZED -- complete w3af 1.x REST API (59MB); permissive-auth-by-default (FWB-F09); python-libs.tar.xz not yet analyzed",
     },
 
     "unique_findings": [
@@ -518,6 +625,8 @@ ANALYSIS_STATUS = {
         "FWB-F06: 10 Redis instances (6379-6389) all unauthenticated; SSRF -> FLUSHALL, session token forge, CONFIG SET RCE path",
         "FWB-F07: Shibboleth SP 2.x (EOL 2022) SAML config; same class as FAD-F10",
         "FortiWeb ships MCP schemas (2024-11-05 through 2025-11-25); MCP implementation in encrypted rootfs -- not yet analyzed",
+        "FWB-F08: INFO -- FortiWeb MCP WAF proxy ships mcp_security_db.json v1.00010 (2025-09-15); 23 pattern groups; monitors tools/call+tools/list+prompts/get; GenericAPIKey pattern [A-Za-z0-9]{20,50} over-broad (matches JWTs/UUIDs/session tokens); WAF pattern bypass via encoding/Unicode normalization",
+        "FWB-F09: CANDIDATE -- wvs.tar.xz w3af REST API requires_auth bypasses all auth when PASSWORD not configured; POST /scans/ accepts file:// and internal targets -> local file read + SSRF; blocker: startup auth config in encrypted rootfs",
         "FortiWeb ships HSM (Luna/SafeNet) client config (Chrystoki.conf); HSM integration available but config has no credentials",
     ],
 }
