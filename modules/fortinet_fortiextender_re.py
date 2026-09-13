@@ -316,13 +316,122 @@ FEXT_F05_FGT_512_KEY = {
 
 
 # ---------------------------------------------------------
+# FEXT-F06: Unrestricted AT command passthrough via CAPWAP VSP type 0xf0a
+# ---------------------------------------------------------
+FEXT_F06_CAPWAP_AT_CMD_PASSTHROUGH = {
+    "id":       "FEXT-F06",
+    "product":  "Fortinet FortiExtender 511F v7.0.3",
+    "severity": "MEDIUM -- arbitrary AT command execution on LTE modem; requires CAPWAP controller position",
+    "class":    "Insufficient input validation (CWE-20) in modem command dispatch",
+
+    "attack_path": {
+        "entry":       "CAPWAP VSP message type 0xf0a delivered to extenderd via FortiGate controller channel",
+        "dispatch":    "extenderd dispatch table at VMA 0x4a71f0: type 0xf0a -> cmd_at_command (0x471e74)",
+        "call_chain":  "cmd_at_command -> mdm_atcmd -> run_atcmd_from_controller -> connmgr_execute_at_cmd",
+        "passthrough": (
+            "run_atcmd_from_controller at 0x461d9c: strstr(cmd, 'GenericAtCmd:') at 0x461dd4. "
+            "If NOT found, branch-at-0x461ddc falls through directly to connmgr_execute_at_cmd at 0x461e84 "
+            "with the raw AT command string. No allowlist. No pattern filter. "
+            "GenericAtCmd: prefix triggers index-validated table lookup (indices 1-5 only), "
+            "but absence of the prefix routes around the entire validation gate."
+        ),
+    },
+
+    "disasm_evidence": {
+        "dispatch_table_vma":  "0x4a71f0 (section .data.rel.ro): [0xf0a, 0x471e74]",
+        "run_atcmd_0x461dd4":  "bl strstr(at_cmd, 'GenericAtCmd:') -> b.eq 0x461e74 (skip to raw passthrough)",
+        "connmgr_execute":     "0x461e84: bl connmgr_execute_at_cmd@plt (raw cmd, 1024-byte response buffer)",
+        "buffer_size":         "mdm_atcmd allocates 0x420-byte frame; response buffer at x29+0x38, size 0x400 (1024)",
+    },
+
+    "attacker_position": {
+        "capwap_controller":   "Compromised FortiGate AC can send arbitrary FEXT VSP commands",
+        "rogue_controller":    (
+            "CAPWAP discovery (UDP 5246) is unauthenticated before DTLS setup. "
+            "Attacker on LAN or WAN path can respond to extender CAPWAP Discovery Request "
+            "with rogue AC Discovery Response, complete JOIN/CONFIG states, "
+            "then send type 0xf0a messages."
+        ),
+    },
+
+    "modem_impact": {
+        "EM7355_EM7455": "Sierra Wireless modem; AT commands exposed include:",
+        "commands": [
+            "AT+CGDCONT -- change APN (redirects cellular data traffic)",
+            "AT!RESET -- factory reset modem (DoS)",
+            "AT+CIMI -- read IMSI (subscriber identity exfiltration)",
+            "AT+CRSM -- SIM access commands (read ICCID, MSISDN)",
+            "AT!ENTERCND -- enter engineering mode (if passphrase known)",
+        ],
+        "worst_case": "APN substitution redirects all cellular traffic through attacker-controlled gateway",
+    },
+
+    "chain_with_fext_f01": (
+        "FEXT-F01 (unauthenticated REST) already gives shell via FEXT-F02. "
+        "FEXT-F06 is a distinct channel: CAPWAP controller side -> modem layer. "
+        "Relevant when attacker controls the FortiGate (supply chain / lateral movement) "
+        "rather than having direct REST access to the extender."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FEXT-F07: strongSwan 5.6.3 -- CVE-2018-16151 + CVE-2018-16152 (RSA signature bypass)
+# ---------------------------------------------------------
+FEXT_F07_STRONGSWAN_SIGBYPASS = {
+    "id":       "FEXT-F07",
+    "product":  "Fortinet FortiExtender 511F v7.0.3",
+    "severity": "HIGH -- IKEv2 RSA signature verification bypass; pre-auth; if cert-based IKE configured",
+    "class":    "Incorrect signature verification (CVE-2018-16151, CVE-2018-16152)",
+
+    "version_evidence": {
+        "binary":   "/usr/libexec/ipsec/charon",
+        "version":  "5.6.3",
+        "string_match": "strings charon | grep '5.6.3' -> 'Linux strongSwan %s 5.6.3'",
+    },
+
+    "cves": {
+        "CVE-2018-16151": (
+            "Incorrect handling of RSA signature: strongSwan up to 5.7.0 accepts a crafted "
+            "RSA signature that passes PKCS#1 v1.5 padding checks even when the "
+            "cryptographic signature is invalid. An unauthenticated attacker can establish "
+            "an IKEv2 SA without knowing the peer's private key."
+        ),
+        "CVE-2018-16152": (
+            "Related: improper signature verification logic in the same code path. "
+            "Both CVEs were patched in 5.7.0 (Oct 2018). FortiExtender 511F ships 5.6.3."
+        ),
+        "affected_range":   "strongSwan < 5.7.0",
+        "fixed":            "5.7.0",
+        "extenderd_version": "5.6.3 (unpatched)",
+    },
+
+    "conditions": (
+        "Requires IKEv2 with RSA certificate authentication. "
+        "If FortiExtender uses PSK-only IKE (pre-shared key), CVE does not apply. "
+        "Configuration is set at runtime by extenderd cloud_certificate_update / config_update_vpn_certificate_*. "
+        "Verify by checking ipsec.conf or swanctl.conf on a live device; "
+        "static config in rootfs/etc/strongswan/ipsec.conf shows only commented templates."
+    ),
+
+    "impact": (
+        "Pre-auth IKEv2 SA establishment as any peer identity. "
+        "If FortiExtender uses IKEv2 for the LAN extension tunnel or cloud VPN, "
+        "attacker can impersonate a legitimate peer, inject into the IPsec SA, "
+        "and decrypt/modify tunnel traffic."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "rootfs":           "EXTRACTED (squashfs at 0x2a2f78 in MBR disk image, extracted to rootfs/)",
     "kore_config":      "COMPLETE -- /etc/kore/apgui.conf + api_system.conf fully analyzed",
     "libapgui.so":      "COMPLETE -- system_api_req_handler disassembled; PTY symbols confirmed",
-    "extenderd":        "SURFACE ONLY -- not stripped; deeper analysis pending",
+    "extenderd":        "COMPLETE -- CAPWAP dispatch table mapped; AT cmd passthrough path confirmed (FEXT-F06)",
+    "strongswan":       "COMPLETE -- version 5.6.3 confirmed; CVE-2018-16151/16152 applies (FEXT-F07)",
     "authentication":   "CONFIRMED ABSENT at both config and handler layer (FEXT-F01)",
     "terminal_rce":     "CONFIRMED -- kore_pty_create + system_terminal_ws_handler (FEXT-F02)",
     "fortism":          "NOT ANALYZED -- kernel not extracted; squashfs contains ARM aarch64 userspace only",
@@ -333,6 +442,8 @@ ANALYSIS_STATUS = {
         "FEXT-F03: LOW -- libapgui.so and extenderd NOT stripped; full symbol table in production firmware",
         "FEXT-F04: HIGH -- fgt.key RSA-1024 plaintext in rootfs/etc; deprecated key size shipped in production",
         "FEXT-F05: CRITICAL -- fgt_512.key + fgt_lenc.key RSA-512 plaintext; 512-bit RSA factored in hours; different modulus from FGA-F02 but same broken key size",
+        "FEXT-F06: MEDIUM -- CAPWAP VSP type 0xf0a -> cmd_at_command -> mdm_atcmd; non-GenericAtCmd prefix bypasses index validation; raw AT string passed to connmgr_execute_at_cmd; modem APN/identity exfiltration/DoS from compromised FortiGate controller",
+        "FEXT-F07: HIGH -- strongSwan 5.6.3 (< 5.7.0); CVE-2018-16151+16152 RSA signature bypass; pre-auth IKEv2 SA establishment if cert-based IKE in use",
         "Process runas admin -- no privilege separation between web server and OS",
         "Management API binds to 0.0.0.0:80/443 -- reachable from any network interface including LTE WAN",
     ],
