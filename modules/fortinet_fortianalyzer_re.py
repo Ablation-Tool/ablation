@@ -293,21 +293,224 @@ FAZ_F05_LOGSEARCH_FILTER_PASSTHROUGH = {
 
 
 # ---------------------------------------------------------
+# FAZ-F06: SOAR connector TLS verification bypass
+# ---------------------------------------------------------
+FAZ_F06_SOAR_TLS_VERIFY_FALSE = {
+    "id":       "FAZ-F06",
+    "product":  "Fortinet FortiAnalyzer 8.0.0 -- SOAR connector framework",
+    "severity": "MEDIUM -- TLS certificate verification disabled in multiple production connectors; enables MITM on third-party integrations",
+    "class":    "TLS verification bypass (CWE-295 Improper Certificate Validation)",
+
+    "affected_connectors": {
+        "FMQ": {
+            "file":   "SOAR/FMQ/operator.py:285",
+            "target": "https://api.fortimq.fortinet.net (Fortinet cloud messaging queue)",
+            "code":   "requests.post(url, ..., verify=False)",
+            "note":   "Hardcoded False; no user-configurable override. On-path attacker between FAZ and Fortinet cloud can MITM the FortiMQ session.",
+        },
+        "SERVICENOW": {
+            "file":    "SOAR/SERVICENOW/operator.py:64",
+            "target":  "User-configured ServiceNow instance",
+            "code":    "self.verify_ssl = False (class __init__)",
+            "note":    "Class default is False. If find_servicenow_connector_params() returns False for verify-ssl, never overridden. Affects POST /api/now/v2/table/incident calls.",
+        },
+        "MS_TEAMS": {
+            "file":   "SOAR/MS_TEAMS/operator.py:56",
+            "target": "Microsoft Teams webhook URLs / OAuth endpoints",
+            "code":   "self.verify_ssl = False",
+            "note":   "Hardcoded at class init; all Teams HTTP requests bypass cert validation.",
+        },
+    },
+
+    "impact": (
+        "An on-path attacker (BGP hijack, ISP, rogue AP, compromised upstream router) "
+        "between the FortiAnalyzer and any of these endpoints can intercept SOAR automation "
+        "traffic in cleartext, inject false responses, or steal API credentials transmitted "
+        "in request headers/bodies."
+    ),
+
+    "source":        "rootfs-ext (SOAR connector Python source, accessible layer)",
+    "verification":  "CONFIRMED -- source code read; verify=False at stated lines",
+
+    "remediation": (
+        "Set verify=True and supply CA bundle path (certifi or system trust store). "
+        "For FMQ: use the bundled Fortinet CA chain. For customer connectors: read verify-ssl "
+        "from connector config and default to True, not False."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAZ-F07: SOAR WEBHOOK connector SSRF
+# ---------------------------------------------------------
+FAZ_F07_SOAR_WEBHOOK_SSRF = {
+    "id":       "FAZ-F07",
+    "product":  "Fortinet FortiAnalyzer 8.0.0 -- SOAR WEBHOOK connector",
+    "severity": "MEDIUM -- admin-level SSRF; FAZ can be directed to issue HTTP/HTTPS requests to arbitrary internal hosts",
+    "class":    "Server-Side Request Forgery via WEBHOOK connector URL override (CWE-918)",
+
+    "description": (
+        "The WEBHOOK connector execute_action() accepts an action-level URL override via "
+        "params.get('url', self.server_url) with no allowlist or host validation. "
+        "The only normalization is prefix enforcement (http:// or https://). "
+        "An authenticated SOAR playbook designer can configure a playbook action that "
+        "directs the FortiAnalyzer to issue GET/POST/PUT/DELETE/PATCH requests to any "
+        "reachable address (internal RFC1918, metadata services, localhost)."
+    ),
+
+    "code_path": {
+        "file":      "SOAR/WEBHOOK/operator.py",
+        "override":  "execute_action(): self.server_url = params.get('url', self.server_url)",
+        "no_filter": "No scheme restriction beyond http/https prefix. No IP/hostname allowlist.",
+        "methods":   ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    },
+
+    "reach": {
+        "internal_network": "FAZ can reach any host on its management/data network segments",
+        "cloud_metadata":   "169.254.169.254 reachable if FAZ runs in cloud (AWS/Azure/GCP VM)",
+        "localhost":        "127.0.0.1:10745 (backend API, no TLS), :11345 (MCP server), :31723 (fazsvcd), :9000 (ClickHouse), :6379/:6384 (Redis) all reachable",
+    },
+
+    "privilege_req": "SOAR playbook designer role (not full admin)",
+
+    "source":       "SOAR/WEBHOOK/operator.py -- WebhookBaseOperator.execute_action()",
+    "verification": "CONFIRMED -- source code read",
+
+    "remediation": (
+        "Validate server_url against a configurable allowlist of permitted hostnames/CIDRs. "
+        "Reject RFC1918 addresses, 127.0.0.1/::1, and link-local (169.254.x.x, fe80::) unless "
+        "explicitly permitted. Do not allow URL override at action level; fix at connector config."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAZ-F08: SOAR credential architecture -- Redis-backed
+#          credential store with plaintext ClickHouse password
+# ---------------------------------------------------------
+FAZ_F08_SOAR_CREDENTIAL_ARCHITECTURE = {
+    "id":       "FAZ-F08",
+    "product":  "Fortinet FortiAnalyzer 8.0.0 -- SOAR credential store",
+    "severity": "INFO/MEDIUM -- credential architecture; impact depends on Redis accessibility",
+    "class":    "Sensitive credential storage architecture (CWE-312, CWE-256)",
+
+    "description": (
+        "All SOAR connector credentials (API keys, passwords, auth tokens for ServiceNow, "
+        "vSphere, VirusTotal, MS Teams, FMQ, etc.) are encrypted and stored in Redis. "
+        "Decryption requires two native library calls via ctypes. "
+        "ClickHouse SIEM database password is stored in plaintext at /etc/clickhouse-security. "
+        "If an attacker reaches Redis (e.g., via FAZ-F07 SSRF to :6379/:6384) with knowledge "
+        "of the decryption library interface, all stored connector credentials are at risk."
+    ),
+
+    "redis_ports": {
+        6379:     "main Redis instance",
+        6384:     "SOAR Redis instance (connector credential store)",
+        "DKAP":   "DKAP (Dynamic Key and Password) Redis; connection via REDIS_DKAP_CONN_ID Airflow hook",
+    },
+
+    "decryption_chain": {
+        "step1":  "redis_security_get_password(redis_port) -- native lib via ctypes; returns Redis AUTH password",
+        "step2":  "Connect authenticated to Redis; read encrypted credential blob",
+        "step3":  "decrypt_with_redis_port(encrypted_blob, redis_port) -- native lib via ctypes; returns plaintext credential",
+        "native": "Library loaded from disk via ctypes RTLD_LAZY; likely libRedisExt.so or similar in encrypted rootfs.gz",
+    },
+
+    "clickhouse_credential": {
+        "file":   "/etc/clickhouse-security",
+        "format": "plaintext password string",
+        "access": "read at runtime by LOCALHOST connector SOAR operator for ClickHouse SIEM queries",
+        "db":     "ClickHouse host=localhost user=default database=siem",
+        "note":   "Any process with root access that survives the fortism domain model can read this file",
+    },
+
+    "airflow_stack": {
+        "framework":  "Apache Airflow (DAG-based SOAR orchestration)",
+        "metadata_db": "PostgreSQL 11 (/usr/local/pg11/) -- Airflow DAG/task state",
+        "log_db":     "ClickHouse (636MB binary, NOT stripped, BuildID 54e3c62019aeb33bf592492e196e9017a8fb30b7)",
+        "cache_queue": "Redis (3 ports)",
+    },
+
+    "source": (
+        "SOAR connector health_check.py files (FGD, SERVICENOW, FORTIANALYZER_CLOUD, VSPHERE); "
+        "LOCALHOST/operator.py (ClickHouse credential read at line 3449)"
+    ),
+    "verification": "CONFIRMED -- source code read",
+
+    "remediation": (
+        "Restrict Redis ports to localhost or Unix sockets; require AUTH with strong passwords. "
+        "Move ClickHouse password to a secrets manager or at minimum 0600 root-only file. "
+        "Audit which fortism domains have permission to read /etc/clickhouse-security."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAZ-F09: Apache custom module + unencrypted backend proxy
+# ---------------------------------------------------------
+FAZ_F09_APACHE_BACKEND_PROXY = {
+    "id":       "FAZ-F09",
+    "product":  "Fortinet FortiAnalyzer 8.0.0 -- Apache/web stack",
+    "severity": "INFO -- internal proxy architecture; relevant if SSRF reaches :10745",
+    "class":    "Internal backend proxy without TLS; custom Apache module in binary",
+
+    "architecture": {
+        "apache_ports":  [443, 8082, 80],
+        "backend_port":  10745,
+        "backend_proto": "HTTP (no TLS)",
+        "proxy_config":  "ProxyPass / http://localhost:10745/ keepalive=On ttl=15 retry=0",
+        "ws_proxy":      "ProxyPass /ws ws://localhost:10745/ws",
+    },
+
+    "custom_modules": {
+        "fmg_request.so": "LoadModule fmg_request_module -- replaces standard request processing; in encrypted rootfs.gz",
+        "fmg_rewrite.so": "LoadModule rewrite_module fmg_rewrite.so -- replaces standard mod_rewrite; in encrypted rootfs.gz",
+    },
+
+    "ssl_config": {
+        "cert":     "/usr/local/apache2/server.crt",
+        "key":      "/usr/local/apache2/server.key",
+        "protocol": "TLSv1.2 + TLSv1.3 (primary); TLSv1.1 allowed in legacy config section",
+        "servername": "fmg.fortinet.com:443 (FAZ and FMG share web stack identity)",
+    },
+
+    "clickhouse_binary": {
+        "path":       "/usr/local/clickhouse/clickhouse",
+        "size":       "636MB",
+        "stripped":   False,
+        "elf_class":  "ELF 64-bit x86-64 LSB pie",
+        "build_id":   "54e3c62019aeb33bf592492e196e9017a8fb30b7",
+        "note":       "NOT stripped -- all function names preserved; full static analysis possible without source",
+    },
+
+    "source":       "rootfs-ext/usr/local/apache2/conf/httpd.conf + httpd-ssl.conf (accessible layer)",
+    "verification": "CONFIRMED -- config files read",
+
+    "ssrf_relevance": (
+        "FAZ-F07 WEBHOOK SSRF can reach http://127.0.0.1:10745/ directly, bypassing Apache "
+        "authentication and SSL termination. The backend receives unauthenticated HTTP requests."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Kernel + rootfs analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "vmlinuz": {
         "status":  "BLOCKED -- payload encrypted",
         "method":  "bzImage setup code parsed (plaintext); payload at 0x42c4 encrypted",
-        "version": "Linux 6.12.32 (read from setup code at file offset 0x3860)",
+        "version": "Linux 6.12.32 PREEMPT_DYNAMIC (built 2026-04-20); kernel builder root@49192c769448",
+        "posture": "RO-rootFS (read-only root); 6.12 LTS branch (modern, maintained)",
     },
     "rootfs_gz": {
         "status":  "BLOCKED -- custom encryption format 0x5b6758cb",
-        "note":    "Not gzip, not FortiOS 7.x XZ-with-bad-CRC format",
+        "note":    "Not gzip, not FortiOS 7.x XZ-with-bad-CRC format; 143MB",
+        "blocked": ["webmcpserver binary", "fmg_request.so", "fmg_rewrite.so", "fazsvcd", "native SOAR decrypt library"],
     },
     "rootfs_ext_tar_xz": {
         "status":  "ACCESSIBLE -- standard XZ",
-        "content": "Python 3.11 Django application; AI agent framework; FAZ MCP server code",
+        "content": "Python 3.11 Django application; AI agent framework; FAZ MCP server code; SOAR connector Python source (18 connector types)",
         "key_dirs": [
             "proj/ai/faz_mcp/  -- MCP proxy (SSRF gated by CONFIG_DEBUG)",
             "proj/ai/agent/    -- multi-agent framework (router, diagnostics, script gen, policy)",
@@ -315,11 +518,25 @@ ANALYSIS_STATUS = {
         ],
     },
     "syntax_tar_xz": {
-        "status":  "NOT YET EXTRACTED -- standard XZ (87MB)",
-        "pending": True,
+        "status":  "ACCESSIBLE -- standard XZ",
+        "content": "FortiOS CMDB syntax definitions (800.txt 61K lines), FMG/FAZ JSON-RPC API schemas, connector_syntax.json, fmg_cmdb_syntax.json (611KB), fmglog_syntax.json (206KB), fmg_dvm_syntax.json (48KB)",
     },
     "webmcpserver": {
         "status":  "BLOCKED -- binary in encrypted rootfs.gz",
         "impact":  "Cannot confirm auth posture of :11345 from static analysis",
     },
+    "soar_connectors": {
+        "status":   "ANALYZED -- 18 connector Python sources read",
+        "findings": ["FAZ-F06 (TLS bypass: FMQ/SERVICENOW/MS_TEAMS)", "FAZ-F07 (WEBHOOK SSRF)", "FAZ-F08 (Redis credential store)"],
+        "connectors": ["AD", "EMS", "FAC", "FCASB", "FEDR", "FGD", "FML", "FMQ",
+                       "FORTIANALYZER_CLOUD", "FOS", "FSA", "FWEB", "LOCALHOST",
+                       "MS_TEAMS", "SERVICENOW", "VIRUSTOTAL", "VSPHERE", "WEBHOOK"],
+    },
+    "partition_signature": {
+        "file":   "faz_db_x -- PKCS#7 Signed Data",
+        "signer": "fortinet-ca2 (Fortinet CA, Sunnyvale CA, US)",
+        "valid":  "2022-02-04 to 2056-05-26 (34-year cert)",
+        "note":   "Same partition signing pattern as FGT (flatkc.sig). Cross-product FAZ/FGT architecture.",
+    },
+    "unique_findings": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F06", "FAZ-F07", "FAZ-F08", "FAZ-F09"],
 }
