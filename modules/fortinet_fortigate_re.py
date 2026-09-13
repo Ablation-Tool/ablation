@@ -1724,7 +1724,7 @@ ANALYSIS_STATUS = {
         "FGT-F09": "PENDING runtime -- rootfs AES key at static ceiling; /dev/mtdX read needed on live system",
         "sslvpnd": "PARTIAL -- fgtlang directory traversal confirmed via strings; SSRF/unauth endpoints not confirmed",
         "kernel_7.0.9": "NOT analyzed -- Linux 3.2.16 bzImage in flatkc; KASLR absent (added 3.14); ASLR effectiveness unknown",
-        "fortism_LSM": "FGT-F18 class TBD -- hook type (MAY_READ/WRITE vs OPEN vs MMAP) not determined statically",
+        "fortism_LSM": "FGT-F18 RESOLVED-NOT-EXPLOITABLE -- page-table pre-touch hook; no security decision; unconditional zero return is correct; BERT false positive (7 patterns matched, all spurious)",
     },
 
     "unique_findings": [
@@ -1745,7 +1745,7 @@ ANALYSIS_STATUS = {
         "FGT-F15: MEDIUM -- fortism ioctl 0x4004 unauth read; 4-byte kernel object field read without privilege check (7.0.9)",
         "FGT-F16: CRITICAL -- fortism ioctl 0x9007 unauth heap overflow + DoS; size=0xffffffff -> kmalloc(0) + copy_from_user(SIZE_MAX) -> kernel crash (8.0.0 x86-64)",
         "FGT-F17: MEDIUM -- fortism ioctl 0x9004 unauth kernel object read; 28 bytes via bounded index (8.0.0)",
-        "FGT-F18: CANDIDATE -- fortism LSM hook with zero return; hook type TBD (8.0.0)",
+        "FGT-F18: RESOLVED-NOT-EXPLOITABLE -- fortism LSM page-table pre-touch hook; unconditional zero return is correct for this hook class; BERT false positive (AUTH_BYPASS/PRIV_ESC patterns matched spuriously on 'always allows' function shape)",
         "FGT-F19: HIGH -- fortism ioctl 0x9004 conditional unauth write; runtime object semantics determine impact (8.0.0)",
         "FGT-F20: MEDIUM -- fortism ioctl 0x9003 unauth kernel object field read; no privilege gate (8.0.0)",
         "FGT-F21: LOW-MEDIUM -- fortism ioctl 0x9005 unauth global read + boolean oracle via 0x9007 (8.0.0)",
