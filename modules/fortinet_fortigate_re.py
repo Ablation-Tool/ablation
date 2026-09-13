@@ -1543,6 +1543,139 @@ FGT_F22_IOCTL_0x9007_STRING_WRITE = {
     "status": "CONFIRMED -- DoS primitive via FGT-F16 path. Boolean query oracle confirmed (returns 0/1 capability bit from kernel object). Injection vector NOT present.",
 }
 
+# ---------------------------------------------------------
+# FGT-F23: x86-64 8.0.0 kernel frozen at Linux 4.19.13 (Jan 2019 base, EOL Dec 2024)
+# ---------------------------------------------------------
+FGT_F23_KERNEL_FROZEN_BASE = {
+    "id":       "FGT-F23",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (x86-64)",
+    "severity": "HIGH -- kernel base is Linux 4.19.13 (January 2019); shipped April 2026; "
+                "EOL in upstream December 2024; missing 300+ point-release security patches",
+    "class":    "End-of-life / frozen kernel base (CWE-1395: use of expired third-party component)",
+
+    "kernel_id": {
+        "version":    "4.19.13",
+        "build_date": "2026-04-20 17:10:46",
+        "builder":    "root@6dd369a4a2ab",
+        "smp":        True,
+        "format":     "bzImage (7.7MB)",
+        "path_in_image": "/flatkc (ext2 partition sector 2048)",
+    },
+
+    "version_context": {
+        "4.19.13_release":  "2019-01-15 (part of 4.19 LTS series)",
+        "4.19_lts_eol":     "2024-12-31 (kernel.org LTS page)",
+        "4.19_final":       "4.19.325+ by EOL",
+        "point_release_delta": "300+ point releases between 4.19.13 and final 4.19 LTS",
+        "shipped":          "2026-04-20 (FortiOS 8.0.0.F build0167) -- 4 months after EOL",
+    },
+
+    "vs_709_kernel": {
+        "709_kernel":       "Linux 3.2.16 (2012, missing SMEP/SMAP/kASLR/KPTI entirely)",
+        "800_kernel":       "Linux 4.19.13 (2019, SMEP/SMAP/kASLR/KPTI all present)",
+        "improvement":      "4.19 is a much better security baseline than 3.2.16",
+        "remaining_gap":    "4.19.13 frozen base misses all upstream fixes from 4.19.14-4.19.325; "
+                            "Fortinet presumably backports some CVEs but the delta is unknown without diff",
+    },
+
+    "notable_missing_patches_by_era": (
+        "The 4.19.13 -> 4.19.325 delta spans 2019-2024. "
+        "High-profile kernel vulnerabilities in that window include: "
+        "CVE-2021-4154 (use-after-free cgroup1), CVE-2022-0847 (Dirty Pipe), "
+        "CVE-2022-1015 (netfilter nf_tables OOB write), CVE-2023-0266 (ALSA use-after-free), "
+        "CVE-2023-32233 (netfilter use-after-free), CVE-2024-1086 (netfilter use-after-free). "
+        "Whether Fortinet backported these is not confirmed without patch analysis."
+    ),
+
+    "kernel_security_features": {
+        "smep":     "present (x86 SMEP added in Sandy Bridge era, supported by 4.19)",
+        "smap":     "present",
+        "kaslr":    "present (added 3.14)",
+        "kpti":     "present (added 4.15 for Spectre/Meltdown)",
+        "cfi":      "absent (not in mainline 4.19)",
+        "kcfi":     "absent",
+    },
+
+    "boot_string": "Linux version 4.19.13 (root@6dd369a4a2ab) #1 SMP Mon Apr 20 17:10:46 America 2026",
+    "verification": "CONFIRMED -- file(1) output on extracted /flatkc from disk_p1.raw (ext2 sector 2048)",
+}
+
+
+# ---------------------------------------------------------
+# FGT-F24: eBPF WAD kernel dispatcher (wad_dispatcher_kern.ebpf in rootfs)
+# ---------------------------------------------------------
+FGT_F24_EBPF_WAD_DISPATCHER = {
+    "id":       "FGT-F24",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (x86-64)",
+    "severity": "INFO -- eBPF program in rootfs; kernel-level hook; attack surface if rootfs write is achievable",
+    "class":    "Custom eBPF kernel program (potential kernel privilege escalation vector if loadable eBPF is replaceable)",
+
+    "file": {
+        "path":         "/lib/wad_dispatcher_kern.ebpf",
+        "sha256":       "dfad7b4b8bad9702e2a4349479a45c9c4df7560a6c34ffc4afb0db16a9dc0a58",
+        "source":       "hash_bin.sha256 manifest from unencrypted ext2 partition",
+    },
+
+    "context": (
+        "WAD (web application daemon) is FortiOS's deep packet inspection engine. "
+        "wad_dispatcher_kern.ebpf is a custom eBPF program loaded into the kernel at runtime, "
+        "implementing a WAD packet dispatcher at the kernel network level. "
+        "Custom eBPF programs run in the kernel after passing the eBPF verifier; "
+        "if the eBPF bytecode file can be replaced before loading (rootfs write access), "
+        "malicious eBPF could bypass the WAD fortism security domain entirely. "
+        "The eBPF verifier will reject invalid programs; a replacement must be valid eBPF bytecode."
+    ),
+
+    "security_model_note": (
+        "The fortism LSM governs file access by domain. WAD runs in the WAD domain (EXCLUDE, chroot /tmp/wad/jail). "
+        "If the eBPF file is loaded BEFORE WAD's chroot, it may run outside the chroot constraint. "
+        "Attack chain: write access to rootfs -> replace wad_dispatcher_kern.ebpf -> WAD loads malicious eBPF -> kernel-level packet manipulation or privilege escalation."
+    ),
+
+    "verification": "INDIRECT -- hash manifest only; eBPF file not yet extracted or disassembled",
+}
+
+
+# ---------------------------------------------------------
+# FGT-F25: hash_bin.sha256 exposes rootfs binary manifest from unencrypted partition
+# ---------------------------------------------------------
+FGT_F25_ROOTFS_MANIFEST_LEAK = {
+    "id":       "FGT-F25",
+    "product":  "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM (x86-64)",
+    "severity": "INFO -- unencrypted partition discloses complete rootfs file inventory (path + SHA-256 per file)",
+    "class":    "Information disclosure; file enumeration without rootfs decryption",
+
+    "file": {
+        "path":       "/hash_bin.sha256 (ext2 partition, sector 2048)",
+        "format":     "SHA-256 hex  <path>  (one entry per line)",
+        "entry_count": 410,
+    },
+
+    "notable_disclosed_paths": {
+        "/bin/node":                      "Node.js binary; SHA-256=1de035e241f616ee3201bfb90d516425191c111e727155b72356e8535cab49f2",
+        "/node-scripts/chunk-*.js":       "20+ webpack bundle chunks; FortiOS web management UI JS backend",
+        "/lib/wad_dispatcher_kern.ebpf":  "eBPF kernel program (FGT-F24)",
+        "/lib/ossl-modules/oqsprovider.so": "Open Quantum Safe OpenSSL provider (post-quantum crypto: Kyber/Dilithium)",
+        "/lib/ossl-modules/tpm2.so":      "TPM2 OpenSSL provider (consistent with hardware TPM in ARM64 FGA-F04)",
+        "/lib/ossl-modules/fips.so":      "FIPS 140 OpenSSL provider",
+        "/lib/libIPSec_MB.so.1":          "Intel Multi-Buffer Cryptography Library (hardware-accelerated IPsec)",
+        "/lib/cert/subcacert2.pem":       "Sub-CA certificate (chain component)",
+        "/lib/cert/DigicertCA.ca":        "DigiCert CA (firmware signing timestamp chain)",
+        "/bin/ftk.o":                     "Fortinet kernel toolkit object (purpose unknown; not a .ko)",
+        "/usr/local/lib/open-vm-tools/":  "VMware Tools plugins (confirm VM target environment)",
+    },
+
+    "attack_use": (
+        "An attacker with access to the ext2 partition (physical access, or device extraction) "
+        "can enumerate all files in the encrypted rootfs without decryption. "
+        "Useful for: targeting specific binary analysis, identifying attack surface, "
+        "comparing hash values across firmware versions to identify changed files."
+    ),
+
+    "verification": "CONFIRMED -- hash_bin.sha256 extracted from ext2 partition via debugfs on disk_p1.raw",
+}
+
+
 # ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
@@ -1575,13 +1708,16 @@ ANALYSIS_STATUS = {
     "8.0.0_vm64": "SUPPLEMENTAL -- x86-64 + ARM64 fortism.ko binaries analyzed for ioctl surface",
 
     "components": {
-        "bin/init":         "DISASSEMBLED -- maintainer backdoor (FGT-F03), HA trust headers (FGT-F04), multicall (FGT-F02)",
-        "fortism.ko 7.0.9": "DISASSEMBLED -- FGT-F10 thru FGT-F15 (ioctl 0x4001-0x4004, LSM hooks)",
-        "fortism.ko 8.0.0": "DISASSEMBLED -- FGT-F16 thru FGT-F21 (ioctl 0x9004-0x9009)",
-        "sslvpnd":          "STRINGS ONLY -- FGT-F05 fgtlang path traversal; binary not fully disassembled",
-        "flatkc":           "IDENTIFIED -- 4.1MB bzImage; kernel version extracted",
-        "rootfs.gz":        "EXTRACTED -- full cpio rootfs",
-        "bin.tar.xz":       "EXTRACTED -- Fortinet XZ CRC bypass; LZMA2 with preset=6 (not dict_size from block hdr -- see FortiSwitch for correct extraction)",
+        "bin/init":             "DISASSEMBLED -- maintainer backdoor (FGT-F03), HA trust headers (FGT-F04), multicall (FGT-F02)",
+        "fortism.ko 7.0.9":    "DISASSEMBLED -- FGT-F10 thru FGT-F15 (ioctl 0x4001-0x4004, LSM hooks)",
+        "fortism.ko 8.0.0":    "DISASSEMBLED -- FGT-F16 thru FGT-F22 (ioctl 0x9004-0x9009)",
+        "sslvpnd":              "STRINGS ONLY -- FGT-F05 fgtlang path traversal; binary not fully disassembled",
+        "flatkc 7.0.9":        "IDENTIFIED -- 4.1MB bzImage; Linux 3.2.16",
+        "flatkc 8.0.0 x86-64": "ANALYZED -- 7.7MB bzImage; Linux 4.19.13 (Jan 2019 frozen base, EOL Dec 2024, FGT-F23)",
+        "rootfs.gz 7.0.9":     "EXTRACTED -- full cpio rootfs",
+        "rootfs.gz 8.0.0":     "ENCRYPTED -- custom format; not standard gzip/cpio; key in kernel driver",
+        "bin.tar.xz":          "EXTRACTED -- Fortinet XZ CRC bypass; LZMA2 with preset=6",
+        "hash_bin.sha256":     "EXTRACTED -- 410-entry rootfs manifest (path+SHA-256); FGT-F25; discloses eBPF file, node binary hash, OQS provider",
     },
 
     "pending": {
@@ -1613,5 +1749,13 @@ ANALYSIS_STATUS = {
         "FGT-F19: HIGH -- fortism ioctl 0x9004 conditional unauth write; runtime object semantics determine impact (8.0.0)",
         "FGT-F20: MEDIUM -- fortism ioctl 0x9003 unauth kernel object field read; no privilege gate (8.0.0)",
         "FGT-F21: LOW-MEDIUM -- fortism ioctl 0x9005 unauth global read + boolean oracle via 0x9007 (8.0.0)",
+        "FGT-F22: HIGH -- fortism ioctl 0x9007 unauth controlled heap alloc + kernel string query oracle (8.0.0); "
+                 "size=0xffffffff -> DoS (x86-64 only); 0x55db6d reads kernel hash table; no injection",
+        "FGT-F23: HIGH -- x86-64 8.0.0 kernel frozen at Linux 4.19.13 (Jan 2019 base); "
+                 "shipped April 2026 (4 months after Dec 2024 EOL); missing 300+ point-release patches",
+        "FGT-F24: INFO -- /lib/wad_dispatcher_kern.ebpf custom eBPF kernel program in rootfs; "
+                 "kernel-level network hook; if eBPF file replaceable -> kernel-level packet manipulation",
+        "FGT-F25: INFO -- hash_bin.sha256 (410 entries) on unencrypted ext2 partition; "
+                 "discloses complete rootfs file inventory + SHA-256 hashes without rootfs decryption",
     ],
 }
