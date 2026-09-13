@@ -333,20 +333,191 @@ CROSS_PRODUCT_MAP = {
 
 
 # ---------------------------------------------------------
+# FWB-F05: wassd_ws.py TLS verification disabled -- Fortinet cloud mgmt channel MitM
+# ---------------------------------------------------------
+FWB_F05_WASSD_TLS_MITM = {
+    "id":       "FWB-F05",
+    "product":  "Fortinet FortiWeb 8.0.0",
+    "severity": "HIGH -- wassd_ws.py (Fortinet cloud management WebSocket client) sets ctx.verify_mode = ssl.CERT_NONE; MitM on the cloud management channel allows injecting cert updates, filebeat log forwarding targets, and ABP config",
+    "class":    "Improper certificate validation (CWE-295)",
+
+    "description": (
+        "FortiWeb ships wassd_ws.py (/data/etc/wassd_ws.py), a Python WebSocket client that "
+        "connects to Fortinet's cloud infrastructure to receive management commands. "
+        "The TLS context is explicitly configured to skip certificate verification: "
+        "'ctx = ssl.create_default_context()' followed immediately by 'ctx.verify_mode = ssl.CERT_NONE'. "
+        "This allows any party who can intercept the WebSocket connection (DNS poisoning, ARP spoofing, "
+        "or BGP hijack of Fortinet's cloud IPs) to impersonate the Fortinet cloud server and inject "
+        "management commands into FortiWeb. "
+        "The commands that can be injected include: "
+        "(1) update_msk_certificate: overwrite /etc/filebeat/client_cert.pem and /etc/filebeat/private-key.pem with attacker-controlled cert/key; "
+        "(2) start_on_premise_alog: start filebeat log forwarding with attacker-controlled MSK_domain (Kafka endpoint) and MSK_topic -- FortiWeb audit logs forwarded to attacker; "
+        "(3) update_abp: write arbitrary file names to /tmp/abp_id/ directory."
+    ),
+
+    "code_evidence": {
+        "file":         "/data/etc/wassd_ws.py",
+        "line_204_207": "ctx = ssl.create_default_context() ... ctx.verify_mode = ssl.CERT_NONE",
+        "line_209":     "self.connection = await websockets.connect(uri=self.ws_url, extra_headers=header, ssl=ctx)",
+        "line_341_356": "json_msg = json.loads(message); dispatches to start_handler/stop_handler/updatecert_handler/update_abp_handler",
+    },
+
+    "injected_command_impacts": {
+        "update_msk_certificate": {
+            "handler":  "updatecert_handler(json_msg)",
+            "writes":   "json_msg['cert'] -> /etc/filebeat/client_cert.pem; json_msg['key'] -> /etc/filebeat/private-key.pem",
+            "impact":   "Replaces FortiWeb's MSK client cert with attacker's; allows attacker to authenticate to Fortinet's MSK Kafka as FortiWeb",
+        },
+        "start_on_premise_alog": {
+            "handler":  "start_handler(json_msg)",
+            "writes":   "json_msg['MSK_domain'] and json_msg['MSK_topic'] -> /etc/filebeat/filebeat.yml",
+            "impact":   "FortiWeb audit logs (WAF events, attack logs, client IPs, request bodies) forwarded to attacker-controlled Kafka endpoint",
+            "secondary": "MSK_domain string written directly into YAML with no sanitization; newlines in json_msg['MSK_domain'] inject arbitrary YAML into filebeat config",
+        },
+        "update_abp": {
+            "handler":  "update_abp_handler(json_msg)",
+            "writes":   "json_msg['appid'] items -> /tmp/abp_id/<appid>",
+            "impact":   "Write arbitrary file names to /tmp/abp_id/; directory traversal in appid value creates files outside /tmp/abp_id if appid='../../../etc/cron.d/backdoor'",
+        },
+    },
+
+    "remediation": (
+        "Remove 'ctx.verify_mode = ssl.CERT_NONE'. "
+        "Load a pinned Fortinet CA certificate into the SSL context via 'ctx.load_verify_locations(ca_bundle)'. "
+        "Set 'ctx.check_hostname = True'. "
+        "Sanitize MSK_domain and MSK_topic values from WebSocket messages before writing to filebeat config."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FWB-F06: 10 Redis instances without requirepass on loopback
+# ---------------------------------------------------------
+FWB_F06_REDIS_NO_AUTH = {
+    "id":       "FWB-F06",
+    "product":  "Fortinet FortiWeb 8.0.0",
+    "severity": "MEDIUM -- 10 Redis instances (ports 6379-6389, 6382) bind to 127.0.0.1 with no requirepass; unauthenticated access from any process on the FortiWeb host or via SSRF; WAF session data, rate limiting state, and WAF rule cache exposed",
+    "class":    "Missing authentication for critical function (CWE-306)",
+
+    "description": (
+        "FortiWeb ships Redis configuration files for 10 separate instances: "
+        "ports 6379, 6380, 6381, 6382 (redis-cache / redis-cache-cloud), 6383, 6384, 6385, 6386, 6387, 6388, 6389. "
+        "All config files: bind 127.0.0.1 (loopback only) AND no requirepass directive (commented out as '# requirepass foobared'). "
+        "Redis without requirepass accepts any connection from 127.0.0.1 without authentication. "
+        "For a WAF product, Redis is the backbone for: session token storage, rate limiting counters, "
+        "WAF rule cache, bot detection state (FortiWeb ABP), ML model inference cache. "
+        "Any SSRF vulnerability in FortiWeb's web application, or any local process (compromised via "
+        "another vulnerability), can issue arbitrary Redis commands to all 10 instances: "
+        "KEYS *, GET <session_token>, FLUSHALL (destroy all WAF state), SET (forge session tokens), "
+        "CONFIG SET dir/dbfilename (write files to disk, potential RCE via Redis config write)."
+    ),
+
+    "evidence": {
+        "redis_configs":  "10 files in /data/etc/redis/: redis.conf (6379), redis_6380-6389.conf, redis-cache.conf (6382), redis-cache-cloud.conf (6382)",
+        "no_requirepass": "All files: requirepass commented out or absent; only '# requirepass foobared' example line",
+        "bind_loopback":  "All instances: bind 127.0.0.1 (access restricted to same host)",
+    },
+
+    "redis_config_map": {
+        "6379": "redis.conf -- primary Redis instance",
+        "6380": "redis_6380.conf",
+        "6381": "redis_6381.conf",
+        "6382": "redis-cache.conf / redis-cache-cloud.conf -- cache instance",
+        "6383": "redis_6383.conf",
+        "6384": "redis_6384.conf",
+        "6385": "redis_6385.conf",
+        "6386": "redis_6386.conf",
+        "6387": "redis_6387.conf",
+        "6388": "redis_6388.conf",
+        "6389": "redis_6389.conf",
+    },
+
+    "ssrf_amplification": (
+        "FortiWeb is a WAF that handles HTTP traffic from external clients. "
+        "Any SSRF in FortiWeb's management interface (e.g., server URL fields, webhook configs) "
+        "targeting 127.0.0.1:6379-6389 gives full unauthenticated Redis access. "
+        "FLUSHALL destroys all WAF protection state. "
+        "CONFIG SET enables Redis filesystem write (RCE path if Redis runs as root or in a writable directory)."
+    ),
+
+    "remediation": (
+        "Set unique strong passwords for each Redis instance via requirepass in each config file. "
+        "Consider Redis 6+ ACL system for granular per-command authentication. "
+        "If Redis instances do not need to talk to each other, remove all cross-instance replication config. "
+        "Monitor Redis command logs for FLUSHALL, CONFIG SET, DEBUG commands."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FWB-F07: Shibboleth SP 2.x in FortiWeb SAML implementation (EOL)
+# ---------------------------------------------------------
+FWB_F07_SHIBBOLETH_EOL = {
+    "id":       "FWB-F07",
+    "product":  "Fortinet FortiWeb 8.0.0",
+    "severity": "MEDIUM -- Shibboleth SP 2.x (EOL 2022) used for SAML SSO; same EOL library pattern as FAD-F10 in FortiADC",
+    "class":    "EOL dependency (CWE-1329) / same class as FAD-F10",
+
+    "description": (
+        "FortiWeb 8.0.0 ships Shibboleth SP configuration files at /data/etc/saml/shibboleth/ "
+        "(attribute-map.xml, attribute-policy.xml, protocols.xml, native.logger, keygen.sh, etc.). "
+        "The attribute-map.xml uses 'xmlns:urn:mace:shibboleth:2.0:attribute-map' namespace, "
+        "confirming Shibboleth SP 2.x. "
+        "Shibboleth SP 2.x reached end-of-life in 2022; shipped in FortiWeb 8.0.0 firmware (2026). "
+        "Same class of finding as FAD-F10 (FortiADC). Affects all FortiWeb deployments using SAML SSO."
+    ),
+
+    "evidence": {
+        "config_dir":        "/data/etc/saml/shibboleth/ (attribute-map.xml, attribute-policy.xml, protocols.xml, ...)",
+        "namespace":         "xmlns='urn:mace:shibboleth:2.0:attribute-map' -- Shibboleth SP 2.x namespace",
+        "eol_date":          "Shibboleth SP 2.x EOL 2022; FortiWeb 8.0.0 built 2026-07-09",
+        "cross_product":     "FAD-F10 (FortiADC 8.0.4): libshibsp-lite.so.6 + shibboleth 2.5.6 confirmed via binary strings",
+    },
+
+    "cve_candidates": {
+        "CVE-2017-16853": "Shibboleth SP 2.x < 2.6.1 -- session ID replay (same as FAD-F10)",
+    },
+
+    "remediation": "Upgrade to Shibboleth SP 3.x (supported) or migrate to a supported SAML implementation.",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "vmlinuz":        "ACCESSIBLE (46MB ELF vmlinux extracted). fortism confirmed at 0x75e905.",
     "rootfs_gz":      "BLOCKED -- custom encryption 0x84fe53de. FWB-specific.",
     "krootfs_gz":     "BLOCKED -- custom encryption 0xb63606e9. Different from rootfs.gz.",
-    "datafs_tar_gz":  "NOT YET ANALYZED (standard gzip, 18MB).",
+    "datafs_tar_gz":  "COMPLETE -- 18MB standard gzip; extracted from p1.raw ext4 (SYSLINUX boot partition); contents: bin/, config/, etc/, lib/, var/; key attack surfaces analyzed (Redis, wassd_ws.py, Shibboleth SAML, MCP schemas, Python cloud connectors)",
     "fortism_ioctls": "COMPLETE -- all 6 ioctls mapped (0x9002, 0x9003, 0x9004, 0x9005, 0x9007, 0x9009).",
     "cross_products":  "FGT-F19/F20/F21 confirmed; FGT-F16/F22 confirmed but partially mitigated.",
+
+    "datafs_contents": {
+        "etc/redis/": "10 Redis instances (6379-6389, 6382); all no requirepass; all bind 127.0.0.1 (FWB-F06)",
+        "etc/wassd_ws.py": "Fortinet cloud mgmt WebSocket client; TLS verification disabled (FWB-F05)",
+        "etc/cmf_cmdline.py": "CLI command bridge: reads file from sys.argv[1] -> pipes to /bin/cli admin cmd_line; not directly exposed",
+        "etc/saml/shibboleth/": "Shibboleth SP 2.x config files (attribute-map.xml with 2.0 namespace) (FWB-F07)",
+        "etc/mcp_schema/": "MCP protocol schemas: 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25 -- FortiWeb has MCP server/client capability",
+        "etc/mcp_security_db.json": "FortiWeb MCP security patterns DB (patterns_group, request/response scan targets); NOT yet fully analyzed",
+        "etc/globalcert/": "Fortinet_Factory2.cer, defaultcert.cer, snca2.cer referenced in wassd_ws.py",
+        "etc/filebeat/": "Filebeat config; cert/key managed by wassd_ws.py cloud channel",
+        "etc/mysql/": "MariaDB config: MyISAM engine, port 3306, socket /tmp/mysql.sock, no credentials in config",
+        "etc/aws_cloud_connector.py": "AWS EC2 API client; takes key_id, access_key as params (from CLI/config, not hardcoded)",
+        "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
+        "lib_packge/": "python-libs.tar.xz, wvs.tar.xz (Web Vulnerability Scanner library)",
+    },
+
     "unique_findings": [
         "FWB uses SMALLER object table (32 slots vs FGT/FFW's 64 slots)",
         "FWB has DIFFERENT object table address (0x82caf4c0)",
         "FWB has js MITIGATION for 0x9007 integer overflow -- FGT/FFW lack this",
         "FWB uses Linux 6.1.62 (different from FGT's 6.12.32 and FFW's 4.19.13)",
         "Dual-image boot (P1 and P2 both 781MB)",
+        "FWB-F05: wassd_ws.py ctx.verify_mode=ssl.CERT_NONE -- Fortinet cloud WebSocket MitM; injects cert updates, log forwarding targets, ABP config",
+        "FWB-F06: 10 Redis instances (6379-6389) all unauthenticated; SSRF -> FLUSHALL, session token forge, CONFIG SET RCE path",
+        "FWB-F07: Shibboleth SP 2.x (EOL 2022) SAML config; same class as FAD-F10",
+        "FortiWeb ships MCP schemas (2024-11-05 through 2025-11-25); MCP implementation in encrypted rootfs -- not yet analyzed",
+        "FortiWeb ships HSM (Luna/SafeNet) client config (Chrystoki.conf); HSM integration available but config has no credentials",
     ],
 }
