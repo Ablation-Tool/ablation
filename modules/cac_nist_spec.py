@@ -482,6 +482,36 @@ BEHAVIORAL_FINDINGS = [
         "note":  "Prior nibble-based decode (Agency=2201, PI=5836015073) disagrees with 5-bit decode. 5-bit INCITS 287 decode is authoritative per NIST SP 800-73-4. Non-standard code at system code position is anomalous.",
     },
     {
+        "id":    "F-PIV-AUTH-CERT",
+        "title": "PIV Auth cert (5FC105): KLOSTER.NICHOLAS.MICHAEL.1505393089 / DOD ID CA-64",
+        "desc":  "X.509 cert (1343B DER) at container tag 0x70. Subject CN=KLOSTER.NICHOLAS.MICHAEL.1505393089 (C=US, O=U.S. Government, OU=DoD, OU=PKI, OU=USA). Issuer: CN=DOD ID CA-64, serial 0x0FF143. Validity: 2023-02-13 to 2024-12-16 (matches card expiry). RSA-2048 public key. keyUsage=[digitalSignature] (critical). certPolicies: 2.16.840.1.101.2.1.11.42 (id-piv-auth), 2.16.840.1.101.3.2.1.3.13 (DoD). SAN: otherName OID 2.16.840.1.101.3.6.6 (id-FASC-N) = d22010da... (matches CHUID FASC-N exactly). CRL: http://crl.disa.mil/crl/DODIDCA_64.crl. AIA: caIssuers=http://crl.disa.mil/sign/DODIDCA_64.cer; OCSP=http://ocsp.disa.mil. Non-standard: stray 0x01 byte at DER offset 580 before extensions block (DoD encoding artifact; prevents openssl x509 / cryptography.x509 parsing). Non-standard: tag 0xFD wrapper before AIA extension. Container also has proprietary tag 0xBD (200B) after cert TLV.",
+        "note":  "Confirmed: Security Object signed by CA-63, PIV Auth cert by CA-64 -- CA version mismatch confirms stale Security Object theory (cert re-issued under newer CA without re-signing Security Object).",
+    },
+    {
+        "id":    "F-CA-MISMATCH",
+        "title": "CA version mismatch: Security Object=CA-63, PIV Auth cert=CA-64",
+        "desc":  "Security Object (tag 0x5FC106) CMS signed by DOD ID CA-63 (serial #07); PIV Auth cert (tag 0x5FC105) issued by DOD ID CA-64 (serial 0x0FF143). The card was re-issued or the cert was renewed under CA-64 after the Security Object was signed. Security Object was not re-signed to reflect the new cert. This directly causes F-SECOBJ-MISMATCH: the hash table covers the old cert content from CA-63 era, but current 0x5FC105 contains a CA-64 cert with a different hash.",
+        "severity": "HIGH",
+        "note":  "Root cause of F-SECOBJ-MISMATCH: card management failure -- cert renewal without Security Object re-issuance.",
+    },
+    {
+        "id":    "F-CHUID-GUID",
+        "title": "CHUID GUID (tag 0x34): cad783c7-0cf4-4251-97f5-de5e375a182b",
+        "desc":  "CHUID tag 0x34 = 16 bytes = UUID cad783c7-0cf4-4251-97f5-de5e375a182b (RFC 4122 format). Used as the card's globally unique identifier for contactless card authentication (NIST SP 800-73-4 GUID field).",
+    },
+    {
+        "id":    "F-FINGERPRINTS",
+        "title": "Fingerprint BDB: 1236B CBEFF retrieved PIN-gated (FF-padded verify); RAPIDS/ANSI-378",
+        "desc":  "GET DATA 5FC103 returned 1236B after VERIFY 9000 (PIN '123456' + 0xFF padding). Container: outer 0x53 (1232B) -> inner 0xBC CBEFF BDB (1226B) + 0xFE EDC. CBEFF BDB: Format Owner 0x030D (DoD/RAPIDS), 'US DOD RAPIDS' origin string at BDB offset 41. FASC-N bound in BDB at offset ~67 (d22010da... = exact match to CHUID FASC-N). FMR magic 'FMR\\0 20\\0' (ANSI INCITS 378-2004) at BDB offset 88 -- this is the finger minutiae template. BDB length field: 1226B total.",
+        "note":  "PIN padding: right-padded with 0xFF to 8 bytes (not 0x00). 6982 (access denied) clears after any successful VERIFY 9000 in CH role.",
+    },
+    {
+        "id":    "F-MANAGE-CHANNEL",
+        "title": "INS=0x70 MANAGE CHANNEL: OS opens ch1 (returns 0x01); PIV applet rejects ch1 (6881)",
+        "desc":  "INS=0x70 P1=00 P2=00 Le=01 returns 9000 data=01 -- logical channel 1 opened at OS layer. All PIV APDUs with CLA=0x01 (channel 1) return 6881 'Logical channel not supported'. MANAGE CHANNEL close returns 6200 (warning). Oberthur Cosmo V8 JavaCard OS supports logical channels; HID ActivID PIV applet binds exclusively to basic channel (CLA=0x00).",
+        "note":  "No expanded command surface on channel 1. Confirms PIV applet single-channel design.",
+    },
+    {
         "id":    "F-TIMING-CLEAN",
         "title": "RSA-2048 timing: TVLA clean, Hamming clean, constant-time confirmed",
         "slot":  "9E (Card Auth, NR)",
