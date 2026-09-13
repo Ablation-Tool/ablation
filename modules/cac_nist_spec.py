@@ -477,9 +477,21 @@ BEHAVIORAL_FINDINGS = [
     },
     {
         "id":    "F-FASC-N-5BIT",
-        "title": "FASC-N 5-bit INCITS 287 decode: AC=8011, CN=000054, PI=0515939123, POA=4 (contractor)",
-        "desc":  "25B FASC-N (hex: d22010da0168ad084215258360da150d733c845382201093fa) decoded via INCITS 287 5-bit BCD with odd parity. Fields: SS | Agency=8011 | FS | System=01[0x0D]2 | FS | Credential=000054 | FS | CS=1 | FS | ICI=1 | FS | PI=0515939123 | OC=0 | OI=8011 | POA=4 | ES | LRC. POA=4 = non-federal employee (contractor). PI = cardholder EDIPI. Non-standard code 0x0D (01101 binary) at System Code digit 3: not a valid BCD digit (BCD 1101=13) and not a standard INCITS 287 sentinel; likely HID ActivID proprietary encoding or card-manufacturing artifact.",
-        "note":  "Prior nibble-based decode (Agency=2201, PI=5836015073) disagrees with 5-bit decode. 5-bit INCITS 287 decode is authoritative per NIST SP 800-73-4. Non-standard code at system code position is anomalous.",
+        "title": "FASC-N corrected: AC=2100 SC=1068 CN=111154 PI=1505393089 OC=1 OI=2100 POA=4",
+        "fascn_hex": "d22010da0168ad084215258360da150d733c845382201093fa",
+        "fields": {
+            "AC":  "2100",   # DoD agency code
+            "SC":  "1068",   # System Code (DEERS/RAPIDS system identifier)
+            "CN":  "111154", # Credential Number
+            "CS":  "0",      # Credential Series
+            "ICI": "0",      # Individual Credential Issue
+            "PI":  "1505393089",  # EDIPI -- confirmed matches PIV Auth cert subject suffix
+            "OC":  "1",      # Organizational Category = Federal Government
+            "OI":  "2100",   # Organizational Identifier (= DoD, matches AC)
+            "POA": "4",      # Person-Organization Association; 4 = contractor
+        },
+        "encoding_note": "GSC-IS 2.1 Table B-3 (ABA 5-bit BCD, LSB-first digit within 5-bit code, odd parity). NOT MSB-first. Prior decode (AC=8011, CN=000054, PI=0515939123) was wrong due to MSB-first digit assumption. Code 0x0D = 01101 = digit 6 under correct LSB-first scheme (not non-standard). LRC=[39]=0x1A coincides with SS value; computed separately.",
+        "desc":  "25B FASC-N decoded via GSC-IS 2.1 Table B-3 (ABA 5-bit BCD with trailing odd parity; digit stored LSB-first: 0x10=1, 0x08=2, 0x19=3, 0x15=5, 0x1C=7, 0x02=8). SS=0x1A, FS=0x16, ES=0x1F. AC=2100 (DoD), SC=1068 (RAPIDS system), CN=111154 (credential serial), PI=1505393089 (EDIPI=matches cert suffix exactly), OC=1 (Federal Government), OI=2100 (DoD), POA=4 (contractor). Prior finding F-FASC-N-5BIT (AC=8011/PI=0515939123) retracted: MSB-first BCD mapping error.",
     },
     {
         "id":    "F-PIV-AUTH-CERT",
