@@ -441,15 +441,21 @@ BEHAVIORAL_FINDINGS = [
     },
     {
         "id":    "F-SECOBJ-MISMATCH",
-        "title": "Security Object integrity verification FAILS -- stale hashes",
+        "title": "Security Object: 2-entry hash table (CHUID + PIV Auth cert); BOTH stale; integrity non-functional",
         "severity": "HIGH",
-        "desc":  "SHA-256 hashes in Security Object (IDref=2 CHUID, IDref=3 CERT_PIV_AUTH) do not match SHA-256 of current container content in ANY representation (full raw, strip-53, inner DER, subset). Card content was modified after Security Object was last signed.",
+        "hash_table_entries": 2,
+        "expected_entries":   "6-8 per NIST SP 800-73-4",
+        "entries": [
+            {"id": 2, "container": "CHUID (5FC102)",           "stored_hash": "d861591293da59ee25e596d08cbf8b19b7e041bfd6d149eb50ae968843c9b864", "match": False},
+            {"id": 3, "container": "PIV Auth Cert (5FC105)",   "stored_hash": "b59bc5d8f207af509c43c9bcd97af1199853e420c5ac0e72fd849e515c0d3eb1", "match": False},
+        ],
+        "desc":  "Security Object hash table (per NIST SP 800-73-4 Table 6) covers only containers IDref=2 (CHUID) and IDref=3 (PIV Auth Cert). Typical Security Object covers 6-8 containers; 2-entry table is minimal. SHA-256 of neither container matches stored hash in ANY representation (full raw, strip-53 tag, inner DER, or sub-slices). Both the CHUID and PIV Auth cert were updated after the Security Object was last signed. PIV integrity chain is fully broken -- no container on the card is integrity-protected by the current Security Object.",
         "impact": "PIV integrity mechanism non-functional. Security Object CMS signature covers stale data; current CHUID and CERT_PIV_AUTH are not integrity-protected.",
-        "likely_cause": "CHUID or CERT_PIV_AUTH renewed/re-issued without re-signing Security Object; Security Object is from earlier in card lifecycle.",
-        "h_idref2_chuid":     "d861591293da59ee25e596d08cbf8b19b7e041bfd6d149eb50ae968843c9b864",
-        "h_idref3_cert_auth": "b59bc5d8f207af509c43c9bcd97af1199853e420c5ac0e72fd849e515c0d3eb1",
-        "computed_chuid":     "348eb82909fab9cba3d4aa43101dd8153f378ac597eeaea8f53e92e0be9a9026",
-        "computed_cert":      "0d5382facbc894b3f6b792a214de59aef96e0fefd0e05c1c3f034cdf1363b379",
+        "likely_cause": "CHUID and PIV Auth cert were both renewed/re-issued (CHUID GUID updated, PIV Auth cert reissued under CA-64) without re-signing Security Object. Original Security Object from CA-63 era remains on card.",
+        "current_hashes": {
+            "chuid_full_raw": "348eb82909fab9cba3d4aa43101dd8153f378ac597eeaea8f53e92e0be9a9026",
+            "cert1_full":     "0d5382facbc894b3f6b792a214de59aef96e0fefd0e05c1c3f034cdf1363b379",
+        },
     },
     {
         "id":    "F-CHUID-EXPIRED",
