@@ -459,9 +459,27 @@ BEHAVIORAL_FINDINGS = [
     },
     {
         "id":    "F-CHUID-ISSUER-SIG",
-        "title": "CHUID contains 1818B CMS issuer signature (tag 0x3E)",
-        "desc":  "CHUID tag 0x3E contains a CMS SignedData structure (1818B). This is the CHUID asymmetric signature from the issuing CA (DoD PKI). CHUID total: 2048B = FASC-N(25) + GUID(16) + Expiry(8) + IssuerSig(1818) + misc.",
-        "note":  "CHUID issuer signature not yet verified against DoD PKI chain",
+        "title": "CHUID CMS signer: DSS17.dmdc.osd.mil (DMDC/OSD) via DOD ID CA-63",
+        "desc":  "CHUID tag 0x3E = CMS SignedData (1818B). Signer cert: CN=DSS17.dmdc.osd.mil, OU=OSD, issued by CN=DOD ID CA-63 (serial #07), valid 2021-04-27 through 2027-04-07. Content OID: 2.16.840.1.101.3.6.1. Signing entity: DMDC (Defense Manpower Data Center). Cert still valid at time of analysis. Card expired 2024-12-16; signing infrastructure valid through 2027.",
+        "note":  "Signature not cryptographically verified (DoD PKI root cert not downloaded); structural parse only via openssl asn1parse. BIT STRING parse error at RSA public key offset prevents full DER extraction.",
+    },
+    {
+        "id":    "F-SECOBJ-CMS-SELF-CONSISTENT",
+        "title": "Security Object CMS message digest internally consistent",
+        "desc":  "SHA-256 of Security Object encapsulated content (96B hash table) = 73ADB543B3EC0C7763FD1321B26BB0AFF223FAE3755BCB06C6E6D8F437B1D3AA, matches the messageDigest signed attribute in the CMS exactly. Security Object CMS is self-consistent; it was validly constructed at signing time. Mismatch (F-SECOBJ-MISMATCH) is between the hash table values and current container content, not an internal CMS integrity failure.",
+        "note":  "The CMS is structurally valid. The security failure is the stale hash table, not a corrupted signature structure.",
+    },
+    {
+        "id":    "F-SIGNER-CHAIN",
+        "title": "Both CMS structures share signer: DOD ID CA-63 serial #07 / DMDC",
+        "desc":  "Security Object CMS: signerInfo references issuer CN=DOD ID CA-63, serial #07 (no embedded cert). CHUID CMS: signerInfo references same issuer/serial, embeds cert for CN=DSS17.dmdc.osd.mil. Both structures signed by the same DMDC card-issuance infrastructure. DOD ID CA-63 is a DISA-managed intermediate CA in the DoD PKI hierarchy.",
+        "note":  "Confirmed via openssl asn1parse of both CMS DER files. DOD ID CA-63 root cert publicly available from DISA PKI but not downloaded for chain verification.",
+    },
+    {
+        "id":    "F-FASC-N-5BIT",
+        "title": "FASC-N 5-bit INCITS 287 decode: AC=8011, CN=000054, PI=0515939123, POA=4 (contractor)",
+        "desc":  "25B FASC-N (hex: d22010da0168ad084215258360da150d733c845382201093fa) decoded via INCITS 287 5-bit BCD with odd parity. Fields: SS | Agency=8011 | FS | System=01[0x0D]2 | FS | Credential=000054 | FS | CS=1 | FS | ICI=1 | FS | PI=0515939123 | OC=0 | OI=8011 | POA=4 | ES | LRC. POA=4 = non-federal employee (contractor). PI = cardholder EDIPI. Non-standard code 0x0D (01101 binary) at System Code digit 3: not a valid BCD digit (BCD 1101=13) and not a standard INCITS 287 sentinel; likely HID ActivID proprietary encoding or card-manufacturing artifact.",
+        "note":  "Prior nibble-based decode (Agency=2201, PI=5836015073) disagrees with 5-bit decode. 5-bit INCITS 287 decode is authoritative per NIST SP 800-73-4. Non-standard code at system code position is anomalous.",
     },
     {
         "id":    "F-TIMING-CLEAN",
