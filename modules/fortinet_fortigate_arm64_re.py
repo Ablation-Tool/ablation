@@ -104,11 +104,14 @@ FGA_F01_FGT2_PLAINTEXT_KEY = {
     ),
 
     "scope": (
-        "CONFIRMED CROSS-ARCHITECTURE: identical modulus in both ARM64 8.0.0 and x86-64 8.0.0 datafs.tar.gz. "
-        "ARM64 modulus == x86-64 modulus (verified 2026-09-12). "
-        "Applies to all G-series hardware (50G/70G/90G/120G) and x86-64 VM targets. "
+        "CONFIRMED CROSS-ARCHITECTURE AND CROSS-PRODUCT: identical modulus in FGT ARM64 8.0.0, "
+        "FGT x86-64 8.0.0, and FortiFirewall (FFW) 8.0.0 (all three verified 2026-09-12/13). "
+        "ARM64 modulus == x86-64 modulus == FFW modulus. "
+        "Applies to all G-series hardware (50G/70G/90G/120G), x86-64 VM targets, and FortiFirewall VM. "
         "The fgt2 key pair has been shipped since at least November 2016 (cert not_before date). "
-        "fgt2.crt valid until 2056 (40-year cert)."
+        "fgt2.crt valid until 2056 (40-year cert). "
+        "Also confirmed in FFW-F05 (fortinet_fortifirewall_re.py). "
+        "Likely present in FMG and FAZ (P1 rootfs encrypted in those images, not yet verified)."
     ),
 
     "remediation": (

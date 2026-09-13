@@ -350,13 +350,96 @@ FFW_F04_IOCTL_0x9007_OVERFLOW = {
 
 
 # ---------------------------------------------------------
+# FFW-F05: Shared fgt2.key private key -- cross-product
+#          Cross-product: FGA-F01, FGT-F05
+# ---------------------------------------------------------
+FFW_F05_SHARED_FGT2_KEY = {
+    "id":       "FFW-F05",
+    "product":  "Fortinet FortiFirewall OS 8.0.0 (datafs.tar.gz -> etc/fgt2.key)",
+    "severity": "CRITICAL -- cross-product shared RSA private key; same key in FGT ARM64, FGT x86-64, and FFW",
+    "class":    "Hardcoded shared private key (CWE-321)",
+    "cross_product": [
+        "FGA-F01 (fortinet_fortigate_arm64_re.py) -- FGT ARM64 8.0.0 fgt2.key",
+        "FGT-F05 (fortinet_fortigate_re.py) -- FGT x86-64 8.0.0 fgt2.key",
+    ],
+
+    "key_material": {
+        "path":   "/etc/fgt2.key (inside datafs.tar.gz in P1 partition)",
+        "format": "PKCS#1 RSA private key",
+        "modulus_prefix": "A75C115F690B67C32834D43FE1BD50DB301CE34F...",
+        "confirmed_identical": (
+            "Modulus of FFW /etc/fgt2.key == FGT ARM64 8.0.0 fgt2.key modulus == FGT x86-64 8.0.0 fgt2.key modulus. "
+            "All three share a single RSA private key pair."
+        ),
+    },
+
+    "scope": (
+        "Cross-product: FGT (ARM64 G-series), FGT (x86-64 VM), FFW (x86-64 VM) all ship the same key. "
+        "Scope likely extends to all Fortinet products shipping fgt2.key, including FortiManager and FortiAnalyzer "
+        "(not yet verified in FAZ/FMG 8.0.0 -- P1 rootfs encrypted in those images). "
+        "Key use case: device authentication, Security Fabric PKI, VPN certificates."
+    ),
+
+    "source":       "datafs.tar.gz extracted from FFW p1.raw via debugfs; openssl rsa -noout -modulus",
+    "verification": "CONFIRMED -- modulus compared byte-for-byte across three firmware images",
+
+    "remediation": (
+        "Generate unique RSA key pairs per device at first boot or manufacturing time. "
+        "Rotate existing deployments. Revoke the shared fgt2.key from all PKI trust anchors."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FFW-F06: fortism LSM hook names in stripped vmlinux
+#          (INFO: symbol table stripped but LSM hooks preserved as strings)
+# ---------------------------------------------------------
+FFW_F06_FORTISM_SYMBOLS_IN_VMLINUX = {
+    "id":       "FFW-F06",
+    "product":  "Fortinet FortiFirewall OS 8.0.0 -- vmlinux (decompressed from flatkc)",
+    "severity": "INFO -- fortism LSM function names preserved in stripped kernel; accelerates reverse engineering",
+    "class":    "Symbol disclosure in production kernel binary",
+
+    "preserved_symbols": [
+        "fortism_file_open", "fortism_path_link", "fortism_path_symlink",
+        "fortism_kernel_load_data", "fortism_run_trigger", "fortism_learn_policy",
+        "fortism_check_result", "fortism_check_acl", "fortism_add_acl_policy",
+        "fortism_policy_to_1path_acl", "fortism_file_ioctl", "fortism_file_mprotect",
+        "fortism_file_mmap", "__fortism_capable", "fortism_path_chroot",
+    ],
+
+    "mechanism": (
+        "Linux LSM hooks are registered via security_add_hooks() with a string name. "
+        "These strings survive stripping because they are referenced by the LSM framework. "
+        "The vmlinux is marked 'stripped' by file(1) (ELF symbol table absent) but LSM hook "
+        "registration strings remain in the .rodata section."
+    ),
+
+    "research_value": (
+        "fortism_policy_to_1path_acl and fortism_add_acl_policy are policy enforcement functions. "
+        "fortism_learn_policy suggests a dynamic learning mode (disabled at runtime?). "
+        "Combined with ioctl analysis (FFW-F01 through FFW-F04), these names enable "
+        "precise code navigation in the 4.19.13 vmlinux at known file offsets."
+    ),
+
+    "source":       "strings output from FFW vmlinux (decompressed 27MB ELF)",
+    "verification": "CONFIRMED -- strings | grep fortism returns 15 named hooks",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "flatkc_vmlinux":  "ACCESSIBLE (extracted, 26MB ELF). fortism module confirmed at 0x55d636.",
+    "flatkc_vmlinux":  "ACCESSIBLE (extracted, 27MB ELF). fortism module confirmed at 0x55d636.",
     "rootfs_gz":       "BLOCKED -- custom encryption 0xa3ba56c6. NOT gzip, NOT FAZ/FMG format.",
-    "datafs_tar_gz":   "NOT YET ANALYZED (standard gzip, 20MB).",
+    "datafs_tar_gz": {
+        "status":      "ANALYZED",
+        "key_finding": "FFW-F05 -- fgt2.key modulus identical to FGT ARM64 and x86-64 8.0.0",
+        "files":       ["etc/fgt2.key", "etc/fgt_512.key", "etc/fgt2.crt", "etc/fortism_config.json"],
+    },
     "fortism_ioctls":  "COMPLETE -- all 6 ioctls mapped (0x9002, 0x9003, 0x9004, 0x9005, 0x9007, 0x9009).",
-    "cross_products":  "FGT-F19/F20/F21/F22 all confirmed in FFW 8.0.0.",
+    "cross_products":  "FGT-F19/F20/F21/F22 confirmed in FFW 8.0.0; FFW-F05 extends FGA-F01/FGT-F05 cross-product key scope.",
     "kernel_age":      "Linux 4.19.13 (2019 kernel, EOL LTS; Fortinet patched build 2026-04-20).",
+    "unique_findings": ["FFW-F01", "FFW-F02", "FFW-F03", "FFW-F04", "FFW-F05", "FFW-F06"],
 }
