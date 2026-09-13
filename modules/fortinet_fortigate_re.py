@@ -812,8 +812,31 @@ cmp rax, 0xffffffff8165f620       ; SENTINEL CHECK — skips null
 je sentinel_exit
 """,
 
-    "impact": "Kernel panic via null-ptr dereference -> system reboot. Reachable on any path that creates a fortism object with type=7 and a partial list.",
-    "status": "CANDIDATE — trigger condition (type=7 with mid-chain null) not yet exercised",
+    "crash_point_analysis": {
+        "crash_vma":     "0xffffffff80551519",
+        "crash_foff":    "0x551519",
+        "crash_insn":    "mov eax, dword ptr [r14 + 0x10]",
+        "chain":         (
+            "Chain walk at 0x5514c7: rax = [[r13+0x30]] (next ptr of current element). "
+            "If next ptr is null: rax=0 stored to [r13+0x30] at 0x5514ce. "
+            "Sentinel check at 0x5514fa: cmp rax, 0xffffffff8165f620 -- null != sentinel, no branch. "
+            "Fall-through: 0x551506: mov r14, [r13+0x30] -- r14 = null. "
+            "Crash: 0x551519: mov eax, [r14+0x10] -- deref null+0x10 = page fault -> kernel panic."
+        ),
+        "trigger_analysis": (
+            "Type=7 is a TRANSIENT state in the fortism object state machine. "
+            "After the chain walk, type is immediately set to 1 (0x5514f2). "
+            "The state machine is driven by a loop: add [r13+0x58], 1 at 0x5515f2; "
+            "type increments through processing loop. Type=7 is reached after 6 loop iterations. "
+            "Mid-chain null requires list corruption prior to type=7: "
+            "(a) concurrent list modification race, (b) prior memory corruption bug, "
+            "or (c) Fortinet list-building bug that omits sentinel for certain list lengths. "
+            "NOT directly triggerable from unprivileged user-space without a prerequisite condition."
+        ),
+    },
+
+    "impact": "Kernel panic via null-ptr dereference -> system reboot. Reachable on any path that creates a fortism object with type=7 and a mid-chain null in its processing list.",
+    "status": "CANDIDATE -- NARROWED: crash point confirmed at 0xffffffff80551519 (r14=null dereference); trigger requires mid-chain null in fortism processing list; type=7 is transient (6 loop iterations); direct trigger from user-space requires prerequisite list corruption",
 }
 
 # ─────────────────────────────────────────────────────────
