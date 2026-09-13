@@ -526,7 +526,7 @@ SBVM_CATALOG = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "rootfs":      "COMPLETE -- ext4 fully accessible (FAD only non-encrypted Fortinet 8.0.x rootfs)",
-    "vmlinux":     "ACCESSIBLE (38MB ELF). Kernel modules analyzed. vtb.ko ioctl surface pending deep RE.",
+    "vmlinux":     "COMPLETE -- 38MB ELF; all custom kernel modules analyzed; vtb.ko 4-ioctl surface fully mapped (FAD-F02): cmd 0x89f0 missing CAP_NET_ADMIN (READ-ONLY vtb server table leak), cmds 0x89f1/f2/f3 all gated on CAP_NET_ADMIN; source path leaked: /root/FortiADC_test/FortiADC/kernel/modules-6.1/vtb/vtbk.c",
     "sbvm_format": "COMPLETE -- DES-CBC key=IV='S3crtMsG' confirmed by decryption of fgt601v1.pkg",
     "libFCP_so":   "COMPLETE -- full API disassembled (15 exports); 42-entry FCP object type table decoded (VA 0x34c0, 25B stride); gpVerifyPkg CRC32-only confirmed (no crypto imports for signing); DES key hardcoded at both file offset 0x3d90 (data) and VA 0x1a05 movabs immediate (text); cross-product scope confirmed (FIMG/ONCE/DCEN/FAEN types); FAD-F03 added",
     "vtb_ko":      "COMPLETE -- 4 ioctl cmds (0x89f0-0x89f3); cmd 0x89f0 missing CAP_NET_ADMIN gate; 0x5ff8-byte copy_from_user without privilege check",
