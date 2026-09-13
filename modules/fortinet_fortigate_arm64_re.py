@@ -104,9 +104,11 @@ FGA_F01_FGT2_PLAINTEXT_KEY = {
     ),
 
     "scope": (
-        "Confirmed in ARM64 8.0.0 datafs.tar.gz. "
-        "High probability same key exists in x86-64 8.0.0 and all G-series hardware (50G/70G/90G/120G). "
-        "The fgt2 key pair has been shipped since at least November 2016 (cert not_before date)."
+        "CONFIRMED CROSS-ARCHITECTURE: identical modulus in both ARM64 8.0.0 and x86-64 8.0.0 datafs.tar.gz. "
+        "ARM64 modulus == x86-64 modulus (verified 2026-09-12). "
+        "Applies to all G-series hardware (50G/70G/90G/120G) and x86-64 VM targets. "
+        "The fgt2 key pair has been shipped since at least November 2016 (cert not_before date). "
+        "fgt2.crt valid until 2056 (40-year cert)."
     ),
 
     "remediation": (
@@ -123,7 +125,7 @@ FGA_F01_FGT2_PLAINTEXT_KEY = {
 # ---------------------------------------------------------
 FGA_F02_FGT_512_BROKEN_KEY = {
     "id":       "FGA-F02",
-    "product":  "Fortinet FortiGate ARM64 8.0.0",
+    "product":  "Fortinet FortiGate ARM64 8.0.0 and x86-64 8.0.0 (cross-arch confirmed)",
     "severity": "CRITICAL -- RSA-512 private key in plaintext; 512-bit RSA is factored in hours",
     "class":    "Cryptographically broken hardcoded key",
     "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key), CWE-326 (Inadequate Encryption Strength)",
@@ -586,6 +588,115 @@ FGA_F08_OBJECT44_BRANCH_FLIP = {
 
 
 # ---------------------------------------------------------
+# FGA-F09: WEB_SVC (/bin/node) domain over-privilege
+#          fortism_config.json: Node.js has CAP_SYS_ADMIN + factory CA key read
+# ---------------------------------------------------------
+FGA_F09_WEB_SVC_OVERPRIVILEGE = {
+    "id":       "FGA-F09",
+    "product":  "Fortinet FortiGate 8.0.0 (ARM64 and x86-64; all G-series and VM targets)",
+    "severity": "HIGH -- /bin/node (WEB_SVC fortism domain) granted CAP_SYS_ADMIN, CAP_SYS_PTRACE, "
+                "CAP_DAC_READ_SEARCH, CAP_DAC_OVERRIDE, and file-system read access to the Fortinet factory root CA private key; "
+                "RCE in node -> full system compromise + factory CA exfiltration",
+    "class":    "Privilege over-assignment; sensitive file over-exposure (CWE-732, CWE-312)",
+    "source":   "fortism_config.json -- WEB_SVC domain (id=23), Permission_Policies section",
+
+    "domain": {
+        "name":         "WEB_SVC",
+        "id":           23,
+        "binary":       "/bin/node",
+        "default_act":  "EXCLUDE",
+        "anon_mem_exec": 1,
+        "also_includes": ["/bin/httpsnifferd", "/bin/brotli", "/bin/pigz"],
+    },
+
+    "capabilities_granted": [
+        "CAP_SYS_ADMIN",         # mount, device, namespace, and many other privileged operations
+        "CAP_SYS_PTRACE",        # ptrace any process (including init, management daemons)
+        "CAP_SYS_TTY_CONFIG",
+        "CAP_NET_BIND_SERVICE",
+        "CAP_DAC_READ_SEARCH",   # bypass DAC read permission on any file / directory
+        "CAP_DAC_OVERRIDE",      # bypass DAC write/execute permission on any file
+        "CAP_NET_RAW",
+        "CAP_NET_ADMIN",
+    ],
+
+    "over_privileged_file_access": {
+        "root_factory_key": {
+            "path":   "/data/etc/cert/factory/root_Fortinet_Factory.key",
+            "access": "READ (explicit allow in WEB_SVC read list)",
+            "impact": "If Node.js is exploited (RCE), attacker reads the Fortinet factory root CA private key. "
+                      "That key can sign certificates for any FortiGate device identity, enabling MITM against the entire Fortinet Security Fabric.",
+        },
+        "root_factory_cert": {
+            "path":   "/data/etc/cert/factory/root_Fortinet_Factory.cer",
+            "access": "READ",
+        },
+        "device_ca_dir": {
+            "path":   "/data/etc/cert/ca/*",
+            "access": "READ -- all CA certificates on the device",
+        },
+        "device_local_certs": {
+            "path":   "/data/etc/cert/local/*",
+            "access": "READ -- device-specific private keys",
+        },
+        "self_key": {
+            "path":   "/data/etc/cert/self.key",
+            "access": "READ",
+        },
+        "migadmin": {
+            "path":   "/data/migadmin/#",
+            "access": "READ -- migration admin data (wildcard recursive)",
+        },
+    },
+
+    "network_exposure": {
+        "ipv4_connect": "INCLUDEALL -- unrestricted outbound IPv4 connections to any address (internet-capable)",
+        "ipv6_listen":  "INCLUDEALL -- unrestricted inbound IPv6 listen",
+        "unix_sockets": [
+            "/tmp/httpsd.sock", "/tmp/httpclid.sock",
+            "/tmp/web_svc_bridge/#", "/tmp/nst/.nst.ipc",
+            "/tmp/node-csf.sock", "/tmp/node-fmg.sock",
+            "/tmp/node-faz.sock", "/tmp/node-oaas.sock",
+            "/tmp/http_authd_req",
+        ],
+        "note": "Node connects to httpsd (web frontend), FortiManager, FortiAnalyzer, http_authd, and fabric services; "
+                "compromise propagates to the full Fortinet Security Fabric management plane",
+    },
+
+    "anon_mem_exec_note": (
+        "anon-mem-exec: 1 grants Node.js anonymous-memory execution (required for V8 JIT). "
+        "Under the fortism security model this is an exception to the default EXCLUDE policy. "
+        "Combined with Node RCE, this means the memory protection does not prevent shellcode execution -- "
+        "V8 JIT already maps anonymous RWX pages."
+    ),
+
+    "cap_sys_ptrace_impact": (
+        "CAP_SYS_PTRACE allows ptrace of any process including /bin/init (pid 1) and management daemons. "
+        "RCE in node -> ptrace /bin/init -> inject shellcode -> full OS privilege escalation. "
+        "This is a direct privilege escalation path independent of kernel vulnerabilities."
+    ),
+
+    "attack_path": (
+        "1. Exploit RCE in /bin/node (web API endpoint, node-scripts handler, or FortiOS web management panel). "
+        "2. From Node execution context: read /data/etc/cert/factory/root_Fortinet_Factory.key (no escalation needed -- already permitted). "
+        "3. Use CAP_SYS_PTRACE to attach to /bin/init or any management daemon; inject shellcode for root shell. "
+        "4. Factory root CA key enables signing new device certificates; "
+        "   combined with FGA-F01 (shared fgt2.key), attacker can impersonate any FortiGate in a Security Fabric."
+    ),
+
+    "remediation": [
+        "Remove CAP_SYS_ADMIN and CAP_SYS_PTRACE from WEB_SVC domain; web service has no legitimate need for either.",
+        "Remove read access to /data/etc/cert/factory/root_Fortinet_Factory.key from WEB_SVC policy.",
+        "Remove CAP_DAC_READ_SEARCH and CAP_DAC_OVERRIDE; use explicit path allowances instead.",
+        "The factory root CA key should not reside on device filesystem; it is a build-time signing key.",
+    ],
+
+    "verification": "CONFIRMED -- fortism_config.json WEB_SVC Permission_Policies section (line ~3522); "
+                    "capabilities and file read paths extracted directly from config.",
+}
+
+
+# ---------------------------------------------------------
 # Cross-product reference
 # ---------------------------------------------------------
 CROSS_PRODUCT_FORTISM = {
@@ -597,6 +708,7 @@ CROSS_PRODUCT_FORTISM = {
     "FFF-F01 (FortiFone)":     "FGA-F01 -- same plaintext private key pattern (server.key in FortiFone, fgt2.key in FortiGate)",
     "FGA-F07 (ARM64-only)":    "ioctl 0x9009 FORTISM_OBJECT_STATE_QUERY -- unauth object[+0x30] read; state==3 leaks global",
     "FGA-F08 (ARM64)":         "0x9004 UNAUTH write to object[+0x44] flips 3 kernel branch gates; enables 511-byte sub-ptr path + fn-ptr indirect call; chain primitive",
+    "FGA-F09 (all arches)":    "WEB_SVC (/bin/node) domain: CAP_SYS_ADMIN + CAP_SYS_PTRACE + CAP_DAC_READ_SEARCH + factory root CA key read; node RCE -> ptrace-based privesc + factory key exfil",
 }
 
 
@@ -620,11 +732,11 @@ ANALYSIS_STATUS = {
         "FGA-F06: MEDIUM -- ARM64 fortism full ioctl map: 0x9003/0x9004/0x9005 unauth primitives confirmed; 0x9009 ARM64-only addition; 0x9001/0x9006 absent",
         "FGA-F07: INFO -- ioctl 0x9009 (FORTISM_OBJECT_STATE_QUERY) exists in ARM64 8.0.0 but not x86-64; unauth; reads object[+0x30] or global 0xffff0000090f17c0",
         "FGA-F08: MEDIUM -- UNAUTH ioctl 0x9004 write to object[+0x44] flips 3 kernel security branch gates (0x2de2f4 bit1, 0x2dffac >1, 0x2d9ee4 bit26); enables 511-byte sub-ptr-dereference path and fn-ptr indirect call path without auth",
+        "FGA-F09: HIGH -- /bin/node WEB_SVC domain: CAP_SYS_ADMIN+CAP_SYS_PTRACE+CAP_DAC_READ_SEARCH+CAP_DAC_OVERRIDE; read access to /data/etc/cert/factory/root_Fortinet_Factory.key; ipv4-connect INCLUDEALL; node RCE -> ptrace privesc + factory CA exfil",
     ],
 
     "pending": {
-        "fgt2_key_scope":  "Verify fgt2.key is identical in x86-64 FGT 8.0.0 datafs",
-        "node_js_surface": "/bin/node (WEB_SVC domain) -- Node.js attack surface in FortiOS not yet analyzed",
+        "node_js_surface_deep": "/bin/node -- node-scripts content analysis pending (not in datafs.tar.gz; in rootfs.gz which is encrypted)",
     },
 
     "closed": {
@@ -632,5 +744,8 @@ ANALYSIS_STATUS = {
                              "p=0xd7dc3ab96b8a6fd7f2218fc1f24ed0e3c5bfcf53172ba28aea91fda3219029a9 (256-bit); "
                              "q=0xd7c1f8df3c2218e4c3dc9da60279be2de8eac4a645b8bc39f19edf0fbb6c82b7 (256-bit); "
                              "p*q==n confirmed. Documented in FGA-F02.",
+        "fgt2_key_scope":    "CONFIRMED 2026-09-12 -- fgt2.key modulus IDENTICAL in ARM64 8.0.0 and x86-64 8.0.0 datafs.tar.gz. "
+                             "Scope of FGA-F01 extends to all FortiGate 8.0.0 targets across both architectures. "
+                             "fgt_512.key also identical cross-arch (FGA-F02 scope confirmed x86-64).",
     },
 }
