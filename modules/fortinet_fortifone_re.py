@@ -280,6 +280,67 @@ FFF_F05_CI_ARTIFACT_IN_PRODUCTION = {
 
 
 # ---------------------------------------------------------
+# FFF-F06: nodeIntegration:true + contextIsolation:false in all BrowserWindows
+#          XSS in renderer -> full OS code execution
+# ---------------------------------------------------------
+FFF_F06_NODE_INTEGRATION_XSS_TO_RCE = {
+    "id":       "FFF-F06",
+    "product":  "Fortinet FortiFone Desktop v8.0 build 67",
+    "severity": "HIGH -- nodeIntegration:true + contextIsolation:false in all renderer BrowserWindows; XSS in any rendered content = full OS RCE",
+    "class":    "Electron security misconfiguration (CWE-653): Node.js API exposed to renderer processes",
+
+    "description": (
+        "All five BrowserWindows in FortiFone (guiWin, callWindow, dialpadWin, notifierWindow, simTestWin) "
+        "are created with nodeIntegration:true and contextIsolation:false. "
+        "The source explicitly comments these as '//security #2', "
+        "confirming Fortinet is aware of the risk but intentionally left it enabled. "
+        "With contextIsolation:false, the Node.js runtime (require(), process, fs, child_process) "
+        "is available to all JavaScript executing in the renderer -- including any server-provided "
+        "data rendered via innerHTML, chat messages, calendar events, or SIP messages. "
+        "An XSS in any of these surfaces chains directly to OS-level code execution on the client machine."
+    ),
+
+    "code_evidence": {
+        "guiWin":         "main.js:962-963: nodeIntegration: true, //security #2 | contextIsolation: false, // expose node API",
+        "callWindow":     "main.js:1316-1317: same flags",
+        "dialpadWin":     "main.js:1493-1494: same flags",
+        "notifierWin":    "main.js:1604-1605: same flags",
+        "simTestWin":     "main.js:1704-1705: same flags (//security #2)",
+        "meeting_window": "main.js:1780-1782: EXCEPTION -- FortiMeet BrowserWindow has NO nodeIntegration (only preload script); mitigated",
+    },
+
+    "attack_surface": {
+        "renderer_content": [
+            "Chat messages received from FortiVoice server (rendered by fvoiceChat)",
+            "SIP INFO headers (contact name, caller ID) rendered in call UI",
+            "Calendar event titles/descriptions (fortivoiceCalendar)",
+            "Notification content (fortivoiceNotifier/fvoiceNotifier.html)",
+            "FortiVoice admin portal embedded iframe (portalWindow)",
+        ],
+        "server_side": "Attacker controls a FortiVoice PBX OR MITM's the FortiFone-to-PBX connection",
+    },
+
+    "navigation_control": (
+        "guiWin and callWindow have will-navigate handlers (handleRedirect) that prevent top-level "
+        "navigation to external URLs. This does NOT prevent sub-resource XSS: scripts, fetch, innerHTML. "
+        "No Content-Security-Policy is set by the Electron main process."
+    ),
+
+    "build_expiration": {
+        "date":      "2026-10-01T00:00:01 (hardcoded in main.js:536)",
+        "cert_link": "set to match PKCS12 cert expiry (2026-10-12); app stops functioning 11 days before cert expiry",
+        "code":      "global.sharedObject.build_expiration_date = new Date('2026-10-01T00:00:01')",
+    },
+
+    "chain": (
+        "MitM FortiVoice TLS (possible via FFF-F02 shared client cert extraction) -> "
+        "inject XSS payload into PBX response rendered by renderer with nodeIntegration:true -> "
+        "require('child_process').execSync('id') -> RCE on FortiFone Desktop user account"
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -292,6 +353,7 @@ ANALYSIS_STATUS = {
     "ca_chain":         "EXTRACTED -- fortinet-ca2 RSA-8192 + fortinet-subca2001 RSA-2048; no private keys (FFF-F04)",
     "ci_artifact":      "IDENTIFIED -- macOS codesign script in production bundle; WWDR Team ID extracted (FFF-F05)",
     "electron_binary":  "NOT ANALYZED -- /opt/FortiFone/fortifone is stripped; native Electron binary, not Fortinet code",
+    "main_js":          "COMPLETE -- nodeIntegration:true + contextIsolation:false at 5 BrowserWindow creation sites with //security #2 comment; FortiMeet window correctly sandboxed (FFF-F06)",
 
     "unique_findings": [
         "FFF-F01: LOW -- shared RSA-2048 TLS private key (server.key) in all v8.0b67 installations; localhost HTTPS IPC",
@@ -299,6 +361,7 @@ ANALYSIS_STATUS = {
         "FFF-F03: INFO -- FEScrambler XOR obfuscation (magic=0x1f) on FortiVoice PBX protocol; single-byte XOR over TLS; security through obscurity only",
         "FFF-F04: INFO -- Fortinet internal CA chain (fortinet-ca2 RSA-8192, valid 2016-2056) bundled for server cert validation; no private key material",
         "FFF-F05: LOW -- CI/CD script (init-macOS-codesign-notary-keychain.sh) + .gitlab-ci.yml + .devops in production asar; WWDR Team ID AH4XFXJ7DK exposed",
+        "FFF-F06: HIGH -- nodeIntegration:true + contextIsolation:false in all 5 GUI BrowserWindows (guiWin/callWindow/dialpadWin/notifierWindow/simTestWin); comment '//security #2' confirms known risk; XSS in any renderer content (chat, SIP caller-ID, calendar, notifications) -> require('child_process') -> OS RCE on FortiFone Desktop client",
     ],
 
     "vs_other_products": {
