@@ -623,8 +623,14 @@ ANALYSIS_STATUS = {
     ],
 
     "pending": {
-        "fgt2_key_scope":    "Verify fgt2.key is identical in x86-64 FGT 8.0.0 datafs",
-        "fgt_512_factoring": "Extract 512-bit modulus from fgt_512.crt; factor; reconstruct private key",
-        "node_js_surface":   "/bin/node (WEB_SVC domain) -- Node.js attack surface in FortiOS not yet analyzed",
+        "fgt2_key_scope":  "Verify fgt2.key is identical in x86-64 FGT 8.0.0 datafs",
+        "node_js_surface": "/bin/node (WEB_SVC domain) -- Node.js attack surface in FortiOS not yet analyzed",
+    },
+
+    "closed": {
+        "fgt_512_factoring": "COMPLETE -- fgt_512.key is PLAINTEXT in datafs; no factoring needed. "
+                             "p=0xd7dc3ab96b8a6fd7f2218fc1f24ed0e3c5bfcf53172ba28aea91fda3219029a9 (256-bit); "
+                             "q=0xd7c1f8df3c2218e4c3dc9da60279be2de8eac4a645b8bc39f19edf0fbb6c82b7 (256-bit); "
+                             "p*q==n confirmed. Documented in FGA-F02.",
     },
 }
