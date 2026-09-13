@@ -356,6 +356,7 @@ ANALYSIS_STATUS = {
     "main_js":          "COMPLETE -- nodeIntegration:true + contextIsolation:false at 5 BrowserWindow creation sites with //security #2 comment; FortiMeet window correctly sandboxed (FFF-F06); IPC get_password handler unvalidated service name (FFF-F07)",
     "fvPasswordProxy":  "COMPLETE -- fortivoiceShared/fvPasswordProxy.js; keytar account = os.userInfo().username; 5 services: fortifone-{account,jwt-expire,jwt-token,session-magic,sip}; renderer path: ipcRenderer.sendSync('get_password', {service: '...'}); no service name validation",
 
+    "unique_findings": [
         "FFF-F07: HIGH -- IPC get_password handler (main.js:3688) accepts arbitrary service name from renderer with no validation; XSS in any nodeIntegration:true renderer (FFF-F06) -> ipcRenderer.sendSync('get_password', {service:'fortifone-sip'}) -> synchronous OS keychain read; all 5 stored credentials exfiltrated: fortifone-sip (VoIP password), fortifone-jwt-token (FortiVoice API JWT), fortifone-account (account URL+username), fortifone-session-magic, fortifone-jwt-expire",
         "FFF-F01: LOW -- shared RSA-2048 TLS private key (server.key) in all v8.0b67 installations; localhost HTTPS IPC",
         "FFF-F02: HIGH -- shared PKCS12 mTLS client cert; passphrase CONFIRMED (desktopapp#2025 via AES-256-CBC+SHA256('fortinet desktop app')); RSA-4096 private key extracted; cert valid to 2026-10-12; all FortiFone Desktop v8.0b67 installations share one mTLS identity",
