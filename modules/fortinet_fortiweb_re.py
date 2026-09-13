@@ -689,7 +689,7 @@ FWB_F10_PYTHON_DEPS_CVES = {
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "vmlinuz":        "ACCESSIBLE (46MB ELF vmlinux extracted). fortism confirmed at 0x75e905.",
+    "vmlinuz":        "COMPLETE -- 46MB ELF vmlinux extracted; fortism at 0x75e905; all 6 ioctls (0x9002/3/4/5/7/9) mapped and analyzed (FWB-F01 through FWB-F04); object table at 0xffffffff82caf4c0 (32-slot, smaller than FGT's 64-slot); no additional fortism findings beyond FWB-F01..F04",
     "rootfs_gz":      "BLOCKED -- custom encryption 0x84fe53de. FWB-specific.",
     "krootfs_gz":     "BLOCKED -- custom encryption 0xb63606e9. Different from rootfs.gz.",
     "datafs_tar_gz":  "COMPLETE -- 18MB standard gzip; extracted from p1.raw ext4 (SYSLINUX boot partition); contents: bin/, config/, etc/, lib/, var/; key attack surfaces analyzed (Redis, wassd_ws.py, Shibboleth SAML, MCP schemas, Python cloud connectors)",
