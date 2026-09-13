@@ -479,7 +479,49 @@ call kmalloc                 ; allocates ONLY r13d bytes, not rbx+9
         "Kernel SLUB allocator mitigations (KASAN, hardened usercopy) may prevent exploitation on hardened builds",
     ],
 
-    "status": "CANDIDATE — caller chain not yet traced; 32-bit truncation not confirmed reachable from external input",
+    "caller_chain_analysis": {
+        "method":       "full .text E8-scan + capstone disasm of all 4 call sites",
+        "callers":      4,
+        "sites": [
+            {
+                "vma":    "0xffffffff8054a1e5",
+                "foff":   "0x54a1e5",
+                "length_source": "rcx inherited from caller at 0x54ab91; rcx=[rbp-0x58] set by function 0x54962d",
+            },
+            {
+                "vma":    "0xffffffff8054a32f",
+                "foff":   "0x54a32f",
+                "length_source": "rcx = qword ptr [rbp-0x78] written by function 0x54962d at 0x54a311",
+            },
+            {
+                "vma":    "0xffffffff8054a367",
+                "foff":   "0x54a367",
+                "length_source": "rcx = qword ptr [rbp-0x78] same as above; second call same function",
+            },
+            {
+                "vma":    "0xffffffff8054abb2",
+                "foff":   "0x54abb2",
+                "length_source": "rcx = qword ptr [rbp-0x58] written by function 0x54962d at 0x54ab6b",
+            },
+        ],
+        "length_derivation": (
+            "All 4 sites route through function 0x54962d which reads key->description->length "
+            "via: movzx eax, word ptr [rax+0x10] (ZERO-EXTENDED u16 field). "
+            "Maximum value: 0xffff = 65535. "
+            "Required for 32-bit overflow: rbx >= 0xfffffff7 = 4,294,967,287. "
+            "0xffff + 9 = 0x10008 -- no wrap in 32 bits. "
+            "Earlier outer-function bounds check at 0x54a9b7 (cmp rax, 0x7ffe) additionally "
+            "constrains some paths to <= 0x7fff."
+        ),
+        "verdict": (
+            "CONFIRMED NOT EXPLOITABLE. The 32-bit LEA truncation is present in the binary "
+            "but structurally unreachable: no call site can supply rbx >= 0xfffffff7. "
+            "Length is always sourced from a u16 kernel key description field. "
+            "Downgrade from HIGH CANDIDATE to INFO. No CVE warranted."
+        ),
+    },
+
+    "status": "CONFIRMED NOT EXPLOITABLE -- all 4 call sites source length from u16 key_desc field (max 0xffff); 32-bit overflow requires >= 0xfffffff7; structurally unreachable",
 }
 
 # ─────────────────────────────────────────────────────────
@@ -816,7 +858,40 @@ FGT_F13_FORTISM_GLOBAL_FLAG = {
 """,
 
     "impact": "If reachable from unprivileged context: globally disables fortism LSM enforcement for all processes on the system.",
-    "status": "CANDIDATE — LSM hook invocation context (which file operation triggers this) not yet mapped",
+
+    "static_analysis": {
+        "hook_name_string": (
+            "Rodata at foff 0x123d370-0x123d380 contains the string 'fortism_check_mm_maps' "
+            "immediately preceding the hook function pointer (rodata foff 0x123d3b8 = pointer "
+            "to 0xffffffff8055e297). Pattern confirmed: rodata string precedes each hook entry "
+            "in the fortism hook table. Adjacent entry: 'fortism_bprm_check_security' at "
+            "0x123d350-0x123d368 -> pointer at 0x123d3a8 = 0xffffffff8044825d. "
+            "Hook identity: 'fortism_check_mm_maps' = Fortinet-named mmap_addr LSM hook "
+            "(kernel hook: security_mmap_addr, called for every mmap() syscall)."
+        ),
+        "flag_semantics": (
+            "Global flag at 0xffffffff81660a18 is a 3-state init counter. "
+            "3 references found via full .text RIP-relative scan: "
+            "  WRITE at 0x55e2ab: mov [flag], 1 (this hook, flag 0->1). "
+            "  READ  at 0x55e2e2: cmp [flag], 2; setne al; ret "
+            "    => returns 1 when flag != 2 (not fully initialized). "
+            "  READ  at 0x55eb6b: same pattern (cmp [flag], 2). "
+            "Flag=2 requires a separate write path not in fortism region "
+            "(likely module init routine executed at load time). "
+            "Impact narrowed: this hook triggers 0->1 from any unprivileged mmap(), "
+            "NOT a direct MAC bypass. Enforcement requires flag=2 from a privileged path."
+        ),
+        "revised_impact": (
+            "Hook fires on mmap_addr without privilege check. Flag write (0->1) "
+            "races with module init that sets flag=2. All enforcement checks compare "
+            "to 2 (not to 1), so flag=1 does not enable or disable enforcement. "
+            "Missing capability check confirmed; practical impact LOW -- the unprivileged "
+            "flag write does not grant access beyond what the 0->1 state represents, "
+            "and that state is pre-enforcing by design."
+        ),
+    },
+
+    "status": "CANDIDATE -- NARROWED: hook = 'fortism_check_mm_maps' (mmap_addr); flag is 3-state init counter; hook sets flag 0->1 (not 1->0); enforcement gate checks for flag==2; unprivileged trigger confirmed but NOT a MAC bypass; impact LOW",
 }
 
 # ─────────────────────────────────────────────────────────
