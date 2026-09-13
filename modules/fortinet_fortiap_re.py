@@ -348,16 +348,186 @@ FAP_F06_PASSWD_CMD_INJECTION = {
 
 
 # ---------------------------------------------------------
+# FAP-F07: devmem hidden command -- physical memory R/W as uid=0
+# ---------------------------------------------------------
+FAP_F07_DEVMEM_PHYSMEM = {
+    "id":       "FAP-F07",
+    "product":  "Fortinet FortiAP 23JF v7.2.0",
+    "severity": "HIGH -- fapcli hidden command list includes devmem (busybox devmem); combined with FAP-F02 empty password, any network host gets physical memory R/W on the AP SoC",
+    "class":    "Exposed privileged hardware interface (CWE-284)",
+
+    "description": (
+        "fapcli's hidden command list (/etc/fap/cli_cmds after '# hidden commands' section) "
+        "includes /sbin/devmem, which is a symlink to busybox devmem. "
+        "busybox devmem provides read and write access to physical memory via /dev/mem. "
+        "On ARM64 Linux, /dev/mem exposes the full physical address space including "
+        "MMIO-mapped peripheral registers, kernel memory, and hardware crypto accelerators. "
+        "admin (uid=0) has unrestricted access to /dev/mem. "
+        "Combined with FAP-F02 (any network host can SSH as admin with no password), "
+        "this gives an unauthenticated remote attacker full physical memory R/W capability "
+        "on the Qualcomm IPQ60xx SoC: kernel data structures, crypto key material, "
+        "Wi-Fi firmware state, MMIO registers."
+    ),
+
+    "evidence": {
+        "cli_cmds_entry":   "/sbin/devmem (listed under '# hidden commands' in /etc/fap/cli_cmds)",
+        "devmem_target":    "/sbin/devmem -> ../bin/busybox (busybox devmem applet)",
+        "dev_mem":          "busybox devmem reads/writes /dev/mem directly",
+        "uid":              "admin uid=0 -> unrestricted /dev/mem access",
+    },
+
+    "primitives": {
+        "read_kernel_mem":  "devmem <phys_addr> [width] -> read physical address (kernel data, crypto keys)",
+        "write_kernel_mem": "devmem <phys_addr> [width] <value> -> write physical address (patch running kernel)",
+        "mmio_access":      "Qualcomm IPQ60xx MMIO base addresses (Wi-Fi MAC, crypto engine, GPIO) accessible via devmem",
+        "wlan_key_extract": "Wi-Fi session keys held in kernel/driver memory accessible at runtime via devmem if KASLR not enabled",
+    },
+
+    "chain_with_fap_f02": {
+        "step_1":  "SSH to port 22 as admin with no password (FAP-F02)",
+        "step_2":  "fapcli session -- run 'devmem <addr>' (hidden command)",
+        "step_3":  "read/write Qualcomm IPQ60xx physical memory as uid=0",
+        "impact":  "kernel memory manipulation, MMIO register tampering, crypto key extraction",
+    },
+
+    "remediation": (
+        "Remove devmem from fapcli's command list (both visible and hidden). "
+        "Restrict /dev/mem access via a kernel config option (CONFIG_STRICT_DEVMEM=y) "
+        "which limits /dev/mem to non-kernel memory regions. "
+        "Set admin password (fixes FAP-F02, which is the access path to devmem)."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAP-F08: fapcli allows dropbear restart and tcpdump wireless capture
+# ---------------------------------------------------------
+FAP_F08_FAPCLI_DANGEROUS_COMMANDS = {
+    "id":       "FAP-F08",
+    "product":  "Fortinet FortiAP 23JF v7.2.0",
+    "severity": "HIGH -- fapcli hidden commands include dropbear (SSH daemon) and tcpdump; combined with FAP-F02 these enable backdoor persistence and wireless credential capture",
+    "class":    "Exposed privileged management interface (CWE-272)",
+
+    "description": (
+        "fapcli's hidden command list includes two high-impact utilities: "
+        "(1) /usr/sbin/dropbear (the SSH daemon) -- an authenticated admin can launch a second "
+        "dropbear instance on a non-standard port with custom config, creating a persistent "
+        "SSH backdoor that survives fapcli session termination. "
+        "(2) /usr/sbin/tcpdump -- on a Wi-Fi AP, tcpdump captures all frames transmitted "
+        "over the air, including: EAPOL 4-way handshakes (WPA2-PSK offline crack), "
+        "EAP/RADIUS exchanges (enterprise Wi-Fi credentials), and HTTP traffic from captive "
+        "portal clients (plaintext credentials). "
+        "Combined with FAP-F02 (any host can SSH in as admin), both capabilities are "
+        "available without any credential barrier."
+    ),
+
+    "evidence": {
+        "cli_cmds_dropbear":  "/usr/sbin/dropbear (listed under '# hidden commands' in /etc/fap/cli_cmds)",
+        "cli_cmds_tcpdump":   "/usr/sbin/tcpdump (listed under visible commands in /etc/fap/cli_cmds)",
+        "uid":                "admin uid=0 -> can bind any port, write to any path",
+    },
+
+    "dropbear_backdoor": {
+        "attack":    "dropbear -p 2222 -A -s -> launch SSH on port 2222 with no auth required",
+        "note":      "fapcli admin (uid=0) can run dropbear with any flags; non-standard port may evade network monitoring",
+        "persist":   "dropbear process survives fapcli exit; persists until AP reboot",
+    },
+
+    "tcpdump_capture": {
+        "attack":    "tcpdump -i ath0 -w /tmp/capture.pcap -> capture all wireless frames",
+        "eapol":     "WPA2-PSK 4-way handshakes captured -> offline dictionary attack (hashcat -m 22000)",
+        "radius":    "EAP-PEAP/TTLS with WPA2-Enterprise: inner MS-CHAPv2 credentials captured if inner tunnel not strictly validated",
+        "captive":   "FortiAP runs captive portal (cwp_auth.py); HTTP logins from CP users captured in plaintext",
+        "ftftp":     "/usr/bin/ftftp (hidden command) can exfiltrate the pcap file off-device",
+    },
+
+    "chain_with_fap_f02": {
+        "step_1": "SSH to port 22 as admin with no password (FAP-F02)",
+        "step_2": "Run tcpdump to capture wireless traffic -> exfiltrate via ftftp",
+        "step_3": "OR run dropbear on non-standard port to create persistent SSH backdoor",
+        "impact": "wireless credential harvest + persistent AP backdoor without any credential barrier",
+    },
+
+    "remediation": (
+        "Remove dropbear and tcpdump from fapcli's command list. "
+        "If wireless diagnostics require packet capture, restrict to a dedicated diagnostic mode "
+        "requiring secondary authentication. "
+        "Set admin password (fixes FAP-F02). "
+        "Disable LuCI/uhttpd on production APs (FAP-F05 lateral)."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FAP-F09: htop in fapcli -- execlp escape vector (PATH-dependent)
+# ---------------------------------------------------------
+FAP_F09_HTOP_ESCAPE = {
+    "id":       "FAP-F09",
+    "product":  "Fortinet FortiAP 23JF v7.2.0",
+    "severity": "MEDIUM -- htop 1.0.3 in fapcli command list; uses execlp() for strace/lsof; PATH manipulation (via SSH client env or ftftp plant) converts execlp into arbitrary code exec; uid=0 on success",
+    "class":    "Restricted shell escape via execlp (CWE-78)",
+
+    "description": (
+        "fapcli's visible command list includes /usr/bin/htop (htop 1.0.3, 2004-2012). "
+        "htop 1.0.3 calls execlp() (not execve()) to launch external programs: "
+        "'s' key -> execlp(\"strace\", ...) to attach a syscall tracer to the selected process; "
+        "'l' key -> execlp(\"lsof\", ...) to list open files. "
+        "execlp() searches PATH for the named binary. "
+        "If an attacker can plant a malicious 'strace' or 'lsof' binary in a directory "
+        "earlier in PATH than the real binary, htop's execlp() executes the planted binary "
+        "as admin (uid=0), breaking out of fapcli's restricted environment. "
+        "The prerequisite is PATH manipulation: either via SSH AcceptEnv sending a modified PATH, "
+        "or by using fapcli's /usr/bin/ftftp (hidden) to download a malicious binary to /tmp "
+        "and then relying on PATH including /tmp. "
+        "PATH content at fapcli startup is not confirmed (stripped binary, environment origin "
+        "traces to dropbear SSH session)."
+    ),
+
+    "evidence": {
+        "htop_version":     "htop 1.0.3 (2004-2012), confirmed via embedded version string",
+        "execlp_strace":    "htop strings: 'trace syscalls with strace' + execlp symbol + 'Could not execute strace'",
+        "execlp_lsof":      "htop strings: 'list open files with lsof' + 'Could not execute lsof'",
+        "fapcli_htop":      "/usr/bin/htop in /etc/fap/cli_cmds (visible commands)",
+        "fapcli_ftftp":     "/usr/bin/ftftp in /etc/fap/cli_cmds (hidden commands) -- file transfer tool",
+        "fapcli_execv_asm": "fapcli at 0x4038e0: fork() -> execv(x23, x24) for command dispatch",
+        "char_filter":      "fapcli blocks '$' and backtick; does NOT block ';', '|', '>' in argv passed to execv",
+    },
+
+    "attack_path": {
+        "step_1": "SSH to port 22 as admin (FAP-F02: empty password)",
+        "step_2": "Use ftftp (hidden fapcli command) to download /tmp/strace (malicious binary: exec /bin/sh)",
+        "step_3": "Confirm or arrange PATH=/tmp:... (via SSH client AcceptEnv or dropbear env passthrough)",
+        "step_4": "Run htop from fapcli; press 's' on any process",
+        "step_5": "htop execlp('strace', ...) -> PATH search -> executes /tmp/strace -> uid=0 /bin/sh",
+        "result": "Full unrestricted root shell, breaking out of fapcli",
+        "blockers": [
+            "PATH at fapcli startup may not include /tmp (unconfirmed -- dropbear env passthrough behavior not analyzed)",
+            "ftftp may require a reachable FTP server (not built-in to attack prerequisite)",
+            "If PATH is hardcoded in fapcli startup, this path is not viable without additional steps",
+        ],
+    },
+
+    "remediation": (
+        "Remove htop from fapcli's command list. "
+        "Replace with a stripped-down read-only process monitor that does not exec external binaries. "
+        "If htop is kept, replace execlp() calls with execve() using absolute paths and empty envp[]. "
+        "Ensure fapcli sets a hardcoded PATH that excludes writable directories (/tmp, /var)."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "rootfs":           "EXTRACTED -- squashfs v4 XZ on UBIFS volume; 3889 inodes; full filesystem access",
     "kernel":           "IDENTIFIED -- FIT image on kernel UBIFS volume; ARM64; kernel version from DTB node",
-    "fap_backend.so":   "PARTIALLY DISASSEMBLED -- NOT stripped; restDownload + path validation analyzed",
+    "fap_backend.so":   "ANALYZED -- NOT stripped; restDownload uses static whitelist table (runtime-populated via relocations, BSS at file offset); cert/key paths: /fap_data/cfg/cert/local/Fortinet_Uploaded.{cer,key}, /fap_data/cfg/cert/wan1x/%s%s; path validation appears secure (strcmp-based whitelist, not user-controlled paths)",
     "kore":             "STRINGS ONLY -- stripped; chroot + realpath confirmed from strings",
     "startup_fw":       "STRINGS ONLY -- stripped; kore launch parameters NOT confirmed",
-    "fapcli":           "SURFACE ONLY -- stripped; execv present (potential escape vector, not confirmed)",
-    "capwap_protocol":  "NOT ANALYZED -- libcapwap.so present but not disassembled",
+    "libcapwap.so":     "COMPLETE -- NOT stripped; cwDtlsSecVerifyPeerCert (0xa3b58): EKU OIDs 1.3.6.1.5.5.7.3.19 (capwapWTP) + 1.3.6.1.5.5.7.3.18 (capwapAC) + CN='Fortinet' checked; cwDtlsCertVerify (0xa4040): SSL_get_verify_result() called FIRST (X509 chain strict), then EKU; NO bypass path; structurally more secure than FortiExtender",
+    "fapcli":           "ANALYZED -- stripped; fork+execv dispatch confirmed (0x4038e0); command list from /etc/fap/cli_cmds (42 visible + 19 hidden); character filter blocks $ and backtick; devmem/dropbear/tcpdump/htop attack surfaces documented (FAP-F07, FAP-F08, FAP-F09)",
+    "libsysapi.so":     "COMPLETE -- command injection in LOGIN_PASSWD_ENC handler (FAP-F06); is_valid_passwd exported at 0x42720 (called by fapcli for password validation); dl_iterate_phdr ELF callback scan pattern documented",
 
     "unique_findings": [
         "FAP-F01: MEDIUM -- OpenWRT Chaos Calmer 15.05.1 (EOL 2016) in 2022 firmware; dozens of unpatched CVEs in bundled packages",
@@ -366,20 +536,24 @@ ANALYSIS_STATUS = {
         "FAP-F04: LOW -- /api/v1/download file parameter validated with regex ^.*$ (allows ../ sequences); Kore chroot likely prevents traversal but validator is wrong",
         "FAP-F05: HIGH -- LuCI web interface (port 80/443) with rpcd root/$p$root -> admin empty password -> full device configuration read+write",
         "FAP-F06: MEDIUM/HIGH -- command injection in libsysapi.so LOGIN_PASSWD_ENC handler: fgt_decode -> snprintf -> system with no quote sanitization; HIGH chained with FAP-F02",
+        "FAP-F07: HIGH -- fapcli hidden command list includes devmem (busybox); with FAP-F02 empty password, any network host gets physical memory R/W on Qualcomm IPQ60xx SoC",
+        "FAP-F08: HIGH -- fapcli hidden commands include dropbear (SSH daemon restart -> persistent backdoor) and tcpdump (wireless credential capture: EAPOL, EAP, captive portal HTTP)",
+        "FAP-F09: MEDIUM -- htop 1.0.3 in fapcli command list; execlp(strace/lsof) with PATH search; malicious binary in /tmp + PATH manipulation -> uid=0 shell escape from fapcli (PATH manipulation prereq unconfirmed)",
         "Qualcomm IPQ60xx (ARM64) with UBIFS/squashfs storage -- different from all other analyzed Fortinet products (MIPS/ARM32/x86-64)",
         "fap_backend.so NOT stripped -- full symbol table in production binary (36 REST handler functions visible)",
         "cwp_auth.py uses Python 2 urllib2 -- captive portal code makes HTTP requests for untrusted CP users using EOL library",
         "libsysapi.so uses dl_iterate_phdr for ELF callback discovery -- framework scans loaded ELF binaries for *_apply symbols to register as variable apply callbacks",
         "cfg binary passwd_apply (0x400e68) uses sprintf (no size limit) vs libsysapi.so snprintf(256) -- identical injection, secondary overflow risk",
+        "libcapwap.so DTLS: SSL_get_verify_result() called BEFORE custom EKU check -- structurally correct; FortiAP DTLS more secure than FortiExtender (FEXT-F05 pattern not present)",
     ],
 
     "vs_other_products": {
         "FGT/FFW/FWB": "fortism LSM, encrypted rootfs, authenticated REST; FAP has no fortism, plaintext squashfs, empty password",
         "FSW":          "ARM32 3.6.5 kernel, af_admin.ko; FAP is ARM64 OpenWRT 15.05.1, different attack surface",
-        "FEXT":         "Kore auth disabled (CRIT); FAP has Kore auth enabled but empty password defeats it",
-        "FAD":          "SBVM DES key, vtb.ko ioctl; FAP has no kernel modules of note but has SSH empty password",
+        "FEXT":         "Kore auth disabled (CRIT); FAP has Kore auth enabled but empty password defeats it; FEXT-F05 DTLS bypass not present in FAP",
+        "FAD":          "SBVM DES key, vtb.ko ioctl; FAP has no kernel modules of note but has SSH empty password + devmem",
         "FAC":          "Encrypted rootfs, no password issues; FAP opposite: plaintext rootfs + empty password",
-        "FAP":          "Wi-Fi AP; OpenWRT-based; empty password most severe finding; CAPWAP protocol surface not analyzed",
+        "FAP":          "Wi-Fi AP; OpenWRT-based; empty password most severe finding; DTLS properly gated; devmem + tcpdump + htop escalation chain from empty SSH password",
     },
 
     "image_format_notes": {
