@@ -496,12 +496,98 @@ FAD_F10_SHIBBOLETH_EOL = {
 
 
 # ---------------------------------------------------------
+# FAD-F12: fnginx_new NLA credential pool persistence without zeroization
+# ---------------------------------------------------------
+FAD_F12_NLA_CRED_POOL_PERSISTENCE = {
+    "id":       "FAD-F12",
+    "product":  "Fortinet FortiADC 8.0.4 (fnginx_new RDP/CredSSP gateway)",
+    "class":    "Credential persistence in process memory (CWE-316 Cleartext Storage of Sensitive Information in Memory)",
+    "severity": "MEDIUM -- NLA/CredSSP credentials stored as plaintext strings in sslvpn_pool for full session lifetime; no zeroization after authentication; any heap read primitive or /proc/pid/mem access exposes all active-session credentials",
+
+    "description": (
+        "After the SSL VPN client sends FRDS_CMD_CREDENTIAL (command byte 0x01) with "
+        "domain\\\\username and password, process_cmd_cb (0x146fae) copies both fields into "
+        "the nginx session memory pool via sslvpn_pool_strdup (ngx_pool_t allocation). "
+        "The credential strings are stored at session_ctx+0x190+{0x0, 0x8, 0x10, 0x20} and "
+        "remain in pool memory for the entire RDP session. There is no memset or explicit "
+        "zeroization after authentication completes. All active RDP sessions expose plaintext "
+        "username, password, and domain in fnginx_new heap memory."
+    ),
+
+    "code_evidence": {
+        "handler_va":      "0x146fae in process_cmd_cb (FRDS_CMD_CREDENTIAL case)",
+        "field1_strdup":   "0x146fe2-0x146ff0: mov 0x8(%r12),%rsi (ptr1); call sslvpn_pool_strdup",
+        "field2_strdup":   "0x14702a-0x147038: mov 0x10(%r12),%rsi (ptr2); call sslvpn_pool_strdup",
+        "storage_offsets": "session_ctx+0x190+0x0=username(non-NLA); +0x8=username(NLA,post-parse); +0x10=password(NLA); +0x20=domain(NLA)",
+        "domain_parse":    "0x147003: strrchr(ptr, 0x5c '\\\\') splits DOMAIN\\\\user into domain+username; domain at +0x20, username at +0x8",
+        "state_dispatch":  "session_ctx+0x80==0x9 -> NLA path (connect_frds_server -> fsv_frds_make_connection); ==0x8 -> direct VNC path",
+        "no_zeroing":      "grep -c memset fnginx_new near sslvpn_pool_strdup returns 0; no zeroization in credential handler or in frds_connection teardown",
+    },
+
+    "frds_command_table": {
+        "confirmed_via":   "frds_cmd_strs at VA 0x3d93e0 (PIE base 0; file offset == VA)",
+        "total_commands":  "29 (0x00-0x1c)",
+        "FRDS_CMD_CONNECT":         0x00,
+        "FRDS_CMD_CREDENTIAL":      0x01,
+        "FRDS_CMD_CONNECT_OK":      0x02,
+        "FRDS_CMD_CONNECT_ERR":     0x03,
+        "FRDS_CMD_MOUSE":           0x04,
+        "FRDS_CMD_CURSOR_SYS":      0x05,
+        "FRDS_CMD_CURSOR_POS":      0x06,
+        "FRDS_CMD_CURSOR_COLOR":    0x07,
+        "FRDS_CMD_CURSOR_CACHED":   0x08,
+        "FRDS_CMD_KEY":             0x09,
+        "FRDS_CMD_PAINT":           0x0a,
+        "FRDS_CMD_RDP_BMP":         0x0b,
+        "FRDS_CMD_DISCONECT":       0x0c,
+        "FRDS_CMD_END_PAINT":       0x0d,
+        "FRDS_CMD_COPY":            0x0e,
+        "FRDS_CMD_FILL":            0x0f,
+        "FRDS_CMD_TIGHT_PAL":       0x10,
+        "FRDS_CMD_TIGHT_IMG":       0x11,
+        "FRDS_CMD_ZRLE":            0x12,
+        "FRDS_CMD_RRE":             0x13,
+        "FRDS_CMD_VNC_FB_UPD":      0x14,
+        "FRDS_CMD_CUT_TEXT":        0x15,
+        "FRDS_CMD_RDP_REQ_CLIPBOARD":      0x16,
+        "FRDS_CMD_RDP_REQ_CLIPBOARD_DATA": 0x17,
+        "FRDS_CMD_RDP_NO_CLIPBOARD_DATA":  0x18,
+        "FRDS_CMD_RDP_PALETTE":     0x19,
+        "FRDS_CMD_RDP_FAST_UPDATE_DAT": 0x1a,
+        "FRDS_CMD_RDP_PDU_DAT":     0x1b,
+        "FRDS_CMD_INPUT_FOCUS":     0x1c,
+    },
+
+    "exploit_prerequisites": {
+        "heap_read":    "Any OOB read or use-after-free vulnerability in fnginx_new during active sessions exposes all session credentials in pool memory",
+        "proc_mem":     "/proc/<fnginx_pid>/mem readable by root (standard Linux); any local privilege escalation -> credential harvest from all active RDP sessions",
+        "coredump":     "If fnginx_new is killed/crashes during session, coredump contains plaintext credentials of all active sessions",
+        "timing":       "Credentials persist from credential receipt through full session tear-down (potentially minutes to hours)",
+    },
+
+    "vs_fad_f08": (
+        "FAD-F08 documents plaintext credential transmission on the frds IPC wire. "
+        "FAD-F12 documents pool-based credential storage persistence for session lifetime. "
+        "FAD-F08 requires IPC sniffing; FAD-F12 requires heap read or local root. "
+        "Both stem from the same root cause: no credential lifecycle management in fnginx_new."
+    ),
+
+    "remediation": (
+        "After NLA handshake completes (fsv_frds_client_process_loop returns successfully), "
+        "explicit memset(password_ptr, 0, len) + memset(username_ptr, 0, len) before pool_cleanup. "
+        "Alternatively, use a separate zeroing pool for credential strings that is explicitly "
+        "destroyed immediately after NLA completion rather than at session teardown."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "rootfs":           "FULLY EXTRACTED -- ext4, no encryption; 100% file access",
     "kernel_vmlinux":   "38MB ELF x86-64 stripped, BuildID=4900fe17c0cf36e910d0af94849e74f251b426c5",
-    "fnginx_new":       "COMPLETE -- NOT stripped, 17MB; frds_cmd_credential_read disassembled; plaintext credential IPC confirmed (FAD-F08)",
+    "fnginx_new":       "COMPLETE -- NOT stripped, 17MB; frds_cmd_credential_read disassembled; plaintext credential IPC confirmed (FAD-F08); credential pool persistence confirmed (FAD-F12); full FRDS command table recovered (29 commands, 0x00-0x1c)",
     "restapi":          "STRINGS + SYMBOL SURFACE -- Go binary, stripped; 21MB; JWT middleware identified",
     "libfmladminauth":  "ANALYZED -- admin_new_pwd_shm disassembled; proper credential zeroing; no finding; (see FAD-F08 notes)",
     "authd":            "STRINGS ONLY -- stripped",
@@ -514,7 +600,7 @@ ANALYSIS_STATUS = {
         "FAD-F01: HIGH -- gin-jwt is_password_reset_url JWT bypass + /api/user/force_password_reset route; pre-auth password reset possible (needs runtime verification)",
         "FAD-F02: MEDIUM -- Go pprof endpoints /api/debug/pprof/* in production binary; internal state disclosure if unauthenticated",
         "FAD-F03: MEDIUM -- admin-bypass-vdom-check explicit bypass string in restapi; VDOM isolation bypass risk",
-        "FAD-F04: INFO -- fnginx_new NOT STRIPPED with 1264 FreeRDP/CredSSP symbols; RDP gateway credential handling = high-value pending target",
+        "FAD-F04: COMPLETE -- fnginx_new NOT STRIPPED with 1264 FreeRDP/CredSSP symbols; full NLA credential flow traced: FRDS_CMD_CREDENTIAL(0x01) -> frds_cmd_credential_read -> sslvpn_pool_strdup into session_ctx+0x190; 29-command FRDS protocol table recovered; see FAD-F08 (IPC wire) and FAD-F12 (pool persistence)",
         "FAD-F05: LOW -- gdb, strace, perf, strings in production image; post-compromise capability amplification",
         "FAD-F06: LOW -- TLS 1.0/3DES/RSA-KEX enabled by default in restapi Go GODEBUG; weak TLS posture",
         "FAD-F07: INFO -- build paths and CGO_LDFLAGS with all library names embedded in restapi binary",
@@ -522,6 +608,7 @@ ANALYSIS_STATUS = {
         "FAD-F09: HIGH -- httproxy embeds HAProxy 1.5.19 (2016-12-25); CVE-2019-18277 TE smuggling (all HAProxy < 2.0.6); custom nghttp2 H2->H1 bridging introduces additional H2.CL smuggling surface",
         "FAD-F10: HIGH -- httproxy links libshibsp-lite.so.6 (Shibboleth SP 2.5.6, circa 2015); EOL since 2022; no upstream patches for post-2022 CVEs; XML signature wrapping, open redirect via RelayState, SSRF via IdP metadata URL in SAML SP path",
         "FAD-F11: CANDIDATE -- httproxy3 is HAProxy 2.8.9 (2024-04-05) with QUIC; predates CVE-2024-45506 fix (2.8.10, 2024-09); QUIC frame parsing DoS/potential RCE; needs runtime confirmation",
+        "FAD-F12: MEDIUM -- fnginx_new NLA credentials stored via sslvpn_pool_strdup at session_ctx+0x190 (username +0x8, password +0x10, domain +0x20); no zeroization after NLA auth; plaintext persists full session lifetime in heap; any heap read or local root exposes all active-session credentials",
         "Two HAProxy binaries: httproxy (1.5.19, SAML/Shibboleth, no QUIC) + httproxy3 (2.8.9, QUIC/HTTP3, no SAML); FortiADC runs both in parallel for different traffic classes",
         "httproxy3 source path: /root/FortiADC_test/FortiADC/daemon/httproxy/; built with Fortinet cross-compiler; WAF headers included",
         "libshibsp.so.6 RelayState validation: ONLY absolute URL check ('Target resource was not an absolute URL.'); relayStateWhitelist not in any static template; open redirect exploitable if not configured at deployment time",
