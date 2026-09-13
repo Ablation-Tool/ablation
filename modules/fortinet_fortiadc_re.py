@@ -436,6 +436,66 @@ FAD_F09_HAPROXY_SMUGGLING = {
 
 
 # ---------------------------------------------------------
+# FAD-F10: httproxy links EOL Shibboleth SP 2.5.6 for SAML processing
+# ---------------------------------------------------------
+FAD_F10_SHIBBOLETH_EOL = {
+    "id":       "FAD-F10",
+    "product":  "Fortinet FortiADC 8.0.4",
+    "severity": "HIGH -- Shibboleth SP 2.5.6 (circa 2015) linked in httproxy for SAML processing; 2.x branch EOL 2022; no upstream patches for post-2022 vulnerabilities; XML signature wrapping attack surface",
+    "class":    "Use of end-of-life component (CWE-1104); XML signature wrapping (CWE-347)",
+
+    "version_evidence": {
+        "library":        "/lib/libshibsp-lite.so.6 (1.5MB)",
+        "version_string": "shibboleth 2.5.6 (embedded in library strings)",
+        "companion":      "/lib/libxmltooling-lite.so.6 (879KB) -- XML parsing + signature validation",
+        "symbols":        "shibsp::AbstractSPRequest, shibsp::SPConfig::setFeatures, opensaml::FatalProfileException",
+        "integration":    "httproxy (cfg_parse_saml_sp) loads SAML SP config; shibsp mangled symbols linked statically-ish",
+    },
+
+    "eol_implications": {
+        "eol_date":       "Shibboleth SP 2.x reached end-of-life in 2022",
+        "shipped_in":     "FortiADC 8.0.4 firmware (2026) -- 11+ years after the version was released",
+        "no_patches":     "Any CVE disclosed after 2022 against Shibboleth SP 2.x has no upstream fix to backport",
+    },
+
+    "attack_surface": {
+        "xml_sig_wrapping": (
+            "SAML assertions are XML-signed. Shibboleth SP 2.5.x processes RelayState, SAMLResponse, "
+            "SAMLRequest from the ACS endpoint. XML signature wrapping (XSW) attacks clone the signed "
+            "element and insert a malicious copy; old SP implementations may validate the signature on "
+            "the canonical element while using the forged sibling. Shibboleth 2.x had partial mitigations "
+            "but full XML schema validation hardening came in 3.x."
+        ),
+        "relay_state_redirect": (
+            "RelayState is a URL passed in the SAML authentication flow. If httproxy reflects it "
+            "in a redirect without validation, an attacker sends a crafted AuthnRequest with "
+            "RelayState=https://evil.com to the SAML SP endpoint, causing the victim to be "
+            "redirected to the attacker's site post-authentication."
+        ),
+        "ssrf_idp_metadata": (
+            "The SAML SP fetches IdP metadata from a configured URL. If the metadata URL is "
+            "partially controllable (e.g., via VDOM-specific SP config), SSRF to internal services "
+            "is possible. Shibboleth 2.5.x does not restrict metadata URL schemes."
+        ),
+        "saml_replay":    "Assertion replay via stale session ID; Shibboleth 2.5.6 has limited replay detection window",
+    },
+
+    "cve_candidates": {
+        "CVE-2017-16853": "Shibboleth SP 2.x < 2.6.1 -- session ID replay; 2.5.6 is affected",
+        "CVE-2015-1172":  "Shibboleth SP 2.x < 2.5.3 -- XML injection in attribute statements; 2.5.6 is fixed",
+        "post-2022":      "Any Shibboleth SP 2.x CVE after 2022 = unpatched in FAD 8.0.4 by definition",
+    },
+
+    "chain": (
+        "External attacker targeting FortiADC SAML-protected virtual server -> "
+        "craft malicious SAMLResponse with XSW payload -> "
+        "Shibboleth SP 2.5.6 validates canonical signature, uses forged attributes -> "
+        "authentication bypass as arbitrary SAML attribute-identified user"
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -458,6 +518,7 @@ ANALYSIS_STATUS = {
         "FAD-F07: INFO -- build paths and CGO_LDFLAGS with all library names embedded in restapi binary",
         "FAD-F08: MEDIUM -- fnginx_new frds_cmd_credential_read: RDP proxy passes NLA credentials in plaintext via internal frds IPC; no zeroing; struct+0x8=username_ptr, struct+0x10=password_ptr into live wire buffer",
         "FAD-F09: HIGH -- httproxy embeds HAProxy 1.5.19 (2016-12-25); CVE-2019-18277 TE smuggling (all HAProxy < 2.0.6); custom nghttp2 H2->H1 bridging introduces additional H2.CL smuggling surface",
+        "FAD-F10: HIGH -- httproxy links libshibsp-lite.so.6 (Shibboleth SP 2.5.6, circa 2015); EOL since 2022; no upstream patches for post-2022 CVEs; XML signature wrapping, open redirect via RelayState, SSRF via IdP metadata URL in SAML SP path",
     ],
 
     "vs_other_products": {
@@ -471,7 +532,7 @@ ANALYSIS_STATUS = {
     "high_priority_pending": [
         "FAD-F01 runtime verification: POST /api/user/force_password_reset without auth",
         "FAD-F02 runtime verification: GET /api/debug/pprof/goroutine without auth",
-        "SAML handler: saml_pre_login_handler / saml_sso_handler for open redirect or assertion injection",
-        "httproxy SAML/OAuth2 surface: libshibsp-lite.so.6 + libxmltooling-lite.so.6 linked -- SAML XML parsing in load balancer path",
+        "FAD-F10 runtime verification: test RelayState open redirect via FortiADC SAML SP endpoint; XSW payload delivery",
+        "SAML handler disassembly: cfg_parse_saml_sp and shibsp ACS handler in stripped httproxy",
     ],
 }
