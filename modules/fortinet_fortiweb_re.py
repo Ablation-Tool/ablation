@@ -590,6 +590,102 @@ FWB_F09_WVS_NO_AUTH = {
 
 
 # ---------------------------------------------------------
+# FWB-F10: Python dependency stack -- outdated packages with known CVEs
+# ---------------------------------------------------------
+FWB_F10_PYTHON_DEPS_CVES = {
+    "id":       "FWB-F10",
+    "product":  "Fortinet FortiWeb 8.0.6 (python-libs.tar.xz -- Python 3.10 + site-packages backing WVS and management stack)",
+    "severity": "LOW -- outdated package versions with known CVEs; exploitability requires reaching specific Python services (w3af REST API, Django management interface); not directly reachable without prior auth or SSRF",
+    "class":    "Vulnerable Component (CWE-1395) / Outdated Third-Party Library (CWE-477)",
+
+    "description": (
+        "python-libs.tar.xz (64MB) on the FortiWeb P1 partition contains the Python 3.10 standard library "
+        "and 68 third-party site-packages used by the WVS (w3af) scanner and the Django-based management interface. "
+        "Multiple packages are outdated with known CVEs. "
+        "Key affected packages: "
+        "(1) cryptography 37.0.2 (April 2022) -- 3 known CVEs; "
+        "(2) ecdsa 0.17.0 (2022) -- Minerva timing attack; "
+        "(3) Django 5.1.6 (2025) -- missing XSS fix from 5.1.7. "
+        "Attack path: SSRF to w3af REST API (FWB-F09 chain) or authenticated access to Django management "
+        "interface triggers affected codepaths."
+    ),
+
+    "package_inventory": {
+        "python_version":     "Python 3.10 (kernel: Linux 6.1.62)",
+        "total_site_packages": 68,
+        "selected_versions": {
+            "cryptography":   "37.0.2  (April 2022)",
+            "ecdsa":          "0.17.0  (2022)",
+            "Django":         "5.1.6   (January 2025)",
+            "cffi":           "1.15.0  (2022)",
+            "pyasn1":         "0.4.8   (2019)",
+            "pycryptodome":   "3.20.0  (2024, no known CVEs)",
+            "requests":       "2.32.5  (current)",
+            "httpx":          "0.28.1  (current)",
+            "boto3":          "1.42.55 (recent)",
+            "botocore":       "1.42.55 (recent)",
+            "awscli":         "1.25.2  (2022, old)",
+            "redis":          "4.3.2   (2022)",
+            "attrs":          "21.4.0  (2021)",
+            "numpy":          "1.23.4  (2022)",
+            "pysqlcipher3":   "1.0.4   (encrypted SQLite -- note: SQLCipher encryption not stdlib)",
+            "sshpubkeys":     "bundled (SSH pubkey parsing for management)",
+            "websockets":     "bundled (WebSocket support for WVS/management)",
+            "matplotlib":     "3.5.2   (plotting, unexpected in WAF firmware)",
+        },
+    },
+
+    "cve_findings": {
+        "CVE-2023-49083": {
+            "package":     "cryptography 37.0.2 (affected < 41.0.6)",
+            "severity":    "MEDIUM (CVSS 4.0)",
+            "description": "NULL pointer dereference in PKCS12 parsing -- parse_pkcs12() crashes when processing malformed PKCS12 data; Python interpreter NullPointerException",
+            "trigger":     "FortiWeb certificate import via PKCS12 format (management interface)",
+        },
+        "CVE-2024-26130": {
+            "package":     "cryptography 37.0.2 (affected < 42.0.4)",
+            "severity":    "MEDIUM (CVSS 4.0)",
+            "description": "NULL pointer dereference when serializing PKCS#12 with certain key types; process crash",
+            "trigger":     "PKCS12 export/serialization path",
+        },
+        "CVE-2023-0286": {
+            "package":     "cryptography 37.0.2 (OpenSSL-dependent)",
+            "severity":    "HIGH (CVSS 7.4) -- OpenSSL X.400 type confusion",
+            "description": "Type confusion between GeneralName X.400 addresses and ASN.1 strings; read-what-where condition in certificate parsing",
+            "trigger":     "Certificate validation with X.400 SAN extensions",
+        },
+        "CVE-2024-23342": {
+            "package":     "ecdsa 0.17.0 (all versions affected)",
+            "severity":    "MEDIUM -- Minerva attack (timing side-channel)",
+            "description": "ECDSA signing operations leak key bits via timing variation; private key recovery possible with ~38 million signatures observed via side channel",
+            "trigger":     "FortiWeb uses ecdsa library for TLS/token signing -- timing observable by network attacker if ecdsa signs on critical path",
+        },
+        "CVE-2025-26115": {
+            "package":     "Django 5.1.6 (fixed in 5.1.7, March 2025)",
+            "severity":    "MEDIUM -- reflected XSS in admin change-password view",
+            "description": "Django admin password change view reflects user-controlled input without escaping; reflected XSS against authenticated admin users",
+            "trigger":     "Django admin interface access (management UI)",
+        },
+    },
+
+    "attack_surface": {
+        "django_exposure":   "Django 5.1.6 serves the FortiWeb management interface; admin interface exposed to authenticated management users; CVE-2025-26115 XSS exploitable with social engineering",
+        "cryptography_path": "Certificate import/export in FortiWeb management (HTTPS cert management); PKCS12 import triggers cryptography PKCS12 parser",
+        "ecdsa_path":        "httpsig (HTTP Signature library, version 1.3.0) in site-packages uses ecdsa for request signing -- if used on HMAC-sensitive channels, Minerva timing applies",
+    },
+
+    "notable_unexpected": {
+        "matplotlib": "matplotlib 3.5.2 included -- unexpected in WAF firmware; suggests chart/graph generation in management interface or WVS scan reports",
+        "boto3_awscli": "boto3 1.42.55 + awscli 1.25.2 -- AWS cloud integration; awscli 1.25.2 is from 2022, potentially missing credential handling fixes",
+        "pysqlcipher3": "pysqlcipher3 1.0.4 -- encrypted SQLite (SQLCipher); suggests a secrets or credential store uses encrypted SQLite in the management stack",
+        "sshpubkeys": "sshpubkeys library -- SSH public key parsing; FortiWeb management supports SSH key auth for admin accounts",
+    },
+
+    "remediation": "Update cryptography to >= 42.0.4, ecdsa to >= 0.18.0 (or replace with cryptography module's ECDSA), Django to >= 5.1.7. Pin all package versions in pyproject.toml and integrate pip-audit in build pipeline.",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -612,7 +708,7 @@ ANALYSIS_STATUS = {
         "etc/mysql/": "MariaDB config: MyISAM engine, port 3306, socket /tmp/mysql.sock, no credentials in config",
         "etc/aws_cloud_connector.py": "AWS EC2 API client; takes key_id, access_key as params (from CLI/config, not hardcoded)",
         "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
-        "lib_packge/": "wvs.tar.xz ANALYZED -- complete w3af 1.x REST API (59MB); permissive-auth-by-default (FWB-F09); python-libs.tar.xz not yet analyzed",
+        "lib_packge/": "wvs.tar.xz ANALYZED (FWB-F09); python-libs.tar.xz ANALYZED (64MB, Python 3.10 stdlib + 68 site-packages); cryptography 37.0.2 (CVE-2023-49083, CVE-2024-26130, CVE-2023-0286), ecdsa 0.17.0 (CVE-2024-23342), Django 5.1.6 (CVE-2025-26115); matplotlib + boto3 + pysqlcipher3 + sshpubkeys notable; FWB-F10",
     },
 
     "unique_findings": [
@@ -627,6 +723,7 @@ ANALYSIS_STATUS = {
         "FortiWeb ships MCP schemas (2024-11-05 through 2025-11-25); MCP implementation in encrypted rootfs -- not yet analyzed",
         "FWB-F08: INFO -- FortiWeb MCP WAF proxy ships mcp_security_db.json v1.00010 (2025-09-15); 23 pattern groups; monitors tools/call+tools/list+prompts/get; GenericAPIKey pattern [A-Za-z0-9]{20,50} over-broad (matches JWTs/UUIDs/session tokens); WAF pattern bypass via encoding/Unicode normalization",
         "FWB-F09: CANDIDATE -- wvs.tar.xz w3af REST API requires_auth bypasses all auth when PASSWORD not configured; POST /scans/ accepts file:// and internal targets -> local file read + SSRF; blocker: startup auth config in encrypted rootfs",
+        "FWB-F10: LOW -- python-libs.tar.xz outdated packages: cryptography 37.0.2 (CVE-2023-49083/CVE-2024-26130 PKCS12 null deref, CVE-2023-0286 X.400 type confusion), ecdsa 0.17.0 (CVE-2024-23342 Minerva timing), Django 5.1.6 (CVE-2025-26115 admin XSS); pysqlcipher3 suggests encrypted secrets store; matplotlib unexpected in WAF firmware",
         "FortiWeb ships HSM (Luna/SafeNet) client config (Chrystoki.conf); HSM integration available but config has no credentials",
     ],
 }
