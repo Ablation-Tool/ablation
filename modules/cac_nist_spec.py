@@ -484,8 +484,20 @@ BEHAVIORAL_FINDINGS = [
     {
         "id":    "F-PIV-AUTH-CERT",
         "title": "PIV Auth cert (5FC105): KLOSTER.NICHOLAS.MICHAEL.1505393089 / DOD ID CA-64",
-        "desc":  "X.509 cert (1343B DER) at container tag 0x70. Subject CN=KLOSTER.NICHOLAS.MICHAEL.1505393089 (C=US, O=U.S. Government, OU=DoD, OU=PKI, OU=USA). Issuer: CN=DOD ID CA-64, serial 0x0FF143. Validity: 2023-02-13 to 2024-12-16 (matches card expiry). RSA-2048 public key. keyUsage=[digitalSignature] (critical). certPolicies: 2.16.840.1.101.2.1.11.42 (id-piv-auth), 2.16.840.1.101.3.2.1.3.13 (DoD). SAN: otherName OID 2.16.840.1.101.3.6.6 (id-FASC-N) = d22010da... (matches CHUID FASC-N exactly). CRL: http://crl.disa.mil/crl/DODIDCA_64.crl. AIA: caIssuers=http://crl.disa.mil/sign/DODIDCA_64.cer; OCSP=http://ocsp.disa.mil. Non-standard: stray 0x01 byte at DER offset 580 before extensions block (DoD encoding artifact; prevents openssl x509 / cryptography.x509 parsing). Non-standard: tag 0xFD wrapper before AIA extension. Container also has proprietary tag 0xBD (200B) after cert TLV.",
-        "note":  "Confirmed: Security Object signed by CA-63, PIV Auth cert by CA-64 -- CA version mismatch confirms stale Security Object theory (cert re-issued under newer CA without re-signing Security Object).",
+        "desc":  "X.509 cert (1343B DER) at container tag 0x70. Subject CN=KLOSTER.NICHOLAS.MICHAEL.1505393089 (C=US, O=U.S. Government, OU=DoD, OU=PKI, OU=USA). Issuer: CN=DOD ID CA-64 (under DoD Root CA 3, valid through 2027-06-02), serial 0x0FF143. Validity: 2023-02-13 to 2024-12-16. RSA-2048 public key. keyUsage=[digitalSignature] (critical). EKU: smartcardLogon (1.3.6.1.4.1.311.20.2.2), clientAuth (1.3.6.1.5.5.7.3.2). certPolicies: 2.16.840.1.101.2.1.11.42 (id-piv-auth), 2.16.840.1.101.3.2.1.3.13. subjectDirectoryAttributes: countryOfCitizenship=US. SAN: otherName OID 2.16.840.1.101.3.6.6 (id-FASC-N) = d22010da... (matches CHUID exactly). CRL: http://crl.disa.mil/crl/DODIDCA_64.crl. AIA: http://crl.disa.mil/sign/DODIDCA_64.cer + OCSP http://ocsp.disa.mil. Non-standard: stray 0x01 at DER offset 580 before extensions block + tag 0xFD wrapper around AIA extension (both DoD encoding artifacts preventing standard x509 parsing).",
+        "note":  "CA-64 cert downloaded from DISA. Signature verification blocked by stray-byte DER artifact. EKU confirms Windows smart card logon + TLS client auth use cases.",
+    },
+    {
+        "id":    "F-DIGSIG-CERT",
+        "title": "Digital Signature cert (5FC10A): DOD EMAIL CA-62, emailProtection+documentSigning",
+        "desc":  "X.509 cert (1243B DER). Subject CN=KLOSTER.NICHOLAS.MICHAEL.1505393089 (OU=USA). Issuer: CN=DOD EMAIL CA-62, serial 0x1254FD. Validity: 2023-02-13 to 2024-12-16. RSA-2048. keyUsage=[digitalSignature, nonRepudiation]. EKU=[emailProtection, szOID_KP_DOCUMENT_SIGNING (1.3.6.1.4.1.311.10.3.12)]. Purpose: S/MIME email signing and document signing.",
+        "note":  "DOD EMAIL CA-62 (not CA-64) -- the email signing infrastructure uses a separate CA chain from PIV auth.",
+    },
+    {
+        "id":    "F-KEYMGMT-CERT",
+        "title": "Key Management cert (5FC10B): DOD EMAIL CA-64, keyEncipherment",
+        "desc":  "X.509 cert (1210B DER). Subject CN=KLOSTER.NICHOLAS.MICHAEL.1505393089 (OU=USA). Issuer: CN=DOD EMAIL CA-64, serial 0x1230BB. Validity: 2023-02-13 to 2024-12-16. RSA-2048. keyUsage=[keyEncipherment]. Purpose: S/MIME email encryption (key transport).",
+        "note":  "Three distinct CA chains: DOD ID CA-64 (PIV auth), DOD EMAIL CA-62 (signing), DOD EMAIL CA-64 (encryption). All three key pairs on same card for different cryptographic purposes.",
     },
     {
         "id":    "F-CA-MISMATCH",
