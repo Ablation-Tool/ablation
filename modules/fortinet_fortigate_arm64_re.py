@@ -462,6 +462,21 @@ FGA_F06_ARM64_FORTISM_IOCTLS = {
             "0x9006 -- not present in ARM64 dispatch",
         ],
     },
+
+    "object_field_security_branches": {
+        "0x44_bit1_gate_vma":   "0xffff0000082de2f4",
+        "0x44_bit1_gate_foff":  "0x2de2f4",
+        "insn":                 "ldr w0, [x19, #0x44]; tbnz w0, #1, #0x2de32c",
+        "clear_path":           "bl #0x2e5290: checks task->flags[+0x3a0] bit 0 (privilege byte); then checks object[+0x40] bits 0-1 via 0x2e4c80; returns",
+        "set_path":             "0x2de32c: accesses object[+0x18](ptr)->[+0x30](sub-ptr); checks object[+0x40] bit 6; copies up to 0x1ff (511) bytes; processes protocol data",
+        "attacker_control":     "ioctl 0x9004 (UNAUTH) can set object[+0x44] bit 1; enables extended sub-pointer-dereference+copy path without auth",
+        "0x44_gt1_gate_vma":    "0xffff0000082dffac",
+        "0x44_gt1_gate_insn":   "ldr w0, [x19, #0x44]; cmp w0, #1; b.hi #0x2dffd0",
+        "gt1_path":             "0x2dffd0: mrs sp_el0 -> reads task[+0x3e0] (PID/UID); blr x20 (indirect call); logging path",
+        "0x44_bit26_gate_vma":  "0xffff0000082d9ee4",
+        "0x44_bit26_gate_insn": "ldr w0, [x20, #0x44]; tbnz w0, #0x1a, #0x2d9f4c",
+        "bit26_path":           "0x2d9f4c: early return w0=0 (caller treats as no-more-items / disabled)",
+    },
 }
 
 
@@ -499,6 +514,78 @@ FGA_F07_ARM64_IOCTL_9009 = {
 
 
 # ---------------------------------------------------------
+# FGA-F08: 0x9004 UNAUTH write to object[+0x44] flips multiple kernel security branch gates
+# ---------------------------------------------------------
+FGA_F08_OBJECT44_BRANCH_FLIP = {
+    "id":       "FGA-F08",
+    "product":  "Fortinet FortiGate ARM64 8.0.0 (fortism kernel module in flatkc)",
+    "severity": "MEDIUM -- UNAUTH ioctl flips kernel security branch gates; enables extended kernel processing paths without auth",
+    "class":    "Unauth kernel control flow manipulation via object field write (CWE-269, CWE-284)",
+
+    "write_primitive": {
+        "ioctl":    "0x9004 (FORTISM_OBJECT_WRITE)",
+        "auth":     "UNAUTH -- no credential check",
+        "input":    "8 bytes: [0:4]=object_index (max 0x40); [4:8]=value_to_write",
+        "effect":   "fortism_object_lookup(index) -> STR w19, [x0, #0x44] at foff 0x2df7e0",
+        "scope":    "Writes any 4-byte value to ANY of the 65 (0..0x40) fortism object slots' [+0x44] field",
+    },
+
+    "security_gates_flipped": {
+        "gate_1": {
+            "vma":      "0xffff0000082de2f4",
+            "foff":     "0x2de2f4",
+            "insn":     "ldr w0, [x19, #0x44]; tbnz w0, #1, #0xffff0000082de32c",
+            "bit":      "bit 1",
+            "clear":    "bl #0x2e5290 (privilege check: task->flags[+0x3a0]; object[+0x40] bits 0-1); then return",
+            "set":      "0x2de32c: object[+0x18] ptr chain -> dereferences sub-ptr at [+0x30]; "
+                        "checks object[+0x40] bit 6; copies up to 511 bytes (0x1ff) of protocol data; "
+                        "accesses kernel list at 0xffff000009050440",
+            "impact":   "Setting bit 1 bypasses the privilege-check path; enables 511-byte sub-pointer-dereference + protocol copy without auth",
+        },
+        "gate_2": {
+            "vma":      "0xffff0000082dffac",
+            "foff":     "0x2dffac",
+            "insn":     "ldr w0, [x19, #0x44]; cmp w0, #1; b.hi #0xffff0000082dffd0",
+            "threshold": "> 1",
+            "normal":   "skip branch; return via ldp/ret",
+            "elevated": "0x2dffd0: mrs x1, sp_el0 -> ldr w21, [x1, #0x3e0] (task PID/UID); blr x20 (indirect call via global fn-ptr); logging/event path",
+            "impact":   "Writing value > 1 to object[+0x44] routes to a fn-ptr indirect call path reading current task identity",
+        },
+        "gate_3": {
+            "vma":      "0xffff0000082d9ee4",
+            "foff":     "0x2d9ee4",
+            "insn":     "ldr w0, [x20, #0x44]; tbnz w0, #0x1a, #0xffff0000082d9f4c",
+            "bit":      "bit 26",
+            "clear":    "continues normal processing (network/packet iteration)",
+            "set":      "0x2d9f4c: early return w0=0 (disables the function's output for this object -- treated as no-more-items)",
+            "impact":   "Setting bit 26 silently disables processing for the affected object slot",
+        },
+    },
+
+    "chain": (
+        "Step 1: open fortism char device (typically /dev/fortism or via ioctl fd from mgmt process). "
+        "Step 2: ioctl(fd, 0x9004, {index=X, value=0x2}) to write 0x2 to object[X][+0x44]. "
+        "Step 3: When kernel subsequently calls the function containing gate_1 (0x2de2f4) for object X, "
+        "  it takes the SET path (0x2de32c): accesses object[+0x18] ptr -> sub-ptr[+0x30] -> copies 511 bytes. "
+        "If object[+0x18] or sub-ptr[+0x30] contains user-controlled data (set via ioctl 0x9003 or other), "
+        "this is a kernel memory read/write primitive from an unprivileged context."
+    ),
+
+    "access_model": (
+        "The fortism char device access is typically restricted to Fortinet management processes "
+        "in the FortiOS userspace. If any of those processes has a bug allowing untrusted code to "
+        "issue ioctls (SSRF, code injection, privilege confusion), this chain enables kernel manipulation. "
+        "On a hardened system: requires CAP_SYS_ADMIN or Fortinet management-plane access. "
+        "Within a VM escape / container escape scenario: exploiting fortism ioctl 0x9004 before "
+        "KASLR is bypassed to flip branch gates."
+    ),
+
+    "vs_x86": "object[+0x44] security gates also exist in x86-64 8.0.0 (FGT-F19 documents the write primitive); gate analysis is ARM64-specific",
+    "verification": "CONFIRMED -- ARM64 disassembly of flatkc; three gate sites identified; 0x9004 write path confirmed at foff 0x2df7e0",
+}
+
+
+# ---------------------------------------------------------
 # Cross-product reference
 # ---------------------------------------------------------
 CROSS_PRODUCT_FORTISM = {
@@ -509,6 +596,7 @@ CROSS_PRODUCT_FORTISM = {
     "FGT-F13 (x86-64 7.0.9)": "FGA-F05 -- global override flag affects all 35 LSM domains in fortism_config.json",
     "FFF-F01 (FortiFone)":     "FGA-F01 -- same plaintext private key pattern (server.key in FortiFone, fgt2.key in FortiGate)",
     "FGA-F07 (ARM64-only)":    "ioctl 0x9009 FORTISM_OBJECT_STATE_QUERY -- unauth object[+0x30] read; state==3 leaks global",
+    "FGA-F08 (ARM64)":         "0x9004 UNAUTH write to object[+0x44] flips 3 kernel branch gates; enables 511-byte sub-ptr path + fn-ptr indirect call; chain primitive",
 }
 
 
@@ -531,12 +619,12 @@ ANALYSIS_STATUS = {
         "FGA-F05: INFO -- fortism_config.json: 35 security domains; 6 with anon-mem-exec (PRECHROOT/CMDBSVR/MISC/WAD/IPS/WEB_SVC); Node.js present",
         "FGA-F06: MEDIUM -- ARM64 fortism full ioctl map: 0x9003/0x9004/0x9005 unauth primitives confirmed; 0x9009 ARM64-only addition; 0x9001/0x9006 absent",
         "FGA-F07: INFO -- ioctl 0x9009 (FORTISM_OBJECT_STATE_QUERY) exists in ARM64 8.0.0 but not x86-64; unauth; reads object[+0x30] or global 0xffff0000090f17c0",
+        "FGA-F08: MEDIUM -- UNAUTH ioctl 0x9004 write to object[+0x44] flips 3 kernel security branch gates (0x2de2f4 bit1, 0x2dffac >1, 0x2d9ee4 bit26); enables 511-byte sub-ptr-dereference path and fn-ptr indirect call path without auth",
     ],
 
     "pending": {
         "fgt2_key_scope":    "Verify fgt2.key is identical in x86-64 FGT 8.0.0 datafs",
         "fgt_512_factoring": "Extract 512-bit modulus from fgt_512.crt; factor; reconstruct private key",
         "node_js_surface":   "/bin/node (WEB_SVC domain) -- Node.js attack surface in FortiOS not yet analyzed",
-        "0x9009_impact":     "Trace 0x9009 object[+0x30] field -- what triggers state==3; chain with 0x9004 write",
     },
 }
