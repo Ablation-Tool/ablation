@@ -507,6 +507,8 @@ ANALYSIS_STATUS = {
     "authd":            "STRINGS ONLY -- stripped",
     "mysql":            "STRINGS ONLY -- stripped; default_password_lifetime present",
     "httproxy":         "ANALYZED -- HAProxy 1.5.19 (2016) identified; nghttp2 H2 bridging; CVE-2019-18277 applicable (FAD-F09)",
+    "httproxy3":        "IDENTIFIED -- HAProxy 2.8.9 (2024-04-05) with QUIC/HTTP3 (DUSE_QUIC); OpenSSL 3.5.7; 2.8.9 predates CVE-2024-45506 fix (2.8.10); SAML NOT in httproxy3 (separate from httproxy)",
+    "libshibsp_saml":   "ANALYZED -- sendRedirect called via xmltooling external symbol; libshibsp.so.6 confirms: only absolute URL check for RelayState ('Target resource was not an absolute URL.'); relayStateWhitelist config option EXISTS in libshibsp but NOT set in any static config template; shibboleth2.xml is runtime-generated, no static visibility; security-policy.xml has validate=false",
 
     "unique_findings": [
         "FAD-F01: HIGH -- gin-jwt is_password_reset_url JWT bypass + /api/user/force_password_reset route; pre-auth password reset possible (needs runtime verification)",
@@ -519,6 +521,10 @@ ANALYSIS_STATUS = {
         "FAD-F08: MEDIUM -- fnginx_new frds_cmd_credential_read: RDP proxy passes NLA credentials in plaintext via internal frds IPC; no zeroing; struct+0x8=username_ptr, struct+0x10=password_ptr into live wire buffer",
         "FAD-F09: HIGH -- httproxy embeds HAProxy 1.5.19 (2016-12-25); CVE-2019-18277 TE smuggling (all HAProxy < 2.0.6); custom nghttp2 H2->H1 bridging introduces additional H2.CL smuggling surface",
         "FAD-F10: HIGH -- httproxy links libshibsp-lite.so.6 (Shibboleth SP 2.5.6, circa 2015); EOL since 2022; no upstream patches for post-2022 CVEs; XML signature wrapping, open redirect via RelayState, SSRF via IdP metadata URL in SAML SP path",
+        "FAD-F11: CANDIDATE -- httproxy3 is HAProxy 2.8.9 (2024-04-05) with QUIC; predates CVE-2024-45506 fix (2.8.10, 2024-09); QUIC frame parsing DoS/potential RCE; needs runtime confirmation",
+        "Two HAProxy binaries: httproxy (1.5.19, SAML/Shibboleth, no QUIC) + httproxy3 (2.8.9, QUIC/HTTP3, no SAML); FortiADC runs both in parallel for different traffic classes",
+        "httproxy3 source path: /root/FortiADC_test/FortiADC/daemon/httproxy/; built with Fortinet cross-compiler; WAF headers included",
+        "libshibsp.so.6 RelayState validation: ONLY absolute URL check ('Target resource was not an absolute URL.'); relayStateWhitelist not in any static template; open redirect exploitable if not configured at deployment time",
     ],
 
     "vs_other_products": {
@@ -526,6 +532,7 @@ ANALYSIS_STATUS = {
         "FAP":          "ARM64 OpenWRT base; FAD is x86-64 Linux 6.1 with full Go REST stack",
         "FSW":          "ARM32 kernel, basic auth; FAD has SAML/OAuth2/CredSSP/JWT -- vastly larger auth surface",
         "FAC":          "Authentication-focused; FAD's SAML/ADFS proxy and CredSSP make it a credential broker",
+        "FAD vs FWB":   "Both use Shibboleth SP 2.x for SAML; FAD also ships httproxy3 HAProxy 2.8.9 QUIC; FWB has wassd_ws.py TLS MitM; different threat models",
         "toolchain":    "All other products use GCC/G++; FAD uses full LLVM (clang 18.1.8 / LLD 18.1.8)",
     },
 
@@ -533,6 +540,6 @@ ANALYSIS_STATUS = {
         "FAD-F01 runtime verification: POST /api/user/force_password_reset without auth",
         "FAD-F02 runtime verification: GET /api/debug/pprof/goroutine without auth",
         "FAD-F10 runtime verification: test RelayState open redirect via FortiADC SAML SP endpoint; XSW payload delivery",
-        "SAML handler disassembly: cfg_parse_saml_sp and shibsp ACS handler in stripped httproxy",
+        "FAD-F11 runtime confirmation: probe httproxy3 QUIC endpoint for CVE-2024-45506 DoS",
     ],
 }
