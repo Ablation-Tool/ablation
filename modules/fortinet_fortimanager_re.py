@@ -3059,6 +3059,32 @@ ANALYSIS_STATUS = {
                  "severity MEDIUM: post-auth (ADMINPRIV_SYSTEM_FGD_CENTER_LICENSING), GET-only SSRF, no response body readback via img tag; "
                  "remediation: uncomment lxml Cleaner in download_pdf_pure; add --no-images or keep Cleaner active; "
                  "source: util/views.py L1418-1421, util/common.py L2289-2331, analysis 2026-09-15",
+
+        "FMG-F70: MEDIUM CANDIDATE -- FortiManager alert handler reset endpoint inserts user-controlled template_url and handler_id fields unsanitized into the internal FMG RPC proxy URL, enabling path traversal across the CMDB API namespace (FMG8.0.0, proj/alert/views.py L291-324, 2026-09-15): "
+                 "class: internal CMDB API path traversal / authorization boundary bypass; "
+                 "root cause: _handler_reset() at alert/views.py L291-324 reads handler.get('template-url') and handler.get('handler-id') from POST body without sanitization; "
+                 "both inserted at L303: params = {'url': f'config/global{template_url}/{handler_id}', 'method': 'get'}; "
+                 "sent to common.get_rpc_proxy(settings.FMG_PROXY, adom).get(params) at L305; "
+                 "path traversal payload: template_url='/../pm2' -> url='config/global/../pm2/{handler_id}' potentially reaching pm2 CMDB namespace; "
+                 "template_url='/../../../sys/debug' -> url='config/global/../../../sys/debug/{handler_id}'; "
+                 "two-stage impact: (1) GET traversal reads arbitrary CMDB config object data from the traversed path; "
+                 "(2) _simple_adom_conf_api_res() at L314-318 sends SET to '/alert/' + endpoint + '/' + handler_id "
+                 "where handler_id='1/../device/firewall1' propagates handler_id path traversal into a WRITE operation "
+                 "at '/alert/basic-handler/1/../device/firewall1' -> writes GET result data to an arbitrary CMDB path under alert namespace; "
+                 "privilege: @rw_required(priv.ADMINPRIV_EVENT_MANAGEMENT) on all three callers: "
+                 "basic_handler_reset (L337), threat_handler_reset (L345), correlation_handler_reset (L352); "
+                 "ADMINPRIV_EVENT_MANAGEMENT = lower-privilege role (alert/event handler management, not full system admin); "
+                 "status CANDIDATE: impact depends on FMG_PROXY RPC router URL normalization behavior; "
+                 "if router normalizes '..' segments before routing, traversal is blocked at the router layer; "
+                 "rootfs.gz is encrypted so behavior is unverified; partial confirmation: FMG-F37 (ADOM name injection in CMDB URL) "
+                 "establishes that CMDB URL paths accept user data without pre-processing in the Django layer; "
+                 "chain: ADMINPRIV_EVENT_MANAGEMENT cred -> FMG-F70 GET traversal reads device credentials from pm2 namespace -> "
+                 "privilege escalate to full admin; "
+                 "remediation: validate template_url against allowlist of known handler URL prefixes "
+                 "(e.g. '/alert/basic-handler', '/alert/threat-handler', '/alert/correlation-handler') "
+                 "before constructing the RPC params URL; validate handler_id matches integer or UUID format; "
+                 "source: alert/views.py L291-324 (_handler_reset), L336-352 (basic/threat/correlation callers), "
+                 "util/common.py get_rpc_proxy(), analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
