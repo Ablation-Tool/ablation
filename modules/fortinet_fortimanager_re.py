@@ -2176,6 +2176,31 @@ ANALYSIS_STATUS = {
                  "status HIGH: confirmed static analysis; "
                  "source: fmg-soar/FML/operator.py manage_profile L173-180, manage_email_address L183-189, manage_list L191-201, analysis 2026-09-15",
 
+        "FMG-F52: CRITICAL -- FortiManager SOAR FMQ connector trigger-controlled commands injected into FortiGate fleet block-list enforcement via FAZ notification API (FMG7.x, fmg-soar/FMQ/operator.py, 2026-09-15): "
+                 "class: FMQSendBlockListNewOperator (execute() line 536); "
+                 "trigger path: commands = FAZUtilsOperator.parse_input(context, commands, context_dict) (line 548) -- commands fully trigger-controlled; "
+                 "snlist ALSO trigger-controlled via parse_input (line 546) -- attacker can target arbitrary FGT serial numbers; "
+                 "sink: _send_message(snlist, commands) (lines 558-575) POSTs to FAZ /api/v1/notifications (line 260) with body "
+                 '[{"objectId":30001,"objectType":"blockList","messages":[{"version":1,"source":faz_sn,"target":snlist,"commands":<attacker-controlled>}]}]; '
+                 "FAZ relays commands to FGT devices via FGFM/FGSP using mTLS cert (CRL-checked, L252-320); "
+                 "FGT executes block-list commands without further payload validation beyond cert auth; "
+                 "normal command structure: [{type:ip|domain|url|mac, command:add|delete|snapshot, entries:[...]}]; "
+                 "attack 1 (fleet block-list wipe): commands=[{type:ip,command:snapshot,entries:[]},{type:domain,command:snapshot,entries:[]},{...}] -> "
+                 "clears ALL block-list entries on ALL targeted FGT devices in ADOM simultaneously; "
+                 "attack 2 (unblock attacker IP): commands=[{type:ip,command:delete,entries:[attacker_ip]}] -> "
+                 "removes attacker IP from FGT threat-blocking policy, bypassing SOAR-triggered block; "
+                 "attack 3 (production traffic disruption): commands=[{type:ip,command:add,entries:[legitimate_ip]}] -> "
+                 "adds legitimate service IPs to FGT block list, disrupting production traffic; "
+                 "trigger chain: network event with attacker-controlled source field (e.g. failed login from attacker IP) -> "
+                 "SOAR playbook with FMQ task -> parse_input on commands -> fleet-wide FGT block-list manipulation; "
+                 "no FGT credential required -- trust is at TLS layer (FAZ cert), not payload layer; "
+                 "impact CRITICAL: full block-list manipulation across entire managed FGT fleet; "
+                 "scope: all FGT devices in target ADOM (snlist trigger-controlled); "
+                 "fix: validate commands against strict allowlist (permitted types/commands/entry formats); "
+                 "never pass parse_input result directly to _send_message without schema validation; "
+                 "status CRITICAL: confirmed static analysis; parse_input->_send_message chain L548/575 confirmed; "
+                 "source: fmg-soar/FMQ/operator.py FMQSendBlockListNewOperator L519-577, _send_message_with_cert_fallback L252-320, analysis 2026-09-15",
+
         "FMG-F50: HIGH -- FortiManager SOAR FAC connector URL path traversal + account disable via trigger-controlled userid and user_type (FMG7.x, fmg-soar/FAC/operator.py, 2026-09-15): "
                  "classes: FACGetUserOperator (execute_action line 201), FACUpdateUserStatusOperator (execute_action line 292); "
                  "sink 1 (GET): self.make_api_call(endpoint='api/v1/{0}/{1}/'.format(user_type, userid)) -- both user_type and userid are "
