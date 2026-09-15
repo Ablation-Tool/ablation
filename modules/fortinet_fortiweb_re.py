@@ -983,6 +983,37 @@ ANALYSIS_STATUS = {
     "fortism_ioctls": "COMPLETE -- all 6 ioctls mapped (0x9002, 0x9003, 0x9004, 0x9005, 0x9007, 0x9009).",
     "cross_products":  "FGT-F19/F20/F21 confirmed; FGT-F16/F22 confirmed but partially mitigated.",
 
+    "hardware_appliance_firmware": {
+        "note": "Second FortiWeb firmware analyzed: FortiWeb hardware appliance (FFWKVM-8.0 hardware series, NOT the 8.0.6.M KVM image analyzed above)",
+        "build_date": "2026-04-20",
+        "kernel": "Linux 4.19.13 (root@3ff2a6779e73, gcc 12.4.0)",
+        "kernel_build_id": "ff4f7d808875e34fd38b3bfebb61969f80fa2f25",
+        "source": "/mnt/ffw-p1/ (ext2 boot partition, hardware appliance)",
+        "rootfs_gz": "BLOCKED -- custom encryption magic 0xa3ba56c6 (same as 8.0.6.M KVM)",
+        "datafs_tar_gz": "IDENTICAL to 8.0.6.M KVM -- same SHA256 for fgt2.key and fortism_config.json; same userspace",
+        "kernel_delta_vs_kvm": {
+            "kvm_kernel": "Linux 6.1.62 (LTS, supported until Dec 2026)",
+            "hw_kernel": "Linux 4.19.13 (LTS, EOL December 2024 -- NO upstream patches for 2025/2026 CVEs)",
+            "security_gap": "4.19.13 lacks CFI, newer BPF restrictions, io_uring mitigations; Spectre/MDS coverage less complete than 6.1.x",
+        },
+        "fortism_confirmed": {
+            "hooks": ["fortism_file_ioctl", "fortism_file_mmap", "fortism_file_mprotect", "fortism_file_open",
+                      "fortism_bprm_check_security", "fortism_path_chroot", "fortism_path_link", "fortism_path_mknod",
+                      "fortism_path_permission", "fortism_path_symlink", "fortism_path2_permission",
+                      "fortism_ptrace_acl_check", "fortism_socket_connect", "fortism_socket_listen",
+                      "fortism_task_kill", "fortism_task_setuid", "fortism_unix_connect", "fortism_unix_path_permission",
+                      "fortism_inet6_connect", "fortism_kernel_load_data", "fortism_check_mm_maps",
+                      "fortism_audit_log", "fortism_audit_log_violation"],
+            "ioctls_present": [0x9002, 0x9003, 0x9004, 0x9005, 0x9007, 0x9009],
+            "0x9007_bounds_check": False,
+            "0x9007_note": "No bounds check on user-controlled index (confirmed by disassembly at 0x55d82d); same integer overflow as FGT-F16/FFW-F04; hardware kernel lacks the 0x40 guard present in FWB KVM 8.0.6",
+            "object_table_slots": 64,
+        },
+        "kaslr": True,
+        "retpoline": True,
+        "default_admin_config": "system.conf.def contains ENC XXUp2ozpdysrQ admin password hash (reversible FortiOS AES; default factory config)",
+    },
+
     "datafs_contents": {
         "etc/redis/": "10 Redis instances (6379-6389, 6382); all no requirepass; all bind 127.0.0.1 (FWB-F06)",
         "etc/wassd_ws.py": "Fortinet cloud mgmt WebSocket client; TLS verification disabled (FWB-F05)",
@@ -1030,6 +1061,10 @@ ANALYSIS_STATUS = {
                  "SHA-1 + RSA-512 -- both algorithms broken; Fortinet deliberately issued new 512-bit cert in Dec 2025; "
                  "exploit path: factor modulus -> forge FortiWeb device cert -> MITM WEB_AUTH TLS sessions -> credential theft; "
                  "FGT 7.4.12 also ships a different 512-bit key (CFB821074C...) but not confirmed active via fortism",
+        "FWB-F15: HIGH -- FortiWeb hardware appliance (FFWKVM-8.0 hardware series, build 2026-04-20) ships Linux 4.19.13 (EOL Dec 2024); "
+                 "KVM variant ships 6.1.62 (same userspace/datafs SHA256 match); hardware appliance users receive NO upstream kernel patches for 2025/2026 CVEs; "
+                 "fortism ioctl 0x9007 handler LACKS bounds check at 0x55d82d (FFW-F04 confirmed unmitigated); "
+                 "default admin ENC password in system.conf.def (FortiOS reversible AES, device-keyed)",
         "FWB-F14: HIGH -- libips.so.new (18.5MB stripped x86-64 ELF) exposes only 2 external symbols; "
                  "all 529 internal functions vended via ips_so_query_interface vtable; popen+system present "
                  "and resolved at runtime via dlopen (bypasses nm/readelf UND detection); Lua interpreter embedded "
