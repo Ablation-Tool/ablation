@@ -848,10 +848,12 @@ FWB_F13_512BIT_KEY_WEB_AUTH = {
         "key_size":   "512-bit RSA (2 primes) -- cryptographically broken",
         "modulus_ffw_800": "B5ED8433938A7D0044B98B73AA98E5F92747A8811361D1DC9D0DA381C22900045BC0D21FDF4594B74DE6B1FD879207CE7901730EA29F1DE7568A45CF398199CF",
         "cert_file":  "/etc/fgt_512.crt",
-        "cert_issued": "2011-02-21 (Feb 21, 2011) -- 15 years in production firmware",
-        "cert_expires": "2038-01-19",
+        "cert_issued": "2025-12-05 (Dec 5, 2025) -- freshly issued 512-bit RSA cert; Fortinet deliberately chose broken key size in 2025",
+        "cert_expires": "2056-05-24 (30-year validity)",
         "cert_subject": "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiGate, CN=FortiGate, emailAddress=support@fortinet.com",
-        "cert_issuer":  "Fortinet internal CA (CN=support, OU=Certificate Authority)",
+        "cert_issuer":  "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=Certificate Authority, CN=fortinet-subca2003",
+        "signature_alg": "sha1WithRSAEncryption (SHA-1 + RSA-512; both deprecated/broken)",
+        "note": "CORRECTED: prior module entry stated cert_issued=2011-02-21 and cert_expires=2038-01-19; actual cert data shows Dec 2025 issue date, May 2056 expiry; Fortinet issued a NEW 512-bit RSA cert in 2025",
     },
 
     "domain_usage": {
@@ -867,8 +869,9 @@ FWB_F13_512BIT_KEY_WEB_AUTH = {
         "Derived private key enables: (1) certificate forgery for the FortiWeb management identity, "
         "(2) passive decryption of captured TLS sessions terminated by WEB_AUTH, "
         "(3) active MITM of HTTP authentication sessions (credential theft). "
-        "The key has been present in Fortinet firmware since 2011 -- historical traffic captured over 15 years "
-        "can be retroactively decrypted."
+        "The cert was issued December 2025 by Fortinet's own CA (fortinet-subca2003); "
+        "Fortinet deliberately chose a 512-bit RSA key for a newly issued production cert in 2025. "
+        "30-year validity (expires 2056) means no planned rotation."
     ),
 
     "cross_product_scope": {
@@ -907,7 +910,7 @@ ANALYSIS_STATUS = {
         "etc/fortism_config.json": "ANALYZED (FWB-F11): 5 domains with CAP_SYS_MODULE (WAD, REMOTELOG, CSFD_PRIV, SNIFFERD, WEB_AUTH); 6 domains with anon-mem-exec=1 (PRECHROOT, CMDBSVR, MISC, WAD, IPS, WEB_SVC); no heap-exec/stack-exec/regain-root (stricter than FGT 7.4.12)",
         "etc/fgt2.key": "ANALYZED (FFW-F05): modulus A75C115F... matches FGT 7.4.12/8.0.0/FGA 8.0.0; cross-product shared static RSA key",
         "etc/fgt_512.key": "ANALYZED (FWB-F13): 512-bit RSA private key; modulus B5ED8433... unique to FFW 8.0.0; WEB_AUTH domain loads fgt_512.crt (fortism_config.json confirmed); cert issued 2011; key is factorable",
-        "etc/fgt_512.crt": "ANALYZED (FWB-F13): paired with fgt_512.key; active in WEB_AUTH domain; issued 2011-02-21, expires 2038-01-19",
+        "etc/fgt_512.crt": "ANALYZED (FWB-F13): paired with fgt_512.key; active in WEB_AUTH domain; CORRECTED: issued 2025-12-05, expires 2056-05-24 (30-year cert); SHA-1+RSA-512; CN=fortinet-subca2003",
         "hash_bin.sha256": "ANALYZED (FWB-F12): 400 entries; /bin/node SHA-256 matches FGT 8.0.0 exactly; 221 node-scripts webpack chunks (product-specific UI); rootfs.gz encrypted (magic 0xa3ba56c6)",
         "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
         "lib_packge/": "wvs.tar.xz ANALYZED (FWB-F09); python-libs.tar.xz ANALYZED (64MB, Python 3.10 stdlib + 68 site-packages); cryptography 37.0.2 (CVE-2023-49083, CVE-2024-26130, CVE-2023-0286), ecdsa 0.17.0 (CVE-2024-23342), Django 5.1.6 (CVE-2025-26115); matplotlib + boto3 + pysqlcipher3 + sshpubkeys notable; FWB-F10",
@@ -935,7 +938,8 @@ ANALYSIS_STATUS = {
                  "same Node.js binary shared across FortiGate and FortiWeb; 221 webpack chunks in FFW (different UI logic); "
                  "Node.js runtime vulnerability = both product lines affected",
         "FWB-F13: CRITICAL -- 512-bit RSA private key (fgt_512.key) active in WEB_AUTH domain (FFW 8.0.0 fortism_config.json confirmed); "
-                 "modulus B5ED8433... factorable in days; cert issued 2011 (15 years in firmware); "
+                 "modulus B5ED8433... factorable in days; CORRECTED cert date: issued 2025-12-05 (not 2011), expires 2056-05-24 (30-year validity); "
+                 "SHA-1 + RSA-512 -- both algorithms broken; Fortinet deliberately issued new 512-bit cert in Dec 2025; "
                  "exploit path: factor modulus -> forge FortiWeb device cert -> MITM WEB_AUTH TLS sessions -> credential theft; "
                  "FGT 7.4.12 also ships a different 512-bit key (CFB821074C...) but not confirmed active via fortism",
     ],
