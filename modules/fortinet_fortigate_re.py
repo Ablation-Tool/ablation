@@ -2442,6 +2442,21 @@ ANALYSIS_STATUS = {
                  "primary attack surface remains FGT-F41 (authenticated Lua config chain); "
                  "source: full capstone analysis 2026-09-15",
 
+        "FGT-F54: MEDIUM -- libav.so.new (FGT7412 May 2026, 7.4MB) ELF handler heap off-by-one null byte write (2026-09-15): "
+                 "format id=0x068 (ELF magic: 7f454c46 02 01 01) fp18 handler at 0x10ed00; context alloc: ALLOC1(1, 0x40) = 64 bytes at fp10 0x10eca0; "
+                 "off-by-one: at 0x10ee66 ALLOC1(1, r13) allocates r13 bytes where r13 = strlen([outer_ctx+0x10]) - outer_ctx[0x28] - 1; "
+                 "strncpy at 0x10ee86: strncpy(buf, src, r13) copies r13 bytes to the r13-byte buffer (valid); "
+                 "null write at 0x10ee8e: 'mov byte ptr [rcx + r13], 0' writes 0 at buf[r13] = first byte past allocation end; "
+                 "trigger condition: [outer_ctx+0x20] must start with 'lz\\0' (compression format check at 0x10ee47-0x10ee56); "
+                 "attacker control: [outer_ctx+0x10] is the ELF string path; strlen of path minus a fixed offset determines r13; "
+                 "impact: systematic heap off-by-one null byte write at attacker-controlled allocation boundary; "
+                 "when r13 is an exact multiple of heap chunk alignment (8 bytes), null byte hits next chunk's metadata; "
+                 "with 8-byte alignment (ALLOC1 -> 0x395560: mov ecx,8), r13 = 8k for any k causes null write at next chunk prev_size field; "
+                 "attack scenario: submit ELF binary (in archive or email) with 'lz' compression indicator and crafted filename length; "
+                 "pre-auth surface: AV engine processes all incoming ELF content without authentication; "
+                 "alternate path 0x10eeb0: allocates (r13+5), memcpy r13 bytes, appends '.out' literal 4 bytes, then null at buf[r13+4] -- within bounds (safe path); "
+                 "source: fp18 0x10ed00, off-by-one at 0x10ee8e, alloc at 0x10ee66, strncpy at 0x10ee86, analysis 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
