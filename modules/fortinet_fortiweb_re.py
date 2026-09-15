@@ -1075,5 +1075,26 @@ ANALYSIS_STATUS = {
                  "network-facing HA replication; /tmp/ipscfgshm.%s path constructed from config value; "
                  "Rust subprojects in RPATH (zerocopy-derive-0.8.31, uvart) confirm C/Rust FFI boundary; "
                  "RADIUS dissection parses User-Password, CHAP-Password, Tunnel-Password from wire traffic",
+        "FFW-F06: MEDIUM CANDIDATE -- libips.so.new HTTP request line-position counter 16-bit truncation causes WAF bypass (FFW 8.0.0, libips.so.new 18MB x86-64, analysis 2026-09-15): "
+                 "binary: ffw-data/lib/libips.so.new; "
+                 "state machine at [rbx+0x280] (word) tracks byte position within current HTTP request line; "
+                 "two increment paths: "
+                 "(1) 0x25fa79-0x25fa7c: add ecx, r12d; mov word ptr [rbx+0x280], cx -- 32-bit offset added to 16-bit counter, truncated to word; "
+                 "(2) 0x25fa98-0x25faa7: add r12d, r13d; mov word ptr [rbx+0x280], r12w -- bulk buffer length added to counter, truncated to word; "
+                 "trigger: movzx r14d, word ptr [rbx+0x280]; test r14w, r14w; jne <line-body-processing> "
+                 "at 0x25f139, 0x25f479, 0x25f7c9 -- counter==0 interpreted as line-start sentinel; "
+                 "attack: HTTP request header line exceeding 65535 bytes causes counter to wrap to 0; "
+                 "on next call, test r14w, r14w passes (r14w==0), triggering line-start logic at byte 65536 instead of byte 0; "
+                 "specifically: movzx eax, byte ptr [r10]; mov byte ptr [rbx+0x288], al stores current byte (65536th) as 'first char of line'; "
+                 "WAF rules inspecting the first character of an HTTP header line receive a mid-line byte as the line-start byte; "
+                 "function pointer table at 0x983a8: 62 dispatch entries reference 0x25f9f0 as the handler for this protocol -- "
+                 "the truncation affects all protocol variants using this handler; "
+                 "impact: WAF bypass for FortiWeb rules that condition on HTTP header line-start characters; "
+                 "potential for malformed header smuggling where WAF inspection anchors on line positions; "
+                 "confidence MEDIUM: truncation confirmed by static analysis; which specific WAF rule classes are affected requires dynamic testing; "
+                 "requires crafting HTTP header with line length > 65535 bytes (unusual but valid per RFC 7230); "
+                 "remediation: change [rbx+0x280] from word to dword; add explicit upper-bound check before counter increment; "
+                 "note: 62 function pointer table entries reference 0x25f9f0 -- this handler processes multiple protocol subtypes; "
+                 "source: ffw-data/lib/libips.so.new 0x25f9f0-0x25faaf, 0x25f139/0x25f479/0x25f7c9 (line-start triggers), analysis 2026-09-15",
     ],
 }
