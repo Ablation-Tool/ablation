@@ -2201,6 +2201,26 @@ ANALYSIS_STATUS = {
                  "remove embedded employee PII from test data in production artifacts; "
                  "source: fmg-soar/AD/operator.py lines 585-600, 629, 804-819, analysis 2026-09-15",
 
+        "FMG-F43: CRITICAL -- FortiManager/FortiAnalyzer SIEM compiler Lua code injection via parser_uuid in Analyzer.run() (FMG8.0.0/FAZ8.0.0, Python SIEM compiler 2025, 2026-09-15): "
+                 "file: fmg-ext2/usr/local/siem/compiler/analyzer.py -- Analyzer.run() method line 76; "
+                 "Analyzer uses lupa (Python LuaJIT bindings): self.lua = LuaRuntime(unpack_returned_tuples=True) at line 56; "
+                 "Lua code injection at line 76: mod = self.lua.eval(f'require(\\\"trace_{self.parser_uuid}\\\")'); "
+                 "self.parser_uuid is set by load(parser_uuid) at line 23 with NO format validation; "
+                 "injection payload: parser_uuid = '\\\") os.execute(\\\"id > /tmp/rce\\\")--' -> "
+                 "self.lua.eval('require(\\\"trace_\\\") os.execute(\\\"id > /tmp/rce\\\")--\\\"')'; "
+                 "the Lua -- comment discards the trailing closing characters; require() may fail but os.execute() fires; "
+                 "LuaJIT runtime has unrestricted access to os library by default -- os.execute() calls /bin/sh; "
+                 "impact: RCE as the FAZ/FMG SIEM daemon process user (typically root in Fortinet appliances); "
+                 "attack surface: any API endpoint that invokes Analyzer.load(parser_uuid) with user-controlled uuid; "
+                 "additional injection site: compiler.py dryRunMatches() line 455: "
+                 "exe_lines.append('record[\\\"{}\\\"] = \\\"{}\\\"'.format(key, value)) where key+value from matches dict are unescaped; "
+                 "if value contains '\"' or newline, Lua string literal breaks and injects arbitrary Lua into the dry-run script; "
+                 "dryRunMatches is called with test data during SIEM parser compilation/validation (user-supplied test records); "
+                 "remediation: validate parser_uuid against strict UUID regex ([0-9a-f]{8}-...) before use in eval; "
+                 "use Lua table passing (lua.table_from()) instead of string formatting for any user data into Lua context; "
+                 "escape key/value in dryRunMatches: replace '\\\"' with '\\\\\\\"' and newlines with space; "
+                 "source: fmg-ext2/usr/local/siem/compiler/analyzer.py line 76; compiler.py lines 443-481, analysis 2026-09-15",
+
         "FMG-F42: HIGH -- FortiManager SOAR FMQ connector PostgreSQL SQL injection via adom_prefix from Redis (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
                  "file: fmg-soar/FMQ/operator.py -- FMQBaseOperator._get_req_act_blk_inds() L375-394 and _update_indicator_status() L396-419; "
                  "_get_req_act_blk_inds() constructs a PostgreSQL SELECT using adom_prefix as a double-quoted identifier: "
