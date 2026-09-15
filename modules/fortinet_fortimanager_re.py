@@ -308,6 +308,14 @@ FMG_F04_TOOL_CALL_CHANNEL_NO_SESSION_BINDING = {
             "any auth user can terminate any running agent conversation by ID; "
             "combined with cancel_tool_call: full disruption of another user's agent session"
         ),
+        "run_agent_lock_hold_dos": (
+            "agent_views.py:366 -- acquire_redis_lock(get_run_agent_lock(conversation_id), 1); "
+            "lock key = conversation_id ONLY (no session_id); "
+            "any authenticated user can POST run_agent with victim's conversation_id and hold the lock for the full agent run duration; "
+            "victim's concurrent run_agent calls for that conversation_id fail with LockAcquisitionError; "
+            "two-stage DoS chain: (1) stop_conversation to kill victim's active run, (2) immediately post run_agent with victim's id to acquire lock and block restart; "
+            "note: Redis save/load key does include session_id so attacker cannot read/corrupt victim's conversation data -- DoS only"
+        ),
     },
 
     "attack_surface_summary": (
@@ -504,6 +512,68 @@ FMG_F07_VPN_MODIFY_SCRIPT_PROMPT_INJECTION = {
 }
 
 
+FMG_F09_CURRENT_DATAMASK_CROSS_SESSION_LEAK = {
+    "id":       "FMG-F09",
+    "product":  "Fortinet FortiManager (AI agent views layer, current_datamask endpoint)",
+    "severity": "HIGH -- any authenticated FMG user can read any other user's AI conversation datamask "
+                "by providing an arbitrary conversation_id; datamask contains original (unmasked) PII: "
+                "email addresses, device serial numbers, FortiGate device names submitted to the AI assistant",
+    "class":    "Broken Object Level Authorization / Cross-Session Data Exposure",
+
+    "endpoint":         "POST /p/ai/current_datamask/",
+    "auth_required":    "@login_required @post_only -- no session ownership validation",
+    "redis_key":        "fortiai::datamask::conversation_id:{conversation_id} -- NO session_id in key",
+
+    "vulnerability": (
+        "current_datamask reads from Redis using conversation_id ONLY (no session_id). "
+        "Any authenticated FMG user can supply any conversation_id and receive the full datamask "
+        "for that conversation. The datamask stores the original unmasked values that were "
+        "substituted before sending user content to the LLM: email addresses, device serial numbers, "
+        "FortiGate device names (CUSTOM_MASK_PREFIX_COLLECTIONS = ['email', 'serial_number', 'fortigate']). "
+        "This is a complete bypass of the data masking privacy model -- the attacker recovers the exact "
+        "plaintext values the victim was trying to keep private."
+    ),
+
+    "authorization_gap_evidence": {
+        "missing_check": (
+            "current_datamask (agent_views.py:548-567): NO call to get_session_conversation_id(); "
+            "reads get_datamask_storage_key(conversation_id) directly from Redis and returns to caller"
+        ),
+        "properly_protected_endpoints": [
+            "submit_datamask (line 575): get_session_conversation_id(request.session_id) == conversation_id check",
+            "decrypt_message (line 697): same session ownership check",
+            "encrypt_message (line 717): same session ownership check",
+            "send_feedback (line 742): same session ownership check",
+        ],
+        "current_datamask_is_sole_exception": (
+            "Every other datamask-related endpoint validates that conversation_id belongs to the requesting session. "
+            "current_datamask is the only endpoint that skips this check."
+        ),
+    },
+
+    "data_exposed": {
+        "categories": ["email", "serial_number", "fortigate"],
+        "source":     "datamask.py:280 -- CUSTOM_MASK_PREFIX_COLLECTIONS",
+        "format":     "full FullDataMask.export() -- collection entries with original and masked values; decrypt map available via get_decrypt_map()",
+        "context":    "Any network topology, device inventory, and operator PII that any FMG user typed into the AI assistant is recoverable by another authenticated user who knows (or guesses) the conversation_id",
+    },
+
+    "conversation_id_discoverability": (
+        "conversation_id is a client-generated UUID stored in the browser; it is transmitted in WebSocket messages "
+        "and in all run_agent / create_conversation POST bodies. An attacker on the same network segment monitoring "
+        "WebSocket traffic can harvest UUIDs. stop_conversation DoS (FMG-F04) requires the same UUID -- the two findings share the same prerequisite."
+    ),
+
+    "code_evidence": {
+        "file":          "usr/local/lib/python3.11/proj/ai/agent/agent_views.py:548-567",
+        "storage_key":   "datamask.py:229 -- f'fortiai::datamask::conversation_id:{conversation_id}'",
+        "return_value":  "JsonResponse(datamask) -- full collection dump including original plaintext values",
+    },
+
+    "status": "CONFIRMED -- source code; authorization gap verified against all peer endpoints",
+}
+
+
 FMG_F08_AI_MEDIATED_ENDPOINT_QUARANTINE = {
     "id":       "FMG-F08",
     "product":  "Fortinet FortiAnalyzer (FAZ AI views, faz_assistant tool scope)",
@@ -657,6 +727,8 @@ ANALYSIS_STATUS = {
         "FMG-F06: HIGH -- policy_config_agent includes install_package_to_device in tool set; permission approval via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL (no session binding); Fortinet developer comment confirms awareness; mitigation removes read-only tool, leaves execution chain intact",
         "FMG-F07: HIGH -- fmg_vpn_modify_script (POST /p/ai/fmg/vpn/modify_script/) passes request_body['message'] verbatim to LLM; @login_required only; no guardrail; any auth user injects adversarial CLI script generation prompt; output applied to managed FortiGate fleet if operator acts on it",
         "FMG-F08: HIGH -- action_quarantine_internal_endpoint in FAZ_FORTIAI_CLEANED_TOOLS; any @login_required FAZ user can cause AI to quarantine any internal endpoint via local_assistant or chat_completions_assistant; get_system_processes_from_internal_endpoint also in cleaned tools; no per-action authorization gate",
+        "FMG-F09: HIGH -- current_datamask (POST /p/ai/current_datamask/) has no session ownership check; any @login_required user reads any other user's datamask (original PII values: email, device serial number, FortiGate names) by supplying arbitrary conversation_id; every peer datamask endpoint (submit_datamask, decrypt_message, encrypt_message, send_feedback) validates session ownership -- current_datamask is sole exception; datamask Redis key is conversation_id only (no session_id)",
+        "FMG-F04 AMPLIFIED: run_agent lock keyed on conversation_id only; any auth user holds lock for victim's conversation by POSTing to run_agent with victim's id; two-stage DoS: stop_conversation + run_agent lock-hold blocks victim from restarting agent session",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
