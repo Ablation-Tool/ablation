@@ -1090,11 +1090,117 @@ FMG_F15_SESSION_FINDER_GUI_ARG_INJECTION = {
         "not a peer FMG admin."
     ),
 
-    "verification": "CONFIRMED -- static analysis of session_finder_diagnose/agent.py; "
-                    "find_source_interface_and_fortigate_handler reads device data and sends "
-                    "3 GUIAnyFunctionCallMessage with device-controlled args; "
-                    "frontend sink behavior requires browser-side analysis (JS bundle not fully analyzed)",
-    "status": "CONFIRMED injection path; frontend impact unconfirmed (JS analysis pending)",
+    "frontend_sink_analysis": {
+        "source": "58383.bd3bf6b0.chunk.js",
+        "handler": "ANY_GUI_FUNCTION_CALL handler calls I[T](...re) where re=args (device-controlled)",
+        "get_fortigate_info": (
+            "Looks up device by name in LOCAL Redux state (h[1].result[0].data.find(v=>v.name===y)). "
+            "No JSONRPC call with device_name. Safe from path traversal. "
+            "Device_name determines which local Redux device entry is displayed -- "
+            "attacker can make the UI display a DIFFERENT device's info."
+        ),
+        "get_interface_info": (
+            "Constructs JSONRPC URL: h = 'pm/config/device/' + device_name + '/global/system/interface'. "
+            "Issues authenticated JSONRPC GET from admin browser: N.fiFmgHttp.query({method:'get', params:[{url:h}]}). "
+            "Path traversal: device_name='../../../pm/config/global/system/admin' could traverse out of device scope. "
+            "Cross-device: adversarial device provides device_name='other-managed-fgt' to read that device's interface config. "
+            "Result stored in React state (fe() data) and sent to sendAnyGUIToolResponse."
+        ),
+        "get_ping_source_ip": (
+            "Constructs JSONRPC exec: N.fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', "
+            "data:{device: device_name, command:['diagnose ip address list']}}]}). "
+            "Command is hardcoded ('diagnose ip address list'); device is adversary-controlled. "
+            "Adversarial FGT provides device_name='production-firewall-01' -> FMG executes CLI command "
+            "on production-firewall-01 using admin browser session. Cross-device CLI exec via confused deputy."
+        ),
+        "severity_upgrade": (
+            "get_ping_source_ip is CRITICAL: cross-device CLI exec on any FMG-managed device via admin session, "
+            "no admin awareness or confirmation; triggered by adversarial managed FGT providing controlled device_name. "
+            "get_interface_info is HIGH: cross-device JSONRPC read + potential path traversal into admin config."
+        ),
+    },
+
+    "verification": "CONFIRMED -- static analysis of session_finder_diagnose/agent.py + 58383.bd3bf6b0.chunk.js; "
+                    "injection path Python->frontend confirmed; frontend JSONRPC exec via get_ping_source_ip CONFIRMED "
+                    "via JS bundle analysis; cross-device CLI exec on any FMG-managed device via admin session.",
+    "status": "CONFIRMED -- severity upgraded to CRITICAL for get_ping_source_ip cross-device exec path",
+}
+
+
+# ---------------------------------------------------------
+# FMG-F16: CRITICAL -- cross-device JSONRPC exec/read via adversarial FGT device_name in GUI frontend
+# Source: 58383.bd3bf6b0.chunk.js + session_finder_diagnose/agent.py
+# ---------------------------------------------------------
+FMG_F16_CROSS_DEVICE_JSONRPC_VIA_ADVERSARIAL_FGT = {
+    "id":       "FMG-F16",
+    "severity": "CRITICAL",
+    "title":    "Adversarial FGT device_name causes cross-device JSONRPC exec on FMG fleet via admin session",
+
+    "root_cause": (
+        "session_finder_diagnose find_source_interface_and_fortigate_handler injects "
+        "device_data['device_vdom_result'][0] (FGT-controlled) as args into GUIAnyFunctionCallMessage. "
+        "Frontend ANY_GUI_FUNCTION_CALL handler calls I[T](...re) -- spreading device-controlled args "
+        "into get_ping_source_ip() and get_interface_info() frontend functions. "
+        "Both extract device_name from the args and issue authenticated JSONRPC calls to FMG backend."
+    ),
+
+    "exploits": {
+        "get_ping_source_ip_exec": {
+            "vector": "JSONRPC exec -- cross-device CLI command execution",
+            "code": "N.fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', data:{device:device_name, command:['diagnose ip address list']}}]})",
+            "attack": (
+                "Adversarial FGT returns device_vdom_result[0] with device_name='target-production-fw'. "
+                "FMG admin browser executes CLI command on 'target-production-fw' (a different managed device). "
+                "Command is hardcoded -- attacker controls target device, not command. "
+                "Extracts IP address table of any FMG-managed device without admin intent."
+            ),
+            "impact": "CLI exec on any FMG-managed device via admin session; reconnaissance across fleet",
+        },
+        "get_interface_info_read": {
+            "vector": "JSONRPC get -- cross-device config read + path traversal",
+            "url_template": "pm/config/device/{device_name}/global/system/interface",
+            "attack_basic": (
+                "Adversarial FGT returns device_name='other-production-fgt' -> reads that device's "
+                "full interface configuration from FMG config DB using admin session."
+            ),
+            "attack_traversal": (
+                "device_name containing '../..' could escape device scope. "
+                "Example: device_name='x/../../pm/config/global/system/admin' -> FMG JSONRPC GET to "
+                "'pm/config/global/system/admin/global/system/interface'. "
+                "Path normalization behavior in FMG JSONRPC server determines exploitability."
+            ),
+            "impact": "Cross-device config read; potential path traversal to admin credential store",
+        },
+    },
+
+    "not_affected": (
+        "get_fortigate_info -- uses device_name only for local Redux state lookup; "
+        "no JSONRPC call with adversary-controlled device_name."
+    ),
+
+    "attack_prerequisites": [
+        "Attacker controls a FGT device that is registered to the target FMG instance",
+        "Admin uses SD-WAN session finder diagnose feature in FMG GUI",
+        "Adversarial FGT device crafts device_vdom_result[0].device_name in MCP tool response",
+    ],
+
+    "result_handling": (
+        "JSONRPC results are stored in React state (ct() call) under listKey (e.g., 'get_ping_source_ip'). "
+        "Result also sent to sendAnyGUIToolResponse(M, {status:'success', result:Z}) -> "
+        "POST /p/ai/any_gui_function_call_resp. Python agent does NOT wait for this (fire-and-forget). "
+        "Data visible in FMG SD-WAN diagnose UI showing 'source IP' from the targeted device."
+    ),
+
+    "code_evidence": [
+        "session_finder_diagnose/agent.py:212-227 -- GUIAnyFunctionCallMessage injection from device data",
+        "58383.bd3bf6b0.chunk.js -- ANY_GUI_FUNCTION_CALL handler: I[T](...re) spread call",
+        "58383.bd3bf6b0.chunk.js -- get_interface_info: h=`pm/config/device/${u}/global/system/interface`; N.fiFmgHttp.query({method:'get',...})",
+        "58383.bd3bf6b0.chunk.js -- get_ping_source_ip: N.fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', data:{device:h, command:['diagnose ip address list']}}]})",
+    ],
+
+    "cross_ref": "FMG-F15 (injection path from device data to GUIAnyFunctionCallMessage); FMG-F11 (GUI auto-exec without confirmation)",
+    "verification": "CONFIRMED -- full chain traced: Python handler -> GUIAnyFunctionCallMessage -> frontend ANY_GUI_FUNCTION_CALL -> JSONRPC exec/get; JS bundle code confirmed cross-device device_name injection",
+    "status": "CONFIRMED",
 }
 
 
@@ -1116,7 +1222,8 @@ FMG_GUARDRAIL_ANALYSIS = {
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "python_layer":   "COMPLETE -- agent_definitions (all dvm_agent, policy_agent, script_agent, sdwan_diagnose_root incl session_finder_diagnose, advanced_mode, vpn_diagnose, gui_agents) + agent_views.py + views.py + faz_mcp/views.py + faz_assistant.py + agent_framework/tool_related/mcp.py + logfetcher/views.py + report/views/views.py fully analyzed; all 19 unique_findings documented",
+    "python_layer":   "COMPLETE -- agent_definitions (all dvm_agent, policy_agent, script_agent, sdwan_diagnose_root incl session_finder_diagnose, advanced_mode, vpn_diagnose, gui_agents) + agent_views.py + views.py + faz_mcp/views.py + faz_assistant.py + agent_framework/tool_related/mcp.py + logfetcher/views.py + report/views/views.py fully analyzed",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; FMG-F15/F16 confirmed; 17 unique_findings total",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1144,7 +1251,8 @@ ANALYSIS_STATUS = {
         "FMG-F12: MEDIUM -- device_operations_agent (line 260) and sdwan_recommendation_agent (line 109) hardcode model='gpt-4.1' (OpenAI) instead of AI_MODEL_LARGE; sensitive FortiGate device data (CVEs, license info, device status, SD-WAN interface configs, health check metrics, routing tables) routes to OpenAI API outside Fortinet infrastructure; all other FMG agents use AI_MODEL_LARGE abstraction; no customer notification or data residency controls",
         "FMG-F13: MEDIUM -- device_diagnostics_agent.search_and_run_tool dynamically expands tool access to ALL 5 ADVANCED_MODE_TOOLSET_URIs (general_network_diagnostic, vpn_diagnostic, sdwan_diagnostic, routing_diagnostic, utilities) filtered only by tag keywords; inner 'device_diagnostics_tool_runner' receives args['request'] as system prompt verbatim; injection via managed device data -> attacker controls both tag selection and tool request; 'utilities' toolset contents unknown (webmcpserver BLOCKED)",
         "FMG-F14: LOW -- REQUIRED_USER_PERMISSION_TOOLS in mcp_permission_tools.py gates schedule_firmware_upgrade via MCP path (permission dialog required); same tool exposed as GUI tool in device_operations_agent (INCLUDED_GUI_TOOLS) via make_gui_tool_handler -> GUIToolCall (auto-execute, no dialog); gate inconsistency between MCP and GUI paths for same tool",
-        "FMG-F15: MEDIUM -- session_finder_diagnose find_source_interface_and_fortigate_handler passes managed FGT device data verbatim as args to 3 GUIAnyFunctionCallMessage frontend functions (get_fortigate_info, get_interface_info, get_ping_source_ip); device_data['device_vdom_result'][0] is FGT-controlled JSON; no sanitization before injection into admin GUI; if frontend sinks unsanitized: XSS/DOM injection in FMG admin browser; distinct from FMG-F04 (peer-admin injection) -- threat actor here is the managed FGT device itself",
+        "FMG-F15: CRITICAL -- session_finder_diagnose find_source_interface_and_fortigate_handler passes managed FGT device data verbatim as args to 3 GUIAnyFunctionCallMessage frontend functions; device_data['device_vdom_result'][0] FGT-controlled; JS bundle analysis (58383.bd3bf6b0.chunk.js) confirms: get_ping_source_ip fires JSONRPC exec deployment/run/cmd on adversary-controlled device_name (cross-device CLI exec on any FMG-managed device without admin intent); get_interface_info fires JSONRPC get pm/config/device/{device_name}/... (cross-device config read + path traversal); see FMG-F16 for full chain",
+        "FMG-F16: CRITICAL -- get_ping_source_ip(device_name): N.fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', data:{device:adversary_device_name, command:['diagnose ip address list']}}]}) -- adversarial FGT device_name triggers CLI exec on any FMG-managed device via admin browser session; command hardcoded, target device adversary-controlled; get_interface_info additionally: JSONRPC get pm/config/device/{adversary_device_name}/ -- cross-device config read; attack prereq: attacker controls a FGT device registered to FMG + admin uses SD-WAN session finder diagnose",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
