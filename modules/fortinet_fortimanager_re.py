@@ -864,6 +864,167 @@ FMG_F11_DVM_AGENT_AUTO_EXECUTE_PERMISSION_GAP = {
 
 
 # ---------------------------------------------------------
+# FMG-F12: Third-party LLM data exfiltration (OpenAI gpt-4.1)
+# ---------------------------------------------------------
+FMG_F12_THIRD_PARTY_LLM_EXFILTRATION = {
+    "id":       "FMG-F12",
+    "severity": "MEDIUM",
+    "title":    "Sensitive device/network data routed to OpenAI gpt-4.1 outside Fortinet infrastructure",
+    "agents": {
+        "device_operations_agent": {
+            "file":  "proj/ai/agent/agent_definitions/dvm_agent/device_operations_agent.py:260",
+            "model": "gpt-4.1",
+            "data_classes": [
+                "managed device status (connectivity/sync state)",
+                "firmware CVE data (vulnerabilities per device)",
+                "device license expiry info",
+                "firmware upgrade schedules",
+                "event logs from deployment_manager sub-type",
+                "failed installation logs",
+                "config change history",
+            ],
+        },
+        "sdwan_recommendation_agent": {
+            "file":  "proj/ai/agent/agent_definitions/sdwan_diagnose_root/sdwan_diagnose/recommendation/agent.py:109",
+            "model": "gpt-4.1",
+            "data_classes": [
+                "SD-WAN rule config (interface names, mode, fib-best-match, priority lists)",
+                "realtime health check metrics (latency, jitter, packet loss per interface)",
+                "selected interface for live traffic sessions",
+                "routing table data",
+                "member bandwidth usage",
+                "interface status per FortiGate device",
+            ],
+        },
+    },
+    "mechanism": (
+        "Both agents hardcode model='gpt-4.1' (OpenAI) instead of 'AI_MODEL_LARGE' "
+        "(Fortinet's abstracted model constant used by all other FMG AI agents). "
+        "On every agent invocation, the full conversation context -- including FortiGate "
+        "device names, CVE identifiers, interface configs, and routing data -- is sent to "
+        "OpenAI's API endpoint under the Fortinet API key. No customer notification or "
+        "consent mechanism is in the code path."
+    ),
+    "contrast": (
+        "All other FMG AI agents use model='AI_MODEL_LARGE' constant resolved at runtime. "
+        "device_operations_agent and sdwan_recommendation_agent hardcode 'gpt-4.1' directly, "
+        "bypassing the model abstraction layer."
+    ),
+    "implications": [
+        "Network topology leakage: SD-WAN interface names, IP addresses, routing tables sent to OpenAI",
+        "Vulnerability disclosure: firmware CVE data per managed device sent to OpenAI",
+        "Data residency: organizations with EU/APAC data residency requirements receive no option",
+        "Key exposure: Fortinet OpenAI API key is shared across all customer tenants; "
+        "all customers' device data routes through a single Fortinet-controlled OpenAI credential",
+    ],
+    "code_evidence": [
+        "device_operations_agent.py:260 -- model='gpt-4.1'",
+        "recommendation/agent.py:109 -- model='gpt-4.1'",
+        "compare: fmg_assistant.json model fields all use 'AI_MODEL_LARGE'",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# FMG-F13: device_diagnostics_agent search_and_run_tool -- dynamic tool expansion via tag filter
+# ---------------------------------------------------------
+FMG_F13_SEARCH_AND_RUN_TOOL_EXPANSION = {
+    "id":       "FMG-F13",
+    "severity": "MEDIUM",
+    "title":    "device_diagnostics_agent dynamic tool execution via tag-filtered MCP toolset expansion",
+    "mechanism": (
+        "device_diagnostics_agent.search_and_run_tool allows the AI (or attacker via injection) "
+        "to dynamically select and execute MCP tools from ALL 5 ADVANCED_MODE_TOOLSET_URI "
+        "toolsets (general_network_diagnostic, vpn_diagnostic, sdwan_diagnostic, "
+        "routing_diagnostic, utilities) by supplying search_keywords from the tool tag enumeration. "
+        "The inner 'device_diagnostics_tool_runner' LLMAgent receives args['request'] as its "
+        "system prompt -- not user prompt -- and executes tools matching the provided tags."
+    ),
+    "toolsets_accessible": {
+        "general_network_diagnostic": "fmg://agents/toolsets/advanced/general_network_diagnostic",
+        "vpn_diagnostic": "fmg://agents/toolsets/advanced/vpn_diagnostic",
+        "sdwan_diagnostic": "fmg://agents/toolsets/advanced/sdwan_diagnostic",
+        "routing_diagnostic": "fmg://agents/toolsets/advanced/routing_diagnostic",
+        "utilities": "fmg://agents/toolsets/advanced/utilities",
+    },
+    "tag_enumeration": (
+        "Tag map is fetched from fmg://agents/toolsets/advanced/tag_map at runtime. "
+        "get_tool_tags() reads this resource and returns a dict of tool_name->tags. "
+        "search_and_run_tool exposes all_tool_tags as an enum on search_keywords parameter. "
+        "An injected prompt can enumerate all valid tags and select any combination."
+    ),
+    "injection_vector": (
+        "Indirect prompt injection via managed device data -> device_diagnostics_agent -> "
+        "search_and_run_tool(search_keywords=[...], request='...'). "
+        "args['request'] is passed verbatim as initial_prompt_role='system' to the inner agent. "
+        "Inner agent has no instruction firewall -- instructions are generic 'try your best'. "
+        "Attacker controls both tool selection (via search_keywords enum) and tool parameters "
+        "(via request field)."
+    ),
+    "contrast_with_other_agents": (
+        "Other diagnostic agents (sdwan_diagnose_step_executor, vpn_fixer_agent) have fixed "
+        "toolset URIs. device_diagnostics_agent is unique: it dynamically fans out to ALL "
+        "advanced toolsets at once, with no fixed tool list, gated only by tag match."
+    ),
+    "unknown_surface": (
+        "webmcpserver binary is in encrypted rootfs.gz (BLOCKED). The actual tool implementations "
+        "in the 5 advanced toolsets -- and specifically what 'utilities' contains -- are opaque. "
+        "Based on tool names surfaced in sdwan_diagnose toolset: execute_ping_from_fortigate, "
+        "get_health_check_status_from_fortigate, check_bandwidth_usage_from_fortigate, "
+        "get_sdwan_rule_info_from_fortigate -- all execute live diagnostic commands on managed FGT devices."
+    ),
+    "code_evidence": [
+        "device_diagnostics_agent.py:100-188 -- make_search_and_run_tool implementation",
+        "device_diagnostics_agent.py:82-97 -- get_tool_tags reads fmg://agents/toolsets/advanced/tag_map",
+        "device_diagnostics_agent.py:107 -- available_toolset_uris = list(ADVANCED_MODE_TOOLSET_URI.values())",
+        "device_diagnostics_agent.py:156-162 -- initial_prompt=args['request'] as role='system'",
+        "advanced_mode/const.py:11-17 -- 5 ADVANCED_MODE_TOOLSET_URI definitions",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# FMG-F14: MCP REQUIRED_USER_PERMISSION_TOOLS bypass via GUI tool path
+# ---------------------------------------------------------
+FMG_F14_MCP_PERMISSION_GATE_BYPASS = {
+    "id":       "FMG-F14",
+    "severity": "LOW",
+    "title":    "MCP permission gate for schedule_firmware_upgrade bypassed by parallel GUI tool implementation",
+    "mechanism": (
+        "mcp_permission_tools.py defines REQUIRED_USER_PERMISSION_TOOLS = "
+        "['revert_policy_change', 'schedule_firmware_upgrade', 'move_policy', 'delete_policy']. "
+        "When these tools are called via the MCP path (webmcpserver:11345), "
+        "get_user_permission_before_running() triggers send_gui_toolcall_permission_request -- "
+        "an admin dialog must be approved before execution. "
+        "However, schedule_firmware_upgrade is ALSO exposed as a GUI tool "
+        "(INCLUDED_GUI_TOOLS in device_operations_agent) via make_gui_tool_handler -> GUIToolCall. "
+        "The GUI path does not go through MCPToolHandlerFactory and bypasses "
+        "REQUIRED_USER_PERMISSION_TOOLS entirely."
+    ),
+    "gate_inconsistency": {
+        "mcp_path": "schedule_firmware_upgrade -> get_user_permission_before_running() -> permission dialog required",
+        "gui_path":  "schedule_firmware_upgrade -> make_gui_tool_handler -> GUIToolCall -> auto-execute in frontend",
+    },
+    "mcp_gated_mcp_only_tools": [
+        "revert_policy_change -- MCP only, properly gated",
+        "move_policy -- MCP only, properly gated",
+        "delete_policy -- MCP only, properly gated",
+    ],
+    "note": (
+        "schedule_firmware_upgrade GUI and MCP tool definitions may have different backend "
+        "implementations. MCP version in webmcpserver (BLOCKED). GUI version calls frontend "
+        "auto-execute. Both parameters match: devices[], upgrade_to_version string."
+    ),
+    "code_evidence": [
+        "tool_related/mcp_permission_tools.py:3-8 -- REQUIRED_USER_PERMISSION_TOOLS definition",
+        "tool_related/mcp.py:421-442 -- get_user_permission_before_running implementation",
+        "dvm_agent/device_operations_agent.py:52 -- INCLUDED_GUI_TOOLS = ['schedule_firmware_upgrade']",
+        "util/get_fmggui_assistant_config.py:63-89 -- make_gui_tool_handler sends GUIToolCall (no permission)",
+    ],
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -881,7 +1042,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "python_layer":   "COMPLETE -- agent_definitions + views.py + faz_mcp/views.py + faz_assistant.py fully analyzed",
+    "python_layer":   "COMPLETE -- agent_definitions (all dvm_agent, policy_agent, script_agent, sdwan_diagnose_root, advanced_mode, vpn_diagnose, gui_agents) + views.py + faz_mcp/views.py + faz_assistant.py + agent_framework/tool_related/mcp.py fully analyzed",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -906,6 +1067,9 @@ ANALYSIS_STATUS = {
         "FMG-F04 AMPLIFIED: run_agent lock keyed on conversation_id only; any auth user holds lock for victim's conversation by POSTing to run_agent with victim's id; two-stage DoS: stop_conversation + run_agent lock-hold blocks victim from restarting agent session",
         "FMG-F10: MEDIUM -- sdwan_diagnose recommendation chain: adversarial SD-WAN config on managed device -> diagnosis context -> recommendation LLM -> sdwan_recommendation_scripts_agent auto-invoked with recommendations as system prompt; scripts agent has fix_disable_fib_best_match and fix_rule_metric_custom_profile tools; both tools 'Show a script' (GUI presentation, not auto-execution) -- admin still must click Apply; impact = misleading AI-recommended fix scripts pushed to operator from attacker-controlled device data",
         "FMG-F11: HIGH -- asymmetric permission model: device_config_agent (modify_configuration, install_to_device), device_operations_agent (schedule_firmware_upgrade), policy_config_agent (install_package_to_device) all use GUIToolCall (AGENT_TOOL_CALL) -> frontend auto-executes without dialog; only create_and_run_script uses GUIToolCallPermissionRequest (AGENT_TOOL_CALL_PERMISSION_REQUEST) requiring admin approval; highest-impact operations (config push to managed device fleet, firmware upgrade, policy install) lack the permission gate that lower-impact policy script generation has; indirect prompt injection via device hostname/interface alias/VDOM name -> AI calls modify_configuration without admin confirmation; FMG-F06 correction: install_package_to_device auto-executes (not gated); frontend auto-execute confirmed in 58383.bd3bf6b0.chunk.js",
+        "FMG-F12: MEDIUM -- device_operations_agent (line 260) and sdwan_recommendation_agent (line 109) hardcode model='gpt-4.1' (OpenAI) instead of AI_MODEL_LARGE; sensitive FortiGate device data (CVEs, license info, device status, SD-WAN interface configs, health check metrics, routing tables) routes to OpenAI API outside Fortinet infrastructure; all other FMG agents use AI_MODEL_LARGE abstraction; no customer notification or data residency controls",
+        "FMG-F13: MEDIUM -- device_diagnostics_agent.search_and_run_tool dynamically expands tool access to ALL 5 ADVANCED_MODE_TOOLSET_URIs (general_network_diagnostic, vpn_diagnostic, sdwan_diagnostic, routing_diagnostic, utilities) filtered only by tag keywords; inner 'device_diagnostics_tool_runner' receives args['request'] as system prompt verbatim; injection via managed device data -> attacker controls both tag selection and tool request; 'utilities' toolset contents unknown (webmcpserver BLOCKED)",
+        "FMG-F14: LOW -- REQUIRED_USER_PERMISSION_TOOLS in mcp_permission_tools.py gates schedule_firmware_upgrade via MCP path (permission dialog required); same tool exposed as GUI tool in device_operations_agent (INCLUDED_GUI_TOOLS) via make_gui_tool_handler -> GUIToolCall (auto-execute, no dialog); gate inconsistency between MCP and GUI paths for same tool",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
