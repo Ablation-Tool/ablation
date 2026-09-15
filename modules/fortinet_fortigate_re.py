@@ -2105,6 +2105,30 @@ ANALYSIS_STATUS = {
                  "or signature replay), attacker controls the exec path and argv -> arbitrary binary execution "
                  "during URL DB patch cycle with setuid privilege change; "
                  "ablation score: execvp_in_urldb_patch 0.547 vs 'execvp setuid update package path traversal'",
+        "FGT-F35: MEDIUM CONFIRMED -- libav.so.new (FGT7412 May 2026, 7.4MB stripped x86-64, AV engine): "
+                 "avScanLoad+0x104dc0 (VA 0x2043b0): four consecutive memcpy calls use 32-bit count fields from "
+                 "AV signature database entries without verifying count*multiplier <= remaining buffer space; "
+                 "(1) 0x204500: mov 0x4(%rax),%edx -> add %rdx,%rdx (count*2) -> memcpy(r15+0x2670, src, count*2); "
+                 "(2) 0x20451d: mov (%rax),%edx -> shl $0x2,%rdx (count*4) -> memcpy(r15+0x1050, src, count*4); "
+                 "(3) 0x204538: mov 0x4(%rax),%edx -> shl $0x2,%rdx (count*4) -> memcpy(r15+0x3160, src, count*4); "
+                 "(4) 0x20454f: mov 0x20(%rax),%edx -> memcpy(r15+0x4740, src, edx) [no multiplication, still unchecked]; "
+                 "r15 = pre-allocated arena buffer from obj->field_0x28; entry data loaded from AV sig database "
+                 "via global table at 0x71ac70 (0x516782(%rip) from 0x2044e7); no upper bound check between "
+                 "count*multiplier and arena size before any of the four memcpy calls; "
+                 "attack path: FortiGuard update MITM (sig file signing bypass) OR FortiManager compromise -> "
+                 "inject malicious AV .avdb with large count field -> avScanLoad processes file -> "
+                 "count*4 overflows arena -> heap overflow in AV engine process; "
+                 "ablation top score: 0x2043b0 score=0.388 vs 'memcpy called with size from file header without bound check'",
+        "FGT-F36: MEDIUM CONFIRMED -- libav.so.new (FGT7412 May 2026): avScanLoad+0x11cba4 (VA 0x21c194): "
+                 "strcpy(rbp-0x148, rsi) at 0x21c1f1 copies function argument (database-embedded filename/path) into "
+                 "fixed 0x148-byte (328-byte) stack buffer with no length check; "
+                 "rdi = rbp-0x148 (stack buffer), rsi = rbx = function argument from caller; "
+                 "function immediately after opens the same path via fopen(rbx, 'wb') to write extracted sig data; "
+                 "stack frame: 0x168 bytes + 5 pushed registers; return address is reachable if source exceeds 328 bytes; "
+                 "source of rsi: caller provides path derived from signature database record (file extraction path); "
+                 "attack path: same as FGT-F35 (update MITM or FMG compromise) -> malicious avdb with embedded "
+                 "path field > 328 bytes -> strcpy stack overflow -> RIP control in AV engine; "
+                 "ablation score: 0x21c194 score=0.191 vs 'strcpy fopen fwrite fclose stack buffer overflow'",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
