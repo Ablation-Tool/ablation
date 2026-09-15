@@ -1433,7 +1433,57 @@ FMG_F19_SIEM_LUA_INJECTION = {
     },
 
     "cross_ref": "FMG SOAR connector (FMG-F19b candidate): operator.py LOCALHOST connector loads 14 Fortinet native C libraries via ctypes CDLL (RTLD_GLOBAL); commented subprocess.check_output at line 2247 (inactive)",
-    "status":    "CANDIDATE -- injection path confirmed by static analysis; dryRun trigger API in encrypted rootfs.gz (not accessible without decryption key)",
+    "status":    "CONFIRMED -- dryRun.py extracted from rootfs-ext.tar.xz; line 18: lua.execute(args.input) -- executes entire Lua script string; os library available in lupa LuaRuntime by default; os.execute('cmd') confirmed as OS exec primitive; injection chain: user SIEM rule -> compiler.py .format() -> dry_run_lua string -> subprocess.run dryRun.py -> lua.execute -> os.execute; trigger API still in encrypted rootfs.gz but execution chain fully confirmed",
+}
+
+
+# ---------------------------------------------------------
+FMG_F23_AD_SOAR_LDAP_INJECTION = {
+    "id":       "FMG-F23",
+    "severity": "HIGH",
+    "title":    "SOAR AD connector get_attribute() interpolates user-controlled search_attr_value directly into LDAP filter string -- LDAP injection",
+
+    "component": "fmg-soar/AD/operator.py: get_attribute() lines 589-597",
+
+    "injection_points": {
+        "sAMAccountName_user": {
+            "line":    "591 -- filter = '(&{0}(sAMAccountName={1}))'.format(filter, search_attr_value)",
+            "filter":  "(&(objectclass=*)(sAMAccountName=<INJECT>))",
+            "payload": "* )(| -- produces filter (&(objectclass=*)(sAMAccountName=* )(| ))",
+        },
+        "sAMAccountName_computer": {
+            "line":    "589 -- filter = '(&(objectCategory=computer)(objectClass=computer)(sAMAccountName={1}))'.format(filter, search_attr_value)",
+            "note":    "Checked for '$' suffix and '*' but only appends '$'; LDAP metacharacters like )(| are not escaped",
+        },
+        "userPrincipalName": {
+            "line":    "594-595 -- filter = '(&{0}(|(userPrincipalName={1})(mail={1})))'.format(filter, search_attr_value)",
+            "payload": "admin@corp.com)( -- produces filter (&(objectclass=*)(|(userPrincipalName=admin@corp.com)( )(mail=admin@corp.com)( )))",
+        },
+        "distinguishedName": {
+            "line":    "597 -- filter = '(&{0}(distinguishedName={1}))'.format(filter, search_attr_value)",
+        },
+    },
+
+    "source": {
+        "caller":      "lines 628-630: search_attr_name = SEARCH_ATTRIBUTES_DICT[params.get('search_attr_name')]; search_attr_value = params.get('search_attr_value')",
+        "params_from": "SOAR playbook params dict (user-controlled playbook input via AD connector action)",
+        "note":        "lines 1532-1533 (commented out): parse_input call for search_attr_name was disabled; also line 1410/1840: search_object directly formatted into filter without escaping",
+    },
+
+    "impact": (
+        "LDAP filter injection against the organization's Active Directory (AD) server configured in the SOAR connector. "
+        "Attack: supply search_attr_value with LDAP metacharacters -> modify filter to match ALL objects "
+        "(authentication bypass for AD-backed auth, full user/group enumeration, attribute exfiltration). "
+        "Exploitation requires authenticated access to create/trigger a SOAR playbook using the AD connector."
+    ),
+
+    "sanitization": {
+        "applied": False,
+        "ldap_escape_needed": "RFC 4515 LDAP filter escaping: (, ), *, \\0, /, =, |, &, ~, <, > must be percent-encoded",
+        "ldap3_note": "ldap3.Connection.search(search_filter=...) passes raw filter string to server without validation",
+    },
+
+    "status": "CONFIRMED -- static analysis of get_attribute() in AD/operator.py; .format() with search_attr_value confirmed; no escaping applied",
 }
 
 
@@ -1552,7 +1602,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 23 unique_findings total",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 26 unique_findings total",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1588,6 +1638,8 @@ ANALYSIS_STATUS = {
         "FMG-F20: HIGH -- ClickHouse default-user password stored plaintext in /etc/clickhouse-security; read at runtime by FindLateralMovementOperator (line 2493) and get_anomaly_details() (line 3449) in SOAR LOCALHOST connector; ClickHouse binary shows <listen_host>::</listen_host> (wildcard bind); 'default' user on 'siem' database; attack: any process reading /etc/clickhouse-security or direct port 8123 access -> full SIEM database read (all customer log data, risk scores, lateral movement records) + potential system.users access via ClickHouse built-in functions",
         "FMG-F21: MEDIUM -- SOAR MaliciousVPNAggregateOperator._build_filter() (line 2647) interpolates self.filter (playbook-supplied string) directly into FAZ log query filter via f'({self.filter}) and '; no sanitization; secondary injection via tunnel_ips (indicator value join) at line 2655; second-order injection via lateral_movement entry['dstepid']/entry['dst_ip'] from prior FIND_LM step results at lines 2655-2657; status CANDIDATE -- FAZ log query filter grammar not confirmed (backend in encrypted rootfs.gz)",
         "FMG-F22: MEDIUM -- SOAR FIND_LM operator build_filter_string() (line 2467) constructs ClickHouse SQL via Python f-string with tuple() for IN clause values; Python's tuple.__str__() is NOT SQL-safe: strings containing single quotes rendered with double quotes, which ClickHouse treats as identifiers not literals; direct key injection blocked (keys restricted to src_ip/epid by parse_trigger_data conditionals); value identifier injection via epid values containing single quotes produces double-quoted ClickHouse tokens; status CANDIDATE -- needs live ClickHouse verification",
+        "FMG-F23: HIGH -- SOAR AD connector get_attribute() (lines 589-597) interpolates user-controlled search_attr_value directly into LDAP filter strings via .format() without escaping; all 4 search_attr_name paths affected (sAMAccountName, userPrincipalName, distinguishedName); ldap3 library passes raw filter string to AD server; payload: sAMAccountName='*)(|(objectClass=*)' bypasses filter to match all objects; CONFIRMED by static analysis; req: authenticated SOAR playbook author with AD connector access; also: search_object formatted at lines 1410/1840 (extra injection surface)",
+        "FMG-F19 UPGRADE: CONFIRMED -- dryRun.py extracted from rootfs-ext: lua.execute(args.input) line 18; lupa LuaRuntime with os library available; os.execute('cmd') confirmed as execution primitive; injection chain: SIEM rule name/app/matches -> compiler.py .format() -> dry_run_lua -> subprocess.run('./dryRun.py', '-i', lua_str) -> lua.execute -> os.execute; API trigger path still in encrypted rootfs.gz",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
