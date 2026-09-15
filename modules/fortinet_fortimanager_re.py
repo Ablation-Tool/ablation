@@ -1383,6 +1383,61 @@ FMG_F18_DEVICE_CONFIG_AGENT_SCRIPT_EXEC = {
 
 
 # ---------------------------------------------------------
+# FMG-F19: HIGH -- SIEM compiler Lua injection -> OS command execution
+# Source: rootfs-ext.tar.xz / usr/local/siem/compiler/compiler.py
+# ---------------------------------------------------------
+FMG_F19_SIEM_LUA_INJECTION = {
+    "id":       "FMG-F19",
+    "severity": "HIGH",
+    "title":    "SIEM compiler unsanitized user fields interpolated into Lua dryRun script -> OS command execution",
+    "component": "usr/local/siem/compiler/compiler.py (extracted from rootfs-ext.tar.xz, 237MB XZ)",
+
+    "injection_points": {
+        "name_field": {
+            "source":   "self.data['header']['name'] (user-supplied SIEM rule name)",
+            "line":     "~461 -- metadata[\"data_sourcename\"] = \"{}\".format(self.name_str)",
+            "lua_context": "injected into the metadata table assignment block of the generated Lua script",
+        },
+        "application_field": {
+            "source":   "self.data['header'].get('application', ...) (user-supplied app name)",
+            "line":     "~462 -- metadata[\"data_sourcetype\"] = \"{}\".format(self.app_str)",
+            "lua_context": "injected into the metadata table assignment block",
+        },
+        "matches_dict": {
+            "source":   "matches dict values (user-controlled field names/values in SIEM rule match block)",
+            "lines":    "454-455 -- record[\"{}\"] = \"{}\".format(key, value) for key, value in matches.items()",
+            "lua_context": "injected into the record table assignment block; both key and value unsanitized",
+        },
+    },
+
+    "execution": {
+        "mechanism":    "subprocess.run(['/bin/python', './dryRun.py', '-i', dry_run_lua], check=True)",
+        "lines":        "421-423 + 472-473 (two call sites: dryRunMatches invocation path + direct dryRun path)",
+        "interpreter":  "/bin/python executes the generated Lua script via dryRun.py",
+        "attack_payload_example": (
+            "SIEM rule name: foo\"; os.execute(\"id\"); --\n"
+            "Generated Lua: metadata[\"data_sourcename\"] = \"foo\"; os.execute(\"id\"); --\"\n"
+            "Result: os.execute() runs under /bin/python subprocess on FMG/FAZ host"
+        ),
+    },
+
+    "privilege_requirement": {
+        "auth":     "Authenticated (FMG/FAZ admin or restricted-admin with SIEM rule creation permission)",
+        "note":     "SIEM rule creation is a standard admin function; restricted-admin profiles may include it",
+        "api_path": "CANDIDATE -- dryRunMatches callers not found in extracted rootfs-ext; dryRun API endpoint is in encrypted rootfs.gz (inaccessible); path to trigger is not confirmed",
+    },
+
+    "sanitization": {
+        "applied": False,
+        "detail":  "No escaping, quoting, or validation applied to name_str, app_str, or matches values before format() insertion into Lua string; Python .format() is not injection-safe for embedded interpreter contexts",
+    },
+
+    "cross_ref": "FMG SOAR connector (FMG-F19b candidate): operator.py LOCALHOST connector loads 14 Fortinet native C libraries via ctypes CDLL (RTLD_GLOBAL); commented subprocess.check_output at line 2247 (inactive)",
+    "status":    "CANDIDATE -- injection path confirmed by static analysis; dryRun trigger API in encrypted rootfs.gz (not accessible without decryption key)",
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -1401,7 +1456,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 19 unique_findings total",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 20 unique_findings total",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1409,7 +1464,7 @@ ANALYSIS_STATUS = {
         "builder": "root@e2770389c733 (different container from FAZ root@49192c769448, same day build)",
     },
     "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ, magic 0x5b6758cb...)",
-    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped; all HTTP endpoints in ai/urls.py evaluated",
+    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped; all HTTP endpoints in ai/urls.py evaluated; SIEM compiler (usr/local/siem/compiler/compiler.py) analyzed -> FMG-F19 (Lua injection); SOAR LOCALHOST connector (operator.py, 143KB) analyzed -> 14 ctypes CDLL loads (FMG-F19b candidate)",
     "syntax_ext":    "ncmdb_syntax.json 123 objects analyzed (fmg_cmdb_syntax.json is in encrypted rootfs.gz -- inaccessible); ncmdb_syntax is CMDB schema constants, no injection surface",
     "debug_gates":   "CONFIRMED DISABLED -- SYS.CONFIG_DEBUG hardcoded to 0 in macros.py; faz_mcp/call_tool and debug_1 return 404 in all production builds",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
@@ -1433,6 +1488,7 @@ ANALYSIS_STATUS = {
         "FMG-F16: CRITICAL -- 3 frontend GUI functions all make cross-device JSONRPC calls with adversary-controlled device_name; (1) get_ping_source_ip: fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', data:{device:adv_device, command:['diagnose ip address list']}}]}) -- CLI exec on any FMG-managed device; (2) get_interface_info: JSONRPC get pm/config/device/{adv_device}/global/system/interface -- cross-device config read + path traversal; (3) get_sdwan_rule_info via Se.j6: diagnoseSDWANService -> POST /gui/adom/.../device/{adv_device}/execute_clicommand (sdwan diagnostics) + getCategoryData -> JSONRPC get /pm/config/device/{adv_device}/vdom/{adv_vdom}/system/sdwan; all three triggered from same FMG-F15 injection chain; attack prereq: attacker controls a FGT device registered to FMG + admin uses SD-WAN session finder diagnose",
         "FMG-F17: CRITICAL -- policy_config_agent.handle_create_and_run_script generates FortiOS CLI script via LLM and runs it on FMG policy packages via JSONRPC exec /dmworker/install/script; permission gate (send_gui_toolcall_permission_request) broken by FMG-F04 session binding absence -- any authenticated FMG user can POST allowed=True to /p/ai/send_tool_call_permission_response to bypass; additionally, prompt injection via reference policy data (get_policy_cli) could generate adversarial script content",
         "FMG-F18: HIGH -- device_config_agent generates CLI scripts via LLM and runs via modify_configuration GUI tool (JSONRPC exec /dmworker/install/script, target=device/{device_name}) after UI confirmation widget; install_to_device opens FMG install wizard to push config to FGT; prompt injection vector: FGT device config data returned by get_existing_configuration MCP tool flows unfiltered into LLM context (after masking), enabling adversarial FGT config fields to manipulate script generation; admin sees script in chat widget but may approve without reading all lines; supported categories: system interface, router static, system global, system sdwan, system ntp, vpn ipsec phase1/2-interface",
+        "FMG-F19: HIGH -- SIEM compiler (usr/local/siem/compiler/compiler.py) interpolates user-supplied SIEM rule fields (name, application, matches key/value pairs) verbatim into generated Lua script strings via .format(); no escaping applied; Lua executed via subprocess.run(['/bin/python', './dryRun.py', '-i', dry_run_lua]); payload: SIEM rule name 'foo\"; os.execute(\"id\"); --' injects OS command in Lua metadata block; auth prereq: admin or restricted-admin with SIEM rule creation permission; status CANDIDATE -- dryRun trigger API in encrypted rootfs.gz",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
