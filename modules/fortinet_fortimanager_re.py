@@ -2159,6 +2159,25 @@ ANALYSIS_STATUS = {
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
 
+        "FMG-F50: HIGH -- FortiManager SOAR FAC connector URL path traversal + account disable via trigger-controlled userid and user_type (FMG7.x, fmg-soar/FAC/operator.py, 2026-09-15): "
+                 "classes: FACGetUserOperator (execute_action line 201), FACUpdateUserStatusOperator (execute_action line 292); "
+                 "sink 1 (GET): self.make_api_call(endpoint='api/v1/{0}/{1}/'.format(user_type, userid)) -- both user_type and userid are "
+                 "FAZUtilsOperator.parse_input() results (FACGetUserOperator.execute() lines 225, 229); "
+                 "sink 2 (PATCH): self.make_api_call(endpoint='api/v1/{0}/{1}/'.format(user_type, userid), method='PATCH') "
+                 "with data={'active': active} -- active also trigger-controlled (FACUpdateUserStatusOperator.execute() line 311-318); "
+                 "Python requests does NOT normalize URL path components; "
+                 "attack 1 (traversal via user_type): user_type='localusers/../ldapusers' -> endpoint='api/v1/localusers/../ldapusers/{userid}/' "
+                 "-- accesses LDAP user endpoint instead of local users endpoint; "
+                 "attack 2 (account disable via userid): userid='1/../2' with method=PATCH active=0 -> disables FAC user id 2; "
+                 "attack 3 (cross-endpoint access): user_type='localusers/999/../../system' -> api/v1/system/ if FAC normalizes; "
+                 "trigger chain: network event (e.g. failed login) triggers SOAR playbook -> FAC task with attacker-controlled src IP as userid -> "
+                 "disable legitimate admin account by traversing to target userid; "
+                 "impact HIGH: authentication disruption, account enumeration across user types not accessible via playbook design; "
+                 "no encoding or path validation applied to userid or user_type before URL construction; "
+                 "fix: urllib.parse.quote(userid, safe='') and whitelist user_type to allowed values; "
+                 "status HIGH: confirmed static analysis; "
+                 "source: fmg-soar/FAC/operator.py FACGetUserOperator L196-215, FACUpdateUserStatusOperator L287-321, analysis 2026-09-15",
+
         "FMG-F49: MEDIUM -- FortiManager SOAR LOCALHOST IncidentUpdateOperator URL path traversal via trigger-controlled incident_id (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
                  "file: fmg-soar/LOCALHOST/operator.py, class IncidentUpdateOperator (line 1100); "
                  "sink: execute() line 1246: url = f'/incidentmgmt/adom/{adom_name}/incident/{self.incident_id}' "
