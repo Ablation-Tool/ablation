@@ -1602,7 +1602,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 32 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface)",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 33 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface; FMG-F30 from FWEB SOAR HTTP SSRF -> ClickHouse/Redis/IMDS)",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1684,6 +1684,31 @@ ANALYSIS_STATUS = {
                  "-> TCL RCE on all managed FGT devices; (b) FMG-F15/F16 AI agent injection (controlled FGT device hostname) "
                  "-> JSONRPC exec call -> pivot from run/cmd to install/tclscript -> lateral RCE across managed fleet; "
                  "source: fmg-syntax/syntax/{dmworker,dvmaux,fgfm,system}_syntax.json",
+        "FMG-F30: HIGH CONFIRMED -- SOAR FWEB connector (fmg-builtin/FWEB/operator.py) make_api_call() allows "
+                 "arbitrary HTTP SSRF via connector server_url; "
+                 "validation at lines 100-101: 'if not self.server_url.startswith(https://) and not self.server_url.startswith(http://)'; "
+                 "condition False when server_url = 'http://...' -> no scheme forced; "
+                 "line 104: endpoint = '{0}/api/v2.0/{1}'.format(self.server_url, url) -> "
+                 "attacker-controlled base URL with /api/v2.0/<action> path appended; "
+                 "server_url sourced from: params.get('server-addr') (line 162) -> connector config schema field "
+                 "{'type': 'string', 'widget-type': 'text', 'display_name': 'IP/FQDN', 'editable': True} -- no format validation, no allowlist, no RFC1918 blocklist; "
+                 "contrast: EMS connector (line 215) forces HTTPS_PREFIX unconditionally; "
+                 "MS_TEAMS (line 227) forces https://; SERVICENOW (line 172) forces https://; "
+                 "FWEB is the unique outlier that allows plaintext HTTP to any address; "
+                 "high-value internal SSRF targets reachable from FMG host: "
+                 "(1) http://localhost:8123/?query=SELECT+... -> ClickHouse SIEM DB (FMG-F20 confirms wildcard bind + no-auth default + plaintext creds in /etc/clickhouse-security); "
+                 "ClickHouse HTTP interface returns query results over GET without credentials by default; "
+                 "(2) http://localhost:6379/ -> Redis SOAR message queue (FMG-F01 confirms REDIS_TOOL_CALL_CHANNEL for AI agent cross-session injection); "
+                 "(3) http://169.254.169.254/ -> cloud IMDS (AWS/GCP/Azure metadata service for IAM credential theft when FMG runs in cloud); "
+                 "(4) http://localhost:<any-FMG-svc>/ -> any HTTP service bound to loopback on FMG host; "
+                 "attack path: (a) attacker with SOAR connector config access sets FWEB server-addr to 'http://localhost:8123' "
+                 "-> any SOAR playbook using FWEB connector (GetBlockedUsers, GetClientInfo, GetServerPolicyTraffic) "
+                 "sends GET http://localhost:8123/api/v2.0/<op>?<params> to ClickHouse; "
+                 "ClickHouse returns 'Code 404 DB::Exception: Unknown function api' or raw data depending on endpoint match; "
+                 "(b) combined with FMG-F27 (URL param injection via policy_name) -> inject '?query=SELECT+*+FROM+siem.logs' "
+                 "into ClickHouse HTTP interface via policy_name parameter injection in endpoint path; "
+                 "severity: HIGH (FMG-accessible internal services have no auth expectation from loopback); "
+                 "source: fmg-builtin/FWEB/operator.py (Python source, lines 100-104, 162); schema.json FWEB properties",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
