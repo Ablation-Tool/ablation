@@ -2133,6 +2133,31 @@ ANALYSIS_STATUS = {
                  "status CANDIDATE: CMDB backend in encrypted rootfs.gz, path traversal may be stripped by URL parser; "
                  "chain: FMG-F33 (RADIUS VSA ADOM injection) -> FMG-F37 -> CMDB SQL/path injection; "
                  "source: FortiManager JSON-RPC API Reference dvmdb/adom namespace (63 endpoints)",
+        "FMG-F38: HIGH CANDIDATE -- local_mode.so (FCPService Apache module, FMG7.x) pre-auth FCP Policy DataItem parsing; "
+                 "attack surface: /FCPService/Manager HTTP endpoint, Apache module local_mode.so; "
+                 "Apache IP filter at 0x5eb8 blocks loopback (127.0.0.1, ::1, 127.x.x.x) but passes all external IP connections; "
+                 "any network client can reach the FCP registration handler without authentication token; "
+                 "FCP 'Policy' command processing (fn at 0x93de): FCP_recv_request (external) -> FCP_get_param('SerialNumber') -> "
+                 "apr_table_get(headers_in, 'rpc-src') for IP/serial validation (0x94e1 - 0x9557); "
+                 "rpc-src is a CLIENT-SUPPLIED HTTP header -- attacker sets rpc-src to '<any>.<target_serial>' and supplies matching "
+                 "SerialNumber in FCP packet body to bypass the validation check at 0x952e (strcmp(after_dot, serial)); "
+                 "serial number is 22 chars fixed-length (FMG-F31 FGFM trust model exposes known serial pattern); "
+                 "post-bypass: FCP_get_param('DataItem') -> FCP_breakup_data_item() (EXTERNAL, libfcpapi.so, not analyzed); "
+                 "FCP_breakup_data_item fills pointer array [rsp+0x38] with parsed key:value strings from DataItem; "
+                 "DataItem is a free-form string from the FCP packet -- length not locally bounded before external parse call; "
+                 "local key handlers: ManagementID strlcpy(rbx, val, 0x25) [BOUNDED]; Hostname/Platform/Release apr_pstrdup [HEAP-safe]; "
+                 "DeviceID/OSVersion/BranchPoint/BuildNum atoi [safe]; "
+                 "UNTRACED: FCP_breakup_data_item internals -- if it uses fixed internal buffer for DataItem string, overflow pre-split; "
+                 "UNTRACED: FCP_unpack_obj_ff at 0x997e -- unpacks FBVO object from FCP packet into /var/tmp temp file (external); "
+                 "post-unpack: fread into apr_palloc(lstat_size) buffer -- size gated by cmp r13d, 0x200000 (2MB max); "
+                 "then local_0x8691 (0x9b10) and local_0x8fa8 (0x9b77) process unpacked data for checkin/retrieve operations; "
+                 "severity rationale: rpc-src header is attacker-controlled, serial guessable via FMG-F31 trust model; "
+                 "full pre-auth exploitation requires FCP_breakup_data_item internals or local_0x8691/8fa8 overflow; "
+                 "remediation: set rpc-src from Apache REMOTE_ADDR (not from request header); rate-limit /FCPService; "
+                 "require mutual TLS (FGFM cert) before FCP parse; "
+                 "status HIGH CANDIDATE: rpc-src bypass confirmed by static analysis; overflow path requires libfcpapi.so; "
+                 "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
+                 "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
