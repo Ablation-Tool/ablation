@@ -2207,6 +2207,26 @@ ANALYSIS_STATUS = {
                  "candidate not confirmed: FortiOS dostring call path with network-controlled input not confirmed in main binary; "
                  "source: libips.so.new VA 0xca9680 (luaopen dispatch), 0xc87960 (IPS dispatch), "
                  "0xc87fa0 (Lua C API dispatch), 0x484d50 (os.execute), 0x14e940 (dostring), 0x14ea60 (loadbuffer)",
+
+        "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
+                 "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
+                 "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
+                 "ips_luacfg_init loads Lua config from CMDB (custom IPS rule Lua code); "
+                 "internal Lua function wrappers confirmed in libips.so.new: "
+                 "ips_lua_dostring (0x14e940, ref from 0x14ea36), ips_lua_loadbuffer (0x14ea60, ref from 0x14eaf8), "
+                 "ips_lua_pcall (0x14e2c0, ref from 0x14e3fd), ips_lua_newstate (0x1513e0, ref from 0x1514d1); "
+                 "ips_lua_prepare_call at 0x7e0d90 (NaN-boxing + LuaJIT VM call setup); "
+                 "ips_lua_load (0x1c755a in Lua init at 0x1c6c80), ips_lua_require (0x1c460b in prepare_lua_state 0x1c3fa0); "
+                 "ips_luacfg_parse_app_grp_filters referenced at 0x787584 in function 0x782b90; "
+                 "attack path: authenticated admin sets custom IPS Lua rule via REST API "
+                 "(/api/v2/cmdb/ips/custom -> api_cmdb_v2-handler -> handle_cli_req_v2 -> cmdb_save_with_children -> cmdbsvr "
+                 "-> ips_init_engine_from_cmdb -> ips_luacfg_init -> Lua rule execution in IPS VM -> os.execute(cmd)); "
+                 "severity MEDIUM: requires admin authentication; no known auth bypass in this chain; "
+                 "load_rule_file (dispatch [11] at 0xe5da0) parses binary TLV format (16-bit type, 14-bit length); "
+                 "bounds check confirmed at 0xe6177 (jg -> truncation at 0xe6742): no unchecked TLV length copy found; "
+                 "modify_custom_rule (dispatch [15] at 0xe7190) processes custom rules via CMDB path; "
+                 "source: libips.so.new rodata 0xa65af0 (ips_init_engine_from_cmdb), "
+                 "0x1d9027/0x1d96aa (ips_luacfg_init refs in 0x1d6d90), 0xc87fa0 (Lua C API dispatch 74 entries)",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
