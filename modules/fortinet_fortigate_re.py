@@ -2375,6 +2375,21 @@ ANALYSIS_STATUS = {
                  "pre-auth surface: AV engine parses PDF file content from email/web filter; "
                  "source: sub_13e320 (0x13e320), sub_139fa0 (0x139fa0), sub_139e90 (0x139e90), LZW cross-ref 0x2bf592-0x2bf59a analysis 2026-09-15",
 
+        "FGT-F52: HIGH CONFIRMED -- libav.so.new (FGT7412 May 2026, 7.4MB) format id=0x016 reassembly buffer 32-bit integer overflow leading to heap buffer overflow (2026-09-15): "
+                 "fp18 handler at 0x11e090 processes reassembly chunks into an accumulation buffer; "
+                 "struct fields: [rbx+0x10]=buf_ptr, [rbx+0x18]=fill_offset(dword), [rbx+0x20]=chunk_data_ptr, [rbx+0x28]=chunk_size(dword); "
+                 "overflow: at 0x11e0ff 'add eax, dword ptr [rbx+0x18]' -- 32-bit add of fill_offset and chunk_size; "
+                 "result stored in esi (32-bit) at 0x11e102 then used as new_size for allocator; "
+                 "limit check at 0x11e113 'cmp rax, rsi; jb 0x11e1e8' compares limit against overflowed rsi (e.g., 1) -- passes because 1 < limit; "
+                 "allocator at 0xbd8c0 (->0x395770) takes (rdi=old_buf, rsi=new_size); calling convention: both args live at call site; "
+                 "rsi = overflowed small value -> realloc(old_buf, 1) returns 1-byte buffer; "
+                 "memcpy at 0x11e139: dest = tiny_buf + [rbx+0x18](large fill_offset), src = chunk_data, len = [rbx+0x28](large chunk_size); "
+                 "result: memcpy write starts far past tiny buffer end -> uncontrolled heap corruption; "
+                 "attack vector: accumulate fill_offset to X via legitimate chunks, then send chunk_size = (2^32 - X + 1) -> sum wraps to 1; "
+                 "format id=0x016 has no name string in dispatch table (name_ptr=0); magic rejection at 0x11e0e4/0x11e0f2 excludes MZ(PE) and RAR(!raR) from recursion, not from being the outer format; "
+                 "pre-auth surface: libav.so.new AV engine processes email/web content; "
+                 "source: fp18 0x11e090, allocator 0x395770, 32-bit overflow at 0x11e0ff/0x11e102, memcpy at 0x11e139, analysis 2026-09-15",
+
         "FGT-F51: DENIED -- libav.so.new (FGT7412 May 2026, 7.4MB) full multiply-before-alloc audit COMPLETE (2026-09-15): "
                  "full-text scan of all 1,879 alloc calls (0xbd8a0/0xbd8b0/0xbd940/0xbd960) for movsxd+multiply+alloc pattern; "
                  "scanner filtered: require (movsxd|movsx) AND (imul|mul|shl) within 30 instructions before alloc, no cmp/test/bounds between multiply and alloc; "
