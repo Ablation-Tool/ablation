@@ -1173,6 +1173,47 @@ FMG_F16_CROSS_DEVICE_JSONRPC_VIA_ADVERSARIAL_FGT = {
         },
     },
 
+    "exploits_sdwan_rule_info": {
+        "get_sdwan_rule_info_diagnose": {
+            "vector": "POST /gui/adom/{adom}/device/{adv_device}/vdom/{adv_vdom}/execute_clicommand -- cross-device CLI exec via GUI endpoint",
+            "implementation": "Se.j6({ruleId, sourceFGTNameVdom}) -> N(sourceFGTNameVdom) -> T.ee.diagnoseSDWANService({deviceName: adv_device, vdomName: adv_vdom})",
+            "commands_issued": [
+                "diagnose sys sdwan service4  (FGT >= 7.6)",
+                "diagnose sys sdwan service6  (FGT >= 7.6)",
+                "diagnose sys sdwan service   (FGT < 7.6)",
+            ],
+            "whitelist_gate": (
+                "fiDeviceDataLoader.getDeviceByName(adversary_device) throws if device not found. "
+                "Adversary-registered FGT IS found; an adversary-supplied name of ANOTHER registered "
+                "device also passes the check. Gate prevents non-FMG-managed targets, not cross-device targeting."
+            ),
+            "path_traversal": (
+                "URL: /gui/adom/{adom}/device/{adv_device}/vdom/{adv_vdom}/execute_clicommand. "
+                "If adv_device='victim/../other' the GUI router behavior determines exploitability."
+            ),
+            "code_evidence": [
+                "52096.d1dc51ae.chunk.js:29919 -- module 43127 (Se): const v = async({ruleId,sourceFGTNameVdom}) => N(sourceFGTNameVdom)...",
+                "App-a5834e37.4eeebfb0.js:76389 -- diagnoseSDWANService=te: H(['diagnose sys sdwan service4/service6/service'])({deviceName:adv,vdomName:adv_vdom})",
+                "App-a5834e37.4eeebfb0.js -- H() helper: url=/gui/adom/${E.name}/device/${deviceName}/vdom/${vdomName}/execute_clicommand",
+            ],
+        },
+        "get_sdwan_rule_info_config_read": {
+            "vector": "JSONRPC get -- pm/config/device/{adv_device}/vdom/{adv_vdom}/system/sdwan",
+            "implementation": "Se.j6 -> le.y({sourceFGTNameVdom}) -> G.PZ.getCategoryData({device: adv_device, vdom: adv_vdom, cate: 'system sdwan'})",
+            "url_template": "/pm/config/device/{adv_device}/{adv_vdom}/system/sdwan",
+            "no_whitelist": "getCategoryData has no device whitelist check; injects device name directly into JSONRPC URL",
+            "code_evidence": [
+                "52096.d1dc51ae.chunk.js:22282 -- module 1055 (le.y): G.PZ.getCategoryData({device:d, vdom:q, cate:'system sdwan'})",
+                "App-a5834e37.4eeebfb0.js -- function p (getCategoryData): url=`/pm/config/device/${s}/${z}/${q}` -> fiFmgHttp.forward",
+            ],
+        },
+        "trigger_path": (
+            "sdwan_diagnose/agent.py sends GUIAnyFunctionCallMessage(id='1', function_name='get_sdwan_rule_info', args=[data.args]) "
+            "where data.args = LLM-generated tool call args from get_sdwan_rule_info_from_fortigate tool. "
+            "Tool result from FGT sets device_name and vdom_name. These flow into Se.j6({ruleId, sourceFGTNameVdom: device_name/vdom_name})."
+        ),
+    },
+
     "not_affected": (
         "get_fortigate_info -- uses device_name only for local Redux state lookup; "
         "no JSONRPC call with adversary-controlled device_name."
@@ -1223,7 +1264,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- agent_definitions (all dvm_agent, policy_agent, script_agent, sdwan_diagnose_root incl session_finder_diagnose, advanced_mode, vpn_diagnose, gui_agents) + agent_views.py + views.py + faz_mcp/views.py + faz_assistant.py + agent_framework/tool_related/mcp.py + logfetcher/views.py + report/views/views.py fully analyzed",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; FMG-F15/F16 confirmed; 17 unique_findings total",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec (deployment/run/cmd); get_interface_info=cross-device JSONRPC get+path-traversal (pm/config/device/...); get_sdwan_rule_info=ALSO vulnerable: module 43127 (Se.j6) calls diagnoseSDWANService -> POST /gui/adom/.../device/{adv}/vdom/{adv}/execute_clicommand + getCategoryData -> JSONRPC get /pm/config/device/{adv}/vdom/{adv}/system/sdwan; FMG-F15/F16 confirmed; 17 unique_findings total",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1252,7 +1293,7 @@ ANALYSIS_STATUS = {
         "FMG-F13: MEDIUM -- device_diagnostics_agent.search_and_run_tool dynamically expands tool access to ALL 5 ADVANCED_MODE_TOOLSET_URIs (general_network_diagnostic, vpn_diagnostic, sdwan_diagnostic, routing_diagnostic, utilities) filtered only by tag keywords; inner 'device_diagnostics_tool_runner' receives args['request'] as system prompt verbatim; injection via managed device data -> attacker controls both tag selection and tool request; 'utilities' toolset contents unknown (webmcpserver BLOCKED)",
         "FMG-F14: LOW -- REQUIRED_USER_PERMISSION_TOOLS in mcp_permission_tools.py gates schedule_firmware_upgrade via MCP path (permission dialog required); same tool exposed as GUI tool in device_operations_agent (INCLUDED_GUI_TOOLS) via make_gui_tool_handler -> GUIToolCall (auto-execute, no dialog); gate inconsistency between MCP and GUI paths for same tool",
         "FMG-F15: CRITICAL -- session_finder_diagnose find_source_interface_and_fortigate_handler passes managed FGT device data verbatim as args to 3 GUIAnyFunctionCallMessage frontend functions; device_data['device_vdom_result'][0] FGT-controlled; JS bundle analysis (58383.bd3bf6b0.chunk.js) confirms: get_ping_source_ip fires JSONRPC exec deployment/run/cmd on adversary-controlled device_name (cross-device CLI exec on any FMG-managed device without admin intent); get_interface_info fires JSONRPC get pm/config/device/{device_name}/... (cross-device config read + path traversal); see FMG-F16 for full chain",
-        "FMG-F16: CRITICAL -- get_ping_source_ip(device_name): N.fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', data:{device:adversary_device_name, command:['diagnose ip address list']}}]}) -- adversarial FGT device_name triggers CLI exec on any FMG-managed device via admin browser session; command hardcoded, target device adversary-controlled; get_interface_info additionally: JSONRPC get pm/config/device/{adversary_device_name}/ -- cross-device config read; attack prereq: attacker controls a FGT device registered to FMG + admin uses SD-WAN session finder diagnose",
+        "FMG-F16: CRITICAL -- 3 frontend GUI functions all make cross-device JSONRPC calls with adversary-controlled device_name; (1) get_ping_source_ip: fiFmgHttp.query({method:'exec', params:[{url:'deployment/run/cmd', data:{device:adv_device, command:['diagnose ip address list']}}]}) -- CLI exec on any FMG-managed device; (2) get_interface_info: JSONRPC get pm/config/device/{adv_device}/global/system/interface -- cross-device config read + path traversal; (3) get_sdwan_rule_info via Se.j6: diagnoseSDWANService -> POST /gui/adom/.../device/{adv_device}/execute_clicommand (sdwan diagnostics) + getCategoryData -> JSONRPC get /pm/config/device/{adv_device}/vdom/{adv_vdom}/system/sdwan; all three triggered from same FMG-F15 injection chain; attack prereq: attacker controls a FGT device registered to FMG + admin uses SD-WAN session finder diagnose",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
