@@ -2229,8 +2229,14 @@ ANALYSIS_STATUS = {
                  "post-overflow fopen(corrupted_filename, 'rb') at 0x20db25 opens attacker-controlled path; "
                  "ZIP LFH format: LFH.signature(4)+version(2)+flags(2)+compression(2)+modtime(2)+moddate(2)+crc32(4)+compsize(4)+uncompsize(4)+fname_len(2)+extra_len(2)+FILENAME; "
                  "trigger: craft ZIP with fname_len=0x0200 (512) -- passes all field checks, triggers strcpy overflow by 249 bytes; "
+                 "SCOPE UPDATE (2026-09-15): ZIP VARIANTS 0x0a/0x39/0x3a also affected -- "
+                 "dispatch table entries id=0x0a/0x39/0x3a share handler 0x11fc70 which calls EOCD scanner (0x165360) and LFH scanner (0x165740); "
+                 "id=0x0a=ZIP64, id=0x39=encrypted-ZIP, id=0x3a=ZIP-with-data-descriptor; "
+                 "all 3 variants create entry objects with the same vtable class (0x710cd8) -> same strcpy overflow path; "
+                 "FGT-F42 affects 4 ZIP format IDs: 0x22/0x0a/0x39/0x3a; "
+                 "no direct CALL rel32 to 0x20dbd0/0x20db50 exists in .text -- vtable indirect dispatch is the ONLY path; "
                  "context: libav.so confirmed in avdb_patch + scanunitd crash backtraces; FortiOS 7.6.7 / AV engine 7.0.0054 has fixes; "
-                 "source: ZIP-chain fork + vtable fork confirmed 2026-09-15; libav.so.new Ablation sweep",
+                 "source: ZIP-chain fork + vtable fork + 7z-CAB fork confirmed 2026-09-15; libav.so.new Ablation sweep",
 
         "FGT-F43: FALSE POSITIVE -- libav.so.new streaming buffer writer Ablation false prologue: "
                  "Ablation prologue scanner found push_rbp at 0xfd04f and treated it as a function start; "
@@ -2285,7 +2291,32 @@ ANALYSIS_STATUS = {
                  "error code 0xc000000e in [rbx+0x8c174] = mailbomb/oversize detection (eventtype=oversize in FortiGate logs); "
                  "FGT-F43 RETRACTED FALSE POSITIVE: Ablation prologue scanner hit push_rbp at 0xfd04f (mid-function); "
                  "real function at 0xfd040: bounds check cmp [rdx+0x20], esi; jl error as first instruction -- properly guarded; "
-                 "source: libav.so.new 0x2630b0 + 0x261d80 + inflate-hunt fork (0x38ce00 confirmed 2026-09-15)",
+                 "ZSTD bounded (fork 2026-09-15): 128KB cap at frame-header parse time at 0x1867d3 (cmova clamp); ZSTD format does NOT overflow; "
+                 "RAR3 bounded (fork 2026-09-15): reference-based storage, memchr null-scan, multiplicative-inverse length cap (15-entry); no strcpy; "
+                 "XAR bounded (fork 2026-09-15): XML library (0x2cdf20) handles allocation; no strcpy of filename observed; "
+                 "source: libav.so.new 0x2630b0 + 0x261d80 + inflate-hunt fork + ZSTD/RAR/XAR fork (all 2026-09-15)",
+
+        "FGT-F46: MEDIUM CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB) id=0x33 decompressor handler large stack allocation: "
+                 "dispatch table entry [24] id=0x33 (fp10=0x11f030, fp18=0x11f2b0, cleanup=0x11f310); "
+                 "0x11f030 allocates 0x107e8 (67,560) bytes of stack space (sub rsp, 0x107e8) -- very large frame; "
+                 "calls: 0x2cdf20 (allocates 0x38-byte stream context), 0x2ce320 (sets buffer params), 0x17a480/0x17a540; "
+                 "0x17a540 uses XMM pairs to initialize function pointers in state machine struct (stateful decompressor); "
+                 "pattern matches bzip2: bzip2 internal state is ~7560 bytes; 67KB stack = pre-allocated Huffman + symbol tables; "
+                 "CANDIDATE status: stack allocation size and state machine init confirmed; decompressor body not traced; "
+                 "if a block-header field controls memcpy into the 67KB stack region without bounds check = stack overflow; "
+                 "bzip2 block header has: blockSize100k (1 byte, 1-9) * 100000 = max 900000 bytes output per block; "
+                 "if stack output buffer is fixed at 67KB and block says 900KB output, memcpy into stack overflows; "
+                 "source: 7z-CAB fork (0x11f030 frame analysis 2026-09-15); NOT YET CONFIRMED",
+
+        "FGT-F47: LOW CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB) CAB CFFILE filename extraction not analyzed: "
+                 "CAB CFHEADER parser at 0x1254e1 (MSCF magic check via strncmp, string at rodata 0x40e126); "
+                 "reads CFHEADER fields byte-by-byte (manual endianness handling); "
+                 "attributes byte at [rbx+0x22] controls extended header; "
+                 "CFFILE filename parsing in subsequent function NOT reached during analysis; "
+                 "CAB CFFILE structure: filename is NULL-terminated ASCII at end of CFFILE record (variable length, no size field); "
+                 "if CAB filename parsed with strcpy into fixed buffer and using same vtable as ZIP entries = same overflow as FGT-F42; "
+                 "dispatch table mapping for CAB not confirmed (not found via LEA or CALL analysis); "
+                 "status CANDIDATE LOW: filename extraction chain untraced; source: 7z-CAB fork 2026-09-15",
 
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
