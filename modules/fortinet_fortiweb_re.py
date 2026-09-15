@@ -886,6 +886,93 @@ FWB_F13_512BIT_KEY_WEB_AUTH = {
 
 
 # ---------------------------------------------------------
+# FWB-F14: libips.so.new IPS engine attack surface
+# ---------------------------------------------------------
+FWB_F14_LIBIPS_ATTACK_SURFACE = {
+    "id": "FWB-F14",
+    "severity": "HIGH",
+    "title": "libips.so.new IPS engine: popen/system via dlopen, embedded Lua, TCP reassembly, LMDB mmap, C/Rust FFI boundary",
+    "file": "lib/libips.so.new",
+    "file_info": {
+        "size_bytes": 18525336,
+        "arch": "ELF 64-bit x86-64 LSB shared object",
+        "stripped": True,
+        "soname": "libips.so",
+        "build_id": "3473282a6bf9b4a237ef469d4b0bb9de22b70367",
+        "needed": ["libdl.so.2", "librt.so.1", "libpthread.so.0", "libstdc++.so.6", "libm.so.6", "libgcc_s.so.1", "libc.so.6", "ld-linux-x86-64.so.2"],
+        "rpath_rust_subprojects": [
+            "zerocopy-derive-0.8.31",
+            "thiserror-impl-2.0.3",
+            "serde_derive-1.0.215",
+            "enum_dispatch-0.3.13",
+            "uvart (custom Fortinet Rust async runtime)",
+            "libuv",
+        ],
+    },
+    "interface": {
+        "external_exports": ["ips_so_query_interface@@EXPORTED", "ips_so_patch_urldb@@EXPORTED"],
+        "internal_function_count": 529,
+        "access_pattern": "callers invoke ips_so_query_interface to receive a vtable; all 529 functions accessed via function pointers",
+        "hot_patch": "ips_so_patch_urldb enables runtime URL database replacement without process restart",
+    },
+    "attack_surfaces": {
+        "popen_system_via_dlopen": {
+            "evidence": "strings: 'popen', 'system' present; UND symbol table is empty (nm -D returns 0 UND)",
+            "implication": "popen/system resolved at runtime via dlopen('libc.so.6')+dlsym; bypasses standard UND-based detection; if any user-controlled data (URI, HTTP header, PCRE pattern, RADIUS field) reaches these calls, RCE",
+            "domain": "IPS (EXCLUDE default, anon-mem-exec=1 per fortism_config.json)",
+        },
+        "lua_interpreter": {
+            "functions": ["ips_luacfg_init", "ips_luacfg_parse_app_grp_filters", "ips_lua_prepare_call"],
+            "threat": "Lua sandbox embedded in IPS engine; custom IPS rule injection via Lua grants script execution in IPS domain; Lua sandboxing historically leaky (os.execute, io.popen via FFI if luajit)",
+        },
+        "tcp_reassembly": {
+            "functions": ["ips_tcp_resume", "ips_tcp_reenter", "ips_tcp_move_asm_to_sent", "ips_tcp_set_pkt_seq", "ips_tcp_truncate_packet", "ips_tcp_bypass", "ips_tcp_switch_to_dry", "ips_tcp_can_switch_mode"],
+            "threat": "TCP segment reassembly engine; attacker-controlled TCP sequence numbers, segmentation, and retransmits are classic IPS evasion and reassembly-buffer overflow vectors",
+        },
+        "pcre_parsing": {
+            "function": "ips_parse_pcre",
+            "threat": "custom IPS rule upload includes PCRE patterns; malformed PCRE triggers PCRE engine bugs or ReDoS; admin-controlled but relevant for privilege escalation from restricted admin role",
+        },
+        "lmdb_mmap_store": {
+            "functions": ["ips_mdb_init", "ips_mdb_fini", "ips_mdb_db_rm", "mdb_txn_begin", "mdb_txn_commit", "mdb_get", "mdb_put", "mdb_cursor_open", "mdb_cursor_del"],
+            "db_path_format": "/tmp/ipscfgshm.%s",
+            "threat": "LMDB uses memory-mapped files; mmap region corruption via filesystem write (IPS domain has write to /tmp/ips/*) leads to arbitrary read/write at the mapped VA",
+        },
+        "shared_memory_ipc": {
+            "shm_names": ["ips.shm.localurlf", "ips.shm.localdnsf", "ips.shm.webch", "ips.shm.webcontent", "ips.shm.emailfilter-bword", "ips.sip_dialogs.shm"],
+            "ipc_socket": "ips_otvp_ipc.sock (otvp_ipc_connect/send/close)",
+            "threat": "SHM surfaces cross domain boundaries; TOCTOU on SHM read/write enables cross-domain data corruption from a less-privileged domain that shares SHM access",
+        },
+        "ha_session_replication": {
+            "functions": ["ips_ha_sess_cache_prune", "ips_ha_session_add_send", "ips_ha_exp_session_clr"],
+            "threat": "HA session sync is network-facing IPC between cluster peers; peer authentication weakness allows session injection from a compromised peer node",
+        },
+        "radius_field_parsing": {
+            "fields_parsed": ["User-Password", "CHAP-Password", "Tunnel-Password", "ARAP-Password", "Configuration-Token", "Tunnel-Private-Group-ID"],
+            "threat": "IPS engine dissects RADIUS auth fields from wire traffic; malformed RADIUS packets targeting the dissector; password fields parsed in plaintext within IPS engine memory",
+        },
+        "ssl_processing": {
+            "functions": ["ips_dsct_ssl_processor", "ips_dsct_ssl_on_pktl_error", "ips_ssl_run_urlfilter", "ips_ssl_cert_verify_cache_insert", "ips_collect_ssl_log_negot_info", "ips_get_cert_block_page"],
+            "threat": "SSL/TLS packet processing inside IPS domain; malformed TLS records targeting reassembly/cert parsing",
+        },
+        "rust_ffi_boundary": {
+            "evidence": "RPATH contains zerocopy-derive-0.8.31, serde_derive, uvart, libuv alongside C++ (libstdc++.so.6)",
+            "threat": "C/Rust FFI boundary; Rust 'unsafe' blocks at FFI layer; zero-copy deserialization (zerocopy crate) with malformed network input may hit logic errors; memory layout assumptions at FFI boundary",
+        },
+    },
+    "fortism_context": {
+        "domain": "IPS",
+        "domain_id": 17,
+        "default_act": "EXCLUDE",
+        "chroot_path": "/tmp/ips_root",
+        "anon_mem_exec": 1,
+        "note": "IPS domain is EXCLUDE (sandboxed) with anon-mem-exec=1; post-exploitation shellcode can execute directly after memory corruption without additional bypasses",
+    },
+    "status": "CANDIDATE -- strings analysis only; runtime confirmation requires instrumented IPS engine load",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -912,7 +999,8 @@ ANALYSIS_STATUS = {
         "etc/fgt_512.key": "ANALYZED (FWB-F13): 512-bit RSA private key; modulus B5ED8433... unique to FFW 8.0.0; WEB_AUTH domain loads fgt_512.crt (fortism_config.json confirmed); cert issued 2011; key is factorable",
         "etc/fgt_512.crt": "ANALYZED (FWB-F13): paired with fgt_512.key; active in WEB_AUTH domain; CORRECTED: issued 2025-12-05, expires 2056-05-24 (30-year cert); SHA-1+RSA-512; CN=fortinet-subca2003",
         "hash_bin.sha256": "ANALYZED (FWB-F12): 400 entries; /bin/node SHA-256 matches FGT 8.0.0 exactly; 221 node-scripts webpack chunks (product-specific UI); rootfs.gz encrypted (magic 0xa3ba56c6)",
-        "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
+        "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig; libips.so.new ANALYZED (FWB-F14)",
+        "lib/libips.so.new": "ELF 64-bit x86-64 stripped 18.5MB; SONAME=libips.so; 2 external exports only (ips_so_query_interface, ips_so_patch_urldb); 529 internal functions exposed via vtable; popen+system resolved via dlopen at runtime (not in UND dynamic table); RPATH includes Rust subprojects (zerocopy-derive-0.8.31, serde_derive-1.0.215, uvart custom async runtime, libuv); LMDB (mdb_*) memory-mapped config store; Lua scripting (ips_luacfg_init, ips_lua_prepare_call); TCP reassembly engine (ips_tcp_*); PCRE parsing (ips_parse_pcre); HA session replication IPC (ips_ha_*); IPS SHM surfaces (ips.shm.localurlf, ips.shm.localdnsf, ips.shm.webch, ips.shm.webcontent, ips.shm.emailfilter-bword); otvp_ipc.sock Unix socket; RADIUS field parsing (User-Password, CHAP-Password, Tunnel-Password); path construction: /tmp/ipscfgshm.%s (FWB-F14)",
         "lib_packge/": "wvs.tar.xz ANALYZED (FWB-F09); python-libs.tar.xz ANALYZED (64MB, Python 3.10 stdlib + 68 site-packages); cryptography 37.0.2 (CVE-2023-49083, CVE-2024-26130, CVE-2023-0286), ecdsa 0.17.0 (CVE-2024-23342), Django 5.1.6 (CVE-2025-26115); matplotlib + boto3 + pysqlcipher3 + sshpubkeys notable; FWB-F10",
     },
 
@@ -942,5 +1030,15 @@ ANALYSIS_STATUS = {
                  "SHA-1 + RSA-512 -- both algorithms broken; Fortinet deliberately issued new 512-bit cert in Dec 2025; "
                  "exploit path: factor modulus -> forge FortiWeb device cert -> MITM WEB_AUTH TLS sessions -> credential theft; "
                  "FGT 7.4.12 also ships a different 512-bit key (CFB821074C...) but not confirmed active via fortism",
+        "FWB-F14: HIGH -- libips.so.new (18.5MB stripped x86-64 ELF) exposes only 2 external symbols; "
+                 "all 529 internal functions vended via ips_so_query_interface vtable; popen+system present "
+                 "and resolved at runtime via dlopen (bypasses nm/readelf UND detection); Lua interpreter embedded "
+                 "(ips_luacfg_init, ips_lua_prepare_call) = custom IPS rule injection via Lua sandbox; "
+                 "TCP reassembly engine (ips_tcp_resume/reenter/move_asm_to_sent/set_pkt_seq) = evasion and reassembly overflow surface; "
+                 "PCRE parsing (ips_parse_pcre) = custom-rule ReDoS; LMDB memory-mapped store (ips_mdb_*) = "
+                 "mmap-region corruption -> arbitrary RW; HA session IPC (ips_ha_sess_cache_prune, ips_ha_session_add_send) = "
+                 "network-facing HA replication; /tmp/ipscfgshm.%s path constructed from config value; "
+                 "Rust subprojects in RPATH (zerocopy-derive-0.8.31, uvart) confirm C/Rust FFI boundary; "
+                 "RADIUS dissection parses User-Password, CHAP-Password, Tunnel-Password from wire traffic",
     ],
 }
