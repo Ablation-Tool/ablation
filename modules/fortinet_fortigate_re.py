@@ -2081,6 +2081,30 @@ ANALYSIS_STATUS = {
                  "confsyncd, extenderd (FortiExtender mgmt), fnbamd (auth daemon), forticron, hasync (HA sync, FGT-F04), http_authd; "
                  "confirmed in FGT7412 hardware appliance (May 2026); contrast: FGT 7.4.12 did NOT have ALL_ACCESS domain "
                  "(7.4.12 had WAD+major daemons in INCLUDE with exec flags but named domains); this is a new grouping in 7412 build",
+        "FGT-F33: HIGH CONFIRMED -- libips.so.new (FGT7412 May 2026, 14MB stripped x86-64): IPS engine embeds "
+                 "LuaJIT 2.1.d06beb04 with fully unsandboxed io and os standard libraries; "
+                 "io.popen(cmd, mode) binding at 0x47e3d0: args[0]/args[1] NaN-unboxed (tag 0xfffffffb, mask 0x7fffffffffff, "
+                 "string data at GCstr+0x18) -> popen(cmd, mode) with no input sanitization; "
+                 "os.execute(cmd) binding at 0x484d50: same NaN-unbox pattern -> system(cmd); "
+                 "debug library (sethook/gethook/traceback) also exposed -- bypasses metamethod protections; "
+                 "dispatch tables at 0xca8748 (io_popen) and 0xca8d00 (os_system); "
+                 "library registration tables at 0xb339a0 (io: open/popen/tmpfile/close/read/write/flush/input/output/lines/type) "
+                 "and 0xb34a90 (os: execute/remove/rename/tmpname/getenv/exit/clock/date/time/difftime/setlocale); "
+                 "IPS rules with Lua scripts can call os.execute() / io.popen() to run arbitrary OS commands; "
+                 "attack paths: (1) FortiManager compromise -> push custom IPS signatures with Lua OS cmd payload -> "
+                 "RCE on all managed FGT devices; (2) FortiGuard update channel MITM (signing bypass) -> "
+                 "malicious IPS rule package -> mass RCE; (3) custom IPS signature UI injection if sanitization gaps exist; "
+                 "IPS engine runs with elevated privileges (network-facing packet processor); "
+                 "ablation scores: io_popen_handler 0.460, os_system_handler 0.503 vs 'LuaJIT popen system unsandboxed OS cmd exec'",
+        "FGT-F34: HIGH CONFIRMED -- libips.so.new (FGT7412 May 2026): IPS URL DB patch handler (0x3a6000 region, "
+                 "inside ips_so_patch_urldb EXPORTED symbol) calls execvp([rbp-0x260], [rbp-0x248]) at 0x3a77f1 "
+                 "after full fork/exec setup: open([rip+0x811cb0]=0xbb9374 hardcoded path, dup2 FDs, "
+                 "chdir([rbp-0x210]), sigemptyset+sigprocmask, then execvp; setuid([rbp-0x1f8]) in same block; "
+                 "[rbp-0x260] (exec path) first written from r14 at 0x3a6afe during URL DB update processing; "
+                 "if URL DB update package integrity verification can be bypassed (MITM on FortiGuard update channel "
+                 "or signature replay), attacker controls the exec path and argv -> arbitrary binary execution "
+                 "during URL DB patch cycle with setuid privilege change; "
+                 "ablation score: execvp_in_urldb_patch 0.547 vs 'execvp setuid update package path traversal'",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
