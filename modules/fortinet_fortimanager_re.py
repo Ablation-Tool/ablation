@@ -2159,6 +2159,23 @@ ANALYSIS_STATUS = {
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
 
+        "FMG-F51: HIGH -- FortiManager SOAR FML connector URL path traversal enabling cross-profile delete and whitelist manipulation via trigger-controlled profile_name/resource/level_type (FMG7.x, fmg-soar/FML/operator.py, 2026-09-15): "
+                 "three injection points, all via manage_profile()/manage_email_address()/manage_list() helpers: "
+                 "(1) manage_profile() line 176: endpoint.format(profile_name) where endpoint='/api/v1/ProfSession/{0}', profile_name trigger-controlled; "
+                 "attack: profile_name='default/../ProfMisc/target' -> DELETE /api/v1/ProfSession/default/../ProfMisc/target "
+                 "-> if FortiMail normalizes -> deletes /api/v1/ProfMisc/target (anti-spam misc profile, not session profile); "
+                 "(2) manage_email_address() line 185: endpoint.format(profile_name, email_address) where email_address is trigger-controlled "
+                 "(FMLAddEmailToSessionProfile*/FMLDeleteEmailFromSessionProfile*, parse_input lines 1090/1147/1202/1258); "
+                 "attack: email_address='user@domain.com/../../../ProfSender/target' -> traverses to sender profile endpoint; "
+                 "(3) manage_list() line 197: endpoint='/api/v1/{0}/{1}'.format(resource, level) where resource=self.resource and level_type=self.level_type "
+                 "BOTH trigger-controlled (parse_input lines 1319/1321); item_list also trigger-controlled (line 1324); "
+                 "attack: resource='whitelist', level_type='system', item_list='attacker-ip' -> adds attacker IP to FML system whitelist, bypassing spam filters; "
+                 "cross-list attack: resource='whitelist/system/../../blacklist', level_type='domain' -> injects into wrong list type; "
+                 "impact HIGH: FortiMail anti-spam profile deletion, whitelist/blacklist manipulation, email filter bypass for attacker IPs/domains; "
+                 "fix: url-encode all path components before format(); whitelist resource and level_type to fixed string sets; "
+                 "status HIGH: confirmed static analysis; "
+                 "source: fmg-soar/FML/operator.py manage_profile L173-180, manage_email_address L183-189, manage_list L191-201, analysis 2026-09-15",
+
         "FMG-F50: HIGH -- FortiManager SOAR FAC connector URL path traversal + account disable via trigger-controlled userid and user_type (FMG7.x, fmg-soar/FAC/operator.py, 2026-09-15): "
                  "classes: FACGetUserOperator (execute_action line 201), FACUpdateUserStatusOperator (execute_action line 292); "
                  "sink 1 (GET): self.make_api_call(endpoint='api/v1/{0}/{1}/'.format(user_type, userid)) -- both user_type and userid are "
