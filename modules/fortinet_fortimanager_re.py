@@ -3017,6 +3017,48 @@ ANALYSIS_STATUS = {
                  "remediation: uncomment proc.validate_request(saml_request_params) at L234; same fix the TODO comment indicates; "
                  "severity INFO: no exploitable impact beyond self-logout when SSO IDP enabled; "
                  "source: sso_idp/views.py L221-240, sso_idp/urls.py L7, analysis 2026-09-15",
+
+        "FMG-F52: LOW -- FortiManager FortiCloud SP-side SLO signature validation explicitly bypassed + CSRF-exempt (FMG 8.0.0, 2026-09-15): "
+                 "file: usr/local/lib/python3.11/proj/sso_sp/views.py -- handle_sls() at L652-677; "
+                 "external URL: POST /p/sso_sp?forticloud-sls (registered in saml_sp at L680 with @csrf_exempt); "
+                 "vulnerability: handle_sls(request, auth, is_forticloud=True) at L658-667 builds ignore_list: "
+                 "['In order to validate the sign on the SAMLResponse, the x509cert of the IdP is required', "
+                 "'invalid_logout_response_signature', 'Signature validation failed. Logout Response rejected']; "
+                 "_raise_if_error(auth, ignore_list) at L669 suppresses ALL three SAML signature validation errors; "
+                 "comment at L658: 'Ignore Signature Validation error for FortiCloud, since it will fail anyway'; "
+                 "auth.process_slo(request_id=request.session.get('LogoutRequestID'), delete_session_cb=lambda: request.session.flush()); "
+                 "combined with @csrf_exempt on saml_sp view: attacker can CSRF-force a logged-in FortiCloud SSO user to submit "
+                 "a forged unsigned SLO SAMLResponse to /p/sso_sp?forticloud-sls; "
+                 "delete_session_cb triggers request.session.flush() -- victim is logged out; "
+                 "impact: CSRF-forced logout (DoS) for authenticated FortiCloud SSO users; "
+                 "no arbitrary session logout: flush() applies to the HTTP REQUEST's session, not targeted by attacker; "
+                 "requires FortiCloud SSO enabled (@sso.require_forticloud_sso_enabled on sub-handler); "
+                 "compare: _sso_forticloud_acs (L440) uses verify_response_certificate() -- CA + CN check -- for login; "
+                 "logout intentionally skips verification: design choice with CSRF security gap; "
+                 "redirect URL at L671-672: comes from python3-saml IdP metadata, not from request -- no open redirect; "
+                 "remediation: remove saml_sp from @csrf_exempt or move FortiCloud SLO to a CSRF-protected endpoint; "
+                 "severity LOW: forces session logout only, FortiCloud SSO required, CSRF attack vector; "
+                 "source: sso_sp/views.py L652-677, L680-691, analysis 2026-09-15",
+
+        "FMG-F53: MEDIUM -- FortiManager authenticated SSRF via wkhtmltopdf in ai_pdf_download (HTML sanitizer commented out) (FMG 8.0.0, 2026-09-15): "
+                 "file: usr/local/lib/python3.11/proj/util/views.py -- ai_pdf_download() at L1418-1421; "
+                 "auth: @login_required @r_required(ADMINPRIV_SYSTEM_FGD_CENTER_LICENSING); "
+                 "call: download_pdf_pure(request.POST) -- util/common.py L2289-2331; "
+                 "vulnerability: in download_pdf_pure at L2293-2294 the lxml Cleaner is COMMENTED OUT: "
+                 "'# cleaner = Cleaner(remove_unknown_tags=False, ...) / # body = cleaner.clean_html(body)'; "
+                 "body = req.get('body', '<h1>Blank Page</h1>') written raw to tempfile without sanitization; "
+                 "wkhtmltopdf command includes: --disable-javascript --disable-local-file-access --disable-external-links; "
+                 "SSRF gap: --disable-external-links prevents PDF hyperlink output only; "
+                 "it does NOT block HTTP resource loading: <img src='http://...'>, <link href='http://...'>, "
+                 "CSS @import url('http://...') all trigger network requests FROM the FMG host; "
+                 "contrast with download_pdf (L2204): lxml Cleaner IS active -- variant diverges at sanitizer; "
+                 "attack: POST /p/util/ai_pdf_download with body='<img src=\"http://internal-host:port/path\">' "
+                 "triggers GET request from FMG to internal-host; also cleans temp files (L2322-2323 also commented out, leaving /tmp/ftvDld_*.html and .pdf on disk); "
+                 "SSRF utility: internal network enumeration, reach unauthenticated internal management ports; "
+                 "secondary finding: temp files not deleted (L2322-2323 commented), potential info disclosure via /tmp/ race; "
+                 "severity MEDIUM: post-auth (ADMINPRIV_SYSTEM_FGD_CENTER_LICENSING), GET-only SSRF, no response body readback via img tag; "
+                 "remediation: uncomment lxml Cleaner in download_pdf_pure; add --no-images or keep Cleaner active; "
+                 "source: util/views.py L1418-1421, util/common.py L2289-2331, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
