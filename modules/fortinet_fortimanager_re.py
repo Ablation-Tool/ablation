@@ -1833,6 +1833,122 @@ FMG_F35_FGTGUI_PROXY_PIVOT = {
 
 
 # ---------------------------------------------------------
+# FMG-F36: sys/proxy cross-device JSONRPC lateral pivot -- documented API surface
+# Source: FortiManager JSON-RPC API Reference (4128 endpoints; sys/* namespace)
+# ---------------------------------------------------------
+FMG_F36_SYS_PROXY_LATERAL_PIVOT = {
+    "id":       "FMG-F36",
+    "product":  "Fortinet FortiManager (all versions with JSON-RPC API)",
+    "severity": "HIGH -- authenticated FMG user proxies arbitrary JSON-RPC to any managed FortiGate device via documented API",
+    "source":   "FortiManager JSON-RPC API Reference -- sys/* namespace: /sys/proxy/json + /sys/proxy/forward",
+
+    "description": (
+        "The FMG JSON-RPC API includes /sys/proxy/json (and /sys/proxy/forward) endpoints that proxy "
+        "arbitrary JSON-RPC requests to managed FortiGate devices registered in FMG. "
+        "An authenticated FMG user (or a user who has bypassed auth via FMG-F04 session binding absence) "
+        "can reach ANY managed FortiGate device's local API surface through FMG, "
+        "including devices that are not directly network-accessible from the attacker's position. "
+        "This is the DOCUMENTED and intended path -- but it is the same trust boundary that FMG-F15/F16 "
+        "exploit via AI injection (get_ping_source_ip / get_interface_info / get_sdwan_rule_info). "
+        "The direct API path bypasses the AI agent layer entirely."
+    ),
+
+    "api_surface": {
+        "endpoint":       "POST /jsonrpc  method=exec  url=/sys/proxy/json",
+        "body_schema":    '{"method":"exec","params":[{"url":"/sys/proxy/json","data":{"target":["adom/global/device/<DEVICE_SN>"],"action":"get|set|exec","resource":"/api/v2/monitor/...","payload":{...}}}]}',
+        "target_field":   "device serial number -- any device registered in FMG",
+        "resource_field": "any FortiGate API endpoint -- /api/v2/cmdb/firewall/policy, /api/v2/monitor/system/status, etc.",
+        "auth_required":  "FMG session token (bypassed by FMG-F04 if no session binding check)",
+    },
+
+    "attack_scenarios": {
+        "direct_fgt_rce": (
+            "FMG auth -> POST /sys/proxy/json with target=<any_FGT_SN> resource=/api/v2/cmdb/system/exec "
+            "-> execute CLI command on target FortiGate via its REST API, proxied by FMG. "
+            "FortiGate REST API exec endpoints: /api/v2/monitor/system/firmware/upgrade, "
+            "/api/v2/monitor/wifi/managed_ap/configure, and others that trigger system operations."
+        ),
+        "fleet_config_exfil": (
+            "GET /sys/proxy/json targeting each registered FGT -> read full firewall policy, "
+            "VPN config, admin account hashes, interface configs from all managed devices. "
+            "FMG manages thousands of devices; one request per device maps the full network topology."
+        ),
+        "ai_bypass": (
+            "FMG-F15/F16 required the AI agent to make the cross-device JSONRPC call. "
+            "Direct /sys/proxy eliminates the AI layer -- attacker calls FGT APIs directly "
+            "without needing a managed device with an adversarial hostname to trigger the AI."
+        ),
+        "auth_bypass_chain": (
+            "FMG-F04 (no session binding on AI lifecycle endpoints) provides FMG session. "
+            "FMG-F32 (permanent API key, no rotation) provides persistent FMG access. "
+            "Either + /sys/proxy/json = attacker-controlled lateral movement to entire FGT fleet "
+            "via a single FMG credential."
+        ),
+    },
+
+    "chain": "FMG-F04 or FMG-F32 (FMG auth) -> FMG-F36 (sys/proxy) -> arbitrary FortiGate REST API on entire managed fleet",
+}
+
+
+# ---------------------------------------------------------
+# FMG-F37: ADOM name injection in CMDB URL path -- 63+ dvmdb/adom endpoints
+# Source: FortiManager JSON-RPC API Reference (4128 endpoints; dvmdb/adom namespace)
+# ---------------------------------------------------------
+FMG_F37_ADOM_PATH_INJECTION = {
+    "id":       "FMG-F37",
+    "product":  "Fortinet FortiManager (all versions with JSON-RPC API)",
+    "severity": "MEDIUM -- ADOM name in URL path reaches backend CMDB without documented sanitization; path traversal / second-order injection",
+    "source":   "FortiManager JSON-RPC API Reference -- dvmdb/adom namespace (63 endpoints)",
+
+    "description": (
+        "FortiManager exposes 63 endpoints under /dvmdb/adom/{adom}/ where {adom} is a user-controlled "
+        "ADOM name taken from the JSON-RPC URL field. "
+        "Key endpoints: /dvmdb/adom/{adom}/workspace/lock|commit|unlock (write gating), "
+        "/dvmdb/adom/{adom}/device (device list), /dvmdb/adom/{adom}/script/* (script CRUD). "
+        "ADOM names are user-defined strings (max 36 chars, limited charset). "
+        "The URL field is passed from the JSON-RPC layer to the FMG CMDB backend. "
+        "If the backend constructs SQL queries, LDAP filters, or filesystem paths from the ADOM name "
+        "without sanitization, second-order injection or path traversal is possible. "
+        "Specifically: workspace lock at /dvmdb/adom/{adom}/workspace/lock requires the ADOM name to "
+        "exist in the CMDB -- but the lookup itself may be injectable."
+    ),
+
+    "technical_surface": {
+        "endpoint_count":  "63 endpoints in dvmdb/adom/{adom}/* namespace",
+        "key_targets": [
+            "exec /dvmdb/adom/{adom}/workspace/lock -- required before any write when workspace-mode=normal",
+            "exec /dvmdb/adom/{adom}/workspace/commit -- commit pending changes",
+            "get  /dvmdb/adom/{adom}/device -- list devices in ADOM",
+            "add  /dvmdb/adom/{adom}/script -- create script under ADOM",
+            "exec /dvmdb/adom/{adom}/script/execute -- execute script (10 endpoints; adom + script name both user-controlled)",
+        ],
+        "injection_surface": (
+            "ADOM name in URL path -> FMG URL parser strips to name component -> CMDB SQL lookup for adom. "
+            "If CMDB uses: SELECT * FROM adom WHERE name='{adom}' without parameterization -> SQL injection. "
+            "If CMDB uses filesystem: /opt/fortimanager/var/dm/adom/{adom}/ -> path traversal via ../. "
+            "Both are CANDIDATE status -- requires CMDB source (in encrypted rootfs.gz) to confirm."
+        ),
+        "amplified_surface": (
+            "Script execution at /dvmdb/adom/{adom}/script/execute has TWO user-controlled path components: "
+            "adom name + script name. "
+            "If either is injectable, script execution on managed FortiGate devices is the impact "
+            "(same as FMG-F29 dmworker/install/tclscript)."
+        ),
+    },
+
+    "workspace_lock_specific": (
+        "When workspace-mode=normal (common in production), ALL writes to FMG config require "
+        "a prior workspace/lock call. The ADOM lock operation is the GATE for every config change. "
+        "If the lock endpoint is injectable via the ADOM name, any authenticated user can lock "
+        "arbitrary objects or bypass the intended ADOM scope restriction."
+    ),
+
+    "status": "CANDIDATE -- CMDB backend in encrypted rootfs.gz; second-order injection unconfirmed; path traversal via ../ may be stripped by URL parser",
+    "chain":  "FMG-F33 (RADIUS VSA ADOM injection = attacker controls which ADOM admin is assigned) -> FMG-F37 (ADOM name injection) -> SQL/path injection in CMDB lookup",
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -1851,7 +1967,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 38 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface; FMG-F30 from FWEB SOAR HTTP SSRF -> ClickHouse/Redis/IMDS; FMG-F31 FGFM trust default; FMG-F32 permanent API session; FMG-F33 RADIUS VSA ADOM injection; FMG-F34 OAuth2 mail SSRF; FMG-F35 GUI proxy pivot -- source: FMG 7.6.7 CLI Reference)",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 40 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface; FMG-F30 from FWEB SOAR HTTP SSRF -> ClickHouse/Redis/IMDS; FMG-F31 FGFM trust default; FMG-F32 permanent API session; FMG-F33 RADIUS VSA ADOM injection; FMG-F34 OAuth2 mail SSRF; FMG-F35 GUI proxy pivot -- source: FMG 7.6.7 CLI Reference; FMG-F36 sys/proxy lateral pivot; FMG-F37 ADOM path injection -- source: FMG JSON-RPC API Reference 4128 endpoints)",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1996,6 +2112,27 @@ ANALYSIS_STATUS = {
                  "FMG admin clicks spoofed device in GUI -> request proxied to attacker -> attacker returns credential-harvesting fake FortiGate login page in FMG GUI context; "
                  "admin session cookie visible to attacker-controlled endpoint via proxy; "
                  "source: FortiManager 7.6.7 CLI Reference p.61 (config system admin setting, fgt-gui-proxy)",
+        "FMG-F36: HIGH -- sys/proxy cross-device JSONRPC lateral pivot; "
+                 "documented API endpoint POST /jsonrpc method=exec url=/sys/proxy/json proxies arbitrary JSON-RPC to any managed FortiGate device; "
+                 "target field = device serial number (any device registered in FMG); "
+                 "resource field = any FortiGate API endpoint (/api/v2/cmdb/firewall/policy, /api/v2/monitor/system/status, etc.); "
+                 "bypasses AI agent layer entirely -- direct API path vs FMG-F15/F16 which required AI injection; "
+                 "FMG auth (bypassed by FMG-F04 session binding / FMG-F32 permanent key) + /sys/proxy = "
+                 "arbitrary FortiGate REST API on entire managed fleet (thousands of devices); "
+                 "chain: FMG-F04 or FMG-F32 (FMG auth) -> FMG-F36 (sys/proxy) -> fleet-wide FGT REST API exec; "
+                 "source: FortiManager JSON-RPC API Reference sys/* namespace",
+        "FMG-F37: MEDIUM CANDIDATE -- ADOM name injection in CMDB URL path; "
+                 "63 endpoints under /dvmdb/adom/{adom}/* take user-controlled ADOM name in URL path field; "
+                 "key targets: workspace/lock|commit|unlock (write gating), device list, script CRUD + execute; "
+                 "ADOM name passed to FMG CMDB backend; if backend constructs SQL without parameterization: "
+                 "SELECT * FROM adom WHERE name='{adom}' -> SQL injection; "
+                 "if filesystem path: /opt/fortimanager/var/dm/adom/{adom}/ -> path traversal via ../; "
+                 "script/execute has TWO user-controlled path components (adom + script name) -> "
+                 "if either injectable, same impact as FMG-F29 (script exec on managed FGT fleet); "
+                 "workspace lock is GATE for all config writes when workspace-mode=normal -- injection bypasses ADOM scope; "
+                 "status CANDIDATE: CMDB backend in encrypted rootfs.gz, path traversal may be stripped by URL parser; "
+                 "chain: FMG-F33 (RADIUS VSA ADOM injection) -> FMG-F37 -> CMDB SQL/path injection; "
+                 "source: FortiManager JSON-RPC API Reference dvmdb/adom namespace (63 endpoints)",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
