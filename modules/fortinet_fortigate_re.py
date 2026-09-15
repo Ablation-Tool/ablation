@@ -2318,6 +2318,24 @@ ANALYSIS_STATUS = {
                  "dispatch table mapping for CAB not confirmed (not found via LEA or CALL analysis); "
                  "status CANDIDATE LOW: filename extraction chain untraced; source: 7z-CAB fork 2026-09-15",
 
+        "FGT-F48: MEDIUM CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB) OLE2 Compound Document handler memmove without destination size check: "
+                 "dispatch table entry [35] id=0x2d (fp10=0x10ff40, fp18=0x110340, cleanup=0x110e80); "
+                 "OLE2 format confirmed: fp18 at 0x110340 processes record types 0x14 and 0x3e (FAT directory entries, stride 0x1c); "
+                 "filename processing chain in fp18: "
+                 "0x1104d3: call PLT:strrchr(entry_path_ptr, 0x5c) -- finds last backslash in OLE2 entry path; "
+                 "0x1104f2: memmove(rbx+0xdc, ptr_after_backslash, strlen_result) -- strips path prefix, stores filename at [rbx+0xdc]; "
+                 "strlen_result = rdx = rax from strlen(strrchr_output) -- attacker-controlled length from OLE2 directory entry name; "
+                 "destination rbx+0xdc is a field in the entry struct whose allocation size IS NOT CONFIRMED in the analyzed code path; "
+                 "if struct at rbx was allocated with fixed size and [rbx+0xdc] is a fixed-size filename buffer, "
+                 "and OLE2 directory entry name > buffer size -> memmove overflow; "
+                 "OLE2 directory entry names: up to 64 bytes per spec (wchar UTF-16), but custom implementations may allow more; "
+                 "context: OLE2 is Office Binary format (DOC/XLS/PPT pre-2007), commonly scanned in email AV; "
+                 "attack path: OLE2 file with directory entry name > rbx+0xdc buffer size in email attachment scan; "
+                 "size cap check at 0x1105c8 (lea rax, [rsi-0x3d]; cmp rax, 0x1ffc3) limits to ~130KB -- path data, not filename; "
+                 "integer overflow analysis: NO imul(untrusted_length) before any alloc in 69 handler pairs reviewed; "
+                 "all imul patterns are reciprocal division constants (compiler optimization for /constant); "
+                 "status CANDIDATE: rbx+0xdc buffer size unconfirmed; source: integer-overflow-hunt fork 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
