@@ -1979,6 +1979,9 @@ def fortios_xz_decompress(path):
 ANALYSIS_STATUS = {
     "7.0.9_vm64": "MAIN SOURCE -- virtioa.qcow2 (fortinet-FGT-v7.0.9-build0444); full rootfs extracted",
     "8.0.0_vm64": "SUPPLEMENTAL -- x86-64 + ARM64 fortism.ko binaries analyzed for ioctl surface",
+    "7412_hw_may2026": "ANALYZED -- hardware appliance datafs key files + fortism_config.json; "
+                        "FGT-F27/F28/F30/F31 scope confirmed; kernel 4.19.13 (built 2026-05-05); "
+                        "shared ENC default password hash with FFW 8.0.0 hardware",
 
     "components": {
         "bin/init":             "DISASSEMBLED -- maintainer backdoor (FGT-F03), HA trust headers (FGT-F04), multicall (FGT-F02)",
@@ -2053,9 +2056,39 @@ ANALYSIS_STATUS = {
                  "below NIST SP 800-131A min 2048-bit); (b) etc/ssh/moduli is unmodified OpenBSD 2015 file "
                  "(v1.14, 2015-07-22) with 49 x 1535-bit DH groups (sub-2048-bit); "
                  "contributes to consistent weak-crypto pattern alongside FGT-F27/F28",
+        "FGT-F30: HIGH -- cloud integration daemons (gcpd, waagent, azd, awsd, ocid, openstackd, sdnd, kubed) "
+                 "grouped as VM_DAEMONS in fortism trigger policy; gcpd and waagent Permission_Policies grant "
+                 "CMDB write access to system.admin table (admin account creation/modification); "
+                 "confirmed in FGT 7.4.12 datafs AND FGT 7412 hardware appliance (May 2026 build); "
+                 "attack chain: cloud provider API compromise OR cloud metadata SSRF in any VM_DAEMONS daemon "
+                 "-> fortism-authorized CMDB write to system.admin -> add admin account -> full FGT control; "
+                 "SDN_COMMON daemon additionally authorized to write firewall.address, firewall.policy, "
+                 "system.interface, router.static, vpn.ipsec.phase1/2-interface, router.bgp (full policy modification)",
+        "FGT-F31: MEDIUM -- FGT7412 hardware appliance (May 2026) fortism policy adds file-mod-exec=1 "
+                 "to all 36 domains (including SSLVPND, WAD, CMDBSVR, INIT); prior versions had anon-mem-exec "
+                 "as primary exec flag; file-mod-exec flag permits exec of file-backed mappings (mmap MAP_SHARED+PROT_EXEC "
+                 "from writable files); combined with regain-root=1, an attacker with write access to any mapped "
+                 "library file can execute modified code; cross-references: fortism 0x9007 ioctl (FGT-F16) gives "
+                 "kernel-level write capability; TERMINAL domain protects /data/lib/libips.so from write but permits "
+                 "mmap-x from it (libips.so: high-value exec target from FWB-F14)",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
     "7.4.12 datafs/etc/cert/cert.conf": "ANALYZED -- FGT-F29a: default_bits=1024 (CSR template weak default)",
     "7.4.12 datafs/etc/ssh/moduli":     "ANALYZED -- FGT-F29b: OpenBSD 2015 v1.14, 268 entries, 49 x 1535-bit groups; unmodified in 10+ years",
+
+    "FGT7412 hardware appliance (May 2026)": {
+        "status":            "ANALYZED -- datafs key files + fortism_config.json",
+        "kernel":            "Linux 4.19.13 (root@build, gcc unknown); bzImage 7.5MB; built 2026-05-05",
+        "fgt2.key modulus":  "A75C115F... (matches FGT 7.4.12 + FGT 8.0.0 VM + FFW 8.0.0; FGT-F27 scope confirmed hardware)",
+        "fgt_512.key":       "CFB821074C... (matches FGT 7.4.12; FGT-F28 confirmed hardware appliance)",
+        "default_admin_enc": "ENC XXUp2ozpdysrQ (same as FFW 8.0.0 hardware; shared default credential hash cross-product)",
+        "fortism_policy": {
+            "domains":              36,
+            "all_exec_flags_set":   "35/36 domains have anon-mem-exec=1, heap-exec=1, stack-exec=1, file-mod-exec=1, regain-root=1",
+            "file_mod_exec_all":    "ALL 36 domains have file-mod-exec=1 (FGT-F31 -- new field vs 7.4.12)",
+            "exception":            "TERMINAL domain: no anon-mem-exec/heap-exec/stack-exec/regain-root; only file-mod-exec=1",
+            "cloud_daemon_writes":  "GCPD writes system.admin; WAAGENT writes system.admin + system.global (FGT-F30)",
+        },
+    },
 }
