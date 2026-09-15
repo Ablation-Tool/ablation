@@ -2501,6 +2501,25 @@ ANALYSIS_STATUS = {
                  "remediation: remove luv bindings from IPS Lua state; restrict standard library to math/string/table only; "
                  "source: RELA.DYN entries 9977-9978 (0xca9698 table), rodata 0xad8000-0xad9100 (luv names), 0x105720 dispatch, 0x487a90 os loader, 0x484d50 os.execute, analysis 2026-09-15",
 
+        "FGT-F57: HIGH CANDIDATE -- libips.so.new (FGT7412 May 2026, 13.8MB) LuaJIT FFI module preloaded in IPS Lua state (2026-09-15): "
+                 "LuaJIT _PRELOAD table at rodata 0xb32299 contains 'ffi' and 'jit' as null-terminated module entries "
+                 "(raw bytes: 5f 50 52 45 4c 4f 41 44 00 66 66 69 00 6a 69 74 00 followed by nulls, confirmed via binary scan); "
+                 "preloaded modules are accessible via require('ffi') and require('jit') WITHOUT filesystem access -- they are built into the LuaJIT runtime embedded in libips.so.new; "
+                 "LuaJIT FFI capability: ffi.cdef('int system(const char *cmd)') + ffi.C.system('malicious_cmd') = arbitrary process execution; "
+                 "FFI bypasses any Fortinet-level restriction on os.execute specifically -- calling system() via ffi.C is semantically equivalent but not blocked by os module restrictions; "
+                 "combined attack path with FGT-F41 (authenticated admin Lua exec): "
+                 "auth admin sets custom IPS Lua rule via REST API -> rule body: "
+                 "local ffi = require('ffi'); ffi.cdef('int system(const char*)'); ffi.C.system('id > /tmp/pwn'); "
+                 "-> ips_lua_dostring (0x14e940) executes rule -> arbitrary process execution as IPS daemon UID; "
+                 "severity upgrade vs FGT-F41: FFI path is more portable than os.execute (built-in, no module dependencies) "
+                 "and harder to block without disabling FFI entirely (which would break legitimate IPS Lua features); "
+                 "DISTINCT from FGT-F56 (luv spawn): luv requires the luv binding module; FFI requires only LuaJIT built-in ffi; "
+                 "together FGT-F41 + FGT-F56 + FGT-F57 provide three independent post-auth Lua exec-to-RCE paths; "
+                 "remediation: remove ffi from _PRELOAD or run IPS Lua state with LuaJIT compiled without FFI; "
+                 "minimum: sandbox ffi.C to a whitelist of approved functions via ffi.cdef policy; "
+                 "SEVERITY HIGH CANDIDATE: authenticated exec path confirmed; pre-auth path unconfirmed; "
+                 "source: libips.so.new rodata 0xb32299 (_PRELOAD\\x00ffi\\x00jit\\x00), LuaJIT PANIC string at 0xb3244c, analysis 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
