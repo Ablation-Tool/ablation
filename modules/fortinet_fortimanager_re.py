@@ -2334,6 +2334,25 @@ ANALYSIS_STATUS = {
                  "source: fmg-ext2/usr/local/siem/compiler/compiler.py L454-455, L421-426; "
                  "siem/views.py L322-339; siem/siem_validator.py L155-170; analyzer.py L56; adminapi.py L51, analysis 2026-09-15",
 
+        "FMG-F62: MEDIUM -- FortiManager webmcpserver spawned with admin session cookies as cleartext command-line argument, readable from /proc/<pid>/cmdline by any local process, enabling session token theft after any foothold on the appliance (FMG8.0.0, fmg-ext/usr/local/lib/python3.11/proj/ai/agent/agent_framework/tool_related/mcp.py, 2026-09-15): "
+                 "class: credential exposure via process arguments; "
+                 "root cause: StdioMCPClient.connect_to_server() at mcp.py L77-84: "
+                 "`cookies = json.dumps(self.context.request.COOKIES); all_cli_args = [\"--cookies\", cookies, \"--remoteaddr\", remote_addr]` "
+                 "then launches `StdioServerParameters(command=\"/usr/bin/webmcpserver\", args=all_cli_args)` via stdio_client(); "
+                 "the admin session cookie JSON is a process argument, not an env var or pipe -- "
+                 "on Linux, /proc/<pid>/cmdline is world-readable by default (unlike /proc/<pid>/environ which requires owner); "
+                 "any process on the FMG host can enumerate `ls /proc/[0-9]*/cmdline` or `cat /proc/*/cmdline | strings | grep -A1 webmcpserver` "
+                 "to extract a live admin session cookie; "
+                 "session cookies are sufficient to authenticate to FMG HTTPS GUI as the admin who triggered the MCP tool; "
+                 "exploitation path: FMG-F60 (SIEM Lua RCE, ADMINPRIV_LOG_VIEWER) -> os.execute reads /proc/*/cmdline -> extracts admin cookie -> "
+                 "forges requests to FMG /cgi-bin/module/flatui as full admin; "
+                 "alternative path: any other initial foothold on the appliance (unrelated vuln, SSH, or another service) gains admin session without cracking passwords or needing separate auth; "
+                 "window: each webmcpserver process is short-lived (per MCP tool call), but monitoring /proc at 100ms intervals during AI usage is trivially achievable; "
+                 "impact: MEDIUM on its own; CRITICAL when chained with FMG-F60 (log-viewer -> RCE -> admin session); "
+                 "remediation: pass cookies via environment variable (setenv in server params) or via stdin pipe, never as CLI arg; "
+                 "alternatively use a shared-secret approach: webmcpserver reads session cookie from a temp file written by Django with O_TMPFILE, not from cmdline; "
+                 "source: ai/agent/agent_framework/tool_related/mcp.py L73-98 (StdioMCPClient.connect_to_server), analysis 2026-09-15",
+
         "FMG-F61: HIGH -- FortiAI indirect prompt injection via action_analyze_logs tool result bypasses wrap_user_messages defense, enabling unauthenticated remote attacker to quarantine internal hosts or create malicious event handlers through a SOC analyst session (FMG8.0.0, fmg-ext/usr/local/lib/python3.11/proj/ai/util/util.py + ai/assistant_config/faz_assistant.py, 2026-09-15): "
                  "class: indirect prompt injection / AI security; "
                  "root cause: wrap_user_messages() at ai/util/util.py L26-43 wraps only role=user messages with a random XML tag + final system instruction; "
