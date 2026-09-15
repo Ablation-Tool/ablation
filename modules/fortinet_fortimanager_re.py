@@ -2974,6 +2974,28 @@ ANALYSIS_STATUS = {
                  "note: basic auth path (Authorization: Basic) creates a new session via svc_authenticate_user(); "
                  "creates cookie via create_session_cookie(session_id, r12, 0) where r12 is the (potentially header-overridden) client IP; "
                  "source: webconsole_module.so 0x8f5c-0x8fc7 disasm, analysis 2026-09-15",
+
+        "FMG-F50: MEDIUM -- FortiManager report image upload missing path normalization allows write-anywhere with image magic bytes (FMG 8.0.0, 2026-09-15): "
+                 "file: usr/local/lib/python3.11/proj/report/views/image.py -- image_upload() at L103; "
+                 "auth: @post_only @login_required @rw_required(ADMINPRIV_REPORT_VIEWER); "
+                 "vulnerability: at L106: target = os.path.join(USER_IMAGE_PATH, filename) where USER_IMAGE_PATH='/drive0/private/graphics'; "
+                 "filename comes from form.cleaned_data['file'].name -- the uploaded filename from Content-Disposition header; "
+                 "Django FileField.clean() does NOT strip path components from uploaded filenames; "
+                 "normalize_image() only normalizes '.jpeg' -> '.jpg', does not call os.path.basename() or strip path separators; "
+                 "result: if uploaded filename = '../../../tmp/evil.jpg', target = '/drive0/private/graphics/../../../tmp/evil.jpg' -> '/tmp/evil.jpg'; "
+                 "content constraint: UploadFileForm.clean_file validates extension (.png/.jpeg/.jpg), content-type (image/png|jpeg), "
+                 "and imghdr.what() magic bytes -- file content must have valid JPEG/PNG header bytes; "
+                 "inconsistency with delete_graphic (L74): target = os.path.abspath(os.path.join(USER_IMAGE_PATH, fn)); if target.startswith(USER_IMAGE_PATH): -- correct; "
+                 "attack scenario: attacker with ADMINPRIV_REPORT_VIEWER + write can upload 'evil.jpg' with filename='../../etc/cron.d/evil.jpg' and JPEG+cron payload; "
+                 "the imghdr check reads first N bytes for magic (JPEG = FF D8 FF); the rest of the file can contain arbitrary cron lines after a valid JPEG header; "
+                 "alternative: overwrite configuration files at predictable locations with JPEG-magic-prepended content; "
+                 "severity MEDIUM: post-auth exploit (ADMINPRIV_REPORT_VIEWER required), content partly constrained by magic byte validation, "
+                 "but JPEG+payload file achievable; ADMIN required but not Super_User; "
+                 "same vulnerability in image_upload_adom (L188) -- passes filename via JSON-RPC 'file-name' field to management daemon, "
+                 "server-side path handling unknown without daemon binary; "
+                 "remediation: add os.path.abspath() + startswith(USER_IMAGE_PATH) check consistent with delete_graphic; "
+                 "alternatively: apply os.path.basename() to filename before join; "
+                 "source: report/views/image.py L103-L112 vs L73-L76 comparison, report/forms.py L1291-L1303, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
