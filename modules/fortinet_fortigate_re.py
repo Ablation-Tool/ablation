@@ -2073,6 +2073,14 @@ ANALYSIS_STATUS = {
                  "library file can execute modified code; cross-references: fortism 0x9007 ioctl (FGT-F16) gives "
                  "kernel-level write capability; TERMINAL domain protects /data/lib/libips.so from write but permits "
                  "mmap-x from it (libips.so: high-value exec target from FWB-F14)",
+        "FGT-F32: CRITICAL -- httpsd (FGT main web GUI + REST API server, primary attack surface) runs in "
+                 "ALL_ACCESS fortism domain (id=34; anon-mem-exec=1, heap-exec=1, stack-exec=1, file-mod-exec=1, "
+                 "regain-root=1, default_act=INCLUDE); fortism LSM applies ZERO additional restrictions to httpsd; "
+                 "all execution protections are DISABLED for the internet-facing web server; "
+                 "additionally in ALL_ACCESS domain: scimd (SDN/cloud infra), cloudinitd (cloud-init, processes untrusted metadata), "
+                 "confsyncd, extenderd (FortiExtender mgmt), fnbamd (auth daemon), forticron, hasync (HA sync, FGT-F04), http_authd; "
+                 "confirmed in FGT7412 hardware appliance (May 2026); contrast: FGT 7.4.12 did NOT have ALL_ACCESS domain "
+                 "(7.4.12 had WAD+major daemons in INCLUDE with exec flags but named domains); this is a new grouping in 7412 build",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
@@ -2091,6 +2099,14 @@ ANALYSIS_STATUS = {
             "file_mod_exec_all":    "ALL 36 domains have file-mod-exec=1 (FGT-F31 -- new field vs 7.4.12)",
             "exception":            "TERMINAL domain: no anon-mem-exec/heap-exec/stack-exec/regain-root; only file-mod-exec=1",
             "cloud_daemon_writes":  "GCPD writes system.admin; WAAGENT writes system.admin + system.global (FGT-F30)",
+            "ALL_ACCESS_domain": {
+                "description":  "New domain in FGT7412; absent in FGT 7.4.12 datafs",
+                "id":           34,
+                "flags":        "all exec flags=1, regain-root=1, default_act=INCLUDE",
+                "binaries":     ["/bin/httpsd", "/bin/scimd", "/bin/cloudinitd", "/bin/confsyncd",
+                                 "/bin/extenderd", "/bin/fnbamd", "/bin/forticron", "/bin/hasync", "/bin/http_authd"],
+                "severity":     "CRITICAL -- httpsd (internet-facing web GUI + REST API) in zero-restriction domain (FGT-F32)",
+            },
         },
     },
 }
