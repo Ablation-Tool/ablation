@@ -2201,6 +2201,24 @@ ANALYSIS_STATUS = {
                  "remove embedded employee PII from test data in production artifacts; "
                  "source: fmg-soar/AD/operator.py lines 585-600, 629, 804-819, analysis 2026-09-15",
 
+        "FMG-F42: HIGH -- FortiManager SOAR FMQ connector PostgreSQL SQL injection via adom_prefix from Redis (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/FMQ/operator.py -- FMQBaseOperator._get_req_act_blk_inds() L375-394 and _update_indicator_status() L396-419; "
+                 "_get_req_act_blk_inds() constructs a PostgreSQL SELECT using adom_prefix as a double-quoted identifier: "
+                 "sql = f\"\"\"SELECT uuid, ... FROM \\\"{adom_prefix}-indicators\\\" WHERE useractionpending=1 ...\"\"\" (L376); "
+                 "adom_prefix comes from _check_redis_block_indicator() L471-478: "
+                 "_, adom_name, adom_prefix = adom_info.split(':') where adom_info is fetched from BLOCKING_INDICATOR_REDIS_KEY in Redis; "
+                 "double-quoted PostgreSQL identifiers can contain any char except '\"' -- if adom_prefix contains '\"', the identifier closes early; "
+                 "injection payload: adom_prefix = 'a\\\" UNION SELECT usename,passwd,null,null,null FROM pg_shadow--' -> "
+                 "sql becomes: SELECT ... FROM \\\"a\\\" UNION SELECT usename,passwd,null,null,null FROM pg_shadow--\\\"-indicators\\\" ...; "
+                 "result: PostgreSQL credential dump from pg_shadow (shadow password hashes for all DB users); "
+                 "additional injection site: _update_indicator_status() L397-398: uuids_list joins uuid values as '\\'{uuid}\\'' strings, "
+                 "where uuids come from the prior SELECT result -- second-order injection if a uuid contains a single quote; "
+                 "attack surface: BLOCKING_INDICATOR_REDIS_KEY in Redis -- if Redis is accessible (FMG deployments typically have Redis on 127.0.0.1:6379 with no auth), "
+                 "ZADD with malicious adom_info triggers SQL injection on next FMQ blocking cycle; "
+                 "chain with FMG-F39 SSRF: SSRF to Redis RESP protocol on 127.0.0.1:6379 -> ZADD malicious adom_info -> FMQ reads -> PostgreSQL injection; "
+                 "remediation: use parameterized queries (psycopg2 %s) for all SQL; validate adom_prefix against alphanumeric+hyphen pattern before use; "
+                 "source: fmg-soar/FMQ/operator.py lines 375-378, 396-398, 471-478, analysis 2026-09-15",
+
         "FMG-F41: HIGH -- FortiManager SOAR LOCALHOST connector ClickHouse SQL injection via unsanitized lateral-movement trigger data (FMG7.x / FortiAnalyzer 8.0.0, Python SOAR engine 2024, 2026-09-15): "
                  "file: fmg-soar/LOCALHOST/operator.py -- LateralMovementOperator.build_filter_string() L2466-2468 + build_query() L2451-2464; "
                  "build_filter_string uses Python tuple() string coercion: f\"{key} in {tuple(value)}\" for key,value in targets.items(); "
