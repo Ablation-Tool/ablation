@@ -2925,6 +2925,55 @@ ANALYSIS_STATUS = {
                  "if that boundary is breached (spoofed source IP, SSRF from FMG itself), /FCPService access requires no further credential; "
                  "remediation: add trust list check for /FCPService consistent with /FDSService; "
                  "source: mod_access_filter.so 0x16fb-0x171b disasm, analysis 2026-09-15",
+
+        "FMG-F47: LOW -- FortiManager webconsole_module.so accepts Bearer token from JSON body access_token field (FMG 8.0.0, 2026-09-15): "
+                 "binary: usr/local/apache2/modules/webconsole_module.so -- auth handler fn at 0x7ed8; "
+                 "token extraction priority: (1) json_object_object_get(json_body, 'access_token') then json_object_get_string(); "
+                 "(2) fallback: apr_table_get(headers_in, 'Authorization') with strncasecmp 'Bearer ' prefix; "
+                 "if access_token found in JSON body: snprintf(buf_0x100, '%s', token) then json_object_object_del(json_body, 'access_token') before downstream; "
+                 "token validation: JSON-RPC to mgmt daemon via svc_string_client() -- "
+                 "request format: '{ \"id\": 1, \"root\":\"cli\", \"method\": \"get\", \"params\": [ { \"url\"...'; "
+                 "daemon response fields consumed: 'userid' (username), 'rpc-permit' (privilege level), 'profileid'; "
+                 "rpc-permit parsing: 'read-write'->0, 'read'->2, 'none'->1, 'from-profile'->3, numeric via atoi; "
+                 "on success: session_confirm_larval('JSON(api_user)', ...) then create_session_cookie(sid, origin, 0); "
+                 "session cookie returned in JSON response 'session' field; "
+                 "security note: access_token in JSON body is a documented FortiManager API auth path but creates a dual-channel attack surface; "
+                 "if any JSON-parsing endpoint passes through the raw JSON body to webconsole_module, the access_token field is consumed silently; "
+                 "severity LOW: the token itself requires valid API credentials -- no bypass; "
+                 "the dual-channel (body vs header) complicates WAF/SIEM detection that only inspects Authorization headers; "
+                 "source: webconsole_module.so 0x7f2b-0x7fd6 disasm, analysis 2026-09-15",
+
+        "FMG-F48: LOW -- FortiManager webconsole_module.so localhost IP-override headers FLATUI-COOKIE-REMOTE-ADDR and FAZ-GUI-CLIENT-ADDR propagate into JSON-RPC src/rpcsrc (FMG 8.0.0, 2026-09-15): "
+                 "binary: usr/local/apache2/modules/webconsole_module.so -- JSON-RPC dispatcher fn at 0x8635; "
+                 "finding 1 -- FLATUI-COOKIE-REMOTE-ADDR: "
+                 "at 0x868a reads conn_rec->server_rec->client_ip (conn_rec+0x08->+0x28); "
+                 "at 0x86a0: strcmp(client_ip, '127.0.0.1'); if 0 (localhost): apr_table_get(headers_in, 'FLATUI-COOKIE-REMOTE-ADDR'); "
+                 "if header present: r12 = header value (effective client IP); else: r12 = actual client_ip; "
+                 "at 0x8989-0x89b9: json_object_new_string(r12) added as 'src' AND 'rpcsrc' fields in JSON-RPC body sent to mgmt daemon; "
+                 "finding 2 -- FAZ-GUI-CLIENT-ADDR: "
+                 "at 0x8d70: apr_table_get(headers_in, 'FAZ-GUI-CLIENT-ADDR'); "
+                 "at 0x8da1: strcmp(r12, '127.0.0.1'); if from localhost AND FAZ-GUI-CLIENT-ADDR present: use header value as client address for session; "
+                 "finding 3 -- FAZ-SOC-Fabric-Proxy: "
+                 "at 0x8e6b: when svc_rpc_src_is_local() true: apr_table_get(headers_in, 'FAZ-SOC-Fabric-Proxy'); "
+                 "if non-empty: esi=7 else esi=0, passed to fazproxy_json_req(json_req, esi, session_id); "
+                 "exploitation path: requires prior localhost access (SSRF via FMG itself or internal IPC socket access); "
+                 "if achieved: attacker controls 'src'/'rpcsrc' fields seen by mgmt daemon -> affects audit log attribution and potentially IP-based trust decisions in daemon; "
+                 "severity LOW: localhost constraint limits to chained SSRF scenario; "
+                 "remediation: sanitize or strip these headers at perimeter (before Apache); do not use header-supplied IPs for security-relevant decisions; "
+                 "source: webconsole_module.so 0x86a0-0x89b9, 0x8d70-0x8ddc, 0x8e6b-0x8e8b disasm, analysis 2026-09-15",
+
+        "FMG-F49: INFO -- FortiManager webconsole_module.so GUI session type blocked from external API requests (FMG 8.0.0, 2026-09-15): "
+                 "binary: usr/local/apache2/modules/webconsole_module.so -- JSON-RPC dispatcher fn at 0x8635; "
+                 "at 0x8f5c: svc_http_prepare_external_jreq(json_req) prepares request for external-facing endpoint; "
+                 "at 0x8f68: svc_rpc_src_is_local(r12) checks if effective client IP is local; "
+                 "if not local: at 0x8f7f: session_from_string(session_id_str, 3, 'GUI'); "
+                 "if session is GUI type (3): REJECT with HTTP 401 (0x191); "
+                 "error log: '%s(%d): GUI session cannot be used for external request! Remote ip = %s, request...'; "
+                 "this enforces session type separation at module level: browser GUI sessions cannot authenticate external JSON-RPC API calls; "
+                 "severity INFO: correct design, no bypass observed; "
+                 "note: basic auth path (Authorization: Basic) creates a new session via svc_authenticate_user(); "
+                 "creates cookie via create_session_cookie(session_id, r12, 0) where r12 is the (potentially header-overridden) client IP; "
+                 "source: webconsole_module.so 0x8f5c-0x8fc7 disasm, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
