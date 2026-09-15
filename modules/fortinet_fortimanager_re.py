@@ -792,6 +792,24 @@ FMG_F11_DVM_AGENT_AUTO_EXECUTE_PERMISSION_GAP = {
             "impact":      "Installs policy package to managed FortiGate devices. "
                            "Corrects FMG-F06 characterization -- install_package_to_device does NOT use permission request.",
         },
+        "install_sdwan_overlay_configs": {
+            "agent":       "sdwan_provisioning_agent (gui_agents.py:32-37, gui_assistant_config_to_tools('sdwan'))",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "type: 'hub' or 'spoke'",
+            "impact":      "Installs SD-WAN overlay configurations to Hub or Branch FortiGate devices.",
+        },
+        "revert_sdwan_overlay_configs": {
+            "agent":       "sdwan_provisioning_agent (gui_agents.py:32-37, gui_assistant_config_to_tools('sdwan'))",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "none",
+            "impact":      "Deletes/reverts all generated SD-WAN overlay templates and configs. No parameters -- unconditional.",
+        },
+        "fix_sdwan_overlay_configs": {
+            "agent":       "sdwan_provisioning_agent",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "sot_name, hub_devgrp, hub_sdwan_tmpl_name, spoke_sdwan_tmpl_name, hub_ppkg_name, spoke_ppkg_name, spoke_devgrps",
+            "impact":      "Fixes SD-WAN overlay configs based on validation errors -- modifies overlay templates affecting hub and branch devices.",
+        },
     },
 
     "gated_tool_by_comparison": {
