@@ -441,7 +441,7 @@ ANALYSIS_STATUS = {
     "fortism_ioctls":  "COMPLETE -- all 6 ioctls mapped (0x9002, 0x9003, 0x9004, 0x9005, 0x9007, 0x9009).",
     "cross_products":  "FGT-F19/F20/F21/F22 confirmed in FFW 8.0.0; FFW-F05 extends FGA-F01/FGT-F05 cross-product key scope.",
     "kernel_age":      "Linux 4.19.13 (2019 kernel, EOL LTS; Fortinet patched build 2026-04-20).",
-    "unique_findings": ["FFW-F01", "FFW-F02", "FFW-F03", "FFW-F04", "FFW-F05", "FFW-F06", "FFW-F07", "FFW-F08"],
+    "unique_findings": ["FFW-F01", "FFW-F02", "FFW-F03", "FFW-F04", "FFW-F05", "FFW-F06", "FFW-F07", "FFW-F08", "FFW-F09"],
 }
 
 # FFW-F07: fortism_config.json divergence + OPSEC leak + internal function references
@@ -491,29 +491,96 @@ FFW_F07 = {
     "debug_paths": ["/dev/cmdb/debug_zone", "/tmp/daemon_debug/", "\\000/wad_debug_ctrl"],
 }
 
-# FFW-F08: FFW libips.so.new larger than FGT7412 -- additional IPS attack surface
+# FFW-F08: FFW libips.so.new LuaJIT 2.1.f9140a62 + uvart-ftls-lua Rust TLS engine
 FFW_F08 = {
     "id":       "FFW-F08",
-    "title":    "FFW libips.so.new 18MB vs FGT7412 14MB -- unsandboxed LuaJIT with larger attack surface",
+    "title":    "FFW libips.so.new 18MB -- LuaJIT 2.1.f9140a62 + uvart_ftls_lua Rust TLS engine confirmed",
     "severity": "HIGH",
     "status":   "CONFIRMED",
     "source":   "ffw-data/lib/libips.so.new (FortiFirewall hardware datafs, Apr 2026 build)",
     "summary": (
-        "FFW libips.so.new (BuildID 3473282a6bf9b4a237ef469d4b0bb9de22b70367) is 18MB vs "
-        "FGT7412 libips.so.new (BuildID 7c155e7e27176fdb7c2bede9fb2d04c76fb77b24) at 14MB; "
-        "4MB additional code in same IPS engine family; "
-        "FGT7412 libips.so.new contains unsandboxed LuaJIT 2.1.d06beb04 with io.popen and os.execute "
-        "bindings (FGT-F33); FFW libips.so.new has different BuildID (different code) but same engine family; "
-        "the additional 4MB in FFW may represent additional protocol parsers or file format handlers; "
-        "fortism IPS domain in FFW grants only anon-mem-exec=1 (FFW-F07) -- memory protection is stricter; "
-        "however if FFW libips.so.new also exposes unsandboxed Lua (requires separate analysis), "
-        "the FGT-F33 attack path (FortiManager compromise -> malicious IPS sig with os.execute) "
-        "would apply to FFW IPS engine as well; "
+        "FFW libips.so.new (BuildID 3473282a, 18MB) contains LuaJIT 2.1.f9140a62 (newer than FGT7412 "
+        "libips.so.new BuildID 7c155e7e which uses LuaJIT 2.1.d06beb04); "
+        "the 4MB additional code vs FGT7412 (14MB) is primarily the uvart_ftls_lua Rust crate: "
+        "an async TLS engine implemented in Rust with a LuaJIT scripting interface via libuv; "
+        "exposes Lua bindings: new_tcp, new_pipe, new_poll, new_timer, lua_fs_unlink (FILE DELETE), "
+        "lua_fs_stat, lua_fileno, lua_os_getpid, new_client, new_server, sleep, "
+        "TLS session management (sessinfo, session_ticket, renegotiate); "
+        "lua_fs_unlink enables arbitrary file deletion from Lua scripts running in the FFW IPS engine; "
+        "Rust alloc::boxed panic strings confirm: uvart_ftls_lua::luv, uvart_ftls_lua::tls, "
+        "uvart_ftls_lua::session (FtlsClient/FtlsServer/LuaSession types); "
+        "ssl::http_parser::LuaHttpParser also confirmed -- HTTP parser exposed to Lua layer; "
         "same fgt2.key (A75C115F) confirmed in FFW -- FGT-F27/FFW-F05 scope confirmed; "
-        "FFW does NOT contain fgt.key (A8E3201C) -- that key is FGT-specific (FGT-F37)"
+        "FFW does NOT contain fgt.key (A8E3201C) -- that key is FGT-specific (FGT-F37); "
+        "os module attack surface: see FFW-F09"
     ),
     "build_comparison": {
-        "fgt7412": {"size": "14MB", "buildid": "7c155e7e27176fdb7c2bede9fb2d04c76fb77b24", "date": "May 2026"},
-        "ffw":     {"size": "18MB", "buildid": "3473282a6bf9b4a237ef469d4b0bb9de22b70367", "date": "Apr 2026"},
+        "fgt7412": {"size": "14MB", "buildid": "7c155e7e27176fdb7c2bede9fb2d04c76fb77b24",
+                    "luajit": "2.1.d06beb04", "date": "May 2026"},
+        "ffw":     {"size": "18MB", "buildid": "3473282a6bf9b4a237ef469d4b0bb9de22b70367",
+                    "luajit": "2.1.f9140a62", "date": "Apr 2026"},
     },
+    "rust_crate": "uvart_ftls_lua -- async Fortinet TLS engine (libuv + LuaJIT); Rust-in-C binary hybrid",
+    "lua_file_ops": ["lua_fs_unlink (delete)", "lua_fs_stat (stat)", "lua_fileno (fd)", "fopen (open)"],
+}
+
+
+# FFW-F09: Complete Lua os/io module exposed in FFW libips.so.new
+FFW_F09 = {
+    "id":       "FFW-F09",
+    "title":    "FFW libips.so.new: full Lua os/io module (system/popen/rename/remove/getenv/exit/fopen) in IPS engine",
+    "severity": "HIGH",
+    "status":   "CONFIRMED",
+    "source":   "ffw-data/lib/libips.so.new (FortiFirewall hardware datafs, Apr 2026 build); disasm @ .text",
+    "summary": (
+        "FFW libips.so.new IPS engine exposes the complete standard Lua os and io module via a "
+        "function pointer dispatch table at .data.rel.ro:0x113de80; confirmed by LuaJIT NaN-boxing "
+        "disassembly (sar $0x2f / cmp $0xfffffffb tag check + movabs $0x7fffffffffff / and + "
+        "lea +0x18 GCstr data access) in each binding; "
+        "14-entry table: "
+        "(1) 0x113de80 -> 0x40fa90: system() -- os.execute; takes Lua string arg, calls system(str), "
+        "returns exit code as Lua number; "
+        "(2) 0x113de88 -> 0x40fbb0: remove() -- os.remove; "
+        "(3) 0x113de90 -> 0x40fd40: rename(src, dst) -- os.rename; two NaN-unboxed string args; "
+        "(4) 0x113de98 -> 0x412150: mkstemp() -- temp file creation; "
+        "(5) 0x113dea0 -> 0x412220: getenv() -- os.getenv; "
+        "(6) 0x113dea8 -> 0x414d00: exit() -- os.exit; "
+        "(7) 0x113deb0 -> 0x40eed0: clock() -- os.clock; "
+        "(8) 0x113deb8 -> 0x4123b0: localtime_r/strftime/time -- os.date; "
+        "(9) 0x113dec0 -> 0x4129c0: time() -- os.time; "
+        "(10) 0x113dec8 -> 0x413070: difftime() -- os.difftime; "
+        "(11) 0x113ded0 -> 0x413200: setlocale() -- os.setlocale; "
+        "(12) 0x113dee0 -> 0x411950: fopen() -- io.open; "
+        "(13) 0x113dee8 -> 0x40f360: fflush+popen() -- io.popen; TWO string args (cmd, mode='r'); "
+        "(14) 0x113def0 -> 0x411c90: tmpfile() -- io.tmpfile; "
+        "the same table is also indexed by the DLT link-type decoder table at file:0x27b00 "
+        "(JUNIPER_MFR->system, FRF.16->rename, etc.) -- DLT entries point into the Lua os module table; "
+        "attack path (same as FGT-F33): FortiManager compromise (any FMG-F* auth bypass) -> "
+        "deliver malicious IPS signature containing Lua with os.execute() or io.popen() call -> "
+        "FFW IPS engine loads sig -> arbitrary shell execution in IPS domain context; "
+        "fortism IPS domain on FFW has anon-mem-exec=1 only (FFW-F07) -- no stack/heap/file_mod exec; "
+        "system() calls /bin/sh via execve family which is NOT gated by fortism anon/stack/heap flags; "
+        "io.popen provides bidirectional channel (read output); os.getenv leaks environment; "
+        "os.remove + os.rename enable filesystem manipulation without execve"
+    ),
+    "confirmed_NaN_unboxing": {
+        "system_binding":  "0x40fac0: sar $0x2f -> cmp $0xfffffffb; 0x40fac9: movabs $0x7fffffffffff; 0x40fad3: and; 0x40fad6: lea +0x18; 0x40fada: call system@plt",
+        "popen_binding":   "0x40f38c: sar $0x2f -> cmp $0xfffffffb; 0x40f399: movabs $0x7fffffffffff; 0x40f3a3: and; 0x40f3a6: lea +0x18 -> r14 (cmd); second arg for mode: same pattern -> r12; 0x40f445: call popen@plt",
+        "rename_binding":  "0x40fd72: sar $0x2f -> cmp $0xfffffffb; 0x40fd7f: movabs $0x7fffffffffff; 0x40fd89: and -> r12; 0x40fd8c: add $0x8 (next arg); 0x40fdc0: call rename@plt(r12, rsi)",
+    },
+    "plt_entries": {
+        "system@plt": "0x9ef80",
+        "popen@plt":  "0x9ea80",
+        "remove@plt": "0x9e590 (approx)",
+        "rename@plt": "0x9f110",
+        "getenv@plt": "0x9e490 (approx)",
+        "exit@plt":   "0x9e340 (approx)",
+    },
+    "vs_fgt_f33": (
+        "FGT-F33 (FGT7412 libips.so.new 14MB) exposes the same os module; "
+        "FFW version uses newer LuaJIT (f9140a62 vs d06beb04); "
+        "FFW adds uvart_ftls_lua Rust TLS engine with additional Lua file/net primitives (FFW-F08); "
+        "FFW fortism IPS domain is more restrictive (anon-exec only, no stack/heap exec) "
+        "but system()/popen() themselves are NOT blocked by fortism flags"
+    ),
 }
