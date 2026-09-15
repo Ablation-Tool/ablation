@@ -1438,6 +1438,102 @@ FMG_F19_SIEM_LUA_INJECTION = {
 
 
 # ---------------------------------------------------------
+FMG_F20_CLICKHOUSE_PLAINTEXT_CREDS = {
+    "id":       "FMG-F20",
+    "severity": "HIGH",
+    "title":    "ClickHouse default-user password stored plaintext in /etc/clickhouse-security; read at runtime by two SOAR operators",
+
+    "component": "fmg-soar/LOCALHOST/operator.py: FindLateralMovementOperator.execute() line 2493 + get_anomaly_details() line 3449",
+
+    "credential_detail": {
+        "file":      "/etc/clickhouse-security",
+        "content":   "plaintext password for ClickHouse user='default', database='siem'",
+        "consumers": [
+            "FindLateralMovementOperator.execute() -- open('/etc/clickhouse-security', 'r') line 2493; sends to http://127.0.0.1:8123/ via requests.post auth=('default', password)",
+            "get_anomaly_details() -- open('/etc/clickhouse-security', 'r') line 3449; passes to clickhouse_driver.Client(user='default', password=password, database='siem')",
+        ],
+        "clickhouse_listen": "<listen_host>::</listen_host> in ClickHouse binary config string -- binds to all IPv4+IPv6 interfaces; HTTP port 8123 and TCP port 9000 potentially accessible from network unless filtered by kernel firewall",
+    },
+
+    "attack_chain": (
+        "1. Read /etc/clickhouse-security via any local privilege (post-exploitation or file-read vuln) OR network-accessible 8123 port.\n"
+        "2. Authenticate to ClickHouse as 'default' user with full rights on 'siem' database.\n"
+        "3. Read all SIEM log data: adom{N}_SIM_Xlog tables, Xlog_sp{N} tables, risk_score_hist, siem.* schema.\n"
+        "4. ClickHouse default user may have filesystem read access via file() function and system table access via system.users, system.settings."
+    ),
+
+    "sanitization": {"applied": False, "detail": "Password read from file, passed directly to client; no in-memory protection, no rotation mechanism observed"},
+    "status": "CONFIRMED -- two code paths confirmed by static analysis; ClickHouse listen wildcard confirmed from binary strings",
+}
+
+
+# ---------------------------------------------------------
+FMG_F21_SOAR_FILTER_INJECTION = {
+    "id":       "FMG-F21",
+    "severity": "MEDIUM",
+    "title":    "SOAR MaliciousVPNAggregate operator interpolates user-controlled filter string directly into FAZ log query filter without sanitization",
+
+    "component": "fmg-soar/LOCALHOST/operator.py: MaliciousVPNAggregateOperator._build_filter() line 2647",
+
+    "injection_point": {
+        "source":   "self.filter from FAZUtilsOperator.parse_input(context, self.filter, context_dict) -- playbook-supplied filter string",
+        "line":     "2647 -- filter_str += f'({self.filter}) and '",
+        "context":  "_build_filter assembles filter used in FAZ JSONRPC API log query; user-controlled self.filter wrapped in parens but not sanitized",
+    },
+
+    "second_injection_points": {
+        "tunnel_ips": {
+            "source": "_parse_tunnel_ips joins indicator values with | separator; values from trigger_data['indicator'][N]['value'] list",
+            "line":   "2629 -- f'src_ip={tunnel_ips} and '",
+            "detail": "tunnel_ips is '|'.join(set(tunnel_ips)); if indicator value contains FAZ filter operators, injected into filter string",
+        },
+        "lateral_movement_dstepid": {
+            "source": "entry['dstepid'] and entry['dst_ip'] from previous SOAR step results (LOCALHOST_FIND_LM output)",
+            "lines":  "2655-2657 -- f'epid={entry[\"dstepid\"]}' and f'src_ip={ipv6_to_ipv4(entry[\"dst_ip\"])}'",
+            "detail": "second-order injection: if FIND_LM step returned adversary-controlled dstepid/dst_ip values, these flow into next MALICIOUS_VPN_AGGREGATE filter",
+        },
+    },
+
+    "impact": "FAZ log query filter injection; depending on FAZ backend filter grammar, attacker could modify query to access logs from other ADOMs or extract all logs",
+    "auth":   "Authenticated SOAR playbook author or SOAR trigger event with attacker-controlled indicator values",
+    "status": "CANDIDATE -- filter string API semantics depend on FAZ backend (in encrypted rootfs.gz); impact extent unconfirmed",
+}
+
+
+# ---------------------------------------------------------
+FMG_F22_SOAR_FIND_LM_SQL = {
+    "id":       "FMG-F22",
+    "severity": "MEDIUM",
+    "title":    "SOAR LOCALHOST_FIND_LM operator builds ClickHouse SQL via Python tuple string representation -- values not SQL-escaped",
+
+    "component": "fmg-soar/LOCALHOST/operator.py: FindLateralMovementOperator.build_filter_string() line 2466-2468 + build_query() line 2451-2463",
+
+    "injection_detail": {
+        "build_filter_string": (
+            "filters = [f\"{key} in {tuple(value)}\" for key, value in targets.items()]\n"
+            "Python's tuple.__str__() is NOT SQL-safe: string representation uses single quotes normally,\n"
+            "but switches to double quotes when string contains single quotes.\n"
+            "In ClickHouse SQL: double-quoted tokens are IDENTIFIERS (table/column names), not string literals.\n"
+            "Attack: supply epid value containing single quote -> Python uses double quotes ->\n"
+            "ClickHouse interprets value as identifier reference -> SQL parse error or identifier injection."
+        ),
+        "build_query_table_name": (
+            "FROM adom{self.adom_oid}_SIM_Xlog -- adom_oid integer from authenticated ADOM context; injection blocked if enforced as int\n"
+            "AND itime >= '{itime_start}' AND event_creation_time >= '{start_ns}' -- cast to int() before interpolation; injection blocked"
+        ),
+    },
+
+    "update_targets_from_result": (
+        "new_targets keys come from ClickHouse query column names (dstepid, dst_ip -- fixed by SELECT clause).\n"
+        "If an attacker could influence the SELECT output column names (via ClickHouse column aliasing via injection), second-order key injection is possible."
+    ),
+
+    "clickhouse_endpoint": "http://127.0.0.1:8123/?database=siem&default_format=JSON -- raw HTTP, password from /etc/clickhouse-security (FMG-F20)",
+    "status": "CANDIDATE -- key injection blocked by parse_trigger_data conditionals; value injection via double-quote/identifier path needs live ClickHouse verification",
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -1456,7 +1552,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 20 unique_findings total",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 23 unique_findings total",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1464,7 +1560,7 @@ ANALYSIS_STATUS = {
         "builder": "root@e2770389c733 (different container from FAZ root@49192c769448, same day build)",
     },
     "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ, magic 0x5b6758cb...)",
-    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped; all HTTP endpoints in ai/urls.py evaluated; SIEM compiler (usr/local/siem/compiler/compiler.py) analyzed -> FMG-F19 (Lua injection); SOAR LOCALHOST connector (operator.py, 143KB) analyzed -> 14 ctypes CDLL loads (FMG-F19b candidate)",
+    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped; all HTTP endpoints in ai/urls.py evaluated; SIEM compiler (usr/local/siem/compiler/compiler.py) analyzed -> FMG-F19 (Lua injection); SOAR LOCALHOST connector (operator.py 3892 lines, health_check.py) analyzed -> FMG-F20 (ClickHouse plaintext creds), FMG-F21 (filter injection), FMG-F22 (SQL tuple injection); sql_rewriter Flask JSONRPC service analyzed (app.py, gen_ds_feature.py, sql_helper/utils.py, sql-validator/sqlparser.py, sqlinterpreter.py); FazSQLConvertor from libsqlrewriter.so (native, inaccessible); webconsole_module.so, fmg_request.so, fmg_rewrite.so string analysis",
     "syntax_ext":    "ncmdb_syntax.json 123 objects analyzed (fmg_cmdb_syntax.json is in encrypted rootfs.gz -- inaccessible); ncmdb_syntax is CMDB schema constants, no injection surface",
     "debug_gates":   "CONFIRMED DISABLED -- SYS.CONFIG_DEBUG hardcoded to 0 in macros.py; faz_mcp/call_tool and debug_1 return 404 in all production builds",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
@@ -1489,6 +1585,9 @@ ANALYSIS_STATUS = {
         "FMG-F17: CRITICAL -- policy_config_agent.handle_create_and_run_script generates FortiOS CLI script via LLM and runs it on FMG policy packages via JSONRPC exec /dmworker/install/script; permission gate (send_gui_toolcall_permission_request) broken by FMG-F04 session binding absence -- any authenticated FMG user can POST allowed=True to /p/ai/send_tool_call_permission_response to bypass; additionally, prompt injection via reference policy data (get_policy_cli) could generate adversarial script content",
         "FMG-F18: HIGH -- device_config_agent generates CLI scripts via LLM and runs via modify_configuration GUI tool (JSONRPC exec /dmworker/install/script, target=device/{device_name}) after UI confirmation widget; install_to_device opens FMG install wizard to push config to FGT; prompt injection vector: FGT device config data returned by get_existing_configuration MCP tool flows unfiltered into LLM context (after masking), enabling adversarial FGT config fields to manipulate script generation; admin sees script in chat widget but may approve without reading all lines; supported categories: system interface, router static, system global, system sdwan, system ntp, vpn ipsec phase1/2-interface",
         "FMG-F19: HIGH -- SIEM compiler (usr/local/siem/compiler/compiler.py) interpolates user-supplied SIEM rule fields (name, application, matches key/value pairs) verbatim into generated Lua script strings via .format(); no escaping applied; Lua executed via subprocess.run(['/bin/python', './dryRun.py', '-i', dry_run_lua]); payload: SIEM rule name 'foo\"; os.execute(\"id\"); --' injects OS command in Lua metadata block; auth prereq: admin or restricted-admin with SIEM rule creation permission; status CANDIDATE -- dryRun trigger API in encrypted rootfs.gz",
+        "FMG-F20: HIGH -- ClickHouse default-user password stored plaintext in /etc/clickhouse-security; read at runtime by FindLateralMovementOperator (line 2493) and get_anomaly_details() (line 3449) in SOAR LOCALHOST connector; ClickHouse binary shows <listen_host>::</listen_host> (wildcard bind); 'default' user on 'siem' database; attack: any process reading /etc/clickhouse-security or direct port 8123 access -> full SIEM database read (all customer log data, risk scores, lateral movement records) + potential system.users access via ClickHouse built-in functions",
+        "FMG-F21: MEDIUM -- SOAR MaliciousVPNAggregateOperator._build_filter() (line 2647) interpolates self.filter (playbook-supplied string) directly into FAZ log query filter via f'({self.filter}) and '; no sanitization; secondary injection via tunnel_ips (indicator value join) at line 2655; second-order injection via lateral_movement entry['dstepid']/entry['dst_ip'] from prior FIND_LM step results at lines 2655-2657; status CANDIDATE -- FAZ log query filter grammar not confirmed (backend in encrypted rootfs.gz)",
+        "FMG-F22: MEDIUM -- SOAR FIND_LM operator build_filter_string() (line 2467) constructs ClickHouse SQL via Python f-string with tuple() for IN clause values; Python's tuple.__str__() is NOT SQL-safe: strings containing single quotes rendered with double quotes, which ClickHouse treats as identifiers not literals; direct key injection blocked (keys restricted to src_ip/epid by parse_trigger_data conditionals); value identifier injection via epid values containing single quotes produces double-quoted ClickHouse tokens; status CANDIDATE -- needs live ClickHouse verification",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
