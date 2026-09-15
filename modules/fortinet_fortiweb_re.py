@@ -329,6 +329,7 @@ CROSS_PRODUCT_MAP = {
     "FFW-F02 (FFW 8.0.0)": "FWB-F02 -- equivalent",
     "FFW-F03 (FFW 8.0.0)": "FWB-F03 -- equivalent",
     "FFW-F04 (FFW 8.0.0)": "FWB-F04 -- same overflow, different mitigation status",
+    "FFW-F05 (FFW 8.0.0)": "cross-product fgt2.key shared RSA private key; same modulus A75C115F... as FGT 7.4.12 (FGT-F27) + FGT 8.0.0 + FGA 8.0.0",
 }
 
 
@@ -685,6 +686,151 @@ FWB_F10_PYTHON_DEPS_CVES = {
 }
 
 
+# FFW-F05: fgt2.key static RSA private key -- same as FGT 7.4.12, FGT 8.0.0, FGA 8.0.0
+# Source: datafs.tar.gz -> etc/fgt2.key (unencrypted partition)
+# ---------------------------------------------------------
+FFW_F05_SHARED_RSA_KEY = {
+    "id":       "FFW-F05",
+    "product":  "Fortinet FortiWeb FortiOS 8.0.0 VM64-KVM",
+    "severity": "CRITICAL -- same static RSA private key (fgt2.key) present in FFW 8.0.0 as in "
+                "FGT 7.4.12, FGT 8.0.0, FGA 8.0.0; cross-product, cross-version shared static key",
+    "class":    "Cryptographic Key Reuse -- cross-product shared static RSA private key",
+
+    "source_file": "datafs.tar.gz -> etc/fgt2.key",
+    "modulus_prefix": "A75C115F690B67C32834D43FE1BD50DB301CE34F6A96EACDD6AE16353E72715AA8893B03",
+
+    "confirmed_products_same_key": [
+        "Fortinet FortiWeb FortiOS 8.0.0 VM64-KVM     -- this finding",
+        "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM   -- FGT-F27",
+        "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM    -- FGT-F05 ref",
+        "Fortinet FortiGate FortiOS 8.0.0 ARM64 (FGA) -- FGA-F01 ref",
+    ],
+
+    "impact": (
+        "A single static key shared across FortiGate and FortiWeb product lines, across "
+        "the 7.4.x and 8.0.x release trains. Key use: TLS mutual authentication, firmware "
+        "integrity verification, and inter-device trust relationships. A private key extracted "
+        "from any one device (via FGT-F09 rootfs decryption, fortism ioctl kernel access, or "
+        "any other extraction path) is valid for all confirmed products. "
+        "Scope: all FortiGate and FortiWeb devices globally in the affected firmware ranges."
+    ),
+
+    "verification": "CONFIRMED -- openssl rsa -noout -modulus on fgt2.key extracted from "
+                    "FFW 8.0.0 datafs.tar.gz; modulus matches all other Fortinet products.",
+    "status": "CONFIRMED",
+}
+
+
+# FWB-F11: CAP_SYS_MODULE granted to WAD + 4 additional domains in fortism_config.json
+# Source: datafs.tar.gz -> etc/fortism_config.json (unencrypted partition)
+# ---------------------------------------------------------
+FWB_F11_WAD_CAP_SYS_MODULE = {
+    "id":       "FWB-F11",
+    "product":  "Fortinet FortiWeb FortiOS 8.0.0 VM64-KVM (fortism LSM policy config)",
+    "severity": "HIGH -- WAD SSL-inspection proxy granted CAP_SYS_MODULE; allows kernel module "
+                "loading from the highest-value, internet-facing daemon; 4 additional daemons "
+                "(REMOTELOG, CSFD_PRIV, SNIFFERD, WEB_AUTH) also granted CAP_SYS_MODULE",
+    "class":    "Privilege Over-grant -- CAP_SYS_MODULE in internet-facing daemon domain",
+
+    "source_file": "datafs.tar.gz -> etc/fortism_config.json",
+
+    "affected_domains": {
+        "WAD": {
+            "binary":     "/bin/wad",
+            "role":       "SSL/TLS inspection proxy; handles all intercepted HTTP/HTTPS traffic",
+            "exposure":   "Internet-facing; processes untrusted client content",
+            "anon_mem_exec": 1,
+            "cap_sys_module": "GRANTED",
+            "other_caps": [
+                "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_FW_SES_DUMP",
+                "CAP_SETGID", "CAP_NET_BIND_SERVICE", "CAP_NET_ADMIN",
+                "CAP_NET_RAW", "CAP_IPC_LOCK", "CAP_FW_SES_ADMIN",
+            ],
+            "risk":  "WAD compromise via SSL inspection attack surface (memory corruption in TLS parsing, "
+                     "content inspection, URL rewriting) -> CAP_SYS_MODULE -> insmod arbitrary .ko -> ring 0",
+        },
+        "REMOTELOG": {
+            "binary":     "/bin/syslogd, /bin/fgtlogd",
+            "role":       "Remote syslog forwarder",
+            "cap_sys_module": "GRANTED",
+            "risk":  "Log forwarding daemon with kernel module capability; log injection -> code exec -> module load",
+        },
+        "CSFD_PRIV": {
+            "binary":     "/bin/csfd",
+            "role":       "Fortinet content security framework daemon (privileged variant)",
+            "cap_sys_module": "GRANTED",
+            "risk":  "PRIV variant already indicates privileged context; adding kernel module capability redundant and dangerous",
+        },
+        "SNIFFERD": {
+            "binary":     "/bin/httpsnifferd",
+            "role":       "HTTP packet capture / deep inspection sniffer",
+            "cap_sys_module": "GRANTED",
+            "note":  "Could be needed for loading packet capture kernel modules, but CAP_NET_ADMIN + eBPF cover this without module loading",
+        },
+        "WEB_AUTH": {
+            "binary":     "/bin/http_authd",
+            "role":       "Web captive portal / HTTP authentication daemon",
+            "exposure":   "Internet-facing (captive portal redirect handling)",
+            "cap_sys_module": "GRANTED",
+            "risk":  "Auth daemon compromised via captive portal injection -> CAP_SYS_MODULE -> ring 0",
+        },
+    },
+
+    "attack_chain": (
+        "Memory corruption in WAD TLS parsing (e.g., malformed ClientHello, certificate chain, "
+        "or HTTP request during SSL inspection) -> "
+        "WAD domain has anon-mem-exec=1 (shellcode staging allowed) -> "
+        "CAP_SYS_MODULE granted -> insmod /tmp/attacker.ko -> "
+        "kernel code execution / persistent rootkit. "
+        "All steps within the WAD fortism security domain; no domain escape needed."
+    ),
+
+    "comparison": (
+        "In FGT 7.4.12 fortism_config.json, WAD has anon-mem-exec=1, heap-exec=1, stack-exec=1, "
+        "regain-root=1 but no explicit capability grants (capabilities are inherited from the process). "
+        "In FFW 8.0.0, WAD explicitly grants CAP_SYS_MODULE, CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH "
+        "as deliberate policy inclusions. FFW 8.0.0's WAD privilege grant is more explicit and "
+        "measurably worse for kernel integrity than FGT 7.4.12's exec-flag approach."
+    ),
+
+    "verification": "CONFIRMED -- etc/fortism_config.json Permission_Policies WAD entry extracted "
+                    "from FFW 8.0.0 datafs.tar.gz; CAP_SYS_MODULE listed in capabilities.include. "
+                    "5 domains confirmed via grep (lines 1173, 2162, 2882, 3723, 4714).",
+    "status": "CONFIRMED",
+}
+
+
+# FWB-F12: /bin/node binary identical between FFW 8.0.0 and FGT 8.0.0 (cross-product shared binary)
+# Source: hash_bin.sha256 from both FFW 8.0.0 and FGT 8.0.0 (unencrypted partition)
+# ---------------------------------------------------------
+FWB_F12_NODE_BINARY_SHARED = {
+    "id":       "FWB-F12",
+    "product":  "Fortinet FortiWeb FortiOS 8.0.0 / FortiGate FortiOS 8.0.0",
+    "severity": "INFO -- /bin/node (Node.js) binary is byte-for-byte identical across FFW 8.0.0 "
+                "and FGT 8.0.0; vulnerability in this binary affects both product lines simultaneously",
+    "class":    "Shared binary across products -- cross-product Node.js vulnerability scope",
+
+    "evidence": {
+        "binary":         "/bin/node",
+        "sha256_ffw_800": "1de035e241f616ee3201bfb90d516425191c111e727155b72356e8535cab49f2",
+        "sha256_fgt_800": "1de035e241f616ee3201bfb90d516425191c111e727155b72356e8535cab49f2",
+        "match":          "IDENTICAL -- same compiled binary in both products",
+        "source_ffw":     "FFW 8.0.0 hash_bin.sha256 (unencrypted partition)",
+        "source_fgt":     "FGT 8.0.0 hash_bin.sha256 (FGT-F25 in fortinet_fortigate_re.py)",
+    },
+
+    "node_scripts_differ": (
+        "FFW 8.0.0 ships 221 node-scripts/chunk-*.js webpack bundles vs FGT 8.0.0's 20+ bundles. "
+        "Bundle hashes are product-specific (different UI logic), but the underlying Node.js "
+        "runtime is shared. Any Node.js runtime vulnerability (heap overflow in V8, "
+        "buffer handling, native addon attack) affects both FortiGate and FortiWeb."
+    ),
+
+    "verification": "CONFIRMED -- SHA-256 match extracted from hash_bin.sha256 files on both products.",
+    "status": "CONFIRMED",
+}
+
+
 # ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
@@ -707,6 +853,9 @@ ANALYSIS_STATUS = {
         "etc/filebeat/": "Filebeat config; cert/key managed by wassd_ws.py cloud channel",
         "etc/mysql/": "MariaDB config: MyISAM engine, port 3306, socket /tmp/mysql.sock, no credentials in config",
         "etc/aws_cloud_connector.py": "AWS EC2 API client; takes key_id, access_key as params (from CLI/config, not hardcoded)",
+        "etc/fortism_config.json": "ANALYZED (FWB-F11): 5 domains with CAP_SYS_MODULE (WAD, REMOTELOG, CSFD_PRIV, SNIFFERD, WEB_AUTH); 6 domains with anon-mem-exec=1 (PRECHROOT, CMDBSVR, MISC, WAD, IPS, WEB_SVC); no heap-exec/stack-exec/regain-root (stricter than FGT 7.4.12)",
+        "etc/fgt2.key": "ANALYZED (FFW-F05): modulus A75C115F... matches FGT 7.4.12/8.0.0/FGA 8.0.0; cross-product shared static RSA key",
+        "hash_bin.sha256": "ANALYZED (FWB-F12): 400 entries; /bin/node SHA-256 matches FGT 8.0.0 exactly; 221 node-scripts webpack chunks (product-specific UI); rootfs.gz encrypted (magic 0xa3ba56c6)",
         "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
         "lib_packge/": "wvs.tar.xz ANALYZED (FWB-F09); python-libs.tar.xz ANALYZED (64MB, Python 3.10 stdlib + 68 site-packages); cryptography 37.0.2 (CVE-2023-49083, CVE-2024-26130, CVE-2023-0286), ecdsa 0.17.0 (CVE-2024-23342), Django 5.1.6 (CVE-2025-26115); matplotlib + boto3 + pysqlcipher3 + sshpubkeys notable; FWB-F10",
     },
@@ -725,5 +874,12 @@ ANALYSIS_STATUS = {
         "FWB-F09: CANDIDATE -- wvs.tar.xz w3af REST API requires_auth bypasses all auth when PASSWORD not configured; POST /scans/ accepts file:// and internal targets -> local file read + SSRF; blocker: startup auth config in encrypted rootfs",
         "FWB-F10: LOW -- python-libs.tar.xz outdated packages: cryptography 37.0.2 (CVE-2023-49083/CVE-2024-26130 PKCS12 null deref, CVE-2023-0286 X.400 type confusion), ecdsa 0.17.0 (CVE-2024-23342 Minerva timing), Django 5.1.6 (CVE-2025-26115 admin XSS); pysqlcipher3 suggests encrypted secrets store; matplotlib unexpected in WAF firmware",
         "FortiWeb ships HSM (Luna/SafeNet) client config (Chrystoki.conf); HSM integration available but config has no credentials",
+        "FFW-F05: CRITICAL -- etc/fgt2.key modulus A75C115F... identical to FGT 7.4.12 (FGT-F27), FGT 8.0.0, FGA 8.0.0; same static RSA key spans FortiGate and FortiWeb product lines across 7.4.x and 8.0.x release trains",
+        "FWB-F11: HIGH -- WAD SSL-inspection proxy granted CAP_SYS_MODULE via fortism_config.json Permission_Policies; "
+                 "also WEB_AUTH (http_authd captive portal), REMOTELOG (syslogd), CSFD_PRIV (csfd), SNIFFERD (httpsnifferd); "
+                 "WAD compromise + CAP_SYS_MODULE + anon-mem-exec=1 = kernel module loading from internet-facing daemon",
+        "FWB-F12: INFO -- /bin/node SHA-256 identical across FFW 8.0.0 and FGT 8.0.0; "
+                 "same Node.js binary shared across FortiGate and FortiWeb; 221 webpack chunks in FFW (different UI logic); "
+                 "Node.js runtime vulnerability = both product lines affected",
     ],
 }
