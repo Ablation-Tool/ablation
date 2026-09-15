@@ -2259,6 +2259,28 @@ ANALYSIS_STATUS = {
                  "0x289c93: fseek+ftell+fread full-file read (malloc'd buffer matching size); all bounded; "
                  "source: libav.so.new Ablation semantic sweep run 2026-09-15",
 
+        "FGT-F45: HIGH CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB) decompression pre-check bypassed by ZIP local-header size mismatch: "
+                 "archive scanner state machine at 0x2630b0 (recursive, __sigsetjmp error handling, nest-limit at 0x263149); "
+                 "pre-decompression size check at 0x261d80: sub edx, [rcx+0x3134]; sub edx, [rcx+0x3120]; cmp edx, 0x1fffff; ja <error>; "
+                 "check validates HEADER-DECLARED uncompressed_size against hardcoded 2MB limit (0x1fffff = 2,097,151 bytes); "
+                 "check only reads from archive metadata struct (offsets +0x3134 and +0x3120 in scan context); "
+                 "if declared size passes, decompression proceeds with NO per-iteration avail_out guard confirmed in this function; "
+                 "ZIP local file header structure: uncompressed_size field at offset +22 (4 bytes) is ADVISORY when data descriptor present; "
+                 "RFC 1952 (GZIP) and ZIP spec allow data descriptor after compressed data with correct size; "
+                 "attack path: craft ZIP with local_header.uncompressed_size=0x100000 (1MB, passes 2MB check), "
+                 "then actual inflate output exceeds 2MB due to data descriptor override (size post-data); "
+                 "pre-check at 0x261d80 passes (1MB < 2MB) -> decompressor called -> inflate writes beyond assumed output buffer; "
+                 "additional attack path: nested archive bomb -- 0x263149 checks nest count against [rdx+0x10]; "
+                 "if the nesting counter is per-session and not per-connection, concurrent sessions may share counts; "
+                 "community.fortinet.com confirms: uncompressed-oversize-limit is a CLI config option (not hardcoded); "
+                 "hardcoded 0x1fffff in 0x261d80 is a code-level limit but configurable limit enforced at policy layer separately; "
+                 "decompressor call chain: state machine 0x2630b0 -> dispatch by file type -> internal inflate (not zlib PLT, static); "
+                 "actual inflate routines not yet located (0x395410/0x395c40 confirmed as memory allocator internals, NOT inflate); "
+                 "forks dispatched to find actual inflate and confirm output buffer bounds; "
+                 "status CANDIDATE: archive header-size-only pre-check identified; actual inflate bounds not yet confirmed; "
+                 "error code 0xc000000e in [rbx+0x8c174] = mailbomb/oversize detection (matches FortiGate log eventtype=oversize); "
+                 "source: libav.so.new 0x2630b0 state machine + 0x261d80 size check + community.fortinet.com AV bomb docs + FortiOS 7.6.7 avdb_patch crash history",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
