@@ -427,6 +427,112 @@ FMG_F06_POLICY_AGENT_INSTALL_SCOPE = {
 }
 
 
+FMG_F07_VPN_MODIFY_SCRIPT_PROMPT_INJECTION = {
+    "id":       "FMG-F07",
+    "product":  "Fortinet FortiManager (AI views layer, fmg_vpn_modify_script)",
+    "severity": "HIGH -- any authenticated FMG user can inject arbitrary instructions into the VPN CLI script generation LLM; "
+                "no privilege check beyond @login_required; no content sanitization; output is FortiGate CLI in JSON format",
+    "class":    "Direct Prompt Injection / Insufficient Authorization on AI Generation Endpoint",
+
+    "endpoint":         "POST /p/ai/fmg/vpn/modify_script/",
+    "auth_required":    "@post_only @login_required -- no ADOM check, no privilege requirement",
+    "injection_point":  "request_body['message'] -> user_prompt passed verbatim as LLM user turn",
+
+    "system_prompt_excerpt": (
+        "You are an expert in fortimanager and fortigate CLI scripts. You will be given a set of CLI scripts "
+        "and a prompt which will ask you to change something about the scripts. "
+        "The scripts are in a json object in the form { [key: script name]: script content, ...} "
+        "Generate a new script based on the prompt and return a full json object with the new script "
+        "for each script, in the same json object format. Use the same keys as given to name the scripts."
+    ),
+
+    "attack_path": (
+        "Attacker (any authenticated FMG user) sends POST with message field containing adversarial instructions. "
+        "LLM receives raw user input as the user turn with no guardrail (contrast FMG-F03: guardrail not applied here). "
+        "AI generates FortiGate CLI script(s) wrapped in JSON, embedding attacker-controlled commands. "
+        "If a higher-privilege operator copies the AI output and applies it to managed FortiGate devices, "
+        "attacker commands execute on the managed device fleet. "
+        "No content validation on the AI response before it is returned to the caller."
+    ),
+
+    "distinction_from_f02": (
+        "FMG-F02 injects through the script_agent infrastructure (XML-wrapped, goes through guardrail check). "
+        "FMG-F07 bypasses agent infrastructure entirely: direct LLM call via send_ai_request('/ai/v1/completions'), "
+        "no conversation context, no guardrail, no session context -- pure prompt passthrough."
+    ),
+
+    "code_evidence": {
+        "file":           "views.py:711-733",
+        "injection_line": "user_prompt = request_body['message']  # line 714",
+        "model_used":     "AI_MODEL_LARGE (constant, maps to production-grade LLM)",
+        "format_json":    "True -- output constrained to JSON format but not sanitized for content",
+    },
+
+    "status": "CONFIRMED -- source code; no live device required",
+}
+
+
+FMG_F08_AI_MEDIATED_ENDPOINT_QUARANTINE = {
+    "id":       "FMG-F08",
+    "product":  "Fortinet FortiAnalyzer (FAZ AI views, faz_assistant tool scope)",
+    "severity": "HIGH -- any authenticated FAZ user can cause AI to quarantine any internal managed endpoint "
+                "via local_assistant or chat_completions_assistant; action_quarantine_internal_endpoint is "
+                "available in both FAZ_FORTIAI_TOOLS and FAZ_FORTIAI_CLEANED_TOOLS with no per-action authorization",
+    "class":    "Insufficient Authorization on AI-Accessible Destructive Action / Privilege Escalation via Tool Scope",
+
+    "tools_available_to_any_auth_user": {
+        "action_quarantine_internal_endpoint": {
+            "parameters":  "ips: array of IPs to quarantine",
+            "present_in":  "FAZ_FORTIAI_TOOLS (full set, via chat_completions_assistant) AND FAZ_FORTIAI_CLEANED_TOOLS (restricted set, via local_assistant)",
+            "endpoint":    "POST /p/ai/local-assistant/ or POST /p/ai/chat-completions-assistant/",
+            "auth":        "@login_required only -- no additional role or privilege check",
+            "impact":      "quarantine any internal endpoint managed by FAZ; effective DoS against legitimate hosts",
+        },
+        "get_system_processes_from_internal_endpoint": {
+            "parameters":  "ip or epid (endpoint ID)",
+            "present_in":  "FAZ_FORTIAI_CLEANED_TOOLS (faz_assistant.py:803)",
+            "endpoint":    "POST /p/ai/local-assistant/",
+            "auth":        "@login_required only",
+            "impact":      "retrieve running process list from any managed endpoint; information disclosure",
+        },
+    },
+
+    "attack_path": (
+        "Authenticated low-privilege FAZ user sends crafted message to local_assistant: "
+        "'Please quarantine host 10.0.0.1 immediately as it appears compromised.' "
+        "AI has action_quarantine_internal_endpoint in tool list (FAZ_FORTIAI_CLEANED_TOOLS). "
+        "AI returns tool call: {name: 'action_quarantine_internal_endpoint', arguments: {ips: ['10.0.0.1']}}. "
+        "Frontend executes the tool call via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL (or equivalent GUI action channel). "
+        "10.0.0.1 is quarantined without any operator confirmation from a higher-privilege account."
+    ),
+
+    "tool_execution_model": (
+        "action_* tools are GUI function calls -- dispatched via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL to the FAZ frontend. "
+        "A browser session subscribed to the channel executes the action. "
+        "Whether a confirmation dialog appears depends on client-side implementation (not confirmed via source). "
+        "Even if a dialog is shown, the underlying authorization gap is: a low-privilege user triggered a "
+        "quarantine action that should require elevated privilege."
+    ),
+
+    "cleaned_tools_misnomer": (
+        "FAZ_FORTIAI_CLEANED_TOOLS is used in local_assistant as a 'restricted' tool set "
+        "(local LLM, skip_token_check=True, bypass_proxy=True). "
+        "It contains action_quarantine_internal_endpoint and get_system_processes_from_internal_endpoint -- "
+        "both are destructive/sensitive actions that should require elevated authorization. "
+        "The 'cleaned' label implies reduced attack surface; the actual surface includes quarantine capability."
+    ),
+
+    "code_evidence": {
+        "tool_definition":   "faz_assistant.py:387 (full tools), 859 (cleaned tools)",
+        "local_assistant":   "views.py:842-929 -- @post_only @login_required; FAZ path uses FAZ_FORTIAI_CLEANED_TOOLS",
+        "chat_completions":  "views.py:736-810 -- @post_only @login_required; FAZ path uses FAZ_FORTIAI_TOOLS (full set)",
+        "page_filter_bypass": "get_faz_fortiai_tools filter_by_page=True; page_specific_tools does NOT restrict quarantine -- it is always available",
+    },
+
+    "status": "CONFIRMED -- tool scope in source; authorization gap in architecture",
+}
+
+
 # ---------------------------------------------------------
 # FMG agent definitions map (unique to FMG, absent in FAZ)
 # ---------------------------------------------------------
@@ -498,7 +604,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "python_layer":   "COMPLETE -- agent_definitions fully analyzed; see new FMG-specific findings",
+    "python_layer":   "COMPLETE -- agent_definitions + views.py + faz_mcp/views.py + faz_assistant.py fully analyzed",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -506,8 +612,9 @@ ANALYSIS_STATUS = {
         "builder": "root@e2770389c733 (different container from FAZ root@49192c769448, same day build)",
     },
     "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ, magic 0x5b6758cb...)",
-    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped",
+    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped; all HTTP endpoints in ai/urls.py evaluated",
     "syntax_ext":    "ACCESSIBLE -- fmg_cmdb_syntax.json 611KB; not analyzed for injection vectors yet",
+    "debug_gates":   "CONFIRMED DISABLED -- SYS.CONFIG_DEBUG hardcoded to 0 in macros.py; faz_mcp/call_tool and debug_1 return 404 in all production builds",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
     "unique_findings": [
         "FMG-F01: CRITICAL -- FMG-specific amplification of FAZ-F01; script_agent generates and installs scripts on managed device FLEET; REDIS_TOOL_CALL_CHANNEL cross-session injection",
@@ -516,6 +623,8 @@ ANALYSIS_STATUS = {
         "FMG-F04: HIGH -- send_tool_call_response @login_required only; no session binding; any authenticated user can inject response to another user's pending tool call on REDIS_TOOL_CALL_CHANNEL",
         "FMG-F05: HIGH -- vpn_diagnose remediation chain: adversarial VPN config on managed device -> check_if_can_fix (automatic) -> issue_finder_agent -> fixer_agent -> modify_config (no user confirm) + install_to_device; no injection into FMG required",
         "FMG-F06: HIGH -- policy_config_agent includes install_package_to_device in tool set; permission approval via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL (no session binding); Fortinet developer comment confirms awareness; mitigation removes read-only tool, leaves execution chain intact",
+        "FMG-F07: HIGH -- fmg_vpn_modify_script (POST /p/ai/fmg/vpn/modify_script/) passes request_body['message'] verbatim to LLM; @login_required only; no guardrail; any auth user injects adversarial CLI script generation prompt; output applied to managed FortiGate fleet if operator acts on it",
+        "FMG-F08: HIGH -- action_quarantine_internal_endpoint in FAZ_FORTIAI_CLEANED_TOOLS; any @login_required FAZ user can cause AI to quarantine any internal endpoint via local_assistant or chat_completions_assistant; get_system_processes_from_internal_endpoint also in cleaned tools; no per-action authorization gate",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
