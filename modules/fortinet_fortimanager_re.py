@@ -2158,6 +2158,48 @@ ANALYSIS_STATUS = {
                  "status HIGH CANDIDATE: rpc-src bypass confirmed by static analysis; overflow path requires libfcpapi.so; "
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
+
+        "FMG-F39: HIGH -- FortiManager SOAR WEBHOOK connector SSRF via unvalidated URL override (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/WEBHOOK/operator.py -- WebhookBaseOperator class; "
+                 "vulnerable method: execute_action(params) at line 42: self.server_url = params.get('url', self.server_url); "
+                 "url is overridden with raw params['url'] WITHOUT the scheme validation that runs in __init__; "
+                 "__init__ scheme check (lines 35-39): adds https:// prefix if scheme missing -- BYPASSED by execute_action override; "
+                 "make_api_call uses self.server_url directly: url = self.server_url + '/' + endpoint; "
+                 "calls self.make_https_request(method, url, ...) -- no URL scheme or host validation; "
+                 "SSRF attack: playbook action sets url='http://169.254.169.254/latest/meta-data' -> FMG makes HTTP request to AWS IMDS; "
+                 "equivalent for Azure (169.254.169.254:80 /metadata/instance) and GCP (169.254.169.254:80 /computeMetadata/v1/); "
+                 "response returned to attacker via {'response': res} -- exfiltrates instance credentials, IAM roles, VPC metadata; "
+                 "internal SSRF: any host/port accessible from FMG network reachable -- Redis :6379, Postgres :5432, etcd :2379; "
+                 "the pattern recurs across all 5 webhook operator subclasses (Get/Post/Put/Patch/Delete, lines 113/154/197/239/280); "
+                 "each subclass: self.server_url = url (no validation) in __init__ override path; "
+                 "attack path: authenticated SOAR playbook editor -> create WEBHOOK action with url=http://internal:port/ -> execute -> SSRF; "
+                 "severity HIGH: any SOAR operator (not just admin) who can create/modify playbooks can trigger; "
+                 "cloud metadata is highest impact -- full instance credential via single playbook execution; "
+                 "remediation: validate params['url'] scheme in execute_action; reject non-https schemes; "
+                 "allowlist target hostname against configured server_url (do not allow arbitrary URL override); "
+                 "source: fmg-soar/WEBHOOK/operator.py lines 42-61, 113, 154, 197, 239, 280, analysis 2026-09-15",
+
+        "FMG-F40: HIGH -- FortiManager SOAR Active Directory connector LDAP injection via unescaped filter construction (FMG7.x, 2026-09-15): "
+                 "file: fmg-soar/AD/operator.py -- ADBaseOperator.get_attribute() method lines 582-600; "
+                 "three LDAP filter constructions using Python .format() with raw search_attr_value (no ldap3 escape): "
+                 "(1) L589: filter='(&(objectCategory=computer)(objectClass=computer)(sAMAccountName={1}))'.format(filter,search_attr_value); "
+                 "(2) L591: filter='(&{0}(sAMAccountName={1}))'.format(filter,search_attr_value); "
+                 "(3) L594: filter='(&{0}(|(userPrincipalName={1})(mail={1})))'.format(filter,search_attr_value); "
+                 "(4) L597: filter='(&{0}(distinguishedName={1}))'.format(filter,search_attr_value); "
+                 "search_attr_value comes from params.get('search_attr_value') at line 629 -- attacker-supplied via playbook params; "
+                 "LDAP injection payload: search_attr_value='*)(|(objectClass=*)' transforms filter to: "
+                 "'(&(objectclass=*)(&(objectclass=*)(sAMAccountName=*)(|(objectClass=*)))))' -- matches ALL AD objects; "
+                 "impact: enumerate full Active Directory (all users, groups, computers, OUs, attributes) regardless of intended filter; "
+                 "the search returns ldap3.ALL_ATTRIBUTES per line 531 -- full attribute dump for any matched objects; "
+                 "result includes: passwordLastSet, userAccountControl, memberOf, distinguishedName, security descriptors; "
+                 "AD record exfiltration requires only SOAR playbook execution rights (not full AD admin); "
+                 "additional info disclosure: AD/operator.py contains real Fortinet employee AD record as embedded test data: "
+                 "name='Raghavendra Medishetty', email='rmedishetty@fortinet-us.com', title='Senior Software Release QA Specialist', "
+                 "OU='OU=R&D,OU=Vancouver,OU=Canada,OU=Employees,OU=Fortinet,DC=fortinet-us,DC=com' (internal domain structure exposed); "
+                 "remediation: wrap all search_attr_value in ldap3.utils.conv.escape_filter_chars() before filter construction; "
+                 "example fix: from ldap3.utils.conv import escape_filter_chars; val = escape_filter_chars(search_attr_value); "
+                 "remove embedded employee PII from test data in production artifacts; "
+                 "source: fmg-soar/AD/operator.py lines 585-600, 629, 804-819, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
