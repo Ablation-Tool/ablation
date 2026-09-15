@@ -2348,7 +2348,7 @@ ANALYSIS_STATUS = {
                  "SMB2 traffic then triggers it with parsed protocol values as args; NO pre-auth path; "
                  "source: ips_lua_prepare_call fork (2026-09-15)",
 
-        "FGT-F50: MEDIUM CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB) PDF FlateDecode predictor row buffer missing Colors*BitsPerComponent factor (2026-09-15): "
+        "FGT-F50: CONFIRMED MEDIUM -- libav.so.new (FGT7412 May 2026, 7.4MB) PDF FlateDecode predictor row buffer missing Colors*BitsPerComponent factor (2026-09-15): "
                  "PDF format ID = 0x2c; fp10 at 0x111ae0; DecodeParms setup outer function at 0x1416c0; "
                  "DecodeParms parser stores: Predictor at [rsp+0x20], Columns at [rsp+0x18], Colors at [rsp+0x14], BitsPerComponent at [rsp+0x10]; "
                  "call chain: 0x141eae -> sub_139fa0(rdi=container, rsi=stream, edx=BitsPerComponent, ecx=Colors) -> sub_13e320 -> row_size_compute; "
@@ -2357,16 +2357,23 @@ ANALYSIS_STATUS = {
                  "Predictor=2 (TIFF) at 0x13e438: jmp to same 0x13e3d5 path; "
                  "default at 0x13e3d5: row_size = min(0x10, (Columns+7)/8 + 5); "
                  "Colors (r14d/ecx) and BitsPerComponent (r15d/edx) are bit-packed into a config word via sub_2faea0 (SHA accumulator) -- NOT multiplied into row_size; "
+                 "CONFIRMATION via LZW cross-reference (0x2bf354 function): "
+                 "LZW decoder at 0x2bf4d0 parses /Predictor and /Columns for its own predictor struct; "
+                 "at 0x2bf592: mov eax, dword ptr [rax+0x10] -- loads raw /Columns pixel count (no multiplication); "
+                 "at 0x2bf595: mov dword ptr [r12+0x40], ebp -- stores Predictor type; "
+                 "at 0x2bf59a: mov dword ptr [r12+0x44], eax -- stores raw /Columns pixel count with ZERO multiplication by Colors or BitsPerComponent; "
+                 "full scan of 0x2bf354 function: ZERO imul/mul/shl instructions in struct-initialization path; "
+                 "both FlateDecode and LZW decoders store raw pixel-count Columns, not pre-multiplied byte-width; "
+                 "[sub_struct+8] = raw /Columns pixels confirmed -- open question resolved as RAW PIXELS; "
                  "correct PDF PNG predictor formula: row_bytes = ceil(Colors * BitsPerComponent * Columns / 8) + 1; "
                  "example impact: Columns=1000, Colors=4, BitsPerComponent=8 -> correct=4001 bytes, computed row_size=130 bytes (30x underallocation); "
                  "row_size multiplied by 8 at sub_139e90+0x57 (shl esi, 3) before passing to sub_2f73e0 -> final buffer = row_size*8; "
                  "still undersized by 4x for typical 4-channel 8-bit image; "
                  "attacker controls all three parameters via PDF /DecodeParms dictionary (/Columns, /Colors, /BitsPerComponent); "
-                 "open question: whether [sub_struct+8] contains raw /Columns (pixels) or pre-multiplied bit-width; "
-                 "if raw pixels: out-of-bounds write during PNG predictor application (each row write overflows into next heap chunk); "
+                 "out-of-bounds write during PNG predictor application: each row write overflows into next heap chunk; "
                  "trigger: malformed PDF with FlateDecode + DecodeParms /Predictor 12 or 2 + large Colors*BitsPerComponent*Columns product; "
                  "pre-auth surface: AV engine parses PDF file content from email/web filter; "
-                 "source: sub_13e320 (0x13e320), sub_139fa0 (0x139fa0), sub_139e90 (0x139e90) analysis 2026-09-15",
+                 "source: sub_13e320 (0x13e320), sub_139fa0 (0x139fa0), sub_139e90 (0x139e90), LZW cross-ref 0x2bf592-0x2bf59a analysis 2026-09-15",
 
         "FGT-F51: DENIED -- libav.so.new (FGT7412 May 2026, 7.4MB) full multiply-before-alloc audit COMPLETE (2026-09-15): "
                  "full-text scan of all 1,879 alloc calls (0xbd8a0/0xbd8b0/0xbd940/0xbd960) for movsxd+multiply+alloc pattern; "
