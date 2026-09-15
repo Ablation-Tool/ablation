@@ -2159,6 +2159,37 @@ ANALYSIS_STATUS = {
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
 
+        "FMG-F46: MEDIUM -- FortiManager SOAR LOCALHOST EventOperator FAZ filter injection via unescaped cond['value'] from trigger data (FMG7.x / FortiAnalyzer 8.0.0, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/LOCALHOST/operator.py -- EventOperator.execute() lines 820-838 + get_filter() lines 728-762; "
+                 "injection site: execute() lines 828-831 -- for each cond in self.filter['conditions'], "
+                 "cond['value'] = FAZUtilsOperator.parse_input(context, cond['value'], context_dict) renders trigger data into the value field; "
+                 "get_filter() line 758: filters.append(f'{fld}{operator}\"{val}\"') -- val placed inside double quotes with no quote escaping; "
+                 "attack vector: trigger data value containing '\"' character breaks out of double-quoted string context in FAZ/ClickHouse filter syntax; "
+                 "example payload: cond['value'] = 'foo\" OR 1=1 --' produces filter expression eventtype=\"foo\" OR 1=1 --\"; "
+                 "constraints: fld (from cond['field']) and operator (from cond['operator']) are from static DAG definition, not trigger data -- "
+                 "attacker controls only val via trigger payload; requires '\"' character in trigger data to escape; "
+                 "impact: FAZ event data exfiltration across ADOM boundaries; filter-based bypass of event type restrictions; "
+                 "compare with FMG-F45/F44: weaker because double-quote escape required; "
+                 "remediation: escape double-quote characters in val before insertion; use parameterized FAZ SDK filter API; "
+                 "source: fmg-soar/LOCALHOST/operator.py lines 728-762, 820-838, analysis 2026-09-15",
+
+        "FMG-F45: HIGH -- FortiManager SOAR LOCALHOST IOCOperator FAZ filter injection via unescaped self.epid from trigger data (FMG7.x / FortiAnalyzer 8.0.0, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/LOCALHOST/operator.py -- IOCOperator.execute() lines 477-530; "
+                 "injection site: line 489-496 -- FAZUtilsOperator.need_parse(self.epid) check then "
+                 "self.epid = FAZUtilsOperator.parse_input(context, self.epid, context_dict) renders trigger data into self.epid; "
+                 "line 496: 'filter': f'epid={self.epid}' -- self.epid inserted raw with no int() cast and no content validation; "
+                 "validate_input_values() at line 466-471 only checks isinstance(self.epid, str) -- any string accepted; "
+                 "need_parse() gate does not prevent injection: gate skips Jinja2 rendering when no template markers present, "
+                 "but attacker providing raw injection string (e.g. '12345 OR 1=1') bypasses parse_input and goes straight to filter; "
+                 "FAZ logview API converts filter strings to ClickHouse SQL WHERE clauses internally; "
+                 "payload: self.epid = '12345 OR 1=1 --' produces filter 'epid=12345 OR 1=1 --'; "
+                 "impact: exfiltrate FortiGate security logs for arbitrary endpoints across all ADOMs; "
+                 "contrast with DLPOperator (line 1842): DLPOperator casts int(FAZUtilsOperator.parse_input(context, self.epid)) before insertion -- "
+                 "IOCOperator lacks this cast; "
+                 "chain with FMG-F44/F41: all three paths inject into FAZ filter layer via different operators; "
+                 "remediation: cast self.epid to int() before use in filter string; "
+                 "source: fmg-soar/LOCALHOST/operator.py lines 466-530, analysis 2026-09-15",
+
         "FMG-F44: HIGH -- FortiManager SOAR LOCALHOST GetCustomEventsOperator FAZ filter injection via unescaped trigger data (FMG7.x / FortiAnalyzer 8.0.0, Python SOAR engine 2024, 2026-09-15): "
                  "file: fmg-soar/LOCALHOST/operator.py -- GetCustomEventsOperator._build_filter() lines 2643-2718; "
                  "injection site 1: line 2646: filter_str += f'({self.filter}) and ' where self.filter set by "
