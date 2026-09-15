@@ -2996,6 +2996,27 @@ ANALYSIS_STATUS = {
                  "remediation: add os.path.abspath() + startswith(USER_IMAGE_PATH) check consistent with delete_graphic; "
                  "alternatively: apply os.path.basename() to filename before join; "
                  "source: report/views/image.py L103-L112 vs L73-L76 comparison, report/forms.py L1291-L1303, analysis 2026-09-15",
+
+        "FMG-F51: INFO -- FortiManager SSO IDP LogoutRequest accepted without signature verification (FMG 8.0.0, 2026-09-15): "
+                 "file: usr/local/lib/python3.11/proj/sso_idp/views.py -- logout_process() at L221-240; "
+                 "registered route: sso_idp/urls.py re_path(r'^(?P<prefix>\\w+)/logout/$', views.logout_process, name='saml_logout'); "
+                 "root URL conf: proj/urls.py path('p/sso_idp/', include('sso_idp.urls')); "
+                 "external URL: POST /p/sso_idp/<prefix>/logout/; "
+                 "decorators: @csrf_exempt @sso.require_sso_enabled @render_errors -- no @login_required; "
+                 "vulnerability: L234-235: proc.validate_request(saml_request_params) is COMMENTED OUT with '# TODO: Verify logout request'; "
+                 "any SAMLRequest that parses successfully is accepted without SAML signature verification; "
+                 "impact LIMITED: L237 checks 'if (request.sso_is_authenticated)' -- uses HTTP request session (cookie-based), NOT SAML payload session index; "
+                 "logout_session(request.sso_session_id, client_ip) at L239: logs out the REQUESTING user's HTTP session only, not arbitrary sessions; "
+                 "unauthenticated attacker: 'if (request.sso_is_authenticated)' is False -> no logout occurs; "
+                 "authenticated attacker: can send forged LogoutRequest to trigger self-logout (equivalent to clicking Logout button); "
+                 "no account takeover, no forced logout of other users, no session fixation; "
+                 "this differs from a true SAML SLO replay: backend validates session ownership via request.sso_session_id from HTTP cookie, not SAML NameID; "
+                 "requires SSO IDP role configured (non-default): @sso.require_sso_enabled raises Http404 if IDP not configured; "
+                 "compare sso_sp/views.py sso_slo (SP-side SLO): also lacks explicit signature verification but relies on request.session_id; "
+                 "chain risk: none -- self-logout only, no cross-session impact; "
+                 "remediation: uncomment proc.validate_request(saml_request_params) at L234; same fix the TODO comment indicates; "
+                 "severity INFO: no exploitable impact beyond self-logout when SSO IDP enabled; "
+                 "source: sso_idp/views.py L221-240, sso_idp/urls.py L7, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
