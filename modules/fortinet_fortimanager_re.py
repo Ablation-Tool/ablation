@@ -745,6 +745,107 @@ FMG_F10_SDWAN_RECOMMENDATION_ADVERSARIAL_FIX = {
 
 
 # ---------------------------------------------------------
+# FMG-F11: Asymmetric permission model -- device-level AI actions auto-execute via AGENT_TOOL_CALL
+# Source: agent_views.py, get_fmggui_assistant_config.py, message_const.py, 58383.bd3bf6b0.chunk.js (frontend)
+# ---------------------------------------------------------
+FMG_F11_DVM_AGENT_AUTO_EXECUTE_PERMISSION_GAP = {
+    "id":       "FMG-F11",
+    "product":  "Fortinet FortiManager (AI agent layer, dvm_agent + policy_config_agent)",
+    "severity": "HIGH -- device_config_agent and device_operations_agent push CLI scripts and firmware upgrades "
+                "to managed FortiGate devices via AGENT_TOOL_CALL (auto-execute, no permission dialog); "
+                "policy_config_agent's create_and_run_script uses AGENT_TOOL_CALL_PERMISSION_REQUEST "
+                "(explicit admin approval); highest-impact operations lack the gate that lower-impact ones have",
+    "class":    "Asymmetric Permission Model -- Highest-Impact AI Actions Execute Without Admin Confirmation",
+
+    "message_type_protocol": {
+        "AGENT_TOOL_CALL":              "GUIToolCall (message_const.py:185) -> frontend auto-executes, no dialog -> const.py:49",
+        "AGENT_TOOL_CALL_PERMISSION_REQUEST": "GUIToolCallPermissionRequest (message_const.py:211) -> frontend renders permission dialog, requires admin click -> const.py:51",
+        "frontend_evidence":            "58383.bd3bf6b0.chunk.js: 'AGENT_TOOL_CALL:async l=>{...await X({function_calls:M,...})' (execute); 'AGENT_TOOL_CALL_PERMISSION_REQUEST:l=>{...se(P)({type:\"tool_call_permission\",...})' (dialog)",
+    },
+
+    "auto_execute_tools": {
+        "modify_configuration": {
+            "agent":       "device_config_agent (device_config_agent.py:49-52, INCLUDED_GUI_TOOLS)",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "devices (array of FortiGate targets), script (CLI script content)",
+            "impact":      "Pushes arbitrary FortiGate CLI script to one or more managed devices without admin approval. "
+                           "Any config category within SUPPORTED_MODIFY_CATEGORIES (system interface, router static, system global, sdwan, ntp, vpn ipsec). "
+                           "The LLM generates the script content from user input (or injected device data).",
+        },
+        "install_to_device": {
+            "agent":       "device_config_agent (INCLUDED_GUI_TOOLS)",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "devices (array of targets)",
+            "impact":      "Installs pending configuration changes to specified FortiGate devices",
+        },
+        "schedule_firmware_upgrade": {
+            "agent":       "device_operations_agent (device_operations_agent.py:52, INCLUDED_GUI_TOOLS=['schedule_firmware_upgrade'])",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "devices (array), upgrade_to_version (string)",
+            "impact":      "Schedules firmware upgrade on specified managed FortiGate devices. LLM controls target version. "
+                           "Firmware downgrade or upgrade to vulnerable version possible.",
+        },
+        "install_package_to_device": {
+            "agent":       "policy_config_agent (policy_config_agent.py:403-413, from gui_assistant_config_to_tools('policy_agent'))",
+            "mechanism":   "make_gui_tool_handler -> GUIToolCall -> AGENT_TOOL_CALL -> frontend auto-execute",
+            "parameters":  "package_path (string)",
+            "impact":      "Installs policy package to managed FortiGate devices. "
+                           "Corrects FMG-F06 characterization -- install_package_to_device does NOT use permission request.",
+        },
+    },
+
+    "gated_tool_by_comparison": {
+        "create_and_run_script": {
+            "agent":      "policy_config_agent (handle_create_and_run_script, policy_config_agent.py:198-220)",
+            "mechanism":  "send_gui_toolcall_permission_request -> GUIToolCallPermissionRequest -> AGENT_TOOL_CALL_PERMISSION_REQUEST -> admin dialog",
+            "gate":       "Admin sees generated script via initial_jsondata before approval; permission_result.allowed gate in backend",
+            "impact":     "Lower: generates policy script that admin must explicitly approve before run_script_on_package executes",
+        },
+    },
+
+    "inversion":  (
+        "The tool with lowest per-device impact (create_and_run_script: policy script, requires approval) has an "
+        "explicit permission gate. The tools with highest per-device impact (modify_configuration: direct device config, "
+        "schedule_firmware_upgrade: device firmware version, install_to_device: commit pending changes) have NO gate. "
+        "An attacker who can influence the LLM context (indirect prompt injection via device hostname, interface name, "
+        "policy object name, SD-WAN service name) can trigger modify_configuration or schedule_firmware_upgrade on the "
+        "managed device fleet without any admin confirmation step."
+    ),
+
+    "injection_surface_for_indirect_attack": (
+        "device_config_agent retrieves device config via MCP (get_existing_configuration, get_devices_by_interface_config). "
+        "Attacker-controlled managed device fields that flow into the LLM context: "
+        "device hostname, interface alias, VDOM name, SD-WAN rule name, VPN tunnel name, static route comment. "
+        "Payload in any of these fields could cause the AI to call modify_configuration with attacker-authored script "
+        "without admin interaction beyond the initial 'tell me about this device' query."
+    ),
+
+    "code_evidence": {
+        "make_gui_tool_handler": "get_fmggui_assistant_config.py:63-89 -- GUIToolCall, no permission request",
+        "gui_assistant_config_to_tools": "get_fmggui_assistant_config.py:93-132 -- wraps all GUI tools via make_gui_tool_handler",
+        "INCLUDED_GUI_TOOLS_dvm": "device_config_agent.py:49-52 -- ['modify_configuration', 'install_to_device']",
+        "INCLUDED_GUI_TOOLS_ops": "device_operations_agent.py:52 -- ['schedule_firmware_upgrade']",
+        "policy_agent_tools": "policy_config_agent.py:401-421 -- install_package_to_device via gui_assistant_config_to_tools('policy_agent')",
+        "permission_gate_only_in": "policy_config_agent.py:198-206 -- send_gui_toolcall_permission_request for create_and_run_script only",
+        "frontend_auto_exec": "58383.bd3bf6b0.chunk.js -- AGENT_TOOL_CALL handler calls X({function_calls}) directly; AGENT_TOOL_CALL_PERMISSION_REQUEST adds to dialog queue",
+    },
+
+    "fmg_f06_correction": (
+        "FMG-F06 characterized install_package_to_device as going through a permission approval flow. "
+        "Corrected: it goes through GUIToolCall (AGENT_TOOL_CALL) which auto-executes. "
+        "The FMG-F04 REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL injection enables fake-approval of "
+        "create_and_run_script permission requests (the one tool that DOES use AGENT_TOOL_CALL_PERMISSION_REQUEST). "
+        "FMG-F04 + FMG-F11 together: FMG-F04 abuses the permission gate for create_and_run_script; "
+        "FMG-F11 shows the more impactful tools have no gate to abuse or bypass."
+    ),
+
+    "status": "CONFIRMED -- frontend auto-execute behavior confirmed in minified JS bundle; "
+              "Python backend uses make_gui_tool_handler (GUIToolCall) for all dvm_agent and policy_agent execution tools; "
+              "asymmetric permission model verified via comparison of handler implementations",
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -786,6 +887,7 @@ ANALYSIS_STATUS = {
         "FMG-F09: HIGH -- current_datamask (POST /p/ai/current_datamask/) has no session ownership check; any @login_required user reads any other user's datamask (original PII values: email, device serial number, FortiGate names) by supplying arbitrary conversation_id; every peer datamask endpoint (submit_datamask, decrypt_message, encrypt_message, send_feedback) validates session ownership -- current_datamask is sole exception; datamask Redis key is conversation_id only (no session_id)",
         "FMG-F04 AMPLIFIED: run_agent lock keyed on conversation_id only; any auth user holds lock for victim's conversation by POSTing to run_agent with victim's id; two-stage DoS: stop_conversation + run_agent lock-hold blocks victim from restarting agent session",
         "FMG-F10: MEDIUM -- sdwan_diagnose recommendation chain: adversarial SD-WAN config on managed device -> diagnosis context -> recommendation LLM -> sdwan_recommendation_scripts_agent auto-invoked with recommendations as system prompt; scripts agent has fix_disable_fib_best_match and fix_rule_metric_custom_profile tools; both tools 'Show a script' (GUI presentation, not auto-execution) -- admin still must click Apply; impact = misleading AI-recommended fix scripts pushed to operator from attacker-controlled device data",
+        "FMG-F11: HIGH -- asymmetric permission model: device_config_agent (modify_configuration, install_to_device), device_operations_agent (schedule_firmware_upgrade), policy_config_agent (install_package_to_device) all use GUIToolCall (AGENT_TOOL_CALL) -> frontend auto-executes without dialog; only create_and_run_script uses GUIToolCallPermissionRequest (AGENT_TOOL_CALL_PERMISSION_REQUEST) requiring admin approval; highest-impact operations (config push to managed device fleet, firmware upgrade, policy install) lack the permission gate that lower-impact policy script generation has; indirect prompt injection via device hostname/interface alias/VDOM name -> AI calls modify_configuration without admin confirmation; FMG-F06 correction: install_package_to_device auto-executes (not gated); frontend auto-execute confirmed in 58383.bd3bf6b0.chunk.js",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
