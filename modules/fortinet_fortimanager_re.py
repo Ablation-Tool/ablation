@@ -2159,6 +2159,18 @@ ANALYSIS_STATUS = {
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
 
+        "FMG-F49: MEDIUM -- FortiManager SOAR LOCALHOST IncidentUpdateOperator URL path traversal via trigger-controlled incident_id (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/LOCALHOST/operator.py, class IncidentUpdateOperator (line 1100); "
+                 "sink: execute() line 1246: url = f'/incidentmgmt/adom/{adom_name}/incident/{self.incident_id}' "
+                 "where self.incident_id = FAZUtilsOperator.parse_input(context, self.incident_id, context_dict) at line 1245; "
+                 "validate_input_values() at line 1236 only checks existence of incident_id (not None/falsy), no format or type constraint on content; "
+                 "attack: trigger-controlled incident_id = '123/../../../dvmdb/global' produces url = "
+                 "'/incidentmgmt/adom/{adom_name}/incident/123/../../../dvmdb/global'; "
+                 "if FMG API normalizes path components, request is rerouted to /dvmdb/global or other modules outside incidentmgmt; "
+                 "cross-ADOM variant: incident_id = '../adom/other_adom_name/incident/999' accesses incident in different ADOM; "
+                 "status MEDIUM: confirmed static analysis; impact depends on FMG API path normalization (unverified without handler binary); "
+                 "source: fmg-soar/LOCALHOST/operator.py lines 1100-1300 (IncidentUpdateOperator), analysis 2026-09-15",
+
         "FMG-F48: HIGH -- FortiManager SOAR Active Directory connector LDAP injection via trigger-controlled filter data (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
                  "file: builtin_connectors/AD/operator.py; "
                  "injection site 1: ADAdvancedSearchOperator.execute() line 1784: custom_query = FAZUtilsOperator.parse_input(context, self.query, context_dict) "
