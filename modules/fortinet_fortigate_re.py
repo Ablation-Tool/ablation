@@ -2179,6 +2179,33 @@ ANALYSIS_STATUS = {
                  "avIsIgnoreBuffer used by AV engine to maintain exclusion list; "
                  "caller-controlled strings (archive member names, file paths) reach this path; "
                  "source: libav.so.new 0xf46c0-0xf46e6",
+
+        "FGT-F40: HIGH CANDIDATE -- libips.so.new (FGT7412 May 2026, 13.8MB, x86-64 stripped, BuildID 7c155e7e): "
+                 "IPS engine embeds LuaJIT 2.1.d06beb04 with full standard library (os, io, string, math, table, package, debug, bit, jit); "
+                 "luaopen dispatch table at VA 0xca9680 (11 entries + NULL): '', package, table, io, os, string, math, debug, bit, jit; "
+                 "luaopen_os at 0x488810 registers os.execute wrapper at 0x484d50: "
+                 "checks NaN-box tag 0xfffffffb (LuaJIT string), extracts ptr AND 0x7fffffffffff, "
+                 "lea +0x18 to skip GCstr header -> char* -> system(cmd); "
+                 "luaopen_io at 0x487a90 registers io.popen at 0x47e4b5: "
+                 "same NaN-box unpack pattern -> popen(cmd, mode); "
+                 "IPS dispatch table at VA 0xc87960 (36 entries) exposes: "
+                 "init_engine[1], process_packet[2], load_rule_file[11], "
+                 "query_lua_intf[28], register_lua_module[34], prepare_lua_state[35]; "
+                 "query_lua_intf at 0xe7030 exposes a SECOND dispatch table at 0xc87fa0 (74 entries) to FortiOS: "
+                 "includes dofile[66], dostring[67], loadbuffer[68], loadx[69], pcall[70], newstate[71]; "
+                 "dostring at 0x14e940 executes arbitrary Lua from a string in the IPS Lua VM; "
+                 "loadbuffer at 0x14ea60 compiles and runs Lua from a byte buffer; "
+                 "attack path: FortiOS component (httpsd or mgmt daemon) resolves dostring via query_lua_intf, "
+                 "passes network-controlled data as Lua string -> os.execute('cmd') = IPS daemon RCE; "
+                 "register_lua_module at 0x1a8b70 stores up to 49 function pointers in global array at 0xd65d60 -> "
+                 "injected Lua modules can call any C function; "
+                 "secondary attack path: FortiGuard IPS rule MITM -> malicious Lua payload in custom rule -> "
+                 "os.execute() in rule Lua handler; "
+                 "popen callers in libips are hardcoded diagnostic commands (/usr/sbin/lsattr, /usr/sbin/psrinfo); "
+                 "candidate not confirmed: (1) luaL_openlibs call path from prepare_lua_state not fully traced; "
+                 "(2) FortiOS dostring call path with network-controlled input not confirmed in main binary; "
+                 "source: libips.so.new VA 0xca9680 (luaopen dispatch), 0xc87960 (IPS dispatch), "
+                 "0xc87fa0 (Lua C API dispatch), 0x484d50 (os.execute), 0x14e940 (dostring), 0x14ea60 (loadbuffer)",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
