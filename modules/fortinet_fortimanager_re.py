@@ -2159,6 +2159,21 @@ ANALYSIS_STATUS = {
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
 
+        "FMG-F47: MEDIUM -- FortiManager SOAR FWEB connector FortiWeb URL parameter injection via unescaped trigger data (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/FWEB/operator.py -- FWEBDeleteClientInfoOperator.execute_action() line 590, "
+                 "FWEBRestoreThreadScoreOperator.execute_action() line 624, FWEBGetBlockedUsersOperator.execute_action() line 307; "
+                 "injection site 1: line 590: endpoint = 'monitor/clientmanagement?op_type=2&client_id={clientid}'.format(clientid=client_id) "
+                 "where client_id = FAZUtilsOperator.parse_input(context, self.client_id, context_dict) at execute() line 602 -- trigger data unencoded in URL query param; "
+                 "injection site 2: line 624: same pattern for FWEBRestoreThreadScoreOperator (op_type=1); "
+                 "injection site 3: line 307: endpoint = 'monitor/blockedusers?type={type}&policy_name={policy_name}'.format(policy_name=policy_name) "
+                 "where policy_name = FAZUtilsOperator.parse_input(context, self.policy_name, context_dict) at execute() line 323; "
+                 "attack: client_id = '123&op_type=1' flips DELETE (op_type=2) to RESTORE (op_type=1) in FortiWeb client threat score endpoint; "
+                 "allows attacker-controlled SOAR trigger to re-enable threat scores for blocked clients via op_type parameter override; "
+                 "policy_name injection adds arbitrary query parameters to FortiWeb blocked-user listing/management API calls; "
+                 "no URL encoding applied to any of these values before URL construction; "
+                 "remediation: apply urllib.parse.quote() to client_id, policy_name, and op_type before embedding in endpoint URL; "
+                 "source: fmg-soar/FWEB/operator.py lines 307-312, 587-594, 621-628, analysis 2026-09-15",
+
         "FMG-F46: MEDIUM -- FortiManager SOAR LOCALHOST EventOperator FAZ filter injection via unescaped cond['value'] from trigger data (FMG7.x / FortiAnalyzer 8.0.0, Python SOAR engine 2024, 2026-09-15): "
                  "file: fmg-soar/LOCALHOST/operator.py -- EventOperator.execute() lines 820-838 + get_filter() lines 728-762; "
                  "injection site: execute() lines 828-831 -- for each cond in self.filter['conditions'], "
