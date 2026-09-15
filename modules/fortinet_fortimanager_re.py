@@ -688,6 +688,62 @@ FMG_AGENT_DEFINITIONS = {
 }
 
 
+FMG_F10_SDWAN_RECOMMENDATION_ADVERSARIAL_FIX = {
+    "id":       "FMG-F10",
+    "product":  "Fortinet FortiManager (AI agent layer, sdwan_diagnose recommendation chain)",
+    "severity": "MEDIUM -- adversarial SD-WAN config on managed FortiGate -> AI-mediated misleading fix script presentation to FMG admin; admin must still click Apply (not autonomous execution -- contrast FMG-F05)",
+    "class":    "Indirect Prompt Injection via Managed Device Config -> AI-Recommended Fix Script Manipulation",
+
+    "injection_chain": [
+        "1. Attacker controls SD-WAN config on ONE managed FortiGate (service name, health check name, interface name fields allow arbitrary text)",
+        "2. FMG admin runs SD-WAN Diagnose on the compromised device",
+        "3. Tool results (device config data via MCP) accumulate in sdwan_diagnose_context",
+        "4. sdwan_diagnose_executor calls get_final_recommendations tool",
+        "5. handle_get_recommendations spawns sdwan_recommendation_agent (gpt-4.1) with device data in system prompt",
+        "6. Attacker payload in device config influences recommendations text (e.g. 'Disable fib-best-match on rule 5')",
+        "7. run_possible_fixes called with full recommendations string as system prompt to sdwan_recommendation_scripts_agent",
+        "8. scripts agent calls fix_disable_fib_best_match(sdwan_rule_id=X) or fix_rule_metric_custom_profile(sdwan_rule_id=Y)",
+        "9. Fix scripts displayed in FMG GUI as AI-recommended -- admin clicks Apply to execute",
+    ],
+
+    "auto_remediation_tools": {
+        "fix_disable_fib_best_match": {
+            "description": "Show a script to disable fib-best-match if needed",
+            "impact":      "Disables FIB best-match routing on specified SD-WAN rule -- may cause suboptimal routing on managed device",
+            "execution":   "GUI presentation (admin must Apply); NOT auto-executed",
+        },
+        "fix_rule_metric_custom_profile": {
+            "description": "Show a script to set the link-cost-factor to custom-profile-1",
+            "impact":      "Changes SD-WAN rule quality criteria; affects traffic path selection",
+            "execution":   "GUI presentation (admin must Apply); NOT auto-executed",
+        },
+    },
+
+    "distinction_from_fmg_f05": (
+        "FMG-F05 (vpn_diagnose): fixer_agent instructions say 'IMMEDIATELY use modify_config'; "
+        "install_to_device runs without user confirmation. "
+        "FMG-F10 (sdwan_diagnose): fix tools 'Show a script' -- presented in GUI, admin must confirm. "
+        "FMG-F10 is influence attack (mislead admin decision); FMG-F05 is autonomous execution."
+    ),
+
+    "service_name_injection": (
+        "get_recommended_sla_by_agent (get_recommendation_tool.py:32): "
+        "service_name passed verbatim as 'For service {service_name}' to recommendation LLM as system prompt. "
+        "If service_name comes from a managed device SD-WAN rule and contains injection payload, "
+        "it influences the 'optimal/standard SLA' recommendation used in the final fix prompt."
+    ),
+
+    "code_evidence": {
+        "run_possible_fixes":    "get_recommendation_tool.py:95-115 -- spawns sdwan_recommendation_scripts_agent with full_recommendations as system prompt",
+        "scripts_agent":         "recommendation/agent.py:118-138 -- tools: fix_disable_fib_best_match, fix_rule_metric_custom_profile",
+        "recommendation_prompt": "get_recommendation_tool.py:169-190 -- service_name + sdwan_diagnose_context + all_observations all sourced from device tool results",
+        "device_data_flow":      "sdwan_diagnose_executor -> save_mcp_result_to_context -> sdwan_diagnose_context -> recommendation_prompt",
+    },
+
+    "status": "CONFIRMED -- code path verified; exploit effectiveness depends on LLM susceptibility to device-embedded injection",
+}
+
+
 # ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
@@ -715,7 +771,7 @@ ANALYSIS_STATUS = {
     },
     "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ, magic 0x5b6758cb...)",
     "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped; all HTTP endpoints in ai/urls.py evaluated",
-    "syntax_ext":    "ACCESSIBLE -- fmg_cmdb_syntax.json 611KB; not analyzed for injection vectors yet",
+    "syntax_ext":    "ncmdb_syntax.json 123 objects analyzed (fmg_cmdb_syntax.json is in encrypted rootfs.gz -- inaccessible); ncmdb_syntax is CMDB schema constants, no injection surface",
     "debug_gates":   "CONFIRMED DISABLED -- SYS.CONFIG_DEBUG hardcoded to 0 in macros.py; faz_mcp/call_tool and debug_1 return 404 in all production builds",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
     "unique_findings": [
@@ -729,6 +785,7 @@ ANALYSIS_STATUS = {
         "FMG-F08: HIGH -- action_quarantine_internal_endpoint in FAZ_FORTIAI_CLEANED_TOOLS; any @login_required FAZ user can cause AI to quarantine any internal endpoint via local_assistant or chat_completions_assistant; get_system_processes_from_internal_endpoint also in cleaned tools; no per-action authorization gate",
         "FMG-F09: HIGH -- current_datamask (POST /p/ai/current_datamask/) has no session ownership check; any @login_required user reads any other user's datamask (original PII values: email, device serial number, FortiGate names) by supplying arbitrary conversation_id; every peer datamask endpoint (submit_datamask, decrypt_message, encrypt_message, send_feedback) validates session ownership -- current_datamask is sole exception; datamask Redis key is conversation_id only (no session_id)",
         "FMG-F04 AMPLIFIED: run_agent lock keyed on conversation_id only; any auth user holds lock for victim's conversation by POSTing to run_agent with victim's id; two-stage DoS: stop_conversation + run_agent lock-hold blocks victim from restarting agent session",
+        "FMG-F10: MEDIUM -- sdwan_diagnose recommendation chain: adversarial SD-WAN config on managed device -> diagnosis context -> recommendation LLM -> sdwan_recommendation_scripts_agent auto-invoked with recommendations as system prompt; scripts agent has fix_disable_fib_best_match and fix_rule_metric_custom_profile tools; both tools 'Show a script' (GUI presentation, not auto-execution) -- admin still must click Apply; impact = misleading AI-recommended fix scripts pushed to operator from attacker-controlled device data",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
