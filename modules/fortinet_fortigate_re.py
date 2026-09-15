@@ -1676,6 +1676,144 @@ FGT_F25_ROOTFS_MANIFEST_LEAK = {
 }
 
 
+# FGT-F26: fortism LSM policy config nullifies NX/DEP for 35/36 daemons (FGT 7.4.12)
+# Source: datafs.tar.gz from FGT 7.4.12 VM64-KVM (unencrypted partition)
+# ---------------------------------------------------------
+FGT_F26_FORTISM_LSM_NX_NULLIFICATION = {
+    "id":       "FGT-F26",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fortism LSM policy config)",
+    "severity": "HIGH -- fortism LSM policy grants anon-mem-exec=1, heap-exec=1, stack-exec=1, "
+                "regain-root=1 to 35/36 daemon security domains; NX/DEP kernel enforcement "
+                "is effectively disabled for all major Fortinet daemons",
+    "class":    "LSM Policy Misconfiguration -- NX/DEP Nullification across daemon security domains",
+
+    "source_file": "datafs.tar.gz -> etc/fortism_config.json",
+
+    "affected_domains": {
+        "total": 36,
+        "permissive_count": 35,
+        "restricted_count": 1,
+        "restricted_domain": "TERMINAL (id=2: sshd, telnetd) -- anon-mem-exec=0, heap-exec=0, stack-exec=0",
+        "permissive_flags_per_domain": {
+            "anon-mem-exec": 1,
+            "heap-exec":     1,
+            "stack-exec":    1,
+            "file-mod-exec": 1,
+            "regain-root":   1,
+        },
+        "high_value_permissive_domains": [
+            "SSLVPND (id=5)  -- /bin/sslvpnd; internet-facing; all exec flags =1",
+            "WEB_SVC (id=?) -- /bin/node; management UI backend; all exec flags =1",
+            "ALL_ACCESS     -- /bin/httpsd, /bin/fnbamd, /bin/scimd, /bin/confsyncd, "
+            "/bin/extenderd, /bin/forticron, /bin/hasync, /bin/http_authd; all flags =1",
+            "WAD            -- /bin/wad; SSL inspection proxy; all flags =1",
+            "CMDBSVR        -- /bin/cmdbsvr; config database; all flags =1",
+            "FORTICLDD      -- /bin/forticldd; cloud daemon; all flags =1",
+            "FGFMD          -- /bin/fgfmd; FortiGate fleet management daemon; all flags =1",
+        ],
+    },
+
+    "security_implication": (
+        "The fortism LSM module is Fortinet's proprietary Linux Security Module that enforces "
+        "domain-based memory execution policy. When anon-mem-exec=1, the LSM permits mmap(PROT_EXEC) "
+        "on anonymous memory (shellcode staging). When heap-exec=1, the LSM permits mprotect() "
+        "to mark heap pages executable. When stack-exec=1, executable stack is permitted. "
+        "When regain-root=1, privilege re-escalation to root is not blocked by the LSM. "
+        "With all four flags set to 1, the fortism LSM provides ZERO NX/DEP enforcement "
+        "for the affected domain. Any memory corruption vulnerability in those daemons "
+        "(sslvpnd, httpsd, wad, cmdbsvr, node, fnbamd, etc.) gets direct shellcode staging "
+        "without needing a ROP chain. The kernel's hardware NX bit still applies at the "
+        "hardware level, but the LSM enforcement layer that would block mprotect/mmap-exec "
+        "transitions is configured to allow them unconditionally."
+    ),
+
+    "contrast_ffw_800": {
+        "product":   "Fortinet FortiWeb 8.0.0 VM64-KVM",
+        "source":    "datafs.tar.gz -> etc/fortism_config.json",
+        "permissive_count": 6,
+        "permissive_domains": [
+            "PRECHROOT (id=3) -- anon-mem-exec=1 only",
+            "CMDBSVR (id=6)  -- anon-mem-exec=1 only",
+            "MISC (id=8)     -- anon-mem-exec=1 only",
+            "WAD (id=10)     -- anon-mem-exec=1 only",
+            "IPS (id=17)     -- anon-mem-exec=1 only",
+            "WEB_SVC (id=23) -- anon-mem-exec=1 only",
+        ],
+        "absent_flags": ["heap-exec", "stack-exec", "file-mod-exec", "regain-root"],
+        "sslvpnd": "SSLVPND domain (id=9): default_act=EXCLUDE, NO anon-mem-exec -- fully restricted",
+        "conclusion": (
+            "FFW 8.0.0 restricts anon-mem-exec to 6 domains (WAD, IPS, WEB_SVC require it for "
+            "JIT/content processing), does not grant heap-exec/stack-exec/regain-root to any domain. "
+            "FGT 7.4.12's config is dramatically more permissive. The SSLVPND domain difference is "
+            "the most significant: FFW denies all exec flags for SSLVPND; FGT grants all exec flags. "
+            "This divergence may reflect FortiWeb's hardening iteration vs FortiGate's older baseline."
+        ),
+    },
+
+    "attack_chain": (
+        "Memory corruption in sslvpnd (pre-auth, internet-facing) -> "
+        "anon-mem-exec=1 permits mmap(PROT_EXEC) for shellcode staging -> "
+        "regain-root=1 permits uid(0) restoration after sandbox escape -> "
+        "full root shell without ROP chain requirement. "
+        "Eliminates NX/DEP as a mitigation for the highest-value attack surface on the device."
+    ),
+
+    "verification": "CONFIRMED -- etc/fortism_config.json extracted from datafs.tar.gz (unencrypted "
+                    "partition). 35 domains counted with all five exec flags =1. "
+                    "FFW 8.0.0 fortism_config.json extracted for cross-product comparison.",
+    "status": "CONFIRMED",
+}
+
+
+# FGT-F27: FGT 7.4.12 shares static RSA fgt2.key with FGT 8.0.0 + FFW 8.0.0 (cross-version scope)
+# Source: datafs.tar.gz from FGT 7.4.12 VM64-KVM (unencrypted partition)
+# ---------------------------------------------------------
+FGT_F27_FGT7412_SHARED_KEY_SCOPE_EXTENSION = {
+    "id":       "FGT-F27",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fgt2.key scope extension)",
+    "severity": "CRITICAL -- same static RSA private key present across FGT 7.4.12 and FGT/FFW 8.0.0; "
+                "key compromise affects all major FortiOS version branches simultaneously",
+    "class":    "Cryptographic Key Reuse -- cross-product, cross-version shared static RSA private key",
+
+    "source_file": "datafs.tar.gz -> etc/fgt2.key",
+
+    "modulus_prefix": "A75C115F690B67C32834D43FE1BD50DB301CE34F6A96EACDD6AE16353E72715AA8893B03",
+
+    "confirmed_products_same_key": [
+        "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM     -- fgt2.key (this finding, datafs.tar.gz)",
+        "Fortinet FortiGate FortiOS 8.0.0 VM64-KVM      -- fgt2.key (FGT-F05 in this module)",
+        "Fortinet FortiGate FortiOS 8.0.0 ARM64 (FGA)   -- fgt2.key (FGA-F01 in fortigate_arm64_re)",
+        "Fortinet FortiWeb FortiOS 8.0.0 VM64-KVM        -- fgt2.key (FFW-F05 in fortiweb_re)",
+    ],
+
+    "version_span": (
+        "Key confirmed identical across both 7.4.x (7.4.12) and 8.0.x (8.0.0) major branches. "
+        "These are separate release trains with distinct feature sets and patch cycles; "
+        "shipping the same static private key across both confirms the key was never rotated "
+        "during the 7.x -> 8.x product generation boundary."
+    ),
+
+    "impact": (
+        "A single private key compromise (via FGT-F09 rootfs key extraction, fortism ioctl "
+        "kernel-level compromise, or any other path) gives an attacker the material to: "
+        "(1) impersonate any FortiGate or FortiWeb device in TLS mutual authentication, "
+        "(2) decrypt traffic protected by this key pair across both 7.4.x and 8.0.x deployments, "
+        "(3) forge firmware signatures if fgt2.key is used in firmware integrity verification chain. "
+        "Scope: all FortiGate and FortiWeb devices running these firmware lines (global install base)."
+    ),
+
+    "cross_ref": {
+        "FGT-F09": "rootfs AES key -- path to decrypt encrypted rootfs and extract key material",
+        "FFW-F05": "FortiWeb 8.0.0 same key confirmed",
+        "FGA-F01": "FortiGate ARM64 8.0.0 same key confirmed",
+    },
+
+    "verification": "CONFIRMED -- openssl rsa -noout -modulus on fgt2.key from FGT 7.4.12 datafs.tar.gz; "
+                    "modulus prefix A75C115F... matches all previously confirmed products.",
+    "status": "CONFIRMED",
+}
+
+
 # ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
@@ -1717,7 +1855,11 @@ ANALYSIS_STATUS = {
         "rootfs.gz 7.0.9":     "EXTRACTED -- full cpio rootfs",
         "rootfs.gz 8.0.0":     "ENCRYPTED -- custom format; not standard gzip/cpio; key in kernel driver",
         "bin.tar.xz":          "EXTRACTED -- Fortinet XZ CRC bypass; LZMA2 with preset=6",
-        "hash_bin.sha256":     "EXTRACTED -- 410-entry rootfs manifest (path+SHA-256); FGT-F25; discloses eBPF file, node binary hash, OQS provider",
+        "hash_bin.sha256":          "EXTRACTED -- 410-entry rootfs manifest (path+SHA-256); FGT-F25; discloses eBPF file, node binary hash, OQS provider",
+        "7.4.12 datafs/fortism_config.json": "ANALYZED -- FGT-F26: 35/36 domains all exec flags=1 (NX nullified); "
+                                              "contrasted against FFW 8.0.0 (6 domains, anon-mem-exec only)",
+        "7.4.12 datafs/fgt2.key":  "ANALYZED -- FGT-F27: modulus A75C115F... identical to FGT 8.0.0 + FFW 8.0.0; "
+                                    "cross-version shared key scope confirmed",
     },
 
     "pending": {
@@ -1757,5 +1899,13 @@ ANALYSIS_STATUS = {
                  "kernel-level network hook; if eBPF file replaceable -> kernel-level packet manipulation",
         "FGT-F25: INFO -- hash_bin.sha256 (410 entries) on unencrypted ext2 partition; "
                  "discloses complete rootfs file inventory + SHA-256 hashes without rootfs decryption",
+        "FGT-F26: HIGH -- fortism LSM policy (FGT 7.4.12 etc/fortism_config.json): 35/36 daemon domains "
+                 "have anon-mem-exec=1, heap-exec=1, stack-exec=1, regain-root=1; NX/DEP nullified for "
+                 "sslvpnd, httpsd, wad, cmdbsvr, node, fnbamd and all major daemons; "
+                 "FFW 8.0.0 has 6 domains with anon-mem-exec=1 only (no heap/stack/regain-root) -- "
+                 "FGT 7.4.12 policy dramatically more permissive",
+        "FGT-F27: CRITICAL -- FGT 7.4.12 fgt2.key modulus A75C115F... identical to FGT 8.0.0 (x86+ARM64) "
+                 "and FFW 8.0.0; same static RSA private key spans 7.4.x and 8.0.x release trains; "
+                 "single key compromise covers full FortiGate+FortiWeb install base across both generations",
     ],
 }
