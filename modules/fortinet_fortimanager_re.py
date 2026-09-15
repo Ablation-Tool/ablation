@@ -2312,6 +2312,28 @@ ANALYSIS_STATUS = {
                  "source: fmg-ext/usr/local/lib/python3.11/proj/sso_sp/views.py L599-634, adapter.py forticloud_sso_settings, "
                  "site-packages/onelogin/saml2/utils.py L946-957 (@FTNT_CHANGE), proj/proj/settings.py L364-367, analysis 2026-09-15",
 
+        "FMG-F60: HIGH -- FortiManager SIEM parser dry-run dryRunMatches() inserts log field values unescaped into Lua code executed by lupa LuaRuntime (no sandbox, os.execute available), reachable by any admin with ADMINPRIV_LOG_VIEWER=40 (FMG8.0.0, fmg-ext2/usr/local/siem/compiler/compiler.py + siem/views.py, 2026-09-15): "
+                 "class: code injection / RCE; "
+                 "root cause: compiler.py dryRunMatches() L454-455: `for key, value in matches.items(): exe_lines.append(\"record[\\\"{}\\\"]=\\\"{}\\\"\".format(key, value))` -- "
+                 "both key and value from parsed log inserted via .format() without any escaping; "
+                 "a value containing `\"; os.execute(\"cmd\"); x=\"` breaks the Lua string literal and injects arbitrary Lua; "
+                 "execution: generated dry_run_lua string passed to `/bin/python ./dryRun.py -i dry_run_lua` (subprocess.run L421-426); "
+                 "dryRun.py runs Lua via lupa LuaRuntime -- which is unsandboxed (analyzer.py L56: `self.lua = LuaRuntime(unpack_returned_tuples=True)`) providing full os.execute/io.popen; "
+                 "call path: POST /validate_siem_parser -> siem.views.validate_siem_parser (L324) -> siem_validator.validate(adom, data) (L337) -> "
+                 "data['log'] list of attacker-controlled log strings -> validator.dryRun(txt) -> compiler.dryRunMatches(comp_folder, matches) -> Lua injection; "
+                 "matches dict: log text parsed by Matcher into key=value pairs; logfmt parser (analyzer.py L126: `r'(\\b[a-zA-Z_][a-zA-Z0-9_\\-]*=(\"[^\"]*\"|\\S+))'`) "
+                 "strips outer quotes from quoted values (L181-182: `val = val[1:-1]`) -- "
+                 "craft log: `foo=\"bar\"; os.execute(\\\"id\\\"); x=\\\"\"` -> val after strip = `bar\"; os.execute(\"id\"); x=\"` -> injected verbatim; "
+                 "auth: requires login + ADMINPRIV_LOG_VIEWER=40 (log viewer, lowest read-only admin role; NOT full system admin); "
+                 "impact: RCE as FMG daemon process user (root equivalent on appliance); "
+                 "chain: FMG-F57 FLATUI auth bypass (127.0.0.1 VirtualHost) -> FMG-F60 SIEM Lua injection -> root shell; "
+                 "no additional privilege required beyond initial log-viewer session; "
+                 "remediation: escape backslash and double-quote in key/value before .format(): "
+                 "`value.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')` before inserting into Lua string literal; "
+                 "alternatively use lupa table API directly instead of string-building Lua code; "
+                 "source: fmg-ext2/usr/local/siem/compiler/compiler.py L454-455, L421-426; "
+                 "siem/views.py L322-339; siem/siem_validator.py L155-170; analyzer.py L56; adminapi.py L51, analysis 2026-09-15",
+
         "FMG-F54: HIGH -- FortiManager SOAR LOCALHOST IocFortiviewOperator FortiAnalyzer API injection via trigger-controlled json_request enabling arbitrary FAZ JSON-RPC API calls (FMG7.x, fmg-soar/LOCALHOST/operator.py, 2026-09-15): "
                  "class: IocFortiviewOperator (execute() ~L476); "
                  "source: self.json_request configured as Jinja2 template referencing trigger context -- "
