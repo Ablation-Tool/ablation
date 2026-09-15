@@ -1602,7 +1602,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 31 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection)",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 32 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface)",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1668,6 +1668,22 @@ ANALYSIS_STATUS = {
                  "fctuid='x/../../../other/endpoint' -> path traversal (if server normalizes path); "
                  "attack path: SOAR playbook fed fctuid from external alert/indicator data sourced from attacker-controlled endpoint "
                  "-> EMS connector makes API request to unintended FortiClient EMS API endpoint or with injected parameters",
+        "FMG-F29: HIGH CONFIRMED -- fmg-syntax/syntax/dmworker_syntax.json: 4 PUBLIC JSONRPC endpoints expose "
+                 "arbitrary script execution on managed FortiGate devices without check-perm-only flag; "
+                 "(1) dmworker/install/tclscript [PUBLIC, not internal]: attrs={device:FGT,script:string,adminusr:string,log:string}; "
+                 "TCL code in script field executes directly on target FGT device; NO permission-check flag in schema "
+                 "(contrast: install/script has flags.check-perm-only); adminusr field allows admin impersonation; "
+                 "(2) dvmaux/script/execute [PUBLIC]: attrs={script:string,adom,package,pblock,scope:device|group}; "
+                 "scope=group targets ALL devices in group simultaneously; support_mode=SUPPORT_M_ALL; returns task ID; "
+                 "(3) fgfm/push/config [PUBLIC]: attrs={device:FGT,script:string,revno,type:INST_TYPE_OPTIONS}; "
+                 "pushes arbitrary config script to FGT via FGFM protocol; "
+                 "(4) system/api/sdnconnector [PUBLIC]: attrs={adom,connector_name,command:string}; "
+                 "command passed to SDN connector (NSX/K8s/AWS/Azure); response includes command output; "
+                 "contrast: dmsvc/run/cmd and dmsvc/install/script ARE marked internal=1, but none of the dmworker/dvmaux equivalents are; "
+                 "attack path: (a) FortiManager auth bypass (FMG-F04 session binding) -> call dmworker/install/tclscript "
+                 "-> TCL RCE on all managed FGT devices; (b) FMG-F15/F16 AI agent injection (controlled FGT device hostname) "
+                 "-> JSONRPC exec call -> pivot from run/cmd to install/tclscript -> lateral RCE across managed fleet; "
+                 "source: fmg-syntax/syntax/{dmworker,dvmaux,fgfm,system}_syntax.json",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
