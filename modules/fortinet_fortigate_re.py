@@ -2576,6 +2576,25 @@ ANALYSIS_STATUS = {
                  "remediation: replace strcpy with strncpy(dst, src, 0x108); null-terminate [rbx+0x107] = 0 explicitly; "
                  "source: libav.so.new .text 0x20db50, vtable 0x710ce8 at file_offset 0x710ce8, PLT index 0xa3 (strcpy), analysis 2026-09-15",
 
+        "FGT-F60: LOW -- libips.so.new (FGT7412 May 2026, 13.8MB) URLDB table loader (0xf5000) ext_len field missing upper bound -- OOB heap read + IPS evasion (2026-09-15): "
+                 "note: FGT-F53 declared libips.so.new URLDB parser SAFE but did not trace this specific field; this entry corrects that omission; "
+                 "root cause: at 0xf5202 ext_len = movzx eax, word ptr [r12 + 0x2f]; uint16_t, max 65535; "
+                 "at 0xf5208 r10 = r12 + 0x41; at 0xf520d cmp ax, 0x1c; jbe 0xf5218; "
+                 "at 0xf5213 r10 += ext_len - 0x1c -- final: r10 = r12 + 0x25 + ext_len; "
+                 "at 0xf521d add rbx, r12 -- rbx = buffer_end (r12 + file_size); "
+                 "at 0xf5243-0xf5246: rax = rbx - r10 (passed as length rsi to hash function 0x795c20 at 0xf5250); "
+                 "overflow condition: ext_len > file_size - 0x25 -> r10 > buffer_end -> rsi underflows (wraps to huge uint64_t); "
+                 "hash loop at 0x795c35: lea r11, [rdi + rsi - 0xf] wraps below rdi -> loop condition jb r11 false on first iter -> loop skipped; "
+                 "tail path at 0x795cd9 processes up to 15 bytes at rdi=r10 (past buffer end) -> 1-15 byte OOB heap read (malloc metadata of next chunk); "
+                 "in glibc malloc: next chunk header is mapped -> no crash; reads 8-15 bytes of heap metadata into hash state; "
+                 "impact: hash mismatch at 0xf525c (cmp r14d, eax; jne 0xf5830) -> URLDB table load aborted -> IPS URL filtering disabled; "
+                 "attack vector: MITM on FortiGuard URLDB update channel + craft URLDB file with ext_len > file_size; "
+                 "no signature verification visible in 0xf5000 table loader (no crypto PLT calls before read at 0xf511d); "
+                 "severity LOW: OOB read (not write); no crash in normal heap layout; primary impact is IPS evasion (URL category filtering disabled); "
+                 "escalation condition: if table loader is called with attacker-controlled file path (authenticated path), same OOB triggered; "
+                 "remediation: add bounds check before 0xf5213: if (ext_len > file_size - 0x41) return error; "
+                 "source: libips.so.new 0xf5202 (ext_len read), 0xf5213 (unchecked add), 0xf5250 (hash call), 0x795c20 (hash fn), analysis 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
