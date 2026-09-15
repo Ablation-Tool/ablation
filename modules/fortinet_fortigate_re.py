@@ -2457,6 +2457,20 @@ ANALYSIS_STATUS = {
                  "alternate path 0x10eeb0: allocates (r13+5), memcpy r13 bytes, appends '.out' literal 4 bytes, then null at buf[r13+4] -- within bounds (safe path); "
                  "source: fp18 0x10ed00, off-by-one at 0x10ee8e, alloc at 0x10ee66, strncpy at 0x10ee86, analysis 2026-09-15",
 
+        "FGT-F55: DENIED -- libav.so.new (FGT7412 May 2026, 7.4MB) format handler sweep batch 2 (2026-09-15): "
+                 "9 alloc-flagged candidates from broad scan of unexplored handler ranges (0x100000-0x119500); "
+                 "[A3@0x100723] SEXT: movsxd rsi,r14d before ALLOC3 NO_BOUNDS -- NULL check at 0x100728 (je 0x100c8a) covers all failure cases; DENIED; "
+                 "[A3@0x111900] SHL: add esi,0x20; shl rsi,4 before ALLOC3 NO_BOUNDS -- NULL check at 0x11190f/0x111924 (je 0x111940) covers failure; wraparound to rsi=0 triggers free() path handled by je; DENIED; "
+                 "[A0@0x100b03] SEXT: movsxd rdi,r14d, has_cmp -- bounds check present; DENIED; "
+                 "[A0@0x108354] SEXT: movsxd rdi,r13d where r13=[rbx+0x2c0], has_cmp -- NULL check at 0x10835c (test rax,rax; je 0x108535); DENIED; "
+                 "[A0@0x109c78] SEXT: movsxd rdi,r15d after add r15d,1, has_cmp -- NULL check present in context; DENIED; "
+                 "[A3@0x115563] SHL -- has_cmp; [A3@0x115631] SEXT -- has_cmp; [A3@0x115aeb] SHL: add eax,0x14; lea rsi,[rax+rax*2]; shl rsi,3 -- has_cmp; [A0@0x119579] SEXT -- has_cmp; all DENIED with bounds check; "
+                 "FORMAT HANDLERS individually audited and DENIED: "
+                 "id=0x046 fp18=0x107e90: memcpy@0x107f52 with rdx=r12; r12 bounded at 0x107f12 (cmp r12,0x200; ja exit) AND 0x107f27 (cmp r12,r9; jae exit); dest=stack [rsp+0x98] with 560B available vs 512B max copy; SAFE; "
+                 "id=0x068 fp18=0x10ed00: see FGT-F54 for finding; alt path 0x10eeb0 (no lz compression): alloc(r13+5), memcpy r13, append 4B '.out', null at buf[r13+4] -- within bounds; SAFE; "
+                 "id=0x06e fp18=0x11eae0 (XAR): context alloc ALLOC1(1,0x260)=608B; copy dest=[rbx+0x60] cap=0x200 (512B via cmovg); remaining struct space after offset 0x60 = 0x260-0x60=0x200=512B exactly; cap matches space -- intentional; SAFE; "
+                 "source: broad capstone alloc scan + per-handler disassembly, 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
