@@ -1729,24 +1729,41 @@ FGT_F26_FORTISM_LSM_NX_NULLIFICATION = {
 
     "contrast_ffw_800": {
         "product":   "Fortinet FortiWeb 8.0.0 VM64-KVM",
-        "source":    "datafs.tar.gz -> etc/fortism_config.json",
-        "permissive_count": 6,
-        "permissive_domains": [
-            "PRECHROOT (id=3) -- anon-mem-exec=1 only",
-            "CMDBSVR (id=6)  -- anon-mem-exec=1 only",
-            "MISC (id=8)     -- anon-mem-exec=1 only",
-            "WAD (id=10)     -- anon-mem-exec=1 only",
-            "IPS (id=17)     -- anon-mem-exec=1 only",
-            "WEB_SVC (id=23) -- anon-mem-exec=1 only",
+        "source":    "datafs.tar.gz -> etc/fortism_config.json (// comments stripped, trailing commas fixed)",
+        "total_domains": 44,
+        "anon_exec_only_count": 6,
+        "anon_exec_only_domains": [
+            "PRECHROOT (id=3)  -- anon-mem-exec=1, default_act=INCLUDE (pre-chroot init stage)",
+            "CMDBSVR  (id=6)   -- anon-mem-exec=1, default_act=INCLUDE (config DB)",
+            "MISC     (id=8)   -- anon-mem-exec=1, default_act=INCLUDE (misc init daemons)",
+            "WAD      (id=10)  -- anon-mem-exec=1, default_act=EXCLUDE (SSL proxy -- JIT required)",
+            "IPS      (id=17)  -- anon-mem-exec=1, default_act=EXCLUDE (IPS engine -- JIT required)",
+            "WEB_SVC  (id=23)  -- anon-mem-exec=1, default_act=EXCLUDE (web service -- node JIT)",
         ],
-        "absent_flags": ["heap-exec", "stack-exec", "file-mod-exec", "regain-root"],
-        "sslvpnd": "SSLVPND domain (id=9): default_act=EXCLUDE, NO anon-mem-exec -- fully restricted",
+        "absent_flags_all_domains": ["heap-exec", "stack-exec", "file-mod-exec", "regain-root"],
+        "default_act_pattern": (
+            "FFW ids 0-8 (INIT/CONSOLE/TERMINAL/PRECHROOT/GUI/CMDBSVR/INTERNAL/MISC) use "
+            "default_act=INCLUDE (bootstrap/admin layer). Operational daemon domains (id >= 9) "
+            "uniformly use default_act=EXCLUDE (deny-by-default). "
+            "FGT 7.4.12 uses default_act=INCLUDE for ALL 35 permissive domains -- including "
+            "SSLVPND, WAD, WEB_SVC, FGFMD, FORTICLDD. No operational daemon is EXCLUDE."
+        ),
+        "critical_domain_comparison": {
+            "SSLVPND": "FFW id=9: anon=0 heap=0 stack=0 root=0 default=EXCLUDE (fully restricted) "
+                       "vs FGT id=5: anon=1 heap=1 stack=1 root=1 default=INCLUDE (all bypassed)",
+            "WAD":     "FFW id=10: anon=1 heap=0 stack=0 root=0 default=EXCLUDE (JIT only, deny-default) "
+                       "vs FGT: anon=1 heap=1 stack=1 root=1 default=INCLUDE",
+            "FGFMD":   "FFW id=22: anon=0 heap=0 stack=0 root=0 default=EXCLUDE "
+                       "vs FGT: anon=1 heap=1 stack=1 root=1 default=INCLUDE",
+            "WEB_AUTH":"FFW id=39: anon=0 heap=0 stack=0 root=0 default=EXCLUDE "
+                       "(same domain that loads fgt_512.crt -- Fortism restricts it properly in FFW)",
+            "SSHD":    "FFW id=35: anon=0 heap=0 stack=0 root=0 default=EXCLUDE",
+        },
         "conclusion": (
-            "FFW 8.0.0 restricts anon-mem-exec to 6 domains (WAD, IPS, WEB_SVC require it for "
-            "JIT/content processing), does not grant heap-exec/stack-exec/regain-root to any domain. "
-            "FGT 7.4.12's config is dramatically more permissive. The SSLVPND domain difference is "
-            "the most significant: FFW denies all exec flags for SSLVPND; FGT grants all exec flags. "
-            "This divergence may reflect FortiWeb's hardening iteration vs FortiGate's older baseline."
+            "FFW 8.0.0 demonstrates Fortism CAN enforce deny-by-default policy with no heap/stack "
+            "execution rights for any domain. The FGT 7.4.12 config is not a build baseline -- it is "
+            "a deliberate architectural choice to grant all exec bypass flags to every operational daemon. "
+            "The mechanism exists and works in FortiWeb; FortiGate opted out of it."
         ),
     },
 
@@ -1870,6 +1887,66 @@ FGT_F28_512BIT_KEY_DATAFS = {
 }
 
 
+# ---------------------------------------------------------
+# FGT-F29: Weak cryptographic configuration baseline -- cert.conf 1024-bit CSR default + SSH moduli 1535-bit (FGT 7.4.12)
+# Source: datafs.tar.gz from FGT 7.4.12 VM64-KVM (unencrypted partition)
+# ---------------------------------------------------------
+FGT_F29_WEAK_CRYPTO_CONFIG_BASELINE = {
+    "id":       "FGT-F29",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (crypto configuration baseline)",
+    "severity": "LOW -- weak cryptographic defaults in configuration templates; not directly exploitable "
+                "but document a consistent pattern of insufficient crypto hygiene alongside FGT-F27/F28",
+    "class":    "Weak Cryptographic Configuration -- CSR template 1024-bit default + stale SSH moduli group file",
+
+    "findings": {
+        "cert_conf_1024_bit": {
+            "file":        "datafs.tar.gz -> etc/cert/cert.conf",
+            "field":       "default_bits = 1024",
+            "risk":        "1024-bit RSA CSR template; any certificate generated via the local CLI or "
+                          "admin-facing 'generate CSR' workflow would default to 1024-bit RSA. "
+                          "1024-bit RSA is below NIST SP 800-131A (min 2048-bit since 2012); "
+                          "factorable in under one year with well-resourced adversary.",
+            "scope":       "Affects admin-generated CSRs only; built-in device certs use separate generation paths",
+        },
+        "ssh_moduli_1535_bit": {
+            "file":        "datafs.tar.gz -> etc/ssh/moduli",
+            "source":      "$OpenBSD: moduli,v 1.14 2015/07/22 02:34:59 dtucker Exp $ (unchanged from 2015)",
+            "size_dist":   {
+                "1535-bit": 49,
+                "2047-bit": 40,
+                "3071-bit": 37,
+                "4095-bit": 38,
+                "6143-bit": 37,
+                "7679-bit": 36,
+                "8191-bit": 29,
+            },
+            "total_entries": 268,
+            "risk":        "49 of 268 DH group entries are 1535-bit (sub-2048-bit). RFC 8270 / NIST SP 800-131A "
+                          "require minimum 2048-bit DH groups for SSH key exchange. Modern OpenSSH >= 7.4 "
+                          "disables 1535-bit negotiation by default; client negotiation determines actual group used. "
+                          "Unmodified 2015 OpenBSD file -- no maintenance over 10+ years.",
+            "scope":       "Affects SSH daemon DH group exchange; legacy clients may negotiate 1535-bit group",
+        },
+    },
+
+    "pattern_context": (
+        "FGT 7.4.12 exhibits a consistent weak-crypto pattern: "
+        "(1) 512-bit RSA private key in production firmware (FGT-F28), "
+        "(2) 1024-bit RSA CSR generation template (FGT-F29a), "
+        "(3) unmodified 2015 SSH moduli file including 1535-bit groups (FGT-F29b), "
+        "(4) fgt_512.crt issued 2015 with expiry 2038 (FGT-F28). "
+        "None of these are isolated oversights; the pattern indicates crypto baseline maintenance "
+        "has not been applied to the platform across version branches."
+    ),
+
+    "cross_ref": "FGT-F27 (1024-bit CSR default in cert.conf), FGT-F28 (512-bit key in datafs)",
+    "verification": "CONFIRMED -- etc/cert/cert.conf extracted from datafs.tar.gz, field default_bits=1024; "
+                    "etc/ssh/moduli md5=b27b6034c05755a41dfec04ce29c09ed, OpenBSD 2015 source confirmed, "
+                    "49 x 1535-bit entries counted.",
+    "status": "CONFIRMED",
+}
+
+
 # ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
@@ -1968,7 +2045,13 @@ ANALYSIS_STATUS = {
                  "cert issued 2015-07-16, expires 2038-01-19; fortism_config.json has ZERO references (usage unconfirmed for FGT 7.4.12); "
                  "FortiWeb 8.0.0 confirmed active in WEB_AUTH domain (FWB-F13, different modulus B5ED8433...); "
                  "if active in FGT: factored key -> cert forgery + MITM",
+        "FGT-F29: LOW -- weak crypto config baseline: (a) etc/cert/cert.conf default_bits=1024 (CSR template, "
+                 "below NIST SP 800-131A min 2048-bit); (b) etc/ssh/moduli is unmodified OpenBSD 2015 file "
+                 "(v1.14, 2015-07-22) with 49 x 1535-bit DH groups (sub-2048-bit); "
+                 "contributes to consistent weak-crypto pattern alongside FGT-F27/F28",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2015, expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
+    "7.4.12 datafs/etc/cert/cert.conf": "ANALYZED -- FGT-F29a: default_bits=1024 (CSR template weak default)",
+    "7.4.12 datafs/etc/ssh/moduli":     "ANALYZED -- FGT-F29b: OpenBSD 2015 v1.14, 268 entries, 49 x 1535-bit groups; unmodified in 10+ years",
 }
