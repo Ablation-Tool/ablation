@@ -1025,6 +1025,80 @@ FMG_F14_MCP_PERMISSION_GATE_BYPASS = {
 
 
 # ---------------------------------------------------------
+# FMG-F15: session_finder_diagnose -- managed FGT device data injected into GUI frontend function args
+# Source: ai/agent/agent_definitions/sdwan_diagnose_root/session_finder_diagnose/agent.py
+# ---------------------------------------------------------
+FMG_F15_SESSION_FINDER_GUI_ARG_INJECTION = {
+    "id":       "FMG-F15",
+    "severity": "MEDIUM",
+    "title":    "Managed FGT device data injected unfiltered into GUIAnyFunctionCallMessage args for 3 frontend functions",
+
+    "mechanism": (
+        "find_source_interface_and_fortigate_handler() in session_finder_diagnose/agent.py "
+        "is a custom MCP tool result handler called when the MCP tool "
+        "'find_source_interface_and_fortigate' completes. "
+        "The handler parses the raw MCP tool result as JSON, extracts "
+        "device_data['device_vdom_result'][0] (fully controlled by the managed FGT device), "
+        "and passes it verbatim as args to 3 sequential GUIAnyFunctionCallMessage calls: "
+        "get_fortigate_info(stringified_device_vdom_result), "
+        "get_interface_info(stringified_device_vdom_result), "
+        "get_ping_source_ip(stringified_device_vdom_result). "
+        "These 3 messages are sent to the FMG admin GUI WebSocket/SSE stream where they are "
+        "executed as JavaScript function calls in the admin's browser. "
+        "No sanitization is applied between the FGT device response and the GUI function args."
+    ),
+
+    "attack_path": {
+        "threat_model": "Compromised or adversarial managed FGT device",
+        "prerequisite": "FGT device registered to FMG; admin uses SD-WAN session finder diagnose",
+        "injection_point": (
+            "FGT device controls the JSON response to MCP tool 'find_source_interface_and_fortigate'. "
+            "Specifically device_data['device_vdom_result'][0] is a device-controlled value "
+            "that becomes args to get_fortigate_info / get_interface_info / get_ping_source_ip."
+        ),
+        "frontend_sinks": [
+            "get_fortigate_info(stringified_device_vdom_result)",
+            "get_interface_info(stringified_device_vdom_result)",
+            "get_ping_source_ip(stringified_device_vdom_result)",
+        ],
+        "impact_if_frontend_unsanitized": (
+            "If any of the 3 JS functions pass args to innerHTML, eval, or structured rendering "
+            "without escaping: XSS in FMG admin browser, DOM injection, admin session hijack."
+        ),
+    },
+
+    "code_evidence": [
+        "session_finder_diagnose/agent.py:194-234 -- find_source_interface_and_fortigate_handler",
+        "session_finder_diagnose/agent.py:198-199 -- device_data = json.loads(results[0])",
+        "session_finder_diagnose/agent.py:200 -- stringified_device_vdom_result = json.dumps(device_data['device_vdom_result'][0])",
+        "session_finder_diagnose/agent.py:212-227 -- 3 GUIAnyFunctionCallMessage calls with id='1' and device-controlled args",
+    ],
+
+    "also_in_diagnose_planner": (
+        "templates/diagnose_planner/tools.py:154-186 also sends GUIAnyFunctionCallMessage(id='1') "
+        "for get_destination_icon, get_fortigate_info, get_interface_info, get_ping_source_ip "
+        "with user-provided args (source_ip, destination_ip, fortigate_name). "
+        "These come from the admin's input, not device data -- lower adversarial threat. "
+        "The session_finder variant is higher risk because the args originate from the managed FGT device."
+    ),
+
+    "distinction_from_fmg_f04": (
+        "FMG-F04 covers any-auth-user API-level injection via send_tool_call_response / "
+        "any_gui_function_call_resp endpoints (cross-session, same-FMG admin). "
+        "FMG-F15 covers adversarial MANAGED DEVICE data reaching the GUI frontend "
+        "without passing through any FMG admin session -- the FGT device is the threat actor, "
+        "not a peer FMG admin."
+    ),
+
+    "verification": "CONFIRMED -- static analysis of session_finder_diagnose/agent.py; "
+                    "find_source_interface_and_fortigate_handler reads device data and sends "
+                    "3 GUIAnyFunctionCallMessage with device-controlled args; "
+                    "frontend sink behavior requires browser-side analysis (JS bundle not fully analyzed)",
+    "status": "CONFIRMED injection path; frontend impact unconfirmed (JS analysis pending)",
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -1042,7 +1116,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "python_layer":   "COMPLETE -- agent_definitions (all dvm_agent, policy_agent, script_agent, sdwan_diagnose_root, advanced_mode, vpn_diagnose, gui_agents) + views.py + faz_mcp/views.py + faz_assistant.py + agent_framework/tool_related/mcp.py fully analyzed",
+    "python_layer":   "COMPLETE -- agent_definitions (all dvm_agent, policy_agent, script_agent, sdwan_diagnose_root incl session_finder_diagnose, advanced_mode, vpn_diagnose, gui_agents) + agent_views.py + views.py + faz_mcp/views.py + faz_assistant.py + agent_framework/tool_related/mcp.py + logfetcher/views.py + report/views/views.py fully analyzed; all 19 unique_findings documented",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1070,6 +1144,7 @@ ANALYSIS_STATUS = {
         "FMG-F12: MEDIUM -- device_operations_agent (line 260) and sdwan_recommendation_agent (line 109) hardcode model='gpt-4.1' (OpenAI) instead of AI_MODEL_LARGE; sensitive FortiGate device data (CVEs, license info, device status, SD-WAN interface configs, health check metrics, routing tables) routes to OpenAI API outside Fortinet infrastructure; all other FMG agents use AI_MODEL_LARGE abstraction; no customer notification or data residency controls",
         "FMG-F13: MEDIUM -- device_diagnostics_agent.search_and_run_tool dynamically expands tool access to ALL 5 ADVANCED_MODE_TOOLSET_URIs (general_network_diagnostic, vpn_diagnostic, sdwan_diagnostic, routing_diagnostic, utilities) filtered only by tag keywords; inner 'device_diagnostics_tool_runner' receives args['request'] as system prompt verbatim; injection via managed device data -> attacker controls both tag selection and tool request; 'utilities' toolset contents unknown (webmcpserver BLOCKED)",
         "FMG-F14: LOW -- REQUIRED_USER_PERMISSION_TOOLS in mcp_permission_tools.py gates schedule_firmware_upgrade via MCP path (permission dialog required); same tool exposed as GUI tool in device_operations_agent (INCLUDED_GUI_TOOLS) via make_gui_tool_handler -> GUIToolCall (auto-execute, no dialog); gate inconsistency between MCP and GUI paths for same tool",
+        "FMG-F15: MEDIUM -- session_finder_diagnose find_source_interface_and_fortigate_handler passes managed FGT device data verbatim as args to 3 GUIAnyFunctionCallMessage frontend functions (get_fortigate_info, get_interface_info, get_ping_source_ip); device_data['device_vdom_result'][0] is FGT-controlled JSON; no sanitization before injection into admin GUI; if frontend sinks unsanitized: XSS/DOM injection in FMG admin browser; distinct from FMG-F04 (peer-admin injection) -- threat actor here is the managed FGT device itself",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
