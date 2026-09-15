@@ -296,6 +296,137 @@ FMG_F04_TOOL_CALL_CHANNEL_NO_SESSION_BINDING = {
 }
 
 
+# FMG-F05: VPN diagnose remediation chain -- adversarial device config -> autonomous device fleet modification
+# Source: agent_definitions/vpn_diagnose/ (vpn_fixer/agent.py, agent.py, const.py)
+# ---------------------------------------------------------
+FMG_F05_VPN_DIAGNOSE_ADVERSARIAL_CONFIG = {
+    "id":       "FMG-F05",
+    "product":  "Fortinet FortiManager (FMG AI agent layer, vpn_diagnose agent)",
+    "severity": "HIGH -- adversarial VPN configuration on ONE managed FortiGate can trigger "
+                "autonomous script generation and device installation via the vpn_diagnose "
+                "remediation chain with no additional user interaction",
+    "class":    "Indirect Prompt Injection via Managed Device Config -> Autonomous Device Config Modification",
+
+    "agent_chain": {
+        "vpn_diagnose_planner": "Runs 8-step plan: get_phase1_config, get_phase2_config, get_ike_config -> check_if_can_fix() -> remediate_found_issues",
+        "check_if_can_fix":     "Called automatically after each of: get_ike_config, get_phase1_config, get_phase2_config, get_underlay_interface_status",
+        "multi_agent_consensus": "Spawns 2 parallel issue_finder_agent calls (asyncio.gather) on the DEVICE CONFIG OUTPUT; merges results",
+        "issue_finder_agent":   "LLM analyzes raw device config string from get_phase1_config etc.; produces JSON {found_issue: bool, explanation: str}",
+        "fixer_agent":          "Instructions: 'IMMEDIATELY use the tool modify_config'; calls modify_config (no user confirmation) then install_to_device (Redis channel, FMG-F04 applicable)",
+    },
+
+    "injection_surface": (
+        "The VPN diagnostic tools (get_phase1_config, get_phase2_config, get_ike_config) "
+        "read configuration directly from the managed FortiGate device and pass the output "
+        "as a plain string to check_if_can_fix() -> multi_agent_consensus(). "
+        "FortiGate VPN configuration allows arbitrary text in fields: "
+        "comments, peer-id, name, description fields. "
+        "An attacker with access to configure ONE managed FortiGate device can embed "
+        "a prompt injection payload in these fields. When an FMG admin runs VPN diagnose "
+        "on the managed device, the payload is passed to the LLM chain. "
+        "The issue_finder_agent is instructed to find config issues; a crafted injection "
+        "can cause it to report false issues and suggest attacker-controlled 'fixes'."
+    ),
+
+    "trigger_condition": (
+        "FMG admin initiates 'VPN Diagnose' on the compromised managed FortiGate device. "
+        "Plan step 8 ('Remediate Found Issues') automatically calls remediate_found_issues_tool. "
+        "No extra user action required beyond running the diagnostic -- step 8 is the final "
+        "automated step in the VPN_DIAGNOSE_PLAN_STEPS plan."
+    ),
+
+    "fixer_agent_tools": [
+        "modify_config -- NO user confirmation step before execution; fixer_agent instructions say 'IMMEDIATELY use the tool'",
+        "install_to_device -- same GUI tool channel as FMG-F04; permission check via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL (no session binding)",
+    ],
+
+    "guardrail_coverage": (
+        "The protect_instructions_guardrail (FMG-F03 analysis) is NOT applied to tool call results "
+        "or device config output (confirmed in FMG_GUARDRAIL_ANALYSIS). "
+        "The injection flows through: device config (tool result) -> check_if_can_fix -> "
+        "issue_finder_agent initial_prompt -> fixer_agent initial_prompt. "
+        "Each sub-agent starts with context.clone(messages=[]) so no system instruction "
+        "is present in the sub-agent conversation -- the only content is the attacker-controlled "
+        "device config string."
+    ),
+
+    "lateral_movement_scope": (
+        "fixer_agent instruction: 'Generate one script per device, as needed. Run the install to device tool.' "
+        "The 'install_to_device' tool scope is determined by the ADOM policy -- can target all devices "
+        "in the ADOM. If the admin runs VPN diagnose from a global ADOM context, the install scope "
+        "could be the full managed device fleet."
+    ),
+
+    "code_evidence": {
+        "check_if_can_fix": "vpn_diagnose/agent.py: called in save_gui_tool_resp_to_context after every CAN_FIX_TOOLS result",
+        "fixer_agent_tools": "vpn_diagnose/vpn_fixer/agent.py lines 28-38: tools=[...modify_config or install_to_device...]",
+        "fixer_instructions": "vpn_diagnose/vpn_fixer/agent.py lines 15-24: 'IMMEDIATELY use the tool modify_config'; 'run the install to device tool'",
+        "plan_step_8": "vpn_diagnose/const.py: step 8 = 'Remediate Found Issues' -> use remediate_found_issues",
+    },
+
+    "status": "CONFIRMED -- code path verified; severity depends on injection effectiveness and managed device write access",
+}
+
+
+# FMG-F06: policy_config_agent install_package_to_device + permission approval via unbound Redis channel
+# Source: agent_definitions/policy_agent/policy_config_agent.py
+# ---------------------------------------------------------
+FMG_F06_POLICY_AGENT_INSTALL_SCOPE = {
+    "id":       "FMG-F06",
+    "product":  "Fortinet FortiManager (FMG AI agent layer, policy_config_agent)",
+    "severity": "HIGH -- policy_config_agent exposes install_package_to_device directly in tool set; "
+                "permission approval uses REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL with no session binding (FMG-F04); "
+                "amplifies FMG-F02 scope from script generation to full policy package installation",
+    "class":    "Excessive Tool Privilege + Permission Approval Channel Without Session Binding",
+
+    "tools_with_impact": {
+        "create_and_run_script": (
+            "Calls send_gui_toolcall_permission_request() before running. "
+            "Permission request published to REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL. "
+            "FMG-F04 cross-session injection applies: any @login_required user can approve "
+            "another user's script execution by injecting a matching response to the channel."
+        ),
+        "install_package_to_device": (
+            "Directly included in policy_config_agent tool set via "
+            "gui_assistant_config_to_tools('policy_agent'). "
+            "The install step runs after script creation and approval. "
+            "This gives the policy_config_agent the complete chain: "
+            "generate malicious CLI script + approve via FMG-F04 injection + install to device fleet."
+        ),
+    },
+
+    "developer_awareness": (
+        "policy_config_agent.py bottom comment: "
+        "'NOTE: Removed tools due to concerns of sending raw config scripts'. "
+        "The commented-out tool is 'get_package_changes_since_last_installation'. "
+        "The threat model is aware of raw config script risks but the mitigation "
+        "does NOT remove install_package_to_device or address the Redis channel injection. "
+        "Fortinet removed a READ-ONLY tool while leaving the execution chain intact."
+    ),
+
+    "permission_gate_bypass": (
+        "send_gui_toolcall_permission_request() publishes to REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL. "
+        "any_gui_function_call_resp endpoint (agent_views.py) is @login_required only; no privilege check; no session binding. "
+        "Any authenticated FMG user can publish an 'allowed=true' response to approve another user's "
+        "policy installation by racing the GUID-based tool_call_id lookup."
+    ),
+
+    "chain_with_fmg_f02": (
+        "FMG-F02: user query injected into script_agent -> malicious FortiGate CLI script generated. "
+        "FMG-F06: policy_config_agent drives the same script via formal_request (another prompt injection surface) "
+        "+ has install_package_to_device to complete the kill chain without requiring script_agent."
+    ),
+
+    "code_evidence": {
+        "install_in_tool_list": "policy_config_agent.py: gui_assistant_config_to_tools('policy_agent') filtered to include 'install_package_to_device'",
+        "permission_channel":   "agent_views.py: any_gui_function_call_resp -> publish_tool_call_resp -> REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL",
+        "dev_comment":          "policy_config_agent.py bottom: 'NOTE: Removed tools due to concerns of sending raw config scripts'",
+    },
+
+    "status": "CONFIRMED -- tool present in policy_config_agent; channel vulnerability confirmed (FMG-F04)",
+}
+
+
 # ---------------------------------------------------------
 # FMG agent definitions map (unique to FMG, absent in FAZ)
 # ---------------------------------------------------------
@@ -330,7 +461,21 @@ FMG_AGENT_DEFINITIONS = {
     },
     "policy_config_agent": {
         "permissions": ["ADMINPRIV_ADOM_POLICY_PACK (29)", "ADMINPRIV_ADOM_POLICY_OBJECT (30)", "ADMINPRIV_G_POLICY_PACK (6)", "ADMINPRIV_POLICY_OBJECTS (54)"],
-        "risk_surface": "ADOM firewall policy modification",
+        "tools": ["create_and_run_script", "search_for_policy", "show_policies", "get_policy_revision_diff", "install_package_to_device", "navigate_to_policy_package"],
+        "mcp_toolset": "fmg://agents/toolsets/policy_management",
+        "risk_surface": "ADOM firewall policy modification + install_package_to_device (FMG-F06)",
+        "developer_note": "'NOTE: Removed tools due to concerns of sending raw config scripts' -- awareness without fix",
+    },
+    "vpn_diagnose_planner": {
+        "permissions": ["ADMINPRIV_DEV_MANAGER (11)", "ADMINPRIV_DEV_CFG (12)"],
+        "tools": ["get_phase1_config", "get_phase2_config", "get_ike_config", "get_vpn_logs_from_fortigate", "get_wan_status_from_fortigate", "get_underlay_interface_status", "modify_config", "remediate_found_issues"],
+        "risk_surface": "VPN diagnose reads device config (unfiltered); auto-triggers check_if_can_fix -> fixer_agent (FMG-F05)",
+    },
+    "fixer_agent": {
+        "parent": "vpn_diagnose",
+        "tools": ["modify_config", "install_to_device"],
+        "instructions_excerpt": "'IMMEDIATELY use the tool modify_config'; 'run the install to device tool'",
+        "risk_surface": "no user confirmation for modify_config; install_to_device via FMG-F04 channel",
     },
 }
 
@@ -364,6 +509,13 @@ ANALYSIS_STATUS = {
     "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped",
     "syntax_ext":    "ACCESSIBLE -- fmg_cmdb_syntax.json 611KB; not analyzed for injection vectors yet",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
-    "unique_findings": ["FMG-F01", "FMG-F02", "FMG-F03", "FMG-F04"],
+    "unique_findings": [
+        "FMG-F01: CRITICAL -- FMG-specific amplification of FAZ-F01; script_agent generates and installs scripts on managed device FLEET; REDIS_TOOL_CALL_CHANNEL cross-session injection",
+        "FMG-F02: HIGH -- script_agent verbatim query embedding in XML prompt; no content safety check; scripts installable on managed devices via device_config_agent",
+        "FMG-F03: MEDIUM -- LLM guardrail (gpt-4.1-mini) checks instruction similarity only; not applied to MCP/tool outputs or device config data",
+        "FMG-F04: HIGH -- send_tool_call_response @login_required only; no session binding; any authenticated user can inject response to another user's pending tool call on REDIS_TOOL_CALL_CHANNEL",
+        "FMG-F05: HIGH -- vpn_diagnose remediation chain: adversarial VPN config on managed device -> check_if_can_fix (automatic) -> issue_finder_agent -> fixer_agent -> modify_config (no user confirm) + install_to_device; no injection into FMG required",
+        "FMG-F06: HIGH -- policy_config_agent includes install_package_to_device in tool set; permission approval via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL (no session binding); Fortinet developer comment confirms awareness; mitigation removes read-only tool, leaves execution chain intact",
+    ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
