@@ -2549,7 +2549,32 @@ ANALYSIS_STATUS = {
                  "remediation: add pre-div guard 'if (r10d==0 && rdx==0) return error' before 0x109138 for all r11b states; "
                  "do not treat alternate-mode flag as validation bypass -- apply independent zero-check per code path; "
                  "status: MEDIUM CONFIRMED by static analysis; crash path fully traceable to header byte fields; "
-                 "source: libav.so.new .text 0x108fb0-0x1094ff, dispatch table 0x70f1e0 entry id=0x02b (0x70f9f0), analysis 2026-09-15",
+                 "source: libav.so.new .text 0x108fb0-0x1094ff, dispatch table 0x70f1e0 entry idx=43 format_id=0x59 (file_offset=0x70f9f0), analysis 2026-09-15",
+
+        "FGT-F59: MEDIUM CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB, x86-64 stripped) unbounded strcpy into AV file handler object (2026-09-15): "
+                 "function at 0x20db50 -- virtual method (vtable 0x710ce8, method slot +0x10, method index 2); "
+                 "vtable at 0x710ce8 belongs to an AV format file-handler object with fields: "
+                 "+0x00: vtable* (set by constructor); +0x08: char[] path_buffer (implicit size 0x108=264 bytes); "
+                 "+0x110: char* format_string_ptr; +0x118: FILE* file_handle; "
+                 "vulnerable call at 0x20db8f: strcpy(dst=[rbx+8], src=rbp) where rbp=rsi (caller-supplied string arg); "
+                 "no length check on src before or after the call; PLT-confirmed: 0x81a60 = strcpy@GLIBC_2.2.5 (GOT 0x71b518, PLT index 0xa3); "
+                 "implicit buffer bound: 264 bytes -- [rbx+8] to adjacent pointer field [rbx+0x110]; "
+                 "overflow corrupts [rbx+0x110] (format string pointer -> controlled format specifier for snprintf) "
+                 "and [rbx+0x118] (FILE* handle -> controlled seek/read/close target after overwrite); "
+                 "dispatch chain: format file-handler virtual method 2 dispatched from vtable 0x710ce8; "
+                 "vtable 0x710ce8 entries: [+0x00]=0x20dbd0 [+0x08]=0x20dad0 [+0x10]=0x20db50(STRCPY) [+0x18]=0x20dc50; "
+                 "type guard at 0x20db63: cmp [[rdi]+0x58], 0x20d520 -- only processes objects whose vtable slot 0x58 = destructor 0x20d520; "
+                 "attack path: AV engine processes composite file format (ZIP/ISO/7z/TAR) containing member with path > 264 bytes; "
+                 "format handler for each member creates an object with vtable 0x710ce8, calls method 2 with member path as rsi arg; "
+                 "strcpy writes >264 bytes, overwriting [+0x110] and [+0x118] with attacker-controlled data; "
+                 "if [+0x118] FILE* is overwritten with crafted pointer, subsequent fread/fseek/fclose on the object -> arbitrary pointer deref; "
+                 "severity MEDIUM CANDIDATE: overflow path confirmed by static analysis; "
+                 "reachability from pre-auth file scan path unconfirmed -- requires dynamic analysis to trace member-path extraction; "
+                 "escalation condition: if member paths are extracted without PATH_MAX (4096) validation upstream, this is HIGH; "
+                 "ablation semantic sweep (2026-09-15): 0x20db58 (block within fn) scored 0.424 fidsdb_parser_overflow, "
+                 "0x20dbd8 scored 0.422 fidsdb_parser_overflow -- semantic similarity to parser overflow confirmed; "
+                 "remediation: replace strcpy with strncpy(dst, src, 0x108); null-terminate [rbx+0x107] = 0 explicitly; "
+                 "source: libav.so.new .text 0x20db50, vtable 0x710ce8 at file_offset 0x710ce8, PLT index 0xa3 (strcpy), analysis 2026-09-15",
 
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
