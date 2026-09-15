@@ -1979,8 +1979,10 @@ def fortios_xz_decompress(path):
 ANALYSIS_STATUS = {
     "7.0.9_vm64": "MAIN SOURCE -- virtioa.qcow2 (fortinet-FGT-v7.0.9-build0444); full rootfs extracted",
     "8.0.0_vm64": "SUPPLEMENTAL -- x86-64 + ARM64 fortism.ko binaries analyzed for ioctl surface",
-    "7412_hw_may2026": "ANALYZED -- hardware appliance datafs key files + fortism_config.json; "
-                        "FGT-F27/F28/F30/F31 scope confirmed; kernel 4.19.13 (built 2026-05-05); "
+    "7412_hw_may2026": "ANALYZED -- hardware appliance datafs key files + fortism_config.json + vmlinux disassembly; "
+                        "FGT-F16/F27/F28/F30/F31 scope confirmed; kernel 4.19.13 (BuildID 04e76032, built 2026-05-05); "
+                        "0x9007 handler at 0x55227e: IDENTICAL no-bounds-check pattern (lea edi,[rax+1] -> kmalloc(0)); "
+                        "0x9009 handler at 0x5521bc: HAS bounds check (cmp edi,0x40 + ja) -- asymmetry confirmed; "
                         "shared ENC default password hash with FFW 8.0.0 hardware",
 
     "components": {
@@ -2023,7 +2025,7 @@ ANALYSIS_STATUS = {
         "FGT-F13: MEDIUM -- fortism global override flag; single bit clears ALL LSM security hooks system-wide",
         "FGT-F14: LOW -- fortism inode metadata memory leak; 48-byte slab leak per inode access with specific flags",
         "FGT-F15: MEDIUM -- fortism ioctl 0x4004 unauth read; 4-byte kernel object field read without privilege check (7.0.9)",
-        "FGT-F16: CRITICAL -- fortism ioctl 0x9007 unauth heap overflow + DoS; size=0xffffffff -> kmalloc(0) + copy_from_user(SIZE_MAX) -> kernel crash (8.0.0 x86-64)",
+        "FGT-F16: CRITICAL -- fortism ioctl 0x9007 unauth heap overflow + DoS; size=0xffffffff -> kmalloc(0) + copy_from_user(SIZE_MAX) -> kernel crash (8.0.0 x86-64 VM AND 7412 hardware appliance May 2026 BuildID 04e76032); 0x9009 has cmp edi,0x40 bounds check (asymmetry confirms 0x9007 omission is a defect, not a design choice)",
         "FGT-F17: MEDIUM -- fortism ioctl 0x9004 unauth kernel object read; 28 bytes via bounded index (8.0.0)",
         "FGT-F18: RESOLVED-NOT-EXPLOITABLE -- fortism LSM page-table pre-touch hook; unconditional zero return is correct for this hook class; BERT false positive (AUTH_BYPASS/PRIV_ESC patterns matched spuriously on 'always allows' function shape)",
         "FGT-F19: HIGH -- fortism ioctl 0x9004 conditional unauth write; runtime object semantics determine impact (8.0.0)",
