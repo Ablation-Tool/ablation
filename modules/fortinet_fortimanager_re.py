@@ -30,7 +30,23 @@ PLATFORM = {
         "python_app":   "IDENTICAL to FAZ 8.0.0 (md5 differs only in macros.py IMG_TYPE field)",
         "img_type":     "IMG_TYPE = 2 (PRODUCT_FMG); FAZ uses IMG_TYPE = 1 (PRODUCT_FAZ)",
         "rootfs_ext_size": "237MB (vs FAZ's 296MB -- smaller, no FAZ-specific log analytics)",
-        "all_ai_code":  "Byte-for-byte identical: agent_views.py, faz_mcp/views.py, mcp.py, all agent_definitions",
+        "all_ai_code":  "Byte-for-byte identical: agent_views.py, faz_mcp/views.py, mcp.py",
+        "agent_definitions": "FMG-SPECIFIC -- entirely different agent set from FAZ (script_agent, dvm_agent, policy_agent, sdwan_diagnose, vpn_diagnose)",
+    },
+
+    "apache_modules": {
+        "fmg_request.so":    "14KB stripped x86-64; post_read_request hook; queries CMF via libcmdbapi.so, libcmfapi.so; checks Host:127.0.0.1",
+        "fmg_rewrite.so":    "76KB stripped x86-64; custom URL rewriter; routes /fdsupdate /FDSService /FCPService /fazproxy /jsonrpc /fgdsvc /workflow /portal",
+        "local_mode.so":     "72KB stripped x86-64; implements /Manager /Controller /FirmwareUpgrade handlers; uses libfcpapi.so for FCP package processing",
+        "webconsole_module.so": "68KB stripped x86-64; jsonrpc handler; session auth via decrypt_and_auth + session_from_cookie; workflow handler",
+    },
+
+    "listen_ports": {
+        "443":   "HTTPS main; fmg_rewrite routes; wconsole jsonrpc; ws3 ws://127.0.0.1:9003",
+        "80":    "HTTP -> redirect 443; /fdsupdate fct-handler; /fgdsvc fgdsvc-handler",
+        "8082":  "HTTPS; ProxyPass -> http://localhost:10745/ (Django AI/MCP server)",
+        "26443": "HTTPS management port (same VHost config as 443)",
+        "31723": "localhost:31723 internal RPC VHost; same docroot as 443",
     },
 }
 
@@ -60,6 +76,13 @@ CROSS_PRODUCT_CONFIRMED = {
         "FAZ-F08": "SOAR Redis credential store -- same reason; SOAR disabled in FMG",
         "FAZ-F09": "Apache backend proxy and ClickHouse binary -- APPLIES to FMG (same apache2 config, same ClickHouse binary)",
     },
+    "note_agent_definitions_differ": (
+        "FAZ agent_definitions and FMG agent_definitions ARE DIFFERENT. "
+        "FAZ has: faz_assistant, device_diagnostics, threat_timeline, triage. "
+        "FMG has: script_agent, dvm_agent (device_operations, device_config, device_diagnostics), "
+        "policy_agent, sdwan_diagnose_root, vpn_diagnose, gui_agents. "
+        "FAZ-F01 mechanism (Redis pub/sub) is identical; FMG blast radius covers managed FortiGate fleet."
+    ),
     "macros_diff": {
         "IMG_TYPE":       "1 (FAZ) vs 2 (FMG)",
         "CONFIG_PROD_NAME": "FortiAnalyzer-VM64-KVM vs FortiManager-VM64-KVM",
@@ -101,13 +124,228 @@ FMG_F01_REDIS_CROSS_SESSION_AMPLIFIED = {
             "fmg://agents/toolsets/advanced/sdwan_diagnostic",
             "fmg://agents/toolsets/advanced/routing_diagnostic",
             "fmg://agents/toolsets/advanced/utilities",
+            "fmg://agents/toolsets/dvm",
+            "fmg://agents/toolsets/dvm_config",
+            "fmg://agents/toolsets/dvm_diagnose",
+        ],
+        "high_impact_tools": [
+            "schedule_firmware_upgrade (device_operations_agent) -- upgrades firmware on managed FortiGates",
+            "install_to_device (device_config_agent) -- pushes config changes to managed FortiGates",
+            "modify_configuration (device_config_agent) -- modifies FortiGate device configs",
         ],
         "cross_device_impact": (
-            "stop_conversation still only stops the FMG Django session. "
-            "Tool call injection could affect in-flight device operations if "
-            "an agent is executing a multi-step diagnostic on a managed device."
+            "Tool call injection into a device_operations_agent session could trigger "
+            "schedule_firmware_upgrade to downgrade fleet to a vulnerable firmware version. "
+            "Injection into device_config_agent could push malicious config changes fleet-wide."
         ),
     },
+}
+
+
+# ---------------------------------------------------------
+# FMG-F02: script_agent prompt injection -> fleet-wide CLI execution
+# ---------------------------------------------------------
+FMG_F02_SCRIPT_AGENT_PROMPT_INJECTION = {
+    "id":       "FMG-F02",
+    "product":  "Fortinet FortiManager 8.0.0",
+    "severity": "HIGH -- LLM prompt injection via script_agent; generated scripts installed on managed FortiGate fleet",
+    "file":     "usr/local/lib/python3.11/proj/ai/agent/agent_definitions/script_agent/generate_script.py",
+
+    "description": (
+        "The FMG script_agent embeds the user's raw query into LLM system prompts with no sanitization. "
+        "The generated FortiGate CLI or Jinja script is sent to the GUI and can be saved and then "
+        "installed on managed FortiGate devices via the device_config_agent install_to_device tool. "
+        "The risk analyzer is informational only (returns a summary text, no blocking gate). "
+        "An attacker with ADMINPRIV_DEV_MANAGER + ADMINPRIV_SCRIPT_ACCESS can craft a prompt "
+        "that induces the LLM to generate a malicious CLI script, bypassing the script editor UI."
+    ),
+
+    "code_evidence": {
+        "injection_point_1": (
+            "generate_script.py:try_to_generate_script(): "
+            "initial_prompt includes '{args[\"query\"]}' verbatim inside <request> XML tags; "
+            "no sanitization, no allowlist of CLI commands"
+        ),
+        "injection_point_2": (
+            "generate_script.py:try_to_generate_script(): "
+            "previous_script also injected verbatim into <previous_script> block; "
+            "attacker controls prior generated script content via script_id reference"
+        ),
+        "no_blocking_gate": (
+            "script_risk_analyzer.py:analyze_script_risks() called AFTER generation, "
+            "returns a text summary; called from agent.py but does NOT gate script delivery; "
+            "script reaches GUI regardless of risk summary content"
+        ),
+        "validate_script_retry": (
+            "generate_script.py:try_to_generate_script(): validate_script called via GUI tool; "
+            "max 3 retry loops; validation checks syntax only, not content safety"
+        ),
+    },
+
+    "attack_chain": (
+        "1. Authenticate as FMG admin with ADMINPRIV_SCRIPT_ACCESS "
+        "2. POST to /run_agent with agent='script_agent' and query containing injection payload "
+        "3. LLM generates FortiGate CLI script per injected instructions "
+        "4. Script displayed in GUI; attacker clicks save_script "
+        "5. Script installed to target FortiGate devices via device_config_agent install_to_device "
+        "6. Installed CLI executes on managed devices (e.g. create admin account, open firewall rule)"
+    ),
+
+    "agent_registration": {
+        "required_permissions": [
+            "ADMINPRIV_DEV_MANAGER (11)",
+            "ADMINPRIV_SCRIPT_ACCESS (47)",
+        ],
+        "source": "ai/agent/all_agents.py:ALL_AGENTS_MAP[script_agent]",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FMG-F03: local_mode.so FCPService -- forged FCP package delivery to managed devices
+# ---------------------------------------------------------
+FMG_F03_LOCAL_MODE_FCP_FIRMWARE_DELIVERY = {
+    "id":       "FMG-F03",
+    "product":  "Fortinet FortiManager 8.0.0",
+    "severity": "HIGH -- local_mode Apache module processes FCP packages via libfcpapi.so; FCP has CRC32-only integrity (see FAD-F03)",
+    "file":     "usr/local/apache2/modules/local_mode.so",
+
+    "description": (
+        "The Apache module local_mode.so implements the /Manager, /Controller, and /FirmwareUpgrade "
+        "HTTP handlers. It uses libfcpapi.so (FCP_init_request, FCP_recv_request, FCP_unpack_obj_ff, "
+        "FCP_pack_obj_ff, FCP_clear_request) to process FCP packages received from managed FortiGate "
+        "devices and from FortiGuard. FCP packages have CRC32-only integrity and a hardcoded DES key "
+        "(FAD-F03); a forged FCP FIMG (firmware image) or ONCE (run-once executable) package will pass "
+        "gpVerifyPkg validation. An authenticated FMG admin can submit forged packages via the "
+        "/FirmwareUpgrade endpoint which stores them in /var/fwm/images before distribution to "
+        "managed devices."
+    ),
+
+    "code_evidence": {
+        "fcp_api_calls": [
+            "FCP_init_request",
+            "FCP_recv_request",
+            "FCP_unpack_obj_ff",
+            "FCP_clear_request",
+            "FCP_pack_obj_ff",
+        ],
+        "libraries":     ["libfcpapi.so", "libdpmclt.so"],
+        "endpoints":     ["/Manager", "/Controller", "/FirmwareUpgrade"],
+        "storage_path":  "/var/fwm/images (FMG firmware image store)",
+        "dpm_services":  ["dpm_co_service", "dpm_ci_service", "dpm_diff_service", "dpm_list_service"],
+        "error_string":  "'unregistered device ignored' -- device registration enforced pre-package delivery",
+    },
+
+    "cross_reference": {
+        "fcp_integrity": "FAD-F03 -- CRC32-only; DES key S3crtMsG hardcoded at libFCP.so 0x3d90 and VA 0x1a05",
+        "fcp_object_types": "FIMG (firmware, idx 18) and ONCE (run-once exec, idx 16) are high-impact delivery targets",
+        "routing": "fmg_rewrite.so routes /FCPService -> local_mode.so handler",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FMG-F04: REDIS_TOOL_CALL_CHANNEL no session binding - cross-session injection
+# ---------------------------------------------------------
+FMG_F04_TOOL_CALL_CHANNEL_NO_SESSION_BINDING = {
+    "id":       "FMG-F04",
+    "product":  "Fortinet FortiManager 8.0.0",
+    "severity": "MEDIUM -- authenticated cross-session tool call injection; requires tool_call_id (UUIDv4) from target session",
+    "file":     "usr/local/lib/python3.11/proj/ai/agent/agent_views.py",
+
+    "description": (
+        "The send_tool_call_response view (POST-only, login_required) publishes to the global "
+        "REDIS_TOOL_CALL_CHANNEL keyed only by tool_call_id. The listener on the receiving side "
+        "matches on tool_call_id UUID with no session binding. Any authenticated FMG user "
+        "(regardless of privilege level) can POST to send_tool_call_response with any tool_call_id "
+        "and inject a fake result into another user's agent session. The tool_call_id is a UUIDv4 "
+        "sent to the browser GUI over WebSocket; exploitation requires observing the target UUID."
+    ),
+
+    "code_evidence": {
+        "view_handler": (
+            "agent_views.py:send_tool_call_response(): "
+            "@post_only @login_required -- NO privilege check; "
+            "publish_tool_call_resp(tool_call_id=..., result=...) -> REDIS_TOOL_CALL_CHANNEL"
+        ),
+        "listener_match": (
+            "redis_util.py:get_tool_call_result(): "
+            "on_message checks 'message[\"tool_call_id\"] == tool_call_id' only; "
+            "no session_id, no user_id comparison"
+        ),
+        "global_channel": (
+            "REDIS_TOOL_CALL_CHANNEL is a single global Redis pub/sub channel; "
+            "all sessions publish/subscribe to same channel; "
+            "ALL authenticated users' tool call traffic is co-mingled"
+        ),
+    },
+
+    "impact_chain": (
+        "1. Victim admin starts device_operations_agent session, triggers schedule_firmware_upgrade "
+        "2. Attacker (low-privilege authenticated user) observes tool_call_id from WebSocket traffic "
+        "3. Attacker POSTs to /ai/send_tool_call_response with the UUID and malicious result "
+        "4. Victim's agent receives attacker's result instead of legitimate GUI response "
+        "5. Agent acts on injected result (e.g. confirming a downgrade to vulnerable firmware version)"
+    ),
+
+    "note_vs_faz_f01": (
+        "FAZ-F01 covers the Python-side redis_channel.subscribe injection. "
+        "FMG-F04 covers the HTTP-exposed send_tool_call_response endpoint injection. "
+        "Both exploit the same global REDIS_TOOL_CALL_CHANNEL; they are complementary paths."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FMG agent definitions map (unique to FMG, absent in FAZ)
+# ---------------------------------------------------------
+FMG_AGENT_DEFINITIONS = {
+    "script_agent": {
+        "permissions": ["ADMINPRIV_DEV_MANAGER (11)", "ADMINPRIV_SCRIPT_ACCESS (47)"],
+        "tools": ["generate_script", "modify_script", "save_script", "get_jinja_info", "file_search"],
+        "model": "not overridden (inherits session model)",
+        "risk_surface": "generates FortiGate CLI scripts; installed on managed devices via device_config_agent",
+    },
+    "device_operations_agent": {
+        "permissions": ["ADMINPRIV_DEV_MANAGER (11)", "ADMINPRIV_DEV_CFG (12)"],
+        "tools": ["schedule_firmware_upgrade", "get_device_status", "get_device_licenses", "get_firmware_vulnerability_data", "get_event_logs"],
+        "model": "gpt-4.1 (explicit override in device_operations_agent.py)",
+        "risk_surface": "firmware upgrade scheduling across managed FortiGate fleet",
+    },
+    "device_config_agent": {
+        "permissions": ["ADMINPRIV_DEV_MANAGER (11)", "ADMINPRIV_DEV_CFG (12)"],
+        "tools": ["modify_configuration", "install_to_device", "get_existing_configuration", "get_device_vdoms", "get_interface_datasource"],
+        "supported_categories": [
+            "config system interface", "config router static", "config system global",
+            "config system sdwan", "config system ntp",
+            "config vpn ipsec phase1-interface", "config vpn ipsec phase2-interface",
+        ],
+        "risk_surface": "direct config push and install to managed FortiGate devices",
+    },
+    "device_diagnostics_agent": {
+        "permissions": ["ADMINPRIV_DEV_MANAGER (11)", "ADMINPRIV_DEV_CFG (12)"],
+        "mcp_server": "http://127.0.0.1:11345/sse",
+        "toolset": "fmg://agents/toolsets/dvm_diagnose + advanced toolsets via tag_map",
+        "risk_surface": "executes diagnostic commands on remote FortiGate devices",
+    },
+    "policy_config_agent": {
+        "permissions": ["ADMINPRIV_ADOM_POLICY_PACK (29)", "ADMINPRIV_ADOM_POLICY_OBJECT (30)", "ADMINPRIV_G_POLICY_PACK (6)", "ADMINPRIV_POLICY_OBJECTS (54)"],
+        "risk_surface": "ADOM firewall policy modification",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FMG guardrail analysis
+# ---------------------------------------------------------
+FMG_GUARDRAIL_ANALYSIS = {
+    "implementation": "ai/agent/util/guardrails/protect_instructions_guardrail.py",
+    "model":          "gpt-4.1-mini",
+    "type":           "LLM-as-judge: checks if user input is 'very similar' to agent system instructions",
+    "bypass":         "Checks similarity to instruction text only; does not detect malicious tool payload injection or adversarial CLI script generation",
+    "regex_variant":  "make_protect_instructions_guardrail_by_regex(target_string): regex match on lowercased output; trivial to bypass with case variation or Unicode substitution",
+    "not_applied_to": "MCP tool outputs, GUI tool call responses, device config data returned from managed devices",
+    "conclusion":     "Guardrail blocks instruction extraction but does not block LLM-generated malicious script content",
 }
 
 
@@ -115,16 +353,17 @@ FMG_F01_REDIS_CROSS_SESSION_AMPLIFIED = {
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
-    "python_layer":  "COMPLETE -- identical to FAZ; see FAZ module for full findings",
-    "vmlinuz":       {
+    "python_layer":   "COMPLETE -- agent_definitions fully analyzed; see new FMG-specific findings",
+    "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
+    "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
         "version": "Linux 6.12.32 PREEMPT_DYNAMIC (built 2026-04-20 10:50:40 PDT); RO-rootFS",
         "builder": "root@e2770389c733 (different container from FAZ root@49192c769448, same day build)",
     },
     "rootfs_gz":     "BLOCKED -- custom encryption format (same as FAZ, magic 0x5b6758cb...)",
-    "rootfs_ext":    "ACCESSIBLE (extracted, 247MB) -- Python app confirmed identical to FAZ via diff; SOAR connectors ABSENT",
-    "syntax_ext":    "ACCESSIBLE -- same structure as FAZ (fmg_cmdb_syntax.json 611KB, etc.)",
+    "rootfs_ext":    "COMPLETE -- 247MB extracted and analyzed; FMG-specific agent surface fully mapped",
+    "syntax_ext":    "ACCESSIBLE -- fmg_cmdb_syntax.json 611KB; not analyzed for injection vectors yet",
     "webmcpserver":  "BLOCKED -- binary in encrypted rootfs.gz",
-    "unique_findings": ["FMG-F01"],
+    "unique_findings": ["FMG-F01", "FMG-F02", "FMG-F03", "FMG-F04"],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
