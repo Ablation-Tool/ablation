@@ -1814,6 +1814,62 @@ FGT_F27_FGT7412_SHARED_KEY_SCOPE_EXTENSION = {
 }
 
 
+# ---------------------------------------------------------
+# FGT-F28: 512-bit RSA private key (fgt_512.key) in FGT 7.4.12 datafs
+# Source: datafs.tar.gz from FGT 7.4.12 VM64-KVM; FFW 8.0.0 confirmed active in WEB_AUTH domain
+# ---------------------------------------------------------
+FGT_F28_512BIT_KEY_DATAFS = {
+    "id":       "FGT-F28",
+    "product":  "Fortinet FortiGate FortiOS 7.4.12 VM64-KVM (fgt_512.key)",
+    "severity": "HIGH -- 512-bit RSA private key present in datafs; cryptographically broken (factorable in days); "
+                "fortism_config.json for FGT 7.4.12 does NOT reference fgt_512.crt (usage unconfirmed for FGT); "
+                "FortiWeb 8.0.0 confirmed active in WEB_AUTH domain (FWB-F13); FGT usage may be via non-fortism path",
+    "class":    "Broken Cryptographic Key / 512-bit RSA in Production Firmware",
+
+    "key_details": {
+        "file":        "datafs.tar.gz -> etc/fgt_512.key",
+        "key_size":    "512-bit RSA (2 primes)",
+        "modulus":     "CFB821074C9ADFD7951F8EDAB0229D295BB714B118ECA5F687995AFD5DC0F2DDEDB07E1C0CA300F6846D3D9B958F5AD5AE67D0610D335447EF6B49157D41D2AD",
+        "cert_file":   "datafs.tar.gz -> etc/fgt_512.crt",
+        "cert_issued": "2015-07-16 (Jul 16, 2015)",
+        "cert_expires": "2038-01-19",
+        "cert_sha1":   "E4:0B:D3:DD:87:21:FB:56:E4:A9:7D:1D:57:1D:1B:43:67:B6:77:9F",
+        "cert_subject": "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiGate, CN=FortiGate, emailAddress=support@fortinet.com",
+    },
+
+    "fgt_usage_status": (
+        "FGT 7.4.12 fortism_config.json: zero references to fgt_512 or 512.crt. "
+        "Either (a) the key is vestigial/unused in FGT 7.4.12, "
+        "(b) loaded during pre-fortism initialization phase, "
+        "(c) loaded by a domain in default_act=INCLUDE mode (doesn't need explicit allowlist), "
+        "or (d) used in a path not covered by fortism policy. "
+        "FGT 7.4.12 fortism has 35/36 domains with all exec flags=1 (FGT-F26) -- "
+        "if a permissive domain loads fgt_512.key, fortism would not log or block it."
+    ),
+
+    "cross_product": {
+        "ffw_800": "CONFIRMED active: WEB_AUTH domain loads fgt_512.crt (FWB-F13); FFW modulus DIFFERENT (B5ED8433...)",
+        "fgt_7412": "File present (CFB821074C...); NOT confirmed active via fortism; different modulus from FFW",
+        "note": "Both are 512-bit and independently factorable; not cross-product shared (different moduli per product)",
+    },
+
+    "exploit_path": (
+        "Factor the 512-bit modulus CFB821074C... using CADO-NFS or public RSA factoring service "
+        "(512-bit RSA has been publicly factored; <2 days on modern hardware). "
+        "If the key is actively used in FGT: forge FortiGate device certificate, "
+        "MITM TLS sessions using this cert, decrypt captured traffic. "
+        "If the key is vestigial in FGT 7.4.12 but active in other FGT versions: "
+        "the cert in datafs would still serve as a forgeable device identity."
+    ),
+
+    "cross_ref":  "FWB-F13 -- FortiWeb 8.0.0 WEB_AUTH confirmed active; FGT-F27 -- fgt2.key shared key (different key pair)",
+
+    "verification": "CONFIRMED key file present and parseable -- openssl rsa -noout -text confirms 512-bit, 2 primes; "
+                    "fortism_config.json non-reference is negative evidence only",
+    "status": "CONFIRMED FILE PRESENT; USAGE UNCONFIRMED IN FGT 7.4.12 FORTISM",
+}
+
+
 # ─────────────────────────────────────────────────────────
 # Forensic extraction commands
 # ─────────────────────────────────────────────────────────
@@ -1907,5 +1963,12 @@ ANALYSIS_STATUS = {
         "FGT-F27: CRITICAL -- FGT 7.4.12 fgt2.key modulus A75C115F... identical to FGT 8.0.0 (x86+ARM64) "
                  "and FFW 8.0.0; same static RSA private key spans 7.4.x and 8.0.x release trains; "
                  "single key compromise covers full FortiGate+FortiWeb install base across both generations",
+        "FGT-F28: HIGH -- 512-bit RSA private key (fgt_512.key) present in FGT 7.4.12 datafs; "
+                 "modulus CFB821074C9ADFD7... (512-bit, 2 primes, factorable in days); "
+                 "cert issued 2015-07-16, expires 2038-01-19; fortism_config.json has ZERO references (usage unconfirmed for FGT 7.4.12); "
+                 "FortiWeb 8.0.0 confirmed active in WEB_AUTH domain (FWB-F13, different modulus B5ED8433...); "
+                 "if active in FGT: factored key -> cert forgery + MITM",
     ],
+    "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
+                                   "cert issued 2015, expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
 }

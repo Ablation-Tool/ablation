@@ -832,6 +832,57 @@ FWB_F12_NODE_BINARY_SHARED = {
 
 
 # ---------------------------------------------------------
+# FWB-F13: 512-bit RSA private key in WEB_AUTH domain (FFW 8.0.0)
+# Source: FFW 8.0.0 datafs/etc/fgt_512.key + fortism_config.json WEB_AUTH domain
+# ---------------------------------------------------------
+FWB_F13_512BIT_KEY_WEB_AUTH = {
+    "id":       "FWB-F13",
+    "product":  "Fortinet FortiWeb FortiOS 8.0.0",
+    "severity": "CRITICAL -- 512-bit RSA private key loaded by WEB_AUTH domain (user-facing web auth TLS service); "
+                "512-bit RSA is factorable in days using public tools (CADO-NFS, public factoring services); "
+                "factored key enables MITM of web authentication sessions and credential theft",
+    "class":    "Broken Cryptographic Key / 512-bit RSA in Active Production Service",
+
+    "key_details": {
+        "file":       "/etc/fgt_512.key",
+        "key_size":   "512-bit RSA (2 primes) -- cryptographically broken",
+        "modulus_ffw_800": "B5ED8433938A7D0044B98B73AA98E5F92747A8811361D1DC9D0DA381C22900045BC0D21FDF4594B74DE6B1FD879207CE7901730EA29F1DE7568A45CF398199CF",
+        "cert_file":  "/etc/fgt_512.crt",
+        "cert_issued": "2011-02-21 (Feb 21, 2011) -- 15 years in production firmware",
+        "cert_expires": "2038-01-19",
+        "cert_subject": "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiGate, CN=FortiGate, emailAddress=support@fortinet.com",
+        "cert_issuer":  "Fortinet internal CA (CN=support, OU=Certificate Authority)",
+    },
+
+    "domain_usage": {
+        "domain_name": "WEB_AUTH",
+        "service":     "Web authentication daemon (captive portal / HTTP auth); user-facing TLS service",
+        "confirmation": "fortism_config.json WEB_AUTH domain allowlist: '/etc/fgt2.crt' and '/etc/fgt_512.crt' both listed",
+        "also_has":    "CAP_SYS_MODULE in Permission_Policies (FWB-F11) -- WEB_AUTH domain has both broken crypto and kernel module loading capability",
+    },
+
+    "exploit_path": (
+        "Attacker uses CADO-NFS or RSA 512 factoring service to factor the 512-bit modulus B5ED8433... "
+        "(publicly factorable; several public services have factored 512-bit RSA in <2 days). "
+        "Derived private key enables: (1) certificate forgery for the FortiWeb management identity, "
+        "(2) passive decryption of captured TLS sessions terminated by WEB_AUTH, "
+        "(3) active MITM of HTTP authentication sessions (credential theft). "
+        "The key has been present in Fortinet firmware since 2011 -- historical traffic captured over 15 years "
+        "can be retroactively decrypted."
+    ),
+
+    "cross_product_scope": {
+        "ffw_800":    "CONFIRMED active -- WEB_AUTH fortism policy loads fgt_512.crt",
+        "fgt_7412":   "file present in datafs (/etc/fgt_512.key, modulus CFB821074C9ADFD7...) but NOT referenced in fortism_config.json; usage in FGT 7.4.12 is unconfirmed",
+        "fgt_7412_modulus": "CFB821074C9ADFD7951F8EDAB0229D295BB714B118ECA5F687995AFD5DC0F2DDEDB07E1C0CA300F6846D3D9B958F5AD5AE67D0610D335447EF6B49157D41D2AD",
+        "key_uniqueness": "FFW and FGT 7.4.12 have DIFFERENT 512-bit moduli -- not cross-product shared; each must be factored independently",
+    },
+
+    "status": "CONFIRMED -- key extracted from FFW 8.0.0 datafs; WEB_AUTH domain usage confirmed via fortism_config.json; key is factorable",
+}
+
+
+# ---------------------------------------------------------
 # Analysis status
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
@@ -855,6 +906,8 @@ ANALYSIS_STATUS = {
         "etc/aws_cloud_connector.py": "AWS EC2 API client; takes key_id, access_key as params (from CLI/config, not hardcoded)",
         "etc/fortism_config.json": "ANALYZED (FWB-F11): 5 domains with CAP_SYS_MODULE (WAD, REMOTELOG, CSFD_PRIV, SNIFFERD, WEB_AUTH); 6 domains with anon-mem-exec=1 (PRECHROOT, CMDBSVR, MISC, WAD, IPS, WEB_SVC); no heap-exec/stack-exec/regain-root (stricter than FGT 7.4.12)",
         "etc/fgt2.key": "ANALYZED (FFW-F05): modulus A75C115F... matches FGT 7.4.12/8.0.0/FGA 8.0.0; cross-product shared static RSA key",
+        "etc/fgt_512.key": "ANALYZED (FWB-F13): 512-bit RSA private key; modulus B5ED8433... unique to FFW 8.0.0; WEB_AUTH domain loads fgt_512.crt (fortism_config.json confirmed); cert issued 2011; key is factorable",
+        "etc/fgt_512.crt": "ANALYZED (FWB-F13): paired with fgt_512.key; active in WEB_AUTH domain; issued 2011-02-21, expires 2038-01-19",
         "hash_bin.sha256": "ANALYZED (FWB-F12): 400 entries; /bin/node SHA-256 matches FGT 8.0.0 exactly; 221 node-scripts webpack chunks (product-specific UI); rootfs.gz encrypted (magic 0xa3ba56c6)",
         "lib/": "libfpm.so, libsigfunc.so.1 (signature engine), libav.so.orig",
         "lib_packge/": "wvs.tar.xz ANALYZED (FWB-F09); python-libs.tar.xz ANALYZED (64MB, Python 3.10 stdlib + 68 site-packages); cryptography 37.0.2 (CVE-2023-49083, CVE-2024-26130, CVE-2023-0286), ecdsa 0.17.0 (CVE-2024-23342), Django 5.1.6 (CVE-2025-26115); matplotlib + boto3 + pysqlcipher3 + sshpubkeys notable; FWB-F10",
@@ -881,5 +934,9 @@ ANALYSIS_STATUS = {
         "FWB-F12: INFO -- /bin/node SHA-256 identical across FFW 8.0.0 and FGT 8.0.0; "
                  "same Node.js binary shared across FortiGate and FortiWeb; 221 webpack chunks in FFW (different UI logic); "
                  "Node.js runtime vulnerability = both product lines affected",
+        "FWB-F13: CRITICAL -- 512-bit RSA private key (fgt_512.key) active in WEB_AUTH domain (FFW 8.0.0 fortism_config.json confirmed); "
+                 "modulus B5ED8433... factorable in days; cert issued 2011 (15 years in firmware); "
+                 "exploit path: factor modulus -> forge FortiWeb device cert -> MITM WEB_AUTH TLS sessions -> credential theft; "
+                 "FGT 7.4.12 also ships a different 512-bit key (CFB821074C...) but not confirmed active via fortism",
     ],
 }
