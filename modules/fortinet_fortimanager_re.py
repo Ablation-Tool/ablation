@@ -2159,6 +2159,23 @@ ANALYSIS_STATUS = {
                  "ablation semantic sweep: 0x93de scored 0.409 strcpy_overflow, 0.354 preauth_overflow (local_mode.so sweep 2026-09-15); "
                  "source: local_mode.so .text 0x93de-0xa050, PLT.SEC 0x48f0, httpd.conf FCPService handler, analysis 2026-09-15",
 
+        "FMG-F48: HIGH -- FortiManager SOAR Active Directory connector LDAP injection via trigger-controlled filter data (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
+                 "file: builtin_connectors/AD/operator.py; "
+                 "injection site 1: ADAdvancedSearchOperator.execute() line 1784: custom_query = FAZUtilsOperator.parse_input(context, self.query, context_dict) "
+                 "then line 1759: json_data = self.search(conn, base_dn, custom_query, ...) -- entire LDAP filter string is trigger-controlled; "
+                 "attack: custom_query='(objectClass=*)' enumerates all AD objects regardless of intended scope restriction; "
+                 "injection site 2: ADGlobalSearchOperator.global_search() line 1848: query = '({0}={1}))'.format(search_attr_name, search_attr_value) "
+                 "where search_attr_value = FAZUtilsOperator.parse_input(context, self.search_attr_value, context_dict) at line 1880 -- unescaped in LDAP filter; "
+                 "attack: search_attr_value='*)(|(objectClass=*)' gives '(&(objectCategory=...)(objectClass=...)(sAMAccountName=*)(|(objectClass=*))' -- bypasses objectCategory/objectClass restriction; "
+                 "injection site 3: ADBaseOperator.get_attribute() lines 589/591/594/597: four LDAP filters built with .format(filter, search_attr_value) -- no ldap3.utils.conv.escape_filter_chars() call; "
+                 "get_attribute() called by: perform_action (enable/disable/move), update_object (ADUpdateObjectOperator), delete_object (ADDeleteObjectDetailsOperator); "
+                 "ldap3 does not auto-escape filter values; fix: ldap3.utils.conv.escape_filter_chars(search_attr_value) before filter construction; "
+                 "impact: arbitrary AD object enumeration (authentication data, group membership), cross-system account manipulation (disable/move/delete arbitrary AD accounts via injected filter match); "
+                 "trigger data source: FortiAnalyzer alert field values (e.g. username, srcip) flow into SOAR playbook parameters -> LDAP filter; "
+                 "attacker crafts syslog/alert with LDAP metacharacters to inject cross-AD-object targeting in automated incident response playbooks; "
+                 "status HIGH: confirmed static analysis, ldap3 library has no auto-escaping, filter construction fully trigger-controlled; "
+                 "source: builtin_connectors/AD/operator.py lines 589-598 (get_attribute), 1783-1800 (ADAdvancedSearchOperator), 1840-1851 (ADGlobalSearchOperator), analysis 2026-09-15",
+
         "FMG-F47: MEDIUM -- FortiManager SOAR FWEB connector FortiWeb URL parameter injection via unescaped trigger data (FMG7.x, Python SOAR engine 2024, 2026-09-15): "
                  "file: fmg-soar/FWEB/operator.py -- FWEBDeleteClientInfoOperator.execute_action() line 590, "
                  "FWEBRestoreThreadScoreOperator.execute_action() line 624, FWEBGetBlockedUsersOperator.execute_action() line 307; "
