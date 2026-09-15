@@ -2152,6 +2152,33 @@ ANALYSIS_STATUS = {
                  "fgt_512.key (CFB821074C, 512-bit, 2011, FGT-F28, trivially factorable); "
                  "scope: needs cross-version confirmation (check FGT 7.4.12 VM etc/fgt.key modulus vs A8E3201C); "
                  "source: extracted from FGT7412 hardware appliance May 2026 datafs/etc/fgt.key",
+        "FGT-F38: MEDIUM CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.7MB, x86-64 stripped): "
+                 "avDbSetAdd@@EXPORTED (VA 0xfde20): TLV string append to heap without bounds check or realloc; "
+                 "function signature: avDbSetAdd(int type, int subtype, const char *str) -- rdx=str -> r12; "
+                 "at 0xfe050-0xfe074: "
+                 "(1) load existing_str = 0x10(r13, rax*1) from 32-byte struct array (entry->string); "
+                 "(2) rdx = strlen(existing_str); "
+                 "(3) compute dst = existing_str + strlen(existing_str) + 1 (append position); "
+                 "(4) strcpy(dst, r12) -- appends r12 (caller-supplied string) PAST existing_str end; "
+                 "NO realloc of entry->string buffer before strcpy; "
+                 "NO check that original heap allocation has room for strlen(existing)+strlen(new)+1; "
+                 "only bound checked before this path: r14d (entry count) <= 0x1f and esi (subtype) <= 0x1f; "
+                 "avDbSetAdd is @@EXPORTED -- called by FGT main binary to load AV signature database; "
+                 "attack path: AV database update MITM or malicious FortiGuard update -> "
+                 "long TLV field for same (type, subtype) pair in database -> "
+                 "avDbSetAdd appends second-occurrence value without size check -> heap corruption in AV daemon; "
+                 "similar attack surface to FGT-F35 (libav memcpy count overflow) but different function; "
+                 "source: libav.so.new 0xfe050-0xfe087 disassembly; avDbSetAdd@@EXPORTED prologue at 0xfde20",
+        "FGT-F39: LOW CANDIDATE -- libav.so.new avIsIgnoreBuffer@@EXPORTED: "
+                 "heap strcpy into 72-byte node at offset 8 (64-byte effective string area); "
+                 "at 0xf46c0-0xf46e6: calloc(1, 0x48) -> 72-byte node; "
+                 "stores r15 (next ptr) at node+0; "
+                 "lea 0x8(%rax), %rdi -> dst = node+8; "
+                 "strcpy(node+8, rbp) where rbp = caller-supplied string (filename/path in ignore list); "
+                 "no strlen check before strcpy; string > 63 bytes = heap overflow past node boundary; "
+                 "avIsIgnoreBuffer used by AV engine to maintain exclusion list; "
+                 "caller-controlled strings (archive member names, file paths) reach this path; "
+                 "source: libav.so.new 0xf46c0-0xf46e6",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
                                    "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
