@@ -1848,9 +1848,11 @@ FGT_F28_512BIT_KEY_DATAFS = {
         "key_size":    "512-bit RSA (2 primes)",
         "modulus":     "CFB821074C9ADFD7951F8EDAB0229D295BB714B118ECA5F687995AFD5DC0F2DDEDB07E1C0CA300F6846D3D9B958F5AD5AE67D0610D335447EF6B49157D41D2AD",
         "cert_file":   "datafs.tar.gz -> etc/fgt_512.crt",
-        "cert_issued": "2015-07-16 (Jul 16, 2015)",
+        "cert_issued": "2011-02-21 (Feb 21, 2011) -- LEGACY cert from 2011; not refreshed",
         "cert_expires": "2038-01-19",
-        "cert_sha1":   "E4:0B:D3:DD:87:21:FB:56:E4:A9:7D:1D:57:1D:1B:43:67:B6:77:9F",
+        "cert_issuer": "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=Certificate Authority, CN=support -- "
+                       "old CA (different from FFW 8.0.0 which uses fortinet-subca2003)",
+        "cert_sha1":   "10:72:66:65:94:AB:C3:01:4D:CE:EF:62:61:01:37:B2:40:99:CE:43",
         "cert_subject": "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiGate, CN=FortiGate, emailAddress=support@fortinet.com",
     },
 
@@ -1934,7 +1936,7 @@ FGT_F29_WEAK_CRYPTO_CONFIG_BASELINE = {
         "(1) 512-bit RSA private key in production firmware (FGT-F28), "
         "(2) 1024-bit RSA CSR generation template (FGT-F29a), "
         "(3) unmodified 2015 SSH moduli file including 1535-bit groups (FGT-F29b), "
-        "(4) fgt_512.crt issued 2015 with expiry 2038 (FGT-F28). "
+        "(4) fgt_512.crt issued 2011 (legacy, not refreshed), expiry 2038 (FGT-F28). "
         "None of these are isolated oversights; the pattern indicates crypto baseline maintenance "
         "has not been applied to the platform across version branches."
     ),
@@ -2042,7 +2044,9 @@ ANALYSIS_STATUS = {
                  "single key compromise covers full FortiGate+FortiWeb install base across both generations",
         "FGT-F28: HIGH -- 512-bit RSA private key (fgt_512.key) present in FGT 7.4.12 datafs; "
                  "modulus CFB821074C9ADFD7... (512-bit, 2 primes, factorable in days); "
-                 "cert issued 2015-07-16, expires 2038-01-19; fortism_config.json has ZERO references (usage unconfirmed for FGT 7.4.12); "
+                 "cert issued 2011-02-21 (LEGACY, not refreshed), expires 2038-01-19; "
+                 "cert issuer CN=support (old CA, differs from FFW fortinet-subca2003); "
+                 "fortism_config.json has ZERO references (usage unconfirmed for FGT 7.4.12); "
                  "FortiWeb 8.0.0 confirmed active in WEB_AUTH domain (FWB-F13, different modulus B5ED8433...); "
                  "if active in FGT: factored key -> cert forgery + MITM",
         "FGT-F29: LOW -- weak crypto config baseline: (a) etc/cert/cert.conf default_bits=1024 (CSR template, "
@@ -2051,7 +2055,7 @@ ANALYSIS_STATUS = {
                  "contributes to consistent weak-crypto pattern alongside FGT-F27/F28",
     ],
     "7.4.12 datafs/fgt_512.key": "ANALYZED -- FGT-F28: 512-bit RSA private key; modulus CFB821074C...; "
-                                   "cert issued 2015, expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
+                                   "cert issued 2011-02-21 (LEGACY; CN=support old CA); expires 2038; NOT referenced in fortism_config.json; usage in FGT 7.4.12 unconfirmed",
     "7.4.12 datafs/etc/cert/cert.conf": "ANALYZED -- FGT-F29a: default_bits=1024 (CSR template weak default)",
     "7.4.12 datafs/etc/ssh/moduli":     "ANALYZED -- FGT-F29b: OpenBSD 2015 v1.14, 268 entries, 49 x 1535-bit groups; unmodified in 10+ years",
 }
