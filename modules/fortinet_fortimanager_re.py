@@ -2200,6 +2200,27 @@ ANALYSIS_STATUS = {
                  "example fix: from ldap3.utils.conv import escape_filter_chars; val = escape_filter_chars(search_attr_value); "
                  "remove embedded employee PII from test data in production artifacts; "
                  "source: fmg-soar/AD/operator.py lines 585-600, 629, 804-819, analysis 2026-09-15",
+
+        "FMG-F41: HIGH -- FortiManager SOAR LOCALHOST connector ClickHouse SQL injection via unsanitized lateral-movement trigger data (FMG7.x / FortiAnalyzer 8.0.0, Python SOAR engine 2024, 2026-09-15): "
+                 "file: fmg-soar/LOCALHOST/operator.py -- LateralMovementOperator.build_filter_string() L2466-2468 + build_query() L2451-2464; "
+                 "build_filter_string uses Python tuple() string coercion: f\"{key} in {tuple(value)}\" for key,value in targets.items(); "
+                 "this constructs raw SQL IN clauses by casting a Python set to tuple repr -- no parameterization, no escaping; "
+                 "targets are populated from playbook trigger_data by parse_trigger_data() L2417-2449: "
+                 "trigger_data['indicator'][i]['value'] when name='epid' (L2436), trigger_data['targets'][j]['endpoint'] (L2444), "
+                 "trigger_data['epid'] (L2447) -- all unescaped; "
+                 "example payload: trigger_data['epid']=\"0') OR 1=1--\" -> filter_str=\"epid in ('0') OR 1=1--',)\" -> "
+                 "injected into: WHERE ({filter_str}) AND itime >= '...' (L2456); "
+                 "query target: http://127.0.0.1:8123/?database=siem&default_format=JSON (ClickHouse SIEM DB); "
+                 "query scope: SELECT from adom{adom_oid}_SIM_Xlog -- full FAZ/SIEM log database; "
+                 "SQL injection gives arbitrary SELECT: UNION SELECT to enumerate all siem.* tables and exfiltrate log data; "
+                 "ClickHouse HTTP interface accepts raw SQL via POST body -- injection runs unrestricted against the SIEM database; "
+                 "the loop runs up to depth=5 iterations, with update_targets_from_result() feeding query results back into the next query (L2526); "
+                 "trigger_data comes from the SOAR playbook trigger (alert enrichment input) -- can be attacker-influenced via malicious network event; "
+                 "chain with FMG-F39 SSRF: attacker uses SSRF to write arbitrary trigger_data into the Airflow task params -> SQL injection; "
+                 "remediation: parameterize ClickHouse query using clickhouse_driver client.execute(query, params={}); "
+                 "reject trigger_data values that fail strict IP/integer type validation before building filter_str; "
+                 "src_ip values are partially protected by ipv4_to_ipv6() format check, but epid/endpoint values have no validation; "
+                 "source: fmg-soar/LOCALHOST/operator.py lines 2451-2468, 2417-2449, 2480-2527, analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
