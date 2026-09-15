@@ -441,5 +441,79 @@ ANALYSIS_STATUS = {
     "fortism_ioctls":  "COMPLETE -- all 6 ioctls mapped (0x9002, 0x9003, 0x9004, 0x9005, 0x9007, 0x9009).",
     "cross_products":  "FGT-F19/F20/F21/F22 confirmed in FFW 8.0.0; FFW-F05 extends FGA-F01/FGT-F05 cross-product key scope.",
     "kernel_age":      "Linux 4.19.13 (2019 kernel, EOL LTS; Fortinet patched build 2026-04-20).",
-    "unique_findings": ["FFW-F01", "FFW-F02", "FFW-F03", "FFW-F04", "FFW-F05", "FFW-F06"],
+    "unique_findings": ["FFW-F01", "FFW-F02", "FFW-F03", "FFW-F04", "FFW-F05", "FFW-F06", "FFW-F07", "FFW-F08"],
+}
+
+# FFW-F07: fortism_config.json divergence + OPSEC leak + internal function references
+FFW_F07 = {
+    "id":       "FFW-F07",
+    "title":    "fortism_config.json: policy divergence from FGT7412 + Mantis ID + internal function names in production",
+    "severity": "MEDIUM",
+    "status":   "CONFIRMED",
+    "source":   "ffw-data/etc/fortism_config.json (FortiFirewall hardware datafs, extracted Apr 2026)",
+    "summary": (
+        "FFW fortism_config.json confirms two distinct findings: "
+        "(1) SECURITY POSTURE DIVERGENCE: FFW grants only anon-mem-exec=1 to 6 of 44 domains "
+        "(PRECHROOT, CMDBSVR, MISC, WAD, IPS, WEB_SVC); "
+        "no domain in FFW has stack-exec, heap-exec, file-mod-exec, or regain-root; "
+        "contrast: FGT7412 (same product family, same fortism LSM, May 2026 build) grants "
+        "all five flags (STACK+HEAP+ANON+FILE_MOD_EXEC+REGAIN_ROOT) to 35 of 36 domains "
+        "(see FGT-F31); this represents a SIGNIFICANT security architecture divergence "
+        "where FortiGate provides essentially zero memory protection while FortiFirewall "
+        "provides meaningful restrictions; "
+        "(2) OPSEC LEAK: fortism_config.json contains non-standard C++-style // comments "
+        "(invalid in JSON, parsed via custom Fortinet reader) embedding: "
+        "internal Mantis bug tracker ID Mantis 1278479 (blackboxd /data/config access), "
+        "TODO annotations revealing unreviewed code paths, "
+        "internal function names: sslvpn_stat_get_all() in dump_upgrade_report_stat(), "
+        "backup_dhcp()/backup_dhcp6() in fwctl_upgrade(), sfupg_write_pid() in sfupgraded_main(), "
+        "ncfg_cw_wrap_wtp_image() in sfupg_fap_stage_upgrade(), "
+        "cu_wrap_wtp_image() in sfupg_fsw_stage_upgrade(), "
+        "disk_rev_delete() in __restore_image_exec() (disk delete during image restore!); "
+        "abstract Unix socket \\000/wad_debug_ctrl (WAD debug control, abstract namespace); "
+        "debug device /dev/cmdb/debug_zone (appears 8+ times across domain policies); "
+        "these function names provide direct targeting for reverse engineering without full binary access"
+    ),
+    "affected_domains": {
+        "fgt7412_full_exec": ["SSLVPND", "WAD", "WEB_SVC", "FGFMD", "ALL_ACCESS", "UPDATED", "INIT"],
+        "ffw_anon_only":     ["PRECHROOT", "CMDBSVR", "MISC", "WAD", "IPS", "WEB_SVC"],
+        "ffw_restricted":    "ALL other 38 domains (no exec permissions)",
+    },
+    "internal_functions": [
+        "sslvpn_stat_get_all()", "dump_upgrade_report_stat()",
+        "backup_dhcp()", "backup_dhcp6()", "fwctl_upgrade()",
+        "sfupg_write_pid()", "sfupgraded_main()",
+        "ncfg_cw_wrap_wtp_image()", "sfupg_fap_stage_upgrade()",
+        "ncfg_cu_get_swtp_image_path()", "sfupg_fsw_stage_upgrade()",
+        "cu_wrap_wtp_image()", "disk_rev_delete()", "__restore_image_exec()",
+    ],
+    "internal_references": ["Mantis 1278479 (blackboxd /data/config)"],
+    "debug_paths": ["/dev/cmdb/debug_zone", "/tmp/daemon_debug/", "\\000/wad_debug_ctrl"],
+}
+
+# FFW-F08: FFW libips.so.new larger than FGT7412 -- additional IPS attack surface
+FFW_F08 = {
+    "id":       "FFW-F08",
+    "title":    "FFW libips.so.new 18MB vs FGT7412 14MB -- unsandboxed LuaJIT with larger attack surface",
+    "severity": "HIGH",
+    "status":   "CONFIRMED",
+    "source":   "ffw-data/lib/libips.so.new (FortiFirewall hardware datafs, Apr 2026 build)",
+    "summary": (
+        "FFW libips.so.new (BuildID 3473282a6bf9b4a237ef469d4b0bb9de22b70367) is 18MB vs "
+        "FGT7412 libips.so.new (BuildID 7c155e7e27176fdb7c2bede9fb2d04c76fb77b24) at 14MB; "
+        "4MB additional code in same IPS engine family; "
+        "FGT7412 libips.so.new contains unsandboxed LuaJIT 2.1.d06beb04 with io.popen and os.execute "
+        "bindings (FGT-F33); FFW libips.so.new has different BuildID (different code) but same engine family; "
+        "the additional 4MB in FFW may represent additional protocol parsers or file format handlers; "
+        "fortism IPS domain in FFW grants only anon-mem-exec=1 (FFW-F07) -- memory protection is stricter; "
+        "however if FFW libips.so.new also exposes unsandboxed Lua (requires separate analysis), "
+        "the FGT-F33 attack path (FortiManager compromise -> malicious IPS sig with os.execute) "
+        "would apply to FFW IPS engine as well; "
+        "same fgt2.key (A75C115F) confirmed in FFW -- FGT-F27/FFW-F05 scope confirmed; "
+        "FFW does NOT contain fgt.key (A8E3201C) -- that key is FGT-specific (FGT-F37)"
+    ),
+    "build_comparison": {
+        "fgt7412": {"size": "14MB", "buildid": "7c155e7e27176fdb7c2bede9fb2d04c76fb77b24", "date": "May 2026"},
+        "ffw":     {"size": "18MB", "buildid": "3473282a6bf9b4a237ef469d4b0bb9de22b70367", "date": "Apr 2026"},
+    },
 }
