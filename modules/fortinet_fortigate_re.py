@@ -2202,8 +2202,9 @@ ANALYSIS_STATUS = {
                  "secondary attack path: FortiGuard IPS rule MITM -> malicious Lua payload in custom rule -> "
                  "os.execute() in rule Lua handler; "
                  "popen callers in libips are hardcoded diagnostic commands (/usr/sbin/lsattr, /usr/sbin/psrinfo); "
-                 "candidate not confirmed: (1) luaL_openlibs call path from prepare_lua_state not fully traced; "
-                 "(2) FortiOS dostring call path with network-controlled input not confirmed in main binary; "
+                 "luaL_openlibs CONFIRMED: 6 call sites in libips.so.new (0x1c7482 in Lua init complex at 0x1c6c80, "
+                 "0x15140a, 0x1594af, 0x3a9026, 0x697b31, 0x69815b); ALL standard libraries registered; "
+                 "candidate not confirmed: FortiOS dostring call path with network-controlled input not confirmed in main binary; "
                  "source: libips.so.new VA 0xca9680 (luaopen dispatch), 0xc87960 (IPS dispatch), "
                  "0xc87fa0 (Lua C API dispatch), 0x484d50 (os.execute), 0x14e940 (dostring), 0x14ea60 (loadbuffer)",
     ],
