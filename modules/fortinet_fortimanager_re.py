@@ -288,6 +288,38 @@ FMG_F04_TOOL_CALL_CHANNEL_NO_SESSION_BINDING = {
         "5. Agent acts on injected result (e.g. confirming a downgrade to vulnerable firmware version)"
     ),
 
+    "additional_unbound_endpoints": {
+        "send_tool_call_permission_response": (
+            "agent_views.py:820 -- @post_only @login_required; "
+            "takes tool_call_id + allowed (bool) + final_jsondata; "
+            "publishes to REDIS_TOOL_CALL_PERMISSION_CHANNEL with no session binding; "
+            "any auth user can APPROVE another user's pending tool permission (e.g. policy install, config push); "
+            "client-side guard 'he.current.has(Ie)' in webclient JS is bypassed by direct HTTP POST"
+        ),
+        "cancel_tool_call": (
+            "agent_views.py:538 -- @post_only @login_required; "
+            "takes tool_call_id; calls publish_tool_call_resp(tool_call_id, result='User cancelled the tool call'); "
+            "any auth user can cancel ANY running tool call in ANY other user's agent session; "
+            "DoS/disruption: cancel a critical remediation action mid-execution"
+        ),
+        "stop_conversation": (
+            "agent_views.py:528 -- @post_only @login_required; "
+            "takes request_ids array; calls publish_stop_conversation for each; "
+            "any auth user can terminate any running agent conversation by ID; "
+            "combined with cancel_tool_call: full disruption of another user's agent session"
+        ),
+    },
+
+    "attack_surface_summary": (
+        "Five endpoints cover the full AI agent lifecycle with only @login_required, no session binding: "
+        "(1) send_tool_call_response: inject fake tool result; "
+        "(2) send_tool_call_permission_response: approve any pending permission (bypass client guard); "
+        "(3) cancel_tool_call: cancel any running tool call; "
+        "(4) stop_conversation: terminate any agent session; "
+        "(5) any_gui_function_call_resp (FMG-F04/F06): inject result to any GUI tool call. "
+        "Together these give any authenticated FMG user complete control over any other user's AI agent session lifecycle."
+    ),
+
     "note_vs_faz_f01": (
         "FAZ-F01 covers the Python-side redis_channel.subscribe injection. "
         "FMG-F04 covers the HTTP-exposed send_tool_call_response endpoint injection. "
@@ -620,7 +652,7 @@ ANALYSIS_STATUS = {
         "FMG-F01: CRITICAL -- FMG-specific amplification of FAZ-F01; script_agent generates and installs scripts on managed device FLEET; REDIS_TOOL_CALL_CHANNEL cross-session injection",
         "FMG-F02: HIGH -- script_agent verbatim query embedding in XML prompt; no content safety check; scripts installable on managed devices via device_config_agent",
         "FMG-F03: MEDIUM -- LLM guardrail (gpt-4.1-mini) checks instruction similarity only; not applied to MCP/tool outputs or device config data",
-        "FMG-F04: HIGH -- send_tool_call_response @login_required only; no session binding; any authenticated user can inject response to another user's pending tool call on REDIS_TOOL_CALL_CHANNEL",
+        "FMG-F04: HIGH -- 5 AI lifecycle endpoints @login_required only, no session binding: send_tool_call_response (inject fake result), send_tool_call_permission_response (approve any pending permission, bypasses client guard), cancel_tool_call (cancel any tool), stop_conversation (terminate any session), any_gui_function_call_resp (inject GUI tool result); full lifecycle control over any user's AI session by any auth FMG user",
         "FMG-F05: HIGH -- vpn_diagnose remediation chain: adversarial VPN config on managed device -> check_if_can_fix (automatic) -> issue_finder_agent -> fixer_agent -> modify_config (no user confirm) + install_to_device; no injection into FMG required",
         "FMG-F06: HIGH -- policy_config_agent includes install_package_to_device in tool set; permission approval via REDIS_ANY_GUI_FUNCTION_CALL_CHANNEL (no session binding); Fortinet developer comment confirms awareness; mitigation removes read-only tool, leaves execution chain intact",
         "FMG-F07: HIGH -- fmg_vpn_modify_script (POST /p/ai/fmg/vpn/modify_script/) passes request_body['message'] verbatim to LLM; @login_required only; no guardrail; any auth user injects adversarial CLI script generation prompt; output applied to managed FortiGate fleet if operator acts on it",
