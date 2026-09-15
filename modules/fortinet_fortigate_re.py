@@ -2348,6 +2348,26 @@ ANALYSIS_STATUS = {
                  "SMB2 traffic then triggers it with parsed protocol values as args; NO pre-auth path; "
                  "source: ips_lua_prepare_call fork (2026-09-15)",
 
+        "FGT-F50: MEDIUM CANDIDATE -- libav.so.new (FGT7412 May 2026, 7.4MB) PDF FlateDecode predictor row buffer missing Colors*BitsPerComponent factor (2026-09-15): "
+                 "PDF format ID = 0x2c; fp10 at 0x111ae0; DecodeParms setup outer function at 0x1416c0; "
+                 "DecodeParms parser stores: Predictor at [rsp+0x20], Columns at [rsp+0x18], Colors at [rsp+0x14], BitsPerComponent at [rsp+0x10]; "
+                 "call chain: 0x141eae -> sub_139fa0(rdi=container, rsi=stream, edx=BitsPerComponent, ecx=Colors) -> sub_13e320 -> row_size_compute; "
+                 "row size computed at sub_13e320 (0x13e320) for ALL predictor types: "
+                 "Predictor=3 (PNG sub) at 0x13e408: row_size = (Columns + 7) / 8 using only [rbx+8]; "
+                 "Predictor=2 (TIFF) at 0x13e438: jmp to same 0x13e3d5 path; "
+                 "default at 0x13e3d5: row_size = min(0x10, (Columns+7)/8 + 5); "
+                 "Colors (r14d/ecx) and BitsPerComponent (r15d/edx) are bit-packed into a config word via sub_2faea0 (SHA accumulator) -- NOT multiplied into row_size; "
+                 "correct PDF PNG predictor formula: row_bytes = ceil(Colors * BitsPerComponent * Columns / 8) + 1; "
+                 "example impact: Columns=1000, Colors=4, BitsPerComponent=8 -> correct=4001 bytes, computed row_size=130 bytes (30x underallocation); "
+                 "row_size multiplied by 8 at sub_139e90+0x57 (shl esi, 3) before passing to sub_2f73e0 -> final buffer = row_size*8; "
+                 "still undersized by 4x for typical 4-channel 8-bit image; "
+                 "attacker controls all three parameters via PDF /DecodeParms dictionary (/Columns, /Colors, /BitsPerComponent); "
+                 "open question: whether [sub_struct+8] contains raw /Columns (pixels) or pre-multiplied bit-width; "
+                 "if raw pixels: out-of-bounds write during PNG predictor application (each row write overflows into next heap chunk); "
+                 "trigger: malformed PDF with FlateDecode + DecodeParms /Predictor 12 or 2 + large Colors*BitsPerComponent*Columns product; "
+                 "pre-auth surface: AV engine parses PDF file content from email/web filter; "
+                 "source: sub_13e320 (0x13e320), sub_139fa0 (0x139fa0), sub_139e90 (0x139e90) analysis 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
