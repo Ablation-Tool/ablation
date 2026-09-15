@@ -2368,6 +2368,26 @@ ANALYSIS_STATUS = {
                  "pre-auth surface: AV engine parses PDF file content from email/web filter; "
                  "source: sub_13e320 (0x13e320), sub_139fa0 (0x139fa0), sub_139e90 (0x139e90) analysis 2026-09-15",
 
+        "FGT-F51: DENIED -- libav.so.new (FGT7412 May 2026, 7.4MB) full multiply-before-alloc audit COMPLETE (2026-09-15): "
+                 "full-text scan of all 1,879 alloc calls (0xbd8a0/0xbd8b0/0xbd940/0xbd960) for movsxd+multiply+alloc pattern; "
+                 "scanner filtered: require (movsxd|movsx) AND (imul|mul|shl) within 30 instructions before alloc, no cmp/test/bounds between multiply and alloc; "
+                 "12 candidates found (down from 106 raw after bounds-check filter); "
+                 "candidate analysis: "
+                 "[0x122428] imul rdx,rdi,0x922 at 0x12242d: DENIED -- this is memset length (rdi=buffer ptr from ALLOC1 above, rdx=count*0x922 for memset size); alloc already happened at 0x12240b; "
+                 "[0x124fb1/0x124fc2] shl r15,3 at 0x124fc2: DENIED -- loop bound pointer arithmetic (r15 = r13*8 = end-of-array offset); alloc at 0x124ffc uses 16-bit word (max 65535B); "
+                 "[0x125acf/0x125aec] shl esi,8 at 0x125ad2/0x125aec: DENIED -- field-packing (merging two bytes into 16-bit word for [r14+0xc]); alloc at 0x125b34 uses string loop count+1 bounded by actual null terminator; "
+                 "[0x2211a3/0x221302/0x22249a/0x2f266b] shl rdi,3 pattern: DENIED -- all have 'shr rax,0x3c; jne' overflow guard (64-bit overflow check that kills on count>=2^60); "
+                 "[0x28f15a] lea edi,[rcx-1]; movsxd; shl 3: DENIED -- count from [rdi+0x40] in magic-validated struct (0x19770522); minimum count when reaching 0x28f150 is 2 (count==1 branches at 0x28f100; count<1 exits at 0x28f0c1); "
+                 "[0x28fb3b] lea edi,[rax-1]; movsxd; shl 3: DENIED -- same pattern; eax=[rdi+0x108] with 'cmp eax,1; je special_path' guard; minimum rax=2 at 0x28fb31; "
+                 "[0x28e00b] movsxd rax,r15d; lea rdi,[rax+rax*4]; shl rdi,3 (count*40 alloc): DENIED -- r15d = global_count-1 from RIP-relative BSS global managed by internal insertion API; not directly attacker-controlled; "
+                 "[0x28e66d/0x305c3d] sub eax,1; cdqe; lea rdi,[rax+rax*2]; shl rdi,3: DENIED -- eax from internal array iteration counter; cdqe sign-extends but value is guaranteed >0 by loop condition; "
+                 "[0x28f15a cold path] confirmed same fn_start 0x28f096; cmp ecx,esi;jle exits on count<=index, so underflow impossible; "
+                 "[0x393940] movsxd rax,[r13]; lea rdi,[rax+rax*2]; shl rdi,3 (value*24): DENIED -- binary logistic model parser ('binary:logistic' format); count is 32-bit from file but: (a) 64-bit arithmetic prevents multiply overflow; (b) negative count causes alloc fail caught at 0x393951 test+je; (c) large count causes data bounds check fail at 0x393966 (cmp rbx,rsi; jb error); "
+                 "[0x163372] shl r12,3; sub r12,r15; alloc: DENIED -- rdi set to ebp*8 at 0x163363 before sub; sub modifies r12 for subsequent pointer arithmetic, not alloc arg; ebp = sum of two 16-bit zero-extended word fields (max 0xFFFF0 bytes); "
+                 "CONCLUSION: libav.so.new integer overflow / multiply-before-alloc attack surface fully audited; NO exploitable integer overflow paths found; "
+                 "all 12 candidates either: bounded by 16-bit fields, guarded by shr-based overflow check, protected by magic-validated struct counts, or the multiply feeds memset not alloc; "
+                 "source: full-text capstone scan 2026-09-15",
+
         "FGT-F41: MEDIUM -- libips.so.new IPS CMDB Lua config chain (FGT7412, authenticated admin path): "
                  "ips_init_engine_from_cmdb string at rodata VA 0xa65af0 confirms IPS engine initializes from CMDB config; "
                  "function at 0x1d6d90 (large IPS engine state machine) contains ips_luacfg_init references at 0x1d9027 and 0x1d96aa; "
