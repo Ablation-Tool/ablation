@@ -1584,6 +1584,255 @@ FMG_F22_SOAR_FIND_LM_SQL = {
 
 
 # ---------------------------------------------------------
+# FMG-F31: FGFM trust model -- unauthenticated device auto-registration
+# Source: FortiManager 7.6.7 CLI Reference (2026-06-02)
+# ---------------------------------------------------------
+FMG_F31_FGFM_TRUST_DEFAULT = {
+    "id":       "FMG-F31",
+    "product":  "Fortinet FortiManager 7.6.7 (CLI Reference confirmed; applies to all 7.x)",
+    "severity": "HIGH -- unauthenticated device registers to FortiManager with full service access via FGFM",
+    "source":   "FortiManager 7.6.7 CLI Reference pp.60,63,95 (config system admin setting, config system global)",
+
+    "description": (
+        "Two default settings in FortiManager combine to allow any network-adjacent device to register to FMG "
+        "via FGFM (TCP 541) and receive service rights without pre-authorization. "
+        "(1) config system global: fgfm-deny-unknown = disable (default) -- devices with unknown serial numbers "
+        "are allowed to actively register as unauthorized devices. "
+        "(2) config system admin setting: unreg_dev_opt = add_allow_service (default) -- when an unregistered "
+        "device connects, FMG adds it AND allows service requests. "
+        "The combination: unknown SN device connects on TCP 541 -> FMG adds it to device list -> "
+        "FMG processes the new device's service requests (FGFM protocol). "
+        "An attacker who can reach TCP 541 on the FortiManager can register a spoofed FortiGate and "
+        "begin receiving pushed policy configurations, firmware images, and FortiGuard updates that FMG "
+        "distributes to its managed device fleet."
+    ),
+
+    "default_config": {
+        "fgfm-deny-unknown":    "disable -- unknown SN devices allowed to register (config system global)",
+        "unreg_dev_opt":        "add_allow_service -- unregistered devices auto-added with service access (config system admin setting)",
+        "fgfm-ssl-protocol":    "tlsv1.2 (default, minimum) -- SSL required but no device auth by default",
+        "fgfm-ca-cert":         "default certificate (empty string uses built-in CA)",
+        "fgfm-cert-exclusive":  "disable -- CA cert used best-effort, not required",
+    },
+
+    "attack_path": (
+        "1. Attacker reaches FortiManager TCP 541 (FGFM) -- exposed directly or via managed network segment. "
+        "2. Attacker sends FGFM HELLO frame with arbitrary serial number and device type. "
+        "3. FMG default config: fgfm-deny-unknown=disable accepts the connection. "
+        "4. FMG default config: unreg_dev_opt=add_allow_service adds device and grants service. "
+        "5. Attacker receives: policy packages pushed by FMG (firewall rules, SD-WAN config), "
+        "FortiGuard update packages distributed by FMG to managed devices, "
+        "and can send FGFM messages to FMG as if it were a legitimate FortiGate. "
+        "6. Secondary impact: FMG GUI proxy (fgt-gui-proxy=enable default) creates a proxy route "
+        "from HTTPS 8082 to the registered device -- see FMG-F35."
+    ),
+
+    "amplified_risk": (
+        "FortiManager is a single-pane-of-glass managing thousands of FortiGate devices. "
+        "A spoofed device registration enables passive policy exfiltration of the full managed fleet's "
+        "firewall configuration, potentially exposing network topology. "
+        "Combined with fgfm/push/config PUBLIC endpoint (FMG-F29), a registered attacker device "
+        "could send config push requests targeting OTHER registered devices via the FMG FGFM bus."
+    ),
+
+    "remediation": (
+        "set fgfm-deny-unknown enable (config system global) -- blocks unknown SN device registration; "
+        "set unreg_dev_opt add_no_service (config system admin setting) -- adds but denies service to unknown devices; "
+        "restrict TCP 541 to known management IP ranges at perimeter."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FMG-F32: API admin permanent session -- no token rotation
+# Source: FortiManager 7.6.7 CLI Reference (2026-06-02)
+# ---------------------------------------------------------
+FMG_F32_API_ADMIN_PERMANENT_SESSION = {
+    "id":       "FMG-F32",
+    "product":  "Fortinet FortiManager 7.6.7",
+    "severity": "HIGH -- leaked API key grants permanent non-expiring access; no login/logout audit trail",
+    "source":   "FortiManager 7.6.7 CLI Reference p.69 (config system admin user, user_type=api)",
+
+    "description": (
+        "FortiManager supports user_type=api admin accounts. Per CLI Reference p.69: "
+        "'A REST API Admin is used to generate a permanent API key, which means the same user account "
+        "will always share the same session and you do not need to use the login/logout endpoints.' "
+        "Key security implications: (1) the API key is PERMANENT -- no expiration by design; "
+        "(2) no login/logout events are generated for API auth; "
+        "(3) the session is shared across all API calls for that user -- no per-call auth; "
+        "(4) autoreg-user=enable variant creates an API user specifically for device auto-registration, "
+        "potentially granting device management rights via a static key."
+    ),
+
+    "technical_detail": {
+        "user_type_api":  "permanent API key; same session always; no login/logout endpoints required",
+        "autoreg_user":   "enable variant for FGFM auto-registration -- API user with device registration rights",
+        "no_2fa":         "two-factor-auth only available on pki-auth accounts; api type has no 2FA option",
+        "cors_allow_origin": "cors-allow-origin <string> settable per API user -- allows cross-origin API access if set to *",
+        "rpc_permit":     "rpc-permit {none|read-only|read-write} controls RPC access level; default=none",
+    },
+
+    "attack_scenarios": {
+        "key_exposure": (
+            "API key exposed via: logs (JSON request logs if jsonapi-log=all), config backup, "
+            "scripted config exports, leaked environment variables in CI/CD pipelines. "
+            "Key remains valid indefinitely after exposure. No forced rotation mechanism documented."
+        ),
+        "no_audit_trail": (
+            "API auth bypasses login/logout event generation. "
+            "SIEM rules monitoring failed auth attempts or session counts will not detect "
+            "API key abuse. Attacker uses permanent key without generating detectable auth events."
+        ),
+        "autoreg_abuse": (
+            "API user with autoreg-user=enable is specifically for device auto-registration. "
+            "Leaked autoreg API key allows attacker to register unlimited fake devices to FMG "
+            "without knowing admin credentials -- amplifies FMG-F31 impact."
+        ),
+    },
+
+    "chain_link": "FMG-F31 (FGFM auto-register) -> FMG-F32 (autoreg API key) = unauthenticated device fleet registration via single static key",
+}
+
+
+# ---------------------------------------------------------
+# FMG-F33: RADIUS VSA ADOM injection via ext-auth-adom-override
+# Source: FortiManager 7.6.7 CLI Reference (2026-06-02)
+# ---------------------------------------------------------
+FMG_F33_RADIUS_VSA_ADOM_INJECTION = {
+    "id":       "FMG-F33",
+    "product":  "Fortinet FortiManager 7.6.7",
+    "severity": "HIGH -- RADIUS VSA injection enables cross-ADOM access escalation via MITM of auth channel",
+    "source":   "FortiManager 7.6.7 CLI Reference p.69 (config system admin user, ext-auth-adom-override)",
+
+    "description": (
+        "FortiManager supports ext-auth-adom-override {enable|disable} on admin user accounts (default=disable). "
+        "When enabled, the ADOM assigned to the authenticating admin is taken from the remote authentication "
+        "server (RADIUS/TACACS+/LDAP) via Vendor-Specific Attribute. "
+        "The Fortinet RADIUS Vendor ID is 12365 and the attribute used is Fortinet-Vdom-Name. "
+        "An attacker who can MITM or compromise the RADIUS authentication channel can inject "
+        "a Fortinet-Vdom-Name VSA with an arbitrary ADOM name, overriding the admin's configured ADOM "
+        "and granting access to that ADOM on FMG."
+    ),
+
+    "technical_detail": {
+        "attribute":    "Fortinet-Vdom-Name (Fortinet VSA, Vendor-ID 12365)",
+        "trigger":      "ext-auth-adom-override = enable on admin user account",
+        "default":      "disable -- requires explicit admin misconfiguration to be exploitable",
+        "protocol_gap": (
+            "RADIUS UDP is not integrity-protected by default (MD5 HMAC is optional and widely skipped). "
+            "RADIUS shared secret protects the User-Password attribute only, not VSA values. "
+            "A network-adjacent attacker with access to the RADIUS UDP traffic can forge "
+            "RADIUS Access-Accept packets containing arbitrary Fortinet VSA values."
+        ),
+    },
+
+    "attack_path": (
+        "1. Identify FMG admin user with user_type=radius and ext-auth-adom-override=enable. "
+        "2. Attacker on path between FMG and RADIUS server intercepts UDP/1812 auth exchange. "
+        "3. Attacker modifies RADIUS Access-Accept to include Fortinet-Vdom-Name=<target-adom>. "
+        "4. FMG applies ext-auth-adom-override: admin session assigned to <target-adom>. "
+        "5. Admin now has full access to devices and policies in the target ADOM, not their intended ADOM."
+    ),
+
+    "secondary_surface": {
+        "ext_auth_accprofile_override": (
+            "ext-auth-accprofile-override {enable|disable} (default=disable): "
+            "similar mechanism -- RADIUS server can override the access PROFILE assigned to the admin. "
+            "Forged VSA + accprofile-override = attacker assigns Super_User profile to any RADIUS-authed admin."
+        ),
+    },
+}
+
+
+# ---------------------------------------------------------
+# FMG-F34: OAuth2 mail config SSRF -- new in FortiManager 7.6.7
+# Source: FortiManager 7.6.7 CLI Reference What's New section (2026-06-02)
+# ---------------------------------------------------------
+FMG_F34_OAUTH2_MAIL_SSRF = {
+    "id":       "FMG-F34",
+    "product":  "Fortinet FortiManager 7.6.7 (new feature, not present in 7.6.6)",
+    "severity": "MEDIUM -- authenticated admin SSRF via OAuth2 mail authentication server URL",
+    "source":   "FortiManager 7.6.7 CLI Reference What's New p.15 (config system mail, oauth2-auth-server added)",
+
+    "description": (
+        "FortiManager 7.6.7 added OAuth2 support to config system mail: "
+        "oauth2-auth-server, oauth2-client-id, oauth2-client-secret, oauth2-auth-scope. "
+        "The oauth2-auth-server field accepts a user-controlled URL string. "
+        "When FMG sends mail, it performs an OAuth2 token request to this URL. "
+        "No allowlist or URL format validation is documented. "
+        "An authenticated admin can set oauth2-auth-server to an internal IP/port to trigger "
+        "SSRF from the FortiManager host."
+    ),
+
+    "technical_detail": {
+        "new_in_767":     "config system mail: oauth2-auth-server, oauth2-client-id, oauth2-client-secret, oauth2-auth-scope",
+        "trigger":        "FMG sends alert mail -> OAuth2 token request to oauth2-auth-server URL",
+        "ssrf_targets":   [
+            "http://127.0.0.1:8123/ (ClickHouse -- FMG-F20)",
+            "http://127.0.0.1:6379/ (Redis -- FMG-F01)",
+            "http://169.254.169.254/ (cloud IMDS credential theft)",
+            "http://<internal-network-host>/ (lateral probe via FMG host)",
+        ],
+        "secret_storage": "oauth2-client-secret stored in FMG config -- if accessible via CMDB read (CVE-2024-23113 class), secret exfiltrated",
+    },
+
+    "auth_requirement": "Requires authenticated admin with mail config write access (system.admin profile)",
+    "chain_link": "FMG-F34 SSRF -> FMG-F20 (ClickHouse plaintext creds) -> FMG-F30 (FWEB SSRF to ClickHouse)",
+}
+
+
+# ---------------------------------------------------------
+# FMG-F35: FortiGate GUI proxy pivot -- default-enabled proxy to registered devices
+# Source: FortiManager 7.6.7 CLI Reference (2026-06-02)
+# ---------------------------------------------------------
+FMG_F35_FGTGUI_PROXY_PIVOT = {
+    "id":       "FMG-F35",
+    "product":  "Fortinet FortiManager 7.6.7",
+    "severity": "HIGH -- FMG as network pivot to internal FortiGate management interfaces; amplified by FMG-F31",
+    "source":   "FortiManager 7.6.7 CLI Reference p.61 (config system admin setting, fgt-gui-proxy)",
+
+    "description": (
+        "config system admin setting: fgt-gui-proxy = enable (DEFAULT). "
+        "FortiManager proxies FortiGate GUI traffic at port 8082 (default fgt-gui-proxy-port). "
+        "This creates an HTTP proxy route from FMG port 8082 to each registered FortiGate device's "
+        "management interface. "
+        "An attacker with FMG admin access can use this proxy to reach FortiGate management interfaces "
+        "that are otherwise unreachable from the attacker's network position. "
+        "Combined with FMG-F31 (unauthenticated device auto-registration), an attacker can: "
+        "(1) register a spoofed FortiGate device to FMG; "
+        "(2) FMG creates a GUI proxy route to the attacker's device at port 8082; "
+        "(3) any FMG admin using the GUI proxy to access the 'device' connects to attacker-controlled endpoint; "
+        "(4) attacker presents a fake FortiGate management UI to harvest admin credentials."
+    ),
+
+    "technical_detail": {
+        "fgt_gui_proxy":      "enable (default) -- FortiManager proxies FortiGate GUIs",
+        "fgt_gui_proxy_port": "8082 (default)",
+        "proxy_target":       "registered FortiGate management IP:port",
+        "attack_vector_1": (
+            "Legitimate use: FMG admin navigates to managed FortiGate GUI through FMG portal. "
+            "FMG sends HTTP request to FortiGate's HTTPS management interface and proxies response. "
+            "A compromised FortiGate device in the fleet can serve malicious HTML/JS to any admin "
+            "who accesses it via the FMG GUI proxy, executing in the FMG GUI origin context."
+        ),
+        "attack_vector_2": (
+            "FMG as SSRF pivot: FMG-F34/F30 SSRF vectors + fgt-gui-proxy = FMG makes HTTP connections "
+            "to registered device management IPs; if device IPs span internal network segments, "
+            "FMG becomes a pivot to reach otherwise-isolated network segments."
+        ),
+        "attack_vector_3": (
+            "Fake device registration (FMG-F31) + GUI proxy: "
+            "Attacker registers spoofed device, FMG creates proxy route to attacker's server at 8082. "
+            "FMG admin clicks on the spoofed device in the GUI -> request proxied to attacker server -> "
+            "attacker returns credential-harvesting fake FortiGate login page in FMG GUI context."
+        ),
+    },
+
+    "chain": "FMG-F31 (device auto-register) -> FMG-F35 (GUI proxy pivot) -> admin credential harvest via fake FortiGate UI served in FMG GUI context",
+}
+
+
+# ---------------------------------------------------------
 # FMG guardrail analysis
 # ---------------------------------------------------------
 FMG_GUARDRAIL_ANALYSIS = {
@@ -1602,7 +1851,7 @@ FMG_GUARDRAIL_ANALYSIS = {
 # ---------------------------------------------------------
 ANALYSIS_STATUS = {
     "python_layer":   "COMPLETE -- all agent_definitions analyzed: dvm_agent (device_config_agent=FMG-F18, device_operations_agent, device_diagnostics_agent), policy_agent (policy_config_agent=FMG-F17, policy_search_agent), script_agent (generate_script, script_risk_analyzer), sdwan_diagnose_root (session_finder_diagnose=FMG-F15, sdwan_diagnose, general_diagnose), advanced_mode (network_diagnostic=commented_out/inactive), vpn_diagnose, gui_agents (vpn_provision_agent, sdwan_provisioning_agent, provisioning_template, general_agent, navigation_agent), agent_views.py, views.py, faz_mcp/views.py, faz_assistant.py, agent_framework/tool_related/mcp.py, logfetcher/views.py, report/views/views.py",
-    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 33 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface; FMG-F30 from FWEB SOAR HTTP SSRF -> ClickHouse/Redis/IMDS)",
+    "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 38 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface; FMG-F30 from FWEB SOAR HTTP SSRF -> ClickHouse/Redis/IMDS; FMG-F31 FGFM trust default; FMG-F32 permanent API session; FMG-F33 RADIUS VSA ADOM injection; FMG-F34 OAuth2 mail SSRF; FMG-F35 GUI proxy pivot -- source: FMG 7.6.7 CLI Reference)",
     "apache_modules": "COMPLETE -- fmg_request.so, fmg_rewrite.so, local_mode.so, webconsole_module.so analyzed via strings",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
@@ -1709,6 +1958,44 @@ ANALYSIS_STATUS = {
                  "into ClickHouse HTTP interface via policy_name parameter injection in endpoint path; "
                  "severity: HIGH (FMG-accessible internal services have no auth expectation from loopback); "
                  "source: fmg-builtin/FWEB/operator.py (Python source, lines 100-104, 162); schema.json FWEB properties",
+        "FMG-F31: HIGH -- FGFM trust model default weakness: fgfm-deny-unknown=disable (config system global default) "
+                 "+ unreg_dev_opt=add_allow_service (config system admin setting default); "
+                 "any network-adjacent device reaching TCP 541 auto-registers to FortiManager and receives full FGFM service rights; "
+                 "attacker sends FGFM HELLO with arbitrary serial number -> FMG adds device + grants service -> "
+                 "attacker receives pushed policy packages (firewall rules, SD-WAN config, FortiGuard updates) for entire managed fleet; "
+                 "secondary: FMG-F35 GUI proxy route created to attacker-controlled endpoint; "
+                 "remediation: set fgfm-deny-unknown enable + set unreg_dev_opt add_no_service; restrict TCP 541 to known management IPs; "
+                 "source: FortiManager 7.6.7 CLI Reference pp.60,63,95 (config system global + config system admin setting)",
+        "FMG-F32: HIGH -- API admin permanent session -- no token rotation; user_type=api creates permanent non-expiring keys; "
+                 "CLI Reference p.69: 'same user account will always share the same session... do not need login/logout endpoints'; "
+                 "no login/logout audit events generated -> API key abuse invisible to SIEM; "
+                 "autoreg-user=enable variant: API user for FGFM device auto-registration with device management rights; "
+                 "leaked autoreg key enables unlimited fake device registration without admin credentials (amplifies FMG-F31); "
+                 "cors-allow-origin settable per API user -> cross-origin API access if set to *; "
+                 "source: FortiManager 7.6.7 CLI Reference p.69 (config system admin user, user_type=api)",
+        "FMG-F33: HIGH -- RADIUS VSA ADOM injection via ext-auth-adom-override; "
+                 "when ext-auth-adom-override=enable on admin account, FMG accepts ADOM assignment from Fortinet VSA (Vendor-ID 12365, Fortinet-Vdom-Name attribute); "
+                 "RADIUS UDP not integrity-protected by default; shared secret protects User-Password only, NOT VSA values; "
+                 "network-adjacent attacker can forge RADIUS Access-Accept with arbitrary Fortinet-Vdom-Name -> admin session assigned to attacker-controlled ADOM; "
+                 "secondary: ext-auth-accprofile-override enables same attack vector against access profile (Super_User escalation via forged VSA); "
+                 "default=disable -- requires misconfigured admin account; "
+                 "source: FortiManager 7.6.7 CLI Reference p.69 (config system admin user)",
+        "FMG-F34: MEDIUM -- OAuth2 mail SSRF -- new in FortiManager 7.6.7; "
+                 "config system mail adds oauth2-auth-server <string> (new in 7.6.7, absent in 7.6.6); "
+                 "FMG makes outbound OAuth2 token request to this URL when sending alert mail; "
+                 "no URL allowlist or format validation documented; "
+                 "authenticated admin sets oauth2-auth-server=http://localhost:8123/ -> ClickHouse SIEM DB query (FMG-F20); "
+                 "or http://169.254.169.254/ -> cloud IMDS credential theft; "
+                 "oauth2-client-secret stored in FMG config -> CMDB read (CVE-2024-23113 class) exfiltrates secret; "
+                 "source: FortiManager 7.6.7 CLI Reference What's New p.15 + config system mail",
+        "FMG-F35: HIGH -- FortiGate GUI proxy pivot -- fgt-gui-proxy=enable (DEFAULT), port 8082; "
+                 "FMG proxies FortiGate GUI traffic at port 8082 to each registered FortiGate management interface; "
+                 "attack vector 1: compromised FortiGate device serves malicious HTML/JS to admin via FMG GUI proxy (same-origin context); "
+                 "attack vector 2: FMG-F34/F30 SSRF + proxy routes = FMG reaches isolated network segments accessible to managed devices; "
+                 "attack vector 3 (chain with FMG-F31): attacker registers spoofed FGT device -> FMG creates proxy route to attacker server at 8082 -> "
+                 "FMG admin clicks spoofed device in GUI -> request proxied to attacker -> attacker returns credential-harvesting fake FortiGate login page in FMG GUI context; "
+                 "admin session cookie visible to attacker-controlled endpoint via proxy; "
+                 "source: FortiManager 7.6.7 CLI Reference p.61 (config system admin setting, fgt-gui-proxy)",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
