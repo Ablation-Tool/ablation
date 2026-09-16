@@ -426,3 +426,99 @@ CROSSVER_ENGINE_EVOLUTION = {
         "Cross-version homolog diffing via ablation identifies functions added/changed between releases."
     ),
 }
+
+
+# ---------------------------------------------------------
+# CROSSVER-F09: libips.so.new 7.4.8 semantic sweep results
+# Sweep: 4000 functions, 8 vulnerability query profiles, all-MiniLM-L6-v2
+# ---------------------------------------------------------
+CROSSVER_IPS_SWEEP_748 = {
+    "id":       "CROSSVER-F09",
+    "binary":   "/tmp/fgt748_datafs/lib/libips.so.new",
+    "version":  "FortiOS 7.4.8",
+    "method":   "BinFuse opcode normalization + all-MiniLM-L6-v2 semantic embedding; prologue-based function extraction",
+    "corpus":   "4000 functions (hit limit; actual function count higher)",
+
+    "top_candidates": {
+        "VA_0x415311": {
+            "label":    "compression-block-parser",
+            "score":    0.2710,  # http-header-overflow query
+            "stack_frame_bytes": 0x198,  # 408 bytes
+            "flags": [
+                "Parses three 16-bit fields from external buffer at [rdi+0], [rdi+2], [rdi+4]",
+                "Remaining-length check: r12 - 6 - field1 - field2 - field3 (total sum vs packet length)",
+                "Random access [rdi + rax + 5] where rax = field1 (word from packet) after cmp rax, 7 check",
+                "BSR-based variable-width integer decoding (0-7 byte LEB-like encoding) at 0x4159e0",
+                "Dispatch via jump table at 0x4159e0 indexed by field1 value",
+                "408-byte stack frame; called via function pointer (no direct CALL rel32 callers found)",
+                "TODO: verify [rdi + rax + 5] cannot exceed buffer bounds when field1 is max uint16",
+            ],
+            "verdict": "PLAUSIBLE -- bounds check validates total but per-segment random access not explicitly bounded",
+        },
+        "VA_0xd86f0": {
+            "label":    "linked-list-destructor",
+            "score":    0.3919,  # malloc-int-overflow query
+            "flags": [
+                "Walks r12-based pointer array of size 0x2000 bytes (512 pointers)",
+                "For each non-null pointer: reads [rbx] (next ptr), calls 0xf05d0 (free wrapper), iterates",
+                "Pattern: rbx = [r12], call free(rbx), rbx = old[rbx] -- if any code retains a pointer to freed nodes, UAF",
+                "TODO: identify all callers and check for retained references post-free",
+            ],
+            "verdict": "PLAUSIBLE -- free loop; need caller graph to confirm UAF potential",
+        },
+        "VA_0xcf8e0": {
+            "label":    "c++-object-init-or-logger",
+            "score":    0.4223,  # sprintf-stack-buf (highest single query score)
+            "flags": [
+                "xorps + movups zero-init pattern (C++ object construction)",
+                "RIP-relative string LEA followed by indirect call through vtable",
+                "Likely C++ constructor or logging wrapper -- not direct buffer overflow target",
+            ],
+            "verdict": "LOW -- instrumentation/logging class, not a packet parser",
+        },
+        "VA_0x3296f0": {
+            "label":    "multi-arg-accessor",
+            "score":    0.2962,  # format-string query
+            "flags": [
+                "6 registers pushed (r14/r13/r12/rbx + stack args via [rbp+0x10])",
+                "Feature flag check at entry: cmp byte ptr [rip + offset], 0",
+                "Validates pointer pair r12/r14 non-null before dereferencing",
+                "Reads [r14] as size field, compares to constant 8 (protocol field accessor pattern)",
+                "Stores rax from global pointer [rip + offset + 0x40] -- likely capability/config accessor",
+            ],
+            "verdict": "LOW -- protocol field accessor / config reader, not a parser",
+        },
+    },
+
+    "7.4.8_binary_inventory_highlights": {
+        "openssl_upgrade":  "libcrypto.so.3 + libssl.so.3 in IMA list -- OpenSSL 3.x (from 1.1.1n in 7.2.0)",
+        "fips_module":      "/lib/ossl-modules/fips.so -- OpenSSL FIPS 140 module included in 7.4.8",
+        "apache_modules":   "mod_md.so + mod_watchdog.so in IMA list -- Apache httpd with ACME (Let's Encrypt) support",
+        "ebpf":             "wad_dispatcher_kern.ebpf -- WAD eBPF kernel program (same as 8.0.0)",
+        "jwt":              "libjwt.so.2 -- JWT library; suggests OAuth/OIDC token handling in management interface",
+        "dlp_engine":       "libdlp.so -- Data Loss Prevention engine as shared library",
+        "kmip":             "libkmip.so.0 -- KMIP key management client (HSM integration)",
+        "node_addon":       "3505ff29135da0890d141264ed1e2af1.node -- same native addon pattern as 8.0.0",
+        "libjemalloc":      "libjemalloc.so.2 -- jemalloc allocator (heap layout predictability affects exploit reliability)",
+    },
+
+    "fgt2_crt_7.4.8_confirmed": {
+        "serial":   "109D",
+        "issuer":   "CN=fortinet-subca2001",
+        "validity": "Nov 30 2016 - Nov 20 2056",
+        "status":   "IDENTICAL to 6.0.3/7.0.3/7.2.0 -- same cert across all 5 versions",
+    },
+
+    "default_creds_7.4.8": {
+        "admin_enc": "ENC XXUp2ozpdysrQ -- IDENTICAL (now confirmed 6.0.3/7.0.3/7.2.0/7.4.8/8.0.0)",
+        "guest":     "present in system.conf.def",
+    },
+
+    "next_steps": [
+        "Manual disasm: verify 0x415311 [rdi+rax+5] access vs actual buffer bounds -- need caller context",
+        "Manual disasm: 0xd86f0 caller graph -- identify code paths that retain freed node pointers",
+        "Cross-version diff: run same semantic sweep on 7.2.0 libips.so.new; compare top-5 per query",
+        "jemalloc heap layout: document implications for exploit reliability vs glibc malloc",
+        "mod_md.so RE: Apache ACME module processes domain validation -- potential SSRF or cert injection surface",
+    ],
+}
