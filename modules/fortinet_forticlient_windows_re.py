@@ -581,3 +581,89 @@ WIN_F12_FORTIAUTH_SAML = {
         "code execution in the FortiAuth.exe process context."
     ),
 }
+
+
+# ---------------------------------------------------------
+# Cross-version driver analysis: 7.2.3 vs 7.4.7
+# ---------------------------------------------------------
+WIN_DRIVER_CROSSVER = {
+    "id":       "WIN-CROSSVER",
+    "product":  "FortiClient Windows driver suite -- 7.2.3 vs 7.4.7 cross-version comparison",
+
+    "fortitransctrl_changes": {
+        "7.2.3_size":   "109KB (FortiTransCtrl.pdb: C:\\jenkins\\FCT0\\GIT_CLONE_PARENT\\FortiClientDriver\\2019-x64-Win10Release\\)",
+        "7.4.7_size":   "134KB (+23% code growth)",
+        "added_in_7.4.7": [
+            "AleAuthConnectRegisterCallouts / AleAuthRecvAcceptRegisterCallouts (new auth callout layer)",
+            "BindRedirectClassify (new bind redirect logic -- caller classification)",
+            "ConnectionRedirectClassify (new connection redirect classification)",
+            "ConnectionRedirectRegisterCallouts_v4/v6 (explicit v4/v6 separation)",
+            "AppendIpForwardEntryToTunnel (new tunnel routing API)",
+            "apply NonExemptPorts (port exemption management)",
+            "Protocol-specific allow rules: DNS, DHCP, mDNS, LLMNR, STUN/TURN/ICE, SSDP, NetBIOS-NS, WSD, WS-Discovery",
+            "Block IPV6 mDNS query: remoteIp=0x%08x remotePort=%d (explicit IPv6 mDNS filtering)",
+            "All Tunnel: this flow was blocked (new ZTNA all-tunnel mode enforcement)",
+        ],
+        "removed_in_7.4.7": [
+            "Generic 'allow port %d for inbound traffic' (replaced by protocol-specific rules)",
+        ],
+        "significance": (
+            "The 23% code growth in fortitransctrl.sys from 7.2.3 to 7.4.7 introduces "
+            "significantly more protocol-specific classification logic. Each new callout "
+            "(BindRedirectClassify, ConnectionRedirectClassify) is a potential parsing "
+            "path for attacker-controlled network data. The STUN/TURN/ICE allow rule is "
+            "interesting: WebRTC traffic is specifically exempted from tunnel enforcement, "
+            "which could allow covert channel exfiltration through a STUN endpoint."
+        ),
+    },
+
+    "drivers_present_in_7.2.3_not_7.4.7_standalone": {
+        "FortiShield.sys": {
+            "size":     "132KB PE32+ native",
+            "purpose":  "Self-protection minifilter driver; protects FortiClient files and processes",
+            "sddl":     "D:P(A;;GA;;;SY)(A;;GA;;;BA) -- confirmed; same as fortitransctrl.sys",
+            "port":     "FltBuildDefaultSecurityDescriptor (default -- Admins+SYSTEM only)",
+            "bypass_list": (
+                "FortiShield maintains a bypass PID list ('add bypass pid %ld'). "
+                "Log: '%d trying to access %d with %x, bypass' / 'deny'. "
+                "PIDs on the bypass list can access protected paths without restriction. "
+                "List management requires Admins (port ACL). "
+                "Bypass is also automatic for SYSTEM-level processes: "
+                "'local system %d trying to access %d with %x, bypass'."
+            ),
+            "source":   "C:\\jenkins\\FCT0\\GIT_CLONE_PARENT\\FortiClientDriver\\2019-x64-Win10Release\\FortiShield.pdb",
+        },
+        "fortips_ndis6_3.sys": {
+            "size":     "199KB PE32+ native NDIS 6.3 filter driver",
+            "purpose":  "Kernel-mode IPS engine; processes all inbound/outbound network packets",
+            "apis":     ["NdisAllocateMemoryWithTagPriority", "NdisAllocateNetBuffer", "NdisGetDataBuffer", "NdisAllocateMdl"],
+            "esp_handlers": ["__esp_input", "__esp_input6", "__esp_output", "__esp_output6"],
+            "attack_surface": (
+                "fortips_ndis6_3.sys processes inbound packet data at the NDIS filter layer. "
+                "The IPS signature parser (isdb.tar rules at userspace, kernel pattern match here) "
+                "receives attacker-controlled packet payloads. "
+                "Warning: 'esp_output not big enough (must expand)' suggests dynamic buffer expansion "
+                "for ESP packet processing -- if the expansion lacks an upper bound, "
+                "NdisAllocateMemory can fail and an unhandled failure path causes kernel panic. "
+                "The isdb.tar replacement race (WIN-F06) that injects malformed IPS rules "
+                "would cause this kernel driver to process attacker-crafted patterns."
+            ),
+            "source":   "C:\\jenkins\\FCT0\\GIT_CLONE_PARENT\\FortiClientDriver\\2019-x64-Win10Release\\fortips.pdb",
+        },
+        "fortimon3.sys": "85KB process activity monitor kernel driver",
+        "fortisniff2.sys": "134KB network packet capture kernel driver",
+        "FortiAptFilter.sys": "78KB APT detection kernel filter",
+        "FortiDeviceGuard.sys": "51KB Credential Guard integration driver",
+        "fortielam.sys": "21KB Early Launch Anti-Malware driver",
+        "fortiwf2.sys": "65KB Windows Firewall integration",
+        "ftsvnic.sys": "76KB FortiClient virtual NIC driver",
+        "note": (
+            "The full EPP (endpoint protection) suite adds 7+ kernel drivers on top of "
+            "the VPN-only standalone. Each kernel driver is a privilege escalation surface "
+            "with 0-privilege-needed execution if any kernel vuln is present. "
+            "The standalone package omits FortiShield (self-protection) -- "
+            "meaning the standalone installation is more vulnerable to tampering "
+            "but has less kernel attack surface."
+        ),
+    },
+}
