@@ -709,6 +709,14 @@ CROSSVER_IPS_DIFF_720_748 = {
                 "webfovrd_compat_lua": "Loaded at startup from datafs path -- not attacker-controlled unless datafs is compromised",
                 "ips_rules_lua_count": "128 IPS rules contain 'lua/script' in their name -- these are DETECTION rules for Lua/JS injection, NOT detection via Lua scripts",
                 "assessment": "Lua eval is config-path triggered (admin input), not raw-packet triggered. Still exploitable via config injection.",
+                "sandbox_state": {
+                    "os_module": "INCLUDED -- os.execute, os.exit, os.getenv, os.rename, os.remove, os.time, os.tmpname all present",
+                    "io_module": "NOT EVIDENT from string analysis -- may be excluded",
+                    "debug_module": "NOT EVIDENT",
+                    "ffi_module": "Present (LuaJIT ffi -- direct C function call from Lua)",
+                    "os_execute_confirmed": True,
+                    "impact": "os.execute() in IPS LuaJIT -> any injected Lua code executes OS shell commands directly; CHAIN-F01 yields RCE not just VM code exec",
+                },
             },
 
             "cross_finding_chain": {
