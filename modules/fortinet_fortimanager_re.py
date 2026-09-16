@@ -3529,6 +3529,34 @@ ANALYSIS_STATUS = {
                  "note: FMG-F31 (FGFM trust default) is related -- FGFM uses device serial+cert for auth; if attacker can forge or replay a valid FGFM handshake, full managed-device trust is obtained; "
                  "remediation: add Apache-layer Require ssl-verify-client to enforce client cert before proxying to FGFM daemon; limit /sdnproxy and /ws to FortiGate IP ranges at Apache level; "
                  "source: httpd-ssl.conf VirtualHost *:8082 block, analysis 2026-09-16",
+        "FMG-F91: MEDIUM CANDIDATE -- FortiManager fgdsvc_handler pre-auth POST forwarded to FortiGuard daemon Unix socket without protocol validation (FMG8.0.0, webconsole_module.so 0xb35f, httpd.conf /fgdsvc, 2026-09-16): "
+                 "handler: fgdsvc_handler (0xb35f-0xb3e6) registered for /fgdsvc SetHandler path on HTTP port 80; POST-only (M_POST=2 check at 0xb384 vs [rdi+0x6c]); "
+                 "auth: NONE -- no session check, no Require auth directive; any unauthenticated client on TCP 80 can reach this handler; "
+                 "body read: reads POST body via local fn 0xb2a6 into a stack buffer (rsp); result stored in [rsp] (body ptr), body_size in r8d; "
+                 "forward: calls fgd_http_redirect(rdi='/var/tmp/.fgd_http_usock', rsi=ebx (server fd), rdx='fgdsvc', rcx=[rsp] (body ptr), r8d=body_size) at 0xb3c5 (PLT GOT[0x10f18]); "
+                 "trust boundary: /var/tmp/.fgd_http_usock is a Unix domain socket for the FortiGuard data daemon (fgd); "
+                 "the daemon expects the caller (Apache) to be trusted -- it does not have its own auth layer for Unix socket connections; "
+                 "attacker sends arbitrary HTTP POST body to http://fmg:80/fgdsvc -> body forwarded verbatim to FortiGuard daemon; "
+                 "daemon binary in encrypted rootfs.gz -- cannot statically verify which commands it accepts; "
+                 "potential impacts: (1) if fgd accepts command-style protocol (like fgdsvc), attacker can inject protocol messages to the FortiGuard subsystem; "
+                 "(2) if fgd has memory corruption in protocol parsing, pre-auth RCE via injected packet; "
+                 "compare FMG-F24: /logging forwards to fortilogd via UDP; /fgdsvc forwards to fgd via Unix socket -- similar trust-boundary pattern, different daemon; "
+                 "HTTP 80 path: /fgdsvc accessible on port 80 (not 443), which may be filtered/forwarded differently than main HTTPS handlers; "
+                 "note: Apache redirect of HTTP 80 to HTTPS 443 is configured via RewriteRule, but /fgdsvc has a SetHandler BEFORE the redirect applies; "
+                 "remediation: add <Location /fgdsvc> Require local or Require ip 127.0.0.1; restrict to trusted FortiGate source IPs; "
+                 "source: webconsole_module.so 0xb35f-0xb3e6 disasm, httpd.conf /fgdsvc handler config, analysis 2026-09-16",
+
+        "FMG-F92: LOW -- FortiManager fctsvc_handler pre-auth POST to /fgdsvc content-transfer service with bounded heap allocation (FMG8.0.0, webconsole_module.so 0xb3e7, httpd.conf, 2026-09-16): "
+                 "handler: fctsvc_handler (0xb3e7+) registered for /fctsvc or related path; source file: fgdsvc.c (same as fgdsvc_handler); POST-only (M_POST=2 check); "
+                 "auth: NONE -- same pre-auth trust boundary as FMG-F91; "
+                 "body processing: reads POST body; checks required header via apr_table_do callback; "
+                 "heap allocation: calloc(1, body_size+0x1001); snprintf(buf, body_size+0x1000, '%s\\n', body); strcat(buf, '\\r\\n'); rep movsb raw body to buf+strlen+2; "
+                 "size gate: strlen(snprintf_result)+2 <= 0x1000 (4096); if body_size > 4093, strlen = body_size+1, check = body_size+3 > 4096, exits -- no overflow; "
+                 "heap overflow analysis: threshold for overflow is body_size > 4094; header check exits at body_size >= 4094 (r12d=4097 > 4096); exact fencepost -- NO OVERFLOW confirmed by bounds math; "
+                 "forwards to: fgd_http_redirect with service='fctsvc' to same or different Unix socket; destination socket in encrypted rootfs.gz; "
+                 "risk: same trust boundary violation as FMG-F91 -- pre-auth attacker injects raw body into FortiContent transfer service; lower severity because body is size-limited to 4093 bytes; "
+                 "source: webconsole_module.so 0xb3e7 disasm, analysis 2026-09-16",
+
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
