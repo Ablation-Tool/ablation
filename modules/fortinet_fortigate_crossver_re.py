@@ -610,8 +610,42 @@ CROSSVER_IPS_DIFF_720_748 = {
     ],
 
     "priority_action": (
-        "Disassemble VA 0x269a1c in 7.2.0 libips.so.new -- highest malloc-int-overflow score (0.3483); "
-        "early .text location suggests possible initialization/registration path. "
-        "Also need caller graph for 0x613770 to understand input trust boundary."
+        "Disassemble VA 0x269a1c in 7.2.0 libips.so.new -- rule-ID dispatcher (FP, not exploitable). "
+        "Caller graph for 0x613770 needed to understand input trust boundary. "
+        "7.0.13 VA 0x6eac0 (malloc-int-overflow 0.4022) is the highest unverified score -- priority target."
     ),
+
+    "7.0.13_sweep": {
+        "corpus": "4000 functions (cap hit on 8.9MB binary -- high prologue density vs 7.2.0)",
+        "top_candidates": {
+            "VA_0x6eac0":  {"query": "malloc-int-overflow", "score": 0.4022, "verdict": "UNVERIFIED -- highest cross-version malloc-overflow score"},
+            "VA_0x4ff5f0": {"query": "sprintf-stack-buf",   "score": 0.4196, "verdict": "UNVERIFIED"},
+            "VA_0x1009f6": {"query": "sprintf-stack-buf + malloc-int-overflow", "score": "0.4111 / 0.3883", "verdict": "UNVERIFIED -- appears in two query profiles"},
+            "VA_0xddd00":  {"query": "use-after-free + ips-sig-heap", "score": "0.3314 / 0.3209", "verdict": "UNVERIFIED -- appears in two profiles"},
+        },
+        "three_version_comparison": {
+            "malloc_int_overflow_top": {
+                "7.0.13": "VA 0x6eac0 (0.4022)",
+                "7.2.0":  "VA 0x269a1c (0.3483, VERIFIED FP -- rule dispatcher)",
+                "7.4.8":  "VA 0xd86f0 (0.3919, linked-list destructor)",
+            },
+            "sprintf_stack_buf_top": {
+                "7.0.13": "VA 0x4ff5f0 (0.4196)",
+                "7.2.0":  "VA 0x64ddf0 (0.3806)",
+                "7.4.8":  "VA 0xcf8e0 (0.4223, VERIFIED -- C++ object init, LOW)",
+            },
+            "use_after_free_top": {
+                "7.0.13": "VA 0x1a89d0 (0.3350)",
+                "7.2.0":  "VA 0x663730 (0.3318, VERIFIED -- correct overflow guards, LOW)",
+                "7.4.8":  "VA 0xd0e20 (0.4094)",
+            },
+        },
+        "observation": (
+            "No consistent high-scoring VA across all three versions -- code reorganization between releases "
+            "prevents direct cross-version tracking without ablation homolog matching. "
+            "7.0.13 VA 0x6eac0 (malloc-int-overflow 0.4022) is the highest unverified score across all three sweeps. "
+            "7.0.13 VA 0x1009f6 appears in two query profiles (sprintf + malloc) -- suggests a parsing function "
+            "that both formats output AND allocates; prime cross-boundary vuln candidate."
+        ),
+    },
 }
