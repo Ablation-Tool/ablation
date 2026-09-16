@@ -455,8 +455,8 @@ WIN_F09_FCAUTH_PIPE = {
 WIN_F10_FCCONFIG2_JWT = {
     "id":       "WIN-F10",
     "product":  "FortiClient Windows -- FCConfig2.exe (Rust/Tokio WebSocket+OIDC config daemon); binds 127.0.0.1:8011; JWT 'none' algorithm in signing algorithm list; local OIDC provider with potential token forgery",
-    "severity": "CRITICAL if JWT 'none' alg is accepted by the server; HIGH as a local unauthenticated config manipulation surface",
-    "class":    "JWT algorithm confusion / 'none' attack (CWE-347); local WebSocket config endpoint without verified authentication",
+    "severity": "HIGH -- local WebSocket config endpoint on 127.0.0.1:8011 accessible to all local processes; JWT 'none' alg MITIGATED (openidconnect Rust crate hard-rejects it); residual: token theft via OIDC redirect race or WebSocket pre-auth info disclosure",
+    "class":    "Local WebSocket config endpoint access control (CWE-284); OIDC redirect port race (CWE-362)",
 
     "evidence": [
         "FCConfig2.exe (11MB Rust binary) strings: '127.0.0.1:8011' (WebSocket bind address)",
@@ -488,8 +488,10 @@ WIN_F10_FCCONFIG2_JWT = {
 
     "attack_surface": {
         "jwt_none_alg": (
-            "Forge JWT with {'alg':'none', 'typ':'JWT'}.{'sh_token':'...any_user...'}. "
-            "If accepted: full WebSocket config API access without FortiClient credentials."
+            "MITIGATED: FCConfig2.exe uses openidconnect Rust crate "
+            "(C:\\279\\2902741\\ForticlientNG\\vendor\\openidconnect\\src\\verification\\mod.rs). "
+            "The crate hard-rejects alg:none in verification::mod.rs -- 'noneunrecognized JSON Web Algorithm' "
+            "is an error variant, not an accepted algorithm. Algorithm confusion attack is blocked."
         ),
         "websocket_unauthenticated": (
             "If WebSocket endpoint at ws://127.0.0.1:8011 serves any commands before JWT "
