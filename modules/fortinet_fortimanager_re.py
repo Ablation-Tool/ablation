@@ -1998,7 +1998,28 @@ ANALYSIS_STATUS = {
                      "saml_sp at path('saml/') is @csrf_exempt pre-auth endpoint; dispatches by GET param: acs/sls/forticloud-acs/forticloud-sls; "
                      "_sso_acs: OneLogin SAML process_response + _raise_if_error + internal request to 127.0.0.1:31723 /cgi-bin/module/flatui_auth for assertion_id validation; correct SAML assertion flow; "
                      "_sso_forticloud_acs: process_response + verify_response_certificate (c2py.verify_certificate_ca + CN check vs FORTICLOUD_SSO_CERT_CN) + CA loop; correct; "
-                     "_c2pygui.so ANALYSIS COMPLETE",
+                     "py_sign_data_with_key (0x8706, 2296B, METH_VARARGS, largest function in binary): PyArg_ParseTuple format 'spy#i' "
+                     "(s=key_source string/path, p=is_file bool, y#=data_bytes+len, i=sign_algo int); "
+                     "if is_file=True: checks 'Filename cannot be empty', calls access(key_source, F_OK), then fopen(key_source) + d2i_PrivateKey_fp; "
+                     "if is_file=False: BIO_new_mem_buf(key_source) + d2i_PrivateKey_bio; "
+                     "EVP_DigestSign{Init,Update,Final} + EVP_EncodeBlock -> base64 signature returned as Python string; "
+                     "PATH TRAVERSAL ANALYSIS: key_source passed directly to access()+fopen() with NO C-level path sanitization; "
+                     "Python caller (sso_idp/xml_signing.py:get_rsa_signature L42): "
+                     "  private_key_file = config.get(PRIVATE_KEY_FILENAME) -> config['private_key_file'] "
+                     "  <- sso_idp/metadata.py L34/52: get_cert_path(cfg['cert'], settings.CERT_ROOT_LOCAL, '.key'); "
+                     "get_cert_path (util/sso.py L54): os.path.abspath(os.path.join(cert_dir, cert_name)); "
+                     "  GUARD: path.startswith(cert_dir) -- missing trailing os.sep; "
+                     "  BYPASS: if cert_dir='/var/cert/local', cert_name='../localX/evil.key' -> abspath='/var/cert/localX/evil.key' "
+                     "  -> '/var/cert/localX/evil.key'.startswith('/var/cert/local') = TRUE (string prefix not path prefix) -> FMG-F96; "
+                     "  IN PRACTICE: cfg['cert'] comes from c2py.get_sys_saml_idp_cfg() = admin config store, not user input; "
+                     "  requires admin write access to cert config to exploit -> LOW severity; "
+                     "101 call sites, 57 string references extracted; no path check at C layer; fully dependent on Python caller guard; "
+                     "ATTACK VECTOR UPDATE for FMG-F93: verify_cloud_token sends vm_inst_id in plaintext request body to FortiCloud "
+                     "(cloud.py L228: data=json.dumps({...,'vm_inst_id': uuid})); MITM attacker observing the request body learns VM UUID "
+                     "directly without needing separate API call -- strengthens MITM-based HMAC forgery chain; "
+                     "forticloud_jsonrpc_login at proj/urls.py L75 (@json_call @post_only @csrf_exempt @cloud.ftnt_cloud_required): "
+                     "pre-auth (no @login_required), CSRF-exempt, gated only by ftnt_cloud_required (cloud deployment flag); "
+                     "_c2pygui.so ANALYSIS COMPLETE (including py_sign_data_with_key path traversal 2026-09-16)",
     "js_bundle":      "CONFIRMED CRITICAL -- 58383.bd3bf6b0.chunk.js + 55315.57a13f8f.chunk.js + 52096.d1dc51ae.chunk.js + App-a5834e37.4eeebfb0.js + 20921.bdc5b7d7.chunk.js analyzed; ANY_GUI_FUNCTION_CALL handler confirmed; get_ping_source_ip=cross-device JSONRPC exec; get_interface_info=cross-device JSONRPC get+path-traversal; get_sdwan_rule_info=cross-device exec via Se.j6+diagnoseSDWANService+getCategoryData; modify_configuration=UI-gated JSONRPC exec /dmworker/install/script on FGT device (FMG-F18); install_to_device=UI-gated FMG install wizard; run_script=JSONRPC exec /dmworker/install/script on policy package (FMG-F17); FMG-F15/F16/F17/F18 confirmed; 40 unique_findings total (FMG-F24/F25/F26 from webconsole_module.so; FMG-F27/F28 from FWEB+EMS SOAR connector URL injection; FMG-F29 from dmworker/dvmaux/fgfm/system public script-exec surface; FMG-F30 from FWEB SOAR HTTP SSRF -> ClickHouse/Redis/IMDS; FMG-F31 FGFM trust default; FMG-F32 permanent API session; FMG-F33 RADIUS VSA ADOM injection; FMG-F34 OAuth2 mail SSRF; FMG-F35 GUI proxy pivot -- source: FMG 7.6.7 CLI Reference; FMG-F36 sys/proxy lateral pivot; FMG-F37 ADOM path injection -- source: FMG JSON-RPC API Reference 4128 endpoints)",
     "apache_modules": "COMPLETE -- all 4 Apache modules deep binary swept: "
                      "fmg_request.so PLT mapped (13 entries -- apr_table_get=PLT.0x11a0, apr_table_set=PLT.0x11b0, apr_pstrdup=PLT.0x1180, strcmp=PLT.0x1160, cmf_query_data=PLT.0x1190, create_cmf_query_by_type=PLT.0x1140, cmf_query_free=PLT.0x1130, ap_hook_post_read_request=PLT.0x1120, pthread_mutex_lock=PLT.0x11c0, pthread_mutex_unlock=PLT.0x11d0, __stack_chk_fail=PLT.0x1150, conf_init=PLT.0x1170, puts=PLT.0x1110); "
@@ -3616,6 +3637,25 @@ ANALYSIS_STATUS = {
                  "(2) potentially cause redirect to attacker-controlled URL if URL survives process_slo() RelayState handling; "
                  "requires FortiCloud SSO enabled; comment at L658 confirms intentional: 'will fail anyway'; "
                  "source: sso_sp/views.py L652-677 analysis 2026-09-16",
+
+        "FMG-F96: LOW -- FortiManager get_cert_path directory jail uses startswith without trailing separator "
+                 "(FMG8.0.0, util/sso.py L54, sso_idp/xml_signing.py L47, 2026-09-16): "
+                 "get_cert_path(cert_name, cert_dir, ext) builds path via os.path.abspath(os.path.join(cert_dir, cert_name)); "
+                 "guard: not (path.startswith(cert_dir) and os.path.exists(path) and os.path.isfile(path)); "
+                 "flaw: startswith(cert_dir) is a string prefix check, not a path prefix check; "
+                 "if cert_dir='/var/cert/local' (example), a cert_name of '../localX/evil.key' resolves to '/var/cert/localX/evil.key'; "
+                 "'/var/cert/localX/evil.key'.startswith('/var/cert/local') = TRUE -- jail bypassed; "
+                 "correct fix: path.startswith(cert_dir + os.sep) or os.path.commonpath([path, cert_dir]) == cert_dir; "
+                 "call site: sso_idp/metadata.py L34/52 passes cfg['cert'] from c2py.get_sys_saml_idp_cfg() (admin config store); "
+                 "exploitation requires: (1) attacker can write to admin SAML IdP cert config with a traversal-containing cert name, "
+                 "(2) adjacent directory to CERT_ROOT_LOCAL exists on the filesystem with a .key file to load; "
+                 "in practice, cfg['cert'] is an admin-controlled value -- requires admin write access or a separate config injection chain; "
+                 "severity LOW: admin-controlled precondition limits blast radius; however, path confusion at C layer "
+                 "(py_sign_data_with_key accepts raw path from Python with no C-side validation) means any Python-layer bypass "
+                 "immediately becomes arbitrary private key read; "
+                 "remediation: change guard to path.startswith(cert_dir + os.sep) in get_cert_path; "
+                 "source: util/sso.py L54-60, sso_idp/xml_signing.py L42-49, sso_idp/metadata.py L34/52, "
+                 "_c2pygui.so py_sign_data_with_key 0x8706 disasm analysis 2026-09-16",
 
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
