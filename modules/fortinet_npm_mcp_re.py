@@ -358,6 +358,56 @@ FORTIMGR_ECOSYSTEM_ANALYSIS = {
     "affected_tools": [
         "n8n-nodes-fortimanager v1.8.0 (sys.proxy.executeJson)",
         "iflow-mcp-jmpijll-fortimanager-code-mode-mcp v1.0.1 (execute tool + exec method)",
+        "connector-fortinet-fortimanager-json-rpc (FortiSOAR connector; free_form action)",
         "Any tool using FortiManager /sys/proxy/json without apiPath restriction",
     ],
+}
+
+
+# ---------------------------------------------------------
+# FFSR-F01: FortiSOAR FortiManager connector -- free_form action with no URL restriction
+# ---------------------------------------------------------
+FFSR_F01_FORTISOAR_FREE_FORM = {
+    "id":       "FFSR-F01",
+    "product":  "FortiSOAR connector-fortinet-fortimanager-json-rpc v2025",
+    "severity": "HIGH -- free_form action passes user-controlled URL and method to pyFMG without restriction",
+    "class":    "Unrestricted JSON-RPC passthrough in FortiSOAR playbook connector (CWE-441)",
+
+    "description": (
+        "The FortiSOAR FortiManager connector's free_form action (operations.py:70) calls: "
+        "action_func = getattr(fmg, 'free_form'); url = data['data'][0].get('url', url); "
+        "status, action_response = action_func(method, **data). "
+        "The url and method are taken from the FortiSOAR playbook operator's input. "
+        "No URL allowlist or restriction is enforced at the connector level. "
+        "A FortiSOAR playbook with FortiManager connector access can call: "
+        "  url=/sys/proxy/json, method=exec, data={action:'get', resource:'/api/v2/cmdb/system/admin', "
+        "  target:['/device/FW01']} "
+        "  -> reads FortiGate admin credentials via FortiManager proxy. "
+        "disable_request_warnings=True suppresses urllib3 InsecureRequestWarning globally "
+        "even when verify_ssl=True is set -- this hides TLS misconfiguration from logs."
+    ),
+
+    "vulnerable_code": (
+        "with FortiManager(..., disable_request_warnings=True) as fmg: "
+        "  action_func = getattr(fmg, action); "
+        "  url = data['data'][0].get('url', url); "
+        "  status, action_response = action_func(method, **data)"
+    ),
+
+    "free_form_example": {
+        "url":    "/sys/proxy/json",
+        "method": "exec",
+        "data": {
+            "data": [{
+                "url": "/sys/proxy/json",
+                "data": {
+                    "action": "get",
+                    "resource": "/api/v2/cmdb/system/admin",
+                    "target": ["/device/FortiGate01"]
+                }
+            }]
+        }
+    },
+
+    "source": "connector-fortinet-fortimanager-json-rpc/fortinet-fortimanager-json-rpc/generic_json_rpc.py:174-204",
 }
