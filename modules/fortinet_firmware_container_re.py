@@ -937,3 +937,159 @@ ANALYSIS_STATUS = {
         ),
     },
 }
+
+
+# ---------------------------------------------------------
+# FortiOS 8.0.0 VM64 rootfs binary inventory (via IMA measurement list)
+# Source: /mnt/fgt800p1/hash_bin.sha256 (410 entries, 39,629 bytes)
+# rootfs.gz is encrypted (magic cbd2efa3) but IMA hash list reveals all binaries
+# ---------------------------------------------------------
+FORTIOS_800_ROOTFS_INVENTORY = {
+    "id":      "FGT-ROOTFS-800-INVENTORY",
+    "product": "FortiOS 8.0.0 VM64-KVM -- full rootfs binary inventory from IMA measurement list",
+    "source":  "/mnt/fgt800p1/hash_bin.sha256 (SHA256 hashes of 410 IMA-measured binaries)",
+    "rootfs_access_method": (
+        "rootfs.gz is encrypted (magic cbd2efa3). "
+        "hash_bin.sha256 is an IMA (Integrity Measurement Architecture) list of "
+        "SHA256 hashes for all measured binaries INSIDE the encrypted rootfs. "
+        "This provides the complete binary inventory without decryption."
+    ),
+
+    "rootfs_decryption_architecture": {
+        "conclusion": "TPM2-sealed decryption key (hardware-bound, not static)",
+        "evidence": [
+            "No cbd2efa3 magic or static AES key in vmlinux text/data sections",
+            "No static 16/32-byte key candidates near fos_keyring or rootfs loader code",
+            "TPM2 Software Stack present: libtss2-esys.so.0, libtss2-sys.so.1, libtss2-mu.so.0, libtss2-tcti-device.so.0, libtss2-rc.so.0, libtss2-tctildr.so.0",
+            "TPM2 OpenSSL provider: /lib/ossl-modules/tpm2.so",
+            "/bin/eltt2 (ELF Tool for TPM2) measured by IMA",
+            ".fos_keyring string in vmlinux: Linux keyring for FortiOS key management",
+            "/data/.db and /data/.db.x: encrypted/integrity-protected config database",
+        ],
+        "mechanism": (
+            "Boot sequence hypothesis: "
+            "(1) flatkc BIOS stub decompresses vmlinux; "
+            "(2) vmlinux verifies .chk RSA signatures (fortinet-subca2003 key) on flatkc, rootfs.gz, datafs.tar.gz; "
+            "(3) kernel interacts with TPM2 via libtss2 to unseal the AES decryption key -- "
+            "    key is sealed to PCR values (TPM2 policy), so it's only available if "
+            "    the boot measurement chain matches expected values; "
+            "(4) kernel decrypts rootfs.gz using unsealed key; "
+            "(5) IMA enforces binary hashes from hash_bin.sha256 at load time. "
+            "Consequence: rootfs decryption requires either TPM2 hardware or PCR value prediction."
+        ),
+        "attack_surface": [
+            "TPM2 policy binding -- if PCR values are predictable in VM context, attacker can unseal key",
+            "libtss2 stack vulnerabilities -- 6 libtss2 libraries, all measured by IMA but loaded from rootfs",
+            "chicken-and-egg: IMA enforcement requires rootfs, rootfs requires TPM unsealing -- boot race possible",
+        ],
+    },
+
+    "critical_findings": {
+        "nodejs_web_ui": {
+            "binaries": ["/bin/node", "/node-scripts/index.js", "/node-scripts/worker.js"],
+            "chunk_files": "240+ JavaScript chunk files (hash-named, SPA bundle)",
+            "native_addon": "/node-scripts/45a595f0b26e2dda0ae0dd596a6ab028.node (C++ native addon)",
+            "significance": (
+                "FortiOS 8.0.0 web management interface is Node.js-based. "
+                "240+ JS chunk files = complete web UI SPA. "
+                "Native .node addon = C++ code loaded into Node.js runtime. "
+                "Attack surface: JS prototype pollution, native addon memory safety, "
+                "Node.js event loop DoS, require() path traversal in addon."
+            ),
+            "severity": "CRITICAL",
+        },
+        "ebpf_wad": {
+            "binary": "/lib/wad_dispatcher_kern.ebpf",
+            "significance": (
+                "WAD (Web Application Daemon) loads an eBPF program for kernel-level packet dispatch. "
+                "eBPF program is in the IMA measurement list -- kernel verifies it at load. "
+                "Attack surface: eBPF verifier bypass, eBPF map out-of-bounds, "
+                "malicious eBPF bytecode if WAD accepts externally-supplied programs."
+            ),
+            "severity": "HIGH",
+        },
+        "oqs_provider": {
+            "binary": "/lib/ossl-modules/oqsprovider.so",
+            "significance": (
+                "Open Quantum Safe (liboqs) OpenSSL provider -- post-quantum cryptography. "
+                "FortiOS 8.0.0 includes PQC algorithms (Kyber, Dilithium, etc.) via oqsprovider. "
+                "Attack surface: PQC implementation bugs in liboqs (complex new code); "
+                "key encapsulation oracle attacks if hybrid key exchange is misimplemented."
+            ),
+            "severity": "MEDIUM",
+        },
+        "dpdk_offload": {
+            "binaries": ["/lib/libdpdk.so", "/lib/libdpdkhelper.so"],
+            "significance": (
+                "FortiOS uses DPDK for high-speed packet processing in VM context. "
+                "DPDK operates in user space with direct NIC access via UIO/VFIO. "
+                "Attack surface: DPDK packet parsers (Ethernet/IP/L4) -- malformed packets "
+                "bypass the kernel network stack and hit DPDK directly."
+            ),
+            "severity": "HIGH",
+        },
+        "mellanox_rdma": {
+            "binaries": ["/lib/libibverbs.so.1", "/lib/libmlx4.so.1", "/lib/libmlx5.so.1", "/lib/libmana.so.1"],
+            "significance": (
+                "InfiniBand/RDMA support + Mellanox ConnectX-4/5 SmartNIC libraries. "
+                "FortiOS supports Mellanox NIC offload. "
+                "RDMA bypasses kernel network stack entirely -- DMA-capable remote write "
+                "to registered memory regions."
+            ),
+            "severity": "HIGH",
+        },
+        "hyperscan_ips": {
+            "binary": "/lib/libhs.so.5",
+            "significance": (
+                "Intel Hyperscan -- PCRE/regex acceleration library for IPS/UTM. "
+                "Hyperscan 5.x -- check for known vulnerabilities in the RE2 compilation layer. "
+                "ReDoS via crafted patterns injected through IPS rule update mechanism."
+            ),
+            "severity": "MEDIUM",
+        },
+        "saml_daemon": {
+            "binary": "/bin/samld",
+            "significance": (
+                "Dedicated SAML SSO daemon (/bin/samld + /bin/samld.map). "
+                "FortiOS 8.0.0 has a standalone SAML processing binary. "
+                "SAML XML parsing + signature verification -- class of bugs: "
+                "SAML signature wrapping, XML injection in assertion attributes."
+            ),
+            "severity": "HIGH",
+        },
+        "kmip_library": {
+            "binary": "/lib/libkmip.so.0",
+            "significance": (
+                "KMIP (Key Management Interoperability Protocol) client library. "
+                "FortiOS 8.0.0 can connect to external KMIP key management servers. "
+                "Attack surface: KMIP server impersonation -> malicious key material delivery; "
+                "KMIP protocol parser vulnerabilities in libkmip."
+            ),
+            "severity": "MEDIUM",
+        },
+    },
+
+    "library_inventory_notable": [
+        "/lib/libcmdbapi.so -- CMDB API (config management, core attack surface)",
+        "/lib/libsslvpndapi.so -- SSL VPN daemon API (FortiGate SSL VPN internals)",
+        "/lib/libfips_crypt.so + libfips.so -- FIPS 140-2 crypto implementation",
+        "/lib/libdlp.so -- DLP engine",
+        "/lib/libecryptfs.so -- eCryptfs per-file encryption (for /data?)",
+        "/lib/libjwt.so.2 -- JWT library (FortiOS uses JWT for some auth flows)",
+        "/lib/libwebsocket.so -- WebSocket support (Node.js web UI?)",
+        "/lib/libxmlsec1-openssl.so.1 + libxmlsec1.so.1 -- XML security (SAML/xmldsig)",
+        "/lib/libIPS_MB.so.1 -- Intel Multi-Buffer (batch crypto acceleration)",
+        "/lib/liblasso.so.3 -- Lasso SAML library (second SAML implementation alongside samld?)",
+        "/lib/libjemalloc.so.2 + libmimalloc.so.2 -- two allocators (jemalloc + mimalloc; context-dependent)",
+        "/lib/librabbitmq.so -- RabbitMQ AMQP client (FortiOS sends messages to message queues)",
+        "/lib/gssntlmssp.so -- NTLM SSP for Kerberos GSSAPI (Active Directory auth)",
+    ],
+
+    "ima_hash_list_note": (
+        "hash_bin.sha256 only covers IMA-measured binaries. "
+        "FortiOS has additional binaries not measured by IMA (scripts, config files). "
+        "The 410 entries represent the security-critical binary surface. "
+        "The node-scripts/ JS chunks have hashes but are not JIT-compiled -- "
+        "the hash only prevents substitution, not code injection via JS prototype chains."
+    ),
+}
