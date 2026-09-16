@@ -67,6 +67,66 @@ CVE_2023_48788_MECHANICS = {
 
 
 # ---------------------------------------------------------
+# CVE-2023-48788 addendum: Python PoC REGISTER message format
+# (source: cve-pocs-extra/CVE-2023-48788/CVE-2023-48788.py)
+# ---------------------------------------------------------
+CVE_2023_48788_REGISTER_FORMAT = {
+    "id":       "FCEMS-REGISTER-F01",
+    "product":  "FortiClient EMS -- REGISTER message format from Python PoC",
+    "source":   "cve-pocs-extra/CVE-2023-48788/CVE-2023-48788.py",
+    "note":     "Addendum to CVE_2023_48788_MECHANICS; Python PoC reveals protocol details not in MSF module",
+}
+
+CVE_2023_48788_REGISTER_MECHANICS = {
+    "message_type": "REGISTER (the initial FortiClient agent registration message sent to FcmDaemon.exe)",
+
+    "fctuid_injection_placement": (
+        "The Python PoC hardcodes a base FCTUID UUID: "
+        "  CBE8FC122B1A46D18C3541E1A8EFF7BD "
+        "The SQL injection is appended directly after the UUID value: "
+        "  FCTUID=CBE8FC122B1A46D18C3541E1A8EFF7BD{SQLI} "
+        "FcmDaemon parses the FCTUID field as a string; the injected SQL extends beyond "
+        "the UUID format boundary without validation. "
+        "The hardcoded UUID is the 'dummy' FortiClient device identifier -- any UUID-formatted "
+        "value works; the injection suffix is what triggers SQL execution."
+    ),
+
+    "registration_header_fields": (
+        "The REGISTER MSG_HEADER includes additional fields: "
+        "  X-FCCK-REGISTER: base64-encoded JSON containing system info (OS version, hostname, IP). "
+        "  FCTUID: UUID + SQL injection suffix. "
+        "  FCTVER: FortiClient version string (spoofed in PoC). "
+        "  PEER_IP: source IP (spoofed in PoC). "
+        "The X-FCCK-REGISTER field contains the sysinfo blob that FortiClient sends "
+        "during enrollment -- it is not involved in the injection but must be present "
+        "for FcmDaemon to process the registration as a valid FortiClient message."
+    ),
+
+    "detection_primitive": (
+        "Successful exploitation detection: KA_INTERVAL in the response body. "
+        "FcmDaemon responds to a valid REGISTER message with a keepalive interval value: "
+        "  'KA_INTERVAL={seconds}' "
+        "The Python PoC checks for 'KA_INTERVAL' in the response to confirm "
+        "the registration was processed (and the SQL injection was passed to FCTDas/MSSQL). "
+        "If KA_INTERVAL is NOT present, the registration was rejected before reaching SQL. "
+        "This provides a reliable exploitation confirmation primitive."
+    ),
+
+    "re_insight": (
+        "The Python PoC reveals two things not visible in the MSF module: "
+        "1. The injection is an extension of a hardcoded UUID -- any valid UUID prefix works; "
+        "   FortiClient agents all share the same UUID format, making the field trivially forgeable. "
+        "2. The KA_INTERVAL response field is a protocol-level confirmation primitive -- "
+        "   it does not indicate SQL execution success but does confirm the REGISTER message "
+        "   was accepted by FcmDaemon and forwarded to FCTDas (where SQL injection occurs). "
+        "Ablation semantic sweep: find the FCTUID parser in FcmDaemon.exe; "
+        "  query: 'function parsing FCTUID field from MSG_HEADER; concatenates to SQL string without sanitization'. "
+        "Binary: FcmDaemon.exe is a Windows PE -- requires PE disassembler; not available via firmware extraction."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # CVE-2020-9294: FortiMail unauthenticated login bypass (version detection)
 # ---------------------------------------------------------
 CVE_2020_9294 = {
