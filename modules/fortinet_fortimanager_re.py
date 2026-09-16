@@ -3110,6 +3110,33 @@ ANALYSIS_STATUS = {
                  "before constructing the RPC params URL; validate handler_id matches integer or UUID format; "
                  "source: alert/views.py L291-324 (_handler_reset), L336-352 (basic/threat/correlation callers), "
                  "util/common.py get_rpc_proxy(), analysis 2026-09-15",
+
+        "FMG-F72: HIGH -- FortiManager SOAR Active Directory connector inserts attacker-controlled trigger data into LDAP filter string without escaping, enabling LDAP injection to enumerate or bypass AD attribute-based access control (FMG8.0.0, fmg-builtin/AD/operator.py L582-597, L1574-1579, 2026-09-15): "
+                 "class: LDAP filter injection / unauthorized AD enumeration; "
+                 "root cause: get_attribute() at AD/operator.py L582-597 builds LDAP filter strings via .format() with unsanitized search_attr_value; "
+                 "L591: filter = '(&{0}(sAMAccountName={1}))'.format(filter, search_attr_value) -- no ldap3.utils.dn.escape_filter_chars() call; "
+                 "L593-595: filter = '(&{0}(|(userPrincipalName={1})(mail={1})))'.format(filter, search_attr_value) -- same pattern; "
+                 "L596-597: filter = '(&{0}(distinguishedName={1}))'.format(filter, search_attr_value) -- same pattern; "
+                 "zero calls to escape_filter_chars or any ldap3.utils function in the entire 2344-line file (confirmed by grep); "
+                 "data flow: execute() at L1574-1579: search_attr_value = FAZUtilsOperator.parse_input(context, self.search_attr_value, context_dict) -> params['search_attr_value'] = search_attr_value -> "
+                 "get_attribute(conn, base_dn, search_attr_name, search_attr_value) at L1538-1542 -> filter string at L591; "
+                 "trigger data (playbook input, ultimately from SIEM event fields) flows through FAZUtilsOperator.parse_input() without sanitization; "
+                 "same vulnerable code in: fmg-soar/AD/operator.py (identical file, confirmed by diff), soar-connectors/AD/operator.py (identical 2344 lines); "
+                 "injection payload example: search_attr_value='*)(objectClass=*))(&(cn=*' -> "
+                 "constructed filter '(&(objectclass=*)(sAMAccountName=*)(objectClass=*))(&(cn=*))' -> "
+                 "dumps all AD objects regardless of intended query; "
+                 "higher impact payload: inject filter branches that return objects the playbook is not supposed to see "
+                 "(e.g. service account credentials stored as AD attributes, privileged group membership); "
+                 "distinguish from SQL injection in FOS/operator.py (F50-class): SQL is blocked by int() cast; LDAP has no equivalent mitigation here; "
+                 "attack path: SIEM event with malicious content in a field mapped to search_attr_value -> Airflow DAG trigger -> "
+                 "LDAP injection in AD connector -> read arbitrary AD object attributes; "
+                 "if SOAR playbook uses AD query result to gate decisions (e.g. check group membership before blocking), "
+                 "injection breaks the gate and can allow attacker to appear as member of any group; "
+                 "remediation: wrap all search_attr_value insertions with ldap3.utils.dn.escape_filter_chars(search_attr_value) "
+                 "before inserting into filter string; "
+                 "also apply to base_dn, object_dn, and any DN-sourced values passed to conn.modify/conn.search; "
+                 "source: fmg-builtin/AD/operator.py L582-598 (get_attribute), L625-630 (perform_action), "
+                 "L1515-1579 (ADGetObjectDetailsOperator.execute), analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
