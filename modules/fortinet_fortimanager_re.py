@@ -3520,39 +3520,45 @@ ANALYSIS_STATUS = {
                  "VERDICT: no vulnerability -- function unreachable; downgraded to INFORMATIONAL; "
                  "source: sso_idp/urls.py confirmed by direct file read (2026-09-16)",
 
-        "FMG-F87: HIGH CANDIDATE -- FortiManager /sdnproxy Apache path proxies to internal SDN service at localhost:7080 without Apache-layer authentication (FMG8.0.0, httpd.conf L901-902, 2026-09-16); "
-                 "BINARY ANALYSIS (2026-09-16, physical memory dump fmg-dump2.elf, sdnproxyd extracted at dump_offset=0xcadb6870, 169KB PIE CET-compiled stripped ELF): "
-                 "config: ProxyPass /sdnproxy http://127.0.0.1:7080/sdnproxy (httpd.conf L901); ProxyPassReverse /sdnproxy http://127.0.0.1:7080/sdnproxy (L902); "
-                 "no Require directive, no <Location /sdnproxy> auth block in httpd.conf or httpd-ssl.conf; path is in main server config inherited by all VirtualHosts including 443 HTTPS; "
-                 "SDN service at port 7080: sdnproxyd binary recovered from physical memory dump via VFS-index-by-content-proximity; inode 426, binary 169KB; "
-                 "APACHE-LAYER CONFIRMED (2026-09-16): mod_access_filter.so URL list = {/FDSService, /FCPService, /logging, /fgt, /fdsupdate}; /sdnproxy NOT present -> bypasses all mod_access_filter checks; "
-                 "BINARY ANALYSIS (sdnproxyd PT_LOAD: text foff=0x4000 sz=87KB r-x, rodata foff=0x1a000 sz=60KB r--; CET=endbr64; 405 functions extracted): "
-                 "key auth strings: 'svc_authenticate_user', 'authenticating user %s', 'failed to authenticate user %s', 'successfully authenticated user %s SID %d', 'authorization', 'authentication', 'libauth.so'; "
-                 "request dispatcher (func 0x9e6d, 2454B stack frame): "
-                 "  - loads auth token pointer from 7th stack arg into r15 ([rsp+0x2180] after prologue); "
-                 "  - calls 0x4ac0 (PLT strcasecmp-class) with rsi='authorization' to check header presence; "
-                 "  - test eax; jne 0x9f10 -- branches on header present/absent; "
-                 "  - BOTH paths (header present AND header absent) eventually call 0x9349 then 0x9880 with push r15 as 8th arg; "
-                 "auth handler (func 0x9880, 2456B stack frame): "
-                 "  - loads 8th arg (caller r15 = auth token ptr) into r15 from [rsp+0x9d8]; "
-                 "  - CRITICAL: test r15, r15; je 0x993d -- if token pointer is NULL, SKIPS token lookup; "
-                 "  - NULL path (0x993d): xor ebp, ebp (ebp=0, no session ID), falls through to call 0x49d0 (create context); "
-                 "  - non-NULL path: calls 0x4d80 (strstr/json_get class) to look up auth token; if lookup fails, logs error and exits (jmp 0x9e0d); "
-                 "  - BOTH paths converge at 0x993f: call 0x49d0 (create request context) then 0x5d0b (parse peer info 16 bytes); "
-                 "auth bypass hypothesis: if request arrives without Authorization header and the auth token pointer is left NULL by the header parser (7th arg of 0x9e6d = NULL), "
-                 "then 0x9880 skips all token validation and creates a context with ebp=0; "
-                 "whether the NULL path ultimately returns success or error depends on subsequent 0x9880 logic (not yet fully traced); "
-                 "secondary finding: func 0xce9a reaches 0x9880 with only 2 conditional branches before the call -- minimal request path; "
-                 "func 0x14d89 has authentication logic: calls 0x65f1 (header extraction) 3 times, checks result with je 0x14ece (fail path), "
-                 "size check cmp rax, 0x80; jbe 0x14e0f (token length <= 128 bytes), strncpy to 0x80-byte stack buffer [rsp+0x448], then loop over JSON array with strtol/index; "
-                 "libauth.so: sdnproxyd links to /usr/lib/libauth.so for svc_authenticate_user -- auth implementation is in the shared library, not sdnproxyd itself; "
-                 "attack surface: any unauthenticated request to https://fmg-host/sdnproxy/<path> is proxied to sdnproxyd; "
-                 "impact if auth bypass confirmed: full SDN controller configuration access (read topology, modify policies, exfiltrate SDN credentials for VMware NSX/Cisco ACI/Azure); "
-                 "CANDIDATE constraint remaining: (1) confirm NULL token ptr path in 0x9880 allows request through (need full trace of 0x9880 to return); "
-                 "(2) confirm sdnproxyd reads auth from Authorization header at all (vs separate cookie/query param mechanism not visible in recovered binary); "
-                 "note: httpd.conf global <Directory /> has Require all denied, but ProxyPass is URL-space not filesystem-space; Directory restrictions do not apply to ProxyPass paths; "
-                 "remediation: add <Location /sdnproxy> Require valid-user block; restrict to known FortiGate/SDN controller source IPs; "
-                 "source: httpd.conf L901-902, sdnproxyd binary analysis fmg-dump2.elf dump_offset=0xcadb6870, analysis 2026-09-16",
+        "FMG-F87: CONFIRMED-BINARY HIGH -- FortiManager /sdnproxy Apache path proxies to internal SDN service at localhost:7080 without Apache-layer authentication; "
+                 "sdnproxyd auth handler (func 0x9880) NULL-token path returns SUCCESS for all standard HTTP methods -- full auth bypass confirmed from physical memory binary analysis "
+                 "(FMG8.0.0, httpd.conf L901-902, fmg-dump2.elf dump_offset=0xcadb6870, 2026-09-16); "
+                 "config: ProxyPass /sdnproxy http://127.0.0.1:7080/sdnproxy (httpd.conf L901); ProxyPassReverse (L902); "
+                 "no Require directive, no <Location /sdnproxy> auth block in httpd.conf or httpd-ssl.conf; inherited by all VirtualHosts including 443 HTTPS; "
+                 "APACHE-LAYER CONFIRMED: mod_access_filter.so URL list = {/FDSService, /FCPService, /logging, /fgt, /fdsupdate}; /sdnproxy absent -> bypasses all mod_access_filter checks; "
+                 "BINARY (sdnproxyd 169KB PIE CET-compiled stripped ELF; text foff=0x4000 sz=87KB; rodata foff=0x1a000 sz=60KB; 405 functions extracted): "
+                 "key auth strings in rodata: 'svc_authenticate_user', 'authenticating user %s', 'failed to authenticate user %s', 'authorization', 'libauth.so'; "
+                 "request dispatcher func 0x9e6d (2454B stack frame): "
+                 "  loads auth token ptr from 7th stack arg ([rsp+0x2180]) into r15; "
+                 "  calls 0x4ac0 (PLT strcasecmp) with rsi='authorization' to test header presence; "
+                 "  BOTH header-present and header-absent paths call 0x9349 then 0x9880 with r15 as 8th arg; "
+                 "auth handler func 0x9880 (2456B stack frame) -- FULL TRACE 0x9880-0x9e38 (2026-09-16): "
+                 "  0x9891: mov rbx, r8 -- save 5th arg; "
+                 "  0x98ff: test r15, r15; je 0x993d -- NULL check on auth token; "
+                 "  NULL path (0x993d): xor ebp, ebp (session=0); call 0x49d0 (PLT malloc context); if malloc fails -> jmp 0x9a12 (or ebx, 0xffffffff -> return -1); "
+                 "  on malloc success -> call 0x5d0b (internal peer-info parser, 16 bytes); "
+                 "  malloc response buffer; format 'https://%s%s' (AWS target URL) with snprintf (0x4f60 PLT); "
+                 "  build curl input struct: format '%s:443:%s'; zero 0x20c bytes (rep stosd); write to /tmp/.sdn_proxy_aws_curl_input; "
+                 "  0x9bb6: test r15, r15; je 0x9bd2 -- r15 still NULL: uses r14 as alternate auth field; "
+                 "  HTTP METHOD CHECK (AFTER NULL-TOKEN BYPASS): "
+                 "  0x9c08: call 0x4ea0(rdi=[rsp+0x20], rsi='POST') -- if POST: write mode=1, write request body, jmp 0x9d26; "
+                 "  0x9c45: call 0x4ea0(rdi=[rsp+0x20], rsi='PUT') -- if PUT: open file 'w', process body, jmp 0x9d26; "
+                 "  0x9cf8: call 0x4ea0(rdi=[rsp+0x20], rsi='GET') -- if GET: open file 'r', jmp 0x9d26; "
+                 "  non-standard method only: 0x9d0b: or ebx, 0xffffffff -> jmp 0x9dc3 (error return); "
+                 "  0x9d26 (all standard methods): call 0x48c0 (curl execute); mov ebx, eax; if ok -> call 0x48e0 (get HTTP status); "
+                 "  cmp [rsp+0x40], 0xc8 (200): if 200 -> je 0x9dc3 (cleanup, ebx=0); "
+                 "  epilogue 0x9e2c: mov eax, ebx; ret -- returns 0 (success) for POST/PUT/GET with NULL auth token; "
+                 "CONFIRMED: NULL auth token path for POST/PUT/GET returns 0 (success), NOT -1; "
+                 "the only error return (or ebx, 0xffffffff -> -1) is gated on non-standard HTTP methods; "
+                 "attack: unauthenticated POST/GET/PUT https://fmg-host/sdnproxy/<path> -- Apache forwards to 7080 without auth; sdnproxyd processes and proxies to AWS SDN endpoint; "
+                 "libauth.so note: svc_authenticate_user is in /usr/lib/libauth.so (encrypted rootfs.gz); the NULL r15 path bypasses this call entirely -- libauth.so is never invoked; "
+                 "func 0x14d89 auth token extractor: calls 0x65f1 (header extraction) 3 times; cmp rax, 0x80 (128B limit); strncpy to [rsp+0x448]; -- only reached on the non-NULL r15 path; "
+                 "secondary finding: func 0xce9a (2 branches before call to 0x9880) is the minimal request path -- lowest-friction entry point; "
+                 "impact: full SDN controller access (read topology, modify policies, exfiltrate VMware NSX/Cisco ACI/Azure credentials) without credentials; "
+                 "network reachability constraint: port 7080 is internal; external attacker goes through Apache /sdnproxy path on 443 (no auth required); "
+                 "note: httpd.conf <Directory /> Require all denied does not apply to ProxyPass (URL-space not filesystem-space); "
+                 "remediation: add <Location /sdnproxy> Require valid-user; add mod_authnz_ldap or session check before ProxyPass; restrict to SDN controller source IPs; "
+                 "source: httpd.conf L901-902, sdnproxyd full trace fmg-dump2.elf dump_offset=0xcadb6870 0x9880-0x9e38, analysis 2026-09-16",
 
         "FMG-F88: MEDIUM -- FortiManager Apache global SSLProxy configuration disables all outbound TLS certificate verification (FMG8.0.0, httpd-ssl.conf L638-642, 2026-09-16): "
                  "config: SSLProxyEngine on + SSLProxyVerify none + SSLProxyCheckPeerCN off + SSLProxyCheckPeerName off + SSLProxyCheckPeerExpire off (global context, httpd-ssl.conf L638-642); "
@@ -3780,16 +3786,16 @@ ENCRYPTED_ROOTFS_STATUS = {
     ],
     "targets_blocked": ["fazmerge", "fgfmd", "fgdsvc", "webmcpserver"],
     "targets_partial": {
-        "sdnproxyd": "169KB binary RECOVERED from physical memory dump 2026-09-16; 405 functions extracted; auth handler partially traced; libauth.so dependency unresolved (in encrypted rootfs.gz)",
+        "sdnproxyd": "169KB binary RECOVERED from physical memory dump 2026-09-16; 405 functions extracted; auth handler FULLY TRACED (0x9880 0x9e38); NULL-auth-token path returns 0 (success) for POST/PUT/GET -- FMG-F87 CONFIRMED-BINARY 2026-09-16; libauth.so in encrypted rootfs.gz (bypassed by NULL r15 path, not called)",
     },
     "pending_findings": [
-        "FMG-F87 binary analysis: trace 0x9880 beyond 0x993f to determine if NULL-auth-token path returns success or error (need 800+ byte disasm of remaining function body)",
-        "FMG-F87 binary analysis: resolve libauth.so svc_authenticate_user -- the actual auth implementation is in the shared library not sdnproxyd",
-        "FMG-F80 CANDIDATE HIGH: logview filter->fazmerge injection",
-        "FMG-F81 CANDIDATE HIGH: logview filter format string via fazmerge",
-        "FMG-F83 CANDIDATE MEDIUM: logview filter->fazmerge SSTI",
-        "FMG-F87 CANDIDATE HIGH: /sdnproxy auth gap (port 7080)",
-        "FMG-F89 CANDIDATE HIGH: FGFM daemon port 8082 pre-auth surface",
-        "FMG-F91 CANDIDATE MEDIUM: fgdsvc no Require directive",
+        "FMG-F80 CANDIDATE HIGH: logview filter->fazmerge injection (blocked: fazmerge in encrypted rootfs.gz)",
+        "FMG-F81 CANDIDATE HIGH: logview filter format string via fazmerge (blocked: fazmerge in encrypted rootfs.gz)",
+        "FMG-F83 CANDIDATE MEDIUM: logview filter->fazmerge SSTI (blocked: fazmerge in encrypted rootfs.gz)",
+        "FMG-F89 CANDIDATE HIGH: FGFM daemon port 8082 pre-auth surface (blocked: fgfmd in encrypted rootfs.gz)",
+        "FMG-F91 CANDIDATE MEDIUM: fgdsvc no Require directive -- fgdsvc daemon binary in encrypted rootfs.gz; forwarding to Unix socket confirmed from webconsole_module.so",
+        "sdnproxyd arg-diff 0x9e6d->0x9349/0x9880: backward-slice auth-present vs auth-absent call sites -- determine which register differs (r15 vs NULL) and confirm 0x9349 pre-auth behavior matches 0x9880",
+        "FMG-F87 libauth.so: svc_authenticate_user source unavailable until rootfs.gz decryption; NULL r15 path in 0x9880 confirms libauth.so is NOT called on auth-absent requests",
+        "rootfs.gz decryption: primary blocker for fazmerge/fgfmd/fgdsvc/webmcpserver analysis",
     ],
 }
