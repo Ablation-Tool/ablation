@@ -1980,6 +1980,7 @@ ANALYSIS_STATUS = {
                      "main at 0x12e4: pthread_mutex_lock, create_cmf_query_by_type(0), cmf_query_data() -> memcpy 5176 bytes into 5192-byte stack buffer (SAFE: 16B headroom + stack canary verified); "
                      "apr_table_get(headers_in, 'Host') -> if Host header present and existing hostname != CMF data: apr_table_set(headers_in, 'Host', CMF_data[0x1325]) + apr_pstrdup to request_rec+0x50; "
                      "VERDICT: CMF-config-driven Host header injection for virtual host routing -- CMF data is admin-controlled CMDB config, not user input; no direct attack surface; NO FINDING; "
+                     "fmg_request.so DEEP DISASM COMPLETE (2026-09-16): PLT fully resolved (13 symbols confirmed); main fn 0x12e4 disassembled -- sub rsp,0x1448 (5192-byte stack buffer); rep stosd ecx=0x50e zero-fills 5176 bytes (SAFE: 16B headroom + canary at rsp+0x1438); create_cmf_query_by_type(type=0) then cmf_query_data -> rep movsd 5176 bytes into zero-initialized buffer; checks byte at rsp+0x1325 (field 4901 in CMF result struct); if non-zero: apr_table_get(headers_in,'Host') -- if present: OVERWRITES Host header via apr_table_set(headers_in,'Host',cmf_result[0x1325]) -- CMF-config-derived canonical hostname, NOT user-supplied; apr_pstrdup to request_rec+0x50 for caching; VERDICT: Host header normalization based on admin-configured CMF hostname, not user-controlled -- no auth bypass from Host spoofing; NO FINDING CONFIRMED; "
                      "fmg_rewrite.so: ELF64 x86-64 PIE NOT stripped 76KB custom URL rewriter; ablation semantic sweep 2026-09-15: "
                      "29 functions detected via endbr64 prologues (.text 35313 bytes / 0x89f1); "
                      "145 PLT entries mapped via rela.plt -- Fortinet-specific: PLT.0x4700 cmf_query_update (CMDB write), PLT.0x4770 check_create_cmf_query, PLT.0x46b0 conf_init; "
@@ -2196,7 +2197,8 @@ ANALYSIS_STATUS = {
                  "fmg_rewrite.so analysis (NO FINDING): apr_dbd_pvselect at 0x5f05 uses prepared statement from apr_hash_get (r8), bind param traces to disk-loaded Apache rewrite rule config at outer fn 0x98d5 (r14=rbp[0x68] from apr_hash_first iteration), not HTTP input; "
                  "cmf_query_update at 0x8654 and 0x8950 both load from global module context pointer at VA 0x12fb8 via rip-relative load, not user data; no SQL injection path in fmg_rewrite.so; "
                  "source: local_mode.so .text 0x93de-0xa050 0xbe07-0xc9f0, PLT.SEC 0x48f0, httpd.conf FCPService handler, "
-                 "fmg_rewrite.so 0x5f05 apr_dbd_pvselect 0x8654/0x8950 cmf_query_update 0x98d5 outer-fn, analysis 2026-09-15",
+                 "fmg_rewrite.so 0x5f05 apr_dbd_pvselect 0x8654/0x8950 cmf_query_update 0x98d5 outer-fn, analysis 2026-09-15; "
+                 "fmg_rewrite.so SEMANTIC SWEEP 2 (2026-09-16): 55 functions encoded (101 prologue candidates, 55 unique); rodata 304 strings extracted; custom URI schemes jp:// and alancer:// in .rodata (registered via ap_register_rewrite_mapfunc); ablation queries [path_traversal|jp_alancer_map|ssrf_proxy|buffer_overflow|preauth_bypass|unvalidated_redirect] all run; top hits confirmed as standard mod_proxy integration (0x98d9), db map error handler (0x5e61), proxy: prefix handler (0xc8fb); all candidates traced to standard mod_rewrite logic or admin-config-driven CMF; NO NOVEL FINDING from sweep; VERDICT CONFIRMED",
 
         "FMG-F51: HIGH -- FortiManager SOAR FML connector URL path traversal enabling cross-profile delete and whitelist manipulation via trigger-controlled profile_name/resource/level_type (FMG7.x, fmg-soar/FML/operator.py, 2026-09-15): "
                  "three injection points, all via manage_profile()/manage_email_address()/manage_list() helpers: "
@@ -3424,6 +3426,21 @@ ANALYSIS_STATUS = {
                  "distinction from FMG-F70: FMG-F70 is path traversal in CMDB API URL namespace; FMG-F84 is SSRF to arbitrary external or internal host via fabric routing; both stem from unvalidated proxied* parameters; "
                  "remediation: validate proxiedServer at Python layer against registered fabric member list before forwarding to C backend; or add privilege escalation so webhook_get requires SOC_FABRIC privilege; "
                  "source: logview/views/views.py L937-1022 (download_fabric_archive_file), util/common.py L2530-2564 (send_socfabric_proxy_request / submit_socfabric_proxy_request), util/dataaccess.py L89-97 (_rpc_get), fabric/views.py L71, alert/views.py L92/L370, analysis 2026-09-15",
+
+        "FMG-F86: LOW -- FortiManager SSO IDP pre-auth open redirect via unvalidated redirect_to GET parameter in logout view (FMG8.0.0, sso_idp/views.py L244-261, 2026-09-16): "
+                 "file: usr/local/lib/python3.11/proj/sso_idp/views.py -- logout() at L244-261; "
+                 "registered route: sso_idp/urls.py (inferred -- no explicit entry in urls.py for logout; checked saml_logout route points to logout_process not logout; route existence confirmed by function presence and SSO IDP standard URL pattern); "
+                 "decorators: @csrf_exempt @sso.require_sso_enabled -- NO @login_required; pre-auth if SSO IDP role is enabled; "
+                 "vulnerability: redirect_url = request.GET.get('redirect_to', '') (L253); "
+                 "URL_VALIDATOR = URLValidator(schemes=('http', 'https')) validates scheme+structure only, NO host restriction; "
+                 "if validation passes: return HttpResponseRedirect(redirect_url) (L260) -- unconditional redirect to any http/https URL; "
+                 "attacker sends: GET /p/sso_idp/logout/?redirect_to=https://phishing.example.com -- victim browser redirects to attacker site after logout; "
+                 "impact: phishing + credential harvesting; victim believes they logged out of FortiManager, lands on attacker-controlled page mimicking FMG login; "
+                 "CANDIDATE note: sso_idp/urls.py has no explicit logout route -- function may not be reachable from outside; confirm by checking proj/urls.py or searching for path('logout/', views.logout); "
+                 "severity LOW: open redirect; requires SSO IDP enabled, potentially unreachable if not routed; no auth bypass; "
+                 "compare: FMG-F52 (FortiCloud SLS L671-672) notes 'redirect URL from python3-saml IdP metadata, not from request -- no open redirect'; this is the distinct pre-auth logout() view; "
+                 "remediation: validate redirect_url against request.get_host() before redirecting; or remove redirect_to parameter entirely and always redirect to static login page; "
+                 "source: sso_idp/views.py L244-261, sso_idp/urls.py, analysis 2026-09-16",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
