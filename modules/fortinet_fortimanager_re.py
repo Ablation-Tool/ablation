@@ -590,3 +590,169 @@ pending_findings = [
     "run locally with llama.cpp; use for generating FortiOS CLI fuzzing payloads; "
     "source: HuggingFace (user-downloaded); 2026-09-16",
 ]
+
+
+# ---------------------------------------------------------
+# FMG syntax.tar.xz: complete JSON-RPC command schema + SOAR connector source
+# Source: /mnt/fmg800/syntax.tar.xz (88MB) -> syntax/ directory
+# ---------------------------------------------------------
+FMG_SYNTAX_RE = {
+    "id":      "FMG-SYNTAX",
+    "product": "FortiManager 8.0.x -- JSON-RPC command schema and SOAR connector Python source",
+    "source":  "/mnt/fmg800/syntax.tar.xz -> syntax/*.json + builtin_connectors.tar.gz",
+
+    "schema_files": {
+        "command_syntax.json": (
+            "19KB. Top-level modules: sys, dvm/cmd, securityconsole, deployment, dmworker, dmsase, "
+            "cli, cli/aux, config, dvmdb. Methods: get/add/set/update/delete/move/clone/replace/unset/exec. "
+            "exec includes modules: sys, cache, dvm/cmd, securityconsole, deployment, dmworker, dmsase, "
+            "fgfm, pm/config/aux, dvmdb/aux, cli/aux, um."
+        ),
+        "ncmdb_syntax.json":    "949KB -- largest schema file; full CMDB object model",
+        "fmg_cmdb_syntax.json": "593KB -- FortiManager-specific CMDB schema",
+        "fmglog_syntax.json":   "203KB -- log schema (FortiAnalyzer side)",
+        "fmg_dvm_syntax.json":  "47KB -- device manager schema",
+        "securityconsole_syntax.json": "17KB -- policy install/assign commands (30 command types)",
+        "fgfm_syntax.json":     "3.1KB -- FortiGate-to-FortiManager protocol command schema (16 commands)",
+        "firmware_txt_files": (
+            "700.txt (5.0MB), 720.txt (4.6MB), 740.txt (4.5MB), 760.txt (4.1MB), 800.txt (3.9MB) -- "
+            "full FortiOS syntax definition per major release. Comparable delta between versions = "
+            "new attack surface per release."
+        ),
+    },
+
+    "critical_commands": {
+        "fgfm/json/rpc": {
+            "source_file": "fgfm_syntax.json",
+            "json_rpc_path": "exec /fgfm/json/rpc",
+            "params": {"device": "datasrc -> dvmdb/device", "req": "string (raw JSON-RPC request)"},
+            "impact": (
+                "Direct FortiOS API relay to any managed FortiGate via FGFM tunnel. "
+                "Single FMG admin API call can issue arbitrary FortiOS JSON-RPC commands "
+                "to any managed device in the fleet. Fleet-wide lateral movement from one FMG session. "
+                "No device-level auth required once FMG session is valid."
+            ),
+            "severity": "CRITICAL",
+        },
+        "fgfm/push/config": {
+            "source_file": "fgfm_syntax.json",
+            "params": {
+                "device": "datasrc -> dvmdb/device",
+                "type": "int16 (none=0 / rev=1)",
+                "revno": "int32",
+                "script": "string",
+            },
+            "impact": (
+                "Push arbitrary FortiOS config or CLI script to a managed device. "
+                "script parameter is a raw string -- no schema constraint on content."
+            ),
+            "severity": "HIGH",
+        },
+        "fgfm/probe/device": {
+            "source_file": "fgfm_syntax.json",
+            "params": {"ip": "string", "usr": "string", "passwd": "string", "force_probe": "int16"},
+            "impact": (
+                "FMG initiates outbound connection to arbitrary IP with supplied credentials. "
+                "Equivalent to SSRF + credential injection: attacker-controlled IP receives "
+                "an FMG probe with admin credentials."
+            ),
+            "severity": "HIGH",
+        },
+        "fgfm/start/tunnel": {
+            "source_file": "fgfm_syntax.json",
+            "params": {"device": "datasrc", "force": "int16", "usr": "string", "passwd": "password"},
+            "impact": (
+                "Credentials sent in JSON-RPC request body (type=password in schema). "
+                "If FMG log verbosity captures request bodies, credentials logged in plaintext."
+            ),
+            "severity": "MEDIUM",
+        },
+        "cdbaux/_reset/database": {
+            "source_file": "cdbaux_syntax.json",
+            "params": {"version": "int32", "mr": "int32"},
+            "domain": "DOM_GLOBAL",
+            "impact": (
+                "Complete CMDB wipe. No confirmation parameter in schema. "
+                "Single authenticated JSON-RPC call destroys all FortiManager policy and device data."
+            ),
+            "severity": "CRITICAL",
+        },
+        "cdbaux/_fsp/custom/command": {
+            "source_file": "cdbaux_syntax.json",
+            "internal": True,
+            "params": {
+                "switch": "datasrc -> managed-switch",
+                "command": "datasrc -> switch-controller/custom-command",
+                "device": "datasrc -> dvmdb/device",
+            },
+            "impact": (
+                "Sends a pre-defined custom CLI command to a managed FortiSwitch. "
+                "Attack path: create arbitrary custom-command object via /pm/config/adom/ "
+                "API, then invoke it here to execute arbitrary FortiSwitch CLI on any managed switch."
+            ),
+            "severity": "HIGH",
+        },
+        "system/reboot": {
+            "source_file": "system_syntax.json",
+            "impact": "Unauthenticated or low-priv FortiManager reboot via JSON-RPC (DoS/disruption).",
+            "severity": "MEDIUM",
+        },
+        "system/backup": {
+            "source_file": "system_syntax.json",
+            "impact": "Config backup download -- full CMDB + device configs + credential store exfil.",
+            "severity": "HIGH",
+        },
+        "system/upgrade": {
+            "source_file": "system_syntax.json",
+            "impact": "Firmware upgrade via JSON-RPC -- supply malicious firmware image = persistent RCE.",
+            "severity": "CRITICAL",
+        },
+    },
+
+    "soar_connectors": {
+        "location": "/tmp/fmg_ext/usr/local/builtin_connectors/ -> builtin_connectors.tar.gz",
+        "connectors": [
+            "AD (Active Directory)", "EMS (FortiClient EMS)", "FAC (FortiAuthenticator)",
+            "FCASB (FortiCASB)", "FEDR (FortiEDR)", "FGD (FortiGuard)", "FML (FortiMail)",
+            "FMQ", "FORTIANALYZER_CLOUD", "FOS (FortiOS)", "FSA", "FWEB (FortiWeb)",
+            "LOCALHOST", "MS_TEAMS", "SERVICENOW", "VIRUSTOTAL", "VSPHERE", "WEBHOOK",
+        ],
+        "sqli_findings": {
+            "EMS/operator.py:195": {
+                "code": "sql = f'''select distinct fctuid from endpoints where adomoid = {adom_oid} and fctuid is not null;'''",
+                "vuln": (
+                    "adom_oid interpolated directly into PostgreSQL query via f-string. "
+                    "Typed as int in __init__ but if playbook context supplies it as a string "
+                    "without validation, SQLi -> PostgreSQL RCE via COPY TO/FROM or pg_exec. "
+                    "Table: endpoints (FortiClient endpoint records). "
+                    "PostgreSQL connection via Airflow PostgresHook(POSTGRES_CONN_ID)."
+                ),
+                "severity": "HIGH",
+            },
+            "FOS/operator.py:167": {
+                "code": "sql = f'''select t1.mac, t1.fctuid from {table_endpoint} t1 where t1.epid = {epid} limit 1;'''",
+                "vuln": (
+                    "epid interpolated directly. Same PostgreSQL execution path. "
+                    "epid originates from get_macaddr_fctuid_by_epid(epid) caller -- "
+                    "trace input source to determine if externally controllable."
+                ),
+                "severity": "HIGH",
+            },
+        },
+        "fos_native_libs": {
+            "libsrchd.so":    "Loaded with RTLD_GLOBAL in FOS/operator.py webhook(); search handler",
+            "libsessionmgr.so": "Loaded with RTLD_GLOBAL; session manager",
+            "note": (
+                "RTLD_GLOBAL makes symbols from these libraries available to all subsequently "
+                "loaded SOs in the process -- symbol collision attack if attacker controls "
+                "a loaded library path."
+            ),
+        },
+        "ems_auth_pattern": {
+            "verify_ssl": "False (hardcoded default -- SSL verification disabled for all EMS connections)",
+            "credential_source": "find_ems_connector_params() -> super().find_connector_params() -> PostgreSQL",
+            "stored_fields": ["server-addr", "auth-user", "auth-password", "auth-type", "auth-token"],
+            "cloud_auth": "signin_cloud() -- FortiCloud OAuth via account_id; no client secret in connector",
+        },
+    },
+}
