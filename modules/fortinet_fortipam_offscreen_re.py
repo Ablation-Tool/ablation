@@ -99,7 +99,7 @@ FPO_OF_F01_INCOMPLETE_CRED_WIPE = {
 # FPO-OF-F02: TOTP code fetched and stored plaintext in SW/offscreen memory
 # ---------------------------------------------------------
 FPO_OF_F02_TOTP_PLAINTEXT_IN_MEMORY = {
-    "id":       "FPO-OF-F03",
+    "id":       "FPO-OF-F02",
     "product":  "FortiPAM Chrome Extension offscreen.js (SessionManager.checkTOTP / API.getTOTP)",
     "severity": "MEDIUM -- TOTP code fetched from server and stored plaintext in extension memory",
     "class":    "Sensitive data in memory (CWE-316)",
