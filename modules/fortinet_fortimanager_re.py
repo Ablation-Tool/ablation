@@ -481,6 +481,81 @@ FMG_APACHE_INTERNALS = {
 }
 
 
+# ---------------------------------------------------------
+# FMG firmware: ClickHouse 25.8.15.35 binary RE
+# Source: /tmp/fmg_ext/usr/local/clickhouse/clickhouse (636MB ELF)
+# ---------------------------------------------------------
+FMG_CLICKHOUSE_RE = {
+    "id":       "FMG-CLICKHOUSE",
+    "product":  "FortiManager/FortiAnalyzer 8.0.x -- embedded ClickHouse 25.8.15.35",
+    "source":   "/mnt/fmg800 rootfs-ext.tar.xz -> usr/local/clickhouse/clickhouse",
+    "binary": {
+        "path":      "/usr/local/clickhouse/clickhouse",
+        "size_mb":   636,
+        "elf":       "ELF 64-bit LSB pie executable, x86-64, dynamically linked, NOT stripped",
+        "build_id":  "54e3c62019aeb33bf592492e196e9017a8fb30b7",
+        "version":   "25.8.15.35",
+        "text_symbols": 90704,
+        "stripped":  False,
+    },
+
+    "fortinet_customizations": {
+        "faz_murmur_hash32": {
+            "va":        "0x124f6c00",
+            "algorithm": "MurmurHash2 32-bit (Appleby 2008)",
+            "magic":     "0x5bd1e995",
+            "signature": (
+                "4-byte stride loop: imul edx,[rcx],0x5bd1e995 + shr edi,0x18 + xor/imul; "
+                "tail: 1/2/3-byte remainder cases via direct jle/je branches; "
+                "finalization: shr 0xd, imul 0x5bd1e995, shr 0xf. "
+                "Prototype: uint32_t faz_murmur_hash32(const void* data, int len, uint32_t seed)."
+            ),
+        },
+        "faz_murmur_hash64": {
+            "va":        "0x124f6cb0",
+            "algorithm": "MurmurHash2 64-bit (Appleby 2008)",
+            "magic":     "0xc6a4a7935bd1e995",
+            "signature": (
+                "8-byte stride loop: movabs rcx,0xc6a4a7935bd1e995 + imul rdx,rcx + shr rdi,0x2f; "
+                "tail: 0-7 byte remainder via computed jump table (notrack jmp rdx on 4-entry table); "
+                "byte-by-byte XOR accumulation with shift (0x30/0x28/0x20/0x18/0x10/0x08). "
+                "Prototype: uint64_t faz_murmur_hash64(const void* data, int len, uint64_t seed)."
+            ),
+        },
+        "note": (
+            "Only 2 Fortinet-authored symbols in the entire 636MB binary. "
+            "All other 'Forti*' symbol matches are LLVM FortifiedLibCallSimplifier class "
+            "(LLVM JIT embedded for ClickHouse query execution -- not Fortinet code). "
+            "faz_ functions are registered as ClickHouse scalar functions for FortiAnalyzer "
+            "log row hashing and partition bucketing."
+        ),
+    },
+
+    "attack_surface": [
+        (
+            "Hash collision via log injection: MurmurHash2 is NOT collision-resistant. "
+            "Attacker controlling log event content can craft entries that collide in the same "
+            "ClickHouse shard, causing query skew, missed deduplication, or partition hot-spots."
+        ),
+        (
+            "Full symbol table available: 90,704 unstripped text symbols expose complete internal "
+            "ClickHouse call graph -- enables precise ROP gadget selection targeting ClickHouse "
+            "query parsing or HTTP handler if ClickHouse is exposed on a network interface."
+        ),
+        (
+            "Version 25.8.15.35 -- check ClickHouse CVE list for this branch (25.8 is a recent "
+            "release series). Any HTTP interface exposed (default port 8123) is reachable if "
+            "FortiManager network segmentation allows it."
+        ),
+        (
+            "LLVM JIT embedded -- if ClickHouse query compilation is reachable from the FortiManager "
+            "web layer (via /jsonrpc or /flatui/api/ triggering DB queries), a malformed query "
+            "could exercise LLVM IR generation paths."
+        ),
+    ],
+}
+
+
 pending_findings = [
     "FFMG-F01 verification: test FGFM port 541 detection -- verify FMG TLS cert O=Fortinet + CN starts with FMG; "
     "source: fortimanager_rce_47575.rb check() method; 2026-09-16",
