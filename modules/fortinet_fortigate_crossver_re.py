@@ -296,7 +296,7 @@ CROSSVER_MULTIVERSION_KEYS = {
 
     "fgt2_key_rsa2048": {
         "pubkey_sha256": "3f9c28e38355e26d9f1fcaa50522ee9e74c57f17dcb9d80efa8c7d50bba4358c",
-        "versions_confirmed": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)", "8.0.0 (2026)"],
+        "versions_confirmed": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)", "7.4.8 (2025)", "8.0.0 (2026)"],
         "path_in_datafs": "./etc/fgt2.key",
         "status": "IDENTICAL fingerprint across all 4 versions -- private key never rotated in 8 years",
         "impact": (
@@ -310,13 +310,15 @@ CROSSVER_MULTIVERSION_KEYS = {
     "fgt_512_key_rsa512": {
         "pubkey_sha256_pre_800":  "e5888c11ef0b452cf03be3b1bc325fa314a08402e7057b4fa6bdd46840223e78",
         "pubkey_sha256_800":      "bdef4ac15542bcc047eaa4de45c24f168cd7637be17de0e375735982b89dccbc",
-        "versions_old_key": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)"],
+        "versions_old_key": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)", "7.4.8 (2025)"],
         "versions_new_key": ["8.0.0 (2026)"],
-        "status": "ROTATED silently between 7.2.x and 8.0.0; no advisory published",
+        "rotation_window": "Between 7.4.8 (2025) and 8.0.0 (2026) -- NOT between 7.2.x and 8.0.0 as initially estimated",
+        "status": "ROTATED silently between 7.4.8 and 8.0.0; no advisory published",
         "note": (
             "RSA-512 is cryptographically broken (factored in hours with CADO-NFS on commodity hardware). "
             "Fortinet silently rotated it in 8.0.0 but left the RSA-2048 (fgt2.key) untouched. "
-            "All devices running 6.0.3 through 7.x share the same RSA-512 private key, which can be factored."
+            "All devices running 6.0.3 through 7.4.x share the same RSA-512 private key (7-year span), "
+            "which can be factored to retroactively decrypt any session authenticated with this key."
         ),
     },
 
@@ -363,9 +365,64 @@ CROSSVER_MULTIVERSION_KEYS = {
 
     "attack_surface": [
         "CROSSVER-F07-A1: RSA-2048 fgt2.key -- extract from any firmware image -> impersonate any FortiGate to FortiManager (FGFM protocol) -> fleet-wide lateral movement without credential",
-        "CROSSVER-F07-A2: RSA-512 fgt_512.key (pre-8.0.0) -- factor in hours with CADO-NFS -> decrypt any session authenticated with this key on 6.0.3/7.0.3/7.2.0 devices",
+        "CROSSVER-F07-A2: RSA-512 fgt_512.key (pre-8.0.0) -- factor in hours with CADO-NFS -> decrypt any session authenticated with this key on 6.0.3 through 7.4.8 devices (7-year span)",
         "CROSSVER-F07-A3: fgt2.crt 40-year shared cert -- cert pinning bypass; MitM FGFM traffic between FortiGate and FortiManager using known private key",
         "CROSSVER-F07-A4: Default admin ENC XXUp2ozpdysrQ -- decode with FortiOS ENC algorithm -> plaintext admin password for any device that has not changed default",
         "CROSSVER-F07-A5: Unencrypted rootfs (6.0.3/7.0.3/7.2.0) -- extract and analyze all FortiOS binaries without firmware decryption; directly compare httpsd/sslvpnd/wad/cmdbsvr across versions",
     ],
+}
+
+
+# ---------------------------------------------------------
+# CROSSVER-F08: IPS/AV engine binary size evolution (7.2.0 vs 7.4.8)
+# Sources: datafs.tar.gz extracted from each qcow2
+# ---------------------------------------------------------
+CROSSVER_ENGINE_EVOLUTION = {
+    "id":    "CROSSVER-F08",
+    "title": "FortiOS IPS and AV engine library size growth between 7.2.0 and 7.4.8",
+    "class": "Attack surface expansion",
+
+    "libips_so_new": {
+        "7.2.0": {"size_bytes": 10881736, "build_id": "1e53d9610563168760c96e6fc804228e74e9ec31", "sha256": "348717c0c97cfb7b4fc29111beec8554b44fc2ee62d07d4df3c06f25050375dd"},
+        "7.4.8": {"size_bytes": 13675184, "build_id": "37d8f9362af583fd9a81ec5ebb133ec381359101", "sha256": "d86541c4d9428f7d6ad75557b27373cc7800ee6df40678474c4dc7b5f61ab3c8"},
+        "growth_bytes": 2793448,
+        "growth_pct":   "+26%",
+        "note": "Different BuildIDs and SHA256 -- distinct binaries; IPS engine added ~2.8MB of new code between releases",
+    },
+
+    "libav_so_new": {
+        "7.2.0": {"size_bytes": 6667680},
+        "7.4.8": {"size_bytes": 8672032},
+        "growth_bytes": 2004352,
+        "growth_pct":   "+30%",
+        "note": "AV engine grew +30% between 7.2.0 and 7.4.8; 7.4.8 also ships libav.so.new.x (signed variant)",
+    },
+
+    "hash_bin_inventory_delta": {
+        "8.0.0": 410,
+        "7.4.8": 119,
+        "note": (
+            "7.4.8 IMA measurement list covers only 119 binaries vs 410 in 8.0.0. "
+            "8.0.0 significantly expanded the set of IMA-measured binaries -- broader integrity coverage. "
+            "7.4.8 measures primarily /bin/ and /usr/local/apache2/modules/; 8.0.0 adds full tree."
+        ),
+    },
+
+    "datafs_extra_7.4.8": [
+        "libav.so.new.x -- signed/chk variant present in 7.4.8 but not 7.2.0",
+        "libips.so.new.x -- signed/chk variant present in 7.4.8 but not 7.2.0",
+        "casb.dat -- new in 7.4.8; CASB policy database",
+        "cid.dat -- new in 7.4.8; certificate intelligence data",
+        "app.iot.rules.x + app.json.gz -- IoT classification engine upgraded",
+        "application.rules.x -- signed application signature DB",
+    ],
+
+    "re_target_priority": (
+        "libips.so.new in 7.4.8 (13.7MB stripped ELF) is the primary target: "
+        "IPS engine parses all network traffic before firewall policy; "
+        "memory corruption in the parser -> pre-auth RCE at kernel network path. "
+        "Semantic sweep on both 7.2.0 and 7.4.8 versions maps new code added in 7.4.8 "
+        "and finds any functions matching buffer-overflow / length-check-missing patterns. "
+        "Cross-version homolog diffing via ablation identifies functions added/changed between releases."
+    ),
 }
