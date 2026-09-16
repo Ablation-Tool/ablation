@@ -574,3 +574,133 @@ FFF_F09_SHELL_OPEN_EXTERNAL_SCHEME = {
         "the navigation target is on an expected domain before calling shell.openExternal."
     ),
 }
+
+
+# =============================================================
+# FortiFone UC Android -- com.fortinet.fvuc.app v8.0.2.250
+# Source: com.fortinet.fvuc.app.apk (83MB, ARM64-v8a)
+# Analysis: 2026-09-16
+# =============================================================
+
+FVUC_ANDROID_PLATFORM = {
+    "product":      "FortiFone UC (Unified Communications) for Android",
+    "package":      "com.fortinet.fvuc.app",
+    "version":      "8.0.2.250",
+    "arch":         "ARM64-v8a (native libs only; Flutter/Dart app + Kotlin/Java wrapper)",
+    "native_libs": {
+        "libfvuc.so (14MB)":     "Core VoIP/UC logic; PJSIP + Janus WebRTC; FVMagic/FVScramble auth; libcurl; OpenSSL; SRTP; libopus; bcg729; G.722/G.729 codecs",
+        "libflutter.so (11MB)":  "Flutter runtime (Dart VM); compiled app logic in libapp.so",
+        "libjingle_peerconnection_so.so (11MB)": "Google libjingle WebRTC (peer connection, ICE, DTLS-SRTP)",
+        "libapp.so (7.8MB)":     "Compiled Dart business logic (decompile with blutter/reFlutter)",
+        "libsqlcipher.so (5MB)": "SQLCipher -- AES-256 encrypted local SQLite DB; passphrase TBD",
+        "libadaptivecards-native-lib.so (2.5MB)": "Microsoft Adaptive Cards (in-app IM rich content)",
+    },
+    "voip_stack":  "PJSIP (pjsip_DOMAIN_STR, PJSIP_EAUTHACCDISABLED, PJSIP_EAUTHACCNOTFOUND) + Janus WebRTC gateway (com.fortinet.janusclientlib.EchoTestActivity)",
+    "api_endpoints": ["/api/auth", "/api/ice-servers", "/api/mam_query", "/api/v1", "api/v2", "/api/message (WebSocket)"],
+    "cloud_domains": [
+        "contacts.fortivoice-cloud.com",
+        "cs.fortivoice-cloud.com",
+        "phone.fortivoice-cloud.com",
+        "fwimage.fortivoice-cloud.com",
+        "deeplink.fortivoice-cloud.com",
+        "deeplink.dev.fortivoice-cloud.com",
+        "deeplink.staging.fortivoice-cloud.com",
+        "contacts.staging.fortivoice-cloud.com",
+        "cs.dev.fortivoice-cloud.com",
+    ],
+    "auth_mechanisms": ["JWT (jwts library in libfvuc.so)", "FVMagic token (FVScramble base-10 custom alphabet)", "SSO/OAuth (net.openid.appauth)", "PKI/mTLS (FVDeviceAuthImpl)", "Password (FVVoiceLoginImpl fallback)"],
+    "oauth_flow":   "net.openid.appauth; AddOAuthAccountActivity; deeplink.fortivoice-cloud.com for redirect; PKCE not confirmed; oauthresponse custom scheme",
+    "xmpp":         "libstrophe; XMPP for FortiIM chat/presence; xmpp_conn_disable_tls exported from libfvuc.so",
+    "database":     "SQLCipher encrypted local DB; FVCallLogContentProvider + FVVoicemailContentProvider (ContentProvider endpoints)",
+    "firebase":     "Firebase Cloud Messaging (FVUCFirebaseMessagingService) + Crashlytics (crash report telemetry)",
+}
+
+
+# ---------------------------------------------------------
+# FFF-F10: FVMagic token -- predictable scramblev2 base-10 encoding
+# ---------------------------------------------------------
+FFF_F10_FVMAGIC_SCRAMBLEV2 = {
+    "id":       "FFF-F10",
+    "product":  "FortiFone UC Android v8.0.2.250",
+    "severity": "LOW-MEDIUM -- FVMagic token uses a fully reversible custom encoding with published alphabet; "
+                "token space (values 0-31) maps to 32 possible values; "
+                "combined with JWT and password for auth so standalone forgery does not bypass full auth",
+    "class":    "Weak authentication token encoding (CWE-327) -- security through obscurity",
+
+    "description": (
+        "FortiFone UC uses FVMagic as a secondary auth credential alongside JWT and password. "
+        "The V2 format encodes an integer in base-10 using the alphabet 'scramblev2' "
+        "(s=0, c=1, r=2, a=3, m=4, b=5, l=6, e=7, v=8, 2=9). "
+        "Values 0-31 map to single letters (value + 0x41 = ASCII character, e.g. 0='A', 25='Z'). "
+        "Values > 31 use a secondary encoding path (see decodeV2MagicNumber at 0x3c5574). "
+        "The algorithm is fully recoverable from the libfvuc.so binary. "
+        "FVScramble::disable_scramble(bool) is exported via JNI (Java_..._FVScramble_1disable_1scramble) "
+        "and callable from the app's Java layer -- if reachable from a malicious context, "
+        "it disables the scrambling mechanism entirely."
+    ),
+
+    "code_evidence": {
+        "decode_fn":        "libfvuc.so: _ZN4fvuc10FVScramble19decodeV2MagicNumberERKSs at 0x3c5574",
+        "alphabet":         "10 bytes at VA 0xabfbb0 (libfvuc.so .rodata): 73 63 72 61 6d 62 6c 65 76 32 = 'scramblev2'",
+        "alphabet_mapping": "s=0, c=1, r=2, a=3, m=4, b=5, l=6, e=7, v=8, 2=9",
+        "decode_algo":      "value = 0; for each char: value = value * 10 + alphabet.index(char); if value <= 31: map to char(value+0x41)",
+        "disable_fn":       "libfvuc.so: _ZN4fvuc10FVScramble16disable_scrambleEb at 0x3c556c; strb w1, [x0+5]",
+        "jni_disable":      "Java_com_fortinet_fvuc_lib_ucbaseJNI_FVScramble_1disable_1scramble at 0x25b54c",
+        "token_triple":     "'Account %d: token[%s], magic number[%s], password[%s]' -- all three used together",
+        "source_refs":      "FVScramble.cpp lines 156-565 (assertion-heavy, 25+ source line refs visible in binary)",
+    },
+
+    "comparison_with_desktop": (
+        "FortiFone Desktop (FFF-F03) uses FEScrambler: XOR scramble + base64 encoding. "
+        "FortiFone UC Android uses FVScramble: base-10 with 'scramblev2' alphabet. "
+        "Both are trivially reversible; both layer custom obfuscation on top of standard auth. "
+        "The FEScrambler XOR key was recovered from fvoiceAuthAgent.js; "
+        "the FVScramble alphabet is literal ASCII 'scramblev2' in .rodata."
+    ),
+
+    "hardcoded_test_sip": {
+        "contact":  "Contact: <sip:fake@192.168.10.1:5061>",
+        "via":      "Via: SIP/2.0/%s 192.168.10.1:5060;branch=z9hG4bK001b84f6%d-%lu;rport",
+        "note":     "Development/test SIP headers with hardcoded 192.168.10.1 addresses present in production binary",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FFF-F11: xmpp_conn_disable_tls exported from libfvuc.so
+# ---------------------------------------------------------
+FFF_F11_XMPP_TLS_DISABLE = {
+    "id":       "FFF-F11",
+    "product":  "FortiFone UC Android v8.0.2.250",
+    "severity": "MEDIUM -- XMPP TLS downgrade function exported from native library; "
+                "XMPP carries FortiIM chat messages and presence; TLS downgrade exposes credentials and message content",
+    "class":    "Cleartext transmission of sensitive information (CWE-319)",
+
+    "description": (
+        "libfvuc.so exports xmpp_conn_disable_tls at VA 0x4ae4fc from libstrophe (open-source XMPP library). "
+        "If called, it disables TLS for the active XMPP connection, causing credentials and chat messages "
+        "to be transmitted in plaintext over the network. "
+        "libstrophe's xmpp_conn_disable_tls is a debug API not intended for production use. "
+        "Its presence and export in production libfvuc.so indicates either: "
+        "(1) libstrophe was linked without stripping debug symbols/exports, or "
+        "(2) some code path calls this function (e.g. for testing or fallback). "
+        "The XMPP connection carries FortiIM IM messages, presence updates, and group chat. "
+        "A network attacker who can intercept the XMPP session (e.g. by injecting a TLS-stripping server) "
+        "could observe or inject FortiIM messages. "
+        "The 'OAUTHBEARER' and 'XOAUTH2' SASL strings confirm XMPP uses OAuth for authentication; "
+        "TLS downgrade would expose the OAuth bearer token."
+    ),
+
+    "code_evidence": {
+        "export_va":     "libfvuc.so: xmpp_conn_disable_tls at 0x4ae4fc",
+        "library_origin": "libstrophe (open-source XMPP library bundled in libfvuc.so)",
+        "sasl_mechanisms": "'OAUTHBEARER', 'XOAUTH2' strings confirm OAuth token passed over XMPP SASL",
+        "xmpp_component": "JWebSocketClientService (com.fortinet.fvuc.app.websocket) + FortiIM integration",
+    },
+
+    "remediation": (
+        "Remove or block xmpp_conn_disable_tls from production builds via linker script or symbol visibility. "
+        "Enforce TLS_REQUIRED in libstrophe connection config. "
+        "Build libstrophe with -fvisibility=hidden and export only the minimum required symbols."
+    ),
+}
