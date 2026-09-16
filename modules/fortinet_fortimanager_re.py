@@ -3662,3 +3662,108 @@ ANALYSIS_STATUS = {
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
+
+# ============================================================
+# ENCRYPTED ROOTFS BLOCKER + LIVE EXTRACTION STRATEGY
+# 2026-09-16
+# ============================================================
+#
+# rootfs.gz is AES-encrypted on disk (verified: binwalk shows no readable
+# ELF headers in rootfs.gz, confirmed encrypted container).
+# Decryption key is embedded in the kernel/initrd and applied at boot.
+# The decrypted filesystem lives in RAM (tmpfs/overlayfs) once the VM is running.
+#
+# Primary targets blocked by encryption:
+#   fazmerge     -- logview filter backend (FMG-F80/F81/F83 candidates)
+#   fgfmd        -- FGFM daemon port 8082 (FMG-F89)
+#   fgdsvc       -- device service (FMG-F91)
+#   webmcpserver -- MCP STDIO server
+#   sdnproxyd    -- SDN proxy port 7080 (FMG-F87)
+#
+# EXTRACTION APPROACHES (ordered by reliability):
+#
+# APPROACH 1: QEMU Monitor Memory Dump (KVM host access required)
+# ---------------------------------------------------------------
+# Tool: modules/fortinet_fortimanager_live_extract.py
+#
+# Step 1: Locate the QEMU process and its QMP monitor socket
+#   ps aux | grep qemu-system
+#   # Look for: -qmp unix:/path/to/socket,server,nowait
+#   # OR: -monitor telnet:localhost:PORT,server,nowait
+#
+# Step 2: Connect and dump
+#   python3 modules/fortinet_fortimanager_live_extract.py \
+#     --monitor /var/lib/libvirt/qemu/domain-fmg/monitor.sock \
+#     --out /tmp/fmg-bins --analyze
+#   # OR for TCP monitor:
+#   python3 modules/fortinet_fortimanager_live_extract.py \
+#     --monitor tcp:localhost:4444 --out /tmp/fmg-bins --analyze
+#
+# Step 3: Run ablation semantic sweep on extracted binaries
+#   python3 modules/semantic_search.py /tmp/fmg-bins/fazmerge
+#
+# APPROACH 2: QEMU VM Snapshot (KVM host access, virsh available)
+# ---------------------------------------------------------------
+# Live memory snapshot captures full RAM state without stopping the VM:
+#   virsh snapshot-create-as fmg-domain snap1 \
+#     --memspec file=/tmp/fmg-ram.bin,snapshot=external \
+#     --diskspec vda,snapshot=no
+#   # /tmp/fmg-ram.bin is a raw memory image
+#   python3 modules/fortinet_fortimanager_live_extract.py \
+#     --dump /tmp/fmg-ram.bin --out /tmp/fmg-bins --analyze
+#
+# APPROACH 3: FMG Diagnostic Shell (console/SSH access to running FMG)
+# -------------------------------------------------------------------
+# FortiManager CLI provides a limited shell on some builds:
+#   FMG# diagnose system shell
+#   # Drops to bash (available in FMG 8.0.0 on some build variants)
+#   $ tar czf - /usr/sbin/fazmerge /usr/sbin/fgfmd /usr/sbin/fgdsvc \
+#       /usr/bin/webmcpserver /usr/sbin/sdnproxyd | base64 -w0 > /tmp/b64.txt
+#   $ cat /tmp/b64.txt
+#   # Copy output, decode on attacker machine:
+#   base64 -d b64.txt | tar xzf -
+#
+# APPROACH 4: QEMU Guest Agent (if FMG has qemu-guest-agent installed)
+# -------------------------------------------------------------------
+#   python3 modules/fortinet_fortimanager_live_extract.py \
+#     --guest-tar fmg-domain-name --out /tmp/fmg-bins
+#
+# APPROACH 5: /proc/kcore (requires shell on FMG guest)
+# -----------------------------------------------------
+# /proc/kcore exposes full physical memory as ELF core:
+#   dd if=/proc/kcore of=/tmp/kcore.elf bs=4M count=2048
+#   python3 modules/fortinet_fortimanager_live_extract.py \
+#     --dump /tmp/kcore.elf --out /tmp/fmg-bins --analyze
+#
+# NEXT STEPS AFTER EXTRACTION:
+# After obtaining decrypted binaries, run ablation semantic sweep:
+#   1. fazmerge: query "filter injection, format string, clickhouse, SQL"
+#      -> confirms/denies FMG-F80/F81/F83
+#   2. fgfmd: query "unauthenticated, port 8082, certificate, pre-auth"
+#      -> confirms/denies FMG-F89
+#   3. sdnproxyd: query "authentication check, port 7080, bypass"
+#      -> confirms/denies FMG-F87
+#   4. fgdsvc: query "authentication, privilege check"
+#      -> confirms/denies FMG-F91
+
+ENCRYPTED_ROOTFS_STATUS = {
+    "status": "BLOCKED -- rootfs.gz AES-encrypted at rest, decrypted at boot in initrd",
+    "last_checked": "2026-09-16",
+    "extraction_tool": "modules/fortinet_fortimanager_live_extract.py",
+    "approaches": [
+        "QEMU QMP monitor dump (primary): --monitor /path/to/socket or tcp:host:port",
+        "virsh snapshot-create-as (clean): --dump /path/to/ram.bin",
+        "FMG diagnostic shell: diagnose system shell + tar | base64",
+        "QEMU guest agent: --guest-tar <domain>",
+        "/proc/kcore: --dump /proc/kcore (requires FMG shell access)",
+    ],
+    "targets_blocked": ["fazmerge", "fgfmd", "fgdsvc", "webmcpserver", "sdnproxyd"],
+    "pending_findings": [
+        "FMG-F80 CANDIDATE HIGH: logview filter->fazmerge injection",
+        "FMG-F81 CANDIDATE HIGH: logview filter format string via fazmerge",
+        "FMG-F83 CANDIDATE MEDIUM: logview filter->fazmerge SSTI",
+        "FMG-F87 CANDIDATE HIGH: /sdnproxy auth gap (port 7080)",
+        "FMG-F89 CANDIDATE HIGH: FGFM daemon port 8082 pre-auth surface",
+        "FMG-F91 CANDIDATE MEDIUM: fgdsvc no Require directive",
+    ],
+}
