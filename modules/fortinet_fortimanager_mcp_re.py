@@ -263,3 +263,80 @@ FMGR_MCP_F04_API_TOKEN_ENV = {
         "No token rotation mechanism is implemented in the MCP server code."
     ),
 }
+
+
+# ---------------------------------------------------------
+# fortimanager-mcp (Python/FastMCP variant; 590 tools; by Jamie van der Pijll)
+# ---------------------------------------------------------
+FORTIMGR_MCP_PYTHON = {
+    "id":       "FMGR-MCP-PYTHON",
+    "product":  "fortimanager-mcp Python/FastMCP server (Jamie van der Pijll; community; v?)",
+    "source":   "mcp-servers/fortimanager-mcp/ (Docker; Python; FastMCP framework)",
+    "tools_count": 590,
+    "tool_mode": {
+        "full":    "590 tools loaded at startup (all FortiManager API operations)",
+        "dynamic": "Only proxy/discovery tools loaded; others executed on demand",
+    },
+    "default_config": {
+        "MCP_SERVER_HOST":        "0.0.0.0 (all interfaces; default in docker-compose)",
+        "MCP_SERVER_PORT":        "8000",
+        "MCP_SERVER_MODE":        "http (Docker; HTTP mode default)",
+        "FORTIMANAGER_VERIFY_SSL":"false (DEFAULT in env.example AND docker-compose)",
+    },
+}
+
+FMGR_MCP_PYTHON_F01_UNAUTH_590_TOOLS = {
+    "id":       "FMGR-MCP-PYTHON-F01",
+    "product":  "fortimanager-mcp Python -- no auth on HTTP 0.0.0.0:8000; 590 FortiManager tools exposed",
+    "severity": "CRITICAL -- unauthenticated access to 590 FortiManager API operations on all interfaces",
+    "class":    "Missing authentication (CWE-306) + default insecure configuration (CWE-1188)",
+
+    "description": (
+        "The Python fortimanager-mcp server: "
+        "  1. Binds HTTP on 0.0.0.0:8000 (all interfaces) by default. "
+        "  2. No authentication on the MCP HTTP endpoint -- no mention of API key, session token, "
+        "     or mutual TLS for the MCP server itself. "
+        "  3. 590 FortiManager API tools exposed to any unauthenticated caller. "
+        "  4. Includes `execute_device_json_commands(device_name, commands: list[str])` which "
+        "     passes arbitrary JSON-RPC command strings to managed FortiGate devices "
+        "     via exec /sys/proxy/json. "
+        "This is functionally an unauthenticated gateway to execute arbitrary commands "
+        "on all FortiGate firewalls managed by FortiManager. "
+        "Combined with VERIFY_SSL=false (below): MITM interception and injection of responses."
+    ),
+
+    "execute_device_json_commands_sig": (
+        "@mcp.tool() "
+        "async def execute_device_json_commands( "
+        "    device_name: str, "
+        "    commands: list[str],  # arbitrary JSON-RPC command strings "
+        "    adom: str = 'root', "
+        ") -> dict: ... "
+        "# calls api.execute_proxy_json(device_name, commands, adom) "
+        "# which calls client.exec('/sys/proxy/json', data=...)"
+    ),
+}
+
+FMGR_MCP_PYTHON_F02_VERIFY_SSL_FALSE_DEFAULT = {
+    "id":       "FMGR-MCP-PYTHON-F02",
+    "product":  "fortimanager-mcp Python -- FORTIMANAGER_VERIFY_SSL=false is the default",
+    "severity": "HIGH -- TLS cert verification disabled by default; all API traffic MITM-able",
+    "class":    "Improper certificate validation (CWE-295); insecure default (CWE-1188)",
+
+    "description": (
+        "env.example line: 'FORTIMANAGER_VERIFY_SSL=false'. "
+        "docker-compose.yml line: 'FORTIMANAGER_VERIFY_SSL=${FORTIMANAGER_VERIFY_SSL:-false}'. "
+        "The '-:false' default means: if FORTIMANAGER_VERIFY_SSL is not set, default to false. "
+        "Result: by default, the MCP server connects to FortiManager without verifying "
+        "the TLS server certificate. "
+        "An attacker who can intercept the network path between the MCP server and FortiManager "
+        "can: "
+        "  1. Present a self-signed certificate (accepted because verify=false). "
+        "  2. Intercept all FortiManager API requests and responses. "
+        "  3. Inject malicious responses containing prompt injection payloads "
+        "     (FMGR-MCP-F03 class attack). "
+        "  4. Suppress/modify configuration commands sent by the AI assistant. "
+        "Comment in env.example: 'Set to false if using self-signed certificates "
+        "(not recommended for production)' -- but false is the default, not an exception."
+    ),
+}
