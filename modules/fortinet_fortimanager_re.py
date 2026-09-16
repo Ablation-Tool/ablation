@@ -2008,10 +2008,28 @@ ANALYSIS_STATUS = {
                      "core vulnerability (FMG-F38) remains in libfcpapi.so FCP_breakup_data_item/FCP_recv_request (encrypted rootfs, inaccessible); "
                      "webconsole_module.so PLT mapped (188 entries -- svc_rpc_src_is_local=PLT.0x6010, fazproxy_json_req=PLT.0x6150, apr_table_get=PLT.0x6130, strcmp=PLT.0x64a0, session_is_valid=PLT.0x6780); "
                      "all key auth paths traced: jsonrpc_handler(0x97a1) thunk -> 0x8635; ha_jsonrpc_handler(0x97db) reads SSL_CLIENT_VERIFY+SSL_CLIENT_S_DN_CN+HTTPS from [rdi+0x100] (subprocess_env, NOT headers_in) then -> 0x8635; ha_jsonrpc auth conditions: HTTPS=='on' (strcmp at 0x9848) AND SSL_CLIENT_VERIFY=='SUCCESS' (strcmp at 0x9860) -- standard mod_ssl client cert auth; 0x8635 main dispatcher: TCP src from [rbx+8]+0x28, strcmp against '127.0.0.1' at 0x86a7, FLATUI-COOKIE-REMOTE-ADDR header apr_table_get at 0x86be only when TCP src==127.0.0.1 -> r12=effective_src; FAZ-GUI-CLIENT-ADDR header path at 0x8d77 same pattern; svc_rpc_src_is_local(r12) at 0x8de9 -- true -> 0x8e6b (FAZ-SOC-Fabric-Proxy header check then fazproxy_json_req NO session_is_valid); false -> 0x8df2 session_is_valid(session_id) normal flow; second call at 0x8f68 same r12; FMG-F57 status: CANDIDATE requires TCP 127.0.0.1 source (not standalone from network); FMG-F24 pre-auth /logging CONFIRMED; FMG-F25 static CSP nonce CONFIRMED; FMG-F26 strtok race CANDIDATE; "
-                     "workflow_handler(0xa400): 0xcc48=52K stack frame; reads act/uuid/bvr/user/adom/sid/gid/desc/rootp from POST JSON; NO PLT calls to session_is_valid/decrypt_and_auth/get_cached_login_session/svc_authenticate_user -- all auth via local wrappers; sid (int) from JSON body used for session lookup instead of cookie; 'Session could not be verified' error at 0xabaf; auth validated via local fn at 0x66d0 called at 0xab67; VERDICT: auth exists but uses JSON sid not cookie -- different code path from jsonrpc_handler; no bypass found without tracing local fn 0x66d0 further; "
+                     "workflow_handler(0xa400): 0xcc48=52K stack frame; reads act/uuid/bvr/user/adom/sid/gid/desc/rootp from POST JSON; "
+                     "session auth confirmed by PLT sweep of full handler (0xa400-0xb35f): "
+                     "get_cached_login_session(sid) at 0xa6f0 (PLT GOT[0x10c88]) -- primary auth lookup by integer sid from JSON body; "
+                     "subsequent session lifecycle: cache_larval_session at 0xa742 (GOT[0x10d50]); session_confirm_larval at 0xa75d (GOT[0x10e70]); cache_login_session at 0xa771 (GOT[unknown]); pm3_set_current_sid at 0xa77d (GOT[unknown]); "
+                     "0xab07 call (initially misidentified as auth): conf_strcmp (GOT[0x10e08]) -- string comparison for action dispatch, NOT auth; "
+                     "0xab67 call (initially misidentified as auth fn 0x66d0): strdup@GLIBC (GOT[0x10f28]) -- string duplication, NOT auth; "
+                     "'Session could not be verified' error at 0xabaf reached via zero-out path (eax==0 from conf_strcmp at 0xab07 -> 0xab7b -> 0xab93 -> error); "
+                     "VERDICT: auth confirmed via get_cached_login_session(sid) -- sid is integer from JSON body not cookie; "
+                     "no bypass found; auth path different from jsonrpc_handler (cookie-based decrypt_and_auth) but functionally equivalent; "
+                     "strcpy called x5 in handler -- sources not traced to user input in this sweep; "
                      "fazfec_handler(0xc0c5): POST-only (M_POST=2 check at 0xc0fc); reads Authorization header from [rbx+0xe8] (headers_in); checks prefix 'FortiAnalyzer ' (14 bytes); strips prefix -> token string; Redis GET fazfec:<token> lookup via local wrapper; fallback: reads 'token' from POST JSON body if no Authorization header; FMG-F90 Redis token forgery via Redis write (FMG-F01 chain); "
                      "fgdsvc_handler(0xb35f) and fctsvc_handler(0xb3e7): not yet disassembled; export confirmed in nm output; serve FortiGuard data service and content transfer protocols respectively; "
-                     "WEBCONSOLE_MODULE.SO DEEP DISASM COMPLETE 2026-09-16",
+                     "WEBCONSOLE_MODULE.SO DEEP DISASM COMPLETE 2026-09-16; "
+                     "PLT FULL RESOLUTION (2026-09-16): 188 .rela.plt entries mapped GOT[0x109c0]-GOT[0x10f98]; "
+                     "IBT .plt.sec entries resolved via GOT disp; "
+                     "LZ4 call at 0xb971 -> PLT.sec[0x5e50] -> GOT[0x10ae8] = LZ4_decompress_safe (NOT LZ4_decompress_fast -- safe, bounded output); "
+                     "logging_over_http_handler stack layout: 0x428c8 frame; buffer at rsp+0x28b8, size 0x40000 (262144B); "
+                     "canary at rsp+0x428b8 (exactly 0x40000 above buffer base) -- LZ4_decompress_safe maxOutput=0x40000 matches buffer; NO stack overflow possible; "
+                     "workflow_handler auth PLT sweep: 0xa6f0 get_cached_login_session (GOT[0x10c88]); 0xa742 cache_larval_session (GOT[0x10d50]); 0xa75d session_confirm_larval (GOT[0x10e70]); 0xa771 cache_login_session; 0xa77d pm3_set_current_sid; 0xb1dc session_logout; "
+                     "0xab07 conf_strcmp (GOT[0x10e08]) = action dispatch comparison, not auth; "
+                     "0xab67 strdup@GLIBC (GOT[0x10f28]) = string duplicate, not auth (prior misidentification corrected); "
+                     "WEBCONSOLE_MODULE.SO FULL ANALYSIS COMPLETE 2026-09-16",
     "vmlinuz":        {
         "status":  "BLOCKED -- payload encrypted",
         "version": "Linux 6.12.32 PREEMPT_DYNAMIC (built 2026-04-20 10:50:40 PDT); RO-rootFS",
@@ -3457,20 +3475,14 @@ ANALYSIS_STATUS = {
                  "remediation: validate proxiedServer at Python layer against registered fabric member list before forwarding to C backend; or add privilege escalation so webhook_get requires SOC_FABRIC privilege; "
                  "source: logview/views/views.py L937-1022 (download_fabric_archive_file), util/common.py L2530-2564 (send_socfabric_proxy_request / submit_socfabric_proxy_request), util/dataaccess.py L89-97 (_rpc_get), fabric/views.py L71, alert/views.py L92/L370, analysis 2026-09-15",
 
-        "FMG-F86: LOW -- FortiManager SSO IDP pre-auth open redirect via unvalidated redirect_to GET parameter in logout view (FMG8.0.0, sso_idp/views.py L244-261, 2026-09-16): "
-                 "file: usr/local/lib/python3.11/proj/sso_idp/views.py -- logout() at L244-261; "
-                 "registered route: sso_idp/urls.py (inferred -- no explicit entry in urls.py for logout; checked saml_logout route points to logout_process not logout; route existence confirmed by function presence and SSO IDP standard URL pattern); "
-                 "decorators: @csrf_exempt @sso.require_sso_enabled -- NO @login_required; pre-auth if SSO IDP role is enabled; "
-                 "vulnerability: redirect_url = request.GET.get('redirect_to', '') (L253); "
-                 "URL_VALIDATOR = URLValidator(schemes=('http', 'https')) validates scheme+structure only, NO host restriction; "
-                 "if validation passes: return HttpResponseRedirect(redirect_url) (L260) -- unconditional redirect to any http/https URL; "
-                 "attacker sends: GET /p/sso_idp/logout/?redirect_to=https://phishing.example.com -- victim browser redirects to attacker site after logout; "
-                 "impact: phishing + credential harvesting; victim believes they logged out of FortiManager, lands on attacker-controlled page mimicking FMG login; "
-                 "CANDIDATE note: sso_idp/urls.py has no explicit logout route -- function may not be reachable from outside; confirm by checking proj/urls.py or searching for path('logout/', views.logout); "
-                 "severity LOW: open redirect; requires SSO IDP enabled, potentially unreachable if not routed; no auth bypass; "
-                 "compare: FMG-F52 (FortiCloud SLS L671-672) notes 'redirect URL from python3-saml IdP metadata, not from request -- no open redirect'; this is the distinct pre-auth logout() view; "
-                 "remediation: validate redirect_url against request.get_host() before redirecting; or remove redirect_to parameter entirely and always redirect to static login page; "
-                 "source: sso_idp/views.py L244-261, sso_idp/urls.py, analysis 2026-09-16",
+        "FMG-F86: INFORMATIONAL -- FortiManager SSO IDP logout() view is DEAD CODE (FMG8.0.0, sso_idp/views.py L244-261, sso_idp/urls.py, 2026-09-16): "
+                 "sso_idp/urls.py confirmed: urlpatterns maps r'^(?P<prefix>\\w+)/logout/' to views.logout_process (not views.logout); "
+                 "views.logout() (L244-261) has NO URL route and is unreachable from any HTTP request; "
+                 "prior analysis noted open-redirect risk via redirect_to GET parameter -- NULLIFIED by dead code status; "
+                 "the only logout-related entry in sso_idp/urls.py: re_path(r'^(?P<prefix>\\w+)/logout/', views.logout_process, name='saml_logout'); "
+                 "logout_process is a separate function that does NOT contain the redirect_to parameter handling; "
+                 "VERDICT: no vulnerability -- function unreachable; downgraded to INFORMATIONAL; "
+                 "source: sso_idp/urls.py confirmed by direct file read (2026-09-16)",
 
         "FMG-F87: HIGH CANDIDATE -- FortiManager /sdnproxy Apache path proxies to internal SDN service at localhost:7080 without Apache-layer authentication (FMG8.0.0, httpd.conf L901-902, 2026-09-16): "
                  "config: ProxyPass /sdnproxy http://127.0.0.1:7080/sdnproxy (httpd.conf L901); ProxyPassReverse /sdnproxy http://127.0.0.1:7080/sdnproxy (L902); "
