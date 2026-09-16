@@ -666,4 +666,30 @@ WIN_DRIVER_CROSSVER = {
             "but has less kernel attack surface."
         ),
     },
+
+    "fortips_semantic_sweep": {
+        "binary":   "/tmp/fc723_driver/File_fortips_ndis6_3.sys",
+        "method":   "ablation semantic sweep; sentence-transformers/all-MiniLM-L6-v2; 607 functions; x64 prologues",
+        "note":     "Low scores (0.17-0.37) due to stripped kernel driver with minimal strings -- typical for kernel code",
+        "clusters": {
+            "buffer_overflow_candidate": {
+                "va":   "0x14000cdec",
+                "score": 0.375,
+                "calls": ["0x14000db50", "0x140016e78"],
+                "profile": "Tops buffer_overflow, ndis_recv_undercheck, AND esp_ipsec_overflow queries -- cross-profile concentration",
+                "priority": "HIGH for manual disassembly",
+            },
+            "esp_handler_cluster": {
+                "shared_callee": "0x14001b570 (called by 0x14001cfce, 0x14001d0db, 0x14001cea8, 0x14001cfa7, 0x14001cfa7)",
+                "profile": "ESP overflow query; 'esp_output not big enough' string belongs to this call graph",
+                "priority": "HIGH for manual disassembly -- 0x14001b570 is the ESP buffer management function",
+            },
+            "integer_overflow_candidate": {
+                "va":   "0x14000baca",
+                "calls": ["0x14000bc00"],
+                "note": "Calls same target twice in sequence; possible loop over variable-length field",
+            },
+        },
+        "next_step": "Manual disassembly of 0x14000cdec and 0x14001b570 in Ghidra/Binary Ninja",
+    },
 }
