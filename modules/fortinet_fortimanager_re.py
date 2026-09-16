@@ -821,3 +821,86 @@ FAZ_CLICKHOUSE_FILTER_INJECTION = {
         "ClickHouse default HTTP interface port 8123 -- check if exposed on FMG loopback or LAN."
     ),
 }
+
+
+# ---------------------------------------------------------
+# FMG web UI: JavaScript bundle + CSP nonce architecture
+# Source: /tmp/fmg_ext/usr/local/webclient/ (index.html + static/dist/ JS bundles)
+# ---------------------------------------------------------
+FMG_WEB_UI_RE = {
+    "id":      "FMG-WEB-UI",
+    "product": "FortiManager 8.0.x -- React/webpack web UI bundle analysis",
+    "source":  "/tmp/fmg_ext/usr/local/webclient/ (index.html, static/dist/ 539 JS files)",
+
+    "architecture": {
+        "framework": "React (webpack bundle, webpackChunkflatui namespace)",
+        "entry_point": "index.html with {{__gui_url_prefix__}} and {{__gui_nonce__}} template vars",
+        "bundle_structure": {
+            "97722.72499859.js": "386KB -- core shared runtime (API paths, routing)",
+            "78386.d6cb6dc0.js": "163KB -- theme/color constants, CONFIG_GUI_NO",
+            "react-*.js": "React runtime bundles",
+            "vendors-*.js": "Third-party vendor bundles (17 files)",
+            "utilities-*.js": "Shared utilities (4 files)",
+            "App-*.js": "Application feature chunks (80+ files, lazy-loaded)",
+            "mod-dvm-main.*.chunk.js": "Device Manager main chunk",
+        },
+        "api_paths_in_js": [
+            "/jsonrpc (primary JSON-RPC API endpoint)",
+            "/cgi-bin/module/flatui_auth (authentication)",
+            "/cgi-bin/module/flatui (UI endpoint)",
+            "/cgi-bin/module/fazapi (FortiAnalyzer API)",
+            "/cgi-bin/module/flatui_proxy (proxy)",
+            "/cgi-bin/module/productapi",
+            "/api/v2/cmdb/ (FortiGate REST API via proxy)",
+            "/api/v2/monitor/ (FortiGate monitor via proxy)",
+            "/api/v2/service/ (FortiGate service via proxy)",
+        ],
+        "phone_home_endpoints": [
+            "https://mapserver.fortinet.com (geographic map tile server -- FortiManager phones home for device location views)",
+        ],
+    },
+
+    "csp_nonce_finding": {
+        "id":       "FFMG-F06",
+        "severity": "HIGH",
+        "title":    "Potential static CSP nonce enables XSS bypass",
+        "evidence": {
+            "index_html": (
+                "{{__gui_nonce__}} is the CSP nonce placeholder in index.html. "
+                "Substituted into: (1) <script nonce={{__gui_nonce__}}> inline script tag; "
+                "(2) JavaScript variable: GUI_NONCE = '{{__gui_nonce__}}'; "
+                "(3) favicon cache-bust query: favicon.ico?rnd={{__gui_nonce__}}"
+            ),
+            "webconsole_module": (
+                "Hardcoded MD5 6241e8c23b5b279b0071865c8ac78ca8 found in webconsole_module.so "
+                "(Apache module responsible for serving /flatui/ paths). "
+                "Located adjacent to CSP nonce formatting code. "
+                "Source: FMG_APACHE_INTERNALS in this file."
+            ),
+            "hypothesis": (
+                "If webconsole_module.so substitutes the hardcoded MD5 as the nonce value "
+                "(instead of generating a random value per request), "
+                "the CSP nonce is effectively a static shared secret. "
+                "Any XSS injection that includes nonce=\"6241e8c23b5b279b0071865c8ac78ca8\" "
+                "bypasses the FortiManager Content Security Policy and executes inline JS."
+            ),
+        },
+        "verification": (
+            "Send authenticated request to /flatui/ and observe the nonce in the response HTML. "
+            "If it matches 6241e8c23b5b279b0071865c8ac78ca8, the bypass is confirmed. "
+            "If the nonce changes per request, the MD5 is used for another purpose."
+        ),
+        "impact": (
+            "Static CSP nonce + any stored XSS in FMG UI -> "
+            "arbitrary JavaScript execution in FMG admin context -> "
+            "JSON-RPC API calls as admin -> fleet-wide FortiGate config manipulation via sys_proxy_json."
+        ),
+    },
+
+    "js_attack_surface": [
+        "539 JS files -- prototype pollution in React or vendor dependencies",
+        "webpack dynamic import() -- path traversal in chunk loading if __gui_url_prefix__ is unsanitized",
+        "/api/v2/cmdb/ proxied to managed FortiGate -- SSRF via URL manipulation in API proxy component",
+        "EMS connector UI (FortiClient EMS) -- renders EMS tag data without apparent sanitization in chunk",
+    ],
+}
