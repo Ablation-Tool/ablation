@@ -3526,7 +3526,9 @@ ANALYSIS_STATUS = {
                  "SDN service at port 7080: binary in encrypted rootfs.gz (inaccessible without decryption); service is the FMG SDN integration daemon that manages connectivity to SDN controllers (VMware NSX, Cisco ACI, etc.); "
                  "attack surface: any unauthenticated request to https://fmg-host/sdnproxy/<path> is proxied to internal SDN service; SDN service may expose REST API with its own auth or may trust all loopback requests; "
                  "impact if SDN service trusts loopback: full SDN controller configuration access (read existing SDN topology, modify network segmentation policies, exfiltrate network credentials); "
-                 "CANDIDATE constraint: requires confirmation that (1) /sdnproxy is globally accessible not restricted to internal callers only; (2) SDN service at 7080 has weak or no auth; "
+                 "APACHE-LAYER CONFIRMED (2026-09-16): mod_access_filter.so string analysis shows URL list = {/FDSService, /FCPService, /logging, /fgt, /fdsupdate} -- /sdnproxy is NOT present; "
+                 "module hooks ap_hook_handler; if URL not in its list, handler returns DECLINED -> Apache continues to ProxyPass; /sdnproxy bypasses all mod_access_filter checks; "
+                 "CANDIDATE constraint remaining: (2) SDN service at 7080 has weak or no auth (binary in encrypted rootfs.gz, unverifiable); "
                  "note: httpd.conf global <Directory /> has Require all denied, but ProxyPass is URL-space not filesystem-space -- Directory restrictions do not apply to ProxyPass paths; "
                  "remediation: add <Location /sdnproxy> Require valid-user block; or restrict to known FortiGate/SDN controller source IPs; "
                  "source: httpd.conf L901-902, analysis 2026-09-16",
