@@ -296,7 +296,7 @@ CROSSVER_MULTIVERSION_KEYS = {
 
     "fgt2_key_rsa2048": {
         "pubkey_sha256": "3f9c28e38355e26d9f1fcaa50522ee9e74c57f17dcb9d80efa8c7d50bba4358c",
-        "versions_confirmed": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)", "7.4.8 (2025)", "8.0.0 (2026)"],
+        "versions_confirmed": ["6.0.3 (2018)", "7.0.3 (2021)", "7.0.13 (2023)", "7.2.0 (2022)", "7.4.8 (2025)", "8.0.0 (2026)"],
         "path_in_datafs": "./etc/fgt2.key",
         "status": "IDENTICAL fingerprint across all 4 versions -- private key never rotated in 8 years",
         "impact": (
@@ -363,12 +363,41 @@ CROSSVER_MULTIVERSION_KEYS = {
         ),
     },
 
+    "fgt_key_device_cert": {
+        "pubkey_sha256": "01df5c4533518c2c8c5f482e9efbd58c7cf448efdffb3ddeb8b419a5f8ad5d3a",
+        "cert_subject":  "CN=FortiGate, OU=FortiGate",
+        "cert_issuer":   "CN=support",
+        "cert_serial":   "0241C8",
+        "cert_validity": "Jul 16 2015 - Jan 19 2038 (Y2038 = INT32_MAX timestamp)",
+        "versions_confirmed": ["6.0.3 (2018)", "7.0.3 (2021)", "7.0.13 (2023)", "7.2.0 (2022)", "7.4.8 (2025)"],
+        "versions_removed": ["8.0.0 (2026)"],
+        "status": "IDENTICAL across all 5 pre-8.0.0 versions; REMOVED (not rotated) in 8.0.0",
+        "impact": (
+            "fgt.key is the default HTTPS private key for the FortiGate management interface (port 443). "
+            "Any FortiGate device using the default certificate shares this private key. "
+            "An attacker with the private key can decrypt any HTTPS management session or perform a "
+            "transparent MitM against the management interface. "
+            "Y2038 expiry (INT32_MAX) confirms auto-generation in 2015 with no review. "
+            "Fortinet removed this cert in 8.0.0 instead of rotating it -- silently ending 10 years of reuse."
+        ),
+    },
+
+    "libips_size_evolution": {
+        "7.0.13": 8900728,
+        "7.2.0":  10881736,
+        "7.4.8":  13675184,
+        "growth_7013_to_720_pct":  "+22%",
+        "growth_720_to_748_pct":   "+26%",
+        "note": "Consistent ~24% per-cycle growth -- each release adds significant new protocol parser code",
+    },
+
     "attack_surface": [
         "CROSSVER-F07-A1: RSA-2048 fgt2.key -- extract from any firmware image -> impersonate any FortiGate to FortiManager (FGFM protocol) -> fleet-wide lateral movement without credential",
         "CROSSVER-F07-A2: RSA-512 fgt_512.key (pre-8.0.0) -- factor in hours with CADO-NFS -> decrypt any session authenticated with this key on 6.0.3 through 7.4.8 devices (7-year span)",
-        "CROSSVER-F07-A3: fgt2.crt 40-year shared cert -- cert pinning bypass; MitM FGFM traffic between FortiGate and FortiManager using known private key",
-        "CROSSVER-F07-A4: Default admin ENC XXUp2ozpdysrQ -- decode with FortiOS ENC algorithm -> plaintext admin password for any device that has not changed default",
-        "CROSSVER-F07-A5: Unencrypted rootfs (6.0.3/7.0.3/7.2.0) -- extract and analyze all FortiOS binaries without firmware decryption; directly compare httpsd/sslvpnd/wad/cmdbsvr across versions",
+        "CROSSVER-F07-A3: fgt.key (pre-8.0.0) -- default HTTPS device cert private key; MitM any management session on default-cert FortiGate (10-year span, 2015-2025)",
+        "CROSSVER-F07-A4: fgt2.crt 40-year shared CA cert -- cert pinning bypass; MitM FGFM traffic between FortiGate and FortiManager using known private key",
+        "CROSSVER-F07-A5: Default admin ENC XXUp2ozpdysrQ -- decode with FortiOS ENC algorithm -> plaintext admin password for any device that has not changed default",
+        "CROSSVER-F07-A6: Unencrypted rootfs (6.0.3/7.0.3/7.2.0) -- extract and analyze all FortiOS binaries without firmware decryption; directly compare httpsd/sslvpnd/wad/cmdbsvr across versions",
     ],
 }
 
