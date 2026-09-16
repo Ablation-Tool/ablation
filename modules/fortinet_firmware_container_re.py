@@ -873,9 +873,52 @@ ANALYSIS_STATUS = {
         },
         "datafs_contents": {
             "accessible_elfs": [
-                "lib/libips.so.new  (x86-64, stripped, 54MB -- IPS/intrusion prevention engine)",
+                "lib/libips.so.new  (x86-64, stripped, 18MB in FGT 8.0.0 VM64 -- IPS/intrusion prevention engine; primarily Rust; 47,749 function prologues)",
                 "lib/libav.so.new   (x86-64, stripped -- antivirus engine)",
             ],
+            "libips_deep_analysis": {
+                "language":     "Primarily Rust (confirmed by panic strings, Rust crate paths in binary)",
+                "crates_confirmed": [
+                    "memchr-2.7.4 (byte search)",
+                    "regex-automata-0.4.7 (regex engine)",
+                    "regex-syntax-0.8.4",
+                    "serde_json-1.0.133 (JSON deserialization)",
+                    "zlib-rs-0.6.0 (Rust zlib implementation)",
+                    "encoding_rs-0.8.35 (character encoding)",
+                    "quiche (Cloudflare QUIC/HTTP3 implementation)",
+                    "aho-corasick (multi-pattern string matching for IPS signatures)",
+                    "lmdb (Lightning Memory-Mapped Database for state caching)",
+                    "serde-1.0.215, serde_derive-1.0.215",
+                    "thiserror-2.0.3, enum_dispatch-0.3.13, zerocopy-derive-0.8.31",
+                    "intrusive-collections-0.9.6 (lock-free intrusive data structures)",
+                ],
+                "corelib_modules": [
+                    "corelib/ipsc/ (IPS core -- packet/signature matching)",
+                    "corelib/flowav/ (flow-based antivirus engine)",
+                    "corelib/dfasearch/ (DFA-based signature search; stats.rs)",
+                    "corelib/mcdb/ (MCDB -- multi-core database?)",
+                    "corelib/ssl/crates/uvart-ftls/ (Rust TLS library)",
+                    "corelib/utils/crates/lmdb (LMDB Rust bindings)",
+                    "corelib/utils/crates/libuv (libuv Rust bindings)",
+                    "corelib/utils/crates/uvart (uvart event loop)",
+                ],
+                "build_path":   "/home/devops/ips-build-env/code/ipsbuild-Q3jPsx/",
+                "build_rustc":  "/rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/ (rustc commit hash)",
+                "lua_integration": "uvart_ftls_lua bindings: LuaJIT + libuv + TLS in Rust FFI; types UvPipe/UvTcp/UvTimer/UvRequest/UvPoll/UvFsEvent/UvPrepare",
+                "quic_http3": "quiche (Cloudflare QUIC) integrated -- ECH stripping: 'Found ECH: create stripped ECH message'",
+                "attack_surface": (
+                    "Rust memory safety eliminates most classical BOF/UAF. Residual attack surface: "
+                    "(1) FFI boundaries: uvart_ftls_lua (LuaJIT-Rust boundary); C bridge layer in bridge/src/ipsc.rs. "
+                    "(2) quiche QUIC deserialization -- any quiche vulnerability affects IPS QUIC processing. "
+                    "(3) Signature database loading -- binary format parser ('fidsdb_parser_overflow' profile); "
+                    "    zlib-rs decompression of compressed signature data. "
+                    "(4) ECH (Encrypted Client Hello) stripping logic -- creates modified TLS ClientHello; "
+                    "    parsing errors could cause bypass or panic. "
+                    "(5) PCRE/regex -- regex-automata + aho-corasick + PCRE; ReDoS possible against regex signatures. "
+                    "(6) Integer arithmetic -- Rust debug panics on overflow; release mode uses wrapping semantics; "
+                    "    'capacity overflow' panic strings suggest possible length calculation edge cases."
+                ),
+            },
             "cert_files": [
                 "etc/fgt2.key  (RSA-2048 private key -- CROSSVER-F01: identical across FGT 7.4.12 x86-64 and ARM64 8.0.0)",
                 "etc/fgt_512.key  (RSA-512 private key, pipeline modulus-B for ARM64)",
