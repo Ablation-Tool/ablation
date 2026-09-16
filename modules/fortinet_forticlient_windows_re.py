@@ -447,3 +447,135 @@ WIN_F09_FCAUTH_PIPE = {
         "meaning it runs as SYSTEM and impersonates the user for credential operations."
     ),
 }
+
+
+# ---------------------------------------------------------
+# WIN-F10: FCConfig2.exe -- Rust WebSocket+OIDC server on 127.0.0.1:8011; JWT 'none' alg attack surface
+# ---------------------------------------------------------
+WIN_F10_FCCONFIG2_JWT = {
+    "id":       "WIN-F10",
+    "product":  "FortiClient Windows -- FCConfig2.exe (Rust/Tokio WebSocket+OIDC config daemon); binds 127.0.0.1:8011; JWT 'none' algorithm in signing algorithm list; local OIDC provider with potential token forgery",
+    "severity": "CRITICAL if JWT 'none' alg is accepted by the server; HIGH as a local unauthenticated config manipulation surface",
+    "class":    "JWT algorithm confusion / 'none' attack (CWE-347); local WebSocket config endpoint without verified authentication",
+
+    "evidence": [
+        "FCConfig2.exe (11MB Rust binary) strings: '127.0.0.1:8011' (WebSocket bind address)",
+        "FCConfig2.exe strings: 'websocket upgrade complete', 'sec-websocket-key', 'sec-websocket-version'",
+        "FCConfig2.exe strings: 'forticlient::standalone::http::server::OidcRedirectListener::run'",
+        "FCConfig2.exe strings: 'confighandler_rust::webserver::routes::websock::command::Command::send_to_clients'",
+        "FCConfig2.exe strings: 'Websocket msg:' + 'handle_message' (WebSocket message dispatch)",
+        "FCConfig2.exe strings: 'CoreJwsSigningAlgorithmHS256HS384HS512RS256RS384RS512ES256ES384ES512PS256PS384PS512EdDSA' -- none present in algorithm enumeration",
+        "FCConfig2.exe strings: 'sh_token', 'id_token', 'nonce mi', 'bad sign' (JWT token handling)",
+        "FCConfig2.exe strings: 'struct JsonWebKeySet', 'jwks_uri' (full OIDC discovery document support)",
+        "FCConfig2.exe source: C:\\279\\2902741\\ForticlientNG\\Apps\\confighandler-rust\\src\\webserver\\routes\\websock\\command\\license.rs",
+        "FCConfig2.exe source: C:\\279\\2902741\\ForticlientNG\\Base\\forticlient\\src\\standalone\\http\\server.rs (OIDC redirect listener)",
+    ],
+
+    "mechanism": (
+        "FCConfig2.exe is a Rust/Tokio+Warp HTTP+WebSocket server providing: "
+        "  1. WebSocket IPC for config commands (the Electron GUI connects here as the 'confighandler') "
+        "  2. OIDC redirect listener for Azure/SAML auth callbacks "
+        "  3. JWT-protected config API using 'sh_token' (shared token) "
+        "The JWT signing algorithm list includes 'none' in the algorithm enum. "
+        "If the JWT library accepts a token with header alg:none, an attacker can: "
+        "  1. Connect to ws://127.0.0.1:8011 from any local process "
+        "  2. Forge a JWT with alg:none and any sh_token claim "
+        "  3. Issue config commands as an authenticated Fabric Agent client "
+        "  -> arbitrary config read/write including VPN credentials, compliance policy bypass. "
+        "The OIDC redirect listener (port may be 127.0.0.1:34254) "
+        "could also be interceptable by a local process registering a race on the port."
+    ),
+
+    "attack_surface": {
+        "jwt_none_alg": (
+            "Forge JWT with {'alg':'none', 'typ':'JWT'}.{'sh_token':'...any_user...'}. "
+            "If accepted: full WebSocket config API access without FortiClient credentials."
+        ),
+        "websocket_unauthenticated": (
+            "If WebSocket endpoint at ws://127.0.0.1:8011 serves any commands before JWT "
+            "auth validation (e.g., version info, license query, public OIDC discovery), "
+            "information disclosure before any auth is required."
+        ),
+        "oidc_redirect_race": (
+            "OidcRedirectListener binds a local port to receive the OAuth callback. "
+            "If the port is dynamic and written to a shared file (same service_port pattern "
+            "as Linux GUI-F06), attacker writes a rogue port -> OIDC redirect goes to attacker "
+            "-> intercepts Azure AD id_token."
+        ),
+    },
+
+    "see_also": [
+        "GUI-F06: Linux service_port injection (same class -- local port file written for IPC)",
+        "WIN-F05: FortiTcs.exe token manipulation -- combined with FCConfig2 JWT forgery = full config+service control",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# WIN-F11: sslvpnlib.dll -- cert validation bypass via user dialog + shared memory credential exposure
+# ---------------------------------------------------------
+WIN_F11_SSLVPN = {
+    "id":       "WIN-F11",
+    "product":  "FortiClient Windows -- sslvpnlib.dll (1.7MB SSL-VPN library); user-bypassable server cert validation; FortiVpnDll2.dll VPN state shared memory with GR ACE for unknown SID",
+    "severity": "HIGH -- MITM credential capture via cert dialog bypass; potential credential read from shared memory",
+    "class":    "Trust-on-first-use cert validation (CWE-297) + shared memory access control (CWE-732)",
+
+    "evidence": [
+        "sslvpnlib.dll strings: 'IsSslvpnStrictServerCertValidationEnabled' (non-strict mode implies bypass path)",
+        "sslvpnlib.dll strings: 'User doesn\\'t want to proceed connection with invalid certificate'",
+        "sslvpnlib.dll strings: 'ShowServerCerttificateWarningMessage' (dialog shown, not blocked)",
+        "sslvpnlib.dll strings: 'CSslvpnBase::GetServerCertFingerprint' (fingerprint pinning available but not default)",
+        "sslvpnlib.dll strings: '\\\\pipe\\\\FortiSslvpnNamedPipe' (named pipe for SSL-VPN daemon IPC)",
+        "FortiVpnDll2.dll strings: SDDL 'D:(A;;GAFA;;;' + '(A;;GA;;;' + '(A;;GR;;;' -- three ACEs, third has GR (read) for unknown SID",
+        "FortiVpnDll2.dll strings: 'VpnConnInfo_GetUsername', 'VpnConnInfo_GetRemoteGateway', 'VpnConnInfo_GetCommandline'",
+        "FortiVpnDll2.dll strings: 'Clear string [%s] in VpnConnParam shared memory in session %lu'",
+    ],
+
+    "cert_bypass": (
+        "sslvpnlib.dll uses WinHTTP for SSL-VPN HTTPS connections. "
+        "Non-strict mode allows the user to click through a certificate warning dialog "
+        "and connect to an invalid server. "
+        "A rogue FortiGate with a self-signed cert: "
+        "  1. User sees ShowServerCerttificateWarningMessage dialog "
+        "  2. If user proceeds: SSL-VPN credentials sent to attacker's endpoint "
+        "  3. Fingerprint pinning only works if previously stored."
+    ),
+
+    "shared_mem_credential": (
+        "FortiVpnDll2.dll stores VPN connection parameters including VpnConnInfo_GetUsername "
+        "in a shared memory section. SDDL third ACE has GR (read-only) for dynamically computed SID. "
+        "If that SID = BU (Built-in Users) or WD (Everyone): any local process maps the section "
+        "and reads VPN session parameters including username and connection metadata. "
+        "Verification: OpenFileMappingW test from low-priv process."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-F12: FortiAuth.exe WebView2 SAML -- JsonDeserializeHtml from rogue FortiGate
+# ---------------------------------------------------------
+WIN_F12_FORTIAUTH_SAML = {
+    "id":       "WIN-F12",
+    "product":  "FortiClient Windows -- FortiAuth.exe (.NET 4.7.2 + WebView2); SAML response deserialized via JsonDeserializeHtml; SAMLResponse content from FortiGate-controlled page",
+    "severity": "HIGH -- rogue FortiGate controls WebView2 page content; malformed JSON in SAML response -> deserialization in .NET 4.7.2 context",
+    "class":    "Attacker-controlled JSON deserialization via browser SAML flow (CWE-502)",
+
+    "evidence": [
+        "FortiAuth.exe strings: 'CoreWebView2_DocumentTitleChanged', 'WebViewAuth_CoreWebView2InitializationCompleted'",
+        "FortiAuth.exe strings: 'GetSamlResponseAndRelayState', 'SAMLResponse', 'SamlZtnaResponse', 'SamlIpsecVpnResponse'",
+        "FortiAuth.exe strings: 'JsonDeserializeHtml' (custom function deserializing JSON from HTML)",
+        "FortiAuth.exe strings: 'Deserialize', 'GetMd5Hash', 'HashAlgorithm'",
+        "FortiAuth.exe strings: 'FormSamlAuth', 'FormSamlAuth2', 'ShowWebBrowserAuth'",
+        "FortiAuth.exe config: .NET Framework 4.7.2 (System.Runtime.CompilerServices.Unsafe 6.0.0.0)",
+    ],
+
+    "mechanism": (
+        "FortiAuth.exe shows a WebView2 browser window for SAML authentication. "
+        "WebView2 navigates to the FortiGate SAML endpoint. "
+        "FortiGate (or rogue FortiGate) controls the HTML/JSON returned. "
+        "FortiAuth.exe calls JsonDeserializeHtml on the page content to extract the SAMLResponse. "
+        "If JsonDeserializeHtml uses Newtonsoft.Json with TypeNameHandling.All or BinaryFormatter, "
+        "a rogue FortiGate's SAML page can embed a .NET gadget chain in the JSON -> "
+        "code execution in the FortiAuth.exe process context."
+    ),
+}
