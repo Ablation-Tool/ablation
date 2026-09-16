@@ -221,13 +221,27 @@ IKED_F01_FRAG_REASSEMBLE = {
         "(likely root or a privileged user for kernel IPsec integration)."
     ),
 
-    "disasm_required": (
-        "ikev2_frags_reassemble VA not confirmed from static analysis. "
-        "Manual disassembly needed to: "
-        "  1. Find the malloc/calloc call for the reassembly buffer. "
-        "  2. Confirm the size argument comes from ikev2_check_frag_oversize output. "
-        "  3. Check whether the fragment copy loop bounds-checks each fragment's offset + length. "
-        "BERT semantic sweep on iked: 3,734 functions found; sweep deferred pending token budget."
+    "disasm_confirmed": (
+        "BERT semantic sweep completed: 3,734 functions encoded; all 5 query profiles run. "
+        "EAP-TTLS cluster (0x5b6425, 0x5afdd5, 0x5af7c5, 0x5af455, 0x5b0c75) showed "
+        "highest confidence (score 0.33), consistent with credential-handling functions. "
+        ""
+        "ikev2_frags_reassemble: confirmed at 0x5f1000 (>18KB function). "
+        "  References to 'ikev2_frags_reassemble' string at offsets +0x442a, +0x4460, +0x45c1 "
+        "  within the function confirm this is the reassembly function (self-logging). "
+        "  Zero direct (e8) callers found -- function is invoked via function pointer (indirect call). "
+        ""
+        "ikev2_check_frag_oversize: confirmed at 0x462620. "
+        "  Logic: computes total fragment size (calls 0x4406f0, 0x440720, 0x43fec0), "
+        "  compares against threshold (0x208=520 or 0x4b4=1204 bytes depending on IKE version flag). "
+        "  Returns: 0 if within limits, 1 if oversize+allowed, -1 if error path. "
+        "  Called from exactly 3 sites: 0x45fe2a, 0x464643, 0x464b71. "
+        ""
+        "Critical gap: frags_reassemble invoked via function pointer means the 3 check sites "
+        "do NOT necessarily cover all reassembly paths. Any code path that invokes the function "
+        "pointer directly without calling check_frag_oversize first bypasses the size validation. "
+        "Full CFG (control flow graph) analysis required to enumerate all indirect call sites. "
+        "Verdict: PLAUSIBLE; full confirmation requires dynamic analysis or CFG reconstruction."
     ),
 
     "related": "CVE-2024-23113 (FortiOS SSL-VPN pre-auth format string); IKED-F01 is a different daemon but same pre-auth network attack surface pattern.",
