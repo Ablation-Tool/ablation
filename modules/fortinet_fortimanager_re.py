@@ -3137,6 +3137,19 @@ ANALYSIS_STATUS = {
                  "also apply to base_dn, object_dn, and any DN-sourced values passed to conn.modify/conn.search; "
                  "source: fmg-builtin/AD/operator.py L582-598 (get_attribute), L625-630 (perform_action), "
                  "L1515-1579 (ADGetObjectDetailsOperator.execute), analysis 2026-09-15",
+
+        "FMG-F73: MEDIUM -- FortiManager SOAR FortiMail (FML) connector inserts trigger-controlled domain_name directly into FAC REST API URL path without URL encoding, enabling SOAR trigger data to traverse the FortiMail API endpoint space (FMG8.0.0, fmg-builtin/FML/operator.py L555-600, 2026-09-15): "
+                 "class: URL path traversal in SOAR connector via trigger data (same root cause as FMG-F50 but affects FortiMail API); "
+                 "root cause: add_sender_to_blocklist() at FML/operator.py L555-575: "
+                 "url = f'https://{ip}/api/v1/SenderListV2/{domain_name}' -- domain_name from params.get('domain_name'); "
+                 "params['domain_name'] populated at execute() L594-595: self.domain_name = FAZUtilsOperator.parse_input(context, self.domain_name, context_dict); "
+                 "no URL encoding applied to domain_name before insertion into URL path; "
+                 "path traversal payload: domain_name='example.com/../../../admin/accounts' -> URL traverses to https://{fml_host}/api/v1/admin/accounts; "
+                 "impact: reach FortiMail REST API endpoints not intended to be accessible via this playbook action; "
+                 "same fix applies to email parameter in POST body (less critical, not URL-path); "
+                 "distinguish from F50 (FAC): FAC has account disable impact via PATCH; FML impact limited to blocklist API traversal; "
+                 "remediation: URL-encode domain_name with urllib.parse.quote(domain_name, safe='') before inserting into URL; "
+                 "source: fmg-builtin/FML/operator.py L543-600 (FMLAddSenderToBlocklistOperator), analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
