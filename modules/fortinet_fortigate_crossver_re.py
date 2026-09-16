@@ -659,5 +659,56 @@ CROSSVER_IPS_DIFF_720_748 = {
             "7.0.13 VA 0x1009f6 appears in two query profiles (sprintf + malloc) -- suggests a parsing function "
             "that both formats output AND allocates; prime cross-boundary vuln candidate."
         ),
+
+        "luajit_finding": {
+            "id":    "CROSSVER-F11",
+            "title": "LuaJIT embedded in FortiOS IPS engine (libips.so.new) -- version differs across releases",
+            "severity": "HIGH -- embedded scripting engine in pre-auth packet processing path",
+
+            "versions": {
+                "7.0.13": "LuaJIT 2.1.d1a2fef8 (development snapshot)",
+                "7.2.0":  "LuaJIT 2.1.0-beta3 (March 2017 release -- OLDEST, most likely to have unpatched JIT bugs)",
+                "7.4.8":  "LuaJIT 2.1.d06beb04 (development snapshot, most recent)",
+            },
+
+            "confirmed_entry_points": [
+                "ips_lua_newstate -- creates new Lua VM state",
+                "ips_lua_pcall -- protected call (evaluates Lua function with error handling)",
+                "ips_lua_loadbuffer -- compiles Lua bytecode from buffer",
+                "ips_lua_dostring -- evaluates Lua string as code",
+                "ips_lua_require -- loads Lua module",
+                "ips_lua_load -- loads Lua chunk",
+                "ips_lua_prepare_call -- sets up Lua call stack",
+                "ips_luacfg_init -- initializes Lua config system",
+                "ips_luacfg_parse_app_grp_filters -- parses application group filters via Lua",
+                "query_lua_intf -- query Lua interface (IPS <-> Lua boundary)",
+                "register_lua_module -- registers C module with Lua VM",
+                "prepare_lua_state -- state initialization",
+            ],
+
+            "lua_search_path": "/usr/local/share/luajit-2.1/?.lua;/usr/local/share/lua/5.1/?.lua",
+
+            "nan_boxing_confirmed": {
+                "ptr_tag":       "0xfff9800000000000 (11-12 occurrences across all versions)",
+                "undefined_tag": "0xfffa000000000000 (158-165 occurrences across all versions)",
+                "int32_tag":     "0xfffe000000000000 (13-15 occurrences across all versions)",
+                "max_alloc":     "0x7fffff00 (30-31 occurrences -- LuaJIT string/table size limit)",
+            },
+
+            "attack_surface": [
+                "CROSSVER-F11-A1: ips_lua_dostring with packet-derived content -> Lua code execution pre-auth",
+                "CROSSVER-F11-A2: LuaJIT 2.1.0-beta3 in 7.2.0 -- research known JIT compiler bugs for that vintage",
+                "CROSSVER-F11-A3: ips_luacfg_parse_app_grp_filters -- Lua-parsed config from network; injection if not sanitized",
+                "CROSSVER-F11-A4: NaN-boxing object allocator (VA 0xddd00 in 7.0.13) -- size guard 0x7fffff00 only validation",
+                "CROSSVER-F11-A5: Lua search path includes /usr/local/share/lua/5.1/ -- if writable, Lua module injection",
+            ],
+
+            "next_steps": [
+                "Trace call graph from packet entry point to ips_lua_dostring/ips_lua_pcall to confirm attacker reach",
+                "Audit LuaJIT 2.1.0-beta3 CVEs (7.2.0) for JIT compiler memory corruption bugs",
+                "Check if ips_luacfg_parse_app_grp_filters receives data from AppCtrl/DPI layer (network input)",
+                "Identify which IPS rules use Lua scripting (likely app-group-filter rules)",
+            ],
+        },
     },
 }
