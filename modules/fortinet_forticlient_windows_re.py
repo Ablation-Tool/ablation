@@ -825,3 +825,149 @@ WIN_F15_AZURE_TOKEN = {
         "if scopes are broad (e.g., User.Read.All, Mail.Read), the attack yields full AD access."
     ),
 }
+
+
+# ---------------------------------------------------------
+# WIN-F16: FortiSSLVPNdaemon.exe -- Mongoose web server + CGI + TinyXML; FortiGate XML fetch
+# ---------------------------------------------------------
+WIN_F16_SSLVPN_DAEMON = {
+    "id":       "WIN-F16",
+    "product":  "FortiClient Windows -- FortiSSLVPNdaemon.exe (present 7.2.9 and 7.4.3; removed 7.4.7); embeds Mongoose mini web server with CGI support; fetches FortiGate-controlled XML at /remote/fortisslvpn_xml; TinyXML compiled in",
+    "severity": "HIGH -- network-controlled XML from FortiGate parsed by TinyXML; CGI root potentially writable",
+    "class":    "Embedded web server + XML injection (CWE-787 via TinyXML; CWE-78 via CGI path)",
+
+    "versions": {
+        "7.2.9":  "FortiSSLVPNdaemon.exe 836KB (VPN.cab); Mongoose-based; TinyXML RTTI confirmed; fetches /remote/fortisslvpn_xml",
+        "7.4.3":  "FortiSSLVPNdaemon.exe 1.6MB (VPN.cab); DTLS support added; still TinyXML; still fetches /remote/fortisslvpn_xml",
+        "7.4.7":  "Removed; replaced by sslvpnlib.dll (library-only architecture; no embedded server)",
+    },
+
+    "evidence": [
+        "FortiSSLVPNdaemon.exe strings (7.2.9+7.4.3): 'GET /remote/fortisslvpn_xml', 'GetAndDoXmlConfig', '[DoXmlConfigEx]: Xml='",
+        "TinyXML RTTI (both versions): .?AVTiXmlDocument@@, .?AVTiXmlElement@@, .?AVTiXmlText@@ (full set)",
+        "Mongoose web server: 'mg_vsnprintf', 'truncating vsnprintf buffer', '**.cgi$|**.pl$|**.php$'",
+        "CGI support: 'SCRIPT_NAME=%s', 'GATEWAY_INTERFACE=CGI/1.1', 'Error: CGI program...'",
+        "SSL cert verification: 'SSL_CTX_set_cert_verify_callback', 'CListener: RequestHandle copying fingerprint: %s'",
+        "Named pipe: '\\\\.\\\\.pipe\\\\FortiSslvpnNamedPipe'",
+        "7.4.3 pdb: C:\\279\\2693219\\FortiClientHS\\sslvpn\\FortiSSLVPNd\\x64\\Release\\FortiSSLVPNdaemon.pdb",
+        "7.2.9 pdb: C:\\GitLab-Runner\\builds\\temp\\FortiClientHS\\sslvpn\\FortiSSLVPNd\\",
+    ],
+
+    "attack_surface": (
+        "FortiSSLVPNdaemon.exe embeds a Mongoose HTTP server with full CGI script execution support. "
+        "Attack paths: "
+        "  1. XML injection: daemon fetches /remote/fortisslvpn_xml from FortiGate over established tunnel; "
+        "     rogue FortiGate can send crafted XML -> TinyXML parses attacker-controlled content "
+        "     (same class as CVE-2021-42260 + xmlvpn.dll chain in WIN-F08). "
+        "  2. CGI execution: if document_root is writable by non-admin process, "
+        "     an attacker who can write to that path gets code execution in the daemon's security context. "
+        "  3. The CGI patterns (**.cgi, **.pl, **.php) suggest broad CGI extension matching -- "
+        "     any file with those extensions in document_root is executed as CGI subprocess. "
+        "Removed in 7.4.7 -- this attack surface is present in any 7.2.x or 7.4.3 deployment."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-F17: ipsec_proxy.dll -- Asio-based IPsec-over-TCP proxy (7.4.3 new)
+# ---------------------------------------------------------
+WIN_F17_IPSEC_PROXY = {
+    "id":       "WIN-F17",
+    "product":  "FortiClient Windows -- ipsec_proxy.dll (7.4.3 new, VPN.cab); Boost.Asio-based UDP-to-TCP proxy for IPsec-over-TCP service; pairs with IOCTL_START_IPSEC_OVER_TCP_SERVICE in fortips_ndis6_3.sys",
+    "severity": "MEDIUM -- new IPC layer between userspace IKE and kernel driver; packet injection surface if proxy_write_tcp_packet lacks validation",
+    "class":    "New userspace-kernel IPC proxy layer (CWE-20 potential at packet write boundary)",
+
+    "versions": {
+        "7.2.9":  "absent",
+        "7.4.3":  "ipsec_proxy.dll 192KB (VPN.cab); Asio IOCP; exports start/stop/write",
+        "7.4.7":  "present (in VPN.cab as part of full 7.4.7 package)",
+    },
+
+    "evidence": [
+        "ipsec_proxy.dll strings: 'start_ipsec_proxy', 'stop_ipsec_proxy', 'proxy_write_tcp_packet', 'proxy_get_tcp_local_port'",
+        "ipsec_proxy.dll strings: 'ike packet', 'UDP Server failed create listen socket'",
+        "ipsec_proxy.dll RTTI: Boost.Asio win_iocp_socket_service for both UDP and TCP transports",
+        "ipsec_proxy.dll pdb: C:\\279\\2693219\\FortiClientHS\\x64\\Release\\ipsec_proxy.pdb",
+        "Pairs with: fortips_ndis6_3.sys 7.4.3 IOCTL_START_IPSEC_OVER_TCP_SERVICE (WIN-CROSSVER)",
+    ],
+
+    "mechanism": (
+        "ipsec_proxy.dll is a new UDP-to-TCP proxy library added in 7.4.3, paired with the "
+        "new IPsec-over-TCP IOCTLs in the fortips_ndis6_3.sys kernel driver. "
+        "It listens on a UDP socket for IKE packets from ipsec.exe and proxies them "
+        "over TCP to a FortiGate endpoint (for NAT traversal where UDP 500/4500 are blocked). "
+        "proxy_write_tcp_packet takes an IKE packet and writes it to the TCP connection -- "
+        "if the length/content of the IKE packet from a rogue FortiGate is not validated "
+        "before the write, this is a potential buffer boundary issue in the proxy layer. "
+        "The proxy runs in userspace, so no kernel memory risk; process memory corruption only."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-CROSSVER-2: 3-version cross-version analysis (7.2.9 / 7.4.3 / 7.4.7)
+# ---------------------------------------------------------
+WIN_CROSSVER2 = {
+    "id":       "WIN-CROSSVER-2",
+    "product":  "FortiClient Windows -- cross-version binary progression 7.2.9 to 7.4.7 (VPN + Core installers)",
+    "method":   "MSI/CAB extraction + 7z listing + strings comparison across three versions",
+
+    "installer_cabs": {
+        "7.2.9_vpn_143MB": "VPN.cab + common.cab + x64.cab + fcresc.cab + FSSOMA.cab",
+        "7.4.3_vpn_208MB": "VPN.cab + common.cab + Core.cab + x64.cab + fcresc.cab + FSSOMA.cab",
+        "7.4.7_standalone_169MB": "common.cab (122MB) + VPN.cab (3.3MB) + x64.cab (65KB) + PAM.cab (1.3MB) + Core.cab (18MB)",
+    },
+
+    "sslvpn_daemon_timeline": {
+        "7.2.9": "FortiSSLVPNdaemon.exe 836KB + FortiSSLVPNsys.exe 146KB + pppop_ndis6_0.sys (PPP-over-NDIS)",
+        "7.4.3": "FortiSSLVPNdaemon.exe 1.6MB (grew -- DTLS added) + FortiSSLVPNsys.exe 144KB; pppop removed",
+        "7.4.7": "FortiSSLVPNdaemon.exe REMOVED; replaced by sslvpnlib.dll 1.75MB (library-only)",
+    },
+
+    "ipsec_timeline": {
+        "7.2.9": "ipsec.exe 926KB (FortiIKE -- C/C++ IKE daemon; no protobuf; build=GitLab-Runner)",
+        "7.4.3": "ipsec.exe 1.0MB + ipsec_proxy.dll 192KB (new Asio IPsec-over-TCP proxy)",
+        "7.4.7": "ipsec.exe 5.8MB (massive growth -- protobuf 31.1 IKE config serialization added)",
+    },
+
+    "config_server_timeline": {
+        "7.2.9": "FCConfig.exe (C++) -- no Rust OIDC server",
+        "7.4.3": "FCConfig.exe 694KB (C++) -- no Rust OIDC server",
+        "7.4.7": "FCConfig2.exe (Rust/Warp/Tokio; 127.0.0.1:8011 OIDC server) NEW",
+    },
+
+    "azure_token_timeline": {
+        "7.2.9": "AzureToken.exe 27KB (.NET 4.x MSAL; single binary; pdb=GitLab-Runner)",
+        "7.4.3": "AzureToken2.exe 28KB (renamed; AzureToken.exe = 24-byte stub placeholder)",
+        "7.4.7": "AzureToken2.exe (same class; source path C:\\279\\2902741\\...)",
+    },
+
+    "fortitcs_timeline": {
+        "7.2.9": "absent",
+        "7.4.3": "absent",
+        "7.4.7": "FortiTcs.exe (Go binary; token impersonation -- WIN-F05) NEW",
+    },
+
+    "xml_dlls_timeline": {
+        "7.2.9_msi_binary_resources": [
+            "xmlae.dll", "xmlav.dll", "xmlcloudscan.dll", "xmlesnac.dll",
+            "xmlfssoma.dll", "xmlfw.dll", "xmlpam.dll", "xmlsandbox.dll",
+            "xmlsystem.dll", "xmlusbmon.dll", "xmlvpn.dll", "xmlvuln.dll",
+            "xmlwanopt.dll", "xmlwf.dll", "xmlztna.dll",
+        ],
+        "note": (
+            "7.2.9 MSI embeds 15 xml*.dll setup-time binaries confirming full-product TinyXML "
+            "pervasiveness (extends WIN-F13 count to 15+ XML DLLs + FortiSSLVPNdaemon.exe = 16+ TinyXML instances). "
+            "7.4.7 standalone (VPN+ZTNA subset) only ships 4."
+        ),
+    },
+
+    "driver_sizes": {
+        "fortitransctrl.sys": {"7.2.3": "109KB", "7.4.3": "117KB", "7.4.7": "131KB"},
+        "fortips_ndis6_3.sys": {"7.2.3": "199KB", "7.4.3": "225KB", "7.4.7": "confirmed present"},
+        "FortiFilter_ndis6_3.sys": {"7.4.3": "39KB (NDIS packet filter -- new confirmed)"},
+        "ftsvnic.sys": {"7.4.3": "85KB (SSL VPN virtual NIC adapter)"},
+        "ftvnic_ndis6_3.sys": {"7.4.3": "52KB (VPN NIC NDIS driver)"},
+        "pppop_ndis6_0.sys": {"7.2.9": "54KB (PPP over NDIS)", "7.4.3": "removed"},
+    },
+}
