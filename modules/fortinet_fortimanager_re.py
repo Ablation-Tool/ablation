@@ -3802,15 +3802,18 @@ ENCRYPTED_ROOTFS_STATUS = {
     "targets_blocked": ["fazmerge", "fgfmd", "fgdsvc", "webmcpserver"],
     "targets_partial": {
         "sdnproxyd": "169KB binary RECOVERED from physical memory dump 2026-09-16; 405 functions extracted; auth handler FULLY TRACED (0x9880 0x9e38); NULL-auth-token path returns 0 (success) for POST/PUT/GET -- FMG-F87 CONFIRMED-BINARY 2026-09-16; libauth.so in encrypted rootfs.gz (bypassed by NULL r15 path, not called)",
+        "fazbroker": "264KB binary RECOVERED from physical memory dump 2026-09-16; dump_offset=0xe2a8f870; identified as FAZ HA broker daemon (faz_broker_client.c, faz_broker_membr_ha.c); IPC paths /drive0/private/fazbroker/client_recv/%s and client_send/%s; 1003 functions; ablation semantic sweep complete 2026-09-16; TRUNCATE TABLE format uses hardcoded table names (not injection); template handler at 0x29e00 (5 templates max, session-gated); fazmerge string present in binary but binary is fazbroker not logview-backend fazmerge -- FMG-F80/F81/F83 target (dataset_query_build) NOT found in this binary",
+        "fgfmsd": "448KB binary RECOVERED from physical memory dump 2026-09-16; dump_offset=0xd3ede870; identified as FortiGate-FortiManager SSL daemon (fgfmsd); strings: /var/run/fgfmsd.pid, fgfm_private_auth, fmg_login_name, auth_session, fg_token, fortigatecloud.fortinet.com; handles FGFM protocol on port 8082 (FMG-F89 candidate); fgfm_private_auth function present (authentication handler); auth_session string confirms session management; 2026-09-16",
+        "rootfs_gz_format": "BLOCKED -- AES-strength encryption confirmed 2026-09-16; entropy 7.23 bits/byte (first 256B, all 256 byte values present); no gzip/xz/cpio magic found; first 32 bytes: 86 fc 39 82 a6 02 15 9d e7 98 2d af e9 a1 7a 45 ca 6c fd 29 ae 12 04 2c a3 fb 35 2c 90 3f 9f de; no header structure visible; kernel bzImage uses non-standard payload magic (d2 f0 33 72) -- custom Fortinet packing; AES-NI implementation found in dump at 0x1bf347b0 is user-space libcrypto.so (CRYPTOGAMS signature); kernel banner at phys 0x10f400080 (high memory PT_LOAD[5])",
     },
     "pending_findings": [
-        "FMG-F80 CANDIDATE HIGH: logview filter->fazmerge injection (blocked: fazmerge in encrypted rootfs.gz)",
-        "FMG-F81 CANDIDATE HIGH: logview filter format string via fazmerge (blocked: fazmerge in encrypted rootfs.gz)",
-        "FMG-F83 CANDIDATE MEDIUM: logview filter->fazmerge SSTI (blocked: fazmerge in encrypted rootfs.gz)",
-        "FMG-F89 CANDIDATE HIGH: FGFM daemon port 8082 pre-auth surface (blocked: fgfmd in encrypted rootfs.gz)",
+        "FMG-F80 CANDIDATE HIGH: logview filter->fazmerge injection (fazbroker recovered but dataset_query_build not found; actual fazmerge backend binary still in encrypted rootfs.gz)",
+        "FMG-F81 CANDIDATE HIGH: logview filter format string via fazmerge (same blocker as F80)",
+        "FMG-F83 CANDIDATE MEDIUM: logview filter->fazmerge SSTI (same blocker as F80)",
+        "FMG-F89 CANDIDATE HIGH: FGFM daemon fgfmsd RECOVERED from dump 2026-09-16; fgfm_private_auth function present; pre-auth surface at port 8082 unconfirmed -- requires full semantic sweep of fgfmsd binary",
         "FMG-F91 CANDIDATE MEDIUM: fgdsvc no Require directive -- fgdsvc daemon binary in encrypted rootfs.gz; forwarding to Unix socket confirmed from webconsole_module.so",
         "sdnproxyd arg-diff 0x9e6d->0x9349/0x9880: backward-slice auth-present vs auth-absent call sites -- determine which register differs (r15 vs NULL) and confirm 0x9349 pre-auth behavior matches 0x9880",
         "FMG-F87 libauth.so: svc_authenticate_user source unavailable until rootfs.gz decryption; NULL r15 path in 0x9880 confirms libauth.so is NOT called on auth-absent requests",
-        "rootfs.gz decryption: primary blocker for fazmerge/fgfmd/fgdsvc/webmcpserver analysis",
+        "rootfs.gz decryption: AES-encrypted with custom Fortinet packing; kernel payload non-standard magic; decryption code in embedded initramfs init (not kernel proper); user-space libcrypto.so AES-NI at dump 0x1bf347b0 unrelated to rootfs decryption",
     ],
 }
