@@ -224,6 +224,7 @@ ANALYSIS_STATUS = {
         "CROSSVER-F03: FGT 7.4.12 x86-64 has 35 anon-mem-exec domains vs 6 in ARM64 8.0.0 -- SSLVPND anon-exec present in 7.4.12 but not 8.0.0",
         "CROSSVER-F04: Rootfs encryption introduced between v7.0.9 (CPIO, accessible) and v7.4.12 (encrypted) -- blocks static RE of modern versions",
         "CROSSVER-F05: Kernel progression: 3.2 (7.0) -> 4.19 (7.4) -> 6.12 (8.0 x86-64); FFW 8.0.0 stayed on 4.19 (same branch as FGT 7.4)",
+        "CROSSVER-F06: system.conf.def in FGT 8.0.0 VM64 datafs contains sae-password 'fortinet.mesh.root' in plaintext -- hardcoded WPA3 SAE mesh password same across all firmware images",
     ],
 
     "pending": {
@@ -231,4 +232,52 @@ ANALYSIS_STATUS = {
         "encryption_point":    "Need v7.2.x or v7.3.x samples to pinpoint when encryption was introduced",
         "fgt2_key_7.0.9":     "Unknown -- 7.0.9 uses pre-encryption pipeline; different datafs format",
     },
+}
+
+
+# ---------------------------------------------------------
+# CROSSVER-F06: Hardcoded SAE WiFi mesh password in system.conf.def
+# ---------------------------------------------------------
+CROSSVER_F06_SAE_PASSWORD = {
+    "id":       "CROSSVER-F06",
+    "product":  "FortiGate FortiOS 8.0.0 (VM64) -- system.conf.def in datafs.tar.gz; hardcoded plaintext SAE/WPA3 mesh password",
+    "severity": "MEDIUM -- plaintext credential embedded in firmware; affects all devices running this firmware",
+    "class":    "Hardcoded credential (CWE-798)",
+
+    "source": {
+        "firmware": "FGT 8.0.0 VM64-KVM (nbd1p1 -> /mnt/fgt800p1 -> datafs.tar.gz -> ./etc/system.conf.def)",
+        "kernel":   "Linux 4.19.13 built 2026-04-20 (flatkc bzImage at /mnt/fgt800p1/flatkc)",
+    },
+
+    "evidence": [
+        "system.conf.def line: 'set sae-password \"fortinet.mesh.root\"' (plaintext in firmware defaults)",
+        "system.conf.def line: 'set password ENC XXUp2ozpdysrQ' (admin password, reversible encoding, same as FortiSwitch/FortiWeb -- FSW-F04)",
+        "system.conf.def line: 'set trusthost1 0.0.0.0 0.0.0.0' (admin access from any IP by default)",
+        "system.conf.def: '#config-version=FGVM64-8.0' (VM64 product variant)",
+    ],
+
+    "sae_password_detail": (
+        "The SAE (Simultaneous Authentication of Equals) password 'fortinet.mesh.root' is the default "
+        "credential used for WPA3 Enterprise / WiFi mesh authentication in FortiGate. "
+        "SAE is the WPA3 key exchange protocol -- this password is used as the mesh network PSK. "
+        "The default is hardcoded in the firmware image (system.conf.def is extracted at first boot). "
+        "All FortiGate devices running this firmware share the same default SAE credential. "
+        "An attacker knowing this credential can authenticate to any FortiGate WiFi mesh that "
+        "has not changed the default password."
+    ),
+
+    "daemon_inventory": (
+        "fortism_config.json in the same datafs shows complete FortiOS daemon binary paths: "
+        "/bin/httpsd (HTTPS management), /bin/sslvpnd (SSL VPN), /bin/iked (IKE), "
+        "/bin/wad (Web Application Daemon), /bin/cmdbsvr (config DB), /bin/fgfmd (FortiGate Federation Manager), "
+        "/bin/scimd (SCIM identity), /bin/http_authd (HTTP auth), /bin/forticldd (FortiCloud), "
+        "/bin/node (Node.js web service), /bin/cloudapid + awsd + ocid + azd + gcpd (cloud daemons). "
+        "All in /bin/ -- confirms all FortiOS daemons are in single flat directory."
+    ),
+
+    "cross_product_admin_password": (
+        "ENC XXUp2ozpdysrQ is the same default admin password encoding across FortiGate, FortiSwitch, FortiWeb "
+        "(same string found in all three firmware system.conf.def files). "
+        "FSW-F04 in fortinet_fortiswitch_re.py confirmed the string appears verbatim in /bin/init."
+    ),
 }
