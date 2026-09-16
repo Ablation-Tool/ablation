@@ -411,3 +411,43 @@ FFSR_F01_FORTISOAR_FREE_FORM = {
 
     "source": "connector-fortinet-fortimanager-json-rpc/fortinet-fortimanager-json-rpc/generic_json_rpc.py:174-204",
 }
+
+
+# ---------------------------------------------------------
+# FFMG-MCP-F01: fortimanager-mcp Python server -- execute_device_json_commands unrestricted
+# ---------------------------------------------------------
+FFMG_MCP_F01_EXECUTE_DEVICE_JSON = {
+    "id":       "FFMG-MCP-F01",
+    "product":  "fortimanager-mcp Python MCP server (mcp-servers/fortimanager-mcp)",
+    "severity": "HIGH -- execute_device_json_commands MCP tool accepts arbitrary JSON-RPC commands; no allowlist",
+    "class":    "Unrestricted FortiGate command execution via MCP tool bridge (CWE-94 / CWE-441)",
+
+    "description": (
+        "sysproxy_tools.py registers an MCP tool: "
+        "execute_device_json_commands(device_name, commands: list[str], adom='root'). "
+        "The commands list is passed directly to SysProxyAPI.execute_proxy_json() "
+        "which calls client.exec('/sys/proxy/json', data={device, commands}). "
+        "No validation on commands content. The docstring says: "
+        "'Allows direct execution of FortiGate JSON-RPC API commands through FortiManager. "
+        "More flexible than CLI commands for advanced automation.' "
+        "An LLM or attacker with MCP access can pass any FortiGate REST API call: "
+        "  commands=['{\"url\":\"/api/v2/cmdb/system/admin\",\"action\":\"get\"}']. "
+        "This is more direct than FMCP-F01: no sandboxed JS execution step, "
+        "the commands go straight to the FortiGate via FortiManager. "
+        "SYSTEM_PROMPT.md instructs the AI to call this tool for 'advanced operations'."
+    ),
+
+    "mcp_tool": "execute_device_json_commands(device_name, commands, adom)",
+    "source":   "mcp-servers/fortimanager-mcp/src/fortimanager_mcp/tools/sysproxy_tools.py:21-47",
+    "chain":    "sysproxy_tools -> SysProxyAPI.execute_proxy_json -> client.exec('/sys/proxy/json', commands)",
+
+    "prompt_injection_surface": (
+        "SYSTEM_PROMPT.md tells the AI to use execute_device_json_commands for 'advanced automation'. "
+        "If the AI processes a workflow that includes FortiGate device data "
+        "(policy names, address object names, device names) containing AI instructions, "
+        "it could call this tool with attacker-controlled commands. "
+        "The MCP server's dynamic mode (DYNAMIC_MODE_GUIDE.md) further extends the attack surface: "
+        "the AI discovers additional tools at runtime, making injection payloads in FMG objects "
+        "more likely to be acted on."
+    ),
+}
