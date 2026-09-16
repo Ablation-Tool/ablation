@@ -621,7 +621,19 @@ CROSSVER_IPS_DIFF_720_748 = {
             "VA_0x6eac0":  {"query": "malloc-int-overflow", "score": 0.4022, "verdict": "UNVERIFIED -- highest cross-version malloc-overflow score"},
             "VA_0x4ff5f0": {"query": "sprintf-stack-buf",   "score": 0.4196, "verdict": "UNVERIFIED"},
             "VA_0x1009f6": {"query": "sprintf-stack-buf + malloc-int-overflow", "score": "0.4111 / 0.3883", "verdict": "UNVERIFIED -- appears in two query profiles"},
-            "VA_0xddd00":  {"query": "use-after-free + ips-sig-heap", "score": "0.3314 / 0.3209", "verdict": "UNVERIFIED -- appears in two profiles"},
+            "VA_0xddd00":  {
+            "query": "use-after-free + ips-sig-heap", "score": "0.3314 / 0.3209",
+            "verdict": "CONFIRMED JS ENGINE -- embedded JavaScript object allocator in IPS binary",
+            "detail": [
+                "NaN-boxing: 0xfff9800000000000 (pointer tag) + 0xfffa000000000000 (undefined tag)",
+                "Object shape dispatch: [r12+0x58] vs 0xffe4/0xffe5 (JS object shape IDs)",
+                "Size guard: cmp r13, 0x7fffff00 -- limits JS buffer allocation to <2GB",
+                "Error paths: call 0x3821c0(r12, 0x4f) (throw RangeError); call 0x3824d0 (error handle)",
+                "Allocation via vtable: call [r14] with args (rdi=pool, rsi=0, rcx=size+0x30)",
+                "JS engine evaluates IPS detection rules; attacker-controlled content -> JS eval path -> allocator",
+                "IMPACT: any bug in the JS engine accessible from the packet path is pre-auth RCE",
+            ],
+        },
         },
         "three_version_comparison": {
             "malloc_int_overflow_top": {
