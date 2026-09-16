@@ -412,6 +412,75 @@ HIGH_VALUE_ENDPOINTS = {
 # ---------------------------------------------------------
 # Pending findings
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# FMG firmware: Apache2 routing + webconsole_module.so RE
+# Source: /mnt/fmg800 (nbd0p1) -> rootfs-ext.tar.xz -> usr/local/apache2/
+# ---------------------------------------------------------
+FMG_APACHE_INTERNALS = {
+    "id":       "FMG-ARCH-APACHE",
+    "product":  "FortiManager 8.0.x -- Apache2 routing layer extracted from rootfs-ext.tar.xz",
+    "source":   "/mnt/fmg800/rootfs-ext.tar.xz (237MB) -> usr/local/apache2/",
+
+    "custom_modules": {
+        "fmg_request.so": (
+            "15KB Apache post_read_request hook. "
+            "Imports: libcmdbapi.so, libcmfapi.so, libosapi.so, libulib.so, libsysapi.so, libcdb.so. "
+            "Flow: cmf_query_mutex + cmf_query_data per request -> routes to 127.0.0.1 backend."
+        ),
+        "webconsole_module.so": (
+            "Registers handlers: ha_jsonrpc_handler (/jsonrpc), logging_over_http_handler, "
+            "fazfec_handler (/fazfec), fgdsvc_handler (/fgdsvc), fctsvc_handler (/fctsvc), "
+            "workflow_handler (/workflow). "
+            "Session auth: aps_get_sessionid + decrypt_and_auth (cookie decryption). "
+            "Uses strtok (not thread-safe, race risk in multi-threaded Apache). "
+            "Imports json-c: json_tokener_new + json_tokener_parse_ex + json_object_object_get. "
+            "LZ4 and DEFLATE decompression in logging handler -- client-supplied compressed data. "
+            "Hardcoded MD5 hash 6241e8c23b5b279b0071865c8ac78ca8 alongside CSP nonce formatting."
+        ),
+    },
+
+    "unix_socket_routing": {
+        "/tmp/fmgd.domain": [
+            "/flatui/api/ (REST API)",
+            "/flatui/auth/, /cgi-bin/module/flatui_auth (authentication)",
+            "/cgi-bin/module/fazapi, /flatui/fazapi/ (FortiAnalyzer API)",
+            "/cgi-bin/module/productapi, /flatui/productapi/",
+            "/cgi-bin/module/flatui_proxy (proxy)",
+            "/jsonrpc-ui/ (JSON-RPC UI)",
+            "/flatui/auth/ (auth endpoint)",
+        ],
+        "/tmp/gui_webforward": [
+            "/flatui/forward/, /flatui/json/, /flatui/service/",
+            "/cgi-bin/module/flatui/* variants",
+        ],
+        "note": (
+            "All API traffic flows through FastCGI Unix sockets. "
+            "If /tmp/fmgd.domain or /tmp/gui_webforward are writable by a non-root process "
+            "that can be reached from the web layer, socket hijacking -> arbitrary API response injection."
+        ),
+    },
+
+    "internal_http_services": {
+        "9006": "http://127.0.0.1:9006/fmgui/ -- GUI service (Python/Node?)",
+        "9007": "http://127.0.0.1:9007/static/ -- static file server",
+        "9008": "http://127.0.0.1:9008/excelexport/ -- Excel export (Python via mod_wsgi?)",
+        "7080": "http://127.0.0.1:7080/sdnproxy -- SDN controller proxy",
+    },
+
+    "attack_surface": [
+        "ha_jsonrpc_handler (/jsonrpc) -- primary FMG RCE surface (CVE-2024-47575 class)",
+        "webconsole_module.so strtok race -- not thread-safe in event MPM",
+        "LZ4/DEFLATE decompression in logging_over_http_handler -- client-controlled input to decompress",
+        "decrypt_and_auth session cookie -- if decryption uses static IV/key, session forgery possible",
+        "Unix socket at /tmp/fmgd.domain -- world-writable /tmp; socket hijacking if fmgd socket is unprotected",
+        "Excel export at 9008 -- file-generating endpoint; path traversal or SSRF in export logic",
+        "/faz_upload/ -- file upload with sandbox CSP; check for path traversal in upload handler",
+        "6241e8c23b5b279b0071865c8ac78ca8 -- static MD5 hash adjacent to CSP nonce; if used as fixed nonce = CSP bypass",
+        "Cloud config include <IfFile '/data/httpd-cloud.conf'> -- cloud config file injection if /data writable",
+    ],
+}
+
+
 pending_findings = [
     "FFMG-F01 verification: test FGFM port 541 detection -- verify FMG TLS cert O=Fortinet + CN starts with FMG; "
     "source: fortimanager_rce_47575.rb check() method; 2026-09-16",
