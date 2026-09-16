@@ -3816,7 +3816,18 @@ ENCRYPTED_ROOTFS_STATUS = {
         "sdnproxyd arg-diff 0x9e6d->0x9349/0x9880: backward-slice auth-present vs auth-absent call sites -- determine which register differs (r15 vs NULL) and confirm 0x9349 pre-auth behavior matches 0x9880",
         "FMG-F87 libauth.so: svc_authenticate_user source unavailable until rootfs.gz decryption; NULL r15 path in 0x9880 confirms libauth.so is NOT called on auth-absent requests",
         "rootfs.gz decryption: AES-encrypted with custom Fortinet packing; VM images have unencrypted rootfs-ext.tar.xz (extension packages) but core daemons still in encrypted rootfs.gz; decryption key must be in kernel or derived at boot",
-        "fmg_request.so: 15KB Apache module in rootfs-ext, unexplored -- sweep pending",
-        "fmg_rewrite.so: unexplored Apache module in rootfs-ext -- sweep pending",
+        "local_mode.so IP check disasm (2026-09-16): NOT a bypass surface -- function at 0x5eb0 (xref via deny-access-to string at 0xd455) "
+        "enforces loopback-only before any FCP processing; checks: strcmp(client_ip,'127.0.0.1') at 0x5f7a, strcmp(client_ip,'::1') at 0x5f91, "
+        "inet_pton(AF_INET6,'::ffff:127.0.0.0') mask check at 0x6044; external IP -> ap_log_rerror 'deny ip address' + DECLINED; "
+        "only loopback passes to dispatch: URI /FCPService/Manager -> manage_req_handler (0x5707), /FCPService/Controller -> controll_req_handler; "
+        "fwm_req_handler (0xbe07) call chain: __ap_get_post_body(0x4ba0) -> FCP_init_request(0x4d90) -> FCP_recv_request(0x4cf0), no session auth; "
+        "loopback IP gate confirmed at 0x5eb0, 3 loopback variants -- confirmed NO external attack surface; "
+        "FCP checkout response format: HomeServer:%s:443*AlterServer:%s:443*Contract:%s*NextRequest:86400*ManagementMod (set_checkout_resp_fbvo); "
+        "FCP_init_request+FCP_recv_request+FCP_parse_params all from libfcpapi.so (external SO, not in rootfs-ext); "
+        "NO NEW FINDING -- loopback-only IPC confirmed; prior FMG-F38 attack surface is SSRF-only; "
+        "fmg_request.so SWEPT 2026-09-16: NO FINDING -- Host header normalizer only (CMF canonical hostname; no user-controlled data); "
+        "fmg_rewrite.so SWEPT 2026-09-16: NO FINDING -- URL rewriter; apr_dbd_pvselect uses prepared stmts from admin config, not HTTP input; "
+        "cmf_query_update at 0x8654/0x8950 loads from module context (not user data); jp:// and alancer:// schemes are custom URI maps (admin config); "
+        "sources: local_mode.so .text 0x5eb0-0x64ab, 0xbe07-0xc9f0; fmg_request.so 0x12e4; fmg_rewrite.so 0x5f05/0x8654/0x8950; 2026-09-16",
     ],
 }
