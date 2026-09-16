@@ -756,3 +756,68 @@ FMG_SYNTAX_RE = {
         },
     },
 }
+
+
+# ---------------------------------------------------------
+# FAZ ClickHouse query injection via $filter template variable
+# Source: syntax.tar.xz -> ncmdb/adom_defconf_1.txt (FortiAnalyzer report engine)
+# ---------------------------------------------------------
+FAZ_CLICKHOUSE_FILTER_INJECTION = {
+    "id":      "FAZ-CH-FILTER-SQLi",
+    "product": "FortiAnalyzer 8.0.x -- ClickHouse log query engine report filter injection",
+    "source":  "syntax.tar.xz -> ncmdb/adom_defconf_1.txt (414 log paths in fmglog_syntax.json)",
+
+    "mechanism": (
+        "FortiAnalyzer report engine uses ClickHouse for log storage and query. "
+        "All report queries are constructed by string-substituting template variables "
+        "($filter, $filter-drilldown, $log, $flex_timestamp, $flex_timescale, $bully_keywords, $banned_keywords) "
+        "directly into ClickHouse SQL strings at query time. "
+        "The /*sql_normalized*/ prefix indicates a normalization pass, but ClickHouse "
+        "historically lacked parameterized queries before v24; "
+        "if the normalization does not escape single-quotes in filter values, "
+        "injection through any user-controlled filter parameter is possible."
+    ),
+
+    "injection_vectors": {
+        "$filter": (
+            "Primary injection point. Appears in WHERE clause of every report query "
+            "(traffic, webfilter, IPS, event, DLP categories). "
+            "Source: report filter form in FortiAnalyzer web UI or API log-query filter parameter. "
+            "Example query fragment: '...from $log where $filter and (bitAnd(logflag,1)>0)...' "
+            "A value like '1=1) UNION SELECT...' terminates the WHERE clause and injects."
+        ),
+        "$filter-drilldown": (
+            "Second WHERE clause substitution in drilldown report queries. "
+            "Same injection surface as $filter -- controls outer query WHERE after subquery."
+        ),
+        "$bully_keywords": (
+            "Substituted into DLP/bullying keyword filter: 'where $filter and ($bully_keywords)'. "
+            "Content comes from DLP sensor policy keyword configuration -- "
+            "attacker with DLP policy write access can inject via keyword field."
+        ),
+        "$banned_keywords": (
+            "Same pattern as $bully_keywords. DLP sensor keyword field -> ClickHouse WHERE injection."
+        ),
+    },
+
+    "log_schema": {
+        "file": "fmglog_syntax.json (203KB, C-comment JSON, not valid JSON -- requires comment stripping)",
+        "total_log_paths": 414,
+        "categories": ["event/system", "event/user", "event/router", "traffic", "utm/webfilter",
+                       "utm/ips", "utm/dlp", "utm/app-ctrl", "utm/email", "utm/voip"],
+        "largest_string_fields": "sz=1024 (multiple fields)",
+        "note": (
+            "Complete log field schema for all 414 log types. "
+            "Knowing field IDs and types enables precise injection payloads "
+            "targeting specific ClickHouse column types."
+        ),
+    },
+
+    "attack_surface_note": (
+        "ClickHouse binary is 636MB unstripped (FMG-CLICKHOUSE). "
+        "If $filter injection reaches ClickHouse query execution, "
+        "attacker can use ClickHouse file() table function or INTO OUTFILE "
+        "to read/write arbitrary filesystem paths as the ClickHouse process user. "
+        "ClickHouse default HTTP interface port 8123 -- check if exposed on FMG loopback or LAN."
+    ),
+}
