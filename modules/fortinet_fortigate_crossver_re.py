@@ -703,11 +703,34 @@ CROSSVER_IPS_DIFF_720_748 = {
                 "CROSSVER-F11-A5: Lua search path includes /usr/local/share/lua/5.1/ -- if writable, Lua module injection",
             ],
 
+            "lua_attack_scope_revision": {
+                "direct_packet_path": "NOT CONFIRMED -- ips_lua_dostring string appears in error logging context only; actual Lua eval not triggered from raw network packets",
+                "config_path": "CONFIRMED -- ips_luacfg_parse_app_grp_filters takes admin-controlled app-group filter config; Lua executed during config parse",
+                "webfovrd_compat_lua": "Loaded at startup from datafs path -- not attacker-controlled unless datafs is compromised",
+                "ips_rules_lua_count": "128 IPS rules contain 'lua/script' in their name -- these are DETECTION rules for Lua/JS injection, NOT detection via Lua scripts",
+                "assessment": "Lua eval is config-path triggered (admin input), not raw-packet triggered. Still exploitable via config injection.",
+            },
+
+            "cross_finding_chain": {
+                "id":    "CHAIN-F01",
+                "title": "fgt2.key FGFM impersonation -> FortiManager config push -> Lua exec on managed FortiGate",
+                "steps": [
+                    "1. Extract fgt2.key (RSA-2048, fingerprint 3f9c28e3) from any FortiOS firmware image",
+                    "2. Impersonate a FortiGate device to FortiManager via FGFM protocol using shared private key",
+                    "3. Once accepted as managed device, FortiManager pushes config including app-group filters",
+                    "4. Inject malicious Lua code into app-group-filter config field in FortiManager JSON-RPC",
+                    "5. Config push triggers ips_luacfg_parse_app_grp_filters on target FortiGate",
+                    "6. LuaJIT evaluates injected Lua code within the IPS engine context (privileged data path)",
+                ],
+                "components": ["CROSSVER-F07-A1 (fgt2.key)", "CROSSVER-F11 (LuaJIT in IPS)", "FMG-SYNTAX (fgfm/json/rpc)"],
+                "verdict": "PLAUSIBLE -- requires FortiManager access or FGFM impersonation; Lua sandboxing TBD",
+            },
+
             "next_steps": [
-                "Trace call graph from packet entry point to ips_lua_dostring/ips_lua_pcall to confirm attacker reach",
                 "Audit LuaJIT 2.1.0-beta3 CVEs (7.2.0) for JIT compiler memory corruption bugs",
-                "Check if ips_luacfg_parse_app_grp_filters receives data from AppCtrl/DPI layer (network input)",
-                "Identify which IPS rules use Lua scripting (likely app-group-filter rules)",
+                "Check Lua sandbox configuration: does IPS Lua have os.execute / io.open available?",
+                "Verify: can FGFM-impersonating device receive app-group-filter config push from FortiManager?",
+                "Test webfovrd_compat.lua path: is it in a datafs location updateable via FortiManager?",
             ],
         },
     },
