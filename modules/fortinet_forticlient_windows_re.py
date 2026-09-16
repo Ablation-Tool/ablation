@@ -67,7 +67,7 @@ WIN_ARCH = {
             "CONNFORWARD_IOCTL_CMD_FQDN_REAL_IP -- set FQDN-to-IP mapping in kernel",
             "CONNFORWARD_IOCTL_CMD_APPEND_REDIRECT_IP -- add IP redirect rule in kernel",
         ],
-        "creation":     "IoCreateDeviceSecure (SDDL not visible in strings; requires runtime verification)",
+        "creation":     "IoCreateDeviceSecure SDDL CONFIRMED: D:P(A;;GA;;;SY)(A;;GA;;;BA) -- SYSTEM and Administrators only; no world access",
         "pool_alloc":   "ExAllocatePoolWithTag (deprecated in Win11 22H2; should be ExAllocatePool2)",
         "packet_inject": ["FwpsInjectTransportReceiveAsync", "FwpsInjectNetworkSendAsync"],
     },
@@ -80,7 +80,7 @@ WIN_ARCH = {
 WIN_F01_DRIVER_IOCTL = {
     "id":       "WIN-F01",
     "product":  "FortiClient Windows -- fortitransctrl.sys WFP callout driver; IOCTL interface with unconfirmed device SDDL; FQDN/IP redirect manipulation from kernel",
-    "severity": "CRITICAL if device is world-accessible; HIGH regardless -- kernel-level traffic redirect and DNS manipulation",
+    "severity": "MEDIUM -- device SDDL confirmed D:P(A;;GA;;;SY)(A;;GA;;;BA): SYSTEM+Admins only; unprivileged IOCTL ruled out; ExAllocatePoolWithTag (deprecated NX) and post-exploitation IOCTL abuse remain",
     "class":    "Kernel IOCTL access control + kernel-level MITM (CWE-284, CWE-749)",
 
     "evidence": [
@@ -94,6 +94,9 @@ WIN_F01_DRIVER_IOCTL = {
 
     "attack_surface": {
         "ioctl_unprivileged": (
+            "RULED OUT: SDDL D:P(A;;GA;;;SY)(A;;GA;;;BA) blocks all non-admin access. "
+            "Standard user processes cannot open \\\\Device\\\\FortitransCtrlDrv. "
+            "---\n"
             "If IoCreateDeviceSecure uses a permissive SDDL (e.g., world-readable/writable), "
             "any local process can open \\\\Device\\\\FortitransCtrlDrv and issue IOCTLs. "
             "CONNFORWARD_IOCTL_CMD_FQDN_REAL_IP: attacker sets forged FQDN-to-IP mappings "
@@ -312,5 +315,135 @@ WIN_F06_ISDB_EXTRACT = {
         "and extracted at runtime. If the installation directory has incorrect permissions, "
         "a local attacker replaces isdb.tar with one containing a malicious binary or "
         "signature file that triggers a parser vulnerability in the IPS engine when processed."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-F07: ipsec.exe IKEv2 fragment reassembly (Windows iked)
+# ---------------------------------------------------------
+WIN_F07_IPSEC_FRAG = {
+    "id":       "WIN-F07",
+    "product":  "FortiClient Windows -- ipsec.exe (C/C++ iked, 5.8MB, VPN.cab); IKEv2 RFC7383 fragment reassembly (ikev2_frags_reassemble); same class as IKED-F01 on Linux",
+    "severity": "HIGH -- network-reachable; rogue FortiGate can send crafted IKEv2 fragments; pre-auth if IKE_SA_INIT phase is targeted",
+    "class":    "IKE fragment reassembly attack surface (CWE-120, CWE-400)",
+
+    "evidence": [
+        "ipsec.exe strings: 'ikev2_frags_reassemble' (RFC7383 fragment reassembly function)",
+        "ipsec.exe strings: '%s: Total Fragments too big %u' (fragment count guard present)",
+        "ipsec.exe strings: 'N_FRAGMENTATION_SUPPORTED' (IKEv2 fragmentation negotiated)",
+        "ipsec.exe strings: 'ikev2_send_encrypted_fragments' (fragment sending path)",
+        "ipsec.exe strings: 'ikev2_getimsgdata: length too small for sh' (length check -- if not exhaustive, bypass possible)",
+        "Source: ..\\..\\iked\\config.c, ..\\..\\iked\\ca.c (same C codebase as Linux iked)",
+        "Build: C:\\6627\\2443094\\FortiClientHS\\ (matches Linux build tree prefix)",
+        "Protobuf 31.1: C:\\6627\\2443094\\libraries\\src\\protobuf\\ (IKE config serialization)",
+    ],
+
+    "mechanism": (
+        "ipsec.exe is the Windows port of the same iked C codebase running on Linux FortiClient. "
+        "ikev2_frags_reassemble accumulates IKEv2 Encrypted Fragment payloads (RFC7383) into a buffer. "
+        "The 'Total Fragments too big' guard checks fragment COUNT but may not bound the "
+        "TOTAL REASSEMBLED SIZE independently -- if per-fragment size * count overflows "
+        "the reassembly buffer allocation size, heap overflow results. "
+        "Pre-auth: IKE_SA_INIT uses fragments BEFORE the IKE_AUTH exchange completes. "
+        "EAP-TTLS phase also present: 'EAP-TTLS: too short Phase 2 request (len=%lu)' "
+        "and 'EAP-TTLS: Phase 2 MSCHAPV2 Request' -- EAP tunnel carries MSCHAPv2 challenges "
+        "from the FortiGate without certificate-pinned validation of EAP server identity "
+        "(same IKED-F04/F05 pattern on Windows)."
+    ),
+
+    "eap_attack_surface": {
+        "eap_ttls_mschapv2": (
+            "FortiClient connects to FortiGate's EAP-TTLS server; inside the TLS tunnel, "
+            "MSCHAPv2 challenges from the FortiGate are processed. "
+            "If FortiClient does not pin the EAP server certificate against the gateway's "
+            "configured identity, a rogue FortiGate (or MITM) sends crafted MSCHAPv2 challenges "
+            "-> NTLM hash capture (MS-CHAPv2 DES) without user awareness."
+        ),
+        "protobuf": (
+            "Protobuf 31.1 used for IKE config/state messages. "
+            "Protobuf parse_context.h included from C:\\6627\\2443094\\libraries\\src\\protobuf\\. "
+            "Attacker-controlled IKE config from EMS/FortiGate -> protobuf deserialization path "
+            "-> CVE-2022-1941 class (proto3 required fields / arena corruption)."
+        ),
+    },
+
+    "see_also": [
+        "IKED-F01: Linux iked fragment reassembly (same C source)",
+        "IKED-F04/F05: EAP-TTLS credential exposure (same attack surface, Windows ipsec.exe)",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# WIN-F08: xmlvpn.dll TinyXML + TinyXPath double-parser; FortiGate XML arrives here
+# ---------------------------------------------------------
+WIN_F08_XMLVPN_TINYXML = {
+    "id":       "WIN-F08",
+    "product":  "FortiClient Windows -- xmlvpn.dll uses TinyXML + TinyXPath (877KB, VPN.cab); FortiGate VPN profile XML processed at connection setup",
+    "severity": "HIGH -- rogue FortiGate sends malformed XML config; dual parser (TinyXML + TinyXPath) means two separate exploit surfaces",
+    "class":    "Vulnerable XML/XPath library (CWE-787, CWE-611); same class as WIN-F03 (xmlztna.dll) but VPN path",
+
+    "evidence": [
+        "xmlvpn.dll RTTI: '.?AVTiXmlDocument@@', '.?AVTiXmlElement@@', '.?AVTiXmlBase@@'",
+        "xmlvpn.dll RTTI: '.?AVxpath_processor@TinyXPath@@', '.?AVsyntax_overflow@TinyXPath@@'",
+        "xmlvpn.dll RTTI: '.?AVtoken_list@TinyXPath@@', '.?AVbyte_stream@TinyXPath@@'",
+        "xmlvpn.dll XPath paths: '/forticlient_configuration/vpn/ipsecvpn/connections/connection/ike_settings/fgt'",
+        "xmlvpn.dll XPath paths: '/forticlient_configuration/vpn/sslvpn/connections/connection'",
+        "xmlvpn.dll source: C:\\279\\2902741\\FortiClientHS\\service\\xmlvpn\\x64\\Release\\xmlvpn.pdb",
+        "xmlvpn.dll exports: ExportToXml, ImportFromXml, VpnLockDown_Get/SetDeadLockedFlag, VpnLockDown_Get/SetTempLockedFlag",
+    ],
+
+    "mechanism": (
+        "xmlvpn.dll parses FortiGate-supplied VPN connection profiles via TinyXML. "
+        "XPath queries extract IKE settings and connection parameters. "
+        "TinyXPath 'syntax_overflow' exception class reveals the XPath evaluator uses a fixed-size "
+        "token/expression stack -- a deeply nested XPath expression from FortiGate overflows it. "
+        "Attack: rogue FortiGate returns a 'VPN profile' XML with: "
+        "  1. Oversized element content -> TinyXML heap overflow (CVE-2021-42260 class) "
+        "  2. Deeply nested XPath -> TinyXPath syntax_overflow -> C++ exception with "
+        "     potential use-after-free in the exception handler path "
+        "  3. XML entity expansion (XXE) if external entity processing not disabled "
+        "Both ExportToXml and ImportFromXml are DLL exports -- xmlvpn.dll is the serialization "
+        "boundary between FortiGate-controlled config and the local VPN service."
+    ),
+
+    "note": (
+        "VpnLockDown_GetDeadLockedFlag and VpnLockDown_SetTempLockedFlag suggest VPN lockdown "
+        "mode (block all non-VPN traffic) is controlled via this DLL. An attacker who corrupts "
+        "the VPN config via xmlvpn.dll may also affect the lockdown state."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-F09: FCAuth.exe credential dialog -- named pipe with same PID-based ignore pattern
+# ---------------------------------------------------------
+WIN_F09_FCAUTH_PIPE = {
+    "id":       "WIN-F09",
+    "product":  "FortiClient Windows -- FCAuth.exe (credential dialog, VPN.cab); named pipe with PID-based 'ignore' (not deny); same class as WIN-F02 (FortiTray pipe)",
+    "severity": "MEDIUM -- if pipe is world-accessible, attacker can inject into authentication dialog flow or suppress credential prompts",
+    "class":    "Named pipe access control (CWE-284); credential dialog spoofing",
+
+    "evidence": [
+        "FCAuth.exe strings: 'ignore request from pid=%d state=%d app=%d of pipe=%ws'",
+        "FCAuth.exe strings: 'GetNamedPipeClientProcessId', 'GetNamedPipeClientSessionId'",
+        "FCAuth.exe strings: 'PIPEMSG: Peercheck pipe=%ws pid=%d, session=%d, app=%ws'",
+        "FCAuth.exe strings: 'Credential Dialog Xaml Host' (Windows Xaml credential UI)",
+        "FCAuth.exe strings: 'HandlePipeMsg', 'MsgPipe_PostMessage_UE'",
+        "FCAuth.exe source: C:\\279\\2902741\\FortiClientHS\\service\\AuthDaemon\\x64\\Release\\fcauth.pdb",
+    ],
+
+    "mechanism": (
+        "FCAuth.exe hosts the Windows credential dialog (Xaml-based) for VPN authentication. "
+        "It communicates with the VPN service via a named pipe using the same 'ignore request from pid' "
+        "pattern as FortiTray -- unauthorized callers are ignored, not rejected. "
+        "If the pipe DACL allows low-privilege write: "
+        "  1. Attacker process opens FCAuth pipe "
+        "  2. Sends PIPEMSG to trigger credential dialog display -> phishing (attacker-controlled "
+        "     credential dialog appearing at arbitrary times) "
+        "  3. Sends PIPEMSG to suppress credential dialog -> credential collection bypass "
+        "WTSQueryUserToken in the import list: FCAuth.exe queries user session tokens, "
+        "meaning it runs as SYSTEM and impersonates the user for credential operations."
     ),
 }
