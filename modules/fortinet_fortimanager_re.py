@@ -3284,6 +3284,34 @@ ANALYSIS_STATUS = {
                  "source: util/templates.py L57-70 (sanitize_template), util/sso.py L201-211 (preview_template), "
                  "proj/views.py L147-154 (saml_login), util/views.py L1138-1158 (post_idp_custom_login_template), "
                  "logview/views/views.py L1535-1553 (FMG-F71 write primitive), analysis 2026-09-15",
+
+        "FMG-F79: HIGH -- FortiManager SOAR FMQ connector SQL injection via trigger-controlled adom_prefix in PostgreSQL table name (FMG8.0.0, 2026-09-15): "
+                 "class: SQL injection (table name injection via PostgreSQL double-quoted identifier escape); "
+                 "location: fmg-soar/FMQ/operator.py -- FMQSendBlockListOperator.execute() at L497-516, "
+                 "_block_list_snapshot() at L436-465 (L453 injection point), _get_req_act_blk_inds() at L375-394 (L376 injection point); "
+                 "flow: (1) playbook step FMQSendBlockListOperator initializes adom_prefix from constructor param (L495, L500); "
+                 "(2) execute() resolves trigger-controlled context: adom_prefix = FAZUtilsOperator.parse_input(context, adom_prefix, context_dict) at L508; "
+                 "(3a) snapshot path (option=='snapshot'): _block_list_snapshot(snlist, adom_prefix) at L514; "
+                 "at L453: sql = f\"\"\"Select distinct type, value from \\\"{adom_prefix}-indicators\\\" where status='Blocked' order by value;\"\"\"; cursor.execute(sql) at L454; "
+                 "(3b) incremental path: _check_redis_block_indicator(snlist, adom_prefix) at L516; "
+                 "inside: _, adom_name, adom_prefix = adom_info.split(':') at L472 (trigger value must be colon-delimited x:y:INJECT); "
+                 "adom_prefix flows to _get_req_act_blk_inds() at L423 -> sql at L376; "
+                 "injection mechanism: adom_prefix embedded in double-quoted PostgreSQL identifier without sanitization; "
+                 "payload (snapshot path): adom_prefix = 'x\"; SELECT pg_sleep(5); --' yields: "
+                 "Select distinct type, value from \"x\"; SELECT pg_sleep(5); --indicators\" where status='Blocked'; "
+                 "psycopg2 cursor.execute() (used by Airflow PostgresHook.get_records() and direct cursor) allows stacked queries via semicolon; "
+                 "no parameterized query, no input sanitization, no identifier escaping anywhere in call chain; "
+                 "trigger path: if adom_prefix resolves from log event field via parse_input (e.g., ${trigger.adom_prefix}), "
+                 "an external attacker who can influence log data ingested as SOAR trigger events (crafted firewall log records, forged syslog, webhook payload injection) "
+                 "achieves SQL injection without playbook-authoring privileges; "
+                 "impact: arbitrary SQL execution against SOAR PostgreSQL database; reads SOAR connector credentials (server-addr, auth-user, auth-password from connector config tables), "
+                 "indicator tables, playbook config; potential lateral movement to other SOAR-connected systems via credential extraction; "
+                 "fos_sql_injection note: FOS/operator.py L166-167 has structurally similar f-string SQL ({epid} in WHERE clause) but is NOT injectable -- "
+                 "epid = int(parameter['value']) at L237/L295 force-casts to integer, raising ValueError on non-numeric payload before reaching SQL; "
+                 "remediation: use parameterized queries with psycopg2 identifier quoting (psycopg2.sql.Identifier) for table names; "
+                 "or whitelist adom_prefix against known ADOM prefix values from authoritative source before use in SQL; "
+                 "source: fmg-soar/FMQ/operator.py L375-394 (_get_req_act_blk_inds), L436-465 (_block_list_snapshot), "
+                 "L496-516 (FMQSendBlockListOperator.execute), L471-478 (_check_redis_block_indicator), analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
