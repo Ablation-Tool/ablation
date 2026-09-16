@@ -690,6 +690,12 @@ WIN_DRIVER_CROSSVER = {
                 "note": "Calls same target twice in sequence; possible loop over variable-length field",
             },
         },
-        "next_step": "Manual disassembly of 0x14000cdec and 0x14001b570 in Ghidra/Binary Ninja",
+        "manual_verification": {
+            "0x14000cdec": "FLOW TRACKER ALLOCATOR -- pool tag SASS (0x46415353), size 0x88; linked list walk + conditional alloc; NOT a buffer overflow. False positive from semantic sweep.",
+            "0x14001b570": "NDIS BUFFER COPY HELPER -- NdisAllocateNetBuffer + RtlCopyMemory chain. All callers use HARDCODED size constants (0x254, 0x54, 0x478, 0xa0 etc.) via dispatch table; NOT packet-field-derived. No vulnerability confirmed.",
+            "0x14001cfce": "IKE MESSAGE DISPATCH TABLE -- sub ecx,1/3/5 stepping through message types; each branch calls 0x14001b570 with a fixed struct size. Correct handling.",
+        },
+        "conclusion": "No kernel vulnerability confirmed in fortips_ndis6_3.sys from semantic sweep + manual disassembly of top candidates. Fixed-size NDIS copies with hardcoded bounds. 'esp_output not big enough' warning is in userspace ipsec.exe, not this driver.",
+        "next_step": "Manual disassembly of 0x14000cdec and 0x14001b570 COMPLETE -- no finding. Consider deeper analysis of NdisAllocateMemoryWithTagPriority callers for dynamic-length allocation paths.",
     },
 }
