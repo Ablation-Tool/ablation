@@ -698,4 +698,130 @@ WIN_DRIVER_CROSSVER = {
         "conclusion": "No kernel vulnerability confirmed in fortips_ndis6_3.sys from semantic sweep + manual disassembly of top candidates. Fixed-size NDIS copies with hardcoded bounds. 'esp_output not big enough' warning is in userspace ipsec.exe, not this driver.",
         "next_step": "Manual disassembly of 0x14000cdec and 0x14001b570 COMPLETE -- no finding. Consider deeper analysis of NdisAllocateMemoryWithTagPriority callers for dynamic-length allocation paths.",
     },
+
+    "fortips_743_new_ioctls": {
+        "binary":   "fortips_ndis6_3.sys 7.4.3 (220KB, +21KB vs 7.2.3)",
+        "sddl":     "D:P(A;;GA;;;SY)(A;;GA;;;BA) confirmed -- Admins only; no new privilege surface",
+        "new_features_7.4.3": [
+            "IOCTL_FORTIPS_ENABLE (new IOCTL command)",
+            "IOCTL_START_IPSEC_OVER_TCP_SERVICE (new IOCTL -- enables IPsec-over-TCP tunnel mode)",
+            "IOCTL_STOP_IPSEC_OVER_TCP_SERVICE (new IOCTL)",
+            "IPS_CMD_SET_CONFIG with gIpsecIkeFloatPort and gIpsecTunnelMode (new config surface)",
+            "shared memory IPC added (failed to create share memory / de-initialize share memory / MmMapLockedPagesSpecifyCache)",
+            "'critical error in copy from user space' -- new userspace-to-kernel copy path; if bounds not checked, kernel write primitive",
+            "DHCP option stripping: 'remove option 121 len=%d' / 'remove option 249 len=%d' (VPN bypass protection)",
+            "got input dhcp packet %d on phy adapter (DHCP packet processing in kernel)",
+        ],
+        "note": (
+            "The shared memory IPC and critical-copy-from-user-space added in 7.4.3 are "
+            "new kernel attack surface. Admin-only IOCTL gate means they require admin access, "
+            "but the shared memory path (MmMapLockedPagesSpecifyCache + IoAllocateMdl) deserves "
+            "deeper analysis for ProbeForRead/ProbeForWrite usage before the copy."
+        ),
+    },
+}
+
+
+# ---------------------------------------------------------
+# WIN-F13: TinyXML pervasive usage across all config DLLs
+# ---------------------------------------------------------
+WIN_F13_TINYXML_PERVASIVE = {
+    "id":       "WIN-F13",
+    "product":  "FortiClient Windows -- TinyXML used in ALL config serialization DLLs; 4 confirmed instances covering VPN, ZTNA, PAM, and system compliance",
+    "severity": "HIGH -- network-reachable via rogue FortiGate/EMS; same vulnerability class amplified across all config areas",
+    "class":    "Vulnerable XML library across multiple trust boundaries (CWE-787, CWE-611)",
+
+    "instances": {
+        "xmlvpn.dll":    "VPN profile config (FortiGate IKE settings) -- TinyXML + TinyXPath (WIN-F08)",
+        "xmlztna.dll":   "ZTNA config (FortiGate/EMS) -- TinyXML + TinyXPath (WIN-F03)",
+        "xmlsystem.dll": "System/compliance config (EMS) -- TinyXML + IsComponentInstalled",
+        "xmlpam.dll":    "PAM (Privileged Access Management) config -- TinyXML",
+        "xmlfssoma.dll": "FSSOMA agent config -- TinyXML (likely, same naming pattern)",
+    },
+
+    "significance": (
+        "Fortinet uses a single TinyXML library across all feature-area config DLLs. "
+        "A single vulnerability in TinyXML (e.g., CVE-2021-42260 class heap overflow) "
+        "is exploitable via 5+ different attack surfaces: "
+        "  - VPN config from FortiGate (IPsec, SSL-VPN) "
+        "  - ZTNA rules from EMS/FortiGate "
+        "  - System compliance config from EMS "
+        "  - PAM config from EMS "
+        "  - FSSOMA agent config "
+        "A single TinyXML patch applies across all; a single TinyXML vuln affects all. "
+        "This is a systemic dependency risk -- the XML parser is the single point of failure "
+        "for the entire EMS-managed config attack surface."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-F14: update_task.exe -- requireAdministrator + temp file TOCTOU race
+# ---------------------------------------------------------
+WIN_F14_UPDATE_TOCTOU = {
+    "id":       "WIN-F14",
+    "product":  "FortiClient Windows -- update_task.exe (requireAdministrator manifest); software update downloads to temp file then verifies; TOCTOU race between temp write and verify/install",
+    "severity": "MEDIUM -- requires local write access to temp directory; escalates to admin code execution when update runs",
+    "class":    "Update handler TOCTOU race (CWE-367, CWE-379)",
+
+    "evidence": [
+        "update_task.exe manifest: requestedExecutionLevel level='requireAdministrator' (UAC prompt on launch)",
+        "update_task.dll strings: 'GetTempPath failed, error=%lu' + 'GetTempFileName failed, error=%lu'",
+        "update_task.dll strings: 'Failed to remove temp folder, ret=%d, err=%d, %ws'",
+        "update_task.dll strings: 'combined CRCs: stored = 0x%08x, computed = 0x%08x' (CRC verification after download)",
+        "update_task.dll strings: 'process_certverify_result' + 'failed to verify object, ret=%d, cate=%d'",
+        "update_task.dll strings: '%ws(), uploading softinvent to FDS is enabled' (FortiGuard update server contact)",
+        "update_task.dll source: C:\\279\\2902741\\FortiClientHS\\service\\update_task",
+    ],
+
+    "mechanism": (
+        "update_task.exe triggers a UAC elevation prompt (requireAdministrator). "
+        "Post-elevation, update_task.dll contacts FortiGuard Distribution Server (FDS) "
+        "and downloads update packages to a temp directory (GetTempPath + GetTempFileName). "
+        "The update is verified via CRC checksum and certificate check (process_certverify_result). "
+        "TOCTOU race: the download and verification use a temp file path; "
+        "if the temp directory allows low-privilege write (standard %LOCALAPPDATA%\\Temp behavior), "
+        "a local attacker can: "
+        "  1. Monitor for temp file creation during update "
+        "  2. Swap the temp file AFTER verification passes but BEFORE the install move "
+        "  3. The admin-privileged installer executes the swapped payload "
+        "The CRC check uses stored CRC from the download metadata -- if the swap happens "
+        "before the second CRC check, the race window is the install stage."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# WIN-F15: AzureToken2.exe -- EMS-controlled OAuth client_id injection
+# ---------------------------------------------------------
+WIN_F15_AZURE_TOKEN = {
+    "id":       "WIN-F15",
+    "product":  "FortiClient Windows -- AzureToken2.exe (.NET 4.8.1 MSAL); receives client_id and tenant_name as command-line args from FortiTcs.exe; EMS-controlled values allow arbitrary OAuth app impersonation",
+    "severity": "HIGH -- if EMS is compromised, attacker controls client_id -> Azure AD tokens acquired for arbitrary registered applications",
+    "class":    "OAuth client_id injection via EMS config (CWE-441, CWE-346)",
+
+    "evidence": [
+        "AzureToken2.exe strings: 'client_id', 'tenant_name' (command-line argument names)",
+        "AzureToken2.exe strings: 'AcquireTokenInteractive', 'AcquireTokenSilent' (MSAL token acquisition)",
+        "AzureToken2.exe strings: 'LaunchFortiClientWithAzureToken', 'AquireAzureToken' (main flow)",
+        "AzureToken2.exe strings: 'WithDefaultRedirectUri' (OAuth redirect)",
+        "AzureToken2.exe manifest: asInvoker (no elevation -- runs as user)",
+        "AzureToken2.exe source: C:\\279\\2902741\\FortiClientHS\\service\\AzureToken\\obj\\Release\\AzureToken2.pdb",
+        "AzureToken2.exe: .NET Framework 4.8.1 MSAL client",
+        "FortiTcs.exe strings (WIN-F05): 'RequestAzureTokenFromFortiTray' -- FortiTcs requests tokens",
+    ],
+
+    "mechanism": (
+        "AzureToken2.exe is a .NET MSAL client that acquires Azure AD access tokens. "
+        "It receives client_id (the Azure AD application ID) and tenant_name as command-line arguments. "
+        "FortiTcs.exe spawns AzureToken2.exe with values sourced from EMS configuration. "
+        "If EMS is compromised or a rogue FortiGate sends malicious EMS config: "
+        "  1. Attacker sets client_id to their own registered Azure AD application ID "
+        "  2. AzureToken2.exe shows a legitimate Azure AD login dialog to the user "
+        "  3. User authenticates (they see a normal Microsoft login page) "
+        "  4. Access token is issued for the attacker's app with the user's identity "
+        "  -> silent exfiltration of Azure AD session with permissions matching the fake app's scopes. "
+        "MSAL's AcquireTokenInteractive shows the user the OAUTH consent screen for the attacker's app -- "
+        "if scopes are broad (e.g., User.Read.All, Mail.Read), the attack yields full AD access."
+    ),
 }
