@@ -3150,6 +3150,21 @@ ANALYSIS_STATUS = {
                  "distinguish from F50 (FAC): FAC has account disable impact via PATCH; FML impact limited to blocklist API traversal; "
                  "remediation: URL-encode domain_name with urllib.parse.quote(domain_name, safe='') before inserting into URL; "
                  "source: fmg-builtin/FML/operator.py L543-600 (FMLAddSenderToBlocklistOperator), analysis 2026-09-15",
+
+        "FMG-F74: MEDIUM -- FortiManager SOAR FortiWeb (FWEB) connector inserts trigger-controlled policy_name and server_policy_name directly into FortiWeb management API URL query strings via .format() without URL encoding, enabling SOAR trigger data to inject additional query parameters into FortiWeb management API calls (FMG8.0.0, fmg-builtin/FWEB/operator.py L295-340 and L729-763, 2026-09-15): "
+                 "class: URL query parameter injection in SOAR connector via trigger data (same root cause as FMG-F73 but affects FortiWeb API and query string layer); "
+                 "root cause 1: FWEBGetBlockedUsersOperator.execute_action() at FWEB/operator.py L307-309: "
+                 "endpoint = 'monitor/blockedusers?type={type}&policy_name={policy_name}'.format(type=PARAM_MAPPING.get(block_type, '1'), policy_name=policy_name); "
+                 "policy_name from params.get('policy_name') where params['policy_name'] set at execute() L339: self.policy_name = FAZUtilsOperator.parse_input(context, self.policy_name, context_dict); "
+                 "root cause 2: FWEBGetServerPolicyTrafficOperator.execute_action() at FWEB/operator.py L742-744: "
+                 "endpoint = 'policy/policytraffic?policy_name={policy_name}'.format(policy_name=policy_name or server_policy_name); "
+                 "server_policy_name set at execute() L759: self.server_policy_name = FAZUtilsOperator.parse_input(context, self.server_policy_name, context_dict); "
+                 "full URL constructed at make_api_call() L104: endpoint = '{server_url}/api/v2.0/{url}'.format(...); "
+                 "injection payload: policy_name='x&type=0&other_param=evil' -> query string contains injected params; "
+                 "impact: inject unexpected parameters into FortiWeb management API calls, potentially altering query semantics; "
+                 "soar-connectors/FWEB/operator.py is byte-for-byte identical (confirmed by diff, no output); "
+                 "remediation: URL-encode policy_name with urllib.parse.quote(policy_name, safe='') before .format() insertion; "
+                 "source: fmg-builtin/FWEB/operator.py L295-340 (FWEBGetBlockedUsersOperator), L729-763 (FWEBGetServerPolicyTrafficOperator), analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
