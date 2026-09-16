@@ -579,5 +579,149 @@ def main():
             print(f'Manifest -> {mpath}')
 
 
+# ---------------------------------------------------------
+# VM RE helpers -- process-aware analysis (from vm_re_helper pattern, 2026-09-16)
+# Designed to work with PhysmemVFS index + /proc/maps text extracted from the dump
+# ---------------------------------------------------------
+
+import re as _re
+
+def parse_proc_maps(maps_text: str) -> list:
+    """Parse /proc/<pid>/maps text into structured region dicts."""
+    LINE_RE = _re.compile(
+        r'^([0-9a-f]+)-([0-9a-f]+)\s+(\S+)\s+([0-9a-f]+)\s+(\S+)\s+(\d+)\s*(.*)$'
+    )
+    regions = []
+    for ln in maps_text.splitlines():
+        m = LINE_RE.match(ln.strip())
+        if not m:
+            continue
+        start, end, perms, offset, dev, inode, path = m.groups()
+        regions.append({
+            'start':  int(start, 16),
+            'end':    int(end, 16),
+            'perms':  perms,
+            'offset': int(offset, 16),
+            'dev':    dev,
+            'inode':  int(inode),
+            'path':   path.strip() or None,
+        })
+    return regions
+
+
+def group_maps_by_binary(regions: list) -> dict:
+    """Group /proc/maps regions by path substring, excluding anon/heap/stack."""
+    bins: dict = {}
+    for r in regions:
+        p = r.get('path')
+        if not p or p.startswith('['):
+            continue
+        bins.setdefault(p, []).append(r)
+    return bins
+
+
+def match_elf_to_maps(elf_candidates: list, maps_regions: list) -> 'ElfCandidate | None':
+    """
+    Score each ElfCandidate by how many of its PT_LOAD file offsets appear in maps_regions.
+    Returns the best-matching candidate (typically unambiguous for score >= 2).
+
+    elf_candidates: list of ElfCandidate objects from PhysmemVFS._index
+    maps_regions: list of region dicts from parse_proc_maps() filtered to one binary
+    """
+    map_offsets = {r['offset'] for r in maps_regions if r.get('path')}
+
+    best = None
+    best_score = 0
+    for cand in elf_candidates:
+        elf_offsets = {seg.p_offset for seg in cand.segments}
+        score = len(map_offsets & elf_offsets)
+        if score > best_score:
+            best = cand
+            best_score = score
+    return best
+
+
+def rank_functions(funcs: list) -> list:
+    """
+    Rank FunctionRecord-like dicts by size_score + 2*call_score.
+    funcs: list of dicts with keys 'asm' (list of str) and 'calls' (list of str).
+    Returns sorted list of {'fn': func_dict, 'score': int} descending.
+    """
+    ranked = []
+    for fn in funcs:
+        size_score = len(fn.get('asm', []))
+        call_score = len(fn.get('calls', []))
+        ranked.append({'fn': fn, 'score': size_score + 2 * call_score})
+    return sorted(ranked, key=lambda x: x['score'], reverse=True)
+
+
+def get_arg_setup(insns: list, call_idx: int) -> dict:
+    """
+    Backward slice from a CALL instruction to find last register writes before it.
+    insns: list of capstone CsInsn objects.
+    call_idx: index of the call instruction in insns.
+    Returns dict {reg_name: CsInsn} for rdi/rsi/rdx/rcx/r8/r9.
+    """
+    interesting = ('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')
+    reg_state: dict = {}
+    i = call_idx - 1
+    while i >= 0:
+        ins = insns[i]
+        if ins.mnemonic in ('ret', 'jmp', 'call'):
+            break
+        if ins.mnemonic in ('mov', 'lea') and ',' in ins.op_str:
+            dst, _ = ins.op_str.split(',', 1)
+            dst = dst.strip()
+            if dst in interesting and dst not in reg_state:
+                reg_state[dst] = ins
+        i -= 1
+    return reg_state
+
+
+def analyze_calls_to_targets(insns: list, targets: list) -> list:
+    """
+    Find call sites in a function's disassembly that target specific callees.
+    Returns list of dicts with call_addr, target, arg_setup (reg -> insn text).
+    """
+    targets_set = set(targets)
+    results = []
+    for idx, ins in enumerate(insns):
+        if ins.mnemonic != 'call':
+            continue
+        try:
+            tgt = int(ins.op_str, 16)
+        except (ValueError, TypeError):
+            continue
+        if tgt not in targets_set:
+            continue
+        reg_state = get_arg_setup(insns, idx)
+        results.append({
+            'call_addr': ins.address,
+            'target':    tgt,
+            'arg_setup': {r: f'{i.mnemonic} {i.op_str}' for r, i in reg_state.items()},
+        })
+    return results
+
+
+def diff_call_args(call_info: list) -> str:
+    """
+    Format argument differences across multiple call sites to the same targets.
+    Useful for auth-present vs auth-absent path comparison.
+    """
+    by_target: dict = {}
+    for ci in call_info:
+        by_target.setdefault(ci['target'], []).append(ci)
+
+    lines = []
+    for tgt, calls in sorted(by_target.items()):
+        lines.append(f'target 0x{tgt:x}:')
+        for ci in calls:
+            lines.append(f'  call at 0x{ci["call_addr"]:x}')
+            for reg, inst in sorted(ci['arg_setup'].items()):
+                lines.append(f'    {reg}: {inst}')
+        lines.append('')
+    return '\n'.join(lines)
+
+
 if __name__ == '__main__':
     main()
