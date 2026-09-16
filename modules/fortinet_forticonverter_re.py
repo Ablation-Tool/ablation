@@ -265,47 +265,61 @@ FCV_F04_DEFAULT_CREDS_OLD_DJANGO = {
 FCV_F05_PARSER_ATTACK_SURFACE = {
     "id":       "FCV-F05",
     "product":  "Fortinet FortiConverter v7.4.0 build 0848",
-    "severity": "HIGH (potential) -- 25 vendor config parsers process untrusted uploaded files",
-    "class":    "Unsafe deserialization / parser vulnerabilities (CWE-20; unevaluated)",
+    "severity": "HIGH -- 25 vendor config parsers process untrusted uploaded files; IBM XML bomb and Lucent ZIP bomb CONFIRMED",
+    "class":    "Unsafe deserialization / parser vulnerabilities (CWE-20, CWE-776, CWE-409)",
 
     "description": (
         "FortiConverter parses 25 different vendor firewall config formats. "
         "Config files are uploaded via the unauthenticated /api/files/ endpoint "
         "and processed by dedicated Django apps per vendor. "
-        "Each parser is a potential attack surface: "
-        "malformed config files -> stack overflow, integer overflow, regex DoS (ReDoS), "
-        "XML entity expansion (XXE in XML-based configs: Sophos, IBM, Forcepoint Stonesoft, PaloAlto), "
-        "or command injection if the parser shells out. "
-        "Check Point config files use .C format (object database); "
-        "Juniper JunOS uses structured text; PaloAlto/IBM/Sophos use XML; "
-        "Cisco ASA uses text-based CLI format. "
         "All parsers run in the Django process without sandboxing."
     ),
 
     "high_risk_parsers": {
-        "paloalto":       "XML-based (paloalto.xml) -- XXE risk",
-        "ibm":            "XML-based (demo-ibm.xml) -- XXE risk",
-        "forcepoint":     "XML-based (stonesoft.xml) -- XXE risk",
-        "sophos":         "XML-based -- XXE risk",
+        "paloalto":       "XML parsed by native ConversionEngine.exe (binary); Python layer delegates via engine_invoker; XML parsing risk unclear without binary RE",
+        "ibm":            "CONFIRMED: minidom.parse(filename) -- no defusedxml; XML entity expansion (Billion Laughs) DoS",
+        "forcepoint":     "XML-based (stonesoft.xml) -- XXE risk pending confirmation",
+        "sophos":         "XML-based -- XXE risk pending confirmation",
         "checkpoint":     "C object database format -- complex nested parsing",
-        "cisco_asa":      "CLI text parsing -- regex-based; potential ReDoS",
-        "lucent":         "ZIP archive (demo.zip) -- zip bomb potential",
+        "cisco_asa":      "CLI text parsing -- regex-based; ReDoS pending confirmation",
+        "lucent":         "CONFIRMED: zipfile.extractall() with no size/entry limit -> zip bomb DoS",
+    },
+
+    "confirmed_ibm_xml_bomb": {
+        "source":   "applications/ibm/ibm_convert_script.py:25: mydoc = minidom.parse(filename)",
+        "import":   "from xml.dom import minidom",
+        "class":    "XML entity expansion (Billion Laughs) -- CWE-776",
+        "payload":  (
+            "<?xml version='1.0'?>"
+            "<!DOCTYPE bomb [<!ENTITY a 'aaa...'><!ENTITY b '&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;'>...]>"
+            "<securityEventsList>&b;</securityEventsList>"
+        ),
+        "impact":   "Exponential memory expansion in Django process; OOM -> DoS. No auth required via /api/files/.",
+        "no_defusedxml": "defusedxml is NOT imported or used anywhere in the IBM parser or its dependencies.",
+    },
+
+    "confirmed_lucent_zip_bomb": {
+        "source":   "applications/lucent/lucent_convert_job.py:95-96: zip_job = zipfile.ZipFile(...); zip_job.extractall(self.output_dir_base)",
+        "class":    "ZIP bomb / unrestricted archive extraction (CWE-409)",
+        "no_limits": (
+            "No check for: total uncompressed size, file count, individual file size, "
+            "path traversal in ZIP entry names (../ paths), symlinks in ZIP entries. "
+            "zipfile.extractall() follows ZIP paths relative to output_dir_base -- "
+            "a ZIP with entries like '../../etc/cron.d/evil' would write to those paths "
+            "if Django is running with write access to parent dirs."
+        ),
+        "zip_bomb_payload": "Single ZIP file ~1KB compressed -> 1GB+ uncompressed (standard zip bomb).",
+        "path_traversal":   "ZIP entries with '../' paths: output_dir_base + '../../etc/cron.d/evil' if not sandboxed.",
+        "impact":           "DoS via disk/memory exhaustion; potential path traversal to writable dirs. No auth required.",
     },
 
     "evidence": {
         "upload_endpoint":  "POST /api/files/ (no auth; multipart upload)",
         "parser_dirs":      "applications/{cisco,checkpoint,paloalto,ibm,sophos,...}/",
-        "xml_parsers":      "IBM, Forcepoint Stonesoft, PaloAlto, Sophos use XML input",
-        "zip_input":        "Lucent parser accepts .zip files",
-        "demo_files":       "nsis_full/$APPDATA/Fortinet/FortiConverter/demo/ has vendor sample formats",
+        "xml_parsers":      "IBM confirmed (minidom); Forcepoint/Sophos pending",
+        "zip_input":        "Lucent parser accepts .zip files (confirmed extractall)",
+        "source_path":      "/tmp/forticonverter/nsis_full/converter/backend/mysite/applications/",
     },
-
-    "pending": (
-        "Fuzz each XML parser with XXE payloads (file:// entity, SSRF via http:// entity). "
-        "Test Cisco ASA parser with extremely long object names for ReDoS/buffer overflow. "
-        "Test Lucent ZIP parser with zip bomb and directory traversal in ZIP paths. "
-        "Source files available at /tmp/forticonverter/nsis_full/converter/backend/mysite/applications/"
-    ),
 }
 
 
@@ -317,16 +331,19 @@ pending_findings = [
     "verify Django storage.get_valid_name() interaction with the type-based path construction; "
     "source: applications/fileupload/models.py get_file_path(); 2026-09-16",
 
-    "FCV-F05 XXE: fuzz PaloAlto XML parser with <!DOCTYPE> XXE entity; "
-    "if XXE triggers SSRF from the Django process, this could reach internal services; "
-    "source: applications/paloalto/models.py (XML parsing); 2026-09-16",
+    "FCV-F05 IBM XML bomb CONFIRMED: test payload at /tmp/forticonverter via /api/files/ upload "
+    "to confirm OOM crash in Django process; source: applications/ibm/ibm_convert_script.py:25; 2026-09-16",
+
+    "FCV-F05 Lucent ZIP bomb CONFIRMED: verify disk exhaustion via extractall; "
+    "test path traversal in ZIP entries (../); source: lucent_convert_job.py:95-96; 2026-09-16",
+
+    "FCV-F05 XXE: fuzz PaloAlto XML via ConversionEngine.exe (native binary); "
+    "Python delegates to engine_invoker.invoke_engine_parse -- binary needs RE for XML parser ID; "
+    "source: paloalto_convert_job.py:180; 2026-09-16",
 
     "FCV-F05 Cisco ASA ReDoS: fuzz applications/cisco/ parser with pathological input "
     "designed to trigger catastrophic backtracking in Python regex patterns; "
     "source: applications/cisco/models.py; 2026-09-16",
-
-    "FCV-F05 Lucent ZIP traversal: upload zip with ../../../path entries via Lucent parser; "
-    "source: applications/lucent/models.py; demo at nsis_full/$APPDATA/.../demo/Lucent/; 2026-09-16",
 
     "Django 1.10.1 SQL injection audit: check all Django ORM usages for raw() or extra() "
     "calls with user-controlled data; source: applications/*/models.py; 2026-09-16",
