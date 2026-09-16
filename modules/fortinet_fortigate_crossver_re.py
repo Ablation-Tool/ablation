@@ -517,8 +517,72 @@ CROSSVER_IPS_SWEEP_748 = {
     "next_steps": [
         "Manual disasm: verify 0x415311 [rdi+rax+5] access vs actual buffer bounds -- need caller context",
         "Manual disasm: 0xd86f0 caller graph -- identify code paths that retain freed node pointers",
-        "Cross-version diff: run same semantic sweep on 7.2.0 libips.so.new; compare top-5 per query",
         "jemalloc heap layout: document implications for exploit reliability vs glibc malloc",
         "mod_md.so RE: Apache ACME module processes domain validation -- potential SSRF or cert injection surface",
     ],
+}
+
+
+# ---------------------------------------------------------
+# CROSSVER-F10: libips.so.new cross-version semantic diff (7.2.0 vs 7.4.8)
+# ---------------------------------------------------------
+CROSSVER_IPS_DIFF_720_748 = {
+    "id":       "CROSSVER-F10",
+    "method":   "Parallel semantic sweep on both versions; same 8-query profile; top-3 candidates per query",
+
+    "corpus_sizes": {
+        "7.2.0_libips": "1432 functions (10.9MB binary)",
+        "7.4.8_libips": "4000 functions (13.7MB binary, hit cap)",
+        "note": "7.4.8 has ~3x more detected prologues despite only 26% larger binary -- different inlining/optimization",
+    },
+
+    "7.2.0_top_candidates": {
+        "VA_0x613770": {
+            "queries_hit":  5,  # memcpy-no-bound, sprintf-stack-buf, tls-asn1-overflow, http-header-overflow, ips-sig-heap
+            "stack_frame":  0x138,
+            "flags": [
+                "6-argument function (rdi/rsi/rdx/rcx/r8/r9 + stack args at [rsp+0x170])",
+                "movabs rax, 0x50604030201 -- 6-byte type-code lookup table used with shr by cl*8",
+                "cl computed from [rsp+0x8c] -- a field from decoded context struct",
+                "Multiple indirect calls through vtable pointers (protocol decoder dispatch)",
+                "Context switch between protocol variants via type byte extraction from movabs literal",
+                "Appears across 5 vulnerability queries -- high-priority for manual verification",
+            ],
+            "verdict": "PLAUSIBLE -- protocol decoder dispatch with type byte extraction; need full trace",
+        },
+        "VA_0x663730": {
+            "queries_hit":  1,  # use-after-free (score 0.3318)
+            "stack_frame":  0x318,  # 792 bytes
+            "flags": [
+                "Reads [rsi+0x178] == 0x2f (protocol state check) and [rsi+0x1d8] == 2 (type check)",
+                "Three sequential allocations using sizes derived from struct fields",
+                "EACH multiplication has explicit setno/jo overflow guard: r14*4, r15*0x18",
+                "Guards appear complete -- all three mul paths checked before allocation",
+                "Verdict: overflow guards are correct and consistent on analyzed paths",
+            ],
+            "verdict": "LOW -- overflow guards validated as correct on analyzed allocation paths",
+        },
+        "VA_0x269a1c": {
+            "queries_hit":  1,  # malloc-int-overflow (score 0.3483, highest single 7.2.0 score)
+            "flags": [
+                "TODO: not yet disassembled -- highest malloc-int-overflow score in 7.2.0",
+                "VA 0x269a1c in early .text section (low offset) -- may be early initialization code",
+            ],
+            "verdict": "UNVERIFIED -- pending disassembly",
+        },
+    },
+
+    "cross_version_delta_observations": [
+        "7.2.0 top candidates cluster around 0x6x0000 range (high .text offset); 7.4.8 candidates cluster at 0x4x0000 and 0xd0000",
+        "Different VA ranges suggest significant code reorganization between versions, not just appended code",
+        "0x613770 (7.2.0) appearing in 5 queries but no equivalent high-signal function in 7.4.8 could indicate: (a) vulnerability patched in 7.4.8, (b) function inlined/split, or (c) recompiled differently",
+        "7.4.8 libips.so.new ships libips.so.new.x (signed variant) -- signature verification now enforced in 7.4.8",
+        "0x663730 overflow guards confirmed correct in 7.2.0; 7.4.8 equivalent not found (may be inlined or refactored)",
+    ],
+
+    "priority_action": (
+        "Disassemble VA 0x269a1c in 7.2.0 libips.so.new -- highest malloc-int-overflow score (0.3483); "
+        "early .text location suggests possible initialization/registration path. "
+        "Also need caller graph for 0x613770 to understand input trust boundary."
+    ),
 }
