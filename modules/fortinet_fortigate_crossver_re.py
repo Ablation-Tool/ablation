@@ -281,3 +281,91 @@ CROSSVER_F06_SAE_PASSWORD = {
         "FSW-F04 in fortinet_fortiswitch_re.py confirmed the string appears verbatim in /bin/init."
     ),
 }
+
+
+# ---------------------------------------------------------
+# CROSSVER_MULTIVERSION_KEYS -- 8-year key reuse across 4 FortiOS generations
+# Sources: FortiOS 6.0.3 / 7.0.3 / 7.2.0 / 8.0.0 qcow2 images; datafs extracted
+# Mounts: /mnt/fgt603p1 (nbd2), /mnt/fgt703p1 (nbd3), /mnt/fgt70p1 (nbd4), /mnt/fgt720p1 (nbd5)
+# ---------------------------------------------------------
+CROSSVER_MULTIVERSION_KEYS = {
+    "id":       "CROSSVER-F07",
+    "title":    "RSA-2048 key (fgt2.key) identical across all FortiOS versions 2018-2026 (8-year span)",
+    "severity": "CRITICAL -- shared private key across entire product fleet, all time",
+    "class":    "Hardcoded cryptographic key (CWE-321)",
+
+    "fgt2_key_rsa2048": {
+        "pubkey_sha256": "3f9c28e38355e26d9f1fcaa50522ee9e74c57f17dcb9d80efa8c7d50bba4358c",
+        "versions_confirmed": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)", "8.0.0 (2026)"],
+        "path_in_datafs": "./etc/fgt2.key",
+        "status": "IDENTICAL fingerprint across all 4 versions -- private key never rotated in 8 years",
+        "impact": (
+            "fgt2.key is used for device authentication in FortiGate management protocols (FGFM, FortiLink). "
+            "Identical private key across all FortiOS versions and all devices that have not regenerated it "
+            "means any firmware image leaks the private key for every deployed FortiGate. "
+            "An attacker with one FortiOS image can impersonate any FortiGate device to FortiManager."
+        ),
+    },
+
+    "fgt_512_key_rsa512": {
+        "pubkey_sha256_pre_800":  "e5888c11ef0b452cf03be3b1bc325fa314a08402e7057b4fa6bdd46840223e78",
+        "pubkey_sha256_800":      "bdef4ac15542bcc047eaa4de45c24f168cd7637be17de0e375735982b89dccbc",
+        "versions_old_key": ["6.0.3 (2018)", "7.0.3 (2021)", "7.2.0 (2022)"],
+        "versions_new_key": ["8.0.0 (2026)"],
+        "status": "ROTATED silently between 7.2.x and 8.0.0; no advisory published",
+        "note": (
+            "RSA-512 is cryptographically broken (factored in hours with CADO-NFS on commodity hardware). "
+            "Fortinet silently rotated it in 8.0.0 but left the RSA-2048 (fgt2.key) untouched. "
+            "All devices running 6.0.3 through 7.x share the same RSA-512 private key, which can be factored."
+        ),
+    },
+
+    "fgt2_crt": {
+        "issuer":    "CN=fortinet-subca2001",
+        "validity":  "Nov 30 2016 - Nov 20 2056 (40-year certificate)",
+        "versions_confirmed": ["6.0.3", "7.0.3", "7.2.0"],
+        "status": "IDENTICAL certificate across all three pre-8.0 versions",
+        "note": (
+            "40-year validity is a design choice, not an oversight -- Fortinet expects this cert to be valid "
+            "for the operational lifetime of all deployed hardware. "
+            "Same cert across versions means a cert revocation event would require simultaneous firmware update "
+            "of the entire deployed FortiGate fleet."
+        ),
+    },
+
+    "rootfs_encryption_timeline": {
+        "6.0.3":  "gzip CPIO (unencrypted, full rootfs accessible)",
+        "7.0.3":  "gzip CPIO (unencrypted, full rootfs accessible)",
+        "7.0.13": "ENCRYPTED (magic 0x70c4180e, different scheme from 8.0.0)",
+        "7.2.0":  "gzip CPIO (unencrypted, full rootfs accessible)",
+        "8.0.0":  "ENCRYPTED (magic 0xcbd2efa3, TPM2-sealed key)",
+        "analysis": (
+            "Encryption was introduced between 7.0.9 (CPIO, accessible) and 7.0.13 (encrypted). "
+            "7.2.0 reverted to unencrypted CPIO -- encryption was not uniformly deployed across branches. "
+            "8.0.0 uses a different encryption magic from 7.0.13, suggesting a new scheme. "
+            "Static RE is fully possible on 6.0.3, 7.0.3, and 7.2.0 -- all rootfs content accessible. "
+            "7.0.13 and 8.0.0 require TPM2 key extraction or emulation-based dynamic analysis."
+        ),
+    },
+
+    "default_credentials_cross_version": {
+        "admin_password_enc": "ENC XXUp2ozpdysrQ",
+        "admin_status": "IDENTICAL across 6.0.3, 7.0.3, 7.2.0, 8.0.0",
+        "guest_password": "passwd guest (plaintext)",
+        "guest_status": "IDENTICAL across all versions",
+        "source": "system.conf.def in datafs.tar.gz for each version",
+        "impact": (
+            "Default admin ENC hash and guest plaintext credential unchanged across 8 years of releases. "
+            "Any device where the admin password was not changed post-deployment is vulnerable to the known default. "
+            "ENC prefix indicates FortiOS reversible encoding (not bcrypt) -- decoding possible with known algorithm."
+        ),
+    },
+
+    "attack_surface": [
+        "CROSSVER-F07-A1: RSA-2048 fgt2.key -- extract from any firmware image -> impersonate any FortiGate to FortiManager (FGFM protocol) -> fleet-wide lateral movement without credential",
+        "CROSSVER-F07-A2: RSA-512 fgt_512.key (pre-8.0.0) -- factor in hours with CADO-NFS -> decrypt any session authenticated with this key on 6.0.3/7.0.3/7.2.0 devices",
+        "CROSSVER-F07-A3: fgt2.crt 40-year shared cert -- cert pinning bypass; MitM FGFM traffic between FortiGate and FortiManager using known private key",
+        "CROSSVER-F07-A4: Default admin ENC XXUp2ozpdysrQ -- decode with FortiOS ENC algorithm -> plaintext admin password for any device that has not changed default",
+        "CROSSVER-F07-A5: Unencrypted rootfs (6.0.3/7.0.3/7.2.0) -- extract and analyze all FortiOS binaries without firmware decryption; directly compare httpsd/sslvpnd/wad/cmdbsvr across versions",
+    ],
+}
