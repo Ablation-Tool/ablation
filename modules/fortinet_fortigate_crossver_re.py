@@ -984,7 +984,28 @@ LIBIPS_F03_WEBFOVRD_LUA_INJECTION = {
         "not as a scheduled task."
     ),
 
-    "scope": "FortiOS 7.0.13 confirmed; 7.2.0 binary lacks webfovrd_compat string (may have different module name)",
+    "scope": (
+        "FortiOS 7.0.13 confirmed. 7.2.0 NEGATIVE: webfovrd_compat, webfovrd, and webfovrd_common "
+        "are ALL absent from 7.2.0 libips.so.new (confirmed via full string diff). "
+        "The entire webfovrd Lua subsystem was removed between 7.0.13 and 7.2.0. "
+        "No equivalent Lua module load found in 7.2.0. LIBIPS-F03 is 7.0.13-only."
+    ),
+
+    "luajit_version_regression": {
+        "7.0.13": "LuaJIT 2.1.d1a2fef8 (stable build)",
+        "7.2.0":  "LuaJIT 2.1.0-beta3 (older beta -- version DOWNGRADED in 7.2.0)",
+        "note":   "7.2.0 ships an older LuaJIT build than 7.0.13; any beta3 CVEs apply to 7.2.0 but not 7.0.13",
+    },
+
+    "webfovrd_module_table_7013": {
+        "location": "FO 0x7c2865: built-in Lua module registration table in libips.so.new",
+        "modules_registered": ["webfovrd", "webfovrd_common", "ftls", "ftls_utils", "ftls_starttls", "json", "periodical"],
+        "note": (
+            "webfovrd and webfovrd_common are C-implemented built-in Lua modules (not .lua files). "
+            "webfovrd_compat is a separate OPTIONAL .lua file loaded via ips_lua_require -- "
+            "this is the injection point. The built-in C modules cannot be hijacked via path search."
+        ),
+    },
 }
 
 
@@ -1351,5 +1372,86 @@ FGFM_TLS_CLIENT_VERIFY_F01 = {
         },
     },
     "scope": "FortiOS 7.0.3 and 7.2.0 confirmed via binary analysis; both versions share identical ssl_ctx_create_new_ex structure with SSL_VERIFY_NONE default",
+}
+
+
+# =============================================================================
+# FortiOS 7.0.13 encrypted rootfs -- format analysis (ROOTFS-F01)
+# =============================================================================
+
+ROOTFS_F01_ENCRYPTED_ROOTFS_FORMAT = {
+    "id":       "ROOTFS-F01",
+    "product":  "FortiOS 7.0.13 (KVM QCOW2) -- rootfs.gz encrypted with custom magic 0x70c4180e",
+    "severity": "INFO -- encryption blocks static rootfs analysis; key recovery is the pending work",
+    "class":    "Firmware encryption / static analysis blocker",
+
+    "partition_layout": {
+        "image": "fortios-v7.0.13.qcow2 (2GB QCOW2v3)",
+        "p1_type": "EXT3, 256MB, mounted as /mnt/fgt70p1",
+        "p1_files": {
+            "flatkc":          "4315024 bytes, bzImage x86-64, kernel 3.2.16 (built 2023-10-24)",
+            "rootfs.gz":       "58611088 bytes, encrypted (magic 0x70c4180e)",
+            "datafs.tar.gz":   "10823893 bytes, gzip of CPIO (unencrypted, accessible)",
+            "rootfs.gz.chk":   "256 bytes, RSA-2048 PKCS#7 signature of rootfs.gz",
+            "flatkc.chk":      "256 bytes, RSA-2048 PKCS#7 signature of flatkc",
+            ".db":             "858 bytes, JSON integrity manifest (SHA512 digests for all P1 files)",
+            ".db.x":           "13736 bytes, PKCS#7 signature of .db",
+            "extlinux.conf":   "Boot config: root=/dev/ram0 ramdisk_size=65536 initrd=/rootfs.gz",
+            "filechecksum":    "/rootfs.gz,CRC32,0xbdb57d7b | /flatkc,CRC32,0xffffffff",
+        },
+    },
+
+    "encryption_format": {
+        "magic":        "0x70c4180e (first 4 bytes of rootfs.gz)",
+        "file_size":    "58611088 bytes (55.9MB)",
+        "entropy": {
+            "bytes_4_64":   "5.66 bits/byte (structured metadata -- potential IV/nonce)",
+            "bytes_64_128": "5.75 bits/byte (still structured)",
+            "bytes_128_512": "7.45 bits/byte (high entropy -- ciphertext begins here)",
+        },
+        "suspected_format": "magic(4) + IV_or_header(124+) + AES_ciphertext",
+        "cipher_unknown": "AES-128-CBC and AES-256-CBC with all 16/32-byte vmlinux key candidates tested -- NO MATCH",
+    },
+
+    "decryption_key_search": {
+        "method":       "Known-plaintext: decrypted rootfs expected to start with gzip magic 1f8b0800",
+        "vmlinux_scan": "Full vmlinux (10.5MB) scanned at 4-byte granularity for AES-128 and AES-256 keys -- 0 candidates",
+        "boot_setup":   "bzImage setup section (0x200-0x4858) scanned -- no key material (high-entropy blocks)",
+        "ldlinux":      "ldlinux.c32 (122KB syslinux module) scanned -- magic not present",
+        "data_partition": ".db manifest is integrity-only JSON (SHA512 digests), no key material",
+        "conclusion":   "Key is NOT a static embedded AES key in any accessible binary on P1",
+    },
+
+    "new_7013_kernel_features": {
+        "FortiOS_LSM": {
+            "name":    "FortiOS Linux Security Module",
+            "hooks":   ["fortism_file_open", "fortism_path_link", "fortism_path_rename", "fortism_kernel_load_data"],
+            "effect":  "Blocks unauthorized kernel module loading in enforce mode; logs violations",
+        },
+        "fos_ima": {
+            "name":    "FortiOS IMA (Integrity Measurement Architecture)",
+            "paths_monitored": [
+                "/data/rootfs.gz", "/data/datafs.tar.gz", "/data/flatkc",
+                "/data", "/data2", "/data_secondary",
+            ],
+            "note":    "IMA monitors the encrypted rootfs path but does NOT decrypt it",
+        },
+        "tpm_support": "TPM driver added -- possible hardware-bound key source",
+    },
+
+    "comparison_with_other_versions": {
+        "7.0.3":  "rootfs.gz = gzip CPIO (unencrypted, 61.3MB) -- full static access",
+        "7.0.13": "rootfs.gz = custom encryption (0x70c4180e, 55.9MB) -- BLOCKED",
+        "7.2.0":  "rootfs.gz = gzip CPIO (unencrypted) -- encryption REVERTED",
+        "7.4.8":  "rootfs.gz = custom encryption (0x654accb2, 91.4MB) -- BLOCKED",
+    },
+
+    "alternative_analysis_paths": {
+        "tpm_key":      "TPM driver added in 7.0.13 -- if key is TPM-sealed, QEMU TPM emulator + known endorsement key needed",
+        "qemu_trace":   "Boot 7.0.13 image in QEMU + GDB stub; break at populate_rootfs() or rd_load_image() to catch plaintext",
+        "ida_pro":      "The kernel modification IS in vmlinux but not at obvious string reference sites; IDA xref analysis needed",
+        "7.0.3_path":   "7.0.3 and 7.2.0 rootfs is unencrypted -- full binary access available on those versions",
+        "datafs_pivot": "7.0.13 datafs IS accessible (lib/libips.so.new confirmed), attack surface via datafs binaries",
+    },
 }
 
