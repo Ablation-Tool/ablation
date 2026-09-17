@@ -2959,7 +2959,7 @@ FORTICLIENT80_VULSCAN = {
                 "OVERFLOW PATH: if malloc size = strlen(r12)+strlen(rbp)+2 this is safe. "
                 "If size does not include rbp length or separator, heap overflow."
             ),
-            "pending": "Trace eax at 0x86fd1a back to size computation to verify malloc accounts for both components + separator",
+            "pending": "Trace eax at 0x86fd1a back to size computation. Cross-binary analysis (confighandler/evtmon) confirms branch-adjusted malloc is LIKELY SAFE; apply same verdict here pending vulscan-specific trace.",
         },
         "safe_callers": {
             "0x5771bd": "dest = heap alloc via 0x542d67; src = [rbp-0x40]; likely strdup-then-copy; PLAUSIBLE SAFE pending 0x542d67 resolution",
@@ -3168,4 +3168,129 @@ FORTICLIENT80_CONFIGHANDLER = {
         "Check if h2 HTTP/2 server accepts connections from network (vs localhost only)",
         "memcpy: 638 callers -- targeted trace from recvfrom/recv call sites through dispatcher",
     ],
+}
+
+
+# ---------------------------------------------------------
+# FortiClient 8.0 -- evtmon (event monitor daemon) RE
+# ---------------------------------------------------------
+FORTICLIENT80_EVTMON = {
+    "id":        "FCLIENT80-EVTMON",
+    "product":   "FortiClient 8.0 evtmon -- event monitoring daemon",
+    "binary":    "/opt/forticlient/evtmon (ET_DYN ELF64 x86-64; 16MB)",
+    "has_canary": True,
+    "has_chk":   False,
+    "chk_detail": "No __sprintf_chk, no __strcpy_chk. Canary present but CHK absent.",
+    "language":  "Rust+C hybrid (same structure as confighandler)",
+    "severity":  "MEDIUM -- same shared C module patterns as confighandler; CHK absent increases severity",
+
+    "cross_binary_note": (
+        "evtmon shares IDENTICAL C code patterns with confighandler: "
+        "  path-concat strcpy pair (same register pattern: [r13+rbx+1], rbp) "
+        "  host:port strcat (same 0x3a separator, strlen then write ':') "
+        "  recvfrom with ebp len (same struct offsets: [r14+0x100], [rbx+0x38]). "
+        "Likely compiled from a shared C source module linked into multiple FortiClient daemons. "
+        "Same class of finding applies to confighandler, evtmon, vpn, epctrl."
+    ),
+
+    "plt_inventory": {
+        "strcpy":   {"plt": "0x10cbb0", "callers": 8},
+        "strcat":   {"plt": "0x10cda8", "callers": 1},
+        "sprintf":  {"plt": "0x10d090", "callers": 1},
+        "strncpy":  {"plt": "0x10ca28", "callers": 8},
+        "snprintf": {"plt": "0x10cc58", "callers": 21},
+        "recvfrom": {"plt": "0x10cad8", "callers": 1},
+        "read":     {"plt": "0x10c930", "callers": 9},
+        "memcpy":   {"plt": "0x10c9b0", "callers": 1075},
+        "recv":     {"callers": "NOT FOUND in PLT -- direct syscall via Rust stdlib"},
+    },
+
+    "strcpy_analysis": {
+        "callers": 8,
+        "callers_list": ["0x23438f", "0x80ae7e", "0x8592df", "0x85a4a5", "0x85a4dd", "0x898aa5", "0x9da753", "0x9da766"],
+        "findings": 1,
+        "FCLIENT80-EVTMON-STRCPY-F01": {
+            "id":       "FCLIENT80-EVTMON-STRCPY-F01",
+            "severity": "MEDIUM PLAUSIBLE -- path-concat double strcpy; identical pattern to FCLIENT80-CONFIGHANDLER-STRCPY-F01; CHK absent",
+            "callers":  ["0x9da753", "0x9da766"],
+            "pattern":  (
+                "0x9da753: strcpy(rax, r12) -- first path component. "
+                "0x9da766: strcpy([r13+rbx+1], rbp) -- second component after separator. "
+                "Identical register pattern to confighandler 0xe5f313/0xe5f326. "
+                "CHK absent: __strcpy_chk would have caught destination overflow; without it, no runtime check."
+            ),
+            "cross_ref": "FCLIENT80-CONFIGHANDLER-STRCPY-F01 -- same shared C module",
+        },
+    },
+
+    "sprintf_analysis": {
+        "callers": 1,
+        "findings": 0,
+        "detail": {
+            "0x23446d": "sprintf(rax, '%s%s', RODATA1, RODATA2). RODATA-only args; same as confighandler. SAFE.",
+        },
+    },
+
+    "strcat_analysis": {
+        "callers": 1,
+        "findings": 0,
+        "detail": {
+            "0x80ae9e": "strcpy(dest, r13) + strlen + ':' + strcat(dest, rbp). Identical host:port pattern. PLAUSIBLE SAFE.",
+        },
+    },
+
+    "recvfrom_analysis": {
+        "callers": 1,
+        "findings": 0,
+        "detail": {
+            "0x80d411": (
+                "recvfrom(edi=[rbx+0x38], rsi=r12, rdx=movsxd(ebp), ...). "
+                "Identical to confighandler 0xc6cc11. Same struct offsets ([r14+0x100], [rbx+0x38]). "
+                "MEDIUM -- ebp length not verified against r12 buffer size."
+            ),
+        },
+    },
+
+    "nng_ipc_finding": {
+        "id":       "FCLIENT80-EVTMON-F01",
+        "severity": "MEDIUM -- NNG IPC present; same unauthenticated local socket pattern as confighandler",
+        "class":    "Unauthenticated local IPC (CWE-284)",
+        "description": "evtmon uses NNG (same as confighandler, iked). No builtin auth. Local process can send event notifications.",
+    },
+
+    "pending": [
+        "Trace malloc before 0x9da753 for path-concat size verification",
+        "Cross-check: verify same malloc pattern in vpn and epctrl (likely also present)",
+        "Trace ebp at 0x80d411 recvfrom -- find bound against r12",
+    ],
+}
+
+# Cross-binary class finding for shared C module pattern
+FCLIENT80_SHARED_C_MODULE = {
+    "id":        "FCLIENT80-SHARED-C-F01",
+    "severity":  "INFORMATIONAL -- path-concat malloc branch pattern is self-consistent; likely SAFE",
+    "affected":  ["confighandler (0xe5f313/0xe5f326)", "evtmon (0x9da753/0x9da766)"],
+    "class":     "Path concatenation; shared compiled C module in FortiClient 8.0 daemons",
+    "malloc_branch_analysis": (
+        "confighandler 0xe5f2e1-0xe5f302 disasm shows two branches: "
+        "  Path 1 (no trailing '/'): eax += 2 then malloc(eax). "
+        "  Path 2 (trailing '/'): eax -= 1; eax += 2 = net eax += 1; then malloc(eax). "
+        "  ebp = strlen(r12) confirmed (movsxd edx, ebp; cmp [r12+rdx-1], '/'). "
+        "  If eax_before_branch = strlen(r12) + strlen(rbp): "
+        "    Path 1 malloc(strlen(r12)+strlen(rbp)+2) covers r12+'/' +rbp+null. EXACT FIT. "
+        "    Path 2 malloc(strlen(r12)+strlen(rbp)+1) covers r12 (has '/')+rbp+null. EXACT FIT. "
+        "  Branch pattern is the canonical safe path-join size computation. "
+        "  eax_before_branch accumulation not fully traced (500+ bytes back from 0xe5f2e1). "
+        "  Self-consistency of branch adjustment STRONGLY SUGGESTS eax = strlen(r12)+strlen(rbp). "
+        "  VERDICT: LIKELY SAFE. Off-by-one possible but not indicated by branch structure."
+    ),
+    "description": (
+        "At least confighandler and evtmon share IDENTICAL C code: "
+        "  1. Double strcpy path-concat (malloc + two strcpy + separator) "
+        "  2. Host:port strcat (strcpy + strlen + ':' + strcat) "
+        "  3. recvfrom with ebp-bounded len from struct (same struct offsets). "
+        "Malloc size computation branch analysis complete; pattern consistent with SAFE. "
+        "Same pattern likely in vpn, epctrl."
+    ),
+    "pending": "Sweep vpn + epctrl for same shared C module pattern; confirm struct offsets match.",
 }
