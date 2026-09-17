@@ -545,3 +545,92 @@ FC_F05_XML_DESER = {
         "Decompile FortiCentral.exe to confirm XML reading and processing."
     ),
 }
+
+
+# ---------------------------------------------------------
+# FC-F06: FortiCentral Video Analytics -- TensorFlow + OpenCV attack surface
+# ---------------------------------------------------------
+FC_F06_VIDEO_ANALYTICS = {
+    "id":       "FC-F06",
+    "product":  "FortiCentral Video Analytics add-on (FortiCentral_VideoAnalytics_FaceDetection_x64_7.2.0077.exe)",
+    "severity": "HIGH -- TensorFlow + OpenCV parsing camera RTSP streams; unsigned DLLs post-install; old TF version",
+    "class":    "Third-party ML library attack surface via camera stream input (RTSP/HTTP from FortiRecorder)",
+
+    "package_structure": {
+        "outer_installer":   "FortiCentral_VideoAnalytics_FaceDetection_x64_7.2.0077.exe (246MB, WiX Burn bootstrapper)",
+        "wixburn_section":   ".wixburn section at VA=0x6c000, sz=0x38 -- identifies as WiX Burn",
+        "embedded_cab_offset": "0xA19A0 in the PE file",
+        "embedded_cab_size": "245,457,671 bytes (245.5 MB, LZX compressed)",
+        "embedded_cab_contents": "Single file 'a0' (245.7 MB uncompressed) -- the Video Analytics MSI",
+        "msi_file":          "a2 in /tmp/forticentral_cab/ (110MB) = Composite Document File, OLE2",
+        "digital_signature": "Signed by Fortinet, Inc. via DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1",
+    },
+
+    "embedded_libraries": {
+        "tensorflow_dll": {
+            "file":             "tensorflow.dll in CAB stream 2",
+            "uncompressed_sz":  "211,298,304 bytes (211.3 MB)",
+            "compressed_sz":    "66,596,212 bytes (66.6 MB, in MSI stream '䄦㢥䆾䅤')",
+            "risk":             "TensorFlow 2.x on Windows; if SavedModel path is attacker-controlled, arbitrary code via TF custom ops; "
+                                "known CVE classes: CVE-2022-29216 (TF saved_model), CVE-2023-25801 (TF tensor memory)",
+            "version_unknown":  "Exact TF version not confirmed from CAB metadata -- check DLL strings",
+        },
+        "opencv_suite": {
+            "version":    "4.8.0 (all DLL names contain '480')",
+            "count":      "53 OpenCV DLLs in CAB stream 1",
+            "key_modules": [
+                "opencv_dnn480.dll (6.9MB) -- loads ONNX/Caffe/TF models from file path",
+                "opencv_face480.dll (0.7MB) -- face detection/recognition",
+                "opencv_objdetect480.dll (1.4MB) -- object detection (Haar cascades, HOG)",
+                "opencv_videoio_ffmpeg480_64.dll (26.4MB) -- FFmpeg video decode for RTSP",
+                "opencv_gapi480.dll (6.1MB) -- G-API pipeline (graph-based processing)",
+            ],
+            "rtsp_attack_surface": (
+                "opencv_videoio_ffmpeg480_64.dll uses FFmpeg to decode video from FortiRecorder RTSP streams. "
+                "A compromised or rogue FortiRecorder camera sending a malformed video stream (H.264, H.265, MJPEG) "
+                "triggers FFmpeg parsing in the FortiCentral process. FFmpeg has multiple known parsing CVEs."
+            ),
+        },
+        "cv_interfaces": {
+            "file":    "ComputerVisionInterfaces (37,376 bytes, no .dll extension)",
+            "type":    "Likely .NET assembly -- 37KB is too small for native code; needs extraction and decompilation",
+            "role":    "Bridge between FortiCentral .NET application and native OpenCV/TF DLLs",
+        },
+    },
+
+    "attack_vectors": {
+        "rtsp_stream_parser": {
+            "description": "FortiCentral receives RTSP streams from FortiRecorder cameras via opencv_videoio_ffmpeg480_64.dll. "
+                           "A malicious camera (or MITM on the camera network) sends a crafted H.264/H.265/MJPEG stream. "
+                           "FFmpeg parsing runs in FortiCentral's process context (Windows SYSTEM or admin-level service).",
+            "severity":    "CRITICAL -- pre-auth from camera network; no user interaction needed",
+            "cve_class":   "FFmpeg heap-buffer-overflow in video codec parsers (multiple historical CVEs)",
+        },
+        "dnn_model_loading": {
+            "description": "opencv_dnn480.dll loads model files from a configurable path (likely C:\\ProgramData\\Fortinet\\... "
+                           "or admin-configurable path). Model formats: ONNX, Caffe .prototxt, DarkNet .cfg. "
+                           "ONNX models are Protobuf-parsed; malformed ONNX can trigger memory corruption.",
+            "severity":    "HIGH -- requires write access to model path (admin) or FGFM config injection (CHAIN-F01)",
+        },
+        "tensorflow_savedmodel": {
+            "description": "If SavedModel directory path is configurable, TF can load a SavedModel with custom ops. "
+                           "In TF 2.x, custom ops in .so/.dll loaded at SavedModel load time. "
+                           "This is a documented code execution path (CVE-2022-29216 class).",
+            "severity":    "HIGH -- requires admin-controlled model path; CHAIN-F01 can inject via FortiManager",
+        },
+    },
+
+    "chain_extensions": {
+        "CHAIN-FC02": {
+            "title": "Rogue FortiRecorder camera -> RTSP stream -> FFmpeg heap overflow -> FortiCentral RCE",
+            "steps": [
+                "1. Attacker controls a device in the FortiRecorder camera segment (or ARP poisons camera IP)",
+                "2. FortiCentral connects to the camera RTSP endpoint (configured camera IP:port)",
+                "3. Rogue device serves a malformed H.264/H.265 stream crafted for a known FFmpeg CVE",
+                "4. opencv_videoio_ffmpeg480_64.dll processes the stream in FortiCentral process space",
+                "5. Heap overflow in FFmpeg achieves RCE on the Windows host running FortiCentral",
+            ],
+            "confidence": "MEDIUM -- attack path confirmed; specific FFmpeg CVE applicability depends on bundled version",
+        },
+    },
+}
