@@ -5399,11 +5399,12 @@ FGT748_LIBAV_ZIP_INT_OVERFLOW = {
     ),
 
     "cross_version": {
-        "7_0_13": "0xb686c: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d; add %r12,%rbp -- SAME OVERFLOW (r12d)",
-        "7_2_0":  "0xb4b8c: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d; add %r12,%rbp -- SAME OVERFLOW (r12d)",
-        "7_4_8":  "0xce3b9: movzwl 0x1c(%r14),%r13d; add 0x12(%r14),%r13d; add %r13,%r12  -- SAME OVERFLOW (r13d)",
+        "6_0_3":  "0x84fbe avIsMaliciousBuffer: mov 0x12(%rbx),%r8d; add %r8d,%r12d -- SAME OVERFLOW; function renamed to avIsIgnoreBuffer in later versions",
+        "7_0_13": "0xb686c avIsIgnoreBuffer: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d -- SAME OVERFLOW (r12d)",
+        "7_2_0":  "0xb4b8c avIsIgnoreBuffer: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d -- SAME OVERFLOW (r12d)",
+        "7_4_8":  "0xce3b9 avIsIgnoreBuffer: movzwl 0x1c(%r14),%r13d; add 0x12(%r14),%r13d -- SAME OVERFLOW (r13d)",
         "8_0_0":  "NOT YET ANALYZED -- avFlowWrite struct changed significantly; ZIP parser may have changed",
-        "verdict": "Bug confirmed across FGT 7.0.13, 7.2.0, 7.4.8 -- persistent across 3+ major firmware generations",
+        "verdict": "Bug confirmed across FGT 6.0.3 through 7.4.8 -- present for 6+ years (2018-2024) unpatched",
     },
 
     "remediation": (
