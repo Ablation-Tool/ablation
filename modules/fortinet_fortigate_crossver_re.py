@@ -2979,22 +2979,65 @@ FORTICLIENT80_LIBAV = {
                 "LOW-PLAUSIBLE -- same condition as 0x2e638a."
             ),
         },
-        "still_unknown": [
-            "0x753a06: dest [r13+0x550]; struct field; source rbp",
-            "0x195ac0, 0x2e5f3b, 0x3ea6da, 0x3eb212, 0x7621b9, 0x77c27f: rdi/rsi not found in lookback",
-        ],
+        "analyzed_heap_struct": {
+            "0x753a06": (
+                "Function at 0x75396d: sub rsp, 0x38. "
+                "Alloc chain: strlen(rbp) -> 0x753620(rdi=0, rsi=strlen+0x551) -> malloc(strlen(rbp)+0x551). "
+                "Then memset(r13, 0, 0x550). Dest = r13+0x550; space = alloc-0x550 = strlen(rbp)+1. "
+                "strcpy copies strlen(rbp)+1 bytes exactly. SAFE -- allocation perfectly sized."
+            ),
+            "0x195ac0": (
+                "Same 5608-byte frame as 0x195bc0 (prologue at 0x19552a: sub rsp, 0x15e8). "
+                "Dest = [rsp+0x360] (space 0x1288=4744 bytes). Src = [rsp+0x160] (URL buffer). "
+                "Twin call site of 0x195bc0 within same URL-escaping function. PLAUSIBLE SAFE."
+            ),
+            "0x7621b9": (
+                "0x7621a6: strlen(rbp) -> rax; rsi = rax+1. "
+                "0x7621aa: call 0x753620(r12, strlen+1) -> malloc(strlen+1). "
+                "0x7621b2: [rbx+0x10] = rax. 0x7621b6: rdi = rax. "
+                "strcpy(malloc_buf, rbp). SAFE -- strdup pattern."
+            ),
+            "0x77c27f": (
+                "0x77c246: strlen([r11+0x28]) -> rax. "
+                "0x77c24b: rdi = rax+1. 0x77c24f: call 0x772bb0(rax+1) -> malloc(strlen+1). "
+                "0x77c271: rsi = [r11+0x28] (same source). 0x77c27f: strcpy(malloc_buf, src). "
+                "SAFE -- strdup pattern."
+            ),
+        },
+        "analyzed_fixed_struct": {
+            "0x2e5f3b": (
+                "Function at 0x2e5f13: sub rsp, 0x2428 (9KB frame). "
+                "Dest = [rsp+0x420]; capacity = 0x2428-0x420 = 0x2008 = 8200 bytes. "
+                "Src = [arg0+0x2a] (codec path component string from struct field). "
+                "8200-byte buffer for a path component. LOW-PLAUSIBLE."
+            ),
+            "0x3ea6da": (
+                "Function at 0x3ea620: populates fixed-size registry entry struct rbx. "
+                "Preceding strcpy at 0x3ea6b6: strcpy(rbx, r12) then byte [rbx+0x3ff]=0; "
+                "field capacity = 0x400 = 1024 bytes for string1. "
+                "0x3ea6da: strcpy([rbx+0x400], r13) then byte [rbx+0x503]=0; "
+                "field capacity = 0x104 = 260 bytes for string2. "
+                "Both sources from caller arg1/arg2; no length guard before copy. LOW-PLAUSIBLE."
+            ),
+            "0x3eb212": (
+                "Function at 0x3eb1bf: sub rsp, 0x510 (1296-byte frame). "
+                "Src = [rbx+0x400] -- same struct field written by 0x3ea6da, sentinel [rbx+0x503]=0. "
+                "Max source length = 0x103 bytes (bounded by sentinel at offset 0x503). "
+                "Dest = rsp (1296 bytes). SAFE -- dest capacity > max possible source length."
+            ),
+        },
     },
 
     "severity_updated": (
         "MEDIUM-HIGH -- libav.so has no stack canary; FCLIENT80-LIBAV-SPRINTF-F01 (ODF style name sprintf) "
         "is stack-exploitable from a malicious ODF file. No canary = full RCE potential. "
-        "sprintf sweep complete (all 65). strcpy sweep: 1 CONFIRMED (KEYCACHE), cluster LOW-PLAUSIBLE."
+        "sprintf sweep complete (all 65). strcpy sweep: 1 CONFIRMED (KEYCACHE), cluster LOW-PLAUSIBLE. "
+        "All still_unknown callers now resolved."
     ),
 
     "pending": [
         "Trace how 'arch_internal_' key names are sourced (file-derived vs RODATA) for FCLIENT80-LIBAV-F01",
         "Trace 0x2b5849 strcat loop: confirm initial malloc size accounts for all array elements",
-        "Trace 0x753a06/0x195ac0/0x2e5f3b/0x3ea6da/0x3eb212/0x7621b9/0x77c27f: still unknown",
     ],
 }
 
