@@ -2336,38 +2336,41 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
 
 LIBAV_603_STRNCPY_FILE_N_STACKOVERFLOW = {
     "id":       "LIBAV-603-F02",
-    "product":  "FortiOS 6.0.3 libav.so -- AV engine strncpy with file-controlled n",
-    "severity": "HIGH -- n from 2-byte file field; 50-byte stack buffer dest; no canary; CHK present but not on this callsite",
+    "product":  "FortiOS 6.0.3 libav.so -- AV engine file format parser (informational)",
+    "severity": "INFORMATIONAL -- strncpy n=0x10 CONSTANT (not file-derived); previous HIGH verdict was incorrect",
     "caller":   "0x74be6 (strncpy call within file format parser at 0x74b20)",
+    "revision":  "DOWNGRADED from HIGH to INFORMATIONAL after full disasm of 0x74b20",
 
     "trigger": {
-        "file_magic":    "2-byte value at file_buffer[r14+9..r14+10] must equal 0x293b",
-        "n_source":      "2-byte big-endian at file_buffer[r14+0xd..r14+0xe]; max 0xffff",
-        "src_source":    "file_buffer[r14+0xf] (file content directly)",
-        "dest":          "rsp+0x36 (stack buffer in function at 0x74b20)",
+        "outer_magic_4bytes": "file[0..3] == 0x3F 0x5F 0x03 0x00 (bytes '?_\\x03\\x00')",
+        "outer_magic_check":  "cmp dword ptr [rdi], 0x35f3f at 0x74b42",
+        "r14":                "file[4..7] = 32-bit offset/count field",
+        "inner_magic":        "LE word at file[r14+9..10] must equal 0x293b (bytes 0x3b=';', 0x29=')')",
+        "format_identity":    "Unidentified proprietary format; signature table (0x255200-0x255500) places this between ASF GUID and RAR magic; |SYSTEM string at 0x1fb970 suggests CHM/MSI internal structure",
     },
 
-    "stack_layout": {
-        "frame_size":       "sub rsp, 0x68 (104 bytes) + 6 pushes = 152 bytes total",
-        "buffer_at_rsp36":  "rsp+0x36 to rsp+0x67 = 50 bytes before saved rbx",
-        "saved_rbx_at":     "rsp+0x68",
-        "saved_r15_at":     "rsp+0x90",
-        "return_addr_at":   "rsp+0x98 = overwritten after 98 bytes of input",
-        "no_canary":        True,
+    "strncpy_analysis": {
+        "call_va":    "0x74be6",
+        "n_arg":      "edx = 0x10 (16) -- hardcoded constant at 0x74bb5; NOT from file content",
+        "src_arg":    "rsi = file_buf + r14 + 0xf (file content at that offset)",
+        "dest_arg":   "rdi = rsp+0x36 (16-byte stack slot; exactly fits n=16)",
+        "2byte_field": "r15 = LE word from file[r14+0xd..0xe] -- stored at [rsp+0x34] for other use, NOT used as n",
+        "verdict":    "SAFE -- n=16 bounds the copy to exactly the dest buffer size",
     },
 
-    "overflow_condition": (
-        "Attacker scans a crafted file where: "
-        "(1) field at file_buf[r14+9..10] == 0x293b; "
-        "(2) field at file_buf[r14+0xd..0xe] (n) > 50. "
-        "strncpy writes exactly n bytes into 50-byte stack buffer, "
-        "padding with nulls if source shorter than n. "
-        "Return address overwritten after 98 bytes. "
-        "FortiOS 6.0.3 may lack ASLR -- fixed stack address simplifies exploitation."
+    "format_table_evidence": (
+        "Format signature table at 0x255200: lists ASF GUID (30 26 b2 75 ... 62 ce 6c), "
+        "then '?_\\x03\\x00', then Rar!\\x1a\\x07\\x00 (RAR4), Rar!\\x1a\\x07\\x01\\x00 (RAR5), AVI, etc. "
+        "Static string '|SYSTEM' at 0x1fb970 is compared with 7-byte repe cmpsb at 0x74d92. "
+        "Format parsed is likely a CHM or MSI-related archive type with internal streams."
     ),
 
-    "attack_vector": "Attacker submits malicious file to FortiGate for AV scanning (email gateway, web proxy, file upload); AV engine dispatches to this parser for specific format/magic; stack overflow",
-    "pending":       "Identify file format by magic 0x293b (check PDF, OLE, ELF, or custom format); determine r14 computation to map exact byte offsets in crafted file",
+    "function_structure": (
+        "0x74b20 parses the matched format, reading multiple 2-byte fields, "
+        "performing a 7-byte string comparison with '|SYSTEM', "
+        "then allocating struct arrays (imul rsi, 0x7c) for parsed entries. "
+        "The function is a full archive parser, not just a magic-check stub."
+    ),
 }
 
 LIBAV_603_KEYCACHE_UPDATE = {
@@ -2395,7 +2398,17 @@ LIBAV_603_KEYCACHE_UPDATE = {
     "no_canary":  False,  # libav.so does have CHK hardening (has_chk=True from earlier analysis)
     "overflow_condition": "Any scanned file where a metadata field (key string at struct+8) exceeds 64 bytes triggers heap buffer overflow",
     "attack_vector": "Attacker sends malicious file to FortiGate for AV scan; crafts PE/JPEG/archive metadata field > 64 chars",
-    "pending": "Verify which specific file format parser sets [r14+8]+0x300; determine max field length in that format",
+
+    "confirmed_disasm": {
+        "calloc_at":     "0x9e266: call 0x488f0 with edi=1, esi=0x48 (calloc(1,72))",
+        "store_r13":     "0x9e26f: [calloc_result] = r13 (linked-list next pointer)",
+        "strcpy_dest":   "0x9e26b: rdi = [calloc_result + 8] (64-byte usable dest)",
+        "strcpy_src":    "0x9e272: rsi = rbx (file-derived metadata key string)",
+        "linked_list":   "0x9e230-0x9e247: traverse list comparing rbx with [node+8] via strcmp (0x484c0); insert at tail if not found",
+        "source_origin": "rbx = key string from metadata struct at [r14+8]+0x300 (populated by format-specific parser)",
+    },
+
+    "pending": "Trace format-specific parser that sets [r14+8]+0x300; determine max field length in JPEG EXIF, ZIP filename, and PE section name paths; confirm whether parsers enforce <=63 byte limit before inserting into scan context",
 }
 
 LIBVCM_603 = {
