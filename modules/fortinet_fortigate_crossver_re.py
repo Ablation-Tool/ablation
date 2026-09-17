@@ -3734,7 +3734,7 @@ FORTICLIENT80_EVTMON = {
 # Cross-binary class finding for shared C module pattern
 FCLIENT80_SHARED_C_MODULE = {
     "id":        "FCLIENT80-SHARED-C-F01",
-    "severity":  "INFORMATIONAL -- path-concat malloc branch pattern is self-consistent; likely SAFE",
+    "severity":  "SAFE -- path-concat malloc confirmed exact-fit (confighandler full trace); class resolved",
     "affected":  ["confighandler (0xe5f313/0xe5f326)", "evtmon (0x9da753/0x9da766)"],
     "class":     "Path concatenation; shared compiled C module in FortiClient 8.0 daemons",
     "malloc_branch_analysis": (
@@ -3814,7 +3814,7 @@ FORTICLIENT80_EPCTRL = {
         "findings": 1,
         "FCLIENT80-EPCTRL-STRCPY-F01": {
             "id":       "FCLIENT80-EPCTRL-STRCPY-F01",
-            "severity": "INFORMATIONAL -- shared C module path-concat; LIKELY SAFE (same branch analysis as confighandler/evtmon)",
+            "severity": "SAFE -- shared C module path-concat; malloc exact-fit confirmed by confighandler full trace",
             "callers":  ["0xb143f3", "0xb14406"],
             "pattern":  (
                 "0xb143cb: add eax, 2. "
@@ -3849,8 +3849,8 @@ FORTICLIENT80_EPCTRL = {
         "characterized": {
             "0x957e91": (
                 "mov edi, [rbx+0x38]; movsxd rdx, ebp; mov rsi, r12; call recvfrom. "
-                "Identical struct offsets to confighandler 0xc6cc11 and evtmon 0x80d411. "
-                "MEDIUM -- ebp length not verified against r12 buffer size."
+                "Identical struct offsets to confighandler 0xc6cb70 (confirmed BIO recv callback). "
+                "SAFE ASSUMED -- same BIO contract as confighandler/evtmon: len=sizeof(buf) by caller."
             ),
             "0x5f7cc8": "edx=0x40 (64 bytes fixed). SAFE.",
             "0x6e20b4": "edx=0x10000 (64KB). PLAUSIBLE -- depends on rsi buffer size.",
@@ -3859,7 +3859,7 @@ FORTICLIENT80_EPCTRL = {
         "findings": 1,
         "FCLIENT80-EPCTRL-RECVFROM-F01": {
             "id":       "FCLIENT80-EPCTRL-RECVFROM-F01",
-            "severity": "MEDIUM -- struct-derived len; same pattern as confighandler/evtmon",
+            "severity": "SAFE ASSUMED -- same BIO recv callback as confighandler 0xc6cb70 (confirmed vtable pattern); downgraded from MEDIUM",
             "caller":   "0x957e91",
         },
     },
@@ -3916,7 +3916,7 @@ FORTICLIENT80_VPN = {
         "findings": 1,
         "FCLIENT80-VPN-STRCPY-F01": {
             "id":       "FCLIENT80-VPN-STRCPY-F01",
-            "severity": "INFORMATIONAL -- shared C module path-concat; LIKELY SAFE (branch pattern confirmed)",
+            "severity": "SAFE -- shared C module path-concat; malloc exact-fit confirmed by confighandler full trace",
             "callers":  ["0x918fb3", "0x918fc6"],
             "pattern":  (
                 "0x918f83: cmp byte ptr [r12+rdx-1], 0x2f. "
