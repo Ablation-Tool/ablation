@@ -1455,3 +1455,196 @@ ROOTFS_F01_ENCRYPTED_ROOTFS_FORMAT = {
     },
 }
 
+INIT_720_F01_MONOLITHIC_BINARY = {
+    "id":      "INIT-720-F01",
+    "product": "FortiOS 7.2.0 (KVM QCOW2) -- monolithic /bin/init binary",
+    "severity": "INFO -- architectural inventory; all daemon attack surface lives in one binary",
+
+    "binary": {
+        "path":      "/tmp/fgt720_bin_extracted/bin/init",
+        "size":      "68,717,928 bytes (68MB)",
+        "arch":      "ELF x86-64, stripped",
+        "build_id":  "e6b30f7a62e506eb4cd668576d3047ff7b1c9251",
+        "text_va":   "0x4438b0",
+        "text_size": "39MB",
+    },
+
+    "daemon_symlinks": (
+        "All FortiOS daemons (httpsd, sslvpnd, wad, cmdbsvr, fgfmd, etc.) are symlinks to /bin/init. "
+        "init inspects argv[0] to dispatch to the correct daemon. "
+        "There is no process isolation between daemons -- a single binary bug grants cross-daemon memory access."
+    ),
+
+    "load_segments": {
+        "text_exec":  "VA 0x43a000-0x2b6bae9, file 0x3a000, 39MB (code)",
+        "rodata":     "VA 0x2b6c000-0x3ec1728, file 0x276c000, 20MB (read-only strings/tables)",
+        "data_bss":   "VA 0x3ec2980-0x45893b0, file 0x3ac1980 (writable)",
+    },
+
+    "semantic_sweep": {
+        "model":         "sentence-transformers/all-MiniLM-L6-v2",
+        "functions":     5000,
+        "encode_time_s": 163.6,
+        "score_range":   "0.1-0.3 (low -- semantic similarity against English query descriptions is noisy on stripped binaries)",
+        "false_positive_analysis": {
+            "USE_AFTER_FREE_VA_0x560ea0": (
+                "Score 0.285. Disasm shows safe doubly-linked list traversal: next pointer saved to rbx "
+                "at 0x560f1b before free call at 0x560f7a; loop iterates via saved rbx. NOT UAF."
+            ),
+            "FGFM_PREAUTH_VA_0x4f5fe0": (
+                "Score 0.241. 5-instruction stub: loads edi=0x4f5fb0, calls 0x1e33bb0, stores rax to global. "
+                "Constructor/initializer. NOT a pre-auth handler."
+            ),
+            "FORMAT_STRING_VA_0x4f9730_0x4f9880": (
+                "Score 0.239-0.248. Call to 0x1deec60 with string+output_int signature (sscanf-like). "
+                "Followed by bounds check: (parsed_int - 1) unsigned <= 0xe0f (range [1,3600]). "
+                "Bounded integer parser. NOT a format string vuln."
+            ),
+        },
+    },
+}
+
+FGFMD_720_F01_PROTOCOL_SURFACE = {
+    "id":      "FGFMD-720-F01",
+    "product": "FortiOS 7.2.0 fgfmd -- FortiGate-to-FortiManager protocol handler",
+    "severity": "MEDIUM -- FGFM channel dispatch exposes config-push and firmware-push commands over an authenticated tunnel",
+
+    "protocol_strings": {
+        "auth_header":    "X-AUTH-FGFM (HTTP header in FGFM requests)",
+        "auxiliary_hdrs": ["X-GUID", "X-HA-ADMIN-NAME"],
+        "sni_auth":       "fgfm_sni_signature / set_fgfm_sni -- SNI field carries device serial for cert-based auth",
+        "source_ip_check": (
+            "FGFMs: Source IP address mismatch, drop the connection "
+            "(file 0x28d9d48) -- only network-layer auth before cert check; "
+            "bypassable by IP spoofing in transparent/NAT topologies"
+        ),
+        "exclusive_session": "FGFMs: Reject tunnel request, exclusive session found -- DoS via session exhaustion possible",
+    },
+
+    "command_dispatch_table": {
+        "file_offset": "0x28d6d1c",
+        "commands": [
+            "put_config", "put_json_cmd", "put_image", "put_second_image",
+            "put_avfile", "put_ipsfile", "put_template", "put_fp_db",
+            "put_haconfig", "put_ap_image", "put_fext_image",
+            "get_config", "get_haconfig", "get_fp_db",
+            "file_exch_cmd", "fp_vdom", "fp_sensitivity", "file_exch_file",
+        ],
+        "note": (
+            "put_image / put_second_image accept firmware image pushes; "
+            "put_ipsfile / put_fp_db accept IPS signature and fingerprint DB updates; "
+            "all commands execute post-handshake but the handshake auth (cert + X-AUTH-FGFM) "
+            "is the only gate. Compromising FGFM auth (ref FGFM-TLS-F01) grants full command access."
+        ),
+    },
+
+    "handler_vtable": {
+        "fgfm_clt_handler":        "VA ~0x2b6f9a0 (rodata vtable entry, file 0x276f9a0)",
+        "fgfm_chan_msg_handler":    "registered at file 0x28d2190",
+        "fgfm_json_rpc_handler":   "registered at file 0x28d5630",
+        "fgfm_script_handler":     "registered at file 0x28d4dd0",
+        "fgfm_fqdn_connect":       "registered at file 0x28d3e40",
+    },
+
+    "attack_classes": {
+        "command_injection_via_script": (
+            "fgfm_script_handler downloads and executes scripts at /tmp/fgfm_script. "
+            "If the FMG-to-FGT script content is not validated, a compromised FMG "
+            "or MITM delivers arbitrary CLI commands to the FortiGate."
+        ),
+        "firmware_downgrade": (
+            "put_image / put_second_image accept firmware pushes. "
+            "A rogue FMG can push a known-vulnerable firmware version. "
+            "FGFM-TLS-F01 cert bypass enables this without a real FMG."
+        ),
+    },
+}
+
+SSLVPN_720_F01_CLOUD_INIT_SSRF = {
+    "id":      "SSLVPN-720-F01",
+    "product": "FortiOS 7.2.0 -- cloud-init metadata fetch SSRF potential",
+    "severity": "LOW -- SSRF to internal metadata services only exploitable in cloud deployments with attacker-controlled DHCP/DNS",
+
+    "evidence": {
+        "format_string":   "http://%s/latest/user-data (file 0x28597f6)",
+        "log_strings":     [
+            "Checking metadata source %s (file 0x285977a)",
+            "Found metadata source: %s (file 0x285977a)",
+        ],
+        "azure_imds": [
+            "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=%s (file 0x279a847)",
+            "http://169.254.169.254/metadata/instance?api-version=2018-10-01 (file 0x279b507)",
+        ],
+        "aws_sts":   "https://sts.amazonaws.com/?Action=GetCallerIdentity (file 0x2798068)",
+        "cloudinit_params": ["config-url", "license-url", "license-token"],
+    },
+
+    "attack_vector": (
+        "In cloud deployments, FortiOS fetches cloud-init user-data from a metadata source hostname "
+        "resolved at boot. If an attacker controls DHCP option 114 (cloud-config URL) or DNS for "
+        "the metadata source, they can redirect the fetch to an arbitrary HTTP endpoint. "
+        "The user-data is then processed as a FortiOS configuration payload "
+        "(context: Run preconfig script / Run config script at file 0x28597af). "
+        "Impact: arbitrary FortiOS CLI config injection at boot."
+    ),
+
+    "scope": "FortiOS cloud images (AWS, Azure, GCP) only. Physical/VM deployments without cloud-init are not affected.",
+
+    "aws_sts_kubernetes_note": (
+        "AWS STS integration for Kubernetes clusters (k8s-aws-v1 token) is present: "
+        "AWS4-HMAC-SHA256 signed GetCallerIdentity requests to sts.amazonaws.com. "
+        "If the AWS region or endpoint is configurable via cloud-init, SSRF to VPC-internal STS endpoints is possible."
+    ),
+}
+
+SSLVPN_720_F02_REALM_REDIRECT = {
+    "id":      "SSLVPN-720-F02",
+    "product": "FortiOS 7.2.0 SSL-VPN -- /remote/logincheck realm parameter in redirect URL",
+    "severity": "LOW -- potential open redirect; needs confirmation of realm source and validation logic",
+
+    "evidence": {
+        "format_string_1": "%s?realm=%s%s&err=%s&lang=%s (file 0x2caca8b)",
+        "format_string_2": "%s?%s&err=%s&lang=%s (file 0x2cacaa8)",
+        "redirect_to_hostcheck": "%s:%d redirect to hostcheck (file 0x2cacad3)",
+        "redir_param":     ",redir=%s (file 0x2cacac3)",
+    },
+
+    "context": (
+        "The /remote/logincheck handler constructs a redirect Location URL using format string "
+        "'%s?realm=%s%s&err=%s&lang=%s'. The realm parameter appears in the query string of the redirect. "
+        "If realm is taken from the POST body or query parameter without stripping control characters "
+        "(%0d%0a for CRLF), a header injection attack producing arbitrary HTTP response headers is possible. "
+        "If realm merely appears in the URL query string, the risk is limited to open redirect "
+        "if the base URL (%s) is attacker-controlled."
+    ),
+
+    "pending": (
+        "Need disassembly of the function that calls these format strings to confirm: "
+        "(1) whether realm comes from user-supplied POST body or a config value, "
+        "(2) whether snprintf with fixed buffer or unbounded sprintf is used, "
+        "(3) whether CRLF characters are stripped before formatting."
+    ),
+}
+
+SSLVPN_720_F03_OUTBOUND_LOGINCHECK_TEMPLATE = {
+    "id":      "SSLVPN-720-F03",
+    "product": "FortiOS 7.2.0 SSL-VPN -- outbound POST /remote/logincheck request template",
+    "severity": "INFO -- documents the SSL-VPN authentication proxy request format",
+
+    "evidence": {
+        "get_template":  "GET /remote/logincheck HTTP/1.1\\r\\nHost: %s\\r\\nUser-Agent: FortiSSLVPN\\r\\n%sContent-Length: %d\\r\\n\\r\\n (file 0x2cd2b45)",
+        "post_template": "POST /remote/logincheck HTTP/1.1\\r\\nHost: %s\\r\\nUser-Agent: FortiSSLVPN\\r\\n%sContent-Length: %d\\r\\n\\r\\n (file 0x2cd2be0)",
+        "post_body":     "ajax=1&username=%.*s&realm=%.*s&credential=%.*s (file 0x2cd2ba0)",
+        "cookie_fmt":    "SVPNCOOKIE=%s;\\r\\n\\r\\n (file 0x2cd2a52)",
+    },
+
+    "note": (
+        "FortiGate acts as an SSL-VPN authentication proxy: it sends these outbound logincheck requests "
+        "to a backend server (Host: %s). The username, realm, and credential fields use precision-limited "
+        "format specifiers (%.*s), indicating bounded copies. "
+        "The Host header value comes from the configured backend address -- not user input -- so this is "
+        "NOT a SSRF in a standard configuration. Risk increases if the backend address is writable "
+        "by an authenticated admin or discoverable via FGFM config push."
+    ),
+}
+
