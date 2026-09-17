@@ -2097,5 +2097,18 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
         "7.4.8_flatkc": "2025-05-23 (from .db JSON manifest)",
         "8.0.0_flatkc": "2026-04-20 (from strings in binary: SMP Mon Apr 20 17:10:46 America 2026)",
     },
+
+    "6_0_3_libips_callsite_counts": {
+        "sprintf":   {"callers": 3, "analysis": "All 3 callers use static RIP-relative format strings (RODATA); no user-controlled format. One caller (0x2b8ef9) formats 6 byte fields from a struct -- likely IP address formatter."},
+        "sscanf":    {"callers": 10},
+        "strcpy":    {"callers": 10},
+        "strcat":    {"callers": 8},
+        "strtok":    {"callers": 2},
+        "note":      "6.0.3 has no _chk hardened variants at all. Dangerous functions: sprintf, sscanf, strcpy, strcat, strtok -- all unfortified. Despite this, callsite count is low (3.6MB binary vs 18.5MB in 8.0.0). Most calls use static format strings.",
+    },
+
+    "748_strcpy_conclusion": {
+        "finding":  "106 strcpy callers in 7.4.8 are predominantly safe -- mostly custom strdup patterns (strlen + internal xmalloc at 0xf03f0 + strcpy). The 8.0.0 reduction to 8 callers reflects replacing custom strdup() with libc strdup()/strndup(), not fixing vulnerability. VA 0x441b38 (non-strdup: copies from rcx at null-terminated token boundary) remains unresolved.",
+    },
 }
 
