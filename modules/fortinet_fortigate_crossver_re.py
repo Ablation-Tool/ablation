@@ -4262,5 +4262,34 @@ FGT800_LIBIPS_SEMANTIC_SWEEP = {
         "0x26ae60": "packet_parse_memcpy(#4), buffer_overread(#1) -- protocol type dispatcher, same pattern as 0x26af80",
     },
 
-    "pending_analysis": ["0x2600c0 (buffer_overread #3)", "0x6413c0 (heap_overflow_alloc #1)", "0x25f9f0 (format_string #1)", "0x6b8660 (heap_overflow_alloc #3)"],
+    "pending_analysis": ["0x6413c0 (heap_overflow_alloc #1, partial)", "0x6b8660 (heap_overflow_alloc #3)"],
+
+    "false_positives_confirmed": {
+        "0xb887c":  "C++ global constructor chain (repeated call 0x9f088 + ud2 abort); NOT a real function",
+        "0x2600c0": "HTTP line parser -- memchr(buf, 0x0a, len) newline search; struct fields at +0x258/+0x260/+0x268/+0x280/+0x283",
+        "0x25f9f0": "Duplicate of 0x2600c0 -- identical HTTP line parser with same struct layout",
+        "weak_crypto_cluster": "0x5f63b0 TLS parser (cmp [rbx], 0x303 = TLS 1.2); 0x5be820/0x5bcfb0/0x5bcab0/0x5cabb0 = struct iterators with stride 0x20",
+    },
+
+    "process_packet_trace": {
+        "entry":   "0xedad0: process_packet(rdi=arg1, rsi=arg2)",
+        "enqueue": (
+            "Pops work item from free list at [global+0x2848]. "
+            "Sets work_item+0x18 = arg1 (packet state). work_item+0x10 = arg2 (session). "
+            "Inserts into per-protocol dispatch queue at [global + protocol*40 + 0x20]."
+        ),
+        "worker_call":  "0xedc12: call 0x1ca830(rdi=adjusted_ptr, rdx=session, rsi=packet_state)",
+        "core_dispatch": (
+            "0x1ca830: r15d = [rdi+8] (protocol 0-6); r14 = [rdi+0x18] (session/packet context). "
+            "cmp r15d, 6; ja 0x1cb13b (invalid protocol). "
+            "jump table dispatch: lea rbx, [rip+0xc71c8a]; jmp [rbx + r15*4 + rbx] at 0x1ca940. "
+            "Protocols 0-6 map to separate L4 parser functions. "
+            "L4/L7 protocol handlers are the actual packet-data parsing surface."
+        ),
+        "sequence_counter": (
+            "At 0x1ca99b: reads [r14+0x698], applies 48-bit mask (0xffffffffffff), increments. "
+            "48-bit counter -- likely per-session packet sequence number."
+        ),
+        "pending": "Trace jump table entries at [rip+0xc71c8a] for protocols 2 (TCP) and 3 (UDP) to find L4 parsers",
+    },
 }
