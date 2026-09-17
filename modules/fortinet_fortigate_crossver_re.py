@@ -1649,16 +1649,62 @@ SSLVPN_720_F02_REALM_CRLF = {
     ),
 
     "redirect_chain": {
-        "step1": "call 0x1609460(URL_buf, session): allocates response struct via 0x16091d0, copies URL into it, sets redirect flag bit (or 0x8 at [session+0x2fe])",
-        "step2": "0x16091d0(session, URL): alloc 0x308-byte response struct (r14); call 0x1604090(r14, URL) to store redirect URL in struct",
-        "step3": "HTTP response serialization (not yet traced) writes Location: header from the URL field in the response struct",
+        "step1": (
+            "VA 0x164ad97: call 0x1609460(URL_buf_with_CRLF, session). "
+            "redirect_store(0x1609460) -> alloc_response_struct(0x16091d0) -> url_store_struct(0x1604090) -> url_parse(0x1617300). "
+            "url_parse stores parsed URL path at response_struct+0x250; url_store_struct sets response_struct+0x68 = response_struct+0x250. "
+            "redirect_store then copies response_struct+0xd4/0xd8/0xe0/0xe8 back to session fields and sets bit 3 at session+0x2fe."
+        ),
+        "step2": (
+            "Function containing 0x164ad97 returns immediately after redirect_store (epilogue at 0x164adbd: ret). "
+            "The CRLF URL is now at response_struct+0x68 (attacker-controlled). "
+            "session+0x18 = response_struct pointer. session+0x2fe bit 3 = 1."
+        ),
+        "step3_http303_builder": (
+            "Primary HTTP 303 builder at VA 0x4a8580 uses format string 0x2b82b68: "
+            "'HTTP/1.1 303 See Other\\r\\nLocation: %s\\r\\n%s: close...'. "
+            "URL arg (rcx=input_rsi) comes from callers: "
+            "0x4a8710 reads auth_ctx->field_130 (admin-configured). "
+            "0x4a8af0 reads auth_ctx->field_160 (set by 0x4ae710 from auth_policy_struct->field_68, admin-configured) "
+            "or auth_policy_struct->field_80+0x20 (admin-configured). "
+            "auth_ctx->field_160 is set by 0x4ae710 from session->field_610->field_68 (admin realm policy, NOT attacker URL). "
+            "DISCONNECT: response_struct+0x68 (CRLF URL from redirect_store) does NOT flow to auth_ctx->field_160 via any traced path."
+        ),
+        "step3_ssl_layer": (
+            "UNTRACED: Whether the SSL-VPN session layer (not 0x4a8580) has its own HTTP response writer "
+            "that reads response_struct+0x68 or session+0x18->field_68 to build a Location header. "
+            "Bit-3 handler at session+0x2fe is set by redirect_store but the bit-3 -> HTTP write chain is not fully traced."
+        ),
     },
 
-    "verdict": "PLAUSIBLE -- CRLF survives encoding chain and enters redirect response struct; HTTP response splitting pending HTTP layer confirmation",
+    "session_struct_layout": {
+        "session+0x18":   "response_struct pointer (set by 0x16091d0 alloc_response_struct)",
+        "session+0xa0":   "auth_ctx pointer (HTTP layer auth struct)",
+        "session+0x2fe":  "redirect flags: bit 0 = type-A HTTP redirect; bit 3 = type-B (set by redirect_store/SSL state machine)",
+        "session+0xe0":   "response_struct+0xe0 copy (set by redirect_store; not the attacker URL)",
+        "session+0x610":  "auth_policy_struct pointer (admin-configured realm policy)",
+        "resp+0x68":      "parsed URL path from attacker input (CRLF present here); NOT copied to session+0xe0",
+        "auth_ctx+0x160": "redirect URL struct (set by 0x4ae710 from admin auth_policy_struct->field_68)",
+        "auth_ctx+0x130": "fallback URL (admin-configured, read by 0x4a8710)",
+    },
+
+    "verdict": (
+        "PLAUSIBLE -- CRLF survives HTML encoder and enters redirect URL at response_struct+0x68 via redirect_store. "
+        "Primary HTTP 303 builder (0x4a8580) reads admin-configured URL from auth_ctx->field_160, NOT response_struct+0x68. "
+        "DISCONNECT confirmed between attacker URL (response_struct+0x68) and 303 builder URL source. "
+        "Finding NOT definitively refuted: SSL-VPN layer may have a separate HTTP writer that uses response_struct+0x68 directly. "
+        "Bit-3 -> HTTP response write chain not fully traced."
+    ),
 
     "pending": (
-        "Trace 0x1604090(resp_struct, URL_ptr) to confirm URL stored as Location header value (not URL-escaped by HTTP layer). "
-        "Test: POST /remote/logincheck with realm=valid_realm%0d%0aX-Injected:%20test and inspect response headers."
+        "CRITICAL: Find where bit 3 at session+0x2fe (set by redirect_store) triggers HTTP response generation. "
+        "Caller of the function containing 0x164ab69 (prologue) -- callers not found via direct call scan (possibly indirect dispatch). "
+        "Check whether SSL-VPN session's function pointer at session+0x30 (see 0x16055a2: jmp rax where rax=[session+0x30]) "
+        "reads response_struct+0x68 as a Location header value. "
+        "Also check 0x1608d50 (large state machine called inside redirect_store, at 0x160947a) for reads of response_struct+0x68 "
+        "that might trigger a direct HTTP write. "
+        "Alternative: dynamic test -- POST /remote/logincheck with realm=valid_realm%0d%0aX-Injected:%20test "
+        "and inspect raw HTTP response headers to confirm or refute empirically."
     ),
 }
 
