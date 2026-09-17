@@ -1597,53 +1597,68 @@ SSLVPN_720_F01_CLOUD_INIT_SSRF = {
     ),
 }
 
-SSLVPN_720_F02_REALM_REDIRECT = {
+SSLVPN_720_F02_REALM_CRLF = {
     "id":      "SSLVPN-720-F02",
-    "product": "FortiOS 7.2.0 SSL-VPN -- /remote/logincheck realm parameter in redirect URL",
-    "severity": "LOW -- potential open redirect; needs confirmation of realm source and validation logic",
+    "product": "FortiOS 7.2.0 SSL-VPN -- /remote/logincheck realm parameter CRLF pass-through in redirect URL",
+    "severity": "MEDIUM -- \\r\\n (CRLF) survives HTML encoding; if realm is user-supplied and placed in Location header, HTTP response splitting possible",
 
-    "evidence": {
-        "format_string_1": "%s?realm=%s%s&err=%s&lang=%s (file 0x2caca8b)",
-        "format_string_2": "%s?%s&err=%s&lang=%s (file 0x2cacaa8)",
-        "redirect_to_hostcheck": "%s:%d redirect to hostcheck (file 0x2cacad3)",
-        "redir_param":     ",redir=%s (file 0x2cacac3)",
+    "format_strings": {
+        "realm_redirect": "%s?realm=%s%s&err=%s&lang=%s (rodata VA 0x30aca8b, file 0x2caca8b)",
+        "alt_redirect":   "%s?%s&err=%s&lang=%s (rodata VA 0x30acaa8, file 0x2cacaa8)",
     },
 
-    "context": (
-        "The /remote/logincheck handler constructs a redirect Location URL using format string "
-        "'%s?realm=%s%s&err=%s&lang=%s'. The realm parameter appears in the query string of the redirect. "
-        "If realm is taken from the POST body or query parameter without stripping control characters "
-        "(%0d%0a for CRLF), a header injection attack producing arbitrary HTTP response headers is possible. "
-        "If realm merely appears in the URL query string, the risk is limited to open redirect "
-        "if the base URL (%s) is attacker-controlled."
+    "encoder_analysis": {
+        "function_va":     "0x16187d0 (file 0x12187d0)",
+        "purpose":         "HTML entity encoder applied to realm value before it is formatted into the redirect URL",
+        "bitmask":         "0x500003c400000000 -- encodes ASCII chars 0x22 (\"), 0x26 (&), 0x27 ('), 0x28 ((), 0x29 ()), 0x3c (<), 0x3e (>)",
+        "entity_example":  "'<' -> '&#60;' (verified: dword 0x30362326 = '&#60' + byte 0x3b = ';')",
+        "crlf_handling":   "CRLF NOT encoded: \\n (0x0a) and \\r (0x0d) are NOT in the bitmask; they pass through as-is into the output buffer",
+        "size_safe":       "snprintf at VA 0x164ad70 uses max size 0x200 (512 bytes) -- no buffer overflow",
+    },
+
+    "call_chain": {
+        "get_realm": (
+            "VA 0x164aecb: call 0x166d340 -- retrieves realm value from session context (r13). "
+            "Session context built from HTTP request parsing earlier in the call stack."
+        ),
+        "html_encode": (
+            "VA 0x164aedc: call 0x16187d0 -- HTML-encodes the realm value. "
+            "Result (r15=rax) contains \\r\\n unmodified if they were in the input."
+        ),
+        "snprintf": (
+            "VA 0x164aee3: mov edx, 0x30aca8b (format string); "
+            "VA 0x164ad70: call 0x440660 (snprintf) with rdi=[rbp-0x240] (512B stack buf), "
+            "rsi=0x200, rdx=format, rcx=base_url, r8=encoded_realm, r9=suffix, stack=err+lang. "
+            "If realm='evil\\r\\nX-Injected: hdr', output is "
+            "base_url?realm=evil\\r\\nX-Injected: hdr&err=...&lang=..."
+        ),
+        "redirect_call": (
+            "VA 0x164ad97: call 0x1609460 with rdi=URL_buffer, rsi=session_context. "
+            "Likely sets Location: header. If so, the \\r\\n terminates the Location header "
+            "and the injected content becomes a new HTTP response header."
+        ),
+    },
+
+    "attack_vector": (
+        "POST /remote/logincheck with body: realm=evil%0d%0aX-Evil: injected "
+        "-> FortiGate builds Location URL containing literal CRLF "
+        "-> HTTP response contains injected header. "
+        "Requires: realm parameter reaches this code path (logincheck with realm mismatch or SAML redirect), "
+        "and request-level input parsing does not strip \\r\\n from the realm field. "
+        "Authentication state: pre-auth (logincheck is the login endpoint)."
     ),
 
-    "disassembly": {
-        "realm_fmt_usage": (
-            "VA 0x164aee3 (file 0x124aee4): `mov edx, 0x30aca8b` passes realm format string "
-            "as 3rd arg (format position in x86-64 SysV ABI). "
-            "Preceding calls: 0x166d340 (arg getter?), 0x16187d0 (string processor). "
-            "Realm value flows from context struct at r13 through these calls. "
-            "Further: `push r15; mov rcx,[rip+0x2c767d1]; push r14; mov r8,rax; lea r9,[rbx+0x470]; jmp 0x164ad62` "
-            "suggests 6+ arguments to the actual format call -- consistent with snprintf."
-        ),
-        "logincheck_dispatch": (
-            "VA 0x1648051 (file 0x1248051): `mov qword ptr [rbp-0x78], 0x30ac930` stores "
-            "the /remote/logincheck string VA in a stack-allocated struct. "
-            "Pattern: {string_va, count} pairs -- URL routing table built on stack. "
-            "Surrounding entries: 0x3366fbb (another URL), 0x28=40, 0x29=41, 0x2b=43, 0x2c=44."
-        ),
-        "addressing_note": (
-            "Both format strings use 32-bit immediate MOV (not RIP-relative LEA) to load "
-            "the string VA. This is why RIP-relative scanning found 0 results. "
-            "Compiler chose immediate encoding since the VA (0x30ac930, 0x30aca8b) fits in 32 bits."
-        ),
+    "redirect_chain": {
+        "step1": "call 0x1609460(URL_buf, session): allocates response struct via 0x16091d0, copies URL into it, sets redirect flag bit (or 0x8 at [session+0x2fe])",
+        "step2": "0x16091d0(session, URL): alloc 0x308-byte response struct (r14); call 0x1604090(r14, URL) to store redirect URL in struct",
+        "step3": "HTTP response serialization (not yet traced) writes Location: header from the URL field in the response struct",
     },
 
+    "verdict": "PLAUSIBLE -- CRLF survives encoding chain and enters redirect response struct; HTTP response splitting pending HTTP layer confirmation",
+
     "pending": (
-        "Trace r13 context struct back to HTTP request parsing to confirm realm is user-supplied. "
-        "Disassemble 0x166d340 to determine if it extracts the realm query parameter. "
-        "Check call at 0x164ad62 to determine if snprintf (bounded) or sprintf (unbounded) is used."
+        "Trace 0x1604090(resp_struct, URL_ptr) to confirm URL stored as Location header value (not URL-escaped by HTTP layer). "
+        "Test: POST /remote/logincheck with realm=valid_realm%0d%0aX-Injected:%20test and inspect response headers."
     ),
 }
 
