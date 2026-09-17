@@ -1879,5 +1879,55 @@ LIBIPS_800_F01_SEMANTIC_SWEEP = {
 
         "conclusion": "No true positives in first 2000 of 4777 functions. Remaining 2777 functions not swept (budget constraint). strcpy and unfortified sscanf remain attack surface -- locate callers via cross-reference analysis before dismissing.",
     },
+
+    "callsite_analysis": {
+        "strcpy_callers": 8,
+        "sscanf_callers": 3,
+
+        "LIBIPS_800_STRCPY_PARSER": {
+            "caller_va":   "0x6ab118",
+            "severity":    "MEDIUM -- strcpy in character-by-character parser; position bounds check present but copy length unchecked",
+            "function_start": "0x6ab0c0",
+            "analysis": (
+                "Function reads bytes from a bounded input buffer: r15 = [rdi] (current position), r14 = [rbp+0x10] (end-of-buffer). "
+                "Bounds check `cmp r15, r14; jae exit` ensures current position is within buffer, "
+                "but does NOT check how many bytes strcpy will copy from r15+1 (source = one byte past current position). "
+                "Character classification at `test byte ptr [r9 + r14], 2` gates the strcpy call. "
+                "If the source string (from position r15+1 onward) lacks a null terminator within the buffer, "
+                "strcpy reads past the buffer boundary. "
+                "Destination buffer size not visible from call site -- rdi = first function arg."
+            ),
+            "verdict": "PLAUSIBLE -- copy length unchecked; needs caller context to confirm destination size and source origin (packet vs internal buffer)",
+        },
+
+        "LIBIPS_800_STRCPY_VARBUF": {
+            "caller_va":   "0x22b095",
+            "severity":    "MEDIUM -- strcpy into VLA (variable-length stack allocation)",
+            "analysis": (
+                "Before the strcpy call: `shl rax, 4; sub rsp, rax` dynamically allocates stack space (VLA) "
+                "based on value at [rbp-0xf8] (size = [rbp-0xf8] * 16 bytes). "
+                "VLA start saved to [rbp-0xe8]. "
+                "If the VLA size field comes from a packet and is subsequently used to allocate insufficient space for the strcpy source, "
+                "this is a stack overflow. "
+                "The strcpy source is not visible from this window -- rdi/rsi setup not shown."
+            ),
+            "verdict": "PLAUSIBLE -- VLA before strcpy; source of size field [rbp-0xf8] needs tracing",
+        },
+
+        "LIBIPS_800_SSCANF_NULL_ARG": {
+            "caller_vas":  ["0x2e8b2b", "0x2e94b2"],
+            "severity":    "LOW -- sscanf called with edi=0 (NULL first arg); crash-on-input or false disasm",
+            "analysis": (
+                "Both call sites: `xor edi, edi; mov esi, 0x80; mov rdx, rbx; call sscanf_plt`. "
+                "edi=0 = NULL first argument to sscanf -- sscanf(NULL, 0x80, rbx) would crash with SIGSEGV. "
+                "Possible explanations: (1) rdi is set to a valid pointer earlier in the function and not shown in this window (likely), "
+                "(2) this is a genuine null-deref on malformed input, or (3) the 0x80 is not esi but part of a different encoding. "
+                "Both callers are in the same large function. "
+                "Without full function context, cannot confirm. "
+                "The global flag `mov dword ptr [rip+0xeb7165], 1` immediately before call 1 suggests an init/parse-state machine."
+            ),
+            "verdict": "UNKNOWN -- ambiguous; xor edi, edi could be partial setup or genuine NULL; needs full function context",
+        },
+    },
 }
 
