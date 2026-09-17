@@ -205,29 +205,54 @@ CAT9K_F3 = {
     ),
 }
 
-# CAT9K-F4: PermitRootLogin yes
+# CAT9K-F4: xinetd telnetd with lablogin.sh login shell exposes unauthenticated root shell
 CAT9K_F4 = {
     "id":       "CAT9K-F4",
-    "title":    "sshd_config PermitRootLogin yes — SSH direct root login enabled; "
-                "host keys stored at /config/.ssh/ (runtime-generated, not in firmware); "
-                "PasswordAuthentication defaults to yes (not explicitly disabled); "
-                "ChallengeResponseAuthentication also defaults to yes",
-    "severity": "HIGH",
-    "status":   "CONFIRMED — bigbang/etc/ssh/sshd_config extracted; "
-                "PermitRootLogin yes at line 29 confirmed; PasswordAuthentication "
-                "and ChallengeResponseAuthentication commented out (both default yes); "
-                "HostKey paths: /config/.ssh/ssh_host_rsa_key, ssh_host_ecdsa_key, "
-                "ssh_host_ed25519_key",
-    "cwe":      ["CWE-250 (Execution with Unnecessary Privileges)",
-                 "CWE-284 (Improper Access Control)"],
-    "files":    ["bigbang/etc/ssh/sshd_config"],
-    "sshd_config_line": "PermitRootLogin yes",
+    "title":    "xinetd telnet service (xinetd_telnetd.conf, disable=no, user=root) "
+                "configured with server_args=-L /etc/lablogin.sh; lablogin.sh performs "
+                "zero authentication and unconditionally execs root's login shell "
+                "(grep /etc/passwd for root's shell, exec $SHELL -l); any user reaching "
+                "TCP/23 receives a root shell without providing any credential",
+    "severity": "CRITICAL",
+    "status":   "CONFIRMED — bigbang/etc/xinetd_telnetd.conf extracted; service telnet "
+                "with user=root, server=/usr/sbin/in.telnetd, "
+                "server_args=-L /etc/lablogin.sh, disable=no confirmed; "
+                "bigbang/etc/lablogin.sh extracted; shell resolution via /etc/passwd and "
+                "unconditional exec $SHELL -l with no authentication check confirmed; "
+                "no password prompt, no PAM, no public key check in lablogin.sh",
+    "cwe":      ["CWE-306 (Missing Authentication for Critical Function)",
+                 "CWE-269 (Improper Privilege Management)"],
+    "files":    ["bigbang/etc/xinetd_telnetd.conf", "bigbang/etc/lablogin.sh"],
+    "xinetd_config": [
+        "service telnet",
+        "user            = root",
+        "server          = /usr/sbin/in.telnetd",
+        "server_args     = -L /etc/lablogin.sh",
+        "disable         = no",
+    ],
+    "lablogin_key_lines": [
+        "home_dir=$(grep ^root /etc/passwd | cut -d ':' -f 6)",
+        "shell=$(grep ^root /etc/passwd | cut -d ':' -f 7)",
+        "export HOME=$home_dir",
+        "export SHELL=$shell",
+        "exec $SHELL -l",
+    ],
     "impact": (
-        "Direct root SSH login is available if the root account has any credential. "
-        "Combined with PermitRootLogin yes, password authentication enabled by default, "
-        "and any weak/empty credential (if present at runtime), an attacker with network "
-        "access to SSH has a direct path to a root shell."
+        "Any network peer that can reach TCP/23 on a Cat9K management or data interface "
+        "receives an interactive root shell with no credential requirement. The telnet "
+        "protocol provides no authentication layer; lablogin.sh explicitly bypasses all "
+        "system authentication by looking up root's shell from /etc/passwd and exec-ing "
+        "it directly. There is no PAM callout, no password prompt, and no SSH key check. "
+        "Attack path: connect to TCP/23, receive root shell. "
+        "IOS-XE ACL configuration is the only gate; a single misconfigured ACL or any "
+        "network-adjacent attacker on the management VRF has immediate root access."
     ),
+    "note": "lablogin.sh is documented in the IOS-XE sources as an 'internal telnet server' "
+            "for lab use. The xinetd_telnetd.conf file is loaded separately from the main "
+            "xinetd.conf and configures this service with disable=no, making it active by "
+            "default in production firmware. lablogin.sh does include an rsync call that "
+            "logs the access, but the rsync call is non-blocking and exec $SHELL -l runs "
+            "regardless of whether rsync succeeds.",
 }
 
 # CAT9K-F5: World-writable debug directories created at every boot
@@ -381,59 +406,95 @@ CAT9K_F9 = {
     ),
 }
 
-# CAT9K-F10: systemd 255 as initramfs PID 1
+# CAT9K-F10: QEMU/KVM configured user=root group=root in production qemu.conf
 CAT9K_F10 = {
     "id":       "CAT9K-F10",
-    "title":    "initramfs init is systemd 255 (x86-64 ELF PIC, dynamically linked to "
-                "libsystemd-core-255.so and libsystemd-shared-255.so, GLIBC_2.34+); "
-                "full systemd unit ecosystem including binos.target, binos_script.service, "
-                "chasfs.service, xinetd services — attack surface is full systemd "
-                "rather than a minimal custom init",
+    "title":    "qemu.conf (bigbang/3pa/etc/libvirt/qemu.conf) sets user=root and group=root "
+                "as the only uncommented active configuration; all QEMU guest processes "
+                "run with host UID 0 / GID 0 instead of an isolated QEMU service account; "
+                "full QEMU-KVM stack (qemu-kvm 17.8MB ELF, libvirt, libvirtd) ships in "
+                "production IOS-XE rpbase for IOx guest services",
     "severity": "MEDIUM",
-    "status":   "CONFIRMED — /tmp/cat9k-initrd/init -> usr/lib/systemd/systemd confirmed; "
-                "ELF strings show libsystemd-core-255.so, libsystemd-shared-255.so, "
-                "GLIBC_2.34/GLIBC_2.7/GLIBC_2.8/GLIBC_2.4 symbol versioning; "
-                "systemd unit files in usr/lib/systemd/system/ confirmed",
-    "cwe":      ["CWE-1104 (Use of Unmaintained Third Party Components)"],
-    "files":    ["usr/lib/systemd/systemd"],
-    "key_units": [
-        "binos_script.service: ExecStart=/etc/init.d/binos start (runs as root)",
-        "boothelper.service: ExecStart=/usr/binos/conf/boothelper_evt.sh --daemon",
-        "chasfs.service: ExecStart=/etc/init.d/chasfs_boottime.sh",
-        "agetty-iosd.service: ExecStart=/etc/init.d/agetty-iosd start (console relay)",
-        "binos.target: full BinOS stack target",
+    "status":   "CONFIRMED — bigbang/3pa/etc/libvirt/qemu.conf extracted from rpbase inner "
+                "SquashFS; grep removing comments and blank lines yields only "
+                "'user = root' and 'group = root' as active settings; "
+                "bigbang/3pa/usr/bin/qemu-kvm (17,806,744 bytes x86-64 ELF) confirmed "
+                "in same 3pa/ tree alongside libvirtd.conf (15780 bytes)",
+    "cwe":      ["CWE-250 (Execution with Unnecessary Privileges)",
+                 "CWE-269 (Improper Privilege Management)"],
+    "files":    ["bigbang/3pa/etc/libvirt/qemu.conf",
+                 "bigbang/3pa/usr/bin/qemu-kvm",
+                 "bigbang/3pa/etc/libvirt/libvirtd.conf"],
+    "qemu_conf_active_lines": [
+        "user = root",
+        "group = root",
     ],
     "impact": (
-        "Full systemd 255 expands the attack surface vs a minimal init. Known systemd "
-        "privilege escalation and local DoS CVEs apply if the systemd version is unpatched. "
-        "The service unit model (Type=forking, RemainAfterExit, Restart=always) also "
-        "means misconfigured units can restart crashed processes indefinitely, masking "
-        "crash-based detection of exploitation attempts."
+        "IOx (IOS Application eXperience) guest VMs execute as UID 0 / GID 0 on the host. "
+        "Any hypervisor vulnerability (guest-to-host escape via QEMU device emulation, "
+        "virtio, or memory handling) delivers root access on the IOS-XE OS rather than "
+        "dropping into an isolated service account. The recommended QEMU hardening is to "
+        "use a dedicated unprivileged user (e.g. 'qemu' or 'libvirt-qemu'). Running as "
+        "root eliminates that containment layer. The Cat9K IOx surface allows tenant "
+        "applications to run guest OSes, making this an attacker-controlled code path "
+        "into the hypervisor boundary."
     ),
+    "note": "The 3pa/ directory (third-party applications) houses the full QEMU-KVM "
+            "virtualization stack for the IOx (IOS Application eXperience) feature, "
+            "which allows deployment of containerized or VM-based applications on Cat9K "
+            "switching hardware. The qemu.conf and libvirtd.conf files are present in "
+            "identical form across all five platform directories (bigbang, nyquist, "
+            "passport, starfleet, symphony).",
 }
 
-# CAT9K-F11: Build artifacts expose internal development infrastructure
+# CAT9K-F11: leabasdk test TLS private keys (unencrypted) shipped in production rpbase
 CAT9K_F11 = {
     "id":       "CAT9K-F11",
-    "title":    "Platform codenames (bigbang, nyquist, passport, starfleet, symphony), "
-                "build user (mcpre), build path "
-                "(/nobackup/mcpre/s2c-build-ws/binos/linkfarm/cat9k_universalk9-stage), "
-                "and git hash (150b070c01e17) exposed in packages.conf .pkginfo and "
-                "SquashFS directory layout",
+    "title":    "Three RSA private keys for the leabasdk (Licensing and Entitlement "
+                "Architecture SDK) CLI TLS test interface shipped in production firmware "
+                "at bigbang/usr/lib64/leabasdk/test/api/cli_tls/keys/; client.key and "
+                "server.key are unencrypted PKCS#1 PEM (no Proc-Type header); all three "
+                "key files carry executable permission bits (chmod +x) unusual for key "
+                "material; keys present identically under both bigbang/ and symphony/ "
+                "platform trees",
     "severity": "MEDIUM",
-    "status":   "CONFIRMED — packages.conf .pkginfo extracted from outer SquashFS; "
-                ".BuildPath, .SW_DESCRIPTION (V1718_4_FC1-0-g150b070c01e17), User=mcpre "
-                "confirmed; bigbang/nyquist/passport/starfleet/symphony top-level dirs "
-                "in rpbase inner SquashFS confirmed",
-    "cwe":      ["CWE-200 (Exposure of Sensitive Information to Unauthorized Actor)"],
-    "files":    ["packages.conf", ".pkginfo"],
-    "codenames": ["bigbang", "nyquist", "passport", "starfleet", "symphony"],
-    "build_details": {
-        "user": "mcpre",
-        "build_path": "/nobackup/mcpre/s2c-build-ws/binos/linkfarm/cat9k_universalk9-stage",
-        "git_hash": "150b070c01e17",
-        "pkg_uid": "feda5b3482420cdd040e3f5b127b49e20d10933e",
+    "status":   "CONFIRMED — bigbang/usr/lib64/leabasdk/test/api/cli_tls/keys/ca.key "
+                "(3311 bytes, DES-EDE3-CBC encrypted, DEK-Info header confirmed), "
+                "client.key (3243 bytes, BEGIN RSA PRIVATE KEY, no Proc-Type encrypted "
+                "header = unencrypted), server.key (3243 bytes, same format) extracted "
+                "from rpbase inner SquashFS; unsquashfs listing shows -rwxr-xr-x "
+                "permission on all three key files; symphony/ platform dir contains "
+                "identical copies",
+    "cwe":      ["CWE-321 (Use of Hard-coded Cryptographic Key)",
+                 "CWE-312 (Cleartext Storage of Sensitive Information)"],
+    "files":    ["bigbang/usr/lib64/leabasdk/test/api/cli_tls/keys/ca.key",
+                 "bigbang/usr/lib64/leabasdk/test/api/cli_tls/keys/client.key",
+                 "bigbang/usr/lib64/leabasdk/test/api/cli_tls/keys/server.key"],
+    "key_details": {
+        "ca.key":     "3311 bytes, RSA, DES-EDE3-CBC passphrase-protected",
+        "client.key": "3243 bytes, RSA PRIVATE KEY, unencrypted (no Proc-Type header)",
+        "server.key": "3243 bytes, RSA PRIVATE KEY, unencrypted (no Proc-Type header)",
+        "permissions": "-rwxr-xr-x root/root (executable bit on all three key files)",
+        "key_prefix_client": "MIIJKQIBAAKCAgEAq7ELTtWcZv/rfnfhl1DZjcHWZEd6/qUISdr",
+        "key_prefix_server": "MIIJKQIBAAKCAgEAxKSM+PhLbSqyG76kBkCpg34zQFXrjKBU9tI",
     },
+    "impact": (
+        "The client.key and server.key are unencrypted RSA private keys that can be "
+        "extracted directly from any Cat9K firmware image or device filesystem. "
+        "If the leabasdk CLI TLS interface uses these as default credentials (when no "
+        "device-specific cert is configured), any party with firmware access can impersonate "
+        "the TLS client or server role for leabasdk CLI communications. The LEA (Licensing "
+        "and Entitlement Architecture) SDK handles smart licensing; a rogue client cert "
+        "could spoof licensing transactions. The executable bit on key files is anomalous "
+        "and may indicate these are executed as scripts in some test paths, embedding "
+        "cleartext key material in process arguments visible to /proc/self/cmdline."
+    ),
+    "note": "leabasdk is Cisco's Licensing and Entitlement Architecture SDK, part of the "
+            "smart licensing infrastructure. The cli_tls/ subdirectory suggests a TLS-over-CLI "
+            "transport used by the leabasdk test suite. Production firmware shipping test "
+            "key material from a test/ subdirectory is consistent with the pattern of "
+            "incomplete lab-to-production cleanup seen in other Cat9K components "
+            "(xinetd_telnetd.conf, auxinit.sh ROMMON_SR_INIT_SHELL).",
 }
 
 # CAT9K-F12: codesign.pubkey in custom undocumented binary format
@@ -460,29 +521,58 @@ CAT9K_F12 = {
     ),
 }
 
-# CAT9K-F13: Lab artifact daytime service in production xinetd
+# CAT9K-F13: auxinit.sh ROMMON_SR_INIT_SHELL triggers unauthenticated root bash on AUX port
 CAT9K_F13 = {
     "id":       "CAT9K-F13",
-    "title":    "xinetd includes a TCP daytime service (type=INTERNAL, disable=no) "
-                "with comment '# used for the lab time hack remove eventually' and "
-                "MCP_FIXME tag; service runs as root and is enabled in production firmware",
-    "severity": "LOW",
-    "status":   "CONFIRMED — bigbang/etc/xinetd.conf extracted; daytime service block "
-                "with 'type = INTERNAL, id = daytime-stream, socket_type = stream, "
-                "protocol = tcp, user = root, wait = no, disable = no' confirmed; "
-                "comment '# used for the lab time hack remove eventually' and "
-                "'# MCP_FIXME' tag confirmed",
-    "cwe":      ["CWE-489 (Active Debug Code)"],
-    "files":    ["bigbang/etc/xinetd.conf"],
-    "service_comment": "# used for the lab time hack remove eventually\n# MCP_FIXME",
+    "title":    "auxinit.sh (AUX port initialization script) checks ROMMON variable "
+                "ROMMON_SR_INIT_SHELL for substring 'aux_do_system_shell' using a glob "
+                "match (*aux_do_system_shell*); if matched, sets HOME=/root and execs "
+                "/bin/bash -l as root on the AUX port connection with no authentication; "
+                "variable is loaded from ROMMON environment at early boot via "
+                "save_and_load_rommon_vars (rommon_to_env binary)",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — bigbang/etc/auxinit.sh extracted; conditional block "
+                "if [[ ${ROMMON_SR_INIT_SHELL:-} == *aux_do_system_shell* ]]; then "
+                "export HOME=/root; cd $HOME; /bin/bash -l confirmed; "
+                "no authentication check between ROMMON variable test and bash exec; "
+                "ROMMON_SR_INIT_SHELL loaded from ROMMON environment by explode-common "
+                "save_and_load_rommon_vars function",
+    "cwe":      ["CWE-306 (Missing Authentication for Critical Function)",
+                 "CWE-489 (Active Debug Code)"],
+    "files":    ["bigbang/etc/auxinit.sh", "explode-common"],
+    "trigger_code": [
+        "if [[ \"${ROMMON_SR_INIT_SHELL:-}\" == *\"aux_do_system_shell\"* ]]; then",
+        "    export HOME=/root",
+        "    cd $HOME",
+        "    /bin/bash -l",
+        "fi",
+    ],
+    "attack_path": [
+        "1. Attain ROMMON access (physical console during power cycle, or ROMMON CVE)",
+        "2. Set ROMMON variable: ROMMON_SR_INIT_SHELL=aux_do_system_shell",
+        "3. Boot device normally",
+        "4. Connect to AUX port (physical serial or auxiliary console)",
+        "5. auxinit.sh matches glob, execs /bin/bash -l as root — no credential required",
+    ],
     "impact": (
-        "Lab artifact in production firmware. The MCP_FIXME tag confirms Cisco "
-        "engineering intended to remove this service before production but did not. "
-        "Minimal direct impact (daytime only returns current time), but confirms a "
-        "pattern of lab configuration leaking into release builds. "
-        "Consistent with MCP_FIXME patterns in explode-common (untested ROMMON "
-        "assumption, CAT9K-F7) and lagging lab artifact cleanup across multiple modules."
+        "An attacker with ROMMON access can plant ROMMON_SR_INIT_SHELL=aux_do_system_shell "
+        "and reboot; on next boot the AUX port delivers a root bash shell to whoever "
+        "connects, with no password prompt and no authentication. The AUX port is a "
+        "physical serial interface present on all Cat9K hardware, typically used for "
+        "modem or out-of-band management. Combined with physical access to the management "
+        "console (which grants ROMMON), this provides a persistent root backdoor that "
+        "survives IOS-XE authentication configuration: the backdoor activates before "
+        "IOS-XE authentication services start. Glob match (*aux_do_system_shell*) means "
+        "any string containing the trigger phrase activates the bypass, broadening "
+        "any accidental or malicious trigger surface."
     ),
+    "note": "auxinit.sh is the AUX port initialization script invoked during platform "
+            "startup. The ROMMON_SR_INIT_SHELL check appears to be an internal debug "
+            "mechanism for dropping to a shell from the AUX port during development. "
+            "Shipping it in production firmware with disable=no logic creates a "
+            "documented backdoor for any party who can write ROMMON variables. "
+            "Contrast with ROMMON_SR_INIT_DEBUG (CAT9K-F6): that variable enables "
+            "xtrace logging; this one enables an unauthenticated shell.",
 }
 
 FINDINGS = [
@@ -503,9 +593,9 @@ FINDINGS = [
 
 SUMMARY = {
     "total": 13,
-    "critical": 2,
+    "critical": 3,
     "high":     6,
     "medium":   3,
-    "low":      2,
+    "low":      1,
     "by_id": [f["id"] for f in FINDINGS],
 }
