@@ -3342,7 +3342,7 @@ FORTICLIENT80_VULSCAN = {
         },
     },
 
-    "severity": "LOW -- no high-severity findings confirmed; 0x5e02a8 recvfrom remains MEDIUM pending buf allocation trace",
+    "severity": "LOW -- no high-severity findings confirmed; recvfrom 0x5e02a8 SAFE (see recvfrom_0x5e02a8_resolved)",
 
     "wrappers_indirect_dispatch": (
         "Callers of 0x6b4ac0/0x6b61d0/0x91b7bd/0xa0c51b/0xb3c9c2 not found via direct e8 scan "
@@ -3352,8 +3352,20 @@ FORTICLIENT80_VULSCAN = {
         "SAFE_ASSUMED: wrapper-level analysis complete; indirect callers not traceable statically."
     ),
 
+    "recvfrom_0x5e02a8_resolved": (
+        "recvfrom(fd=[r15+0x128], buf=[r15+0x100], len=[r15+0x150]+4, 0, addr, 0x80). "
+        "Setup function at 0x5df895: allocates [rbp+0x100] = calloc(1, max(0x200, r13d)+4) "
+        "where r13d = max(0x200, movzx_word_at_[r12+0x878]). "
+        "Sets [rbp+0x154] = r13d (capacity sentinel). "
+        "Sets [rbp+0x150] = 0x200 initially. "
+        "Write path at 0x5e0537: mov [r15+0x150], edx -- GUARDED by explicit bounds check: "
+        "0x5e052e: cmp rdx, [r15+0x154]; jg error_path. "
+        "Invariant: field_0x150 <= field_0x154 always. "
+        "Allocation = max(0x200, field_0x154) + 4 >= field_0x154 + 4 >= field_0x150 + 4 = recv_count. "
+        "SAFE -- explicit pre-assignment bounds check prevents overwrite."
+    ),
+
     "pending": [
-        "Trace buf allocation at r15->field_0x100 vs r15->field_0x150 for recvfrom 0x5e02a8",
         "Resolve 0x542d67 (called at 0x577186 before strcpy at 0x5771bd)",
     ],
 }
