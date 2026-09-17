@@ -2269,6 +2269,21 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
             "conclusion":    "All 8 strcat callers are LOW or SAFE. No network-controlled unbounded source confirmed.",
         },
 
+        "LIBIPS-603-STRNCPY-CALLERS": {
+            "strncpy_plt": "0x4d110 (GOT 0x5010d8)",
+            "caller_count": 6,
+            "callers": ["0x6bb85", "0xdb06c", "0x22546c", "0x24972e", "0x2ed56e", "0x3284d2"],
+            "analysis": {
+                "0x6bb85":  {"n": "0x20 (32, fixed constant)", "verdict": "SAFE -- fixed n; dest is struct field"},
+                "0xdb06c":  {"n": "UNREADABLE -- context not decodable", "verdict": "UNKNOWN"},
+                "0x22546c": {"n": "[rsp+0x2c] (local var)", "src": "static RODATA [rip+0x1add35]", "post": "explicit null-term: [rbx+rbp] = 0", "verdict": "SAFE -- static source; manual null-termination after copy"},
+                "0x24972e": {"n": "0x1000 (4096, fixed)", "src": "rax+0x13", "dest": "rax+8", "overlap": "src - dest = 11 bytes < n; overlapping copy (UB); internal buffer shift", "verdict": "LOW -- fixed n; internal operation; not externally injectable"},
+                "0x2ed56e": {"n": "r15 = strlen(src)+1", "alloc": "exponential bucket (0x400 << cl, cl <= 0xf); allocates bucket_max bytes before copy", "verdict": "LOW -- n = strlen(src)+1; allocation sized by doubling algorithm; internal string cache"},
+                "0x3284d2": {"n": "0xf (15, fixed constant)", "dest": "rsp+0x10 (stack buf, 24+ bytes visible)", "src": "rsi+rbx (computed offset)", "verdict": "SAFE -- fixed n <= dest size"},
+            },
+            "conclusion": "All 6 strncpy callers: 4 SAFE (fixed n, static src, or matched alloc), 1 LOW (internal buffer shift with UB overlap), 1 UNKNOWN (unreadable context). No attacker-injectable unbounded strncpy found.",
+        },
+
         "603_strcpy_conclusion": {
             "finding":    "10 strcpy callers in 6.0.3 libips.so: 7 are safe strdup patterns. 2 struct-field callers (0x931af/0x931bf) are LOW due to clamped sources and matching dest sizes. 1 protocol-dispatch caller (0x32c096) is MEDIUM PLAUSIBLE pending caller dest-size verification.",
             "hardening_gap": "6.0.3 has ZERO _chk fortified variants (no __strcpy_chk, no __sprintf_chk). All dangerous function calls are raw, unfortified, no canary. Binary is 5MB vs 18.5MB in 8.0.0 -- smaller attack surface but zero mitigations.",
