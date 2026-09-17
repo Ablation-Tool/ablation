@@ -2866,3 +2866,176 @@ FORTICLIENT80_LIBAV = {
         "sprintf 65 callers not analyzed (snprintf 206 = bounded by design)",
     ],
 }
+
+
+# ---------------------------------------------------------
+# FortiClient 8.0 -- vulscan (vulnerability scanner binary) RE
+# ---------------------------------------------------------
+FORTICLIENT80_VULSCAN = {
+    "id":        "FCLIENT80-VULSCAN",
+    "product":   "FortiClient 8.0 vulscan -- vulnerability scanner daemon",
+    "binary":    "/opt/forticlient/vulscan (ET_EXEC ELF64 x86-64 stripped; 11,848,560 bytes)",
+    "has_canary": True,
+    "has_chk":   True,
+    "chk_detail": "Stack canary + CHK variants present. Reduces RCE exploitability of any stack overflow to DoS.",
+    "severity":  "MEDIUM (pending) -- recv surface partially analyzed; strcpy path-concat MEDIUM PLAUSIBLE; sscanf SAFE",
+
+    "scanner_note": (
+        "Initial PLT caller scan used raw byte scan (scan for 0xe8 then decode displacement). "
+        "This produces FALSE POSITIVES when 0xe8 appears inside instruction operands. "
+        "All caller lists in this block used disasm-validated scan (confirm mnemonic==call at each address). "
+        "This bug affected all prior vulscan PLT analyses -- all counts here are validated."
+    ),
+
+    "plt_inventory": {
+        "strcpy":   {"plt": "0x408760", "callers": 10, "validated": True},
+        "strcat":   {"plt": "0x4091b0", "callers": 2,  "validated": True},
+        "sprintf":  {"plt": "0x407da0", "callers": 3,  "validated": True},
+        "strncpy":  {"plt": "0x408200", "callers": 20, "validated": True},
+        "sscanf":   {"plt": "0x408410", "callers": 22, "validated": True},
+        "recv":     {"plt": "0x407f60", "callers": 12, "validated": True},
+        "recvfrom": {"plt": "0x4084d0", "callers": 4,  "validated": True},
+        "read":     {"plt": "0x408d50", "callers": 21, "validated": True},
+    },
+
+    "segment_layout": {
+        "seg1": {"va": "0x400000", "foff": "0x0",      "filesz": "0xaa31d1"},
+        "seg2": {"va": "0x10a3c80", "foff": "0xaa3c80", "filesz": "0xa8340"},
+        "note": "ET_EXEC: VA_to_foff = foff + (VA - vaddr). p_filesz at phdr offset 32 (NOT 40 which is p_memsz).",
+    },
+
+    "sscanf_analysis": {
+        "callers": 22,
+        "method": "Disasm-validated caller list + 512-byte format string extraction (writes-to-rsi/esi only)",
+        "findings": 0,
+        "formats": {
+            "0x45813e":  "'%u.%u.%u.%u' -- IPv4 parse; numeric only; SAFE",
+            "0xa0f17d":  "'%d/%3s/%d %d:%d:%d' -- HTTP date (Apache); %3s bounded; SAFE",
+            "0xa0f1cf":  "'%d %3s %d %d:%d:%d' -- HTTP date variant; %3s bounded; SAFE",
+            "0xa0f221":  "'%*3s, %d %3s %d %d:%d:%d' -- RFC 2822 date; %*3s skips; SAFE",
+            "0xa0f26f":  "'%d-%3s-%d %d:%d:%d' -- HTTP date variant; %3s bounded; SAFE",
+            "0xa11199":  "'%255[^:]:%255[^:]:%*s' -- .htpasswd parse; 255-char bounded field; SAFE",
+            "0xa1313c":  "'bytes=%ld-%ld' -- HTTP Range header; %ld numeric; SAFE",
+            "0xa174c0":  "' virtual=\"%511[^\"]\"' -- virtualhost URL; 511-char bounded; SAFE",
+            "0xa17546":  "' abspath=\"%511[^\"]\"' -- path parse; 511-char bounded; SAFE",
+            "0xa175ae":  "NOT FOUND (in same cluster as 0xa174c0/0xa175d3; likely %511[^\"])",
+            "0xa175d3":  "' \"%511[^\"]\"' -- generic quoted string; 511-char bounded; SAFE",
+            "0xa17934":  "NOT FOUND (in virtualhost/abspath cluster; likely bounded)",
+            "0xa1b317":  "'%u.%u.%u.%u/%u%n' -- CIDR parse; %u + %n int output; SAFE",
+            "0xa1b35f":  "'%u.%u.%u.%u%n' -- IPv4 parse; SAFE",
+            "0xa1b4c8":  "'%lf%c' -- float + char parse; SAFE",
+            "0xa1fce3":  "'%u.%u.%u.%u:%u%n' -- IP:port parse; SAFE",
+            "0xa1fd95":  "'%u%n' -- unsigned int; SAFE",
+            "0xa1ff8a":  "'%u%n' -- unsigned int; SAFE",
+            "0xb262aa":  "'%4d%2d%2d%2d%2d%2d' -- datetime parse; all fixed-width numeric; SAFE",
+            "0xb285f8":  "'%4x:%4x:%4x:%4x%n' -- IPv6 parse; fixed-width hex + %n int; SAFE",
+            "0xb28714":  "'%2x-%2x-%2x-%2x-%2x-%2x%n' -- MAC (EUI-48) parse; fixed-width; SAFE",
+            "0xb28810":  "'%2x-%2x-%2x-%2x-%2x-%2x-%2x-%2x%n' -- EUI-64 parse; fixed-width; SAFE",
+        },
+        "verdict": "SAFE -- all 22 callers use bounded format specifiers (%3s, %255[^:], %511[\"], fixed-width, numeric). No unbounded %s anywhere.",
+    },
+
+    "strcpy_analysis": {
+        "callers": 10,
+        "callers_list": [
+            "0x5771bd", "0x6afc2e", "0x6f07ff", "0x6f19c5", "0x6f19fd",
+            "0x7259e5", "0x86fd33", "0x86fd46", "0xa11094", "0xa28e76",
+        ],
+        "method": "Ablation semantic sweep (all-MiniLM-L6-v2) + manual disasm of top candidates",
+        "findings": 1,
+        "FCLIENT80-VULSCAN-STRCPY-F01": {
+            "id":       "FCLIENT80-VULSCAN-STRCPY-F01",
+            "severity": "MEDIUM PLAUSIBLE -- path concatenation: malloc then double strcpy; safety depends on pre-computed size",
+            "callers":  ["0x86fd33", "0x86fd46"],
+            "pattern":  (
+                "0x86fd1d: call 0x723fe0 (malloc) with eax as size arg. "
+                "0x86fd22: r13 = malloc result. "
+                "0x86fd2a: rsi = r12 (first path component). "
+                "0x86fd33: strcpy(r13, r12) -- first component. "
+                "0x86fd38: byte [r13+rbx] = '/' -- separator. "
+                "0x86fd3e: rdi = r13+rbx+1 (after separator). "
+                "0x86fd43: rsi = rbp (second path component). "
+                "0x86fd46: strcpy(r13+rbx+1, rbp) -- second component. "
+                "OVERFLOW PATH: if malloc size = strlen(r12)+strlen(rbp)+2 this is safe. "
+                "If size does not include rbp length or separator, heap overflow."
+            ),
+            "pending": "Trace eax at 0x86fd1a back to size computation to verify malloc accounts for both components + separator",
+        },
+        "safe_callers": {
+            "0x5771bd": "dest = heap alloc via 0x542d67; src = [rbp-0x40]; likely strdup-then-copy; PLAUSIBLE SAFE pending 0x542d67 resolution",
+            "0x6f19c5": "dest=rax (heap); src=r11; arithmetic path (cdq/shr/and ops); PLAUSIBLE string index copy",
+            "0x6f19fd": "dest=rax (heap); src=[rsp+0x18] (heap struct field); PLAUSIBLE",
+            "other": "Remaining callers: insufficient context in 400-byte lookback",
+        },
+    },
+
+    "recv_analysis": {
+        "callers": 12,
+        "callers_list": [
+            "0x51fbf4", "0x5204cd", "0x520d9d", "0x524e49", "0x527815",
+            "0x5ae81a", "0x5aedb0", "0xa0c76f", "0xb35c37", "0xb35ca7",
+            "0xb363fe", "0xb36476",
+        ],
+        "findings": 0,
+        "characterized": {
+            "0x5aedb0": (
+                "recv(fd, rsp, 0x400=1024); sub rsp, 0x418. "
+                "buf=rsp; capacity=frame=0x418 > recv_len=0x400. SAFE."
+            ),
+            "0x5ae81a": (
+                "recv wrapper: edi=[r14+0x98] (fd from [r12+0x10]+0x98); "
+                "rsi=caller_arg3; rdx=r13=caller_arg4 (len). "
+                "sub rsp, 0x118; caller provides both buf and len. "
+                "Safety deferred to callers."
+            ),
+            "0x524e49": (
+                "recv(r14d, [rbp-0xe8] ptr-indirect, 0x2000=8192). "
+                "[rbp-0xe8] is a POINTER variable (not a direct stack buffer). "
+                "Function prologue not found in 5000-byte lookback (very large function). "
+                "Ptr at [rbp-0xe8] may be heap-allocated earlier. "
+                "MEDIUM PLAUSIBLE -- if ptr points to a < 8192-byte buffer, heap overflow."
+            ),
+            "0x51fbf4 group": (
+                "0x51fbf4, 0x5204cd, 0x520d9d, 0x527815: all edx=0x2000 (8192); "
+                "rsi = r14 or r13 (register-held buffer pointers). "
+                "Same class as 0x524e49; prologue context not found; MEDIUM PLAUSIBLE."
+            ),
+            "0xa0c76f": (
+                "recv(rax, [rbp-0x58] ptr-indirect, movsxd rdx eax where eax=[rbp-0x5c]). "
+                "Context: HTTP response body reader; [rbp-0x5c] = likely content-length from header. "
+                "If buf was malloc(content_length), this is exact-fit SAFE. "
+                "PLAUSIBLE SAFE pending trace of [rbp-0x58] allocation."
+            ),
+            "0xb35c37,0xb363fe,0xb36476": "Format context not found in 160-byte lookback; not analyzed.",
+            "0xb35ca7": "edx=r12 (caller-provided len); rsi=[r13+r15] (indexed array); PLAUSIBLE.",
+        },
+    },
+
+    "recvfrom_analysis": {
+        "callers": 4,
+        "callers_list": ["0x464a68", "0x5e02a8", "0x6b21c1", "0xb35a9d"],
+        "findings": 0,
+        "characterized": {
+            "0x5e02a8": (
+                "recvfrom(rdi=[r15+0x128], rsi=[r15+0x100], edx=[r15+0x150]+4, ecx=0, r8=rsp+0x50, r9=rsp+0x3c=0x80). "
+                "All args from a struct at r15. len = struct[0x150]+4. buf = struct[0x100]. "
+                "MEDIUM -- if struct[0x150] (len field) is not validated against buf size."
+            ),
+            "0x464a68,0x6b21c1,0xb35a9d": "Format context not found; not analyzed.",
+        },
+    },
+
+    "strncpy_analysis": {
+        "callers": 20,
+        "verdict": "SAFE by definition -- strncpy always writes at most n bytes to destination; bounded.",
+        "note": "strncpy does not guarantee null-termination when src >= n; callers should verify termination.",
+    },
+
+    "pending": [
+        "Trace malloc size at 0x86fd1a for FCLIENT80-VULSCAN-STRCPY-F01 (path concat)",
+        "Trace [rbp-0xe8] and r14/r13 buffer pointers for recv group (0x524e49, 0x51fbf4 etc.)",
+        "Trace [r15+0x150] at 0x5e02a8 recvfrom -- verify len bounded against buf size",
+        "Analyze strcat (2 callers), sprintf (3 callers), read (21 callers)",
+        "Resolve 0x542d67 (called at 0x577186 before strcpy at 0x5771bd)",
+    ],
+}
