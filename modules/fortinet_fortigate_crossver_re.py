@@ -5458,8 +5458,8 @@ FGT748_LIBAV_ZIP_INT_OVERFLOW = {
         "7_0_13": "0xb686c avIsIgnoreBuffer: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d -- SAME OVERFLOW (r12d)",
         "7_2_0":  "0xb4b8c avIsIgnoreBuffer: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d -- SAME OVERFLOW (r12d)",
         "7_4_8":  "0xce3b9 avIsIgnoreBuffer: movzwl 0x1c(%r14),%r13d; add 0x12(%r14),%r13d -- SAME OVERFLOW (r13d)",
-        "8_0_0":  "NOT YET ANALYZED -- avFlowWrite struct changed significantly; ZIP parser may have changed",
-        "verdict": "Bug confirmed across FGT 6.0.3 through 7.4.8 -- present for 6+ years (2018-2024) unpatched",
+        "8_0_0":  "0x159145 avIsIgnoreBuffer: movzwl 0x1c(%r13),%r12d; add 0x12(%r13),%r12d -- SAME OVERFLOW; register base r13 (previously r14 in 7.x); UNFIXED in 8.0.0",
+        "verdict": "Bug confirmed across FGT 6.0.3 through 8.0.0 -- present for 6+ years (2018-2025) unpatched across 5 major versions",
     },
 
     "remediation": (
@@ -5503,6 +5503,20 @@ FGT748_LIBAV_ZIP_EOCD_CROSSVER = {
         "EOCD":         "0x30db43: cmp $0x6054b50 = PK\\x05\\x06 (PRESENT)",
         "ZIP64_EOCD":   "0x30dc20: cmp $0x6064b50 = PK\\x06\\x06 = ZIP64 EOCD (PRESENT)",
     },
+
+    "8_0_0_avScanLoad_coverage": {
+        "LFH":          "0x8de396: cmp $0x4034b50 (PRESENT -- second LFH site; avTlvDecode or avScanLoad range)",
+        "CDH":          "0x8de410: cmp $0x2014b50 (PRESENT)",
+        "EOCD":         "0x8de389: cmp $0x6054b50 = PK\\x05\\x06 (PRESENT)",
+        "ZIP64_EOCD":   "0x8de460: cmp $0x6064b50 = PK\\x06\\x06 = ZIP64 EOCD (PRESENT -- RESTORED in 8.0.0)",
+    },
+
+    "zip64_history": (
+        "ZIP64 EOCD (PK\\x06\\x06) was present in 7.0.13 and 7.2.0 avScanLoad. "
+        "It was removed in 7.4.8 avScanLoad (only PK\\x05\\x06 EOCD remained). "
+        "It was restored in 8.0.0 avScanLoad (both PK\\x05\\x06 and PK\\x06\\x06 present). "
+        "7.4.8 is the only analyzed version without ZIP64 EOCD in avScanLoad."
+    ),
 
     "description": (
         "FGT 7.0.13 avScanLoad handles three ZIP EOCD signatures: CDH, regular EOCD, and ZIP64 EOCD. "
