@@ -2486,10 +2486,85 @@ LIBVCM_603 = {
         "conclusion": "All visible recvfrom callers use fixed maximum lengths; no unbounded recvfrom found",
     },
 
+    "strcat_analysis": {
+        "callers": 24,
+        "method": "Ablation semantic sweep (all-MiniLM-L6-v2) + manual disasm of top candidates",
+        "findings": 0,
+        "detail": (
+            "0x38de** cluster (8 calls): SAFE -- pre-sized by 4x repne-scasb strlen measurements, "
+            "then malloc(total+6), then strcpy+strcat chain. All lengths pre-computed. "
+            "0x3673** cluster (8 calls): SAFE -- snprintf+strcat chain; "
+            "allocation has 256-byte slack for fixed RODATA strings. "
+            "0x367ae9: SAFE -- bounded realloc loop capped at 0x100000. "
+            "0x3683df/ee/fe: SAFE -- pre-computed allocation using not-rcx strlen pattern. "
+            "0x3691cb/0x3691f1: CWE-457 LOW -- fresh malloc, then strcat without prior null terminator; "
+            "undefined behavior but allocation pre-sized to total length. "
+            "0x36dcd4: SAFE -- realloc to fit, then strcat. "
+            "0x3745ac: UNKNOWN (disasm failed). "
+            "0x378c18: AMBIGUOUS -- sprintf with '\\\\\\\\%s\\\\%s' into struct field; "
+            "struct size not traced; LOW."
+        ),
+    },
+
+    "strncpy_analysis": {
+        "callers": 5,
+        "method": "Manual disasm of all callers",
+        "findings": 0,
+        "detail": (
+            "All 5 callers use fixed constant n values: "
+            "0x3867df: n=0x10 (16); 0x386896: n=0x10 (16); "
+            "0x38f253: n=0x200 (512); 0x38f31f: n=0x80 (128); 0x39083b: n=0x200 (512). "
+            "No n value derived from file content or network data."
+        ),
+    },
+
+    "sscanf_analysis": {
+        "callers": 13,
+        "method": "Format string extraction via LEA rip-relative byte scan",
+        "findings": 0,
+        "formats": {
+            "0x36719a":  "%x",
+            "0x36f2b8":  "%u,%u,%u,%u,%u,%u",
+            "0x36f386":  "150%*[^(](%d )",
+            "0x36f51e":  "%u,%u,%u,%u,%u,%u",
+            "0x37475a":  "Service Pack ",
+            "0x37479b":  "%d.%d.%d.%d",
+            "0x3747da":  "%d.%d.%d.%d",
+            "0x374cf0":  "%du",
+            "0x374e9c":  "Service Pack ",
+            "0x375631":  "Service Pack ",
+            "0x375693":  "Service Pack ",
+            "0x3756f5":  "Service Pack ",
+            "0x375750":  "Service Pack ",
+        },
+        "detail": (
+            "No bare %s in any sscanf format string. "
+            "All specifiers are integer (%x/%u/%d) or literal-match ('Service Pack ' -- zero-output pattern). "
+            "'Service Pack ' format with no specifiers is used as substring-match detection; sscanf returns 0 unless input starts with that literal."
+        ),
+    },
+
+    "sprintf_analysis": {
+        "callers": 32,
+        "method": "Ablation semantic sweep + LEA rip-relative format string extraction",
+        "findings": 0,
+        "detail": (
+            "All 32 sprintf callers use RODATA format strings (no user-controlled format). "
+            "Integer-only formats: %d, %hX, %X, %08lX -- max 20 chars per arg. "
+            "Static literal formats: 'Z', 'UN', 'G' -- 1-2 char outputs. "
+            "%s formats: "
+            "  0x375d85: '%s\\\\%s' -- allocation pre-sized by 2x repne-scasb + 2; exact fit; SAFE. "
+            "  0x382035: '%s\\\\%s' -- same pattern; SAFE. "
+            "  0x378c18: '\\\\\\\\%s\\\\%s' -- writes into struct field at "
+            "[rcx + rax*2 + 0x27]; struct field size not traced; LOW."
+        ),
+    },
+
     "pending": [
-        "strcat (24 callers), strncpy (5), sscanf (13), sprintf (32) -- not analyzed",
         "Trace hotfix_missing callers in other FortiOS 6.0.3 binaries",
         "Verify 0x364c70 and 0x3643dc recvfrom callsites",
+        "0x3745ac strcat: disasm failed; needs review",
+        "0x378c18 sprintf/struct: trace struct layout to confirm no overflow",
     ],
 }
 
