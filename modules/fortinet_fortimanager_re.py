@@ -885,15 +885,94 @@ FMG_WEB_UI_RE = {
                 "bypasses the FortiManager Content Security Policy and executes inline JS."
             ),
         },
-        "verification": (
-            "Send authenticated request to /flatui/ and observe the nonce in the response HTML. "
-            "If it matches 6241e8c23b5b279b0071865c8ac78ca8, the bypass is confirmed. "
-            "If the nonce changes per request, the MD5 is used for another purpose."
+        "verification_result": {
+            "verdict":     "CONFIRMED_PLAUSIBLE",
+            "date":        "2026-09-16",
+            "binary":      "/tmp/fmg_ext/usr/local/apache2/modules/webconsole_module.so",
+            "method":      "Static disassembly; prologue scan + RIP-relative xref scan + PLT resolution",
+            "function_va": "0xa400",
+            "hit_va":      "0xb0b8",
+            "disasm_trace": (
+                # apr_generate_random_bytes setup
+                "0xb07b: xorps xmm0, xmm0   ; zero nonce buffer area"
+                "\n                0xb08d: lea r13, [rsp+0xcb07]  ; r13 = 16-byte random buffer"
+                "\n                0xb095: mov esi, 0x10           ; size = 16 bytes"
+                "\n                0xb09a: lea r12, [rsp+0xcb17]  ; r12 = hex-string output buffer"
+                "\n                0xb0af: call 0x6280             ; PLT -> apr_generate_random_bytes(r13, 16)"
+                "\n                0xb0b4: test eax, eax           ; APR_SUCCESS = 0"
+                "\n                0xb0b6: je 0xb0c9               ; SUCCESS -> ap_bin2hex -> random nonce"
+                # fallback path (eax != 0 = failure)
+                "\n                0xb0b8: lea rsi, [rip+0x2aed]  ; rsi = 0xdbac = '6241e8c23b5b279b0071865c8ac78ca8' (FALLBACK)"
+                "\n                0xb0bf: mov rdi, r12            ; rdi = output buffer"
+                "\n                0xb0c2: call 0x61f0             ; PLT -> strcpy(r12, static_MD5)"
+                "\n                0xb0c7: jmp 0xb0e1              ; merge"
+                # normal path
+                "\n                0xb0c9: mov rdx, r12            ; (SUCCESS path)"
+                "\n                0xb0cc: mov esi, 0x10"
+                "\n                0xb0d1: mov rdi, r13"
+                "\n                0xb0d4: call 0x6670             ; PLT -> ap_bin2hex(r13, 16, r12)"
+                # CSP header build
+                "\n                0xb0e1: (merge) lea r13, [rsp+0xcb38]"
+                "\n                0xb0f6: lea rdx, [rip+0x2ad0]  ; rdx = 0xdbcd = \"script-src 'self' 'nonce-%s'\""
+                "\n                0xb0fd: call 0x65e0             ; PLT -> snprintf(r13, 0x100, fmt, r12)"
+                "\n                0xb102: mov rdi, [rbx+0xf0]    ; rdi = request headers table"
+                "\n                0xb10c: lea rsi, [rip+0x2ad7]  ; rsi = 0xdbea = 'Content-Security-Policy'"
+                "\n                0xb113: call 0x66e0             ; PLT -> apr_table_set(tbl, 'Content-Security-Policy', nonce_val)"
+            ),
+            "plt_resolution": {
+                "0x6280": "apr_generate_random_bytes",
+                "0x61f0": "strcpy",
+                "0x6670": "ap_bin2hex",
+                "0x65e0": "snprintf",
+                "0x66e0": "apr_table_set",
+            },
+            "rodata_strings": {
+                "0xdbac": "6241e8c23b5b279b0071865c8ac78ca8  (static fallback nonce)",
+                "0xdbcd": "script-src 'self' 'nonce-%s'  (CSP format string)",
+                "0xdbea": "Content-Security-Policy  (HTTP header name)",
+            },
+            "control_flow": (
+                "PRIMARY PATH: apr_generate_random_bytes(16 bytes) -> ap_bin2hex -> "
+                "random 32-char hex nonce per request (correct behavior). "
+                "FALLBACK PATH (apr_generate_random_bytes returns non-zero): "
+                "strcpy(r12, '6241e8c23b5b279b0071865c8ac78ca8') -> static nonce. "
+                "Trigger: file descriptor exhaustion, seccomp restriction, or /dev/urandom "
+                "unavailability causes APR random generation failure."
+            ),
+            "csp_scope_deficiency": (
+                "CSP is 'script-src self nonce-...' only. "
+                "Missing: default-src, object-src, base-uri, form-action, connect-src, style-src. "
+                "Even with a random per-request nonce, the CSP provides limited protection: "
+                "stylesheet injection, form action hijacking, and connect-src SSRF are unrestricted."
+            ),
+        },
+        "impact": (
+            "FALLBACK_PATH: Force apr_generate_random_bytes failure (fd exhaustion) -> "
+            "static nonce '6241e8c23b5b279b0071865c8ac78ca8' in every response -> "
+            "any XSS payload with nonce attribute set to this value bypasses CSP -> "
+            "arbitrary JS in FortiManager admin context -> JSON-RPC API as admin -> "
+            "fleet-wide FortiGate config via sys_proxy_json."
+        ),
+    },
+
+    # FFMG-F07: Incomplete CSP directive set (standalone finding, no fallback required)
+    "csp_directive_gap": {
+        "id":       "FFMG-F07",
+        "severity": "MEDIUM",
+        "title":    "Incomplete Content-Security-Policy -- only script-src configured",
+        "evidence": (
+            "webconsole_module.so snprintf format at 0xdbcd: \"script-src 'self' 'nonce-%s'\". "
+            "No default-src, object-src, base-uri, form-action, connect-src, style-src, "
+            "frame-ancestors, or upgrade-insecure-requests directives present. "
+            "A CSP with only script-src permits: CSS injection (style-src unrestricted), "
+            "form action redirection (form-action unrestricted), "
+            "iframe embedding (frame-ancestors unrestricted), "
+            "WebSocket/fetch to arbitrary origins (connect-src unrestricted)."
         ),
         "impact": (
-            "Static CSP nonce + any stored XSS in FMG UI -> "
-            "arbitrary JavaScript execution in FMG admin context -> "
-            "JSON-RPC API calls as admin -> fleet-wide FortiGate config manipulation via sys_proxy_json."
+            "CSS injection -> data exfiltration via attribute selectors. "
+            "Form action rewrite -> CSRF-like credential harvest. "
+            "connect-src unrestricted -> exfiltrate admin session tokens via fetch."
         ),
     },
 
