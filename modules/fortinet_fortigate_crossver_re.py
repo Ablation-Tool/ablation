@@ -918,23 +918,43 @@ FGFM_CHAIN_F01_BINARY_ANALYSIS = {
     },
 
     "chain_f01_status": {
-        "hypothesis": "Attacker impersonates FortiManager via FGFM protocol -> injects put_config or put_json_cmd -> FortiGate executes arbitrary config/script -> LIBIPS-F01 Lua eval -> OS exec",
+        "hypothesis": "Attacker registers rogue FortiGate with FortiManager using shared fgt2.key (CVE-2024-47575 class) -> FortiManager accepts rogue device -> attacker pushes malicious IPS config to all managed FortiGates via FortiManager -> LIBIPS-F01 Lua eval -> OS exec on target FortiGates",
         "evidence_for": [
             "put_config and put_json_cmd command types ARE in active code (referenced from text)",
             "FGFM client code confirmed active in 7.2.0",
-            "fgt2.key RSA-2048 private key is SHARED across all FortiOS versions (CROSSVER-F01) -- can sign FGFM tunnel packets",
-            "Certificate loader (0x1fa66f0) loads .cer/.key pair -- client uses its own cert for TLS, does not appear to pin server cert",
+            "fgt2.key RSA-2048 private key is SHARED across all FortiOS versions (CROSSVER-F01)",
+            "fgt.crt and fgt2.crt are GENERIC certs (CN=FortiGate, no device serial number in Subject)",
+            "Certificate loader (0x1fa66f0) loads .cer/.key pair for FGFM TLS client identity",
+            "fgt2.crt signed by fortinet-subca2001 (sub of fortinet-ca2) -- valid Fortinet CA chain",
+            "CVE-2024-47575 (Oct 2024): FortiManager accepted FGFM connections with just a valid Fortinet CA cert, no SN registration check required",
         ],
-        "evidence_against": [
-            "FGFMs server-side serial-number allowlist check strings exist but are unreferenced -- may only apply to FortiManager role not FortiGate client role",
-            "Full TLS server cert validation path not traced -- FortiGate may verify FMG certificate against Fortinet CA",
-            "CVE-2024-47575 was on FortiManager side (FMG accepting rogue FGT registrations), not FGT side",
-        ],
-        "cvss_estimate": "9.8 if FortiGate does not validate FortiManager TLS cert (MITM scenario); 7.5 if cert is validated but shared fgt2.key allows crafted cert",
-        "next_steps": [
-            "Trace function 0x1fa66f0 callers to find the TLS connect path and check if server cert is verified",
-            "Check /tmp/fgt720_datafs/etc/fgt.crt and fgt2.crt -- are these the client cert used for FGFM?",
-            "Find the accept-register-list config handler (referenced string) to understand allowlist enforcement",
-        ],
+        "pki_analysis": {
+            "fortinet_root_ca": "CN=support, C=US, O=Fortinet, OU=Certificate Authority, 2015-2038 (cacert.pem)",
+            "fortinet_ca2": "CN=fortinet-ca2, 2016-2056 (cacert2.pem)",
+            "fortinet_subca2001": "CN=fortinet-subca2001, signed by fortinet-ca2, 2016-2056 (subcacert2.pem)",
+            "fgt_client_cert": "CN=FortiGate, O=Fortinet, OU=FortiGate -- signed by fortinet-subca2001 (fgt2.crt)",
+            "fgt_client_key": "fgt2.key RSA-2048 -- IDENTICAL across all FortiOS versions (CROSSVER-F01)",
+            "critical_finding": (
+                "The FortiGate client certificate (fgt2.crt) has CN=FortiGate with NO device-specific "
+                "serial number. The private key (fgt2.key) is shared. Any attacker with these files "
+                "(extracted from ANY FortiOS firmware) can authenticate to FortiManager as 'a FortiGate'. "
+                "FortiManager (pre-CVE-2024-47575) validated only that the cert was signed by Fortinet CA "
+                "-- not that the connecting device was a specific registered FortiGate."
+            ),
+            "ca_bundle": "133 public CA certs (ca_bundle gzip); used for web browsing TLS, not FGFM validation",
+        },
+        "chain_two_legs": {
+            "leg_1_fmg_compromise": {
+                "cve": "CVE-2024-47575 (FortiManager 7.2.0-7.6.0, CVSS 9.8)",
+                "mechanism": "Present fgt2.crt + fgt2.key via FGFM TLS to FortiManager port 541; FMG validates Fortinet CA chain (passes) but does NOT verify SN is registered (or allow_unknown_devices is on)",
+                "result": "Rogue device registered with FortiManager, gains management access to all managed FortiGates",
+            },
+            "leg_2_target_exploitation": {
+                "mechanism": "Via FortiManager API/console, push malicious IPS config (custom app group with Lua rule) to all managed FortiGates",
+                "trigger": "LIBIPS-F01: ips_luacfg_parse_app_grp_filters evaluates os.execute() in Lua sandbox with live io/os/ffi globals",
+                "result": "OS command execution on all managed FortiGates as IPS engine process (root/fortid)",
+            },
+        },
+        "scope": "All FortiOS versions with shared fgt2.key + any FortiManager instance with CVE-2024-47575 exposure",
     },
 }
