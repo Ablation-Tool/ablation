@@ -2520,7 +2520,7 @@ LIBVCM_603 = {
     "va_eq_offset": True,
     "has_chk":    False,
     "has_canary": False,
-    "severity":   "HIGH (one finding) -- LIBVCM-603-F01 hotfix_missing() exported strcpy overflow; no canary; 66 strcpy + 24 strcat + 6 recvfrom all analyzed; recvfrom SAFE; strcat: 1 LOW allocation miscalculation (internal OS fingerprint data only); main HIGH finding is the exported function",
+    "severity":   "HIGH (one finding) -- LIBVCM-603-F01 hotfix_missing() exported strcpy overflow; no canary; 66 strcpy + 24 strcat + 6 recvfrom all analyzed; recvfrom SAFE; strcat: 2 findings (STRCAT-F01 LOW internal OS fingerprint miscalc; STRCAT-F02 LOW-MEDIUM SMB reg-match 1-byte null overflow authenticated); sprintf SAFE; main HIGH finding is the exported function",
 
     "protocol_recv_wrappers": {
         "note":          "libvcm.so is the VCM/IPS network protocol inspection library; contains custom recv wrappers for every protocol",
@@ -2605,7 +2605,7 @@ LIBVCM_603 = {
     "strcat_analysis": {
         "callers": 24,
         "method": "Ablation semantic sweep (all-MiniLM-L6-v2) + manual disasm of all callers",
-        "findings": 1,
+        "findings": 2,
         "detail": (
             "0x38de** cluster (8 calls, OS fingerprint builder at 0x38dcb5): "
             "ALLOCATION MISCALCULATION (LOW) -- malloc(strlen(rbp)+strlen(r12)+strlen(r13)+strlen(r14)+strlen(r15)+6). "
@@ -2624,10 +2624,11 @@ LIBVCM_603 = {
             "0x3691cb/0x3691f1: SAFE -- loop measures all strings via repne-scasb, malloc(total), "
             "then strcat chain; all lengths pre-computed. "
             "0x36dcd4: SAFE -- realloc(rbp, strlen+1+realloc_extra) before strcat. "
-            "0x3745ac: SAFE -- fallback branch: strcat(rbx, RODATA_string) where rsi=[rip+0x3521f] "
-            "(static source); not the failed-lookup path; disasm confirmed. "
-            "0x378c18: calls 0x3633c0 (NOT strcat; it is sprintf-32 callers); "
-            "source=[rip+0x30ed0]='(.*)$' (regex RODATA); not dangerous."
+            "0x3745ac: LOW -- off-by-one null heap overflow (see LIBVCM-603-STRCAT-F02 below). "
+            "malloc(strlen(r13)+15) at 0x374568; strcpy uses strlen+1; strcat('DisplayVersion',14B+null) "
+            "needs 15B but 14B available; writes 1 null byte past heap chunk boundary. "
+            "Static source (not attacker-injectable content); authenticated SMB path only. "
+            "0x378c18: NOT strcat -- calls sprintf@0x3633c0; see sprintf_analysis below."
         ),
         "LIBVCM-603-STRCAT-OSMISCALC": {
             "id":       "LIBVCM-603-STRCAT-F01",
@@ -2640,6 +2641,30 @@ LIBVCM_603 = {
             "overflow_bytes":  23,
             "sources":         "rbp/r12/r13/r14 from call 0x363490 (internal OS fingerprint DB lookup -- not network-derived)",
             "verdict":         "LOW -- genuine heap corruption bug; no direct network exploitability",
+        },
+        "LIBVCM-603-STRCAT-SMBREGMATCH": {
+            "id":       "LIBVCM-603-STRCAT-F02",
+            "severity": "LOW-MEDIUM -- 1-byte null heap overflow in SMB registry-match path; authenticated attacker; static overflow content",
+            "class":    "Heap off-by-one (CWE-193); 1-byte null write past heap chunk end",
+            "function": "reg_match_uninstall context, callsite VA 0x3745ac (strcat PLT 0x362980)",
+            "context":  "src/smb/api_new_smb.c:0xf3 (line 243, from rvs__malloc debug caller frame)",
+            "allocation": (
+                "repnz scasb r13 -> not rcx (= strlen(r13)+1) -> lea rdi,[rcx+0xe] -> rvs__malloc(strlen+15). "
+                "SCASB convention: scans N+1 bytes (string + null), rcx decrements N+1 times from -1, "
+                "giving -(N+2); not -> N+1. So malloc_size = (strlen+1) + 14 = strlen+15."
+            ),
+            "overflow": (
+                "strcpy(rbx, r13): uses strlen(r13)+1 bytes. Remaining: 14 bytes. "
+                "strcat(rbx, 'DisplayVersion'): needs strlen('DisplayVersion')+1 = 14+1 = 15 bytes. "
+                "1-byte null terminator writes past heap chunk boundary."
+            ),
+            "exploit_conditions": (
+                "Authenticated SMB session required. Attacker controls r13 (registry path/share name). "
+                "Overflow content is always a single null byte -- not attacker-injectable bytes. "
+                "Exploitability depends on rvs__malloc chunk layout and adjacent chunk header at +strlen+15."
+            ),
+            "trigger":  "Authenticated SMB client sends registry-match path; strstr fails to find pattern; strcat fallback taken",
+            "verdict":  "LOW-MEDIUM -- genuine 1-byte null heap overflow; authenticated path; static content limits exploitability",
         },
     },
 
@@ -2692,16 +2717,17 @@ LIBVCM_603 = {
             "%s formats: "
             "  0x375d85: '%s\\\\%s' -- allocation pre-sized by 2x repne-scasb + 2; exact fit; SAFE. "
             "  0x382035: '%s\\\\%s' -- same pattern; SAFE. "
-            "  0x378c18: '\\\\\\\\%s\\\\%s' -- writes into struct field at "
-            "[rcx + rax*2 + 0x27]; struct field size not traced; LOW."
+            "  0x378c18: '\\\\\\\\%s\\\\%s' -- struct alloc 0x3766ea: calloc(1, r12+rdx+0x27) "
+            "where r12=esi*2=8, rdx=len1+len2+11; total=len1+len2+58. "
+            "Dest = struct+rax*2+0x27+1 = struct+48 (rax=4 from struct field[0x24]). "
+            "Available = (len1+len2+58)-48 = len1+len2+10. "
+            "Format '\\\\\\\\%s\\\\%s' writes 2+len1+1+len2+1(null) = len1+len2+4. "
+            "Slack = 6. SAFE."
         ),
     },
 
     "pending": [
-        "Trace hotfix_missing callers in other FortiOS 6.0.3 binaries",
-        "Verify 0x364c70 and 0x3643dc recvfrom callsites",
-        "0x3745ac strcat: disasm failed; needs review",
-        "0x378c18 sprintf/struct: trace struct layout to confirm no overflow",
+        "Trace hotfix_missing callers in other FortiOS 6.0.3 binaries (BLOCKED: main daemons in encrypted qcow2)",
     ],
 }
 
