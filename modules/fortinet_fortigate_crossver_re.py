@@ -5353,6 +5353,99 @@ FGT800_SYNTAX_F02 = {
     ),
 }
 
+FGT748_LIBAV_ZIP_INT_OVERFLOW = {
+    "id":       "FGT748-LIBAV-ZIP-INT-OVERFLOW",
+    "product":  "FortiGate 7.4.8 libav.so.new -- avIsIgnoreBuffer LFH parser 32-bit integer overflow",
+    "binary":   "/tmp/fgt748_datafs/lib/libav.so.new (BuildID sha1:226d04c187d4eb77ccb15d71a2b0bea97a77c12b)",
+    "severity": "MEDIUM -- malformed ZIP with crafted LFH fields causes AV parser misalignment; potential OOB read inside archive",
+    "class":    "Integer overflow in ZIP LFH entry advancement (CWE-190); parser redirect to attacker-supplied bytes",
+    "cwe":      "CWE-190",
+
+    "location": {
+        "function":   "avIsIgnoreBuffer (VA 0xce3a0 region, LFH parse path)",
+        "overflow_at": "0xce3b9: add 0x12(%r14),%r13d",
+        "advance_at":  "0xce35a: add %r13,%r12",
+    },
+
+    "description": (
+        "In avIsIgnoreBuffer's ZIP Local File Header (LFH) parser, the advancement past an LFH entry "
+        "accumulates the next-entry offset into r13d (32-bit register): "
+        "  0xce3b4: movzwl 0x1c(%r14),%r13d    ; r13d = LFH[0x1c] = extra_len (16-bit) "
+        "  0xce3b9: add    0x12(%r14),%r13d     ; r13d += LFH[0x12] = compressed_size (32-bit) "
+        "This 32-bit addition wraps silently when extra_len + compressed_size >= 0x1_0000_0000. "
+        "Concrete trigger: extra_len=0x00001 (minimum valid, 1 byte), compressed_size=0xFFFFFFFF (max 32-bit). "
+        "Sum = 0x1_0000_0000; r13d = 0x00000000; r13 (64-bit zero-extension) = 0. "
+        "Subsequent advancement: 0xce35a: add %r13,%r12 -- adds 0 to r12. "
+        "r12 remains at (r14 + filename_len + 0x1e) = start of the file data area (past the LFH header). "
+        "At 0xce391: cmp %r12,%r14; jae abort -- old r14 < new r12 (small positive difference), passes. "
+        "At 0xce39a: mov %r12,%r14 -- r14 moves into attacker-controlled file data. "
+        "At 0xce3a0: cmp $0x4034b50,(%r14) -- reads 4 bytes from start of file data as a ZIP signature. "
+        "If file data starts with 'PK\\x03\\x04' (attacker-controlled), parser treats it as a new LFH. "
+        "Fields read from fake LFH: filename_len (0x1a), extra_len (0x1c), compressed_size (0x12) -- "
+        "all from attacker-controlled bytes, NO bounds check that the fake LFH is within buffer_end - 0x2e. "
+        "The adjusted end-pointer check (sub $0x2e from buffer_end) is done BEFORE the CDH/LFH signature "
+        "decision at 0xce2c4; it is NOT re-evaluated for the re-entered r14 after the overflow. "
+        "Result: parser advances via an attacker-supplied 16-bit filename_len, potentially past the buffer end."
+    ),
+
+    "exploit_precondition": (
+        "Attacker submits a ZIP file through any FortiGate AV inspection path (HTTP download, email attachment, "
+        "FTP transfer). The ZIP must contain an LFH with: "
+        "  compressed_size = 0xFFFFFFFF (or any value such that extra_len + compressed_size = 0x1_0000_0000) "
+        "  File data starting with bytes 50 4B 03 04 (PK\\x03\\x04) "
+        "  Attacker-controlled 2-byte field at offset 0x1a within the fake LFH (filename_len) "
+        "If fake filename_len is large enough to push the next r12 past buffer end, "
+        "subsequent reads in the CDH loop will be out of bounds."
+    ),
+
+    "cross_version": (
+        "8.0.0 libav.so.new: NOT YET ANALYZED for this specific integer overflow. "
+        "The avFlowWrite struct changed significantly (see FGT748-LIBAV-CROSSVER-DIFF), "
+        "suggesting the ZIP parser was also modified. Requires 8.0.0 RE to confirm presence/fix."
+    ),
+
+    "remediation": (
+        "Replace 32-bit register arithmetic with 64-bit: "
+        "  movzwl 0x1c(%r14),%r13d -> movzwl 0x1c(%r14),%r13d (ok for the zero-extend) "
+        "  add 0x12(%r14),%r13d -> movl 0x12(%r14),%edx; add %rdx,%r13 (64-bit add, no wrap) "
+        "Add explicit check: if (extra_len + compressed_size > remaining_buffer): return error."
+    ),
+}
+
+FGT748_LIBAV_ZIP64_CROSSVER = {
+    "id":       "FGT748-LIBAV-ZIP64-CROSSVER",
+    "product":  "FortiGate 7.4.8 vs 8.0.0 libav.so.new -- ZIP64 EOCD parser present in 7.4.8, absent/different in 8.0.0",
+    "binary_748": "/tmp/fgt748_datafs/lib/libav.so.new",
+    "severity": "INFORMATIONAL -- cross-version code divergence; different attack surface per version",
+    "class":    "Feature delta: ZIP64 End-of-Central-Directory handling",
+
+    "description": (
+        "FGT 7.4.8 avScanLoad (at 0x165c0b) explicitly handles ZIP64 EOCD signature (PK\\x06\\x06 = 0x6054b50): "
+        "  0x165c0b: cmp $0x6054b50,%edx "
+        "  0x165c11: jne 0x165260 (reject path) "
+        "The ZIP64 EOCD handling path in 7.4.8 includes: "
+        "  0x165c3e: lea 0x1e(%rbx),%rsi; cmp %r12,%rsi; jae abort -- minimum 30-byte size check "
+        "  0x165c6f: movzwl 0x1a(%rax),%edi -- filename_len from record "
+        "  0x165c73: movzwl 0x1c(%rax),%edx -- extra_len from record "
+        "  0x165c77: lea 0x1e(%rdi,%rdx,1),%rdx -- total = 0x1e + filename_len + extra_len "
+        "  0x165c82: cmp %rbp,%rdx; jb abort -- lower bound "
+        "  0x165c8f: cmp %rsi,%rcx -- buffer end check "
+        "The ZIP64 EOCD fixed record minimum is 56 bytes (0x38), not 30 bytes (0x1e). "
+        "The minimum size check of 0x1e may be too small for the ZIP64 EOCD structure; "
+        "fields at 0x1a and 0x1c in the EOCD context represent different data than CDH/LFH. "
+        "FGT 8.0.0 libav.so.new: no 0x6054b50 comparison found in prior ZIP parser analysis; "
+        "8.0.0 appears to not handle ZIP64 EOCD at this path (or handles it differently). "
+        "A ZIP64 archive submitted to 7.4.8 passes through the ZIP64 parser; "
+        "the same archive on 8.0.0 may be rejected or misidentified."
+    ),
+
+    "cdr_traversal_748": {
+        "safe_cmp_0x2e":   "CDH traversal: lea 0x2e(%rax),%rdx; cmp %rdx,%rcx; jb abort (CORRECT minimum-header check)",
+        "safe_total_calc": "CDH: lea 0x2e(%rsi,%rdx,1),%rdx + comment_len + double bounds check (CORRECT)",
+        "zip64_min_check": "ZIP64 EOCD: only 0x1e (30-byte) minimum (MAY BE INSUFFICIENT -- ZIP64 EOCD fixed part = 56 bytes)",
+    },
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
