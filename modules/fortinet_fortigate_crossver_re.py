@@ -4319,3 +4319,392 @@ FGT800_LIBIPS_SEMANTIC_SWEEP = {
         },
     },
 }
+
+# ---------------------------------------------------------
+# FMG 8.0.0 RE: Web Stack Architecture
+# Source: /mnt/fmg800/ (FMG 8.0.0 boot partition)
+#   rootfs-ext.tar.xz extracted to /tmp/fmg800_rootfs_ext/usr/
+#   httpd.conf: /tmp/fmg800_rootfs_ext/usr/local/apache2/conf/httpd.conf
+#   fmg_rewrite.so: /tmp/fmg800_rootfs_ext/usr/local/apache2/modules/fmg_rewrite.so
+#   fmg_request.so: /tmp/fmg800_rootfs_ext/usr/local/apache2/modules/fmg_request.so
+# ---------------------------------------------------------
+
+FMG800_WEB_ARCH = {
+    "id":      "FMG800-WEB-ARCH",
+    "product": "FortiManager 8.0.0 -- web stack architecture",
+    "source":  "httpd.conf + fmg_rewrite.so (75KB ELF x86-64 stripped) + fmg_request.so (15KB)",
+
+    "listeners": {
+        "port_443":  "HTTPS -- primary admin/management interface; TLSv1.2+TLSv1.3 only",
+        "port_80":   "HTTP -- disabled in FIPS mode (Listen 127.0.0.1:80); active in non-FIPS",
+        "port_8082": (
+            "FGT Proxy Block (virtual host). "
+            "Proxies ALL requests to http://localhost:10745/ (FortiGate management protocol handler). "
+            "SSLVerifyClient none -- no mutual TLS from managed FortiGate devices. "
+            "Keepalive with ttl=15 retry=0. "
+            "Header: Accept Protocols http/1.1 only (HTTP/2 disabled on port 8082). "
+            "This is the channel managed FortiGates use to communicate with FMG."
+        ),
+    },
+
+    "mpm": "event (multithreaded; Apache MPM event module; comment in httpd.conf references sys_global.c for mode change)",
+
+    "request_routing": {
+        "django_wsgi": {
+            "paths":   ["/p/*", "/index.py/p/*", "/saml/*", "/saml-idp/*", "/metadata/*", "/faz_upload/*"],
+            "backend": "WSGIDaemonProcess proj, 10 processes x 1 thread, deadlock-timeout=300, request-timeout=300",
+            "wsgi":    "/usr/local/lib/python3.11/proj/proj/wsgi.py",
+            "python":  "Python 3.11, single-threaded (multi-thread breaks C lib session manager and SSO)",
+            "handles": "SAML SSO (IDP+SP), file uploads (faz_upload), report generation, Django REST API",
+        },
+        "fmgd_fcgi": {
+            "socket":  "unix:/tmp/fmgd.domain (FastCGI)",
+            "paths": [
+                "/cgi-bin/module/flatui_proxy  -> fmgd (main GUI API)",
+                "/flatui/api/                  -> fmgd",
+                "/cgi-bin/module/flatui_auth   -> fmgd (AUTH ENDPOINT -- pre-auth surface)",
+                "/flatui/auth/                 -> fmgd (AUTH ENDPOINT)",
+                "/cgi-bin/module/fazapi        -> fmgd (FortiAnalyzer API)",
+                "/flatui/fazapi/               -> fmgd",
+                "/cgi-bin/module/productapi    -> fmgd",
+                "/flatui/productapi/           -> fmgd",
+                "/jsonrpc-ui/                  -> fmgd (authenticated JSON-RPC GUI)",
+            ],
+            "note": "All paths proxy to the same fmgd Unix domain socket. The fmgd process is the main FortiManager daemon.",
+        },
+        "gui_webforward_fcgi": {
+            "socket":  "unix:/tmp/gui_webforward (FastCGI)",
+            "paths": [
+                "/cgi-bin/module/flatui/forward -> gui_webforward",
+                "/flatui/forward/               -> gui_webforward",
+                "/cgi-bin/module/flatui/json    -> gui_webforward",
+                "/flatui/json/                  -> gui_webforward",
+                "/cgi-bin/module/flatui/service -> gui_webforward",
+                "/flatui/service/               -> gui_webforward",
+            ],
+        },
+        "jsonrpc_handler": {
+            "path":    "/jsonrpc",
+            "handler": "jsonrpc-handler (in fmg_rewrite.so via SetHandler)",
+            "note":    "Device management JSON-RPC -- managed FortiGates use this to communicate with FMG daemon",
+        },
+        "react_spa": {
+            "path":    "/${GUI_URL_PREFIX}/ui/ -> proxy to http://127.0.0.1:9007/index.html",
+            "static":  "http://127.0.0.1:9007/static/",
+            "guiapi":  "http://127.0.0.1:9006/fmgui/ (GUI REST API backend on port 9006)",
+            "excel":   "http://127.0.0.1:9008/excelexport/ (Excel export service on port 9008)",
+            "sdnproxy": "http://127.0.0.1:7080/sdnproxy",
+        },
+        "special_handlers": {
+            "/FCPService":  "local_mode-handler (via local_mode_module) -- FortiClient Profile service",
+            "/fazfec":      "fazfec-handler",
+            "/workflow":    "workflow-handler",
+        },
+    },
+
+    "custom_apache_modules": {
+        "fmg_request.so": {
+            "size":     "15KB ELF x86-64 stripped",
+            "hook":     "ap_hook_post_read_request",
+            "function": (
+                "Reads Host header (apr_table_get). "
+                "Checks against '127.0.0.1' (strcmp). "
+                "On match: calls create_cmf_query_by_type -> cmf_query_data -> cmf_query_free (pthread mutex protected). "
+                "Adds result to request headers via apr_table_set. "
+                "Pattern: localhost Host header triggers CMF backend query before request is dispatched."
+            ),
+            "deps":     ["libcmdbapi.so", "libcmfapi.so", "libosapi.so", "libulib.so", "libsysapi.so", "libcdb.so"],
+        },
+        "fmg_rewrite.so": {
+            "size":     "75KB ELF x86-64 stripped",
+            "based_on": "mod_rewrite 2.4.x (all standard RewriteRule/RewriteCond/RewriteMap directives present)",
+            "additions": [
+                "check_create_cmf_query (Fortinet custom CMF integration)",
+                "cmf_query_update (Fortinet custom)",
+                "conf_init (Fortinet custom)",
+                "__no_redirect_uri_list (symbol: list of URIs exempt from redirect rules)",
+            ],
+            "routes": ["/fdsupdate", "/FDSService", "/FCPService", "/fazproxy", "/jsonrpc", "/workflow"],
+            "hooks":   ["ap_hook_pre_config", "ap_hook_post_config", "ap_hook_child_init",
+                        "ap_hook_fixups", "ap_hook_translate_name", "ap_hook_handler"],
+            "map_types": ["txt", "rnd", "dbm", "dbd", "fastdbd", "int", "prg"],
+            "sql_map": (
+                "apr_dbd_pvselect / apr_dbd_get_row / apr_dbd_get_entry imported. "
+                "SQL-backed RewriteMap (dbd/fastdbd types) supported. "
+                "If RewriteMap key is derived from user-controlled request data, "
+                "SQL injection into the map backend query is possible."
+            ),
+            "deps":     ["libcmdbapi.so", "libcmfapi.so", "libosapi.so", "libsysapi.so"],
+        },
+    },
+
+    "security_headers": {
+        "X-Remote-Addr": "Set by Apache from REMOTE_ADDR (correct; not user-injectable)",
+        "Proxy":         "RequestHeader unset Proxy early (HTTPoxy mitigation present)",
+        "X-Frame-Options": "Header always append X-Frame-Options SAMEORIGIN",
+        "CSP": (
+            "frame-ancestors 'none'; object-src 'none'; script-src 'self' applied to most paths. "
+            "Exemption: /flatui/ prefix paths are excluded from this CSP. "
+            "Exemption: / (root) is excluded. "
+            "PDF reports at /static/data/outbreak/default/*.pdf get: "
+            "default-src 'none'; frame-ancestor 'self' (iframe embedding allowed for PDFs only)."
+        ),
+        "HSTS":  "Strict-Transport-Security: max-age=63072000 (2 years, HTTPS only)",
+        "TraceEnable": "off (HTTP TRACE disabled)",
+    },
+
+    "tls_config": {
+        "port_443": "SSLProtocol -ALL +TLSv1.3 +TLSv1.2",
+        "cipher_suite": "HIGH:MEDIUM:!aNULL:!MD5:!RC4:!RC2:!EXPORT40:!SEED-SHA:!ECDHE-RSA-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!DES-CBC3-SHA:!RSA:!SHA1",
+        "cert": "/usr/local/apache2/server.crt (generated at provisioning; not in rootfs-ext)",
+        "key":  "/usr/local/apache2/server.key (generated at provisioning; not in rootfs-ext)",
+        "ca":   "/etc/cert/ca/ca.crt (Fortinet CA chain)",
+        "client_auth": "SSLVerifyClient none (no mutual TLS for end-users on port 443)",
+        "http2": "Protocols h2 http/1.1 (HTTP/2 enabled on port 443 only; port 8082 is http/1.1 only)",
+        "fips_curves": "X25519MLKEM768:X25519:prime256v1:secp384r1:secp521r1 (post-quantum hybrid in FIPS mode)",
+    },
+
+    "http2_note": (
+        "HTTP/2 is enabled on port 443. "
+        "HTTP/2 request smuggling (CL.TE, TE.CL) attacks via h2c upgrade paths and "
+        "header injection via pseudo-header manipulation are worth testing. "
+        "mod_proxy + h2 combination has known smuggling vectors in some Apache versions."
+    ),
+
+    "gui_url_prefix": (
+        "GUI_URL_PREFIX defined as empty string in defined.conf "
+        "(dynamic change: server/src/sysmgr_new/cmf/plugin/sysmanager/sys_global.c). "
+        "WSGI_PROCESSES = 10. "
+        "When GUI_URL_PREFIX is empty, routes like '/${GUI_URL_PREFIX}/ui/' resolve to '/ui/'."
+    ),
+
+    "cgi_bin": {
+        "path":    "/usr/local/webclient/cgi_bin/ (ScriptAlias /cgi-bin/ -> here)",
+        "content": "Empty in rootfs-ext -- CGI handlers compiled into fmgd binary or loaded at runtime",
+    },
+
+    "fabric_oauth": {
+        "FAZ_fabric_authorization": "RewriteRule ^p/faz-fabric-authorization(.*) /${GUI_URL_PREFIX}/ui/faz-fabric-authorization [QSA,R=301,L]",
+        "FGT_fabric_authorization": "RewriteRule ^fabric-authorization(.*) /${GUI_URL_PREFIX}/ui/fabric-authorization [QSA,R=301,L]",
+        "note": "OAuth-style device approval flow for FAZ and FGT fabric onboarding -- redirect-only, handled by React SPA",
+    },
+}
+
+FMG800_WEB_F01 = {
+    "id":       "FMG800-WEB-F01",
+    "product":  "FortiManager 8.0.0 -- port 8082 FGT Proxy no mutual TLS",
+    "severity": "HIGH -- FortiGate device identity on port 8082 relies on cert validation; SSLVerifyClient none means any client can attempt FGFM",
+    "class":    "Missing mutual TLS on device management channel (CWE-295)",
+
+    "description": (
+        "Port 8082 (FGT Proxy Block) serves as the channel through which managed FortiGate devices "
+        "communicate with FortiManager. SSLVerifyClient is set to 'none' -- Apache does not verify "
+        "client certificates at the TLS layer. "
+        "All traffic is proxied to http://localhost:10745/ (the FGFM protocol handler). "
+        "Device identity verification (if any) is deferred entirely to the application layer in "
+        "the localhost:10745 service. "
+        "If the application layer uses the shared fgt2.key / fgt2.crt keypair for device identity "
+        "(which is the same RSA-2048 key across ALL FortiGate firmware versions 6.0.3 through 8.0.0), "
+        "an attacker with any FortiOS image can impersonate any managed FortiGate to FortiManager. "
+        "See CROSSVER-F07 (fgt2.key global shared keypair) for the key compromise path."
+    ),
+
+    "chain": (
+        "1. Extract fgt2.key from any FortiOS firmware image (same key in all versions). "
+        "2. Connect to FMG port 8082 using extracted key for TLS client authentication. "
+        "3. Send FGFM protocol messages impersonating a managed FortiGate. "
+        "4. FortiManager accepts the device as legitimate -> attacker has management plane access. "
+        "5. Push config to real managed FortiGate devices via FortiManager."
+    ),
+
+    "note": (
+        "The '/tmp/fmgd.domain' Unix socket is used for FastCGI. "
+        "World-readable /tmp location -- check socket permissions at runtime. "
+        "If permissions are too open, a local process on FMG could connect to fmgd directly."
+    ),
+}
+
+FMG800_WEB_F02 = {
+    "id":       "FMG800-WEB-F02",
+    "product":  "FortiManager 8.0.0 -- fmg_request.so CMF query on Host header match",
+    "severity": "MEDIUM -- Host header spoofing could bypass localhost-gated CMF query path; impact depends on CMF query semantics",
+    "class":    "Host header injection bypassing internal access check (CWE-346)",
+
+    "description": (
+        "fmg_request.so hooks post_read_request and reads the Host header. "
+        "If Host == '127.0.0.1', it calls create_cmf_query_by_type -> cmf_query_data, "
+        "then injects the result into the request via apr_table_set. "
+        "If an external request can reach Apache with Host: 127.0.0.1, the CMF query path fires. "
+        "The ServerName in httpd.conf is '127.0.0.1' -- Apache SNI and VirtualHost matching may "
+        "allow or reject this depending on configuration. "
+        "The CMF query result is injected as a request header -- if downstream code uses this header "
+        "for access control decisions (e.g., 'is this request from localhost, so skip auth'), "
+        "a Host header injection creates an auth bypass. "
+        "Requires: external client can set Host: 127.0.0.1 AND Apache does not filter it."
+    ),
+
+    "re_details": (
+        "fmg_request.so at /tmp/fmg800_rootfs_ext/usr/local/apache2/modules/fmg_request.so. "
+        "15KB ELF x86-64 stripped. "
+        "Imports: ap_hook_post_read_request, apr_table_get (Host header read), "
+        "strcmp (comparison against '127.0.0.1'), apr_table_set (inject result header), "
+        "create_cmf_query_by_type (libcmfapi.so), cmf_query_data, cmf_query_free. "
+        "Confirmed string in RODATA: '127.0.0.1' at offset 0x20a0 in fmg_request.so (confirmed by strings)."
+    ),
+}
+
+FMG800_WEB_F03 = {
+    "id":       "FMG800-WEB-F03",
+    "product":  "FortiManager 8.0.0 -- sql_rewriter NameError in logfields error path",
+    "severity": "LOW -- Python NameError in error handler leaks traceback to JSON-RPC response",
+    "class":    "Variable reference before assignment in exception handler (CWE-690); information disclosure",
+
+    "file":    "/tmp/fmg800_rootfs_ext/usr/local/python/sql_rewriter/app.py",
+    "line":    100,
+
+    "description": (
+        "In the sqlrewriter.logfields JSON-RPC method (app.py line 99-100): "
+        "  try: validate(instance=devtype, schema=rewriter_devtype_len_schema) "
+        "  except Exception as e: "
+        "      raise JSONRPCDispatchException(..., data={'info': message, 'status': code}) "
+        "Variables 'message' and 'code' are only defined at lines 111-112 (after the try/except block). "
+        "When the first validate() raises, the except handler references 'message' and 'code' "
+        "which are not yet in scope -- Python raises NameError: name 'message' is not defined. "
+        "This NameError is uncaught and surfaces as an unhandled exception in the Flask JSON-RPC response, "
+        "potentially leaking a Python traceback including file paths and internal variable names."
+    ),
+
+    "exploit": (
+        "POST /api/v1 with body: "
+        '{\"jsonrpc\": \"2.0\", \"method\": \"sqlrewriter.logfields\", \"params\": {\"query\": \"x\", \"devtype\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}, \"id\": 1} '
+        "(devtype > 8 chars triggers validate() failure -> NameError -> traceback in response). "
+        "Requires: access to the sql_rewriter Flask service endpoint. "
+        "The endpoint is /api/v1 -- check if it is exposed externally via httpd.conf ProxyPass."
+    ),
+
+    "impact": "Information disclosure (Python traceback, file paths). Not directly exploitable for RCE.",
+}
+
+FMG800_WEB_F04 = {
+    "id":       "FMG800-WEB-F04",
+    "product":  "FortiManager 8.0.0 -- rewrite engine SQL map injection surface",
+    "severity": "MEDIUM -- theoretical; requires SQL-backed RewriteMap with user-controlled key",
+    "class":    "SQL injection via RewriteMap key (CWE-89); conditional on deployment config",
+
+    "description": (
+        "fmg_rewrite.so imports apr_dbd_pvselect, apr_dbd_get_row, apr_dbd_get_entry -- "
+        "these are Apache DBD functions used by the dbd/fastdbd RewriteMap types. "
+        "If any RewriteMap in the active rewrite configuration uses dbd/fastdbd type "
+        "and the map key is derived from user-controlled request data (URL, headers, query string), "
+        "the key is passed to a SQL query against the DBD connection pool. "
+        "mod_rewrite does not sanitize the map key before passing to apr_dbd_pvselect. "
+        "If the SQL query is constructed via format string (not parameterized), "
+        "SQL injection in the database backing the RewriteMap is possible. "
+        "Impact: depends on the database (SQLite vs PostgreSQL) and what the RewriteMap table contains."
+    ),
+
+    "note": (
+        "The FMG 8.0.0 rootfs-ext does not contain runtime RewriteMap configurations -- "
+        "these are generated by fmgd at startup. Manual inspection of running fmgd required to "
+        "confirm whether dbd/fastdbd RewriteMap types are used. "
+        "FMG includes PostgreSQL 11 (pg11 at /usr/local/pg11/) -- the DBD pool likely connects to this."
+    ),
+}
+
+FMG800_PYTHON_STACK = {
+    "id":      "FMG800-PYTHON-STACK",
+    "product": "FortiManager 8.0.0 -- Python backend components",
+
+    "django_wsgi": {
+        "path":        "/usr/local/lib/python3.11/proj/",
+        "processes":   10,
+        "threads":     1,
+        "deadlock_timeout": 300,
+        "request_timeout":  300,
+        "max_requests": 500,
+        "restart_interval": 3600,
+        "python_version": "3.11",
+        "handles": ["SAML IDP (/saml-idp/<id>/metadata|login|logout/)", "SAML SP (/metadata/, /saml/)", "faz_upload", "generic /p/* routes"],
+        "note": "Single-threaded by design: multi-thread breaks C library session manager and SSO (lxml+BeautifulSoup).",
+    },
+
+    "sql_rewriter": {
+        "path":    "/usr/local/python/sql_rewriter/",
+        "app":     "Flask JSON-RPC server (jsonrpc.backend.flask)",
+        "methods": [
+            "sqlrewriter.rewrite(query, skip_fabric=0) -> rewrites FMG SQL to ClickHouse SQL",
+            "sqlrewriter.fabricrewrite(query) -> fabric-specific SQL rewrite",
+            "sqlrewriter.logfields(query, devtype='FGT', logtype='traffic') -> field extraction",
+            "sqlrewriter.echo(name) -> debug echo",
+            "sqlrewriter.notify() -> no-op",
+        ],
+        "parser":  "ANTLR4 grammar FazsqlParser (custom FMG SQL dialect -> ClickHouse SQL)",
+        "classes": [
+            "FazSQLAst -- ANTLR4 parse tree builder",
+            "FazSQLConvertor -- FMG SQL -> ClickHouse SQL converter (3132-line file)",
+            "FazFabricSQLAnalyzer -- Fabric SQL analyzer",
+            "FazFabricSQLConvertor -- Fabric SQL -> ClickHouse converter",
+            "FazSQLField -- field extraction from FMG SQL queries",
+            "FazReportSQL -- report-specific SQL processing",
+            "FazSQLFeature -- feature extraction for hcache optimization",
+        ],
+        "bug":     "NameError in sqlrewriter.logfields error path (see FMG800-WEB-F03)",
+    },
+
+    "sql_validator": {
+        "path":    "/usr/local/python/sql-validator/",
+        "purpose": "CLI tool to validate FMG SQL files (FortiView-HCACHE, Dataset styles)",
+        "parser":  "SqlParser class (sqlparser.py) -- separate SQL parser from sql_rewriter",
+        "invocation": "validateSQL.py -i <sql_file> -s <style> -d <devtype> -l <logtype> -r <rule>",
+    },
+
+    "libs_of_interest": {
+        "textblob":    "NLP library -- likely for log analytics or threat description processing",
+        "boto3":       "AWS SDK -- cloud log ingestion or FortiCloud integration",
+        "grpc":        "gRPC -- inter-service communication",
+        "certifi":     "CA bundle -- TLS validation for outbound connections",
+        "botocore":    "AWS core -- cloud integration",
+    },
+}
+
+FMG800_SEMANTIC_SWEEP = {
+    "id":      "FMG800-SEMANTIC-SWEEP",
+    "product": "FortiManager 8.0.0 -- fmg_rewrite.so semantic sweep",
+
+    "method": {
+        "binary":         "/tmp/fmg800_rootfs_ext/usr/local/apache2/modules/fmg_rewrite.so",
+        "size":           "75KB ELF x86-64 stripped",
+        "prologue_scan":  "55 48 89 E5 (push rbp; mov rbp, rsp) + 41 57 (push r15) variants",
+        "functions_found": 17,
+        "model":          "sentence-transformers/all-MiniLM-L6-v2",
+        "encoding_time":  "0.2s (trivial -- only 17 functions)",
+        "saved_corpus":   "/tmp/fmgrewrite_vecs.npy",
+    },
+
+    "observation": (
+        "fmg_rewrite.so has only 17 prologue-detected functions. "
+        "The module is a thin Apache wrapper -- all heavy logic is in libcmdbapi.so, "
+        "libcmfapi.so, libosapi.so, libsysapi.so (not present in rootfs-ext). "
+        "The semantic scores are low (0.01-0.16) indicating none of the 17 functions "
+        "closely match security-relevant query patterns. "
+        "The security surface of fmg_rewrite.so is its configuration hooks and "
+        "the CMF integration (check_create_cmf_query, cmf_query_update) -- "
+        "these are opaque without the backend library source."
+    ),
+
+    "key_functions": {
+        "0x59ce": "push r15/r14 callee-save setup; highest score on buffer/memcpy query (0.16) -- manual analysis needed",
+        "0x5c2f": "6-register callee-save (AWAVAUATUH) -- complex function; appears in buffer + error queries",
+        "0x6536": "7-register callee-save (AWAVAUATUSH) -- largest visible function; appears in auth + error queries",
+        "0xc8f7": "7-register callee-save -- top result for error handler query (score=0.14)",
+        "0xe000": "ap_register_rewrite_mapfunc -- in RODATA, not a function; map registration table",
+        "0xfe24": "Route table: /fdsupdate, /FDSService, /FCPService, /fazproxy, /jsonrpc, /workflow -- in RODATA",
+    },
+
+    "next_steps": [
+        "Disassemble 0x6536 (largest function visible, appears in auth query): "
+        "likely the main rewrite handler that calls check_create_cmf_query",
+        "Get libcmdbapi.so and libcmfapi.so from encrypted rootfs.gz for deeper CMF analysis",
+        "Trace /cgi-bin/module/flatui_auth FCGI path: Apache -> Unix socket -> fmgd auth handler",
+    ],
+}
