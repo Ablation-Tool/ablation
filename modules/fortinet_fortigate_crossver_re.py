@@ -5857,6 +5857,122 @@ FMG800_AUTO_SCRIPT_EXEC = {
     "cross_reference": ["FMG800-SWITCH-CUSTOM-CMD -- switch-controller variant; commands sent to FortiSwitches"],
 }
 
+FMG800_LLM_SERVER_APIKEY_PLAINTEXT = {
+    "id":       "FMG800-LLM-SERVER-APIKEY-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- LLM server api-key stored as :string: for all AI providers (CWE-312)",
+    "severity": "HIGH -- all configured LLM API keys exposed in plaintext config backup; covers OpenAI, Anthropic, Gemini, Grok, Azure OpenAI",
+    "class":    "Cleartext storage of LLM API credentials (CWE-312)",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 23292-23309 (vdom table 'llm server')",
+
+    "description": (
+        "The vdom-level 'llm server' table configures AI/LLM providers for all FortiManager AI security features: "
+        "  built-in-server: openai:option:'opt:openai azure azure-openai gemini anthropic grok "
+        "                              gemini-with-openai-api anthropic-with-openai-api' "
+        "  api-key: :string:'sz:255;mt:10;mu;' -- LLM API key, up to 10 values, plaintext "
+        "The api-key field stores the actual API authentication token for the selected LLM provider. "
+        "All supported providers -- OpenAI, Azure OpenAI, Google Gemini, Anthropic, Grok (xAI) -- "
+        "use the same api-key field type (:string: = plaintext). "
+        "Critical inconsistency with system sso-admin: "
+        "  system sso-admin openai-api-key: :passwd:'sz:124;mu;' (ENC-156 encrypted) "
+        "  llm server api-key: :string:'sz:255;mt:10;mu;' (PLAINTEXT) "
+        "The 'llm server' table is the operational LLM configuration (handles all inference requests); "
+        "the sso-admin key is the SSO integration key. The more-used operational key is less protected. "
+        "mt:10 = up to 10 API keys per server entry (e.g., multiple Azure deployments with separate keys). "
+        "Impact: config backup obtained by any admin exposes all LLM API keys in plaintext. "
+        "  1. Attacker can use stolen API keys to run LLM inference on the victim's account (cost fraud). "
+        "  2. Attacker can query the same models with access to any fine-tuned or organization data the key allows. "
+        "  3. For Azure OpenAI and enterprise Gemini/Anthropic: organizational rate limits and quotas are accessible."
+    ),
+
+    "providers_affected": ["openai", "azure-openai", "gemini", "anthropic", "grok",
+                           "gemini-with-openai-api", "anthropic-with-openai-api"],
+    "cross_reference": ["FMG800-OPENAI-INTEGRATION -- SSO admin OpenAI key IS :passwd: (ENC-156); operational key is NOT"],
+    "remediation": "Change api-key field type from :string: to :passwd:; add to hexpwdattr list",
+}
+
+FMG800_FORTITOKEN_SEED_PLAINTEXT = {
+    "id":       "FMG800-FORTITOKEN-SEED-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- FortiToken TOTP seed stored as :string: (CWE-312)",
+    "severity": "CRITICAL -- TOTP seed in plaintext config backup; any holder of the backup can clone all FortiTokens and bypass MFA",
+    "class":    "Cleartext storage of TOTP seed (CWE-312); MFA factor exposure",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 3011-3017 (vdom table 'user fortitoken')",
+
+    "description": (
+        "The FortiToken user table stores: "
+        "  serial-number: :string:'16' -- token serial number "
+        "  status: active:option:'active lock' "
+        "  seed: :string:'sz:208;xs;' -- TOTP/HOTP seed (ROOT SECRET, PLAINTEXT) "
+        "  comments: :string:'sz:255;xs;' "
+        "  license: :string:'31' "
+        "  activation-code: :string:'32' "
+        "The seed field stores the FortiToken TOTP/HOTP root secret in plaintext. "
+        "The TOTP seed (RFC 6238) is the shared secret K used in HMAC-SHA1(K, T) to generate OTPs. "
+        "Knowing the seed = ability to generate all past and future OTPs for the token. "
+        "Field size 208 chars = exactly the ENC-156 base64 output length (156 bytes -> 208 base64 chars). "
+        "Fortinet uses ENC-156 throughout the config for other secrets of comparable sensitivity, "
+        "but chose :string: for FortiToken seeds -- a critical inconsistency. "
+        "Attack path: "
+        "  1. Attacker obtains config backup (any admin with 'execute backup config' access). "
+        "  2. Parses 'user fortitoken' table, extracts seed values for all enrolled tokens. "
+        "  3. Imports seeds into a software TOTP app (e.g., oathtool, Google Authenticator). "
+        "  4. Generates valid OTPs for any user whose FortiToken is enrolled. "
+        "  5. Bypasses MFA for all FortiManager admin accounts and FortiGate VPN users using FortiToken. "
+        "Combined with any password leak (from ENC-156 decryption or other means): "
+        "  full account takeover despite MFA being enabled."
+    ),
+
+    "totp_math": (
+        "TOTP(K, T) = HOTP(K, T) = HMAC-SHA1(K, T) mod 10^d "
+        "where K = seed (exposed in plaintext), T = current 30-second window. "
+        "With K known, generating valid OTPs requires only the current time -- no brute force needed."
+    ),
+    "cross_reference": [
+        "FMG800-PRIVATE-DATA-ENCRYPTION-OFF -- private-data-encryption disabled by default; seeds unprotected",
+        "FMG800-GCK-PRIVATE-KEY-PLAINTEXT -- same :string: anti-pattern for other secrets",
+    ],
+    "remediation": (
+        "1. Change seed field type from :string: to :passwd:; add to hexpwdattr list. "
+        "2. Enable private-data-encryption to add device-level key wrapping to all passwd fields. "
+        "3. Restrict config backup access to super-admins only."
+    ),
+}
+
+FMG800_CAPTCHA_SECRET_PLAINTEXT = {
+    "id":       "FMG800-CAPTCHA-SECRET-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- CAPTCHA secret key stored as :string: in auth portal (CWE-312)",
+    "severity": "MEDIUM -- CAPTCHA server-side verification key exposed; enables CAPTCHA bypass on FMG auth portal",
+    "class":    "Cleartext storage of CAPTCHA secret key (CWE-312)",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 23637-23640 (user authentication settings)",
+
+    "description": (
+        "The user authentication settings table includes CAPTCHA integration fields: "
+        "  captcha: disable:binopt: -- CAPTCHA toggle (disabled by default) "
+        "  captcha-vendor: google-recaptcha-v2-checkbox:option:'google-recaptcha-v2-checkbox "
+        "                  google-recaptcha-v2-invisible google-recaptcha-v3 cloudflare-turnstile' "
+        "  captcha-site-key: :string:'63' -- public site key (acceptable; site key IS public) "
+        "  captcha-secret-key: :string:'63' -- server-side verification secret (PLAINTEXT) "
+        "The CAPTCHA secret key is the shared secret used in server-to-server calls to the CAPTCHA "
+        "provider's verification API (e.g., Google reCAPTCHA siteverify endpoint). "
+        "This key verifies that a CAPTCHA token presented by a client was legitimately solved. "
+        "The secret key MUST be kept private; if an attacker obtains it: "
+        "  1. Attacker sends POST requests directly to the CAPTCHA verification API with the secret key "
+        "     and any arbitrary token value. "
+        "  2. Depending on the provider, this may allow generating valid verification responses. "
+        "  3. More directly: the attacker could spoof the server-side verification call "
+        "     if they can MITM the FMG -> CAPTCHA provider connection (intercepting the secret key "
+        "     from the plaintext config backup enables offline analysis of verification behavior). "
+        "  4. Combined with CAPTCHA bypass: can automate brute-force attempts against the FMG auth portal. "
+        "Adjacent captcha-site-key is also :string: but the site key IS intentionally public "
+        "(it is embedded in the frontend HTML, not secret). "
+        "Captcha is disabled by default; impact limited to deployments with CAPTCHA enabled."
+    ),
+
+    "remediation": "Change captcha-secret-key field type from :string: to :passwd:; add to hexpwdattr list",
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
