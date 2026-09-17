@@ -5251,6 +5251,70 @@ FGT800_LIBIPS_F02 = {
 }
 
 
+FGT800_SYNTAX_F02 = {
+    "id":       "FGT800-SYNTAX-F02",
+    "product":  "FortiGate 8.0.0 -- automation-action webhook SSRF and diagnose-script execution",
+    "severity": "HIGH -- admin-accessible SSRF to any internal/cloud endpoint; diagnose-script reaches OS",
+    "class":    "SSRF via webhook URI (CWE-918); OS-level script execution via diagnose-script (CWE-78)",
+    "cwe":      "CWE-918, CWE-78",
+    "source":   "800.txt lines 23524-23581",
+
+    "description": (
+        "The 'system automation-action' global table (800.txt line 23524) supports webhook actions "
+        "with a 1023-byte uri field (:string:'sz:1023;mu;') with no URL validation. "
+        "Combined with port (1-65535), method (GET/POST/PUT/PATCH/DELETE), verify-host-cert (disableable), "
+        "and arbitrary http-headers injection (key 1023 bytes, value 4095 bytes), any admin can configure "
+        "the FortiGate to send HTTP requests to any internal IP, cloud metadata endpoint, or "
+        "adjacent network host when an automation trigger fires. "
+        "Additional high-severity fields: "
+        "  diagnose-script action-type: runs FortiOS 'diagnose' CLI commands, some of which reach the OS shell. "
+        "  system-action=backup-config: any automation trigger can exfiltrate the full device configuration. "
+        "  regular-expression field (sz:1023;xs;): PCRE regex applied to log data; no timeout mentioned -- potential ReDoS. "
+        "  message field (sz:4095;xs;mu;): includes log variable substitution (%%log%% etc.); if log content "
+        "    includes user-controlled data, the expanded message can inject into webhook body or CLI commands."
+    ),
+
+    "attack_chain": {
+        "ssrf_cloud_metadata": (
+            "Set uri='http://169.254.169.254/latest/meta-data/', method='get', verify-host-cert='disable'. "
+            "Trigger via any log event. FMG/FGT makes HTTP GET to AWS/Azure metadata service. "
+            "Response appears in FortiGate logs or can be collected via automation-stitch output."
+        ),
+        "diagnose_script_shell": (
+            "Set action-type='diagnose-script', script='diagnose sys sh id'. "
+            "Trigger fires -> FortiGate executes OS-level shell command. "
+            "Output captured in automation output up to output-size (1-1024KB)."
+        ),
+        "config_exfil": (
+            "Set action-type='system-actions', system-action='backup-config'. "
+            "Trigger on any common log event (login, config change). "
+            "Full configuration backup triggered automatically and sent to external server."
+        ),
+    },
+
+    "fields": {
+        "uri":          ":string:'sz:1023;mu;' -- no URL scheme/host validation",
+        "port":         "0:int:'1,65535' -- any port",
+        "method":       "get/post/put/patch/delete",
+        "verify-host-cert": "enable:binopt: -- CAN BE DISABLED (no TLS validation)",
+        "script":       ":string:'sz:1023;xs;mu;' -- CLI/diagnose script",
+        "http-body":    ":string:'sz:4095;xs;' -- arbitrary HTTP body",
+        "http-headers.key":   ":string:'sz:1023;mu;'",
+        "http-headers.value": ":string:'sz:4095;xs;mu;'",
+        "message":      ":string:'sz:4095;xs;mu;' -- log variable substitution",
+        "regular-expression": ":string:'sz:1023;xs;mu;' -- PCRE regex on log data",
+        "system-action": "reboot|shutdown|backup-config",
+    },
+
+    "access_control": "Admin-level access required to configure; any admin with automation-stitch perms",
+    "remediation": (
+        "Add URL allowlist/denylist validation for webhook uri field. "
+        "Rate-limit diagnose-script output. "
+        "Disable verify-host-cert=disable option or warn on use. "
+        "Add PCRE timeout for regular-expression evaluation."
+    ),
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
