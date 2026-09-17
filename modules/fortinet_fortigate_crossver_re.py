@@ -2866,11 +2866,44 @@ FORTICLIENT80_LIBAV = {
         },
     },
 
+    "sprintf_analysis": {
+        "callers": 65,
+        "method": "Automated format string scan (LEA [rip+N] rsi = RODATA; other = manual review)",
+        "safe_count": 40,
+        "safe_patterns": "40 callers use RODATA format with %d/%u/%f/%02x/%3.3s; no unbounded %s; SAFE.",
+        "findings": 1,
+        "FCLIENT80-LIBAV-SPRINTF-F01": {
+            "id":       "FCLIENT80-LIBAV-SPRINTF-F01",
+            "severity": "MEDIUM-HIGH -- sprintf to stack buf from ODF/XML style name; no canary; file-derived input",
+            "caller":   "0x3c0f18",
+            "format":   "'<style:style style:name=%s' (25 bytes fixed)",
+            "dest":     "rdi = rbp = [rsp + 0x110]",
+            "frame":    "sub rsp, 0x318 at 0x3c0dff; available buf = 0x318 - 0x110 = 0x208 = 520 bytes",
+            "overflow": "ODF/OOXML style name > 495 bytes -> stack overflow. No canary. Attacker provides malicious ODF file.",
+            "no_canary": "libav.so has no __stack_chk_fail -- exploitable (not just DoS).",
+        },
+        "low_findings": {
+            "0x329142": "sprintf(rbp, '%s%s%s.tmp', r13, [rsp+0xc], r14). Temp filename construction. LOW.",
+            "0x11cdd4": "Hex-dump loop: sprintf(r12, RODATA_fmt, edx_byte). RODATA format. SAFE.",
+            "0x8472a3": "Same hex-dump loop pattern as 0x11cdd4. SAFE.",
+            "0x12097c": "sprintf(malloc, '%u %s', edx_int, r15_string). PLAUSIBLE SAFE if malloc sized correctly.",
+            "0x133a23": "sprintf(buf+offset, '%s:rating = %.1f', rbp_str, xmm0). PLAUSIBLE SAFE.",
+            "0x3e76ae": "sprintf(buf+rbx, rsi=[rsp+0x10], ...). Format from stack var; content not traced.",
+            "0x854590": "sprintf(r12, '@%s=%c', rdx_array_elem, 0x22). JSON attribute. PLAUSIBLE SAFE.",
+        },
+        "rsi_not_found": "16 callers: rsi set > 50 bytes before call; pending deeper lookback scan.",
+    },
+
+    "severity_updated": (
+        "MEDIUM-HIGH -- libav.so has no stack canary; FCLIENT80-LIBAV-SPRINTF-F01 (ODF style name sprintf) "
+        "is stack-exploitable from a malicious ODF file. No canary = full RCE potential."
+    ),
+
     "pending": [
         "Trace how 'arch_internal_' key names are sourced (file-derived vs RODATA) for FCLIENT80-LIBAV-F01",
         "Trace 0x2d88bf rbp through callers for max length",
         "Trace remaining 22 strcpy callers not analyzed",
-        "sprintf 65 callers not analyzed (snprintf 206 = bounded by design)",
+        "Scan 16 sprintf callers with rsi set > 50 bytes before call (rsi_not_found group)",
         "Trace 0x2b5849 strcat loop: confirm initial malloc size accounts for all array elements",
     ],
 }
