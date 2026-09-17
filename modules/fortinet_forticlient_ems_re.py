@@ -417,12 +417,17 @@ EMS_F6_CLIENT_CERT_NO_CA_VERIFY = {
         "^fabric_device_auth/ -- device auth endpoint",
     ],
 
-    "note": (
-        "SSLVerifyClient optional_no_ca is different from optional: "
-        "'optional' validates cert against SSLCACertificateFile; "
-        "'optional_no_ca' skips all chain validation. "
-        "The auth impact requires cert_chain_auth.pyc analysis to confirm scope -- "
-        "Django may add additional validation beyond the CN check."
+    "confirmed_impact": (
+        "cert_chain_auth.pyc analysis confirms: "
+        "Django checks SSL_CLIENT_VERIFY=SUCCESS (set by Apache even with optional_no_ca), "
+        "then calls get_by_cn() to look up the cert CN in the EMS database. "
+        "If CN matches a registered device: grants that device's role/access. "
+        "ATTACK: Present self-signed cert with CN = FortiGate serial number (visible in "
+        "management traffic, firmware, device UI) to impersonate that fabric device. "
+        "NOT arbitrary admin -- requires knowing a registered device CN. "
+        "Django may also call _check_certificate_chain_is_valid() -- if this calls OpenSSL "
+        "for chain verification INDEPENDENTLY of Apache, the bypass is mitigated. "
+        "Severity downgraded to HIGH pending confirmation of _check_certificate_chain_is_valid() scope."
     ),
 
     "apache_config_other_findings": {
