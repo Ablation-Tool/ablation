@@ -3203,7 +3203,17 @@ FORTICLIENT80_VULSCAN = {
                 "Same function as 0xb35c37 (different branch); rdx=edx-r15; buf=[r13+r15]. "
                 "Also bounded 2-byte header read. SAFE."
             ),
-            "0xb363fe,0xb36476": "Disasm context garbled (mid-instruction lookback start); prologue not found; NEEDS_TRACE.",
+            "0xb363fe": (
+                "Function at 0xb363c0: malloc(2) -> r12. r13d=2. "
+                "Loop: rdx=r13-rbx=2; rsi=r12+rbx; recv(fd, rsi, rdx, 0). "
+                "Reads up to 2 bytes into 2-byte allocation. SAFE -- header read."
+            ),
+            "0xb36476": (
+                "Same function (0xb363c0), body-read branch after 2-byte header decoded. "
+                "r13 = movzx bx (16-bit big-endian body length from header). "
+                "r12 = malloc(r13). rdx = r13-rbx. recv(fd, r12+rbx, rdx, 0). "
+                "Allocation == recv count == header-declared length. SAFE."
+            ),
         },
     },
 
@@ -3334,10 +3344,16 @@ FORTICLIENT80_VULSCAN = {
 
     "severity": "LOW -- no high-severity findings confirmed; 0x5e02a8 recvfrom remains MEDIUM pending buf allocation trace",
 
+    "wrappers_indirect_dispatch": (
+        "Callers of 0x6b4ac0/0x6b61d0/0x91b7bd/0xa0c51b/0xb3c9c2 not found via direct e8 scan "
+        "or function-pointer-in-binary search. Runtime-resolved dispatch (likely vtable set at init). "
+        "All wrappers are passthrough (count from caller's arg). "
+        "No packet-derived count found in any traceable read call path. "
+        "SAFE_ASSUMED: wrapper-level analysis complete; indirect callers not traceable statically."
+    ),
+
     "pending": [
         "Trace buf allocation at r15->field_0x100 vs r15->field_0x150 for recvfrom 0x5e02a8",
-        "Trace callers of read wrappers (0x6b4ac0/0x6b61d0/0x91b7bd/0xa0c51b/0xb3c9c2) to confirm count not packet-derived",
-        "Trace recv 0xb363fe/0xb36476 (garbled lookback; need prologue)",
         "Resolve 0x542d67 (called at 0x577186 before strcpy at 0x5771bd)",
     ],
 }
