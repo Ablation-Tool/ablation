@@ -318,20 +318,42 @@ class SemanticSearcher:
 
     # ── corpus management ────────────────────────────────────────────────────
 
-    def _cache_file(self) -> Path:
-        return self._cache_dir / 'func_semantic_cache.pkl'
+    def _cache_file(self, live_hash: str = '') -> Path:
+        suffix = f'_{live_hash}' if live_hash else ''
+        return self._cache_dir / f'func_semantic_cache{suffix}.pkl'
 
     def _db_hash(self) -> str:
         return hashlib.sha256(self._db_path.read_bytes()).hexdigest()[:16]
 
-    def build_corpus(self, force: bool = False) -> int:
+    @staticmethod
+    def load_live_addrs(path: str) -> 'set[int]':
+        """Load live function addresses from a newline-delimited hex-address file."""
+        live: set[int] = set()
+        with open(path, 'r') as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    live.add(int(line, 16))
+        return live
+
+    def build_corpus(self, force: bool = False, live_addrs: 'set[int] | None' = None) -> int:
         """Load or rebuild the embedding corpus from func_id_db.
+
+        When *live_addrs* is provided only functions whose VA appears in the set
+        are encoded. This eliminates dead-code false positives (e.g. protobuf
+        template stubs with 0 callers) that score highest on structural queries.
 
         Returns the number of functions indexed.
         """
         import sqlite3
 
-        cache = self._cache_file()
+        live_hash = ''
+        if live_addrs is not None:
+            live_hash = hashlib.sha256(
+                ','.join(str(a) for a in sorted(live_addrs)).encode()
+            ).hexdigest()[:12]
+
+        cache = self._cache_file(live_hash)
         db_hash = self._db_hash()
 
         if not force and cache.exists():
@@ -349,6 +371,9 @@ class SemanticSearcher:
              WHERE confidence IN ('CONFIRMED', 'ANGR_INFERRED')
         ''').fetchall()
         con.close()
+
+        if live_addrs is not None:
+            rows = [r for r in rows if r[0] in live_addrs]
 
         if not rows:
             self._vectors = np.empty((0, 384), dtype=np.float32)
