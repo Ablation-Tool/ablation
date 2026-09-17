@@ -243,3 +243,97 @@ FPE_CS_F05_ACTIVITY_TRACKER = {
 
     "note": "The code field does not reveal what the user typed, only which physical key was pressed. Intended for session activity/idle detection.",
 }
+
+
+# ---------------------------------------------------------
+# FPE-CS-F06: _internal_get_credential_from_page -- bidirectional credential harvest
+# ---------------------------------------------------------
+FPE_CS_F06_CREDENTIAL_HARVEST_FROM_PAGE = {
+    "id":       "FPE-CS-F06",
+    "product":  "FortiPAM Chrome Extension content-script.js",
+    "severity": "MEDIUM -- service worker can harvest credentials from any open tab's password fields",
+    "class":    "Overly broad credential read access (CWE-522 + CWE-732)",
+
+    "description": (
+        "The content script's onMessageHandler accepts '_internal_get_credential_from_page' "
+        "from the service worker (extension-internal; not web-page-triggerable). "
+        "Handler calls getCredentialsFromPage(callback): "
+        "queries document.querySelectorAll('[type=password]').filter(t=>t.value?.length>0), "
+        "takes the last non-empty password field, reads its plaintext .value, "
+        "finds the nearest username field via findNearestUsernameInput(lastPwdInput), "
+        "and returns {username: usernameInput.value, password: lastPwdInput.value}. "
+        "The service worker sends this message via chrome.tabs.sendMessage(tabId, msg) -- "
+        "it can target ANY tab where the content script is active (all URLs). "
+        "The 'quickCreateAction' feature legitimately uses this: when a user asks the extension "
+        "to save a new PAM secret for the current page, it reads existing credentials. "
+        "A logic bug in service_worker.js could cause this to run on the wrong tab, "
+        "harvesting credentials from any page with filled password fields."
+    ),
+
+    "evidence": {
+        "handler":  "_internal_get_credential_from_page at content-script.js offset 60084",
+        "query":    "document.querySelectorAll('[type=\"password\"]').filter(t=>t.value?.length>0)",
+        "returns":  "{type:'_internal_get_credential_from_page_response', username: str, password: str}",
+        "caller":   "askContentScriptForCredentials(tab) in service_worker.js at offset 330380",
+        "scope":    "content script is registered on <all_urls>; message can target any tab",
+    },
+
+    "attack_scenario": (
+        "1. Service worker has logic bug: sends _internal_get_credential_from_page to active tab "
+        "instead of PAM-specific tab (e.g., tab selection race condition). "
+        "2. Active tab is a banking site with filled password field. "
+        "3. Content script returns {password: '<bank_password>'}. "
+        "4. Service worker sends this to the PAM server API (createWebAccountSecretForUrl). "
+        "Alternatively: XSS on the FortiPAM web UI triggers quickCreateAction "
+        "via the extension's external message handler, targeting any tab ID."
+    ),
+
+    "note": (
+        "This is intentional design (PAM secret creation flow). "
+        "The risk is amplified by the <all_urls> content script scope -- "
+        "no page is excluded from credential read access."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FPE-CS-F07: _internal_fill_specific_field_with_value -- arbitrary DOM injection
+# ---------------------------------------------------------
+FPE_CS_F07_ARBITRARY_DOM_FILL = {
+    "id":       "FPE-CS-F07",
+    "product":  "FortiPAM Chrome Extension content-script.js",
+    "severity": "LOW -- arbitrary DOM field injection via service worker; no direct web-page trigger",
+    "class":    "DOM injection via extension IPC (design-level attack surface)",
+
+    "description": (
+        "The content script's onMessageHandler accepts '_internal_fill_specific_field_with_value' "
+        "from the service worker. "
+        "Handler: const {selector, value} = t; this.fillSpecificFieldWithValue(selector, value). "
+        "The selector is a CSS selector string; value is the string to inject. "
+        "fillSpecificFieldWithValue() calls document.querySelector(selector) or similar, "
+        "then sets the matched element's .value to the provided string and dispatches "
+        "input/change events. "
+        "This allows the service worker to inject any string into any CSS-selector-matched "
+        "DOM element on any page where the content script runs. "
+        "Web pages cannot trigger this directly (extension-internal message only). "
+        "A compromised service worker or logic error in session injection could cause "
+        "credential values to be written to wrong DOM elements on any page."
+    ),
+
+    "evidence": {
+        "handler":   "_internal_fill_specific_field_with_value at content-script.js offset 60372",
+        "payload":   "{type:'_internal_fill_specific_field_with_value', selector: str, value: str}",
+        "no_origin": "origin of calling tab is not checked by content script; trusts service worker",
+    },
+
+    "note": "Exploitable only via service worker compromise or logic error; not a web-page-reachable surface.",
+}
+
+
+# ---------------------------------------------------------
+# Finding index
+# ---------------------------------------------------------
+unique_findings = [
+    "FPE-CS-F01", "FPE-CS-F02", "FPE-CS-F03",
+    "FPE-CS-F04", "FPE-CS-F05", "FPE-CS-F06", "FPE-CS-F07",
+]
