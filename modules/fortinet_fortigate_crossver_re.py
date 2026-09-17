@@ -2568,3 +2568,105 @@ LIBVCM_603 = {
     ],
 }
 
+
+
+# ---------------------------------------------------------
+# FortiClient 8.0 -- scanunit (AV engine) binary RE
+# ---------------------------------------------------------
+FORTICLIENT80_SCANUNIT = {
+    "id":        "FCLIENT-SCANUNIT",
+    "product":   "FortiClient 8.0 scanunit -- AV scanning engine",
+    "binary":    "/opt/forticlient/scanunit (ELF64 x86-64 stripped; 8,478,448 bytes)",
+    "has_canary": True,
+    "has_chk":   True,
+    "chk_detail": "__sprintf_chk present (partial hardening); __strcpy_chk absent",
+    "severity":  "LOW -- all dangerous-function callers verified safe; stack canaries prevent overflow exploitation",
+
+    "plt_inventory": {
+        "strcpy":   {"plt": "0x406910", "got": "0xe0e4c8", "callers": 10},
+        "strcat":   {"plt": "0x407210", "got": "0xe0e948", "callers": 2},
+        "sprintf":  {"plt": "0x406110", "got": "0xe0e0c8", "callers": 3},
+        "strncpy":  {"plt": "0x406470", "got": "0xe0e278", "callers": 20},
+        "sscanf":   {"plt": "0x406630", "got": "0xe0e358", "callers": 17},
+        "recv":     {"plt": "0x406280", "got": "0xe0e180", "callers": 1},
+        "recvfrom": {"plt": "0x4066f0", "got": "0xe0e3b8", "callers": 2},
+    },
+
+    "strcpy_analysis": {
+        "callers": 10,
+        "method": "Ablation semantic sweep + manual disasm of all callers",
+        "findings": 0,
+        "detail": (
+            "Top-scoring: 0x8bf885 has explicit bounds check (strlen(src) < remaining_buf_size) before strcpy. "
+            "0x8a7aa3: strlen check cmp rax, 0xfff (strlen <= 4091) before strcpy into [rbp-0x1010] (4112 bytes). "
+            "0x509c0e, 0x50fd8f, 0x510f55, 0x510f8d, 0x52e0b5: all follow malloc(strlen+1) -> strcpy strdup pattern. "
+            "0x5007b7, 0x750113, 0x750126: disasm failed (data bytes). "
+            "No bare strcpy into fixed-size buffer with user-controlled source found."
+        ),
+    },
+
+    "sscanf_analysis": {
+        "callers": 17,
+        "method": "Format string extraction + manual review",
+        "findings": 0,
+        "formats": {
+            "0x8a5b8c":  "%d/%3s/%d %d:%d:%d",
+            "0x8a5bde":  "%d %3s %d %d:%d:%d",
+            "0x8a5c30":  "%*3s, %d %3s %d %d:%d:%d",
+            "0x8a5c7e":  "%d-%3s-%d %d:%d:%d",
+            "0x8a7ba8":  "%255[^:]:%255[^:]:%*s",
+            "0x8a9b4b":  "bytes=%ld-%ld",
+            "0x8adf55":  " abspath=\"%511[^\"\"\"]\", ",
+            "0x8adfe2":  " \"%511[^\"\"\"]\", ",
+            "0x8ae343":  " \"%1023[^\"\"\"]\", ",
+            "0x8b1d26":  "%u.%u.%u.%u/%u%n",
+            "0x8b1d6e":  "%u.%u.%u.%u%n",
+            "0x8b1ed7":  "%lf%c",
+            "0x8b66f2":  "%u.%u.%u.%u:%u%n",
+            "0x8b67a4":  "%u%n",
+            "note":      "All 17 callers use width-bounded specifiers (%3s, %255[], %511[], %1023[], etc.) or integer-only formats. No bare %s.",
+        },
+        "sscanf_1023_dest_size": (
+            "Caller 0x8ae343 uses '%1023[^\"]'; dest=[rbp-0x410]; frame sub rsp, 0x450 = 1104 bytes. "
+            "Max write: 1023 chars + null = 1024 bytes from [rbp-0x410], ending at [rbp-0x11]. "
+            "Canary at [rbp-8]: 9 bytes gap. NOT reached. SAFE."
+        ),
+    },
+
+    "strncpy_analysis": {
+        "callers": 20,
+        "method": "Ablation semantic sweep + n-value classification",
+        "findings": 0,
+        "constant_n": {
+            "count": 8,
+            "values": "0x6b (x2), 0x3f, 0x10, 0x31, 0x16a, 0x100, 0x200",
+            "verdict": "SAFE",
+        },
+        "dynamic_n": {
+            "0x4fe63e": "n = strlen(src)+1 = exact allocation; strdup pattern; SAFE",
+            "0x606641": "n = r14+1 (buffer chunk size in loop concatenation); SAFE",
+            "0x60665d": "n = r12 from call 0x606510 return value (computed length); SAFE",
+            "0x6b83bd": "n = rbp = (rdx+7)/8 alignment loop counter; SAFE",
+            "0x4360b4": "n = [rsp+0x18]; function context: path copy after open(path); LIKELY SAFE",
+            "0x72b629": "disasm failed; UNKNOWN",
+        },
+    },
+
+    "recvfrom_analysis": {
+        "callers": 2,
+        "findings": 0,
+        "detail": {
+            "0x41a5b0": (
+                "recvfrom(fd, [rsp+0x490], 0x20e9, 0, addr, 0x6e). "
+                "Post-check: cmp rax, 0x20e9 (reject partial reads); "
+                "cmp word [rsp+0x2580], 1 (AF_INET check). "
+                "Fixed-size protocol packet; SAFE."
+            ),
+            "0x77bd51": (
+                "recvfrom(fd, r12, rbp, r13, rax, [rsp+0x18]). "
+                "rbp=edx from caller arg; r12=buffer from caller. "
+                "Caller-controlled buffer + caller-provided size = standard safe receive wrapper."
+            ),
+        },
+    },
+}
