@@ -1684,3 +1684,101 @@ SSLVPN_720_F03_OUTBOUND_LOGINCHECK_TEMPLATE = {
     ),
 }
 
+FABRIC_720_F01_OUTBOUND_API_CALLS = {
+    "id":      "FABRIC-720-F01",
+    "product": "FortiOS 7.2.0 -- Fortinet Security Fabric outbound REST API calls",
+    "severity": "MEDIUM -- FortiGate makes outbound API calls to fabric member addresses; SSRF if fabric member address is attacker-controlled",
+
+    "evidence": {
+        "admin_api":    "https://%s/api/v2/cmdb/system/admin/admin (file 0x27c6e20) -- creates/updates admin account on fabric member",
+        "console_api":  "https://%s/api/v2/cmdb/system/console (file 0x27c6e80)",
+        "flan_api":     "https://%s/api/v2/cmdb/system/flan-cloud (file 0x27c6ea8)",
+        "switch_trunk": "https://%s/api/v2/cmdb/switch/trunk/%s (file 0x27c6f00)",
+        "switch_isl":   "https://%s/api/v2/cmdb/switch/auto-isl-port-group (file 0x27c6f28)",
+        "interface":    "https://%s/api/v2/cmdb/system/interface/%s (file 0x27c6f60)",
+    },
+
+    "attack_vector": (
+        "The FortiGate root device in a Security Fabric makes outbound REST API calls to "
+        "downstream FortiSwitch/FortiAP members via https://%s/api/v2/cmdb/... URLs, "
+        "where %s is the managed device's IP address. "
+        "Attack scenario 1: If an attacker compromises a managed FortiSwitch, they can "
+        "intercept these fabric API calls and respond with crafted data to influence the root device. "
+        "Attack scenario 2: FGFM config push (from compromised FMG via FGFM-TLS-F01) can set "
+        "the fabric member address to an attacker-controlled endpoint, turning this into SSRF. "
+        "The admin/admin endpoint is particularly sensitive -- it was the exact target in CVE-2022-40684."
+    ),
+
+    "note": (
+        "CVE-2022-40684 exploited the https://<device>/api/v2/cmdb/system/admin/admin "
+        "endpoint with forged X-Forwarded-For and Authorization headers for pre-auth admin takeover. "
+        "In 7.2.0, the outbound call from fabric root to members uses this same endpoint. "
+        "The attack surface here is the fabric trust relationship, not the endpoint itself."
+    ),
+}
+
+SSLVPN_720_F06_WEB_PROXY_SURFACE = {
+    "id":      "SSLVPN-720-F06",
+    "product": "FortiOS 7.2.0 SSL-VPN -- web proxy application recognition patterns",
+    "severity": "INFO -- hardcoded third-party domain patterns and SAP application paths; attack surface in application-specific routing",
+
+    "hardcoded_domains": {
+        "file_offset": "0x2caf833 (rodata)",
+        "domains": [
+            "remote.drcswitchboards.com.au",
+            "www.costco.com",
+        ],
+        "more_at": "0x2cb0cfe: sap.contiba.com, int.dswiss.com, cbhs.com.au, grupoasv.com",
+    },
+
+    "sap_paths": {
+        "file_offset": "0x2caf780 (rodata)",
+        "paths": ["/sdata", "/trans/x3/erp/", "/trans", "/nwbc/", "/print/", "/print"],
+        "note": "SAP ERP application paths recognized for SSL-VPN proxy routing",
+    },
+
+    "proxy_url_surface": {
+        "endpoint":     "proxy?url= (SSL-VPN web access proxy)",
+        "url_param":    "?url=https%3A%2F%2F (URL parameter is URL-encoded HTTPS target)",
+        "ssrf_concern": (
+            "libcurl compiled into FortiOS supports file:// protocol "
+            "(libcurl error string: 'Couldn\\'t read a file:// file' at file 0x3252aac). "
+            "If the proxy?url= endpoint passes the URL directly to libcurl without protocol filtering, "
+            "file:// SSRF can read local files. "
+            "However: the URL-encoded prefix '?url=https%3A%2F%2F' suggests the code pre-encodes "
+            "HTTPS-only URLs before passing to proxy, which would restrict the protocol. "
+            "Needs testing with ?url=file:///etc/passwd to confirm."
+        ),
+    },
+
+    "session_tokens": {
+        "SVPNCOOKIE":          "main SSL-VPN session cookie",
+        "SVPNNETWORKCOOKIE":   "SSL-VPN network access token",
+        "sslvpn-requesttoken": "request token in URL (?sslvpn-requesttoken=)",
+        "SEC_SESSTOKEN":       "~SEC_SESSTOKEN= in URL -- SAP BusinessObjects session token",
+        "XSRF-TOKEN":          "cross-site request forgery token",
+        "note":                "Multiple session token types; token confusion between sslvpn-requesttoken and XSRF-TOKEN is a potential attack vector",
+    },
+}
+
+HTTPSD_720_F01_NTLM_AUTH = {
+    "id":      "HTTPSD-720-F01",
+    "product": "FortiOS 7.2.0 httpsd -- NTLM authentication in SSL-VPN web server",
+    "severity": "LOW -- NTLM auth presence enables NTLM relay attacks against FortiGate SSL-VPN portal in Windows network environments",
+
+    "evidence": {
+        "ntlm_string": "NTLM  (file 0x2caad2a) -- NTLM auth challenge string in httpsd response headers",
+        "basic_auth":  "Basic realm=\"\" (file 0x2caad38) -- HTTP Basic auth also supported",
+        "webdav_methods": "Allow: GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, PATCH, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK",
+    },
+
+    "attack_vector": (
+        "FortiGate SSL-VPN portal supports NTLM authentication (Windows Integrated Auth). "
+        "In Windows AD environments, a browser connecting to the SSL-VPN portal may auto-negotiate NTLM. "
+        "If an attacker can intercept the NTLM handshake (MITM on the portal traffic), "
+        "they can relay the NTLM credentials to another service (NTLM relay). "
+        "Additionally: WebDAV methods (PROPFIND, MKCOL, LOCK, UNLOCK) are enabled on the SSL-VPN portal. "
+        "Historical precedent: CVE-2018-13381 was a heap overflow in FortiOS SSL-VPN PROPFIND handler."
+    ),
+}
+
