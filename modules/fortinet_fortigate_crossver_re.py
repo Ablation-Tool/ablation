@@ -4850,3 +4850,188 @@ FGT800_LIBAV_F01_FLOW_LIMITS = {
     "total_limit":  "0x3fffffff per flow",
     "mitigation":   "Lower the total limit or implement per-flow timeout; enforce decompressed-size limits in internal decompressors",
 }
+
+# ---------------------------------------------------------
+# FortiGate/FMG 8.0.0 LLM integration attack surface
+# Source: /tmp/fmg800_syntax/syntax/800.txt (61202-line firmware schema)
+# ---------------------------------------------------------
+FGT800_LLM_ARCH = {
+    "id":       "FGT800-LLM-ARCH",
+    "product":  "FortiGate/FMG 8.0.0 -- LLM integration architecture",
+    "source":   "firmware CLI schema (800.txt syntax definition file)",
+
+    "components": {
+        "llm_server":  {
+            "table":    "vdom table 'llm server {tz:512,256,0;}' (line 23292)",
+            "backends": ["openai", "azure", "azure-openai", "gemini", "anthropic", "grok",
+                         "gemini-with-openai-api", "anthropic-with-openai-api"],
+            "api_key":  "api-key: :string:'sz:255;mt:10;mu;' -- NOT :passwd:; mt:10 = multi-token (stores up to 10 keys)",
+            "note":     "api-key uses :string: type, NOT in hexpwdattr list -- cleartext in config exports",
+        },
+        "llm_profile": {
+            "table":    "vdom table 'llm profile {tz:512,256,0;}' (line 23311)",
+            "chat_obj": {
+                "max_req_len":          "1024 bytes default",
+                "stream":               "bypass|block",
+                "system_prompt_mode":   "bypass|replace|prepend|append",
+                "system_prompt":        ":string:'sz:255' -- injected into all proxied LLM calls",
+            },
+            "unknown_api": "disable by default -- blocks unrecognized API endpoints",
+            "log":         "none|blocked|all",
+        },
+        "llm_proxy":   {
+            "obj":      "vdom obj 'llm proxy' (line 23267)",
+            "ports":    {"http": 8098, "https": 8099},
+            "auth":     "NONE -- no authentication fields in proxy object; access controlled by firewall policy only",
+            "ssl_cert": "configurable (ssl-certificate table)",
+            "note":     "Proxy listens on 8098/8099; no app-layer auth; firewall-policy gated only",
+        },
+        "admin_llm_keys": {
+            "system_admin":              "openai-api-key + openai-api-key-part2 (hexpwdattr, ENC default in schema)",
+            "system_sso_admin":          "openai-api-key (hexpwdattr, ENC default in schema)",
+            "system_sso_forticloud":     "openai-api-key (hexpwdattr, ENC default in schema)",
+            "system_sso_fgt_cloud":      "openai-api-key (hexpwdattr, ENC default in schema)",
+            "gui_llm_provider_default":  "fortiai (not openai) -- OpenAI path requires explicit admin config change",
+        },
+        "proxy_address_integration": "firewall proxy-address llm-servers -- LLM server objects usable in FW policy match",
+        "profile_integration":       "firewall policy/proxy-policy/security-policy: llm-profile field",
+    },
+
+    "enc_crypto_weakness": {
+        "observation": "ALL ENC-prefixed password defaults in 800.txt share the same 10-char base64 tail: 'lmMjY3dkVA'",
+        "affected_fields": [
+            "system admin openai-api-key (all 4 admin types)",
+            "acme-eab-key-hmac (line 1997)",
+            "system mobile-tunnel sim2-pin (line 3593)",
+            "cloud-authentication-access-key (lines 14974, 15007)",
+        ],
+        "implication": (
+            "Shared ciphertext suffix across unrelated password types implies: "
+            "  (a) Fixed IV or deterministic counter mode so same key material encrypts same positions, OR "
+            "  (b) Same plaintext padding/terminator at all positions across all field types, OR "
+            "  (c) Global XOR key applied to all values; terminal key bytes are fixed. "
+            "A known-plaintext attack on ANY one field (e.g., sim2-pin which may be numeric and short) "
+            "would recover the key material for ALL defaults including the OpenAI API keys."
+        ),
+        "non_sharing": "SDN connector api-key, vcenter-password have DIFFERENT tails -- not all ENC values share this",
+    },
+}
+
+FGT800_LLM_F01 = {
+    "id":       "FGT800-LLM-F01",
+    "product":  "FortiGate 8.0.0 -- LLM server API keys stored as cleartext strings",
+    "severity": "HIGH -- config backup exposes all LLM API keys (OpenAI, Anthropic, Gemini, Grok, Azure)",
+    "class":    "Cleartext storage of sensitive credentials (CWE-312)",
+    "cwe":      "CWE-312",
+
+    "description": (
+        "The 'llm server' VDOM table (line 23292 of 800.txt) defines: "
+        "  api-key: :string:'sz:255;mt:10;mu;' "
+        "The :string: type means the value is stored in plaintext in the running config. "
+        "The field is NOT listed in the 'hexpwdattr' section (which governs ENC password encryption). "
+        "Config backup via 'execute backup config' or 'diagnose sys config' will export LLM API keys "
+        "in cleartext. "
+        "Contrast with 'system admin openai-api-key' which uses :passwd: type AND is in hexpwdattr -- "
+        "these ARE encrypted in config exports. "
+        "The llm server API keys (shared LLM backend credentials) are not protected the same way."
+    ),
+
+    "affected_backends": ["openai", "azure", "azure-openai", "gemini", "anthropic", "grok",
+                          "gemini-with-openai-api", "anthropic-with-openai-api"],
+    "exposure_path":     "execute backup config -> tftp/scp/ftp -> cleartext API keys in backup file",
+    "remediation":       "Change api-key field to :passwd: type; add 'llm server api-key' to hexpwdattr",
+}
+
+FGT800_LLM_F02 = {
+    "id":       "FGT800-LLM-F02",
+    "product":  "FortiGate 8.0.0 -- LLM proxy lacks application-layer authentication",
+    "severity": "MEDIUM -- proxy auth relies solely on firewall policy; bypass risk if policy misconfigured",
+    "class":    "Missing authentication for critical function (CWE-306)",
+    "cwe":      "CWE-306",
+
+    "description": (
+        "The 'llm proxy' VDOM object (line 23267) opens an LLM API proxy on: "
+        "  - TCP 8098 (HTTP) "
+        "  - TCP 8099 (HTTPS) "
+        "The proxy object has NO authentication fields (no api-key, no user/password, no token). "
+        "Access control relies entirely on the firewall policy (llm-profile applied to proxy-policy). "
+        "If the firewall policy is misconfigured (e.g., ANY source allowed to port 8098/8099), "
+        "unauthenticated clients can send requests through the LLM proxy using Fortinet's configured "
+        "API keys at no cost to the attacker. "
+        "The proxy intercepts, optionally modifies (system-prompt injection), and forwards requests "
+        "to configured LLM backends."
+    ),
+
+    "attack_scenario": (
+        "Attacker on internal network -> TCP 8098 -> LLM proxy -> configured OpenAI/Anthropic API key "
+        "-> LLM API calls billed to victim organization. "
+        "Or: attacker sends crafted prompt that bypasses injected system-prompt filtering."
+    ),
+    "remediation": "Add application-layer bearer token auth to llm proxy; enforce source IP restrictions at proxy level, not only firewall policy",
+}
+
+FGT800_LLM_F03 = {
+    "id":       "FGT800-LLM-F03",
+    "product":  "FortiGate 8.0.0 -- LLM profile system prompt injection capability",
+    "severity": "MEDIUM -- administrative feature; exploitable if attacker can edit llm-profile",
+    "class":    "Prompt injection via firewall configuration (design feature with abuse potential)",
+
+    "description": (
+        "The 'llm profile' VDOM table (line 23311) includes: "
+        "  system-prompt-mode: bypass|replace|prepend|append "
+        "  system-prompt: :string:'sz:255' "
+        "When a firewall proxy-policy applies an llm-profile with system-prompt-mode != bypass, "
+        "the FortiGate MODIFIES the system prompt of all LLM API calls passing through it. "
+        "This is a designed feature for content control (e.g., add a disclaimer to all prompts). "
+        "Abuse: an attacker with admin access to llm-profile can inject system prompts into all "
+        "outbound LLM API calls, enabling: "
+        "  1. Data exfiltration instructions embedded in all user prompts "
+        "  2. Behavior modification of LLM responses for all users "
+        "  3. DLP bypass by instructing LLM to ignore content policies "
+        "The system-prompt field is 255 bytes, sufficient for complex injection payloads."
+    ),
+
+    "note": "This is a deliberate feature; the security risk is the low barrier to abuse (any admin can configure it)",
+    "remediation": "Require dual-admin approval for llm-profile changes; audit llm-profile modification in change logs",
+}
+
+FGT800_LLM_F04 = {
+    "id":       "FGT800-LLM-F04",
+    "product":  "FortiGate 8.0.0 -- hardcoded ENC default for admin OpenAI API keys with crypto weakness",
+    "severity": "MEDIUM -- ENC defaults may represent Fortinet's own OpenAI credentials; shared ciphertext suffix enables key recovery",
+    "class":    "Hard-coded credentials + cryptographic weakness (CWE-798, CWE-326)",
+    "cwe":      "CWE-798 / CWE-326",
+
+    "description": (
+        "The firmware schema (800.txt) pre-populates the openai-api-key field with ENC-encrypted "
+        "default values for four admin types: "
+        "  system admin:                ENC 0vq6iTUGaBGWgAz0... (156 bytes decoded) "
+        "  system sso-admin:            ENC B7pmXb1f44eBToH5... (156 bytes decoded) "
+        "  system sso-forticloud-admin: ENC NEv4Hn2ywXAAFYVm... (156 bytes decoded) "
+        "  system sso-fortigate-cloud:  ENC hE5h0sUEUd66IGav... (156 bytes decoded) "
+        "All four are 156 bytes (208 base64 chars) and share the same 8-byte hex tail: 5966323637764540. "
+        "These defaults represent Fortinet's pre-configured OpenAI API credentials for the AI assistant "
+        "feature. They only activate if an admin sets gui-llm-provider to 'openai' (default: 'fortiai'). "
+        "The shared tail across ALL ENC defaults in the firmware (including unrelated fields like "
+        "acme-eab-key-hmac, sim2-pin, cloud-auth-access-key) indicates a global fixed encryption parameter. "
+        "Known-plaintext attack on any simple field (sim2-pin is numeric) could recover the key material, "
+        "enabling decryption of all ENC defaults including the OpenAI API keys."
+    ),
+
+    "enc_candidates": {
+        "system_admin":     "ENC 0vq6iTUGaBGWgAz0tTyLXClTv6W7keBBUqRUPcKGZ8+Pu/JH...lmMjY3dkVA",
+        "sso_admin":        "ENC B7pmXb1f44eBToH5MX6zFLxRV7Py1MZu1CiOtHwVeFdj...lmMjY3dkVA",
+        "sso_forticloud":   "ENC NEv4Hn2ywXAAFYVm1o7cUgfikyvOd8GIqdqS0SwXog...lmMjY3dkVA",
+        "sso_fgt_cloud":    "ENC hE5h0sUEUd66IGavDc6LgHQBKdq9+EDB5P9MsPEqADb...lmMjY3dkVA",
+    },
+    "also_affected": [
+        "acme-eab-key-hmac (line 1997): ENC dGaszvLJJ4Uft...lmMjY3dkVA",
+        "sim2-pin (line 3593): ENC FD7QuLfCjOVy...lmMjY3dkVA",
+        "cloud-authentication-access-key (lines 14974, 15007): both end with lmMjY3dkVA",
+    ],
+    "remediation": (
+        "Remove pre-configured ENC defaults from schema; require admins to supply their own API keys. "
+        "Migrate ENC to AES-256-GCM with per-device key derivation (device serial + secret). "
+        "Rotate affected OpenAI API keys immediately."
+    ),
+}
