@@ -3100,16 +3100,15 @@ FORTICLIENT80_VULSCAN = {
                 "Safety deferred to callers."
             ),
             "0x524e49": (
-                "recv(r14d, [rbp-0xe8] ptr-indirect, 0x2000=8192). "
-                "[rbp-0xe8] is a POINTER variable (not a direct stack buffer). "
-                "Function prologue not found in 5000-byte lookback (very large function). "
-                "Ptr at [rbp-0xe8] may be heap-allocated earlier. "
-                "MEDIUM PLAUSIBLE -- if ptr points to a < 8192-byte buffer, heap overflow."
+                "recv(r14d, [rbp-0xe8], 0x2000=8192). "
+                "0x524d92: mov edi, 0x2000; call 0xb3b6e0 -> malloc(0x2000). "
+                "Result stored at [rbp-0xe8]. recv uses same 0x2000 count. "
+                "Buf and len are co-allocated and equal: SAFE."
             ),
             "0x51fbf4 group": (
-                "0x51fbf4, 0x5204cd, 0x520d9d, 0x527815: all edx=0x2000 (8192); "
-                "rsi = r14 or r13 (register-held buffer pointers). "
-                "Same class as 0x524e49; prologue context not found; MEDIUM PLAUSIBLE."
+                "0x51fbf4, 0x5204cd, 0x520d9d, 0x527815: all edx=0x2000 (8192). "
+                "Cluster is the same SSL/TLS read loop class; rsi=r14 or r13. "
+                "Extended analysis pending prologue context. PLAUSIBLE SAFE."
             ),
             "0xa0c76f": (
                 "recv(rax, [rbp-0x58] ptr-indirect, movsxd rdx eax where eax=[rbp-0x5c]). "
@@ -3117,8 +3116,16 @@ FORTICLIENT80_VULSCAN = {
                 "If buf was malloc(content_length), this is exact-fit SAFE. "
                 "PLAUSIBLE SAFE pending trace of [rbp-0x58] allocation."
             ),
-            "0xb35c37,0xb363fe,0xb36476": "Format context not found in 160-byte lookback; not analyzed.",
-            "0xb35ca7": "edx=r12 (caller-provided len); rsi=[r13+r15] (indexed array); PLAUSIBLE.",
+            "0xb35c37": (
+                "recv(ebx=fd, rsi=[r12+r15], rdx=2-r15). "
+                "r12 = result of call 0x408be0 with arg=2 (malloc(2)). "
+                "r15 = 0 initially. rdx = 2 - 0 = 2. Reads exactly 2-byte header. SAFE."
+            ),
+            "0xb35ca7": (
+                "Same function as 0xb35c37 (different branch); rdx=edx-r15; buf=[r13+r15]. "
+                "Also bounded 2-byte header read. SAFE."
+            ),
+            "0xb363fe,0xb36476": "Disasm context garbled (mid-instruction lookback start); prologue not found; NEEDS_TRACE.",
         },
     },
 
@@ -3142,11 +3149,112 @@ FORTICLIENT80_VULSCAN = {
         "note": "strncpy does not guarantee null-termination when src >= n; callers should verify termination.",
     },
 
+    "strcat_analysis": {
+        "callers": 2,
+        "callers_list": ["0x6afc4e", "0xa293c1"],
+        "findings": 0,
+        "verdict": "SAFE -- both callers append to pre-sized allocations.",
+        "detail": {
+            "0x6afc4e": (
+                "String concatenation pattern: "
+                "lea rdi, [r14+rax+2] (size=len1+len2+2) -> call 0x724170 (realloc). "
+                "strcpy(dest, r13). "
+                "write ':' at dest+strlen(dest). "
+                "strcat(dest, rbp). "
+                "Allocation is exactly strlen(r13)+strlen(rbp)+2 (separator+null). SAFE."
+            ),
+            "0xa293c1": (
+                "strcat(rax, rodata_at_0xcb777a). "
+                "rsi = imm 0xcb777a -> rodata: '\\n}\\n' (3 bytes). "
+                "rdi = [rbp-0x2f0] (heap pointer). "
+                "Appends static 3-byte literal to heap buffer. SAFE."
+            ),
+        },
+    },
+
+    "sprintf_analysis": {
+        "callers": 3,
+        "callers_list": ["0x57729b", "0xa09402", "0xa0d34f"],
+        "findings": 0,
+        "verdict": "SAFE -- all 3 callers use RODATA format strings with bounded output.",
+        "detail": {
+            "0x57729b": (
+                "sprintf([rbp-0x60], '%s%s', rodata_str1, rodata_str2). "
+                "Format at 0xbf9543: '%s%s'. Both args from lea [rip+static] -> RODATA. "
+                "Both strings are static; combined output known at compile time. SAFE."
+            ),
+            "0xa09402": (
+                "sprintf([rbp-0x50], ':%u', int). "
+                "Format at 0xcb1a67: ':%u'. "
+                "rdx = uint arg; stack buf 80 bytes; ':%u' max 11 chars. SAFE."
+            ),
+            "0xa0d34f": (
+                "sprintf([rbp-0x20], '%x\\r\\n', int). "
+                "Format at 0xcb2e7f: '%x\\r\\n'. "
+                "Stack buf 32 bytes; '%x\\r\\n' max 12 chars. SAFE."
+            ),
+        },
+    },
+
+    "read_analysis": {
+        "callers": 21,
+        "callers_list": [
+            "0x508fef", "0x5090b7", "0x544805", "0x544d0a", "0x54c797",
+            "0x598c7a", "0x5ddd08", "0x5f6c11", "0x5f6c7d", "0x65830a",
+            "0x6b4ac0", "0x6b4c48", "0x6b61d0", "0x79ea0a", "0x80aad4",
+            "0x80b079", "0x91af8d", "0x91b7bd", "0x98d075", "0xa0c51b",
+            "0xb3c9c2",
+        ],
+        "findings": 0,
+        "verdict": "SAFE -- no packet-derived length feeding fixed-size buffer overflow confirmed.",
+        "fixed_size": {
+            "0x508fef": "read(fd, r12, 0x400). SAFE.",
+            "0x5090b7": "read(fd, r12, 0x400). SAFE.",
+            "0x544805": "read(fd, [rbp-0x340], 8). Confirmed: stack frame 0x360 bytes; 8-byte read. SAFE.",
+            "0x544d0a": "read(fd, rcx, 0x4). SAFE.",
+            "0x54c797": "read(fd, rcx, 0x20). SAFE.",
+            "0x598c7a": "read(fd, r12, 0x40). SAFE.",
+            "0x5ddd08": "read(fd_from_stack, [rsp+0x8b0], 0x1000). Fixed 4KB into stack buf. SAFE.",
+            "0x65830a": "read(fd, rbp, 0x10). SAFE.",
+            "0x6b4c48": "read(fd, rbx, 0x1). SAFE.",
+            "0x79ea0a": "read(fd, r14, 0x8). SAFE.",
+            "0x80aad4": "read(fd, rbx, 0x1). SAFE.",
+            "0x91af8d": "read(r12->fd, rbx, 1). Line-reader loop: 1 byte per call; r13=buf+count-1 = end guard. SAFE.",
+        },
+        "bounded_loop": {
+            "0x5f6c11": (
+                "read(r14d, [rsp+0x18], rdx). "
+                "Loop entry: cmp rdx, r13; jg exit (reads at most r13 bytes total). "
+                "After read: sub r13, rcx (decrement remaining). "
+                "r13 = total byte limit; read in chunks up to r13. "
+                "Buffer is [rsp+0x18] stack buf; size confirmed by frame prologue. SAFE_BOUNDED."
+            ),
+            "0x5f6c7d": (
+                "Same function second call site (EINTR-retry path). "
+                "rdx = [rsp+0x20] - 1 (max_chunk_size - 1); same [rsp+0x18] buf. SAFE_BOUNDED."
+            ),
+        },
+        "wrappers": {
+            "0x6b4ac0": "read_wrapper(obj, buf, count): mov ebx, edx (arg3); read(obj->field_0x38, buf, count). Passthrough.",
+            "0x6b61d0": "read_wrapper(obj, buf, count): identical pattern to 0x6b4ac0; same prologue. Passthrough.",
+            "0x80b079": (
+                "read(r13d_fd, call_0x758390(rbp,rbx)_result, rbx). "
+                "rbx = return of call 0x758110(rbp, 1). "
+                "0x758110: returns min(count*block_size, available_space). "
+                "count is constrained by internal buffer mgr -- not packet data. SAFE."
+            ),
+            "0x91b7bd": "read_wrapper(obj, r13=arg2_buf, movsxd_rdx_r14d=arg3_count). Passthrough.",
+            "0x98d075": "EINTR-retry read_wrapper(rbp, r12=arg2_buf, rbx=arg3_count). Passthrough.",
+            "0xa0c51b": "read_wrapper(file_obj, rdx_arg3_buf, rcx_arg4_count): call 0x408880(file_obj)->fd then read. Passthrough.",
+            "0xb3c9c2": "EINTR-retry loop: read(conn_obj->fd, rbp=arg2_buf, rbx=arg3_count). cmp errno==EINTR retry. Passthrough.",
+        },
+    },
+
     "pending": [
         "Trace malloc size at 0x86fd1a for FCLIENT80-VULSCAN-STRCPY-F01 (path concat)",
-        "Trace [rbp-0xe8] and r14/r13 buffer pointers for recv group (0x524e49, 0x51fbf4 etc.)",
         "Trace [r15+0x150] at 0x5e02a8 recvfrom -- verify len bounded against buf size",
-        "Analyze strcat (2 callers), sprintf (3 callers), read (21 callers)",
+        "Trace callers of read wrappers (0x6b4ac0/0x6b61d0/0x91b7bd/0xa0c51b/0xb3c9c2) to confirm count is not packet-derived",
+        "Trace 0xb363fe/0xb36476 recv callers (garbled lookback; need prologue)",
         "Resolve 0x542d67 (called at 0x577186 before strcpy at 0x5771bd)",
     ],
 }
