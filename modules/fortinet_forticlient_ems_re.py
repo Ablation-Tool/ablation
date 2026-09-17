@@ -334,16 +334,176 @@ EMS_F4_ATTACK_SURFACE = {
 
 
 # ---------------------------------------------------------
+# EMS-F5: Embedded shared Fortinet root CA in FcmDaemon.exe
+# ---------------------------------------------------------
+EMS_F5_EMBEDDED_CA = {
+    "id":       "EMS-F5",
+    "title":    "Shared Fortinet root CA embedded in FcmDaemon.exe with encrypted private key",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:N",
+    "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key)",
+    "status":   "CONFIRMED -- CA cert embedded; passphrase at runtime (not hardcoded); impact depends on passphrase recovery",
+
+    "certificate": {
+        "issuer":    "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=Certificate Authority, CN=support",
+        "subject":   "Same (self-signed)",
+        "email":     "support@fortinet.com",
+        "not_before": "2015-07-16 22:34:39 UTC",
+        "not_after":  "2038-01-19 22:34:39 UTC",
+        "key_usage":  "CA:TRUE (can sign any certificate)",
+        "key_size":   "RSA 2048-bit",
+    },
+
+    "private_key": {
+        "format":     "PEM PKCS#1 RSA private key, AES-256-CBC encrypted",
+        "iv":         "F4DD69DDD1982F6FDD0D75097603C628",
+        "location":   "FcmDaemon.exe binary (embedded as string constant)",
+        "passphrase": "Runtime CLI argument --keypass; NOT hardcoded in binary or config files",
+    },
+
+    "impact": (
+        "Fortinet CA cert is shared across ALL EMS installations -- it is embedded in the installer binary. "
+        "Apache VirtualHost references SSLCACertificateFile 'fortinet_ca_root_all.crt' for client cert validation. "
+        "If private key passphrase is recovered (registry, process memory, installer custom action analysis), "
+        "attacker can sign arbitrary client certs trusted by ALL EMS instances. "
+        "Combined with EMS-F6 (optional_no_ca), cert forgery is not needed for the web API -- "
+        "but matters for OFTP/gRPC agent channel (FcmDaemon port 8013)."
+    ),
+
+    "attack_chain": [
+        "Step 1: Recover --keypass from EMS service registry or installer custom action DLL",
+        "Step 2: Decrypt embedded RSA private key using openssl pkey -in key.pem -passin pass:<keypass>",
+        "Step 3: Sign client cert with CN=<FortiGate serial number> or CN=<admin username>",
+        "Step 4: Use signed cert to impersonate FortiGate device in fabric auth or EMS agent protocol",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# EMS-F6: Apache SSLVerifyClient optional_no_ca -- arbitrary client cert accepted
+# ---------------------------------------------------------
+EMS_F6_CLIENT_CERT_NO_CA_VERIFY = {
+    "id":       "EMS-F6",
+    "title":    "Apache SSLVerifyClient optional_no_ca allows arbitrary client certs to bypass identity verification",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe":      "CWE-295 (Improper Certificate Validation)",
+    "status":   "CONFIRMED -- config explicitly sets optional_no_ca",
+
+    "evidence": {
+        "file":    "Apache24/conf/apache_django_wsgi.conf (VirtualHost *:[SERVERSSLPORT])",
+        "config":  "SSLVerifyClient optional_no_ca",
+        "header_forwarding": "RequestHeader set SSL_CLIENT_S_DN_CN \"%{SSL_CLIENT_S_DN_CN}s\"",
+        "explanation": (
+            "optional_no_ca means: accept client certificate if presented, "
+            "but DO NOT verify it against any CA. Any self-signed certificate is accepted. "
+            "The client cert's CN is extracted and forwarded to Django as SSL_CLIENT_S_DN_CN request header."
+        ),
+    },
+
+    "attack_chain": [
+        "Step 1: Generate self-signed certificate with any desired CN (e.g., 'admin', a FortiGate serial number)",
+        "Step 2: Connect to EMS HTTPS (port 8443 or SERVERSSLPORT) with the self-signed cert",
+        "Step 3: Apache accepts the cert (no CA check) and sets SSL_CLIENT_S_DN_CN = <your CN>",
+        "Step 4: Django cert_chain_auth.pyc receives forged CN as trusted identity",
+        "Step 5: Impact depends on how Django uses SSL_CLIENT_S_DN_CN for access control",
+    ],
+
+    "affected_auth_paths": [
+        "cert_chain_auth.pyc -- device identity from cert CN for fabric authorization",
+        "fabric_device_auth_controller.pyc -- FortiGate fabric device endpoints",
+        "fct_saml_auth_controller.pyc -- SAML with cert-chain identity",
+        "^fabric-authorization/ -- fabric auth endpoint",
+        "^fabric_device_auth/ -- device auth endpoint",
+    ],
+
+    "note": (
+        "SSLVerifyClient optional_no_ca is different from optional: "
+        "'optional' validates cert against SSLCACertificateFile; "
+        "'optional_no_ca' skips all chain validation. "
+        "The auth impact requires cert_chain_auth.pyc analysis to confirm scope -- "
+        "Django may add additional validation beyond the CN check."
+    ),
+
+    "apache_config_other_findings": {
+        "script_src_unsafe_eval": (
+            "Content-Security-Policy allows 'unsafe-eval' and 'unsafe-inline' in script-src -- "
+            "XSS mitigation weakened; JS eval() allowed."
+        ),
+        "proxy_to_ztnaworker": (
+            "SSL_CLIENT_VERIFY SUCCESS routes /api/v1/report/fct/tags -> localhost:9990 -- "
+            "with forged cert (EMS-F6), attacker routes to ztnaworker directly."
+        ),
+    },
+}
+
+
+# ---------------------------------------------------------
+# EMS-F7: GoEMS/FcmDaemon architecture findings
+# ---------------------------------------------------------
+EMS_F7_DAEMON_ARCHITECTURE = {
+    "id":    "EMS-F7",
+    "title": "GoEMS daemon architecture -- ECSO gRPC port 8013, Redis no-auth",
+    "severity": "MEDIUM",
+
+    "daemon_stack": {
+        "goEMS.conf": "Go-based EMS daemon handling agent protocol (gRPC)",
+        "ecsocksrvworker": {
+            "host": "0.0.0.0",
+            "port": 8013,
+            "tls":  "yes (TLS_ECDHE_ECDSA ciphers)",
+            "protocols": ["X-FCCK-PROBE", "X-FCCK-TAG", "X-FCCK-REGISTER", "X-FCCK-KA"],
+        },
+        "legacy_protocol": {
+            "host": "127.0.0.1",
+            "port": 65431,
+            "services": ["X-FCCK-PROBE", "X-FCCK-REGISTER", "X-FCCK-KA", "X-FCCK-TAG", "UPLOAD"],
+        },
+        "workers": {
+            "kaworker":   {"port": 9991, "grpc": True},
+            "probeworker": {"port": 9992},
+            "tagworker":  {"port": 9993},
+            "regworker":  {"port": 9994, "grpc": True},
+            "ztnaworker": {"port": 9990},
+            "das":        {"port": 65432},
+        },
+    },
+
+    "redis_no_auth": {
+        "host":     "127.0.0.1",
+        "port":     6379,
+        "password": "",
+        "evidence": "connector.conf [redis] Password = (empty)",
+        "impact":   (
+            "Redis accessible without authentication from any process on EMS server. "
+            "Post-initial-access: read/write session data, push malicious tasks, "
+            "inject data into EMS workflow queues."
+        ),
+    },
+
+    "pre_auth_surface": (
+        "Port 8013 is the pre-authentication FortiClient agent registration endpoint. "
+        "X-FCCK-REGISTER service accepts agent connections without prior authentication. "
+        "Analysis of regworker.exe (Go binary, 14 sections) is needed to identify "
+        "registration protocol parsing vulnerabilities."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Pending analysis
 # ---------------------------------------------------------
 PENDING = [
-    "Decompile views.py content() to confirm auth requirement and CONTENT_DIRECTORY join logic",
-    "Decompile admin_settings_controller.pyc for send_command command validation logic",
-    "Confirm if import/xml endpoint uses defusedxml or vulnerable XML parser",
-    "Extract DB connection strings from sql_helper.pyc or connection config",
-    "Check if /api/v1/init_consts is unauthenticated and leaks version/build info",
-    "Analyze certificate upload endpoints for parsing vulnerabilities",
+    "EMS-F2 revision: Apache Alias /static/ serves fcm/fcm/static/ directly -- "
+    "Django content/<path> serves a DIFFERENT directory; CONTENT_DIRECTORY value unconfirmed; "
+    "ContentDict in views.py may be a whitelist (not traversal-vulnerable); needs binary analysis",
+    "EMS-F6: Analyze cert_chain_auth.pyc to confirm what SSL_CLIENT_S_DN_CN is used for and impact scope",
+    "EMS-F5: Recover --keypass from EMS Windows service registry or installer custom action DLL",
+    "EMS-F3: Confirm XML parser -- check if defusedxml is installed in Python path",
+    "regworker.exe (Go binary, port 9994): analyze gRPC service definitions for X-FCCK-REGISTER protocol vulns",
+    "Port 8013 pre-auth surface: analyze goEMS binary for ECSO protocol parsing vulnerabilities",
     "Check /api/v1/support_package/ for credential/key inclusion in archive",
+    "Check if /api/v1/init_consts is unauthenticated and leaks version/build info",
     "FortiClient VPN 7.2.10 -- start extraction and RE",
     "FAZ VM64 -- pending flatkc key for encrypted rootfs",
     "FortiGate VM64 -- pending flatkc key",
