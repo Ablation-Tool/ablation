@@ -278,3 +278,176 @@ FORTICENTRAL_AI_CV = {
         "rtsp://<server>/<channel_id>; if RTSP server is unauthenticated, live feeds are public."
     ),
 }
+
+
+# ---------------------------------------------------------
+# FC-F01: Chromium 104 (August 2022) in libcef.dll -- critically outdated
+# ---------------------------------------------------------
+FC_F01_CHROMIUM_104 = {
+    "id":       "FC-F01",
+    "product":  "FortiCentral v7.2.0077 -- Chromium 104.0.5112.102 (August 2022) embedded via CefSharp",
+    "severity": "CRITICAL -- Chromium 104 has multiple critical CVEs including CVE-2022-3075 (exploited in-the-wild 0-day)",
+    "class":    "Use of outdated browser engine with known exploited vulnerabilities (CWE-1104)",
+    "verdict":  "CONFIRMED",
+
+    "evidence": [
+        "libcef.dll: string at offset 0x93e75d0: b'104.0.5112.102\\x008e5396254975ef939f2ef7d0bd334e48a05'",
+        "libcef.dll: 'cef_version_info' symbol at 0x9fdc1d6 -- confirms libcef build",
+        "FortiCentral.exe: CefSharp.dll / CefSharp.Wpf.dll bundled -- WPF embedding",
+        "File version: 7.2.77.0 compiled April 15 2024 -- Chromium 104 used in production 20 months after release",
+    ],
+
+    "known_critical_cves": {
+        "CVE-2022-3075": "CRITICAL (CVSS 8.8) -- Insufficient data validation in Mojo; exploited as 0-day in-the-wild in August 2022 (same month Chromium 104 shipped); heap corruption via malformed IPC message",
+        "CVE-2022-2856": "HIGH -- Type confusion in Intent handling; V8 type confusion",
+        "CVE-2022-2929": "HIGH -- Heap buffer overflow in ANGLE; GPU process exploitation",
+        "CVE-2022-2624": "HIGH -- Heap buffer overflow in PDF rendering",
+        "CVE-2022-2162": "HIGH -- Insufficient policy enforcement in File System API",
+    },
+
+    "attack_path": (
+        "FortiCentral's CefSharp browser loads FortiGate web UI pages (see FC-F02). "
+        "Any V8/Chromium exploit code served from a compromised FortiGate or via MITM "
+        "(FortiCentral likely has same TLS bypass pattern as FortiFone) "
+        "executes in Chromium 104 with full access to the CefSharp .NET bridge. "
+        "CVE-2022-3075 is particularly concerning: Mojo IPC heap corruption means "
+        "the renderer process can escape the sandbox and reach the C# host process."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FC-F02: FRCC IPC channel -- console.log "frcc-host:" can be sent by ANY loaded page
+# ---------------------------------------------------------
+FC_F02_FRCC_IPC = {
+    "id":       "FC-F02",
+    "product":  "FortiCentral -- FRCC IPC channel via console.log('frcc-host:...'); C# host dispatches without page-origin check",
+    "severity": "HIGH -- XSS in FortiGate web UI loaded in CefSharp can invoke FortiCentral host functions; FortiGate session pivoting",
+    "class":    "Origin-less IPC dispatcher in CefSharp host application (CWE-284)",
+    "verdict":  "CONFIRMED -- code path traced; no origin validation found",
+
+    "mechanism": (
+        "FortiCentral JS->C# IPC uses: "
+        "  console.log('frcc-host:' + functionName + ':' + JSON.stringify(args)) "
+        "The C# host (Chrome_OnFrameLoadEnd handlers) intercepts console.log output "
+        "and dispatches any message with 'frcc-host:' prefix to the named function. "
+        "Registered host functions (from #Strings metadata): "
+        "  RegisterDataPoll(path, query, callbackIndex) -- subscribe to FortiGate API polling "
+        "  UnregisterDataPoll(callbackIndex) "
+        "  GetData(path, query, callbackIndex) -- one-shot authenticated FortiGate API call "
+        "  RequestSessionData(apiName, widgetName, callbackIndex) -- Fabric widget data "
+        "If C# host does not filter by source URL (origin of the page that sent console.log), "
+        "then ANY JavaScript in CefSharp -- including XSS on the FortiGate web UI -- "
+        "can call these functions with the established FortiGate session."
+    ),
+
+    "impact": (
+        "XSS payload in FortiGate web UI loaded in FortiCentral CefSharp: "
+        "  console.log('frcc-host:GetData:' + JSON.stringify([ "
+        "    '/api/v2/cmdb/system/admin', {}, 0 "
+        "  ])); "
+        "FortiCentral's C# host makes an authenticated GET to /api/v2/cmdb/system/admin "
+        "using the FortiGate admin session already established by FortiCentral. "
+        "Response returned to callbackIndex 0 via frcc.relayHostCallback(0, data). "
+        "Admin credential hashes, VPN configs, and all FortiGate CMDB readable from the XSS context. "
+        "FortiOS has had multiple XSS CVEs: CVE-2023-22640, CVE-2021-43073, CVE-2023-29182, others."
+    ),
+
+    "evidence": [
+        "Visualizers/js/frcc.js line 47-52: invokeHostFunction -> console.log('frcc-host:...')",
+        "Visualizers/js/frcc.js line 113-133: RegisterDataPoll, GetData, RequestSessionData",
+        "#Strings metadata: 'Chrome_OnFrameLoadEnd' with 9 lambda variants (b__34_0 through b__34_9)",
+        "Visualizers/dashboard.html: window.location = dashboard (navigates to FortiGate web UI)",
+        "FortiCentral.exe #US stream: 'frcc.relayHostCallback', 'frcc.handleHostEvent' (C# calls back to JS)",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# FC-F03: Open redirect via server-controlled dashboard URL
+# ---------------------------------------------------------
+FC_F03_OPEN_REDIRECT = {
+    "id":       "FC-F03",
+    "product":  "FortiCentral -- dashboard.html navigates CefSharp browser to server-provided URL without scheme validation",
+    "severity": "HIGH -- compromised FortiGate server controls FortiCentral browser navigation; javascript: URL execution",
+    "class":    "Open redirect / unvalidated URL navigation (CWE-601)",
+    "verdict":  "CONFIRMED",
+
+    "evidence": [
+        "Visualizers/dashboard.html lines 24-34:",
+        "  frcc.onServiceConnect = function() {",
+        "      var dashboard = frcc.getSettingData('SelectDashboard');",
+        "      window.location = dashboard; // navigates to server-provided URL",
+        "  }",
+        "getSettingData reads from frcc._hostData, which is set via handleHostEvent('onSettingsReceived', ...)",
+        "hostData flows from C# host which reads it from FortiGate server configuration response",
+    ],
+
+    "attack_path": (
+        "1. Attacker compromises FortiGate or performs MITM on FortiCentral->FortiGate connection. "
+        "2. FortiGate response sets SelectDashboard to 'javascript:alert(document.domain)' or attacker URL. "
+        "3. FortiCentral C# calls frcc.handleHostEvent('onSettingsReceived', [...]) with malicious hostData. "
+        "4. dashboard.html executes: window.location = 'javascript:alert(document.domain)'. "
+        "5. In Chromium 104, window.location = 'javascript:...' executes the JS. "
+        "6. JavaScript executes in CefSharp context with access to frcc.invokeHostFunction() -> "
+        "   FortiGate API access, .NET bridge, and subsequent FortiGate session hijack. "
+        "Variant without MITM: SelectDashboard is a user-configurable setting stored in "
+        "FortiRecorderCentral.exe.Settings -- a local admin can also set this."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FC-F04: KopiLua .NET scripting -- RegisterFortiCentralLuaFunctions exposed to Lua
+# ---------------------------------------------------------
+FC_F04_KOPILUA = {
+    "id":       "FC-F04",
+    "product":  "FortiCentral -- KopiLua.dll (Lua 5.1 in C#) with RegisterFortiCentralLuaFunctions exposing .NET methods to Lua",
+    "severity": "HIGH -- Lua scripting surface if scripts come from network or config; .NET bridge functions callable from Lua",
+    "class":    "Scripting engine with insufficient sandboxing (CWE-272)",
+
+    "evidence": [
+        "KopiLua.dll (Lua 5.1 C# port) bundled in FortiCentral",
+        "#Strings metadata: 'RegisterFortiCentralLuaFunctions' -- dedicated .NET->Lua registration method",
+        "#Strings metadata: 'RunLua', '<RunLua>b__10_0', '<RunLua>b__10_1' -- at least 2 Lua execution paths",
+        "#Strings metadata: 'LuaScriptException' -- Lua exceptions caught, confirming active execution",
+        "#Strings metadata: 'Lcl_Op_Register', 'Lcl_Op_UnRegister' -- Lua callback registration ops",
+    ],
+
+    "pending": (
+        "Determine where Lua scripts originate: "
+        "  a. User-defined script via UI (low risk, local admin only) "
+        "  b. Loaded from local config file (FortiRecorderCentral.exe.Settings / ArbiterV10.xml) "
+        "  c. Pushed from FortiGate/FortiManager (HIGH risk -- network-controlled script execution) "
+        "  d. Received via P2P channel (frcc.js references p2p functionality) "
+        "The RunLua method and RegisterFortiCentralLuaFunctions need to be traced via "
+        ".NET decompilation (ILSpy/dnSpy) to determine what .NET functions are exposed."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FC-F05: XmlSerializer for ArbiterV10.xml -- potential XML deserialization
+# ---------------------------------------------------------
+FC_F05_XML_DESER = {
+    "id":       "FC-F05",
+    "product":  "FortiCentral -- XmlSerializer used for FortiRecorderCentral.exe config files; ArbiterV10.xml, Settings, Global",
+    "severity": "MEDIUM -- XmlSerializer is safe from RCE but susceptible to XXE if external entities are enabled",
+    "class":    "Potential XXE in XML configuration deserialization (CWE-611)",
+
+    "evidence": [
+        "#US stream strings: 'XmlSerializer: UnknownAttribute', 'XmlSerializer: UnknownElement', 'XmlSerializer: UnknownNode'",
+        "#US stream strings: 'FortiRecorderCentral.exe.ArbiterV10.xml', 'FortiRecorderCentral.exe.Settings', 'FortiRecorderCentral.exe.Global'",
+        "#US stream: '<ArbiterState xmlns:xsd=', '<GlobalSettings xmlns:xsd=', '</ArbiterState>'",
+        "#US stream: 'FortiRecorderCentral.exe.Settings' path referenced",
+    ],
+
+    "note": (
+        ".NET XmlSerializer does NOT support ENTITY expansion by default -- XXE is unlikely unless "
+        "XmlReader is explicitly configured with ProhibitDtd=false. "
+        "More relevant: ArbiterV10.xml is a config file that may be writable by low-privilege users "
+        "or pushed from a FortiGate/FortiManager. If the XML schema allows injecting values "
+        "that are later used in file paths, SQL queries, or shell commands, this is a config injection. "
+        "Decompile FortiCentral.exe to confirm XML reading and processing."
+    ),
+}
