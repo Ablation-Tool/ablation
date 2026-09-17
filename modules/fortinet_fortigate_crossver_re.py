@@ -827,3 +827,114 @@ LIBIPS_F01_LUA_SANDBOX_ESCAPE = {
         "combined_impact": "Three independent paths to OS exec from IPS Lua: os.execute (global), io.popen (global), ffi.C.system (via require('ffi'))",
     },
 }
+
+
+# ---------------------------------------------------------
+# CHAIN-F01: FGFM impersonation surface -- FortiOS 7.2.0 init binary analysis
+# ---------------------------------------------------------
+FGFM_CHAIN_F01_BINARY_ANALYSIS = {
+    "finding_ref": "CHAIN-F01",
+    "title": "FGFM command reception surface in FortiOS 7.2.0 monolithic init binary",
+    "verdict": "SURFACE CONFIRMED; full chain requires FortiManager-side SN bypass (CVE-2024-47575 class)",
+
+    "binary": {
+        "path":   "/tmp/fgt720_bin_extracted/bin/init",
+        "size":   "68,717,928 bytes (65.5 MB)",
+        "format": "ELF 64-bit LSB executable, x86-64, stripped, dynamically linked",
+        "entry":  "0x447d80",
+        "build_id": "e6b30f7a62e506eb4cd668576d3047ff7b1c9251",
+        "date":   "Mar 30 2022 (FortiOS 7.2.0)",
+    },
+
+    "architecture": (
+        "FortiOS 7.2.0 uses a single 65MB monolithic 'init' binary for ALL 169 daemons. "
+        "Every daemon name (httpsd, fgfmd, sslvpnd, authd, cmdbsvr, bgpd, etc.) is a "
+        "symlink to /bin/init. The binary checks argv[0] at startup to dispatch to the "
+        "correct daemon code path -- identical to the BusyBox multi-call pattern but at "
+        "enterprise scale. All attack surfaces (FGFM handler, web server, SSL-VPN, LDAP "
+        "auth) reside in one ELF, making a single binary analysis cover the full threat surface."
+    ),
+
+    "xz_bypass": {
+        "problem":  "bin.tar.xz in FortiOS 7.2.0 rootfs fails with 'Compressed data is corrupt' under standard xz tools",
+        "root_cause": "XZ stream footer SHA-256 block check is intentionally corrupted by Fortinet (copy-protection or signing mechanism); the LZMA2 compressed data itself is intact",
+        "bypass":   "Parse XZ block structure manually; extract raw LZMA2 payload (offset 0x18 to 0x1ba17d0 minus 32-byte SHA256 check); decompress via lzma.FORMAT_RAW with FILTER_LZMA2",
+        "result":   "106,056,704 bytes (101 MB) decompressed successfully from 27.6 MB xz; bin/init extracted",
+        "applies_to": "FortiOS 7.0.3 bin.tar.xz is identically broken -- same bypass applies",
+    },
+
+    "fgfm_client_evidence": {
+        "method":   "One-pass scan of .text section (0x4438b0, 39.2 MB) for RIP-relative LEA instructions; built effective-address set (21,753 unique targets); cross-referenced against rodata string VAs",
+        "total_eff_addrs": 21753,
+        "fgfm_range_refs": "43 referenced VAs in rodata range [0x2cd0000, 0x2d00000]",
+
+        "active_fgfm_strings": {
+            "dev_register":     "VA 0x2cd6a46 -- FGFM registration request message type (outgoing from FGT to FMG)",
+            "serialno":         "VA 0x2cd6e61 -- serial number field in registration packet",
+            "regist_passwd":    "VA 0x2cd6be3 -- registration password field",
+            "if_unregister":    "VA 0x2cd6bf1 -- unregister flag field",
+            "put_config":       "VA 0x2cd6d1c -- FGFM config push command type (INCOMING from FMG to FGT)",
+            "put_json_cmd":     "VA 0x2cd6d27 -- FGFM JSON command push (INCOMING from FMG to FGT)",
+            "file_exchange":    "VA 0x2cd6a38 -- file transfer channel type",
+            "file_exch_cmd":    "VA 0x2cd6dc8 -- file exchange command field",
+            "file_exch_file":   "VA 0x2cd6ded -- file exchange file field",
+            "detect_fmg":       "VA 0x2cd6bbf -- FortiManager auto-detect field",
+            "fmg_ip":           "VA 0x2cd6a6b -- FortiManager IP address field",
+            "connect_tcp":      "VA 0x2cd6a2c -- TCP connection request type",
+            "Fortimanager_Access": "VA 0x2cd6c0f -- access credential channel identifier",
+            "super_admin":      "VA 0x2cd6fe1 -- privilege level indicator (refs: 0x2650d3a, 0x272e57c, 0x2730204)",
+            "os_ver":           "VA 0x2cd6951 -- OS version field in registration",
+        },
+
+        "unreferenced_fgfm_strings": {
+            "note": "All FGFMs: (server-side) log strings are present in rodata but have ZERO code references in text section",
+            "strings": [
+                "FGFMs: connection denied; sn %s is not in the current list -- VA 0x2cd7c78",
+                "FGFMs: tunnel session sn %s not allowed -- VA 0x2cd7be8",
+                "FGFMs: Reject tunnel request, exclusive session found -- VA 0x2cd7d00",
+                "FGFMs: No valid cert, aborting connection! -- VA 0x2cda1a8",
+                "fgfm_script_handler -- VA 0x2cd4dd0",
+                "fgfm_chan_msg_handler -- VA 0x2cd2190",
+                "fgfm_json_rpc_handler -- VA 0x2cd5630",
+            ],
+            "interpretation": (
+                "The FGFMs: prefix indicates FGFM SERVER-side code. FortiGate 7.2.0 connects "
+                "OUTBOUND to FortiManager -- it is the client, not the server. "
+                "Server-side FGFM code (where FGT acts as FGFM relay/aggregator) exists in "
+                "rodata string tables but has no active code references in the text section. "
+                "fgfm_script_handler and fgfm_json_rpc_handler function name strings are present "
+                "but NOT referenced via RIP-relative LEA, suggesting they are invoked via "
+                "function pointer dispatch table (not confirmed) or are dead code from a "
+                "stripped server-side implementation."
+            ),
+        },
+
+        "key_functions": {
+            "0x2683360": "FGFM registration builder: builds dev_register msg with serialno, user, passwd, regist_passwd, if_unregister fields",
+            "0x2683840": "FGFM file_exchange/put_config builder: builds file_exchange msg with put_config and file_exch_cmd, file_exch_file fields",
+            "0x1fa66f0": "Certificate loader: loads .cer and .key file pair for FGFM TLS connection; calls stat() to verify file existence before loading",
+            "0x2683621": "detect_fmg handler: accesses detect_fmg, fmg_ip fields in FortiManager discovery packet",
+        },
+    },
+
+    "chain_f01_status": {
+        "hypothesis": "Attacker impersonates FortiManager via FGFM protocol -> injects put_config or put_json_cmd -> FortiGate executes arbitrary config/script -> LIBIPS-F01 Lua eval -> OS exec",
+        "evidence_for": [
+            "put_config and put_json_cmd command types ARE in active code (referenced from text)",
+            "FGFM client code confirmed active in 7.2.0",
+            "fgt2.key RSA-2048 private key is SHARED across all FortiOS versions (CROSSVER-F01) -- can sign FGFM tunnel packets",
+            "Certificate loader (0x1fa66f0) loads .cer/.key pair -- client uses its own cert for TLS, does not appear to pin server cert",
+        ],
+        "evidence_against": [
+            "FGFMs server-side serial-number allowlist check strings exist but are unreferenced -- may only apply to FortiManager role not FortiGate client role",
+            "Full TLS server cert validation path not traced -- FortiGate may verify FMG certificate against Fortinet CA",
+            "CVE-2024-47575 was on FortiManager side (FMG accepting rogue FGT registrations), not FGT side",
+        ],
+        "cvss_estimate": "9.8 if FortiGate does not validate FortiManager TLS cert (MITM scenario); 7.5 if cert is validated but shared fgt2.key allows crafted cert",
+        "next_steps": [
+            "Trace function 0x1fa66f0 callers to find the TLS connect path and check if server cert is verified",
+            "Check /tmp/fgt720_datafs/etc/fgt.crt and fgt2.crt -- are these the client cert used for FGFM?",
+            "Find the accept-register-list config handler (referenced string) to understand allowlist enforcement",
+        ],
+    },
+}
