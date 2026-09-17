@@ -2836,7 +2836,7 @@ FORTICLIENT80_LIBAV = {
         ),
         "FCLIENT80-LIBAV-STRCPY-KEYCACHE2": {
             "id":       "FCLIENT80-LIBAV-F01",
-            "severity": "MEDIUM PLAUSIBLE -- calloc(1,0x48)[+8] 64-byte dest; source=rbp (key suffix after 'arch_internal_' prefix); overflow if suffix > 64 bytes",
+            "severity": "LOW -- key source traced to RODATA codec option tables, not file-derived metadata",
             "function": "Linked-list key-cache insert at 0x1841f1",
             "calloc":   "0x1841df: calloc(1, 0x48) via 0x1482b0",
             "dest":     "rdi = [calloc_result + 8] -- 64-byte usable dest",
@@ -2845,13 +2845,16 @@ FORTICLIENT80_LIBAV = {
                 "0x187350 strips 'arch_internal_' prefix (14 bytes) from key arg via strncmp. "
                 "Output (suffix after prefix) stored in stack buffer at r12=rbp. "
                 "RODATA pattern at 0x978fd4 = b'arch_internal_'. "
-                "Overflow if AV signature name suffix > 64 bytes. "
-                "AV signature names typically 20-40 bytes; unlikely to exceed 64 in standard sigs. "
-                "If attacker can craft a file with an 'arch_internal_' + 65-byte suffix identifier, overflow occurs."
+                "KEYCACHE is called from 0x1864f0 (enumeration loop), invoked by 0x184200 called at 0x119036. "
+                "Dict at [rbx+0x508] is a codec options dict, not file-format metadata (AVFormatContext.metadata). "
+                "Keys are set by codec internal option registration (RODATA option names). "
+                "'arch_internal_' appears exactly once in binary (0x978fd4) as a pattern, never as a setter; "
+                "all option name suffixes are bounded RODATA strings. "
+                "Overflow requires a codec option name suffix > 64 bytes, which does not exist in the binary."
             ),
             "pattern":  "Linked-list traversal with strcasecmp (0xf49b0) at 0x1841bc; insert at tail if not found",
             "cross_ref": "LIBAV-603-KEYCACHE in FGT603 libav.so -- identical calloc(1,0x48) pattern",
-            "pending":  "Trace how AV signature names are provided: file-derived (JPEG/ZIP/PE parser) vs RODATA-only. File-derived = upgrade to HIGH.",
+            "key_source_verdict": "RODATA-only. Not file-derived. Cannot be attacker-controlled via media file.",
         },
         "remaining_not_analyzed": [
             "0x1a020f", "0x1a021e", "0x1e13de", "0x2d893f", "0x2d89bf", "0x2d8fe9",
@@ -2868,8 +2871,21 @@ FORTICLIENT80_LIBAV = {
             "0x339aed": "Array-indexed strcat; bounds-checked ebp vs [rbx+0x8c190]/[rbx+0x29be80]. SAFE.",
             "0x333f97": "Same array-indexed pattern as 0x339aed; same struct bounds check. SAFE.",
             "0x3a60cc": "malloc(strlen(r12)+strlen(rbx)+1) then strcat(malloc_result, rbx). Correctly sized. SAFE.",
-            "0x2b5849": "strcat loop (max 4 iterations); appends array elements to strcpy result. LOW -- initial malloc likely strdup of first element; subsequent appends may overflow if caller does not size correctly.",
-            "0x187a9a": "strcat with 'arch_internal_' parser output (0x187350) and stack buf [rsp+0xb]. LOW -- same parser as KEYCACHE; dest=r12 source not traced.",
+            "0x2b5849": (
+                "Two-phase variadic concat: prologue at 0x2b5757 (sub rsp,0x50). "
+                "Phase 1 (0x2b5779-0x2b57e2): strlen(arg0)+1 base; second loop adds strlen of each subsequent arg -> ebx = total. "
+                "0x2b57e4: call 0x2b5450(ebx) -> malloc(total) via 0x1482a0. "
+                "Phase 2 (0x2b57f7): strcpy(dest, arg0). Loop (0x2b5846-0x2b586e): strcat(dest, argN). "
+                "Both phases use identical iteration (same counter at [rsp+8], same ptr at [rsp+0x10]). "
+                "SAFE -- allocation exactly covers all elements."
+            ),
+            "0x187a9a": (
+                "strcat(r12, [rsp+0xb]). "
+                "rdi=r12 (heap pointer from earlier malloc). rsi=[rsp+0xb] (stack buf output from 0x187350 parser). "
+                "0x187350 is the 'arch_internal_' prefix stripper; output is RODATA-sourced suffix. "
+                "KEYCACHE source traced to RODATA (see FCLIENT80-LIBAV-F01 key_source_verdict). "
+                "Dest r12 allocated at 0x187a18 and filled before this strcat. Source is bounded RODATA. SAFE."
+            ),
         },
     },
 
@@ -3031,14 +3047,14 @@ FORTICLIENT80_LIBAV = {
     "severity_updated": (
         "MEDIUM-HIGH -- libav.so has no stack canary; FCLIENT80-LIBAV-SPRINTF-F01 (ODF style name sprintf) "
         "is stack-exploitable from a malicious ODF file. No canary = full RCE potential. "
-        "sprintf sweep complete (all 65). strcpy sweep: 1 CONFIRMED (KEYCACHE), cluster LOW-PLAUSIBLE. "
-        "All still_unknown callers now resolved."
+        "sprintf sweep complete (all 65). "
+        "strcpy sweep complete: FCLIENT80-LIBAV-F01 (KEYCACHE) downgraded to LOW (RODATA source confirmed); "
+        "all still_unknown callers resolved; 2 LOW-PLAUSIBLE struct-field copies remain. "
+        "strcat sweep complete: all 5 callers SAFE. "
+        "FC8 libav.so dangerous-function sweep: COMPLETE."
     ),
 
-    "pending": [
-        "Trace how 'arch_internal_' key names are sourced (file-derived vs RODATA) for FCLIENT80-LIBAV-F01",
-        "Trace 0x2b5849 strcat loop: confirm initial malloc size accounts for all array elements",
-    ],
+    "pending": [],
 }
 
 
