@@ -5635,6 +5635,87 @@ FMG800_OPENAI_INTEGRATION = {
     },
 }
 
+FMG800_GCK_PRIVATE_KEY_PLAINTEXT = {
+    "id":       "FMG800-GCK-PRIVATE-KEY-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- Google Cloud KMS private key stored as :string: (CWE-312)",
+    "severity": "HIGH -- GCP service account private key exposed in config backups in plaintext",
+    "class":    "Cleartext storage of cryptographic private key (CWE-312)",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 4464-4472: global table 'system cloud-service'",
+
+    "description": (
+        "The 'system cloud-service' global table (800.txt line 4464) stores Google Cloud KMS integration config. "
+        "The gck-private-key field (line 4469) uses type :string:'sz:8191;xs;' -- plain string, NOT :passwd:. "
+        "An 8191-byte string field is large enough for a complete RSA-2048 or RSA-4096 PEM private key. "
+        "Google Cloud KMS service account private keys are JSON-formatted credentials containing the private key PEM. "
+        "Storage as :string: means: "
+        "  1. The key appears in plaintext in config backups (execute backup config). "
+        "  2. The key appears in plaintext when CLI 'show system cloud-service' is run. "
+        "  3. Config database access (sqlite or config file) exposes the key directly. "
+        "An attacker who obtains an FMG config backup or has CLI read access can extract the GCP private key "
+        "and use it to access the customer's Google Cloud KMS keys, decrypt GCP-encrypted data, or "
+        "assume the service account identity for any GCP operation it's authorized for. "
+        "Contrast: gck-service-account (service account email) is correctly stored as :string: (non-secret). "
+        "But gck-private-key is the private credential -- it MUST be :passwd: type for ENC protection."
+    ),
+
+    "table_fields": {
+        "vendor":      "vendor: unknown|google-cloud-kms (GCP KMS integration)",
+        "gck-service-account": ":string:'285' -- service account email, 285 chars, plaintext (OK, not a secret)",
+        "gck-private-key":     ":string:'sz:8191;xs;' -- GCP private key, PLAINTEXT (VULNERABILITY)",
+        "gck-keyid":           ":string:'127' -- KMS key resource ID",
+        "gck-access-token-lifetime": "60:int:'1,3600' -- token lifetime in seconds",
+    },
+
+    "remediation": "Change gck-private-key field type from :string: to :passwd:; add to hexpwdattr for ENC encryption",
+}
+
+FMG800_PRIVATE_DATA_ENCRYPTION_OFF = {
+    "id":       "FMG800-PRIVATE-DATA-ENCRYPTION-OFF",
+    "product":  "FortiManager 8.0.0 -- private-data-encryption disabled by default",
+    "severity": "MEDIUM -- FortiManager config data-at-rest encryption is opt-in; default config stores all passwords as ENC-156/ENC-148 without additional layer",
+    "class":    "Missing encryption at rest for config backup (CWE-311)",
+    "cwe":      "CWE-311",
+    "source":   "800.txt line 16036",
+
+    "description": (
+        "800.txt line 16036: private-data-encryption: disable (DEFAULT). "
+        "800.txt line 16037: private-data-encryption-key: ENC ZT7owkML+T6+... (ENC-156 value, ends in mMjY3dkVA). "
+        "When private-data-encryption is enabled, FMG uses an additional encryption layer via the private-data-encryption-key "
+        "to protect passwords in the database. With the default 'disable' state, all passwords use only the standard "
+        "ENC-156/ENC-148 device-level encryption. "
+        "The private-data-encryption-key itself is stored as an ENC-156 value (decryptable with the device master key). "
+        "The key hierarchy: device_master_key -> decrypt(private-data-encryption-key) -> re-encrypt passwords. "
+        "Without enabling this feature, config backups obtained by any admin expose all passwords "
+        "protected only by the ENC-156 scheme (which relies on the device-level key being unknown to the attacker)."
+    ),
+
+    "private_data_enc_key_enc": "ENC ZT7owkML+T6+8y0h+MNkJKxtSNR8bvCyo1V2Z2ksZQ0bCs1cIfjOpWF/g0OnDYh97BkaguNzorYtJw7ysxuNZDvUpTaDSVieVgE8rWt1U+fzNL3jOv9zSXxRPL+Ygc+dDyVNPmx1a3i6nSOPjJQZOrWOg4G9QqzmuyOLOTUtYe/qX8BBA5ldzbxpNEwfcdod/TBPullmMjY3dkVA",
+    "enc_format": "ENC-156 (208 base64 chars = 156 bytes; marker Yf267vE@ PRESENT at tail)",
+}
+
+FMG800_SWITCH_CUSTOM_CMD = {
+    "id":       "FMG800-SWITCH-CUSTOM-CMD",
+    "product":  "FortiManager 8.0.0 -- switch-controller custom-command 4095-byte command injection",
+    "severity": "MEDIUM -- vdom admin can create custom FortiSwitch CLI commands up to 4095 bytes",
+    "class":    "Command injection via switch-controller custom-command (CWE-77); vdom-scoped",
+    "cwe":      "CWE-77",
+    "source":   "800.txt lines 16040-16044",
+
+    "description": (
+        "The 'switch-controller custom-command' vdom table defines custom CLI commands sent to managed FortiSwitches. "
+        "The 'command' field (line 16043): :string:'sz:4095;xs;mu;' -- 4095-byte expandable multi-value string. "
+        "Any vdom admin with switch-controller access can create arbitrary CLI command strings and send them "
+        "to managed FortiSwitch devices. "
+        "If the custom-command execution lacks sanitization of special FortiOS CLI characters, "
+        "an admin can inject commands beyond the intended switch CLI subset. "
+        "Combined with an over-privileged vdom admin or a compromised admin account, this path "
+        "allows arbitrary command execution on all FortiSwitch devices managed by the FMG vdom."
+    ),
+
+    "access_control": "Vdom admin with switch-controller access; limited to the scope of managed FortiSwitches",
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
