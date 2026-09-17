@@ -796,10 +796,20 @@ LIBIPS_F01_LUA_SANDBOX_ESCAPE = {
     },
 
     "scope": {
-        "affected_versions": "FortiOS 7.0.13 confirmed; likely all 7.x versions sharing the same LuaJIT integration",
+        "affected_versions": "FortiOS 7.0.13 CONFIRMED; FortiOS 7.2.0 CONFIRMED cross-version (see cross_version_confirmation below)",
         "affected_binaries":  "libips.so.new (IPS engine shared library)",
         "admin_path":        "Admin creating custom IPS rule with Lua can call os.execute() -- privilege escalation to root shell",
         "injection_path":    "CHAIN-F01 (FGFM impersonation) -- unauthenticated RCE if FGFM device enrollment accepted",
+    },
+
+    "cross_version_confirmation": {
+        "version":       "FortiOS 7.2.0 libips.so.new (10,881,736 bytes)",
+        "method":        "Binary string and dynstr grep; regloader source comparison",
+        "regloader_720": "IDENTICAL to 7.0.13 -- file offset 0x7ee9e9: 'local function register_loader(f) ... loaders[2] = f ... for i = 3, #loaders do loaders[i] = nil end'",
+        "ffi_in_preload": "_PRELOAD string at 0x887a42; context shows '_PRELOAD\\x00ffi\\x00jit\\x00' -- ffi still registered in package.preload",
+        "popen_import":  "dynstr offset 0x3ea4: popen imported from libc -- io.popen still functional",
+        "system_import": "dynstr offset 0x3eb2: system imported from libc -- os.execute backend still present",
+        "verdict":       "LIBIPS-F01 sandbox escape NOT PATCHED in 7.2.0; same three exec paths confirmed",
     },
 
     "ffi_confirmation": {
