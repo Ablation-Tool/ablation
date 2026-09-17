@@ -624,6 +624,63 @@ FORTIAP_F11_PREAUTH_CLIENT_DEAUTH = {
     ),
 }
 
+# ---------------------------------------------------------
+# FORTIAP-F12: Authenticated TLS cert replacement -- persistent HTTPS MITM
+# ---------------------------------------------------------
+FORTIAP_F12_TLS_CERT_REPLACEMENT = {
+    "id":       "FORTIAP-F12",
+    "product":  "FortiAP 231G v7.04 -- restUpload TLS certificate replacement",
+    "severity": "HIGH -- persistent HTTPS MITM after single authenticated write to /fap_data",
+    "class":    "Unprotected cert store allows attacker cert installation (CWE-295 / CWE-494)",
+    "source":   "fap_backend.so restUpload@0x9e18",
+
+    "description": (
+        "POST /api/v1/upload (auth required) accepts multipart fields: "
+        "  uploaded_cert -- PEM certificate "
+        "  uploaded_key  -- PEM private key "
+        "restUpload saves these to PERSISTENT storage: "
+        "  /fap_data/cfg/cert/local/Fortinet_Uploaded.cer "
+        "  /fap_data/cfg/cert/local/Fortinet_Uploaded.key "
+        "Then IMMEDIATELY loads them into the live SSL context: "
+        "  SSL_CTX_use_certificate_file(ctx, cer_path, SSL_FILETYPE_PEM) "
+        "  SSL_CTX_use_PrivateKey_file(ctx, key_path, SSL_FILETYPE_PEM) "
+        "fap_backend.conf uses the Fortinet_Uploaded.cer as TLS server cert. "
+        "After upload: all subsequent HTTPS connections to port 443 use the attacker cert. "
+        "The /fap_data volume persists across reboots (not erased by firmware upgrade)."
+    ),
+
+    "disasm_evidence": {
+        "cert_save":    "saveFileToPath at 0x9ec0 -> /fap_data/cfg/cert/local/Fortinet_Uploaded.cer",
+        "key_save":     "saveFileToPath at 0x9ed4 -> /fap_data/cfg/cert/local/Fortinet_Uploaded.key",
+        "ssl_load_cert": "SSL_CTX_use_certificate_file at 0x9fc0 (w2=SSL_FILETYPE_PEM=1)",
+        "ssl_load_key":  "SSL_CTX_use_PrivateKey_file at 0x9fd4",
+        "hardcoded_paths": "c000+0x468 and c000+0x498 in fap_backend.so .rodata",
+    },
+
+    "attack_scenario": (
+        "1. Obtain auth session (brute-force via F09 or F01 SSH). "
+        "2. Generate attacker RSA key + self-signed cert: "
+        "   openssl req -x509 -newkey rsa:2048 -keyout k.pem -out c.pem -days 3650 -nodes "
+        "3. POST /api/v1/upload with multipart: uploaded_cert=c.pem, uploaded_key=k.pem "
+        "4. Device immediately serves attacker cert on port 443. "
+        "5. All future admin HTTPS logins: attacker intercepts credentials via their private key. "
+        "6. Persists across reboots -- cert survives factory reset if /fap_data is not wiped."
+    ),
+
+    "chain": (
+        "F09 (session prediction) -> auth -> F12 (cert upload) -> PERSISTENT MITM. "
+        "All admin credentials captured. "
+        "Combined with F10 (no firmware auth): pivot from MITM to firmware replacement."
+    ),
+
+    "remediation": (
+        "Require out-of-band confirmation (physical button press or console) for cert replacement. "
+        "Log cert upload events to FAZ with admin username and cert fingerprint. "
+        "Do not hot-reload SSL context without process restart (allows atomic verification). "
+        "Clear /fap_data on factory reset; factory reset should not preserve uploaded certs."
+    ),
+}
+
 unique_findings = [
     "FORTIAP-F01",  # CRITICAL: empty admin password + SSH
     "FORTIAP-F02",  # HIGH: devmem CLI direct hardware access
@@ -636,4 +693,5 @@ unique_findings = [
     "FORTIAP-F09",  # HIGH: session token prediction via srand(time(NULL)) + strcmp timing oracle
     "FORTIAP-F10",  # CRITICAL: firmware upgrade skips cryptographic auth (format-only check)
     "FORTIAP-F11",  # MEDIUM: pre-auth client MAC deauthentication via /cp-logout
+    "FORTIAP-F12",  # HIGH: authenticated TLS cert replacement -- persistent HTTPS MITM
 ]
