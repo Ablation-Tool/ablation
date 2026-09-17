@@ -806,3 +806,88 @@ FPHONE_MAC_F04_SQUIRREL_SHIPIT = {
         ),
     },
 }
+
+# ======================================================================
+# FortiFone macOS ARM64 v7.0 b141 -- main.js security audit
+# Source: FortiFone_mac_v7.0_b141_arm64.dmg (ASAR extraction)
+# ======================================================================
+FORTIFONE_MACOS_ARM64_V70 = {
+    "id":       "FPHONE-MACOS-ARM64-V70",
+    "product":  "FortiFone macOS ARM64 v7.0 b141 -- Electron application",
+    "binary":   "FortiFone.app/Contents/MacOS/FortiFone (Mach-O arm64, 69KB -- Electron launcher)",
+    "app_code": "app.asar (Python struct-parsed; content_base=16+header_size)",
+    "framework": "Electron + React; SIP via fortivoiceAgent/libs/sip.js; chat via fvoiceChat.js",
+
+    "electron_security": {
+        "nodeIntegration": True,
+        "contextIsolation": False,
+        "sandbox": False,
+        "remote": "@electron/remote (deprecated) -- initialize() + enable() on GUI, call, dialpad windows",
+        "comment_in_source": "nodeIntegration: true, //security #2 -- developer-acknowledged debt",
+        "verdict": "INSECURE -- full Node.js access from all renderer processes; no sandbox",
+    },
+
+    "FPHONE-MACOS-F01": {
+        "id":       "FPHONE-MACOS-F01",
+        "severity": "MEDIUM -- Electron nodeIntegration=true; contextIsolation=false; @electron/remote enabled; developer-acknowledged",
+        "class":    "Electron security misconfiguration (CWE-78 via nodeIntegration; CWE-284 via remote)",
+        "detail": (
+            "main.js line ~30901: nodeIntegration: true, contextIsolation: false on ALL BrowserWindows. "
+            "Sandbox is commented out (// sandbox: true). "
+            "require('@electron/remote/main').initialize() at line 578. "
+            "require('@electron/remote/main').enable() called for GUI window, call window, and dialpad window. "
+            "@electron/remote is deprecated precisely because it breaks renderer/main process isolation. "
+            "Developer comment: '//security #2' -- confirms this is known technical debt. "
+            "Impact: any code injection in any renderer process has FULL access to Node.js APIs "
+            "(child_process.exec, fs, net, etc.) and to all main-process methods via @electron/remote."
+        ),
+        "attack_surface": (
+            "Current version loads local files only (mainURL = file:// path from app bundle). "
+            "No remote URL loaded in main windows. Chat messages do not use innerHTML/dangerouslySetInnerHTML. "
+            "Risk is MEDIUM (not immediately exploitable from network). "
+            "Risk escalates to CRITICAL if: "
+            "  (1) Any FortiVoice server response is ever rendered in an Electron webContents "
+            "  (2) A dependency injection or supply chain attack injects renderer JS "
+            "  (3) A SIP/chat message XSS is introduced in a future update."
+        ),
+    },
+
+    "FPHONE-MACOS-F02": {
+        "id":       "FPHONE-MACOS-F02",
+        "severity": "LOW -- shell.openExternal called without allow-list on redirected URLs",
+        "class":    "Open redirect / arbitrary URL open (CWE-601)",
+        "detail": (
+            "handleRedirect() at line 35915 calls shell.openExternal(details.url) for non-same-origin URLs. "
+            "The check is: if URL is not the same as sender_url, call openExternal. "
+            "If an attacker can inject a navigation to a custom protocol URI (e.g. file://, or a URL "
+            "handler registered by another app), shell.openExternal executes it with system privileges. "
+            "Mitigated by: (1) main window only loads local files, reducing injection surface; "
+            "(2) will-navigate event only fires on navigation, not on normal fetch/XHR."
+        ),
+    },
+
+    "js_analysis": {
+        "total_files":  23489,
+        "js_files":     683,
+        "key_files": {
+            "main.js":                       "204KB -- Electron main process; all window creation; IPC handlers",
+            "fortivoiceAgent/libs/sip.js":   "522KB -- SIP stack (JsSIP-based)",
+            "bundles/common.js":             "13MB -- bundled React app",
+            "fvoiceChat.js":                 "245KB -- chat module",
+            "ChatMessageRow.js":             "158KB -- chat message renderer; no XSS vectors found",
+            "fvIpcMsgSender.js":             "46KB -- IPC message bus",
+            "appAssistant/fvoiceAuthAgent.js": "82KB -- auth agent; @openid/appauth flow",
+        },
+        "no_xss_vectors": "No dangerouslySetInnerHTML, no innerHTML with user data, no eval of user input found in chat renderer.",
+        "sanitizer": "No DOMPurify or equivalent sanitizer present (not needed since no HTML rendering from server).",
+        "native_modules": {
+            "keytar.node": "node_modules/keytar/build/Release/keytar.node -- credential storage via macOS Keychain. ARM64 native.",
+        },
+    },
+
+    "architecture_note": (
+        "Identical codebase to Windows v7.0 b141 (same ASAR, same JS). "
+        "macOS binary is the Electron launcher (69KB arm64 Mach-O); all logic is in app.asar. "
+        "Windows FPHONE-F03 (main process nodeIntegration finding) applies here identically."
+    ),
+}
