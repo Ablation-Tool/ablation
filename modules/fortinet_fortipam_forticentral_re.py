@@ -6,7 +6,8 @@ Sources:
   - fortipam/fortipam_firefox.xpi, fortipam_edge.crx
   - fortipam-vault-tool/main.go + cmd/ (Go CLI for FortiPAM vault API)
   - forticentral/*.zip (AI/CV Windows executables)
-Method: zip extraction, JS static analysis, Go source analysis
+  - FortiCentral_VideoAnalytics_FaceDetection_x64_7.2.0077.exe (MSI desktop app; WiX Burn)
+Method: zip extraction, JS static analysis, Go source analysis, PE strings, PDB analysis
 """
 
 # ---------------------------------------------------------
@@ -633,4 +634,193 @@ FC_F06_VIDEO_ANALYTICS = {
             "confidence": "MEDIUM -- attack path confirmed; specific FFmpeg CVE applicability depends on bundled version",
         },
     },
+}
+
+# ------------------------------------------------------------------
+# FortiCentral MSI Desktop App RE
+# Source: /tmp/forticentral_msi/Program Files/Fortinet/FortiCentral/
+# Extracted from FortiCentral_VideoAnalytics_FaceDetection_x64_7.2.0077.exe
+# ------------------------------------------------------------------
+
+FORTICENTRAL_MSI_DESKTOP_ARCH = {
+    "id":       "FCENTRAL-MSI-ARCH",
+    "product":  "FortiCentral Windows desktop app (WPF + CefSharp + WCF + FFmpeg)",
+    "binary":   "FortiCentral.exe (WPF .NET 4.5.2, x64; FortiCentral.pdb included in release package)",
+
+    "framework": ".NET Framework 4.5.2 (EOL -- end of mainstream support 2017, extended 2022)",
+
+    "components": {
+        "ui":           "WPF (Windows Presentation Foundation) -- XAML-based desktop UI",
+        "browser":      "CefSharp (Chromium Embedded Framework for .NET) -- embeds Chrome in WPF window",
+        "js_bridge":    "console.log interception via Chrome_OnConsoleMessage -- JS sends 'frcc-host:name:args', .NET parses",
+        "dotnet_bridge": "IJavascriptObjectRepository -- .NET objects exposed directly to embedded JS context",
+        "api_layer":    "Fortinet.FortiCentral.WebAPI.dll -- WCF (Windows Communication Foundation) service on local port",
+        "media":        "Fortinet.FortiRecorderCentral.FFMPEG.dll -- C++/CLI mixed-mode; FFmpeg 6.x (avcodec-60, avformat-60)",
+        "cv":           "Fortinet.FortiCentral.ComputerVision.Interfaces.dll -- bridge to OpenCV/TF in Video Analytics package",
+        "fabric_api":   "APIs/Fabric/API.cs + Session.cs -- Fortinet Security Fabric REST API client",
+    },
+
+    "build_artifacts": {
+        "pdb_in_release": "FortiCentral.pdb shipped in release MSI -- full source path disclosure",
+        "jenkins_path":   "c:\\jenkins\\FRC0\\GIT_CLONE_PARENT\\Fortinet.FortiCentral\\ -- build server path in all PDB strings",
+        "debug_files":    [
+            "DebugProcessImageCV.xaml + DebugProcessImageCV.cs -- CV debug window compiled into release",
+            "DebugStartupTests.cs -- startup test code compiled into release",
+        ],
+        "wcf_pdb":        "c:\\jenkins\\FRC0\\GIT_CLONE_PARENT\\Fortinet.FortiCentral.WebAPI\\obj\\Release\\Fortinet.FortiCentral.WebAPI.pdb",
+    },
+
+    "js_bridge_flow": (
+        "Local HTML pages in Visualizers/ load via file:// URL in CefSharp. "
+        "frcc.js defines invokeHostFunction(name, args): calls console.log('frcc-host:' + name + ':' + JSON.stringify(args)). "
+        ".NET Chrome_OnConsoleMessage intercepts console.log output, parses 'frcc-host:' prefix, "
+        "dispatches to registered handlers. "
+        ".NET calls back into JS via ExecuteScriptAsync/EvaluateScriptAsync: "
+        "  browser.ExecuteScriptAsync(\"frcc.handleHostEvent('\" + name + \"', '\" + args + \"')\"). "
+        "handleHostEvent in frcc.js dispatches: onSettingsReceived (sets _hostSettings, _hostData, _localizationData), "
+        "onServiceConnect (sets _dynamicSettings), onDataPoll, onServiceDisconnect."
+    ),
+}
+
+FORTICENTRAL_MSI_F01_WINDOW_LOCATION = {
+    "id":       "FCENTRAL-MSI-F01",
+    "severity": "MEDIUM -- server-supplied URL navigation in CefSharp with no scheme validation",
+    "class":    "Open redirect / javascript: URI navigation in embedded browser (CWE-601 + CWE-79)",
+
+    "affected_files": [
+        "Visualizers/transparent.html -- window.location = host (from frcc.getSetting('Host'))",
+        "Visualizers/transparent.html -- window.location = host + '/' + path (frcc.getSetting('Endpoint'))",
+        "Visualizers/dashboard.html -- window.location = dashboard (frcc.getSettingData('SelectDashboard'))",
+    ],
+
+    "sink_detail": {
+        "transparent_html": (
+            "frcc.onServiceConnect: host = frcc.getSetting('Host'); path = frcc.getSetting('Endpoint'). "
+            "No URL scheme check. window.location = host if path empty; else host + '/' + path or host + path. "
+            "If host = 'javascript:eval(atob(...))', Chromium executes the JS expression in the current page context."
+        ),
+        "dashboard_html": (
+            "frcc.onServiceConnect: dashboard = frcc.getSettingData('SelectDashboard'). "
+            "dashboard.replace('/ng/', '/') applied only when fortigateVersion >= 7.4.0. "
+            "window.location = dashboard -- no scheme validation."
+        ),
+    },
+
+    "exploit_path": (
+        "Attack requires controlling the settings data passed to the visualizer page. "
+        "Path A (MITM): If ServicePointManager TLS validation is bypassed (see FCENTRAL-MSI-F02), "
+        "  a network-adjacent attacker intercepts the FortiRecorder/FortiGate API response, "
+        "  injects Host = 'javascript:...' into the response. "
+        "  .NET passes the injected value to the visualizer page via handleHostEvent. "
+        "  window.location = 'javascript:...' executes in CefSharp. "
+        "Path B (FortiRecorder compromise): A compromised FortiRecorder device returns "
+        "  a malicious endpoint URL. No user interaction required after the device is compromised. "
+        "JS execution in CefSharp context has access to IJavascriptObjectRepository registered .NET objects."
+    ),
+
+    "limitations": (
+        "Requires either MITM or compromised backend device. "
+        "If TLS validation is properly implemented (AdvancedRemoteCertificateValidationCallback), "
+        "Path A requires a valid certificate. "
+        "CefSharp by default runs the renderer in a sandboxed process; "
+        "IJavascriptObjectRepository bridge crosses the sandbox via IPC."
+    ),
+}
+
+FORTICENTRAL_MSI_F02_SERVICEPOINT_TLS = {
+    "id":       "FCENTRAL-MSI-F02",
+    "severity": "MEDIUM-PLAUSIBLE -- ServicePointManagerServerCertificateValidationCallback registered; behavior unconfirmed",
+    "class":    "Potential TLS certificate validation bypass (CWE-295)",
+
+    "evidence": (
+        "FortiCentral.exe contains: "
+        "  '<ServicePointManagerServerCertificateValidationCallback>b__0' -- compiler-generated lambda. "
+        "  'AdvancedRemoteCertificateValidationCallback' + 'AdvancedRemoteCertificateValidationFunction' + "
+        "  'AdvancedRemoteCertificateValidationUnpack' -- custom cert validation implementation. "
+        "ServicePointManager.ServerCertificateValidationCallback is a process-wide .NET delegate. "
+        "If set to always return true, ALL HttpWebRequest/WebClient calls in the process skip TLS validation. "
+        "The 'Advanced' naming suggests a real validation implementation, not a trivial bypass, "
+        "but the pattern of having a process-wide override alongside 'NoSSL' and 'DEFAULT_SSL' flags "
+        "suggests the app may disable cert validation in certain configurations or modes."
+    ),
+
+    "impact_if_bypass": (
+        "If ServicePointManagerServerCertificateValidationCallback returns true unconditionally: "
+        "  All FortiCentral HTTPS API calls to FortiRecorder/FortiGate/FortiAnalyzer are MITMable. "
+        "  Attacker on the same network segment (camera LAN, corporate LAN) intercepts creds + session tokens. "
+        "  Combined with FCENTRAL-MSI-F01: MITM injects malicious Host URL -> JS execution in CefSharp."
+    ),
+
+    "confirmation_method": (
+        "Decompile FortiCentral.exe with dnSpy or ILSpy. "
+        "Search for ServicePointManager.ServerCertificateValidationCallback assignment. "
+        "Check if the lambda body is 'return true' (bypass) or calls AdvancedRemoteCertificateValidationFunction."
+    ),
+}
+
+FORTICENTRAL_MSI_F03_WCF_SERVICE = {
+    "id":       "FCENTRAL-MSI-F03",
+    "severity": "LOW -- local WCF API with person management and image data; Windows auth may protect it",
+    "class":    "Local privileged service attack surface (CWE-284); image data deserialization",
+
+    "service":  "IFortiCentralWebAPI (WCF, .NET 4.5.2, Fortinet.FortiCentral.WebAPI.dll)",
+
+    "operations": {
+        "GetPeople":    "Returns person list with employeeID, firstName, lastName, employeeType, image, imageType",
+        "CreatePerson": "Creates person record with image data",
+        "FindPerson":   "Lookup by field",
+    },
+
+    "security_controls": {
+        "windows_auth":     "WindowsPrincipal + IsInRole check -- Windows-identity-based role enforcement",
+        "not_admin_check":  "'NotAdmin' string -- operations gated on admin role",
+        "metadata_exposed": "ServiceMetadataBehavior present -- WSDL/MEX endpoint may be accessible at service base URL",
+    },
+
+    "attack_surface": (
+        "WCF listens on a local TCP/named-pipe endpoint (port configurable; 'PortInUse' check at startup). "
+        "If bound to 127.0.0.1 with NetTcpBinding + Windows auth, only authenticated local processes can call it. "
+        "If bound to 0.0.0.0 or uses BasicHttpBinding without Windows auth, any network process can reach it. "
+        "Image data in CreatePerson: if image bytes are deserialized with a permissive format (BMP/TIFF), "
+        "memory corruption in the .NET image parser (System.Drawing) is possible. "
+        "System.Drawing uses GDI+ which has had historical GDI parsing vulnerabilities."
+    ),
+
+    "physical_security_context": (
+        "FortiCentral manages physical access control (cameras, door controllers, access badges). "
+        "Unauthorized CreatePerson call injects a fake identity into the access control database. "
+        "GetPeople exposes employee photos and badge data -- surveillance capability."
+    ),
+}
+
+FORTICENTRAL_MSI_F04_FFMPEG_CAMERA = {
+    "id":       "FCENTRAL-MSI-F04",
+    "severity": "MEDIUM -- bundled FFmpeg 6.x for RTSP camera stream parsing; known CVE class",
+    "class":    "Malicious media stream -> heap corruption in FFmpeg codec parser (CWE-122)",
+
+    "ffmpeg_evidence": {
+        "dll_names":   "avcodec-60.dll, avformat-60.dll -- API major version 60 = FFmpeg 6.x",
+        "build_path":  "C:/Fortinet/ExternalBuild/FFmpegInterop/ffmpeg/libavutil/ (in avutil strings)",
+        "wrapper":     "Fortinet.FortiRecorderCentral.FFMPEG.dll (C++/CLI mixed-mode assembly)",
+        "calls":       [
+            "avformat_open_input -- opens RTSP/HTTP media URLs from camera config",
+            "avformat_find_stream_info -- probes stream format (reads and parses media headers)",
+            "avcodec_send_packet / avcodec_receive_frame -- decodes video frames in-process",
+        ],
+    },
+
+    "attack_path": (
+        "FortiCentral connects to FortiRecorder-managed cameras via RTSP URLs. "
+        "A rogue device at a camera IP (ARP poisoning or physical replacement) serves a crafted stream. "
+        "avformat_open_input + avformat_find_stream_info parse the stream headers in FortiCentral's process. "
+        "Known FFmpeg 6.x CVE classes: heap-buffer-overflow in H.264/H.265 parser, "
+        "use-after-free in MOV container parser, integer overflow in audio codec demuxer. "
+        "Attack runs in the Windows process context of FortiCentral (typically domain user or admin)."
+    ),
+
+    "note": (
+        "OpenCV 4.8.0 (opencv_videoio_ffmpeg480_64.dll) in the Video Analytics package is a parallel path. "
+        "The base MSI also bundles standalone avcodec-60/avformat-60 DLLs in the install directory. "
+        "Both paths are reachable from camera input."
+    ),
 }
