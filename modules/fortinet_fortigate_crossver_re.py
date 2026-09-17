@@ -2173,7 +2173,7 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
         "sample_analysis": {
             "0x66ade0": "FP -- strdup pattern: strlen(rbx) -> malloc(len+1) -> strcpy(malloc_buf, rbx). Safe.",
             "0x742c69": "FP -- identical strdup pattern on r12. Safe.",
-            "0x441b38": "UNCERTAIN -- strcpy(rdi, rcx); rcx origin not visible in 15-instruction window; needs callchain trace",
+            "0x441b38": "LOW -- strcpy in function at 0x441ac0 (same pattern as 8.0.0 0x3e0790): rcx=input_struct+0x18; loop bounded to 0x30 bytes; strcpy only fires on null-terminator within bound; dest=rdi+9 in caller stack frame. callers: 0x44431a, 0x444890, 0x44b85a. PLT 0xb8850 confirmed=strcpy GOT 0xce97d8.",
         },
         "conclusion": "Majority of 106 callers are custom strdup implementations. 8.0.0 likely replaced these with libc strdup(). Targeted analysis of non-strdup callers required to find genuine vulnerability.",
     },
@@ -2193,7 +2193,7 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
     },
 
     "748_strcpy_conclusion": {
-        "finding":  "106 strcpy callers in 7.4.8 are predominantly safe -- mostly custom strdup patterns (strlen + internal xmalloc at 0xf03f0 + strcpy). The 8.0.0 reduction to 8 callers reflects replacing custom strdup() with libc strdup()/strndup(), not fixing vulnerability. VA 0x441b38 (non-strdup: copies from rcx at null-terminated token boundary) remains unresolved.",
+        "finding":  "106 strcpy callers in 7.4.8 are predominantly safe -- mostly custom strdup patterns (strlen + internal xmalloc at 0xf03f0 + strcpy). The 8.0.0 reduction to 8 callers reflects replacing custom strdup() with libc strdup()/strndup(), not fixing vulnerability. VA 0x441b38 resolved: function 0x441ac0 is loop-bounded-strcpy pattern (identical to 8.0.0 0x3e0790), verdict LOW.",
     },
 }
 
