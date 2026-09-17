@@ -2217,7 +2217,38 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
                 },
             },
         },
-        "pending": "Analyze 0x4b604 (loop accumulation with strcpy to rbp); full strncpy/sscanf sweep; memcpy length-from-packet analysis in scan path.",
+        "loop_strcpy_0x4b604": {
+            "function":  "0x4b500 (push r14/r13/r12/rbp(=rcx)/rbx; sub rsp,0x10)",
+            "rbp_source": "rcx = 4th argument from caller (dest buffer size unknown without callers)",
+            "r13_source": "pointer into internal structure from 0x4b4e0->0x4ae20 iteration (not directly file content)",
+            "callers":   "No direct e8 callers found; indirect dispatch (vtable or callback)",
+            "verdict":   "LOW-PLAUSIBLE -- r13 from internal struct iterator (not obviously file-derived); dest size unknown; indirect dispatch limits attack surface",
+        },
+        "strncpy_analysis": {
+            "total":     65,
+            "verdict":   "SAFE -- all analyzed callers use either literal bounds or remaining-space calculations",
+            "literal_count_callers": "Majority use: 0x32, 0x40, 0x7f, 0xff, 0x100, 0x104, 0x1ff, 0x3ff (compile-time constants)",
+            "variable_count_safe": {
+                "0x9e6f4": "count=remaining_space (dest_end - dest_start via strchr); strncpy bounded to available dest space. SAFE.",
+                "0x9e722": "count=strlen(src); pre-check: cmp eax,r14d;jae skip ensures count<remaining_space. SAFE.",
+                "0xba37c": "count=movzx_bp=min(r15w, 0x3ff) via cmovbe; max 0x3ff bytes. SAFE.",
+                "0x8637b": "count=edx from caller (general wrapper); dest at rcx; caller responsible. PLAUSIBLE-SAFE.",
+                "0x5561e,0x55675": "Scanner: count=0x32 (literal set before call; my initial scan misread post-call rdx setup). SAFE.",
+            },
+        },
+        "sscanf_analysis": {
+            "total":   6,
+            "formats": {
+                "0x84abe":  "'%6ho%11o' -- width-bounded octal fields. SAFE.",
+                "0xcb394":  "'%d' -- signed integer. SAFE.",
+                "0xcb3c6":  "'%d' -- signed integer. SAFE.",
+                "0x14ce43": "'%d' -- signed integer. SAFE.",
+                "0x196875": "'%u' -- unsigned integer. SAFE.",
+                "0x1968ba": "'%u' -- unsigned integer (same block as 0x196875). SAFE.",
+            },
+            "verdict": "SAFE -- all 6 callers use width-bounded or numeric format specifiers; no unbounded %s.",
+        },
+        "pending": "memcpy length-from-packet analysis in scan path (not yet started).",
     },
 
     "build_timestamps": {
