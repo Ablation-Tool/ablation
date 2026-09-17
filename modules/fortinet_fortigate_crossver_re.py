@@ -5133,12 +5133,32 @@ FGT800_ENC_CRYPTO_ARCH = {
     "product":  "FortiGate 8.0.0 -- ENC password encryption format analysis",
     "source":   "/tmp/fmg800_syntax/syntax/800.txt",
 
+    "format_variants": {
+        "ENC-148": {
+            "total_decoded_bytes":  148,
+            "base64_chars":         200,
+            "structure":            "nonce(8) || ciphertext(128) || auth_tag(12) = 148 bytes (no marker)",
+            "marker":               "ABSENT",
+            "examples":             "rsso-secret (sz:31), aws-api-key (sz:N), azure-api-key (sz:N) -- legacy :passwd: fields",
+            "rsso_secret_nonce":    "96d5712604bec25e",
+        },
+        "ENC-156": {
+            "total_decoded_bytes":  156,
+            "base64_chars":         208,
+            "structure":            "nonce(8) || ciphertext(128) || auth_tag(12) || marker(8) = 156 bytes",
+            "fixed_marker":         "5966323637764540 (hex) = 'Yf267vE@' (ASCII)",
+            "examples":             "sim2-pin, openai-api-key, all Group A OpenAI keys -- newer :passwd: fields",
+            "marker_is_plaintext":  "The 8-byte marker is OUTSIDE the AEAD envelope (appended after GCM tag); GCM authentication does NOT cover the marker. Tampering with marker bytes does not cause GCM auth failure.",
+        },
+        "discriminator_logic":  "Decryption engine likely checks: if decoded_len == 156 and last 8 bytes == 0x5966323637764540: ENC-156 path; else if decoded_len == 148: ENC-148 path (legacy).",
+    },
+
     "format": {
         "total_decoded_bytes":  156,
         "base64_chars":         208,
-        "structure":            "nonce(8 bytes) || ciphertext(140 bytes) || fixed_marker(8 bytes) = 156 bytes",
-        "fixed_marker":         "5966323637764540 (hex) = 'Yf267vE@' (ASCII)",
-        "marker_meaning":       "Unencrypted trailer appended to all Group A :passwd: ENC values; purpose unknown (version tag, magic, or integrity marker)",
+        "structure":            "nonce(8 bytes) || ciphertext(128 bytes) || auth_tag(12 bytes) || fixed_marker(8 bytes) = 156 bytes",
+        "fixed_marker":         "5966323637764540 (hex) = 'Yf267vE@' (ASCII) -- CONFIRMED: bytes 150-155 = 32 36 37 76 45 40 always encode as 'MjY3dkVA' (last 8 base64 chars of all ENC-156 values)",
+        "marker_meaning":       "Plaintext version discriminator appended AFTER GCM auth tag; not authenticated by AEAD; purpose: ENC format version detection",
     },
 
     "nonce_analysis": {
@@ -5573,6 +5593,45 @@ FGT748_LIBAV_ZIP_EOCD_CROSSVER = {
         "safe_cmp_0x2e":   "CDH traversal avScanLoad: lea 0x2e(%rax),%rdx; cmp %rdx,%rcx; jb abort (CORRECT)",
         "safe_total_calc": "CDH avScanLoad: lea 0x2e(%rsi,%rdx,1),%rdx + comment_len + double bounds (CORRECT)",
         "eocd_min_check":  "EOCD avScanLoad 7.4.8: 0x1e (30-byte) minimum before reads at 0x1a/0x1c (VERIFY -- EOCD fixed = 22 bytes)",
+    },
+}
+
+FMG800_OPENAI_INTEGRATION = {
+    "id":       "FMG800-OPENAI-INTEGRATION",
+    "product":  "FortiManager 8.0.0 -- OpenAI API key integration in SSO admin, LLM proxy (CWE-312, CWE-918)",
+    "severity": "HIGH -- OpenAI API keys stored in ENC-156 format per admin; LLM proxy (ports 8098/8099) with firewall-only auth; SAML IdP URL sz:255 with no validation",
+    "class":    "API key storage in encrypted config (CWE-312); LLM proxy SSRF (CWE-918); SAML IdP URL injection",
+    "source":   "/tmp/fmg800_syntax/syntax/800.txt",
+
+    "openai_api_key_storage": {
+        "fields": {
+            "gui-llm-provider":    "fortiai:option:'fortiai openai' -- selects between Fortinet AI or OpenAI",
+            "openai-api-key":      ":passwd:'sz:124;mu;' -- 124-char OpenAI API key, ENC-156 encrypted",
+            "openai-api-key-part2": ":passwd:'sz:124;od;' -- second half of key (split for 248-char total)",
+            "openai-model":        ":string:'sz:35;mu;' -- OpenAI model name (gpt-4o, etc.)",
+            "openai-project-id":   ":string:'35'",
+            "openai-org-id":       ":string:'35'",
+        },
+        "enc_value_line5081": "ENC B7pmXb1f44eBToH5MX6zFLxRV7Py1MZu1CiOtHwVeFdjEOzJqvkLzkCZcdBUYFpPH5Daw08TklG1QfsKhL9BFWSp7xtzLRDcQWfOXtISaBWrHJpgfFl5F2EL+2UsIqozai9GKJwBSZ8JMsP6mEK4d63yjzDdAcXZe7lo+i5OKoXF4JMUHNp/nI4bkicJRErVf7RWPllmMjY3dkVA",
+        "enc_format":   "ENC-156: nonce=07ba665dbd5fe387; marker=5966323637764540 (Yf267vE@) PRESENT",
+        "all_nonces":   "Line 5029: d2faba89; line 5081: 07ba665d; line 5110: 344bf81e -- 3 different admins, 3 different ENC-156 values",
+        "severity_note": "If ENC key is global (same across devices), offline decryption of API key may be feasible with known-plaintext attack on the OpenAI key format ('sk-' prefix known).",
+    },
+
+    "llm_proxy_attack_surface": {
+        "ports":    "HTTP 8098, HTTPS 8099 -- LLM proxy service on FMG",
+        "auth":     "Firewall policy only -- no application-layer authentication on LLM proxy",
+        "backends": "OpenAI, Azure, Gemini, Anthropic, Grok -- all cloud LLM providers",
+        "attack":   "Admin-scoped SSRF: attacker with FMG admin access sets openai-api-key and directs LLM proxy to internal metadata endpoint via provider configuration. Cloud metadata SSRF or token theft via crafted LLM request.",
+    },
+
+    "saml_attack_surface": {
+        "idp_entity_id":   "idp-entity-id: :string:'sz:255;xs;mu;' -- 255-byte expandable, no URL validation",
+        "idp_sso_url":     "idp-single-sign-on-url: :string:'sz:255;mu;' -- 255-byte IdP SSO URL, no scheme validation",
+        "sp_sso_url":      "single-sign-on-url: :string:'sz:255;mu;' -- 255-byte SP ACS URL",
+        "ike_saml_port":   "auth-ike-saml-port: 1001 (default) -- SAML auth for IKE/IPsec VPN on port 1001",
+        "ike_saml_server": "ike-saml-server: :string:'sz:35;ds;' -- named SAML server for IKE auth",
+        "attack":          "Admin can set idp-single-sign-on-url to internal URL (cloud metadata, adjacent service). FMG sends SAML auth redirect to attacker-controlled IdP. Combined with open-redirect in IdP: SAML assertion forgery.",
     },
 }
 
