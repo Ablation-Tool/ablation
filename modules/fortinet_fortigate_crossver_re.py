@@ -3039,3 +3039,133 @@ FORTICLIENT80_VULSCAN = {
         "Resolve 0x542d67 (called at 0x577186 before strcpy at 0x5771bd)",
     ],
 }
+
+
+# ---------------------------------------------------------
+# FortiClient 8.0 -- confighandler (config management daemon) RE
+# ---------------------------------------------------------
+FORTICLIENT80_CONFIGHANDLER = {
+    "id":        "FCLIENT80-CONFIGHANDLER",
+    "product":   "FortiClient 8.0 confighandler -- central configuration management daemon",
+    "binary":    "/opt/forticlient/confighandler (ET_DYN ELF64 x86-64; 22MB)",
+    "has_canary": True,
+    "has_chk":   True,
+    "language":  "Rust+C hybrid",
+    "severity":  "MEDIUM -- NNG IPC unauthenticated local socket; path-concat strcpy MEDIUM PLAUSIBLE; sprintf with %s%s args (RODATA only -- SAFE)",
+
+    "architecture_note": (
+        "confighandler is a Rust+C hybrid binary. Dynstr contains: "
+        "h2 crate (HTTP/2 implementation), tokio (async runtime), NNG 1.8.0 (Nano Next Generation IPC). "
+        "150 raw syscall instructions from Rust stdlib direct syscalls. "
+        "Rust portions: memory-safe by language (no classic buffer overflows). "
+        "C portions: 8 strcpy, 1 strcat, 1 sprintf, 1 recvfrom callers. "
+        "confighandler acts as central message bus for ALL FortiClient daemons."
+    ),
+
+    "plt_inventory": {
+        "method": "ET_DYN: .plt.got stubs (8-byte); RELA.PLT+RELA.DYN GOT resolution; validated disasm scan",
+        "strcpy":   {"plt": "0x232a80", "got": "0x1787958", "callers": 8},
+        "strcat":   {"plt": "0x232c00", "got": "0x1788f50", "callers": 1},
+        "sprintf":  {"plt": "0x232e28", "got": "0x178ae18", "callers": 1},
+        "strncpy":  {"plt": "0x232940", "got": "0x17864a8", "callers": 9},
+        "snprintf": {"plt": "0x232b00", "got": "0x1788050", "callers": 21},
+        "recvfrom": {"plt": "0x2329d0", "got": "0x1786f68", "callers": 1},
+        "memcpy":   {"plt": "0x2328d8", "got": "0x1785fe0", "callers": 638},
+        "recv":     {"got": "0x178a918", "callers": "NOT FOUND in PLT -- called via Rust stdlib direct syscall or different stub"},
+        "sscanf":   {"callers": "NOT FOUND in PLT -- likely not used in C portion (Rust has own parsers)"},
+        "read":     {"plt": "0x232880", "got": "0x1785bf0", "callers": 13},
+    },
+
+    "strcpy_analysis": {
+        "callers": 8,
+        "callers_list": ["0x50e53f", "0xc6a67e", "0xcbb36f", "0xcbc535", "0xcbc56d", "0xcfae35", "0xe5f313", "0xe5f326"],
+        "method": "Manual disasm of all 8 callers (400-byte lookback)",
+        "findings": 1,
+        "FCLIENT80-CONFIGHANDLER-STRCPY-F01": {
+            "id":       "FCLIENT80-CONFIGHANDLER-STRCPY-F01",
+            "severity": "MEDIUM PLAUSIBLE -- path concat: double strcpy at 0xe5f313/0xe5f326; same class as FCLIENT80-VULSCAN-STRCPY-F01",
+            "callers":  ["0xe5f313", "0xe5f326"],
+            "pattern":  (
+                "0xe5f313: strcpy(rax, r12) -- first path component. "
+                "0xe5f326: strcpy([r13+rbx+1], rbp) -- second component after separator. "
+                "Identical to vulscan 0x86fd33/0x86fd46 pattern: malloc then double strcpy. "
+                "OVERFLOW if malloc size does not account for both r12 and rbp lengths."
+            ),
+            "cross_ref": "FCLIENT80-VULSCAN-STRCPY-F01 -- same path-concat class in vulscan",
+        },
+        "other_callers": {
+            "note": "0x50e53f, 0xc6a67e, 0xcbb36f, 0xcbc535, 0xcfae35: all dest=rax (heap result); src varies; likely strdup patterns. 0xcbc56d: context insufficient (no rsi/rdi in 80-byte lookback).",
+        },
+    },
+
+    "strcat_analysis": {
+        "callers": 1,
+        "findings": 0,
+        "detail": {
+            "0xc6a69e": (
+                "Context: strcpy(dest, r13) then strlen(dest) then write ':' then strcat(dest, rbp). "
+                "Pattern: host:port string construction. "
+                "PLAUSIBLE SAFE if dest = malloc(strlen(r13)+strlen(rbp)+2); needs allocation trace."
+            ),
+        },
+    },
+
+    "sprintf_analysis": {
+        "callers": 1,
+        "findings": 0,
+        "detail": {
+            "0x50e61d": (
+                "sprintf(rax, '%s%s', [rip+0xa77d3a], [rip+0xa78011]). "
+                "Format = '%%s%%s' (two static string args from RODATA). "
+                "Both arguments are compile-time constants from RODATA; output is fixed length. "
+                "Dest = rax (heap allocation). SAFE."
+            ),
+        },
+    },
+
+    "recvfrom_analysis": {
+        "callers": 1,
+        "findings": 0,
+        "detail": {
+            "0xc6cc11": (
+                "recvfrom(edi=[rbx+0x38], rsi=r12, rdx=movsxd(ebp), ecx=r13d, r8=rax, r9=rsp+0x18). "
+                "len = ebp (callee-saved register, set at function entry). "
+                "buf = r12 (caller-provided). "
+                "MEDIUM -- ebp length not verified against r12 buffer size in this context window."
+            ),
+        },
+    },
+
+    "nng_ipc_finding": {
+        "id":       "FCLIENT80-CONFIGHANDLER-F01",
+        "severity": "HIGH -- confighandler is central NNG message bus; all socket types present; no auth",
+        "class":    "Unauthenticated local IPC (CWE-284); NNG multi-pattern socket hub",
+        "description": (
+            "confighandler implements ALL NNG socket types: "
+            "REQ/REP, PAIR (v0+v1), PUB/SUB, PUSH/PULL, BUS, SURVEYOR/RESPONDENT. "
+            "It is the central daemon that all other FortiClient processes communicate through. "
+            "NNG has no built-in authentication. "
+            "If NNG socket permissions are not restricted (world-accessible socket file): "
+            "  1. Any local process knowing the socket name can send NNG messages. "
+            "  2. Messages can trigger config changes: VPN on/off, proxy settings, split-tunnel rules. "
+            "  3. Full config manipulation = local privilege escalation / network traffic redirect. "
+            "Cross-reference: iked (FCLIENT-IKED-F02) uses NNG REQ/REP only. "
+            "confighandler uses ALL socket types -- wider attack surface. "
+            "The HTTP/2 (h2 crate) interface suggests a management API over HTTP/2."
+        ),
+        "nng_symbols": (
+            "nng_req0_open, nng_rep0_open, nng_pair0_open, nng_pair1_open, "
+            "nng_pub0_open, nng_sub0_open, nng_push0_open, nng_pull0_open, "
+            "nng_bus0_open, nng_surveyor0_open, nng_respondent0_open, "
+            "nng_ctx_recv, nng_recvmsg, nng_sendmsg, nng_dial, nng_listen"
+        ),
+    },
+
+    "pending": [
+        "Trace malloc size before 0xe5f313 for FCLIENT80-CONFIGHANDLER-STRCPY-F01 (path concat)",
+        "Trace ebp at 0xc6cc11 recvfrom -- find where it's bounded against r12 buffer",
+        "Determine NNG socket names/paths at listen/bind calls (strace or string search)",
+        "Check if h2 HTTP/2 server accepts connections from network (vs localhost only)",
+        "memcpy: 638 callers -- targeted trace from recvfrom/recv call sites through dispatcher",
+    ],
+}
