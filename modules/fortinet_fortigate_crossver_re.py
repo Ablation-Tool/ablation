@@ -1172,5 +1172,25 @@ FGFM_TLS_CLIENT_VERIFY_F01 = {
             "Purpose of create_ssl_ctx is unconfirmed; likely admin WebUI mutual TLS or SSL-VPN context."
         ),
     },
-    "scope": "FortiOS 7.2.0 confirmed; cross-version verification pending semantic sweep on 7.0.x / 7.4.x binaries",
+    "cross_version_confirmation": {
+        "703": {
+            "binary": "/tmp/fgt703_bin_extracted/bin/init (FortiOS 7.0.3, 59MB, BuildID 6e32c6d64daed33e3f63b16dbbfa3df592195db0)",
+            "ssl_ctx_create_new_ex_va": "0x1c82070",
+            "ssl_ctx_set_verify_called": False,
+            "ssl_ctx_set_security_level": "xor esi, esi at 0x1c8236d; CALL 0x4373e0 -- security_level=0 confirmed",
+            "structure_identical": (
+                "7.0.3 ssl_ctx_create_new_ex has identical structure to 7.2.0: "
+                "SSL_CTX_new -> set_options -> load cipher lists -> __ssl_cert_ctx_load -> NO set_verify. "
+                "Also loads /tmp/fgt_lsn.crt, /tmp/fgt_lsn.key, Fortinet_CA, Fortinet_CA_Backup certs. "
+                "SSL_CTX_set_verify was NOT called in 7.0.3 either."
+            ),
+        },
+        "720": {
+            "ssl_ctx_create_new_ex_va": "0x1fa2e50",
+            "ssl_ctx_set_verify_called": False,
+            "ssl_ctx_set_security_level": "SSL_CTX_set_security_level(ctx, 0) -- confirmed",
+        },
+    },
+    "scope": "FortiOS 7.0.3 and 7.2.0 confirmed via binary analysis; both versions share identical ssl_ctx_create_new_ex structure with SSL_VERIFY_NONE default",
 }
+
