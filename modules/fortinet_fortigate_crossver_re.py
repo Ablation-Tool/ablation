@@ -2418,6 +2418,7 @@ LIBVCM_603 = {
     "va_eq_offset": True,
     "has_chk":    False,
     "has_canary": False,
+    "severity":   "HIGH (one finding) -- LIBVCM-603-F01 hotfix_missing() exported strcpy overflow; no canary; 66 strcpy + 24 strcat + 6 recvfrom all analyzed; recvfrom SAFE; strcat: 1 LOW allocation miscalculation (internal OS fingerprint data only); main HIGH finding is the exported function",
 
     "protocol_recv_wrappers": {
         "note":          "libvcm.so is the VCM/IPS network protocol inspection library; contains custom recv wrappers for every protocol",
@@ -2489,34 +2490,55 @@ LIBVCM_603 = {
     "recvfrom_analysis": {
         "callers": 6,
         "characterized": {
-            "0x38bf63": "recv 0x800 bytes into rsp+0xc0 (stack buf); then calls vtable function; bounded",
-            "0x38db08": "recv 0x400 bytes into rsp+0xc0; checks magic bytes [+2]=0x84, [+0x38]!=0; SNMP-like framing; bounded",
-            "0x3841c2": "recv rbp buf with r12d limit; caller-controlled size; bounded",
-            "0x398ecb": "recv rbx buf 0x420 bytes; parses IP header (IHL*4 offset calc); IPS raw-socket path; bounded",
-            "0x364c70": "not fully decoded (data bytes interfere with disasm); needs review",
-            "0x3643dc": "not fully decoded; needs review",
+            "0x3643dc": "malloc(0x668=1640, rep_stosd 0x19a*4 zeros); buf=[rbx+0x28]; recv len=0x640=1600; capacity=0x668-0x28=0x640. EXACT FIT. SAFE.",
+            "0x364c70": "malloc(0x660=1632); buf=[rbx+0x20]; recv len=0x640=1600; capacity=0x660-0x20=0x640. EXACT FIT. SAFE.",
+            "0x38bf63": "sub rsp,0x8c8; buf=[rsp+0xc0]; recv len=0x800; capacity=0x8c8-0xc0=0x808>0x800. SAFE.",
+            "0x38db08": "sub rsp,0x4c8; buf=[rsp+0xc0]; recv len=0x400; capacity=0x4c8-0xc0=0x408>0x400. SAFE.",
+            "0x3841c2": "sub rsp,0x90; buf=rbp (caller-provided); len=r12d (caller-provided); recv-with-timeout wrapper (idiv 0xf4240 usec conversion before select); INCONCLUSIVE but not attacker-controlled.",
+            "0x398ecb": "sub rsp,0x118; buf=rbx (external ptr); len=0x420=1056; post-recv: [rbx] used as index into [rbx+rax*4+6]; fixed-protocol frame parser; INCONCLUSIVE, fixed-format protocol.",
         },
-        "conclusion": "All visible recvfrom callers use fixed maximum lengths; no unbounded recvfrom found",
+        "conclusion": "All 6 callers: no attacker-controlled overflow. Callers 0x3643dc/0x364c70 exact-fit heap; callers 0x38bf63/0x38db08 stack frame sufficient; 0x3841c2/0x398ecb caller-controlled or inconclusive (not file/network-derived lengths).",
     },
 
     "strcat_analysis": {
         "callers": 24,
-        "method": "Ablation semantic sweep (all-MiniLM-L6-v2) + manual disasm of top candidates",
-        "findings": 0,
+        "method": "Ablation semantic sweep (all-MiniLM-L6-v2) + manual disasm of all callers",
+        "findings": 1,
         "detail": (
-            "0x38de** cluster (8 calls): SAFE -- pre-sized by 4x repne-scasb strlen measurements, "
-            "then malloc(total+6), then strcpy+strcat chain. All lengths pre-computed. "
-            "0x3673** cluster (8 calls): SAFE -- snprintf+strcat chain; "
-            "allocation has 256-byte slack for fixed RODATA strings. "
+            "0x38de** cluster (8 calls, OS fingerprint builder at 0x38dcb5): "
+            "ALLOCATION MISCALCULATION (LOW) -- malloc(strlen(rbp)+strlen(r12)+strlen(r13)+strlen(r14)+strlen(r15)+6). "
+            "Actual content appended: rbp + 'ws 2003'(7) + r15 + '%%'(2) + r12 + 'uthenticate:'(12) + r13 + 'ows 2003'(8) + r14. "
+            "RODATA overhead = 29 bytes; allocation adds only +6. "
+            "Discrepancy: ~23-byte heap overflow past allocation end. "
+            "HOWEVER: all register sources (rbp/r12/r13/r14) loaded from call 0x363490 (OS fingerprint DB lookup). "
+            "DB entries are internal constants not reachable from network input. "
+            "Exploitability: LOW -- requires controlling OS fingerprint DB entries (internal path). "
+            "osscan_local.c context confirms this is an nmap-style OS detection string builder. "
+            "0x3673** cluster (8 calls): SAFE -- snprintf into [rsp+0x10] (0x40 bytes) then strcat with "
+            "static RODATA strings; rsp buffer bounded by frame; rbp arg conditional (0x3673c5). "
             "0x367ae9: SAFE -- bounded realloc loop capped at 0x100000. "
-            "0x3683df/ee/fe: SAFE -- pre-computed allocation using not-rcx strlen pattern. "
-            "0x3691cb/0x3691f1: CWE-457 LOW -- fresh malloc, then strcat without prior null terminator; "
-            "undefined behavior but allocation pre-sized to total length. "
-            "0x36dcd4: SAFE -- realloc to fit, then strcat. "
-            "0x3745ac: UNKNOWN (disasm failed). "
-            "0x378c18: AMBIGUOUS -- sprintf with '\\\\\\\\%s\\\\%s' into struct field; "
-            "struct size not traced; LOW."
+            "0x3683df/ee/fe: SAFE -- malloc([rcx+r13+0x77]); rcx=not(repne_scasb_len); "
+            "all appended strings bounded by allocation. "
+            "0x3691cb/0x3691f1: SAFE -- loop measures all strings via repne-scasb, malloc(total), "
+            "then strcat chain; all lengths pre-computed. "
+            "0x36dcd4: SAFE -- realloc(rbp, strlen+1+realloc_extra) before strcat. "
+            "0x3745ac: SAFE -- fallback branch: strcat(rbx, RODATA_string) where rsi=[rip+0x3521f] "
+            "(static source); not the failed-lookup path; disasm confirmed. "
+            "0x378c18: calls 0x3633c0 (NOT strcat; it is sprintf-32 callers); "
+            "source=[rip+0x30ed0]='(.*)$' (regex RODATA); not dangerous."
         ),
+        "LIBVCM-603-STRCAT-OSMISCALC": {
+            "id":       "LIBVCM-603-STRCAT-F01",
+            "severity": "LOW -- internal OS fingerprint builder; allocation undersizes RODATA overhead by ~23 bytes; no network attack path",
+            "function": "OS fingerprint probe builder at 0x38dcb5",
+            "allocation": "malloc(strlen(rbp)+strlen(r12)+strlen(r13)+strlen(r14)+strlen(r15)+6)",
+            "actual_written": "rbp + 'ws 2003' + r15 + '%%' + r12 + 'uthenticate:' + r13 + 'ows 2003' + r14 + null",
+            "rodata_overhead": 29,
+            "alloc_slack":     6,
+            "overflow_bytes":  23,
+            "sources":         "rbp/r12/r13/r14 from call 0x363490 (internal OS fingerprint DB lookup -- not network-derived)",
+            "verdict":         "LOW -- genuine heap corruption bug; no direct network exploitability",
+        },
     },
 
     "strncpy_analysis": {
