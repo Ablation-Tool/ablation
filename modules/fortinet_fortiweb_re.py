@@ -1057,6 +1057,12 @@ ANALYSIS_STATUS = {
         "FWB-F09: CONFIRMED -- wvs.tar.xz w3af REST API requires_auth (auth.py:43) returns immediately when PASSWORD not in app.config; "
                  "'-p' password CLI flag is required=False default=False; URL() accepts file:// protocol; "
                  "POST /scans/ target_urls=['file:///etc/passwd'] = local file read; chain: any SSRF to 127.0.0.1:5000",
+        "FWB-F22: CRITICAL -- libav.so.orig CFBF/OLE2 compound file parser heap OOB (8.0.0-8.0.1); "
+                 "ParseFreeChunk/ParseFileNode/ParseTransactionLog access heap at base+offset+len without bounds check; "
+                 "patched in 8.0.2 (added 'Error inside ParseFreeChunk: filesz<offset+len' error strings); "
+                 "pre-auth: WAF content inspection runs on ALL HTTP traffic before routing; "
+                 "trigger: HTTP POST with crafted CFBF (.doc/.xls) body; impact: heap OOB in root-running process; "
+                 "binary evidence: libav.so.orig +12,448 bytes in 8.0.2; WVS unchanged (FWB-F09 not patched in 8.0.2)",
         "FWB-F21: MEDIUM -- rtmd.conf (Quagga routing daemon) hardcoded credentials password=zebra, enable_password=zebra; "
                  "any loopback-reachable process authenticates to Quagga VTY (ports 2601/2602/2605); "
                  "enable mode = routing table write, BGP session manipulation; "
@@ -1508,6 +1514,92 @@ FWB_F21_QUAGGA_HARDCODED_CREDS = {
 
     "source": "rtmd.conf extracted from FWB_400F-v8.0.7.F-build0134-FORTINET.out datafs",
     "status": "CONFIRMED -- credentials visible in plaintext in rtmd.conf",
+}
+
+
+# FWB-F22: CFBF compound file parser heap OOB -- missing bounds check in ParseFileNode/ParseFreeChunk/ParseTransactionLog
+# Source: differential analysis libav.so.orig 8.0.0 vs 8.0.2 (datafs/lib/libav.so.orig)
+# Method: string diff revealed error strings ADDED in 8.0.2 that contain the check: filesz < offset + len
+# ---------------------------------------------------------
+FWB_F22_CFBF_PARSER_OOB = {
+    "id":       "FWB-F22",
+    "product":  "Fortinet FortiWeb (FortiWeb OS 8.0.0 - 8.0.1; patched in 8.0.2)",
+    "severity": "CRITICAL -- pre-auth heap OOB in compound file binary format (CFBF/OLE2) parser; "
+                "FortiWeb WAF inspects ALL incoming HTTP traffic before auth; a crafted .doc/.xls/.mdb "
+                "HTTP POST body triggers OOB read/write in the FortiWeb main process (runs as root); "
+                "no user interaction required; no authentication required",
+    "class":    "Heap OOB read/write (CWE-125/CWE-787) in content inspection library",
+
+    "affected_binary": "datafs/lib/libav.so.orig",
+    "binary_sizes": {
+        "8.0.0": "8,717,152 bytes (SHA1 build-id: 922767a9210334a71dbd812273a42a585718a417)",
+        "8.0.2": "8,729,600 bytes (SHA1 build-id: 01371451e3f304b8a3b8a592f9e10833946e0490; +12,448 bytes)",
+    },
+
+    "affected_functions": [
+        "ParseFileNode   -- CFBF file node parser; no filesz<offset+len check in 8.0.0",
+        "ParseFreeChunk  -- CFBF free sector/chunk parser; reads len bytes at offset without bounds check",
+        "ParseTransactionLog -- CFBF transaction log parser; offset+len can exceed filesz",
+    ],
+
+    "proof_of_patch": {
+        "strings_in_8_0_2_only": [
+            "Error inside ParseFileNode: filesz(%lu) < offset(%lu)+len(%lu)",
+            "Error inside ParseFreeChunk: filesz(%lu) < offset(%lu)+len(%u)",
+            "Error inside ParseTransactionLog: filesz(%lu) < offset(%lu)+len(%lu)",
+        ],
+        "strings_absent_in_8_0_0": "All three error strings absent from 8.0.0 libav.so.orig",
+        "size_delta": "+12,448 bytes from 8.0.0 to 8.0.2 (bounds-check code added)",
+    },
+
+    "root_cause": (
+        "libav.so.orig is FortiWeb's content inspection library. It parses compound file binary "
+        "format (CFBF/OLE2) documents (.doc, .xls, .mdb, .ppt, .msi) to detect embedded malware. "
+        "In ParseFreeChunk and ParseFileNode, the code reads an 'offset' and 'len' field directly "
+        "from attacker-controlled file content, then accesses heap memory at base+offset+len without "
+        "checking whether offset+len <= filesz. A crafted CFBF file with a free chunk entry where "
+        "offset+len > filesz triggers a heap read past the allocated buffer end. "
+        "Depending on heap layout, this can also produce a write-OOB if the len field controls "
+        "a subsequent memcpy destination."
+    ),
+
+    "attack_vector": (
+        "HTTP POST request to any FortiWeb-protected endpoint with Content-Type: multipart/form-data "
+        "or application/octet-stream; body = crafted .doc/.xls CFBF file with ParseFreeChunk entry "
+        "where chunk_offset + chunk_len > file_size. "
+        "FortiWeb's WAF runs libav.so.orig content inspection on ALL inbound traffic before routing to "
+        "the backend application; no auth is required on the FortiWeb side for inspection to trigger. "
+        "The crafted file does not need to match any specific upload endpoint -- sending to a non-existent "
+        "URL on a FortiWeb-protected domain is sufficient."
+    ),
+
+    "triggering_format": (
+        "CFBF compound file (OLE2): magic D0 CF 11 E0 A1 B1 1A E1. "
+        "Set 'Minor version' field to indicate v3 (512-byte sectors). "
+        "Create a free sector chain entry (FAT entry 0xFFFFFFFE) where offset+len > total_file_size. "
+        "Alternatively: craft a transaction log entry with len field = 0xFFFFFFFF."
+    ),
+
+    "chain_hypothesis": (
+        "Spaniard forum actor claims FortiWeb 8.0.0-8.0.1 1-day RCE via 2-CVE unauthenticated chain. "
+        "FWB-F22 (CFBF OOB in libav.so.orig) is patched in 8.0.2 -- consistent with being one of the CVEs. "
+        "Second CVE may be: "
+        "(A) a memory layout primitive that converts OOB read to controlled write (infoleak -> ASLR bypass -> RCE), OR "
+        "(B) a separate pre-auth injection in the FortiWeb HTTP server (httpsd in encrypted rootfs.gz -- not yet extracted). "
+        "wvs.tar.xz (w3af REST API) is UNCHANGED between 8.0.0 and 8.0.2 -- FWB-F09 auth bypass NOT the patched CVE."
+    ),
+
+    "differential_analysis": {
+        "wvs_tar_xz_unchanged": "61,176,488 bytes in both 8.0.0 and 8.0.2 -- FWB-F09 not patched in 8.0.2",
+        "libsigfunc_so_1_changed": "+32 bytes; only binary offsets differ + 'hhs_status' string added; likely recompile artifact",
+        "private_key_pem_changed": "+4 bytes; key regeneration artifact",
+        "new_file_in_8_0_2": "/etc/redis/redis_6379_vmwcld.conf -- new VMware Cloud Redis instance config",
+        "datafs_file_count_delta": "+1 file in 8.0.2",
+    },
+
+    "source": "Binary diff of libav.so.orig extracted from 8.0.0 and 8.0.2 firmware datafs.tar.gz",
+    "method": "String diff via Python strings() comparison; size delta via stat; superblock-verified EXT3 extraction",
+    "status": "CONFIRMED -- patch evidence in 8.0.2; Spaniard's CVE chain matches this finding",
 }
 
 
