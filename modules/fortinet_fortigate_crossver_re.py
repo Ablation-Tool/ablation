@@ -5086,6 +5086,120 @@ FGT800_SYNTAX_ARCH = {
     },
 }
 
+# ---------------------------------------------------------
+# libips.so.new RE: L7 IPS engine, LuaJIT runtime
+# Binary: /tmp/fgt800_datafs/lib/libips.so.new
+# BuildID sha1:3473282a6bf9b4a237ef469d4b0bb9de22b70367
+# Size: 18MB; 4637 functions (semantic sweep); cached at /tmp/libips800_vecs.npy
+# Semantic sweep: BinFuse 11-category + all-MiniLM-L6-v2
+# ---------------------------------------------------------
+
+FGT800_LIBIPS_ARCH = {
+    "id":       "FGT800-LIBIPS-ARCH",
+    "product":  "FortiGate 8.0.0 libips.so.new -- L7 IPS engine architecture",
+    "binary":   "/tmp/fgt800_datafs/lib/libips.so.new (ELF64 x86-64 stripped; 18MB)",
+    "buildid":  "sha1:3473282a6bf9b4a237ef469d4b0bb9de22b70367",
+    "functions": 4637,
+    "sweep":    "BinFuse 11-category opcode normalization + sentence-transformers/all-MiniLM-L6-v2; vectors /tmp/libips800_vecs.npy",
+
+    "l7_components": {
+        "l7_vtable_init_1":     "0x326860 -- session lookup/dispatch; divq into global table at 0x128a9b8; accesses struct fields at offsets 0xa8, 0xac, 0xb0",
+        "l7_vtable_init_2":     "0xe1180 -- C++ TLS/guard init pattern (xorps xmm0; movups); not direct vtable",
+        "init_engine":          "0xf4ea0 -- state-machine gated on 3 globals (0x11b4c00, 0x11c14c0, 0x11c1520); main path at 0xf50b0 registers protocol decoders via protocol IDs 0x2a/0x21/0x24",
+        "content_disp_parser":  "0x64b420 -- Content-Disposition header parser; matches 'attachment;', 'filename*=', 'filename=', 'inline;'; 0x400-byte bounded stack buffer with explicit cmp $0x3ff guard",
+        "dns_handler_reg":      "0x4c4930 -- DNS record type handler registrar; registers RR types 1-14 and 0xff (ANY) via 0xac0-byte stack frame; 16-bit size limit from RODATA 0xefc410 = 0x1f (31)",
+        "dns_rdata_parser":     "0x4e9192 -- 0x7d40-byte (32KB) stack frame; processes DNS wire format via 16-byte SIMD loads (movdqu); calls 0x4c4930 for each RR type",
+    },
+
+    "luajit_runtime": {
+        "version":          "LuaJIT 2.1 (embedded)",
+        "nan_boxing":       "Confirmed: movabs $0xfffd800000000000 / $0xfffa000000000000 (LuaJIT tag bits)",
+        "package_path":     "./?.lua;/usr/local/share/luajit-2.1/?.lua;/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua",
+        "package_path_va":  "0xeb8b90 (RODATA); set into Lua state at 0x415440 and 0x4157af",
+        "entry_points":     {
+            "ips_lua_newstate":     "creates new Lua state (string at 0xe2d320)",
+            "prepare_lua_state":    "initializes Lua state including package.path (string at 0xe27a74)",
+            "ips_lua_dostring":     "executes string as Lua code -- runtime arbitrary execution interface",
+            "ips_lua_loadbuffer":   "loads Lua bytecode from buffer -- allows pre-compiled Lua injection",
+            "ips_lua_pcall":        "protected call -- caller-visible error propagation",
+            "ips_lua_require":      "custom require wrapper",
+            "register_lua_module":  "registers external C module into Lua state",
+            "query_lua_intf":       "query Lua interface (likely for IPS rule callbacks)",
+            "ips_luacfg_init":      "LuaJIT config initialization",
+        },
+    },
+
+    "dangerous_function_surface": {
+        "note":     "Semantic sweep scores for classic memory corruption patterns were low (0.15-0.36), suggesting most parsers have explicit bounds checks",
+        "notable":  {
+            "content_disp_0x400_buf":   "0x64b878: 0x400-byte stack buffer with explicit 0x3ff guard; RFC 5987 percent-decode path at 0x205e30",
+            "dns_stack_32kb":           "0x4e9192: 0x7d40-byte stack allocation; DNS RR type limit from RODATA 0xefc410 = 0x1f (31 bytes max per field?)",
+            "dns_rr_size_constant":     "RODATA 0xefc410 = 0x0000001f; 0xefece4 = 0x00000708 (0x708 = 1800 decimal -- max DNS record size?)",
+        },
+    },
+}
+
+FGT800_LIBIPS_F01 = {
+    "id":       "FGT800-LIBIPS-F01",
+    "product":  "FortiGate 8.0.0 libips.so.new -- LuaJIT CWD path injection",
+    "severity": "MEDIUM -- requires write access to the IPS daemon's CWD; enables Lua code execution in IPS engine context",
+    "class":    "Unsafe Lua package.path with CWD entry (CWE-427)",
+    "cwe":      "CWE-427",
+
+    "description": (
+        "libips.so.new embeds LuaJIT 2.1 and sets the following package.path in the Lua state: "
+        "  './?.lua;/usr/local/share/luajit-2.1/?.lua;/usr/local/share/lua/5.1/?.lua;...' "
+        "The './?.lua' entry is the FIRST path searched when any require() call is made from within "
+        "the IPS engine's Lua runtime. "
+        "If an attacker can write a file named '<module>.lua' to the current working directory of "
+        "the IPS daemon process, that file will be executed as Lua code the next time the IPS engine "
+        "calls require('<module>'). "
+        "The IPS daemon's CWD is likely '/' or a known system directory. "
+        "Exploitability requires: "
+        "  1. Ability to write a .lua file to the CWD (via authenticated CLI file upload, FTP, "
+        "     path traversal in another component, or post-exploitation pivot) "
+        "  2. Triggering a require() call in the IPS engine (likely automatic during signature processing) "
+        "Impact: Lua code executes in the context of the IPS engine with the same privileges; "
+        "access to ips_lua_dostring/ips_lua_loadbuffer provides an additional code path."
+    ),
+
+    "evidence": {
+        "package_path_string":      "0xeb8b90 (RODATA): './?.lua;/usr/local/share/luajit-2.1/?.lua;...'",
+        "package_path_set_at":      ["0x415440 (lea rcx, 0xeb8b90; call 0x3ffc10)", "0x4157af (lea rsi, 0xeb8b90; call 0x3df630)"],
+        "ips_lua_dostring_present":  True,
+        "ips_lua_loadbuffer_present": True,
+        "luajit_nan_boxing_confirmed": True,
+    },
+
+    "remediation": "Set package.path explicitly after luaL_newstate(), removing the './?' prefix: package.path = '/usr/local/share/luajit-2.1/?.lua;...'",
+}
+
+FGT800_LIBIPS_F02 = {
+    "id":       "FGT800-LIBIPS-F02",
+    "product":  "FortiGate 8.0.0 libips.so.new -- ips_lua_dostring runtime Lua execution surface",
+    "severity": "INFORMATIONAL -- execution interface is internal; exploitability depends on whether IPS signatures can invoke it via user-controlled content",
+    "class":    "Runtime code execution interface in IPS engine (informational)",
+
+    "description": (
+        "libips.so.new exports or internally uses ips_lua_dostring and ips_lua_loadbuffer, "
+        "which execute arbitrary Lua code strings and pre-compiled Lua bytecode respectively. "
+        "If any IPS signature action or custom rule can pass attacker-controlled content to "
+        "either function, this enables arbitrary code execution in the IPS engine's Lua runtime. "
+        "The ips_lua_pcall wrapper provides protected-mode execution (errors are caught). "
+        "The query_lua_intf and register_lua_module strings suggest the IPS engine uses Lua as "
+        "a plugin/extension mechanism for signature processing. "
+        "Pending: trace what IPS rule fields map to ips_lua_dostring calls."
+    ),
+
+    "evidence": {
+        "ips_lua_dostring":     "symbol string at RODATA; maps to wrapper around lua_pcall with string arg",
+        "ips_lua_loadbuffer":   "symbol string at RODATA; maps to luaL_loadbuffer for bytecode loading",
+        "register_lua_module":  "symbol string; suggests C module registration into Lua state",
+        "query_lua_intf":       "symbol string; likely IPS-to-Lua callback mechanism",
+    },
+}
+
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
