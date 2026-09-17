@@ -2797,19 +2797,53 @@ FORTICLIENT80_LIBAV = {
 
     "strcpy_analysis": {
         "callers": 48,
-        "findings": 0,
-        "detail": (
-            "Representative sample of 8 callers reviewed. "
-            "0x115ca5: stpcpy(r12, r14) then strcpy(end_ptr, rbx) -- concatenation; "
-            "r12=[rsp+0x800] with frame sub rsp,0x15e8 = 3560 bytes available. SAFE. "
-            "0x2d88bf: strcpy([rbx+8], rbp) where rbp=function arg; dest is 0x108-byte struct field. "
-            "Requires caller source bound analysis. LOW. "
-            "0x1841f1: malloc(0x48=72 bytes) then strcpy([malloc+8], rbp). "
-            "rbp in setjmp/exception-handling context (0x1840bf prologue: mov rbp, rsp); "
-            "source unlikely user-controlled. LOW. "
-            "0x2d90fe, 0x18e080: struct management copies with internal strings. LIKELY SAFE. "
-            "No confirmed unbounded copy of file/network data into fixed buffer."
+        "findings": 1,
+        "method": "Ablation semantic sweep (all-MiniLM-L6-v2, 48 callers encoded) + manual disasm of top 15 candidates",
+        "safe_patterns": {
+            "strdup_class":         ["0x65be0c", "0x2b57f7", "0x18e0e1"],
+            "bounded_length_check": ["0x9655a9", "0x1956b8", "0x1956f2", "0x1957fe"],
+            "large_stack_buffer":   ["0x2d79ce", "0x2d7aa1", "0x2e5f3b"],
+            "detail": (
+                "0x9655a9: SAFE -- explicit bounds: cmp strlen(r13), [rbp]; jae skip_strcpy. "
+                "0x1956b8/f2/0x1957fe: SAFE -- bounded string builder; cmp total_len, 0xfff; jbe end gates all copies. "
+                "0x65be0c: SAFE -- strlen -> malloc(len+N) -> strcpy strdup pattern. "
+                "0x2b57f7: SAFE -- strlen loop -> malloc via 0x2b5450 (total sized) -> strcpy. "
+                "0x2d79ce: SAFE -- sub rsp,0x360c8 (221KB); buf=[rsp+0x20c0]; capacity=0x33e08=204KB; r14=arg2. "
+                "0x2d7aa1: SAFE -- stpcpy(r12=[rsp+0x40c0], r13) then strcpy(end_ptr, rbx); 200KB buf. "
+                "0x2e5f3b: SAFE -- sub rsp,0x2428 (9KB); buf=[rsp+0x420]; capacity=0x2008=8KB; [r13+0x2a] source. "
+                "0x18e0e1: SAFE -- strlen(r14) -> strcpy(r14+strlen+1, r12) (strcat equiv); bounded to r14 buf. "
+            ),
+        },
+        "low_class": ["0x2d88bf", "0x2e6740", "0x3ec579", "0x3ea6b6", "0x842cb0",
+                      "0x116828", "0x2ad758", "0x2cd3be", "0x195ac0", "0x195bc0",
+                      "0x18e080"],
+        "low_detail": (
+            "0x2d88bf: strcpy([rbx+8], rbp) -- struct field copy, rbp=caller arg, prior fclose on old ptr. LOW. "
+            "0x2e6740: sub rsp,0x198; buf=[rsp+0x78]; cap=0x120=288 bytes; source=rbp=arg2. LOW. "
+            "0x3ec579: sub rsp,0x378; buf=[rsp+0x60]; effective cap to [rsp+0x160]=256 bytes; source=rbp=arg2. LOW. "
+            "0x3ea6b6: strcpy(rbx=1KB-struct-field, r12=arg) then mov [rbx+0x3ff],0 (post-null enforcement). LOW. "
+            "0x842cb0: calloc(1,0x410=1040), strcpy(alloc, r12=arg1); no callers via direct call (fn-ptr only). LOW. "
+            "0x116828: strcpy(rbx, r12) -- r12=ptr from iteration; need rbx allocation trace. LOW. "
+            "0x195ac0/bc0: stack-to-stack copies within 0x5e0-frame; dest=[rsp+0x360/0x361]; src=[rsp+0x160]. LOW. "
+            "0x18e080: strcpy(BSS_global, r12) -- writes to global var; r12=arg. LOW (global size unknown). "
         ),
+        "FCLIENT80-LIBAV-STRCPY-KEYCACHE2": {
+            "id":       "FCLIENT80-LIBAV-F01",
+            "severity": "MEDIUM PLAUSIBLE -- calloc(1,0x48)[+8] 64-byte dest; source=rbp (key string in linked-list insert); same class as LIBAV-603-KEYCACHE",
+            "function": "Linked-list key-cache insert at 0x1841f1",
+            "calloc":   "0x1841df: calloc(1, 0x48) via 0x1482b0",
+            "dest":     "rdi = [calloc_result + 8] -- 64-byte usable dest",
+            "source":   "rsi = rbp (key string)",
+            "pattern":  "Linked-list traversal with strcasecmp (0xf49b0) at 0x1841bc; insert at tail if not found",
+            "cross_ref": "LIBAV-603-KEYCACHE in FGT603 libav.so -- identical calloc(1,0x48) pattern",
+            "pending":  "Trace rbp source to determine if it comes from file-derived metadata; same questions as LIBAV-603-KEYCACHE",
+        },
+        "remaining_not_analyzed": [
+            "0x1a020f", "0x1a021e", "0x1e13de", "0x2d893f", "0x2d89bf", "0x2d8fe9",
+            "0x2d90fe", "0x2e638a", "0x2e72f1", "0x33392f", "0x3399d8", "0x34b1e3",
+            "0x34c531", "0x3a7fa4", "0x3aa2f3", "0x3eae4a", "0x3eb212", "0x42cddb",
+            "0x753a06", "0x75bd8f", "0x7621b9", "0x77c27f"
+        ],
     },
 
     "strcat_analysis": {
@@ -2825,10 +2859,10 @@ FORTICLIENT80_LIBAV = {
     },
 
     "pending": [
-        "Complete strcpy analysis: 40 remaining callers not individually reviewed",
-        "Trace 0x2d88bf source (rbp = function arg) through callers",
-        "Trace 0x1841f1 malloc(0x48) size vs actual source string length",
+        "Trace rbp source for FCLIENT80-LIBAV-F01 (0x1841f1 KEYCACHE) -- same as LIBAV-603-KEYCACHE trace",
+        "Trace 0x2d88bf rbp through callers for max length",
+        "Trace remaining 22 strcpy callers not analyzed",
         "Analyze 4 remaining strcat callers",
-        "sprintf 65 callers not analyzed (snprintf 206 callers = bounded by design)",
+        "sprintf 65 callers not analyzed (snprintf 206 = bounded by design)",
     ],
 }
