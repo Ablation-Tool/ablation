@@ -180,29 +180,52 @@ CAT9K_F2 = {
             "enterprise networks, making this a realistic attack surface in misconfigured deployments.",
 }
 
-# CAT9K-F3: NFS /tmp exported rw no_root_squash to 10.0.0.0/8
+# CAT9K-F3: guestshell_setup.sh world-writable (0777) in production, root-executed by CAF daemon
 CAT9K_F3 = {
     "id":       "CAT9K-F3",
-    "title":    "NFS export /tmp to 10.0.0.0/255.0.0.0 with rw,no_root_squash "
-                "(fsid=250) allows any host in the 10.x.x.x range to mount /tmp "
-                "read-write with root privileges preserved; /misc also exported ro "
-                "to 10.0.0.0/8 (fsid=251)",
+    "title":    "IOx CAF guestshell setup script (opt/cisco/caf/scripts/guestshell_setup.sh, "
+                "46800 bytes, 1467 lines) has 0777 permissions in SquashFS across all five "
+                "platform trees (bigbang, nyquist, passport, starfleet, symphony); the script "
+                "is executed as root by the CAF daemon when IOS-XE IOx guestshell is "
+                "activated/installed; also creates shell_exec.sh (chmod 777) and "
+                "shell_exec.conf (chmod 666) at runtime; removes root password from "
+                "container shadow via sed on the guestshell rootfs",
     "severity": "HIGH",
-    "status":   "CONFIRMED — bigbang/etc/exports extracted; /tmp 10.0.0.0/255.0.0.0 "
-                "(fsid=250,sync,rw,no_subtree_check,no_root_squash) confirmed; "
-                "/misc 10.0.0.0/255.0.0.0 (fsid=251,sync,ro,no_subtree_check,root_squash) confirmed",
+    "status":   "CONFIRMED — unsquashfs -lls shows -rwxrwxrwx root/root 46800 bytes at "
+                "squashfs-root/bigbang/opt/cisco/caf/scripts/guestshell_setup.sh and "
+                "identical entries in nyquist/, passport/, starfleet/, symphony/; "
+                "guestshell_setup.sh source read: "
+                "sed 's/^root:[^:]+:/root::/' -i ${gs_dir}/etc/shadow at line 315; "
+                "chmod 777 ${SHELL_EXEC_DIR}/${app_id}/shell_exec.sh at line 460; "
+                "chmod 666 ${SHELL_EXEC_DIR}/${app_id}/shell_exec.conf at line 424",
     "cwe":      ["CWE-732 (Incorrect Permission Assignment for Critical Resource)",
-                 "CWE-284 (Improper Access Control)"],
-    "files":    ["bigbang/etc/exports"],
-    "export_line": "/tmp  10.0.0.0/255.0.0.0(fsid=250,sync,rw,no_subtree_check,no_root_squash)",
+                 "CWE-269 (Improper Privilege Management)"],
+    "files":    ["bigbang/opt/cisco/caf/scripts/guestshell_setup.sh"],
+    "permissions_in_squashfs": "-rwxrwxrwx root/root (0777 on all 5 platform dirs)",
+    "key_operations": [
+        "Executed as root by CAF daemon on IOx guestshell activate/install",
+        "sed 's/^root:[^:]+:/root::/' -i ${gs_dir}/etc/shadow  # removes root password",
+        "chmod 777 ${SHELL_EXEC_DIR}/${app_id}/shell_exec.sh  # world-writable root exec",
+        "chmod 666 ${SHELL_EXEC_DIR}/${app_id}/shell_exec.conf  # world-writable root config",
+        "chown root:network-admin $flash_dir  # grants network-admin group flash access",
+    ],
     "impact": (
-        "A host in 10.x.x.x that can reach the NFS port can mount /tmp as root with "
-        "no squashing. Combined with world-writable /tmp/gdbserver, /tmp/strace, "
-        "/tmp/lddebug (CAT9K-F5), and rsync's [install_file]=/tmp/installer (CAT9K-F2), "
-        "a 10.x.x.x attacker can plant files that influence the boot or upgrade process. "
-        "Package verification debug logs at /tmp/pkg_cs_debug/ are also readable, "
-        "exposing failed code-signing attempts."
+        "Any local user who can write to the overlayfs writable layer covering "
+        "opt/cisco/caf/scripts/ (or who has rsync write access to the CAF path via "
+        "CAT9K-F2's [var] or [bootflash] modules) can replace guestshell_setup.sh "
+        "before the CAF daemon invokes it. At the next guestshell activate operation, "
+        "the replaced script executes as root, providing full privilege escalation. "
+        "The script also sets up a chain of further world-writable files: shell_exec.sh "
+        "(chmod 777) is the script executed to enter the guestshell container session — "
+        "it is writable by any local user after creation. The sed command removing root's "
+        "password from the container shadow means every activated guestshell has a "
+        "passwordless root account inside the container."
     ),
+    "note": "guestshell_setup.sh is annotated at line 6 'This file is temporary until "
+            "CAF support is present' and dates to 2016. The copyright range is 2016-2026 "
+            "suggesting the file has shipped in this state since the CAF/IOx feature was "
+            "introduced. The 0777 permissions appear intentional for the dev-to-production "
+            "pipeline but were never hardened for production deployment.",
 }
 
 # CAT9K-F4: xinetd telnetd with lablogin.sh login shell exposes unauthenticated root shell
@@ -255,33 +278,49 @@ CAT9K_F4 = {
             "regardless of whether rsync succeeds.",
 }
 
-# CAT9K-F5: World-writable debug directories created at every boot
+# CAT9K-F5: OpenResty nginx.conf consists entirely of `include /tmp/nginx.conf`
 CAT9K_F5 = {
     "id":       "CAT9K-F5",
-    "title":    "explode-common creates /tmp/gdbserver, /tmp/strace, /tmp/lddebug "
-                "with chmod 777 at every boot (in both make_dirs and mount_zram_tmp "
-                "code paths); these directories persist for the lifetime of the running system",
+    "title":    "The shipped OpenResty nginx.conf at "
+                "usr/binos/openresty/nginx/conf/nginx.conf contains only a single "
+                "directive: 'include /tmp/nginx.conf;' — the entire web management proxy "
+                "security configuration (TLS policy, authentication locations, CSRF "
+                "settings, proxy rules, RESTCONF paths) is generated at runtime and loaded "
+                "from /tmp; SELinux context for /tmp/nginx.conf is httpd_config_t only on "
+                "the starfleet platform; SELinux policy coverage for bigbang/nyquist/"
+                "passport/symphony not confirmed in firmware",
     "severity": "HIGH",
-    "status":   "CONFIRMED — explode-common bash source examined; lines 72-76 and 103-107 "
-                "both contain: for dir in gdbserver strace lddebug; do "
-                "must mkdir -p /tmp/$dir; chmod 777 /tmp/$dir; done",
-    "cwe":      ["CWE-732 (Incorrect Permission Assignment for Critical Resource)",
-                 "CWE-489 (Active Debug Code)"],
-    "files":    ["explode-common"],
-    "world_writable_paths": ["/tmp/gdbserver", "/tmp/strace", "/tmp/lddebug"],
+    "status":   "CONFIRMED — bigbang/usr/binos/openresty/nginx/conf/nginx.conf extracted "
+                "(97 bytes); full content: '# Copyright (c) 2020 by Cisco Systems, Inc.\\n"
+                "# All rights reserved.\\n\\ninclude /tmp/nginx.conf;'; "
+                "SELinux file_contexts for starfleet platform: "
+                "/tmp/nginx.conf system_u:object_r:httpd_config_t:s0 confirmed; "
+                "bigbang platform SELinux policy coverage not found in initramfs or rpbase",
+    "cwe":      ["CWE-494 (Download of Code Without Integrity Check)",
+                 "CWE-732 (Incorrect Permission Assignment for Critical Resource)"],
+    "files":    ["bigbang/usr/binos/openresty/nginx/conf/nginx.conf"],
+    "nginx_conf_full_content": "include /tmp/nginx.conf;",
+    "tmp_nginx_selinux_context": "system_u:object_r:httpd_config_t:s0 (starfleet only)",
     "impact": (
-        "Any local user (guestshell GID 1000, limiteduser, dockeruser) can write into "
-        "/tmp/gdbserver and /tmp/strace. If any process searches PATH or LD_PRELOAD "
-        "against these directories, or if any service auto-starts binaries placed there, "
-        "a low-privilege user can execute code in a higher-privilege context. The directories "
-        "also serve as an injection point for the NFS no_root_squash export (CAT9K-F3): "
-        "a 10.x.x.x attacker can plant a gdbserver or strace binary that will be executed "
-        "if the system or any admin invokes the tool by name from /tmp/."
+        "The IOS-XE web management proxy security posture is entirely determined by "
+        "/tmp/nginx.conf, a runtime-generated file. Any process or user that can write "
+        "/tmp/nginx.conf before or after nginx starts can inject arbitrary nginx directives: "
+        "replacing proxy_pass targets to redirect authentication to attacker-controlled "
+        "servers (credential harvest), injecting allow/deny rules to bypass access controls, "
+        "adding proxy_set_header directives to forge headers seen by ConfD (compounding "
+        "CAT9K-F... ConfD XFF trust), disabling TLS, or inserting content_by_lua_block "
+        "for server-side code execution in the nginx worker context. "
+        "On non-starfleet platforms (bigbang is the primary management platform), no "
+        "SELinux type enforcement for /tmp/nginx.conf was confirmed in the firmware, "
+        "meaning DAC permissions on /tmp govern write access."
     ),
-    "note": "The comment in explode-common near the gdbserver/strace/lddebug mkdir block "
-            "references ROMMON SR_INIT_DEBUG and acknowledges a window between boot start "
-            "and ROMMON variable load — these directories are created before the ROMMON "
-            "debug flag check, meaning they exist on every boot regardless of debug mode.",
+    "note": "The design separates static firmware files from runtime configuration: "
+            "the SquashFS contains only the include directive; the actual nginx config is "
+            "assembled from multiple conf fragments at boot by IOS-XE's http service manager "
+            "and placed at /tmp/nginx.conf. This is the same pattern used for /tmp/debug.conf "
+            "(CAT9K-F7) and reflects a general architectural choice to generate security-critical "
+            "configurations in /tmp. The SELinux coverage gap on the bigbang platform is "
+            "notable because bigbang is the primary RP hardware family for Cat9K.",
 }
 
 # CAT9K-F6: ROMMON_SR_INIT_DEBUG enables bash xtrace at early boot
@@ -379,31 +418,58 @@ CAT9K_F8 = {
     ),
 }
 
-# CAT9K-F9: xinetd TFTP servers running as root
+# CAT9K-F9: ConfD RESTCONF/NETCONF trusts X-Forwarded-For; OpenResty auth proxy hardcodes 192.168.1.6:21111
 CAT9K_F9 = {
     "id":       "CAT9K-F9",
-    "title":    "xinetd exposes two TFTP servers as root: standard TFTP on UDP 69 "
-                "(tftpd -c /tftp /tftp/inv, create mode, read from /tftp, write to "
-                "/tftp/inv) and tftp-private on UDP 16069 (tftpd -c, create mode, "
-                "no path restriction); both services run as root user=root",
+    "title":    "ConfD (Tail-f NETCONF/YANG daemon) configured with useForwardedClientIp "
+                "trusting X-Forwarded-For from allowedProxyIpPrefix=127.0.0.1/32 "
+                "(confd.conf.in); OpenResty auth_proxy.conf forwards client X-Forwarded-For "
+                "to the authentication backend at hardcoded IP 192.168.1.6:21111 via "
+                "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; "
+                "ConfD uses the forwarded IP for RESTCONF/NETCONF client attribution "
+                "including NACM (NETCONF Access Control Model) rule evaluation and audit logging",
     "severity": "MEDIUM",
-    "status":   "CONFIRMED — bigbang/etc/xinetd.conf extracted; tftp-private (port 16069) "
-                "server_args=-c user=root confirmed; tftp (port 69) server_args=-c /tftp "
-                "/tftp/inv user=root confirmed",
-    "cwe":      ["CWE-284 (Improper Access Control)",
-                 "CWE-732 (Incorrect Permission Assignment for Critical Resource)"],
-    "files":    ["bigbang/etc/xinetd.conf"],
-    "services": [
-        "tftp-private: UDP/16069, tftpd -c (create mode), user=root, no path restriction",
-        "tftp: UDP/69, tftpd -c /tftp /tftp/inv, user=root, write to /tftp/inv",
+    "status":   "CONFIRMED — bigbang/etc/opt/confd/config/cisco/confd.conf.in extracted; "
+                "useForwardedClientIp block with proxyHeaders=X-Forwarded-For and "
+                "allowedProxyIpPrefix=127.0.0.1/32 at lines 335-338 confirmed; "
+                "bigbang/usr/binos/openresty/nginx/conf/auth_proxy.conf extracted; "
+                "proxy_pass http://192.168.1.6:21111 liin and "
+                "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for "
+                "confirmed in /auth_proxy, /session_key, /get_banner_login locations",
+    "cwe":      ["CWE-290 (Authentication Bypass by Spoofing)",
+                 "CWE-116 (Improper Encoding or Escaping of Output)"],
+    "files":    ["bigbang/etc/opt/confd/config/cisco/confd.conf.in",
+                 "bigbang/usr/binos/openresty/nginx/conf/auth_proxy.conf"],
+    "confd_conf_block": [
+        "<useForwardedClientIp>",
+        "  <proxyHeaders>X-Forwarded-For</proxyHeaders>",
+        "  <allowedProxyIpPrefix>127.0.0.1/32</allowedProxyIpPrefix>",
+        "</useForwardedClientIp>",
     ],
+    "auth_proxy_backend": "http://192.168.1.6:21111 (IOS HTTP server hardcoded internal IP)",
+    "forwarding_locations": ["/auth_proxy", "/session_key", "/get_banner_login"],
     "impact": (
-        "tftp-private on UDP/16069 with -c flag and no path argument runs as root with "
-        "no directory restriction — write destination is CWD or caller-specified. "
-        "Standard TFTP on UDP/69 allows writes to /tftp/inv as root. These are used "
-        "for inter-FRU package distribution (CC fetches drivers from RP via TFTP). "
-        "Access control relies entirely on IOS-XE ACL configuration."
+        "ConfD attributes client identity in RESTCONF/NETCONF sessions using X-Forwarded-For. "
+        "If NACM rules filter by source IP (a common IOS-XE hardening recommendation), "
+        "an attacker who can inject an X-Forwarded-For header reaching ConfD can forge "
+        "their source IP to match a trusted management IP and bypass those rules. "
+        "The attack surface: any SSRF vulnerability in OpenResty, any request smuggling "
+        "flaw, or any component that can make authenticated requests appearing to come "
+        "from 127.0.0.1 can set an arbitrary X-Forwarded-For before it reaches ConfD. "
+        "Additionally, the auth backend 192.168.1.6:21111 receives the client's "
+        "X-Forwarded-For chain — if the IOS HTTP authentication logic makes decisions "
+        "based on forwarded IP (e.g., skipping authentication for management IPs), "
+        "the same spoofing applies to the authentication layer, not just ConfD. "
+        "The hardcoded 192.168.1.6 also exposes the IOS internal IPC addressing scheme."
     ),
+    "note": "192.168.1.6 is the standard IOS-XE internal Linux-to-IOS IPC address for "
+            "the IOS HTTP server process. Port 21111 is the IOS-XE web auth service port. "
+            "This IP:port combination is the same across all Cat9K deployments, making it "
+            "a known target for any process running on the linux side of IOS-XE. "
+            "The allowedProxyIpPrefix=127.0.0.1/32 restriction means only OpenResty "
+            "(running on localhost) can inject trusted X-Forwarded-For headers — but "
+            "this assumes OpenResty itself cannot be influenced to forward attacker-controlled "
+            "headers, which the pubd.conf $proxy_add_x_forwarded_for directive does not prevent.",
 }
 
 # CAT9K-F10: QEMU/KVM configured user=root group=root in production qemu.conf
