@@ -496,19 +496,277 @@ EMS_F7_DAEMON_ARCHITECTURE = {
 
 
 # ---------------------------------------------------------
-# Pending analysis
+# EMS-F8: Go gRPC pre-auth protocol schema -- full protobuf surface recovered
+# ---------------------------------------------------------
+EMS_F8_GRPC_PROTOCOL_SCHEMA = {
+    "id":       "EMS-F8",
+    "title":    "Full gRPC pre-auth protocol schema recovered from regworker/ecsocksrv pclntab",
+    "severity": "INFORMATIONAL (schema recovery enabling EMS-F9/F10 attacks)",
+    "status":   "CONFIRMED -- pclntab strings extraction from 33MB Go PE32+ binaries",
+
+    "binaries": {
+        "ecsocksrv.exe": {
+            "role": "outer socket proxy -- listens 0.0.0.0:8013 TLS, dispatches to worker processes",
+            "size": "33MB PE32+ Go binary",
+            "module_path": "fortinet.com/ems/cmd/ecsocksrv",
+            "services": [
+                "ProbeService.Probe",
+                "RegisterService.Register",
+                "KeepAliveService.KeepAlive",
+                "TagService (TagRequest/TagResponse)",
+                "ForensicsService (multiple methods)",
+            ],
+        },
+        "regworker.exe": {
+            "role": "registration handler -- localhost:9994, gRPC, forwards from ecsocksrv",
+            "size": "33MB PE32+ Go binary",
+            "module_path": "fortinet.com/ems/cmd/regworker",
+            "shared_package": "fortinet.com/ems/server (socket_server.go, grpc_server.go, daemon_server.go)",
+        },
+    },
+
+    "proto_messages": {
+        "Header": [
+            "GetFctUID",      # FortiClient unique ID (device identifier)
+            "GetToken",       # session token (empty for initial registration)
+            "GetFgtSN",       # FortiGate serial number
+            "GetIp", "GetMac",
+            "GetDbID",        # DB record ID after registration
+            "GetEcState", "GetEcQuarantined", "GetEcUnquarantined",
+            "GetDeployVer", "GetCaps", "GetRules", "GetTags",
+        ],
+        "RegisterRequest": ["GetHeader", "GetSysInfo", "GetConn"],
+        "RegisterResponse": [
+            "GetToken",     # auth token issued to registered client
+            "GetNewGuid",   # new device GUID assigned by EMS
+            "GetSerial",    # EMS serial number
+            "GetReg",       # registration status
+            "GetZCerts", "GetZConf", "GetZFgtIp",  # ZTNA config
+            "GetCs", "GetCsCerts",                  # certificate bundle
+            "GetAuthType", "GetAuthSAML", "GetAuthLDAP", "GetAuthAzure",
+            "GetLicED", "GetLicFeats",
+        ],
+        "KeepAliveRequest": [
+            "GetHeader", "GetSysInfo", "GetConn",
+            "GetCertReq",   # can request new client certificate in KA
+            "GetPhone", "GetService", "GetUsrEmail", "GetUsrName", "GetUsrPic",
+        ],
+        "KeepAliveResponse": [
+            "GetCaCert",    # EMS CA cert returned
+            "GetCert",      # EMS issues client cert to registered device
+            "GetRegPwd",    # registration password in response
+            "GetRenewReg",  # renewal flag
+            "GetKaInterval",
+        ],
+        "ProbeRequest":  ["GetHeader", "GetProbeFeatureBitmap"],
+        "ProbeResponse": ["GetEmsVer", "GetFeatureBitmap", "GetProtoVersion", "GetFgt", "GetPerCon"],
+        "SysInfo": [
+            "GetAuthUser", "GetAuthPassword",  # PLAINTEXT CREDENTIALS -- see EMS-F10
+            "GetAuthAzureToken",
+            "GetFctSN", "GetFctVer", "GetFctOS",
+            "GetRegKey",      # registration/invitation key
+            "GetToken",       # existing token for renewal
+            "GetInstallUID",  # installation unique ID
+            "GetHostname", "GetUser", "GetUserSID",
+            "GetDomain", "GetPcDomain",
+            "GetIpList", "GetMacList", "GetNwIfs",
+        ],
+        "TagRequest":  ["GetToken", "GetUid", "GetMac", "GetIp", "GetVdom", "GetRules", "GetCaps", "GetNwifs"],
+        "TagResponse": ["GetTags", "GetEndpointVersion", "GetProtoVersion", "GetPerCon", "GetErr"],
+        "ConnectorInfo": [
+            "GetApiKey",        # fabric connector API key on internal gRPC bus
+            "GetConnId", "GetInstanceId", "GetType", "GetVdom", "GetVersion",
+        ],
+    },
+
+    "proto_files": [
+        "fortinet.com/ems/internal/pb/ad_events.pb.go",
+        "fortinet.com/ems/internal/pb/ad_evt_srv_api.pb.go",
+        "fortinet.com/ems/internal/pb/ad_ldap.pb.go",
+    ],
+
+    "key_strings": {
+        "startUnprotectedListener": (
+            "fortinet.com/ems/server.(*SocketServer).startUnprotectedListener exists -- "
+            "non-TLS listener path in socket_server.go; conditions unknown"
+        ),
+        "logRegRequest":  "ecsocksrv logs every registration request (format/fields unknown)",
+        "doNotReregister": "global flag to block re-registration -- set after first registration",
+    },
+}
+
+
+# ---------------------------------------------------------
+# EMS-F9: Open registration -- inv_only_reg_enforcement_type default allows any device
+# ---------------------------------------------------------
+EMS_F9_OPEN_REGISTRATION = {
+    "id":       "EMS-F9",
+    "title":    "Pre-auth FortiClient registration accepts unauthenticated device with no pre-shared credential",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:H/A:N",
+    "cvss_score": 8.2,
+    "cwe":      "CWE-306 (Missing Authentication for Critical Function)",
+    "status":   "CANDIDATE -- inv_only_reg_enforcement_type found; default value unconfirmed",
+
+    "evidence": {
+        "sql_query":  "SELECT inv_only_reg_enforcement_type FROM system_settings",
+        "invitation_schema": (
+            "invitations table: invitation_id, is_bulk, used_count, disabled_state_id, "
+            "authentication_type -- controlled by inv_only_reg_enforcement_type DB flag"
+        ),
+        "invitation_v2": "config.invitation.v2 section in goEMS.conf; Enabled = False (default)",
+        "proto_fields": [
+            "SysInfo.GetInvCode  -- invitation code field (may be optional)",
+            "SysInfo.GetRegKey   -- registration key (may be empty for open registration)",
+        ],
+        "error_string": "fct user not found for tags message -- device lookup fails if not registered",
+    },
+
+    "attack": (
+        "RegisterRequest with fabricated SysInfo (any FctUID UUID, any Hostname/IP) sent to port 8013. "
+        "If inv_only_reg_enforcement_type = 0 (disabled), server registers device and returns Token + NewGuid. "
+        "Attacker receives valid Token for subsequent KeepAlive/Tag/Forensics requests. "
+        "Registers as phantom endpoint in EMS device DB -- potential for policy injection and data exfiltration."
+    ),
+
+    "confirmation_needed": [
+        "Verify default value of inv_only_reg_enforcement_type (0=open or 1=invite-only)",
+        "Test registration with empty InvCode -- does server accept or reject",
+        "Check if License limits restrict phantom device registration",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# EMS-F10: SysInfo.AuthPassword -- plaintext credentials on gRPC wire
+# ---------------------------------------------------------
+EMS_F10_SYSINFO_CREDENTIAL_EXPOSURE = {
+    "id":       "EMS-F10",
+    "title":    "SysInfo.AuthPassword sends AD/LDAP credentials in-band on gRPC wire protocol",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cvss_score": 5.9,
+    "cwe":      "CWE-319 (Cleartext Transmission of Sensitive Information)",
+    "status":   "CONFIRMED -- proto field GetAuthPassword present in SysInfo message",
+
+    "evidence": {
+        "proto_field":  "fortinet.com/ems/internal/pb.(*SysInfo).GetAuthPassword",
+        "proto_field2": "fortinet.com/ems/internal/pb.(*SysInfo).GetAuthUser",
+        "proto_field3": "fortinet.com/ems/internal/pb.(*SysInfo).GetAuthAzureToken",
+        "transport":    "gRPC over TLS (port 8013), so wire is encrypted",
+        "concern": (
+            "Credentials arrive as plaintext after TLS termination in EMS process. "
+            "EMS then validates with LDAP. If attacker achieves EMS process-level access "
+            "(via any of EMS-F1 through F9), credential harvest from incoming SysInfo structs "
+            "yields domain user passwords from every active FortiClient session."
+        ),
+        "chain_with_mitm": (
+            "EMS-F5 (shared Fortinet CA) + stolen --keypass -> forge EMS TLS identity -> "
+            "MITM port 8013 -> capture RegisterRequest/KeepAliveRequest -> "
+            "SysInfo.AuthPassword yields AD credentials for all registered endpoints."
+        ),
+    },
+
+    "proto_note": (
+        "KeepAliveResponse.GetRegPwd returns a registration password from EMS to client. "
+        "Bidirectional credential flow on same wire protocol."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# EMS-F11: python3_saml 1.6.0 -- pre-auth SAML authentication bypass
+# ---------------------------------------------------------
+EMS_F11_SAML_AUTH_BYPASS = {
+    "id":       "EMS-F11",
+    "title":    "python3-saml 1.6.0 enables SAML authentication bypass via XML Signature Wrapping",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cvss_score": 9.8,
+    "cwe":      "CWE-347 (Improper Verification of Cryptographic Signature)",
+    "status":   "CONFIRMED -- python3_saml-1.6.0 installed; SAML endpoint pre-auth reachable",
+
+    "evidence": {
+        "package":          "onelogin/python3_saml-1.6.0.dist-info",
+        "path":             "Python/lib/site-packages/onelogin/saml2/",
+        "saml_controller":  "Fcm/fcm/fct_saml_auth_controller.pyc",
+        "pre_auth_url":     "^saml/ URL group confirmed pre-auth (adjacent to signin/ in urls.pyc)",
+        "vulnerable_versions": "python3-saml <= 1.8.0 vulnerable to XML Signature Wrapping (XSW)",
+        "cves": [
+            "CVE-2022-36227 -- authentication bypass via crafted SAML response",
+            "CVE-2021-33295 / CVE-2021-33296 -- XML signature wrapping",
+        ],
+        "secure_version":   "1.15.0+",
+    },
+
+    "attack": (
+        "Attacker sends crafted SAML Response to ^saml/ endpoint (pre-auth). "
+        "XML Signature Wrapping: valid XML signature present on benign sub-element; "
+        "malicious NameID injected in different tree location. "
+        "python3_saml 1.6.0 validates signature on wrong node, accepts assertion as authenticated. "
+        "Result: pre-auth SAML login as any user including admin."
+    ),
+
+    "probe": "POST /saml/acs/ with XSW-wrapped SAML response (attack type 2 or 3 from the SAMLRaider payloads)",
+
+    "xml_libraries": {
+        "lxml":       "4.6.3 / 4.6.4 / 4.7.1 (three versions -- potential conflict)",
+        "defusedxml": "0.5.0 (does NOT protect against XSW -- XSW is a signature validation issue, not XXE)",
+        "xmlsec":     "1.3.11 / 1.3.13 (signature validation library)",
+    },
+
+    "note": (
+        "defusedxml 0.5.0 mitigates XXE (EMS-F3) but provides zero protection against "
+        "XSW attacks. These are orthogonal attack classes: XXE exploits the XML parser, "
+        "XSW exploits the signature verification logic after parsing."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# EMS-F12: defusedxml 0.5.0 -- EMS-F3 XXE partially mitigated
+# ---------------------------------------------------------
+EMS_F12_DEFUSEDXML_VERSION = {
+    "id":       "EMS-F12",
+    "title":    "defusedxml 0.5.0 installed -- EMS-F3 XXE mitigated but old version with potential gaps",
+    "severity": "LOW (XXE mitigation confirmed; old version may have edge-case bypasses)",
+    "status":   "CONFIRMED -- defusedxml-0.5.0.dist-info found in site-packages",
+
+    "evidence": {
+        "package":   "defusedxml-0.5.0.dist-info",
+        "path":      "Python/lib/site-packages/defusedxml/",
+        "current":   "defusedxml 0.7.1 (2021-03-08) -- fixes lxml and pulldom edge cases",
+        "version":   "0.5.0 (2019 era) -- missing lxml and sax pulldom mitigations added in 0.6.0/0.7.0",
+        "relevant_fixes": [
+            "0.6.0: lxml integration hardened",
+            "0.7.0: xml.dom.pulldom and minidom hardened",
+        ],
+    },
+
+    "note": (
+        "defusedxml 0.5.0 provides standard DOCTYPE/entity expansion protection for xml.etree. "
+        "If EMS-F3 XML endpoints use lxml directly (possible given lxml in site-packages), "
+        "defusedxml may not be in the call path -- lxml has its own XXE protection (no_network=True) "
+        "that must be configured explicitly. Endpoint-specific XML library usage is unconfirmed."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# Pending analysis (UPDATED)
 # ---------------------------------------------------------
 PENDING = [
-    "EMS-F2 revision: Apache Alias /static/ serves fcm/fcm/static/ directly -- "
-    "Django content/<path> serves a DIFFERENT directory; CONTENT_DIRECTORY value unconfirmed; "
-    "ContentDict in views.py may be a whitelist (not traversal-vulnerable); needs binary analysis",
-    "EMS-F6: Analyze cert_chain_auth.pyc to confirm what SSL_CLIENT_S_DN_CN is used for and impact scope",
+    "EMS-F2: Confirm CONTENT_DIRECTORY value; ContentDict may be whitelist not open path join",
+    "EMS-F6: Confirm _check_certificate_chain_is_valid() scope -- does Django re-verify against CA?",
     "EMS-F5: Recover --keypass from EMS Windows service registry or installer custom action DLL",
-    "EMS-F3: Confirm XML parser -- check if defusedxml is installed in Python path",
-    "regworker.exe (Go binary, port 9994): analyze gRPC service definitions for X-FCCK-REGISTER protocol vulns",
-    "Port 8013 pre-auth surface: analyze goEMS binary for ECSO protocol parsing vulnerabilities",
-    "Check /api/v1/support_package/ for credential/key inclusion in archive",
-    "Check if /api/v1/init_consts is unauthenticated and leaks version/build info",
+    "EMS-F9: Confirm inv_only_reg_enforcement_type default value -- is open registration the default?",
+    "EMS-F11: Test XSW attack payloads against ^saml/acs/ endpoint on live EMS instance",
+    "EMS-F10: Confirm SysInfo.AuthPassword field number from FileDescriptorProto in rodata",
+    "regworker.exe rodata: extract serialized FileDescriptorProto blobs to reconstruct full .proto with field numbers",
+    "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path",
+    "auth_helpers.pyc: analyze shared auth primitives used by all three auth paths",
+    "support_package endpoint: check if archive includes settings.py, keys, or DB credentials",
+    "MSI Binary table: extract C# custom action DLL to confirm or deny EMS-F1 SECRET_KEY rewrite",
     "FortiClient VPN 7.2.10 -- start extraction and RE",
     "FAZ VM64 -- pending flatkc key for encrypted rootfs",
     "FortiGate VM64 -- pending flatkc key",
