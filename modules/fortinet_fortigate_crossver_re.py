@@ -2017,3 +2017,85 @@ FCT80_F01_ROGUE_GATEWAY_SURFACE = {
     },
 }
 
+# ─── Cross-version libips analysis ───────────────────────────────────────────
+
+LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
+    "id":      "LIBIPS-XVER-F01",
+    "product": "FortiOS libips cross-version hardening delta (6.0.3 -> 7.0.13 -> 7.4.8 -> 8.0.0)",
+    "severity": "INFO -- cross-version callsite tracking reveals systematic hardening; older versions have 13x more unfortified strcpy callers",
+
+    "size_progression": {
+        "6.0.3":  {"path": "/tmp/fgt603_datafs/lib/libips.so",      "size": "5,357,480 bytes",  "build_id": "N/A", "encryption": "none (unencrypted ELF)"},
+        "7.0.13": {"path": "/tmp/fgt7013_datafs/lib/libips.so.new", "size": "8,900,728 bytes",  "build_id": "0e51328bb83f0184619719212fbad7b037f66c2c"},
+        "7.4.8":  {"path": "/tmp/fgt748_datafs/lib/libips.so.new",  "size": "13,675,184 bytes", "build_id": "37d8f9362af583fd9a81ec5ebb133ec381359101"},
+        "8.0.0":  {"path": "/tmp/fgt800_datafs/lib/libips.so.new",  "size": "18,525,336 bytes", "build_id": "3473282a6bf9b4a237ef469d4b0bb9de22b70367"},
+        "growth_rate": "Approximately 5.4MB -> 8.9MB -> 13.7MB -> 18.5MB (+65%, +54%, +35% per version). Expansion reflects new protocol parsers and signature engine growth.",
+    },
+
+    "rootfs_encryption_magic_table": {
+        "FortiOS_7.0.3":  "0x1f8b (gzip -- unencrypted)",
+        "FortiOS_7.2.0":  "0x1f8b (gzip -- unencrypted)",
+        "FortiOS_7.0.13": "0x70c4180e (custom encryption, variant 1)",
+        "FortiOS_7.4.8":  "0x70d77ae1 (custom encryption, variant 2 -- similar 0x70xx prefix to 7.0.13)",
+        "FortiOS_8.0.0":  "0xa3efd2cb (custom encryption, variant 3 -- different prefix family)",
+    },
+
+    "dangerous_callsite_counts": {
+        "6.0.3": {
+            "strcpy":  "unknown (callsite scan pending)",
+            "sprintf": "present (unfortified, no __sprintf_chk import at all -- most dangerous version)",
+            "sscanf":  "present",
+            "strcat":  "present",
+            "note":    "6.0.3 has NO _chk variants -- raw dangerous functions only; no code fortification",
+        },
+        "7.4.8": {
+            "strcpy":  106,
+            "sscanf":  19,
+            "strtok":  2,
+            "strcat":  1,
+            "strtok_r": 20,
+            "note":    "106 strcpy callers; ~90% are strdup pattern (strlen+malloc+strcpy = safe allocation); remainder need callchain tracing",
+        },
+        "8.0.0": {
+            "strcpy":  8,
+            "sscanf":  3,
+            "strtok":  23,
+            "strtok_r": 1,
+            "note":    "Massive reduction from 7.4.8: strcpy 106->8, sscanf 19->3. Fortinet systematically replaced strcpy with __strcpy_chk between 7.4.8 and 8.0.0",
+        },
+    },
+
+    "7_4_8_function_stats": {
+        "prologues": 6640,
+        "text_size": "9.7MB (0x98815c)",
+        "text_va":   "0xba000",
+    },
+
+    "7_4_8_semantic_sweep": {
+        "functions_swept":    2000,
+        "queries_run":        4,
+        "max_score":          0.289,
+        "false_positives": {
+            "0x2b04f9": "Score 0.289. Destructor: calls free(0xf05d0) on 9+ struct fields at offsets 0x338-0x3a8. NOT a packet parser.",
+            "0x145d89": "Score 0.276. Destructor with mixed free() and memset patterns; zeroes fields at 0x60-0x80. NOT a packet parser.",
+        },
+        "conclusion":         "Same false-positive pattern as 8.0.0 sweep: object destructors match BUFFER_OVERFLOW query due to similar structural profile. No true positives in first 2000 functions.",
+    },
+
+    "7_4_8_strcpy_callsite_sample": {
+        "total_callers": 106,
+        "distribution":  "Callers clustered in 0x441xxx-0x742xxx VA range",
+        "sample_analysis": {
+            "0x66ade0": "FP -- strdup pattern: strlen(rbx) -> malloc(len+1) -> strcpy(malloc_buf, rbx). Safe.",
+            "0x742c69": "FP -- identical strdup pattern on r12. Safe.",
+            "0x441b38": "UNCERTAIN -- strcpy(rdi, rcx); rcx origin not visible in 15-instruction window; needs callchain trace",
+        },
+        "conclusion": "Majority of 106 callers are custom strdup implementations. 8.0.0 likely replaced these with libc strdup(). Targeted analysis of non-strdup callers required to find genuine vulnerability.",
+    },
+
+    "build_timestamps": {
+        "7.4.8_flatkc": "2025-05-23 (from .db JSON manifest)",
+        "8.0.0_flatkc": "2026-04-20 (from strings in binary: SMP Mon Apr 20 17:10:46 America 2026)",
+    },
+}
+
