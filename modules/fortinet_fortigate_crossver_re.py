@@ -1074,3 +1074,103 @@ HTTPSD_APACHE_SURFACE = {
     "scope": "FortiOS 7.2.0 admin WebUI (httpsd/Apache); CSP weakness and AllowEncodedSlashes apply cross-version",
 }
 
+FGFM_TLS_CLIENT_VERIFY_F01 = {
+    "finding_ref": "FGFM-TLS-F01",
+    "title": "FortiOS 7.2.0 FGFM client TLS: no SSL_CTX_set_verify(SSL_VERIFY_PEER) -- FortiGate does not enforce FortiManager cert validity",
+    "severity": "CRITICAL",
+    "verdict": "CONFIRMED via binary disassembly; ssl_ctx_create_new_ex (0x1fa2e50) never calls SSL_CTX_set_verify",
+    "binary": "/tmp/fgt720_bin_extracted/bin/init (FortiOS 7.2.0, 65MB monolith)",
+    "key_functions": {
+        "ssl_ctx_create_new_ex": {
+            "va": "0x1fa2e50",
+            "log_name": "ssl_ctx_create_new_ex",
+            "role": "Creates the SSL context for outbound FGFM connection (FortiGate to FortiManager port 541)",
+            "call_sequence": [
+                "TLS_method()",
+                "SSL_CTX_new(TLS_method)",
+                "SSL_CTX_set_options()",
+                "SSL_CTX_ctrl(ctx, 0x7b=SSL_CTRL_SET_MIN_PROTO_VERSION, ...)",
+                "ssl_ctx_add_builtin_crls (0x1fa2530) -- loads CRL chain",
+                "SSL_CTX_set_cipher_list()",
+                "SSL_CTX_set_ciphersuites()",
+                "__ssl_cert_ctx_load (0x1fa2050) -- loads Fortinet trusted CA store + listener certs",
+                "SSL_CTX_set_security_level(ctx, 0) -- disables ALL OpenSSL security level checks",
+                "SSL_new()",
+                "SSL_set_fd()",
+            ],
+            "critical_omission": "NO call to SSL_CTX_set_verify() in ssl_ctx_create_new_ex or any function it calls",
+        },
+        "ssl_connect": {
+            "va": "0x1fa3a60",
+            "log_name": "ssl_connect",
+            "role": "Wraps SSL_connect() for FGFM TLS handshake",
+            "behavior": (
+                "Calls SSL_connect(ssl). On success returns immediately. "
+                "On error calls SSL_get_error() and logs. "
+                "Does NOT call SSL_get_verify_result() post-handshake."
+            ),
+        },
+        "ssl_ctx_use_builtin_store": {
+            "va": "0x1fa1e70",
+            "role": "Loads /data/etc/cert/.ftgd_trusted/ certs into SSL_CTX cert store; sets CRL flags",
+            "calls": [
+                "SSL_CTX_get_cert_store()",
+                "X509_VERIFY_PARAM_set_flags(store, 0xc) -- CRL_CHECK | CRL_CHECK_ALL",
+                "X509_LOOKUP_ctrl() -- adds cert lookup directory",
+            ],
+            "note": (
+                "CRL flags are set but ineffectual with SSL_VERIFY_NONE default: "
+                "OpenSSL runs cert verification but completes the handshake on failure."
+            ),
+        },
+    },
+    "openssl_behavior": {
+        "ssl_verify_none_semantics": (
+            "No SSL_CTX_set_verify() call -> default mode SSL_VERIFY_NONE (0x00). "
+            "Client mode with SSL_VERIFY_NONE: server still sends its cert, OpenSSL runs X509_verify_cert(), "
+            "but handshake COMPLETES regardless of verification result. "
+            "A rogue FortiManager with a self-signed or untrusted cert passes the TLS handshake."
+        ),
+        "security_level_zero": (
+            "SSL_CTX_set_security_level(ctx, 0) disables all OpenSSL security level enforcement: "
+            "no minimum key size, no minimum digest strength, MD5 permitted, weak DH params permitted."
+        ),
+        "no_post_handshake_verify_check": (
+            "ssl_connect does not call SSL_get_verify_result() after SSL_connect() returns. "
+            "No application-layer cert check occurs after handshake completes."
+        ),
+    },
+    "impact": {
+        "direct": (
+            "A network adversary positioned between FortiGate and FortiManager (MITM) or on the same "
+            "network segment can impersonate FortiManager on port 541. No valid Fortinet-signed "
+            "certificate is required. FGFM protocol commands (put_config, put_json_cmd) are accepted."
+        ),
+        "chain_with_libips_f01": (
+            "Rogue FortiManager pushes malicious IPS Lua config to FortiGate via FGFM put_config. "
+            "LIBIPS-F01 (ips_luacfg_parse_app_grp_filters) evaluates os.execute() in Lua sandbox. "
+            "Result: OS command execution as IPS engine process (root/fortid)."
+        ),
+        "distinction_from_cve_2024_47575": (
+            "CVE-2024-47575: FortiManager server side -- FMG accepts unregistered FortiGates (client -> server). "
+            "FGFM-TLS-F01: FortiGate client side -- FGT does not verify FMG server cert (server -> client). "
+            "These are complementary attack directions. FGFM-TLS-F01 enables rogue FMG to reach real FGT "
+            "without requiring CVE-2024-47575."
+        ),
+    },
+    "cert_loading_note": (
+        "ssl_ctx_create_new_ex DOES load Fortinet trusted CA certs via ssl_ctx_use_builtin_store. "
+        "The trusted CA store is populated. With SSL_VERIFY_NONE this store is unused for gate-keeping: "
+        "the handshake completes whether or not the server cert chains to that store."
+    ),
+    "create_ssl_ctx_contrast": {
+        "va": "0x4719b0",
+        "note": (
+            "A separate function create_ssl_ctx (0x4719b0) calls SSL_CTX_set_verify(SSL_VERIFY_PEER) "
+            "on its happy path and SSL_VERIFY_NONE on cert-load failure. "
+            "create_ssl_ctx is not in the FGFM outbound path (single caller at 0x471d48, no callers of that wrapper). "
+            "Purpose of create_ssl_ctx is unconfirmed; likely admin WebUI mutual TLS or SSL-VPN context."
+        ),
+    },
+    "scope": "FortiOS 7.2.0 confirmed; cross-version verification pending semantic sweep on 7.0.x / 7.4.x binaries",
+}
