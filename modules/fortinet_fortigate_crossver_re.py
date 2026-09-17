@@ -2669,4 +2669,24 @@ FORTICLIENT80_SCANUNIT = {
             ),
         },
     },
+
+    "strcat_analysis": {
+        "callers": 2,
+        "findings": 0,
+        "detail": {
+            "0x509c2e": (
+                "Allocation: malloc(strlen(r13) + strlen(rbp) + 2). "
+                "strcpy(buf, r13); buf[strlen(r13)] = ':' (word write 0x003a); strcat(buf, rbp). "
+                "Final string = r13 + ':' + rbp. Total = strlen(r13)+1+strlen(rbp)+1 = alloc size. "
+                "Exact-fit allocation; no overflow possible. SAFE."
+            ),
+            "0x8bfdd0": (
+                "strcat(heap_ptr, '\\n}\\n'). "
+                "Source is static 3-char JSON closing brace. "
+                "Destination is conditional on non-null guard (je 0x8bfdd5). "
+                "Surrounding context: JSON builder with snprintf(buf, 0x100, ...) calls; byte-count tracked at [rbp-0x2e8]. "
+                "Static 3-char source; pre-sized JSON heap buffer. SAFE."
+            ),
+        },
+    },
 }
