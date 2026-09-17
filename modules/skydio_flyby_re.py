@@ -268,10 +268,26 @@ QUERY_PROFILES = {
 
 # ── Semantic sweep ─────────────────────────────────────────────────────────────
 
-def run_sweep(binary_path: str, query_key: str = None, top_n: int = 10, cache: bool = True) -> dict:
+def load_live_addrs(path: str) -> 'set[int]':
+    """Load live function addresses from a hex-address-per-line file."""
+    live: set[int] = set()
+    with open(path, 'r') as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                live.add(int(line, 16))
+    return live
+
+
+def run_sweep(binary_path: str, query_key: str = None, top_n: int = 10, cache: bool = True,
+              live_filter: 'set[int] | None' = None) -> dict:
     print(f"\n[*] Skydio libflyby_jni.so — Semantic RE Sweep")
     print(f"[*] Binary: {binary_path}")
-    print(f"[*] Size: {os.path.getsize(binary_path)//1024//1024}MB\n")
+    print(f"[*] Size: {os.path.getsize(binary_path)//1024//1024}MB")
+    if live_filter is not None:
+        print(f"[*] Liveness filter: {len(live_filter):,} live addresses (dead-code suppressed)\n")
+    else:
+        print(f"[*] Liveness filter: OFF (dead code included in corpus)\n")
 
     with open(binary_path, 'rb') as f:
         data = f.read()
@@ -293,6 +309,12 @@ def run_sweep(binary_path: str, query_key: str = None, top_n: int = 10, cache: b
             with open(cache_path, 'w') as f:
                 json.dump(cacheable, f)
             print(f"[*] Cached {len(described):,} descriptors -> {cache_path}")
+
+    if live_filter is not None:
+        before = len(described)
+        described = [f for f in described if f['addr'] in live_filter]
+        print(f"[*] Liveness filter: {before:,} -> {len(described):,} functions "
+              f"({before - len(described):,} dead-code entries removed)")
 
     print(f"[*] Building BERT embeddings for {len(described):,} functions...")
     from sentence_transformers import SentenceTransformer
@@ -352,6 +374,9 @@ def main():
     parser.add_argument('--all-queries', action='store_true')
     parser.add_argument('--top', type=int, default=10)
     parser.add_argument('--no-cache', action='store_true')
+    parser.add_argument('--live-filter', default=None, metavar='PATH',
+                        help='Path to hex-address-per-line live function set (e.g. /tmp/skydio_live_funcs.txt). '
+                             'Restricts corpus to reachable functions, eliminating dead-code false positives.')
     args = parser.parse_args()
 
     if not os.path.exists(args.binary):
@@ -360,8 +385,15 @@ def main():
         print(f"    python3 -c \"import zipfile; z=zipfile.ZipFile('.../config.arm64_v8a.apk'); open('{args.binary}','wb').write(z.read('lib/arm64-v8a/libflyby_jni.so'))\"")
         sys.exit(1)
 
+    live_addrs = None
+    if args.live_filter:
+        print(f"[*] Loading live function set from {args.live_filter}...")
+        live_addrs = load_live_addrs(args.live_filter)
+        print(f"[*] {len(live_addrs):,} live addresses loaded")
+
     query_key = args.query if not args.all_queries else None
-    results = run_sweep(args.binary, query_key, args.top, cache=not args.no_cache)
+    results = run_sweep(args.binary, query_key, args.top, cache=not args.no_cache,
+                        live_filter=live_addrs)
     save_report(results, args.binary)
 
     print("\n[*] Next steps:")
