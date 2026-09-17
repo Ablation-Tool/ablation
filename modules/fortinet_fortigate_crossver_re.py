@@ -3056,21 +3056,20 @@ FORTICLIENT80_VULSCAN = {
         "findings": 1,
         "FCLIENT80-VULSCAN-STRCPY-F01": {
             "id":       "FCLIENT80-VULSCAN-STRCPY-F01",
-            "severity": "MEDIUM PLAUSIBLE -- path concatenation: malloc then double strcpy; safety depends on pre-computed size",
+            "severity": "SAFE -- malloc is exactly strlen(first)+strlen(second)+2",
             "callers":  ["0x86fd33", "0x86fd46"],
             "pattern":  (
-                "0x86fd1d: call 0x723fe0 (malloc) with eax as size arg. "
-                "0x86fd22: r13 = malloc result. "
-                "0x86fd2a: rsi = r12 (first path component). "
+                "0x86fceb: strlen(rdx) -> r13 (first component length). "
+                "0x86fcf3: strlen(rbp) -> eax (second component length). "
+                "0x86fcf8: eax += r13d (total = len1+len2). "
+                "0x86fd0b: add eax, 2 (separator '/' + null terminator). "
+                "0x86fd1a: movsxd rdi, eax (malloc size = strlen1+strlen2+2). "
+                "0x86fd1d: malloc(strlen1+strlen2+2). "
                 "0x86fd33: strcpy(r13, r12) -- first component. "
-                "0x86fd38: byte [r13+rbx] = '/' -- separator. "
-                "0x86fd3e: rdi = r13+rbx+1 (after separator). "
-                "0x86fd43: rsi = rbp (second path component). "
+                "0x86fd38: byte [r13+rbx] = '/' (rbx = strlen1). "
                 "0x86fd46: strcpy(r13+rbx+1, rbp) -- second component. "
-                "OVERFLOW PATH: if malloc size = strlen(r12)+strlen(rbp)+2 this is safe. "
-                "If size does not include rbp length or separator, heap overflow."
+                "Allocation is exactly sized for both components + separator + null. SAFE."
             ),
-            "pending": "Trace eax at 0x86fd1a back to size computation. Cross-binary analysis (confighandler/evtmon) confirms branch-adjusted malloc is LIKELY SAFE; apply same verdict here pending vulscan-specific trace.",
         },
         "safe_callers": {
             "0x5771bd": "dest = heap alloc via 0x542d67; src = [rbp-0x40]; likely strdup-then-copy; PLAUSIBLE SAFE pending 0x542d67 resolution",
@@ -3135,9 +3134,13 @@ FORTICLIENT80_VULSCAN = {
         "findings": 0,
         "characterized": {
             "0x5e02a8": (
-                "recvfrom(rdi=[r15+0x128], rsi=[r15+0x100], edx=[r15+0x150]+4, ecx=0, r8=rsp+0x50, r9=rsp+0x3c=0x80). "
-                "All args from a struct at r15. len = struct[0x150]+4. buf = struct[0x100]. "
-                "MEDIUM -- if struct[0x150] (len field) is not validated against buf size."
+                "recvfrom(r15->fd_0x128, r15->buf_0x100, r15->len_0x150+4, 0, ...). "
+                "Post-receive check at 0x5df1f7: cmp (len_0x150+3) >= bytes_received_0x144; "
+                "this is TCP fragmentation completion check, not overflow protection. "
+                "Init: 0x49e62d writes 0 to field_0x150; 0x565b71 writes 0x100000 (1MB) to [rax+0x150] "
+                "in a different context (may be capacity constant, not per-packet len). "
+                "No bounds check on len_0x150 against buf_0x100 allocation visible in call path. "
+                "MEDIUM -- if len_0x150 is set from packet header without cap, and buf_0x100 is < len+4."
             ),
             "0x464a68,0x6b21c1,0xb35a9d": "Format context not found; not analyzed.",
         },
@@ -3250,11 +3253,12 @@ FORTICLIENT80_VULSCAN = {
         },
     },
 
+    "severity": "LOW -- no high-severity findings confirmed; 0x5e02a8 recvfrom remains MEDIUM pending buf allocation trace",
+
     "pending": [
-        "Trace malloc size at 0x86fd1a for FCLIENT80-VULSCAN-STRCPY-F01 (path concat)",
-        "Trace [r15+0x150] at 0x5e02a8 recvfrom -- verify len bounded against buf size",
-        "Trace callers of read wrappers (0x6b4ac0/0x6b61d0/0x91b7bd/0xa0c51b/0xb3c9c2) to confirm count is not packet-derived",
-        "Trace 0xb363fe/0xb36476 recv callers (garbled lookback; need prologue)",
+        "Trace buf allocation at r15->field_0x100 vs r15->field_0x150 for recvfrom 0x5e02a8",
+        "Trace callers of read wrappers (0x6b4ac0/0x6b61d0/0x91b7bd/0xa0c51b/0xb3c9c2) to confirm count not packet-derived",
+        "Trace recv 0xb363fe/0xb36476 (garbled lookback; need prologue)",
         "Resolve 0x542d67 (called at 0x577186 before strcpy at 0x5771bd)",
     ],
 }
