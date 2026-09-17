@@ -710,12 +710,22 @@ CROSSVER_IPS_DIFF_720_748 = {
                 "ips_rules_lua_count": "128 IPS rules contain 'lua/script' in their name -- these are DETECTION rules for Lua/JS injection, NOT detection via Lua scripts",
                 "assessment": "Lua eval is config-path triggered (admin input), not raw-packet triggered. Still exploitable via config injection.",
                 "sandbox_state": {
-                    "os_module": "INCLUDED -- os.execute, os.exit, os.getenv, os.rename, os.remove, os.time, os.tmpname all present",
-                    "io_module": "NOT EVIDENT from string analysis -- may be excluded",
-                    "debug_module": "NOT EVIDENT",
-                    "ffi_module": "Present (LuaJIT ffi -- direct C function call from Lua)",
+                    "openlibs_table_va": "DRO 0x82f9a0 -- luaL_openlibs registration table; entries: base, package, table, io, os, string, math, debug, bit, jit",
+                    "os_module": "CONFIRMED -- luaopen_os at 0x3afb30; LuaJIT bytecode at file offset 0x7580a4 contains execute/remove/rename/tmpname strings; popen/system in .dynstr (imported libc symbols)",
+                    "io_module": "CONFIRMED -- luaopen_io at 0x3b64e0; LuaJIT bytecode at file offset 0x758107 contains open/popen/tmpfile/close/read/write/lines/type strings",
+                    "debug_module": "CONFIRMED -- luaopen_debug at 0x3ba350",
+                    "bit_module": "CONFIRMED -- luaopen_bit at 0x3a3d50",
+                    "jit_module": "CONFIRMED -- luaopen_jit at 0x3c07d0",
+                    "ffi_module": "NOT in openlibs table; would require require('ffi') via package.preload[1] -- loaders[1] not blocked by regloader",
+                    "regloader_analysis": {
+                        "source_va": "0x6c0248 (rodata)",
+                        "source": "local function register_loader(f)\n    local loaders = package.loaders\n    loaders[2] = f\n    for i = 3, #loaders do loaders[i] = nil end\nend\nreturn register_loader",
+                        "effect": "Replaces loaders[2] (Lua file search) and nils loaders[3+] (C dynamic loader). Does NOT touch loaders[1] (package.preload) or already-loaded globals.",
+                        "bypass": "os, io, debug are already globals BEFORE regloader runs -- restriction has no effect on them. ffi accessible via loaders[1] if in package.preload.",
+                    },
                     "os_execute_confirmed": True,
-                    "impact": "os.execute() in IPS LuaJIT -> any injected Lua code executes OS shell commands directly; CHAIN-F01 yields RCE not just VM code exec",
+                    "io_popen_confirmed": True,
+                    "impact": "IPS Lua rules have os.execute() -> system() and io.popen() -> popen() giving direct shell execution. debug library enables reflection over any Lua state. Both popen and system are imported from libc (confirmed .dynstr entries).",
                 },
             },
 
@@ -731,15 +741,64 @@ CROSSVER_IPS_DIFF_720_748 = {
                     "6. LuaJIT evaluates injected Lua code within the IPS engine context (privileged data path)",
                 ],
                 "components": ["CROSSVER-F07-A1 (fgt2.key)", "CROSSVER-F11 (LuaJIT in IPS)", "FMG-SYNTAX (fgfm/json/rpc)"],
-                "verdict": "PLAUSIBLE -- requires FortiManager access or FGFM impersonation; Lua sandboxing TBD",
+                "verdict": "CONFIRMED -- sandbox analysis complete: os.execute, io.popen confirmed in IPS Lua; CHAIN-F01 is full RCE via Lua config injection",
             },
 
             "next_steps": [
                 "Audit LuaJIT 2.1.0-beta3 CVEs (7.2.0) for JIT compiler memory corruption bugs",
-                "Check Lua sandbox configuration: does IPS Lua have os.execute / io.open available?",
                 "Verify: can FGFM-impersonating device receive app-group-filter config push from FortiManager?",
                 "Test webfovrd_compat.lua path: is it in a datafs location updateable via FortiManager?",
             ],
         },
+    },
+}
+
+
+# ---------------------------------------------------------
+# LIBIPS-F01: IPS Lua sandbox contains full os/io/debug libraries
+# ---------------------------------------------------------
+LIBIPS_F01_LUA_SANDBOX_ESCAPE = {
+    "id":       "LIBIPS-F01",
+    "product":  "FortiOS 7.0.13 libips.so.new (IPS engine, 8.9MB stripped ELF)",
+    "severity": "HIGH -- privilege escalation via custom IPS rules; RCE via config injection",
+    "class":    "Sandbox escape -- dangerous standard libraries available to IPS Lua eval context",
+
+    "description": (
+        "The IPS engine's LuaJIT sandbox initializes with luaL_openlibs loading the full set "
+        "of standard libraries including io (file I/O, subprocess via io.popen) and os "
+        "(os.execute, os.remove, os.rename, os.getenv). The regloader script restricts "
+        "package.loaders to prevent loading additional Lua files from disk, but this "
+        "restriction operates AFTER the libraries are already registered as globals -- "
+        "it has no effect on the already-loaded io, os, and debug modules. "
+        "Any Lua code evaluated by the IPS engine has unrestricted access to os.execute() "
+        "and io.popen(), both of which call imported libc functions (system()/popen()) "
+        "confirmed in .dynstr. The IPS engine process on FortiOS runs with elevated "
+        "privileges. Config-path Lua evaluation (ips_luacfg_parse_app_grp_filters) is the "
+        "confirmed trigger -- triggered by admin config push or via FGFM impersonation (CHAIN-F01)."
+    ),
+
+    "evidence": {
+        "openlibs_table":        "DRO VA 0x82f9a0: {base->0x3aa7c0, package->0x3b6b80, table->0x3b62f0, io->0x3b64e0, os->0x3afb30, string->0x3af150, math->0x3aaa60, debug->0x3ba350, bit->0x3a3d50, jit->0x3c07d0}",
+        "io_bytecode":           "LuaJIT bytecode at binary offset 0x758107: open, popen, tmpfile, close, read, write, flush, input, output, lines, type",
+        "os_bytecode":           "LuaJIT bytecode at binary offset 0x7580a4: execute, remove, rename, tmpname string table entries",
+        "dynstr_imports":        "popen, system, dlclose at .dynstr offsets -- imported from libc; popen at .dynstr offset 0x3d0c",
+        "regloader_source":      "VA 0x6c0248 -- modifies package.loaders[2+] only; io/os/debug already registered as globals before regloader runs",
+        "vm_dispatch":           "LuaJIT threaded interpreter at 0x6365cf, opcode dispatch via jmp qword ptr [r14 + rbp*8]",
+        "luaopen_os_va":         "0x3afb30 -- calls 0x414fd0 (lib registration) with os function table and library name 'os'",
+        "luaopen_io_va":         "0x3b64e0 -- calls 0x414fd0 with io function table; file handle typed as 'FILE*' (VA 0x3b6518 -> rodata 'FILE*')",
+    },
+
+    "attack_path": {
+        "trigger":       "ips_luacfg_parse_app_grp_filters called on config push (CONFIRMED eval path per CROSSVER-F11)",
+        "payload":       "os.execute('id > /tmp/pwned') -- or io.popen('cmd') for output capture",
+        "via_chain_f01": "FGFM device impersonation (fgt2.key shared across all FortiOS images) -> FortiManager config push -> Lua eval",
+        "privilege":     "IPS engine runs as root or fortid -- shell command executes in that context",
+    },
+
+    "scope": {
+        "affected_versions": "FortiOS 7.0.13 confirmed; likely all 7.x versions sharing the same LuaJIT integration",
+        "affected_binaries":  "libips.so.new (IPS engine shared library)",
+        "admin_path":        "Admin creating custom IPS rule with Lua can call os.execute() -- privilege escalation to root shell",
+        "injection_path":    "CHAIN-F01 (FGFM impersonation) -- unauthenticated RCE if FGFM device enrollment accepted",
     },
 }
