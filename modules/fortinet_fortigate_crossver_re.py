@@ -5398,17 +5398,13 @@ FGT748_LIBAV_ZIP_INT_OVERFLOW = {
         "subsequent reads in the CDH loop will be out of bounds."
     ),
 
-    "cross_version": (
-        "FGT 7.0.13 avIsIgnoreBuffer (VA 0x9de20): SAME overflow at 0xb686c: "
-        "  movzwl 0x1c(%r14),%r12d  ; extra_len "
-        "  add    0x12(%r14),%r12d  ; += compressed_size (32-bit, same wrap) "
-        "  add    %r12,%rbp         ; advance step -- wraps to no-op (0xb6806) "
-        "Register changed (r12d vs r13d) but pattern is identical. Bug confirmed across "
-        "at least FGT 7.0.13 and 7.4.8. "
-        "FGT 8.0.0 libav.so.new: NOT YET ANALYZED. The avFlowWrite struct changed significantly "
-        "(see FGT748-LIBAV-CROSSVER-DIFF), suggesting the ZIP parser was also modified. "
-        "Requires 8.0.0 RE to confirm presence/fix."
-    ),
+    "cross_version": {
+        "7_0_13": "0xb686c: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d; add %r12,%rbp -- SAME OVERFLOW (r12d)",
+        "7_2_0":  "0xb4b8c: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d; add %r12,%rbp -- SAME OVERFLOW (r12d)",
+        "7_4_8":  "0xce3b9: movzwl 0x1c(%r14),%r13d; add 0x12(%r14),%r13d; add %r13,%r12  -- SAME OVERFLOW (r13d)",
+        "8_0_0":  "NOT YET ANALYZED -- avFlowWrite struct changed significantly; ZIP parser may have changed",
+        "verdict": "Bug confirmed across FGT 7.0.13, 7.2.0, 7.4.8 -- persistent across 3+ major firmware generations",
+    },
 
     "remediation": (
         "Replace 32-bit register arithmetic with 64-bit: "
@@ -5444,6 +5440,12 @@ FGT748_LIBAV_ZIP_EOCD_CROSSVER = {
         "CDH":          "0x312420: cmp $0x2014b50 (PRESENT)",
         "EOCD":         "0x312393: cmp $0x6054b50 = PK\\x05\\x06 (PRESENT)",
         "ZIP64_EOCD":   "0x312470: cmp $0x6064b50 = PK\\x06\\x06 = ZIP64 EOCD (PRESENT)",
+    },
+
+    "7_2_0_avScanLoad_coverage": {
+        "CDH":          "0x30dbd0: cmp $0x2014b50 (PRESENT)",
+        "EOCD":         "0x30db43: cmp $0x6054b50 = PK\\x05\\x06 (PRESENT)",
+        "ZIP64_EOCD":   "0x30dc20: cmp $0x6064b50 = PK\\x06\\x06 = ZIP64 EOCD (PRESENT)",
     },
 
     "description": (
