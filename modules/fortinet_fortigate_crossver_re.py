@@ -5035,3 +5035,76 @@ FGT800_LLM_F04 = {
         "Rotate affected OpenAI API keys immediately."
     ),
 }
+
+FGT800_SYNTAX_ARCH = {
+    "id":      "FGT800-SYNTAX-ARCH",
+    "product": "FortiGate/FMG 8.0.0 -- firmware CLI schema analysis (800.txt)",
+    "source":  "/tmp/fmg800_syntax/syntax/800.txt (61202 lines)",
+
+    "enc_groups": {
+        "group_A_156byte": {
+            "tail":         "lmMjY3dkVA (base64) = 5966323637764540 (hex) at positions 148-155",
+            "fields":       ["system admin openai-api-key", "acme-eab-key-hmac", "sim2-pin",
+                             "cloud-authentication-access-key (2 instances)"],
+            "finding":      "Stream cipher with static nonce suspected; same key stream at positions 148-155 across all fields; known-plaintext attack on sim2-pin (numeric, likely 4-8 digits) recovers key stream at those positions",
+        },
+        "group_B_152byte": {
+            "tail":         "varies",
+            "head":         "0xFF (both values)",
+            "fields":       ["wireless passphrase (WPA2)", "wireless sae-password (WPA3)"],
+            "finding":      "0xFF header likely version/format marker; different encryption scheme from Group A",
+        },
+        "group_C_148byte": {
+            "tail":         "varies",
+            "fields":       ["system automation-action aws-api-key", "azure-api-key", "user radius secret"],
+            "finding":      "Different sizes and tails; separate encryption scheme from Group A",
+        },
+    },
+
+    "cleartext_fields": {
+        "llm_server_api_key":   "vdom table 'llm server' api-key: :string:'sz:255;mt:10;mu;' -- NOT :passwd:",
+        "auth_server_secret":   "wireless AP table auth-server-secret: :string:'sz:63;xs;nd;mu;+ud;' -- RADIUS 802.1X secret cleartext",
+    },
+
+    "automation_action": {
+        "table":            "global table 'system automation-action' (line 23524)",
+        "action_types":     ["cli-script", "diagnose-script", "webhook", "aws-lambda", "azure-function",
+                             "google-cloud-function", "alicloud-function"],
+        "script_field":     "script: :string:'sz:1023;xs;mu;' -- CLI commands executed by automation engine",
+        "uri_field":        "uri: :string:'sz:1023;mu;' -- webhook URL, potential SSRF if attacker controls trigger",
+        "http_body_field":  "http-body: :string:'sz:4095;xs;' -- arbitrary HTTP body for webhook actions",
+        "hardcoded_keys":   {
+            "aws_api_key":   "ENC 0qxQBIZ+uIVGgn1T9... (148 bytes, :passwd: type)",
+            "azure_api_key": "ENC cMVgikXD6aQpDUg2u... (148 bytes, :passwd: type)",
+        },
+    },
+
+    "llm_proxy": {
+        "ports":    {"http": 8098, "https": 8099},
+        "auth":     "Firewall policy only -- no application-layer authentication",
+        "systems":  ["llm server (openai/azure/gemini/anthropic/grok)", "llm profile (prompt injection)", "llm proxy (ports 8098/8099)"],
+    },
+}
+
+FGT800_SYNTAX_F01 = {
+    "id":       "FGT800-SYNTAX-F01",
+    "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
+    "severity": "MEDIUM -- RADIUS 802.1X shared secret exposed in config backups",
+    "class":    "Cleartext storage of RADIUS secret (CWE-312)",
+    "cwe":      "CWE-312",
+
+    "description": (
+        "The wireless AP configuration table (lines 7018-7020 of 800.txt) defines: "
+        "  auth-server-secret: :string:'sz:63;xs;nd;mu;+ud;' "
+        "This field stores the RADIUS shared secret for 802.1X enterprise WiFi authentication. "
+        "The :string: type means the value is stored in plaintext in the running config. "
+        "It is NOT listed in hexpwdattr (which would give it ENC encryption). "
+        "Contrast with 'user radius secret' (line 2614) which uses :passwd: type -- that field IS encrypted. "
+        "Config backups obtained by any admin with 'execute backup config' access would expose "
+        "the 802.1X RADIUS secret in cleartext, enabling the attacker to: "
+        "  1. Craft rogue RADIUS responses (if they can intercept traffic) "
+        "  2. Authenticate to other RADIUS-protected services using the same secret"
+    ),
+
+    "remediation": "Change auth-server-secret field type from :string: to :passwd:; add to hexpwdattr",
+}
