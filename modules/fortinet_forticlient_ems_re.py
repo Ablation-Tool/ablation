@@ -526,57 +526,278 @@ EMS_F8_GRPC_PROTOCOL_SCHEMA = {
     },
 
     "proto_messages": {
-        "Header": [
-            "GetFctUID",      # FortiClient unique ID (device identifier)
-            "GetToken",       # session token (empty for initial registration)
-            "GetFgtSN",       # FortiGate serial number
-            "GetIp", "GetMac",
-            "GetDbID",        # DB record ID after registration
-            "GetEcState", "GetEcQuarantined", "GetEcUnquarantined",
-            "GetDeployVer", "GetCaps", "GetRules", "GetTags",
-        ],
-        "RegisterRequest": ["GetHeader", "GetSysInfo", "GetConn"],
-        "RegisterResponse": [
-            "GetToken",     # auth token issued to registered client
-            "GetNewGuid",   # new device GUID assigned by EMS
-            "GetSerial",    # EMS serial number
-            "GetReg",       # registration status
-            "GetZCerts", "GetZConf", "GetZFgtIp",  # ZTNA config
-            "GetCs", "GetCsCerts",                  # certificate bundle
-            "GetAuthType", "GetAuthSAML", "GetAuthLDAP", "GetAuthAzure",
-            "GetLicED", "GetLicFeats",
-        ],
-        "KeepAliveRequest": [
-            "GetHeader", "GetSysInfo", "GetConn",
-            "GetCertReq",   # can request new client certificate in KA
-            "GetPhone", "GetService", "GetUsrEmail", "GetUsrName", "GetUsrPic",
-        ],
-        "KeepAliveResponse": [
-            "GetCaCert",    # EMS CA cert returned
-            "GetCert",      # EMS issues client cert to registered device
-            "GetRegPwd",    # registration password in response
-            "GetRenewReg",  # renewal flag
-            "GetKaInterval",
-        ],
-        "ProbeRequest":  ["GetHeader", "GetProbeFeatureBitmap"],
-        "ProbeResponse": ["GetEmsVer", "GetFeatureBitmap", "GetProtoVersion", "GetFgt", "GetPerCon"],
-        "SysInfo": [
-            "GetAuthUser", "GetAuthPassword",  # PLAINTEXT CREDENTIALS -- see EMS-F10
-            "GetAuthAzureToken",
-            "GetFctSN", "GetFctVer", "GetFctOS",
-            "GetRegKey",      # registration/invitation key
-            "GetToken",       # existing token for renewal
-            "GetInstallUID",  # installation unique ID
-            "GetHostname", "GetUser", "GetUserSID",
-            "GetDomain", "GetPcDomain",
-            "GetIpList", "GetMacList", "GetNwIfs",
-        ],
-        "TagRequest":  ["GetToken", "GetUid", "GetMac", "GetIp", "GetVdom", "GetRules", "GetCaps", "GetNwifs"],
-        "TagResponse": ["GetTags", "GetEndpointVersion", "GetProtoVersion", "GetPerCon", "GetErr"],
-        "ConnectorInfo": [
-            "GetApiKey",        # fabric connector API key on internal gRPC bus
-            "GetConnId", "GetInstanceId", "GetType", "GetVdom", "GetVersion",
-        ],
+        "Header": {
+            "fctUID":          1,
+            "ip":              2,
+            "mac":             3,
+            "fctOnNet":        4,
+            "onNet":           5,
+            "ecState":         6,
+            "fgtSN":           7,
+            "vdom":            8,
+            "caps":            9,
+            "avRunning":       10,
+            "avScanInfo":      11,
+            "dbID":            12,
+            "dbSCHID":         13,
+            "deployVer":       14,
+            "schTime":         15,
+            "error":           16,
+            "state":           17,
+            "ecQuarantined":   18,
+            "ecUnquarantined": 19,
+            "vbltRunning":     20,
+            "vbltCompleted":   21,
+            "vulnIDs":         22,
+            "rules":           23,
+            "tags":            24,
+            "desc":            25,
+            "uptime":          26,
+            "tstat":           27,
+            "alerts":          28,
+            "alerts15":        29,
+            "token":           30,
+            "msgsStatus":      31,
+            "protoVer":        32,
+        },
+        "RegisterRequest": {
+            "header":  1,
+            "sysInfo": 2,
+            "conn":    3,
+        },
+        "RegisterResponse": {
+            "reg":             1,
+            "avSig":           2,
+            "licFeats":        3,
+            "licED":           4,
+            "newGuid":         5,
+            "softCrc":         6,
+            "emsOnNet":        7,
+            "zFgtIp":          8,
+            "cs":              9,
+            "zHVR":            10,
+            "hvCs":            11,
+            "offConf":         12,
+            "offSum":          13,
+            "onNet":           14,
+            "onNetCs":         15,
+            "zConf":           16,
+            "csum":            17,
+            "zCerts":          18,
+            "csCerts":         19,
+            "runSrvCmd":       20,
+            "wfPageURL":       21,
+            "wfChksm":         22,
+            "token":           23,
+            "authType":        25,   # 0=local 1=LDAP 2=SAML 3=Azure -- tells client which auth method
+            "authLDAP":        26,   # LDAP server config pushed to endpoint
+            "authSAML":        27,   # SAML config pushed to endpoint
+            "authPRD":         28,
+            "errMsg":          29,
+            "serial":          30,
+            "tenantID":        31,
+            "authAzure":       32,
+            "azureClientID":   33,
+            "protoVersion":    34,
+            "perCon":          35,
+            "endpointVersion": 36,
+            "authSAMLURL":     37,   # SAML endpoint URL pushed to endpoint -- see EMS-F14
+        },
+        "KeepAliveRequest": {
+            "header":   1,
+            "sysInfo":  2,
+            "conn":     3,
+            "usrName":  4,
+            "usrEmail": 5,
+            "service":  6,
+            "phone":    7,
+            "certReq":  8,
+            "usrPic":   9,
+            "usrPict":  10,
+        },
+        "KeepAliveResponse": {
+            "cont":            1,
+            "renewReg":        2,
+            "emsSN":           3,
+            "upldPrt":         4,
+            "kaInterval":      5,
+            "licenseVer":      6,
+            "licFeats":        7,
+            "licED":           8,
+            "snapTime":        9,
+            "quar":            10,   # quarantine command
+            "avtr":            11,
+            "avSig":           12,
+            "emsOnNet":        13,
+            "qCode":           14,
+            "qReason":         15,
+            "qMsg":            16,
+            "runSrvCmd":       17,   # CRITICAL: run service command on endpoint -- see EMS-F15
+            "aval":            18,
+            "avalUrl":         19,   # AV update URL -- rogue EMS can redirect to malicious URL
+            "avalEng":         20,
+            "avalEngCRC":      21,
+            "avalEng64CRC":    22,
+            "avalEngMacCRC":   23,
+            "avalEngUrl":      24,
+            "avalEng64Url":    25,
+            "avalEngMacUrl":   26,
+            "mace":            27,
+            "maca":            28,
+            "upgradePath":     29,   # upgrade binary URL -- rogue EMS arbitrary binary delivery
+            "regPwd":          40,   # CRITICAL: registration password pushed to endpoint -- see EMS-F13
+            "cloud":           41,
+            "wfPageURL":       42,
+            "wfChksm":         43,
+            "vulnPatch":       44,
+            "error":           45,
+            "zFgtIp":          46,
+            "cs":              47,
+            "zHVR":            48,
+            "hvCs":            49,
+            "offConf":         50,
+            "offSum":          51,
+            "onNet":           52,
+            "onNetCs":         53,
+            "zConf":           54,
+            "csum":            55,
+            "zCerts":          56,
+            "csCerts":         57,
+            "cert":            58,   # EMS issues X.509 client cert to endpoint
+            "caCert":          59,   # EMS CA cert pushed to endpoint
+            "certRevoke":      60,
+            "tags":            61,
+            "authType":        63,
+            "authLDAP":        64,
+            "authSAML":        65,
+            "authPRD":         66,
+            "errMsg":          67,
+            "serial":          68,
+            "authAzure":       69,
+            "azureClientID":   70,
+            "messages":        71,
+            "tenantID":        72,
+            "fsrUpldUrl":      73,
+            "fsrUpldToken":    74,
+            "protoVersion":    75,
+            "perCon":          76,
+            "endpointVersion": 77,
+            "authSAMLURL":     78,
+        },
+        "ProbeRequest":  {"header": 1, "probeFeatureBitmap": 2},
+        "ProbeResponse": {
+            "fgt":             1,
+            "featureBitmap":   2,
+            "emsVer":          3,
+            "protoVersion":    4,
+            "perCon":          5,
+            "endpointVersion": 6,
+        },
+        "SysInfo": {
+            "regKey":                 1,
+            "fctOS":                  2,
+            "fctVer":                 3,
+            "avSigVer":               4,
+            "avEngVer":               5,
+            "appSigVer":              6,
+            "appEngVer":              7,
+            "vulSigVer":              8,
+            "vulEngVer":              9,
+            "avALSigVer":             10,
+            "avALEngVer":             11,
+            "enabledFeatureBitMap":   12,
+            "installedFeatureBitMap": 13,
+            "hiddenFeatureBitMap":    14,
+            "hostname":               15,
+            "domain":                 16,
+            "osVer":                  17,
+            "user":                   18,
+            "userSID":                19,
+            "comMan":                 20,
+            "comSN":                  21,
+            "cpu":                    22,
+            "mem":                    23,
+            "hdd":                    24,
+            "fctUnreg":               25,
+            "epChksum":               26,
+            "dhcpServer":             27,
+            "pcDomain":               28,
+            "utc":                    29,
+            "installUID":             30,
+            "fctSN":                  31,
+            "epFgtChksum":            32,
+            "epCertsChksum":          33,
+            "epRuleChksum":           34,
+            "epOnnetChksum":          35,
+            "epOffnetChksum":         36,
+            "fctAutoUnreg":           37,
+            "avProtected":            38,
+            "groupTag":               39,
+            "wfFilesChksum":          40,
+            "avProduct":              41,
+            "diskEnc":                42,
+            "nwIfs":                  43,
+            "peerIP":                 44,
+            "adGuid":                 45,
+            "invCode":                46,   # invitation code for restricted registration
+            "token":                  47,
+            "workgroup":              48,
+            "regStatus":              50,
+            "avwlSigVer":             51,
+            "avwlEngVer":             52,
+            "sslVPN":                 53,
+            "fctDate":                54,
+            "epLogoff":               55,
+            "adGroups":               56,
+            "dgwMacList":             57,
+            "dgwIPList":              58,
+            "ipList":                 59,
+            "macList":                60,
+            "dgwMac":                 61,
+            "gwMacList":              62,
+            "tempConfig":             63,
+            "comModel":               64,
+            "authUser":               65,   # PLAINTEXT AD/LDAP username -- see EMS-F10
+            "authPassword":           66,   # PLAINTEXT AD/LDAP password -- see EMS-F10
+            "reAuth":                 67,
+            "enabledApps":            68,
+            "installedApps":          69,
+            "authAzureToken":         70,
+            "azureDeviceID":          72,
+            "azureTenantID":          73,
+            "mdm":                    74,
+            "rsEngVer":               76,
+            "fsrStatus":              77,
+            "fsrDownlUrl":            78,
+            "mdmDeviceId":            79,
+            "mobileSecurityBitMap":   80,
+        },
+        "TagRequest": {
+            "uid":   1,
+            "ip":    2,
+            "mac":   3,
+            "vdom":  4,
+            "rules": 5,
+            "nwifs": 6,
+            "conn":  7,
+            "caps":  8,
+            "token": 9,
+        },
+        "TagResponse": {
+            "tags":            1,
+            "err":             2,
+            "protoVersion":    3,
+            "perCon":          4,
+            "endpointVersion": 5,
+        },
+        "ConnectorInfo": {
+            "apiKey":      1,   # fabric connector API key on internal gRPC bus
+            "connId":      2,
+            "instanceId":  3,
+            "type":        4,
+            "vdom":        5,
+            "version":     6,
+        },
     },
 
     "proto_files": [
@@ -650,9 +871,10 @@ EMS_F10_SYSINFO_CREDENTIAL_EXPOSURE = {
     "status":   "CONFIRMED -- proto field GetAuthPassword present in SysInfo message",
 
     "evidence": {
-        "proto_field":  "fortinet.com/ems/internal/pb.(*SysInfo).GetAuthPassword",
-        "proto_field2": "fortinet.com/ems/internal/pb.(*SysInfo).GetAuthUser",
-        "proto_field3": "fortinet.com/ems/internal/pb.(*SysInfo).GetAuthAzureToken",
+        "proto_field":        "SysInfo.authPassword (field 66) -- CONFIRMED from FileDescriptorProto decode",
+        "proto_field_user":   "SysInfo.authUser (field 65) -- AD/LDAP username",
+        "proto_field_azure":  "SysInfo.authAzureToken (field 70) -- Azure AD bearer token",
+        "field_numbers_confirmed": True,
         "transport":    "gRPC over TLS (port 8013), so wire is encrypted",
         "concern": (
             "Credentials arrive as plaintext after TLS termination in EMS process. "
@@ -663,13 +885,17 @@ EMS_F10_SYSINFO_CREDENTIAL_EXPOSURE = {
         "chain_with_mitm": (
             "EMS-F5 (shared Fortinet CA) + stolen --keypass -> forge EMS TLS identity -> "
             "MITM port 8013 -> capture RegisterRequest/KeepAliveRequest -> "
-            "SysInfo.AuthPassword yields AD credentials for all registered endpoints."
+            "SysInfo.authPassword (field 66) yields AD credentials for all registered endpoints."
+        ),
+        "frequency": (
+            "SysInfo.authUser/authPassword appear in BOTH RegisterRequest and KeepAliveRequest. "
+            "Credentials re-sent on every keepalive cycle (default interval from KeepAliveResponse.kaInterval)."
         ),
     },
 
     "proto_note": (
-        "KeepAliveResponse.GetRegPwd returns a registration password from EMS to client. "
-        "Bidirectional credential flow on same wire protocol."
+        "KeepAliveResponse.regPwd (field 40) returns a registration password from EMS to client. "
+        "Bidirectional credential flow on same wire protocol -- see EMS-F13."
     ),
 }
 
@@ -724,6 +950,143 @@ EMS_F11_SAML_AUTH_BYPASS = {
 
 
 # ---------------------------------------------------------
+# EMS-F13: KeepAliveResponse.regPwd -- EMS pushes registration password to endpoint fleet
+# ---------------------------------------------------------
+EMS_F13_KEEPALIVE_REGPWD_PUSH = {
+    "id":       "EMS-F13",
+    "title":    "KeepAliveResponse.regPwd (field 40) sends registration password from EMS to endpoint in plaintext gRPC field",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cvss_score": 5.9,
+    "cwe":      "CWE-319 (Cleartext Transmission of Sensitive Information)",
+    "status":   "CONFIRMED -- field 40 present in KeepAliveResponse from FileDescriptorProto decode",
+
+    "evidence": {
+        "proto_field":       "KeepAliveResponse.regPwd (field 40, type: string)",
+        "message":           "KeepAliveResponse",
+        "field_number":      40,
+        "direction":         "server-to-client (EMS pushes to FortiClient endpoint)",
+        "field_name_meaning": "regPwd likely = registration password; purpose is provisioning or re-registration auth",
+    },
+
+    "attack_chain": (
+        "EMS-F5 (shared Fortinet CA) + stolen CA --keypass -> forge EMS TLS cert -> "
+        "intercept port 8013 keepalive traffic -> capture KeepAliveResponse -> "
+        "extract regPwd (field 40) from every endpoint's keepalive response. "
+        "Value semantics unknown but likely a shared secret enabling re-registration or machine account access."
+    ),
+
+    "combined_exposure": {
+        "client_to_server": "SysInfo.authUser (65) + authPassword (66) in RegisterRequest + KeepAliveRequest",
+        "server_to_client": "KeepAliveResponse.regPwd (40)",
+        "implication": (
+            "Both directions carry credentials over same TLS session. "
+            "Single MITM position on port 8013 yields credentials flowing in both directions."
+        ),
+    },
+
+    "confirmation_needed": [
+        "Determine what regPwd contains -- AD machine account password, re-registration shared secret, or EMS-issued token",
+        "Identify which EMS service consumes regPwd on the client side",
+        "Check if regPwd is per-device or shared across all devices",
+    ],
+}
+
+
+# ---------------------------------------------------------
+# EMS-F14: RegisterResponse auth config push -- rogue EMS redirects endpoint authentication
+# ---------------------------------------------------------
+EMS_F14_AUTH_CONFIG_REDIRECT = {
+    "id":       "EMS-F14",
+    "title":    "RegisterResponse.authSAML/authLDAP/authSAMLURL allow rogue EMS to redirect endpoint auth to attacker-controlled server",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:N",
+    "cvss_score": 8.7,
+    "cwe":      "CWE-940 (Improper Verification of Source of a Communication Channel)",
+    "status":   "CONFIRMED -- fields present in RegisterResponse; semantics confirmed by field names",
+
+    "evidence": {
+        "authType":    "RegisterResponse field 25 -- tells client which auth method to use (1=LDAP 2=SAML 3=Azure)",
+        "authLDAP":    "RegisterResponse field 26 -- LDAP server config pushed to endpoint",
+        "authSAML":    "RegisterResponse field 27 -- SAML IdP config pushed to endpoint",
+        "authSAMLURL": "RegisterResponse field 37 -- SAML ACS URL pushed to endpoint",
+        "authAzure":   "RegisterResponse field 32 -- Azure AD config pushed to endpoint",
+        "authPRD":     "RegisterResponse field 28 -- auth period/timeout",
+        "also_in_ka":  "KeepAliveResponse fields 63-70 carry same authType/authLDAP/authSAML/authSAMLURL",
+    },
+
+    "attack_chain": [
+        "Step 1: EMS-F5 CA impersonation -- forge EMS TLS certificate using shared Fortinet CA",
+        "Step 2: Position rogue EMS on port 8013 (MITM or DNS hijack of EMS server address)",
+        "Step 3: FortiClient connects, rogue EMS responds to RegisterRequest with RegisterResponse",
+        "Step 4: Set authType=2 (SAML), authSAMLURL=https://attacker.com/saml/acs/",
+        "Step 5: FortiClient sends all SAML auth tokens to attacker-controlled SAML server",
+        "Step 6: Attacker captures enterprise SSO tokens for every user on EMS-managed endpoint",
+        "Alternative Step 4: Set authType=1 (LDAP), authLDAP pointing to attacker LDAP server",
+        "Alternative Step 5: FortiClient sends AD credentials to attacker LDAP -- plaintext bind",
+    ],
+
+    "scope": (
+        "Affects every FortiClient endpoint registered to a compromised or impersonated EMS instance. "
+        "EMS commonly manages thousands of endpoints in enterprise deployments. "
+        "Auth config pushed in both RegisterResponse AND KeepAliveResponse -- "
+        "rogue config re-injected on every keepalive cycle even for previously registered devices."
+    ),
+
+    "prerequisite": "EMS-F5 (shared Fortinet CA) required to forge TLS identity on port 8013",
+}
+
+
+# ---------------------------------------------------------
+# EMS-F15: KeepAliveResponse.runSrvCmd + upgradePath -- rogue EMS fleet RCE
+# ---------------------------------------------------------
+EMS_F15_ROGUE_EMS_FLEET_RCE = {
+    "id":       "EMS-F15",
+    "title":    "KeepAliveResponse.runSrvCmd (field 17) and upgradePath (field 29) enable rogue EMS to achieve RCE on entire endpoint fleet",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:H",
+    "cvss_score": 9.0,
+    "cwe":      "CWE-494 (Download of Code Without Integrity Check)",
+    "status":   "CONFIRMED -- fields present in KeepAliveResponse from FileDescriptorProto decode",
+
+    "evidence": {
+        "runSrvCmd":    "KeepAliveResponse field 17 -- EMS sends service command to execute on endpoint",
+        "upgradePath":  "KeepAliveResponse field 29 -- URL for FortiClient to download upgrade binary from",
+        "avalUrl":      "KeepAliveResponse field 19 -- AV signature update URL (secondary code delivery vector)",
+        "avalEngUrl":   "KeepAliveResponse field 24 -- AV engine update URL",
+        "avalEng64Url": "KeepAliveResponse field 25 -- 64-bit AV engine URL",
+        "also_in_reg":  "RegisterResponse field 20 = runSrvCmd (also present in registration response)",
+    },
+
+    "attack_chain": [
+        "Step 1: EMS-F5 CA impersonation -- forge EMS TLS cert for port 8013",
+        "Step 2: MITM or rogue EMS intercepts FortiClient keepalive cycle",
+        "Step 3: Inject KeepAliveResponse with upgradePath pointing to attacker-hosted MSI/EXE",
+        "Step 4: FortiClient downloads and executes binary from attacker URL",
+        "Step 5: Arbitrary code execution as FortiClient service (SYSTEM-level on Windows)",
+        "Alternative Step 3: Set runSrvCmd to trigger built-in service command (semantics unknown -- research needed)",
+        "Alternative Step 3: Set avalUrl/avalEngUrl to attacker-hosted malicious signature/engine files",
+    ],
+
+    "scope": (
+        "Fleet-wide impact. Every FortiClient endpoint polling EMS via keepalive receives the malicious response. "
+        "FortiClient runs as a privileged Windows service. Upgrade execution is likely trusted by design. "
+        "No per-binary signature verification observed in proto schema (no checksum field paired with upgradePath). "
+        "avalEngCRC/avalEng64CRC fields 21/22 exist but are int32 -- 4-byte CRC trivially pre-imaged."
+    ),
+
+    "integrity_weakness": {
+        "upgradePath_checksum": "No checksum field found adjacent to upgradePath in proto schema",
+        "aval_crc":             "avalEngCRC (field 21) and avalEng64CRC (field 22) are int32 -- CRC32 trivially forgeable",
+        "aval_mac_crc":         "avalEngMacCRC (field 23) same -- int32 CRC",
+        "implication":          "Attacker delivers binary; CRC pre-image computed for malicious payload",
+    },
+
+    "prerequisite": "EMS-F5 (shared Fortinet CA) required for TLS impersonation on port 8013",
+}
+
+
+# ---------------------------------------------------------
 # EMS-F12: defusedxml 0.5.0 -- EMS-F3 XXE partially mitigated
 # ---------------------------------------------------------
 EMS_F12_DEFUSEDXML_VERSION = {
@@ -756,17 +1119,27 @@ EMS_F12_DEFUSEDXML_VERSION = {
 # Pending analysis (UPDATED)
 # ---------------------------------------------------------
 PENDING = [
+    # Protocol / binary RE
+    "EMS-F15: Determine runSrvCmd semantics -- what service commands are valid and what they execute",
+    "EMS-F13: Determine regPwd semantics -- AD machine account password vs EMS-issued shared secret vs per-device",
+    "EMS-F14: Confirm rogue EMS auth redirect on live instance -- does FortiClient accept authSAMLURL from server",
+    "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path in socket_server.go",
+    "ztnaworker.exe RE: ZTNA-specific attack surface (port 9990, receives from ecsocksrv with forged cert)",
+    "sipdaemon.exe RE: SIP daemon (signatures/07002000/pua.dat) attack surface",
+
+    # Django application RE
     "EMS-F2: Confirm CONTENT_DIRECTORY value; ContentDict may be whitelist not open path join",
     "EMS-F6: Confirm _check_certificate_chain_is_valid() scope -- does Django re-verify against CA?",
-    "EMS-F5: Recover --keypass from EMS Windows service registry or installer custom action DLL",
     "EMS-F9: Confirm inv_only_reg_enforcement_type default value -- is open registration the default?",
     "EMS-F11: Test XSW attack payloads against ^saml/acs/ endpoint on live EMS instance",
-    "EMS-F10: Confirm SysInfo.AuthPassword field number from FileDescriptorProto in rodata",
-    "regworker.exe rodata: extract serialized FileDescriptorProto blobs to reconstruct full .proto with field numbers",
-    "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path",
     "auth_helpers.pyc: analyze shared auth primitives used by all three auth paths",
     "support_package endpoint: check if archive includes settings.py, keys, or DB credentials",
+
+    # Installer / key material
+    "EMS-F5: Recover --keypass from EMS Windows service registry or installer custom action DLL",
     "MSI Binary table: extract C# custom action DLL to confirm or deny EMS-F1 SECRET_KEY rewrite",
+
+    # Other Fortinet products
     "FortiClient VPN 7.2.10 -- start extraction and RE",
     "FAZ VM64 -- pending flatkc key for encrypted rootfs",
     "FortiGate VM64 -- pending flatkc key",
