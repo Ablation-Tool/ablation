@@ -5330,9 +5330,23 @@ FGT_LIBIPS_LUAJIT_MIGRATION = {
             "ips_lua_dostring": "PRESENT",
             "vuln_status":    "VULNERABLE -- CWD injection + dostring execution both present",
         },
+        "7_0_3": {
+            "runtime":        "LuaJIT 2.1.0-beta3",
+            "package_path":   "./?.lua;/usr/local/share/luajit-2.1.0-beta3/?.lua;/usr/local/share/lua/5.1/?.lua;...",
+            "cwd_position":   "FIRST",
+            "ips_lua_dostring": "PRESENT",
+            "vuln_status":    "VULNERABLE",
+        },
         "7_2_0": {
             "runtime":        "LuaJIT 2.1.0-beta3",
             "package_path":   "./?.lua;/usr/local/share/luajit-2.1.0-beta3/?.lua;...",
+            "cwd_position":   "FIRST",
+            "ips_lua_dostring": "PRESENT",
+            "vuln_status":    "VULNERABLE",
+        },
+        "7_4_8": {
+            "runtime":        "LuaJIT 2.1.d06beb04 (specific commit build)",
+            "package_path":   "./?.lua;/usr/local/share/luajit-2.1/?.lua;/usr/local/share/lua/5.1/?.lua;...",
             "cwd_position":   "FIRST",
             "ips_lua_dostring": "PRESENT",
             "vuln_status":    "VULNERABLE",
