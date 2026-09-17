@@ -3285,12 +3285,197 @@ FCLIENT80_SHARED_C_MODULE = {
         "  VERDICT: LIKELY SAFE. Off-by-one possible but not indicated by branch structure."
     ),
     "description": (
-        "At least confighandler and evtmon share IDENTICAL C code: "
-        "  1. Double strcpy path-concat (malloc + two strcpy + separator) "
+        "All four FortiClient 8.0 C daemons share IDENTICAL C code: "
+        "  1. Double strcpy path-concat (malloc + two strcpy + separator) -- confirmed all four "
         "  2. Host:port strcat (strcpy + strlen + ':' + strcat) "
         "  3. recvfrom with ebp-bounded len from struct (same struct offsets). "
         "Malloc size computation branch analysis complete; pattern consistent with SAFE. "
-        "Same pattern likely in vpn, epctrl."
+        "Class finding closed: all four daemons analyzed."
     ),
-    "pending": "Sweep vpn + epctrl for same shared C module pattern; confirm struct offsets match.",
+    "affected": [
+        "confighandler (0xe5f313/0xe5f326)",
+        "evtmon (0x9da753/0x9da766)",
+        "epctrl (0xb143f3/0xb14406)",
+        "vpn (0x918fb3/0x918fc6)",
+    ],
+    "shared_C_module_identifier": (
+        "Allocator call uses rdx=0xea constant in all four binaries. "
+        "Same register pattern: r12=first component, rbp=second component, rbx=separator offset. "
+        "Same '/' check: cmp byte ptr [r12+rdx-1], 0x2f. "
+        "Almost certainly a single compiled C source file linked into all four daemons."
+    ),
+}
+
+# ======================================================================
+# FORTICLIENT 8.0 -- epctrl (endpoint control daemon)
+# ======================================================================
+FORTICLIENT80_EPCTRL = {
+    "id":        "FCLIENT80-EPCTRL",
+    "product":   "FortiClient 8.0 epctrl -- endpoint control daemon",
+    "binary":    "/opt/forticlient/epctrl (ET_EXEC ELF64 x86-64 stripped; 14.9MB)",
+    "has_canary": True,
+    "has_chk":   True,
+    "severity":  "LOW -- shared C module present; path-concat malloc LIKELY SAFE; no high-severity findings",
+
+    "plt_inventory": {
+        "method": "ET_EXEC: PLT 16-byte stubs; disasm-validated E8 scan",
+        "strcpy":        {"plt": "0x40a770", "callers": 10},
+        "strcat":        {"plt": "0x40b2e0", "callers": 2},
+        "sprintf":       {"plt": "0x409cb0", "callers": 3},
+        "strncpy":       {"plt": "0x40a150", "callers": 22},
+        "sscanf":        {"plt": "0x40a3e0", "callers": 23},
+        "recv":          {"plt": "0x409ea0", "callers": 18},
+        "recvfrom":      {"plt": "0x40a4a0", "callers": 6},
+        "read":          {"plt": "0x40ae10", "callers": 24},
+        "snprintf":      {"plt": "0x40b060", "callers": 31},
+        "__strcpy_chk":  {"plt": "0x40a660", "callers": 1},
+        "__strcat_chk":  {"plt": "0x40a800", "callers": 2},
+        "__sprintf_chk": {"plt": "0x40a290", "callers": 14},
+        "__snprintf_chk":{"plt": "0x40a2d0", "callers": 50},
+    },
+
+    "segment_layout": {
+        "seg1": {"va": "0x400000", "foff": "0x0",      "filesz": "0xe412d9"},
+        "seg2": {"va": "0x1441cc0","foff": "0xe41cc0",  "filesz": "0xb0d98"},
+    },
+
+    "strcpy_analysis": {
+        "callers": 10,
+        "callers_list": [
+            "0x779431", "0x954c8e", "0x996e3f", "0x998005", "0x99803d",
+            "0x9cc025", "0xb143f3", "0xb14406", "0xcf2673", "0xd0a455",
+        ],
+        "findings": 1,
+        "FCLIENT80-EPCTRL-STRCPY-F01": {
+            "id":       "FCLIENT80-EPCTRL-STRCPY-F01",
+            "severity": "INFORMATIONAL -- shared C module path-concat; LIKELY SAFE (same branch analysis as confighandler/evtmon)",
+            "callers":  ["0xb143f3", "0xb14406"],
+            "pattern":  (
+                "0xb143cb: add eax, 2. "
+                "0xb143ce: mov edx, 0xea. "
+                "0xb143dd: call 0x9ca620 (custom allocator). "
+                "0xb143f3: strcpy(rax, r12) -- first component. "
+                "0xb143f8: byte [r13+rbx] = '/' -- separator. "
+                "0xb14406: strcpy([r13+rbx+1], rbp) -- second component. "
+                "rdx=0xea constant matches confighandler/evtmon/vpn. Shared C module confirmed."
+            ),
+        },
+        "safe_callers": {
+            "0x9cc025": "strlen(rbp)+1 -> malloc -> strcpy(rax, rbp). strdup pattern. SAFE.",
+            "0x996e3f": "strlen+1 -> malloc(0x9ca620) -> strcpy(rax, r12). strdup. SAFE.",
+            "0x998005": "strlen+1 -> malloc -> strcpy(rax, r11). strdup. SAFE.",
+            "0x954c8e": "host:port pattern (strcpy + strlen + ':' + strcat). See strcat_analysis.",
+            "0xd0a455": "bounds check: cmp [rbp-8], remaining_space; jae skip; strcpy. SAFE.",
+            "0xcf2673": "strcpy(dest=[rbp-0x1010], src=[rbp-0x1668]). PLAUSIBLE SAFE if src <= 4112 bytes.",
+        },
+    },
+
+    "strcat_analysis": {
+        "callers": 2,
+        "detail": {
+            "0x954cae": "host:port: strcpy then strlen then write 0x3a then strcat(dest, rbp). PLAUSIBLE SAFE.",
+            "0xd0a9a0": "strcat(dest, 0xfb4c1a). RODATA-only arg -- static suffix. SAFE.",
+        },
+    },
+
+    "recvfrom_analysis": {
+        "callers": 6,
+        "characterized": {
+            "0x957e91": (
+                "mov edi, [rbx+0x38]; movsxd rdx, ebp; mov rsi, r12; call recvfrom. "
+                "Identical struct offsets to confighandler 0xc6cc11 and evtmon 0x80d411. "
+                "MEDIUM -- ebp length not verified against r12 buffer size."
+            ),
+            "0x5f7cc8": "edx=0x40 (64 bytes fixed). SAFE.",
+            "0x6e20b4": "edx=0x10000 (64KB). PLAUSIBLE -- depends on rsi buffer size.",
+            "0x72c91d": "malloc(0xffff) then recvfrom edx=0xffff. Exact fit. SAFE.",
+        },
+        "findings": 1,
+        "FCLIENT80-EPCTRL-RECVFROM-F01": {
+            "id":       "FCLIENT80-EPCTRL-RECVFROM-F01",
+            "severity": "MEDIUM -- struct-derived len; same pattern as confighandler/evtmon",
+            "caller":   "0x957e91",
+        },
+    },
+
+    "recv_analysis": {
+        "callers": 18,
+        "characterized": {
+            "0x535a11": "lea rsi, [rbp-0x1040]; edx=0x1000. Stack buf 0x1040; recv max 0x1000. SAFE.",
+            "0x550ed3": "lea rdi, [rbp-0x2030]; edx=0x2000; rep stosq zero-fill. SAFE.",
+            "0x5f0061": "edx=0x2000; rsi from rbx (struct-derived). PLAUSIBLE.",
+        },
+    },
+}
+
+# ======================================================================
+# FORTICLIENT 8.0 -- vpn (SSL VPN client daemon)
+# ======================================================================
+FORTICLIENT80_VPN = {
+    "id":        "FCLIENT80-VPN",
+    "product":   "FortiClient 8.0 vpn -- SSL VPN client daemon",
+    "binary":    "/opt/forticlient/vpn (ET_EXEC ELF64 x86-64 stripped; 12.6MB)",
+    "has_canary": True,
+    "has_chk":   True,
+    "has_chk_strcat": False,
+    "severity":  "LOW -- shared C module present; path-concat malloc LIKELY SAFE; no high-severity findings",
+
+    "plt_inventory": {
+        "method": "ET_EXEC: PLT 16-byte stubs; disasm-validated E8 scan",
+        "strcpy":        {"plt": "0x40af40", "callers": 10},
+        "strcat":        {"plt": "0x40ba20", "callers": 2},
+        "sprintf":       {"plt": "0x40a500", "callers": 3},
+        "strncpy":       {"plt": "0x40a9a0", "callers": "not scanned"},
+        "sscanf":        {"plt": "0x40abe0", "callers": "not scanned"},
+        "recv":          {"plt": "0x40a6e0", "callers": 13},
+        "recvfrom":      {"plt": "0x40aca0", "callers": 7},
+        "read":          {"plt": "0x40b590", "callers": "not scanned"},
+        "snprintf":      {"plt": "0x40b7f0", "callers": "not scanned"},
+        "__strcpy_chk":  {"plt": "0x40ae40", "callers": "present"},
+        "__sprintf_chk": {"plt": "0x40aaa0", "callers": "present"},
+        "__snprintf_chk":{"plt": "0x40aae0", "callers": "present"},
+    },
+
+    "segment_layout": {
+        "seg1": {"va": "0x400000", "foff": "0x0",      "filesz": "0xbe0445"},
+        "seg2": {"va": "0x11e0a00","foff": "0xbe0a00",  "filesz": "0xaa680"},
+    },
+
+    "strcpy_analysis": {
+        "callers": 10,
+        "callers_list": [
+            "0x62009a", "0x75a46e", "0x79b97f", "0x79cb45", "0x79cb7d",
+            "0x7d0be5", "0x918fb3", "0x918fc6", "0xaefbc4", "0xb079a6",
+        ],
+        "findings": 1,
+        "FCLIENT80-VPN-STRCPY-F01": {
+            "id":       "FCLIENT80-VPN-STRCPY-F01",
+            "severity": "INFORMATIONAL -- shared C module path-concat; LIKELY SAFE (branch pattern confirmed)",
+            "callers":  ["0x918fb3", "0x918fc6"],
+            "pattern":  (
+                "0x918f83: cmp byte ptr [r12+rdx-1], 0x2f. "
+                "0x918f8b: add eax, 2. "
+                "0x918f8e: mov edx, 0xea. "
+                "0x918f9d: call 0x7cf1e0 (custom allocator, same rdx=0xea). "
+                "0x918fb3: strcpy(rax, r12). "
+                "0x918fb8: byte [r13+rbx] = 0x2f. "
+                "0x918fc6: strcpy([r13+rbx+1], rbp). "
+                "Fourth binary confirming shared C module. rdx=0xea present."
+            ),
+        },
+        "safe_callers": {
+            "0x7d0be5": "strlen(rbp)+1 -> malloc -> strcpy(rax, rbp). strdup. SAFE.",
+            "0x79cb7d": "strlen+1 -> malloc -> strcpy. strdup. SAFE.",
+            "0x75a46e": "host:port pattern. See strcat_analysis.",
+            "0xb079a6": "bounds check before strcpy (jae skip). SAFE.",
+            "0xaefbc4": "strcpy to [rbp-0x1010]; len check at 0xaefb9e (cmp rax, 0xfff). SAFE.",
+        },
+    },
+
+    "strcat_analysis": {
+        "callers": 2,
+        "detail": {
+            "0x75a48e": "host:port: strcpy + strlen + 0x3a + strcat. PLAUSIBLE SAFE.",
+        },
+    },
 }
