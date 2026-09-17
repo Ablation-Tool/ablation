@@ -2829,14 +2829,22 @@ FORTICLIENT80_LIBAV = {
         ),
         "FCLIENT80-LIBAV-STRCPY-KEYCACHE2": {
             "id":       "FCLIENT80-LIBAV-F01",
-            "severity": "MEDIUM PLAUSIBLE -- calloc(1,0x48)[+8] 64-byte dest; source=rbp (key string in linked-list insert); same class as LIBAV-603-KEYCACHE",
+            "severity": "MEDIUM PLAUSIBLE -- calloc(1,0x48)[+8] 64-byte dest; source=rbp (key suffix after 'arch_internal_' prefix); overflow if suffix > 64 bytes",
             "function": "Linked-list key-cache insert at 0x1841f1",
             "calloc":   "0x1841df: calloc(1, 0x48) via 0x1482b0",
             "dest":     "rdi = [calloc_result + 8] -- 64-byte usable dest",
-            "source":   "rsi = rbp (key string)",
+            "source":   "rsi = rbp (stack buffer output from 0x187350 parser)",
+            "parser_detail": (
+                "0x187350 strips 'arch_internal_' prefix (14 bytes) from key arg via strncmp. "
+                "Output (suffix after prefix) stored in stack buffer at r12=rbp. "
+                "RODATA pattern at 0x978fd4 = b'arch_internal_'. "
+                "Overflow if AV signature name suffix > 64 bytes. "
+                "AV signature names typically 20-40 bytes; unlikely to exceed 64 in standard sigs. "
+                "If attacker can craft a file with an 'arch_internal_' + 65-byte suffix identifier, overflow occurs."
+            ),
             "pattern":  "Linked-list traversal with strcasecmp (0xf49b0) at 0x1841bc; insert at tail if not found",
             "cross_ref": "LIBAV-603-KEYCACHE in FGT603 libav.so -- identical calloc(1,0x48) pattern",
-            "pending":  "Trace rbp source to determine if it comes from file-derived metadata; same questions as LIBAV-603-KEYCACHE",
+            "pending":  "Trace how AV signature names are provided: file-derived (JPEG/ZIP/PE parser) vs RODATA-only. File-derived = upgrade to HIGH.",
         },
         "remaining_not_analyzed": [
             "0x1a020f", "0x1a021e", "0x1e13de", "0x2d893f", "0x2d89bf", "0x2d8fe9",
@@ -2849,21 +2857,21 @@ FORTICLIENT80_LIBAV = {
     "strcat_analysis": {
         "callers": 5,
         "findings": 0,
-        "detail": (
-            "0x339aed: strcat(rdi, rsi) where rdi = ebp + [rbx+0x8c1c8] and "
-            "rsi = esi + [rbx+0x8c1c8]. Both indices bounds-checked: "
-            "cmp ebp, [rbx+0x8c190] (lower) and cmp ebp, [rbx+0x29be80] (upper), "
-            "jb/jae to error on out-of-range. Array-indexed concatenation with explicit bounds. SAFE. "
-            "Remaining 4 callers (0x187a9a, 0x2b5849, 0x333f97, 0x3a60cc) not fully analyzed."
-        ),
+        "detail": {
+            "0x339aed": "Array-indexed strcat; bounds-checked ebp vs [rbx+0x8c190]/[rbx+0x29be80]. SAFE.",
+            "0x333f97": "Same array-indexed pattern as 0x339aed; same struct bounds check. SAFE.",
+            "0x3a60cc": "malloc(strlen(r12)+strlen(rbx)+1) then strcat(malloc_result, rbx). Correctly sized. SAFE.",
+            "0x2b5849": "strcat loop (max 4 iterations); appends array elements to strcpy result. LOW -- initial malloc likely strdup of first element; subsequent appends may overflow if caller does not size correctly.",
+            "0x187a9a": "strcat with 'arch_internal_' parser output (0x187350) and stack buf [rsp+0xb]. LOW -- same parser as KEYCACHE; dest=r12 source not traced.",
+        },
     },
 
     "pending": [
-        "Trace rbp source for FCLIENT80-LIBAV-F01 (0x1841f1 KEYCACHE) -- same as LIBAV-603-KEYCACHE trace",
+        "Trace how 'arch_internal_' key names are sourced (file-derived vs RODATA) for FCLIENT80-LIBAV-F01",
         "Trace 0x2d88bf rbp through callers for max length",
         "Trace remaining 22 strcpy callers not analyzed",
-        "Analyze 4 remaining strcat callers",
         "sprintf 65 callers not analyzed (snprintf 206 = bounded by design)",
+        "Trace 0x2b5849 strcat loop: confirm initial malloc size accounts for all array elements",
     ],
 }
 
