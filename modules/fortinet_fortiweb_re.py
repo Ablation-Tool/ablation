@@ -1597,9 +1597,67 @@ FWB_F22_CFBF_PARSER_OOB = {
         "datafs_file_count_delta": "+1 file in 8.0.2",
     },
 
+    "assembly_diff": {
+        "description": "Disassembly comparison at the ParseFreeChunk hot path inside avScanLoad",
+        "8_0_2_patched_at_0x2acebb": (
+            "2aceaf:  mov %eax, %ecx          ; ecx = chunk->offset (from file)\n"
+            "2aceb1:  mov 0x8(%rbp), %r9      ; r9 = filesize\n"
+            "2aceb5:  add %r8, %rcx           ; rcx = offset + len (chunk->len in r8)\n"
+            "2aceb8:  cmp %rcx, %r9           ; compare filesize with (offset+len)\n"
+            "2acebb:  jb  2ad48c              ; BOUNDS CHECK: if filesize < offset+len -> error handler\n"
+            "2acec1:  sub %r8d, %r9d          ; r9d = filesize - len (safe after check)"
+        ),
+        "8_0_0_vulnerable_at_0x2ab65c": (
+            "2ab659:  cmp $-1, %eax           ; check if len == sentinel\n"
+            "2ab65c:  je  2ab6f8              ; skip if -1\n"
+            "; *** add+cmp+jb MISSING -- entire bounds check block absent ***\n"
+            "2ab662:  mov 0x8(%rbp), %r9d     ; r9d = filesize (32-bit register)\n"
+            "2ab666:  mov 0x0(%rbp), %rcx     ; rcx = file_data_ptr\n"
+            "2ab66a:  sub %r8d, %r9d          ; r9d = filesize - len (WRAPS unsigned if len > filesize)\n"
+            "2ab66d:  lea (%rcx,%r8,1), %r15  ; r15 = file_ptr + len (OOB if len > remaining)\n"
+            "...\n"
+            "2ab68c:  mov (%r15), %ecx        ; READ 4 bytes at OOB heap address"
+        ),
+        "oob_mechanics": (
+            "If chunk->len > filesize: "
+            "(1) r9d = filesize - len wraps to large uint32 (e.g., len=0x10001 filesize=0x1000 -> r9d=0xFFFF0FFF); "
+            "(2) r15 = file_ptr + len points 1+ bytes past the end of the heap allocation; "
+            "(3) cmova r9d,eax limits loop to min(wrapped_size, chunk->offset) iterations; "
+            "(4) loop reads 4 bytes per iteration at r15 -- OOB heap read of adjacent heap data. "
+            "With large chunk->offset (attacker-controlled), up to 256KB of adjacent heap leaks."
+        ),
+        "register_width_note": (
+            "8.0.0 uses 32-bit r9d for filesize, then sub r8d,r9d (32-bit subtraction); "
+            "8.0.2 uses full 64-bit r9 and rcx for the bounds check. "
+            "The 32-bit truncation in 8.0.0 means filesizes above 4GB are also mishandled, "
+            "though FortiWeb file uploads are practically bounded well below 4GB."
+        ),
+    },
+
+    "exploit_status": {
+        "proof_type": "CVE-level -- binary diff + asm diff + patch string evidence sufficient for filing",
+        "what_is_proven": "Missing bounds check in 8.0.0 ParseFreeChunk; OOB read primitive confirmed",
+        "what_is_not_yet_built": (
+            "Weaponized PoC requires: "
+            "(1) crafted CFBF trigger file with sector entry where offset+len > filesize; "
+            "(2) heap grooming to control adjacent allocation content at r15; "
+            "(3) data exfil path (OOB data returning in HTTP response or chaining to write primitive); "
+            "(4) full RCE chain (infoleak -> ASLR bypass -> controlled write -> code exec). "
+            "Spaniard 2-CVE chain hypothesis: this OOB read is CVE-1 (infoleak/heap leak); "
+            "CVE-2 is a separate primitive (possibly in httpsd, inaccessible -- encrypted rootfs.gz) "
+            "that converts the heap leak to a controlled write."
+        ),
+    },
+
     "source": "Binary diff of libav.so.orig extracted from 8.0.0 and 8.0.2 firmware datafs.tar.gz",
-    "method": "String diff via Python strings() comparison; size delta via stat; superblock-verified EXT3 extraction",
-    "status": "CONFIRMED -- patch evidence in 8.0.2; Spaniard's CVE chain matches this finding",
+    "method": (
+        "String diff via Python strings() comparison; size delta via stat; "
+        "superblock-verified EXT3 extraction; "
+        "manual disassembly via Python capstone at structural anchor offsets "
+        "(anchor: 'ParseTransactionLogFragment: offset=0x%08X len=%d ct=%d' LEA refs at 8.0.2:0x2ad24a / 8.0.0:0x2aba0a); "
+        "confirmed 8.0.0 missing add+cmp+jb block at 8.0.2 offset 0x2acebb"
+    ),
+    "status": "CONFIRMED -- patch evidence in 8.0.2; asm-level OOB mechanism characterized; Spaniard CVE chain hypothesis consistent",
 }
 
 
