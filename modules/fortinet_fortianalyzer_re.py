@@ -538,7 +538,7 @@ ANALYSIS_STATUS = {
         "valid":  "2022-02-04 to 2056-05-26 (34-year cert)",
         "note":   "Same partition signing pattern as FGT (flatkc.sig). Cross-product FAZ/FGT architecture.",
     },
-    "unique_findings": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F06", "FAZ-F07", "FAZ-F08", "FAZ-F09", "FAZ-F10"],
+    "unique_findings": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F06", "FAZ-F07", "FAZ-F08", "FAZ-F09", "FAZ-F10", "FAZ-F11"],
 }
 
 FAZ_F10_SOAR_CLICKHOUSE_SQLI = {
@@ -615,4 +615,74 @@ FAZ_F10_SOAR_CLICKHOUSE_SQLI = {
     ),
 
     "related_findings": ["FAZ-F07 (WEBHOOK SSRF)", "FAZ-F08 (Redis credential store)"],
+}
+
+FAZ_F11_SOAR_CONNECTOR_URL_PATH_TRAVERSAL = {
+    "id":       "FAZ-F11",
+    "product":  "Fortinet FortiAnalyzer 8.0.0 -- SOAR FAC/FML connector URL path traversal",
+    "severity": "MEDIUM -- attacker-influenced SOAR trigger data injected into FAC/FML API URL path; enables access to unauthorized API endpoints on external Fortinet servers using SOAR connector credentials",
+    "class":    "URL path traversal / SSRF via SOAR connector (CWE-22/CWE-918); affects external servers",
+    "cwe":      "CWE-22, CWE-918",
+    "source":   "builtin_connectors.tar.gz -> FAC/operator.py, FML/operator.py",
+
+    "affected_connectors": {
+        "FAC (FortiAuthenticator)": {
+            "file":     "FAC/operator.py",
+            "location": "FACGetUserListOperator.execute_action (L142), FACGetUserOperator.execute_action (L201/206), FACUpdateUserStatusOperator.execute_action (L292)",
+            "pattern":  "endpoint='api/v1/{user_type}/' or endpoint='api/v1/{user_type}/{userid}/'",
+            "how_triggered": "FAZUtilsOperator.parse_input(context, user_type/userid, context_dict) at execute() L158/229/311 -- template-expands from SOAR context",
+        },
+        "FML (FortiMail)": {
+            "file":     "FML/operator.py",
+            "location": "FMLAddSenderToBlocklistOperator.add_sender_to_blocklist (L561)",
+            "pattern":  "url = f'https://{ip}/api/v1/SenderListV2/{domain_name}'",
+            "how_triggered": "FAZUtilsOperator.parse_input(context, domain_name, context_dict) at execute() L595 -- template-expands from SOAR context",
+        },
+    },
+
+    "description": (
+        "Multiple SOAR builtin connectors construct HTTP API URLs by interpolating SOAR context "
+        "values (resolved via FAZUtilsOperator.parse_input) directly into URL path segments "
+        "with no validation or normalization. "
+        "In FAC (FortiAuthenticator connector): "
+        "  execute_action: url = self.server_url + 'api/v1/{user_type}/{userid}/' "
+        "  user_type and userid are template-expanded from SOAR trigger/incident context at execute(). "
+        "  If playbook config uses {{ trigger.field }} for user_type or userid, attacker controls the URL path. "
+        "  FACBaseOperator.make_api_call constructs: url = self.server_url + endpoint "
+        "  and sends it via make_https_request (no URL normalization). "
+        "In FML (FortiMail connector): "
+        "  url = f'https://{ip}/api/v1/SenderListV2/{domain_name}' "
+        "  domain_name is template-expanded from SOAR context at execute() L595. "
+        "Attack: attacker crafts network event with domain_name = '../../unauthorized_endpoint'. "
+        "The FAZ SOAR connector sends the request to the FortiMail/FortiAuthenticator server "
+        "using the connector's admin credentials (Basic auth, cookie session). "
+        "The attacker can reach any API endpoint on the target server reachable from FAZ. "
+        "Prerequisite: SOAR playbook author uses {{ trigger.X }} template variables for the affected fields. "
+        "This is plausible for automation that queries user info or manages block lists based on "
+        "detected threat indicators (common SOAR use case). "
+        "The external FAC/FML server's own URL normalization may limit impact (most web servers "
+        "normalize ../; however, percent-encoded paths like %2e%2e%2f may bypass normalization). "
+        "Combined with FAZ-F10 (trigger-data SQL injection) this completes a pattern: "
+        "all SOAR data flows from trigger data through parse_input with no sanitization."
+    ),
+
+    "attack_chain": (
+        "1. Attacker crafts spam/phishing email with controlled sender domain. "
+        "2. FortiMail creates a SOAR incident with domain = '../../admin'. "
+        "3. SOAR FMLAddSenderToBlocklistOperator fires; parse_input resolves domain_name = '../../admin'. "
+        "4. URL: https://fml.example.com/api/v1/SenderListV2/../../admin -- resolved to /api/v1/admin. "
+        "5. FortiMail admin API call with SOAR connector session credentials. "
+        "FAC variant: controlled username/userid in network event -> FACGetUserOperator -> "
+        "  https://fac.example.com/api/v1/localusers/../../admin/config/."
+    ),
+
+    "remediation": (
+        "Validate user_type, userid, and domain_name against a whitelist of allowed values "
+        "before constructing the URL. For user_type: only 'localusers', 'ldapusers', 'radiususers' "
+        "are valid FAC endpoints. For userid: enforce integer or UUID format. "
+        "For domain_name: enforce hostname label format (regex: ^[a-zA-Z0-9.-]+$). "
+        "Use urllib.parse.quote(..., safe='') to percent-encode values before interpolation."
+    ),
+
+    "related_findings": ["FAZ-F07 (WEBHOOK SSRF -- same SSRF class against external URLs)", "FAZ-F10 (SOAR trigger-data SQL injection)"],
 }
