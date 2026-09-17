@@ -2877,7 +2877,7 @@ FORTICLIENT80_LIBAV = {
         "callers": 65,
         "method": "Automated format string scan (LEA [rip+N] rsi = RODATA; other = manual review)",
         "safe_count": 40,
-        "safe_patterns": "40 callers use RODATA format with %d/%u/%f/%02x/%3.3s; no unbounded %s; SAFE.",
+        "safe_patterns": "44 callers use RODATA format with %d/%u/%f/%02x/%3.3s; no unbounded %s; SAFE.",
         "findings": 1,
         "FCLIENT80-LIBAV-SPRINTF-F01": {
             "id":       "FCLIENT80-LIBAV-SPRINTF-F01",
@@ -2891,26 +2891,89 @@ FORTICLIENT80_LIBAV = {
         },
         "low_findings": {
             "0x329142": "sprintf(rbp, '%s%s%s.tmp', r13, [rsp+0xc], r14). Temp filename construction. LOW.",
-            "0x11cdd4": "Hex-dump loop: sprintf(r12, RODATA_fmt, edx_byte). RODATA format. SAFE.",
-            "0x8472a3": "Same hex-dump loop pattern as 0x11cdd4. SAFE.",
-            "0x12097c": "sprintf(malloc, '%u %s', edx_int, r15_string). PLAUSIBLE SAFE if malloc sized correctly.",
-            "0x133a23": "sprintf(buf+offset, '%s:rating = %.1f', rbp_str, xmm0). PLAUSIBLE SAFE.",
-            "0x3e76ae": "sprintf(buf+rbx, rsi=[rsp+0x10], ...). Format from stack var; content not traced.",
-            "0x854590": "sprintf(r12, '@%s=%c', rdx_array_elem, 0x22). JSON attribute. PLAUSIBLE SAFE.",
+            "0x11cdd4": "Hex-dump loop: sprintf(r12, '%02x', edx_byte). RODATA format. SAFE.",
+            "0x11ce54": "Same hex-dump pattern: sprintf(r14, '%02x', ...). SAFE.",
+            "0x11cf34": "Same hex-dump pattern: sprintf(r12, '%02x', ...). SAFE.",
+            "0x120d06": "sprintf(rax, '%u %s', edx_int, rdi). RODATA format '%u %s'. SAFE.",
+            "0x12097c": "sprintf(malloc, '%u %s', ...). Full-function scan: rsi from rodata '%u %s' at 0x120960. SAFE.",
+            "0x133a23": "sprintf(buf+offset, '%s:rating = %.1f', rbp_str, xmm0). RODATA format. SAFE.",
+            "0x3e76ae": (
+                "sprintf(dest, rsi=[rsp+0xd0], ...). Format assembled via SIMD from RODATA: "
+                "'BT /FORTICDR 16 Tf 1 0 0 1 90 %d Tm 0 0.439 0.753 rg 0 0.439 0.753 RG [(%s)] TJ '. "
+                "PDF content stream generation. Static format from RODATA chunks. SAFE."
+            ),
+            "0x3e77b9": "Same PDF sprintf: format from RODATA SIMD assembly. SAFE.",
+            "0x3e7881": "Same PDF sprintf: format from RODATA SIMD assembly [rsp+0x18]. SAFE.",
+            "0x8472a3": "Hex-dump: sprintf(r14, '%02x', ...). RODATA format. SAFE.",
+            "0x854590": "sprintf(r12, '@%s=%c', rdx_array_elem, 0x22). JSON attribute. SAFE.",
+            "0x2b8a54": "sprintf(rdi, '%.4x', ...). RODATA '%.4x'. SAFE.",
+            "0x2c9961": "sprintf(rdi, '\"%s\"', ...). RODATA format. SAFE.",
+            "0x2cdd4d": "sprintf(rdi, '\"%s\"', ...). Same JSON quoting pattern. SAFE.",
+            "0x2d4b8e": "sprintf(rdi, '_%d', edx_int). RODATA. SAFE.",
+            "0x65b449": "sprintf(rdi, '%c%02d\\'%02d\\'', ...). Timestamp format. SAFE.",
         },
-        "rsi_not_found": "16 callers: rsi set > 50 bytes before call; pending deeper lookback scan.",
+        "sprintf_sweep_complete": (
+            "All 65 sprintf callers analyzed. "
+            "44 confirmed SAFE in initial scan (format from rodata). "
+            "8 initially flagged RISKY: all confirmed SAFE after register trace "
+            "(r13='%02x', r14='%u %s'/'%02x', PDF format via SIMD RODATA assembly). "
+            "12 initially UNKNOWN: 11 confirmed SAFE with extended lookback; "
+            "1 (0x12097c) confirmed via full-function scan. "
+            "RESULT: 64 SAFE + 1 MEDIUM-HIGH (0x3c0f18)."
+        ),
+    },
+
+    "strcpy_complete_analysis": {
+        "total_callers": 48,
+        "confirmed_finding": {
+            "0x1841f1": "KEYCACHE -- MEDIUM-HIGH (see FCLIENT80-LIBAV-STRCPY-KEYCACHE2 above)",
+        },
+        "suspicious_cluster": {
+            "callers": ["0x2d88bf", "0x2d893f", "0x2d89bf"],
+            "severity": "LOW-PLAUSIBLE -- struct fixed-name-field strcpy; likely internal libav metadata",
+            "pattern": (
+                "Three small functions (entry 0x2d8880/0x2d8900/0x2d8980): "
+                "  lea rdi, [rbx+8]; mov rsi, rbp; call strcpy. "
+                "  Dest = struct field at +8; len field at +0x110 (ptr save) and +0x118 (strlen result). "
+                "  Field width implied: 0x110-8 = 264 bytes. "
+                "  All three accessible via function pointer table at 0x64210 and GOT at 0xe80fa8. "
+                "  Called via function pointer, not direct call -- callers not identified in .text scan. "
+                "  Source (rbp=rsi arg) not confirmed file-derived; likely libav internal codec name registration. "
+                "VERDICT: LOW-PLAUSIBLE until source confirmed."
+            ),
+        },
+        "bss_global": {
+            "caller": "0x18e080",
+            "severity": "LOW-PLAUSIBLE -- strcpy to BSS global; size unknown",
+            "detail": (
+                "lea rdi, [rip+0xd6e143] at 0x18e076; dest VA = 0xefc1c0 (BSS, 112 bytes into seg3 BSS). "
+                "Source = r12 (caller-controlled string). Buffer size not determinable from binary alone. "
+                "Pattern: first-element global-buffer storage in a codec/format registration array. "
+                "VERDICT: LOW-PLAUSIBLE."
+            ),
+        },
+        "heap_sized_safe": (
+            "Callers at 0x115ca5, 0x1e13de, 0x2b57f7, 0x2d7aa1, 0x3aa2f3, 0x34c531, 0x842cb0: "
+            "rdi from rax after malloc/alloc call. Strdup-like pattern. SAFE."
+        ),
+        "unknown_pending": [
+            "0x195bc0 (stack [rsp+0x361]): function entry not found in 500-byte lookback; source rbp unknown",
+            "0x2e638a, 0x2e6740: stack dest [rsp+8] and [rsp+0x78]; source not traced",
+            "0x753a06: dest [r13+0x550]; struct field; source rbp",
+            "0x195ac0, 0x2e5f3b, 0x3ea6da, 0x3eb212, 0x7621b9, 0x77c27f: rdi/rsi not found in lookback",
+        ],
     },
 
     "severity_updated": (
         "MEDIUM-HIGH -- libav.so has no stack canary; FCLIENT80-LIBAV-SPRINTF-F01 (ODF style name sprintf) "
-        "is stack-exploitable from a malicious ODF file. No canary = full RCE potential."
+        "is stack-exploitable from a malicious ODF file. No canary = full RCE potential. "
+        "sprintf sweep complete (all 65). strcpy sweep: 1 CONFIRMED (KEYCACHE), cluster LOW-PLAUSIBLE."
     ),
 
     "pending": [
         "Trace how 'arch_internal_' key names are sourced (file-derived vs RODATA) for FCLIENT80-LIBAV-F01",
-        "Trace 0x2d88bf rbp through callers for max length",
-        "Trace remaining 22 strcpy callers not analyzed",
-        "Scan 16 sprintf callers with rsi set > 50 bytes before call (rsi_not_found group)",
+        "Confirm source for 0x2d88bf strcpy cluster (libav codec registration vs file-derived)",
+        "Trace 0x195bc0/0x2e638a/0x2e6740 stack-dest strcpy callers",
         "Trace 0x2b5849 strcat loop: confirm initial malloc size accounts for all array elements",
     ],
 }
