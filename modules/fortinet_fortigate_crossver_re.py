@@ -1927,37 +1927,74 @@ LIBIPS_800_F01_SEMANTIC_SWEEP = {
     },
 
     "callsite_analysis": {
-        "strcpy_callers": 8,
+        "strcpy_plt":       "0x9e4f0 (strcpy@GLIBC_2.2.5 -> GOT 0x118fe28)",
+        "ctype_tolower_plt": "0x9e500 (__ctype_tolower_loc@GLIBC_2.3 -> GOT 0x118fe30)",
+        "strcpy_chk_plt":   "0x9ea10 (__strcpy_chk@GLIBC_2.3.4 -> GOT 0x11900b8)",
+        "strcpy_direct_callers": ["0xb7280", "0x3e0808"],
+        "strcpy_tail_calls":     ["0x3e082d", "0x3e0894"],
+        "strcpy_chk_callers":    ["0x1b4fbe", "0x22b3a0"],
         "sscanf_callers": 3,
 
         "LIBIPS_800_STRCPY_PARSER": {
             "caller_va":   "0x6ab118",
-            "severity":    "MEDIUM -- strcpy in character-by-character parser; position bounds check present but copy length unchecked",
+            "severity":    "FALSE_POSITIVE -- misidentified PLT entry",
             "function_start": "0x6ab0c0",
             "analysis": (
-                "Function reads bytes from a bounded input buffer: r15 = [rdi] (current position), r14 = [rbp+0x10] (end-of-buffer). "
-                "Bounds check `cmp r15, r14; jae exit` ensures current position is within buffer, "
-                "but does NOT check how many bytes strcpy will copy from r15+1 (source = one byte past current position). "
-                "Character classification at `test byte ptr [r9 + r14], 2` gates the strcpy call. "
-                "If the source string (from position r15+1 onward) lacks a null terminator within the buffer, "
-                "strcpy reads past the buffer boundary. "
-                "Destination buffer size not visible from call site -- rdi = first function arg."
+                "Call at 0x6ab118 goes to PLT 0x9e500 = __ctype_tolower_loc (NOT strcpy). "
+                "PLT stubs for strcpy (0x9e4f0) and __ctype_tolower_loc (0x9e500) are adjacent (GOT entries 0x118fe28 vs 0x118fe30). "
+                "The function at 0x6ab0c0 is a character classifier/tolower lookup: "
+                "reads byte at r15, checks char class via [r9+r14] table, then calls __ctype_tolower_loc() "
+                "to get the tolower table, then dereferences [rax + r14*4] to convert the char. "
+                "No strcpy call exists in this function."
             ),
-            "verdict": "PLAUSIBLE -- copy length unchecked; needs caller context to confirm destination size and source origin (packet vs internal buffer)",
+            "verdict": "FALSE_POSITIVE -- PLT entry 0x9e500 is __ctype_tolower_loc, not strcpy (GOT 0x118fe30 vs strcpy GOT 0x118fe28)",
         },
 
         "LIBIPS_800_STRCPY_VARBUF": {
             "caller_va":   "0x22b095",
-            "severity":    "MEDIUM -- strcpy into VLA (variable-length stack allocation)",
+            "severity":    "FALSE_POSITIVE -- misidentified PLT entry",
             "analysis": (
-                "Before the strcpy call: `shl rax, 4; sub rsp, rax` dynamically allocates stack space (VLA) "
-                "based on value at [rbp-0xf8] (size = [rbp-0xf8] * 16 bytes). "
-                "VLA start saved to [rbp-0xe8]. "
-                "If the VLA size field comes from a packet and is subsequently used to allocate insufficient space for the strcpy source, "
-                "this is a stack overflow. "
-                "The strcpy source is not visible from this window -- rdi/rsi setup not shown."
+                "Call at 0x22b095 goes to PLT 0x9e500 = __ctype_tolower_loc (NOT strcpy). "
+                "VLA allocation at 0x22b076/0x22b07a (`shl rax,4; sub rsp,rax`) is for a character conversion buffer, "
+                "not a strcpy destination. After the tolower table fetch, code uses [rax] (tolower table) to convert "
+                "chars in the VLA. Size field at [rbp-0xf8] controls the VLA, but no strcpy is involved."
             ),
-            "verdict": "PLAUSIBLE -- VLA before strcpy; source of size field [rbp-0xf8] needs tracing",
+            "verdict": "FALSE_POSITIVE -- PLT 0x9e500 is __ctype_tolower_loc; the VLA is for char conversion, not strcpy dest",
+        },
+
+        "LIBIPS_800_STRCPY_REAL_STATIC": {
+            "caller_va":   "0xb7280",
+            "function_start": "0xb7236",
+            "callers_of_fn": ["0xb7824", "0xb7e4a", "0xb7ef9"],
+            "severity":    "LOW -- strcpy with static source; not network-attacker-controlled",
+            "analysis": (
+                "strcpy(rdi=struct_r12+8+offset, rsi=static_table[rax*8]). "
+                "Source rsi = entry from static pointer table at VA 0x113d89e (binary data in rodata). "
+                "rax computed from struct fields (socket type flags), indexes into a fixed lookup table. "
+                "Source strings are predefined, not from network input. "
+                "Destination rdi = [r12+8] + computed_offset (into caller-provided struct buffer). "
+                "Risk depends on destination buffer size vs longest static string, but not an injection vector."
+            ),
+            "verdict": "LOW -- static source strings; not attacker-injectable",
+        },
+
+        "LIBIPS_800_STRCPY_REAL_INPUT": {
+            "caller_va":   "0x3e0808",
+            "tail_calls":  ["0x3e082d", "0x3e0894"],
+            "function_start": "0x3e0790",
+            "callers_of_fn": ["0x3de05a", "0x3e0990", "0x3e651a"],
+            "severity":    "MEDIUM -- strcpy from input struct field; destination size not confirmed",
+            "analysis": (
+                "Function at 0x3e0790 receives (rdi=dest_struct, rsi=input_struct) as args. "
+                "Source: rcx = input_struct+0x18 (potentially attacker-controlled). "
+                "Loop at 0x3e07c0-0x3e07d5 scans bytes of input+0x18 until byte <= 0x1f OR 0x30 iterations. "
+                "strcpy at 0x3e0808 called only if [input+0x18+loop_count] == 0 (null-terminated within ~48 bytes). "
+                "Destination: rdi+9 (9 bytes into first-arg buffer). "
+                "Second strcpy (tail call 0x3e082d) appends to dest. "
+                "Pending: trace callers (0x3de05a, 0x3e0990, 0x3e651a) to confirm dest buffer size "
+                "and whether input_struct+0x18 is populated from network packet data."
+            ),
+            "verdict": "MEDIUM PLAUSIBLE -- input struct source; dest size unknown; 0x30-byte loop limit suggests bounded input but strcpy copies to unvalidated dest",
         },
 
         "LIBIPS_800_SSCANF_NULL_ARG": {
