@@ -1618,11 +1618,32 @@ SSLVPN_720_F02_REALM_REDIRECT = {
         "if the base URL (%s) is attacker-controlled."
     ),
 
+    "disassembly": {
+        "realm_fmt_usage": (
+            "VA 0x164aee3 (file 0x124aee4): `mov edx, 0x30aca8b` passes realm format string "
+            "as 3rd arg (format position in x86-64 SysV ABI). "
+            "Preceding calls: 0x166d340 (arg getter?), 0x16187d0 (string processor). "
+            "Realm value flows from context struct at r13 through these calls. "
+            "Further: `push r15; mov rcx,[rip+0x2c767d1]; push r14; mov r8,rax; lea r9,[rbx+0x470]; jmp 0x164ad62` "
+            "suggests 6+ arguments to the actual format call -- consistent with snprintf."
+        ),
+        "logincheck_dispatch": (
+            "VA 0x1648051 (file 0x1248051): `mov qword ptr [rbp-0x78], 0x30ac930` stores "
+            "the /remote/logincheck string VA in a stack-allocated struct. "
+            "Pattern: {string_va, count} pairs -- URL routing table built on stack. "
+            "Surrounding entries: 0x3366fbb (another URL), 0x28=40, 0x29=41, 0x2b=43, 0x2c=44."
+        ),
+        "addressing_note": (
+            "Both format strings use 32-bit immediate MOV (not RIP-relative LEA) to load "
+            "the string VA. This is why RIP-relative scanning found 0 results. "
+            "Compiler chose immediate encoding since the VA (0x30ac930, 0x30aca8b) fits in 32 bits."
+        ),
+    },
+
     "pending": (
-        "Need disassembly of the function that calls these format strings to confirm: "
-        "(1) whether realm comes from user-supplied POST body or a config value, "
-        "(2) whether snprintf with fixed buffer or unbounded sprintf is used, "
-        "(3) whether CRLF characters are stripped before formatting."
+        "Trace r13 context struct back to HTTP request parsing to confirm realm is user-supplied. "
+        "Disassemble 0x166d340 to determine if it extracts the realm query parameter. "
+        "Check call at 0x164ad62 to determine if snprintf (bounded) or sprintf (unbounded) is used."
     ),
 }
 
