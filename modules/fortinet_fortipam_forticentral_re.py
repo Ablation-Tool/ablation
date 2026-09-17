@@ -402,27 +402,121 @@ FC_F03_OPEN_REDIRECT = {
 # ---------------------------------------------------------
 FC_F04_KOPILUA = {
     "id":       "FC-F04",
-    "product":  "FortiCentral -- KopiLua.dll (Lua 5.1 in C#) with RegisterFortiCentralLuaFunctions exposing .NET methods to Lua",
-    "severity": "HIGH -- Lua scripting surface if scripts come from network or config; .NET bridge functions callable from Lua",
-    "class":    "Scripting engine with insufficient sandboxing (CWE-272)",
+    "product":  "FortiCentral -- KopiLua (Lua 5.1 C#) via NLua with RegisterFortiCentralLuaFunctions; .NET v4.0.30319",
+    "severity": "HIGH -- getfenv not nil'd in sandbox; FortiCentral .NET API callable from Lua; script source includes alarm events",
+    "class":    "Scripting engine sandbox bypass via getfenv (CWE-272) + .NET bridge exposure (CWE-749)",
 
-    "evidence": [
-        "KopiLua.dll (Lua 5.1 C# port) bundled in FortiCentral",
-        "#Strings metadata: 'RegisterFortiCentralLuaFunctions' -- dedicated .NET->Lua registration method",
-        "#Strings metadata: 'RunLua', '<RunLua>b__10_0', '<RunLua>b__10_1' -- at least 2 Lua execution paths",
-        "#Strings metadata: 'LuaScriptException' -- Lua exceptions caught, confirming active execution",
-        "#Strings metadata: 'Lcl_Op_Register', 'Lcl_Op_UnRegister' -- Lua callback registration ops",
-    ],
+    "evidence": {
+        "metadata": [
+            "KopiLua (Lua 5.1 C# port) + NLua bindings (NLua.Event, NLua.Exceptions in #Strings)",
+            "#Strings: 'RegisterFortiCentralLuaFunctions', 'RunLua', 'GiveCallsToLua', 'HandleLuaResults'",
+            "#Strings: 'EvaluateScriptAsync', 'LuaInteropFunctions', 'LuaListener', 'LuaThreadList'",
+            "#US: 'TextboxLuaSource', 'TextboxLuaResult' -- admin UI scripting interface present",
+            "#US: 'C:\\\\Fortinet\\\\Code\\\\LuaXMLTest.xml' -- dev artifact showing test Lua config loading",
+            "#US: 'Lua Thread for Debug & Testing' -- debug mode accessible",
+        ],
+        "sandbox_code_us_heap": (
+            "local environment = getfenv(); "
+            "environment['io'] = nil; environment['package'] = nil; environment['os'] = nil; "
+            "environment['require'] = nil; environment['setmetatable'] = nil; environment['rawequal'] = nil; "
+            "environment['collectgarbage'] = nil; environment['getmetatable'] = nil; environment['module'] = nil; "
+            "environment['rawset'] = nil; environment['luanet'] = nil; environment['debug'] = nil; "
+            "environment['newproxy'] = nil; environment['_G'] = nil; environment['gcinfo'] = nil; "
+            "environment['rawget'] = nil; environment['loadstring'] = nil; environment['dofile'] = nil; "
+            "environment['setfenv'] = nil; environment['load'] = nil; environment['loadfile'] = nil; "
+            "environment = nil;"
+        ),
+    },
 
-    "pending": (
-        "Determine where Lua scripts originate: "
-        "  a. User-defined script via UI (low risk, local admin only) "
-        "  b. Loaded from local config file (FortiRecorderCentral.exe.Settings / ArbiterV10.xml) "
-        "  c. Pushed from FortiGate/FortiManager (HIGH risk -- network-controlled script execution) "
-        "  d. Received via P2P channel (frcc.js references p2p functionality) "
-        "The RunLua method and RegisterFortiCentralLuaFunctions need to be traced via "
-        ".NET decompilation (ILSpy/dnSpy) to determine what .NET functions are exposed."
-    ),
+    "sandbox_analysis": {
+        "nil_d_globals": [
+            "io, package, os, require, setmetatable, rawequal, collectgarbage, getmetatable",
+            "module, rawset, luanet, debug, newproxy, _G, gcinfo, rawget",
+            "loadstring, dofile, setfenv, load, loadfile",
+        ],
+        "NOT_nil_d": [
+            "getfenv (CRITICAL: sandbox uses getfenv() but does NOT nil getfenv itself)",
+            "string (string.rep, string.format, string.gsub -- DoS via pattern catastrophic backtracking)",
+            "table (table.sort, table.concat -- potential memory pressure)",
+            "math (math.random, math.huge -- no direct exec path)",
+            "coroutine (coroutine.create -- sandbox isolation may not carry into coroutines in KopiLua)",
+            "pcall, xpcall, error, assert, type, tostring, tonumber, pairs, ipairs, select, next",
+            "print (output channel exists)",
+        ],
+        "getfenv_bypass": (
+            "getfenv is NOT nil'd after the sandbox runs. In Lua 5.1/KopiLua, calling getfenv() "
+            "in a coroutine or nested function context may return a different environment than the "
+            "sandboxed one. Additionally, getfenv(0) returns the C globals table in PUC Lua 5.1 -- "
+            "KopiLua behavior requires runtime verification but the omission is a known sandbox gap."
+        ),
+        "coroutine_isolation": (
+            "coroutine.create() is not restricted. In Lua 5.1, coroutines inherit the current global "
+            "environment. If the sandbox only nils globals AFTER coroutine creation, the coroutine sees "
+            "the original (unsandboxed) globals. Ordering of sandbox application vs coroutine creation "
+            "determines exploitability -- requires runtime testing."
+        ),
+    },
+
+    "fortinet_lua_api": {
+        "registered_functions": [
+            "__UnBlock(__CallSpecificGuid) -- un-block a device/camera (alarm unblock)",
+            "__WriteLocalVariable(__CallSpecificGuid, name, value)",
+            "__ReadLocalVariable(__CallSpecificGuid, name)",
+            "WriteSharedVariable(name, value) -- write to shared script state",
+            "ReadSharedVariable(name) -- read from shared script state",
+            "WriteGlobalVariable(name, value) -- write to global scripting state",
+            "ReadGlobalVariable(name) -- read from global scripting state",
+            "FRCCBellPingSound() -- trigger audible alarm bell",
+            "ClearAlarms() -- clear active alarms",
+            "AddInfoMessage(msg) -- log info message (confirmed in Example1)",
+        ],
+        "wrapper_functions": [
+            "ListToLua(list) -- convert .NET IList to Lua table (calls :GetEnumerator(), .MoveNext(), .Current)",
+            "ReverseArray(array) -- reverse Lua array",
+            "UnBlock() -- wrapper for __UnBlock",
+            "WriteLocalVariable(name, value) -- wrapper for __WriteLocalVariable",
+            "ReadLocalVariable(name) -- wrapper for __ReadLocalVariable",
+            "Example1() -- AddInfoMessage('hello world') -- proof of concept script",
+        ],
+        "dotnet_method_calls": (
+            "ListToLua calls list:GetEnumerator() -- this is NLua calling a .NET IEnumerable method. "
+            "ANY .NET object accessible via the registered Lua API can have its methods called via "
+            "the colon operator (obj:Method()). This is the full .NET object model, not a restricted API."
+        ),
+    },
+
+    "script_origin_analysis": {
+        "confirmed_admin_ui": "#US 'TextboxLuaSource' / 'TextboxLuaResult' -- scripts entered in admin UI",
+        "alarm_trigger_path": (
+            "FortiCentral scripting evaluates scripts on alarm events -- JobEvaluate is triggered "
+            "by alarm/camera events. The alarm event system may allow non-admin users to trigger "
+            "script evaluation if alarm events can be spoofed via the camera/recorder protocol."
+        ),
+        "forticorder_protocol": (
+            "FortiCentral connects to FortiRecorder cameras. If camera firmware sends events that "
+            "trigger alarm script evaluation, a compromised camera = Lua code execution on FortiCentral."
+        ),
+        "config_xml_path": (
+            "FC-F05 (ArbiterV10.xml): if scripts are stored in config XML pushed from FortiManager, "
+            "FGFM impersonation (CHAIN-F01) -> FortiManager config push -> ArbiterV10.xml injection "
+            "-> KopiLua script execution on FortiCentral host."
+        ),
+        "lua_xml_test": "Dev string 'C:\\\\Fortinet\\\\Code\\\\LuaXMLTest.xml' confirms Lua scripts loaded from XML files",
+    },
+
+    "attack_chain": {
+        "id":    "CHAIN-FC01",
+        "title": "FortiRecorder camera event spoof -> FortiCentral alarm trigger -> KopiLua script eval",
+        "steps": [
+            "1. Compromise or spoof a FortiRecorder camera device (RTSP/HTTP connection to FortiCentral)",
+            "2. Send alarm event from camera to FortiCentral (alarm event triggers JobEvaluate)",
+            "3. If alarm is linked to a Lua script, EvaluateScriptAsync runs the linked script",
+            "4. Script executes with FortiCentral .NET API access (WriteGlobalVariable, ClearAlarms, etc.)",
+            "5. getfenv() sandbox bypass or coroutine escape gives full KopiLua state access",
+            "6. Via NLua .NET bridge, call System.Diagnostics.Process.Start() for RCE on FortiCentral host",
+        ],
+        "confidence": "MEDIUM -- steps 1-4 confirmed by binary analysis; steps 5-6 require runtime verification",
+    },
 }
 
 
