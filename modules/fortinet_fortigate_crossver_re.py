@@ -2379,7 +2379,7 @@ LIBAV_603_KEYCACHE_UPDATE = {
     "caller":     "0x9e278 (inside function 0x9e030)",
     "caller_count_for_0x9e030": 1,
     "only_callsite": "0x848d9 (inside file format classifier at 0x843e0)",
-    "verdict":    "MEDIUM PLAUSIBLE -- file-derived metadata key copied into 64-byte heap buffer without length check",
+    "verdict":    "MEDIUM-HIGH CONFIRMED -- file-derived metadata key copied into 64-byte heap buffer; no length check at callsite 0x848c0 or in parsers",
 
     "call_chain": (
         "File content -> AV engine format classifier (0x843e0) -> "
@@ -2408,7 +2408,14 @@ LIBAV_603_KEYCACHE_UPDATE = {
         "source_origin": "rbx = key string from metadata struct at [r14+8]+0x300 (populated by format-specific parser)",
     },
 
-    "pending": "Trace format-specific parser that sets [r14+8]+0x300; determine max field length in JPEG EXIF, ZIP filename, and PE section name paths; confirm whether parsers enforce <=63 byte limit before inserting into scan context",
+    "callsite_no_length_check": (
+        "0x848b9: mov rsi, [rax+0x300] (metadata key from file context). "
+        "0x848c0: test rsi, rsi; je 0x848e6 (NULL check only -- no strlen or length bound). "
+        "0x848d9: call 0x9e030 (KEYCACHE). "
+        "JPEG parser at 0x87130: validates 0xff 0xd8 magic; no metadata field length enforcement found. "
+        "Any AV-scanned file where the metadata field at struct+0x300 > 64 bytes triggers heap overflow."
+    ),
+    "pending": "Enumerate other format parsers (0x87560, 0x87650, 0x87740) to confirm same absent length check; determine JPEG EXIF field that sets struct+0x300.",
 }
 
 LIBVCM_603 = {
