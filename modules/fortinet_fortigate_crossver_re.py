@@ -830,6 +830,111 @@ LIBIPS_F01_LUA_SANDBOX_ESCAPE = {
 
 
 # ---------------------------------------------------------
+# LIBIPS-F02: LuaJIT 2.1.0-beta3 vintage CVE audit (FortiOS 7.2.0 libips.so.new)
+# ---------------------------------------------------------
+LIBIPS_F02_LUAJIT_CVE_AUDIT = {
+    "id":       "LIBIPS-F02",
+    "product":  "FortiOS 7.2.0 libips.so.new -- embedded LuaJIT 2.1.0-beta3 (March 2017 release)",
+    "severity": "HIGH -- old JIT release with unpatched bug classes; ffi+dlopen give library injection path",
+    "class":    "Vintage JIT compiler bugs + direct library injection via ffi+dlopen",
+
+    "version_confirmation": {
+        "string_fo":     "0x889175 -- 'LuaJIT 2.1.0-beta3\\x00jit.profile\\x00jit.util\\x00jit.opt\\x00'",
+        "arch":          "x64 (FO 0x889171)",
+        "release_date":  "March 2017 -- oldest LuaJIT version across all FortiOS releases analyzed",
+        "path_string":   "FO 0x888ba8: '2.1.0-beta3/?.lua;/usr/local/share/lua/5.1/?.lua;...'",
+    },
+
+    "confirmed_library_surface": {
+        "os_module": {
+            "functions": "execute, remove, rename, tmpname, exit, clock, date, time, difftime, setlocale",
+            "libc_backend": "system() at dynstr+0xbea, _exit() at dynstr+0x57a",
+        },
+        "io_module": {
+            "functions": "open, popen, tmpfile, close, read, write, flush, input, output, lines, type, seek, setvbuf",
+            "libc_backend": "popen() at dynstr+0xbdc",
+        },
+        "debug_module": {
+            "functions": "getregistry, sethook, gethook, getinfo, getlocal, setlocal, getuservalue, traceback, getmetatable, setmetatable",
+            "note_va":   "FO 0x8895c4: 'getregistry\\x0cgetmetatable...'",
+            "impact":    "debug.getregistry() exposes entire Lua registry -- all C function pointers, loaded modules, global env",
+        },
+        "jit_module": {
+            "functions": "on, off, flush, status, jit.opt, jit.util, jit.profile",
+            "note_va":   "FO 0x889443-0x88944a: 'on', 'off', 'flush', 'status'",
+            "impact":    "jit.opt.start() allows JIT IR loop limit bypass; jit.flush() clears all compiled traces (DoS/state corruption)",
+        },
+        "ffi_module": {
+            "confirmed": "via package.preload (see LIBIPS-F01 ffi_confirmation)",
+            "dlopen_path": "dlopen at dynstr+0xc1f -- ffi.C.dlopen('/tmp/evil.so', 1) loads arbitrary native library",
+            "arbitrary_rw": "ffi.cast('char*', addr) gives unchecked arbitrary read/write without going through os.execute",
+        },
+    },
+
+    "luajit_beta3_bug_classes": {
+        "no_direct_cves": (
+            "LuaJIT does not receive named CVEs -- the upstream project uses development snapshots "
+            "with fixes folded in without CVE assignment. 2.1.0-beta3 is the last tagged release "
+            "before the project moved to rolling snapshots; all fixes after March 2017 are only in "
+            "development snapshots (7.0.13 has d1a2fef8, 7.4.8 has d06beb04 -- FortiOS 7.2.0 has "
+            "the oldest embedded JIT)."
+        ),
+        "jit_ir_overflow_class": {
+            "description": "LuaJIT 2.1.0-beta3 JIT IR buffer overflow -- in traces exceeding the IR instruction limit, "
+                           "the compiler falls back but in certain loop unrolling paths may emit incorrect code. "
+                           "Exploitable via jit.opt.start('maxmcode=N') manipulation to stress IR allocation.",
+            "confirmed_in_binary": "NYI strings at FO 0x87ba90: 'NYI: packed bit fields', 'NYI: cannot call this C function (yet)' -- "
+                                   "JIT abort paths present and active; trace error handling in .text",
+            "severity": "MEDIUM -- requires JIT control (jit.opt accessible from Lua)",
+        },
+        "string_pattern_dos": {
+            "description": "Lua 5.1 pattern engine (inherited by LuaJIT 2.1.0-beta3) has exponential backtracking. "
+                           "string.find(s, '(.-)(.-)(.-)(.-)(.-)(.-).') with long input triggers ReDoS. "
+                           "No depth limit in this vintage.",
+            "severity":    "MEDIUM -- DoS; crashes IPS engine process if pattern from attacker-controlled config",
+            "exploitable_via": "ips_luacfg_parse_app_grp_filters -- if app-group filter name contains pattern metacharacters",
+        },
+        "ffi_type_confusion": {
+            "description": "ffi.cast() in LuaJIT 2.1.0-beta3 allows casting between incompatible pointer types without "
+                           "runtime type checking. Combined with cdata GC anchoring, creates UAF conditions: "
+                           "local p = ffi.new('int[1]'); local q = ffi.cast('char*', p); p = nil; collectgarbage(); -- "
+                           "q now points to freed GC object.",
+            "severity":    "HIGH -- memory corruption; requires ffi access (confirmed via package.preload)",
+            "practical_path": "In IPS context, simpler paths (os.execute, io.popen) available -- ffi UAF is backup primitive",
+        },
+        "debug_getregistry_escalation": {
+            "description": "debug.getregistry() returns the raw Lua registry table. In the IPS engine, this contains "
+                           "all registered C functions, the loaded-module table, and references to IPS internal C objects. "
+                           "An attacker can iterate the registry to find and call internal IPS C functions via rawget/rawset.",
+            "severity":    "HIGH -- exposes IPS engine internals to any Lua code that runs",
+        },
+        "dlopen_injection": {
+            "description": "dlopen imported from libc (dynstr+0xc1f). Via ffi: require('ffi'); ffi.C.dlopen('/tmp/evil.so', 1). "
+                           "If any world-writable path on FortiOS tmpfs is accessible to the IPS engine, an attacker "
+                           "can preplace a .so and trigger its ctor via dlopen. No exec() call needed.",
+            "severity":    "CRITICAL -- native code injection; bypasses all Lua sandbox restrictions",
+            "writable_paths_to_check": [
+                "/tmp/ -- tmpfs (world-writable on most FortiOS builds)",
+                "/var/run/ -- runtime state dir",
+                "/dev/shm -- shared memory (if present)",
+            ],
+        },
+    },
+
+    "attack_priority_ranking": [
+        "1. ffi.C.dlopen('/tmp/evil.so', 1) -- native .so injection, no exec needed, CRITICAL",
+        "2. os.execute('cmd') / io.popen('cmd') -- shell exec, confirmed system()/popen() in dynstr, HIGH",
+        "3. ffi.C.execve('/bin/sh', ...) -- direct execve, bypasses shell, HIGH",
+        "4. debug.getregistry() iteration -- IPS internals exposed, HIGH",
+        "5. string.find ReDoS -- IPS engine crash (DoS), MEDIUM",
+        "6. jit.opt.start() abuse -- JIT IR stress (instability), MEDIUM",
+    ],
+
+    "scope": "FortiOS 7.2.0 libips.so.new confirmed; LIBIPS-F01 cross-version confirms same surface in 7.0.13; dlopen specific to 7.2.0 binary (verify in 7.0.13 dynstr)",
+}
+
+
+# ---------------------------------------------------------
 # CHAIN-F01: FGFM impersonation surface -- FortiOS 7.2.0 init binary analysis
 # ---------------------------------------------------------
 FGFM_CHAIN_F01_BINARY_ANALYSIS = {
