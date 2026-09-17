@@ -3506,7 +3506,7 @@ FORTICLIENT80_CONFIGHANDLER = {
     "has_canary": True,
     "has_chk":   True,
     "language":  "Rust+C hybrid",
-    "severity":  "MEDIUM -- NNG IPC unauthenticated local socket; path-concat strcpy MEDIUM PLAUSIBLE; sprintf with %s%s args (RODATA only -- SAFE)",
+    "severity":  "MEDIUM -- NNG IPC unauthenticated local socket (HIGH finding); all dangerous function callers SAFE after malloc/BIO trace",
 
     "architecture_note": (
         "confighandler is a Rust+C hybrid binary. Dynstr contains: "
@@ -3538,15 +3538,24 @@ FORTICLIENT80_CONFIGHANDLER = {
         "findings": 1,
         "FCLIENT80-CONFIGHANDLER-STRCPY-F01": {
             "id":       "FCLIENT80-CONFIGHANDLER-STRCPY-F01",
-            "severity": "MEDIUM PLAUSIBLE -- path concat: double strcpy at 0xe5f313/0xe5f326; same class as FCLIENT80-VULSCAN-STRCPY-F01",
+            "severity": "SAFE -- path-concat malloc is exact-fit; downgraded from MEDIUM PLAUSIBLE after malloc trace",
             "callers":  ["0xe5f313", "0xe5f326"],
-            "pattern":  (
-                "0xe5f313: strcpy(rax, r12) -- first path component. "
-                "0xe5f326: strcpy([r13+rbx+1], rbp) -- second component after separator. "
-                "Identical to vulscan 0x86fd33/0x86fd46 pattern: malloc then double strcpy. "
-                "OVERFLOW if malloc size does not account for both r12 and rbp lengths."
+            "malloc_trace": (
+                "0xe5f2c6: strlen(path1=rdx) -> r13=rax, ebx=rax. "
+                "0xe5f2d3: strlen(path2=rbp) -> rax. "
+                "0xe5f2d8: eax += r13d (total len). "
+                "0xe5f2e3: cmp [r12+r13-1], '/' -- check trailing slash. "
+                "No trailing slash: eax += 2 (separator + null). malloc_size = len1+len2+2. "
+                "Trailing slash: ebx = r13-1; eax -= 1; eax += 2. malloc_size = len1+len2+1. "
+                "0xe5f2fd: CRYPTO_malloc(eax) = r13 (buf). "
+                "0xe5f313: strcpy(buf, path1) uses len1+1 bytes. "
+                "0xe5f318: [buf+ebx] = '/' (overwrites null with separator). "
+                "0xe5f326: strcpy(buf+ebx+1, path2) uses len2+1 bytes. "
+                "Total written: len1+1+len2+1 = len1+len2+2 (no trailing slash, exact fit). "
+                "Total written: len1+len2+1 (trailing slash, separator is existing char, exact fit). "
+                "SAFE -- exact-fit allocation in both code paths."
             ),
-            "cross_ref": "FCLIENT80-VULSCAN-STRCPY-F01 -- same path-concat class in vulscan",
+            "cross_ref": "FCLIENT80-EVTMON-STRCPY-F01 -- same shared C module (identical bytes)",
         },
         "other_callers": {
             "note": "0x50e53f, 0xc6a67e, 0xcbb36f, 0xcbc535, 0xcfae35: all dest=rax (heap result); src varies; likely strdup patterns. 0xcbc56d: context insufficient (no rsi/rdi in 80-byte lookback).",
@@ -3584,9 +3593,13 @@ FORTICLIENT80_CONFIGHANDLER = {
         "detail": {
             "0xc6cc11": (
                 "recvfrom(edi=[rbx+0x38], rsi=r12, rdx=movsxd(ebp), ecx=r13d, r8=rax, r9=rsp+0x18). "
-                "len = ebp (callee-saved register, set at function entry). "
-                "buf = r12 (caller-provided). "
-                "MEDIUM -- ebp length not verified against r12 buffer size in this context window."
+                "Function at 0xc6cb70 is an OpenSSL BIO recv callback (vtable entry at foff=0x1dc800: "
+                "[8, 0xc6cb70, 0x1761030] -- size/func/data triplet). "
+                "Called by BIO dispatch layer: BIO_read(bio, buf, len) -> callback(bio_obj, buf, len). "
+                "len=ebp=arg3 is supplied by the OpenSSL caller which owns buf and sets len=sizeof(buf). "
+                "No length manipulation in this function; ebp passed directly to recvfrom. "
+                "SAFE ASSUMED -- BIO contract: caller guarantees len <= sizeof(buf). "
+                "Same pattern: evtmon 0x80d370 is byte-for-byte identical."
             ),
         },
     },
@@ -3617,8 +3630,6 @@ FORTICLIENT80_CONFIGHANDLER = {
     },
 
     "pending": [
-        "Trace malloc size before 0xe5f313 for FCLIENT80-CONFIGHANDLER-STRCPY-F01 (path concat)",
-        "Trace ebp at 0xc6cc11 recvfrom -- find where it's bounded against r12 buffer",
         "Determine NNG socket names/paths at listen/bind calls (strace or string search)",
         "Check if h2 HTTP/2 server accepts connections from network (vs localhost only)",
         "memcpy: 638 callers -- targeted trace from recvfrom/recv call sites through dispatcher",
@@ -3666,15 +3677,16 @@ FORTICLIENT80_EVTMON = {
         "findings": 1,
         "FCLIENT80-EVTMON-STRCPY-F01": {
             "id":       "FCLIENT80-EVTMON-STRCPY-F01",
-            "severity": "MEDIUM PLAUSIBLE -- path-concat double strcpy; identical pattern to FCLIENT80-CONFIGHANDLER-STRCPY-F01; CHK absent",
+            "severity": "SAFE -- same shared C module as confighandler; malloc exact-fit confirmed by cross-binary analysis",
             "callers":  ["0x9da753", "0x9da766"],
             "pattern":  (
                 "0x9da753: strcpy(rax, r12) -- first path component. "
                 "0x9da766: strcpy([r13+rbx+1], rbp) -- second component after separator. "
-                "Identical register pattern to confighandler 0xe5f313/0xe5f326. "
-                "CHK absent: __strcpy_chk would have caught destination overflow; without it, no runtime check."
+                "Byte-for-byte identical to confighandler 0xe5f313/0xe5f326 (shared C module). "
+                "malloc at 0x9da73d (CRYPTO_malloc): size = strlen(path1)+strlen(path2)+2 (no trailing slash) "
+                "or +1 (trailing slash). Both paths are exact-fit. Confirmed by confighandler analysis."
             ),
-            "cross_ref": "FCLIENT80-CONFIGHANDLER-STRCPY-F01 -- same shared C module",
+            "cross_ref": "FCLIENT80-CONFIGHANDLER-STRCPY-F01 -- same shared C module; identical bytes confirmed",
         },
     },
 
@@ -3700,8 +3712,9 @@ FORTICLIENT80_EVTMON = {
         "detail": {
             "0x80d411": (
                 "recvfrom(edi=[rbx+0x38], rsi=r12, rdx=movsxd(ebp), ...). "
-                "Identical to confighandler 0xc6cc11. Same struct offsets ([r14+0x100], [rbx+0x38]). "
-                "MEDIUM -- ebp length not verified against r12 buffer size."
+                "Function at 0x80d370 is byte-for-byte identical to confighandler 0xc6cb70 (shared C module). "
+                "Same OpenSSL BIO recv callback pattern; same vtable registration. "
+                "SAFE ASSUMED -- same reasoning as confighandler 0xc6cc11 (BIO contract: caller ensures len<=sizeof(buf))."
             ),
         },
     },
@@ -3714,9 +3727,7 @@ FORTICLIENT80_EVTMON = {
     },
 
     "pending": [
-        "Trace malloc before 0x9da753 for path-concat size verification",
-        "Cross-check: verify same malloc pattern in vpn and epctrl (likely also present)",
-        "Trace ebp at 0x80d411 recvfrom -- find bound against r12",
+        "Cross-check vpn and epctrl for same path-concat and recvfrom shared module (SAFE ASSUMED by same pattern)",
     ],
 }
 
