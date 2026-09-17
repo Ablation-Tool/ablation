@@ -5744,6 +5744,119 @@ FMG800_SAE_PRIVATE_KEY_PLAINTEXT = {
     "remediation": "Change sae-private-key field type from :string: to :passwd:; add to hexpwdattr",
 }
 
+FMG800_CIFS_KEYTAB_PLAINTEXT = {
+    "id":       "FMG800-CIFS-KEYTAB-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- CIFS Kerberos keytab stored as :string: (CWE-312)",
+    "severity": "HIGH -- Kerberos service keytab in plaintext config backups; offline ticket forgery if leaked",
+    "class":    "Cleartext storage of Kerberos keytab (CWE-312)",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 11662-11682 (obj 'cifs' -> table 'server-keytab')",
+
+    "description": (
+        "The CIFS inspection profile (obj 'cifs') includes a Kerberos server-keytab sub-table: "
+        "  server-credential-type: none:option:'opt:none credential-replication credential-keytab' "
+        "  domain-controller: :string:'sz:63;ds;mu;' "
+        "  table 'server-keytab': "
+        "    principal: :string:'sz:511;mu;' -- Kerberos service principal name "
+        "    keytab: :string:'sz:8191;mu;' -- Kerberos keytab file content "
+        "    password: :passwd:'sz:128;hd;' -- password field (ENC-encrypted) "
+        "The keytab field stores the raw Kerberos keytab content (standard krb5 keytab binary, base64 or hex). "
+        "A Kerberos keytab contains long-term Kerberos keys: AES-256-CTS-HMAC-SHA1 keys derived from the "
+        "service account password. These keys are used to decrypt Kerberos service tickets. "
+        "Inconsistency: the adjacent 'password' field uses :passwd: (ENC-156 encrypted), "
+        "but the 'keytab' field (which IS the cryptographic credential) uses :string: (plaintext). "
+        "Impact if config backup is obtained by attacker: "
+        "  1. Attacker extracts keytab from backup config (plaintext, sz:8191 = full keytab file). "
+        "  2. Attacker uses keytab to forge Kerberos service tickets for the registered principal "
+        "     (equivalent to a targeted silver ticket attack without needing the KRBTGT key). "
+        "  3. If FortiGate is domain-joined for CIFS inspection, the principal may have AD access "
+        "     to Windows file shares -- attacker impersonates the service account to read/write shares. "
+        "FortiGate uses this keytab when 'server-credential-type' is set to 'credential-keytab' "
+        "to authenticate to AD as a service for CIFS deep inspection."
+    ),
+
+    "cross_reference": [
+        "FMG800-GCK-PRIVATE-KEY-PLAINTEXT -- same :string: anti-pattern for cryptographic material",
+        "FMG800-SAE-PRIVATE-KEY-PLAINTEXT -- same :string: anti-pattern for private keys",
+    ],
+    "remediation": "Change keytab field type from :string: to :passwd: or :hex_passwd:; add to hexpwdattr list",
+}
+
+FMG800_ACME_PRIVATEKEY_PLAINTEXT = {
+    "id":       "FMG800-ACME-PRIVATEKEY-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- ACME account private key stored as :string: (CWE-312)",
+    "severity": "HIGH -- ACME account key in plaintext; attacker can issue/revoke certs for all ACME-managed domains",
+    "class":    "Cleartext storage of ACME account private key (CWE-312)",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 21783-21798 (global obj 'system acme' -> table 'accounts')",
+
+    "description": (
+        "The ACME (RFC 8555 / Let's Encrypt protocol) account table stores: "
+        "  privatekey: :string:'sz:8191;mu;' -- ACME account EC/RSA private key "
+        "  eab-key-id: :string:'255' -- External Account Binding key ID "
+        "  eab-key-hmac: :passwd:'128' -- EAB HMAC secret (ENC-156 ENCRYPTED) "
+        "The ACME account private key is used to sign all ACME protocol messages (certificate orders, "
+        "revocation requests, account updates) to the CA (Let's Encrypt, ZeroSSL, etc.). "
+        "Critical inconsistency: eab-key-hmac (a one-time setup credential) is stored as :passwd: (ENC-156). "
+        "The privatekey (the ongoing operational signing key, more sensitive) is stored as :string: (plaintext). "
+        "The EAB HMAC is used only once to bind an external account; the private key is used for every "
+        "certificate operation across the lifetime of the ACME account. "
+        "Impact if config backup is obtained: "
+        "  1. Attacker extracts ACME account private key from backup (plaintext, sz:8191). "
+        "  2. Attacker sends ACME revocation requests signed with the key to the CA. "
+        "  3. CA revokes all certificates issued to the ACME account -- denial of service on HTTPS. "
+        "  4. Attacker uses the key to issue new certificates for any domain the account has authorizations for "
+        "     (if domain control validation was already cached by the CA). "
+        "  5. New certificates can be used for MITM on any FortiGate-managed HTTPS service for that domain."
+    ),
+
+    "adjacent_protected": {
+        "eab-key-hmac": "ENC-156 :passwd: -- ironic: the less-critical EAB HMAC is encrypted",
+        "store-passphrase": "ENC-156 :passwd: -- ACME account keystore passphrase is encrypted",
+    },
+    "cross_reference": [
+        "FMG800-GCK-PRIVATE-KEY-PLAINTEXT -- same :string: anti-pattern for private keys",
+        "FMG800-CIFS-KEYTAB-PLAINTEXT -- same :string: anti-pattern for domain credentials",
+    ],
+    "remediation": "Change privatekey field type from :string: to :passwd:; add to hexpwdattr list",
+}
+
+FMG800_AUTO_SCRIPT_EXEC = {
+    "id":       "FMG800-AUTO-SCRIPT-EXEC",
+    "product":  "FortiManager 8.0.0 -- system auto-script 1023-byte CLI command execution surface",
+    "severity": "MEDIUM -- admin-access required; but provides persistent scheduled CLI execution with no command filtering",
+    "class":    "Admin-accessible persistent command execution via auto-script (CWE-77)",
+    "cwe":      "CWE-77",
+    "source":   "800.txt lines 23987-23995 (global table 'system auto-script')",
+
+    "description": (
+        "The 'system auto-script' global table defines scheduled CLI command executions: "
+        "  name: :string:'35' -- script identifier "
+        "  interval: 0:int:'0,31557600' -- run interval in seconds (0 = once; max ~1 year) "
+        "  repeat: 1:int:'lsz:2;' -- number of executions "
+        "  start: manual:option:'manual auto' -- trigger mode (manual or automatic on startup/interval) "
+        "  script: :string:'sz:1023;xs;' -- CLI commands to execute (1023 bytes, expandable) "
+        "  output-size: 10:int:'10,1024' -- max output retained (KB) "
+        "  timeout: 0:int:'0,300' -- execution timeout (seconds) "
+        "The 'script' field takes raw FortiOS CLI commands with no documented filtering or allowlisting. "
+        "With 'start: auto' and 'interval' set, the script runs on every boot and at each interval without "
+        "further admin interaction. "
+        "Attack scenario (post-compromise persistence): "
+        "  1. Attacker compromises admin account (or exploits auth bypass CVE on FMG management plane). "
+        "  2. Creates auto-script with 'start: auto', interval=60, repeat=0 (infinite). "
+        "  3. Script calls out to attacker C2 via 'execute ping' or 'diagnose debug' primitives, "
+        "     or modifies config (route injection, user creation, policy changes). "
+        "  4. Persistence survives reboots and admin session logout. "
+        "This is a supported feature, not a bug -- but its existence means any admin-level compromise "
+        "trivially installs persistent scheduled code execution that survives reboots. "
+        "Contrast with switch-controller custom-command (FMG800-SWITCH-CUSTOM-CMD): that sends commands "
+        "to managed FortiSwitch devices; auto-script executes on the FMG itself."
+    ),
+
+    "persistence_surface": "Any admin with 'system auto-script' write access can install persistent CLI execution",
+    "cross_reference": ["FMG800-SWITCH-CUSTOM-CMD -- switch-controller variant; commands sent to FortiSwitches"],
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
