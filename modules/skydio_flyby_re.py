@@ -44,6 +44,63 @@ from semantic_search import SemanticSearcher, describe_function, normalize_asm
 
 BINARY_DEFAULT = "/media/cowboy/research/Skydio/intel-vdt/re-material/libflyby_jni.so"
 
+# ── Manually confirmed function addresses (updated 2026-09-17) ────────────────
+# All from manual disassembly of libflyby_jni.so (BuildID b867c6540e28e1f2edc3ec0d6ecfc08f6ecbe4b2)
+CONFIRMED_ADDRS = {
+    # wire_proxy core dispatch
+    0x025c27a4: "WireProxy::HandleIncomingPacket -- packet type dispatcher (jump table @0x32cdfe2)",
+    0x025c2b6c: "HandleIncomingPacket type=2 STREAM path -> ParseFromArray(WireProxyRequest, payload, data_size) F25 LOCUS",
+    0x025c0504: "WireProxy::ParseInfo -- type=3 UNK alt trigger, F25 alt",
+    0x025c2bb8: "WireProxy::SendDatagram -- type=1 DGRAM path",
+
+    # USB callers of HandleIncomingPacket (only two direct callers)
+    0x02097e70:  "UsbHandler::DidReadLinkData -- SAFE: data_size=vector.end()-begin()",
+    0x02097f44:  "UsbHandler::HandleUsbLinkMessage -- data_size=arg_w4 from USB protocol",
+    0x02097ff4:  "UsbHandler::DidReadLcmData -- dispatches via vtable[4]",
+    0x017e1e4c:  "Java_com_skydio_djinni_IUsbHandler_CppProxy_native_didReadLinkData -- JNI bridge",
+
+    # TCP accept / relay path
+    0x025cb7b4:  "WireProxy::AcceptNewStream -- TCP accept callback (called when listen fd readable)",
+    0x025ccdb0:  "WireProxy::ReadStreamData -- per-client TCP relay; calls Recv+FindReplaceHost+WriteOutput; DOES NOT CALL HandleIncomingPacket",
+    0x025bfd3c:  "WireProxy::WriteOutput -- forwards LCM packet to all connected TCP streams",
+    0x025ba7e0:  "PrepTCPSocket -- sets SendBufferSize + SendSendTimeout; socket param config only",
+
+    # UDP relay path
+    0x025ceebc:  "WireProxy::ReadDatagram -- UDP relay; calls RecvFrom+WriteOutput; DOES NOT CALL HandleIncomingPacket",
+    0x025bd458:  "WireProxy::OpenUdpSocket -- binds UDP socket, registers recv callback",
+
+    # TCP server setup
+    0x025bbab4:  "WireProxy::Initialize -- subscribes 2 Skybus channels, calls OpenTcpSocket",
+    0x025bc604:  "WireProxy::OpenTcpSocket -- binds TCP server, registers AcceptNewStream callback",
+    0x025bcd4c:  "StreamSocket::Listen(5) -- TCP listen",
+
+    # Per-client fd callback
+    0x025d5c20:  "per-client fd callback operator() -- ldr WireProxy* from closure, call ReadStreamData(connection_index)",
+
+    # Other
+    0x025c3714:  "WireProxy::SendStreamData -- INFO type=0 subtype=0 path",
+    0x025bfc1c:  "WireProxy::WriteInfo -- publishes WireProxyInfo.tcp_port on Skybus WIRE_PROXY_INFO_PB",
+
+    # Callee functions
+    0x016a8aa0:  "PLT: WireProxy::ReadStreamData",
+    0x016c2c10:  "PLT: WireProxy::RemoveStreamNoLock",
+    0x01661ff0:  "PLT: WireProxy::WriteOutput",
+    0x016c5bf0:  "PLT: AcEventLoop::AddFileDescriptorCallback",
+    0x01695470:  "PLT: PrepTCPSocket",
+    0x016bd6d0:  "PLT: StreamSocket::Recv",
+    0x0169a0c0:  "PLT: WireProxy::FindReplaceHost -- rewrites embedded hostnames in relayed payload",
+    0x016b4890:  "PLT: DatagramSocket::RecvFrom",
+
+    # F25 vulnerability primitive
+    0x0165ddf0:  "google::protobuf::MessageLite::ParseFromArray(void const*, int) -- F25 sink",
+}
+
+# ── WireProxy architecture note ───────────────────────────────────────────────
+# External TCP/UDP sockets are RELAY-ONLY paths (ReadStreamData, ReadDatagram -> WriteOutput).
+# HandleIncomingPacket is ONLY called from UsbHandler (USB physical interface).
+# F25 is USB-physical-access-only; TCP/UDP external paths do not reach HandleIncomingPacket.
+# Skybus subscriptions (callbacks at WireProxy+0x180, WireProxy+0x1c8) receive internal IPC only.
+
 # ── ELF ARM64 function extraction ─────────────────────────────────────────────
 
 def parse_elf64_sections(data: bytes) -> dict:
