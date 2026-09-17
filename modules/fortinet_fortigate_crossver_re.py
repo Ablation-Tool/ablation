@@ -716,7 +716,7 @@ CROSSVER_IPS_DIFF_720_748 = {
                     "debug_module": "CONFIRMED -- luaopen_debug at 0x3ba350",
                     "bit_module": "CONFIRMED -- luaopen_bit at 0x3a3d50",
                     "jit_module": "CONFIRMED -- luaopen_jit at 0x3c07d0",
-                    "ffi_module": "NOT in openlibs table; would require require('ffi') via package.preload[1] -- loaders[1] not blocked by regloader",
+                    "ffi_module": "CONFIRMED via package.preload -- registration code at 0x3a06ed: lua_getfield(L, REGISTRY, '_PRELOAD'); lua_rawset(L, 'ffi', NaN-boxed luaopen_ffi at 0x3cb070); require('ffi') succeeds through loaders[1] (package.preload) which regloader does NOT touch",
                     "regloader_analysis": {
                         "source_va": "0x6c0248 (rodata)",
                         "source": "local function register_loader(f)\n    local loaders = package.loaders\n    loaders[2] = f\n    for i = 3, #loaders do loaders[i] = nil end\nend\nreturn register_loader",
@@ -800,5 +800,20 @@ LIBIPS_F01_LUA_SANDBOX_ESCAPE = {
         "affected_binaries":  "libips.so.new (IPS engine shared library)",
         "admin_path":        "Admin creating custom IPS rule with Lua can call os.execute() -- privilege escalation to root shell",
         "injection_path":    "CHAIN-F01 (FGFM impersonation) -- unauthenticated RCE if FGFM device enrollment accepted",
+    },
+
+    "ffi_confirmation": {
+        "preload_registration_va": "0x3a06ed -- ffi registered in package.preload before any Lua code runs",
+        "luaopen_ffi_va":          "0x3cb070 -- ffi module init function (NaN-boxed lightfunc in _PRELOAD table)",
+        "preload_key":             "_PRELOAD at VA 0x756d98; loaders[1] searches here; regloader does NOT modify loaders[1]",
+        "regloader_bypass":        "regloader targets loaders[2+] only; package.preload['ffi'] is untouched; require('ffi') succeeds",
+        "ffi_primitives": [
+            "ffi.cdef('...') -- define arbitrary C function signatures",
+            "ffi.C.system('cmd') -- call system() directly without going through Lua os module",
+            "ffi.C.execve('/bin/sh', ...) -- exec arbitrary binary",
+            "ffi.cast('char *', addr) -- arbitrary memory read/write via pointer cast",
+            "ffi.load('/path/to/lib.so') -- load arbitrary native .so",
+        ],
+        "combined_impact": "Three independent paths to OS exec from IPS Lua: os.execute (global), io.popen (global), ffi.C.system (via require('ffi'))",
     },
 }
