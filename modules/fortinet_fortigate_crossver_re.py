@@ -2352,18 +2352,20 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
 
         "LIBIPS-603-STRCPY-PROTO-DISPATCH": {
             "caller":    "0x32c096",
-            "function":  "0x32bec2",
-            "summary":   "strcpy into caller-provided dest from protocol-parsed attribute record; source is [r8+0x10] from a 0x20-byte array element",
+            "function":  "0x32bec0 (prologue; previously misidentified as 0x32bec2)",
+            "summary":   "strcpy dispatch case reachable only when type_code=0x11 AND rcx!=NULL; all 4 callers pre-zero rcx; effectively dead path",
             "analysis": {
-                "dest":        "rcx = arg3 of 0x32bec2 -- caller-allocated, size UNKNOWN",
-                "src":         "[r8+0x10] where r8 = r12 + (index * 0x20); r12 = [rdi+0x90] (protocol parse struct array)",
-                "src_fallback": "If [r8+0x10] is NULL: lea rax, [rip+0x9e558] (static string from RODATA); safe fallback",
-                "type_code":   "esi arg1 = protocol attribute type; dispatch table at 0x32c06f selects case; esi 0xb..0x12 reachable",
-                "proto_origin": "r8 iterates records from [rdi+0x90] array (count=[rdi+0x9c]); rdi is caller-passed parser struct; likely protocol packet data",
-                "null_guard":   "0x32bfd8: test rcx, rcx; je 0x32c209 -- dest checked for NULL before any copy",
+                "dispatch":    "jump table at 0x4892a0: esi-0xc=5 (esi=0x11) -> 0x32c081 (strcpy case). Other cases: 0=int-read, 1=error, 2/3=strlen, 4=strlen, 5=strcpy, 6=int-read.",
+                "null_guard":  "0x32bfd8: test rcx, rcx; je 0x32c209 -- rcx checked for NULL before dispatch; blocks strcpy if rcx=NULL",
+                "callers": {
+                    "0x331b4c": "type_code=0xd; rcx=rsi (arg2 of outer func). esi=0xd dispatches to string-compare path at 0x32c147 (NOT strcpy). SAFE.",
+                    "0x331bc0": "type_code=0x12; rcx=0 (xor ecx,ecx). Jump table case 6 -> int-read. rcx=NULL also blocks. SAFE.",
+                    "0x331be2": "type_code=0x12; rcx=0 (xor ecx,ecx). Same as above. SAFE.",
+                    "0x331cd6": "type_code=r12d (variable); rcx=0 (xor ecx,ecx at 0x331ccb). NULL check at 0x32bfdb blocks strcpy regardless of type_code. SAFE.",
+                },
+                "src_origin": "[r8+0x10] from protocol attribute array [rdi+0x90] -- not analyzed further; path unreachable",
             },
-            "verdict": "MEDIUM PLAUSIBLE -- source [r8+0x10] is from a protocol-attribute record (potentially network-controlled string); destination is caller-provided with unknown allocation size; NULL-dest guard exists but no length bound on strcpy; caller analysis required to confirm or refute overflow potential",
-            "pending": "Trace callers of 0x32bec2 to determine destination buffer allocation size; determine whether [r8+0x10] strings originate from raw packet bytes or from pre-validated rule signatures",
+            "verdict": "SAFE (dead path) -- strcpy at 0x32c096 is operationally unreachable: all callers pre-zero rcx (NULL dest); NULL check at 0x32bfdb universally blocks execution before dispatch reaches strcpy case",
         },
 
         "LIBIPS-603-STRCAT-CALLERS": {
@@ -2400,7 +2402,7 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
         },
 
         "603_strcpy_conclusion": {
-            "finding":    "10 strcpy callers in 6.0.3 libips.so: 7 are safe strdup patterns. 2 struct-field callers (0x931af/0x931bf) are LOW due to clamped sources and matching dest sizes. 1 protocol-dispatch caller (0x32c096) is MEDIUM PLAUSIBLE pending caller dest-size verification.",
+            "finding":    "10 strcpy callers in 6.0.3 libips.so: 7 are safe strdup patterns. 2 struct-field callers (0x931af/0x931bf) are LOW due to clamped sources and matching dest sizes. 1 protocol-dispatch caller (0x32c096) is SAFE (dead path -- all 4 callers pre-zero rcx; NULL guard blocks strcpy universally).",
             "hardening_gap": "6.0.3 has ZERO _chk fortified variants (no __strcpy_chk, no __sprintf_chk). All dangerous function calls are raw, unfortified, no canary. Binary is 5MB vs 18.5MB in 8.0.0 -- smaller attack surface but zero mitigations.",
             "vs_newer_versions": "7.4.8 and 8.0.0 add __strcpy_chk callers and __FORTIFY_SOURCE protection for some callsites; 6.0.3 has none of this.",
         },
