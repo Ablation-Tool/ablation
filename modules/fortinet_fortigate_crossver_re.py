@@ -4708,3 +4708,145 @@ FMG800_SEMANTIC_SWEEP = {
         "Trace /cgi-bin/module/flatui_auth FCGI path: Apache -> Unix socket -> fmgd auth handler",
     ],
 }
+
+# ---------------------------------------------------------
+# FortiGate 8.0.0 libav.so.new -- AV engine flow API RE
+# ---------------------------------------------------------
+FGT800_LIBAV_FLOW_API = {
+    "id":       "FGT800-LIBAV-FLOW",
+    "product":  "FortiGate 8.0.0 libav.so.new -- pure-C AV engine, flow-based scan API",
+    "binary":   "/lib/libav.so.new (ELF64 x86-64 stripped; 15MB; BuildID sha1:5d57f4f663acc978695cea23796b7e68aaba87da)",
+    "language": "C (no Rust, CET enabled: endbr64 at every function entry)",
+    "source_path": "/home/devops/jenkins_slave/workspace/Build_Steps/Chroot_Build_Docker/AVEngine/11/SVN_REPO_CHILD/corelib/sigdb/virloader.c",
+
+    "function_count": 5236,
+    "semantic_sweep": {
+        "vectors_saved": "/tmp/libav800_vecs.npy",
+        "prologues_saved": "/tmp/libav800_prologues.json",
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "scan_time_s": 96.9,
+        "method": "endbr64 (f3 0f 1e fa) scan within .text bounds -- CET markers used as function entry points instead of 55 48 89 E5 prologue (binary uses -fomit-frame-pointer)",
+    },
+
+    "text_section": {
+        "file_offset": "0xf5280",
+        "vaddr":       "0xf5280",
+        "size_bytes":  "0x875d4f (8.3MB)",
+    },
+
+    "flow_api": {
+        "avFlowOpen":  {
+            "va": "0x1369b0",
+            "desc": "Allocates 744-byte (0x2e8) flow context with malloc; initializes state machine fields",
+        },
+        "avFlowWrite": {
+            "va":   "0x1371c0",
+            "desc": "Accumulates data into mmap'd shared-memory buffer; dispatches scan on boundaries",
+            "args": "rdi=flow_ctx, rsi=data_ptr, rdx=chunk_size",
+            "guards": {
+                "chunk_size_max": "0x10000 (65536 bytes) -- checked at 0x1371e8 before any write",
+                "total_max":      "0x3fffffff (1073741823 bytes) -- checked at 0x137210",
+            },
+            "accumulation": {
+                "fn_va":   "0x135a40",
+                "desc":    "Extends mmap'd buffer pages (mprotect via 0x871640) then calls memcpy",
+                "memcpy":  "memcpy(write_ptr_from_0x1489d0, data_ptr, chunk_size) -- chunk_size <= 0x10000",
+                "verdict": "NO OVERFLOW: chunk_size bounded by guard before this call",
+            },
+            "flush_path": "0x14c010 -- triggered when chunk > 0x10000 OR total > 0x3fffffff; no direct memcpy",
+            "scan_dispatch": {
+                "primary_va":    "0x136500",
+                "secondary_va":  "0x136e40",
+                "ctx_init_va":   "0x11c010",
+                "desc": "0x136500 clamps chunk_size to ctx[0x28] then calls 0x11c010 (scan context init on stack, 0x440 bytes) then dispatches to scan engine function table",
+            },
+        },
+        "avFlowClose": {"va": "0x137a20"},
+        "avFlowGet":   {"va": "0x135e10", "desc": "jump table dispatch on ebx type 0-6; returns flow context fields"},
+    },
+
+    "mmap_buffer": {
+        "size_constant": "0xc66000 (13,008,896 bytes)",
+        "flags_guess":   "MAP_SHARED|MAP_ANONYMOUS (0xc66000 used as mmap flags arg)",
+        "base_ptr_offset_in_ctx": "0x48",
+        "write_ptr_fn":  "0x1489d0 -- computes write offset from ctx[0x48], ctx[0x50], ctx[0x58]",
+    },
+
+    "zip_parser_trace": {
+        "va": "0x1af9ac (function containing 0x1af9dd)",
+        "signatures_checked": {
+            "PK_local":   "0x04034b50 (PK\\x03\\x04) -- local file header",
+            "PK_central": "0x02014b50 (PK\\x01\\x02) -- central directory header",
+        },
+        "lfh_parsing": {
+            "filename_len_read": "movzx esi, word ptr [rbp+0x1a] (LFH offset 26)",
+            "bounds_check": "lea r15d, [esi+0x1e]; cmp rcx, r15 -- verifies header fits in input buffer before processing",
+            "verdict": "Proper bounds check before filename pointer arithmetic",
+        },
+        "cdh_parsing": {
+            "filename_len": "movzx edx, word ptr [rax+0x1c] (CDH offset 28)",
+            "extra_len":    "movzx r14d, word ptr [rax+0x1e] (CDH offset 30)",
+            "comment_len":  "movzx r14d, word ptr [rax+0x20] (CDH offset 32)",
+            "traversal":    "r15 = filename_len + 0x2e; rax = start + r15 -- correct CDH traversal arithmetic",
+            "verdict": "No integer overflow in CDH traversal; all fields are word-sized (max 65535)",
+        },
+        "extraction_dispatch": {
+            "va": "0x1af340",
+            "desc": "Signature matcher: strncasecmp(filename, static_pattern, filename_len) + compressed_size + date checks; returns 1 on match; does NOT extract/decompress data",
+        },
+    },
+
+    "sprintf_strncpy_audit": {
+        "sprintf_callers": 65,
+        "strncpy_callers": 56,
+        "hot_spot_0x2d4b": {
+            "strncpy_va": "0x2d4b63",
+            "sprintf_va":  "0x2d4b8e",
+            "pattern": "strncpy with cmovae-capped size (max 16 bytes); sprintf uses static RODATA format string; no user-controlled format string or unbounded destination",
+            "verdict": "SAFE",
+        },
+        "hot_spot_0x1f1a": {
+            "strncpy_va": "0x1f1a1a",
+            "sprintf_va":  "0x1f1a7d",
+            "pattern": "sprintf uses [rip+static] format string; no user-controlled format string",
+            "verdict": "SAFE",
+        },
+    },
+
+    "decompression": {
+        "zlib_inflate":   "NOT in PLT -- statically linked or decompression handled internally",
+        "bz2_decompress": "NOT in PLT",
+        "note": "GZIP magic \\x1f\\x8b found at dense cluster 0x103ab4-0x103bd7; internal decompression not traced",
+    },
+
+    "overall_verdict": (
+        "No direct memory corruption found in avFlowWrite accumulation path. "
+        "The flow API enforces chunk_size <= 0x10000 and total <= 0x3fffffff before any memcpy. "
+        "ZIP parser traversal is correctly bounds-checked. "
+        "sprintf/strncpy audit: 65 + 56 callers; hot spots use static format strings and size-capped copies. "
+        "Novel vulnerability surface would require: "
+        "  (1) Tracing internal decompression (statically linked inflate/lzma/bzip2) for integer overflow in allocation, "
+        "  (2) Fuzzing the scan engine with malformed PE/OLE2/ZIP archives, "
+        "  (3) Triggering edge cases in the scan state machine at 0x136e40 with specific flag combinations."
+    ),
+}
+
+FGT800_LIBAV_F01_FLOW_LIMITS = {
+    "id":       "FGT800-LIBAV-F01",
+    "product":  "FortiGate 8.0.0 libav.so.new -- avFlowWrite size limits are not defense-in-depth",
+    "severity": "INFORMATIONAL -- limits present, DoS surface remains",
+    "class":    "Resource exhaustion via repeated avFlowWrite calls (CWE-400)",
+
+    "description": (
+        "avFlowWrite allows a single flow to accumulate up to 0x3fffffff (1GB) of data before flushing. "
+        "A malicious file (crafted ZIP or archive) that reaches this limit will trigger repeated flush+scan cycles. "
+        "Each flush calls 0x14c010 which dispatches 0x136e40 (scan function) on the entire buffered data. "
+        "If 0x3fffffff bytes at a pathological structure causes scan engine exponential backtracking "
+        "(regex-based scanner or decompression bomb), it constitutes a DoS against the AV subsystem. "
+        "This does not bypass AV scanning (the limits cause flush, not skip)."
+    ),
+
+    "chunk_limit":  "0x10000 per write call",
+    "total_limit":  "0x3fffffff per flow",
+    "mitigation":   "Lower the total limit or implement per-flow timeout; enforce decompressed-size limits in internal decompressors",
+}
