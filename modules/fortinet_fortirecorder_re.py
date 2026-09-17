@@ -48,48 +48,52 @@ PLATFORM = {
 FRC_F01_HARDCODED_AES_KEY = {
     "id":       "FRC-F01",
     "product":  "Fortinet FortiRecorder Mobile Android APK",
-    "severity": "HIGH -- hardcoded symmetric key; all FortiRecorder installations share the same encryption material",
+    "severity": "HIGH -- two hardcoded symmetric keys; all FortiRecorder installations share identical encryption material",
     "class":    "Hardcoded cryptographic key (CWE-321)",
 
     "description": (
-        "The FRC.Crypto class ("
-        "Lcom/fortinet/fortirecorder/managers/FRC/Crypto;) uses a hardcoded 32-character "
-        "AES-256 key: '12345678901234567890123456789012'. "
-        "This key is loaded via a DEX const-string instruction at offset 0x1aba04 "
-        "(string pool index 2333, ULEB128 length prefix 0x20 = 32 bytes). "
-        "The cipher suite is AES/CBC/PKCS5Padding (confirmed from DEX string pool). "
-        "The Crypto class provides strToEncrypt/strToDecrypt operations used by the FRCC "
-        "protocol and BLE WiFi provisioning flow to encrypt/decrypt data payloads sent "
-        "between the app and FortiRecorder NVR cameras."
+        "The FRC.Crypto class (Lcom/fortinet/fortirecorder/managers/FRC/Crypto;) "
+        "contains two distinct hardcoded 32-byte AES-256 keys present in the APK. "
+        "Key 1 ('12345678901234567890123456789012') is the primary Crypto class key "
+        "loaded at DEX const-string offset 0x1aba04 (string pool index 2333). "
+        "Key 2 ('UMohK5Sevaep3ohLaeLea3EpPhuRa1Ja') is a second hardcoded 32-byte key "
+        "loaded in FRCC.t() (the UserAuthenticate packet builder, code_off=0x1ab998) "
+        "alongside the primary key, used in the FRCC auth frame construction. "
+        "The cipher suite is AES/CBC/PKCS5Padding. "
+        "Both keys are embedded in the publicly distributed APK; any party with the APK "
+        "has both decryption keys for all encrypted FRCC and BLE traffic from all "
+        "FortiRecorder Android app deployments."
     ),
 
     "evidence": {
-        "key_value":        "12345678901234567890123456789012 (32 ASCII chars = 256-bit AES key)",
-        "dex_offset":       "0x1aba04 (const-string opcode 0x1a, register v7, string index 0x091d)",
-        "string_pool_idx":  "2333 (0x91d) in classes.dex string_ids table (offset 0x3c4c91)",
+        "key1_value":       "12345678901234567890123456789012 (32 ASCII chars = 256-bit AES key)",
+        "key1_dex_offset":  "0x1aba04 (const-string opcode 0x1a; string pool idx 2333 = 0x91d)",
+        "key1_usage":       "BLE WiFi provisioning (BluetoothWifiSettings) + FRCC auth frame",
+        "key2_value":       "UMohK5Sevaep3ohLaeLea3EpPhuRa1Ja (32 ASCII chars = 256-bit AES key)",
+        "key2_method":      "FRCC.t() at code_off=0x1ab998, insns +0x003e (const-string v4)",
+        "key2_usage":       "FRCC UserAuthenticate packet builder (OpCode=114); loaded before Crypto.a() call",
         "cipher_mode":      "AES/CBC/PKCS5Padding (string pool confirmed)",
-        "class":            "Lcom/fortinet/fortirecorder/managers/FRC/Crypto;",
-        "related_strings":  "strToEncrypt, strToDecrypt, Error while encrypting:",
-        "prng":             "SecureRandom.getInstance('SHA1PRNG') -- deprecated insecure PRNG",
+        "crypto_class":     "Lcom/fortinet/fortirecorder/managers/FRC/Crypto; method a() = encrypt/decrypt",
+        "prng":             "SecureRandom.getInstance('SHA1PRNG') -- deprecated insecure PRNG for IV",
     },
 
     "impact": (
-        "An attacker who captures BLE provisioning traffic between the FortiRecorder "
-        "mobile app and a camera can decrypt all encrypted payloads using this fixed key. "
-        "This includes WiFi WPA2 passphrases (see FRC-F02). "
-        "All FortiRecorder Android app deployments share the same key -- no per-device "
-        "or per-installation variation. AES-CBC with a hardcoded key provides no "
-        "confidentiality guarantee."
+        "An attacker with the APK (publicly obtainable) and network access can decrypt: "
+        "(1) BLE provisioning traffic including WiFi WPA2 passphrases (FRC-F02), "
+        "(2) FRCC TCP auth frames containing NVR username and password (FRC-F05). "
+        "No per-device or per-installation key variation exists. "
+        "AES-CBC with a static key provides no semantic security."
     ),
 
     "reproduction": (
-        "1. Capture BLE advertisement/GATT traffic during camera WiFi provisioning "
-        "(BluetoothWifiSettings activity). "
-        "2. Decrypt payload with AES-256-CBC key='12345678901234567890123456789012'. "
-        "3. Recover WiFi WPA2 passphrase from decrypted JSON."
+        "BLE path: capture GATT traffic during camera provisioning; "
+        "decrypt with AES-256-CBC key='12345678901234567890123456789012'. "
+        "FRCC auth path: capture TCP stream on frccPort; "
+        "filter OpCode=114 frames; decrypt ExtraData with key='UMohK5Sevaep3ohLaeLea3EpPhuRa1Ja' "
+        "and/or '12345678901234567890123456789012'; recover NVR username+password."
     ),
 
-    "remediation": "Generate random per-session AES key via secure key agreement (ECDH or BLE pairing key derivation).",
+    "remediation": "Replace both keys with ECDH ephemeral key agreement per session. Never embed symmetric keys in APK.",
 }
 
 
@@ -316,21 +320,26 @@ FRC_F05_FRCC_AUTH_PLAINTEXT = {
     ),
 
     "evidence": {
-        "frcc_password_field": "password: Ljava/lang/String; in FRCC (class_idx=2870, field_ids table)",
-        "frcc_username_field": "userName: Ljava/lang/String; in FRCC (class_idx=2870, field_ids table)",
-        "auth_opcode":        "Frc_Op_UserAuthenticate = 114 (S), FRCCKt static_values_off=0x4e2948",
-        "transport":          "java.net.Socket (TcpClient); no SSLSocket in class list",
-        "aes_key":            "FRC.Crypto hardcoded key 12345678901234567890123456789012 (FRC-F01, offset 0x1aba04)",
-        "session_cookie":     "cookie: [B (32 bytes, CLIENT_COOKIE_LEN=32) stored after auth -- also recoverable",
+        "confirmed_method":    "FRCC.t() at code_off=0x1ab998 (bytecode-confirmed UserAuthenticate builder)",
+        "opcode_set":          "const/16 v4, #114 -> FrcPacketHeader.a(v2,v4) at insns +0x0176 (sets OpCode=114)",
+        "userName_load":       "iget-object v1, v11, FRCC.userName:String at insns +0x00bc",
+        "password_load":       "iget-object v2, v11, FRCC.password:String at insns +0x00de",
+        "payload_assembly":    "f.a(LLL)[B calls at +0x0118-+0x0144 concatenate userName+password bytes",
+        "encryption_call":     "new-instance Crypto at +0x0180; invoke-virtual Crypto.a(LLL)String at +0x018a",
+        "hardcoded_key2":      "const-string v4, 'UMohK5Sevaep3ohLaeLea3EpPhuRa1Ja' at insns +0x003e (auth frame key)",
+        "hardcoded_key1":      "const-string v7, '12345678901234567890123456789012' at insns +0x005c (also loaded)",
+        "transport":           "java.net.Socket (TcpClient); no SSLSocket observed in class list",
+        "session_cookie":      "cookie: [B (32 bytes, CLIENT_COOKIE_LEN=32) loaded at +0x0054 into auth payload",
+        "credential_scrub":    "Arrays.fill(buf, 0) at +0x0152 (36-byte zero after assembly -- developer aware of risk)",
     },
 
     "reproduction": (
         "1. Position on LAN between FortiRecorder app and NVR. "
-        "2. Capture TCP stream on frccPort (default port: FRCC.port field, resolved at runtime). "
-        "3. Filter frames with OpCode bytes = 0x0072 (114 LE short at byte offset 2 of header). "
-        "4. Extract ExtraData payload from the frame (offset = fixed header size, length = ExtraDataLength). "
-        "5. Decrypt with AES-256-CBC key='12345678901234567890123456789012'. "
-        "6. Parse decrypted payload for username/password fields."
+        "2. Capture TCP stream on frccPort (FRCC.port field). "
+        "3. Filter frames: OpCode = 0x0072 (114 LE short at header byte offset 2). "
+        "4. Extract ExtraData (bytes from fixed header end, length = ExtraDataLength field). "
+        "5. Decrypt with AES-256-CBC key='UMohK5Sevaep3ohLaeLea3EpPhuRa1Ja' (auth frame key). "
+        "6. Parse decrypted payload: userName bytes (null-terminated) + password bytes."
     ),
 
     "impact": (
@@ -352,10 +361,6 @@ FRC_F05_FRCC_AUTH_PLAINTEXT = {
 # Pending findings
 # ---------------------------------------------------------
 pending_findings = [
-    "FRCC auth ExtraData format: extract bytecode from FRCC$authenticate$1$1$1 to confirm "
-    "that Crypto.strToEncrypt is called on the credential payload before transmission; "
-    "source: classes.dex Lcom/fortinet/fortirecorder/managers/FRC/FRCC$authenticate*; 2026-09-17",
-
     "FaceUploadActivity biometric data: reverse data format and transport -- "
     "does facial template upload use the same hardcoded AES key or a separate channel; "
     "source: com.fortinet.fortirecorder.activities.FaceUploadActivity; 2026-09-17",
@@ -366,6 +371,10 @@ pending_findings = [
 
     "frccPort value: determine the default NVR port used for FRCC TCP connections; "
     "search FRCCKt or NVRManager for port constant or configuration key; 2026-09-17",
+
+    "Crypto.a() argument role: confirm which argument to Crypto.a(v4,v1,v0) is the "
+    "plaintext vs the key -- signature is Crypto.a(LLL)String with 3 Object args; "
+    "source: FRCC.t() code_off=0x1ab998 insns +0x018a; 2026-09-17",
 ]
 
 
