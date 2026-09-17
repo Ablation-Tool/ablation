@@ -9,6 +9,12 @@ This module covers the actual application code (JavaScript/Electron).
 Architecture correction: FortiFone is an Electron application, NOT a native Win32 SIP client.
 Prior findings FPHONE-F01 (lstrcpyA SIP overflow) and FPHONE-F02 (DLL hijacking) were from
 the NSIS stub (loader) only; the actual SIP stack is JavaScript (SIP.js 0.11.6).
+
+macOS ARM64 section (FPHONE-MAC-*):
+Source: FortiFone_mac_v7.0_b141_arm64.dmg (136.4MB Apple UDIF DMG)
+        -> APFS container (509.9MB) -> FortiFone.app bundle
+Method: UDIF block decompression (385 zlib blocks), APFS B-tree traversal,
+        Mach-O load command parsing, binary string extraction
 """
 
 # ---------------------------------------------------------
@@ -542,4 +548,261 @@ FPHONE_F13_ADAPTIVE_CARDS = {
         '"actions":[{"type":"Action.OpenUrl","title":"Join Meeting",'
         '"url":"javascript:require(\'child_process\').exec(\'calc\')"}]}'
     ),
+}
+
+
+# =============================================================================
+# macOS ARM64 findings -- FortiFone_mac_v7.0_b141_arm64.dmg
+# Source analysis: APFS container from 136.4MB Apple UDIF DMG
+# =============================================================================
+
+
+# ---------------------------------------------------------
+# FPHONE-MAC-F01: macOS ARM64 bundle architecture
+# ---------------------------------------------------------
+FPHONE_MAC_F01_MACOS_ARCH = {
+    "id":       "FPHONE-MAC-F01",
+    "product":  "FortiFone v7.0.5-b141 macOS ARM64 (FortiFone_mac_v7.0_b141_arm64.dmg)",
+    "severity": "INFO -- architecture inventory; attack surface defined by Electron + Squirrel",
+    "class":    "Architecture analysis",
+
+    "dmg_structure": {
+        "container_format": "Apple UDIF DMG (koly trailer at FO 0x820d4b9)",
+        "apfs_partition": "995973 sectors = 509.9MB; magic NXSB block_size=4096 block_count=124496",
+        "decompressed_to": "/tmp/fortifone_apfs.img (509.9MB, 385 zlib blocks decompressed)",
+        "volume_name": "FortiFone 7.0.5-b141-1776974466-GA-arm64",
+        "volume_uuid": "e5444850f114a9180100000000000000",
+        "num_files": 191,
+        "num_dirs":  183,
+    },
+
+    "binary_inventory": {
+        "main_executable": {
+            "phys_block": 432,
+            "uuid": "4c4c4439-5555-3144-a1c7-13c1a944ce6f",
+            "arch": "ARM64",
+            "filetype": "MH_EXECUTE",
+            "ncmds": 16,
+            "imports": ["@rpath/Electron Framework.framework/Electron Framework", "/usr/lib/libSystem.B.dylib"],
+            "note": "thin Electron wrapper -- all app logic in JavaScript ASAR bundle",
+        },
+        "electron_framework": {
+            "phys_block": 39931,
+            "uuid": "4c4c4485-5555-3144-a112-ee32e6ed0440",
+            "arch": "ARM64",
+            "filetype": "MH_DYLIB",
+            "ncmds": 76,
+            "text_vmsize": "0x8678000 (135MB)",
+            "id": "@rpath/Electron Framework.framework/Electron Framework",
+            "imports_notable": [
+                "@rpath/libffmpeg.dylib",
+                "@rpath/Squirrel.framework/Squirrel",
+                "@rpath/ReactiveObjC.framework/ReactiveObjC",
+                "@rpath/Mantle.framework/Mantle",
+                "/System/Library/Frameworks/LocalAuthentication.framework/Versions/A/LocalAuthentication",
+                "/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation",
+                "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
+                "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+            ],
+        },
+        "helper_renderer": {
+            "phys_block": 39888,
+            "uuid": "4c4c4485-5555-3144-a15c-52b1655442d9",
+            "note": "FortiFone Helper (Renderer).app -- sandboxed (libsandbox.1.dylib)",
+        },
+        "helper_gpu": {
+            "phys_block": 97380,
+            "uuid": "4c4c44a5-5555-3144-a1fe-39e065ead909",
+            "note": "FortiFone Helper (GPU).app -- sandboxed",
+        },
+        "helper_plugin": {
+            "phys_block": 97418,
+            "uuid": "4c4c44fc-5555-3144-a1b1-8f14abc83dea",
+            "note": "FortiFone Helper (Plugin).app -- sandboxed",
+        },
+        "libffmpeg": {
+            "phys_block": 96411,
+            "uuid": "4c4c44b7-5555-3144-a167-7b50fccda3be",
+            "arch": "ARM64",
+            "filetype": "MH_DYLIB",
+            "id": "@loader_path/libffmpeg.dylib",
+            "text_size": "1818624 bytes (~1.7MB)",
+            "total_filesize": "2116272 bytes (2MB)",
+        },
+        "libEGL": {"phys_block": 90560, "id": "./libEGL.dylib"},
+        "libGLESv2": {"phys_block": 94644, "id": "./libGLESv2.dylib"},
+        "libvk_swiftshader": {"phys_block": 90621, "id": "@rpath/libvk_swiftshader.dylib"},
+        "squirrel_framework": {"phys_block": 97313, "id": "@rpath/Squirrel.framework/Squirrel"},
+        "shipit_installer": {"phys_block": 97276, "ncmds": 24, "note": "Squirrel ShipIt installer helper"},
+        "reactive_objc": {"phys_block": 97179, "id": "@rpath/ReactiveObjC.framework/ReactiveObjC"},
+        "mantle": {"phys_block": 97351, "id": "@rpath/Mantle.framework/Mantle"},
+        "ip_detection_utility": {"phys_block": 38722, "ncmds": 18, "imports": ["libcurl.4.dylib"],
+                                  "note": "standalone ARM64 binary; calls https://ifconfig.me for external IP"},
+        "crashpad_handler": {"phys_block": 96928, "ncmds": 28,
+                              "note": "Google Crashpad crash handler; 1MB; embeds BoringSSL + Chromium base"},
+    },
+}
+
+
+# ---------------------------------------------------------
+# FPHONE-MAC-F02: libffmpeg.dylib pre-auth VoIP codec attack surface
+# ---------------------------------------------------------
+FPHONE_MAC_F02_LIBFFMPEG = {
+    "id":       "FPHONE-MAC-F02",
+    "product":  "FortiFone v7.0.5-b141 macOS ARM64 -- libffmpeg.dylib N-115016-g631703bfb9",
+    "severity": "HIGH -- pre-auth media parsing attack surface; FFmpeg dev build (not a stable release)",
+    "class":    "Binary exploitation via malformed media stream (CWE-119, CWE-122)",
+
+    "version": {
+        "string": "FFmpeg version N-115016-g631703bfb9",
+        "libavformat": "Lavf60.21.101 (FFmpeg 6.x era)",
+        "build_type": "development build (git commit N-115016-g631703bfb9), NOT a stable release",
+    },
+
+    "codec_surface": {
+        "video": ["H.264", "HEVC/H.265", "VP8", "VP9"],
+        "audio_telephony": [
+            "pcm_mulaw (G.711 mu-law)", "pcm_alaw (G.711 A-law)",
+            "adpcm_g722 (G.722)", "adpcm_g726 (G.726)",
+            "amr_nb (AMR-NB)", "amr_wb (AMR-WB)",
+            "opus / libopus", "AAC / HE-AAC / HE-AACv2", "aac_latm",
+        ],
+        "subtitle": ["WebVTT (D_WEBVTT/CAPTIONS, D_WEBVTT/DESCRIPTIONS)"],
+        "adpcm_variants": "42 ADPCM codec variants (game/media formats)",
+    },
+
+    "attack_vectors": {
+        "rtp_voip": (
+            "FortiFone receives SIP INVITE -> negotiates RTP payload type -> libffmpeg decodes incoming RTP stream. "
+            "Malformed G.711/G.722/AMR/Opus RTP packet -> decoder bug -> heap/stack corruption. "
+            "Attack is PRE-AUTH: caller sends INVITE before any authentication is complete."
+        ),
+        "h264_rtp": (
+            "H.264 RTP payload (RFC 6184) parsed by libffmpeg H264 decoder. "
+            "Known H.264 NAL unit parsing bugs (e.g., CVE-2022-3964 class) apply to this dev build. "
+            "Fragmented NAL unit reassembly bugs in FU-A/STAP-A modes."
+        ),
+        "rtsp_stream": (
+            "Electron Framework also processes RTSP (for screen share / video conference). "
+            "libffmpeg RTSP session description parsing (SDP): malformed SDP in RTSP DESCRIBE response "
+            "-> format string or bounds issues in sdp.c."
+        ),
+        "webvtt_subtitle": (
+            "WebVTT subtitle injection via WebRTC data channel or RTSP: "
+            "D_WEBVTT/CAPTIONS parser in libffmpeg -> buffer parsing in subtitles/webvttdec.c."
+        ),
+    },
+
+    "additional_note": (
+        "The libffmpeg build uses Chromium's vendored Opus (third_party/opus/src/). "
+        "Assertion paths confirm source from Electron/Chromium third_party tree. "
+        "Not built from a stable FFmpeg tag -- any fixes after N-115016 are absent."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FPHONE-MAC-F03: External IP disclosure via ifconfig.me
+# ---------------------------------------------------------
+FPHONE_MAC_F03_IFCONFIG_ME = {
+    "id":       "FPHONE-MAC-F03",
+    "product":  "FortiFone v7.0.5-b141 macOS ARM64 -- IP detection utility (block 38722, libcurl 8.4.0)",
+    "severity": "LOW -- privacy disclosure; device presence leaked to third-party service",
+    "class":    "Information exposure to third party (CWE-359)",
+
+    "binary": {
+        "phys_block": 38722,
+        "size": "52992 bytes (51KB)",
+        "arch": "ARM64 MH_EXECUTE",
+        "imports": ["/usr/lib/libcurl.4.dylib", "/usr/lib/libSystem.B.dylib"],
+        "strings": {
+            "url": "https://ifconfig.me",
+            "user_agent": "curl/8.4.0",
+        },
+    },
+
+    "description": (
+        "FortiFone bundles a standalone ARM64 binary that calls https://ifconfig.me via libcurl "
+        "to determine the device's external (NAT) IP address. "
+        "Purpose: NAT detection for SIP registration and ICE/STUN candidate selection. "
+        "ifconfig.me is a third-party public service (not operated by Fortinet). "
+        "Every FortiFone session leaks the device's external IP, timestamp, and User-Agent to "
+        "ifconfig.me at startup, before any user authentication or VPN connection."
+    ),
+
+    "attack_surface": (
+        "ifconfig.me response is returned as the public IP. "
+        "If DNS for ifconfig.me is poisoned (MITM on corporate networks), "
+        "an attacker can return a crafted IP that influences SIP/ICE behavior. "
+        "Also: ifconfig.me logs all client IPs -- mass correlation attack possible."
+    ),
+
+    "remediation": "Replace ifconfig.me with a Fortinet-operated IP reflection endpoint or use STUN (RFC 5389) directly.",
+}
+
+
+# ---------------------------------------------------------
+# FPHONE-MAC-F04: Squirrel auto-update ShipIt installer attack surface
+# ---------------------------------------------------------
+FPHONE_MAC_F04_SQUIRREL_SHIPIT = {
+    "id":       "FPHONE-MAC-F04",
+    "product":  "FortiFone v7.0.5-b141 macOS ARM64 -- Squirrel ShipIt installer (block 97276)",
+    "severity": "MEDIUM -- auto-update installer; code signature check via SecCodeCheckValidity; known Squirrel attack classes",
+    "class":    "Insecure auto-update mechanism (CWE-494)",
+
+    "binary_info": {
+        "phys_block": 97276,
+        "arch": "ARM64 MH_EXECUTE",
+        "ncmds": 24,
+        "uuid": "4c4c4413-5555-3144-a191-83b5fb549a35",
+        "frameworks": [
+            "@rpath/Mantle.framework/Mantle",
+            "@rpath/ReactiveObjC.framework/ReactiveObjC",
+        ],
+        "system_imports": [
+            "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+            "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+            "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+        ],
+    },
+
+    "code_evidence": {
+        "installer_class": "SQRLInstaller -- handles update bundle install/abort",
+        "code_sig_class": "SQRLCodeSignature -- wraps SecCodeCheckValidity for update verification",
+        "transaction_lock": "com.github.Squirrel.SQRLTransactionLock -- power assertion during install",
+        "key_methods": [
+            "verifyBundleAtURL: -- calls SecCodeCheckValidity on update bundle",
+            "prepareAndValidateUpdateBundleURLForRequest: -- validates update URL + signature",
+            "installItemAtURL:fromURL: -- moves bundle; uses NSFileCoordinator",
+            "launchAfterInstallation -- launches app after successful install",
+            "abortInstallationCommand -- rollback to previous bundle",
+        ],
+        "error_strings": [
+            "'Code signature at URL %@ did not pass validation'",
+            "'Failed to get static code for bundle %@'",
+            "'Too many attempts to install, aborting update' (SQRLShipItInstallationAttempts counter)",
+            "'Aborting update attempt because there are %lu running instances of the target app'",
+        ],
+    },
+
+    "attack_classes": {
+        "dns_mitm_update_feed": (
+            "SUFeedURL in Info.plist points to update server. "
+            "DNS MITM -> redirect to attacker update server -> serve malicious .zip with valid-looking bundle. "
+            "SQRLCodeSignature calls SecCodeCheckValidity with a stored SecRequirement. "
+            "If the requirement string is permissive (e.g. 'anchor apple generic'), "
+            "an attacker-signed bundle passes validation."
+        ),
+        "toctou_bundle_swap": (
+            "SQRLInstaller uses NSFileCoordinator for atomicity, but moves bundles via "
+            "rename across filesystem boundaries (direct move or cross-volume copy). "
+            "Classic TOCTOU: verify bundle at path A, then install from path A to B -- "
+            "race window between verify and install allows swap to malicious bundle."
+        ),
+        "installation_attempt_counter": (
+            "SQRLShipItInstallationAttempts is stored in app state. "
+            "Exhausting the counter causes ShipIt to abort and not retry updates, "
+            "creating a denial-of-update condition (prevents security patches)."
+        ),
+    },
 }
