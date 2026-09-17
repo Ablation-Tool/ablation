@@ -4851,6 +4851,44 @@ FGT800_LIBAV_F01_FLOW_LIMITS = {
     "mitigation":   "Lower the total limit or implement per-flow timeout; enforce decompressed-size limits in internal decompressors",
 }
 
+FGT748_LIBAV_CROSSVER_DIFF = {
+    "id":       "FGT748-LIBAV-CROSSVER-01",
+    "product":  "FortiGate cross-version avFlowWrite total size limit regression: 7.4.8 vs 8.0.0",
+    "severity": "MEDIUM -- 7.4.8 allows 68x more data accumulation than 8.0.0; memory exhaustion DoS in 7.4.8",
+    "class":    "Memory exhaustion via unbounded flow accumulation (CWE-400); cross-version regression",
+
+    "avFlowWrite_748": {
+        "va":           "0xac840",
+        "buildid":      "sha1:226d04c187d4eb77ccb15d71a2b0bea97a77c12b",
+        "chunk_guard":  "0xac88d: cmp $0x10000,%r15; ja 0xad6e4 -- same 64KB chunk limit as 8.0.0",
+        "total_guard":  "0xac8a7: shr $0x24,%rax; jne 0xad70b -- total must be < 2^36 = 68GB before rejection",
+        "ctx_offsets":  "flow_total at +0x3d0, mmap_buf at +0x3c8 (different from 8.0.0 which uses +0x48)",
+    },
+
+    "avFlowWrite_800": {
+        "va":           "0x1371c0",
+        "total_guard":  "0x137210: cmp $0x3fffffff,%rdx; ja -- total must be < 1GB",
+        "ratio":        "8.0.0 limit is 64x smaller than 7.4.8 limit -- deliberate security hardening",
+    },
+
+    "description": (
+        "In FGT 7.4.8, avFlowWrite enforces a 64KB per-chunk limit (matching 8.0.0) but the total "
+        "accumulated size check uses a bit-shift: `mov rdx, (ctx+0x3d0); add r15, rdx; shr 0x24, rdx; jne reject`. "
+        "The shift by 36 means rejection only occurs when the total exceeds 2^36 = 68,719,476,736 bytes (~68GB). "
+        "In practice this is unreachable on real hardware (not enough RAM), but for virtualized deployments "
+        "with overcommitted memory or on systems with large swap, sustained 64KB writes could cause OOM. "
+        "More importantly, the mmap extension loop (via mprotect) in 7.4.8 would attempt to extend the scan "
+        "buffer to accommodate up to 68GB, causing rapid virtual address space exhaustion -- DoS via SIGBUS. "
+        "In FGT 8.0.0, the limit was tightened to 0x3fffffff (1GB) -- a 68x improvement in security posture. "
+        "The struct layout also changed substantially (7.4.8: ctx+0x3d0/0x3c8 vs 8.0.0: ctx+0x48), "
+        "confirming a major refactor of the scan context in this version bump."
+    ),
+
+    "affected_versions": "FortiGate 7.4.8 and likely all 7.x; fixed in 8.0.0",
+    "exploitation":      "Requires sending a stream of 64KB-aligned malicious content via an inspected protocol (HTTP/SMTP/FTP); no authentication needed if traffic passes through FortiGate IPS/AV inspection",
+}
+
+
 # ---------------------------------------------------------
 # FortiGate/FMG 8.0.0 LLM integration attack surface
 # Source: /tmp/fmg800_syntax/syntax/800.txt (61202-line firmware schema)
