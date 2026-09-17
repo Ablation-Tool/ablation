@@ -2178,6 +2178,48 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
         "conclusion": "Majority of 106 callers are custom strdup implementations. 8.0.0 likely replaced these with libc strdup(). Targeted analysis of non-strdup callers required to find genuine vulnerability.",
     },
 
+    "LIBAV-603-SURFACE": {
+        "product":    "FortiOS 6.0.3 libav.so -- AV engine dangerous function inventory",
+        "binary":     "/tmp/fgt603_datafs/lib/libav.so (ELF64 x86-64, 3.6MB, Oct 2018 build)",
+        "has_chk":    True,
+        "text_range": "0x48bb0..0x32f210 (VA == file offset, first LOAD VirtAddr=0)",
+        "plt_summary": {
+            "memcpy":   {"plt": "0x48af0", "got": "0x54b408", "callers": 361},
+            "memmove":  {"plt": "0x487a0", "got": "0x54b260", "callers": 80},
+            "strncpy":  {"plt": "0x48960", "got": "0x54b340", "callers": 65},
+            "strcpy":   {"plt": "0x488a0", "got": "0x54b2e0", "callers": 36},
+            "sprintf":  {"plt": "0x486a0", "got": "0x54b1e0", "callers": 60},
+            "strcat":   {"plt": "0x48760", "got": "0x54b240", "callers": 6},
+            "sscanf":   {"plt": "0x486e0", "got": "0x54b200", "callers": 6},
+            "read":     {"plt": "0x484f0", "got": "0x54b108", "callers": 1},
+        },
+        "strcpy_analysis": {
+            "total":          36,
+            "strdup_pattern": 5,
+            "other":          31,
+            "interesting": {
+                "LIBAV-603-STRCPY-KEYCACHE": {
+                    "caller":   "0x9e278",
+                    "pattern":  "calloc(1, 0x48) -> strcpy(result+8, rbx); dest usable size = 0x40 (64) bytes; source = rbx (key string from scanning context; not length-bounded in callsite)",
+                    "verdict":  "MEDIUM PLAUSIBLE -- 64-byte key buffer; source not length-checked; overflow if key > 64 chars",
+                    "context":  "Linked-list cache insertion: if key not found in list, alloc new node and copy key in. Node struct: [ptr|key[64]]; strcpy writes at +8.",
+                },
+                "LIBAV-603-STRCPY-PATH": {
+                    "callers":  ["0xb922a", "0xb9239"],
+                    "pattern":  "Path component parsing; strchr(rbx, '\\\\') -> advance past backslash -> strcpy(rbp+0x1e0, rbx_past_backslash); second strcpy into rbp+0x2e0",
+                    "strlen_check": "strlen checked 2..127 at 0xb91df-0xb91e9 BEFORE this path",
+                    "verdict":  "SAFE -- source bounded to <=127 chars by strlen guard before strcpy",
+                },
+                "doc_parser_cluster": {
+                    "callers":  ["0xbb166", "0xbb2b6", "0xbb420", "0xbb448", "0xbb470", "0xbb5c0"],
+                    "pattern":  "PostScript/RTF token parser; total output length check: cmp rax, 0xfff (0xbb111); copies from internal stack buffer rsp+0x170 to dest pointers",
+                    "verdict":  "LOW -- total-length bound check (0xfff); stack working buffer source",
+                },
+            },
+        },
+        "pending": "Analyze 0x4b604 (loop accumulation with strcpy to rbp); full strncpy/sscanf sweep; memcpy length-from-packet analysis in scan path.",
+    },
+
     "build_timestamps": {
         "7.4.8_flatkc": "2025-05-23 (from .db JSON manifest)",
         "8.0.0_flatkc": "2026-04-20 (from strings in binary: SMP Mon Apr 20 17:10:46 America 2026)",
