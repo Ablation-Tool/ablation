@@ -958,3 +958,119 @@ FGFM_CHAIN_F01_BINARY_ANALYSIS = {
         "scope": "All FortiOS versions with shared fgt2.key + any FortiManager instance with CVE-2024-47575 exposure",
     },
 }
+
+HTTPSD_APACHE_SURFACE = {
+    "finding_ref": "HTTPSD-A01",
+    "title": "FortiOS 7.2.0 httpsd Apache configuration security surface",
+    "verdict": "MULTIPLE WEAKNESSES CONFIRMED; no single pre-auth RCE; combined surface enables XSS, path confusion, and SAML attack vectors",
+    "source_files": {
+        "httpd_conf":       "/tmp/fgt720_usr_extracted/usr/local/apache2/conf/httpd.conf",
+        "admin_vhost_conf": "/tmp/fgt720_usr_extracted/usr/local/apache2/conf/admin-vhost.conf",
+        "admin_global_conf": "/tmp/fgt720_usr_extracted/usr/local/apache2/conf/admin-global.conf",
+    },
+    "tls_cert_in_tmpfs": {
+        "finding": "HTTPSD-A01-TLS",
+        "severity": "HIGH",
+        "detail": (
+            "Admin server TLS certificate and private key are stored in tmpfs at boot: "
+            "`Define SSL_CERT_FILE /tmp/admin_server.crt` and `Define SSL_CERT_KEY_FILE /tmp/admin_server.key`. "
+            "tmpfs is world-readable by default on Linux. Any process with filesystem access (e.g., a shell obtained "
+            "via CVE, or a rogue daemon) can read the private key from /tmp at runtime. "
+            "Key is regenerated each boot -- but is exposed in plaintext for the full uptime of the device."
+        ),
+        "impact": "Admin TLS MITM if attacker has any filesystem read primitive (LFI, path traversal, rogue process).",
+        "note": "Key is in tmpfs, not persistent storage -- forensics miss it post-reboot.",
+    },
+    "csp_no_script_src": {
+        "finding": "HTTPSD-A01-XSS",
+        "severity": "HIGH",
+        "detail": (
+            "Content-Security-Policy header is set to `frame-ancestors 'self'` only. "
+            "There is NO script-src directive. This means inline scripts, eval(), and arbitrary "
+            "external script loads are not blocked by CSP. Any XSS primitive in the admin WebUI "
+            "(reflected or stored) executes without CSP interference. "
+            "X-XSS-Protection is set to `1; mode=block` which is deprecated and ignored by all modern browsers."
+        ),
+        "impact": "XSS in any admin handler (login page, CMDB API error, SAML redirect) achieves full session takeover.",
+        "note": "DocumentRoot is /migadmin -- WebUI is JS-heavy SPA; XSS surface proportional to JS bundle size.",
+    },
+    "allow_encoded_slashes": {
+        "finding": "HTTPSD-A01-PATH",
+        "severity": "MEDIUM",
+        "detail": (
+            "`AllowEncodedSlashes NoDecode` is set for the /api/v2/cmdb path. "
+            "NoDecode passes encoded slashes (%2F, %2F%2F) to the handler without decoding at the Apache layer. "
+            "The CMDB API handler receives the raw encoded form. If the handler normalizes paths inconsistently "
+            "(decoding at a different layer), path traversal variants become possible: "
+            "`/api/v2/cmdb/system%2Fglobal` may be processed as `/api/v2/cmdb/system/global` by the handler "
+            "while Apache sees it as a single path token. CVE-2022-40684 auth bypass exploited a related path "
+            "normalization inconsistency in this handler family."
+        ),
+        "impact": "Path confusion between Apache routing and CMDB handler enables auth bypass variants.",
+        "cve_class": "CVE-2022-40684 (FortiOS auth bypass via path normalization, CVSS 9.8)",
+    },
+    "saml_handler_suite": {
+        "finding": "HTTPSD-A01-SAML",
+        "severity": "HIGH",
+        "detail": (
+            "Apache config exposes both SP and IdP SAML handlers: "
+            "`saml-sp-handler` at /saml and `saml-idp-handler` at /saml-idp. "
+            "FortiOS acts as both SAML SP (consuming assertions from external IdP) and IdP (issuing assertions "
+            "for federated login). The IdP path is particularly dangerous: if FortiOS issues SAML assertions "
+            "accepted by downstream services, a logic flaw in the assertion builder enables authentication "
+            "as any user without credentials. SAML XML signature verification flaws (XXE, comment injection "
+            "in NameID, signature wrapping) have historically yielded CVSS 9.x in this handler class."
+        ),
+        "known_precedents": "CVE-2023-27997 (FortiOS SSL-VPN heap overflow, SAML path); CVE-2022-42475 (heap overflow in ssl-vpn web mode)",
+        "impact": "Pre-auth authentication bypass or RCE if SAML XML parser has memory corruption or logic flaw.",
+    },
+    "api_fmg_handler": {
+        "finding": "HTTPSD-A01-FMG",
+        "severity": "HIGH",
+        "detail": (
+            "`api_fmg-handler` is registered at /api/fmg -- this is the REST API path for FortiManager "
+            "integration from the admin WebUI side. Combined with CHAIN-F01 (FGFM protocol client path), "
+            "this handler represents the inbound side: FortiManager can push config to the FortiGate via "
+            "this endpoint. If the handler lacks authentication checks equivalent to the CMDB API, it "
+            "is reachable with only a valid session cookie or no auth at all. "
+            "The handler is separate from api_cmdb_v2-handler -- it has its own auth path that must be audited independently."
+        ),
+        "chain_relevance": "CHAIN-F01 Leg 2 uses FortiManager to push config; api_fmg-handler is the FortiGate-side receiver.",
+        "impact": "If auth is weaker on /api/fmg than /api/v2/cmdb, attacker with network access can push config without admin credentials.",
+    },
+    "error_logging_devnull": {
+        "finding": "HTTPSD-A01-LOG",
+        "severity": "INFO",
+        "detail": (
+            "ErrorLog is set to /dev/null by default in httpd.conf. Apache error output (including auth failures, "
+            "handler crashes, and malformed request rejections) is silently discarded. "
+            "This is a deliberate Fortinet choice -- httpsd errors are routed to the FortiOS logging daemon "
+            "separately, not Apache's native ErrorLog. However, any handler that writes diagnostic info to "
+            "Apache's error log (e.g., via ap_log_rerror) will lose that output entirely."
+        ),
+        "impact": "Attacker probing /api/v2/cmdb or /saml generates zero log entries at the Apache layer.",
+    },
+    "process_recycle": {
+        "finding": "HTTPSD-A01-PROC",
+        "severity": "INFO",
+        "detail": (
+            "`MaxConnectionsPerChild 50` causes each Apache worker process to exit after handling 50 connections. "
+            "This is a heap-lifecycle control: it prevents long-running heap fragmentation or use-after-free "
+            "states from persisting across many requests. However, it also means heap spray primitives need "
+            "to land within a 50-connection window. For a 32-worker pool (MaxRequestWorkers 32), "
+            "the attacker has 32 parallel slots each with a 50-connection budget."
+        ),
+        "impact": "Heap exploitation requires landing spray within 50-connection window per worker; limits reliability of multi-stage heap shaping attacks.",
+    },
+    "port_and_listen": {
+        "admin_port": 9980,
+        "detail": (
+            "Admin server listens on port 9980 internally (HTTP_PORT defined in admin-global.conf). "
+            "External access is typically proxied through haproxy or the main httpsd listener. "
+            "Direct access to port 9980 from within the device (e.g., via command injection or SSRF) "
+            "bypasses any frontend rate limiting or IP allowlist applied at the outer listener."
+        ),
+    },
+    "scope": "FortiOS 7.2.0 admin WebUI (httpsd/Apache); CSP weakness and AllowEncodedSlashes apply cross-version",
+}
+
