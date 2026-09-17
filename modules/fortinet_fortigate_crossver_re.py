@@ -5087,6 +5087,57 @@ FGT800_SYNTAX_ARCH = {
 }
 
 # ---------------------------------------------------------
+# ENC crypto analysis -- Group A format confirmed
+# ---------------------------------------------------------
+
+FGT800_ENC_CRYPTO_ARCH = {
+    "id":       "FGT800-ENC-CRYPTO-ARCH",
+    "product":  "FortiGate 8.0.0 -- ENC password encryption format analysis",
+    "source":   "/tmp/fmg800_syntax/syntax/800.txt",
+
+    "format": {
+        "total_decoded_bytes":  156,
+        "base64_chars":         208,
+        "structure":            "nonce(8 bytes) || ciphertext(140 bytes) || fixed_marker(8 bytes) = 156 bytes",
+        "fixed_marker":         "5966323637764540 (hex) = 'Yf267vE@' (ASCII)",
+        "marker_meaning":       "Unencrypted trailer appended to all Group A :passwd: ENC values; purpose unknown (version tag, magic, or integrity marker)",
+    },
+
+    "nonce_analysis": {
+        "sim2_pin_nonce":       "143ed0b8b7c28ce5",
+        "openai_5029_nonce":    "d2faba8935066811",
+        "openai_5081_nonce":    "07ba665dbd5fe387",
+        "openai_5110_nonce":    "344bf81e7db2c170",
+        "verdict":              "Nonces are UNIQUE per encryption. Static-nonce hypothesis DISPROVED.",
+        "implication":          "No keystream reuse between Group A values; direct XOR known-plaintext attack is not feasible across different ENC values.",
+    },
+
+    "xor_analysis": {
+        "sim2_pin_xor_openai_5029_tail": "0000000000000000 (last 8 bytes)",
+        "interpretation":       "Fixed marker not encrypted; remaining 140 bytes XOR to non-zero (different ciphertexts from different nonces/plaintexts)",
+    },
+
+    "crypto_hypothesis": {
+        "most_likely": "AEAD cipher with unique nonce per encryption (AES-GCM or ChaCha20-Poly1305); nonce(8) + ciphertext(128) + auth_tag(12) + static_marker(8) = 156 bytes",
+        "key_reuse":   "UNKNOWN -- whether the encryption KEY is the same for all devices is not yet determined",
+        "attack_path": "Known-plaintext attack against sim2-pin (numeric PIN) requires access to decryption function; brute-force of 4-8 digit PIN offline feasible IF same key used across devices",
+    },
+
+    "code_signing": {
+        "file":                 "/tmp/fgt800_datafs/lib/libips.so.new.x",
+        "format":               "DER Encoded PKCS#7 Signed Data (14KB)",
+        "chain": [
+            "fortinet-subca2002 (Fortinet internal CA; valid 2022-02-04 to 2056-05-26; modulus D3ED91F62DEB...)",
+            "DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1 (valid 2021-04-29 to 2036-04-28)",
+            "Fortinet, Inc. (end-entity, DigiCert-signed; valid 2025-10-10 to 2028-10-11; modulus F9E8B17FCABD...)",
+        ],
+        "fgt2_key_match":       False,
+        "verdict":              "IPS library signing uses DigiCert-issued cert, NOT fgt2.key. No vulnerability.",
+    },
+}
+
+
+# ---------------------------------------------------------
 # libips.so.new RE: L7 IPS engine, LuaJIT runtime
 # Binary: /tmp/fgt800_datafs/lib/libips.so.new
 # BuildID sha1:3473282a6bf9b4a237ef469d4b0bb9de22b70367
