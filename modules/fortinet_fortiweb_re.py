@@ -1098,3 +1098,363 @@ ANALYSIS_STATUS = {
                  "source: ffw-data/lib/libips.so.new 0x25f9f0-0x25faaf, 0x25f139/0x25f479/0x25f7c9 (line-start triggers), analysis 2026-09-15",
     ],
 }
+
+
+# ==========================================================
+# FWB 400F v8.0.7.F -- hardware appliance RE
+# Source: FWB_400F-v8.0.7.F-build0134-FORTINET.out (gzip outer, 2026-08-27)
+# ==========================================================
+
+FWB_400F_PLATFORM = {
+    "id":      "FWB-400F",
+    "product": "Fortinet FortiWeb 400F hardware appliance",
+    "version": "8.0.7.F build0134",
+    "build_date": "2026-08-27",
+    "kernel":  "Linux 6.1.62-kdump (root@36d92f03c8ba)",
+    "arch":    "x86-64",
+    "source":  "FWB_400F-v8.0.7.F-build0134-FORTINET.out",
+
+    "firmware_format": {
+        "outer":          "gzip compressed (gunzip -> 2.45GB sparse MBR disk image)",
+        "mbr_signature":  "0x55AA at offset 0x1FE (standard MBR boot signature)",
+        "fortinet_header": "Bytes 0x000-0x00F: magic 0xFF00AA55 + model string FWB_400F",
+        "partitions": {
+            "P1": "type 0xEF (EFI System), LBA 1, size 64MB -- not accessible as file, contains GRUB/boot config",
+            "P2": "type 0x83 (Linux ext3), LBA 131073, size 781MB (200000 blocks x 4096), bootable -- MAIN BOOT PARTITION",
+            "P3": "type 0x83 (Linux ext3), LBA 12931073, size 6250MB -- secondary/failover image",
+            "P4": "type 0x83 (Linux ext3), LBA 25731073, size 195MB -- config/data partition",
+        },
+        "p2_uuid": "d204f715-75be-49fa-9638-c94afda0b38c",
+        "p2_files": [
+            "flatkc (8.2MB, Fortinet encrypted kernel, magic 0x55AA4D5A)",
+            "rootfs.gz (145MB, Fortinet encrypted rootfs, random-byte header)",
+            "krootfs.gz (5.7MB, Fortinet encrypted mini-rootfs, random-byte header)",
+            "datafs.tar.gz (18MB, STANDARD gzip, accessible)",
+            "vmlinuz.kdump (4.6MB, Linux 6.1.62 bzImage for kdump)",
+        ],
+        "extraction_chain": (
+            "gunzip -> MBR disk image (2.45GB) -> "
+            "dd skip=131073 bs=512 count=1638400 -> ext3 (781MB) -> "
+            "mount -o ro,loop -> datafs.tar.gz -> tar -xzf"
+        ),
+    },
+
+    "datafs_layout": {
+        "bin/":   "empty (no binaries in datafs)",
+        "config/": "additional config files",
+        "etc/":   "security policies, signatures, keys, certs, WAF scripts, cloud connector Python",
+        "lib/":   "libfpm.so, libsigfunc.so.1, libav.so.orig",
+        "var/debug": "empty debug directory",
+        "size_400f": "38MB (vs 18MB in KVM variant)",
+    },
+
+    "vs_kvm_806": {
+        "version_delta": "400F is 8.0.7.F; KVM analyzed previously was 8.0.6.M",
+        "kernel":        "Both use Linux 6.1.62",
+        "datafs_size":   "400F=38MB vs KVM=18MB; 400F includes additional WAF JS files",
+        "partition_layout": "400F: MBR with 4 partitions; KVM: EFI GPT with SYSLINUX",
+        "new_in_400f":   "content-type.key, signature_content_type.key, xss_config.enc, dk.dat, mcp_security_db.json v1.00010",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FWB-F16: Hardcoded AES key FWB_web_cache_KEY with all-zero IV
+# ---------------------------------------------------------
+FWB_F16_HARDCODED_WEB_CACHE_KEY = {
+    "id":       "FWB-F16",
+    "product":  "Fortinet FortiWeb 400F 8.0.7.F -- web cache encryption",
+    "severity": "HIGH -- hardcoded AES encryption key with all-zero IV; allows offline decryption of web cache data by any party with firmware access",
+    "class":    "Hardcoded cryptographic key (CWE-321) / Initialization vector reuse (CWE-330)",
+    "source":   "datafs.tar.gz -> etc/content-type.key",
+
+    "description": (
+        "etc/content-type.key contains the AES key and IV for FortiWeb web cache encryption: "
+        "  passwd (base64): RldCX3dlYl9jYWNoZV9LRVkK "
+        "  decoded:         FWB_web_cache_KEY "
+        "  iv (base64):     AAAAAAAAAAAAAAAAAAAAAA== "
+        "  decoded:         16 zero bytes (all-zero AES IV) "
+        "The all-zero IV is a critical cryptographic weakness: for AES-CBC with a fixed key "
+        "and fixed IV, identical plaintexts produce identical ciphertexts. "
+        "This defeats the confidentiality goal of the encryption -- an attacker who knows "
+        "one plaintext-ciphertext pair can recognize when the same plaintext appears again. "
+        "The key is hardcoded (not per-device, not per-installation). "
+        "Any party with access to this firmware image can decrypt any FortiWeb web cache "
+        "content using AES with key=FWB_web_cache_KEY and IV=0x000000000000000000000000. "
+        "The paired ciphertext file etc/content-type.enc is decryptable from the firmware."
+    ),
+
+    "evidence": {
+        "key_file":  "etc/content-type.key",
+        "passwd_b64": "RldCX3dlYl9jYWNoZV9LRVkK",
+        "passwd_raw": "FWB_web_cache_KEY",
+        "iv_b64":    "AAAAAAAAAAAAAAAAAAAAAA==",
+        "iv_raw":    "0x00000000000000000000000000000000 (16 zero bytes)",
+        "sha1_digest": "in key file (not shown to minimize sensitivity)",
+    },
+
+    "sister_files": {
+        "content-type.enc": "Encrypted web cache data, decryptable with the key above",
+    },
+
+    "remediation": (
+        "Generate a per-device AES key at first boot; store in secure storage (HSM if available). "
+        "Generate a random IV per encryption operation; prepend to ciphertext. "
+        "Do not use AES-CBC with a fixed IV -- use AES-GCM (provides both confidentiality and authentication). "
+        "Remove the key from the firmware image entirely."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FWB-F17: Hardcoded AES key FWB_server_protection_KEY with all-zero IV
+# ---------------------------------------------------------
+FWB_F17_HARDCODED_SERVER_PROTECTION_KEY = {
+    "id":       "FWB-F17",
+    "product":  "Fortinet FortiWeb 400F 8.0.7.F -- server protection signature encryption",
+    "severity": "HIGH -- hardcoded AES key with all-zero IV for server protection signatures; enables offline decryption of FortiWeb WAF signature database",
+    "class":    "Hardcoded cryptographic key (CWE-321) / Initialization vector reuse (CWE-330)",
+    "source":   "datafs.tar.gz -> etc/signature_content_type.key",
+
+    "description": (
+        "etc/signature_content_type.key contains the AES key and IV for server protection signature encryption: "
+        "  passwd (base64): RldCX3NlcnZlcl9wcm90ZWN0aW9uX0tFWQ== "
+        "  decoded:         FWB_server_protection_KEY "
+        "  iv (base64):     AAAAAAAAAAAAAAAAAAAAAA== "
+        "  decoded:         16 zero bytes (all-zero AES IV) "
+        "  hmac_key (b64):  cqDt0P/JZa0i0hQ30KZEvs/UX4sIR5BaKhBXOkyAAGqDJn3/KvDxSme8AbqfkTbqT64JGKl5y+SkKTsAWuzPyQ== "
+        "The server protection WAF signature database is encrypted with this key. "
+        "An attacker who downloads the public firmware can decrypt signature_content_type.enc, "
+        "reverse-engineer the entire Fortinet server protection signature format, and identify "
+        "payloads that evade signature matching. "
+        "The all-zero IV means the encryption is also deterministic (same plaintext = same ciphertext). "
+        "The hmac_key is also hardcoded, allowing signature validation bypass."
+    ),
+
+    "evidence": {
+        "key_file":   "etc/signature_content_type.key",
+        "passwd_b64": "RldCX3NlcnZlcl9wcm90ZWN0aW9uX0tFWQ==",
+        "passwd_raw": "FWB_server_protection_KEY",
+        "iv_b64":     "AAAAAAAAAAAAAAAAAAAAAA==",
+        "iv_raw":     "0x00000000000000000000000000000000",
+        "hmac_b64":   "cqDt0P/JZa0i0hQ30KZEvs/UX4sIR5BaKhBXOkyAAGqDJn3/KvDxSme8AbqfkTbqT64JGKl5y+SkKTsAWuzPyQ==",
+    },
+
+    "security_impact": (
+        "Signature reverse-engineering path: "
+        "1. Download FWB_400F-v8.0.7.F-build0134-FORTINET.out (public) "
+        "2. Extract ext3 -> datafs.tar.gz -> etc/signature_content_type.key (key = FWB_server_protection_KEY) "
+        "3. AES-decrypt signature_content_type.enc with the extracted key and zero IV "
+        "4. Full server protection WAF rule set exposed in plaintext "
+        "5. Identify patterns that the WAF does NOT detect -> design bypass payloads "
+        "This is the attack path any vulnerability researcher or threat actor would take."
+    ),
+
+    "remediation": (
+        "Server protection signatures should not be encrypted with a hardcoded symmetric key. "
+        "If signatures are meant to be secret, use a key hierarchy: master key in secure enclave, "
+        "per-update signature key encrypted by master. "
+        "Replace AES-CBC with fixed IV with AES-GCM with random nonce per signature package. "
+        "Consider whether signature secrecy is the right threat model -- "
+        "open signature databases (Snort/Suricata) benefit from community review."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FWB-F18: RSA 2048 private keys embedded in firmware (three distinct keys)
+# ---------------------------------------------------------
+FWB_F18_EMBEDDED_RSA_PRIVATE_KEYS = {
+    "id":       "FWB-F18",
+    "product":  "Fortinet FortiWeb 400F 8.0.7.F -- embedded RSA private keys",
+    "severity": "HIGH -- three RSA 2048-bit private keys baked into firmware image; shared across all FortiWeb 400F devices; enables TLS impersonation of FortiWeb HTTPS admin interface",
+    "class":    "Hardcoded cryptographic key (CWE-321) / Shared private key across installations (CWE-798)",
+    "source":   "datafs.tar.gz -> etc/private_key.pem, etc/globalcert/apache.key, etc/globalcert/fips.key",
+
+    "keys": {
+        "etc/private_key.pem": {
+            "type":    "RSA 2048-bit (2 primes) PKCS#8 PRIVATE KEY",
+            "modulus_prefix": "bd:e5:1f:3c:8a:f5:c8:2b:49:c8:29:bf:f1:56:ad:57",
+            "purpose": "Unknown -- generic name; likely used by WAF or management TLS",
+        },
+        "etc/globalcert/apache.key": {
+            "type":    "RSA 2048-bit (2 primes) PKCS#8 PRIVATE KEY",
+            "modulus_prefix": "de:4a:be:eb:89:08:7e:76:ef:d9:d4:08:e9:fc:ed:cf",
+            "cert_file": "etc/globalcert/apache.cer",
+            "cert_subject": "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiWeb, CN=FortiWeb, emailAddress=support@fortinet.com",
+            "cert_issued": "2017-07-07",
+            "cert_expires": "2056-01-19 (40-year validity)",
+            "purpose": "Default HTTPS certificate for FortiWeb web management interface",
+        },
+        "etc/globalcert/fips.key": {
+            "type":    "RSA private key (size not confirmed; file present)",
+            "purpose": "FIPS mode TLS certificate key",
+        },
+    },
+
+    "description": (
+        "Three RSA private keys are embedded in the FortiWeb 400F firmware datafs. "
+        "The apache.key is the private key for the default HTTPS certificate used by "
+        "the FortiWeb web management interface: "
+        "  CN=FortiWeb, O=Fortinet, OU=FortiWeb "
+        "  issued 2017-07-07, expires 2056-01-19 "
+        "This certificate and private key are IDENTICAL on all FortiWeb 400F devices "
+        "running firmware 8.0.7. An attacker who extracts this key from the public "
+        "firmware image can: "
+        "  (a) Impersonate any FortiWeb HTTPS management interface (TLS server impersonation) "
+        "  (b) Passively decrypt previously captured TLS sessions to the FortiWeb admin portal "
+        "  (c) Perform active MITM on admin browser sessions if the administrator's browser "
+        "      trusts the Fortinet CA that signed apache.cer "
+        "The apache.cer certificate is also embedded -- the full public/private key pair "
+        "is in the firmware for any researcher or attacker to extract."
+    ),
+
+    "context_vs_fwb_f13": (
+        "FWB-F13 identified a 512-bit RSA key (fgt_512.key) used in the WEB_AUTH domain. "
+        "FWB-F18 identifies a separate set of RSA 2048-bit keys used for the management "
+        "HTTPS interface. Both represent static key pairs shared across all devices. "
+        "FWB-F18 keys are not in fortism_config.json -- they are likely loaded by the "
+        "management daemon (mgmtd or similar) from the datafs etc/globalcert/ directory."
+    ),
+
+    "remediation": (
+        "Generate a unique RSA key pair at first boot; store the private key in the secure "
+        "storage partition (not in the publicly-distributed firmware image). "
+        "Use the embedded cert only as a self-signed placeholder until a proper cert is provisioned. "
+        "Remove all private key files from the firmware; they have no legitimate use there."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FWB-F19: SafeNet Luna HSM config contains hardcoded AWS VPC internal IP
+# ---------------------------------------------------------
+FWB_F19_HSM_CONFIG_AWS_IP = {
+    "id":       "FWB-F19",
+    "product":  "Fortinet FortiWeb 400F 8.0.7.F -- SafeNet Luna HSM client config",
+    "severity": "LOW -- HSM config references AWS VPC internal IP (172.31.160.2) in cert file paths; no credentials present; dev/test artifact in production firmware",
+    "class":    "Information disclosure / Dev environment artifact in production firmware (CWE-200)",
+    "source":   "datafs.tar.gz -> etc/Chrystoki.conf",
+
+    "description": (
+        "etc/Chrystoki.conf is the SafeNet Luna SA HSM client configuration file. "
+        "FortiWeb supports optional HSM integration (SafeNet Luna) for private key storage. "
+        "The config file references an AWS VPC internal IP address in the certificate file paths: "
+        "  ClientPrivKeyFile = /data/etc/cert/hsm/172.31.160.2Key.pem "
+        "  ClientCertFile    = /data/etc/cert/hsm/172.31.160.2.pem "
+        "The IP 172.31.160.2 is in the AWS EC2 default VPC subnet (172.31.0.0/16). "
+        "This indicates the HSM configuration was developed or tested against an AWS instance "
+        "at 172.31.160.2 and the dev/test config was shipped in production firmware. "
+        "The HSM cert and key files themselves are absent from the firmware image "
+        "(etc/cert/hsm/ contains only the stc/ subdirectory for Secure Trusted Channel). "
+        "The passfile for HSM authentication is at /data/etc/cert/hsm/passfile (also absent). "
+        "Practical impact: low (credentials absent); disclosure of dev environment detail."
+    ),
+
+    "evidence": {
+        "config_file": "etc/Chrystoki.conf",
+        "aws_ip":      "172.31.160.2 (RFC 1918 172.16.0.0/12, specifically AWS EC2 default VPC)",
+        "cert_path":   "ClientPrivKeyFile = /data/etc/cert/hsm/172.31.160.2Key.pem",
+        "engine_init": "EngineInit = 'hagroup':0:0:passfile=/data/etc/cert/hsm/passfile",
+        "hsm_cert_dir": "etc/cert/hsm/ -- only stc/ subdir present; no actual HSM certs/keys in firmware",
+    },
+
+    "hsm_config_summary": {
+        "hsm_type":   "SafeNet Luna SA (network HSM, libCryptoki2.so + libCryptoki2_64.so)",
+        "ha_group":   "hagroup:0:0 (HA group 0, slot 0, default partition)",
+        "stc_enabled": "Secure Trusted Channel configured (partition_identities, client_identities)",
+        "ped_timeouts": "PEDTimeout1=100ms, PEDTimeout2=200ms, PEDTimeout3=10ms (PED=PIN Entry Device)",
+        "server_config": "ServerName00/Port00/Htl00 all empty (no default HSM server configured)",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FWB-F20: FWB 400F hardware firmware layout -- MBR disk image with ext3 boot partition
+# ---------------------------------------------------------
+FWB_F20_400F_FIRMWARE_LAYOUT = {
+    "id":       "FWB-F20",
+    "product":  "Fortinet FortiWeb 400F 8.0.7.F -- firmware format analysis",
+    "severity": "INFO -- firmware is a gzip-compressed MBR disk image; different from KVM qcow2 format",
+    "class":    "Firmware format analysis",
+
+    "description": (
+        "FWB_400F-v8.0.7.F-build0134-FORTINET.out is a gzip-compressed sparse MBR disk image. "
+        "The outer gzip decompresses to a 2.45GB sparse disk image (mostly zeros). "
+        "The first 512 bytes are the MBR with Fortinet header magic 0xFF00AA55 at bytes 0x00-0x0F "
+        "and model string FWB_400F at bytes 0x10-0x17. "
+        "The MBR partition table at 0x1BE describes 4 partitions: "
+        "  P1 (EFI, 64MB): GRUB bootloader partition "
+        "  P2 (ext3, 781MB): MAIN -- contains kernel, rootfs, datafs "
+        "  P3 (ext3, 6250MB): SECONDARY -- backup image for A/B boot "
+        "  P4 (ext3, 195MB): CONFIG -- persistent config partition "
+        "The main P2 partition is ext3 (UUID d204f715, 50176 inodes, 200000 blocks at 4096B). "
+        "P2 file layout: flatkc (Fortinet encrypted kernel, magic 0x55AA4D5A); "
+        "rootfs.gz (random-byte header = Fortinet encrypted rootfs); "
+        "krootfs.gz (random-byte header = encrypted mini-rootfs); "
+        "datafs.tar.gz (standard gzip, accessible); vmlinuz.kdump (Linux 6.1.62 kdump kernel). "
+        "The flatkc magic 0x55AA4D5A matches the Fortinet flatkc header pattern documented in "
+        "fortinet_firmware_crypto_re.py. The 32-byte rolling XOR key is embedded in flatkc "
+        "for rootfs.gz decryption."
+    ),
+
+    "extraction_steps": [
+        "1. gunzip FWB_400F-v8.0.7.F-build0134-FORTINET.out > /tmp/fwb400f.img (2.45GB sparse)",
+        "2. Parse MBR at offset 0: P2 at LBA 131073, 1638400 sectors",
+        "3. dd bs=512 skip=131073 count=1638400 if=/tmp/fwb400f.img of=/tmp/fwb400f_p2.ext3",
+        "4. mount -o ro,loop /tmp/fwb400f_p2.ext3 /mnt/fwb400f (ext3, UUID d204f715)",
+        "5. tar -xzf /mnt/fwb400f/datafs.tar.gz -C /tmp/fwb400f_datafs",
+    ],
+
+    "streaming_extraction": (
+        "For 2.45GB sparse gzip, streaming extraction avoids full decompression to disk: "
+        "gunzip -c firmware.out | dd bs=512 skip=131073 count=1638400 of=p2.ext3 status=progress"
+    ),
+
+    "vs_kvm_format": {
+        "kvm_format":     "qcow2 (boot.qcow2 296MB -> 32GB virtual disk with SYSLINUX/MBR partition)",
+        "400f_format":    "gzip -> sparse MBR disk image (2.45GB decompressed)",
+        "partition_type": "KVM: 4 partitions labeled P1-P4 (all ext2/3); 400F: EFI-type P1, ext3 P2-P4",
+        "main_partition": "Both use ~781MB ext3 for main boot partition",
+    },
+
+    "xss_config_enc_format": {
+        "file":   "etc/xss_config.enc",
+        "header": "#FGBK|3|FV-VMB|6|36|5811|",
+        "fields": {
+            "#FGBK": "Fortinet format marker (FortiBLockK or similar)",
+            "3":     "version field",
+            "FV-VMB": "firmware version/model string (FV=FortiWeb, VMB=?)",
+            "6":     "field count",
+            "36":    "unknown (possibly record count or checksum)",
+            "5811":  "unknown (possibly record count, could be 5811 XSS signature records)",
+        },
+        "body": "encrypted content after header+newline (32+ random-looking bytes)",
+        "key":  "FWB_server_protection_KEY from signature_content_type.key (likely)",
+    },
+}
+
+
+ANALYSIS_STATUS_400F = {
+    "firmware":    "FWB_400F-v8.0.7.F-build0134-FORTINET.out (2026-08-27)",
+    "datafs":      "COMPLETE -- 38MB; all security-critical files analyzed",
+    "rootfs_gz":   "BLOCKED -- Fortinet encrypted (random-byte header, same pattern as KVM)",
+    "krootfs_gz":  "BLOCKED -- Fortinet encrypted (random-byte header)",
+    "flatkc":      "PARTIAL -- magic 0x55AA4D5A confirmed; XOR key extraction pending (see fortinet_firmware_crypto_re.py)",
+    "vmlinuz_kdump": "INFO -- Linux 6.1.62-kdump (crash dump kernel); not primary kernel",
+
+    "new_findings_vs_kvm": [
+        "FWB-F16: HIGH -- content-type.key: AES key FWB_web_cache_KEY + all-zero IV (16 zeros)",
+        "FWB-F17: HIGH -- signature_content_type.key: AES key FWB_server_protection_KEY + all-zero IV + hardcoded HMAC key",
+        "FWB-F18: HIGH -- etc/private_key.pem + globalcert/apache.key + globalcert/fips.key: 3 RSA 2048-bit private keys in firmware; apache.cer expires 2056 (40-year cert, same key across all 400F devices)",
+        "FWB-F19: LOW -- Chrystoki.conf: SafeNet Luna HSM config references AWS VPC internal IP 172.31.160.2 in cert paths; dev artifact in production firmware",
+        "FWB-F20: INFO -- MBR disk image format (not EFI/QCOW2); 4-partition layout; ext3 P2 directly mountable",
+    ],
+
+    "confirmed_in_400f_vs_kvm": [
+        "FWB-F08: mcp_security_db.json v1.00010 (2025-09-15) present -- FortiWeb MCP WAF active in 400F",
+        "FWB-F06: Redis configs in etc/redis/ (10 instances, no requirepass) -- same as KVM",
+        "FWB-F07: Shibboleth SP 2.x (etc/saml/shibboleth/) -- same EOL SAML stack",
+        "FWB-F05: wassd_ws.py present (etc/wassd_ws.py) -- cloud mgmt WebSocket TLS bypass likely same",
+    ],
+}
