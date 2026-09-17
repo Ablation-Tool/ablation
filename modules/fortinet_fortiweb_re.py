@@ -1581,12 +1581,15 @@ FWB_F22_CFBF_PARSER_OOB = {
     ),
 
     "chain_hypothesis": (
-        "Spaniard forum actor claims FortiWeb 8.0.0-8.0.1 1-day RCE via 2-CVE unauthenticated chain. "
-        "FWB-F22 (CFBF OOB in libav.so.orig) is patched in 8.0.2 -- consistent with being one of the CVEs. "
-        "Second CVE may be: "
-        "(A) a memory layout primitive that converts OOB read to controlled write (infoleak -> ASLR bypass -> RCE), OR "
-        "(B) a separate pre-auth injection in the FortiWeb HTTP server (httpsd in encrypted rootfs.gz -- not yet extracted). "
-        "wvs.tar.xz (w3af REST API) is UNCHANGED between 8.0.0 and 8.0.2 -- FWB-F09 auth bypass NOT the patched CVE."
+        "UPDATED 2026-09-17: RansoMonitor (X/@RansoMonitor) identified the Spaniard's actual CVE pair as "
+        "CVE-2025-64446 (path traversal) and CVE-2025-58034 (command injection) -- a 'November 2025 "
+        "path-traversal and command-injection pair' already patched by Fortinet in 8.0.2. "
+        "FWB-F22 (CFBF heap OOB in libav.so.orig) is therefore an INDEPENDENT finding -- not part of the "
+        "Spaniard's chain. FWB-F22 was silently patched in 8.0.2 alongside the CVE pair, suggesting Fortinet "
+        "fixed multiple issues in that release without issuing separate advisories for all of them. "
+        "The path traversal (CVE-2025-64446) and command injection (CVE-2025-58034) primitives are likely "
+        "in httpsd (encrypted rootfs.gz, not yet extracted) or the cleartext Lua/Python layer in datafs. "
+        "wvs.tar.xz (w3af REST API) is UNCHANGED between 8.0.0 and 8.0.2 -- FWB-F09 auth bypass NOT patched."
     ),
 
     "differential_analysis": {
