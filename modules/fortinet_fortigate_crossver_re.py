@@ -2334,3 +2334,126 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
     },
 }
 
+LIBAV_603_KEYCACHE_UPDATE = {
+    "id":         "LIBAV-603-STRCPY-KEYCACHE-CONFIRMED",
+    "product":    "FortiOS 6.0.3 libav.so -- AV engine key cache strcpy",
+    "caller":     "0x9e278 (inside function 0x9e030)",
+    "caller_count_for_0x9e030": 1,
+    "only_callsite": "0x848d9 (inside file format classifier at 0x843e0)",
+    "verdict":    "MEDIUM PLAUSIBLE -- file-derived metadata key copied into 64-byte heap buffer without length check",
+
+    "call_chain": (
+        "File content -> AV engine format classifier (0x843e0) -> "
+        "Format-specific parsers (0x87130=JPEG, 0x87560, 0x87650, 0x87130, 0x87740) -> "
+        "Scan context updated: [r14+8]+0x2f8 = parsed-file struct pointer, [r14+8]+0x300 = metadata struct -> "
+        "call 0x9e030(rdi=[r14+8]+0x2f8, rsi=[r14+8]+0x300, rdx=file_buffer, ...) -> "
+        "rbx=[rsi+8] = key string from metadata struct (file-derived) -> "
+        "calloc(1, 0x48) -> strcpy(result+8, rbx)  // 64-byte usable dest"
+    ),
+
+    "dest_size":  "calloc(1, 0x48) = 72 bytes; dest=result+8 leaves 64 usable bytes before heap chunk boundary",
+    "source":     "rbx = [arg1+8] = key string from scan-context metadata struct populated by format parser",
+    "source_origin": "Format-specific parser fills [r14+8]+0x300 struct from file content (PE sections, MIME headers, embedded metadata, filenames, etc.)",
+    "no_length_check": True,
+    "no_chk_hardening": True,
+    "no_canary":  False,  # libav.so does have CHK hardening (has_chk=True from earlier analysis)
+    "overflow_condition": "Any scanned file where a metadata field (key string at struct+8) exceeds 64 bytes triggers heap buffer overflow",
+    "attack_vector": "Attacker sends malicious file to FortiGate for AV scan; crafts PE/JPEG/archive metadata field > 64 chars",
+    "pending": "Verify which specific file format parser sets [r14+8]+0x300; determine max field length in that format",
+}
+
+LIBVCM_603 = {
+    "id":         "LIBVCM-603",
+    "product":    "FortiOS 6.0.3 libvcm.so -- Vulnerability Content Manager library",
+    "binary":     "/tmp/fgt603_datafs/lib/libvcm.so.gz (decompressed: 7,786,576 bytes, Oct 2018)",
+    "va_eq_offset": True,
+    "has_chk":    False,
+    "has_canary": False,
+
+    "protocol_recv_wrappers": {
+        "note":          "libvcm.so is the VCM/IPS network protocol inspection library; contains custom recv wrappers for every protocol",
+        "wrappers":      ["smb_recv@0x374f87", "_smb_recv@0x377257", "http_recv@0x367d3a",
+                          "tftp_recv@0x3739d2", "_snmp_udp_recv@0x384123", "rawsock_recv@0x36b8ec",
+                          "rvs_recv@0x36b27e", "os_recv@0x36eafd", "_smb_send_recv@0x377ab5"],
+    },
+
+    "plt_inventory": {
+        "strcpy":    {"plt": "0x361c20", "got": "0x96a808", "callers": 66},
+        "strcat":    {"plt": "0x362980", "got": "0x96aeb8", "callers": 24},
+        "sprintf":   {"plt": "0x3633c0", "got": "0x96b3d8", "callers": 32},
+        "strncpy":   {"plt": "0x362cd0", "got": "0x96b060", "callers": 5},
+        "sscanf":    {"plt": "0x363980", "got": "0x96b6b8", "callers": 13},
+        "recv":      {"plt": "0x361db0", "got": "0x96a8d0", "callers": 1},
+        "recvfrom":  {"plt": "0x3623e0", "got": "0x96abe8", "callers": 6},
+        "read":      {"plt": "0x362c10", "got": "0x96b000", "callers": 2},
+    },
+
+    "LIBVCM-603-HOTFIX-MISSING-STACKOVERFLOW": {
+        "id":       "LIBVCM-603-F01",
+        "severity": "HIGH -- exported function; unbounded strcpy into 308-byte stack buffer; no canary; no CHK",
+        "function": "hotfix_missing (GLOBAL exported, VA 0x375778, size 289 bytes)",
+        "signature": "int hotfix_missing(void *context, const char *hotfix_name)",
+        "vuln": (
+            "hotfix_missing() copies arg1 (hotfix_name string) directly into a 308-byte stack "
+            "buffer via strcpy with zero length check: strcpy(rsp+4, rsi). "
+            "No null/empty guard beyond the 2-byte check at entry. "
+            "Stack frame: sub rsp, 0x138 (0x138=312 bytes) + 4 pushes (32 bytes) = 344 bytes total. "
+            "Buffer at rsp+4: 308 bytes to first saved register (rbx at rsp+0x138). "
+            "Return address overwritten at ~340 bytes of input. "
+            "No __stack_chk_fail in libvcm.so: NO canary. "
+            "No CHK hardening variants anywhere in binary."
+        ),
+        "call_flow": (
+            "strcpy(rsp+4, rsi)  // overflow point, 0x37579f"
+            "strstr([rsp+4], '; ')  // then parses the string"
+            "strcpy(r13=[rsp+0x68], static_string)"
+            "strcpy(r13+0x16, [rsp+4])  // second strcpy into r13 struct"
+            "hash_iter(context+0x138)  // checks hotfix list"
+        ),
+        "export_evidence": "ELF DYNSYM: 13: 0x375778 289 FUNC GLOBAL DEFAULT 9 hotfix_missing",
+        "pointer_evidence": "VA pointer to 0x375778 found in data section at file offset 0x1758 (function pointer table)",
+        "attack_vector": (
+            "Attacker provides > 308-byte hotfix_name argument to hotfix_missing(). "
+            "Caller of hotfix_missing determines if this is reachable from network input. "
+            "libvcm.so processes IPS/VCM protocol data; hotfix names could originate from "
+            "SNMP OID queries, IPS signature evaluation, or config loading from network. "
+            "FortiOS 6.0.3 has no ASLR (fixed load address), no stack canary -- "
+            "classical stack smashing to control RIP is straightforward once reachability confirmed."
+        ),
+        "pending": "Trace callers of hotfix_missing in other FortiOS 6.0.3 binaries to determine if reachable from pre-auth network input",
+    },
+
+    "strcpy_analysis": {
+        "callers_analyzed": 66,
+        "method": "Ablation semantic sweep (all-MiniLM-L6-v2) + manual disasm of top candidates",
+        "safe_strdup_patterns": 38,
+        "safe_rodata_source": 27,
+        "findings": 1,
+        "safe_detail": (
+            "38 callers follow repne-scasb strlen -> malloc(len+N) -> strcpy strdup pattern. "
+            "27 callers use lea rsi, [rip+offset] (static RODATA) as source. "
+            "1 caller (0x374262) does strcpy(buf, buf+1) in-place to strip leading '\"'; undefined behavior but no overflow. "
+        ),
+        "finding_detail": "LIBVCM-603-F01 hotfix_missing() exported function; see above",
+    },
+
+    "recvfrom_analysis": {
+        "callers": 6,
+        "characterized": {
+            "0x38bf63": "recv 0x800 bytes into rsp+0xc0 (stack buf); then calls vtable function; bounded",
+            "0x38db08": "recv 0x400 bytes into rsp+0xc0; checks magic bytes [+2]=0x84, [+0x38]!=0; SNMP-like framing; bounded",
+            "0x3841c2": "recv rbp buf with r12d limit; caller-controlled size; bounded",
+            "0x398ecb": "recv rbx buf 0x420 bytes; parses IP header (IHL*4 offset calc); IPS raw-socket path; bounded",
+            "0x364c70": "not fully decoded (data bytes interfere with disasm); needs review",
+            "0x3643dc": "not fully decoded; needs review",
+        },
+        "conclusion": "All visible recvfrom callers use fixed maximum lengths; no unbounded recvfrom found",
+    },
+
+    "pending": [
+        "strcat (24 callers), strncpy (5), sscanf (13), sprintf (32) -- not analyzed",
+        "Trace hotfix_missing callers in other FortiOS 6.0.3 binaries",
+        "Verify 0x364c70 and 0x3643dc recvfrom callsites",
+    ],
+}
+
