@@ -1931,3 +1931,89 @@ LIBIPS_800_F01_SEMANTIC_SWEEP = {
     },
 }
 
+# ─── FortiClient 8.0 Linux findings ──────────────────────────────────────────
+
+FCT80_F01_ROGUE_GATEWAY_SURFACE = {
+    "id":      "FCT80-F01",
+    "product": "FortiClient 8.0 Linux -- rogue VPN gateway attack surface inventory",
+    "severity": "MEDIUM -- client parses server-supplied HTML and XML without cert pinning; untrusted-cert prompt enables MITM",
+
+    "binary_inventory": {
+        "vpn":           {"size": "13,155,376 bytes (13MB)", "build_id": "2319f2522c793bc1de0cb27212c9e52f42fe25b7", "text": "8MB", "functions": 4187},
+        "iked":          {"size": "12,824,712 bytes", "notes": "IKE/IPsec daemon; DTLS handshake attack surface"},
+        "confighandler": {"size": "22,677,928 bytes", "notes": "largest binary; config management"},
+        "libcertd.so":   {"size": "23,875,552 bytes", "notes": "certificate library; used for X.509 validation"},
+        "ztproxy":       {"size": "19,330,648 bytes", "notes": "Zero Trust proxy"},
+    },
+
+    "source_files_visible": [
+        "/home/devops/code/src/vpn/src/server_response_parser.cpp",
+        "/home/devops/code/src/vpn/src/credential_manager.cpp",
+        "/home/devops/code/src/vpn/src/dtls_handshake.cpp",
+        "/home/devops/code/src/vpn/src/sslvpn.cpp",
+        "/home/devops/code/src/vpn/src/compliance.cpp",
+        "/home/devops/code/src/vpn/src/vpn_connection.cpp",
+    ],
+
+    "tls_validation": {
+        "untrusted_cert_prompt": "You are connecting to an untrusted server, which could put your confidential information at risk. Would you like to connect to this server?",
+        "cert_pinning":          "No certificate pinning observed -- client validates against system CA store",
+        "fingerprint_display":   "Fingerprint (SHA1): <displayed to user>",
+        "expired_cert_class":    "N4base6health3vpn11ExpiredCertE -- expired certs raise health exception, not hard block",
+        "rogue_gateway_path":    "Attacker runs server with self-signed cert -> user clicks accept -> server sends crafted HTML/XML to client",
+    },
+
+    "server_response_parsing": {
+        "html_form_parser": {
+            "evidence": "<INPUT TYPE=\"hidden\" NAME=\"reqid\" VALUE=\"...\" -- client parses server HTML to extract hidden form field reqid",
+            "attack":    "Rogue server injects oversized or malicious reqid value in HTML; client extracts it and includes in POST: magic=%s&username=%s&reqid=%s&...",
+            "severity":  "PLAUSIBLE -- reqid from server HTML flows into format string; size of extraction buffer in server_response_parser.cpp unknown",
+        },
+        "xml_parser": {
+            "library":   "rapidxml (N8rapidxml11parse_errorE exception class visible)",
+            "endpoint":  "/remote/fortisslvpn_xml?dual_stack=1",
+            "attack":    "Rogue server sends malformed XML to client; rapidxml does in-place parsing with exception-based error handling; uncaught parse_error or use of dangling pointers on malformed input",
+            "severity":  "PLAUSIBLE -- rapidxml has historical parse_error mishandling; depends on exception handling in vpn binary",
+        },
+        "webdav_dav": {
+            "evidence": "<?xml version=\"1.0\" encoding=\"utf-8\"?><d:multistatus xmlns:d='DAV:'> -- DAV namespace XML in client",
+            "notes":    "Client generates WebDAV multistatus XML internally; not parsed from server (low risk)",
+        },
+    },
+
+    "dangerous_imports_vpn_binary": {
+        "sprintf":   {"callers": 3, "plt": "0x40a500", "notes": "unfortified; 0xae7f32: sprintf([rbp-0x50], static_fmt, port_field) -- stack buffer, static format"},
+        "strcpy":    {"callers": 10, "plt": "0x40af40", "notes": "unfortified; callers at 0x62009a (server response area?), 0x75a46e, 0x79b97f etc"},
+        "sscanf":    {"callers": 25, "plt": "0x40abe0", "notes": "unfortified; widely used"},
+        "strcat":    {"callers": 2,  "plt": "0x40ba20", "notes": "unfortified; 0x75a48e: strcat([buf+strlen(r13)], rbp) -- string concatenation with strlen-computed dest"},
+        "strncpy":   {"callers": 21, "plt": "0x40a9a0", "notes": "bounded variant; requires correct len arg"},
+        "strtok":    {"callers": 9,  "plt": "0x40b790", "notes": "strtok modifies the source string in-place; thread-unsafe"},
+    },
+
+    "strcat_0x75a48e_analysis": {
+        "caller_va":   "0x75a48e",
+        "pattern": (
+            "1. strlen(r13) via call 0x40a800 -> eax (length of first string) "
+            "2. lea rdi, [r14 + rax + 2] -- allocates buffer of strlen(r13)+strlen(rbp)+2 via malloc at 0x7cf370 "
+            "3. strcpy([rdi], r13) -- copies first string into fresh buffer "
+            "4. mov word ptr [r14 + rax], 0x3a -- appends ':' byte at offset strlen(r13) "
+            "5. strcat([rdi], rbp) -- appends second string after the ':' "
+        ),
+        "verdict": "FP -- malloc-based buffer sized strlen+strlen+2; classic safe concatenation pattern despite using unfortified strcat",
+    },
+
+    "semantic_sweep": {
+        "functions_swept":    "2000 of 4187",
+        "model":              "all-MiniLM-L6-v2",
+        "queries_run":        6,
+        "max_score":          0.243,
+        "conclusion":         "All scores < 0.25; C++ template instantiation dilutes function descriptions; no high-confidence candidates from BERT sweep alone. Callsite analysis is more productive for C++ binaries.",
+    },
+
+    "dtls_preauth_surface": {
+        "source":    "dtls_handshake.cpp",
+        "notes":     "DTLS is used for the VPN data tunnel. The handshake runs before authentication is complete. Pre-auth DTLS packet parsing is a historical class of vulnerabilities (cf. CVE-2014-0195 DTLS fragment reassembly).",
+        "status":    "PENDING -- DTLS handshake code not yet disassembled; iked binary also has DTLS surface",
+    },
+}
+
