@@ -4290,6 +4290,32 @@ FGT800_LIBIPS_SEMANTIC_SWEEP = {
             "At 0x1ca99b: reads [r14+0x698], applies 48-bit mask (0xffffffffffff), increments. "
             "48-bit counter -- likely per-session packet sequence number."
         ),
-        "pending": "Trace jump table entries at [rip+0xc71c8a] for protocols 2 (TCP) and 3 (UDP) to find L4 parsers",
+        "jump_table_va":    "0xe3c5c0 (RODATA), stride=4 bytes, relative offsets from table base",
+        "protocol_handlers": {
+            "proto[0]=generic": "0x1ca991",
+            "proto[1]":         "0x1cee99",
+            "proto[2]=TCP":     "0x1cb018",
+            "proto[3]=UDP":     "0x1caafe",
+            "proto[4]":         "0x1cb024",
+            "proto[5]":         "0x1ca948",
+            "proto[6]":         "0x1cd1c6",
+        },
+        "tcp_handler": {
+            "va":    "0x1cb018",
+            "flow":  "lea rbx, [rip+0xff64a1] (TCP vtable); jmp 0x1caefd (shared with other protocols). Calls 0x1bd5c0(r14=session) and 0x1e34b0(r14=session, when [r14+0x600]!=0). Swaps session fields [r14+0x3f0]-[r14+0x4c0] with packet [r13+0x30]/[r13+0x38].",
+        },
+        "udp_handler": {
+            "va":    "0x1caafe",
+            "flow": (
+                "r15=[r14+0x98] (payload pointer). "
+                "Checks session flags [r14+0x60] & 0xfffd5fff. "
+                "Rule iteration: [r14+0x160]=rule_count; [r14+r12*8+0x168]=rule_ctx. "
+                "DFA fingerprint: rsi=port_hash; [r13 + rsi*8 + 0x162] = DFA state flags (bit 1 = DFA match). "
+                "Port table lookup: [r15+0xc]=port; rdi=[global]; rbx=[rdi+port*4]. "
+                "Protocol handler vtable: call [r10 + proto_idx*8] at 0x1cabbd -- INDIRECT L7 PARSER CALL. "
+                "Post-call: call 0x105e50(rule_ctx, payload, r15) for rule evaluation."
+            ),
+            "note": "The indirect call at 0x1cabbd dispatches to L7 protocol parsers (HTTP/FTP/SMTP/etc.) -- this is the highest-priority target for buffer overflow analysis.",
+        },
     },
 }
