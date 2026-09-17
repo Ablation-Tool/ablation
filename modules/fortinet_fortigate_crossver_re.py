@@ -5716,6 +5716,34 @@ FMG800_SWITCH_CUSTOM_CMD = {
     "access_control": "Vdom admin with switch-controller access; limited to the scope of managed FortiSwitches",
 }
 
+FMG800_SAE_PRIVATE_KEY_PLAINTEXT = {
+    "id":       "FMG800-SAE-PRIVATE-KEY-PLAINTEXT",
+    "product":  "FortiManager 8.0.0 -- WPA3 SAE-PK private key stored as :string: (CWE-312)",
+    "severity": "MEDIUM -- SAE-PK AP private key exposed in config backups; disabled by default but when enabled, enables evil-twin attacks",
+    "class":    "Cleartext storage of WPA3 SAE-PK private key (CWE-312)",
+    "cwe":      "CWE-312",
+    "source":   "800.txt lines 3524-3526 (wireless SSID profile table)",
+
+    "description": (
+        "The wireless SSID profile table includes SAE-PK (Simultaneous Authentication of Equals with Public Key) fields: "
+        "  sae-pk: disable:binopt: -- SAE-PK feature toggle (DISABLED by default) "
+        "  sae-h2e-only: disable:binopt: -- Hash-to-Element only mode "
+        "  sae-private-key: :string:'359' -- AP private key for SAE-PK authentication "
+        "SAE-PK (defined in IEEE 802.11-2020 amendment) allows WPA3 access points to authenticate "
+        "their identity using a public/private key pair embedded in the SSID fingerprint. "
+        "The AP private key (stored in sae-private-key) is used to sign the SAE-PK value. "
+        "Storing sae-private-key as :string: (359 chars, enough for EC P-384 PEM) instead of :passwd: "
+        "means the key is PLAINTEXT in config backups. If stolen: "
+        "  1. Attacker creates an evil-twin AP with the same SSID and SAE-PK signature. "
+        "  2. WPA3-PK clients authenticate to the evil twin (key fingerprint matches). "
+        "  3. Full MITM on WPA3-authenticated clients without triggering client-side auth warnings. "
+        "SAE-PK is disabled by default; impact is limited to deployments that explicitly enable it."
+    ),
+
+    "cross_reference": ["FMG800-GCK-PRIVATE-KEY-PLAINTEXT -- same :string: instead of :passwd: pattern for private key"],
+    "remediation": "Change sae-private-key field type from :string: to :passwd:; add to hexpwdattr",
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
