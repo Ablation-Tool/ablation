@@ -2383,11 +2383,17 @@ LIBAV_603_KEYCACHE_UPDATE = {
 
     "call_chain": (
         "File content -> AV engine format classifier (0x843e0) -> "
-        "Format-specific parsers (0x87130=JPEG, 0x87560, 0x87650, 0x87130, 0x87740) -> "
-        "Scan context updated: [r14+8]+0x2f8 = parsed-file struct pointer, [r14+8]+0x300 = metadata struct -> "
-        "call 0x9e030(rdi=[r14+8]+0x2f8, rsi=[r14+8]+0x300, rdx=file_buffer, ...) -> "
+        "KEYCACHE path (fall-through): none of the magic-byte detectors match -> "
+        "0x848a8: call 0xb8d10 (generic format check: returns non-zero if file[8..11]!='Null' and no deadbeef/Inst/soft sentinel) -> "
+        "0x848b5: rax = [r14+8] (pre-populated scan context struct from earlier deep-scan stage) -> "
+        "0x848b9: rsi = [rax+0x300] (metadata key ptr, set by deep-scan before classifier) -> "
+        "0x848c0: test rsi, rsi; je skip (NULL check only) -> "
+        "0x848d9: call 0x9e030 (KEYCACHE) -> "
         "rbx=[rsi+8] = key string from metadata struct (file-derived) -> "
-        "calloc(1, 0x48) -> strcpy(result+8, rbx)  // 64-byte usable dest"
+        "calloc(1, 0x48) -> strcpy(result+8, rbx)  // 64-byte usable dest. "
+        "NOTE: Format parsers 0x87130/0x87560/0x87650/0x87740 are magic-byte detectors only; "
+        "they remap args internally and lose scan_context; on recognition they jump to 0x846cd (early return, eax=0). "
+        "KEYCACHE path triggers only for files NOT matching JPEG/GIF/TIFF/PNG magic."
     ),
 
     "dest_size":  "calloc(1, 0x48) = 72 bytes; dest=result+8 leaves 64 usable bytes before heap chunk boundary",
@@ -2397,7 +2403,13 @@ LIBAV_603_KEYCACHE_UPDATE = {
     "no_chk_hardening": True,
     "no_canary":  False,  # libav.so does have CHK hardening (has_chk=True from earlier analysis)
     "overflow_condition": "Any scanned file where a metadata field (key string at struct+8) exceeds 64 bytes triggers heap buffer overflow",
-    "attack_vector": "Attacker sends malicious file to FortiGate for AV scan; crafts PE/JPEG/archive metadata field > 64 chars",
+    "attack_vector": (
+        "Attacker sends malicious file to FortiGate for AV scan. "
+        "File must NOT match JPEG/GIF/TIFF/PNG magic (those bypass KEYCACHE via early return). "
+        "File must pass 0xb8d10 check (file[8..11] != 'Null' and no deadbeef/Inst/soft sentinel). "
+        "Deep-scan stage before classifier populates [scan_context+8]+0x300 metadata struct with file-derived key > 64 bytes. "
+        "KEYCACHE copies that key into 64-byte heap buffer. Heap overflow."
+    ),
 
     "confirmed_disasm": {
         "calloc_at":     "0x9e266: call 0x488f0 with edi=1, esi=0x48 (calloc(1,72))",
@@ -2412,10 +2424,20 @@ LIBAV_603_KEYCACHE_UPDATE = {
         "0x848b9: mov rsi, [rax+0x300] (metadata key from file context). "
         "0x848c0: test rsi, rsi; je 0x848e6 (NULL check only -- no strlen or length bound). "
         "0x848d9: call 0x9e030 (KEYCACHE). "
-        "JPEG parser at 0x87130: validates 0xff 0xd8 magic; no metadata field length enforcement found. "
-        "Any AV-scanned file where the metadata field at struct+0x300 > 64 bytes triggers heap overflow."
+        "Any AV-scanned non-JPEG/GIF/TIFF/PNG file where the pre-scan metadata field at struct+0x300 > 64 bytes triggers heap overflow."
     ),
-    "pending": "Enumerate other format parsers (0x87560, 0x87650, 0x87740) to confirm same absent length check; determine JPEG EXIF field that sets struct+0x300.",
+    "parser_correction": (
+        "0x87560 = GIF detector (checks 'GIF87a'/'GIF89a' magic -> jmp 0x87300). "
+        "0x87650 = TIFF detector (checks 'II'/'MM' + 0x2a magic -> jmp 0x875b0). "
+        "0x87740 = PNG detector (checks 0x89 'PNG' CRLF magic -> jmp 0x876a0). "
+        "0x87130 = JPEG detector (checks 0xff 0xd8 magic -> jmp 0x86ff0). "
+        "All four: immediately remap args (mov rdi, rsi; mov rsi, rdx) losing scan_context. "
+        "On recognition: set output arg fields, return 1; caller jne 0x846cd = early return eax=0. "
+        "NONE of these parsers write to [scan_context+8]+0x300. "
+        "KEYCACHE is ONLY triggered for files unrecognized by all four parsers. "
+        "Pending-task 'enumerate 0x87560/0x87650/0x87740' was based on wrong premise -- CLOSED: not in attack path."
+    ),
+    "pending": "None -- all KEYCACHE call-chain analysis complete.",
 }
 
 LIBVCM_603 = {
