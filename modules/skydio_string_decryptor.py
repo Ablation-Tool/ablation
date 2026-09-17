@@ -200,25 +200,67 @@ def extract_and_decrypt_at(data: bytes, segs: list, func_start_va: int,
 def find_all_loops_by_pattern(data: bytes, seg_end: int = 0x39904a0) -> list:
     """
     Fast byte-pattern scan for all XOR decrypt loop instances.
-    Searches for the exact 8-byte signature:
-      eor w11,w11,w12      = 0x4a0c016b (little-endian)
-      eor w11,w11,#0xff..1 = 0x521c716b (little-endian)
-    Both instructions appear consecutively and 4-byte aligned in every known loop.
 
-    This replaces the capstone sliding-window approach which fails on the full
-    binary because capstone chokes on non-code data at the ELF header VA=0x0.
+    Two loop families:
+    (A) Standard: uses eor #0xfffffff1 as ARM64 bitmask immediate
+        Signature: eor w11,w11,w12 (0x4a0c016b) + eor w11,w11,#0xfffffff1 (0x521c716b)
+        XOR constant = 0xF1 (low byte of 0xfffffff1)
+
+    (B) Register: uses eor w12,w12,w9 where w9 is set via mov wN,#const earlier
+        Signature: eor w12,w12,w13 (0x4a0d818c) + strb w12,[x1,x8] (0x38286c2c)
+        XOR constant varies per function (e.g., 0x69 in platform_state.cc SetCloudAuth)
+        Detection: scan for the umull+msub+ldrb triple that precedes the eor pair
+
+    Returns list of (va, xor_const) tuples.
     """
-    # Exact 8-byte signature (two consecutive eor instructions)
-    PATTERN = b'\x6b\x01\x0c\x4a\x6b\x71\x1c\x52'
+    # Family A: exact 8-byte eor+eor_immediate signature
+    PATTERN_A = b'\x6b\x01\x0c\x4a\x6b\x71\x1c\x52'
+    # Family B: eor w12,w12,w13 (0x4a0d818c) -- register-based second XOR
+    PATTERN_B = b'\x8c\x81\x0d\x4a'
     hits = []
     pos = 0
     while pos < seg_end:
-        idx = data.find(PATTERN, pos, seg_end)
+        idx = data.find(PATTERN_A, pos, seg_end)
         if idx < 0:
             break
         if idx % 4 == 0:
-            hits.append(idx)  # VA == file offset in this flat-mapped binary
+            hits.append((idx, XOR_CONST))  # Family A: fixed 0xF1
         pos = idx + 4
+
+    # Family B: scan for eor w12,w12,w13 -- resolve xor_const via preceding mov
+    pos = 0
+    md = None
+    while pos < seg_end:
+        idx = data.find(PATTERN_B, pos, seg_end)
+        if idx < 0:
+            break
+        if idx % 4 == 0:
+            # Check if followed by strb (confirming this is inside a decrypt loop)
+            next_insn = struct.unpack_from('<I', data, idx + 4)[0] if idx + 4 < seg_end else 0
+            # strb w12, [x1, x8] = 0x3828_6c2c
+            if (next_insn & 0xFFFFFFFF) == 0x3828682c or (next_insn & 0xFFFFFFFF) == 0x38286c2c:
+                # Scan backward up to 256 instructions for the xor_const register assignment
+                xor_const = None
+                for back_off in range(idx - 4, max(idx - 256*4, 0), -4):
+                    word = struct.unpack_from('<I', data, back_off)[0]
+                    # mov w9, #imm8: 0x52800009 + imm5<<5 -- movz w9, #imm
+                    # movz wN, #imm: encoding = 0x52800000 | (imm16 << 5) | Rd
+                    if (word & 0xFFE0001F) == 0x52800009:  # movz w9, #imm
+                        imm16 = (word >> 5) & 0xFFFF
+                        if imm16 <= 0xFF:
+                            xor_const = imm16
+                            break
+                    # Also check for generic family: eor wX,wX,wY + eor wX,wX,#0xfffffff1
+                    # If we find standard pattern nearby, skip (avoid double-counting)
+                    if data[back_off:back_off+8] == PATTERN_A:
+                        xor_const = None
+                        break
+                if xor_const is not None and xor_const != XOR_CONST:
+                    hits.append((idx, xor_const))  # Family B: variable constant
+        pos = idx + 4
+
+    # Sort by VA
+    hits.sort(key=lambda x: x[0])
     return hits
 
 
@@ -232,13 +274,15 @@ def scan_all_decrypt_loops(data: bytes, segs: list, key_table: bytes) -> list:
 
     print(f"  Pattern scan: VA=0x0-0x{seg_end:x} ({seg_end//1024//1024}MB)...")
     hits = find_all_loops_by_pattern(data, seg_end)
-    print(f"  Found {len(hits)} XOR decrypt loops")
+    print(f"  Found {len(hits)} XOR decrypt loops ({sum(1 for _, c in hits if c == XOR_CONST)} family-A, "
+          f"{sum(1 for _, c in hits if c != XOR_CONST)} family-B)")
 
-    for loop_va in hits:
+    for loop_va, loop_xor in hits:
         func_start = max(loop_va - 0x200, 0)
         res = extract_and_decrypt_at(data, segs, func_start, key_table, max_insns=200)
         results.append({
             'loop_va': loop_va,
+            'loop_xor': loop_xor,
             'func_start': func_start,
             'strings': res,
         })
@@ -247,7 +291,7 @@ def scan_all_decrypt_loops(data: bytes, segs: list, key_table: bytes) -> list:
                 s = dec.decode('ascii', errors='replace')
                 printable = all(0x20 <= b <= 0x7e for b in dec)
                 print(f"    [0x{loop_va:08x}] {'[+]' if printable else '[?]'} "
-                      f"len={len(dec):3d} {s!r}")
+                      f"len={len(dec):3d} xor=0x{loop_xor:02x} {s!r}")
             except Exception as e:
                 print(f"    [0x{loop_va:08x}] decode error: {e}")
 
