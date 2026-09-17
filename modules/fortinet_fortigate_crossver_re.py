@@ -5289,6 +5289,61 @@ FGT800_LIBIPS_F02 = {
 }
 
 
+FGT_LIBIPS_LUAJIT_MIGRATION = {
+    "id":       "FGT-LIBIPS-LUAJIT-MIGRATION",
+    "product":  "FortiGate libips -- Lua 5.3 to LuaJIT migration introduced CWD injection and dostring surface",
+    "severity": "MEDIUM (historical; attack surface appeared in 7.0.13, present through 8.0.0)",
+    "class":    "Attack surface introduced by dependency upgrade (CWE-1395); CWD path injection (CWE-427)",
+
+    "version_matrix": {
+        "6_0_3": {
+            "runtime":        "Lua 5.3 (standard interpreter, not LuaJIT)",
+            "package_path":   "/lua/5.3/?/init.lua;./?.lua;./?/init.lua;...",
+            "cwd_position":   "SECOND (./?.lua is not first -- /lua/5.3/... takes priority)",
+            "ips_lua_dostring": "ABSENT",
+            "vuln_status":    "NOT VULNERABLE -- no dostring; ./?.lua not first in path",
+        },
+        "7_0_13": {
+            "runtime":        "LuaJIT 2.1",
+            "package_path":   "./?.lua;/usr/local/share/luajit-2.1/?.lua;...",
+            "cwd_position":   "FIRST -- ./?.lua loads before all absolute paths",
+            "ips_lua_dostring": "PRESENT",
+            "vuln_status":    "VULNERABLE -- CWD injection + dostring execution both present",
+        },
+        "7_2_0": {
+            "runtime":        "LuaJIT 2.1.0-beta3",
+            "package_path":   "./?.lua;/usr/local/share/luajit-2.1.0-beta3/?.lua;...",
+            "cwd_position":   "FIRST",
+            "ips_lua_dostring": "PRESENT",
+            "vuln_status":    "VULNERABLE",
+        },
+        "8_0_0": {
+            "runtime":        "LuaJIT 2.1",
+            "package_path":   "./?.lua;/usr/local/share/luajit-2.1/?.lua;... (VA 0xeb8b90 in RODATA)",
+            "cwd_position":   "FIRST (set at 0x415440 and 0x4157af in libips.so.new)",
+            "ips_lua_dostring": "PRESENT",
+            "vuln_status":    "VULNERABLE",
+        },
+    },
+
+    "description": (
+        "Between FGT 6.0.3 and FGT 7.0.13, the IPS engine's embedded Lua runtime was upgraded from "
+        "Lua 5.3 to LuaJIT 2.1. This migration changed two security-relevant behaviors simultaneously: "
+        "1. package.path order: in Lua 5.3, the default path began with /lua/5.3/, putting absolute "
+        "   paths first. In LuaJIT, the path was set to begin with ./?.lua (CWD-relative), placing "
+        "   attacker-writable paths above system paths. "
+        "2. ips_lua_dostring was introduced as a new API in the 7.x libips -- this function allows "
+        "   the IPS engine to execute arbitrary Lua string code at runtime. In 6.0.3, no such "
+        "   string-execution API exists in the binary. "
+        "Combined: if an attacker can write a file named after a module the IPS engine loads (e.g., "
+        "a Lua module name used in IPS rule evaluation) to the IPS engine's CWD, that module loads "
+        "preferentially. If ips_lua_dostring is called with attacker-influenced data, arbitrary Lua "
+        "code executes within the IPS engine's privilege context."
+    ),
+
+    "references": ["FGT800_LIBIPS_F01 (CWD injection detail)", "FGT800_LIBIPS_F02 (dostring execution surface)"],
+}
+
 FGT800_SYNTAX_F02 = {
     "id":       "FGT800-SYNTAX-F02",
     "product":  "FortiGate 8.0.0 -- automation-action webhook SSRF and diagnose-script execution",
