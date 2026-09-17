@@ -44,17 +44,23 @@ FGT2_KEY_CROSS_VERSION = {
     "cross_scope":  "CONFIRMED cross-version, cross-architecture",
 
     "version_md5_map": {
-        "FGT_ARM64_8.0.0":  "c8eaa255efceab1512356f46f90b57b5  (fgt2.key, RSA-2048)",
-        "FGT_x86-64_7.4.12": "c8eaa255efceab1512356f46f90b57b5  (fgt2.key, RSA-2048) -- IDENTICAL",
+        "FGT_ARM64_8.0.0":    "c8eaa255efceab1512356f46f90b57b5  (fgt2.key, RSA-2048)",
+        "FGT_x86-64_7.4.12":  "c8eaa255efceab1512356f46f90b57b5  (fgt2.key, RSA-2048) -- IDENTICAL",
+        "FGT_x86-64_7.2.0":   "SAME modulus A75C11... confirmed by openssl -modulus cross-check",
+        "FGT_x86-64_7.0.13":  "SAME modulus A75C11... confirmed",
+        "FGT_x86-64_7.0.3":   "SAME modulus A75C11... confirmed",
+        "FGT_x86-64_6.0.3":   "SAME modulus A75C11... confirmed",
+        "FGT_x86-64_8.0.0":   "SAME modulus A75C11... confirmed -- no rotation at 8.0 boundary for fgt2",
     },
 
+    "modulus_hex": "A75C115F690B67C32834D43FE1BD50DB301CE34F6A96EACDD6AE16353E72715AA8893B039539F5DF1EC68A29926B68A6B20B981E56859DC71F7D0E029F0483E105EE9A108F88FF1B5E304652FF7ECBDD3086AD1642574E706BB2ED692E401FF3B815180A758EFB3ADAEAC8BD5C321C573908C6C51C3ADFE486DD197BCA16B7B54D32C4B3823353 64C6F89343CA2A4FED9CF26168A64DF97A963758B9674544 95A8A0F0106A66470BC6B0C625B952D2E0202B82A12A687653468AB542F0C1351ED3FF9406649F4745 1560F3A7300A4221D19C09C6FEF154BBBADA2B9824 88B9C97BF204185A2863CBD55B633E1A98D21E7BD4E19B595789442671E5C0BCB7A46D",
+
     "implication": (
-        "The fgt2.key RSA-2048 private key is IDENTICAL between FortiGate x86-64 v7.4.12 and "
-        "FortiGate ARM64 v8.0.0 (different versions, different architectures, different build dates). "
-        "This proves the key is firmware-baked (not per-device generated) and has persisted unchanged "
-        "across at least one major version boundary (7.4 -> 8.0) and across architectures (x86-64 -> ARM64). "
-        "The fgt2.crt not_before date is 2016-11-30, establishing the key has been in continuous use "
-        "since at least November 2016 -- a 9+ year window as of 2026."
+        "The fgt2.key RSA-2048 private key is IDENTICAL across all tested FortiGate versions: "
+        "x86-64 6.0.3, 7.0.3, 7.0.13, 7.2.0, 7.4.12, 8.0.0 and ARM64 8.0.0. "
+        "Tested span: 7+ major firmware releases, two architectures, 2016-2026. "
+        "The fgt2.crt not_before = 2016-11-30 confirms at least 9 years of continuous use as of 2026. "
+        "No rotation observed across any major version boundary."
     ),
 
     "cert_signing_chain": (
@@ -66,7 +72,6 @@ FGT2_KEY_CROSS_VERSION = {
 
     "scope_unknown": [
         "FGT x86-64 v7.0.9 (2022): fgt2.key not extracted (separate build pipeline, older product era)",
-        "FGT x86-64 v8.0.0 (2026): datafs not yet extracted for direct comparison",
     ],
 }
 
@@ -79,23 +84,48 @@ FGT_512_KEY_CROSS_VERSION = {
 
     "modulus_pool": {
         "modulus_A": {
-            "prefix":    "00:cf:b8:21:07:4c:9a:df:d7:95:1f:8e:da:b0:22:",
-            "products":  ["FGT_x86-64_7.4.12", "FortiExtender_511F_7.0.3"],
-            "note":      "Same RSA-512 modulus across FGT x86-64 and FortiExtender -- x86-64 build pipeline shared key",
+            "n_hex":     "CFB821074C9ADFD7951F8EDAB0229D295BB714B118ECA5F687995AFD5DC0F2DDEDB07E1C0CA300F6846D3D9B958F5AD5AE67D0610D335447EF6B49157D41D2AD",
+            "md5":       "1158fa1e43c915520a051fe4bebf90d6",
+            "products":  [
+                "FGT_x86-64_6.0.3", "FGT_x86-64_7.0.3", "FGT_x86-64_7.0.13",
+                "FGT_x86-64_7.2.0", "FGT_x86-64_7.4.8", "FGT_x86-64_7.4.12",
+                "FortiExtender_511F_7.0.3",
+            ],
+            "note":      "Identical key file (md5 confirmed) across FGT x86-64 6.0.3 through 7.4.12 and FortiExtender. Spans 7+ years and 4 major versions without rotation.",
+            "factors": {
+                "p": "107095045731422606421607340394827291322211240411133720933781117103784129141009",
+                "q": "101583971568060441777466531308110073456717166856706173952340766593938766839773",
+            },
         },
         "modulus_B": {
-            "prefix":    "00:b5:ed:84:33:93:8a:7d:00:44:b9:8b:73:aa:98:",
-            "products":  ["FGT_ARM64_8.0.0"],
-            "note":      "Different RSA-512 modulus -- ARM64 build pipeline uses separate 512-bit key",
+            "n_hex":     "B5ED8433938A7D0044B98B73AA98E5F92747A8811361D1DC9D0DA381C22900045BC0D21FDF4594B74DE6B1FD879207CE7901730EA29F1DE7568A45CF398199CF",
+            "md5":       "12b045d81de1c16c531e2a43e17f0332",
+            "products":  ["FGT_x86-64_8.0.0", "FGT_ARM64_8.0.0"],
+            "note":      "Replacement key in 8.0.0 era. Still 512-bit RSA. Same file on x86-64 and ARM64 builds -- single global key for 8.x.",
+            "factors": {
+                "p": "97636374099857130169741076853870851523592073731019969402232674075263464647081",
+                "q": "97589981580399376801631665110380745102239180441911007493594721563758635549367",
+            },
         },
     },
 
+    "cert_details": {
+        "issuer":        "CN=fortinet-subca2003, O=Fortinet, OU=Certificate Authority",
+        "subject":       "CN=FortiGate, O=Fortinet, OU=FortiGate",
+        "sig_algorithm": "sha1WithRSAEncryption",
+        "valid_from":    "2025-12-05 (fgt_512.crt in 8.0.0 -- fresh issuance)",
+        "valid_to":      "2056-05-24",
+        "weakness":      "Double weakness: 512-bit RSA modulus + SHA-1 signature hash",
+    },
+
     "structural_finding": (
-        "Fortinet uses different RSA-512 keys per build pipeline (x86-64 vs ARM64), "
-        "but the key is still shared across all devices built from the same pipeline. "
-        "Modulus-A is used by both FGT x86-64 AND FortiExtender, suggesting these share "
-        "a common build/signing infrastructure. "
-        "ALL instances use RSA-512 which is cryptographically broken regardless of modulus uniqueness."
+        "Fortinet uses different RSA-512 keys per major version era (6.x/7.x vs 8.x), "
+        "but the key is identical across all devices within each era. "
+        "Modulus-A covers FGT x86-64 from 6.0.3 to 7.4.12 AND FortiExtender, indicating a "
+        "shared build infrastructure. Modulus-B replaces it in 8.0.0 for both x86-64 and ARM64. "
+        "Key loading: libips.so.new loads the key at runtime via format string '%s%srsa-%d.key' -- "
+        "not hardcoded in binary. The key file is shipped in datafs.tar.gz on the boot partition. "
+        "ALL instances use RSA-512 which is cryptographically broken; factors are known."
     ),
 
     "extracted_factors": {
@@ -3990,4 +4020,247 @@ FORTICLIENT80_VPN = {
             "0x75a48e": "host:port: strcpy + strlen + 0x3a + strcat. PLAUSIBLE SAFE.",
         },
     },
+}
+
+
+# ---------------------------------------------------------
+# FGT 8.0.0 libips.so.new architecture
+# ---------------------------------------------------------
+FGT800_LIBIPS_ARCH = {
+    "id":       "FGT800-LIBIPS-ARCH",
+    "product":  "FortiGate 8.0.0 libips.so.new -- IPS plugin shared library",
+    "binary":   "/tmp/fgt800_datafs/lib/libips.so.new (ELF 64-bit x86-64 shared object, stripped, 18MB)",
+    "build_id": "3473282a6bf9b4a237ef469d4b0bb9de22b70367",
+    "source":   "datafs.tar.gz on FGT_VM64_KVM-v8.0.0.F-build0167 boot partition (unencrypted)",
+
+    "composition": (
+        "Hybrid C + Rust shared library. C provides the core IPS engine; "
+        "Rust crates (via Cargo workspace at /home/devops/ips-build-env/code/ipsbuild-Q3jPsx/) provide: "
+        "bridge::ml (ML domain classifier), bridge::ssl (TLS interception/probing), "
+        "bridge::flowav (flow AV, virus URL cache), bridge::dfa (deterministic finite automaton), "
+        "bridge::shm_rule (shared memory IP/rule tables), bridge::dbloader (rule DB, LMDB-like). "
+        "Rust async runtime: uvart (custom, built on libuv). "
+        "Rust toolchain: rustc ded5c06cf21d2b93bffd5d884aa6e96934ee4234."
+    ),
+
+    "plugin_abi": {
+        "export_register":  "ips_so_query_interface @ 0x103220 (172 bytes)",
+        "export_patch":     "ips_so_patch_urldb @ 0x1032d0 (58 bytes)",
+        "interface_table":  "36-entry name/funcptr table at VA 0x1127ea0 (foff 0x1126ea0), stride=16",
+        "dispatch_logic":   "strcmp(name, table[i].name) -> write table[i].funcptr to caller output array; 36 iterations",
+    },
+
+    "interface_table": {
+        "process_packet":          "0xedad0 -- primary packet inspection entry; dispatches to per-protocol work queue",
+        "init_engine":             "0xf4ea0",
+        "load_rule_file":          "0xee2f0",
+        "validate_rule_param":     "0xeee90",
+        "modify_custom_rule":      "0xf8ce0",
+        "load_config":             "0xfdae0",
+        "apply_config":            "0xef210",
+        "query_lua_intf":          "0x1017b0 -- query Lua interface",
+        "register_lua_module":     "0x1ae1c0 -- register Lua module",
+        "prepare_lua_state":       "0x1b90e0 -- prepare LuaJIT state",
+        "create_proxy":            "0xfff40 -- create SSL proxy",
+        "register_socket_intf":    "0xfff30",
+        "register_avscan_intf":    "0x843f00",
+        "process_flowav_result":   "0x8435b0",
+        "process_certverify_result": "0xeef80",
+        "reinit_engine":           "0xf3970",
+        "get_lib_info":            "0xed980",
+        "ctrl":                    "0xf9d90",
+    },
+
+    "ml_classifier": {
+        "function":  "bridge::ml::ips_ml_classify_internal",
+        "role":      "Domain/URL ML classification for threat detection",
+        "panic_msg": "bridge::ml::ips_ml_classify_internal::f: label_idx= is out of bounds: recalculate...",
+        "note":      "Rust OOB index access panics/aborts; panic can be DoS if triggered from network path",
+    },
+
+    "ssl_probe": {
+        "functions":   ["bridge::ssl::ips_ssl_probe_submit", "bridge::ssl::ips_ssl_probe_cancel",
+                        "bridge::ssl::ips_uvart_runtime_init", "bridge::ssl::ftls_lua_init"],
+        "lua_scripts": ["ftls.lua", "iot_client.lua", "iot_query.lua", "webfovrd.lua", "webfovrd_common.lua"],
+        "storage":     "Embedded as gzip-compressed LuaJIT bytecode in RODATA",
+        "ipc":         "ips_otvp_ipc.sock -- Unix socket for inter-process communication",
+        "tempfile":    "/tmp/lua_XXXXXX -- LuaJIT creates temp Lua files in /tmp",
+    },
+
+    "key_paths": {
+        "rsa":   "%s%srsa-%d.key  (loads fgt_512.key, fgt.key, etc. at runtime)",
+        "dsa":   "%s%sdsa-%d.key",
+        "ecdsa": "%s%secdsa-%d.key",
+        "ed":    "%s%sed%d.key",
+    },
+
+    "function_corpus": {
+        "prologue_scan_count":  4637,
+        "bert_sweep_model":     "sentence-transformers/all-MiniLM-L6-v2",
+        "encoding_time":        "165s on CPU (batch_size=256)",
+        "saved_corpus":         "/tmp/libips800_vecs.npy, /tmp/libips800_prologues.json",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FGT 8.0.0 libips.so.new F01: global 512-bit RSA keys
+# ---------------------------------------------------------
+FGT800_LIBIPS_F01 = {
+    "id":       "FGT800-LIBIPS-F01",
+    "product":  "FortiGate libips.so.new -- global 512-bit RSA device identity key",
+    "severity": "CRITICAL -- 512-bit RSA is factorable; global shared key; factors already known",
+    "class":    "Hardcoded/shared cryptographic key (CWE-321) + inadequate key size (CWE-326)",
+
+    "key_file":  "datafs.tar.gz:/etc/fgt_512.key (shipped in every FortiGate firmware image)",
+    "cert_file": "datafs.tar.gz:/etc/fgt_512.crt (X.509 cert, Fortinet CA signed)",
+    "key_size":  "512-bit RSA (cryptographically broken; factorable with GNFS in hours-days)",
+
+    "cross_version_scope": {
+        "modulus_A": {
+            "hex":      "CFB821074C9ADFD7951F8EDAB0229D295BB714B118ECA5F687995AFD5DC0F2DDEDB07E1C0CA300F6846D3D9B958F5AD5AE67D0610D335447EF6B49157D41D2AD",
+            "md5":      "1158fa1e43c915520a051fe4bebf90d6",
+            "versions": "FortiGate x86-64 6.0.3, 7.0.3, 7.0.13, 7.2.0, 7.4.8, 7.4.12; FortiExtender 511F 7.0.3",
+            "factors":  "p=107095045731422606421607340394827291322211240411133720933781117103784129141009 q=101583971568060441777466531308110073456717166856706173952340766593938766839773",
+        },
+        "modulus_B": {
+            "hex":      "B5ED8433938A7D0044B98B73AA98E5F92747A8811361D1DC9D0DA381C22900045BC0D21FDF4594B74DE6B1FD879207CE7901730EA29F1DE7568A45CF398199CF",
+            "md5":      "12b045d81de1c16c531e2a43e17f0332",
+            "versions": "FortiGate x86-64 8.0.0, FortiGate ARM64 8.0.0",
+            "factors":  "p=97636374099857130169741076853870851523592073731019969402232674075263464647081 q=97589981580399376801631665110380745102239180441911007493594721563758635549367",
+        },
+    },
+
+    "cert_details": {
+        "issuer":     "CN=fortinet-subca2003 (modulus_B cert, 8.0.0 era)",
+        "subject":    "CN=FortiGate, O=Fortinet, OU=FortiGate",
+        "sig_alg":    "sha1WithRSAEncryption (SHA-1 -- double weakness: broken hash + broken key)",
+        "not_before": "2025-12-05 (modulus_B cert issued December 2025 for 8.0.0 firmware)",
+        "not_after":  "2056-05-24",
+    },
+
+    "load_mechanism": (
+        "libips.so.new does not embed the key bytes. It constructs the key path at runtime "
+        "using format string '%s%srsa-%d.key' (RODATA in libips.so.new). "
+        "The key file is shipped as a plaintext PEM file in datafs.tar.gz on the FortiGate boot partition. "
+        "No TPM or hardware protection; any process with FS access can read the private key."
+    ),
+
+    "impact": (
+        "1. Both modulus_A and modulus_B have known factors -- the private keys are trivially recoverable. "
+        "2. The private key matches the Fortinet-CA-issued X.509 certificate (CN=FortiGate). "
+        "3. With the private key, an attacker can: impersonate any FortiGate device to FortiManager/FortiAnalyzer; "
+        "forge device identity signatures; decrypt traffic encrypted to this public key. "
+        "4. modulus_A covers all FortiGate x86-64 firmware from 6.0.3 to 7.4.x -- a single key for the entire 6.x/7.x era. "
+        "5. modulus_B is the 8.0 replacement -- still 512-bit, still broken."
+    ),
+
+    "pending": ["Identify which FortiManager/FortiAnalyzer authentication protocol uses these certs",
+                "Determine if IKE/IPsec or SSL-VPN use fgt_512.crt for device authentication"],
+}
+
+
+# ---------------------------------------------------------
+# FGT 8.0.0 libips.so.new F02: LuaJIT embedded with disk paths
+# ---------------------------------------------------------
+FGT800_LIBIPS_F02 = {
+    "id":       "FGT800-LIBIPS-F02",
+    "product":  "FortiGate libips.so.new -- LuaJIT 2.1 runtime with disk module search paths",
+    "severity": "MEDIUM -- LuaJIT in IPS; disk search path allows Lua code injection if CWD writable",
+    "class":    "Unsafe dynamic code loading (CWE-829); Lua module search from writable paths",
+
+    "luajit_version": "LuaJIT 2.1.f9140a62",
+    "lua_version":    "Lua 5.1 compatible",
+
+    "module_search_paths": {
+        "lua":    "./?.lua;/usr/local/share/luajit-2.1/?.lua;/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua",
+        "clib":   "./?.so;/usr/local/lib/lua/5.1/?.so;/usr/local/lib/lua/5.1/loadall.so",
+        "note":   "./?.lua and ./?.so load from the current working directory FIRST",
+    },
+
+    "embedded_scripts": {
+        "storage":  "Gzip-compressed LuaJIT bytecode in RODATA",
+        "scripts":  ["ftls.lua (TLS inspection)", "iot_client.lua (IoT classification)", "iot_query.lua", "webfovrd.lua (web flow override)", "webfovrd_common.lua"],
+        "source":   "bridge::ssl::crates::uvart-ftls-lua crate",
+    },
+
+    "lua_api_exports": {
+        "ips_lua_require":    "C bridge: require Lua module",
+        "ips_lua_newstate":   "C bridge: create new Lua state",
+        "ips_lua_pcall":      "C bridge: protected Lua call",
+        "ips_lua_loadbuffer": "C bridge: load Lua bytecode from buffer",
+        "ips_lua_dostring":   "C bridge: execute Lua string",
+        "ips_lua_load":       "C bridge: load Lua chunk",
+    },
+
+    "tempfile": {
+        "path":    "/tmp/lua_XXXXXX",
+        "note":    "LuaJIT creates temp files in /tmp; XXXXXX = mkstemp suffix; symlink race if /tmp is world-writable",
+    },
+
+    "attack_scenario": (
+        "If the IPS process (ipsmonitor/ipsengine daemon) runs with a writable current directory, "
+        "an attacker who can write to that directory can place a crafted .lua file that gets loaded "
+        "by require() before the legitimate module (./?.lua is searched first). "
+        "Alternatively: if /tmp is writable and /tmp/lua_XXXXXX creation is predictable, "
+        "a symlink attack on the temp Lua file could redirect Lua bytecode loading. "
+        "The LOADLIB mechanism (LOADLIB: %s luaopen_%s) also allows loading .so C extensions -- "
+        "if the module path is attacker-controlled, this becomes arbitrary code execution."
+    ),
+
+    "pending": ["Determine CWD of ipsengine/ipsmonitor process on running FortiGate",
+                "Check if any Lua module names are derived from attacker-controlled network data",
+                "Verify if ftls_lua_init can load external Lua modules or only embedded bytecode"],
+}
+
+
+# ---------------------------------------------------------
+# FGT 8.0.0 libips.so.new -- ablation semantic sweep results
+# ---------------------------------------------------------
+FGT800_LIBIPS_SEMANTIC_SWEEP = {
+    "id":       "FGT800-LIBIPS-SWEEP",
+    "product":  "FortiGate 8.0.0 libips.so.new ablation BERT semantic sweep",
+    "binary":   "libips.so.new (18MB ELF x86-64 stripped)",
+
+    "method": {
+        "prologue_scan":  "55 48 89 E5 (push rbp; mov rbp, rsp) -- 4637 functions",
+        "model":          "sentence-transformers/all-MiniLM-L6-v2",
+        "normalization":  "BinFuse 11-category opcode abstraction + call list extraction",
+        "encoding_time":  "165s on CPU",
+        "saved_corpus":   "/tmp/libips800_vecs.npy",
+    },
+
+    "query_results": {
+        "packet_parse_memcpy": {
+            "top":   ["0x26af80 (score=0.3718)", "0xb887c (score=0.3684, FP -- global constructor)", "0x26ae60 (score=0.3676)"],
+            "verdict": "0x26af80 and 0x26ae60 are protocol type dispatchers reading [rbx+0x318] (protocol field). bswap on [r12+0x28] = big-endian network field. CONFIRM: packet processing, not memcpy vuln.",
+        },
+        "heap_overflow_alloc": {
+            "top":   ["0x6413c0 (score=0.3292)", "0x281630 (score=0.3278)", "0x6b8660 (score=0.3264)"],
+            "verdict": "NOT YET ANALYZED",
+        },
+        "format_string": {
+            "top":   ["0x25f9f0 (score=0.3065)", "0x1894f9 (score=0.2924)", "0x260590 (score=0.2913)"],
+            "verdict": "NOT YET ANALYZED",
+        },
+        "buffer_overread": {
+            "top":   ["0x26ae60 (score=0.3641)", "0x26af80 (score=0.3566)", "0x2600c0 (score=0.3556)"],
+            "verdict": "0x26ae60 and 0x26af80 confirmed as protocol dispatchers. 0x2600c0 NOT YET ANALYZED.",
+        },
+        "weak_crypto": {
+            "top":   ["0x5f63b0 (score=0.2767)", "0x5be820 (score=0.2758)", "0x5bcfb0 (score=0.2733)"],
+            "verdict": "FALSE POSITIVE CLUSTER -- 0x5f63b0 is TLS protocol discriminator (cmp [rbx], 0x303 = TLS 1.2). Others are data structure iterators with stride 0x20. Semantic match is spurious.",
+        },
+        "command_injection": {
+            "top":   ["0xb887c (score=0.2239)"],
+            "verdict": "FALSE POSITIVE -- 0xb887c is C++ global constructor chain (repeated calls to 0x9f088 + ud2 abort pattern).",
+        },
+    },
+
+    "cross_query_hits": {
+        "0x26af80": "packet_parse_memcpy(#1), buffer_overread(#2), crlf_injection(#1) -- protocol type dispatcher; bswap on network field at [r12+0x28]",
+        "0x26ae60": "packet_parse_memcpy(#4), buffer_overread(#1) -- protocol type dispatcher, same pattern as 0x26af80",
+    },
+
+    "pending_analysis": ["0x2600c0 (buffer_overread #3)", "0x6413c0 (heap_overflow_alloc #1)", "0x25f9f0 (format_string #1)", "0x6b8660 (heap_overflow_alloc #3)"],
 }
