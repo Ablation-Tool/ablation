@@ -5408,6 +5408,40 @@ FGT800_SYNTAX_F02 = {
     ),
 }
 
+FGT603_LIBVCM_ARCH = {
+    "id":       "FGT603-LIBVCM-ARCH",
+    "product":  "FortiGate 6.0.3 libvcm.so -- Virus Checking Module; SMB/RPC active scanning engine (absent in 7.x+)",
+    "binary":   "/tmp/fgt603_datafs/lib/libvcm.so.gz (compressed ELF; decompresses to 7.78MB)",
+    "severity": "INFORMATIONAL -- active scanning library with SMB/RPC probe capability; absorbed into libav.so.new in 7.x",
+
+    "description": (
+        "libvcm.so is a standalone Virus Checking Module present only in FGT 6.0.3 and earlier. "
+        "It is absent in 7.0.13, 7.2.0, 7.4.8, and 8.0.0 -- its functions were absorbed into libav.so "
+        "(which grew from 3.6MB in 6.0.3 to 8.3MB in 7.4.8, a 2.3x increase matching the absorbed module). "
+        "Key capabilities identified from strings: "
+        "  SMB authentication: smb_login, smb_account, smb_passwd, smb_session_setupx_auth "
+        "  DCE/RPC unauthenticated probing: dce_rpc_request_no_auth, dce_rpc_bind_no_auth, dce_rpc_parse_response_no_auth "
+        "  Windows registry access over SMB: HKEY_CURRENT_USER, HKEY_USERS, smb_registry_enum_key "
+        "  DCE/RPC SAM enumeration: _smb_samr_enumdomuser, _smb_samr_openuser, _smb_samr_queryuser "
+        "  Custom UA: 'User-Agent: Mozilla/5.0 (X11; U; en-US; Fortinet' (used for HTTP-based AV scanning) "
+        "  Detection patterns: EXPLOIT_PAT_UNIX/WIN, EXPLOIT_CMD_UNIX/WIN (exploit pattern strings) "
+        "  Arkeia detection: 'Arkeia.Agent.Access.Default.Root.Password' (detection rule for Arkeia default cred) "
+        "  NTLM auth: http_keepalive_send_ntlm, Authorization: NTLM %s, NTLMSSP "
+        "  Protocol coverage: FTP, SMB, HTTP, SNMP (usmHMACSHA1/MD5AuthProtocol), CVS, IMAP "
+        "The dce_rpc_request_no_auth capability is architecturally significant: the AV engine actively "
+        "initiates unauthenticated DCE/RPC connections to scanned hosts. This means the AV scanner acts "
+        "as a network client to SMB/RPC servers, opening attack surface if remote services send malformed RPC responses."
+    ),
+
+    "smb_cred_storage": (
+        "libvcm exposes smb_account and smb_passwd as function names -- these accept SMB credentials "
+        "for authenticated scanning of SMB shares. In 6.0.3, these credentials would be stored in the "
+        "FortiGate configuration. The storage type in the 6.0.3 syntax file has not been analyzed; "
+        "if stored as :string: rather than :passwd:, the credentials are cleartext in config backups "
+        "(same class as FGT800-SYNTAX-F01 wireless RADIUS secret)."
+    ),
+}
+
 FGT748_LIBAV_ZIP_INT_OVERFLOW = {
     "id":       "FGT748-LIBAV-ZIP-INT-OVERFLOW",
     "product":  "FortiGate 7.4.8 libav.so.new -- avIsIgnoreBuffer LFH parser 32-bit integer overflow",
