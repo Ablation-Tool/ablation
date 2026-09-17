@@ -147,6 +147,32 @@ def extract_functions(data: bytes, max_funcs: int = 6000) -> list:
     return funcs
 
 
+def extract_functions_from_live(data: bytes, live_addrs: 'set[int]',
+                                 addr_lo: int = 0x016e54c0,
+                                 addr_hi: int = 0x0315ad30,
+                                 max_insn_bytes: int = 256) -> list:
+    """Build function records using live addresses as function starts.
+
+    Skips prologue heuristics entirely. Uses caller/RELA-derived addresses
+    as ground-truth entry points. For libflyby_jni.so the ELF maps VA==fileoff
+    so file_offset = addr directly.
+
+    addr_lo/addr_hi default to the .text section bounds of libflyby_jni.so
+    (VA 0x016e54c0 to 0x0315ad30 = .rodata start).
+    """
+    starts = sorted(a for a in live_addrs if addr_lo <= a < addr_hi)
+    funcs = []
+    for i, addr in enumerate(starts):
+        next_addr = starts[i + 1] if i + 1 < len(starts) else addr + max_insn_bytes
+        size = min(next_addr - addr, max_insn_bytes)
+        foff = addr  # VA == fileoff for this binary
+        if foff < 0 or foff + size > len(data):
+            continue
+        code = data[foff:foff + size]
+        funcs.append({'addr': addr, 'offset': foff, 'code': code, 'size': size})
+    return funcs
+
+
 # ── Disassembly + description ──────────────────────────────────────────────────
 
 def disasm_arm64(code: bytes, addr: int, max_insns: int = 60) -> list:
@@ -280,41 +306,67 @@ def load_live_addrs(path: str) -> 'set[int]':
 
 
 def run_sweep(binary_path: str, query_key: str = None, top_n: int = 10, cache: bool = True,
-              live_filter: 'set[int] | None' = None) -> dict:
+              live_filter: 'set[int] | None' = None,
+              live_direct: 'set[int] | None' = None) -> dict:
     print(f"\n[*] Skydio libflyby_jni.so — Semantic RE Sweep")
     print(f"[*] Binary: {binary_path}")
     print(f"[*] Size: {os.path.getsize(binary_path)//1024//1024}MB")
-    if live_filter is not None:
-        print(f"[*] Liveness filter: {len(live_filter):,} live addresses (dead-code suppressed)\n")
+    if live_direct is not None:
+        print(f"[*] Mode: LIVE-DIRECT ({len(live_direct):,} live addrs as function starts, no prologue scan)\n")
+    elif live_filter is not None:
+        print(f"[*] Mode: prologue-scan + liveness filter ({len(live_filter):,} live addrs)\n")
     else:
-        print(f"[*] Liveness filter: OFF (dead code included in corpus)\n")
+        print(f"[*] Mode: prologue-scan only (dead code included)\n")
 
     with open(binary_path, 'rb') as f:
         data = f.read()
 
-    cache_path = Path(binary_path).with_suffix('.funcs.json')
-    if cache and cache_path.exists():
-        print(f"[*] Loading cached function descriptors from {cache_path}")
-        with open(cache_path) as f:
-            described = json.load(f)
-        print(f"[*] Loaded {len(described):,} functions from cache")
+    if live_direct is not None:
+        # Bypass prologue scanning entirely. Use live addresses as function starts.
+        # Cache key includes the live set hash to avoid stale cache collisions.
+        import hashlib as _hl
+        lhash = _hl.sha256(
+            ','.join(str(a) for a in sorted(live_direct)).encode()
+        ).hexdigest()[:12]
+        cache_path = Path(binary_path).with_suffix(f'.live_{lhash}.funcs.json')
+        if cache and cache_path.exists():
+            print(f"[*] Loading cached live-direct descriptors from {cache_path.name}")
+            with open(cache_path) as f:
+                described = json.load(f)
+            print(f"[*] Loaded {len(described):,} functions from cache")
+        else:
+            print(f"[*] Extracting from {len(live_direct):,} live addresses (.text range)...")
+            funcs = extract_functions_from_live(data, live_direct)
+            print(f"[*] Building semantic descriptions ({len(funcs):,} functions)...")
+            described = build_func_descriptions(data, funcs)
+            if cache:
+                cacheable = [{k: v for k, v in f.items() if k != 'code'} for f in described]
+                with open(cache_path, 'w') as f:
+                    json.dump(cacheable, f)
+                print(f"[*] Cached {len(described):,} descriptors -> {cache_path.name}")
     else:
-        print("[*] Extracting functions...")
-        funcs = extract_functions(data)
-        print(f"[*] Building semantic descriptions ({len(funcs):,} functions)...")
-        described = build_func_descriptions(data, funcs)
-        if cache:
-            # Strip code bytes from cache (too large)
-            cacheable = [{k: v for k, v in f.items() if k != 'code'} for f in described]
-            with open(cache_path, 'w') as f:
-                json.dump(cacheable, f)
-            print(f"[*] Cached {len(described):,} descriptors -> {cache_path}")
+        cache_path = Path(binary_path).with_suffix('.funcs.json')
+        if cache and cache_path.exists():
+            print(f"[*] Loading cached function descriptors from {cache_path}")
+            with open(cache_path) as f:
+                described = json.load(f)
+            print(f"[*] Loaded {len(described):,} functions from cache")
+        else:
+            print("[*] Extracting functions...")
+            funcs = extract_functions(data)
+            print(f"[*] Building semantic descriptions ({len(funcs):,} functions)...")
+            described = build_func_descriptions(data, funcs)
+            if cache:
+                cacheable = [{k: v for k, v in f.items() if k != 'code'} for f in described]
+                with open(cache_path, 'w') as f:
+                    json.dump(cacheable, f)
+                print(f"[*] Cached {len(described):,} descriptors -> {cache_path}")
 
-    if live_filter is not None:
-        before = len(described)
-        described = [f for f in described if f['addr'] in live_filter]
-        print(f"[*] Liveness filter: {before:,} -> {len(described):,} functions "
-              f"({before - len(described):,} dead-code entries removed)")
+        if live_filter is not None:
+            before = len(described)
+            described = [f for f in described if f['addr'] in live_filter]
+            print(f"[*] Liveness filter: {before:,} -> {len(described):,} functions "
+                  f"({before - len(described):,} dead-code entries removed)")
 
     print(f"[*] Building BERT embeddings for {len(described):,} functions...")
     from sentence_transformers import SentenceTransformer
@@ -375,8 +427,13 @@ def main():
     parser.add_argument('--top', type=int, default=10)
     parser.add_argument('--no-cache', action='store_true')
     parser.add_argument('--live-filter', default=None, metavar='PATH',
-                        help='Path to hex-address-per-line live function set (e.g. /tmp/skydio_live_funcs.txt). '
-                             'Restricts corpus to reachable functions, eliminating dead-code false positives.')
+                        help='Path to hex-address-per-line live function set. '
+                             'Restricts the prologue-scanned corpus to reachable functions only.')
+    parser.add_argument('--live-direct', default=None, metavar='PATH',
+                        help='Path to hex-address-per-line live function set. '
+                             'Replaces prologue scanning entirely: uses live addresses as function starts. '
+                             'Much higher precision on stripped binaries. '
+                             'Default range: .text [0x016e54c0, 0x0315ad30] (libflyby_jni.so).')
     args = parser.parse_args()
 
     if not os.path.exists(args.binary):
@@ -386,14 +443,16 @@ def main():
         sys.exit(1)
 
     live_addrs = None
-    if args.live_filter:
-        print(f"[*] Loading live function set from {args.live_filter}...")
-        live_addrs = load_live_addrs(args.live_filter)
+    if args.live_filter or args.live_direct:
+        path = args.live_direct or args.live_filter
+        print(f"[*] Loading live function set from {path}...")
+        live_addrs = load_live_addrs(path)
         print(f"[*] {len(live_addrs):,} live addresses loaded")
 
     query_key = args.query if not args.all_queries else None
     results = run_sweep(args.binary, query_key, args.top, cache=not args.no_cache,
-                        live_filter=live_addrs)
+                        live_filter=live_addrs if args.live_filter else None,
+                        live_direct=live_addrs if args.live_direct else None)
     save_report(results, args.binary)
 
     print("\n[*] Next steps:")
