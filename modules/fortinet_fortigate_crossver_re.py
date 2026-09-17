@@ -2690,3 +2690,110 @@ FORTICLIENT80_SCANUNIT = {
         },
     },
 }
+
+
+# ---------------------------------------------------------
+# FortiClient 8.0 -- libav.so (AV engine shared library) RE
+# ---------------------------------------------------------
+FORTICLIENT80_LIBAV = {
+    "id":        "FCLIENT80-LIBAV",
+    "product":   "FortiClient 8.0 libav.so -- AV engine (shared library)",
+    "binary":    "/opt/forticlient/libav.so (ET_DYN ELF64 x86-64 stripped; 15,715,008 bytes)",
+    "has_canary": False,
+    "has_chk":   False,
+    "chk_detail": "No __stack_chk_fail; no __sprintf_chk. No canary protection.",
+    "severity":  "LOW-MEDIUM -- no confirmed HIGH findings; no stack canary (any stack overflow would be exploitable); requires deeper strcpy surface review",
+
+    "go_binaries_in_forticlient80": [
+        "fctdns (Go BuildID present; no C memory bugs; uses system DNS resolver)",
+        "firewall (Go BuildID present; iptables manager; no C memory bugs)",
+        "forticlient-cli (Go)",
+        "FortiGuardAgent (Go)",
+        "webfilter (Go)",
+        "ztproxy (Go)",
+    ],
+
+    "plt_inventory": {
+        "strcpy":   {"plt": "0xf4860", "got": "0xe91418", "callers": 48},
+        "strncpy":  {"plt": "0xf4450", "got": "0xe91210", "callers": 56},
+        "strcat":   {"plt": "0xf4fe0", "got": "0xe917d8", "callers": 5},
+        "strncat":  {"plt": "0xf45e0", "got": "0xe912d8", "callers": 10},
+        "sscanf":   {"plt": "0xf4600", "got": "0xe912e8", "callers": 9},
+        "sprintf":  {"plt": "0xf41a0", "got": "0xe910b8", "callers": 65},
+        "snprintf": {"plt": "0xf4ee0", "got": "0xe91758", "callers": 206},
+        "memcpy":   {"plt": "0xf4740", "got": "0xe91388", "callers": 2194},
+    },
+
+    "plt_resolved": {
+        "0xf49b0": "strcasecmp",
+        "0xf4920": "stpcpy",
+        "0xf48e0": "fclose",
+        "0xf4360": "strlen",
+        "0xf4a00": "memchr",
+        "0xf4c60": "strcmp",
+    },
+
+    "semantic_sweep": {
+        "method": "Ablation semantic sweep (all-MiniLM-L6-v2) on 137 callers (strcpy+strcat+sscanf+strncat+sprintf)",
+        "queries": ["unbounded_string_copy", "format_string_injection", "sscanf_bare_s", "strcat_overflow", "av_file_parse"],
+        "top_candidates_reviewed": 12,
+    },
+
+    "sscanf_analysis": {
+        "callers": 9,
+        "findings": 0,
+        "detail": (
+            "All 9 callers use %d or %u format strings only. No bare %s. "
+            "7 callers use RODATA format directly (LEA rsi scan confirmed). "
+            "2 callers (0x3d8016, 0x3d805d) use r12 as format; r12 set at 0x3d800c: "
+            "lea r12, [rip+0x88b8f4] = RODATA '%u'. Both use static integer format. SAFE."
+        ),
+    },
+
+    "strncat_analysis": {
+        "callers": 10,
+        "findings": 0,
+        "detail": (
+            "All 4 analyzed callers (0x1ebe69, 0x2ad351, 0x2ad3dc, 0x2ad45d) use pattern: "
+            "strlen(dest) -> n = max_size - strlen(dest) -> strncat(dest, src, n). "
+            "n = remaining space in destination, not source length. Correct safe pattern. SAFE."
+        ),
+    },
+
+    "strcpy_analysis": {
+        "callers": 48,
+        "findings": 0,
+        "detail": (
+            "Representative sample of 8 callers reviewed. "
+            "0x115ca5: stpcpy(r12, r14) then strcpy(end_ptr, rbx) -- concatenation; "
+            "r12=[rsp+0x800] with frame sub rsp,0x15e8 = 3560 bytes available. SAFE. "
+            "0x2d88bf: strcpy([rbx+8], rbp) where rbp=function arg; dest is 0x108-byte struct field. "
+            "Requires caller source bound analysis. LOW. "
+            "0x1841f1: malloc(0x48=72 bytes) then strcpy([malloc+8], rbp). "
+            "rbp in setjmp/exception-handling context (0x1840bf prologue: mov rbp, rsp); "
+            "source unlikely user-controlled. LOW. "
+            "0x2d90fe, 0x18e080: struct management copies with internal strings. LIKELY SAFE. "
+            "No confirmed unbounded copy of file/network data into fixed buffer."
+        ),
+    },
+
+    "strcat_analysis": {
+        "callers": 5,
+        "findings": 0,
+        "detail": (
+            "0x339aed: strcat(rdi, rsi) where rdi = ebp + [rbx+0x8c1c8] and "
+            "rsi = esi + [rbx+0x8c1c8]. Both indices bounds-checked: "
+            "cmp ebp, [rbx+0x8c190] (lower) and cmp ebp, [rbx+0x29be80] (upper), "
+            "jb/jae to error on out-of-range. Array-indexed concatenation with explicit bounds. SAFE. "
+            "Remaining 4 callers (0x187a9a, 0x2b5849, 0x333f97, 0x3a60cc) not fully analyzed."
+        ),
+    },
+
+    "pending": [
+        "Complete strcpy analysis: 40 remaining callers not individually reviewed",
+        "Trace 0x2d88bf source (rbp = function arg) through callers",
+        "Trace 0x1841f1 malloc(0x48) size vs actual source string length",
+        "Analyze 4 remaining strcat callers",
+        "sprintf 65 callers not analyzed (snprintf 206 callers = bounded by design)",
+    ],
+}
