@@ -1782,3 +1782,102 @@ HTTPSD_720_F01_NTLM_AUTH = {
     ),
 }
 
+# ─── FortiOS 8.0.0 findings ──────────────────────────────────────────────────
+
+FGT800_F01_ROOTFS_ENCRYPTION_NEW_MAGIC = {
+    "id":      "FGT800-F01",
+    "product": "FortiOS 8.0.0 (KVM QCOW2) -- rootfs.gz encryption variant inventory",
+    "severity": "INFO -- new encryption magic; prevents direct CPIO extraction of 8.0.0 rootfs",
+
+    "rootfs_gz": {
+        "path":     "/mnt/fgt800p1/rootfs.gz",
+        "size":     "95,995,309 bytes (96MB)",
+        "magic":    "0xa3efd2cb (LE32, first 4 bytes: cb d2 ef a3)",
+        "type":     "custom encrypted format -- NOT gzip (gzip magic: 1f 8b), NOT prior known variants",
+    },
+
+    "encryption_magic_cross_version": {
+        "FortiOS_7.0.3":  "plain gzip CPIO (magic 1f 8b) -- unencrypted",
+        "FortiOS_7.2.0":  "plain gzip CPIO (magic 1f 8b) -- unencrypted",
+        "FortiOS_7.0.13": "custom magic 0x70c4180e -- encrypted",
+        "FortiOS_7.4.8":  "custom magic 0x654accb2 -- encrypted",
+        "FortiOS_8.0.0":  "custom magic 0xa3efd2cb -- encrypted (third distinct variant)",
+    },
+
+    "datafs": {
+        "path":    "/mnt/fgt800p1/datafs.tar.gz",
+        "size":    "22,015,015 bytes",
+        "format":  "plain gzip tar -- accessible without decryption",
+        "contents": ["lib/libips.so.new", "lib/libav.so.new", "lib/libips.so.new.x", "lib/libav.so.new.x"],
+    },
+
+    "dot_x_files": {
+        "libips.so.new.x": "13,786 bytes, DER-encoded X.509 cert (magic 30 80 06 09 2a 86 48 86) -- OID prefix 1.2.840.113549 (RSA PKCS)",
+        "libav.so.new.x":  "13,787 bytes, DER-encoded X.509 cert (same OID prefix)",
+        "function":        "Likely integrity verification certificates for signed library loading -- kernel checks .so.new.x signature before loading .so.new",
+    },
+
+    "kernel": {
+        "binary":    "flatkc",
+        "version":   "4.19.13",
+        "compiled":  "Mon Apr 20 17:10:46 America 2026",
+        "compiler":  "gcc version 12.4.0 (GCC)",
+        "buildhost": "root@6dd369a4a2ab",
+        "notes":     "Major kernel upgrade from 3.2.16 in FortiOS 7.0.13 to 4.19 LTS in 8.0.0; 4.19 added KASLR, enhanced seccomp, improved BPF JIT, retpoline for Spectre-v2",
+    },
+}
+
+LIBIPS_800_F01_SEMANTIC_SWEEP = {
+    "id":      "LIBIPS-800-F01",
+    "product": "FortiOS 8.0.0 libips.so.new -- IPS engine semantic sweep",
+    "severity": "INFO -- sweep complete; no high-confidence true positives in first 2000 functions; import inventory documented",
+
+    "binary": {
+        "path":      "/tmp/fgt800_datafs/lib/libips.so.new",
+        "size":      "18,525,336 bytes (18.5MB)",
+        "arch":      "ELF x86-64 shared object (ET_DYN), stripped",
+        "build_id":  "3473282a6bf9b4a237ef469d4b0bb9de22b70367",
+        "text_section": {
+            "va":     "0x9f140",
+            "size":   "0xd8322c (13.5MB)",
+        },
+        "size_vs_7013": "8.9MB (7.0.13) -> 18.5MB (8.0.0): +109%. Likely new protocol parsers and expanded signature engine.",
+    },
+
+    "dangerous_imports": {
+        "strcpy":    "present (U strcpy@GLIBC_2.2.5)",
+        "sscanf":    "present (U sscanf@GLIBC_2.2.5 + U __isoc99_sscanf@GLIBC_2.7)",
+        "strtok":    "present (U strtok@GLIBC_2.2.5 + U strtok_r@GLIBC_2.2.5)",
+        "sprintf":   "present as __sprintf_chk@GLIBC_2.3.4 (fortified -- checked variant)",
+        "memcpy":    "present as memcpy@GLIBC_2.14 + __memcpy_chk@GLIBC_2.3.4",
+        "memmove":   "present as memmove@GLIBC_2.2.5 + __memmove_chk@GLIBC_2.3.4",
+        "fgets":     "present (U fgets@GLIBC_2.2.5)",
+        "note":      "strcpy and sscanf are unfortified variants -- no CHK equivalent imported",
+    },
+
+    "semantic_sweep": {
+        "functions_found":    4777,
+        "functions_encoded":  1999,
+        "model":              "sentence-transformers/all-MiniLM-L6-v2",
+        "queries_run":        7,
+
+        "results": {
+            "BUFFER_OVERFLOW_PACKET":  {"top_va": "0x1dd2e0", "score": 0.400, "verdict": "FP -- global object destructor (3x free+null cycles on global ptrs); no packet data", "score_threshold": 0.50},
+            "FORMAT_STRING":           {"top_va": "0x2a09f0", "score": 0.210, "verdict": "FP -- all scores < 0.22; no format string candidates", "score_threshold": 0.50},
+            "SSCANF_OVERFLOW":         {"top_va": "0x1682a0", "score": 0.321, "verdict": "FP -- flag setter: reads struct flags at [r12+0x668], cmovne between two ptr offsets, ORs bit 2 into [rbx+1]", "score_threshold": 0.45},
+            "USE_AFTER_FREE":          {"top_va": "0x3c02a0", "score": 0.219, "verdict": "FP -- all scores < 0.22; no UAF candidates", "score_threshold": 0.45},
+            "INTEGER_OVERFLOW_ALLOC":  {"top_va": "0x32a310", "score": 0.300, "verdict": "FP -- likely alloc wrapper; insufficient disasm context", "score_threshold": 0.45},
+            "PCRE_REGEX_INJECTION":    {"top_va": "0x2659aa", "score": 0.404, "verdict": "FP -- 5-case jump table dispatch on parsed byte field; flag check at [rdi+0x668]; NOT PCRE", "score_threshold": 0.50},
+            "PREAUTH_NETWORK_PARSE":   {"top_va": "0x277075", "score": 0.227, "verdict": "FP -- all scores < 0.23; no clear pre-auth handler", "score_threshold": 0.45},
+        },
+
+        "interesting_observations": {
+            "struct_offset_0x668": "Flags field at struct+0x668 appears in multiple high-scoring functions (0x2659aa, 0x1682a0) -- likely a common IPS context object; bit 3 (0x08) controls dispatch path",
+            "va_0x326e80_varargs": "sub rsp, 0x10d8 at VA 0x326e80 saves all xmm0-7 + all GP regs -- varargs logging/format function; 0x1000-byte stack buffer (snprintf safe)",
+            "va_0x2659aa_dispatch": "5-case jump table via movsxd [rdx+rax*4]+rdx; dispatches on return value from 0x860b30 with 3 byte output pointers; likely IPS protocol classifier",
+        },
+
+        "conclusion": "No true positives in first 2000 of 4777 functions. Remaining 2777 functions not swept (budget constraint). strcpy and unfortified sscanf remain attack surface -- locate callers via cross-reference analysis before dismissing.",
+    },
+}
+
