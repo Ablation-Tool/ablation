@@ -5399,9 +5399,15 @@ FGT748_LIBAV_ZIP_INT_OVERFLOW = {
     ),
 
     "cross_version": (
-        "8.0.0 libav.so.new: NOT YET ANALYZED for this specific integer overflow. "
-        "The avFlowWrite struct changed significantly (see FGT748-LIBAV-CROSSVER-DIFF), "
-        "suggesting the ZIP parser was also modified. Requires 8.0.0 RE to confirm presence/fix."
+        "FGT 7.0.13 avIsIgnoreBuffer (VA 0x9de20): SAME overflow at 0xb686c: "
+        "  movzwl 0x1c(%r14),%r12d  ; extra_len "
+        "  add    0x12(%r14),%r12d  ; += compressed_size (32-bit, same wrap) "
+        "  add    %r12,%rbp         ; advance step -- wraps to no-op (0xb6806) "
+        "Register changed (r12d vs r13d) but pattern is identical. Bug confirmed across "
+        "at least FGT 7.0.13 and 7.4.8. "
+        "FGT 8.0.0 libav.so.new: NOT YET ANALYZED. The avFlowWrite struct changed significantly "
+        "(see FGT748-LIBAV-CROSSVER-DIFF), suggesting the ZIP parser was also modified. "
+        "Requires 8.0.0 RE to confirm presence/fix."
     ),
 
     "remediation": (
@@ -5412,37 +5418,55 @@ FGT748_LIBAV_ZIP_INT_OVERFLOW = {
     ),
 }
 
-FGT748_LIBAV_ZIP64_CROSSVER = {
-    "id":       "FGT748-LIBAV-ZIP64-CROSSVER",
-    "product":  "FortiGate 7.4.8 vs 8.0.0 libav.so.new -- ZIP64 EOCD parser present in 7.4.8, absent/different in 8.0.0",
-    "binary_748": "/tmp/fgt748_datafs/lib/libav.so.new",
-    "severity": "INFORMATIONAL -- cross-version code divergence; different attack surface per version",
-    "class":    "Feature delta: ZIP64 End-of-Central-Directory handling",
+FGT748_LIBAV_ZIP_EOCD_CROSSVER = {
+    "id":       "FGT748-LIBAV-ZIP-EOCD-CROSSVER",
+    "product":  "FortiGate 7.4.8 vs 7.0.13 libav.so.new -- ZIP EOCD and ZIP64 EOCD handling differs across versions",
+    "binary_748":  "/tmp/fgt748_datafs/lib/libav.so.new",
+    "binary_7013": "/tmp/fgt7013_datafs/lib/libav.so.new",
+    "severity": "INFORMATIONAL -- cross-version code divergence; 7.0.13 handles ZIP64 EOCD, 7.4.8 does not",
+    "class":    "Feature delta: ZIP64 End-of-Central-Directory handling (CWE-1339 cross-version inconsistency)",
+
+    "magic_bytes": {
+        "PK01": "0x02014b50 = bytes 50 4B 01 02 = CDH (Central Directory Header)",
+        "PK0304": "0x04034b50 = bytes 50 4B 03 04 = LFH (Local File Header)",
+        "PK0506": "0x06054b50 = bytes 50 4B 05 06 = EOCD (End of Central Directory)",
+        "PK0606": "0x06064b50 = bytes 50 4B 06 06 = ZIP64 EOCD (ZIP64 End of Central Directory)",
+    },
+
+    "7_4_8_avScanLoad_coverage": {
+        "CDH":          "0x165bfe: cmp $0x2014b50 (PRESENT)",
+        "LFH":          "NOT found in avScanLoad range analyzed; avIsIgnoreBuffer handles LFH",
+        "EOCD":         "0x165c0b: cmp $0x6054b50 = 0x06054b50 = PK\\x05\\x06 = regular EOCD (PRESENT)",
+        "ZIP64_EOCD":   "No 0x6064b50 (PK\\x06\\x06) comparison found in 7.4.8 avScanLoad -- ABSENT",
+    },
+
+    "7_0_13_avScanLoad_coverage": {
+        "CDH":          "0x312420: cmp $0x2014b50 (PRESENT)",
+        "EOCD":         "0x312393: cmp $0x6054b50 = PK\\x05\\x06 (PRESENT)",
+        "ZIP64_EOCD":   "0x312470: cmp $0x6064b50 = PK\\x06\\x06 = ZIP64 EOCD (PRESENT)",
+    },
 
     "description": (
-        "FGT 7.4.8 avScanLoad (at 0x165c0b) explicitly handles ZIP64 EOCD signature (PK\\x06\\x06 = 0x6054b50): "
-        "  0x165c0b: cmp $0x6054b50,%edx "
-        "  0x165c11: jne 0x165260 (reject path) "
-        "The ZIP64 EOCD handling path in 7.4.8 includes: "
-        "  0x165c3e: lea 0x1e(%rbx),%rsi; cmp %r12,%rsi; jae abort -- minimum 30-byte size check "
-        "  0x165c6f: movzwl 0x1a(%rax),%edi -- filename_len from record "
-        "  0x165c73: movzwl 0x1c(%rax),%edx -- extra_len from record "
-        "  0x165c77: lea 0x1e(%rdi,%rdx,1),%rdx -- total = 0x1e + filename_len + extra_len "
-        "  0x165c82: cmp %rbp,%rdx; jb abort -- lower bound "
-        "  0x165c8f: cmp %rsi,%rcx -- buffer end check "
-        "The ZIP64 EOCD fixed record minimum is 56 bytes (0x38), not 30 bytes (0x1e). "
-        "The minimum size check of 0x1e may be too small for the ZIP64 EOCD structure; "
-        "fields at 0x1a and 0x1c in the EOCD context represent different data than CDH/LFH. "
-        "FGT 8.0.0 libav.so.new: no 0x6054b50 comparison found in prior ZIP parser analysis; "
-        "8.0.0 appears to not handle ZIP64 EOCD at this path (or handles it differently). "
-        "A ZIP64 archive submitted to 7.4.8 passes through the ZIP64 parser; "
-        "the same archive on 8.0.0 may be rejected or misidentified."
+        "FGT 7.0.13 avScanLoad handles three ZIP EOCD signatures: CDH, regular EOCD, and ZIP64 EOCD. "
+        "FGT 7.4.8 avScanLoad handles CDH and regular EOCD but NOT ZIP64 EOCD (PK\\x06\\x06). "
+        "This means a ZIP64 archive submitted to 7.4.8 will not match the EOCD-locator path and "
+        "falls through to the reject path at 0x165260. The CDH/LFH entries are still parsed "
+        "independently (avIsIgnoreBuffer handles LFH), but the ZIP64 EOCD metadata is silently ignored. "
+        "7.4.8's regular EOCD handling path (PK\\x05\\x06 at 0x165c0b) includes: "
+        "  0x165c3e: lea 0x1e(%rbx),%rsi; cmp %r12,%rsi; jae abort -- 30-byte minimum check "
+        "  0x165c6f/0x165c73: reads at offsets 0x1a and 0x1c from the EOCD record "
+        "In the regular EOCD (PK\\x05\\x06) structure, offset 0x1a = disk number start (4 bytes), "
+        "offset 0x1c = comment_len. A 30-byte check for the EOCD structure is CORRECT (EOCD fixed "
+        "part = 22 bytes minimum including the 4-byte comment_len field at offset 0x14). "
+        "Reading at offset 0x1a from EOCD base = past the 22-byte fixed part -- if rax points to "
+        "start of EOCD record, field 0x1a = within extensible/comment area. Check is POTENTIALLY INSUFFICIENT "
+        "depending on whether rax is 0-based from signature or from a different offset."
     ),
 
     "cdr_traversal_748": {
-        "safe_cmp_0x2e":   "CDH traversal: lea 0x2e(%rax),%rdx; cmp %rdx,%rcx; jb abort (CORRECT minimum-header check)",
-        "safe_total_calc": "CDH: lea 0x2e(%rsi,%rdx,1),%rdx + comment_len + double bounds check (CORRECT)",
-        "zip64_min_check": "ZIP64 EOCD: only 0x1e (30-byte) minimum (MAY BE INSUFFICIENT -- ZIP64 EOCD fixed part = 56 bytes)",
+        "safe_cmp_0x2e":   "CDH traversal avScanLoad: lea 0x2e(%rax),%rdx; cmp %rdx,%rcx; jb abort (CORRECT)",
+        "safe_total_calc": "CDH avScanLoad: lea 0x2e(%rsi,%rdx,1),%rdx + comment_len + double bounds (CORRECT)",
+        "eocd_min_check":  "EOCD avScanLoad 7.4.8: 0x1e (30-byte) minimum before reads at 0x1a/0x1c (VERIFY -- EOCD fixed = 22 bytes)",
     },
 }
 
