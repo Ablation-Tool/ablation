@@ -2334,6 +2334,42 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
     },
 }
 
+LIBAV_603_STRNCPY_FILE_N_STACKOVERFLOW = {
+    "id":       "LIBAV-603-F02",
+    "product":  "FortiOS 6.0.3 libav.so -- AV engine strncpy with file-controlled n",
+    "severity": "HIGH -- n from 2-byte file field; 50-byte stack buffer dest; no canary; CHK present but not on this callsite",
+    "caller":   "0x74be6 (strncpy call within file format parser at 0x74b20)",
+
+    "trigger": {
+        "file_magic":    "2-byte value at file_buffer[r14+9..r14+10] must equal 0x293b",
+        "n_source":      "2-byte big-endian at file_buffer[r14+0xd..r14+0xe]; max 0xffff",
+        "src_source":    "file_buffer[r14+0xf] (file content directly)",
+        "dest":          "rsp+0x36 (stack buffer in function at 0x74b20)",
+    },
+
+    "stack_layout": {
+        "frame_size":       "sub rsp, 0x68 (104 bytes) + 6 pushes = 152 bytes total",
+        "buffer_at_rsp36":  "rsp+0x36 to rsp+0x67 = 50 bytes before saved rbx",
+        "saved_rbx_at":     "rsp+0x68",
+        "saved_r15_at":     "rsp+0x90",
+        "return_addr_at":   "rsp+0x98 = overwritten after 98 bytes of input",
+        "no_canary":        True,
+    },
+
+    "overflow_condition": (
+        "Attacker scans a crafted file where: "
+        "(1) field at file_buf[r14+9..10] == 0x293b; "
+        "(2) field at file_buf[r14+0xd..0xe] (n) > 50. "
+        "strncpy writes exactly n bytes into 50-byte stack buffer, "
+        "padding with nulls if source shorter than n. "
+        "Return address overwritten after 98 bytes. "
+        "FortiOS 6.0.3 may lack ASLR -- fixed stack address simplifies exploitation."
+    ),
+
+    "attack_vector": "Attacker submits malicious file to FortiGate for AV scanning (email gateway, web proxy, file upload); AV engine dispatches to this parser for specific format/magic; stack overflow",
+    "pending":       "Identify file format by magic 0x293b (check PDF, OLE, ELF, or custom format); determine r14 computation to map exact byte offsets in crafted file",
+}
+
 LIBAV_603_KEYCACHE_UPDATE = {
     "id":         "LIBAV-603-STRCPY-KEYCACHE-CONFIRMED",
     "product":    "FortiOS 6.0.3 libav.so -- AV engine key cache strcpy",
