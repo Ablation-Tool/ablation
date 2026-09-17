@@ -5973,6 +5973,84 @@ FMG800_CAPTCHA_SECRET_PLAINTEXT = {
     "remediation": "Change captcha-secret-key field type from :string: to :passwd:; add to hexpwdattr list",
 }
 
+FGT_LIBAV_AVSCANLOD_LFH_OVERFLOW = {
+    "id":       "FGT-LIBAV-AVSCANLOD-LFH-OVERFLOW",
+    "product":  "FortiGate libav.so.new -- avScanLoad LFH advance integer overflow (7.0.13-8.0.0)",
+    "severity": "HIGH -- second independent 32-bit integer overflow in ZIP LFH advance; same class as FGT748-LIBAV-ZIP-INT-OVERFLOW; scan engine misalignment",
+    "class":    "Integer overflow in ZIP LFH advance calculation in avScanLoad (CWE-190)",
+    "cwe":      "CWE-190",
+    "related":  "FGT748-LIBAV-ZIP-INT-OVERFLOW (same overflow class in avIsIgnoreBuffer)",
+
+    "description": (
+        "avScanLoad (the active ZIP scanning engine) contains an independent LFH advance integer overflow "
+        "distinct from the overflow in avIsIgnoreBuffer (FGT748-LIBAV-ZIP-INT-OVERFLOW). "
+        "In avScanLoad's LFH processing branch, the next-entry position advance is computed as: "
+        "  eax = file_name_len (16-bit, zero-extended to 32) "
+        "  eax += compressed_size (32-bit) -- 32-BIT ADD WITHOUT WIDENING, OVERFLOW POSSIBLE "
+        "  eax = eax + extra_field_len + 0x1e "
+        "  position += eax "
+        "If compressed_size + file_name_len >= 2^32, the 32-bit addition wraps to a small value. "
+        "The position advances by only extra_field_len + 30 (the LFH fixed header size) + the wrapped "
+        "remainder instead of the true entry size. "
+        "The parser then re-reads attacker-controlled file data as a new ZIP structure. "
+        "This is the SAME vulnerability class as avIsIgnoreBuffer's overflow but in a different function "
+        "and with different operands (file_name_len + compressed_size vs extra_len + compressed_size). "
+        "Root cause: the TLV-decode framework introduced at 7.0.13 computes header-driven offsets using "
+        "32-bit arithmetic without upcasting 16-bit fields to 64-bit before adding 32-bit fields. "
+        "The 6.0.3 avScanLoad used a linear byte scan (advance by 1 byte per iteration) which is immune "
+        "to this class -- the vulnerability was introduced by the performance refactoring at 7.0.13."
+    ),
+
+    "crossver_matrix": {
+        "6.0.3":  "NOT PRESENT -- linear byte-scan; no advance calculation",
+        "7.0.13": "PRESENT at 0x312506: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
+        "7.2.0":  "PRESENT at 0x30dcb6: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
+        "7.4.8":  "avScanLoad uses different LFH dispatch (compression method filter first); not in same path",
+        "8.0.0":  "PRESENT at 0x8de4f6: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
+    },
+
+    "asm_snippet": {
+        "fgt_800_avscanlod_lfh": {
+            "0x8de4ec": "movzx edx, WORD [rsp+0x6c]   ; extra_field_len (16-bit -> 32-bit)",
+            "0x8de4f1": "movzx eax, WORD [rsp+0x6a]   ; file_name_len (16-bit -> 32-bit)",
+            "0x8de4f6": "add   eax, DWORD [rsp+0x62]  ; += compressed_size (32-bit ADD, OVERFLOW HERE)",
+            "0x8de4fa": "lea   eax, [rax+rdx*1+0x1e]  ; += extra_field_len + 0x1e",
+            "0x8de4fe": "add   ebp, eax               ; advance position (wraps to small value on overflow)",
+        },
+        "fgt_7013_avscanlod_lfh": {
+            "0x3124fc": "movzx edx, WORD [rsp+0x6c]   ; extra_field_len",
+            "0x312501": "movzx eax, WORD [rsp+0x6a]   ; file_name_len",
+            "0x312506": "add   eax, DWORD [rsp+0x62]  ; += compressed_size (OVERFLOW)",
+            "0x31250a": "lea   eax, [rax+rdx*1+0x1e]",
+            "0x31250e": "add   ebx, eax",
+        },
+    },
+
+    "comparison_with_avIsIgnoreBuffer": (
+        "avIsIgnoreBuffer overflow (FGT748-LIBAV-ZIP-INT-OVERFLOW): "
+        "  extra_field_len (16-bit) + compressed_size (32-bit) -- at avIsIgnoreBuffer LFH traverse loop "
+        "avScanLoad overflow (this finding): "
+        "  file_name_len (16-bit) + compressed_size (32-bit) -- at avScanLoad LFH processing branch "
+        "Both use the same 32-bit ADD without widening. Both can be triggered with large compressed_size. "
+        "They are in different functions with different code paths: "
+        "  avIsIgnoreBuffer/avIsMaliciousBuffer: filter function, decides whether to scan the file "
+        "  avScanLoad: the active scanning engine that processes the file for detection "
+        "An attacker can trigger one or both overflows depending on the code path taken."
+    ),
+
+    "trigger_condition": (
+        "compressed_size value such that compressed_size + file_name_len >= 2^32. "
+        "Example: compressed_size = 0xfffeffff, file_name_len = 0x0001 -> sum = 0x100000000 -> wraps to 0. "
+        "The attacker sets compressed_size in the ZIP LFH to this value and places fake ZIP structure "
+        "in the file data immediately following the LFH."
+    ),
+
+    "cross_reference": [
+        "FGT748-LIBAV-ZIP-INT-OVERFLOW -- same class in avIsIgnoreBuffer",
+        "FGT748-LIBAV-ZIP-EOCD-CROSSVER -- related ZIP parser architecture",
+    ],
+}
+
 FGT800_SYNTAX_F01 = {
     "id":       "FGT800-SYNTAX-F01",
     "product":  "FortiGate 8.0.0 -- wireless auth-server-secret stored as cleartext string",
