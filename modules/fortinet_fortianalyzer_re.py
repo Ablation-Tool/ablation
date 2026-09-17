@@ -538,5 +538,81 @@ ANALYSIS_STATUS = {
         "valid":  "2022-02-04 to 2056-05-26 (34-year cert)",
         "note":   "Same partition signing pattern as FGT (flatkc.sig). Cross-product FAZ/FGT architecture.",
     },
-    "unique_findings": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F06", "FAZ-F07", "FAZ-F08", "FAZ-F09"],
+    "unique_findings": ["FAZ-F01", "FAZ-F02", "FAZ-F03", "FAZ-F04", "FAZ-F05", "FAZ-F06", "FAZ-F07", "FAZ-F08", "FAZ-F09", "FAZ-F10"],
+}
+
+FAZ_F10_SOAR_CLICKHOUSE_SQLI = {
+    "id":       "FAZ-F10",
+    "product":  "Fortinet FortiAnalyzer 8.0.0 -- SOAR FindLateralMovementOperator ClickHouse SQL injection",
+    "severity": "HIGH -- unsanitized trigger data injected into ClickHouse SQL; full SIEM database read (all security logs, all monitored devices)",
+    "class":    "SQL injection in SOAR connector Python code (CWE-89); ClickHouse database",
+    "cwe":      "CWE-89",
+    "source":   "fmg800_rootfs_ext/usr/local/builtin_connectors/builtin_connectors.tar.gz -> LOCALHOST/operator.py",
+
+    "vulnerable_code": {
+        "file":      "LOCALHOST/operator.py",
+        "class":     "FindLateralMovementOperator",
+        "function":  "build_filter_string (L2466-2468) + build_query (L2451-2464)",
+        "injection_point": "L2467: filters = [f\"{key} in {tuple(value)}\" for key, value in targets.items()]",
+        "sink":      "L2505-2510: requests.post('http://127.0.0.1:8123/?database=siem&default_format=JSON', data=query)",
+    },
+
+    "description": (
+        "The SOAR FindLateralMovementOperator (lateral movement hunt playbook) constructs a ClickHouse SQL "
+        "query using Python f-strings with NO parameterization or escaping: "
+        "  build_filter_string: "
+        "    filters = [f'{key} in {tuple(value)}' for key, value in targets.items()] "
+        "    return ' or '.join(filters) "
+        "  build_query: "
+        "    return f'SELECT ... FROM adom{self.adom_oid}_SIM_Xlog WHERE ({filter_str}) ...' "
+        "The resulting SQL string is sent as the raw HTTP POST body to ClickHouse on 127.0.0.1:8123. "
+        "The `value` in `targets.items()` originates from SOAR trigger data: "
+        "  parse_trigger_data reads indicator.value and targets from self.trigger_data. "
+        "  trigger_data = FAZUtilsOperator.parse_multi_input(context, self.trigger_data, context_dict). "
+        "  context_dict is populated from SOAR incident data (network security events from FAZ). "
+        "Attack path: "
+        "  1. Attacker crafts network traffic that generates a FAZ security event with a controlled "
+        "     source IP or endpoint ID field. "
+        "  2. FAZ SOAR creates an incident with the attacker-controlled value in indicator.value. "
+        "  3. FindLateralMovementOperator playbook fires on the incident. "
+        "  4. parse_trigger_data populates unique_targets with the attacker-controlled value. "
+        "  5. build_filter_string produces: \"src_ip in (') UNION SELECT ... --,)\" "
+        "  6. build_query wraps it in a full SELECT, sent to ClickHouse at 127.0.0.1:8123. "
+        "  7. ClickHouse executes the injected query -- attacker can read any table in the 'siem' database. "
+        "ClickHouse 'siem' database contains: all FAZ log records from all monitored FortiGates/FortiWalls, "
+        "security events, endpoint telemetry, network flow data for all monitored sessions. "
+        "Exfiltration of this database = complete network visibility across all monitored devices. "
+        "The ClickHouse instance on 127.0.0.1:8123 uses HTTP basic auth: "
+        "  auth=('default', password) -- the default user's password is passed in as a SOAR connector param. "
+        "If ClickHouse is configured with the default empty password for the 'default' user, "
+        "no auth bypass needed -- the connector supplies the password anyway."
+    ),
+
+    "proof_of_concept": (
+        "trigger_data with indicator.value = [\"') UNION SELECT version(), 2, 3, 4 FROM system.one-- \"] "
+        "Produces: "
+        "  filter_str = \"src_ip in (') UNION SELECT version(), 2, 3, 4 FROM system.one-- ',)\" "
+        "  Full query: SELECT dstepid, dst_ip, ... "
+        "              FROM adom1_SIM_Xlog "
+        "              WHERE (src_ip in (') UNION SELECT version(), 2, 3, 4 FROM system.one-- ',)) "
+        "              AND itime >= '...' AND ... "
+        "ClickHouse executes the UNION, returns ClickHouse version string in the result set."
+    ),
+
+    "data_model": {
+        "database":   "siem (ClickHouse on 127.0.0.1:8123)",
+        "tables":     "adom{N}_SIM_Xlog (lateral movement log), plus other SIEM tables accessible via UNION",
+        "auth_model": "HTTP basic auth (default/<connector_password>); password from SOAR connector config",
+    },
+
+    "remediation": (
+        "Use ClickHouse parameterized queries: "
+        "  ClickHouse supports query parameters via URL: ?param_name=value "
+        "  Replace: f'{key} in {tuple(value)}' "
+        "  With: parameterized placeholders and pass values via the params= argument to requests.post "
+        "Alternatively, validate that `value` matches the expected IP/epid format (IP regex, integer check) "
+        "before including in the filter string."
+    ),
+
+    "related_findings": ["FAZ-F07 (WEBHOOK SSRF)", "FAZ-F08 (Redis credential store)"],
 }
