@@ -2956,9 +2956,30 @@ FORTICLIENT80_LIBAV = {
             "Callers at 0x115ca5, 0x1e13de, 0x2b57f7, 0x2d7aa1, 0x3aa2f3, 0x34c531, 0x842cb0: "
             "rdi from rax after malloc/alloc call. Strdup-like pattern. SAFE."
         ),
-        "unknown_pending": [
-            "0x195bc0 (stack [rsp+0x361]): function entry not found in 500-byte lookback; source rbp unknown",
-            "0x2e638a, 0x2e6740: stack dest [rsp+8] and [rsp+0x78]; source not traced",
+        "analyzed_stack_dest": {
+            "0x195bc0": (
+                "Function prologue at 0x19552a: sub rsp, 0x15e8 (5608-byte frame). "
+                "Source: rbp = [rsp+0x160] (URL-unescaping output buffer, built by loop at 0x195b60). "
+                "Dest: [rsp+0x361]. Available space from dest to end: 0x15e8-0x361=0x1287=4743 bytes. "
+                "Source is URL-component buffer; both src and dest in same large stack frame. "
+                "No direct overflow via strcpy; overflow risk is in the escaping loop itself. PLAUSIBLE SAFE."
+            ),
+            "0x2e638a": (
+                "Function at 0x2e6350: sub rsp, 0x120 (288-byte frame). "
+                "Dest: [rsp+8]; cap = 0x120-8 = 280 bytes. Source: rbx = arg2 (rsi at prologue). "
+                "Pattern: codec name written into temporary stack object (vtable ptr at [rsp], name at [rsp+8]). "
+                "After strcpy: av_strdup(rbx) at 0x2e63a1 stored at [rsp+0x118]. "
+                "Codec names are typically < 64 chars; 280-byte cap is safe for all known libav codec names. "
+                "LOW-PLAUSIBLE -- if RTSP SDP codec-name field can be > 280 bytes."
+            ),
+            "0x2e6740": (
+                "Function at 0x2e66f0: sub rsp, 0x198 (408-byte frame). "
+                "Dest: [rsp+0x78]; cap = 0x198-0x78 = 0x120 = 288 bytes. Source: rbp = arg2 (rsi at prologue). "
+                "Same pattern as 0x2e638a: codec temp object on stack. "
+                "LOW-PLAUSIBLE -- same condition as 0x2e638a."
+            ),
+        },
+        "still_unknown": [
             "0x753a06: dest [r13+0x550]; struct field; source rbp",
             "0x195ac0, 0x2e5f3b, 0x3ea6da, 0x3eb212, 0x7621b9, 0x77c27f: rdi/rsi not found in lookback",
         ],
@@ -2972,9 +2993,8 @@ FORTICLIENT80_LIBAV = {
 
     "pending": [
         "Trace how 'arch_internal_' key names are sourced (file-derived vs RODATA) for FCLIENT80-LIBAV-F01",
-        "Confirm source for 0x2d88bf strcpy cluster (libav codec registration vs file-derived)",
-        "Trace 0x195bc0/0x2e638a/0x2e6740 stack-dest strcpy callers",
         "Trace 0x2b5849 strcat loop: confirm initial malloc size accounts for all array elements",
+        "Trace 0x753a06/0x195ac0/0x2e5f3b/0x3ea6da/0x3eb212/0x7621b9/0x77c27f: still unknown",
     ],
 }
 
