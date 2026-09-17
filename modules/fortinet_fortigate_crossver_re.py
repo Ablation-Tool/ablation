@@ -5509,11 +5509,12 @@ FGT748_LIBAV_ZIP_INT_OVERFLOW = {
 
     "cross_version": {
         "6_0_3":  "0x84fbe avIsMaliciousBuffer: mov 0x12(%rbx),%r8d; add %r8d,%r12d -- SAME OVERFLOW; function renamed to avIsIgnoreBuffer in later versions",
+        "7_0_3":  "0xb47ae avIsIgnoreBuffer: movzx r12d,WORD [rbx+0x1c]; add r12d,DWORD [rbx+0x12] -- SAME OVERFLOW (r12d, base rbx)",
         "7_0_13": "0xb686c avIsIgnoreBuffer: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d -- SAME OVERFLOW (r12d)",
         "7_2_0":  "0xb4b8c avIsIgnoreBuffer: movzwl 0x1c(%r14),%r12d; add 0x12(%r14),%r12d -- SAME OVERFLOW (r12d)",
         "7_4_8":  "0xce3b9 avIsIgnoreBuffer: movzwl 0x1c(%r14),%r13d; add 0x12(%r14),%r13d -- SAME OVERFLOW (r13d)",
         "8_0_0":  "0x159145 avIsIgnoreBuffer: movzwl 0x1c(%r13),%r12d; add 0x12(%r13),%r12d -- SAME OVERFLOW; register base r13 (previously r14 in 7.x); UNFIXED in 8.0.0",
-        "verdict": "Bug confirmed across FGT 6.0.3 through 8.0.0 -- present for 6+ years (2018-2025) unpatched across 5 major versions",
+        "verdict": "Bug confirmed across FGT 6.0.3 through 8.0.0 -- present for 6+ years (2018-2025) unpatched across 6 confirmed versions",
     },
 
     "remediation": (
@@ -6003,9 +6004,10 @@ FGT_LIBAV_AVSCANLOD_LFH_OVERFLOW = {
 
     "crossver_matrix": {
         "6.0.3":  "NOT PRESENT -- linear byte-scan; no advance calculation",
+        "7.0.3":  "PRESENT at 0x30c3e6: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
         "7.0.13": "PRESENT at 0x312506: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
         "7.2.0":  "PRESENT at 0x30dcb6: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
-        "7.4.8":  "avScanLoad uses different LFH dispatch (compression method filter first); not in same path",
+        "7.4.8":  "NOT PRESENT -- reverted to linear byte-scan (advance by 1 byte); immune",
         "8.0.0":  "PRESENT at 0x8de4f6: movzx eax,WORD [rsp+0x6a]; add eax,DWORD [rsp+0x62]",
     },
 
@@ -6016,6 +6018,13 @@ FGT_LIBAV_AVSCANLOD_LFH_OVERFLOW = {
             "0x8de4f6": "add   eax, DWORD [rsp+0x62]  ; += compressed_size (32-bit ADD, OVERFLOW HERE)",
             "0x8de4fa": "lea   eax, [rax+rdx*1+0x1e]  ; += extra_field_len + 0x1e",
             "0x8de4fe": "add   ebp, eax               ; advance position (wraps to small value on overflow)",
+        },
+        "fgt_703_avscanlod_lfh": {
+            "0x30c3dc": "movzx edx, WORD [rsp+0x6c]   ; extra_field_len",
+            "0x30c3e1": "movzx eax, WORD [rsp+0x6a]   ; file_name_len",
+            "0x30c3e6": "add   eax, DWORD [rsp+0x62]  ; += compressed_size (OVERFLOW)",
+            "0x30c3ea": "lea   eax, [rax+rdx*1+0x1e]",
+            "0x30c3ee": "add   ebx, eax",
         },
         "fgt_7013_avscanlod_lfh": {
             "0x3124fc": "movzx edx, WORD [rsp+0x6c]   ; extra_field_len",
