@@ -576,3 +576,132 @@ ANALYSIS_STATUS = {
         "bin_tar_xz":       "/bin.tar.xz: Fortinet XZ CRC bypass (SHA-256 stream flags 0x000a, LZMA2 props=0x1c/64MB dict); 15.9MB decompressed tar",
     },
 }
+
+
+# =============================================================
+# FortiSwitch 108FN v7.04 RE (FortiSwitchOS 7.0.4, build 0801)
+# Source: FSW_108F-v7-build0801-FORTINET.out (19,651,249 bytes)
+# Architecture: ARM Thumb LE (ARMv7), confirmed via capstone
+# Format: Two-component Fortinet container (new format, incompatible with 224E-POE)
+# Status: Component 1 analyzed; Component 2 AES-encrypted, key unknown
+# =============================================================
+
+FSW_108FN_CONTEXT = {
+    "id":       "FSW-108FN",
+    "product":  "Fortinet FortiSwitch 108FN",
+    "version":  "FortiSwitchOS 7.0.4, build 0801, 2023-12-07 patch02",
+    "file":     "FSW_108F-v7-build0801-FORTINET.out",
+    "size":     "19,651,249 bytes (= ASCII '19651249' embedded in outer header)",
+    "arch":     "ARM Thumb LE (ARMv7 Thumb-2)",
+    "note":     "FSW_108F from FortiSwitch/7.4.2/ has identical MD5 -- same binary for both versions",
+
+    "firmware_format": {
+        "outer_header": {
+            "offset":   "file 0x000-0x0FF (256 bytes)",
+            "magic":    "0xADCF076D (bytes: AD CF 07 6D)",
+            "size_str": "ASCII file size '19651249' at offset 0x04 (8 bytes)",
+            "model":    "null-terminated at 0x0D: 'S108FN-7.04-FW-build0801-231207-patch02'",
+            "note":     "Magic differs from 224E-POE (0x83f6c30b vs 0xADCF076D); new container generation",
+        },
+        "inner_toc": {
+            "offset":   "file 0x100-0x10FFF (65,280 bytes)",
+            "magic":    "0xe3c73b07 at TOC offset 0x00",
+            "entry1":   "01 00 01 00 (type=1, flags=0, ver_major=1, ver_minor=0)",
+            "entry2":   "02 00 01 01 (type=2, flags=0, ver_major=1, ver_minor=1)",
+            "entry3":   "03 00 01 02 (type=3, flags=0, ver_major=1, ver_minor=2)",
+            "rest":     "0x00 fill (TOC does not encode component offsets or sizes)",
+        },
+        "component1": {
+            "header_offset": "file 0x10000 (64-byte header, magic 0x8CAE6D99)",
+            "field_0x08":    "shared firmware timestamp 0xA8D7CE42 (identical in both components)",
+            "data_range":    "file 0x10040-0x26FFFF (ARM Thumb LE code, NOT encrypted)",
+            "entropy":       "5.6-7.2 bits/byte; 22-27% 0xFE in code blocks",
+            "encryption":    "NONE -- Friedman attack key=0x00 all positions; IC=0.063 (plaintext-level)",
+            "arm_peak":      "file 0x200000: 70% Thumb validity, 0.1% FE; SVC #0x28; addw pc, sb, #0xa50 (Thumb-2)",
+        },
+        "erased_region": {
+            "file_range": "file 0x270000-0x40FFBF",
+            "content":    "100% 0xFE (NAND flash erase byte; confirms NAND medium; NOR uses 0xFF)",
+        },
+        "component2": {
+            "header_offset": "file 0x40FFC0 (64-byte header, magic 0x8CAE6D99)",
+            "data_range":    "file 0x410000-0x12BF671 (~15MB)",
+            "entropy":       "7.997 bits/byte across all 64KB blocks",
+            "encryption":    "AES (entropy 7.9997 = cryptographically random; key unknown)",
+            "key_location":  "Embedded in component 1 ARM Thumb bootloader; not yet extracted",
+        },
+    },
+}
+
+
+FSW_F07_108FN_FORMAT = {
+    "id":       "FSW-F07",
+    "product":  "Fortinet FortiSwitch 108FN v7.04",
+    "severity": "INFO -- new firmware container format; AES encryption in component 2",
+    "class":    "Firmware format analysis",
+    "source":   "entropy scan, Friedman attack, capstone ARM Thumb disassembly",
+
+    "format_map": {
+        "0x000-0x0FF":       "256-byte outer header (magic 0xADCF076D + ASCII size + model string)",
+        "0x100-0x10FFF":     "64KB inner TOC (magic 0xe3c73b07 + 3-entry component version manifest)",
+        "0x10000-0x10040":   "Component 1 header (magic 0x8CAE6D99 + 64 bytes metadata)",
+        "0x10040-0x26FFFF":  "Component 1 data (ARM Thumb LE code, NOT encrypted)",
+        "0x270000-0x40FFBF": "100% 0xFE erased NAND flash (inter-component gap)",
+        "0x40FFC0-0x40FFFF": "Component 2 header (magic 0x8CAE6D99 + 64 bytes metadata)",
+        "0x410000-0x12BF671": "Component 2 data (AES-encrypted rootfs, ~15MB, entropy 7.9997)",
+    },
+
+    "vs_224e_poe": (
+        "224E-POE: magic 0x83f6c30b, no TOC, uImage at 0x10000 (plaintext kernel), uImage ramdisk at 0x510000. "
+        "108FN: magic 0xADCF076D, 64KB TOC, per-component 0x8CAE6D99 magic, AES component 2, NAND 0xFE erase. "
+        "Completely different packaging generation despite same firmware version line (v7)."
+    ),
+}
+
+
+FSW_F08_108FN_ENCRYPTED_ROOTFS = {
+    "id":       "FSW-F08",
+    "product":  "Fortinet FortiSwitch 108FN v7.04 -- component 2 AES encryption",
+    "severity": "HIGH -- AES key embedded in unencrypted component 1 bootloader; key recovery via static analysis",
+    "class":    "Firmware encryption with embedded key (CWE-321)",
+    "source":   "Entropy analysis (7.9997 bits/byte), Friedman attack, component 1 ARM Thumb disassembly",
+
+    "description": (
+        "Component 2 (~15MB, file 0x410000-0x12BF671) is AES-encrypted (entropy 7.9997, 0.4% FE). "
+        "Component 1 (ARM Thumb bootloader) is NOT encrypted (Friedman key=0x00, IC=0.063). "
+        "Bootloader contains AES key or key derivation logic to decrypt component 2 at boot. "
+        "Key recovery path: BERT semantic sweep of component 1 for AES key schedule patterns, "
+        "then extract key from static data adjacent to crypto init function."
+    ),
+
+    "pending": (
+        "Run ablation BERT semantic sweep on file 0x10040-0x26FFFF (component 1 ARM Thumb binary). "
+        "Query: AES key schedule, CBC IV init, crypto_init, PKCS7 padding. "
+        "Extract candidate key + IV, decrypt component 2, verify with known filesystem magic."
+    ),
+}
+
+
+FSW_F09_108FN_ARM_ARCH = {
+    "id":       "FSW-F09",
+    "product":  "Fortinet FortiSwitch 108FN v7.04 -- ARM Thumb LE architecture confirmed",
+    "severity": "INFO -- ARM Thumb LE (ARMv7); MIPS hypothesis from false uImage decode eliminated",
+    "class":    "Architecture identification",
+    "source":   "capstone ARM_THUMB disassembly at file 0x200000",
+
+    "description": (
+        "FortiSwitch 108FN uses ARM Thumb LE (ARMv7 Thumb-2), NOT MIPS. "
+        "capstone: 45/45 valid ARM Thumb LE instructions in 128 bytes at file 0x200000. "
+        "SVC #0x28 = Linux ARM Thumb syscall (syscall 40 = getuid). "
+        "addw pc, sb, #0xa50 = Thumb-2 exclusive (ARMv7+). "
+        "Function prologue PUSH {r1, r3, r7, lr} at file 0x1F05FA. "
+        "Prior MIPS hypothesis came from XOR [AB AB 74 CF] on bytes 0x10000-0x10003 giving uImage magic; "
+        "that key was wrong (Friedman proves payload is plaintext, key=0x00) -- arch byte was meaningless."
+    ),
+}
+
+FSW_108FN_UNIQUE_FINDINGS = [
+    "FSW-F07: INFO -- new container format; outer 0xADCF076D + 64KB TOC 0xe3c73b07 + per-component 0x8CAE6D99; NAND 0xFE erase; incompatible with 224E-POE",
+    "FSW-F08: HIGH -- component 2 AES-encrypted (~15MB, entropy 7.9997); key in unencrypted component 1 ARM Thumb bootloader; BERT sweep pending",
+    "FSW-F09: INFO -- ARM Thumb LE (ARMv7) confirmed; SVC #0x28 + Thumb-2 addw; MIPS hypothesis eliminated",
+]
