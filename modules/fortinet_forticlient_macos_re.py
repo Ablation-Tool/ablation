@@ -316,3 +316,73 @@ MACOS_F05_NETWORK_EXT = {
         "Network Extensions run in userspace (not kernel) but have FULL NETWORK VISIBILITY."
     ),
 }
+
+
+# ---------------------------------------------------------
+# MACOS-F06: ZTNA+EPP DMG libUpdate.dylib -- FDS protocol fingerprinting + build path
+# Source: forticlient_ztna_epp_macos.dmg (v8.0.1.x, APFS, built 2026-07-27)
+# Binary: FortiClientFullInstaller.app/Contents/Resources/runtime.helper/libUpdate.dylib
+#         (15.3MB universal Mach-O dylib, x86_64 + arm64, stripped)
+# ---------------------------------------------------------
+MACOS_F06_LIBUPDDATE_FDS = {
+    "id":       "MACOS-F06",
+    "product":  "FortiClient ZTNA+EPP macOS -- libUpdate.dylib FDS update client",
+    "severity": "INFO -- fingerprinting risk and build artifact exposure",
+    "class":    "Hardcoded User-Agent string + FDS protocol documentation",
+
+    "exported_api": {
+        "_upd_init":            "0x13e76 -- initialize update subsystem",
+        "_load_providers":      "0x140c3 -- load update provider list",
+        "_set_full_version":    "0x140b9 -- set version string",
+        "_upd_check_fcn_update": "0x13c21 -- dispatch update check by flags bitmask",
+    },
+
+    "imported_symbols": {
+        "_gcrypto_key":         "imported from parent process (FortiClient native app); not hardcoded in dylib",
+        "__global_tchAddress":  "FDS server address; set by parent",
+        "__global_sPort":       "FDS server port; set by parent",
+        "__global_tchUser":     "FDS auth username; set by parent",
+        "__global_tchPassword": "FDS auth password; set by parent",
+    },
+
+    "fds_protocol": {
+        "endpoint":     "POST /fdsupdate HTTP/1.1",
+        "user_agent":   "Mozilla/4.0 (compatible; FCT 7.4.8.1977; Windows NT 5.1)",
+        "message_types": {
+            "FDST": "0x46445354 -- FDS Task message",
+            "FDSI": "0x46445349 -- FDS Information message",
+        },
+        "message_format": {
+            "header": "4 LE uint32: [msg_type?, length, 1075724911 (0x401F206F), 0]",
+            "note":   "Same magic 0x401F206F appears in FortiSIEM port 7900 protocol (CVE-2025-25256)",
+        },
+        "object_types": {
+            "FECT": "FortiClient Endpoint Compliance Table",
+            "fdni": "FortiGuard Device and Network Intelligence file",
+        },
+    },
+
+    "hardcoded_values": {
+        "test_serial":   "FCT1001234567890 (adjacent to product ID FCT100-FC-1.00-034; likely default/test serial)",
+        "user_agent":    "FCT 7.4.8.1977; Windows NT 5.1 -- identifies as Windows XP regardless of actual OS",
+        "version_code":  "0205000",
+    },
+
+    "build_artifacts": {
+        "source_path":   "/Users/cm/builds/AxxsiyfyX/0/devops/cloudservices/common_build_pipeline/MacOSX/update/patchsig.cpp",
+        "update_funcs":  "/Users/cm/builds/AxxsiyfyX/0/devops/cloudservices/common_build_pipeline/MacOSX/update/update_funcs.c",
+        "ci_runner":     "AxxsiyfyX (GitLab CI runner token prefix in build path)",
+        "build_user":    "cm",
+        "significance":  "Reveals internal build system layout; macOS CI pipeline path structure",
+    },
+
+    "attack_surface": (
+        "1. FDS User-Agent fingerprinting: any firewall/IDS observing update traffic can determine "
+        "exact FortiClient version from the hardcoded 'FCT 7.4.8.1977' user-agent string. "
+        "2. Protocol magic 0x401F206F matches FortiSIEM port 7900 (CVE-2025-25256 context): "
+        "possible shared protocol library across Fortinet products -- if protocol parsing is shared, "
+        "FortiSIEM RCE techniques may be adaptable to the FDS update client parsing. "
+        "3. patchsig.cpp exists (signature verification source) but _gcrypto_key is imported from "
+        "parent -- actual key strength depends on FortiClient native agent, not this dylib."
+    ),
+}
