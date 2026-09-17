@@ -307,7 +307,9 @@ def load_live_addrs(path: str) -> 'set[int]':
 
 def run_sweep(binary_path: str, query_key: str = None, top_n: int = 10, cache: bool = True,
               live_filter: 'set[int] | None' = None,
-              live_direct: 'set[int] | None' = None) -> dict:
+              live_direct: 'set[int] | None' = None,
+              addr_lo: int = 0x016e54c0,
+              addr_hi: int = 0x0315ad30) -> dict:
     print(f"\n[*] Skydio libflyby_jni.so — Semantic RE Sweep")
     print(f"[*] Binary: {binary_path}")
     print(f"[*] Size: {os.path.getsize(binary_path)//1024//1024}MB")
@@ -335,8 +337,9 @@ def run_sweep(binary_path: str, query_key: str = None, top_n: int = 10, cache: b
                 described = json.load(f)
             print(f"[*] Loaded {len(described):,} functions from cache")
         else:
-            print(f"[*] Extracting from {len(live_direct):,} live addresses (.text range)...")
-            funcs = extract_functions_from_live(data, live_direct)
+            in_range = sum(1 for a in live_direct if addr_lo <= a < addr_hi)
+            print(f"[*] Extracting from {in_range:,} live addresses in [0x{addr_lo:x}, 0x{addr_hi:x})...")
+            funcs = extract_functions_from_live(data, live_direct, addr_lo=addr_lo, addr_hi=addr_hi)
             print(f"[*] Building semantic descriptions ({len(funcs):,} functions)...")
             described = build_func_descriptions(data, funcs)
             if cache:
@@ -434,6 +437,12 @@ def main():
                              'Replaces prologue scanning entirely: uses live addresses as function starts. '
                              'Much higher precision on stripped binaries. '
                              'Default range: .text [0x016e54c0, 0x0315ad30] (libflyby_jni.so).')
+    parser.add_argument('--addr-lo', default=None,
+                        help='Lower bound for --live-direct address range (hex, e.g. 0x01700000). '
+                             'Default: .text section start 0x016e54c0.')
+    parser.add_argument('--addr-hi', default=None,
+                        help='Upper bound for --live-direct address range (hex, e.g. 0x01800000). '
+                             'Default: .rodata start 0x0315ad30.')
     args = parser.parse_args()
 
     if not os.path.exists(args.binary):
@@ -449,10 +458,14 @@ def main():
         live_addrs = load_live_addrs(path)
         print(f"[*] {len(live_addrs):,} live addresses loaded")
 
+    addr_lo = int(args.addr_lo, 16) if args.addr_lo else 0x016e54c0
+    addr_hi = int(args.addr_hi, 16) if args.addr_hi else 0x0315ad30
+
     query_key = args.query if not args.all_queries else None
     results = run_sweep(args.binary, query_key, args.top, cache=not args.no_cache,
                         live_filter=live_addrs if args.live_filter else None,
-                        live_direct=live_addrs if args.live_direct else None)
+                        live_direct=live_addrs if args.live_direct else None,
+                        addr_lo=addr_lo, addr_hi=addr_hi)
     save_report(results, args.binary)
 
     print("\n[*] Next steps:")
