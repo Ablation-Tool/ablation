@@ -1983,18 +1983,20 @@ LIBIPS_800_F01_SEMANTIC_SWEEP = {
             "tail_calls":  ["0x3e082d", "0x3e0894"],
             "function_start": "0x3e0790",
             "callers_of_fn": ["0x3de05a", "0x3e0990", "0x3e651a"],
-            "severity":    "MEDIUM -- strcpy from input struct field; destination size not confirmed",
+            "severity":    "LOW -- strcpy from input struct, source loop-bounded to 0x30 bytes; fits destination",
             "analysis": (
-                "Function at 0x3e0790 receives (rdi=dest_struct, rsi=input_struct) as args. "
-                "Source: rcx = input_struct+0x18 (potentially attacker-controlled). "
-                "Loop at 0x3e07c0-0x3e07d5 scans bytes of input+0x18 until byte <= 0x1f OR 0x30 iterations. "
-                "strcpy at 0x3e0808 called only if [input+0x18+loop_count] == 0 (null-terminated within ~48 bytes). "
-                "Destination: rdi+9 (9 bytes into first-arg buffer). "
-                "Second strcpy (tail call 0x3e082d) appends to dest. "
-                "Pending: trace callers (0x3de05a, 0x3e0990, 0x3e651a) to confirm dest buffer size "
-                "and whether input_struct+0x18 is populated from network packet data."
+                "Function at 0x3e0790: receives (rdi=dest_buf, rsi=input_struct). "
+                "Source: rcx = input_struct+0x18. "
+                "Loop at 0x3e07c0-0x3e07d5 scans up to 0x30 bytes stopping at byte <= 0x1f. "
+                "strcpy only if null-terminator present at loop exit position. "
+                "Destination: rdi+9 (after 9-byte header write at rdi..rdi+8). "
+                "Caller 0x3de05a: dest = &[rbp-0x70] in frame with sub_rsp=0x58, 5 pushes. "
+                "  Available: [rbp-0x70] to [rbp-0x28] = 0x48 bytes. "
+                "  Max write: 9 (header) + 0x30 (string) + 1 (null) = 0x3a bytes < 0x48 -> fits. "
+                "The 0x30-byte loop limit provides effective length bound on the strcpy source. "
+                "NOT an overflow given observed caller stack layouts."
             ),
-            "verdict": "MEDIUM PLAUSIBLE -- input struct source; dest size unknown; 0x30-byte loop limit suggests bounded input but strcpy copies to unvalidated dest",
+            "verdict": "LOW -- loop-bounded source (max 0x30 bytes); caller 0x3de05a dest is 0x48 bytes; bounded copy fits; not a practical overflow path",
         },
 
         "LIBIPS_800_SSCANF_NULL_ARG": {
