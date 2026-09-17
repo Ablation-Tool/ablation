@@ -144,3 +144,64 @@ FCLIENT_IKED_ARCH = {
         "routing changes without VPN authentication."
     ),
 }
+
+FCLIENT_IKED_F04_PREAUTH_SURFACE = {
+    "id":       "FCLIENT-IKED-F04",
+    "product":  "FortiClient 8.0 iked -- pre-auth dangerous function surface (ELF x86-64, 13MB, PLT analysis)",
+    "binary":   "/opt/forticlient/iked (FortiClient 8.0, 13,078,576 bytes, BuildID sha1:87a4658c)",
+    "severity": "LOW -- all strcpy/sprintf callers analyzed; no attacker-injectable unbounded copies found",
+    "class":    "Static dangerous-function inventory (PLT sweep); pre-auth packet receive surface",
+
+    "plt_inventory": {
+        "memcpy":   {"plt": "0x412a90", "got": "0x12240d8", "callers": 1941, "status": "NOT ANALYZED -- too many; focused analysis needed on IKE parser path"},
+        "memmove":  {"plt": "0x412c20", "got": "0x12241a0", "callers": 277,  "status": "NOT ANALYZED"},
+        "strncpy":  {"plt": "0x412bf0", "got": "0x1224188", "callers": 16,   "status": "NOT ANALYZED"},
+        "strcpy":   {"plt": "0x413280", "got": "0x12244d0", "callers": 10,   "status": "ANALYZED -- all safe (see below)"},
+        "strcat":   {"plt": "0x413a10", "got": "0x1224898", "callers": 2,    "status": "NOT ANALYZED"},
+        "sprintf":  {"plt": "0x414440", "got": "0x1224db0", "callers": 3,    "status": "ANALYZED -- all safe (see below)"},
+        "snprintf": {"plt": "0x413550", "got": "0x1224638", "callers": 27,   "status": "NOT ANALYZED"},
+        "sscanf":   {"plt": "0x413080", "got": "0x12243d0", "callers": 27,   "status": "NOT ANALYZED"},
+        "recv":     {"plt": "0x414210", "got": "0x1224c98", "callers": 15,   "status": "NOT ANALYZED"},
+        "recvfrom": {"plt": "0x412f00", "got": "0x1224310", "callers": 5,    "status": "PARTIALLY ANALYZED (see below)"},
+        "read":     {"plt": "0x413bd0", "got": "0x1224978", "callers": 34,   "status": "NOT ANALYZED"},
+        "sprintf":  {"plt": "0x414440", "got": "0x1224db0", "callers": 3,    "status": "ANALYZED -- all safe"},
+    },
+
+    "sprintf_analysis": {
+        "callers": ["0x685a49", "0x689996", "0x6ee91c"],
+        "verdict": "SAFE -- all 3 callers use static RODATA format strings with integer or static-string args; no user-controlled format string",
+        "detail": {
+            "0x685a49": "esi=0xcdfbc7 (static fmt), rdi=rbp-0x50 (stack buf), edx=[rbp-0x78] (int)",
+            "0x689996": "esi=0xce0fdf (static fmt), rdi=rbp-0x20 (stack buf), edx=[rbp-0x44] (int)",
+            "0x6ee91c": "rsi=[rip+static] (fmt), rdx/rsi=[rip+static] (static string args), rdi=[rbp-0x60] (ptr)",
+        },
+    },
+
+    "strcpy_analysis": {
+        "callers": ["0x68d6db", "0x6a54bd", "0x6ee83e", "0x7a461e", "0x7f0ecf",
+                    "0x7f2095", "0x7f20cd", "0x82d115", "0x976f53", "0x976f66"],
+        "verdict": "SAFE -- all 10 callers are either strdup patterns or have size-checked destinations",
+        "patterns": {
+            "strdup_pattern":     ["0x7a461e", "0x7f0ecf", "0x7f2095", "0x82d115", "0x976f53", "0x976f66"],
+            "strdup_detail":      "call strlen(src) -> malloc(len+1) -> strcpy(dest, src); dest always sized to src",
+            "bounded_copy":       ["0x6a54bd"],
+            "bounded_detail":     "Pre-check: if source_len >= remaining_space: skip strcpy and advance write_pos to end. Only calls strcpy when source_len < remaining_space (correct bounds check).",
+            "malloc_sized_copy":  ["0x6ee83e"],
+            "malloc_detail":      "malloc(strlen(src1) + strlen(src2) + 13) then strcpy(dest, src1) -- src1 is strictly shorter than malloc size; safe by construction",
+            "unreadable":         ["0x68d6db", "0x7f20cd"],
+            "unreadable_note":    "Context bytes decode as mid-instruction or data; likely in non-linear code path (e.g., exception handler or unreachable code)",
+        },
+    },
+
+    "recvfrom_analysis": {
+        "callers": ["0x4e44e9", "0x56dac8", "0x7a7821", "0xa842c8", "0xca0aad"],
+        "characterized": {
+            "0xca0aad": "malloc(0xffff) -> recvfrom(fd, buf, 0xffff, flags, addr, addrlen) -> realloc(buf, recv_result) -> return buf. Safe allocation pattern; no parse-driven memcpy from received data in this function.",
+            "0x56dac8": "Structured UDP receive; buf from rbp-0x58 (caller-allocated); len from rbp-0x50; typical select-loop recv handler.",
+            "0x7a7821": "DTLS receive path; fd from [rbx+0x38]; buf = r12 (caller-allocated); flags include MSG_PEEK variant (r13d from r14+0x100). DTLS packet dispatcher entry.",
+        },
+        "note": "Pre-auth memcpy surface in IKE_SA_INIT and DTLS ClientHello parser not traced; 1941 memcpy callers require focused path-tracing from recvfrom call site through packet dispatcher to memcpy callsites.",
+    },
+
+    "pending": "Trace IKE_SA_INIT dispatch path from 0x7a7821 (DTLS recvfrom) through packet type dispatch to payload parsers; identify memcpy calls that use length fields from the received packet without upper-bound checks.",
+}

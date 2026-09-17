@@ -2251,6 +2251,24 @@ LIBIPS_CROSSVER_F01_HARDENING_DELTA = {
             "pending": "Trace callers of 0x32bec2 to determine destination buffer allocation size; determine whether [r8+0x10] strings originate from raw packet bytes or from pre-validated rule signatures",
         },
 
+        "LIBIPS-603-STRCAT-CALLERS": {
+            "strcat_plt":    "0x4d950 (GOT 0x5014f8)",
+            "caller_count":  8,
+            "callers":       ["0x309d4c", "0x309dbc", "0x327bbf", "0x327c09", "0x327c53", "0x327c9d", "0x327ce7", "0x327d31"],
+            "hex_formatter": {
+                "callers":   ["0x309d4c", "0x309dbc"],
+                "function":  "~0x309c50",
+                "pattern":   "Loop: call 0x16a830 (byte->hex) into r13=rsp+0x2b scratch, then strcat(rbx, r13) where rbx=rsp+0x30. Builds hex representation of network data field.",
+                "verdict":   "LOW -- source is 1-byte hex output (max 2 chars per iteration); loop bound determines total length; stack buffer at rsp+0x30 likely sized appropriately",
+            },
+            "static_source_callers": {
+                "callers":   ["0x327bbf", "0x327c09", "0x327c53", "0x327c9d", "0x327ce7", "0x327d31"],
+                "pattern":   "All 6 calls: rsi = lea [rip + 0xb0b..] (static RODATA string); rdi = rdx (dest). Sources are compile-time-known strings.",
+                "verdict":   "SAFE -- static RODATA sources; bounded appended length",
+            },
+            "conclusion":    "All 8 strcat callers are LOW or SAFE. No network-controlled unbounded source confirmed.",
+        },
+
         "603_strcpy_conclusion": {
             "finding":    "10 strcpy callers in 6.0.3 libips.so: 7 are safe strdup patterns. 2 struct-field callers (0x931af/0x931bf) are LOW due to clamped sources and matching dest sizes. 1 protocol-dispatch caller (0x32c096) is MEDIUM PLAUSIBLE pending caller dest-size verification.",
             "hardening_gap": "6.0.3 has ZERO _chk fortified variants (no __strcpy_chk, no __sprintf_chk). All dangerous function calls are raw, unfortified, no canary. Binary is 5MB vs 18.5MB in 8.0.0 -- smaller attack surface but zero mitigations.",
