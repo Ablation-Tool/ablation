@@ -617,8 +617,25 @@ FSR_F10_FRONTEND_ONLY_LICENSE_ENFORCEMENT = {
     "cvss":     "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
     "cvss_score": 8.1,
     "cwe":      "CWE-602 (Client-Side Enforcement of Server-Side Security)",
-    "status":   "STRONGLY INDICATED -- source: product-feature-matrix/tip_feature_control.json",
+    "status":   "CONFIRMED -- direct analysis of tip_feature_control.json and soar_feature_control.json",
     "source":   "https://repo.fortisoar.fortinet.com/fortisoar/product-feature-matrix/tip_feature_control.json",
+
+    "tier_comparison": {
+        "tip_outbreak_vs_full_suite_url_delta": [
+            "main.editor.picklists",
+            "main.system.archival",
+        ],
+        "tip_outbreak_restricted_features": {
+            "disabledGlobalSearch": True,
+            "disableDebug": True,
+            "playbook_retention_days": 10,
+        },
+        "finding": (
+            "Only 2 URL states differ between tip_outbreak (cheapest) and tip_full_suite (most expensive). "
+            "ALL restrictions are ui_prop only. backend_prop.disallowed is empty for all 4 TIP tiers. "
+            "A tip_outbreak user calling API directly gets full tip_full_suite access."
+        ),
+    },
 
     "evidence": {
         "backend_restrictions_empty": (
