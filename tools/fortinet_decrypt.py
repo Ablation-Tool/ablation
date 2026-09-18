@@ -66,11 +66,23 @@ except ImportError:
 FSR_FERNET_KEY = b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='
 
 # FSR-F40: AES-128-CFB keys from PasswordModule.so
-# Used by: connector credentials stored in cyops_db
+# Used by: connector credentials stored in cyops_db (PasswordModule_default, PasswordModule_alt)
+# FSR-F61: PasswordModule_cli key scope confirmed from source analysis (settings.py, ldaphandler.so,
+#           csengine.so, ha/common_utils.so, ha/postgres.so, audit_log_migration.py):
+#   - RabbitMQ/Celery broker password: mq_password in config; decrypted in settings.py line 180
+#   - PostgreSQL database password:    DB_PASSWORD in config; decrypted in settings.py line 352
+#   - MongoDB password:                encrypted in config; decrypted in audit_log_migration.py
+#   - LDAP bind password:              encrypted in DAS config; decrypted in ldaphandler.so
+# Config file locations:
+#   /opt/cyops/configs/cyops.conf (pg_password, mq_password, db config)
+#   /opt/cyops/configs/rabbitmq/rabbitmq_users.conf (mq_password for direct RabbitMQ access)
+#   /opt/cyops-auth/utilities/das.ini (DAS DB password)
+# Decryption script: /opt/cyops/configs/scripts/manage_passwords.py --decrypt <b64blob> jQp3(7@jod#j38d1
+# Encryption: AES-128-CFB, IV prepended (base64(IV[16] + ciphertext)); see fsr_aes_cfb_decrypt()
 FSR_AES_CFB_KEYS = {
     'PasswordModule_default': b'jp3mci29fq7f2kc7',
     'PasswordModule_alt':     b'I3dmcn23@KlS2#!c',  # 16 bytes (truncated from I3dmcn23@KlS2#!ck)
-    'PasswordModule_cli':     b'jQp3(7@jod#j38d1',
+    'PasswordModule_cli':     b'jQp3(7@jod#j38d1',  # FSR-F61: decrypts RabbitMQ/PostgreSQL/MongoDB/LDAP
 }
 
 # Suffix appended by PasswordModule.encrypt, stripped in decrypt
