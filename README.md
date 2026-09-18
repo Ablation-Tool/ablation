@@ -1,36 +1,260 @@
-<p align="center">
-  <img src="assets/sauce.jpg" width="480" alt="ablation">
+<div align="center">
+
+<h1>Ablation</h1>
+
+<p><strong>Semantic function matching for stripped firmware. No symbols. No source. No setup.</strong></p>
+
+<p>BERT-encoded behavioral fingerprints locate vulnerability homologs across architectures,<br>
+compiler variants, and firmware generations in under two minutes per binary.</p>
+
+<p>
+<a href="#how-it-works">How It Works</a> &nbsp;|&nbsp;
+<a href="#the-ablation-difference">What Makes It Different</a> &nbsp;|&nbsp;
+<a href="#use-cases">Use Cases</a> &nbsp;|&nbsp;
+<a href="#claude-code-integration">Claude Code</a> &nbsp;|&nbsp;
+<a href="#quick-start">Quick Start</a> &nbsp;|&nbsp;
+<a href="#architecture">Architecture</a> &nbsp;|&nbsp;
+<a href="#target-coverage">Coverage</a>
 </p>
 
-<p align="center">
-</p>
-
----
-After disassembly, before CFG analysis. It encodes what a function does semantically (opcode category sequences + Markov transitions + call targets + strings) into a BERT vector. This sidesteps the hardest problems (indirect calls, obfuscated CFGs, stripped symbols) by asking a different question: not "what is this function named" but "what does this function behaviorally resemble." That's why it finds homologs across versions even when address, name, and instruction sequence all changed.
-
-Ablation reads firmware and figures out what each piece of code *does* — not what it looks like, but what job it's performing. Then it can answer the question: "Does this device still have the vulnerable code in it?" — even if that code has been moved around, renamed, or recompiled into a slightly different form. It does that check in under two minutes, automatically, without a human having to read a single line of assembly.
-
-The practical result: one researcher can now scan an entire vendor's firmware catalog for a known vulnerability in an afternoon. Work that used to take a team weeks now takes one person a few hours. And vendors can no longer quietly patch one product and call it done — because now there's tooling that will find every other product where they didn't.
+</div>
 
 ---
 
-Stripped enterprise firmware, no debug symbols, no source. Ablation encodes what each function *does* and answers two questions: **which functions match a given vulnerability pattern** and **when was this function patched**.
+## How It Works
 
-Every other approach breaks when the address moves or the code changes slightly. Signature scanners need exact byte matches. IDA and Ghidra need a human to manually correlate functions across versions. BinDiff works on full binary pairs but has no semantic understanding — it matches structure, not meaning. None of them tell you *when* a function was patched.
+<img src="assets/sauce.jpg" width="480" alt="ablation">
 
-Ablation matches on three signals simultaneously — structure, instruction overlap, and what the function actually does — and uses the result to:
+Ablation operates at **stage 2.5** — after disassembly, before CFG analysis. It encodes what each function does semantically (opcode category sequences + Markov transitions + call targets + strings) into a BERT vector, then answers two questions: **which functions match a given vulnerability pattern** and **when was this function patched**.
 
-- **Sweep a binary for vulnerability classes** in under two minutes
-- **Track a function across every firmware version** and find the exact patch epoch
-- **Bridge architectures**: the same seed finds its ARM64 counterpart in a different build
+Opcode categorization follows BinFuse (TrustCom 2025): 11 semantic categories (`DATA_TRANSFER_OP`, `ARITHMETIC_OP`, `COMPARISON_OP`, ...) that are cross-architecture invariant — x86-64 `mov` and ARM64 `ldr` both normalize to `DATA_TRANSFER_OP`. Markov transition text encodes behavioral structure invariant to optimization level. The result: a function can be recompiled, renamed, and moved 28 MB in address space — the behavioral fingerprint stays stable.
+
+**Validated:** Cisco ASA `lina` 9.14 to 9.22 — RADIUS parser moved 28 MB, renamed, recompiled. Homolog similarity: 0.82. Unrelated function (TLS handler): 0.14. Separation: 5.9x.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+<strong>Semantic Sweep</strong><br><br>
+Describe dangerous code in plain English. Ablation encodes every function in the binary and returns the closest behavioral matches — no symbols, no database, no prior knowledge of the binary required.
+</td>
+<td width="33%" valign="top">
+<strong>Patch Epoch Tracking</strong><br><br>
+Mnemonic 4-gram Jaccard is a continuous implementation era signal, not binary match/no-match. Jaccard ~0.97 means unpatched; ~0.21 means structural rewrite. Derives patch timeline from firmware alone, no CVE or source required.
+</td>
+<td width="33%" valign="top">
+<strong>Cross-Architecture Bridging</strong><br><br>
+x86-64 seed finds its ARM64 counterpart in a different build via the semantic layer. Same query locates the same vulnerability class across Cisco ASA x86-64, FTD ARM64, and legacy i386 images.
+</td>
+</tr>
+</table>
+
+**Proven on production firmware:** `attr_list_add_impl` sweep across 33 Cisco ASA firmware versions identified a 3.5-year unpatched window with no CVE, no advisory, and no source — derived entirely from stripped binaries.
+
+```
+Era 1  (jac ~0.11–0.19)   ASA 9.1.7 → 9.6.4        old implementation
+Era 2  (jac ~0.96–0.97)   ASA 9.8.x → 9.14.4.24    UNPATCHED  (~3.5 years, no CVE)
+──────────────────── patch boundary: ASA 9.15.x ─────────────────────────────────
+Era 3  (jac ~0.21)        ASA 9.15.x → 9.22+        PATCHED
+Era 4  (jac ~0.19)        ASA 10.1.x                 separate codeline, patched
+```
 
 ---
 
-## Semantic vulnerability sweep
+## The Ablation Difference
 
-Describe what dangerous code looks like in plain English. Ablation encodes every function in the binary and returns the closest matches — no symbols, no database, no setup required.
+<img src="assets/accent.svg">
 
-**How to sweep any binary:**
+<table>
+<tr>
+<td width="25%" align="center" valign="top">
+<br>
+<strong>No Symbol Dependency &raquo;</strong>
+<br><br>
+Matches on behavioral semantics, not names or addresses. Stripped enterprise firmware is the default case, not an edge case.
+<br><br>
+
+- x86-64, ARM64, ARM32, MIPS32 all supported
+- Same query finds the same function across ISA boundaries
+- No FLIRT signatures, no debug info, no symbol table
+
+</td>
+<td width="25%" align="center" valign="top">
+<br>
+<strong>Semantic Matching &raquo;</strong>
+<br><br>
+BinDiff matches structure. Ablation matches meaning. Recompiled at -O3 instead of -O2, function swapped instructions — Ablation still finds it.
+<br><br>
+
+- BinFuse 11-category opcode normalization
+- Markov transition text preserves behavioral structure
+- `sentence-transformers/all-MiniLM-L6-v2`, 384-dim embeddings
+
+</td>
+<td width="25%" align="center" valign="top">
+<br>
+<strong>Catalog Coverage &raquo;</strong>
+<br><br>
+A single seed becomes a behavioral signature that sweeps every firmware variant sharing the functional logic — not just matching version strings.
+<br><br>
+
+- 33+ Cisco ASA lina versions tracked
+- Fleet-wide patch timeline from firmware alone
+- OEM derivative and legacy build coverage
+
+</td>
+<td width="25%" align="center" valign="top">
+<br>
+<strong>Disclosure-Aligned Output &raquo;</strong>
+<br><br>
+Structured findings with VA offsets, confidence scores, and version attribution feed directly into disclosure reports and CVE submissions.
+<br><br>
+
+- `func_id_db` stores confirmed function identities across binary versions
+- Claude ReAct loop names functions and hypothesizes vulns
+- BARE adapter ranks Metasploit modules against findings
+
+</td>
+</tr>
+</table>
+
+---
+
+## Use Cases
+
+<img src="assets/accent.svg">
+
+Stripped firmware. No symbols. Production-scale vulnerability research.
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<br>
+<strong>VULNERABILITY SWEEP</strong>
+<br><br>
+Sweep a firmware image for a vulnerability class before reading a single line of assembly. 885 functions, 5 candidates per class, 35 seconds on CPU. Start every engagement here.
+<br><br>
+</td>
+<td width="33%" align="center" valign="top">
+<br>
+<strong>PATCH TIMELINE RECONSTRUCTION</strong>
+<br><br>
+Track a function across every firmware version and identify the exact patch epoch. No CVE, no advisory, no source code — derives the timeline from Jaccard continuity across builds.
+<br><br>
+</td>
+<td width="33%" align="center" valign="top">
+<br>
+<strong>N-DAY SYNDICATION</strong>
+<br><br>
+A single patch becomes a behavioral signature. Sweep thousands of firmware images across different product lines, OEM derivatives, and legacy builds for every unpatched variant.
+<br><br>
+</td>
+</tr>
+<tr>
+<td width="33%" align="center" valign="top">
+<br>
+<strong>CROSS-ARCHITECTURE RE</strong>
+<br><br>
+x86-64 seed finds its ARM64 counterpart via the semantic layer. Same vulnerability class located across Cisco ASA x86-64, FTD ARM64, and i386 legacy images in one query.
+<br><br>
+</td>
+<td width="33%" align="center" valign="top">
+<br>
+<strong>LLM-ASSISTED ANALYSIS</strong>
+<br><br>
+Claude ReAct loop runs against unknown function VAs: issues disassembly, CFG, xref, and string queries; names functions; hypothesizes vulns; persists results to func_id_db.
+<br><br>
+</td>
+<td width="33%" align="center" valign="top">
+<br>
+<strong>EXPLOIT MODULE RANKING</strong>
+<br><br>
+BARE adapter converts findings to semantic queries against 3,904 Metasploit modules. Offline, air-gap safe. Classic overflow/memcpy primitives surface usable MSF modules immediately.
+<br><br>
+</td>
+</tr>
+</table>
+
+**Real-world evidence:** [Ablation-Case-Studies](https://github.com/francis-rancid/Ablation-Case-Studies) — 8 production RE engagements across Cisco, Fujitsu, MikroTik, AXIS, MacStadium Orka, Enigma2, Skydio UAV, and WeChat.
+
+---
+
+## Claude Code Integration
+
+<img src="assets/accent.svg">
+
+`llm_analyst` runs Claude as an active RE participant via a tool-calling ReAct loop. Given an unknown function VA, it issues disassembly, CFG, xref, and string queries against the binary, then calls `query_func_db` to pull prior findings, and terminates with a structured result: function name, role, confidence, vuln notes.
+
+```python
+from modules.llm_analyst import AgentLoop
+from modules.llm_analyst.tasks.vuln_hypothesis import VulnHypothesisTask
+
+loop = AgentLoop('/path/to/lina')
+result = loop.run(0x4a1234, task=VulnHypothesisTask())
+print(result.name, result.role, result.confidence)
+print(result.vuln_notes)
+```
+
+7 tools: `get_disassembly`, `get_cfg`, `get_xrefs`, `get_strings`, `get_imports`, `query_func_db`, `done`. Results with `confidence >= 0.5` persist to `func_id_db` as `ANGR_INFERRED`.
+
+Role taxonomy includes: `RADIUS_ATTR_HANDLER`, `RADIUS_DISPATCH`, `CRYPTO_HPKE`, `CRYPTO_STRAP`, `SAML_HANDLER`, `CSTP_HANDLER`, `DTLS_HANDLER`, and 12 others.
+
+---
+
+## Quick Start
+
+```bash
+# Binary / firmware
+./ablation --binary /path/to/target
+./ablation --lina /path/to/lina --asa-version 9.22.2.32
+
+# Live targets
+./ablation --asa 192.168.1.1
+./ablation --orka https://orka-api:443
+
+# LLM-assisted function analysis (requires ANTHROPIC_API_KEY)
+python3 -c "
+from modules.llm_analyst import AgentLoop
+from modules.llm_analyst.tasks.vuln_hypothesis import VulnHypothesisTask
+loop = AgentLoop('/path/to/lina')
+result = loop.run(0x4a1234, task=VulnHypothesisTask())
+print(result.name, result.role, result.confidence)
+print(result.vuln_notes)
+"
+
+# Cross-version patch tracking
+python3 -c "
+from modules.version_delta import VersionTracker
+tracker = VersionTracker({
+    '9.14': '/path/to/lina-9.14',
+    '9.16': '/path/to/lina-9.16',
+    '9.18': '/path/to/lina-9.18',
+})
+for report in tracker.track(seed_binary='9.14', seed_va=0x4a1234):
+    print(report.summary())
+"
+
+# Quick function diff
+python3 -c "
+from modules.version_delta import diff_functions, jaccard_similarity
+delta = diff_functions(asm_914, 'func_v914', asm_916, 'func_v916', callees_914, callees_916)
+print(delta.unified_diff('9.14', '9.16'))
+"
+
+# Rank Metasploit modules against vuln findings
+python3 -c "
+from modules.bare_adapter import rank_modules, format_bare_output
+output = rank_modules(results, binary_path='/path/to/lina')
+print(format_bare_output(output))
+"
+
+# API RE (30 phases)
+python3 modules/api_re.py http://target:8080
+python3 modules/api_re.py http://target:8080 --depth deep --output out.json
+```
+
+### Semantic Vulnerability Sweep
+
+Describe what dangerous code looks like in plain English. Ablation encodes every function and returns the closest matches — no symbols, no database, no setup.
 
 ```python
 import struct, capstone, numpy as np
@@ -38,12 +262,9 @@ from modules.semantic_search import describe_function
 from sentence_transformers import SentenceTransformer
 
 BINARY = '/path/to/target'          # any stripped ELF — no symbols needed
-SCAN_START = 0x200000               # adjust to the code region you care about
+SCAN_START = 0x200000
 SCAN_END   = 0x400000
 
-# Optional: map call targets to names for richer descriptions.
-# Run `objdump -d binary | grep '@plt'` to get these.
-# Leave empty and the sweep still works — you just get raw addresses.
 PLT = {
     0x7a8e0: 'strcpy',   0x785f0: 'sprintf',  0x7a9b0: 'snprintf',
     0x79650: 'memcpy',   0x79710: 'free',      0x7bda8: 'malloc',
@@ -56,7 +277,6 @@ with open(BINARY, 'rb') as f:
 md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 
 def find_starts(data, start, end):
-    # x86-64 function prologue: push rbp; mov rsp,rbp
     return [i for i in range(start, end - 4)
             if data[i] == 0x55 and data[i+1:i+4] == b'\x48\x89\xe5']
 
@@ -73,7 +293,6 @@ def extract(va, max_bytes=2048):
             break
     return lines, calls
 
-# 1. Find and encode every function in the scan range
 funcs = []
 for va in find_starts(data, SCAN_START, SCAN_END):
     lines, calls = extract(va)
@@ -83,12 +302,10 @@ for va in find_starts(data, SCAN_START, SCAN_END):
             call_targets=calls, strings=[], asm_lines=lines,
         ), 'calls': calls})
 
-# 2. Encode corpus — ~35 seconds for 885 functions on CPU
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
 corpus = model.encode([f['desc'] for f in funcs], normalize_embeddings=True,
                       batch_size=128, show_progress_bar=True).astype(np.float32)
 
-# 3. Query: describe what dangerous code looks like
 queries = {
     'unsafe_memcpy':   'TARGET | calls: memcpy | vuln: memcpy called with length from packet without bounds check',
     'strcpy_overflow': 'TARGET | calls: strcpy | vuln: strcpy on user-controlled string into fixed buffer',
@@ -117,185 +334,6 @@ for name, query in queries.items():
   0x294f30  score=0.6102  calls=['free', 'malloc', 'memcpy']
 ```
 
-The encoder is architecture-agnostic. x86-64 `mov`, ARM64 `ldr`, and MIPS `lw` all normalize to `DATA_TRANSFER_OP` before encoding — so the same query finds the same function in x86-64 and ARM64 builds. A function can be recompiled, have instructions swapped, or move to a different address — the behavioral fingerprint stays stable.
-
-**This is the right first step on any unfamiliar binary.** Run it before reading assembly manually. It turns 885 functions into 5 candidates per vulnerability class in 35 seconds.
-
-**Validated:** Cisco ASA `lina` 9.14 → 9.22 — RADIUS parser moved 28 MB, renamed, recompiled. Homolog similarity: 0.82. Unrelated function (TLS handler): 0.14. Separation: 5.9×. See `tests/test_bert_cross_version.py`.
-
----
-
-## Why this changes the economics
-
-| Constraint | Legacy workflow | Ablation |
-|------------|----------------|---------|
-| Target scope | Single binary pair per session | Fleet-wide scans across hundreds of variants |
-| Preparation cost | High — manual symbol recovery, bespoke decoders per target | Zero — autonomous intermediate representation |
-| Compiler variance | Breaks analysis (`-O2` vs `-O3`, ARM vs x86) | Ignored — matches core behavioral logic |
-| Time to value | Days of manual graph alignment | Under two minutes per 94MB image |
-
-**Collapsing patch analysis time.** Traditional patch diffing requires loading multiple massive binaries, waiting for auto-analysis, aligning function structures, and manually isolating changed logic. Dropping that to a sub-two-minute automated job means patch diffing can run continuously across entire build pipelines.
-
-**The N-day syndication model.** When a vendor quietly patches a vulnerability in one device line, Ablation turns that single patch into a behavioral signature and searches thousands of other firmware images across different product lines, OEM derivatives, and legacy builds — finding every unpatched variant sharing the functional logic, not just the same version string.
-
-**Flipping the asymmetry.** Defenders rely on static hashes, CVE metadata, and version strings — metrics trivially bypassed by compiler changes or quiet backports. Behavioral tracking ignores the metadata and hunts the logic. It forces vendors to actually remediate across the full supply chain, because researchers now have tooling to find every instance where a patch was skipped or backported poorly.
-
-**Redeploying human capital.** The barrier to entry in firmware vulnerability research is not finding the initial bug — it is the exorbitant setup time before the hunt begins. Manually scripting LIEF and Capstone to disassemble a monolithic binary, writing custom decoders per target, waiting on Ghidra auto-analysis. When semantic tracking handles the structural alignment autonomously, engineering effort shifts from being a highly paid assembly parser to evaluating exploit viability and building payloads.
-
----
-
-## Cross-version patch tracking
-
-## How it works
-
-```
-Binary  →  Prologue scan  →  FuncFeatures[]
-                                    │
-                          ┌─────────▼──────────┐
-                          │  1. Block filter    │  ±2 basic blocks       (coarse)
-                          │  2. 4-gram Jaccard  │  mnemonic n-grams      (precise)
-                          │  3. MPNet embedding │  semantic meaning       (cross-arch)
-                          └─────────┬──────────┘
-                                    │
-                              HomologMatch
-                            (va, jaccard, semantic_score, confidence, delta)
-```
-
-**Stage 1** prunes the search space. **Stage 2** is the load-bearing signal: mnemonic 4-gram Jaccard is build-invariant — the same function compiled with different optimization flags, address layouts, or minor code tweaks produces nearly the same Jaccard. **Stage 3** bridges ISA boundaries where Jaccard fails (x86-64 seed vs. ARM64 target).
-
----
-
-## The novel part: Jaccard as a patch epoch classifier
-
-Jaccard isn't used as binary match/no-match. It's a continuous implementation era signal:
-
-| Jaccard | Interpretation |
-|---------|---------------|
-| ~0.97 | Bytecode nearly identical — same implementation era, almost certainly unpatched |
-| ~0.21 | Structural rewrite — function was significantly changed, patched |
-| ~0.11–0.19 | Different implementation era — pre-dates the current codeline |
-
-No existing tool does this. BinDiff and Diaphora give you "X% similar." Ablation gives you "this function has been in the same implementation era since version 9.8, changed once at 9.15, and every version after that is a structural rewrite of the original" — derived entirely from firmware, with no CVE, no advisory, no source code.
-
-**Example — Cisco ASA `attr_list_add_impl` sweep across 33 firmware versions:**
-
-```
-Era 1  (jac ~0.11–0.19)   ASA 9.1.7 → 9.6.4        old implementation
-Era 2  (jac ~0.96–0.97)   ASA 9.8.x → 9.14.4.24    UNPATCHED  (~3.5 years, no CVE)
-──────────────────── patch boundary: ASA 9.15.x ─────────────────────────────────
-Era 3  (jac ~0.21)        ASA 9.15.x → 9.22+        PATCHED
-Era 4  (jac ~0.19)        ASA 10.1.x                 separate codeline, patched
-```
-
-The boundary was identified by sweeping FTD 6.6.0 (ASA 9.14 base, Era 2) vs. FTD 6.7.0 (ASA 9.15 base, Era 3) — no source code, no debug symbols, no prior knowledge of the patch. Cross-architecture coverage extends the same timeline to ARM64 (FTD 10.0.0, FTD 1200) and i386 (ASA 9.1.x, 9.2.x) via the semantic layer.
-
-This runs in under two minutes on a 94MB stripped binary.
-
----
-
-## How a reverse engineering tool works
-
-A RE tool is a pipeline that transforms raw bytes into human-understandable structure — from bit pattern to behavior. Every major tool (IDA, Ghidra, Binary Ninja, radare2) is built from the same eight stages.
-
-```
-Binary on disk
-      │
-      ▼
-┌─────────────────┐
-│  1. Loader      │  parse format → map sections into memory model
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  2. Disassembler│  bytes → instructions (linear sweep or recursive descent)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  3. CFG Builder │  instructions → basic blocks → edges (branch targets)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  4. Call Graph  │  function boundary detection → caller/callee graph
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  5. Lift to IR  │  assembly → architecture-agnostic intermediate rep
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  6. Data Flow   │  track values through registers/memory (taint, types)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  7. Decompiler  │  IR → C-like pseudocode (structure recovery, vars, types)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  8. Symbol/Xref │  name resolution, cross-reference index, string refs
-└─────────────────┘
-```
-
-**1. Loader** reads ELF/PE/Mach-O headers. Extracts sections (`.text`, `.data`, `.bss`, `.rodata`), entry point VA, import table (API surface), export table, segment permissions (R/W/X). Everything downstream depends on knowing what bytes are code vs. data vs. padding.
-
-**2. Disassembler** — two strategies, both flawed:
-
-```
-Linear sweep:        march forward blindly — fast, misses data islands in code
-Recursive descent:   follow branch targets — accurate, misses indirect branches + dead code
-```
-
-Modern tools combine both with heuristics (prologue patterns, exception handler tables). Ablation uses Capstone — multi-arch, embeddable, fast.
-
-**3. CFG (Control Flow Graph)** — a basic block is a maximal instruction sequence with single entry, single exit (ends in branch/call/ret/hlt). Edges connect blocks via branch targets. Everything else — decompiler, taint analysis, semantic similarity — runs on top of this graph.
-
-**4. Call Graph** — function boundary detection in stripped binaries uses prologue heuristics (`push rbp; mov rbp, rsp`, `sub rsp, N`) and exception tables (PE `.pdata`, ELF `.eh_frame`). Leaf functions doing IO/crypto/network are high-value targets.
-
-**5. IR Lifting** — why: `mov eax, [rbp-8]` (x86) and `ldr w0, [x29, #-8]` (ARM64) do the same thing. Lifting to one IR means write the analysis once, run it everywhere.
-
-| IR | Used by | Tradeoff |
-|----|---------|----------|
-| VEX | angr, Valgrind | precise flag effects, memory modeled |
-| PCODE | Ghidra | reversible register transfer language |
-| ESIL | radare2 | stack-based expression evaluator |
-| BinFuse categories | Ablation | lossy but BERT-friendly (`mov → DATA_TRANSFER_OP`) |
-
-The lossier the IR, the less precise the analysis — but the more robust to recompilation noise.
-
-**6. Data Flow Analysis** — tracks where values come from and where they go:
-
-```
-taint source: recv() return value (attacker-controlled length)
-      │
-      ▼  mov ecx, eax     ← ECX tainted
-      │
-      ▼  call memcpy      ← tainted value reaches length arg → vuln candidate
-```
-
-Used for taint analysis (attacker input → dangerous sink), type recovery (value passed to `socket()` → must be int), and constant propagation (resolve indirect calls).
-
-**7. Decompiler** reconstructs C-like pseudocode from IR + CFG:
-
-```
-CFG → structure recovery:   loops (back edges), if/else (dominator tree)
-Registers → variables:      SSA form, phi nodes, stack slot coalescence
-Operations → types:         int vs. pointer vs. float propagated through ops
-Addresses → names:          FLIRT signatures, import names, user labels
-```
-
-Output is always an approximation — compilers discard type info, names, comments. Good decompilers (Hex-Rays, Ghidra HLIL, BN MLIL) guess well on common patterns and fail on obfuscation.
-
-**8. Symbol resolution + xref index** — FLIRT/BSim match stripped functions to known library signatures. The xref index lets you ask "who writes to this global?" in O(1).
-
-### Where Ablation sits
-
-Ablation operates at **stage 2.5** — after disassembly, before full CFG analysis. It encodes what a function *does* semantically (opcode category sequences + Markov transitions + call targets + strings) into a BERT vector. This sidesteps the hardest problems (indirect calls, obfuscated CFGs, stripped symbols) by asking a different question: not "what is this function named" but "what does this function behaviorally resemble." That is why it finds homologs across versions even when address, name, and instruction sequence all changed.
-
 ---
 
 ## Architecture
@@ -314,26 +352,17 @@ modules/
 └── bare_adapter.py      ablation findings → BARE binary → ranked Metasploit modules
 ```
 
-### llm_analyst
-
-Claude runs as an active RE participant via a tool-calling ReAct loop. Given an unknown function VA, it issues disassembly, CFG, xref, and string queries against the binary, then calls `query_func_db` to pull prior findings, and terminates with a structured `done()` result: function name, role, confidence, vuln notes.
-
-- 7 tools: `get_disassembly`, `get_cfg`, `get_xrefs`, `get_strings`, `get_imports`, `query_func_db`, `done`
-- Role taxonomy: `RADIUS_ATTR_HANDLER`, `RADIUS_DISPATCH`, `CRYPTO_HPKE`, `CRYPTO_STRAP`, `SAML_HANDLER`, `CSTP_HANDLER`, `DTLS_HANDLER`, and 12 others
-- Budget governor: hard stop at `max_tool_calls` (default 10), partial result on budget exhaust
-- Results with `confidence ≥ 0.5` persist to `func_id_db` as `ANGR_INFERRED`
-
 ### semantic_search
 
 BERT-based function similarity seeded from `func_id_db` CONFIRMED/ANGR_INFERRED functions.
 
-- Opcode categorization follows BinFuse (TrustCom 2025): 11 semantic categories (`DATA_TRANSFER_OP`, `ARITHMETIC_OP`, `COMPARISON_OP`, ...) — cross-architecture invariant, x86 `mov` and ARM64 `ldr` collapse to `DATA_TRANSFER_OP`
+- Opcode categorization follows BinFuse (TrustCom 2025): 11 semantic categories (`DATA_TRANSFER_OP`, `ARITHMETIC_OP`, `COMPARISON_OP`, ...) — cross-architecture invariant
 - Markov transition text: top-5 adjacent-category transitions (`COMPARISON_OP->CONDITIONAL_OP(2)`) encode behavioral structure invariant to optimization level
 - Corpus cached as numpy array keyed on db hash; repeated queries cost one dot-product (~1ms)
 
 ### version_delta
 
-Tracks a seed function across binary versions via a three-stage pipeline.
+Three-stage pipeline for cross-version homolog tracking.
 
 ```
 Stage 1  Structural pre-filter     basic block count ±2, edge ratio ±35%
@@ -341,7 +370,15 @@ Stage 2  Mnemonic 4-gram Jaccard   build-invariant sequence similarity, top-10 c
 Stage 3  Semantic tiebreaker       SemanticSearcher when top-2 within 0.05 Jaccard
 ```
 
-Patch localization via `difflib.SequenceMatcher` on normalized instruction lines surfaces the exact changed instructions. Primary use case: track the RADIUS Class attribute overflow patch (CVE-2022-0778) across 17 lina versions.
+Jaccard as patch epoch classifier — not binary match/no-match but a continuous implementation era signal:
+
+| Jaccard | Interpretation |
+|---------|---------------|
+| ~0.97 | Bytecode nearly identical — same implementation era, almost certainly unpatched |
+| ~0.21 | Structural rewrite — function was significantly changed, patched |
+| ~0.11–0.19 | Different implementation era — pre-dates the current codeline |
+
+Patch localization via `difflib.SequenceMatcher` surfaces the exact changed instructions.
 
 ### func_id_db
 
@@ -355,103 +392,17 @@ SQLite store for function identity across binary versions. Schema v2 (WAL, FK-in
 
 Converts `llm_analyst.AnalysisResult` vuln findings to BARE `findings.json` and ranks against 3,904 Metasploit modules via the BARE binary (offline, air-gap safe, no Python at inference).
 
-- AI/ML-specific findings (HPKE, STRAP, custom RADIUS) trigger `no_high_confidence_match` — expected, no MSF coverage exists for these
-- Classic overflow/memcpy primitives surface usable MSF modules
-
----
-
-## Target coverage
-
-| Platform | Coverage |
-|----------|---------|
-| Cisco ASA (lina) | struct RE (gp_obj layout), RADIUS class-attr overflow, ASDM JAR, WebVPN JS, ROMMON, 17+ versions tracked |
-| Cisco FTD / FDM | 43 modules: JWT forgery, Neo4j key, TAR slip RCE, ZMQ NULL auth, hardcoded AES-256 key, zip-slip |
-| Cisco ISE | RADIUS OU injection, LDAP chain, credential audit — 46 findings (CRIT:11) |
-| Cisco CUCM | Static AES key, OAuth JWT forgery, ITL signing key, HAProxy 666 — 482 findings |
-| Cisco FMC | 44 findings: PAM code injection (root), backup/health module/report RCE chain, PERL5LIB root escalation, hardcoded DB creds, Vault root token |
-| Cisco AnyConnect | HPKE/STRAP/IPC RE, acsockext TOCTOU, DTLS handler, SAML forging |
-| Cisco IOS / IOS-XE | Firmware RE, crashdump, hardcoded credential scan |
-| Cisco NX-OS / ACI | APIC REST, guestshell rootfs, Nexus Dashboard, Kafka/TF cred exfil |
-| Orka | K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC |
-| WeChat Android | MMTLS two-tier crypto, PSK extraction, DB key derivation, ptrace key extraction |
-| macOS / Apple Silicon | Mach-O, Swift ABI, Orka cluster RE, malware persistence, Keychain, MDM |
-| Windows (PE / PE32+) | Kernel driver RE, IOCTL dispatch, DKOM, SSDT, DSE bypass |
-| Docker / Kubernetes | Escape surface, socket mounts, capability audit, SA token, etcd |
-| Linux (ELF x86-64/ARM64/MIPS) | Binary RE, live process, privesc, containers, garble-obfuscated Go |
-
----
-
-## Quick start
-
-```bash
-# Binary / firmware
-./ablation --binary /path/to/target
-./ablation --lina /path/to/lina --asa-version 9.22.2.32
-
-# Live targets
-./ablation --asa 192.168.1.1
-./ablation --orka https://orka-api:443
-
-# LLM-assisted function analysis (requires ANTHROPIC_API_KEY)
-python3 -c "
-from modules.llm_analyst import AgentLoop
-from modules.llm_analyst.tasks.vuln_hypothesis import VulnHypothesisTask
-loop = AgentLoop('/path/to/lina')
-result = loop.run(0x4a1234, task=VulnHypothesisTask())
-print(result.name, result.role, result.confidence)
-print(result.vuln_notes)
-"
-
-# Semantic vulnerability sweep — no database needed, works on any stripped binary
-# See the full self-contained sweep pattern in the "Semantic vulnerability sweep" section above.
-
-# Cross-version patch tracking
-python3 -c "
-from modules.version_delta import VersionTracker
-tracker = VersionTracker({
-    '9.14': '/path/to/lina-9.14',
-    '9.16': '/path/to/lina-9.16',
-    '9.18': '/path/to/lina-9.18',
-})
-for report in tracker.track(seed_binary='9.14', seed_va=0x4a1234):
-    print(report.summary())
-"
-
-# Quick function diff (no angr required)
-python3 -c "
-from modules.version_delta import diff_functions, jaccard_similarity
-delta = diff_functions(asm_914, 'func_v914', asm_916, 'func_v916', callees_914, callees_916)
-print(delta.unified_diff('9.14', '9.16'))
-"
-
-# Rank Metasploit modules against vuln findings
-python3 -c "
-from modules.bare_adapter import rank_modules, format_bare_output
-output = rank_modules(results, binary_path='/path/to/lina')
-print(format_bare_output(output))
-"
-
-# API RE (30 phases)
-python3 modules/api_re.py http://target:8080
-python3 modules/api_re.py http://target:8080 --depth deep --output out.json
-
-# Platform-specific
-python3 -c "from modules.cisco_cucm_re import full_findings_summary; print(full_findings_summary())"
-python3 -c "from modules.ftd_hardcoded_aes_key import AES256_KEY; print(AES256_KEY.hex())"
-python3 modules/go_garble_re.py /path/to/binary
-```
-
 ---
 
 ## Modules
 
-### RE infrastructure
+### RE Infrastructure
 
 | Module | Summary |
 |--------|---------|
 | `func_id_db` | SQLite function identity store — byte-pattern + callee + struct + string matching across binary versions |
 | `llm_analyst/` | Claude ReAct loop — active RE participant; names functions, hypothesizes vulns, reconstructs structs |
-| `semantic_search` | BERT-based function similarity (MPNet, BinFuse opcode categories, Markov transitions) |
+| `semantic_search` | BERT-based function similarity (MiniLM-L6-v2, BinFuse opcode categories, Markov transitions) |
 | `version_delta` | Cross-version homolog matching (structural → 4-gram Jaccard → semantic) + SequenceMatcher patch diff |
 | `bare_adapter` | Ablation findings → BARE binary → ranked Metasploit modules (3,904 modules, offline) |
 | `regression` | Version-confirmed LINA struct offsets, angr Veritesting boundary model |
@@ -480,7 +431,7 @@ python3 modules/go_garble_re.py /path/to/binary
 
 | Module | Summary |
 |--------|---------|
-| `ftd_jwt_forge` | JWT forgery chain — RS256→HS256 confusion |
+| `ftd_jwt_forge` | JWT forgery chain — RS256 to HS256 confusion |
 | `ftd_jwt_key_extraction` | JWT signing key extraction |
 | `ftd_neo4j_password_decrypt` | Neo4j key recovery |
 | `ftd_backup_tarslip` | TAR slip RCE via backup restore |
@@ -535,7 +486,7 @@ python3 modules/go_garble_re.py /path/to/binary
 | Module | Summary |
 |--------|---------|
 | `api_re` | 30-phase API RE: schema harvest, BOLA/BFLA, JWT confusion, NoSQL inject, WebSocket, shadow versions |
-| `jwt_crypto_analyzer` | alg:none, RS256→HS256 confusion, kid SQLi/SSRF/traversal |
+| `jwt_crypto_analyzer` | alg:none, RS256 to HS256 confusion, kid SQLi/SSRF/traversal |
 | `tls_enum` | Cipher suite, JA3, HSTS, session resumption |
 | `net_sniffer` | HTTP/FTP/Telnet/SMTP/SNMP/SIP/LDAP credential capture |
 | `nginx_enum` | Alias traversal, proxy SSRF, CVE map |
@@ -557,6 +508,27 @@ python3 modules/go_garble_re.py /path/to/binary
 | `java_decompiler` | Procyon/CFR/Fernflower wrapper |
 | `go_garble_re` | pclntab detection, bootstrap trace, XOR stub finder, string xref |
 | `privesc_enum` | SUID/SGID, sudo NOPASSWD, capabilities, cron injection |
+
+---
+
+## Target Coverage
+
+| Platform | Coverage |
+|----------|---------|
+| Cisco ASA (lina) | struct RE (gp_obj layout), RADIUS class-attr overflow, ASDM JAR, WebVPN JS, ROMMON, 17+ versions tracked |
+| Cisco FTD / FDM | 43 modules: JWT forgery, Neo4j key, TAR slip RCE, ZMQ NULL auth, hardcoded AES-256 key, zip-slip |
+| Cisco ISE | RADIUS OU injection, LDAP chain, credential audit — 46 findings (CRIT:11) |
+| Cisco CUCM | Static AES key, OAuth JWT forgery, ITL signing key, HAProxy 666 — 482 findings |
+| Cisco FMC | 44 findings: PAM code injection (root), backup/health module/report RCE chain, PERL5LIB root escalation, hardcoded DB creds, Vault root token |
+| Cisco AnyConnect | HPKE/STRAP/IPC RE, acsockext TOCTOU, DTLS handler, SAML forging |
+| Cisco IOS / IOS-XE | Firmware RE, crashdump, hardcoded credential scan |
+| Cisco NX-OS / ACI | APIC REST, guestshell rootfs, Nexus Dashboard, Kafka/TF cred exfil |
+| Orka | K8s API, JWT forge (CVE-2020-26160 + empty-key), VM exec, gRPC |
+| WeChat Android | MMTLS two-tier crypto, PSK extraction, DB key derivation, ptrace key extraction |
+| macOS / Apple Silicon | Mach-O, Swift ABI, Orka cluster RE, malware persistence, Keychain, MDM |
+| Windows (PE / PE32+) | Kernel driver RE, IOCTL dispatch, DKOM, SSDT, DSE bypass |
+| Docker / Kubernetes | Escape surface, socket mounts, capability audit, SA token, etcd |
+| Linux (ELF x86-64/ARM64/MIPS) | Binary RE, live process, privesc, containers, garble-obfuscated Go |
 
 ---
 
@@ -584,7 +556,7 @@ r2 (radare2)  bindiff (BinDiff v8)
 
 **bare_adapter:**
 ```
-BARE binary       github.com/sshpie/BARE  (install to ~/.local/bin/bare)
+BARE binary       github.com/francis-rancid/BARE  (install to ~/.local/bin/bare)
 ```
 
 ---
@@ -595,6 +567,15 @@ BARE binary       github.com/sshpie/BARE  (install to ~/.local/bin/bare)
 - [docs/apple.md](docs/apple.md) — Swift RE, Orka, malware persistence, sysadmin
 - [docs/wechat.md](docs/wechat.md) — MMTLS protocol, DB key derivation, ptrace extraction
 - [docs/core.md](docs/core.md) — binary analysis, Java, Windows kernel, containers, network, crypto
+
+**Case studies:** [Ablation-Case-Studies](https://github.com/francis-rancid/Ablation-Case-Studies) — 8 production RE engagements.
+
+---
+
+## Credits
+
+- **[@francis-rancid](https://github.com/francis-rancid)** — research and development
+- **Claude Code** ([claude.ai/code](https://claude.ai/code)) — assisted analysis
 
 ---
 
