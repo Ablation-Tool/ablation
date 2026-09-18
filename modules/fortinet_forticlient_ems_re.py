@@ -1634,7 +1634,11 @@ EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
         "note": (
             "EMS-F21 (port 9990, no auth TagService.Tag) does NOT directly call enableFirewallRule. "
             "The injection chain runs through port 8013 ecsocksrv (ecsocksrv == ECSocketServerService). "
-            "Prerequisite: EMS-F19 hardcoded cert OR a compromised FortiClient endpoint."
+            "Prerequisite: EMS-F19 hardcoded cert OR a compromised FortiClient endpoint. "
+            "PENDING: determine if closure args (name, path) originate from EC protocol message body "
+            "(client-controlled, pre-auth with EMS-F19 cert) or from EMS policy config DB "
+            "(admin-controlled). If client-controlled: severity CRITICAL pre-auth RCE. "
+            "If admin-controlled: severity HIGH priv-esc from EMS admin to SYSTEM."
         ),
     },
 
@@ -1659,7 +1663,7 @@ PENDING = [
     "EMS-F14: Confirm rogue EMS auth redirect on live instance -- does FortiClient accept authSAMLURL from server",
     "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path in socket_server.go",
     "ztnaworker.exe RE: COMPLETE for EMS-F20/F21/F22 -- remaining: trace NewGrpcConnPool target host to identify what it connects to",
-    "sipdaemon.exe RE: SIP daemon (signatures/07002000/pua.dat) attack surface",
+    "sipdaemon.exe RE: COMPLETE -- binary is IDENTICAL to ztnaworker.exe (same 3700 fortinet symbols, 0 unique); 4 syms unique to ztnaworker.exe only: server.WithFOS, server.WithRedis and their .func1 variants. All EMS-F20/F21/F22 findings apply to sipdaemon.exe equally. Binary is 34,386,048 bytes (ztnaworker: 34,389,632 = 3584 bytes diff = exactly the WithFOS/WithRedis delta).",
 
     # Django application RE
     "EMS-F2: Confirm CONTENT_DIRECTORY value; ContentDict may be whitelist not open path join",
