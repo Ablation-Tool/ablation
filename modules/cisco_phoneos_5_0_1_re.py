@@ -49,6 +49,7 @@ FINDINGS = [
             "authenticated user."
         ),
         "version_comparison": {
+            "11.0.6SR8_8821":   "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, pre-12.0.7 state)",
             "12.0.7MPP":        "debug:*:..:/bin/false (LOCKED - no access)",
             "14.4.1_7832":      "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
             "14.4.1_78xx":      "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
