@@ -641,6 +641,224 @@ CAT9K_F13 = {
             "xtrace logging; this one enables an unauthenticated shell.",
 }
 
+# CAT9K-F14: bexecute SUID + shell_exec.sh /tmp TOCTOU local privilege escalation
+CAT9K_F14 = {
+    "id":       "CAT9K-F14",
+    "title":    "bexecute SUID binary (rwsr-sr-x root/root, 55040 bytes) whitelists "
+                "shell_exec.sh in /usr/binos/conf/uicmd.conf; shell_exec.sh sources "
+                "/tmp/.shell_exec.<args_id> as bash at line 45 with root effective UID; "
+                "args_id is the first argv token passed by the caller; "
+                "/tmp is world-writable; file is read without exclusive lock",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — /tmp/rpbase-full/bigbang/usr/binos/bin/bexecute "
+                "(rwsr-sr-x root/root, confirmed SUID via unsquashfs -lls); "
+                "uicmd.conf extracted: /usr/binos/conf/shell_exec.sh listed as whitelisted "
+                "script; shell_exec.sh line 29: args_file=\"/tmp/.shell_exec.${args_id}\"; "
+                "line 45: source \"${args_file}\" confirmed; "
+                "args_id set from ${1} directly from caller argv with no sanitization",
+    "cwe":      ["CWE-377 (Insecure Temporary File)",
+                 "CWE-362 (Concurrent Execution Using Shared Resource with Improper Synchronization)",
+                 "CWE-269 (Improper Privilege Management)"],
+    "files":    ["bigbang/usr/binos/bin/bexecute",
+                 "bigbang/usr/binos/conf/uicmd.conf",
+                 "bigbang/usr/binos/conf/shell_exec.sh"],
+    "trigger_code": [
+        "# shell_exec.sh",
+        "args_id=\"${1}\"",
+        "args_file=\"/tmp/.shell_exec.${args_id}\"",
+        "# ...",
+        "source \"${args_file}\"   # sourced as root via bexecute SUID",
+    ],
+    "attack_path": [
+        "1. From any low-privileged shell (binos, guestshell, network-operator)",
+        "2. Pre-create /tmp/.shell_exec.<predictable_args_id> with: chmod +s /bin/bash",
+        "3. Invoke bexecute shell_exec.sh <predictable_args_id>",
+        "4. bexecute sets effective UID=0 (SUID), exec shell_exec.sh",
+        "5. shell_exec.sh sources /tmp/.shell_exec.<args_id> as bash with root euid",
+        "6. Payload executes as root",
+    ],
+    "impact": (
+        "Local privilege escalation from any IOS-XE shell user to root. "
+        "The bexecute binary is the standard mechanism for running administrative "
+        "scripts as root on Cat9K; the whitelist (uicmd.conf) contains 80+ entries. "
+        "shell_exec.sh is invoked by multiple IOS-XE subsystems (NETCONF sessions, "
+        "container management) making args_id values predictable from process IDs or "
+        "session identifiers visible in /tmp. An attacker with any level of IOS-XE "
+        "shell access (guestshell, network-operator, any sudoers entry) can race the "
+        "args file creation to obtain root. No exploit primitives beyond file write "
+        "to /tmp are required."
+    ),
+    "note": "shell_exec.sh handles multiple actions (enable_netconf_yang, "
+            "execute_session_command, disable_netconf_yang) and is a central "
+            "IOS-XE subsystem component. The args_file pattern is used to pass "
+            "structured parameters (SHELL_SESSION_action, SHELL_SESSION_command_line, etc.) "
+            "to the script, which explains the bash-sourcing design. The rm -f at line 88 "
+            "deletes the args_file after sourcing, providing no persistent evidence. "
+            "SHELL_SESSION_command_line at line 1684 is also unquoted in the nsenter exec "
+            "invocation, but word-splitting is the lesser risk compared to the source path.",
+}
+
+# CAT9K-F15: screen 4.9.1 SUID root logfile privilege escalation
+CAT9K_F15 = {
+    "id":       "CAT9K-F15",
+    "title":    "GNU screen 4.9.1 installed SUID root (rwsr-sr-x root/root, 452656 bytes) "
+                "at /usr/bin/screen in production Cat9K IOS-XE firmware; "
+                "screen multiuser mode requires SUID; -Logfile flag allows writing "
+                "screen session output to an arbitrary path as root; "
+                "-D -m flags run detached in daemon mode without a controlling terminal",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — unsquashfs -lls on cat9k-rpbase.17.18.04.SPA.pkg shows "
+                "-rwsr-sr-x root/root 452656 usr/bin/screen; strings output confirms "
+                "\"Screen version %s\", \"-Logfile file Set logfile name.\", "
+                "\"Must run suid root for multiuser support.\" present in binary",
+    "cwe":      ["CWE-269 (Improper Privilege Management)",
+                 "CWE-250 (Execution with Unnecessary Privileges)"],
+    "files":    ["bigbang/usr/bin/screen"],
+    "version":  "screen-4.9.1",
+    "suid_bits": "rwsr-sr-x root/root",
+    "trigger_code": [
+        "screen -D -m -L -Logfile /etc/cron.d/root_shell <cmd>",
+        "# or: append to /root/.ssh/authorized_keys",
+    ],
+    "attack_path": [
+        "1. From any local shell (any privilege level with /usr/bin/screen access)",
+        "2. screen -D -m -L -Logfile /target/path /bin/sh -c 'echo payload'",
+        "3. screen runs detached as root, writes session output to /target/path",
+        "4. Target can be /etc/crontab, /etc/cron.d/, /root/.ssh/authorized_keys",
+        "5. Cron or SSH key triggers root shell",
+    ],
+    "impact": (
+        "Any user with access to /usr/bin/screen can write arbitrary content to any "
+        "root-owned path via the -Logfile flag. Classic targets: /etc/crontab "
+        "(cron root shell), /root/.ssh/authorized_keys (SSH key injection), "
+        "/etc/ld.so.preload (library injection). On Cat9K, /etc/crontab or "
+        "init.d paths can schedule persistence that survives process restarts. "
+        "Screen 4.9.1 has no CVE specifically for this behavior (it is by design "
+        "for multiuser); the risk is the SUID deployment on a production network "
+        "device where screen's terminal multiplexing function is unnecessary."
+    ),
+    "note": "GNU screen requires SUID root on Linux to support multiuser mode "
+            "(screen -x for session sharing across users). On a network device, "
+            "multiuser screen sharing has no legitimate use case. The SUID bit "
+            "should be removed (chmod -s /usr/bin/screen) or screen should not "
+            "be included in production firmware. CVE-2023-24626 (screen 4.9.0 "
+            "signal handling) is patched in 4.9.1 but the SUID logfile write "
+            "surface remains.",
+}
+
+# CAT9K-F16: SUID nsenter unrestricted namespace escape
+CAT9K_F16 = {
+    "id":       "CAT9K-F16",
+    "title":    "nsenter (util-linux 2.39.3) installed SUID root (rwsr-sr-x root/root, "
+                "43296 bytes) at /usr/bin/nsenter; any process can call nsenter to "
+                "attach to any Linux namespace (PID, mount, network, user, IPC) "
+                "with -S 0 -G 0 flags to set UID/GID 0 inside the target namespace; "
+                "nsenter_exec.sh reads /tmp/app_pid.txt (world-writable) for target PID",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — unsquashfs -lls shows -rwsr-sr-x root/root 43296 usr/bin/nsenter; "
+                "nsenter_exec.sh at bigbang/usr/binos/conf/nsenter_exec.sh confirmed: "
+                "GSPID=$(</tmp/app_pid.txt) and "
+                "/usr/bin/nsenter -t $GSPID -m -u -i -n -p -U -S 0 -G 0 -r -w -Z env -i "
+                "PATH=... $1 with both GSPID and $1 unquoted",
+    "cwe":      ["CWE-269 (Improper Privilege Management)",
+                 "CWE-250 (Execution with Unnecessary Privileges)"],
+    "files":    ["bigbang/usr/bin/nsenter",
+                 "bigbang/usr/binos/conf/nsenter_exec.sh"],
+    "version":  "util-linux 2.39.3",
+    "suid_bits": "rwsr-sr-x root/root",
+    "trigger_code": [
+        "# nsenter_exec.sh - unquoted args",
+        "GSPID=$(</tmp/app_pid.txt)    # world-writable source",
+        "/usr/bin/nsenter -t $GSPID -m -u -i -n -p -U -S 0 -G 0 -r -w -Z \\",
+        "  env -i PATH=... $1           # $1 unquoted: word-splits",
+    ],
+    "attack_path": [
+        "1. Direct SUID call: /usr/bin/nsenter -t 1 -m -u -i -n -p /bin/bash",
+        "   Enters PID 1 (init) namespaces with caller's UID (root if SUID effective)",
+        "2. Via nsenter_exec.sh: write attacker PID to /tmp/app_pid.txt",
+        "   nsenter enters that process's namespace with -S 0 -G 0 (root in namespace)",
+        "3. On containerized workloads: nsenter PID = container PID 1",
+        "   -m flag enters mount namespace, -n enters net namespace = container escape",
+    ],
+    "impact": (
+        "SUID nsenter enables unrestricted namespace attachment. On Cat9K devices "
+        "running IOx containerized applications (Docker, LXC), nsenter provides "
+        "container escape: enter the container's mount namespace and gain root inside it, "
+        "or reverse: from inside a container, enter the host PID namespace. "
+        "The -S 0 -G 0 flags in nsenter_exec.sh explicitly set root credentials "
+        "inside the entered namespace. nsenter_exec.sh's use of /tmp/app_pid.txt "
+        "as the PID source (world-writable) allows any local user to redirect "
+        "nsenter to target any running process, not just the intended guestshell PID. "
+        "The $1 argument in nsenter_exec.sh is unquoted: word-split on whitespace "
+        "if the caller provides a spaced argument string."
+    ),
+    "note": "nsenter is used by IOS-XE for guestshell and IOx container access "
+            "(connecting to the container's network/mount namespaces for the "
+            "'app-hosting connect appid' CLI command). The SUID bit is required "
+            "for this function. The risk is the unrestricted access: any process "
+            "on the device can call /usr/bin/nsenter with arbitrary namespace targets. "
+            "Mitigation: restrict nsenter to specific users via sudo with explicit "
+            "allowed PIDs, or use Linux capabilities (CAP_SYS_ADMIN) scoped to the "
+            "guestshell management process rather than world-SUID.",
+}
+
+# CAT9K-F17: SUID runc v1.1.12+dev container runtime on production network hardware
+CAT9K_F17 = {
+    "id":       "CAT9K-F17",
+    "title":    "runc v1.1.12+dev (Go 1.22.2, 9,680,544 bytes) installed SUID root "
+                "(rwsr-sr-x root/root) at /usr/bin/runc; the +dev suffix indicates "
+                "a pre-release development build ahead of the 1.1.12 release tag; "
+                "CVE-2024-21626 (CVSS 8.6 HIGH, file descriptor leak enabling host root "
+                "escape from containers) is patched in runc >= 1.1.12 release; "
+                "patch applicability for the +dev pre-release is unconfirmed",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — unsquashfs -lls shows -rwsr-sr-x root/root 9680544 usr/bin/runc; "
+                "strings confirm opencontainers/runc module path; "
+                "version 1.1.12+dev with Go 1.22.2 from binary version string; "
+                "CVE-2024-21626 fix commits are in the 1.1.12 release tag; "
+                "+dev build provenance against that tag is not determinable from binary alone",
+    "cwe":      ["CWE-403 (Exposure of File Descriptor to Unintended Control Sphere)",
+                 "CWE-269 (Improper Privilege Management)"],
+    "files":    ["bigbang/usr/bin/runc"],
+    "version":  "v1.1.12+dev (Go 1.22.2)",
+    "suid_bits": "rwsr-sr-x root/root",
+    "cve_ref":  "CVE-2024-21626 (CVSS 8.6 HIGH) — runc <= 1.1.11: workdir fd leak "
+                "allows container process to obtain a host filesystem fd and escape "
+                "to host root; patched in 1.1.12 release",
+    "attack_path": [
+        "CVE-2024-21626 path (if +dev predates fix commits):",
+        "1. Attacker controls container image or runc exec arguments",
+        "2. Container process opens /proc/self/fd/<leaked-host-fd>",
+        "3. Obtains file descriptor to host filesystem path outside container root",
+        "4. Writes to /etc/crontab, /root/.ssh/authorized_keys, /etc/shadow via host fd",
+        "5. Full host root access",
+        "",
+        "SUID deployment risk (independent of CVE):",
+        "Any future runc vulnerability affecting SUID deployments has "
+        "amplified impact on a production network device.",
+    ],
+    "impact": (
+        "runc is the OCI container runtime for IOS-XE IOx applications. "
+        "SUID deployment on production network hardware amplifies any runc vulnerability. "
+        "CVE-2024-21626 (8.6 HIGH) allows container escape to host root via fd leak; "
+        "while runc 1.1.12 release patches it, the +dev suffix in this build "
+        "indicates a development snapshot whose relationship to the patch commits "
+        "is not determinable from the binary alone. If the build predates the fix "
+        "commits (February 2024), the CVE applies. If it postdates them, the SUID "
+        "deployment on network infrastructure remains a risk for future runc CVEs. "
+        "Cisco should pin to a release-tagged version and document the patch epoch."
+    ),
+    "note": "runc in IOS-XE provides container isolation for IOx applications. "
+            "The +dev version suffix suggests this was built from source at a "
+            "commit ahead of the 1.1.11 release but the exact commit hash is not "
+            "embedded in the binary strings. The CVE-2024-21626 fix was committed "
+            "to the runc main branch on 2024-01-31 and released as 1.1.12 on "
+            "2024-02-13. A build labeled 1.1.12+dev could be pre-release (before "
+            "the fix) or post-release (a dev snapshot after the tag). "
+            "Binary-level confirmation would require matching Go module checksums.",
+}
+
+
 FINDINGS = [
     CAT9K_F1,
     CAT9K_F2,
@@ -655,12 +873,16 @@ FINDINGS = [
     CAT9K_F11,
     CAT9K_F12,
     CAT9K_F13,
+    CAT9K_F14,
+    CAT9K_F15,
+    CAT9K_F16,
+    CAT9K_F17,
 ]
 
 SUMMARY = {
-    "total": 13,
+    "total": 17,
     "critical": 3,
-    "high":     6,
+    "high":     10,
     "medium":   3,
     "low":      1,
     "by_id": [f["id"] for f in FINDINGS],
