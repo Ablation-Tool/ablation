@@ -378,19 +378,21 @@ FSAB_F07_INLINE_BLOCK_INT_OVERFLOW = {
     "id":       "FSAB-F07",
     "product":  "Fortinet FortiSandbox inline_block daemon",
     "cve":      None,
-    "severity": "CANDIDATE -- integer overflow before malloc in inline_block",
+    "severity": "FALSE POSITIVE -- rapidjson::CrtAllocator::Malloc wrapper",
     "class":    "Integer overflow (CWE-190) leading to heap buffer overflow",
     "affected": "5.0.5 build0141",
-    "status":   "UNVERIFIED -- semantic candidate",
+    "status":   "CLOSED -- manual disassembly confirmed thin wrapper, not exploitable",
 
     "description": (
         "Semantic sweep of inline_block (C++ binary, 2236 functions) identified "
         "function at VA 0x7586 with score 0.472 (highest across all 8 binaries swept) "
         "for the integer_overflow_alloc profile. "
-        "The function calls malloc directly. "
-        "inline_block handles inline blocking/filtering of network traffic in the scanning pipeline. "
-        "An integer overflow before malloc can result in an undersized allocation followed by "
-        "a heap overflow when the full-size data is written."
+        "Manual disassembly confirmed VA 0x7586 = rapidjson::CrtAllocator::Malloc(size_t): "
+        "thin wrapper that calls malloc directly with the size argument unchanged. "
+        "Only one caller, invoked in a static constructor. "
+        "The score is a false positive caused by the embedding model associating "
+        "malloc-containing wrappers with the integer_overflow_alloc profile. "
+        "Closed. Proceeded to manual analysis of inline_block CGI handler (see FSAB-F12)."
     ),
 
     "semantic_sweep_result": {
@@ -595,6 +597,73 @@ FSA_SEMANTIC_SWEEP_SUMMARY = {
     "note": (
         "Scores are cosine similarity to vulnerability query profile. "
         "Threshold 0.35+ warrants manual disassembly; 0.40+ is high-confidence candidate. "
-        "inline_block 0x7586 (score 0.472) is the highest-priority manual RE target after FSAB-F01."
+        "inline_block 0x7586 (score 0.472) was highest-priority; manual RE revealed FALSE POSITIVE (see FSAB-F07). "
+        "Next manual RE priority: sandbox-scan-main 0x144db (FSAB-F06)."
     ),
+}
+
+
+# ---------------------------------------------------------
+# FSAB-F12: inline_block CGI handler -- manual RE conclusions
+# ---------------------------------------------------------
+FSAB_F12_INLINE_BLOCK_MANUAL_RE = {
+    "id":       "FSAB-F12",
+    "product":  "Fortinet FortiSandbox inline_block",
+    "cve":      None,
+    "severity": "INFO -- manual RE of inline_block CGI handler; access gate analysis",
+    "class":    "Architecture finding (auth, data flow)",
+    "affected": "5.0.5 build0141",
+    "status":   "INVESTIGATED -- auth model confirmed; no exploitable pre-auth surface found",
+
+    "description": (
+        "Manual disassembly of inline_block CGI handler following FSAB-F07 false positive. "
+        "inline_block is a C++ CGI binary (not stripped, cgicc + RapidJSON) that handles "
+        "HTTP POST requests for the inline blocking/filtering API. "
+        "Key findings: "
+        "(1) accessCheck() at 0x1652b calls fgt_is_authorized() (external PLT, Fortinet auth library) "
+        "    with credentials from _request_params fields at offsets +0x40/+0x60/+0xe0. "
+        "    This is standard FortiOS credential-based auth, NOT the fabric HMAC token from FSAB-F01. "
+        "    FSAB-F01 token forge does NOT bypass inline_block auth. "
+        "    Returns 0 on success, 0xffffffff on failure (HTTP 401). "
+        "(2) _handle_commit_file_meta() at 0x17541 takes char* data and opens it via fopen(data, 'w'). "
+        "    The data pointer is populated by caller _commit_file() via: "
+        "    snprintf(buf, 0x1000, '%s/%ld.meta', basedir, job_id) "
+        "    where job_id is a long integer from the session context. "
+        "    Path is NOT user-controlled; integer formatting prevents injection/traversal. "
+        "(3) get_post_data() at 0x170fd reads stdin via cin.read(buf, 0x400), "
+        "    size limit = _request_params[+0x1b8] << 0x15 (up to ~2MB per chunk). "
+        "    The shift-21 multiplier on a CGI Content-Length-derived field is worth re-examining "
+        "    if +0x1b8 can be influenced by HTTP headers. "
+        "(4) scan_file() at 0x19401 is the main dispatch; process() at 0x1a294 is the entry point. "
+        "(5) parse_json_data() at 0x16973 processes file_name, file_content, file_type, "
+        "    vdom_name, protocol, unpack_password, password fields."
+    ),
+
+    "auth_architecture": {
+        "inline_block_auth":  "fgt_is_authorized() -- FortiOS credential auth library",
+        "fabric_api_auth":    "HMAC-SHA1 with hardcoded key (FSAB-F01) -- Django fabricrpc",
+        "separation":         "Two independent auth systems in same appliance; FSAB-F01 DOES NOT affect inline_block",
+    },
+
+    "path_construction": {
+        "function":   "_commit_file (0x1839d) -> _handle_commit_file_meta (0x17541)",
+        "format":     "snprintf(buf, 0x1000, '%s/%ld.meta', basedir, job_id)",
+        "assessment": "NOT traversable -- job_id is integer decimal, no shell chars possible",
+    },
+
+    "residual_surface": (
+        "inline_block is entirely post-auth. "
+        "The get_post_data() size field from _request_params[+0x1b8] << 0x15 is worth revisiting "
+        "to determine if Content-Length or a custom HTTP header populates that field (potential "
+        "for oversized read if the shift overflows on a 32-bit int). "
+        "The file_content base64 decode pipeline (decode_base64 at 0x259f9) is safe: "
+        "reserves input_len + 64, standard implementation."
+    ),
+
+    "next_steps": [
+        "Trace _request_params[+0x1b8] population path: which HTTP header sets it?",
+        "Cross-version diff inline_block 5.0.4->5.0.5 to find patched functions",
+        "Pivot to sandbox-scan-main 0x144db (FSAB-F06) as next manual RE target",
+        "Consider FortiMail firmware (FML_VM-64-v742.M) for cross-product attack surface",
+    ],
 }
