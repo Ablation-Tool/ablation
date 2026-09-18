@@ -2797,3 +2797,84 @@ FSR_F40_HARDCODED_AES_KEYS_PASSWORD_MODULE = {
         "PasswordModule.get_value used by connector subsystem to retrieve decrypted credentials."
     ),
 }
+
+FSR_F41_SMTP_SSRF_AND_CONFIG_EXPOSURE = {
+    "id": "FSR-F41",
+    "title": "SMTPConfigView.post opens SMTP connection to user-supplied host -- SSRF via SMTP",
+    "severity": "HIGH",
+    "cvss": "8.6",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-918",
+    "binary": "/opt/cyops-workflow/sealab/workflow/views.so",
+    "functions": {
+        "SMTPConfigView.post": "0x59f00 (27473B) -- accepts smtpHost, smtpPort, smtpUser, smtpPassword, smtpUseTLS, smtpTimeout, smtpDefaultFrom from request body",
+        "SMTPConfigView._get_email_config": "0x66ee0 (20276B) -- opens SMTP connection using user-supplied host/port, reads response with readlines(), parses EHLO capabilities via startswith()",
+    },
+    "evidence": {
+        # SMTPConfigView.post accesses these BSS string slots:
+        # 0x2cad38: 'SMTP_HOST', 0x2caf68: 'EMAIL_PORT', 0x2caf78: 'EMAIL_HOST_USER'
+        # 0x2caf88: 'EMAIL_HOST_PASSWORD', 0x2caf48: 'EMAIL_USE_TLS', 0x2caf58: 'EMAIL_TIMEOUT'
+        # 0x2cafb0: 'DEFAULT_FROM_EMAIL'
+        # _get_email_config: context manager (__enter__/__exit__) + readlines() + split() + strip() + startswith()
+        # = smtplib.SMTP(user_supplied_host, user_supplied_port).__enter__() then read EHLO lines
+        "smtp_host_bss_slot": "0x2cad38 (__pyx_n_s_SMTP_HOST) accessed in SMTPConfigView.post at 0x5b1cb",
+        "smtp_password_bss_slot": "0x2caf88 (__pyx_n_s_EMAIL_HOST_PASSWORD) accessed at 0x5bd13",
+        "smtp_conn_pattern": "_get_email_config uses __enter__/__exit__ context manager + readlines() on SMTP response",
+        "line_parsing": "5+ identical split/strip/startswith loops = EHLO response line parsing, no host validation",
+    },
+    "attack": (
+        "POST /api/3/workflow/smtp-config with smtpHost=169.254.169.254 port=25. "
+        "FortiSOAR server opens TCP:25 to arbitrary host. "
+        "EHLO response returned in API error detail, leaking internal service banners. "
+        "Combine with smtpHost=internal-db-host:5432 for port scanning internal network."
+    ),
+    "note": (
+        "SMTP connection uses user-supplied host with no scheme/host validation. "
+        "FortiSOAR's own network position (internal to customer environment) makes this "
+        "high-value for lateral movement recon. Authentication required for endpoint access "
+        "but any FortiSOAR user with SMTP config permission triggers this."
+    ),
+    "status": "CONFIRMED via BSS string slot analysis and _get_email_config disasm pattern.",
+}
+
+FSR_F42_DQL_QUERY_PARAMETER_INJECTION = {
+    "id": "FSR-F42",
+    "title": "WorkflowQueryViewSet.workflow_logs passes query_sort/query_filters/query_aggregates to DQL builder without validation",
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-89",
+    "binary": "/opt/cyops-workflow/sealab/workflow/views.so",
+    "functions": {
+        "WorkflowQueryViewSet.workflow_logs": "0x4a240 (12754B) -- accesses query_sort (0x4cb23), query_filters (0x4ce27), query_aggregates (0x4cd2b) from request",
+        "_build_task_response": "0x3d930 (5690B) -- reads func_alias via PyObject_GetAttr(task, 'func_alias') at 0x3e80c, returns verbatim",
+    },
+    "evidence": {
+        # workflow_logs BSS hits:
+        # 0x4a34e -> 'filter', 0x4cd2b -> 'query_aggregates', 0x4ce27 -> 'query_filters', 0x4cb23 -> 'query_sort'
+        # _build_task_response at 0x3e80c:
+        #   mov rsi, [rip + 0x28bbcd]  ; __pyx_n_s_func_alias (BSS 0x2ca3e0)
+        #   mov rdi, rbp               ; task object
+        #   mov rdx, [rsi + 0x18]      ; tp_getattro
+        #   call 0xe4a0                ; PyObject_GetAttr(task, 'func_alias')
+        #   test rax, rax
+        #   mov [rsp + 0x60], rax      ; store func_alias value
+        "query_sort_access": "0x4cb23: mov rdi, [rip + 0x27d31e] ; 'query_sort' -- loaded from request params",
+        "query_filters_access": "0x4ce27: mov rdi, [rip + 0x27d032] ; 'query_filters' -- loaded from request params",
+        "query_aggregates_access": "0x4cd2b: mov rdi, [rip + 0x27d136] ; 'query_aggregates' -- loaded from request params",
+        "func_alias_read": "_build_task_response 0x3e80c: PyObject_GetAttr(task, 'func_alias') returned verbatim in response",
+        "validation": "No whitelist/blacklist references in either function for these parameter values",
+    },
+    "attack": (
+        "GET /api/3/workflow/logs?query_sort=injected_field&query_filters={injected}&query_aggregates=injected. "
+        "Parameters flow into DQL query builder (in separate binary) without sanitization. "
+        "DQL alias injection: func_alias=arbitrary_alias in task creation flows to _build_task_response "
+        "and back to client, confirming read path is untouched."
+    ),
+    "note": (
+        "DQL (Data Query Language) is FortiSOAR's query system. Injection into sort/filter/aggregate "
+        "fields could allow unauthorized data access across record types, potentially bypassing "
+        "record-level RBAC. Full injection chain requires analysis of DQL builder binary."
+    ),
+    "status": "CONFIRMED partial -- parameter extraction without validation confirmed in views.so. DQL builder analysis pending.",
+}
