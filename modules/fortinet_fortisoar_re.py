@@ -4486,8 +4486,78 @@ FSR_F74_BLOCK_IN_TEMPLATE_BYPASS = {
     },
     "impact": "Extends FSR-F63 (no-sandbox SSTI) -- BLOCK_IN_TEMPLATE was the only mitigation; bypass reduces it to zero-mitigation SSTI",
     "chain": "FSR-F71 (forge session cookie) + FSR-F63 (SSTI) + FSR-F74 (bypass blocklist) = unauthenticated RCE",
+    "chain_detail": {
+        "port_443_authenticated": "POST /api/wf/api/dynamic_variable/jinja-editor/ at port 443 (PHP Symfony ProxyController::wfProxyRouteAction) proxied to https://localhost:8888/wf/api/dynamic_variable/jinja-editor/; requires JWT auth + create.workflows + execute.workflows RBAC (workflows_api_post handler in parameters.yaml)",
+        "port_8888_preaauth": "Direct HTTPS to port 8888 + forge Django session via FSR-F71 (hardcoded SECRET_KEY) = pre-auth RCE; port 8888 bound on all interfaces (nginx listen 8888 ssl; no IP restrict) but blocked by firewalld in default config (no firewall-cmd --add-port=8888/tcp in any installer); exploitable on internal network or if firewall disabled/cloud SG open",
+        "nginx_routing": "/wf location in cyops-api.conf (port 443) has root /opt/cyops-workflow/ but NO proxy_pass; does NOT proxy to Django; Django reached via /api/wf/ route through PHP ProxyController",
+    },
     "status": "CONFIRMED -- PySequence_Contains enforcement verified by binary analysis of validate_and_format_string.isra.30; bypass is inherent to pre-render string search approach",
     "note": "dynamic_variable/views.so also references BLOCK_IN_TEMPLATE; same bypass applies to dynamic variable template injection path",
+}
+
+# PHP proxy architecture (confirmed from routes.yaml + ProxyController + parameters_prod.yaml):
+# - PHP Symfony at port 443: route /api/wf/{route} -> ProxyController::wfProxyRouteAction
+# - targetUri: https://localhost:8888/wf (parameters_prod.yaml)
+# - wfProxyRouteAction adds X-USER header, injects __TEAMS into POST payload, calls proxyRouteAction()
+# - RBAC enforced per-route from parameters.yaml handler map:
+#     workflows_api_post: POST ^api/(.*)$ requires [create.workflows, execute.workflows]
+#     workflows_global_variable_post: POST ^api/dynamic-variable(.*)$ requires [create.workflows]
+# - jinja-editor/ URL: POST /api/wf/api/dynamic_variable/jinja-editor/ requires create.workflows + execute.workflows
+# - Django URL prefix /wf/api/ confirmed from sealab/urls.so strings
+# - Django jinja-editor/ full internal URL: https://localhost:8888/wf/api/dynamic_variable/jinja-editor/
+
+# FSR-F75: Hardcoded Symfony app secret
+FSR_F75_SYMFONY_SECRET = {
+    "id": "FSR-F75",
+    "title": "Hardcoded Symfony app secret 'PleaseChangeMe123' in cyops-api parameters_prod.yaml (CWE-321)",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-321",
+    "affected_component": "cyops-api -- Symfony application secret",
+    "affected_paths": {
+        "config_file": "/opt/cyops-api/config/parameters_prod.yaml",
+        "secret_line": "secret: 'PleaseChangeMe123'",
+    },
+    "evidence": {
+        "hardcoded_value": "Literal string constant in parameters_prod.yaml shipped in cyops-api RPM",
+        "symfony_usage": "Symfony app secret used for CSRF token generation; NOT used for JWT signing (JWT uses RSA keys at wfpublic.key/wfprivate.key) and NOT for session cookies (API is stateless, security.yaml: stateless: true)",
+        "impact_limited": "No remember-me configured in security.yaml; stateless JWT auth means session cookie forgery not applicable; CSRF token forgery relevant if CSRF enforced on any endpoint",
+    },
+    "impact": "CSRF token forgery via known secret; limited scope due to stateless JWT auth architecture",
+    "status": "CONFIRMED -- literal in parameters_prod.yaml; lower severity due to stateless API (no session cookies, no remember-me)",
+}
+
+# Public action routes (unauthenticated, security: false pattern ^/api/public/.*):
+# - /api/public/saml/{route} -- SAML proxy
+# - /api/public/forgotPassword -- password reset
+# - /api/public/license -- license info
+# - /api/public/portal/user -- portalUserAction (see FSR-F76)
+# - /api/public/auth/action -- authenticatedPublicAction (DAS action proxy with cookie/loginId)
+
+# FSR-F76: portalUserAction unauthenticated header injection to DAS
+FSR_F76_PORTAL_USER_HEADER_INJECTION = {
+    "id": "FSR-F76",
+    "title": "portalUserAction forwards all request headers to DAS /token unauthenticated -- header injection to internal auth service (CWE-441)",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-441",
+    "affected_component": "cyops-api -- PublicActionController::portalUserAction",
+    "affected_paths": {
+        "controller": "/opt/cyops-api/src/Controller/PublicActionController.php:329",
+        "route": "/api/public/portal/user (security: false in Symfony firewalls -- unauthenticated)",
+        "target": "PUT {das.uri}/token with all forwarded request headers",
+    },
+    "evidence": {
+        "code": "$request_headers = $request->headers->all(); $request_headers['Cookie'] = $cookie; $dasRequests = new GuzzleRequest('put', $dasUri . '/token', $request_headers, $request->getContent())",
+        "no_auth": "Symfony firewall pattern '^/api/public/.*' has security: false; endpoint reachable by unauthenticated attackers",
+        "header_forwarding": "ALL incoming request headers forwarded to DAS including attacker-controlled headers (X-USER, X-REMOTE_ADDR, custom auth headers)",
+        "wfproxy_comparison": "Authenticated wfProxyRouteAction sets X-USER from $this->getUser()->getUuid(); portalUserAction forwards attacker-supplied X-USER directly to DAS",
+    },
+    "impact": "If DAS /token endpoint uses forwarded X-USER or other headers for authorization, attacker can impersonate arbitrary users including admins; severity confirmed requires DAS analysis (authenticationhandler.so)",
+    "pending": "Requires analysis of cyops-auth/authenticationhandler.so to determine if DAS /token trusts X-USER header from caller",
+    "status": "CANDIDATE -- unauthenticated header injection confirmed by code; impact severity pending DAS analysis",
 }
 
 # jinja.so analysis notes:
