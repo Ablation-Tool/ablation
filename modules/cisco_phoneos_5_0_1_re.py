@@ -5,8 +5,11 @@ Targets:
   - rootfs-9841_51.5-0-1-0005-62.sbn: raw UBI image (145MB)
   - cmterm-78xx.14-4-1-0301-6.zip: UBI rootfs (46MB)
   - cmterm-7832.14-4-1-0301-6.zip: UBI rootfs (44MB)
+  - cmterm-88xx.14-4-1-0301-6.zip: SquashFS rootfs (88xx series)
+  - cmterm-8832.14-4-1-0301-6.zip: UBI rootfs (8832 conference)
+  - cmterm-8845_65.14-4-1-0401-1_REL.zip: SquashFS rootfs 1887 inodes (8845/8865 video)
 Source: /media/cowboy/research/Cisco-IP PHONE/
-Build: 2026-08-12 for PhoneOS; 2026-06-09 for MPP 14.4.1
+Build: 2026-08-12 for PhoneOS; 2026-06-09 / 2026-07-07 for MPP 14.4.1
 """
 
 METADATA = {
@@ -38,23 +41,28 @@ FINDINGS = [
             "However, MPP 14.4.1 (released June 2026) REACTIVATED the account with "
             "a crackable MD5 hash: `debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71` "
             "(cracked: `debug`) and login shell `/usr/sbin/debugsh`. This is "
-            "confirmed across BOTH 7832 (conference) and 78xx (desk) 14.4.1 "
-            "firmware, indicating the regression affects all MPP 14.4.1 models. "
+            "confirmed across ALL FIVE 14.4.1 model archives: 7832 (conference), "
+            "78xx (desk), 8832 (conference), 88xx (video), and 8845_65 (video, "
+            "build 0401-1). All use identical hash and debugsh shell. "
             "The `debugshd` daemon runs as root (`BEUID=root:root`) via "
             "`debugshd.sh` init script, providing root command execution to any "
             "authenticated user."
         ),
         "version_comparison": {
-            "12.0.7MPP":      "debug:*:..:/bin/false (LOCKED - no access)",
-            "14.4.1_7832":    "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
-            "14.4.1_78xx":    "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
-            "PhoneOS_5.0.1":  "debug:*:..:/sbin/nologin (LOCKED - no access)",
+            "12.0.7MPP":        "debug:*:..:/bin/false (LOCKED - no access)",
+            "14.4.1_7832":      "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
+            "14.4.1_78xx":      "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
+            "14.4.1_8832":      "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
+            "14.4.1_88xx":      "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug)",
+            "14.4.1_8845_65":   "debug:$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71:..:/usr/sbin/debugsh (ACTIVE, cracked: debug, VIDEO PHONE)",
+            "PhoneOS_5.0.1":    "debug:*:..:/sbin/nologin (LOCKED - no access)",
         },
         "hash": "$1$aoJQnypw$vHpN9WTJEQn1UnHzJdoz71",
         "cracked_password": "debug",
         "impact": [
             "Any host on the same VLAN can SSH to the phone and obtain root execution (when SSH is active)",
-            "Affects all MPP 14.4.1 models (7832 conference phone, 78xx desk phones, likely 88xx)",
+            "Confirmed across ALL 5 MPP 14.4.1 model archives: 7832, 78xx, 8832, 88xx, 8845_65 (identical hash)",
+            "8845/8865 video phones: debug account enables audio+video surveillance (camera + microphone)",
             "debugshd provides command execution as root; getmicdata enables audio capture (7832)",
         ],
         "remediation": (
