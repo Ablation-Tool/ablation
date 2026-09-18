@@ -4357,8 +4357,8 @@ FSR_F71_WORKFLOW_HARDCODED_SECRET_KEY = {
         "step3": "Send forged cookie to /wf/ endpoint -- workflow API accepts it as authenticated session",
         "step4": "Trigger workflow execution as a privileged user without any credentials",
     },
-    "status": "CONFIRMED -- key is hardcoded in settings.py; shared-across-installations assumption needs verification against multiple RPM versions",
-    "note": "Verification: check same key in 7.2.0, 7.4.x, 7.5.x, 7.6.x builds; if present in all, severity is CRITICAL; chain with FSR-F63 SSTI for full RCE",
+    "status": "CONFIRMED CRITICAL -- identical key found in ALL checked builds: 4.11.0 (CyberSponse era, ~2019), 7.2.0, 7.2.1, 7.6.7 (latest); never rotated in 4+ years; universal across all FortiSOAR installations globally",
+    "note": "Chain: forge workflow session -> hit /wf/ API as admin -> trigger playbook with user-controlled template -> SSTI (FSR-F63) -> RCE; no credentials required",
 }
 
 # FSR-F72: INTEGRATIONS_SECRET_KEY bypasses connector RBAC in cyops-integrations (HIGH / CWE-798)
@@ -4396,8 +4396,9 @@ FSR_F72_INTEGRATIONS_SECRET_KEY_RBAC_BYPASS = {
         "step3": "Execute any connector action (HTTP, script, etc.) without authentication",
         "chain": "Chain with FSR-F68 (rpm_full_name shell injection in _install_rpm_dependencies) for OS command execution",
     },
-    "prerequisite": "Key must be shared across installations (likely); port 9595 must be reachable from attacker",
-    "status": "PLAUSIBLE -- key confirmed in workflow settings; RBAC bypass mechanism confirmed; needs verification that key is same in integrations service",
+    "prerequisite": "Port 9595 must be reachable from attacker (nginx binds all interfaces by default)",
+    "status": "CONFIRMED -- INTEGRATIONS_SECRET_KEY identical in 4.11.0 and 7.2.0+ builds; universal across all installations; comment in source explicitly states RBAC bypass purpose",
+    "upgrade_note": "Upgrade FSR-F72 to CRITICAL if port 9595 is externally reachable on default install; chain with FSR-F68 for pre-auth RCE via connector RPM injection",
 }
 
 # FSR-F73: Hardcoded Django SECRET_KEY in cyops-integrations (HIGH / CWE-321)
