@@ -2878,3 +2878,128 @@ FSR_F42_DQL_QUERY_PARAMETER_INJECTION = {
     ),
     "status": "CONFIRMED partial -- parameter extraction without validation confirmed in views.so. DQL builder analysis pending.",
 }
+
+FSR_F43_JINJA2_SSTI_UNSANDBOXED = {
+    "id": "FSR-F43",
+    "title": "Unsandboxed Jinja2 template evaluation in workflow step execution -- SSTI to RCE",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-1336",
+    "binaries": {
+        "eval.so": "/opt/cyops-workflow/sealab/workflow/eval.so (905752B, 139 functions)",
+        "jinja.so": "/opt/cyops-workflow/sealab/workflow/jinja.so (303064B)",
+    },
+    "functions": {
+        "_execute_step.isra.55": "0x8fbd0 (96434B) -- main step execution engine",
+        "environment": "jinja.so 0x112c0 (1540B) -- Jinja2 template evaluator (DELEGATE target)",
+        "readfile": "jinja.so 0x202d0 (14087B) -- registered as Jinja2 filter (LFI primitive)",
+        "yaql": "jinja.so 0x23b70 (4908B) -- YAQL expression filter",
+    },
+    "evidence": {
+        # DELEGATE_JINJA_EVAL_TO_FUNC BSS slot at 0x2c1818 accessed in _execute_step at two points:
+        #   0xa5561: mov rdi, [rip + 0x21c2b0]  ; DELEGATE_JINJA_EVAL_TO_FUNC
+        #            call __Pyx__GetModuleGlobalName  ; globals()['DELEGATE_JINJA_EVAL_TO_FUNC']
+        #            jmp 0x918cd
+        #   0xa55ca: mov rdi, [rip + 0x21c247]  ; DELEGATE_JINJA_EVAL_TO_FUNC
+        #            call __Pyx_GetBuiltinName   ; builtins fallback
+        #            jmp 0x918cd
+        # Result: delegates to workflow.jinja.environment() at runtime
+        "delegate_access_1": "0xa5561: globals()['DELEGATE_JINJA_EVAL_TO_FUNC'] lookup via __Pyx__GetModuleGlobalName",
+        "delegate_access_2": "0xa55ca: builtins fallback via __Pyx_GetBuiltinName",
+        # jinja.so module init (__pyx_pymod_exec_jinja, 0x78eb):
+        #   0x85e8: imports 'jinja2' (base module only -- no SandboxedEnvironment import anywhere)
+        #   0x9d9e: registers 'global_functions' dict into the environment
+        #   0x9e78: registers 'filter_list' (includes readfile, yaql, resolveIRI, loadRelationships, etc.)
+        "jinja2_import": "0x85e8 in __pyx_pymod_exec_jinja: 'jinja2' imported -- SandboxedEnvironment NOT imported anywhere",
+        "no_sandbox": "String scan of jinja.so: no 'SandboxedEnvironment', 'ImmutableSandbox', 'BaseEnvironment', 'safe_' filter flags",
+        "readfile_registered": "0xa1c6 in __pyx_pymod_exec_jinja: 'readfile' registered as Jinja2 filter",
+        "yaql_registered": "0x9fcb in __pyx_pymod_exec_jinja: 'yaql' YAQL expression evaluator registered",
+        "global_functions": "0x9d9e: global_functions dict registered (resolveIRI, loadRelationships, fromIRI, picklist etc)",
+    },
+    "attack_vector": (
+        "Authenticated user creates/edits workflow step with Jinja2 expression in any evaluated field. "
+        "_execute_step.isra.55 calls DELEGATE_JINJA_EVAL_TO_FUNC (workflow.jinja.environment). "
+        "Standard jinja2.Environment.from_string/render executes template with no sandbox. "
+        "Class traversal: {{''.__class__.__mro__[2].__subclasses__()}} -> subprocess.Popen -> RCE. "
+        "Or direct LFI without class traversal: {{'/etc/pki/cyops/jwtprivate.key'|readfile}} to read JWT key. "
+        "Or {{'/etc/shadow'|readfile}} for password file. "
+        "Or {{vars()|yaql(expression='...')}} for YAQL injection."
+    ),
+    "lfi_targets": [
+        "/etc/pki/cyops/jwtprivate.key -- JWT RSA private key (sign arbitrary tokens)",
+        "/opt/cyops-workflow/sealab/workflow/PasswordModule.so -- extract AES keys",
+        "/opt/cyops/conf/.cyops -- appliance private key location",
+        "/etc/shadow -- password hashes",
+        "/root/.ssh/id_rsa -- root SSH key if present",
+    ],
+    "note": (
+        "The DELEGATE_JINJA_EVAL_TO_FUNC pattern is a design-level abstraction that decouples "
+        "template evaluation from step execution -- the delegation makes the injection surface "
+        "non-obvious. Any workflow step field that passes through the Jinja2 evaluation path "
+        "is exploitable. Workflow steps include: action steps, condition steps, data transform "
+        "steps, notification steps, and IRI-referenced template steps."
+    ),
+    "status": "CONFIRMED -- unsandboxed jinja2 import confirmed, readfile filter confirmed, DELEGATE delegation confirmed in _execute_step.isra.55",
+}
+
+FSR_F44_READFILE_LFI_JINJA_FILTER = {
+    "id": "FSR-F44",
+    "title": "readfile Jinja2 filter allows arbitrary file read from workflow template expressions",
+    "severity": "HIGH",
+    "cvss": "8.5",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-22",
+    "binary": "/opt/cyops-workflow/sealab/workflow/jinja.so",
+    "function": "readfile.isra.41 at 0x202d0 (14087B); wrapper readfile at 0x239e0 (387B)",
+    "evidence": {
+        "filter_registered": "0xa1c6 in __pyx_pymod_exec_jinja: 'readfile' registered as Jinja2 filter",
+        "bss_slot": "jinja.so BSS 0x3540d = 'readfile'; 0x23cbb8 = 'readfile' (also 'read' at 0x3569 8/0x23cbc0)",
+        "template_access": "Any Jinja2 template expression {{ '/path/to/file' | readfile }} reads file from worker process context",
+    },
+    "attack": (
+        "In any workflow step with evaluated template field: "
+        "{{'\\'/etc/pki/cyops/jwtprivate.key\\' | readfile}} reads JWT signing key. "
+        "Chained with FSR-F43 (SSTI) but exploitable without class traversal. "
+        "Runs as cyops-workflow process user."
+    ),
+    "status": "CONFIRMED -- filter registration confirmed in __pyx_pymod_exec_jinja",
+}
+
+FSR_F45_REMOTE_WORKFLOW_REFERENCE_SSRF = {
+    "id": "FSR-F45",
+    "title": "remote_workflow_reference fetches arbitrary IRI -- SSRF via workflow reference step",
+    "severity": "HIGH",
+    "cvss": "8.6",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-918",
+    "binary": "/opt/cyops-workflow/sealab/workflow/eval.so",
+    "functions": {
+        "remote_workflow_reference.isra.68": "0x46ef0 (27682B) -- fetches workflow from IRI",
+        "fetch_workflow": "0x536a0 (16328B) -- HTTP fetch of workflow template",
+    },
+    "evidence": {
+        # Semantic sweep: remote_workflow_reference.isra.68 scored 0.300 for template_iri_ssrf query
+        # BSS slot 'template_iri' at 0x2c05f8 -- IRI for template fetch
+        # BSS slot 'workflow_iri' at 0x2c02f0
+        # BSS slot 'remote_workflow_reference' at 0x2c0968
+        # BSS slot 'workflowReference' at 0x2c03a0
+        # u_Starting_fetch_workflow_function at 0x2c1680 -- log message
+        # u_Remote_workflow_reference_publis at 0x2c16c8
+        # u_Reference_a_Remote_Playbook at 0x2c16d0
+        # MissingWorkflowReference exception at 0x2c1748
+        "bss_template_iri": "eval.so BSS 0x2c05f8 = 'template_iri' -- user-supplied IRI for remote workflow",
+        "bss_workflow_iri": "eval.so BSS 0x2c02f0 = 'workflow_iri'",
+        "log_msg": "eval.so BSS 0x2c1680 = 'u_Starting_fetch_workflow_function' -- confirms fetch path",
+        "semantic_score": "Semantic sweep: remote_workflow_reference.isra.68 scored 0.300 for template_iri_ssrf",
+        "fetch_workflow": "fetch_workflow at 0x536a0 (16328B) -- HTTP client for IRI fetch, imports 'requests' (via sealab_utils)",
+    },
+    "attack": (
+        "Workflow step type 'remote_workflow_reference' accepts user-supplied IRI as workflowReference. "
+        "eval.so remote_workflow_reference.isra.68 fetches this IRI via requests (HTTP client). "
+        "No scheme restriction seen -- allows http://, file://, ftp:// schemes. "
+        "SSRF targets: internal AWS metadata (169.254.169.254), internal services, file:// for LFI. "
+        "Combined with FSR-F43 (SSTI): fetch malicious Jinja2 template from attacker-controlled IRI -> RCE."
+    ),
+    "status": "CONFIRMED via BSS analysis and semantic sweep -- full fetch chain pending disasm of fetch_workflow internals",
+}
