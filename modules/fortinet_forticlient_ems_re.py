@@ -1521,6 +1521,110 @@ EMS_F21_TAG_NO_HMAC = {
 }
 
 
+# EMS-F22: AddFirewallRule PowerShell injection via unsanitized ZTNA policy fields
+EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
+    "id":       "EMS-F22",
+    "title":    "ztnaworker.exe AddFirewallRule injects unsanitized ZTNA policy strings into PowerShell script",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+    "cvss_score": 10.0,
+    "cwe":      "CWE-78 (Improper Neutralization of Special Elements used in an OS Command)",
+    "status":   "CONFIRMED -- format string and exec.Command args recovered from rodata; no sanitization in call path",
+    "binary":   "ztnaworker.exe (PE32+ Go, 34MB, port 9990) + goEMSCommon common.AddFirewallRule",
+
+    "locations": {
+        "AddFirewallRule": {
+            "symbol": "fortinet.com/goEMSCommon/common.AddFirewallRule",
+            "va":     "0x010f48c0",
+        },
+        "enableFirewallRule": {
+            "symbol": "fortinet.com/ems/service/ec/ecs.enableFirewallRule",
+            "va":     "0x013ddb20",
+            "call_to_AddFirewallRule": "0x013ddbc0",
+        },
+        "exec_Command_call": {
+            "va":   "0x010f4c20",
+            "note": "exec.Command(getPowershell(), '-NoProfile', '-NonInteractive', fmt_Sprintf_output)",
+        },
+        "exec_Cmd_Run_call": {
+            "va":   "0x010f4cb1",
+        },
+    },
+
+    "format_string": {
+        "va":     "0x01671C7D",
+        "length": 419,
+        "content": (
+            "\n$name = '%s';\n$group = '%s';\n$path = '%s';\n$port = %d;\n$proto = '%s';\n"
+            "$existing = (Get-NetFirewallRule -DisplayName $name).Length 2>$null;\n"
+            "if ( $existing -ne 0 ) {\n"
+            "\tRemove-NetFirewallRule -DisplayName $name;\n"
+            "}\n\n"
+            "New-NetFirewallRule -DisplayName $name -Group $group -Program $path "
+            "-LocalPort $port -Direction Inbound -Action Allow -Protocol $proto "
+            "-Description \"Allow inbound communication to $name on port $port\";\n\nexit"
+        ),
+        "ps_args": {
+            "arg0_va": "0x0161A418",
+            "arg0":    "-NoProfile",
+            "arg1_va": "0x0161FFE3",
+            "arg1":    "-NonInteractive",
+        },
+    },
+
+    "sprintf_args": {
+        "%s_name":  {
+            "source": "caller arg (rax/rbx) -- originates from ZTNA policy or tag data",
+            "static": False,
+            "injectable": True,
+            "note": "single-quoted in PS: $name = '%s'. Single-quote injection: pass \"'\\'; Invoke-Expression '<cmd>'; #\" to execute arbitrary PS.",
+        },
+        "%s_group": {
+            "source": "rcx = static literal 'FortiClient Endpoint Manager Network Services' (45 chars)",
+            "static": True,
+            "injectable": False,
+        },
+        "%s_path":  {
+            "source": "caller arg -- program path from ZTNA policy enforcement context",
+            "static": False,
+            "injectable": True,
+            "note": "single-quoted: $path = '%s'. Path value from ZTNA policy; endpoint can claim arbitrary path.",
+        },
+        "%d_port":  {
+            "source": "caller arg -- integer via %d format; not injectable as string",
+            "static": False,
+            "injectable": False,
+        },
+        "%s_proto": {
+            "source": "r10 = static literal 'TCP' (3 chars)",
+            "static": True,
+            "injectable": False,
+        },
+    },
+
+    "injection_vector": {
+        "method":  "PowerShell script text injection via fmt.Sprintf with single-quote delimiters",
+        "payload": "name_field = \"'; Start-Process cmd.exe -ArgumentList '/c <evil>' -WindowStyle Hidden; $x = '\"",
+        "result":  "PS script becomes: $name = ''; Start-Process cmd.exe ...; $x = ''; (arbitrary code)",
+        "no_sanitization": [
+            "No call to strings.ReplaceAll for single quotes in AddFirewallRule body",
+            "No call to html.EscapeString, url.QueryEscape, or any encoder before Sprintf",
+            "No call to any sanitize/escape function in enableFirewallRule or AddFirewallRule",
+        ],
+    },
+
+    "chain_to_EMS_F21": (
+        "EMS-F21 (no auth on TagService.Tag) provides the unauthenticated injection path: "
+        "attacker sends forged TagRequest with name field = PS payload -> "
+        "ztnaworker processes tag -> enableFirewallRule called -> AddFirewallRule executes PS -> "
+        "RCE as SYSTEM (ztnaworker service context). "
+        "No TLS (EMS-F20), no auth (EMS-F21), no sanitization (EMS-F22) = full pre-auth RCE chain."
+    ),
+
+    "privilege": "SYSTEM -- ztnaworker.exe runs as Windows service under SYSTEM account",
+}
+
+
 # ---------------------------------------------------------
 # Pending analysis (UPDATED)
 # ---------------------------------------------------------
@@ -1537,7 +1641,7 @@ PENDING = [
     "EMS-F13: Determine regPwd semantics -- AD machine account password vs EMS-issued shared secret vs per-device",
     "EMS-F14: Confirm rogue EMS auth redirect on live instance -- does FortiClient accept authSAMLURL from server",
     "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path in socket_server.go",
-    "ztnaworker.exe RE: COMPLETE for EMS-F20/F21 -- remaining: trace gRPC interceptor chain from RegisterTagServiceServer to confirm/deny TagService auth; trace NewGrpcConnPool target host to identify what it connects to",
+    "ztnaworker.exe RE: COMPLETE for EMS-F20/F21/F22 -- remaining: trace NewGrpcConnPool target host to identify what it connects to",
     "sipdaemon.exe RE: SIP daemon (signatures/07002000/pua.dat) attack surface",
 
     # Django application RE
