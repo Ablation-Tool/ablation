@@ -1524,12 +1524,18 @@ EMS_F21_TAG_NO_HMAC = {
 # EMS-F22: AddFirewallRule PowerShell injection via unsanitized ZTNA policy fields
 EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
     "id":       "EMS-F22",
-    "title":    "ztnaworker.exe AddFirewallRule injects unsanitized ZTNA policy strings into PowerShell script",
-    "severity": "CRITICAL",
-    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-    "cvss_score": 10.0,
+    "title":    "ztnaworker.exe AddFirewallRule injects unsanitized EMS policy strings into PowerShell script (admin-to-SYSTEM)",
+    "severity": "HIGH (standalone) -- CRITICAL when chained with EMS-F1 or EMS-F2",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H",
+    "cvss_score": 9.1,
     "cwe":      "CWE-78 (Improper Neutralization of Special Elements used in an OS Command)",
-    "status":   "CONFIRMED -- format string and exec.Command args recovered from rodata; no sanitization in call path",
+    "status":   (
+        "CONFIRMED -- format string and exec.Command args recovered from rodata; no sanitization in call path. "
+        "Field origin RESOLVED: ECSocketServerService.field_0xb0/0xb8 flows from SocketServer.field_0xf8.field_0x80/0x88 "
+        "(getServiceInstance at 0x013EC240 passes SocketServer receiver field_0xf8 as r11 to NewECSocketServerService). "
+        "SocketServer.field_0xf8 is server-init config, NOT client-controlled via EC protocol messages. "
+        "Standalone entry requires EMS admin privilege. Chained with EMS-F1 (SECRET_KEY) or EMS-F2 (SQLi): unauthenticated."
+    ),
     "binary":   "ztnaworker.exe (PE32+ Go, 34MB, port 9990) + goEMSCommon common.AddFirewallRule",
 
     "locations": {
@@ -1574,10 +1580,10 @@ EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
 
     "sprintf_args": {
         "%s_name":  {
-            "source": "caller arg (rax/rbx) -- originates from ZTNA policy or tag data",
+            "source": "ECSocketServerService.field_0xb0/0xb8 -- admin-configured firewall rule display name from EMS DB",
             "static": False,
             "injectable": True,
-            "note": "single-quoted in PS: $name = '%s'. Single-quote injection: pass \"'\\'; Invoke-Expression '<cmd>'; #\" to execute arbitrary PS.",
+            "note": "single-quoted in PS: $name = '%s'. Admin sets name to \"'; Invoke-Expression '<cmd>'; #\" -> arbitrary PS at SYSTEM.",
         },
         "%s_group": {
             "source": "rcx = static literal 'FortiClient Endpoint Manager Network Services' (45 chars)",
@@ -1585,10 +1591,10 @@ EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
             "injectable": False,
         },
         "%s_path":  {
-            "source": "caller arg -- program path from ZTNA policy enforcement context",
+            "source": "ECSocketServerService via [rsp+0xf0].field_0x68 -- admin-configured program path from EMS policy",
             "static": False,
             "injectable": True,
-            "note": "single-quoted: $path = '%s'. Path value from ZTNA policy; endpoint can claim arbitrary path.",
+            "note": "single-quoted: $path = '%s'. Admin-controlled path field; same injection surface as name.",
         },
         "%d_port":  {
             "source": "caller arg -- integer via %d format; not injectable as string",
@@ -1622,23 +1628,37 @@ EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
         ],
         "entry_point": "port 8013 (EC socket server, not port 9990 ZTNA gRPC)",
         "closure_fields": {
-            "+0x8 / +0x10": "name string (ptr, len) -- firewall rule display name from EC message",
-            "+0x18":         "path/additional arg from EC message -- used as enableFirewallRule third arg",
+            "+0x8 / +0x10": "name string (ptr, len) -- from ECSocketServerService.field_0xb0/0xb8",
+            "+0x18":         "path string from ECSocketServerService via [rsp+0xf0].field_0x68",
         },
-        "chain_with_EMS_F19": (
-            "EMS-F19 (hardcoded defaultCert/defaultKey for port 8013 TLS) enables attacker impersonation: "
-            "use defaultCert to authenticate to port 8013 as a FortiClient endpoint -> "
-            "send EC policy message with PS payload as rule name or program path -> "
-            "Serve.func2 -> enableFirewallRule -> AddFirewallRule executes PS -> SYSTEM RCE."
-        ),
+        "field_origin_trace": {
+            "ECSocketServerService.field_0xb0": "SocketServer.field_0xf8.field_0x80 (ptr part of name string)",
+            "ECSocketServerService.field_0xb8": "SocketServer.field_0xf8.field_0x88 (len part of name string)",
+            "SocketServer.field_0xf8": "9th param (r11) to NewECSocketServerService, passed by getServiceInstance (va=0x013EC240)",
+            "getServiceInstance_trace": "0x013EC721: mov rdx, [rdx+0xf8] where rdx = SocketServer receiver (rsp+0x1e0 = rax on entry)",
+            "origin": "SocketServer config struct populated at server init from EMS DB/config -- NOT from client EC protocol messages",
+            "implication": "Injection fields are admin-configured (EMS policy firewall rule name/path). Admin-to-SYSTEM standalone.",
+        },
+        "combined_chain": {
+            "via_EMS_F1": (
+                "EMS-F1 (hardcoded Django SECRET_KEY) -> forge admin session cookie -> set malicious firewall rule name "
+                "via EMS admin web interface -> stored in SQL Server DB -> SocketServer reads at init -> "
+                "ECSocketServerService.field_0xb0/0xb8 -> Serve.func2 -> enableFirewallRule -> AddFirewallRule -> "
+                "PowerShell injection -> SYSTEM RCE. Prerequisite: EMS service restart or SocketServer reinit."
+            ),
+            "via_EMS_F2": (
+                "EMS-F2 (SQLi in Django view) -> write malicious firewall rule name directly to DB -> "
+                "same path as EMS-F1 chain from SocketServer init onward -> SYSTEM RCE."
+            ),
+            "combined_severity": "CRITICAL (10.0) -- unauthenticated attacker can chain to SYSTEM via EMS-F1 or EMS-F2",
+        },
         "note": (
             "EMS-F21 (port 9990, no auth TagService.Tag) does NOT directly call enableFirewallRule. "
-            "The injection chain runs through port 8013 ecsocksrv (ecsocksrv == ECSocketServerService). "
-            "Prerequisite: EMS-F19 hardcoded cert OR a compromised FortiClient endpoint. "
-            "PENDING: determine if closure args (name, path) originate from EC protocol message body "
-            "(client-controlled, pre-auth with EMS-F19 cert) or from EMS policy config DB "
-            "(admin-controlled). If client-controlled: severity CRITICAL pre-auth RCE. "
-            "If admin-controlled: severity HIGH priv-esc from EMS admin to SYSTEM."
+            "The injection chain runs through port 8013 ecsocksrv (ECSocketServerService). "
+            "EMS-F19 (hardcoded cert) does NOT upgrade severity here -- even with endpoint impersonation, "
+            "the EC protocol message body does not control field_0xb0/0xb8 (those come from server config, not the message). "
+            "Severity standalone = HIGH (EMS admin must set malicious rule name). "
+            "Severity chained with EMS-F1 or EMS-F2 = CRITICAL (unauthenticated to SYSTEM, requires service restart/reinit)."
         ),
     },
 
@@ -1662,7 +1682,7 @@ PENDING = [
     "EMS-F13: Determine regPwd semantics -- AD machine account password vs EMS-issued shared secret vs per-device",
     "EMS-F14: Confirm rogue EMS auth redirect on live instance -- does FortiClient accept authSAMLURL from server",
     "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path in socket_server.go",
-    "ztnaworker.exe RE: COMPLETE for EMS-F20/F21/F22 -- remaining: trace NewGrpcConnPool target host to identify what it connects to",
+    "ztnaworker.exe RE: COMPLETE for EMS-F20/F21/F22 (field origin RESOLVED: admin-configured via SocketServer config) -- remaining: trace NewGrpcConnPool target host to identify what it connects to",
     "sipdaemon.exe RE: COMPLETE -- binary is IDENTICAL to ztnaworker.exe (same 3700 fortinet symbols, 0 unique); 4 syms unique to ztnaworker.exe only: server.WithFOS, server.WithRedis and their .func1 variants. All EMS-F20/F21/F22 findings apply to sipdaemon.exe equally. Binary is 34,386,048 bytes (ztnaworker: 34,389,632 = 3584 bytes diff = exactly the WithFOS/WithRedis delta).",
 
     # Django application RE
