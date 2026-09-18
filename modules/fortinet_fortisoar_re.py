@@ -691,3 +691,140 @@ FSR_F10_FRONTEND_ONLY_LICENSE_ENFORCEMENT = {
         "the backend does not further restrict by tier."
     ),
 }
+
+# FSR-F11: code-snippet connector sandbox escape via __import__ builtin re-injection
+# CVSS 3.1: AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H = 9.9 CRITICAL
+# CWE-693: Protection Mechanism Failure
+#
+# Source: cyops-connector-code-snippet v2.1.0-v2.2.1 (introduced in v2.1.0, present in all later versions)
+# File: utils.py lines 21-25 (all affected versions)
+#
+# The code-snippet connector uses RestrictedPython safe_builtins as its sandbox. RestrictedPython
+# deliberately excludes __import__ from safe_builtins because it is a known sandbox escape. Fortinet
+# re-injects __import__ = __import__ into custom_builtins (v2.1.0 release notes: "Configurable settings
+# restricted solely to the root user, enabling the utilization of only safe built-in functions").
+# custom_builtins is then merged into allowed_builtins via ChainMap(safe_builtins, limited_builtins,
+# custom_builtins). Since safe_builtins does not contain __import__, the ChainMap lookup falls through to
+# custom_builtins and exposes the real __import__ builtin.
+#
+# The import validation (validate_imports_in_code in v2.2.x, _regex_for_imports in v2.1.x) only inspects
+# ast.Import and ast.ImportFrom AST nodes. Calling __import__('os') generates an ast.Call node, which is
+# never checked. Both the regex check and AST walker are bypassed identically.
+#
+# The bypass works regardless of connector configuration:
+# - allow_imports=True: validate_imports_in_code runs but misses ast.Call; __import__ in restricted_globals
+# - allow_imports=False: 'import ' string check misses '__import__' (no space after); __import__ in restricted_globals
+# - restrict_imports=['requests']: whitelist mode; __import__('os') not in the code AST, bypass identical
+#
+# Payload (works in all config modes):
+#   os = __import__('os')
+#   print(os.popen('id; whoami; cat /etc/passwd').read())
+#
+# Or to execute subprocess (also blacklisted but bypassed):
+#   sp = __import__('subprocess')
+#   print(sp.check_output(['id'], shell=False))
+#
+# Attack path:
+# 1. Authenticate to FortiSOAR with any account that has playbook execution permission (standard user).
+# 2. Create or edit a playbook step using code-snippet connector.
+# 3. Set python_function param to payload above.
+# 4. Execute playbook step via /api/v3/playbooks/execute/ or trigger.
+# 5. OS commands execute as the cyops-worker process user (typically cyops or root).
+#
+# Versions affected: code-snippet 2.1.0 through 2.2.1 (all currently available on repo.fortisoar.fortinet.com)
+# Versions not affected: 2.0.3 and earlier (no __import__ in custom_builtins)
+# FortiSOAR release mapping: 7.4.x (ships 2.0.x), 7.5.x+ (ships 2.1.x+)
+
+FSR_F11_CODE_SNIPPET_SANDBOX_ESCAPE = {
+    "id": "FSR-F11",
+    "title": "code-snippet connector sandbox escape via __import__ builtin re-injection",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-693",
+    "component": "cyops-connector-code-snippet",
+    "affected_versions": "2.1.0 - 2.2.1",
+    "not_affected": "<= 2.0.3",
+    "introduced": "2.1.0",
+    "source_file": "utils.py:21-25",
+
+    "root_cause": (
+        "RestrictedPython safe_builtins excludes __import__ as a known escape. "
+        "Fortinet re-injects __import__ = __import__ into custom_builtins (utils.py:25) "
+        "and merges via ChainMap(safe_builtins, limited_builtins, custom_builtins). "
+        "Since safe_builtins has no __import__ key, ChainMap returns the injected real __import__."
+    ),
+
+    "validation_bypass": (
+        "v2.1.x: _regex_for_imports() matches ^import (os|sys|subprocess) -- only matches import statements. "
+        "v2.2.x: validate_imports_in_code() walks ast.Import and ast.ImportFrom nodes only. "
+        "__import__('os') parses as ast.Call node -- invisible to both validators. "
+        "String check 'import ' not in '__import__(...)' -- trailing space prevents match."
+    ),
+
+    "payload": "__import__('os').popen('id').read()",
+
+    "attack_path": (
+        "1. Authenticate with any account with playbook execution rights. "
+        "2. POST /api/v3/playbooks/ to create playbook with code-snippet step. "
+        "3. Set python_function = \"os = __import__('os'); print(os.popen('id').read())\". "
+        "4. Execute via /api/v3/playbooks/execute/ or trigger. "
+        "5. Command output returned in code_output field."
+    ),
+
+    "process_context": (
+        "Executes as cyops-worker process. On default FortiSOAR install, cyops-worker runs as root "
+        "or cyops system account with broad filesystem access including /etc/passwd, DB credentials "
+        "in /opt/cyops/configs/, and SSL private keys in /opt/cyops/ssl/."
+    ),
+
+    "fix": (
+        "Remove '__import__': __import__ from custom_builtins in utils.py. "
+        "Extend AST validation to flag ast.Call nodes where func.id == '__import__'. "
+        "Alternatively, override __builtins__['__import__'] in restricted_globals with a safe wrapper "
+        "that only allows whitelisted module names."
+    ),
+}
+
+# FSR-F12: code-snippet connector global semaphore DoS
+# CVSS 3.1: AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H = 6.5 MEDIUM
+# CWE-400: Uncontrolled Resource Consumption
+#
+# Source: cyops-connector-code-snippet v2.2.0+ (introduced with CodeSnippet class refactor)
+# File: operations.py lines 27-50
+#
+# The CodeSnippet class holds a class-level Semaphore(1) that is acquired before exec() and released
+# after. An infinite loop or blocking call in user code holds the semaphore indefinitely.
+# All subsequent code-snippet operations on the same FortiSOAR instance are blocked waiting on acquire().
+# Combined with FSR-F11 (which provides code exec), a single attacker can permanently disable
+# all code-snippet connector functionality with: while True: pass
+#
+# The Semaphore is at class scope (line 27: semaphore_obj = Semaphore(1)), shared across all instances
+# and all connector executions within the worker process.
+
+FSR_F12_CODE_SNIPPET_SEMAPHORE_DOS = {
+    "id": "FSR-F12",
+    "title": "code-snippet connector class-level semaphore DoS",
+    "severity": "MEDIUM",
+    "cvss": "6.5",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+    "cwe": "CWE-400",
+    "component": "cyops-connector-code-snippet",
+    "affected_versions": "2.2.0 - 2.2.1",
+    "source_file": "operations.py:27",
+
+    "root_cause": (
+        "Semaphore(1) at class scope in CodeSnippet (operations.py:27). "
+        "Acquired before exec() at line 36, released in finally block at line 49. "
+        "No timeout on acquire() -- blocked indefinitely if code does not return."
+    ),
+
+    "payload": "while True: pass",
+
+    "chain": "FSR-F11 provides code exec to inject infinite loop; FSR-F12 then denies service to all other users.",
+
+    "fix": (
+        "Move semaphore from class scope to instance scope, or use acquire(timeout=N). "
+        "Enforce a maximum execution time limit via threading.Timer or subprocess with timeout."
+    ),
+}
