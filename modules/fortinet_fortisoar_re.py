@@ -3175,6 +3175,129 @@ FSR_F48_TOOL_FUNCTION_CALLER_DIRECT_DISPATCH = {
     "status": "CONFIRMED -- operation defined in info.json; dispatcher confirmed in assistant_helper.so symbols; tool functions confirmed in genai_tool_functions.so",
 }
 
+# ---------------------------------------------------------
+# Auth and filter injection findings
+# Binaries: auth_ogre/schemes.so, workflow/filtersets.so
+# ---------------------------------------------------------
+
+FSR_F52_AUTH_SCHEME_CONFUSION_ANONYMOUS_BYPASS = {
+    "id": "FSR-F52",
+    "title": "Authentication scheme confusion via HTTP_X_CS_AUTHENTICATION_METHOD header -- anonymous auth creates real authenticated user, bypasses IsAuthenticated",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-287",
+    "binary": "/opt/cyops-workflow/sealab/auth_ogre/schemes.so",
+    "nginx_config": "/etc/nginx/conf.d/cyops-workflow.conf",
+    "evidence": {
+        "nginx_no_header_strip": (
+            "cyops-workflow.conf: all requests pass to uwsgi_pass via uwsgi_params. "
+            "uwsgi_params defines only CGI vars (QUERY_STRING, REQUEST_METHOD, etc.) "
+            "but HTTP headers are forwarded automatically as HTTP_* env vars by nginx+uWSGI protocol. "
+            "HTTP_X_CS_AUTHENTICATION_METHOD is NOT stripped -- client-controlled."
+        ),
+        "OgreAuthentication_authenticate_BSS": (
+            "BSS slots: META, get, auth_scheme_map, authenticate, format. "
+            "Flow: request.META.get('HTTP_X_CS_AUTHENTICATION_METHOD') -> auth_scheme_map[scheme] -> auth_cls.authenticate()."
+        ),
+        "auth_scheme_map_keys_confirmed": (
+            "Module init BSS (__pyx_pymod_exec_schemes): 'anonymous', 'basic' confirmed as auth_scheme_map keys. "
+            "'HmacAuthenticationScheme', 'DASBasicAuthentication', 'AnonymousAuthentication' all initialized."
+        ),
+        "AnonymousAuthentication_BSS": (
+            "AnonymousAuthentication.authenticate BSS: ANONYMOUS_USER, anonymous, settings, maybe_create_user. "
+            "Reads settings.ANONYMOUS_USER username -> calls _maybe_create_user."
+        ),
+        "_maybe_create_user_BSS": (
+            "_maybe_create_user BSS: objects, get, username, DoesNotExist, create_user, User. "
+            "Pattern: User.objects.get(username=ANONYMOUS_USER) -> on DoesNotExist: User.objects.create_user(...). "
+            "Returns real Django User object with is_authenticated=True."
+        ),
+    },
+    "attack": (
+        "External attacker sends any request to workflow service with header: "
+        "X-CS-Authentication-Method: anonymous. "
+        "OgreAuthentication reads HTTP_X_CS_AUTHENTICATION_METHOD='anonymous' from request.META. "
+        "Selects AnonymousAuthentication from auth_scheme_map. "
+        "AnonymousAuthentication calls _maybe_create_user(ANONYMOUS_USER): "
+        "User.objects.get_or_create(username=settings.ANONYMOUS_USER) -- real DB user. "
+        "Returns (anonymous_user, None). DRF: anonymous_user.is_authenticated=True (real User, not AnonymousUser). "
+        "IsAuthenticated permission passes. Request processed as authenticated anonymous user."
+    ),
+    "impact": (
+        "Anonymous user has unknown privilege level -- likely internal service permissions. "
+        "Minimum impact: access to workflow API as authenticated user (data enumeration). "
+        "Combined with query_filters ORM injection (FSR-F42): enumerate all workflow data. "
+        "Combined with FSR-F43 SSTI: if anonymous user can edit workflows, RCE without credentials."
+    ),
+    "preauth_escalation": "PRE-AUTH -> authenticated access without credentials",
+    "note": (
+        "HMAC scheme (HTTP_X_CS_AUTHENTICATION_METHOD: hmac) also externally selectable. "
+        "With SEALAB_PRIVATE_KEY known (from FSR-F44 LFI), attacker can forge valid HMAC requests "
+        "and authenticate as HMAC_USER (internal service account with elevated privileges)."
+    ),
+    "status": "CONFIRMED -- scheme selection, AnonymousAuthentication, _maybe_create_user flow all confirmed via BSS analysis; nginx header passthrough confirmed in uwsgi_params",
+}
+
+FSR_F53_DQL_ORM_FIELD_TRAVERSAL_INJECTION = {
+    "id": "FSR-F53",
+    "title": "Django ORM field traversal injection via unvalidated query_filters field parameter -- cross-model data access",
+    "severity": "HIGH",
+    "cvss": "7.7",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-943",
+    "binary": "/opt/cyops-workflow/sealab/workflow/filtersets.so",
+    "evidence": {
+        "_condition_BSS": (
+            "filtersets._condition (0x134c0, 18941B) BSS slots: get, format, Q. "
+            "No field validation BSS slots (no 'fields', no '_meta', no allowlist). "
+            "Pattern: Q(**{'{}__{}'. format(field_name, operator): value}). "
+            "field_name from user-supplied query_filters dict, passed directly to Q()."
+        ),
+        "query_sort_BSS": (
+            "filtersets.query_sort (0xf140, 9968B) BSS slots: queryset, query, order_by, lower, get, format. "
+            "No field validation. Pattern: queryset.order_by(formatted_field_name). "
+            "User-supplied sort field passed directly to order_by()."
+        ),
+        "query_aggregates_BSS": (
+            "filtersets.query_aggregates (0x11830, 7304B) BSS slots: values, total, queryset, query, order_by, get, annotate, Count. "
+            "Pattern: queryset.annotate(total=Count(user_field)).values('total'). "
+            "User-supplied aggregation field passed to Count() without validation."
+        ),
+        "query_filters_wrapper_BSS": (
+            "query_filters wrapper (0x18050, 2389B) BSS: workflow_filtersets, queryset, filters, logic, filter. "
+            "logic = user-supplied AND/OR; filters = user-supplied list of {field, operator, value} dicts."
+        ),
+        "views_so_authenticated": "workflow/views.so: IsAuthenticated permission class present (post-auth, not pre-auth)",
+    },
+    "attack": {
+        "field_traversal": (
+            "GET /wf/api/workflows/?query_filters=[{\"field\":\"user__password\",\"operator\":\"icontains\",\"value\":\"$2b$12$a\"}]. "
+            "filtersets._condition: Q(**{'user__password__icontains': '$2b$12$a'}). "
+            "Django ORM: SELECT ... WHERE auth_user.password LIKE '%$2b$12$a%' JOIN auth_user. "
+            "Empty result = hash doesn't start with '$2b$12$a'. "
+            "Boolean oracle: binary search on password hash character by character."
+        ),
+        "order_by_sort": (
+            "GET /wf/api/workflows/?query_sort={\"sort_field\":\"user__password\",\"sort_order\":\"asc\"}. "
+            "filtersets.query_sort: queryset.order_by('user__password'). "
+            "Response rows ordered by password hash -- confirms hash prefix ordering. "
+            "Side channel: row ordering reveals hash prefix."
+        ),
+        "dos_random_order": (
+            "GET /wf/api/workflows/?query_sort={\"sort_field\":\"?\",\"sort_order\":\"asc\"}. "
+            "queryset.order_by('?') = random ordering via SQL RANDOM() on every row. "
+            "Full table scan each request. DoS against large tables."
+        ),
+        "cross_model_access": (
+            "Field traversal to any model reachable via FK from Workflow: "
+            "user__email, user__groups__name, user__user_permissions__codename. "
+            "Allows reading user emails, group memberships, permissions."
+        ),
+    },
+    "status": "CONFIRMED -- _condition BSS pattern get+format+Q with no validation confirmed; IsAuthenticated required (post-auth only); FSR-F52 chain enables pre-auth access",
+}
+
 FSR_F49_LISTENER_SOCKET_ARGUMENT_INJECTION = {
     "id": "FSR-F49",
     "title": "Argument injection via unescaped query_str in listener TCP socket payload -- arbitrary ChromaDB training folder injection",
