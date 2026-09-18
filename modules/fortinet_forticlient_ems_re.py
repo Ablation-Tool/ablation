@@ -1613,13 +1613,30 @@ EMS_F22_ADDFIREWALLRULE_PS_INJECTION = {
         ],
     },
 
-    "chain_to_EMS_F21": (
-        "EMS-F21 (no auth on TagService.Tag) provides the unauthenticated injection path: "
-        "attacker sends forged TagRequest with name field = PS payload -> "
-        "ztnaworker processes tag -> enableFirewallRule called -> AddFirewallRule executes PS -> "
-        "RCE as SYSTEM (ztnaworker service context). "
-        "No TLS (EMS-F20), no auth (EMS-F21), no sanitization (EMS-F22) = full pre-auth RCE chain."
-    ),
+    "actual_call_chain": {
+        "chain": [
+            "(*ECSocketServerService).Serve (port 8013 ecsocksrv) -- receives EC message from FortiClient",
+            "Serve.func2 (va=0x013D7A00) -- goroutine closure; args from closure struct fields +0x8, +0x10, +0x18",
+            "enableFirewallRule (va=0x013DDB20) -- passes name/path from closure to AddFirewallRule",
+            "AddFirewallRule (va=0x010F48C0) -- builds PS script with fmt.Sprintf, executes via exec.Command",
+        ],
+        "entry_point": "port 8013 (EC socket server, not port 9990 ZTNA gRPC)",
+        "closure_fields": {
+            "+0x8 / +0x10": "name string (ptr, len) -- firewall rule display name from EC message",
+            "+0x18":         "path/additional arg from EC message -- used as enableFirewallRule third arg",
+        },
+        "chain_with_EMS_F19": (
+            "EMS-F19 (hardcoded defaultCert/defaultKey for port 8013 TLS) enables attacker impersonation: "
+            "use defaultCert to authenticate to port 8013 as a FortiClient endpoint -> "
+            "send EC policy message with PS payload as rule name or program path -> "
+            "Serve.func2 -> enableFirewallRule -> AddFirewallRule executes PS -> SYSTEM RCE."
+        ),
+        "note": (
+            "EMS-F21 (port 9990, no auth TagService.Tag) does NOT directly call enableFirewallRule. "
+            "The injection chain runs through port 8013 ecsocksrv (ecsocksrv == ECSocketServerService). "
+            "Prerequisite: EMS-F19 hardcoded cert OR a compromised FortiClient endpoint."
+        ),
+    },
 
     "privilege": "SYSTEM -- ztnaworker.exe runs as Windows service under SYSTEM account",
 }
