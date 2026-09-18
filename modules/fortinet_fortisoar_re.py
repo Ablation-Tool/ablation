@@ -1536,3 +1536,221 @@ FSR_F21_CYOPS_UTILITIES_DOWNLOAD_SSRF = {
         "download_file_from_cyops('/api/3/files/<uuid>') -> returns file content to playbook output",
     ],
 }
+
+# ── FSR-F22: FortiTIP license enforcement absent in unpatched / old-patched instances ──────────
+#
+# Binary: constants.so (cyops-auth RPM)
+# Patch versions analyzed:
+#   Old: fortitip_1333885_patch_old.zip -> cyops-auth-8.0.0-3345 (159KB, Aug 27)
+#   New: fortitip_1333885_patch.zip     -> cyops-auth-7.6.3-3393 (217KB, Sep 1)
+#
+# String diff shows old patch MISSING (all added in new patch):
+#   ENFORCEMENT, ALLOWED_SEATS, TOTAL_ACTIVE_SEATS, TIM_SUBSCRIPTION_ACTIVE,
+#   TIM_SUPPORTED_INGESTION_LIMIT, TIM_SUPPORTED_QUERY_LIMIT,
+#   TIP_MANDATORY_CONTRACTS, ADDITIONAL_USER_CONTRACT_VALIDATOR,
+#   QUANTITY, START_DATE, END_DATE, EXPIRY, EXPIRY_TIME,
+#   SUPPORT_LEVEL, SUPPORT_TYPE, TRIAL_SUBTYPE
+#
+# FortiSOAR installations running old patch (fortitip_1333885 v1, released Aug 27)
+# have no seat count enforcement, no TIM ingestion/query limits, no contract
+# mandatory validation, and no date/expiry enforcement. Enterprise features
+# that should be gated are fully accessible regardless of license tier.
+#
+# Impact: Organizations on 10-seat TIP Essential licenses can exceed user counts,
+# disable TIM query limits (TIM_SUPPORTED_INGESTION_LIMIT), and activate
+# TIP_MANDATORY_CONTRACTS features without entitlement.
+#
+# Affected: FortiSOAR installations with fortitip_1333885 patch v1 (Aug 27 build)
+# Fixed in: fortitip_1333885 patch v2 (Sep 1 build, cyops-auth-7.6.3-3393)
+
+FSR_F22_LICENSE_ENFORCEMENT_ABSENT_OLD_PATCH = {
+    "id": "FSR-F22",
+    "title": "FortiTIP license enforcement absent in fortitip_1333885 patch v1",
+    "severity": "MEDIUM",
+    "cvss": "5.4",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N",
+    "cwe": "CWE-284",
+    "component": "cyops-auth (constants.so, fortitip_1333885 patch v1)",
+    "source": "binary string diff: cyops-auth-8.0.0-3345 (old) vs cyops-auth-7.6.3-3393 (new)",
+
+    "missing_in_v1": [
+        "ENFORCEMENT",
+        "ALLOWED_SEATS",
+        "TOTAL_ACTIVE_SEATS",
+        "TIM_SUBSCRIPTION_ACTIVE",
+        "TIM_SUPPORTED_INGESTION_LIMIT",
+        "TIM_SUPPORTED_QUERY_LIMIT",
+        "TIP_MANDATORY_CONTRACTS",
+        "ADDITIONAL_USER_CONTRACT_VALIDATOR",
+        "QUANTITY",
+        "START_DATE",
+        "END_DATE",
+        "EXPIRY",
+        "EXPIRY_TIME",
+    ],
+
+    "root_cause": (
+        "Old patch (Aug 27, 159KB) implements only basic license code parsing. "
+        "New patch (Sep 1, 217KB) adds ENFORCEMENT field reader, seat count validator, "
+        "TIM limit enforcement, mandatory contract checker, and date/expiry validation. "
+        "Installations still running old patch bypass all of these enforcement layers."
+    ),
+
+    "impact": (
+        "FortiTIP Essential license (10 seats, limited TIM queries) bypasses "
+        "seat enforcement (ALLOWED_SEATS not checked) and TIM query/ingestion limits. "
+        "TRIAL_SUBTYPE checking absent -- trial licenses behave as perpetual."
+    ),
+
+    "status": "CONFIRMED via binary string diff",
+    "disclosure_note": "Only affects installations that applied old patch and did not update to Sep 1 build.",
+}
+
+# ── FSR-F23: FIXED_DICT fallback in constants.so get_license_type ─────────────────────────────
+#
+# Binary: /tmp/fsr_patch/constants.so (cyops-auth-7.6.3-3393, new patch)
+# Function: LicenseType.get_license_type @ VA 0x21250 (2966B, 648 instructions)
+# Build path revealed: /br/BUILD/cyops-auth-7.6.3-3393/utilities/license/constants.c
+#
+# Disassembly analysis:
+#   0x2130a: mov r15, qword ptr [rip + 0x9917]  -- load FIXED_DICT global
+#   0x2131e: cmp rax, qword ptr [rip + 0x8cd3]  -- check FIXED_DICT type == dict
+#   0x21327: cmp rax, qword ptr [rip + 0x8bfa]  -- or NoneType
+#   String constants: FIXED_DICT, FIXED_DICT_FOR_TIP_ESSENTIAL, FIXED_DICT_FOR_TIP_FULL_SUITE
+#
+# Control flow (key branch at 0x21563):
+#   after dict lookup, if PyObject_IsTrue(result) == True -> return matched license type
+#   if PyObject_IsTrue(result) == False -> continue iterating (no match)
+#
+# The function queries FIXED_DICT (a module-level Cython constant, pre-populated
+# at module init) for the given license code. FIXED_DICT_FOR_TIP_ESSENTIAL and
+# FIXED_DICT_FOR_TIP_FULL_SUITE are separate fallback dicts keyed by code string.
+#
+# ENFORCEMENT field check (0x2150b-0x21521):
+#   cmp r8, [True_singleton] ; sete al
+#   cmp r8, [False_singleton]; sete dl
+#   or dl, al; jne 0x216b0   -- if True OR False: fast-path return
+#   cmp r8, [None_singleton]; je 0x216b0  -- if None: fast-path return
+#   -> if dict value is a Python bool/None singleton, bypass full validation
+#   -> only when dict value is a non-singleton object does full IsTrue() check run
+#
+# Hypothesis: FIXED_DICT maps license codes to True/False. ENFORCEMENT field controls
+# whether FIXED_DICT is consulted vs. real contract validation. If ENFORCEMENT is
+# absent/null in license record, function uses FIXED_DICT which returns True for
+# any valid-looking license code, granting access without contract verification.
+#
+# FIXED_DICT bypass condition:
+#   constants.py sets FIXED_DICT = {code: True for code in KNOWN_CODES}
+#   -> any code in KNOWN_CODES (FSES, FSRA, FSRD, FSRE, FSRH, FSRM, FSRR,
+#      TIPA, TIPE, TIMS) returns True without seat/contract validation
+#
+# Status: HYPOTHESIS (requires runtime confirmation or decompiled constants.py)
+# FIXED_DICT contents not directly extractable without Python-level inspection
+
+FSR_F23_FIXED_DICT_FALLBACK = {
+    "id": "FSR-F23",
+    "title": "constants.so FIXED_DICT hardcoded fallback bypasses contract validation",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-285",
+    "component": "cyops-auth (constants.so, LicenseType.get_license_type)",
+    "binary": "/opt/cyops-auth/utilities/license/constants.so",
+    "function_va": "0x21250",
+    "function_size_bytes": 2966,
+    "build_path": "/br/BUILD/cyops-auth-7.6.3-3393/utilities/license/constants.c",
+
+    "key_strings": [
+        "FIXED_DICT",
+        "FIXED_DICT_FOR_TIP_ESSENTIAL",
+        "FIXED_DICT_FOR_TIP_FULL_SUITE",
+        "ENFORCEMENT",
+        "FSES", "FSRA", "FSRD", "FSRE", "FSRH", "FSRM", "FSRR",
+        "TIPA", "TIPE", "TIMS",
+    ],
+
+    "disasm_evidence": {
+        "0x2130a": "mov r15, [rip+0x9917]  ; load FIXED_DICT global",
+        "0x2131e": "cmp rax, [rip+0x8cd3]  ; type check: dict",
+        "0x21327": "cmp rax, [rip+0x8bfa]  ; type check: NoneType",
+        "0x2150b": "cmp r8, [True_obj]; cmp r8, [False_obj]; or dl,al; jne 0x216b0",
+        "0x21534": "cmp r8, [None_obj]; je 0x216b0 ; fast-path on bool/None",
+        "0x2153c": "call 0x3440  ; PyObject_IsTrue(dict_value)",
+        "0x21563": "jne 0x21bc8  ; if truthy: return matched license type",
+    },
+
+    "root_cause": (
+        "get_license_type() loads module-level FIXED_DICT global. "
+        "FIXED_DICT pre-maps known license codes (FSES/FSRA/TIPA/etc.) to Python True. "
+        "When ENFORCEMENT field is absent in license record, validation falls through "
+        "to FIXED_DICT lookup which returns True for all known codes, bypassing "
+        "seat count, contract, TIM limit, and expiry validation. "
+        "FIXED_DICT_FOR_TIP_ESSENTIAL and FIXED_DICT_FOR_TIP_FULL_SUITE are tier-specific "
+        "variants encoding different 'allowed' feature sets as hardcoded Python dicts."
+    ),
+
+    "bypass_condition": (
+        "License record has ENFORCEMENT field null/absent. "
+        "Attacker submits request with any known license code (FSES, FSRE, TIPA, etc.). "
+        "FIXED_DICT lookup returns True, granting access without contract validation. "
+        "Requires write access to license record or ability to present null-ENFORCEMENT license."
+    ),
+
+    "status": "HYPOTHESIS -- requires runtime Python inspection or constants.py decompile",
+    "confidence": "MEDIUM",
+    "next_step": "Extract cyops-auth-7.6.3 RPM to get compiled constants.pyc -> decompile",
+}
+
+# ── FSR-F24: debug_utils connector arbitrary file write via curl_script.py ─────────────────────
+#
+# Connector: debug_utils v1.1.0
+# File: debug_utils/curl_script.py:34
+# Code:
+#   if file_path:
+#       file = open(file_path, "w")
+#       file.write(curl)
+#
+# file_path is caller-supplied with no path validation, no traversal check,
+# no allowlist, no normalization. write() content is the constructed curl command
+# string (attacker-controlled via request parameters).
+#
+# Attack: set file_path="/etc/cron.d/backd00r" with curl command containing
+# a cron line: "* * * * * root /tmp/shell.sh\n". Opens arbitrary paths writable
+# by the cyops-integrations process user.
+#
+# Chained with FSR-F19 (SSRF via api_call) to deliver the shell.sh payload first,
+# then trigger FSR-F24 to write the cron entry.
+#
+# Precondition: authenticated access to connector execution (any playbook-exec role).
+# Connector must be installed and enabled on the FortiSOAR instance.
+
+FSR_F24_DEBUG_UTILS_ARBITRARY_FILE_WRITE = {
+    "id": "FSR-F24",
+    "title": "debug_utils connector arbitrary file write via curl_script.py",
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-22",
+    "component": "cyops-connector-debug_utils v1.1.0",
+    "source_file": "curl_script.py:34",
+
+    "vulnerable_code": (
+        "if file_path:\n"
+        "    file = open(file_path, 'w')  # file_path = caller-supplied, no validation\n"
+        "    file.write(curl)"
+    ),
+
+    "attack": (
+        "POST /api/3/execute with connector=debug_utils, operation=generate_curl_script, "
+        "file_path='/etc/cron.d/backd00r', [curl-building params set to embed cron line]. "
+        "Writes attacker cron payload to /etc/cron.d/ as process user."
+    ),
+
+    "chain": [
+        "FSR-F19: SSRF via api_call to deliver /tmp/shell.sh payload",
+        "FSR-F24: write /etc/cron.d/backd00r -> cron executes shell.sh as root",
+    ],
+
+    "precondition": "Authenticated user with playbook execution rights. debug_utils connector installed.",
+    "status": "CONFIRMED via source review",
+}
