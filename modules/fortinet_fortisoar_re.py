@@ -4160,6 +4160,9 @@ FSR_F67_AGGREGATE_FIELD_ACL_BYPASS = {
 #   A compromised content hub entry could deliver a malicious rpm_full_name
 # Note: identify_if_dependencies_installed + is_rpm_command and rpmlib strings also present --
 #   may be a validation path, but shell=True + Popen + 'rpm -qa | grep ' string are from the same function
+# Additional vector: postman/views.so has execute_cmd function (Popen + shell) with rpm_full_name
+#   string in same binary -- agent installer (AgentInstallerView.post) triggers same injection pattern
+#   during remote agent RPM installation; confirmation requires separate disasm of postman/views.so
 FSR_F68_RPM_FULLNAME_SHELL_INJECTION = {
     "id": "FSR-F68",
     "title": "Shell command injection in _install_rpm_dependencies -- connector info.json rpm_full_name appended to 'rpm -qa | grep ' and executed via Popen with shell=True",
