@@ -3013,18 +3013,50 @@ FSR_F45_REMOTE_WORKFLOW_REFERENCE_SSRF = {
         "fetch_workflow": "fetch_workflow at 0x536a0 (16328B) -- HTTP client for IRI fetch, imports 'requests' (via sealab_utils)",
     },
     "attack": (
-        "REVISED: remote_workflow_reference.isra.68 publishes to RabbitMQ queue for async workflow execution "
-        "(BSS slot RMQ_PUBLISHER confirmed). "
-        "fetch_workflow (0x536a0) queries CRUD_HUB_URL (internal) with workflow_iri as parameter -- "
-        "NOT a direct HTTP fetch to user IRI. "
-        "APPLIANCE_PRIVATE_KEY used to sign the internal POST to CRUD_HUB_URL (BSS 0x53ea7). "
-        "Reduced SSRF: user-supplied IRI passed to internal service, not fetched directly. "
-        "SSRF may exist at CRUD hub layer if it fetches external IRIs -- requires crudhub.so analysis."
+        "CONFIRMED SSRF VIA CRUDHUB.PY L78-81: "
+        "_make_cyops_request(iri, method) checks urlparse(iri).netloc. "
+        "If netloc is non-empty (absolute IRI), url = iri directly (no prepend of CRUD_HUB_URL). "
+        "requests.request(method, url, verify=False) -- TLS verification disabled. "
+        "Supply absolute IRI in workflowReference step field: http://169.254.169.254/latest/meta-data/ "
+        "-> SSRF to AWS metadata. Also: signed auth header (APPLIANCE_PRIVATE_KEY sig) sent to attacker URL "
+        "-> key material leak. "
+        "file:// scheme also available if requests library supports it. "
+        "Chained with FSR-F43: supply IRI of attacker-controlled Jinja2 template -> fetch -> RCE."
     ),
     "key_finding": (
-        "fetch_workflow uses APPLIANCE_PRIVATE_KEY (from .envdir/) to sign inter-service POST to CRUD_HUB_URL. "
-        "If APPLIANCE_PRIVATE_KEY extracted via FSR-F44 (readfile LFI), attacker can forge inter-service auth "
-        "and make arbitrary signed requests to CRUD hub as the workflow service."
+        "fetch_workflow signs POST to CRUD_HUB_URL with APPLIANCE_PRIVATE_KEY. "
+        "If workflowReference = absolute http:// IRI, _make_cyops_request uses it directly. "
+        "APPLIANCE_PRIVATE_KEY auth header sent to attacker server. "
+        "APPLIANCE_PRIVATE_KEY stored at /opt/cyops-workflow/sealab/.envdir/APPLIANCE_PRIVATE_KEY (FSR-F44)."
     ),
-    "status": "REVISED -- not direct SSRF to user IRI; fetch_workflow signs internal request with APPLIANCE_PRIVATE_KEY; key extractable via FSR-F44",
+    "crudhub_code": {
+        "file": "cyops_utilities/crudhub.py",
+        "L78": "if not bool(urlparse(iri).netloc):",
+        "L79": "    url = settings.CRUD_HUB_URL + str(iri)  # relative iri",
+        "L81": "else: url = iri  # absolute iri -> used DIRECTLY -> SSRF",
+        "L115": "response = requests.request(method, url, auth=auth, json=body, verify=False)  # verify=False always",
+    },
+    "status": "CONFIRMED -- SSRF via absolute IRI in _make_cyops_request(crudhub.py L78-81); verify=False on all requests",
+}
+
+FSR_F46_TLS_VERIFICATION_DISABLED = {
+    "id": "FSR-F46",
+    "title": "TLS certificate verification disabled on all inter-service HTTP requests (verify=False)",
+    "severity": "MEDIUM",
+    "cvss": "6.8",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-295",
+    "file": "cyops_utilities/crudhub.py",
+    "evidence": {
+        "L115": "response = requests.request(method, url, auth=auth, json=body, verify=False)",
+        "scope": "All inter-service requests via _make_cyops_request/make_cyops_request -- covers all workflow-to-crudhub, workflow-to-external, connector API calls",
+    },
+    "attack": (
+        "Any attacker with network position to intercept traffic between FortiSOAR services "
+        "can perform MITM without TLS validation. "
+        "Since APPLIANCE_PRIVATE_KEY auth headers are sent on these requests (crudhub.py L111), "
+        "a MITM attacker can capture signed request tokens for replay. "
+        "Combined with FSR-F45 SSRF: attacker-supplied URL receives auth headers with key material."
+    ),
+    "status": "CONFIRMED -- verify=False hardcoded at crudhub.py L115",
 }
