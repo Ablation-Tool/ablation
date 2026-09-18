@@ -3678,3 +3678,57 @@ FSR_F59_PUBLIC_ACTION_XFF_DAS_INJECTION = {
     },
     "status": "CONFIRMED -- PHP source shows HTTP_X_FORWARDED_FOR used unconditionally at line 443; loginId concatenated without urlencode() at line 425",
 }
+
+# FSR-F60: JWT complete authentication bypass chain -- SSTI reads JWT private key -> RS256 JWT forgery (CWE-347 / CWE-327)
+# Sources:
+#   - cyops-auth.service: User=nginx (DAS runs as nginx)
+#   - cyops-workflow celery services: User=nginx (workflow runs as nginx)
+#   - das.ini [JWT]: privatepath = ./certs/jwtprivate.key (abs: /opt/cyops-auth/certs/jwtprivate.key)
+#   - CorrectJwtEncoder.php: validates with RS256 public key; accepts any RS256-signed token with valid type field
+#   - CorrectSimpleJWS.isExpired(): returns false when exp is absent -> forged tokens with no exp = permanent validity
+#   - CorrectSimpleJWS.isValidType(): type field must exist and not be 'restricted'/'noauth'/'2fa' -> use type='user'
+# Chain:
+#   1. FSR-F43 (SSTI via Jinja2 readfile filter) reads /opt/cyops-auth/certs/jwtprivate.key
+#      - File is readable by nginx; DAS itself reads it as nginx to sign tokens
+#   2. Attacker obtains RSA-2048 private key
+#   3. Forge RS256 JWT with payload: {"uuid": "<admin_uuid>", "type": "user"} -- omit exp for permanent validity
+#   4. Present forged JWT as Bearer token to cyops-api
+#   5. CorrectJwtEncoder.decode() validates signature with public key -> passes; isValidType -> passes; isLogout -> passes (not in logout cache)
+#   6. Full authentication as any user UUID
+# Key confirmation: DAS runs as nginx (cyops-auth.service User=nginx); must read /opt/cyops-auth/certs/jwtprivate.key
+#   as nginx -> file is nginx-readable -> FSR-F43 SSTI (nginx context) can read it
+# Logout cache bypass: forged token is never added to logout cache (JwtLogoutKeyProvider only stores tokens on logout action)
+# No-exp bypass: isExpired() checks 'if (isset($payload['exp']) && is_numeric($payload['exp']))' -- absent exp returns false
+FSR_F60_JWT_FORGERY_VIA_SSTI_KEY_READ = {
+    "id": "FSR-F60",
+    "title": "JWT complete auth bypass -- FSR-F43 SSTI reads JWT RSA private key (/opt/cyops-auth/certs/jwtprivate.key); forge RS256 JWT; cyops-api accepts forged token as any user",
+    "severity": "CRITICAL",
+    "cvss": "10.0",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-347",
+    "key_architecture": {
+        "signing_service": "DAS (cyops-auth) at /opt/cyops-auth/; runs as nginx (cyops-auth.service User=nginx)",
+        "jwt_private_key_path": "/opt/cyops-auth/certs/jwtprivate.key (das.ini [JWT] privatepath = ./certs/jwtprivate.key)",
+        "key_type": "RSA-2048 private key (RS256 algorithm); instance-generated on install via generate_app_keys()",
+        "validation_service": "cyops-api (PHP/Symfony); validates with RS256 public key; does NOT sign tokens",
+        "workflow_service_user": "nginx (cyops-workflow celery services User=nginx)",
+        "key_readable_by": "nginx -- DAS runs as nginx and reads the private key; therefore key is nginx-accessible",
+    },
+    "exploit_chain": {
+        "step1": "FSR-F43 SSTI (Jinja2 readfile filter in cyops-workflow) reads /opt/cyops-auth/certs/jwtprivate.key",
+        "step2": "Attacker now holds RSA-2048 private key used by DAS to sign all user JWTs",
+        "step3": "Craft JWT payload: {'uuid': '<target_admin_uuid>', 'type': 'user', 'roles': [...]} -- omit 'exp' for permanent validity",
+        "step4": "Sign with RS256 using stolen private key",
+        "step5": "POST /api/3/auth/session or any authenticated endpoint with forged Bearer token",
+        "step6": "CorrectJwtEncoder.decode() verifies RS256 signature (passes), checks isValidType (passes: type='user'), checks isLogout (passes: not in logout cache) -> authenticated as admin",
+    },
+    "bypass_details": {
+        "isExpired_bypass": "CorrectSimpleJWS.isExpired() returns false when 'exp' absent -> omit exp -> permanent token validity",
+        "isValidType_bypass": "type='user' or any value except 'restricted'/'noauth'/'2fa' passes isValidType when called with null type",
+        "isLogout_bypass": "Forged token never added to JwtLogoutKeyProvider cache (only stored on actual logout) -> isLogout returns false",
+        "signature_not_bypassable": "verify() correctly checks header['alg'] == 'RS256' -> algorithm confusion (HS256/none) blocked",
+    },
+    "preauth_chain": "FSR-F52 (anonymous auth bypass) + FSR-F43 (SSTI) + FSR-F60 (JWT forgery): unauthenticated attacker -> full admin access to cyops-api",
+    "admin_uuid_discovery": "Any authenticated user (or via FSR-F52 pre-auth) can list users via GET /api/3/people to obtain admin UUIDs",
+    "status": "CONFIRMED -- DAS runs as nginx (systemd file confirmed); das.ini key path confirmed; CorrectJwtEncoder validation logic confirmed from source; isExpired absent-exp behavior confirmed from source",
+}
