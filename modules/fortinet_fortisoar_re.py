@@ -4564,6 +4564,102 @@ FSR_F76_PORTAL_USER_HEADER_INJECTION = {
     "status": "CONFIRMED MEDIUM -- unauthenticated SSRF to DAS PUT /token with header injection; X-USER takeover via portalUserAction NOT viable (tokenhandler.so ignores X-USER); EXTENSION_CONTAINER_HOSTNAME injection viable if hostname not in system DB",
 }
 
+# FSR-F77: workflow.builtins.http api_call -- no URL restriction (MEDIUM / CWE-918)
+# Scope: playbook step built-in HTTP action; requires create.workflows permission
+# Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/workflow/builtins/http.so (87288B)
+# Strings evidence: no 'blacklist'/'whitelist'/'filter_url'/'restrict'/'internal_only' in http.so
+# Functions: workflow.builtins.http.api_call, workflow.builtins.http._api_call, _convert_verify
+# _convert_verify: controls SSL cert verification only; no URL scheme or host filtering
+FSR_F77_API_CALL_SSRF = {
+    "id": "FSR-F77",
+    "title": "workflow.builtins.http api_call has no URL restriction -- playbook-level SSRF to internal services (CWE-918)",
+    "severity": "MEDIUM",
+    "cvss": "6.5",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
+    "cwe": "CWE-918",
+    "affected_component": "cyops-workflow -- workflow.builtins.http.api_call",
+    "affected_paths": {
+        "binary": "/opt/cyops-workflow/sealab/workflow/builtins/http.so",
+        "function": "workflow.builtins.http.api_call",
+        "permissions": "create.workflows -- required to author playbook steps using api_call",
+    },
+    "evidence": {
+        "no_url_filter": "No 'blacklist'/'whitelist'/'filter_url'/'restrict'/'denylist'/'internal_only' strings in http.so",
+        "functions": "workflow.builtins.http.api_call, _api_call, _convert_verify; _convert_verify handles SSL verification only",
+        "params": "api_call takes url, method, headers, auth_config params with no host restriction",
+    },
+    "impact": "Actors with create.workflows can create playbook steps that make HTTP requests to arbitrary internal URLs (http://localhost:8888, http://localhost:8443, http://10.x.x.x/admin) from the FortiSOAR server; enables metadata service access, internal API probing, and scanning of RFC-1918 space",
+    "chain": "create.workflows permission + api_call step = internal SSRF; combine with FSR-F74 (Jinja2 SSTI) or FSR-F71 (Django session forge) for unauthenticated escalation to api_call",
+    "internal_targets": {
+        "port_8443": "DAS authentication service (Cython); unauthenticated from localhost",
+        "port_8888": "cyops-workflow Django (restricted externally but reachable from localhost even with firewalld)",
+        "port_9595": "cyops-integrations connector engine with INTEGRATIONS_SECRET_KEY auth (FSR-F72)",
+        "rabbitmq_mgmt": "RabbitMQ management port 15672 (if enabled)",
+    },
+    "status": "CONFIRMED MEDIUM -- no URL filter in http.so; exploitable with create.workflows",
+}
+
+# FSR-F78: workflow.builtins.ssh run_remote_python -- arbitrary Python on remote SSH hosts (MEDIUM / CWE-78)
+# Scope: playbook step built-in SSH action; requires create.workflows + configured SSH connector
+# Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/workflow/builtins/ssh.so (140024B)
+# Key strings: 'run_remote_python', 'Execute python', 'Execute remote command', 'exec_command'
+# paramiko AutoAddPolicy -- host key verification DISABLED; any SSH host accepted without challenge
+# run_remote_python: likely calls exec_command on channel with provided Python code string
+FSR_F78_RUN_REMOTE_PYTHON = {
+    "id": "FSR-F78",
+    "title": "workflow.builtins.ssh run_remote_python executes arbitrary Python on SSH hosts with no host key verification (CWE-78 / CWE-295)",
+    "severity": "MEDIUM",
+    "cvss": "6.8",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-78",
+    "affected_component": "cyops-workflow -- workflow.builtins.ssh.run_remote_python",
+    "affected_paths": {
+        "binary": "/opt/cyops-workflow/sealab/workflow/builtins/ssh.so",
+        "functions": "run_remote_python, run_remote_command, run_sftp_copy, _prepare_ssh_client",
+    },
+    "evidence": {
+        "function_strings": "'run_remote_python starts', 'Execute python', 'Execute remote command', 'exec_command' in ssh.so",
+        "no_host_verify": "AutoAddPolicy string in ssh.so -- paramiko AutoAddPolicy accepts any SSH host key without verification",
+        "paramiko": "SSHClient, RSAKey, private_key_data, password strings confirm paramiko-based SSH execution",
+    },
+    "impact": "Actors with create.workflows can create playbook steps using run_remote_python to execute arbitrary Python code on any SSH-reachable host (including localhost) without host key verification; attacker-controlled Python code string passes directly to paramiko exec_command; if SSH connector is configured with a key that has access to localhost, this provides local code execution escalation beyond FortiSOAR's RBAC",
+    "chain": "create.workflows + run_remote_python step targeting localhost SSH (port 22) with FortiSOAR's own SSH key = LPE to arbitrary code exec as the SSH user (typically root); chain with FSR-F74/F71 for unauthenticated path to run_remote_python",
+    "no_host_key_verification": "AutoAddPolicy in paramiko accepts any SSH host key; enables MITM during lateral movement within internal network if attacker controls routing",
+    "status": "CONFIRMED MEDIUM -- run_remote_python confirmed in ssh.so with AutoAddPolicy; exploitable with create.workflows + SSH connectivity",
+}
+
+# eval.so semantic sweep notes (2026-09-18):
+# Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/workflow/eval.so (905752B)
+# Build: /br/BUILD/cyops-workflow-7.2.0-914/sealab/workflow/eval.c (Cython)
+# 110 functions in corpus (54 meaningful >50B excluding __Pyx helpers)
+# Largest functions: _execute_step.isra.55 (96434B), manual_input.isra.67 (60890B),
+#   __pyx_pymod_exec_eval (48401B), for_each (45304B)
+# Semantic sweep: low scores (<0.3) for all security queries -- Cython helper stubs dominate symbol table
+# Key strings identified:
+#   DELEGATE_JINJA_EVAL_TO_FUNC: flag routing template eval to a Jinja2 function
+#   IGNORE_EVAL_INPUT_LIST: list of step input keys to skip Jinja2 evaluation
+#   EVAL_INPUT_PARAMS_FROM_ENV: controls env-sourced input evaluation
+#   unauthenticated_input: WorkflowInput model field for portal display (NOT auth bypass)
+#   APPLIANCE_PRIVATE_KEY, APPLIANCE_PUBLIC_KEY: loaded via os.getenv() in settings.py (not hardcoded)
+#   run_remote_command: in workflow.builtins.ssh (see FSR-F78)
+#   upload_to_url, download_file_from_url, upload_to_crudhub, download_file_from_crudhub: workflow step actions
+#   database_connector, database_connector_with_args, database_connector_test: DB step types
+#   PARALLEL_BRANCH_THREAD_POOL, ThreadPoolExecutor: parallel branch execution
+#   queue_sealab_action_remoteresponse, queue_sealab_action_remoterequest: RabbitMQ queue names
+#   COPY_INPUT_RECORD_FOR_REFERENCE_WORKFLOW, COPY_ENV_FOR_REFERENCE_WORKFLOW: reference workflow flags
+
+# workflow/jinja.so analysis notes (2026-09-18):
+# Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/workflow/jinja.so (303064B)
+# 90 unique function symbols; largest: picklist (27355B), pymod_exec (24840B), readfile (14087B)
+# readfile filter (VA 0x202d0, 14087B): HTTP GET to CrudHub API (NOT filesystem)
+#   - Log string: 'Starting request to crudhub: GET %s'
+#   - Param: file_voucher (CrudHub file IRI like /api/3/files/<uuid>)
+#   - Impact: SSRF to CrudHub API if attacker controls file_voucher in template context
+#   - NOT arbitrary filesystem read; CrudHub URL from Django settings CRUD_HUB_URL
+# APPLIANCE_PRIVATE_KEY, APPLIANCE_PUBLIC_KEY in jinja.so: env vars (os.getenv in settings.py)
+#   NOT hardcoded; NOT accessible via standard Jinja2 context (would require __subclasses__ SSTI attack)
+# Jinja2 environment type: NOT SandboxedEnvironment (from prior sealab/jinja.so analysis)
+
 # jinja.so analysis notes:
 # Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/sealab/jinja.so (131024B)
 # Build: /br/BUILD/cyops-workflow-7.2.0-914/sealab/sealab/jinja.py (Cython 0.29.21)
