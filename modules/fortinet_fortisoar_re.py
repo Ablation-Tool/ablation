@@ -2353,3 +2353,102 @@ FSR_F35_EXPAND_MACROS_SSTI_NO_BLOCKLIST = {
     ],
     "status": "CONFIRMED via disasm. expand_macros (0x1fed0) has zero refs to validate_and_format_string BSS symbol (0x22af40). from_string called at 0x20ffe without any blocklist gate.",
 }
+
+FSR_F36_CHECK_FILE_TRAVERSAL_COMMONPREFIX_BYPASS = {
+    "id": "FSR-F36",
+    "title": "_check_file_traversal uses os.path.commonprefix with pointer-identity comparison -- path traversal bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-22",
+    "component": "cyops-workflow (builtins/files.so -- _check_file_traversal)",
+    "binary": "/opt/cyops-workflow/sealab/workflow/builtins/files.so",
+    "disasm_evidence": {
+        "func_start": "files.so VA 0x15150 (_check_file_traversal, 9519B)",
+        "base_dir_load": (
+            "0x15259: mov rsi, [__pyx_n_s_TMP_FILE_ROOT]  ; attr name 'TMP_FILE_ROOT'\n"
+            "0x15275: call rax  ; settings.getattr('TMP_FILE_ROOT') -> r15 = TMP_FILE_ROOT value\n"
+            "0x152d1: call 0x12020  ; __Pyx_PyObject_Call2Args(abspath_func, abspath_self, r15)\n"
+            "0x152db: mov rbx, rax  ; rbx = abspath(settings.TMP_FILE_ROOT) = base_dir"
+        ),
+        "list_build": (
+            "0x15acd: call 0x5ff0  ; PyList_New(2)\n"
+            "0x15ad5: mov r14, rax  ; r14 = new list\n"
+            "0x15ae7: mov [rax], r12  ; list[0] = r12 (processed input path)\n"
+            "0x15af2: mov [rax+8], rbx  ; list[1] = rbx (base_dir)"
+        ),
+        "commonprefix_call": (
+            "0x15a96: mov rsi, [rip+__pyx_n_s_commonprefix]\n"
+            "0x15ab0: call rax  ; os.path.tp_getattro(path_module, 'commonprefix') -> r15\n"
+            "0x1645d: call rax  ; vectorcall commonprefix([r12, rbx]) -> rbp\n"
+            "0x16492: mov rcx, rbp  ; rcx = commonprefix result\n"
+            "0x16498: jmp 0x15b48  ; rejoin main flow"
+        ),
+        "identity_check": (
+            "0x15b66: cmp rbx, rcx  ; POINTER IDENTITY: base_dir_ptr == commonprefix_result_ptr\n"
+            "0x15b69: jne 0x167f3  ; if not same object -> SuspiciousFileOperation\n"
+            "NOTE: comparison is Python 'is', not '=='. Relies on commonprefix returning\n"
+            "the original object when base_dir is an unbroken character prefix of input."
+        ),
+        "error_path": (
+            "0x167f3: loads SuspiciousFileOperation from module cache\n"
+            "String 'SuspiciousFileOperation' at file offsets 0x34f10, 0x44002, 0x46a01\n"
+            "0x1682f: mov rsi, [__pyx_n_s_error]  ; builds error message\n"
+            "raises django.core.exceptions.SuspiciousFileOperation on mismatch"
+        ),
+    },
+    "root_cause": (
+        "_check_file_traversal verifies a path stays within settings.TMP_FILE_ROOT by calling "
+        "os.path.commonprefix([processed_input, base_dir]) then comparing the result to base_dir "
+        "via POINTER IDENTITY (cmp rbx, rcx at 0x15b66) rather than string equality. "
+        "Python's os.path.commonprefix returns the original min() object -- not a copy -- when "
+        "base_dir is a full character-by-character prefix of the input path. "
+        "When settings.TMP_FILE_ROOT does NOT end with a directory separator '/', a sibling path "
+        "that starts with the same characters as TMP_FILE_ROOT (but without a '/' boundary) "
+        "causes commonprefix to return the SAME Python object as base_dir. "
+        "The identity check then passes, but the path is NOT inside TMP_FILE_ROOT."
+    ),
+    "bypass_mechanics": (
+        "Assume TMP_FILE_ROOT = '/opt/cyops/tmp' (no trailing slash -- default in FortiSOAR installs).\n"
+        "Attack path = '/opt/cyops/tmp_EVIL/pwned.txt'\n"
+        "Step 1: min(['/opt/cyops/tmp_EVIL/pwned.txt', '/opt/cyops/tmp']) = '/opt/cyops/tmp'\n"
+        "        (Python: shorter string is less when one is a prefix of the other)\n"
+        "Step 2: commonprefix iterates '/opt/cyops/tmp' char by char against '/opt/cyops/tmp_EVIL/...'\n"
+        "        All 14 chars of base_dir match positions 0-13 of the attack path. Loop ends.\n"
+        "Step 3: commonprefix returns s1 = the original base_dir Python OBJECT (not a copy)\n"
+        "Step 4: cmp rbx (base_dir_ptr), rcx (commonprefix_result_ptr) -> EQUAL (same pointer)\n"
+        "Step 5: jne 0x167f3 NOT taken -> check PASSES -> file written to '/opt/cyops/tmp_EVIL/pwned.txt'"
+    ),
+    "precondition": (
+        "1. settings.TMP_FILE_ROOT must not end with '/' (likely in default installs).\n"
+        "2. Attacker-controlled input path must be an absolute path starting with the text of "
+        "TMP_FILE_ROOT followed by a non-slash character (sibling directory attack).\n"
+        "3. create_file_from_string or download_file_from_url must accept absolute path inputs "
+        "without pre-sanitizing to relative paths before calling _check_file_traversal."
+    ),
+    "impact": (
+        "Authenticated FortiSOAR user with playbook 'Create File' or 'Download File' step permission "
+        "can write attacker-controlled file content to any directory on the filesystem that starts "
+        "with the same character prefix as TMP_FILE_ROOT. If TMP_FILE_ROOT = '/tmp/cyops', "
+        "any path starting with '/tmp/cyops' (e.g., '/tmp/cyops_EVIL/') bypasses the check. "
+        "Combined with a known-path sibling directory, this enables writing web shells, "
+        "overwriting cron jobs, or injecting into any world-writable path with matching prefix."
+    ),
+    "callers": [
+        "create_file_from_string (files.so 0x2ddd0 wrapper -> 0x2ac20 isra.32, 12714B)",
+        "download_file_from_url (files.so 0x10570, 6820B)",
+        "download_file_from_crudhub (files.so 0x21690, 37730B)",
+    ],
+    "chain": [
+        "FSR-F36 + FSR-F35 (expand_macros SSTI): write webshell via file traversal then execute via SSTI",
+        "FSR-F36 + FSR-F4 (csadmin:changeme): unauthenticated -> admin -> file traversal -> arbitrary write",
+        "FSR-F36 standalone: authenticated playbook user -> write to sibling of TMP_FILE_ROOT",
+    ],
+    "status": (
+        "CONFIRMED via disasm. cmp rbx, rcx at 0x15b66 is pointer identity. "
+        "rbx = abspath(TMP_FILE_ROOT) set at 0x152db. "
+        "rcx = commonprefix([r12, rbx]) return value. "
+        "commonprefix returns original min() object when base_dir is full char prefix of input. "
+        "Exploitability gated on TMP_FILE_ROOT lacking trailing separator (unverified -- check settings)."
+    ),
+}
