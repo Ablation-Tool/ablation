@@ -1,10 +1,13 @@
 """
-Cisco Catalyst Classic IOS and IOS-XE RE Module
+Cisco Catalyst Classic IOS, IOS-XE, and CGP-ONT RE Module
 Targets:
   - c3560cx-universalk9-mz.152-7.E14.bin: Classic IOS 15.2(7)E14 for 3560CX (22.9MB, MIPS)
   - c2960l-universalk9-mz.152-7.E14.bin: Classic IOS 15.2(7)E14 for 2960L (same train)
   - cat9k_iosxe_npe.17.18.04.SPA.bin: IOS-XE 17.18.04 NPE for Cat9K (1.18GB, x86_64 Linux)
   - cat9k_iosxe.17.18.04.SPA.bin: IOS-XE 17.18.04 standard (1.18GB, x86_64 Linux)
+  - CGP-ONT-4P-1.1.3.18.tar: Catalyst Passive Optical Network ONT (Linux 4.4.140 MIPS, 2022)
+  - cat9k_iosxe.17.15.06.CSCwt88239.SPA.smu.bin: IOS-XE 17.15.06 bulk-patch SMU
+  - cat9k_iosxe.17.15.06.CSCwv26786.SPA.smu.bin: IOS-XE 17.15.06 bulk-patch SMU
 Source: /media/cowboy/research/Cisco-Catalyst/
 """
 
@@ -52,6 +55,25 @@ METADATA = {
             ],
         },
     },
+}
+
+METADATA["targets"]["cgp_ont"] = {
+    "binary":     "CGP-ONT-4P-1.1.3.18.tar (fwu.sh + uImage + rootfs + md5.txt)",
+    "device":     "Cisco CGP-ONT-4P (4-port Catalyst Passive Optical Network ONT - fiber terminal)",
+    "arch":       "MIPS Linux 4.4.140 (EOL February 2022)",
+    "version":    "1.1.3.18 (built 2022-10-19)",
+    "hardware":   "N40-429 (Cisco hardware model)",
+    "codename":   "luna (fwu.sh: 'luna firmware upgrade script')",
+    "framework":  "YueMe (firmware update framework)",
+    "rootfs":     "SquashFS 4.0 xz-compressed, 17.7MB, 1709 inodes",
+    "web_server": "Boa (embedded web server, last upstream release 2005)",
+    "services":   ["Boa web server (port 80)", "Samba (smb.conf)", "WPS (wscd.conf)", "dnsmasq", "Avahi?"],
+    "init":       "Custom rc0-rc63 sequential init scripts",
+}
+
+METADATA["smu_patches"] = {
+    "CSCwt88239": "cat9k_iosxe.17.15.06.CSCwt88239.SPA.smu.bin - bulk-patch SMU for IOS-XE 17.15.06",
+    "CSCwv26786": "cat9k_iosxe.17.15.06.CSCwv26786.SPA.smu.bin - bulk-patch SMU for IOS-XE 17.15.06",
 }
 
 FINDINGS = [
@@ -294,10 +316,75 @@ FINDINGS = [
     },
 ]
 
+FINDINGS.append(
+    {
+        "id": "F5",
+        "title": "CGP-ONT Boa Web Server Runs as root (User 0) on TCP/80 - EOL Web Server on Fiber ONT",
+        "severity": "HIGH",
+        "cvss": 8.8,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+        "cwe": "CWE-269",
+        "description": (
+            "The Cisco CGP-ONT-4P (fiber access ONT, version 1.1.3.18) runs Boa web server "
+            "configured as `User 0` (root) on port 80. The Boa project was abandoned in 2005 "
+            "and has not received security updates for 20+ years. "
+            "Boa running as root means any vulnerability in the web server "
+            "(path traversal, buffer overflow, CGI injection) immediately yields a root shell. "
+            "The device also runs Linux 4.4.140, which went EOL in February 2022. "
+            "The CGP-ONT additionally includes Samba (SMB file sharing) and WPS daemon "
+            "(wscd.conf), creating unusual attack surface for what should be a simple fiber terminal. "
+            "Firmware integrity check uses only MD5 checksums stored in the same tar archive "
+            "as the firmware - an attacker serving a malicious firmware bundle just needs to "
+            "include a matching md5.txt to bypass all integrity checking (no digital signature). "
+            "The internal codename is `luna`; the update framework is `YueMe`."
+        ),
+        "boa_config": {
+            "port":    "80",
+            "user":    "0 (root)",
+            "version": "Boa (EOL 2005, ~20 years of unpatched vulnerabilities)",
+        },
+        "firmware_integrity": {
+            "method":    "MD5 checksum comparison against bundled md5.txt",
+            "signature": "NONE - no digital signature on firmware payload",
+            "exploit":   "Serve attacker firmware + matching md5.txt = accepted as valid",
+        },
+        "additional_services": [
+            "Samba (smb.conf): file sharing on a fiber ONT - unusual attack surface",
+            "WPS daemon (wscd.conf): Wi-Fi Protected Setup potentially enabled",
+            "dnsmasq: DNS/DHCP server",
+        ],
+        "linux_kernel": "4.4.140 (EOL February 2022 - critical CVEs unpatched including Dirty COW CVE-2016-5195)",
+        "impact": [
+            "Boa RCE (any known CVE) = immediate root shell on fiber ONT",
+            "Firmware update MITM: attacker-served firmware passes MD5 integrity check",
+            "EOL kernel: Dirty COW and post-2022 Linux 4.4 CVEs all unpatched",
+            "Samba + Boa-as-root: multiple root-reachable network attack surfaces",
+        ],
+        "remediation": (
+            "Replace Boa with a maintained web server (lighttpd, nginx). "
+            "Run web server as non-root with capability-based port binding. "
+            "Add digital signature (RSA-2048 or ECDSA-P256) to firmware update process. "
+            "Update to a supported Linux kernel. Remove Samba if not needed."
+        ),
+        "yara": """rule cisco_cgp_ont_boa_root_no_sig_firmware {
+    meta:
+        description = "CGP-ONT Boa web server runs as root, firmware has MD5-only integrity (no signature)"
+        severity = "HIGH"
+    strings:
+        $luna_fwu    = "luna firmware upgrade" ascii
+        $boa_user0   = "User 0" ascii
+        $yueme       = "YueMe" ascii
+        $md5_only    = "md5.txt" ascii
+    condition:
+        $luna_fwu or ($boa_user0 and $md5_only)
+}""",
+    }
+)
+
 SUMMARY = {
-    "total":    4,
+    "total":    5,
     "critical": 1,
-    "high":     1,
+    "high":     2,
     "medium":   1,
     "low":      1,
     "note":     (
