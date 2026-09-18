@@ -3423,3 +3423,134 @@ FSR_F51_AI_GENERATED_CONNECTOR_CODE_EXECUTION = {
     ),
     "status": "CONFIRMED -- connector_assistant Python generation confirmed in system prompt; connector_gen_import_connector tool confirmed in llm_metadata.json; connector_gen_functions.so confirmed present",
 }
+
+# FSR-F54: workflow.builtins.http.api_call -- unrestricted SSRF (CWE-918)
+# Binary: /opt/cyops-workflow/sealab/workflow/builtins/http.so
+# api_call(url, method, params, body, headers, verify, username, password, auth_config)
+# - url passed directly to python requests library, zero validation
+# - No scheme allowlist (file://, gopher://, dict:// all accepted)
+# - No private IP blocklist (127.0.0.1, 169.254.169.254, 10.x all reachable)
+# - verify parameter is user-controlled boolean (TLS verification bypassable)
+# - Separate from FSR-F19 (cyops_utilities api_call) and FSR-F38 (download_file_from_url)
+#   because http.so is the native workflow step type exposed in the playbook UI
+# - _api_call helper "notably lacks the vault decorator" -- can be invoked without vault
+# Exploit chains:
+#   FSR-F52 + FSR-F54: pre-auth SSRF (auth bypass -> workflow trigger -> http step -> internal scan)
+#   FSR-F43 + FSR-F54: SSTI -> control url parameter -> SSRF to cloud metadata (169.254.169.254)
+#   FSR-F52 + FSR-F43 + FSR-F54: full pre-auth SSRF chain
+FSR_F54_WORKFLOW_HTTP_BUILTIN_SSRF = {
+    "id": "FSR-F54",
+    "title": "workflow.builtins.http.api_call passes url directly to requests -- unrestricted SSRF, no scheme or IP validation",
+    "severity": "HIGH",
+    "cvss": "8.6",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-918",
+    "binary": "/opt/cyops-workflow/sealab/workflow/builtins/http.so",
+    "functions": {
+        "api_call": "Public wrapper with vault decorator; params: url, method, params, body, headers, verify, username, password, auth_config",
+        "_api_call": "Internal helper that 'notably lacks the vault decorator' -- direct requests call without credential gating",
+    },
+    "signature": "docstring: ':param str url: End point to hit' -- no restrictions documented or enforced",
+    "validation": "NONE confirmed -- zero blocklist strings, zero scheme validation strings, zero private-IP check strings in binary",
+    "note": (
+        "http.so is separate from cyops_utilities.api_call (FSR-F19) and download_file_from_url (FSR-F38). "
+        "http.so is the native 'Make API Call' playbook step type exposed in the FortiSOAR workflow UI. "
+        "Any workflow author with playbook access can configure a step to reach any internal endpoint. "
+        "_api_call bypasses vault decorator -- can be invoked without credential management."
+    ),
+    "chains": {
+        "preauth_ssrf": "FSR-F52 (anonymous auth bypass) + FSR-F54: unauthenticated -> trigger workflow -> http step -> internal scan",
+        "ssti_ssrf": "FSR-F43 (SSTI via Jinja2) + FSR-F54: template injection controls url -> SSRF to cloud metadata endpoint",
+        "full_chain": "FSR-F52 + FSR-F43 + FSR-F54: pre-auth -> RCE + SSRF to 169.254.169.254 -> cloud credential theft",
+        "internal_pivot": "FSR-F54 alone: authenticated workflow user -> port scan/data exfil via http step against internal services",
+    },
+    "targets": {
+        "cloud_metadata": "http://169.254.169.254/latest/meta-data/iam/security-credentials/ (AWS IMDS)",
+        "internal_crudhub": "http://localhost:8000/api/3/ (CrudHub -- internal API not exposed externally)",
+        "internal_elasticsearch": "http://localhost:9200/_cat/indices (Elasticsearch -- FSR-F39 chain)",
+        "internal_postgres": "Not HTTP but workflow can chain to db.so builtin",
+    },
+    "status": "CONFIRMED -- no validation strings in binary; docstring confirms arbitrary url accepted; requests library used directly",
+}
+
+# FSR-F55: workflow.builtins.ssh -- AutoAddPolicy MITM + unrestricted command execution (CWE-295 / CWE-78)
+# Binary: /opt/cyops-workflow/sealab/workflow/builtins/ssh.so
+# Functions: _prepare_ssh_client, run_remote_command, run_remote_python, run_sftp_copy
+# Key evidence:
+#   - 'AutoAddPolicy' confirmed in binary (paramiko.client.AutoAddPolicy)
+#   - Docstring for run_remote_command: "There are currently no restrictions on the commands you can run, nor any..."
+#   - run_remote_python: executes arbitrary Python via exec_command on remote host
+# Distinct from FSR-F18 (SSH connector in cyops-integrations package):
+#   FSR-F18 = cyops-connector-ssh v2.1.3 (builtins.py in connector package)
+#   FSR-F55 = workflow.builtins.ssh (built-in workflow step in cyops-workflow package)
+# Impact: MITM possible against any SSH target a workflow connects to;
+#         workflow author can run any OS command on any SSH-reachable host
+FSR_F55_WORKFLOW_SSH_BUILTIN_NO_RESTRICTIONS = {
+    "id": "FSR-F55",
+    "title": "workflow.builtins.ssh -- AutoAddPolicy (no host key verification) + run_remote_command has no command restrictions",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-295",
+    "binary": "/opt/cyops-workflow/sealab/workflow/builtins/ssh.so",
+    "functions": {
+        "run_remote_command": "Executes OS command on remote SSH server; docstring: 'no restrictions on the commands you can run'",
+        "run_remote_python": "Executes arbitrary Python via exec_command on remote host",
+        "run_sftp_copy": "SFTP file copy, also uses AutoAddPolicy client",
+        "_prepare_ssh_client": "Sets up paramiko.SSHClient with AutoAddPolicy",
+    },
+    "evidence": {
+        "AutoAddPolicy": "String 'AutoAddPolicy' confirmed in binary at _prepare_ssh_client",
+        "no_restrictions_docstring": "String 'There are currently no restrictions on the commands you can run, nor any' confirmed in binary",
+        "exec_command": "String 'exec_command' confirmed in binary -- paramiko channel exec_command call",
+    },
+    "distinct_from_fsr_f18": (
+        "FSR-F18 is the cyops-connector-ssh v2.1.3 Python connector (cyops-integrations package, builtins.py). "
+        "FSR-F55 is the workflow.builtins.ssh built-in step type in cyops-workflow package (ssh.so). "
+        "Both use AutoAddPolicy; FSR-F55 additionally documents 'no restrictions' explicitly."
+    ),
+    "chains": {
+        "mitm_chain": "Attacker on network path between FortiSOAR and SSH target -> intercept ssh.so connection -> steal commands/responses",
+        "ssrf_pivot": "FSR-F54 (http SSRF) maps internal hosts -> FSR-F55 targets those hosts -> lateral movement",
+        "preauth_chain": "FSR-F52 (auth bypass) -> FSR-F43 (SSTI) -> FSR-F55 (SSH command exec on third host) = pre-auth RCE on internal SSH targets",
+    },
+    "status": "CONFIRMED -- AutoAddPolicy and no-restrictions docstring both confirmed in binary",
+}
+
+# FSR-F56: workflow.builtins.soap -- WSDL URL fetch SSRF + potential XXE (CWE-918 / CWE-611)
+# Binary: /opt/cyops-workflow/sealab/workflow/builtins/soap.so
+# SoapConnector.__init__(wsdl_path): fetches wsdl_path URL using zeep library
+# - wsdl_path is user-supplied; if controlled, = SSRF to any HTTP endpoint
+# - zeep parses WSDL XML -- if WSDL contains external entity declarations, XXE possible
+# - soap_connector and soap_call exposed as workflow step types in the playbook UI
+# - wsdl docstring: "'wsdl': '<url to the wsdl file>'" -- confirms string URL accepted
+FSR_F56_WORKFLOW_SOAP_WSDL_SSRF = {
+    "id": "FSR-F56",
+    "title": "workflow.builtins.soap.SoapConnector fetches user-supplied wsdl_path URL -- SSRF via SOAP WSDL fetch",
+    "severity": "HIGH",
+    "cvss": "7.1",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+    "cwe": "CWE-918",
+    "binary": "/opt/cyops-workflow/sealab/workflow/builtins/soap.so",
+    "functions": {
+        "SoapConnector.__init__": "Takes wsdl_path (URL string) and fetches WSDL document via zeep",
+        "soap_connector": "Workflow step type that calls SoapConnector.__init__ with host_config['wsdl']",
+        "soap_call": "Makes SOAP request to the configured endpoint",
+    },
+    "evidence": {
+        "wsdl_path_docstring": "':param str wsdl_path: url to WSDL file' + host_config example: \"'wsdl': '<url to the wsdl file>'\"",
+        "fetch_mechanism": "zeep library fetches WSDL from URL; zeep uses requests internally = same SSRF surface as http.so",
+        "no_validation": "Zero URL validation, scheme, or IP blocklist strings in binary",
+    },
+    "xxe_note": (
+        "zeep parses WSDL with lxml. If attacker controls WSDL URL and serves a WSDL with external entity: "
+        "<!DOCTYPE foo [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]>, zeep may process the entity. "
+        "Depends on zeep's XML parser configuration (defusedxml not confirmed)."
+    ),
+    "chains": {
+        "ssrf_via_wsdl": "Workflow step with wsdl='http://169.254.169.254/...' -> SSRF to cloud metadata on WSDL fetch",
+        "xxe_via_wsdl": "Attacker-controlled WSDL server returns malicious WSDL with XXE -> local file read on FortiSOAR host",
+        "combine_fsr52": "FSR-F52 (auth bypass) + FSR-F56: pre-auth SSRF via SOAP step",
+    },
+    "status": "CONFIRMED -- wsdl_path as URL confirmed in docstring; no validation strings; zeep WSDL fetch is SSRF surface",
+}
