@@ -1503,6 +1503,154 @@ rule CAT9K_F17_SUID_Runc_Dev_Build {
 }
 \end{lstlisting}
 
+% -----------------------------------------
+\subsection{CAT9K-F18: Meraki NETCONF Config Monitor --- Hardcoded \texttt{deveng} Account; SSH Key in \texttt{/tmp}; No Host Key Verification}
+% -----------------------------------------
+
+\begin{overviewbox}
+Two Meraki NETCONF monitor scripts (\path{nc_subscribe.py}, \path{nc_config_updater.py})
+hardcode \texttt{USERNAME~=~"deveng"} and store the NETCONF SSH private key at
+\path{/tmp/.shell_exec/netconf/1/users/deveng/keys/id\_rsa\_netconf}. The \texttt{/tmp}
+path is world-writable. Both scripts call \texttt{iosp\_client -f netconf\_enable\_passwordless
+global deveng} to provision a passwordless NETCONF session on port 8281. The
+\texttt{ncclient.connect()} call uses \texttt{hostkey\_verify=False}, disabling SSH host
+key verification. On Meraki-managed Cat9K devices, any local process can read or replace
+the deveng SSH key, impersonating the config monitor or receiving all NETCONF configuration
+change notifications.
+
+\href{https://cwe.mitre.org/data/definitions/798.html}{CWE-798} (Hard-coded Credentials),
+\href{https://cwe.mitre.org/data/definitions/297.html}{CWE-297} (Improper Certificate with Host Mismatch),
+\href{https://cwe.mitre.org/data/definitions/377.html}{CWE-377} (Insecure Temporary File)\\
+\textbf{CVSS~3.1:} 7.8 High \quad CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+Hardcoded username and world-writable SSH key path confirmed in both scripts.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/binos/conf/nc\_subscribe.py}
+\begin{lstlisting}[style=bash]
+# nc_subscribe.py lines 29, 42, 101-104
+USERNAME = "deveng"
+KEYFILE  = "/tmp/.shell_exec/netconf/1/users/deveng/keys/id_rsa_netconf"
+
+m = manager.connect(
+    host="127.0.0.1", port="8281", username=USERNAME,
+    key_filename=KEYFILE,
+    hostkey_verify=False,     # no SSH host key verification
+    ...
+)
+
+# Provisions passwordless account at runtime:
+subprocess.run(["iosp_client", "-f",
+                "netconf_enable_passwordless", "global", USERNAME])
+
+# nc_config_updater.py: identical USERNAME, KEYFILE, hostkey_verify=False
+# Also writes CONFIG_MODEL_XPATHS_PATH = "/tmp/confd/ndbman_config_xpaths"
+# (world-writable; controls YANG paths uploaded to Meraki Dashboard)
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item Any local process can read the deveng SSH key from \texttt{/tmp} and connect to
+    NETCONF on \texttt{127.0.0.1:8281}, receiving all configuration change notifications
+    for the entire switch in real time.
+  \item \texttt{hostkey\_verify=False} allows MITM interception (e.g., via namespace
+    manipulation or LD\_PRELOAD socket intercept) between the Python client and the
+    local NETCONF server without detection.
+  \item Writing to \texttt{/tmp/confd/ndbman\_config\_xpaths} suppresses or injects
+    YANG config model XPaths, controlling what configuration is visible to Meraki Dashboard.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F18_Meraki_Deveng_Hardcoded_NETCONF {
+    meta:
+        description = "Hardcoded deveng account; NETCONF SSH key in world-writable /tmp"
+        id = "CAT9K-F18"
+        severity = "High"
+    strings:
+        $user    = "USERNAME = \"deveng\"" ascii
+        $keyfile = "/tmp/.shell_exec/netconf" ascii
+        $nohost  = "hostkey_verify=False" ascii
+    condition:
+        all of them
+}
+\end{lstlisting}
+
+% -----------------------------------------
+\subsection{CAT9K-F19: \texorpdfstring{\texttt{xcopy\_script.sh}}{xcopy\_script.sh} Falls Back to \texttt{curl~-k} on TLS Error; Meraki Mode Defaults to \texttt{-k}}
+% -----------------------------------------
+
+\begin{overviewbox}
+The IOS-XE \texttt{copy} command backend (\path{xcopy\_script.sh}) falls back to
+\texttt{curl -k} (certificate verification disabled) on any SSL certificate error, logging
+only a warning. In Meraki managed mode, \texttt{CURLFLAGS="-k"} is set unconditionally
+(line~708), meaning all Meraki firmware and configuration downloads bypass TLS server
+authentication. The Meraki CA bundle includes a certificate that expired in July 2020,
+which can trigger cert validation failures and activate the insecure fallback on devices
+using the old CA for trust anchoring.
+
+\href{https://cwe.mitre.org/data/definitions/295.html}{CWE-295} (Improper Certificate Validation),
+\href{https://cwe.mitre.org/data/definitions/757.html}{CWE-757} (Selection of Less-Secure Algorithm During Negotiation)\\
+\textbf{CVSS~3.1:} 7.4 High \quad CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N
+\end{overviewbox}
+
+\subsubsection{Technical Evidence}
+
+Two code paths confirm unconditional or fallback TLS bypass.
+
+\begin{pocbox}{Confirmed via Static Analysis of IOS-XE 17.18.04 bigbang/usr/binos/conf/xcopy\_script.sh}
+\begin{lstlisting}[style=bash]
+# Line 59: Meraki CA bundle includes expired cert
+readonly MERAKI_CA_CERT_FILE="/usr/binos/conf/meraki/ssl/meraki-ca.crt"
+# Bundle cert 1: CN=Meraki Certificate Authority, notAfter=2020-07-22 (EXPIRED)
+# Bundle cert 2: CN=Meraki Private Config Root CA, notAfter=2037-01-20
+
+# Line 490: fallback on any SSL error
+# "falling back to insecure mode for downloading"
+CURLFLAGS="$CURLFLAGS"" -k "   # cert verification disabled -- no MITM protection
+
+# Line 708: Meraki download path -- -k by default, no error required
+CURLFLAGS="-k "
+
+# Attack: MITM between Cat9K and firmware server
+# Present invalid cert -> curl retries with -k -> accepts attacker-served firmware
+\end{lstlisting}
+\end{pocbox}
+
+\subsubsection{Impact}
+
+\begin{itemize}[nosep]
+  \item A network-position attacker (ARP spoof, rogue DHCP, route injection) can serve
+    a malicious firmware image or IOS-XE configuration that is installed without
+    integrity verification.
+  \item In Meraki managed mode, all Meraki Dashboard firmware and config pushes bypass
+    TLS server authentication unconditionally (\texttt{-k} by default).
+  \item The warning log message is not surfaced as a failure to the network operator:
+    the copy operation reports \texttt{success\_warning} status.
+\end{itemize}
+
+\subsubsection{Detection: YARA Rule}
+
+\begin{lstlisting}[style=yara]
+rule CAT9K_F19_Xcopy_TLS_Bypass_Fallback {
+    meta:
+        description = "xcopy curl -k fallback on TLS error; Meraki defaults insecure"
+        id = "CAT9K-F19"
+        severity = "High"
+    strings:
+        $fallback = "falling back to insecure mode for downloading" ascii
+        $flag_k   = "CURLFLAGS=\"-k " ascii
+        $merakica = "meraki-ca.crt" ascii
+    condition:
+        2 of them
+}
+\end{lstlisting}
+
 % =============================================================
 \section{CWE Glossary}
 % =============================================================
@@ -1523,6 +1671,10 @@ rule CAT9K_F17_SUID_Runc_Dev_Build {
     & Improper Privilege Management & F3, F4, F8, F10, F14, F15, F16, F17 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/290.html}{CWE-290}
     & Authentication Bypass by Spoofing & F9 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/295.html}{CWE-295}
+    & Improper Certificate Validation & F19 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/297.html}{CWE-297}
+    & Improper Validation of Certificate with Host Mismatch & F18 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/306.html}{CWE-306}
     & Missing Authentication for Critical Function & F2, F4, F13 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/312.html}{CWE-312}
@@ -1534,7 +1686,7 @@ rule CAT9K_F17_SUID_Runc_Dev_Build {
   \href{https://cwe.mitre.org/data/definitions/362.html}{CWE-362}
     & Race Condition (Concurrent Execution) & F14 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/377.html}{CWE-377}
-    & Insecure Temporary File & F14 \\[0.3em]
+    & Insecure Temporary File & F14, F18 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/403.html}{CWE-403}
     & Exposure of File Descriptor to Unintended Control Sphere & F17 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/489.html}{CWE-489}
@@ -1545,8 +1697,10 @@ rule CAT9K_F17_SUID_Runc_Dev_Build {
     & Insertion of Sensitive Information into Log File & F6 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/732.html}{CWE-732}
     & Incorrect Permission Assignment for Critical Resource & F2, F3, F5 \\[0.3em]
+  \href{https://cwe.mitre.org/data/definitions/757.html}{CWE-757}
+    & Selection of Less-Secure Algorithm During Negotiation & F19 \\[0.3em]
   \href{https://cwe.mitre.org/data/definitions/798.html}{CWE-798}
-    & Use of Hard-coded Credentials & F1 \\
+    & Use of Hard-coded Credentials & F1, F18 \\
 \end{longtable}
 
 % =============================================================

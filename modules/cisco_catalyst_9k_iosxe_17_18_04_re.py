@@ -859,6 +859,139 @@ CAT9K_F17 = {
 }
 
 
+# CAT9K-F18: Meraki NETCONF config monitor: hardcoded "deveng" account, SSH key in /tmp, no host key verification
+CAT9K_F18 = {
+    "id":       "CAT9K-F18",
+    "title":    "Meraki NETCONF config monitor scripts (nc_subscribe.py, nc_config_updater.py) "
+                "hardcode USERNAME=\"deveng\" for NETCONF sessions; SSH private key stored at "
+                "/tmp/.shell_exec/netconf/1/users/deveng/keys/id_rsa_netconf (world-writable /tmp); "
+                "ncclient.connect() uses hostkey_verify=False; iosp_client provisions a "
+                "passwordless account; port 8281 opened for passwordless NETCONF access "
+                "on Meraki-managed devices; CONFIG_MODEL_XPATHS_PATH at /tmp/confd/ndbman_config_xpaths "
+                "(world-writable) controls which YANG paths are synced to Meraki cloud",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — bigbang/usr/binos/conf/nc_subscribe.py and nc_config_updater.py "
+                "both contain USERNAME = \"deveng\" at line 29 and 41 respectively; "
+                "KEYFILE = \"/tmp/.shell_exec/netconf/%s/users/%s/keys/id_rsa_netconf\" % (VRF, USERNAME); "
+                "ncclient.manager.connect(..., hostkey_verify=False) confirmed in both files; "
+                "iosp_client call: subprocess.run([\"iosp_client\", \"-f\", "
+                "\"netconf_enable_passwordless\", \"global\", USERNAME]) confirmed; "
+                "meraki_switching_common.lua:120 confirms \"Opening port 8281 for passwordless netconf access\"",
+    "cwe":      ["CWE-798 (Use of Hard-coded Credentials)",
+                 "CWE-297 (Improper Validation of Certificate with Host Mismatch)",
+                 "CWE-377 (Insecure Temporary File)"],
+    "files":    ["bigbang/usr/binos/conf/nc_subscribe.py",
+                 "bigbang/usr/binos/conf/nc_config_updater.py",
+                 "bigbang/usr/binos/conf/meraki/ssl/meraki-ca.crt"],
+    "hardcoded_account": "deveng",
+    "netconf_port":      "8281 (127.0.0.1, passwordless when Meraki mode active)",
+    "keyfile_path":      "/tmp/.shell_exec/netconf/1/users/deveng/keys/id_rsa_netconf",
+    "config_xpaths_path": "/tmp/confd/ndbman_config_xpaths",
+    "trigger_code": [
+        "# nc_subscribe.py lines 29, 42, 101-104",
+        "USERNAME = \"deveng\"",
+        "KEYFILE = \"/tmp/.shell_exec/netconf/%s/users/%s/keys/id_rsa_netconf\" % (VRF, USERNAME)",
+        "m = manager.connect(host=\"127.0.0.1\", port=\"8281\", username=USERNAME,",
+        "                    key_filename=KEYFILE, hostkey_verify=False, ...)",
+        "result = subprocess.run([\"iosp_client\", \"-f\",",
+        "                         \"netconf_enable_passwordless\", \"global\", USERNAME])",
+    ],
+    "attack_path": [
+        "1. On any Meraki-managed Cat9K, iosp_client provisions deveng as a passwordless NETCONF user",
+        "2. SSH private key written to /tmp/.shell_exec/netconf/1/users/deveng/keys/id_rsa_netconf",
+        "3. Any local process can read (or replace) the key in /tmp",
+        "4. Read key: impersonate nc_subscribe.py, connect to local NETCONF, receive all config notifications",
+        "5. Replace key: next nc_subscribe.py connection uses attacker's key, script fails silently",
+        "6. /tmp/confd/ndbman_config_xpaths world-writable: inject or remove YANG xpaths to control",
+        "   what config models are uploaded to Meraki Dashboard",
+    ],
+    "impact": (
+        "In Meraki-managed mode, any process with local filesystem access can read the deveng "
+        "NETCONF SSH key from /tmp and connect to the local NETCONF session on 127.0.0.1:8281 "
+        "to receive real-time configuration change notifications for the entire switch. "
+        "hostkey_verify=False means a MITM attack between the Python script and the local "
+        "NETCONF server (e.g., via LD_PRELOAD socket interception or namespace manipulation) "
+        "receives all NETCONF traffic without detection. The /tmp/confd/ndbman_config_xpaths "
+        "file controls which YANG config models are uploaded to Meraki Dashboard; writing "
+        "to this file can selectively suppress config telemetry to the management plane. "
+        "Two Meraki CA certs are embedded: the first (CN=Meraki Certificate Authority) "
+        "expired 2020-07-22; the second (CN=Meraki Private Config Root CA) is valid to 2037."
+    ),
+    "note": "nc_subscribe.py and nc_config_updater.py implement the Meraki SD-WAN config "
+            "monitoring path: they subscribe to NETCONF notifications from ConfD and forward "
+            "config change events to meraki_mgrd via a SEQPACKET Unix socket. The deveng "
+            "account is an internal service account created by iosp_client at runtime, not "
+            "a persistent /etc/passwd entry. The hardcoded username means any future deveng "
+            "account with any credential set can be used to access NETCONF on port 8281.",
+}
+
+# CAT9K-F19: xcopy_script.sh TLS certificate validation bypass (curl -k fallback)
+CAT9K_F19 = {
+    "id":       "CAT9K-F19",
+    "title":    "xcopy_script.sh (IOS-XE copy command backend) falls back to curl -k "
+                "(TLS certificate verification disabled) on any SSL certificate error; "
+                "Meraki managed mode starts with CURLFLAGS=\"-k\" (no TLS from the start); "
+                "Meraki CA bundle includes a cert expired 2020-07-22 that can trigger "
+                "cert validation failures and activate the insecure fallback path",
+    "severity": "HIGH",
+    "status":   "CONFIRMED — bigbang/usr/binos/conf/xcopy_script.sh line 490: "
+                "CURLFLAGS=\"$CURLFLAGS\"\" -k \" added on ssl cert error; "
+                "line 708: CURLFLAGS=\"-k \" in Meraki download path; "
+                "MERAKI_CA_CERT_FILE=\"/usr/binos/conf/meraki/ssl/meraki-ca.crt\" at line 59; "
+                "openssl x509 confirms first cert in bundle expired notAfter=Jul 22 21:09:25 2020 GMT; "
+                "second cert (Meraki Private Config Root CA) valid 2017-2037",
+    "cwe":      ["CWE-295 (Improper Certificate Validation)",
+                 "CWE-757 (Selection of Less-Secure Algorithm During Negotiation)"],
+    "files":    ["bigbang/usr/binos/conf/xcopy_script.sh",
+                 "bigbang/usr/binos/conf/meraki/ssl/meraki-ca.crt"],
+    "expired_cert": {
+        "subject":  "CN=Meraki Certificate Authority, O=Meraki Inc, OU=Network Operations",
+        "issuer":   "self-signed",
+        "serial":   "B3D533A29BD31BAF",
+        "not_after": "2020-07-22T21:09:25Z",
+        "status":   "EXPIRED (4 years as of firmware release 17.18.04 / 2024)",
+    },
+    "trigger_code": [
+        "# xcopy_script.sh line 490",
+        "CURLFLAGS=\"$CURLFLAGS\"\" -k \"  # added on SSL cert error: no TLS verification",
+        "",
+        "# xcopy_script.sh line 708 (Meraki download path)",
+        "CURLFLAGS=\"-k \"  # TLS disabled from start in Meraki mode",
+    ],
+    "attack_path": [
+        "Network MITM attack on IOS-XE firmware/config copy operations:",
+        "1. Position attacker between Cat9K and download server (ARP spoof, route injection, rogue AP)",
+        "2. Present an invalid or self-signed TLS certificate for the download server",
+        "3. xcopy_script.sh receives SSL error, re-executes curl with -k flag",
+        "4. curl downloads firmware/config with no TLS verification from attacker-controlled server",
+        "5. Malicious firmware or config is installed; no integrity check at this layer",
+        "",
+        "Meraki mode path (line 708):",
+        "1. Meraki managed mode activates -k by default, no cert error required",
+        "2. All Meraki firmware/config downloads bypass TLS verification entirely",
+    ],
+    "impact": (
+        "The IOS-XE `copy` command (used for firmware updates, config backups, SCP/TFTP/HTTPS "
+        "file transfers) falls back to unverified TLS on any certificate error. This enables "
+        "MITM interception of firmware downloads: an attacker with network access between the "
+        "Cat9K device and the download server can serve a malicious firmware image. "
+        "In Meraki managed mode, the -k flag is active unconditionally, meaning all Meraki "
+        "cloud downloads (firmware updates, config pushes from Dashboard) occur with no "
+        "server authentication. Combined with the expired Meraki CA cert (2020) in the trust "
+        "bundle, legitimate cert errors on the Meraki CA-signed endpoints are guaranteed to "
+        "trigger the fallback on devices where the first CA is used for verification."
+    ),
+    "note": "The btrace log message on the fallback path reads: "
+            "'Warning curl error = $my_status: Peer certificate cannot be authenticated with "
+            "known CA certificates, falling back to insecure mode for downloading'. "
+            "This is logged but not surfaced as a failure to the operator. "
+            "The expired CA cert (B3D533A29BD31BAF) was valid 2013-2020 and was likely "
+            "Meraki's original infrastructure CA. Its presence in a firmware released in "
+            "2024 indicates incomplete trust store hygiene. "
+            "The Meraki Private Config Root CA (valid 2037) is the replacement.",
+}
+
+
 FINDINGS = [
     CAT9K_F1,
     CAT9K_F2,
@@ -877,12 +1010,14 @@ FINDINGS = [
     CAT9K_F15,
     CAT9K_F16,
     CAT9K_F17,
+    CAT9K_F18,
+    CAT9K_F19,
 ]
 
 SUMMARY = {
-    "total": 17,
+    "total": 19,
     "critical": 3,
-    "high":     10,
+    "high":     12,
     "medium":   3,
     "low":      1,
     "by_id": [f["id"] for f in FINDINGS],
