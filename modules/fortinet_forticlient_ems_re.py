@@ -1384,6 +1384,127 @@ EMS_F19_PORT8013_CERT_REUSE = {
 
 
 # ---------------------------------------------------------
+# EMS-F20: ztnaworker.exe -- Two gRPC connections use grpc.WithInsecure (no TLS)
+# ---------------------------------------------------------
+EMS_F20_ZTNA_GRPC_INSECURE = {
+    "id":       "EMS-F20",
+    "title":    "ztnaworker.exe establishes two gRPC connections without TLS via grpc.WithInsecure",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 7.4,
+    "cwe":      "CWE-319 (Cleartext Transmission of Sensitive Information)",
+    "status":   "CONFIRMED -- disassembly of NewGrpcConnPool and getForensicsWorkerConnSafely.func1",
+
+    "binary":   "ztnaworker.exe (PE32+ Go, 34MB, port 9990)",
+
+    "locations": {
+        "ec_dispatcher_pool": {
+            "symbol":  "fortinet.com/ems/service/ec/dispatcher.NewGrpcConnPool",
+            "va":      "0x011a0ca0",
+            "call_va": "0x011a0d56",
+            "pattern": (
+                "Loop: for i := 0; i < pool_size; i++. Each iteration calls grpc.WithInsecure(), "
+                "then retry.WithMax(9), retry.WithCodes, retry.UnaryClientInterceptor. "
+                "Entire EC (endpoint compliance) dispatcher pool uses no TLS."
+            ),
+        },
+        "forensics_worker": {
+            "symbol":  "fortinet.com/ems/service.(*KeepAliveService).getForensicsWorkerConnSafely.func1",
+            "va":      "0x012e8320",
+            "call_va": "0x012e8358",
+            "pattern": (
+                "Reads host address from struct at offsets +0x68/+0x70 (host string). "
+                "Calls grpc.WithInsecure() immediately followed by grpc.Dial(host, insecure_opt). "
+                "No TLS on forensics worker connection."
+            ),
+        },
+    },
+
+    "impact": (
+        "ZTNA endpoint compliance (EC) dispatcher and forensics worker both use plaintext gRPC. "
+        "An attacker on the same network segment (or with ARP/DNS control) can: "
+        "(1) read ZTNA posture tags and endpoint compliance data in cleartext; "
+        "(2) inject forged gRPC frames to alter compliance state or trigger forensics commands; "
+        "(3) replay valid compliance frames to impersonate compliant endpoints."
+    ),
+
+    "note": (
+        "grpc.WithInsecure is deprecated since gRPC-Go 1.44 (2022). Its presence with no "
+        "grpc.WithTransportCredentials fallback confirms zero TLS on these paths. "
+        "Combined with EMS-F19 (hardcoded cert on port 8013), full ZTNA enforcement path has no "
+        "meaningful TLS trust anchor."
+    ),
+
+    "evidence": {
+        "grpc_WithInsecure_va":          "0x00e8d000",
+        "insecure_NewCredentials_va":     "0x00e00dc0",
+        "insecure_OverrideServerName_va": "0x00e010c0",
+        "OverrideServerName_body":        "xor eax,eax; xor ebx,ebx; ret -- pure NOP, always returns nil",
+        "callers_of_WithInsecure":        ["0x011a0d56 (NewGrpcConnPool)", "0x012e8358 (getForensicsWorkerConnSafely.func1)"],
+    },
+}
+
+
+# ---------------------------------------------------------
+# EMS-F21: ztnaworker.exe -- TagService.Tag processes ZTNA posture tags without origin verification
+# ---------------------------------------------------------
+EMS_F21_TAG_NO_HMAC = {
+    "id":       "EMS-F21",
+    "title":    "ztnaworker.exe TagService.Tag accepts ZTNA posture tags without cryptographic origin verification",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+    "cvss_score": 7.5,
+    "cwe":      "CWE-345 (Insufficient Verification of Data Authenticity)",
+    "status":   "CONFIRMED (no HMAC visible) -- 200+ instructions of TagService.Tag analyzed; no signature check found",
+
+    "binary":   "ztnaworker.exe (PE32+ Go, 34MB, port 9990)",
+
+    "grpc_surface": {
+        "service":   "fortinet.com/ems/internal/pb.TagServiceServer",
+        "handler":   "pb._TagService_Tag_Handler (va=0x011d7e60) -- gRPC dispatcher",
+        "impl":      "service.(*TagService).Tag (va=0x0131fbe0) -- actual tag processing",
+        "transport": "gRPC over TLS port 9990 (ecsocksrv forwards here from FortiClient)",
+    },
+
+    "analysis": {
+        "prologue": (
+            "service.(*TagService).Tag allocates 0x948 bytes stack frame. "
+            "First call (0x43f9e0) = runtime.deferprocStack -- pushes recover() defer. "
+            "Two interface dispatch calls (call rcx via [rcx+0x28]) are context operations, "
+            "NOT auth checks -- pattern matches ctx.Value() / metadata extraction."
+        ),
+        "processing_body": (
+            "At 0x131fdb6 (success path): reads TagRequest.field_0x28 (string), calls strings.ToUpper, "
+            "calls setDefaultVdomIfEmpty (fortinet.com/ems/service.setDefaultVdomIfEmpty = va 0x12e9940), "
+            "calls log.Debug for field logging. "
+            "No HMAC computation, no signature verify, no token check observed before field access."
+        ),
+        "missing_checks": [
+            "No call to crypto/hmac.*",
+            "No call to crypto/sha256.*",
+            "No JWT verify in TagService.Tag body",
+            "No peer certificate check against expected client identity",
+            "setDefaultVdomIfEmpty accepts VDOM from TagRequest without validation",
+        ],
+    },
+
+    "impact": (
+        "Attacker who can reach port 9990 (or who controls ecsocksrv via EMS-F19 MITM) can submit "
+        "a crafted gRPC TagRequest with a forged VDOM assignment or posture tag. "
+        "If accepted, the forged tag alters ZTNA policy enforcement state for the targeted endpoint "
+        "without the endpoint actually passing posture checks."
+    ),
+
+    "caveat": (
+        "Auth may be enforced by a gRPC interceptor registered in NewTagService/RegisterTagServiceServer. "
+        "NewTagService (va=0x0131f5c0) takes 9 args -- some may be interceptors. "
+        "Full confirmation requires tracing the interceptor chain from RegisterTagServiceServer. "
+        "Absent interceptor proof, this is CONFIRMED-PROBABLE."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # Pending analysis (UPDATED)
 # ---------------------------------------------------------
 PENDING = [
@@ -1399,7 +1520,7 @@ PENDING = [
     "EMS-F13: Determine regPwd semantics -- AD machine account password vs EMS-issued shared secret vs per-device",
     "EMS-F14: Confirm rogue EMS auth redirect on live instance -- does FortiClient accept authSAMLURL from server",
     "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path in socket_server.go",
-    "ztnaworker.exe RE: ZTNA-specific attack surface (port 9990, receives from ecsocksrv with forged cert)",
+    "ztnaworker.exe RE: COMPLETE for EMS-F20/F21 -- remaining: trace gRPC interceptor chain from RegisterTagServiceServer to confirm/deny TagService auth; trace NewGrpcConnPool target host to identify what it connects to",
     "sipdaemon.exe RE: SIP daemon (signatures/07002000/pua.dat) attack surface",
 
     # Django application RE
