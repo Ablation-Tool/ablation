@@ -2956,7 +2956,19 @@ FSR_F43_JINJA2_SSTI_UNSANDBOXED = {
         "is exploitable. Workflow steps include: action steps, condition steps, data transform "
         "steps, notification steps, and IRI-referenced template steps."
     ),
-    "status": "CONFIRMED -- unsandboxed jinja2 import confirmed, readfile filter confirmed, DELEGATE delegation confirmed in _execute_step.isra.55",
+    "evaluated_field_scope": {
+        # From _execute_step.isra.55 BSS accesses (87 unique slots):
+        # input at 0x92361, args at 0x90898 -- step input/args fields
+        # expand at 0x9b1e3 -- Environment.expand = actual Jinja2 template expansion call
+        # IGNORE_EVAL_INPUT_LIST at 0xa1b22 -- whitelist of fields that skip evaluation
+        # DELEGATE_JINJA_EVAL_TO_FUNC at 0xa5564 -- delegation point to jinja.so environment
+        # step_variables at 0xa480b -- step variables accessible in template context
+        # env at 0x9d4c5 -- full environment dict passed to template
+        "fields_evaluated": "All step 'input' and 'args' fields processed through Environment.expand (Jinja2) except those in IGNORE_EVAL_INPUT_LIST",
+        "template_context": "Template has access to 'env' dict (full environment), 'step_variables', 'result' from prior steps",
+        "step_types": "All step types using FUNCTION_MAP (action, condition, transform, notification, etc.) pass through evaluation path",
+    },
+    "status": "CONFIRMED -- unsandboxed jinja2 import confirmed, readfile filter confirmed, DELEGATE delegation confirmed in _execute_step.isra.55; evaluated field scope: input/args via Environment.expand",
 }
 
 FSR_F44_READFILE_LFI_JINJA_FILTER = {
