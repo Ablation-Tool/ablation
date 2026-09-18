@@ -2916,6 +2916,15 @@ FSR_F43_JINJA2_SSTI_UNSANDBOXED = {
         "readfile_registered": "0xa1c6 in __pyx_pymod_exec_jinja: 'readfile' registered as Jinja2 filter",
         "yaql_registered": "0x9fcb in __pyx_pymod_exec_jinja: 'yaql' YAQL expression evaluator registered",
         "global_functions": "0x9d9e: global_functions dict registered (resolveIRI, loadRelationships, fromIRI, picklist etc)",
+        # settings.py lines 331-341 (TEMPLATES config):
+        #   'NAME': 'jinja2',
+        #   'BACKEND': 'django.template.backends.jinja2.Jinja2',
+        #   'environment': 'sealab.jinja.environment',  <-- THE unsandboxed env
+        #   'extensions': ['jinja2.ext.loopcontrols', 'jinja2.ext.do'],
+        #   'undefined': ChainableUndefined ...
+        "django_templates_config": "settings.py L337: TEMPLATES['environment']='sealab.jinja.environment' -- ALL Django template rendering uses this unsandboxed env",
+        "jinja2_do_extension": "settings.py L338: jinja2.ext.do extension loaded -- allows arbitrary statement execution in templates",
+        "chainable_undefined": "settings.py L339: ChainableUndefined -- attribute access on undefined variables silent (enables injection chaining)",
     },
     "attack_vector": (
         "Authenticated user creates/edits workflow step with Jinja2 expression in any evaluated field. "
@@ -2927,12 +2936,19 @@ FSR_F43_JINJA2_SSTI_UNSANDBOXED = {
         "Or {{vars()|yaql(expression='...')}} for YAQL injection."
     ),
     "lfi_targets": [
+        "/opt/cyops-workflow/sealab/.envdir/APPLIANCE_PRIVATE_KEY -- RSA private key for inter-service auth (sign any inter-svc request)",
+        "/opt/cyops-workflow/sealab/.envdir/SEALAB_PRIVATE_KEY -- Sealab workflow RSA private key",
         "/etc/pki/cyops/jwtprivate.key -- JWT RSA private key (sign arbitrary tokens)",
-        "/opt/cyops-workflow/sealab/workflow/PasswordModule.so -- extract AES keys",
-        "/opt/cyops/conf/.cyops -- appliance private key location",
+        "/opt/cyops-workflow/sealab/workflow/PasswordModule.so -- extract AES keys (binary)",
         "/etc/shadow -- password hashes",
         "/root/.ssh/id_rsa -- root SSH key if present",
     ],
+    "key_env_dir": (
+        "settings.py L136-141: ENV_DIR = BASE_DIR/.envdir. Keys loaded by reading each file in .envdir/ "
+        "where filename = env var name, content = value. "
+        "APPLIANCE_PRIVATE_KEY content = /opt/cyops-workflow/sealab/.envdir/APPLIANCE_PRIVATE_KEY (plaintext RSA key). "
+        "Readable via {{ '/opt/cyops-workflow/sealab/.envdir/APPLIANCE_PRIVATE_KEY' | readfile }} in any template."
+    ),
     "note": (
         "The DELEGATE_JINJA_EVAL_TO_FUNC pattern is a design-level abstraction that decouples "
         "template evaluation from step execution -- the delegation makes the injection surface "
@@ -2959,11 +2975,13 @@ FSR_F44_READFILE_LFI_JINJA_FILTER = {
     },
     "attack": (
         "In any workflow step with evaluated template field: "
+        "{{'\\'/opt/cyops-workflow/sealab/.envdir/APPLIANCE_PRIVATE_KEY\\' | readfile}} reads RSA private key. "
         "{{'\\'/etc/pki/cyops/jwtprivate.key\\' | readfile}} reads JWT signing key. "
         "Chained with FSR-F43 (SSTI) but exploitable without class traversal. "
         "Runs as cyops-workflow process user."
     ),
-    "status": "CONFIRMED -- filter registration confirmed in __pyx_pymod_exec_jinja",
+    "key_dir": "/opt/cyops-workflow/sealab/.envdir/ (from settings.py ENV_DIR = BASE_DIR/.envdir)",
+    "status": "CONFIRMED -- filter registration confirmed in __pyx_pymod_exec_jinja; key path confirmed in settings.py",
 }
 
 FSR_F45_REMOTE_WORKFLOW_REFERENCE_SSRF = {
@@ -2995,11 +3013,18 @@ FSR_F45_REMOTE_WORKFLOW_REFERENCE_SSRF = {
         "fetch_workflow": "fetch_workflow at 0x536a0 (16328B) -- HTTP client for IRI fetch, imports 'requests' (via sealab_utils)",
     },
     "attack": (
-        "Workflow step type 'remote_workflow_reference' accepts user-supplied IRI as workflowReference. "
-        "eval.so remote_workflow_reference.isra.68 fetches this IRI via requests (HTTP client). "
-        "No scheme restriction seen -- allows http://, file://, ftp:// schemes. "
-        "SSRF targets: internal AWS metadata (169.254.169.254), internal services, file:// for LFI. "
-        "Combined with FSR-F43 (SSTI): fetch malicious Jinja2 template from attacker-controlled IRI -> RCE."
+        "REVISED: remote_workflow_reference.isra.68 publishes to RabbitMQ queue for async workflow execution "
+        "(BSS slot RMQ_PUBLISHER confirmed). "
+        "fetch_workflow (0x536a0) queries CRUD_HUB_URL (internal) with workflow_iri as parameter -- "
+        "NOT a direct HTTP fetch to user IRI. "
+        "APPLIANCE_PRIVATE_KEY used to sign the internal POST to CRUD_HUB_URL (BSS 0x53ea7). "
+        "Reduced SSRF: user-supplied IRI passed to internal service, not fetched directly. "
+        "SSRF may exist at CRUD hub layer if it fetches external IRIs -- requires crudhub.so analysis."
     ),
-    "status": "CONFIRMED via BSS analysis and semantic sweep -- full fetch chain pending disasm of fetch_workflow internals",
+    "key_finding": (
+        "fetch_workflow uses APPLIANCE_PRIVATE_KEY (from .envdir/) to sign inter-service POST to CRUD_HUB_URL. "
+        "If APPLIANCE_PRIVATE_KEY extracted via FSR-F44 (readfile LFI), attacker can forge inter-service auth "
+        "and make arbitrary signed requests to CRUD hub as the workflow service."
+    ),
+    "status": "REVISED -- not direct SSRF to user IRI; fetch_workflow signs internal request with APPLIANCE_PRIVATE_KEY; key extractable via FSR-F44",
 }
