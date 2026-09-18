@@ -3633,6 +3633,14 @@ FSR_F58_FILES_CONTROLLER_SVG_XSS = {
         "preauth_chain": "FSR-F52 (auth bypass) -> FSR-F58: unauthenticated upload of malicious SVG -> stored XSS payload planted",
     },
     "status": "CONFIRMED -- PHP source shows getClientMimeType() at both restriction check and setMimeType(); getRestrictedMimeTypeList() confirmed to return empty array when SystemSettings not configured",
+    "version_check_767": {
+        "status": "UNFIXED in 7.6.7 -- confirmed from 7.6.7 FilesController.php source",
+        "7.6.7_changes": "7.6.7 added validateMimeTypeRestrictions() checking clientMimeType + getMimeType() + detectMimeType() all against getRestrictedMimeTypeList() -- still empty by default",
+        "7.6.7_worsened": "parameters_prod.yaml line 143-144: allowed_image_mime_type explicitly includes 'image/svg' and 'image/svg+xml' -- SVG is WHITELISTED for Image resource uploads in 7.6.7",
+        "7.6.7_setMimeType": "Line 231 and 267 still use $file->setMimeType($upload->getClientMimeType()) -- client MIME still stored",
+        "7.6.7_download": "Line 111 still uses $response->headers->set('Content-Type', $file->getMimeType()) -- stored MIME served on download",
+        "config_path": "/opt/cyops-api/config/parameters_prod.yaml -- allowed_image_mime_type: ['image/svg', 'image/svg+xml']",
+    },
 }
 
 # FSR-F59: PublicActionController.php -- unconditional X-Forwarded-For trust + DAS loginId URL injection (CWE-348 / CWE-88)
