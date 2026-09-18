@@ -4042,3 +4042,99 @@ FSR_F65_CONNECTOR_CONFIG_JINJA2_SSTI = {
     },
     "status": "CONFIRMED -- 'Error while evaluating jinja template for config %s' and docstring from _expand present in connectors/utils.so binary strings; 'builtins' present; no SandboxedEnvironment found",
 }
+
+# FSR-F66: AgentController server-side decryption oracle + FSR-F61 key in PHP API source (CWE-321)
+# Source: /opt/cyops-api/src/Controller/AgentController.php (7.6.7)
+# Evidence:
+#   - Line 186: new Process(['python3', MANAGE_PWD, '--decrypt', $password, 'jQp3(7@jod#j38d1'])
+#   - $password = $decodedRequestData['password'] from POST body (user-controlled)
+#   - MANAGE_PWD = '/opt/cyops/scripts/manage_passwords.py'
+# Attack model:
+#   1. Attacker has 'agents:create' permission (admin or operator role)
+#   2. POST /api/3/agents with {"password": "<any_AES-128-CFB_ciphertext>"}
+#   3. prePostAdd() calls getAgentPassword($password)
+#   4. Server executes: python3 manage_passwords.py --decrypt <attacker_ciphertext> jQp3(7@jod#j38d1
+#   5. Returns decrypted plaintext in response
+# Impact: Decryption oracle for FSR-F61 key -- any encrypted credential stored in FortiSOAR
+#   databases can be decrypted without extracting the binary key
+# DoS note: getAgentPassword has retry loop with sleep(6) * 5 retries = 30 seconds of thread
+#   blocking per request; no apparent rate limiting -> thread exhaustion if flooded
+# Third occurrence of jQp3 key (after auth binary and integrations binary) -- FSR-F61 scope extended to API layer
+FSR_F66_AGENT_DECRYPTION_ORACLE = {
+    "id": "FSR-F66",
+    "title": "AgentController exposes server-side AES decryption oracle via user-controlled 'password' field in agent create/update + hardcoded FSR-F61 key in PHP source",
+    "severity": "HIGH",
+    "cvss": "6.8",
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:N/A:L",
+    "cwe": "CWE-321",
+    "source_file": "/opt/cyops-api/src/Controller/AgentController.php",
+    "key_in_source": {
+        "file": "AgentController.php:186",
+        "value": "jQp3(7@jod#j38d1",
+        "context": "new Process(['python3', self::MANAGE_PWD, '--decrypt', $password, 'jQp3(7@jod#j38d1'])",
+    },
+    "oracle_mechanism": {
+        "endpoint": "POST /api/3/agents (agent create) or PUT /api/3/agents/{id} (agent update)",
+        "field": "password",
+        "flow": "prePostAdd($data) -> getAgentPassword($data['password']) -> Process(['python3', manage_passwords.py, '--decrypt', $user_input, 'jQp3(7@jod#j38d1']) -> returns plaintext",
+        "permission_required": "PERM_CRUD_CREATE.agents or PERM_CRUD_UPDATE.agents (admin/operator level)",
+    },
+    "dos_amplifier": {
+        "description": "getAgentPassword() retries decrypt up to 5 times with sleep(6) between each: 30 seconds of thread blocking per request",
+        "vector": "Concurrent flood of agent create requests with passwords triggers thread exhaustion at 30s/thread",
+        "rate_limit": "No rate limit observed in controller",
+    },
+    "fsr_f61_scope_extension": "Third occurrence of key jQp3(7@jod#j38d1 beyond cyops-auth binaries and cyops-integrations -- now confirmed in cyops-api PHP source; key spans all 4 service tiers",
+    "chains": {
+        "credential_decrypt": "Operator/admin role -> POST agent with ciphertext from DB backup or log -> server decrypts -> plaintext credential returned",
+        "f61_oracle": "FSR-F61 (any encrypted blob in FortiSOAR DBs) -> FSR-F66 oracle -> plaintext without needing direct key extraction",
+    },
+    "status": "CONFIRMED -- key 'jQp3(7@jod#j38d1' found at AgentController.php:186; user-controlled $password flows to Process --decrypt call with hardcoded key",
+}
+
+# FSR-F67: AdvancedQueryController aggregate query bypasses field-level access control (CWE-284)
+# Source: /opt/cyops-api/src/Controller/AdvancedQueryController.php (7.6.7)
+# Evidence:
+#   - applyQuery() (line 66): checks only PERM_CRUD_READ -- no field-level permission check
+#   - queryAssociationAction() (line 137): checks PERM_FIELD_READ . '.' . $module . '.' . $field
+#   - FilterQueryBuilder.getAggregateExpression(): processes __aggregates fields without isField() validation
+#   - FilterQueryBuilder.getFieldExpression(): DOES call isField() and isAssociation() for filter fields
+# Attack model:
+#   1. Attacker has CRUD read permission on a module (e.g., 'alerts') but restricted field-level access
+#      (e.g., cannot read 'assignee.password' or 'apiKey' field due to PERM_FIELD_READ ACL)
+#   2. POST /api/3/{module}/apply-advanced-query with __aggregates payload:
+#      {"__aggregates": [{"operator": "count", "field": "restrictedField", "alias": "x"}]}
+#   3. applyQuery() checks only CRUD read, not field read -> passes to FilterQueryBuilder
+#   4. getAggregateExpression() processes 'restrictedField' via getFieldAlias() without isField() check
+#   5. Returns COUNT/SUM/MAX/MIN of restricted field -- data extraction via aggregate side-channel
+# Limitation: Aggregate functions return scalar values (count, sum) not raw field values;
+#   however COUNT DISTINCT leaks cardinality, MAX/MIN leak range bounds, SUM leaks numeric totals
+#   of restricted numeric fields (e.g., salary, score, severity aggregate patterns)
+# FilterQueryBuilder.checkForComputeQuery: comma-separated fields build arithmetic DQL expressions
+#   (e.g., field='cost,revenue' -> DQL SUM(o.cost-o.revenue)) -- aggregate arithmetic also bypasses field ACL
+FSR_F67_AGGREGATE_FIELD_ACL_BYPASS = {
+    "id": "FSR-F67",
+    "title": "AdvancedQueryController aggregate queries bypass field-level access control -- PERM_FIELD_READ not checked in applyQuery() aggregate path; restricted fields queryable via COUNT/SUM/MAX/MIN",
+    "severity": "MEDIUM",
+    "cvss": "4.3",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
+    "cwe": "CWE-284",
+    "source_file": "/opt/cyops-api/src/Controller/AdvancedQueryController.php",
+    "evidence": {
+        "applyQuery_line66_80": "PERM_CRUD_READ check only -- no PERM_FIELD_READ check for aggregate field names",
+        "queryAssociationAction_line137": "PERM_FIELD_READ IS checked: denyUnlessAccessGranted(PERM_FIELD_READ . '.' . $module . '.' . $field)",
+        "getAggregateExpression_no_isField": "FilterQueryBuilder.getAggregateExpression() calls getFieldAlias() which does NOT call isField() or isAssociation(); no entity metadata validation in aggregate path",
+        "getFieldExpression_has_isField": "FilterQueryBuilder.getFieldExpression() DOES call isAssociation() -> isField() -- asymmetric validation between filter and aggregate paths",
+    },
+    "affected_operators": ["count", "countdistinct", "sum", "max", "min", "avg", "median", "groupby", "select", "fields"],
+    "aggregate_arithmetic": {
+        "mechanism": "FilterQueryBuilder.checkForComputeQuery(): field='f1,f2' -> DQL 'SUM(o.f1-o.f2)' or 'SUM(o.f1+o.f2)' -- comma-delimited fields build DQL arithmetic expressions",
+        "field_acl": "Neither f1 nor f2 checked against PERM_FIELD_READ; arithmetic result treated as allowed query",
+    },
+    "exploit_payload": {
+        "url": "POST /api/3/alerts/apply-advanced-query",
+        "body": '{"logic":"AND","filters":[],"__aggregates":[{"operator":"countdistinct","field":"severity","alias":"sev_count"},{"operator":"max","field":"assigneeId","alias":"max_id"}]}',
+        "note": "Returns COUNT DISTINCT and MAX of fields regardless of field-level ACL; groupby can enumerate distinct values of restricted string fields",
+    },
+    "status": "CONFIRMED -- PERM_FIELD_READ absent from applyQuery() path; present in queryAssociationAction(); FilterQueryBuilder asymmetry confirmed from source analysis",
+}
