@@ -4555,9 +4555,13 @@ FSR_F76_PORTAL_USER_HEADER_INJECTION = {
         "header_forwarding": "ALL incoming request headers forwarded to DAS including attacker-controlled headers (X-USER, X-REMOTE_ADDR, custom auth headers)",
         "wfproxy_comparison": "Authenticated wfProxyRouteAction sets X-USER from $this->getUser()->getUuid(); portalUserAction forwards attacker-supplied X-USER directly to DAS",
     },
-    "impact": "If DAS /token endpoint uses forwarded X-USER or other headers for authorization, attacker can impersonate arbitrary users including admins; severity confirmed requires DAS analysis (authenticationhandler.so)",
-    "pending": "Requires analysis of cyops-auth/authenticationhandler.so to determine if DAS /token trusts X-USER header from caller",
-    "status": "CANDIDATE -- unauthenticated header injection confirmed by code; impact severity pending DAS analysis",
+    "impact": "Unauthenticated SSRF to internal DAS service with attacker-controlled headers; EXTENSION_CONTAINER_HOSTNAME injectable if system hostname not configured in DB (PHP falls back to HTTP Host header: $_SERVER['HTTP_HOST']); X-USER injection to PUT /token has LIMITED impact (tokenhandler.so does NOT reference X-USER symbol -- tokenhandler handles PUT /token via portal token/cookie validation, NOT X-USER-based auth); X-USER IS read by authenticationhandler.so (AuthenticatedActionHandler.post.isra.24 at VA 0x18f7e in header dispatch loop) but that handler is for POST /execute/action reached via authenticatedPublicAction which validates user first",
+    "das_analysis": {
+        "tokenhandler_so": "PUT /token (portalUserAction target) -- NO X_USER symbol in tokenhandler.so; X-USER injection to this endpoint is benign; token PUT validates existing tokens (FortiCloud/FMG/FSR) not X-USER header",
+        "authenticationhandler_so": "AuthenticatedActionHandler.post.isra.24 at VA 0x18f7e reads X-USER from request headers via header dispatch loop; handles POST /execute/action for authenticated actions; PHP authenticatedPublicAction sets X-USER = actor.uuid after validating user -- not bypass-able via portalUserAction",
+        "xuser_bss_addr": "__pyx_kp_u_X_USER at .bss VA 0x2513e8 (authenticationhandler.so); referenced at VA 0x133bb (setting X-USER in dict) and 0x18f7e (comparing header name to X-USER in dispatch loop)",
+    },
+    "status": "CONFIRMED MEDIUM -- unauthenticated SSRF to DAS PUT /token with header injection; X-USER takeover via portalUserAction NOT viable (tokenhandler.so ignores X-USER); EXTENSION_CONTAINER_HOSTNAME injection viable if hostname not in system DB",
 }
 
 # jinja.so analysis notes:
