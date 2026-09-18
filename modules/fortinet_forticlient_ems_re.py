@@ -1087,6 +1087,119 @@ EMS_F15_ROGUE_EMS_FLEET_RCE = {
 
 
 # ---------------------------------------------------------
+# EMS-F16: Shared FortiClient identity certificate + decrypted private key
+# ---------------------------------------------------------
+EMS_F16_SHARED_FORTICLIENT_CERT = {
+    "id":       "EMS-F16",
+    "title":    "defaultCert FortiClient identity certificate and defaultKey RSA private key are identical across all EMS installations; private key decrypted",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 9.1,
+    "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key)",
+    "status":   "CONFIRMED -- cert extracted from ecsocksrv.exe; private key decrypted; passphrase recovered",
+
+    "certificate": {
+        "subject":    "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=FortiClient, CN=FortiClient/emailAddress=support@fortinet.com",
+        "issuer":     "C=US, ST=California, L=Sunnyvale, O=Fortinet, OU=Certificate Authority, CN=support/emailAddress=support@fortinet.com",
+        "serial":     "4267478 (0x411dd6)",
+        "valid":      "2017-04-21 to 2038-01-19",
+        "ca_false":   True,
+        "key_size":   2048,
+        "modulus_prefix": "0xfabcf1c870453a1fd563c4b38d86505c07f387f276e3799b9657d7c9e9641a9e",
+        "pem_embedded_at": "ecsocksrv.exe: 0x019dfec0, len=4353 (text+PEM)",
+    },
+
+    "private_key_recovery": {
+        "key_format":   "RSA PRIVATE KEY, Proc-Type: 4,ENCRYPTED, DEK-Info: AES-256-CBC,F4DD69DDD1982F6FDD0D75097603C628",
+        "key_location": "ecsocksrv.exe goEMSCommon.defaultKey global, RVA=0x01DD33A0, file=0x019D19A0, len=1796",
+        "enc_sym":      "goEMSCommon/common.defaultCertPassEnc (RVA=0x1DAF900, len=40, file=0x019ADF00)",
+        "key_sym":      "goEMSCommon/common.defaultCertPassKey (RVA=0x1DAF940, len=40, file=0x019ADF40)",
+        "cipher":       "XOR: passphrase = defaultCertPassEnc XOR defaultCertPassKey",
+        "passphrase":   b'j41z"{S8T*]{}<:0+yx N+,@i/23\'$$\'&138>73n'.hex(),
+        "passphrase_ascii": 'j41z"{S8T*]{}<:0+yx N+,@i/23\'$$\'&138>73n',
+        "openssl_verify": "openssl rsa -in defaultKey.pem -passin pass:<passphrase> -noout -text -- exit 0",
+        "decrypted_key_file": "/tmp/ems_default_ca.key",
+    },
+
+    "attack": (
+        "Any party with the EMS installer (public download) can extract defaultCert and decrypt defaultKey "
+        "using the recovered passphrase. Presenting defaultCert + defaultKey to any EMS instance "
+        "authenticates as a FortiClient device (CN=FortiClient). "
+        "Combined with EMS-F6 (SSLVerifyClient optional_no_ca), the forged cert is accepted without CA chain verification. "
+        "Attacker receives a valid registration token and can enumerate device lists, inject policies, "
+        "and participate in the EMS management plane as a phantom device. "
+        "Global scope: one cert+key pair, every EMS deployment worldwide."
+    ),
+
+    "present_in": [
+        "ecsocksrv.exe (goEMSCommon.defaultCert/defaultKey globals)",
+        "regworker.exe (same globals, same passphrase -- confirmed 4 getKeyPass hits)",
+        "kaworker.exe, tagworker.exe, probeworker.exe, ztnaworker.exe (all 4 hits each)",
+    ],
+
+    "ca_chain": (
+        "defaultCert is signed by Fortinet root CA: C=US, ST=California, O=Fortinet, OU=Certificate Authority, CN=support. "
+        "That CA cert is also shipped in Apache24/conf/ssl.crt/fortinet_ca_root_all.crt. "
+        "The root CA private key is NOT recovered from this analysis -- it is likely held by Fortinet's PKI."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# EMS-F17: Shared Apache TLS server key -- HTTPS endpoint spoofing
+# ---------------------------------------------------------
+EMS_F17_SHARED_APACHE_TLS_KEY = {
+    "id":       "EMS-F17",
+    "title":    "Apache TLS server.key is identical across all EMS installations -- HTTPS endpoint impersonation",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:N",
+    "cvss_score": 8.0,
+    "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key)",
+    "status":   "CONFIRMED -- same modulus across all 4 shipped key files; matches server.crt and default_server.crt",
+
+    "evidence": {
+        "keys_identical": [
+            "Apache24/conf/ssl.key/server.key (MD5: d39d97830b7436b454c670093383bb08)",
+            "Apache24/conf/ssl.key/default_server.crt.key (same modulus)",
+            "certs/server.key (MD5: d39d97830b7436b454c670093383bb08)",
+            "certs/client.key (MD5: d39d97830b7436b454c670093383bb08)",
+        ],
+        "key_format":       "PKCS#8 BEGIN PRIVATE KEY (no passphrase)",
+        "key_size":         "2048-bit RSA",
+        "modulus_prefix":   "0xe469fb335c3b736ef78e12027fa4c6362663f1cd516646c2a9a514e045ed853",
+        "matches_certs": [
+            "Apache24/conf/ssl.crt/server.crt (same modulus)",
+            "Apache24/conf/ssl.crt/default_server.crt (same modulus)",
+        ],
+        "key_is_unencrypted": True,
+    },
+
+    "attack": (
+        "Any party with the EMS installer extracts server.key from the MSI (no passphrase, PKCS#8 plaintext). "
+        "Combined with the matching server.crt, attacker terminates TLS on the EMS HTTPS port presenting "
+        "a valid certificate chain. FortiClient and admin browsers connecting to a MITM endpoint receive "
+        "the legitimate EMS certificate. "
+        "Attack chain: DNS hijack or ARP spoof target -> serve TLS with shipped server.key+server.crt -> "
+        "MITM all HTTPS traffic including admin credentials and FortiClient management sessions."
+    ),
+
+    "scope": (
+        "default_server.crt is signed by Apache24/conf/ssl.crt/ca.crt (FortiClient Enterprise Management Server CA). "
+        "If ca.crt itself is the same across all installations (fixed 2015 date suggests shipped), "
+        "FortiClient trust anchored to that CA accepts this server.crt. "
+        "HTTPS port is the admin web UI -- credential harvest from every EMS admin login."
+    ),
+
+    "apache_crt_ca_status": (
+        "ca.crt DER format, notBefore=2015-05-08, self-signed. "
+        "Fixed date suggests shipped (not install-time generated). "
+        "CA private key not found in installer -- if per-installation generated, severity reduces for new cert signing. "
+        "Shipped server.crt chain STILL enables impersonation even if CA key is per-installation."
+    ),
+}
+
+
+# ---------------------------------------------------------
 # EMS-F12: defusedxml 0.5.0 -- EMS-F3 XXE partially mitigated
 # ---------------------------------------------------------
 EMS_F12_DEFUSEDXML_VERSION = {
@@ -1119,6 +1232,12 @@ EMS_F12_DEFUSEDXML_VERSION = {
 # Pending analysis (UPDATED)
 # ---------------------------------------------------------
 PENDING = [
+    # Crypto / key material
+    "EMS-F17: Confirm ca.crt (Apache EMS CA) is shipped vs per-installation; if shipped, recover or confirm CA private key location",
+    "EMS-F16/F17: Chain -- use decrypted defaultKey + defaultCert to authenticate to live EMS as FortiClient device",
+    "EMS-F5: --keypass in goEMSCommon/common.getKeyPass -- different from defaultCertPassKey; is there a SECOND encrypted key for port 8013 TLS?",
+    "defaultKey modulus vs ca.crt -- confirmed no match; defaultKey matches defaultCert (FortiClient end-entity cert, not CA)",
+
     # Protocol / binary RE
     "EMS-F15: Determine runSrvCmd semantics -- what service commands are valid and what they execute",
     "EMS-F13: Determine regPwd semantics -- AD machine account password vs EMS-issued shared secret vs per-device",
