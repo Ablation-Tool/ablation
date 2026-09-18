@@ -1455,7 +1455,7 @@ EMS_F21_TAG_NO_HMAC = {
     "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
     "cvss_score": 7.5,
     "cwe":      "CWE-345 (Insufficient Verification of Data Authenticity)",
-    "status":   "CONFIRMED (no HMAC visible) -- 200+ instructions of TagService.Tag analyzed; no signature check found",
+    "status":   "CONFIRMED -- gRPC server has no auth interceptor; 200+ TagService.Tag instructions show no HMAC/sig check",
 
     "binary":   "ztnaworker.exe (PE32+ Go, 34MB, port 9990)",
 
@@ -1495,11 +1495,28 @@ EMS_F21_TAG_NO_HMAC = {
         "without the endpoint actually passing posture checks."
     ),
 
-    "caveat": (
-        "Auth may be enforced by a gRPC interceptor registered in NewTagService/RegisterTagServiceServer. "
-        "NewTagService (va=0x0131f5c0) takes 9 args -- some may be interceptors. "
-        "Full confirmation requires tracing the interceptor chain from RegisterTagServiceServer. "
-        "Absent interceptor proof, this is CONFIRMED-PROBABLE."
+    "grpc_server_config": {
+        "call":    "grpc.NewServer at 0x013e2036 in (*GrpcServer).Start",
+        "options": [
+            "grpc.NumStreamWorkers(N)           -- concurrency tuning, no security impact",
+            "grpc.MaxConcurrentStreams(M)        -- rate limit, no security impact",
+            "grpc.UnaryInterceptor(server.QueueLimitInterceptor)  -- queue rate limiting ONLY, no auth",
+        ],
+        "absent":  [
+            "grpc.Creds()        -- not in symbol table; no server-side TLS credential object",
+            "auth interceptor    -- no JWT/token/cert/HMAC check anywhere in option list",
+        ],
+        "note": "grpc.Creds absent from entire binary COFF symbol table -- not compiled in as server option.",
+    },
+
+    "impact": (
+        "Any host that can reach ztnaworker port 9990 can submit arbitrary ZTNA posture tags. "
+        "No authentication, no TLS, no signature check. Attacker path: "
+        "(1) Internal network access to port 9990 directly, OR "
+        "(2) Exploit EMS-F19 hardcoded cert to MITM ecsocksrv on port 8013, then forward forged "
+        "TagRequests to port 9990. "
+        "Result: forged VDOM assignment and posture tags alter ZTNA enforcement state "
+        "without the endpoint actually passing compliance checks."
     ),
 }
 
