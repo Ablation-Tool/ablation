@@ -15,8 +15,11 @@ EMS Schemes:
 FortiSOAR Schemes:
   SCHEME-FSR1  Fernet/AES-128-CBC: hardcoded key in encrypt_decrypt_util.so (FSR-F39)
                Encrypts: workflow secrets, env vars, playbook sensitive params (PostgreSQL)
-  SCHEME-FSR2  AES-128-CFB: hardcoded keys in PasswordModule.so (FSR-F40)
+  SCHEME-FSR2  AES-128-CFB8: hardcoded keys in PasswordModule.so (FSR-F40/FSR-F79)
                Encrypts: connector credentials (API keys, OAuth, SMTP, cloud creds)
+               Format (old): base64(random_iv_16 + AES_CFB8_encrypt(key, iv, plaintext))
+               Format (new): base64(iv+ct) + key.decode('ascii') + version_char (EncryptionKeyType suffix)
+               Mode: PyCryptodome MODE_CFB default (CFB8, segment_size=8) -- verified via round-trip test
 
 Usage:
   # FortiClient EMS binary analysis
@@ -65,10 +68,23 @@ except ImportError:
 # Used by: workflow secrets, environment variables, playbook sensitive params
 FSR_FERNET_KEY = b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='
 
-# FSR-F40: AES-128-CFB keys from PasswordModule.so
-# Used by: connector credentials stored in cyops_db (PasswordModule_default, PasswordModule_alt)
-# FSR-F61: PasswordModule_cli key scope confirmed from source analysis (settings.py, ldaphandler.so,
-#           csengine.so, ha/common_utils.so, ha/postgres.so, audit_log_migration.py):
+# FSR-F40/FSR-F79: AES-128-CFB8 keys from PasswordModule.so (both versions)
+# Cipher: PyCryptodome AES.new(key, MODE_CFB, iv) -- MODE_CFB default = CFB8 (segment_size=8)
+# Format (old, cyops-common): base64(random_iv_16 + AES_CFB8_encrypt(key, iv, plaintext))
+# Format (new, cyops-integrations): base64(iv+ct) + key.decode('ascii') + version_char suffix
+#   Suffix identifies key type (EncryptionKeyType enum); strip suffix then decrypt b64 remainder
+# Round-trip test confirmed 2026-09-18: all 3 old keys decrypt/encrypt correctly
+#
+# Old PasswordModule.so (/opt/cyops/configs/scripts/.lib/PasswordModule.so):
+#   0x16000: jp3mci29fq7f2kc7  -- default key
+#   0x16020: jQp3(7@jod#j38d1  -- shared key (also in new version); CLI/config key
+#   0x16040: I3dmcn23@KlS2#!c  -- alternate key; used in template db_config.yml blob
+# New PasswordModule.so (/opt/cyops-integrations/integrations/integrations/PasswordModule.so):
+#   0x02dcf0: zc5nbk76qd1g8wv3  -- new default key
+#   0x02dd10: jQp3(7@jod#j38d1  -- shared key (same as old version)
+#   0x02dd50: K2vsif65@LrU4#!g  -- new alternate key
+#
+# FSR-F61: jQp3(7@jod#j38d1 scope confirmed (settings.py, ldaphandler.so, csengine.so, etc.):
 #   - RabbitMQ/Celery broker password: mq_password in config; decrypted in settings.py line 180
 #   - PostgreSQL database password:    DB_PASSWORD in config; decrypted in settings.py line 352
 #   - MongoDB password:                encrypted in config; decrypted in audit_log_migration.py
@@ -77,17 +93,25 @@ FSR_FERNET_KEY = b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='
 #   /opt/cyops/configs/cyops.conf (pg_password, mq_password, db config)
 #   /opt/cyops/configs/rabbitmq/rabbitmq_users.conf (mq_password for direct RabbitMQ access)
 #   /opt/cyops-auth/utilities/das.ini (DAS DB password)
-# Decryption script: /opt/cyops/configs/scripts/manage_passwords.py --decrypt <b64blob> jQp3(7@jod#j38d1
-# Encryption: AES-128-CFB, IV prepended (base64(IV[16] + ciphertext)); see fsr_aes_cfb_decrypt()
-FSR_AES_CFB_KEYS = {
+# Decryption script: /opt/cyops/configs/scripts/manage_passwords.py --decrypt <b64blob>
+FSR_AES_CFB_KEYS_OLD = {
     'PasswordModule_default': b'jp3mci29fq7f2kc7',
-    'PasswordModule_alt':     b'I3dmcn23@KlS2#!c',  # 16 bytes (truncated from I3dmcn23@KlS2#!ck)
-    'PasswordModule_cli':     b'jQp3(7@jod#j38d1',  # FSR-F61: decrypts RabbitMQ/PostgreSQL/MongoDB/LDAP
+    'PasswordModule_alt':     b'I3dmcn23@KlS2#!c',  # 16 bytes
+    'PasswordModule_cli':     b'jQp3(7@jod#j38d1',  # decrypts RabbitMQ/PostgreSQL/MongoDB/LDAP
 }
+FSR_AES_CFB_KEYS_NEW = {
+    'PasswordModule_new_default': b'zc5nbk76qd1g8wv3',
+    'PasswordModule_shared':      b'jQp3(7@jod#j38d1',  # same as old cli key
+    'PasswordModule_new_alt':     b'K2vsif65@LrU4#!g',  # 16 bytes
+}
+FSR_AES_CFB_KEYS = {**FSR_AES_CFB_KEYS_OLD, **FSR_AES_CFB_KEYS_NEW}
 
-# Suffix appended by PasswordModule.encrypt, stripped in decrypt
-# BSS ref: __pyx_kp_s_Password -> endswith check
-FSR_PWD_SUFFIX = b'Password'
+# New-format suffix: raw key bytes (16) + version_char (1) appended to b64 ciphertext
+# detect_key_type() in new PasswordModule.so reads this suffix to select the decryption key
+FSR_NEW_FORMAT_VERSION_CHAR = 'k'
+
+# Decrypt output format: PasswordModule.decrypt() returns "Password:<plaintext>" or error string
+FSR_PWD_PREFIX = b'Password:'
 
 
 # ============================================================= FortiSOAR decrypt
@@ -108,26 +132,42 @@ def fsr_fernet_decrypt(token_b64: str) -> bytes | None:
         return None
 
 
+def fsr_strip_new_format_suffix(blob: str) -> tuple[str, bytes | None]:
+    """
+    Strip EncryptionKeyType suffix from new-format PasswordModule blobs.
+    New format: <b64(iv+ct)><key_16bytes_ascii><version_char>
+    Returns (b64_part, key_bytes) or (blob, None) if no suffix matched.
+    """
+    for key in FSR_AES_CFB_KEYS.values():
+        try:
+            suffix = key.decode('ascii') + FSR_NEW_FORMAT_VERSION_CHAR
+            if blob.endswith(suffix):
+                return blob[:-len(suffix)], key
+        except Exception:
+            pass
+    return blob, None
+
+
 def fsr_aes_cfb_decrypt(ciphertext_b64: str, key: bytes) -> bytes | None:
     """
-    Decrypt a FortiSOAR PasswordModule AES-128-CFB blob (FSR-F40).
-    Format: base64(IV[16] + ciphertext) with optional 'Password' suffix stripped.
+    Decrypt a FortiSOAR PasswordModule AES-128-CFB8 blob (FSR-F40/FSR-F79).
+    Old format: base64(random_iv_16 + AES_CFB8_ciphertext)
+    New format: base64(iv+ct) + key.decode() + version_char (suffix auto-stripped by caller)
+    Cipher: AES.new(key, MODE_CFB, iv) -- MODE_CFB default = CFB8 (segment_size=8)
     """
     if not HAS_PYCRYPTO:
         print("[!] pycryptodome not available (pip install pycryptodome)")
         return None
     try:
-        raw = base64.b64decode(ciphertext_b64)
+        # pad base64 if needed
+        pad = (4 - len(ciphertext_b64) % 4) % 4
+        raw = base64.b64decode(ciphertext_b64 + '=' * pad)
         if len(raw) < 17:
             return None
         iv = raw[:16]
         ct = raw[16:]
-        if ct.endswith(FSR_PWD_SUFFIX):
-            ct = ct[:-len(FSR_PWD_SUFFIX)]
         cipher = PyCryptoAES.new(key, PyCryptoAES.MODE_CFB, iv)
         pt = cipher.decrypt(ct)
-        if pt.endswith(FSR_PWD_SUFFIX):
-            pt = pt[:-len(FSR_PWD_SUFFIX)]
         return pt
     except Exception:
         return None
@@ -164,7 +204,22 @@ def fsr_decrypt_blob(blob: str, try_all: bool = False) -> dict:
             })
             return result
 
-    # Try AES-128-CFB keys (FSR-F40)
+    # Try AES-128-CFB8 keys (FSR-F40/FSR-F79)
+    # New format: strip EncryptionKeyType suffix (key_bytes + version_char) before b64 decode
+    b64_blob, suffix_key = fsr_strip_new_format_suffix(blob)
+    if suffix_key is not None:
+        # new-format blob: key identified by suffix
+        pt = fsr_aes_cfb_decrypt(b64_blob, suffix_key)
+        if pt is not None and _looks_printable(pt):
+            key_name = next((k for k, v in FSR_AES_CFB_KEYS.items() if v == suffix_key), 'unknown')
+            result.update({
+                'scheme': 'SCHEME-FSR2-NEW (AES-128-CFB8 with EncryptionKeyType suffix)',
+                'key_used': f'{key_name} ({suffix_key.decode()})',
+                'plaintext': pt.hex(),
+                'plaintext_str': pt.decode('utf-8', errors='replace'),
+                'success': True,
+            })
+            return result
     for key_name, key in FSR_AES_CFB_KEYS.items():
         pt = fsr_aes_cfb_decrypt(blob, key)
         if pt and _looks_printable(pt):
