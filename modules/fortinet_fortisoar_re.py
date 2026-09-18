@@ -598,4 +598,96 @@ PENDING = [
     # xf integration agent
     "Download xf-integration-agent-26.2.a-1615.x86_64.rpm -- extract and RE Python/binary contents",
     "Determine what 'xf' product family is (FortiXDR? FortiRecon?)",
+
+    # Feature control analysis
+    "DONE: tip_feature_control.json + soar_feature_control.json analyzed -- frontend-only enforcement confirmed (FSR-F10)",
+    "Find backend API endpoint that serves feature_control JSON -- verify if license validation occurs server-side",
+    "Test: make API call to main.editor.modules equivalent endpoint with tip_essential license -- confirm no backend enforcement",
+    "Check replace-fdn-truststore.bin RC4 decryption logic -- extract FDN CA cert for truststore content analysis",
 ]
+
+
+# ---------------------------------------------------------
+# FSR-F10: Feature control enforcement is frontend-only
+# ---------------------------------------------------------
+FSR_F10_FRONTEND_ONLY_LICENSE_ENFORCEMENT = {
+    "id":       "FSR-F10",
+    "title":    "TIP license feature restrictions enforced only in React frontend -- backend has no connector or module restrictions; direct API access bypasses all TIP tier limits",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 8.1,
+    "cwe":      "CWE-602 (Client-Side Enforcement of Server-Side Security)",
+    "status":   "STRONGLY INDICATED -- source: product-feature-matrix/tip_feature_control.json",
+    "source":   "https://repo.fortisoar.fortinet.com/fortisoar/product-feature-matrix/tip_feature_control.json",
+
+    "evidence": {
+        "backend_restrictions_empty": (
+            "backend_prop.content_hub.disallowed.connectors = [] for ALL TIP tiers (tip_outbreak, tip_enterprise, "
+            "tip_essential, tip_full_suite). No connector or module is blocked at the backend for any TIP license."
+        ),
+        "frontend_restrictions_extensive": (
+            "ui_prop.restricted_url_states blocks 29 Angular router states per tier including: "
+            "main.editor.modules, main.editor.exporter, main.editor.importer, main.section_dashboard, "
+            "main.system.license, main.system.notification, main.assignment_automation_entry, "
+            "main.editor.recommendationengine, viewPanel.modulesDetail."
+        ),
+        "license_page_hidden": (
+            "main.system.license blocked for ALL TIP tiers -- admins on TIP-mode instances "
+            "cannot access license management UI; license bypass would be invisible via UI."
+        ),
+        "tip_essential_auth_routes_blocked": (
+            "main.security.authentication (LDAP, SSO, RADIUS, NFA sub-routes) blocked for tip_essential -- "
+            "cannot configure auth backends via UI, but backend API likely still accepts these calls."
+        ),
+    },
+
+    "api_surface_from_routes": {
+        "main.editor.modules":            "Module schema editor -- API: /api/v3/modules/ (CRUD)",
+        "main.editor.exporter":           "Content exporter -- API: /api/v3/export/",
+        "main.editor.importer":           "Content importer -- API: /api/v3/import/",
+        "main.editor.navigation":         "Navigation editor -- API: /api/v3/navigation/",
+        "main.editor.picklists":          "Picklist editor -- API: /api/v3/picklists/",
+        "main.editor.preProcessing":      "Pre-processing rules -- API: /api/v3/preprocessing/",
+        "main.editor.recommendationengine": "Recommendation engine -- API: /api/v3/recommendation/",
+        "main.editor.correlation":        "Correlation engine -- API: /api/v3/correlations/",
+        "main.system.license":            "License management -- API: /api/v3/license/ or /auth/license/",
+        "main.system.archival":           "Archival config -- API: /api/v3/archival/",
+        "main.section_dashboard":         "Dashboard -- API: /api/v3/dashboards/",
+        "main.modules.list":              "Module list -- API: /api/v3/modules/",
+        "main.assignment_automation":     "Assignment automation -- API: /api/v3/assignment/",
+        "main.security.authentication.ldap":   "LDAP config -- API: /api/v3/auth/ldap/",
+        "main.security.authentication.sso":    "SSO config -- API: /api/v3/auth/sso/",
+        "main.security.authentication.radius": "RADIUS config -- API: /api/v3/auth/radius/",
+        "main.security.authentication.nfa":    "MFA config -- API: /api/v3/auth/nfa/",
+        "main.system.notification":       "Notification channels -- API: /api/v3/notifications/",
+        "main.system.configuration.syslog":    "Syslog config -- API: /api/v3/settings/syslog/",
+        "main.system.configuration.proxy":     "Proxy config -- API: /api/v3/settings/proxy/",
+        "main.system.configuration.branding":  "Branding -- API: /api/v3/settings/branding/",
+    },
+
+    "license_tiers": {
+        "tip_outbreak":    "outbreak response tier (limited, most restricted)",
+        "tip_enterprise":  "enterprise tier (second most restricted)",
+        "tip_essential":   "essential tier (most routes blocked, no auth config)",
+        "tip_full_suite":  "full suite tier (moderate restrictions)",
+        "soar_trial":      "standard SOAR trial (cannot install fortiTIP or fortiGuardLabs-IOCSearch solution packs)",
+        "soar_enterprise": "standard SOAR enterprise (same content_hub block as trial)",
+    },
+
+    "attack": (
+        "1. Obtain any FortiSOAR credentials (e.g., FSR-F4 csadmin:changeme, default user from installer). "
+        "2. Enumerate API endpoints directly: GET /api/v3/modules/, /api/v3/export/, /api/v3/license/ etc. "
+        "3. These endpoints respond regardless of TIP license tier -- the restriction only blocks the UI route. "
+        "4. For tip_essential users: directly call /api/v3/auth/ldap/ to configure LDAP auth "
+        "   (blocked in UI but likely not in API) -> add attacker-controlled LDAP server -> gain persistent auth access. "
+        "5. Access /api/v3/license/ to read/modify license state (hidden from TIP users in UI). "
+        "VERIFICATION REQUIRED: confirm backend does not validate license tier per API endpoint."
+    ),
+
+    "soar_license_bypass_note": (
+        "soar_trial and soar_enterprise BOTH block fortiTIP solution pack install at backend_prop level. "
+        "This IS backend-enforced (unlike TIP tier restrictions). "
+        "However, TIP feature restrictions within TIP tiers appear purely frontend -- once on any TIP license, "
+        "the backend does not further restrict by tier."
+    ),
+}
