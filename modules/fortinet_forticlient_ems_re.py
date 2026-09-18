@@ -1682,7 +1682,7 @@ PENDING = [
     "EMS-F13: Determine regPwd semantics -- AD machine account password vs EMS-issued shared secret vs per-device",
     "EMS-F14: Confirm rogue EMS auth redirect on live instance -- does FortiClient accept authSAMLURL from server",
     "Port 8013 startUnprotectedListener: identify conditions that trigger non-TLS path in socket_server.go",
-    "ztnaworker.exe RE: COMPLETE for EMS-F20/F21/F22 (field origin RESOLVED: admin-configured via SocketServer config) -- remaining: trace NewGrpcConnPool target host to identify what it connects to",
+    "ztnaworker.exe RE: COMPLETE -- EMS-F20/F21/F22 confirmed; GrpcDispatcher host map traced: ECSocketServerService.field_0x80 = SocketServer.field_0xf8.field_0x78 = admin-configured backend gRPC endpoint map, not network-injectable; no additional vulnerability found",
     "sipdaemon.exe RE: COMPLETE -- binary is IDENTICAL to ztnaworker.exe (same 3700 fortinet symbols, 0 unique); 4 syms unique to ztnaworker.exe only: server.WithFOS, server.WithRedis and their .func1 variants. All EMS-F20/F21/F22 findings apply to sipdaemon.exe equally. Binary is 34,386,048 bytes (ztnaworker: 34,389,632 = 3584 bytes diff = exactly the WithFOS/WithRedis delta).",
 
     # Django application RE
