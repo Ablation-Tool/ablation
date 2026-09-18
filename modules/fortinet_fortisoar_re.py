@@ -828,3 +828,95 @@ FSR_F12_CODE_SNIPPET_SEMAPHORE_DOS = {
         "Enforce a maximum execution time limit via threading.Timer or subprocess with timeout."
     ),
 }
+
+# FSR-F13: AI assistant listener unauthenticated TCP socket + training data poisoning
+# CVSS 3.1: AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:H = 7.1 HIGH
+# CWE-306: Missing Authentication for Critical Function
+#
+# Source: cyops-connector-aiassistant-utils v4.0.0 (latest)
+# File: listener/listener.py (plaintext Python, fully readable)
+#
+# The AI assistant connector starts a TCP server on localhost:10447 via start_socket_server()
+# (listener_client.so -> listener.py). The server binds to 127.0.0.1 only but has no
+# authentication or authorization. Any process with localhost access can:
+#
+# 1. TRAINING DATA POISONING: Send `--refresh_model --training_folder /attacker/path`
+#    to replace the 9978-document ChromaDB embedding corpus with attacker-controlled data.
+#    The AI assistant uses this corpus for RAG-based playbook suggestion. Poisoned corpus
+#    causes the AI to suggest malicious playbook steps (e.g., containing FSR-F11 __import__
+#    payloads) when responding to user queries.
+#
+# 2. DENIAL OF SERVICE: Send `--exit` to kill the listener process, disabling all AI
+#    assistant functionality (playbook generation, natural language queries) until restart.
+#
+# 3. CORPUS EXTRACTION: Query the semantic search with `--similar --query_str X --n_results 9978`
+#    to extract the full ChromaDB training corpus (contains internal Fortinet dev UUIDs,
+#    internal IP addresses 192.168.50.x, and test credentials like pdf_password "testapi123").
+#
+# Protocol: 8-byte big-endian uint64 length prefix + UTF-8 payload parsed by argparse.
+# No HMAC, no token, no path-based access control.
+#
+# Attack path using FSR-F11 chain:
+# 1. FSR-F11 (code-snippet sandbox escape) gives code exec as cyops-worker.
+# 2. From cyops-worker, connect to localhost:10447.
+# 3. Send --refresh_model --training_folder /tmp/attacker/ to poison AI corpus.
+# 4. All subsequent AI-assisted playbook generation returns attacker-controlled templates.
+# 5. Users deploying AI-suggested playbooks execute attacker payloads in production.
+#
+# Alternatively: SSRF in any connector that can make raw TCP connections (not HTTP-only)
+# to localhost:10447 bypasses the local access requirement.
+#
+# Additional finding: ChromaDB training corpus (9978 docs, shipped in RPM) contains
+# internal Fortinet/CyberSponse development artifacts:
+# - Internal IPs: 192.168.50.{102,231,243}, 192.168.60.105
+# - Test credentials: pdf_password = "testapi123" (Qualys connector examples)
+# - Internal connector config UUIDs: e5997f03-136e-4dd3-9083-3698c8ae01a3 (multiple)
+# - CyberSponse Inc. internal playbook comments (pre-acquisition artifacts)
+# These are shipped to all FortiSOAR customers in the connector RPM.
+
+FSR_F13_AI_LISTENER_UNAUTH = {
+    "id": "FSR-F13",
+    "title": "AI assistant listener unauthenticated TCP socket allows training data poisoning",
+    "severity": "HIGH",
+    "cvss": "7.1",
+    "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:H",
+    "cwe": "CWE-306",
+    "component": "cyops-connector-aiassistant-utils",
+    "affected_versions": "all (listener.py present in 1.0.0 through 4.0.0)",
+    "source_file": "listener/listener.py (plaintext, fully readable)",
+
+    "socket": "localhost:10447, SOCK_STREAM, no auth",
+
+    "attack_vectors": {
+        "training_poisoning": (
+            "Send: 8-byte len prefix + b'--refresh_model --training_folder /attacker/path'. "
+            "Server calls refresh_collection(training_folder) in embeddings_helper_common.so. "
+            "Replaces 9978-doc ChromaDB corpus. AI now suggests malicious playbook templates."
+        ),
+        "dos": "Send b'--exit' to kill listener. Disables all AI assistant operations.",
+        "corpus_extract": (
+            "Send --similar --query_str 'X' --n_results 9978 to extract full corpus. "
+            "Corpus contains internal dev IPs, test credentials, internal UUIDs."
+        ),
+    },
+
+    "chain": (
+        "FSR-F11 (code exec as cyops-worker) provides localhost access. "
+        "FSR-F13 then poisons AI training data. "
+        "AI suggestions executed by operators propagate attacker payloads to production playbooks."
+    ),
+
+    "corpus_exposure": {
+        "internal_ips": ["192.168.50.102", "192.168.50.231", "192.168.50.243", "192.168.60.105"],
+        "test_credentials": {"Qualys pdf_password": "testapi123"},
+        "internal_uuids": ["e5997f03-136e-4dd3-9083-3698c8ae01a3", "412c1ce0-a415-452b-a970-98996fc97e24"],
+        "artifact": "CyberSponse Inc. (pre-acquisition) comment strings in playbook examples",
+    },
+
+    "fix": (
+        "Add authentication to listener: Unix domain socket with filesystem permissions, "
+        "or HMAC token required on all commands. "
+        "Validate training_folder against a whitelist of allowed paths. "
+        "Scrub internal IPs, credentials, and UUIDs from the shipped ChromaDB corpus."
+    ),
+}
