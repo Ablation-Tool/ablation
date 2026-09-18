@@ -9,7 +9,10 @@ OS:      FreeBSD UFS2, 9-partition GPT layout
          p8 (2G UFS, 4096-block, features dir), p9 (122.6G UFS, 16384-block)
 Files:   /etc/master.passwd (install/dist factory default)
          /etc/asyncos.conf (sourced at boot via [ -f /etc/asyncos.conf ] && . /etc/asyncos.conf)
-Session: 38
+         external_auth-1.0.0_000-py2.6_13_amd64_thr.egg (authentication daemon)
+         aplib-1.0.0_000-py2.6_13_amd64_thr-freebsd-13.0-RELEASE-p13-amd64.egg
+         godspeed_rpc-1.0.0_000-py2.6_13_amd64_thr.egg-info
+Sessions: 38, 40
 """
 
 MODULE_SUMMARY = {
@@ -35,9 +38,9 @@ MODULE_SUMMARY = {
             "'Last Chance Back Door' (see F2)"
         ),
     },
-    "finding_counts": {"CRITICAL": 1, "HIGH": 3, "MEDIUM": 2, "LOW": 0},
-    "cumulative_counts": {"CRITICAL": 61, "HIGH": 226, "MEDIUM": 221, "LOW": 191},
-    "cumulative_total": 699,
+    "finding_counts": {"CRITICAL": 1, "HIGH": 4, "MEDIUM": 3, "LOW": 1},
+    "cumulative_counts": {"CRITICAL": 61, "HIGH": 227, "MEDIUM": 222, "LOW": 192},
+    "cumulative_total": 702,
 }
 
 FINDINGS = [
@@ -321,6 +324,173 @@ FINDINGS = [
             "OS-level capability restrictions beyond the CLI script restriction. "
             "Audit smad_cli.sh for injection vulnerabilities. "
             "Monitor smaduser for any process spawning outside the expected SMAD tree."
+        ),
+    },
+    {
+        "id": "F7",
+        "severity": "HIGH",
+        "title": (
+            "AsyncOS Authentication Daemon Runs on Python 2.6 (EOL December 2013) -- "
+            "LDAP/SAML/Local Auth Stack Exposed to 12+ Years of Unpatched CVEs"
+        ),
+        "component": (
+            "external_auth-1.0.0_000-py2.6_13_amd64_thr.egg (//prod/main/ap/external_auth/)"
+        ),
+        "evidence": {
+            "egg_files": [
+                "external_auth-1.0.0_000-py2.6_13_amd64_thr.egg-info",
+                "godspeed_rpc-1.0.0_000-py2.6_13_amd64_thr.egg-info",
+                "aplib-1.0.0_000-py2.6_13_amd64_thr-freebsd-13.0-RELEASE-p13-amd64.egg",
+                "coverage-3.6-py2.6_10_amd64_thr-freebsd-10.1-RELEASE-amd64.egg",
+            ],
+            "python_lib_path": "/usr/local/lib/python2.6_10_amd64_thr/ (Python 2.6 standard library present)",
+            "perforce_sources": [
+                "# $Header: //prod/main/ap/external_auth/external_auth/config.py#83 $",
+                "# $Header: //prod/main/ap/external_auth/external_auth/external_auth_rpc_server.py#19 $",
+                "# $Header: //prod/main/ap/external_auth/external_auth/ldap_rpc_server.py#44 $",
+                "# $Header: //prod/main/ap/external_auth/local_auth/local_authd.py#31 $",
+                "# $Header: //prod/main/ap/external_auth/saml20/__init__.py#3 $",
+            ],
+            "cross_product_scope": (
+                "Perforce depot path //prod/main/ap/external_auth/ is under 'main/ap' "
+                "(Appliance Platform main branch), not the WSA-specific coeus-16-0-br branch. "
+                "This authentication daemon is shared across ESA, WSA, and SMA product lines."
+            ),
+        },
+        "impact": (
+            "Python 2.6 reached End-of-Life in December 2013. "
+            "The authentication subsystem (LDAP bind, SAML assertion parsing, "
+            "local auth daemon) runs in a Python 2.6 interpreter that has "
+            "received no security patches for over 12 years. "
+            "Known Python 2.6 CVEs include: CVE-2014-9365 (SSL hostname verification bypass), "
+            "CVE-2013-4238 (null byte in CN certificate bypass), "
+            "CVE-2011-4944 (insecure temp file in distutils), and "
+            "the entire range of Python 2.x stdlib vulnerabilities post-2013. "
+            "The RPC architecture (external_auth_rpc_server.py, ldap_rpc_server.py) "
+            "processes authentication requests from the web UI -- if the RPC parsing "
+            "layer has a bug exploitable from network input, it runs in the Python 2.6 context. "
+            "Cross-product scope: ESA and SMA ship the same egg."
+        ),
+        "remediation": (
+            "Port the external_auth egg to Python 3.x. Python 2.6 is beyond EOL. "
+            "As an interim measure, restrict the external_auth RPC socket to localhost-only "
+            "and ensure all authentication inputs are sanitized before reaching the Python 2.6 layer. "
+            "Cisco should publish a PSIRT advisory acknowledging the Python 2.6 runtime "
+            "in AsyncOS authentication components across all async appliance products."
+        ),
+    },
+    {
+        "id": "F8",
+        "severity": "MEDIUM",
+        "title": (
+            "Legacy 'old_authentication.py' Code Path Active in AsyncOS 16.0 Distribution -- "
+            "Dead Code or Live Fallback Path Unverified"
+        ),
+        "component": "external_auth/old_authentication.py (revision #5, //prod/main/ap/external_auth/)",
+        "evidence": {
+            "perforce_header": (
+                "# $Header: //prod/main/ap/external_auth/external_auth/old_authentication.py#5 $"
+            ),
+            "compiled": (
+                "external_auth/old_authentication.pyc present in the egg -- "
+                "Python compiles .pyc at import time, so the file was imported during development "
+                "or is imported at runtime. Presence of .pyc in the shipped egg is consistent "
+                "with runtime use."
+            ),
+            "revision_contrast": (
+                "config.py is at revision #83 (actively developed); "
+                "old_authentication.py is at revision #5 (frozen legacy). "
+                "The name 'old_authentication' explicitly marks it as legacy code."
+            ),
+        },
+        "impact": (
+            "Legacy authentication code has a higher probability of containing "
+            "vulnerabilities that were patched in the newer code path but not in the old one. "
+            "If 'old_authentication.py' is a fallback path reached on auth failure, "
+            "configuration error, or specific auth mode, an attacker may be able to "
+            "trigger the legacy path deliberately to exploit weaker authentication logic. "
+            "Without source access, the specific vulnerability cannot be confirmed; "
+            "the finding documents an unreviewed code path that is compiled and distributed."
+        ),
+        "remediation": (
+            "Remove old_authentication.py from the shipping egg if it is dead code. "
+            "If it is a live fallback, audit it at revision #5 for authentication "
+            "logic that was superseded in later revisions for security reasons."
+        ),
+    },
+    {
+        "id": "F9",
+        "severity": "MEDIUM",
+        "title": (
+            "SAML 2.0 Authentication Parses XML via Python 2.6 -- "
+            "SAMLConstants.py Compiled into Shipping Egg"
+        ),
+        "component": "external_auth/saml20/SAMLConstants.py (//prod/main/ap/external_auth/saml20/)",
+        "evidence": {
+            "file_present": (
+                "saml20/SAMLConstants.py and saml20/__init__.py (revision #3) "
+                "present in the external_auth egg."
+            ),
+            "python26_context": (
+                "SAMLConstants.py runs under Python 2.6. Python 2.6's "
+                "xml.etree.ElementTree has known namespace prefix normalization issues "
+                "relevant to XML Signature Wrapping (XSW) attacks against SAML assertions."
+            ),
+            "historical_reference": (
+                "CVE-2012-3444: Python xml.etree.ElementTree expat parser overflow "
+                "(Python 2.6.x before 2.6.9). "
+                "SAML XSW attacks (CVE-2012-3814 class) exploit lax XML namespace handling "
+                "to inject arbitrary attribute values into verified assertions."
+            ),
+        },
+        "impact": (
+            "SAML authentication on the WSA allows Single Sign-On from an IdP to the "
+            "management interface and optionally to proxy authentication for web users. "
+            "If the SAML assertion parser running in Python 2.6 is vulnerable to XML "
+            "Signature Wrapping, an attacker with a valid SAML account (even a low-privilege one) "
+            "could forge an admin-level assertion and gain full appliance management access. "
+            "The Python 2.6 runtime lacks fixes for XML parser security issues "
+            "patched in Python 2.7.9+ and all 3.x releases."
+        ),
+        "remediation": (
+            "Upgrade the SAML processing component to Python 3.x with the 'defusedxml' library. "
+            "Until ported, test the SAML implementation against known XSW payloads "
+            "(SAML Raider toolset) to determine if the Python 2.6 XML parser is exploitable "
+            "in the specific SAML assertion structure the WSA uses."
+        ),
+    },
+    {
+        "id": "F10",
+        "severity": "LOW",
+        "title": (
+            "FreeBSD 13.0-RELEASE-p13 Base OS EOL April 2024 -- "
+            "Kernel and System Libraries No Longer Receive Security Updates"
+        ),
+        "component": (
+            "FreeBSD base: aplib-1.0.0_000-py2.6_13_amd64_thr-freebsd-13.0-RELEASE-p13-amd64.egg"
+        ),
+        "evidence": {
+            "os_version": (
+                "FreeBSD 13.0-RELEASE-p13 -- the '-p13' patch level confirms build "
+                "against FreeBSD 13.0 patched through the 13th errata notice. "
+                "FreeBSD 13.0 EOL: April 30, 2024."
+            ),
+            "build_path": (
+                "/usr/build/godspeed/env/freebsd/ironport/freebsd/usr/src/ "
+                "(revealed in binary strings across p3 and p6 partitions)"
+            ),
+        },
+        "impact": (
+            "AsyncOS 16.0.0 (build 399, generated August 2026 per UFS2 timestamps) "
+            "runs on a FreeBSD 13.0 base OS that reached EOL in April 2024. "
+            "Post-EOL FreeBSD 13.0 kernel and library CVEs are not backported. "
+            "This includes kernel privilege escalation vulnerabilities, "
+            "network stack issues, and driver bugs that have been disclosed since April 2024."
+        ),
+        "remediation": (
+            "Rebase AsyncOS on a supported FreeBSD branch (13.4 or 14.x). "
+            "Cisco should disclose the FreeBSD base version in the AsyncOS release notes "
+            "and publish a PSIRT advisory for each affected FreeBSD 13.0 CVE."
         ),
     },
 ]
