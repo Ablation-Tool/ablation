@@ -920,3 +920,83 @@ FSR_F13_AI_LISTENER_UNAUTH = {
         "Scrub internal IPs, credentials, and UUIDs from the shipped ChromaDB corpus."
     ),
 }
+
+# FSR-F14: setup-cyops-offline-yum-repo.sh hardcoded yum:yum credential with NOPASSWD sudo
+# CVSS 3.1: AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H = 8.8 HIGH
+# CWE-798: Use of Hard-coded Credentials
+#
+# Source: downloads/scripts/setup-cyops-offline-yum-repo.sh (lines 68-86)
+# Shipped on: repo.fortisoar.fortinet.com (publicly accessible, no auth)
+#
+# The script creates a system user `yum` with password `yum` and appends
+# "yum ALL=(ALL) NOPASSWD: ALL" to /etc/sudoers. This creates a persistent
+# backdoor on any FortiSOAR offline repository mirror server where an admin
+# runs this Fortinet-provided setup script.
+#
+# create_user() function:
+#   user=yum; password=yum
+#   useradd $user -s /bin/bash
+#   echo $password | passwd $user --stdin
+#   echo "$user ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers
+#
+# The repository mirror server is network-accessible (httpd serving yum repos
+# to all FortiSOAR instances). An attacker who can SSH to the mirror host
+# (via credential yum:yum + any exposed SSH) gains immediate root via sudo.
+#
+# Secondary finding: script syncs from rsync://update.cybersponse.com/repos/
+# (CyberSponse pre-acquisition domain). If this domain lapses, attacker who
+# registers it can serve malicious packages to all offline-mirror deployments.
+# Current status: domain controlled by Fortinet (not lapsed). Monitor for expiry.
+#
+# Internal architecture revealed by this script:
+# - /opt/cyops/configs/scripts/api_caller.py: authenticated local API caller
+#   (POST to https://localhost/api/query/agents with base64 payload)
+#   Used by patches/maintenance scripts -- can make authenticated admin API calls
+# - RabbitMQ vhost: intra-cyops; queues: fsr.rules.{sealab|das|integration|postman}.{data}
+# - Worker types: sealab (workflow engine), das, integration, postman
+# - /opt/cyops-tomcat/webapps/gateway/, /opt/cyops-tomcat/webapps/notifier/ (Spring WARs)
+# - /etc/cyops-release (chattr +i) contains feature flags: secure-message-exchange,
+#   forticloud-secure-message-exchange
+# - /etc/pki/cyops/cs.loc.root.key -- FortiSOAR root CA private key location
+# - /etc/pki/ca-trust/source/anchors/cs.loc.root.crt -- FortiSOAR root CA cert
+
+FSR_F14_HARDCODED_YUM_CREDENTIAL = {
+    "id": "FSR-F14",
+    "title": "setup-cyops-offline-yum-repo.sh hardcoded yum:yum with NOPASSWD sudo",
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-798",
+    "component": "downloads/scripts/setup-cyops-offline-yum-repo.sh",
+    "affected_versions": "all (script distributed on public repo server)",
+    "source_file": "setup-cyops-offline-yum-repo.sh:68-86",
+
+    "hardcoded_credential": {"user": "yum", "password": "yum", "sudo": "NOPASSWD: ALL"},
+
+    "affected_systems": (
+        "Any FortiSOAR offline repository mirror server where an admin ran this script. "
+        "Mirror servers are network-accessible (httpd on port 80/443 serving RPM repos)."
+    ),
+
+    "secondary_finding": (
+        "rsync://update.cybersponse.com/repos/ -- CyberSponse pre-acquisition update domain. "
+        "Domain presently Fortinet-controlled. Domain expiry would enable supply chain attack "
+        "against all offline-mirror FortiSOAR deployments."
+    ),
+
+    "internal_architecture": {
+        "api_caller": "/opt/cyops/configs/scripts/api_caller.py (authenticated local API caller)",
+        "rabbitmq_vhost": "intra-cyops",
+        "queue_pattern": "fsr.rules.{sealab|das|integration|postman}.data",
+        "tomcat_paths": "/opt/cyops-tomcat/webapps/{gateway,notifier}/",
+        "root_ca_key": "/etc/pki/cyops/cs.loc.root.key",
+        "root_ca_cert": "/etc/pki/ca-trust/source/anchors/cs.loc.root.crt",
+        "feature_flags_file": "/etc/cyops-release (chattr +i, contains secure-message-exchange flag)",
+    },
+
+    "fix": (
+        "Remove hardcoded credentials from script. "
+        "Generate random password or require admin to provide one. "
+        "Do not add NOPASSWD sudo for a weak-credential utility account."
+    ),
+}
