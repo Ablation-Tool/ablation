@@ -1959,3 +1959,348 @@ FSR_F27_JWT_LICENSE_FORGERY = {
         "jose Python library: jwt.decode(token, key, algorithms) -- key not validated as CA-signed",
     ],
 }
+
+# ── FSR-F28: Hardcoded PostgreSQL + RabbitMQ credentials in cyops-common RPM ─────────────
+
+FSR_F28_HARDCODED_DB_CREDENTIALS = {
+    "id": "FSR-F28",
+    "title": "Hardcoded database credentials in cyops-common RPM (PostgreSQL + RabbitMQ)",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-798",
+    "component": "cyops-common (configs/database/db_config.yml + configs/common/system-config.yml)",
+    "source_rpm": "cyops-common-7.2.0-914.el7.centos.x86_64.rpm",
+    "credentials": {
+        "postgresql": {
+            "host": "localhost",
+            "port": 5432,
+            "user": "cyberpgsql",
+            "password": "[REDACTED -- extractable from cyops-common RPM db_config.yml]",
+            "database": "venom",
+            "note": "Same password in both pg and pg_archival sections",
+        },
+        "rabbitmq": {
+            "host": "localhost",
+            "port": 5672,
+            "user": "fsr-cluster",
+            "password": "[REDACTED -- literal default string hardcoded in system-config.yml]",
+            "vhost": "fsr-cluster",
+            "note": "Literal default string hardcoded -- see system-config.yml extraction",
+        },
+        "elasticsearch": {
+            "host": "localhost",
+            "port": 9200,
+            "secret": None,
+            "auth": "NONE -- no auth configured",
+        },
+    },
+    "impact": (
+        "Any FortiSOAR host reachable at pg port 5432 can be accessed with these credentials. "
+        "Full read/write access to the 'venom' database: all cases, playbooks, assets, connector "
+        "credentials (encrypted with FSR-F31 defuse key), user accounts, RBAC config. "
+        "RabbitMQ 'default_password' allows publishing to cyops.crudhub.datanotify exchange -- "
+        "fake data events injected into case pipeline. "
+        "Elasticsearch unauth: all indexed case data readable without credentials."
+    ),
+    "chain": [
+        "FSR-F18: pg trust-auth on localhost is a separate bypass (no password needed from localhost)",
+        "FSR-F28: password enables remote DB access if pg_hba.conf allows remote connections",
+        "FSR-F28 + FSR-F31: decrypt all connector credentials from DB using defuse key",
+    ],
+    "status": "CONFIRMED via RPM extraction and config file read",
+}
+
+# ── FSR-F29: Identical RSA appliance keypair on every FortiSOAR install ───────────────────
+
+FSR_F29_SHARED_APPLIANCE_KEYPAIR = {
+    "id": "FSR-F29",
+    "title": "Identical RSA-2048 appliance keypair hardcoded in cyops-common RPM on all installs",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N",
+    "cwe": "CWE-321",
+    "component": "cyops-common (configs/keys/APPLIANCE_PRIVATE_KEY + APPLIANCE_PUBLIC_KEY)",
+    "source_rpm": "cyops-common-7.2.0-914.el7.centos.x86_64.rpm",
+    "key_usage": {
+        "cyops_hmac_sign": "config.yml: cyops.hmac.privatekey -- signs inter-service HMAC requests",
+        "crudhub_proxy": "parameters_prod.yaml: crudhub.private_key_path='keys/appliance_private.key' -- authenticates all /api/3/* proxy requests from cyops-api to CrudHub",
+        "postman_keys": "POSTMAN_APPLIANCE_PRIVATE_KEY is identical to APPLIANCE_PRIVATE_KEY -- same key for both",
+    },
+    "key_fingerprint": "RSA-2048, public modulus prefix: 00:b1:4d:2d:2a:d1:a6:47:6a:18:0e:05:28:4d:30",
+    "impact": (
+        "CrudHub (FortiSOAR core REST API for all modules: cases, assets, playbooks) trusts HMAC "
+        "signatures made with this key. Attacker who downloads the public RPM gets the private key "
+        "and can forge any CrudHub request (case creation/modification, playbook execution, user "
+        "creation) as if originating from the legitimate API gateway, bypassing all RBAC. "
+        "Affects ALL FortiSOAR installs worldwide running 7.2.0 (and likely all versions using "
+        "cyops-common). Single-key compromise spans entire global FortiSOAR install base."
+    ),
+    "attack_path": [
+        "1. Download cyops-common-7.2.0 RPM from public FortiSOAR repo",
+        "2. Extract APPLIANCE_PRIVATE_KEY (RSA-2048 PEM)",
+        "3. Craft HMAC-signed HTTP request to CrudHub /api/3/cases or /api/3/users",
+        "4. CrudHub accepts the request as from the trusted API gateway",
+        "5. Create admin user or read all cases/credentials without authentication",
+    ],
+    "limitation": "CrudHub listens on localhost by default -- need prior foothold or SSRF to reach",
+    "status": "CONFIRMED via RPM extraction. REQUIRES CONFIRMATION: verify key is not regenerated at install time",
+    "note": (
+        "If the install script generates a new keypair and replaces the RPM defaults, this finding "
+        "is downgraded. Check install scripts for key generation. If not regenerated = global impact."
+    ),
+}
+
+# ── FSR-F30: Hardcoded Symfony APP_SECRET + secrets_private_key (Defuse encryption key) ─
+
+FSR_F30_HARDCODED_APP_SECRETS = {
+    "id": "FSR-F30",
+    "title": "Multiple hardcoded cryptographic secrets in cyops-api RPM (Symfony + Defuse key)",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-321",
+    "component": "cyops-api (.env + config/parameters_prod.yaml)",
+    "source_rpm": "cyops-api-7.2.0-914.el7.centos.x86_64.rpm",
+    "secrets": {
+        "APP_SECRET": "[REDACTED -- hardcoded hex string in cyops-api/.env]",
+        "JWT_PASSPHRASE": "[REDACTED -- hardcoded hex string in cyops-api/.env]",
+        "symfony_secret_prod": "PleaseChangeMe123",
+        "secrets_private_key": "[REDACTED -- hex string in parameters_prod.yaml; superseded by Defuse.key mechanism in 7.2.0]",
+        "google_recaptcha_secret": "[REDACTED -- reCAPTCHA v2 secret key in parameters_prod.yaml]",
+        "defuse_key_password": "[REDACTED -- FSRDEFUSE constant in bin/generate-fsr-defuse-key; extractable from cyops-api RPM]",
+        "defuse_key_path": "/opt/cyops/configs/cyops-api/.Defuse.key",
+        "defuse_key_source": "bin/generate-fsr-defuse-key:FSRDEFUSE constant -- hardcoded in binary",
+        "defuse_key_note": (
+            "Defuse key IS randomly generated per install via "
+            "KeyProtectedByPassword::createRandomPasswordProtectedKey(FSRDEFUSE). "
+            "Key is unique per install, but PROTECTION PASSWORD is identical on all installs. "
+            "Attacker reads .Defuse.key file + uses FSRDEFUSE constant -> unlocks encryption key "
+            "-> decrypts all connector credentials from venom DB."
+        ),
+    },
+    "impact_per_secret": {
+        "APP_SECRET": (
+            "Symfony application secret used for CSRF token signing, cookie signing, and "
+            "remember-me token generation. With this known, forge any Symfony session cookie "
+            "or CSRF token. Session hijacking without credentials on any 7.2.0 install."
+        ),
+        "secrets_private_key": (
+            "CRITICAL: defuse-php symmetric encryption key. All connector credentials stored in "
+            "the 'venom' PostgreSQL database are encrypted with this key using Defuse\\Crypto. "
+            "With this key + DB access (FSR-F28), decrypt all stored credentials: AWS/Azure/GCP "
+            "API keys, CrowdStrike/Splunk/Palo Alto auth tokens, SIEM credentials. "
+            "A SOAR platform accumulates the highest-privilege API keys in the entire org stack."
+        ),
+        "JWT_PASSPHRASE": (
+            "Passphrase for decrypting jwtprivate.key (if jwtprivate.key is also static/shipped). "
+            "If key is generated at install but passphrase is static -- lower impact. "
+            "CONFIRM: check if jwtprivate.key is in RPM or generated at install."
+        ),
+        "PleaseChangeMe123": (
+            "Default Symfony secret, never changed. Duplicate impact to APP_SECRET -- "
+            "this value is labeled as a separate 'secret' parameter in parameters_prod.yaml."
+        ),
+    },
+    "chain": [
+        "FSR-F30 (secrets_private_key) + FSR-F28 (PostgreSQL creds) = full connector credential dump",
+        "FSR-F30 (APP_SECRET) = Symfony session/CSRF forge without DB access",
+    ],
+    "status": "CONFIRMED via RPM extraction. secrets_private_key critical if same on all installs.",
+    "next_step": "Check install scripts for key/secret regeneration at install time",
+    "install_script_findings": {
+        "defuse_key": "REGENERATED per install (random) BUT password-protected with FSRDEFUSE constant -- static password",
+        "APP_SECRET": "NOT regenerated -- hardcoded in .env, no generation in setup.sh",
+        "JWT_PASSPHRASE": "NOT regenerated -- hardcoded in .env",
+        "JWT_private_key": "Generated by separate component (not cyops-api RPM) -- TBD",
+    },
+}
+
+# ── FSR-F31: Widget zip slip via PharData::extractTo without path sanitization ────────────
+
+FSR_F31_WIDGET_ZIP_SLIP = {
+    "id": "FSR-F31",
+    "title": "Widget import zip slip via PharData::extractTo -- arbitrary file write as nginx",
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-22",
+    "component": "cyops-api (WidgetController:importWidget + installRepoWidget)",
+    "source_file": "/opt/cyops-api/src/Controller/WidgetController.php",
+    "vulnerable_function": "unzipWidgetFile (line 1047)",
+    "vulnerable_code": (
+        "protected function unzipWidgetFile($tgzFileData, $widgetName, $widgetFolderPath) {\n"
+        "    $phar = new \\PharData($widgetTgzPath);\n"
+        "    $phar->decompress();\n"
+        "    $phar->extractTo($widgetFolderPath);  // NO path sanitization\n"
+        "}"
+    ),
+    "affected_routes": [
+        "POST /api/3/widgets/import  (importWidget -> extractTo /tmp/widgets/)",
+        "POST /api/3/widgets/install (installRepoWidget -> extractTo /opt/cyops-ui/widgets/installed/)",
+    ],
+    "process_user": "nginx (PHP-FPM pool: user=nginx, group=nginx, per /etc/php-fpm.d/cyops-api.conf)",
+    "attack": (
+        "Craft .tgz with entry '../../../../../../opt/cyops-auth/utilities/license/constants.so'. "
+        "constants.so is owned nginx:nginx -- writeable by PHP-FPM process. "
+        "Extract replaces the Cython license validation binary with attacker-patched version. "
+        "Patched constants.so accepts any license JWT -> full license bypass."
+    ),
+    "alternative_targets": [
+        "/opt/cyops-api/public/app.php -- root:root mode 644, NOT nginx-writable on base 7.2.0",
+        "/opt/cyops/configs/database/db_config.yml -- overwrite DB creds (ownership TBD)",
+        "/opt/cyops/configs/keys/APPLIANCE_PRIVATE_KEY -- overwrite inter-service signing key (ownership TBD)",
+        "/opt/cyops-auth/.env/lib/python3.6/site-packages/ -- overwrite Python library for backdoor (root-owned in 7.2.0)",
+    ],
+    "ownership_notes": {
+        "app.php": "root:root mode 644 -- CONFIRMED via cyops-api RPM cpio listing. nginx CANNOT write.",
+        "constants.so_base_7.2.0": "root:root -- cyops-auth RPM cpio listing confirms. nginx CANNOT write.",
+        "constants.so_post_patch": "nginx:nginx mode 0644 -- patch.sh OWNER='nginx:nginx'. nginx CAN write.",
+        "activation_requirement": "Service restart needed to reload constants.so after overwrite. cyops-auth uses Gunicorn; workers cache imported .so at startup.",
+    },
+    "precondition": "Authenticated user with 'read.widgets' or 'execute.widgets' permission",
+    "precondition_note": "Default FortiSOAR user has widget permissions. Low-privilege analyst account sufficient.",
+    "chain": [
+        "FSR-F31: zip slip overwrites constants.so (requires fortitip_1333885 patch on 7.6.x+)",
+        "FSR-F31 + FSR-F27: patched constants.so + license forgery = no license restrictions",
+        "FSR-F31 + service restart trigger: zip slip -> wait for maintenance window or trigger restart",
+    ],
+    "php_version_note": "PharData::extractTo path traversal confirmed for PHP 7.x. FortiSOAR 7.2.0 ships PHP 7.x.",
+    "status": "CONFIRMED -- PharData::extractTo no sanitization (source review). constants.so nginx-writable ONLY on 7.6.x+ with fortitip_1333885 patch.",
+}
+
+
+FSR_F32_WORKFLOW_JINJA_SSTI = {
+    "id": "FSR-F32",
+    "title": "FortiSOAR workflow engine SSTI via unsandboxed Jinja2 with incomplete attribute blocklist",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-1336",
+    "component": "cyops-workflow (sealab/workflow/environment.so, sealab/workflow/jinja.so)",
+    "source_file": "/opt/cyops-workflow/sealab/sealab/settings.py",
+    "jinja2_environment": {
+        "backend": "django.template.backends.jinja2.Jinja2",
+        "environment_factory": "sealab.jinja.environment",
+        "extensions": ["jinja2.ext.loopcontrols", "jinja2.ext.do"],
+        "sandbox": "NONE -- standard jinja2.Environment used, NOT jinja2.sandbox.SandboxedEnvironment",
+        "string_evidence": [
+            "environment.so strings: 'jinja2', 'from_string', '_expand_string', 'expand_steps_result' -- NO 'sandbox' or 'SandboxedEnv'",
+            "jinja.so strings: 'workflow.jinja.environment', 'jinja2' -- NO 'sandbox'",
+        ],
+    },
+    "blocklist": {
+        "setting": "BLOCK_IN_TEMPLATE (settings.py line 91)",
+        "production_list": [
+            "__class__", "__base__", "__subclass__", "__builtins__",
+            "__import__", "__globals__", "__init__",
+        ],
+        "enforcement_mechanism": {
+            "function": "validate_and_format_string (environment.so VA 0x1b130)",
+            "method": "PySequence_Contains -- substring search: 'blocked_term in template_string'",
+            "evidence": "0x1b259: call 0x5250 [PySequence_Contains] after loading BLOCK_IN_TEMPLATE list",
+        },
+        "note_subclass_vs_subclasses": (
+            "'__subclass__' IS a substring of '__subclasses__' -- so {{''.__subclasses__()}} IS blocked "
+            "by substring check. But string concat at runtime bypasses the static check."
+        ),
+        "bypass": {
+            "method": "Jinja2 |attr() filter with string concatenation -- splits blocked names across literals",
+            "example": "{{''|attr('__cla'+'ss__')}} -- template contains '__cla' and 'ss__', neither is in blocklist",
+            "note": "Concatenation is evaluated at Jinja2 render time; BLOCK_IN_TEMPLATE check runs on raw template source",
+        },
+    },
+    "ssti_bypass_chain": (
+        "1. Template: {{''|attr('__cla'+'ss__')|attr('__mr'+'o__')[1]|attr('__sub'+'classes__')()|attr('__getitem__')(X)}} "
+        "2. None of '__cla', 'ss__', '__mr', 'o__', '__sub', 'classes__' match any blocklist entry "
+        "3. At render time: str -> str.__mro__[1] (object) -> object.__subclasses__() -> pick subprocess.Popen subclass "
+        "4. RCE via Popen(['id']) or similar"
+    ),
+    "poc_template_source": "{{''|attr('__cla'+'ss__')|attr('__mr'+'o__')[1]|attr('__sub'+'classes__')()}}",
+    "impact": "RCE as cyops-workflow process user. Celery workers process playbook steps. Process runs as workflow service account.",
+    "attack_vector": (
+        "Authenticated user creates/edits playbook step with Jinja2 template in step parameters. "
+        "eval.so calls workflow.environment.expand() -> environment.so validates template via "
+        "validate_and_format_string -> substring check bypassed via |attr() concat -> "
+        "_expand_string() -> jinja2.Environment.from_string(template).render(env) -> RCE."
+    ),
+    "disasm_evidence": {
+        "from_string_load": "environment.so 0x17a3e: mov rsi, [rip+0x2137bb] --> [from_string]",
+        "jinja2_import": "environment.so 0x19aff: mov rdi, [rip+0x21164a] --> [jinja2]",
+        "block_check": "environment.so 0x1b259: call PySequence_Contains (substring check on raw template)",
+        "block_in_template_load": "environment.so 0x1b1a0: mov rsi, [rip+0x210249] --> [BLOCK_IN_TEMPLATE]",
+        "no_sandbox": "Strings scan of environment.so, jinja.so: 'SandboxedEnvironment' absent",
+    },
+    "also_eval_in_settings": {
+        "line_68": "eval(application_config.get('celeryd', 'CELERY_TASK_RESULT_EXPIRES', ...)) -- eval on config",
+        "line_70": "eval(application_config.get('application', 'ALLOWED_HOSTS')) -- eval on config",
+        "line_73_75": "eval() on THREAD_POOL_WORKER, PARALLEL_BRANCH_THREAD_POOL, SYNC_DELAY_LIMIT from config",
+        "implication": "Config file write (e.g., via zip slip) + eval = RCE without any Jinja2 bypass needed",
+    },
+    "precondition": "Authenticated user with playbook create/edit permission",
+    "status": "CONFIRMED -- unsandboxed Jinja2 (no SandboxedEnvironment in binary strings), BLOCK_IN_TEMPLATE bypass via |attr() concat confirmed via PySequence_Contains mechanism (environment.so disasm).",
+}
+
+
+FSR_F33_INTEGRATIONS_RBAC_BYPASS_KEY = {
+    "id": "FSR-F33",
+    "title": "Hardcoded INTEGRATIONS_SECRET_KEY bypasses connector RBAC on all FortiSOAR installs",
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-798",
+    "component": "cyops-workflow (sealab/sealab/settings.py line 268)",
+    "source_file": "/opt/cyops-workflow/sealab/sealab/settings.py",
+    "secret": {
+        "setting": "INTEGRATIONS_SECRET_KEY",
+        "value": "[REDACTED -- hardcoded string in settings.py:268. Comment: 'SECRET KEY TO BYPASS THE CONNECTOR RBAC']",
+        "usage": "Appended to INTEGRATIONS_URL as ?secretKey=<VALUE>",
+        "url": "https://APP_HOST:9595/integration/execute/?format=json&secretKey=<VALUE>",
+    },
+    "impact": (
+        "Workflow engine calls integrations service at :9595 with this key to bypass connector RBAC. "
+        "Key is hardcoded, identical on all FortiSOAR installs. "
+        "Attacker who can reach :9595 (e.g., via SSRF from FortiSOAR web endpoints, "
+        "or from inside the FortiSOAR host) can execute any connector action without RBAC checks. "
+        "Connectors include AWS, SIEM, EDR, ticketing systems -- all credential access bypassed."
+    ),
+    "access_vector": [
+        "Internal: direct call to https://localhost:9595/integration/execute/?secretKey=<VALUE>",
+        "Via SSRF: any endpoint that proxies user-controlled URLs to internal services",
+        "Via FSR-F18 (DB trust-auth): modify connector config in venom DB to trigger internal call",
+    ],
+    "companion_secret": {
+        "DJANGO_SECRET_KEY": "[REDACTED -- settings.py:265 'SECRET_KEY'. Hardcoded hex string]",
+        "usage": "Django session signing, CSRF token generation, signed cookies",
+        "impact": "Forge CSRF tokens, forge session cookies for any user including admin",
+    },
+    "status": "CONFIRMED via settings.py source. Value redacted for public repo.",
+}
+
+
+FSR_F34_MANAGE_PASSWORDS_DECRYPT_KEY = {
+    "id": "FSR-F34",
+    "title": "Hardcoded symmetric decryption key for manage_passwords.py used to decrypt all service passwords",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "cwe": "CWE-321",
+    "component": "cyops-workflow (settings.py line 181, 354) + manage_passwords.py",
+    "source_file": "/opt/cyops-workflow/sealab/sealab/settings.py",
+    "key": {
+        "value": "[REDACTED -- hardcoded in settings.py lines 181 and 354; extractable from cyops-workflow RPM]",
+        "usage": "manage_passwords.py --decrypt <encrypted_password> <key>",
+        "what_it_decrypts": [
+            "RabbitMQ password (settings.py:181 -- decrypts mq_password from config)",
+            "PostgreSQL password (settings.py:354 -- decrypts DB_PASSWORD from config)",
+        ],
+    },
+    "attack": (
+        "Encrypted passwords stored in config files. "
+        "Key [REDACTED] is hardcoded in settings.py (cyops-workflow RPM -- identical on all installs). "
+        "Any attacker who reads config files (e.g., via FSR-F18 DB access, or file read vuln) "
+        "AND knows this key can decrypt all service passwords without the RPM being installed."
+    ),
+    "note": "manage_passwords.py is at /opt/cyops/configs/scripts/manage_passwords.py -- called via subprocess.",
+    "status": "CONFIRMED via settings.py source.",
+}
