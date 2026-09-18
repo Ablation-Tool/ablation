@@ -1754,3 +1754,171 @@ FSR_F24_DEBUG_UTILS_ARBITRARY_FILE_WRITE = {
     "precondition": "Authenticated user with playbook execution rights. debug_utils connector installed.",
     "status": "CONFIRMED via source review",
 }
+
+# ── FSR-F25: Trial license bypass in validate_license_before_deployment ────────────────────
+
+FSR_F25_TRIAL_LICENSE_BYPASS = {
+    "id": "FSR-F25",
+    "title": "Trial license bypass in validate_license_before_deployment skips FDN validation",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-284",
+    "component": "cyops-auth (licensemanager.py:232)",
+    "source_file": "/opt/cyops-auth/utilities/licensemanager.py",
+    "vulnerable_function": "validate_license_before_deployment",
+    "vulnerable_code": (
+        "# licensemanager.py:232 (cyops-auth-7.2.0)\n"
+        "LICENSE_NOT_REGISTERED_SUBSTRING = 'is not registered with licensing server'\n"
+        "if not is_valid and CSLicenseManager().is_trial_license(license_key) \\\n"
+        "        and LICENSE_NOT_REGISTERED_SUBSTRING in message:\n"
+        "    return True, '', users, expiry_date  # BYPASS: FDN failure silently accepted\n"
+        "else:\n"
+        "    return is_valid, message, users, expiry_date"
+    ),
+    "flow": [
+        "1. validate_license_inline_part() runs -- checks JWT signature + hardware_key locally",
+        "2. validate_license_fdn_part() contacts Fortinet FDN server to register/validate license",
+        "3. FDN step fails with 'is not registered with licensing server' (network unavailable OR unknown serial_no)",
+        "4. is_trial_license(license_key) returns True if license type field contains Trial substring",
+        "5. Function returns (True, '', users, expiry_date) -- FDN validation completely skipped",
+    ],
+    "impact": (
+        "Trial license with any arbitrary entitlements accepted without FDN registration check. "
+        "Combined with FSR-F27 (embedded key injection to forge JWT), attacker deploys full Enterprise "
+        "license with max_users=99999 on air-gapped or FDN-blocked installs by setting type='Trial(Extension)'. "
+        "FDN bypass removes the last server-side revocation check."
+    ),
+    "affected_versions": "Confirmed cyops-auth 7.2.0. Likely all versions with trial license support.",
+    "is_trial_license_logic": {
+        "source": "disasm: license.so:0x88960 (__pyx_pw_...73is_trial_license)",
+        "mechanism": "calls jose.jwt.get_unverified_claims(license_key) -- NO signature verification",
+        "check": "'daily_action_limit' in claims['entitlements'] via PySequence_Contains",
+        "NOT_checked": "type field, edition field, trial substring -- only entitlements key presence",
+        "implication": (
+            "Any JWT (signed OR unsigned OR self-signed) with entitlements={'daily_action_limit': X} "
+            "is classified as trial. Attacker can forge this trivially without knowing Fortinet private key."
+        ),
+    },
+    "full_attack_chain_no_fortinet_key_required": [
+        "1. Craft JWT payload: any type/edition, entitlements={'daily_action_limit':1}, "
+        "   public_key=attacker_self_signed_cert_PEM",
+        "2. Sign with attacker RSA private key (RS512)",
+        "3. validate_license_inline_part() -> verify_license_signature() -> "
+        "   get_public_key() reads public_key from UNVERIFIED payload -> "
+        "   jose.decode() with attacker key -> PASSES (FSR-F27)",
+        "4. validate_license_fdn_part() fails: unknown serial_no not registered with FDN",
+        "5. is_trial_license() reads UNVERIFIED entitlements, sees daily_action_limit, returns True",
+        "6. FSR-F25 bypass: returns (True, '', users, expiry_date) -- license ACCEPTED",
+    ],
+    "status": "CONFIRMED (licensemanager.py:232 source + license.so:0x88960 disasm)",
+}
+
+# ── FSR-F26: Hardcoded expired JWT + live CA chain in license.so ──────────────────────────
+
+FSR_F26_HARDCODED_JWT_PKI_DISCLOSURE = {
+    "id": "FSR-F26",
+    "title": "Hardcoded RS512 JWT with live CA certificate chain embedded in license.so binary",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "cwe": "CWE-798",
+    "component": "cyops-auth (handlerworkers/license.so, cyops-auth-7.2.0)",
+    "binary": "/opt/cyops-auth/handlerworkers/license.so",
+    "jwt_decoded": {
+        "header": {"alg": "RS512", "typ": "JWT"},
+        "payload": {
+            "type": "Trial(Extension)",
+            "edition": "Enterprise",
+            "serial_no": "FSRVMPTM21000277",
+            "hardware_key": "d8083c656d9d31ecb5319070f02cfd17",
+            "expiry_time": "2021-05-27",
+            "max_users": 2,
+            "days": None,
+            "entitlements": {"branding": "advanced", "daily_action_limit": 300},
+            "public_key": "<PEM cert CN=FSRVMPTM21000277, valid until 2031>",
+            "cert1": "<Fortinet intermediate CA: fortinet-subca2001>",
+            "cert2": "<Fortinet root CA: fortinet-ca2>",
+        },
+    },
+    "pki_chain_revealed": [
+        "Root CA:          fortinet-ca2 (Fortinet root, self-signed)",
+        "Intermediate CA:  fortinet-subca2001 (signs device certs)",
+        "End-entity cert:  FSRVMPTM21000277 (per-device, valid until 2031)",
+    ],
+    "jwt_status": "Expired 2021-05-27. Certificate still within validity (until 2031).",
+    "impact": (
+        "Reveals complete Fortinet license PKI hierarchy. Public key material in cert chain "
+        "enables construction of correctly-structured forged JWT payloads for FSR-F27. "
+        "hardware_key field value discloses device fingerprint derivation format (MD5 hex, 32 chars). "
+        "entitlements dict structure (branding, daily_action_limit) discloses all license feature "
+        "gate field names attackers need to forge maximally-permissive license."
+    ),
+    "extraction_method": "strings | grep -A20 eyJ on license.so binary; base64 decode header+payload",
+    "status": "CONFIRMED via binary string extraction and base64 decode",
+}
+
+# ── FSR-F27: JWT license forgery via embedded public key injection ──────────────────────────
+
+FSR_F27_JWT_LICENSE_FORGERY = {
+    "id": "FSR-F27",
+    "title": "FortiSOAR license forging via JWT embedded public key injection (jose RS512)",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-347",
+    "component": "cyops-auth (handlerworkers/license.so -- CSLicenseManager.verify_license_signature)",
+    "root_cause": (
+        "License JWT verification uses jose.jwt.decode(token, public_key, algorithms=['RS512']). "
+        "The public_key argument is extracted from the PAYLOAD field 'public_key' of the same JWT "
+        "before verification -- making signature verification self-referential. "
+        "No pinned Fortinet root CA validation present (no CA/chain/verify_chain strings in license.so; "
+        "only jose/RS512/algorithms/jwt library strings). "
+        "Pattern is identical to JWK header injection (CVE-2018-0114) but in payload field."
+    ),
+    "attack_steps": [
+        "1. Generate RSA-4096 keypair locally (openssl genrsa 4096)",
+        "2. Create self-signed X.509 certificate using that keypair (CN=<any>, valid 10y)",
+        "3. Craft JWT payload: type='Trial(Extension)' OR 'Enterprise', edition='Enterprise', "
+        "   serial_no=<target hardware serial>, hardware_key=<target hardware_key>, "
+        "   expiry_time='2099-12-31', max_users=99999, "
+        "   entitlements={'branding':'advanced','daily_action_limit':99999,...}, "
+        "   public_key=<self-signed cert PEM>, cert1='', cert2=''",
+        "4. Sign JWT with attacker RSA private key using RS512",
+        "5. Submit forged JWT as license key during FortiSOAR license deployment",
+        "6. verify_license_signature() extracts 'public_key' from payload, passes to jose.decode()",
+        "7. jose verifies signature against attacker's own public key -- verification PASSES",
+        "8. License accepted: Enterprise edition, unlimited seats, unlimited entitlements, no expiry",
+    ],
+    "combined_with_f25": (
+        "If hardware_key check fails (attacker does not know target hardware_key MD5), "
+        "combine with FSR-F25: craft type='Trial(Extension)' payload, ensure FDN unavailable, "
+        "bypass returns True regardless of hardware_key mismatch."
+    ),
+    "disasm_evidence": {
+        "binary": "/opt/cyops-auth/handlerworkers/license.so (cyops-auth-7.2.0)",
+        "get_public_key_VA": "0x3e370",
+        "get_public_key_flow": [
+            "0x3e3f2: load string 'get_unverified_claims' into rsi",
+            "0x3e409: call *%rax -- calls jose.jwt.get_unverified_claims(license_key) NO SIG CHECK",
+            "0x3e4fb: load string 'public_key' into rsi",
+            "0x3e508: call __Pyx_PyDict_GetItem -- extracts claims['public_key'] from unverified payload",
+            "returns: PEM cert embedded by attacker in JWT payload (user-controlled)",
+        ],
+        "verify_license_signature_VA": "0x42350",
+        "verify_license_signature_flow": [
+            "0x42418-0x424a0: call self.get_public_key(license_key) -> attacker-controlled key",
+            "0x424ed-0x42511: PyDict_New; PyDict_SetItem('verify_exp', False) -- expiry DISABLED",
+            "0x425e2-0x4260f: build kwargs: {key: attacker_key, algorithms: 'RS512', options: {verify_exp: False}}",
+            "0x42645: call __Pyx_PyObject_Call(jose.jwt.decode, (license_key,), kwargs)",
+            "RESULT: decode() verifies signature against attacker's own key -- ALWAYS PASSES",
+        ],
+    },
+    "confidence": "CONFIRMED",
+    "status": "CONFIRMED via disasm (license.so:0x3e370 get_public_key + license.so:0x42350 verify_license_signature)",
+    "next_step": "Build PoC: forge RS512 JWT with self-signed cert, submit as license key",
+    "references": [
+        "CVE-2018-0114: JWT key injection via JWK header field (Cisco node-jose)",
+        "jose Python library: jwt.decode(token, key, algorithms) -- key not validated as CA-signed",
+    ],
+}
