@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
 """
-Fortinet Go PE32+ Universal Decryption Tool
-Target: FortiClient EMS 7.2.9 and related binaries (ecsocksrv.exe, regworker.exe, ...)
-Method: COFF symbol table scan + Go string header parsing + multi-scheme decryption
+Fortinet Universal Decryption Tool
+Targets:
+  FortiClient EMS 7.2.9 (Go PE32+): ecsocksrv.exe, regworker.exe, ...
+  FortiSOAR 7.2.x-7.6.x (Cython .so): workflow secrets + connector credentials
 
-Schemes implemented:
+EMS Schemes:
   SCHEME-1  XOR passphrase: defaultCertPassEnc XOR defaultCertPassKey -> AES-256-CBC PEM passphrase
   SCHEME-2  AES-128-CBC passphrase decrypt: AES128CBC(k1, IV=zeros, serverKeyPwd) -> DES passphrase
   SCHEME-3  AES-128-CBC blob decrypt: AES128CBC(k1, IV=zeros, serverKeyEnc) -> DES-EDE3-CBC PEM
   SCHEME-4  HMAC-512 key extraction: raw ASCII from global (no decryption needed)
   SCHEME-5  JWT signing keys: same as SCHEME-4
 
+FortiSOAR Schemes:
+  SCHEME-FSR1  Fernet/AES-128-CBC: hardcoded key in encrypt_decrypt_util.so (FSR-F39)
+               Encrypts: workflow secrets, env vars, playbook sensitive params (PostgreSQL)
+  SCHEME-FSR2  AES-128-CFB: hardcoded keys in PasswordModule.so (FSR-F40)
+               Encrypts: connector credentials (API keys, OAuth, SMTP, cloud creds)
+
 Usage:
+  # FortiClient EMS binary analysis
   python3 fortinet_decrypt.py <binary.exe> [--dump-all] [--out-dir /tmp/out]
+
+  # FortiSOAR decrypt single blob (auto-detect Fernet vs AES-CFB)
+  python3 fortinet_decrypt.py --fortisoar --blob <base64_ciphertext>
+
+  # FortiSOAR decrypt file of blobs (one per line, optionally label:blob format)
+  python3 fortinet_decrypt.py --fortisoar --blob-file blobs.txt
+
+  # FortiSOAR try all keys against a blob
+  python3 fortinet_decrypt.py --fortisoar --blob <base64_ciphertext> --try-all
 """
 
-import struct, sys, os, hashlib, subprocess, argparse, json
+import struct, sys, os, hashlib, subprocess, argparse, json, base64
 from pathlib import Path
 
 try:
@@ -25,6 +42,207 @@ try:
 except ImportError:
     HAS_CRYPTO = False
     print("[!] cryptography not installed -- decryption disabled (pip install cryptography)")
+
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+    HAS_FERNET = True
+except ImportError:
+    HAS_FERNET = False
+
+try:
+    from Crypto.Cipher import AES as PyCryptoAES
+    HAS_PYCRYPTO = True
+except ImportError:
+    try:
+        from Cryptodome.Cipher import AES as PyCryptoAES
+        HAS_PYCRYPTO = True
+    except ImportError:
+        HAS_PYCRYPTO = False
+
+
+# ================================================================ FortiSOAR keys
+# FSR-F39: Fernet key from encrypt_decrypt_util.so module init
+# Used by: workflow secrets, environment variables, playbook sensitive params
+FSR_FERNET_KEY = b'PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA='
+
+# FSR-F40: AES-128-CFB keys from PasswordModule.so
+# Used by: connector credentials stored in cyops_db
+FSR_AES_CFB_KEYS = {
+    'PasswordModule_default': b'jp3mci29fq7f2kc7',
+    'PasswordModule_alt':     b'I3dmcn23@KlS2#!c',  # 16 bytes (truncated from I3dmcn23@KlS2#!ck)
+    'PasswordModule_cli':     b'jQp3(7@jod#j38d1',
+}
+
+# Suffix appended by PasswordModule.encrypt, stripped in decrypt
+# BSS ref: __pyx_kp_s_Password -> endswith check
+FSR_PWD_SUFFIX = b'Password'
+
+
+# ============================================================= FortiSOAR decrypt
+
+def fsr_fernet_decrypt(token_b64: str) -> bytes | None:
+    """Decrypt a FortiSOAR Fernet token (FSR-F39 hardcoded key)."""
+    if not HAS_FERNET:
+        print("[!] cryptography.fernet not available")
+        return None
+    try:
+        if isinstance(token_b64, str):
+            token_b64 = token_b64.encode()
+        f = Fernet(FSR_FERNET_KEY)
+        return f.decrypt(token_b64)
+    except InvalidToken:
+        return None
+    except Exception as e:
+        return None
+
+
+def fsr_aes_cfb_decrypt(ciphertext_b64: str, key: bytes) -> bytes | None:
+    """
+    Decrypt a FortiSOAR PasswordModule AES-128-CFB blob (FSR-F40).
+    Format: base64(IV[16] + ciphertext) with optional 'Password' suffix stripped.
+    """
+    if not HAS_PYCRYPTO:
+        print("[!] pycryptodome not available (pip install pycryptodome)")
+        return None
+    try:
+        raw = base64.b64decode(ciphertext_b64)
+        if len(raw) < 17:
+            return None
+        iv = raw[:16]
+        ct = raw[16:]
+        if ct.endswith(FSR_PWD_SUFFIX):
+            ct = ct[:-len(FSR_PWD_SUFFIX)]
+        cipher = PyCryptoAES.new(key, PyCryptoAES.MODE_CFB, iv)
+        pt = cipher.decrypt(ct)
+        if pt.endswith(FSR_PWD_SUFFIX):
+            pt = pt[:-len(FSR_PWD_SUFFIX)]
+        return pt
+    except Exception:
+        return None
+
+
+def fsr_is_fernet_token(blob: str) -> bool:
+    """Fernet tokens are URL-safe base64 and start with gAAAAA (version byte 0x80)."""
+    try:
+        b = base64.urlsafe_b64decode(blob.strip() + '==')
+        return b[0] == 0x80
+    except Exception:
+        return False
+
+
+def fsr_decrypt_blob(blob: str, try_all: bool = False) -> dict:
+    """
+    Auto-detect scheme and decrypt a FortiSOAR ciphertext blob.
+    Returns dict with: scheme, key_used, plaintext (hex+str), raw
+    """
+    blob = blob.strip()
+    result = {'input': blob[:40] + ('...' if len(blob) > 40 else ''), 'scheme': None,
+              'key_used': None, 'plaintext': None, 'plaintext_str': None, 'success': False}
+
+    # Try Fernet first (FSR-F39)
+    if fsr_is_fernet_token(blob) or try_all:
+        pt = fsr_fernet_decrypt(blob)
+        if pt is not None:
+            result.update({
+                'scheme': 'SCHEME-FSR1 (Fernet/AES-128-CBC)',
+                'key_used': 'FSR_FERNET_KEY (PGh7aJYw8gPK0HT9W2x7ThTOyTurZShP7HmnQGQFyKA=)',
+                'plaintext': pt.hex(),
+                'plaintext_str': pt.decode('utf-8', errors='replace'),
+                'success': True,
+            })
+            return result
+
+    # Try AES-128-CFB keys (FSR-F40)
+    for key_name, key in FSR_AES_CFB_KEYS.items():
+        pt = fsr_aes_cfb_decrypt(blob, key)
+        if pt and _looks_printable(pt):
+            result.update({
+                'scheme': 'SCHEME-FSR2 (AES-128-CFB)',
+                'key_used': f'{key_name} ({key.decode()})',
+                'plaintext': pt.hex(),
+                'plaintext_str': pt.decode('utf-8', errors='replace'),
+                'success': True,
+            })
+            return result
+
+    if try_all:
+        # Report best attempt even if not clearly printable
+        for key_name, key in FSR_AES_CFB_KEYS.items():
+            pt = fsr_aes_cfb_decrypt(blob, key)
+            if pt:
+                result.update({
+                    'scheme': 'SCHEME-FSR2 (AES-128-CFB, uncertain)',
+                    'key_used': f'{key_name} ({key.decode()})',
+                    'plaintext': pt.hex(),
+                    'plaintext_str': pt.decode('utf-8', errors='replace'),
+                    'success': False,
+                })
+                break
+
+    return result
+
+
+def _looks_printable(b: bytes) -> bool:
+    """Heuristic: >80% printable ASCII -> likely plaintext."""
+    if not b:
+        return False
+    printable = sum(1 for c in b if 32 <= c < 127 or c in (9, 10, 13))
+    return printable / len(b) > 0.80
+
+
+def fsr_decrypt_main(args):
+    """Entry point for --fortisoar mode."""
+    if not HAS_FERNET and not HAS_PYCRYPTO:
+        print("[!] Install dependencies: pip install cryptography pycryptodome")
+        sys.exit(1)
+
+    blobs = []
+    if args.blob:
+        blobs.append(('cmdline', args.blob))
+    if args.blob_file:
+        for line in Path(args.blob_file).read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if ':' in line and len(line.split(':', 1)[0]) < 40:
+                label, blob = line.split(':', 1)
+                blobs.append((label.strip(), blob.strip()))
+            else:
+                blobs.append((f'blob_{len(blobs)+1}', line))
+
+    if not blobs:
+        print("[!] Provide --blob <token> or --blob-file <file>")
+        sys.exit(1)
+
+    print(f"\n{'='*60}")
+    print("FortiSOAR Universal Decryption")
+    print(f"  FSR-F39 Fernet key: {FSR_FERNET_KEY.decode()}")
+    print(f"  FSR-F40 AES-CFB keys: {', '.join(FSR_AES_CFB_KEYS)}")
+    print(f"{'='*60}\n")
+
+    report = []
+    for label, blob in blobs:
+        r = fsr_decrypt_blob(blob, try_all=args.try_all)
+        r['label'] = label
+        report.append(r)
+        status = '[OK]' if r['success'] else '[FAIL]'
+        print(f"{status} {label}")
+        if r['success'] or args.try_all:
+            print(f"  scheme    : {r['scheme']}")
+            print(f"  key       : {r['key_used']}")
+            print(f"  plaintext : {r['plaintext_str']!r}")
+            print(f"  hex       : {r['plaintext']}")
+        else:
+            print(f"  no scheme matched -- unknown key or format")
+        print()
+
+    if args.out_dir:
+        Path(args.out_dir).mkdir(parents=True, exist_ok=True)
+        rpath = os.path.join(args.out_dir, 'fortisoar_decrypt.json')
+        Path(rpath).write_text(json.dumps(report, indent=2))
+        print(f"[*] Report -> {rpath}")
+
+    return report
 
 
 IMAGE_BASE = 0x400000
@@ -315,9 +533,36 @@ def analyse(path, out_dir, dump_all):
 
 
 if __name__ == '__main__':
-    ap = argparse.ArgumentParser(description='Fortinet Go PE32+ universal decryption tool')
-    ap.add_argument('binary', help='Path to Fortinet Go binary (e.g. ecsocksrv.exe)')
+    ap = argparse.ArgumentParser(description='Fortinet universal decryption tool (EMS + FortiSOAR)')
+    ap.add_argument('binary', nargs='?', help='Path to FortiClient EMS Go binary (e.g. ecsocksrv.exe)')
     ap.add_argument('--out-dir', default='/tmp/fortinet_decrypt_out', help='Output directory')
-    ap.add_argument('--dump-all', action='store_true', help='Dump all raw blobs to out-dir')
+    ap.add_argument('--dump-all', action='store_true', help='Dump all raw blobs to out-dir (EMS mode)')
+
+    # FortiSOAR mode
+    ap.add_argument('--fortisoar', action='store_true',
+                    help='FortiSOAR decrypt mode (FSR-F39 Fernet + FSR-F40 AES-CFB)')
+    ap.add_argument('--blob', metavar='B64',
+                    help='Single base64 ciphertext blob to decrypt (FortiSOAR)')
+    ap.add_argument('--blob-file', metavar='FILE',
+                    help='File of blobs to decrypt, one per line or label:blob format')
+    ap.add_argument('--try-all', action='store_true',
+                    help='Try all known keys even if auto-detect fails')
+    ap.add_argument('--keys', action='store_true',
+                    help='Print all known FortiSOAR hardcoded keys and exit')
+
     args = ap.parse_args()
-    analyse(args.binary, args.out_dir, args.dump_all)
+
+    if args.keys:
+        print(f"FSR-F39 Fernet key (encrypt_decrypt_util.so, workflow secrets):")
+        print(f"  {FSR_FERNET_KEY.decode()}")
+        print(f"\nFSR-F40 AES-128-CFB keys (PasswordModule.so, connector credentials):")
+        for name, key in FSR_AES_CFB_KEYS.items():
+            print(f"  {name}: {key.decode()}")
+        sys.exit(0)
+
+    if args.fortisoar or args.blob or args.blob_file:
+        fsr_decrypt_main(args)
+    elif args.binary:
+        analyse(args.binary, args.out_dir, args.dump_all)
+    else:
+        ap.print_help()
