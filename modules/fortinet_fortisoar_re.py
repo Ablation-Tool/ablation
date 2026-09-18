@@ -4253,3 +4253,58 @@ FSR_F69_ZIP_SLIP_SOLUTION_PACK = {
     },
     "status": "CONFIRMED -- ZipArchive::extractTo() without entry name validation in SolutionPackUtilityService.php and ImportJobCommand.php (source code); PharData::extractTo() in WidgetController.php; PHP ZipArchive path traversal is well-documented behavior",
 }
+
+# FSR-F70: PublicActionController portalUserAction -- pre-auth all-header forwarding to DAS /token (CWE-346 / CWE-441)
+# PublicActionController.php:329 portalUserAction() is a pre-auth endpoint that proxies PUT /token requests to DAS.
+# The function collects ALL client-supplied HTTP headers via $request->headers->all() (line 339)
+# and forwards them verbatim to the internal DAS service (line 345).
+# Only EXTENSION_CONTAINER_HOSTNAME is overwritten with the server-side hostname (line 342).
+# All other client-supplied headers -- including Authorization, X-Forwarded-For, X-Auth-Token,
+# X-Remote-User, or any custom DAS-specific headers -- pass through unchanged.
+# If the DAS /token handler trusts any of these forwarded headers for portal authentication or
+# identity binding, an unauthenticated attacker can manipulate them to influence token creation
+# or user provisioning (line 368: saveSamlUser() creates/updates users from DAS response).
+# Attack surface: pre-auth; requires no credentials; hits DAS on internal network.
+# Status: PLAUSIBLE -- exploitability depends on DAS /token handler's trust model for forwarded headers;
+#   deeper DAS authenticationhandler.so analysis needed to confirm which headers affect token logic.
+FSR_F70_PORTAL_USER_PREAUTH_HEADER_INJECTION = {
+    "id": "FSR-F70",
+    "title": "PublicActionController portalUserAction -- pre-auth all-client-header forwarding to DAS /token enables DAS header spoofing (CWE-346 / CWE-441)",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N",
+    "cwe": "CWE-346",
+    "affected_paths": {
+        "proxy_function": "/opt/cyops-api/src/Controller/PublicActionController.php:329 -- portalUserAction()",
+        "header_collection": "/opt/cyops-api/src/Controller/PublicActionController.php:339 -- $request->headers->all()",
+        "das_proxy_call": "/opt/cyops-api/src/Controller/PublicActionController.php:345 -- GuzzleRequest('put', dasUri/token, $request_headers, body)",
+        "user_creation": "/opt/cyops-api/src/Controller/PublicActionController.php:368 -- saveSamlUser(Person::class, $jsonDecodeResponse['user_details'])",
+    },
+    "evidence": {
+        "all_headers_forwarded": "$request->headers->all() returns ALL HTTP headers including attacker-controlled ones",
+        "only_one_override": "Only EXTENSION_CONTAINER_HOSTNAME is overwritten; Authorization, X-Auth-Token, X-Remote-User pass through",
+        "pre_auth": "No authentication check at start of portalUserAction -- it is a public endpoint for portal SSO flow",
+        "user_creation_risk": "saveSamlUser() at line 368 creates or updates FortiSOAR users based on DAS response; DAS response influenced by forwarded headers",
+    },
+    "attack": {
+        "step1": "Send PUT /api/public/... (portalUserAction route) with arbitrary headers including auth-bypass candidates",
+        "step2": "PHP proxy forwards all client headers to DAS /token endpoint on internal network",
+        "step3": "If DAS /token trusts X-Remote-User or similar headers from internal callers, attacker impersonates arbitrary portal user",
+        "step4": "saveSamlUser() provisions attacker-controlled identity into FortiSOAR user store",
+    },
+    "prerequisite": "DAS /token handler must trust client-forwarded headers from PHP proxy; requires DAS authenticationhandler.so analysis to confirm",
+    "status": "PLAUSIBLE -- header forwarding confirmed in PHP source; DAS response not confirmed to be influenced by forwarded headers",
+}
+
+# Binary analysis notes (this session -- 2026-09-18)
+# workflow/environment.so: NO SandboxedEnvironment anywhere in all 23 workflow .so files (confirmed via full string sweep)
+#   Confirms: existing FSR-F63 (rules engine SSTI) and FSR-F65 (connector config SSTI) are fully unsandboxed
+#   Relevant to: if any new SSTI path is found, sandbox bypass is not a separate obstacle
+# workflow/environment.so: _expand(obj, env) uses env as READ-ONLY Jinja2 context -- env values are NOT
+#   rendered as templates themselves (no double-render); WorkflowTriggerController env injection -> SSTI
+#   is NOT directly exploitable via env values alone (env values substituted as literals, not templates)
+# licensehandler.so: unauthenticated_api list contains deploy_license / install_trial_license /
+#   download_trial_license / get_info_for_license; deploy_ui_license_using_cli (shell execution) is
+#   NOT in unauthenticated list; pre-auth shell injection via routeLicenseAction() is RULED OUT
+# DAS server (csdassrv.py Tornado): deploy_ui_license_using_cli uses subprocess with use_shell=True
+#   but deployment_type is whitelisted via __Pyx_PyUnicode_Equals checks -- injection mitigated
