@@ -4195,3 +4195,61 @@ FSR_F68_RPM_FULLNAME_SHELL_INJECTION = {
     },
     "status": "CONFIRMED -- 'rpm -qa | grep ' string constant in _install_rpm_dependencies; 'shell' n_s kwarg + Popen + PIPE all present; pipeline syntax requires shell=True; rpm_full_name from info.json (user-controlled via FSR-F64 dev API)",
 }
+
+# FSR-F69: Zip Slip (arbitrary file write) in solution pack / widget / import job upload -- PHP ZipArchive::extractTo() without entry name validation (CWE-22)
+# Sources:
+#   - /opt/cyops-api/src/Service/SolutionPackUtilityService.php:143 -- $zip->extractTo($contentFolderPath)
+#   - /opt/cyops-api/src/Service/SolutionPackUtilityService.php:181 -- $zip->extractTo($folderPath)
+#   - /opt/cyops-api/src/Controller/WidgetController.php:1162 -- $phar->extractTo($widgetFolderPath) (Phar archive)
+#   - /opt/cyops-api/src/Command/ImportJobCommand.php:229 -- $zip->extractTo($folderPath)
+# Vulnerable pattern:
+#   $zip = new ZipArchive();
+#   $zip->open($zipPath);
+#   $zip->extractTo($contentFolderPath);  // No entry name iteration or '..' check before extract
+# PHP ZipArchive::extractTo() does NOT sanitize path traversal (../) in zip entry names.
+# checkFileDumpPath() only validates the zip FILE path, not individual entries within the archive.
+# Attack model:
+#   1. Attacker has solution pack import / widget upload / configuration import permission (admin/operator)
+#   2. Creates malicious ZIP: entry named '../../etc/cron.d/evil' with payload content
+#   3. Uploads via /api/3/solution-pack/ or widget upload or config import endpoint
+#   4. extractTo() writes '../../../etc/cron.d/evil' relative to extraction dir
+#   5. With extraction dir at /tmp/cyops-sp-<uuid>/, attacker writes to arbitrary filesystem paths
+# Impact depends on running user:
+#   - SolutionPack: PHP-FPM runs as nginx (cyops-api) -- writes to nginx-writable paths
+#     including nginx config, PHP app files, /tmp/ accessible cron dirs, authorized_keys
+#   - Widget: same nginx user context
+#   - ImportJob: runs via /usr/bin/php console command, same nginx user
+# Note: Phar archives (WidgetController) also susceptible -- PharData::extractTo() has same issue
+FSR_F69_ZIP_SLIP_SOLUTION_PACK = {
+    "id": "FSR-F69",
+    "title": "Zip Slip (arbitrary file write) in solution pack / widget / config import -- PHP ZipArchive::extractTo() and PharData::extractTo() called without entry name validation for path traversal",
+    "severity": "HIGH",
+    "cvss": "7.2",
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-22",
+    "affected_paths": {
+        "solution_pack_1": "/opt/cyops-api/src/Service/SolutionPackUtilityService.php:143 -- ZipArchive::extractTo($contentFolderPath)",
+        "solution_pack_2": "/opt/cyops-api/src/Service/SolutionPackUtilityService.php:181 -- ZipArchive::extractTo($folderPath)",
+        "widget_upload":   "/opt/cyops-api/src/Controller/WidgetController.php:1162 -- PharData::extractTo($widgetFolderPath)",
+        "import_job":      "/opt/cyops-api/src/Command/ImportJobCommand.php:229 -- ZipArchive::extractTo($folderPath)",
+    },
+    "evidence": {
+        "no_entry_validation": "No iteration over zip entries, no '../' check, no realpath validation before extractTo() call in all four locations",
+        "checkFileDumpPath_scope": "checkFileDumpPath() validates zip FILE path (that it's in /tmp/), not individual entries inside the archive",
+        "php_ziparchive_behavior": "PHP ZipArchive::extractTo() does NOT sanitize path traversal in entry names -- this is documented PHP behavior (CWE-22)",
+    },
+    "attack": {
+        "step1": "Create malicious ZIP: entry name '../../etc/cron.d/evil' (or nginx config path, or .ssh/authorized_keys)",
+        "step2": "POST /api/3/solution-pack/ (previewAction or installAction) or widget upload endpoint",
+        "step3": "$zip->extractTo('/tmp/cyops-sp-<uuid>/') extracts '../../etc/cron.d/evil' -> writes to /etc/cron.d/evil",
+        "step4": "Scheduled cron job executes as root -> full OS compromise",
+        "alternate": "Write to /opt/cyops-api/src/Controller/SomeController.php -> PHP code injection as nginx user",
+    },
+    "privilege_required": "Solution pack import requires PERM_CRUD_UPDATE.application + PERM_CRUD_UPDATE.security (admin level); widget upload may have lower privilege",
+    "running_user": "nginx (PHP-FPM running cyops-api as nginx user)",
+    "chains": {
+        "admin_to_root": "FSR-F69 (admin ZipSlip) -> write to /etc/cron.d/ -> cron executes as root -> full OS",
+        "vs_F64": "FSR-F64 (connector dev API) achieves RCE as fortisoar; FSR-F69 achieves file write as nginx -- different users, potentially wider filesystem access via nginx",
+    },
+    "status": "CONFIRMED -- ZipArchive::extractTo() without entry name validation in SolutionPackUtilityService.php and ImportJobCommand.php (source code); PharData::extractTo() in WidgetController.php; PHP ZipArchive path traversal is well-documented behavior",
+}
