@@ -983,3 +983,116 @@ FMG_WEB_UI_RE = {
         "EMS connector UI (FortiClient EMS) -- renders EMS tag data without apparent sanitization in chunk",
     ],
 }
+
+
+# =============================================================
+# FortiManager 8.0.0 KVM firmware RE -- rootfs-ext plaintext
+# Source: FMG_VM64_KVM-v8.0.0.F-build0105-FORTINET.qcow2
+# =============================================================
+
+FMG_PLATFORM_800 = {
+    "product":      "Fortinet FortiManager 8.0.0 VM64-KVM",
+    "build":        "0105",
+    "qcow2":        "FMG_VM64_KVM-v8.0.0.F-build0105-FORTINET.qcow2",
+    "p1_label":     "FORTI_BOOT_DEV (ext3)",
+    "p1_files":     ["vmlinuz", "rootfs.gz (120MB, encrypted, entropy 7.997)",
+                     "rootfs-ext.tar.xz (236MB compressed, 1362MB uncompressed, PLAINTEXT XZ)",
+                     "syntax.tar.xz (87MB, encrypted entropy 7.997)"],
+    "arch_family":  "FAZ/FMG (application layer in rootfs-ext.tar.xz, NOT in encrypted rootfs.gz)",
+}
+
+
+FMG_F01_ROOTFS_EXT_PLAINTEXT = {
+    "id":       "FMG-F01",
+    "product":  "Fortinet FortiManager 8.0.0 VM64-KVM",
+    "severity": "INFORMATIONAL -- architectural bypass; full application source exposed without decryption",
+    "class":    "Plaintext Application Archive in Firmware -- same pattern as FAZ-F (rootfs-ext.tar.xz)",
+
+    "description": (
+        "FortiManager 8.0.0 P1 contains rootfs-ext.tar.xz (236MB compressed, 1.36GB uncompressed). "
+        "This is a standard XZ archive (magic fd377a585a000004, CRC64 integrity check) containing "
+        "the entire Python application layer: SQL rewriter, SOAR connector operators, builtin connector "
+        "schemas, and the sql-validator module. "
+        "rootfs.gz on the same partition is encrypted (entropy 7.997, first bytes 86fc3982a602159d). "
+        "No decryption or fortism bypass is required to access the full application surface."
+    ),
+
+    "archive_contents": {
+        "usr/local/python/sql_rewriter/": "Flask JSON-RPC SQL rewriter service (identical to FAZ 8.0.0)",
+        "usr/local/python/sql-validator/": "SQL parser/validator (sqlparser.py, sqlinterpreter.py)",
+        "usr/local/builtin_connectors/": "SOAR connector pack (identical to FAZ 8.0.0 build)",
+    },
+
+    "extraction": "xz -dc rootfs-ext.tar.xz | tar -tv",
+
+    "cross_product_note": (
+        "rootfs-ext.tar.xz content is byte-identical to FAZ 8.0.0 (same build date 2026-04-20 13:12). "
+        "FortiAnalyzer and FortiManager share a single application codebase; "
+        "findings against FAZ rootfs-ext.tar.xz apply equally to FMG and vice versa."
+    ),
+}
+
+
+FMG_F02_CONNECTOR_TLS_BYPASS = {
+    "id":       "FMG-F02",
+    "product":  "Fortinet FortiManager 8.0.0 VM64-KVM",
+    "severity": "HIGH -- same as FAZ_F06; MITM of connector TLS connections",
+    "class":    "TLS Certificate Verification Disabled -- SOAR builtin connectors",
+
+    "description": (
+        "FortiManager builtin_connectors.tar.gz (extracted from rootfs-ext.tar.xz) contains "
+        "identical connector operator code to FortiAnalyzer 8.0.0. "
+        "The following connectors disable TLS verification unconditionally:"
+    ),
+
+    "affected": {
+        "FMQ/operator.py:285":         "requests.post(url, ..., verify=False)",
+        "FMQ/health_check.py:71":       "requests.get(server_addr, verify=False)",
+        "VSPHERE/operator.py:122":      "ssl._create_unverified_context()",
+        "VSPHERE/health_check.py:72":   "ssl._create_unverified_context()",
+        "LOCALHOST/operator.py:2509":   "requests.post('http://127.0.0.1:8123/...', verify=False)",
+        "EMS/health_check.py:190":      "cert_reqs = ssl.CERT_NONE when verify_ssl=False (user-controlled)",
+        "EMS/operator.py:241":          "cert_reqs = ssl.CERT_NONE when verify_ssl=False (user-controlled)",
+    },
+
+    "note_ems": (
+        "EMS connector TLS bypass is conditional on verify_ssl parameter (user-configurable). "
+        "When verify_ssl=False, all EMS API calls use ssl.CERT_NONE with check_hostname=False. "
+        "FortiClient EMS connector manages endpoint security policy -- MITM here allows "
+        "injecting malicious EMS responses to FortiManager."
+    ),
+
+    "note_localhost": (
+        "LOCALHOST/operator.py:2509 verify=False targets http://127.0.0.1:8123 (ClickHouse). "
+        "verify=False is dead code on HTTP. However, reading /etc/clickhouse-security for credentials "
+        "at line 2493 is a credential exposure -- see FAZ_F10 for the SQL injection chain."
+    ),
+
+    "cross_ref": "FAZ_F06 (identical finding in FortiAnalyzer 8.0.0)",
+}
+
+
+FMG_F03_SCOPE_EXTENSION = {
+    "id":       "FMG-F03",
+    "product":  "Fortinet FortiManager + FortiAnalyzer 8.0.0 (shared codebase)",
+    "severity": "SCOPE EXTENSION -- all FAZ 8.0.0 connector findings apply to FMG 8.0.0",
+    "class":    "Cross-Product Finding Scope",
+
+    "description": (
+        "FortiManager 8.0.0 and FortiAnalyzer 8.0.0 share an identical rootfs-ext.tar.xz build "
+        "(build date 2026-04-20 13:12 on both products). All FAZ SOAR connector findings "
+        "(FAZ_F06 through FAZ_F11) apply to FortiManager with the same file paths, line numbers, "
+        "and severity."
+    ),
+
+    "findings_scope": [
+        "FAZ_F06 / FMG-F02: TLS bypass in FMQ, VSPHERE, LOCALHOST, EMS connectors",
+        "FAZ_F10 (FAZ_SOAR_CLICKHOUSE_SQLI): SQL injection in FindLateralMovementOperator -- applies to FMG",
+        "FAZ_F11 (SOAR_CONNECTOR_URL_PATH_TRAVERSAL): URL path traversal -- applies to FMG",
+    ],
+
+    "disclosure_note": (
+        "Any Fortinet PSIRT report for FAZ SOAR connector findings MUST list FortiManager as "
+        "an additional affected product. Separate CVE assignment may be warranted."
+    ),
+}
