@@ -1160,3 +1160,74 @@ FSR_F16_YUM_SOURCE_INJECTION = {
 
     "prerequisite": "Root-level code exec (FSR-F11 if cyops-worker=root, or escalation from cyops-worker)",
 }
+
+# FSR-F17: jscode-snippet connector complete OS command execution via js2py pyimport
+# CVSS 3.1: AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H = 9.9 CRITICAL
+# CWE-94: Improper Control of Generation of Code ('Code Injection')
+#
+# Source: connectors/x86_64/cyops-connector-jscode-snippet-1.0.0-8012.el7.centos.x86_64.rpm
+# Publisher: "Fortinet CSE" (Fortinet customer-facing team, not core product; cs_approved: null)
+# Connector: publicly available on repo.fortisoar.fortinet.com/connectors/x86_64/
+#
+# operations.py, run_js_code():
+#   js_code = params.get('js_code')
+#   js_code = js_code.replace("document.write", "return ")
+#   js2py.eval_js(js_code)
+#
+# js2py.eval_js() exposes `pyimport` statement in the JavaScript global context.
+# This is documented behavior: js2py README: "you can use pyimport statement from inside
+# JS code to import and use python libraries" (js2py/__init__.py line 50).
+# Example from js2py docs: js2py.eval_js('pyimport urllib; urllib.urlopen("...")')
+#
+# The connector performs NO sanitization, NO allowlist, NO sandbox restriction.
+# `pyimport` gives full access to all Python modules including os, subprocess, sys.
+# There is no "disable_pyimport" call (function exists in js2py but not invoked).
+#
+# Payload:
+#   pyimport os; os.popen('id').read()
+#
+# This executes as the cyops-worker process user (same as FSR-F11) with no bypass needed.
+# js2py provides complete Python interop by design; executing user-submitted JS = RCE.
+#
+# Comparison to FSR-F11 (code-snippet):
+# - FSR-F11: attempts RestrictedPython sandbox; bypass requires __import__ injected builtin
+# - FSR-F17: no sandbox attempt; pyimport is a documented feature; zero-bypass RCE
+#
+# Note: jscode-snippet is a community connector (Fortinet CSE, not officially approved).
+# It may not be installed by default, but is publicly available and installable by any
+# FortiSOAR admin. Once installed, any playbook user can trigger RCE.
+
+FSR_F17_JSCODE_SNIPPET_RCE = {
+    "id": "FSR-F17",
+    "title": "jscode-snippet connector unrestricted OS command execution via js2py pyimport",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-94",
+    "component": "cyops-connector-jscode-snippet",
+    "affected_versions": "1.0.0 (only version, cs_approved: null)",
+    "publisher": "Fortinet CSE (community, not core product)",
+    "source_file": "operations.py:11",
+
+    "root_cause": (
+        "js2py.eval_js() exposes pyimport statement globally, providing unrestricted Python module access. "
+        "No sandbox, no allowlist, no disable_pyimport() call. "
+        "Connector is the functional equivalent of a Python exec() with no protection."
+    ),
+
+    "payload": "pyimport os; os.popen('id; cat /etc/passwd').read()",
+
+    "attack_path": (
+        "1. Authenticate with any account with playbook execution rights. "
+        "2. Create playbook step using jscode-snippet connector. "
+        "3. Set js_code = 'pyimport os; os.popen(\"id\").read()'. "
+        "4. Execute playbook step. "
+        "5. Command output returned in data field."
+    ),
+
+    "vs_fsr_f11": (
+        "FSR-F11 (code-snippet) requires __import__ builtin injection bypass. "
+        "FSR-F17 (jscode-snippet) requires zero bypass -- pyimport is a documented js2py feature. "
+        "Simpler payload, no RestrictedPython hurdle."
+    ),
+}
