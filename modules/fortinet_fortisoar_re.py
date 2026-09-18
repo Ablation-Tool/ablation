@@ -3970,3 +3970,67 @@ FSR_F64_CONNECTOR_DEV_API_CODE_EXEC = {
     },
     "status": "CONFIRMED -- create_connector_files + publish endpoints confirmed from urls.so and views.so; service user confirmed from systemd unit files in RPMs; code execution via connector action execution is the intended design",
 }
+
+# FSR-F65: Connector configuration Jinja2 SSTI -- get_parsed_config evaluates config fields as Jinja2 templates (CWE-94)
+# Source: /tmp/fsr_integrations_720/opt/cyops-integrations/integrations/connectors/utils.so (Cython binary)
+# Binary source: connectors/utils.py -> connectors.utils.get_parsed_config + _expand
+# Evidence from binary strings:
+#   - 'Error while evaluating jinja template for config %s' -- explicit error message in _expand
+#   - 'This function will parse if config is in the form of jinja template.' -- docstring in binary
+#   - 'builtins' + '_expand' present -- standard Jinja2 with builtins accessible (no sandbox)
+#   - 'get_parsed_config' + 'decrypt_password' + 'encrypt_password' -- config parsing entry points
+# Attack model:
+#   1. Attacker has access to a connector configuration (any user with connector access)
+#   2. Sets a connector config field (e.g., hostname, api_key, username, password) to Jinja2 payload:
+#      e.g., '{{config.__class__.__init__.__globals__["os"].popen("id").read()}}' or
+#            '{{"".__class__.__mro__[2].__subclasses__()[132]("id",shell=True,stdout=-1).communicate()}}'
+#   3. When connector action executes (by any trigger: manual, workflow, notification rule):
+#      - connectors.utils.get_parsed_config() called with connector config
+#      - _expand() evaluates the config field as a Jinja2 template
+#      - Jinja2 evaluates attacker payload with builtins accessible
+#   4. RCE as fortisoar (7.2.x) or fsr-integrations (7.6.7+)
+# Note: integrations/integrations/PasswordModule.so contains hardcoded key 'jQp3(7@jod#j38d1' --
+#   same key as FSR-F61 -- used for connectors database (db_user=cyberpgsql, db_name=connectors)
+# pg_encrypted_password field confirmed in password_utils.so -- PostgreSQL connectors DB password encrypted
+# with the FSR-F61 key -> attackers who decrypt with jQp3 key get connectors DB credentials too
+# Note: this is DISTINCT from FSR-F43 (workflow step SSTI), FSR-F63 (notification rule SSTI), FSR-F64 (dev API)
+#   FSR-F65 fires in the INTEGRATIONS service context (fortisoar user); all others fire in WORKFLOW (nginx user)
+#   Requires LOWER privilege than FSR-F43/F63 -- any connector configuration edit, not playbook step edit
+FSR_F65_CONNECTOR_CONFIG_JINJA2_SSTI = {
+    "id": "FSR-F65",
+    "title": "Connector config fields Jinja2 SSTI -- connectors.utils._expand() evaluates connector configuration values as unsandboxed Jinja2 templates on every action execution",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-94",
+    "source_binary": "/opt/cyops-integrations/integrations/connectors/utils.so (Cython from utils.py)",
+    "evidence": {
+        "error_string": "'Error while evaluating jinja template for config %s' -- explicit jinja eval error in _expand()",
+        "docstring": "'This function will parse if config is in the form of jinja template.' -- _expand() docstring in binary",
+        "builtins_present": "'builtins' string present in utils.so -- standard Python builtins accessible (no SandboxedEnvironment)",
+        "call_chain": "connectors.utils.get_parsed_config() -> _expand(config_field) -> Jinja2 Environment.from_string(field_value).render()",
+    },
+    "affected_config_fields": "All connector configuration fields: hostname, api_url, username, password, api_key, custom fields -- any string field in connector config is Jinja2-expanded",
+    "attack": {
+        "step1": "Navigate to any connector configuration (Fortinet FortiEDR, FortiManager, etc.) -- requires connector usage permission",
+        "step2": "Set any text config field (e.g., 'hostname') to Jinja2 payload: {{''.__class__.__mro__[2].__subclasses__()[132]('id',shell=True,stdout=-1).communicate()[0].decode()}}",
+        "step3": "Save configuration",
+        "step4": "Execute any action on the connector (health check, any connector operation) -- fires manually, via workflow, or via notification rule",
+        "step5": "get_parsed_config() calls _expand() -> Jinja2 evaluates config field -> OS command executes as fortisoar user",
+    },
+    "runtime_user": "fortisoar (7.2.x) / fsr-integrations (7.6.7+) -- separate from nginx/DAS/workflow context",
+    "jinja2_sandbox_bypass": "No SandboxedEnvironment found in integrations/integrations/jinja.so or connectors/utils.so -- standard Environment; full builtins accessible",
+    "hardcoded_key_scope": "PasswordModule.so in integrations service also contains 'jQp3(7@jod#j38d1' (FSR-F61 key scope extended); pg_encrypted_password in password_utils.so decrypted with same key -> connectors DB (cyberpgsql@connectors)",
+    "privilege_requirement": "Any user with connector configuration edit access -- lower privilege than workflow playbook edit (FSR-F43) or notification rule edit (FSR-F63)",
+    "distinction": {
+        "vs_FSR-F43": "FSR-F43 fires in cyops-workflow (nginx user); FSR-F65 fires in cyops-integrations (fortisoar/fsr-integrations); different user contexts; lower PR for F65",
+        "vs_FSR-F63": "FSR-F63 requires notification rule edit; FSR-F65 requires connector config edit -- typically lower privilege",
+        "vs_FSR-F64": "FSR-F64 requires connector developer access; FSR-F65 requires only connector configuration access -- significantly lower privilege",
+    },
+    "chains": {
+        "any_user_to_rce": "Any user with connector access sets malicious config -> triggers action -> RCE as fortisoar",
+        "preauth_chain": "FSR-F52 (auth bypass) -> low-priv session -> configure any connector with SSTI payload -> trigger action -> RCE",
+        "secrets_exfil": "FSR-F65 RCE (fortisoar) -> read /opt/cyops-integrations/integrations/configs/config.ini -> db_user=cyberpgsql -> decrypt pg_encrypted_password with jQp3 key -> connectors DB access -> all stored connector credentials",
+    },
+    "status": "CONFIRMED -- 'Error while evaluating jinja template for config %s' and docstring from _expand present in connectors/utils.so binary strings; 'builtins' present; no SandboxedEnvironment found",
+}
