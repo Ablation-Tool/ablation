@@ -4299,7 +4299,7 @@ FSR_F70_PORTAL_USER_PREAUTH_HEADER_INJECTION = {
     "status": "PLAUSIBLE -- header forwarding confirmed in PHP source; DAS response not confirmed to be influenced by forwarded headers",
 }
 
-# Binary analysis notes (this session -- 2026-09-18)
+# Binary analysis notes (2026-09-18)
 # workflow/environment.so: NO SandboxedEnvironment anywhere in all 23 workflow .so files (confirmed via full string sweep)
 #   Confirms: existing FSR-F63 (rules engine SSTI) and FSR-F65 (connector config SSTI) are fully unsandboxed
 #   Relevant to: if any new SSTI path is found, sandbox bypass is not a separate obstacle
@@ -4311,3 +4311,122 @@ FSR_F70_PORTAL_USER_PREAUTH_HEADER_INJECTION = {
 #   NOT in unauthenticated list; pre-auth shell injection via routeLicenseAction() is RULED OUT
 # DAS server (csdassrv.py Tornado): deploy_ui_license_using_cli uses subprocess with use_shell=True
 #   but deployment_type is whitelisted via __Pyx_PyUnicode_Equals checks -- injection mitigated
+
+# auth_ogre/schemes.so analysis (2026-09-18):
+# AnonymousAuthentication.authenticate: NOT in DEFAULT_AUTHENTICATION_CLASSES; only
+#   SessionAuthentication + HmacAuthenticationScheme are defaults; AnonymousAuthentication
+#   would only be triggered if explicitly dispatched via HTTP_X_CS_AUTHENTICATION_METHOD header
+# _maybe_create_user: creates/gets Django User with auth_type=ANONYMOUS_USER ('anon_user');
+#   user is stored in DB with ANONYMOUS_USER_ID = -1
+# BLOCK_IN_TEMPLATE in workflow settings: weak blocklist approach against SSTI
+#   (__class__, __base__, __subclass__, __builtins__, __import__, __globals__, __init__)
+#   does NOT prevent all SSTI chains (missing __mro__, cycler/namespace/joiner globals,
+#   attr filter bypasses); combined with no-sandbox (FSR-F63/F65), exploitability HIGH
+
+# FSR-F71: Hardcoded Django SECRET_KEY in cyops-workflow (CRITICAL / CWE-321)
+# cyops-workflow/sealab/sealab/settings.py line 265:
+#   SECRET_KEY = 'yco#qath+mim6sfb&$zcfye25ph2@3725ak$ktp$$7q8^@4)@-'
+# The workflow Django service (port 9191, proxied via nginx at /wf/) uses this key to
+# sign all session cookies, CSRF tokens, and password reset tokens.
+# If this key is identical across all FortiSOAR installations (not per-installation generated),
+# an attacker can forge Django session cookies for the workflow service and authenticate as
+# any user without credentials.
+# Django SECRET_KEY impact: session forgery, CSRF bypass, password reset token forgery.
+# Severity: CRITICAL if shared across installations; HIGH if per-installation.
+FSR_F71_WORKFLOW_HARDCODED_SECRET_KEY = {
+    "id": "FSR-F71",
+    "title": "Hardcoded Django SECRET_KEY in cyops-workflow -- allows session/CSRF token forgery across all installations (CWE-321 / CWE-798)",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-321",
+    "affected_paths": {
+        "settings_file": "/opt/cyops-workflow/sealab/sealab/settings.py:265",
+        "secret_key": "SECRET_KEY = 'yco#qath+mim6sfb&$zcfye25ph2@3725ak$ktp$$7q8^@4)@-'",
+        "service_port": "port 9191 (internal), proxied via nginx at /wf/ on port 443",
+    },
+    "evidence": {
+        "hardcoded_value": "SECRET_KEY is a literal string constant, not loaded from environment or per-installation config",
+        "same_codebase": "RPM ships this settings.py; all installations get the same key unless overridden at install time",
+        "django_usage": "SECRET_KEY signs session cookies (django.contrib.sessions), CSRF tokens, password reset links",
+        "no_per_install_rotation": "No setup script found that rotates this key post-install",
+    },
+    "attack": {
+        "step1": "Attacker obtains SECRET_KEY from public FortiSOAR RPM (already disclosed in this RE)",
+        "step2": "Craft a forged Django session cookie for the workflow API (signed with the known key)",
+        "step3": "Send forged cookie to /wf/ endpoint -- workflow API accepts it as authenticated session",
+        "step4": "Trigger workflow execution as a privileged user without any credentials",
+    },
+    "status": "CONFIRMED -- key is hardcoded in settings.py; shared-across-installations assumption needs verification against multiple RPM versions",
+    "note": "Verification: check same key in 7.2.0, 7.4.x, 7.5.x, 7.6.x builds; if present in all, severity is CRITICAL; chain with FSR-F63 SSTI for full RCE",
+}
+
+# FSR-F72: INTEGRATIONS_SECRET_KEY bypasses connector RBAC in cyops-integrations (HIGH / CWE-798)
+# cyops-workflow/sealab/sealab/settings.py lines 267-268 and 506:
+#   INTEGRATIONS_SECRET_KEY = 'ycoVqathYmim6sfbINzcfye25ph2@3725akAktpSS7q8^@4)@-'
+#   INTEGRATIONS_URL = 'https://APP_HOST:9595/integration/execute/?format=json&secretKey=INTEGRATIONS_SECRET_KEY'
+# Comment in source: "# SECRET KEY TO BYPASS THE CONNECTOR RBAC"
+# The cyops-integrations service listens on port 9595 (SSL, all interfaces per nginx config).
+# The connectors/views.so contains verify_secret_key function that validates the secretKey param.
+# If the key is shared across all FortiSOAR installations, any attacker who knows it can send
+# POST /integration/execute/?secretKey=<key> to port 9595 and execute connectors without RBAC.
+# Port 9595 nginx config: listen 9595 ssl; server_name localhost; (but all-interfaces bind by default)
+FSR_F72_INTEGRATIONS_SECRET_KEY_RBAC_BYPASS = {
+    "id": "FSR-F72",
+    "title": "Hardcoded INTEGRATIONS_SECRET_KEY bypasses connector RBAC in cyops-integrations (CWE-798 / CWE-284)",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-798",
+    "affected_paths": {
+        "workflow_settings": "/opt/cyops-workflow/sealab/sealab/settings.py:267 -- INTEGRATIONS_SECRET_KEY hardcoded",
+        "integrations_url": "/opt/cyops-workflow/sealab/sealab/settings.py:506 -- INTEGRATIONS_URL with secretKey param",
+        "verify_function": "/opt/cyops-integrations/integrations/connectors/views.so -- verify_secret_key",
+        "nginx_config": "/etc/nginx/conf.d/cyops-integrations.conf -- listen 9595 ssl (all interfaces)",
+    },
+    "evidence": {
+        "comment_confirms_purpose": "Source comment: '# SECRET KEY TO BYPASS THE CONNECTOR RBAC'",
+        "key_value": "INTEGRATIONS_SECRET_KEY = 'ycoVqathYmim6sfbINzcfye25ph2@3725akAktpSS7q8^@4)@-'",
+        "port_externally_accessible": "nginx listens on 9595 ssl on all interfaces; only server_name is 'localhost' (name check, not IP bind)",
+        "verify_secret_key_exists": "verify_secret_key function confirmed in connectors/views.so binary",
+    },
+    "attack": {
+        "step1": "Send POST https://TARGET:9595/integration/execute/?format=json&secretKey=ycoVqathYmim6sfbINzcfye25ph2@3725akAktpSS7q8^@4)@- with connector execution payload",
+        "step2": "verify_secret_key validates the known static key and skips RBAC checks",
+        "step3": "Execute any connector action (HTTP, script, etc.) without authentication",
+        "chain": "Chain with FSR-F68 (rpm_full_name shell injection in _install_rpm_dependencies) for OS command execution",
+    },
+    "prerequisite": "Key must be shared across installations (likely); port 9595 must be reachable from attacker",
+    "status": "PLAUSIBLE -- key confirmed in workflow settings; RBAC bypass mechanism confirmed; needs verification that key is same in integrations service",
+}
+
+# FSR-F73: Hardcoded Django SECRET_KEY in cyops-integrations (HIGH / CWE-321)
+# cyops-integrations/integrations/integrations/settings.py line 158:
+#   SECRET_KEY = '1qsjrdu6005n=^ukpx=&_scsrf%28)4xvbo%904-8+@him6$hp'
+# Same impact as FSR-F71 but for the integrations service (port 9595).
+FSR_F73_INTEGRATIONS_HARDCODED_SECRET_KEY = {
+    "id": "FSR-F73",
+    "title": "Hardcoded Django SECRET_KEY in cyops-integrations (CWE-321)",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cwe": "CWE-321",
+    "affected_paths": {
+        "settings_file": "/opt/cyops-integrations/integrations/integrations/settings.py:158",
+        "secret_key": "SECRET_KEY = '1qsjrdu6005n=^ukpx=&_scsrf%28)4xvbo%904-8+@him6$hp'",
+        "service_port": "port 9595 (SSL, all interfaces)",
+    },
+    "evidence": {
+        "hardcoded_value": "Literal string constant in settings.py",
+        "service_exposure": "Integrations service on port 9595 handles connector execution",
+    },
+    "status": "CONFIRMED -- hardcoded in settings.py shipped in RPM",
+}
+
+# Additional settings.py notes (cyops-workflow):
+# - ANONYMOUS_USER = 'anon_user' / ANONYMOUS_USER_ID = -1 (Django guardian anon user)
+# - AES decrypt key jQp3(7@jod#j38d1 confirmed used at lines 181 and 353 for RabbitMQ+DB password decrypt
+# - BLOCK_IN_TEMPLATE list is weak SSTI mitigation (does not prevent cycler/namespace/joiner attacks)
+# - ENABLE_CHAINABLE_UNDEFINED = True uses ChainableUndefined in Jinja2 (more permissive undefined handling)
+# - INTEGRATIONS_URL pattern confirmed: APP_HOST:9595/integration/execute/?format=json&secretKey=KEY
+# - cyops-workflow SECRET_KEY different from cyops-integrations SECRET_KEY (2 separate hardcoded values)
