@@ -1890,11 +1890,48 @@ FSR_F27_JWT_LICENSE_FORGERY = {
         "7. jose verifies signature against attacker's own public key -- verification PASSES",
         "8. License accepted: Enterprise edition, unlimited seats, unlimited entitlements, no expiry",
     ],
-    "combined_with_f25": (
-        "If hardware_key check fails (attacker does not know target hardware_key MD5), "
-        "combine with FSR-F25: craft type='Trial(Extension)' payload, ensure FDN unavailable, "
-        "bypass returns True regardless of hardware_key mismatch."
+    "hardware_key_constraint": {
+        "location": "validate_license_inline_part VA 0x754e0",
+        "check": "claims['hardware_key'] in get_cluster_node_ids() via PySequence_Contains at 0x75fcd",
+        "source": "get_cluster_node_ids() from handlerworkers.cluster -- reads actual node fingerprints",
+        "implication": (
+            "Attacker must know target machine's hardware_key (MD5 hex, 32 chars) to pass inline "
+            "validation. hardware_key stored in envc DB table as NODE_HARDWARE_KEY. "
+            "Obtainable via: FSR-F18 DB trust-auth bypass -> SELECT hardware_key FROM envc; "
+            "OR authenticated FortiSOAR API query; OR network-level lateral movement to DB host."
+        ),
+        "cluster_install_note": (
+            "Cluster installs: hardware_key only needs to match ANY cluster node ID, "
+            "widening attack surface proportional to cluster size."
+        ),
+        "expiry_bypass": (
+            "inline validation reads expiry_time from attacker-controlled claims dict "
+            "at 0x76364 -- set expiry_time='2099-12-31' to pass inline date check "
+            "even though jose.decode runs with verify_exp=False."
+        ),
+    },
+    "combined_with_f25_note": (
+        "FSR-F25 bypass path also requires inline validation to pass first (hardware_key match). "
+        "No path bypasses hardware_key check without knowing target machine's fingerprint "
+        "unless hardware_key can be obtained via DB access (FSR-F18 chain)."
     ),
+    "full_chain_fsr_f18_to_f27": [
+        "PRECONDITION: FortiSOAR host reachable (post-SSRF, lateral, or local). ",
+        "1. FSR-F18: PostgreSQL trust-auth (pg_hba.conf default) -- no password",
+        "   psql -U postgres -h 127.0.0.1 -c 'SELECT hardware_key FROM envc'",
+        "   -> retrieves NODE_HARDWARE_KEY (32-char MD5 hex)",
+        "2. FSR-F27: generate RSA-4096 keypair; create self-signed cert",
+        "   forge JWT: edition=Enterprise, serial_no=<anything>, hardware_key=<from step 1>,",
+        "   max_users=999, expiry_time=2099-12-31, entitlements={branding:advanced,...},",
+        "   public_key=<attacker cert PEM>; sign with attacker RSA private key (RS512)",
+        "3. Submit forged JWT via FortiSOAR license activation endpoint",
+        "4. verify_license_signature(): extracts public_key from UNVERIFIED payload -> PASSES",
+        "5. validate_license_inline_part(): hardware_key matches -> type/expiry checks pass",
+        "6. If FDN reachable: FDN rejects unknown serial -- but FSR-F25 trial bypass if",
+        "   daily_action_limit in entitlements -> still accepted as valid license",
+        "7. If FDN unreachable (air-gap): validation returns success directly",
+        "RESULT: Full Enterprise license activated, unlimited seats, no expiry, no Fortinet key",
+    ],
     "disasm_evidence": {
         "binary": "/opt/cyops-auth/handlerworkers/license.so (cyops-auth-7.2.0)",
         "get_public_key_VA": "0x3e370",
