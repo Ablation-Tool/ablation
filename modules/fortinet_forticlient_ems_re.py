@@ -1338,13 +1338,60 @@ EMS_F12_DEFUSEDXML_VERSION = {
 
 
 # ---------------------------------------------------------
+# EMS-F19: Port 8013 gRPC TLS server/client cert identity collapse
+# ---------------------------------------------------------
+EMS_F19_PORT8013_CERT_REUSE = {
+    "id":       "EMS-F19",
+    "title":    "Port 8013 gRPC TLS server presents same hardcoded cert as every FortiClient client -- mutual TLS provides no authentication",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 7.4,
+    "cwe":      "CWE-295 (Improper Certificate Validation)",
+    "status":   "CONFIRMED -- disassembly of LoadDefCert call chain; cert/key match EMS-F16 defaultCert/defaultKey",
+
+    "call_chain": {
+        "LoadTLSConfig":  "fortinet.com/goEMSCommon/common.LoadTLSConfig (VA=0x010DA920) -- sets up port 8013 TLS",
+        "sub_10DB3C0":    "internal sub called from LoadTLSConfig (VA=0x010DB3C0)",
+        "LoadDefCert":    "fortinet.com/goEMSCommon/common.LoadDefCert (VA=0x010E3280) -- loads defaultCert + defaultKey",
+        "getKeyPass":     "fortinet.com/goEMSCommon/common.getKeyPass (VA=0x010E3A00) -- returns XOR(defaultCertPassEnc, defaultCertPassKey) = SCHEME-1 passphrase",
+        "DecryptPEMBlock": "crypto/x509.DecryptPEMBlock -- decrypts defaultKey with passphrase from getKeyPass",
+        "LoadX509KeyPair": "crypto/tls.LoadX509KeyPair (VA=0x00802D80) -- finalizes TLS cert+key pair",
+    },
+    "cert_used": {
+        "subject":     "CN=FortiClient, OU=FortiClient, O=Fortinet",
+        "serial":      "4267478 (0x411dd6)",
+        "valid":       "2017-04-21 to 2038-01-19",
+        "key_size":    "RSA-2048",
+        "same_as":     "EMS-F16 defaultCert (identical certificate -- same modulus, serial, dates)",
+    },
+    "impact": (
+        "gRPC server (port 8013) presents CN=FortiClient, same cert as every FortiClient endpoint. "
+        "FortiClient clients CANNOT distinguish a real EMS server from a rogue one by TLS cert -- both present "
+        "the same hardcoded CN=FortiClient cert. Mutual TLS provides zero server authentication. "
+        "An attacker with defaultKey (trivially extracted via EMS-F16 SCHEME-1) can stand up a rogue gRPC "
+        "server on port 8013 that FortiClient clients accept as legitimate EMS without any TLS alarm."
+    ),
+    "attack_chain": [
+        "Step 1: Extract defaultKey passphrase via SCHEME-1 XOR (defaultCertPassEnc XOR defaultCertPassKey)",
+        "Step 2: Decrypt defaultKey: openssl rsa -passin pass:'j41z\"{{S8T*]{{}}}<:0+yx N+,@i/23\\'\\$\\'&138>73n'",
+        "Step 3: Load defaultCert + decrypted defaultKey into rogue gRPC server (e.g., grpc-go TLS config)",
+        "Step 4: DNS-hijack or ARP-spoof EMS server address",
+        "Step 5: FortiClient connects to rogue server -- TLS handshake succeeds (same cert), no warning to user",
+        "Step 6: Rogue server issues malicious policy responses (runSrvCmd, ZTNA redirect, SAML URL)",
+    ],
+    "prerequisite": "EMS-F16 (defaultKey/defaultCert extraction) -- both trivially satisfied from installer binary",
+}
+
+
+# ---------------------------------------------------------
 # Pending analysis (UPDATED)
 # ---------------------------------------------------------
 PENDING = [
     # Crypto / key material
     "EMS-F17: Confirm ca.crt (Apache EMS CA) is shipped vs per-installation; if shipped, recover or confirm CA private key location",
-    "EMS-F16/F17/F18: Chain live test -- use decrypted defaultKey + defaultCert to authenticate to live EMS as FortiClient device",
-    "EMS-F5: --keypass in goEMSCommon/common.getKeyPass -- now confirmed separate from k1/defaultCertPassKey; find port 8013 actual TLS server cert (not FortiClient client cert)",
+    "EMS-F16/F17/F18/F19: Chain live test -- use decrypted defaultKey + defaultCert to authenticate to live EMS as FortiClient device",
+    # RESOLVED: getKeyPass = SCHEME-1 XOR (defaultCertPassEnc XOR defaultCertPassKey); port 8013 TLS server cert = defaultCert (EMS-F19)
+    "EMS-F5: --keypass for CA private key (FcmDaemon.exe AES-256-CBC key) still unresolved -- check service registry, installer custom action DLL, or process memory",
     "EMS-F18: Determine if deriveKey/gcm PBKDF2 path (16384 iter, dasSalt) is used for any external-facing surface (DAS channel at 127.0.0.1:65432 is localhost-only)",
 
     # Protocol / binary RE
