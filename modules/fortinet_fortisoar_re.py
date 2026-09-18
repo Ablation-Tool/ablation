@@ -2304,3 +2304,52 @@ FSR_F34_MANAGE_PASSWORDS_DECRYPT_KEY = {
     "note": "manage_passwords.py is at /opt/cyops/configs/scripts/manage_passwords.py -- called via subprocess.",
     "status": "CONFIRMED via settings.py source.",
 }
+
+
+FSR_F35_EXPAND_MACROS_SSTI_NO_BLOCKLIST = {
+    "id": "FSR-F35",
+    "title": "expand_macros calls Jinja2 from_string with no BLOCK_IN_TEMPLATE check -- unconstrained SSTI",
+    "severity": "CRITICAL",
+    "cvss": "9.9",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+    "cwe": "CWE-94",
+    "component": "cyops-workflow (environment.so -- expand_macros)",
+    "binary": "/opt/cyops-workflow/sealab/workflow/environment.so",
+    "disasm_evidence": {
+        "expand_macros_start": "environment.so VA 0x1fed0 (size 18983B, from PyMethodDef table at 0x22a8c0)",
+        "from_string_call":   "0x20fe7: mov rsi, [rip+0x20a212] --> [__pyx_n_s_from_string]; 0x20fee: mov rax, [rdi+8]; mov rax, [rax+0x90] (tp_getattro); 0x20ffe: call rax -- calls Environment.from_string",
+        "validate_absent":    "BSS scan of expand_macros (0x1fed0-0x244db): zero refs to __pyx_n_s_validate_and_format_string (0x22af40) or __pyx_n_s_expand_string (0x22b230)",
+        "pysequence_calls":   "Two PySequence_Contains calls at 0x20b90 and 0x21b8c check 'arrow' and 'timestamp' -- NOT BLOCK_IN_TEMPLATE",
+        "contrast_with_f32":  "_expand_string.isra (0x16ba0): calls validate_and_format_string at offset +0x537 (VA 0x170d7 via call r15) BEFORE from_string at offset +0xe9e (VA 0x17a3e). expand_macros skips this entirely.",
+    },
+    "root_cause": (
+        "expand_macros is a separate top-level function exposed via PyMethodDef. "
+        "It calls Jinja2 Environment.from_string directly (via tp_getattro on cached env object at 0x20fe3-0x20ffe). "
+        "The BLOCK_IN_TEMPLATE substring blocklist (checked in validate_and_format_string.isra at 0x1b259 via PySequence_Contains) "
+        "is never invoked in the expand_macros code path. "
+        "No SandboxedEnvironment is used anywhere in environment.so. "
+        "expand_macros handles playbook macro templates -- strings that contain Jinja2 expressions "
+        "for dynamic playbook variable expansion."
+    ),
+    "impact": (
+        "Authenticated FortiSOAR user with playbook edit permission can achieve unauthenticated RCE "
+        "by injecting Jinja2 SSTI payload into a playbook macro template field. "
+        "Unlike FSR-F32 (which requires |attr() string-split bypass of BLOCK_IN_TEMPLATE), "
+        "expand_macros enforces NO blocklist -- any standard SSTI payload works unmodified: "
+        "{{ ''.__class__.__mro__[1].__subclasses__()[X].__init__.__globals__['os'].popen('id').read() }} "
+        "Macro templates execute on the cyops-worker process as the process owner. "
+        "If cyops-worker runs as root (common in default installs), this is direct root RCE."
+    ),
+    "precondition": "Authenticated user with playbook create/edit permission (any role with playbook access)",
+    "poc_template": (
+        "Playbook macro field value: "
+        "{{ ''.__class__.__mro__[1].__subclasses__()[396].__init__.__globals__['__builtins__']['__import__']('os').popen('id').read() }}"
+    ),
+    "chain": [
+        "FSR-F35 standalone: playbook macro SSTI -> cyops-worker RCE -> host compromise",
+        "FSR-F35 + FSR-F4 (csadmin:changeme): unauthenticated -> admin session -> macro SSTI -> RCE",
+        "FSR-F35 + FSR-F33 (INTEGRATIONS_SECRET_KEY): pivot to connector secrets + SSTI for persistence",
+        "FSR-F35 + FSR-F34 (decrypt key): read config files via SSTI -> decrypt DB/MQ passwords",
+    ],
+    "status": "CONFIRMED via disasm. expand_macros (0x1fed0) has zero refs to validate_and_format_string BSS symbol (0x22af40). from_string called at 0x20ffe without any blocklist gate.",
+}
