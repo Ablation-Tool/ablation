@@ -4431,3 +4431,81 @@ FSR_F73_INTEGRATIONS_HARDCODED_SECRET_KEY = {
 # - ENABLE_CHAINABLE_UNDEFINED = True uses ChainableUndefined in Jinja2 (more permissive undefined handling)
 # - INTEGRATIONS_URL pattern confirmed: APP_HOST:9595/integration/execute/?format=json&secretKey=KEY
 # - cyops-workflow SECRET_KEY different from cyops-integrations SECRET_KEY (2 separate hardcoded values)
+
+# Port 9595 exposure analysis:
+# - nginx: listen 9595 ssl; server_name localhost; -- all-interface bind (no IP specified)
+# - SELinux: semanage port --add --type http_port_t --proto tcp 9595 (allows nginx to bind; separate from firewall)
+# - NO firewall-cmd --add-port=9595/tcp found in any installer or upgrade script
+# - Rocky Linux default firewalld public zone does NOT include 9595
+# - Conclusion: 9595 blocked externally in default RPM install; FSR-F72 stays HIGH in default config
+# - Upgrade to CRITICAL if: customer disables firewalld, or cloud security group exposes 9595,
+#   or FortiSOAR agent deployment scenario opens the port
+
+# workflow/environment.so analysis (BLOCK_IN_TEMPLATE enforcement):
+# Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/workflow/environment.so (211680B)
+# Build: /br/BUILD/cyops-workflow-7.2.0-914/sealab/workflow/environment.py (Cython compiled)
+# Key exported functions: expand(), _expand_string(), validate_and_format_string(), expand_macros()
+# BLOCK_IN_TEMPLATE enforcement: PySequence_Contains calls in validate_and_format_string.isra.30
+# Mechanism: literal substring search -- each blocked string checked with Python 'in' operator
+#   against the raw template source string BEFORE from_string()/render() is called
+# NOT an AST check; NOT a Jinja2 sandbox; strings evaluated at render time bypass pre-render check
+# Confirmed bypass: Jinja2 evaluates string concatenation at runtime
+#   BLOCKED:   {{ ''.__class__ }}  (literal '__class__' in template source)
+#   BYPASSED:  {{ ''['__cl'+'ass__'] }}  (no literal blocked string; Jinja2 resolves at runtime)
+#   BYPASSED:  {{ ''|attr('__cl'+'ass__') }}
+#   BYPASSED:  {{ ''['\x5f\x5f\x63\x6c\x61\x73\x73\x5f\x5f'] }}  (hex escape, no literal in source)
+# --> FSR-F74 (HIGH/CONFIRMED): BLOCK_IN_TEMPLATE bypass via Jinja2 string concatenation
+
+# FSR-F74: BLOCK_IN_TEMPLATE bypass -- literal substring search evaded by runtime string construction
+FSR_F74_BLOCK_IN_TEMPLATE_BYPASS = {
+    "id": "FSR-F74",
+    "title": "BLOCK_IN_TEMPLATE substring check bypassed by Jinja2 runtime string construction (CWE-184 / CWE-693)",
+    "severity": "HIGH",
+    "cvss": "8.8",
+    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": "CWE-184",
+    "affected_component": "cyops-workflow -- workflow/environment.so: validate_and_format_string.isra.30",
+    "affected_paths": {
+        "binary": "/opt/cyops-workflow/sealab/workflow/environment.so",
+        "function": "validate_and_format_string.isra.30 (VA 0x1b130, 11808B)",
+        "settings": "/opt/cyops-workflow/sealab/sealab/settings.py:91 -- BLOCK_IN_TEMPLATE list",
+        "enforcement_calls": "PySequence_Contains at 0x1b259, 0x1b322, 0x1b34e, 0x1b434, 0x1b51b, 0x1b6fb, 0x1b8f2, 0x1bb00, 0x1bb64, 0x1bc03",
+    },
+    "evidence": {
+        "mechanism": "validate_and_format_string() iterates BLOCK_IN_TEMPLATE list; calls PySequence_Contains(blocked_item, template_string) -- Python 'in' operator on raw template source",
+        "no_sandbox": "jinja2.Environment used (not SandboxedEnvironment); 'sandbox' string absent from jinja.so",
+        "from_string_render": "template.from_string() + template.render() called after blocklist check; blocked check pre-render only",
+        "blocklist": "['__class__', '__base__', '__subclass__', '__builtins__', '__import__', '__globals__', '__init__']",
+        "bypass_payloads": [
+            "{{ ''['__cl'+'ass__'] }}  -- string concat bypasses literal search; Jinja2 resolves at render",
+            "{{ ''|attr('__cl'+'ass__') }}  -- |attr() filter with concatenated key",
+            "{{ ''['\\x5f\\x5f\\x63\\x6c\\x61\\x73\\x73\\x5f\\x5f'] }}  -- hex escape",
+            "{{ ''[request.args.k] }}  -- key from request param (no blocked string in template)",
+            "{{ config.__class__.__init__.__globals__ }}  -- if autoescape=False and __class__ check is bypassed",
+        ],
+    },
+    "impact": "Extends FSR-F63 (no-sandbox SSTI) -- BLOCK_IN_TEMPLATE was the only mitigation; bypass reduces it to zero-mitigation SSTI",
+    "chain": "FSR-F71 (forge session cookie) + FSR-F63 (SSTI) + FSR-F74 (bypass blocklist) = unauthenticated RCE",
+    "status": "CONFIRMED -- PySequence_Contains enforcement verified by binary analysis of validate_and_format_string.isra.30; bypass is inherent to pre-render string search approach",
+    "note": "dynamic_variable/views.so also references BLOCK_IN_TEMPLATE; same bypass applies to dynamic variable template injection path",
+}
+
+# jinja.so analysis notes:
+# Binary: /tmp/fsr_workflow/opt/cyops-workflow/sealab/sealab/jinja.so (131024B)
+# Build: /br/BUILD/cyops-workflow-7.2.0-914/sealab/sealab/jinja.py (Cython 0.29.21)
+# Sections: .text 71375B, .rodata 4456B, .bss 1624B
+# 67 unique function symbols
+# Exported functions: environment(), resolveRange(), toDict(), get_uuid(), get_current_date(),
+#   get_current_datetime(), current_date_minus()
+# environment() at VA 0xa070 (18284B): creates jinja2.Environment (NOT SandboxedEnvironment)
+#   - autoescape string present in .rodata at VA 0x1692a -- autoescape kwarg IS set
+#   - BLOCK_IN_TEMPLATE string NOT present in jinja.so -- enforcement delegated to workflow/environment.so
+#   - undefined string NOT in jinja.so -- ChainableUndefined set via Django settings (ENABLE_CHAINABLE_UNDEFINED)
+#   - utilities_filters, ansible_filters dynamically imported from INSTALLED_APPS modules
+#   - PyObject_Dir + PySequence_Contains calls iterate INSTALLED_APPS for filter registration
+#   - PyObject_Call at VA 0xe5ae = jinja2.Environment() constructor call
+#   - PyObject_SetAttr at VA 0xe66f sets attribute on resulting env object
+# resolveRange() at VA 0xe7e0 (23594B): uses literal_eval string, regex patterns for range parsing
+#   - '^\[0-9\\.]*\\.\\.[0-9\\.]*$' regex at VA 0x169e0 for range like 1.5..10.0
+#   - '^< *[0-9\\.]*$' etc for comparison ranges
+#   - MUST_EVAL_DATA_TYPES at VA 0x16760 controls which types are evaluated
