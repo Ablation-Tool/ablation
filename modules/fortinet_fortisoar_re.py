@@ -1000,3 +1000,101 @@ FSR_F14_HARDCODED_YUM_CREDENTIAL = {
         "Do not add NOPASSWD sudo for a weak-credential utility account."
     ),
 }
+
+# FSR-F15: prod/4.12.0 -- multiple hardcoded secrets and trust-auth PostgreSQL
+# CVSS 3.1 (DB connection + decrypt key): AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H = 7.8 HIGH
+# CWE-321: Use of Hard-coded Cryptographic Key
+# CWE-256: Plaintext Storage of a Password (DB connection string)
+#
+# Source: prod/4.12.0/{update_user_id.so, audit_log_migration.py, pg_hba.conf}
+# Note: 4.12.0 is the CyberSponse-era FortiSOAR (2018). Some settings persist in newer versions.
+#
+# Finding 1: Plaintext DB connection strings in update_user_id.so (Cython module)
+#   strings output: "postgresql+pypostgresql://cyberpgsql: @localhost:5432/das"
+#                   "postgresql+pypostgresql://cyberpgsql: @localhost:5432/venom"
+#   User: cyberpgsql, Password: empty (space then @), Databases: das (main SOAR), venom (workflow)
+#   Combined with pg_hba.conf trust auth: any local process = full DB superuser access
+#
+# Finding 2: pg_hba.conf ships with trust auth for ALL local connections
+#   local all all trust
+#   host all all 127.0.0.1/32 trust
+#   Combined with FSR-F11 (code exec as cyops-worker): psql -h localhost -U postgres -d das
+#   No password required. Full database access including auth_user (Django users), configprops (LDAP creds)
+#
+# Finding 3: Hardcoded MongoDB decryption key in publicly distributed script
+#   audit_log_migration.py line 25-29 (shipped on repo.fortisoar.fortinet.com):
+#     suffix = 'I3dmcn23@KlS2#!ck'
+#     decrypt_key = 'jQp3(7@jod#j38d1'  (16-char, AES-128-compatible)
+#     cmd: manage_passwords.py --decrypt $mongodb_password 'jQp3(7@jod#j38d1'
+#   Any attacker who downloads this script knows the MongoDB encryption key.
+#   Encrypted passwords are detectable by the I3dmcn23@KlS2#!ck suffix.
+#
+# Architecture revealed (confirmed for 4.12.0, likely extended to newer versions):
+#   Config: /etc/cyops/config.yml (mongodb_user, mongodb_password, postgres_user, postgres_password)
+#   DB config: /opt/cyops/configs/database/db_config.yml
+#   Password tool: /opt/cyops/configs/scripts/manage_passwords.py --decrypt <pwd> 'jQp3(7@jod#j38d1'
+#   MongoDB SSL: /var/lib/mongo/ssl/server.leaf.pem (cert), SCRAM-SHA-1 auth
+#   DAS key pair: /opt/cyops-auth/dashmac/keys/dasprivate.key, daspublic.key
+#   Hardcoded tables: configprops (LDAP config incl. reader_password), actors (user accounts with UUID)
+#   Python env: /opt/cyops-auth/.env/bin/python (cyops-auth virtualenv)
+
+FSR_F15_PROD_HARDCODED_SECRETS = {
+    "id": "FSR-F15",
+    "title": "prod/4.12.0 hardcoded DB connection strings, trust-auth PostgreSQL, MongoDB decryption key",
+    "severity": "HIGH",
+    "cvss": "7.8",
+    "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+    "cwe": ["CWE-321", "CWE-256"],
+    "component": "prod/4.12.0 (CyberSponse-era artifacts, publicly distributed)",
+    "source_files": ["update_user_id.so", "audit_log_migration.py", "pg_hba.conf"],
+
+    "db_connections": {
+        "postgres_das": "postgresql+pypostgresql://cyberpgsql: @localhost:5432/das",
+        "postgres_venom": "postgresql+pypostgresql://cyberpgsql: @localhost:5432/venom",
+        "pg_user": "cyberpgsql",
+        "pg_password": "empty (space char between colon and @ in connection string)",
+    },
+
+    "pg_hba_trust": {
+        "local_all": "local all all trust",
+        "ipv4_loopback": "host all all 127.0.0.1/32 trust",
+        "impact": (
+            "Any local process connects to PostgreSQL as any user with no password. "
+            "Combined with FSR-F11 code exec: full read/write access to das and venom databases."
+        ),
+    },
+
+    "mongodb_decrypt_key": {
+        "encrypted_password_suffix": "I3dmcn23@KlS2#!ck",
+        "decrypt_key": "jQp3(7@jod#j38d1",
+        "decrypt_command": "manage_passwords.py --decrypt <mongodb_password> 'jQp3(7@jod#j38d1'",
+        "key_length": "16 chars (AES-128 compatible)",
+        "script_location": "audit_log_migration.py (publicly distributed on repo.fortisoar.fortinet.com)",
+    },
+
+    "architecture": {
+        "main_config": "/etc/cyops/config.yml",
+        "db_config": "/opt/cyops/configs/database/db_config.yml",
+        "password_manager": "/opt/cyops/configs/scripts/manage_passwords.py",
+        "das_privkey": "/opt/cyops-auth/dashmac/keys/dasprivate.key",
+        "das_pubkey": "/opt/cyops-auth/dashmac/keys/daspublic.key",
+        "cyops_auth_python": "/opt/cyops-auth/.env/bin/python",
+        "tables": {
+            "configprops": "section/key/value store -- LDAP reader_password in (section=LDAP, key=reader_password)",
+            "actors": "user accounts -- uuid, user_id foreign key",
+        },
+        "mongodb_ssl": "/var/lib/mongo/ssl/server.leaf.pem (cert), SCRAM-SHA-1 auth mechanism",
+    },
+
+    "chain": (
+        "FSR-F11 (code exec as cyops-worker) + pg_hba trust auth = "
+        "SELECT * FROM configprops WHERE section='LDAP' -> decrypt LDAP reader_password -> "
+        "LDAP bind as FortiSOAR reader -> enumerate all AD/LDAP users -> "
+        "cross-reference with actors table -> map user account UUIDs to AD identities."
+    ),
+
+    "note": (
+        "4.12.0 is CyberSponse-era (2018). These exact settings may not persist in FortiSOAR 7.x/8.x. "
+        "Confirm pg_hba.conf trust auth is still default in current versions once version-dir RPMs download."
+    ),
+}
