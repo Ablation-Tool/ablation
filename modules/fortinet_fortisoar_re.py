@@ -329,6 +329,161 @@ FSR_F7_PIP_SUPPLY_CHAIN = {
 
 
 # ---------------------------------------------------------
+# FSR-F8: restore-connectors script -- PGPASSWORD process leak + yum injection
+# ---------------------------------------------------------
+FSR_F8_RESTORE_CONNECTORS_CREDENTIAL_EXPOSURE = {
+    "id":       "FSR-F8",
+    "title":    "PGPASSWORD decrypted and shell-interpolated into heredoc; visible in /proc/PID/cmdline; yum install with DB-derived package name enables injection",
+    "severity": "HIGH",
+    "cvss":     "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+    "cvss_score": 7.3,
+    "cwe":      "CWE-214 (Process Environment Exposure) + CWE-78 (OS Command Injection)",
+    "status":   "CONFIRMED -- source: restore-connectors-widgets-from-externaldb.bin on public repo",
+    "source":   "https://repo.fortisoar.fortinet.com/fortisoar/scripts/restore-connectors-widgets-from-externaldb.bin",
+
+    "evidence": {
+        "credential_leak": (
+            'PGPASSWORD=$(/opt/cyops-workflow/.env/bin/python <<< '
+            '"from fsr_utilities import decrypt; print(decrypt(\'$ENCRYPTED_PASS\'))")'
+            " -- ENCRYPTED_PASS shell-interpolated into heredoc Python command; "
+            "full decrypted password visible in /proc/PID/cmdline during script execution"
+        ),
+        "yum_injection": (
+            "package_name derived from PostgreSQL query on installed connectors table; "
+            'yum install -y "$package_name" -- if DB records modified (via SQL injection or'
+            " direct DB access), attacker controls yum package name -> arbitrary RPM install as root"
+        ),
+        "chained_with": "FSR-F4 csadmin:changeme + sudo -> DB access -> poison package column -> yum injection -> persistent backdoor",
+    },
+
+    "attack": (
+        "1. Any local user can read /proc/<PID>/cmdline while restore script runs. "
+        "2. Decrypted PostgreSQL password exposed in process args. "
+        "3. With DB write access: UPDATE installed_content_hub_connectors SET name='malicious-pkg' "
+        "   -> script runs 'yum install -y malicious-pkg' as root. "
+        "CHAIN: FSR-F4 csadmin:changeme -> sudo psql -> poison connector row -> run restore script -> root RCE."
+    ),
+}
+
+
+# ---------------------------------------------------------
+# FSR-F9: fortitip_1333885_patch constants.so -- license schema RE
+# ---------------------------------------------------------
+FSR_F9_LICENSE_CONSTANTS_RE = {
+    "id":       "FSR-F9",
+    "title":    "Cython-compiled license constants module reveals full license schema; ENFORCEMENT field and FIXED_DICT hardcoded license objects identified",
+    "severity": "INFORMATIONAL",
+    "status":   "ANALYZED -- constants.so from fortitip_1333885_patch.zip (2026-09-01)",
+    "source":   "https://repo.fortisoar.fortinet.com/patches/fortitip_1333885_patch.zip",
+
+    "binary_info": {
+        "file":      "constants.so",
+        "size":      "217KB (213K on disk)",
+        "type":      "ELF 64-bit LSB shared object x86-64, NOT stripped",
+        "buildid":   "9dba4e133973ab89434f38f98a3d889ca263ade8",
+        "source_c":  "/br/BUILD/cyops-auth-7.6.3-3393/utilities/license/constants.c",
+        "origin_py": "utilities/license/constants.py (Cython-compiled)",
+        "cython":    "_cython_3_0_6",
+        "python":    "3.x (uses _PyUnicode_Ready -- 3.9/3.10 era; fails on 3.12)",
+        "entry":     "PyInit_constants -> __pyx_pymod_exec_constants (65KB init)",
+    },
+
+    "license_types": {
+        "ENTERPRISE":                {"code": "ENTERPRISE_CODE",              "schema": "ENTERPRISE_CODE_SCHEMA"},
+        "STARTER_ENTERPRISE":        {"code": "STARTER_ENTERPRISE_CODE",      "schema": "STARTER_ENTERPRISE_CODE_SCHEMA"},
+        "EVALUATION":                {},
+        "PERPETUAL":                 {},
+        "SUBSCRIPTION":              {},
+        "TRIAL_EXTENSION":           {"subtype": "TRIAL_SUBTYPE"},
+        "MULTI_TENANT":              {"code": "MULTI_TENANT_CODE",            "schema": "MULTI_TENANT_CODE_SCHEMA"},
+        "MULTI_TENANT_DEDICATED":    {"code": "MULTI_TENANT_DEDICATED_CODE",  "schema": "MULTI_TENANT_DEDICATED_CODE_SCHEMA"},
+        "MULTI_TENANT_REGIONAL":     {"code": "MULTI_TENANT_REGIONAL_SOC_CODE", "schema": "MULTI_TENANT_REGIONAL_SOC_CODE_SCHEMA"},
+        "HA_FSR":                    {"code": "HA_CODE",                      "schema": "HA_CODE_SCHEMA"},
+        "UNKNOWN":                   {},
+    },
+
+    "edition_codes": {
+        "FSRM": "FortiSOAR Multi-tenant (inferred from MULTI_TENANT context)",
+        "FSRE": "FortiSOAR Enterprise (inferred)",
+        "FSRH": "FortiSOAR HA (inferred from HA_FSR context)",
+        "FSRD": "FortiSOAR Dedicated (inferred from MULTI_TENANT_DEDICATED context)",
+        "FSES": "FortiSOAR Enterprise Starter (inferred from STARTER_ENTERPRISE context)",
+        "FSRA": "FortiSOAR (unknown sub-edition A)",
+        "FSRR": "FortiSOAR Regional SOC (inferred from MULTI_TENANT_REGIONAL context)",
+        "note": "4-char Forticare SKU codes embedded as Cython global PyObject*; actual string values confirmed by strings extraction",
+    },
+
+    "contract_schema_fields": [
+        "CODE", "CSDATA", "DESCRIPTION", "START_DATE", "END_DATE",
+        "EXPIRY", "EXPIRY_TIME", "EXTENSION_SUBTYPE", "TRIAL_SUBTYPE",
+        "QUANTITY", "USERS", "SEATS",
+        "SUPPORT_TYPE", "SUPPORT_TYPE_DESCRIPTION",
+        "SUPPORT_LEVEL", "SUPPORT_LEVEL_DESCRIPTION",
+        "ENFORCEMENT",
+        "MANDATORY_CONTRACTS",
+    ],
+
+    "tip_addon": {
+        "TIP_ENTERPRISE":            {"code": "TIP_ENTERPRISE_CODE",          "schema": "TIP_ENTERPRISE_CODE_SCHEMA"},
+        "TIP_ADD_ON_ESSENTIAL":      {"fixed": "FIXED_DICT_FOR_TIP_ESSENTIAL"},
+        "TIP_ADD_ON_FULL_SUITE":     {"fixed": "FIXED_DICT_FOR_TIP_FULL_SUITE"},
+        "TIP_ADD_ON_FAZ_ESSENTIAL":  {"code": "TIP_ADD_ON_FAZ_ESSENTIAL_CODE", "schema": "TIP_FAZ_ADD_ON_ESSENTIAL_CODE_SCHEMA"},
+        "TIP_ADD_ON_FAZ_FULL_SUITE": {"code": "TIP_ADD_ON_FAZ_FULL_SUITE_CODE", "schema": "TIP_FAZ_ADD_ON_FULL_SUITE_CODE_SCHEMA"},
+        "TIP_ADDITIONAL_USER":       {"schema": "TIP_ADDITIONAL_USER_CONTRACT_SCHEMA"},
+        "TIP_MANDATORY_CONTRACTS":   {},
+        "TIPA":                      "TIP Add-on short code",
+        "TIPE":                      "TIP Enterprise short code",
+    },
+
+    "tim_module": {
+        "TIM_SUBSCRIPTION":      "Threat Intelligence Module subscription",
+        "TIM_SUBSCRIPTION_ACTIVE": "flag: TIM subscription is active",
+        "TIM_EXPIRY":            "TIM-specific expiry (separate from main license)",
+        "TIM_SUPPORTED_INGESTION_LIMIT": "max IOC ingestion per period",
+        "TIM_SUPPORTED_QUERY_LIMIT":     "max threat intel queries per period",
+        "TIMS":                  "TIM short code",
+        "TIMS_CONTRACT_SCHEMA":  "TIM contract validation schema",
+    },
+
+    "seat_enforcement": {
+        "ALLOWED_SEATS":      "maximum seats in license contract",
+        "LICENSE_SEATS":      "seats granted by current license",
+        "TOTAL_ACTIVE_SEATS": "currently active user seats (checked against ALLOWED_SEATS)",
+        "ADDITIONAL_USER":              "add-on user license",
+        "ADDITIONAL_USER_ACTIVE":       "flag: add-on user active",
+        "ADDITIONAL_USER_CONTRACT_SCHEMA":    "schema for add-on user contract",
+        "ADDITIONAL_USER_CONTRACT_VALIDATOR": "validator object for add-on",
+        "has_additional_users_active":  "method: returns bool",
+        "ENFORCEMENT":        "CRITICAL: if False, license seat enforcement disabled -- RE target in cyops-auth",
+    },
+
+    "hardcoded_objects": {
+        "FIXED_DICT":                  "base hardcoded license configuration object",
+        "FIXED_DICT_FOR_TIP_ESSENTIAL": "hardcoded TIP Essential license config (no Forticare validation?)",
+        "FIXED_DICT_FOR_TIP_FULL_SUITE": "hardcoded TIP Full Suite license config (no Forticare validation?)",
+        "note": "FIXED_DICT objects bypass contract validation -- if code path that uses these can be triggered without valid Forticare contract, enables license upgrade without payment",
+    },
+
+    "patch_significance": (
+        "fortitip_1333885 patches cyops-auth to replace constants.so. "
+        "Patch compiled 2026-09-01 from cyops-auth-7.6.3-3393. "
+        "Patch.sh drops constants.so to /opt/cyops-auth/utilities/license/ and restarts cyops-auth. "
+        "Likely added FIXED_DICT_FOR_TIP_ESSENTIAL and FIXED_DICT_FOR_TIP_FULL_SUITE (new TIP add-on tiers). "
+        "Possible CVE: previous version had license bypass or incorrect TIP entitlement. "
+        "Target for version comparison: obtain pre-patch constants.so from 7.6.3 RPM."
+    ),
+
+    "next_steps": [
+        "Extract cyops-auth-7.6.3.x RPM (from 7.6.3/x86_64/) -- get pre-patch constants.so for diff",
+        "Find code in cyops-auth that reads ENFORCEMENT field -- if False path is reachable from network, license bypass",
+        "Find code that selects between FIXED_DICT vs Forticare-validated dict -- FIXED_DICT code path is bypass candidate",
+        "Check TIM_SUBSCRIPTION_ACTIVE handling -- if can be set True without valid TIM license",
+        "Locate active_contract_key reader in cyops-auth -- understand what triggers ENFORCEMENT=False",
+    ],
+}
+
+
+# ---------------------------------------------------------
 # Repo surface map (from public crawl 2026-09-17)
 # ---------------------------------------------------------
 REPO_SURFACE = {
@@ -393,8 +548,9 @@ REPO_SURFACE = {
 # Pending analysis
 # ---------------------------------------------------------
 PENDING = [
-    # RPM extraction
-    "Extract cyops-auth RPM -- analyze Django auth views, session handling, JWT/token validation",
+    # RPM extraction -- priority order
+    "PRIORITY: Extract cyops-auth-7.6.3.x RPM -- get pre-patch constants.so; diff against fortitip_1333885 constants.so to find what changed",
+    "PRIORITY: Extract cyops-auth RPM (7.6.7) -- find ENFORCEMENT field reader, active_contract_key handler, FIXED_DICT code paths",
     "Extract cyops-api RPM -- map all API endpoints, find unauth surfaces, check IDOR",
     "Extract cyops-common RPM -- find hardcoded secrets, keys, DB credentials",
     "Extract cyops-rabbitmq RPM -- confirm default password handling in install (not just upgrade)",
@@ -402,7 +558,7 @@ PENDING = [
     "Extract cyops-integrations RPM -- connector sandbox analysis, escape vectors",
 
     # Patch analysis
-    "Download + analyze patches/fortitip_1333885_patch.zip (2026-09-01) -- what did it fix?",
+    "DONE: fortitip_1333885_patch.zip analyzed -- constants.so is Cython license schema module (FSR-F9)",
     "Download + analyze patches/fsr-cve-2022-22965-fix.zip -- Spring4Shell mitigation in Tomcat",
 
     # Content hub
