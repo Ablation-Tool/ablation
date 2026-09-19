@@ -834,17 +834,72 @@ FINDINGS["EMS-800-F15"] = {
     ),
 }
 
+# ---------------------------------------------------------
+# EMS-800-F16 | Scheduled SFTP Backup Uses InsecureIgnoreHostKey -- MITM Credential/Data Theft
+# Severity: HIGH
+# ---------------------------------------------------------
+FINDINGS["EMS-800-F16"] = {
+    "title":    "TaskScheduledBackup uses golang.org/x/crypto/ssh.InsecureIgnoreHostKey -- no SFTP server verification",
+    "severity": "HIGH",
+    "status":   "CONFIRMED -- symbol fortinet.com/ems/service/emstasks.TaskScheduledBackup.func1.InsecureIgnoreHostKey.2 in binary",
+    "cvss":     "7.4 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N)",
+    "component": "bin/emsworkers_linux_arm64 (fortinet.com/ems/service/emstasks.TaskScheduledBackup)",
+
+    "evidence": {
+        "symbol": (
+            "fortinet.com/ems/service/emstasks.TaskScheduledBackup.func1.InsecureIgnoreHostKey.2\n"
+            "-- confirmed in Go symbol table at binary offset 0x3ea5dcf"
+        ),
+        "sftp_stack": [
+            "golang.org/x/crypto/ssh.Password -- password-based SSH auth (backup password from DB)",
+            "github.com/pkg/sftp@v1.13.6 -- SFTP client library",
+            "golang.org/x/crypto/ssh.Dial -- standard SSH dial",
+            "fortinet.com/ems/service/emstasks.SFTPMkdirAll -- directory creation on remote SFTP server",
+        ],
+        "insecure_note": (
+            "golang.org/x/crypto/ssh.InsecureIgnoreHostKey() returns a HostKeyCallback that "
+            "accepts ANY server host key without verification. Go documentation explicitly labels "
+            "this function as insecure and states it should only be used for testing."
+        ),
+    },
+
+    "attack_path": (
+        "1. Attacker positions on network path between EMS server and configured SFTP backup target\n"
+        "2. Scheduled backup task runs (TaskScheduledBackup) using InsecureIgnoreHostKey\n"
+        "3. Attacker presents fake SFTP server -- EMS connects without verifying host key\n"
+        "4. SSH Password credential (scheduled_backup_password, decrypted from DB via symmetric_key())\n"
+        "   is sent to attacker's fake server\n"
+        "5. Attacker also receives the full EMS configuration backup data\n"
+        "   (contains all endpoint registrations, policies, encrypted secrets)"
+    ),
+
+    "chain": "EMS-800-F06 (symmetric_key() exposure) provides scheduled_backup_password. "
+             "EMS-800-F16 leaks it to a network MITM during backup transmission.",
+
+    "backup_content_risk": (
+        "Scheduled EMS backups contain full DB exports including: endpoint registration passwords, "
+        "LDAP credentials, Azure AD client secrets, JWT signing keys, TLS private keys. "
+        "A backup file stolen via MITM gives equivalent access to a DB dump."
+    ),
+
+    "remediation": (
+        "1. Replace InsecureIgnoreHostKey with known_hosts-based HostKeyCallback.\n"
+        "2. Store SFTP server host key fingerprint in EMS settings and verify on each connection.\n"
+        "3. Alternatively: enforce SFTP over TLS (FTPS) or use SFTP with certificate authentication."
+    ),
+}
+
 # =============================================================
 # SUMMARY TABLE
 # =============================================================
 
 SUMMARY = {
-    "total_findings": 15,
+    "total_findings": 16,
     "critical":       4,   # EMS-800-F04, EMS-800-F08, EMS-800-F13, EMS-800-F15
-    "high":           6,   # EMS-800-F01, EMS-800-F03, EMS-800-F05, EMS-800-F06, EMS-800-F12, EMS-800-F14
+    "high":           7,   # EMS-800-F01, EMS-800-F03, EMS-800-F05, EMS-800-F06, EMS-800-F12, EMS-800-F14, EMS-800-F16
     "medium":         4,   # EMS-800-F02, EMS-800-F07, EMS-800-F09, EMS-800-F11
     "low":            1,   # EMS-800-F10
-    "confirmed":      11,  # F01, F02, F03, F06, F07 (partial), F08, F10, F11, F12, F13, F15
+    "confirmed":      12,  # F01, F02, F03, F06, F07 (partial), F08, F10, F11, F12, F13, F15, F16
     "candidate":      4,   # F04, F05, F09, F14
     "disclosure_deadline": "2026-12-16",
     "disclosure_start":    "2026-09-17",
@@ -864,7 +919,8 @@ PENDING = [
     "EMS-800-F03: Confirm emsworkers passes user-controlled data to FCTDas SQL format strings",
     "EMS-800-F14: Trace filename sanitization path in custom installer upload -- subprocess injection",
     "EMS-800-F15: Test if /api/v1/ai/query enforces Django session auth; obtain aigateway binary",
-    "7.2.14 / 7.2.15 Windows installer: extract and diff against 7.2.9 findings (F1-F22)",
+    "EMS-800-F16: Extract scheduled_backup_password from DB; confirm InsecureIgnoreHostKey with network MITM test",
+    "7.2.14 / 7.2.15 Windows installer: extract CAB payload; diff against 7.2.9 findings (F1-F22)",
     "cert_chain_auth.pyc full bytecode: confirm no code path bypasses contains_certificate()",
     "Ablation semantic sweep on emsworkers ARM64: auth, memcpy, exec, SQL query profiles",
     "7.4.5 OVA extraction: stream OVA as tar, find VMDK offset, mount with qemu-nbd",
