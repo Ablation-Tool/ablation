@@ -281,3 +281,103 @@ FORTIOS_FIRMWARE_SYSTEMIC = {
         "miglogd: Log daemon; BOLDMOVE suppression target",
     ],
 }
+
+
+# =============================================================
+# Universal OVF/qcow2 P1 plaintext architecture survey
+# Date: 2026-09-18
+# Tested: FGT 8.0.0, FFW 8.0.0, FMG 8.0.0, FAZ 8.0.0
+# =============================================================
+
+FORTINET_P1_ARCHITECTURE_SURVEY = {
+    "id":        "FW-ARCH-01",
+    "product":   "Fortinet firmware -- all VM variants",
+    "severity":  "INFORMATIONAL -- architecture disclosure",
+    "class":     "Plaintext Application Archive in VM Firmware -- product family split",
+
+    "summary": (
+        "All Fortinet VM firmware images follow one of two P1 partition architectures. "
+        "The split correlates with product family (FortiOS-based vs FAZ/FMG-based). "
+        "Both families have encrypted rootfs.gz (fortism LSM, entropy 7.997). "
+        "The application layer exposure varies by family."
+    ),
+
+    "family_a_fortigate_based": {
+        "products":       ["FortiGate", "FortiFirewall"],
+        "versions_tested": ["FortiGate 8.0.0 VM64-KVM", "FortiFirewall 8.0.0 VM64-KVM"],
+        "p1_label":        "FORTIOS (ext3, SYSLINUX/EXTLINUX boot)",
+        "encrypted":       "rootfs.gz (entropy 7.997, non-gzip header, fortism LSM hook)",
+        "plaintext":       "datafs.tar.gz -- ~20MB gzip archive",
+        "datafs_contents": [
+            "etc/fgt2.key (2048-bit RSA shared device key -- all devices same key)",
+            "etc/fgt_512.key (512-bit RSA, signs PKCS7 .x integrity files -- trivially factorable)",
+            "etc/fgt_512.crt (leaf cert, issued by fortinet-subca2003)",
+            "etc/fortism_config.json (~211KB -- full fortism LSM MAC policy in JSONC)",
+            "lib/libips.so.new (18.5MB ELF shared lib -- IPS engine, 335 dynamic syms)",
+            "lib/libav.so.new (15.7MB ELF shared lib -- AV engine)",
+            "etc/wad_ips.rules, ips/ips.rules (549KB plaintext IPS rules)",
+            "etc/system.conf.def (29KB default system configuration)",
+            "etc/ssh/moduli (592KB SSH DH moduli)",
+        ],
+        "os_layer_access": "BLOCKED (rootfs.gz encrypted; requires fortism kernel hook intercept)",
+    },
+
+    "family_b_faz_fmg_based": {
+        "products":        ["FortiAnalyzer", "FortiManager"],
+        "versions_tested": ["FortiAnalyzer 8.0.0 VM64-KVM", "FortiManager 8.0.0 VM64-KVM"],
+        "p1_label":        "FORTI_BOOT_DEV (ext3)",
+        "encrypted":       "rootfs.gz (entropy 7.997) + syntax.tar.xz (entropy 7.997)",
+        "plaintext":       "rootfs-ext.tar.xz -- 236MB compressed, ~1.36GB uncompressed",
+        "rootfs_ext_contents": [
+            "usr/local/python/ -- full Python application source",
+            "usr/local/python/sql_rewriter/ -- Flask JSON-RPC SQL rewriting service",
+            "usr/local/python/sql-validator/ -- SQL parser",
+            "usr/local/builtin_connectors/ -- SOAR connector pack (tar.gz inside XZ)",
+            "builtin_connectors: AD, EMS, FOS, VSPHERE, FMQ, LOCALHOST, FEDR, FSA, FML, etc.",
+        ],
+        "os_layer_access": "BLOCKED but IRRELEVANT -- full application layer in plaintext",
+    },
+
+    "shared_key_confirmation": (
+        "fgt2.key modulus prefix A75C115F690B67C32834D43FE1BD50DB301CE34F6A96... "
+        "confirmed identical across FGT 7.4.12, FGT 8.0.0, FFW 8.0.0 (separate qcow2 images). "
+        "Key is universal across FortiOS product family. See FGT-F27 for full scope."
+    ),
+}
+
+
+# ===================================================================
+# FortiAuthenticator architecture note (universality sweep result)
+# Date: 2026-09-18
+# ===================================================================
+
+FAC_ARCHITECTURE = {
+    "product":   "FortiAuthenticator-VM",
+    "versions_tested": [
+        "FAC_VM_KVM-v6-build1355 (July 2023, 99MB rootfs.gz, 4MB flatkc)",
+        "FAC_VM-v8-build0099-FORTINET.out.ovf (April 2026, 132MB rootfs.gz, 6.1MB flatkc)",
+    ],
+    "family":    "FortiOS (A), minimal variant -- NO plaintext data archive",
+    "p1_format": "ext2/ext3, SYSLINUX/EXTLINUX boot, 3-partition layout",
+    "p1_files":  [
+        "flatkc (4-6MB, compressed bzImage kernel)",
+        "rootfs.gz (~100-132MB, encrypted -- non-gzip header, fortism LSM)",
+        "*.sign files (512B PKCS7 detached sigs for each file)",
+        "extlinux.conf (bootloader config, root=/dev/ram0, ramdisk_size=600000)",
+    ],
+    "p2_p3_format": "Uninitialized (all zeros, pre-provisioned for runtime use)",
+    "plaintext_attack_surface": "NONE -- no datafs.tar.gz, no rootfs-ext.tar.xz",
+    "encrypted_rootfs_entropy": "7.571 (KVM v6), 7.571 (OVF v8) -- encrypted",
+    "notes": (
+        "FortiAuthenticator uses the FortiOS boot chain (flatkc + fortism LSM) "
+        "but does NOT include the datafs.tar.gz plaintext archive present in FGT/FFW. "
+        "This means the shared private key attack (FGT-F27) does NOT apply here. "
+        "rootfs.gz decryption still requires the QEMU GDB approach targeting fortism LSM hook. "
+        "LDAP-related authentication logic likely inside encrypted rootfs."
+    ),
+}
+
+FAC_UNIVERSALITY_RESULT = {
+    "finding":   "FAC has no plaintext application layer -- least attack surface of all VM products",
+    "implication": "FortiOS family without datafs.tar.gz = most protected VM image format Fortinet ships",
+}
