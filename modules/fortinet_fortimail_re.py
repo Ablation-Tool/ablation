@@ -439,7 +439,9 @@ FMLB_F06_MAILFILTERD_DECOMP = {
     "id":       "FMLB-F06",
     "product":  "Fortinet FortiMail mailfilterd",
     "cve":      None,
-    "severity": "CANDIDATE -- decompression/MIME parsing candidates in mail filter daemon",
+    "severity": "FALSE POSITIVE (top 2) -- 0x131362 = FortiMail::MediaOutImpl::setpos() C++ seek; "
+                "0xfeef0 = FortiMail::PolicyRecipient::~PolicyRecipient() deleting destructor; "
+                "all top candidates are C++ RAII teardown, not data-processing code",
     "class":    "Resource exhaustion / heap overflow in MIME/archive parser (CWE-400/122)",
     "affected": "FortiMail 8.0.0 build0183",
     "status":   "UNVERIFIED -- semantic candidates, 6398 functions; manual RE required",
@@ -482,7 +484,9 @@ FMLB_F07_HTTPD_INT_OVERFLOW = {
     "id":       "FMLB-F07",
     "product":  "Fortinet FortiMail custom httpd",
     "cve":      None,
-    "severity": "CANDIDATE -- integer overflow before malloc in custom httpd",
+    "severity": "FALSE POSITIVE -- 0x85500 = Apache ap_expr_yylex_init_extra(); "
+                "malloc(0x98) is compile-time constant, not user-input derived. "
+                "0x85505 is mid-function sub-rsp instruction, same prologue-byte FP class as imap.",
     "class":    "Integer overflow (CWE-190) leading to heap overflow",
     "affected": "FortiMail 8.0.0 build0183",
     "status":   "UNVERIFIED -- semantic candidates; must verify not false positive (cf. FSA FSAB-F07)",
@@ -614,17 +618,51 @@ FML_SEMANTIC_SWEEP_SUMMARY = {
 
     "false_positives_confirmed": [
         "imap 0x121a5 (mime_parser_overflow, 0.471): mid-instruction 0x55 byte in push-r13; see FMLB-F08",
-        "imap 0x121ab (mime_parser_overflow, 0.467): push-rbp in middle of callee-save sequence; see FMLB-F08",
+        "imap 0x121ab (mime_parser_overflow, 0.467): push-rbp mid-prologue; see FMLB-F08",
         "smtpd 0xdefa8 (strcpy_fixed_dst, 0.404): Cyrus SASL _plug_strdup -- malloc(strlen+1) + strcpy; safe",
-        "smtpd 0xa99e3 (strcpy_fixed_dst, 0.408): SASL DIGEST-MD5 username; strncpy with 0xff bound into BSS global; safe",
+        "smtpd 0xa99e3 (strcpy_fixed_dst, 0.408): SASL DIGEST-MD5 username; strncpy 0xff bound; safe",
+        "mailfilterd 0x131362 (decompression_bomb, 0.447): FortiMail::MediaOutImpl::setpos() -- C++ seek/delete",
+        "mailfilterd 0xfeef0 (decompression_bomb, 0.446): FortiMail::PolicyRecipient::~PolicyRecipient() -- deleting dtor",
+        "httpd 0x85500 (integer_overflow_alloc, 0.437): ap_expr_yylex_init_extra() -- Apache lexer init, malloc(0x98) constant",
+        "httpd 0x85505 (integer_overflow_alloc, 0.413): mid-function sub-rsp in same ap_expr_yylex_init_extra()",
     ],
 
+    "false_positive_patterns": {
+        "prologue_misalignment": (
+            "Prologue heuristic hits 0x55 byte (push rbp) mid-instruction inside multi-register "
+            "callee-save sequences (e.g. '41 55' = push r13). Fix: require prologue at 16-byte aligned "
+            "address OR preceded by ret/jmp/nop-pad."
+        ),
+        "library_safe_functions": (
+            "Cyrus SASL _plug_strdup, Sendmail sm_ functions: use unsafe-looking primitives safely "
+            "(malloc to strlen+1 then strcpy). Fix: filter functions with known-safe library name prefixes."
+        ),
+        "cpp_raii_destructors": (
+            "C++ deleting destructors (~T()) call operator delete, which the embedding model associates "
+            "with decompression/allocation patterns. Fix: filter _ZN...D[012]Ev mangled name suffix."
+        ),
+        "apache_internals": (
+            "ap_expr_yylex_init_extra: Apache expression lexer init with compile-time constant malloc. "
+            "Fix: Apache function prefix filter, or require that malloc size be register-derived."
+        ),
+    },
+
     "priority_order": [
-        "1. FMLB-F02: Confirm Dovecot CVE versions applicable (2.2.12 -> check each CVE scope)",
-        "2. FMLB-F04: Live test /module/adminfileupload with no auth cookie",
-        "3. FMLB-F05: Manual disasm smtpd 0xdefa8 + 0xa99e3 for pre-auth SMTP overflow",
-        "4. FMLB-F08: SSRF test -- APPEND CATENATE (URL imap://attacker/) as authenticated user",
-        "5. FMLB-F06: nm mailfilterd at 0x131362 + manual disasm for MIME/archive path",
-        "6. FMLB-F07: httpd 0x85500 manual disasm (watch for false positive)",
+        "1. FMLB-F02: Confirm which Dovecot CVEs affect 2.2.12 (version scope analysis per CVE)",
+        "2. FMLB-F04: Live test /module/adminfileupload with no auth cookie -- quick yes/no",
+        "3. FMLB-F08: SSRF test -- APPEND CATENATE (URL imap://attacker/) authenticated",
+        "4. FMLB-F05 residual: smtpd 0xf4db7 (HMAC_CTX_free in DKIM path) -- unverified",
     ],
+
+    "sweep_fp_rate": {
+        "confirmed_false_positives": 8,
+        "total_candidates_checked": 8,
+        "surviving_candidates": 0,
+        "note": (
+            "All top-8 sweep candidates confirmed false positive. "
+            "Structural finding (FMLB-F02 Dovecot 2.2.12) is the primary actionable result. "
+            "Sweep false positive root causes documented in false_positive_patterns -- "
+            "improvements needed before next FortiMail sweep run."
+        ),
+    },
 }
