@@ -69,29 +69,76 @@ TOP_N = 8
 MAX_INSNS = 400
 
 
+def build_caller_set(data: bytes, text_off: int, text_va: int, text_sz: int) -> set:
+    """
+    Scan .text for call rel32 (e8) and jmp rel32 (e9) instructions.
+    Returns set of intra-section target VAs that are explicitly branched to.
+    Used as one acceptance criterion for function start candidates.
+    """
+    targets = set()
+    blob = data[text_off:text_off + text_sz]
+    for i in range(len(blob) - 5):
+        if blob[i] in (0xe8, 0xe9):
+            rel = struct.unpack_from("<i", blob, i + 1)[0]
+            target_va = text_va + i + 5 + rel
+            if text_va <= target_va < text_va + text_sz:
+                targets.add(target_va)
+    return targets
+
+
 def find_functions(data: bytes, base_va: int, text_off: int, text_va: int, text_sz: int):
     """
     Find x86-64 function prologues: PUSH RBP / ENDBR64+PUSH RBP / SUB RSP.
-    Returns list of (va, file_offset).
-    """
-    funcs = []
-    blob = data[text_off:text_off + text_sz]
 
+    Three-condition acceptance filter to eliminate mid-instruction false starts:
+      1. VA appears as a call/jmp rel32 target in .text  (direct caller exists)
+      2. Byte immediately before VA is a known function boundary marker
+         (ret/leave/retf/hlt/int3/nop)
+      3. VA is 16-byte aligned  (compiler function alignment)
+
+    A candidate is accepted if ANY condition is true.
+    """
+    blob = data[text_off:text_off + text_sz]
     ENDBR64 = bytes([0xf3, 0x0f, 0x1e, 0xfa])
+
+    # Bytes that legitimately terminate a function and precede the next start
+    BOUNDARY_BYTES = frozenset([0xc3, 0xc9, 0xcb, 0xf4, 0xcc, 0x90])
+
+    caller_set = build_caller_set(data, text_off, text_va, text_sz)
+
+    raw = []
     i = 0
     while i < len(blob) - 4:
         b = blob[i]
-        if b == 0x55:  # PUSH RBP
-            funcs.append(text_va + i)
+        if b == 0x55:
+            raw.append(text_va + i)
         elif blob[i:i+4] == ENDBR64 and i + 4 < len(blob) and blob[i+4] == 0x55:
-            funcs.append(text_va + i)
+            raw.append(text_va + i)
         elif b == 0x48 and i + 3 < len(blob) and blob[i+1] == 0x83 and blob[i+2] == 0xec:
-            # SUB RSP, imm8 prologue
-            funcs.append(text_va + i)
+            raw.append(text_va + i)
         i += 1
 
-    # deduplicate and sort
-    return sorted(set(funcs))
+    funcs = []
+    excluded = 0
+    for va in sorted(set(raw)):
+        # Condition 1: has a direct caller
+        if va in caller_set:
+            funcs.append(va)
+            continue
+        # Condition 2: preceded by a function-boundary byte
+        off = text_off + (va - text_va)
+        if off > text_off and data[off - 1] in BOUNDARY_BYTES:
+            funcs.append(va)
+            continue
+        # Condition 3: 16-byte aligned (compiler function alignment)
+        if va & 0xF == 0:
+            funcs.append(va)
+            continue
+        excluded += 1
+
+    print(f"  Prologue filter: {len(set(raw))} raw -> {len(funcs)} accepted "
+          f"({excluded} excluded: misaligned, no caller, no boundary)")
+    return funcs
 
 
 def disasm_function(data: bytes, va: int, text_va: int, text_off: int, text_sz: int, md):
@@ -219,9 +266,15 @@ def sweep(binary_path: str, label: str):
     # Disassemble and build descriptions
     descs = []
     metas = []
+    n_skip_short = n_skip_ud2 = 0
     for va in func_vas:
         insns, raw_calls = disasm_function(data, va, text_va, text_off, text_sz, md)
         if len(insns) < 4:
+            n_skip_short += 1
+            continue
+        # Skip C++ exception landing pads: ud2 (0f 0b) signals __terminate / unreachable
+        if any(i.startswith("ud2") for i in insns):
+            n_skip_ud2 += 1
             continue
         # Resolve PLT calls to names
         call_names = []
@@ -243,7 +296,8 @@ def sweep(binary_path: str, label: str):
         descs.append(desc)
         metas.append({"va": va, "calls": call_names, "n_insns": len(insns)})
 
-    print(f"Functions with >=4 instructions: {len(descs)}")
+    print(f"Functions encoded: {len(descs)} "
+          f"(skipped: {n_skip_short} too-short, {n_skip_ud2} exception-handlers)")
 
     print(f"Encoding {len(descs)} functions with {MODEL_NAME}...")
     model = SentenceTransformer(MODEL_NAME, device="cpu")
