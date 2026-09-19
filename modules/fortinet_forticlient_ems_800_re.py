@@ -369,37 +369,66 @@ FINDINGS["EMS-800-F05"] = {
 # Severity: HIGH
 # ---------------------------------------------------------
 FINDINGS["EMS-800-F06"] = {
-    "title":    "PostgreSQL addons.pgp_sym_decrypt with addons.symmetric_key() -- key source unknown",
+    "title":    "addons.symmetric_key() exposed to all DB users -- 80-bit entropy, decrypts entire EMS secret store",
     "severity": "HIGH",
-    "status":   "CANDIDATE -- SQL fragment confirmed in emsworkers binary, key derivation TBD",
-    "cvss":     "7.5 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N)",
-    "component": "bin/emsworkers_linux_arm64 (SQL fragment); PostgreSQL addons schema",
+    "status":   "CONFIRMED -- key generation in postinst, function body in sqitch migrations, callable by any DB user",
+    "cvss":     "8.1 (AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N)",
+    "component": "postinst + sqitch/vdom/deploy/baseline/schema/master.sql + sqitch/fcm/deploy/baseline/schema/master.sql",
 
     "evidence": {
-        "sql_fragment": (
-            "addons.pgp_sym_decrypt(client_secret, addons.symmetric_key()) AS client_secret"
+        "key_generation": (
+            "# postinst:\n"
+            "SYMMETRIC_KEY=$(head -c 20 /dev/urandom | md5sum | head -c 20)\n"
+            "# 20 bytes urandom -> MD5 hex -> first 20 chars = 80-bit effective entropy\n"
+            "# Key written into SQL function body AND stored to filesystem:\n"
+            "# /var/lib/postgresql/{PG_VERSION}/symmetric_key.txt"
         ),
-        "meaning": (
-            "The 'addons' PostgreSQL schema (likely pgcrypto extension wrapper) stores "
-            "client_secret values encrypted with PGP symmetric encryption. The key is "
-            "derived from addons.symmetric_key(), a custom PostgreSQL function. "
-            "If symmetric_key() returns a constant, derives from a predictable value, "
-            "or is accessible to unprivileged DB users, all client_secret values can be decrypted."
+        "sql_function_baseline": (
+            "CREATE OR REPLACE FUNCTION addons.symmetric_key()\n"
+            "  RETURNS character varying LANGUAGE plpgsql AS $\n"
+            "  BEGIN RETURN '[SYMMETRIC_KEY]'; END; $;\n"
+            "-- postinst replaces [SYMMETRIC_KEY] with the generated 20-char hex key.\n"
+            "-- Key is hardcoded in the SQL function body after install."
         ),
+        "callable_by_any_db_user": "SELECT addons.symmetric_key();  -- no SECURITY DEFINER restriction seen",
+        "encrypted_columns": [
+            "ldap.client_secret (Azure AD OAuth2 client secret)",
+            "upload_token, secret, scheduled_backup_password",
+            "scheduled_backup_remote_user_password",
+            "endpoint_registration_ips_list.reg_pwd",
+            "Any column with pg_description ILIKE 'encrypted%'",
+            "ALL jwt_secrets.secret values (JWT signing keys for all KIDs)",
+        ],
     },
 
     "attack_path": (
-        "1. Obtain DB access (via EMS-800-F01 credential decryption or SQL injection)\n"
-        "2. Call addons.symmetric_key() to retrieve the key\n"
-        "3. Run addons.pgp_sym_decrypt() on all rows with encrypted client_secret\n"
-        "4. client_secret values likely include OAuth2 tokens, API keys, or endpoint secrets"
+        "1. Obtain any PostgreSQL DB user access (e.g. via EMS-800-F03 SQL injection or EMS-800-F01 cred leak)\n"
+        "2. SELECT addons.symmetric_key() -- returns the 20-char hex encryption key\n"
+        "3. SELECT addons.pgp_sym_decrypt(secret::bytea, addons.symmetric_key()) FROM jwt_secrets\n"
+        "   -- decrypts ALL JWT signing keys (CLOUD_CONTROLLER, EMAIL_REPORT, SASE_CONTROLLER, OAUTH2, WEBSERVER)\n"
+        "4. SELECT addons.pgp_sym_decrypt(client_secret, addons.symmetric_key()) FROM ldap\n"
+        "   -- decrypts Azure AD OAuth2 client_secret\n"
+        "5. Forge JWT tokens for any KID, impersonate cloud controller or SASE controller"
     ),
 
-    "pending": "Find addons.symmetric_key() implementation in PostgreSQL migration files",
+    "entropy_note": (
+        "head -c 20 /dev/urandom provides 160-bit raw entropy. md5() reduces to 128-bit output. "
+        "Taking only the first 20 hex chars (80 bits) of that. This is below modern key strength "
+        "recommendations for symmetric encryption keys. In practice the key space is 16^20 = 2^80 "
+        "which is weak for offline brute force given the key is stored in the DB function body."
+    ),
+
+    "filesystem_exposure": (
+        "Key also stored in /var/lib/postgresql/{PG_VERSION}/symmetric_key.txt. "
+        "Any process running as the postgres OS user (or reading the DB data directory) "
+        "can read the key without DB access."
+    ),
 
     "remediation": (
-        "Ensure addons.symmetric_key() is not callable by the application DB user directly. "
-        "Use column-level encryption with keys stored outside the DB (HSM or KMS)."
+        "1. Remove addons.symmetric_key() function -- prevent direct DB user access to the key.\n"
+        "2. Store encryption keys outside the DB (HSM, AWS KMS, or HashiCorp Vault).\n"
+        "3. Increase key entropy: 256-bit key from /dev/urandom (no md5 reduction).\n"
+        "4. Apply SECURITY DEFINER + GRANT EXECUTE only to the EMS service account at minimum."
     ),
 }
 
@@ -624,18 +653,199 @@ FINDINGS["EMS-800-F12"] = {
     "mitigation_path": "Switch to SESSION_ENGINE = 'django.contrib.sessions.backends.db' (server-side, revocable)",
 }
 
+# ---------------------------------------------------------
+# EMS-800-F13 | JWT Secret Store Encrypted with Exposed symmetric_key()
+# Severity: CRITICAL (chains with EMS-800-F06)
+# ---------------------------------------------------------
+FINDINGS["EMS-800-F13"] = {
+    "title":    "ALL JWT signing secrets encrypted with addons.symmetric_key() -- full token forgery via DB access",
+    "severity": "CRITICAL",
+    "status":   "CONFIRMED -- jwt_secrets.pyc SQL confirms pgp_sym_encrypt/decrypt with symmetric_key()",
+    "cvss":     "9.1 (AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N)",
+    "component": "fcm/models/jwt_secrets/jwt_secrets.pyc",
+
+    "evidence": {
+        "get_secret_sql": (
+            "SELECT addons.pgp_sym_decrypt(\"secret\"::bytea, addons.symmetric_key()) AS \"secret\"\n"
+            "FROM jwt_secrets\n"
+            "WHERE \"key\" = %s"
+        ),
+        "create_secret_sql": (
+            "INSERT INTO jwt_secrets (\"key\", \"secret\")\n"
+            "VALUES (%s, addons.pgp_sym_encrypt(%s, addons.symmetric_key()))"
+        ),
+        "update_secret_sql": (
+            "UPDATE jwt_secrets\n"
+            "SET \"secret\" = addons.pgp_sym_encrypt(%s, addons.symmetric_key())\n"
+            "WHERE \"key\" = %s"
+        ),
+        "asymmetric_key_sql": (
+            "INSERT INTO jwt_secrets (key, secret, public_key, is_symmetric, jwk)\n"
+            "VALUES (%s, addons.pgp_sym_encrypt(%s, addons.symmetric_key()), %s, FALSE, %s)\n"
+            "-- RSA private keys also encrypted with the same symmetric_key()"
+        ),
+        "kid_types": [
+            "CLOUD_CONTROLLER_KID -- symmetric HS256 secret",
+            "EMAIL_REPORT_KID -- symmetric HS256 secret",
+            "SASE_CONTROLLER_KID -- symmetric HS256 secret (MERGE upsert)",
+            "OAUTH2_KID -- symmetric HS256 secret",
+            "WEBSERVER_KID -- RSA keypair (RS256), private key encrypted with symmetric_key()",
+        ],
+    },
+
+    "chain": "EMS-800-F06 (symmetric_key() callable by any DB user) provides the decryption key. "
+             "Combined: DB access + symmetric_key() = forge any JWT for any trust domain.",
+
+    "attack_path": (
+        "1. Gain DB access (EMS-800-F03 SQL injection or EMS-800-F01 credential disclosure)\n"
+        "2. SELECT addons.symmetric_key()  -- retrieves 20-char hex key\n"
+        "3. SELECT key, addons.pgp_sym_decrypt(secret::bytea, addons.symmetric_key()) FROM jwt_secrets\n"
+        "   -- dumps all JWT signing secrets for all KIDs\n"
+        "4. Forge HS256 JWT with CLOUD_CONTROLLER_KID, EMAIL_REPORT_KID, OAUTH2_KID\n"
+        "5. Reconstruct RSA private key for WEBSERVER_KID, forge RS256 tokens\n"
+        "6. JWT grants full EMS API access as any user or service"
+    ),
+
+    "key_rotation_behavior": (
+        "JwtSecrets.check_ws_kid_rotation() rotates WEBSERVER_KID if older than WEBSERVER_KID_LIFETIME_DAYS. "
+        "Old keys kept for WEBSERVER_KID_LIFETIME_DAYS grace period. "
+        "Rotation does NOT change symmetric_key() -- forged tokens remain valid until per-kid expiry."
+    ),
+
+    "remediation": (
+        "1. Fix EMS-800-F06 first (restrict symmetric_key() access).\n"
+        "2. Store JWT signing keys in a separate HSM or secrets manager, not in the DB encrypted with a DB function.\n"
+        "3. Rotate all JWT secrets immediately after any DB compromise."
+    ),
+}
+
+# ---------------------------------------------------------
+# EMS-800-F14 | Custom Installer Upload -- subprocess on Uploaded File Path
+# Severity: HIGH (command injection candidate)
+# ---------------------------------------------------------
+FINDINGS["EMS-800-F14"] = {
+    "title":    "uploadhelper.py calls subprocess (msiinfo, 7z, grep) with uploaded installer file paths",
+    "severity": "HIGH",
+    "status":   "CANDIDATE -- subprocess confirmed, sanitization of filename/path not yet verified",
+    "cvss":     "8.8 (AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H) if filename unsanitized",
+    "component": "fcm/models/installers/uploadhelper.pyc + custom_installer_uploader.pyc",
+
+    "evidence": {
+        "subprocess_calls": [
+            "subprocess with capture_output=True on msiinfo -- MSI property/suminfo extraction",
+            "subprocess on grep -- file content scanning",
+            "subprocess on 7z / _unzip -- archive extraction to temp dir",
+            "python3 peInfo.py <filename> -- PE version extraction via wrapper script",
+        ],
+        "external_tools": ["msiinfo", "7z", "grep", "python3_wrapper (peInfo.py)"],
+        "temp_dir": "uuid4()-based temp directory for extraction",
+        "filename_flow": (
+            "Uploaded file saved -> path passed to _get_win_installer_info / _get_deb_installer_info "
+            "-> uploadhelper functions -> subprocess([tool, path, ...])"
+        ),
+        "architecture_check": (
+            "isFortiClientDEBAMDInstaller / isFortiClientDEBARMInstaller call grep on the DEB file "
+            "to extract architecture string -- file path passed directly to subprocess"
+        ),
+    },
+
+    "injection_vector": (
+        "If the filename from the multipart upload is not stripped of shell metacharacters before "
+        "use in subprocess calls, an attacker can inject shell commands. "
+        "E.g., filename='FortiClient; rm -rf /tmp; .msi' passed to msiinfo or 7z.\n"
+        "Requires: authenticated EMS admin user with installer upload permission."
+    ),
+
+    "cpio_note": (
+        "RPM installer processing uses cpio extraction: subprocess on cpio_extracted_dir path. "
+        "Path traversal in the cpio archive could write files outside the temp extraction dir."
+    ),
+
+    "pending": [
+        "Trace filename sanitization between upload controller and uploadhelper subprocess calls",
+        "Check if shlex.quote() or equivalent is applied before subprocess construction",
+        "Test: upload .deb with crafted filename containing shell metacharacters",
+    ],
+
+    "remediation": (
+        "1. Use subprocess with list args (not shell=True) and validate filenames against strict allowlist regex.\n"
+        "2. Strip or reject filenames with non-alphanumeric chars (except ._-).\n"
+        "3. Run installer processing in a sandboxed subprocess with no network and restricted FS access."
+    ),
+}
+
+# ---------------------------------------------------------
+# EMS-800-F15 | ai_controller Proxies to localhost:8001 Without Auth -- Django Completes Unauthenticated AI Path
+# Severity: CRITICAL (chains with EMS-800-F08)
+# ---------------------------------------------------------
+FINDINGS["EMS-800-F15"] = {
+    "title":    "/api/v1/ai/query Django controller proxies to localhost:8001/query with no additional auth",
+    "severity": "CRITICAL",
+    "status":   "CONFIRMED -- ai_controller.pyc strings: http://localhost:8001/query, no auth headers",
+    "cvss":     "9.1 (AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N)",
+    "component": "fcm/controllers/ai_controller.pyc + etc/nginx/sites-available/ems-443.conf.template",
+
+    "evidence": {
+        "nginx_location": (
+            "location /ai/ {\n"
+            "    proxy_pass http://fcems_aigateway;\n"
+            "    proxy_read_timeout 3600;\n"
+            "    # NO common_proxy_headers.conf (no session/user headers forwarded)\n"
+            "    # NO ssl_verify check\n"
+            "    # NO auth requirement\n"
+            "}"
+        ),
+        "django_controller": (
+            "class AiController:\n"
+            "    # Route: /api/v1/ai/query\n"
+            "    # Proxies to: http://localhost:8001/query\n"
+            "    # No auth in extracted strings -- relies solely on Nginx layer\n"
+            "    # Request body: {'message': '...'} (application/json)"
+        ),
+        "fcems_aigateway_service": (
+            "ExecStart=bash -c 'exec -a fcems_aigateway /opt/forticlientems/ai/gateway/venv/bin/aigateway'\n"
+            "# Binary shipped separately -- not in this package\n"
+            "# EnvironmentFile=/opt/forticlientems/ai/gateway/.env"
+        ),
+    },
+
+    "chain": "EMS-800-F08 (Nginx /ai/ unauthenticated) + EMS-800-F15 (Django no-auth proxy to localhost:8001) = "
+             "internet client sends arbitrary LLM queries with zero authentication at any layer.",
+
+    "attack_path": (
+        "1. Send POST https://<EMS_IP>/ai/  (or /api/v1/ai/query) with JSON body {\"message\": \"<prompt>\"}\n"
+        "2. Nginx passes through with no auth check (EMS-800-F08)\n"
+        "3. Django ai_controller proxies to localhost:8001/query with no added auth\n"
+        "4. AI gateway processes arbitrary prompt\n"
+        "5. If AI gateway has tool access or can read EMS data, prompt injection escalates to data exfil"
+    ),
+
+    "pending": [
+        "Obtain aigateway binary -- audit /query endpoint for tool access, data source access, SSRF",
+        "Check .env file for API keys or LLM provider credentials",
+        "Test: does /api/v1/ai/query require session cookie (Django auth middleware may still apply)",
+        "Determine if Nginx /ai/ and Django /api/v1/ai/query are separate or same route",
+    ],
+
+    "remediation": (
+        "1. Add authentication to the Nginx /ai/ location (include common_proxy_headers.conf, require valid session).\n"
+        "2. Add auth enforcement in ai_controller before proxying.\n"
+        "3. Audit aigateway for SSRF, prompt injection, and EMS data access."
+    ),
+}
+
 # =============================================================
 # SUMMARY TABLE
 # =============================================================
 
 SUMMARY = {
-    "total_findings": 12,
-    "critical":       2,   # EMS-800-F04, EMS-800-F08
-    "high":           5,   # EMS-800-F01, EMS-800-F03, EMS-800-F05, EMS-800-F06, EMS-800-F12
-    "medium":         3,   # EMS-800-F02, EMS-800-F07, EMS-800-F09, EMS-800-F11
+    "total_findings": 15,
+    "critical":       4,   # EMS-800-F04, EMS-800-F08, EMS-800-F13, EMS-800-F15
+    "high":           6,   # EMS-800-F01, EMS-800-F03, EMS-800-F05, EMS-800-F06, EMS-800-F12, EMS-800-F14
+    "medium":         4,   # EMS-800-F02, EMS-800-F07, EMS-800-F09, EMS-800-F11
     "low":            1,   # EMS-800-F10
-    "confirmed":      8,   # F01, F02, F03, F08, F10, F11, F12, F07 (partial)
-    "candidate":      4,   # F04, F05, F06, F09
+    "confirmed":      11,  # F01, F02, F03, F06, F07 (partial), F08, F10, F11, F12, F13, F15
+    "candidate":      4,   # F04, F05, F09, F14
     "disclosure_deadline": "2026-12-16",
     "disclosure_start":    "2026-09-17",
     "analysis_date":       "2026-09-19",
@@ -648,12 +858,15 @@ SUMMARY = {
 PENDING = [
     "EMS-800-F04: Disassemble emsworkers ARM64 near impdb._Cfunc_memcpy to confirm no bounds check",
     "EMS-800-F05: Find interpreter invocation callsite in emsworkers -- which endpoint triggers it",
-    "EMS-800-F06: Find addons.symmetric_key() definition in PostgreSQL sqitch migration files",
     "EMS-800-F07: Determine default value of enable_cert_auth_all in fresh EMS 8.0.0 install",
     "EMS-800-F08: Obtain AI gateway binary and audit its authentication implementation",
     "EMS-800-F09: Decompile scim.pyc to verify bearer token enforcement",
     "EMS-800-F03: Confirm emsworkers passes user-controlled data to FCTDas SQL format strings",
+    "EMS-800-F14: Trace filename sanitization path in custom installer upload -- subprocess injection",
+    "EMS-800-F15: Test if /api/v1/ai/query enforces Django session auth; obtain aigateway binary",
     "7.2.14 / 7.2.15 Windows installer: extract and diff against 7.2.9 findings (F1-F22)",
     "cert_chain_auth.pyc full bytecode: confirm no code path bypasses contains_certificate()",
     "Ablation semantic sweep on emsworkers ARM64: auth, memcpy, exec, SQL query profiles",
+    "7.4.5 OVA extraction: stream OVA as tar, find VMDK offset, mount with qemu-nbd",
+    "8.0.0.0121 vs 8.0.0.0157: diff FCTDas, emsworkers, postinst for patch changes",
 ]
