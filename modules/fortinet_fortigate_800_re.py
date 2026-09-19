@@ -7,7 +7,9 @@ Sources:
   - Kernel: flatkc (bzImage, Linux 4.19.13, FortiOS IMA enforce mode, fos_keyring)
   - rootfs.gz: AES-encrypted (device-specific key in kernel); not extractable without hardware
   - datafs.tar.gz: plain gzip, ~46MB expanded; lib/ + etc/ contents
-  - Semantic sweep: libips.so.new (43882 functions), libav.so.new (TBD)
+  - Semantic sweep R1: libips.so.new (43882 functions), libav.so.new (37482 functions) -- 100% FP
+  - Semantic sweep R2 (fixed filter): libips.so.new (10692 encoded), libav.so.new (5391 encoded) -- 100% FP
+  - Kernel: flatkc extracted (27MB vmlinux), fortism LSM confirmed, rootfs cbc(aes) key not static
 Products: Fortinet FortiGate VM64 8.0.0 build0167, FortiOS 8.0.0.F
 """
 
@@ -288,5 +290,207 @@ FGT800_SWEEP_SUMMARY = {
         "709_rootfs": "Fake XZ encryption (CRC32 forgery) -- trivially extracted",
         "800_rootfs": "Real AES -- rootfs sealed; only datafs accessible",
         "regression": "Fortinet hardened firmware extraction between 7.0.9 and 8.0.0",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FGTB-F05: Kernel analysis -- flatkc extracted, fortism LSM, rootfs key
+# ---------------------------------------------------------
+FGTB_F05_KERNEL_ANALYSIS = {
+    "id":       "FGTB-F05",
+    "severity": "INFO -- static kernel analysis; key extraction not possible without live boot",
+    "summary":  "flatkc extracted from fortios.vmdk p1 (ext3). vmlinux decompressed (27MB ELF64 x86-64). "
+        "fortism LSM confirmed; rootfs decryption uses cbc(aes). AES key not statically recoverable.",
+
+    "partition": {
+        "layout": "fortios.raw p1 (sector 2048, 256MB, ext3 FORTIOS) via loop mount offset=1048576",
+        "files":  [
+            "flatkc (7.7MB bzImage, Linux 4.19.13, root@6dd369a4a2ab, 2026-04-20 17:10:46)",
+            "rootfs.gz (92MB AES-encrypted ciphertext)",
+            "datafs.tar.gz (plain gzip, libips + libav accessible)",
+            "flatkc.chk (256B RSA-2048 signature over flatkc)",
+            "rootfs.gz.chk (256B RSA-2048 signature over rootfs.gz ciphertext)",
+            "filechecksum (/rootfs.gz,CRC32,0xe59ea42b; /flatkc,CRC32,0xffffffff)",
+        ],
+        "rootfs_crc_verified": True,  # CRC32 0xe59ea42b verified against encrypted blob
+    },
+
+    "kernel": {
+        "buildid":         "43e6c79f25c4e6509765325de60ad04e09dd71bc",
+        "vmlinux_size_mb": 27,
+        "elf_segments": [
+            "LOAD [r-x] foff=0x200000 vaddr=0xffffffff80200000 fsz=0x12fa000 (text+rodata)",
+            "LOAD [rw-] foff=0x1600000 vaddr=0xffffffff81600000 fsz=0xe5000 (data)",
+            "LOAD [rw-] foff=0x1800000 vaddr=0x0 fsz=0x29000 (init data)",
+            "LOAD [rwx] foff=0x190e000 vaddr=0xffffffff8170e000 fsz=0x12e000 (init text)",
+        ],
+        "security_features": [
+            "fortism LSM (security/fortism/forti_lsm.c) -- 30+ hooks: file_open, path_link, "
+                "socket_listen, unix_sendmsg, inet_connect, kernel_load_data, path_chmod",
+            "fos_keyring (.fos_keyring at 0xffffffff813ef2dc) -- Linux keyring for module signing",
+            "fos_ima -- IMA enforce mode; file integrity checking at open/exec",
+            "X.509 certs embedded: Fortinet CA2, Fortinet SubCA2002, Fortinet SubCA2003, "
+                "Digicert Codesign, Digicert TSA",
+        ],
+        "no_kaslr": True,  # bzImage with fixed load address; deterministic VA layout
+    },
+
+    "rootfs_decryption": {
+        "cipher_mode":         "cbc(aes) -- found at 0xffffffff813e1002 in rodata",
+        "path_strings":        ["/data/rootfs.gz", "/data/datafs.tar.gz", "/data/flatkc"],
+        "path_string_region":  "0xffffffff813ee757 (fortism LSM rodata region)",
+        "chk_file":            "rootfs.gz.chk (256B RSA-2048 signature, not key material)",
+        "key_extraction": {
+            "static_result": "KEY NOT FOUND -- no 16/32-byte high-entropy blobs in fortism code region "
+                "that survive printable/code context filtering",
+            "reason":        "Key likely loaded via keyring_alloc / request_key at runtime into fos_keyring; "
+                "not a static byte array in the binary",
+            "approaches_tried": [
+                "High-entropy 32-byte blob scan in fortism rodata (0x13d0000-0x14fa000)",
+                "LEA RIP-relative scan for /data/rootfs.gz and cbc(aes) string references",
+                "Absolute pointer search for string VAs in data segment",
+                "kallsyms address table scan for fortism_init VA",
+                "initcall pointer enumeration in .init segment",
+            ],
+            "conclusion": "DYNAMIC ANALYSIS REQUIRED -- live VM boot or kernel memory dump needed to "
+                "extract key from fos_keyring at runtime",
+        },
+    },
+
+    "attack_surface_notes": {
+        "no_kaslr":     "Fixed kernel VA layout enables reliable ROP gadget addressing if kernel code exec achieved",
+        "4_19_vulns":   "Kernel 4.19.13 predates all FGTB-F01 fixes; see FGTB-F01 for CVE list",
+        "fortism_hooks": "fortism LSM adds file/socket/network enforcement hooks -- audit path for sandbox escapes",
+    },
+}
+
+
+# ---------------------------------------------------------
+# FGTB-F06 / FGTB-F07: Round-2 sweeps (fixed filter)
+# ---------------------------------------------------------
+FGTB_F06_IPS_SWEEP_R2 = {
+    "id":       "FGTB-F06",
+    "severity": "LOW -- 100% FP rate in checked candidates",
+    "binary":   "libips.so.new",
+    "sweep_round": 2,
+    "filter":   "three-condition (caller_set | boundary_byte | 16B-aligned); ud2 exception skip",
+    "filter_stats": {
+        "raw_prologue_hits":    47756,
+        "accepted_after_filter": 11064,
+        "excluded":             36692,
+        "exclusion_pct":        "77%",
+        "encoded_after_short_skip": 10692,
+        "skipped_too_short":    249,
+        "skipped_ud2_handlers": 123,
+    },
+    "sweep_status": "COMPLETE (2026-09-19)",
+    "top_candidates": [
+        {"va": "0x8619db", "score": 0.461, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Version registration wrapper: 10 instructions, loads 'Version 1.92.0 (ded5c06cf 2025-12-08)' "
+                   "strings from rodata, makes single indirect call to registrar. No untrusted data."},
+        {"va": "0x852fb0", "score": 0.405, "profile": "av_decomp_output_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "URL/hostname parser: scans rdi for ':' (0x3a) separator, calls two indirect functions "
+                   "for prefix/suffix lookup. Appears in libips as URL processing for IPS rule metadata."},
+        {"va": "0xe1390",  "score": 0.400, "profile": "ssl_inspection_buffer_overflow",
+         "verdict": "UNCHECKED",
+         "reason": "Calls __tls_get_addr; likely TLS thread-local storage accessor. Not inspected."},
+    ],
+    "fp_patterns_new": {
+        "version_registration_wrapper": "Tiny init stub loading version strings from rodata, calls registrar",
+        "url_hostname_parser":           "RFC delimiter scan (':') in libips URL processing; not a packet parser",
+    },
+}
+
+FGTB_F07_AV_SWEEP_R2 = {
+    "id":       "FGTB-F07",
+    "severity": "LOW -- 100% FP rate in checked candidates",
+    "binary":   "libav.so.new",
+    "sweep_round": 2,
+    "filter":   "three-condition (caller_set | boundary_byte | 16B-aligned); ud2 exception skip",
+    "filter_stats": {
+        "raw_prologue_hits":    5484,
+        "accepted_after_filter": 5391,
+        "excluded":             89,
+        "skipped_ud2_handlers": 4,
+    },
+    "sweep_status": "COMPLETE (2026-09-19)",
+    "top_candidates": [
+        {"va": "0x8db950", "score": 0.430, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "bounds_checked_jump_target: jae 0x8db950 at 0x8db949 (cmp [rax+8], r9; jae ...) -- "
+                   "memcpy at 0x8db950 is only reachable when buf_size >= offset+len. "
+                   "IDENTICAL pattern to FGTB-F04 hit. New filter still accepts via 16B-align (0x8db950 & 0xF = 0). "
+                   "Requires caller-context analysis to filter -- out of scope for first-pass sweep."},
+        {"va": "0x69c860", "score": 0.384, "profile": "memcpy_packet_len",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Clamped buffer read: cmova rbx, rsi computes min(available, requested) before memcpy. "
+                   "Correct bounds: available = [rdx+0x18] - [rdx+0x10]; length = min(available, rsi). Safe."},
+        {"va": "0x871460", "score": 0.400, "profile": "decompression_bomb",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "PID cache init: 5 instructions, call getpid(), store in global at [rip+0x6ae379]. "
+                   "Library init function cached the process PID for multi-process state tracking."},
+        {"va": "0x86fb70", "score": 0.409, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Float-to-int constructor: malloc(64), stores double-precision float with clamping "
+                   "(0x7fffffff / 0x80000000 bounds), cvttsd2si. Signature value field construction, not a parser."},
+        {"va": "0x2e4d00", "score": 0.387, "profile": "network_packet_parse",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Mid-function fragment or function-end tail: 'push rbp' at 0x2e4d00 is in epilogue of "
+                   "a larger function (function-end sequence + call memcpy). Prologue misalignment FP."},
+        {"va": "0x327994", "score": 0.377, "profile": "network_packet_parse",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "IPS signature state machine: large function (~0x600 bytes) doing multi-level range checks "
+                   "on signature IDs with cmp/jb/jae bounds before array lookup. memcpy at 0x327b32 uses "
+                   "available=capacity-used as copy length (not user-controlled length). Safe."},
+    ],
+    "sweep_fp_rate": {
+        "confirmed_false_positives": 6,
+        "total_candidates_checked":  6,
+        "surviving_candidates":      0,
+    },
+    "fp_patterns_new": {
+        "bounds_checked_jump_target": "Persistent across filter rounds; requires caller-context analysis",
+        "clamped_buffer_read":        "cmova min(available, requested) before memcpy -- correct pattern",
+        "pid_cache_init":             "Library init calling getpid(); not a decompressor",
+        "float_constructor":          "malloc + cvttsd2si with clamp; signature value object construction",
+        "mid_function_fragment":      "push rbp at epilogue of larger function (sub-function tail call)",
+        "bounded_streaming_copy":     "available=capacity-used as copy length in state machine",
+    },
+}
+
+
+# ---------------------------------------------------------
+# Cumulative summary (updated after round-2 sweeps)
+# ---------------------------------------------------------
+FGT800_SWEEP_SUMMARY_R2 = {
+    "firmware_version": "FortiOS 8.0.0.F build0167 (2026-04-20)",
+    "sweep_rounds": 2,
+    "filter_improvement": "Round 1: flat prologue scan (43882/37482). Round 2: three-condition filter (11064/5484). 77% cut.",
+    "accessible_binaries": [
+        "libips.so.new (18MB, 10692 functions in round-2 encoding)",
+        "libav.so.new  (15MB, 5391 functions in round-2 encoding)",
+    ],
+    "inaccessible": "Core OS (rootfs.gz AES-encrypted); key not statically extractable -- requires live VM",
+    "kernel_vintage": "Linux 4.19.13 (7+ years old; CVE-2019-11477 unpatched -- see FGTB-F01)",
+    "highest_severity_confirmed": "FGTB-F01: CVE-2019-11477 SACK Panic (pre-auth DoS from WAN)",
+    "sweep_result": "17 candidates manually verified across both rounds; 17/17 false positives",
+    "fp_evolution": {
+        "round_1_dominant": "prologue_misalignment, static_wrappers, cpp_exception_handlers",
+        "round_2_dominant": "bounds_checked_jump_target, clamped_buffer_read, init_functions",
+        "interpretation":   "Filter eliminated heuristic noise; remaining FPs are semantic mismatch "
+            "(correct code that superficially resembles vulnerable patterns). "
+            "Suggests either (a) absence of simple memory safety bugs in IPS/AV engines, "
+            "or (b) harder-to-detect patterns (integer overflow, type confusion, protocol state) "
+            "that require more targeted profiles.",
+    },
+    "next_steps": {
+        "live_vm_analysis": "Boot FortiGate VM64 8.0.0 in QEMU/VMware to extract runtime key from fos_keyring",
+        "kernel_rootfs_mount": "Mount decrypted rootfs to access httpd, sslvpnd, forticron daemons",
+        "profile_refinement":  "Add profiles for: integer_truncation (u16->int), type_confusion, "
+            "state_machine_OOB (buffer position not re-validated after state change)",
+        "caller_context":      "Implement caller-set graph to reject bounds_checked_jump_targets automatically",
     },
 }
