@@ -357,7 +357,9 @@ FMLB_F05_SMTPD_STRCPY = {
     "id":       "FMLB-F05",
     "product":  "Fortinet FortiMail smtpd",
     "cve":      None,
-    "severity": "CANDIDATE -- strcpy/strncpy in SMTP parser (NOT stripped, 4558 functions)",
+    "severity": "FALSE POSITIVE (top 2) -- 0xdefa8 = Cyrus SASL _plug_strdup (safe); "
+                "0xa99e3 = SASL DIGEST-MD5 username strncpy (bounded); "
+                "0xf4db7 (HMAC_CTX_free) remains unverified",
     "class":    "Stack/heap overflow via unsafe copy (CWE-120)",
     "affected": "FortiMail 8.0.0 build0183",
     "status":   "UNVERIFIED -- semantic candidates, require manual disassembly",
@@ -376,21 +378,24 @@ FMLB_F05_SMTPD_STRCPY = {
             "score":   0.404,
             "profile": "strcpy_fixed_dst",
             "calls":   ["strcpy"],
-            "priority": "HIGH -- direct strcpy call; manual disassembly to confirm input source",
+            "priority": "FALSE POSITIVE -- manual RE confirmed Cyrus SASL _plug_strdup (0xdeeb9): "
+                        "malloc(strlen(src)+1) then strcpy -- correctly sized allocation, no overflow.",
         },
         {
             "va":      "0xa99e3",
             "score":   0.408,
             "profile": "strcpy_fixed_dst",
             "calls":   ["strncpy", "strchr"],
-            "priority": "HIGH -- strncpy + strchr pattern; possible fixed-buffer dst",
+            "priority": "FALSE POSITIVE -- manual RE: strncpy(global_buf, input, 0xff) in SASL DIGEST-MD5 "
+                        "username handler inside message@@Base (Sendmail dispatch); "
+                        "strncpy limit 0xff prevents overflow; BSS buffer is hostname-sized global.",
         },
         {
             "va":      "0xa641c",
             "score":   0.403,
             "profile": "strcpy_fixed_dst",
             "calls":   ["strchr"],
-            "priority": "MEDIUM -- strchr for field parsing, no copy visible in calls",
+            "priority": "LOW -- strchr only, no copy call; likely field delimiter search. Deprioritized.",
         },
         {
             "va":      "0xf4db7",
@@ -407,6 +412,14 @@ FMLB_F05_SMTPD_STRCPY = {
             "priority": "LOW -- decompression path; close() suggests file handle management",
         },
     ],
+
+    "smtpd_library_context": (
+        "smtpd binary is Sendmail + Cyrus SASL with FortiMail customizations. "
+        "Core SMTP command parsing (message@@Base) is established library code. "
+        "All sweep candidates were library functions (_plug_strdup, DIGEST-MD5 handler). "
+        "Remaining attack surface: DKIM verifier at 0xf4db7 (HMAC_CTX_free) -- "
+        "may have heap allocation issues in signature parsing path."
+    ),
 
     "ports":  [25, 465, 587],
     "pre_auth_state": "EHLO, HELO, MAIL FROM, RCPT TO all precede AUTH in SMTP",
@@ -602,6 +615,8 @@ FML_SEMANTIC_SWEEP_SUMMARY = {
     "false_positives_confirmed": [
         "imap 0x121a5 (mime_parser_overflow, 0.471): mid-instruction 0x55 byte in push-r13; see FMLB-F08",
         "imap 0x121ab (mime_parser_overflow, 0.467): push-rbp in middle of callee-save sequence; see FMLB-F08",
+        "smtpd 0xdefa8 (strcpy_fixed_dst, 0.404): Cyrus SASL _plug_strdup -- malloc(strlen+1) + strcpy; safe",
+        "smtpd 0xa99e3 (strcpy_fixed_dst, 0.408): SASL DIGEST-MD5 username; strncpy with 0xff bound into BSS global; safe",
     ],
 
     "priority_order": [
