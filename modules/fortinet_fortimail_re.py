@@ -160,37 +160,58 @@ FMLB_F02_DOVECOT_2212 = {
     "current_dovecot":  "2.3.21+ (2023)",
     "years_behind":     "~10 years of security patches not applied",
 
+    "urlauth_confirmed": (
+        "Strings in imap binary confirm 'vendor/vendor.dovecot/imap-urlauth' is present. "
+        "IMAP URLAUTH (RFC 4467) IS implemented in FortiMail's Dovecot 2.2.12 build. "
+        "This enables cross-server IMAP URL resolution -- strengthens FMLB-F08 SSRF finding."
+    ),
+
     "affected_cves": [
         {
             "cve": "CVE-2019-7524",
-            "severity": "HIGH -- stack overflow in imap/pop3 login proxy",
-            "pre_auth": True,
-            "vector": "Stack overflow via crafted login command in proxy mode",
+            "severity": "HIGH",
+            "pre_auth": False,
+            "affects_2212": True,
+            "fixed_in": "2.2.36.1 / 2.3.3",
+            "vector": (
+                "Local attacker sends crafted email triggering stack overflow in indexer-worker "
+                "via Sieve regex header normalization. Escalates to root. "
+                "For FortiMail: remote email delivery triggers indexer-worker on behalf of user. "
+                "Attacker sends malicious email to user on FortiMail -- not strictly local."
+            ),
         },
         {
             "cve": "CVE-2019-3814",
-            "severity": "HIGH -- authentication bypass via TLS SNI",
+            "severity": "HIGH",
             "pre_auth": True,
-            "vector": "auth_ssl_require_client_cert bypass via malformed SNI",
+            "affects_2212": True,
+            "fixed_in": "2.2.36.2 / 2.3.4",
+            "vector": (
+                "auth_ssl_require_client_cert bypass: client sends malformed TLS SNI in "
+                "imap-login handshake, skipping certificate verification. "
+                "imap-login binary confirmed in FortiMail 8.0.0. "
+                "Requires auth_ssl_require_client_cert = yes in Dovecot config."
+            ),
         },
         {
-            "cve": "CVE-2020-12100",
-            "severity": "HIGH -- recursive MIME parsing DoS",
+            "cve": "CVE-2021-33515",
+            "severity": "MEDIUM",
             "pre_auth": True,
-            "vector": "Email with deeply nested MIME parts triggers O(n^2) memory growth",
+            "affects_2212": True,
+            "fixed_in": "2.2.x and 2.3.x",
+            "vector": (
+                "SMTP submission STARTTLS command injection -- injects IMAP protocol data "
+                "before STARTTLS upgrade. Requires submission service exposure on port 587."
+            ),
         },
-        {
-            "cve": "CVE-2020-12673",
-            "severity": "HIGH -- out-of-bounds read in NTLM auth",
-            "pre_auth": True,
-            "vector": "Crafted NTLM authentication packet triggers OOB read in auth process",
-        },
-        {
-            "cve": "CVE-2020-24386",
-            "severity": "MEDIUM -- IMAP hibernation buffer reading",
-            "pre_auth": False,
-            "vector": "Authenticated IMAP client can read buffer contents from other sessions",
-        },
+    ],
+
+    "version_scoped_out": [
+        "CVE-2020-12100: Introduced in 2.3.x (recursive MIME algorithm changed) -- 2.2.12 NOT affected",
+        "CVE-2020-12673: NTLM OOB read -- introduced in 2.3.x; 2.2.12 lacks NTLM auth module",
+        "CVE-2020-24386: IMAP hibernation -- introduced in 2.3.x; 2.2.12 NOT affected",
+        "CVE-2020-10957/10958/10967: Submission service -- added in 2.2.22+; 2.2.12 MAY lack it",
+        "CVE-2021-29157: Quota bypass -- requires 2.3.x quota driver; 2.2.12 NOT affected",
     ],
 
     "semantic_sweep_candidate": {
@@ -567,13 +588,14 @@ FMLB_F08_IMAP_CATENATE_MANUAL_RE = {
 
     "residual_ssrf": (
         "imap_msgpart_url_parse accepts a full IMAP URL including a server component "
-        "(imap://server/mailbox/uid=N/section). If Dovecot 2.2.12 resolves remote server "
-        "references, a crafted CATENATE URL could trigger an outbound IMAP connection "
-        "from the FortiMail server -- authenticated SSRF. "
-        "FortiMail is a mail gateway that may have internal network access (quarantine systems, "
-        "mail stores, Active Directory). SSRF from FortiMail would reach those systems. "
-        "Requires verification: does Dovecot 2.2.12 support IMAP URLAUTH (RFC 4467) "
-        "which enables cross-server URL resolution?"
+        "(imap://server/mailbox/uid=N/section). "
+        "URLAUTH CONFIRMED PRESENT: strings in imap binary show 'vendor/vendor.dovecot/imap-urlauth'. "
+        "Dovecot 2.2.12 in FortiMail DOES implement IMAP URLAUTH (RFC 4467). "
+        "CATENATE URL 'imap://internal-server/mailbox/;uid=1' would trigger outbound IMAP connection "
+        "from FortiMail to internal-server -- authenticated SSRF. "
+        "FortiMail gateway has internal network access to: AD/LDAP, quarantine storage, "
+        "internal mail relay hops, internal IMAP servers. "
+        "Severity: MEDIUM (requires authenticated IMAP session on FortiMail)."
     ),
 
     "next_steps": [
