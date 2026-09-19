@@ -157,24 +157,49 @@ FGTB_F02_ROOTFS_ENCRYPTED = {
 # ---------------------------------------------------------
 FGTB_F03_IPS_SWEEP = {
     "id":       "FGTB-F03",
-    "severity": "PENDING -- sweep results required to score",
+    "severity": "LOW -- 100% FP rate; no confirmed memory safety issues in sweep",
     "binary":   "libips.so.new",
     "binary_size_mb": 18,
     "function_count": 43882,
-    "sweep_status": "RUNNING (task bczl5c5o0) -- started 2026-09-18 19:49",
-    "attack_surface": "PRE-AUTH: IPS engine loaded into kernel-adjacent daemon, processes all network packets "
-        "before authentication. Buffer overflow in IPS = RCE from WAN with no credentials.",
+    "sweep_status": "COMPLETE (2026-09-18)",
+    "attack_surface": "PRE-AUTH: IPS engine processes all network packets before authentication. "
+        "Buffer overflow in IPS = RCE from WAN with no credentials.",
     "profiles_queried": [
         "memcpy_packet_len", "strcpy_fixed_dst", "integer_overflow_alloc",
         "format_string", "use_after_free", "fidsdb_parser_overflow",
         "system_popen_injection", "luajit_string_unbox", "decompression_bomb",
         "network_packet_parse",
-        "ips_pkt_len_overflow", "ips_signature_parser",
+        "ips_pkt_len_overflow", "ips_signature_parse",
         "av_decomp_output_overflow", "av_mime_boundary_overflow",
         "ssl_inspection_buffer_overflow",
     ],
-    "top_candidates": [],  # populated post-sweep
-    "manual_re_queue": [],
+    "top_candidates": [
+        {"va": "0x8619db", "score": 0.461, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Static wrapper; all arguments are RIP-relative constants + vtable call; "
+                   "no untrusted data flow visible in 13 instructions"},
+        {"va": "0x644dbf", "score": 0.441, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Disassembly misalignment -- 0x55 byte mid-instruction causes prologue heuristic to fire; "
+                   "decoded instructions are nonsense (add al,[rax]; add [rax-0x7b],cl)"},
+        {"va": "0xdd4db0", "score": 0.434, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Static wrapper with hardcoded constant args (edx=0xf, r8d=0xa); no untrusted length"},
+        {"va": "0xb492bf", "score": 0.401, "profile": "ips_pkt_len_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "C++ exception handler (unwind code): ud2 instruction, lock dec reference counting, "
+                   "_Unwind_Resume call; not a packet parser"},
+    ],
+    "sweep_fp_rate": {
+        "confirmed_false_positives": 4,
+        "total_candidates_checked": 4,
+        "surviving_candidates": 0,
+    },
+    "false_positive_patterns": {
+        "prologue_misalignment": "0x55 (push rbp) and 0x48 0x83 0xec (sub rsp, imm8) fire mid-instruction",
+        "static_wrappers":       "Thin dispatch wrappers with all-static RIP-relative args dominate top hits",
+        "cpp_exception_handlers": "Exception landing pads (ud2, _Unwind_Resume, lock dec) match parser profiles",
+    },
 }
 
 
@@ -183,20 +208,56 @@ FGTB_F03_IPS_SWEEP = {
 # ---------------------------------------------------------
 FGTB_F04_AV_SWEEP = {
     "id":       "FGTB-F04",
-    "severity": "PENDING -- sweep results required",
+    "severity": "LOW -- 100% FP rate; no confirmed memory safety issues in sweep",
     "binary":   "libav.so.new",
     "binary_size_mb": 15,
-    "sweep_status": "PENDING (will run after FGTB-F03 sweep completes)",
+    "function_count": 37482,
+    "sweep_status": "COMPLETE (2026-09-18)",
     "attack_surface": "SEMI-PRE-AUTH: AV engine processes file content (email attachments, HTTP downloads, "
-        "SMB files) before content is delivered to users. Malformed archive triggers before auth in "
-        "perimeter inspection mode.",
+        "SMB files) before content is delivered to users. Malformed archive triggers before auth.",
     "profiles_queried": [
         "memcpy_packet_len", "strcpy_fixed_dst", "integer_overflow_alloc",
-        "format_string", "use_after_free", "decompression_bomb",
-        "network_packet_parse", "av_decomp_output_overflow", "av_mime_boundary_overflow",
+        "format_string", "use_after_free", "fidsdb_parser_overflow",
+        "luajit_string_unbox", "decompression_bomb",
+        "network_packet_parse", "ips_pkt_len_overflow",
+        "av_decomp_output_overflow", "av_mime_boundary_overflow",
+        "ssl_inspection_buffer_overflow",
     ],
-    "top_candidates": [],  # populated post-sweep
-    "manual_re_queue": [],
+    "top_candidates": [
+        {"va": "0x8db950", "score": 0.430, "profile": "fidsdb_parser_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Jump target from bounds check at 0x8db946: cmp [rax+8],ecx; jae 0x8db950. "
+                   "The memcpy (add rsi,rdx; mov rdx,rcx; call memcpy) is only reachable when "
+                   "buffer capacity >= copy size. Bounds check precedes the copy."},
+        {"va": "0x317226", "score": 0.408, "profile": "ips_pkt_len_overflow",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Disassembly misalignment -- first instructions are garbage bytes; real code "
+                   "starts mid-function (contains memcpy + 0x871680 call but no function prologue here)"},
+        {"va": "0x133bc4", "score": 0.424, "profile": "ips_signature_parse",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Cleanup/zero function: memset(ptr, 0, internal_count*16); count from object "
+                   "field [rbx+0x2a8], not from untrusted input; not a parser"},
+        {"va": "0x4a0088", "score": 0.422, "profile": "decompression_bomb",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "Bounding box accumulator: iterator over 8-byte elements calling 0x416450 "
+                   "(min/max update for 16-bit (x,y,w,h) coordinates -- image analysis in AV engine); "
+                   "not a decompressor"},
+        {"va": "0x3596bf", "score": 0.401, "profile": "memcpy_packet_len",
+         "verdict": "FALSE_POSITIVE",
+         "reason": "memcpy with RIP-relative constant length: rdx = movsxd from [rip+0xbb7796] "
+                   "(global constant at link time); not a runtime-controlled size"},
+    ],
+    "sweep_fp_rate": {
+        "confirmed_false_positives": 7,  # includes 0x932fbb and 0x772d92 misalignments
+        "total_candidates_checked": 7,
+        "surviving_candidates": 0,
+    },
+    "false_positive_patterns": {
+        "prologue_misalignment":      "0x55 byte mid-instruction fires prologue heuristic",
+        "bounds_checked_jump_target": "memcpy only reachable via jae/jb guard -- sweep misses caller context",
+        "constant_length_memcpy":     "memcpy with RIP-relative global constant as length",
+        "domain_analysis_functions":  "AV engine bounding box / image analysis code matches decompression profile",
+    },
 }
 
 
@@ -206,11 +267,23 @@ FGTB_F04_AV_SWEEP = {
 FGT800_SWEEP_SUMMARY = {
     "firmware_version": "FortiOS 8.0.0.F build0167 (2026-04-20)",
     "extraction_method": "VMware OVF (FGT_VM64) -> VMDK -> raw disk -> ext3 FORTIOS partition",
-    "accessible_binaries": ["libips.so.new (18MB)", "libav.so.new (15MB)"],
+    "accessible_binaries": ["libips.so.new (18MB, 43882 functions)", "libav.so.new (15MB, 37482 functions)"],
     "inaccessible": "Core OS (rootfs.gz AES-encrypted) -- httpd, sslvpnd, forticron, etc.",
     "kernel_vintage": "Linux 4.19.13 (7+ years old; multiple CVEs unpatched)",
     "highest_severity_confirmed": "FGTB-F01: CVE-2019-11477 SACK Panic (pre-auth DoS from WAN)",
-    "pending": ["FGTB-F03 IPS sweep results", "FGTB-F04 AV sweep results", "Manual disasm top candidates"],
+    "sweep_result": "11 candidates manually verified; 11/11 false positives (100% FP rate, same as FortiMail)",
+    "sweep_negative_result": "No easy memory safety issues visible in IPS/AV engines via semantic sweep. "
+        "Absence of obvious findings suggests code quality is adequate for obvious patterns; "
+        "harder-to-find vulnerabilities (integer overflow, type confusion, complex protocol decoder state) "
+        "are more likely targets than simple memcpy/strcpy.",
+    "false_positive_patterns_cumulative": {
+        "prologue_misalignment": "0x55 or 0x48 0x83 0xec mid-instruction fires heuristic",
+        "static_wrappers":       "Thin dispatch wrappers with RIP-relative constant args",
+        "cpp_exception_handlers": "Unwind code (ud2, lock dec, _Unwind_Resume) matches parsers",
+        "bounds_checked_jump_targets": "memcpy only reachable via jae/jb guard -- caller context missing",
+        "constant_length_ops":   "RIP-relative global constant used as memcpy/memset size",
+        "domain_analysis":       "AV engine image/document processing (bounding box) matches decompression",
+    },
     "contrast_with_709": {
         "709_rootfs": "Fake XZ encryption (CRC32 forgery) -- trivially extracted",
         "800_rootfs": "Real AES -- rootfs sealed; only datafs accessible",
