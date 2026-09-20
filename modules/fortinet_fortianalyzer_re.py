@@ -27,14 +27,19 @@ PLATFORM = {
 }
 
 VERSIONS_ON_HAND = {
-    "6.4.14": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v6.4.14-build2660-FORTINET.out.ovf.zip",
-    "7.0.12": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.0.12-build0623-FORTINET.out.ovf.zip",
-    "7.0.16": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.0.16-build0710-FORTINET.out.zip",
-    "7.2.10": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.10-build1682-FORTINET.zip",
-    "7.2.11": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.11-build1720-FORTINET.out.zip",
-    "7.2.12": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.12-build1721-FORTINET.out.zip",
-    "7.4.10": "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.4.10.M-build2778-FORTINET.out.zip",
-    "8.0.0":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v8.0.0.F-build0105-FORTINET.out.zip",
+    # 11 versions confirmed complete (2026-09-19 README download status)
+    # DO NOT ANALYZE v7.4.2 -- .aria2 control file present (incomplete download)
+    "6.4.14":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v6.4.14-build2660-FORTINET.out.ovf.zip",
+    "7.0.12":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.0.12-build0623-FORTINET.out.ovf.zip",   # VULNERABLE: CVE-2024-47575
+    "7.0.16":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.0.16-build0710-FORTINET.out.zip",
+    "7.2.5":   "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.5-build1574-FORTINET.out.ovf.zip",    # VULNERABLE: CVE-2024-47575
+    "7.2.7":   "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.7-build1633-FORTINET.out.ovf.zip",    # VULNERABLE: CVE-2024-47575
+    "7.2.9":   "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.9-build1638-FORTINET.zip",            # VULNERABLE: CVE-2024-47575 (patched in 7.2.8)
+    "7.2.10":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.10-build1682-FORTINET.zip",           # patched for CVE-2024-47575
+    "7.2.11":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.11-build1720-FORTINET.out.zip",
+    "7.2.12":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.2.12-build1721-FORTINET.out.zip",
+    "7.4.10":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.4.10.M-build2778-FORTINET.out.zip",
+    "7.4.11":  "/media/cowboy/research/Fortinet/FortiAnalyzer/FAZ_VM64-v7.4.11.M-build2804-FORTINET.out.zip",
 }
 
 EXTRACTED = {
@@ -116,6 +121,8 @@ FINDINGS["FAZ-F02"] = {
         "getFazArchive: download archived log data",
         "setFazConfig: write FAZ configuration -- can change admin password, disable MFA, add admin account",
         "Also has xml.wsdl (same as FMG xml.wsdl): runScript, installConfig ops with same optional auth",
+        "VERSION BOUNDARY: XML API present in all FAZ <7.6.5; removed in 7.6.5 per 7.6.7 release notes",
+        "All 7.2.x targets (7.2.5/7.2.7/7.2.9/7.2.10/7.2.11/7.2.12) have SOAP surface",
         "CANDIDATE: server-side enforcement TBD -- may validate credentials even if schema says optional",
         "Highest priority for live instance testing after FAZ-F01",
     ],
@@ -133,7 +140,7 @@ FINDINGS["FAZ-F02"] = {
 FINDINGS["FAZ-F03"] = {
     "title": "ClickHouse 8123/9000 on localhost -- empty default user password, SSRF pivot target",
     "severity": "HIGH",
-    "status": "CONFIRMED -- config.xml: empty password for default user; localhost-bound only",
+    "status": "CONFIRMED in 6.4.14 -- config.xml: empty password for default user; localhost-bound only",
     "cvss": "7.5 (AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H) -- chained with F01/F02",
     "cve": None,
     "notes": [
@@ -145,6 +152,10 @@ FINDINGS["FAZ-F03"] = {
         "ClickHouse stores FAZ analytics data: FortiGate traffic logs, threat intel, event correlations",
         "Entire organization's network logs available via empty-password ClickHouse HTTP API",
         "SSRF via FAZ-F02 (SOAP searchFazLog with SSRF-injectable log source parameter) TBD",
+        "VERSION BOUNDARY: ClickHouse present in 6.4.14 (confirmed from rootfs). In 7.2.x FAZ uses BOTH",
+        "ClickHouse (analytics) and Postgres (primary log DB). In 7.6.0+ Postgres MIGRATED to ClickHouse.",
+        "F03 applies to 6.4.14; needs confirmation in 7.2.x (ClickHouse config may differ)",
+        "INAPPLICABLE for 7.2.x CVE-2024-47575 range as primary log DB attack vector (Postgres there)",
     ],
     "references": ["FAZ-F01"],
 }
@@ -170,39 +181,106 @@ FINDINGS["FAZ-F04"] = {
 }
 
 FINDINGS["FAZ-F05"] = {
-    "title": "FAZ rootfs.gz is plain XZ in 6.4.14 -- full filesystem extraction without decryption",
+    "title": "FAZ rootfs.gz is plain XZ in 6.4.14/7.0.x/7.2.x -- full filesystem extraction without decryption",
     "severity": "MEDIUM",
-    "status": "CONFIRMED -- magic fd377a5a (XZ) NOT Fortinet-encrypted (contrast: FMG 7.4.11 uses 6bda915e)",
+    "status": "CONFIRMED -- magic fd377a5a (XZ) NOT Fortinet-encrypted. 7.0.12 also confirmed XZ. 7.4.1+ encrypted per release notes.",
     "cvss": "N/A (firmware analysis, not network finding)",
     "cve": None,
     "notes": [
         "FAZ 6.4.14 rootfs.gz: XZ-compressed cpio initramfs -- fully extractable",
+        "FAZ 7.0.12 rootfs.gz: also XZ (confirmed via debugfs dump + magic bytes)",
+        "FAZ 7.4.1+ rootfs: ENCRYPTED per 7.6.7 release notes ('kernel and rootfs are encrypted as of 7.4.1')",
+        "FAZ 7.2.x (CVE-2024-47575 range): XZ, unencrypted -- all 7.2.5/7.2.7/7.2.9 extractable",
         "FMG 7.4.11 rootfs.gz: Fortinet-encrypted (magic 0x6bda915e) -- cannot extract",
         "FAZ extraction: xz -dk rootfs.gz | cpio -id -> 968MB rootfs, ~82K files",
         "Entire Python web application, Airflow config, ClickHouse config, Django app, certs all accessible",
-        "Contrast: FMG 7.x encrypts rootfs; FAZ 6.4.x does NOT -- much larger analysis surface",
-        "Need to verify if FAZ 7.x/8.0.0 also encrypts rootfs or continues XZ format",
+        "FAZ 7.4.x/7.6.x: encrypted rootfs -- must extract from running process or via alternate vectors",
+        "Shell access: execute shell available in FAZ <7.6.0 (removed in 7.6.0 per release notes)",
+        "SOAP/XML API: xml_faz.wsdl present in <7.6.5 (XML API removed in 7.6.5 per release notes)",
+        "Config backup: unencrypted before 7.4.2 (encrypted+password required starting 7.4.2)",
     ],
     "references": [],
 }
 
 FINDINGS["FAZ-F06"] = {
-    "title": "Django SSO/SAML SP implementation in FAZ -- potential auth bypass via SAML assertion manipulation",
-    "severity": "HIGH",
-    "status": "CANDIDATE -- sso_sp Django app present; SAML endpoint at /saml/ and /p/sso_sp/",
-    "cvss": "9.1 (AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N) if SAML bypass confirmed",
+    "title": "SAML SP: wantAssertionsSigned + wantMessagesSigned both False -- XSW possible if SSO enabled",
+    "severity": "MEDIUM",
+    "status": "CANDIDATE -- library enforces at least one sig; requires SSO enabled; downgraded from HIGH",
+    "cvss": "6.5 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N) if SSO enabled with attacker-controlled Fabric IdP",
     "cve": None,
     "notes": [
-        "Django URL conf: path('saml/', sso_sp_views.saml_sp) -- SAML SP endpoint",
-        "path('p/sso_sp/', include('sso_sp.urls')) -- SAML SP management",
-        "path('p/sso_idp/', include('sso_idp.urls')) -- SAML IdP (FAZ acts as identity provider)",
-        "FAZ acts as BOTH SP and IdP -- potential circular trust exploitation",
-        "SAML assertion signing validation: check for CVE-2023-40023 pattern (XML signature wrapping)",
-        "FAZ also has /p/forticloud_jsonrpc_login/ -- FortiCloud authentication path",
-        "Python3.8 + older Django 2.2: check for known SAML library CVEs in python3-saml",
-        "TODO: examine sso_sp/views.py for assertion validation logic",
+        "sso_sp/adapter.py cfg2settings() security block: ONLY sets requestedAuthnContext=False",
+        "wantAssertionsSigned and wantMessagesSigned both default to False (settings.py:286-287)",
+        "python3-saml response.py:290: library DOES enforce at least one signature exists (NO_SIGNATURE_FOUND error)",
+        "Fully unsigned SAML response REJECTED even with wantMessagesSigned=False",
+        "XSW (XML Signature Wrapping) still possible: signed element present but assertion content forged",
+        "parse_config(RelayState): RelayState = idp_name only; IdP cert fetched from server-side system config",
+        "No cert injection via RelayState: c2py.get_sys_saml_sp_cfg() or get_fab_sp_cfg(name) -- server-side",
+        "Requires SSO to be enabled (@sso.require_sso_enabled decorator blocks endpoint if disabled)",
+        "Default FAZ deployment: SSO not enabled. Attack requires SSO configuration.",
+        "If Fabric SP mode enabled: attacker controls which pre-configured Fabric IdP is selected via RelayState",
+        "FAZ acts as both SP and IdP: potential circular trust if FAZ IdP cert accessible",
+        "python3-saml version: not packaged as dist-info; located at /usr/local/lib/python3.8/onelogin/",
+        "Known XSW CVEs in python3-saml: CVE-2022-41900, CVE-2023-40023 -- version check pending",
     ],
-    "references": ["CVE-2023-40023"],
+    "references": ["CVE-2022-41900", "CVE-2023-40023"],
+}
+
+FINDINGS["FAZ-F07"] = {
+    "title": "FGFM daemon pre-auth attack surface -- CVE-2024-47575 class, unauthenticated device registration",
+    "severity": "CRITICAL",
+    "status": "CANDIDATE -- CVE-2024-47575 confirmed patched in 7.2.8; 7.2.5/7.2.7/7.2.9 VULNERABLE; binary not yet extracted",
+    "cvss": "9.8 (AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H) -- per NVD for CVE-2024-47575",
+    "cve": "CVE-2024-47575",
+    "notes": [
+        "FGFM protocol: FortiGate-to-FortiManager/FortiAnalyzer management protocol on port 541",
+        "CVE-2024-47575 (FortiJump): missing authentication in FGFM handler allows pre-auth RCE",
+        "Affected versions on hand: 7.0.12, 7.2.5, 7.2.7, 7.2.9 -- all pre-patch",
+        "Patched in 7.2.8; 7.2.10/7.2.11/7.2.12 are post-patch",
+        "7.0.16 status: unclear -- 7.0.x patch timeline TBD",
+        "FGFM daemon name: likely fgfmd or fgfmsd -- need binary extraction from 7.2.9 rootfs to confirm",
+        "Device registration flow: FortiGate sends registration request with cert CN = serial number",
+        "FAZ verifies CN against device SN; CVE-2024-47575 = this verification missing/bypassable",
+        "Attacker registers fake device -> gains management session -> potential RCE",
+        "fortilogd: confirmed log daemon (bug 1217641: diagnose fortilogd logvol-adom)",
+        "OFTP protocol: FortiGate log transfer to FAZ; cert-only auth in 7.2.x",
+        "legacy-auth-mode (password fallback when cert CN mismatches SN): NOT present in 7.2.x",
+        "legacy-auth-mode added in 7.6.7 as configurable option -- not the vulnerability window",
+        "TODO: extract fgfmd binary from 7.2.9 rootfs; run Ablation sweep; find missing auth check",
+        "TODO: diff fgfmd binary 7.2.7 vs 7.2.10 (post-patch) to identify exact patch location",
+    ],
+    "references": ["CVE-2024-47575", "https://www.fortiguard.com/psirt/FG-IR-24-423"],
+}
+
+# Doc-derived intelligence (from README mandatory docs reading)
+DOC_INTEL = {
+    "sources_read": [
+        "FortiAnalyzer-7.6.7-Release_Notes.pdf (pages 1-20, 61-66)",
+        "FortiAnalyzer-7.2.1-Administration_Guide.pdf (pages 1-50)",
+        "README.md (full re-read 2026-09-19)",
+    ],
+    "version_security_matrix": {
+        "shell_access":    "execute shell: present in <7.6.0; REMOVED in 7.6.0",
+        "soap_xml_api":    "xml_faz.wsdl: present in <7.6.5; REMOVED in 7.6.5",
+        "rootfs_encrypt":  "rootfs unencrypted in 6.4.x/7.0.x/7.2.x; ENCRYPTED from 7.4.1",
+        "log_database":    "Postgres as primary log DB in 7.2.x; MIGRATED to ClickHouse in 7.6.0",
+        "config_backup":   "config backup unencrypted in <7.4.2; password-required from 7.4.2",
+        "legacy_auth_mode":"OFTP password fallback only added in 7.6.7 (configurable); cert-only in 7.2.x",
+    },
+    "daemon_names": {
+        "log_daemon":      "fortilogd (confirmed: bug 1217641 diagnose fortilogd logvol-adom)",
+        "fgfm_daemon":     "TBD -- extract from 7.2.9 rootfs",
+    },
+    "device_auth_flow": {
+        "methods": ["serial number matching", "pre-shared key"],
+        "fabric_auth": "FortiGate Fabric Connector (7.0.1+); FAZ verifies cert CN matches device SN",
+        "oftp": "FortiGate log transfer protocol; cert-only in 7.2.x; no password fallback",
+        "default_admin": "blank password on first setup -- must be changed during wizard",
+    },
+    "cve_in_767": "CVE-2026-84391 (Bug 1259015) -- only CVE patched in 7.6.7",
+    "known_unfixed_bugs": [
+        "Bug 1220686: SAML SSO HA failover -- sync prevents admin SSO login after HA failover (unfixed in 7.6.7)",
+    ],
 }
 
 # Airflow DAG inventory
@@ -231,15 +309,28 @@ APACHE_ROUTES = {
 
 # Pending analysis
 TODO = [
-    "Check FAZ 7.x rootfs.gz format -- does it encrypt like FMG 7.x or stay XZ?",
-    "Examine sso_sp/views.py for SAML assertion validation (F06)",
-    "Verify if Airflow 8081 is externally accessible or firewalled by FAZ netfilter",
-    "Live test FAZ-F02: SOAP searchFazLog without servicePass",
-    "Live test FAZ-F01: Airflow REST API /api/v1/dags without auth",
-    "Compare xml_faz.wsdl across 6.4.14/7.x/8.0.0 to find when auth was added",
-    "Run Ablation semantic sweep on Apache2 CGI handler binaries",
-    "Check ClickHouse for FAZ log schema -- identify sensitive data stored",
-    "Examine Docker socket permissions from Airflow process context",
-    "Check if FAZ 7.2.x/7.4.x still uses temporary_key or rotates it",
-    "FAZ 8.0.0: extract and check Airflow version + auth config",
+    # IMMEDIATE: FGFM daemon extraction (CVE-2024-47575)
+    "Extract fgfmd/fgfmsd binary from FAZ 7.2.9 rootfs -- mount VMDK, find daemon binary",
+    "Run Ablation semantic sweep on fgfmd binary -- find missing auth check (F07)",
+    "Diff fgfmd binary 7.2.7 vs 7.2.10 to locate exact patch for CVE-2024-47575",
+    # BINARY SWEEPS (from 6.4.14 syntax.tar.xz)
+    "Run Ablation semantic sweep on libcdb_plugin.so (134KB) -- /tmp/faz614_syntax/syntax/",
+    "Run Ablation semantic sweep on libfazcfg_plugin.so (48KB) -- /tmp/faz614_syntax/syntax/",
+    # SOAP SURFACE (F02)
+    "Confirm FAZ-F02 server-side enforcement: SOAP servicePass bypass on 7.2.x live instance",
+    "Run Ablation sweep on Apache2 CGI handler binaries (SOAP endpoint)",
+    # AIRFLOW (F01)
+    "Verify Airflow 8081 external accessibility: check FAZ iptables/nftables rules in 7.2.9 rootfs",
+    "Live test FAZ-F01: POST /api/v1/dags/<dag>/dagRuns without Authorization header",
+    # DOC READING (pending)
+    "Read FortiAnalyzer-7.4.1-Administration_Guide.pdf -- logging daemon architecture section",
+    # VERSION VERIFICATION
+    "Confirm Airflow version in 7.2.x -- is it still 2.2.3 or upgraded?",
+    "Check if 7.2.x uses same temporary_key or rotates Airflow secret_key",
+    "Confirm ClickHouse config in 7.2.x -- is default user still empty password?",
+    # SAML (F06)
+    "Examine sso_sp/views.py for SAML assertion validation path",
+    "Check python3-saml version in 7.2.x for CVE-2022-41900/CVE-2023-40023",
+    # DOCKER (F04)
+    "Examine Docker socket permissions from Airflow process context in 7.2.x",
 ]
