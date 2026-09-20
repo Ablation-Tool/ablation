@@ -114,49 +114,102 @@ FINDINGS["EMS-745-F02"] = {
 }
 
 FINDINGS["EMS-745-F03"] = {
-    "title": "gRPC WithInsecure() on 2 internal worker channels + LDAP CheckCertHostname defaults false",
-    "severity": "MEDIUM",
-    "status": "CONFIRMED (gRPC) -- CANDIDATE (LDAP). Full pclntab attribution complete 2026-09-20.",
-    "cvss": "5.9 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N) -- LDAP MITM path",
+    "title": "adconnector LDAP TLS: InsecureSkipVerify=true + peer-supplied CA trust = full MITM bypass",
+    "severity": "HIGH",
+    "status": "CONFIRMED -- Full disassembly of adconnector_linux_amd64 getTLSConfigForLDAPS + verifyPeerCertificate (2026-09-20).",
+    "cvss": "7.4 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N)",
     "cve": None,
     "notes": [
         "=== PRIOR FINDING CORRECTION (2026-09-20) ===",
-        "Original claim 'InsecureSkipVerify=true: 2 occurrences' was WRONG.",
-        "Both string occurrences are Go stdlib artifacts:",
+        "Original claim 'InsecureSkipVerify=true: 2 occurrences in regworker' was WRONG.",
+        "Both regworker occurrences are Go stdlib artifacts:",
         "  0x2c9a0f7: stdlib error msg 'tls: either ServerName or InsecureSkipVerify must be specified'",
         "  0x33c2a20: tls.Config struct field name in Go reflect/type metadata",
-        "NO actual InsecureSkipVerify=true assignment found in regworker.",
+        "NO InsecureSkipVerify=true assignment in regworker. LDAPAuthenticator.AuthUser (0x2506dc0) is SQL-backed, no live LDAP.",
         "",
-        "=== ACTUAL INSECURE TRANSPORTS (gRPC WithInsecure) ===",
+        "=== gRPC INSECURE TRANSPORTS (regworker) ===",
         "Two internal gRPC connections use grpc/credentials/insecure.NewCredentials (no TLS):",
         "  1. fortinet.com/ems/service/ec/dispatcher.NewGrpcConnPool.WithInsecure.func1 (0x2495800)",
-        "     EC (endpoint control) dispatcher gRPC connection pool -- plaintext gRPC",
-        "     Context: ForwardRequest dispatching to EC worker, load-balanced pool",
         "  2. fortinet.com/ems/service.(*KeepAliveService).getForensicsWorkerConnSafely.func1.WithInsecure.1 (0x2698f40)",
-        "     KeepAlive service connecting to forensics worker -- plaintext gRPC",
-        "  Also present (already in F02): InsecureIgnoreHostKey for SFTP backup (0x222f580)",
-        "  startUnprotectedListener (0x27108c0) confirms server side also listens without TLS",
-        "  Impact: if gRPC ports are bound to 0.0.0.0 (not verified), MITM possible on LAN",
-        "  Likely localhost/Unix socket -- LOW severity if internal only",
+        "  startUnprotectedListener (0x27108c0) confirms server side listens without TLS",
+        "  Severity: LOW-MEDIUM (likely localhost; no confirmed 0.0.0.0 binding)",
         "",
-        "=== LDAP CheckCertHostname defaulting false (CANDIDATE) ===",
-        "LDAPAuthSettings and LDAPSearchSettings both have GetCheckCertHostname field",
-        "Proto3 bool default = false -- if not explicitly set by admin, hostname check disabled",
-        "Protobuf definition: 'varint,6,opt,name=checkCertHostname,proto3' (0x36f849f)",
-        "go-ldap/ldap/v3 library present; CheckCertHostname=false likely maps to InsecureSkipVerify=true",
-        "LDAPAuthenticator.AuthUser (0x2506dc0, ~2000 bytes) -- full disasm needed to confirm",
-        "Impact if confirmed: LDAP TLS connections to AD/LDAP server have no hostname verification",
-        "  Attacker on same LAN as LDAP server can MITM LDAP auth, capture AD credentials",
-        "=== LDAPAuthenticator.AuthUser ANALYSIS (2026-09-20) ===",
-        "LDAPAuthenticator.AuthUser (0x2506dc0, 7680 bytes) -- DOES NOT make live LDAP connections.",
-        "  Calls: checkUserAuthLockout, updateUserAuthFailure, common.LogToDB, ec.NewECError",
-        "  DB calls: go-mssqldb.UniqueIdentifier.Scan/String -- SQL query against local cached user table",
-        "  This is DB-backed auth (locally cached LDAP user data), NOT a live LDAP network connection",
-        "  Only go-ldap caller in regworker: adcomn.GetCanonicalName -> go-ldap.ParseDN (DN parsing, no network)",
-        "  CONCLUSION: Live LDAP connections are in adconnector_linux_amd64, NOT regworker",
-        "  CheckCertHostname analysis: requires adconnector_linux_amd64 (separate binary, not yet analyzed)",
+        "=== LDAP TLS BYPASS -- CONFIRMED HIGH (adconnector_linux_amd64) ===",
+        "Binary: /opt/forticlientems/bin/adconnector_linux_amd64 (36MB, Go 1.20+, 35706 funcs)",
+        "",
+        "getTLSConfigForLDAPS (0xdcac20, 280 insns, 1344 bytes):",
+        "  Builds tls.Config for all LDAPS connections in NewDefaultLdapConnPool.",
+        "  0xdcb05a: call runtime.newobject  (allocate tls.Config)",
+        "  0xdcb05f: mov byte ptr [rax + 0xa0], 1  <-- InsecureSkipVerify = true, UNCONDITIONAL",
+        "  Offset 0xa0 in Go 1.20 tls.Config struct layout:",
+        "    +0x00 Rand, +0x10 Time, +0x18 Certificates (slice), +0x30 NameToCertificate,",
+        "    +0x38 GetCertificate, +0x40 GetClientCertificate, +0x48 GetConfigForClient,",
+        "    +0x50 VerifyPeerCertificate (func), +0x58 VerifyConnection, +0x60 RootCAs,",
+        "    +0x68 NextProtos (slice), +0x80 ServerName, +0x90 ClientAuth, +0x98 ClientCAs,",
+        "    +0xa0 InsecureSkipVerify bool  <-- CONFIRMED this field",
+        "  0xdcb05f sets InsecureSkipVerify=true on every tls.Config, regardless of admin config.",
+        "  0xdcb0ab: mov qword ptr [rax + 0x50], rdx  -- stores VerifyPeerCertificate closure",
+        "  0xdcb0c5: mov word ptr [rax + 0x108], 0x303  -- MinVersion = TLS 1.2",
+        "",
+        "  VerifyPeerCertificate closure struct (at 0xdcafcb):",
+        "    [+0x00] = ptr to getTLSConfigForLDAPS.func1 (0xdcb160)",
+        "    [+0x08] = ServerName ptr",
+        "    [+0x10] = ServerName len",
+        "    [+0x18] = cachedPTRResult (for reverse DNS)",
+        "    [+0x20] = cert pool ptr (pre-loaded CA)",
+        "    [+0x28] = checkCertHostname bool (from proto3 LDAPAuthSettings.CheckCertHostname)",
+        "    [+0x30] = root CA pool (may be nil)",
+        "",
+        "getTLSConfigForLDAPS.func1 (0xdcb160, VerifyPeerCertificate callback):",
+        "  0xdcb177: movzx r10d, byte ptr [rdx + 0x28]  -- loads checkCertHostname bool",
+        "  Passes all closure fields to verifyPeerCertificate (0xdca0e0)",
+        "",
+        "verifyPeerCertificate (0xdca0e0, 386 insns) -- CRITICAL BYPASS PATH:",
+        "  Iterates rawCerts from peer:",
+        "    - Calls crypto/x509.ParseCertificate for each raw cert",
+        "    - If cert.IsCA (field 0x361 != 0): AddCert to CA pool built from PEER-SUPPLIED certs",
+        "    - Else: saves as leaf cert",
+        "  Decision branch at 0xdca386-0xdca3a4:",
+        "    0xdca386: movzx r9d, byte ptr [rsp + 0x1d8]  -- load checkCertHostname",
+        "    0xdca392: jne 0xdca3a9  -- if true: do PTR/hostname lookup",
+        "    0xdca394-0xdca3a4: if false: SKIP hostname check, jump to 0xdca4a6",
+        "  Final path (checkCertHostname=false, proto3 default):",
+        "    0xdca4ee: test r9b, r9b; je 0xdca55f  -- DNSName stays empty",
+        "    0xdca599: call crypto/x509.(*Certificate).Verify",
+        "      opts.DNSName = '' (no hostname check)",
+        "      opts.Roots = CA pool built from PEER-PROVIDED certs (not system trust store)",
+        "  RESULT: x509.Verify passes for any cert where:",
+        "    - Peer sends a self-signed cert with CA bit set",
+        "    - verifyPeerCertificate adds it to Roots pool",
+        "    - Leaf cert verified against attacker-supplied CA -> SUCCESS",
+        "  Full MITM possible with self-signed cert, no DNS name check, no chain validation.",
+        "",
+        "  checkCertHostname=true path:",
+        "    PTR lookup performed; DNSName set to ServerName",
+        "    opts.Roots still = peer-supplied CAs (not system store)",
+        "    Self-signed cert with correct CN/SAN still bypasses (chain not validated against trusted roots)",
+        "",
+        "NewDefaultLdapConnPool (0xdcb200): calls getTLSConfigForLDAPS at 0xdcb560",
+        "  0xdcb59d: mov qword ptr [rdx + 0x98], rax  -- stores tls.Config at pool struct +0x98",
+        "(*DefaultLdapConnPool).getConn (0xdc82a0): LDAP connection factory",
+        "  0xdc83fb: mov rsi, qword ptr [rcx + 0x98]  -- loads tls.Config from pool",
+        "  0xdc8414: call ldap.DialTLS  -- LDAPS connection with InsecureSkipVerify=true",
+        "  0xdc8377: call ldap.Dial  -- plain LDAP path (no TLS at all)",
+        "  ldap.(*Conn).StartTLS (0x9a8800) also present -- affected if StartTLS used",
+        "",
+        "IMPACT:",
+        "  Attacker on LAN between EMS and AD/LDAP server can MITM all LDAPS/StartTLS traffic.",
+        "  Captured: LDAP bind credentials (AD service account password), full LDAP search results",
+        "  (user enumeration, group membership, attribute data)",
+        "  Default configuration (CheckCertHostname=false) = no certificate verification whatsoever.",
+        "  Even with CheckCertHostname=true: self-signed cert with correct hostname bypasses.",
+        "",
+        "AFFECTED PROTOCOLS:",
+        "  LDAPS (ldap.DialTLS): directly via getConn",
+        "  StartTLS (ldap.(*Conn).StartTLS): upgrade from plain LDAP",
+        "  Plain LDAP (ldap.Dial): no TLS at all (separate issue, existing behavior)",
     ],
-    "references": ["EMS-745-F02 (InsecureIgnoreHostKey SFTP)"],
+    "references": ["EMS-745-F02 (InsecureIgnoreHostKey SFTP)", "go-ldap/ldap/v3 CheckCertHostname"],
 }
 
 FINDINGS["EMS-745-F04"] = {
@@ -250,6 +303,24 @@ BINARY_HASHES = {
         "size_bytes": 84951040,  # 81MB
         "md5": None,   # TODO
         "sha256": "f4a6d61750a9f06080440587eb6fdaedfc3f902be553a44fb483e8e4a8a25cfd",
+        "pclntab_funcs": 82810,
+        "go_version": "1.20+",
+        "analyzed": "2026-09-20",
+    },
+    "adconnector_linux_amd64": {
+        "size_bytes": 37748736,  # 36MB
+        "md5": None,   # TODO
+        "sha256": None,  # TODO
+        "pclntab_funcs": 35706,
+        "go_version": "1.20+",
+        "analyzed": "2026-09-20",
+        "key_findings": [
+            "getTLSConfigForLDAPS (0xdcac20): InsecureSkipVerify=true UNCONDITIONAL at 0xdcb05f",
+            "verifyPeerCertificate (0xdca0e0): peer-supplied CA trusted, DNSName='' by default",
+            "ldap.DialTLS (0x9a7fc0), ldap.Dial (0x9a7dc0), (*Conn).StartTLS (0x9a8800)",
+            "(*DefaultLdapConnPool).getConn (0xdc82a0): connection factory",
+            "NewDefaultLdapConnPool (0xdcb200): calls getTLSConfigForLDAPS",
+        ],
     },
     "FCTDas": {
         "size_bytes": 26214400,  # 25MB
@@ -259,12 +330,25 @@ BINARY_HASHES = {
 
 # Pending analysis tasks
 TODO = [
-    "Run Ablation semantic sweep on regworker_linux_amd64 (AMD64 -- sweep works better than ARM64)",
-    "Disassemble regworker around _Cfunc_memcpy callsite (F04)",
-    "Identify which connections use InsecureSkipVerify (F03)",
-    "Decompile auth_middleware.pyc -- confirm Ems-Call-Type bypass condition (F05)",
+    # COMPLETED:
+    # [DONE 2026-09-20] Ablation semantic sweep on regworker_linux_amd64:
+    #   37774 non-stdlib functions encoded, 1758s, all-MiniLM-L6-v2
+    #   Result: NO Fortinet functions above 0.5 threshold on any vulnerability query
+    #   All hits were vendor library code (golang-jwt, pgproto3, AzureAD MSAL)
+    #   Confirms: attack surface is already-identified findings; no new code-pattern vulns
+    # [DONE 2026-09-20] F03: gRPC WithInsecure() confirmed; LDAPAuthenticator.AuthUser = SQL-backed (no live LDAP)
+    # [DONE 2026-09-20] F05: Ems-Call-Type bypass -- CLOSED, logging only
+    # [DONE 2026-09-20] adconnector_linux_amd64 LDAP TLS analysis:
+    #   getTLSConfigForLDAPS (0xdcac20): InsecureSkipVerify=true at 0xdcb05f (unconditional)
+    #   verifyPeerCertificate (0xdca0e0): with checkCertHostname=false (default):
+    #     DNSName="" + Roots=peer-supplied CAs -> any self-signed cert passes
+    #   F03 elevated to HIGH, status CONFIRMED
+
+    # ACTIVE:
+    "Disassemble regworker VulnImpDB._Cfunc_memcpy callsite (F04) -- extract .so path and confirm heap overflow surface",
     "Compare nginx config with 8.0.0 to check /ai/ route absence and other diffs",
     "SHA256 FCTDas and compare with EMS-800 FCTDas for diff",
-    "Check if emsworkers_linux_amd64 runs all workers or is the registration worker",
     "Analyze uploadworker_linux_amd64 for subprocess injection (F14 equivalent)",
+    "Extract IPS engine .so from running EMS instance or FortiGuard update for F04 TLV analysis",
+    "Run Ablation semantic sweep on adconnector_linux_amd64 (35706 non-stdlib funcs) -- look for additional LDAP/AD vulns",
 ]
