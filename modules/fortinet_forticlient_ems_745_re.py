@@ -287,6 +287,68 @@ FINDINGS["EMS-745-F04"] = {
     "references": ["EMS-800-F04"],
 }
 
+FINDINGS["EMS-745-F14"] = {
+    "title": "uploadworker subprocess injection surface: ./osslsigncode relative path + /usr/bin/php + Wine",
+    "severity": "MEDIUM",
+    "status": "CONFIRMED surface -- full subprocess map extracted (2026-09-20). osslsigncode relative path is exploitable if CWD is attacker-writable. PHP injection CANDIDATE (args not fully traced).",
+    "cvss": "6.5 (AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H) -- osslsigncode path; requires write to CWD",
+    "cve": None,
+    "notes": [
+        "Binary: uploadworker_linux_amd64 (82MB, Go 1.20+, 82,793 pclntab funcs)",
+        "64 os/exec functions present: Command, CommandContext, Cmd.Run, Cmd.Start, Cmd.Output, Cmd.CombinedOutput",
+        "766 EMS service functions matching: upload/unzip/script/install/extract/pkg/package",
+        "",
+        "=== FINDING 1: ./osslsigncode RELATIVE PATH (MEDIUM) ===",
+        "fortinet.com/ems/service/fctinstaller.signFile (0x2566180, 473 insns):",
+        "  Caller: signWithCustomerCertificate (0x2565ba0)",
+        "  Command: os/exec.Command('./osslsigncode', 'sign', '-pkcs12', <cert_path>, '-in', <installer_path>, '-out', <output_path>, '-h', 'sha256', '-ts', <timestamp_url>, '-pass', <password>)",
+        "  'osslsigncode' string: VA 0x2c092da, len 14 = './osslsigncode'",
+        "  Arg strings confirmed: 'sign' (VA 0x2bedfc5), '-pkcs12' (0x2bf967c), '-in' (0x2becfb0), '-out' (0x2bedfc9), '-h' (0x2bec102), 'sha256' (0x2bf4fed), '-ts' (0x2becfb3)",
+        "  Log message at 0x2c60e9a: 'Running osslsigncode command: %s %s -pass ***'",
+        "Bundled binary: /opt/forticlientems/bin/osslsigncode -- version 2.4 (string at 0x34c0)",
+        "  Size: 292,520 bytes (ELF64, AMD64)",
+        "  Linked against: GLIBC_2.33, GLIBC_2.14",
+        "Relative path './osslsigncode' resolves against uploadworker CWD at exec time.",
+        "  If CWD = /opt/forticlientems/bin/ (where real osslsigncode lives), relative path works normally.",
+        "  If an attacker can write a file named 'osslsigncode' to the CWD before signFile is triggered:",
+        "    -> Any uploaded installer triggers execution of attacker's binary as the osslsigncode user",
+        "  CWD verification: uploadworker likely chdir()s to /opt/forticlientems/bin/ at startup.",
+        "  Attack prerequisite: write access to CWD (requires prior auth or path traversal in upload).",
+        "",
+        "signWithCustomerCertificate (0x2565ba0):",
+        "  Iterates installer file list (array at [rsp+0x120], iterated with rcx count)",
+        "  For each installer file: calls AES decrypt for cert password -> signFile(filepath, cert, timestamp, password)",
+        "  Cert path: filepath.Join('/opt/forticlientems/data/certs/TLS_RSA_W...', <cert_name>)",
+        "  The installer file path comes from the iterated array -- source is the uploaded/downloaded installer list.",
+        "",
+        "=== FINDING 2: /usr/bin/php IN batchPCRERegexMatch (CANDIDATE) ===",
+        "fortinet.com/ems/service/softinvproc/swmatch.batchPCRERegexMatch (0x26d8ec0, 446 insns):",
+        "  Command: os/exec.Command('/usr/bin/php', <runtime_args>)",
+        "  '/usr/bin/php' string: VA 0x2c04d6c, len 12",
+        "  Args: from runtime slice [rsp+0xc0/0xc8/0x120] -- built from software inventory processing",
+        "  Purpose: PCRE pattern matching on software inventory data using PHP's preg_match",
+        "  If PHP script path or pattern args include user-supplied software name/version strings:",
+        "    -> Possible PHP argument injection (not shell injection -- Go exec avoids shell)",
+        "  Status: CANDIDATE -- PHP script path and arg construction not fully traced.",
+        "",
+        "=== FINDING 3: Wine execution of rpkg.exe (INFORMATIONAL) ===",
+        "fortinet.com/ems/service/fctinstaller.runRpkgCmd (0x2541540, 450 insns):",
+        "  Command 1: os/exec.Command('/opt/forticlientems/rpkg/rpkg', ...) -- static path, absolute",
+        "  Command 2: os/exec.Command('/opt/forticlientems/rpkg/emswine32-10.9/bin/wine', '/opt/forticlientems/rpkg/rpkg.exe', '--debug', '--wine', <additional_args>)",
+        "  Wine 10.9 bundled: /opt/forticlientems/rpkg/emswine32-10.9/bin/wine",
+        "  Execution triggered by: installer type matching at 0x2541a64-0x2541a9e (checks 'DEB_ARAM' and 'RPM_ARAM' 7-byte strings)",
+        "  Wine-hosted rpkg.exe processes Windows installer repackaging.",
+        "  Absolute paths, not a relative path issue. Informational for attack surface mapping.",
+        "",
+        "=== FINDING 4: 7zz extraction (INFORMATIONAL) ===",
+        "fortinet.com/ems/service/fctinstaller.extractEDRSourcePKGFile (0x2540e60):",
+        "  Command: os/exec.Command('/opt/forticlientems/bin/7zz', 'e', '-o/opt/forticlientems/rpkg/edrSource/extracted_dmg', <source_pkg_path>)",
+        "  Absolute path. Source pkg path from function arg (caller-determined).",
+        "  Risk: if source_pkg_path can escape the extraction directory (-snl for symlinks in 7z), possible path traversal.",
+    ],
+    "references": ["EMS-800 installer worker analysis (if any)", "osslsigncode v2.4"],
+}
+
 FINDINGS["EMS-745-F05"] = {
     "title": "Ems-Call-Type header: NOT a bypass in EMS 7.4.5 -- logging only",
     "severity": "NONE",
@@ -366,6 +428,21 @@ BINARY_HASHES = {
             "NewDefaultLdapConnPool (0xdcb200): calls getTLSConfigForLDAPS",
         ],
     },
+    "uploadworker_linux_amd64": {
+        "size_bytes": 86106624,  # 82MB
+        "pclntab_funcs": 82793,
+        "go_version": "1.20+",
+        "analyzed": "2026-09-20",
+        "key_findings": [
+            "signFile (0x2566180): os/exec.Command('./osslsigncode', ...) -- RELATIVE PATH (CWD-dependent)",
+            "bundled osslsigncode: /opt/forticlientems/bin/osslsigncode v2.4 (ELF64 AMD64, 292520 bytes)",
+            "full sign command: ./osslsigncode sign -pkcs12 <cert> -in <file> -out <out> -h sha256 -ts <url> -pass ***",
+            "batchPCRERegexMatch (0x26d8ec0): os/exec.Command('/usr/bin/php', <runtime_args>)",
+            "runRpkgCmd (0x2541540): Wine 10.9 execution of rpkg.exe (absolute path)",
+            "extractEDRSourcePKGFile (0x2540e60): 7zz extraction (absolute path)",
+            "64 os/exec functions, 766 upload/install/pkg functions, 3783 EMS service functions",
+        ],
+    },
     "FCTDas": {
         "size_bytes": 26214400,  # 25MB
         "sha256": None,  # TODO -- check vs EMS-800 FCTDas
@@ -388,11 +465,17 @@ TODO = [
     #     DNSName="" + Roots=peer-supplied CAs -> any self-signed cert passes
     #   F03 elevated to HIGH, status CONFIRMED
 
+    # [DONE 2026-09-20] F04 libips.so path confirmed: /opt/forticlientems/lib/libips.so (11MB, Feb 2023)
+    # [DONE 2026-09-20] F04 memcpy callsite confirmed: GetIpsMaps.func9 (0x24100e0), sole caller, no bounds check
+    # [DONE 2026-09-20] uploadworker_linux_amd64 subprocess injection survey COMPLETE (F14):
+    #   ./osslsigncode relative path (MEDIUM), /usr/bin/php in batchPCRERegexMatch (CANDIDATE),
+    #   Wine execution (informational), 7zz extraction (informational)
+
     # ACTIVE:
-    "Disassemble regworker VulnImpDB._Cfunc_memcpy callsite (F04) -- extract .so path and confirm heap overflow surface",
     "Compare nginx config with 8.0.0 to check /ai/ route absence and other diffs",
     "SHA256 FCTDas and compare with EMS-800 FCTDas for diff",
-    "Analyze uploadworker_linux_amd64 for subprocess injection (F14 equivalent)",
+    "Trace batchPCRERegexMatch PHP args to confirm user-controlled input (F14 CANDIDATE elevation)",
+    "Verify uploadworker CWD at runtime to confirm osslsigncode ./relative path resolves (F14 exploitability gate)",
     "Extract IPS engine .so from running EMS instance or FortiGuard update for F04 TLV analysis",
     "Run Ablation semantic sweep on adconnector_linux_amd64 (35706 non-stdlib funcs) -- look for additional LDAP/AD vulns",
 ]
