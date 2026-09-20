@@ -246,10 +246,39 @@ FINDINGS["FAZ-F07"] = {
         "OFTP protocol: FortiGate log transfer to FAZ; cert-only auth in 7.2.x",
         "legacy-auth-mode (password fallback when cert CN mismatches SN): NOT present in 7.2.x",
         "legacy-auth-mode added in 7.6.7 as configurable option -- not the vulnerability window",
+        "FGFM daemon name: fgfmd (separate from oftpd -- FGFM = port 541 mgmt, OFTP = port 514 log transfer)",
+        "diagnose test application oftpd 3 -> shows OFTP connections (oftpd daemon)",
+        "diagnose test application fgtlogd 1 -> shows FortiGate log daemon state (FortiGate side)",
         "TODO: extract fgfmd binary from 7.2.9 rootfs; run Ablation sweep; find missing auth check",
         "TODO: diff fgfmd binary 7.2.7 vs 7.2.10 (post-patch) to identify exact patch location",
     ],
     "references": ["CVE-2024-47575", "https://www.fortiguard.com/psirt/FG-IR-24-423"],
+}
+
+FINDINGS["FAZ-F08"] = {
+    "title": "OFTP oftpd: SSLv3 supported + UDP514 log channel unencrypted by default",
+    "severity": "HIGH",
+    "status": "CANDIDATE -- documented in 7.4.1 admin guide Appendix B; SSLv3 support listed, default log=UDP514 unencrypted",
+    "cvss": "7.4 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N)",
+    "cve": None,
+    "notes": [
+        "OFTP = Optimized Fabric Transfer Protocol; FAZ daemon = oftpd; ports TCP514 + UDP514",
+        "Default config: OFTP control = TCP514 (TLS); log transfer = UDP514 (NO encryption)",
+        "Secure log transfer requires explicit opt-in: config log fortianalyzer setting set reliable enable",
+        "OFTP SSL supports: SSLv3, TLSv1.0, TLSv1.2, TLSv1.3 (default TLSv1.2)",
+        "SSLv3 support = POODLE downgrade attack possible on OFTP control channel",
+        "ssl-static-key-ciphers enabled by default = no forward secrecy on OFTP TLS",
+        "Log integrity: default log-checksum=none (no integrity check); MD5 or MD5-auth optional",
+        "UDP514 log path: no encryption, no integrity check by default = full log content visible/injectable",
+        "In typical FAZ deployment: FortiGate logs flow UDP514 in cleartext across network",
+        "enc-algorithm low = includes weak CBC ciphers; high = GCM only but not default",
+        "Attack surface: MITM between FortiGate and FAZ captures/injects all network security logs",
+        "FAZ serial number appears in OFTP diagnostics: SNs list -- confirms device identity leak pre-auth",
+        "diagnose test application oftpd 3 -> active OFTP sessions (DEVICE, CONN, HOSTNAME, IP, #PKTS)",
+        "logsync_conn_id visible in fgtlogd output = connection sequence numbers predictable",
+        "CANDIDATE: verify SSLv3 actually present in oftpd binary (may be compiled out); check 7.2.x",
+    ],
+    "references": [],
 }
 
 # Doc-derived intelligence (from README mandatory docs reading)
@@ -257,6 +286,7 @@ DOC_INTEL = {
     "sources_read": [
         "FortiAnalyzer-7.6.7-Release_Notes.pdf (pages 1-20, 61-66)",
         "FortiAnalyzer-7.2.1-Administration_Guide.pdf (pages 1-50)",
+        "FortiAnalyzer-7.4.1-Administration_Guide.pdf (pages 1-20, 34-37, 432-440)",
         "README.md (full re-read 2026-09-19)",
     ],
     "version_security_matrix": {
@@ -268,8 +298,17 @@ DOC_INTEL = {
         "legacy_auth_mode":"OFTP password fallback only added in 7.6.7 (configurable); cert-only in 7.2.x",
     },
     "daemon_names": {
-        "log_daemon":      "fortilogd (confirmed: bug 1217641 diagnose fortilogd logvol-adom)",
-        "fgfm_daemon":     "TBD -- extract from 7.2.9 rootfs",
+        "log_daemon_faz":  "fortilogd (confirmed: bug 1217641 diagnose fortilogd logvol-adom)",
+        "oftp_daemon_faz": "oftpd (confirmed: diagnose test application oftpd 3; TCP/UDP 514)",
+        "log_daemon_fgt":  "fgtlogd (FortiGate-side log daemon: diagnose test application fgtlogd 1)",
+        "fgfm_daemon_faz": "fgfmd (CVE-2024-47575 target; port 541; extract from 7.2.9 rootfs)",
+    },
+    "oftp_protocol": {
+        "ports":         "TCP514 (OFTP/TLS control) + UDP514 (log, unencrypted by default)",
+        "tls_versions":  "SSLv3, TLSv1.0, TLSv1.2, TLSv1.3 (default TLSv1.2)",
+        "log_integrity": "default=none; optional MD5 or MD5-auth",
+        "forward_secrecy": "disabled by default (ssl-static-key-ciphers=enabled)",
+        "enc_algorithm": "low=all OpenSSL; medium=high+medium; high=high only; custom=ssl-cipher-suites table",
     },
     "device_auth_flow": {
         "methods": ["serial number matching", "pre-shared key"],
@@ -309,9 +348,11 @@ APACHE_ROUTES = {
 
 # Pending analysis
 TODO = [
-    # IMMEDIATE: FGFM daemon extraction (CVE-2024-47575)
-    "Extract fgfmd/fgfmsd binary from FAZ 7.2.9 rootfs -- mount VMDK, find daemon binary",
+    # IMMEDIATE: FGFM + OFTP daemon extraction (CVE-2024-47575 + F08)
+    "Extract fgfmd binary from FAZ 7.2.9 rootfs -- mount VMDK; daemon on port 541 (FGFM protocol)",
+    "Extract oftpd binary from FAZ 7.2.9 rootfs -- daemon on TCP/UDP 514 (OFTP log transfer)",
     "Run Ablation semantic sweep on fgfmd binary -- find missing auth check (F07)",
+    "Run Ablation semantic sweep on oftpd binary -- verify SSLv3 compiled in; find cipher negotiation (F08)",
     "Diff fgfmd binary 7.2.7 vs 7.2.10 to locate exact patch for CVE-2024-47575",
     # BINARY SWEEPS (from 6.4.14 syntax.tar.xz)
     "Run Ablation semantic sweep on libcdb_plugin.so (134KB) -- /tmp/faz614_syntax/syntax/",
