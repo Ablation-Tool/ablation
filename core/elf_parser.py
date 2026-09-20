@@ -1028,14 +1028,35 @@ class ELFParser:
         """
         Translate a virtual address to a file offset using PT_LOAD segments.
         Returns None if the address is not covered by any load segment.
+
+        Edge case: some linkers (Go, lld) emit a PT_LOAD segment with p_vaddr=0
+        and p_offset=0 that covers the ELF header region (filesz up to the first
+        real segment). This segment must be skipped: returning a file offset from
+        it maps VA 0x1000 -> file offset 0x1000 which is correct for ELF headers
+        but wrong for any real code/data VA that the segment spuriously contains
+        when filesz is large. The heuristic: skip any PT_LOAD where both p_vaddr
+        and p_offset are zero (the ELF header pseudo-segment).
+
+        When multiple non-zero-base segments match (pathological but possible),
+        prefer the segment with the highest p_vaddr for the most specific mapping.
         """
+        best_offset = None
+        best_vaddr  = -1
+
         for p in self.phdrs:
-            if p["p_type"] == PT_LOAD and p["p_filesz"] > 0:
-                seg_start = p["p_vaddr"]
-                seg_end   = seg_start + p["p_filesz"]
-                if seg_start <= vaddr < seg_end:
-                    return vaddr - seg_start + p["p_offset"]
-        return None
+            if p["p_type"] != PT_LOAD or p["p_filesz"] == 0:
+                continue
+            # Skip the ELF header pseudo-segment
+            if p["p_vaddr"] == 0 and p["p_offset"] == 0:
+                continue
+            seg_start = p["p_vaddr"]
+            seg_end   = seg_start + p["p_filesz"]
+            if seg_start <= vaddr < seg_end:
+                if seg_start > best_vaddr:
+                    best_vaddr  = seg_start
+                    best_offset = vaddr - seg_start + p["p_offset"]
+
+        return best_offset
 
     def get_plt_got_table(self) -> list:
         """
