@@ -16,7 +16,7 @@ sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
 from modules.version_delta import FuncFeatures, FuncMatcher
 from modules.semantic_search import SemanticSearcher
 
-LINA_914  = '/home/cowboy/VDT/intel/cisco-downloads/asa9-14-extracted/lina'
+LINA_914  = '/path/to/binary'
 SEED_VA   = 0xc563d0   # attr_list_add_impl
 SEED_NAME = 'attr_list_add_impl'
 DB        = '~/.ablation/func_id.db'
@@ -25,52 +25,52 @@ DB        = '~/.ablation/func_id.db'
 # Note: 9.2.4 (i386), 9.1.7.23 (x86-64), and FTD 1200/10.0.0 ARM64 are in test_cross_arch.py
 VERSIONS = [
     # ASA 9.0.4.42 is i386 — cross-arch result (jac=0.1471, MEDIUM, Era 1); in test_cross_arch.py
-    ('ASA 9.1.7.23',   '/media/cowboy/research/cisco-lina-re/asa91723-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.5.2.204',  '/media/cowboy/research/cisco-lina-re/asa952-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.6.4.18',   '/media/cowboy/research/cisco-lina-re/asa964-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.1.7.23',   '/path/to/research/binary'),
+    ('ASA 9.5.2.204',  '/path/to/research/binary'),
+    ('ASA 9.6.4.18',   '/path/to/research/binary'),
     # FTD 6.2.0-362 (Jan 2017, ~ASA 9.6.x era): jac=0.1307 Era 1
-    ('FTD 6.2.0-362',  '/media/cowboy/research/cisco-lina-re/ftd620-extract/lina'),
+    ('FTD 6.2.0-362',  '/path/to/research/binary'),
     # ASA 9.7.1 (Jan 2017): jac=0.1301 Era 1 — boundary pin: Era 1→2 transition is between 9.7.1 and 9.9.2.85
-    ('ASA 9.7.1',      '/media/cowboy/research/cisco-lina-re/asa971-extract/lina'),
-    ('ASA 9.9.2.85',   '/media/cowboy/research/cisco-lina-re/asa992-85-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.7.1',      '/path/to/research/binary'),
+    ('ASA 9.9.2.85',   '/path/to/research/binary'),
     # FTD 6.3.0-83 (Nov 2018, ~ASA 9.8-9.9 era): jac=0.9593 Era 2 UNPATCHED
-    ('FTD 6.3.0-83',   '/media/cowboy/research/cisco-lina-re/ftd630-extract/lina'),
-    ('ASA 9.10.1.37',  '/media/cowboy/research/cisco-lina-re/asa9101037-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.10.1.40',  '/media/cowboy/research/cisco-lina-re/asa9101040-mnt/asa/bin/lina'),
-    ('ASA 9.10.1.42',  '/media/cowboy/research/cisco-lina-re/asa9101042-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.12.4.13',  '/media/cowboy/research/cisco-lina-re/asa9124-13-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.12.4.67',  '/media/cowboy/research/cisco-lina-re/asa9124-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.13.1.12',  '/media/cowboy/research/cisco-lina-re/asa9131112-extract/cpio-root/asa/bin/lina'),
+    ('FTD 6.3.0-83',   '/path/to/research/binary'),
+    ('ASA 9.10.1.37',  '/path/to/research/binary'),
+    ('ASA 9.10.1.40',  '/path/to/research/binary'),
+    ('ASA 9.10.1.42',  '/path/to/research/binary'),
+    ('ASA 9.12.4.13',  '/path/to/research/binary'),
+    ('ASA 9.12.4.67',  '/path/to/research/binary'),
+    ('ASA 9.13.1.12',  '/path/to/research/binary'),
     ('ASA 9.14 (seed source)', None),   # seed — skip self-match
-    ('ASA 9.14.1.15',  '/media/cowboy/research/cisco-lina-re/asa9141-15-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.14.1.30',  '/media/cowboy/research/cisco-lina-re/asa9141-30-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.14.2.4',   '/media/cowboy/research/cisco-lina-re/asa9142-4-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.14.2.14',  '/media/cowboy/research/cisco-lina-re/asa91424-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.14.4.24',  '/media/cowboy/research/cisco-lina-re/asa9144-extract/cpio-root/asa/bin/lina'),
+    ('ASA 9.14.1.15',  '/path/to/research/binary'),
+    ('ASA 9.14.1.30',  '/path/to/research/binary'),
+    ('ASA 9.14.2.4',   '/path/to/research/binary'),
+    ('ASA 9.14.2.14',  '/path/to/research/binary'),
+    ('ASA 9.14.4.24',  '/path/to/research/binary'),
     # FTD 6.6.0 (Apr 2020, ASA 9.14.x base): jac=0.9593 Era 2 UNPATCHED
-    ('FTD 6.6.0',      '/media/cowboy/research/cisco-lina-re/ftd660-extract/lina'),
+    ('FTD 6.6.0',      '/path/to/research/binary'),
     # ASA 9.15.1.1: jac=0.2143 Era 3 PATCHED — direct ASA-side patch boundary confirmation
-    ('ASA 9.15.1.1',   '/media/cowboy/research/cisco-lina-re/asa915-11-extract/lina'),
+    ('ASA 9.15.1.1',   '/path/to/research/binary'),
     # FTD 6.7.0-65 (Nov 2020, ASA 9.15.x base): jac=0.2143 Era 3 PATCHED — matches 9.15.1.1 exactly
-    ('FTD 6.7.0-65',   '/media/cowboy/research/cisco-lina-re/ftd670-extract/lina'),
-    ('ASA 9.16.1',     '/home/cowboy/VDT/intel/cisco-downloads/asa9-16-1-binwalk-out/'
+    ('FTD 6.7.0-65',   '/path/to/research/binary'),
+    ('ASA 9.16.1',     '/path/to/binary'
                        '_asa9-16-1-smp-k8.bin.extracted/asa9-16-1-cpio/asa/bin/lina'),
     # FTD 7.0.0-94 (May 2021, ASA 9.16.x base): jac=0.2051 Era 3 PATCHED
-    ('FTD 7.0.0-94',   '/media/cowboy/research/cisco-lina-re/ftd700-extract/lina'),
-    ('ASA 9.16.2.14',  '/media/cowboy/research/cisco-lina-re/asa9162-14-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.16.4.42',  '/media/cowboy/research/cisco-lina-re/asa916442-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.16.4.92',  '/media/cowboy/research/cisco-lina-re/asa91692-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.16.4.76',  '/media/cowboy/research/cisco-lina-re/asa9164-76-extract/cpio-root/asa/bin/lina'),
-    ('ASA 9.16.4.84',  '/media/cowboy/research/cisco-lina-re/asa9164-84-extract/cpio-root/asa/bin/lina'),
+    ('FTD 7.0.0-94',   '/path/to/research/binary'),
+    ('ASA 9.16.2.14',  '/path/to/research/binary'),
+    ('ASA 9.16.4.42',  '/path/to/research/binary'),
+    ('ASA 9.16.4.92',  '/path/to/research/binary'),
+    ('ASA 9.16.4.76',  '/path/to/research/binary'),
+    ('ASA 9.16.4.84',  '/path/to/research/binary'),
     # ASA 9.20.3: jac=0.1690 Era 3 drift — patched impl accumulating structural changes
-    ('ASA 9.20.3',     '/media/cowboy/research/cisco-lina-re/asa9203-extract/lina'),
-    ('ASA 9.22',       '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'),
-    ('ASA 9.22.1.1',   '/media/cowboy/research/cisco-lina-re/asa92211-extract/lina'),
-    ('ASA 9.22.2',     '/media/cowboy/research/cisco-lina-re/asa9222-extract/'
+    ('ASA 9.20.3',     '/path/to/research/binary'),
+    ('ASA 9.22',       '/path/to/binary'),
+    ('ASA 9.22.1.1',   '/path/to/research/binary'),
+    ('ASA 9.22.2',     '/path/to/research/binary'
                        '_asa9-22-2-32-smp-k8.bin.extracted/_rootfs.img.extracted/cpio-root/asa/bin/lina'),
-    ('FTD 7.6.2',      '/media/cowboy/research/cisco-lina-re/ftd-762-extract/'
+    ('FTD 7.6.2',      '/path/to/research/binary'
                        'rootfs/root/ngfw/usr/local/asa/bin/lina'),
-    ('ASA 10.1.2.1.7', '/media/cowboy/research/cisco-lina-re/asa10121-extract/cpio-root/asa/bin/lina'),
+    ('ASA 10.1.2.1.7', '/path/to/research/binary'),
 ]
 
 _PROLOGUES  = [b'\x55\x48\x89\xe5', b'\xf3\x0f\x1e\xfa\x55', b'\x55\x41']

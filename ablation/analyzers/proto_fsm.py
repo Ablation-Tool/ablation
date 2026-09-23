@@ -506,7 +506,7 @@ def emit_dot(states: List[FSMState], transitions: List[FSMTransition],
 
 # ─── main ─────────────────────────────────────────────────────────────────────
 
-DEFAULT_SO = '/media/cowboy/research/wechat-re/native-libs/lib/arm64-v8a/libwechatnetwork.so'
+DEFAULT_SO = '/path/to/libwechatnetwork.so'
 DEFAULT_SEEDS = [0x111f98, 0x305020, 0x305094, 0x304d64, 0x2ec280, 0x246364]
 
 def main():

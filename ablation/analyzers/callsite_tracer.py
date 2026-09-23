@@ -251,7 +251,7 @@ def backward_slice(raw: bytes, binary, callsite_va: int,
 
 # ─── main ─────────────────────────────────────────────────────────────────────
 
-DEFAULT_SO = '/media/cowboy/research/wechat-re/native-libs/lib/arm64-v8a/libwechatnetwork.so'
+DEFAULT_SO = '/path/to/libwechatnetwork.so'
 DEFAULT_TARGET = 0x2ec280
 DEFAULT_CALLSITES = [0x2e90cc, 0x2eac04]
 DEFAULT_ARGS = ['x0', 'x1', 'x2', 'x3']

@@ -13,16 +13,16 @@ Usage:
     ctx = BinaryContext.load_or_build('/path/to/binary')
     ira = IPRegAnnotator.from_context(ctx)
 
-    chain = ira.annotate_chain(entry_va=0x412f4, max_hops=2)
+    chain = ira.annotate_chain(entry_va=0x4000, max_hops=2)
     print(chain.fmt())
 
-Example output (libfmgsvrd.so -> conf_ctx_set_cli -> Tcl_Eval):
-    CHAIN 0x412f4  libfmgsvrd.so:__conf_ctx_from_file  [hops=2]
+Example output (libservice.so -> target_func -> Tcl_Eval):
+    CHAIN 0x4000  libservice.so:init_handler  [hops=2]
 
-    [0x412f4]  hop 0
+    [0x4000]  hop 0
       0x41339  conf_parse_devinfo(rdi=arg0_entry, rsi=0x...)
-      0x41366  conf_ctx_set_cli(rdi=arg0_entry, rsi=?, rdx=?)
-        [-> libfmgsvrd.so:0x5aee0  hop 1]
+      0x41366  target_func(rdi=arg0_entry, rsi=?, rdx=?)
+        [-> libservice.so:0x7000  hop 1]
         0x5af12  Tcl_Eval(rdi=arg0_entry, rsi=?)  *** EXTERNAL ***
         0x5b023  __cdb_obj_ctx_init(rdi=arg0_entry)  *** EXTERNAL ***
 
@@ -31,7 +31,7 @@ Example output (libfmgsvrd.so -> conf_ctx_set_cli -> Tcl_Eval):
     other libraries by loading RegAnnotator for each callee binary on demand.
 
     ira = IPRegAnnotator.from_context(ctx, lib_graph=lg)
-    chain = ira.annotate_chain(0x412f4, max_hops=3)
+    chain = ira.annotate_chain(0x4000, max_hops=3)
 """
 
 from __future__ import annotations

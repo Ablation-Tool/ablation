@@ -7,13 +7,13 @@ Automates the manual 4-step process:
   3. Cross-reference handler factories to find GET/POST handler VAs
   4. Run FuncProfiler on each handler to surface sinks
 
-Designed for FortiManager 8.0.0 libfmgd.so but parameterized for other
+Designed for FortiManager 8.0.0 libservice.so but parameterized for other
 flatui-based binaries.
 
 Usage:
     from ablation.analyzers.preauth_route_auditor import PreAuthRouteAuditor
 
-    auditor = PreAuthRouteAuditor.from_path('/tmp/fmg800_libs/libfmgd.so')
+    auditor = PreAuthRouteAuditor.from_path('/tmp/firmware_libs/libservice.so')
     results = auditor.run(
         route_init_va=0x27b324,
         route_init_end_va=0x288d50,
@@ -36,7 +36,7 @@ from capstone.x86_const import X86_OP_MEM, X86_REG_RIP
 from .binary_context import BinaryContext
 from .func_profiler import FuncProfiler, FuncProfile
 
-# flatui route registration call targets (FMG 8.0.0 libfmgd.so defaults)
+# flatui route registration call targets (FMG 8.0.0 libservice.so defaults)
 _ROUTE_URL_REGISTER  = 0x27b12a  # call: route URL or handler name
 _METHOD_LIST_INIT    = 0x27b1ca  # call: method list vector init
 _MIDDLEWARE_BUILD_A  = 0x25acf0  # call: build middleware string (prefix + suffix)
@@ -143,8 +143,8 @@ class PreAuthRouteAuditor:
         self.path = binary_path
         self.ctx = BinaryContext.load_or_build(binary_path)
         self.fp = FuncProfiler.from_context(self.ctx, custom_sinks={
-            'fm_exec_pipe':  'cmd-exec',
-            'fm_exec_cli':   'cmd-exec',
+            'exec_pipe_handler':  'cmd-exec',
+            'exec_handler':   'cmd-exec',
             'system':        'cmd-exec',
             'popen':         'cmd-exec',
             'execv':         'cmd-exec',

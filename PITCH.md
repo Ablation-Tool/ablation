@@ -51,16 +51,8 @@ automatically. The tool improves with every finding.
 ## Real results
 
 Ablation confirmed CVE-class vulnerabilities in production enterprise firmware before any
-manual disassembly:
-
-| Finding | Target | Class | CVSS |
-|---|---|---|---|
-| C16 | FortiGate 7000F (FortiOS 8.0.0) | Diameter AVP zero-length infinite loop | 7.5 |
-| C17 | FortiGate 7000F (FortiOS 8.0.0) | DCE/RPC record zero-length infinite loop | 7.5 |
-| FMG-F107 | FortiManager 8.0.0 | Pre-auth JSON-RPC route exposure | 9.1 |
-
-The semantic sweep identified the exact function in each case. Manual disassembly only began
-after Ablation narrowed 19,000 functions to five candidates.
+manual disassembly. In each case the semantic sweep identified the exact function; manual
+disassembly only began after Ablation narrowed 19,000 functions to five candidates.
 
 ---
 
