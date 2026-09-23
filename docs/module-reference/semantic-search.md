@@ -22,19 +22,17 @@ is the core capability.
 ```python
 from ablation.analyzers.binary_context import BinaryContext
 from ablation.analyzers.corpus_builder import CorpusBuilder
-from ablation.analyzers.xref_graph import XRefGraph
 from ablation.analyzers.semantic_search import SemanticSearcher
 
 ctx = BinaryContext.load_or_build('/path/to/binary.so')
 
-# Step 1: build behavioral descriptions (func_id.db)
+# Step 1: build behavioral descriptions into func_id.db
 cb = CorpusBuilder()
 n = cb.build('/path/to/binary.so', product='my-product', version='1.0')
 print(f"  {n} functions described")
 
-# Step 2: build BERT embeddings
-xg = XRefGraph.from_path('/path/to/binary.so').build()
-searcher = SemanticSearcher('/path/to/binary.so', xg=xg)
+# Step 2: build BERT embeddings from the DB
+searcher = SemanticSearcher('~/.ablation/func_id.db')
 searcher.build_corpus()   # ~35s for 19,000 functions on CPU; cached after first run
 
 # Step 3: query
@@ -44,7 +42,7 @@ results = searcher.query(
 )
 
 for r in results:
-    print(f"  0x{r.va:x}  score={r.score:.3f}  {ctx.name(r.va)}")
+    print(f"  0x{r.va:x}  score={r.score:.3f}  {r.name or hex(r.va)}")
 ```
 
 **Build time:** ~35 seconds for 19,000 functions on CPU.
@@ -66,23 +64,23 @@ Queries follow a structured format that steers BERT toward the right functional 
 | `calls:` | External functions this function calls | `memcpy memmove malloc free` |
 | `vuln:` | The specific vulnerability in plain English | `zero-length field causes infinite loop` |
 
-**Queries that produced confirmed findings:**
+**Example queries:**
 
 ```python
-# Confirmed C16 (FortiGate 7000F, Diameter AVP infinite loop)
+# DoS: infinite loop on zero-length field
 "PROTOCOL_PARSER | role=tlv_advance | calls: memcpy memmove | "
 "vuln: TLV pointer advance loop with no minimum length check; "
 "zero-length field causes infinite loop"
 
-# Confirmed C17 (FortiGate 7000F, DCE/RPC infinite loop)
+# DoS: record decode without minimum size check
 "PROTOCOL_PARSER | role=record_decoder | calls: memcpy memmove | "
 "vuln: record pointer advance without minimum record length check"
 
-# General: stack buffer overflow
+# Memory: stack buffer overflow
 "AV_SCANNER | role=string_copy | calls: strcpy strcat sprintf | "
 "vuln: strcpy or sprintf into fixed-size stack buffer without length check"
 
-# General: integer overflow before allocation
+# Memory: integer overflow before allocation
 "AV_SCANNER | role=allocation | calls: malloc realloc calloc | "
 "vuln: integer multiplication or addition before malloc without overflow check"
 ```
@@ -114,11 +112,11 @@ from ablation.analyzers.corpus_builder import CorpusBuilder
 cb = CorpusBuilder()
 
 # Build for one binary
-n = cb.build('/path/to/binary.so', product='fortigate-7000f', version='8.0.0')
+n = cb.build('/path/to/binary.so', product='my-target', version='1.0')
 
 # Build for an entire firmware image directory
-n = cb.build_dir('/path/to/rootfs/', product='fortigate', version='8.0.0',
-                 extensions=['.so', '.so.new'])
+n = cb.build_dir('/path/to/rootfs/', product='my-target', version='1.0',
+                 extensions=['.so'])
 ```
 
 **Output:** `~/.ablation/func_id.db` (SQLite). SemanticSearcher reads this on `build_corpus()`.
@@ -141,12 +139,12 @@ pl = PatternLibrary()
 
 pl.record_hit(
     query="TLV pointer advance loop with no minimum length check",
-    binary_sha="fdfaceccdc740d82",
-    va=0x17b660,
+    binary_sha="<sha256_of_binary>",
+    va=0x1000,
     confirmed=True,
     vuln_class="infinite_loop",
     cvss=7.5,
-    notes="FortiGate 7000F C16 -- Diameter AVP",
+    notes="confirmed finding -- protocol parser",
 )
 ```
 
@@ -154,7 +152,7 @@ pl.record_hit(
 
 ```python
 pl_results = pl.sweep(searcher, top_k=8, min_score=0.30)
-print(pl.fmt_sweep(pl_results, binary_name='libips.so.new'))
+print(pl.fmt_sweep(pl_results, binary_name='target.so'))
 ```
 
 Output shows each confirmed pattern, its CVSS score, and the top candidates in the new binary.
@@ -166,17 +164,15 @@ Patterns are stored at `~/.ablation/patterns.json`. They are user-local and not 
 git. `ablation/data/seed_corpus.json` ships pre-loaded patterns from published CVEs as a
 starting corpus on first install.
 
-### fortinet_sweep.py
+### Running a sweep
 
-The canonical sweep entry point for Fortinet binaries. Ships at `fortinet_sweep.py` in the
-repo root. Runs all vulnerability profiles plus PatternLibrary replay, prints results, and
-suggests next steps.
+Use the CLI or the `sweeps/base_sweep.py` entry point:
 
 ```bash
-python3 fortinet_sweep.py /path/to/libips.so.new
-python3 fortinet_sweep.py /path/to/libav.so.new --top 15
-python3 fortinet_sweep.py /path/to/libservice.so --min-score 0.35
+ablation sweep /path/to/target.so
+ablation sweep /path/to/target.so --min-score 0.35 --top-k 10
+ablation sweep /path/to/target.so --sarif results.sarif
 ```
 
-Extend `VULN_PROFILES` in the script before sweeping a binary against a new vulnerability
+Extend `VULN_PROFILES` in `sweeps/base_sweep.py` before sweeping against a new vulnerability
 class.

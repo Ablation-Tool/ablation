@@ -47,21 +47,21 @@ ctx = BinaryContext.load_from_cache_file('~/.ablation/cache/<slug>.json', orig_p
 
 ```python
 # Function name (overlay > export > PLT > hex)
-ctx.name(0x17b660)                         # "ips_diameter_parse_message"
+ctx.name(0x1000)                         # "proto_parse_message"
 
 # Call graph navigation
 ctx.callers_of('memcpy')                   # [(caller_va, name), ...]
-ctx.callers_of(0x17b660)                   # [(caller_va, name), ...]
-ctx.callees_of(0x17b660)                   # [(target_va, label), ...]
+ctx.callers_of(0x1000)                   # [(caller_va, name), ...]
+ctx.callees_of(0x1000)                   # [(target_va, label), ...]
 
 # String xrefs
-ctx.strings_in_func(0x17b660)             # [(string_va, content), ...]
+ctx.strings_in_func(0x1000)             # [(string_va, content), ...]
 ctx.string_xrefs(string_va)               # [code_va, ...]
 ctx.funcs_referencing_string(string_va)   # [func_va, ...]
 ctx.strings_near(va, radius=128)           # [(string_va, content), ...]
 
 # Function boundary
-ctx.func_containing(0x17b851)             # 0x17b660  (nearest start <= va)
+ctx.func_containing(0x1200)             # 0x1000  (nearest start <= va)
 
 # Summary
 print(ctx.summary())                       # PLT/export/func/string/edge counts
@@ -71,11 +71,11 @@ print(ctx.summary())                       # PLT/export/func/string/edge counts
 
 ```python
 # Register a name (persists across sessions via NameRegistry)
-ctx.set_name(0x17b660, 'ips_diameter_parse_message', source='confirmed')
-ctx.delete_name(0x17b660)
+ctx.set_name(0x1000, 'proto_parse_message', source='confirmed')
+ctx.delete_name(0x1000)
 
 # Read the overlay
-ctx.name(0x17b660)           # returns overlay name if set, then export/PLT/hex
+ctx.name(0x1000)           # returns overlay name if set, then export/PLT/hex
 ctx.names_table()            # formatted table of all discovered names
 ctx.names_map()              # {va: name} dict
 ctx.names_count()            # int
@@ -115,10 +115,10 @@ from ablation.analyzers.xref_graph import XRefGraph
 xg = XRefGraph.from_path('/path/to/binary.so')
 xg.build()
 
-xg.callers(0x17b660)        # direct callers
-xg.callees(0x17b660)        # direct callees
-xg.reachable(0x17b660)      # all functions reachable via BFS
-xg.call_depth(0x17b660)     # max call depth from va
+xg.callers(0x1000)        # direct callers
+xg.callees(0x1000)        # direct callees
+xg.reachable(0x1000)      # all functions reachable via BFS
+xg.call_depth(0x1000)     # max call depth from va
 ```
 
 ---
@@ -137,7 +137,7 @@ from ablation.analyzers.xref_graph import XRefGraph
 xg = XRefGraph.from_path('/path/to/binary.so').build()
 builder = CFGBuilder('/path/to/binary.so', xref=xg)
 
-cfg = builder.build_function(0x17b660)
+cfg = builder.build_function(0x1000)
 
 for bb_va, bb in cfg.blocks.items():
     print(f"  BB 0x{bb_va:x}: {len(bb.insns)} insns -> succs={[hex(s) for s in bb.succs]}")
@@ -218,10 +218,10 @@ from ablation.analyzers.path_solver import PathSolver
 from ablation.analyzers.cfg_builder import CFGBuilder
 
 builder = CFGBuilder('/path/to/binary.so', xref=xg)
-cfg = builder.build_function(0x17b660)
+cfg = builder.build_function(0x1000)
 
 solver = PathSolver(cfg)
-result = solver.is_reachable(target_bb_va=0x17b84c)
+result = solver.is_reachable(target_bb_va=0x1050)
 print(result.feasible, result.path)
 ```
 
@@ -241,7 +241,7 @@ queries into a structured summary without full disassembly.
 from ablation.analyzers.func_profiler import FuncProfiler
 
 profiler = FuncProfiler('/path/to/binary.so', ctx=ctx, xg=xg)
-profile = profiler.profile(0x17b660)
+profile = profiler.profile(0x1000)
 print(profile.summary())
 ```
 
