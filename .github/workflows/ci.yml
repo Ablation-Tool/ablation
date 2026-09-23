@@ -60,4 +60,4 @@ jobs:
           EOF
 
       - name: Run existing tests
-        run: python -m pytest tests/ -x -q --ignore=tests/test_angr.py 2>/dev/null || true
+        run: python -m pytest tests/ -x -q 2>/dev/null || true
