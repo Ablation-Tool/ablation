@@ -7,29 +7,29 @@ callees_of -> dump_text -> annotate_calls -> string lookup.
 
 Usage:
     fp = FuncProfiler.from_path('/path/to/binary')
-    print(fp.profile(va=0x15a78a, end_va=0x15a8ef).fmt())
+    print(fp.profile(va=0x1000, end_va=0x1200).fmt())
 
     # With target-specific sinks:
-    fp = FuncProfiler.from_path(binary, custom_sinks={'fm_exec_cli': [2]})
-    print(fp.profile(va=0x15a78a, end_va=0x15a8ef).fmt())
+    fp = FuncProfiler.from_path(binary, custom_sinks={'exec_handler': [2]})
+    print(fp.profile(va=0x1000, end_va=0x1200).fmt())
 
 Example output:
-    [FUNC 0x15a78a..0x15a8ef]  357B  11 calls  4 strings  2 SINKS
+    [FUNC 0x1000..0x1200]  357B  11 calls  4 strings  2 SINKS
 
     STRINGS:
-      0x1a5e40  '/bin/stress-ng'
-      0x1a5f10  '--temp-path'
-      0x1a5f28  '/var/private/stress-ng-test'
+      0x8000  '/bin/target-binary'
+      0x1a5f10  '--output-path'
+      0x1a5f28  '/var/private/test-path'
       0x1a5e00  'help'
 
     CALLS:
-      0x15a7c7  strcmp(rdi='help', rsi=[arg1_entry+0x0])
-      0x15a810  exec_cmd_by_process_pipe(rsi=0x3, rdx=0)
-      0x15a840  strcmp(rsi='--temp-path')
-      0x15a858  strcmp(rsi='/var/private/stress-ng-test')
-      0x15a86d  printf(rdi='--temp-path must be %s', rsi='/var/private/stress-ng-test')
-      0x15a892  fm_exec_cli(rdi='/bin/stress-ng', rsi=arg0_entry, rdx=arg1_entry)  *** SINK ***
-      0x15a8b6  fm_exec_cli(rdi='/bin/stress-ng', rsi=arg0_entry, rdx=arg1_entry)  *** SINK ***
+      0x1050  strcmp(rdi='help', rsi=[arg1_entry+0x0])
+      0x10c0  exec_by_pipe(rsi=0x3, rdx=0)
+      0x1090  strcmp(rsi='--output-path')
+      0x1058  strcmp(rsi='/var/private/test-path')
+      0x106d  printf(rdi='--output-path must be %s', rsi='/var/private/test-path')
+      0x1100  exec_handler(rdi='/bin/target-binary', rsi=arg0_entry, rdx=arg1_entry)  *** SINK ***
+      0x1180  exec_handler(rdi='/bin/target-binary', rsi=arg0_entry, rdx=arg1_entry)  *** SINK ***
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ _DEFAULT_SINKS: Dict[str, str] = {
     'execl':    'cmd-exec',
     'execlp':   'cmd-exec',
     'execvpe':  'cmd-exec',
-    'fm_exec_cli': 'cmd-exec',
+    'exec_handler': 'cmd-exec',
     # Tcl injection
     'Tcl_Eval':          'tcl-inject',
     'Tcl_EvalEx':        'tcl-inject',

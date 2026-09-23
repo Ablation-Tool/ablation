@@ -381,7 +381,7 @@ def extract_fortios_hardware(fw_path: str, outdir: str, plaintext_assumption: in
     Example:
         from ablation.analyzers.fortios_firmware_extractor import extract_fortios_hardware
         result = extract_fortios_hardware(
-            "/media/cowboy/research/Fortinet/FortiWiFi/FWF_60E-v7.2.4.F-build1396-FORTINET.out",
+            "/path/to/FortiWiFi-firmware.out",
             "/tmp/fwf60e_extracted/",
         )
         print(result.fmt())

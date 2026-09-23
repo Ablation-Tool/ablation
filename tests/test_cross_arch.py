@@ -17,18 +17,18 @@ sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
 from modules.version_delta import FuncFeatures, FuncMatcher
 from modules.semantic_search import SemanticSearcher
 
-LINA_914   = '/home/cowboy/VDT/intel/cisco-downloads/asa9-14-extracted/lina'
+LINA_914   = '/path/to/binary'
 SEED_VA    = 0xc563d0
 SEED_NAME  = 'attr_list_add_impl'
 DB         = '~/.ablation/func_id.db'
 
-LINA_904        = '/media/cowboy/research/cisco-lina-re/asa904-42-extract/lina'
-LINA_924        = '/media/cowboy/research/cisco-lina-re/asa924-extract/cpio-root/asa/bin/lina'
-LINA_917_K8     = '/media/cowboy/research/cisco-lina-re/asa917-k8-extract/cpio-root/asa/bin/lina'
-LINA_917_32     = '/media/cowboy/research/cisco-lina-re/asa917-32-extract/cpio-root/asa/bin/lina'
-LINA_917_23_K8  = '/media/cowboy/research/cisco-lina-re/asa917-23-k8-extract/cpio-root/asa/bin/lina'
-LINA_FTD10      = '/media/cowboy/research/cisco-lina-re/ftd-1000-extract/lina'
-LINA_1200       = '/media/cowboy/research/cisco-lina-re/ftd-1200-762-extract/root/ngfw/usr/local/asa/bin/lina'
+LINA_904        = '/path/to/research/binary'
+LINA_924        = '/path/to/research/binary'
+LINA_917_K8     = '/path/to/research/binary'
+LINA_917_32     = '/path/to/research/binary'
+LINA_917_23_K8  = '/path/to/research/binary'
+LINA_FTD10      = '/path/to/research/binary'
+LINA_1200       = '/path/to/research/binary'
 
 CROSS_ARCH_SEM_THRESHOLD = 0.85
 

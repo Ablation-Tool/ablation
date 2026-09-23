@@ -108,7 +108,7 @@ class TaintTracker:
     def _populate_known_funcs(self):
         try:
             import sys
-            sys.path.insert(0, '/home/cowboy/ablation')
+            sys.path.insert(0, '/path/to/ablation')
             from ablation.analyzers.binary_context import BinaryContext
             bc = BinaryContext.load_or_build(self.binary_path)
             for va, name in bc.plt.items():

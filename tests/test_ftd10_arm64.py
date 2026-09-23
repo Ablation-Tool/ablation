@@ -25,8 +25,8 @@ from modules.semantic_search import SemanticSearcher
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 
-LINA_914_X64  = '/home/cowboy/VDT/intel/cisco-downloads/asa9-14-extracted/lina'
-LINA_1000_A64 = '/media/cowboy/research/cisco-lina-re/ftd-1000-extract/lina'
+LINA_914_X64  = '/path/to/binary'
+LINA_1000_A64 = '/path/to/research/binary'
 SEED_VA       = 0xc563d0
 SEED_NAME     = 'attr_list_add_impl'
 DB            = '~/.ablation/func_id.db'

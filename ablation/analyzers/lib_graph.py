@@ -6,21 +6,21 @@ builds a unified index of exports, callers, and import relationships across all
 libraries at once.
 
 Usage:
-    lg = LibGraph.from_dir('/tmp/fmg800/rootfs/usr/lib/')
+    lg = LibGraph.from_dir('/path/to/firmware/rootfs/usr/lib/')
     lg = LibGraph.from_paths(['/path/to/libfoo.so', '/path/to/libbar.so'])
 
-    lg.callers_of('conf_ctx_set_cli')
-    # -> [LibCaller(binary='libfmgsvrd.so', caller_va=0x412f4, fn='0x412f4'),
-    #     LibCaller(binary='libdmserver.so', caller_va=0x9951d, fn='svc_dmworker_diff_handler_')]
+    lg.callers_of('target_func')
+    # -> [LibCaller(binary='libservice.so', caller_va=0x4000, fn='0x4000'),
+    #     LibCaller(binary='libserver.so', caller_va=0x9951d, fn='worker_dispatch_handler')]
 
-    lg.defined_in('conf_ctx_set_cli')
-    # -> [('libdmapi.so', 0x5aee0)]
+    lg.defined_in('target_func')
+    # -> [('libapi.so', 0x7000)]
 
-    lg.imports_of('libfmgsvrd.so')
-    # -> ['conf_ctx_set_cli', 'conf_parse_devinfo', ...]
+    lg.imports_of('libservice.so')
+    # -> ['target_func', 'parse_config', ...]
 
-    lg.exports_of('libdmapi.so')
-    # -> ['conf_ctx_set_cli', 'dm_devinfo2dvmdev', ...]
+    lg.exports_of('libapi.so')
+    # -> ['target_func', 'config_to_device', ...]
 
     lg.summary()
     # table: binary, exports, imports, outbound_calls

@@ -14,10 +14,10 @@ Captures:
 Usage:
     ctx = BinaryContext.load_or_build('/path/to/binary')
 
-    ctx.plt[0x256f0]                    # -> 'conf_ctx_set_cli'
-    ctx.exports['__conf_ctx_from_file'] # -> 0x412f4
-    ctx.callers_of('conf_ctx_set_cli')  # -> [(from_va, from_fn_name_or_hex), ...]
-    ctx.callees_of(0x412f4)             # -> [(to_va, label), ...]
+    ctx.plt[0x3000]                    # -> 'target_func'
+    ctx.exports['init_handler'] # -> 0x4000
+    ctx.callers_of('target_func')  # -> [(from_va, from_fn_name_or_hex), ...]
+    ctx.callees_of(0x4000)             # -> [(to_va, label), ...]
     ctx.strings_near(0x4137f, radius=64)# -> [(va, content), ...]
 
     print(ctx.summary())                # compact session-start context block

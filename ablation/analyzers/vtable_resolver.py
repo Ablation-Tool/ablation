@@ -42,7 +42,7 @@ except ImportError:
     print("[!] pip install lief", file=sys.stderr)
     sys.exit(1)
 
-DEFAULT_SO = "/media/cowboy/research/wechat-re/native-libs/lib/arm64-v8a/libwechatnetwork.so"
+DEFAULT_SO = "/path/to/libwechatnetwork.so"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data structures

@@ -11,7 +11,7 @@ This module decodes those IDs by:
 Usage:
     from ablation.analyzers.flatui_method_decoder import FlatuiMethodDecoder
 
-    dec = FlatuiMethodDecoder.from_path('/tmp/fmg800_libs/libfmgd.so')
+    dec = FlatuiMethodDecoder.from_path('/tmp/firmware_libs/libservice.so')
     print(dec.decode(11))         # -> {'GET', 'POST', 'DELETE', ...}
     print(dec.decode_all())       # full table
     print(dec.fmt_table())        # human-readable
@@ -23,7 +23,7 @@ from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 import capstone
 from capstone.x86_const import X86_OP_MEM, X86_OP_IMM, X86_REG_RIP
 
-# Calibration table from FMG 8.0.0 libfmgd.so static analysis.
+# Calibration table from FMG 8.0.0 libservice.so static analysis.
 #
 # Derived by correlating method IDs with known handler semantics:
 #   method_id=3:  FT_FirmwareImport (/revision/import), FT_FloorMapImport -> POST-only import ops

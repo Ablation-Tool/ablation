@@ -20,13 +20,13 @@ sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
 from modules.version_delta import FuncFeatures, FuncMatcher
 from modules.semantic_search import SemanticSearcher
 
-CAPF_PATH  = '/media/cowboy/research/cisco-lina-re/cucm-15.0.1-extract/cm-capf/usr/local/cm/bin/capf'
+CAPF_PATH  = '/path/to/research/binary'
 SEED_VA    = 0x37630   # capfBldAuthString (PIE: VA == file offset for this binary)
 SEED_NAME  = 'capfBldAuthString'
 DB         = '~/.ablation/func_id.db'
 
-ISE_BASE   = '/media/cowboy/research/ise-re/ise-35/ise35-cisco-ra-extracted/opt/CSCOcpm/appsrv/cisco-ra'
-CUCM_BASE  = '/media/cowboy/research/cisco-lina-re/cucm-15.0.1-extract'
+ISE_BASE   = '/path/to/research/binary'
+CUCM_BASE  = '/path/to/research/binary'
 
 TARGETS = {
     'ISE libciscossm':   f'{ISE_BASE}/deps/ciscossm/lib/libciscossm.so',
