@@ -135,6 +135,16 @@ def cmd_corpus(args):
     print(f"\nCorpus built: {n} functions indexed")
     print(f"DB: {db}")
 
+    if args.sigs:
+        from ablation.analyzers.sig_library import SigLibrary
+        print("\nRunning signature matching on unnamed functions ...")
+        lib = SigLibrary()
+        renamed = lib.auto_name(str(db), dry_run=False)
+        if renamed:
+            print(f"Renamed {renamed} fn_0x* functions via signature matching")
+        else:
+            print("No unnamed functions matched known signatures")
+
 
 def cmd_sweep(args):
     import json as _json
@@ -266,6 +276,7 @@ def main():
     p_corpus.add_argument('--product', default=None)
     p_corpus.add_argument('--version', default=None)
     p_corpus.add_argument('--db', default=str(_DEFAULT_DB), help='func_id DB path')
+    p_corpus.add_argument('--sigs', action='store_true', help='auto-name fn_0x* functions after build')
     p_corpus.set_defaults(func=cmd_corpus)
 
     # sweep
