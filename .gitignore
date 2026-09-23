@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Ablation runtime
+checkpoints/
+reports/
+*.db
+
+# Binary / firmware artifacts
+*.bin
+*.img
+*.qcow2
+*.deb
+*.rpm
+*.extracted/
+*.tar.gz
+*.zip
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Internal
+SESSION.md
+CLAUDE.md

@@ -1,0 +1,173 @@
+[
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-119",
+    "severity": "HIGH",
+    "title": "memcpy length from packet field without bound check",
+    "description": "PACKET_PARSER | calls: memcpy | vuln: memcpy called with length derived from untrusted packet field without upper bound validation, classic stack or heap buffer overflow via oversized field value"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-78",
+    "severity": "CRITICAL",
+    "title": "command injection via user-controlled string in shell call",
+    "description": "CMD_EXEC | calls: system popen | vuln: command string assembled via sprintf from user-controlled input, passed directly to system or popen without sanitization, shell metacharacter injection"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-190",
+    "severity": "HIGH",
+    "title": "integer overflow in allocation size arithmetic",
+    "description": "ALLOC | calls: malloc calloc | vuln: integer overflow in multiplication or addition of size fields before allocation, attacker-controlled count wraps to small allocation, subsequent write overflows heap"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-416",
+    "severity": "HIGH",
+    "title": "use-after-free in connection teardown path",
+    "description": "CONN_HANDLER | calls: free | vuln: pointer freed in error path then accessed in cleanup, use-after-free on connection object, exploitable for heap corruption or info leak"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-134",
+    "severity": "HIGH",
+    "title": "uncontrolled format string from user input",
+    "description": "LOG_FUNC | calls: printf fprintf syslog | vuln: user-controlled string passed as format argument without format specifier, allows stack read or write via format directives"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-125",
+    "severity": "MEDIUM",
+    "title": "out-of-bounds read in TLV field parsing",
+    "description": "TLV_PARSER | calls: memcpy memmove | vuln: TLV length field read from packet without bounds check against remaining buffer length, out-of-bounds read exposes heap or stack memory"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-476",
+    "severity": "HIGH",
+    "title": "null pointer dereference on failed allocation",
+    "description": "ALLOC_HANDLER | calls: malloc strdup | vuln: return value of malloc or strdup not checked before dereference, null pointer dereference on allocation failure causes crash or pre-auth denial of service"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-120",
+    "severity": "HIGH",
+    "title": "strcpy or strcat into fixed-size buffer",
+    "description": "STRUTIL | calls: strcpy strcat | vuln: strcpy or strcat copies user-controlled string into fixed-size stack buffer without length check, stack buffer overflow"
+  },
+  {
+    "vendor": "generic",
+    "product": "vpn-client",
+    "version": null,
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "title": "certificate validation bypass in TLS handshake",
+    "description": "TLS_HANDSHAKE | calls: SSL_verify X509_verify | vuln: certificate chain validation result not checked or overridden, allows MitM via forged certificate"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-200",
+    "severity": "MEDIUM",
+    "title": "stack memory disclosure via partial buffer copy",
+    "description": "RESP_BUILDER | calls: memcpy send | vuln: response buffer not fully initialized before copy, uninitialized stack or heap bytes leaked to remote attacker via partial copy"
+  },
+  {
+    "vendor": "cisco",
+    "product": "anyconnect",
+    "version": "5.1.15.287",
+    "cwe": "CWE-295",
+    "severity": "HIGH",
+    "title": "OpenSSL BN_mod_sqrt infinite loop denial of service",
+    "description": "OPENSSL_TLS | calls: BN_mod_sqrt EC_POINT_oct2point | vuln: malformed EC certificate triggers infinite loop in BN_mod_sqrt during TLS handshake, pre-auth denial of service, CVE-2022-0778"
+  },
+  {
+    "vendor": "cisco",
+    "product": "fmc",
+    "version": "7.x",
+    "cwe": "CWE-89",
+    "severity": "HIGH",
+    "title": "SQL injection in FMC report parameter handling",
+    "description": "REPORT_HANDLER | calls: sqlite3_exec mysql_query | vuln: report filter parameter concatenated into SQL query without parameterization, authenticated SQL injection in management interface"
+  },
+  {
+    "vendor": "generic",
+    "product": "go-firmware",
+    "version": null,
+    "cwe": "CWE-78",
+    "severity": "CRITICAL",
+    "title": "Go exec.Command with user-controlled arguments",
+    "description": "GO_SUBPROCESS | calls: exec.Command os.StartProcess | vuln: user-controlled string passed as argument to exec.Command without sanitization, argument injection or command injection depending on shell flag"
+  },
+  {
+    "vendor": "generic",
+    "product": "go-firmware",
+    "version": null,
+    "cwe": "CWE-400",
+    "severity": "HIGH",
+    "title": "goroutine leak or unbounded channel fill from untrusted input",
+    "description": "GO_GOROUTINE | calls: go_routine chan_send | vuln: attacker-controlled input causes unbounded goroutine spawn or channel block, resource exhaustion denial of service"
+  },
+  {
+    "vendor": "generic",
+    "product": "web-service",
+    "version": null,
+    "cwe": "CWE-78",
+    "severity": "CRITICAL",
+    "title": "PHP exec call with user-controlled FQDN or parameter",
+    "description": "PHP_EXEC | calls: exec shell_exec system | vuln: user-controlled parameter (FQDN, file path, regex) passed to PHP exec or shell_exec without sanitization, pre-auth or post-auth command injection"
+  },
+  {
+    "vendor": "generic",
+    "product": "web-service",
+    "version": null,
+    "cwe": "CWE-434",
+    "severity": "HIGH",
+    "title": "unrestricted file upload via FCTDas with PE signature bypass",
+    "description": "UPLOAD_WORKER | calls: osslsigncode file_put_contents | vuln: PE file uploaded without authenticode signature verification, signature check absent or bypassable, allows unsigned binary execution on managed endpoints"
+  },
+  {
+    "vendor": "generic",
+    "product": "web-server",
+    "version": null,
+    "cwe": "CWE-22",
+    "severity": "HIGH",
+    "title": "path traversal in file read or write operation",
+    "description": "FILE_HANDLER | calls: fopen open realpath | vuln: user-supplied filename not canonicalized before open, path traversal via ../ sequences reads or writes files outside intended directory"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-362",
+    "severity": "MEDIUM",
+    "title": "TOCTOU race in file permission check before open",
+    "description": "FILE_ACCESS | calls: access stat open | vuln: permission check via access or stat followed by open on same path, race condition between check and use allows privilege escalation"
+  },
+  {
+    "vendor": "generic",
+    "product": "firmware",
+    "version": null,
+    "cwe": "CWE-287",
+    "severity": "CRITICAL",
+    "title": "authentication bypass via predictable session token",
+    "description": "AUTH_HANDLER | calls: rand srand time | vuln: session token or nonce generated with predictable seed from time or pid, allows token prediction and authentication bypass"
+  }
+]
