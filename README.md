@@ -37,20 +37,19 @@ pip install ablation[llm]
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.corpus_builder import CorpusBuilder
-from ablation.analyzers.xref_graph import XRefGraph
+from ablation.analyzers.semantic_search import SemanticSearcher
 
 # Load binary -- 0.5s first run, 110ms from cache
 ctx = BinaryContext.load_or_build('/path/to/firmware.so')
 print(ctx.summary())
 
-# Build behavioral corpus and sweep for vulnerability patterns
+# Build behavioral corpus (stored in ~/.ablation/func_id.db)
 cb = CorpusBuilder()
 cb.build('/path/to/firmware.so', product='my-target', version='1.0')
 
-xg = XRefGraph.from_path('/path/to/firmware.so').build()
-searcher = SemanticSearcher('/path/to/firmware.so', xg=xg)
+# Query in plain English
+searcher = SemanticSearcher('~/.ablation/func_id.db')
 searcher.build_corpus()
 
 results = searcher.query(
@@ -58,7 +57,16 @@ results = searcher.query(
     top_k=10
 )
 for r in results:
-    print(f"  {ctx.name(r.va):<50s}  score={r.score:.3f}")
+    print(f"  0x{r.va:x}  {r.name:<50s}  score={r.score:.3f}")
+```
+
+Or from the CLI:
+
+```bash
+ablation corpus /path/to/firmware.so --product my-target --version 1.0
+ablation search /path/to/firmware.so "TLV parser without length check" --top-k 10
+ablation sweep  /path/to/firmware.so
+ablation cfg    /path/to/firmware.so 0xfa00 --insns
 ```
 
 35 seconds for 19,000 functions on CPU. No pre-built database.
