@@ -21,7 +21,7 @@ import sys, os, struct, subprocess, time, gc
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
 import capstone
 
-_BASE = '/media/cowboy/research/juniper-firmware/extracted'
+_BASE = '/path/to/research/binary'
 
 VERSIONS = [
     ('10.4R7.5',     f'{_BASE}/srx-10.4/junos-srxsme-10.4R7.5-domestic'),
