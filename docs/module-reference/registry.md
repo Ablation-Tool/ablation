@@ -22,8 +22,8 @@ Key structure:
 ```json
 {
   "fdfaceccdc740d82": {
-    "0x17b660": {
-      "name": "ips_diameter_parse_message",
+    "0x1000": {
+      "name": "proto_parse_message",
       "source": "confirmed",
       "ts": "2026-09-23T09:00:00"
     }
@@ -50,16 +50,16 @@ from ablation.analyzers.binary_context import BinaryContext
 ctx = BinaryContext.load_or_build('/path/to/binary.so')
 
 # Register a name
-ctx.set_name(0x17b660, 'ips_diameter_parse_message', source='confirmed')
+ctx.set_name(0x1000, 'proto_parse_message', source='confirmed')
 
 # Look up a name
-ctx.name(0x17b660)       # "ips_diameter_parse_message"
+ctx.name(0x1000)       # "proto_parse_message"
 
 # All names for this binary
 ctx.names_table()        # formatted table
 ctx.names_map()          # {va: name} dict
 ctx.names_count()        # int
-ctx.delete_name(0x17b660)
+ctx.delete_name(0x1000)
 ```
 
 `set_name()` writes to disk immediately. Thread-safe via file locking.
@@ -71,21 +71,20 @@ from ablation.analyzers.name_registry import NameRegistry
 
 reg = NameRegistry()  # loads from ~/.ablation/function_names.json
 
-reg.set_name(binary_sha256, 0x17b660, 'ips_diameter_parse_message', source='confirmed')
-reg.get_name(binary_sha256, 0x17b660)   # "ips_diameter_parse_message"
+reg.set_name(binary_sha256, 0x1000, 'proto_parse_message', source='confirmed')
+reg.get_name(binary_sha256, 0x1000)   # "proto_parse_message"
 reg.all_names(binary_sha256)            # [(va, name, source), ...] sorted by VA
 reg.names_map(binary_sha256)            # {va: name}
 reg.count(binary_sha256)                # int
-reg.delete_name(binary_sha256, 0x17b660)
+reg.delete_name(binary_sha256, 0x1000)
 reg.save()
 ```
 
 ### Cross-binary name sharing
 
-Names are keyed by SHA256 of the specific binary. A name for `libips.so.new` from
-FortiOS 8.0.0 does not apply to `libips.so.new` from FortiOS 8.0.1 -- the SHA256 differs.
-Use VersionDelta to find the function's new VA in the updated binary, then register the name
-under the new SHA256.
+Names are keyed by SHA256 of the specific binary. A name for `libservice.so` from firmware version 1.0 does not apply to the same filename from
+version 1.1 -- the SHA256 differs. Use VersionDelta to find the function's new VA in the
+updated binary, then register the name under the new SHA256.
 
 ---
 
@@ -93,9 +92,9 @@ under the new SHA256.
 
 **File:** `ablation/analyzers/finding_registry.py`
 
-Cross-target confirmed finding store backed by SQLite. A confirmed Cisco LINA overflow
-registers as a BERT seed that surfaces as a hit when sweeping FortiGate, even when the
-function descriptions use different protocol terminology.
+Cross-target confirmed finding store backed by SQLite. A confirmed finding in one vendor's
+binary registers as a BERT seed that surfaces as a hit when sweeping other vendors' binaries,
+even when the function descriptions use different protocol terminology.
 
 ### Storage
 
@@ -110,16 +109,16 @@ from ablation.analyzers.finding_registry import FindingRegistry
 reg = FindingRegistry()
 
 reg.register(
-    vendor='fortinet',
-    product='fortigate-7000f',
-    version='8.0.0',
-    binary='libips.so.new',
-    title='Diameter AVP zero-length infinite loop',
+    vendor='my-vendor',
+    product='my-product',
+    version='1.0',
+    binary='libservice.so',
+    title='TLV zero-length infinite loop',
     description='PROTOCOL_PARSER | role=tlv_advance | calls: memcpy | '
-                'vuln: AVP length=0 causes infinite pointer advance loop',
+                'vuln: zero-length field causes infinite pointer advance loop',
     cwe_class='CWE-835',
     severity='HIGH',
-    func_addr=0x17b660,
+    func_addr=0x1000,
     embedding=func_embedding_vector,   # optional: numpy float32 array
 )
 ```
@@ -151,6 +150,6 @@ ablation-commit
 ### How it seeds future sweeps
 
 When findings carry BERT embeddings, SemanticSearcher uses them as additional query vectors
-during a sweep. This pulls in cross-vendor patterns that pure-text queries miss. A TLV loop
-vulnerability confirmed in Cisco ASA surfaces as a seed hit when sweeping FortiGate even when
-the function description uses different protocol-specific terminology.
+during a sweep. This pulls in cross-vendor patterns that pure-text queries miss. A TLV loop vulnerability confirmed in one vendor's binary surfaces as a seed hit when sweeping
+another vendor's binary, even when the function description uses different protocol-specific
+terminology.

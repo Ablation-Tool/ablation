@@ -9,8 +9,8 @@ applied. Find the new VA. Port the named function overlay to the updated binary.
 
 - A vendor releases a security advisory. You need to find the patched function and verify the
   fix is real, not cosmetic.
-- You have confirmed findings in FortiOS 8.0.0 and want to check whether they were silently
-  fixed in 8.0.1 without a CVE assignment.
+- You have confirmed findings in firmware v1.0 and want to check whether they were silently
+  fixed in v1.1 without a CVE assignment.
 - You are building a delta report for a vendor advisory: which exact instructions changed
   between the vulnerable and fixed version.
 
@@ -20,13 +20,13 @@ applied. Find the new VA. Port the named function overlay to the updated binary.
 
 Start from your confirmed finding. You need two things:
 
-- The function VA in v1: e.g., `0x17b660` (`ips_diameter_parse_message` in FortiOS 8.0.0)
-- The binary path for v1: `/path/to/libips.so.new.v8_0_0`
+- The function VA in v1: e.g., `0x1000` (your named function in the v1 binary)
+- The binary path for v1: `/path/to/firmware_v1.so`
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
 
-ctx_v1 = BinaryContext.load_or_build('/path/to/libips.so.new.v8_0_0')
+ctx_v1 = BinaryContext.load_or_build('/path/to/firmware_v1.so')
 print(ctx_v1.names_table())   # confirm the function is named in the overlay
 ```
 
@@ -38,11 +38,11 @@ print(ctx_v1.names_table())   # confirm the function is named in the overlay
 from ablation.analyzers.version_delta import VersionDelta
 
 vd = VersionDelta(
-    binary_v1='/path/to/libips.so.new.v8_0_0',
-    binary_v2='/path/to/libips.so.new.v8_0_1',
+    binary_v1='/path/to/firmware_v1.so',
+    binary_v2='/path/to/firmware_v2.so',
 )
 
-result = vd.track(func_va_v1=0x17b660)
+result = vd.track(func_va_v1=0x1000)
 
 print(f"Homolog VA in v2: 0x{result.va_v2:x}")
 print(f"Confidence: {result.confidence:.2f}")
@@ -73,22 +73,22 @@ so the logic change is visible without address noise:
   movzx  eax, word ptr [rcx + 0x4]
   bswap  eax
   shr    eax, 0x10
-+ cmp    eax, 0x8          # PATCH: minimum AVP header size check added
++ cmp    eax, 0x8          # PATCH: minimum header size check added
 + jb     <error_path>      # PATCH: jump to error if too small
   add    rcx, rax
   cmp    rcx, rbx
   jb     <loop_top>
 ```
 
-This diff is the disclosure-quality evidence that the patch addressed the specific root cause.
+This diff is disclosure-quality evidence that the patch addressed the specific root cause.
 
 ---
 
 ## Step 4: Port the name overlay to v2
 
 ```python
-ctx_v2 = BinaryContext.load_or_build('/path/to/libips.so.new.v8_0_1')
-ctx_v2.set_name(result.va_v2, 'ips_diameter_parse_message', source='confirmed')
+ctx_v2 = BinaryContext.load_or_build('/path/to/firmware_v2.so')
+ctx_v2.set_name(result.va_v2, 'proto_parse_message', source='confirmed')
 print(ctx_v2.names_table())
 ```
 
@@ -102,8 +102,8 @@ logic -- which can introduce new bugs adjacent to the fix.
 
 ```python
 vd_23 = VersionDelta(
-    binary_v1='/path/to/libips.so.new.v8_0_1',
-    binary_v2='/path/to/libips.so.new.v8_0_2',
+    binary_v1='/path/to/firmware_v2.so',
+    binary_v2='/path/to/firmware_v3.so',
 )
 result_23 = vd_23.track(func_va_v1=result.va_v2)
 print(result_23.patch_diff)   # empty if no further changes
@@ -139,11 +139,11 @@ versions), use StructuralSim directly:
 from ablation.analyzers.structural_sim import StructuralSim
 
 sim = StructuralSim(
-    binary_a='/path/to/libips.so.new',     # FortiGate
-    binary_b='/path/to/lina',              # Cisco ASA
+    binary_a='/path/to/vendor_a.so',
+    binary_b='/path/to/vendor_b.so',
 )
 
-score = sim.compare(func_va_a=0x17b660, func_va_b=0x212a669)
+score = sim.compare(func_va_a=0x1000, func_va_b=0x2000)
 print(f"Composite similarity: {score.composite:.3f}")
 print(f"  opcode_hist  = {score.opcode_hist:.3f}")
 print(f"  imm_jaccard  = {score.imm_jaccard:.3f}")
