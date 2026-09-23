@@ -1,0 +1,326 @@
+{
+  "_comment": "Ablation function signature library v1. Behavioral descriptions used for semantic matching against stripped binaries.",
+  "version": "1.0",
+  "signatures": [
+    {
+      "name": "memcpy",
+      "aliases": ["_memcpy", "__memcpy", "memcpy_s", "bcopy"],
+      "category": "memory",
+      "description": "copies a fixed number of bytes from a source address to a destination address with no bounds checking on the destination buffer",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-120"
+    },
+    {
+      "name": "memmove",
+      "aliases": ["_memmove", "__memmove"],
+      "category": "memory",
+      "description": "copies bytes between potentially overlapping memory regions; handles overlap by copying through a temporary buffer",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "memset",
+      "aliases": ["_memset", "__memset", "bzero"],
+      "category": "memory",
+      "description": "fills a block of memory with a single repeated byte value; commonly used to zero-initialize buffers before use",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "memcmp",
+      "aliases": ["_memcmp", "__memcmp", "bcmp"],
+      "category": "memory",
+      "description": "compares two memory regions byte-by-byte and returns zero if equal; timing is proportional to common prefix length",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-208"
+    },
+    {
+      "name": "strlen",
+      "aliases": ["_strlen", "__strlen"],
+      "category": "string",
+      "description": "iterates through a null-terminated string counting bytes until it finds the zero terminator; no maximum length bound",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-126"
+    },
+    {
+      "name": "strcpy",
+      "aliases": ["_strcpy", "__strcpy"],
+      "category": "string",
+      "description": "copies a null-terminated string to a destination buffer without checking whether the destination is large enough",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-120"
+    },
+    {
+      "name": "strncpy",
+      "aliases": ["_strncpy", "strlcpy"],
+      "category": "string",
+      "description": "copies at most n bytes from source string to destination; pads with null bytes if source is shorter than n",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "strcat",
+      "aliases": ["_strcat", "__strcat"],
+      "category": "string",
+      "description": "appends a null-terminated string to another by finding the null terminator and copying; no bounds check on destination",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-120"
+    },
+    {
+      "name": "strcmp",
+      "aliases": ["_strcmp", "__strcmp"],
+      "category": "string",
+      "description": "compares two null-terminated strings character by character; returns zero if identical, negative or positive otherwise",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "strncmp",
+      "aliases": ["_strncmp", "__strncmp"],
+      "category": "string",
+      "description": "compares up to n characters of two null-terminated strings; returns zero if the first n bytes are identical",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "sprintf",
+      "aliases": ["_sprintf", "__sprintf"],
+      "category": "string",
+      "description": "formats a string with printf-style format specifiers and writes the result to a caller-supplied buffer with no length limit",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-120"
+    },
+    {
+      "name": "snprintf",
+      "aliases": ["_snprintf", "__snprintf"],
+      "category": "string",
+      "description": "formats a string with printf-style format specifiers and writes at most n bytes including the null terminator to a caller-supplied buffer",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "sscanf",
+      "aliases": ["_sscanf", "__sscanf"],
+      "category": "string",
+      "description": "parses formatted input from a string according to a format string and writes converted values into caller-supplied pointers",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-120"
+    },
+    {
+      "name": "strtol",
+      "aliases": ["_strtol", "strtoul", "strtoll", "strtoull", "atoi", "atol"],
+      "category": "string",
+      "description": "converts a string representation of a number to an integer; sets an end pointer to the first unconverted character",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "malloc",
+      "aliases": ["_malloc", "__malloc", "xmalloc", "safe_malloc"],
+      "category": "memory-alloc",
+      "description": "allocates a requested number of bytes from the heap and returns a pointer; returns NULL on allocation failure",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "calloc",
+      "aliases": ["_calloc", "__calloc", "xcalloc"],
+      "category": "memory-alloc",
+      "description": "allocates memory for an array of elements and initializes all bytes to zero; multiplies count by size",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-190"
+    },
+    {
+      "name": "realloc",
+      "aliases": ["_realloc", "__realloc", "xrealloc"],
+      "category": "memory-alloc",
+      "description": "resizes a previously allocated heap block; copies existing contents to the new block if relocation is needed",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-190"
+    },
+    {
+      "name": "free",
+      "aliases": ["_free", "__free", "xfree", "sfree"],
+      "category": "memory-alloc",
+      "description": "releases a heap block back to the allocator; calling with an already-freed pointer causes undefined behavior",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-415"
+    },
+    {
+      "name": "recv",
+      "aliases": ["_recv", "recvfrom", "read"],
+      "category": "network",
+      "description": "reads bytes from a network socket into a caller-supplied buffer; returns the number of bytes actually received",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-20"
+    },
+    {
+      "name": "send",
+      "aliases": ["_send", "sendto", "write"],
+      "category": "network",
+      "description": "writes bytes from a buffer to a network socket; may block if the socket send buffer is full",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "accept",
+      "aliases": ["_accept", "accept4"],
+      "category": "network",
+      "description": "accepts an incoming TCP connection on a listening socket and returns a new connected socket file descriptor",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "connect",
+      "aliases": ["_connect"],
+      "category": "network",
+      "description": "initiates a TCP connection to a remote address; blocks until connected or until the connection times out",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "getenv",
+      "aliases": ["_getenv"],
+      "category": "process",
+      "description": "looks up the value of an environment variable by name and returns a pointer into the process environment block",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-807"
+    },
+    {
+      "name": "system",
+      "aliases": ["_system", "popen"],
+      "category": "process",
+      "description": "executes a shell command string by passing it to /bin/sh; command injection is possible if any part comes from untrusted input",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-78"
+    },
+    {
+      "name": "execve",
+      "aliases": ["_execve", "execvp", "execl", "execlp"],
+      "category": "process",
+      "description": "replaces the current process image with a new program; the argv array and environment are passed to the new program",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-78"
+    },
+    {
+      "name": "fopen",
+      "aliases": ["_fopen", "open", "creat"],
+      "category": "file",
+      "description": "opens a file at a given path with a specified mode string and returns a FILE handle or file descriptor",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-22"
+    },
+    {
+      "name": "fread",
+      "aliases": ["_fread", "read"],
+      "category": "file",
+      "description": "reads a specified number of fixed-size records from a file into a caller-supplied buffer",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "fwrite",
+      "aliases": ["_fwrite", "write"],
+      "category": "file",
+      "description": "writes a specified number of fixed-size records from a buffer to a file",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "SSL_read",
+      "aliases": ["ssl_read", "TLS_read"],
+      "category": "tls",
+      "description": "reads decrypted application data from a TLS session into a caller-supplied buffer; handles TLS record reassembly internally",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "SSL_write",
+      "aliases": ["ssl_write", "TLS_write"],
+      "category": "tls",
+      "description": "encrypts application data and writes it to the underlying socket as one or more TLS records",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "SSL_connect",
+      "aliases": ["ssl_connect", "SSL_do_handshake"],
+      "category": "tls",
+      "description": "performs the TLS client handshake; negotiates cipher suite, verifies server certificate, and establishes session keys",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-295"
+    },
+    {
+      "name": "EVP_EncryptUpdate",
+      "aliases": ["AES_encrypt", "AES_cbc_encrypt"],
+      "category": "crypto",
+      "description": "encrypts a buffer using a symmetric cipher in a streaming context; updates the internal cipher state for multi-block inputs",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "SHA256_Update",
+      "aliases": ["SHA1_Update", "MD5_Update", "HMAC_Update"],
+      "category": "crypto",
+      "description": "feeds a chunk of data into an incremental hash computation; accumulates input before the final digest is computed",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "RAND_bytes",
+      "aliases": ["rand", "random", "getrandom", "arc4random"],
+      "category": "crypto",
+      "description": "fills a buffer with cryptographically strong random bytes from the platform entropy source",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "printf",
+      "aliases": ["_printf", "fprintf", "dprintf", "vprintf"],
+      "category": "io",
+      "description": "formats and prints output according to a format string; unsafe if the format string originates from untrusted input",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-134"
+    },
+    {
+      "name": "json_parse",
+      "aliases": ["cJSON_Parse", "json_tokener_parse", "json_loads"],
+      "category": "parser",
+      "description": "parses a JSON string into an in-memory tree of typed nodes; allocates memory proportional to input depth",
+      "callee_patterns": ["malloc", "realloc", "strcpy", "strncpy"],
+      "cwe_risk": null
+    },
+    {
+      "name": "xml_parse",
+      "aliases": ["xmlReadMemory", "expat_parse", "tinyxml_parse"],
+      "category": "parser",
+      "description": "parses an XML document byte stream; dispatches callbacks or builds a DOM tree for each element encountered",
+      "callee_patterns": ["malloc", "realloc", "strlen"],
+      "cwe_risk": "CWE-611"
+    },
+    {
+      "name": "base64_decode",
+      "aliases": ["base64_decode", "EVP_DecodeBlock", "b64_decode"],
+      "category": "encoding",
+      "description": "decodes a base64-encoded string into raw bytes; output buffer must be at least 3/4 the input length",
+      "callee_patterns": [],
+      "cwe_risk": null
+    },
+    {
+      "name": "url_decode",
+      "aliases": ["urldecode", "percent_decode", "http_decode_url"],
+      "category": "encoding",
+      "description": "decodes percent-encoded URL sequences by replacing %XX escape codes with the corresponding byte values",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-116"
+    },
+    {
+      "name": "pthread_mutex_lock",
+      "aliases": ["mutex_lock", "spin_lock", "sem_wait"],
+      "category": "sync",
+      "description": "acquires an exclusive mutex lock; blocks the calling thread until the lock is available",
+      "callee_patterns": [],
+      "cwe_risk": "CWE-833"
+    }
+  ]
+}
