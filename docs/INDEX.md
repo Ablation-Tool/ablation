@@ -45,8 +45,6 @@ Vendor-specific RE knowledge: binary layout, known structures, confirmed pattern
 
 | Document | Vendors |
 |---|---|
-| [Fortinet](targets/fortinet.md) | FortiGate, FortiManager -- IPS engine, flatui, FortiOS binary layout |
-| [Cisco](targets/cisco.md) | ASA, FTD, ISE, CUCM, AnyConnect, IOS, NX-OS |
 | [Axis](targets/axis.md) | AXIS OS, camera firmware, ACAP applications |
 | [Tencent](targets/tencent.md) | TencentOS, WeChat, Qwen3 |
 | [MikroTik](targets/routeros.md) | RouterOS |

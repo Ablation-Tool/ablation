@@ -22,13 +22,13 @@ No symbols. No source. No setup.
 ## Install
 
 ```bash
-pip install ablation
+pip install git+https://github.com/Ablation-Tool/ablation
 ```
 
 Optional LLM features (automated function naming via Claude):
 
 ```bash
-pip install ablation[llm]
+pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ```
 
 ---

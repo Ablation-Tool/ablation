@@ -16,7 +16,7 @@ pip install ablation
 From source:
 
 ```bash
-git clone https://github.com/francis-rancid/ablation
+git clone https://github.com/Ablation-Tool/ablation
 cd ablation
 pip install -e .
 ```
@@ -49,7 +49,7 @@ same binary name rebuilds automatically.
 Example output:
 
 ```
-BinaryContext: libips.so.new
+BinaryContext: libservice.so
   sha256     : fdfaceccdc740d82...
   base_va    : 0x0
   func_starts: 19024
@@ -66,25 +66,20 @@ BinaryContext: libips.so.new
 ## Step 2: Run a semantic sweep
 
 The sweep is the core workflow. It encodes all functions as BERT behavioral fingerprints and
-queries by vulnerability description in plain English. Use `fortinet_sweep.py` as a template
-(ships with Ablation), or build your own:
+queries by vulnerability description in plain English. Use `sweeps/base_sweep.py` as a
+template, or build your own:
 
 ```python
-from ablation.analyzers.binary_context import BinaryContext
 from ablation.analyzers.corpus_builder import CorpusBuilder
-from ablation.analyzers.xref_graph import XRefGraph
 from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.pattern_library import PatternLibrary
 
-ctx = BinaryContext.load_or_build('/path/to/binary.so')
-
-# Build behavioral description corpus (func_id.db)
+# Build behavioral description corpus into func_id.db
 cb = CorpusBuilder()
 cb.build('/path/to/binary.so', product='my-target', version='1.0')
 
 # Build BERT embeddings (~35s for 19k functions on CPU)
-xg = XRefGraph.from_path('/path/to/binary.so').build()
-searcher = SemanticSearcher('/path/to/binary.so', xg=xg)
+searcher = SemanticSearcher('~/.ablation/func_id.db')
 searcher.build_corpus()
 
 # Query by vulnerability description
@@ -94,7 +89,7 @@ results = searcher.query(
 )
 
 for r in results:
-    print(f"  {ctx.name(r.va):<50s}  score={r.score:.3f}")
+    print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
 **Expected run time:** 35 to 60 seconds for 19,000 functions on CPU. Subsequent queries
@@ -107,7 +102,7 @@ against the same corpus run in under one second -- embeddings are cached.
 For each high-scoring candidate, get its context:
 
 ```python
-va = 0x17b660  # candidate VA from sweep results
+va = 0x1000  # candidate VA from sweep results
 
 # What does this function call?
 print("callees:", ctx.callees_of(va))
@@ -131,10 +126,10 @@ When you identify a function's purpose, register its name. Names persist across 
 appear in all subsequent analysis output:
 
 ```python
-ctx.set_name(0x17b660, 'ips_diameter_parse_message', source='confirmed')
+ctx.set_name(0x1000, 'proto_parse_message', source='confirmed')
 
 # Names appear everywhere:
-print(ctx.callees_of(0x17b660))   # labels instead of hex addresses
+print(ctx.callees_of(0x1000))   # labels instead of hex addresses
 print(ctx.names_table())           # all named functions in this binary
 ```
 
@@ -155,7 +150,7 @@ pl = PatternLibrary()
 pl.record_hit(
     query="TLV pointer advance loop with no minimum length check",
     binary_sha="fdfaceccdc740d82",
-    va=0x17b660,
+    va=0x1000,
     confirmed=True,
     vuln_class="infinite_loop",
     cvss=7.5,
@@ -192,5 +187,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 - [Vulnerability hunting workflow](workflows/vuln-hunting.md) -- full loop from sweep to
   disclosure-ready finding
 - [Module reference](module-reference/) -- all 50+ analyzers with parameters and examples
-- [Fortinet target notes](targets/fortinet.md) -- FortiGate and FortiManager binary structure
-  and confirmed finding patterns
+- [CONTRIBUTING.md](../CONTRIBUTING.md) -- how to add patterns, sweeps, and analyzer modules
