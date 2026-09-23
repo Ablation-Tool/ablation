@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ablation"
@@ -25,15 +25,14 @@ full = [
 ]
 
 [project.scripts]
-ablation = "main:main"
+ablation = "ablation.cli:main"
 ablation-sweep = "sweeps.base_sweep:main"
 ablation-search = "ablation.analyzers.finding_registry:_cli"
-ablation-commit = "ablation.analyzers.finding_registry:_cli"
 ablation-taint = "ablation.analyzers.taint_tracker_x86:_cli"
 ablation-cfg = "ablation.analyzers.cfg_builder:_cli"
 
 [tool.setuptools.packages.find]
-include = ["ablation*", "sweeps*", "targets*", "core*", "modules*"]
+include = ["ablation*", "sweeps*", "modules*"]
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
