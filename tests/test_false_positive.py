@@ -20,7 +20,7 @@ from modules.version_delta import (
 )
 from modules.semantic_search import SemanticSearcher
 
-LINA_914  = '/home/cowboy/VDT/intel/cisco-downloads/asa9-14-extracted/lina'
+LINA_914  = '/path/to/binary'
 SEED_VA   = 0xc563d0
 SEED_NAME = 'attr_list_add_impl'
 DB        = '~/.ablation/func_id.db'
@@ -228,7 +228,7 @@ def main():
         results[name] = match
 
     # ── lina 9.22 baseline with enriched seed ────────────────────────────────
-    LINA_922 = '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'
+    LINA_922 = '/path/to/binary'
     print(f'\nComputing enriched baseline against lina 9.22...')
     feats_922 = prologue_scan(LINA_922)
     match_922 = matcher.find_homolog(seed, feats_922)

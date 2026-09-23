@@ -11,16 +11,16 @@ microseconds, BERT scores the shortlist.
 
 Usage:
     idx = SAXIndex(word_size=8, alphabet_size=8)
-    idx.add_binary('/firmware/lib/libcdb.so', ctx=ctx)
-    idx.add_binary('/firmware/lib/libdmapi.so')
+    idx.add_binary('/firmware/lib/libdata.so', ctx=ctx)
+    idx.add_binary('/firmware/lib/libapi.so')
 
     # Query by sequence:
     enc = OpSeqEncoder('/path/to/binary')
-    seq = enc.encode_va(0x15a78a, 0x15a8ef)
+    seq = enc.encode_va(0x1000, 0x1200)
     results = idx.query_seq(seq, top_k=10)
 
     # Query by function VA:
-    results = idx.query_va('/path/to/binary', 0x15a78a, top_k=10)
+    results = idx.query_va('/path/to/binary', 0x1000, top_k=10)
 
     # Save / load index:
     idx.save('/path/to/index.pkl')

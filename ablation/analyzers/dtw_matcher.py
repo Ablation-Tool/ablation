@@ -14,7 +14,7 @@ Usage:
         v1_path='/firmware/v1/libfoo.so',
         v2_path='/firmware/v2/libfoo.so',
     )
-    matches = matcher.find_homologs(va_v1=0x412f4, ctx_v1=ctx1, top_k=5)
+    matches = matcher.find_homologs(va_v1=0x4000, ctx_v1=ctx1, top_k=5)
     for m in matches:
         print(m)
 

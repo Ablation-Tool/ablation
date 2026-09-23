@@ -218,7 +218,7 @@ class OpSeqEncoder:
 
     Usage:
         enc = OpSeqEncoder('/path/to/binary')
-        seq = enc.encode_va(func_va=0x15a78a, end_va=0x15a8ef)
+        seq = enc.encode_va(func_va=0x1000, end_va=0x1200)
         # -> [1, 1, 5, 2, 6, 1, 5, ...]  (DATA_TRANSFER, ..., COMPARISON, CONDITIONAL, ...)
     """
 

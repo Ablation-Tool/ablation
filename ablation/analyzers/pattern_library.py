@@ -16,7 +16,7 @@ Usage:
         print(f"{pattern}: {len(hits)} hits")
 
     # Record a confirmed finding:
-    pl.record_hit('strcpy with user-controlled src', binary='libcdb.so', va=0x12ebc6, confirmed=True)
+    pl.record_hit('strcpy with user-controlled src', binary='libdata.so', va=0x5000, confirmed=True)
     pl.save()
 
     # Add new pattern:
