@@ -1,21 +1,17 @@
-<div align="center">
+<p align="center"><img src="assets/ablation-1b-riveted-plate-header-1280.png" width="640" alt="ABLATION"></p>
 
-<h1>Ablation</h1>
+<p align="center"><strong>Semantic firmware analysis for vulnerability researchers.</strong></p>
 
-<p><strong>Semantic firmware analysis for vulnerability researchers.</strong></p>
-
-<p>
+<p align="center">
 Find vulnerable functions in stripped binary firmware in seconds, not hours.<br>
 No symbols. No source. No setup.
 </p>
 
-<p>
+<p align="center">
 <a href="docs/INDEX.md">Documentation</a> &nbsp;|&nbsp;
 <a href="PITCH.md">What it does</a> &nbsp;|&nbsp;
 <a href="docs/getting-started.md">Quick Start</a>
 </p>
-
-</div>
 
 ---
 
