@@ -36,15 +36,15 @@ from ablation.analyzers.func_id_db import FuncDB
 
 db = FuncDB.open('~/.ablation/func_id.db')
 reg = ToolRegistry('/path/to/binary.so', func_db=db)
-loop = AgentLoop(reg, func_db=db, product='libips', version='8.0.0')
+loop = AgentLoop(reg, func_db=db, product='libservice', version='1.0')
 
 # Name a function automatically
-result = loop.run(0x17b660, task='name_function')
-print(result.name)        # "ips_diameter_parse_message"
+result = loop.run(0x1000, task='name_function')
+print(result.name)        # "proto_parse_message"
 print(result.confidence)  # 0.92
 
 # Generate a vulnerability hypothesis
-result = loop.run(0x17b660, task='vuln_hypothesis')
+result = loop.run(0x1000, task='vuln_hypothesis')
 print(result.hypothesis)
 # "Function advances AVP pointer by wire-supplied length without minimum size check.
 #  If length=0, pointer never advances, infinite loop results."
@@ -80,8 +80,8 @@ RAGRetriever fetches the top-K most similar confirmed findings from `func_id.db`
 embedding cosine similarity. These are prepended to Claude's context window:
 
 ```
-[Prior finding: Cisco ASA lina, radius_class_attr_add, confirmed overflow]
-[Prior finding: FortiGate 7000F, ips_dcerpc_decode, confirmed infinite loop]
+[Prior finding: vendor-a, service_parse_record, confirmed buffer overflow]
+[Prior finding: vendor-b, proto_decode_frame, confirmed infinite loop]
 ```
 
 This grounding improves name accuracy on protocol parsers where function behavior (TLV

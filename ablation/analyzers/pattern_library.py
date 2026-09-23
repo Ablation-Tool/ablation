@@ -88,6 +88,82 @@ _DEFAULT_PATTERNS = [
         "query": "function registers CLI tree node with exec callback that receives argv directly",
         "tag": "cmd-exec",
     },
+    # Integer overflow / truncation
+    {
+        "query": "arithmetic on user-controlled size or count value used as allocation argument, possible integer overflow or wrap",
+        "tag": "integer-overflow",
+    },
+    {
+        "query": "multiplication of user-supplied count and element-size passed to malloc without overflow check",
+        "tag": "integer-overflow",
+    },
+    # Use-after-free / double-free
+    {
+        "query": "pointer freed inside loop or error path then dereferenced or freed again in cleanup",
+        "tag": "use-after-free",
+    },
+    {
+        "query": "object reference passed to free then referenced again in subsequent callback or signal handler",
+        "tag": "use-after-free",
+    },
+    {
+        "query": "heap pointer freed twice on error unwind with no NULL assignment between frees",
+        "tag": "double-free",
+    },
+    # Format string
+    {
+        "query": "printf or syslog called with user-controlled argument directly in format position",
+        "tag": "format-string",
+    },
+    {
+        "query": "log or debug function constructs format string from user-supplied message field",
+        "tag": "format-string",
+    },
+    # Race conditions
+    {
+        "query": "shared counter or flag read and written from multiple threads without mutex protection",
+        "tag": "race-condition",
+    },
+    {
+        "query": "check-then-use pattern on file or socket descriptor across a non-atomic operation",
+        "tag": "race-condition",
+    },
+    # DoS / resource exhaustion
+    {
+        "query": "loop iterates until packet field reaches zero, no iteration bound, possible infinite loop",
+        "tag": "dos",
+    },
+    {
+        "query": "memory allocation inside parsing loop driven by attacker-controlled count field, no upper bound",
+        "tag": "dos",
+    },
+    # Info leak
+    {
+        "query": "stack buffer or heap object returned in response without zeroing uninitialized bytes",
+        "tag": "info-leak",
+    },
+    {
+        "query": "error response includes pointer value, kernel address, or internal struct field",
+        "tag": "info-leak",
+    },
+    # Auth bypass
+    {
+        "query": "authentication check returns success when underlying function returns error code",
+        "tag": "auth-bypass",
+    },
+    {
+        "query": "session token or credential comparison short-circuits on empty or null input",
+        "tag": "auth-bypass",
+    },
+    # Crypto misuse
+    {
+        "query": "IV or nonce reused across encryption calls, or nonce derived from predictable counter",
+        "tag": "crypto",
+    },
+    {
+        "query": "SSL or TLS certificate verification disabled or return value from verify callback ignored",
+        "tag": "crypto",
+    },
 ]
 
 
