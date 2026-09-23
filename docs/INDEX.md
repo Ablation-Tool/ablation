@@ -32,10 +32,21 @@ Step-by-step guides for common research tasks.
 |---|---|
 | [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, PathSolver |
 | [Semantic Search](module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
+| [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
+| [Export Formats](module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
 | [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry |
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper |
 | [Structural](module-reference/structural.md) | VtableResolver, VersionDelta, StructuralSim |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
+
+---
+
+## Integrations
+
+| Document | |
+|---|---|
+| [Claude Code](integrations/claude-code.md) | Using Ablation inside a Claude Code session |
+| [Binary Ninja](integrations/binja.md) | Plugin installation and commands |
 
 ---
 

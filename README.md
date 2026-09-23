@@ -92,13 +92,75 @@ Three analysis tracks:
 
 ## Real results
 
-| Finding | Target | CVSS |
-|---|---|---|
-| Diameter AVP zero-length infinite loop | FortiGate 7000F (FortiOS 8.0.0) | 7.5 |
-| DCE/RPC record zero-length infinite loop | FortiGate 7000F (FortiOS 8.0.0) | 7.5 |
-| Pre-auth JSON-RPC route exposure | FortiManager 8.0.0 | 9.1 |
+All findings below were identified via semantic sweep before any manual disassembly.
 
-All three found via semantic sweep before any manual disassembly.
+| Vuln class | Technique |
+|---|---|
+| Zero-length loop DoS in protocol parser | Semantic sweep, CFG loop detection |
+| Zero-length loop DoS, second protocol variant | Semantic sweep, pattern replay |
+| Pre-auth management API route exposure | Semantic sweep, taint trace |
+
+---
+
+## Export
+
+Sweep results and confirmed findings export to SARIF 2.1.0 (GitHub Code Scanning) or flat JSON:
+
+```bash
+ablation sweep  firmware.so --sarif results.sarif
+ablation sweep  firmware.so --json  results.json
+ablation findings --sarif findings.sarif
+
+# Upload to GitHub Code Scanning
+gh api repos/<owner>/<repo>/code-scanning/sarifs \
+    -f commit_sha=$(git rev-parse HEAD) \
+    -f ref=refs/heads/main \
+    -f sarif=$(gzip -c results.sarif | base64 -w0) \
+    -f tool_name=ablation
+```
+
+---
+
+## Signature matching
+
+Auto-name stripped `fn_0x*` functions using 40 behavioral signatures:
+
+```bash
+ablation corpus firmware.so --sigs          # build corpus and auto-name in one step
+ablation sigs   firmware.so --dry-run       # preview names without writing
+```
+
+Ships 40 signatures: `memcpy`, `malloc`, `recv`, `SSL_read`, `system`, `execve`, and more.
+Threshold 0.62 cosine similarity. Names written as `likely:memcpy` in the corpus DB.
+
+---
+
+## Claude Code integration
+
+Ablation is designed to work alongside Claude Code. Put this in your project's `CLAUDE.md`
+or invoke the CLI directly from a Claude Code session with `!`:
+
+```bash
+! ablation corpus /path/to/firmware.so --product my-target
+! ablation sweep  /path/to/firmware.so
+! ablation search /path/to/firmware.so "parser reads user-controlled length"
+! ablation cfg    /path/to/firmware.so 0xfa00 --insns
+```
+
+Claude interprets the output, suggests manual follow-up VAs, and helps trace taint paths
+through CFG output -- combining pattern-matched candidates with LLM-guided analysis.
+
+See [Claude Code integration docs](docs/integrations/claude-code.md) for the full workflow.
+
+---
+
+## Binary Ninja plugin
+
+Install `ablation/integrations/binja_plugin.py` to your Binary Ninja plugins directory.
+On binary open, the plugin checks `~/.ablation/func_id.db` for an existing corpus
+and renames matched functions automatically. Adds sweep results as bookmarks.
+
+See [Binary Ninja integration docs](docs/integrations/binja.md).
 
 ---
 
@@ -114,10 +176,15 @@ All three found via semantic sweep before any manual disassembly.
 | **Module Reference** | |
 | [Core Analyzers](docs/module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker |
 | [Semantic Search](docs/module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
+| [Signature Matching](docs/module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
+| [Export Formats](docs/module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
 | [Registry](docs/module-reference/registry.md) | NameRegistry, FindingRegistry |
 | [Crypto](docs/module-reference/crypto.md) | EntropyMapper, XorSolver, CryptoAudit |
 | [Structural](docs/module-reference/structural.md) | VersionDelta, StructuralSim, VtableResolver |
 | [LLM Analyst](docs/module-reference/llm.md) | ReAct agent loop for automated naming |
+| **Integrations** | |
+| [Claude Code](docs/integrations/claude-code.md) | Using Ablation inside a Claude Code session |
+| [Binary Ninja](docs/integrations/binja.md) | Plugin installation and commands |
 ---
 
 ## Requirements
