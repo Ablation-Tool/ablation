@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ablation"
+version = "1.8.0"
+description = "Semantic function matching for stripped firmware — no symbols, no source, no setup"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "capstone>=5.0.1",
+    "numpy>=1.26.0",
+    "lief>=0.14.0",
+    "sentence-transformers>=2.7.0",
+    "pyelftools>=0.29",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.30.0"]
+full = [
+    "anthropic>=0.30.0",
+    "angr>=9.2.90",
+]
+
+[project.scripts]
+ablation = "main:main"
+ablation-sweep = "sweeps.base_sweep:main"
+ablation-search = "ablation.analyzers.finding_registry:_cli"
+ablation-commit = "ablation.analyzers.finding_registry:_cli"
+ablation-taint = "ablation.analyzers.taint_tracker_x86:_cli"
+ablation-cfg = "ablation.analyzers.cfg_builder:_cli"
+
+[tool.setuptools.packages.find]
+include = ["ablation*", "sweeps*", "targets*", "core*", "modules*"]
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
