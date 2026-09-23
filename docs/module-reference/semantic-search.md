@@ -175,7 +175,7 @@ suggests next steps.
 ```bash
 python3 fortinet_sweep.py /path/to/libips.so.new
 python3 fortinet_sweep.py /path/to/libav.so.new --top 15
-python3 fortinet_sweep.py /path/to/libfmgd.so --min-score 0.35
+python3 fortinet_sweep.py /path/to/libservice.so --min-score 0.35
 ```
 
 Extend `VULN_PROFILES` in the script before sweeping a binary against a new vulnerability

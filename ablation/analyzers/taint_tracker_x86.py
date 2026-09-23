@@ -334,7 +334,7 @@ def _propagate(insn, md, state: TaintState, plt: Dict[int, str],
     Mutates state in place.
 
     extra_sinks: additional {symbol_name: [arg_indices]} merged with _SINKS.
-                 Use for target-specific sinks (e.g. fm_exec_cli, custom wrappers).
+                 Use for target-specific sinks (e.g. exec_handler, custom wrappers).
     """
     iid = insn.id
     ops = insn.operands
@@ -1020,10 +1020,10 @@ class TaintTracker:
         func_starts:     optional explicit set of function start VAs
         custom_sinks:    {symbol_name: [arg_indices]} added to the sink table.
                          Use for target-specific functions not in the default list.
-                         Example: {"fm_exec_cli": [2], "custom_eval": [1]}
+                         Example: {"exec_handler": [2], "custom_eval": [1]}
         custom_sink_vas: {va: (name, [arg_indices])} for sinks referenced by VA.
                          Entries are injected into the PLT map AND the sink table.
-                         Example: {0x595c0: ("fm_exec_cli", [2])}
+                         Example: {0x595c0: ("exec_handler", [2])}
         """
         self.path = binary_path
         self.data = Path(binary_path).read_bytes()

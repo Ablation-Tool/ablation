@@ -16,7 +16,7 @@ Core workflow:
     text = wa.dump_text(va=0x41366, window=1536)
 
 Annotation format per instruction line:
-    0x41366: call 0x256f0          ; PLT -> conf_ctx_set_cli
+    0x41366: call 0x3000          ; PLT -> target_func
     0x41371: lea  rdi, [rip+0x...]  ; "==diff==> %s:%d loading cli context fail"
     0x41290: endbr64               ; [FUNC_START]
 

@@ -580,7 +580,7 @@ def run(so_path: str, min_score: int, show_profiles: bool, as_json: bool):
 
 def main():
     ap = argparse.ArgumentParser(description='PLT slot classifier for stripped ARM64 binaries')
-    ap.add_argument('--so', default='/media/cowboy/research/wechat-re/native-libs/lib/arm64-v8a/libwechatnetwork.so')
+    ap.add_argument('--so', default='/path/to/libwechatnetwork.so')
     ap.add_argument('--min-score', type=int, default=6)
     ap.add_argument('--show-profiles', action='store_true')
     ap.add_argument('--json', action='store_true')

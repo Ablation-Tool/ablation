@@ -440,7 +440,7 @@ def report(records: List[WriteRecord]) -> None:
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--binary', default='/media/cowboy/research/wechat-re/native-libs/lib/arm64-v8a/libwechatnetwork.so')
+    ap.add_argument('--binary', default='/path/to/libwechatnetwork.so')
     ap.add_argument('--text-start', default='0xdd130', type=lambda x: int(x, 16))
     ap.add_argument('--text-size',  default='0x2de650', type=lambda x: int(x, 16))
     ap.add_argument('--verbose', action='store_true')
