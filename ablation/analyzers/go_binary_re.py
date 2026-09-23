@@ -11,7 +11,7 @@ Capabilities:
   - go.string.* section extraction (hardcoded path strings)
   - Docker socket HTTP-over-unix client
 
-Primary RE target: /media/cowboy/research/spleetit-162.221.89.95/binaries/com.docker.vmnetd
+Primary RE target: /path/to/target/com.docker.vmnetd
 
 === Go Binary Patterns (from book corpus) ===
 
@@ -906,7 +906,7 @@ def docker_socket_exec(sock_path: str, container_id: str,
       2. POST /v1.41/exec/{exec_id}/start  → start exec, read stdout/stderr stream
 
     Args:
-        sock_path: path to docker socket (e.g. /tmp/spleetit_docker.sock)
+        sock_path: path to docker socket (e.g. /tmp/target_docker.sock)
         container_id: container ID or name
         cmd: command list, e.g. ["id"] or ["cat", "/etc/passwd"]
         timeout: socket timeout
@@ -1098,7 +1098,7 @@ def analyze(binary_path: str, text_slide: int = TEXT_SLIDE_DEFAULT,
 # vmnetd-specific full analysis (hardcoded target paths)
 # ---------------------------------------------------------------------------
 
-VMNETD_BINARY = "/media/cowboy/research/spleetit-162.221.89.95/binaries/com.docker.vmnetd"
+VMNETD_BINARY = "/path/to/target/com.docker.vmnetd"
 VMNETD_REMOTE_SOCK = "/var/run/com.docker.vmnetd.sock"
 
 VMNETD_KNOWN_HANDLERS = {

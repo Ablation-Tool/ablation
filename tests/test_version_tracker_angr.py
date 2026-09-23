@@ -27,8 +27,8 @@ from modules.version_delta import (
 )
 from modules.semantic_search import SemanticSearcher
 
-LINA_914  = '/home/cowboy/VDT/intel/cisco-downloads/asa9-14-extracted/lina'
-LINA_922  = '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'
+LINA_914  = '/path/to/binary'
+LINA_922  = '/path/to/binary'
 SEED_VA   = 0xc563d0
 SEED_NAME = 'attr_list_add_impl'
 DB        = '~/.ablation/func_id.db'

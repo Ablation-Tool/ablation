@@ -15,8 +15,8 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from modules.semantic_search import describe_function, normalize_asm
 
-LINA_914 = '/home/cowboy/VDT/intel/cisco-downloads/asa9-14-extracted/lina'
-LINA_922 = '/home/cowboy/VDT/intel/cisco-downloads/asa9-22-lina/asa/bin/lina'
+LINA_914 = '/path/to/binary'
+LINA_922 = '/path/to/binary'
 
 # lina 9.14: VAs confirmed via func_id_db seed
 VA_914_RADIUS  = 0xc563d0   # attr_list_add_impl

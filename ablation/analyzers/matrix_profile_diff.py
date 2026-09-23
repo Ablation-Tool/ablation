@@ -13,13 +13,13 @@ Usage:
         v1_path='/firmware/v1/libfoo.so',
         v2_path='/firmware/v2/libfoo.so',
     )
-    result = diff.diff_functions(va_v1=0x412f4, end_va_v1=0x4143f,
+    result = diff.diff_functions(va_v1=0x4000, end_va_v1=0x4143f,
                                   va_v2=0x41800, end_va_v2=0x41980)
     print(result.fmt())
     print(result.change_summary())
 
     # Or use with BinaryContext for function bounds:
-    result = diff.diff_va(va_v1=0x412f4, va_v2=0x41800, ctx_v1=ctx1, ctx_v2=ctx2)
+    result = diff.diff_va(va_v1=0x4000, va_v2=0x41800, ctx_v1=ctx1, ctx_v2=ctx2)
 
 Output shows:
     [UNCHANGED] insn  0-45  (v1 0-45   <-> v2 0-45)

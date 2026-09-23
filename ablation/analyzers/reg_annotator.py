@@ -7,7 +7,7 @@ typical firmware dispatch functions.
 
 Usage:
     ra = RegAnnotator.from_path('/path/to/binary')
-    result = ra.annotate_calls(func_va=0x15a78a, func_end_va=0x15a8ef)
+    result = ra.annotate_calls(func_va=0x1000, func_end_va=0x1200)
 
     for call in result.calls:
         print(f"0x{call.site_va:x}: call {call.target_name}")
@@ -17,8 +17,8 @@ Usage:
     print(result.fmt())  # full formatted block
 
 Example output:
-    0x15a892: call fm_exec_cli
-      rdi = '/bin/stress-ng'  (0x1a5e40 via r13)
+    0x1100: call exec_handler
+      rdi = '/bin/target-binary'  (0x8000 via r13)
       rsi = arg0_entry  (rdi@entry via ebp)
       rdx = arg1_entry  (rsi@entry via r12)
 """

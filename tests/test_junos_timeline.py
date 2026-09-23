@@ -410,7 +410,7 @@ SECURITY DELTA:
   Exploitability: depends on whether packet processing paths pass attacker-influenced
     protocol values to netisr_dispatch beyond the 38-entry table boundary.
 
-Firmware at /media/cowboy/research/juniper-firmware/extracted/
+Firmware at /path/to/research/binary
 """
 
 import sys, os, struct, subprocess, time
@@ -424,7 +424,7 @@ DB = '~/.ablation/func_id.db'
 
 # Each entry: (label, path)
 # All are ELF 32-bit MSB MIPS, symbols type A, not stripped.
-_BASE = '/media/cowboy/research/juniper-firmware/extracted'
+_BASE = '/path/to/research/binary'
 VERSIONS = [
     ('10.4R7.5  (2011-09)',   f'{_BASE}/srx-10.4/junos-srxsme-10.4R7.5-domestic'),
     ('11.4R3.7  (2012-05)',   f'{_BASE}/srx-11.4/junos-srxsme-11.4R3.7-domestic'),

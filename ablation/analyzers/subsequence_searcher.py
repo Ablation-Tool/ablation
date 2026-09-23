@@ -35,7 +35,7 @@ Usage:
     results = ss.search_dtw(ref_seq, threshold=0.6)
 
     # Find functions similar to an existing function:
-    results = ss.search_like(ref_va=0x15a78a, end_va=0x15a8ef, top_k=10)
+    results = ss.search_like(ref_va=0x1000, end_va=0x1200, top_k=10)
 """
 
 from __future__ import annotations
@@ -264,7 +264,7 @@ class SubsequenceSearcher:
         mode: 'dtw' (default) or 'sax' (faster pre-filter).
 
         Example: find all handlers that look like the stress exec handler.
-            ss.search_like(ref_va=0x15a78a, end_va=0x15a8ef, top_k=10)
+            ss.search_like(ref_va=0x1000, end_va=0x1200, top_k=10)
         """
         ref_seq = self._enc.encode_va(ref_va, end_va)
         if not ref_seq:

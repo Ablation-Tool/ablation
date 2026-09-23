@@ -78,7 +78,7 @@ GO_VULN_PROFILES = [
 
     ("domain_sync_injection",
      "FUNC | role: domain sync handler | "
-     "vuln: LDAP base DN or search filter derived from EMS-provided domain config "
+     "vuln: LDAP base DN or search filter derived from externally-provided domain config "
      "without sanitization, allows LDAP scope expansion"),
 
     ("search_req_injection",
