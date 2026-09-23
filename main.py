@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Ablation - Autonomous Reverse Engineering Tool
+Ablation - Reverse Engineering Tool
 
-Deploy inside compromised system to autonomously reverse engineer unknown platform.
+Dev-only script for interactive analysis sessions. For the installed CLI, use ablation/cli.py.
 
 Usage:
     ./ablation              - Full autonomous analysis
