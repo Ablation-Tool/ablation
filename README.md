@@ -110,13 +110,6 @@ All three found via semantic sweep before any manual disassembly.
 | [Crypto](docs/module-reference/crypto.md) | EntropyMapper, XorSolver, CryptoAudit |
 | [Structural](docs/module-reference/structural.md) | VersionDelta, StructuralSim, VtableResolver |
 | [LLM Analyst](docs/module-reference/llm.md) | ReAct agent loop for automated naming |
-| **Target Notes** | |
-| [Fortinet](docs/targets/fortinet.md) | FortiGate, FortiManager |
-| [Cisco](docs/targets/cisco.md) | ASA, FTD, AnyConnect, ISE, NX-OS |
-| [Axis](docs/targets/axis.md) | AXIS OS, ACAP applications |
-| [Tencent](docs/targets/tencent.md) | TencentOS, WeChat, Qwen3 |
-| [MikroTik](docs/targets/routeros.md) | RouterOS |
-
 ---
 
 ## Requirements
