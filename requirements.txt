@@ -1,0 +1,22 @@
+# Core (required)
+capstone>=5.0.1
+numpy>=1.26.0
+lief>=0.14.0
+
+# Semantic search + version delta (required for sweep)
+sentence-transformers>=2.7.0
+
+# LLM analyst ReAct loop
+anthropic>=0.30.0
+
+# Optional: angr-based analysis (heavy dependency)
+# angr>=9.2.90
+
+# Optional: Cisco re_engine extras
+# flare-floss
+# flare-capa
+# ropper
+# keystone-engine
+# rzpipe
+# frida-tools
+# scapy
