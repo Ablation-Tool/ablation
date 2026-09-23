@@ -37,6 +37,10 @@ from typing import Any, Dict, List, Optional, Tuple
 _STORE_DIR = Path.home() / ".ablation"
 _STORE_PATH = _STORE_DIR / "patterns.json"
 
+# Increment when new default patterns are added. On load, if the stored
+# schema_version is older, new defaults are merged without losing confirmed hits.
+_SCHEMA_VERSION = 2
+
 # Default patterns seeded on first load.
 # These cover the most common firmware vuln classes and have been validated on FMG 8.0.0.
 _DEFAULT_PATTERNS = [
@@ -233,23 +237,37 @@ class PatternLibrary:
 
     def _load(self) -> None:
         _STORE_DIR.mkdir(parents=True, exist_ok=True)
+        stored_version = 0
         if self._path.exists():
             try:
                 data = json.loads(self._path.read_text())
                 self._patterns = [Pattern.from_dict(p) for p in data.get("patterns", [])]
+                stored_version = data.get("schema_version", 0)
             except (json.JSONDecodeError, KeyError):
                 self._patterns = []
         if not self._patterns:
             self._seed_defaults()
+        elif stored_version < _SCHEMA_VERSION:
+            self._merge_new_defaults()
 
     def save(self) -> None:
         _STORE_DIR.mkdir(parents=True, exist_ok=True)
-        data = {"patterns": [p.to_dict() for p in self._patterns]}
+        data = {"schema_version": _SCHEMA_VERSION, "patterns": [p.to_dict() for p in self._patterns]}
         self._path.write_text(json.dumps(data, indent=2))
 
     def _seed_defaults(self) -> None:
         for d in _DEFAULT_PATTERNS:
             self._patterns.append(Pattern(query=d["query"], tag=d["tag"]))
+
+    def _merge_new_defaults(self) -> None:
+        existing = {p.query for p in self._patterns}
+        added = 0
+        for d in _DEFAULT_PATTERNS:
+            if d["query"] not in existing:
+                self._patterns.append(Pattern(query=d["query"], tag=d["tag"]))
+                added += 1
+        if added:
+            self.save()
         self.save()
 
     # ── management ───────────────────────────────────────────────────────────
