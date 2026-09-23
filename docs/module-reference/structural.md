@@ -38,18 +38,18 @@ instruction lines reveals the exact instructions that changed between versions.
 from ablation.analyzers.version_delta import VersionDelta
 
 vd = VersionDelta(
-    binary_v1='/path/to/libips.so.new.v8.0.0',
-    binary_v2='/path/to/libips.so.new.v8.0.1',
+    binary_v1='/path/to/firmware_v1.so',
+    binary_v2='/path/to/firmware_v2.so',
 )
 
-result = vd.track(func_va_v1=0x17b660)
+result = vd.track(func_va_v1=0x1000)
 print(f"Homolog in v2: 0x{result.va_v2:x}  (confidence={result.confidence:.2f})")
 print(result.patch_diff)   # unified diff of changed instructions
 ```
 
 ### Anchor scan (implementation variant classification)
 
-For large binary corpora (e.g., 28 different `lina` builds across all ASA versions),
+For large binary corpora (e.g., 28 different builds of the same firmware component),
 VersionDelta includes masked byte-pattern anchors that classify the implementation variant of
 a function. This distinguishes ELF32 vs ELF64 calling conventions and register-allocation
 differences between major versions:
@@ -91,7 +91,7 @@ survive recompilation. A `mov eax, 0x10` (16-byte minimum header) or `cmp rax, 0
 from ablation.analyzers.structural_sim import StructuralSim
 
 sim = StructuralSim('/path/to/binary_v1.so', '/path/to/binary_v2.so')
-score = sim.compare(func_va_v1=0x17b660, func_va_v2=0x18a940)
+score = sim.compare(func_va_v1=0x1000, func_va_v2=0x1200)
 print(f"Similarity: {score.composite:.3f}")
 print(f"  opcode_hist={score.opcode_hist:.3f}")
 print(f"  imm_jaccard={score.imm_jaccard:.3f}")
@@ -148,8 +148,8 @@ for blr in result.resolved_blr:
           f"targets={[hex(t) for t in blr.targets]}")
 ```
 
-Primary target in the current corpus: `libwechatnetwork.so` (WeChat 8.0.56 ARM64) -- resolves
-the `BLR` at 0x112050 that passes `&gILinkKey` as `x1`.
+Useful for ARM64 binaries where C++ virtual dispatch accounts for a large fraction of indirect
+calls -- resolves `BLR xN` sites to their concrete target function sets.
 
 ---
 

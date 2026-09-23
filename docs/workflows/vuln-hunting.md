@@ -126,7 +126,7 @@ print(pl.fmt_sweep(pl_hits, binary_name='binary.so'))
 For each candidate above score 0.35, get context before opening a disassembler:
 
 ```python
-va = 0x17b660
+va = 0x1000
 
 # What protocols or data does this function process?
 print("strings:", ctx.strings_in_func(va))
@@ -193,8 +193,8 @@ from ablation.analyzers.taint_tracker_x86 import TaintTracker
 
 tracker = TaintTracker('/path/to/binary.so')
 result = tracker.trace(
-    func_va=0x17b660,
-    source_va=0x17b84c,
+    func_va=0x1000,
+    source_va=0x1050,
     source_reg='rax',
     sink_patterns=['memcpy', 'malloc', 'add rcx']
 )
@@ -210,15 +210,15 @@ address is known, register everything:
 
 ```python
 # Name the function
-ctx.set_name(0x17b660, 'ips_diameter_parse_message', source='confirmed')
+ctx.set_name(0x1000, 'proto_parse_message', source='confirmed')
 
 # Register the finding
 from ablation.analyzers.finding_registry import FindingRegistry
 fr = FindingRegistry()
 fr.add_finding(
     binary_sha=ctx.sha256[:16],
-    va=0x17b660,
-    func_name='ips_diameter_parse_message',
+    va=0x1000,
+    func_name='proto_parse_message',
     vuln_class='infinite_loop',
     cvss=7.5,
     trigger='Diameter packet with AVP Length field = 0x000000',
@@ -232,7 +232,7 @@ pl = PatternLibrary()
 pl.record_hit(
     query="TLV pointer advance loop with no minimum length check",
     binary_sha=ctx.sha256[:16],
-    va=0x17b660,
+    va=0x1000,
     confirmed=True,
     vuln_class='infinite_loop',
     cvss=7.5,
