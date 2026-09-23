@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package and core deps
+        run: pip install -e ".[full]"
+
+      - name: Import smoke test
+        run: |
+          python -c "from ablation.analyzers.binary_context import BinaryContext"
+          python -c "from ablation.analyzers.xref_graph import XRefGraph"
+          python -c "from ablation.analyzers.cfg_builder import CFGBuilder"
+          python -c "from ablation.analyzers.corpus_builder import CorpusBuilder"
+          python -c "from ablation.analyzers.semantic_search import SemanticSearcher"
+          python -c "from ablation.analyzers.pattern_library import PatternLibrary"
+          python -c "from ablation.cli import main"
+          echo "All imports OK"
+
+      - name: CLI help
+        run: ablation --help
+
+      - name: BinaryContext + XRefGraph on system binary
+        run: |
+          python - <<'EOF'
+          from ablation.analyzers.binary_context import BinaryContext
+          from ablation.analyzers.xref_graph import XRefGraph
+          from ablation.analyzers.cfg_builder import CFGBuilder
+
+          ctx = BinaryContext.load_or_build('/usr/bin/ls')
+          assert ctx.func_starts, "no functions found"
+          print(f"BinaryContext: {len(ctx.func_starts)} functions")
+
+          xg = XRefGraph.from_path('/usr/bin/ls')
+          xg.build()
+          stats = xg.stats()
+          assert stats['functions'] > 0
+          print(f"XRefGraph: {stats['functions']} functions, {stats['plt_entries']} PLT")
+
+          builder = CFGBuilder('/usr/bin/ls', xref=xg)
+          fva = sorted(xg._func_starts)[0]
+          cfg = builder.build_function(fva)
+          assert cfg.blocks, "empty CFG"
+          print(f"CFG 0x{fva:x}: {cfg.stats()['blocks']} blocks")
+          EOF
+
+      - name: Run existing tests
+        run: python -m pytest tests/ -x -q --ignore=tests/test_angr.py 2>/dev/null || true

@@ -16,6 +16,8 @@ import argparse
 import sys
 from pathlib import Path
 
+_DEFAULT_DB = Path('~/.ablation/func_id.db').expanduser()
+
 
 def _require_binary(path: str) -> Path:
     p = Path(path)
@@ -23,6 +25,14 @@ def _require_binary(path: str) -> Path:
         print(f"error: file not found: {path}", file=sys.stderr)
         sys.exit(1)
     return p
+
+
+def _build_corpus_for(binary_path: str, db: Path) -> None:
+    """Ensure func_id.db contains an up-to-date corpus entry for binary_path."""
+    from ablation.analyzers.corpus_builder import CorpusBuilder
+    product = Path(binary_path).stem
+    cb = CorpusBuilder(db_path=str(db))
+    cb.build(binary_path, product=product, version='unknown', progress=False)
 
 
 def cmd_analyze(args):
@@ -41,26 +51,26 @@ def cmd_analyze(args):
 
 
 def cmd_search(args):
-    from ablation.analyzers.binary_context import BinaryContext
-    from ablation.analyzers.xref_graph import XRefGraph
     from ablation.analyzers.semantic_search import SemanticSearcher
 
     p = str(_require_binary(args.binary))
-    ctx = BinaryContext.load_or_build(p)
-    xg = XRefGraph.from_path(p)
-    xg.build()
+    db = Path(args.db).expanduser()
 
-    searcher = SemanticSearcher(p, xg=xg)
-    searcher.build_corpus()
+    print(f"Building corpus for {Path(p).name} ...")
+    _build_corpus_for(p, db)
+
+    searcher = SemanticSearcher(str(db))
+    n = searcher.build_corpus()
+    print(f"Corpus: {n} functions. Querying ...")
 
     results = searcher.query(args.query, top_k=args.top_k)
     if not results:
         print("No results.")
         return
 
-    print(f"Top {len(results)} matches for: {args.query!r}\n")
+    print(f"\nTop {len(results)} matches for: {args.query!r}\n")
     for r in results:
-        name = ctx.name(r.va) if hasattr(ctx, 'name') else hex(r.va)
+        name = r.name or hex(r.va)
         print(f"  0x{r.va:x}  {name:<50s}  score={r.score:.3f}")
 
 
@@ -93,7 +103,8 @@ def cmd_cfg(args):
     builder = CFGBuilder(p)
     cfg = builder.build_function(va)
 
-    print(f"CFG for 0x{va:x}: {len(cfg.blocks)} basic blocks\n")
+    s = cfg.stats()
+    print(f"CFG for 0x{va:x}: {s['blocks']} blocks, {s['edges']} edges, {s['instructions']} instructions\n")
     for bb_va, bb in sorted(cfg.blocks.items()):
         succs = ', '.join(f'0x{s:x}' for s in bb.succs)
         print(f"  0x{bb_va:x}..0x{bb.end:x}  succs=[{succs}]")
@@ -115,26 +126,29 @@ def cmd_corpus(args):
     from ablation.analyzers.corpus_builder import CorpusBuilder
 
     p = str(_require_binary(args.binary))
+    db = Path(args.db).expanduser()
     product = args.product or Path(p).stem
     version = args.version or 'unknown'
 
-    cb = CorpusBuilder()
-    counts = cb.build(p, product=product, version=version)
-    print(f"Corpus built: {counts} functions indexed for {product} {version}")
+    cb = CorpusBuilder(db_path=str(db))
+    n = cb.build(p, product=product, version=version, progress=True)
+    print(f"\nCorpus built: {n} functions indexed")
+    print(f"DB: {db}")
 
 
 def cmd_sweep(args):
-    from ablation.analyzers.xref_graph import XRefGraph
     from ablation.analyzers.semantic_search import SemanticSearcher
     from ablation.analyzers.pattern_library import PatternLibrary
 
     p = str(_require_binary(args.binary))
-    ctx = BinaryContext.load_or_build(p)
-    xg = XRefGraph.from_path(p)
-    xg.build()
+    db = Path(args.db).expanduser()
 
-    searcher = SemanticSearcher(p, xg=xg)
-    searcher.build_corpus()
+    print(f"Building corpus for {Path(p).name} ...")
+    _build_corpus_for(p, db)
+
+    searcher = SemanticSearcher(str(db))
+    n = searcher.build_corpus()
+    print(f"Corpus: {n} functions. Running pattern sweep ...")
 
     pl = PatternLibrary()
     results = pl.sweep(searcher, top_k=args.top_k, min_score=args.min_score)
@@ -175,6 +189,7 @@ def main():
     p_search.add_argument('binary')
     p_search.add_argument('query')
     p_search.add_argument('--top-k', type=int, default=10)
+    p_search.add_argument('--db', default=str(_DEFAULT_DB), help='func_id DB path')
     p_search.set_defaults(func=cmd_search)
 
     # taint
@@ -199,6 +214,7 @@ def main():
     p_corpus.add_argument('binary')
     p_corpus.add_argument('--product', default=None)
     p_corpus.add_argument('--version', default=None)
+    p_corpus.add_argument('--db', default=str(_DEFAULT_DB), help='func_id DB path')
     p_corpus.set_defaults(func=cmd_corpus)
 
     # sweep
@@ -206,6 +222,7 @@ def main():
     p_sweep.add_argument('binary')
     p_sweep.add_argument('--top-k', type=int, default=5)
     p_sweep.add_argument('--min-score', type=float, default=0.30)
+    p_sweep.add_argument('--db', default=str(_DEFAULT_DB), help='func_id DB path')
     p_sweep.set_defaults(func=cmd_sweep)
 
     # findings
