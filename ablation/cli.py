@@ -137,6 +137,7 @@ def cmd_corpus(args):
 
 
 def cmd_sweep(args):
+    import json as _json
     from ablation.analyzers.semantic_search import SemanticSearcher
     from ablation.analyzers.pattern_library import PatternLibrary
 
@@ -152,22 +153,72 @@ def cmd_sweep(args):
 
     pl = PatternLibrary()
     results = pl.sweep(searcher, top_k=args.top_k, min_score=args.min_score)
-    print(pl.fmt_sweep(results, binary_name=Path(p).name))
+
+    if args.sarif:
+        from ablation.export.sarif import sweep_to_sarif
+        doc = sweep_to_sarif(results, binary_path=p, min_score=args.min_score)
+        Path(args.sarif).write_text(_json.dumps(doc, indent=2))
+        print(f"SARIF written to {args.sarif}")
+    elif args.json:
+        from ablation.export.json_export import sweep_to_json
+        doc = sweep_to_json(results, binary_path=p, min_score=args.min_score)
+        Path(args.json).write_text(_json.dumps(doc, indent=2))
+        print(f"JSON written to {args.json}")
+    else:
+        print(pl.fmt_sweep(results, binary_name=Path(p).name))
 
 
 def cmd_findings(args):
+    import json as _json
     from ablation.analyzers.finding_registry import FindingRegistry
 
     reg = FindingRegistry()
-    findings = reg.list()
+    findings = reg.list_findings()
 
     if not findings:
         print("No confirmed findings recorded.")
         return
 
+    if args.sarif:
+        from ablation.export.sarif import findings_to_sarif
+        doc = findings_to_sarif(findings)
+        Path(args.sarif).write_text(_json.dumps(doc, indent=2))
+        print(f"SARIF written to {args.sarif}")
+        return
+
+    if args.json:
+        from ablation.export.json_export import findings_to_json
+        doc = findings_to_json(findings)
+        Path(args.json).write_text(_json.dumps(doc, indent=2))
+        print(f"JSON written to {args.json}")
+        return
+
     print(f"{len(findings)} finding(s):\n")
     for f in findings:
-        print(f"  [{f.severity}] 0x{f.va:x}  {f.binary}  {f.pattern}")
+        print(f"  [{f.get('severity','?')}] {f.get('product','')}  {f.get('title','')}")
+
+
+def cmd_sigs(args):
+    from ablation.analyzers.sig_library import SigLibrary
+
+    lib = SigLibrary(threshold=args.threshold)
+
+    if args.list:
+        for s in lib.known_signatures():
+            print(f"  {s['name']:<25s} [{s.get('category','')}]  {s['description'][:60]}")
+        return
+
+    db = Path(args.db).expanduser()
+    if not db.exists():
+        print(f"error: DB not found: {db}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Loading model ...")
+    lib.load_model()
+    print(f"Matching {len(lib.known_signatures())} signatures against {db.name} ...")
+    n = lib.auto_name(str(db), dry_run=args.dry_run)
+    tag = "(dry-run) would rename" if args.dry_run else "renamed"
+    print(f"{tag} {n} functions")
 
 
 def main():
@@ -223,11 +274,23 @@ def main():
     p_sweep.add_argument('--top-k', type=int, default=5)
     p_sweep.add_argument('--min-score', type=float, default=0.30)
     p_sweep.add_argument('--db', default=str(_DEFAULT_DB), help='func_id DB path')
+    p_sweep.add_argument('--sarif', metavar='FILE', default=None, help='write SARIF 2.1.0 to FILE')
+    p_sweep.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_sweep.set_defaults(func=cmd_sweep)
 
     # findings
     p_findings = sub.add_parser('findings', help='list confirmed findings')
+    p_findings.add_argument('--sarif', metavar='FILE', default=None, help='write SARIF 2.1.0 to FILE')
+    p_findings.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_findings.set_defaults(func=cmd_findings)
+
+    # sigs
+    p_sigs = sub.add_parser('sigs', help='match and auto-name functions from signature library')
+    p_sigs.add_argument('--db', default=str(_DEFAULT_DB), help='func_id DB path')
+    p_sigs.add_argument('--threshold', type=float, default=0.62, help='similarity threshold (0-1)')
+    p_sigs.add_argument('--dry-run', action='store_true', help='report matches without writing')
+    p_sigs.add_argument('--list', action='store_true', help='list all signatures in the library')
+    p_sigs.set_defaults(func=cmd_sigs)
 
     args = parser.parse_args()
     try:
