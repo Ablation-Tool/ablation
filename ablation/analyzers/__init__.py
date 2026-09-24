@@ -1,4 +1,6 @@
 from .semantic_search import SemanticSearcher, describe_function, normalize_asm, WhiteningTransform
+from .taint_tracker_arm32 import ARM32TaintTracker, TaintFinding32, TaintState32
+from .intoverflow_scanner_arm32 import ARM32IntOverflowScanner, IntOverflowFinding32
 from .version_delta import VersionTracker, diff_functions
 from .func_id_db import FuncDB
 from .go_pclntab import GoFuncTable
@@ -24,6 +26,8 @@ from .subsequence_searcher import SubsequenceSearcher, PatternMatch, parse_patte
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
+    "ARM32TaintTracker", "TaintFinding32", "TaintState32",
+    "ARM32IntOverflowScanner", "IntOverflowFinding32",
     "VersionTracker", "diff_functions",
     "FuncDB",
     "GoFuncTable",
