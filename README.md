@@ -38,6 +38,7 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **Self-improving pattern library**: confirmed vulnerability findings register as new patterns and replay on future binaries automatically
 - **Version diffing** with DTW and Matrix Profile; confirms whether a CVE was patched across firmware releases
 - **Windows kernel driver analysis**: IRP/IOCTL dispatch extraction, kernel API risk classification, rootkit callback detection, SSDT hook and SMEP-disable pattern scanning (`ablation driver`)
+- **Format string vulnerability scan**: 28 printf/syslog/err family sinks; backward trace classifies format arg as safe (string literal) or vulnerable (stack slot, argument register); two-hop vsnprintf detection (`ablation fmtstr`)
 
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
 
@@ -70,6 +71,18 @@ Ablation adds what Binary Ninja does not have:
 ---
 
 ## Updates
+
+**v2.1.0 (2026-09-24): Format string scanner, MIPS32 taint tracker, BYOVD detector, heap scanner**
+
+Four new analyzers ship in this release.
+
+`ablation fmtstr <binary>` scans any x86-64 ELF for format string vulnerabilities. It covers 28 printf/syslog/err family sinks and traces the format argument register backward from each call site. A `LEA [rip+offset]` into `.rodata` is safe. A `MOV` from a stack slot or argument register is vulnerable. It also detects the two-hop pattern from TAOSSA ch.8: a `vsnprintf` output buffer reused as the format argument to `syslog`.
+
+`MIPS32TaintTracker` (`taint_tracker_mips.py`) adds MIPS32 network-to-sink taint tracking. It handles the O32 ABI, load-delay slots, and both big-endian and little-endian binaries. Sources: recv/read/fgets family. Sinks: system/execve/strcpy/sprintf/memcpy. Intraprocedural and interprocedural BFS modes.
+
+`BYOVDDetector` (`byovd_detector.py`) detects Bring Your Own Vulnerable Driver patterns: `MmMapIoSpace` called from an IOCTL handler with user-controlled physical address and size, enabling arbitrary physical memory read/write from user mode.
+
+`HeapVulnScanner` (`heap_vuln_scanner.py`) scans x86-64 ELF for heap vulnerability patterns: use-after-free indicators, double-free sequences, and allocation size calculations derived from user-controlled data.
 
 **v2.0.0 (2026-09-24): Windows kernel driver RE**
 
@@ -124,6 +137,8 @@ ablation taint   firmware.so
 ablation findings --sarif findings.sarif
 ablation driver  driver.sys
 ablation driver  driver.sys --json driver_report.json
+ablation fmtstr  firmware.so
+ablation fmtstr  firmware.so --json fmt_findings.json
 ablation news
 ```
 
