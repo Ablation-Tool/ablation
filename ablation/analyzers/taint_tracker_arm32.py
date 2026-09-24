@@ -194,6 +194,8 @@ class ARM32TaintTracker:
 
     Sources: recv/read family (r0 tainted on return).
     Sinks:   memcpy/malloc length args, strcpy dst, system/execve path arg.
+    Per-function Thumb mode: pass thumb_funcs from BinaryContext or let
+    _load_elf() auto-detect from symbol LSB.
     """
 
     def __init__(
@@ -201,6 +203,7 @@ class ARM32TaintTracker:
         binary_path: str,
         custom_sinks: Optional[Dict[str, List[int]]] = None,
         thumb: bool = False,
+        thumb_funcs: Optional[Set[int]] = None,
     ):
         self.path = binary_path
         self._data = Path(binary_path).read_bytes()
@@ -208,6 +211,7 @@ class ARM32TaintTracker:
         self._plt: Dict[int, str] = {}
         self._exports: Dict[str, int] = {}
         self._func_starts: List[int] = []
+        self._thumb_funcs: Set[int] = set(thumb_funcs) if thumb_funcs else set()
         self._sinks: Dict[str, List[int]] = dict(_DEFAULT_SINKS)
         if custom_sinks:
             self._sinks.update(custom_sinks)
@@ -272,7 +276,10 @@ class ARM32TaintTracker:
         except Exception:
             pass
 
-        # Function starts via eh_frame
+        # Strip LSB from exports (ARM32 Thumb indicator)
+        self._exports = {k: (v & ~1 if v & 1 else v) for k, v in self._exports.items()}
+
+        # Function starts via eh_frame; strip LSB and detect Thumb
         starts: set = set(self._exports.values())
         try:
             from elftools.elf.elffile import ELFFile
@@ -284,7 +291,22 @@ class ARM32TaintTracker:
                     if di.has_EH_CFI():
                         for e in di.EH_CFI_entries():
                             if isinstance(e, FDE) and e['initial_location'] > 0:
-                                starts.add(e['initial_location'])
+                                va = e['initial_location']
+                                if va & 1:
+                                    va &= ~1
+                                    self._thumb_funcs.add(va)
+                                starts.add(va)
+        except Exception:
+            pass
+        # Also detect Thumb from dynamic_symbols LSB
+        try:
+            binary2 = lief.parse(self._data)
+            if isinstance(binary2, lief.ELF.Binary):
+                for sym in binary2.dynamic_symbols:
+                    if sym.name and sym.value and str(getattr(sym, 'type', '')).endswith('FUNC'):
+                        if sym.value & 1:
+                            self._thumb_funcs.add(sym.value & ~1)
+                        starts.add(sym.value & ~1 if sym.value & 1 else sym.value)
         except Exception:
             pass
         self._func_starts = sorted(starts)
@@ -302,6 +324,9 @@ class ARM32TaintTracker:
 
     def run_on_function(self, func_va: int, max_bytes: int = 8192) -> List[TaintFinding32]:
         """Analyze one function for source-to-sink paths."""
+        is_thumb = func_va in self._thumb_funcs
+        if is_thumb != self._thumb or self._disasm._base != self._base:
+            self._disasm = _ARM32Disasm(self._data, self._base, is_thumb)
         state = TaintState32()
         findings: List[TaintFinding32] = []
         self._analyze(func_va, state, findings, max_bytes)
@@ -312,7 +337,6 @@ class ARM32TaintTracker:
         all_findings: List[TaintFinding32] = []
         funcs = self._func_starts[:max_funcs] if self._func_starts else []
         if not funcs:
-            # Fall back: scan for function-like entry points heuristically
             return all_findings
         for va in funcs:
             findings = self.run_on_function(va)
@@ -481,7 +505,8 @@ class ARM32TaintTracker:
 
     @classmethod
     def from_context(cls, ctx, custom_sinks=None) -> 'ARM32TaintTracker':
-        inst = cls(ctx.path, custom_sinks=custom_sinks)
+        inst = cls(ctx.path, custom_sinks=custom_sinks,
+                   thumb_funcs=getattr(ctx, 'thumb_funcs', None))
         # Overlay PLT and exports from BinaryContext
         inst._plt.update(ctx.plt)
         inst._exports.update(ctx.exports)

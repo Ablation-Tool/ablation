@@ -93,6 +93,7 @@ class BinaryContext:
         self.exports: Dict[str, int] = {}
         self.strings: Dict[int, str] = {}
         self.func_starts: List[int] = []
+        self.thumb_funcs: Set[int] = set()
         self.call_edges: List[Tuple[int, int, str]] = []
         self._callers_idx: Dict[str, List[Tuple[int, str]]] = {}
         self._callees_idx: Dict[int, List[Tuple[int, str]]] = {}
@@ -480,7 +481,10 @@ class BinaryContext:
         try:
             for sym in binary.exported_functions:
                 if sym.name and sym.value:
-                    self.exports[sym.name] = sym.value
+                    va = sym.value
+                    if self.arch == 'arm32' and (va & 1):
+                        va &= ~1
+                    self.exports[sym.name] = va
         except Exception:
             pass
         if not self.exports:
@@ -489,7 +493,10 @@ class BinaryContext:
                     if (sym.name and sym.value and
                             str(getattr(sym, 'binding', '')).endswith('GLOBAL') and
                             str(getattr(sym, 'type', '')).endswith('FUNC')):
-                        self.exports[sym.name] = sym.value
+                        va = sym.value
+                        if self.arch == 'arm32' and (va & 1):
+                            va &= ~1
+                        self.exports[sym.name] = va
             except Exception:
                 pass
 
@@ -516,6 +523,7 @@ class BinaryContext:
 
     def _extract_func_starts(self, path: str, binary) -> None:
         starts: Set[int] = set()
+        thumb: Set[int] = set()
         if path:
             try:
                 from elftools.elf.elffile import ELFFile
@@ -527,14 +535,31 @@ class BinaryContext:
                         if di.has_EH_CFI():
                             for e in di.EH_CFI_entries():
                                 if isinstance(e, FDE) and e["initial_location"] > 0:
-                                    starts.add(e["initial_location"])
+                                    va = e["initial_location"]
+                                    if self.arch == 'arm32' and (va & 1):
+                                        va &= ~1
+                                        thumb.add(va)
+                                    starts.add(va)
             except Exception:
                 pass
-        # Augment from exports
+        # Augment from exports (already LSB-stripped)
         for va in self.exports.values():
             if va:
                 starts.add(va)
+        # ARM32: also scan dynamic_symbols for FUNC type to catch non-exported funcs
+        if self.arch == 'arm32' and _LIEF_OK:
+            try:
+                for sym in binary.dynamic_symbols:
+                    if sym.name and sym.value and str(getattr(sym, 'type', '')).endswith('FUNC'):
+                        va = sym.value
+                        if va & 1:
+                            va &= ~1
+                            thumb.add(va)
+                        starts.add(va)
+            except Exception:
+                pass
         self.func_starts = sorted(starts)
+        self.thumb_funcs = thumb
 
     def _build_call_graph(self, data: bytes, binary) -> None:
         """Build call graph via vectorized opcode scan (arch-aware).
@@ -690,6 +715,36 @@ class BinaryContext:
         for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
             label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
             edges.append((int(owner_va), int(target_va), label))
+
+        # Second pass: capstone scan for Thumb BL/BLX in Thumb functions
+        if self.thumb_funcs:
+            import capstone
+            sorted_starts = self.func_starts
+            for i, fva in enumerate(sorted_starts):
+                if fva not in self.thumb_funcs:
+                    continue
+                end_va = sorted_starts[i + 1] if i + 1 < len(sorted_starts) else sec_va + N
+                func_size = min(end_va - fva, 4096)
+                if func_size <= 0:
+                    continue
+                off = fva - sec_va
+                if off < 0 or off + func_size > N:
+                    continue
+                chunk = sec_data[off: off + func_size]
+                cs = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB)
+                cs.detail = False
+                cs.skipdata = True
+                for insn in cs.disasm(chunk, fva):
+                    mn = insn.mnemonic.lower()
+                    if mn not in ('bl', 'blx'):
+                        continue
+                    try:
+                        target = int(insn.op_str.strip().lstrip('#'), 16)
+                        label = self.plt.get(target, "") or va_to_export.get(target, "")
+                        edges.append((fva, target, label))
+                    except ValueError:
+                        pass
+
         self.call_edges = edges
 
     def _build_call_graph_sequential(self, data: bytes, binary) -> None:
@@ -731,11 +786,12 @@ class BinaryContext:
         """Build string xref index.
 
         x86_64/arm64: vectorized RIP/PC-relative displacement scan.
-        arm32: skipped (uses pool loads, not RIP-relative; xref is empty for now).
+        arm32: capstone LDR [PC, #off] literal pool scan per function.
         """
-        if not _NUMPY_OK:
-            return
         if self.arch == 'arm32':
+            self._build_string_xref_index_arm32(data, binary)
+            return
+        if not _NUMPY_OK:
             return
 
         text_sec = binary.get_section(".text")
@@ -791,6 +847,91 @@ class BinaryContext:
         self._str_xref_idx = str_xref
         self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
 
+    def _build_string_xref_index_arm32(self, data: bytes, binary) -> None:
+        """ARM32 string xref via LDR Rd, [PC, #off] literal pool scan.
+
+        ARM mode: pool_va = insn_va + 8 + disp  (pipeline prefetch offset)
+        Thumb 16-bit: pool_va = ((insn_va + 4) & ~3) + disp  (word-aligned PC+4)
+        Thumb 32-bit: pool_va = insn_va + 4 + disp
+        The 4-byte word at pool_va is the string pointer.
+        """
+        import capstone
+        from capstone import arm as C_ARM
+
+        text_sec = binary.get_section('.text')
+        if not text_sec or not self.strings:
+            return
+
+        text_data = bytes(text_sec.content)
+        text_va = int(text_sec.virtual_address)
+        str_va_set = set(self.strings.keys())
+
+        # Build section map for dereferencing pool words
+        sec_map: List[Tuple[int, int, bytes]] = []
+        for sn in ('.text', '.rodata', '.data', '.data.rel.ro'):
+            try:
+                sec = binary.get_section(sn)
+                if sec and sec.size > 0:
+                    sc = bytes(sec.content)
+                    sv = int(sec.virtual_address)
+                    sec_map.append((sv, sv + len(sc), sc))
+            except Exception:
+                pass
+
+        def _read_word(va: int) -> Optional[int]:
+            for sv, ev, sc in sec_map:
+                off = va - sv
+                if 0 <= off <= len(sc) - 4:
+                    return struct.unpack_from('<I', sc, off)[0]
+            return None
+
+        str_xref: Dict[int, List[int]] = {}
+        func_str: Dict[int, List[int]] = {}
+
+        sorted_starts = self.func_starts or [text_va]
+        for i, fva in enumerate(sorted_starts):
+            end_va = sorted_starts[i + 1] if i + 1 < len(sorted_starts) else text_va + len(text_data)
+            is_thumb = fva in self.thumb_funcs
+            func_size = min(end_va - fva, 4096)
+            if func_size <= 0:
+                continue
+            off = fva - text_va
+            if off < 0 or off + func_size > len(text_data):
+                continue
+            chunk = text_data[off: off + func_size]
+            mode = capstone.CS_MODE_THUMB if is_thumb else capstone.CS_MODE_ARM
+            cs = capstone.Cs(capstone.CS_ARCH_ARM, mode)
+            cs.detail = True
+            cs.skipdata = True
+            for insn in cs.disasm(chunk, fva):
+                if insn.mnemonic.lower() != 'ldr':
+                    continue
+                try:
+                    ops = insn.operands
+                    if len(ops) < 2:
+                        continue
+                    op1 = ops[1]
+                    if op1.type != C_ARM.ARM_OP_MEM:
+                        continue
+                    if insn.reg_name(op1.mem.base).lower() != 'pc':
+                        continue
+                    disp = op1.mem.disp
+                    if is_thumb and insn.size == 2:
+                        pool_va = ((insn.address + 4) & ~3) + disp
+                    elif is_thumb:
+                        pool_va = insn.address + 4 + disp
+                    else:
+                        pool_va = insn.address + 8 + disp
+                    ptr = _read_word(pool_va)
+                    if ptr is not None and ptr in str_va_set:
+                        str_xref.setdefault(ptr, []).append(insn.address)
+                        func_str.setdefault(fva, []).append(ptr)
+                except Exception:
+                    continue
+
+        self._str_xref_idx = str_xref
+        self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
     def _build_indices(self) -> None:
         # Rebuild callers_idx: sym_name -> [(caller_va, label)]
         callers_idx: Dict[str, List[Tuple[int, str]]] = {}
@@ -830,6 +971,7 @@ class BinaryContext:
             "strings": {str(va): s for va, s in self.strings.items()},
             "func_starts": self.func_starts,
             "call_edges": [[f, t, l] for f, t, l in self.call_edges],
+            "thumb_funcs": sorted(self.thumb_funcs),
             "str_xref_idx": {str(k): v for k, v in self._str_xref_idx.items()},
             "func_str_idx": {str(k): v for k, v in self._func_str_idx.items()},
         }
@@ -847,6 +989,7 @@ class BinaryContext:
         ctx.exports = {k: int(v) for k, v in payload.get("exports", {}).items()}
         ctx.strings = {int(k): v for k, v in payload.get("strings", {}).items()}
         ctx.func_starts = [int(x) for x in payload.get("func_starts", [])]
+        ctx.thumb_funcs = set(int(x) for x in payload.get("thumb_funcs", []))
         ctx.call_edges = [(int(f), int(t), l) for f, t, l in payload.get("call_edges", [])]
         ctx._build_indices()
         ctx._str_xref_idx = {int(k): v for k, v in payload.get("str_xref_idx", {}).items()}

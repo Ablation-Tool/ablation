@@ -93,20 +93,25 @@ class ARM32IntOverflowScanner:
     """
 
     def __init__(self, data: bytes, base: int, plt: Dict[int, str],
-                 func_starts: List[int]):
+                 func_starts: List[int], thumb_funcs: Optional[Set[int]] = None):
         self._data = data
         self._base = base
         self._plt = plt
         self._func_starts = func_starts
+        self._thumb_funcs: Set[int] = set(thumb_funcs) if thumb_funcs else set()
         self._arch = make_arch('arm32')
         self._cs = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
         self._cs.detail = True
         self._cs.skipdata = True
+        self._cs_thumb = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB)
+        self._cs_thumb.detail = True
+        self._cs_thumb.skipdata = True
 
     @classmethod
     def from_context(cls, ctx) -> 'ARM32IntOverflowScanner':
         data = Path(ctx.path).read_bytes()
-        return cls(data, ctx.base_va, ctx.plt, ctx.func_starts)
+        return cls(data, ctx.base_va, ctx.plt, ctx.func_starts,
+                   thumb_funcs=getattr(ctx, 'thumb_funcs', None))
 
     @classmethod
     def from_path(cls, path: str) -> 'ARM32IntOverflowScanner':
@@ -170,6 +175,14 @@ class ARM32IntOverflowScanner:
 
         return cls(data, base, plt, func_starts)
 
+    def _cs_for(self, func_va: int) -> capstone.Cs:
+        return self._cs_thumb if func_va in self._thumb_funcs else self._cs
+
+    def func_containing(self, va: int) -> Optional[int]:
+        import bisect
+        idx = bisect.bisect_right(self._func_starts, va) - 1
+        return self._func_starts[idx] if idx >= 0 else None
+
     def scan(self, max_funcs: int = 10000) -> List[IntOverflowFinding32]:
         findings: List[IntOverflowFinding32] = []
         funcs = self._func_starts[:max_funcs]
@@ -223,7 +236,7 @@ class ARM32IntOverflowScanner:
         if off < 0 or off + max_bytes > len(self._data):
             return
         chunk = self._data[off: off + max_bytes]
-        for insn in self._cs.disasm(chunk, func_va):
+        for insn in self._cs_for(func_va).disasm(chunk, func_va):
             mn = insn.mnemonic.lower()
             if mn not in _MUL_MNEMS:
                 continue
@@ -257,7 +270,7 @@ class ARM32IntOverflowScanner:
             if off < 0:
                 continue
             chunk = self._data[off: off + 4096]
-            for insn in self._cs.disasm(chunk, func_va):
+            for insn in self._cs_for(func_va).disasm(chunk, func_va):
                 mn = insn.mnemonic.lower()
                 if not (mn.startswith('bl') and not mn.startswith('blx_r')):
                     continue
@@ -281,7 +294,7 @@ class ARM32IntOverflowScanner:
             if off < 0:
                 continue
             chunk = self._data[off: off + 4096]
-            for insn in self._cs.disasm(chunk, func_va):
+            for insn in self._cs_for(func_va).disasm(chunk, func_va):
                 mn = insn.mnemonic.lower()
                 if not mn.startswith('bl'):
                     continue
@@ -379,7 +392,8 @@ class ARM32IntOverflowScanner:
             return False
         scan_len = max(alloc_va - mul_va + 4, 64)
         chunk = self._data[off: off + scan_len]
-        for insn in self._cs.disasm(chunk, mul_va):
+        func_va = self.func_containing(mul_va) or mul_va
+        for insn in self._cs_for(func_va).disasm(chunk, mul_va):
             if insn.address >= alloc_va:
                 break
             mn = insn.mnemonic.lower()
