@@ -75,6 +75,7 @@ Ablation adds what Binary Ninja does not have:
 
 ## Updates
 
+- [v2.5.0](updates/v2.5.0.md) — FormatStringScanner fortify variants, IoctlAttackSurface, CrossBinaryTaint, BYOVDDetector PDB fingerprints
 - [v2.4.0](updates/v2.4.0.md) — format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint
 - [v2.0.0](updates/v2.0.0.md) — Windows kernel driver RE
 
