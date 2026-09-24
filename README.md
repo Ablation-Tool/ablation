@@ -124,4 +124,4 @@ Built by **Nicholas Michael Kloster**, independent security researcher specializ
 
 Copyright (c) 2026 Nicholas Michael Kloster. All Rights Reserved.
 
-Commercial license required for commercial use. Source available for non-commercial research use. Contact for licensing.
+Licensed for authorized security research and educational use. Commercial use requires written permission. See [LICENSE](LICENSE) for full terms.
