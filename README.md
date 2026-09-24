@@ -1,19 +1,20 @@
-<p align="center"><img src="assets/ablation-1b-riveted-plate-header-1280.png" width="640" alt="ABLATION"></p>
+<img src="assets/ablation-1b-riveted-plate-header-1280.png" width="640" alt="ABLATION">
 
-<p align="center"><strong>Semantic firmware analysis for vulnerability researchers.</strong></p>
+# Ablation
 
-<p align="center">
-Find vulnerable functions in stripped binary firmware in seconds, not hours.<br>
-No symbols. No source. No setup.
-</p>
+Ablation is a semantic firmware analysis framework for vulnerability researchers. It finds
+vulnerable functions in stripped binary firmware in seconds -- no symbols, no source, no
+pre-built database required.
 
-<p align="center">
-<a href="docs/INDEX.md">Documentation</a> &nbsp;|&nbsp;
-<a href="PITCH.md">What it does</a> &nbsp;|&nbsp;
-<a href="docs/getting-started.md">Quick Start</a>
-</p>
+Given a stripped ELF binary, Ablation builds a behavioral corpus from call graph structure and
+RIP-relative string cross-references, encodes every function as a BERT embedding, and lets you
+query in plain English: *"TLV parser that advances a pointer without a bounds check."* It
+returns ranked candidates with cosine similarity scores. A 19,000-function binary takes 35
+seconds on CPU.
 
----
+The pattern library compounds across engagements. Every confirmed vulnerability registers as a
+semantic pattern that replays automatically on future binaries, regardless of vendor or
+architecture.
 
 ## Install
 
@@ -27,24 +28,15 @@ Optional LLM features (automated function naming via Claude):
 pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ```
 
----
-
-## In 30 seconds
+## Quick start
 
 ```python
-from ablation.analyzers.binary_context import BinaryContext
 from ablation.analyzers.corpus_builder import CorpusBuilder
 from ablation.analyzers.semantic_search import SemanticSearcher
 
-# Load binary -- 0.5s first run, 110ms from cache
-ctx = BinaryContext.load_or_build('/path/to/firmware.so')
-print(ctx.summary())
-
-# Build behavioral corpus (stored in ~/.ablation/func_id.db)
 cb = CorpusBuilder()
 cb.build('/path/to/firmware.so', product='my-target', version='1.0')
 
-# Query in plain English
 searcher = SemanticSearcher('~/.ablation/func_id.db')
 searcher.build_corpus()
 
@@ -59,32 +51,31 @@ for r in results:
 Or from the CLI:
 
 ```bash
-ablation corpus /path/to/firmware.so --product my-target --version 1.0
-ablation search /path/to/firmware.so "TLV parser without length check" --top-k 10
-ablation sweep  /path/to/firmware.so
+ablation corpus /path/to/firmware.so --product my-target --version 1.0 --sigs
+ablation sweep  /path/to/firmware.so --json results.json
+ablation search /path/to/firmware.so "TLV parser without length check"
 ablation cfg    /path/to/firmware.so 0xfa00 --insns
+ablation taint  /path/to/firmware.so
+ablation findings --sarif findings.sarif
 ```
 
-35 seconds for 19,000 functions on CPU. No pre-built database.
+## Features
 
----
-
-## What it is
-
-A Python framework for rapid vulnerability research on stripped binary firmware. Designed to
-answer one question before opening a disassembler: **which of these 19,000 functions is worth
-looking at?**
-
-Three analysis tracks:
-
-- **Vectorized scan** -- NumPy call graph and RIP-relative xref scan finds every string
-  cross-reference in an 18 MB binary in one O(N) pass. No sequential disassembly.
-- **BERT semantic search** -- query in plain English against behavioral fingerprints of every
-  function. Finds vulnerability patterns across vendors without symbol names.
-- **Self-improving pattern library** -- every confirmed finding registers as a semantic pattern
-  that replays automatically on future binaries.
-
----
+- **Vectorized corpus build** -- one O(N) pass over call graph + RIP-relative xrefs.
+  18 MB binary in 35 seconds on CPU.
+- **BERT semantic search** -- query in plain English against behavioral fingerprints.
+  Finds vulnerability patterns across vendors without symbol names.
+- **30 sweep patterns** -- buffer overflow, heap overflow, format string, integer overflow,
+  UAF, double-free, race condition, DoS, info-leak, auth-bypass, crypto misuse, and more.
+- **Signature matching** -- 40 behavioral signatures auto-name stripped `fn_0x*` functions
+  (memcpy, malloc, recv, SSL_read, system, execve, ...) at 0.62 cosine threshold.
+- **Self-improving pattern library** -- confirmed findings seed future sweeps automatically.
+- **SARIF 2.1.0 export** -- results feed directly into GitHub Code Scanning.
+- **CFG and taint analysis** -- control-flow graph and data-flow tracing from network read
+  sinks to dangerous callees.
+- **Claude Code integration** -- invoke CLI with `!` prefix inside a Claude Code session.
+  Claude interprets output, suggests manual follow-up VAs, traces taint paths.
+- **Binary Ninja plugin** -- auto-renames matched functions on binary open.
 
 ## Real results
 
@@ -96,11 +87,7 @@ All findings below were identified via semantic sweep before any manual disassem
 | Zero-length loop DoS, second protocol variant | Semantic sweep, pattern replay |
 | Pre-auth management API route exposure | Semantic sweep, taint trace |
 
----
-
 ## Export
-
-Sweep results and confirmed findings export to SARIF 2.1.0 (GitHub Code Scanning) or flat JSON:
 
 ```bash
 ablation sweep  firmware.so --sarif results.sarif
@@ -115,51 +102,6 @@ gh api repos/<owner>/<repo>/code-scanning/sarifs \
     -f tool_name=ablation
 ```
 
----
-
-## Signature matching
-
-Auto-name stripped `fn_0x*` functions using 40 behavioral signatures:
-
-```bash
-ablation corpus firmware.so --sigs          # build corpus and auto-name in one step
-ablation sigs   firmware.so --dry-run       # preview names without writing
-```
-
-Ships 40 signatures: `memcpy`, `malloc`, `recv`, `SSL_read`, `system`, `execve`, and more.
-Threshold 0.62 cosine similarity. Names written as `likely:memcpy` in the corpus DB.
-
----
-
-## Claude Code integration
-
-Ablation is designed to work alongside Claude Code. Put this in your project's `CLAUDE.md`
-or invoke the CLI directly from a Claude Code session with `!`:
-
-```bash
-! ablation corpus /path/to/firmware.so --product my-target
-! ablation sweep  /path/to/firmware.so
-! ablation search /path/to/firmware.so "parser reads user-controlled length"
-! ablation cfg    /path/to/firmware.so 0xfa00 --insns
-```
-
-Claude interprets the output, suggests manual follow-up VAs, and helps trace taint paths
-through CFG output -- combining pattern-matched candidates with LLM-guided analysis.
-
-See [Claude Code integration docs](docs/integrations/claude-code.md) for the full workflow.
-
----
-
-## Binary Ninja plugin
-
-Install `ablation/integrations/binja_plugin.py` to your Binary Ninja plugins directory.
-On binary open, the plugin checks `~/.ablation/func_id.db` for an existing corpus
-and renames matched functions automatically. Adds sweep results as bookmarks.
-
-See [Binary Ninja integration docs](docs/integrations/binja.md).
-
----
-
 ## Documentation
 
 | Document | |
@@ -168,7 +110,7 @@ See [Binary Ninja integration docs](docs/integrations/binja.md).
 | [Vulnerability Hunting](docs/workflows/vuln-hunting.md) | Full sweep-to-disclosure workflow |
 | [Cross-Version Diffing](docs/workflows/cross-version.md) | Track functions across patch releases |
 | [Go Binary RE](docs/workflows/go-binaries.md) | pclntab recovery, garbled builds |
-| [Crypto Analysis](docs/workflows/crypto.md) | Encrypted firmware, XOR keys, JWT cracking |
+| [Crypto Analysis](docs/workflows/crypto.md) | Encrypted firmware, XOR keys |
 | **Module Reference** | |
 | [Core Analyzers](docs/module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker |
 | [Semantic Search](docs/module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
@@ -181,7 +123,6 @@ See [Binary Ninja integration docs](docs/integrations/binja.md).
 | **Integrations** | |
 | [Claude Code](docs/integrations/claude-code.md) | Using Ablation inside a Claude Code session |
 | [Binary Ninja](docs/integrations/binja.md) | Plugin installation and commands |
----
 
 ## Requirements
 
@@ -189,14 +130,10 @@ See [Binary Ninja integration docs](docs/integrations/binja.md).
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
 - Optional: `anthropic` for LLM analyst features
 
----
-
 ## Author
 
 Built by **Nicholas Michael Kloster** -- independent security researcher specializing in
 binary firmware vulnerability research.
-
----
 
 ## License
 
