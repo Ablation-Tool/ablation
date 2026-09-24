@@ -17,6 +17,12 @@ dependencies = [
     "pyelftools>=0.29",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Ablation-Tool/ablation"
+Issues = "https://github.com/Ablation-Tool/ablation/issues"
+Changelog = "https://github.com/Ablation-Tool/ablation/blob/main/CHANGELOG.md"
+Source = "https://github.com/Ablation-Tool/ablation"
+
 [project.optional-dependencies]
 llm = ["anthropic>=0.30.0"]
 full = [
