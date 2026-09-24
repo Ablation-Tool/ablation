@@ -507,3 +507,10 @@ def screen_directory(dir_path: str) -> List[ByovdReport]:
 
     order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2}
     return sorted(reports, key=lambda r: order.get(r.risk_level, 99))
+
+
+# CLI compatibility alias: `det.analyze()` same as `det.detect()`
+ByovdDetector.analyze = ByovdDetector.detect  # type: ignore[attr-defined]
+
+# CLI import alias: `from ablation.analyzers.byovd_detector import BYOVDDetector`
+BYOVDDetector = ByovdDetector
