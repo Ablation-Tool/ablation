@@ -11,6 +11,7 @@ You can also reach out directly:
 
 - Email: [ablation@nuclide-research.com](mailto:ablation@nuclide-research.com)
 - X: [@ablation_tool](https://x.com/ablation_tool)
+- Signal: [@deadbug.06](https://signal.me/#p/deadbug.06)
 
 ---
 
