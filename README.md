@@ -70,7 +70,7 @@ Ablation adds what Binary Ninja does not have:
 
 ## Real-World Results
 
-Ablation has been used to analyze production firmware from Fortinet, Cisco, and others.
+Ablation has been used to analyze production firmware from Fortinet, Cisco, TencentOS, Fujitsu, and others.
 
 Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
 
