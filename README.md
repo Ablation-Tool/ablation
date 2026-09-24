@@ -90,6 +90,16 @@ gh api repos/<owner>/<repo>/code-scanning/sarifs \
     -f tool_name=ablation
 ```
 
+## Autonomous reverse engineering
+
+Ablation runs autonomously inside a Claude Code session. Hand over a binary path and Claude executes the full workflow without further instruction.
+
+Claude builds the corpus, sweeps for vulnerable functions across all 30 patterns, queries specific behaviors by name, pulls CFG and taint traces for top candidates, and interprets every result. The researcher reviews findings. The tool does the triage.
+
+The `CLAUDE.md` in this repo contains the full command reference and standard workflow. Claude reads it at session start and operates Ablation as a first-class tool. No context-switching, no manual command sequencing, no intermediate steps handed back to the researcher.
+
+See [Claude Code integration docs](docs/integrations/claude-code.md) for the full session walkthrough.
+
 ## Documentation
 
 | Document | |
