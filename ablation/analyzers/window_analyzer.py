@@ -42,6 +42,20 @@ _RIP_RE = re.compile(r'\[rip [+-] (0x[0-9a-f]+)\]')
 _ENDBR64 = bytes([0xf3, 0x0f, 0x1e, 0xfa])
 
 
+def _elf_arch(data: bytes) -> str:
+    """Return 'x86_64', 'arm64', or 'arm32' from ELF header e_machine."""
+    if len(data) < 20:
+        return 'x86_64'
+    if data[:4] != b'\x7fELF':
+        return 'x86_64'
+    e_machine = struct.unpack_from('<H', data, 18)[0]
+    if e_machine == 183:   # EM_AARCH64
+        return 'arm64'
+    if e_machine == 40:    # EM_ARM
+        return 'arm32'
+    return 'x86_64'
+
+
 def _parse_rip_target(insn_addr: int, insn_size: int, op_str: str) -> Optional[int]:
     m = _RIP_RE.search(op_str)
     if not m:
@@ -65,6 +79,7 @@ class WindowAnalyzer:
         self.data = data
         self.base_va = base_va
         self.path = path
+        self.arch: str = _elf_arch(data)
         self.plt: Dict[int, str] = {}
         self.strings: Dict[int, str] = {}
         self._text_start: int = 0
@@ -176,7 +191,12 @@ class WindowAnalyzer:
 
     def _cs(self) -> capstone.Cs:
         if self._md is None:
-            self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+            if self.arch == 'arm32':
+                self._md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
+            elif self.arch == 'arm64':
+                self._md = capstone.Cs(capstone.CS_ARCH_AARCH64, capstone.CS_MODE_ARM)
+            else:
+                self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
             self._md.detail = False
         return self._md
 
@@ -227,14 +247,18 @@ class WindowAnalyzer:
             line = f"0x{addr:x}: {mnemonic:<8} {op_str}"
             annotations: List[str] = []
 
-            # Mark function starts
-            if bytes(insn.bytes[:4]) == _ENDBR64:
+            # Mark function starts (x86_64: endbr64 probe; arm32/arm64: push/stp prologue)
+            if self.arch == 'x86_64' and bytes(insn.bytes[:4]) == _ENDBR64:
                 annotations.append("[FUNC_START]")
+            elif self.arch in ('arm32', 'arm64') and mnemonic in ('push', 'stp', 'stmdb', 'stmfd'):
+                if 'lr' in op_str.lower() or 'x29' in op_str.lower():
+                    annotations.append("[FUNC_START?]")
 
             # Annotate calls with PLT symbol name
-            if mnemonic == "call":
+            call_mnems = {'call'} if self.arch == 'x86_64' else {'bl', 'blx', 'blr'}
+            if mnemonic.lower().split('.')[0] in call_mnems:
                 try:
-                    target = int(op_str, 16)
+                    target = int(op_str.strip().lstrip('#'), 16)
                     if target in self.plt:
                         annotations.append(f"PLT -> {self.plt[target]}")
                     elif target in self.strings:
@@ -242,8 +266,8 @@ class WindowAnalyzer:
                 except ValueError:
                     pass
 
-            # Annotate RIP-relative LEA/MOV with string content
-            if mnemonic in ("lea", "mov") and "[rip" in op_str:
+            # Annotate RIP-relative LEA/MOV with string content (x86_64 only)
+            if self.arch == 'x86_64' and mnemonic in ("lea", "mov") and "[rip" in op_str:
                 target = _parse_rip_target(addr, insn.size, op_str)
                 if target is not None and target in self.strings:
                     s = self.strings[target]
@@ -272,10 +296,10 @@ class WindowAnalyzer:
         return "\n".join(lines)
 
     def find_func_starts(self, va: int, window: int = 1536, align_back: int = 0) -> List[int]:
-        """Return VAs of all endbr64 instructions in the window (function start candidates)."""
+        """Return VAs of function start candidates in the window."""
         starts = []
         for line in self.dump(va, window=window, align_back=align_back):
-            if "[FUNC_START]" in line:
+            if "[FUNC_START" in line:
                 try:
                     addr_str = line.split(":")[0]
                     starts.append(int(addr_str, 16))
@@ -285,12 +309,13 @@ class WindowAnalyzer:
 
     def calls_in_window(self, va: int, window: int = 1536, align_back: int = 0) -> List[Tuple[int, int, str]]:
         """
-        Return (call_site_va, target_va, label) for all call instructions in the window.
+        Return (call_site_va, target_va, label) for all call/bl instructions in the window.
         label is the PLT symbol name if known, else ''.
         """
+        call_marker = ': call' if self.arch == 'x86_64' else ': bl'
         calls = []
         for line in self.dump(va, window=window, align_back=align_back):
-            if ": call" not in line:
+            if call_marker not in line:
                 continue
             parts = line.split(":")
             try:
