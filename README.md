@@ -87,6 +87,20 @@ Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC
 
 ---
 
+## Feedback
+
+Found a bug, have an idea, or want to see something added to the tool? Reach out directly.
+
+- [Open an issue](https://github.com/Ablation-Tool/ablation/issues) on GitHub
+- X: [@ablation_tool](https://x.com/ablation_tool)
+- Signal: [@deadbug.06](https://signal.me/#p/deadbug.06)
+
+**Ideas and feature requests:** describe the RE task you want to accomplish and what Ablation currently can't do. All suggestions are welcome.
+
+**Bug reports:** include your Python version, OS, the command that failed, and the full error output.
+
+---
+
 ## Install
 
 ```bash
@@ -130,21 +144,6 @@ ablation news
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
 - Optional: `anthropic` for LLM features
-
----
-
-## Feedback
-
-Found a bug, have an idea, or want to see something added to the tool? Reach out directly.
-
-- [Open an issue](https://github.com/Ablation-Tool/ablation/issues) on GitHub
-- Email: [ablation@nuclide-research.com](mailto:ablation@nuclide-research.com)
-- X: [@ablation_tool](https://x.com/ablation_tool)
-- Signal: [@deadbug.06](https://signal.me/#p/deadbug.06)
-
-**Bug reports:** include your Python version, OS, the command that failed, and the full error output.
-
-**Ideas and feature requests:** describe the RE task you want to accomplish and what Ablation currently can't do. All suggestions are welcome.
 
 ---
 
