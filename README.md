@@ -89,4 +89,4 @@ See [LICENSE](LICENSE).
 
 ## Maintainer
 
-Nicholas Michael Kloster
+Nicholas Michael Kloster & Claude
