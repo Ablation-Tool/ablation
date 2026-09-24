@@ -4,13 +4,13 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-**Binary RE platform for stripped firmware. Disassembly, taint analysis, semantic search, and autonomous LLM-driven analysis. Built from scratch.**
+**Hand it any binary. It reverse engineers it.**
 
 ---
 
 ## What we use it for
 
-We load stripped enterprise firmware binaries -- network appliances, IPS engines, management platforms -- with 19,000+ functions, no symbols, no debug information. We open Claude Code, tell it to find vulnerabilities, and walk away.
+Hand Ablation any binary -- stripped firmware, enterprise applications, shared libraries, Go binaries, Windows PE files, macOS Mach-O, embedded images -- and tell Claude Code to find vulnerabilities. It takes apart the binary: disassembly, call graph, taint analysis, semantic search across every function, cross-binary analysis, version diffing. You do not need symbols. You do not need source. You do not need to know anything about the binary beforehand.
 
 Claude runs the semantic sweep across all functions, identifies top candidates by vulnerability class, pulls CFG and taint traces on each one, reasons about the results, and comes back with specific functions, specific vulnerability classes, and specific disassembly showing exactly why they are vulnerable. Confirmed findings before opening a disassembler.
 
@@ -96,7 +96,7 @@ SemanticSearcher runs first, across all functions, before any CFG or disassembly
 
 ## Coverage vs Ghidra, IDA Pro, and Binary Ninja
 
-Ablation was built from scratch. It does not wrap or call Ghidra, IDA Pro, or Binary Ninja. Every capability listed below is implemented directly in Python against raw binaries using capstone, lief, numpy, and the Anthropic API.
+Ablation was built from scratch. It does not wrap or call Ghidra, IDA Pro, or Binary Ninja. Every capability listed below is implemented directly in Python -- capstone, lief, numpy, and the Anthropic API -- against any binary you hand it.
 
 ### vs Ghidra
 
