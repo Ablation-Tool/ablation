@@ -1,5 +1,5 @@
 """
-xref_graph.py -- Multi-arch ELF cross-reference graph: strings, call graph, callers.
+xref_graph.py: Multi-arch ELF cross-reference graph: strings, call graph, callers.
 
 Closes the primary capability gap vs. Ghidra: knowing what strings a function
 references and who calls it. Both dramatically improve BERT embedding quality.
@@ -7,10 +7,10 @@ references and who calls it. Both dramatically improve BERT embedding quality.
 Supported architectures: x86_64, arm64, arm32 (including Thumb).
 
 Key outputs per function VA:
-  strings_at(va)  -- printable strings the function references
-  callees(va)     -- VAs this function calls directly
-  callers(va)     -- VAs that call this function
-  plt_name(va)    -- imported symbol name if va is a PLT entry
+  strings_at(va) : printable strings the function references
+  callees(va)    : VAs this function calls directly
+  callers(va)    : VAs that call this function
+  plt_name(va)   : imported symbol name if va is a PLT entry
 
 Usage:
     xg = XRefGraph.from_path('/path/to/binary')
@@ -181,7 +181,7 @@ class XRefGraph:
         self._build_call_graph(merged if merged else None)
 
         # Second pass: all call targets are function entries by definition.
-        # Augment _func_starts with discovered callees -- catches leaf functions
+        # Augment _func_starts with discovered callees: catches leaf functions
         # and non-standard prologues missed by the prologue heuristic.
         self._augment_func_starts_from_callees()
         return self

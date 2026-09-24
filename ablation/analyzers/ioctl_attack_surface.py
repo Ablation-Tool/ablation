@@ -1,9 +1,9 @@
 """
-ioctl_attack_surface.py -- IOCTL attack surface generator for Windows kernel drivers.
+ioctl_attack_surface.py: IOCTL attack surface generator for Windows kernel drivers.
 
 Builds on KernelDriverAnalyzer to enumerate the complete IOCTL dispatch surface:
   - All IoControlCode values extracted from the binary
-  - METHOD_NEITHER codes (raw user pointer -- no kernel buffer copy)
+  - METHOD_NEITHER codes (raw user pointer: no kernel buffer copy)
   - InputBufferLength / OutputBufferLength access patterns per handler
   - ProbeForRead / ProbeForWrite presence (protection against TYPE3 derefs)
   - ExAllocatePool calls downstream of buffer length reads (integer overflow path)
@@ -18,8 +18,8 @@ IO_STACK_LOCATION.Parameters.DeviceIoControl offsets (x64):
   +0x08  OutputBufferLength  (ULONG)
   +0x10  InputBufferLength   (ULONG)
   +0x18  IoControlCode       (ULONG)
-  +0x20  Type3InputBuffer    (PVOID) -- valid only for METHOD_NEITHER
-  +0x70  Buffer              (PVOID) -- SystemBuffer for METHOD_BUFFERED
+  +0x20  Type3InputBuffer    (PVOID): valid only for METHOD_NEITHER
+  +0x70  Buffer              (PVOID): SystemBuffer for METHOD_BUFFERED
 """
 
 from __future__ import annotations
@@ -402,7 +402,7 @@ class IoctlAttackSurfaceGenerator:
                                 pattern_type="ALLOC_BEFORE_LENGTH_CHECK",
                                 offset=insn.address - handler_va,
                                 description=(
-                                    f"{target_name} called before InputBufferLength read -- "
+                                    f"{target_name} called before InputBufferLength read: "
                                     "allocation size may be user-controlled without bounds check"
                                 ),
                                 severity="HIGH",
@@ -529,7 +529,7 @@ class IoctlAttackSurfaceGenerator:
                     offset=0,
                     description=(
                         "Allocation API called but InputBufferLength never read from "
-                        "IO_STACK_LOCATION -- allocation size may be fully user-controlled"
+                        "IO_STACK_LOCATION: allocation size may be fully user-controlled"
                     ),
                     severity="HIGH",
                 ))

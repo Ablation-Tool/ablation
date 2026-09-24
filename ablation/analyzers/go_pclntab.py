@@ -7,11 +7,11 @@ Extracting names before BERT encoding lifts sweep accuracy from ~0.20 to ~0.70+
 on stripped Go binaries (vs generic func_0xABCD descriptions).
 
 Supports:
-  Go 1.12-1.15  (magic 0xFFFFFB_FF) -- 32-bit function table
-  Go 1.16-1.19  (magic 0xFFFFFA_FF) -- 64-bit function table
-  Go 1.20+      (magic 0xFFFFFFF1) -- 64-bit with separate funcnametab
+  Go 1.12-1.15  (magic 0xFFFFFB_FF): 32-bit function table
+  Go 1.16-1.19  (magic 0xFFFFFA_FF): 64-bit function table
+  Go 1.20+      (magic 0xFFFFFFF1): 64-bit with separate funcnametab
 
-Architecture: x86-64, arm64, mips, riscv64 -- all use the same pclntab structure.
+Architecture: x86-64, arm64, mips, riscv64: all use the same pclntab structure.
 
 Usage:
     from modules.go_pclntab import GoFuncTable
@@ -48,7 +48,7 @@ class GoFuncTable:
         Scan binary for pclntab magic, parse function table, return GoFuncTable.
         Returns None if no pclntab found.
         """
-        # Search for known magics -- try all known values
+        # Search for known magics: try all known values
         for magic, ver in [
             (_MAGIC_120, "1.20+"),
             (_MAGIC_118, "1.16-1.19"),
@@ -97,11 +97,11 @@ def _parse_120(data: bytes, base: int, ver: str) -> "GoFuncTable":
       8   nfunc(8)
      16   nfiles(8)
      24   textStart(8)
-     32   funcnametabOff(8)  -- offset from base to funcnametab
+     32   funcnametabOff(8) : offset from base to funcnametab
      40   cutabOff(8)
      48   filetabOff(8)
      56   pctabOff(8)
-     64   funcdataOff(8)     -- offset from base to funcdata (ftab + funcstructs)
+     64   funcdataOff(8)    : offset from base to funcdata (ftab + funcstructs)
 
     ftab at base+funcdataOff:
       (nfunc+1) entries of {entryOff uint32, funcOff uint32}
@@ -110,7 +110,7 @@ def _parse_120(data: bytes, base: int, ver: str) -> "GoFuncTable":
 
     _Func struct:
       0  entryOff uint32
-      4  nameOff  int32   -- offset into funcnametab (from funcnametabBase)
+      4  nameOff  int32  : offset into funcnametab (from funcnametabBase)
       8  args     uint32
       ...
     """
@@ -169,11 +169,11 @@ def _parse_pre120(data: bytes, base: int, ver: str) -> "GoFuncTable":
     Go 1.16-1.19 pclntab layout (magic 0xFFFFFAFF):
       0   magic(4) minLC(1) ptrSize(1) pad(2)
       8   nfunc(8)
-     16   funcDataOff(8)   -- offset to function table
+     16   funcDataOff(8)  : offset to function table
      funcData: (nfunc+1) pairs of (funcPC uint64, funcDataOff uint64)
      _Func struct (at base + funcDataOff):
       0  entry    uint64
-      8  nameoff  int32  -- offset into string table (embedded before funcdata)
+      8  nameoff  int32 : offset into string table (embedded before funcdata)
     """
     if base + 24 > len(data):
         raise ValueError("pclntab too small")
@@ -234,7 +234,7 @@ def enrich_descriptions(funcs: list[dict], func_table: "GoFuncTable") -> list[di
     """
     Enrich function description dicts with Go function names from pclntab.
     funcs: list of dicts with 'va' (int) and 'desc' (str) keys.
-    Matches by VA -- updates 'desc' in place to prepend function name.
+    Matches by VA: updates 'desc' in place to prepend function name.
     Returns the same list.
     """
     names = func_table.names

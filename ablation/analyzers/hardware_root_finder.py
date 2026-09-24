@@ -1,8 +1,8 @@
 """
-hardware_root_finder.py -- Hardware root detection via MMIO range access scanning.
+hardware_root_finder.py: Hardware root detection via MMIO range access scanning.
 
 Firmware for microcontrollers and SoCs accesses peripherals via Memory-Mapped I/O
-(MMIO) -- hardcoded addresses in known peripheral ranges. Functions that read from
+(MMIO): hardcoded addresses in known peripheral ranges. Functions that read from
 or write to MMIO are "hardware roots": the true entry points for device-specific
 behavior (UART, GPIO, DMA, watchdog, crypto accelerators, network MACs).
 
@@ -12,7 +12,7 @@ Strategy:
    system peripherals).
 2. Collect the containing function VA for each hit.
 3. From each hardware-root function, walk callers backwards via BinaryContext to
-   build the "call spine" -- who eventually calls into the hardware.
+   build the "call spine": who eventually calls into the hardware.
 
 This is the inverse of TaintTracker: instead of following data from network input
 to dangerous sinks, we follow code from hardware access upward to protocol parsers.

@@ -2,7 +2,7 @@
 Cross-version binary function similarity fine-tuning.
 
 Problem: MiniLM-L6-v2 collapses all stripped binary functions to the same
-embedding neighborhood -- 0 orphans at threshold=0.65 even when 116% size
+embedding neighborhood: 0 orphans at threshold=0.65 even when 116% size
 growth implies major new code. Root cause: opcode n-gram descriptions are
 nearly identical across functions (push/sub/mov/call is universal).
 
@@ -15,7 +15,7 @@ Pair generation strategy:
   positive = describe_function() text for best structural match in version B
 
 Structural match = (instruction count within 20%) AND (call set Jaccard >= threshold).
-Loss: MultipleNegativesRankingLoss -- every other sample in the batch acts
+Loss: MultipleNegativesRankingLoss: every other sample in the batch acts
 as a negative. Batch of 32 pairs provides 31 negatives per anchor automatically.
 """
 

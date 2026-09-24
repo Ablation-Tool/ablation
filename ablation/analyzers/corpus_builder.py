@@ -1,5 +1,5 @@
 """
-corpus_builder.py -- Populate func_id.db with ANGR_INFERRED function records.
+corpus_builder.py: Populate func_id.db with ANGR_INFERRED function records.
 
 Enables SemanticSearcher.build_corpus() for binaries with no prior RE coverage,
 such as multiple shared libraries from the same firmware image.

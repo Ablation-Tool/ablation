@@ -1,5 +1,5 @@
 """
-chunk_walker_validator.py -- Detect TLV/chunk parsers missing alignment.
+chunk_walker_validator.py: Detect TLV/chunk parsers missing alignment.
 
 Many protocols (SCTP RFC 9260, DNS RFC 1035, GRE, PPTP, IS-IS) require
 chunk/TLV boundaries to be aligned to 4 bytes. Parsers that advance the
@@ -119,9 +119,9 @@ def _is_mem_length_load(mnem: str, ops: str) -> Optional[tuple]:
     """Detect loading a chunk length field from memory into a register.
 
     Matches:
-      movzwl offset(%ptr_reg), %dest_reg  -- 16-bit length field (e.g. SCTP chunk length)
-      movzbl offset(%ptr_reg), %dest_reg  -- 8-bit length field
-      movzx  %dest_reg, offset(%ptr_reg)  -- Intel syntax variant
+      movzwl offset(%ptr_reg), %dest_reg : 16-bit length field (e.g. SCTP chunk length)
+      movzbl offset(%ptr_reg), %dest_reg : 8-bit length field
+      movzx  %dest_reg, offset(%ptr_reg) : Intel syntax variant
 
     Returns (dest_reg, ptr_reg) if matched, else None.
     """
@@ -137,7 +137,7 @@ def _is_mem_length_load(mnem: str, ops: str) -> Optional[tuple]:
     if m:
         dest = m.group(1)
         ptr = m.group(2).lower()
-        # RIP-relative loads access global/static data -- not user-controlled packet fields
+        # RIP-relative loads access global/static data: not user-controlled packet fields
         if ptr == 'rip':
             return None
         # Stack-relative loads (rbp/rsp) are stack frame variables, not packet fields
@@ -193,8 +193,8 @@ def _has_alignment(insns_window: List[tuple], len_reg: str) -> bool:
     """Check if a 4-byte alignment mask is present in the instruction window.
 
     Alignment requires an AND with 0xFFFFFFFC (or 0xFFFFFFF8 for 8-byte):
-      and reg, 0xfffffffc   -- 4-byte alignment mask (canonical)
-      and reg, -4           -- same in signed decimal form
+      and reg, 0xfffffffc  : 4-byte alignment mask (canonical)
+      and reg, -4          : same in signed decimal form
 
     We don't require the preceding 'add reg, 3' since 'add reg, 3' is
     too common in protocol code. The AND mask is the definitive signal.

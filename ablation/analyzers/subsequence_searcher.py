@@ -1,11 +1,11 @@
 """
-subsequence_searcher.py -- Behavioral subsequence pattern search.
+subsequence_searcher.py: Behavioral subsequence pattern search.
 
 Finds all functions in a binary that contain a specified behavioral
 sub-pattern. Two modes:
 
 1. Exact: "find all functions containing [COMPARISON_OP, CONDITIONAL_OP,
-   DATA_TRANSFER_OP, UNCONDITIONAL_OP] in sequence" -- literal subsequence
+   DATA_TRANSFER_OP, UNCONDITIONAL_OP] in sequence": literal subsequence
    match with optional wildcards.
 
 2. DTW approximate: sliding window DTW to find approximate matches,

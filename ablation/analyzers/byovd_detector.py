@@ -1,29 +1,29 @@
 """
-byovd_detector.py -- Bring Your Own Vulnerable Driver (BYOVD) capability detector.
+byovd_detector.py: Bring Your Own Vulnerable Driver (BYOVD) capability detector.
 
 BYOVD is a technique where attackers load a legitimate, Authenticode-signed kernel
-driver that contains dangerous capabilities -- physical memory R/W, process/token
-manipulation, or direct kernel object manipulation -- and exploit those capabilities
+driver that contains dangerous capabilities: physical memory R/W, process/token
+manipulation, or direct kernel object manipulation: and exploit those capabilities
 to bypass EDR controls, disable kernel-level security, or escalate to kernel-mode
 execution.
 
 Detection strategy:
-  Stage 1: Static signature -- identify dangerous capability imports
-  Stage 2: IOCTL surface scan -- find IOCTLs that accept physical addresses or
+  Stage 1: Static signature: identify dangerous capability imports
+  Stage 2: IOCTL surface scan: find IOCTLs that accept physical addresses or
            process handles, and trace them to the dangerous APIs
-  Stage 3: String evidence -- device path names, known vulnerable driver strings,
-           \Device\PhysicalMemory access, direct object manager paths
+  Stage 3: String evidence: device path names, known vulnerable driver strings,
+           \\Device\\PhysicalMemory access, direct object manager paths
 
 BYOVD capability classes:
-  PHYS_MEM_RW:    MmMapIoSpace / HalTranslateBusAddress -- map physical memory
+  PHYS_MEM_RW:    MmMapIoSpace / HalTranslateBusAddress: map physical memory
                   from user-controlled address -> arbitrary kernel R/W
-  PROCESS_KILL:   ZwTerminateProcess with elevated privilege -- kill EDR processes
-  TOKEN_STEAL:    PsInitialSystemProcess + token copy pattern -- privilege escalation
+  PROCESS_KILL:   ZwTerminateProcess with elevated privilege: kill EDR processes
+  TOKEN_STEAL:    PsInitialSystemProcess + token copy pattern: privilege escalation
   PTE_MANIP:      MmGetPhysicalAddress + direct PTE write via MmMapIoSpace
-  DRIVER_LOAD:    ZwLoadDriver / IoCreateDriver -- load additional kernel modules
+  DRIVER_LOAD:    ZwLoadDriver / IoCreateDriver: load additional kernel modules
   CALLBACK_REMOVE:PsRemoveLoadImageNotifyRoutine / PsRemoveCreateThreadNotifyRoutine
-                  -- blind EDR callbacks
-  MSR_WRITE:      WRMSR (0x30) via IOCTL passthrough -- modify LSTAR/STAR/SYSENTER
+                 : blind EDR callbacks
+  MSR_WRITE:      WRMSR (0x30) via IOCTL passthrough: modify LSTAR/STAR/SYSENTER
   DKOM:           ObReferenceObjectByHandle + direct _EPROCESS manipulation
 
 Grounded in:
@@ -162,7 +162,7 @@ class ByovdCapability:
             "HIGH":     "[HIGH] ",
             "MEDIUM":   "[MED]  ",
         }.get(self.risk, "[?]    ")
-        return f"{risk_tag} {self.capability_class}: {self.api_name} -- {self.evidence}"
+        return f"{risk_tag} {self.capability_class}: {self.api_name}: {self.evidence}"
 
 
 @dataclass
