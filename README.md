@@ -73,16 +73,6 @@ Ablation adds what Binary Ninja does not have:
 
 ---
 
-## Updates
-
-- [v2.5.0](updates/v2.5.0.md) — FormatStringScanner fortify variants, IoctlAttackSurface, CrossBinaryTaint, BYOVDDetector PDB fingerprints
-- [v2.4.0](updates/v2.4.0.md) — format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint
-- [v2.0.0](updates/v2.0.0.md) — Windows kernel driver RE
-
-`ablation news` prints the update log inline.
-
----
-
 ## Real-World Results
 
 Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio, covering x86-64, ARM64, ARM32, MIPS32, PowerPC, and Windows .sys.
