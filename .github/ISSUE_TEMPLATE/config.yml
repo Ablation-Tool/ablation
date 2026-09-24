@@ -7,6 +7,9 @@ contact_links:
   - name: X (@ablation_tool)
     url: https://x.com/ablation_tool
     about: Reach out on X for quick questions or feedback
+  - name: Signal (@deadbug.06)
+    url: https://signal.me/#p/deadbug.06
+    about: Message on Signal for anything you prefer to keep off public channels
   - name: Security vulnerability
     url: https://github.com/Ablation-Tool/ablation/security/advisories/new
     about: Report a security vulnerability privately via GitHub advisories
