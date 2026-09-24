@@ -2,19 +2,11 @@
 
 # Ablation
 
-Ablation is a semantic firmware analysis framework for vulnerability researchers. It finds
-vulnerable functions in stripped binary firmware in seconds -- no symbols, no source, no
-pre-built database required.
+Ablation finds vulnerable functions in stripped binary firmware in seconds, without symbols, source code, or a pre-built database.
 
-Given a stripped ELF binary, Ablation builds a behavioral corpus from call graph structure and
-RIP-relative string cross-references, encodes every function as a BERT embedding, and lets you
-query in plain English: *"TLV parser that advances a pointer without a bounds check."* It
-returns ranked candidates with cosine similarity scores. A 19,000-function binary takes 35
-seconds on CPU.
+Given a stripped ELF binary, Ablation builds a behavioral corpus from call graph structure and RIP-relative string cross-references. It encodes every function as a BERT embedding, then lets you query in plain English: *"TLV parser that advances a pointer without a bounds check."* Ranked candidates return with cosine similarity scores. A 19,000-function binary takes 35 seconds on CPU.
 
-The pattern library compounds across engagements. Every confirmed vulnerability registers as a
-semantic pattern that replays automatically on future binaries, regardless of vendor or
-architecture.
+The pattern library improves with each engagement. Every confirmed vulnerability seeds a new semantic pattern that replays automatically on future binaries, regardless of vendor or architecture.
 
 ## Install
 
@@ -28,7 +20,7 @@ Optional LLM features (automated function naming via Claude):
 pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ```
 
-## Quick start
+## Quick Start
 
 ```python
 from ablation.analyzers.corpus_builder import CorpusBuilder
@@ -61,23 +53,17 @@ ablation findings --sarif findings.sarif
 
 ## Features
 
-- **Vectorized corpus build** -- one O(N) pass over call graph + RIP-relative xrefs.
-  18 MB binary in 35 seconds on CPU.
-- **BERT semantic search** -- query in plain English against behavioral fingerprints.
-  Finds vulnerability patterns across vendors without symbol names.
-- **30 sweep patterns** -- buffer overflow, heap overflow, format string, integer overflow,
-  UAF, double-free, race condition, DoS, info-leak, auth-bypass, crypto misuse, and more.
-- **Signature matching** -- 40 behavioral signatures auto-name stripped `fn_0x*` functions
-  (memcpy, malloc, recv, SSL_read, system, execve, ...) at 0.62 cosine threshold.
-- **Self-improving pattern library** -- confirmed findings seed future sweeps automatically.
-- **SARIF 2.1.0 export** -- results feed directly into GitHub Code Scanning.
-- **CFG and taint analysis** -- control-flow graph and data-flow tracing from network read
-  sinks to dangerous callees.
-- **Claude Code integration** -- invoke CLI with `!` prefix inside a Claude Code session.
-  Claude interprets output, suggests manual follow-up VAs, traces taint paths.
-- **Binary Ninja plugin** -- auto-renames matched functions on binary open.
+- **Vectorized build**: one O(N) pass over call graph and RIP-relative xrefs; 35 seconds for a 19,000-function binary on CPU
+- **BERT semantic search**: query functions in plain English; finds vulnerability patterns across vendors without symbol names
+- **30 sweep patterns**: buffer overflow, heap overflow, format string, integer overflow, UAF, double-free, race condition, DoS, info-leak, auth-bypass, crypto misuse, and more
+- **Signature matching**: 40 behavioral signatures auto-name stripped `fn_0x*` functions at 0.62 cosine threshold
+- **Self-improving pattern library**: confirmed findings seed future sweeps automatically
+- **SARIF 2.1.0 export**: results feed directly into GitHub Code Scanning
+- **CFG and taint analysis**: traces user-controlled data from network read functions to dangerous callees
+- **Claude Code integration**: invoke the CLI with `!` inside a Claude Code session; Claude interprets output, suggests follow-up addresses, and traces taint paths
+- **Binary Ninja plugin**: renames matched functions on binary open
 
-## Real results
+## Results
 
 All findings below were identified via semantic sweep before any manual disassembly.
 
@@ -132,12 +118,10 @@ gh api repos/<owner>/<repo>/code-scanning/sarifs \
 
 ## Author
 
-Built by **Nicholas Michael Kloster** -- independent security researcher specializing in
-binary firmware vulnerability research.
+Built by **Nicholas Michael Kloster**, independent security researcher specializing in binary firmware vulnerability research.
 
 ## License
 
 Copyright (c) 2026 Nicholas Michael Kloster. All Rights Reserved.
 
-Commercial license required for commercial use. Source available for non-commercial research
-use. Contact for licensing.
+Commercial license required for commercial use. Source available for non-commercial research use. Contact for licensing.
