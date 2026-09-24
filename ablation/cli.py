@@ -361,6 +361,8 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v2.5.0 (2026-09-24)  HeapUAFScanner, MIPS32FuncProfiler, ByovdDetector aliases
+
 v2.4.0 (2026-09-24)  MIPS32 taint tracker + cross-binary taint + IOCTL surface
   ablation mips <binary> [--le]
   ablation ioctl-surface <driver.sys>
