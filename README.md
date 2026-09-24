@@ -75,17 +75,21 @@ Ablation adds what Binary Ninja does not have:
 
 ## Updates
 
-**v2.1.0 (2026-09-24): Format string scanner, MIPS32 taint tracker, BYOVD detector, heap scanner**
+**v2.4.0 (2026-09-24): Format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint**
 
-Four new analyzers ship in this release.
+Six new analyzers ship in this release.
 
 `ablation fmtstr <binary>` scans any x86-64 ELF for format string vulnerabilities. It covers 28 printf/syslog/err family sinks and traces the format argument register backward from each call site. A `LEA [rip+offset]` into `.rodata` is safe. A `MOV` from a stack slot or argument register is vulnerable. It also detects the two-hop pattern from TAOSSA ch.8: a `vsnprintf` output buffer reused as the format argument to `syslog`.
 
 `MIPS32TaintTracker` (`taint_tracker_mips.py`) adds MIPS32 network-to-sink taint tracking. It handles the O32 ABI, load-delay slots, and both big-endian and little-endian binaries. Sources: recv/read/fgets family. Sinks: system/execve/strcpy/sprintf/memcpy. Intraprocedural and interprocedural BFS modes.
 
-`BYOVDDetector` (`byovd_detector.py`) detects Bring Your Own Vulnerable Driver patterns: `MmMapIoSpace` called from an IOCTL handler with user-controlled physical address and size, enabling arbitrary physical memory read/write from user mode.
+`BYOVDDetector` (`byovd_detector.py`) detects Bring Your Own Vulnerable Driver patterns across 8 attack paths: `MmMapIoSpace` with user-controlled physical address, MDL-based kernel write, MSR_LSTAR manipulation, SSDT hook via CR0 WP-disable, token stealing via PsInitialSystemProcess, SMEP bypass via CR4, APC kernel injection, and ZwWriteVirtualMemory. Scores each driver 0-100 and returns a BYOVD_CONFIRMED verdict when a signed driver exposes a METHOD_NEITHER IOCTL with a dangerous primitive behind it.
 
-`HeapVulnScanner` (`heap_vuln_scanner.py`) scans x86-64 ELF for heap vulnerability patterns: use-after-free indicators, double-free sequences, and allocation size calculations derived from user-controlled data.
+`HeapVulnScanner` (`heap_vuln_scanner.py`) scans x86-64 ELF for four heap vulnerability classes grounded in TAOSSA ch.5 and ch.6: integer overflow before allocation (IMUL/MUL/SHL result fed to malloc without a bounds check), use-after-free, double-free, and off-by-one allocation (strlen without +1 for the NUL terminator).
+
+`IoctlAttackSurface` (`ioctl_attack_surface.py`) generates a per-IOCTL handler attack surface report for Windows kernel drivers. It pairs each decoded CTL_CODE with the handler's disassembly window, flags METHOD_NEITHER codes, and annotates dangerous APIs reached within the handler.
+
+`CrossBinaryTaintTracker` (`cross_binary_taint.py`) follows taint across shared library boundaries using LibGraph. It seeds tainted return values at each export crossing and BFS-tracks them through callee chains, producing source-to-sink paths that span multiple `.so` files in a firmware image.
 
 **v2.0.0 (2026-09-24): Windows kernel driver RE**
 
