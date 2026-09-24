@@ -20,7 +20,7 @@ Do not open a public GitHub issue for security vulnerabilities.
 
 **Preferred:** Use GitHub's private advisory flow -- click "Report a vulnerability" on the [Security tab](https://github.com/Ablation-Tool/ablation/security/advisories/new).
 
-**Alternative:** Email [ablation@nuclide-research.com](mailto:ablation@nuclide-research.com) with `[SECURITY]` in the subject line. Include:
+**Alternative:** Email [ablation@nuclide-research.com](mailto:ablation@nuclide-research.com) with `[SECURITY]` in the subject line, or message on Signal at [@deadbug.06](https://signal.me/#p/deadbug.06). Include:
 
 - A description of the vulnerability and its impact
 - Steps to reproduce or a minimal proof-of-concept binary
@@ -28,4 +28,4 @@ Do not open a public GitHub issue for security vulnerabilities.
 
 ## Response
 
-Acknowledgment within 72 hours. Coordinated disclosure: no public details until a fix is available and you have reviewed the patch.
+Acknowledgment within 72 hours. Bugs are remediated as fast as possible. Coordinated disclosure: no public details until a fix is available and you have reviewed the patch.
