@@ -1,6 +1,6 @@
 <img src="assets/ablation-1b-riveted-plate-header-1280.png" width="640" alt="ABLATION">
 
-# Ablation Software Reverse Engineering Framework
+# Ablation Autonomous Reverse Engineering Framework
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
