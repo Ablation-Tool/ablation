@@ -1,10 +1,8 @@
 <img src="assets/ablation-1b-riveted-plate-header-1280.png" width="640" alt="ABLATION">
 
-# Ablation
+# Ablation Software Reverse Engineering Framework
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
-
-**Hand it any binary. It reverse engineers it.**
 
 Ablation is an autonomous software reverse engineering framework. It does everything Ghidra, IDA Pro, and Binary Ninja do, without the tedious GUI work, without the license fees, and without relying on any legacy RE tool.
 
