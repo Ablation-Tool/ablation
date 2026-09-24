@@ -6,6 +6,20 @@
 
 Ablation is an autonomous software reverse engineering framework. It does everything Ghidra, IDA Pro, and Binary Ninja do, without the tedious GUI work, without the license fees, and without relying on any legacy RE tool.
 
+---
+
+## Claude Code Integration
+
+Ablation is optimized for use with Claude Code. Copy `CLAUDE.md` from this repository into your project, point Claude at a binary, and tell it to find vulnerabilities. Claude drives the entire workflow autonomously: builds the corpus, sweeps all vulnerability patterns, pulls disassembly and data flow analysis on every candidate, and returns findings with the exact functions and reasons they are vulnerable.
+
+No binary path needed. No command flags. No manual steps. Just tell it what to do.
+
+```
+Reverse engineer this firmware and find vulnerabilities.
+```
+
+---
+
 Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 
 - **Semantic search** across every function in plain English using BERT behavioral fingerprints
@@ -43,18 +57,6 @@ Ablation adds what Binary Ninja does not have:
 - **Self-improving pattern library** that replays confirmed findings on future binaries
 - **Cross-binary analysis** across every shared library in a firmware image simultaneously
 - **Version diffing** with DTW and Matrix Profile
-
----
-
-## Claude Code Integration
-
-Ablation is optimized for use with Claude Code. Copy `CLAUDE.md` from this repository into your project, point Claude at a binary, and tell it to find vulnerabilities. Claude drives the entire workflow autonomously: builds the corpus, sweeps all vulnerability patterns, pulls disassembly and data flow analysis on every candidate, and returns findings with the exact functions and reasons they are vulnerable.
-
-No binary path needed. No command flags. No manual steps. Just tell it what to do.
-
-```
-Reverse engineer this firmware and find vulnerabilities.
-```
 
 ---
 
