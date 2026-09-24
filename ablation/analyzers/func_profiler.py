@@ -40,6 +40,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from .binary_context import BinaryContext
 from .reg_annotator import RegAnnotator, CallSite, RegVal, _ARG_REGS
+from .arm32_reg_annotator import ARM32RegAnnotator
 
 # Known dangerous sinks: symbol name -> reason tag
 _DEFAULT_SINKS: Dict[str, str] = {
@@ -170,8 +171,11 @@ class FuncProfiler:
         custom_sinks: Optional[Dict[str, str]] = None,
     ):
         self.path = binary_path
-        self._ra = RegAnnotator.from_path(binary_path)
         self._ctx = ctx or BinaryContext.load_or_build(binary_path)
+        if self._ctx.arch == 'arm32':
+            self._ra = ARM32RegAnnotator.from_context(self._ctx)
+        else:
+            self._ra = RegAnnotator.from_path(binary_path)
         self._sinks: Dict[str, str] = {**_DEFAULT_SINKS}
         if custom_sinks:
             self._sinks.update(custom_sinks)
