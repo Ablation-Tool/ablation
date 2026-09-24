@@ -2,6 +2,8 @@
 
 # Ablation
 
+![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
+
 Ablation finds vulnerable functions in stripped binary firmware in seconds, without symbols, source code, or a pre-built database.
 
 Given a stripped ELF binary, Ablation builds a behavioral corpus from call graph structure and RIP-relative string cross-references. It encodes every function as a BERT embedding, then lets you query in plain English: *"TLV parser that advances a pointer without a bounds check."* Ranked candidates return with cosine similarity scores. A 19,000-function binary takes 35 seconds on CPU.
