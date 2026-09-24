@@ -2,6 +2,46 @@
 
 ---
 
+## v2.5.0
+
+- **FormatStringScanner** (`format_string_scanner.py`) -- x86-64 format string
+  vulnerability detector. TAOSSA Ch8-grounded. 28 format sinks: printf/fprintf/
+  sprintf/snprintf/syslog/err/warn/wprintf family. Backward trace per call site:
+  LEA [rip+offset] into .rodata = SAFE; register from function arg / stack slot /
+  recv return = VULNERABLE. `verdict` property returns SAFE / VULNERABLE / SUSPICIOUS.
+  CLI: `ablation fmtstr <binary> [--json FILE]`.
+
+- **IoctlAttackSurfaceGenerator** (`ioctl_attack_surface.py`) -- per-IOCTL attack
+  surface report for Windows kernel drivers. Wraps KernelDriverAnalyzer output. For
+  each IoControlCode: METHOD_NEITHER without ProbeForRead = CRITICAL; allocation
+  before InputBufferLength read = HIGH; TYPE3_INPUT_BUFFER direct deref = HIGH.
+  Generates Markdown report via `report_markdown()`. CLI: `ablation ioctl-surface`.
+
+- **CrossBinaryTaintTracker** (`cross_binary_taint.py`) -- LibGraph-backed cross-library
+  taint BFS. Extends TaintTracker.run_interprocedural() to follow tainted arguments
+  through PLT entries into exporting shared libraries. Resolves PLT symbol to exporting
+  binary via LibGraph.defined_in(), spawns a seeded TaintTracker on that binary, and
+  continues BFS. Returns TaintChain with full cross-binary hop provenance.
+
+- **ByovdDetector / BYOVDDetector** (`byovd_detector.py`) -- BYOVD capability detector.
+  12 capability classes: PHYS_MEM_RW (MmMapIoSpace), TOKEN_STEAL (PsInitialSystemProcess),
+  DKOM (ObReferenceObjectByHandle), APC_INJECT (KeInitializeApc), DRIVER_LOAD,
+  CALLBACK_REMOVE, PROCESS_KILL, MSR_WRITE (WRMSR instruction scan), and more.
+  Known-driver PDB fingerprints (mhyprot, RTCore64, dbutil, PROCEXP, iqvw64e, cpuz).
+  CLI: `ablation byovd <driver.sys>`.
+
+- **MIPS32FuncProfiler** (`mips_analyzer.py`) -- quick MIPS32 function profiler.
+  Complements MIPS32TaintTracker (taint_tracker_mips.py): single-call function
+  profile returning call sites + sink flags for MIPS32 binaries. Uses `MIPS32TaintTracker`
+  as backend; adds big-endian + little-endian O32 ABI support.
+
+- **HeapUAFScanner** (`heap_uaf_scanner.py`) -- forward register-state UAF/double-free
+  scanner. Complements HeapVulnScanner: simpler single-pass approach tracking ALLOC /
+  FREE / UNKNOWN state per register. Compatible with both SysV and Windows x64 ABI
+  (`windows_abi=True` flag uses RCX as free arg instead of RDI).
+
+---
+
 ## v2.4.0
 
 - **MIPS32TaintTracker** (`taint_tracker_mips.py`) -- MIPS32 source-to-sink taint
