@@ -74,7 +74,7 @@ class DisasmEngineX:
     Requires: pip install angr
 
     Usage:
-        dx = DisasmEngineX('lina_9.14.2.14', base_addr=0x0)
+        dx = DisasmEngineX('firmware_binary', base_addr=0x0)
         callers = dx.find_all_callers(0xADDR_OF_SetTextFileContents)
         defs    = dx.track_register_def_use(func_addr=0xADDR, reg_name='rdx')
 
@@ -280,7 +280,7 @@ class DisasmEngine:
         """Generator variant of disassemble() — yields InsnRecord objects one at a time.
 
         Fluent Python ch.17 §"How a Generator Works": yields values one by one
-        rather than building a list. For large binaries (105MB lina) this avoids
+        rather than building a list. For large binaries this avoids
         materialising millions of dicts in RAM simultaneously.  Callers that only
         need a subset (e.g. finding the first CALL *rax) can break early without
         paying the cost of scanning the entire binary.

@@ -11,7 +11,7 @@ Usage:
     report_md = generate_report(
         results=sweep_results,          # output of sweep()
         binary_path='/path/to/binary',
-        vendor='fortinet', product='forticlientems', version='7.4.5',
+        vendor='my-vendor', product='my-target', version='1.0',
         registry_hits=registry_hits,    # optional: {va: [similar findings]}
         xref=xg,                        # optional: XRefGraph instance
         top_k=5,

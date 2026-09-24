@@ -2,7 +2,7 @@
 corpus_builder.py -- Populate func_id.db with ANGR_INFERRED function records.
 
 Enables SemanticSearcher.build_corpus() for binaries with no prior RE coverage,
-such as libips.so.new / libav.so.new (FortiOS 8.0.0).
+such as multiple shared libraries from the same firmware image.
 
 For each function in a binary (discovered via eh_frame FDE entries):
   - name      : 'fn_0x<va>' (stripped, no symbols)
@@ -17,14 +17,14 @@ filter: CONFIRMED or ANGR_INFERRED) and encoded by all-mpnet-base-v2.
 Usage:
     # Build corpus for a single binary
     cb = CorpusBuilder('~/.ablation/func_id.db')
-    count = cb.build('/path/to/libips.so.new', product='libips', version='8.0.0')
+    count = cb.build('/path/to/firmware.so', product='my-target', version='1.0')
     print(f'Indexed {count} functions')
 
     # Then run semantic search:
     from ablation.analyzers.semantic_search import SemanticSearcher
     searcher = SemanticSearcher('~/.ablation/func_id.db')
     n = searcher.build_corpus()
-    results = searcher.query('SCTP chunk length underflow integer wrap', top_k=10)
+    results = searcher.query('parser reads user-controlled length field without bounds check', top_k=10)
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ class CorpusBuilder:
 
         Args:
             binary_path : path to ELF binary
-            product     : product name (e.g. 'libips', 'libav')
+            product     : product name (e.g. 'libservice', 'libparser')
             version     : version string (e.g. '8.0.0')
             arch        : architecture (default 'x86-64')
             force_rebuild_ctx : force BinaryContext rebuild (clears cache)
@@ -259,26 +259,23 @@ class CorpusBuilder:
             return db.summary()
 
 
-def build_fortios_corpus(
-    libips_path: str,
-    libav_path: str,
+def build_multi_corpus(
+    paths: list,
     db_path: str = '~/.ablation/func_id.db',
-    version: str = '8.0.0',
+    product: str = 'firmware',
+    version: str = '1.0',
 ) -> Dict[str, int]:
-    """Convenience function: build corpus for FortiOS 8.x libips + libav.
-
-    Run this once after loading libips.so.new and libav.so.new. Then
-    SemanticSearcher.build_corpus() returns the full function set.
+    """Convenience function: build corpus for multiple binaries from the same firmware image.
 
     Example:
-        counts = build_fortios_corpus(
-            '/path/to/libips.so.new',
-            '/path/to/libav.so.new',
+        counts = build_multi_corpus(
+            ['/path/to/libservice.so', '/path/to/libparser.so'],
+            product='my-target',
+            version='2.1',
         )
-        print(counts)  # {'libips.so.new': 8234, 'libav.so.new': 6891}
+        print(counts)  # {'libservice.so': 8234, 'libparser.so': 6891}
     """
     cb = CorpusBuilder(db_path)
     return cb.build_multi([
-        (libips_path, 'libips', version),
-        (libav_path,  'libav',  version),
+        (p, product, version) for p in paths
     ])

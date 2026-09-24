@@ -1699,8 +1699,3 @@ class NXOSEnumerator:
 
         return results
 
-
-def enumerate_macstadium_cisco() -> dict:
-    """Top-level: enumerate all MacStadium Cisco NX-OS / ACI targets."""
-    enumerator = NXOSEnumerator(targets=MACSTADIUM_CISCO_TARGETS)
-    return enumerator.run()

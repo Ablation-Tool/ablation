@@ -99,7 +99,7 @@ pip install ablation
 From source:
 
 ```bash
-git clone https://github.com/francis-rancid/ablation
+git clone https://github.com/Ablation-Tool/ablation
 cd ablation
 pip install -e .
 ```
@@ -136,5 +136,5 @@ one function worth an hour of manual work.
 ## License
 
 Commercial license required for commercial use. Non-commercial research use permitted.
-Source at [github.com/francis-rancid/ablation](https://github.com/francis-rancid/ablation).
+Source at [github.com/Ablation-Tool/ablation](https://github.com/Ablation-Tool/ablation).
 Contact for licensing.

@@ -54,8 +54,8 @@ class AgentLoop:
 
     Usage:
         registry = ToolRegistry(binary_path, func_db)
-        loop = AgentLoop(registry, func_db=func_db, product='lina', version='9.16.4.18')
-        result = loop.run(func_addr=0x212a669, task='name_function')
+        loop = AgentLoop(registry, func_db=func_db, product='my-target', version='1.0')
+        result = loop.run(func_addr=0x1fa00, task='name_function')
     """
 
     def __init__(

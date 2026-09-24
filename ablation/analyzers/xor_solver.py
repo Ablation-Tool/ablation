@@ -288,7 +288,7 @@ class XorSolver:
         Set plaintext_assumption=0xFF for NAND flash (erased cells = 0xFF).
         Set plaintext_assumption=0x00 for zero-sparse images (default, original behaviour).
 
-        Validated on FortiOS fortios.raw (x86-64, 512 MB NAND, 0x00-sparse):
+        Validated on a 512 MB NAND x86-64 firmware image (0x00-sparse):
           - IC spike at shift=64 (IC=0.953, 244x above random baseline)
           - Decrypted entropy: 0.2677 bits/byte (from 5.653 raw)
         Validated on FortiWiFi FWF_60E-v7.2.4.F (ARM, 256 MB NAND, 0xFF-sparse):

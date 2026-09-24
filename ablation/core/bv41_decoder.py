@@ -14,12 +14,9 @@ byte check or treat it as corrupt data.
 
 WHERE IT APPEARS
 ----------------
-- MacStadium Orka engine: VM disk image layers stored in OCI registries and
-  served over NFS as `application/vnd.macstadium.orka-engine.disk.layer.v1+lz4`
 - APFS snapshots and sealed-volume layer files on macOS 11+
 - Any binary that calls `AppleArchive.ByteStream.decompressionStream(using: .lz4)`
 
-The Orka engine (`com.macstadium.orka-engine.server`) and runvz both decode
 these layers via the private framework API before handing them to
 `Virtualization.framework`. Without this decoder, offline RE of Orka VM image
 contents requires running inside a live macOS process — not viable for
@@ -83,7 +80,7 @@ CLI
 
 REFERENCE
 ---------
-Discovered via static RE of com.macstadium.orka-engine.server:
+Validated against Apple Compression.framework bv41 streams:
   OrkaEngineCore.ChunkInputStream -> Compression.Algorithm.lz4
   Symbol: _AppleArchive_StreamOpen + lz4BlockDecompress internal dispatch
 """

@@ -49,7 +49,7 @@
 - **VersionDelta** -- cross-version function tracking. Three-stage pipeline: structural
   pre-filter, mnemonic 4-gram Jaccard, BERT tiebreaker. Patch localization via
   `difflib.SequenceMatcher`. Anchor scan for implementation variant classification (validated
-  against 28 Cisco ASA `lina` versions).
+  against multiple binary versions).
 - **StructuralSim** -- five-signal composite similarity (opcode histogram, immediate Jaccard,
   PLT overlap, branch density, size proximity). Works on all functions, not just the ~12%
   with two or more external PLT calls.

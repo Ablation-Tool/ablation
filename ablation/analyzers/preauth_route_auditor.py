@@ -1,5 +1,5 @@
 """
-preauth_route_auditor.py -- FortiManager flatui pre-auth route scanner.
+preauth_route_auditor.py -- Flatui-style pre-auth route scanner for firmware web frameworks.
 
 Automates the manual 4-step process:
   1. Scan route init function for WorkflowLockWithoutSessionPermit-only routes
@@ -7,7 +7,7 @@ Automates the manual 4-step process:
   3. Cross-reference handler factories to find GET/POST handler VAs
   4. Run FuncProfiler on each handler to surface sinks
 
-Designed for FortiManager 8.0.0 libservice.so but parameterized for other
+Designed for a specific target but parameterized for other
 flatui-based binaries.
 
 Usage:

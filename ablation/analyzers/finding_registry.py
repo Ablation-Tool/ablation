@@ -2,8 +2,8 @@
 finding_registry.py -- cross-target confirmed finding store.
 
 Every confirmed vulnerability finding from any RE engagement registers here.
-The registry grows with each engagement: Cisco LINA confirmed overflow becomes
-a query seed for the next Fortinet sweep automatically.
+The registry grows with each engagement: a confirmed finding from one target becomes
+a query seed for future sweeps on new binaries automatically.
 
 Storage:
     ~/.ablation/findings.db   -- SQLite, user-local, not committed to git
@@ -23,7 +23,7 @@ Usage:
 
     # Register a newly confirmed finding:
     reg.register(
-        vendor="fortinet", product="forticlientems", version="7.4.5",
+        vendor="my-vendor", product="my-target", version="1.0",
         title="batchPCRERegexMatch command injection via PHP exec",
         description="PHP_EXEC | calls: exec | vuln: ...",
         cwe_class="CWE-78", severity="CRITICAL",
@@ -32,7 +32,7 @@ Usage:
 
 CLI:
     python3 -m ablation.analyzers.finding_registry stats
-    python3 -m ablation.analyzers.finding_registry list [--vendor fortinet]
+    python3 -m ablation.analyzers.finding_registry list [--vendor my-vendor]
     python3 -m ablation.analyzers.finding_registry register --interactive
 """
 

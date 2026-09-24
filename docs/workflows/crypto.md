@@ -139,7 +139,7 @@ import jwt  # PyJWT
 
 secret = ""   # confirmed Orka secret
 forged = jwt.encode(
-    {"sub": "admin@macstadium.com", "role": "admin"},
+    {"sub": "admin@example.com", "role": "admin"},
     secret,
     algorithm="HS256"
 )
