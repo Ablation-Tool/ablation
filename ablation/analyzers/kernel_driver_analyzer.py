@@ -771,6 +771,39 @@ class KernelDriverAnalyzer:
             'SeSinglePrivilegeCheck':          ('HIGH',  'privilege'),
             'SeAccessCheck':                   ('HIGH',  'privilege'),
             'SeTokenIsAdmin':                  ('HIGH',  'privilege'),
+            # Token stealing: PsInitialSystemProcess = EPROCESS for pid 4 (System).
+            # Attacker copies System token to arbitrary process -> SYSTEM privileges.
+            # Classic LPE primitive; DKOM write to EPROCESS+0x4b8 (Win10 offset).
+            'PsInitialSystemProcess':          ('CRITICAL', 'privilege'),
+            'PsReferencePrimaryToken':         ('HIGH',   'privilege'),
+            'SeQueryInformationToken':         ('HIGH',   'privilege'),
+            'PsDereferencePrimaryToken':       ('MEDIUM', 'privilege'),
+
+            # --- Kernel APC injection ---
+            # KeInsertQueueApc queues a kernel-mode APC to an arbitrary thread.
+            # Chain: OpenThread -> KeInitializeApc -> KeInsertQueueApc -> arbitrary
+            # kernel code executed in target thread context at APC_LEVEL.
+            # Rootkits use this for stealthy code injection without remote thread APIs.
+            'KeInitializeApc':                 ('CRITICAL', 'apc_inject'),
+            'KeInsertQueueApc':                ('CRITICAL', 'apc_inject'),
+            'PsGetCurrentThreadApcDisable':    ('MEDIUM',   'apc_inject'),
+
+            # --- Process attachment ---
+            # KeStackAttachProcess switches the current thread to run in the
+            # virtual address space of an arbitrary process (PEPROCESS).
+            # Used with PsLookupProcessByProcessId for arbitrary process VA access.
+            'KeStackAttachProcess':            ('CRITICAL', 'dkom'),
+            'KeUnstackDetachProcess':          ('MEDIUM',   'dkom'),
+            'PsGetProcessPeb':                 ('HIGH',     'dkom'),
+
+            # --- Virtual memory manipulation ---
+            # ZwAllocateVirtualMemory / NtProtectVirtualMemory from kernel =
+            # arbitrary RWX pages in target process without standard userland APIs.
+            'ZwAllocateVirtualMemory':         ('CRITICAL', 'mem_copy'),
+            'ZwFreeVirtualMemory':             ('MEDIUM',   'mem_copy'),
+            'ZwProtectVirtualMemory':          ('CRITICAL', 'mem_copy'),
+            'NtProtectVirtualMemory':          ('CRITICAL', 'mem_copy'),
+            'ZwWriteVirtualMemory':            ('CRITICAL', 'mem_copy'),
 
             # --- Driver loading from kernel ---
             'ZwLoadDriver':                    ('CRITICAL', 'driver_load'),
@@ -780,6 +813,10 @@ class KernelDriverAnalyzer:
             # ntoskrnl exports KeServiceDescriptorTable; accessing it directly
             # is the prerequisite for SSDT hook installation
             'KeServiceDescriptorTable':        ('CRITICAL', 'ssdt_hook'),
+            # MmGetSystemRoutineAddress resolves kernel symbols by Unicode name at runtime.
+            # Rootkits use this to locate KeServiceDescriptorTable without a static import,
+            # bypassing the trivial import-scan detection above.
+            'MmGetSystemRoutineAddress':       ('CRITICAL', 'ssdt_hook'),
 
             # --- Registry ---
             'ZwCreateKey':                     ('HIGH',   'registry'),
@@ -1099,6 +1136,27 @@ class KernelDriverAnalyzer:
                 offset=m.start(),
                 description='VMware magic "VMXh"; anti-VM I/O port detection',
                 severity='MEDIUM',
+            ))
+
+        # MSR_LSTAR (0xC0000082) targeted access.
+        # LSTAR = IA32_LSTAR = syscall entry point (nt!KiSystemCall64 on x64 Windows).
+        # MOV ECX, 0xC0000082 (B9 82 00 00 C0) immediately before RDMSR/WRMSR:
+        #   RDMSR at LSTAR leaks kernel .text base (KiSystemCall64 VA, trivial KASLR defeat).
+        #   WRMSR at LSTAR replaces the syscall handler = full ring-0 code execution.
+        # Source: Windows Internals Part 1 (syscall dispatch via LSTAR MSR).
+        for m in re.finditer(rb'\xb9\x82\x00\x00\xc0', self.data):
+            window = self.data[m.start(): m.start() + 13]
+            if b'\x0f\x32' in window:
+                op, sev = 'RDMSR(LSTAR): reads KiSystemCall64 VA (KASLR defeat)', 'CRITICAL'
+            elif b'\x0f\x30' in window:
+                op, sev = 'WRMSR(LSTAR): overwrites syscall handler (full ring-0)', 'CRITICAL'
+            else:
+                op, sev = 'ECX=LSTAR index loaded (MSR access likely follows)', 'HIGH'
+            findings.append(DangerousPattern(
+                pattern='MSR_LSTAR_ACCESS',
+                offset=m.start(),
+                description=op,
+                severity=sev,
             ))
 
         # UTF-16LE wide-string scan for L"KeServiceDescriptorTable".
