@@ -95,6 +95,20 @@ ablation findings --sarif findings.sarif
 
 ---
 
+## Feedback
+
+Found a bug or want to suggest something?
+
+- [Open an issue](https://github.com/Ablation-Tool/ablation/issues) on GitHub
+- Email: [ablation@nuclide-research.com](mailto:ablation@nuclide-research.com)
+- X: [@ablation_tool](https://x.com/ablation_tool)
+
+**Bug reports:** include your Python version, OS, the command that failed, and the full error output.
+
+**Feature requests:** describe the RE task you want to accomplish and what Ablation currently can't do.
+
+---
+
 ## License
 
 See [LICENSE](LICENSE).
