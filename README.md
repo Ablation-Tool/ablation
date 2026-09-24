@@ -4,65 +4,66 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-**Semantic vulnerability scanner for stripped binary firmware. Fully autonomous with Claude Code.**
+**Autonomous LLM-driven reverse engineering framework for enterprise firmware.**
 
 ---
 
-You have a stripped binary with 19,000 functions and no symbols. IDA Pro takes four hours to load it. Ablation returns the five functions worth looking at in 35 seconds.
+Ablation gives Claude Code the tools to autonomously reverse engineer stripped binary firmware and find exploitable vulnerabilities. Point it at an enterprise firmware image, tell it to find vulnerabilities, and walk away. It builds the analysis corpus, sweeps every function against 30 vulnerability patterns, traces call graphs and data flow paths, and surfaces confirmed exploitable findings.
 
-Query in plain English. Ablation encodes every function as a behavioral fingerprint and ranks candidates by how closely they match. No symbol names. No disassembly database. No prior knowledge of the binary required.
+No manual disassembly. No symbol names. No pre-built database.
 
-Give it to Claude Code with one instruction and the entire reverse engineering workflow runs without you: corpus build, pattern sweep, CFG traces, taint analysis, findings. The researcher reviews results. The tool does the triage.
-
----
-
-## What it looks like
-
-```
-$ ablation sweep firmware.so
-
-[*] BinaryContext     19,247 functions  PLT 312  strings 8,841
-[*] Building corpus   35.2s
-[*] Sweeping 30 patterns...
-
-[dos-loop]
-  score=0.83  0x17b660  fn_0x17b660    advances pointer by wire-length; zero terminates loop
-  score=0.69  0x20dd40  fn_0x20dd40    record-length loop without minimum field check
-
-[buffer-overflow]
-  score=0.81  0x1fa00   fn_0x1fa00     strcpy into fixed-size stack buffer, no length gate
-  score=0.74  0x21340   fn_0x21340     sprintf with externally sourced format argument
-
-[integer-overflow]
-  score=0.78  0x2a1c0   fn_0x2a1c0     field-width * bpp before malloc, no overflow check
-  score=0.71  0x31000   fn_0x31000     TLV length used directly as allocation size, no cap
-```
-
-```
-$ ablation search firmware.so "TLV parser that advances pointer without minimum length check"
-
-  0x17b660  fn_0x17b660    advances ptr by field_len, no floor check    score=0.834
-  0x20dd40  fn_0x20dd40    record pointer loop, no minimum record len    score=0.791
-  0x1fa00   fn_0x1fa00     copies TLV value with fixed dest buffer       score=0.743
-```
+We built this to audit real enterprise firmware: network appliances, IPS engines, management platforms. Binaries with 19,000+ stripped functions, no debug info, and no source. Claude Code drives the full workflow autonomously from a single instruction.
 
 ---
 
-## Autonomous with Claude Code
+## How it works in practice
 
-Drop `CLAUDE.md` from this repo into your project. Open Claude Code. Say:
+Open a Claude Code session. Say:
 
 > *Reverse engineer this firmware and find vulnerabilities.*
 
-That is the entire instruction. Claude reads the command reference at session start, locates the binary, and drives the full workflow without further input.
+Claude reads the CLAUDE.md command reference included in this repo, locates the binary, and runs:
 
 ```
 corpus  →  sweep  →  search  →  cfg  →  taint  →  findings
 ```
 
-Claude builds the corpus, sweeps all 30 vulnerability patterns, queries specific behaviors, pulls CFG and taint traces on every top candidate, and interprets each result. You review findings. The tool does the triage.
+It builds a behavioral fingerprint for every function (35 seconds for 19,000 functions on CPU), sweeps all 30 vulnerability patterns, runs targeted semantic searches for specific behaviors, pulls control-flow graphs and taint traces on every top candidate, and interprets the results. Confirmed findings export to SARIF for GitHub Code Scanning.
 
-Not an MCP server. Not a plugin. Not a protocol layer. Ablation is a standard Python CLI. Claude calls it with `!` commands inside a session, reads the output, and reasons about it. No network service. No browser extension.
+You review the findings. The tool does the triage.
+
+---
+
+## What we've found
+
+These findings were confirmed in production enterprise firmware using Ablation running autonomously in a Claude Code session. Manual disassembly began only after Ablation narrowed the candidate list.
+
+| Vulnerability | How it was found |
+|---|---|
+| Zero-length loop DoS in enterprise protocol parser | Semantic sweep, CFG loop analysis |
+| Second DoS variant in same binary, different protocol | Automatic pattern replay -- no new query written |
+| Pre-auth management API route exposure (CVSS 9.1) | Semantic sweep, taint trace to unauthenticated handler |
+
+The second DoS was found automatically. After confirming the first, Ablation registered the vulnerability pattern. The next sweep replayed it and surfaced the second variant without any additional input.
+
+---
+
+## The semantic search layer
+
+IDA Pro and Ghidra need a complete disassembly pass before you can search anything. On a 50 MB stripped network appliance image that takes one to four hours. Ablation makes one O(N) pass over the binary and is ready in 35 seconds.
+
+More importantly: IDA searches by instruction names, string literals, and symbol names. None of those exist in a stripped binary. Ablation searches by behavioral meaning.
+
+```python
+searcher.query(
+    "TLV parser that advances a pointer without checking minimum field length",
+    top_k=10
+)
+```
+
+That query matches functions that do exactly that, regardless of register names, compiler output, or architecture. BinFuse normalization maps x86-64 and ARM64 instructions to the same 11 behavioral categories, so the same query runs on both without modification.
+
+This is not a decompiler. It does not generate pseudocode. It tells you which function in 19,000 is worth an hour of manual work.
 
 ---
 
@@ -110,7 +111,7 @@ stripped binary (ELF · no symbols)
 │                                                       │
 │  FuncProfiler ─────── strings · calls · sinks         │
 │  RegAnnotator ─────── call-site arg values            │
-│  IPRegAnnotator ───── cross-binary arg chains         │
+│  IPRegAnnotator ───── cross-library arg chains        │
 └───────────────────────────────────────────────────────┘
         │
         ▼
@@ -120,22 +121,6 @@ stripped binary (ELF · no symbols)
 ╚══════════════════════════════════════════════════════╝
 ```
 
-SemanticSearcher runs first, on all functions, before CFG or taint analysis begins. It narrows 19,000 candidates to fewer than ten. Everything below that box runs only on those candidates. That is where the 35-second figure comes from.
-
----
-
-## Real results
-
-All three findings below were identified via semantic sweep before any manual disassembly. In each case the sweep returned the exact function. Manual analysis began only after Ablation narrowed the candidate list.
-
-| Vulnerability class | How found |
-|---|---|
-| Zero-length loop DoS in protocol parser | Semantic sweep, CFG loop detection |
-| Zero-length loop DoS, second protocol variant | Semantic sweep, pattern replay on same binary |
-| Pre-auth management API route exposure | Semantic sweep, taint trace to unauthenticated handler |
-
-The pattern library replays confirmed findings automatically. The second DoS above was found by replaying the pattern from the first.
-
 ---
 
 ## Install
@@ -144,7 +129,7 @@ The pattern library replays confirmed findings automatically. The second DoS abo
 pip install git+https://github.com/Ablation-Tool/ablation
 ```
 
-With LLM analyst features (automated function naming via Claude):
+With LLM analyst features:
 
 ```bash
 pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
@@ -155,22 +140,11 @@ pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ## Quick start
 
 ```bash
-# Build corpus (run once per binary)
 ablation corpus firmware.so --product my-target --version 1.0 --sigs
-
-# Sweep all 30 vulnerability patterns
 ablation sweep  firmware.so --json results.json
-
-# Targeted query
 ablation search firmware.so "TLV parser that advances pointer without bounds check"
-
-# CFG for a candidate
 ablation cfg    firmware.so 0x17b660 --insns
-
-# Taint trace from network sources to dangerous callees
 ablation taint  firmware.so
-
-# Export confirmed findings
 ablation findings --sarif findings.sarif
 ```
 
@@ -194,31 +168,20 @@ for r in results:
 
 ---
 
-## Why not IDA Pro, Ghidra, or Binary Ninja
-
-IDA Pro and Ghidra are disassemblers. They build a complete instruction database before you can search anything. On a 50 MB stripped network appliance image that takes one to four hours. Ablation makes one O(N) pass, builds a behavioral index, and is ready in 35 seconds.
-
-**The search model is different.** IDA searches by instruction mnemonics, string literals, and function names. None of those exist in a stripped binary. Ablation searches by behavioral meaning. The query *"memcpy called with a length from an untrusted packet field"* matches functions that do that, regardless of instruction names, register choices, or compiler variant. BinFuse normalization makes the same query work on x86-64 and ARM64 without modification.
-
-**Ablation is not a replacement for a disassembler.** It does not decompile. It does not generate pseudocode. It does not provide an interactive disassembly view. It is the tool you run before opening a disassembler to find which of 19,000 functions deserves an hour of manual work.
-
----
-
 ## Features
 
-- **35-second corpus build**: one O(N) NumPy pass over call graph and RIP-relative xrefs; no full auto-analysis
-- **Plain-English semantic search**: BERT all-mpnet-base-v2 over behavioral fingerprints; cross-vendor without symbol names
-- **Cross-architecture**: BinFuse 11-category opcode normalization covers x86-64 and ARM64 with the same queries
+- **Autonomous Claude Code integration**: one instruction drives corpus build, pattern sweep, CFG analysis, taint tracing, and findings
+- **35-second corpus build** on 19,000-function binaries, no full auto-analysis pass
+- **Plain-English semantic search** via BERT all-mpnet-base-v2 behavioral fingerprints
+- **Cross-architecture**: BinFuse 11-category normalization covers x86-64 and ARM64 with identical queries
 - **30 sweep patterns**: buffer overflow, heap overflow, format string, integer overflow, UAF, double-free, race condition, DoS, info-leak, auth-bypass, crypto misuse, path traversal, and more
-- **Self-improving pattern library**: every confirmed finding registers a semantic pattern that replays on future binaries automatically
-- **Static taint analysis**: x86-64 source-to-sink data flow; MFP worklist over CFG; interprocedural BFS; custom sinks
-- **CFG builder**: recursive disassembly with basic block decomposition and branch analysis
-- **Cross-version diffing**: DTW homolog matching and Matrix Profile patch localization across firmware releases
+- **Self-improving pattern library**: confirmed findings replay automatically on future binaries across vendors
+- **Static taint analysis**: x86-64 source-to-sink; MFP worklist; interprocedural BFS; custom sinks
+- **Cross-version diffing**: DTW homolog matching and Matrix Profile patch localization
 - **Structural similarity**: Jaccard composite over PLT call sets, opcode 4-grams, and immediate values
-- **Signature matching**: 40 behavioral signatures auto-name stripped `fn_0x*` functions
-- **SARIF 2.1.0 export**: results feed directly into GitHub Code Scanning
-- **Binary Ninja plugin**: renames matched functions on binary open
-- **Autonomous Claude Code integration**: one plain-English instruction drives the full RE workflow
+- **Signature matching**: 40 behavioral signatures auto-name stripped functions
+- **SARIF 2.1.0 export** for GitHub Code Scanning
+- **Binary Ninja plugin**
 
 ---
 
@@ -227,13 +190,13 @@ IDA Pro and Ghidra are disassemblers. They build a complete instruction database
 | Method | Used for |
 |---|---|
 | BERT all-mpnet-base-v2 | Semantic function embeddings; cosine similarity ranking |
-| BinFuse opcode normalization | Maps x86-64 and ARM64 to 11 behavioral categories; cross-architecture queries |
+| BinFuse opcode normalization | Maps x86-64 and ARM64 to 11 behavioral categories |
 | BinDeep memory patterns | Load/store/branch reference pattern encoding |
 | Markov opcode transitions | Behavioral sequence matching across opcode categories |
 | Jaccard similarity | Structural scoring via PLT call sets and opcode 4-gram overlap |
-| DTW (Dynamic Time Warping) | Warp-invariant cross-version homolog matching; handles inserted and removed basic blocks |
-| Matrix Profile (STUMPY) | AB-join distance over opcode sequences; localizes changed code regions between versions |
-| Timing oracle detection | Statistical response-time analysis for non-constant-time comparisons in crypto code |
+| DTW (Dynamic Time Warping) | Warp-invariant cross-version homolog matching |
+| Matrix Profile (STUMPY) | AB-join over opcode sequences; localizes changed code regions |
+| Timing oracle detection | Statistical response-time analysis for non-constant-time crypto |
 
 ---
 
@@ -243,7 +206,6 @@ IDA Pro and Ghidra are disassemblers. They build a complete instruction database
 ablation sweep firmware.so --sarif results.sarif
 ablation findings --sarif findings.sarif
 
-# Upload to GitHub Code Scanning
 gh api repos/<owner>/<repo>/code-scanning/sarifs \
     -f commit_sha=$(git rev-parse HEAD) \
     -f ref=refs/heads/main \
