@@ -1067,18 +1067,6 @@ class NginxEnumerator:
 
 # ── MacStadium convenience ────────────────────────────────────────────────────
 
-def enumerate_macstadium_nginx() -> dict:
-    """Probe the Cisco Nexus nginx 1.7.10 frontend at 207.254.14.1:443."""
-    enum = NginxEnumerator(
-        host='207.254.14.1',
-        port=443,
-        use_tls=True,
-    )
-    return enum.run()
-
-
-# ── Web content discovery / attack-surface probes ────────────────────────────
-
 def probe_common_sensitive_paths(
         host: str, port: int = 443, use_tls: bool = True,
         timeout: float = 5.0) -> list:

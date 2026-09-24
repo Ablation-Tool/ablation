@@ -11,7 +11,6 @@ Covers:
   - Certificate transparency anomaly detection (CT poison = honeypot signal per Insight #97)
   - HSTS / HPKP header detection
   - Quantum-vulnerability inventory (RSA/ECDSA -> Shor-vulnerable; ML-KEM/ML-DSA -> safe)
-  - MacStadium-specific: idp.macstadium.com, api.macstadium.com, *.orka.macstadium.com
 
 TLS 1.3 handshake facts (from Real-World Cryptography ch. 9):
   - Phase 1 (Key Exchange): ClientHello + ServerHello; ephemeral ECDHE/X25519
@@ -39,12 +38,6 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Optional
 
-# ── MacStadium target constants ───────────────────────────────────────────────
-MACSTADIUM_HOSTS = [
-    ('idp.macstadium.com',   443),
-    ('api.macstadium.com',   443),
-    ('orka.macstadium.com',  443),
-]
 
 # ── TLS weak cipher/protocol detection ───────────────────────────────────────
 
@@ -2587,22 +2580,6 @@ class TLSAnalyzer:
 
         return result
 
-    # ── MacStadium-specific ───────────────────────────────────────────────────
-
-    def analyze_macstadium(self) -> list:
-        """Analyze MacStadium TLS targets.
-
-        Targets: idp.macstadium.com, api.macstadium.com, orka.macstadium.com
-        Context: F-JWT finding — empty-secret HS256 JWT at idp.macstadium.com.
-        TLS posture correlates with JWT security posture.
-        """
-        results = []
-        for host, port in MACSTADIUM_HOSTS:
-            result = self.analyze(host, port)
-            result['target_label'] = f'MacStadium:{host}'
-            results.append(result)
-        return results
-
     # ── Bulk probing ──────────────────────────────────────────────────────────
 
     def analyze_hosts(self, targets: list) -> list:
@@ -2740,21 +2717,16 @@ if __name__ == '__main__':
 
     args = sys.argv[1:]
     if not args or args[0] in ('-h', '--help'):
-        print('Usage: tls_analyzer.py [host[:port] ...] [--macstadium]')
-        print('       tls_analyzer.py idp.macstadium.com api.macstadium.com')
-        print('       tls_analyzer.py --macstadium')
+        print('Usage: tls_analyzer.py [host[:port] ...]')
+        print('       tls_analyzer.py api.example.com:443')
         sys.exit(0)
 
     analyzer = TLSAnalyzer()
     results  = []
 
-    if '--macstadium' in args or not args:
-        print('[*] Analyzing MacStadium TLS targets...')
-        results = analyzer.analyze_macstadium()
-    else:
-        targets = [a for a in args if not a.startswith('--')]
-        print(f'[*] Analyzing {len(targets)} host(s)...')
-        results = analyzer.analyze_hosts(targets)
+    targets = [a for a in args if not a.startswith('--')]
+    print(f'[*] Analyzing {len(targets)} host(s)...')
+    results = analyzer.analyze_hosts(targets)
 
     # Print results
     for r in results:

@@ -19,13 +19,13 @@ CET endbr64 detection:
   Both must be detected as function prologues.
 
 Usage (standalone):
-  python3 physmem_elf_vfs.py --dump /tmp/fmg-dump2.elf --out /tmp/bins
-  python3 physmem_elf_vfs.py --dump /tmp/fmg-dump2.elf --search 'sdnproxy'
-  python3 physmem_elf_vfs.py --dump /tmp/fmg-dump2.elf --index /tmp/elf-index.json
+  python3 physmem_elf_vfs.py --dump /tmp/memory-dump.elf --out /tmp/bins
+  python3 physmem_elf_vfs.py --dump /tmp/memory-dump.elf --search 'sdnproxy'
+  python3 physmem_elf_vfs.py --dump /tmp/memory-dump.elf --index /tmp/elf-index.json
 
 Usage (from ablation):
   from modules.physmem_elf_vfs import PhysmemVFS
-  vfs = PhysmemVFS('/tmp/fmg-dump2.elf')
+  vfs = PhysmemVFS('/tmp/memory-dump.elf')
   vfs.build_index()
   hit = vfs.find_owner(file_offset=0xcadd0928)  # string offset
   vfs.extract_binary(hit, '/tmp/bins/sdnproxy')

@@ -12,7 +12,7 @@ Pattern detected:
   2. No alignment: missing '(len + 3) & ~3' pattern within 5 insns
   3. Field read from advanced pointer (next chunk parse begins)
 
-This is the C13 CANDIDATE pattern from libips.so.new FortiOS 8.0.0 SCTP
+This is the C13-class candidate pattern from a stripped protocol parser binary
 processor at 0x21f062-0x21f0ac.
 
 Usage:

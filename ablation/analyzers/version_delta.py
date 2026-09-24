@@ -1,7 +1,7 @@
 """
 version_delta.py — Cross-version function tracking for ablation.
 
-Tracks how a specific function (e.g., the RADIUS Class attribute handler in lina)
+Tracks how a specific function
 evolves across binary versions. Identifies homologs via a three-stage pipeline:
 
   Stage 1  Structural pre-filter   basic block count ±2, edge count ±30%
@@ -11,7 +11,7 @@ evolves across binary versions. Identifies homologs via a three-stage pipeline:
 Patch localization via difflib.SequenceMatcher on normalized instruction lines
 reveals the specific instructions that changed between versions.
 
-Primary use case: track the RADIUS Class attr patch across all 17 lina versions
+Primary use case: track a specific function across firmware patch releases
 to confirm CVE-2022-0778 / RADIUS overflow remediation.
 """
 
@@ -67,7 +67,7 @@ def _masked_find(data: bytes, pattern: bytes, mask: bytes, start: int, end: int)
 # and not visible from attr_list_add_impl itself — all variants below are present
 # in both patched and unpatched binaries.
 #
-# Corpus validation (28 lina binaries, 2026-08-31):
+# Corpus validation (28 binary versions):
 #   impl_v1:  ALL ELF32 builds (9.2.4, 9.4.4, 9.17.x-k8...) — 32-bit calling conv
 #             also: ELF64 binaries do NOT hit this anchor ✓
 #   impl_v2a: ELF64 9.5.2–9.14.x, 9.20.3    | misses v1 builds, 9.15.x, 9.16.x, 9.17.x+ELF64 ✓
@@ -76,7 +76,7 @@ def _masked_find(data: bytes, pattern: bytes, mask: bytes, start: int, end: int)
 #             r14 first at 9.17.2.3; 9.20.x reverts to v2a (maintenance branch, forked before 9.15)
 ERA_DISCRIMINATOR_ANCHORS: dict[str, tuple[bytes, bytes, int, str]] = {
     # v1: 32-bit i386 calling convention — jne + lea eax,[ebp-0x10] after match
-    # Covers ALL ELF32 lina builds: old (9.2.4, 9.4.4) AND legacy-HW k8 (9.17.x-k8+)
+    # Covers a range of ELF32 binary versions including legacy hardware builds
     # The lea eax,[rbp-0x10] encoding is identical for 32-bit [ebp-0x10]
     'attr_list_add_impl_v1': (
         b'\x66\x3d\x19\x10\x75\x00\x8d\x45\xf0',
@@ -170,7 +170,7 @@ def structural_anchor_scan(
 
 @dataclass
 class BinaryClassification:
-    """Top-level classification of a lina binary's attr_list_add_impl variant."""
+    """Top-level classification of a binary's parser implementation variant."""
     variant:    str    # 'v1' | 'v2a' | 'v2b' | 'v2c' | 'unknown'
     confidence: str    # 'anchor' (deterministic) | 'unknown' (no hit)
     hit_offset: int    # file offset of anchor match; -1 if none
@@ -197,7 +197,7 @@ def classify_binary(
     anchors: dict | None = None,
 ) -> BinaryClassification:
     """
-    Classify a lina binary's attr_list_add_impl variant.
+    Classify a binary's parser implementation variant.
 
     Layer 0 only — structural anchor scan.  Deterministic, <1ms per binary.
     Returns variant='unknown' with confidence='unknown' on anchor miss; caller
@@ -849,7 +849,7 @@ class VersionTracker:
     Track a seed function across multiple binary versions.
 
     Usage:
-        tracker = VersionTracker(binaries={'9.14': '/path/lina-9.14', ...})
+        tracker = VersionTracker(binaries={'v1.0': '/path/fw-v1.0', ...})
         reports = tracker.track(seed_binary='9.14', seed_va=0x4a1234)
         for r in reports:
             print(r.summary())

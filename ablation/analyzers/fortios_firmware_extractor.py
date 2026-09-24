@@ -11,7 +11,7 @@ Generalises across ARM (FortiWiFi IPQ4019) and x86-64 (FortiGate hardware) targe
 All key recovery is delegated to XorSolver -- no reimplementation.
 
 Cipher characteristics (confirmed across FortiWiFi 60E v5.0.9 through v7.2.4.F,
-FortiGate 7000F v8.0.0, and all intermediate versions):
+supported FortiGate hardware, and all intermediate versions):
   - Outer: gzip wrapper (first member only; trailing members are noise/padding)
   - Inner: 64-byte repeating pure XOR applied to a NAND flash partition image
   - NAND plaintext: 0xFF-dominant (erased cells), ~80-86% null bytes
