@@ -71,15 +71,15 @@ Ablation adds what Binary Ninja does not have:
 
 ## Updates
 
-**v2.0.0 (2026-09-24) -- Windows kernel driver RE**
+**v2.0.0 (2026-09-24): Windows kernel driver RE**
 
 `ablation driver <file.sys>` analyzes Windows kernel drivers. Run it against any `.sys` file and it returns a full report in under a second.
 
-- **IRP/IOCTL dispatch** -- disassembles DriverEntry and recovers all 28 MajorFunction slot assignments; decodes each CTL_CODE into DeviceType, Access, Function, and Method; flags METHOD_NEITHER (raw user pointer) as the highest-risk transfer type
-- **Kernel API audit** -- classifies 40+ kernel APIs across 12 risk classes: physical memory mapping, token stealing via PsInitialSystemProcess, APC injection, process attachment, SSDT hooking, virtual memory manipulation, driver loading, DKOM, pool allocation, and MDL misuse
-- **Callback detection** -- tags 20+ kernel callbacks as edr_like, rootkit_risk, or info; ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx + KeRegisterBugCheckReasonCallback in a single driver identifies a rootkit
-- **Dangerous patterns** -- detects the CR0 WP-disable sequence (SSDT hook prerequisite), the CR4 SMEP-disable sequence, MSR_LSTAR reads (KASLR defeat) and writes (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"`, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, and direct I/O port access
-- **Driver classification** -- identifies WDM, KMDF, and minifilter drivers by import profile; extracts the PDB path; detects Authenticode signatures; recovers pool tags from `ExAllocatePoolWithTag` call sites
+- **IRP/IOCTL dispatch**: disassembles DriverEntry and recovers all 28 MajorFunction slot assignments; decodes each CTL_CODE into DeviceType, Access, Function, and Method; flags METHOD_NEITHER (raw user pointer) as the highest-risk transfer type
+- **Kernel API audit**: classifies 40+ kernel APIs across 12 risk classes: physical memory mapping, token stealing via PsInitialSystemProcess, APC injection, process attachment, SSDT hooking, virtual memory manipulation, driver loading, DKOM, pool allocation, and MDL misuse
+- **Callback detection**: tags 20+ kernel callbacks as edr_like, rootkit_risk, or info; ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx + KeRegisterBugCheckReasonCallback in a single driver identifies a rootkit
+- **Dangerous patterns**: detects the CR0 WP-disable sequence (SSDT hook prerequisite), the CR4 SMEP-disable sequence, MSR_LSTAR reads (KASLR defeat) and writes (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"`, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, and direct I/O port access
+- **Driver classification**: identifies WDM, KMDF, and minifilter drivers by import profile; extracts the PDB path; detects Authenticode signatures; recovers pool tags from `ExAllocatePoolWithTag` call sites
 
 `ablation news` prints this update log inline.
 
@@ -87,7 +87,7 @@ Ablation adds what Binary Ninja does not have:
 
 ## Real-World Results
 
-Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio -- across x86-64, ARM64, ARM32, MIPS32, PowerPC, and Windows .sys.
+Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio, covering x86-64, ARM64, ARM32, MIPS32, PowerPC, and Windows .sys.
 
 Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
 
