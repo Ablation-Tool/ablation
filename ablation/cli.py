@@ -344,7 +344,50 @@ def cmd_driver(args):
     print(report.fmt())
 
 
+def cmd_byovd(args):
+    from ablation.analyzers.byovd_detector import BYOVDDetector
+    import json as _json3
+
+    p = _require_binary(args.binary)
+    det = BYOVDDetector.from_path(str(p))
+    report = det.analyze()
+
+    if args.json:
+        Path(args.json).write_text(_json3.dumps(report.summary(), indent=2))
+        print(f"JSON written to {args.json}")
+        return
+
+    print(report.fmt())
+
+
 _RECENT_UPDATES = """\
+v2.4.0 (2026-09-24)  MIPS32 taint tracker
+  ablation mips <binary> [--le]
+  - O32 ABI; $a0-$a3 args, $v0 return; caller/callee-saved clobber model
+  - Sources: recv/recvfrom/read/fgets/gets/fread
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/memcpy/strcat/snprintf
+  - Load-delay slot aware (branch executes after delay slot instruction)
+  - Big-endian (RouterOS, Broadcom) and little-endian (embedded CPE) support
+  - Intraprocedural + interprocedural BFS up to depth 4
+
+v2.3.0 (2026-09-24)  Heap vulnerability scanner
+  ablation heap <binary>
+  - INT_OVERFLOW_BEFORE_ALLOC: IMUL/MUL/SHL result to malloc without overflow check
+    (TAOSSA Ch6 L6-2 width*height pattern, L6-3 nresp*sizeof pattern)
+  - USE_AFTER_FREE: free(ptr) then dereference of same register in same function
+  - DOUBLE_FREE: same register freed twice without intervening reassignment
+  - OFF_BY_ONE_ALLOC: strlen result to malloc without +1 for NUL terminator
+
+v2.2.0 (2026-09-24)  BYOVD detector
+  ablation byovd <file.sys>
+  - Wraps KernelDriverAnalyzer with BYOVD-specific scoring (0-100)
+  - 8 attack paths: PHYS_MEM_ARBITRARY_RW, MDL_KERNEL_WRITE,
+    MSR_LSTAR_MANIPULATION, SSDT_HOOK, TOKEN_STEALING_LPE, SMEP_BYPASS,
+    APC_KERNEL_INJECTION, VIRTUAL_MEM_WRITE
+  - Signed driver + METHOD_NEITHER IOCTL + dangerous primitive = BYOVD_CONFIRMED
+  - Grounded in PRE ch3 IRP walk-through: MmMapIoSpace, MapMdl sequence,
+    KeServiceDescriptorTable SSDT hook, MSR_LSTAR read/write
+
 v2.1.0 (2026-09-24)  Format string vulnerability scanner
   ablation fmtstr <binary>
   - Scans x86-64 ELF for printf/fprintf/syslog/err/warn family calls
@@ -388,6 +431,52 @@ def cmd_fmtstr(args):
     else:
         non_safe = [f for f in findings if f.verdict != 'SAFE']
         print(scanner.report(non_safe))
+
+
+def cmd_heap(args):
+    from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner
+
+    p = str(_require_binary(args.binary))
+    scanner = HeapVulnScanner.from_path(p)
+    findings = scanner.scan()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'kind': f.kind, 'func_va': hex(f.func_va), 'site_va': hex(f.site_va),
+                'severity': f.severity, 'description': f.description,
+                'alloc_sym': f.alloc_sym, 'freed_at': hex(f.freed_at) if f.freed_at else '',
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(scanner.report(findings))
+
+
+def cmd_mips(args):
+    from ablation.analyzers.taint_tracker_mips import MIPS32TaintTracker
+
+    p = str(_require_binary(args.binary))
+    be = not args.le
+    tracker = MIPS32TaintTracker.from_path(p, big_endian=be)
+    findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'sink_va': hex(f.sink_va),
+                'sink': f.sink, 'severity': f.severity, 'description': f.description,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
 
 
 def cmd_news(args):
@@ -508,11 +597,30 @@ def main():
     p_driver.add_argument('--json', metavar='FILE', default=None, help='write JSON summary to FILE')
     p_driver.set_defaults(func=cmd_driver)
 
+    # byovd
+    p_byovd = sub.add_parser('byovd', help='BYOVD risk score: signed driver + IOCTL + dangerous primitive')
+    p_byovd.add_argument('binary')
+    p_byovd.add_argument('--json', metavar='FILE', default=None, help='write JSON summary to FILE')
+    p_byovd.set_defaults(func=cmd_byovd)
+
     # fmtstr
     p_fmtstr = sub.add_parser('fmtstr', help='format string vulnerability scan (printf/syslog/err with non-literal format arg)')
     p_fmtstr.add_argument('binary')
     p_fmtstr.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_fmtstr.set_defaults(func=cmd_fmtstr)
+
+    # heap
+    p_heap = sub.add_parser('heap', help='heap vulnerability scan: int overflow before alloc, UAF, double-free, off-by-one')
+    p_heap.add_argument('binary')
+    p_heap.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_heap.set_defaults(func=cmd_heap)
+
+    # mips
+    p_mips = sub.add_parser('mips', help='MIPS32 taint analysis: recv/read to system/strcpy/exec')
+    p_mips.add_argument('binary')
+    p_mips.add_argument('--le', action='store_true', help='little-endian MIPS (default: big-endian)')
+    p_mips.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_mips.set_defaults(func=cmd_mips)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
