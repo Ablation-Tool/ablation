@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Email
+    url: mailto:ablation@nuclide-research.com
+    about: Send a message directly for questions or private reports
+  - name: X (@ablation_tool)
+    url: https://x.com/ablation_tool
+    about: Reach out on X for quick questions or feedback
+  - name: Security vulnerability
+    url: https://github.com/Ablation-Tool/ablation/security/advisories/new
+    about: Report a security vulnerability privately via GitHub advisories
