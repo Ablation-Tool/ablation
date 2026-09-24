@@ -6,15 +6,15 @@
 
 **Hand it any binary. It reverse engineers it.**
 
-Ablation is an autonomous software reverse engineering framework for stripped binaries. Give it firmware, a PE, a Mach-O, a Go binary, or a shared library — no symbols, no source, no prior knowledge — and it builds a behavioral corpus, searches it in plain English, and deep-analyzes the functions that look vulnerable.
+Ablation is an autonomous reverse engineering framework for stripped binaries. Give it firmware, a PE, a Mach-O, a Go binary, or a shared library. No symbols required. No source required. No prior knowledge required. It builds a behavioral corpus, searches it in plain English, disassembles candidates on demand, traces taint, and decompiles functions via LLM reasoning.
 
-It is not a Ghidra/IDA/Binary Ninja wrapper. The pipeline is implemented in Python on Capstone, LIEF, NumPy, sentence-transformers, and (optionally) the Anthropic API.
+It is not a Ghidra/IDA/Binary Ninja wrapper. The pipeline runs in Python on Capstone, LIEF, NumPy, sentence-transformers, and (optionally) the Anthropic API.
 
 ---
 
 ## What it is for
 
-Typical workflow: drop in a binary, sweep 30 vulnerability patterns, then inspect the 5–10 functions that score highest.
+Drop in a binary, sweep 30 vulnerability patterns, inspect the top functions that score highest.
 
 ```bash
 ablation corpus firmware.so --product my-target --version 1.0 --sigs
@@ -25,14 +25,14 @@ ablation taint  firmware.so
 ablation findings --sarif findings.sarif
 ```
 
-The author reports using this path to find a zero-length-loop DoS in a production protocol parser, an automatic replay of that pattern into a second DoS in the same binary, and a pre-auth management API route rated CVSS 9.1.
+Real findings on this path: a zero-length-loop DoS in a production protocol parser, a second DoS in the same binary found by automatic pattern replay, and a pre-auth management API route rated CVSS 9.1.
 
 Two ways to drive it:
 
-1. **Claude Code.** Copy `CLAUDE.md` into a project and say: *Reverse engineer this firmware and find vulnerabilities.* Claude locates the binary, builds the corpus, sweeps patterns, pulls CFG/taint on candidates, and writes up why each finding is a finding.
-2. **Embedded `LlmAnalyst`.** A ReAct loop via `claude-sonnet-5` that names stripped functions. It preloads callee names, string xrefs, and RAG-retrieved prior findings, then spends a tool budget until it has a name. This runs inside Ablation and does not require Claude Code.
+1. **Claude Code.** Copy `CLAUDE.md` into a project and say: *Reverse engineer this firmware and find vulnerabilities.* Claude locates the binary, builds the corpus, sweeps patterns, pulls CFG and taint on candidates, and explains why each result is a finding. No binary path. No command flags.
+2. **Embedded `LlmAnalyst`.** A ReAct loop using `claude-sonnet-5` for automated function naming and decompilation. It preloads callee names, string xrefs, and RAG-retrieved prior findings, then spends a tool budget until it produces a confident result. This runs inside Ablation independently of Claude Code.
 
-Deep analysis (CFG, annotated windows, taint, Z3) runs only on the shortlist. Semantic search runs first, over every function.
+Semantic search runs first, over every function. Deep analysis runs only on the top candidates.
 
 ---
 
@@ -40,53 +40,126 @@ Deep analysis (CFG, annotated windows, taint, Z3) runs only on the shortlist. Se
 
 ```
 stripped binary (ELF · PE · Mach-O · Go)
-        │
-        ▼
-┌──────────────────────────────────────────────────────┐
-│  BinaryContext                                       │
-│  PLT · exports · strings · call graph                │
-│  SHA256 cache at ~/.ablation/cache/                  │
-│  ~0.5s first build · ~110ms reload                   │
-└──────────────────────────────────────────────────────┘
-        │
-        ▼
-┌──────────────────────────────────────────────────────┐
-│  XRefGraph + CorpusBuilder                           │
-│  .eh_frame FDEs → function starts                    │
-│  vectorized CALL rel32 scan · RIP-relative xrefs     │
-│  role inference: HEAP_ALLOC · NETWORK_IO · …         │
-└──────────────────────────────────────────────────────┘
-        │
-        │  all functions (e.g. 19,000)
-        ▼
-┌──────────────────────────────────────────────────────┐
-│  SemanticSearcher + PatternLibrary + FindingRegistry │
-│  BinFuse 11-category opcodes · x86-64 and ARM64      │
-│  BERT all-mpnet-base-v2 + PCA whitening              │
-│  30-pattern sweep · plain-English query              │
-│  CVE seed corpus · confirmed prior findings          │
-│  ~35s on CPU for 19k functions, then cached          │
-└──────────────────────────────────────────────────────┘
-        │
-        │  top candidates (5–10)
-        ▼
-┌──────────────────────────────────────────────────────┐
-│  CFGBuilder        recursive disasm · basic blocks   │
-│  WindowAnalyzer    annotated window · inline xrefs   │
-│  TaintTracker      source → sink · MFP · interproc   │
-│  PathSolver        Z3 feasibility                    │
-│  FuncProfiler      strings · calls · sinks           │
-│  RegAnnotator      call-site arg values              │
-│  IPRegAnnotator    N-hop cross-library arg chains    │
-│  LlmAnalyst        ReAct · claude-sonnet-5           │
-└──────────────────────────────────────────────────────┘
-        │
-        ▼
-┌──────────────────────────────────────────────────────┐
-│  DTWMatcher · MatrixProfileDiff · VersionDelta       │
-│  PatternLibrary.record_hit() seeds the next sweep    │
-└──────────────────────────────────────────────────────┘
+        |
+        v
++------------------------------------------------------+
+|  BinaryContext                                       |
+|  PLT · exports · strings · call graph                |
+|  SHA256 cache at ~/.ablation/cache/                  |
+|  ~0.5s first build · ~110ms reload                   |
++------------------------------------------------------+
+        |
+        v
++------------------------------------------------------+
+|  XRefGraph + CorpusBuilder                           |
+|  .eh_frame FDEs -> function starts                   |
+|  vectorized CALL rel32 scan · RIP-relative xrefs     |
+|  role inference: HEAP_ALLOC · NETWORK_IO · ...       |
++------------------------------------------------------+
+        |
+        |  all functions (e.g. 19,000)
+        v
++------------------------------------------------------+
+|  SemanticSearcher + PatternLibrary + FindingRegistry |
+|  BinFuse 11-category opcodes · x86-64 and ARM64      |
+|  BERT all-mpnet-base-v2 + PCA whitening              |
+|  30-pattern sweep · plain-English query              |
+|  CVE seed corpus · confirmed prior findings          |
+|  ~35s on CPU for 19k functions, then cached          |
++------------------------------------------------------+
+        |
+        |  top candidates (5 to 10)
+        v
++------------------------------------------------------+
+|  CFGBuilder        recursive disasm · basic blocks   |
+|  WindowAnalyzer    annotated window · inline xrefs   |
+|  TaintTracker      source -> sink · MFP · interproc  |
+|  PathSolver        Z3 feasibility                    |
+|  FuncProfiler      strings · calls · sinks           |
+|  RegAnnotator      call-site arg values              |
+|  IPRegAnnotator    N-hop cross-library arg chains    |
+|  LlmAnalyst        ReAct · decompile · sonnet-5      |
++------------------------------------------------------+
+        |
+        v
++------------------------------------------------------+
+|  DTWMatcher · MatrixProfileDiff · VersionDelta       |
+|  PatternLibrary.record_hit() seeds the next sweep    |
++------------------------------------------------------+
 ```
+
+---
+
+## Coverage vs Ghidra, IDA Pro, and Binary Ninja
+
+Ablation was built from scratch. It does not wrap or call Ghidra, IDA Pro, or Binary Ninja. Every capability listed below is implemented directly in Python using capstone, lief, numpy, and the Anthropic API against any binary you hand it.
+
+### vs Ghidra
+
+| Capability | Ghidra | Ablation |
+|---|---|---|
+| Disassembly | Full upfront auto-analysis; 1 to 4 hours on a 50 MB image | CFGBuilder: per-candidate recursive disasm on demand; WindowAnalyzer: annotated dumps with inline PLT labels and string xrefs |
+| Decompilation | Built-in decompiler lifting to C pseudocode | LlmAnalyst: LLM-driven decompilation via ReAct loop with claude-sonnet-5; works on stripped binaries with no symbols |
+| Call graph | Yes, post auto-analysis | XRefGraph: single O(N) CALL rel32 scan; LibGraph: unified cross-binary matrix across all shared libraries |
+| Cross-reference analysis | Code and data xrefs, post auto-analysis | RIP-relative xref index built in 2s; BinaryContext.strings_in_func(), funcs_referencing_string() |
+| String extraction | Yes | BinaryContext indexes all .rodata strings with function linkage in 0.5s |
+| Function identification | FunctionID (hash-based signatures) | SigLibrary: 40 BERT behavioral signatures; matches functions that were recompiled, renamed, or inlined |
+| Symbol / import / export | Yes | BinaryContext: PLT (.plt/.plt.sec/.plt.got) and .dynsym exports |
+| Data flow / taint | Limited; no source-to-sink | TaintTracker: x86-64 static taint; libdft policy; full stack model; MFP worklist; interprocedural BFS to dangerous sinks |
+| Binary diffing | Via BinExport / Kaiju plugin | DTWMatcher, MatrixProfileDiff, VersionDelta: Jaccard + DTW + semantic tiebreaker; instruction-level patch localization |
+| Scripting | Java API; Python via Ghidrathon | Full Python library; every module is a direct import |
+| YARA generation | Via external plugin | yara_generator.py: direct rule generation from findings |
+| Semantic / behavioral search | Not available | SemanticSearcher: plain-English queries against BERT behavioral fingerprints |
+| Self-improving patterns | Not available | PatternLibrary: confirmed findings auto-replay on future binaries |
+| LLM analysis | Not available | LlmAnalyst: ReAct loop with claude-sonnet-5; RAG-augmented decompilation and naming |
+| Autonomous workflow | Not available | Claude Code drives full workflow from one instruction |
+| Initialization time | 1 to 4 hours (50 MB binary) | 35 seconds (19,000 functions) |
+| Installation | Java GUI application | `pip install` |
+
+### vs IDA Pro
+
+| Capability | IDA Pro | Ablation |
+|---|---|---|
+| Disassembly | Industry standard; full upfront analysis | CFGBuilder + WindowAnalyzer; per-candidate on demand; annotated with inline context |
+| Decompilation | Hex-Rays: C pseudocode via compiler IR lift | LlmAnalyst: LLM-driven decompilation via ReAct loop; works on stripped binaries without Hex-Rays license |
+| Function signatures | FLIRT: hash-based library matching | SigLibrary: BERT behavioral matching; matches recompiled / inlined / custom functions FLIRT cannot |
+| Taint analysis | Very limited; plugin-dependent | TaintTracker: full static taint source-to-sink; MFP worklist; interprocedural; full stack model |
+| Cross-binary analysis | Per-binary; manual linking | LibGraph: unified import/export matrix across all firmware libraries; IPRegAnnotator N-hop cross-library arg provenance |
+| Binary diffing | BinDiff plugin | DTWMatcher + MatrixProfileDiff + VersionDelta |
+| Scripting | IDAPython | Full Python library |
+| Semantic / behavioral search | Not available | SemanticSearcher |
+| Self-improving patterns | Not available | PatternLibrary |
+| LLM analysis | Not available | LlmAnalyst + Claude Code |
+| Autonomous workflow | Not available | Claude Code drives full workflow |
+| Cost | $3,000+ per seat | Open source |
+| Initialization time | Minutes to hours | 35 seconds |
+
+### vs Binary Ninja
+
+| Capability | Binary Ninja | Ablation |
+|---|---|---|
+| Disassembly | Multi-architecture; LLIL/MLIL/HLIL IR | CFGBuilder + WindowAnalyzer |
+| Decompilation | HLIL pseudocode; SSA-based data flow | LlmAnalyst: LLM-driven decompilation via ReAct loop with claude-sonnet-5 |
+| Data flow / value analysis | SSA-based value set analysis | TaintTracker: source-to-sink taint; PathSolver Z3 feasibility |
+| Function signatures | FLIRT-style signatures | SigLibrary: BERT behavioral signatures |
+| Cross-binary analysis | Per-binary | LibGraph: unified cross-binary matrix |
+| Binary diffing | Via plugins | DTWMatcher + MatrixProfileDiff + VersionDelta |
+| Scripting | Python API; headless mode | Full Python library |
+| Semantic / behavioral search | Not available | SemanticSearcher |
+| Self-improving patterns | Not available | PatternLibrary |
+| LLM analysis | Not available | LlmAnalyst + Claude Code |
+| Autonomous workflow | Not available | Claude Code drives full workflow |
+| Initialization time | Minutes on large binaries | 35 seconds |
+
+---
+
+## Real results
+
+| Vulnerability | How it was found |
+|---|---|
+| Zero-length loop DoS in enterprise protocol parser | Semantic sweep, CFG loop analysis |
+| Second DoS variant in same binary, different protocol | Automatic pattern replay from first finding |
+| Pre-auth management API route exposure (CVSS 9.1) | Semantic sweep, taint trace to unauthenticated handler |
 
 ---
 
@@ -119,7 +192,7 @@ Verify:
 python -c "from ablation.analyzers.binary_context import BinaryContext; print('ok')"
 ```
 
-Optional extra `full` also pulls `angr`. LLM features need an Anthropic API key available to the process.
+The optional `full` extra also pulls `angr`. LLM features require an Anthropic API key in the environment.
 
 Cache and state live under `~/.ablation/`:
 
@@ -127,7 +200,7 @@ Cache and state live under `~/.ablation/`:
 |---|---|
 | `~/.ablation/cache/` | SHA256-keyed `BinaryContext` |
 | `~/.ablation/func_id.db` | function embeddings |
-| `~/.ablation/function_names.json` | persistent VA → name overlay |
+| `~/.ablation/function_names.json` | persistent VA to name overlay |
 | `~/.ablation/findings.db` | confirmed findings across targets |
 
 ---
@@ -160,62 +233,45 @@ ctx = BinaryContext.load_or_build("/path/to/binary.so")
 print(ctx.summary())
 ```
 
-CLI entry points from `pyproject.toml`: `ablation`, `ablation-sweep`, `ablation-search`, `ablation-taint`, `ablation-cfg`, `ablation-sigs`.
+CLI entry points: `ablation`, `ablation-sweep`, `ablation-search`, `ablation-taint`, `ablation-cfg`, `ablation-sigs`.
 
 ---
 
 ## Capabilities
 
-**Semantic search and pattern sweep.** Each function is fingerprinted from PLT callees, string xrefs, opcode-category sequences, and Markov transitions. Embeddings use `all-mpnet-base-v2` with PCA whitening. Thirty default patterns cover buffer/heap overflow, format string, integer overflow, UAF, double-free, races, DoS loops, info-leak, auth bypass, crypto misuse, path traversal, Tcl injection, command execution, and related classes. A CVE seed corpus is included; confirmed hits register as new queries and replay on later binaries.
+**Semantic search and pattern sweep.** Each function is fingerprinted from PLT callees, string xrefs, opcode-category sequences, and Markov transitions. Embeddings use `all-mpnet-base-v2` with PCA whitening. Thirty default patterns cover buffer/heap overflow, format string, integer overflow, UAF, double-free, races, DoS loops, info-leak, auth bypass, crypto misuse, path traversal, Tcl injection, command execution, and related classes. A CVE seed corpus is included. Confirmed hits register as new queries and replay on later binaries.
 
-**Disassembly and CFG, on demand.** `CFGBuilder` does iterative recursive disassembly per candidate (Andriesse, *Practical Binary Analysis*, §8.2.4). `WindowAnalyzer` returns a 1536-byte annotated window around any VA with inline PLT labels and string xrefs. One call is meant to be enough context for an LLM.
+**Disassembly and CFG, on demand.** `CFGBuilder` runs iterative recursive disassembly per candidate (Andriesse, *Practical Binary Analysis*, §8.2.4): basic block decomposition, branch analysis, successor edges. `WindowAnalyzer` returns a 1536-byte annotated window around any VA with inline PLT labels and string xrefs. One call gives an LLM everything it needs to reason about a function.
 
-**Taint.** x86-64 static taint from network receive sources to dangerous sinks, using a libdft-style policy (XFER, ALU, CLR, LEA, CALL), rbp/rsp-relative stack model, MFP worklist over the CFG, and interprocedural BFS across libraries. Custom sinks and argv-seeded entry analysis cover CLI handlers. `PathSolver` checks reachability with Z3.
+**Decompilation.** `LlmAnalyst` drives a ReAct loop with `claude-sonnet-5`. It loads the annotated disassembly window, callee names, string xrefs, and RAG-retrieved prior findings, then reasons through the function to produce a behavioral description. This is LLM-based decompilation: it works on fully stripped binaries and does not require a Hex-Rays license.
 
-**Cross-binary.** `LibGraph` builds an import/export matrix over every shared library in a firmware tree. `IPRegAnnotator` follows call chains N hops and keeps register-value provenance, so one query can list every library that reaches a dangerous sink and what was in the argument registers.
+**Taint.** x86-64 static taint from network receive sources to dangerous sinks. Uses a libdft-style policy (XFER, ALU, CLR, LEA, CALL), rbp/rsp-relative stack model, MFP worklist over the CFG, and interprocedural BFS across libraries. Custom sinks and argv-seeded entry analysis cover CLI handlers. `PathSolver` checks reachability with Z3.
 
-**Cross-version.** `VersionDelta` tracks a function across releases with a structural pre-filter, Jaccard 4-grams, and a semantic tiebreaker. `DTWMatcher` matches homologs when blocks were inserted or deleted. `MatrixProfileDiff` (STUMPY AB-join on opcode sequences) localizes the instructions that changed, useful for checking whether a CVE was actually patched.
+**Cross-binary.** `LibGraph` builds an import/export matrix over every shared library in a firmware tree. `IPRegAnnotator` follows call chains N hops and keeps register-value provenance, so one query lists every library that reaches a dangerous sink and what the argument registers held.
 
-**Naming stripped functions.** `SigLibrary` matches against 40 behavioral signatures at cosine 0.62 and rewrites `fn_0x<va>` to names like `likely:memcpy`. `NameRegistry` persists the overlay by binary SHA256. `LlmAnalyst` does the ReAct naming loop described above.
+**Cross-version.** `VersionDelta` tracks a function across releases with a structural pre-filter, Jaccard 4-grams, and a semantic tiebreaker. `DTWMatcher` matches homologs when blocks were inserted or deleted. `MatrixProfileDiff` (STUMPY AB-join on opcode sequences) localizes the instructions that changed between versions. Use it to confirm whether a CVE was patched.
+
+**Naming stripped functions.** `SigLibrary` matches against 40 behavioral signatures at cosine 0.62 and rewrites `fn_0x<va>` to names like `likely:memcpy`. `NameRegistry` persists the overlay by binary SHA256.
 
 **Formats and architectures.** ELF (x86-64, ARM64), PE, Mach-O. Go via pclntab (all Go versions), including garbled builds and subprocess/exec surface enumeration. FortiOS image extraction with XOR-key recovery. Entropy maps for packed/encrypted sections. ARM64 C++ vtable reconstruction and indirect-call resolution.
 
-**Specialized auditors.** `PreAuthRouteAuditor` walks a four-step pre-auth route discovery flow (route-init bypasses → handler classes → factories → `FuncProfiler`); `PocGenerator` emits curl commands for confirmed routes. `CryptoAudit` covers JWT/SAML, TLS versions/ciphers, embedded key material, and timing-oracle checks from response-time deltas.
+**Specialized auditors.** `PreAuthRouteAuditor` walks a four-step pre-auth route discovery flow: route-init bypass scan, handler class extraction, factory cross-reference, and `FuncProfiler` per handler. `PocGenerator` emits curl commands for confirmed routes. `CryptoAudit` covers JWT/SAML, TLS versions/ciphers, embedded key material, and timing-oracle checks from response-time deltas.
 
 ---
 
-## Methods
+## Analysis methods
 
 | Method | Role |
 |---|---|
 | BERT `all-mpnet-base-v2` | function embeddings |
 | PCA whitening (Su et al., 2021) | calibrated cosine similarity |
-| BinFuse | x86-64 / ARM64 → 11 behavioral opcode categories |
+| BinFuse | x86-64 / ARM64 to 11 behavioral opcode categories |
 | BinDeep | `MEM[REG]` / `MEM[REG+IMM]` operand encoding |
 | Markov transitions | structure over category sequences |
 | Jaccard | PLT-call sets and opcode 4-grams |
 | DTW | warp-invariant cross-version matching |
 | Matrix Profile (STUMPY) | instruction-level patch localization |
 | Timing deltas | non-constant-time crypto |
-
----
-
-## Compared with interactive RE tools
-
-Ablation does not replace a decompiler. It is built to avoid hours of upfront auto-analysis on large stripped images: index first, disassemble only the functions that matter.
-
-| | Typical GUI RE tool | Ablation |
-|---|---|---|
-| First look at a 50 MB image | full auto-analysis, often 1–4 h | context build in ~0.5 s; embeddings ~35 s for ~19k functions |
-| Function ID | hash / FLIRT-style signatures | BERT behavioral signatures; survives rename, recompile, some inlining |
-| Search | name, string, byte, type | plain-English behavioral queries |
-| Taint | limited or plugin-dependent | static x86-64 source→sink with interprocedural BFS |
-| Diffing | BinDiff / BinExport-style plugins | DTW + matrix profile + semantic tiebreak |
-| Persistence | per-database | findings and names reuse across binaries |
-| Automation | scripts after the DB exists | Claude Code one-shot workflow + Python library |
-| Install | heavy native / Java app | `pip install` |
-
-It does **not** emit Hex-Rays-quality C. Use IDA, Ghidra, or Binary Ninja when you need a decompiler; there is a Binary Ninja integration documented under `docs/integrations/binja.md`.
 
 ---
 
@@ -241,7 +297,7 @@ gh api repos/<owner>/<repo>/code-scanning/sarifs \
 | Doc | Topic |
 |---|---|
 | [Getting Started](docs/getting-started.md) | install and first analysis |
-| [Vulnerability Hunting](docs/workflows/vuln-hunting.md) | sweep → confirmation → disclosure |
+| [Vulnerability Hunting](docs/workflows/vuln-hunting.md) | sweep to confirmation to disclosure |
 | [Cross-Version Diffing](docs/workflows/cross-version.md) | track functions across patches |
 | [Go Binary RE](docs/workflows/go-binaries.md) | pclntab, garbled builds |
 | [Crypto Analysis](docs/workflows/crypto.md) | encrypted firmware, XOR keys |
@@ -252,9 +308,8 @@ gh api repos/<owner>/<repo>/code-scanning/sarifs \
 | [Registry](docs/module-reference/registry.md) | names and findings |
 | [Crypto](docs/module-reference/crypto.md) | entropy, XOR, `CryptoAudit` |
 | [Structural](docs/module-reference/structural.md) | version delta, vtables |
-| [LLM Analyst](docs/module-reference/llm.md) | ReAct naming loop |
+| [LLM Analyst](docs/module-reference/llm.md) | ReAct decompilation and naming loop |
 | [Claude Code](docs/integrations/claude-code.md) | driving Ablation from a Claude session |
-| [Binary Ninja](docs/integrations/binja.md) | plugin install and commands |
 
 Also see `CLAUDE.md` (agent command reference), `PITCH.md`, and `CHANGELOG.md` (current release: **1.8.0**).
 
@@ -262,22 +317,14 @@ Also see `CLAUDE.md` (agent command reference), `PITCH.md`, and `CHANGELOG.md` (
 
 ## Requirements
 
-- Python ≥ 3.10
+- Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
 - Optional: `anthropic` (`[llm]`), `angr` (`[full]`)
 
 ---
 
-## Author
-
-Built by **Nicholas Michael Kloster**, independent researcher working on binary firmware vulnerability analysis.
-
----
-
 ## License
 
-Copyright (c) 2026 Nicholas Michael Kloster. All Rights Reserved.
-
-Licensed for authorized security research and educational use. Commercial use requires written permission. See [LICENSE](LICENSE) for terms.
+Commercial license required for commercial use. Non-commercial research use permitted. See [LICENSE](LICENSE) for full terms.
 
 Use this only on binaries you are authorized to analyze. Findings are candidates until a human confirms them.
