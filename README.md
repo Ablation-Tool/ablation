@@ -63,7 +63,7 @@ searcher.query(
 
 That query matches functions that do exactly that, regardless of register names, compiler output, or architecture. BinFuse normalization maps x86-64 and ARM64 instructions to the same 11 behavioral categories, so the same query runs on both without modification.
 
-This is not a decompiler. It does not generate pseudocode. It tells you which function in 19,000 is worth an hour of manual work.
+Ablation does disassemble. CFGBuilder runs recursive disassembly on every candidate. WindowAnalyzer dumps annotated instruction output with inline PLT labels and string cross-references. TaintTracker traces data flow at the instruction level. The difference from IDA and Ghidra is sequencing: semantic search narrows 19,000 functions to fewer than ten first, then full disassembly and taint analysis run on those candidates automatically. No waiting four hours before the first search.
 
 ---
 
