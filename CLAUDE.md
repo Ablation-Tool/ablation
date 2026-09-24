@@ -21,6 +21,7 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **Scanner primitives** -- LengthUnderflowScanner (C12 class), ChunkWalkerValidator (C13 class)
 - **Pre-auth route auditor** -- flatui route scanner + PoC generator for Fortinet web framework
 - **Windows kernel driver analysis** -- KernelDriverAnalyzer: WDM/KMDF/minifilter classification, IRP dispatch table, IOCTL decoding, kernel API audit, callback registrations, pool tags, PDB path, SMEP/MSR/CR4 pattern scan
+- **Format string scanner** -- FormatStringScanner: 28 printf/syslog/err family sinks; backward trace to classify format arg as SAFE (LEA .rodata), VULNERABLE (stack slot/arg), or SUSPICIOUS; two-hop vsnprintf-to-syslog detection
 - **Crypto analysis** -- XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis** -- ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -90,6 +91,7 @@ if ctx.names_count():
 | "Find confirmed similar findings from past engagements" | `FindingRegistry.find_similar(embedding)` |
 | "Write a new scanner for an undetected vuln class" | See **Custom scanner workflow** below |
 | "Analyze a Windows kernel .sys driver" | `KernelDriverAnalyzer.from_path(path).analyze()` |
+| "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Decode a Windows IOCTL CTL_CODE value" | `decode_ioctl_code(value)` from `kernel_driver_analyzer` |
 | "Find IRP dispatch handlers in DriverEntry" | `KernelDriverAnalyzer.analyze().major_functions` |
 | "Find IOCTL codes in driver binary" | `KernelDriverAnalyzer.analyze().ioctl_codes` |
