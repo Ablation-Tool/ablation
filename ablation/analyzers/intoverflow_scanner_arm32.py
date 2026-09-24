@@ -1,5 +1,5 @@
 """
-intoverflow_scanner_arm32.py -- ARM32 integer overflow scanner for allocation sizing.
+intoverflow_scanner_arm32.py: ARM32 integer overflow scanner for allocation sizing.
 
 Detects MUL/UMULL/SMULL instructions whose operands are wire-controlled (traced
 to recv/read sources) and whose result flows into an allocation (malloc/calloc/

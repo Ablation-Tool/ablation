@@ -1,5 +1,5 @@
 """
-cfg_builder.py -- Per-function control flow graph for x86-64 ELF binaries.
+cfg_builder.py: Per-function control flow graph for x86-64 ELF binaries.
 
 Implements the iterative recursive disassembly approach from:
   Andriesse, "Practical Binary Analysis" (No Starch), ch. 8.2.4.
@@ -13,15 +13,15 @@ Algorithm:
   6. Result: dict of basic_block_va -> BasicBlock.
 
 BasicBlock:
-  start: int  -- first instruction VA
-  end:   int  -- last instruction VA (inclusive)
-  succs: List[int]  -- successor VAs (branch targets + fall-through)
+  start: int : first instruction VA
+  end:   int : last instruction VA (inclusive)
+  succs: List[int] : successor VAs (branch targets + fall-through)
   insns: List[(va, mnemonic, op_str)]
 
 CFG:
   func_va: int
-  blocks:  Dict[int, BasicBlock]  -- keyed by block start VA
-  entry:   int  -- == func_va
+  blocks:  Dict[int, BasicBlock] : keyed by block start VA
+  entry:   int : == func_va
 
 Usage:
     from ablation.analyzers.cfg_builder import CFGBuilder
@@ -265,7 +265,7 @@ class CFGBuilder:
                     break
 
                 # Block splitting: if we reach a known block boundary that is not
-                # our own start, link to it and stop -- avoids overlapping blocks
+                # our own start, link to it and stop: avoids overlapping blocks
                 # that cause empty-succs bugs in the MFP taint propagation.
                 if va != bb_start and va in cfg.blocks:
                     block.succs.append(va)
