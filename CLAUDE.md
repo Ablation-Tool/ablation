@@ -20,6 +20,7 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **Behavioral corpus search** -- SAXIndex approximate NN + SubsequenceSearcher wildcard pattern matching
 - **Scanner primitives** -- LengthUnderflowScanner (C12 class), ChunkWalkerValidator (C13 class)
 - **Pre-auth route auditor** -- flatui route scanner + PoC generator for Fortinet web framework
+- **Windows kernel driver analysis** -- KernelDriverAnalyzer: WDM/KMDF/minifilter classification, IRP dispatch table, IOCTL decoding, kernel API audit, callback registrations, pool tags, PDB path, SMEP/MSR/CR4 pattern scan
 - **Crypto analysis** -- XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis** -- ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -88,6 +89,15 @@ if ctx.names_count():
 | "Auto-name stripped functions via LLM" | `LlmAnalyst.FunctionNamer(ctx).run(va)` |
 | "Find confirmed similar findings from past engagements" | `FindingRegistry.find_similar(embedding)` |
 | "Write a new scanner for an undetected vuln class" | See **Custom scanner workflow** below |
+| "Analyze a Windows kernel .sys driver" | `KernelDriverAnalyzer.from_path(path).analyze()` |
+| "Decode a Windows IOCTL CTL_CODE value" | `decode_ioctl_code(value)` from `kernel_driver_analyzer` |
+| "Find IRP dispatch handlers in DriverEntry" | `KernelDriverAnalyzer.analyze().major_functions` |
+| "Find IOCTL codes in driver binary" | `KernelDriverAnalyzer.analyze().ioctl_codes` |
+| "Audit kernel API surface of .sys file" | `KernelDriverAnalyzer.analyze().kernel_api_findings` |
+| "Find kernel callback registrations" | `KernelDriverAnalyzer.analyze().callback_registrations` |
+| "Find SMEP bypass / MSR / CR4 patterns" | `KernelDriverAnalyzer.analyze().dangerous_patterns` |
+| "Extract PDB path / build tree from .sys" | `KernelDriverAnalyzer.analyze().pdb_path` |
+| "Check if driver is Authenticode-signed" | `KernelDriverAnalyzer.analyze().is_signed` |
 
 **Ordering rule:** BinaryContext (always) -> SemanticSearcher (new binary/vuln class) -> FuncProfiler (candidate) -> TaintTracker (sinks known) -> PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
 
@@ -809,6 +819,70 @@ count = cb.build('/path/to/libips.so.new', product='libips', version='8.0.0')
 from ablation.analyzers.corpus_builder import build_fortios_corpus
 build_fortios_corpus('/path/libips.so.new', '/path/libav.so.new')
 ```
+
+---
+
+### KernelDriverAnalyzer
+
+**Import:** `from ablation.analyzers.kernel_driver_analyzer import KernelDriverAnalyzer, decode_ioctl_code`
+
+Windows kernel driver (.sys) static analysis. Built on PEParser; does not require BinaryContext (ELF-centric). Uses capstone for disassembly when available; import-only analysis runs without it.
+
+Sources: Windows Internals (Yosifovich/Russinovich), Rootkits: Subverting the Windows Kernel (Hoglund/Butler), Practical Reverse Engineering (Dang et al.).
+
+```python
+kda = KernelDriverAnalyzer.from_path('/path/to/driver.sys')
+report = kda.analyze()
+print(report.fmt())
+
+# Summary dict for ledger / visorlog
+report.summary()
+# {driver_type, is_signed, pdb_path, subsystem, major_functions, ioctl_codes,
+#  ioctl_neither, kernel_api_crit, kernel_api_high, callbacks, pool_ops, dangerous}
+
+# Per-category access
+report.major_functions          # [MajorFunction(index, handler_rva)]
+report.ioctl_codes              # [IoctlCode(raw, device_type, function, method, access)]
+report.kernel_api_findings      # [KernelApiFinding(api, dll, severity, category)]
+report.callback_registrations   # [CallbackRegistration(api, severity, description, risk_class)]
+report.pool_operations          # [PoolOperation(api, tag, file_offset, notes)]
+report.dangerous_patterns       # [DangerousPattern(pattern, offset, description, severity)]
+report.pdb_path                 # str or None -- internal build path leaking vendor/project
+report.is_signed                # bool -- Authenticode cert table present
+
+# IOCTL code standalone decoder:
+ic = decode_ioctl_code(0x222003)
+print(ic.fmt())
+# 0x00222003  DevType=0x0022  Func=0x800  METHOD_NEITHER *** NEITHER (raw user ptr)
+ic.is_neither()         # True -> no buffer copy, raw user ptr in dispatch handler
+ic.is_user_defined()    # True -> function >= 0x800
+```
+
+**Integration with TaintTracker for IOCTL handler analysis:**
+```python
+# After finding METHOD_NEITHER IOCTL codes, configure TaintTracker
+# with kernel pool sinks to trace InputBuffer size -> allocation path:
+from ablation.analyzers.taint_tracker_x86 import TaintTracker
+from ablation.analyzers.xref_graph import XRefGraph
+
+xg = XRefGraph.from_path('/path/driver.sys').build()
+tt = TaintTracker('/path/driver.sys', xref=xg, custom_sinks={
+    'ExAllocatePoolWithTag': [1],  # NumberOfBytes = RDX (arg2)
+    'ExAllocatePool2':       [1],
+    'RtlCopyMemory':         [2],  # Length = R8 (arg3)
+    'memcpy':                [2],
+})
+# Seed taint from IRP stack location reads (InputBufferLength at IO_STACK_LOCATION+0x10)
+findings = tt.run_interprocedural()
+```
+
+**Key kernel structures (x64 Windows 10+):**
+- `DRIVER_OBJECT.MajorFunction[n]` at `+0x70 + n*8`; `IRP_MJ_DEVICE_CONTROL` (0x0E) = `+0xE0`
+- `IO_STACK_LOCATION.Parameters.DeviceIoControl.IoControlCode` at `+0x08` within Parameters
+- `IO_STACK_LOCATION.Parameters.DeviceIoControl.InputBufferLength` at `+0x10`
+- Pool tag is 4-byte ASCII in R8 for `ExAllocatePoolWithTag(PoolType, Size, Tag)`
+
+**METHOD_NEITHER warning:** `IoctlCode.is_neither()` true means the driver's dispatch handler receives `Type3InputBuffer` -- a raw unvalidated user-mode pointer -- with no kernel buffer copy. Any dereference without `ProbeForRead` first = arbitrary kernel read/write.
 
 ---
 
