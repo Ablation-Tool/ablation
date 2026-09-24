@@ -10,9 +10,9 @@
 
 ## What we use it for
 
-Hand Ablation any binary -- stripped firmware, enterprise applications, shared libraries, Go binaries, Windows PE files, macOS Mach-O, embedded images -- and tell Claude Code to find vulnerabilities. It takes apart the binary: disassembly, call graph, taint analysis, semantic search across every function, cross-binary analysis, version diffing. You do not need symbols. You do not need source. You do not need to know anything about the binary beforehand.
+Hand Ablation any binary: stripped firmware, enterprise applications, shared libraries, Go binaries, Windows PE files, macOS Mach-O, embedded images. Tell Claude Code to find vulnerabilities. It takes apart the binary using disassembly, call graph construction, taint analysis, semantic search across every function, cross-binary analysis, and version diffing. No symbols required. No source required. No prior knowledge of the binary required.
 
-Claude runs the semantic sweep across all functions, identifies top candidates by vulnerability class, pulls CFG and taint traces on each one, reasons about the results, and comes back with specific functions, specific vulnerability classes, and specific disassembly showing exactly why they are vulnerable. Confirmed findings before opening a disassembler.
+Claude runs the semantic sweep across all functions, identifies top candidates by vulnerability class, pulls CFG and taint traces on each one, reasons about the results, and returns specific functions, specific vulnerability classes, and specific disassembly showing exactly why they are vulnerable. Confirmed findings before opening a disassembler.
 
 We have found real bugs this way. DoS vulnerabilities in production network appliance firmware. Pre-auth API exposure in a management platform rated CVSS 9.1. The second finding came automatically: after confirming the first DoS, Ablation registered the vulnerability pattern and replayed it on the next sweep without a new query.
 
@@ -29,130 +29,6 @@ The first is Claude Code driving the full RE workflow autonomously. Copy `CLAUDE
 Claude reads the command reference, locates the binary, builds the behavioral corpus, sweeps all 30 vulnerability patterns, runs targeted semantic queries, pulls CFG and taint analysis on every top candidate, and interprets the results. No binary path. No command flags. No manual steps.
 
 The second is Ablation's own embedded LLM analyst. `LlmAnalyst` runs a ReAct agent loop using `claude-sonnet-5` directly via the Anthropic API for automated function naming. It pre-fetches callee names, string cross-references, and RAG-retrieved prior findings before each analysis call, then drives the loop until it has a confident name or exhausts its tool budget. This runs inside Ablation itself, independent of Claude Code.
-
----
-
-## Pipeline
-
-```
-stripped binary (ELF · PE · Mach-O · Go)
-        │
-        ▼
-╔══════════════════════════════════════════════════════╗
-║  BinaryContext                                       ║
-║  PLT · exports · strings · call graph                ║  0.5s first run · 110ms reload
-║  SHA256-keyed cache at ~/.ablation/cache/            ║
-╚══════════════════════════════════════════════════════╝
-        │
-        ▼
-╔══════════════════════════════════════════════════════╗
-║  XRefGraph + CorpusBuilder                           ║
-║  .eh_frame FDE → function starts                     ║  O(N) · no full disassembly
-║  CALL rel32 NumPy scan · RIP-relative xref index     ║
-║  Role inference: HEAP_ALLOC · NETWORK_IO · TCL_INTERP║
-╚══════════════════════════════════════════════════════╝
-        │
-        │  all functions  (e.g. 19,000)
-        ▼
-╔══════════════════════════════════════════════════════╗
-║  SemanticSearcher + PatternLibrary + FindingRegistry ║  ← runs before any CFG work
-║                                                      ║
-║  BinFuse 11-category opcode normalization            ║  x86-64 and ARM64
-║  BERT all-mpnet-base-v2 · PCA whitening              ║  ~35s on CPU
-║  30-pattern sweep · plain-English query              ║
-║  CVE seed corpus · prior confirmed findings          ║
-╚══════════════════════════════════════════════════════╝
-        │
-        │  top candidates  (5–10)
-        ▼
-┌───────────────────────────────────────────────────────┐
-│  per-candidate deep analysis                          │
-│                                                       │
-│  CFGBuilder ──────── recursive disasm · basic blocks  │
-│  WindowAnalyzer ──── annotated disasm · inline xrefs  │
-│       │                                               │
-│       ▼                                               │
-│  TaintTracker ─────── source → sink · MFP worklist    │
-│       │               interprocedural BFS             │
-│       ▼                                               │
-│  PathSolver ──────── Z3 feasibility                   │
-│                                                       │
-│  FuncProfiler ─────── strings · calls · sinks         │
-│  RegAnnotator ─────── call-site arg values            │
-│  IPRegAnnotator ───── N-hop cross-library arg chains  │
-│  LlmAnalyst ──────── ReAct loop · claude-sonnet-5     │
-└───────────────────────────────────────────────────────┘
-        │
-        ▼
-╔══════════════════════════════════════════════════════╗
-║  DTWMatcher · MatrixProfileDiff                      ║  cross-version patch analysis
-║  PatternLibrary.record_hit() · FindingRegistry       ║  findings seed future sweeps
-╚══════════════════════════════════════════════════════╝
-```
-
-SemanticSearcher runs first, across all functions, before any CFG or disassembly work begins. It narrows 19,000 candidates to fewer than ten. Everything below that box runs only on those candidates.
-
----
-
-## Coverage vs Ghidra, IDA Pro, and Binary Ninja
-
-Ablation was built from scratch. It does not wrap or call Ghidra, IDA Pro, or Binary Ninja. Every capability listed below is implemented directly in Python -- capstone, lief, numpy, and the Anthropic API -- against any binary you hand it.
-
-### vs Ghidra
-
-| Capability | Ghidra | Ablation |
-|---|---|---|
-| Disassembly | Full upfront auto-analysis; 1-4h on 50 MB image | CFGBuilder: per-candidate recursive disasm, on-demand; WindowAnalyzer: annotated dumps with inline PLT labels and string xrefs |
-| Call graph | Yes, post auto-analysis | XRefGraph: single O(N) CALL rel32 scan; LibGraph: unified cross-binary matrix across all shared libraries at once |
-| Cross-reference analysis | Code and data xrefs, post auto-analysis | RIP-relative xref index built in 2s; BinaryContext.strings_in_func(), funcs_referencing_string() |
-| String extraction | Yes | BinaryContext indexes all .rodata strings with function linkage in 0.5s |
-| Function identification | FunctionID (hash-based signatures) | SigLibrary: 40 BERT behavioral signatures; matches functions that were recompiled, renamed, or inlined |
-| Symbol / import / export | Yes | BinaryContext: PLT (.plt/.plt.sec/.plt.got) and .dynsym exports |
-| Data flow / taint | Limited; no source-to-sink | TaintTracker: x86-64 static taint; libdft policy; full stack model; MFP worklist; interprocedural BFS to dangerous sinks |
-| Binary diffing | Via BinExport / Kaiju plugin | DTWMatcher, MatrixProfileDiff, VersionDelta: Jaccard + DTW + semantic tiebreaker; instruction-level patch localization |
-| Scripting | Java API; Python via Ghidrathon | Full Python library; every module is a direct import |
-| YARA generation | Via external plugin | yara_generator.py: direct rule generation from findings |
-| Semantic / behavioral search | Not available | SemanticSearcher: plain-English queries against BERT behavioral fingerprints |
-| Self-improving patterns | Not available | PatternLibrary: confirmed findings auto-replay on future binaries |
-| LLM analysis | Not available | LlmAnalyst: ReAct loop with claude-sonnet-5; RAG-augmented function naming |
-| Autonomous workflow | Not available | Claude Code drives full workflow from one instruction |
-| Initialization time | 1-4 hours (50 MB binary) | 35 seconds (19,000 functions) |
-| Installation | Java GUI application | `pip install` |
-
-### vs IDA Pro
-
-| Capability | IDA Pro | Ablation |
-|---|---|---|
-| Disassembly | Industry standard; full upfront analysis | CFGBuilder + WindowAnalyzer; per-candidate on-demand; annotated with inline context |
-| Decompilation | Hex-Rays: gold standard C pseudocode | LlmAnalyst: behavioral reasoning via ReAct loop; no C pseudocode but reasons directly about vulnerability impact |
-| Function signatures | FLIRT: hash-based library matching | SigLibrary: BERT behavioral matching; matches recompiled / inlined / custom functions FLIRT cannot |
-| Taint analysis | Very limited; plugin-dependent | TaintTracker: full static taint source-to-sink; MFP worklist; interprocedural; full stack model |
-| Cross-binary analysis | Per-binary; manual linking | LibGraph: unified import/export matrix across all firmware libraries; IPRegAnnotator N-hop cross-library arg provenance |
-| Binary diffing | BinDiff plugin | DTWMatcher + MatrixProfileDiff + VersionDelta |
-| Scripting | IDAPython | Full Python library |
-| Semantic / behavioral search | Not available | SemanticSearcher |
-| Self-improving patterns | Not available | PatternLibrary |
-| LLM analysis | Not available | LlmAnalyst + Claude Code |
-| Autonomous workflow | Not available | Claude Code drives full workflow |
-| Cost | $3,000+ per seat | Open source |
-| Initialization time | Minutes to hours | 35 seconds |
-
-### vs Binary Ninja
-
-| Capability | Binary Ninja | Ablation |
-|---|---|---|
-| Disassembly | Multi-architecture; LLIL/MLIL/HLIL IR | CFGBuilder + WindowAnalyzer |
-| Decompilation | HLIL pseudocode; SSA-based data flow | LlmAnalyst: behavioral reasoning; no pseudocode |
-| Data flow / value analysis | SSA-based value set analysis | TaintTracker: source-to-sink taint; PathSolver Z3 feasibility |
-| Function signatures | FLIRT-style signatures | SigLibrary: BERT behavioral signatures |
-| Cross-binary analysis | Per-binary | LibGraph: unified cross-binary matrix |
-| Binary diffing | Via plugins | DTWMatcher + MatrixProfileDiff + VersionDelta |
-| Scripting | Python API; headless mode | Full Python library |
-| Semantic / behavioral search | Not available | SemanticSearcher |
-| Self-improving patterns | Not available | PatternLibrary |
-| LLM analysis | Not available | LlmAnalyst + Claude Code |
-| Autonomous workflow | Not available | Claude Code drives full workflow |
-| Initialization time | Minutes on large binaries | 35 seconds |
 
 ---
 
@@ -219,7 +95,7 @@ Behavioral fingerprints for every function: PLT callees, string cross-references
 
 **Disassembly and control flow**
 
-CFGBuilder runs iterative recursive disassembly (Andriesse PBA ch. 8.2.4) per candidate function: basic block decomposition, branch analysis, successor edges. WindowAnalyzer dumps a 1536-byte annotated window centered on any VA with inline PLT labels and string cross-references -- one call returns everything an LLM needs to reason about a function.
+CFGBuilder runs iterative recursive disassembly (Andriesse PBA ch. 8.2.4) per candidate function: basic block decomposition, branch analysis, successor edges. WindowAnalyzer dumps a 1536-byte annotated window centered on any VA with inline PLT labels and string cross-references. One call returns everything an LLM needs to reason about a function.
 
 **Taint analysis**
 
