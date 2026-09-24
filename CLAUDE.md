@@ -78,6 +78,7 @@ if ctx.names_count():
 | "MIPS32: trace recv to system/strcpy/sprintf" | `MIPS32TaintTracker.from_path(elf).run_interprocedural()` |
 | "MIPS32: big-endian RouterOS or little-endian CPE" | `MIPS32TaintTracker.from_path(elf, endian='big')` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
+| "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
 | "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
 | "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
