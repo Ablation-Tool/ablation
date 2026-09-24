@@ -12,6 +12,60 @@ Inside a Claude Code session, Claude builds the corpus, sweeps all 30 vulnerabil
 
 The pattern library improves with each engagement. Every confirmed vulnerability seeds a new semantic pattern that replays automatically on future binaries, regardless of vendor or architecture.
 
+## Pipeline
+
+```
+stripped binary (ELF · no symbols)
+        │
+        ▼
+╔══════════════════════════════════════════════════════╗
+║  BinaryContext                                       ║
+║  PLT · exports · strings · call graph                ║  0.5s first run · 110ms reload
+║  SHA256-keyed cache at ~/.ablation/cache/            ║
+╚══════════════════════════════════════════════════════╝
+        │
+        ▼
+╔══════════════════════════════════════════════════════╗
+║  XRefGraph                                           ║
+║  .eh_frame FDE → function starts                     ║  O(N) · no full disassembly
+║  CALL rel32 NumPy scan · RIP-relative xref index     ║
+╚══════════════════════════════════════════════════════╝
+        │
+        │  all functions (e.g. 19,000)
+        ▼
+╔══════════════════════════════════════════════════════╗
+║  SemanticSearcher + PatternLibrary                   ║  ← first, before any CFG work
+║                                                      ║
+║  BinFuse 11-category opcode normalization            ║  x86-64 and ARM64
+║  BERT all-mpnet-base-v2 embeddings                   ║  ~35s on CPU
+║  30-pattern sweep · plain-English query              ║
+╚══════════════════════════════════════════════════════╝
+        │
+        │  top candidates (5–10)
+        ▼
+┌───────────────────────────────────────────────────────┐
+│  per-candidate deep analysis                          │
+│                                                       │
+│  CFGBuilder ──────── basic blocks · branch edges      │
+│       │                                               │
+│       ▼                                               │
+│  TaintTracker ─────── source → sink data flow         │
+│       │               MFP worklist · interprocedural  │
+│       ▼                                               │
+│  PathSolver ──────── Z3 feasibility                   │
+│                                                       │
+│  FuncProfiler ─────── strings · calls · sinks         │
+│  RegAnnotator ─────── call-site arg values            │
+│  IPRegAnnotator ───── cross-binary arg chains         │
+└───────────────────────────────────────────────────────┘
+        │
+        ▼
+╔══════════════════════════════════════════════════════╗
+║  DTWMatcher · MatrixProfileDiff                      ║  cross-version patch analysis
+║  PatternLibrary.record_hit()                         ║  confirmed findings seed future sweeps
+╚══════════════════════════════════════════════════════╝
+```
+
 ## How it differs from IDA Pro, Ghidra, and Binary Ninja
 
 IDA Pro and Ghidra are disassemblers. They build a complete database of every instruction in the binary before you can search anything. On a 50 MB stripped network appliance image, that initialization takes one to four hours. Ablation makes one O(N) pass over the `.text` segment, builds a behavioral index, and is ready in 35 seconds.
