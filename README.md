@@ -39,6 +39,9 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **Version diffing** with DTW and Matrix Profile; confirms whether a CVE was patched across firmware releases
 - **Windows kernel driver analysis**: IRP/IOCTL dispatch extraction, kernel API risk classification, rootkit callback detection, SSDT hook and SMEP-disable pattern scanning (`ablation driver`)
 - **Format string vulnerability scan**: 28 printf/syslog/err family sinks; backward trace classifies format arg as safe (string literal) or vulnerable (stack slot, argument register); two-hop vsnprintf detection (`ablation fmtstr`)
+- **Heap vulnerability scanner**: integer overflow before alloc, use-after-free, double-free, and off-by-one NUL terminator patterns; grounded in TAOSSA Ch5/Ch6 (`ablation heap`)
+- **MIPS32 taint tracker**: O32 ABI, load-delay slot aware, big-endian and little-endian; recv/read to system/strcpy/execve sinks; RouterOS and embedded CPE firmware (`ablation mips`)
+- **BYOVD detector**: scores signed drivers for Bring Your Own Vulnerable Driver primitives; 8 attack paths including MmMapIoSpace, MDL kernel write, MSR_LSTAR, and SSDT hook (`ablation byovd`)
 
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
 
@@ -139,6 +142,12 @@ ablation driver  driver.sys
 ablation driver  driver.sys --json driver_report.json
 ablation fmtstr  firmware.so
 ablation fmtstr  firmware.so --json fmt_findings.json
+ablation heap    firmware.so
+ablation heap    firmware.so --json heap_findings.json
+ablation mips    router.elf
+ablation mips    router.elf --le --json mips_findings.json
+ablation byovd   driver.sys
+ablation byovd   driver.sys --json byovd_report.json
 ablation news
 ```
 

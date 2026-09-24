@@ -21,7 +21,7 @@
 
 ---
 
-## v2.2.0
+## v2.3.0
 
 - **BYOVDDetector** -- BYOVD (Bring Your Own Vulnerable Driver) risk assessment.
   Wraps `KernelDriverAnalyzer` with BYOVD-specific scoring (0-100). Detects 8
