@@ -73,4 +73,4 @@ ablation findings --sarif findings.sarif
 
 ## License
 
-Commercial license required for commercial use. Non-commercial research use permitted. See [LICENSE](LICENSE) for full terms.
+See [LICENSE](LICENSE).
