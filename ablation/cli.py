@@ -5,6 +5,8 @@ Usage:
     ablation analyze  <binary>              binary summary: arch, PLT, exports, funcs
     ablation search   <binary> <query>      semantic search across all functions
     ablation taint    <binary>              taint trace from network sources to sinks (arch-aware)
+    ablation taint    <binary> --interprocedural      cross-function BFS taint chains
+    ablation taint    <binary> --flow-sensitive        CFG MFP + interprocedural (most precise)
     ablation overflow <binary>              ARM32 integer overflow scan (MUL -> malloc without check)
     ablation window   <binary> <va>         annotated disassembly window around a VA
     ablation profile  <binary> <va>         full function profile: strings + call args + sinks
@@ -14,6 +16,8 @@ Usage:
     ablation sweep    <binary>              run all registered patterns against a binary
     ablation findings                       list confirmed findings in ~/.ablation/findings.db
     ablation driver   <binary.sys>          Windows kernel driver: IOCTL, callbacks, dangerous patterns
+    ablation byovd    <binary.sys>          BYOVD risk score: signed driver + IOCTL surface + dangerous primitive
+    ablation fmtstr   <binary>              format string scan: printf/syslog with non-literal format arg
     ablation news                           show recent updates
 
 claude.ai workflow (no Claude Code access):
@@ -99,12 +103,39 @@ def cmd_taint(args):
             print("No taint paths found.")
             return
         print(tracker.report(findings))
+        return
+
+    from ablation.analyzers.xref_graph import XRefGraph
+    from ablation.analyzers.taint_tracker_x86 import TaintTracker
+    xg = XRefGraph.from_path(p)
+    xg.build()
+    tracker = TaintTracker(p, xref=xg)
+
+    if getattr(args, 'flow_sensitive', False):
+        print("[*] Running flow-sensitive CFG taint analysis (MFP + interprocedural BFS) ...")
+        findings, chains = tracker.run_flow_sensitive()
+        if not findings and not chains:
+            print("No taint paths found.")
+            return
+        if findings:
+            print(f"{len(findings)} intraprocedural finding(s):\n")
+            for f in findings:
+                print(f)
+        if chains:
+            print(f"\n{len(chains)} interprocedural chain(s):\n")
+            for c in chains:
+                print(c)
+    elif getattr(args, 'interprocedural', False):
+        depth = getattr(args, 'depth', 4)
+        print(f"[*] Running interprocedural taint analysis (depth={depth}) ...")
+        chains = tracker.run_interprocedural(depth=depth)
+        if not chains:
+            print("No taint paths found.")
+            return
+        print(f"{len(chains)} interprocedural chain(s):\n")
+        for c in chains:
+            print(c)
     else:
-        from ablation.analyzers.xref_graph import XRefGraph
-        from ablation.analyzers.taint_tracker_x86 import TaintTracker
-        xg = XRefGraph.from_path(p)
-        xg.build()
-        tracker = TaintTracker(p, xref=xg)
         findings = tracker.run()
         if not findings:
             print("No taint paths found.")
@@ -314,6 +345,17 @@ def cmd_driver(args):
 
 
 _RECENT_UPDATES = """\
+v2.1.0 (2026-09-24)  Format string vulnerability scanner
+  ablation fmtstr <binary>
+  - Scans x86-64 ELF for printf/fprintf/syslog/err/warn family calls
+    where the format argument is not a string literal
+  - 28 format string sinks: printf, fprintf, sprintf, snprintf, syslog,
+    err, errx, warn, warnx, wprintf, fwprintf, vsnprintf, and variants
+  - Static backward trace from each call site: LEA [rip+offset] into
+    .rodata = SAFE; MOV from stack slot or arg register = VULNERABLE
+  - Two-hop detection: vsnprintf output buffer reused as syslog format arg
+  - Verdicts: VULNERABLE / SUSPICIOUS / SAFE with write instruction context
+
 v2.0.0 (2026-09-24)  Windows kernel driver RE
   ablation driver <file.sys>
   - IRP/IOCTL dispatch extraction (capstone DriverEntry disassembly)
@@ -328,6 +370,24 @@ v2.0.0 (2026-09-24)  Windows kernel driver RE
 
 v1.9.1 (2026-09-24)  see CHANGELOG.md for earlier entries
 """
+
+
+def cmd_fmtstr(args):
+    from ablation.analyzers.format_string_scanner import FormatStringScanner
+
+    p = str(_require_binary(args.binary))
+    scanner = FormatStringScanner.from_path(p)
+    findings = scanner.scan()
+
+    if args.json:
+        import json
+        out = [f.as_dict() for f in findings if f.verdict != 'SAFE']
+        with open(args.json, 'w') as fh:
+            json.dump(out, fh, indent=2)
+        print(f"Wrote {len(out)} findings to {args.json}")
+    else:
+        non_safe = [f for f in findings if f.verdict != 'SAFE']
+        print(scanner.report(non_safe))
 
 
 def cmd_news(args):
@@ -382,6 +442,12 @@ def main():
     # taint
     p_taint = sub.add_parser('taint', help='taint analysis: network sources to sinks (arch-aware)')
     p_taint.add_argument('binary')
+    p_taint.add_argument('--interprocedural', action='store_true',
+                         help='cross-function BFS taint tracking (x86-64)')
+    p_taint.add_argument('--flow-sensitive', action='store_true',
+                         help='CFG MFP fixpoint + interprocedural BFS (most precise, x86-64)')
+    p_taint.add_argument('--depth', type=int, default=4,
+                         help='max hop depth for interprocedural analysis (default 4)')
     p_taint.set_defaults(func=cmd_taint)
 
     # overflow
@@ -441,6 +507,12 @@ def main():
     p_driver.add_argument('binary')
     p_driver.add_argument('--json', metavar='FILE', default=None, help='write JSON summary to FILE')
     p_driver.set_defaults(func=cmd_driver)
+
+    # fmtstr
+    p_fmtstr = sub.add_parser('fmtstr', help='format string vulnerability scan (printf/syslog/err with non-literal format arg)')
+    p_fmtstr.add_argument('binary')
+    p_fmtstr.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_fmtstr.set_defaults(func=cmd_fmtstr)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
