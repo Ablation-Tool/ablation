@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
 Cryptographic Weakness Auditor
-Synthesized from: MacStadium Orka post-compromise findings
 
-Audit cryptographic posture on a compromised host — JWTs, SAML assertions,
+Audit cryptographic posture on a target host -- JWTs, SAML assertions,
 key material, TLS endpoints, and process environment secrets.
 
-Confirmed context driving this module:
-  F-JWT  Orka engine JWT signed with empty string secret (""), HS256, admin@macstadium.com
-  F-SAML Cisco ASA SAML SSO (MacStadium-SSO-VPN → Azure AD) — assertion wrapping risk
-  F-KEY  LicenseSpring shared_key hardcoded in orka-engine binary (F105)
-  F-TLS  Orka API servers on internal 10.221.188.0/24; TLS posture unverified
+Detects common weaknesses including:
+  - JWTs signed with empty or weak secrets
+  - SAML assertion wrapping risk
+  - Hardcoded key material in binaries
+  - Unverified TLS endpoints on internal networks
 """
 
 import base64

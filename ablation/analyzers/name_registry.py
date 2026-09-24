@@ -2,8 +2,7 @@
 name_registry.py -- Persistent discovered-function-name overlay for ablation.
 
 Supplements the stripped symbol table: every time an analyst confirms what a
-function does (e.g. "ips_diameter_parse_message" at 0x17b660), the name is
-stored here and auto-loaded in future sessions.
+function does, the name is stored here and auto-loaded in future sessions.
 
 Storage: ~/.ablation/function_names.json
 Key structure: { sha256_prefix: { va_hex: { "name": str, "source": str, "ts": str } } }
@@ -15,13 +14,13 @@ Sources:
 
 Usage:
     reg = NameRegistry()
-    reg.set_name(binary_sha256, 0x17b660, "ips_diameter_parse_message", source="confirmed")
-    print(reg.get_name(binary_sha256, 0x17b660))   # "ips_diameter_parse_message"
+    reg.set_name(binary_sha256, 0x1000, "proto_parse_message", source="confirmed")
+    print(reg.get_name(binary_sha256, 0x1000))   # "proto_parse_message"
     reg.save()
 
     # Via BinaryContext (preferred):
-    ctx.set_name(0x17b660, "ips_diameter_parse_message")
-    ctx.name(0x17b660)          # "ips_diameter_parse_message"
+    ctx.set_name(0x1000, "proto_parse_message")
+    ctx.name(0x1000)          # "proto_parse_message"
     ctx.names_map()             # {va: name} for all known functions
 """
 

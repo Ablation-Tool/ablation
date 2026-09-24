@@ -10,9 +10,9 @@ Quick start:
     from func_id_db import FuncDB
 
     db  = FuncDB.open('~/.ablation/func_id.db')
-    reg = ToolRegistry('/path/to/lina', func_db=db)
-    loop = AgentLoop(reg, func_db=db, product='lina', version='9.16.4.18')
-    result = loop.run(0x212a669, task='name_function')
+    reg = ToolRegistry('/path/to/firmware.so', func_db=db)
+    loop = AgentLoop(reg, func_db=db, product='my-target', version='1.0')
+    result = loop.run(0x1fa00, task='name_function')
     print(result.name, result.confidence)
 """
 

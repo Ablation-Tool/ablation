@@ -131,7 +131,7 @@ for h in hits:
     print(f"  {h.vendor}/{h.product} {h.version} -- {h.title} ({h.severity})")
 
 print(reg.stats())
-reg.list_findings(vendor='fortinet')
+reg.list_findings(vendor='my-vendor')
 ```
 
 ### CLI
@@ -139,11 +139,11 @@ reg.list_findings(vendor='fortinet')
 ```bash
 python -m ablation.analyzers.finding_registry stats
 python -m ablation.analyzers.finding_registry list
-python -m ablation.analyzers.finding_registry list --vendor fortinet
+python -m ablation.analyzers.finding_registry list --vendor my-vendor
 python -m ablation.analyzers.finding_registry register --interactive
 
 # Shortcuts
-ablation-search fortinet
+ablation-search my-vendor
 ablation-commit
 ```
 

@@ -98,7 +98,7 @@ callees: {callees}
 class ContextBuilder:
     def __init__(
         self,
-        product:       str = 'lina',
+        product:       str = 'unknown',
         version:       str = 'unknown',
         binary_hint:   str = '',
         max_tool_calls: int = 10,
