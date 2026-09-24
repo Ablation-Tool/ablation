@@ -1,11 +1,13 @@
 """
-xref_graph.py -- x86-64 ELF cross-reference graph: strings, call graph, callers.
+xref_graph.py -- Multi-arch ELF cross-reference graph: strings, call graph, callers.
 
 Closes the primary capability gap vs. Ghidra: knowing what strings a function
 references and who calls it. Both dramatically improve BERT embedding quality.
 
+Supported architectures: x86_64, arm64, arm32 (including Thumb).
+
 Key outputs per function VA:
-  strings_at(va)  -- printable strings the function references (via RIP-relative LEA/MOV)
+  strings_at(va)  -- printable strings the function references
   callees(va)     -- VAs this function calls directly
   callers(va)     -- VAs that call this function
   plt_name(va)    -- imported symbol name if va is a PLT entry
@@ -36,6 +38,18 @@ import numpy as np
 _RIP_RE = re.compile(r'\[rip [+-] (0x[0-9a-f]+)\]')
 
 
+def _elf_arch(data: bytes) -> str:
+    """Detect architecture from ELF e_machine field."""
+    if len(data) < 20 or data[:4] != b'\x7fELF':
+        return 'x86_64'
+    e_machine = struct.unpack_from('<H', data, 18)[0]
+    if e_machine == 183:
+        return 'arm64'
+    if e_machine == 40:
+        return 'arm32'
+    return 'x86_64'
+
+
 def _parse_rip_target(insn_addr: int, insn_size: int, op_str: str) -> Optional[int]:
     """Resolve RIP-relative address from capstone op_str."""
     m = _RIP_RE.search(op_str)
@@ -51,6 +65,7 @@ class XRefGraph:
     def __init__(self, data: bytes, path: str = ""):
         self.data = data
         self.path = path
+        self._arch: str = _elf_arch(data)
         self._binary: Optional[lief.ELF.Binary] = None
 
         # va -> imported name (PLT entries)
@@ -222,6 +237,9 @@ class XRefGraph:
         """Extract PLT va -> symbol name from ELF dynamic relocations."""
         if self._binary is None:
             return
+        if self._arch == 'arm32':
+            self._extract_plt_arm32()
+            return
         try:
             # LIEF 1.x API
             for sym in self._binary.imported_functions:
@@ -236,17 +254,10 @@ class XRefGraph:
                     continue
                 rtype = str(rel.type) if hasattr(rel, 'type') else ''
                 if 'JUMP_SLOT' in rtype or 'GLOB_DAT' in rtype:
-                    # GOT address; PLT entry is typically GOT - plt_offset, but
-                    # we store the GOT VA and also try to find PLT entry
                     self._plt[rel.address] = rel.symbol.name
         except Exception:
             pass
-        # PLT section disassembly to recover stub VA -> name mapping.
-        # Modern gcc/ld with IBT/CET produces three sections:
-        #   .plt      -- resolver + legacy stubs (PLT[0])
-        #   .plt.sec  -- per-function stubs: ENDBR64 + JMP [RIP+offset]
-        #   .plt.got  -- GOT-backed stubs (non-lazy)
-        # We scan all three; .plt.sec is the critical one for modern binaries.
+        # PLT section disassembly: .plt.sec is the critical one for modern x86-64.
         md_plt = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
         md_plt.detail = False
 
@@ -269,18 +280,50 @@ class XRefGraph:
                             if got_va and got_va in self._plt:
                                 self._plt[entry_va] = self._plt[got_va]
                             break
-                        # Skip ENDBR64 (f3 0f 1e fa) -- 4 bytes, continue
                         if insn.mnemonic == 'endbr64':
                             continue
-                        # Any other prefix before jmp: skip
                         if insn.mnemonic not in ('endbr64', 'nop'):
                             break
             except Exception:
                 pass
 
-        _scan_plt_section('.plt', skip_first=True)   # skip resolver stub at PLT[0]
+        _scan_plt_section('.plt', skip_first=True)
         _scan_plt_section('.plt.sec', skip_first=False)
         _scan_plt_section('.plt.got', skip_first=False)
+
+    def _extract_plt_arm32(self):
+        """ARM32 PLT: .rel.plt (8-byte REL entries), stubs at PLT_VA + 20 + n*12."""
+        sym_names: List[str] = []
+        try:
+            rel_plt = self._binary.get_section('.rel.plt')
+            if rel_plt:
+                rel_data = bytes(rel_plt.content)
+                for off in range(0, len(rel_data) - 7, 8):
+                    r_offset, r_info = struct.unpack_from('<II', rel_data, off)
+                    sym_idx = r_info >> 8
+                    try:
+                        sym = self._binary.dynamic_symbols[sym_idx]
+                        sym_names.append(sym.name or '')
+                    except Exception:
+                        sym_names.append('')
+        except Exception:
+            pass
+        if sym_names:
+            plt_sec = self._binary.get_section('.plt')
+            if plt_sec:
+                plt_va = int(plt_sec.virtual_address)
+                for i, name in enumerate(sym_names):
+                    if name:
+                        self._plt[plt_va + 20 + i * 12] = name
+                return
+        try:
+            for rel in self._binary.relocations:
+                if rel.has_symbol:
+                    rtype = str(getattr(rel, 'type', ''))
+                    if 'JUMP_SLOT' in rtype and rel.symbol.name:
+                        self._plt[rel.address] = rel.symbol.name
+        except Exception:
+            pass
 
     def _extract_strings(self, min_len: int = 4):
         """Extract null-terminated ASCII strings from .rodata section."""
@@ -319,11 +362,15 @@ class XRefGraph:
 
     def _build_call_graph(self, func_starts: Optional[Set[int]] = None):
         """
-        Flat-scan disassembly: iterate text sections once, attribute every call
-        and RIP-relative string-load to its containing function via binary search.
-        Breaking at 'ret' is avoided so functions with multiple return paths are
-        fully covered.
+        Flat-scan disassembly: attribute every call and string-load to its
+        containing function via binary search. Arch-aware for x86-64 and ARM32.
         """
+        if self._arch == 'arm32':
+            self._build_call_graph_arm32(func_starts)
+        else:
+            self._build_call_graph_x86(func_starts)
+
+    def _build_call_graph_x86(self, func_starts: Optional[Set[int]] = None):
         import bisect
 
         text_sections = []
@@ -346,7 +393,6 @@ class XRefGraph:
 
         all_func_starts = set(func_starts or [])
 
-        # Phase 1: collect function starts from prologue heuristic
         for vaddr, offset, size in text_sections:
             chunk = self.data[offset: offset + size]
             if not chunk:
@@ -362,8 +408,6 @@ class XRefGraph:
         if not sorted_starts:
             return
 
-        # Phase 2: flat scan -- attribute instructions to containing function
-        # by bisect on sorted_starts
         for vaddr, offset, size in text_sections:
             chunk = self.data[offset: offset + size]
             if not chunk:
@@ -374,41 +418,136 @@ class XRefGraph:
                 op = insn.op_str
                 ia = insn.address
 
-                # Find containing function: largest start <= ia
                 idx = bisect.bisect_right(sorted_starts, ia) - 1
                 if idx < 0:
                     continue
                 fva = sorted_starts[idx]
-                # Sanity: don't attribute beyond 8KB from function start
                 if ia - fva > 8192:
                     continue
 
-                # Direct calls
                 if mnem in ('call', 'callq') and op.startswith('0x'):
                     try:
                         target = int(op, 16)
-                        if fva not in self._callees:
-                            self._callees[fva] = set()
-                        self._callees[fva].add(target)
+                        self._callees.setdefault(fva, set()).add(target)
                     except ValueError:
                         pass
 
-                # RIP-relative string loads
                 elif mnem in ('lea', 'mov') and '[rip' in op:
                     target = _parse_rip_target(ia, insn.size, op)
                     if target and self._rodata_start <= target < self._rodata_end:
                         s = self._strings.get(target)
                         if s:
-                            if fva not in self._str_refs:
-                                self._str_refs[fva] = set()
-                            self._str_refs[fva].add(s)
+                            self._str_refs.setdefault(fva, set()).add(s)
 
-        # Phase 3: build reverse edges from callees
         for caller_va, callee_set in self._callees.items():
             for callee in callee_set:
-                if callee not in self._callers:
-                    self._callers[callee] = set()
-                self._callers[callee].add(caller_va)
+                self._callers.setdefault(callee, set()).add(caller_va)
+
+    def _build_call_graph_arm32(self, func_starts: Optional[Set[int]] = None):
+        """ARM32/Thumb flat scan using capstone ARM disassembler."""
+        import bisect
+        from capstone import arm as C_ARM
+
+        text_sec = None
+        text_va = 0
+        text_off = 0
+        text_size = 0
+        if self._binary is not None:
+            try:
+                sec = self._binary.get_section('.text')
+                if sec:
+                    text_sec = sec
+                    text_va = int(sec.virtual_address)
+                    text_off = int(sec.offset)
+                    text_size = int(sec.size)
+            except Exception:
+                pass
+
+        if text_size == 0:
+            return
+
+        chunk = self.data[text_off: text_off + text_size]
+
+        # Collect func starts: prefer caller-supplied; fall back to PUSH {lr} heuristic
+        all_func_starts = set(func_starts or [])
+        if not func_starts:
+            # ARM PUSH {regs, lr}: byte[3]==0xE9, byte[2]==0x2D, byte[1] bit6 set (LR)
+            for i in range(0, len(chunk) - 3, 4):
+                if chunk[i + 3] == 0xE9 and chunk[i + 2] == 0x2D and (chunk[i + 1] & 0x40):
+                    all_func_starts.add(text_va + i)
+
+        self._func_starts = all_func_starts
+        sorted_starts = sorted(all_func_starts)
+        if not sorted_starts:
+            return
+
+        # Build a thumb_funcs set from eh_frame or symbol LSB (best-effort)
+        thumb_funcs: Set[int] = set()
+        if self._binary is not None:
+            try:
+                for sym in self._binary.dynamic_symbols:
+                    if sym.name and sym.value and str(getattr(sym, 'type', '')).endswith('FUNC'):
+                        if sym.value & 1:
+                            thumb_funcs.add(sym.value & ~1)
+            except Exception:
+                pass
+
+        # Flat scan: iterate each function range with the correct capstone mode
+        for i, fva in enumerate(sorted_starts):
+            end = sorted_starts[i + 1] if i + 1 < len(sorted_starts) else text_va + text_size
+            func_size = min(end - fva, 8192)
+            if func_size <= 0:
+                continue
+            off = fva - text_va
+            if off < 0 or off + func_size > len(chunk):
+                continue
+            fn_chunk = chunk[off: off + func_size]
+            is_thumb = fva in thumb_funcs
+            mode = capstone.CS_MODE_THUMB if is_thumb else capstone.CS_MODE_ARM
+            md = capstone.Cs(capstone.CS_ARCH_ARM, mode)
+            md.detail = True
+            md.skipdata = True
+
+            for insn in md.disasm(fn_chunk, fva):
+                mn = insn.mnemonic.lower()
+
+                # Calls: BL / BLX with immediate target
+                if mn in ('bl', 'blx'):
+                    try:
+                        ops = insn.operands
+                        for op in ops:
+                            if op.type == C_ARM.ARM_OP_IMM:
+                                self._callees.setdefault(fva, set()).add(op.imm)
+                    except Exception:
+                        pass
+
+                # String refs: LDR Rd, [PC, #off] -> pool -> .rodata pointer
+                elif mn == 'ldr':
+                    try:
+                        ops = insn.operands
+                        if len(ops) >= 2 and ops[1].type == C_ARM.ARM_OP_MEM:
+                            if insn.reg_name(ops[1].mem.base).lower() == 'pc':
+                                disp = ops[1].mem.disp
+                                if is_thumb and insn.size == 2:
+                                    pool_va = ((insn.address + 4) & ~3) + disp
+                                elif is_thumb:
+                                    pool_va = insn.address + 4 + disp
+                                else:
+                                    pool_va = insn.address + 8 + disp
+                                pool_off = pool_va - text_va
+                                ptr = None
+                                if 0 <= pool_off <= len(chunk) - 4:
+                                    ptr = struct.unpack_from('<I', chunk, pool_off)[0]
+                                if ptr is not None and self._rodata_start <= ptr < self._rodata_end:
+                                    s = self._strings.get(ptr)
+                                    if s:
+                                        self._str_refs.setdefault(fva, set()).add(s)
+                    except Exception:
+                        pass
+
+        for caller_va, callee_set in self._callees.items():
+            for callee in callee_set:
+                self._callers.setdefault(callee, set()).add(caller_va)
 
     # ── stats ─────────────────────────────────────────────────────────────────
 
