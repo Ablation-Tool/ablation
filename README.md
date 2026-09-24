@@ -18,6 +18,14 @@ No binary path needed. No command flags. No manual steps. Just tell it what to d
 Reverse engineer this firmware and find vulnerabilities.
 ```
 
+**Recommended model:** Ablation was built and tested against `claude-sonnet-4-6`. That is the proven engine. To set it in Claude Code:
+
+```
+/model claude-sonnet-4-6
+```
+
+`claude-sonnet-4-5` works as well.
+
 ---
 
 Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
