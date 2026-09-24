@@ -80,8 +80,6 @@ Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC
 | CVE-2026-76412 | Privilege Escalation to root | 8.5 High |
 | CVE-2026-76413 | Single Sign-On Token Forgery | 8.5 High |
 
-Full case studies with findings, PoC, and YARA rules: [Ablation-Case-Studies](https://github.com/francis-rancid/Ablation-Case-Studies)
-
 ---
 
 ## Install
