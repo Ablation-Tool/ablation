@@ -5,9 +5,9 @@
 Before submitting a patch, check the [issue tracker](https://github.com/Ablation-Tool/ablation/issues):
 
 - **Bug?** Open a bug report. Include your Python version, OS, the failing command, and the full traceback.
-- **Feature request?** Open a feature request. Describe the RE task, not the implementation -- what analysis goal is currently impossible or painful.
+- **Feature request or idea?** Open a feature request, or reach out directly. Describe the RE task, not the implementation -- what analysis goal is currently impossible or painful. All suggestions are welcome.
 
-You can also reach out directly:
+You can also reach out directly for anything:
 
 - Email: [ablation@nuclide-research.com](mailto:ablation@nuclide-research.com)
 - X: [@ablation_tool](https://x.com/ablation_tool)
