@@ -18,7 +18,7 @@ No binary path needed. No command flags. No manual steps. Just tell it what to d
 Reverse engineer this firmware and find vulnerabilities.
 ```
 
-**Recommended model:** Ablation was built and tested against `claude-sonnet-4-6`. That is the proven engine. To set it in Claude Code:
+**Recommended model:** Ablation was built and tested against `claude-sonnet-4-6` (released January 2026). That is the proven engine. To set it in Claude Code:
 
 ```
 /model claude-sonnet-4-6
