@@ -2,6 +2,42 @@
 
 ---
 
+## v2.4.0
+
+- **MIPS32TaintTracker** (`taint_tracker_mips.py`) -- MIPS32 source-to-sink taint
+  analysis for embedded firmware (RouterOS, Broadcom CPE, MIPS-based routers).
+  O32 ABI register model: $a0-$a3 args, $v0 return, $t0-$t9 caller-saved, $s0-$s7
+  callee-saved. Sources: recv/recvfrom/read/fgets/gets/fread. Sinks:
+  system/execve/execl/execvp/popen/strcpy/sprintf/memcpy/strcat/snprintf. Load-delay
+  slot aware. Big-endian and little-endian support. Intraprocedural + interprocedural
+  BFS up to depth 4. CLI: `ablation mips <binary> [--le]`.
+
+- **HeapVulnScanner** (`heap_vuln_scanner.py`) -- four heap memory corruption classes
+  for x86-64 ELF. Grounded in TAOSSA Ch5 (Memory Corruption) and Ch6 (C Language
+  Issues): `INT_OVERFLOW_BEFORE_ALLOC` (IMUL/MUL/SHL result fed to allocator without
+  overflow check, L6-2/L6-3 patterns); `USE_AFTER_FREE` (freed register dereferenced
+  in same function); `DOUBLE_FREE` (same register freed twice without reassignment);
+  `OFF_BY_ONE_ALLOC` (strlen result to malloc without +1). CLI: `ablation heap <binary>`.
+
+---
+
+## v2.2.0
+
+- **BYOVDDetector** -- BYOVD (Bring Your Own Vulnerable Driver) risk assessment.
+  Wraps `KernelDriverAnalyzer` with BYOVD-specific scoring (0-100). Detects 8
+  attack paths: `PHYS_MEM_ARBITRARY_RW` (MmMapIoSpace with user-supplied physical
+  address), `MDL_KERNEL_WRITE` (IoAllocateMdl + MmProbeAndLockPages +
+  MmMapLockedPagesSpecifyCache SSDT-write chain, from PRE ch3 Sample A walk-through),
+  `MSR_LSTAR_MANIPULATION` (RDMSR/WRMSR at 0xC0000082), `SSDT_HOOK` (CR0 WP-disable
+  combined sequence + KeServiceDescriptorTable), `TOKEN_STEALING_LPE`
+  (PsInitialSystemProcess + DKOM), `SMEP_BYPASS` (CR4 combined sequence),
+  `APC_KERNEL_INJECTION` (KeInitializeApc/KeInsertQueueApc), `VIRTUAL_MEM_WRITE`
+  (ZwWriteVirtualMemory). Signed driver + METHOD_NEITHER IOCTL + attack path =
+  BYOVD_CONFIRMED. CLI: `ablation byovd <driver.sys>`.
+  Grounded in Practical Reverse Engineering (Dang et al.) ch3 IOCTL walk-throughs.
+
+---
+
 ## v2.0.0
 
 - **KernelDriverAnalyzer** -- first Windows `.sys` kernel driver RE module. Covers IRP/IOCTL
