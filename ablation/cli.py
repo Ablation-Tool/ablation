@@ -2,14 +2,23 @@
 ablation.cli -- command-line interface.
 
 Usage:
-    ablation analyze <binary>              ELF/PE/Mach-O summary, strings, entropy
-    ablation search  <binary> <query>      semantic search across all functions
-    ablation taint   <binary>              taint trace from network sources to sinks
-    ablation cfg     <binary> <va>         control-flow graph for one function (hex VA)
-    ablation crypto  <binary>              entropy scan + XOR/AES key search
-    ablation corpus  <binary>              build or rebuild the semantic function corpus
-    ablation sweep   <binary>              run all registered patterns against a binary
-    ablation findings                      list confirmed findings in ~/.ablation/findings.db
+    ablation analyze  <binary>              binary summary: arch, PLT, exports, funcs
+    ablation search   <binary> <query>      semantic search across all functions
+    ablation taint    <binary>              taint trace from network sources to sinks (arch-aware)
+    ablation overflow <binary>              ARM32 integer overflow scan (MUL -> malloc without check)
+    ablation window   <binary> <va>         annotated disassembly window around a VA
+    ablation profile  <binary> <va>         full function profile: strings + call args + sinks
+    ablation cfg      <binary> <va>         control-flow graph for one function (hex VA)
+    ablation crypto   <binary>              entropy scan + XOR/AES key search
+    ablation corpus   <binary>              build or rebuild the semantic function corpus
+    ablation sweep    <binary>              run all registered patterns against a binary
+    ablation findings                       list confirmed findings in ~/.ablation/findings.db
+
+claude.ai workflow (no Claude Code access):
+    Run any command above, copy the output, paste into claude.ai.
+    ablation analyze  gives the full binary context block to start a session.
+    ablation window   gives disassembly you can ask claude.ai to annotate.
+    ablation taint    gives source-to-sink findings to ask about.
 """
 
 import argparse
@@ -75,23 +84,97 @@ def cmd_search(args):
 
 
 def cmd_taint(args):
-    from ablation.analyzers.xref_graph import XRefGraph
-    from ablation.analyzers.taint_tracker_x86 import TaintTracker
+    from ablation.analyzers.binary_context import BinaryContext
 
     p = str(_require_binary(args.binary))
-    xg = XRefGraph.from_path(p)
-    xg.build()
+    ctx = BinaryContext.load_or_build(p)
 
-    tracker = TaintTracker(p, xref=xg)
-    findings = tracker.run()
+    if ctx.arch == 'arm32':
+        from ablation.analyzers.taint_tracker_arm32 import ARM32TaintTracker
+        tracker = ARM32TaintTracker.from_context(ctx)
+        findings = tracker.run_interprocedural()
+        if not findings:
+            print("No taint paths found.")
+            return
+        print(tracker.report(findings))
+    else:
+        from ablation.analyzers.xref_graph import XRefGraph
+        from ablation.analyzers.taint_tracker_x86 import TaintTracker
+        xg = XRefGraph.from_path(p)
+        xg.build()
+        tracker = TaintTracker(p, xref=xg)
+        findings = tracker.run()
+        if not findings:
+            print("No taint paths found.")
+            return
+        print(f"{len(findings)} taint finding(s):\n")
+        for f in findings:
+            print(f)
 
-    if not findings:
-        print("No taint paths found.")
+
+def cmd_overflow(args):
+    """ARM32 integer overflow scan: MUL/UMULL with wire-controlled operands before allocation."""
+    from ablation.analyzers.binary_context import BinaryContext
+
+    p = str(_require_binary(args.binary))
+    ctx = BinaryContext.load_or_build(p)
+
+    if ctx.arch != 'arm32':
+        print(f"overflow scan is ARM32-only (binary arch: {ctx.arch})")
         return
 
-    print(f"{len(findings)} taint finding(s):\n")
-    for f in findings:
-        print(f)
+    from ablation.analyzers.intoverflow_scanner_arm32 import ARM32IntOverflowScanner
+    scanner = ARM32IntOverflowScanner.from_context(ctx)
+    findings = scanner.scan()
+    print(scanner.report(findings))
+
+
+def cmd_window(args):
+    """Annotated disassembly window around a VA -- suitable for pasting into claude.ai."""
+    from ablation.analyzers.window_analyzer import WindowAnalyzer
+
+    p = str(_require_binary(args.binary))
+    va = int(args.va, 16)
+    back = args.back
+    window = args.window
+
+    wa = WindowAnalyzer.from_path(p)
+    text = wa.dump_text(va=va, window=window, align_back=back, header=True)
+    print(text)
+
+    if args.calls:
+        calls = wa.calls_in_window(va=va, window=window, align_back=back)
+        if calls:
+            print(f"\nCall sites ({len(calls)}):")
+            for site, target, label in calls:
+                tag = f"  -> {label}" if label else ""
+                print(f"  0x{site:x}  ->  0x{target:x}{tag}")
+
+    if args.funcs:
+        starts = wa.find_func_starts(va=va, window=window, align_back=back)
+        if starts:
+            print(f"\nFunction starts ({len(starts)}):")
+            for s in starts:
+                print(f"  0x{s:x}")
+
+
+def cmd_profile(args):
+    """Full function profile: strings + call site args + sink flags."""
+    from ablation.analyzers.binary_context import BinaryContext
+    from ablation.analyzers.func_profiler import FuncProfiler
+
+    p = str(_require_binary(args.binary))
+    va = int(args.va, 16)
+    ctx = BinaryContext.load_or_build(p)
+
+    fp = FuncProfiler.from_context(ctx)
+    profile = fp.profile(va=va)
+    print(profile.fmt())
+
+    if profile.sink_calls:
+        print(f"\nSink calls ({len(profile.sink_calls)}):")
+        for sc in profile.sink_calls:
+            print(f"  0x{sc.va:x}  {sc.target_name}  [SINK]")
 
 
 def cmd_cfg(args):
@@ -254,9 +337,30 @@ def main():
     p_search.set_defaults(func=cmd_search)
 
     # taint
-    p_taint = sub.add_parser('taint', help='taint analysis: network sources to sinks')
+    p_taint = sub.add_parser('taint', help='taint analysis: network sources to sinks (arch-aware)')
     p_taint.add_argument('binary')
     p_taint.set_defaults(func=cmd_taint)
+
+    # overflow
+    p_overflow = sub.add_parser('overflow', help='ARM32 integer overflow scan: MUL -> alloc without check')
+    p_overflow.add_argument('binary')
+    p_overflow.set_defaults(func=cmd_overflow)
+
+    # window
+    p_window = sub.add_parser('window', help='annotated disassembly window around a VA')
+    p_window.add_argument('binary')
+    p_window.add_argument('va', help='center VA in hex, e.g. 0x1234')
+    p_window.add_argument('--window', type=int, default=1536, help='bytes to disassemble (default 1536)')
+    p_window.add_argument('--back', type=int, default=0, help='bytes before VA to include')
+    p_window.add_argument('--calls', action='store_true', help='list call sites in window')
+    p_window.add_argument('--funcs', action='store_true', help='list function starts in window')
+    p_window.set_defaults(func=cmd_window)
+
+    # profile
+    p_profile = sub.add_parser('profile', help='full function profile: strings + call args + sinks')
+    p_profile.add_argument('binary')
+    p_profile.add_argument('va', help='function VA in hex, e.g. 0x1234')
+    p_profile.set_defaults(func=cmd_profile)
 
     # cfg
     p_cfg = sub.add_parser('cfg', help='control-flow graph for one function')
