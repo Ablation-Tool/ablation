@@ -5,11 +5,11 @@ Replaces PLT-call Jaccard with a weighted composite that works on ALL functions,
 not just the 12% that have 2+ external PLT calls.
 
 Five signals (weights adjusted for signal availability per pair):
-  1. Opcode category histogram  -- cosine similarity of 12-category frequency vectors
-  2. Immediate value Jaccard    -- shared constants (magic bytes, struct offsets, sizes)
-  3. PLT call overlap           -- external function call set (existing signal, lower weight)
-  4. Branch density proximity   -- control flow shape (linear / switch / loop-heavy)
-  5. Size proximity             -- instruction count ratio
+  1. Opcode category histogram : cosine similarity of 12-category frequency vectors
+  2. Immediate value Jaccard   : shared constants (magic bytes, struct offsets, sizes)
+  3. PLT call overlap          : external function call set (existing signal, lower weight)
+  4. Branch density proximity  : control flow shape (linear / switch / loop-heavy)
+  5. Size proximity            : instruction count ratio
 
 Immediates are the key unlock: RIP-relative offsets are filtered (position-dependent),
 but struct field offsets, magic constants, and buffer sizes survive recompilation.
@@ -145,7 +145,7 @@ def extract_fingerprint(
         for m in _IMM_RE.finditer(op_str):
             val = int(m.group(1), 16)
             # Keep: larger offsets, magic values, buffer sizes
-            # Skip: trivial small constants (0-0xff) -- these are generic struct offsets
+            # Skip: trivial small constants (0-0xff): these are generic struct offsets
             # that appear in thousands of functions. Values >= 0x100 are discriminative.
             if 0x100 <= val <= 0xFFFFFFFF:
                 imm_set.add(val)

@@ -235,7 +235,7 @@ def _shannon_entropy(data: bytes) -> float:
 
     Normal compiled code sits below 6.5; packed or encrypted regions exceed 7.0.
     Source: Learning Linux Binary Analysis ch4 (ELF anti-debugging and packing
-            techniques -- runtime packers raise text section entropy).
+            techniques: runtime packers raise text section entropy).
     """
     if not data:
         return 0.0
@@ -454,7 +454,7 @@ class ELFParser:
           .text: code (SHT_PROGBITS, SHF_EXECINSTR)
           .data: initialized globals
           .bss:  uninitialized globals (SHT_NOBITS)
-          .got.plt: GOT for PLT -- primary hooking surface
+          .got.plt: GOT for PLT: primary hooking surface
           .dynsym: dynamic symbols
           .symtab: full symbol table (often stripped)
           .dynamic: dynamic linker tags
@@ -595,7 +595,7 @@ class ELFParser:
         """
         Extract symbols from .dynsym and .symtab.
 
-        .dynsym: dynamic symbols -- imported/exported functions visible to linker.
+        .dynsym: dynamic symbols: imported/exported functions visible to linker.
          Crucial for identifying shared library hooks (PLT/GOT targets).
         .symtab: full static symbol table (present in non-stripped binaries).
 
@@ -891,7 +891,7 @@ class ELFParser:
                         "indicator": "relative_rpath",
                         "severity":  "HIGH",
                         "detail":    (
-                            f"{tag_name}={path_val!r} -- relative search path "
+                            f"{tag_name}={path_val!r}: relative search path "
                             "enables shared library hijack via CWD"
                         ),
                     })
@@ -920,7 +920,7 @@ class ELFParser:
                         "indicator": "suspicious_dt_needed",
                         "severity":  "HIGH",
                         "detail":    (
-                            f"DT_NEEDED={name!r} -- non-standard name; "
+                            f"DT_NEEDED={name!r}: non-standard name; "
                             "possible injected dependency for parasite load"
                         ),
                     })
@@ -939,7 +939,7 @@ class ELFParser:
                 "severity":  "CRITICAL",
                 "detail":    (
                     f"DT_INIT count={len(dt_init_entries)} (spec allows 1); "
-                    f"addresses={addrs} -- extra entry = parasite constructor"
+                    f"addresses={addrs}: extra entry = parasite constructor"
                 ),
             })
 
@@ -964,7 +964,7 @@ class ELFParser:
                         "severity":  "HIGH",
                         "detail":    (
                             f"entry_point={hex(ep)} is outside .text "
-                            f"[{hex(text_start)}-{hex(text_end)}] -- "
+                            f"[{hex(text_start)}-{hex(text_end)}]: "
                             "possible entry-point infection"
                         ),
                     })
@@ -974,7 +974,7 @@ class ELFParser:
         # raises its Shannon entropy above the ~6.0 typical of compiled code.
         # Threshold >7.0 bits/byte indicates likely compression or encryption.
         # Source: Learning Linux Binary Analysis ch4 (ELF anti-debugging and
-        #         packing techniques -- runtime packers compress the text
+        #         packing techniques: runtime packers compress the text
         #         segment to hinder static analysis).
         text_data = self.get_section_data(".text")
         if text_data and len(text_data) >= 256:
@@ -1004,7 +1004,7 @@ class ELFParser:
                 "indicator": "sht_absent",
                 "severity":  "MEDIUM",
                 "detail":    (
-                    f"e_phnum={phnum} but e_shnum=0 -- section header table "
+                    f"e_phnum={phnum} but e_shnum=0: section header table "
                     "stripped; common packer / infection anti-analysis technique"
                 ),
             })
@@ -1013,7 +1013,7 @@ class ELFParser:
                 "indicator": "sht_offset_zero",
                 "severity":  "MEDIUM",
                 "detail":    (
-                    f"e_shnum={shnum} but e_shoff=0 -- section header table "
+                    f"e_shnum={shnum} but e_shoff=0: section header table "
                     "pointer zeroed while count is non-zero"
                 ),
             })
@@ -1072,17 +1072,17 @@ class ELFParser:
         Source: Learning Linux Binary Analysis ch2 (PLT/GOT lazy linking --
                 GOT[3+] holds per-function entries patched by _dl_runtime_resolve;
                 R_386_JMP_SLOT / R_X86_64_JUMP_SLOT relocation types),
-                ch4 (GOT hijacking via relocatable code injection -- Quenya
+                ch4 (GOT hijacking via relocatable code injection: Quenya
                 'hijack' command overwrites GOT entry for target function to
                 redirect PLT call to injected parasite).
 
         Returns list of:
             {
-                'function':      str,   -- resolved symbol name
-                'got_addr':      str,   -- hex virtual address of GOT slot
-                'plt_addr':      str,   -- hex virtual address of PLT stub (or None)
-                'sym_idx':       int,   -- dynamic symbol table index
-                'got_overwrite': bool,  -- True if stored GOT value is outside PT_LOAD
+                'function':      str,  : resolved symbol name
+                'got_addr':      str,  : hex virtual address of GOT slot
+                'plt_addr':      str,  : hex virtual address of PLT stub (or None)
+                'sym_idx':       int,  : dynamic symbol table index
+                'got_overwrite': bool, : True if stored GOT value is outside PT_LOAD
             }
         """
         entries = []

@@ -1,8 +1,8 @@
 """
-dtw_matcher.py -- DTW-based function homolog matching.
+dtw_matcher.py: DTW-based function homolog matching.
 
 Replaces 4-gram Jaccard for cross-version homolog detection. DTW (Dynamic
-Time Warping) is warp-invariant -- it handles insertions and deletions of
+Time Warping) is warp-invariant: it handles insertions and deletions of
 basic blocks that Jaccard penalizes unfairly.
 
 A function that gained one validation block between firmware versions:
@@ -23,7 +23,7 @@ Usage:
     dist  = matcher.distance(seq_v1, seq_v2)    # raw DTW distance
 
 Implementation: O(n*m*w) time with Sakoe-Chiba band constraint (default w=20%
-of longer sequence). No external dependencies -- pure numpy.
+of longer sequence). No external dependencies: pure numpy.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def _cat_dist(a: int, b: int) -> float:
     """
     if a == b:
         return 0.0
-    # Semantic affinity matrix -- categories that are often interchangeable
+    # Semantic affinity matrix: categories that are often interchangeable
     _CLOSE_PAIRS = {
         (0, 3): 0.3,  # ARITHMETIC <-> LOGIC (add/and, sub/xor)
         (3, 0): 0.3,

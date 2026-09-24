@@ -1,5 +1,5 @@
 """
-xor_solver.py -- Automated XOR decryption for firmware analysis.
+xor_solver.py: Automated XOR decryption for firmware analysis.
 
 Firmware XOR obfuscation almost always uses a static, repeating multi-byte key.
 Three attack modes:
@@ -566,7 +566,7 @@ class AffineMapAnalyzer:
         if identity_diffs == 0:
             lines.append("  VERDICT    : Proper XOR cipher (A=I). Only key K protects confidentiality.")
         elif zero_cols or zero_rows:
-            lines.append("  VERDICT    : IMPLEMENTATION BUG -- some bits not XOR'd or mixed incorrectly.")
+            lines.append("  VERDICT    : IMPLEMENTATION BUG: some bits not XOR'd or mixed incorrectly.")
         else:
             lines.append("  VERDICT    : Non-trivial linear mixing detected (not pure XOR).")
 

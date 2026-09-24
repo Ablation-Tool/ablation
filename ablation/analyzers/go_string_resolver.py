@@ -1,5 +1,5 @@
 """
-go_string_resolver.py -- Go 1.17+ AMD64 string resolution for Ablation
+go_string_resolver.py: Go 1.17+ AMD64 string resolution for Ablation
 
 Go strings in .rodata are NOT NUL-terminated. Each string is a (data_ptr, length)
 pair in Go's calling convention. The Go AMD64 register ABI (1.17+) passes:
@@ -186,7 +186,7 @@ class GoStringResolver:
             return {}
 
         results = {}
-        pending = None  # (string_va, insn_index) -- set when lea rax found
+        pending = None  # (string_va, insn_index): set when lea rax found
 
         for idx, insn in enumerate(instructions):
             mnem = insn.mnemonic
@@ -419,9 +419,9 @@ def resolve_go_strings_from_instructions(binary_data: bytes, segments: list,
 # ------------------------------------------------------------------
 
 def _selftest():
-    """Quick smoke test -- no binary needed, tests pattern detection logic."""
+    """Quick smoke test: no binary needed, tests pattern detection logic."""
     if not HAVE_CAPSTONE:
-        print("[!] capstone not installed -- skipping selftest")
+        print("[!] capstone not installed: skipping selftest")
         return
 
     import capstone
@@ -445,7 +445,7 @@ def _selftest():
     # The binary data needs the string at the resolved file offset
     # lea rax, [rip+6]: rip = 0x1000+7 = 0x1007, target VA = 0x1007+6 = 0x100d
     # file offset for 0x100d = 0x100d - 0x1000 + 0x1000 = 0x100d
-    # We need code at file offset 0x100d == index 13 = "hello" -- correct
+    # We need code at file offset 0x100d == index 13 = "hello": correct
     binary_data = b'\x00' * base_va + code  # pad so file offsets match VAs
 
     cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)

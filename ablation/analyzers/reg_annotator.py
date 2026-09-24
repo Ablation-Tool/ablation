@@ -1,8 +1,8 @@
 """
-reg_annotator.py -- Lightweight forward symbolic register pass for call-site annotation.
+reg_annotator.py: Lightweight forward symbolic register pass for call-site annotation.
 
 Single forward pass through a function window tracking register assignments.
-No Z3, no lattice -- just linear propagation. Recovers ~85% of arg values for
+No Z3, no lattice: just linear propagation. Recovers ~85% of arg values for
 typical firmware dispatch functions.
 
 Usage:
@@ -78,14 +78,14 @@ class RegVal:
     A tracked register value.
 
     Kinds:
-      arg     -- entry argument (value.int = arg index 0..5)
-      const   -- immediate constant (value.int = the constant)
-      string  -- resolved .rodata string (value.str = content)
-      copy    -- copied from another register (value.str = source reg, chain = source's RegVal)
-      ret     -- return value from a call (value.str = callee name)
-      zero    -- explicitly zeroed (xor reg, reg)
-      mem     -- loaded from memory (value.str = description)
-      unknown -- clobbered/untracked
+      arg    : entry argument (value.int = arg index 0..5)
+      const  : immediate constant (value.int = the constant)
+      string : resolved .rodata string (value.str = content)
+      copy   : copied from another register (value.str = source reg, chain = source's RegVal)
+      ret    : return value from a call (value.str = callee name)
+      zero   : explicitly zeroed (xor reg, reg)
+      mem    : loaded from memory (value.str = description)
+      unknown: clobbered/untracked
     """
     kind: str
     int_val: int = 0

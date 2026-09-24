@@ -86,17 +86,17 @@ First Windows `.sys` kernel driver support. New CLI command: `ablation driver <f
 
 **KernelDriverAnalyzer** (`ablation/analyzers/kernel_driver_analyzer.py`)
 
-Standalone `decode_ioctl_code(value)` -- decodes any CTL_CODE into DeviceType, Access, Function, Method; flags METHOD_NEITHER (raw user pointer, highest attack surface) explicitly.
+Standalone `decode_ioctl_code(value)`: decodes any CTL_CODE into DeviceType, Access, Function, Method; flags METHOD_NEITHER (raw user pointer, highest attack surface) explicitly.
 
 `KernelDriverAnalyzer.from_path(path).analyze()` returns a `KernelDriverReport` covering:
 
-- **Driver type detection** -- WDM, KMDF, or minifilter by import profile. PDB path (RSDS + NB10 debug formats). Authenticode signature presence.
-- **MajorFunction extraction** -- capstone disassembly of DriverEntry recovers all 28 IRP dispatch slot assignments from `DRIVER_OBJECT+0x70`.
-- **IOCTL extraction** -- scans executable sections for CTL_CODE immediates in CMP/MOV instructions. Reports device type, transfer method, user-defined vs system-reserved function range.
-- **Kernel API audit** -- 40+ APIs across 12 risk classes: `phys_mem`, `pool_alloc`, `dkom`, `apc_inject`, `privilege` (token stealing via PsInitialSystemProcess), `ssdt_hook`, `mem_copy`, `driver_load`, and more.
-- **Callback detection** -- 20+ callbacks tagged edr_like, rootkit_risk, or info. ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx (blocking) + KeRegisterBugCheckReasonCallback = rootkit signal.
-- **Pool tag extraction** -- byte scan for `41 B8` (MOV R8D) extracts 4-byte printable pool tags for ExAllocatePoolWithTag calls.
-- **Dangerous patterns** -- SSDT hook CR0 WP-disable combined sequence, SMEP-disable CR4 combined sequence, MSR_LSTAR targeted read (KASLR defeat) and write (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"` scan (x64 SSDT lookup via MmGetSystemRoutineAddress), RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports, VMware backdoor, deprecated pool allocators.
+- **Driver type detection**: WDM, KMDF, or minifilter by import profile. PDB path (RSDS + NB10 debug formats). Authenticode signature presence.
+- **MajorFunction extraction**: capstone disassembly of DriverEntry recovers all 28 IRP dispatch slot assignments from `DRIVER_OBJECT+0x70`.
+- **IOCTL extraction**: scans executable sections for CTL_CODE immediates in CMP/MOV instructions. Reports device type, transfer method, user-defined vs system-reserved function range.
+- **Kernel API audit**: 40+ APIs across 12 risk classes: `phys_mem`, `pool_alloc`, `dkom`, `apc_inject`, `privilege` (token stealing via PsInitialSystemProcess), `ssdt_hook`, `mem_copy`, `driver_load`, and more.
+- **Callback detection**: 20+ callbacks tagged edr_like, rootkit_risk, or info. ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx (blocking) + KeRegisterBugCheckReasonCallback = rootkit signal.
+- **Pool tag extraction**: byte scan for `41 B8` (MOV R8D) extracts 4-byte printable pool tags for ExAllocatePoolWithTag calls.
+- **Dangerous patterns**: SSDT hook CR0 WP-disable combined sequence, SMEP-disable CR4 combined sequence, MSR_LSTAR targeted read (KASLR defeat) and write (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"` scan (x64 SSDT lookup via MmGetSystemRoutineAddress), RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports, VMware backdoor, deprecated pool allocators.
 
 ```bash
 ablation driver malware.sys
@@ -123,15 +123,15 @@ print(ic.fmt())
 
 Adds a complete time series analysis layer on top of the existing RE toolkit. Encodes function disassembly as integer sequences over 12 opcode categories (BinFuse taxonomy), then applies classical time series algorithms for patch diffing, homolog matching, corpus indexing, and behavioral pattern search.
 
-**OpSeqEncoder** (`ablation/analyzers/opseq.py`) -- shared encoding base. Maps any function VA to `List[int]` of category codes. `seq_to_str()` for compact visual, `seq_histogram()` for distribution analysis.
+**OpSeqEncoder** (`ablation/analyzers/opseq.py`): shared encoding base. Maps any function VA to `List[int]` of category codes. `seq_to_str()` for compact visual, `seq_histogram()` for distribution analysis.
 
-**MatrixProfileDiff** (`ablation/analyzers/matrix_profile_diff.py`) -- instruction-level patch diff via Matrix Profile AB-join. Pinpoints changed instruction regions between two function versions. STUMPY-accelerated when available; numpy fallback for function-length sequences.
+**MatrixProfileDiff** (`ablation/analyzers/matrix_profile_diff.py`): instruction-level patch diff via Matrix Profile AB-join. Pinpoints changed instruction regions between two function versions. STUMPY-accelerated when available; numpy fallback for function-length sequences.
 
-**DTWMatcher** (`ablation/analyzers/dtw_matcher.py`) -- cross-version homolog matching via DTW with Sakoe-Chiba band (20% of max length). Semantic affinity cost matrix (ARITHMETIC/LOGIC cost 0.3 vs default 1.0). Verdict thresholds: same_era >=0.85, patched 0.45-0.85, rewritten 0.20-0.45.
+**DTWMatcher** (`ablation/analyzers/dtw_matcher.py`): cross-version homolog matching via DTW with Sakoe-Chiba band (20% of max length). Semantic affinity cost matrix (ARITHMETIC/LOGIC cost 0.3 vs default 1.0). Verdict thresholds: same_era >=0.85, patched 0.45-0.85, rewritten 0.20-0.45.
 
-**SAXIndex** (`ablation/analyzers/sax_index.py`) -- fast approximate corpus index via SAX encoding. Gaussian breakpoints, categorical PAA, MINDIST lower bound for index pruning. Save/load via pickle for persistent indexes.
+**SAXIndex** (`ablation/analyzers/sax_index.py`): fast approximate corpus index via SAX encoding. Gaussian breakpoints, categorical PAA, MINDIST lower bound for index pruning. Save/load via pickle for persistent indexes.
 
-**SubsequenceSearcher** (`ablation/analyzers/subsequence_searcher.py`) -- behavioral pattern search. Exact match with wildcards, DTW sliding window approximate match, and `search_like()` for behavioral clone detection. `common_patterns()` reveals structurally common n-grams (tells you what NOT to use as discriminators).
+**SubsequenceSearcher** (`ablation/analyzers/subsequence_searcher.py`): behavioral pattern search. Exact match with wildcards, DTW sliding window approximate match, and `search_like()` for behavioral clone detection. `common_patterns()` reveals structurally common n-grams (tells you what NOT to use as discriminators).
 
 ```python
 # Cross-version: find stress handler homolog in v2 binary
@@ -157,7 +157,7 @@ Note: use `discord_threshold=0.5` for MatrixProfileDiff on categorical sequences
 
 ### New: FuncProfiler
 
-`ablation/analyzers/func_profiler.py` -- complete function analysis block in one call.
+`ablation/analyzers/func_profiler.py`: complete function analysis block in one call.
 
 Replaces the 4-call manual sequence (callees_of, dump_text, annotate_calls, string lookup)
 with a single `fp.profile(va, end_va)` call returning a `FuncProfile` with all data combined.
@@ -192,7 +192,7 @@ only the sink-hitting calls.
 
 ### New: PatternLibrary
 
-`ablation/analyzers/pattern_library.py` -- persistent registry of successful semantic search patterns.
+`ablation/analyzers/pattern_library.py`: persistent registry of successful semantic search patterns.
 
 Stores query strings at `~/.ablation/patterns.json` with confirmed hit tracking per binary.
 Pre-seeded with 12 default patterns covering buffer-overflow, cmd-exec, tcl-inject, path-traversal,
@@ -214,11 +214,11 @@ pl.save()
 pl.add('CLI handler passes argv directly to exec_handler without sanitization', tag='cmd-exec')
 ```
 
-Pattern registry accumulates over time -- hit rates guide which patterns to run first on new binaries.
+Pattern registry accumulates over time; hit rates guide which patterns to run first on new binaries.
 
 ### New: IPRegAnnotator
 
-`ablation/analyzers/ipreg_annotator.py` -- interprocedural register annotator (N-hop forward symbolic pass).
+`ablation/analyzers/ipreg_annotator.py`: interprocedural register annotator (N-hop forward symbolic pass).
 
 Follows call chains across function AND library boundaries, carrying RegVal arg states at
 each callee entry. At each callee, seeds entry registers from the caller's register state at
@@ -250,7 +250,7 @@ library boundaries and identifies dangerous sink reachability without symbols.
 
 ### New: LibGraph
 
-`ablation/analyzers/lib_graph.py` -- cross-binary import/export matrix.
+`ablation/analyzers/lib_graph.py`: cross-binary import/export matrix.
 
 Load all .so files in a firmware directory once, build a unified index over every
 library, then query callers/exporters/imports across the entire set in a single call.
@@ -277,7 +277,7 @@ correlating callers across libraries. One `LibGraph.from_dir()` replaces N per-b
 
 ### New: RegAnnotator
 
-`ablation/analyzers/reg_annotator.py` -- lightweight forward symbolic register pass.
+`ablation/analyzers/reg_annotator.py`: lightweight forward symbolic register pass.
 
 Single forward pass through a function window tracking register assignments
 (mov/lea/xor/call) and annotating call sites with inferred argument register values.
@@ -320,7 +320,7 @@ Does NOT handle branches (single path), loops, or complex stack frame indexing.
 
 ### New: BinaryContext
 
-`ablation/analyzers/binary_context.py` -- pre-computed binary context cache.
+`ablation/analyzers/binary_context.py`: pre-computed binary context cache.
 
 Build once (~0.5s for a 24MB ELF), cache to `~/.ablation/cache/`, reload in <110ms.
 Captures: PLT symbol map, exported functions, .rodata strings, function start VAs,
@@ -339,7 +339,7 @@ print(ctx.summary())                  # session-start context block
 
 Validated on libservice.so (24MB): 0.51s build, 0.109s cache reload, 1115 PLT entries,
 498 exports, 2851 strings, 12357 call edges. `callees_of(0x4000)` returns the full
-`init_handler` call sequence in one query -- what previously required a full
+`init_handler` call sequence in one query; what previously required a full
 session of manual tracing.
 
 Cache invalidation: SHA256 mismatch triggers rebuild. Safe across firmware versions.
@@ -354,7 +354,7 @@ Cache invalidation: SHA256 mismatch triggers rebuild. Safe across firmware versi
 functions to the sink table without modifying the default list.
 
 `run_on_function_seeded(func_va, seed_arg_indices)` seeds entry argument registers
-as tainted before analysis begins -- handles CLI handler functions where taint
+as tainted before analysis begins; handles CLI handler functions where taint
 originates from the caller (entry args) rather than from recv/read calls.
 
 ```python
@@ -374,7 +374,7 @@ Changes are backward-compatible: all new parameters default to None.
 
 ### New: WindowAnalyzer
 
-`ablation/analyzers/window_analyzer.py` -- LLM-native bulk disassembly window.
+`ablation/analyzers/window_analyzer.py`: LLM-native bulk disassembly window.
 
 One capstone call over a configurable region (default 1536 bytes) with inline annotation of:
 - PLT call targets via `.rela.plt` (handles `.plt.sec` CET stubs, `.plt`, `.plt.got`)
@@ -392,7 +392,7 @@ starts = wa.find_func_starts(va=0x41000, window=2048)
 
 Motivation: per-instruction tracing requires N round trips through the disassembly pipeline.
 A 1.5KB annotated dump returns a complete function-boundary-visible region for one-pass
-pattern recognition -- the natural unit for LLM-assisted RE.
+pattern recognition; the natural unit for LLM-assisted RE.
 
 ---
 

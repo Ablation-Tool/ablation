@@ -1,5 +1,5 @@
 """
-window_analyzer.py -- LLM-native bulk disassembly window for stripped ELF RE.
+window_analyzer.py: LLM-native bulk disassembly window for stripped ELF RE.
 
 Motivation: per-instruction disassembly calls fragment LLM context across dozens of
 round trips. This module dumps a configurable-size window (default 1536 bytes) centered
@@ -71,8 +71,8 @@ class WindowAnalyzer:
     Bulk window disassembler with inline PLT + string annotation.
 
     Attributes:
-        plt      -- va -> symbol name for PLT stubs
-        strings  -- va -> string content for .rodata references
+        plt     : va -> symbol name for PLT stubs
+        strings : va -> string content for .rodata references
     """
 
     def __init__(self, data: bytes, base_va: int = 0, path: str = ""):
@@ -228,9 +228,9 @@ class WindowAnalyzer:
         annotated instruction strings.
 
         Args:
-            va         -- center/start VA to disassemble from
-            window     -- bytes to disassemble (default 1536 = 1.5KB)
-            align_back -- bytes before va to include (default 0)
+            va        : center/start VA to disassemble from
+            window    : bytes to disassemble (default 1536 = 1.5KB)
+            align_back: bytes before va to include (default 0)
         """
         start_va = va - align_back
         offset = self._va_to_offset(start_va)
