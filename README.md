@@ -4,9 +4,11 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-Ablation finds vulnerable functions in stripped binary firmware in seconds, without symbols, source code, or a pre-built database.
+Ablation finds vulnerable functions in stripped binary firmware in seconds, without symbols, source code, or a pre-built database. Hand it to Claude Code and the entire reverse engineering workflow runs autonomously.
 
 Given a stripped ELF binary, Ablation builds a behavioral corpus from call graph structure and RIP-relative string cross-references. It encodes every function as a BERT embedding, then lets you query in plain English: *"TLV parser that advances a pointer without a bounds check."* Ranked candidates return with cosine similarity scores. A 19,000-function binary takes 35 seconds on CPU.
+
+Inside a Claude Code session, Claude builds the corpus, sweeps all 30 vulnerability patterns, queries specific behaviors, pulls CFG and taint traces for top candidates, and interprets every result. The researcher reviews findings. The tool does the triage. Drop the repo's `CLAUDE.md` into your project and hand over a binary path to start.
 
 The pattern library improves with each engagement. Every confirmed vulnerability seeds a new semantic pattern that replays automatically on future binaries, regardless of vendor or architecture.
 
