@@ -22,6 +22,32 @@ Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary
 
 ---
 
+Ablation does everything IDA Pro does: disassembly, decompilation, function signatures, call graph, cross-references, import/export analysis, scripting, and binary diffing. Then it goes further.
+
+Ablation adds what IDA Pro does not have:
+
+- **Semantic search** across every function in plain English
+- **Autonomous Claude Code workflow**
+- **Self-improving pattern library** that replays confirmed findings on future binaries
+- **Cross-binary analysis** across every shared library in a firmware image simultaneously
+- **Version diffing** with DTW and Matrix Profile
+
+IDA Pro costs $3,000+ per seat. Ablation is open source.
+
+---
+
+Ablation does everything Binary Ninja does: disassembly, decompilation, data flow analysis, function signatures, cross-references, scripting, and binary diffing. Then it goes further.
+
+Ablation adds what Binary Ninja does not have:
+
+- **Semantic search** across every function in plain English
+- **Autonomous Claude Code workflow**
+- **Self-improving pattern library** that replays confirmed findings on future binaries
+- **Cross-binary analysis** across every shared library in a firmware image simultaneously
+- **Version diffing** with DTW and Matrix Profile
+
+---
+
 ## Install
 
 ```bash
