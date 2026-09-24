@@ -1,37 +1,37 @@
-# Ablation -- Claude Operational Reference
+# Ablation: Claude Operational Reference
 
 ## What this tool is
 
 Binary RE toolkit for stripped firmware. No symbols. No source.
 
 **Core capabilities:**
-- **Semantic sweep** -- describe dangerous code in plain English; BERT matches behavioral fingerprints across 19k functions in ~35s
-- **Static taint tracking** -- x86-64 source-to-sink data flow; MFP worklist CFG; interprocedural BFS; custom sinks + seeded entry analysis
-- **ARM32 taint tracker** -- recv/read -> malloc/strcpy/system source-to-sink for ARM32/Thumb ELF; AAPCS-aware caller-saved clobber model
-- **ARM32 integer overflow scanner** -- MUL/UMULL/SMULL operand wire-control detection; ReachingDefs ud-chain trace; allocation downstream check
-- **BinaryContext cache** -- PLT + exports + strings + call graph; arch-aware (x86_64/arm64/arm32); 0.5s build, 110ms reload, SHA256-keyed
-- **Discovered-name overlay** -- persistent VA->name map at `~/.ablation/function_names.json`; survives cache rebuilds and firmware version bumps
-- **Cross-binary matrix** -- LibGraph unified import/export index over all .so files; cross-library caller/callee queries in one call
-- **Function profiler** -- single-call complete function analysis: strings + call args + sink detection
-- **Interprocedural chain tracer** -- N-hop cross-binary call chains with full register value provenance
-- **Pattern library** -- persistent registry of successful semantic queries; auto-replays on new binaries
-- **Finding registry** -- cross-target confirmed finding store; each new finding seeds future sweeps
-- **Patch epoch tracking** -- DTWMatcher + MatrixProfileDiff; firmware version diffing without source
-- **Behavioral corpus search** -- SAXIndex approximate NN + SubsequenceSearcher wildcard pattern matching
-- **Scanner primitives** -- LengthUnderflowScanner (C12 class), ChunkWalkerValidator (C13 class)
-- **Pre-auth route auditor** -- flatui route scanner + PoC generator for Fortinet web framework
-- **Windows kernel driver analysis** -- KernelDriverAnalyzer: WDM/KMDF/minifilter classification, IRP dispatch table, IOCTL decoding, kernel API audit, callback registrations, pool tags, PDB path, SMEP/MSR/CR4 pattern scan
-- **Format string scanner** -- FormatStringScanner: 28 printf/syslog/err family sinks; backward trace to classify format arg as SAFE (LEA .rodata), VULNERABLE (stack slot/arg), or SUSPICIOUS; two-hop vsnprintf-to-syslog detection
-- **Heap vulnerability scanner** -- HeapVulnScanner: INT_OVERFLOW_BEFORE_ALLOC (TAOSSA Ch6 L6-2/L6-3), USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC; x86-64 ELF; TAOSSA Ch5+Ch6 grounded
-- **MIPS32 taint tracker** -- MIPS32TaintTracker: O32 ABI; recv/read -> system/execve/strcpy/sprintf source-to-sink; load-delay slot aware; intraprocedural + interprocedural BFS; big-endian and little-endian (RouterOS, Broadcom, CPE)
-- **Crypto analysis** -- XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
-- **LLM-assisted analysis** -- ReAct agent loop for automated function naming and vuln hypothesis
+- **Semantic sweep**: describe dangerous code in plain English; BERT matches behavioral fingerprints across 19k functions in ~35s
+- **Static taint tracking**: x86-64 source-to-sink data flow; MFP worklist CFG; interprocedural BFS; custom sinks + seeded entry analysis
+- **ARM32 taint tracker**: recv/read -> malloc/strcpy/system source-to-sink for ARM32/Thumb ELF; AAPCS-aware caller-saved clobber model
+- **ARM32 integer overflow scanner**: MUL/UMULL/SMULL operand wire-control detection; ReachingDefs ud-chain trace; allocation downstream check
+- **BinaryContext cache**: PLT + exports + strings + call graph; arch-aware (x86_64/arm64/arm32); 0.5s build, 110ms reload, SHA256-keyed
+- **Discovered-name overlay**: persistent VA->name map at `~/.ablation/function_names.json`; survives cache rebuilds and firmware version bumps
+- **Cross-binary matrix**: LibGraph unified import/export index over all .so files; cross-library caller/callee queries in one call
+- **Function profiler**: single-call complete function analysis: strings + call args + sink detection
+- **Interprocedural chain tracer**: N-hop cross-binary call chains with full register value provenance
+- **Pattern library**: persistent registry of successful semantic queries; auto-replays on new binaries
+- **Finding registry**: cross-target confirmed finding store; each new finding seeds future sweeps
+- **Patch epoch tracking**: DTWMatcher + MatrixProfileDiff; firmware version diffing without source
+- **Behavioral corpus search**: SAXIndex approximate NN + SubsequenceSearcher wildcard pattern matching
+- **Scanner primitives**: LengthUnderflowScanner (C12 class), ChunkWalkerValidator (C13 class)
+- **Pre-auth route auditor**: flatui route scanner + PoC generator for Fortinet web framework
+- **Windows kernel driver analysis**: KernelDriverAnalyzer: WDM/KMDF/minifilter classification, IRP dispatch table, IOCTL decoding, kernel API audit, callback registrations, pool tags, PDB path, SMEP/MSR/CR4 pattern scan
+- **Format string scanner**: FormatStringScanner: 28 printf/syslog/err family sinks; backward trace to classify format arg as SAFE (LEA .rodata), VULNERABLE (stack slot/arg), or SUSPICIOUS; two-hop vsnprintf-to-syslog detection
+- **Heap vulnerability scanner**: HeapVulnScanner: INT_OVERFLOW_BEFORE_ALLOC (TAOSSA Ch6 L6-2/L6-3), USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC; x86-64 ELF; TAOSSA Ch5+Ch6 grounded
+- **MIPS32 taint tracker**: MIPS32TaintTracker: O32 ABI; recv/read -> system/execve/strcpy/sprintf source-to-sink; load-delay slot aware; intraprocedural + interprocedural BFS; big-endian and little-endian (RouterOS, Broadcom, CPE)
+- **Crypto analysis**: XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
+- **LLM-assisted analysis**: ReAct agent loop for automated function naming and vuln hypothesis
 
 **Package:** `pip install -e ~/ablation/` (editable install, already done)
 
 ---
 
-## Session start -- run this every time
+## Session start: run this every time
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -53,8 +53,8 @@ if ctx.names_count():
 ```
 
 **SESSION.md convention:**
-- Root index: `~/ablation/SESSION.md` -- active target + pointers to per-target files
-- Per-target state: `targets/<vendor>/SESSION_<target>.md` -- binary path, overlay table, confirmed findings, exact next steps
+- Root index: `~/ablation/SESSION.md` (active target, pointers to per-target files)
+- Per-target state: `targets/<vendor>/SESSION_<target>.md` (binary path, overlay table, confirmed findings, exact next steps)
 - Read session file BEFORE touching any binary. It has the context.
 - Update session file AFTER each session with what changed and what's next.
 
@@ -68,9 +68,9 @@ if ctx.names_count():
 | "What calls this symbol?" | `ctx.callers_of('symbol')` or `ctx.callers_of(va)` |
 | "What strings does this function reference?" | `ctx.strings_in_func(va)` |
 | "Which functions reference this string?" | `ctx.funcs_referencing_string(string_va)` |
-| "What is this function?" | `ctx.name(va)` -- overlay > export > PLT > hex |
+| "What is this function?" | `ctx.name(va)` (overlay > export > PLT > hex) |
 | "Show me the disassembly around this address" | `WindowAnalyzer.dump_text(va, window=1536)` |
-| "Find functions matching this vulnerability pattern" | `SemanticSearcher.query(description)` -- ALWAYS first on a new binary |
+| "Find functions matching this vulnerability pattern" | `SemanticSearcher.query(description)` (ALWAYS first on a new binary) |
 | "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` |
 | "Trace taint from network recv to sink" | `TaintTracker.run_interprocedural()` |
 | "ARM32: trace recv to malloc/strcpy/system" | `ARM32TaintTracker.from_context(ctx).run_interprocedural()` |
@@ -607,7 +607,7 @@ from ablation.analyzers.fortios_firmware_extractor import FortiOSHardwareExtract
 
 ex = FortiOSHardwareExtractor.from_path('/path/to/FWF_60E-v7.2.4.F-build1396-FORTINET.out')
 
-# Recover key (NAND 0xFF assumption -- default for all FortiWiFi and FortiGate hardware)
+# Recover key (NAND 0xFF assumption; default for all FortiWiFi and FortiGate hardware)
 result = ex.recover_xor_key(plaintext_assumption=0xFF)
 print(result.key.hex())         # 64-byte XOR key
 print(result.confidence)        # entropy drop fraction (0.81+ = reliable)
@@ -854,8 +854,8 @@ report.kernel_api_findings      # [KernelApiFinding(api, dll, severity, category
 report.callback_registrations   # [CallbackRegistration(api, severity, description, risk_class)]
 report.pool_operations          # [PoolOperation(api, tag, file_offset, notes)]
 report.dangerous_patterns       # [DangerousPattern(pattern, offset, description, severity)]
-report.pdb_path                 # str or None -- internal build path leaking vendor/project
-report.is_signed                # bool -- Authenticode cert table present
+report.pdb_path                 # str or None; internal build path leaks vendor/project
+report.is_signed                # bool; Authenticode cert table present
 
 # IOCTL code standalone decoder:
 ic = decode_ioctl_code(0x222003)
@@ -889,7 +889,7 @@ findings = tt.run_interprocedural()
 - `IO_STACK_LOCATION.Parameters.DeviceIoControl.InputBufferLength` at `+0x10`
 - Pool tag is 4-byte ASCII in R8 for `ExAllocatePoolWithTag(PoolType, Size, Tag)`
 
-**METHOD_NEITHER warning:** `IoctlCode.is_neither()` true means the driver's dispatch handler receives `Type3InputBuffer` -- a raw unvalidated user-mode pointer -- with no kernel buffer copy. Any dereference without `ProbeForRead` first = arbitrary kernel read/write.
+**METHOD_NEITHER warning:** `IoctlCode.is_neither()` true means the driver's dispatch handler receives `Type3InputBuffer`, a raw unvalidated user-mode pointer, with no kernel buffer copy. Any dereference without `ProbeForRead` first = arbitrary kernel read/write.
 
 ---
 
@@ -900,9 +900,9 @@ findings = tt.run_interprocedural()
 1. Read `SESSION.md` (root) + target's `SESSION_<target>.md` file
 2. `BinaryContext.load_or_build()` + `ctx.summary()` + `ctx.names_table()`
 3. `CorpusBuilder.build()` if this binary has no prior ANGR_INFERRED coverage
-4. `SemanticSearcher.query()` -- sweep ALL vuln classes before touching disasm
-5. `PatternLibrary.sweep()` -- replay confirmed patterns from prior engagements
-6. `FuncProfiler.profile()` on top candidates -- one call per function
+4. `SemanticSearcher.query()`: sweep ALL vuln classes before touching disasm
+5. `PatternLibrary.sweep()`: replay confirmed patterns from prior engagements
+6. `FuncProfiler.profile()` on top candidates: one call per function
 7. `TaintTracker` if sinks are standard (strcpy/system/execv/Tcl_Eval)
 8. `IPRegAnnotator` for call chains across library boundaries
 9. `WindowAnalyzer.dump_text()` for manual disasm only when automated tools don't have the sink
@@ -910,16 +910,16 @@ findings = tt.run_interprocedural()
 **Confirming a finding:**
 
 1. `PathSolver.solve_path()` for feasibility
-2. `ctx.set_name(va, name, source="confirmed")` -- register the function name
-3. `PatternLibrary.record_hit(confirmed=True)` -- improve pattern hit rate
-4. `FindingRegistry.register()` -- cross-target finding store
-5. Write finding to `targets/<vendor>/<target>_re.py` -- NOT into ablation itself
+2. `ctx.set_name(va, name, source="confirmed")`: register the function name
+3. `PatternLibrary.record_hit(confirmed=True)`: improve pattern hit rate
+4. `FindingRegistry.register()`: cross-target finding store
+5. Write finding to `targets/<vendor>/<target>_re.py` (NOT into ablation itself)
 6. Update `targets/<vendor>/SESSION_<target>.md` with what changed
 
-**Custom scanner workflow -- for vuln classes not covered by existing scanners:**
+**Custom scanner workflow for vuln classes not covered by existing scanners:**
 
 1. Confirm SemanticSearcher has no existing pattern for this class (run a query first)
-2. Create `ablation/analyzers/<scanner_name>.py` -- follow `length_underflow.py` as template
+2. Create `ablation/analyzers/<scanner_name>.py`; follow `length_underflow.py` as the template
 3. Wire: `from_context(ctx)` classmethod, `scan()` -> list of findings, `report(findings)` -> str
 4. Run on a known-positive binary first to verify the scanner fires correctly
 5. Analyze false positives explicitly:
@@ -932,9 +932,9 @@ findings = tt.run_interprocedural()
 
 **Cross-version patch analysis:**
 
-1. `DTWMatcher.score_functions()` -- is this the same era?
-2. `MatrixProfileDiff.diff_functions()` -- exactly what changed?
-3. `VersionTracker.find_homolog()` -- where did the function move?
+1. `DTWMatcher.score_functions()`: is this the same era?
+2. `MatrixProfileDiff.diff_functions()`: exactly what changed?
+3. `VersionTracker.find_homolog()`: where did the function move?
 
 ---
 

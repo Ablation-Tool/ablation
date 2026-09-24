@@ -1,15 +1,15 @@
 """
-binary_context.py -- Pre-computed binary context cache for LLM-assisted RE.
+binary_context.py: Pre-computed binary context cache for LLM-assisted RE.
 
 Eliminates per-session ELF parsing overhead. Build once (~2-5s), serialize to
 ~/.ablation/cache/, reload in <100ms on subsequent sessions.
 
 Captures:
-  plt          -- {va: symbol_name} for all PLT stubs
-  exports      -- {symbol_name: va} for all globally exported functions
-  strings      -- {va: content} for .rodata printable sequences >= 4 chars
-  func_starts  -- sorted list of function entry VAs (eh_frame + callee augmentation)
-  call_edges   -- [(from_va, to_va, label)] flat call graph
+  plt         : {va: symbol_name} for all PLT stubs
+  exports     : {symbol_name: va} for all globally exported functions
+  strings     : {va: content} for .rodata printable sequences >= 4 chars
+  func_starts : sorted list of function entry VAs (eh_frame + callee augmentation)
+  call_edges  : [(from_va, to_va, label)] flat call graph
 
 Usage:
     ctx = BinaryContext.load_or_build('/path/to/binary')
@@ -108,8 +108,8 @@ class BinaryContext:
         Load from cache if valid, otherwise build from scratch and cache.
 
         Args:
-            path          -- path to ELF binary
-            force_rebuild -- ignore cache and rebuild
+            path         : path to ELF binary
+            force_rebuild: ignore cache and rebuild
         """
         data = Path(path).read_bytes()
         sha = _sha256(data)
@@ -136,7 +136,7 @@ class BinaryContext:
         Load directly from a cache JSON file without requiring the original binary.
 
         Use when the binary is unavailable (e.g., /tmp cleared) but the cache is intact.
-        The SHA256 integrity check is skipped -- caller guarantees the binary hasn't changed.
+        The SHA256 integrity check is skipped: caller guarantees the binary hasn't changed.
         """
         return cls._load_json(Path(cache_file), orig_path)
 
@@ -184,7 +184,7 @@ class BinaryContext:
         """Return code VAs (instruction-level) that RIP-relatively reference string_va.
 
         Uses the numpy displacement scan built during _build(). Empty if the index was
-        not populated (old cache format) -- call build_xref_index(path) to populate.
+        not populated (old cache format): call build_xref_index(path) to populate.
         """
         return list(self._str_xref_idx.get(string_va, []))
 
@@ -250,7 +250,7 @@ class BinaryContext:
     def name(self, va: int) -> str:
         """Best available name for va: overlay > export > PLT > hex.
 
-        This is the single call for "what is this function?" -- use it everywhere
+        This is the single call for "what is this function?": use it everywhere
         a hex address would otherwise appear.
         """
         reg = get_registry()

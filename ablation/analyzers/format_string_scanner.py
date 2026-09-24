@@ -1,10 +1,10 @@
 """
-format_string_scanner.py -- Format string vulnerability detector for x86-64 ELF binaries.
+format_string_scanner.py: Format string vulnerability detector for x86-64 ELF binaries.
 
 TAOSSA Ch8: format string vulnerabilities arise when user-controlled data reaches the
 format argument of printf/fprintf/syslog and similar functions. The format argument is
 safe only when it is a string literal (RIP-relative load from .rodata). Any other provenance
--- function argument, stack variable, register from recv/read/network -- is a finding.
+-- function argument, stack variable, register from recv/read/network: is a finding.
 
 Covers the full printf family, syslog, err/warn, and user-supplied callable tables.
 
@@ -273,7 +273,7 @@ class FormatStringScanner:
                 insns, i, fmt_reg_id, func_va, insn.address
             )
             if provenance == 'rodata':
-                continue  # string literal -- safe
+                continue  # string literal: safe
 
             severity = 'HIGH' if provenance == 'arg_passthrough' else 'MEDIUM'
             reg_name = self._reg_id_to_name(fmt_reg_id)
@@ -297,11 +297,11 @@ class FormatStringScanner:
         Returns (provenance, description).
 
         provenance values:
-          'rodata'          -- LEA from .rodata: string literal, safe
-          'arg_passthrough' -- entry argument register moved unchanged to fmt_reg
-          'stack_load'      -- loaded from stack frame (likely local buffer or argc/argv)
-          'register'        -- another non-entry register
-          'unknown'         -- could not trace
+          'rodata'         : LEA from .rodata: string literal, safe
+          'arg_passthrough': entry argument register moved unchanged to fmt_reg
+          'stack_load'     : loaded from stack frame (likely local buffer or argc/argv)
+          'register'       : another non-entry register
+          'unknown'        : could not trace
         """
         for j in range(call_idx - 1, max(call_idx - _LOOKBACK, -1), -1):
             insn = insns[j]
@@ -333,7 +333,7 @@ class FormatStringScanner:
                         return (
                             'arg_passthrough',
                             f"{self._reg_id_to_name(src.reg)} (entry arg) "
-                            f"passed as format string -- caller controls format"
+                            f"passed as format string: caller controls format"
                         )
                     return ('register', f"loaded from register {self._reg_id_to_name(src.reg)}")
 
@@ -346,7 +346,7 @@ class FormatStringScanner:
 
             if mnem == 'xor' and len(insn.operands) == 2:
                 if insn.operands[1].type == X86_OP_REG and insn.operands[1].reg == fmt_reg:
-                    # xor reg, reg = zero -- typically a NULL fmt, not interesting
+                    # xor reg, reg = zero: typically a NULL fmt, not interesting
                     return ('rodata', 'zeroed register (NULL fmt)')
 
         return ('unknown', f'format register {self._reg_id_to_name(fmt_reg)} provenance not found in {_LOOKBACK} insns')

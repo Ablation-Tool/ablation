@@ -1,5 +1,5 @@
 """
-sig_library.py -- Function signature matching for stripped binaries.
+sig_library.py: Function signature matching for stripped binaries.
 
 Matches unknown stripped functions against a behavioral signature library using
 the same BERT model already loaded for semantic search. A match above the
@@ -7,9 +7,9 @@ confidence threshold renames the function in the corpus (e.g. fn_0x1d700
 becomes likely:memcpy).
 
 Architecture:
-  SigLibrary.load()           -- loads sigs.json, encodes all descriptions once
+  SigLibrary.load()          : loads sigs.json, encodes all descriptions once
   SigLibrary.match(function_desc) -> SigMatch | None
-  SigLibrary.auto_name(corpus_db) -> int  -- renames all ANGR_INFERRED fns in DB
+  SigLibrary.auto_name(corpus_db) -> int : renames all ANGR_INFERRED fns in DB
 
 Usage:
     from ablation.analyzers.sig_library import SigLibrary
@@ -60,7 +60,7 @@ class SigLibrary:
 
     Encodes each signature description once with BERT, then does cosine similarity
     against incoming function descriptions.  Subsequent calls use the cached
-    embedding matrix -- matching 40 signatures costs ~1ms per function.
+    embedding matrix: matching 40 signatures costs ~1ms per function.
     """
 
     def __init__(
