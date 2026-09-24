@@ -75,30 +75,10 @@ Ablation adds what Binary Ninja does not have:
 
 ## Updates
 
-Full release notes live in [updates/](updates/).
+- [v2.4.0](updates/v2.4.0.md) — format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint
+- [v2.0.0](updates/v2.0.0.md) — Windows kernel driver RE
 
-**[v2.4.0](updates/v2.4.0.md) (2026-09-24): Format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint**
-
-Six new analyzers ship in this release.
-
-- **Format string scanner** (`ablation fmtstr`): 28 printf/syslog/err sinks; backward trace from each call site; SAFE (LEA .rodata), VULNERABLE (stack slot or arg), SUSPICIOUS (global/computed); two-hop vsnprintf detection
-- **MIPS32 taint tracker** (`ablation mips`): O32 ABI; load-delay slot aware; big-endian and little-endian; recv/read to system/execve/strcpy/sprintf; intraprocedural and interprocedural BFS
-- **BYOVD detector** (`ablation byovd`): scores Windows drivers 0-100 across 8 attack paths; signed driver + METHOD_NEITHER IOCTL + dangerous primitive = BYOVD_CONFIRMED
-- **Heap vulnerability scanner** (`ablation heap`): INT_OVERFLOW_BEFORE_ALLOC, USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC; grounded in TAOSSA ch.5 and ch.6
-- **IOCTL attack surface** (`ioctl_attack_surface.py`): per-IOCTL handler disassembly window; METHOD_NEITHER flagged; dangerous API annotations
-- **Cross-binary taint** (`cross_binary_taint.py`): follows taint across `.so` boundaries via LibGraph; seeds at export crossings; BFS through callee chains
-
-**[v2.0.0](updates/v2.0.0.md) (2026-09-24): Windows kernel driver RE**
-
-`ablation driver <file.sys>` analyzes Windows kernel drivers. Run it against any `.sys` file and it returns a full report in under a second.
-
-- **IRP/IOCTL dispatch**: disassembles DriverEntry and recovers all 28 MajorFunction slot assignments; decodes each CTL_CODE into DeviceType, Access, Function, and Method; flags METHOD_NEITHER (raw user pointer) as the highest-risk transfer type
-- **Kernel API audit**: classifies 40+ kernel APIs across 12 risk classes: physical memory mapping, token stealing via PsInitialSystemProcess, APC injection, process attachment, SSDT hooking, virtual memory manipulation, driver loading, DKOM, pool allocation, and MDL misuse
-- **Callback detection**: tags 20+ kernel callbacks as edr_like, rootkit_risk, or info; ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx + KeRegisterBugCheckReasonCallback in a single driver identifies a rootkit
-- **Dangerous patterns**: detects the CR0 WP-disable sequence (SSDT hook prerequisite), the CR4 SMEP-disable sequence, MSR_LSTAR reads (KASLR defeat) and writes (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"`, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, and direct I/O port access
-- **Driver classification**: identifies WDM, KMDF, and minifilter drivers by import profile; extracts the PDB path; detects Authenticode signatures; recovers pool tags from `ExAllocatePoolWithTag` call sites
-
-`ablation news` prints this update log inline.
+`ablation news` prints the update log inline.
 
 ---
 
