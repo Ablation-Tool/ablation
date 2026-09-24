@@ -84,3 +84,9 @@ ablation findings --sarif findings.sarif
 ## License
 
 See [LICENSE](LICENSE).
+
+---
+
+## Maintainer
+
+Nicholas Michael Kloster
