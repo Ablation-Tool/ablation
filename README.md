@@ -69,6 +69,26 @@ Ablation adds what Binary Ninja does not have:
 
 ---
 
+## Updates
+
+**v2.0.0 (2026-09-24) -- Windows kernel driver RE**
+
+New command: `ablation driver <file.sys>`
+
+Ablation now analyzes Windows kernel drivers natively. Point it at any `.sys` file and it returns a full report: IRP dispatch table, IOCTL codes, kernel API risk surface, callback registrations, and a dangerous-pattern scan covering SSDT hook sequences, SMEP-disable, MSR_LSTAR access, and more.
+
+What it detects:
+
+- **IRP/IOCTL dispatch** -- disassembles DriverEntry and recovers all 28 MajorFunction slot assignments; decodes every CTL_CODE into DeviceType, Access, Function, and Method; flags METHOD_NEITHER (raw user pointer, highest risk) explicitly
+- **Kernel API audit** -- 40+ APIs across 12 risk classes: physical memory mapping, token stealing, APC injection, process attachment, SSDT hooking, virtual memory manipulation, driver loading, DKOM, pool allocation, and MDL misuse
+- **Callback detection** -- 20+ kernel callbacks tagged by class: edr_like, rootkit_risk, or info; ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx + KeRegisterBugCheckReasonCallback in one driver is a rootkit signal
+- **Dangerous patterns** -- CR0 WP-disable sequence (SSDT hook prerequisite), CR4 SMEP-disable sequence, MSR_LSTAR read (KASLR defeat) and write (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"` scan, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports
+- **Driver classification** -- WDM / KMDF / minifilter by import profile; PDB path extraction; Authenticode signature detection; pool tag extraction
+
+Also added: `ablation news` prints recent updates inline.
+
+---
+
 ## Real-World Results
 
 Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio -- across x86-64, ARM64, ARM32, MIPS32, PowerPC, and Windows .sys.
