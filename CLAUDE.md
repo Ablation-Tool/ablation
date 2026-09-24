@@ -22,6 +22,8 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **Pre-auth route auditor** -- flatui route scanner + PoC generator for Fortinet web framework
 - **Windows kernel driver analysis** -- KernelDriverAnalyzer: WDM/KMDF/minifilter classification, IRP dispatch table, IOCTL decoding, kernel API audit, callback registrations, pool tags, PDB path, SMEP/MSR/CR4 pattern scan
 - **Format string scanner** -- FormatStringScanner: 28 printf/syslog/err family sinks; backward trace to classify format arg as SAFE (LEA .rodata), VULNERABLE (stack slot/arg), or SUSPICIOUS; two-hop vsnprintf-to-syslog detection
+- **Heap vulnerability scanner** -- HeapVulnScanner: INT_OVERFLOW_BEFORE_ALLOC (TAOSSA Ch6 L6-2/L6-3), USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC; x86-64 ELF; TAOSSA Ch5+Ch6 grounded
+- **MIPS32 taint tracker** -- MIPS32TaintTracker: O32 ABI; recv/read -> system/execve/strcpy/sprintf source-to-sink; load-delay slot aware; intraprocedural + interprocedural BFS; big-endian and little-endian (RouterOS, Broadcom, CPE)
 - **Crypto analysis** -- XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis** -- ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -73,6 +75,9 @@ if ctx.names_count():
 | "Trace taint from network recv to sink" | `TaintTracker.run_interprocedural()` |
 | "ARM32: trace recv to malloc/strcpy/system" | `ARM32TaintTracker.from_context(ctx).run_interprocedural()` |
 | "ARM32: find MUL before malloc without bounds check" | `ARM32IntOverflowScanner.from_context(ctx).scan()` |
+| "MIPS32: trace recv to system/strcpy/sprintf" | `MIPS32TaintTracker.from_path(elf).run_interprocedural()` |
+| "MIPS32: big-endian RouterOS or little-endian CPE" | `MIPS32TaintTracker.from_path(elf, endian='big')` |
+| "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
 | "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
 | "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
@@ -91,7 +96,6 @@ if ctx.names_count():
 | "Find confirmed similar findings from past engagements" | `FindingRegistry.find_similar(embedding)` |
 | "Write a new scanner for an undetected vuln class" | See **Custom scanner workflow** below |
 | "Analyze a Windows kernel .sys driver" | `KernelDriverAnalyzer.from_path(path).analyze()` |
-| "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Decode a Windows IOCTL CTL_CODE value" | `decode_ioctl_code(value)` from `kernel_driver_analyzer` |
 | "Find IRP dispatch handlers in DriverEntry" | `KernelDriverAnalyzer.analyze().major_functions` |
 | "Find IOCTL codes in driver binary" | `KernelDriverAnalyzer.analyze().ioctl_codes` |

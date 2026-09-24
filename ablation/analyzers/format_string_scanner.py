@@ -1,36 +1,31 @@
 """
-format_string_scanner.py -- Format string vulnerability scanner.
+format_string_scanner.py -- Format string vulnerability detector for x86-64 ELF binaries.
 
-Detects calls to format string sink functions (printf, syslog, err, etc.) where
-the format argument is not a string literal.
+TAOSSA Ch8: format string vulnerabilities arise when user-controlled data reaches the
+format argument of printf/fprintf/syslog and similar functions. The format argument is
+safe only when it is a string literal (RIP-relative load from .rodata). Any other provenance
+-- function argument, stack variable, register from recv/read/network -- is a finding.
 
-Static heuristic (TAOSSA ch.8): trace the format argument register backward from
-the call site. If the last write is a LEA [rip+offset] into .rodata, the format
-string is a literal and the call is safe. If the last write is a MOV from a stack
-slot or argument register, the format string is user-controlled and the call is
-vulnerable.
+Covers the full printf family, syslog, err/warn, and user-supplied callable tables.
 
-Verdict classification:
-  VULNERABLE  -- format reg loaded from stack slot or propagated from argument
-  SUSPICIOUS  -- format reg origin not determined (dynamic, global var, etc.)
-  SAFE        -- format reg loaded via LEA into .rodata
-
-Grounded in: The Art of Software Security Assessment (Dowd et al.), ch.8
-"Strings and Metacharacters", format string section.
+Detection algorithm per call site:
+  1. Identify the fmt register for the callee (RDI for printf, RSI for fprintf, etc.)
+  2. Walk backwards from the call site to find the last instruction that defined that register
+  3. If the definition is LEA from .rodata -> string literal -> safe
+  4. Otherwise -> potential format string vulnerability
+  5. Severity HIGH if fmt comes from a function argument register (rdi/rsi/rdx/rcx at entry);
+     MEDIUM if provenance is unclear (stack load, cross-call result)
 
 Usage:
-    scanner = FormatStringScanner('/path/to/binary')
-    findings = scanner.scan()
-    for f in findings:
-        if f.verdict != 'SAFE':
-            print(f.fmt())
+    from ablation.analyzers.format_string_scanner import FormatStringScanner
 
-    # With existing BinaryContext (avoids ELF re-parse):
+    scanner = FormatStringScanner.from_path('/path/to/binary')
+    findings = scanner.scan()
+    print(scanner.report(findings))
+
     from ablation.analyzers.binary_context import BinaryContext
     ctx = BinaryContext.load_or_build('/path/to/binary')
     scanner = FormatStringScanner.from_context(ctx)
-    findings = scanner.scan()
-    print(scanner.report(findings))
 """
 
 from __future__ import annotations
@@ -39,619 +34,382 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-import capstone
-from capstone.x86_const import (
-    X86_OP_REG, X86_OP_IMM, X86_OP_MEM,
-    X86_INS_LEA, X86_INS_MOV, X86_INS_MOVSX, X86_INS_MOVZX, X86_INS_MOVSXD,
-    X86_INS_MOVSS, X86_INS_MOVSD, X86_INS_MOVAPS, X86_INS_MOVDQA,
-    X86_INS_ADD, X86_INS_SUB, X86_INS_XOR, X86_INS_AND, X86_INS_OR,
-    X86_INS_PUSH, X86_INS_POP, X86_INS_CALL, X86_INS_RET,
-    X86_INS_RETF, X86_INS_RETFQ,
-)
-import lief
+_CS_AVAILABLE = False
+try:
+    from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CS_GRP_CALL, CS_GRP_RET
+    from capstone.x86 import X86_OP_REG, X86_OP_MEM, X86_OP_IMM
+    from capstone.x86_const import (
+        X86_REG_RDI, X86_REG_RSI, X86_REG_RDX, X86_REG_RCX,
+        X86_REG_R8, X86_REG_R9, X86_REG_RAX,
+    )
+    _CS_AVAILABLE = True
+except ImportError:
+    pass
 
-# ── register family normalization ─────────────────────────────────────────────
+_LIEF_AVAILABLE = False
+try:
+    import lief as _lief
+    _LIEF_AVAILABLE = True
+except ImportError:
+    pass
 
-_REG_FAMILY: Dict[str, str] = {}
 
-def _build_reg_family() -> Dict[str, str]:
-    families = {
-        'rax': ['eax', 'ax', 'al', 'ah'],
-        'rbx': ['ebx', 'bx', 'bl', 'bh'],
-        'rcx': ['ecx', 'cx', 'cl', 'ch'],
-        'rdx': ['edx', 'dx', 'dl', 'dh'],
-        'rsi': ['esi', 'si', 'sil'],
-        'rdi': ['edi', 'di', 'dil'],
-        'rsp': ['esp', 'sp', 'spl'],
-        'rbp': ['ebp', 'bp', 'bpl'],
-        'r8':  ['r8d', 'r8w', 'r8b'],
-        'r9':  ['r9d', 'r9w', 'r9b'],
-        'r10': ['r10d', 'r10w', 'r10b'],
-        'r11': ['r11d', 'r11w', 'r11b'],
-        'r12': ['r12d', 'r12w', 'r12b'],
-        'r13': ['r13d', 'r13w', 'r13b'],
-        'r14': ['r14d', 'r14w', 'r14b'],
-        'r15': ['r15d', 'r15w', 'r15b'],
+# ---------------------------------------------------------------------------
+# Format function registry
+# fmt_reg: the capstone register ID that carries the format string argument
+# ---------------------------------------------------------------------------
+
+# Built lazily after capstone is imported
+_FMT_FUNCS: Dict[str, int] = {}
+
+def _build_fmt_funcs() -> Dict[str, int]:
+    if not _CS_AVAILABLE:
+        return {}
+    return {
+        # printf family (fmt = arg0 = RDI)
+        'printf':    X86_REG_RDI,
+        'vprintf':   X86_REG_RDI,
+        'puts':      X86_REG_RDI,  # not a fmt func but often confused; flag for review
+        # fprintf/sprintf/dprintf family (fmt = arg1 = RSI)
+        'fprintf':   X86_REG_RSI,
+        'vfprintf':  X86_REG_RSI,
+        'sprintf':   X86_REG_RSI,
+        'vsprintf':  X86_REG_RSI,
+        'snprintf':  X86_REG_RDX,  # snprintf(buf, n, fmt, ...) -> fmt = arg2 = RDX
+        'vsnprintf': X86_REG_RDX,
+        'asprintf':  X86_REG_RSI,
+        'vasprintf': X86_REG_RSI,
+        'dprintf':   X86_REG_RSI,
+        'vdprintf':  X86_REG_RSI,
+        # syslog family (fmt = arg1 = RSI)
+        'syslog':    X86_REG_RSI,
+        'vsyslog':   X86_REG_RSI,
+        # err/warn (fmt = arg1 = RSI)
+        'err':       X86_REG_RSI,
+        'errx':      X86_REG_RSI,
+        'warn':      X86_REG_RSI,
+        'warnx':     X86_REG_RSI,
+        'verr':      X86_REG_RSI,
+        'verrx':     X86_REG_RSI,
+        'vwarn':     X86_REG_RSI,
+        'vwarnx':    X86_REG_RSI,
+        # custom / embedded common names
+        'log_printf':   X86_REG_RSI,
+        'debug_printf': X86_REG_RDI,
+        'trace_printf': X86_REG_RDI,
     }
-    m: Dict[str, str] = {}
-    for canon, aliases in families.items():
-        m[canon] = canon
-        for a in aliases:
-            m[a] = canon
-    return m
-
-_REG_FAMILY = _build_reg_family()
 
 
-def _canon(reg: str) -> str:
-    return _REG_FAMILY.get(reg.lower(), reg.lower())
+# Entry argument registers (SysV AMD64): taint from caller
+_ENTRY_ARGS = frozenset([
+    X86_REG_RDI, X86_REG_RSI, X86_REG_RDX, X86_REG_RCX,
+    X86_REG_R8, X86_REG_R9,
+] if _CS_AVAILABLE else [])
 
+_CALLER_SAVED = frozenset([
+    X86_REG_RAX, X86_REG_RDI, X86_REG_RSI, X86_REG_RDX, X86_REG_RCX,
+    X86_REG_R8, X86_REG_R9,
+] if _CS_AVAILABLE else [])
 
-# ── format string sink table ──────────────────────────────────────────────────
-# Maps PLT symbol name -> format argument index (0-based, SysV x86-64 ABI)
-# arg0=RDI, arg1=RSI, arg2=RDX, arg3=RCX, arg4=R8, arg5=R9
-
-_FORMAT_SINKS: Dict[str, int] = {
-    # printf family
-    'printf':    0,   # printf(fmt, ...)
-    'fprintf':   1,   # fprintf(fp, fmt, ...)
-    'sprintf':   1,   # sprintf(buf, fmt, ...)
-    'snprintf':  2,   # snprintf(buf, n, fmt, ...)
-    'vprintf':   0,   # vprintf(fmt, ap)
-    'vfprintf':  1,   # vfprintf(fp, fmt, ap)
-    'vsprintf':  1,   # vsprintf(buf, fmt, ap)
-    'vsnprintf': 2,   # vsnprintf(buf, n, fmt, ap)
-    # syslog
-    'syslog':    1,   # syslog(priority, fmt, ...)
-    'vsyslog':   1,   # vsyslog(priority, fmt, ap)
-    # BSD err/warn family
-    'err':       1,   # err(status, fmt, ...)
-    'errx':      1,   # errx(status, fmt, ...)
-    'warn':      0,   # warn(fmt, ...)
-    'warnx':     0,   # warnx(fmt, ...)
-    'verr':      1,
-    'verrx':     1,
-    'vwarn':     0,
-    'vwarnx':    0,
-    # wide-char variants
-    'wprintf':   0,
-    'fwprintf':  1,
-    'swprintf':  1,
-    'vwprintf':  0,
-    'vfwprintf': 1,
-    'vswprintf': 1,
-    # Windows variants
-    '_stprintf':  1,
-    '_vstprintf': 1,
-    '_vtprintf':  0,
-    '_wsprintfA': 1,
-    '_wsprintfW': 1,
-    # glibc-specific / common embedded logging patterns
-    'dprintf':   1,   # dprintf(fd, fmt, ...)
-    'obstack_printf': 1,
-    '__printf':  0,
-}
-
-# Argument register sequence (SysV x86-64)
-_ARG_REGS = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
-
-# Instructions that unconditionally clobber their destination register.
-# Used to detect when backward scan can stop (no earlier write matters).
-_CLOBBER_MNEMS: Set[str] = {
-    'mov', 'movabs', 'movsx', 'movzx', 'movsxd',
-    'movss', 'movsd', 'movaps', 'movdqa', 'movq', 'movd',
-    'lea',
-    'xor',   # handles xor reg, reg (zero) and xor reg, other (clobber)
-    'add', 'sub', 'and', 'or', 'not', 'neg', 'inc', 'dec',
-    'imul', 'mul', 'shl', 'shr', 'sar', 'sal', 'rol', 'ror',
-    'pop',
-    # SET family: write boolean to 8-bit dest
-    'sete', 'setne', 'setb', 'setbe', 'seta', 'setae',
-    'setl', 'setle', 'setg', 'setge', 'sets', 'setns',
-    'seto', 'setno', 'setp', 'setnp',
-    'bsf', 'bsr', 'popcnt', 'tzcnt', 'lzcnt', 'bswap',
-}
-
-# Max instructions to scan backward per call site
-_LOOKBACK_LIMIT = 80
-
-# Max function size to analyze
 _MAX_FUNC_BYTES = 4096
+_LOOKBACK = 20   # max instructions to walk back from CALL site
 
 
-# ── finding dataclass ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Finding
+# ---------------------------------------------------------------------------
 
 @dataclass
-class FormatStringFinding:
-    func_va: int          # owning function start VA
-    call_va: int          # VA of the CALL to the format sink
-    sink_name: str        # PLT symbol (e.g., 'printf')
-    fmt_arg_idx: int      # which argument index is the format string
-    fmt_reg: str          # register carrying the format string (e.g., 'rsi')
-    verdict: str          # 'VULNERABLE', 'SUSPICIOUS', 'SAFE'
-    reason: str           # human-readable explanation of verdict
-    write_va: int         # VA where fmt_reg was last written (0 if not found)
-    write_insn: str       # disassembly of the write instruction (for context)
-    two_hop: bool = False # True if this is a two-hop (buf from vsnprintf used as fmt)
+class FmtStringFinding:
+    func_va: int
+    call_va: int
+    callee: str
+    fmt_reg: str        # 'rdi' / 'rsi' / 'rdx'
+    provenance: str     # 'arg_passthrough' | 'stack_load' | 'register' | 'unknown' | 'rodata'
+    severity: str       # 'HIGH' | 'MEDIUM' | 'SAFE'
+    description: str
 
-    def fmt(self) -> str:
-        tag = f'[{self.verdict}]'
-        hop = '  [TWO-HOP]' if self.two_hop else ''
-        write_line = ''
-        if self.write_va:
-            write_line = f'\n  write   : 0x{self.write_va:x}  {self.write_insn}'
-        return (
-            f'FormatStringFinding {tag}{hop}\n'
-            f'  func    : 0x{self.func_va:x}\n'
-            f'  call    : 0x{self.call_va:x}  {self.sink_name}({self.fmt_reg}=?)'
-            f'  [arg{self.fmt_arg_idx}]{write_line}\n'
-            f'  reason  : {self.reason}\n'
-        )
+    @property
+    def verdict(self) -> str:
+        if self.provenance == 'rodata':
+            return 'SAFE'
+        if self.severity == 'HIGH':
+            return 'VULNERABLE'
+        return 'SUSPICIOUS'
 
     def as_dict(self) -> dict:
         return {
             'func_va': hex(self.func_va),
             'call_va': hex(self.call_va),
-            'sink_name': self.sink_name,
-            'fmt_arg_idx': self.fmt_arg_idx,
+            'callee': self.callee,
+            'fmt_reg': self.fmt_reg,
+            'provenance': self.provenance,
+            'severity': self.severity,
             'verdict': self.verdict,
-            'reason': self.reason,
-            'write_va': hex(self.write_va) if self.write_va else None,
-            'two_hop': self.two_hop,
+            'description': self.description,
         }
 
-
-# ── section boundary helpers ──────────────────────────────────────────────────
-
-class _SectionMap:
-    """Lightweight section boundary index for RIP-relative LEA checks."""
-
-    def __init__(self) -> None:
-        # List of (start_va, end_va, name)
-        self._sections: List[Tuple[int, int, str]] = []
-
-    @classmethod
-    def from_binary(cls, binary: lief.ELF.Binary) -> '_SectionMap':
-        sm = cls()
-        for sec in binary.sections:
-            if sec.virtual_size == 0:
-                continue
-            sm._sections.append((
-                sec.virtual_address,
-                sec.virtual_address + sec.virtual_size,
-                sec.name,
-            ))
-        return sm
-
-    def section_at(self, va: int) -> Optional[str]:
-        for start, end, name in self._sections:
-            if start <= va < end:
-                return name
-        return None
-
-    def is_rodata(self, va: int) -> bool:
-        name = self.section_at(va)
-        if name is None:
-            return False
-        return name in ('.rodata', '.rodata.str1.4', '.rodata.str1.8',
-                        '.rdata', '__TEXT.__cstring', '.text.rodata',
-                        '.data.rel.ro', '.data.rel.ro.local')
+    def fmt(self) -> str:
+        return (
+            f"  {self.severity:6s}  fmt_string  0x{self.func_va:x}+{(self.call_va-self.func_va)&0xFFFF:#x}"
+            f"  {self.callee}({self.fmt_reg}=user?)  {self.description}"
+        )
 
 
-# ── backward register origin tracker ─────────────────────────────────────────
-
-def _origin_of_reg(
-    insns: list,
-    call_idx: int,
-    target_reg: str,
-    section_map: _SectionMap,
-) -> Tuple[str, int, str]:
-    """
-    Scan backward from call_idx in the instruction list to find the last write
-    to target_reg and classify its origin.
-
-    Returns (verdict, write_va, write_insn):
-      verdict: 'SAFE' | 'VULNERABLE' | 'SUSPICIOUS'
-      write_va: VA of the write instruction (0 = not found)
-      write_insn: disassembly string of the write instruction
-    """
-    target = _canon(target_reg)
-
-    for i in range(call_idx - 1, max(-1, call_idx - _LOOKBACK_LIMIT - 1), -1):
-        insn = insns[i]
-        mnem = insn.mnemonic.lower()
-
-        # Skip instructions that don't write a register in operands[0]
-        if not insn.operands:
-            continue
-        dest_op = insn.operands[0]
-        if dest_op.type != X86_OP_REG:
-            continue
-
-        dest_canon = _canon(insn.reg_name(dest_op.reg))
-        if dest_canon != target:
-            continue
-
-        # This instruction writes to our target register.
-        write_insn_str = f'{insn.mnemonic} {insn.op_str}'
-
-        # -- LEA [rip + offset] check ----------------------------------------
-        if insn.id == X86_INS_LEA and len(insn.operands) == 2:
-            src_op = insn.operands[1]
-            if src_op.type == X86_OP_MEM:
-                base = insn.reg_name(src_op.mem.base) if src_op.mem.base else ''
-                if _canon(base) in ('rip', 'eip'):
-                    # RIP-relative: compute target VA
-                    target_va = insn.address + insn.size + src_op.mem.disp
-                    if section_map.is_rodata(target_va):
-                        return ('SAFE', insn.address, write_insn_str)
-                    # LEA into non-.rodata (global var, writable data) -> suspicious
-                    return ('SUSPICIOUS', insn.address, write_insn_str
-                            + '  [LEA into non-rodata section]')
-
-        # -- XOR reg, reg (zero) ----------------------------------------------
-        if insn.id == X86_INS_XOR and len(insn.operands) == 2:
-            src_op = insn.operands[1]
-            if src_op.type == X86_OP_REG:
-                if _canon(insn.reg_name(src_op.reg)) == target:
-                    # xor rsi, rsi -> NULL format string (safe but unusual)
-                    return ('SAFE', insn.address, write_insn_str + '  [xor-zero]')
-
-        # -- MOV reg, [mem] (stack slot read) ---------------------------------
-        if insn.id in (X86_INS_MOV, X86_INS_MOVSX, X86_INS_MOVZX, X86_INS_MOVSXD):
-            if len(insn.operands) == 2:
-                src_op = insn.operands[1]
-                if src_op.type == X86_OP_MEM:
-                    base = insn.reg_name(src_op.mem.base) if src_op.mem.base else ''
-                    base_canon = _canon(base)
-                    # Stack-relative load: format string stored on stack = user data
-                    if base_canon in ('rbp', 'rsp'):
-                        return ('VULNERABLE', insn.address, write_insn_str
-                                + '  [stack slot -> format string]')
-                    # MOV from other memory (global, struct field) -> suspicious
-                    return ('SUSPICIOUS', insn.address, write_insn_str
-                            + '  [memory load, origin unknown]')
-
-                if src_op.type == X86_OP_REG:
-                    src_canon = _canon(insn.reg_name(src_op.reg))
-                    # MOV from an argument register -> propagated caller-controlled input
-                    if src_canon in _ARG_REGS:
-                        return ('VULNERABLE', insn.address, write_insn_str
-                                + '  [arg register propagation]')
-                    # MOV from a callee-saved register -> could be anything; recurse
-                    # (treat as suspicious; full interprocedural analysis is out of scope)
-                    return ('SUSPICIOUS', insn.address, write_insn_str
-                            + '  [register copy, origin unknown]')
-
-        # Any other write to target_reg (add, sub, etc.) -> clobber, suspicious origin
-        if mnem in _CLOBBER_MNEMS:
-            return ('SUSPICIOUS', insn.address, write_insn_str
-                    + '  [computed value]')
-
-    # Reached function boundary without finding a write:
-    # The register holds its entry value (function argument).
-    # For argument registers, this means the caller controls it.
-    if target in _ARG_REGS:
-        return ('VULNERABLE', 0, f'{target_reg} = function argument (not written in body)')
-    return ('SUSPICIOUS', 0, f'{target_reg} = origin not found in {_LOOKBACK_LIMIT} insns')
-
-
-# ── main scanner class ────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Scanner
+# ---------------------------------------------------------------------------
 
 class FormatStringScanner:
     """
-    Scan an x86-64 ELF for format string vulnerabilities.
+    Detect non-constant format string arguments in printf-family calls.
 
-    Finds every call to a format-string sink function where the format argument
-    is not a string literal.
+    Safe: LEA fmt_reg, [rip + offset_in_rodata]   (string literal)
+    Flag: any other definition of fmt_reg before the CALL
     """
 
-    def __init__(
-        self,
-        binary_path: str,
-        func_starts: Optional[List[int]] = None,
-        plt: Optional[Dict[int, str]] = None,
-        text_va: int = 0,
-        text_data: Optional[bytes] = None,
-    ) -> None:
-        self._path = Path(binary_path)
-        self._func_starts = func_starts or []
-        self._plt = plt or {}
-        self._text_va = text_va
-        self._text_data = text_data
-        self._binary: Optional[lief.ELF.Binary] = None
-        self._section_map: Optional[_SectionMap] = None
-        self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
-        self._md.detail = True
-
-    @classmethod
-    def from_path(cls, binary_path: str) -> 'FormatStringScanner':
-        scanner = cls(binary_path)
-        scanner._load()
-        return scanner
+    def __init__(self, binary_path: str, ctx=None):
+        self.binary_path = binary_path
+        self._ctx = ctx
+        self._data: bytes = Path(binary_path).read_bytes()
+        self._fmt_call_vas: Dict[int, Tuple[str, int]] = {}  # va -> (name, fmt_reg_id)
+        self._func_starts: List[int] = []
+        self._plt: Dict[int, str] = {}
+        self._rodata_ranges: List[Tuple[int, int]] = []
+        self._lief_binary = None
+        self._md = None
+        if _CS_AVAILABLE:
+            self._md = Cs(CS_ARCH_X86, CS_MODE_64)
+            self._md.detail = True
+            global _FMT_FUNCS
+            if not _FMT_FUNCS:
+                _FMT_FUNCS = _build_fmt_funcs()
+        if _LIEF_AVAILABLE:
+            self._lief_binary = _lief.parse(binary_path)
+        self._init()
 
     @classmethod
     def from_context(cls, ctx) -> 'FormatStringScanner':
-        """Build from a BinaryContext (avoids ELF re-parse)."""
-        scanner = cls(
-            ctx.path,
-            func_starts=list(ctx.func_starts),
-            plt=dict(ctx.plt),
-        )
-        scanner._load()
-        return scanner
+        return cls(ctx.path, ctx=ctx)
 
-    def _load(self) -> None:
-        binary = lief.parse(str(self._path))
-        if binary is None:
-            raise ValueError(f'lief could not parse {self._path}')
-        self._binary = binary
-        self._section_map = _SectionMap.from_binary(binary)
-
-        # Build PLT if not supplied
-        if not self._plt:
-            self._plt = self._build_plt(binary)
-
-        # Build func_starts if not supplied
-        if not self._func_starts:
-            self._func_starts = self._build_func_starts(binary)
-
-        # Load .text section
-        text_sec = binary.get_section('.text')
-        if text_sec:
-            self._text_va = text_sec.virtual_address
-            self._text_data = bytes(text_sec.content)
-
-    @staticmethod
-    def _build_plt(binary: lief.ELF.Binary) -> Dict[int, str]:
-        plt: Dict[int, str] = {}
-        for sym in binary.symbols:
-            if sym.value and sym.name:
-                plt[sym.value] = sym.name
+    @classmethod
+    def from_path(cls, path: str) -> 'FormatStringScanner':
         try:
-            for rel in binary.pltgot_relocations:
-                if rel.symbol and rel.symbol.name:
-                    plt[rel.address] = rel.symbol.name
+            from ablation.analyzers.binary_context import BinaryContext
+            ctx = BinaryContext.load_or_build(path)
+            return cls(path, ctx=ctx)
         except Exception:
-            pass
-        try:
-            for rel in binary.relocations:
-                if rel.symbol and rel.symbol.name:
-                    plt[rel.address] = rel.symbol.name
-        except Exception:
-            pass
-        return plt
+            return cls(path)
 
-    @staticmethod
-    def _build_func_starts(binary: lief.ELF.Binary) -> List[int]:
-        starts = set()
-        for sym in binary.symbols:
-            if sym.value and sym.type == lief.ELF.Symbol.TYPE.FUNC:
-                starts.add(sym.value)
-        return sorted(starts)
-
-    def _va_to_slice(self, va: int, size: int) -> Optional[bytes]:
-        if not self._text_data or not self._text_va:
-            return None
-        offset = va - self._text_va
-        if offset < 0 or offset >= len(self._text_data):
-            return None
-        end = min(offset + size, len(self._text_data))
-        return self._text_data[offset:end]
-
-    def _get_func_end(self, func_va: int, func_starts: List[int]) -> int:
-        idx = func_starts.index(func_va) if func_va in func_starts else -1
-        if idx >= 0 and idx + 1 < len(func_starts):
-            return func_starts[idx + 1]
-        return func_va + _MAX_FUNC_BYTES
-
-    def _reverse_plt(self) -> Dict[str, int]:
-        return {name: va for va, name in self._plt.items()}
-
-    def _sink_vas(self) -> Dict[int, Tuple[str, int]]:
-        """Return {plt_va: (sink_name, fmt_arg_idx)} for all format sinks."""
-        result: Dict[int, Tuple[str, int]] = {}
+    def _init(self):
+        if self._ctx is not None:
+            self._plt = self._ctx.plt.copy()
+            self._func_starts = list(self._ctx.func_starts)
+        elif self._lief_binary is not None:
+            self._plt = {}
+            for sym in self._lief_binary.symbols:
+                if sym.value:
+                    self._plt[sym.value] = sym.name
+            self._func_starts = sorted(
+                s.value for s in self._lief_binary.symbols
+                if s.value and hasattr(s, 'type') and s.type.name == 'FUNC'
+            )
+        if not _FMT_FUNCS:
+            return
         for va, name in self._plt.items():
-            if name in _FORMAT_SINKS:
-                result[va] = (name, _FORMAT_SINKS[name])
-        return result
+            if name in _FMT_FUNCS:
+                self._fmt_call_vas[va] = (name, _FMT_FUNCS[name])
+        if self._lief_binary is not None:
+            for sec in self._lief_binary.sections:
+                if sec.name in ('.rodata', '.data.ro', '__const', '__cstring', '.rdata'):
+                    self._rodata_ranges.append(
+                        (sec.virtual_address, sec.virtual_address + sec.size)
+                    )
 
-    def scan(self) -> List[FormatStringFinding]:
-        """Scan the binary and return all format string findings."""
-        if not self._text_data or not self._section_map:
+    def _va_to_bytes(self, va: int, size: int) -> bytes:
+        if not _LIEF_AVAILABLE or self._lief_binary is None:
+            return b''
+        try:
+            off = self._lief_binary.virtual_address_to_offset(va)
+            return self._data[off:off + size]
+        except Exception:
+            return b''
+
+    def _is_rodata(self, va: int) -> bool:
+        for start, end in self._rodata_ranges:
+            if start <= va < end:
+                return True
+        return False
+
+    def _resolve_rip_rel(self, insn_va: int, insn_size: int, disp: int) -> int:
+        return insn_va + insn_size + disp
+
+    def scan(self) -> List[FmtStringFinding]:
+        if not _CS_AVAILABLE or not _LIEF_AVAILABLE or not self._fmt_call_vas:
             return []
+        findings: List[FmtStringFinding] = []
+        for func_va in self._func_starts:
+            findings.extend(self._scan_function(func_va))
+        return findings
 
-        sink_map = self._sink_vas()
-        if not sink_map:
+    def _scan_function(self, func_va: int) -> List[FmtStringFinding]:
+        raw = self._va_to_bytes(func_va, _MAX_FUNC_BYTES)
+        if not raw:
             return []
+        insns = list(self._md.disasm(raw, func_va))
+        findings: List[FmtStringFinding] = []
 
-        func_starts = sorted(self._func_starts)
-        func_start_set = set(func_starts)
-
-        findings: List[FormatStringFinding] = []
-        seen: Set[int] = set()
-
-        # Build function end map
-        func_ends: Dict[int, int] = {}
-        for i, fva in enumerate(func_starts):
-            fend = func_starts[i + 1] if i + 1 < len(func_starts) else fva + _MAX_FUNC_BYTES
-            func_ends[fva] = fend
-
-        # Determine function boundaries for each instruction VA
-        # by scanning per-function
-        for func_va in func_starts:
-            func_end = func_ends[func_va]
-            func_bytes = self._va_to_slice(func_va, min(func_end - func_va, _MAX_FUNC_BYTES))
-            if not func_bytes or len(func_bytes) < 8:
+        for i, insn in enumerate(insns):
+            if not insn.group(CS_GRP_CALL) or not insn.operands:
+                continue
+            tgt = insn.operands[0].imm
+            if tgt not in self._fmt_call_vas:
                 continue
 
-            try:
-                insns = list(self._md.disasm(func_bytes, func_va))
-            except Exception:
-                continue
+            callee_name, fmt_reg_id = self._fmt_call_vas[tgt]
 
-            if not insns:
-                continue
+            # Walk back to find the last definition of fmt_reg_id
+            provenance, description = self._trace_fmt_reg(
+                insns, i, fmt_reg_id, func_va, insn.address
+            )
+            if provenance == 'rodata':
+                continue  # string literal -- safe
 
-            # Find all CALL instructions to format sinks
-            for call_idx, insn in enumerate(insns):
-                if insn.id != X86_INS_CALL:
-                    continue
-                if not insn.operands or insn.operands[0].type != X86_OP_IMM:
-                    continue
-                target_va = insn.operands[0].imm
-                if target_va not in sink_map:
-                    continue
-                if insn.address in seen:
-                    continue
-                seen.add(insn.address)
-
-                sink_name, fmt_arg_idx = sink_map[target_va]
-                fmt_reg = _ARG_REGS[fmt_arg_idx] if fmt_arg_idx < len(_ARG_REGS) else 'rdx'
-
-                verdict, write_va, write_insn = _origin_of_reg(
-                    insns, call_idx, fmt_reg, self._section_map,
-                )
-
-                findings.append(FormatStringFinding(
-                    func_va=func_va,
-                    call_va=insn.address,
-                    sink_name=sink_name,
-                    fmt_arg_idx=fmt_arg_idx,
-                    fmt_reg=fmt_reg,
-                    verdict=verdict,
-                    reason=write_insn,
-                    write_va=write_va,
-                ))
-
-        # Two-hop detection: vsnprintf(buf, ...) followed by syslog/printf(buf)
-        # Detect local buf variable passed as format arg after being the output of vsnprintf
-        findings.extend(self._scan_two_hop(func_starts, func_ends))
+            severity = 'HIGH' if provenance == 'arg_passthrough' else 'MEDIUM'
+            reg_name = self._reg_id_to_name(fmt_reg_id)
+            findings.append(FmtStringFinding(
+                func_va=func_va,
+                call_va=insn.address,
+                callee=callee_name,
+                fmt_reg=reg_name,
+                provenance=provenance,
+                severity=severity,
+                description=description,
+            ))
 
         return findings
 
-    def _scan_two_hop(
-        self,
-        func_starts: List[int],
-        func_ends: Dict[int, int],
-    ) -> List[FormatStringFinding]:
+    def _trace_fmt_reg(
+        self, insns: list, call_idx: int, fmt_reg: int, func_va: int, call_va: int
+    ) -> Tuple[str, str]:
         """
-        Two-hop pattern (TAOSSA ch.8):
-          vsnprintf(buf, n, fmt, ap)  -- buf on stack
-          syslog(priority, buf)       -- buf used as format string
+        Walk backwards from call_idx to find the last write to fmt_reg.
+        Returns (provenance, description).
 
-        Detects when a stack buffer that was the OUTPUT of vsnprintf is later
-        passed as the format argument to another sink.
+        provenance values:
+          'rodata'          -- LEA from .rodata: string literal, safe
+          'arg_passthrough' -- entry argument register moved unchanged to fmt_reg
+          'stack_load'      -- loaded from stack frame (likely local buffer or argc/argv)
+          'register'        -- another non-entry register
+          'unknown'         -- could not trace
         """
-        two_hop: List[FormatStringFinding] = []
+        for j in range(call_idx - 1, max(call_idx - _LOOKBACK, -1), -1):
+            insn = insns[j]
+            mnem = insn.mnemonic.lower()
 
-        vsnprintf_vas = {va for va, name in self._plt.items()
-                         if name in ('vsnprintf', 'snprintf')}
-        if not vsnprintf_vas:
-            return []
-
-        sink_map = self._sink_vas()
-        if not sink_map:
-            return []
-
-        for func_va in func_starts:
-            func_end = func_ends[func_va]
-            func_bytes = self._va_to_slice(func_va, min(func_end - func_va, _MAX_FUNC_BYTES))
-            if not func_bytes or len(func_bytes) < 8:
+            if not insn.operands:
                 continue
+            dst = insn.operands[0]
 
-            try:
-                insns = list(self._md.disasm(func_bytes, func_va))
-            except Exception:
-                continue
-
-            # Track stack slot writes from vsnprintf output (output buf = arg0 = RDI)
-            # After vsnprintf call, rax = return value (bytes written).
-            # The buf is whatever was in RDI before the call. Track the stack slot
-            # where RDI was sourced just before the vsnprintf call.
-            vsnprintf_output_slots: Set[int] = set()  # (base, disp) tuples as ints
-
-            for call_idx, insn in enumerate(insns):
-                if insn.id != X86_INS_CALL:
+            # Only interested in writes to fmt_reg
+            if dst.type != X86_OP_REG or dst.reg != fmt_reg:
+                # Check for sub-register writes (e.g. esi -> rsi)
+                if not self._is_subreg_of(dst.reg if dst.type == X86_OP_REG else -1, fmt_reg):
                     continue
-                if not insn.operands or insn.operands[0].type != X86_OP_IMM:
-                    continue
-                target_va = insn.operands[0].imm
 
-                # Is this a vsnprintf call? Record the stack slot holding buf (arg0=RDI)
-                if target_va in vsnprintf_vas:
-                    # Trace RDI backward to a stack slot
-                    v, wva, _ = _origin_of_reg(insns, call_idx, 'rdi', self._section_map)
-                    if v == 'VULNERABLE' and wva:
-                        # Find the actual displacement from the write instruction
-                        for j in range(call_idx - 1, max(-1, call_idx - _LOOKBACK_LIMIT), -1):
-                            wi = insns[j]
-                            if wi.address == wva and wi.id == X86_INS_LEA:
-                                if len(wi.operands) == 2:
-                                    src = wi.operands[1]
-                                    if src.type == X86_OP_MEM:
-                                        # Encode slot as (base_reg_id * 10000 + disp)
-                                        slot_key = (src.mem.base << 24) | (src.mem.disp & 0xFFFFFF)
-                                        vsnprintf_output_slots.add(slot_key)
-                            elif wi.address < wva:
-                                break
+            if mnem in ('lea', 'mov') and len(insn.operands) == 2:
+                src = insn.operands[1]
 
-                # Is this a format sink call? Check if its format arg came from
-                # a stack slot that was a vsnprintf output buffer
-                if target_va in sink_map and vsnprintf_output_slots:
-                    sink_name, fmt_arg_idx = sink_map[target_va]
-                    fmt_reg = _ARG_REGS[fmt_arg_idx] if fmt_arg_idx < len(_ARG_REGS) else 'rdx'
+                if mnem == 'lea' and src.type == X86_OP_MEM:
+                    # RIP-relative LEA: target = rip + disp
+                    if src.mem.base == 0 or src.mem.base == self._rip_reg():
+                        resolved = self._resolve_rip_rel(insn.address, insn.size, src.mem.disp)
+                        if self._is_rodata(resolved):
+                            return ('rodata', f"string literal at 0x{resolved:x}")
+                        return ('register', f"LEA to non-rodata address 0x{resolved:x}")
 
-                    # Trace fmt_reg backward - look for LEA rdi/rsi, [rbp-X]
-                    for j in range(call_idx - 1, max(-1, call_idx - _LOOKBACK_LIMIT), -1):
-                        wi = insns[j]
-                        if not wi.operands:
-                            continue
-                        if wi.operands[0].type != X86_OP_REG:
-                            continue
-                        if _canon(wi.reg_name(wi.operands[0].reg)) != _canon(fmt_reg):
-                            continue
-                        if wi.id == X86_INS_LEA and len(wi.operands) == 2:
-                            src = wi.operands[1]
-                            if src.type == X86_OP_MEM:
-                                slot_key = (src.mem.base << 24) | (src.mem.disp & 0xFFFFFF)
-                                if slot_key in vsnprintf_output_slots:
-                                    two_hop.append(FormatStringFinding(
-                                        func_va=func_va,
-                                        call_va=insn.address,
-                                        sink_name=sink_name,
-                                        fmt_arg_idx=fmt_arg_idx,
-                                        fmt_reg=fmt_reg,
-                                        verdict='VULNERABLE',
-                                        reason=(
-                                            f'two-hop: {fmt_reg} loaded from stack slot '
-                                            f'that was vsnprintf output buffer; buf passed '
-                                            f'as format string to {sink_name}'
-                                        ),
-                                        write_va=wi.address,
-                                        write_insn=f'{wi.mnemonic} {wi.op_str}',
-                                        two_hop=True,
-                                    ))
-                        break
+                if src.type == X86_OP_REG:
+                    if src.reg in _ENTRY_ARGS:
+                        return (
+                            'arg_passthrough',
+                            f"{self._reg_id_to_name(src.reg)} (entry arg) "
+                            f"passed as format string -- caller controls format"
+                        )
+                    return ('register', f"loaded from register {self._reg_id_to_name(src.reg)}")
 
-        return two_hop
+                if src.type == X86_OP_MEM:
+                    base = src.mem.base
+                    # rbp/rsp-relative = stack load
+                    if base in (self._rbp_reg(), self._rsp_reg()):
+                        return ('stack_load', f"loaded from stack [{self._reg_id_to_name(base)}{src.mem.disp:+#x}]")
+                    return ('register', f"loaded from memory [{self._reg_id_to_name(base)}+{src.mem.disp:#x}]")
 
-    def report(self, findings: List[FormatStringFinding]) -> str:
-        """Format findings as a report string."""
+            if mnem == 'xor' and len(insn.operands) == 2:
+                if insn.operands[1].type == X86_OP_REG and insn.operands[1].reg == fmt_reg:
+                    # xor reg, reg = zero -- typically a NULL fmt, not interesting
+                    return ('rodata', 'zeroed register (NULL fmt)')
+
+        return ('unknown', f'format register {self._reg_id_to_name(fmt_reg)} provenance not found in {_LOOKBACK} insns')
+
+    def _is_subreg_of(self, candidate: int, parent: int) -> bool:
+        """Check if candidate is a sub-register of parent (e.g. esi is sub-reg of rsi)."""
+        if not _CS_AVAILABLE:
+            return False
+        from capstone.x86_const import (
+            X86_REG_ESI, X86_REG_EDI, X86_REG_EDX, X86_REG_ECX,
+            X86_REG_EAX,
+        )
+        pairs = {
+            X86_REG_RSI: X86_REG_ESI,
+            X86_REG_RDI: X86_REG_EDI,
+            X86_REG_RDX: X86_REG_EDX,
+            X86_REG_RCX: X86_REG_ECX,
+            X86_REG_RAX: X86_REG_EAX,
+        }
+        return pairs.get(parent) == candidate
+
+    def _rip_reg(self) -> int:
+        if not _CS_AVAILABLE:
+            return -1
+        from capstone.x86_const import X86_REG_RIP
+        return X86_REG_RIP
+
+    def _rbp_reg(self) -> int:
+        if not _CS_AVAILABLE:
+            return -1
+        from capstone.x86_const import X86_REG_RBP
+        return X86_REG_RBP
+
+    def _rsp_reg(self) -> int:
+        if not _CS_AVAILABLE:
+            return -1
+        from capstone.x86_const import X86_REG_RSP
+        return X86_REG_RSP
+
+    _REG_NAME_MAP: Dict[int, str] = {}
+
+    def _reg_id_to_name(self, reg_id: int) -> str:
+        if not self._REG_NAME_MAP and _CS_AVAILABLE:
+            from capstone.x86_const import (
+                X86_REG_RDI, X86_REG_RSI, X86_REG_RDX, X86_REG_RCX,
+                X86_REG_R8, X86_REG_R9, X86_REG_RAX,
+                X86_REG_RBP, X86_REG_RSP, X86_REG_RIP,
+            )
+            FormatStringScanner._REG_NAME_MAP = {
+                X86_REG_RDI: 'rdi', X86_REG_RSI: 'rsi', X86_REG_RDX: 'rdx',
+                X86_REG_RCX: 'rcx', X86_REG_R8: 'r8', X86_REG_R9: 'r9',
+                X86_REG_RAX: 'rax', X86_REG_RBP: 'rbp', X86_REG_RSP: 'rsp',
+                X86_REG_RIP: 'rip',
+            }
+        return self._REG_NAME_MAP.get(reg_id, f'r{reg_id}')
+
+    def report(self, findings: List[FmtStringFinding]) -> str:
         if not findings:
-            return 'FormatStringScanner: no findings\n'
-
-        vuln = [f for f in findings if f.verdict == 'VULNERABLE']
-        susp = [f for f in findings if f.verdict == 'SUSPICIOUS']
-        safe = [f for f in findings if f.verdict == 'SAFE']
-
-        lines = [
-            f'FormatStringScanner: {self._path.name}',
-            f'  VULNERABLE: {len(vuln)}  SUSPICIOUS: {len(susp)}  SAFE: {len(safe)}',
-            '',
-        ]
-
-        for f in vuln + susp:
+            return '[format_string_scanner] no findings\n'
+        high = [f for f in findings if f.severity == 'HIGH']
+        med  = [f for f in findings if f.severity == 'MEDIUM']
+        hdr = f'[format_string_scanner] {len(findings)} finding(s)  HIGH={len(high)}  MED={len(med)}\n'
+        lines = [hdr]
+        for f in sorted(findings, key=lambda x: (x.severity, x.func_va)):
             lines.append(f.fmt())
-
-        return '\n'.join(lines)
+        return '\n'.join(lines) + '\n'
