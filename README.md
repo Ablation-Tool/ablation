@@ -12,6 +12,38 @@ Inside a Claude Code session, Claude builds the corpus, sweeps all 30 vulnerabil
 
 The pattern library improves with each engagement. Every confirmed vulnerability seeds a new semantic pattern that replays automatically on future binaries, regardless of vendor or architecture.
 
+## How it differs from IDA Pro, Ghidra, and Binary Ninja
+
+IDA Pro and Ghidra are disassemblers. They build a complete database of every instruction in the binary before you can search anything. On a 50 MB stripped network appliance image, that initialization takes one to four hours. Ablation makes one O(N) pass over the `.text` segment, builds a behavioral index, and is ready in 35 seconds.
+
+**Search by meaning, not text.** IDA searches for instruction mnemonics, string literals, and function names. None of those exist in a stripped binary. Ablation searches by behavioral meaning: the query *"memcpy called with a length from an untrusted packet field"* matches functions that do exactly that, regardless of instruction names, register choices, or compiler output. The BinFuse opcode normalization makes the same query work on x86-64 and ARM64 without modification.
+
+**Not a decompiler.** Ablation does not generate C pseudocode or an interactive disassembly view. It is the tool you run before opening a disassembler to identify which of 19,000 functions is worth an hour of manual work.
+
+**Not an MCP server, a plugin, or a protocol layer.** Ablation is a Python library and CLI that runs locally. The Claude Code integration uses the standard `!` command prefix: Claude calls the CLI, reads the output, and reasons about the results. There is no MCP server, no tool-calling protocol, no browser extension, and no network service involved.
+
+## Autonomous reverse engineering
+
+Drop `CLAUDE.md` from this repo into your project directory and open a Claude Code session. Then tell Claude to reverse engineer the firmware:
+
+```bash
+cp CLAUDE.md /your/project/CLAUDE.md
+```
+
+```
+"Reverse engineer this firmware and find vulnerabilities."
+```
+
+That is the entire instruction. Claude reads the command reference at session start, locates the binary, and drives the full workflow without further input: corpus build, pattern sweep, targeted searches, CFG and taint traces on top candidates, and result interpretation. No binary path. No command flags. No manual steps.
+
+The workflow Claude follows:
+
+```
+corpus -> sweep -> search -> cfg -> taint -> findings
+```
+
+See [Claude Code integration docs](docs/integrations/claude-code.md) for a step-by-step session walkthrough.
+
 ## Install
 
 ```bash
@@ -59,13 +91,30 @@ ablation findings --sarif findings.sarif
 
 - **Vectorized build**: one O(N) pass over call graph and RIP-relative xrefs; 35 seconds for a 19,000-function binary on CPU
 - **BERT semantic search**: query functions in plain English; finds vulnerability patterns across vendors without symbol names
+- **Cross-architecture**: BinFuse opcode normalization maps x86-64 and ARM64 to the same category space; queries work on both without modification
 - **30 sweep patterns**: buffer overflow, heap overflow, format string, integer overflow, UAF, double-free, race condition, DoS, info-leak, auth-bypass, crypto misuse, and more
 - **Signature matching**: 40 behavioral signatures auto-name stripped `fn_0x*` functions at 0.62 cosine threshold
 - **Self-improving pattern library**: confirmed findings seed future sweeps automatically
 - **SARIF 2.1.0 export**: results feed directly into GitHub Code Scanning
 - **CFG and taint analysis**: traces user-controlled data from network read functions to dangerous callees
+- **Cross-version diffing**: DTW homolog matching and Matrix Profile patch localization track functions across firmware releases
+- **Structural similarity**: weighted Jaccard composite over PLT call sets, opcode 4-grams, and immediate values scores function pairs without symbols
 - **Claude Code integration**: invoke the CLI with `!` inside a Claude Code session; Claude interprets output, suggests follow-up addresses, and traces taint paths
 - **Binary Ninja plugin**: renames matched functions on binary open
+
+## Analysis methods
+
+| Method | Where used |
+|---|---|
+| **BERT all-mpnet-base-v2** | Semantic function embeddings; cosine similarity for query ranking |
+| **BinFuse opcode normalization** | Maps x86-64/ARM64 instructions to 11 behavioral categories; enables cross-architecture queries |
+| **BinDeep memory patterns** | Reference pattern encoding for load/store/branch behavior |
+| **Markov opcode transitions** | Captures behavioral sequences across opcode categories for pattern matching |
+| **Jaccard similarity** | Scores structural similarity via PLT call sets and opcode 4-gram overlap |
+| **DTW (Dynamic Time Warping)** | Warp-invariant cross-version homolog matching; handles inserted/removed basic blocks |
+| **Matrix Profile (STUMPY)** | AB-join distance profile over opcode sequences; localizes exactly where code changed between firmware versions |
+| **Structural composite scoring** | Weighted combination of Jaccard, immediate value overlap, and call set intersection for stripped binary pairing |
+| **Timing oracle detection** | Statistical analysis of response time deltas to detect non-constant-time comparisons in crypto code |
 
 ## Results
 
@@ -91,16 +140,6 @@ gh api repos/<owner>/<repo>/code-scanning/sarifs \
     -f sarif=$(gzip -c results.sarif | base64 -w0) \
     -f tool_name=ablation
 ```
-
-## Autonomous reverse engineering
-
-Ablation runs autonomously inside a Claude Code session. Hand over a binary path and Claude executes the full workflow without further instruction.
-
-Claude builds the corpus, sweeps for vulnerable functions across all 30 patterns, queries specific behaviors by name, pulls CFG and taint traces for top candidates, and interprets every result. The researcher reviews findings. The tool does the triage.
-
-The `CLAUDE.md` in this repo contains the full command reference and standard workflow. Claude reads it at session start and operates Ablation as a first-class tool. No context-switching, no manual command sequencing, no intermediate steps handed back to the researcher.
-
-See [Claude Code integration docs](docs/integrations/claude-code.md) for the full session walkthrough.
 
 ## Documentation
 

@@ -30,7 +30,7 @@ every displacement field in one broadcast operation, and resolves every string c
 in an O(N) pass over the binary. No sequential disassembly.
 
 **2. BERT semantic search**
-Encodes every function as a behavioral fingerprint -- what it calls, what strings it touches,
+Encodes every function as a behavioral fingerprint: what it calls, what strings it references,
 what its call-graph neighbors look like. Researchers query in plain English:
 
 ```
@@ -42,9 +42,7 @@ what its call-graph neighbors look like. Researchers query in plain English:
 Results arrive in roughly 35 seconds across 19,000 functions. No symbols required.
 
 **3. Self-improving pattern library**
-Every confirmed vulnerability registers as a semantic pattern. On the next binary -- same
-vendor, different firmware version, different product line -- those patterns replay
-automatically. The tool improves with every finding.
+Every confirmed vulnerability registers as a semantic pattern. On the next binary, those patterns replay automatically, across vendors and firmware versions. The tool improves with every finding.
 
 ---
 
@@ -86,7 +84,7 @@ ablation/analyzers/
   llm_analyst/            LlmAnalyst -- ReAct agent loop for automated function naming
 ```
 
-**50+ analyzers. 10 target vendors. One install.**
+**50+ analyzers. One install.**
 
 ---
 
@@ -114,14 +112,14 @@ pip install ablation[llm]
 
 ## Who it is for
 
-**Vulnerability researchers** hunting in stripped enterprise firmware -- network appliances,
-embedded Linux, ICS/OT -- who spend more time waiting on IDA Pro than finding bugs.
+**Vulnerability researchers** hunting in stripped enterprise firmware (network appliances,
+embedded Linux, ICS/OT) who spend more time waiting on IDA Pro than finding bugs.
 
 **Security teams** that analyze vendor advisories via patch diff. Load both firmware versions,
 run VersionDelta, get a ranked list of changed functions in seconds.
 
-**Bug bounty researchers** targeting appliance firmware under CVE programs -- Fortinet, Cisco,
-Axis, MikroTik -- who triage dozens of binaries in a single engagement.
+**Bug bounty researchers** targeting appliance firmware under CVE programs (Fortinet, Cisco,
+Axis, MikroTik) who triage dozens of binaries in a single engagement.
 
 ---
 
@@ -137,4 +135,4 @@ one function worth an hour of manual work.
 
 Commercial license required for commercial use. Non-commercial research use permitted.
 Source at [github.com/Ablation-Tool/ablation](https://github.com/Ablation-Tool/ablation).
-Contact for licensing.
+See [LICENSE](LICENSE) for full terms.
