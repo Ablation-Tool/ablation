@@ -4,7 +4,7 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-Ablation is an autonomous LLM-driven reverse engineering framework. Tell Claude to reverse engineer a binary and it does: semantic search across every function, disassembly and decompilation on demand, data flow tracking from attacker-controlled input to dangerous functions, and vulnerability findings before you open a disassembler.
+Ablation is an autonomous LLM-driven reverse engineering framework. Tell Claude to reverse engineer a binary and it does: semantic search across every function, disassembly and decompilation on demand, data flow tracking from attacker-controlled input to dangerous functions, and confirmed vulnerability findings.
 
 Hand it any binary: enterprise firmware, Windows PE, macOS Mach-O, Go binaries, shared libraries. No symbols required. No source required. No manual setup. Claude drives the full pipeline using Ablation as its RE engine, sweeps 30 vulnerability patterns, pulls CFG and taint on every candidate, and returns confirmed findings with disassembly showing exactly why each function is vulnerable.
 
