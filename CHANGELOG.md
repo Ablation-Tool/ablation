@@ -2,6 +2,22 @@
 
 ---
 
+## v2.0.0
+
+- **KernelDriverAnalyzer** -- first Windows `.sys` kernel driver RE module. Covers IRP/IOCTL
+  dispatch extraction (capstone DriverEntry disassembly), CTL_CODE decoder with METHOD_NEITHER
+  flagging, 40+ kernel API risk classifications across 12 classes, 20+ callback registrations
+  tagged by edr_like/rootkit_risk/info, pool tag extraction from `41 B8` byte pattern, and a
+  dangerous-instruction scanner: CR0/CR4 combined sequences, MSR_LSTAR targeted access,
+  SSDT hook combined byte pattern, UTF-16LE `L"KeServiceDescriptorTable"` wide-string scan,
+  SMEP-disable CR4 sequence, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports.
+  Standalone `decode_ioctl_code()` function. WDM/KMDF/minifilter classification by import
+  profile. PDB path extraction (RSDS + NB10), Authenticode signature detection.
+  Grounded in Windows Internals Part 1 (Ch5 memory, Ch6 I/O), Windows Kernel Programming,
+  and Rootkits: Subverting the Windows Kernel.
+
+---
+
 ## v1.8.0
 
 - **NameRegistry** -- persistent VA-to-name overlay at `~/.ablation/function_names.json`,

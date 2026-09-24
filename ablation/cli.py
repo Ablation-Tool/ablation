@@ -13,6 +13,8 @@ Usage:
     ablation corpus   <binary>              build or rebuild the semantic function corpus
     ablation sweep    <binary>              run all registered patterns against a binary
     ablation findings                       list confirmed findings in ~/.ablation/findings.db
+    ablation driver   <binary.sys>          Windows kernel driver: IOCTL, callbacks, dangerous patterns
+    ablation news                           show recent updates
 
 claude.ai workflow (no Claude Code access):
     Run any command above, copy the output, paste into claude.ai.
@@ -291,6 +293,47 @@ def cmd_findings(args):
         print(f"  [{f.get('severity','?')}] {f.get('product','')}  {f.get('title','')}")
 
 
+def cmd_driver(args):
+    from ablation.analyzers.kernel_driver_analyzer import KernelDriverAnalyzer
+    import json as _json2
+
+    p = _require_binary(args.binary)
+    kda = KernelDriverAnalyzer.from_path(str(p))
+    report = kda.analyze()
+
+    if report.error:
+        print(f"error: {report.error}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        Path(args.json).write_text(_json2.dumps(report.summary(), indent=2))
+        print(f"JSON written to {args.json}")
+        return
+
+    print(report.fmt())
+
+
+_RECENT_UPDATES = """\
+v2.0.0 (2026-09-24)  Windows kernel driver RE
+  ablation driver <file.sys>
+  - IRP/IOCTL dispatch extraction (capstone DriverEntry disassembly)
+  - CTL_CODE decoder; METHOD_NEITHER (raw user pointer) flagged
+  - 40+ kernel API risk classifications across 12 classes
+  - 20+ callback registrations (edr_like / rootkit_risk / info)
+  - Pool tag extraction from MOV R8D byte pattern
+  - Dangerous patterns: CR0/CR4 sequences, MSR_LSTAR read/write,
+    L"KeServiceDescriptorTable" wide-string scan, RDMSR/WRMSR,
+    CLI/STI/HLT, SWAPGS, IRETQ, I/O ports
+  - WDM / KMDF / minifilter classification; PDB path; Authenticode
+
+v1.9.1 (2026-09-24)  see CHANGELOG.md for earlier entries
+"""
+
+
+def cmd_news(args):
+    print(_RECENT_UPDATES)
+
+
 def cmd_sigs(args):
     from ablation.analyzers.sig_library import SigLibrary
 
@@ -392,6 +435,16 @@ def main():
     p_sweep.add_argument('--sarif', metavar='FILE', default=None, help='write SARIF 2.1.0 to FILE')
     p_sweep.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_sweep.set_defaults(func=cmd_sweep)
+
+    # driver
+    p_driver = sub.add_parser('driver', help='Windows .sys kernel driver analysis (IOCTL, callbacks, dangerous patterns)')
+    p_driver.add_argument('binary')
+    p_driver.add_argument('--json', metavar='FILE', default=None, help='write JSON summary to FILE')
+    p_driver.set_defaults(func=cmd_driver)
+
+    # news
+    p_news = sub.add_parser('news', help='show recent updates')
+    p_news.set_defaults(func=cmd_news)
 
     # findings
     p_findings = sub.add_parser('findings', help='list confirmed findings')
