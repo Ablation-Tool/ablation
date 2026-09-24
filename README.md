@@ -37,6 +37,7 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **Cross-binary analysis** across every shared library in a firmware image simultaneously
 - **Self-improving pattern library**: confirmed vulnerability findings register as new patterns and replay on future binaries automatically
 - **Version diffing** with DTW and Matrix Profile; confirms whether a CVE was patched across firmware releases
+- **Windows kernel driver analysis**: IRP/IOCTL dispatch extraction, kernel API risk classification, rootkit callback detection, SSDT hook and SMEP-disable pattern scanning (`ablation driver`)
 
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
 
@@ -70,7 +71,7 @@ Ablation adds what Binary Ninja does not have:
 
 ## Real-World Results
 
-Ablation has been used to analyze production firmware from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio -- across x86-64, ARM64, ARM32, MIPS32, and PowerPC.
+Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio -- across x86-64, ARM64, ARM32, MIPS32, PowerPC, and Windows .sys.
 
 Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
 
@@ -99,12 +100,15 @@ pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ## Run
 
 ```bash
-ablation corpus firmware.so --product my-target --version 1.0 --sigs
-ablation sweep  firmware.so --json results.json
-ablation search firmware.so "TLV parser that advances pointer without bounds check"
-ablation cfg    firmware.so 0x17b660 --insns
-ablation taint  firmware.so
+ablation corpus  firmware.so --product my-target --version 1.0 --sigs
+ablation sweep   firmware.so --json results.json
+ablation search  firmware.so "TLV parser that advances pointer without bounds check"
+ablation cfg     firmware.so 0x17b660 --insns
+ablation taint   firmware.so
 ablation findings --sarif findings.sarif
+ablation driver  driver.sys
+ablation driver  driver.sys --json driver_report.json
+ablation news
 ```
 
 ---
