@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ablation"
 version = "1.8.0"
-description = "Semantic function matching for stripped firmware — no symbols, no source, no setup"
+description = "Semantic function matching for stripped firmware. No symbols. No source. No setup."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
