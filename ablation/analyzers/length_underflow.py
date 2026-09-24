@@ -15,11 +15,11 @@ Detects the C12-class bug pattern across any x86-64 binary:
 Without a prior cmp/test bounds check on %reg after the subtraction, values
 1..N-1 wrap around to 65523..65535 (for uint16) and get passed to the callee.
 
-This pattern was confirmed in libips.so.new (FortiOS 8.0.0) as C12:
-  0x21b3f6: cmp $0xf, %r12d     (checks BUFFER SPACE, not chunk_length)
-  0x21b51e: lea -0x10(%r9), %edx  (chunk_length - 16)
-  0x21b529: movzwl %dx, %edx     (uint16 truncation: 3-16 = 65523)
-  0x21b52c: call 0x17b660         (Diameter parser, rdx=65523 -> OOB read)
+Example of a confirmed instance in a protocol parser:
+  0x1000: cmp $0xf, %r12d        (checks BUFFER SPACE, not chunk_length)
+  0x1010: lea -0x10(%r9), %edx   (chunk_length - 16)
+  0x1018: movzwl %dx, %edx       (uint16 truncation: 3-16 = 65523)
+  0x101c: call proto_parse_field  (called with rdx=65523 -> OOB read)
 
 The pattern generalizes to DNS, GRE, PPTP, SCTP, Diameter -- any parser that
 strips a fixed header from a user-supplied length field.
