@@ -1,5 +1,44 @@
 # Ablation Release Notes
 
+## v2.0.0 (2026-09-24)
+
+### New: Windows Kernel Driver RE (`ablation driver`)
+
+First Windows `.sys` kernel driver support. New CLI command: `ablation driver <file.sys>`.
+
+**KernelDriverAnalyzer** (`ablation/analyzers/kernel_driver_analyzer.py`)
+
+Standalone `decode_ioctl_code(value)` -- decodes any CTL_CODE into DeviceType, Access, Function, Method; flags METHOD_NEITHER (raw user pointer, highest attack surface) explicitly.
+
+`KernelDriverAnalyzer.from_path(path).analyze()` returns a `KernelDriverReport` covering:
+
+- **Driver type detection** -- WDM, KMDF, or minifilter by import profile. PDB path (RSDS + NB10 debug formats). Authenticode signature presence.
+- **MajorFunction extraction** -- capstone disassembly of DriverEntry recovers all 28 IRP dispatch slot assignments from `DRIVER_OBJECT+0x70`.
+- **IOCTL extraction** -- scans executable sections for CTL_CODE immediates in CMP/MOV instructions. Reports device type, transfer method, user-defined vs system-reserved function range.
+- **Kernel API audit** -- 40+ APIs across 12 risk classes: `phys_mem`, `pool_alloc`, `dkom`, `apc_inject`, `privilege` (token stealing via PsInitialSystemProcess), `ssdt_hook`, `mem_copy`, `driver_load`, and more.
+- **Callback detection** -- 20+ callbacks tagged edr_like, rootkit_risk, or info. ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx (blocking) + KeRegisterBugCheckReasonCallback = rootkit signal.
+- **Pool tag extraction** -- byte scan for `41 B8` (MOV R8D) extracts 4-byte printable pool tags for ExAllocatePoolWithTag calls.
+- **Dangerous patterns** -- SSDT hook CR0 WP-disable combined sequence, SMEP-disable CR4 combined sequence, MSR_LSTAR targeted read (KASLR defeat) and write (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"` scan (x64 SSDT lookup via MmGetSystemRoutineAddress), RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports, VMware backdoor, deprecated pool allocators.
+
+```bash
+ablation driver malware.sys
+ablation driver malware.sys --json report.json
+ablation news
+```
+
+```python
+from ablation.analyzers.kernel_driver_analyzer import KernelDriverAnalyzer, decode_ioctl_code
+
+report = KernelDriverAnalyzer.from_path('driver.sys').analyze()
+print(report.fmt())
+
+ic = decode_ioctl_code(0x222003)
+print(ic.fmt())
+# 0x00222003  DevType=0x0022 [user-defined]  Func=0x800  METHOD_NEITHER *** NEITHER
+```
+
+---
+
 ## v1.8.0 (2026-09-21)
 
 ### New: Time Series Analysis Modules (5 modules)
