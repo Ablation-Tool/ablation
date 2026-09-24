@@ -1,22 +1,22 @@
 """
-mips_analyzer.py -- Static analysis for MIPS32/MIPS32r2 ELF binaries.
+mips_analyzer.py: Static analysis for MIPS32/MIPS32r2 ELF binaries.
 
 Provides:
   - MIPS32TaintTracker: source-to-sink taint tracking (recv/read -> dangerous sinks)
   - MIPS32FuncProfiler: quick function profiling (calls, strings, sink detection)
 
 Register model (MIPS32 O32 ABI):
-  $zero ($0)   -- always zero
-  $at   ($1)   -- assembler temp
-  $v0,$v1      -- return values; tainted after source calls
-  $a0-$a3      -- function args; seeded as ARG kind at function entry
-  $t0-$t9      -- temporaries; caller-saved; clobbered across calls
-  $s0-$s7      -- callee-saved; survive across calls
-  $k0,$k1      -- kernel reserved
-  $gp          -- global pointer
-  $sp          -- stack pointer
-  $fp ($s8)    -- frame pointer (callee-saved)
-  $ra          -- return address
+  $zero ($0)  : always zero
+  $at   ($1)  : assembler temp
+  $v0,$v1     : return values; tainted after source calls
+  $a0-$a3     : function args; seeded as ARG kind at function entry
+  $t0-$t9     : temporaries; caller-saved; clobbered across calls
+  $s0-$s7     : callee-saved; survive across calls
+  $k0,$k1     : kernel reserved
+  $gp         : global pointer
+  $sp         : stack pointer
+  $fp ($s8)   : frame pointer (callee-saved)
+  $ra         : return address
 
 Branch delay slots: the instruction immediately following a branch/jump
 executes before the branch takes effect. The tracker handles this by
@@ -146,10 +146,10 @@ _DEFAULT_SINKS: Dict[str, List[int]] = {
     "execvp":    [0],
     "execve":    [0],
     "popen":     [0],
-    "strcpy":    [1],   # strcpy(dst, src) -- src = $a1 is the dangerous arg
+    "strcpy":    [1],   # strcpy(dst, src): src = $a1 is the dangerous arg
     "strcat":    [1],
-    "sprintf":   [1],   # sprintf(buf, fmt) -- fmt = $a1
-    "memcpy":    [2],   # memcpy(dst, src, n) -- n = $a2
+    "sprintf":   [1],   # sprintf(buf, fmt): fmt = $a1
+    "memcpy":    [2],   # memcpy(dst, src, n): n = $a2
     "malloc":    [0],
     "calloc":    [0, 1],
     "realloc":   [1],
@@ -377,7 +377,7 @@ class MIPS32TaintTracker:
                     if ops and ops[0].type == MIPS_OP_IMM:
                         target_name = self._plt.get(ops[0].imm, "")
                     elif ops and ops[0].type == MIPS_OP_REG:
-                        # jalr $t9 -- PLT jump
+                        # jalr $t9: PLT jump
                         pass
 
                     if target_name in _SOURCES:
@@ -438,7 +438,7 @@ class MIPS32TaintTracker:
         def reg_name(op) -> str:
             return insn.reg_name(op.reg).lower() if op.type == MIPS_OP_REG else ""
 
-        # LUI -- loads upper immediate; not a taint source
+        # LUI: loads upper immediate; not a taint source
         if insn.id == MIPS_INS_LUI and len(ops) >= 1:
             set_taint(reg_name(ops[0]), False)
 
@@ -456,7 +456,7 @@ class MIPS32TaintTracker:
             else:
                 set_taint(dst, get_taint(s1) or get_taint(s2))
 
-        # ADDIU / ADDI -- reg + immediate; taint propagates from source reg
+        # ADDIU / ADDI: reg + immediate; taint propagates from source reg
         elif insn.id in (MIPS_INS_ADDIU, MIPS_INS_ADDI) and len(ops) >= 2:
             dst, src = reg_name(ops[0]), reg_name(ops[1])
             set_taint(dst, get_taint(src))
@@ -470,7 +470,7 @@ class MIPS32TaintTracker:
             dst, src = reg_name(ops[0]), reg_name(ops[1])
             set_taint(dst, get_taint(src))
 
-        # XOR reg, reg -- zeroing idiom
+        # XOR reg, reg: zeroing idiom
         elif insn.id == MIPS_INS_XOR and len(ops) == 3:
             dst, s1, s2 = reg_name(ops[0]), reg_name(ops[1]), reg_name(ops[2])
             if s1 == s2:
@@ -493,12 +493,12 @@ class MIPS32TaintTracker:
             dst, s1, s2 = reg_name(ops[0]), reg_name(ops[1]), reg_name(ops[2])
             set_taint(dst, get_taint(s1) or get_taint(s2))
 
-        # MFHI / MFLO: result from hi/lo multiply registers -- treat as unknown
+        # MFHI / MFLO: result from hi/lo multiply registers: treat as unknown
         elif insn.id in (MIPS_INS_MFHI, MIPS_INS_MFLO) and len(ops) >= 1:
             dst = reg_name(ops[0])
             set_taint(dst, False)  # conservative: can't easily track hi/lo
 
-        # Loads: LW/LH/LB -- taint from memory is unknown unless we track mem state
+        # Loads: LW/LH/LB: taint from memory is unknown unless we track mem state
         elif insn.id in (MIPS_INS_LW, MIPS_INS_LH, MIPS_INS_LB,
                          MIPS_INS_LHU, MIPS_INS_LBU) and len(ops) >= 2:
             dst = reg_name(ops[0])
@@ -510,7 +510,7 @@ class MIPS32TaintTracker:
                 if base and tainted.get(base):
                     set_taint(dst, True)  # dereferencing a tainted pointer
                 else:
-                    # Don't set to False here -- preserve existing state for other paths
+                    # Don't set to False here: preserve existing state for other paths
                     pass
 
         # Stores: no taint update needed (we track register state, not memory)

@@ -1,5 +1,5 @@
 """
-matrix_profile_diff.py -- Instruction-level patch diff via Matrix Profile.
+matrix_profile_diff.py: Instruction-level patch diff via Matrix Profile.
 
 Encodes two versions of the same function as opcode category sequences and
 computes the AB-join distance profile to locate exactly where code changed.
@@ -66,7 +66,7 @@ def _distance_profile_naive(T_A: np.ndarray, T_B: np.ndarray, m: int) -> np.ndar
     For each position i in T_A, find the minimum z-normalized Euclidean distance
     to any position j in T_B. Returns array of shape (len(T_A)-m+1,).
 
-    This is the AB-join matrix profile. O(n*m*L) -- fine for functions up to ~500 insns.
+    This is the AB-join matrix profile. O(n*m*L): fine for functions up to ~500 insns.
     """
     n_a = len(T_A) - m + 1
     n_b = len(T_B) - m + 1

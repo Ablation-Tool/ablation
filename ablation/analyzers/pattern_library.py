@@ -1,5 +1,5 @@
 """
-pattern_library.py -- Persistent registry of successful semantic search patterns.
+pattern_library.py: Persistent registry of successful semantic search patterns.
 
 Accumulates query strings that have confirmed RE findings, with hit rates per binary.
 Auto-replays all confirmed patterns on new binaries via sweep().

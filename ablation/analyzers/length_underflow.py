@@ -1,16 +1,16 @@
 """
-length_underflow.py -- Protocol parser integer underflow detector.
+length_underflow.py: Protocol parser integer underflow detector.
 
 Detects the C12-class bug pattern across any x86-64 binary:
 
-  movzwl/movzbl <mem>, %reg      -- narrow load of user-supplied length field
+  movzwl/movzbl <mem>, %reg     : narrow load of user-supplied length field
     ...
-  lea -N(%reg), %dest            -- subtract fixed header size (N in [4..256])
+  lea -N(%reg), %dest           : subtract fixed header size (N in [4..256])
    OR sub $N, %reg
     ...
-  movzwl %?x, %dest              -- truncate to uint16 (wraps if len < N)
+  movzwl %?x, %dest             : truncate to uint16 (wraps if len < N)
     ...
-  call <target>                  -- pass wrapped value as argument
+  call <target>                 : pass wrapped value as argument
 
 Without a prior cmp/test bounds check on %reg after the subtraction, values
 1..N-1 wrap around to 65523..65535 (for uint16) and get passed to the callee.
@@ -21,7 +21,7 @@ Example of a confirmed instance in a protocol parser:
   0x1018: movzwl %dx, %edx       (uint16 truncation: 3-16 = 65523)
   0x101c: call proto_parse_field  (called with rdx=65523 -> OOB read)
 
-The pattern generalizes to DNS, GRE, PPTP, SCTP, Diameter -- any parser that
+The pattern generalizes to DNS, GRE, PPTP, SCTP, Diameter: any parser that
 strips a fixed header from a user-supplied length field.
 
 Usage:
@@ -164,7 +164,7 @@ def _parse_sub_const(mnem: str, ops: str) -> Optional[Tuple[str, int]]:
             return None
         dest = m.group(1)
         base_reg = m.group(2).lower()
-        # Skip stack-relative addressing (rbp/rsp -- these are local variable accesses)
+        # Skip stack-relative addressing (rbp/rsp: these are local variable accesses)
         if base_reg in _STACK_BASE_REGS:
             return None
         # Check the sign: '[reg - N]' is subtraction, '[reg + N]' is addition
@@ -202,7 +202,7 @@ def _is_truncation(mnem: str, ops: str, target_family: str) -> bool:
     if mnem not in ('movzx', 'movzwl', 'movzbl'):
         return False
     # Source must be a register, not a memory operand
-    # e.g. 'movzx edx, byte ptr [rdx + 6]' is a mem load -- rdx is a pointer, not value
+    # e.g. 'movzx edx, byte ptr [rdx + 6]' is a mem load: rdx is a pointer, not value
     if '[' in ops:
         return False
     # Check if source register is in the target family

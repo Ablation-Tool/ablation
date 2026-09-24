@@ -1,5 +1,5 @@
 """
-entropy_mapper.py -- Sliding-window Shannon entropy mapper for firmware binaries.
+entropy_mapper.py: Sliding-window Shannon entropy mapper for firmware binaries.
 
 Maps a binary file as a byte stream using Shannon entropy:
     H = -sum(p_i * log2(p_i)) for i in 0..255

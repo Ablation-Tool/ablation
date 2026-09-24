@@ -1,5 +1,5 @@
 """
-name_registry.py -- Persistent discovered-function-name overlay for ablation.
+name_registry.py: Persistent discovered-function-name overlay for ablation.
 
 Supplements the stripped symbol table: every time an analyst confirms what a
 function does, the name is stored here and auto-loaded in future sessions.
@@ -8,9 +8,9 @@ Storage: ~/.ablation/function_names.json
 Key structure: { sha256_prefix: { va_hex: { "name": str, "source": str, "ts": str } } }
 
 Sources:
-  manual    -- analyst assigned the name explicitly
-  string    -- name derived from nearby string (auto-inferred)
-  confirmed -- finding-confirmed (tied to a disclosed vulnerability)
+  manual   : analyst assigned the name explicitly
+  string   : name derived from nearby string (auto-inferred)
+  confirmed: finding-confirmed (tied to a disclosed vulnerability)
 
 Usage:
     reg = NameRegistry()
@@ -108,7 +108,7 @@ class NameRegistry:
                 self._data = {}
 
 
-# Module-level singleton -- one registry, shared across all BinaryContext instances.
+# Module-level singleton: one registry, shared across all BinaryContext instances.
 _registry: Optional[NameRegistry] = None
 
 

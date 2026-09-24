@@ -1,5 +1,5 @@
 """
-arm32_reg_annotator.py -- AAPCS-aware forward register annotator for ARM32/Thumb.
+arm32_reg_annotator.py: AAPCS-aware forward register annotator for ARM32/Thumb.
 
 Tracks r0-r3 at call sites: immediate constants, string pointer loads via
 LDR [PC, #off] literal pool, and register copies. Produces the same
@@ -7,10 +7,10 @@ CallSite/AnnotationResult types as reg_annotator.py so FuncProfiler
 can use it transparently for ARM32 binaries.
 
 AAPCS register roles:
-  r0-r3   -- argument registers + r0 = return value (all caller-saved)
-  r4-r11  -- callee-saved (preserved across calls)
-  r12/ip  -- call-clobbered scratch
-  r13/sp, r14/lr, r15/pc -- special purpose
+  r0-r3  : argument registers + r0 = return value (all caller-saved)
+  r4-r11 : callee-saved (preserved across calls)
+  r12/ip : call-clobbered scratch
+  r13/sp, r14/lr, r15/pc: special purpose
 """
 
 from __future__ import annotations
@@ -40,11 +40,11 @@ class ARM32RegAnnotator:
 
     Tracks r0-r3 arg values at BL/BLX call sites within a single function.
     Handles:
-      MOV Rd, #imm          -- const
-      MOVW Rd, #imm16        -- const (Thumb MOVW)
-      LDR Rd, [PC, #off]    -- pool literal; if pool word is a string VA, string
-      MOV Rd, Rn             -- register copy
-      BL/BLX #target         -- call site recorded; r0-r3, r12 clobbered after
+      MOV Rd, #imm         : const
+      MOVW Rd, #imm16       : const (Thumb MOVW)
+      LDR Rd, [PC, #off]   : pool literal; if pool word is a string VA, string
+      MOV Rd, Rn            : register copy
+      BL/BLX #target        : call site recorded; r0-r3, r12 clobbered after
     Does not track branches or loops (linear pass only).
     """
 
@@ -202,7 +202,7 @@ class ARM32RegAnnotator:
                     reg_trace.append((insn.address, rd, v))
                     continue
 
-            # LDR Rd, [PC, #off] -- literal pool load
+            # LDR Rd, [PC, #off]: literal pool load
             if mn == 'ldr' and len(ops) >= 2:
                 if (ops[0].type == C_ARM.ARM_OP_REG and
                         ops[1].type == C_ARM.ARM_OP_MEM and
@@ -243,7 +243,7 @@ class ARM32RegAnnotator:
                         state[rd] = RegVal.unknown()
                     continue
 
-            # BL/BLX -- call site
+            # BL/BLX: call site
             if mn in ('bl', 'blx') and len(ops) >= 1 and ops[0].type == C_ARM.ARM_OP_IMM:
                 target = ops[0].imm
                 target_name = self._plt.get(target, f'0x{target:x}')

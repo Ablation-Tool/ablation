@@ -1,5 +1,5 @@
 """
-func_profiler.py -- Single-call complete function analysis block.
+func_profiler.py: Single-call complete function analysis block.
 
 Combines BinaryContext (strings/PLT), RegAnnotator (arg values), and sink
 detection into one compact report. Replaces the 4-call manual sequence:
@@ -96,7 +96,7 @@ class ProfiledCall:
             v = self.site.args.get(reg)
             if not v or v.kind == 'unknown':
                 continue
-            # Skip ret() values for non-sink calls -- they add noise without insight
+            # Skip ret() values for non-sink calls: they add noise without insight
             if v.kind == 'ret' and not self.is_sink:
                 continue
             parts.append(f"{reg}={v.display()}")
@@ -282,7 +282,7 @@ class FuncProfiler:
         seen: Set[int] = set()
         strings: List[Tuple[int, str]] = []
 
-        # From RegAnnotator traces -- extract string VAs
+        # From RegAnnotator traces: extract string VAs
         for call in result.calls:
             for rv in call.args.values():
                 self._collect_rv_strings(rv, seen, strings)

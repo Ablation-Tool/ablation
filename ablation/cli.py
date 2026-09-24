@@ -1,5 +1,5 @@
 """
-ablation.cli -- command-line interface.
+ablation.cli: command-line interface.
 
 Usage:
     ablation analyze  <binary>              binary summary: arch, PLT, exports, funcs
@@ -163,7 +163,7 @@ def cmd_overflow(args):
 
 
 def cmd_window(args):
-    """Annotated disassembly window around a VA -- suitable for pasting into claude.ai."""
+    """Annotated disassembly window around a VA: suitable for pasting into claude.ai."""
     from ablation.analyzers.window_analyzer import WindowAnalyzer
 
     p = str(_require_binary(args.binary))

@@ -1,5 +1,5 @@
 """
-heap_vuln_scanner.py -- Heap memory corruption detector for x86-64 ELF binaries.
+heap_vuln_scanner.py: Heap memory corruption detector for x86-64 ELF binaries.
 
 Detects four vulnerability classes grounded in TAOSSA Ch 5 & Ch 6:
 
@@ -128,10 +128,10 @@ class HeapVulnScanner:
     Heap memory corruption detector for x86-64 ELF / PE binaries.
 
     Implements four detection passes per function:
-      1. INT_OVERFLOW_BEFORE_ALLOC  -- IMUL/MUL/SHL -> size arg -> allocator
-      2. USE_AFTER_FREE             -- free(ptr) -> dereference of same reg
-      3. DOUBLE_FREE                -- free(ptr) -> free(ptr) without reassignment
-      4. OFF_BY_ONE_ALLOC           -- strlen result -> malloc -> strcpy/memcpy
+      1. INT_OVERFLOW_BEFORE_ALLOC : IMUL/MUL/SHL -> size arg -> allocator
+      2. USE_AFTER_FREE            : free(ptr) -> dereference of same reg
+      3. DOUBLE_FREE               : free(ptr) -> free(ptr) without reassignment
+      4. OFF_BY_ONE_ALLOC          : strlen result -> malloc -> strcpy/memcpy
     """
 
     def __init__(self, binary_path: str, ctx=None):
@@ -281,7 +281,7 @@ class HeapVulnScanner:
                     for j in range(i + 1, min(i + 1 + _LOOKAHEAD, len(insns))):
                         ji = insns[j]
                         if ji.mnemonic.lower() in ('cmp', 'test', 'jo', 'jno'):
-                            break  # bounds check present -- abort this candidate
+                            break  # bounds check present: abort this candidate
                         if ji.group(CS_GRP_CALL) and ji.operands:
                             tgt = ji.operands[0].imm
                             if tgt in self._alloc_vas:
@@ -489,7 +489,7 @@ class HeapVulnScanner:
                         site_va=strlen_result_va,
                         description=(
                             f"strlen result at 0x{strlen_result_va:x} fed to "
-                            f"{self._plt_name(tgt)} without +1 -- NUL terminator off-by-one"
+                            f"{self._plt_name(tgt)} without +1: NUL terminator off-by-one"
                         ),
                         severity='MEDIUM',
                         alloc_sym=self._plt_name(tgt),

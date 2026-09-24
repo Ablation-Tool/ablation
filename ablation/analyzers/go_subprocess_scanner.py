@@ -1,15 +1,15 @@
 """
-go_subprocess_scanner.py -- Go os/exec injection surface scanner for Ablation
+go_subprocess_scanner.py: Go os/exec injection surface scanner for Ablation
 
 Given a stripped Go binary + its pclntab function table, finds every call site
 that invokes os/exec.Command, os/exec.CommandContext, or exec.Cmd.Start/Run,
 resolves the static command-path argument using GoStringResolver, and classifies
 each site by path type:
 
-  relative  -- starts with "./" or "../" (exploitable if CWD is attacker-writable)
-  path      -- bare name, no slash (resolved via PATH; hijackable via PATH injection)
-  absolute  -- starts with "/" (not directly injectable via CWD/PATH)
-  dynamic   -- argument not resolvable statically (runtime-built string)
+  relative : starts with "./" or "../" (exploitable if CWD is attacker-writable)
+  path     : bare name, no slash (resolved via PATH; hijackable via PATH injection)
+  absolute : starts with "/" (not directly injectable via CWD/PATH)
+  dynamic  : argument not resolvable statically (runtime-built string)
 
 Usage:
     from modules.go_subprocess_scanner import GoSubprocessScanner

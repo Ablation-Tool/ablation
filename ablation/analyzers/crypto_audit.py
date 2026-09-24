@@ -2,7 +2,7 @@
 """
 Cryptographic Weakness Auditor
 
-Audit cryptographic posture on a target host -- JWTs, SAML assertions,
+Audit cryptographic posture on a target host: JWTs, SAML assertions,
 key material, TLS endpoints, and process environment secrets.
 
 Detects common weaknesses including:
@@ -4187,7 +4187,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
     """Detect password hash or credential disclosure in web application responses.
 
     Derived from Security Engineering 3rd ed. Chapter 5 (Cryptography) on hash
-    function weaknesses -- broken algorithms (MD5, SHA1) vs. proper KDFs -- and
+    function weaknesses: broken algorithms (MD5, SHA1) vs. proper KDFs: and
     Chapter 4 (Protocols) on credential exposure risks in authentication protocols.
     Tests common web endpoints for inadvertently exposed password hashes or
     base64-encoded credentials in API responses.
@@ -4260,7 +4260,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "title": "AUTH_HEADER_IN_RESPONSE",
                     "detail": (
                         f"Server returned an Authorization header in response to "
-                        f"GET {endpoint} at {host}:{port} -- credentials must "
+                        f"GET {endpoint} at {host}:{port}: credentials must "
                         "never appear in HTTP response headers; immediate rotation "
                         "required; Security Engineering §4.2: credentials in transit "
                         "are the primary target of passive eavesdropping attacks"
@@ -4279,7 +4279,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                         f"GET {endpoint} at {host}:{port} returned "
                         f"{len(md5_hits)} MD5-length hex string(s) "
                         f"(sample: {md5_hits[0][:8]}...) alongside password-related "
-                        "field names -- MD5 is cryptographically broken for password "
+                        "field names: MD5 is cryptographically broken for password "
                         "storage; precomputed rainbow tables crack unsalted MD5 "
                         "instantly; Security Engineering §5.6: password storage "
                         "requires a slow KDF (bcrypt/Argon2/scrypt), not a raw hash"
@@ -4298,7 +4298,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                         f"GET {endpoint} at {host}:{port} returned "
                         f"{len(sha1_hits)} SHA1-length hex string(s) "
                         f"(sample: {sha1_hits[0][:8]}...) alongside password-related "
-                        "field names -- SHA1 without per-credential salt is trivially "
+                        "field names: SHA1 without per-credential salt is trivially "
                         "crackable via precomputed tables; endpoint may be exposing "
                         "stored credential hashes to unauthenticated API consumers"
                     ),
@@ -4306,7 +4306,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "port": port,
                 })
 
-            # bcrypt hashes -- correct KDF but still a disclosure violation
+            # bcrypt hashes: correct KDF but still a disclosure violation
             bcrypt_hits = bcrypt_pat.findall(body)
             if bcrypt_hits:
                 findings.append({
@@ -4315,7 +4315,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "detail": (
                         f"GET {endpoint} at {host}:{port} returned "
                         f"{len(bcrypt_hits)} bcrypt hash string(s) "
-                        f"(sample: {bcrypt_hits[0][:20]}...) -- bcrypt is an "
+                        f"(sample: {bcrypt_hits[0][:20]}...): bcrypt is an "
                         "appropriate KDF, but returning stored password hashes to "
                         "API clients is a data minimization violation and enables "
                         "offline cracking attempts at the known work factor"
@@ -4324,7 +4324,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "port": port,
                 })
 
-            # NTLM hashes -- direct pass-the-hash vector
+            # NTLM hashes: direct pass-the-hash vector
             ntlm_hits = ntlm_pat.findall(body)
             if ntlm_hits:
                 findings.append({
@@ -4333,7 +4333,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "detail": (
                         f"GET {endpoint} at {host}:{port} returned "
                         f"{len(ntlm_hits)} NTLM-format hash pair(s) "
-                        f"(sample: {ntlm_hits[0][:16]}...) -- LM:NT pairs enable "
+                        f"(sample: {ntlm_hits[0][:16]}...): LM:NT pairs enable "
                         "pass-the-hash lateral movement on Windows networks without "
                         "cracking; Security Engineering §4.3: authentication tokens "
                         "exposed in transit or API responses become impersonation keys"
@@ -4342,7 +4342,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "port": port,
                 })
 
-            # Modern KDF strings (scrypt, argon2) -- disclosure, not algorithm failure
+            # Modern KDF strings (scrypt, argon2): disclosure, not algorithm failure
             modern_hits = modern_hash_pat.findall(body)
             if modern_hits:
                 findings.append({
@@ -4351,7 +4351,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "detail": (
                         f"GET {endpoint} at {host}:{port} returned "
                         f"{len(modern_hits)} modern KDF encoded string(s) "
-                        f"({modern_hits[0]}) -- scrypt/Argon2 are appropriate KDFs "
+                        f"({modern_hits[0]}): scrypt/Argon2 are appropriate KDFs "
                         "but exposing any stored credential representation to API "
                         "consumers violates data minimization; offline cracking at "
                         "disclosed parameters remains feasible with sufficient resources"
@@ -4369,7 +4369,7 @@ def probe_password_hash_disclosure(host: str, port: int = 80, timeout: float = 1
                     "title": "BASE64_CREDENTIAL_DISCLOSED",
                     "detail": (
                         f"GET {endpoint} at {host}:{port} returned a credential-labeled "
-                        f"base64 value (field: '{field_name}') -- base64 is a transport "
+                        f"base64 value (field: '{field_name}'): base64 is a transport "
                         "encoding, not encryption; decoding is trivial and immediate; "
                         "Security Engineering §5: confusion of encoding and encryption "
                         "is a recurring implementation failure; rotate credential "
@@ -4458,7 +4458,7 @@ def detect_protocol_downgrade_surface(
                 # Correct behaviour: inappropriate_fallback alert received
                 pass
             elif content_type == 0x16:
-                # Server sent a ServerHello -- downgrade accepted without objection
+                # Server sent a ServerHello: downgrade accepted without objection
                 findings.append({
                     "severity": "HIGH",
                     "title": "TLS_FALLBACK_SCSV_NOT_ENFORCED",
@@ -4466,7 +4466,7 @@ def detect_protocol_downgrade_surface(
                         f"Server at {host}:{port} accepted a TLS 1.1 ClientHello "
                         "containing TLS_FALLBACK_SCSV (0x5600, RFC 7507) without "
                         "returning an inappropriate_fallback alert (level=fatal, "
-                        "desc=86) -- protocol downgrade attacks (POODLE, DROWN) may "
+                        "desc=86): protocol downgrade attacks (POODLE, DROWN) may "
                         "be feasible; Security Engineering §4.6: chosen-protocol "
                         "attacks work when the server does not guard version "
                         "negotiation; enforce TLS 1.2+ minimum and enable SCSV"
@@ -4479,7 +4479,7 @@ def detect_protocol_downgrade_surface(
 
     # ── 2. HTTP -> HTTPS redirect check ───────────────────────────────────────
     # Security Engineering §4.2: eavesdropping on plaintext channels requires
-    # no cryptanalysis -- only a network tap. All HTTP requests should redirect
+    # no cryptanalysis: only a network tap. All HTTP requests should redirect
     # to HTTPS. Temporary (302) redirects are not cached and leave every initial
     # request exposed to SSLstrip.
     try:
@@ -4507,7 +4507,7 @@ def detect_protocol_downgrade_surface(
                 "title": "HTTP_NO_HTTPS_REDIRECT",
                 "detail": (
                     f"http://{host}:80/ returned HTTP 200 with no redirect to "
-                    "HTTPS -- plaintext HTTP traffic is readable to any on-path "
+                    "HTTPS: plaintext HTTP traffic is readable to any on-path "
                     "observer without any cryptanalysis; all HTTP listeners should "
                     "return a 301 redirect to the HTTPS origin; Security "
                     "Engineering §4.2: passive eavesdropping is the lowest-cost "
@@ -4522,7 +4522,7 @@ def detect_protocol_downgrade_surface(
                 "title": "HTTPS_REDIRECT_TEMPORARY",
                 "detail": (
                     f"http://{host}:80/ returned HTTP 302 (temporary redirect) to "
-                    "HTTPS -- temporary redirects are not cached by browsers, so "
+                    "HTTPS: temporary redirects are not cached by browsers, so "
                     "every initial HTTP request remains a plaintext exposure window "
                     "vulnerable to SSLstrip interception; replace 302 with 301 to "
                     "enable browser-side caching of the upgrade decision"
@@ -4536,7 +4536,7 @@ def detect_protocol_downgrade_surface(
                 "title": "HTTPS_REDIRECT_PERMANENT",
                 "detail": (
                     f"http://{host}:80/ correctly returns HTTP 301 (permanent "
-                    "redirect to HTTPS) -- browsers cache this directive, narrowing "
+                    "redirect to HTTPS): browsers cache this directive, narrowing "
                     "the SSLstrip exposure to only a first-ever visit from a new "
                     "browser profile; pair with HSTS preload to eliminate that window"
                 ),
@@ -4570,7 +4570,7 @@ def detect_protocol_downgrade_surface(
                 "title": "HSTS_NOT_SET",
                 "detail": (
                     f"https://{host}:{port}/ does not return a "
-                    "Strict-Transport-Security response header -- without HSTS, "
+                    "Strict-Transport-Security response header: without HSTS, "
                     "SSLstrip can intercept the initial HTTP request before a "
                     "redirect is seen; Security Engineering §4.6: protocol "
                     "downgrade attacks exploit gaps between the advertised and "
@@ -4589,7 +4589,7 @@ def detect_protocol_downgrade_surface(
                         "title": "HSTS_SHORT_MAX_AGE",
                         "detail": (
                             f"HSTS max-age={max_age} ({max_age // 86400} days) is "
-                            "below the recommended minimum of 31536000 (365 days) -- "
+                            "below the recommended minimum of 31536000 (365 days): "
                             "short HSTS lifetimes reduce the browser-cached protection "
                             "window; NIST SP 800-52 Rev2 recommends >= 1 year; "
                             "hstspreload.org requires >= 1 year for preload eligibility"
@@ -4603,7 +4603,7 @@ def detect_protocol_downgrade_surface(
                     "severity": "MEDIUM",
                     "title": "HSTS_NO_SUBDOMAINS",
                     "detail": (
-                        "HSTS header is missing the 'includeSubDomains' directive -- "
+                        "HSTS header is missing the 'includeSubDomains' directive: "
                         "subdomains remain reachable over plain HTTP and can be used "
                         "to set malicious cookies scoped to the parent domain or to "
                         "initiate protocol downgrade attacks that bypass the parent's "
@@ -4619,7 +4619,7 @@ def detect_protocol_downgrade_surface(
                     "severity": "LOW",
                     "title": "HSTS_NOT_PRELOADED",
                     "detail": (
-                        "HSTS header is missing the 'preload' directive -- the domain "
+                        "HSTS header is missing the 'preload' directive: the domain "
                         "is not eligible for submission to browser HSTS preload lists "
                         "(chromium.googlesource.com/chromium/src/+/main/net/http/"
                         "transport_security_state_static.json); preloading eliminates "
@@ -4652,7 +4652,7 @@ def detect_protocol_downgrade_surface(
                 "title": "NO_HTTP2_SUPPORT",
                 "detail": (
                     f"Server at {host}:{port} negotiated "
-                    f"'{negotiated_proto or 'http/1.1'}' via ALPN instead of h2 -- "
+                    f"'{negotiated_proto or 'http/1.1'}' via ALPN instead of h2: "
                     "HTTP/2 is not supported; HTTP/1.x-only servers lack HPACK "
                     "header compression (which prevents CRIME/BREACH-class attacks "
                     "on repeated header fields), multiplexing, and stream priority "

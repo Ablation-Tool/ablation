@@ -1,11 +1,11 @@
 """
-cross_binary_taint.py -- Cross-binary interprocedural taint tracker.
+cross_binary_taint.py: Cross-binary interprocedural taint tracker.
 
 Extends TaintTracker to follow tainted arguments across shared library
 boundaries using LibGraph's import/export resolution.
 
 Single-binary TaintTracker.run_interprocedural() stops when a tainted
-arg is passed into a PLT entry -- it knows the name, not the address.
+arg is passed into a PLT entry; it knows the name, not the address.
 This module resolves that name to the exporting binary via LibGraph and
 continues the BFS from the exported function's entry point.
 
@@ -134,6 +134,11 @@ class CrossBinaryTaintTracker:
         custom_sources  Extra sources (functions whose return value is tainted).
     """
 
+    _NET_SOURCES = frozenset({
+        "recv", "recvfrom", "recvmsg", "read", "pread",
+        "fread", "fgets", "getline",
+    })
+
     def __init__(
         self,
         entry_binary: str,
@@ -143,7 +148,7 @@ class CrossBinaryTaintTracker:
         custom_sources: Optional[Set[str]] = None,
     ):
         if not _HAS_TAINT:
-            raise ImportError("TaintTracker not available -- install capstone")
+            raise ImportError("TaintTracker not available; install capstone")
 
         self.entry_binary = entry_binary
         self.lib_graph = lib_graph
@@ -155,6 +160,52 @@ class CrossBinaryTaintTracker:
         self._trackers: Dict[str, TaintTracker] = {}
         # Cache of function name -> binary path, from LibGraph
         self._export_cache: Dict[str, Optional[str]] = {}
+
+    @classmethod
+    def from_lib_graph(
+        cls,
+        lib_graph: "LibGraph",
+        entry_binary: Optional[str] = None,
+        max_hops: int = 6,
+        custom_sinks: Optional[Dict[str, List[int]]] = None,
+        custom_sources: Optional[Set[str]] = None,
+    ) -> "CrossBinaryTaintTracker":
+        """
+        Create a tracker from a LibGraph.
+
+        If entry_binary is not given, auto-selects the binary with the most
+        network source imports (recv/recvfrom/read/fgets family), which is
+        most likely to have attacker-controlled data flowing in.
+        """
+        if not _HAS_LIBGRAPH:
+            raise ImportError("LibGraph not available")
+
+        if entry_binary is None:
+            best_name: Optional[str] = None
+            best_count = -1
+            for name in lib_graph.all_binaries():
+                imports = set(lib_graph.imports_of(name))
+                count = len(imports & cls._NET_SOURCES)
+                if count > best_count:
+                    best_count = count
+                    best_name = name
+
+            if best_name is None:
+                all_bins = lib_graph.all_binaries()
+                if not all_bins:
+                    raise ValueError("LibGraph contains no binaries")
+                best_name = all_bins[0]
+
+            ctx = lib_graph.context(best_name)
+            entry_binary = ctx.path if ctx is not None and ctx.path else best_name
+
+        return cls(
+            entry_binary=entry_binary,
+            lib_graph=lib_graph,
+            max_hops=max_hops,
+            custom_sinks=custom_sinks,
+            custom_sources=custom_sources,
+        )
 
     def _get_tracker(self, binary_path: str) -> Optional[TaintTracker]:
         if binary_path not in self._trackers:
@@ -368,11 +419,11 @@ class CrossBinaryTaintTracker:
             if not tainted_arg_indices:
                 continue
 
-            # Callee within same binary -- will be picked up by TaintTracker internally
+            # Callee within same binary; will be picked up by TaintTracker internally
             if callee_va in func_start_set:
                 continue
 
-            # Callee is a PLT entry -- try to resolve to exporting binary
+            # Callee is a PLT entry; try to resolve to exporting binary
             callee_name = tracker._plt.get(callee_va, "")
             if not callee_name:
                 continue

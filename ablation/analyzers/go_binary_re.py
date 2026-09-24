@@ -25,7 +25,7 @@ Newline-framed protocol (vmnetd ReadString pattern):
   r := bufio.NewReader(conn)
   line, _ := r.ReadString('\\n')   # reads until '\\n', includes delimiter
   line = strings.TrimRight(line, "\\n")   # strip trailing newline
-  -- wire: each field = []byte(value) + []byte{'\\n'}
+ : wire: each field = []byte(value) + []byte{'\\n'}
 
 Exact-N-byte reads:
   io.ReadFull(conn, buf)   # errors if < len(buf) bytes available
