@@ -75,23 +75,20 @@ Ablation adds what Binary Ninja does not have:
 
 ## Updates
 
-**v2.4.0 (2026-09-24): Format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint**
+Full release notes live in [updates/](updates/).
+
+**[v2.4.0](updates/v2.4.0.md) (2026-09-24): Format string scanner, MIPS32 taint, BYOVD detector, heap scanner, IOCTL surface, cross-binary taint**
 
 Six new analyzers ship in this release.
 
-`ablation fmtstr <binary>` scans any x86-64 ELF for format string vulnerabilities. It covers 28 printf/syslog/err family sinks and traces the format argument register backward from each call site. A `LEA [rip+offset]` into `.rodata` is safe. A `MOV` from a stack slot or argument register is vulnerable. It also detects the two-hop pattern from TAOSSA ch.8: a `vsnprintf` output buffer reused as the format argument to `syslog`.
+- **Format string scanner** (`ablation fmtstr`): 28 printf/syslog/err sinks; backward trace from each call site; SAFE (LEA .rodata), VULNERABLE (stack slot or arg), SUSPICIOUS (global/computed); two-hop vsnprintf detection
+- **MIPS32 taint tracker** (`ablation mips`): O32 ABI; load-delay slot aware; big-endian and little-endian; recv/read to system/execve/strcpy/sprintf; intraprocedural and interprocedural BFS
+- **BYOVD detector** (`ablation byovd`): scores Windows drivers 0-100 across 8 attack paths; signed driver + METHOD_NEITHER IOCTL + dangerous primitive = BYOVD_CONFIRMED
+- **Heap vulnerability scanner** (`ablation heap`): INT_OVERFLOW_BEFORE_ALLOC, USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC; grounded in TAOSSA ch.5 and ch.6
+- **IOCTL attack surface** (`ioctl_attack_surface.py`): per-IOCTL handler disassembly window; METHOD_NEITHER flagged; dangerous API annotations
+- **Cross-binary taint** (`cross_binary_taint.py`): follows taint across `.so` boundaries via LibGraph; seeds at export crossings; BFS through callee chains
 
-`MIPS32TaintTracker` (`taint_tracker_mips.py`) adds MIPS32 network-to-sink taint tracking. It handles the O32 ABI, load-delay slots, and both big-endian and little-endian binaries. Sources: recv/read/fgets family. Sinks: system/execve/strcpy/sprintf/memcpy. Intraprocedural and interprocedural BFS modes.
-
-`BYOVDDetector` (`byovd_detector.py`) detects Bring Your Own Vulnerable Driver patterns across 8 attack paths: `MmMapIoSpace` with user-controlled physical address, MDL-based kernel write, MSR_LSTAR manipulation, SSDT hook via CR0 WP-disable, token stealing via PsInitialSystemProcess, SMEP bypass via CR4, APC kernel injection, and ZwWriteVirtualMemory. Scores each driver 0-100 and returns a BYOVD_CONFIRMED verdict when a signed driver exposes a METHOD_NEITHER IOCTL with a dangerous primitive behind it.
-
-`HeapVulnScanner` (`heap_vuln_scanner.py`) scans x86-64 ELF for four heap vulnerability classes grounded in TAOSSA ch.5 and ch.6: integer overflow before allocation (IMUL/MUL/SHL result fed to malloc without a bounds check), use-after-free, double-free, and off-by-one allocation (strlen without +1 for the NUL terminator).
-
-`IoctlAttackSurface` (`ioctl_attack_surface.py`) generates a per-IOCTL handler attack surface report for Windows kernel drivers. It pairs each decoded CTL_CODE with the handler's disassembly window, flags METHOD_NEITHER codes, and annotates dangerous APIs reached within the handler.
-
-`CrossBinaryTaintTracker` (`cross_binary_taint.py`) follows taint across shared library boundaries using LibGraph. It seeds tainted return values at each export crossing and BFS-tracks them through callee chains, producing source-to-sink paths that span multiple `.so` files in a firmware image.
-
-**v2.0.0 (2026-09-24): Windows kernel driver RE**
+**[v2.0.0](updates/v2.0.0.md) (2026-09-24): Windows kernel driver RE**
 
 `ablation driver <file.sys>` analyzes Windows kernel drivers. Run it against any `.sys` file and it returns a full report in under a second.
 
