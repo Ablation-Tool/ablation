@@ -1,5 +1,83 @@
 # Ablation Release Notes
 
+## v2.4.0 (2026-09-24)
+
+### New: Heap Vulnerability Scanner (`ablation heap`)
+
+`HeapVulnScanner` (`heap_vuln_scanner.py`) detects four heap memory corruption classes for x86-64 ELF binaries. Grounded in TAOSSA Ch5 (Memory Corruption) and Ch6 (C Language Issues).
+
+**INT_OVERFLOW_BEFORE_ALLOC** (TAOSSA Ch6 L6-2, L6-3): IMUL/MUL/SHL result fed directly to malloc/calloc/ExAllocatePool without an intermediate overflow check or bounds test. Matches the `width * height` pattern from L6-2 and the `nresp * sizeof(char*)` pattern from the OpenSSH 3.1 challenge-response vulnerability (L6-3).
+
+**USE_AFTER_FREE**: `free(ptr)` followed by memory dereference of the same source register in the same function, without an intervening write. Detects both `[reg+off]` loads and re-use as a callee argument.
+
+**DOUBLE_FREE**: the same source register freed twice without reassignment between the two `free()` calls. Matches the strcpy-overflow-then-free pointer corruption pattern from TAOSSA Ch5.
+
+**OFF_BY_ONE_ALLOC**: `strlen(s)` result fed to `malloc` without adding 1 for the NUL terminator. Classic NUL-off-by-one heap overflow.
+
+```bash
+ablation heap  firmware.so
+ablation heap  firmware.so --json heap_findings.json
+```
+
+```python
+from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner
+scanner = HeapVulnScanner.from_context(ctx)
+findings = scanner.scan()
+print(scanner.report(findings))
+```
+
+### New: MIPS32 Taint Tracker (`ablation mips`)
+
+`MIPS32TaintTracker` (`taint_tracker_mips.py`) tracks network-to-sink taint in MIPS32 ELF firmware. Targets RouterOS, Broadcom CPE, and embedded routers.
+
+- **ABI**: O32 register model. `$a0-$a3` args, `$v0` return, `$t0-$t9` caller-saved, `$s0-$s7` callee-saved.
+- **Load-delay slot**: branch delay slot handled correctly; the instruction after a branch executes before the branch takes effect.
+- **Endian**: big-endian (default, RouterOS/Broadcom) and little-endian (`--le`) support.
+- **Sources**: recv, recvfrom, read, fgets, gets, fread.
+- **Sinks**: system, execve, execl, execvp, popen, strcpy, sprintf, memcpy, strcat, snprintf.
+- **Modes**: intraprocedural + interprocedural BFS up to depth 4.
+
+```bash
+ablation mips  router.elf
+ablation mips  router.elf --le --json mips_findings.json
+```
+
+### New: BYOVD Detector (`ablation byovd`)
+
+`BYOVDDetector` (`byovd_detector.py`) scores Windows kernel drivers for Bring Your Own Vulnerable Driver primitives. Wraps `KernelDriverAnalyzer` with BYOVD-specific scoring (0-100). Grounded in PRE Ch3 IOCTL walk-throughs and Rootkits: Subverting the Windows Kernel.
+
+Eight scored attack paths:
+- **PHYS_MEM_ARBITRARY_RW**: `MmMapIoSpace` with user-controlled physical address (MmMapIoSpace primitive from PRE ch3 Sample A)
+- **MDL_KERNEL_WRITE**: `IoAllocateMdl` + `MmProbeAndLockPages` + `MmMapLockedPagesSpecifyCache` kernel write chain
+- **MSR_LSTAR_MANIPULATION**: RDMSR/WRMSR targeting `0xC0000082` (syscall handler replacement)
+- **SSDT_HOOK**: CR0 WP-disable sequence + `KeServiceDescriptorTable` (UTF-16LE scan)
+- **TOKEN_STEALING_LPE**: `PsInitialSystemProcess` + DKOM token field manipulation
+- **SMEP_BYPASS**: CR4 combined sequence disabling SMEP
+- **APC_KERNEL_INJECTION**: `KeInitializeApc` + `KeInsertQueueApc`
+- **VIRTUAL_MEM_WRITE**: `ZwWriteVirtualMemory` called from IOCTL handler
+
+Verdict: BYOVD_CONFIRMED when a signed driver has a METHOD_NEITHER IOCTL and any attack path.
+
+```bash
+ablation byovd driver.sys
+ablation byovd driver.sys --json byovd_report.json
+```
+
+### New: Format String Scanner (`ablation fmtstr`)
+
+`FormatStringScanner` (`format_string_scanner.py`) finds printf-family calls where the format argument is not a string literal. Grounded in TAOSSA Ch8.
+
+- 28 sinks: printf/vprintf, fprintf/vfprintf, sprintf/vsprintf, snprintf/vsnprintf, asprintf, dprintf, syslog/vsyslog, err/errx/warn/warnx + glibc fortify variants (`__printf_chk`, `__fprintf_chk`, `__snprintf_chk`, etc.)
+- Backward trace from each call site classifies the format register: `LEA [rip+offset]` into `.rodata` = SAFE; `MOV` from stack slot = SUSPICIOUS; `MOV` from entry argument register = VULNERABLE
+- Verdicts: VULNERABLE / SUSPICIOUS / SAFE
+
+```bash
+ablation fmtstr firmware.so
+ablation fmtstr firmware.so --json fmt_findings.json
+```
+
+---
+
 ## v2.0.0 (2026-09-24)
 
 ### New: Windows Kernel Driver RE (`ablation driver`)

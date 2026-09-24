@@ -361,14 +361,19 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
-v2.4.0 (2026-09-24)  MIPS32 taint tracker
+v2.4.0 (2026-09-24)  MIPS32 taint tracker + cross-binary taint + IOCTL surface
   ablation mips <binary> [--le]
-  - O32 ABI; $a0-$a3 args, $v0 return; caller/callee-saved clobber model
+  ablation ioctl-surface <driver.sys>
+  - MIPS32TaintTracker: O32 ABI; $a0-$a3 args, $v0 return; caller/callee-saved model
   - Sources: recv/recvfrom/read/fgets/gets/fread
   - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/memcpy/strcat/snprintf
-  - Load-delay slot aware (branch executes after delay slot instruction)
+  - Load-delay slot aware (delay slot instruction executes before branch takes effect)
   - Big-endian (RouterOS, Broadcom) and little-endian (embedded CPE) support
   - Intraprocedural + interprocedural BFS up to depth 4
+  - CrossBinaryTaintTracker: follows taint across library boundaries via LibGraph;
+    seeds tainted return values at each export crossing
+  - IoctlAttackSurface: per-IOCTL handler attack surface report; pairs CTL_CODE
+    decode with METHOD_NEITHER flag and handler disassembly window
 
 v2.3.0 (2026-09-24)  Heap vulnerability scanner
   ablation heap <binary>
