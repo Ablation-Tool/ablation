@@ -63,25 +63,41 @@ def _cache_path(binary_sha256: str, binary_name: str) -> Path:
     return _CACHE_DIR / f"{slug}.json"
 
 
+def _detect_arch(binary) -> str:
+    try:
+        m = str(binary.header.machine_type)
+        if 'X86_64' in m or 'AMD64' in m:
+            return 'x86_64'
+        if 'AARCH64' in m or 'ARM64' in m:
+            return 'arm64'
+        if 'ARM' in m:
+            return 'arm32'
+    except Exception:
+        pass
+    return 'x86_64'
+
+
 class BinaryContext:
     """
     Pre-computed binary context. One object = complete working context for a
     stripped ELF binary: symbols, strings, function starts, call graph.
+    Supports x86_64, arm64, and arm32 ELF binaries.
     """
 
     def __init__(self):
         self.path: str = ""
         self.sha256: str = ""
         self.base_va: int = 0
-        self.plt: Dict[int, str] = {}           # va -> symbol_name
-        self.exports: Dict[str, int] = {}       # symbol_name -> va
-        self.strings: Dict[int, str] = {}       # va -> content
-        self.func_starts: List[int] = []        # sorted function entry VAs
-        self.call_edges: List[Tuple[int, int, str]] = []   # (from_va, to_va, label)
-        self._callers_idx: Dict[str, List[Tuple[int, str]]] = {}   # sym -> [(va, fn)]
-        self._callees_idx: Dict[int, List[Tuple[int, str]]] = {}   # va -> [(va, label)]
-        self._str_xref_idx: Dict[int, List[int]] = {}              # string_va -> [code_vas]
-        self._func_str_idx: Dict[int, List[int]] = {}              # func_va -> [string_vas]
+        self.arch: str = "x86_64"
+        self.plt: Dict[int, str] = {}
+        self.exports: Dict[str, int] = {}
+        self.strings: Dict[int, str] = {}
+        self.func_starts: List[int] = []
+        self.call_edges: List[Tuple[int, int, str]] = []
+        self._callers_idx: Dict[str, List[Tuple[int, str]]] = {}
+        self._callees_idx: Dict[int, List[Tuple[int, str]]] = {}
+        self._str_xref_idx: Dict[int, List[int]] = {}
+        self._func_str_idx: Dict[int, List[int]] = {}
 
     # ── public factory ────────────────────────────────────────────────────────
 
@@ -292,6 +308,7 @@ class BinaryContext:
         lines = [
             f"BinaryContext: {Path(self.path).name}",
             f"  sha256     : {self.sha256[:16]}...",
+            f"  arch       : {self.arch}",
             f"  base_va    : 0x{self.base_va:x}",
             f"  func_starts: {len(self.func_starts)}",
             f"  exports    : {len(self.exports)}",
@@ -335,6 +352,7 @@ class BinaryContext:
             return ctx
 
         ctx.base_va = binary.imagebase
+        ctx.arch = _detect_arch(binary)
 
         ctx._extract_plt(binary)
         ctx._extract_exports(binary)
@@ -347,7 +365,12 @@ class BinaryContext:
         return ctx
 
     def _extract_plt(self, binary) -> None:
-        # Build GOT -> symbol name from .rela.plt
+        # ARM32: .rel.plt (8-byte entries, no addend), stubs at PLT+20+(n*12)
+        if self.arch == 'arm32':
+            self._extract_plt_arm32(binary)
+            return
+
+        # Build GOT -> symbol name from .rela.plt (x86_64 / arm64)
         got_to_sym: Dict[int, str] = {}
         try:
             rela_plt = binary.get_section(".rela.plt")
@@ -413,6 +436,46 @@ class BinaryContext:
                     if got_va in got_to_sym:
                         self.plt[stub_va] = got_to_sym[got_va]
 
+    def _extract_plt_arm32(self, binary) -> None:
+        # Parse .rel.plt (8-byte entries: r_offset:u32 + r_info:u32)
+        sym_names: List[str] = []
+        try:
+            rel_plt = binary.get_section(".rel.plt")
+            if rel_plt:
+                rel_data = bytes(rel_plt.content)
+                for off in range(0, len(rel_data) - 7, 8):
+                    r_offset, r_info = struct.unpack_from("<II", rel_data, off)
+                    sym_idx = r_info >> 8
+                    try:
+                        sym = binary.dynamic_symbols[sym_idx]
+                        sym_names.append(sym.name if sym.name else "")
+                    except Exception:
+                        sym_names.append("")
+        except Exception:
+            pass
+
+        if sym_names:
+            plt_sec = binary.get_section(".plt")
+            if plt_sec:
+                plt_va = int(plt_sec.virtual_address)
+                # PLT[0] is 20-byte resolver; each stub is 12 bytes
+                for i, name in enumerate(sym_names):
+                    if name:
+                        stub_va = plt_va + 20 + i * 12
+                        self.plt[stub_va] = name
+                return
+
+        # Fallback: JUMP_SLOT relocations give GOT addresses; use as plt entries
+        try:
+            for rel in binary.relocations:
+                if not rel.has_symbol:
+                    continue
+                rtype = str(getattr(rel, 'type', ''))
+                if 'JUMP_SLOT' in rtype and rel.symbol.name:
+                    self.plt[rel.address] = rel.symbol.name
+        except Exception:
+            pass
+
     def _extract_exports(self, binary) -> None:
         try:
             for sym in binary.exported_functions:
@@ -474,20 +537,19 @@ class BinaryContext:
         self.func_starts = sorted(starts)
 
     def _build_call_graph(self, data: bytes, binary) -> None:
-        """Build call graph via NumPy vectorized CALL rel32 scan.
+        """Build call graph via vectorized opcode scan (arch-aware).
 
-        Scans .text for 0xe8 (CALL rel32) opcode bytes using np.where,
-        extracts 4-byte LE displacements with stride indexing, and computes
-        target_va = sec_va + pos + 5 + disp32 in one broadcast operation.
-
-        Owning-function assignment uses a single np.searchsorted over all
-        call-site VAs rather than per-site binary search.
-
-        Filters targets to plt | func_starts to eliminate false positives
-        from 0xe8 bytes that appear inside other instruction operands.
-
-        Falls back to sequential capstone disassembly if NumPy is unavailable.
+        x86_64: scan .text for 0xe8 (CALL rel32); target = site+5+disp32.
+        arm32:  scan .text for BL words (byte[3]==0xEB); target = site+8+imm24*4.
+        Falls back to sequential capstone if NumPy is unavailable.
         """
+        if self.arch == 'arm32':
+            if _NUMPY_OK:
+                self._build_call_graph_arm32(data, binary)
+            else:
+                self._build_call_graph_sequential(data, binary)
+            return
+
         if not _NUMPY_OK:
             self._build_call_graph_sequential(data, binary)
             return
@@ -558,6 +620,78 @@ class BinaryContext:
 
         self.call_edges = edges
 
+    def _build_call_graph_arm32(self, data: bytes, binary) -> None:
+        """ARM32 call graph via numpy BL scan.
+
+        BL (condition=AL) encoding: byte[3] of 4-byte LE word == 0xEB.
+        Target: insn_va + 8 + sign_extend(word[23:0], 24) * 4
+        (ARM pipeline: PC = insn_addr + 8 during execution.)
+        """
+        text_sec = binary.get_section(".text")
+        if not text_sec:
+            return
+        sec_data = bytes(text_sec.content)
+        sec_va = int(text_sec.virtual_address)
+        N = len(sec_data)
+        if N < 4:
+            return
+
+        buf = np.frombuffer(sec_data, dtype=np.uint8)
+        word_count = N // 4
+        # MSByte of each 4-byte-aligned word (byte index 3, 7, 11, ...)
+        msb = buf[3: word_count * 4: 4]
+        # BL (cond=AL) = 0xEB; BLX label = 0xFA
+        bl_word_idx = np.where((msb == 0xEB) | (msb == 0xFA))[0]
+        if len(bl_word_idx) == 0:
+            self.call_edges = []
+            return
+
+        byte_off = bl_word_idx * 4
+        # Reconstruct 32-bit LE words
+        b0 = buf[byte_off    ].astype(np.uint32)
+        b1 = buf[byte_off + 1].astype(np.uint32)
+        b2 = buf[byte_off + 2].astype(np.uint32)
+        words = b0 | (b1 << 8) | (b2 << 16) | (msb[bl_word_idx].astype(np.uint32) << 24)
+
+        imm24 = words & np.uint32(0xFFFFFF)
+        # Sign-extend 24-bit to 32-bit signed
+        sign_bit = np.uint32(0x800000)
+        fill = np.uint32(0xFF000000)
+        imm_i32 = np.where(imm24 & sign_bit, (imm24 | fill).view(np.int32), imm24.astype(np.int32))
+
+        insn_vas = np.int64(sec_va) + byte_off.astype(np.int64)
+        target_vas = insn_vas + np.int64(8) + imm_i32.astype(np.int64) * 4
+
+        plt_arr  = np.array(sorted(self.plt.keys()),   dtype=np.int64) if self.plt         else np.empty(0, np.int64)
+        func_arr = np.array(self.func_starts,           dtype=np.int64) if self.func_starts else np.empty(0, np.int64)
+
+        valid = np.zeros(len(target_vas), dtype=bool)
+        if len(plt_arr):
+            hi = np.searchsorted(plt_arr, target_vas)
+            hi = np.minimum(hi, len(plt_arr) - 1)
+            valid |= plt_arr[hi] == target_vas
+        if len(func_arr):
+            hi = np.searchsorted(func_arr, target_vas)
+            hi = np.minimum(hi, len(func_arr) - 1)
+            valid |= func_arr[hi] == target_vas
+
+        insn_vas   = insn_vas[valid]
+        target_vas = target_vas[valid]
+
+        if len(func_arr) and len(insn_vas):
+            owner_idx = np.searchsorted(func_arr, insn_vas, side='right') - 1
+            owner_idx = np.maximum(owner_idx, 0)
+            owner_vas = func_arr[owner_idx]
+        else:
+            owner_vas = insn_vas
+
+        va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
+        edges: List[Tuple[int, int, str]] = []
+        for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
+            label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
+            edges.append((int(owner_va), int(target_va), label))
+        self.call_edges = edges
+
     def _build_call_graph_sequential(self, data: bytes, binary) -> None:
         """Sequential capstone fallback for _build_call_graph (NumPy unavailable)."""
         import capstone
@@ -569,18 +703,22 @@ class BinaryContext:
         sec_data = bytes(text_sec.content)
         sec_va   = text_sec.virtual_address
 
-        cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        if self.arch == 'arm32':
+            cs = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
+            call_mnems = {'bl', 'blx'}
+        else:
+            cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+            call_mnems = {'call'}
         cs.detail = False
 
-        func_starts_set = set(self.func_starts)
         edges: List[Tuple[int, int, str]] = []
         va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
 
         for insn in cs.disasm(sec_data, sec_va):
-            if insn.mnemonic != "call":
+            if insn.mnemonic.lower().split('.')[0] not in call_mnems:
                 continue
             try:
-                target = int(insn.op_str.strip(), 16)
+                target = int(insn.op_str.strip().lstrip('#'), 16)
             except ValueError:
                 continue
             label = self.plt.get(target, "") or va_to_export.get(target, "")
@@ -590,15 +728,14 @@ class BinaryContext:
         self.call_edges = edges
 
     def _build_string_xref_index(self, data: bytes, binary) -> None:
-        """Build RIP-relative xref index using numpy vectorized displacement scan.
+        """Build string xref index.
 
-        For every byte position p in .text:
-          target_va = text_va + p + 4 + sign_extend_32(data[p:p+4])
-        If target_va is a known string VA, record (p -> target_va) in both indices.
-
-        One-pass O(|text|) regardless of number of strings. ~1-2s for 18MB binaries.
+        x86_64/arm64: vectorized RIP/PC-relative displacement scan.
+        arm32: skipped (uses pool loads, not RIP-relative; xref is empty for now).
         """
         if not _NUMPY_OK:
+            return
+        if self.arch == 'arm32':
             return
 
         text_sec = binary.get_section(".text")
@@ -687,6 +824,7 @@ class BinaryContext:
             "path": self.path,
             "sha256": self.sha256,
             "base_va": self.base_va,
+            "arch": self.arch,
             "plt": {str(va): name for va, name in self.plt.items()},
             "exports": {name: va for name, va in self.exports.items()},
             "strings": {str(va): s for va, s in self.strings.items()},
@@ -704,6 +842,7 @@ class BinaryContext:
         ctx.path = orig_path or payload.get("path", "")
         ctx.sha256 = payload["sha256"]
         ctx.base_va = int(payload.get("base_va", 0))
+        ctx.arch = payload.get("arch", "x86_64")
         ctx.plt = {int(k): v for k, v in payload.get("plt", {}).items()}
         ctx.exports = {k: int(v) for k, v in payload.get("exports", {}).items()}
         ctx.strings = {int(k): v for k, v in payload.get("strings", {}).items()}
