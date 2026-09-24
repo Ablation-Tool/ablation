@@ -6,7 +6,7 @@
 
 **Hand it any binary. It reverse engineers it.**
 
-Ablation is a reverse engineering platform. It does everything Ghidra does: disassembly, decompilation, call graph, cross-references, string extraction, function identification, import/export analysis, scripting, and binary diffing. Then it goes further.
+Ablation is an autonomous software reverse engineering framework. It does everything Ghidra, IDA Pro, and Binary Ninja do, without the tedious GUI work, without the license fees, and without relying on any legacy RE tool. Hand it a binary and it reverse engineers it.
 
 Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 
