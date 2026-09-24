@@ -46,6 +46,18 @@ Ablation adds what Binary Ninja does not have:
 
 ---
 
+## Claude Code Integration
+
+Ablation is optimized for use with Claude Code. Copy `CLAUDE.md` from this repository into your project, point Claude at a binary, and tell it to find vulnerabilities. Claude drives the entire workflow autonomously: builds the corpus, sweeps all vulnerability patterns, pulls disassembly and data flow analysis on every candidate, and returns findings with the exact functions and reasons they are vulnerable.
+
+No binary path needed. No command flags. No manual steps. Just tell it what to do.
+
+```
+Reverse engineer this firmware and find vulnerabilities.
+```
+
+---
+
 ## Install
 
 ```bash
