@@ -8,14 +8,14 @@ Handles the full chain for FortiGate/FortiWiFi physical appliance firmware:
   4. Extraction of detected partitions to disk
 
 Generalises across ARM (FortiWiFi IPQ4019) and x86-64 (FortiGate hardware) targets.
-All key recovery is delegated to XorSolver -- no reimplementation.
+All key recovery is delegated to XorSolver: no reimplementation.
 
 Cipher characteristics (confirmed across FortiWiFi 60E v5.0.9 through v7.2.4.F,
 supported FortiGate hardware, and all intermediate versions):
   - Outer: gzip wrapper (first member only; trailing members are noise/padding)
   - Inner: 64-byte repeating pure XOR applied to a NAND flash partition image
   - NAND plaintext: 0xFF-dominant (erased cells), ~80-86% null bytes
-  - IC at shift=64 is 192x-244x above random baseline -- unambiguous key length signal
+  - IC at shift=64 is 192x-244x above random baseline: unambiguous key length signal
   - Key is device-family-specific, not version-specific (same key across versions)
 """
 
@@ -32,7 +32,7 @@ from ablation.analyzers.xor_solver import XorSolver, XorSolverResult
 
 
 # ---------------------------------------------------------------------------
-# Partition magic table -- 3+ bytes only to suppress 2-byte false positives
+# Partition magic table: 3+ bytes only to suppress 2-byte false positives
 # ---------------------------------------------------------------------------
 PARTITION_MAGICS: Dict[bytes, str] = {
     b'\x1f\x8b\x08':         "gzip",
@@ -153,11 +153,11 @@ class FortiOSHardwareExtractor:
         if flg & 0x04:  # FEXTRA
             xlen = struct.unpack_from('<H', raw, offset)[0]
             offset += 2 + xlen
-        if flg & 0x08:  # FNAME -- null-terminated
+        if flg & 0x08:  # FNAME: null-terminated
             while raw[offset] != 0:
                 offset += 1
             offset += 1
-        if flg & 0x10:  # FCOMMENT -- null-terminated
+        if flg & 0x10:  # FCOMMENT: null-terminated
             while raw[offset] != 0:
                 offset += 1
             offset += 1
@@ -168,11 +168,11 @@ class FortiOSHardwareExtractor:
         try:
             return d.decompress(raw[offset:])
         except zlib.error:
-            # Partial decompression is fine -- trailing non-deflate bytes cause this
+            # Partial decompression is fine: trailing non-deflate bytes cause this
             return d.flush()
 
     # ------------------------------------------------------------------
-    # Step 2: XOR key recovery -- wraps XorSolver with NAND assumption
+    # Step 2: XOR key recovery: wraps XorSolver with NAND assumption
     # ------------------------------------------------------------------
 
     def recover_xor_key(
@@ -206,7 +206,7 @@ class FortiOSHardwareExtractor:
                 sample_size=65536,
             )
             if key_len is None:
-                raise ValueError("IC key-length detection failed -- no significant IC spike found")
+                raise ValueError("IC key-length detection failed: no significant IC spike found")
 
             result = solver.recover_by_frequency(
                 key_length=key_len,

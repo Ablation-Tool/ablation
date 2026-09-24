@@ -1,5 +1,5 @@
 """
-sax_index.py -- SAX-based fast function corpus index.
+sax_index.py: SAX-based fast function corpus index.
 
 SAX (Symbolic Aggregate approXimation) encodes an opcode category sequence as
 a short symbolic word. Similar sequences produce the same or nearby words,
@@ -34,7 +34,7 @@ SAX parameters:
   window:       PAA window size (default = seq_len / word_size, auto)
 
 Implementation: histogram-based PAA (categorical sequence adaptation of
-standard SAX -- uses category frequency per segment rather than mean value).
+standard SAX: uses category frequency per segment rather than mean value).
 """
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 """
-lib_graph.py -- Cross-binary import/export matrix for a firmware library set.
+lib_graph.py: Cross-binary import/export matrix for a firmware library set.
 
 Loads BinaryContext for every ELF in a directory (cache hit = ~110ms per binary),
 builds a unified index of exports, callers, and import relationships across all
@@ -85,13 +85,13 @@ class LibGraph:
     def __init__(self):
         # binary_name -> BinaryContext
         self._contexts: Dict[str, BinaryContext] = {}
-        # symbol_name -> [(binary_name, va)] -- where the symbol is DEFINED (exported)
+        # symbol_name -> [(binary_name, va)]: where the symbol is DEFINED (exported)
         self._defined: Dict[str, List[Tuple[str, int]]] = {}
-        # symbol_name -> [LibCaller] -- all call sites across all binaries
+        # symbol_name -> [LibCaller]: all call sites across all binaries
         self._callers: Dict[str, List[LibCaller]] = {}
-        # binary_name -> [symbol_name] -- what each binary imports via PLT
+        # binary_name -> [symbol_name]: what each binary imports via PLT
         self._imports: Dict[str, List[str]] = {}
-        # binary_name -> [symbol_name] -- what each binary exports
+        # binary_name -> [symbol_name]: what each binary exports
         self._exports: Dict[str, List[str]] = {}
 
     # ── factory ───────────────────────────────────────────────────────────────

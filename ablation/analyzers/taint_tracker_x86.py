@@ -1,5 +1,5 @@
 """
-taint_tracker_x86.py -- Static intraprocedural x86-64 taint analysis.
+taint_tracker_x86.py: Static intraprocedural x86-64 taint analysis.
 
 Finds data-flow paths from network receive taint sources to dangerous sinks.
 Implements the libdft taint policy (Andriesse, "Practical Binary Analysis", ch.11)
@@ -99,7 +99,7 @@ def _canon(name: str) -> Optional[str]:
 # Taint-forwarding functions: if any listed arg index is tainted before the call,
 # rax (return value) is marked tainted after the call. Models "allocator-wrapper"
 # patterns where a function wraps tainted data in a new allocation and returns a
-# pointer to it -- the pointer itself becomes a taint carrier.
+# pointer to it: the pointer itself becomes a taint carrier.
 #
 # Example: strdup(tainted_str) -> rax = new allocation containing tainted bytes.
 # Example: cli_nscript_get(interp, tainted_script, ...) -> rax = nscript struct
@@ -113,7 +113,7 @@ _TAINT_FORWARDING: Dict[str, List[int]] = {
 }
 
 # After call to these: rax tainted (return value = bytes received/read)
-# arg1 (rsi) = buffer -- after call, track that stack slot as tainted
+# arg1 (rsi) = buffer: after call, track that stack slot as tainted
 _SOURCES: Set[str] = {
     "recv", "recvfrom", "recvmsg", "read", "fread",
     "fgets", "gets", "getline", "getdelim",
@@ -308,7 +308,7 @@ def _taint_from_mem_op(op, state: TaintState) -> bool:
     if hasattr(op, 'mem'):
         m = op.mem
         if m.base:
-            # We need the capstone handle to get reg_name -- handled outside
+            # We need the capstone handle to get reg_name: handled outside
             # This function receives pre-resolved names via keyword params
             pass
 
@@ -348,7 +348,7 @@ def _propagate(insn, md, state: TaintState, plt: Dict[int, str],
         if ops and ops[0].type == X86_OP_IMM:
             target = ops[0].imm
         elif ops and ops[0].type == X86_OP_REG:
-            # indirect call -- we don't know the target statically
+            # indirect call: we don't know the target statically
             state.clear_caller_saved()
             return None
 
@@ -393,7 +393,7 @@ def _propagate(insn, md, state: TaintState, plt: Dict[int, str],
 
     # ── TAIL CALL: unconditional jmp to a PLT stub ───────────────────────
     # Compiler emits `jmp PLT_stub` instead of `call PLT_stub; ret` when the
-    # callee's return value is also the caller's -- same ABI, all arg regs live.
+    # callee's return value is also the caller's: same ABI, all arg regs live.
     if iid == X86_INS_JMP:
         target = None
         if ops and ops[0].type == X86_OP_IMM:
@@ -521,11 +521,11 @@ def _propagate(insn, md, state: TaintState, plt: Dict[int, str],
         combined = False
         for op in ops:
             combined |= _op_is_tainted(op, md, state)
-        # Apply: dst_taint |= combined (but only if not CLR -- handled above)
+        # Apply: dst_taint |= combined (but only if not CLR: handled above)
         if dst_op.type == X86_OP_REG:
             if combined:
                 state.taint_reg(md.reg_name(dst_op.reg))
-            # (never clear dst for ALU -- taint is additive)
+            # (never clear dst for ALU: taint is additive)
         return None
 
     # ── SUB (non-self) ALU ────────────────────────────────────────────────
@@ -620,7 +620,7 @@ def analyze_function(data: bytes, func_va: int, func_end_va: int,
 
     data:       full binary bytes
     func_va:    start VA of the function in the binary
-    func_end_va: end VA (exclusive) -- we stop at min(func_end_va, func_va+MAX_FUNC_BYTES)
+    func_end_va: end VA (exclusive): we stop at min(func_end_va, func_va+MAX_FUNC_BYTES)
     plt:        {va: name} for PLT entries
     md:         configured capstone Cs instance (detail=True)
     """
@@ -1016,7 +1016,7 @@ class TaintTracker:
                  custom_sink_vas: Optional[Dict[int, tuple]] = None):
         """
         binary_path:     path to ELF binary
-        xref:            XRefGraph instance (already built) -- provides PLT + func boundaries
+        xref:            XRefGraph instance (already built): provides PLT + func boundaries
         func_starts:     optional explicit set of function start VAs
         custom_sinks:    {symbol_name: [arg_indices]} added to the sink table.
                          Use for target-specific functions not in the default list.
@@ -1178,7 +1178,7 @@ class TaintTracker:
             except Exception:
                 continue
 
-        # Step 2: BFS -- (func_va, seed_arg_indices, path, source_name, depth)
+        # Step 2: BFS: (func_va, seed_arg_indices, path, source_name, depth)
         results: List[InterproceduralPath] = []
         queue: deque = deque()
         visited: Set[tuple] = set()

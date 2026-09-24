@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Windows PE file parser -- static analysis for malware indicators.
+Windows PE file parser: static analysis for malware indicators.
 Sources: Practical Malware Analysis (Sikorski/Honig), PE/COFF spec.
 """
 import struct
@@ -664,7 +664,7 @@ class PEParser:
         """
         findings = []
 
-        # INT 3 sled (0xCC repeated >= 3 times) -- checksum INT scanning defense
+        # INT 3 sled (0xCC repeated >= 3 times): checksum INT scanning defense
         for m in re.finditer(rb'\xcc{3,}', self.data):
             findings.append({
                 'pattern':     'INT3_SLED',
@@ -673,7 +673,7 @@ class PEParser:
                 'severity':    'LOW',
             })
 
-        # RDTSC opcode (0F 31) -- timing check, used as anti-debug and anti-VM
+        # RDTSC opcode (0F 31): timing check, used as anti-debug and anti-VM
         for m in re.finditer(rb'\x0f\x31', self.data):
             findings.append({
                 'pattern':     'RDTSC',
@@ -682,7 +682,7 @@ class PEParser:
                 'severity':    'MEDIUM',
             })
 
-        # CPUID (0F A2) -- used to detect hypervisor (ECX bit 31 in leaf 1)
+        # CPUID (0F A2): used to detect hypervisor (ECX bit 31 in leaf 1)
         for m in re.finditer(rb'\x0f\xa2', self.data):
             findings.append({
                 'pattern':     'CPUID',

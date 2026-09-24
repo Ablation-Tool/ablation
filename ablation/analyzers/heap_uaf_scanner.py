@@ -1,5 +1,5 @@
 """
-heap_uaf_scanner.py -- Static heap vulnerability scanner (x86-64).
+heap_uaf_scanner.py: Static heap vulnerability scanner (x86-64).
 
 Detects:
   - Use-after-free (UAF): pointer dereferenced after free()
@@ -55,7 +55,7 @@ _ALLOC_FUNCS: Set[str] = {
     "malloc", "calloc", "realloc",
     "ExAllocatePoolWithTag", "ExAllocatePool2", "ExAllocatePool",
     "kmalloc", "kzalloc", "vmalloc",
-    "new",    # C++ operator new -- often resolved via PLT
+    "new",    # C++ operator new: often resolved via PLT
 }
 
 # Free functions: arg0 (rdi on SysV, rcx on Windows x64) -> freed
@@ -99,7 +99,7 @@ def _canon(name: str) -> Optional[str]:
 MAX_FUNC_BYTES = 0x8000
 
 # x86-64 SysV first arg registers
-_ARG0 = "rdi"   # free(ptr) -- ptr is first arg
+_ARG0 = "rdi"   # free(ptr): ptr is first arg
 _ARG1 = "rsi"
 _ARG2 = "rdx"
 
@@ -356,7 +356,7 @@ class HeapUAFScanner:
                         # Assignment from immediate or memory load clears tracked state
                         reg_state.pop(dst_reg, None)
 
-                # XOR reg, reg (zeroing idiom) -- cleared register can't be free'd
+                # XOR reg, reg (zeroing idiom): cleared register can't be free'd
                 elif insn.id == X86_INS_XOR and len(ops) == 2:
                     dst_op, src_op = ops[0], ops[1]
                     if (dst_op.type == X86_OP_REG and src_op.type == X86_OP_REG

@@ -1,5 +1,5 @@
 """
-taint_tracker_arm32.py -- Static intraprocedural ARM32/Thumb taint analysis.
+taint_tracker_arm32.py: Static intraprocedural ARM32/Thumb taint analysis.
 
 Finds data-flow paths from network receive taint sources to dangerous sinks.
 Implements the libdft taint policy adapted for ARM32 AAPCS:

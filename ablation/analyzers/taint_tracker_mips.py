@@ -1,8 +1,8 @@
 """
-taint_tracker_mips.py -- MIPS32 network-to-sink taint analysis.
+taint_tracker_mips.py: MIPS32 network-to-sink taint analysis.
 
 Architecture: MIPS32 big-endian and little-endian (RouterOS, embedded firmware).
-ABI: O32 -- $a0-$a3 args, $v0/$v1 return, $t0-$t9 caller-saved, $s0-$s7 callee-saved.
+ABI: O32: $a0-$a3 args, $v0/$v1 return, $t0-$t9 caller-saved, $s0-$s7 callee-saved.
 
 Load-delay slot: the instruction immediately after a branch/jump executes before
 the branch takes effect. This tracker processes delay slots correctly by consuming
@@ -148,7 +148,7 @@ class MIPSInterproceduralPath:
 
 
 # ---------------------------------------------------------------------------
-# Core taint analysis -- single function
+# Core taint analysis: single function
 # ---------------------------------------------------------------------------
 
 def _reg_name(cs_insn, op) -> Optional[str]:
@@ -206,7 +206,7 @@ def analyze_function_mips(
                     callee_va = op.imm
                     callee_name = plt.get(callee_va, '')
             elif insn.id == MIPS_INS_JALR and insn.operands:
-                # JALR $t9 -- indirect; check if $t9 is from PLT load
+                # JALR $t9: indirect; check if $t9 is from PLT load
                 pass
 
             # Delay slot: execute before the call takes effect (taint state unchanged)
@@ -230,7 +230,7 @@ def analyze_function_mips(
                         source_name=sources_seen[-1],
                     ))
             elif callee_va and callee_name == '' and sources_seen:
-                # Internal call -- propagate tainted args
+                # Internal call: propagate tainted args
                 tainted_call_args = set(r for r in _ARG_REGS if r in tainted)
                 if tainted_call_args:
                     propagations.append((callee_va, tainted_call_args))
@@ -282,7 +282,7 @@ def analyze_function_mips(
                     else:
                         tainted.discard(dst)
 
-        # --- Store: SW/SH/SB src, offset(base) -- does not change reg taint ---
+        # --- Store: SW/SH/SB src, offset(base): does not change reg taint ---
 
         i += 1
 

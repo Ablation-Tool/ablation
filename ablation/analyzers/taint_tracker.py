@@ -86,7 +86,7 @@ class TaintSink:
     note: str = ''
 
     def __str__(self):
-        return f'0x{self.address:x}  [{self.sink_type}]  {self.instruction}  (tainted: {self.tainted_operand}){" -- " + self.note if self.note else ""}'
+        return f'0x{self.address:x}  [{self.sink_type}]  {self.instruction}  (tainted: {self.tainted_operand}){": " + self.note if self.note else ""}'
 
 
 class TaintTracker:
@@ -271,7 +271,7 @@ class TaintTracker:
                 # Arithmetic: tainted if either operand is tainted
                 if src_tainted or src_mem_tainted or (dst_canon in taint):
                     taint.add(dst_canon)
-                # For cmov: conservative -- mark tainted if src or existing dst tainted
+                # For cmov: conservative: mark tainted if src or existing dst tainted
                 # (we don't know which branch was taken)
 
             elif dst_canon and mnem in ('xor',) and dst == src:

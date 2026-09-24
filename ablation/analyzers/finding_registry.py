@@ -1,13 +1,13 @@
 """
-finding_registry.py -- cross-target confirmed finding store.
+finding_registry.py: cross-target confirmed finding store.
 
 Every confirmed vulnerability finding from any RE engagement registers here.
 The registry grows with each engagement: a confirmed finding from one target becomes
 a query seed for future sweeps on new binaries automatically.
 
 Storage:
-    ~/.ablation/findings.db   -- SQLite, user-local, not committed to git
-    ablation/data/seed_corpus.json -- shipped seed patterns from published CVEs
+    ~/.ablation/findings.db  : SQLite, user-local, not committed to git
+    ablation/data/seed_corpus.json: shipped seed patterns from published CVEs
 
 Usage:
     from ablation.analyzers.finding_registry import FindingRegistry
@@ -335,12 +335,12 @@ def _commit_findings(reg: FindingRegistry, seed_path: Path, dry_run: bool = Fals
     """
     unsynced = reg.unsynced_findings()
     if not unsynced:
-        print("Nothing to sync -- all local findings already in seed corpus.")
+        print("Nothing to sync: all local findings already in seed corpus.")
         return 0
 
     print(f"{len(unsynced)} unsynced finding(s) to append to {seed_path}:")
     for f in unsynced:
-        print(f"  [{f['id']}] {f['vendor']}/{f['product']} {f['cwe'] or '?'} {f['severity'] or '?'} -- {f['title']}")
+        print(f"  [{f['id']}] {f['vendor']}/{f['product']} {f['cwe'] or '?'} {f['severity'] or '?'}: {f['title']}")
 
     if dry_run:
         print("(dry-run, not writing)")
@@ -442,7 +442,7 @@ def _cli():
             print(f"\n{len(hits)} match(es) for: {args.query!r}\n")
             for h in hits:
                 print(f"  sim={h['similarity']:.4f}  [{h['severity'] or '?'}] {h['cwe'] or '?'}")
-                print(f"  {h['vendor']}/{h['product']} -- {h['title']}")
+                print(f"  {h['vendor']}/{h['product']}: {h['title']}")
                 if h.get('description'):
                     print(f"  {h['description'][:100]}")
                 print()

@@ -1,5 +1,5 @@
 """
-preauth_route_auditor.py -- Flatui-style pre-auth route scanner for firmware web frameworks.
+preauth_route_auditor.py: Flatui-style pre-auth route scanner for firmware web frameworks.
 
 Automates the manual 4-step process:
   1. Scan route init function for WorkflowLockWithoutSessionPermit-only routes
@@ -46,8 +46,8 @@ _ROUTE_COPY_CTOR     = 0x260530  # call: RouteResourceConfig copy constructor
 # Handler factory registration calls
 _GET_REGISTER   = 0x24f900   # call: register GET handler (rdx = handler fn VA)
 _POST_REGISTER  = 0x268b50   # call: register POST handler (rdx = handler fn VA)
-_PUT_REGISTER   = 0x265720   # placeholder -- update if found
-_DEL_REGISTER   = 0x25e5f0   # placeholder -- update if found
+_PUT_REGISTER   = 0x265720   # placeholder: update if found
+_DEL_REGISTER   = 0x25e5f0   # placeholder: update if found
 
 WLWSP = 'WorkflowLockWithoutSessionPermit'
 
@@ -275,7 +275,7 @@ class PreAuthRouteAuditor:
                             last_lea_rsi_str = ''
                             rsi_from_reg = None
 
-            # Track mov rsi, rXX (register alias -- rsi gets value from another reg)
+            # Track mov rsi, rXX (register alias: rsi gets value from another reg)
             if insn.mnemonic == 'mov' and op.startswith('rsi, '):
                 src = op.split(', ', 1)[1].strip()
                 if not src.startswith('0x') and not src.startswith('[') and 'ptr' not in src:
@@ -316,7 +316,7 @@ class PreAuthRouteAuditor:
                         continue
 
                     if s.startswith('/'):
-                        # It's a URL -- start a new route entry
+                        # It's a URL: start a new route entry
                         if current.url:
                             # Commit previous entry if it has both URL and handler
                             if current.handler:
@@ -337,12 +337,12 @@ class PreAuthRouteAuditor:
                                 current.method_ids = pending_methods[:method_count or len(pending_methods)]
 
                 elif target == method_init_va:
-                    # Method list finalized -- methods already in pending_methods
+                    # Method list finalized: methods already in pending_methods
                     if current.url and not current.handler:
                         current.method_ids = pending_methods[:method_count or len(pending_methods)]
 
                 elif target in (mw_build_a, mw_build_b):
-                    # Middleware string build -- rsi may come from a direct LEA
+                    # Middleware string build: rsi may come from a direct LEA
                     # or from a BSS register alias (mov rsi, r13 where r13=WLWSP BSS)
                     if current.url and current.handler:
                         mw_str = last_lea_rsi_str
@@ -420,7 +420,7 @@ class PreAuthRouteAuditor:
                         if current_name not in handlers:
                             handlers[current_name] = HandlerEntry(class_name=current_name)
 
-            # call get_reg_va -- register GET handler
+            # call get_reg_va: register GET handler
             if insn.mnemonic == 'call' and op == f'0x{get_reg_va:x}':
                 if current_name and pending_code_va:
                     entry = handlers.setdefault(current_name, HandlerEntry(class_name=current_name))
@@ -428,7 +428,7 @@ class PreAuthRouteAuditor:
                         entry.get_va = pending_code_va
                     pending_code_va = 0
 
-            # call post_reg_va -- register POST handler
+            # call post_reg_va: register POST handler
             if insn.mnemonic == 'call' and op == f'0x{post_reg_va:x}':
                 if current_name and pending_code_va:
                     entry = handlers.setdefault(current_name, HandlerEntry(class_name=current_name))

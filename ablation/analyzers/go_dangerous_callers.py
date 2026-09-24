@@ -30,7 +30,7 @@ Go itab struct layout (Go 1.17+, 64-bit):
 Validation fingerprints (from Gemini itab analysis):
   1. itab+0x14 == 0x00000000 (zero padding)
   2. uint32(itab+0x10) == uint32(_type_va + 0x10) (hash match)
-  3. byte(inter_va + 0x17) == 0x14 (kindInterface -- optional, filters non-interface types)
+  3. byte(inter_va + 0x17) == 0x14 (kindInterface: optional, filters non-interface types)
 
 Usage:
     scanner = GoDangerousCallerScanner('/path/to/binary')
@@ -121,7 +121,7 @@ class GoDangerousCallerScanner:
         self.rodata_strings: Dict[int, str] = {}           # va -> printable string
         self.func_map: Dict[int, Tuple[int, str]] = {}     # func_va -> (func_end, func_name)
         self.all_names: Dict[int, str] = {}                # va -> name (all pclntab funcs)
-        # static_calls[callee_va] = {(caller_fva, call_va)} -- O(1) "who calls X"
+        # static_calls[callee_va] = {(caller_fva, call_va)}: O(1) "who calls X"
         self.static_calls: Dict[int, Set[Tuple[int, int]]] = {}
         self.func_callees: Dict[int, List[int]] = {}       # func_va -> [callee_va, ...]
         # indirect_calls[func_va] = [(site_va, op_str, method_index)]
@@ -132,7 +132,7 @@ class GoDangerousCallerScanner:
         # inter_va = interfacetype descriptor VA (at itab+0x00)
         # type_va  = concrete _type descriptor VA (at itab+0x08)
         self.itab_map: Dict[int, Dict[int, List[int]]] = {}
-        # Reverse: method_va -> [(inter_va, type_va)] -- for CHA: all types implementing a method
+        # Reverse: method_va -> [(inter_va, type_va)]: for CHA: all types implementing a method
         self.method_implementations: Dict[int, List[Tuple[int, int]]] = {}
         # Slot index: (inter_va, slot_idx) -> [method_va, ...] across all concrete types
         # Enables CHA from method_index: given slot N, find all concrete implementations
@@ -434,10 +434,10 @@ class GoDangerousCallerScanner:
     def _build_callgraph(self):
         """
         Single pass over .text. Builds:
-          static_calls[callee_va]      -- O(1) "who calls X"
-          func_callees[caller_fva]     -- forward traversal
-          indirect_calls[caller_fva]   -- interface dispatch sites with method_index
-          func_strings[caller_fva]     -- LEA string refs per function
+          static_calls[callee_va]     : O(1) "who calls X"
+          func_callees[caller_fva]    : forward traversal
+          indirect_calls[caller_fva]  : interface dispatch sites with method_index
+          func_strings[caller_fva]    : LEA string refs per function
 
         Method index extraction (from Gemini doc):
           Backtrack from 'call reg' through window of recent instructions.
@@ -510,13 +510,13 @@ class GoDangerousCallerScanner:
                         if callee_va not in self.func_callees[caller_fva]:
                             self.func_callees[caller_fva].append(callee_va)
                     else:
-                        # Indirect call -- extract method index by backtracking
+                        # Indirect call: extract method index by backtracking
                         method_idx = -1
                         call_reg = None
                         if op.type == capstone.x86.X86_OP_REG:
                             call_reg = op.reg
                         elif op.type == capstone.x86.X86_OP_MEM and op.mem.index == 0:
-                            pass  # call [reg+N] -- less common, skip backtrack
+                            pass  # call [reg+N]: less common, skip backtrack
 
                         if call_reg is not None:
                             for prev in reversed(insn_window):
@@ -763,7 +763,7 @@ class GoDangerousCallerScanner:
 
         Uses method index extracted during callgraph build (from backtracked instruction window).
         When method_index >= 0: query slot_methods[(inter_va, method_index)] for all concrete
-        implementations at that slot position across all known interface types -- precise CHA.
+        implementations at that slot position across all known interface types: precise CHA.
         When method_index == -1: fall back to all Fortinet method implementations (noisy).
 
         Returns: [(call_site_va, method_index, [candidate_func_names])]

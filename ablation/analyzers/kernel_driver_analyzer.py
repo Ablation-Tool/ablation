@@ -54,11 +54,11 @@ class IoctlCode:
     Decoded Windows IOCTL code (CTL_CODE macro output).
 
     Layout (32-bit value):
-      [31:16] DeviceType   -- 0x0001..0x7FFF system, 0x8000..0xFFFF user-defined
-      [15:14] Access       -- FILE_ANY_ACCESS=0, FILE_READ_ACCESS=1,
+      [31:16] DeviceType  : 0x0001..0x7FFF system, 0x8000..0xFFFF user-defined
+      [15:14] Access      : FILE_ANY_ACCESS=0, FILE_READ_ACCESS=1,
                               FILE_WRITE_ACCESS=2, FILE_READ+WRITE=3
-      [13:2]  Function     -- 0x000..0x7FF system, 0x800..0xFFF user-defined
-      [1:0]   Method       -- METHOD_BUFFERED=0, METHOD_IN_DIRECT=1,
+      [13:2]  Function    : 0x000..0x7FF system, 0x800..0xFFF user-defined
+      [1:0]   Method      : METHOD_BUFFERED=0, METHOD_IN_DIRECT=1,
                               METHOD_OUT_DIRECT=2, METHOD_NEITHER=3
 
     METHOD_NEITHER is the most dangerous: no buffer copy, raw user pointer
@@ -75,7 +75,7 @@ class IoctlCode:
         0: 'METHOD_BUFFERED',
         1: 'METHOD_IN_DIRECT',
         2: 'METHOD_OUT_DIRECT',
-        3: 'METHOD_NEITHER',    # raw user pointer -- highest risk
+        3: 'METHOD_NEITHER',    # raw user pointer: highest risk
     }
     _ACCESS_NAMES = {
         0: 'FILE_ANY_ACCESS',
@@ -295,7 +295,7 @@ class KernelDriverReport:
         lines.append(f"EP RVA:      0x{self.entry_point_rva:08x}  "
                      f"ImageBase: 0x{self.image_base:016x}")
         lines.append(f"PDB:         {self.pdb_path or '(not found)'}")
-        lines.append(f"Signed:      {'YES' if self.is_signed else 'NO -- unsigned or stripped'}")
+        lines.append(f"Signed:      {'YES' if self.is_signed else 'NO: unsigned or stripped'}")
 
         if self.error:
             lines.append(f"\nERROR: {self.error}")
@@ -1161,7 +1161,7 @@ class KernelDriverAnalyzer:
 
         # UTF-16LE wide-string scan for L"KeServiceDescriptorTable".
         # Source: Windows Internals Part 1 (I/O system, SSDT structure), Rootkits ch4.
-        # On x64, ntoskrnl does NOT export KeServiceDescriptorTable -- drivers cannot
+        # On x64, ntoskrnl does NOT export KeServiceDescriptorTable: drivers cannot
         # import it via the IAT. The only static indicator is this wide string passed
         # to MmGetSystemRoutineAddress. Combined with SSDT_HOOK_CR0_SEQUENCE = confirmed hook.
         kssdt_wide = b'K\x00e\x00S\x00e\x00r\x00v\x00i\x00c\x00e\x00D\x00e\x00s\x00c\x00r\x00i\x00p\x00t\x00o\x00r\x00T\x00a\x00b\x00l\x00e\x00'
@@ -1186,7 +1186,7 @@ class KernelDriverAnalyzer:
             ))
 
         # ExAllocatePool (no tag variant) implies NonPagedPool type 0.
-        # On Win7/Win8, NonPagedPool was executable -- this is an executable kernel heap alloc.
+        # On Win7/Win8, NonPagedPool was executable: this is an executable kernel heap alloc.
         # On Win10+, NonPagedPool maps to NonPagedPoolNx (non-execute). But on older targets:
         # shellcode in NonPagedPool + control flow redirect = full kernel code exec.
         if 'ExAllocatePool' in imports_flat:

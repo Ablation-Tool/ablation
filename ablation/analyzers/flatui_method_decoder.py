@@ -1,5 +1,5 @@
 """
-flatui_method_decoder.py -- Decode flatui HTTP method enum to HTTP verb strings.
+flatui_method_decoder.py: Decode flatui HTTP method enum to HTTP verb strings.
 
 The flatui framework encodes HTTP methods as integer IDs in RouteMethodData.
 This module decodes those IDs by:
@@ -44,7 +44,7 @@ from capstone.x86_const import X86_OP_MEM, X86_OP_IMM, X86_REG_RIP
 #   8 = PATCH
 #   9 = LINK
 #  10 = UNLINK
-#  11 = ALL  (wildcard: any method -- route accepts GET, POST, PUT, DELETE)
+#  11 = ALL  (wildcard: any method: route accepts GET, POST, PUT, DELETE)
 #  12 = GET+PUT (read + replace)
 #  13 = GET+POST+PUT
 #  15 = GET+POST+PUT+DELETE
@@ -82,7 +82,7 @@ _FMG800_CALIBRATION: Dict[int, FrozenSet[str]] = {
 # interpretations are noted.
 _NOTES: Dict[int, str] = {
     3:  'POST-only (confirmed: FT_FirmwareImport, FT_FloorMapImport)',
-    5:  'DELETE or GET? (observed on /gui/adoms list endpoint -- needs confirmation)',
+    5:  'DELETE or GET? (observed on /gui/adoms list endpoint: needs confirmation)',
     11: 'ALL/compound: cert endpoints + device management; factory registers GET+POST',
     12: 'GET+PUT (observed on DeviceTimezone)',
 }
@@ -126,7 +126,7 @@ class FlatuiMethodDecoder:
                     pos = data.find(name + b'\x00', pos + 1)
 
             # For each method string, find LEA refs and look for nearby cmp/je patterns
-            # that map the string to an integer ID -- this is the core decoder logic.
+            # that map the string to an integer ID: this is the core decoder logic.
             # Simplified: we just return the calibration table for now since static
             # analysis of the dispatcher requires full virtual dispatch resolution.
         except Exception:
@@ -169,9 +169,9 @@ class FlatuiMethodDecoder:
         """
         methods = self.decode_ids(method_ids)
         if methods & {'POST', 'PUT', 'PATCH'}:
-            return 'WRITE+READ (pre-auth full CRUD -- critical)'
+            return 'WRITE+READ (pre-auth full CRUD: critical)'
         if methods & {'DELETE'}:
-            return 'READ+DELETE (pre-auth read/delete -- high)'
+            return 'READ+DELETE (pre-auth read/delete: high)'
         if methods & {'GET', 'HEAD', 'OPTIONS'}:
-            return 'READ-ONLY (pre-auth info disclosure -- medium/high)'
+            return 'READ-ONLY (pre-auth info disclosure: medium/high)'
         return f'UNKNOWN (method_ids={method_ids})'

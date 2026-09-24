@@ -8,7 +8,7 @@ Method: VFS-index-by-content-proximity
   1. Scan dump for all ELF64 x86_64 EXEC/DYN headers -> build VFS index
   2. For each target string: find dump offset, check all ELF PT_LOAD
      windows for coverage (physical contiguity)
-  3. For non-contiguous cases: proximity heuristic -- closest ELF with
+  3. For non-contiguous cases: proximity heuristic: closest ELF with
      PT_LOAD layout matching /proc/maps file offsets and sizes
   4. Confirm via local_offset string match in the rodata PT_LOAD
   5. Extract the confirmed binary
@@ -405,8 +405,8 @@ class PhysmemVFS:
         CET-aware function extraction from the binary's executable PT_LOAD.
 
         Detects both:
-          endbr64 (f3 0f 1e fa) -- CET/IBT compiled
-          push rbp; mov rbp, rsp (55 48 89 e5) -- classic frame
+          endbr64 (f3 0f 1e fa): CET/IBT compiled
+          push rbp; mov rbp, rsp (55 48 89 e5): classic frame
 
         Returns list of {'addr': va, 'asm': [lines], 'calls': [targets]}.
         """
@@ -580,7 +580,7 @@ def main():
 
 
 # ---------------------------------------------------------
-# VM RE helpers -- process-aware analysis (from vm_re_helper pattern, 2026-09-16)
+# VM RE helpers: process-aware analysis (from vm_re_helper pattern, 2026-09-16)
 # Designed to work with PhysmemVFS index + /proc/maps text extracted from the dump
 # ---------------------------------------------------------
 

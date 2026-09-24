@@ -1,9 +1,9 @@
 """
-ipreg_annotator.py -- Interprocedural register annotator (N-hop forward symbolic pass).
+ipreg_annotator.py: Interprocedural register annotator (N-hop forward symbolic pass).
 
 Extends RegAnnotator to follow call chains across function boundaries.
 At each callee, seeds entry registers with the actual RegVal objects from the
-caller's register state at the call site -- so arg provenance traces back to the
+caller's register state at the call site: so arg provenance traces back to the
 root function's entry args.
 
 Usage:
@@ -282,7 +282,7 @@ class IPRegAnnotator:
             is_leaf = False
 
             if hop < max_hops and target_va and not is_plt:
-                # Internal call -- follow it
+                # Internal call: follow it
                 callee_end = self._func_end(self._get_ctx(target_binary), target_va)
                 callee_chain = self._annotate_one(
                     va=target_va,
@@ -296,7 +296,7 @@ class IPRegAnnotator:
                     visited=visited,
                 )
             elif hop < max_hops and is_plt and self._lib_graph and target_binary != binary:
-                # Cross-binary PLT call -- try to follow into the other library
+                # Cross-binary PLT call: try to follow into the other library
                 export_va = self._get_ctx(target_binary).exports.get(target_name, 0)
                 if export_va:
                     callee_end = self._func_end(self._get_ctx(target_binary), export_va)

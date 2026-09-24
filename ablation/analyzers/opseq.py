@@ -1,5 +1,5 @@
 """
-opseq.py -- Shared opcode category sequence encoder.
+opseq.py: Shared opcode category sequence encoder.
 
 Converts a function's disassembly to a List[int] where each integer is a
 BinFuse category index (0-11). This is the common "time series" representation

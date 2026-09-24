@@ -1,5 +1,5 @@
 """
-path_solver.py -- Bounded symbolic execution + Z3 path constraint solver for x86-64.
+path_solver.py: Bounded symbolic execution + Z3 path constraint solver for x86-64.
 
 Implements the "First-Order Logic / Constraint Solving" phase from the
 Semantic Binary Analysis & Bounded Execution Architecture:
@@ -13,7 +13,7 @@ Pipeline position:
 
 Workflow:
   1. Enumerate all simple paths from entry block to target block in the CFG
-     (bounded by MAX_PATH_BLOCKS -- the "loop boundary" from doc section 2)
+     (bounded by MAX_PATH_BLOCKS: the "loop boundary" from doc section 2)
   2. Symbolically execute each path:
      - Registers = Z3 BitVec(64) symbolic variables at entry
      - Instructions update register expressions (state constraints)
@@ -135,7 +135,7 @@ class MemoryConstraint:
 
     Maps a (base_register, byte_offset) memory read to a named Z3 symbol
     with optional bounds. When the same field is read multiple times on a
-    path, the same symbol is reused -- Z3 sees consistent constraints across
+    path, the same symbol is reused: Z3 sees consistent constraints across
     all branches that test the field.
 
     Example (RADIUS attribute struct):
@@ -340,7 +340,7 @@ class PathSolver:
                         if mc.width < 64:
                             return z3.ZeroExt(64 - mc.width, sym)
                         return sym
-            # Unconstrained symbolic memory read -- sound over-approximation
+            # Unconstrained symbolic memory read: sound over-approximation
             return z3.BitVec(f"mem@{va:#x}", 64)
         return z3.BitVec(f"unk@{va:#x}", 64)
 
@@ -392,7 +392,7 @@ class PathSolver:
         elif jmp_id == X86_INS_JNS:
             cond = (a >= zero)
         elif jmp_id in (X86_INS_JO, X86_INS_JNO):
-            return None  # overflow flag -- too complex without full flag tracking
+            return None  # overflow flag: too complex without full flag tracking
         else:
             return None
 
@@ -433,7 +433,7 @@ class PathSolver:
 
             chunk = self.data[offset:]
 
-            # Cap at the last instruction VA in this block -- avoids spilling into
+            # Cap at the last instruction VA in this block: avoids spilling into
             # successor blocks when block.end is a short distance from the next boundary.
             last_insn_va = block.insns[-1][0] if block.insns else block_va
 
