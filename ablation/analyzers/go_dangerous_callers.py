@@ -107,7 +107,7 @@ class GoDangerousCallerScanner:
     deserialization overhead.
     """
 
-    def __init__(self, binary_path: str, namespace: str = 'fortinet.com/',
+    def __init__(self, binary_path: str, namespace: str = '',
                  cache_dir: str = _CACHE_DIR):
         self.binary_path = binary_path
         self.namespace = namespace
@@ -211,7 +211,7 @@ class GoDangerousCallerScanner:
                 ea INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 end_ea INTEGER,
-                is_fortinet INTEGER DEFAULT 0
+                is_target_ns INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS call_edges (
                 caller_ea INTEGER NOT NULL,
@@ -308,9 +308,9 @@ class GoDangerousCallerScanner:
 
             self.func_map = {}
             self.all_names = {}
-            for r in con.execute('SELECT ea, name, end_ea, is_fortinet FROM functions'):
+            for r in con.execute('SELECT ea, name, end_ea, is_target_ns FROM functions'):
                 self.all_names[r['ea']] = r['name']
-                if r['is_fortinet']:
+                if r['is_target_ns']:
                     self.func_map[r['ea']] = (r['end_ea'] or r['ea'] + 0x1000, r['name'])
 
             self.static_calls = {}
@@ -853,7 +853,7 @@ if __name__ == '__main__':
                                  'os/exec.(*Cmd).Run', 'os/exec.(*Cmd).Start',
                                  'os/exec.(*Cmd).Output', 'os/exec.(*Cmd).CombinedOutput'],
                         help='Dangerous call target name substrings')
-    parser.add_argument('--namespace', default='fortinet.com/',
+    parser.add_argument('--namespace', default='',
                         help='Namespace filter for function names')
     parser.add_argument('--rodata-sql', action='store_true',
                         help='Print rodata SQL strings with format specifiers')

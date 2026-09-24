@@ -191,7 +191,16 @@ See [Binary Ninja integration docs](docs/integrations/binja.md).
 
 ---
 
+## Author
+
+Built by **Nicholas Michael Kloster** -- independent security researcher specializing in
+binary firmware vulnerability research.
+
+---
+
 ## License
+
+Copyright (c) 2026 Nicholas Michael Kloster. All Rights Reserved.
 
 Commercial license required for commercial use. Source available for non-commercial research
 use. Contact for licensing.
