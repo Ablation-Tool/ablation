@@ -70,7 +70,7 @@ mindmap
 
 - **Extreme Performance:** A 50 MB binary loads in 35 seconds. Ghidra and IDA Pro can take hours because they parse the entire file into a database before you can do anything. Ablation only analyzes the functions you are actively working on, so you start immediately.
 - **Semantic Search via BERT:** Search across every function in plain English. The agent converts binary semantics into behavioral fingerprints using Sentence Transformers. Searching for *"TLV parser that advances pointer without bounds check"* looks for the mathematical shape of the vulnerability, not just literal strings.
-- **Version Diffing with DTW:** Ablation uses Dynamic Time Warping (DTW) and Matrix Profiles to diff binaries. If a vendor patches a CVE by changing the logic, the raw bytes will change. DTW tracks the "shape" of the function's execution to confirm whether the logic was actually patched across releases.
+- **Version Diffing with DTW:** When a vendor releases a patch, Ablation compares the old and new binary to confirm the fix actually changed the logic, not just the packaging. It does this by tracking the "shape" of how a function executes across versions, rather than comparing raw bytes, so a cosmetic recompile cannot hide an unpatched vulnerability.
 - **Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
 
 ---
