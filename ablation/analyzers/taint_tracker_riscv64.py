@@ -115,7 +115,13 @@ _DEFAULT_SINKS: Dict[str, List[int]] = {
 
 MAX_FUNC_BYTES = 0x8000
 
-# Data-propagating mnemonics (RV64GC -- superset of RV32GC)
+# Data-propagating mnemonics for RV64GC (ISA spec §5 RV64I + §16 RVC, superset of RV32GC).
+# Contract: canonical pseudo-instructions and direct data-movement ops only.
+# Membership means _exec_insn may propagate taint from source registers to rd.
+# *w arithmetic (addw/subw/mulw etc.) sign-extends to 64 bits -- not a bitwise copy,
+# but taint propagation is conservative (attacker-controlled 32-bit value is still
+# attacker-controlled after sign extension).
+# sext.w (addiw rd,rs,0 alias) handled separately in _exec_insn mv-branch.
 _COPY_MNEMS: frozenset = frozenset({
     # Pseudoinstructions
     'mv', 'li', 'la',
@@ -137,7 +143,7 @@ _COPY_MNEMS: frozenset = frozenset({
     'lw', 'lh', 'lb', 'lhu', 'lbu', 'lwu',
     'ld',
     # RVC compressed variants (RV64C)
-    'c.mv', 'c.li', 'c.addi', 'c.addi16sp', 'c.addi4spn',
+    'c.mv', 'c.li', 'c.addi', 'c.addi4spn',  # c.addi16sp intentionally absent (modifies sp)
     'c.addiw', 'c.add', 'c.addw', 'c.sub', 'c.subw',
     'c.and', 'c.or', 'c.xor',
     'c.slli', 'c.srli', 'c.srai',
@@ -374,7 +380,8 @@ class RISCV64TaintTracker:
         rs1 = self._parse_rs(op_str, 1)
         rs2 = self._parse_rs(op_str, 2) if ',' in op_str[op_str.find(',')+1:] else ''
 
-        if mnemonic in ('mv', 'c.mv'):
+        if mnemonic in ('mv', 'c.mv',
+                        'sext.w'):  # addiw rd,rs,0 alias -- narrowing but taint-conservative
             tainted[rd] = bool(tainted.get(rs1))
             return
         if mnemonic in ('li', 'la', 'lui', 'auipc', 'c.li'):
@@ -384,11 +391,13 @@ class RISCV64TaintTracker:
                         'c.lw', 'c.lwsp', 'c.ld', 'c.ldsp'):
             tainted[rd] = False
             return
+        # For 2-operand C-ext forms (c.addi rd, imm / c.addiw rd, imm), capstone emits
+        # op_str='rd, imm'; rs1 parses as the immediate string -- source register is rd.
         if mnemonic in ('addi', 'addiw', 'ori', 'xori', 'slti', 'sltiu',
                         'slli', 'srli', 'srai', 'slliw', 'srliw', 'sraiw',
-                        'c.addi', 'c.addiw', 'c.slli', 'c.srli', 'c.srai',
-                        'c.addi16sp'):
-            tainted[rd] = bool(tainted.get(rs1))
+                        'c.addi', 'c.addiw', 'c.slli', 'c.srli', 'c.srai'):
+            src = rs1 if rs1 and rs1[0].isalpha() else rd
+            tainted[rd] = bool(tainted.get(src))
             return
         if mnemonic in ('andi', 'c.and'):
             tainted[rd] = False
@@ -452,6 +461,11 @@ class RISCV64TaintTracker:
             elif mnemonic == 'ret':
                 break
             elif mnemonic in ('c.jr', 'jr') and op_str.strip() == 'ra':
+                break
+            elif mnemonic == 'jr' and op_str.strip() != 'ra':
+                # tail call via register (tail pseudo: auipc + jalr zero,reg,0)
+                for r in _CALLER_SAVED:
+                    tainted[r] = False
                 break
 
             else:
@@ -577,6 +591,10 @@ class RISCV64TaintTracker:
                     elif mnemonic == 'ret':
                         break
                     elif mnemonic in ('c.jr', 'jr') and op_str.strip() == 'ra':
+                        break
+                    elif mnemonic == 'jr' and op_str.strip() != 'ra':
+                        for r in _CALLER_SAVED:
+                            tainted[r] = False
                         break
                     else:
                         self._exec_insn(mnemonic, op_str, tainted)

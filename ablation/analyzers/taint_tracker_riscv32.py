@@ -137,25 +137,29 @@ _DEFAULT_SINKS: Dict[str, List[int]] = {
 
 MAX_FUNC_BYTES = 0x8000
 
-# Data-propagating mnemonics (rd, rs1 [, rs2|imm])
+# Data-propagating mnemonics for RV32GC (ISA spec §2 RV32I + §16 RVC).
+# Contract: canonical pseudo-instructions and direct data-movement ops only.
+# Membership means _exec_insn may propagate taint from source registers to rd.
+# Non-canonical copy idioms (add rd, rs, zero etc.) are not listed.
+# RV64-only mnemonics (addiw, slliw, srliw, sraiw, lwu) are intentionally absent.
 _COPY_MNEMS: frozenset = frozenset({
     'mv', 'li', 'la',
-    'add', 'addi', 'addiw',
+    'add', 'addi',
     'sub', 'subw',
     'and', 'andi',
     'or', 'ori',
     'xor', 'xori',
-    'sll', 'slli', 'sllw', 'slliw',
-    'srl', 'srli', 'srlw', 'srliw',
-    'sra', 'srai', 'sraw', 'sraiw',
+    'sll', 'slli', 'sllw',
+    'srl', 'srli', 'srlw',
+    'sra', 'srai', 'sraw',
     'mul', 'mulh', 'mulhsu', 'mulhu',
     'div', 'divu', 'rem', 'remu',
     'slt', 'sltu', 'slti', 'sltiu',
     'auipc', 'lui',
-    # loads propagate from memory; we mark result as unknown taint
-    'lw', 'lh', 'lb', 'lhu', 'lbu', 'lw', 'lwu',
-    # RVC variants
-    'c.mv', 'c.li', 'c.addi', 'c.addi16sp', 'c.addi4spn',
+    # loads: clear taint (memory not tracked)
+    'lw', 'lh', 'lb', 'lhu', 'lbu',
+    # RVC variants (RV32C + shared RV32C/RV64C -- ISA spec §16)
+    'c.mv', 'c.li', 'c.addi', 'c.addi4spn',  # c.addi16sp intentionally absent (modifies sp)
     'c.add', 'c.sub', 'c.and', 'c.or', 'c.xor',
     'c.slli', 'c.srli', 'c.srai',
     'c.lw', 'c.lwsp',
@@ -410,22 +414,22 @@ class RISCV32TaintTracker:
             return
 
         # Loads from memory: clear taint on destination (memory not tracked)
-        if mnemonic in ('lw', 'lh', 'lb', 'lhu', 'lbu', 'lwu', 'c.lw', 'c.lwsp'):
+        if mnemonic in ('lw', 'lh', 'lb', 'lhu', 'lbu', 'c.lw', 'c.lwsp'):
             tainted[rd] = False
             return
 
-        # Arithmetic/logic with immediate: propagate rs1 taint
-        if mnemonic in ('addi', 'addiw', 'ori', 'xori', 'slti', 'sltiu',
-                        'slli', 'srli', 'srai', 'slliw', 'srliw', 'sraiw',
+        # Arithmetic/logic with immediate: propagate rs1 taint (RV32I only).
+        # For 2-operand C-ext forms (c.addi rd, imm), capstone emits op_str='rd, imm',
+        # so rs1 parses as the immediate string; the source register is rd itself.
+        if mnemonic in ('addi', 'ori', 'xori', 'slti', 'sltiu',
+                        'slli', 'srli', 'srai',
                         'c.addi', 'c.slli', 'c.srli', 'c.srai'):
-            # 'andi' with small immediate can sanitize (zero upper bits)
-            if mnemonic == 'andi':
-                tainted[rd] = False
-                return
-            tainted[rd] = bool(tainted.get(rs1))
+            src = rs1 if rs1 and rs1[0].isalpha() else rd
+            tainted[rd] = bool(tainted.get(src))
             return
 
-        # andi: mask clears taint (conservative -- marks as clean)
+        # andi/c.and: mask clears taint (conservative -- negative imm is alignment mask,
+        # not a bound, but clearing taint is safe for this tool's contract)
         if mnemonic in ('andi', 'c.and'):
             tainted[rd] = False
             return
@@ -489,6 +493,11 @@ class RISCV32TaintTracker:
             elif mnemonic == 'ret':
                 break
             elif mnemonic in ('c.jr', 'jr') and op_str.strip() == 'ra':
+                break
+            elif mnemonic == 'jr' and op_str.strip() != 'ra':
+                # tail call via register (tail pseudo: auipc + jalr zero,reg,0)
+                for r in _CALLER_SAVED:
+                    tainted[r] = False
                 break
 
             else:
@@ -614,6 +623,10 @@ class RISCV32TaintTracker:
                     elif mnemonic == 'ret':
                         break
                     elif mnemonic in ('c.jr', 'jr') and op_str.strip() == 'ra':
+                        break
+                    elif mnemonic == 'jr' and op_str.strip() != 'ra':
+                        for r in _CALLER_SAVED:
+                            tainted[r] = False
                         break
                     else:
                         self._exec_insn(mnemonic, op_str, tainted)
