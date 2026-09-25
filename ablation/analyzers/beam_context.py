@@ -182,8 +182,8 @@ class BeamContext:
         if 'Dbgi' in raw_chunks:
             _parse_dbgi(raw_chunks['Dbgi'], ctx)
 
-        # 7. Obfuscation indicators
-        _detect_obfuscation(ctx, raw_chunks)
+        # 7. Obfuscation indicators (needs raw data for structural checks)
+        _detect_obfuscation(ctx, raw_chunks, data)
 
         return ctx
 
@@ -376,35 +376,129 @@ def _parse_dbgi(dbgi_bytes: bytes, ctx: BeamContext) -> None:
                 ctx.ast_records.append(rname)
 
 
-def _detect_obfuscation(ctx: BeamContext, raw_chunks: dict) -> None:
+# Chunk IDs that beam_load.c knows about (EA IFF 85 standard BEAM chunks).
+# Any ID outside this set is a rogue chunk.
+_KNOWN_CHUNK_IDS: frozenset = frozenset({
+    'Atom', 'AtU8', 'Code', 'StrT', 'ImpT', 'ExpT', 'FunT', 'LitT',
+    'LocT', 'Attr', 'CInf', 'Dbgi', 'Line', 'Type', 'Meta',
+    # Less common but legitimate
+    'ExDc', 'ExDp', 'Abst', 'Docs',
+})
+
+
+def _detect_obfuscation(ctx: BeamContext, raw_chunks: dict, data: bytes) -> None:
     """
-    Flag obfuscation indicators based on missing or stripped chunks.
+    Flag obfuscation indicators using three categories:
+
+    1. Structural (EA IFF 85 container):
+       - Container anomaly: declared size != physical file size
+       - Boundary violation: chunk extends past EOF or overlaps another chunk
+       - Rogue chunk: chunk ID not in _KNOWN_CHUNK_IDS
+
+    2. Missing required chunks:
+       - Atom table absent
+       - Debug info / line info / local function table stripped
+
+    3. Content anomalies:
+       - Atom table suspiciously small relative to import count
     """
     indicators = []
 
-    # Atom table absent -- primary obfuscation target
+    # ------------------------------------------------------------------
+    # 1a. Container size check (FOR1 declared size vs physical file size)
+    #     FOR1 layout: b'FOR1' <uint32 container_size> b'BEAM' <chunks...>
+    #     container_size covers everything after the first 8 bytes.
+    # ------------------------------------------------------------------
+    if len(data) >= 8:
+        declared = struct.unpack('>I', data[4:8])[0]
+        physical = len(data) - 8
+        if declared != physical:
+            delta = physical - declared
+            indicators.append(
+                f"container anomaly: declared={declared} physical={physical} "
+                f"({'appended data' if delta > 0 else 'truncated'} {abs(delta)} bytes)"
+            )
+
+    # ------------------------------------------------------------------
+    # 1b. Boundary violations and rogue chunk IDs
+    #     Walk the chunk sequence ourselves (not using raw_chunks dict
+    #     which was built by the permissive _split_chunks).
+    # ------------------------------------------------------------------
+    file_size = len(data)
+    pos = 12  # skip FOR1 <size> BEAM
+    seen_ranges: list = []
+    rogue: list = []
+    boundary_violations: list = []
+
+    while pos + 8 <= file_size:
+        cid_bytes = data[pos:pos+4]
+        try:
+            cid = cid_bytes.decode('ascii')
+        except Exception:
+            cid = cid_bytes.decode('latin1', errors='replace')
+
+        chunk_size = struct.unpack('>I', data[pos+4:pos+8])[0]
+        chunk_start = pos + 8
+        chunk_end = chunk_start + chunk_size
+        padded_end = chunk_start + chunk_size + (4 - chunk_size % 4) % 4
+
+        # Boundary: does this chunk extend past EOF?
+        if chunk_end > file_size:
+            boundary_violations.append(
+                f"chunk {cid!r} at {pos:#x}: end {chunk_end:#x} > file {file_size:#x}"
+            )
+            break  # can't safely advance
+
+        # Overlap: does this chunk overlap any previously seen chunk?
+        for (prev_start, prev_end, prev_id) in seen_ranges:
+            if chunk_start < prev_end and chunk_end > prev_start:
+                boundary_violations.append(
+                    f"chunk {cid!r} at {pos:#x} overlaps {prev_id!r}"
+                )
+
+        seen_ranges.append((chunk_start, chunk_end, cid))
+
+        # Rogue chunk ID?
+        if cid.strip() not in _KNOWN_CHUNK_IDS:
+            rogue.append(f"{cid!r} at {pos:#x} (size={chunk_size})")
+
+        pad = (4 - chunk_size % 4) % 4
+        pos = chunk_start + chunk_size + pad
+
+    if boundary_violations:
+        for v in boundary_violations:
+            indicators.append(f"boundary violation: {v}")
+    if rogue:
+        for r in rogue:
+            indicators.append(f"rogue chunk: {r}")
+
+    # ------------------------------------------------------------------
+    # 2. Missing chunks
+    # ------------------------------------------------------------------
     if 'AtU8' not in raw_chunks and 'Atom' not in raw_chunks:
         indicators.append("atom table missing")
-
-    # Debug info stripped -- common in production, but also deliberate obfuscation
     if 'Dbgi' not in raw_chunks:
         indicators.append("debug info stripped")
-
-    # Line number table stripped
     if 'Line' not in raw_chunks:
         indicators.append("line info stripped")
-
-    # Local function table stripped
     if 'LocT' not in raw_chunks:
         indicators.append("local function table missing")
 
-    # Very few atoms relative to import/export count -- atom table may be corrupted
+    # ------------------------------------------------------------------
+    # 3. Content anomaly
+    # ------------------------------------------------------------------
     if ctx.atoms and len(ctx.atoms) < max(len(ctx.imports), len(ctx.exports)):
-        indicators.append(f"atom table suspiciously small ({len(ctx.atoms)} atoms, "
-                          f"{len(ctx.imports)} imports)")
+        indicators.append(
+            f"atom table suspiciously small ({len(ctx.atoms)} atoms, "
+            f"{len(ctx.imports)} imports)"
+        )
 
-    # Mark obfuscated only when 2+ indicators, or atom table is outright missing
-    if 'atom table missing' in indicators or len(indicators) >= 2:
+    # Obfuscated if: structural anomaly present, atom table missing, or 2+ indicators
+    structural = any(
+        i.startswith(('container anomaly', 'boundary violation', 'rogue chunk'))
+        for i in indicators
+    )
+    if structural or 'atom table missing' in indicators or len(indicators) >= 2:
         ctx.obfuscated = True
 
     ctx.obfuscation_indicators = indicators
