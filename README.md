@@ -205,4 +205,4 @@ Nicholas Michael Kloster & Claude
 
 **Honorable Mention**
 
-Microsoft Excel (Data Analysis ToolPak) built specifically to automate the heavy lifting of advanced statistical mathematics and engineering computations.
+Microsoft Excel (Data Analysis ToolPak) When analyzing closed infrastructure or securing black-box systems, this exact process is called timing analysis or telemetry reverse engineering. Without source code, the Data Analysis ToolPak mathematically deconstructs how an application works on the backend by strictly observing its inputs and outputs.
