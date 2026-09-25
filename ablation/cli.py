@@ -361,6 +361,22 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v3.2.0 (2026-09-24)  Renesas V850 taint tracker + frame decoder
+  ablation v850       <binary> [--be] [--interprocedural] [--depth N] [--json FILE]
+  ablation v850-decode <binary> [--be] [--base N] [--frames] [--limit N] [--json FILE]
+  - V850TaintTracker: V850 EABI ABI; r6-r9 args (4 regs only), r10 return,
+    r20-r29 callee-saved; pure-Python (no capstone V850)
+  - Sources: recv/recvfrom/read/fgets/gets/fread (return value in r10)
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/snprintf/memcpy/strcat
+  - V850Decoder: mixed 16/32-bit frame walker; width discriminant: op6>=0x20 -> 32-bit
+  - JARL disp22, lp: direct call; JMP [lp]: return
+  - JARL target: sign_extend_22({hw1[15:0], hw0[15:11]<<1})
+  - Prologue scan: PREPARE instruction (GCC V850 EABI function entry marker)
+  - Default little-endian (V850ES/SJ3 GCC); --be for big-endian variants
+  - DisasmEngine: arch='v850' routes through V850Decoder (_v850_stream)
+  - Targets: Renesas RH850/G3M + G3MH (automotive ECU, AUTOSAR), V850E2R (industrial),
+    V850E3V5 (dual-core ASIL-D), NEC V850ES/SJ3 (power systems, white goods)
+
 v3.1.0 (2026-09-24)  RISC-V 64-bit taint tracker
   ablation riscv64    <binary> [--interprocedural] [--depth N] [--json FILE]
   - RISCV64TaintTracker: RISC-V Linux lp64 ABI; a0-a7 args (8 regs), a0 return,
@@ -774,6 +790,57 @@ def cmd_ppc32(args):
         print(tracker.report(findings))
 
 
+def cmd_v850(args):
+    from ablation.analyzers.taint_tracker_v850 import V850TaintTracker
+
+    p = str(_require_binary(args.binary))
+    endian = 'big' if args.be else 'little'
+    tracker = V850TaintTracker.from_path(p)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
+def cmd_v850_decode(args):
+    from ablation.analyzers.v850_decoder import V850Disasm
+
+    binary_path = _require_binary(args.binary)
+    data = binary_path.read_bytes()
+    endian = 'big' if args.be else 'little'
+    dis = V850Disasm(endian=endian)
+
+    if args.frames:
+        print(dis.report_frames(data, base_addr=args.base, limit=args.limit))
+        return
+
+    starts = dis.find_function_starts(data, base_addr=args.base)
+    if args.json:
+        import json
+        out = [{'func_va': hex(va)} for va in starts]
+        Path(args.json).write_text(json.dumps(out, indent=2))
+        print(f"Wrote {len(out)} function starts to {args.json}")
+    else:
+        print(f"V850 function starts ({len(starts)} found, base={hex(args.base)}):")
+        for va in starts:
+            print(f"  {hex(va)}")
+
+
 def cmd_news(args):
     print(_RECENT_UPDATES)
 
@@ -988,6 +1055,25 @@ def main():
     p_arc_decode.add_argument('--limit', type=int, default=0, help='limit output to N frames (0 = all)')
     p_arc_decode.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_arc_decode.set_defaults(func=cmd_arc_decode)
+
+    # v850 (V850 taint tracker)
+    p_v850 = sub.add_parser('v850', help='V850 taint analysis: V850 EABI; RH850/G3M automotive ECU, V850E2R industrial, V850E3V5 ASIL-D')
+    p_v850.add_argument('binary')
+    p_v850.add_argument('--be', action='store_true', help='big-endian (default: little-endian)')
+    p_v850.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_v850.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_v850.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_v850.set_defaults(func=cmd_v850)
+
+    # v850-decode (V850 frame decoder)
+    p_v850_decode = sub.add_parser('v850-decode', help='V850 instruction frame decoder: 16/32-bit width discriminant + JARL/JMP[lp] classification')
+    p_v850_decode.add_argument('binary')
+    p_v850_decode.add_argument('--be', action='store_true', help='big-endian (default: little-endian)')
+    p_v850_decode.add_argument('--base', type=lambda x: int(x, 0), default=0, help='base VA for .text (hex ok)')
+    p_v850_decode.add_argument('--frames', action='store_true', help='dump all frames (not just control-flow)')
+    p_v850_decode.add_argument('--limit', type=int, default=0, help='limit output to N frames (0 = all)')
+    p_v850_decode.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_v850_decode.set_defaults(func=cmd_v850_decode)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
