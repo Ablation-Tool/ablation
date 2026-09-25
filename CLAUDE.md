@@ -31,7 +31,8 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **ARC taint tracker**: ARCTaintTracker: Synopsys DesignWare ARC 700 / ARC HS; r0-r7 args (8 regs), r0 return, r13-r25 callee-saved, r31=BLINK; variable-length 16/32-bit frame decoder (ARCDecoder); auto-upgrades to full decode when capstone next (CS_ARCH_ARC) is installed; push_s blink prologue detection; recv/read to system/strcpy/execve sinks; interprocedural BFS depth 4; little-endian (Linux ARC HS, IoT MCUs, smart TV SoCs, Marvell/Seagate storage controllers) and big-endian (ARC 700)
 - **RISC-V 32 taint tracker**: RISCV32TaintTracker: ilp32 ABI; a0-a7 args (8 regs), a0 return, s0-s11 callee-saved; capstone CS_ARCH_RISCV + CS_MODE_RISCV32 + CS_MODE_RISCVC; jal (direct, PC-rel 21-bit), jalr (indirect), c.jal/c.jalr (RVC); ret/c.jr ra/jr ra return detection; prologue scan addi sp,sp,-N; recv/read to system/strcpy/execve sinks; interprocedural BFS depth 4; SiFive/StarFive Linux, Allwinner D1, ESP32-C3, GD32VF103, VisionFive 2, Milk-V Duo, OpenWrt RISC-V
 - **RISC-V 64 taint tracker**: RISCV64TaintTracker: lp64 ABI (same register model as RV32); capstone CS_ARCH_RISCV + CS_MODE_RISCV64 + CS_MODE_RISCVC; adds ld/sd, addiw, addw/subw/mulw/divw/remw, sllw/srlw/sraw, c.ld/c.ldsp/c.addiw/c.addw/c.subw; identical call/ret detection; interprocedural BFS depth 4; VisionFive 2 (JH7110), SiFive Unmatched (FU740), Milk-V Pioneer (SG2042), SpacemiT K1, SOPHON BM1684, OpenWrt RISC-V 64
-- **DisasmEngine MIPS/PPC/ARC/RISC-V expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64'/'arc'/'arc32'/'riscv'/'riscv32'/'riscv64' + endian kwarg; prologue detection per arch (stwu PPC32, stdu PPC64, push_s blink ARC, addi sp,sp,-N RISC-V 32+64); per-arch branch/call/ret classification in stream()
+- **V850 32 taint tracker**: V850TaintTracker: Renesas V850 EABI ABI; r6-r9 args (4 regs only), r10 return, r20-r29 callee-saved, r31=lp; variable-length 16/32-bit frame decoder (V850Decoder); pure-Python (no capstone V850); JARL disp22 lp call (op6=0x3E + reg2=r31); JMP [lp] return (op6=0x06 + reg1=r31); PREPARE prologue scan; recv/read to system/strcpy/execve sinks; interprocedural BFS depth 4; Renesas RH850/G3M (automotive ECU, AUTOSAR), RH850/G3MH, V850E2R (industrial), V850E3V5 (dual-core ASIL-D), NEC V850ES/SJ3
+- **DisasmEngine MIPS/PPC/ARC/RISC-V/V850 expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64'/'arc'/'arc32'/'riscv'/'riscv32'/'riscv64'/'v850' + endian kwarg; prologue detection per arch (stwu PPC32, stdu PPC64, push_s blink ARC, addi sp,sp,-N RISC-V 32+64, prepare V850); per-arch branch/call/ret classification in stream()
 - **Crypto analysis**: XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis**: ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -111,6 +112,11 @@ if ctx.names_count():
 | "RISC-V 64: trace recv to system/strcpy (VisionFive 2, SiFive Unmatched)" | `RISCV64TaintTracker.from_path(elf).run_interprocedural()` |
 | "RISC-V 64: custom sinks" | `RISCV64TaintTracker.from_path(elf, custom_sinks={'rv64_exec': [0]}).run()` |
 | "RISC-V 64 disasm via DisasmEngine (with RVC)" | `DisasmEngine(arch='riscv64')` |
+| "V850: trace recv to system/strcpy (RH850/G3M ECU, V850E2R)" | `V850TaintTracker.from_path(elf).run_interprocedural()` |
+| "V850: big-endian V850 firmware" | `V850TaintTracker.from_path(elf)` (endian auto-detected via lief; pass endian kwarg to override) |
+| "V850: walk frame boundaries, decode all instructions" | `V850Decoder(endian='little').decode_frames(data, base_addr)` |
+| "V850: find function starts by prologue (PREPARE)" | `V850Disasm(endian='little').find_function_starts(data, base_addr)` |
+| "V850: DisasmEngine-compatible instruction stream" | `DisasmEngine(arch='v850', endian='little')` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
