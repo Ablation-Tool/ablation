@@ -240,6 +240,15 @@ _PPC_BRANCH_MNEMS = frozenset({
 _PPC_CALL_MNEMS = frozenset({'bl', 'bla', 'bctrl'})
 _PPC_RET_MNEMS  = frozenset({'blr', 'blrl'})
 
+# RISC-V mnemonic sets (capstone lowercase; RVC variants included)
+_RISCV_BRANCH_MNEMS = frozenset({
+    'j', 'beq', 'bne', 'blt', 'bge', 'bltu', 'bgeu',
+    'c.beqz', 'c.bnez',
+    'jr', 'c.jr',  # indirect branch (jr ra handled as ret in stream)
+})
+_RISCV_CALL_MNEMS = frozenset({'jal', 'c.jal', 'jalr', 'c.jalr'})
+_RISCV_RET_MNEMS  = frozenset({'ret'})  # also 'c.jr'/'jr' with op_str=='ra'
+
 
 class DisasmEngine:
     """Universal disassembly engine — Capstone linear sweep."""
@@ -287,6 +296,9 @@ class DisasmEngine:
             # capstone 5.x has no CS_ARCH_ARC; use the pure-Python arc_decoder
             # for stream() when arch=='arc'/'arc32'. self.md stays None.
             self._arc_endian = endian
+        elif arch in ('riscv', 'riscv32'):
+            from capstone import CS_ARCH_RISCV, CS_MODE_RISCV32, CS_MODE_RISCVC
+            self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV32 | CS_MODE_RISCVC)
 
         if self.md:
             self.md.detail = True
@@ -342,8 +354,9 @@ class DisasmEngine:
             return
         # disasm_lite() is the streaming API in Capstone 5+; disasm_iter was removed.
         # Returns (address, size, mnemonic, op_str) tuples — no .bytes attribute.
-        is_mips = self.arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips')
-        is_ppc  = self.arch in ('ppc', 'ppc32', 'ppc64')
+        is_mips   = self.arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips')
+        is_ppc    = self.arch in ('ppc', 'ppc32', 'ppc64')
+        is_riscv  = self.arch in ('riscv', 'riscv32')
         for i, (address, size, mnemonic, op_str) in enumerate(self.md.disasm_lite(code, base_addr)):
             if count and i >= count:
                 return
@@ -358,6 +371,13 @@ class DisasmEngine:
                 _is_call = mnemonic in _PPC_CALL_MNEMS
                 _is_ret  = mnemonic in _PPC_RET_MNEMS
                 _btype   = ('unconditional' if mnemonic in ('b', 'ba', 'bl', 'bla', 'bctr', 'bctrl', 'blr', 'blrl')
+                            else 'conditional') if (_is_br or _is_call or _is_ret) else None
+            elif is_riscv:
+                _is_ret  = (mnemonic == 'ret' or
+                            (mnemonic in ('c.jr', 'jr') and op_str.strip() == 'ra'))
+                _is_call = mnemonic in _RISCV_CALL_MNEMS and not _is_ret
+                _is_br   = (mnemonic in _RISCV_BRANCH_MNEMS and not _is_ret and not _is_call)
+                _btype   = ('unconditional' if mnemonic in ('j', 'jal', 'c.jal', 'jalr', 'c.jalr', 'ret', 'jr', 'c.jr')
                             else 'conditional') if (_is_br or _is_call or _is_ret) else None
             else:
                 _is_br   = mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge',
@@ -672,6 +692,11 @@ class DisasmEngine:
         elif self.arch in ('arc', 'arc32'):
             # push_s blink -- saves BLINK to stack (compact 16-bit prologue)
             if insn.mnemonic == 'push_s' and 'blink' in insn.op_str:
+                return True
+
+        elif self.arch in ('riscv', 'riscv32'):
+            # addi sp, sp, -N  (standard RISC-V function frame allocation)
+            if insn.mnemonic in ('addi', 'c.addi16sp') and 'sp, sp, -' in insn.op_str:
                 return True
 
         elif self.arch == 'arm':
