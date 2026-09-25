@@ -14,7 +14,7 @@ Surveying available RPMs for next audit target.
 | Cisco ThreatGrid v1.3.0 | `targets/fortinet/SESSION_threatgrid.md` | COMPLETE -- 7 findings (TG-1/2 HIGH: api_key logged+persisted in DB) |
 | Cisco Talos TI v1.0.0 | targets/fortinet/SESSION_talos_ti.md | publisher=SpryIQ.co cs_approved=false; CT-1/2/4 CONFIRMED; COMPLETE |
 | FortiExplorer OnlineInstaller v2.6.1083 | `targets/fortinet/SESSION_fortiexplorer_installer.md` | FXE-1 CRIT HTTP MITM→RCE; FXE-2 OpenSSL 1.0.1j; pending: port confirm + PoC |
-| FortiGate 7000F | `targets/fortinet/SESSION_fgt7kf.md` | C17 CONFIRMED HIGH; FGT7K-4 CANDIDATE HIGH; C14/C21/BMP/PNG/MP4 ELIMINATED (session 9); C19 LOW no-upgrade |
+| FortiGate 7000F | `targets/fortinet/SESSION_fgt7kf.md` | C17 CONFIRMED HIGH; FGT7K-4 CANDIDATE HIGH; C14/C21/BMP/PNG/MP4/PDF ELIMINATED (session 9) |
 | FortiManager 8.0.0 | `targets/fortinet/SESSION_fmg800.md` | 54 binary RE + 43 platform RE findings; source recovered 2026-09-24 from pyc; 15 findings pending final status; disclosure merge pending |
 | Google Chrome 154.0.8037.57 | `targets/google/SESSION_chrome154.md` | Module scaffolded; sweep pending; chrome-sandbox SUID is priority target |
 
