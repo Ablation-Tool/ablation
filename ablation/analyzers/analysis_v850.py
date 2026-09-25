@@ -1,0 +1,113 @@
+"""Path-insensitive, flow-sensitive dataflow analysis over a V850/RH850 CFG.
+
+Usage:
+    from ablation.analyzers.analysis_v850 import analyze_cfg
+    from ablation.analyzers.taint_tracker_v850 import State
+    from ablation.analyzers.isa_v850 import Variant
+    from ablation.analyzers.insn_v850 import from_listing
+
+    init = State()
+    init.taint_reg("r6", "user")
+    result = analyze_cfg(list(from_listing(text)), Variant.RH850, initial=init)
+    for f in result.findings:
+        print(f)
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Sequence, Set, Tuple
+
+from .cfg_v850 import CFG, build_cfg
+from .insn_v850 import Insn
+from .isa_v850 import Variant
+from .taint_tracker_v850 import Finding, State, TaintEngine
+
+
+@dataclass
+class CFGResult:
+    cfg: CFG
+    findings: List[Finding]
+    entry_states: Dict[int, State]
+    exit_states: Dict[int, State]
+    iterations: int
+    unknown: Set[str] = field(default_factory=set)
+    unreachable: List[int] = field(default_factory=list)
+
+
+def _loop_heads(cfg: CFG) -> Set[int]:
+    heads: Set[int] = set()
+    color: Dict[int, int] = {}
+
+    def dfs(start: int) -> None:
+        stack: List[Tuple[int, int]] = [(start, 0)]
+        color[start] = 1
+        while stack:
+            node, i = stack[-1]
+            succs = cfg.blocks[node].succs
+            if i < len(succs):
+                stack[-1] = (node, i + 1)
+                s = succs[i]
+                c = color.get(s, 0)
+                if c == 1:
+                    heads.add(s)
+                elif c == 0:
+                    color[s] = 1
+                    stack.append((s, 0))
+            else:
+                color[node] = 2
+                stack.pop()
+
+    dfs(cfg.entry)
+    for b in cfg.blocks:
+        if color.get(b, 0) == 0:
+            dfs(b)
+    return heads
+
+
+def analyze_cfg(
+    insns: Sequence[Insn],
+    variant: Variant = Variant.RH850,
+    initial: Optional[State] = None,
+    entry: Optional[int] = None,
+    max_iterations: int = 10_000,
+) -> CFGResult:
+    cfg = build_cfg(insns, variant=variant, entry=entry)
+    heads = _loop_heads(cfg)
+
+    entry_states: Dict[int, State] = {cfg.entry: (initial or State()).copy()}
+    exit_states: Dict[int, State] = {}
+    visits: Dict[int, int] = {}
+    seen_findings: Set[Tuple[int, str, frozenset]] = set()
+    findings: List[Finding] = []
+    unknown: Set[str] = set()
+
+    worklist: List[int] = [cfg.entry]
+    iterations = 0
+    while worklist and iterations < max_iterations:
+        iterations += 1
+        b = worklist.pop(0)
+        block = cfg.blocks[b]
+        visits[b] = visits.get(b, 0) + 1
+
+        t = TaintEngine(variant)
+        t.state = entry_states[b].copy()
+        t.run(block.insns)
+        unknown |= t.unknown
+        for f in t.findings:
+            key = (f.address, f.kind, f.labels)
+            if key not in seen_findings:
+                seen_findings.add(key)
+                findings.append(f)
+
+        exit_states[b] = t.state
+        for s in block.succs:
+            widen = s in heads and visits.get(s, 0) >= 2
+            new = t.state.copy() if s not in entry_states else entry_states[s].join(t.state, widen=widen)
+            if s not in entry_states or not new.same_as(entry_states[s]):
+                entry_states[s] = new
+                if s not in worklist:
+                    worklist.append(s)
+
+    findings.sort(key=lambda f: f.address)
+    unreachable = sorted(b for b in cfg.blocks if b not in entry_states)
+    return CFGResult(cfg, findings, entry_states, exit_states, iterations, unknown, unreachable)
