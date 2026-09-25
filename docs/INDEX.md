@@ -68,6 +68,10 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.5.0 | FormatStringScanner fortify variants, IoctlAttackSurfaceGenerator, CrossBinaryTaintTracker, BYOVDDetector PDB fingerprints |
+| v2.4.0 | MIPS32TaintTracker, HeapVulnScanner (INT_OVERFLOW/UAF/double-free/off-by-one) |
+| v2.3.0 | BYOVDDetector 8-path scoring, SSDT/CR0/CR4/token-steal/APC primitives |
+| v2.0.0 | KernelDriverAnalyzer: IRP/IOCTL dispatch, 40+ API risk classes, SMEP/CR0 scan |
 | v1.8.0 | NameRegistry overlay, FindingRegistry, PatternLibrary self-improvement loop |
 | v1.7.0 | LlmAnalyst ReAct agent, TaintTracker x86-64, PathSolver |
 | v1.6.0 | VtableResolver ARM64, VersionDelta CFG shape diffing |

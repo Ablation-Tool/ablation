@@ -84,14 +84,20 @@ ablation/analyzers/
   llm_analyst/            LlmAnalyst -- ReAct agent loop for automated function naming
 ```
 
-**50+ analyzers. One install.**
+**75+ analyzers. One install.**
+
+---
+
+## Real-world results
+
+Following coordinated disclosure on Cisco FMC and ISE, Cisco PSIRT has adopted Ablation for internal vulnerability triage across Firepower Threat Defense, Cisco Secure Client, HyperFlex, and Catalyst. Published CVEs: CVE-2026-76420 (FMC, 9.0 Critical), CVE-2026-76412 (FMC, 8.5 High), CVE-2026-76413 (FMC, 8.5 High), CVE-2026-76447 (ISE, 5.3 Medium).
 
 ---
 
 ## Install
 
 ```bash
-pip install ablation
+pip install git+https://github.com/Ablation-Tool/ablation
 ```
 
 From source:
@@ -102,10 +108,10 @@ cd ablation
 pip install -e .
 ```
 
-Optional LLM features (automated naming via Claude):
+With LLM features (automated naming via Claude):
 
 ```bash
-pip install ablation[llm]
+pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ```
 
 ---
