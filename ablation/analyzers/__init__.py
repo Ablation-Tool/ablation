@@ -24,6 +24,8 @@ from .matrix_profile_diff import MatrixProfileDiff, DiffResult, ChangeRegion
 from .dtw_matcher import DTWMatcher, HomologMatch, SimilarityReport, dtw_distance, dtw_similarity
 from .sax_index import SAXIndex, SAXMatch, IndexEntry, encode_sax, sax_mindist
 from .subsequence_searcher import SubsequenceSearcher, PatternMatch, parse_pattern
+from .taint_tracker_mips64 import MIPS64TaintTracker, TaintFinding64, InterproceduralPath64
+from .nanomips_decoder import NanoMIPSDecoder, NanoMIPSDisasm, NanoFrame
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -52,4 +54,6 @@ __all__ = [
     "DTWMatcher", "HomologMatch", "SimilarityReport", "dtw_distance", "dtw_similarity",
     "SAXIndex", "SAXMatch", "IndexEntry", "encode_sax", "sax_mindist",
     "SubsequenceSearcher", "PatternMatch", "parse_pattern",
+    "MIPS64TaintTracker", "TaintFinding64", "InterproceduralPath64",
+    "NanoMIPSDecoder", "NanoMIPSDisasm", "NanoFrame",
 ]
