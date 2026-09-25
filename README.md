@@ -189,7 +189,7 @@ flowchart TD
     LIBS --> LSCAN
 
     DA2 --> F1
-    LSCAN --> F1["F1 · HIGH<br/>verifySafeModel blocks 2 of 2481 ops<br/>upload malicious .pt via ML API<br/>seccomp BPF not yet decoded — CIA open"]
+    LSCAN --> F1["F1 · HIGH<br/>verifySafeModel blocks 2 of 2481 ops<br/>upload malicious .pt via ML API<br/>seccomp BPF not yet decoded, CIA impact open"]
 
     DA3 --> F2
     XREF2 --> F2["F2 · LOW<br/>controller spawn allowlist is sound<br/>but args vector unchecked<br/>requires elasticsearch user pipe access"]
