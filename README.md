@@ -42,53 +42,26 @@ flowchart TD
 ## Local Decompilers
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#fff'}}}%%
-graph TD
-    %% Main Node
-    Start(Local Decompilers)
-
-    %% Connections
-    Start --> X86_32
-    Start --> X86_64
-    Start --> ARM_32
-    Start --> ARM_64
-    Start --> MIPS_32
-    Start --> MIPS_64
-    Start --> PPC_32
-    Start --> PPC_64
-    Start --> ARC
-    Start --> RISCV_32
-    Start --> RISCV_64
-    Start --> V850
-
-    %% Labels
-    X86_32[x86 - 32]
-    X86_64[x86 - 64]
-    ARM_32[ARM - 32]
-    ARM_64[ARM - 64]
-    MIPS_32[MIPS 32+nM]
-    MIPS_64[MIPS - 64]
-    PPC_32[PPC - 32]
-    PPC_64[PPC - 64]
-    ARC[ARC EM/HS]
-    RISCV_32[RISC-V 32]
-    RISCV_64[RISC-V 64]
-    V850[V850 - 32]
-
-    %% Styling for groups
-    classDef x86 fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef arm fill:#ccf,stroke:#333,stroke-width:2px;
-    classDef mips fill:#ff9,stroke:#333,stroke-width:2px;
-    classDef ppc fill:#9f9,stroke:#333,stroke-width:2px;
-    classDef riscv fill:#f99,stroke:#333,stroke-width:2px;
-    classDef embedded fill:#ddd,stroke:#333,stroke-width:2px;
-
-    class X86_32,X86_64 x86;
-    class ARM_32,ARM_64 arm;
-    class MIPS_32,MIPS_64 mips;
-    class PPC_32,PPC_64 ppc;
-    class RISCV_32,RISCV_64 riscv;
-    class ARC,V850 embedded;
+mindmap
+  root((Local Decompilers))
+    x86 Family
+      x86 - 32
+      x86 - 64
+    ARM Family
+      ARM - 32
+      ARM - 64
+    MIPS Family
+      MIPS 32+nM
+      MIPS - 64
+    PowerPC Family
+      PPC - 32
+      PPC - 64
+    RISC-V Family
+      RISC-V 32
+      RISC-V 64
+    Embedded / Other
+      ARC EM/HS
+      V850 - 32
 ```
 
 ---
