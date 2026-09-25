@@ -170,6 +170,57 @@ def _classify(hw0: int, hw1: int, va: int) -> Tuple[str, str, bool, bool, bool, 
         tgt = va + raw9
         return mnem, f'0x{tgt:x}', True, False, False, tgt
 
+    # ---- 16-bit Format I: reg1 op reg2 -> reg2 (destination last)
+    # Source: Renesas V850E2M Architecture Manual R01US0001 Table 3-2
+    if op6 == 0x00: return 'mov',    f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x01: return 'not',    f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x02: return 'divh',   f'r{reg1}, r{reg2}', False, False, False, 0
+    # 0x03 = JMP handled above
+    if op6 == 0x04: return 'satadd', f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x05: return 'satsubr',f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x06: return 'satsub', f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x07: return 'nop',    '', False, False, False, 0
+    # op6 0x08-0x0A: Format II (imm5 in bits[15:11], sign-extended 5-bit)
+    if op6 in (0x08, 0x09, 0x0A):
+        imm5 = (hw0 >> 11) & 0x1F
+        if imm5 >= 0x10: imm5 -= 0x20
+        mn = ('mov', 'add', 'cmp')[op6 - 0x08]
+        return mn, f'{imm5}, r{reg2}', False, False, False, 0
+    if op6 == 0x0B: return 'mulh',   f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x0C: return 'cmp',    f'r{reg1}, r{reg2}', False, False, False, 0  # flags only
+    if op6 == 0x0D: return 'sub',    f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x0E: return 'subr',   f'r{reg1}, r{reg2}', False, False, False, 0
+    if op6 == 0x0F: return 'add',    f'r{reg1}, r{reg2}', False, False, False, 0
+
+    # ---- 16-bit V850E unary in-place (single-register, destination = reg2)
+    if op6 == 0x10: return 'zxb', f'r{reg2}', False, False, False, 0
+    if op6 == 0x12: return 'zxh', f'r{reg2}', False, False, False, 0
+    if op6 == 0x14: return 'sxb', f'r{reg2}', False, False, False, 0
+    if op6 == 0x16: return 'sxh', f'r{reg2}', False, False, False, 0
+
+    # ---- 16-bit shift with imm5 in-place (op6 0x15=sar, 0x17=shr, 0x1E=shl)
+    if op6 in (0x15, 0x17, 0x1E):
+        imm5 = (hw0 >> 11) & 0x1F
+        mn = {0x15: 'sar', 0x17: 'shr', 0x1E: 'shl'}[op6]
+        return mn, f'{imm5}, r{reg2}', False, False, False, 0
+
+    # ---- 16-bit short loads: ep-relative, reg2 is destination
+    if op6 == 0x18: return 'sld.b', f'{(hw0>>11)&0x1F}[ep], r{reg2}', False, False, False, 0
+    if op6 == 0x19: return 'sld.h', f'{(hw0>>11)&0x1F}[ep], r{reg2}', False, False, False, 0
+    if op6 == 0x1A: return 'sld.w', f'{(hw0>>11)&0x1F}[ep], r{reg2}', False, False, False, 0
+    if op6 == 0x1B: return 'sst.w', f'r{reg2}, {(hw0>>11)&0x1F}[ep]', False, False, False, 0
+
+    # ---- 32-bit Format VI: imm16 arithmetic (op6 0x30-0x37)
+    # Encoding: hw0[15:11]=reg1, hw0[4:0]=reg2(dest), hw1[15:0]=imm16
+    # Source: R01US0001 Table 3-2, Format VI
+    if 0x30 <= op6 <= 0x37:
+        imm16 = hw1 & 0xFFFF
+        _F6 = (None, None, None, None, None, None, None, None,  # padding -- indexed from 0x30
+               'addi', 'movea', 'movhi', 'mulhi', 'ori', 'xori', 'andi', 'mulhi')
+        mn = _F6[op6 - 0x30 + 8]  # offset into tuple
+        if mn is None: mn = '???'
+        return mn, f'{imm16}, r{reg1}, r{reg2}', False, False, False, 0
+
     return '???', '', False, False, False, 0
 
 
