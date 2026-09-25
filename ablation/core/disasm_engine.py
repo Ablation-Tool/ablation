@@ -296,9 +296,10 @@ class DisasmEngine:
             # capstone 5.x has no CS_ARCH_ARC; use the pure-Python arc_decoder
             # for stream() when arch=='arc'/'arc32'. self.md stays None.
             self._arc_endian = endian
-        elif arch in ('riscv', 'riscv32'):
-            from capstone import CS_ARCH_RISCV, CS_MODE_RISCV32, CS_MODE_RISCVC
-            self.md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV32 | CS_MODE_RISCVC)
+        elif arch in ('riscv', 'riscv32', 'riscv64'):
+            from capstone import CS_ARCH_RISCV, CS_MODE_RISCV32, CS_MODE_RISCV64, CS_MODE_RISCVC
+            cs_width = CS_MODE_RISCV64 if arch == 'riscv64' else CS_MODE_RISCV32
+            self.md = Cs(CS_ARCH_RISCV, cs_width | CS_MODE_RISCVC)
 
         if self.md:
             self.md.detail = True
@@ -356,7 +357,7 @@ class DisasmEngine:
         # Returns (address, size, mnemonic, op_str) tuples — no .bytes attribute.
         is_mips   = self.arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips')
         is_ppc    = self.arch in ('ppc', 'ppc32', 'ppc64')
-        is_riscv  = self.arch in ('riscv', 'riscv32')
+        is_riscv  = self.arch in ('riscv', 'riscv32', 'riscv64')
         for i, (address, size, mnemonic, op_str) in enumerate(self.md.disasm_lite(code, base_addr)):
             if count and i >= count:
                 return
@@ -694,7 +695,7 @@ class DisasmEngine:
             if insn.mnemonic == 'push_s' and 'blink' in insn.op_str:
                 return True
 
-        elif self.arch in ('riscv', 'riscv32'):
+        elif self.arch in ('riscv', 'riscv32', 'riscv64'):
             # addi sp, sp, -N  (standard RISC-V function frame allocation)
             if insn.mnemonic in ('addi', 'c.addi16sp') and 'sp, sp, -' in insn.op_str:
                 return True
