@@ -7,6 +7,10 @@ Extracts the searchable attack surface from a .beam file:
   - All atoms (AtU8/Atom chunk)           -- equivalent to string table
   - Literals (LitT chunk, ETF-decoded)    -- embedded constants
   - String table (StrT chunk)             -- raw string segments
+  - Debug info (Dbgi chunk)               -- source file, AST-level function
+                                             definitions with line numbers,
+                                             record names, included headers
+  - Obfuscation indicators                -- missing/stripped chunks
 
 Usage:
     from ablation.analyzers.beam_context import BeamContext
@@ -24,9 +28,13 @@ Usage:
         if imp.function in ('os_cmd', 'open_port', 'apply'):
             print(f'[!] {imp}')
 
-    # Export surface
-    for exp in ctx.exports:
-        print(exp)
+    # Source-level function list (from Dbgi AST, when available)
+    for fn in ctx.ast_functions:
+        print(fn)   # "name/arity  line N"
+
+    # Obfuscation check
+    if ctx.obfuscated:
+        print(f'Obfuscation indicators: {ctx.obfuscation_indicators}')
 """
 
 from __future__ import annotations
@@ -93,6 +101,16 @@ class BeamImport:
 
 
 @dataclass
+class BeamAstFunction:
+    name: str
+    arity: int
+    line: int
+
+    def __str__(self) -> str:
+        return f"{self.name}/{self.arity}  line {self.line}"
+
+
+@dataclass
 class BeamContext:
     path: str
     module_name: str = ""
@@ -102,6 +120,15 @@ class BeamContext:
     literals: List[str] = field(default_factory=list)   # ETF-decoded repr strings
     strings: List[str] = field(default_factory=list)    # StrT raw segments
     chunks: List[str] = field(default_factory=list)     # chunk IDs present
+    # Dbgi-derived (AST level, when debug info is present)
+    source_file: str = ""                               # original .erl filename
+    ast_functions: List[BeamAstFunction] = field(default_factory=list)
+    ast_records: List[str] = field(default_factory=list)   # record names
+    ast_includes: List[str] = field(default_factory=list)  # included .hrl files
+    has_debug_info: bool = False
+    # Obfuscation
+    obfuscated: bool = False
+    obfuscation_indicators: List[str] = field(default_factory=list)
 
     # ------------------------------------------------------------------
     # Construction
@@ -151,6 +178,13 @@ class BeamContext:
             ctx.strings = [seg for seg in strt.split(b'\x00') if seg]
             ctx.strings = [s.decode('utf-8', errors='replace') for s in ctx.strings]
 
+        # 6. Debug info (Dbgi chunk: ETF COMPRESSED_EXT wrapping AST)
+        if 'Dbgi' in raw_chunks:
+            _parse_dbgi(raw_chunks['Dbgi'], ctx)
+
+        # 7. Obfuscation indicators
+        _detect_obfuscation(ctx, raw_chunks)
+
         return ctx
 
     # ------------------------------------------------------------------
@@ -178,19 +212,35 @@ class BeamContext:
 
     def summary(self) -> str:
         dangerous = self.dangerous_imports()
+        dbgi_line = (
+            f"yes  ({len(self.ast_functions)} funcs, src={self.source_file})"
+            if self.has_debug_info else "no (stripped)"
+        )
+        obf_line = (
+            f"YES -- {', '.join(self.obfuscation_indicators)}"
+            if self.obfuscated else "no"
+        )
         lines = [
             f"BeamContext: {Path(self.path).name}",
-            f"  module    : {self.module_name}",
-            f"  atoms     : {len(self.atoms)}",
-            f"  exports   : {len(self.exports)}",
-            f"  imports   : {len(self.imports)}  ({len(dangerous)} dangerous)",
-            f"  literals  : {len(self.literals)}",
-            f"  chunks    : {' '.join(self.chunks)}",
+            f"  module     : {self.module_name}",
+            f"  atoms      : {len(self.atoms)}",
+            f"  exports    : {len(self.exports)}",
+            f"  imports    : {len(self.imports)}  ({len(dangerous)} dangerous)",
+            f"  literals   : {len(self.literals)}",
+            f"  debug info : {dbgi_line}",
+            f"  obfuscated : {obf_line}",
+            f"  chunks     : {' '.join(self.chunks)}",
         ]
         if self.exports:
             lines.append("\n  exports:")
             for e in self.exports:
                 lines.append(f"    {e}")
+        if self.ast_functions:
+            lines.append("\n  functions (from AST):")
+            for f in self.ast_functions[:15]:
+                lines.append(f"    {f}")
+            if len(self.ast_functions) > 15:
+                lines.append(f"    ... ({len(self.ast_functions) - 15} more)")
         if dangerous:
             lines.append("\n  dangerous imports:")
             for i in dangerous:
@@ -240,6 +290,125 @@ def fmt_sweep(results: List[BeamContext]) -> str:
 # ---------------------------------------------------------------------------
 # Internal parsers
 # ---------------------------------------------------------------------------
+
+def _parse_dbgi(dbgi_bytes: bytes, ctx: BeamContext) -> None:
+    """
+    Parse Dbgi chunk: ETF COMPRESSED_EXT wrapping {debug_info_v1, erl_abstract_code, {Forms, Opts}}.
+    Extracts source file, AST-level function definitions, record names, included headers.
+    """
+    if len(dbgi_bytes) < 7:
+        return
+    if dbgi_bytes[0] != 0x83 or dbgi_bytes[1] != 0x50:
+        return  # not the expected COMPRESSED_EXT format
+    try:
+        raw = zlib.decompress(dbgi_bytes[6:])
+    except Exception:
+        return
+
+    # raw is ETF without the 0x83 version prefix; add it back for _etf_to_python
+    full = b'\x83' + raw
+    try:
+        term = _etf_to_python(full, 1)[0]
+    except Exception:
+        return
+
+    # Expected: ('debug_info_v1', 'erl_abstract_code', ({'Forms'}, opts))
+    if not (isinstance(term, tuple) and len(term) == 3
+            and term[0] == 'debug_info_v1' and term[1] == 'erl_abstract_code'):
+        return
+
+    inner = term[2]
+    if not (isinstance(inner, tuple) and len(inner) == 2):
+        return
+
+    forms = inner[0]
+    if not isinstance(forms, list):
+        return
+
+    ctx.has_debug_info = True
+
+    for form in forms:
+        if not isinstance(form, tuple) or len(form) < 3:
+            continue
+        tag = form[0]
+
+        if tag == 'attribute':
+            if len(form) < 4:
+                continue
+            attr_name = form[2]
+            attr_val = form[3]
+            if attr_name == 'file' and isinstance(attr_val, tuple) and len(attr_val) == 2:
+                fname = attr_val[0]
+                if isinstance(fname, str) and fname.endswith('.erl') and not ctx.source_file:
+                    ctx.source_file = fname
+            elif attr_name == 'file' and isinstance(attr_val, str) and attr_val.endswith('.erl'):
+                if not ctx.source_file:
+                    ctx.source_file = attr_val
+
+        elif tag == 'function' and len(form) >= 4:
+            fn_name = form[2]
+            arity = form[3]
+            line_info = form[1]
+            line = line_info[0] if isinstance(line_info, tuple) else line_info
+            if isinstance(fn_name, str) and isinstance(arity, int) and isinstance(line, int):
+                ctx.ast_functions.append(BeamAstFunction(name=fn_name, arity=arity, line=line))
+
+    # Detect included .hrl files from file attributes (multiple occurrences = includes)
+    seen_files: list = []
+    for form in forms:
+        if (isinstance(form, tuple) and len(form) >= 4
+                and form[0] == 'attribute' and form[2] == 'file'):
+            val = form[3]
+            fname = val[0] if isinstance(val, tuple) and len(val) == 2 else val
+            if isinstance(fname, str) and fname not in seen_files:
+                seen_files.append(fname)
+    # First is the module's own source; rest are includes
+    if len(seen_files) > 1:
+        ctx.ast_includes = seen_files[1:]
+
+    # Record names from record attributes
+    for form in forms:
+        if (isinstance(form, tuple) and len(form) >= 4
+                and form[0] == 'attribute' and form[2] == 'record'):
+            rec = form[3]
+            rname = rec[0] if isinstance(rec, tuple) and len(rec) >= 1 else rec
+            if isinstance(rname, str):
+                ctx.ast_records.append(rname)
+
+
+def _detect_obfuscation(ctx: BeamContext, raw_chunks: dict) -> None:
+    """
+    Flag obfuscation indicators based on missing or stripped chunks.
+    """
+    indicators = []
+
+    # Atom table absent -- primary obfuscation target
+    if 'AtU8' not in raw_chunks and 'Atom' not in raw_chunks:
+        indicators.append("atom table missing")
+
+    # Debug info stripped -- common in production, but also deliberate obfuscation
+    if 'Dbgi' not in raw_chunks:
+        indicators.append("debug info stripped")
+
+    # Line number table stripped
+    if 'Line' not in raw_chunks:
+        indicators.append("line info stripped")
+
+    # Local function table stripped
+    if 'LocT' not in raw_chunks:
+        indicators.append("local function table missing")
+
+    # Very few atoms relative to import/export count -- atom table may be corrupted
+    if ctx.atoms and len(ctx.atoms) < max(len(ctx.imports), len(ctx.exports)):
+        indicators.append(f"atom table suspiciously small ({len(ctx.atoms)} atoms, "
+                          f"{len(ctx.imports)} imports)")
+
+    # Mark obfuscated only when 2+ indicators, or atom table is outright missing
+    if 'atom table missing' in indicators or len(indicators) >= 2:
+        ctx.obfuscated = True
+
+    ctx.obfuscation_indicators = indicators
+
 
 def _split_chunks(data: bytes) -> dict:
     chunks = {}
@@ -320,6 +489,81 @@ def _parse_literals(data: bytes) -> List[str]:
         lits.append(_etf_repr(term_bytes))
         p += 4 + size
     return lits
+
+
+def _etf_to_python(data: bytes, pos: int):
+    """
+    Structured ETF decoder -- returns actual Python objects (str, int, list, tuple, bytes).
+    Used for Dbgi AST parsing where we need to navigate the term tree.
+    """
+    tag = data[pos]; pos += 1
+
+    if tag == 106:   # NIL
+        return [], pos
+    if tag == 97:    # SMALL_INTEGER_EXT
+        return data[pos], pos + 1
+    if tag == 98:    # INTEGER_EXT
+        return struct.unpack('>i', data[pos:pos+4])[0], pos + 4
+    if tag == 100:   # ATOM_EXT (latin-1)
+        length = struct.unpack('>H', data[pos:pos+2])[0]
+        return data[pos+2:pos+2+length].decode('latin-1', errors='replace'), pos + 2 + length
+    if tag == 115:   # SMALL_ATOM_EXT (latin-1)
+        length = data[pos]
+        return data[pos+1:pos+1+length].decode('latin-1', errors='replace'), pos + 1 + length
+    if tag == 118:   # ATOM_UTF8_EXT
+        length = struct.unpack('>H', data[pos:pos+2])[0]
+        return data[pos+2:pos+2+length].decode('utf-8', errors='replace'), pos + 2 + length
+    if tag == 119:   # SMALL_ATOM_UTF8_EXT
+        length = data[pos]
+        return data[pos+1:pos+1+length].decode('utf-8', errors='replace'), pos + 1 + length
+    if tag == 107:   # STRING_EXT
+        length = struct.unpack('>H', data[pos:pos+2])[0]
+        return data[pos+2:pos+2+length].decode('latin-1', errors='replace'), pos + 2 + length
+    if tag == 109:   # BINARY_EXT
+        length = struct.unpack('>I', data[pos:pos+4])[0]
+        return data[pos+4:pos+4+length], pos + 4 + length
+    if tag == 104:   # SMALL_TUPLE_EXT
+        arity = data[pos]; pos += 1
+        elements, pos = _etf_to_python_seq(data, pos, arity)
+        return tuple(elements), pos
+    if tag == 105:   # LARGE_TUPLE_EXT
+        arity = struct.unpack('>I', data[pos:pos+4])[0]; pos += 4
+        elements, pos = _etf_to_python_seq(data, pos, arity)
+        return tuple(elements), pos
+    if tag == 108:   # LIST_EXT
+        length = struct.unpack('>I', data[pos:pos+4])[0]; pos += 4
+        elements, pos = _etf_to_python_seq(data, pos, length)
+        _tail, pos = _etf_to_python(data, pos)  # tail (usually [])
+        return elements, pos
+    if tag == 110:   # SMALL_BIG_EXT
+        n = data[pos]; sign = data[pos+1]; pos += 2
+        val = int.from_bytes(data[pos:pos+n], 'little')
+        return (-val if sign else val), pos + n
+    if tag == 111:   # LARGE_BIG_EXT
+        n = struct.unpack('>I', data[pos:pos+4])[0]; sign = data[pos+4]; pos += 5
+        val = int.from_bytes(data[pos:pos+n], 'little')
+        return (-val if sign else val), pos + n
+    if tag == 70:    # NEW_FLOAT_EXT
+        val = struct.unpack('>d', data[pos:pos+8])[0]
+        return val, pos + 8
+    if tag == 116:   # MAP_EXT
+        arity = struct.unpack('>I', data[pos:pos+4])[0]; pos += 4
+        result = {}
+        for _ in range(arity):
+            k, pos = _etf_to_python(data, pos)
+            v, pos = _etf_to_python(data, pos)
+            result[k] = v
+        return result, pos
+    # Unknown tag -- return raw bytes marker
+    return f"<etf:{tag:#x}>", pos
+
+
+def _etf_to_python_seq(data: bytes, pos: int, count: int):
+    elements = []
+    for _ in range(count):
+        elem, pos = _etf_to_python(data, pos)
+        elements.append(elem)
+    return elements, pos
 
 
 def _etf_repr(data: bytes) -> str:
