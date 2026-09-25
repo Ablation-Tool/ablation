@@ -361,6 +361,19 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v3.0.0 (2026-09-24)  RISC-V 32-bit taint tracker
+  ablation riscv32    <binary> [--interprocedural] [--depth N] [--json FILE]
+  - RISCV32TaintTracker: RISC-V Linux ilp32 ABI; a0-a7 args (8 regs), a0 return,
+    s0-s11 callee-saved; no delay slots; capstone CS_ARCH_RISCV + CS_MODE_RISCV32 + CS_MODE_RISCVC
+  - Sources: recv/recvfrom/read/fgets/gets/fread (return value in a0)
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/snprintf/memcpy/strcat
+  - Call detection: jal (direct, PC-rel 21-bit), jalr (indirect), c.jal/c.jalr (RVC)
+  - Return detection: ret (= jalr zero, 0(ra)), c.jr ra, jr ra
+  - Prologue scan: addi sp, sp, -N (or c.addi16sp for RVC); function-start heuristic
+  - DisasmEngine: arch='riscv'/'riscv32' + CS_MODE_RISCVC (compressed always on)
+  - Targets: SiFive/StarFive Linux SoCs, Allwinner D1, ESP32-C3, GD32VF103, VisionFive 2,
+    Milk-V Duo, Kendryte K210, OpenWrt RISC-V, Sipeed Maix
+
 v2.9.0 (2026-09-25)  Synopsys DesignWare ARC taint tracker + frame decoder
   ablation arc        <binary> [--be] [--interprocedural] [--depth N] [--json FILE]
   ablation arc-decode <binary> [--be] [--base N] [--frames] [--limit N] [--json FILE]
@@ -645,6 +658,32 @@ def cmd_arc_decode(args):
             print(f"  {hex(va)}")
 
 
+def cmd_riscv32(args):
+    from ablation.analyzers.taint_tracker_riscv32 import RISCV32TaintTracker
+
+    p = str(_require_binary(args.binary))
+    tracker = RISCV32TaintTracker.from_path(p)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
 def cmd_ppc64(args):
     from ablation.analyzers.taint_tracker_ppc64 import PPC64TaintTracker
 
@@ -878,6 +917,14 @@ def main():
     p_ppc64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
     p_ppc64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_ppc64.set_defaults(func=cmd_ppc64)
+
+    # riscv32 (RISC-V 32-bit taint tracker)
+    p_riscv32 = sub.add_parser('riscv32', help='RISC-V 32 taint analysis: ilp32 ABI; SiFive, StarFive, Allwinner D1, ESP32-C3, GD32VF103')
+    p_riscv32.add_argument('binary')
+    p_riscv32.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_riscv32.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_riscv32.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_riscv32.set_defaults(func=cmd_riscv32)
 
     # arc (ARC taint tracker)
     p_arc = sub.add_parser('arc', help='ARC taint analysis: ARC EM/HS/770D; smart TV SoCs, storage controllers, automotive')
