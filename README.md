@@ -46,6 +46,7 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **PPC32 taint tracker**: System V / EABI ABI; r3-r10 args (8 regs), r3 return, r13-r31 callee-saved; no delay slots; recv/read to system/strcpy/execve sinks; prologue scan via stwu r1,-N(r1); interprocedural BFS; big-endian (Cisco IOS 7200/3700, MikroTik RB600, VxWorks) and POWER LE Linux (`ablation ppc32`)
 - **PPC64 taint tracker**: ELFv2 (OpenPOWER Linux) and ELFv1 (AIX, old Linux PPC64) ABI; r3-r10 args, r14-r31 callee-saved; 64-bit ops LD/STD/MULLD/DIVD/EXTSW/RLDICL; prologue scan via stdu r1,-N(r1); interprocedural BFS; big-endian (IBM POWER/AIX, Juniper MX/PTX) and little-endian (POWER8+ OpenPOWER Linux) (`ablation ppc64`)
 - **ARC taint tracker**: Synopsys DesignWare ARC 700 / ARC HS; 8 arg regs (r0-r7), r0 return, BLINK (r31) = LR; variable-length 16/32-bit instruction decoder; auto-upgrades to full decode when capstone next branch (CS_ARCH_ARC) is installed; recv/read to system/strcpy/execve sinks; interprocedural BFS; little-endian (Linux ARC HS, IoT SoCs, smart TV, storage controllers) and big-endian (ARC 700) (`ablation arc`)
+- **RISC-V 32 taint tracker**: RV32GC ilp32 ABI; a0-a7 args (8 regs), a0 return, s0-s11 callee-saved; RVC compressed instruction support (CS_MODE_RISCVC); jal/jalr direct and indirect calls; ret/c.jr detection; prologue scan via addi sp,sp,-N; recv/read to system/strcpy/execve sinks; interprocedural BFS; SiFive/StarFive Linux SoCs, Allwinner D1, ESP32-C3, GD32VF103, VisionFive 2, Milk-V Duo, OpenWrt RISC-V (`ablation riscv32`)
 - **BYOVD detector**: scores signed drivers for Bring Your Own Vulnerable Driver primitives; 8 attack paths including MmMapIoSpace, MDL kernel write, MSR_LSTAR, and SSDT hook (`ablation byovd`)
 
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
@@ -83,7 +84,7 @@ Ablation adds what Binary Ninja does not have:
 Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio.
 
 **Architectures:**
-`x86 - 32` `x86 - 64` `ARM - 32` `ARM - 64` `MIPS 32+nM` `MIPS - 64` `PPC - 32` `PPC - 64` `ARC EM/HS` `Windows .sys`
+`x86 - 32` `x86 - 64` `ARM - 32` `ARM - 64` `MIPS 32+nM` `MIPS - 64` `PPC - 32` `PPC - 64` `ARC EM/HS` `RISC-V 32` `Windows .sys`
 
 Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
 
@@ -155,6 +156,9 @@ ablation arc     arc_binary.elf
 ablation arc     arc_binary.elf --interprocedural --depth 4
 ablation arc     arc_binary.elf --be --json arc_findings.json
 ablation arc-decode arc_binary.elf --frames --limit 200
+ablation riscv32 rv32_elf
+ablation riscv32 rv32_elf --interprocedural --depth 4
+ablation riscv32 rv32_elf --json riscv32_findings.json
 ablation byovd   driver.sys
 ablation byovd   driver.sys --json byovd_report.json
 ablation news
