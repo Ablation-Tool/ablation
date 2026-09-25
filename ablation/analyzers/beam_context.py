@@ -39,12 +39,16 @@ Usage:
 
 from __future__ import annotations
 
+import re
 import struct
 import zlib
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
+
+# Matches /erlang/lib/<app>-<version>/ebin/ in a BEAM file path.
+_OTP_APP_RE = re.compile(r'[/\\]erlang[/\\]lib[/\\]([^/\\]+?)-[\d.]+[/\\]ebin[/\\]')
 
 # ---------------------------------------------------------------------------
 # BEAM magic
@@ -162,6 +166,17 @@ class BeamContext:
     # Obfuscation
     obfuscated: bool = False
     obfuscation_indicators: List[str] = field(default_factory=list)
+    # OTP stdlib origin: non-empty when path matches .../erlang/lib/<app>-<vsn>/ebin/
+    otp_app: str = ""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def is_otp(self) -> bool:
+        """True when this module originates from an OTP stdlib application."""
+        return bool(self.otp_app)
 
     # ------------------------------------------------------------------
     # Construction
@@ -188,6 +203,9 @@ class BeamContext:
     @classmethod
     def _parse(cls, data: bytes, path: str) -> "BeamContext":
         ctx = cls(path=path)
+        m = _OTP_APP_RE.search(path)
+        if m:
+            ctx.otp_app = m.group(1)
         raw_chunks = _split_chunks(data)
         ctx.chunks = list(raw_chunks.keys())
 
@@ -264,9 +282,11 @@ class BeamContext:
             f"YES -- {', '.join(self.obfuscation_indicators)}"
             if self.obfuscated else "no"
         )
+        otp_line = self.otp_app if self.otp_app else "no"
         lines = [
             f"BeamContext: {Path(self.path).name}",
             f"  module     : {self.module_name}",
+            f"  otp_app    : {otp_line}",
             f"  atoms      : {len(self.atoms)}",
             f"  exports    : {len(self.exports)}",
             f"  imports    : {len(self.imports)}  ({len(dangerous)} dangerous)",
@@ -303,16 +323,22 @@ class BeamContext:
 # Directory / plugin sweep
 # ---------------------------------------------------------------------------
 
-def sweep_beam_dir(directory: str, dangerous_only: bool = False) -> List[BeamContext]:
+def sweep_beam_dir(directory: str, dangerous_only: bool = False, exclude_otp: bool = False) -> List[BeamContext]:
     """
     Parse all .beam files under directory and return BeamContext list.
-    If dangerous_only=True, only returns modules with at least one dangerous import.
+
+    dangerous_only: only return modules with at least one dangerous import.
+    exclude_otp:    skip modules whose path matches an OTP stdlib install tree
+                    (/erlang/lib/<app>-<version>/ebin/). Use when scanning
+                    application code to suppress expected OTP infrastructure noise.
     """
     results = []
     for beam_path in Path(directory).rglob("*.beam"):
         try:
             ctx = BeamContext.from_path(str(beam_path))
         except Exception:
+            continue
+        if exclude_otp and ctx.is_otp:
             continue
         if dangerous_only and not ctx.dangerous_imports():
             continue
@@ -345,12 +371,15 @@ def sweep_beam_diff(
     dir_v1: str,
     dir_v2: str,
     min_severity: str = SEVERITY_DISPATCH,
+    exclude_otp: bool = False,
 ) -> List[BeamDiffEntry]:
     """Compare dangerous imports across two directories of BEAM files.
 
     Returns only modules where the dangerous-import set changed.
     Use min_severity to filter low-signal tiers (e.g., SEVERITY_NETWORK to
     exclude DISPATCH noise from erlang:apply).
+    Set exclude_otp=True to skip OTP stdlib modules (useful when diffing
+    OTP versions and only interested in application-code changes).
 
     Example:
         diff = sweep_beam_diff('/tmp/rmq311', '/tmp/rmq312',
@@ -359,7 +388,7 @@ def sweep_beam_diff(
     """
     def index(directory: str) -> dict:
         out = {}
-        for ctx in sweep_beam_dir(directory):
+        for ctx in sweep_beam_dir(directory, exclude_otp=exclude_otp):
             key = ctx.module_name
             out[key] = {
                 (i.module, i.function, i.severity)
