@@ -28,6 +28,8 @@ from .taint_tracker_mips64 import MIPS64TaintTracker, TaintFinding64, Interproce
 from .nanomips_decoder import NanoMIPSDecoder, NanoMIPSDisasm, NanoFrame
 from .taint_tracker_ppc32 import PPC32TaintTracker, TaintFindingPPC32
 from .taint_tracker_ppc64 import PPC64TaintTracker, TaintFindingPPC64
+from .arc_decoder import ARCDecoder, ARCDisasm, ARCFrame
+from .taint_tracker_arc import ARCTaintTracker, TaintFindingARC
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -60,4 +62,6 @@ __all__ = [
     "NanoMIPSDecoder", "NanoMIPSDisasm", "NanoFrame",
     "PPC32TaintTracker", "TaintFindingPPC32",
     "PPC64TaintTracker", "TaintFindingPPC64",
+    "ARCDecoder", "ARCDisasm", "ARCFrame",
+    "ARCTaintTracker", "TaintFindingARC",
 ]

@@ -28,7 +28,8 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **nanoMIPS decoder**: NanoMIPSDecoder + NanoMIPSDisasm: variable-length frame walker (16/32/48-bit); full decode with capstone 6.x; frame-boundary + branch-hint fallback on capstone 5.x; function-start heuristic; targets Ingenic SoC, MediaTek embedded
 - **PPC32 taint tracker**: PPC32TaintTracker: System V / EABI ABI; r3-r10 args (8 regs), r3 return, r13-r31 callee-saved; no delay slots; recv/read to system/strcpy/execve sinks; prologue scan via stwu r1,-N(r1); interprocedural BFS depth 4; big-endian (Cisco IOS 7200/3700, MikroTik RB600, VxWorks) and POWER LE Linux
 - **PPC64 taint tracker**: PPC64TaintTracker: ELFv2 (OpenPOWER Linux) and ELFv1 (AIX/old Linux PPC64) ABI; r3-r10 args, r14-r31 callee-saved; 64-bit ops LD/STD/MULLD/DIVD/DIVDU/SLD/RLDICL/EXTSW; prologue scan via stdu r1,-N(r1); interprocedural BFS depth 4; big-endian (IBM POWER/AIX, Juniper MX/PTX, Apple G5) and little-endian (POWER8+ Linux)
-- **DisasmEngine MIPS/PPC expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64' + endian kwarg; prologue detection per arch (stwu PPC32, stdu PPC64); per-arch branch/call/ret classification in stream()
+- **ARC taint tracker**: ARCTaintTracker: Synopsys DesignWare ARC 700 / ARC HS; r0-r7 args (8 regs), r0 return, r13-r25 callee-saved, r31=BLINK; variable-length 16/32-bit frame decoder (ARCDecoder); auto-upgrades to full decode when capstone next (CS_ARCH_ARC) is installed; push_s blink prologue detection; recv/read to system/strcpy/execve sinks; interprocedural BFS depth 4; little-endian (Linux ARC HS, IoT MCUs, smart TV SoCs, Marvell/Seagate storage controllers) and big-endian (ARC 700)
+- **DisasmEngine MIPS/PPC/ARC expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64'/'arc'/'arc32' + endian kwarg; prologue detection per arch (stwu PPC32, stdu PPC64, push_s blink ARC); per-arch branch/call/ret classification in stream()
 - **Crypto analysis**: XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis**: ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -95,6 +96,13 @@ if ctx.names_count():
 | "PPC64: trace recv to system/strcpy (IBM POWER, AIX)" | `PPC64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
 | "PPC64: POWER8+ OpenPOWER Linux little-endian" | `PPC64TaintTracker.from_path(elf, endian='little').run_interprocedural()` |
 | "PPC64 disasm via DisasmEngine" | `DisasmEngine(arch='ppc64', endian='big')` |
+| "ARC: trace recv to system/strcpy (ARC HS IoT, Marvell, Seagate)" | `ARCTaintTracker.from_path(elf).run_interprocedural()` |
+| "ARC: big-endian ARC 700 firmware" | `ARCTaintTracker.from_path(elf, endian='big').run_interprocedural()` |
+| "ARC: custom sinks (arc_exec_cmd)" | `ARCTaintTracker.from_path(elf, custom_sinks={'arc_exec_cmd': [0]}).run()` |
+| "ARC: walk frame boundaries, decode all instructions" | `ARCDecoder(endian='little').decode_frames(data, base_addr)` |
+| "ARC: find function starts by prologue (push_s blink)" | `ARCDisasm(endian='little').find_function_starts(data, base_addr)` |
+| "ARC: DisasmEngine-compatible instruction stream" | `DisasmEngine(arch='arc', endian='little')` |
+| "ARC: check if capstone next ARC support is available" | `ARCDecoder().has_full_decode` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
