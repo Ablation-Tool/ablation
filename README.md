@@ -18,23 +18,40 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ```mermaid
 flowchart TD
+    Binary(["<b>Target Binary</b><br/><i>ELF · PE · firmware</i>"])
     Claude(["<b>Claude Code (Orchestrator)</b><br/><i>Central Agent Controller</i>"])
 
-    Claude -. "Commands" .-> Corpus["<b>Corpus Builder</b><br/><i>Ingestion / Unpack</i>"]
-    Claude -. "Commands" .-> Semantic["<b>Semantic Search</b><br/><i>BERT Embeddings</i>"]
-    Claude -. "Commands" .-> Taint["<b>Taint Engine</b><br/><i>Data Flow / Sinks</i>"]
-    Claude -. "Commands" .-> Diffing["<b>Diffing Engine</b><br/><i>DTW / AST Analysis</i>"]
+    Binary -->|"load"| BCtx["<b>BinaryContext</b><br/><i>PLT · Strings · Call Graph · XRefs</i>"]
+    BCtx -->|"context"| Corpus["<b>Corpus Builder</b><br/><i>Semantic Embedding DB</i>"]
+    BCtx -->|"context"| Taint["<b>Taint Engine</b><br/><i>Data Flow / Sinks</i>"]
+    BCtx -->|"context"| Diffing["<b>Diffing Engine</b><br/><i>DTW / Version Delta</i>"]
+    BCtx -->|"context"| FmtStr["<b>Format String</b><br/><i>Specifier Scanner</i>"]
+    BCtx -->|"context"| Heap["<b>Heap Scanner</b><br/><i>Chunk / UAF Audit</i>"]
+    BCtx -->|"context"| MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS · PPC · RISC-V · ARC · V850</i>"]
+    BCtx -->|"context"| Driver["<b>Driver Engine</b><br/><i>Kernel IOCTL / BYOVD Audit</i>"]
 
-    Corpus -. "Binaries" .-> FmtStr["<b>Format String</b><br/><i>Specifier Scanner</i>"]
-    Corpus -. "Binaries" .-> Heap["<b>Heap Scanner</b><br/><i>Chunk / UAF Audit</i>"]
-    Corpus -. "Binaries" .-> MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS / PPC / RISC-V / ARC / V850</i>"]
-    Corpus -. "Binaries" .-> Driver["<b>Driver Engine</b><br/><i>Kernel IOCTL / BYOVD Audit</i>"]
+    Corpus -->|"embeddings"| Semantic["<b>Semantic Search</b><br/><i>BERT Behavioral Fingerprints</i>"]
+
+    Semantic -. "candidates" .-> Claude
+    Taint -. "findings" .-> Claude
+    Diffing -. "findings" .-> Claude
+    FmtStr -. "findings" .-> Claude
+    Heap -. "findings" .-> Claude
+    MultiArch -. "findings" .-> Claude
+    Driver -. "findings" .-> Claude
+
+    Claude -->|"confirmed finding"| Registry["<b>Finding Registry</b><br/><i>Cross-Target Corpus</i>"]
+    Registry -->|"seeds future sweeps"| Semantic
 
     classDef primary fill:#2a1a4a,stroke:#7c3aed,stroke-width:2px,color:#fff
-    classDef secondary fill:#171717,stroke:#404040,stroke-width:1px,color:#e5e7eb
+    classDef foundation fill:#0d1117,stroke:#58a6ff,stroke-width:2px,color:#e5e7eb
+    classDef engine fill:#171717,stroke:#404040,stroke-width:1px,color:#e5e7eb
+    classDef feedback fill:#0d2818,stroke:#238636,stroke-width:2px,color:#e5e7eb
 
-    class Claude primary
-    class Corpus,Semantic,Taint,Diffing,FmtStr,Heap,MultiArch,Driver secondary
+    class Claude,Binary primary
+    class BCtx foundation
+    class Corpus,Semantic,Taint,Diffing,FmtStr,Heap,MultiArch,Driver engine
+    class Registry feedback
 ```
 
 ---
