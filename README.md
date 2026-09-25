@@ -14,6 +14,10 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ---
 
+![demo](assets/demo.gif)
+
+---
+
 ## Framework Architecture & Module Orchestration
 
 ```mermaid
