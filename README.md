@@ -8,20 +8,6 @@ Ablation fundamentally shifts the reverse engineering workflow by operating as a
 
 ---
 
-## The Autonomous Loop
-
-When executing commands like `ablation sweep firmware.so --json results.json`, Claude Code can interpret the JSON, identify suspicious functions, and automatically pivot to run `ablation cfg` to visualize logic or `ablation taint` to verify reachability.
-
-This ReAct loop using `claude-sonnet-5` for decompilation effectively replaces the junior analyst role during triage, surfacing only confirmed, exploitable paths for human review.
-
-**Recommended model:** `claude-sonnet-4-6` (released January 2026).
-
-```
-/model claude-sonnet-4-6
-```
-
----
-
 ## Framework Architecture & Module Orchestration
 
 ```mermaid
@@ -100,6 +86,20 @@ block-beta
 ```
 
 *(Note: While IDA offers a free tier, it strictly prohibits commercial use. Furthermore, IDA Free limits analysis to only 3 file formats and restricts disassembly support exclusively to x86 32/64 architectures.)*
+
+---
+
+## The Autonomous Loop
+
+When executing commands like `ablation sweep firmware.so --json results.json`, Claude Code can interpret the JSON, identify suspicious functions, and automatically pivot to run `ablation cfg` to visualize logic or `ablation taint` to verify reachability.
+
+This ReAct loop using `claude-sonnet-5` for decompilation effectively replaces the junior analyst role during triage, surfacing only confirmed, exploitable paths for human review.
+
+**Recommended model:** `claude-sonnet-4-6` (released January 2026).
+
+```
+/model claude-sonnet-4-6
+```
 
 ---
 
