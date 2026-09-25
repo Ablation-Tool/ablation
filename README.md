@@ -115,33 +115,28 @@ mindmap
 
 ## Feature Comparison vs. Legacy Tools
 
-```mermaid
-block-beta
-  columns 5
-  space:1
-  A["Ablation"]:1 G["Ghidra"]:1 I["IDA Pro"]:1 B["Binary Ninja"]:1
+**The foundation — everything the legacy tools have:**
 
-  T1["Semantic Search"] Y1["✅"] N1a["❌"] N1b["❌"] N1c["❌"]
-  T2["Autonomous Loop"] Y2["✅"] N2a["❌"] N2b["❌"] N2c["❌"]
-  T3["Pattern Library"] Y3["✅"] N3a["❌"] N3b["❌"] N3c["❌"]
-  T4["Cross-Binary Analysis"] Y4["✅"] N4a["❌"] N4b["❌"] N4c["❌"]
-  T5["Version Diffing"] Y5["✅"] N5a["❌"] N5b["❌"] N5c["❌"]
-  T6["Deep Taint Tracking"] Y6["✅"] N6a["❌"] N6b["❌"] N6c["❌"]
-  T7["Load Time (50 MB)"] Y7["35 sec"] N7a["1-4 Hrs"] N7b["Heavy DB"] N7c["Heavy DB"]
-  T8["Cost"] Y8["Open Source"] N8a["Free/OSS"] N8b["$3,000+"] N8c["Commercial"]
+| Feature | Ablation | Ghidra | IDA Pro | Binary Ninja |
+|---|:---:|:---:|:---:|:---:|
+| Disassembler | ✅ | ✅ | ✅ | ✅ |
+| Decompiler | ✅ | ✅ | ✅ | ✅ |
+| Scripting API | ✅ | ✅ | ✅ | ✅ |
+| Multi-Architecture | ✅ | ✅ | ✅ | ✅ |
+| Binary Diffing | ✅ | ✅ | ✅ | ✅ |
 
-  style A fill:#e6ffed,stroke:#28a745,stroke-width:2px
-  style Y1 fill:#e6ffed,stroke:#28a745
-  style Y2 fill:#e6ffed,stroke:#28a745
-  style Y3 fill:#e6ffed,stroke:#28a745
-  style Y4 fill:#e6ffed,stroke:#28a745
-  style Y5 fill:#e6ffed,stroke:#28a745
-  style Y6 fill:#e6ffed,stroke:#28a745
-  style Y7 fill:#e6ffed,stroke:#28a745
-  style Y8 fill:#e6ffed,stroke:#28a745
-```
+**Plus more — capabilities the legacy tools don't have:**
 
-*(Note: While IDA offers a free tier, it strictly prohibits commercial use. Furthermore, IDA Free limits analysis to only 3 file formats and restricts disassembly support exclusively to x86 32/64 architectures.)*
+| Feature | Ablation | Ghidra | IDA Pro | Binary Ninja |
+|---|:---:|:---:|:---:|:---:|
+| Semantic Search | ✅ | ❌ | ❌ | ❌ |
+| Autonomous Loop | ✅ | ❌ | ❌ | ❌ |
+| Pattern Library | ✅ | ❌ | ❌ | ❌ |
+| Cross-Binary Taint Tracking | ✅ | ❌ | ❌ | ❌ |
+| Version Diffing via DTW | ✅ | ❌ | ❌ | ❌ |
+| Finding Registry | ✅ | ❌ | ❌ | ❌ |
+| Load Time (50 MB) | **35 sec** | 1-4 hrs | Heavy DB | Heavy DB |
+| Cost | **Open Source** | Free / OSS | $3,000+ | Commercial |
 
 ---
 
