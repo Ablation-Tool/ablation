@@ -27,6 +27,7 @@ from .subsequence_searcher import SubsequenceSearcher, PatternMatch, parse_patte
 from .taint_tracker_mips64 import MIPS64TaintTracker, TaintFinding64, InterproceduralPath64
 from .nanomips_decoder import NanoMIPSDecoder, NanoMIPSDisasm, NanoFrame
 from .taint_tracker_ppc32 import PPC32TaintTracker, TaintFindingPPC32
+from .taint_tracker_ppc64 import PPC64TaintTracker, TaintFindingPPC64
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -58,4 +59,5 @@ __all__ = [
     "MIPS64TaintTracker", "TaintFinding64", "InterproceduralPath64",
     "NanoMIPSDecoder", "NanoMIPSDisasm", "NanoFrame",
     "PPC32TaintTracker", "TaintFindingPPC32",
+    "PPC64TaintTracker", "TaintFindingPPC64",
 ]
