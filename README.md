@@ -205,4 +205,4 @@ Nicholas Michael Kloster & Claude
 
 **Honorable Mention**
 
-Microsoft Excel (Data Analysis ToolPak) -- built specifically to automate the heavy lifting of advanced statistical mathematics and engineering computations.
+Microsoft Excel (Data Analysis ToolPak) built specifically to automate the heavy lifting of advanced statistical mathematics and engineering computations.
