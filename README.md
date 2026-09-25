@@ -115,6 +115,12 @@ Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC
 | CVE-2026-76412 | Privilege Escalation to root | 8.5 High |
 | CVE-2026-76413 | Single Sign-On Token Forgery | 8.5 High |
 
+One vulnerability discovered in Cisco Identity Services Engine (ISE) using Ablation was published in Cisco Security Advisory [cisco-sa-ise-multiauth-bypass-sgD2HbL4](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4):
+
+| CVE | Title | CVSS |
+|---|---|---|
+| CVE-2026-76447 | OCSP Responder Authentication Bypass | 5.3 Medium |
+
 ---
 
 ## Install
