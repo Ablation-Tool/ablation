@@ -68,8 +68,8 @@ mindmap
 
 ## The Core Capabilities
 
+- **Semantic Search via BERT:** Semantic search finds results based on meaning rather than exact keywords. BERT reads text and figures out what it means. Similar meanings get similar scores, so you can search by concept instead of exact words. By combining the two, it speeds up the main bottleneck of reverse engineering while finding the vulnerable functions.
 - **Extreme Performance:** A 50 MB binary loads in 35 seconds. Ghidra and IDA Pro can take hours because they parse the entire file into a database before you can do anything. Ablation only analyzes the functions you are actively working on, so you start immediately.
-- **Semantic Search via BERT:** Search across every function in plain English. The agent converts binary semantics into behavioral fingerprints using Sentence Transformers. Searching for *"TLV parser that advances pointer without bounds check"* looks for the mathematical shape of the vulnerability, not just literal strings.
 - **Version Diffing with DTW:** When a vendor releases a patch, Ablation compares the old and new binary to confirm the fix actually changed the logic, not just the packaging. It does this by tracking the "shape" of how a function executes across versions, rather than comparing raw bytes, so a cosmetic recompile cannot hide an unpatched vulnerability.
 - **Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
 
