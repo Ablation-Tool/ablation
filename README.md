@@ -123,8 +123,6 @@ One vulnerability discovered in Cisco Identity Services Engine (ISE) using Ablat
 |---|---|---|
 | CVE-2026-76447 | OCSP Responder Authentication Bypass | 5.3 Medium |
 
-Cisco Adaptive Security Appliance (ASA) LINA has been reverse engineered down to source-level detail using Ablation. Multiple vulnerabilities were identified through static analysis of stripped x86-64 firmware. Findings are currently under coordinated triage via CERT/CC VINCE.
-
 ---
 
 ## Install
