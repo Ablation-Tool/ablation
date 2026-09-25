@@ -361,6 +361,18 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v2.6.0 (2026-09-24)  MIPS 32+nM and MIPS 64 support
+  ablation mips64   <binary> [--le] [--json FILE]
+  ablation nanomips <binary> [--le] [--json FILE]
+  - MIPS64TaintTracker: N64 ABI; 8 arg regs ($a0-$a3 + $t0-$t3 for $8-$11);
+    64-bit ops LD/SD/DADDU/DADDIU/DMULT; delay-slot aware; interprocedural BFS
+    big-endian (Cisco IOS/OCTEON) and little-endian (RouterOS 64)
+  - NanoMIPSDecoder: variable-length frame walker P16/P32/P48 (16/32/48-bit);
+    full decode with capstone 6.x; branch-hint fallback on capstone 5.x;
+    function-start prologue heuristic; Ingenic SoC and MediaTek embedded
+  - DisasmEngine: arch='mips32'/'mips64'/'mips32r6'/'nanomips' + endian kwarg;
+    MIPS prologue detection (addiu/daddiu $sp,$sp,-N); MIPS stream() classification
+
 v2.5.0 (2026-09-24)  HeapUAFScanner, MIPS32FuncProfiler, ByovdDetector aliases
 
 v2.4.0 (2026-09-24)  MIPS32 taint tracker + cross-binary taint + IOCTL surface
@@ -484,6 +496,59 @@ def cmd_mips(args):
         print(f"Wrote {len(data)} findings to {args.json}")
     else:
         print(tracker.report(findings))
+
+
+def cmd_mips64(args):
+    from ablation.analyzers.taint_tracker_mips64 import MIPS64TaintTracker
+
+    p = str(_require_binary(args.binary))
+    endian = 'little' if args.le else 'big'
+    tracker = MIPS64TaintTracker.from_path(p, endian=endian)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
+def cmd_nanomips(args):
+    from ablation.analyzers.nanomips_decoder import NanoMIPSDisasm
+
+    binary_path = _require_binary(args.binary)
+    data = binary_path.read_bytes()
+    endian = 'little' if args.le else 'big'
+    dis = NanoMIPSDisasm(endian=endian)
+
+    if args.frames:
+        print(dis.report_frames(data, base_addr=args.base, limit=args.limit))
+        return
+
+    starts = dis.find_function_starts(data, base_addr=args.base)
+    if args.json:
+        import json
+        out = [{'func_va': hex(va)} for va in starts]
+        Path(args.json).write_text(json.dumps(out, indent=2))
+        print(f"Wrote {len(out)} function starts to {args.json}")
+    else:
+        print(f"nanoMIPS function starts ({len(starts)} found, base={hex(args.base)}):")
+        for va in starts:
+            print(f"  {hex(va)}")
+        if not dis.has_full_decode:
+            print("\nNote: install capstone 6.x for full nanoMIPS decode.")
 
 
 def cmd_news(args):
@@ -622,12 +687,31 @@ def main():
     p_heap.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_heap.set_defaults(func=cmd_heap)
 
-    # mips
-    p_mips = sub.add_parser('mips', help='MIPS32 taint analysis: recv/read to system/strcpy/exec')
+    # mips (MIPS32 O32)
+    p_mips = sub.add_parser('mips', help='MIPS 32+nM taint analysis: recv/read to system/strcpy/exec (O32 ABI)')
     p_mips.add_argument('binary')
-    p_mips.add_argument('--le', action='store_true', help='little-endian MIPS (default: big-endian)')
+    p_mips.add_argument('--le', action='store_true', help='little-endian (default: big-endian)')
     p_mips.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_mips.set_defaults(func=cmd_mips)
+
+    # mips64 (MIPS64 N64)
+    p_mips64 = sub.add_parser('mips64', help='MIPS 64 taint analysis: N64 ABI; Cisco IOS/OCTEON + RouterOS 64')
+    p_mips64.add_argument('binary')
+    p_mips64.add_argument('--le', action='store_true', help='little-endian (default: big-endian)')
+    p_mips64.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_mips64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_mips64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_mips64.set_defaults(func=cmd_mips64)
+
+    # nanomips (nanoMIPS frame decoder)
+    p_nm = sub.add_parser('nanomips', help='nanoMIPS frame decoder: function-start detection, frame walk (Ingenic/MediaTek)')
+    p_nm.add_argument('binary')
+    p_nm.add_argument('--le', action='store_true', help='little-endian (default: big-endian)')
+    p_nm.add_argument('--base', type=lambda x: int(x, 0), default=0, help='base address (default: 0)')
+    p_nm.add_argument('--frames', action='store_true', help='dump frame listing instead of function starts')
+    p_nm.add_argument('--limit', type=int, default=0, help='max frames to print (0 = all)')
+    p_nm.add_argument('--json', metavar='FILE', default=None, help='write function starts JSON to FILE')
+    p_nm.set_defaults(func=cmd_nanomips)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
