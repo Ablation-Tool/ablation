@@ -26,6 +26,7 @@ from .sax_index import SAXIndex, SAXMatch, IndexEntry, encode_sax, sax_mindist
 from .subsequence_searcher import SubsequenceSearcher, PatternMatch, parse_pattern
 from .taint_tracker_mips64 import MIPS64TaintTracker, TaintFinding64, InterproceduralPath64
 from .nanomips_decoder import NanoMIPSDecoder, NanoMIPSDisasm, NanoFrame
+from .taint_tracker_ppc32 import PPC32TaintTracker, TaintFindingPPC32
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -56,4 +57,5 @@ __all__ = [
     "SubsequenceSearcher", "PatternMatch", "parse_pattern",
     "MIPS64TaintTracker", "TaintFinding64", "InterproceduralPath64",
     "NanoMIPSDecoder", "NanoMIPSDisasm", "NanoFrame",
+    "PPC32TaintTracker", "TaintFindingPPC32",
 ]

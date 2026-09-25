@@ -26,7 +26,8 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **MIPS32 taint tracker**: MIPS32TaintTracker: O32 ABI; recv/read -> system/execve/strcpy/sprintf source-to-sink; load-delay slot aware; intraprocedural + interprocedural BFS; big-endian and little-endian (RouterOS, Broadcom, CPE)
 - **MIPS64 taint tracker**: MIPS64TaintTracker: N64 ABI (8 arg regs: a0-a3 + capstone t0-t3 for $8-$11); 64-bit ops (LD/SD/DADDU/DADDIU/DMULT); delay-slot aware; big-endian (Cisco IOS/OCTEON) and little-endian (RouterOS 64)
 - **nanoMIPS decoder**: NanoMIPSDecoder + NanoMIPSDisasm: variable-length frame walker (16/32/48-bit); full decode with capstone 6.x; frame-boundary + branch-hint fallback on capstone 5.x; function-start heuristic; targets Ingenic SoC, MediaTek embedded
-- **DisasmEngine MIPS expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips' + endian kwarg; MIPS prologue detection (addiu/daddiu $sp,$sp,-N); MIPS branch/call/ret classification in stream()
+- **PPC32 taint tracker**: PPC32TaintTracker: System V / EABI ABI; r3-r10 args (8 regs), r3 return, r13-r31 callee-saved; no delay slots; recv/read to system/strcpy/execve sinks; prologue scan via stwu r1,-N(r1); interprocedural BFS depth 4; big-endian (Cisco IOS 7200/3700, MikroTik RB600, VxWorks) and POWER LE Linux
+- **DisasmEngine MIPS/PPC expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64' + endian kwarg; prologue detection per arch; per-arch branch/call/ret classification in stream()
 - **Crypto analysis**: XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis**: ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -86,6 +87,10 @@ if ctx.names_count():
 | "nanoMIPS: find function starts by prologue pattern" | `NanoMIPSDisasm(endian='little').find_function_starts(data, base_addr)` |
 | "nanoMIPS: DisasmEngine-compatible instruction stream" | `NanoMIPSDisasm(endian='little').stream(data, base_addr)` |
 | "MIPS disasm (any variant) via DisasmEngine" | `DisasmEngine(arch='mips64', endian='big')` |
+| "PPC32: trace recv to system/strcpy (Cisco IOS 7200, VxWorks)" | `PPC32TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
+| "PPC32: POWER LE Linux userspace" | `PPC32TaintTracker.from_path(elf, endian='little').run_interprocedural()` |
+| "PPC32: custom sinks (VxWorks vxExecCmd)" | `PPC32TaintTracker.from_path(elf, custom_sinks={'vxExecCmd': [0]}).run()` |
+| "PPC32 disasm via DisasmEngine" | `DisasmEngine(arch='ppc32', endian='big')` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
