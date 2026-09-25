@@ -58,20 +58,49 @@ BEAM_TAG = b'BEAM'
 # ---------------------------------------------------------------------------
 
 # (module, function) pairs that represent high-risk sinks in Erlang
-DANGEROUS_IMPORTS = {
-    ('os', 'cmd'),
-    ('erlang', 'open_port'),
-    ('erlang', 'apply'),
-    ('file', 'eval'),
-    ('erl_eval', 'exprs'),
-    ('code', 'load_binary'),
-    ('code', 'load_abs'),
-    ('code', 'load_file'),
-    ('inet', 'getifaddrs'),
-    ('ssl', 'connect'),
-    ('httpc', 'request'),
-    ('gen_tcp', 'connect'),
-    ('gen_udp', 'open'),
+# Severity tiers for dangerous imports (ascending severity):
+#   DISPATCH   -- dynamic dispatch; extremely common in OTP; low signal alone
+#   NETWORK    -- outbound network connections / UDP sockets
+#   INFO       -- local system enumeration (network interfaces, etc.)
+#   CODE_EVAL  -- runtime code loading / evaluation (ETF AST execution)
+#   CODE_EXEC  -- OS-level process execution / port driver spawn
+#
+# Used by BeamImport.severity and BeamContext.dangerous_imports(min_severity=...).
+SEVERITY_DISPATCH  = "DISPATCH"
+SEVERITY_NETWORK   = "NETWORK"
+SEVERITY_INFO      = "INFO"
+SEVERITY_CODE_EVAL = "CODE_EVAL"
+SEVERITY_CODE_EXEC = "CODE_EXEC"
+
+_SEVERITY_ORDER = {
+    SEVERITY_DISPATCH:  0,
+    SEVERITY_NETWORK:   1,
+    SEVERITY_INFO:      2,
+    SEVERITY_CODE_EVAL: 3,
+    SEVERITY_CODE_EXEC: 4,
+}
+
+# Maps (module, function) -> severity tier.
+# Any entry here is "dangerous"; severity distinguishes signal strength.
+DANGEROUS_IMPORTS: dict = {
+    # OS-level execution
+    ('os',      'cmd'):          SEVERITY_CODE_EXEC,
+    ('erlang',  'open_port'):    SEVERITY_CODE_EXEC,
+    # Dynamic code evaluation / hot-loading
+    ('erl_eval', 'exprs'):       SEVERITY_CODE_EVAL,
+    ('file',    'eval'):         SEVERITY_CODE_EVAL,
+    ('code',    'load_binary'):  SEVERITY_CODE_EVAL,
+    ('code',    'load_abs'):     SEVERITY_CODE_EVAL,
+    ('code',    'load_file'):    SEVERITY_CODE_EVAL,
+    # Network egress
+    ('ssl',     'connect'):      SEVERITY_NETWORK,
+    ('httpc',   'request'):      SEVERITY_NETWORK,
+    ('gen_tcp', 'connect'):      SEVERITY_NETWORK,
+    ('gen_udp', 'open'):         SEVERITY_NETWORK,
+    # Local system info
+    ('inet',    'getifaddrs'):   SEVERITY_INFO,
+    # Dynamic dispatch (high volume, low signal alone)
+    ('erlang',  'apply'):        SEVERITY_DISPATCH,
 }
 
 
@@ -94,9 +123,13 @@ class BeamImport:
     function: str
     arity: int
     dangerous: bool = False
+    severity: str = ""   # one of SEVERITY_* constants; empty string when not dangerous
 
     def __str__(self) -> str:
-        flag = " [DANGEROUS]" if self.dangerous else ""
+        if self.dangerous:
+            flag = f" [{self.severity}]" if self.severity else " [DANGEROUS]"
+        else:
+            flag = ""
         return f"{self.module}:{self.function}/{self.arity}{flag}"
 
 
@@ -191,9 +224,20 @@ class BeamContext:
     # Query helpers
     # ------------------------------------------------------------------
 
-    def dangerous_imports(self) -> List[BeamImport]:
-        """Return imports that match known high-risk Erlang sinks."""
-        return [i for i in self.imports if i.dangerous]
+    def dangerous_imports(self, min_severity: str = SEVERITY_DISPATCH) -> List[BeamImport]:
+        """Return imports flagged as dangerous at or above min_severity.
+
+        min_severity examples (ascending):
+            SEVERITY_DISPATCH  -- all dangerous (default)
+            SEVERITY_NETWORK   -- network + code-eval + code-exec
+            SEVERITY_CODE_EVAL -- code-eval + code-exec
+            SEVERITY_CODE_EXEC -- OS execution only
+        """
+        min_ord = _SEVERITY_ORDER.get(min_severity, 0)
+        return [
+            i for i in self.imports
+            if i.dangerous and _SEVERITY_ORDER.get(i.severity, 0) >= min_ord
+        ]
 
     def search_atoms(self, keyword: str, case_sensitive: bool = False) -> List[str]:
         """Return atoms containing keyword."""
@@ -276,14 +320,97 @@ def sweep_beam_dir(directory: str, dangerous_only: bool = False) -> List[BeamCon
     return results
 
 
-def fmt_sweep(results: List[BeamContext]) -> str:
+def fmt_sweep(results: List[BeamContext], min_severity: str = SEVERITY_DISPATCH) -> str:
     lines = [f"sweep: {len(results)} module(s)"]
     for ctx in results:
-        d = ctx.dangerous_imports()
+        d = ctx.dangerous_imports(min_severity=min_severity)
         tag = f"  [{len(d)} DANGEROUS]" if d else ""
         lines.append(f"  {ctx.module_name}{tag}")
         for i in d:
-            lines.append(f"      {i}")
+            lines.append(f"      {i.module}:{i.function}/{i.arity} [{i.severity}]")
+    return "\n".join(lines)
+
+
+@dataclass
+class BeamDiffEntry:
+    """One module's dangerous-import delta between two BEAM versions."""
+    module: str
+    gained: List[tuple]   # (module, function, severity) tuples added in v2
+    lost: List[tuple]     # (module, function, severity) tuples removed vs v1
+    new_module: bool = False      # module not present in v1
+    dropped_module: bool = False  # module not present in v2
+
+
+def sweep_beam_diff(
+    dir_v1: str,
+    dir_v2: str,
+    min_severity: str = SEVERITY_DISPATCH,
+) -> List[BeamDiffEntry]:
+    """Compare dangerous imports across two directories of BEAM files.
+
+    Returns only modules where the dangerous-import set changed.
+    Use min_severity to filter low-signal tiers (e.g., SEVERITY_NETWORK to
+    exclude DISPATCH noise from erlang:apply).
+
+    Example:
+        diff = sweep_beam_diff('/tmp/rmq311', '/tmp/rmq312',
+                               min_severity=SEVERITY_NETWORK)
+        print(fmt_sweep_diff(diff))
+    """
+    def index(directory: str) -> dict:
+        out = {}
+        for ctx in sweep_beam_dir(directory):
+            key = ctx.module_name
+            out[key] = {
+                (i.module, i.function, i.severity)
+                for i in ctx.dangerous_imports(min_severity=min_severity)
+            }
+        return out
+
+    idx1, idx2 = index(dir_v1), index(dir_v2)
+    names1, names2 = set(idx1), set(idx2)
+    entries = []
+
+    # Changed modules
+    for mod in sorted(names1 & names2):
+        gained = sorted(idx2[mod] - idx1[mod])
+        lost   = sorted(idx1[mod] - idx2[mod])
+        if gained or lost:
+            entries.append(BeamDiffEntry(module=mod, gained=gained, lost=lost))
+
+    # New modules in v2 with dangerous imports
+    for mod in sorted(names2 - names1):
+        if idx2[mod]:
+            entries.append(BeamDiffEntry(
+                module=mod, gained=sorted(idx2[mod]), lost=[], new_module=True
+            ))
+
+    # Dropped modules (in v1, not v2) with dangerous imports
+    for mod in sorted(names1 - names2):
+        if idx1[mod]:
+            entries.append(BeamDiffEntry(
+                module=mod, gained=[], lost=sorted(idx1[mod]), dropped_module=True
+            ))
+
+    return entries
+
+
+def fmt_sweep_diff(entries: List[BeamDiffEntry]) -> str:
+    if not entries:
+        return "sweep_diff: no dangerous-import changes between versions"
+    lines = [f"sweep_diff: {len(entries)} module(s) changed"]
+    for e in entries:
+        if e.new_module:
+            label = "  [NEW]"
+        elif e.dropped_module:
+            label = "  [DROPPED]"
+        else:
+            label = "  [CHANGED]"
+        lines.append(f"\n{e.module}{label}")
+        for mod, fn, sev in e.gained:
+            lines.append(f"    + {mod}:{fn} [{sev}]")
+        for mod, fn, sev in e.lost:
+            lines.append(f"    - {mod}:{fn} [{sev}]")
     return "\n".join(lines)
 
 
@@ -558,8 +685,10 @@ def _parse_imports(data: bytes, atoms: List[str]) -> List[BeamImport]:
         mi, fi, ai = struct.unpack('>III', data[o:o+12])
         mod = atoms[mi - 1] if 0 < mi <= len(atoms) else f"?{mi}"
         fn = atoms[fi - 1] if 0 < fi <= len(atoms) else f"?{fi}"
-        dangerous = (mod, fn) in DANGEROUS_IMPORTS
-        imports.append(BeamImport(module=mod, function=fn, arity=ai, dangerous=dangerous))
+        severity = DANGEROUS_IMPORTS.get((mod, fn), "")
+        dangerous = bool(severity)
+        imports.append(BeamImport(module=mod, function=fn, arity=ai,
+                                  dangerous=dangerous, severity=severity))
     return imports
 
 
