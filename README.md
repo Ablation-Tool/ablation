@@ -39,7 +39,7 @@ flowchart TD
 
 ---
 
-## Supported Architectures
+## Local Decompilers
 
 `x86 - 32` `x86 - 64` `ARM - 32` `ARM - 64` `MIPS 32+nM` `MIPS - 64` `PPC - 32` `PPC - 64` `ARC EM/HS` `RISC-V 32` `RISC-V 64` `V850 - 32` `Windows .sys`
 
