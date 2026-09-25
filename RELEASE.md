@@ -1,5 +1,37 @@
 # Ablation Release Notes
 
+## v2.5.0 (2026-09-25)
+
+### FormatStringScanner: fortify variant coverage (`ablation fmtstr`)
+
+Added glibc fortify variants: `__printf_chk`, `__fprintf_chk`, `__snprintf_chk`, `__sprintf_chk`, `__vprintf_chk`, `__vfprintf_chk`, `__vsprintf_chk`, `__vsnprintf_chk`. Full sink list is now 28 entries.
+
+### New: IoctlAttackSurfaceGenerator (`ablation ioctl-surface`)
+
+Per-IOCTL attack surface report for Windows kernel drivers. For each IoControlCode: METHOD_NEITHER without ProbeForRead = CRITICAL; allocation before InputBufferLength validation = HIGH; TYPE3_INPUT_BUFFER direct dereference = HIGH. Markdown report via `report_markdown()`.
+
+```bash
+ablation ioctl-surface driver.sys
+ablation ioctl-surface driver.sys --json report.json
+```
+
+### New: CrossBinaryTaintTracker
+
+LibGraph-backed cross-library taint BFS. Follows tainted arguments through PLT entries into exporting shared libraries. Resolves PLT symbol to exporting binary via `LibGraph.defined_in()`, spawns a seeded TaintTracker on that binary, and continues BFS. Returns `TaintChain` with full cross-binary hop provenance.
+
+```python
+from ablation.analyzers.cross_binary_taint import CrossBinaryTaintTracker
+
+tracker = CrossBinaryTaintTracker.from_lib_graph(lg)
+paths = tracker.run()
+```
+
+### BYOVDDetector: expanded to 12 capability classes + PDB fingerprints
+
+Added: DKOM (ObReferenceObjectByHandle), APC_INJECT (KeInitializeApc), DRIVER_LOAD, CALLBACK_REMOVE, PROCESS_KILL, MSR_WRITE (WRMSR instruction scan). Known-driver PDB fingerprint table: mhyprot, RTCore64, dbutil, PROCEXP, iqvw64e, cpuz.
+
+---
+
 ## v2.4.0 (2026-09-24)
 
 ### New: Heap Vulnerability Scanner (`ablation heap`)
