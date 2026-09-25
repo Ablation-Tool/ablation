@@ -8,6 +8,8 @@ Ablation is a reverse engineering framework that provides the exact same core di
 
 
 Ablation is built for the modern landscape, and more importantly, the human.
+
+
 Now reverse engineering achievable to anyone. No matter your wallet or your barrier of entry into education, you can learn about reverse engineering as you reverse engineer.
 
 ---
