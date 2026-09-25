@@ -145,9 +145,12 @@ _SINKS: Dict[str, List[int]] = {
     "vfprintf": [1],
     "syslog":   [1],
     # Memory corruption
-    "memcpy":   [2],       # size argument
-    "memmove":  [2],
-    "memset":   [2],
+    "memcpy":        [2],   # size argument
+    "__memcpy_chk":  [2],   # gcc hardened version: __memcpy_chk(dst, src, len, dstlen)
+    "memmove":       [2],
+    "__memmove_chk": [2],
+    "memset":        [2],
+    "__memset_chk":  [2],
     "strcpy":   [1],
     "strcat":   [1],
     "strncpy":  [2],
@@ -1159,12 +1162,44 @@ class TaintTracker:
         func_start_set = set(func_starts)
 
         # Step 1: identify seed functions (directly call a network source)
+        # Use CFGBuilder so calls in non-first basic blocks are not missed.
+        from ablation.analyzers.cfg_builder import CFGBuilder
+        try:
+            cfg_builder = CFGBuilder(self.path, xref=self.xref)
+        except Exception:
+            cfg_builder = None
+
         seed_funcs: Dict[int, List[str]] = {}
         for fva in func_starts:
             fend = func_end_map[fva]
             func_bytes = self._va_to_slice(fva, min(fend - fva, MAX_FUNC_BYTES))
             if not func_bytes or len(func_bytes) < min_func_size:
                 continue
+            if cfg_builder is not None:
+                # Walk all basic blocks -- catches source calls anywhere in the function
+                try:
+                    cfg = cfg_builder.build_function(fva, fend)
+                    for bb in cfg.blocks.values():
+                        for va, mnem, op_str in bb.insns:
+                            if mnem != "call":
+                                continue
+                            # Re-disassemble the single instruction to get the
+                            # operand integer directly (avoids op_str string parsing)
+                            raw = self._va_to_slice(va, 15)
+                            if not raw:
+                                continue
+                            for insn in self._md.disasm(raw, va):
+                                if insn.id == X86_INS_CALL:
+                                    ops = insn.operands
+                                    if ops and ops[0].type == X86_OP_IMM:
+                                        target_name = self._plt.get(ops[0].imm, "")
+                                        if target_name in _SOURCES:
+                                            seed_funcs.setdefault(fva, []).append(target_name)
+                                break
+                    continue
+                except Exception:
+                    pass
+            # Fallback: linear scan when CFGBuilder unavailable
             try:
                 for insn in self._md.disasm(func_bytes, fva):
                     if insn.id == X86_INS_CALL:
@@ -1200,12 +1235,22 @@ class TaintTracker:
                 continue
 
             try:
-                findings, propagations = analyze_function_seeded(
-                    data=func_bytes, func_va=func_va, func_end_va=fend,
-                    plt=self._plt, md=self._md, seed_arg_indices=seed_args,
-                    source_calls=[source_name],
-                    extra_sinks=self._extra_sinks,
-                )
+                cfg = cfg_builder.build_function(func_va, fend) if cfg_builder else None
+                if cfg and cfg.blocks:
+                    findings, propagations = analyze_function_flow_sensitive(
+                        data=func_bytes, func_va=func_va, func_end_va=fend,
+                        plt=self._plt, md=self._md, cfg=cfg,
+                        seed_args=seed_args or None,
+                        source_calls=[source_name],
+                        extra_sinks=self._extra_sinks,
+                    )
+                else:
+                    findings, propagations = analyze_function_seeded(
+                        data=func_bytes, func_va=func_va, func_end_va=fend,
+                        plt=self._plt, md=self._md, seed_arg_indices=seed_args,
+                        source_calls=[source_name],
+                        extra_sinks=self._extra_sinks,
+                    )
             except Exception:
                 continue
 
