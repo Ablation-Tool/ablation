@@ -171,7 +171,7 @@ Nicholas Michael Kloster & Claude
 
 ## Reference Material Used to Build Ablation
 
-**Books**
+**Books** (All obtained from O'Reilly Media | [www.oreilly.com](https://www.oreilly.com))
 
 | Title | Author |
 |---|---|
