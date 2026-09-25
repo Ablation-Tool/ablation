@@ -34,7 +34,14 @@ from .taint_tracker_riscv32 import RISCV32TaintTracker, TaintFindingRISCV32
 from .taint_tracker_riscv64 import RISCV64TaintTracker, TaintFindingRISCV64
 from .v850_decoder import V850Decoder, V850Disasm, V850Frame
 from .taint_tracker_v850 import V850TaintTracker, TaintFindingV850
-from .beam_context import BeamContext, BeamExport, BeamImport, BeamAstFunction, sweep_beam_dir, fmt_sweep
+from .beam_context import (
+    BeamContext, BeamExport, BeamImport, BeamAstFunction,
+    BeamDiffEntry,
+    sweep_beam_dir, fmt_sweep,
+    sweep_beam_diff, fmt_sweep_diff,
+    SEVERITY_DISPATCH, SEVERITY_NETWORK, SEVERITY_INFO,
+    SEVERITY_CODE_EVAL, SEVERITY_CODE_EXEC,
+)
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -73,5 +80,8 @@ __all__ = [
     "RISCV64TaintTracker", "TaintFindingRISCV64",
     "V850Decoder", "V850Disasm", "V850Frame",
     "V850TaintTracker", "TaintFindingV850",
-    "BeamContext", "BeamExport", "BeamImport", "BeamAstFunction", "sweep_beam_dir", "fmt_sweep",
+    "BeamContext", "BeamExport", "BeamImport", "BeamAstFunction", "BeamDiffEntry",
+    "sweep_beam_dir", "fmt_sweep", "sweep_beam_diff", "fmt_sweep_diff",
+    "SEVERITY_DISPATCH", "SEVERITY_NETWORK", "SEVERITY_INFO",
+    "SEVERITY_CODE_EVAL", "SEVERITY_CODE_EXEC",
 ]
