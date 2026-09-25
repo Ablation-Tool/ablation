@@ -49,18 +49,6 @@ Step-by-step guides for common research tasks.
 
 ---
 
-## Target Notes
-
-Vendor-specific RE knowledge: binary layout, known structures, confirmed patterns.
-
-| Document | Vendors |
-|---|---|
-| [Axis](targets/axis.md) | AXIS OS, camera firmware, ACAP applications |
-| [Tencent](targets/tencent.md) | TencentOS, WeChat, Qwen3 |
-| [MikroTik](targets/routeros.md) | RouterOS |
-
----
-
 ## Release Notes
 
 See [CHANGELOG.md](../CHANGELOG.md) for full version history.
