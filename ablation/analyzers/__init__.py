@@ -31,6 +31,7 @@ from .taint_tracker_ppc64 import PPC64TaintTracker, TaintFindingPPC64
 from .arc_decoder import ARCDecoder, ARCDisasm, ARCFrame
 from .taint_tracker_arc import ARCTaintTracker, TaintFindingARC
 from .taint_tracker_riscv32 import RISCV32TaintTracker, TaintFindingRISCV32
+from .taint_tracker_riscv64 import RISCV64TaintTracker, TaintFindingRISCV64
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -66,4 +67,5 @@ __all__ = [
     "ARCDecoder", "ARCDisasm", "ARCFrame",
     "ARCTaintTracker", "TaintFindingARC",
     "RISCV32TaintTracker", "TaintFindingRISCV32",
+    "RISCV64TaintTracker", "TaintFindingRISCV64",
 ]
