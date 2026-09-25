@@ -184,6 +184,46 @@ class State:
         self.lp_slots = {k for k in self.lp_slots if k[0] != reg}
         self.frame_ptrs = {r: v for r, v in self.frame_ptrs.items() if v[0] != reg}
 
+    # lattice ops (CFG fixpoint) ------------------------------------------
+    def copy(self) -> "State":
+        return State(
+            dict(self.regs), self.flags, dict(self.mem),
+            dict(self.consts), dict(self.frame_ptrs), set(self.lp_slots),
+        )
+
+    def join(self, other: "State", widen: bool = False) -> "State":
+        """Least upper bound for a control-flow merge."""
+        out = State()
+        for r in set(self.regs) | set(other.regs):
+            a, b = self.get(r), other.get(r)
+            ab = 0 if not a.tainted else a.bound
+            bb = 0 if not b.tainted else b.bound
+            if ab is None or bb is None:
+                bound = None
+            elif widen and ab != bb:
+                bound = None
+            else:
+                bound = max(ab, bb)
+            t = Taint(a.labels | b.labels, bound)
+            if t.tainted or t.bound is not None:
+                out.regs[r] = t
+        fl_a, fl_b = self.flags, other.flags
+        out.flags = Taint(fl_a.labels | fl_b.labels, None)
+        for k in set(self.mem) | set(other.mem):
+            a, b = self.mem.get(k, CLEAN), other.mem.get(k, CLEAN)
+            out.mem[k] = Taint(a.labels | b.labels, None)
+        out.consts = {r: v for r, v in self.consts.items() if other.consts.get(r) == v}
+        out.frame_ptrs = {r: v for r, v in self.frame_ptrs.items() if other.frame_ptrs.get(r) == v}
+        out.lp_slots = self.lp_slots | other.lp_slots
+        return out
+
+    def same_as(self, other: "State") -> bool:
+        return (
+            self.regs == other.regs and self.flags == other.flags
+            and self.mem == other.mem and self.consts == other.consts
+            and self.frame_ptrs == other.frame_ptrs and self.lp_slots == other.lp_slots
+        )
+
 
 # ---------------------------------------------------------------------------
 # Labeled-taint engine (listing / objdump path)
