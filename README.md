@@ -115,7 +115,7 @@ mindmap
 
 ## Feature Comparison vs. Legacy Tools
 
-**The foundation: everything the legacy tools have**
+**Everything legacy tools have**
 
 | Feature | Ablation | Ghidra | IDA Pro | Binary Ninja |
 |---|:---:|:---:|:---:|:---:|
@@ -125,7 +125,7 @@ mindmap
 | Multi-Architecture | ✅ | ✅ | ✅ | ✅ |
 | Binary Diffing | ✅ | ✅ | ✅ | ✅ |
 
-**Plus more: capabilities the legacy tools don't have**
+**Capabilities legacy tools don't have**
 
 | Feature | Ablation | Ghidra | IDA Pro | Binary Ninja |
 |---|:---:|:---:|:---:|:---:|
