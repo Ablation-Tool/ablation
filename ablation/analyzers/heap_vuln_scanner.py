@@ -498,11 +498,21 @@ class HeapVulnScanner:
                     strlen_no_plus1 = False
                     continue
 
-            # ADD RAX, 1 (or INC RAX) between strlen and malloc means size is correct
+            # ADD RAX, 1 / INC RAX / LEA dst, [RAX+N] between strlen and malloc
+            # means the allocation size includes room beyond strlen -- not an off-by-one.
+            # Case 1: destination is RAX (add $N,%rax / inc %rax / lea N(x),%rax)
+            # Case 2: LEA uses RAX as memory base with positive displacement into any
+            #         register (e.g. lea 0x9(%rax),%rdi) -- compiler puts strlen+N into
+            #         the malloc size arg without touching RAX itself.
             if strlen_no_plus1 and mnem in ('add', 'inc', 'lea'):
-                if insn.operands and insn.operands[0].type == X86_OP_REG:
-                    if insn.operands[0].reg == X86_REG_RAX:
+                ops = insn.operands
+                if ops and ops[0].type == X86_OP_REG:
+                    if ops[0].reg == X86_REG_RAX:
                         strlen_no_plus1 = False
+                    elif mnem == 'lea' and len(ops) == 2 and ops[1].type == X86_OP_MEM:
+                        mem = ops[1].mem
+                        if mem.base == X86_REG_RAX and mem.disp > 0:
+                            strlen_no_plus1 = False
 
         return findings
 
