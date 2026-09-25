@@ -34,6 +34,7 @@ from .taint_tracker_riscv32 import RISCV32TaintTracker, TaintFindingRISCV32
 from .taint_tracker_riscv64 import RISCV64TaintTracker, TaintFindingRISCV64
 from .v850_decoder import V850Decoder, V850Disasm, V850Frame
 from .taint_tracker_v850 import V850TaintTracker, TaintFindingV850
+from .beam_context import BeamContext, BeamExport, BeamImport, sweep_beam_dir, fmt_sweep
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -72,4 +73,5 @@ __all__ = [
     "RISCV64TaintTracker", "TaintFindingRISCV64",
     "V850Decoder", "V850Disasm", "V850Frame",
     "V850TaintTracker", "TaintFindingV850",
+    "BeamContext", "BeamExport", "BeamImport", "sweep_beam_dir", "fmt_sweep",
 ]
