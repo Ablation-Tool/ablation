@@ -45,6 +45,8 @@ try:
 except ImportError:
     _HAS_CAPSTONE = False
 
+from ablation.analyzers.isa_riscv import canon_reg, andi_propagates as _andi_propagates
+
 try:
     import lief as _lief
     _HAS_LIEF = True
@@ -160,6 +162,7 @@ _COPY_MNEMS: frozenset = frozenset({
     'lw', 'lh', 'lb', 'lhu', 'lbu',
     # RVC variants (RV32C + shared RV32C/RV64C -- ISA spec §16)
     'c.mv', 'c.li', 'c.addi', 'c.addi4spn',  # c.addi16sp intentionally absent (modifies sp)
+    'c.andi',                                  # 6-bit signed imm AND; handled like andi
     'c.add', 'c.sub', 'c.and', 'c.or', 'c.xor',
     'c.slli', 'c.srli', 'c.srai',
     'c.lw', 'c.lwsp',
@@ -398,12 +401,15 @@ class RISCV32TaintTracker:
         if mnemonic not in _COPY_MNEMS:
             return
 
-        rd = self._parse_rd(op_str)
-        if not rd or rd in ('zero', 'x0', 'sp'):
+        rd_raw = self._parse_rd(op_str)
+        rd = canon_reg(rd_raw) or rd_raw
+        if not rd or rd in ('zero', 'sp'):
             return
 
-        rs1 = self._parse_rs(op_str, 1)
-        rs2 = self._parse_rs(op_str, 2) if ',' in op_str[op_str.find(',')+1:] else ''
+        rs1_raw = self._parse_rs(op_str, 1)
+        rs1 = canon_reg(rs1_raw) or rs1_raw
+        rs2_raw = self._parse_rs(op_str, 2) if ',' in op_str[op_str.find(',')+1:] else ''
+        rs2 = canon_reg(rs2_raw) or rs2_raw
 
         # mv, li, la, lui, auipc: destination only
         if mnemonic in ('mv', 'c.mv'):
@@ -428,10 +434,31 @@ class RISCV32TaintTracker:
             tainted[rd] = bool(tainted.get(src))
             return
 
-        # andi/c.and: mask clears taint (conservative -- negative imm is alignment mask,
-        # not a bound, but clearing taint is safe for this tool's contract)
-        if mnemonic in ('andi', 'c.and'):
-            tainted[rd] = False
+        # andi rd, rs, imm (ISA §2.4): negative imm = alignment mask, no bound,
+        # taint propagates; non-negative imm = bounding mask, taint cleared.
+        # andi rd, rs, -1 is an identity (rs & ~0 == rs) and MUST propagate.
+        if mnemonic == 'andi':
+            imm_token = rs2_raw  # position-2 token is the immediate
+            if _andi_propagates(imm_token, xlen=32):
+                src = rs1 if rs1 and rs1[0].isalpha() else rd
+                tainted[rd] = bool(tainted.get(src))
+            else:
+                tainted[rd] = False
+            return
+
+        # c.andi rd, imm: 2-operand compressed form; imm at position 1 (ISA §16.5).
+        # rd is implicit rs1; apply same andi semantics on the 6-bit immediate.
+        if mnemonic == 'c.andi':
+            imm_token = rs1_raw  # position-1 token is the immediate
+            if _andi_propagates(imm_token, xlen=32):
+                tainted[rd] = bool(tainted.get(rd))
+            else:
+                tainted[rd] = False
+            return
+
+        # c.and rd, rs2: rd is implicit rs1; propagate from either operand.
+        if mnemonic == 'c.and':
+            tainted[rd] = bool(tainted.get(rd)) or bool(tainted.get(rs1))
             return
 
         # Arithmetic/logic with two registers: propagate if either source tainted
