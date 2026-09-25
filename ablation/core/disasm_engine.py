@@ -629,8 +629,11 @@ class DisasmEngine:
                 return True
 
         elif self.arch in ('ppc', 'ppc32', 'ppc64'):
-            # stwu r1, -N(r1)  (System V / EABI frame setup + SP save)
+            # stwu r1, -N(r1)  (PPC32 frame setup + SP save)
             if insn.mnemonic == 'stwu' and 'r1, -' in insn.op_str:
+                return True
+            # stdu r1, -N(r1)  (PPC64 ELFv2 frame setup + SP save)
+            if insn.mnemonic == 'stdu' and 'r1, -' in insn.op_str:
                 return True
 
         elif self.arch == 'arm':
