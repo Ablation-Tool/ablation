@@ -105,6 +105,14 @@ mindmap
 
 ---
 
+## Encryption Analysis
+
+- **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
+- **Crypto Audit:** Scans for weak or broken cryptography including JWT alg:none, weak secrets, embedded key material, and outdated TLS versions and ciphers.
+- **XorSolver:** Recovers XOR cipher keys using known-plaintext attacks and frequency analysis, then decrypts the target section.
+
+---
+
 ## Feature Comparison vs. Legacy Tools
 
 **Everything legacy tools have**
