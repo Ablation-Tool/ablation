@@ -9,7 +9,6 @@ Semantic firmware analysis for vulnerability researchers.
 | Document | Description |
 |---|---|
 | [Getting Started](getting-started.md) | Install, first binary, first sweep -- 15 minutes |
-| [Pitch / Overview](../PITCH.md) | What Ablation is and why it exists |
 
 ---
 
