@@ -398,8 +398,12 @@ class XRefGraph:
             if not chunk:
                 continue
             if not func_starts:
-                for i in range(len(chunk) - 3):
+                for i in range(len(chunk) - 4):
+                    # push rbp; mov rbp/rsp (classic prologue)
                     if chunk[i] == 0x55 and chunk[i + 1:i + 3] == b'\x48\x89':
+                        all_func_starts.add(vaddr + i)
+                    # endbr64 / endbr32 (CET IBT marker, emitted by gcc -fcf-protection)
+                    elif chunk[i:i + 4] in (b'\xf3\x0f\x1e\xfa', b'\xf3\x0f\x1e\xfb'):
                         all_func_starts.add(vaddr + i)
 
         self._func_starts = all_func_starts
