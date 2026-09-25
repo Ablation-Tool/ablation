@@ -97,10 +97,10 @@ When executing commands like `ablation sweep firmware.so --json results.json`, C
 
 This ReAct loop using `claude-sonnet-5` for decompilation effectively replaces the junior analyst role during triage, surfacing only confirmed, exploitable paths for human review.
 
-**Recommended model:** `claude-sonnet-5`
+**Recommended model:** `claude-sonnet-4-6` (released January 2026).
 
 ```
-/model claude-sonnet-5
+/model claude-sonnet-4-6
 ```
 
 ---
