@@ -47,8 +47,8 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **ARC taint tracker**
 - **RISC-V 32 taint tracker**
 - **RISC-V 64 taint tracker**
+- **V850 32 taint tracker**
 - **BYOVD detector**
-  
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
 
 ---
@@ -84,7 +84,7 @@ Ablation adds what Binary Ninja does not have:
 Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio.
 
 **Architectures:**
-`x86 - 32` `x86 - 64` `ARM - 32` `ARM - 64` `MIPS 32+nM` `MIPS - 64` `PPC - 32` `PPC - 64` `ARC EM/HS` `RISC-V 32` `RISC-V 64` `Windows .sys`
+`x86 - 32` `x86 - 64` `ARM - 32` `ARM - 64` `MIPS 32+nM` `MIPS - 64` `PPC - 32` `PPC - 64` `ARC EM/HS` `RISC-V 32` `RISC-V 64` `V850 - 32` `Windows .sys`
 
 Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
 
@@ -162,6 +162,10 @@ ablation riscv32 rv32_elf --json riscv32_findings.json
 ablation riscv64 rv64_elf
 ablation riscv64 rv64_elf --interprocedural --depth 4
 ablation riscv64 rv64_elf --json riscv64_findings.json
+ablation v850    v850_elf
+ablation v850    v850_elf --interprocedural --depth 4
+ablation v850    v850_elf --json v850_findings.json
+ablation v850-decode v850_elf --frames --limit 200
 ablation byovd   driver.sys
 ablation byovd   driver.sys --json byovd_report.json
 ablation news
