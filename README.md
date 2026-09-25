@@ -63,34 +63,22 @@ mindmap
   root((Local Decompilers))
     x86 Family
       x86 - 32
-        Legacy firmware · VxWorks · Win32
       x86 - 64
-        Fortinet · Palo Alto · Cisco FMC
     ARM Family
       ARM - 32
-        IoT · embedded Linux · Hikvision
       ARM - 64
-        Apple Silicon · Juniper · mobile
     MIPS Family
       MIPS 32+nM
-        Cisco IOS · RouterOS · CPE
       MIPS - 64
-        Cisco OCTEON · MikroTik RB
     PowerPC Family
       PPC - 32
-        Cisco IOS 7200 · VxWorks
       PPC - 64
-        IBM POWER · AIX · Juniper PTX
     RISC-V Family
       RISC-V 32
-        SiFive · Allwinner D1 · ESP32-C3
       RISC-V 64
-        VisionFive 2 · Milk-V · OpenWrt
     Embedded / Other
       ARC EM/HS
-        Marvell · Seagate · smart TV SoC
       V850 - 32
-        Renesas RH850 · automotive ECU
 ```
 
 ---
