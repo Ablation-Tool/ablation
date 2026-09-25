@@ -361,6 +361,19 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v2.8.0 (2026-09-24)  PowerPC 64-bit taint tracker
+  ablation ppc64   <binary> [--le] [--interprocedural] [--depth N] [--json FILE]
+  - PPC64TaintTracker: ELFv2 (OpenPOWER Linux) and ELFv1 (AIX/old Linux PPC64)
+    ABI; r3-r10 args (8 regs), r3 return, r14-r31 callee-saved; no delay slots
+  - Sources: recv/recvfrom/read/fgets/gets/fread (return value in r3)
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/snprintf/memcpy/strcat
+  - 64-bit ops: LD/STD/STDU/MULLD/DIVD/DIVDU/SLD/SRD/RLDICL/RLDICR/EXTSW
+  - Prologue scan: stdu r1, -N(r1) for function-start discovery without symbols
+  - Interprocedural BFS: follows tainted args r3-r10 through direct bl callees
+  - Big-endian (IBM POWER/AIX, old OpenPOWER, Apple G5, Juniper MX/PTX)
+  - Little-endian: POWER8+ OpenPOWER Linux
+  - DisasmEngine: ppc64 arch stdu prologue detection added
+
 v2.7.0 (2026-09-24)  PowerPC 32-bit taint tracker
   ablation ppc32   <binary> [--le] [--interprocedural] [--depth N] [--json FILE]
   - PPC32TaintTracker: System V / EABI ABI; r3-r10 args (8 regs), r3 return,
@@ -566,6 +579,33 @@ def cmd_nanomips(args):
             print("\nNote: install capstone 6.x for full nanoMIPS decode.")
 
 
+def cmd_ppc64(args):
+    from ablation.analyzers.taint_tracker_ppc64 import PPC64TaintTracker
+
+    p = str(_require_binary(args.binary))
+    endian = 'little' if args.le else 'big'
+    tracker = PPC64TaintTracker.from_path(p, endian=endian)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
 def cmd_ppc32(args):
     from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
 
@@ -763,6 +803,15 @@ def main():
     p_ppc32.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
     p_ppc32.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_ppc32.set_defaults(func=cmd_ppc32)
+
+    # ppc64 (PowerPC 64-bit taint tracker)
+    p_ppc64 = sub.add_parser('ppc64', help='PPC64 taint analysis: ELFv2/ELFv1; IBM POWER, OpenPOWER Linux, AIX')
+    p_ppc64.add_argument('binary')
+    p_ppc64.add_argument('--le', action='store_true', help='little-endian POWER8+ (default: big-endian)')
+    p_ppc64.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_ppc64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_ppc64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_ppc64.set_defaults(func=cmd_ppc64)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
