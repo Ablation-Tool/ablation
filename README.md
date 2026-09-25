@@ -109,21 +109,16 @@ Ablation has been used to analyze production firmware and kernel drivers from Fo
 
 Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Security Incident Response Team (PSIRT) has adopted Ablation for internal vulnerability triage. Cisco PSIRT is actively using it to triage ongoing disclosure reports across Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex, and Catalyst.
 
-Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
+Four vulnerabilities discovered in Cisco products using Ablation have been published in Cisco Security Advisories:
 
-| CVE | Title | CVSS |
-|---|---|---|
-| CVE-2026-76420 | Peer Impersonation | 9.0 Critical |
-| CVE-2026-76412 | Privilege Escalation to root | 8.5 High |
-| CVE-2026-76413 | Single Sign-On Token Forgery | 8.5 High |
+| CVE | Product | Title | CVSS | Advisory |
+|---|---|---|---|---|
+| CVE-2026-76420 | Secure Firewall Management Center (FMC) | Peer Impersonation | 9.0 Critical | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
+| CVE-2026-76412 | Secure Firewall Management Center (FMC) | Privilege Escalation to root | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
+| CVE-2026-76413 | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
+| CVE-2026-76447 | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | 5.3 Medium | [cisco-sa-ise-multiauth-bypass-sgD2HbL4](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) |
 
-One vulnerability discovered in Cisco Identity Services Engine (ISE) using Ablation was published in Cisco Security Advisory [cisco-sa-ise-multiauth-bypass-sgD2HbL4](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4):
-
-| CVE | Title | CVSS |
-|---|---|---|
-| CVE-2026-76447 | OCSP Responder Authentication Bypass | 5.3 Medium |
-
-Cisco Adaptive Security Appliance (ASA) LINA has been reverse engineered using Ablation. Findings are currently under coordinated triage via CERT/CC VINCE.
+Cisco Adaptive Security Appliance (ASA) LINA has also been reverse engineered using Ablation. Findings are currently under coordinated triage via CERT/CC VINCE.
 
 ---
 
