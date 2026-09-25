@@ -186,6 +186,7 @@ Nicholas Michael Kloster & Claude
 | Security Engineering (3rd ed.) | Ross Anderson |
 | Practical IoT Hacking | Chantzis et al. |
 | The Art of Mac Malware | Patrick Wardle |
+| [Mathematical Concepts and Methods in Modern Biology](https://www.sciencedirect.com/book/monograph/9780124157804/mathematical-concepts-and-methods-in-modern-biology) | Robeva, Hodge |
 
 **Research Papers**
 
