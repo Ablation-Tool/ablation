@@ -132,54 +132,6 @@ pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 
 ---
 
-## Run
-
-```bash
-ablation corpus      firmware.so --product my-target --version 1.0 --sigs
-ablation sweep       firmware.so --json results.json
-ablation search      firmware.so "TLV parser that advances pointer without bounds check"
-ablation cfg         firmware.so 0x17b660 --insns
-ablation taint       firmware.so
-ablation findings    --sarif findings.sarif
-ablation driver      driver.sys
-ablation driver      driver.sys --json driver_report.json
-ablation fmtstr      firmware.so
-ablation fmtstr      firmware.so --json fmt_findings.json
-ablation heap        firmware.so
-ablation heap        firmware.so --json heap_findings.json
-ablation mips        router.elf
-ablation mips        router.elf --le --json mips_findings.json
-ablation mips64      iosd --json mips64_findings.json
-ablation mips64      routeros64.elf --le --interprocedural --depth 6
-ablation nanomips    ingenic.bin --le --base 0x80000000
-ablation nanomips    ingenic.bin --le --frames --limit 100
-ablation ppc32       iosd
-ablation ppc32       vxworks.elf --le --interprocedural --depth 6
-ablation ppc32       iosd --json ppc32_findings.json
-ablation ppc64       power_bin
-ablation ppc64       power_bin --le --interprocedural --depth 6
-ablation ppc64       power_bin --json ppc64_findings.json
-ablation arc         arc_binary.elf
-ablation arc         arc_binary.elf --interprocedural --depth 4
-ablation arc         arc_binary.elf --be --json arc_findings.json
-ablation arc-decode  arc_binary.elf --frames --limit 200
-ablation riscv32     rv32_elf
-ablation riscv32     rv32_elf --interprocedural --depth 4
-ablation riscv32     rv32_elf --json riscv32_findings.json
-ablation riscv64     rv64_elf
-ablation riscv64     rv64_elf --interprocedural --depth 4
-ablation riscv64     rv64_elf --json riscv64_findings.json
-ablation v850        v850_elf
-ablation v850        v850_elf --interprocedural --depth 4
-ablation v850        v850_elf --json v850_findings.json
-ablation v850-decode v850_elf --frames --limit 200
-ablation byovd       driver.sys
-ablation byovd       driver.sys --json byovd_report.json
-ablation news
-```
-
----
-
 ## Feedback
 
 Found a bug, have an idea, or want to see something added to the tool? Reach out directly.
