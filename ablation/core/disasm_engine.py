@@ -296,6 +296,9 @@ class DisasmEngine:
             # capstone 5.x has no CS_ARCH_ARC; use the pure-Python arc_decoder
             # for stream() when arch=='arc'/'arc32'. self.md stays None.
             self._arc_endian = endian
+        elif arch == 'v850':
+            # capstone 5.x and next branch have no CS_ARCH_V850; use pure-Python decoder
+            self._v850_endian = endian
         elif arch in ('riscv', 'riscv32', 'riscv64'):
             from capstone import CS_ARCH_RISCV, CS_MODE_RISCV32, CS_MODE_RISCV64, CS_MODE_RISCVC
             cs_width = CS_MODE_RISCV64 if arch == 'riscv64' else CS_MODE_RISCV32
@@ -349,6 +352,9 @@ class DisasmEngine:
         """
         if self.arch in ('arc', 'arc32'):
             yield from self._arc_stream(code, base_addr, count)
+            return
+        if self.arch == 'v850':
+            yield from self._v850_stream(code, base_addr, count)
             return
         if not HAS_CAPSTONE or not self.md:
             yield from self._fallback_disasm_stream(code, base_addr, count)
@@ -418,6 +424,27 @@ class DisasmEngine:
                 is_call=frame.is_call,
                 is_ret=frame.is_ret,
                 branch_type=('unconditional' if frame.is_call or frame.mnemonic == 'b'
+                             else 'conditional') if (frame.is_branch or frame.is_call) else None,
+            )
+
+    def _v850_stream(self, code, base_addr, count):
+        """V850 stream using pure-Python v850_decoder (no capstone required)."""
+        from ablation.analyzers.v850_decoder import V850Decoder
+        endian = getattr(self, '_v850_endian', 'little')
+        dec = V850Decoder(endian=endian)
+        for i, frame in enumerate(dec.decode_frames(code, base_addr)):
+            if count and i >= count:
+                return
+            yield InsnRecord(
+                address=frame.va,
+                mnemonic=frame.mnemonic,
+                op_str=frame.op_str,
+                size=frame.width,
+                raw='',
+                is_branch=frame.is_branch,
+                is_call=frame.is_call,
+                is_ret=frame.is_ret,
+                branch_type=('unconditional' if frame.is_call or frame.mnemonic in ('jr', 'jmp')
                              else 'conditional') if (frame.is_branch or frame.is_call) else None,
             )
 
@@ -698,6 +725,11 @@ class DisasmEngine:
         elif self.arch in ('riscv', 'riscv32', 'riscv64'):
             # addi sp, sp, -N  (standard RISC-V function frame allocation)
             if insn.mnemonic in ('addi', 'c.addi16sp') and 'sp, sp, -' in insn.op_str:
+                return True
+
+        elif self.arch == 'v850':
+            # prepare {list}, imm5 -- GCC V850 EABI function prologue
+            if insn.mnemonic == 'prepare':
                 return True
 
         elif self.arch == 'arm':
