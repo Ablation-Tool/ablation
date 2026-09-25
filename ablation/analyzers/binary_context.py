@@ -112,6 +112,28 @@ class BinaryContext:
             force_rebuild: ignore cache and rebuild
         """
         data = Path(path).read_bytes()
+
+        # Detect non-ELF formats early so callers aren't silently misled by an
+        # empty context.  Known magic bytes that are NOT ELF:
+        _NON_ELF = {
+            b'FOR1': 'Erlang BEAM bytecode',
+            b'PK\x03\x04': 'ZIP/JAR/APK archive',
+            b'MZ': 'PE/DOS executable',
+            b'\xca\xfe\xba\xbe': 'Mach-O fat binary',
+            b'\xce\xfa\xed\xfe': 'Mach-O 32-bit',
+            b'\xcf\xfa\xed\xfe': 'Mach-O 64-bit',
+        }
+        for magic, label in _NON_ELF.items():
+            if data[:len(magic)] == magic:
+                import warnings
+                warnings.warn(
+                    f"BinaryContext: {Path(path).name!r} appears to be {label}, "
+                    f"not an ELF binary -- context will be empty. "
+                    f"Use the appropriate format-specific analyzer instead.",
+                    stacklevel=2,
+                )
+                break
+
         sha = _sha256(data)
         cache_file = _cache_path(sha, path)
 
