@@ -361,6 +361,16 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v3.1.0 (2026-09-24)  RISC-V 64-bit taint tracker
+  ablation riscv64    <binary> [--interprocedural] [--depth N] [--json FILE]
+  - RISCV64TaintTracker: RISC-V Linux lp64 ABI; a0-a7 args (8 regs), a0 return,
+    s0-s11 callee-saved; capstone CS_ARCH_RISCV + CS_MODE_RISCV64 + CS_MODE_RISCVC
+  - RV64-specific ops: ld/sd, addiw, addw/subw/mulw/divw/remw, sllw/srlw/sraw,
+    c.ld/c.ldsp/c.addiw/c.addw/c.subw
+  - Call/ret detection identical to RV32: jal/jalr/ret/c.jr ra
+  - Targets: VisionFive 2, SiFive Unmatched, Milk-V Pioneer, SpacemiT K1,
+    SOPHON BM1684, OpenWrt RISC-V 64, PLCT RISC-V Linux servers
+
 v3.0.0 (2026-09-24)  RISC-V 32-bit taint tracker
   ablation riscv32    <binary> [--interprocedural] [--depth N] [--json FILE]
   - RISCV32TaintTracker: RISC-V Linux ilp32 ABI; a0-a7 args (8 regs), a0 return,
@@ -658,6 +668,32 @@ def cmd_arc_decode(args):
             print(f"  {hex(va)}")
 
 
+def cmd_riscv64(args):
+    from ablation.analyzers.taint_tracker_riscv64 import RISCV64TaintTracker
+
+    p = str(_require_binary(args.binary))
+    tracker = RISCV64TaintTracker.from_path(p)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
 def cmd_riscv32(args):
     from ablation.analyzers.taint_tracker_riscv32 import RISCV32TaintTracker
 
@@ -917,6 +953,14 @@ def main():
     p_ppc64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
     p_ppc64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_ppc64.set_defaults(func=cmd_ppc64)
+
+    # riscv64 (RISC-V 64-bit taint tracker)
+    p_riscv64 = sub.add_parser('riscv64', help='RISC-V 64 taint analysis: lp64 ABI; VisionFive 2, SiFive Unmatched, Milk-V Pioneer, SpacemiT K1')
+    p_riscv64.add_argument('binary')
+    p_riscv64.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_riscv64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_riscv64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_riscv64.set_defaults(func=cmd_riscv64)
 
     # riscv32 (RISC-V 32-bit taint tracker)
     p_riscv32 = sub.add_parser('riscv32', help='RISC-V 32 taint analysis: ilp32 ABI; SiFive, StarFive, Allwinner D1, ESP32-C3, GD32VF103')

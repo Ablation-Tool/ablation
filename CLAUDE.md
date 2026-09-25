@@ -30,7 +30,8 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **PPC64 taint tracker**: PPC64TaintTracker: ELFv2 (OpenPOWER Linux) and ELFv1 (AIX/old Linux PPC64) ABI; r3-r10 args, r14-r31 callee-saved; 64-bit ops LD/STD/MULLD/DIVD/DIVDU/SLD/RLDICL/EXTSW; prologue scan via stdu r1,-N(r1); interprocedural BFS depth 4; big-endian (IBM POWER/AIX, Juniper MX/PTX, Apple G5) and little-endian (POWER8+ Linux)
 - **ARC taint tracker**: ARCTaintTracker: Synopsys DesignWare ARC 700 / ARC HS; r0-r7 args (8 regs), r0 return, r13-r25 callee-saved, r31=BLINK; variable-length 16/32-bit frame decoder (ARCDecoder); auto-upgrades to full decode when capstone next (CS_ARCH_ARC) is installed; push_s blink prologue detection; recv/read to system/strcpy/execve sinks; interprocedural BFS depth 4; little-endian (Linux ARC HS, IoT MCUs, smart TV SoCs, Marvell/Seagate storage controllers) and big-endian (ARC 700)
 - **RISC-V 32 taint tracker**: RISCV32TaintTracker: ilp32 ABI; a0-a7 args (8 regs), a0 return, s0-s11 callee-saved; capstone CS_ARCH_RISCV + CS_MODE_RISCV32 + CS_MODE_RISCVC; jal (direct, PC-rel 21-bit), jalr (indirect), c.jal/c.jalr (RVC); ret/c.jr ra/jr ra return detection; prologue scan addi sp,sp,-N; recv/read to system/strcpy/execve sinks; interprocedural BFS depth 4; SiFive/StarFive Linux, Allwinner D1, ESP32-C3, GD32VF103, VisionFive 2, Milk-V Duo, OpenWrt RISC-V
-- **DisasmEngine MIPS/PPC/ARC/RISC-V expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64'/'arc'/'arc32'/'riscv'/'riscv32' + endian kwarg; prologue detection per arch (stwu PPC32, stdu PPC64, push_s blink ARC, addi sp,sp,-N RISC-V); per-arch branch/call/ret classification in stream()
+- **RISC-V 64 taint tracker**: RISCV64TaintTracker: lp64 ABI (same register model as RV32); capstone CS_ARCH_RISCV + CS_MODE_RISCV64 + CS_MODE_RISCVC; adds ld/sd, addiw, addw/subw/mulw/divw/remw, sllw/srlw/sraw, c.ld/c.ldsp/c.addiw/c.addw/c.subw; identical call/ret detection; interprocedural BFS depth 4; VisionFive 2 (JH7110), SiFive Unmatched (FU740), Milk-V Pioneer (SG2042), SpacemiT K1, SOPHON BM1684, OpenWrt RISC-V 64
+- **DisasmEngine MIPS/PPC/ARC/RISC-V expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips'/'ppc'/'ppc32'/'ppc64'/'arc'/'arc32'/'riscv'/'riscv32'/'riscv64' + endian kwarg; prologue detection per arch (stwu PPC32, stdu PPC64, push_s blink ARC, addi sp,sp,-N RISC-V 32+64); per-arch branch/call/ret classification in stream()
 - **Crypto analysis**: XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis**: ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -107,6 +108,9 @@ if ctx.names_count():
 | "RISC-V 32: trace recv to system/strcpy (SiFive, StarFive, Allwinner D1)" | `RISCV32TaintTracker.from_path(elf).run_interprocedural()` |
 | "RISC-V 32: custom sinks (riscv_exec_cmd)" | `RISCV32TaintTracker.from_path(elf, custom_sinks={'riscv_exec': [0]}).run()` |
 | "RISC-V 32 disasm via DisasmEngine (with RVC)" | `DisasmEngine(arch='riscv32')` |
+| "RISC-V 64: trace recv to system/strcpy (VisionFive 2, SiFive Unmatched)" | `RISCV64TaintTracker.from_path(elf).run_interprocedural()` |
+| "RISC-V 64: custom sinks" | `RISCV64TaintTracker.from_path(elf, custom_sinks={'rv64_exec': [0]}).run()` |
+| "RISC-V 64 disasm via DisasmEngine (with RVC)" | `DisasmEngine(arch='riscv64')` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
