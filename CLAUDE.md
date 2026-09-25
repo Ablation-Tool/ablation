@@ -24,6 +24,9 @@ Binary RE toolkit for stripped firmware. No symbols. No source.
 - **Format string scanner**: FormatStringScanner: 28 printf/syslog/err family sinks; backward trace to classify format arg as SAFE (LEA .rodata), VULNERABLE (stack slot/arg), or SUSPICIOUS; two-hop vsnprintf-to-syslog detection
 - **Heap vulnerability scanner**: HeapVulnScanner: INT_OVERFLOW_BEFORE_ALLOC (TAOSSA Ch6 L6-2/L6-3), USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC; x86-64 ELF; TAOSSA Ch5+Ch6 grounded
 - **MIPS32 taint tracker**: MIPS32TaintTracker: O32 ABI; recv/read -> system/execve/strcpy/sprintf source-to-sink; load-delay slot aware; intraprocedural + interprocedural BFS; big-endian and little-endian (RouterOS, Broadcom, CPE)
+- **MIPS64 taint tracker**: MIPS64TaintTracker: N64 ABI (8 arg regs: a0-a3 + capstone t0-t3 for $8-$11); 64-bit ops (LD/SD/DADDU/DADDIU/DMULT); delay-slot aware; big-endian (Cisco IOS/OCTEON) and little-endian (RouterOS 64)
+- **nanoMIPS decoder**: NanoMIPSDecoder + NanoMIPSDisasm: variable-length frame walker (16/32/48-bit); full decode with capstone 6.x; frame-boundary + branch-hint fallback on capstone 5.x; function-start heuristic; targets Ingenic SoC, MediaTek embedded
+- **DisasmEngine MIPS expansion**: arch='mips32'/'mips64'/'mips32r6'/'nanomips' + endian kwarg; MIPS prologue detection (addiu/daddiu $sp,$sp,-N); MIPS branch/call/ret classification in stream()
 - **Crypto analysis**: XorSolver key recovery, CryptoAudit JWT/TLS/key-material scanner
 - **LLM-assisted analysis**: ReAct agent loop for automated function naming and vuln hypothesis
 
@@ -77,6 +80,12 @@ if ctx.names_count():
 | "ARM32: find MUL before malloc without bounds check" | `ARM32IntOverflowScanner.from_context(ctx).scan()` |
 | "MIPS32: trace recv to system/strcpy/sprintf" | `MIPS32TaintTracker.from_path(elf).run_interprocedural()` |
 | "MIPS32: big-endian RouterOS or little-endian CPE" | `MIPS32TaintTracker.from_path(elf, endian='big')` |
+| "MIPS64: trace recv to system/strcpy/sprintf (Cisco IOS/OCTEON)" | `MIPS64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
+| "MIPS64: little-endian RouterOS 64" | `MIPS64TaintTracker.from_path(elf, endian='little').run_interprocedural()` |
+| "nanoMIPS: walk frame boundaries in Ingenic/MediaTek binary" | `NanoMIPSDecoder(endian='little').decode_frames(data, base_addr)` |
+| "nanoMIPS: find function starts by prologue pattern" | `NanoMIPSDisasm(endian='little').find_function_starts(data, base_addr)` |
+| "nanoMIPS: DisasmEngine-compatible instruction stream" | `NanoMIPSDisasm(endian='little').stream(data, base_addr)` |
+| "MIPS disasm (any variant) via DisasmEngine" | `DisasmEngine(arch='mips64', endian='big')` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
