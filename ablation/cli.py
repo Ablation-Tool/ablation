@@ -361,6 +361,21 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v2.7.0 (2026-09-24)  PowerPC 32-bit taint tracker
+  ablation ppc32   <binary> [--le] [--interprocedural] [--depth N] [--json FILE]
+  - PPC32TaintTracker: System V / EABI ABI; r3-r10 args (8 regs), r3 return,
+    r13-r31 callee-saved; no branch delay slots
+  - Sources: recv/recvfrom/read/fgets/gets/fread (return value in r3)
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/snprintf/memcpy/strcat
+  - Call detection: bl (direct), bctrl (indirect via CTR for PLT stubs)
+  - Return detection: blr/blrl
+  - Prologue scan: stwu r1, -N(r1) for function-start discovery without symbols
+  - Interprocedural BFS: follows tainted args r3-r10 through direct bl callees
+  - Big-endian (Cisco IOS 7200/3700, MikroTik RB600, VxWorks)
+  - Little-endian: POWER LE Linux userspace
+  - DisasmEngine: arch='ppc'/'ppc32'/'ppc64' + endian kwarg;
+    _is_prologue stwu detection; stream() PPC branch/call/ret classification
+
 v2.6.0 (2026-09-24)  MIPS 32+nM and MIPS 64 support
   ablation mips64   <binary> [--le] [--json FILE]
   ablation nanomips <binary> [--le] [--json FILE]
@@ -551,6 +566,33 @@ def cmd_nanomips(args):
             print("\nNote: install capstone 6.x for full nanoMIPS decode.")
 
 
+def cmd_ppc32(args):
+    from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
+
+    p = str(_require_binary(args.binary))
+    endian = 'little' if args.le else 'big'
+    tracker = PPC32TaintTracker.from_path(p, endian=endian)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
 def cmd_news(args):
     print(_RECENT_UPDATES)
 
@@ -712,6 +754,15 @@ def main():
     p_nm.add_argument('--limit', type=int, default=0, help='max frames to print (0 = all)')
     p_nm.add_argument('--json', metavar='FILE', default=None, help='write function starts JSON to FILE')
     p_nm.set_defaults(func=cmd_nanomips)
+
+    # ppc32 (PowerPC 32-bit taint tracker)
+    p_ppc32 = sub.add_parser('ppc32', help='PPC32 taint analysis: System V/EABI; Cisco IOS, VxWorks, MikroTik RB600')
+    p_ppc32.add_argument('binary')
+    p_ppc32.add_argument('--le', action='store_true', help='little-endian (default: big-endian)')
+    p_ppc32.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_ppc32.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_ppc32.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_ppc32.set_defaults(func=cmd_ppc32)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
