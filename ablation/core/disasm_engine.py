@@ -217,35 +217,57 @@ class DisasmEngineX:
             del state
 
 
+_MIPS_BRANCH_MNEMS = frozenset({
+    'beq', 'bne', 'bgtz', 'bltz', 'bgez', 'blez',
+    'bgezal', 'bltzal', 'bal', 'bc1f', 'bc1t',
+    'beql', 'bnel', 'bgtzl', 'bltzl', 'bgezl', 'blezl',
+    'j', 'jr', 'b',
+})
+_MIPS_CALL_MNEMS = frozenset({'jal', 'jalr', 'jalr.hb'})
+_MIPS_RET_MNEMS  = frozenset({'jr'})   # jr $ra is a return; handled by context
+
+
 class DisasmEngine:
     """Universal disassembly engine — Capstone linear sweep."""
-    
-    def __init__(self, arch='x86_64', mode='64'):
+
+    def __init__(self, arch='x86_64', mode='64', endian='little'):
         self.arch = arch
         self.mode = mode
+        self.endian = endian
         self.md = None
-        
+
         if not HAS_CAPSTONE:
             print("WARNING: capstone not installed. Install with: pip install capstone")
             print("Falling back to manual opcode parsing...")
             return
-        
-        # Initialize capstone
-        if arch == 'x86_64' or arch == 'x86':
-            if mode == '64':
-                self.md = Cs(CS_ARCH_X86, CS_MODE_64)
-            else:
-                self.md = Cs(CS_ARCH_X86, CS_MODE_32)
+
+        if arch in ('x86_64', 'x86'):
+            self.md = Cs(CS_ARCH_X86, CS_MODE_64 if mode == '64' else CS_MODE_32)
         elif arch == 'arm':
             if mode == '64':
                 self.md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
             else:
                 self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
-        elif arch == 'mips':
-            self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32)
-        
+        elif arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips'):
+            cs_endian = CS_MODE_BIG_ENDIAN if endian == 'big' else CS_MODE_LITTLE_ENDIAN
+            if arch in ('mips', 'mips32'):
+                self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 | cs_endian)
+            elif arch == 'mips64':
+                self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS64 | cs_endian)
+            elif arch == 'mips32r6':
+                self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32R6 | cs_endian)
+            elif arch == 'nanomips':
+                try:
+                    nm_mode = CS_MODE_NANOMIPS  # type: ignore[name-defined]  # capstone 6.x
+                    self.md = Cs(CS_ARCH_MIPS, nm_mode | cs_endian)
+                except (AttributeError, NameError):
+                    print("WARNING: CS_MODE_NANOMIPS not in capstone 5.x. "
+                          "Upgrade to capstone 6.x for full nanoMIPS decode. "
+                          "Falling back to MIPS32 — frame boundaries may be wrong.")
+                    self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 | cs_endian)
+
         if self.md:
-            self.md.detail = True  # Enable instruction details
+            self.md.detail = True
     
     def disassemble(self, code, base_addr=0x400000, count=0):
         """
@@ -295,19 +317,34 @@ class DisasmEngine:
             return
         # disasm_lite() is the streaming API in Capstone 5+; disasm_iter was removed.
         # Returns (address, size, mnemonic, op_str) tuples — no .bytes attribute.
+        is_mips = self.arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips')
         for i, (address, size, mnemonic, op_str) in enumerate(self.md.disasm_lite(code, base_addr)):
             if count and i >= count:
                 return
+            if is_mips:
+                _is_br   = mnemonic in _MIPS_BRANCH_MNEMS
+                _is_call = mnemonic in _MIPS_CALL_MNEMS
+                _is_ret  = mnemonic == 'jr' and 'ra' in op_str
+                _btype   = ('unconditional' if mnemonic in ('j', 'jr', 'b', 'jal', 'jalr')
+                            else 'conditional') if (_is_br or _is_call) else None
+            else:
+                _is_br   = mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge',
+                                        'ja','jb','jae','jbe','jc','jnc','js','jns','jo','jno',
+                                        'jp','jnp','jcxz','jecxz','jrcxz','loop','loope','loopne')
+                _is_call = mnemonic == 'call'
+                _is_ret  = mnemonic in ('ret', 'retn', 'retf')
+                _btype   = ('conditional' if mnemonic.startswith('j') and mnemonic != 'jmp'
+                            else 'unconditional') if _is_br else None
             yield InsnRecord(
                 address=address,
                 mnemonic=mnemonic,
                 op_str=op_str,
                 size=size,
                 raw='',
-                is_branch=mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge','ja','jb','jae','jbe','jc','jnc','js','jns','jo','jno','jp','jnp','jcxz','jecxz','jrcxz','loop','loope','loopne'),
-                is_call=mnemonic == 'call',
-                is_ret=mnemonic in ('ret','retn','retf'),
-                branch_type=('conditional' if mnemonic.startswith('j') and mnemonic != 'jmp' else 'unconditional') if mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge','ja','jb','jae','jbe','jc','jnc','js','jns','jo','jno','jp','jnp','jcxz','jecxz','jrcxz') else None,
+                is_branch=_is_br,
+                is_call=_is_call,
+                is_ret=_is_ret,
+                branch_type=_btype,
             )
 
     def _fallback_disasm_stream(self, code, base_addr, count):
@@ -563,6 +600,12 @@ class DisasmEngine:
         if self.arch in ['x86_64', 'x86']:
             # push rbp / push ebp  (System-V ABI frame setup)
             if insn.mnemonic == 'push' and 'bp' in insn.op_str:
+                return True
+
+        elif self.arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips'):
+            # addiu $sp, $sp, -N  (MIPS32/nanoMIPS standard frame setup)
+            # daddiu $sp, $sp, -N (MIPS64 standard frame setup)
+            if insn.mnemonic in ('addiu', 'daddiu') and '$sp, $sp, -' in insn.op_str:
                 return True
 
         elif self.arch == 'arm':
