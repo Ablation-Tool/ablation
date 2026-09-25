@@ -10,7 +10,13 @@ works.
 **Requirements:** Python 3.10+, pip
 
 ```bash
-pip install ablation
+pip install git+https://github.com/Ablation-Tool/ablation
+```
+
+With LLM features:
+
+```bash
+pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 ```
 
 From source:
