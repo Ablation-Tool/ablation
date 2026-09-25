@@ -202,3 +202,7 @@ Nicholas Michael Kloster & Claude
 | [Constant Propagation with Conditional Branches](https://dl.acm.org/doi/abs/10.1145/103135.103136) | Wegman, Zadeck |
 | [A Simple, Fast Dominance Algorithm](https://www.cs.princeton.edu/techreports/2005/737.pdf) | Cooper, Harvey, Kennedy |
 | [libdft: Practical Dynamic Data Flow Tracking for Commodity Systems](https://dl.acm.org/doi/10.1145/2151024.2151042) | Kemerlis et al. |
+
+**Honorable Mention**
+
+Microsoft Excel (Data Analysis ToolPak) -- built specifically to automate the heavy lifting of advanced statistical mathematics and engineering computations.
