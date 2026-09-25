@@ -164,3 +164,40 @@ See [LICENSE](LICENSE).
 ## Maintainer
 
 Nicholas Michael Kloster & Claude
+
+---
+
+## Reference Material
+
+**Books**
+
+| Title | Author |
+|---|---|
+| The Art of Software Security Assessment | Dowd, McDonald, Schuh |
+| Practical Binary Analysis | Dennis Andriesse |
+| Practical Malware Analysis | Sikorski, Honig |
+| Practical Reverse Engineering | Dang, Gazet, Bachaalany |
+| Hacking: The Art of Exploitation (2e) | Jon Erickson |
+| Learning Linux Binary Analysis | Ryan O'Neill |
+| Windows Internals Part 1 & 2 | Yosifovich, Russinovich |
+| Rootkits: Subverting the Windows Kernel | Hoglund, Butler |
+| Advanced Compiler Design and Implementation | Muchnick |
+| Engineering a Compiler | Cooper, Torczon |
+| Security Engineering (3rd ed.) | Ross Anderson |
+| Practical IoT Hacking | Chantzis et al. |
+| The Art of Mac Malware | Patrick Wardle |
+
+**Research Papers**
+
+| Title | Authors |
+|---|---|
+| [Finding Taint-Style Vulnerabilities in Linux-based Embedded Firmware with SSE-based Alias Analysis](https://arxiv.org/abs/2109.12209) | Cheng, Zheng, Liu, Guan, Liu, Li, Zhu, Ye, Sun |
+| [iResolveX: Multi-Layered Indirect Call Resolution via Static Reasoning and Learning-Augmented Refinement](https://arxiv.org/abs/2601.17888) | Santra et al. |
+| [Extracting Protocol Format as State Machine via Controlled Static Loop Analysis](https://arxiv.org/abs/2305.13483) | Shi, Xu, Zhang |
+| [NEMETYL: Message Type Identification of Binary Network Protocols using Continuous Segment Similarity](https://arxiv.org/abs/2002.03391) | Kleber et al. |
+| [Imperfect Forward Secrecy: How Diffie-Hellman Fails in Practice](https://dl.acm.org/doi/10.1145/2810103.2813707) | Adrian et al. |
+| [Nonce-Disrespecting Adversaries: Practical Forgery Attacks on GCM in TLS](https://www.usenix.org/conference/woot16/workshop-program/presentation/bock) | Böck et al. |
+| [Whitening Sentence Representations for Better Semantics and Faster Retrieval](https://arxiv.org/abs/2103.15316) | Su et al. |
+| [Constant Propagation with Conditional Branches](https://dl.acm.org/doi/abs/10.1145/103135.103136) | Wegman, Zadeck |
+| [A Simple, Fast Dominance Algorithm](https://www.cs.princeton.edu/techreports/2005/737.pdf) | Cooper, Harvey, Kennedy |
+| [libdft: Practical Dynamic Data Flow Tracking for Commodity Systems](https://dl.acm.org/doi/10.1145/2151024.2151042) | Kemerlis et al. |
