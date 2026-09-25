@@ -40,7 +40,9 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **Windows kernel driver analysis**: IRP/IOCTL dispatch extraction, kernel API risk classification, rootkit callback detection, SSDT hook and SMEP-disable pattern scanning (`ablation driver`)
 - **Format string vulnerability scan**: 28 printf/syslog/err family sinks; backward trace classifies format arg as safe (string literal) or vulnerable (stack slot, argument register); two-hop vsnprintf detection (`ablation fmtstr`)
 - **Heap vulnerability scanner**: integer overflow before alloc, use-after-free, double-free, and off-by-one NUL terminator patterns; grounded in TAOSSA Ch5/Ch6 (`ablation heap`)
-- **MIPS32 taint tracker**: O32 ABI, load-delay slot aware, big-endian and little-endian; recv/read to system/strcpy/execve sinks; RouterOS and embedded CPE firmware (`ablation mips`)
+- **MIPS 32+nM taint tracker**: O32 ABI, load-delay slot aware, big-endian and little-endian; recv/read to system/strcpy/execve sinks; RouterOS and embedded CPE firmware (`ablation mips`)
+- **MIPS 64 taint tracker**: N64 ABI (8 arg regs), 64-bit ops LD/SD/DADDU/DMULT, delay-slot aware; big-endian Cisco IOS/OCTEON and little-endian RouterOS 64 (`ablation mips64`)
+- **nanoMIPS frame decoder**: variable-length P16/P32/P48 instruction walker; function-start detection; full decode with capstone 6.x, frame-boundary fallback on 5.x; Ingenic SoC and MediaTek embedded (`ablation nanomips`)
 - **BYOVD detector**: scores signed drivers for Bring Your Own Vulnerable Driver primitives; 8 attack paths including MmMapIoSpace, MDL kernel write, MSR_LSTAR, and SSDT hook (`ablation byovd`)
 
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
@@ -75,7 +77,10 @@ Ablation adds what Binary Ninja does not have:
 
 ## Real-World Results
 
-Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio, covering x86-64, ARM64, ARM32, MIPS32, PowerPC, and Windows .sys.
+Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, and Skydio.
+
+**Architectures:**
+`x86 - 32` `x86 - 64` `ARM - 32` `ARM - 64` `MIPS 32+nM` `MIPS - 64` `PowerPC` `Windows .sys`
 
 Three vulnerabilities discovered in Cisco Secure Firewall Management Center (FMC) using Ablation were published in Cisco Security Advisory [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG):
 
@@ -133,6 +138,10 @@ ablation heap    firmware.so
 ablation heap    firmware.so --json heap_findings.json
 ablation mips    router.elf
 ablation mips    router.elf --le --json mips_findings.json
+ablation mips64  iosd --json mips64_findings.json
+ablation mips64  routeros64.elf --le --interprocedural --depth 6
+ablation nanomips ingenic.bin --le --base 0x80000000
+ablation nanomips ingenic.bin --le --frames --limit 100
 ablation byovd   driver.sys
 ablation byovd   driver.sys --json byovd_report.json
 ablation news
