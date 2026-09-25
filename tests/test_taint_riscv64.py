@@ -84,8 +84,68 @@ def test_mv_propagates():
     assert st['a0'] is True
 
 
-def test_andi_clears():
+def test_andi_clears_bounding_mask():
+    # 0xff is non-negative: result <= 0xff -- sanitizes, clears taint.
     t = _tracker()
     st = {'a0': True, 'a1': True}
     exec_insn(t, 'andi', 'a0, a1, 0xff', st)
     assert st['a0'] is False
+
+
+def test_andi_propagates_alignment_mask():
+    # -0x10 = -16: alignment mask (negative 12-bit imm), no upper bound, propagates.
+    t = _tracker()
+    st = {'a1': True}
+    exec_insn(t, 'andi', 'a0, a1, -0x10', st)
+    assert st['a0'] is True
+
+
+def test_andi_propagates_identity_mask():
+    # -1: rs & ~0 == rs -- exact copy.
+    t = _tracker()
+    st = {'a1': True}
+    exec_insn(t, 'andi', 'a0, a1, -1', st)
+    assert st['a0'] is True
+
+
+def test_c_andi_propagates_alignment_mask():
+    t = _tracker()
+    st = {'a0': True}
+    exec_insn(t, 'c.andi', 'a0, -0x10', st)
+    assert st['a0'] is True
+
+
+def test_c_andi_clears_bounding_mask():
+    t = _tracker()
+    st = {'a0': True}
+    exec_insn(t, 'c.andi', 'a0, 0xf', st)
+    assert st['a0'] is False
+
+
+def test_c_and_propagates_from_rd():
+    # c.and rd, rs2: rd is implicit rs1; taint from rd propagates.
+    t = _tracker()
+    st = {'a0': True, 'a1': False}
+    exec_insn(t, 'c.and', 'a0, a1', st)
+    assert st['a0'] is True
+
+
+def test_c_and_propagates_from_rs2():
+    t = _tracker()
+    st = {'a0': False, 'a1': True}
+    exec_insn(t, 'c.and', 'a0, a1', st)
+    assert st['a0'] is True
+
+
+def test_c_and_clears_when_both_clean():
+    t = _tracker()
+    st = {'a0': False, 'a1': False}
+    exec_insn(t, 'c.and', 'a0, a1', st)
+    assert st['a0'] is False
+
+
+def test_canon_reg_x_numbered_destination():
+    t = _tracker()
+    st = {'a1': True}
+    exec_insn(t, 'mv', 'x10, a1', st)
+    assert st.get('a0') is True

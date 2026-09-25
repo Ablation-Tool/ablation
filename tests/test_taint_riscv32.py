@@ -89,19 +89,76 @@ def test_addi_propagates():
     assert st['a0'] is True
 
 
-def test_andi_clears_negative_immediate():
-    # andi with -16 (alignment mask) -- conservative: clear taint
+def test_andi_propagates_alignment_mask():
+    # andi a0, a1, -0x10: -16 is a negative imm (alignment mask, all high bits set).
+    # No upper bound on the result -- taint must propagate. ISA §2.4.
     t = _tracker()
-    st = {'a0': True, 'a1': True}
+    st = {'a1': True}
     exec_insn(t, 'andi', 'a0, a1, -0x10', st)
-    assert st['a0'] is False
+    assert st['a0'] is True
+
+
+def test_andi_propagates_identity_mask():
+    # andi rd, rs, -1: rs & ~0 == rs -- exact copy, MUST propagate.
+    t = _tracker()
+    st = {'a1': True}
+    exec_insn(t, 'andi', 'a0, a1, -1', st)
+    assert st['a0'] is True
 
 
 def test_andi_clears_positive_immediate():
+    # 0xff is a non-negative bounding mask: result <= 0xff -- sanitizes, clears taint.
     t = _tracker()
     st = {'a0': True, 'a1': True}
     exec_insn(t, 'andi', 'a0, a1, 0xff', st)
     assert st['a0'] is False
+
+
+def test_c_andi_propagates_alignment_mask():
+    # c.andi rd, -0x10: 6-bit signed immediate, same semantics as andi.
+    t = _tracker()
+    st = {'a0': True}
+    exec_insn(t, 'c.andi', 'a0, -0x10', st)
+    assert st['a0'] is True
+
+
+def test_c_andi_clears_bounding_mask():
+    t = _tracker()
+    st = {'a0': True}
+    exec_insn(t, 'c.andi', 'a0, 0xf', st)
+    assert st['a0'] is False
+
+
+def test_c_and_propagates_from_either_operand():
+    # c.and rd, rs2: rd is implicit rs1; result is rd & rs2.
+    # Taint from rd alone propagates.
+    t = _tracker()
+    st = {'a0': True, 'a1': False}
+    exec_insn(t, 'c.and', 'a0, a1', st)
+    assert st['a0'] is True
+
+
+def test_c_and_propagates_from_rs2():
+    # Taint from the second operand (rs2 token) propagates to rd.
+    t = _tracker()
+    st = {'a0': False, 'a1': True}
+    exec_insn(t, 'c.and', 'a0, a1', st)
+    assert st['a0'] is True
+
+
+def test_c_and_clears_when_both_clean():
+    t = _tracker()
+    st = {'a0': False, 'a1': False}
+    exec_insn(t, 'c.and', 'a0, a1', st)
+    assert st['a0'] is False
+
+
+def test_canon_reg_x_numbered_destination():
+    # x10 = a0: canon_reg in _exec_insn normalizes x-numbered names.
+    t = _tracker()
+    st = {'a1': True}
+    exec_insn(t, 'mv', 'x10, a1', st)
+    assert st.get('a0') is True
 
 
 def test_lw_clears():
