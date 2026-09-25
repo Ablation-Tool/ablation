@@ -96,18 +96,7 @@ mindmap
 
 ---
 
-## Specialized Attack Surface Scanners
-
-- **Format String:** Uses backward tracing to mathematically prove whether a format argument is a safe string literal stored in read-only memory, or a vulnerable stack slot/argument register.
-- **Heap Analysis:** Actively scans for integer overflows occurring immediately before an allocation, as well as use-after-free and double-free conditions.
-- **MIPS32 Taint Tracking:** Traces data originating from network boundaries (`recv`/`read`) straight to system sinks (`execve`/`system`), accounting for MIPS-specific quirks like load-delay slots and endianness.
-- **Windows Kernel Drivers:** Extracts IRP/IOCTL dispatch tables, scans for rootkit callbacks, checks for SMEP disablement, and scores drivers for Bring Your Own Vulnerable Driver (BYOVD) primitives.
-
----
-
-## Encryption Analysis
-
-Firmware encryption is broken in three stages:
+## Decryption
 
 - **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
 - **Crypto Audit:** Scans for cryptography.
