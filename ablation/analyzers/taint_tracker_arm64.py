@@ -178,6 +178,51 @@ class TaintState:
     def snapshot(self) -> Dict[str, str]:
         return {r: str(t) for r, t in sorted(self.regs.items())}
 
+    # lattice ops (CFG fixpoint) ------------------------------------------
+    def copy(self) -> "TaintState":
+        return TaintState(
+            dict(self.regs), dict(self.mem), list(self.ranges),
+            dict(self.consts), dict(self.frame_ptrs), set(self.lr_slots),
+        )
+
+    def join(self, other: "TaintState", widen: bool = False) -> "TaintState":
+        """Least upper bound for a control-flow merge."""
+        out = TaintState()
+        for r in set(self.regs) | set(other.regs):
+            a, b = self.get(r), other.get(r)
+            ab = 0 if not a.tainted else a.bound
+            bb = 0 if not b.tainted else b.bound
+            if ab is None or bb is None:
+                bound = None
+            elif widen and ab != bb:
+                bound = None
+            else:
+                bound = max(ab, bb)
+            t = Taint(a.labels | b.labels, bound)
+            if t.tainted or t.bound is not None:
+                out.regs[r] = t
+        for k in set(self.mem) | set(other.mem):
+            a, b = self.mem.get(k, CLEAN), other.mem.get(k, CLEAN)
+            out.mem[k] = Taint(a.labels | b.labels, None)
+        seen: Set[tuple] = set()
+        for rng in self.ranges + other.ranges:
+            key = (rng[0], rng[1], rng[2], rng[3].labels)
+            if key not in seen:
+                seen.add(key)
+                out.ranges.append(rng)
+        out.consts = {r: v for r, v in self.consts.items() if other.consts.get(r) == v}
+        out.frame_ptrs = {r: v for r, v in self.frame_ptrs.items() if other.frame_ptrs.get(r) == v}
+        out.lr_slots = self.lr_slots | other.lr_slots
+        return out
+
+    def same_as(self, other: "TaintState") -> bool:
+        return (
+            self.regs == other.regs and self.mem == other.mem
+            and sorted(map(repr, self.ranges)) == sorted(map(repr, other.ranges))
+            and self.consts == other.consts and self.frame_ptrs == other.frame_ptrs
+            and self.lr_slots == other.lr_slots
+        )
+
 
 # ---------------------------------------------------------------------------
 # Labeled-taint engine (listing / objdump / capstone path)
