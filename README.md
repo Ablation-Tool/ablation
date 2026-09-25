@@ -4,7 +4,7 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-Ablation is a reverse engineering framework. Paired with Claude Code, it becomes fully autonomous. It does everything Ghidra, IDA Pro, and Binary Ninja do, without the tedious GUI work, without the license fees, and without relying on any legacy RE tool.
+Ablation is a reverse engineering framework. Paired with Claude Code, it becomes fully autonomous. It is not an MCP (Model Context Protocol) server, nor does the Ablation workflow run through MCP to execute these tasks. It does everything Ghidra, IDA Pro, and Binary Ninja do, without the tedious GUI work, without the license fees, and without relying on any legacy RE tool.
 
 ---
 
