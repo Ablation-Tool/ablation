@@ -226,6 +226,11 @@ _MIPS_BRANCH_MNEMS = frozenset({
 _MIPS_CALL_MNEMS = frozenset({'jal', 'jalr', 'jalr.hb'})
 _MIPS_RET_MNEMS  = frozenset({'jr'})   # jr $ra is a return; handled by context
 
+# ARC branch/call/ret mnemonic sets (from arc_decoder classification)
+_ARC_BRANCH_MNEMS = frozenset({'b', 'bcc', 'bbit', 'b_s'})
+_ARC_CALL_MNEMS   = frozenset({'bl', 'jl'})
+_ARC_RET_MNEMS    = frozenset({'j_blink', 'j_s'})
+
 # PPC32/PPC64 mnemonic sets (capstone lowercase strings)
 _PPC_BRANCH_MNEMS = frozenset({
     'b', 'ba', 'bc', 'bca',
@@ -278,6 +283,10 @@ class DisasmEngine:
             cs_endian = CS_MODE_BIG_ENDIAN if endian == 'big' else CS_MODE_LITTLE_ENDIAN
             cs_width  = CS_MODE_32 if arch in ('ppc', 'ppc32') else CS_MODE_64
             self.md = Cs(CS_ARCH_PPC, cs_width | cs_endian)
+        elif arch in ('arc', 'arc32'):
+            # capstone 5.x has no CS_ARCH_ARC; use the pure-Python arc_decoder
+            # for stream() when arch=='arc'/'arc32'. self.md stays None.
+            self._arc_endian = endian
 
         if self.md:
             self.md.detail = True
@@ -325,6 +334,9 @@ class DisasmEngine:
                 if insn.mnemonic == 'call' and '*rax' in insn.op_str:
                     break
         """
+        if self.arch in ('arc', 'arc32'):
+            yield from self._arc_stream(code, base_addr, count)
+            return
         if not HAS_CAPSTONE or not self.md:
             yield from self._fallback_disasm_stream(code, base_addr, count)
             return
@@ -365,6 +377,27 @@ class DisasmEngine:
                 is_call=_is_call,
                 is_ret=_is_ret,
                 branch_type=_btype,
+            )
+
+    def _arc_stream(self, code, base_addr, count):
+        """ARC stream using pure-Python arc_decoder (no capstone required)."""
+        from ablation.analyzers.arc_decoder import ARCDecoder
+        endian = getattr(self, '_arc_endian', 'little')
+        dec = ARCDecoder(endian=endian)
+        for i, frame in enumerate(dec.decode_frames(code, base_addr)):
+            if count and i >= count:
+                return
+            yield InsnRecord(
+                address=frame.va,
+                mnemonic=frame.mnemonic,
+                op_str=frame.op_str,
+                size=frame.width,
+                raw='',
+                is_branch=frame.is_branch,
+                is_call=frame.is_call,
+                is_ret=frame.is_ret,
+                branch_type=('unconditional' if frame.is_call or frame.mnemonic == 'b'
+                             else 'conditional') if (frame.is_branch or frame.is_call) else None,
             )
 
     def _fallback_disasm_stream(self, code, base_addr, count):
@@ -634,6 +667,11 @@ class DisasmEngine:
                 return True
             # stdu r1, -N(r1)  (PPC64 ELFv2 frame setup + SP save)
             if insn.mnemonic == 'stdu' and 'r1, -' in insn.op_str:
+                return True
+
+        elif self.arch in ('arc', 'arc32'):
+            # push_s blink -- saves BLINK to stack (compact 16-bit prologue)
+            if insn.mnemonic == 'push_s' and 'blink' in insn.op_str:
                 return True
 
         elif self.arch == 'arm':
