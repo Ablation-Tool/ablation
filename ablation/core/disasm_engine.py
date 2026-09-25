@@ -226,6 +226,15 @@ _MIPS_BRANCH_MNEMS = frozenset({
 _MIPS_CALL_MNEMS = frozenset({'jal', 'jalr', 'jalr.hb'})
 _MIPS_RET_MNEMS  = frozenset({'jr'})   # jr $ra is a return; handled by context
 
+# PPC32/PPC64 mnemonic sets (capstone lowercase strings)
+_PPC_BRANCH_MNEMS = frozenset({
+    'b', 'ba', 'bc', 'bca',
+    'beq', 'bne', 'bgt', 'blt', 'bge', 'ble',
+    'bdnz', 'bdz', 'bctr',
+})
+_PPC_CALL_MNEMS = frozenset({'bl', 'bla', 'bctrl'})
+_PPC_RET_MNEMS  = frozenset({'blr', 'blrl'})
+
 
 class DisasmEngine:
     """Universal disassembly engine — Capstone linear sweep."""
@@ -263,8 +272,12 @@ class DisasmEngine:
                 except (AttributeError, NameError):
                     print("WARNING: CS_MODE_NANOMIPS not in capstone 5.x. "
                           "Upgrade to capstone 6.x for full nanoMIPS decode. "
-                          "Falling back to MIPS32 — frame boundaries may be wrong.")
+                          "Falling back to MIPS32 -- frame boundaries may be wrong.")
                     self.md = Cs(CS_ARCH_MIPS, CS_MODE_MIPS32 | cs_endian)
+        elif arch in ('ppc', 'ppc32', 'ppc64'):
+            cs_endian = CS_MODE_BIG_ENDIAN if endian == 'big' else CS_MODE_LITTLE_ENDIAN
+            cs_width  = CS_MODE_32 if arch in ('ppc', 'ppc32') else CS_MODE_64
+            self.md = Cs(CS_ARCH_PPC, cs_width | cs_endian)
 
         if self.md:
             self.md.detail = True
@@ -318,6 +331,7 @@ class DisasmEngine:
         # disasm_lite() is the streaming API in Capstone 5+; disasm_iter was removed.
         # Returns (address, size, mnemonic, op_str) tuples — no .bytes attribute.
         is_mips = self.arch in ('mips', 'mips32', 'mips64', 'mips32r6', 'nanomips')
+        is_ppc  = self.arch in ('ppc', 'ppc32', 'ppc64')
         for i, (address, size, mnemonic, op_str) in enumerate(self.md.disasm_lite(code, base_addr)):
             if count and i >= count:
                 return
@@ -327,6 +341,12 @@ class DisasmEngine:
                 _is_ret  = mnemonic == 'jr' and 'ra' in op_str
                 _btype   = ('unconditional' if mnemonic in ('j', 'jr', 'b', 'jal', 'jalr')
                             else 'conditional') if (_is_br or _is_call) else None
+            elif is_ppc:
+                _is_br   = mnemonic in _PPC_BRANCH_MNEMS
+                _is_call = mnemonic in _PPC_CALL_MNEMS
+                _is_ret  = mnemonic in _PPC_RET_MNEMS
+                _btype   = ('unconditional' if mnemonic in ('b', 'ba', 'bl', 'bla', 'bctr', 'bctrl', 'blr', 'blrl')
+                            else 'conditional') if (_is_br or _is_call or _is_ret) else None
             else:
                 _is_br   = mnemonic in ('jmp','je','jne','jz','jnz','jl','jle','jg','jge',
                                         'ja','jb','jae','jbe','jc','jnc','js','jns','jo','jno',
@@ -606,6 +626,11 @@ class DisasmEngine:
             # addiu $sp, $sp, -N  (MIPS32/nanoMIPS standard frame setup)
             # daddiu $sp, $sp, -N (MIPS64 standard frame setup)
             if insn.mnemonic in ('addiu', 'daddiu') and '$sp, $sp, -' in insn.op_str:
+                return True
+
+        elif self.arch in ('ppc', 'ppc32', 'ppc64'):
+            # stwu r1, -N(r1)  (System V / EABI frame setup + SP save)
+            if insn.mnemonic == 'stwu' and 'r1, -' in insn.op_str:
                 return True
 
         elif self.arch == 'arm':
