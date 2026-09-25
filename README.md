@@ -1,4 +1,4 @@
-<img src="assets/ablation-1a-pink-ink-header-2560.png" width="640" alt="ABLATION">
+<img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="640" alt="ABLATION">
 
 # Ablation Reverse Engineering Framework
 
