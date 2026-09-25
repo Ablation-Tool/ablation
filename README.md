@@ -48,6 +48,7 @@ Ablation adds what Ghidra, IDA Pro, and Binary Ninja do not have:
 - **RISC-V 32 taint tracker**
 - **RISC-V 64 taint tracker**
 - **BYOVD detector**
+  
 Ghidra takes 1 to 4 hours to load a 50 MB binary. Ablation loads the same binary in 35 seconds.
 
 ---
