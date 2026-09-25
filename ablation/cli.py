@@ -361,6 +361,21 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v2.9.0 (2026-09-25)  Synopsys DesignWare ARC taint tracker + frame decoder
+  ablation arc        <binary> [--be] [--interprocedural] [--depth N] [--json FILE]
+  ablation arc-decode <binary> [--be] [--base N] [--frames] [--limit N] [--json FILE]
+  - ARCTaintTracker: ARC Linux ABI; r0-r7 args (8 regs), r0 return,
+    r13-r25 callee-saved; no delay slots; pure-Python (no capstone ARC)
+  - Sources: recv/recvfrom/read/fgets/gets/fread (return value in r0)
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/snprintf/memcpy/strcat
+  - ARCDecoder: mixed 16/32-bit frame walker; discriminant: (hw0>>11)&0x1f >= 0x18 -> 16-bit
+  - BL detection: (hw0 & 0xFE00) == 0x2200 (op5=4, unconditional, link bit set)
+  - J[blink] return: (hw0 & 0xFE00)==0x3800 + (hw1 & 0x003F)==0x001F
+  - Prologue scan: push_s blink (compact 16-bit) or op5=0x18 heuristic
+  - Default little-endian (Linux ARC HS); --be for ARC 600/700 big-endian targets
+  - DisasmEngine: arch='arc'/'arc32' routes through ARCDecoder (_arc_stream)
+  - Targets: ARC EM/HS (IoT MCU, smart TV, storage), ARC 770D, automotive SoCs
+
 v2.8.0 (2026-09-24)  PowerPC 64-bit taint tracker
   ablation ppc64   <binary> [--le] [--interprocedural] [--depth N] [--json FILE]
   - PPC64TaintTracker: ELFv2 (OpenPOWER Linux) and ELFv1 (AIX/old Linux PPC64)
@@ -577,6 +592,57 @@ def cmd_nanomips(args):
             print(f"  {hex(va)}")
         if not dis.has_full_decode:
             print("\nNote: install capstone 6.x for full nanoMIPS decode.")
+
+
+def cmd_arc(args):
+    from ablation.analyzers.taint_tracker_arc import ARCTaintTracker
+
+    p = str(_require_binary(args.binary))
+    endian = 'big' if args.be else 'little'
+    tracker = ARCTaintTracker.from_path(p, endian=endian)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va), 'func_name': f.func_name,
+                'sink_va': hex(f.sink_va), 'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args, 'source': f.source_name,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
+def cmd_arc_decode(args):
+    from ablation.analyzers.arc_decoder import ARCDisasm
+
+    binary_path = _require_binary(args.binary)
+    data = binary_path.read_bytes()
+    endian = 'big' if args.be else 'little'
+    dis = ARCDisasm(endian=endian)
+
+    if args.frames:
+        print(dis.report_frames(data, base_addr=args.base, limit=args.limit))
+        return
+
+    starts = dis.find_function_starts(data, base_addr=args.base)
+    if args.json:
+        import json
+        out = [{'func_va': hex(va)} for va in starts]
+        Path(args.json).write_text(json.dumps(out, indent=2))
+        print(f"Wrote {len(out)} function starts to {args.json}")
+    else:
+        print(f"ARC function starts ({len(starts)} found, base={hex(args.base)}):")
+        for va in starts:
+            print(f"  {hex(va)}")
 
 
 def cmd_ppc64(args):
@@ -812,6 +878,25 @@ def main():
     p_ppc64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
     p_ppc64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_ppc64.set_defaults(func=cmd_ppc64)
+
+    # arc (ARC taint tracker)
+    p_arc = sub.add_parser('arc', help='ARC taint analysis: ARC EM/HS/770D; smart TV SoCs, storage controllers, automotive')
+    p_arc.add_argument('binary')
+    p_arc.add_argument('--be', action='store_true', help='big-endian (default: little-endian)')
+    p_arc.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_arc.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_arc.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_arc.set_defaults(func=cmd_arc)
+
+    # arc-decode (ARC frame decoder)
+    p_arc_decode = sub.add_parser('arc-decode', help='ARC instruction frame decoder: width discriminant + BL/J[blink] classification')
+    p_arc_decode.add_argument('binary')
+    p_arc_decode.add_argument('--be', action='store_true', help='big-endian (default: little-endian)')
+    p_arc_decode.add_argument('--base', type=lambda x: int(x, 0), default=0, help='base VA for .text (hex ok)')
+    p_arc_decode.add_argument('--frames', action='store_true', help='dump all frames (not just control-flow)')
+    p_arc_decode.add_argument('--limit', type=int, default=0, help='limit output to N frames (0 = all)')
+    p_arc_decode.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_arc_decode.set_defaults(func=cmd_arc_decode)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
