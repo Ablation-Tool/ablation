@@ -1309,7 +1309,7 @@ FINDINGS = {
 
     "LB_profile": {
         "binary": "lb",
-        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (cmf_exec_conf CRLF downgrade; /bin/sh mkstemp write-content); fadcpopen grep ELIMINATED (single-quote-safe VS names); rest ELIMINATED",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (cmf_exec_conf CRLF downgrade only); mkstemp+/bin/sh ELIMINATED; fadcpopen ELIMINATED; rest ELIMINATED",
         "evidence": {
             "cmf_exec_conf_0x365b5_PLAUSIBLE_LOW": (
                 "cmf_exec_conf @ 0x365b5 sends CLI commands with scripting name, VDOM name, VS name, "
@@ -1328,11 +1328,16 @@ FINDINGS = {
                 "Single-quote breakout requires \\' in the value; [A-Za-z0-9_-] contains no quote characters. "
                 "ELIMINATED."
             ),
-            "fadcsystem_bin_sh_PLAUSIBLE_LOW": (
-                "0x23c71/0x7b2a1: /bin/sh <mkstemp> pattern. mkstemp('/tmp/hap_fadcsystem/%s_fadcsystem_sh_XXXXXX'), "
-                "write '#!/bin/sh\\n' + shell commands with haproxy/opensips names and VS-derived config paths, "
-                "then fadcsystem('/bin/sh <tempfile>'). Shell metacharacters in VS name or config path would "
-                "execute in /bin/sh context. Admin-only HA/haproxy management. PLAUSIBLE LOW."
+            "fadcsystem_bin_sh_ELIMINATED": (
+                "0x23ad0 mkstemp writer (7 callers) + 0x7b110 lb_ha_sync_file mkstemp writer. "
+                "Both write '#!/bin/sh\\n' + script_body + trailing newline to mkstemp then exec '/bin/sh <tempfile>'. "
+                "Script bodies: (a) opensips/HAProxy config scripts — all %s = VS/VDOM names validated by "
+                "is_valid_host_name → [A-Za-z0-9_-]; no shell metacharacters reachable in template substitution. "
+                "(b) lb_ha_sync_file 0x7b110 callers at 0x78c6c/0x78cb7: "
+                "__snprintf_chk at 0x78c60 builds 'cd %s;rm -rf %s/* || true;mv %s %s/lbtables.tar ;tar -xvf lbtables.tar ;rm -f %s' "
+                "where ALL 5x %s = RIP-relative .rodata constants: '/var/log/sync_stick_table' and '/tmp/lbtables.tar'. "
+                "Similarly opensips template at 0x78cb7: all %s = hardcoded .rodata paths. "
+                "No user-controlled data reaches any shell script body. ELIMINATED."
             ),
             "fadcsystem_sed_ELIMINATED": (
                 "0x35b50-0x35f2e: fadcsystem('sed s/PUB_URI/%s/g %s > %s') and 'sed -i s/ADFS_SERVER_DOMAIN/%s/g %s' etc. "
@@ -1615,11 +1620,13 @@ FINDINGS = {
     # kdbgd, krb_test, send2lb — all ~14K PIE ELFs with NO exec-class PLT entries.
     # CLEAN for command injection.
     #
-    # del_netdev (14624B): system@plt (0x1180, 1 caller).
-    #   Format: '/bin/ls %s > /tmp/tmp.brg.list' — lists bridge dir; %s = bridge name from CLI arg.
-    #   Called as: del_netdev <bridge_name>; bridge name comes from CMDB-driven config scripts.
-    #   system() with shell: if bridge name allows metacharacters → injection. PLAUSIBLE LOW-MEDIUM.
-    #   Context: checks /sys/class/net/, /proc/net/vlan/config — bridge/VLAN device deletion util.
+    # del_netdev (14624B): system@plt (0x1180, 1 caller at 0x1998).
+    #   Usage: del_netdev { 0 | 1 | 2 } — MODE argument, NOT a bridge name.
+    #   snprintf at 0x1990: __snprintf_chk(rbx, 0xff, 2, 0x100, r8, r9)
+    #     r8 = '/bin/ls %s > /tmp/tmp.brg.list' (RIP-relative .rodata)
+    #     r9 = '/sys/class/net/' (RIP-relative .rodata)
+    #   Result: system('/bin/ls /sys/class/net/ > /tmp/tmp.brg.list') — BOTH strings are hardcoded.
+    #   No user-controlled input reaches shell. ELIMINATED.
     #
     # vdom (14560B): sys_vdom_exec_safe@plt (0x1080, 1 caller at 0x1373).
     #   Format: '%s ' loop appending CLI args (r15 = argv[3..argc-1]) → cmd string → sys_vdom_exec_safe.
@@ -1631,12 +1638,17 @@ FINDINGS = {
 
     "SMALL_UTILS_profile": {
         "binary": "del_netdev/ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb/vdom",
-        "status": "ANALYZED — 9 utils CLEAN; del_netdev PLAUSIBLE LOW-MEDIUM; vdom PLAUSIBLE LOW",
+        "status": "ANALYZED — 9 utils CLEAN; del_netdev ELIMINATED; vdom PLAUSIBLE LOW",
         "evidence": {
             "clean_9": "ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb — no exec PLT. CLEAN.",
-            "del_netdev_system": (
-                "system@plt (0x1180), 1 caller (0x1998). Format: '/bin/ls %s > /tmp/tmp.brg.list'. "
-                "%s = bridge name from CLI arg (CMDB-driven). Shell: '>' redirection confirms. PLAUSIBLE LOW-MEDIUM."
+            "del_netdev_system_ELIMINATED": (
+                "system@plt (0x1180), 1 caller (0x1998). "
+                "Usage string 'Usage : %s { 0 | 1 | 2 }' confirms argv[1] = mode {0,1,2}, NOT a bridge name. "
+                "__snprintf_chk at 0x1990: rdi=rbx(dest), rsi=0xff, rdx=2, rcx=0x100, "
+                "r8='/bin/ls %s > /tmp/tmp.brg.list'(RIP .rodata), r9='/sys/class/net/'(RIP .rodata). "
+                "Substitution: system('/bin/ls /sys/class/net/ > /tmp/tmp.brg.list'). "
+                "Both format string and its argument are hardcoded .rodata constants. "
+                "No user-controlled data reaches shell. ELIMINATED."
             ),
             "vdom_sys_vdom_exec_safe": (
                 "sys_vdom_exec_safe@plt (0x1080), 1 caller (0x1373). Loop: snprintf('%s ', argv[3..n]) → cmd buf → sys_vdom_exec_safe. "
