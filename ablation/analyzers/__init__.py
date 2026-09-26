@@ -46,6 +46,7 @@ from .source_ingestion import SourceContext
 from .source_entry_classifier import SourceEntryClassifier, RouteClassification, AUTH_NONE, AUTH_API_KEY, AUTH_SESSION, AUTH_INTERNAL, AUTH_ADMIN
 from .source_sink_scanner import SourceSinkScanner, SinkHit
 from .source_isolation_checker import SourceIsolationChecker, IsolationFinding
+from .source_taint_tracker import SourceTaintTracker, TaintPath, TaintHop, CallGraph
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -93,4 +94,5 @@ __all__ = [
     "AUTH_NONE", "AUTH_API_KEY", "AUTH_SESSION", "AUTH_INTERNAL", "AUTH_ADMIN",
     "SourceSinkScanner", "SinkHit",
     "SourceIsolationChecker", "IsolationFinding",
+    "SourceTaintTracker", "TaintPath", "TaintHop", "CallGraph",
 ]
