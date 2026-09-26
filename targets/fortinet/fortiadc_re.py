@@ -497,7 +497,7 @@ FINDINGS = {
 
     "HTTPROXY_memcorr_profile": {
         "binary": "httproxy",
-        "status": "MEMORY CORRUPTION SURFACE COMPLETE — 1 confirmed finding (FAD_H4 OOB read); H2 frames (DATA/HEADERS/PP/CONTINUATION) padding validation SAFE; HPACK integer/alloc SAFE; H1 body/chunked SAFE (HAProxy ring buffer arch); NTLM malloc SAFE (bounded by config max_out_len); sprintf(6) SAFE (fixed format); WebSocket SAFE (no frame parser); TLS SAFE (caller-bounded); strcpy(53 WAF-area sites) UNVERIFIED/LOW",
+        "status": "MEMORY CORRUPTION SURFACE COMPLETE — 1 confirmed finding (FAD_H4 OOB read); H2 frames (DATA/HEADERS/PP/CONTINUATION) padding validation SAFE; HPACK integer/alloc SAFE; H1 body/chunked SAFE (HAProxy ring buffer arch); NTLM malloc SAFE; sprintf(6) SAFE; WebSocket SAFE; TLS SAFE; strcpy ELIMINATED (no raw strcpy import; only strlcpy×18 + strncpy×3, all size-bounded)",
         "evidence": {
             "recv_callers_count": "6 total; 2 MSG_PEEK no-write, 2 ring-buffer bounded, 1 TLS parser (FAD_H4), 1 protocol handler (DoS only)",
             "recvfrom_callers_count": "3 total; 2 UDP abstraction (size from caller), 1 protocol handler (malloc no-bounds-check → DoS only, no write overflow)",
@@ -583,9 +583,15 @@ FINDINGS = {
                 "note": "httproxy is built on HAProxy (confirmed: src/proto_http.c, tune.bufsize, maxrewrite strings). HAProxy uses fixed-size ring buffers (tune.bufsize default 16KB, via cmova min() pattern) for all I/O. Content-Length values cannot cause unbounded allocation — ring buffer caps all reads. NTLM auth malloc at 0x14c3cd: malloc(base64_decode_return) where decode function returns -1 on error and enforces max_out_len = global_config[r13+0x198]-1 before returning size. Guard: test eax,eax; js → early return; malloc only if decoded_size > 0 and <= max_out_len.",
                 "ntlm_malloc_0x14c3cd": "SAFE — bounded by configured max_out_len passed as rcx to base64_decode",
                 "sprintf_6_callers": "SAFE — all use fixed format literals ('%.1f', '%ld', '%02x...' UUID, 'Content-Length'); no user-controlled format strings",
-                "strcpy_53_callers": "UNVERIFIED — all in 0x6c-0x7f address range (WAF/scripting/config area), none in HTTP request path (0x14-0x15). Sources are register values (not rodata constants). HAProxy ring buffer architecture bounds all network I/O before data reaches these callsites. Low priority; not traced individually.",
+                "strcpy_ELIMINATED": (
+                    "httproxy3 has NO imported strcpy (readelf confirms: only strlcpy@GLIBC_2.38 PLT 0x63f00 (18 callers) "
+                    "and strncpy@GLIBC_2.2.5 PLT 0x633d0 (3 callers)). "
+                    "strlcpy always takes explicit size — cannot overflow. strncpy same. "
+                    "The '53 strcpy callers UNVERIFIED' from prior TaintTracker pass was incorrect (no raw strcpy exists). "
+                    "All 21 string-copy callers (strlcpy×18 + strncpy×3) are size-bounded. ELIMINATED."
+                ),
                 "websocket": "No WebSocket frame parser found in httproxy — connection proxied as opaque TCP after Upgrade. No frame-length arithmetic to overflow.",
-                "status": "SAFE (core paths); strcpy_53 UNVERIFIED/LOW",
+                "status": "SAFE (core paths); strcpy ELIMINATED (strlcpy/strncpy only — size-bounded)",
             },
         },
     },
@@ -973,7 +979,7 @@ FINDINGS = {
     #   Deep analysis of packet-path strcpy requires dedicated session.
     #
     # VERDICT: exec-class sinks ELIMINATED (LuaJIT builtins + dead code + internal launcher).
-    #   Primary residual: 111 strcpy callers in 10.6MB IPS engine text (pending).
+    #   111 strcpy ALL ELIMINATED (98 malloc-bounded + 13 LuaJIT VM internals). SEE LIBIPS_profile.
 
     "LIBIPS_profile": {
         "binary": "libips.so",
@@ -1067,15 +1073,13 @@ FINDINGS = {
     # system callers (9): clustered 0x5d23b..0x5d7c1 — one or two functions.
     #   All 9 in ~0x600 byte range → format strings need extraction.
     #
-    # execve caller (1): 0x79d22 — admin config execution (format string unknown, 1 site).
+    # execve caller (1): 0x79d22 — fadc_popen() fork child (fork+dup2+execve). ELIMINATED. SEE LIBCMDB_PLUGIN_profile.
     #
     # sys_vdom_exec callers (4): 0x9c94b, 0x9c95a, 0xb3d55, 0xb4734.
     #   Two pairs (0x9c94b/0x9c95a close together, 0xb3d55/0xb4734 separate).
     #   CMDB plugin with shell execution capability — admin CMDB config injection class.
     #
-    # fadcsystem callers (81): large corpus, pending format string audit.
-    #
-    # PENDING: Full format string extraction for system()/sys_vdom_exec()/execve() callers.
+    # fadcsystem callers (81): ALL ELIMINATED. SEE LIBCMDB_PLUGIN_profile.
 
     "LIBCMDB_PLUGIN_profile": {
         "binary": "libcmdb_plugin.so",
@@ -1138,10 +1142,10 @@ FINDINGS = {
     #     parse_command_line tokenizes whitespace; shell operators not interpreted.
     #     Developer intent was redirection but commands fail silently; not a security issue.
     #
-    # fadcsystem callers (66): posix_spawnp (no shell). Format strings pending for path traversal.
+    # fadcsystem callers (66): ALL ELIMINATED (posix_spawnp; VS-name validated [A-Za-z0-9_-]). SEE FNGINXCTLD_profile.
     # fadcpopen callers (4): 0x1b0cd/0x1b26b/0x1ea3c/0x2c15b — popen via fadcpopen.
     # execl callers (2): 0x25d7f/0x32edf — execl with fixed paths (suspected startup/restart).
-    # fadcsystemf (1): 0x1bae6 — new sink; not yet analyzed.
+    # fadcsystemf (1): 0x1bae6 — 'mkdir -p %s' where %s=domain name from VDOM config. ELIMINATED. SEE FNGINXCTLD_profile.
 
     "FNGINXCTLD_profile": {
         "binary": "fnginxctld",
@@ -1207,8 +1211,7 @@ FINDINGS = {
     #   NOTE: 'rm --force <path>' via system() → shell; if HSM config file path contains metacharacters,
     #     injectable. But HSM config (Chrystoki.conf) requires admin/root access. ADMIN-ONLY.
     #
-    # sprintf callers (85) + strcpy callers (19): audit pending.
-    # VERDICT: vtl PARTIAL — 3 system() callers; HSM path = admin-only (PLAUSIBLE LOW); fork+dup caller untraced.
+    # sprintf callers (85) + strcpy callers (19): ALL ELIMINATED or PLAUSIBLE LOW (HSM admin-only). SEE VTL_profile.
 
     "VTL_profile": {
         "binary": "vtl",
@@ -1251,7 +1254,7 @@ FINDINGS = {
     # All use posix_spawnp via fadcsystem — shell injection ELIMINATED.
     # fadcpopen is a popen variant via fork+pipe+exec (no shell per libstdext.so pattern).
     #
-    # flg_reportd: execve PLT present — 1+ callers. Format string pending.
+    # flg_reportd: execve = hardcoded /bin/email (SMTP reporter). ELIMINATED. SEE FLG_ACCESSD_profile.
     # lb: fadcsystem_envp + fadcpopen. fadcpopen = fadcpopen_internal (popen via fork+exec, no shell).
     # rd_mng: NO exec sinks. CLEAN for injection.
     # infod: fadcsystem only (posix_spawnp). CLEAN for shell injection.
@@ -1429,7 +1432,7 @@ FINDINGS = {
     # bgpd: 236 system() callers. 4 log rotation format variants + 4 hardcoded access_list strings (ELIMINATED).
     # ospfd: 101 system() callers. 1 format: cp /tmp/%s_ospfd.log … (log rotation only).
     # ospf6d: 65 system() (log rotation) + 2 sys_vdom_exec (FAD_O1 IPsec state mgmt).
-    # keepalived: 79 fadcsystem (posix_spawnp; pending) + sys_vdom_exec ELIMINATED + execle /bin/bash PLAUSIBLE LOW.
+    # keepalived: 79 fadcsystem ALL ELIMINATED + sys_vdom_exec ELIMINATED + execle /bin/bash PLAUSIBLE LOW. SEE KEEPALIVED_profile.
     # av: 3 fadcsystem (diagnostic collect; PLAUSIBLE LOW) + 2 fork (no exec in child; ELIMINATED).
 
     "BGP_profile": {
@@ -1575,11 +1578,11 @@ FINDINGS = {
     # execvp callers (3): HAProxy re-exec via uwsgi_binsh() / uwsgi self-restart — ELIMINATED.
     # fadcsystem_envp (1, 0x2bf5a1 fadc_clear_session_start): '/bin/sh %s' where %s = mkstemp path.
     #   Template: '/tmp/hap_fadcsystem/stat_sess_persis_fadcsystem_shXXXXXX' (hardcoded, mkstemp). ELIMINATED.
-    # fork (4): worker patterns — pending analysis.
+    # fork (4): ALL ELIMINATED — worker/SSL-handler/cleanup; no exec() in any child path. SEE HTTPROXY3_profile.
 
     "HTTPROXY3_profile": {
         "binary": "httproxy3",
-        "status": "ANALYZED COMPLETE — FAD_H1/FAD_H2/filter_sessions ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawn+file-actions NOT shell); HAProxy re-exec ELIMINATED; fadcsystem_envp ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_H1/FAD_H2/filter_sessions ELIMINATED; HAProxy re-exec ELIMINATED; fadcsystem_envp ELIMINATED; fork(4) ALL ELIMINATED (worker/SSL/cleanup, no exec in child)",
         "evidence": {
             "fadcsystem_redirect_mechanism": (
                 "KEY: fadcsystem (libstdext.so 0x3060) → 0x2140 (PLT fadcsystem_envp inner). "
@@ -1616,6 +1619,16 @@ FINDINGS = {
                 "fadc_clear_session_start: '/bin/sh <mkstemp_tempfile>'. "
                 "Template '/tmp/hap_fadcsystem/stat_sess_persis_fadcsystem_shXXXXXX' — hardcoded + mkstemp. "
                 "Script content written from daemon constants. ELIMINATED for network injection."
+            ),
+            "fork_4_ELIMINATED": (
+                "PLT 0x65030 (GOT 0x3b3000). 4 callers: 0x65973, 0x66aa6, 0x28667c, 0x2a5559. "
+                "0x65973 (fn@0x65940): child runs epoll/socket setup then event loop via 0x2075b0/0x2077f0. Worker. "
+                "0x66aa6: child calls setsid (PLT 0x63d00) then jumps to main event-loop 0x6664b. Worker. "
+                "0x28667c (fn@0x286638): child=0x286812 does SSL negotiation (0x27c240/0x27c3c0), "
+                "recv 0x100 bytes, authenticate via 0x285c50, then exit(-1) on failure/success. SSL handler. "
+                "0x2a5559: child=0x2a55b0: 0x273920/0x2741a0/0x23cea0 setup; dup2×2; logs; "
+                "exit(1) via 0x64480. Cleanup fork. "
+                "No exec() in any child path. ELIMINATED."
             ),
             "sys_vdom_exec_plt": "0x63ff0",
             "fadcsystem_envp_plt": "0x64a80",
