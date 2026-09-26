@@ -497,13 +497,36 @@ FINDINGS = {
 
     "HTTPROXY_memcorr_profile": {
         "binary": "httproxy",
-        "status": "MEMORY CORRUPTION SURFACE ANALYZED — 1 confirmed finding (FAD_H4 OOB read); all write-overflow vectors SAFE",
+        "status": "MEMORY CORRUPTION SURFACE ANALYZED — 1 confirmed finding (FAD_H4 OOB read); all write-overflow vectors SAFE; H2/chunked integer overflow vectors SAFE",
         "evidence": {
             "recv_callers_count": "6 total; 2 MSG_PEEK no-write, 2 ring-buffer bounded, 1 TLS parser (FAD_H4), 1 protocol handler (DoS only)",
             "recvfrom_callers_count": "3 total; 2 UDP abstraction (size from caller), 1 protocol handler (malloc no-bounds-check → DoS only, no write overflow)",
             "strcpy_chain_0x7f40a0": "HTTP routing dispatch; all inputs bounded ≤157 bytes through 0x7e7c10/0x7e6c10; SAFE",
             "realloc_81_callers": "$VAR substitution + table growth patterns; all correct size accounting; SAFE",
             "sprintf_0x50e3f0": "HAProxy ACL evaluator; format from config struct, not wire; LOW config-only risk",
+            "hpack_integer_decode_0x295850": "SAFE — three independent guards: initial-shift > 31 → error; residual-capacity check (0xffffffff>>shift) >= byte; unsigned carry on accumulate → error",
+            "hpack_header_alloc_0x2a30d0": "SAFE — explicit (field_len+8) <= 0x4000 cap at 0x2a3113 before malloc+memcpy; second cap at 0x2a5ae8",
+            "FAD_WU1": {
+                "location": "0x2a07d0 (WINDOW_UPDATE frame handler)",
+                "guard": "0x2a082a-0x2a082e: sub edx, 0x7fffffff; cmp edx, current_window; jl FLOW_CONTROL_ERROR",
+                "logic": "edx = 0x7fffffff - wire_increment; if current_window > edx → overflow → RST_STREAM(FLOW_CONTROL_ERROR=0xfffffdf4)",
+                "rfc7540": "correctly implements §6.9.1 constraint: window+increment must not exceed 2^31-1",
+                "inc0": "increment==0 guarded at 0x2a0818: je → RST_STREAM(PROTOCOL_ERROR); correct per RFC 7540 §6.9",
+                "window_store": "0x2a0836: [r13+0xb4] = new_window (32-bit signed, max 0x7fffffff)",
+                "status": "SAFE",
+            },
+            "FAD_CHUNKSIZE": {
+                "function": "http2_rsp_body_read_callback (response body chunked parser)",
+                "location": "0x1f2d80–0x1f3480 (state machine, state 1 = hex digit parse)",
+                "accumulator": "32-bit dword at [rsp+8]; initialized to 0 at 0x1f2dbc",
+                "guard": "0x1f2de4: cmp [rsp+8], 0x7ffffff; jbe 0x1f2ef8 (pre-shift check every digit iteration)",
+                "max_size": "0x7FFFFFFF (131072 - 1 bytes max chunk); shl r8d,4 + add esi,r8d cannot overflow 32-bit",
+                "store": "0x1f34e9: [r15+0x34] = accumulated chunk_size (after CRLF terminator found)",
+                "copy_bound": "state 0 body copy (0x1f2b28): cmova r15d, [rbp+0xc] = min(remaining, ring_buf_available); never copies beyond ring buffer",
+                "state_machine": "jump table at 0xae91e0: state0=0x1f2ae1(body_copy), state1=0x1f2d80(hex_parse), state2=0x1f2cc0(crlf), state3=0x1f3138(trailer), state4=0x1f2c30(done)",
+                "zero_chunk": "chunk_size==0 at 0x1f3532: sets state=3 (trailer) instead of entering body copy",
+                "status": "SAFE",
+            },
             "FAD_H4": {
                 "location": "0x27c908 (TLS ClientHello SNI parser)",
                 "trigger": "hostname_length (wire 2-byte big-endian) > sni_list_length - 3",
