@@ -184,6 +184,19 @@
 - web/src/admin/events/utils.ts (full): CLEAN — username/device.name Lit text nodes; URLs via toAdminInterface(); device.pk UUID in URL path only
 - web/src/components/ak-event-info.ts (full): **NEW PLAUSIBLE LOW (AUT-EMAIL-SRCDOC-1)** — renderEmailSent() at line 387 renders event.context.body via <iframe srcdoc=${body}> with NO sandbox attribute; srcdoc inherits parent origin; script in email body runs in admin UI origin; all other event renderers CLEAN (model diff via JSON.stringify in <pre>; policy context via JSON.stringify in <code>; exception messages as text nodes)
 
+### Deep Reads — TypeScript individual file reads (pass 5n — 2026-09-26)
+- web/src/admin/applications/ApplicationForm.ts (full): CLEAN — fields via ak-text-input/ak-slug-input; navigate() for redirect; typed API
+- web/src/admin/flows/FlowForm.ts (full): CLEAN — fields via ak-text-input/ak-slug-input; designation from hardcoded FlowDesignationEnum options
+- web/src/admin/groups/ak-group-form.ts (full): CLEAN — group.name in DualSelectPair as text node; typed API
+- web/src/admin/providers/ldap/LDAPProviderForm.ts (full): CLEAN — thin wrapper; rendering in LDAPProviderFormForm.ts
+- web/src/user/LibraryApplication/CardHeader.ts (full): CLEAN — application.name text node
+- web/src/user/LibraryApplication/CardMenu.ts (full): CLEAN — metaPublisher/description text nodes; editURL admin-constructed in <a href>
+- web/src/user/LibraryPage/ApplicationList.ts (full): CLEAN — groupLabel text node; delegates to LibraryAppRow/AKLibraryApp
+- web/src/user/LibraryApplication/index.ts (full): CLEAN — launchUrl in <a href>: admin-configured, DomainlessURLValidator rejects javascript:; metaIconUrl → ak-app-icon → <img src>; name/description text nodes
+- web/src/user/user-settings/UserSettingsPage.ts (full): CLEAN — component bindings; configureUrl/userId as attribute bindings
+- web/src/elements/user/UserConsentList.ts (full): CLEAN — application.name/permissions (scope strings) text nodes
+- web/src/elements/user/SessionList.ts (full): CLEAN — lastIp/location/device text nodes; getUnicodeFlagIcon() returns Unicode emoji
+
 ## Confirmed Findings
 
 | ID | Severity | Title | Status |
