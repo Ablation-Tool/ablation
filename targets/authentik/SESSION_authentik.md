@@ -320,3 +320,13 @@
 - events/middleware.py (full): CLEAN — dispatch_uid=request_id scopes signals to current request; _CTX_REQUEST ContextVar prevents cross-request handler bleed; audit_ignore() context manager
 - events/signals.py (full): CLEAN — on_user_logged_in reads SESSION_KEY_PLAN (already decoded); on_login_failed logs credentials through cleanse_dict; GDPR cleanup on user delete
 - events/tasks.py (full): CLEAN — event_trigger_handler() infinite loop prevention via policy_uuid check; PolicyEngine.empty_result=False; user looked up from event.user JSONField (not pickle)
+
+### Deep Reads — TypeScript individual file reads (pass 5i — 2026-09-26)
+- web/src/flow/FlowExecutor.ts (full): CLEAN — unsafeHTML(challenge.body) only for ShellChallenge (Django auto-escaped); unsafeStatic(tag) for component tags from static registry (not user content); flowsExecutorSolve echoes back server-provided challenge.component
+- web/src/flow/controllers/FlowIframeMessageController.ts (full): **NEW PLAUSIBLE LOW (AUT-POSTMSG-ORIGIN-1)** — onMessage() checks event.data.source/context/message (attacker-controlled) but NOT event.origin; any cross-origin page can trigger invisible empty submit; blast radius limited (most stages reject {} server-side) but FrameChallenge/AutosubmitStage accept blank submits
+- web/src/flow/controllers/FlowMultitabController.ts (full): CLEAN — correct origin check: new URL(next, window.location.origin) + url.origin===window.location.origin before window.location.assign()
+- web/src/flow/stages/base.ts (full): CLEAN — submitForm uses FormData; readFileAsync for blobs; renderNonFieldErrors HTML-escaped via Lit
+- web/src/flow/stages/autosubmit/AutosubmitStage.ts (full): CLEAN — Lit attribute binding HTML-escaped; action from server-side challenge URL
+- web/src/flow/utils/autosubmit.ts (full): CLEAN — DOM property assignment; HTMLFormElement.prototype.submit.call() (bypasses event handlers for SAML POST binding — by design)
+- web/src/common/api/client.ts (full): CLEAN — Configuration singleton Object.freeze'd; CSRFMiddleware in middleware chain; base path from globalAK().api.base
+- web/src/common/errors/network.ts (full): CLEAN — pluckErrorDetail reads typed error fields; parseAPIResponseError parses response.json() safely with status-code transformer map

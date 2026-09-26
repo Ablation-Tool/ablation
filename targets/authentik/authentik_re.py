@@ -323,6 +323,52 @@ FINDINGS = {
         ),
     },
 
+    "AUT-POSTMSG-ORIGIN-1": {
+        "severity": "LOW",
+        "title": "postMessage listener does not check event.origin (cross-origin empty flow submit)",
+        "file": "web/src/flow/controllers/FlowIframeMessageController.ts",
+        "lines": (1, 40),
+        "cwe": "CWE-346",
+        "status": "PLAUSIBLE",
+        "description": (
+            "FlowIframeMessageController.onMessage() checks event.data.source, "
+            "event.data.context, and event.data.message (all attacker-controlled JS properties) "
+            "but never checks event.origin. Any cross-origin page that embeds authentik in an "
+            "iframe (or opens it as a popup) can post:\n"
+            "  window.frames[0].postMessage({source:'goauthentik.io', "
+            "context:'flow-executor', message:'submit'}, '*')\n"
+            "This triggers FlowExecutor.submit({} as FlowChallengeResponseRequest, "
+            "{invisible: true}) — an invisible empty form submission against the current "
+            "flow stage. Impact is limited by server-side validation: most stages reject "
+            "empty payloads with a 400 ValidationError. However, Device Compliance "
+            "FrameChallenge expects a blank submit (no fields required) and may advance "
+            "the flow state for a victim who has an active authenticated session already "
+            "at the stage boundary."
+        ),
+        "exploit_path": [
+            "1. Victim navigates to attacker page while authenticated to authentik",
+            "2. Attacker page creates iframe pointing at authentik flow URL",
+            "3. Once iframe loads, attacker calls: "
+            "iframe.contentWindow.postMessage({source:'goauthentik.io',"
+            "context:'flow-executor',message:'submit'}, '*')",
+            "4. FlowIframeMessageController.onMessage fires (no origin check)",
+            "5. FlowExecutor.submit({}, {invisible:true}) POSTs empty payload",
+            "6. If active stage is FrameChallenge (Device Compliance), stage advances",
+        ],
+        "root_cause": (
+            "onMessage handler at FlowIframeMessageController.ts trusts "
+            "event.data.source (attacker-controlled string) instead of event.origin "
+            "(browser-enforced origin). The fix is a single-line check: "
+            "`if (event.origin !== window.location.origin) return;` before reading event.data."
+        ),
+        "note": (
+            "Most flow stages reject empty {} payloads server-side, so practical impact "
+            "is confined to stages that accept blank submits (FrameChallenge, AutosubmitStage). "
+            "Compare to FlowMultitabController.ts which correctly uses `new URL(next, "
+            "window.location.origin)` + origin equality check before redirecting."
+        ),
+    },
+
     "AUT-SAML-REFURI-1": {
         "severity": "LOW",
         "title": "SAML assertion signature allows URI=\"\" (root-element reference)",
@@ -496,6 +542,12 @@ CLEAN = [
     "web/src/flow/FlowExecutor.ts — unsafeHTML(challenge.body): ShellChallenge.body from Django template render (auto-escaped)",
     "web/src/flow/stages/prompt/PromptStage.ts — unsafeHTML(prompt.initialValue/subText): admin-configured prompt values",
     "web/src/common/utils.ts — getCookie reads authentik_csrf for CSRF double-submit header pattern",
+    "web/src/flow/controllers/FlowMultitabController.ts — origin check: new URL(next, window.location.origin) + url.origin===window.location.origin before assign()",
+    "web/src/flow/stages/base.ts — submitForm uses FormData; readFileAsync for file blobs via FileReader.readAsDataURL(); renderNonFieldErrors HTML-escaped via Lit",
+    "web/src/flow/stages/autosubmit/AutosubmitStage.ts — Lit attribute binding HTML-escaped; action from server-side challenge URL",
+    "web/src/flow/utils/autosubmit.ts — DOM property assignment (no innerHTML); HTMLFormElement.prototype.submit.call() bypasses event handlers by design",
+    "web/src/common/api/client.ts — Configuration singleton Object.freeze'd; CSRFMiddleware in chain; base path from globalAK().api.base",
+    "web/src/common/errors/network.ts — pluckErrorDetail reads typed error fields; parseAPIResponseError parses response.json() safely",
     "web/src/ — localStorage: username (RememberMe) and tab IDs only; no auth secrets stored",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
