@@ -83,10 +83,6 @@ See [LICENSE](LICENSE).
 
 ---
 
-## Maintainer
-
-Nicholas Michael Kloster & Claude
-
 ---
 
 ## Reference Material Used to Build Ablation
