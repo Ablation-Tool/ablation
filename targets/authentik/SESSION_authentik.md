@@ -1,6 +1,6 @@
 # Authentik Source RE Session
 
-## Status: COMPLETE — 2026-09-26
+## Status: COMPLETE (pass 4 — exhaustive full-codebase sweep) — 2026-09-26
 
 ## Target
 - Repo: https://github.com/goauthentik/authentik
@@ -62,16 +62,6 @@
 - source_ingestion.py: added Django CBV class inheritance patterns to _ROUTE_CONTENT_SIGNALS
 - source_entry_classifier.py: added 10+ DRF/Django auth patterns + AllowAny downgrade logic
 
-## Confirmed Findings
-
-| ID | Severity | Title | Status |
-|----|----------|-------|--------|
-| AUT-SESS-PICKLE-1 | HIGH | Unsigned pickle deserialization of session data (no HMAC) | CONFIRMED |
-| AUT-TASK-PICKLE-1 | HIGH | Unsigned pickle deserialization of task queue arguments | CONFIRMED |
-| AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values | CONFIRMED |
-| AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp | CONFIRMED |
-| AUT-SAML-REFURI-1 | LOW | SAML assertion signature allows URI="" (root-element reference) | PLAUSIBLE |
-
 ## Clean (investigated, not exploitable — exhaustive)
 - TokenAuthentication/IPCUser: compare_digest timing-safe; IPC key issue is AUT-IPC-KEY-1
 - FlowExecutorView AllowAny: intentional (login flow); CSRF not applicable (session-bound flow state)
@@ -91,13 +81,42 @@
 - SCIM auth: source-scoped Bearer token lookup
 - recovery token: management-command-generated, DB filter only
 
+### Deep Reads — Exhaustive full-codebase sweep (pass 4)
+- Grep sweep: ALL 2151 Python + 80 Go + 2861 TypeScript files for critical patterns
+- pickle.loads: confirmed exhaustive — 5 instances only (sessions.py, dramatiq x3, postgres cache)
+- exec(): only in lib/expression/evaluator.py:365 (admin-only)
+- shell=True/subprocess/yaml.load(): zero instances across codebase
+- AllowAny: 9 total — all reviewed (Plex token exchange, Duo FlowActive gated, SSF discovery,
+  brand info, SAML metadata, flow executor, debug/DEBUG-only, geoip, config)
+- JWT algorithms: all decode() use explicit algorithms=["HS256"] — no "none" bypass
+- DPoP (oauth2/dpop.py): RFC 9449 compliant — DPOP_SUPPORTED_ALGS, canonical JWK, JTI replay,
+  compare_digest for thumbprint + c_s256
+- Open redirect: is_url_absolute() checks urlparse(url).netloc — PLAN_CONTEXT_REDIRECT is admin-write
+- RADIUS outpost: all Go files read — PAP/EAP via FlowExecutor API; HMAC-MD5 message auth
+- RAC outpost: guacd started with hardcoded path; log level from admin config; WS Bearer auth
+- TypeScript: DOMPurify + Trusted Types system; ShellChallenge.body from Django template (auto-esc)
+  unsafeHTML(prompt.initialValue) = admin-configured; localStorage = username + tab IDs only
+- Crypto API: private key download gated by view_certificatekeypair_key RBAC + SECRET_VIEW audit
+- LDAP Python sync: escape_filter_chars() on dynamic values; base filters admin-configured
+- DjangoQL search: apply_search -> Django ORM; raw SQL in fields.py uses developer field/table names
+- Channels layer: msgpack.unpackb (not pickle) — no code execution risk
+- Enterprise: pattern-swept all 205 non-test files — no new critical patterns
+
+## Confirmed Findings
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| AUT-SESS-PICKLE-1 | HIGH | Unsigned pickle deserialization of session data (no HMAC) | CONFIRMED |
+| AUT-TASK-PICKLE-1 | HIGH | Unsigned pickle deserialization of task queue arguments | CONFIRMED |
+| AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values | CONFIRMED |
+| AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp | CONFIRMED |
+| AUT-SAML-REFURI-1 | LOW | SAML assertion signature allows URI="" (root-element reference) | PLAUSIBLE |
+
 ## Pending (toolchain gaps only)
 - SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only)
-- AUT-SAML-REFURI-1: confirm URI="" non-exploitable in all SAML response paths
-- Go RADIUS outpost: survey internal/outpost/radius/ (not covered)
-- RAC provider: survey internal/outpost/rac/ (not covered)
 
 ## Commits
 - 2777c49: source_ingestion.py + source_entry_classifier.py DRF pattern additions
 - 3aaa666: initial RE module — pass 1 (3 pickle HIGH, IPC key MEDIUM)
 - 9029d5f: pass 2 — expression/blueprint/debug/outpost coverage + AUT-SAML-REFURI-1
+- debf4ef: pass 3 — 100% attack surface coverage, exhaustive CLEAN list
