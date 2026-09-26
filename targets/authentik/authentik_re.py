@@ -730,6 +730,10 @@ CLEAN = [
     "web/src/admin/groups/GroupListPage.ts — item.name as text node; item.pk in toAdminInterface(); isSuperuser for status label",
     "web/src/admin/tokens/TokenListPage.ts — item.identifier as text node; userObj.pk in toAdminInterface(); formatIntentLabel() enum map",
     "web/src/admin/outposts/OutpostListPage.ts — item.config.authentik_host in msg(str`...`) text node; outpostTypeToLabel() enum map; attribute bindings only",
+    # Pass 5u TypeScript reads
+    "web/src/admin/providers/ProviderListPage.ts — #rowApp(): assignedApplicationName as text node; href via toAdminInterface(); row(): name/verboseName text nodes; IconEditButtonByTagName(item.component, item.pk)",
+    "web/src/admin/sources/SourceListPage.ts — row(): item.name text node in <a>; verboseName text node; IconEditButtonByTagName(); rowInbuilt(): name text node; static Built-in label",
+    "web/src/admin/stages/StageListPage.ts — row(): name/verboseName text nodes; flow.slug in toAdminInterface() and <code> Lit text node; IconEditButtonByTagName(); renderStageActions() hardcoded string check (never rendered)",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
