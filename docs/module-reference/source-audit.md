@@ -260,16 +260,22 @@ Traces data flows from user-controlled sources (route parameters, query strings,
 ### Usage
 
 ```python
+from ablation.analyzers.source_sink_scanner import SourceSinkScanner
 from ablation.analyzers.source_taint_tracker import SourceTaintTracker
 
 ctx = SourceContext.from_path("/tmp/langfuse")
-tracker = SourceTaintTracker.from_context(ctx)
-paths = tracker.trace()
 
+# SourceTaintTracker takes sink_hits from SourceSinkScanner as input
+sink_hits = SourceSinkScanner.from_context(ctx).scan()
+tracker = SourceTaintTracker.from_context(ctx)
+paths = tracker.trace_all(sink_hits)
+print(SourceTaintTracker.report(paths, ctx))
+
+# Walk paths manually
 for path in paths:
-    print(path.source_file, "→", path.sink_file)
+    print(f"{path.sink.rel_path}:{path.sink.line}  [{path.confidence}]")
     for hop in path.hops:
-        print(f"  {hop.file}:{hop.line} — {hop.label}")
+        print(f"  {hop.rel_path}:{hop.line}  {hop.func_name}()")
 ```
 
 ---
