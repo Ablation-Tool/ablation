@@ -578,3 +578,31 @@
 - web/src/admin/stages/deny/DenyStageForm.ts (full): CLEAN — instance.name/denyMessage in value= attribute bindings only
 - web/src/admin/stages/authenticator_sms/AuthenticatorSMSStageForm.ts (full): CLEAN — instance.name/friendlyName/accountSid/fromNumber in value= attribute bindings; secrets via ak-secret-text-input; provider/authType from enum constants; flow search
 - web/src/admin/stages/authenticator_email/AuthenticatorEmailStageForm.ts (full): CLEAN — instance.name/friendlyName/host/username/fromAddress/subject/tokenExpiry in value= attribute bindings; secrets via ak-secret-text-input; template.description text node in <option>; flow search
+
+### Deep Reads — TypeScript individual file reads (pass 5z — 2026-09-26)
+- web/src/admin/stages/account_lockdown/AccountLockdownStageForm.ts (full): CLEAN — instance.name in value=; deactivate/password/sessions/revoke booleans; selfServiceCompletionFlow via ak-flow-search
+- web/src/admin/stages/dummy/DummyStageForm.ts (full): CLEAN — instance.name in value=; throwError boolean; no user data rendered as HTML
+- web/src/admin/stages/mtls/MTLSStageForm.ts (full): CLEAN — instance.name in value=; StageModeEnum/CertAttributeEnum/UserAttributeEnum radio constants; certificateAuthorities via ak-dual-select
+- web/src/admin/stages/source/SourceStageForm.ts (full): CLEAN — instance.name/resumeTimeout in value= bindings; source.name/.verboseName in .renderElement/.renderDescription (strings); ResumeOnMatchFailuresEnum constants
+- web/src/admin/stages/BaseStageForm.ts (full): CLEAN — abstract base; no render logic
+- web/src/admin/flows/FlowForm.ts (full): CLEAN — instance.name/title in value= bindings; slug via ak-slug-input; designation/authentication/layout via <select> with enum option values; background via ak-file-search-input .value=
+- web/src/admin/flows/FlowViewPage.ts (full): CLEAN — flow.name text node; flow.slug in <code> text node; flow.exportUrl in href (server-generated export button ONLY); flow.slug in window.open() constructed URLs (not href attribute); link.link from API in window.open() (server-generated)
+- web/src/admin/flows/BoundStagesList.ts (full): CLEAN — item.order in <pre> text node; item.stageObj.name/.verboseName bare text nodes; no unguarded href
+- web/src/admin/flows/FlowListPage.ts (full): CLEAN — item.slug in href via toAdminInterface path; item.name text node; item.exportUrl in href (server-generated); item.slug in window.open() URL (not href attribute)
+- web/src/admin/flows/StageBindingForm.ts (full): CLEAN — instance.order in value=; stage/target via ak-search-select (returns strings); InvalidResponseActionEnum radio constants
+- web/src/admin/stages/invitation/InvitationForm.ts (full): CLEAN — instance.name via ak-slug-input; expires via datetime-local value=; fixedData via ak-codemirror value=; no user data as href
+- web/src/admin/policies/BoundPoliciesList.ts (full): CLEAN — item.user/group IDs in href via toAdminInterface path (numeric IDs, not HTML); StrictUnsafe for bindingEditForm tag (guarded); getPolicyUserGroupRowLabel returns string text node
+- web/src/admin/policies/PolicyListPage.ts (full): CLEAN — item.name text node; item.verboseName text node; item.boundTo number; Timestamp()
+- web/src/admin/policies/PolicyTestForm.ts (full): CLEAN — result.messages[].m text node in <span>; result.passing boolean; ak-log-viewer for log messages; context via ak-codemirror
+- web/src/admin/policies/BasePolicyForm.ts (full): CLEAN — abstract base; no render logic
+- web/src/admin/policies/expression/ExpressionPolicyForm.ts (full): CLEAN — instance.name in value=; instance.expression in ak-codemirror value=; docLink hardcoded href
+- web/src/admin/policies/PolicyBindingForm.ts (full): CLEAN — instance.order/timeout in value= of <input type=number>; policy/group/user via ak-search-select (.renderElement returns strings); typeNotices from static msg strings
+- web/src/admin/policies/password/PasswordPolicyForm.ts (full): CLEAN — instance.name/errorMessage/symbolCharset/passwordField in value= bindings; numeric inputs; static href to third-party docs
+- web/src/admin/policies/dummy/DummyPolicyForm.ts (full): CLEAN — instance.name in value=; boolean/numeric fields; no user data as HTML
+- web/src/admin/policies/event_matcher/EventMatcherPolicyForm.ts (full): CLEAN — instance.name/query/clientIp in value= bindings; action/app/model via ak-search-select (.renderElement returns strings); docLink hardcoded href
+- web/src/admin/policies/expiry/ExpiryPolicyForm.ts (full): CLEAN — instance.name/days in value= bindings; denyOnly boolean
+- web/src/admin/policies/reputation/ReputationPolicyForm.ts (full): CLEAN — instance.name/threshold in value= bindings; boolean switches
+- web/src/admin/policies/unique_password/UniquePasswordPolicyForm.ts (full): CLEAN — instance.name/passwordField/numHistoricalPasswords in value= bindings
+- web/src/admin/policies/geoip/GeoIPPolicyForm.ts (full): CLEAN — instance.name in value=; numeric distance/tolerance fields; countries via ak-dual-select-provider (country.name/.code strings); asns joined as text input value=
+- web/src/admin/groups/GroupListPage.ts (full): CLEAN — item.pk UUID in href via toAdminInterface path; item.name text node; item.users length numeric
+- web/src/admin/groups/GroupViewPage.ts (full): CLEAN — group.name text node; role.pk UUID in href via toAdminInterface (path only); role.name text node; group.attributes.notes rendered via ak-mdx with .content property binding (DOMPurify-sanitized before unsafeHTML); ak-object-attributes-card for attributes
