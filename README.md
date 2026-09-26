@@ -10,6 +10,8 @@ Ablation is built for the modern landscape, and more importantly, the human.
 
 Now reverse engineering is accessible to anyone. No matter your wallet or your barrier of entry into education, you can learn about reverse engineering as you reverse engineer.
 
+Works with Claude Code and OpenAI Codex.
+
 ---
 
 ![Codex demo](assets/codex-demo.gif)
