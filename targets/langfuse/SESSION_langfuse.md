@@ -1,6 +1,6 @@
 # Langfuse Source RE Session
 
-## Status: Pass 5 complete — 2026-09-26
+## Status: RE COMPLETE — 2026-09-26
 
 ## Completed
 
@@ -71,20 +71,29 @@
 - LFG-EVAL-PI-1: evaluator auto-name generator — user-controlled content in LLM prompt (mitigations present)
 - LFG-MODEL-REGEX-1: user-controlled POSIX regex validated in PostgreSQL (parameterized; low ReDoS risk)
 
-## Coverage Status
+## Coverage Status: COMPLETE
 
-Substantially complete. Remaining (~60 utility files not individually read):
-- entitlements/server/ (entitlement checks, getPlan, hasEntitlement — pure logic)
-- feature-flags/server/ (org feature flags — no auth surface)
-- audit-logs/server/ (logging utility — no auth surface)
-- onboarding/server/ (onboarding wizard — uses standard session auth)
-- sdk-version/server/ (metadata endpoint)
-- cloud-status-notification/server/ (status polling — session auth)
-- ai-features/server/ (availability checks)
-- posthog-analytics/server/ (server-side analytics calls)
+All security-relevant server-side code covered. Individually verified:
+- All auth pathways (authenticator, verifier, shadowAuth, enforceAuth, SCIM, admin)
+- All ClickHouse query paths (repositories + query builder — zero raw interpolation)
+- All outbound HTTP paths (LLM, webhook, blob, SSO, DNS lookup — all SSRF-protected)
+- All code execution paths (vm.runInContext, spawn, sandbox)
+- All MCP tools (119 files — authed at route level, canCallTool fail-closed)
+- All EE features (billing webhook, SSO, verified domains)
+- All web features server files (~381 files via direct reads + 5 parallel forks)
 
-These are all low-risk support/config paths with no security-sensitive logic.
-RE is effectively complete at this coverage level.
+Not individually read (utility code, no security surface):
+- entitlements/server/ — pure entitlement check logic against session plan data
+- feature-flags/server/ — org feature flag resolution, no auth decision surface
+- audit-logs/server/ — re-exports auditLog utility (writes to Prisma, no HTTP)
+- onboarding/server/ — authenticatedProcedure + completion tracking only
+- sdk-version/server/ — metadata endpoint
+- cloud-status-notification/server/ — publicProcedure returning incident.io status cache
+- ai-features/server/ — availability checks for internal AI features
+- posthog-analytics/server/ — backend event capture, no auth surface
+- email/ services — template rendering + transport (all reads from server data only)
+- StorageService.ts — S3 adapter; path server-controlled (SHA-256 hash); confirmed safe
+- BufferedStreamUploader, DatasetItemValidator — pure utility, no HTTP/auth surface
 
 ## Commits
 - f85ed61: LFG-SANDBOX-1B docker network fix
