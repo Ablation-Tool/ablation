@@ -490,3 +490,8 @@
 - web/src/admin/groups/GroupListPage.ts (full): CLEAN — item.name as text node; item.pk in toAdminInterface() URL; item.users.length as number; item.isSuperuser for status label
 - web/src/admin/tokens/TokenListPage.ts (full): CLEAN — item.identifier as text node; item.userObj.pk in toAdminInterface(); item.userObj.username as text node; formatIntentLabel() hardcoded enum map
 - web/src/admin/outposts/OutpostListPage.ts (full): CLEAN — item.config.authentik_host in msg(str`...`) text node; outpostTypeToLabel() enum map; item.serviceConnectionObj.name as text node; attribute bindings only
+
+### Deep Reads — TypeScript individual file reads (pass 5u — 2026-09-26)
+- web/src/admin/providers/ProviderListPage.ts (full): CLEAN — #rowApp(): assignedApplicationName as text node in <a>; href via toAdminInterface(); row(): item.name as text node; item.verboseName as text node; IconEditButtonByTagName(item.component, item.pk) uses StrictUnsafe internally
+- web/src/admin/sources/SourceListPage.ts (full): CLEAN — row(): item.name as text node in <a>; item.enabled for ak-label conditional; item.verboseName as text node; IconEditButtonByTagName(item.component, item.slug); rowInbuilt(): item.name as text node; static Built-in label
+- web/src/admin/stages/StageListPage.ts (full): CLEAN — row(): item.name/verboseName as text nodes; flow.slug in toAdminInterface() href AND <code>${flow.slug}</code> Lit text node; IconEditButtonByTagName(item.component, item.pk); IconPermissionButton(item.name, ...); renderStageActions(): hardcoded "ak-stage-authenticator-duo-form" string check, never rendered
