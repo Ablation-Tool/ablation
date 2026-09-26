@@ -62,6 +62,13 @@ PLT = {
 | FAD_P1 | ptd | tcpdump mkdir path traversal (cmd injection ELIMINATED — execvp separate argv) | **CONFIRMED MEDIUM** |
 | FAD_P2 | ptd→libcgo.so | dumpsystem_delete_run path traversal → arbitrary file deletion as root | **CONFIRMED HIGH** |
 | FAD_P_AWS | ptd→libcgo.so | fadc_aws_pyscript_run: dead stub (xor eax,eax; ret) | ELIMINATED |
+| FAD_W1 | libwaf.so | sys_vdom_exec in hpwafblockip show/clear: shell exec with VS/VDOM name | PLAUSIBLE HIGH |
+| FAD_M1 | miglogd | fadcsystem touch/rm /var/log/logrpt/<VDOM> path traversal | PLAUSIBLE MEDIUM |
+| FAD_N1 | fnginxctld | fngx_process_vcmd → sys_vdom_exec with VS iface/IP in iptables/ip commands | PLAUSIBLE MEDIUM |
+| FAD_C1 | libcmdb_plugin.so | check_need_wake_up_wccpd → sys_vdom_exec with VXLAN/NVGRE iface name injection | PLAUSIBLE MEDIUM |
+| FAD_O1 | ospf6d | sys_vdom_exec 'ip -6 xfrm state %s dst %s ...' — IPsec state mgmt from routing table | PLAUSIBLE LOW-MEDIUM |
+| FAD_BGPD | bgpd/ospfd/ospf6d | log rotation system() 'cp /tmp/%s_<daemon>.log ...' with VDOM name | PLAUSIBLE MEDIUM (class) |
+| FAD_AV1 | av | fadcsystem diagnostic collect 'cat /proc/meminfo >> %s' — path traversal only | PLAUSIBLE LOW |
 
 ### FAD_R1 — Pre-auth `/debug/pprof/*` (CONFIRMED HIGH)
 - Root cause: `ginpprof.WrapGroup(engine)` at `main.main:0xdc1232` — root `*gin.Engine` passed
@@ -140,6 +147,28 @@ PLT = {
 | wadd | 245K C | COMPLETE | CLEAN — execlp=fixed path, not user-controlled |
 | restapi_cmdd | 2.8MB Go | COMPLETE | CLEAN as independent target; exploit path=FAD_R3 |
 | cli | 2.7MB C | COMPLETE | CLEAN — rm-rf hardcoded /tmp/; strcpy bounded; more %s=plausible/admin-only |
+| miglogd | 3.5MB C | COMPLETE | FAD_M1 PLAUSIBLE MEDIUM; all shell injection ELIMINATED (posix_spawnp); VDOM/plugin-name path traversal pending CMDB validation check |
+| ocgs | 5.1MB Go+CGo | COMPLETE | CLEAN — Unix domain socket IPC only; standard Go TLS; no exec sinks |
+| libwaf.so | 2.7MB C | PARTIAL | FAD_W1 PLAUSIBLE HIGH (sys_vdom_exec+shell); fadcsystem ELIMINATED; waf_system/SQLite/PCRE callers PENDING |
+| libstdext.so | 27K C | COMPLETE | fadcsystem = parse_command_line → posix_spawnp; NO shell; confirms all fadcsystem callers safe for shell injection |
+| libips.so | 15MB C | PARTIAL | LuaJIT 2.1 embedded; system/popen = os.execute/io.popen builtins; 111 strcpy in packet code PENDING |
+| libav.so | 8MB C | PROFILED | No exec sinks; sprintf/strcpy in AV pipeline PENDING |
+| libcmdb_plugin.so | 1.8MB C | ANALYZED | system() ELIMINATED (GeoIP); execve ELIMINATED (fadc_popen); FAD_C1 PLAUSIBLE MEDIUM (VXLAN/NVGRE sys_vdom_exec); fadcsystem audit pending |
+| acme-client | 6.1MB Go+CGo | COMPLETE | CLEAN — no exec PLT; no InsecureSkipVerify=true; ACME url field SSRF potential (admin-only) |
+| fnginxctld | 1.7MB C | ANALYZED | FAD_N1 PLAUSIBLE MEDIUM; fngx_process_vcmd → sys_vdom_exec with VS iface/IP args |
+| vtl | 2.1MB C++ | PARTIAL | SafeNet HSM rm --force (PLAUSIBLE LOW); fork+dup+system untraced; sprintf/strcpy pending |
+| flg_accessd | 703KB C | PROFILED | fadcsystem+fadcpopen only (posix_spawnp); shell injection ELIMINATED |
+| flg_indexd | 2MB C | PROFILED | fadcsystem+system_fgt_log; shell injection ELIMINATED |
+| flg_reportd | 1.9MB C | PROFILED | fadcsystem+execve; execve caller format string PENDING |
+| lb | 845KB C | PROFILED | fadcsystem_envp+fadcpopen; shell injection ELIMINATED |
+| infod | 1.5MB C | PROFILED | fadcsystem only; shell injection ELIMINATED |
+| rd_mng | 1.4MB C | COMPLETE | No exec sinks. CLEAN. |
+| libsysapi.so | 251KB C | PROFILED | fadcpopen+asprintf only; CLEAN for shell injection |
+| bgpd | 1.7MB C PIE | ANALYZED | 236 system() callers — log rotation 'cp /tmp/%s_bgpd.log ...' (4 variants) PLAUSIBLE MEDIUM; access_list strings ELIMINATED |
+| ospfd | 1.1MB C PIE | ANALYZED | 101 system() callers — 'cp /tmp/%s_ospfd.log ...' log rotation PLAUSIBLE MEDIUM |
+| ospf6d | 717KB C PIE | ANALYZED | FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec 'ip -6 xfrm state'); 65 system() log rotation PLAUSIBLE MEDIUM |
+| keepalived | 994KB C PIE | ANALYZED | sys_vdom_exec ELIMINATED (echo %d hardcoded int); execle /bin/bash PLAUSIBLE LOW (admin VRRP script); fadcsystem 79 callers pending |
+| av | 1.2MB C PIE | ANALYZED | fadcsystem 3 callers PLAUSIBLE LOW (diagnostic log; path traversal only); fork 2 callers ELIMINATED (no exec in child) |
 
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
@@ -157,4 +186,9 @@ PLT = {
 - 2026-09-25: libcgo.so extracted from qcow2/rootfs; fortiadc_tcpdump_run (0x143980) analyzed — double-fork+execvp with separate argv; cmd injection ELIMINATED; FAD_P1 downgraded to MEDIUM (mkdir traversal only)
 - 2026-09-25: fortiadc_dumpsystem_delete_run (0xcb1b0) analyzed; input_format_check strspn allowlist blocks metacharacters but permits '.'/'/'; fadcsystem("rm /var/log/crash/<input>") → arbitrary file deletion as root; FAD_P2 CONFIRMED HIGH; fadc_aws_pyscript_run (0x12e6f0) = dead stub (xor eax,eax; ret) ELIMINATED
 - 2026-09-26: libadfs.so sweep complete (24 funcs, BinaryContext+FuncProfiler, full string dump 0x7000-0x8000); add_relying_party_cmdb_config (0x5890) — __snprintf_chk with CLI command format strings + cmf_exec_conf; "%" fields not sanitized for '"'/CRLF; FAD_A2 CONFIRMED HIGH (CLI injection via relying party name/proxy name)
-- 2026-09-26: ALL REMAINING BINARIES SWEPT — httproxy (0 taint paths, system=gdb debug, execvp=LaunchProcess → CLEAN); fnginx_new (execve=nginx respawn, SAML=Shibboleth lib, 3255 exports scanned → CLEAN); cm_client (tcpdump=FAD_P1 dup → CLEAN); wadd (execlp=fixed path → CLEAN); restapi_cmdd (pure Go, no exec sinks → CLEAN); cli (rm-rf=hardcoded /tmp/, strcpy=bounded, more-waf-view=admin-only PLAUSIBLE → CLEAN). SWEEP COMPLETE.
+- 2026-09-26: ALL REMAINING BINARIES SWEPT — httproxy (0 taint paths, system=gdb debug, execvp=LaunchProcess → CLEAN); fnginx_new (execve=nginx respawn, SAML=Shibboleth lib, 3255 exports scanned → CLEAN); cm_client (tcpdump=FAD_P1 dup → CLEAN); wadd (execlp=fixed path → CLEAN); restapi_cmdd (pure Go, no exec sinks → CLEAN); cli (rm-rf=hardcoded /tmp/, strcpy=bounded, more-waf-view=admin-only PLAUSIBLE → CLEAN). SESSION 1 SWEEP COMPLETE.
+- 2026-09-26 (session 2): miglogd analyzed — 16 fadcsystem callers all ELIMINATED (posix_spawnp); system_fgt_log = syslog API; FAD_M1 PLAUSIBLE MEDIUM (VDOM path traversal); ocgs CLEAN; libwaf.so FAD_W1 PLAUSIBLE HIGH documented.
+- 2026-09-26 (session 2): New binaries profiled — libips.so (LuaJIT 2.1, exec sinks = builtins, 111 strcpy PENDING); libav.so (no exec sinks); libcmdb_plugin.so (9 system + 4 sys_vdom_exec PENDING); fnginxctld FAD_N1 (fngx_process_vcmd → sys_vdom_exec with VS iface/IP); vtl (SafeNet HSM + fork+system PARTIAL); flg_accessd/indexd/reportd/lb/infod/rd_mng profiled.
+- 2026-09-26 (session 3): libcmdb_plugin.so sys_vdom_exec/execve resolved — 0x9c94b/9c95a ELIMINATED (hardcoded echo flush); execve@0x79d22 ELIMINATED (fadc_popen fork child); FAD_C1 PLAUSIBLE MEDIUM: WCCP 0xb3d55 (NVGRE) + 0xb4734 (VXLAN) — snprintf(iface_name, tunnel_id, ...) → sys_vdom_exec; same class as FAD_N1.
+- 2026-09-26 (session 3): acme-client analyzed — Go 1.22.3 CGo; golang.org/x/crypto/acme; no exec PLT; no InsecureSkipVerify=true; JSON config fields extracted (url, ca, eab_kid, eab_mac_key, challenge_type, etc.); CLEAN.
+- 2026-09-26 (session 4): Routing daemons analyzed — bgpd (236 system() callers, 4 log rotation fmt variants + 4 hardcoded access_list strings ELIMINATED); ospfd (101 system(), single log rotation fmt PLAUSIBLE MEDIUM); ospf6d (65 system() log rotation + 2 sys_vdom_exec FAD_O1 'ip -6 xfrm state' IPsec PLAUSIBLE LOW-MEDIUM; 'enc %s 0x%s' is snprintf fragment not direct system() call); keepalived (sys_vdom_exec ELIMINATED hardcoded int; execle /bin/bash PLAUSIBLE LOW admin VRRP script; fadcsystem 79 pending); av (3 fadcsystem diagnostic PLAUSIBLE LOW; 2 fork ELIMINATED no-exec workers). fadcsystem_envp internals confirmed: parse_command_line + execute_command (not shell — >> handled via posix_spawn file actions).
