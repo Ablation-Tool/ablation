@@ -596,6 +596,93 @@ FINDINGS = {
         },
     },
 
+    # ── httproxy fork() caller analysis (ForkExecClassifier v2, session 17) ──────
+    # Tool: ForkExecClassifier.from_path(httproxy3).classify()
+    # fork PLT: 0x65030  exec-family PLTs: execvp=0x650d0, sys_vdom_exec=0x63ff0
+    #
+    # (1) call@0x65973  func@0x65940  → WORKER
+    #   child_entry=0x6598f: child calls fadc_put_daemon_to_dp_group, mallopt, conf_init,
+    #   0x208860, debug_init, 0x2c28b0, setvbuf; setrlimit loop (indirect calls via [rax],
+    #   jb backward — local setup loop, not event loop); then calls 0x2075b0 + 0x2077f0
+    #   (HAProxy master-worker event loop entry). No exec in child. ELIMINATED.
+    #
+    # (2) call@0x66aa6  func@0x65940  → WORKER  (same func, separate code path)
+    #   child_entry=0x66ab9: child calls setsid (PLT 0x63d00), then jmp 0x6664b
+    #   (main connection-handler loop). No exec in child. ELIMINATED.
+    #
+    # (3) call@0x28667c  func@0x285f30  → EXIT_IN_CHILD
+    #   child_entry=0x286812: child calls SSL negotiation (0x27c240, 0x27c3c0),
+    #   recv 0x100 bytes (0x1932b0), authenticate (0x285c50), then exit(-1).
+    #   One-shot SSL session handler; no exec in child. ELIMINATED.
+    #
+    # (4) call@0x2a5559  func@0x2a54c0  → EXEC_AFTER_FORK  ← INVESTIGATED BELOW
+    #   child_entry=0x2a55b0: execvp@0x2a563f called after priv drop.
+    #   NOTE: session-15 manual analysis incorrectly concluded EXIT_IN_CHILD.
+    #   ForkExecClassifier correctly identified EXEC_AFTER_FORK. ELIMINATED (see below).
+    #
+    # 0x2a5559 EXEC_AFTER_FORK deep trace:
+    #   outer function 0x2a54c0 iterates HAProxy mworker_proc list (r13 = list head at
+    #   [rip+0x11d5c5]); per-entry: checks flags [rbx+0x30] / [rbx+4]; if alive+exec-needed:
+    #     fork() → child path at 0x2a55b0:
+    #       call 0x273920, 0x2741a0, 0x23cea0  (fd setup / dup2 / close)
+    #       cmp [rbx+0x5c], -1 → setgid([rbx+0x5c])   (service GID from mworker_proc)
+    #       mov edi,[rbx+0x58] → setuid([rbx+0x58])    (service UID from mworker_proc)
+    #       unsetenv("HAPROXY_MWORKER_REEXEC")
+    #       unsetenv("HAPROXY_STARTUPLOGS_FD")
+    #       unsetenv("HAPROXY_MWORKER_WAIT_ONLY")
+    #       unsetenv("HAPROXY_PROCESSES")
+    #       rsi = [rbx+0x10]   (mworker_proc->command[] = original startup argv)
+    #       rdi = [rsi]         (path = argv[0] = haproxy binary path)
+    #       call execvp
+    #   This is the standard HAProxy master-worker process reload (SIGUSR2 handler):
+    #   the master forks a child that re-execs the haproxy binary itself with the original
+    #   startup argv, after dropping to service UID/GID. Path and argv come from
+    #   mworker_proc->command[], populated at daemon startup from the kernel exec args.
+    #   Neither is CMDB-sourced or HTTP-reachable. ELIMINATED.
+
+    "HTTPROXY_fork_analysis": {
+        "binary": "httproxy3",
+        "tool": "ForkExecClassifier v2 (ablation/analyzers/fork_exec_classifier.py)",
+        "fork_plt": "0x65030",
+        "status": "ALL 4 FORK CALLERS ANALYZED — 0 injection-reachable exec paths",
+        "callers": {
+            "0x65973": {
+                "func": "0x65940",
+                "verdict": "WORKER",
+                "child_entry": "0x6598f",
+                "child_path": "fadc_put_daemon_to_dp_group + mallopt + conf_init + debug_init + setrlimit-loop (inline) + 0x2075b0 + 0x2077f0 (HAProxy mworker event loop)",
+                "status": "ELIMINATED (worker process, no exec)",
+            },
+            "0x66aa6": {
+                "func": "0x65940",
+                "verdict": "WORKER",
+                "child_entry": "0x66ab9",
+                "child_path": "setsid → jmp 0x6664b (connection-handler loop)",
+                "status": "ELIMINATED (worker process, no exec)",
+            },
+            "0x28667c": {
+                "func": "0x285f30",
+                "verdict": "EXIT_IN_CHILD",
+                "child_entry": "0x286812",
+                "child_path": "SSL negotiation (0x27c240/0x27c3c0) → recv 0x100B (0x1932b0) → authenticate (0x285c50) → exit(-1)",
+                "status": "ELIMINATED (one-shot SSL session handler, no exec)",
+            },
+            "0x2a5559": {
+                "func": "0x2a54c0",
+                "verdict": "EXEC_AFTER_FORK",
+                "child_entry": "0x2a55b0",
+                "execvp_va": "0x2a563f",
+                "exec_path_src": "mworker_proc->command[0] = haproxy argv[0] (kernel exec args at daemon start; not CMDB)",
+                "exec_argv_src": "mworker_proc->command[] = original startup argv",
+                "priv_drop": "setgid([rbx+0x5c]) + setuid([rbx+0x58]) before exec (service UID/GID from mworker_proc)",
+                "env_cleared": "HAPROXY_MWORKER_REEXEC, HAPROXY_STARTUPLOGS_FD, HAPROXY_MWORKER_WAIT_ONLY, HAPROXY_PROCESSES",
+                "mechanism": "HAProxy master-worker reload (SIGUSR2): re-execs haproxy binary with original startup argv after UID/GID drop",
+                "status": "ELIMINATED (mworker re-exec path; exec args come from kernel startup, not user/CMDB input)",
+                "note": "Session-15 manual analysis incorrectly concluded EXIT_IN_CHILD. ForkExecClassifier v2 correctly identified EXEC_AFTER_FORK. Investigated and confirmed ELIMINATED.",
+            },
+        },
+    },
+
     # ── sweep results: fnginx_new (17MB C++, nginx + Shibboleth SAML SP) ──────
     # TaintTracker output: SAML exports profiled; 0 taint paths from recv.
     # Manual export enumeration: 3255 exports — scanned for system/sprintf/strcpy/strcat/execve/execvp.
