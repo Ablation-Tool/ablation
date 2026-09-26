@@ -11,12 +11,23 @@ Analogous to TaintTracker (x86/ARM/MIPS) in binary RE: same backward-slice
 from sink model, same CONFIRMED/PLAUSIBLE verdict system. Operates on regex-
 extracted call graphs instead of disassembled instruction operands.
 
+Architecture: lazy grep-per-function
+  build()           — scans all TS/JS files for function definition locations
+                      (name + line number). Fast and low-memory: no call sites stored.
+  _get_callers(fn)  — called during BFS; greps repo for files containing fn(),
+                      then parses only those files for the containing function.
+                      Results cached — each unique function name is grepped once.
+
+  This means we grep for ~20-50 unique function names (the functions actually
+  on the backward path for 3 sinks at depth 6), not all functions in 5237 files.
+  Contrast with an eager full call graph which OOMs at 5k+ TS files.
+
 Trust boundary: any file under pages/api/ or app/api/ that exports a default
 handler function. These files receive HTTP requests (req.body, req.query, etc.)
 and are the source of all user-controlled data in Next.js applications.
 
 Confidence levels:
-  DIRECT  : sink is inside a route handler (0 hops, highest confidence)
+  DIRECT  : sink is inside a route handler (0 hops)
   HIGH    : route handler → 1 intermediate → sink
   MEDIUM  : route handler → 2 intermediates → sink
   LOW     : route handler → 3+ intermediates → sink (some regex FP risk)
@@ -27,20 +38,13 @@ Usage:
     from ablation.analyzers.source_taint_tracker import SourceTaintTracker
 
     ctx = SourceContext.from_path("/tmp/langfuse")
-
-    # Option 1: run full pipeline
     tracker = SourceTaintTracker.from_context(ctx)
     tracker.build()
+
     scanner = SourceSinkScanner.from_context(ctx)
     sinks = [h for h in scanner.scan() if h.severity in ("CRITICAL", "HIGH")]
     paths = tracker.trace_all(sinks)
     print(tracker.report(paths))
-
-    # Option 2: trace a single known sink
-    paths = tracker.trace_to_source(
-        sink_file=ctx.repo_root / "packages/in-app-agent-sandbox-runtime/src/server.ts",
-        sink_line=330,
-    )
 
 CLI:
     python3 -m ablation.analyzers.source_taint_tracker /tmp/langfuse
@@ -48,6 +52,7 @@ CLI:
 """
 
 import re
+import subprocess
 import sys
 from collections import deque
 from dataclasses import dataclass, field
@@ -61,98 +66,84 @@ except ImportError:
     from source_ingestion import SourceContext
     from source_sink_scanner import SourceSinkScanner, SinkHit
 
-# ── regex patterns for call graph construction ────────────────────────────────
+# ── regex patterns ────────────────────────────────────────────────────────────
 
-# Named function declaration: function foo(  /  async function foo(
 _FUNC_DECL = re.compile(
     r"^[ \t]*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*[(<]",
     re.MULTILINE,
 )
-
-# Arrow / const function assignment: const foo = (  /  export const foo = async (
 _FUNC_ASSIGN = re.compile(
     r"^[ \t]*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>",
     re.MULTILINE,
 )
-
-# Class method: methodName(  (indented, not `function` keyword)
 _CLASS_METHOD = re.compile(
     r"^[ \t]{2,}(?:(?:public|private|protected|static|async|override)\s+)*(\w+)\s*\([^)]*\)\s*(?::\s*[\w<>\[\]|&, ]+\s*)?\{",
     re.MULTILINE,
 )
-
-# Default export: export default function handler(  /  export default async function(
 _DEFAULT_EXPORT = re.compile(
     r"^(?:export\s+default\s+(?:async\s+)?function\s*(?:\w+)?\s*\(|export\s+default\s+handler)",
     re.MULTILINE,
 )
 
-# Named function call: foo(  /  await foo(  /  return foo(
-# Excludes: if/for/while/switch (keywords), import/require (module ops)
-_CALL_SITE = re.compile(
-    r"(?<!['\"`#/])\b(?!(?:if|else|for|while|switch|return|await|new|import|require|typeof|instanceof|delete|void|throw|catch|class|interface|type|enum|namespace)\b)(\w{2,})\s*\(",
-)
-
-# Import statement: import { X, Y } from './path'
-_IMPORT_NAMED = re.compile(
-    r"^import\s+\{([^}]+)\}\s+from\s+['\"]([^'\"]+)['\"]",
-    re.MULTILINE,
-)
-_IMPORT_DEFAULT = re.compile(
-    r"^import\s+(\w+)\s+from\s+['\"]([^'\"]+)['\"]",
-    re.MULTILINE,
-)
-_IMPORT_STAR = re.compile(
-    r"^import\s+\*\s+as\s+(\w+)\s+from\s+['\"]([^'\"]+)['\"]",
-    re.MULTILINE,
-)
-
-# Source markers: expressions that produce user-controlled data
 _SOURCE_PATTERNS: list[re.Pattern] = [
     re.compile(r"\breq\.(body|query|params|headers)\b"),
     re.compile(r"\brequest\.(body|json|form|args|query_params)\b"),
-    re.compile(r"\bz\.unknown\(\)"),
+    re.compile(r"\breadJsonBody\b"),
     re.compile(r"\bJSON\.parse\("),
-    re.compile(r"\breadJsonBody\b"),  # Langfuse-specific
 ]
 
-# Route handler markers (trust boundary entry points)
 _ROUTE_MARKERS: list[re.Pattern] = [
     re.compile(r"export\s+default\s+(?:async\s+)?function"),
     re.compile(r"export\s+const\s+(?:GET|POST|PUT|DELETE|PATCH)\s*="),
     re.compile(r"export\s+default\s+(?:async\s+)?handler"),
     re.compile(r"router\.(get|post|put|delete|patch)\s*\("),
     re.compile(r"app\.(get|post|put|delete|patch)\s*\("),
-    re.compile(r"@(app|router)\.(get|post|put|delete|patch)"),
 ]
 
-# Route file path patterns
 _ROUTE_PATH_PATTERNS: list[re.Pattern] = [
     re.compile(r"pages[/\\]api[/\\]"),
     re.compile(r"app[/\\]api[/\\].*route\.(ts|js)$"),
     re.compile(r"routes?[/\\].*\.(ts|js)$"),
     re.compile(r"controllers?[/\\].*\.(ts|js)$"),
+    re.compile(r"worker[/\\]src[/\\]app\.(ts|js)$"),
+    # Worker queue processors — trust boundary for async job input (equiv. of req.body)
+    re.compile(r"worker[/\\]src[/\\]queues?[/\\].*\.(ts|js)$"),
+    re.compile(r"worker[/\\]src[/\\].*[Qq]ueue.*\.(ts|js)$"),
 ]
 
-# Max BFS depth to avoid infinite loops
+# Worker job processor function name patterns — additional trust boundary signal
+_WORKER_ENTRY_PATTERNS: list[re.Pattern] = [
+    re.compile(r"\bprocess\w*Eval\b"),
+    re.compile(r"\bprocess\w*Job\b"),
+    re.compile(r"\bhandle\w*Job\b"),
+    re.compile(r"\bQueueProcessorBuilder\b"),
+    re.compile(r"new\s+Worker\s*\("),
+    re.compile(r"\.process\s*\("),   # BullMQ worker.process(...)
+]
+
+_SKIP_FUNC_NAMES = frozenset([
+    "if", "else", "for", "while", "switch", "return", "const", "let", "var",
+    "type", "interface", "class", "enum", "import", "export", "from", "async",
+    "await", "new", "delete", "typeof", "instanceof",
+])
+
 _MAX_HOP_DEPTH = 6
-_MAX_CALLERS_PER_FUNC = 50
+_MAX_CALLERS_PER_FUNC = 30
+
+# Files that should not appear on production taint paths
+_EXEMPT_PATH_FRAGMENTS = frozenset([
+    ".test.", ".spec.", "__tests__", ".servertest.", ".clienttest.", ".gatewaye2e.",
+    "/test/", "/tests/", "/fixtures/", "/mocks/", "/mock/",
+    "seed", "seeder", "/scripts/", "/bin/", "/cli/",
+    "backgroundMigrations", "/migration", ".integration.test.",
+    ".mjs",  # standalone scripts (code-eval-runners, etc.)
+])
 
 
 # ── data structures ───────────────────────────────────────────────────────────
 
 @dataclass
-class FuncDef:
-    """One function definition."""
-    name: str
-    file: Path
-    line: int       # 1-indexed line where definition starts
-    is_route: bool  # True if this is a route handler
-
-
-@dataclass
 class TaintHop:
-    """One step in a taint path."""
     func_name: str
     file: Path
     line: int
@@ -164,11 +155,10 @@ class TaintHop:
 
 @dataclass
 class TaintPath:
-    """A confirmed or plausible taint path from route handler to sink."""
     sink: SinkHit
     hops: list[TaintHop]    # [route_handler, ..., func_containing_sink]
     confidence: str          # DIRECT | HIGH | MEDIUM | LOW
-    has_source: bool         # True if a source marker (req.body etc.) was found in the path
+    has_source: bool
 
     @property
     def depth(self) -> int:
@@ -176,7 +166,8 @@ class TaintPath:
 
     def as_dict(self) -> dict:
         return {
-            "sink": self.sink.as_dict(),
+            "sink_file": self.sink.rel_path,
+            "sink_line": self.sink.line,
             "confidence": self.confidence,
             "has_source": self.has_source,
             "depth": self.depth,
@@ -184,216 +175,204 @@ class TaintPath:
         }
 
 
-def _confidence_from_depth(depth: int) -> str:
-    if depth == 0:
+# Keep CallGraph as a lightweight name (for __init__ export compatibility)
+class CallGraph:
+    """Lightweight stub — actual graph is built lazily inside SourceTaintTracker."""
+    pass
+
+
+def _confidence_from_depth(intermediate_hops: int) -> str:
+    if intermediate_hops == 0:
         return "DIRECT"
-    if depth == 1:
+    if intermediate_hops == 1:
         return "HIGH"
-    if depth == 2:
+    if intermediate_hops == 2:
         return "MEDIUM"
     return "LOW"
 
 
-# ── call graph builder ────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
-class CallGraph:
-    """
-    Lightweight inter-procedural call graph built from regex-extracted
-    function definitions and call sites.
-
-    Indexed for backward traversal: callee_name → [FuncDef of callers].
-    """
-
-    def __init__(self):
-        # name → list of definitions (there may be multiple across files)
-        self.func_defs: dict[str, list[FuncDef]] = {}
-        # (file, func_name) → set of callee names found in the function body
-        self.callees: dict[tuple[Path, str], set[str]] = {}
-        # callee_name → list of (caller_file, caller_func_name) — inverted index
-        self.callers_of: dict[str, list[tuple[Path, str]]] = {}
-        # (file, line) → func_name that contains this line
-        self._line_to_func: dict[Path, list[tuple[int, str]]] = {}
-
-    def _extract_func_defs(self, path: Path, text: str) -> list[tuple[int, str]]:
-        """Extract (line_number, func_name) for all function definitions in text."""
-        lines = text.splitlines()
-        defs: list[tuple[int, str]] = []
-
-        for pattern in [_FUNC_DECL, _FUNC_ASSIGN, _CLASS_METHOD]:
-            for m in pattern.finditer(text):
-                name = m.group(1)
-                # Skip common non-function words that slip through
-                if name in ("if", "else", "for", "while", "switch", "return",
-                            "const", "let", "var", "type", "interface", "class",
-                            "enum", "import", "export", "from", "async", "await"):
-                    continue
-                line_no = text.count("\n", 0, m.start()) + 1
-                defs.append((line_no, name))
-
-        defs.sort()
-        return defs
-
-    def _func_at_line(self, path: Path, target_line: int) -> Optional[str]:
-        """Return the name of the function that contains target_line."""
-        defs = self._line_to_func.get(path, [])
-        result = None
-        for line_no, name in defs:
-            if line_no <= target_line:
-                result = name
-            else:
-                break
-        return result
-
-    def _is_route_file(self, path: Path) -> bool:
-        rel = str(path).replace("\\", "/")
-        return any(p.search(rel) for p in _ROUTE_PATH_PATTERNS)
-
-    def _file_has_source(self, path: Path, func_name: str, text: str) -> bool:
-        """Return True if a source marker appears in the function body."""
-        defs = self._line_to_func.get(path, [])
-        # find start line for func_name
-        start_line = None
-        end_line = None
-        for i, (ln, name) in enumerate(defs):
-            if name == func_name:
-                start_line = ln
-                end_line = defs[i + 1][0] if i + 1 < len(defs) else len(text.splitlines())
-                break
-        if start_line is None:
-            return any(p.search(text) for p in _SOURCE_PATTERNS)
-        func_body = "\n".join(text.splitlines()[start_line - 1: end_line])
-        return any(p.search(func_body) for p in _SOURCE_PATTERNS)
-
-    def build(self, ctx: SourceContext):
-        """Build the call graph from all TypeScript/JavaScript files in ctx."""
-        ts_files = ctx.files_by_lang("typescript") + ctx.files_by_lang("javascript")
-
-        for path in ts_files:
-            text = ctx.read(path)
-            if not text:
+def _extract_func_defs(text: str) -> list[tuple[int, str]]:
+    """Return sorted (line_no, func_name) pairs for all function definitions."""
+    defs: list[tuple[int, str]] = []
+    for pattern in [_FUNC_DECL, _FUNC_ASSIGN, _CLASS_METHOD]:
+        for m in pattern.finditer(text):
+            name = m.group(1)
+            if name in _SKIP_FUNC_NAMES:
                 continue
+            line_no = text.count("\n", 0, m.start()) + 1
+            defs.append((line_no, name))
+    defs.sort()
+    # Deduplicate same line
+    seen: set[int] = set()
+    result = []
+    for ln, name in defs:
+        if ln not in seen:
+            seen.add(ln)
+            result.append((ln, name))
+    return result
 
-            # Extract function definitions
-            raw_defs = self._extract_func_defs(path, text)
-            self._line_to_func[path] = raw_defs
 
-            is_route = self._is_route_file(path)
-            file_has_default_export = bool(_DEFAULT_EXPORT.search(text))
+def _func_at_line(defs: list[tuple[int, str]], target_line: int) -> Optional[str]:
+    result = None
+    for line_no, name in defs:
+        if line_no <= target_line:
+            result = name
+        else:
+            break
+    return result
 
-            for line_no, func_name in raw_defs:
-                fd = FuncDef(
-                    name=func_name,
-                    file=path,
-                    line=line_no,
-                    is_route=is_route and (file_has_default_export or func_name in ("handler", "default")),
-                )
-                self.func_defs.setdefault(func_name, []).append(fd)
 
-            # Extract call sites within each function's body
-            lines = text.splitlines()
-            for i, (line_no, func_name) in enumerate(raw_defs):
-                next_start = raw_defs[i + 1][0] if i + 1 < len(raw_defs) else len(lines)
-                body = "\n".join(lines[line_no - 1: next_start])
+def _is_route_file(path: Path) -> bool:
+    rel = str(path).replace("\\", "/")
+    return any(p.search(rel) for p in _ROUTE_PATH_PATTERNS)
 
-                callee_names: set[str] = set()
-                for m in _CALL_SITE.finditer(body):
-                    callee_names.add(m.group(1))
 
-                self.callees[(path, func_name)] = callee_names
+def _is_route_func(path: Path, func_name: str, text: str) -> bool:
+    if not _is_route_file(path):
+        return False
+    if any(p.search(str(path).replace("\\", "/")) for p in _ROUTE_PATH_PATTERNS[-2:]):
+        # Worker queue file: accept any exported function or known processor pattern
+        return (
+            any(p.search(func_name) for p in _WORKER_ENTRY_PATTERNS)
+            or bool(re.search(r"\bexport\b.*\b" + re.escape(func_name) + r"\b", text))
+        )
+    return (
+        func_name in ("handler", "default", "GET", "POST", "PUT", "DELETE", "PATCH")
+        or bool(_DEFAULT_EXPORT.search(text))
+        or any(p.search(text) for p in _ROUTE_MARKERS)
+    )
 
-                # Build inverted index
-                for callee in callee_names:
-                    self.callers_of.setdefault(callee, []).append((path, func_name))
 
-    def get_func_def(self, func_name: str) -> list[FuncDef]:
-        return self.func_defs.get(func_name, [])
-
-    def get_callers(self, func_name: str) -> list[tuple[Path, str]]:
-        return self.callers_of.get(func_name, [])
-
-    def func_at_line(self, path: Path, line: int) -> Optional[str]:
-        return self._func_at_line(path, line)
+def _has_source_marker(text: str) -> bool:
+    return any(p.search(text) for p in _SOURCE_PATTERNS)
 
 
 # ── taint tracker ─────────────────────────────────────────────────────────────
 
 class SourceTaintTracker:
     """
-    Inter-procedural backward slicer: traces from dangerous sinks back to
-    HTTP route handlers (trust boundaries).
+    Inter-procedural backward slicer: lazy grep-per-function approach.
 
-    Build once, query many times. Call build() before trace_to_source() or trace_all().
+    build()        : scan all files for function definition locations (fast).
+    trace_to_source: BFS backward; each unique function name gets one grep
+                     call to find its callers — results cached.
     """
 
     def __init__(self, ctx: SourceContext):
         self.ctx = ctx
-        self.cg = CallGraph()
+        # file → sorted [(line_no, func_name)]
+        self._file_defs: dict[Path, list[tuple[int, str]]] = {}
+        # func_name → [(caller_file, caller_func_name)] — populated lazily
+        self._callers_cache: dict[str, list[tuple[Path, str]]] = {}
         self._built = False
-        self._file_text_cache: dict[Path, str] = {}
+        self.cg = CallGraph()  # stub for API compatibility
 
     @classmethod
     def from_context(cls, ctx: SourceContext) -> "SourceTaintTracker":
         return cls(ctx)
 
-    def _text(self, path: Path) -> str:
-        if path not in self._file_text_cache:
-            self._file_text_cache[path] = self.ctx.read(path)
-        return self._file_text_cache[path]
-
     def build(self):
-        """Build the call graph. Must be called before tracing."""
-        self.cg.build(self.ctx)
+        """
+        Phase 1: extract function definition locations from all TS/JS files.
+        Does NOT build call sites (that's done lazily per function during BFS).
+        """
+        files = self.ctx.files_by_lang("typescript") + self.ctx.files_by_lang("javascript")
+        for path in files:
+            text = self.ctx.read(path)
+            if not text:
+                continue
+            self._file_defs[path] = _extract_func_defs(text)
         self._built = True
 
-    def _is_route_func(self, path: Path, func_name: str) -> bool:
-        """Return True if this function is a route handler (trust boundary)."""
-        if not any(p.search(str(path).replace("\\", "/")) for p in _ROUTE_PATH_PATTERNS):
-            return False
-        text = self._text(path)
-        # Route file + function named handler / default export / HTTP verb
-        return (
-            func_name in ("handler", "default", "GET", "POST", "PUT", "DELETE", "PATCH")
-            or bool(_DEFAULT_EXPORT.search(text))
-            or any(p.search(text) for p in _ROUTE_MARKERS)
-        )
+    def _grep_files_calling(self, func_name: str) -> list[Path]:
+        """
+        Return all source files that contain a call to func_name().
+        Uses ripgrep if available, else grep -r.
+        """
+        pattern = rf"\b{re.escape(func_name)}\s*\("
+        repo = str(self.ctx.repo_root)
 
-    def _hop_has_source(self, path: Path, func_name: str) -> bool:
-        text = self._text(path)
-        return self.cg._file_has_source(path, func_name, text)
+        # Try ripgrep first (much faster on large repos)
+        for cmd in [
+            ["rg", "--files-with-matches", "-t", "ts", "-t", "js", pattern, repo],
+            ["grep", "-r", "-l", "--include=*.ts", "--include=*.js", "-E", pattern, repo],
+        ]:
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    timeout=15,
+                )
+                if result.returncode in (0, 1):  # 1 = no matches, still valid
+                    paths = [Path(p) for p in result.stdout.strip().splitlines() if p]
+                    return paths
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+        return []
 
-    def trace_to_source(
-        self,
-        sink_file: Path,
-        sink_line: int,
-    ) -> list[TaintPath]:
+    def _get_callers(self, func_name: str) -> list[tuple[Path, str]]:
+        """
+        Return [(caller_file, caller_func_name)] for all callers of func_name.
+        Results cached — each unique function name is grepped once.
+        """
+        if func_name in self._callers_cache:
+            return self._callers_cache[func_name]
+
+        candidates = self._grep_files_calling(func_name)
+        call_re = re.compile(rf"\b{re.escape(func_name)}\s*\(")
+
+        results: list[tuple[Path, str]] = []
+        seen: set[tuple[Path, str]] = set()
+
+        for path in candidates:
+            rel = str(path).replace("\\", "/")
+            if any(frag in rel for frag in _EXEMPT_PATH_FRAGMENTS):
+                continue
+            text = self.ctx.read(path)
+            if not text:
+                continue
+            defs = self._file_defs.get(path) or _extract_func_defs(text)
+
+            for m in call_re.finditer(text):
+                line_no = text.count("\n", 0, m.start()) + 1
+                container = _func_at_line(defs, line_no)
+                if container and container != func_name:
+                    key = (path, container)
+                    if key not in seen:
+                        seen.add(key)
+                        results.append((path, container))
+
+            if len(results) >= _MAX_CALLERS_PER_FUNC:
+                results = results[:_MAX_CALLERS_PER_FUNC]
+                break
+
+        self._callers_cache[func_name] = results
+        return results
+
+    def trace_to_source(self, sink_file: Path, sink_line: int) -> list[TaintPath]:
         """
         Backward-slice from the sink at (sink_file, sink_line).
-
-        Returns all TaintPath objects found (one per unique route handler reached).
-        Returns empty list if no route handler is reachable within _MAX_HOP_DEPTH.
+        Returns TaintPath objects for each distinct route handler reached.
         """
         if not self._built:
             self.build()
 
-        # Find the function containing the sink line
-        sink_func = self.cg.func_at_line(sink_file, sink_line)
-        if sink_func is None:
-            # Sink is at module level; treat the file as the route handler
-            sink_func = "__module__"
+        # Find function containing the sink
+        defs = self._file_defs.get(sink_file) or []
+        sink_func = _func_at_line(defs, sink_line) or "__module__"
 
-        # BFS backward through the call graph
-        # State: (func_name, file, path_so_far)
         start_hop = TaintHop(
             func_name=sink_func,
             file=sink_file,
             line=sink_line,
             rel_path=self.ctx.rel(sink_file),
         )
-        # Queue: list of (current_func_name, current_file, list_of_hops)
-        queue: deque = deque()
-        queue.append((sink_func, sink_file, [start_hop]))
-        visited: set[tuple[Path, str]] = {(sink_file, sink_func)}
 
+        # BFS: (curr_func, curr_file, path_so_far)
+        queue: deque = deque([(sink_func, sink_file, [start_hop])])
+        visited: set[tuple[Path, str]] = {(sink_file, sink_func)}
         results: list[TaintPath] = []
 
         while queue:
@@ -402,37 +381,34 @@ class SourceTaintTracker:
             if len(path_so_far) > _MAX_HOP_DEPTH:
                 continue
 
-            # Check if this is a route handler (trust boundary reached)
-            if self._is_route_func(curr_file, curr_func) and len(path_so_far) > 1:
-                hops = list(reversed(path_so_far))
-                depth = len(hops) - 1  # hops include sink; depth is intermediate hops
-                confidence = _confidence_from_depth(depth - 1)
-                has_source = any(self._hop_has_source(h.file, h.func_name) for h in hops)
-                # Build a dummy sink hit reference from the path's leaf
-                sink_hop = path_so_far[0]
-                results.append(TaintPath(
-                    sink=_make_sink_ref(sink_hop),
-                    hops=hops,
-                    confidence=confidence,
-                    has_source=has_source,
-                ))
-                continue
+            # Check if this node is a route handler (trust boundary)
+            if len(path_so_far) > 1:
+                text = self.ctx.read(curr_file)
+                if _is_route_func(curr_file, curr_func, text or ""):
+                    hops = list(reversed(path_so_far))
+                    depth = len(hops) - 1
+                    has_source = any(
+                        _has_source_marker(self.ctx.read(h.file) or "")
+                        for h in hops
+                    )
+                    results.append(TaintPath(
+                        sink=_make_sink_ref(path_so_far[0]),
+                        hops=hops,
+                        confidence=_confidence_from_depth(depth - 1),
+                        has_source=has_source,
+                    ))
+                    continue
 
-            # Walk backward to callers
-            callers = self.cg.get_callers(curr_func)
-            if not callers:
-                # Try callers by file-local function name search
-                callers = self._find_callers_by_grep(curr_func, curr_file)
-
-            caller_count = 0
-            for caller_file, caller_func in callers:
-                if caller_count >= _MAX_CALLERS_PER_FUNC:
-                    break
+            for caller_file, caller_func in self._get_callers(curr_func):
                 key = (caller_file, caller_func)
                 if key in visited:
                     continue
                 visited.add(key)
-                caller_line = self._func_start_line(caller_file, caller_func)
+
+                caller_defs = self._file_defs.get(caller_file) or []
+                caller_line = next(
+                    (ln for ln, nm in caller_defs if nm == caller_func), 0
+                )
                 hop = TaintHop(
                     func_name=caller_func,
                     file=caller_file,
@@ -440,55 +416,23 @@ class SourceTaintTracker:
                     rel_path=self.ctx.rel(caller_file),
                 )
                 queue.append((caller_func, caller_file, [hop] + path_so_far))
-                caller_count += 1
 
         return results
 
-    def _find_callers_by_grep(
-        self,
-        func_name: str,
-        hint_file: Path,
-    ) -> list[tuple[Path, str]]:
-        """
-        Fallback: grep for calls to func_name across TS/JS files.
-        Returns (file, containing_func) pairs.
-        """
-        pattern = re.compile(rf"\b{re.escape(func_name)}\s*\(")
-        results: list[tuple[Path, str]] = []
-        files = self.ctx.files_by_lang("typescript") + self.ctx.files_by_lang("javascript")
-
-        for f in files:
-            text = self.ctx.read(f)
-            for m in pattern.finditer(text):
-                line_no = text.count("\n", 0, m.start()) + 1
-                containing = self.cg.func_at_line(f, line_no)
-                if containing and containing != func_name:
-                    results.append((f, containing))
-        return results[:_MAX_CALLERS_PER_FUNC]
-
-    def _func_start_line(self, path: Path, func_name: str) -> int:
-        defs = self.cg._line_to_func.get(path, [])
-        for line_no, name in defs:
-            if name == func_name:
-                return line_no
-        return 0
-
     def trace_all(self, sink_hits: list[SinkHit]) -> list[TaintPath]:
-        """
-        Trace all sinks from the scanner, returning all found TaintPaths.
-        Automatically builds the call graph if not already built.
-        """
+        """Trace all sinks, attach real SinkHit objects to paths."""
         if not self._built:
             self.build()
+
         all_paths: list[TaintPath] = []
         for hit in sink_hits:
             paths = self.trace_to_source(hit.path, hit.line)
             for p in paths:
-                # Attach real sink data
                 p.sink = hit
             all_paths.extend(paths)
-        _conf_rank = {"DIRECT": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-        all_paths.sort(key=lambda p: (_conf_rank.get(p.confidence, 4), p.sink.rel_path))
+
+        _rank = {"DIRECT": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        all_paths.sort(key=lambda p: (_rank.get(p.confidence, 4), p.sink.rel_path))
         return all_paths
 
     @staticmethod
@@ -522,9 +466,7 @@ class SourceTaintTracker:
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _make_sink_ref(hop: TaintHop) -> SinkHit:
-    """Create a minimal SinkHit reference from a TaintHop for path storage."""
-    from ablation.analyzers.source_sink_scanner import SinkHit
+def _make_sink_ref(hop: TaintHop) -> "SinkHit":
     return SinkHit(
         path=hop.file,
         rel_path=hop.rel_path,
@@ -549,27 +491,27 @@ def _cli():
     )
     ap.add_argument("path", help="Repo path")
     ap.add_argument("--severity", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-                    default="HIGH", help="Minimum sink severity to trace (default: HIGH)")
+                    default="HIGH", help="Minimum sink severity (default: HIGH)")
     ap.add_argument("--confidence", choices=["DIRECT", "HIGH", "MEDIUM", "LOW"],
                     help="Filter output to one confidence level")
     ap.add_argument("--build-only", action="store_true",
-                    help="Build call graph and report stats only")
+                    help="Build func-def index and report stats only")
     args = ap.parse_args()
 
+    import time
     print(f"Building SourceContext for {args.path} ...")
     ctx = SourceContext.from_path(args.path)
     print(ctx.summary())
 
-    print("\nBuilding call graph ...")
+    t0 = time.time()
+    print("\nBuilding function definition index ...")
     tracker = SourceTaintTracker.from_context(ctx)
     tracker.build()
-
-    cg = tracker.cg
-    total_funcs = sum(len(v) for v in cg.func_defs.values())
-    total_edges = sum(len(v) for v in cg.callees.values())
-    print(f"  Functions  : {total_funcs}")
-    print(f"  Call edges : {total_edges}")
-    print(f"  Unique names: {len(cg.func_defs)}")
+    n_files = len(tracker._file_defs)
+    n_funcs = sum(len(v) for v in tracker._file_defs.values())
+    print(f"  Files indexed : {n_files}")
+    print(f"  Functions     : {n_funcs}")
+    print(f"  Build time    : {time.time()-t0:.1f}s")
 
     if args.build_only:
         return
@@ -581,13 +523,16 @@ def _cli():
     sinks = [h for h in scanner.scan() if _sev_rank.get(h.severity, 5) <= min_rank]
     print(f"  Tracing {len(sinks)} sink(s) ...")
 
+    t1 = time.time()
     paths = tracker.trace_all(sinks)
+    print(f"  Trace time : {time.time()-t1:.1f}s")
+    print(f"  Paths found: {len(paths)}")
 
     if args.confidence:
         paths = [p for p in paths if p.confidence == args.confidence]
 
     print()
-    print(tracker.report(paths, ctx))
+    print(tracker.report(paths))
 
 
 if __name__ == "__main__":
