@@ -829,3 +829,22 @@ Notable patterns:
 - PromptStageFormHelpers.ts + AuthenticatorValidateStageFormHelpers.ts + IdentificationStageFormHelpers.ts: pure data helpers; all return label strings for dual-select components.
 - AuthenticatorSMSStageForm.ts: note the `accounts accountSid` field is ALSO used for the Generic provider's external API URL (same form field, different semantics depending on provider). This is a value= binding (form input), not rendered as HTML.
 - UserLoginStageForm.ts: sessionDuration/rememberMeOffset/rememberDevice all in text input value= bindings; MDN link in <a href=> is a hardcoded static URL.
+
+### Deep Reads — TypeScript individual file reads (pass 5ak — 2026-09-26)
+**Directories: web/src/admin/common/ (11 files) + web/src/admin/ root (6 files) — all CLEAN**
+
+#### admin/common/ — 11 files, all CLEAN
+- ak-core-group-search.ts: SearchSelect wrapper; renderElement returns group.name as string
+- ak-crypto-certificate-search.ts: SearchSelect wrapper; renderElement returns item.name as string; #unusableReason returns localized msg() strings
+- ak-flow-search/FlowSearch.ts: abstract base; renderDescription uses html`${flow.slug}` (text node); renderElement calls RenderFlowOption() which returns a string
+- ak-flow-search/{ak-flow-search,ak-branded-flow-search,ak-flow-search-no-default,ak-source-flow-search}.ts: thin FlowSearch extensions, no new rendering
+- certificate-key-types.ts: pure static key type allowlist config (KeyTypeEnum arrays)
+- stories/: Storybook development files only
+
+#### admin/ root — 6 files, all CLEAN
+- ak-about-modal.ts: version.buildHash in `<a href="https://github.com/.../commit/${buildHash}">` — server-generated hex commit hash; also text node; runtime info (pythonVersion/platform/opensslVersion/uname) as text nodes via renderEntry() helper
+- ak-admin-debug-page.ts: no user data rendered; Sentry test + static strings
+- ak-interface-admin.ts: structural admin shell; no user data rendered; sidebar entries from createAdminSidebarEntries() (msg() calls, hardcoded paths)
+- Routes.ts: pure static routing table (hardcoded path patterns)
+- helperText.ts: pure static msg() exports
+- index.entrypoint.ts: entry point only
