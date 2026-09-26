@@ -247,3 +247,56 @@ print(profile.summary())
 
 **Profile output includes:** basic block count, edge count, PLT calls, string references,
 estimated size, and branch density classification (linear / switch / loop-heavy).
+
+---
+
+## CrossBinaryTaintTracker
+
+**File:** `ablation/analyzers/cross_binary_taint.py`
+
+Extends `TaintTracker` to follow tainted arguments across shared library boundaries.
+`TaintTracker.run_interprocedural()` stops when a tainted argument passes into a PLT
+entry — it knows the symbol name but not its address in the exporting library.
+`CrossBinaryTaintTracker` resolves that name via `LibGraph`, loads the exporting
+binary, and continues the BFS from the exported function's entry point.
+
+Requires a `LibGraph` built from the firmware's library directory.
+
+### Usage
+
+```python
+from ablation.analyzers.cross_binary_taint import CrossBinaryTaintTracker
+from ablation.analyzers.lib_graph import LibGraph
+
+lg = LibGraph.from_dir('/path/to/firmware/lib/')
+tracker = CrossBinaryTaintTracker(
+    entry_binary='/path/to/firmware/lib/libservice.so',
+    lib_graph=lg,
+    max_hops=6,
+)
+chains = tracker.run()
+print(tracker.report(chains))
+```
+
+### TaintChain output
+
+Each `TaintChain` records the full cross-binary path from source to sink:
+
+```
+libservice.so:recv_wrapper [tainted: arg0]
+  -> libdata.so:parse_packet [tainted: arg0, arg1]
+  -> libcmd.so:exec_command [tainted: arg0]
+  -> system()  SINK
+```
+
+### TaintChain fields
+
+| Field | Description |
+|---|---|
+| `hops` | Ordered list of `TaintHop` objects — one per function in the chain |
+| `sink_binary` | Path to the binary where the dangerous sink was reached |
+| `sink_va` | VA of the sink call |
+| `sink_name` | Name of the sink function (`system`, `execve`, `memcpy`, etc.) |
+| `tainted_args` | Which arguments arrived tainted at the sink |
+| `source_name` | Entry-point function name where the taint was introduced |
+| `depth` | Number of hops in the chain |
