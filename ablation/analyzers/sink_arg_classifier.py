@@ -156,6 +156,39 @@ def _extract_plt_x86(binary, data: bytes) -> Dict[int, str]:
     return plt
 
 
+def _count_plt_callers(binary, data: bytes) -> Dict[int, int]:
+    """
+    Return {plt_va: caller_count} for all direct `call imm` targets in binary.
+
+    Performs a single O(binary_size) scan over executable sections, counting
+    every `e8 <rel32>` call target simultaneously.  Much faster than scanning
+    once per PLT entry (which would be O(PLT_count × binary_size)).
+
+    A PLT entry with count == 0 is dead code — the import is declared in the
+    dynamic symbol table but never called from within this binary.
+    """
+    from collections import Counter
+    call_targets: Counter = Counter()
+    if binary is None or not data:
+        return {}
+    for sec in binary.sections:
+        if not (int(getattr(sec, 'flags', 0)) & 0x4):  # SHF_EXECINSTR
+            continue
+        off    = sec.offset
+        size   = sec.size
+        sec_va = sec.virtual_address
+        if off + size > len(data):
+            continue
+        for i in range(off, off + size - 5):
+            if data[i] != 0xe8:
+                continue
+            rel     = struct.unpack_from('<i', data, i + 1)[0]
+            call_va = sec_va + (i - off)
+            tgt_va  = call_va + 5 + rel
+            call_targets[tgt_va] += 1
+    return dict(call_targets)
+
+
 def _extract_func_starts(binary, data: bytes = b'') -> List[int]:
     """
     Extract function start VAs. Uses symbol table when available; falls back to
@@ -420,6 +453,8 @@ class SinkArgClassifier:
         self._func_starts: List[int] = []
         self._sinks: Dict[str, int] = dict(_DEFAULT_SINKS)  # name → arg_pos
         self._snprintf_plts: Dict[int, int] = {}  # PLT VA → fmt_arg_pos
+        self._plt_caller_counts: Dict[int, int] = {}   # PLT VA → call site count
+        self._dead_sinks: List[str] = []               # sink names with 0 callers
         self._md: Optional[Cs] = None
         self._bin = None
         if _CS_OK:
@@ -474,6 +509,10 @@ class SinkArgClassifier:
                 self._rodata.append(
                     (sec.virtual_address, sec.virtual_address + sec.size)
                 )
+
+        # Single-pass caller count: O(binary_size) scan for all `call imm` targets.
+        # Used to pre-filter dead PLT imports (0 callers = dead code, skip analysis).
+        self._plt_caller_counts = _count_plt_callers(self._bin, self._data)
 
         self._init_snprintf_plts()
 
@@ -531,11 +570,21 @@ class SinkArgClassifier:
         return -1
 
     def _find_sink_plts(self) -> Dict[int, Tuple[str, int]]:
-        """Return {plt_va: (sink_name, arg_pos)} for all registered sinks."""
+        """
+        Return {plt_va: (sink_name, arg_pos)} for sinks with ≥1 caller.
+
+        Sinks present in the PLT but with 0 call sites anywhere in the binary
+        are dead imports — recorded in self._dead_sinks and excluded from analysis.
+        """
         result: Dict[int, Tuple[str, int]] = {}
+        self._dead_sinks = []
         for name, arg_pos in self._sinks.items():
             va = self._plt_rev.get(name)
-            if va:
+            if not va:
+                continue
+            if self._plt_caller_counts.get(va, 0) == 0:
+                self._dead_sinks.append(name)
+            else:
                 result[va] = (name, arg_pos)
         return result
 
@@ -789,7 +838,7 @@ class SinkArgClassifier:
     # ── reporting ─────────────────────────────────────────────────────────────
 
     def report(self, results: List[SinkClassification]) -> str:
-        if not results:
+        if not results and not self._dead_sinks:
             return '[sink_arg_classifier] no results\n'
         by_verdict: Dict[str, int] = {}
         for r in results:
@@ -802,6 +851,11 @@ class SinkArgClassifier:
         lines = [hdr]
         for r in sorted(results, key=lambda x: (x.verdict, x.func_va)):
             lines.append(r.fmt())
+        if self._dead_sinks:
+            lines.append(
+                f'\n  DEAD IMPORTS (0 callers — ELIMINATED): '
+                + ', '.join(sorted(self._dead_sinks))
+            )
         return '\n'.join(lines) + '\n'
 
 
