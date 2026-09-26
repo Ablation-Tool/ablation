@@ -20,11 +20,11 @@ Combined with with Claude Code or OpenAI Codex, it transforms into a fully auton
 
 **Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
 
-**Source Code Audit:** Ablation assigns every source file a 5-bit security profile based on the rendering patterns it contains and groups them by read priority, so the high-risk files surface first. A 2861-file TypeScript codebase compresses to 72 reads.
+**Source Code Audit:** Every source file gets a 5-bit security profile based on the rendering patterns it contains, grouped into read-priority buckets so the high-risk files surface first. A 2861-file TypeScript codebase compresses to 72 reads.
 
-**Windows Kernel Driver & BYOVD Analysis:** Ablation maps the IRP dispatch table, decodes every IOCTL code, and identifies which kernel APIs expose physical memory and token primitives from user mode. The BYOVD Detector fingerprints signed drivers carrying those capabilities, because one legitimate signed driver is enough to blind EDR from ring-0.
+**Windows Kernel Driver & BYOVD Analysis:** Maps the IRP dispatch table, decodes every IOCTL code, and identifies which kernel APIs expose physical memory and token primitives from user mode. The BYOVD Detector fingerprints signed drivers carrying those capabilities, because one legitimate signed driver is enough to blind EDR from ring-0.
 
-**Erlang / BEAM Analysis:** Ablation reads every .beam chunk and builds the same surface map it builds for ELF, so atom search, import auditing, and obfuscation detection work the same way they do on Linux firmware. Sweeping an entire OTP release directory takes seconds.
+**Erlang / BEAM Analysis:** Erlang compiles to .beam files, and the same surface-map approach used for ELF applies directly, so atom search, import auditing, and obfuscation detection need no special handling. Sweeping a release directory takes seconds.
 
 **Decryption**
 - **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
