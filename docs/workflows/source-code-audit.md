@@ -52,7 +52,7 @@ print(ctx.summary())
 
 Check `summary()` first. It gives file count by language and the number of detected
 route handlers. If route count is 0 on a web app, the entry classifier won't produce
-useful output — the framework-detection patterns may need extending for that stack.
+useful output. The framework-detection patterns may need extending for that stack.
 
 ```python
 clf = SourceEntryClassifier.from_context(ctx)
@@ -84,8 +84,8 @@ print(scanner.report(findings))
 highs = [f for f in findings if f.severity == "HIGH"]
 ```
 
-The sink scanner catches dangerous patterns — `eval`, `subprocess.run`, `os.popen`,
-`innerHTML=`, SSRF-shaped `fetch(var)` — before you read a single file. Each hit
+The sink scanner catches dangerous patterns like `eval`, `subprocess.run`, `os.popen`,
+`innerHTML=`, and SSRF-shaped `fetch(var)` before you read a single file. Each hit
 names the file and line. These become read candidates even when the compressor
 assigns them a low-priority profile, since the sink scanner uses different signal
 classes.
@@ -130,12 +130,12 @@ Estimated audit compression: 97.5% fewer reads
 ```
 
 Start with the highest-profile files. Profile 16+ (unsafe rendering) is the first
-pass — these are the only files where a single line can produce a DOM XSS finding
+pass. These are the only files where a single line can produce a DOM XSS finding
 without further chaining.
 
 ---
 
-## Phase 4: Individual reads — profiles 8–31
+## Phase 4: Individual reads, profiles 8-31
 
 Read every file in `compressor.priority_reads(buckets)`. For each file:
 
@@ -150,7 +150,7 @@ for bucket in compressor.priority_reads(buckets):
         print(f"  {fp.rel_path}")
 ```
 
-**Worked example — authentik PromptStage.ts (profile 19)**
+**Worked example: authentik PromptStage.ts (profile 19)**
 
 Profile 19 = `unsafe_render | user_data | shared_module`. Reading
 `web/src/flow/stages/prompt/PromptStage.ts` found:
@@ -177,12 +177,12 @@ if self.field_key in prompt_context:
 ```
 
 `prompt_context[field_key]` returns user-controlled input from a prior stage when
-field keys collide. Finding logged as `AUT-PROMPT-UNSAFE-HTML-1` (PLAUSIBLE LOW —
+field keys collide. Finding logged as `AUT-PROMPT-UNSAFE-HTML-1` (PLAUSIBLE LOW;
 requires admin misconfiguration to chain two stages with the same field_key).
 
 ---
 
-## Phase 5: Spot checks — profiles 2–7
+## Phase 5: Spot checks, profiles 2-7
 
 ```python
 for bucket in compressor.spot_checks(buckets):
@@ -193,7 +193,7 @@ Read 10% of the files in each spot-check bucket, spread across subsystems. You a
 looking for a surprise: a file assigned a low profile because the dangerous signal
 uses a non-standard API that the compressor patterns don't cover.
 
-**Worked example — authentik profiles 2–3 (212 files)**
+**Worked example: authentik profiles 2-3 (212 files)**
 
 All 10 spot-check reads confirmed the same pattern: user data rendered as Lit text
 nodes:
@@ -208,7 +208,7 @@ text node position. BATCH-CLEAN declared after 10 reads.
 
 ---
 
-## Phase 6: Batch close — profiles 0–1
+## Phase 6: Batch close, profiles 0-1
 
 ```python
 batch = compressor.batch_clean(buckets)
@@ -227,7 +227,7 @@ no rendering).
 
 ## Phase 7: Log findings to the RE module
 
-All findings — confirmed, plausible, eliminated — go into the target RE module at
+All findings (confirmed, plausible, eliminated) go into the target RE module at
 `targets/<vendor>/<target>_re.py`. Add each finding to the `FINDINGS` dict and
 each reviewed file to `CLEAN` with a note on what signal was present and why it
 was cleared.
@@ -245,7 +245,7 @@ The compressor pass metadata goes into a comment block at the top of the RE modu
 #   0 (no signals): BATCH-CLEAN — pass 5ax (2 representatives)
 ```
 
-Commit and push after completing each profile tier — don't wait until 100%:
+Commit and push after completing each profile tier. Don't wait until 100%:
 
 ```bash
 git add -f targets/authentik/authentik_re.py
@@ -257,13 +257,13 @@ env HOME=/home/cowboy GIT_LFS_SKIP_SMUDGE=1 git push origin main
 
 ## Worked example: authentik full audit summary
 
-**Codebase:** goauthentik/authentik — Python (Django) + TypeScript (Lit) + Go
+**Codebase:** goauthentik/authentik, Python (Django) + TypeScript (Lit) + Go
 
 | Language | Files | Method |
 |---|---|---|
-| Python | 2151 | REST API, Django models, permission classes — passes 1–5 |
-| TypeScript | 2861 | Profile-based compression — passes 5ar–5ax |
-| Go | 80 | Individual reads — pass 5 |
+| Python | 2151 | REST API, Django models, permission classes (passes 1-5) |
+| TypeScript | 2861 | Profile-based compression (passes 5ar-5ax) |
+| Go | 80 | Individual reads (pass 5) |
 | **Total** | **4942** | |
 
 **Findings:**
@@ -273,7 +273,7 @@ env HOME=/home/cowboy GIT_LFS_SKIP_SMUDGE=1 git push origin main
 | AUT-SESS-PICKLE-1 | HIGH | PLAUSIBLE | Pickle deserialization in Redis session backend |
 | AUT-SAML-REFURI-1 | CRITICAL* | PLAUSIBLE | SAML Reference URI bypass (* if SAML bypass confirmed) |
 | AUT-PROMPT-UNSAFE-HTML-1 | LOW | PLAUSIBLE | Admin-configured HTML in prompt stages via `unsafeHTML()`; user-controlled XSS via flow key reuse |
-| AUT-LAUNCH-URL-1 | — | ELIMINATED | `window.open()` URL validated before call |
+| AUT-LAUNCH-URL-1 | N/A | ELIMINATED | `window.open()` URL validated before call |
 
 **Audit compression:** 4942 files → ~80 manual reads (98.4% reduction).
 
@@ -285,7 +285,7 @@ The workflow is language-agnostic. The compressor's bit definitions are TypeScri
 oriented (Lit, React, JSX patterns), but SourceContext indexes Python, Go, Rust, Java,
 Ruby, and PHP as well. For non-JS stacks:
 
-- Use `SourceEntryClassifier` and `SourceSinkScanner` directly — they have Python, Rust, and Go patterns built in.
+- Use `SourceEntryClassifier` and `SourceSinkScanner` directly. They have Python, Rust, and Go patterns built in.
 - Use `SourceIsolationChecker` for any Prisma, SQLAlchemy, or Mongoose codebase.
 - Extend `_PAT_UNSAFE_RENDER` in `source_audit_compressor.py` for framework-specific unsafe APIs (e.g., Jinja2 `Markup()`, Django `mark_safe()`).
 

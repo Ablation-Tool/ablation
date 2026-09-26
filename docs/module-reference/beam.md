@@ -22,7 +22,7 @@ Build a context from a `.beam` file and query every surface it exposes.
 | AtU8 / Atom | `atoms` | String table |
 | LitT | `literals` | `.rodata` constants (ETF-decoded) |
 | StrT | `strings` | Raw string table segments |
-| Dbgi | `ast_functions` | DWARF debug info — source file, function names, line numbers |
+| Dbgi | `ast_functions` | DWARF debug info: source file, function names, line numbers |
 
 ### Build and load
 
@@ -66,7 +66,7 @@ for imp in dangerous:
 
 | Constant | Meaning |
 |---|---|
-| `SEVERITY_DISPATCH` | Dynamic dispatch (`erlang:apply`) — low signal alone; extremely common in OTP |
+| `SEVERITY_DISPATCH` | Dynamic dispatch (`erlang:apply`); low signal alone, extremely common in OTP |
 | `SEVERITY_NETWORK` | Outbound network connections (`ssl:connect`, `gen_tcp:connect`, `httpc:request`) |
 | `SEVERITY_INFO` | Local system enumeration (`inet:getifaddrs`) |
 | `SEVERITY_CODE_EVAL` | Runtime code loading / ETF AST evaluation (`erl_eval:exprs`, `code:load_binary`) |
@@ -93,7 +93,7 @@ if ctx.obfuscated:
 ```
 
 Missing or stripped chunks (Dbgi, AtU8) indicate deliberate obfuscation. A missing
-Dbgi chunk means no source-level function names or line numbers — triage falls back
+Dbgi chunk means no source-level function names or line numbers. Triage falls back
 to export/import analysis only.
 
 ### Source-level function list
