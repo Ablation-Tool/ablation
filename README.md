@@ -16,6 +16,21 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ![Codex demo](assets/codex-demo.gif)
 
+## The Core Capabilities
+
+**Semantic Search via BERT:** Semantic search finds results based on meaning rather than exact keywords. BERT reads text and figures out what it means. Similar meanings get similar scores, so you can search by concept instead of exact words. By combining the two, it speeds up the main bottleneck of reverse engineering while finding the vulnerable functions.
+
+**Extreme Performance:** A 50 MB binary loads in 35 seconds. Ghidra and IDA Pro can take hours because they parse the entire file into a database before you can do anything. Ablation only analyzes the functions you are actively working on, so you start immediately.
+
+**Version Diffing:** Utilizing the Jaccard method to measure how much a function's behavior overlaps between releases and Dynamic Time Warping that tracks the "shape" of how a function executes across those versions of firmware or software that a vendor updated, Ablation confirms whether a patch actually changed the logic or just the packaging, because a cosmetic recompile can't hide an unpatched vulnerability.
+
+**Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
+
+**Decryption**
+- **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
+- **Crypto Audit:** Scans for cryptography.
+- **XorSolver:** Recovers, then decrypts the target section which allows further reverse engineering.
+
 ---
 
 ## Framework Architecture & Module Orchestration
