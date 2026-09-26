@@ -86,20 +86,20 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 | Title | Author |
 |---|---|
-| The Art of Software Security Assessment | Mark Dowd ([github.com/mdowd79](https://github.com/mdowd79)), John McDonald, Justin Schuh ([github.com/jschuh](https://github.com/jschuh)) |
-| Practical Binary Analysis | Dennis Andriesse |
-| Practical Malware Analysis | Sikorski, Honig |
-| Practical Reverse Engineering | Dang, Gazet, Bachaalany |
+| The Art of Software Security Assessment | [Mark Dowd](https://github.com/mdowd79), John McDonald, [Justin Schuh](https://github.com/jschuh) |
+| Practical Binary Analysis | [Dennis Andriesse](https://github.com/dennisaa) |
+| Practical Malware Analysis | Michael Sikorski, Andrew Honig |
+| Practical Reverse Engineering | Bruce Dang, Alexandre Gazet, [Elias Bachaalany](https://github.com/0xeb) |
 | Hacking: The Art of Exploitation (2e) | Jon Erickson |
-| Learning Linux Binary Analysis | Ryan O'Neill |
-| Windows Internals Part 1 & 2 | Yosifovich, Russinovich |
-| Rootkits: Subverting the Windows Kernel | Hoglund, Butler |
-| Advanced Compiler Design and Implementation | Muchnick |
-| Engineering a Compiler | Cooper, Torczon |
+| Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) |
+| Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich |
+| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler |
+| Advanced Compiler Design and Implementation | Steven Muchnick |
+| Engineering a Compiler | Keith Cooper, Linda Torczon |
 | Security Engineering (3rd ed.) | Ross Anderson |
-| Practical IoT Hacking | Chantzis et al. |
-| The Art of Mac Malware | Patrick Wardle |
-| Mathematical Concepts and Methods in Modern Biology | Robeva, Hodge |
+| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods |
+| The Art of Mac Malware | [Patrick Wardle](https://github.com/patrickwardle) |
+| Mathematical Concepts and Methods in Modern Biology | Raina Robeva, Terrell Hodge |
 
 **Research Papers**
 
