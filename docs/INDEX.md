@@ -22,6 +22,18 @@ Step-by-step guides for common research tasks.
 | [Cross-Version Diffing](workflows/cross-version.md) | Track a function across firmware patch releases |
 | [Go Binary RE](workflows/go-binaries.md) | Stripped Go binaries: pclntab recovery, garbled builds |
 | [Crypto Analysis](workflows/crypto.md) | Encrypted firmware, XOR key recovery, JWT cracking |
+| [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; authentik worked example |
+
+---
+
+## Source Code Audit
+
+Point Ablation at any repository — open-source project, vendor SDK, or dependency — and get a ranked read list in under 30 seconds.
+
+| Document | Covers |
+|---|---|
+| [Source Analyzers](module-reference/source-audit.md) | SourceContext, SourceAuditCompressor, SourceEntryClassifier, SourceSinkScanner, SourceIsolationChecker, SourceTaintTracker |
+| [Source Code Audit Workflow](workflows/source-code-audit.md) | Clone → compress → priority reads → batch close → log findings |
 
 ---
 
