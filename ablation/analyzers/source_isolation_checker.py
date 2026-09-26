@@ -57,22 +57,34 @@ _PRISMA_OPS = re.compile(
     re.IGNORECASE,
 )
 
-# The where clause block: from `where:` to the next top-level `}`
-# We extract the portion of the call to check for scope fields.
-# This is a best-effort extraction; AST-perfect parsing is Phase 2.
-_WHERE_BLOCK = re.compile(r"where\s*:\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}", re.DOTALL)
+# Anchor: find the opening brace after `where:`.  The balanced-brace
+# extraction is done in Python (regex can't count) — see _extract_where_block.
+_WHERE_START = re.compile(r"where\s*:\s*\{", re.DOTALL)
 
-# Fields that look like scope variables (handles nested: { projectId: ctx.projectId })
+# Fields that look like scope variables.
+# Matches both explicit assignment (projectId: value) and shorthand property (projectId,)
+# The shorthand form { id: dashboardId, projectId } is valid TypeScript and common in Prisma.
+_scope_alts = "|".join(re.escape(f) for f in _SCOPE_FIELDS)
 _SCOPE_FIELD_RE = re.compile(
-    r"\b(" + "|".join(re.escape(f) for f in _SCOPE_FIELDS) + r")\s*:",
+    r"\b(" + _scope_alts + r")\s*(?:[:,}]|\s*$)",
 )
 
 # ── lookup exclusions ─────────────────────────────────────────────────────────
 # Models that are global / non-tenant and don't need project scoping.
 _GLOBAL_MODELS = frozenset([
+    # Auth / org-level models
     "user", "organization", "apikey", "account", "session",
     "verificationtoken", "auditlog", "ssoconfig",
-    "backgroundmigration",
+    # System / scheduler models (no tenant scope expected)
+    "backgroundmigration", "cronjobs", "pricingtier",
+    # Integration config tables queried by global schedulers
+    "blobstorageintegration", "mixpanelintegration", "posthogintegration",
+    # Billing / metering (cloud-wide, not per-project)
+    "billingmeterbackup", "cloudspendalert", "cloudspendthreshold",
+    # Org-level membership (no per-project scope expected)
+    "organizationmembership",
+    # Worker-level job trackers (queried by global runners, not user-scoped)
+    "inappagentrrun", "inappagentruns",
 ])
 
 # Patterns that indicate a lookup by a unique global key (publicKey, email, etc.)
@@ -88,7 +100,36 @@ _GLOBAL_KEY_PATTERNS: list[re.Pattern] = [
 _AUTH_CONTEXT_PATTERNS: list[re.Pattern] = [
     re.compile(r"verifyAuth|authenticate|getAuth|findApiKey|findUser"),
     re.compile(r"ApiAuthService|verifySecretKey|verifyPassword"),
+    re.compile(r"verifyProject\w*Auth|verifyOrg\w*Auth"),
 ]
+
+# Scope-helper-function calls: where clause passes projectId/orgId to a helper.
+# E.g.: AND: [{ id }, visibleModelsWhere(projectId)], params.projectId
+_SCOPE_HELPER_RE = re.compile(
+    r"\b\w+Where\s*\(\s*(?:[^)]*\b(?:" + "|".join(re.escape(f) for f in _SCOPE_FIELDS) + r")\b)"
+    + r"|\b(?:" + "|".join(re.escape(f) for f in _SCOPE_FIELDS) + r")\b\s*\)"
+)
+
+# Prior-ownership-check pattern: a findFirst/findUnique/findMany within the
+# preceding N lines that has a scope field in its where clause.
+# Covers three patterns:
+#   1. fetch-verify-mutate: findFirst({where:{id,projectId}}) → update({where:{id}})
+#   2. fetch-loop-update: findMany({where:{projectId}}).map(r => update({where:{id:r.id}}))
+#   3. include-then-iterate: findFirst({where:{orgId}, include:{X:true}}) → update X by id
+_PRIOR_OWNERSHIP_RE = re.compile(
+    r"\.(findFirst|findUnique|findMany)\s*\(\s*\{[^)]{0,600}where\s*:\s*\{[^)]*\b(?:"
+    + "|".join(re.escape(f) for f in _SCOPE_FIELDS)
+    + r")\b",
+    re.DOTALL,
+)
+
+# Scope-field-in-context: if a scope field is declared as a variable or
+# parameter within the prior function body, the function is scope-aware.
+# The id-only mutation is then PLAUSIBLE (needs manual review) not CONFIRMED.
+# Pattern: projectId/orgId used as a destructured var, param, or assignment.
+_SCOPE_VAR_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(f) for f in _SCOPE_FIELDS) + r")\b\s*[,;:=\)]",
+)
 
 # Path fragments that indicate non-production code (seeds, tests, migrations, CLIs)
 # These are intentionally unscoped and should not be flagged as isolation failures.
@@ -99,20 +140,74 @@ _EXEMPT_PATH_FRAGMENTS = frozenset([
     "scripts/",
     "/cli/", "/bin/",
     "fixtures/", "mock/", "mocks/",
+    "initialize.ts",          # server startup / admin init code
+    # Scheduler/maintenance workers that legitimately query across projects/orgs
+    "schedule.ts",
+    "integrity-runner", "integrityrunner",
+    "batch-data-retention-cleaner",
+    "clickhousereadskipcache",
+    "trace-delete-batch-action-runner",
+    "batchactionrunner",
 ])
 
 
+# where: <varName>  — where clause passed as a variable reference
+_WHERE_VAR_REF = re.compile(r"where\s*:\s*([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s*[,}])", re.DOTALL)
+
+
 def _extract_where_block(call_text: str) -> str:
-    """Extract the content of the where: {} block from a Prisma call."""
-    m = _WHERE_BLOCK.search(call_text)
-    return m.group(1) if m else ""
+    """
+    Extract the content of the where: {...} block from a Prisma call.
+    Uses a balanced-brace scan so nested relation filters
+    (AND/OR/include chains) are handled correctly.
+    Returns empty string if where clause is a variable reference.
+    """
+    m = _WHERE_START.search(call_text)
+    if not m:
+        return ""
+    # m.end() points to the char after the opening `{`
+    start = m.end()
+    depth = 1
+    pos = start
+    while pos < len(call_text) and depth > 0:
+        ch = call_text[pos]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        pos += 1
+    # content is everything between the opening { and closing }
+    return call_text[start : pos - 1]
+
+
+def _get_where_var_name(call_text: str) -> str:
+    """Return the variable name if where clause is a bare var ref, else ''."""
+    m = _WHERE_VAR_REF.search(call_text)
+    if not m:
+        return ""
+    name = m.group(1)
+    # Skip if it looks like a keyword or object key
+    if name in ("null", "undefined", "true", "false"):
+        return ""
+    return name
+
+
+# Prisma compound unique key pattern: `projectId_queueId_userId` — the
+# compound unique index field whose name begins with a scope field.
+_COMPOUND_SCOPE_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(f) for f in _SCOPE_FIELDS) + r")_\w+"
+)
 
 
 def _has_scope_field(where_text: str) -> bool:
-    return bool(_SCOPE_FIELD_RE.search(where_text))
+    return bool(
+        _SCOPE_FIELD_RE.search(where_text)
+        or _COMPOUND_SCOPE_RE.search(where_text)
+        or _SCOPE_HELPER_RE.search(where_text)
+    )
 
 
-def _extract_call_window(lines: list[str], start: int, max_lines: int = 15) -> str:
+def _extract_call_window(lines: list[str], start: int, max_lines: int = 30) -> str:
     """
     Extract a multi-line call starting at start.
     Walks forward until braces balance or max_lines is reached.
@@ -176,12 +271,14 @@ class SourceIsolationChecker:
         op_type: str,
         where_text: str,
         context_lines: str,
+        prior_context: str = "",
+        is_auth_file: bool = False,
     ) -> tuple[str, str]:
         """Return (severity, note) for a detected Prisma call."""
         model_lower = model.lower()
 
-        # Auth-context lookup: not a data access concern
-        if any(p.search(context_lines) for p in _AUTH_CONTEXT_PATTERNS):
+        # Auth file or context lookup: not a data access concern
+        if is_auth_file or any(p.search(context_lines) for p in _AUTH_CONTEXT_PATTERNS):
             return "INFO", "auth-context lookup"
 
         # Global models don't require project scoping
@@ -194,15 +291,29 @@ class SourceIsolationChecker:
 
         # No where clause extracted at all
         if not where_text.strip():
+            # empty-where deleteMany on non-global model is still suspicious
+            if op_type in ("deleteMany", "updateMany"):
+                return "PLAUSIBLE", "empty where clause on bulk op — verify scope filter"
             return "PLAUSIBLE", "where clause not statically extractable"
 
         # Has a recognized scope field → clean
         if _has_scope_field(where_text):
             return None, ""  # clean, not a finding
 
+        # Prior-ownership-check pattern: a scoped findFirst/findUnique/findMany
+        # in the preceding ~50 lines means this id-only mutation is safe.
+        if prior_context and _PRIOR_OWNERSHIP_RE.search(prior_context):
+            return "INFO", "id-only mutation after prior scoped ownership check"
+
         # Only an `id:` field in the where clause
         id_only = re.match(r"\s*id\s*:[^,}]+$", where_text.strip())
         if id_only:
+            # Scope variable in broader function context → downgrade to PLAUSIBLE.
+            # The function is scope-aware but the checker can't prove ownership
+            # statically (e.g. worker job context, nested include, ID derived from
+            # scope field).  Needs manual review.
+            if prior_context and _SCOPE_VAR_RE.search(prior_context):
+                return "PLAUSIBLE", "id-only clause but scope field present in context — verify ownership path"
             return "CONFIRMED", "id-only where clause — no org/project scope"
 
         # Has some fields but none are scope fields
@@ -211,7 +322,13 @@ class SourceIsolationChecker:
     def _is_exempt(self, path: Path) -> bool:
         """Return True for test, seed, migration, and CLI files."""
         rel = self.ctx.rel(path).replace("\\", "/").lower()
-        return any(frag in rel for frag in _EXEMPT_PATH_FRAGMENTS)
+        return any(frag.lower() in rel for frag in _EXEMPT_PATH_FRAGMENTS)
+
+    _AUTH_FILE_RE = re.compile(r"verify\w*[Aa]uth|[Aa]uth\w*[Ss]ervice|[Aa]uth[Mm]iddle")
+
+    def _is_auth_file(self, rel: str) -> bool:
+        """Return True if the file is an auth-infrastructure module."""
+        return bool(self._AUTH_FILE_RE.search(rel))
 
     def _scan_file(self, path: Path) -> list[IsolationFinding]:
         if self._is_exempt(path):
@@ -221,6 +338,7 @@ class SourceIsolationChecker:
             return []
         lines = text.splitlines()
         rel = self.ctx.rel(path)
+        is_auth_file = self._is_auth_file(rel)
         findings: list[IsolationFinding] = []
 
         for i, line in enumerate(lines):
@@ -234,13 +352,49 @@ class SourceIsolationChecker:
             call_window = _extract_call_window(lines, i)
             where_text = _extract_where_block(call_window)
 
+            # If where is a variable reference (where: varName), follow it
+            # backward to find its definition and extract scope fields from there.
+            if not where_text.strip():
+                var_name = _get_where_var_name(call_window)
+                if var_name:
+                    # Scan backward up to 200 lines for the variable assignment
+                    back_start = max(0, i - 200)
+                    back_text = "\n".join(lines[back_start:i])
+                    # Look for: const/let varName = { ... } or varName = { ... }
+                    var_assign = re.compile(
+                        r"\b" + re.escape(var_name) + r"\b.*?\{",
+                        re.DOTALL,
+                    )
+                    am = var_assign.search(back_text)
+                    if am:
+                        # Extract the block starting from the {
+                        start_idx = am.end() - 1
+                        depth_v = 1
+                        pos_v = start_idx + 1
+                        while pos_v < len(back_text) and depth_v > 0:
+                            if back_text[pos_v] == "{":
+                                depth_v += 1
+                            elif back_text[pos_v] == "}":
+                                depth_v -= 1
+                            pos_v += 1
+                        where_text = back_text[start_idx + 1 : pos_v - 1]
+
             # Context: lines around the call for auth-pattern detection
             ctx_start = max(0, i - 5)
             ctx_end = min(len(lines), i + 20)
             context_lines = "\n".join(lines[ctx_start:ctx_end])
 
+            # Prior context: up to 200 lines back for ownership-check detection.
+            # Long functions (workers, tRPC routers) do scoped fetches far
+            # above the mutation.
+            prior_start = max(0, i - 200)
+            prior_context = "\n".join(lines[prior_start:i])
+
             operation = f"prisma.{model}.{op_type}"
-            severity, note = self._classify(model, op_type, where_text, context_lines)
+            severity, note = self._classify(
+                model, op_type, where_text, context_lines, prior_context,
+                is_auth_file=is_auth_file,
+            )
 
             if severity is None:
                 continue  # clean
