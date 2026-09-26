@@ -10,7 +10,7 @@ Combined with with Claude Code or OpenAI Codex, it transforms into a fully auton
 
 ![Codex demo](assets/codex-demo.gif)
 
-## The Core Capabilities
+## Capabilities
 
 **Semantic Search via BERT:** Semantic search finds results based on meaning rather than exact keywords. BERT reads text and figures out what it means. Similar meanings get similar scores, so you can search by concept instead of exact words. By combining the two, it speeds up the main bottleneck of reverse engineering while finding the vulnerable functions.
 
