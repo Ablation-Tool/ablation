@@ -520,3 +520,30 @@
 - web/src/admin/enterprise/EnterpriseLicenseListPage.ts (full): CLEAN — name/expiry as text nodes; internalUsers/externalUsers as numbers in msg(str`...`); installID in encoded URL (encodeURIComponent/encodeURI + href attribute binding)
 - web/src/admin/outposts/OutpostHealthList.ts (full): CLEAN — hostname/version/buildHash/versionShould as text nodes in msg(str`...`)
 - web/src/admin/outposts/OutpostViewPage.ts (full): CLEAN — outpost.name/serviceConnectionObj.name as text nodes; outpostTypeToLabel() enum map; tokenIdentifier in .identifier property binding; document.location.origin in value= attribute binding
+
+### Deep Reads — TypeScript individual file reads (pass 5w — 2026-09-26)
+- web/src/admin/stages/invitation/InvitationListPage.ts (full): CLEAN — item.name text node; createdBy.username/name text nodes in <a>; expires.toLocaleString() text; expanded row delegates to ak-stage-invitation-list-link
+- web/src/admin/stages/invitation/InvitationListLink.ts (full): CLEAN — renderLink(): URL constructed from window.location + flow.slug (API) + invitation.pk; rendered as value= attribute on <input readonly type="text">, not as href navigation
+- web/src/admin/users/UserAgentList.ts (full): CLEAN — item.name/username text nodes; expires.toLocaleString() in pf-tooltip .content property binding (not innerHTML)
+- web/src/admin/users/UserApplicationTable.ts (full): CLEAN — item.name/metaPublisher/group/providerName text nodes; item.launchUrl in href attribute (DomainlessURLValidator backend rejects javascript:); metaIconUrl in ak-app-icon
+- web/src/admin/users/UserCredentialsTab.ts (full): CLEAN — pure composition; delegates to child components via attribute/property bindings; user.username/email/pk in attribute bindings only
+- web/src/admin/users/UserTokenList.ts (full): CLEAN — item.identifier text node; managed for hardcoded msg() label; formatIntentLabel() enum map; Timestamp() for dates
+- web/src/admin/users/UserDevicesTable.ts (full): CLEAN — item.name text node; deviceTypeName() label function; item.extraDescription and item.externalId as text nodes; all Lit text node interpolations
+- web/src/admin/users/UserRolesTab.ts (full): CLEAN — pure composition; delegates to ak-related-role-table via property bindings
+- web/src/admin/users/UserApplicationsTab.ts (full): CLEAN — pure composition; delegates to ak-user-application-table via .user property binding
+- web/src/admin/users/UserForm.ts (full): CLEAN — all user fields via ak-text-input/ak-switch-input/ak-radio-input; targetGroup.name/targetRole.name in msg(str`...`) text nodes in success message
+- web/src/elements/user/SessionList.ts (full): CLEAN — lastIp text node; UA family/OS strings user-controlled but rendered via Lit text node (HTML-escaped); formatLocation() city/country joined as text node; getUnicodeFlagIcon() returns Unicode emoji (not HTML); typed delete
+- web/src/elements/user/UserConsentList.ts (full): CLEAN — application.name text node; permissions.split(' ').map → ak-chip text nodes; typed bulk delete
+- web/src/elements/user/UserReputationList.ts (full): CLEAN — item.identifier/ip/score text nodes; getUnicodeFlagIcon() Unicode emoji; Timestamp() for dates
+- web/src/admin/tokens/TokenForm.ts (full): CLEAN — all fields via ak-text-input/ak-switch-input; user.name in html`${user.name}` text node in ak-search-select description; dateTimeLocal() in input value= attribute
+- web/src/admin/sources/SourceViewPage.ts (full): CLEAN — dispatcher; source.component in switch with all known cases; default fallback renders as text node html`<p>Invalid source type ${source.component}</p>`; source.slug in attribute bindings to child components
+- web/src/admin/sources/ldap/LDAPSourceViewPage.ts (full): CLEAN — source.name/serverUri/baseDn as text nodes in renderDescriptionList(); source.enabled for status label; sync status delegated to child component
+- web/src/admin/sources/oauth/OAuthSourceViewPage.ts (full): CLEAN — source.name/callbackUrl/consumerKey/authorizationUrl/accessTokenUrl all rendered as html`${value}` text nodes in renderDescriptionList() cells (NOT as href attributes); ProviderToLabel() is a hardcoded enum string map
+- web/src/admin/roles/ak-role-list.ts (full): CLEAN — item.name text node in <a>; href via toAdminInterface(); aria-label via msg(str`...`)
+- web/src/admin/roles/ak-role-view.ts (full): CLEAN — targetRole.name in renderDescriptionList() as plain string (text); setPageDetails() with msg(str`...`)
+- web/src/admin/sources/saml/SAMLSourceViewPage.ts (full): CLEAN — source.name/ssoUrl/sloUrl/urlIssuer all text nodes in <div> cells; metadata.metadata in ak-codemirror value attribute; metadata.downloadUrl in <a href> (server-generated read-only URL, not user-editable)
+- web/src/admin/sources/scim/SCIMSourceViewPage.ts (full): CLEAN — source.name/slug text nodes; source.rootUrl in <input readonly value=...> attribute (not href); source.tokenObj.identifier in ak-token-copy-button identifier= attribute
+- web/src/admin/sources/plex/PlexSourceViewPage.ts (full): CLEAN — source.name text node; policy bindings delegated to BoundPoliciesList; form modal for edit
+- web/src/admin/sources/telegram/TelegramSourceViewPage.ts (full): CLEAN — source.name/botUsername text nodes; form modal for edit; policy bindings delegated
+- web/src/admin/sources/kerberos/KerberosSourceViewPage.ts (full): CLEAN — source.name/realm text nodes; ak-mdx .url=${MDSourceKerberosBrowser} is hardcoded static bundled MDX import (URL mode, not user data); DOMPurify applies
+- web/src/admin/providers/proxy/ProxyProviderViewPage.ts (full): CLEAN — provider.name text node; provider.externalHost in <a href> AND as text node (admin-configured, DomainlessURLValidator backend rejects javascript:); provider.clientId in <pre> text node; redirectUris.matchingMode/url as text nodes; renderConfig() uses hardcoded static MDX imports + replacers with URL-parsed hostname (DOMPurify in ak-mdx)
