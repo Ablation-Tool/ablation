@@ -737,3 +737,24 @@ Also confirmed: JSON.stringify(item.attributes) in `<pre>` text nodes in SCIMSou
 - web/src/admin/sources/telegram/TelegramSourceForm.ts: CLEAN — all fields in value= inputs including botUsername
 - web/src/admin/sources/telegram/TelegramSourceViewPage.ts: CLEAN — name/botUsername text nodes; slug/pk in element attrs
 - web/src/admin/sources/telegram/TelegramSourceFormHelpers.ts: CLEAN — pure data helper
+
+### Deep Reads — TypeScript individual file reads (pass 5ag — 2026-09-26)
+**Directory: web/src/admin/property-mappings/ (19 files, all CLEAN)**
+
+Key pattern: most source-specific mapping forms (12 of 19) are API-endpoint-only subclasses of BasePropertyMappingForm — no custom rendering.
+
+Notable: `PropertyMappingTestForm.ts` — `result.result` (expression evaluator output) displayed in ak-codemirror value= (readonly) and `<pre>` text node — both safe, server-side evaluated value.
+
+- PropertyMappingListPage.ts: CLEAN — item.name/verboseName text nodes; item.component in IconEditButtonByTagName (StrictUnsafe); item.pk in attrs
+- BasePropertyMappingForm.ts: CLEAN — instance.name/expression in value= attr bindings; docLink() hardcoded
+- PropertyMappingTestForm.ts: CLEAN — user.username/group.name as strings; YAML.stringify(context) in ak-codemirror value=; result.result in readonly ak-codemirror and <pre> text node
+- PropertyMappingNotification.ts: CLEAN — API endpoints only
+- ak-property-mapping-wizard.ts: CLEAN — wizard factory
+- PropertyMappingProviderGoogleWorkspaceForm.ts: CLEAN — API endpoints only
+- PropertyMappingProviderMicrosoftEntraForm.ts: CLEAN — API endpoints only
+- PropertyMappingProviderRACForm.ts: CLEAN — name/username/password in value= bindings; static radio options; expression in ak-codemirror value=
+- PropertyMappingProviderRadiusForm.ts: CLEAN — API endpoints only
+- PropertyMappingProviderSAMLForm.ts: CLEAN — samlName/friendlyName in value= bindings
+- PropertyMappingProviderSCIMForm.ts: CLEAN — API endpoints only
+- PropertyMappingProviderScopeForm.ts: CLEAN — scopeName/description in value= bindings
+- PropertyMappingSourceKerberosForm.ts through PropertyMappingSourceTelegramForm.ts: all CLEAN — API endpoints only, inheriting BasePropertyMappingForm
