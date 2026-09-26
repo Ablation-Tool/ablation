@@ -638,6 +638,18 @@ CLEAN = [
     "web/src/admin/users/UserForm.ts — all user fields via ak-text-input component bindings; no unsafeHTML",
     "web/src/admin/events/EventListPage.ts — row() fields as Lit text nodes; item.pk numeric in URL; renderEventUser() in utils.ts",
     "web/src/admin/events/utils.ts — renderEventUser(): username Lit text node; URLs via toAdminInterface(); device.name via msg(str); device.pk UUID in URL path",
+    # Pass 5n TypeScript reads
+    "web/src/admin/applications/ApplicationForm.ts — all fields via ak-text-input/ak-slug-input components; typed API calls; navigate() for redirect",
+    "web/src/admin/flows/FlowForm.ts — all fields via ak-text-input/ak-slug-input; designation from FlowDesignationEnum hardcoded options; typed API calls",
+    "web/src/admin/groups/ak-group-form.ts — group.name in DualSelectPair as Lit text node; form fields via ak-text-input/ak-switch-input; typed API calls",
+    "web/src/admin/providers/ldap/LDAPProviderForm.ts — thin state wrapper; rendering delegated to LDAPProviderFormForm.ts; typed API calls",
+    "web/src/user/LibraryApplication/CardHeader.ts — application.name as Lit text node; no injection",
+    "web/src/user/LibraryApplication/CardMenu.ts — metaPublisher/truncatedDescription Lit text nodes; editURL admin-constructed in <a href>",
+    "web/src/user/LibraryPage/ApplicationList.ts — groupLabel text node; application.pk as key; delegates to LibraryAppRow/AKLibraryApp",
+    "web/src/user/LibraryApplication/index.ts — launchUrl in <a href>: admin-configured, validated by DomainlessURLValidator (rejects javascript:); metaIconUrl in ak-app-icon (img src); name/description as text nodes",
+    "web/src/user/user-settings/UserSettingsPage.ts — component bindings; configureUrl in attribute position; currentUser.pk/username in attribute bindings",
+    "web/src/elements/user/UserConsentList.ts — application.name/permissions (scope strings) Lit text nodes; typed delete API",
+    "web/src/elements/user/SessionList.ts — lastIp/location/device Lit text nodes; getUnicodeFlagIcon() returns Unicode emoji (not HTML); typed delete API",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
