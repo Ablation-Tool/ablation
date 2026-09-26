@@ -682,9 +682,10 @@ FINDINGS = {
         "status": "ELIMINATED (sweep complete — no high-severity network-reachable finding)",
         "evidence": {
             "rm_rf_callers": "All 8 callers pass hardcoded /tmp/ paths — ELIMINATED",
-            "more_waf": (
-                "0xfd857: 'more %s' with vsname embedded in path — stored injection PLAUSIBLE "
-                "but requires admin CLI access + CMDB name accepts ';'; not filed (admin-only, constrained)"
+            "more_waf_ELIMINATED": (
+                "0xfd857: system('more %s') where %s = '/var/log/vs/<vsname>/waf_blocked_ip'. "
+                "vsname = VS name from CMDB validated by is_valid_host_name → [A-Za-z0-9_-]. "
+                "system() invokes real shell but vsname cannot contain shell metacharacters. ELIMINATED."
             ),
             "strcpy": "0x54dc7: cmp eax,0xfff length guard before call; dest ~0x1000B — ELIMINATED",
             "wordexp": "WRDE_NOCMD flag set; $(cmd) blocked; glob-only residual risk LOW",
@@ -694,21 +695,31 @@ FINDINGS = {
     # ── libstdext.so — fadcsystem definition ──────────────────────────────────
     # fadcsystem (0x3060): xor esi, esi; jmp PLT[18]=fadcsystem_envp (0x3010)
     # fadcsystem_envp (0x3010): parse_command_line(cmd) → execute_command(parsed, envp)
-    #   → posix_spawnp (PLT import from glibc). No shell involved.
+    #   → posix_spawn + file-actions (NOT shell; I/O redirects implemented via dup2).
+    # parse_redirect_path (0x2560): parses '<','>', '>>', '2>', '&>' only.
+    #   Byte comparisons at 0x2595 ('"'), 0x259a ("'"), 0x25b4 ('2'), 0x25b9 ('&'), 0x25be ('>'), 0x25d9 ('<').
+    #   NO handling of ';', '|', '&&', '||', '$(...)', backtick, '$VAR'. Shell metacharacters → literal argv.
+    # fm_redirect (0x3800): implements I/O redirect as posix_spawn_file_actions (open+dup2).
+    # PLT imports for libstdext.so: posix_spawnattr_*, posix_spawn_file_actions_*, no system().
     # This CONFIRMS FAD_P2 injection ELIMINATED: fadcsystem("rm %s/%s", ...) passes the
     #   full path as argv[1] to rm — shell metacharacters have no effect.
     # Path traversal (coredump-../../etc/shadow) still works as rm follows the resolved path.
     # Also defines: fadcpopen/fadcpopen_internal (popen variants via fork+pipe+exec),
-    #   execute_command (direct posix_spawnp), fm_exec_cli, fm_popen_pipe.
+    #   execute_command (direct posix_spawn), fm_exec_cli, fm_popen_pipe.
     # No system() usage anywhere in libstdext.so.
 
     "LIBSTDEXT_fadcsystem": {
         "binary": "libstdext.so",
-        "status": "ANALYZED — fadcsystem = parse_command_line → posix_spawnp (no shell)",
+        "status": "ANALYZED — fadcsystem = parse_command_line + parse_redirect_path → posix_spawn+file_actions (no shell)",
         "evidence": {
-            "fadcsystem_0x3060": "xor esi,esi; jmp PLT[18]=fadcsystem_envp",
-            "fadcsystem_envp_0x3010": "parse_command_line(0x2280) → execute_command(0x2340) → posix_spawnp",
-            "plt_imports": "posix_spawnp, fork, execvp, setuid, setgid (no system())",
+            "fadcsystem_0x3060": "xor esi,esi; jmp fadcsystem_envp(0x3010). Redirect-capable, no shell.",
+            "fadcsystem_envp_0x3010": "parse_command_line(0x2280) → parse_redirect_path(0x2560) → execute_command(0x2340) → posix_spawn",
+            "parse_redirect_path_0x2560": (
+                "Handles '<','>'(byte 0x3c/0x3e via &0xfd mask), '2>'(0x32+0x3e), '&>'(0x26+0x3e), quoted strings. "
+                "Does NOT handle ';','|','&&','||','$()','`','$VAR'. Shell metacharacters pass as literal argv tokens."
+            ),
+            "fm_redirect_0x3800": "Implements I/O redirects as posix_spawn_file_actions (open+dup2 before exec).",
+            "plt_imports": "posix_spawnattr_*, posix_spawn_file_actions_*, no system()",
             "fad_p2_confirms": "shell injection ELIMINATED; path traversal still active via rm argv[1]",
         },
     },
@@ -1566,22 +1577,34 @@ FINDINGS = {
 
     "HTTPROXY3_profile": {
         "binary": "httproxy3",
-        "status": "ANALYZED COMPLETE — FAD_H1/FAD_H2 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); HAProxy re-exec ELIMINATED; fadcsystem_envp ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_H1/FAD_H2/filter_sessions ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawn+file-actions NOT shell); HAProxy re-exec ELIMINATED; fadcsystem_envp ELIMINATED",
         "evidence": {
+            "fadcsystem_redirect_mechanism": (
+                "KEY: fadcsystem (libstdext.so 0x3060) → 0x2140 (PLT fadcsystem_envp inner). "
+                "Imports parse_redirect_path (0x2560) and fm_redirect (0x3800) from libstdext.so itself. "
+                "parse_redirect_path: byte comparisons for '<'(0x3c),'>'(0x3e),'2>'(0x32 0x3e),'&>'(0x26 0x3e) ONLY. "
+                "Redirects implemented as posix_spawn file-actions (open+dup2), NOT via shell. "
+                "No shell metacharacters (;|&&$()`) handled — shell injection impossible through fadcsystem/sys_vdom_exec path."
+            ),
             "fad_h1_0x2b9563_ELIMINATED": (
                 "merge_fngx_session_table: snprintf(r8='cat /etc/fnginx_new/%s/sessions/* >> %s 2>/dev/null', "
                 "r9=VS_name, stack=outfile) → sys_vdom_exec(rdi, cmd). "
-                "ELIMINATED: sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem = posix_spawnp. "
-                "'>>' '2>/dev/null' are literal argv tokens; VS name is a plain arg to 'cat'. NOT shell injection."
+                "ELIMINATED: sys_vdom_exec (libbase.so 0x1ce80) calls fadcsystem. "
+                "'>>' handled as posix_spawn file-action redirect; '2>/dev/null' as stderr redirect. "
+                "VS name [A-Za-z0-9_-] — no shell metacharacters. NOT shell injection."
             ),
             "fad_h2_0x2b9459_ELIMINATED": (
                 "merge_httproxy_vs_session_table: builds '/var/log/vs/%s/%s.%d.sess', stat() check, "
-                "'cat <session_path> >> <outfile>' via sys_vdom_exec. "
-                "ELIMINATED: same sys_vdom_exec→posix_spawnp path; shell operators not interpreted."
+                "'cat <session_path> >> <outfile>' via sys_vdom_exec → fadcsystem. "
+                "ELIMINATED: same fadcsystem posix_spawn+file-action path; no shell."
             ),
-            "filter_sessions_table_4": (
-                "0x2b9a45/0x2bac0d/0x2bb9c5/0x2bc735: 'cat /proc/net/ip_vs_{session,persist}[_gui] >> %s'. "
-                "Source = hardcoded kernel /proc paths. Output = r13 stack buffer (origin pending trace). PLAUSIBLE LOW."
+            "filter_sessions_table_4_ELIMINATED": (
+                "0x2b9a45/0x2bac0d/0x2bb9c5/0x2bc735: 'cat %s >> %s' "
+                "where format='cat %s >> %s' (r8=0x2e4900), first %s=r9='/proc/net/ip_vs_session' (hardcoded .rodata), "
+                "second %s=r13=snprintf(r13, 0x80, '/var/log/vs/%s/session_table', VS_name) @ 0x2b9766. "
+                "Source: hardcoded /proc kernel paths. Dest: '/var/log/vs/<VS_name>/session_table' "
+                "where VS_name validated [A-Za-z0-9_-]. Via sys_vdom_exec→fadcsystem posix_spawn+file-action. "
+                "No shell injection. ELIMINATED."
             ),
             "execvp_3_ELIMINATED": (
                 "0x20593c/0x2a563f: HAProxy master worker re-exec via HAPROXY_MWORKER_REEXEC/WAIT_ONLY env. "
@@ -1898,9 +1921,11 @@ FINDINGS = {
             ),
             "upgrade_sh_eval_LOW": (
                 "upgrade.sh lines 24/37: cmd='stat -c %Y $var'; eval $cmd. "
-                "$var = filename from ls *synflood*/*ddos* in /var/log/logrpt. "
-                "If attacker can create file named '$(cmd)' in /var/log/logrpt → cmd injection. "
-                "Requires write access to /var/log/logrpt (admin/root). PLAUSIBLE LOW."
+                "$var = filename from ls *synflood*/*ddos* in /var/log/logrpt/<dirname>/. "
+                "Additional sink at line 41: cat tf2 | awk '{print \"mv \"$1\" \"NR\".ddos.alog\"}' | sh — "
+                "$1 = filename from same ls output, piped to /bin/sh. "
+                "If attacker creates file named 'x;cmd' in /var/log/logrpt/* → eval+sh injection. "
+                "Requires write to /var/log/logrpt/ (admin/root-only dir). PLAUSIBLE LOW."
             ),
             "fad_s1_saml_sp_metadata_ELIMINATED": (
                 "saml_sp_metadata.sh: ENTITY_ID from admin SAML SP CMDB. "
