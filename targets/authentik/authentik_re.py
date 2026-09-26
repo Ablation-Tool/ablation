@@ -1402,16 +1402,52 @@ CLEAN = [
     "web/src/admin/flows/FlowListPage.ts — href=${toAdminInterface(`flow/flows/${item.slug}`)} slug in path; window.open(url) uses window.location.origin as base (same-origin scheme); CLEAN",
     "web/src/admin/flows/FlowViewPage.ts — same patterns as FlowListPage; link.link from flowsInstancesExecuteRetrieve() is build_absolute_uri(reverse(...)) (always HTTP/HTTPS); CLEAN",
     "web/src/components/ak-user-switcher.ts — window.location.assign(redirect) where redirect is server-generated (coreUsersSwitchCreate); user.avatar in <img src> (no JS exec); user names as text nodes; CLEAN",
+    # pass 5at — profile 10 (href_binding + user_data) individual reads — 2026-09-26
+    "web/src/admin/agents/AgentListPage.ts — href=${toAdminInterface(`identity/users/${item.parent.pk}`)} PK path; agent names as text nodes; CLEAN",
+    "web/src/admin/applications/ApplicationListPage.ts — href=${toAdminInterface(slug/PK)}; item.launchUrl gated by DomainlessFormattedURLValidator at model layer (blocks javascript:); item.name/slug as text nodes; CLEAN",
+    "web/src/admin/applications/ApplicationViewPage.ts — same patterns as ApplicationListPage; this.application.launchUrl same DomainlessFormattedURLValidator gate; CLEAN",
+    "web/src/admin/blueprints/BlueprintListPage.ts — href=${docLink(hardcoded)} only; <ak-mdx .content=${description}> through DOMPurify (BrandedHTMLPolicy); item.path in <pre> text node; CLEAN",
+    "web/src/admin/crypto/CertificateKeyPairListPage.ts — href=${certificateDownloadUrl} and href=${privateKeyDownloadUrl}: both Django FileSystemStorage/S3Boto3Storage URLs (always HTTP/HTTPS, admin-only); CLEAN",
+    "web/src/admin/endpoints/connectors/ConnectorsListPage.ts — href=${toAdminInterface(`endpoint/endpoints/${item.pk}`)} UUID path; IconEditButtonByTagName(item.component, item.pk) triple-guard; CLEAN",
+    "web/src/admin/endpoints/devices/DeviceListPage.ts — href=${toAdminInterface(UUID)}; names in msg(str`...`) (i18n text node); hardcoded mailto: href; CLEAN",
+    "web/src/admin/enterprise/EnterpriseLicenseListPage.ts — installURL() builds 'https://customers.goauthentik.io/...' + encodeURIComponent(installID) + encodeURI(origin); href=${docLink(hardcoded)}; CLEAN",
+    "web/src/admin/events/EventListPage.ts — PK path via toAdminInterface; delegates event cell rendering to events/utils.ts (CLEAN); CLEAN",
+    "web/src/admin/events/RuleListPage.ts — href=${toAdminInterface(`event/rules/${item.pk}`)} PK path; group/rule names as text nodes; CLEAN",
+    "web/src/admin/files/FileListPage.ts — href=${item.url} where item.url is admin-only backend-generated media/S3 URL (always HTTP/HTTPS); href=${docLink(hardcoded)}; CLEAN",
+    "web/src/admin/groups/GroupListPage.ts — href=${toAdminInterface(`identity/groups/${item.pk}`)} PK path; group names as text nodes; CLEAN",
+    "web/src/admin/groups/GroupViewPage.ts — href=${toAdminInterface(role PK paths)}; <ak-mdx .content=${group.attributes.notes}> through DOMPurify; user names as text nodes; CLEAN",
+    "web/src/admin/groups/RelatedUserList.ts — href=${toAdminInterface(`identity/users/${item.pk}`)} PK path; user/group/role names as text nodes and in msg(str`...`); CLEAN",
+    "web/src/admin/lifecycle/ReviewListPage.ts — href=${ifDefined(translateHashRoute(`#${item.objectAdminUrl}`) ?? undefined)}: translateHashRoute returns null for non-matching routes → ifDefined(null??undefined)=no href attribute; CLEAN",
+    "web/src/admin/outposts/OutpostListPage.ts — href=${toAdminInterface(PK paths)}; outpost names as text nodes; authentik_host in msg(str`...`); CLEAN",
+    "web/src/admin/outposts/OutpostViewPage.ts — href=${docLink(hardcoded)} only; document.location.origin in read-only input value attribute (not href); CLEAN",
+    "web/src/admin/outposts/OutpostProviderList.ts — href=${toAdminInterface(PK/slug paths)}; provider/application names as text nodes; CLEAN",
+    "web/src/admin/property-mappings/BasePropertyMappingForm.ts — href=${docLink(this.docLink)} where this.docLink is a hardcoded class field string constant; form field value attribute bindings; CLEAN",
+    "web/src/admin/providers/ProviderListPage.ts — href=${toAdminInterface(slug/PK paths)}; names/verboseNames as text nodes; IconEditButtonByTagName(item.component) triple-guard; CLEAN",
+    "web/src/admin/providers/saml/SAMLProviderViewPage.ts — href=${urlDownloadMetadata} server-generated SAML metadata download URL; href=${certificateDownloadUrl} Django API cert URL; SAML attributes (acsUrl/slsUrl/nameID/attr.Name/attr.Value) as text nodes or <pre> text nodes; CLEAN",
+    "web/src/admin/providers/ssf/SSFProviderViewPage.ts — href=${toAdminInterface(`core/providers/${provider.pk}`)} PK path; provider.name/ssfUrl as text nodes/input value attributes; CLEAN",
+    "web/src/admin/providers/wsfed/WSFederationProviderViewPage.ts — href=${urlDownloadMetadata} server-generated; href=${certificateDownloadUrl} Django API cert URL; WS-Fed config URLs in read-only input value attributes; SAML-style attributes as text nodes; CLEAN",
+    "web/src/admin/requests/AccessRequestListPage.ts — href=${toAdminInterface(`identity/users/${item.createdBy.pk}`)} PK path; item.createdBy.username/name as text nodes; JSON.stringify(item.requesterData) in <pre> text node (Lit HTML-escapes); obj.label/verboseName as text nodes; CLEAN",
+    "web/src/admin/roles/ak-role-list.ts — href=${toAdminInterface(`identity/roles/${item.pk}`)} PK path; item.name as text node and in aria-label attribute binding (Lit HTML-escapes attribute values); CLEAN",
+    "web/src/admin/sources/SourceListPage.ts — href=${toAdminInterface(`core/sources/${item.slug}`)} slug path; item.name/verboseName as text nodes; IconEditButtonByTagName(item.component, item.slug) triple-guard; CLEAN",
+    "web/src/admin/sources/saml/SAMLSourceViewPage.ts — source.ssoUrl/sloUrl/urlIssuer all as text nodes (not hrefs); metadata.downloadUrl backend-generated build_absolute_uri(reverse(...)); XML metadata in CodeMirror value attribute; CLEAN",
+    "web/src/admin/users/UserListPage.ts — href=${toAdminInterface(`identity/users/${item.pk}`)} PK path; item.username/name as text nodes; item.avatar in <img src> (server-generated avatar service URL); CLEAN",
+    "web/src/components/ak-file-search-input.ts — href=${docLink('/customize/file-picker/')} hardcoded; this.help (component attribute) as text node; CLEAN",
+    "web/src/components/ak-nav-tabs.ts — href=${item.link} where items is @property({attribute:false}) set only from parent developer code (hardcoded nav routes, not API data); item.label as text node; CLEAN",
+    "web/src/components/ak-page-navbar.ts — href=${toCurrentInterface()} developer path helper; href='${globalAK().api.base}if/user/' server-config HTTP/HTTPS base; this.header as text node; description is TemplateResult (Lit-managed); CLEAN",
+    "web/src/components/notifications/NotificationDrawer.ts — href=${item.hyperlink} admin-configured notification rule URL (same trust level as FileListPage item.url); href=${toAdminInterface(event PK)}; item.body as text node; event context as JSON.stringify in <pre> text node; CLEAN",
+    "web/src/flow/FormStatic.ts — href=${flowInfo.cancelUrl} Django-generated via reverse() (always HTTP/HTTPS); this.username as text node; this.avatar in <img src>; CLEAN",
+    "web/src/flow/components/ak-brand-footer.ts — href=${link.href} from admin-configured brand FooterLink[] (admin-controlled); link.name through sanitizeHTML(BrandedHTMLPolicy) DOMPurify; CLEAN",
 ]
 
 PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: pass 5as complete (profiles 8/9/11/13/14 individual reads — 48 files all CLEAN) — 2026-09-26
+# RE STATUS: pass 5at complete (profile 10 individual reads — 37 files all CLEAN) — 2026-09-26
 # Findings: 8 total (AUT-SESS-PICKLE-1 through AUT-CHANGELOG-URL-1) + AUT-LAUNCH-URL-1 ELIMINATED
 # Compressor validated: no false negatives found (insertAdjacentHTML=0, setAttribute href=0, window.location.assign all in profile 4-5)
-# Profile 11 complete (16/16 files); profile 9 complete (19/19 files); profile 8: partial; profiles 13/14: all files read
+# Profile 11 complete (16/16); profile 9 complete (19/19); profile 10 complete (37/37); profiles 8/13/14: all files read
+# NEXT: profiles 2-7 spot-checks (~226 files), profile 1 representative read (340 files), profile 0 batch-CLEAN (1329 files)
 
 
 def print_findings():
