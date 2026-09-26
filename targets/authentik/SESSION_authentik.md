@@ -1,6 +1,6 @@
 # Authentik Source RE Session
 
-## Status: COMPLETE (pass 4 — exhaustive full-codebase sweep) — 2026-09-26
+## Status: COMPLETE (pass 5 — exhaustive individual file reads) — 2026-09-26
 
 ## Target
 - Repo: https://github.com/goauthentik/authentik
@@ -108,6 +108,7 @@
 |----|----------|-------|--------|
 | AUT-SESS-PICKLE-1 | HIGH | Unsigned pickle deserialization of session data (no HMAC) | CONFIRMED |
 | AUT-TASK-PICKLE-1 | HIGH | Unsigned pickle deserialization of task queue arguments | CONFIRMED |
+| AUT-FLOWTOKEN-PICKLE-1 | HIGH | Unsigned pickle deserialization of FlowToken._plan (bare import, missed by grep) | CONFIRMED |
 | AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values | CONFIRMED |
 | AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp | CONFIRMED |
 | AUT-SAML-REFURI-1 | LOW | SAML assertion signature allows URI="" (root-element reference) | PLAUSIBLE |
@@ -120,3 +121,4 @@
 - 3aaa666: initial RE module — pass 1 (3 pickle HIGH, IPC key MEDIUM)
 - 9029d5f: pass 2 — expression/blueprint/debug/outpost coverage + AUT-SAML-REFURI-1
 - debf4ef: pass 3 — 100% attack surface coverage, exhaustive CLEAN list
+- pass 5: individual file reads across all Go + Python (ongoing); found AUT-FLOWTOKEN-PICKLE-1 (bare `from pickle import loads` in flows/models.py:353 — missed by grep sweep)
