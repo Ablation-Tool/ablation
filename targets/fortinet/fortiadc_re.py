@@ -1059,6 +1059,90 @@ FINDINGS = {
             "fork_plt": "0x8db0",
         },
     },
+
+    # ── opensips (2.5MB C PIE, SIP proxy) ─────────────────────────────────────────
+    # PLT exec sinks: fork@plt (0x188c0) only. No system/execv/fadcsystem/sys_vdom_exec.
+    # 3 fork callers: 0x36e40, 0x36e76, 0x707fc.
+    # 0x36e40 context: string 'WARNING:core:%s: pgid file %s exists...' — process management fork.
+    # Standard OpenSIPS multi-process architecture: child processes per SIP module.
+    # CLEAN for command injection.
+
+    "OPENSIPS_profile": {
+        "binary": "opensips",
+        "status": "ANALYZED — CLEAN; no exec sinks; fork = SIP worker process management",
+        "evidence": {
+            "plt_CLEAN": "No system/execv/fadcsystem/sys_vdom_exec in PLT. fork only.",
+            "fork_3": "0x36e40 (pgid/process management), 0x36e76, 0x707fc — standard SIP multi-process worker architecture. ELIMINATED.",
+        },
+    },
+
+    # ── httproxy3 (3.9MB C PIE, HTTP/3 proxy + HAProxy engine) ──────────────────
+    # PLT sinks: sys_vdom_exec(0x63ff0, 6 callers), fadcsystem_envp(0x64a80, 1), fork(0x65030, 4), execvp(0x650d0, 3).
+    # HAProxy embedded: HAPROXY_MWORKER_REEXEC/WAIT_ONLY env vars, execvp = HAProxy master worker re-exec.
+    #
+    # sys_vdom_exec callers:
+    #   FAD_H1 (0x2b9563, merge_fngx_session_table): 'cat /etc/fnginx_new/%s/sessions/* >> %s 2>/dev/null'
+    #     %s = VS name (first arg), output file (second arg). VS name → shell via sys_vdom_exec. PLAUSIBLE MEDIUM.
+    #   FAD_H2 (0x2b9459, merge_httproxy_vs_session_table): 'cat %s >> %s' where first %s is built from
+    #     '/var/log/vs/%s/%s.%d.sess' (VDOM+VS name). stat() gate: file must exist first. PLAUSIBLE LOW-MEDIUM.
+    #   0x2b9a45/0x2bac0d/0x2bb9c5/0x2bc735 (filter_sessions_table): 'cat <hardcoded_proc_file> >> %s'
+    #     Source = /proc/net/ip_vs_{session,persist}[_gui] — hardcoded. Output to r13 stack buf. PLAUSIBLE LOW.
+    #
+    # execvp callers (3): HAProxy re-exec via uwsgi_binsh() / uwsgi self-restart — ELIMINATED.
+    # fadcsystem_envp (1, 0x2bf5a1 fadc_clear_session_start): '/bin/sh %s' where %s = mkstemp path.
+    #   Template: '/tmp/hap_fadcsystem/stat_sess_persis_fadcsystem_shXXXXXX' (hardcoded, mkstemp). ELIMINATED.
+    # fork (4): worker patterns — pending analysis.
+
+    "HTTPROXY3_profile": {
+        "binary": "httproxy3",
+        "status": "ANALYZED — FAD_H1 PLAUSIBLE MEDIUM (VS name → sys_vdom_exec); FAD_H2 PLAUSIBLE LOW-MEDIUM; HAProxy re-exec ELIMINATED",
+        "evidence": {
+            "fad_h1_0x2b9563": (
+                "merge_fngx_session_table: snprintf(r8='cat /etc/fnginx_new/%s/sessions/* >> %s 2>/dev/null', "
+                "r9=VS_name, stack=outfile) → sys_vdom_exec(rdi, cmd). "
+                "First %s = VS name from CMDB (admin-set). Shell injection if VS name allows metacharacters. "
+                "PLAUSIBLE MEDIUM — same class as FAD_N1 (fnginxctld)."
+            ),
+            "fad_h2_0x2b9459": (
+                "merge_httproxy_vs_session_table: builds '/var/log/vs/%s/%s.%d.sess' (VDOM+VS+idx), "
+                "stat() check, then 'cat <session_path> >> <outfile>' via sys_vdom_exec. "
+                "stat() gate: session file must exist to trigger. PLAUSIBLE LOW-MEDIUM."
+            ),
+            "filter_sessions_table_4": (
+                "0x2b9a45/0x2bac0d/0x2bb9c5/0x2bc735: 'cat /proc/net/ip_vs_{session,persist}[_gui] >> %s'. "
+                "Source = hardcoded kernel /proc paths. Output = r13 stack buffer (origin pending trace). PLAUSIBLE LOW."
+            ),
+            "execvp_3_ELIMINATED": (
+                "0x20593c/0x2a563f: HAProxy master worker re-exec via HAPROXY_MWORKER_REEXEC/WAIT_ONLY env. "
+                "execvp(argv[0], same_argv) — self-re-exec for graceful restart. ELIMINATED."
+            ),
+            "fadcsystem_envp_0x2bf5a1_ELIMINATED": (
+                "fadc_clear_session_start: '/bin/sh <mkstemp_tempfile>'. "
+                "Template '/tmp/hap_fadcsystem/stat_sess_persis_fadcsystem_shXXXXXX' — hardcoded + mkstemp. "
+                "Script content written from daemon constants. ELIMINATED for network injection."
+            ),
+            "sys_vdom_exec_plt": "0x63ff0",
+            "fadcsystem_envp_plt": "0x64a80",
+        },
+    },
+
+    # ── uwsgi (1.3MB C PIE, WSGI server) ─────────────────────────────────────────
+    # PLT sinks: fork@plt (0x3f310, 12 callers), execvp@plt (0x3fbb0, 14 callers).
+    # execvp callers: uwsgi_binsh() returns own binary path + '-c' config arg → self re-exec. ELIMINATED.
+    # fork callers (12): standard uwsgi multi-worker process management. ELIMINATED.
+    # CLEAN for command injection.
+
+    "UWSGI_profile": {
+        "binary": "uwsgi",
+        "status": "ANALYZED — CLEAN; execvp = uwsgi self-re-exec (graceful restart); fork = worker management",
+        "evidence": {
+            "execvp_14_ELIMINATED": (
+                "execvp(uwsgi_binsh(), [bin, config, '-c', NULL]) — uwsgi master worker graceful restart. "
+                "execvp with own binary and own config. ELIMINATED."
+            ),
+            "fork_12_ELIMINATED": "Standard uwsgi multi-worker process fork. No exec in child paths traced. ELIMINATED.",
+        },
+    },
 }
 
 registry = FindingRegistry()
