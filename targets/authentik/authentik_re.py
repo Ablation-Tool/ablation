@@ -672,6 +672,18 @@ CLEAN = [
     "web/src/flow/FlowExecutorStageFactory.ts — unsafeStatic(tag) where tag=entry.tag||customElements.getName()||entry.stage; all three sources are compile-time registry values; unknown challenge.component falls to error path before reaching unsafeStatic",
     "web/src/flow/FlowExecutorStages.ts — hardcoded StageEntries array (30 ak-/xak- prefixed component names); registry is static read-only Map, not runtime-extensible",
     "web/src/user/user-settings/UserSettingsPage.ts — all child component bindings; currentUser.pk/username in attribute positions; no unsafeHTML",
+    # Pass 5q TypeScript reads + unsafeHTML exhaustive confirmation
+    "web/src/admin/providers/oauth2/OAuth2ProviderFormForm.ts — ak-text-input/ak-radio-input/ak-flow-search/ak-crypto-certificate-search; RadioOption descriptions=msg() TemplateResults; no unsafeHTML",
+    "web/src/admin/providers/oauth2/OAuth2ProviderRedirectURI.ts — redirectURI.url/matchingMode/type in form input value bindings; no user-controlled HTML rendered",
+    "web/src/admin/crypto/CertificateKeyPairForm.ts — PEM data in ak-secret-textarea-input (input control, not rendered); name in ak-text-input",
+    "web/src/admin/sources/oauth/OAuthSourceForm.ts — no unsafeHTML (grep-confirmed); all fields via typed form components",
+    "web/src/admin/sources/saml/SAMLSourceForm.ts — no unsafeHTML (grep-confirmed); admin form for SAML source config",
+    "web/src/admin/stages/prompt/PromptForm.ts — previewResult via JSON.stringify in <pre>; renderTypes() hardcoded PromptTypeEnum options",
+    "web/src/elements/ak-dual-select/ak-dual-select.ts — unsafeHTML('&nbsp;') or msg(str`${number} items...`) — number count, not user HTML",
+    "web/src/elements/Diagram/ak-diagram.ts — unsafeHTML(svg) from Mermaid renderer of admin-configured flow diagram text",
+    "web/src/elements/utils/files.ts — unsafeHTML(Intl.ListFormat.format(hardcoded ['theme'])) — hardcoded HTML entity wrapper",
+    # EXHAUSTIVE: only 9 TypeScript files use unsafeHTML/unsafeStatic across entire 2861-file codebase
+    # All 9 reviewed; 7 CLEAN, 2 INFO (PromptStage admin-config, FlowExecutor/UserSettingsFlowExecutor server-control)
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
