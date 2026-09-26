@@ -795,13 +795,34 @@ FINDINGS = {
     #     0x88074 parse_regex: dst = malloc(strlen(src)+1) immediately before strcpy.
     #       Heap allocation sized exactly for source. BOUNDED — ELIMINATED.
     #
-    # PENDING: waf_system callers (233 __snprintf_chk uses; need format-string audit for user-data paths)
-    # PENDING: SQLite3 callers (sql injection if query uses string concat)
-    # PENDING: PCRE callers (ReDoS if pattern comes from user input)
+    # RESOLVED: waf_system callers / 233 __snprintf_chk audit (session 12)
+    #   220/233: lea r8,[rip+offset] into .rodata — fixed format strings. SAFE.
+    #   13 scanner misses resolved: 10 also .rodata (scan window too narrow); 2 dead code
+    #     (waf_block_ip_merge 0xb858a: 0 callers; waf_pm_hs_add_pattern_ex 0x96625: r13
+    #     overwritten with .rodata at 0x965ec before call); 1 hex-only output ('%02x' → no '%').
+    #   waf_blk_ip_get callers (cli 0xfd7b3, libcgo 0xa55f0): both pass lea rip→.rodata fmt.
+    #   12 __vsnprintf_chk callers: waf_system SAFE (posix_spawnp); waf_chunk_printf/ex/vprintf_ex
+    #     0 callers → dead; 3 private static debug fns (0x1c2e70/0x1c7631/0x1bb901) 0 callers→dead;
+    #     waf_http_cssp_reg (0xe4fed): fmt=CSSP ctx struct ptr (admin WAF rule data, PLAUSIBLE LOW);
+    #     waf_wje_readjson (0xe760e): fmt=rdi (file logger, callers pass .rodata, PLAUSIBLE LOW);
+    #     cfg_openapi_schema_import_file (0x19e843): admin import, PLAUSIBLE LOW. ALL SAFE/PLAUSIBLE LOW.
+    # RESOLVED: SQLite3 callers (session 12)
+    #   3 callers: waf_db_read_table (0xc7c9d sqlite3_prepare_v2), waf_db_get_table_row_num_condition
+    #     (0xc7e3b sqlite3_prepare), waf_db_read_table_condition (0xc80b2 sqlite3_prepare).
+    #   All three use snprintf-built SQL: 'select * from %s where %s' and 'select count(*) from %s where %s'.
+    #   Both %s slots are caller-provided (table_name=r9/2nd-arg, condition=rdx/3rd-arg pushed to stack).
+    #   CALLERS: 0 binaries import waf_db_read_table/condition anywhere in firmware image.
+    #   VERDICT: DEAD CODE. SQL injection surface never reached at runtime. ELIMINATED.
+    # RESOLVED: PCRE callers (session 12)
+    #   pcre_compile_exp (0x92b20), pcre_match_exp (0x92ba0), pcre_match_exp_store (0x92c50),
+    #     pcre_match_exp_callback (0x92d30): all exported wrappers with 0 internal callers and
+    #     0 external importers (no binary nm-D shows U pcre_*_exp from libwaf.so).
+    #   libwaf.so uses lexertl internally (parse_regex 0x88074: lexertl::basic_rules::add()).
+    #   VERDICT: DEAD CODE. ELIMINATED.
 
     "LIBWAF_profile": {
         "binary": "libwaf.so",
-        "status": "ANALYZED COMPLETE — FAD_W1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell; libbase.so VA=0x1ce80 confirmed); all sinks ELIMINATED; SQLite exported-only dead code",
+        "status": "ANALYZED COMPLETE — FAD_W1 ELIMINATED; all sinks ELIMINATED; SQLite dead code ELIMINATED; PCRE wrappers dead code ELIMINATED; 233 __snprintf_chk ALL SAFE; 12 __vsnprintf_chk SAFE/PLAUSIBLE LOW (admin-only)",
         "evidence": {
             "waf_system_ELIMINATED": (
                 "waf_system(0xead90): variadic fmt → __vsnprintf_chk builds string → fadcsystem. "
