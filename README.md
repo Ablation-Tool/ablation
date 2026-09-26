@@ -14,7 +14,7 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ---
 
-<video src="assets/codex-demo.webm" autoplay loop muted playsinline width="100%"></video>
+![Codex demo](assets/screencast.gif)
 
 ![Claude Code demo](assets/demo.gif)
 
