@@ -71,6 +71,7 @@ PLT = {
 | FAD_AV1 | av | fadcsystem diagnostic collect 'cat /proc/meminfo >> %s' — path traversal only | PLAUSIBLE LOW |
 | FAD_H1 | httproxy3 | merge_fngx_session_table → sys_vdom_exec 'cat /etc/fnginx_new/%s/sessions/*' VS name | PLAUSIBLE MEDIUM |
 | FAD_H2 | httproxy3 | merge_httproxy_vs_session_table → sys_vdom_exec session cat with VDOM+VS in path | PLAUSIBLE LOW-MEDIUM |
+| FAD_RT1 | rtmd | brctl addbr/delbr + ifconfig up/down via sys_vdom_exec with bridge/iface name | PLAUSIBLE MEDIUM |
 
 ### FAD_R1 — Pre-auth `/debug/pprof/*` (CONFIRMED HIGH)
 - Root cause: `ginpprof.WrapGroup(engine)` at `main.main:0xdc1232` — root `*gin.Engine` passed
@@ -174,6 +175,10 @@ PLT = {
 | opensips | 2.5MB C PIE | ANALYZED | CLEAN — no exec sinks; fork only (SIP worker process mgmt) |
 | httproxy3 | 3.9MB C PIE | ANALYZED | FAD_H1 PLAUSIBLE MEDIUM (VS name sys_vdom_exec); FAD_H2 PLAUSIBLE LOW-MEDIUM (session cat stat-gated); HAProxy execvp ELIMINATED; fadcsystem_envp ELIMINATED (mkstemp script) |
 | uwsgi | 1.3MB C PIE | ANALYZED | CLEAN — execvp = uwsgi self-re-exec graceful restart; fork = worker mgmt; no cmd injection |
+| del_netdev | 14KB C PIE | ANALYZED | PLAUSIBLE LOW-MEDIUM — system('/bin/ls %s > /tmp/tmp.brg.list') with bridge name from CLI |
+| vdom | 14KB C PIE | ANALYZED | PLAUSIBLE LOW — sys_vdom_exec_safe with CLI argv appended; requires admin CLI access |
+| rtmd | 785KB C PIE | ANALYZED | FAD_RT1 PLAUSIBLE MEDIUM — brctl/ifconfig sys_vdom_exec with bridge/iface name (8 callers, same class FAD_N1) |
+| ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb | ~14KB each | ANALYZED | CLEAN — no exec PLT |
 
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
@@ -196,5 +201,6 @@ PLT = {
 - 2026-09-26 (session 2): New binaries profiled — libips.so (LuaJIT 2.1, exec sinks = builtins, 111 strcpy PENDING); libav.so (no exec sinks); libcmdb_plugin.so (9 system + 4 sys_vdom_exec PENDING); fnginxctld FAD_N1 (fngx_process_vcmd → sys_vdom_exec with VS iface/IP); vtl (SafeNet HSM + fork+system PARTIAL); flg_accessd/indexd/reportd/lb/infod/rd_mng profiled.
 - 2026-09-26 (session 3): libcmdb_plugin.so sys_vdom_exec/execve resolved — 0x9c94b/9c95a ELIMINATED (hardcoded echo flush); execve@0x79d22 ELIMINATED (fadc_popen fork child); FAD_C1 PLAUSIBLE MEDIUM: WCCP 0xb3d55 (NVGRE) + 0xb4734 (VXLAN) — snprintf(iface_name, tunnel_id, ...) → sys_vdom_exec; same class as FAD_N1.
 - 2026-09-26 (session 3): acme-client analyzed — Go 1.22.3 CGo; golang.org/x/crypto/acme; no exec PLT; no InsecureSkipVerify=true; JSON config fields extracted (url, ca, eab_kid, eab_mac_key, challenge_type, etc.); CLEAN.
+- 2026-09-26 (session 4): small utilities + rtmd — del_netdev PLAUSIBLE LOW-MEDIUM (system('/bin/ls %s > ...') with bridge name); vdom PLAUSIBLE LOW (sys_vdom_exec_safe with CLI argv); rtmd 785KB FAD_RT1 PLAUSIBLE MEDIUM: 8 sys_vdom_exec callers = brctl addbr/delbr + ifconfig up/down with bridge/iface name (same class FAD_N1); 9 utils CLEAN.
 - 2026-09-26 (session 4): opensips/httproxy3/uwsgi analyzed — opensips: fork-only CLEAN (SIP worker); httproxy3: FAD_H1 PLAUSIBLE MEDIUM (merge_fngx_session_table → sys_vdom_exec 'cat /etc/fnginx_new/<VS>/sessions/*'), FAD_H2 PLAUSIBLE LOW-MEDIUM (stat-gated session cat), filter_sessions_table PLAUSIBLE LOW (hardcoded /proc/net/ source), HAProxy execvp re-exec ELIMINATED, fadcsystem_envp ELIMINATED (mkstemp hardcoded template); uwsgi: execvp = self-re-exec ELIMINATED, fork = worker mgmt. fadcsystem_envp internals confirmed: '/bin/sh <mkstemp>' via fadcsystem builds script in /tmp then posix_spawns /bin/sh — not user-injectable. httproxy3 bundles HAProxy (HAPROXY_MWORKER_* env vars confirmed).
 - 2026-09-26 (session 4): Routing daemons analyzed — bgpd (236 system() callers, 4 log rotation fmt variants + 4 hardcoded access_list strings ELIMINATED); ospfd (101 system(), single log rotation fmt PLAUSIBLE MEDIUM); ospf6d (65 system() log rotation + 2 sys_vdom_exec FAD_O1 'ip -6 xfrm state' IPsec PLAUSIBLE LOW-MEDIUM; 'enc %s 0x%s' is snprintf fragment not direct system() call); keepalived (sys_vdom_exec ELIMINATED hardcoded int; execle /bin/bash PLAUSIBLE LOW admin VRRP script; fadcsystem 79 pending); av (3 fadcsystem diagnostic PLAUSIBLE LOW; 2 fork ELIMINATED no-exec workers). fadcsystem_envp internals confirmed: parse_command_line + execute_command (not shell — >> handled via posix_spawn file actions).

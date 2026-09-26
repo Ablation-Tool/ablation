@@ -1143,6 +1143,73 @@ FINDINGS = {
             "fork_12_ELIMINATED": "Standard uwsgi multi-worker process fork. No exec in child paths traced. ELIMINATED.",
         },
     },
+
+    # ── Small Utilities (14K binaries) ────────────────────────────────────────────
+    # ditest, encrypt_file, fipstestd, geolookup, infod_shm_mng, inittest,
+    # kdbgd, krb_test, send2lb — all ~14K PIE ELFs with NO exec-class PLT entries.
+    # CLEAN for command injection.
+    #
+    # del_netdev (14624B): system@plt (0x1180, 1 caller).
+    #   Format: '/bin/ls %s > /tmp/tmp.brg.list' — lists bridge dir; %s = bridge name from CLI arg.
+    #   Called as: del_netdev <bridge_name>; bridge name comes from CMDB-driven config scripts.
+    #   system() with shell: if bridge name allows metacharacters → injection. PLAUSIBLE LOW-MEDIUM.
+    #   Context: checks /sys/class/net/, /proc/net/vlan/config — bridge/VLAN device deletion util.
+    #
+    # vdom (14560B): sys_vdom_exec_safe@plt (0x1080, 1 caller at 0x1373).
+    #   Format: '%s ' loop appending CLI args (r15 = argv[3..argc-1]) → cmd string → sys_vdom_exec_safe.
+    #   sys_vdom_exec_safe = validated variant of sys_vdom_exec (unknown sanitization).
+    #   PLAUSIBLE LOW: requires authenticated admin CLI access to inject.
+    #
+    # rtmd (785KB): Route Table Manager Daemon. sys_vdom_exec@plt (0x11530, 8 callers).
+    #   Manages Linux bridge lifecycle + interface management in VDOM context.
+
+    "SMALL_UTILS_profile": {
+        "binary": "del_netdev/ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb/vdom",
+        "status": "ANALYZED — 9 utils CLEAN; del_netdev PLAUSIBLE LOW-MEDIUM; vdom PLAUSIBLE LOW",
+        "evidence": {
+            "clean_9": "ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb — no exec PLT. CLEAN.",
+            "del_netdev_system": (
+                "system@plt (0x1180), 1 caller (0x1998). Format: '/bin/ls %s > /tmp/tmp.brg.list'. "
+                "%s = bridge name from CLI arg (CMDB-driven). Shell: '>' redirection confirms. PLAUSIBLE LOW-MEDIUM."
+            ),
+            "vdom_sys_vdom_exec_safe": (
+                "sys_vdom_exec_safe@plt (0x1080), 1 caller (0x1373). Loop: snprintf('%s ', argv[3..n]) → cmd buf → sys_vdom_exec_safe. "
+                "Validated variant of sys_vdom_exec. PLAUSIBLE LOW (admin CLI access required)."
+            ),
+        },
+    },
+
+    # ── rtmd (785KB C PIE, Route Table Manager Daemon) ──────────────────────────
+    # Manages Linux bridge and interface lifecycle in VDOM context via sys_vdom_exec.
+    # PLT: sys_vdom_exec@plt (0x11530, 8 callers). No other exec sinks.
+    # Shared libs: libfmladminauth.so, libbase.so, libadc_nl_ipc.so, libfgtutil.so, etc.
+    #
+    # sys_vdom_exec callers (8):
+    #   0x17cf5, 0x1a363: 'brctl addbr %s' — add bridge (2 call sites)
+    #   0x17eb6, 0x1a524: 'ifconfig %s up' — bring interface up (2 call sites)
+    #   0x18972, 0x1b876: 'ifconfig %s down' — bring interface down (2 call sites)
+    #   0x18b2f, 0x1ba37: 'brctl delbr %s' — delete bridge (2 call sites)
+    # %s = bridge/interface name from CMDB (admin-configured VS/network interface).
+    # Same class as FAD_N1 (fnginxctld VS iface) — PLAUSIBLE MEDIUM (FAD_RT1).
+    # stat() gate at 0x17cd5: checks rtmd log file size before exec (not a security gate — just log rotation check).
+
+    "RTMD_profile": {
+        "binary": "rtmd",
+        "status": "ANALYZED — FAD_RT1 PLAUSIBLE MEDIUM (brctl/ifconfig + bridge name → sys_vdom_exec, same class as FAD_N1)",
+        "evidence": {
+            "fad_rt1_brctl": (
+                "'brctl addbr %s' (0x7b412, callers 0x17cf5/0x1a363) — add Linux bridge. "
+                "'brctl delbr %s' (0x7b472, callers 0x18b2f/0x1ba37) — delete Linux bridge. "
+                "%s = bridge name from CMDB virtual network config. sys_vdom_exec = shell. PLAUSIBLE MEDIUM."
+            ),
+            "fad_rt1_ifconfig": (
+                "'ifconfig %s up' (0x7b447, callers 0x17eb6/0x1a524) and 'ifconfig %s down' (0x7b461, callers 0x18972/0x1b876). "
+                "%s = interface name. sys_vdom_exec = shell. PLAUSIBLE MEDIUM (same class as FAD_N1)."
+            ),
+            "stat_check_note": "stat() + file-size check at each caller: log file size check, not a security gate.",
+            "sys_vdom_exec_plt": "0x11530",
+        },
+    },
 }
 
 registry = FindingRegistry()
