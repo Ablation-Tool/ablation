@@ -81,6 +81,26 @@
 - SCIM auth: source-scoped Bearer token lookup
 - recovery token: management-command-generated, DB filter only
 
+### Deep Reads — Continued exhaustive individual file reads (pass 5b — 2026-09-26)
+- core/models.py: CLEAN — Session.session_data=BinaryField (AUT-SESS-PICKLE-1 confirmed), User.uid=SHA-256(id+tenant), GroupAncestryNode raw SQL=developer-defined
+- core/api/users.py: CLEAN — json.loads (not pickle) in filter_attributes; User objects stored in pickle session (AUT-SESS-PICKLE-1 impact +); impersonation deepens session attack surface
+- stages/authenticator_validate/stage.py: CLEAN — JWT MFA cookie uses algorithms=["HS256"], key=SHA-256(tenant_uid+stage_pk), challenge whitelist validation
+- providers/proxy/models.py: CLEAN — ProxySession.session_data=JSONField (not pickle), SystemRandom cookie secret, STRICT redirect URI mode
+- sources/oauth/models.py: CLEAN — tokens in TextField, oidc_jwks as JSONField, all subclasses abstract
+- sources/oauth/views/callback.py: CLEAN — token exchange, profile parsing, state all through safe paths
+- sources/ldap/auth.py: CLEAN — bind uses stored DN not filter construction
+- sources/ldap/sync/base.py: CLEAN — search_filter and search_base are admin-configured source fields
+- sources/ldap/sync/groups.py: CLEAN — filter=admin-configured group_object_filter; property mappings admin-only expression evaluator
+- stages/password/stage.py: CLEAN — backends are admin-configured class paths; credentials cleaned via _clean_credentials()
+- flows/planner.py: CLEAN — cache.get() at line 296 is AUT-CACHE-PICKLE-1 consumption point; FlowPlan deserialized from postgres cache
+- providers/saml/processors/authn_request_parser.py: CLEAN — defusedxml for parsing, lxml+two-layer XXE defense for signature verification, strict ACS URL equality, xmlsec verify before parse
+- providers/saml/processors/assertion.py: CLEAN — lxml programmatic construction (no XML injection); correct sign→encrypt→sign-response order; AES-128+RSA-OAEP; session index=SHA-256(session_key)
+- sources/kerberos/auth.py: CLEAN — gssapi.raw.import_name() uses stored principal; MEMORY: cache isolation; no shell commands
+- stages/consent/stage.py: CLEAN — UUID anti-CSRF token with compare_digest; consent permissions use set operations
+- stages/user_write/stage.py: CLEAN — disallowed_user_attributes blocks id/pk/groups; password via set_password(); data from admin-configured PLAN_CONTEXT_PROMPT
+- providers/rac/consumer_client.py: CLEAN — token bound to session; Guacamole protocol filtered via parser; channel groups SHA-256 hashed
+- providers/rac/guacamole.py: CLEAN — strict length-prefix validation; UTF-16 code unit counting; 8192-byte/64-element limits; ping split from forwarded data
+
 ### Deep Reads — Exhaustive full-codebase sweep (pass 4)
 - Grep sweep: ALL 2151 Python + 80 Go + 2861 TypeScript files for critical patterns
 - pickle.loads: confirmed exhaustive — 5 instances only (sessions.py, dramatiq x3, postgres cache)
@@ -121,4 +141,5 @@
 - 3aaa666: initial RE module — pass 1 (3 pickle HIGH, IPC key MEDIUM)
 - 9029d5f: pass 2 — expression/blueprint/debug/outpost coverage + AUT-SAML-REFURI-1
 - debf4ef: pass 3 — 100% attack surface coverage, exhaustive CLEAN list
-- pass 5: individual file reads across all Go + Python (ongoing); found AUT-FLOWTOKEN-PICKLE-1 (bare `from pickle import loads` in flows/models.py:353 — missed by grep sweep)
+- 0dd967c: pass 5 — AUT-FLOWTOKEN-PICKLE-1 (bare `from pickle import loads` in flows/models.py:353 — missed by grep sweep)
+- pass 5b: 18 more files read (core/, stages/, providers/saml/, sources/ldap/, sources/kerberos/, providers/rac/) — all CLEAN; no new findings; AUT-CACHE-PICKLE-1 consumption confirmed in flows/planner.py:296
