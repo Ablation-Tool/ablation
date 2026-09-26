@@ -42,6 +42,10 @@ from .beam_context import (
     SEVERITY_DISPATCH, SEVERITY_NETWORK, SEVERITY_INFO,
     SEVERITY_CODE_EVAL, SEVERITY_CODE_EXEC,
 )
+from .source_ingestion import SourceContext
+from .source_entry_classifier import SourceEntryClassifier, RouteClassification, AUTH_NONE, AUTH_API_KEY, AUTH_SESSION, AUTH_INTERNAL, AUTH_ADMIN
+from .source_sink_scanner import SourceSinkScanner, SinkHit
+from .source_isolation_checker import SourceIsolationChecker, IsolationFinding
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -84,4 +88,9 @@ __all__ = [
     "sweep_beam_dir", "fmt_sweep", "sweep_beam_diff", "fmt_sweep_diff",
     "SEVERITY_DISPATCH", "SEVERITY_NETWORK", "SEVERITY_INFO",
     "SEVERITY_CODE_EVAL", "SEVERITY_CODE_EXEC",
+    "SourceContext",
+    "SourceEntryClassifier", "RouteClassification",
+    "AUTH_NONE", "AUTH_API_KEY", "AUTH_SESSION", "AUTH_INTERNAL", "AUTH_ADMIN",
+    "SourceSinkScanner", "SinkHit",
+    "SourceIsolationChecker", "IsolationFinding",
 ]
