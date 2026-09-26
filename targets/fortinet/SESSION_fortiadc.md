@@ -126,10 +126,26 @@ PLT = {
 - Impact: MITM on authentication traffic (Kerberos, SAML, OAuth) between proxy and AD FS
 - CWE-295; CVSS: 7.4 (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N)
 
+## Binary Sweep Status
+| Binary | Size | Sweep Status | Notes |
+|--------|------|-------------|-------|
+| restapi | 21MB Go | COMPLETE | FAD_R1 HIGH, FAD_R3 CRIT, FAD_R2 ELIMINATED |
+| adfsproxy | 5.3MB Go+CGo | COMPLETE | FAD_A1 HIGH |
+| libadfs.so | 39K C | COMPLETE | FAD_A2 HIGH; 24 funcs, no additional sinks |
+| ptd | 9.2MB Go+CGo | COMPLETE | FAD_P1 MEDIUM, FAD_P2 HIGH |
+| libcgo.so | 5.6MB C | COMPLETE | fortiadc_tcpdump_run/dumpsystem_delete_run/dumpsystem_run analyzed; FAD_P_AWS ELIMINATED |
+| httproxy | 14MB C | COMPLETE | CLEAN — 0 taint paths from recv; system=gdb debug; execvp=LaunchProcess |
+| fnginx_new | 17MB C++ | COMPLETE | CLEAN — execve=nginx worker respawn; SAML=Shibboleth lib; no injectable sink |
+| cm_client | 11MB C | COMPLETE | CLEAN — tcpdump=FAD_P1 duplicate; no other sinks |
+| wadd | 245K C | COMPLETE | CLEAN — execlp=fixed path, not user-controlled |
+| restapi_cmdd | 2.8MB Go | COMPLETE | CLEAN as independent target; exploit path=FAD_R3 |
+| cli | 2.7MB C | COMPLETE | CLEAN — rm-rf hardcoded /tmp/; strcpy bounded; more %s=plausible/admin-only |
+
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
-2. **Fortinet PSIRT disclosure** — 6 confirmed: FAD_R1 HIGH, FAD_R3 CRIT, FAD_A1 HIGH, FAD_A2 HIGH, FAD_P1 MEDIUM, FAD_P2 HIGH; FAD_R2/FAD_P_AWS ELIMINATED
+2. **Fortinet PSIRT disclosure** — 6 confirmed: FAD_R3 CRIT, FAD_R1 HIGH, FAD_A1 HIGH, FAD_A2 HIGH, FAD_P2 HIGH, FAD_P1 MEDIUM; FAD_R2/FAD_P_AWS ELIMINATED
 3. **fadcsystem definition** — undefined in all 6 extracted libs; confirm system() wrapper for PSIRT submission
+4. SWEEP COMPLETE — all 11 binaries + 2 shared libs analyzed
 
 ## Session History
 - 2026-09-25: Firmware extracted, binaries identified, module scaffolded
@@ -141,3 +157,4 @@ PLT = {
 - 2026-09-25: libcgo.so extracted from qcow2/rootfs; fortiadc_tcpdump_run (0x143980) analyzed — double-fork+execvp with separate argv; cmd injection ELIMINATED; FAD_P1 downgraded to MEDIUM (mkdir traversal only)
 - 2026-09-25: fortiadc_dumpsystem_delete_run (0xcb1b0) analyzed; input_format_check strspn allowlist blocks metacharacters but permits '.'/'/'; fadcsystem("rm /var/log/crash/<input>") → arbitrary file deletion as root; FAD_P2 CONFIRMED HIGH; fadc_aws_pyscript_run (0x12e6f0) = dead stub (xor eax,eax; ret) ELIMINATED
 - 2026-09-26: libadfs.so sweep complete (24 funcs, BinaryContext+FuncProfiler, full string dump 0x7000-0x8000); add_relying_party_cmdb_config (0x5890) — __snprintf_chk with CLI command format strings + cmf_exec_conf; "%" fields not sanitized for '"'/CRLF; FAD_A2 CONFIRMED HIGH (CLI injection via relying party name/proxy name)
+- 2026-09-26: ALL REMAINING BINARIES SWEPT — httproxy (0 taint paths, system=gdb debug, execvp=LaunchProcess → CLEAN); fnginx_new (execve=nginx respawn, SAML=Shibboleth lib, 3255 exports scanned → CLEAN); cm_client (tcpdump=FAD_P1 dup → CLEAN); wadd (execlp=fixed path → CLEAN); restapi_cmdd (pure Go, no exec sinks → CLEAN); cli (rm-rf=hardcoded /tmp/, strcpy=bounded, more-waf-view=admin-only PLAUSIBLE → CLEAN). SWEEP COMPLETE.

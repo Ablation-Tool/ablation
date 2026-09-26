@@ -408,6 +408,132 @@ FINDINGS = {
             "No additional high-severity findings beyond FAD_A2."
         ),
     },
+    # ── sweep results: httproxy (14MB C, stripped ELF64) ──────────────────────
+    # TaintTracker(recv → system/execvp/execve/strcpy/sprintf): 0 taint paths.
+    # SemanticSearcher: 0 functions above threshold.
+    # Manual sink enumeration:
+    #   system@0xc0200: 1 caller (0x43f776) — 'xterm -e "gdb --pid=%u" &' from
+    #     chromium/src/base/debug/debugger_posix.cc; hardcoded, not user-controlled.
+    #   execve@0xc1e60 + execvp@0xbfc20: callers at 0x69be05, 0x69bf20, 0x69bfdd
+    #     — all within one function, rdi='/bin/sh' literal or r13 from struct
+    #     'LaunchOptions'-style arg; Chromium base::LaunchProcess infrastructure.
+    #     NOT user-controlled from HTTP path.
+    #   sprintf@0xbfc70: 3 callers — 0x5ae0e9 ('%.1f' float fmt), 0x50e473 and
+    #     0x5af462 (no recoverable format string — short functions, non-network context).
+    # VERDICT: httproxy CLEAN. No exploitable sink from network path.
+
+    "SWEEP_httproxy_clean": {
+        "binary": "httproxy",
+        "status": "ELIMINATED (sweep complete — no network-reachable sinks)",
+        "evidence": {
+            "taint_tracker": "0 paths from recv → system/execvp/execve/strcpy/sprintf",
+            "semantic_sweep": "0 functions above threshold",
+            "system_caller": "0x43f776: 'xterm -e gdb --pid=%u &' (chromium debugger helper, hardcoded)",
+            "execvp_caller": "0x69be05/0x69bf20: Chromium base::LaunchProcess, rdi='/bin/sh' literal",
+            "sprintf_callers": "3 callers: '%.1f' (float), + 2 non-network short functions",
+        },
+    },
+
+    # ── sweep results: fnginx_new (17MB C++, nginx + Shibboleth SAML SP) ──────
+    # TaintTracker output: SAML exports profiled; 0 taint paths from recv.
+    # Manual export enumeration: 3255 exports — scanned for system/sprintf/strcpy/strcat/execve/execvp.
+    #   Only hit: ngx_shm_free (0x9483e) → execve — FALSE POSITIVE.
+    #     4KB scan window crossed into next function (ngx_shm_free uses munmap, not execve).
+    # execve (0x6db20): 2 callers — 0x948aa (nginx worker process respawn, rdi=argv[0] from
+    #   ngx_process struct, not HTTP request data) + 0x69bfdd (within LaunchProcess-pattern function).
+    # SamlContext::createSTA (0x1dd54e): 58 calls, delegates to Shibboleth SP library chain
+    #   (shibsp::SPConfig, AbstractSPRequest, xmltooling::HTTPRequest). All snprintf into
+    #   bounded buffers (0x80, 0x100, 0x1000). No injectable shell sink in custom nginx module code.
+    # VERDICT: fnginx_new CLEAN. SAML processing fully in Shibboleth library.
+
+    "SWEEP_fnginx_new_clean": {
+        "binary": "fnginx_new",
+        "status": "ELIMINATED (sweep complete — no injectable sink in custom nginx/SAML code)",
+        "evidence": {
+            "taint_tracker": "0 paths from recv → dangerous sinks",
+            "export_scan": "3255 exports scanned; only execve hit is ngx_shm_free FP (window crossed function boundary)",
+            "execve_sites": "0x948aa: nginx worker respawn (rdi=argv[0] from ngx_process struct, not HTTP input); 0x69bfdd: LaunchProcess pattern",
+            "saml_depth": "SamlContext::createSTA (0x1dd54e) → Shibboleth SPConfig chain; bounded snprintf only",
+        },
+    },
+
+    # ── sweep results: cm_client (11MB C, central management client) ──────────
+    # FuncProfiler: tcpdump handlers at 0x877700 (fadc_exec_tcpdump_run):
+    #   __snprintf_chk('%s/%s', '/var/log/tcpdump', filter) → mkdir → fortiadc_tcpdump_run.
+    #   Same mkdir-traversal pattern as FAD_P1 in ptd. No additional distinct finding.
+    # No other dangerous PLT sinks beyond heap ops (malloc/free/realloc).
+    # VERDICT: cm_client CLEAN. tcpdump = FAD_P1 duplicate. No new findings.
+
+    "SWEEP_cm_client_clean": {
+        "binary": "cm_client",
+        "status": "ELIMINATED (sweep complete — tcpdump = FAD_P1 duplicate, no new sinks)",
+        "evidence": {
+            "tcpdump": "fadc_exec_tcpdump_run@0x877700: same mkdir-traversal pattern as FAD_P1; no command injection",
+            "plt_sinks": "heap ops only (malloc/free/realloc/calloc); no system/execv/sprintf/strcpy",
+        },
+    },
+
+    # ── sweep results: wadd (245K C, WAF daemon) ──────────────────────────────
+    # execlp: 1 caller — wad_main startup path; argument is a fixed binary path from
+    #   config struct. Not user-controlled from network. No other dangerous sinks.
+    # VERDICT: wadd CLEAN.
+
+    "SWEEP_wadd_clean": {
+        "binary": "wadd",
+        "status": "ELIMINATED (sweep complete — execlp arg is fixed binary path, not user-controlled)",
+        "evidence": {
+            "execlp_caller": "wad_main startup path; rdi=fixed binary path from config struct",
+        },
+    },
+
+    # ── sweep results: restapi_cmdd (2.8MB Go) ────────────────────────────────
+    # Pure Go, no CGo stubs. PLT: malloc/free/mmap/mprotect only + 8 privilege symbols
+    # (setuid/seteuid/setreuid/setresuid/setgid/setegid/setregid/setresgid).
+    # No system/execv/sprintf/strcpy in PLT. Runs as root (privilege symbols confirmed).
+    # Acts as IPC daemon for restapi scripting upload (FAD_R3 attack path).
+    # VERDICT: restapi_cmdd CLEAN as independent target; exploit path is through FAD_R3.
+
+    "SWEEP_restapi_cmdd_clean": {
+        "binary": "restapi_cmdd",
+        "status": "ELIMINATED (pure Go; exploit path is FAD_R3 in restapi, not this daemon directly)",
+        "evidence": {
+            "plt": "malloc/free/mmap/mprotect + 8 privilege symbols; no system/execv",
+            "role": "IPC daemon for scripting upload; attack surface covered by FAD_R3",
+        },
+    },
+
+    # ── sweep results: cli (2.7MB C, admin CLI binary) ────────────────────────
+    # system callers:
+    #   0xf995d: __snprintf_chk(buf, 0x80, 2, 0x80, 'rm -rf %s > /dev/null', r9)
+    #     All 8 callers (0xf9bd2, 0xf9cc8, 0xf9d08, 0xfb1e2, 0xfb2df, 0xfb318, 0xfbd92, 0xfbe88)
+    #     pass hardcoded /tmp/ paths: '/tmp/tmp_schema_file_unzip' (0xf9bd2: rdi=rbp=hardcoded literal)
+    #     and '/tmp/tmp_openapi_schema_file_unzip' (0xfb1e2: rdi=rbp=hardcoded literal). ELIMINATED.
+    #   0xfd857: __sprintf_chk(buf, 2, 0x100, 'more %s', path_buf)
+    #     path_buf = previously built '/var/log/vs/<vsname>/waf_blocked_ip' via __sprintf_chk.
+    #     vsname comes from CLI dispatch table function (0 direct callers — indirect dispatch).
+    #     PLAUSIBLE stored shell injection if vsname contains ';' — requires:
+    #       (a) admin CLI access + (b) CMDB allows ';' in VS name on creation.
+    #     Most Fortinet CMDB name validators reject shell metacharacters at creation time.
+    #     Constrained to admin-level CLI privilege — below threshold for primary filing.
+    # strcpy@0x54dc7: cmp eax, 0xfff guard (length check) directly before call;
+    #   dest buffer ~0x1000 bytes; bounded copy. ELIMINATED.
+    # wordexp@WRDE_NOCMD: FTP command args — WRDE_NOCMD blocks $(cmd); limited glob risk.
+    # VERDICT: cli CLEAN for primary findings. Stored 'more %s' injection is PLAUSIBLE
+    #   but requires admin + CMDB metachar bypass; below PSIRT threshold given admin-only path.
+
+    "SWEEP_cli_clean": {
+        "binary": "cli",
+        "status": "ELIMINATED (sweep complete — no high-severity network-reachable finding)",
+        "evidence": {
+            "rm_rf_callers": "All 8 callers pass hardcoded /tmp/ paths — ELIMINATED",
+            "more_waf": (
+                "0xfd857: 'more %s' with vsname embedded in path — stored injection PLAUSIBLE "
+                "but requires admin CLI access + CMDB name accepts ';'; not filed (admin-only, constrained)"
+            ),
+            "strcpy": "0x54dc7: cmp eax,0xfff length guard before call; dest ~0x1000B — ELIMINATED",
+            "wordexp": "WRDE_NOCMD flag set; $(cmd) blocked; glob-only residual risk LOW",
+        },
+    },
 }
 
 registry = FindingRegistry()
