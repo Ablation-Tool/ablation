@@ -168,6 +168,81 @@ FINDINGS = {
         ),
         "note": "Intentional. SourceEntryClassifier AllowAny downgrade correctly surfaces this for review.",
     },
+
+    "AUT-EXPR-EXEC-1": {
+        "severity": "INFO",
+        "title": "Expression policy evaluator uses exec() — admin-only by design",
+        "file": "authentik/lib/expression/evaluator.py",
+        "lines": (365, 365),
+        "cwe": "N/A",
+        "status": "CONFIRMED",
+        "description": (
+            "BaseEvaluator.evaluate() calls exec(ast_obj, self._globals, _locals) at line 365. "
+            "Developer comment: 'these policies can only be edited by admins, this is a risk "
+            "we're willing to take.' ExpressionPolicyViewSet uses DEFAULT_PERMISSION_CLASSES "
+            "[ObjectPermissions] — creating/editing expression policies requires admin-level "
+            "model permissions (add_expressionpolicy, change_expressionpolicy). "
+            "Not a vulnerability — intentional by design. Notable side effects: "
+            "(1) `requests` in _globals provides SSRF primitive to any expression author; "
+            "(2) `expr_create_jwt_raw` issues JWTs with arbitrary custom claims. "
+            "Both require admin access to exploit."
+        ),
+        "note": "Same risk model as Jenkins Groovy scripts or Django management commands.",
+    },
+
+    "AUT-BLUEPRINT-FILE-ENV-1": {
+        "severity": "INFO",
+        "title": "Blueprint !File and !Env tags read filesystem/env — admin-gated",
+        "file": "authentik/blueprints/v1/common.py",
+        "lines": (255, 303),
+        "cwe": "N/A",
+        "status": "CONFIRMED",
+        "description": (
+            "BlueprintLoader (SafeLoader subclass) adds custom YAML tags including "
+            "!File (reads arbitrary filesystem paths via open()) and !Env (reads any env var "
+            "via getenv()). These are resolved during Importer.validate() → _apply_models() "
+            "→ entry.get_attrs() → tag_resolver(). The blueprint API endpoints (validate_, "
+            "import_) call check_blueprint_perms() before resolve() is triggered, requiring "
+            "the user to have add/change/delete permissions for each blueprint model. "
+            "This is admin-gated by design. The YAML loader itself is SafeLoader — "
+            "no python/object deserialization is possible."
+        ),
+        "note": "Admin-only features for configuring blueprints from environment/filesystem.",
+    },
+
+    "AUT-DEBUG-LOG-1": {
+        "severity": "INFO",
+        "title": "ServerLogAPI (AllowAny) gated behind settings.DEBUG — not exposed in production",
+        "file": "authentik/core/views/debug.py",
+        "lines": (29, 51),
+        "cwe": "N/A",
+        "status": "CONFIRMED",
+        "description": (
+            "ServerLogAPI is an AllowAny POST endpoint that calls LOGGER.debug(message). "
+            "It is registered in urls.py only inside `if settings.DEBUG:` (core/urls.py). "
+            "In production (DEBUG=False), the URL is not registered and returns 404. "
+            "Docstring confirms: 'Never available in production.'"
+        ),
+        "note": "Correctly gated. Not exposed in production.",
+    },
+
+    "AUT-WS-OUTPOST-1": {
+        "severity": "INFO",
+        "title": "Outpost WebSocket properly gated by guardian per-object permissions",
+        "file": "authentik/outposts/consumer.py",
+        "lines": (73, 86),
+        "cwe": "N/A",
+        "status": "CONFIRMED",
+        "description": (
+            "OutpostConsumer.connect() checks get_objects_for_user(user, "
+            "'authentik_outposts.view_outpost').filter(pk=uuid).first(). If None, raises "
+            "DenyConnection(). The user comes from Django Channels scope (session/token auth). "
+            "Outposts authenticate using settings.SECRET_KEY (token_secret_key path) which "
+            "grants a specific outpost service account. instance_uid from query string is "
+            "hashed via sha256 for group names — no injection risk."
+        ),
+        "note": "Correctly secured with guardian per-object check + DenyConnection on failure.",
+    },
 }
 
 # ============================================================
@@ -250,22 +325,30 @@ TOOL_RESULTS = {
 # PENDING
 # ============================================================
 
+CLEAN = [
+    # These were investigated and confirmed not exploitable / by design
+    "authentik/core/views/debug.py — ServerLogAPI AllowAny gated behind if settings.DEBUG: (not prod)",
+    "authentik/policies/geoip/api.py — ISO3166View AllowAny is static country list (no sensitive data)",
+    "authentik/flows/views/executor.py — FlowExecutorView AllowAny is intentional (login/MFA flow)",
+    "authentik/lib/expression/evaluator.py — exec() in policy evaluator is admin-only by design",
+    "authentik/blueprints/v1/common.py — BlueprintLoader extends SafeLoader; !File/!Env are admin-gated",
+    "authentik/outposts/consumer.py — WebSocket auth uses guardian per-object + DenyConnection",
+]
+
 PENDING = [
-    "SourceIsolationChecker: run on all Python files — check for tenant/org boundary gaps",
+    "SourceIsolationChecker: needs Python/Django ORM adapter (current impl is Prisma/TS-specific)",
     "SourceTaintTracker: trace user-controlled flow inputs to session storage (flow executor PLAN_CONTEXT_*)",
-    "debug view (authentik/core/views/debug.py): verify not exposed in prod; check AllowAny info leak",
-    "GeoIP API (authentik/policies/geoip/api.py): verify AllowAny is intentional; check for info leak",
-    "Go outpost code: review internal/outpost/ and cmd/ (LDAP, RADIUS, proxy outposts)",
-    "Expression engine (authentik/lib/expression/): check for Python eval/exec injection via policy expressions",
-    "Blueprint import (authentik/blueprints/): check for YAML deserialization or template injection",
-    "Outpost IPC (authentik/outposts/channels/): WebSocket IPC between outpost and core, review auth",
+    "Go outpost code: review internal/outpost/ and cmd/ (LDAP, RADIUS, proxy) for Go-specific patterns",
+    "LDAP outpost: check for LDAP injection in ldap query construction",
+    "Property mappings API: same exec() path as ExpressionPolicy — confirm admin-only gate",
+    "Prompt injection via expr_resolve_dns / expr_reverse_dns: DNS-based SSRF in expression globals",
 ]
 
 
 def print_findings():
-    """Print all confirmed findings."""
+    """Print all confirmed findings (security-relevant only, CLEAN entries excluded)."""
     print("=" * 70)
-    print("Authentik Source RE — Confirmed Findings")
+    print("Authentik Source RE — Confirmed Findings (Pass 1+2)")
     print("=" * 70)
     for fid, f in FINDINGS.items():
         sev = f.get("severity", "?")
