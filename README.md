@@ -77,12 +77,6 @@ pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 
 ---
 
-## Maintainer
-
-Nicholas Michael Kloster & Claude
-
----
-
 ## Reference Material Used to Build Ablation
 
 **Books** (All obtained from O'Reilly Media | [www.oreilly.com](https://www.oreilly.com))
