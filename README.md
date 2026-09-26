@@ -44,7 +44,14 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 ## Local Decompilers
 
-x86-32 · x86-64 · ARM-32 · ARM-64 · MIPS-32 · nanoMIPS · MIPS-64 · PPC-32 · PPC-64 · RISC-V 32 · RISC-V 64 · ARC EM/HS · V850-32
+| Architecture | Variants |
+|---|---|
+| x86 | x86-32 · x86-64 |
+| ARM | ARM-32 · ARM-64 |
+| MIPS | MIPS-32 · nanoMIPS · MIPS-64 |
+| PowerPC | PPC-32 · PPC-64 |
+| RISC-V | RISC-V 32 · RISC-V 64 |
+| Embedded | ARC EM/HS · V850-32 |
 
 ---
 
