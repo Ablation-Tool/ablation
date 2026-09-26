@@ -62,6 +62,7 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "Detect allowlist byte-validators in stripped binary" | `SanitizerDetector.from_path(elf).detect()` — SHELL_SAFE/SHELL_UNSAFE/UNKNOWN per charset |
 | "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` — WORKER/EXEC_AFTER_FORK/EXIT_IN_CHILD |
 | "Find 'safe now catastrophic later' rendering architecture risk (TS/JS/Python)" | `SourceArchRiskScanner.from_context(ctx).scan()` — tags: unsafe_render/type_dispatch/string_selector/registry_lookup/shared_module; HIGH=score≥3 or known combo |
+| "Compress N-file source audit to M profile buckets (40x read reduction)" | `SourceAuditCompressor.from_context(ctx).compress()` — 5-bit profile per file; profile 0=batch-CLEAN; profiles 8-31=individual reads; .compression_ratio() gives % reads saved |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
 | "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
 | "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
