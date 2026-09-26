@@ -330,3 +330,19 @@
 - web/src/flow/utils/autosubmit.ts (full): CLEAN — DOM property assignment; HTMLFormElement.prototype.submit.call() (bypasses event handlers for SAML POST binding — by design)
 - web/src/common/api/client.ts (full): CLEAN — Configuration singleton Object.freeze'd; CSRFMiddleware in middleware chain; base path from globalAK().api.base
 - web/src/common/errors/network.ts (full): CLEAN — pluckErrorDetail reads typed error fields; parseAPIResponseError parses response.json() safely with status-code transformer map
+
+### Deep Reads — TypeScript individual file reads (pass 5j — 2026-09-26)
+- web/src/flow/stages/identification/IdentificationStage.ts (lines 100-219): CLEAN — helper form creation via DOM API (createElement, setAttribute); username/password sync via onkeyup without innerHTML; shadow DOM compat workaround
+- web/src/flow/stages/password/PasswordStage.ts (full): CLEAN — Lit attribute binding on pendingUser and recoveryUrl; no unsafeHTML
+- web/src/flow/stages/captcha/CaptchaStage.ts (full): CLEAN — jsUrl admin-configured challenge; URL.canParse() validation; generation counter guard for stale async loads; no unsafeHTML
+- web/src/flow/stages/consent/ConsentStage.ts (full): CLEAN — permission.name/id and headerText rendered as Lit text nodes; token from server challenge
+- web/src/flow/stages/authenticator_validate/AuthenticatorValidateStage.ts (full): CLEAN — device/stage labels from enum→static prop map; StrictUnsafe(tag) where tag from hardcoded switch/case
+- web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageWebAuthn.ts (full): CLEAN — navigator.credentials.get() with PublicKeyCredentialRequestOptions; transformAssertionForServer() encoding; typed submit
+- web/src/elements/utils/unsafe.ts (full): CLEAN — StrictUnsafe gates unsafeStatic(tagName) behind: startsWith(AKElementTagPrefix) check, customElements.get() registration check, isAKElementConstructor check
+- web/src/flow/stages/prompt/PromptStage.ts (full): CLEAN — unsafeHTML(prompt.initialValue/subText) for Static/Alert/Checkbox types (admin-configured); all other input types use Lit attribute binding
+- web/src/common/helpers/webauthn.ts (full): CLEAN — pure base64/byte-array encoding helpers for WebAuthn ceremony
+- web/src/flow/stages/authenticator_webauthn/WebAuthnAuthenticatorRegisterStage.ts (full): CLEAN — standard navigator.credentials.create(); transformNewAssertionForServer() encoding; typed submit; Lit-escaped error strings
+- web/src/common/api/middleware.ts (full): CLEAN — CSRFMiddleware reads getCookie("authentik_csrf") → X-authentik-CSRF header; DevRepeatedRequestsMiddleware only in CanDebug mode; LocaleMiddleware formats Accept-Language header
+- web/src/common/purify.ts (full): CLEAN — 5 DOMPurify-backed Trusted Types policies; BrandedHTMLPolicy has explicit FORBID_TAGS (script/iframe/form/input) + FORBID_ATTR (on* handlers); CompiledMarkdownSanitizePolicy re-sanitizes even build-time markdown because admin-controlled replacers may inject values
+- web/src/elements/router/core/navigation.ts (full): CLEAN — navigate() uses new URL(to, window.location.origin); cross-origin → window.location.assign(); decideInterception rejects cross-origin clicks; click interceptor checks pathname prefix
+- web/src/elements/router/core/interfaces.ts (full): CLEAN — URL builders use server-configured base+interface path; toAdminInterface/toUserInterface/toFlowInterface all pure path formatters
