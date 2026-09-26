@@ -497,7 +497,7 @@ FINDINGS = {
 
     "HTTPROXY_memcorr_profile": {
         "binary": "httproxy",
-        "status": "MEMORY CORRUPTION SURFACE ANALYZED — 1 confirmed finding (FAD_H4 OOB read); all write-overflow vectors SAFE; H2/chunked integer overflow vectors SAFE",
+        "status": "MEMORY CORRUPTION SURFACE COMPLETE — 1 confirmed finding (FAD_H4 OOB read); H2 frames (DATA/HEADERS/PP/CONTINUATION) padding validation SAFE; HPACK integer/alloc SAFE; H1 body/chunked SAFE (HAProxy ring buffer arch); NTLM malloc SAFE (bounded by config max_out_len); sprintf(6) SAFE (fixed format); WebSocket SAFE (no frame parser); TLS SAFE (caller-bounded); strcpy(53 WAF-area sites) UNVERIFIED/LOW",
         "evidence": {
             "recv_callers_count": "6 total; 2 MSG_PEEK no-write, 2 ring-buffer bounded, 1 TLS parser (FAD_H4), 1 protocol handler (DoS only)",
             "recvfrom_callers_count": "3 total; 2 UDP abstraction (size from caller), 1 protocol handler (malloc no-bounds-check → DoS only, no write overflow)",
@@ -545,6 +545,47 @@ FINDINGS = {
                     "0x27c951: mov rdx, r13  ← length = hostname_length (UNVALIDATED)\n"
                     "0x27c954: call memcpy  ← OOB read if hostname_length > sni_list_length - 3"
                 ),
+            },
+            # ── H2 frame padding validation (session 11) ─────────────────────────
+            # All three PADDED frame types use unsigned 8-bit pad_length extracted via
+            # movzx, compared against available frame bytes before any copy. SAFE.
+            "FAD_DATA_PAD": {
+                "frame": "DATA (type 0x0)",
+                "location": "0x2a19a9-0x2a19b0 (inside main HPACK+DATA handler, 0x2a1420)",
+                "guard": "cmp qword ptr [r15+0x268], rax; jb 0x2a2d90 (DATA: invalid padding)",
+                "logic": "rax = movzx(pad_length byte); [r15+0x268] = available_frame_bytes after pad_len field; if available < pad_length → reject",
+                "status": "SAFE",
+            },
+            "FAD_PP_PAD": {
+                "frame": "PUSH_PROMISE (type 0x5)",
+                "location": "0x2a219c-0x2a219f and 0x2a21b4-0x2a21b7",
+                "guard_1": "cmp rcx, rdx; jb 0x2a2dcf  ← available_bytes < pad_length → reject",
+                "guard_2": "cmp rcx, rdx; jb 0x2a2dcf  ← available+1 < pad_length+5 → reject (ensures 4-byte promised_stream_id fits)",
+                "logic": "rdx = movzx(pad_length byte); two-stage: pad fits AND promised_stream_id fits after padding",
+                "status": "SAFE",
+            },
+            "FAD_HDR_PAD": {
+                "frame": "HEADERS (type 0x1)",
+                "location": "0x2a2c6d-0x2a2c70 and 0x2a2c85-0x2a2c88",
+                "guard_1": "cmp rax, rsi; jb 0x2a2e52  ← available < pad_length → reject",
+                "guard_2": "cmp rdi, rsi; jb 0x2a2e52  ← (available+1) < (priority_overhead + pad_length+1) → reject",
+                "logic": "esi = movzx(pad_length byte); [r15+0x268] = available; priority overhead (rdx) factored into second check",
+                "status": "SAFE",
+            },
+            # ── CONTINUATION frame handler (session 11) ──────────────────────────
+            "FAD_CONTINUATION": {
+                "frame": "CONTINUATION (type 0x9)",
+                "note": "No dedicated CONTINUATION frame parser found. RFC 7540 §6.10: CONTINUATION extends a HEADERS/PUSH_PROMISE block and is processed by re-entering the HPACK decode path (already verified SAFE). State classifier stub at 0x2b36d0 reads continuation-expected flag [rbp+0x57] and returns; actual data processed by HPACK decoder (0x2a1420). 'CONTINUATION: unexpected' error path at 0x2a1e80: lea rdx, [rip+0x60b8c2] ('CONTINUATION: unexpected') → log_error → return. Cold-path block after 5-byte NOP padding; no memory operations.",
+                "status": "SAFE",
+            },
+            # ── H1 body / content-length / sprintf / strcpy (session 11) ────────
+            "FAD_H1_BODY": {
+                "note": "httproxy is built on HAProxy (confirmed: src/proto_http.c, tune.bufsize, maxrewrite strings). HAProxy uses fixed-size ring buffers (tune.bufsize default 16KB, via cmova min() pattern) for all I/O. Content-Length values cannot cause unbounded allocation — ring buffer caps all reads. NTLM auth malloc at 0x14c3cd: malloc(base64_decode_return) where decode function returns -1 on error and enforces max_out_len = global_config[r13+0x198]-1 before returning size. Guard: test eax,eax; js → early return; malloc only if decoded_size > 0 and <= max_out_len.",
+                "ntlm_malloc_0x14c3cd": "SAFE — bounded by configured max_out_len passed as rcx to base64_decode",
+                "sprintf_6_callers": "SAFE — all use fixed format literals ('%.1f', '%ld', '%02x...' UUID, 'Content-Length'); no user-controlled format strings",
+                "strcpy_53_callers": "UNVERIFIED — all in 0x6c-0x7f address range (WAF/scripting/config area), none in HTTP request path (0x14-0x15). Sources are register values (not rodata constants). HAProxy ring buffer architecture bounds all network I/O before data reaches these callsites. Low priority; not traced individually.",
+                "websocket": "No WebSocket frame parser found in httproxy — connection proxied as opaque TCP after Upgrade. No frame-length arithmetic to overflow.",
+                "status": "SAFE (core paths); strcpy_53 UNVERIFIED/LOW",
             },
         },
     },
