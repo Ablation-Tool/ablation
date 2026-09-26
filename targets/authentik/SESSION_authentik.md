@@ -284,3 +284,39 @@
 - sources/ldap/password.py (full): CLEAN — ad_password_complexity() checks MS AD 7-rule complexity; change_password() uses extend.microsoft.modify_password with fallback to standard modify; Python 2 except syntax at line 82: `except LDAPAttributeError, LDAPUnwillingToPerformResult, KeyError, IndexError:` and at line 105: `except LDAPAttributeError, LDAPUnwillingToPerformResult, LDAPNoSuchAttributeResult:` (6th and 7th occurrences)
 - sources/oauth/views/dispatcher.py (full): CLEAN — DispatcherView.dispatch() does get_object_or_404(OAuthSource, slug=source_slug) then registry.find(provider_type, kind=RequestKind(self.kind)); @csrf_exempt (correct for OAuth callbacks); no user-controlled URL construction
 - Python 2 except syntax count: 7 confirmed occurrences — scim/clients/groups.py:237, enterprise/license.py:111, root/middleware.py:76, providers/oauth2/views/authorize.py:210, providers/oauth2/views/dcr.py:107, sources/ldap/password.py:82, sources/ldap/password.py:105
+
+### Deep Reads — Continued exhaustive individual file reads (pass 5h — 2026-09-26)
+- sources/oauth/views/dispatcher.py (full): CLEAN — csrf_exempt; get_object_or_404 by slug; registry.find(provider_type, kind)
+- sources/oauth/views/redirect.py (full): CLEAN — login_hint extracted from PLAN_CONTEXT_PENDING_USER (user's own email); additional_scopes from admin-configured source field; all URLs admin-configured
+- sources/oauth/clients/oauth1.py (full): CLEAN — requests_oauthlib.OAuth1; request token stored in session; access_token_url from admin-configured source
+- sources/oauth/clients/oauth2.py (full): CLEAN — constant_time_compare for state check (timing-safe); PKCE verifier stored in session, never from request; access_token_url from admin-configured source; UserprofileHeaderAuthClient sends auth via header only
+- sources/oauth/views/base.py (full): CLEAN — dispatches to OAuthClient (OAuth1) or OAuth2Client based on request_token_url presence
+- sources/oauth/views/callback.py (full): CLEAN — AUT-FLOWTOKEN-PICKLE-1 scope: handle_match_failure() calls session_token.plan; token deleted after use; identifier from source-type-specific get_user_id()
+- sources/oauth/types/registry.py (full): CLEAN — find_type() falls back to SourceType on unknown provider; no user-controlled input
+- sources/ldap/sync/forward_delete_groups.py (full): CLEAN — UUID sentinel pattern for group deletion
+- sources/ldap/sync/membership.py (full): CLEAN — escape_filter_chars(group_dn) for lookup_groups_from_user LDAP filter; group_object_filter from admin-configured source field
+- sources/ldap/sync/vendor/ms_ad.py (full): CLEAN — UserAccountControl IntFlag; ACCOUNTDISABLE|LOCKOUT → is_active=False; set_unusable_password() on pwdLastSet change
+- sources/ldap/sync/vendor/freeipa.py (full): CLEAN — nsaccountlock string→bool conversion (389-ds quirk); krbLastPwdChange UTC-aware comparison
+- providers/ldap/models.py (full): CLEAN — uid_start_number/gid_start_number added to user/group PK for POSIX; mfa_support=semicolon TOTP append (design note); get_required_objects() includes cert key perm
+- providers/ldap/api.py (full): CLEAN — check_access() uses ORM lookup for app_slug; search_full_directory custom perm check; LDAPOutpostConfigViewSet lists assigned providers only
+- events/models.py (full): CLEAN — Event.new() uses cleanse_dict+sanitize_dict; from_http() reads impersonation context and SESSION_KEY_PLAN (already decoded); send_webhook() uses admin-configured webhook_url validated by DomainlessURLValidator; sanitize_item() on mapping output
+- events/utils.py (full): CLEAN — cleanse_item() uses SafeExceptionReporterFilter.hidden_settings regex; ALLOWED_SPECIAL_KEYS exceptions; sanitize_item() drops HttpRequest via ... sentinel
+- lib/utils/http.py (full): CLEAN — TimeoutSession enforces configurable timeout; DebugSession only in debug/trace mode; User-Agent header set to authentik version
+- lib/models.py (full): CLEAN — DomainlessURLValidator adds localhost+blank+ssh+sftp schemes; DomainlessFormattedURLValidator allows %(var)s in URL host; ExpiringManager excludes expired by default
+- root/middleware.py (full): CLEAN — Python 2 except syntax at line 76: `except KeyError, PyJWTError:` (already noted); decode_session_key() with algorithms=["HS256"]; _get_outpost_override_ip() validates IP via ip_address() parse; INTERNAL_SERVICE_ACCOUNT required for IP override
+- lib/generators.py (full): CLEAN — all generators use SystemRandom() (CSPRNG)
+- lib/config.py (partial 100 lines): CLEAN — ConfigLoader searches SEARCH_PATHS + env vars with ENV_PREFIX; Attr dataclass with source tracking
+- admin/files/validation.py (full): CLEAN (confirmed pass 3) — regex + PurePosixPath + absolute path + .. check + THEME_VARIABLE placeholder handling
+- admin/files/api.py (full): CLEAN — 25MB size limit; validate_upload_file_name() on upload AND delete paths; HasPermission RBAC; audit events for both operations
+- admin/files/backends/s3.py (full): CLEAN — ACL=private; key prefix {usage}/{schema}/{name}; presigned URLs with configurable expiry; custom domain rewrite for non-AWS S3
+- admin/files/manager.py (full): CLEAN — config-driven backend selection; file_url() falls back through backends; _check_manageable() before all writes
+- admin/signals.py (full): CLEAN — sets Prometheus metrics on startup
+- admin/tasks.py (full): CLEAN — update_latest_version() fetches from hardcoded version.goauthentik.io URL; event dedup check before creating
+- core/sources/mapper.py (full): CLEAN — PropertyMappingManager.iter_eval(); admin-configured property mappings; MERGE_LIST_UNIQUE for merging
+- core/sources/matcher.py (full): CLEAN — refuses to match on empty property (prevents account takeover); existing connection by identifier → AUTH; new connection by attribute match → LINK/DENY
+- core/sources/stage.py (full): CLEAN — PostSourceStage saves connection after enrollment; audit event created
+- core/sources/flow_manager.py (full): CLEAN — AUT-FLOWTOKEN-PICKLE-1 call sites: handle_match_failure() and _prepare_flow() both call token.plan; both delete token after use; GroupUpdateStage group update in transaction.atomic()
+- enterprise/stages/source/stage.py (full): CLEAN — AUT-FLOWTOKEN-PICKLE-1 call site: SourceStageFinal.dispatch() calls token.plan; token expiry checked; token deleted after use; create_flow_token() uses FlowToken.pickle()
+- events/middleware.py (full): CLEAN — dispatch_uid=request_id scopes signals to current request; _CTX_REQUEST ContextVar prevents cross-request handler bleed; audit_ignore() context manager
+- events/signals.py (full): CLEAN — on_user_logged_in reads SESSION_KEY_PLAN (already decoded); on_login_failed logs credentials through cleanse_dict; GDPR cleanup on user delete
+- events/tasks.py (full): CLEAN — event_trigger_handler() infinite loop prevention via policy_uuid check; PolicyEngine.empty_result=False; user looked up from event.user JSONField (not pickle)
