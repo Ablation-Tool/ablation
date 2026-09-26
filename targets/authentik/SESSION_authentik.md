@@ -617,3 +617,34 @@
 - web/src/admin/crypto/CertificateKeyPairForm.ts (full): CLEAN — instance.name in value=; certificateData/keyData via ak-secret-textarea-input (form inputs); no user data as href
 
 BACKEND FINDING CONFIRMED (launchUrl): meta_launch_url in Application model has validators=[DomainlessFormattedURLValidator()]. DomainlessFormattedURLValidator requires scheme in ["http","https","blank","ssh","sftp"]; rejects javascript:, data:, vbscript: at write time. All subsequent frontend href uses of application.launchUrl are SAFE by backend validation.
+
+### Deep Reads — TypeScript individual file reads (pass 5ab — 2026-09-26)
+- web/src/admin/users/UserForm.ts (full): CLEAN — instance.username/name/email/path in ak-text-input value= bindings; UserTypeEnum radio constants; renderObjectAttributes via ObjectAttributeModelForm
+- web/src/admin/users/UserListPage.ts (full): CLEAN — item.pk in href via toAdminInterface path (numeric); item.username/item.name text nodes; item.avatar in img src (not href); userTypeToLabel returns string
+- web/src/admin/users/UserNotesCard.ts (full): CLEAN — user attributes.notes passed to ak-mdx .content= (DOMPurify BrandedHTMLPolicy before unsafeHTML)
+- web/src/admin/users/UserInfoCard.ts (full): CLEAN — user.username/name/email in renderKeyValueList string values; formatDisambiguatedUserDisplayName returns string; displayName inside html`<code>${displayName}</code>` text node inside msg() localize template
+- web/src/user/user-settings/details/UserSettingsFlowExecutor.ts (full): CLEAN — unsafeHTML(ShellChallenge.body) is existing documented server-generated pattern; redirect href is server-controlled; globalAK().api.base/flowSlug in default href are server-configured
+- web/src/admin/users/UserViewPage.ts (full): CLEAN — user.username passed as element attribute string; pk as numeric attribute; no direct HTML rendering of user data; setPageDetails() takes strings
+- web/src/admin/users/UserAgentList.ts (full): CLEAN — item.name/item.username text nodes in div/small; item.expires.toLocaleString() in tooltip .content property (not HTML)
+- web/src/admin/users/UserDevicesTable.ts (full): CLEAN — item.name/deviceTypeName()/item.extraDescription/item.externalId all text nodes
+- web/src/admin/users/UserPasswordForm.ts (full): CLEAN — this.username/this.email in hidden readonly value= inputs for autocomplete hints only
+- web/src/admin/users/UserActiveForm.ts (full): CLEAN — formatDisambiguatedUserDisplayName() result inside html`<code>${displayName}</code>` text node; msg(html`...${displayName}...`) Lit template escapes interpolation as text node
+- web/src/admin/users/UserImpersonateForm.ts (full): CLEAN — reason text input form only; instancePk is numeric
+- web/src/admin/users/UserCredentialsTab.ts (full): CLEAN — user.username/email/pk passed as element attributes; no direct HTML rendering
+- web/src/admin/users/UserApplicationsTab.ts (full): CLEAN — delegates to UserApplicationTable via property binding
+- web/src/admin/users/recovery.ts (full): CLEAN — formatUserDisplayName() result used as headline modal property string; user.username/email/pk passed as modal invoker properties
+- web/src/admin/users/UserApplicationTable.ts (full): CLEAN — item.slug in href via toAdminInterface; item.providerObj?.pk in href via toAdminInterface; item.launchUrl href server-validated; item.name/metaPublisher/group text nodes
+- web/src/admin/users/UserTokenList.ts (full): CLEAN — item.identifier text node; formatIntentLabel returns string
+- web/src/admin/users/UserOverviewTab.ts (full): CLEAN — user.username passed as chart element attribute; user.attributes.notes to UserNotesCard via .notes= property; user.attributes to ak-object-attributes-card; pk/ModelEnum as attributes
+- web/src/admin/users/UserRolesTab.ts (full): CLEAN — delegates to ak-related-role-table via .targetUser property binding
+- web/src/admin/users/UserBulkRevokeSessionsForm.ts (full): CLEAN — item.username/item.name text nodes; message strings use counts not user-controlled data
+- web/src/admin/users/UserChart.ts (full): CLEAN — this.username used only as API query filter parameter
+- web/src/admin/users/ServiceAccountForm.ts (full): CLEAN — result.username/result.token in readonly value= inputs; targetGroup.name in msg(str`...`) message string (shown as UI notification)
+- web/src/admin/users/UserRecoveryLinkForm.ts (full): CLEAN — static token duration form only; user.pk sent as API param
+- web/src/admin/users/UserResetEmailForm.ts (full): CLEAN — stage.name in .renderElement returns string; no user data as HTML
+- web/src/admin/users/ak-user-group-table.ts (full): CLEAN — item.name text node and chip label only
+- web/src/admin/users/ak-user-role-table.ts (full): CLEAN — item.name text node in div and chip label
+- web/src/admin/users/UserOffboardingForm.ts (full): CLEAN — static enum radio options; dateTimeLocal() date formatting in value=
+- web/src/admin/users/ak-user-wizard.ts (full): CLEAN — username/token in readonly value= inputs; DEFAULT_USER_TYPES static localized descriptions
+- web/src/admin/users/oauth/UserAccessTokenList.ts (full): CLEAN — item.idToken text node in <pre>; item.provider?.pk in href via toAdminInterface; item.provider?.name text node; scope strings text nodes in chips
+- web/src/admin/users/oauth/UserRefreshTokenList.ts (full): CLEAN — identical pattern to UserAccessTokenList
