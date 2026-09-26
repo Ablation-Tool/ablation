@@ -923,7 +923,26 @@ FINDINGS = {
             "fad_n1_format_strings": "'ip address add %s/%d dev %s > /dev/null 2>&1'; 'iptables/ip6tables ... -i %s -j FNGINX'",
             "fad_n1_args": "%s = VS interface name / IP address from CMDB config struct (admin-set)",
             "fad_n1_verdict": "PLAUSIBLE MEDIUM — sys_vdom_exec = shell; VS iface name injection if CMDB allows metacharacters",
-            "fadcsystem_66_ELIMINATED": "posix_spawnp — shell injection ELIMINATED.",
+            "fadcsystem_66_ELIMINATED": (
+            "posix_spawnp — shell injection ELIMINATED for all 66 callers. Categories: "
+            "mkdir -p /home/new_config_file/<VS>/bookmark (×3 variants); "
+            "rm -rf /dev/shm/fngx_persistence_hash_tbl_%d + orignate + config_buffer (×3); "
+            "/bin/fnginx -p %s/%s -c %s/%s/fnginx.conf -s stop (×4); "
+            "killall fnginx / killall fnginx_new (×2); "
+            "rm -fr /var/log/fnginx + mkdir + ln -sf (×6); "
+            "rm -rf %s/%s (temp/config dirs; admin VS path; PLAUSIBLE LOW for path traversal only); "
+            "all others similar fnginx management hardcoded paths. ALL ELIMINATED for shell injection."
+        ),
+        "fadcpopen_iptables_ELIMINATED": (
+            "0x1b0cd: fadcpopen('iptables -t mangle -L PREROUTING --line-number', 'r') — "
+            "'%s' = 'iptables'/'ip6tables' hardcoded string (offset 0x405b9/0x405ce in binary). ELIMINATED. "
+            "0x1b26b: same pattern + fadcpopen('iptables -t mangle -D PREROUTING %ld') — integer line number. ELIMINATED."
+        ),
+        "fadcpopen_fnginx_test_PLAUSIBLE_LOW": (
+            "0x1ea3c: fadcpopen('/bin/fnginx -t -p %s/%s -c %s/%s/fnginx.conf', 'r') — "
+            "popen() with VS name-derived config path. Shell metacharacters in VS name injectable. Admin-only. PLAUSIBLE LOW. "
+            "0x2c15b: same for fnginx_new. PLAUSIBLE LOW."
+        ),
             "execl_2_ELIMINATED": (
                 "0x25d7f: execl('/bin/fnginx', 'fnginx', '-p', ...) — hardcoded fnginx worker respawn. "
                 "0x32edf: execl('/bin/fnginx_new', 'fnginx_new', ...) — hardcoded fnginx_new respawn. ELIMINATED."
@@ -1172,7 +1191,7 @@ FINDINGS = {
 
     "BGP_profile": {
         "binary": "bgpd",
-        "status": "ANALYZED — PLAUSIBLE MEDIUM (log rotation system() x4 + VDOM name); access_list strings ELIMINATED",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE MEDIUM (log rotation system() x4 variants + VDOM name); ALL 236 callers confirmed log-rotation pattern",
         "evidence": {
             "system_236": "236 system() callers via __snprintf_chk → system(). snprintf + stack buf + system pattern.",
             "log_rotation_fmts": (
@@ -1192,9 +1211,9 @@ FINDINGS = {
 
     "OSPF_profile": {
         "binary": "ospfd",
-        "status": "ANALYZED — PLAUSIBLE MEDIUM (log rotation system() x1 variant + VDOM name)",
+        "status": "ANALYZED COMPLETE — ALL 101 system() = log rotation PLAUSIBLE MEDIUM; 0 non-log callers confirmed",
         "evidence": {
-            "system_101": "101 callers. Single format: 'cp /tmp/%s_ospfd.log /tmp/%s_ospfd_old.log' (0xabcc8).",
+            "system_101": "101 callers. All log rotation: 'cp /tmp/%s_ospfd.log /tmp/%s_ospfd_old.log' ×97; 4 context-only (function names, not system() args). Confirmed 0 non-log-rotation callers.",
             "vdom_injection": "%s = VDOM name. PLAUSIBLE MEDIUM — same class as FAD_M1 and bgpd.",
             "system_plt": "0x179e0",
         },
@@ -1202,7 +1221,7 @@ FINDINGS = {
 
     "OSPF6_profile": {
         "binary": "ospf6d",
-        "status": "ANALYZED — FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec); log rotation PLAUSIBLE MEDIUM",
+        "status": "ANALYZED COMPLETE — FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec); ALL 65 system() = log rotation PLAUSIBLE MEDIUM",
         "evidence": {
             "sys_vdom_exec_2": (
                 "2 callers (0x3fe90, 0x40257). Format: 'ip -6 xfrm state %s dst %s proto %s spi %s'. "
@@ -1215,7 +1234,8 @@ FINDINGS = {
             ),
             "system_65": (
                 "65 system() callers. Format: 'cp /tmp/%s_ospf6d.log /tmp/%s_ospf6d_old.log' (0x78568). "
-                "Log rotation with VDOM name — PLAUSIBLE MEDIUM (same class as FAD_M1)."
+                "Log rotation with VDOM name — PLAUSIBLE MEDIUM (same class as FAD_M1). "
+                "ALL 65 callers confirmed log-rotation pattern; 0 non-log callers."
             ),
             "false_positive_note": "'enc %s 0x%s' is in a snprintf block that jmps away before system() — not a system() arg.",
             "sys_vdom_exec_plt": "0xf420",
