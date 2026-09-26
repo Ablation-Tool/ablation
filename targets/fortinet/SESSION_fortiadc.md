@@ -71,6 +71,8 @@ PLT = {
 | FAD_AV1 | av | fadcsystem diagnostic collect 'cat /proc/meminfo >> %s' — path traversal only | PLAUSIBLE LOW |
 | FAD_H1 | httproxy3 | merge_fngx_session_table → sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
 | FAD_H2 | httproxy3 | merge_httproxy_vs_session_table → sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
+| FAD_H3 | httproxy | recvfrom malloc(field+0x38) — no bounds check; int-overflow → malloc(0); recv loop skips; DoS only | ELIMINATED |
+| FAD_H4 | httproxy | SNI hostname_length OOB read — no check against sni_list_length; memcpy reads past SNI ext | **CONFIRMED LOW** |
 | FAD_RT1 | rtmd | brctl/ifconfig via sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
 
 ### FAD_R1 — Pre-auth `/debug/pprof/*` (CONFIRMED HIGH)
@@ -128,6 +130,33 @@ PLT = {
 - CWE-78/CWE-88; CVSS 6.7 (AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:L)
 - libadfs.so sweep complete: 24 funcs, no SAML/XML parser, no system/popen. Only high finding is FAD_A2.
 
+### FAD_H4 — SNI hostname OOB read in TLS ClientHello (CONFIRMED LOW)
+- Binary: `httproxy` (HAProxy-derived TLS pre-inspection code, `ssl_sock.c`)
+- Location: `0x27c908` — SNI extension processing in TLS ClientHello raw parser
+- Root: `hostname_length` (wire field at `[r12+7..8]`, big-endian 2-byte, max 65535) read without validation against `sni_list_length - 3`
+- Outer bounds only verify `sni_list_length ≤ remaining ClientHello bytes`; no check `hostname_length ≤ sni_list_length - 3`
+- `calloc(1, hostname_length+1)` → correctly-sized destination (no heap overflow of dest)
+- `memcpy(dest, [r12+9], hostname_length)` — reads past SNI extension data into adjacent TLS extensions / padding in the 4096-byte static receive buffer
+- Max OOB distance: `hostname_length - actual_hostname_bytes`, bounded to ≤4096 bytes total
+- Impact: SNI buffer populated with garbage extension bytes → used for virtual-server routing; enables SNI-based routing bypass / host header spoofing. OOB read only, no write overflow.
+- Severity: LOW (pre-auth, requires crafted ClientHello; read-only, no sensitive adjacency proven; bounded to recv buffer)
+- Key disasm:
+  ```
+  0x27c3ea: cmp eax, 1; jle 0x27c20e           # SNI list > 1 byte
+  0x27c3f0: movzx ecx, word ptr [r12+4]         # sni_list_length
+  0x27c3fd: cmp ecx, 3; jle 0x27c20e
+  0x27c406: lea esi, [rdx-5]; cmp esi, ecx      # sni_list fits in remaining — NO check hostname_len ≤ ecx-3
+  0x27c417: cmp byte ptr [r12+6], 0; je 0x27c908
+  ...
+  0x27c90d: movzx r13d, word ptr [r12+7]        # hostname_length from wire — UNVALIDATED
+  0x27c919: rol r13w, 8                         # big-endian decode
+  0x27c927: lea esi, [r14+1]
+  0x27c92e: call calloc                         # calloc(1, hostname_length+1)
+  0x27c94c: lea rsi, [r12+9]                    # source = raw recv buffer at SNI hostname offset
+  0x27c951: mov rdx, r13                        # length = hostname_length (UNVALIDATED vs list size)
+  0x27c954: call memcpy                         # OOB read if hostname_length > sni_list_length - 3
+  ```
+
 ### FAD_A1 — adfsproxy TLS cert bypass (CONFIRMED HIGH)
 - `adfslib/http.VerifyServerCertificate` at `0x667440`: logs "Verify" + returns nil — complete stub
 - Used as `VerifyPeerCertificate` (or equivalent) callback in `GetHTTPClient:0x667520`
@@ -144,7 +173,7 @@ PLT = {
 | libadfs.so | 39K C | COMPLETE | FAD_A2 HIGH; 24 funcs, no additional sinks |
 | ptd | 9.2MB Go+CGo | COMPLETE | FAD_P1 MEDIUM, FAD_P2 HIGH |
 | libcgo.so | 5.6MB C | COMPLETE | fortiadc_tcpdump_run/dumpsystem_delete_run/dumpsystem_run analyzed; FAD_P_AWS ELIMINATED |
-| httproxy | 14MB C | COMPLETE | CLEAN — 0 taint paths from recv; system=gdb debug; execvp=LaunchProcess |
+| httproxy | 14MB C | COMPLETE | CLEAN (cmd inject sweep) + FAD_H4 CONFIRMED LOW (SNI hostname OOB read) — deep memory corruption pass session 9 |
 | fnginx_new | 17MB C++ | COMPLETE | CLEAN — execve=nginx worker respawn; SAML=Shibboleth lib; no injectable sink |
 | cm_client | 11MB C | COMPLETE | CLEAN — tcpdump=FAD_P1 duplicate; no other sinks |
 | wadd | 245K C | COMPLETE | CLEAN — execlp=fixed path, not user-controlled |
@@ -207,7 +236,8 @@ PLT = {
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
 2. RE 100% COMPLETE — all binaries, shared libs, kernel modules, scripts, Python apps analyzed
-3. Confirmed findings: FAD_R3 CRIT, FAD_R1/A1/A2/P2 HIGH, FAD_P1 MEDIUM; PLAUSIBLE: FAD_BGPD/FAD_S1 MEDIUM, FAD_M1/FAD_AV1/FAD_LB class LOW
+3. Confirmed findings: FAD_R3 CRIT, FAD_R1/A1/A2/P2 HIGH, FAD_P1 MEDIUM, FAD_H4 LOW
+4. PLAUSIBLE: FAD_BGPD/FAD_S1 MEDIUM, FAD_M1/FAD_AV1/FAD_LB class LOW
 
 ## Session History
 - 2026-09-25: Firmware extracted, binaries identified, module scaffolded
@@ -237,4 +267,5 @@ PLT = {
 - 2026-09-26 (session 7): flg_accessd COMPLETE — fadcsystem×2 ELIMINATED (tar czvf posix_spawnp; md5sum '>' literal not shell redirect); fadcpopen@0xe3b8 PLAUSIBLE LOW: popen("rm -rfv /var/log/logrpt/<vdom>/resdir/* 2>&1") — admin VDOM name → shell metachar injection via popen. flg_indexd COMPLETE — fadcsystem×10 ALL ELIMINATED (killall×5 hardcoded; rm -rf internal tsdb/log dirs via posix_spawnp; killall -9 mysqld hardcoded). infod COMPLETE — fadcsystem×10 ALL ELIMINATED (ldb repair hardcoded, rm -rf /var/log/tsdb*, killall -9 infod, touch /tmp/STATISTICS_DB_IPC_PATH); system_fgt_log×2 = syslog API. lb COMPLETE — fadcsystem×23: 21 ELIMINATED (sed substitutions/mkdir/cp/scripting_convert.sh/scripting_priority_extract.sh/haproxy management all posix_spawnp); 2 PLAUSIBLE LOW (/bin/sh <mkstemp> pattern at 0x23c71/0x7b2a1 — shell script written to /tmp/hap_fadcsystem/ then posix_spawnp'd, admin VS/haproxy params); fadcpopen@0x753c0 PLAUSIBLE LOW (popen pipeline "ps -w | grep '[SR]    %s -f' | grep -F '%s' | wc" — process name/config path in grep single-quote args, single-quote escape injection, likely haproxy name+VS config path, admin-controllable); cmf_exec_conf@0x365b5 PLAUSIBLE MEDIUM: CLI CRLF injection via scripting names — delete format "config vdom\r\nedit \"%s\"\r\nconfig system scripting\r\ndelete \"%s\"\r\n" and create format embeds scripting-file/VS-name/ADFS-pub-name — same mechanism as FAD_A2 but in lb scripting management.
 - 2026-09-26 (session 7 cont): fnginxctld COMPLETE — fadcsystem×66 ALL ELIMINATED (posix_spawnp: mkdir/rm/killall fnginx/fnginx_stop with internal+admin-VS paths); fadcsystemf×1 ELIMINATED; execl×2 ELIMINATED (no shell, fnginx respawn); fadcpopen×2 iptables ELIMINATED (hardcoded iptables/ip6tables binary, integer line number); fadcpopen×2 /bin/fnginx -t PLAUSIBLE LOW (popen VS-name in config path, admin-only); sys_vdom_exec = FAD_N1 (1 caller, previously confirmed). bgpd COMPLETE — ALL 236 system() = log rotation class FAD_BGPD: 'cp /tmp/%s_bgpd.log /tmp/%s_bgpd_old.log' ×156, prelist×31, fillist×25, cmd_bgp×1, 23 more same pattern; 0 non-log-rotation callers confirmed. ospfd COMPLETE — ALL 101 system() = log rotation FAD_BGPD: 'cp /tmp/%s_ospfd.log ...' ×97, 4 context-only (function name labels, not system() args); 0 non-log callers confirmed. ospf6d COMPLETE — ALL 65 system() = log rotation; FAD_O1 confirmed. All remaining ANALYZED binaries upgraded to COMPLETE (libav.so/opensips/httproxy3/uwsgi/del_netdev/vdom/rtmd/ditest-utils/modules.ko/migadmin-fortiai).
 - 2026-09-26 (session 6 cont): flg_reportd row updated to COMPLETE (execve = hardcoded /bin/email SMTP reporter, resolved prior session). waf_db_* external caller audit COMPLETE: 0 callers in any bin or lib in firmware image — API is dead code; only 'waf_db' CLI command table keyword in cli binary. Oracle Instant Client (extra_lib.tar.xz) COMPLETE: 0 FortiADC components import/dlopen Oracle libs; libnnz12.so strcpy×9 struct-bounded ELIMINATED; libclntsh.so internal system/popen callers unreachable; entire Oracle bundle ELIMINATED. keepalived COMPLETE: fadcsystem×79 ALL ELIMINATED (71 chroot setup hardcoded paths, 4 cleanup hardcoded, 2 snprintf mkdir+chmod posix_spawnp, 1 open/dev/null); sys_vdom_exec ELIMINATED (echo %d int-only); execvp×2 hardcoded; execle /bin/bash PLAUSIBLE LOW (admin VRRP notify, confirmed prior session).
+- 2026-09-26 (session 9): httproxy deep memory corruption pass. All 6 recv callers analyzed: MSG_PEEK no-write×2 ELIMINATED; ring-buffer fill bounded×1 SAFE; PROXY-protocol peek×1 SAFE; TLS ClientHello raw parser (0x27c1f6) → FAD_H4 CONFIRMED. All 3 recvfrom callers: UDP abstraction×2 SAFE; protocol handler (0x89d6e3) malloc(field+0x38) no bounds check → FAD_H3 — integer overflow → malloc(0) → recv loop skips → DoS only → ELIMINATED. strcpy chain (0x7f40a0): inputs bounded ≤157B via 0x7e7c10 SAFE. realloc×81: $VAR substitution + table growth patterns, all correct. sprintf@0x50e3f0: HAProxy ACL evaluator, format from config struct not wire LOW. FAD_H4 CONFIRMED LOW: SNI hostname_length (wire 2-byte, no bounds check against sni_list_length) → memcpy past SNI ext into adjacent extensions in recv buf. OOB read only, max 4096B, no write overflow.
 - 2026-09-26 (session 8): CRITICAL ARCH FINDING — libbase.so (155KB) is the sole definer of sys_vdom_exec (VA=0x1ce80, 366B), sys_vdom_exec_safe (VA=0x1d160, 364B), and sys_vdom_id_exec. Both variants call fadcsystem@PLT=0x7b60 (→GOT=0x27598); fadcsystem=posix_spawnp (from libstdext.so). All FAD_W1/N1/C1/H1/H2/RT1/O1 ELIMINATED: sys_vdom_exec does NOT invoke a shell; '> /dev/null 2>&1' and '|' in format strings are literal argv tokens. RPATH/NEEDED confirmed: all importers (libwaf.so, libcmdb_plugin.so, fnginxctld, rtmd, httproxy3) have NEEDED:libbase.so; runtime resolution is deterministic. libbase.so COMPLETE. libntp.so COMPLETE (fadcsystem@PLT, 0 callers). 17 stub libs (libadc_nl_ipc.so, libautolearn.so, libbasepp.so, libcfg_saml.so, libcmdbapi.so, libfmaildbapi.so, libfmlrnd.so, libfpoll.so, libfts.so, libgeo.so, libgzip.so, libippool.so, librs_profile.so, libshmkvdbapi.so, libsslhw.so, libssli.so, libxpl.so.1) COMPLETE — all ~13-14KB, all CLEAN (no exec-class PLT imports). watchdog COMPLETE — CLEAN. RE 100% COMPLETE for FortiADC v8.0.4-B0136.
