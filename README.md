@@ -14,7 +14,13 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ---
 
-![demo](assets/demo.gif)
+**Codex supports Ablation**
+
+![Codex demo](assets/screencast.gif)
+
+**Claude Code supports Ablation**
+
+![Claude Code demo](assets/demo.gif)
 
 ---
 
@@ -142,6 +148,39 @@ This ReAct loop using `claude-sonnet-5` for decompilation effectively replaces t
 ```
 /model claude-sonnet-4-6
 ```
+
+## Using Ablation with Codex
+
+Ablation supports use from Codex through Codex's normal shell access when the CLI and target
+binary are available in the same environment. No Codex-specific plugin or MCP server is
+required for this workflow. Install the local checkout into the Python environment Codex
+uses, then confirm the command is available:
+
+```bash
+python -m pip install -e .
+ablation --help
+```
+
+Codex can run commands, read the results, and inspect likely candidates in sequence:
+
+```bash
+ablation analyze ./target.bin
+ablation search ./target.bin "network-controlled length reaches a copy"
+ablation profile ./target.bin 0xADDRESS
+ablation cfg ./target.bin 0xADDRESS --insns
+ablation taint ./target.bin
+```
+
+Provide Codex the binary path and the question being investigated. Ask it to keep command
+output distinct from its interpretation and to verify candidates against the instructions,
+callers, guards, and input source. Ablation scores and static-analysis findings are triage
+evidence, not proof of exploitability. The generic `taint` command currently routes ARM32
+and x86 differently; use `ablation --help` for explicit architecture commands. A Codex
+session also needs access to the binary itself; a file that remains only on another
+workstation is not available to a remote session.
+
+See [Understanding Ablation](docs/understanding-ablation.md) for a detailed architecture
+overview, command map, limitations, and reproducible Codex workflow.
 
 ---
 
