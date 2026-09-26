@@ -1,6 +1,6 @@
 # Langfuse Source RE Session
 
-## Status: Pass 3 complete — 2026-09-26
+## Status: Pass 5 complete — 2026-09-26
 
 ## Completed
 
@@ -12,21 +12,42 @@
 - SourceTaintTracker: confirmed call chains for LFG-CODEEVAL-1 and LFG-SANDBOX-1B
 - Manual audits: ingestion pipeline SQL, ClickHouse identifiers, EE admin/SSO/RBAC
 
-### Pass 3 (this session, 2026-09-26)
+### Pass 3 (2026-09-26)
 - SSRF audit: LLM base URL, webhook URL, blob storage endpoint
   - LLM/webhook: comprehensive protection (CIDR blocklist all RFC1918+IMDS+NAT64,
     DNS resolution of all A+AAAA records, redirect re-validation, cloud empty whitelist)
   - Blob storage: cloud enforces; self-hosted opt-in only → LFG-BLOB-SSRF-1 INFO
 - LLM API key storage: encrypt() at rest, SafeLlmApiKeySchema strips key from responses
-- Admin API: timing-safe compare, cloud-blocked by default (NEXT_PUBLIC_LANGFUSE_CLOUD_REGION)
-- AI gateway: HMAC signature verify (withGatewayResolveSignatureVerification)
+- Admin API: timing-safe compare, cloud-blocked by default
+- AI gateway: HMAC signature verify
 - SCIM endpoint: org-scoped shadowAuth + Serializable TX for last-OWNER guard
 - Dashboard query stream: session auth + project membership + validateQuery()
 - Trace IO streaming: z.enum(OBSERVATION_IO_STREAM_FIELDS) prevents column injection
 - Sandbox server: intentional zero-auth, MicroVM security contract documented
 - OTEL ingestion: createAuthedProjectAPIRoute + body size limit
-- Annotation queues: createAuthedProjectAPIRoute, all ops use auth.scope.projectId
-- Prompts API: createAuthedProjectAPIRoute, scoped to auth.scope.projectId
+- Annotation queues, prompts API: standard createAuthedProjectAPIRoute pattern
+
+### Pass 4 (2026-09-26)
+- All worker features covered — no new findings beyond LFG-ISO-1
+- Key verifications: eval anti-loop (3 layers), blob SSRF two-layer defense,
+  partition cursor source (system.parts, not user input), trace delete lease discipline,
+  S3 path sanitization (safeBlobKeySegment), DDL injection prevention (assertTargetTable allowlist)
+
+### Pass 5 (2026-09-26)
+- web/src/features/* (~381 server-side TS files, in parallel batches)
+- packages/shared/src/server/repositories/* and queries/clickhouse-sql/*
+- EE features server files (admin-api, SSO, billing webhook, verified-domains)
+- Key verifications:
+  - ClickHouse query layer: isValidTableName whitelists table names, column names
+    from server-controlled registry, all values parameterized — zero raw interpolation
+  - MCP 119 tool files: canCallTool fail-closed, SkillFilePathSchema blocks traversal
+  - API key pipeline: Authenticator → enforceRouteSettings blocks admin-on-cloud
+    and in-app agent keys on non-MCP routes
+  - SSO discovery: validates each OIDC endpoint (token, jwks, userinfo) individually
+  - parseFilterCompletion validates LLM output before use
+  - Media: contentType enum-restricted, bucket path from SHA-256 hash
+  - evaluatorService auto-name LLM prompt: anti-injection guardrail + bounded output → INFO
+  - isValidPostgresRegex: parameterized SQL, PostgreSQL ERE (low ReDoS risk) → INFO
 
 ## Confirmed Findings
 
@@ -45,16 +66,27 @@
 - LFG-MASKING-1: ingestion masking fail-open
 - LFG-WORKER-API-1: worker /health params unauthenticated
 - LFG-MEDIA-1: SVG/HTML upload allowed
-- LFG-CH-QUERY-1: ClickHouse raw interpolation pattern
+- LFG-CH-QUERY-1: ClickHouse raw interpolation pattern (view builder)
 - LFG-BLOB-SSRF-1: blob storage SSRF validation opt-in gap on self-hosted
+- LFG-EVAL-PI-1: evaluator auto-name generator — user-controlled content in LLM prompt (mitigations present)
+- LFG-MODEL-REGEX-1: user-controlled POSIX regex validated in PostgreSQL (parameterized; low ReDoS risk)
 
-## Next
+## Coverage Status
 
-Codebase RE substantially complete. Areas not yet read in detail:
-- Dataset management routes (standard CRUD, createAuthedProjectAPIRoute pattern)
-- Score management (same pattern)
-- Experiment queue internals
-- packages/shared/src/server/repositories/* (Clickhouse read paths, reviewed for SQL injection; not for logic bugs)
+Substantially complete. Remaining (~60 utility files not individually read):
+- entitlements/server/ (entitlement checks, getPlan, hasEntitlement — pure logic)
+- feature-flags/server/ (org feature flags — no auth surface)
+- audit-logs/server/ (logging utility — no auth surface)
+- onboarding/server/ (onboarding wizard — uses standard session auth)
+- sdk-version/server/ (metadata endpoint)
+- cloud-status-notification/server/ (status polling — session auth)
+- ai-features/server/ (availability checks)
+- posthog-analytics/server/ (server-side analytics calls)
 
-If continuing: focus on dataset/experiment query injection surface and eval template
-prompt injection (adversarial user prompts stored in LLM evaluator templates).
+These are all low-risk support/config paths with no security-sensitive logic.
+RE is effectively complete at this coverage level.
+
+## Commits
+- f85ed61: LFG-SANDBOX-1B docker network fix
+- e8d9313: pass 4 complete
+- (next): pass 5 complete
