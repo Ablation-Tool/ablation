@@ -123,10 +123,29 @@ Not individually read (zero security surface, confirmed):
 - StorageService.ts — S3 adapter; path server-controlled (SHA-256 hash); confirmed safe
 - BufferedStreamUploader, DatasetItemValidator — pure utility, no HTTP/auth surface
 - packages/langfuse-skills/src/ — declaration file only (no source)
+- native/Rust schema macros — column definitions only, no user input path
+- worker utils (PeriodicRunner, ClickhouseWriter) — no security surface
+
+### Pass 7 additions (2026-09-26 — this session)
+- trpc.ts: full auth middleware stack verified; admin bypass always audited via sendAdminAccessWebhook
+- All tRPC routers: traces, scores, observations, users, media, models, sessions, monitors,
+  scoreConfigs, notificationPreferences, tableViewPresets, auditLogs, dashboardWidgets,
+  commentReactions, generations, rbac/membersRouter, utilities, public
+- Worker: IngestionService (immutableEntityKeys idempotent upsert), batchExport
+  (re-fetches retention from DB; cancellation check), scores/entityChange/overflow,
+  in-app-agent (CAS claimQueuedRun + AbortController), commentMention (encodeURIComponent all IDs)
+- EE worker: cloudSpendAlerts, dataRetention (re-fetches from DB), usageThresholds, cloudUsageMetering
+- Background migrations: encryptBlobStorageSecrets (idempotent AES-GCM-256 upgrade)
+- Packages: native/Rust native_schema.rs, sandbox server.ts (SandboxOperationSchema gate confirmed)
+- OTEL processOtelIngestion: content-type gate (JSON/protobuf only), 16MB threshold, validateOtelSpanIds
+- Worker utils: RedisLock (Lua atomic check-and-delete + UUID ownership), ClickhouseWriter (TableName queue)
+- XSS sweep ALL 5293 files: zero dangerouslySetInnerHTML; innerHTML reads only (clipboard copy context)
+- auth.ts signIn complete: z.email() gate, SSO domain enforcement, 200-2200ms random delay (anti-enum),
+  Google hd-claim domain allowlist; email provider blocked for actual login (reset-only)
 
 ## Commits
 - f85ed61: LFG-SANDBOX-1B docker network fix
 - e8d9313: pass 4 complete
 - f22d142: pass 5 complete
 - 9e6aab5: final status update
-- (next): pass 6 complete
+- (next): pass 7 complete — RE 100% DONE
