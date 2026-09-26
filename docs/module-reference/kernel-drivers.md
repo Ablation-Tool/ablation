@@ -1,8 +1,8 @@
 # Windows Kernel Driver Analysis
 
 Two cooperating modules for Windows kernel driver RE: `KernelDriverAnalyzer` for
-attack surface mapping and `BYOVDDetector` for identifying drivers with exploitable
-capabilities. Run `KernelDriverAnalyzer` first. `BYOVDDetector` consumes its output.
+attack surface mapping and `ByovdDetector` for identifying drivers with exploitable
+capabilities. Run `KernelDriverAnalyzer` first. `ByovdDetector` consumes its output.
 
 ---
 
@@ -72,7 +72,7 @@ user-mode pointer is passed directly into the dispatch handler.
 
 ---
 
-## BYOVDDetector
+## ByovdDetector
 
 **File:** `ablation/analyzers/byovd_detector.py`
 
@@ -110,34 +110,34 @@ Reference: [loldrivers.io](https://www.loldrivers.io/) for known-vulnerable driv
 ### Usage
 
 ```python
-from ablation.analyzers.byovd_detector import BYOVDDetector
+from ablation.analyzers.byovd_detector import ByovdDetector
 
-detector = BYOVDDetector.from_path('/path/to/driver.sys')
+detector = ByovdDetector.from_path('/path/to/driver.sys')
 result = detector.detect()
 print(result.fmt())
 
-# Summary: is this a BYOVD candidate?
-if result.is_byovd_candidate:
-    print(f"BYOVD candidate — capabilities: {result.capability_classes}")
+if result.is_byovd_capable:
+    for cap in result.capabilities:
+        print(f"  {cap.capability_class}: {cap.api_name}")
 
-# Check for specific capability
-if 'PHYS_MEM_RW' in result.capability_classes:
+# Check for a specific capability class
+if any(c.capability_class == 'PHYS_MEM_RW' for c in result.capabilities):
     print("Physical memory R/W capability confirmed")
 ```
 
 ### Composing with KernelDriverAnalyzer
 
-`BYOVDDetector` reuses `KernelDriverAnalyzer` output to avoid re-parsing the PE:
+`ByovdDetector` accepts an existing `KernelDriverReport` to avoid re-parsing the PE:
 
 ```python
 from ablation.analyzers.kernel_driver_analyzer import KernelDriverAnalyzer
-from ablation.analyzers.byovd_detector import BYOVDDetector
+from ablation.analyzers.byovd_detector import ByovdDetector
 
 kda = KernelDriverAnalyzer.from_path('/path/to/driver.sys')
 driver_report = kda.analyze()
 print(driver_report.fmt())
 
-detector = BYOVDDetector.from_driver_report(driver_report)
+detector = ByovdDetector('/path/to/driver.sys', kda_report=driver_report)
 byovd_result = detector.detect()
 print(byovd_result.fmt())
 ```

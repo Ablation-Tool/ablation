@@ -62,10 +62,11 @@ highs = [f for f in findings if f.severity == 'HIGH']
 |---|---|
 | `func_va` | VA of the enclosing function |
 | `call_va` | VA of the format function call site |
-| `fmt_func` | Name of the format function called |
+| `callee` | Name of the format function called (e.g. `printf`, `syslog`) |
 | `fmt_reg` | Register that held the format argument |
-| `provenance` | How the register was defined: `RODATA` / `ENTRY_ARG` / `STACK_LOAD` / `UNKNOWN` |
-| `severity` | `HIGH` (entry arg) or `MEDIUM` (unclear provenance) |
+| `provenance` | How the register was defined: `rodata` / `arg_passthrough` / `stack_load` / `register` / `unknown` |
+| `severity` | `HIGH` (entry arg passthrough) or `MEDIUM` (unclear provenance) |
+| `description` | Human-readable summary of the finding |
 
 ---
 
