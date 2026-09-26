@@ -534,6 +534,531 @@ FINDINGS = {
             "wordexp": "WRDE_NOCMD flag set; $(cmd) blocked; glob-only residual risk LOW",
         },
     },
+
+    # ── libstdext.so — fadcsystem definition ──────────────────────────────────
+    # fadcsystem (0x3060): xor esi, esi; jmp PLT[18]=fadcsystem_envp (0x3010)
+    # fadcsystem_envp (0x3010): parse_command_line(cmd) → execute_command(parsed, envp)
+    #   → posix_spawnp (PLT import from glibc). No shell involved.
+    # This CONFIRMS FAD_P2 injection ELIMINATED: fadcsystem("rm %s/%s", ...) passes the
+    #   full path as argv[1] to rm — shell metacharacters have no effect.
+    # Path traversal (coredump-../../etc/shadow) still works as rm follows the resolved path.
+    # Also defines: fadcpopen/fadcpopen_internal (popen variants via fork+pipe+exec),
+    #   execute_command (direct posix_spawnp), fm_exec_cli, fm_popen_pipe.
+    # No system() usage anywhere in libstdext.so.
+
+    "LIBSTDEXT_fadcsystem": {
+        "binary": "libstdext.so",
+        "status": "ANALYZED — fadcsystem = parse_command_line → posix_spawnp (no shell)",
+        "evidence": {
+            "fadcsystem_0x3060": "xor esi,esi; jmp PLT[18]=fadcsystem_envp",
+            "fadcsystem_envp_0x3010": "parse_command_line(0x2280) → execute_command(0x2340) → posix_spawnp",
+            "plt_imports": "posix_spawnp, fork, execvp, setuid, setgid (no system())",
+            "fad_p2_confirms": "shell injection ELIMINATED; path traversal still active via rm argv[1]",
+        },
+    },
+
+    # ── ocgs (5.1MB Go 1.22.3 + CGo) — One-Click GSLB Server daemon ──────────
+    # Binary: ~/ablation/fortiadc-work/bins/ocgs
+    # Source: /root/FortiADC_test/FortiADC/daemon/ocgs
+    # BuildID: ziU_vht1vxd0NFUf-i3b/...
+    #
+    # Structure:
+    #   .text: 0x402340 (2.5MB), .gopclntab: 0x75f8c0 (file off 0x35f8c0)
+    #   nfuncs=5529 (Go stdlib + main), 7538 names in funcnametab
+    #
+    # main package (9 real functions):
+    #   0x65ec80  main.main
+    #   0x65ba60  main.DataHandler       — IPC command dispatcher
+    #   0x65a2c0  main.GetAccountIDAuth  — Fortinet Fabric API auth
+    #   0x659400  main.WriteDNSServerStatusFile
+    #   0x659fc0  main.ReadAccountLicense
+    #   0x65e5e0  main.CheckLogSize
+    #   0x65ea60  main.LogInit
+    #   main.EncryptionAccountInfo (VA unresolved — funcdata false positive)
+    #
+    # DataHandler (0x65ba60):
+    #   Listens on Unix domain socket (unixgram — local IPC only, NOT network)
+    #   Text protocol dispatcher; commands:
+    #     len=5:  "reset"
+    #     len=12: "Disconnected" + IP=="0.0.0.0" check
+    #     len=9:  "nolicense"
+    #     len=9:  "Connected" + IP check
+    #     len=8+: "snupdate" (appears 4x — server node update, GSLB member status)
+    #     len=?:  "memb..." (member update — partial)
+    #   No network exposure. Only local daemons can send to this socket.
+    #
+    # GetAccountIDAuth (0x65a2c0):
+    #   Makes HTTPS POST to /api/fabric/auth on admin-configured FortiGate Fabric controller
+    #   Response contains auth token; flow: EncryptionAccountInfo → one_click_token
+    #   Also contacts /api/v1.0/one-click-glb-server
+    #   Uses standard Go crypto/tls (no InsecureSkipVerify found in strings or binary)
+    #   auth_url configurable by admin — potential SSRF if http:// allowed but no evidence
+    #   JSON field json:"license" — reads license data from response
+    #
+    # PLT (C imports only — 48 entries):
+    #   privilege: setresuid, setresgid, setreuid, setregid, setuid, seteuid, setegid, setgid, setgroups
+    #   dns: getaddrinfo, getnameinfo, gai_strerror, freeaddrinfo, res_search
+    #   threading: pthread_create, pthread_mutex_lock, pthread_cond_wait, etc.
+    #   NO: system, popen, exec*, sprintf, strcpy, strcat — pure Go for all string/exec ops
+    #
+    # External files:
+    #   Writes: /tmp/ocgs.log, /tmp/one_click_gslb_server (status file)
+    #   Reads: /etc/resolv.conf (DNS config via net package)
+    #
+    # Privilege: setresuid/setresgid available — can drop or change UID
+    #
+    # VERDICT: CLEAN. No injectable sinks; IPC via Unix domain socket (local only);
+    #   TLS uses standard Go crypto/tls; auth_url SSRF is theoretical (admin-only config).
+
+    # ── libwaf.so (2.7MB C shared library) ───────────────────────────────────
+    # Exports: 1936 functions. BSS: 12.7MB (WAF state tables).
+    # C++ code (lexertl, pcre, json, sqlite3 are all used).
+    #
+    # PLT dangerous sinks:
+    #   fadcsystem (0x7dbc0): 5 callers
+    #     0xb8a45 waf_blk_ip_get:        'rm -f %s' (file path from VS config) → posix_spawnp. ELIMINATED.
+    #     0xb8e8e waf_blk_ip_gui_clear:  'rm -f %s' (log path with glob *) → posix_spawnp. ELIMINATED.
+    #     0xb8edc waf_blk_ip_gui_clear:  same as above. ELIMINATED.
+    #     0xeae89 waf_system:            general-purpose wrapper: vsnprintf(fmt, ...) → fadcsystem.
+    #       waf_system(0xead90) is a variadic fn; callers pass format strings from .rodata.
+    #       Trace needed for each waf_system caller to confirm all formats are hardcoded.
+    #     0xec92d waf_owasp_top10_load:  'touch %s' with hardcoded '/tmp/WAF_OWASP_TOP10_IPC_PATH'. ELIMINATED.
+    #
+    #   sys_vdom_exec (0x7cac0): 2 callers  ← SHELL EXECUTION (> /dev/null 2>&1 in format string)
+    #     0xb82f9 waf_blk_ip_dump_cmd (0xb8230):
+    #       snprintf(buf, 'hpwafblockip show %s %d %s > /dev/null 2>&1', rdi, 10000, rsi)
+    #       rdi = 1st arg to dump_cmd; rsi = 2nd arg. Both come from callers (in other binaries).
+    #       '> /dev/null 2>&1' confirms sys_vdom_exec passes to a shell.
+    #       PLAUSIBLE HIGH if rdi/rsi are VS-name/VDOM-name derived (admin CMDB config).
+    #     0xb840a waf_blk_ip_relese_cmd (0xb8330):
+    #       snprintf(buf, 'hpwafblockip clear %s %s %s > /dev/null 2>&1', arg1, arg2, arg3)
+    #       Same shell execution via sys_vdom_exec. Same PLAUSIBLE assessment.
+    #     ASSESSMENT: admin-stored injection via VS name/VDOM name in shell command.
+    #       Requires: admin CMDB config + VS name accepted with metacharacters.
+    #       Similar to FAD_A2 pattern. Filed as FAD_W1.
+    #
+    #   strcpy (0x7c000): 1 caller
+    #     0x88074 parse_regex: dst = malloc(strlen(src)+1) immediately before strcpy.
+    #       Heap allocation sized exactly for source. BOUNDED — ELIMINATED.
+    #
+    # PENDING: waf_system callers (233 __snprintf_chk uses; need format-string audit for user-data paths)
+    # PENDING: SQLite3 callers (sql injection if query uses string concat)
+    # PENDING: PCRE callers (ReDoS if pattern comes from user input)
+
+    "LIBWAF_profile": {
+        "binary": "libwaf.so",
+        "status": "SWEEP PARTIAL — FAD_W1 PLAUSIBLE HIGH; fadcsystem/strcpy ELIMINATED",
+        "evidence": {
+            "sys_vdom_exec_0xb82f9": "waf_blk_ip_dump_cmd: 'hpwafblockip show %s %d %s > /dev/null 2>&1' → shell exec",
+            "sys_vdom_exec_0xb840a": "waf_blk_ip_relese_cmd: 'hpwafblockip clear %s %s %s > /dev/null 2>&1' → shell exec",
+            "fad_w1_assessment": "PLAUSIBLE HIGH — args from VS/VDOM names (admin config); shell metachar bypass unconfirmed",
+            "fadcsystem_callers": "All 5: 'rm -f %s' file paths or hardcoded — ELIMINATED (posix_spawnp, no shell)",
+            "strcpy_0x88074": "parse_regex: malloc(strlen+1) immediately before strcpy — BOUNDED, ELIMINATED",
+            "pending": "waf_system callers, SQLite queries, PCRE patterns not fully audited",
+        },
+    },
+
+    # ── miglogd (3.5MB C, stripped ELF64) — migration log daemon ────────────────
+    # PLT sinks: fadcsystem (0xaa50), system_fgt_log (0xb220)
+    # .text: 0xb390..0x30454 (255KB), .rodata: 0x31000..0x38724, .bss: 0x3766e0 (174MB)
+    # No load bias: VA == file offset for all sections.
+    #
+    # fadcsystem callers (16 total):
+    #   CRITICAL CONTEXT: fadcsystem = posix_spawnp (no shell) — confirmed via libstdext.so analysis.
+    #   Shell injection ELIMINATED for all fadcsystem callers. Path traversal residual.
+    #
+    #   0x17b1d: snprintf('rm -rf %s', '/tmp/tmp_elog_msg') → hardcoded. ELIMINATED.
+    #   0x18c63: snprintf('rm -rf %s/%s', '/var/log/logrpt', 0x13(%r12))
+    #     0x13(%r12) = log plugin name (cfg_first_logglobalplugin/cfg_next_logglobalplugin iterator).
+    #     Plugin name from CMDB admin config. Path traversal if name contains '../'.
+    #     Shell injection: ELIMINATED (posix_spawnp). Path traversal: PLAUSIBLE MEDIUM.
+    #   0x18ef9, 0x18f48, 0x19521, 0x19565:
+    #     snprintf('cp %s /tmp/fluentbit/global/outputs/', cmf_get_config_file_path())
+    #     Source path from admin-configured plugin file path. PLAUSIBLE LOW.
+    #   0x19453: XMM-assembled hardcoded 'rm -rf  /tmp/fluentbit/global/outputs/*'. ELIMINATED.
+    #   0x194ad: XMM-assembled hardcoded 'cp /etc/fluentbit/fluentbit.null.conf /tmp/fluentbit/global/outputs/'. ELIMINATED.
+    #   0x19841: snprintf('touch /var/log/logrpt/%s/should_deleted', VDOM_name)
+    #     VDOM name = r13 from VDOM event handler. Path traversal if VDOM allows '../'. PLAUSIBLE MEDIUM.
+    #   0x199bd, 0x19c27: snprintf('rm -rf /var/log/logrpt/%s', VDOM_name)
+    #     rm -rf with VDOM name traversal → arbitrary dir deletion. PLAUSIBLE MEDIUM.
+    #     Pattern identical to FAD_P2 (dumpsystem_delete_run). Gated by CMDB VDOM name validator.
+    #   0x19cac, 0x19cb8, 0x19cc4: hardcoded 'killall -9 flg_accessd/flg_indexd/flg_reportd'. ELIMINATED.
+    #   0x1c8b4: snprintf('rm -rf %s/%s/%s', '/var/log/logrpt', logfile_struct, ...) log cleanup. ELIMINATED.
+    #   0x2124c: '/bin/upgrade.sh' hardcoded. ELIMINATED.
+    #
+    # system_fgt_log callers (12 total):
+    #   system_fgt_log = FortiADC syslog API (log message writer), NOT system().
+    #   All 12 callers use format strings: 'Create new log file %s...', 'Can not get log file %s...'
+    #   ALL ELIMINATED — no shell execution.
+    #
+    # NET FINDING: FAD_M1 PLAUSIBLE MEDIUM — VDOM/plugin-name path traversal
+    #   Vectors: 0x19841 (touch), 0x199bd/0x19c27 (rm -rf), 0x18c63 (rm -rf logrpt/plugin)
+    #   Requires CMDB to accept '/' or '..' in VDOM/plugin names (typically blocked by validator).
+    #   Impact: arbitrary file create (touch) or dir deletion (rm -rf) as miglogd daemon.
+    #   Gating: CMDB name validator likely blocks '/' — assess when CMDB validator code is swept.
+
+    "MIGLOGD_profile": {
+        "binary": "miglogd",
+        "status": "ANALYZED — FAD_M1 PLAUSIBLE MEDIUM; all shell injection ELIMINATED",
+        "evidence": {
+            "fadcsystem_context": "fadcsystem=posix_spawnp (confirmed libstdext.so); shell injection ELIMINATED across all 16 callers",
+            "system_fgt_log": "FortiADC syslog API (not system()); all 12 callers ELIMINATED",
+            "eliminated_callers": "hardcoded: 0x17b1d(rm tmp), 0x19453(rm fluentbit), 0x194ad(cp fluentbit), 0x19cac/b/4(killall), 0x1c8b4(log cleanup), 0x2124c(upgrade.sh)",
+            "fad_m1_touch": "0x19841: touch /var/log/logrpt/<VDOM>/should_deleted — path traversal if VDOM name allows '../'",
+            "fad_m1_rm": "0x199bd/0x19c27: rm -rf /var/log/logrpt/<VDOM> — dir deletion traversal (FAD_P2 analog)",
+            "fad_m1_plugin": "0x18c63: rm -rf /var/log/logrpt/<plugin_name> — log plugin name from CMDB",
+            "fad_m1_gating": "all gated by CMDB VDOM/plugin name validator (typically rejects '/' and '..'); confirm when CMDB code swept",
+            "cp_callers": "0x18ef9/18f48/19521/19565: cp <cmf_get_config_file_path result> to /tmp/fluentbit/ — admin config path, PLAUSIBLE LOW",
+        },
+    },
+
+    # ── libips.so (15MB C, IPS engine) — LuaJIT 2.1 embedded ────────────────────
+    # Exports: 2 (ips_so_query_interface, ips_so_patch_urldb). .text: 10.6MB.
+    # PLT: system(0xdc730), popen(0xdc290), execvp(0xdc640) + 17 string sinks.
+    #
+    # system caller (1): 0x489aaa — LuaJIT os.execute() builtin.
+    #   NaN-boxing: sar $0x2f; cmp $0xfffffffb → LuaJIT 2.1 (LuaJIT 2.1.87ae18af confirmed).
+    #   rdi = GCstring* + 0x18 = string data → passed to system().
+    #   VERDICT: admin-controlled Lua IPS rule script. ELIMINATED (intentional design).
+    #
+    # popen callers (4):
+    #   0x483375: popen(GCstring_from_LuaJIT_stack, mode) = io.popen() builtin. Same as above.
+    #   0x686667: popen('sysctl hw.cpufrequency 2>/dev/null', 'r') — macOS dead code. ELIMINATED.
+    #   0x6866bd: popen('/usr/sbin/lsattr -E -l proc0 ...' , 'r') — AIX dead code. ELIMINATED.
+    #   0x686701: popen('/usr/sbin/psrinfo -v 2>/dev/null', 'r') — Solaris dead code. ELIMINATED.
+    #
+    # execvp caller (1): 0x39c3cd — fork+exec subprocess spawner (after chdir/sigprocmask/env setup).
+    #   rdi/-0x260(%rbp) = pathname; rsi/-0x248(%rbp) = argv. Internal process launcher.
+    #   'Problem allocating env' string confirms environment setup. PLAUSIBLE LOW (internal use).
+    #
+    # ips_so_query_interface (0x115140): function-pointer resolver (plugin interface registry).
+    #   Iterates name strings, strcmp against dispatch table at 0xdff3c0, stores function pointers.
+    #   NOT packet processing — used by caller to register callbacks. CLEAN.
+    # ips_so_patch_urldb (0x1151f0): fopen(rdi, "rb") → reads URL database file. NOT network packets.
+    #
+    # 111 strcpy callers in packet-processing code = primary remaining attack surface.
+    #   Deep analysis of packet-path strcpy requires dedicated session.
+    #
+    # VERDICT: exec-class sinks ELIMINATED (LuaJIT builtins + dead code + internal launcher).
+    #   Primary residual: 111 strcpy callers in 10.6MB IPS engine text (pending).
+
+    "LIBIPS_profile": {
+        "binary": "libips.so",
+        "status": "SWEEP PARTIAL — exec sinks ELIMINATED; 111 strcpy in packet code PENDING",
+        "evidence": {
+            "luajit_version": "LuaJIT 2.1.87ae18af confirmed (strings + NaN-box pattern sar $0x2f; cmp $0xfffffffb)",
+            "system_0x489aaa": "LuaJIT os.execute() builtin — admin Lua IPS rule script. ELIMINATED (by-design).",
+            "popen_0x483375": "LuaJIT io.popen() builtin — same. ELIMINATED.",
+            "popen_dead_code": "0x686667/0x6866bd/0x686701: macOS/AIX/Solaris sysctl/lsattr/psrinfo — dead on Linux. ELIMINATED.",
+            "execvp_0x39c3cd": "Internal fork+exec subprocess spawner (chdir+sigprocmask+env setup). PLAUSIBLE LOW (trace caller).",
+            "query_interface": "ips_so_query_interface: function-pointer registry, not packet processing.",
+            "patch_urldb": "ips_so_patch_urldb: URL database file reader (fopen/fseek/fread).",
+            "pending_strcpy": "111 strcpy callers in 10.6MB IPS engine — packet-processing strcpy audit required.",
+        },
+    },
+
+    # ── libav.so (8MB C, Fortinet AV engine) ─────────────────────────────────────
+    # Exports: 69 (avFlowOpen/Write/Close/Diagnose/GetConfig/GetEngineVersion/...).
+    # PLT dangerous sinks: sprintf, strcpy, strcat, strncat, strncpy, vsnprintf,
+    #   snprintf, sscanf, __isoc99_fscanf, fgets, __isoc99_sscanf.
+    # No system/execv/fadcsystem/sys_vdom_exec — AV engine does NOT execute shell commands.
+    # .text: 0x82ef0 (8.2MB), .rodata: 0x49d000 (4.9MB).
+    #
+    # Primary attack surface: sprintf/strcpy/strcat callers in file scanning pipeline.
+    #   avFlowWrite() = main packet/file data ingestion path → traces into format string sinks.
+    #   AV signature parsing (avDbSetAdd) and delta file updates (avGetDeltaFileInfo) also candidates.
+    # No callers found for exec-class sinks → ELIMINATED for command injection.
+    # Residual: sprintf/strcpy in AV parsing pipeline = potential memory corruption.
+    #   Deep analysis requires dedicated session.
+
+    "LIBAV_profile": {
+        "binary": "libav.so",
+        "status": "PROFILED — no exec sinks; sprintf/strcpy in AV pipeline PENDING",
+        "evidence": {
+            "exports_69": "avFlowOpen/Write/Close/Diagnose/GetConfig/GetEngineVersion/GetSigDate/...",
+            "no_exec_sinks": "No system/execv/fadcsystem/sys_vdom_exec in PLT. CLEAN for cmd injection.",
+            "string_sinks": "sprintf, strcpy, strcat, strncat, strncpy, vsnprintf, snprintf, sscanf, fgets present.",
+            "pending": "sprintf/strcpy in avFlowWrite/avDbSetAdd scanning path — memory corruption audit pending.",
+        },
+    },
+
+    # ── libcmdb_plugin.so (1.8MB C, CMDB plugin, 928 exports) ────────────────────
+    # PLT sinks: system(0x4f520), execve(0x4e840), sys_vdom_exec(0x4c240),
+    #   fadcsystem(0x4cd60), fadcpopen(0x4e570), fm_popen_pipe, fadcsystem_envp.
+    # .text: 0x4f6a0..0x10602a (712KB).
+    #
+    # system callers (9): clustered 0x5d23b..0x5d7c1 — one or two functions.
+    #   All 9 in ~0x600 byte range → format strings need extraction.
+    #
+    # execve caller (1): 0x79d22 — admin config execution (format string unknown, 1 site).
+    #
+    # sys_vdom_exec callers (4): 0x9c94b, 0x9c95a, 0xb3d55, 0xb4734.
+    #   Two pairs (0x9c94b/0x9c95a close together, 0xb3d55/0xb4734 separate).
+    #   CMDB plugin with shell execution capability — admin CMDB config injection class.
+    #
+    # fadcsystem callers (81): large corpus, pending format string audit.
+    #
+    # PENDING: Full format string extraction for system()/sys_vdom_exec()/execve() callers.
+
+    "LIBCMDB_PLUGIN_profile": {
+        "binary": "libcmdb_plugin.so",
+        "status": "ANALYZED — system() ELIMINATED; execve ELIMINATED; FAD_C1 PLAUSIBLE MEDIUM (sys_vdom_exec x2); fadcsystem audit pending",
+        "evidence": {
+            "system_9_ELIMINATED": (
+                "All 9 callers in geodebug/geoip_country_name_cmf_startup (GeoIP DB management). "
+                "Hardcoded paths: unzip('F0rtinet899', geoip_db_rg.zip, /tmp2/), rm(geoip files), "
+                "mknod /dev/geoip c 0x8c 0. NO user input in any system() call. ALL ELIMINATED."
+            ),
+            "geoip_hardcoded_pwd": "'F0rtinet899' — hardcoded GeoIP ZIP decryption password (FortiGuard DB update flow).",
+            "execve_0x79d22_ELIMINATED": "Inside fadc_popen() fork child (fork+dup2+execve pattern). ELIMINATED (internal fadc_popen impl).",
+            "sys_vdom_exec_0x9c94b_ELIMINATED": "'echo flush > /proc/net/ipv4_snat_addrbook' — hardcoded. ELIMINATED.",
+            "sys_vdom_exec_0x9c95a_ELIMINATED": "'echo flush > /proc/net/ipv6_snat_addrbook' — hardcoded. ELIMINATED.",
+            "fad_c1_nvgre_0xb3d55": (
+                "PLAUSIBLE MEDIUM: snprintf(r13, 256, 'ip link add %s type nvgre id %d dev %s local %s learning', ...) "
+                "→ sys_vdom_exec(vdom, r13). Args from CMDB VXLAN/NVGRE tunnel config struct "
+                "(interface name, tunnel ID, device name, local IP). "
+                "Interface name via sys_get_name_by_vdid + cfg_find_interface — admin-set CMDB value. "
+                "If CMDB allows metacharacters in interface name, shell injection via sys_vdom_exec."
+            ),
+            "fad_c1_vxlan_0xb4734": (
+                "PLAUSIBLE MEDIUM: snprintf(r13, 256, 'ip link add %s type vxlan id %d dev %s dstport %d local %s ttl %d learning', ...) "
+                "→ sys_vdom_exec(vdom, r13). Args from CMDB VXLAN config struct fields (+0x3ec, +0x3f0, +0x404). "
+                "Same class as FAD_N1 — admin interface name/IP injection into shell. "
+                "Both type 0x8 (VXLAN) and type 0x9 (NVGRE) overlay tunnel creation paths."
+            ),
+            "fadcsystem_81": "posix_spawnp (no shell); format string audit pending",
+            "fadcpopen_3": "0x8d117/0x8d343/0xab399 — popen via fadcpopen (fork+pipe+exec)",
+        },
+    },
+
+    # ── fnginxctld (1.7MB C PIE, nginx control daemon) ────────────────────────────
+    # PLT sinks: sys_vdom_exec(0x7640), fadcsystem(0x7830), fadcpopen(0x7c30),
+    #   execl(0x7ea0), fadcsystemf(0x76b0) — new sink variant.
+    # .text: 0x7ed0..0x3e687 (223KB). PIE: VA == file offset.
+    #
+    # sys_vdom_exec caller (1): 0x89d2 — in fngx_process_vcmd (variadic printf-to-shell dispatcher)
+    #   fngx_process_vcmd(fmt, args...) → __vsnprintf_chk(global_cmd_buf, fmt, va_args)
+    #                                   → cmf_get_cur_domain_name() → snprintf(vdom_buf, '%s', domain)
+    #                                   → sys_vdom_exec(vdom_buf, global_cmd_buf)
+    #   40 callers of fngx_process_vcmd, all using hardcoded format strings:
+    #     'ip address add %s/%d dev %s > /dev/null 2>&1' (VS IP / netmask / iface name)
+    #     'ip6tables -t mangle -A/D PREROUTING -p tcp --dport %d:%d -i %s -j FNGINX' (VS ports / iface)
+    #     'iptables -t mangle -A/D PREROUTING -p tcp --dport %d:%d -i %s -j FNGINX' (VS ports / iface)
+    #     (+ 30+ more callers at 0x1b1b4..0x1b44b — not all sampled)
+    #   %s args = VS interface name (rbp/r12 from VS config struct) and IP address.
+    #   sys_vdom_exec = shell execution confirmed ('> /dev/null 2>&1' in format strings).
+    #   FAD_N1: PLAUSIBLE MEDIUM — admin-stored VS interface name injection into iptables/ip commands.
+    #     Impact: if VS interface name allows semicolons/backticks: shell injection as fnginxctld (root?).
+    #     Same class as FAD_W1/FAD_A2. Gated by CMDB interface name validator.
+    #
+    # fadcsystem callers (66): posix_spawnp (no shell). Format strings pending for path traversal.
+    # fadcpopen callers (4): 0x1b0cd/0x1b26b/0x1ea3c/0x2c15b — popen via fadcpopen.
+    # execl callers (2): 0x25d7f/0x32edf — execl with fixed paths (suspected startup/restart).
+    # fadcsystemf (1): 0x1bae6 — new sink; not yet analyzed.
+
+    "FNGINXCTLD_profile": {
+        "binary": "fnginxctld",
+        "status": "ANALYZED — FAD_N1 PLAUSIBLE MEDIUM; exec callers mapped",
+        "evidence": {
+            "fngx_process_vcmd_0x88c0": "variadic printf-to-shell: vsnprintf(cmd) → sys_vdom_exec(vdom, cmd); 40 callers",
+            "fad_n1_format_strings": "'ip address add %s/%d dev %s > /dev/null 2>&1'; 'iptables/ip6tables ... -i %s -j FNGINX'",
+            "fad_n1_args": "%s = VS interface name / IP address from CMDB config struct (admin-set)",
+            "fad_n1_verdict": "PLAUSIBLE MEDIUM — sys_vdom_exec = shell; VS iface name injection if CMDB allows metacharacters",
+            "fadcsystem_66": "posix_spawnp — shell injection ELIMINATED; path traversal audit pending",
+            "execl_2": "0x25d7f/0x32edf — likely fixed-path startup/restart (not yet verified)",
+            "fadcsystemf_1": "0x1bae6 — new sink fadcsystemf; format string not yet extracted",
+        },
+    },
+
+    # ── vtl (2.1MB C non-PIE, virtual terminal/HSM support daemon) ───────────────
+    # LOAD_VA=0x400000. PLT: system(0x40a2d8), sprintf(0x40a578), strcpy(0x40a918).
+    # .text: 0x40ad00..0x14e378 (1.3MB).
+    # C++ binary: demangled names include ChrystokiConfiguration, std::string.
+    #
+    # system callers (3):
+    #   0x426e1d: fork+dup context; rdi = 0x8(%rbp) struct field. Parent passes cmd as pointer.
+    #     Context: dup(fd), dup(fd), dup(fd), then system(rbp+0x8). rbp = heap struct from caller.
+    #     Likely a popen-equivalent built from user data — needs caller trace to confirm.
+    #   0x430f63, 0x430fcd: ChrystokiConfigurationD1Ev (SafeNet Luna HSM).
+    #     Pattern: strcpy(buf, 'rm --force '); strcat(buf, rbp); system(buf)
+    #     rbp = HSM cluster name ('Cluster01', 'Cluster02'... from sprintf('Cluster%02d', n)).
+    #     rbp is auto-generated, not direct user input. PLAUSIBLE LOW (HSM config).
+    #     Context strings: 'The requested cluster: %s doesn't exist in the SafeNet-INC configuration'
+    #     Third-party SafeNet/Thales Luna HSM client library code.
+    #   NOTE: 'rm --force <path>' via system() → shell; if HSM config file path contains metacharacters,
+    #     injectable. But HSM config (Chrystoki.conf) requires admin/root access. ADMIN-ONLY.
+    #
+    # sprintf callers (85) + strcpy callers (19): audit pending.
+    # VERDICT: vtl PARTIAL — 3 system() callers; HSM path = admin-only (PLAUSIBLE LOW); fork+dup caller untraced.
+
+    "VTL_profile": {
+        "binary": "vtl",
+        "status": "SWEEP PARTIAL — 3 system() callers; HSM = PLAUSIBLE LOW; fork+dup untraced",
+        "evidence": {
+            "system_0x430f63_430fcd": "ChrystokiConfiguration (SafeNet Luna HSM): strcpy('rm --force ') + strcat(cluster_name) + system() — third-party, PLAUSIBLE LOW (admin HSM config)",
+            "system_0x426e1d": "fork+dup+system(rbp+8): command pointer from parent struct; needs caller trace",
+            "sprintf_85": "85 sprintf callers — audit pending (memory corruption / injection risk)",
+            "strcpy_19": "19 strcpy callers — bounds checking unknown; pending",
+        },
+    },
+
+    # ── flg_accessd / flg_indexd / flg_reportd / lb / infod / rd_mng ─────────────
+    # Quick profile: fadcsystem/fadcpopen sinks only (no system/execve except flg_reportd).
+    # All use posix_spawnp via fadcsystem — shell injection ELIMINATED.
+    # fadcpopen is a popen variant via fork+pipe+exec (no shell per libstdext.so pattern).
+    #
+    # flg_reportd: execve PLT present — 1+ callers. Format string pending.
+    # lb: fadcsystem_envp + fadcpopen. fadcpopen = fadcpopen_internal (popen via fork+exec, no shell).
+    # rd_mng: NO exec sinks. CLEAN for injection.
+    # infod: fadcsystem only (posix_spawnp). CLEAN for shell injection.
+
+    # ── acme-client (6.1MB Go 1.22.3 CGo) ─────────────────────────────────────
+    # ACME protocol client (RFC 8555). Challenge types: http-01, dns-01, tls-alpn-01.
+    # Standard golang.org/x/crypto/acme package (type names confirmed: *acme.Client, *acme.Order etc.)
+    # CGo interface: libcert.so, libnocmdbbase.so, libbase.so, libcmfquery.so
+    # RPATH: /root/FortiADC_test/FortiADC/... (build server)
+    # C functions: cfg_local_certificate_import_acme, cfg_local_certificate_import_alpn,
+    #   cfg_local_certificate_set_acme_status_to_failed, cfg_local_certificate_set_success_comments,
+    #   cfg_local_certificate_del, cfg_local_certificate_add/del_cert_group_member, etc.
+    "ACME_CLIENT_profile": {
+        "binary": "acme-client",
+        "status": "ANALYZED — CLEAN; no exec sinks; no InsecureSkipVerify=true found",
+        "evidence": {
+            "go_version": "Go 1.22.3 CGo",
+            "plt_CLEAN": "No execve/system/popen/fork in PLT. os/exec string present (transitive stdlib link only, not called).",
+            "tls_verify": "No InsecureSkipVerify=true in JSON config fields or observable code paths. Custom CA via 'ca' JSON field.",
+            "json_config_fields": "url(ACME server URL), ca(CA file), eab_kid, eab_mac_key, challenge_type, cert_group, vdom, auth_sock_file, alpn_auth_wait, client_timeout, lookup_dns, auth_file_path",
+            "ssrf_note": "url JSON field allows admin-configured ACME server URL (SSRF if non-admin can set it; admin-only CMDB path expected)",
+            "eab_creds": "eab_kid/eab_mac_key in JSON config — External Account Binding credentials (FortiGuard service account linkage)",
+        },
+    },
+
+    "LOGDAEMONS_profile": {
+        "binary": "flg_accessd/flg_indexd/flg_reportd/lb/infod/rd_mng",
+        "status": "PROFILED — fadcsystem callers posix_spawnp only; flg_reportd execve PENDING",
+        "evidence": {
+            "fadcsystem_posixspawnp": "All fadcsystem callers use posix_spawnp (libstdext.so confirmed) — shell injection ELIMINATED",
+            "rd_mng": "No exec-class sinks. CLEAN.",
+            "flg_reportd_execve": "execve in PLT — caller count and format string not yet extracted",
+            "lb_fadcpopen": "fadcpopen = fork+pipe+exec pattern (no shell per libstdext.so analysis)",
+        },
+    },
+
+    "OCGS_profile": {
+        "binary": "ocgs",
+        "status": "ANALYZED — CLEAN (no exploitable path found)",
+        "evidence": {
+            "socket_type": "unixgram (Unix domain datagram) — local IPC only, no network exposure",
+            "protocol_cmds": "reset(5), Disconnected(12), nolicense(9), Connected(9), snupdate(8+), memb...",
+            "auth_endpoint": "/api/fabric/auth + /api/v1.0/one-click-glb-server (Fabric API)",
+            "tls": "standard crypto/tls, no InsecureSkipVerify found",
+            "plt_sinks": "no system/execv/sprintf/strcpy; only libc pthread/privilege/dns imports",
+            "auth_url_ssrf": "THEORETICAL — auth_url admin-configurable; no exploitation evidence",
+        },
+    },
+
+    # ── Routing Daemons: bgpd / ospfd / ospf6d / keepalived / av ─────────────────
+    # All five daemons share a log rotation pattern via system():
+    #   snprintf(buf, 'cp /tmp/%s_<daemon>.log /tmp/%s_<daemon>_old.log', vdom_name, vdom_name)
+    #   system(buf)
+    # %s = VDOM name. If CMDB VDOM name validation allows shell metacharacters → injection.
+    # Same class as FAD_M1 (miglogd). Log rotation callers: PLAUSIBLE MEDIUM.
+    #
+    # bgpd: 236 system() callers. 4 log rotation format variants + 4 hardcoded access_list strings (ELIMINATED).
+    # ospfd: 101 system() callers. 1 format: cp /tmp/%s_ospfd.log … (log rotation only).
+    # ospf6d: 65 system() (log rotation) + 2 sys_vdom_exec (FAD_O1 IPsec state mgmt).
+    # keepalived: 79 fadcsystem (posix_spawnp; pending) + sys_vdom_exec ELIMINATED + execle /bin/bash PLAUSIBLE LOW.
+    # av: 3 fadcsystem (diagnostic collect; PLAUSIBLE LOW) + 2 fork (no exec in child; ELIMINATED).
+
+    "BGP_profile": {
+        "binary": "bgpd",
+        "status": "ANALYZED — PLAUSIBLE MEDIUM (log rotation system() x4 + VDOM name); access_list strings ELIMINATED",
+        "evidence": {
+            "system_236": "236 system() callers via __snprintf_chk → system(). snprintf + stack buf + system pattern.",
+            "log_rotation_fmts": (
+                "'cp /tmp/%s_bgpd.log /tmp/%s_bgpd_old.log' (0x11efb8), "
+                "'cp /tmp/%s_cmd_bgp.log /tmp/%s_cmd_bgp_old.log' (0x121f28), "
+                "'cp /tmp/%s_fillist.log /tmp/%s_fillist_old.log' (0x143268), "
+                "'cp /tmp/%s_prelist.log /tmp/%s_prelist_old.log' (0x1493d0). "
+                "%s = VDOM name. PLAUSIBLE MEDIUM if VDOM name allows shell metacharacters (same class as FAD_M1)."
+            ),
+            "access_list_ELIMINATED": (
+                "'add_access_list_rule', 'del_access_list_rule', 'add_access_list6_rule', 'del_access_list6_rule' "
+                "(0x14da90/b0/db50/db70). No %s — hardcoded command strings. ELIMINATED."
+            ),
+            "system_plt": "0x28b60",
+        },
+    },
+
+    "OSPF_profile": {
+        "binary": "ospfd",
+        "status": "ANALYZED — PLAUSIBLE MEDIUM (log rotation system() x1 variant + VDOM name)",
+        "evidence": {
+            "system_101": "101 callers. Single format: 'cp /tmp/%s_ospfd.log /tmp/%s_ospfd_old.log' (0xabcc8).",
+            "vdom_injection": "%s = VDOM name. PLAUSIBLE MEDIUM — same class as FAD_M1 and bgpd.",
+            "system_plt": "0x179e0",
+        },
+    },
+
+    "OSPF6_profile": {
+        "binary": "ospf6d",
+        "status": "ANALYZED — FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec); log rotation PLAUSIBLE MEDIUM",
+        "evidence": {
+            "sys_vdom_exec_2": (
+                "2 callers (0x3fe90, 0x40257). Format: 'ip -6 xfrm state %s dst %s proto %s spi %s'. "
+                "Args: state=('ah'/'add' from routing flag), dst/proto/spi from routing table struct. "
+                "Not direct user input — routing data. PLAUSIBLE LOW-MEDIUM (FAD_O1)."
+            ),
+            "enc_snprintf_fragment": (
+                "' enc %s 0x%s' (0x8de37) — snprintf fragment appending IPsec cipher/key to command buffer. "
+                "Not a direct system() call — feeds into sys_vdom_exec command assembly."
+            ),
+            "system_65": (
+                "65 system() callers. Format: 'cp /tmp/%s_ospf6d.log /tmp/%s_ospf6d_old.log' (0x78568). "
+                "Log rotation with VDOM name — PLAUSIBLE MEDIUM (same class as FAD_M1)."
+            ),
+            "false_positive_note": "'enc %s 0x%s' is in a snprintf block that jmps away before system() — not a system() arg.",
+            "sys_vdom_exec_plt": "0xf420",
+            "system_plt": "0xf990",
+        },
+    },
+
+    "KEEPALIVED_profile": {
+        "binary": "keepalived",
+        "status": "ANALYZED — sys_vdom_exec ELIMINATED; execle PLAUSIBLE LOW (/bin/bash VRRP health check admin-configured)",
+        "evidence": {
+            "sys_vdom_exec_0x54f76_ELIMINATED": (
+                "'echo %d > /proc/sys/net/ipv4/route/proximity_mode' — integer arg (%d), hardcoded path. ELIMINATED."
+            ),
+            "execle_0x38659": (
+                "execle('/bin/bash', ...) — VRRP health check script. Admin-configured path. "
+                "By-design: VRRP health checks run admin scripts. PLAUSIBLE LOW."
+            ),
+            "fadcsystem_79": "79 fadcsystem callers (posix_spawnp via parse_command_line+execute_command). Format strings pending.",
+            "sys_vdom_exec_plt": "0x9860",
+            "execle_plt": "0x9f70",
+            "fadcsystem_plt": "0x9b00",
+        },
+    },
+
+    "AV_BIN_profile": {
+        "binary": "av",
+        "status": "ANALYZED — fadcsystem PLAUSIBLE LOW (diagnostic collect; daemon-internal path); fork ELIMINATED",
+        "evidence": {
+            "fadcsystem_3": (
+                "'cat /proc/meminfo >> %s' (0x4a205), 'df -ha >> %s' (0x4a21d), 'du -ha /tmp_av/ >> %s' (0x4a22a). "
+                "%s = daemon-internal log file path (scanuint_debug_mem_printf context). "
+                "fadcsystem = parse_command_line + execute_command (not shell). >> handled by posix_spawn file actions. "
+                "PLAUSIBLE LOW — path traversal only; path is daemon-internal state, not user input."
+            ),
+            "fork_2_ELIMINATED": (
+                "fork() at 0x11eeb and 0x12210. Both children call internal worker function 0x15cb0. "
+                "No execve/execl/posix_spawn in child path. ELIMINATED."
+            ),
+            "fadcsystem_plt": "0x8900",
+            "fork_plt": "0x8db0",
+        },
+    },
 }
 
 registry = FindingRegistry()
