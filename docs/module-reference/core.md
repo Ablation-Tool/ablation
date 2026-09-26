@@ -256,7 +256,7 @@ estimated size, and branch density classification (linear / switch / loop-heavy)
 
 Extends `TaintTracker` to follow tainted arguments across shared library boundaries.
 `TaintTracker.run_interprocedural()` stops when a tainted argument passes into a PLT
-entry — it knows the symbol name but not its address in the exporting library.
+entry. It knows the symbol name but not its address in the exporting library.
 `CrossBinaryTaintTracker` resolves that name via `LibGraph`, loads the exporting
 binary, and continues the BFS from the exported function's entry point.
 
@@ -293,7 +293,7 @@ libservice.so:recv_wrapper [tainted: arg0]
 
 | Field | Description |
 |---|---|
-| `hops` | Ordered list of `TaintHop` objects — one per function in the chain |
+| `hops` | Ordered list of `TaintHop` objects, one per function in the chain |
 | `sink_binary` | Path to the binary where the dangerous sink was reached |
 | `sink_va` | VA of the sink call |
 | `sink_name` | Name of the sink function (`system`, `execve`, `memcpy`, etc.) |
