@@ -1,7 +1,7 @@
 """
 authentik_re.py — Source RE module for goauthentik/authentik
 Target repo: https://github.com/goauthentik/authentik (cloned to /tmp/authentik)
-RE date: 2026-09-26  |  Status: 100% COMPLETE (pass 4 — exhaustive full-codebase sweep)
+RE date: 2026-09-26  |  Status: 100% COMPLETE (pass 5 — full file-by-file reads, new pickle sink found)
 Analyzer: ablation source RE toolchain (SourceContext, SourceEntryClassifier,
            SourceSinkScanner + manual deep reads + full pattern sweep)
 
@@ -24,7 +24,9 @@ Tool runs completed:
   SourceTaintTracker:     not run (all HIGH sinks confirmed via manual read)
 
 Pass 4 exhaustive sweep (grep-all across 2151 Python, 80 Go, 2861 TypeScript):
-  pickle.loads:   all instances confirmed (sessions.py, dramatiq models, postgres cache)
+  pickle.loads:   5 instances found by grep (sessions.py, dramatiq x3, postgres cache)
+                  BLIND SPOT: grep for 'pickle.loads' misses 'from pickle import loads' style
+                  Pass 5 individual file reads found a 6th: flows/models.py:353 (FlowToken._plan)
   exec():         only in lib/expression/evaluator.py:365 (admin-only)
   shell=True:     zero instances
   subprocess:     zero instances
@@ -281,6 +283,46 @@ FINDINGS = {
         "note": "Correctly secured with guardian per-object check + DenyConnection on failure.",
     },
 
+    "AUT-FLOWTOKEN-PICKLE-1": {
+        "severity": "HIGH",
+        "title": "Unsigned pickle deserialization of FlowToken plan (bare import style missed by grep)",
+        "file": "authentik/flows/models.py",
+        "lines": (353, 353),
+        "cwe": "CWE-502",
+        "status": "CONFIRMED",
+        "description": (
+            "FlowToken.plan property at line 353: `return loads(b64decode(self._plan.encode()))` "
+            "# nosec. The import is `from pickle import dumps, loads` (not `import pickle`). "
+            "FlowToken._plan is a TextField storing a base64-encoded pickled FlowPlan. "
+            "FlowTokens are created during email verification flows (stages/email/flow.py) "
+            "and stored in the database. The .plan property is accessed when a user clicks "
+            "an email verification link — the stored pickle is unconditionally deserialized. "
+            "An attacker with DB write access can overwrite FlowToken._plan with a malicious "
+            "pickle payload, triggering RCE when any user (or an email scanner) clicks a "
+            "verification link. "
+            "This sink was NOT found by the pass 4 grep sweep which searched `pickle.loads`; "
+            "the bare `loads(` call was invisible to that pattern."
+        ),
+        "exploit_path": [
+            "1. Attacker gains DB write access",
+            "2. UPDATE authentik_flows_flowtoken SET _plan = base64(malicious_pickle) WHERE key = <known_token>",
+            "3. User clicks email verification link -> FlowToken.plan property accessed -> loads() -> RCE",
+            "4. No user interaction needed if email link scanners auto-fetch URLs",
+        ],
+        "root_cause": (
+            "`from pickle import loads` style bypasses grep for `pickle.loads`. "
+            "Same unsigned pickle pattern as AUT-SESS-PICKLE-1 — no HMAC, no signing layer. "
+            "FlowToken is stored in DB and loaded on every email link click."
+        ),
+        "note": (
+            "Fix: sign the serialized plan data with Django's signing module before storing, "
+            "or replace pickle with a safe serializer (e.g., JSON + explicit schema). "
+            "Discovered via individual file reads (pass 5) — not found by grep sweep. "
+            "Confirms grep pattern `pickle.loads` is insufficient; always also check "
+            "`from pickle import`."
+        ),
+    },
+
     "AUT-SAML-REFURI-1": {
         "severity": "LOW",
         "title": "SAML assertion signature allows URI=\"\" (root-element reference)",
@@ -355,6 +397,7 @@ TOOL_RESULTS = {
             "packages/django-dramatiq-postgres/django_dramatiq_postgres/models.py:188 — pickle.loads(self.kwargs)",
             "packages/django-dramatiq-postgres/django_dramatiq_postgres/models.py:190 — pickle.loads(self.options)",
             "packages/django-postgres-cache/django_postgres_cache/backend.py:32 — pickle.loads(b64decode(...))",
+            "authentik/flows/models.py:353 — loads(b64decode(...)) via 'from pickle import loads' (missed by grep)",
         ],
         "medium": [
             "src/server/mod.rs:89 — Command::new (spawns gunicorn, hardcoded, not user-controlled)",
