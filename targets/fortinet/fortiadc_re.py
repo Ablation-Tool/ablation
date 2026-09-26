@@ -716,7 +716,7 @@ FINDINGS = {
 
     "LIBSTDEXT_fadcsystem": {
         "binary": "libstdext.so",
-        "status": "ANALYZED — fadcsystem = parse_command_line + parse_redirect_path → posix_spawn+file_actions (no shell)",
+        "status": "ANALYZED COMPLETE — fadcsystem = parse_command_line + parse_redirect_path → posix_spawn+file_actions (no shell); no system(); all sinks documented",
         "evidence": {
             "fadcsystem_0x3060": "xor esi,esi; jmp fadcsystem_envp(0x3010). Redirect-capable, no shell.",
             "fadcsystem_envp_0x3010": "parse_command_line(0x2280) → parse_redirect_path(0x2560) → execute_command(0x2340) → posix_spawn",
@@ -1529,7 +1529,7 @@ FINDINGS = {
 
     "AV_BIN_profile": {
         "binary": "av",
-        "status": "ANALYZED — fadcsystem PLAUSIBLE LOW (diagnostic collect; daemon-internal path); fork ELIMINATED",
+        "status": "ANALYZED COMPLETE — fadcsystem×3 PLAUSIBLE LOW (diagnostic collect; daemon-internal log path); fork×2 ELIMINATED",
         "evidence": {
             "fadcsystem_3": (
                 "'cat /proc/meminfo >> %s' (0x4a205), 'df -ha >> %s' (0x4a21d), 'du -ha /tmp_av/ >> %s' (0x4a22a). "
