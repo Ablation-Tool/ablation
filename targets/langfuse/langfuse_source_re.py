@@ -1,5 +1,5 @@
 """
-Langfuse source RE — pass 2 complete (2026-09-26)
+Langfuse source RE — pass 3 complete (2026-09-26)
 
 Target  : langfuse/langfuse (open source LLM observability platform)
 Repo    : https://github.com/langfuse/langfuse
@@ -10,6 +10,9 @@ Method  : 4-stage source RE via ablation source analyzers
           Stage 3: SourceSinkScanner (3 HIGH, 41 MEDIUM, 6 LOW sinks)
           Stage 4: SourceIsolationChecker (1 CONFIRMED, 199 INFO)
           Stage 5: SourceTaintTracker (BFS backward from 3 HIGH sinks)
+          Pass 3:  SSRF audit (LLM/webhook/blob), LLM key storage, admin routes,
+                   AI gateway, SCIM, sandbox, dashboard query, IO streaming,
+                   remaining route handlers, analytics integrations
 Auditor : nicholas@nuclide-research.com
 
 Findings summary (confirmed):
@@ -20,6 +23,17 @@ Findings summary (confirmed):
   LFG-APIKEY-1    LOW   audit log confusion via mismatched public key
   LFG-ISO-1       LOW   unscoped batchAction update helper (latent IDOR)
   LFG-SANDBOX-1A  MED   prompt injection → auto-approved bash (PLAUSIBLE)
+
+SSRF surface — pass 3 verdict: CLEAN (no new findings)
+  LLM base URL:        validateLlmConnectionBaseURL → validateOutboundUrlHost →
+                       CIDR blocklist (all RFC1918 + IMDS + NAT64) + DNS resolution
+                       + redirect re-validation; cloud forces empty whitelist + HTTPS-only
+  Webhook URL:         validateWebhookURL → same infrastructure, port 80/443 only
+  Blob storage:        cloud enforces; self-hosted opt-in only (see LFG-BLOB-SSRF-1 INFO)
+  LLM API key storage: encrypt() at rest, displaySecretKey truncated, never returned in API
+  AI gateway:          HMAC signature verification (withGatewayResolveSignatureVerification)
+  SCIM endpoint:       shadowAuth + org-scoped, Serializable TX for last-OWNER guard
+  Sandbox server:      intentional zero-auth, security contract is microVM isolation
 
 Run this module to reproduce the sweep and register confirmed findings:
     python3 targets/langfuse/langfuse_source_re.py --sweep /tmp/langfuse
@@ -261,12 +275,26 @@ INFO_FINDINGS = [
         "line": None,
         "note": "queryBuilder uses raw string interpolation for column/table names from hardcoded view declarations. Safe now; injection surface if any view ever pulls a field from user-supplied config.",
     },
+    {
+        "id": "LFG-BLOB-SSRF-1",
+        "title": "Blob storage endpoint SSRF validation opt-in on self-hosted",
+        "file": "packages/shared/src/server/services/blobStorageEndpointValidation.ts",
+        "line": 68,
+        "note": (
+            "isBlobStorageEndpointValidationEnabled() returns false when no whitelist env vars "
+            "(LANGFUSE_BLOB_STORAGE_ENDPOINT_WHITELISTED_HOST/IPS/IP_SEGMENTS) are set on self-hosted. "
+            "A self-hosted operator configuring a malicious or SSRF-reachable blob endpoint is not "
+            "validated at save time. Cloud enforces strict whitelist (NEXT_PUBLIC_LANGFUSE_CLOUD_REGION). "
+            "TODO comment in source: 'TODO(next major): enforce for self-hosted even with no allowlist'. "
+            "Risk: self-hosted admin who is themselves the attacker, or misconfigured managed deployment."
+        ),
+    },
 ]
 
 
 def print_findings():
     """Print all confirmed findings in RE module format."""
-    print(f"Langfuse Source RE — Pass 2 Complete  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
+    print(f"Langfuse Source RE — Pass 3 Complete  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
     print("=" * 70)
     for f in FINDINGS:
         print(f"\n[{f['id']}] {f['status']} {f['severity']}  {f['cwe']}")
