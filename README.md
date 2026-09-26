@@ -20,7 +20,7 @@ Combined with with Claude Code or OpenAI Codex, it transforms into a fully auton
 
 **Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
 
-**Source Code Audit:** Every source file gets a 5-bit security profile based on the rendering patterns it contains, grouped into read-priority buckets so the high-risk files surface first. A 2861-file TypeScript codebase compresses to 72 reads.
+**Source Code Audit:** Audit any large codebase faster than reading it linearly, with higher accuracy than pattern matching alone. Every source file gets a 5-bit security profile that determines exactly how much attention it needs, so nothing gets missed and nothing gets read twice.
 
 **Windows Kernel Driver & BYOVD Analysis:** Maps the IRP dispatch table, decodes every IOCTL code, and identifies which kernel APIs expose physical memory and token primitives from user mode. The BYOVD Detector fingerprints signed drivers carrying those capabilities, because one legitimate signed driver is enough to blind EDR from ring-0.
 
