@@ -1210,6 +1210,113 @@ FINDINGS = {
             "sys_vdom_exec_plt": "0x11530",
         },
     },
+
+    # ── Shared Libraries (all ~14KB stub wrappers unless noted) ──────────────────
+    # libadc_nl_ipc.so, libautolearn.so, libbasepp.so, libcfg_saml.so, libcmdbapi.so,
+    # libfmaildbapi.so, libfmlrnd.so, libfpoll.so, libfts.so, libgeo.so, libgzip.so,
+    # libippool.so, librs_profile.so, libshmkvdbapi.so, libsslhw.so, libssli.so, libxpl.so.1 — CLEAN.
+    #
+    # libntp.so (14K): fadcsystem@plt. One caller: time_update_event_to_ntpd (0x1270).
+    #   Tail-call: fadcsystem("pkill -SIGUSR1 /bin/ntpd") — hardcoded, ELIMINATED.
+    # libshmkvdbapi.so (14K): system_fgt_log@plt — syslog API only, not a shell. ELIMINATED.
+
+    "SHARED_LIBS_profile": {
+        "binary": "libadc_nl_ipc/libautolearn/libbasepp/libcfg_saml/libcmdbapi/libfmaildbapi/libfmlrnd/libfpoll/libfts/libgeo/libgzip/libippool/libntp/librs_profile/libshmkvdbapi/libsslhw/libssli/libxpl.so.1",
+        "status": "ANALYZED — all CLEAN; libntp fadcsystem ELIMINATED (hardcoded pkill ntpd); libshmkvdbapi system_fgt_log = syslog API",
+        "evidence": {
+            "clean_16": "libadc_nl_ipc, libautolearn, libbasepp, libcfg_saml, libcmdbapi, libfmaildbapi, libfmlrnd, libfpoll, libfts, libgeo, libgzip, libippool, librs_profile, libsslhw, libssli, libxpl.so.1 — no exec PLT. CLEAN.",
+            "libntp_fadcsystem_ELIMINATED": "time_update_event_to_ntpd: fadcsystem('pkill -SIGUSR1 /bin/ntpd') — hardcoded. ELIMINATED.",
+            "libshmkvdbapi_ELIMINATED": "system_fgt_log = syslog(3) API wrapper. Not shell execution. ELIMINATED.",
+        },
+    },
+
+    "KERNEL_MODULES_profile": {
+        "binary": "modules/*.ko",
+        "status": "ANALYZED — all CLEAN for userspace exec; kernel-only code paths only",
+        "evidence": {
+            "custom_fortiadc_modules": (
+                "ha.ko, vtb.ko, adc_nl_ipc_k.ko, arpfilter.ko, bridge_mac.ko, "
+                "fs_miglog.ko, infodmem.ko, log_cfg.ko, miglog.ko, nmi.ko, ti_bridge.ko — "
+                "FortiADC-specific kernel modules. No call_usermodehelper found. "
+                "ha.ko has ha_exec_cmd symbol — kernel-internal only, no userspace spawn."
+            ),
+            "kvm_hypervisor_modules": (
+                "kvm.ko, kvm-intel.ko, kvm-amd.ko, irqbypass.ko — stock KVM modules "
+                "bundled with the KVM appliance image. No custom code paths."
+            ),
+            "xen_modules": (
+                "xen-acpi-processor.ko, xen-gntalloc.ko, xen-gntdev.ko, xen-pciback.ko — "
+                "Xen paravirt modules, bundled for multi-hypervisor support. CLEAN."
+            ),
+            "platform_modules": "uio.ko, wdt-nuvoton.ko — standard kernel modules. CLEAN.",
+            "attack_surface": (
+                "Kernel modules expose no call_usermodehelper, no request_module, "
+                "no kernel_execve. No kernel-to-userspace exec primitive identified. "
+                "HA/VTB/IPC functionality is kernel-internal only."
+            ),
+        },
+    },
+
+    "FORTIAI_profile": {
+        "binary": "migadmin/fortiai/ (Django app)",
+        "status": "ANALYZED — CLEAN for RCE; no exec/system/subprocess in web-facing code; session key path traversal POST-AUTH only",
+        "evidence": {
+            "architecture": (
+                "Django 5.1.6 app served via uwsgi. Custom file-based session management "
+                "in /var/log/fortiai/custom_sessions/. Talks to FortiAI cloud at "
+                "fortiai.forticloud.com via TLS with client cert auth."
+            ),
+            "views_exec_scan": (
+                "views.py (58.7KB): no os.system/exec/subprocess. All external calls via "
+                "send_ai_request() → requests.post to fortiai.forticloud.com (HTTPS) or "
+                "requests.get to https://127.0.0.1/api/ (local REST API). CLEAN."
+            ),
+            "text2lua_CLEAN": (
+                "text2lua.py: Text2lua class loads LLM prompt template from disk and sends "
+                "user query to /ai/v1/completions. Returns LLM-generated Lua script as "
+                "streaming response to frontend — does NOT execute Lua server-side. CLEAN."
+            ),
+            "analysis_agent_CLEAN": (
+                "agents/analysis_agent.py: AnalysisAgent._fetch_vs_metrics calls "
+                "https://127.0.0.1/api/status_history/vs with requests.get(params={...}) — "
+                "URL-encoded params, no injection. validate_vs_name checks vs_name against "
+                "local /api/all_vs_info/vs_list_filter allowlist before use. CLEAN."
+            ),
+            "trend_agent_CLEAN": (
+                "agents/trend_agent.py: 772 lines of pure statistical analysis "
+                "(Mann-Kendall, linear regression) + LLMAgent calls. No exec. CLEAN."
+            ),
+            "llm_agent_CLEAN": (
+                "agents/llm_agent.py: LLMAgent.execute_tool dispatches only to registered "
+                "tools dict — attacker-controlled tool_name returns 'Tool not found' if not "
+                "in self.tools. No dynamic code execution from LLM responses. CLEAN."
+            ),
+            "fortiai_diag_CLEAN": (
+                "fortiai_diag.py: CLI-only diagnostic. subprocess.run(['pkill', '-15', '-f', "
+                "'uwsgi.*uwsgi.ini']) — list form, no shell=True. Not web-facing. CLEAN."
+            ),
+            "query_docs_crash": (
+                "query_docs_from_fortiai (views.py:732): @csrf_exempt only — missing "
+                "@require_session. Line 736 accesses request.custom_session which is never "
+                "set without the decorator. Any unauthenticated request → AttributeError → "
+                "500. Not an auth bypass — crashes before any auth logic runs."
+            ),
+            "session_path_traversal": (
+                "custom_sessions.py:create_session (line 46): session_file = "
+                "os.path.join('/var/log/fortiai/custom_sessions/', f'{session_key}.json') "
+                "where session_key = Authorization header token (parts[1]). No sanitization. "
+                "Token '../../../../tmp/evil' → writes to /tmp/evil.json. "
+                "POST-AUTH ONLY: requires successful FortiAI cloud login with appliance cert "
+                "BEFORE create_session is called. Attacker must already have device access. "
+                "STATUS: POST-AUTH PATH TRAVERSAL — write-primitive to *.json, no RCE."
+            ),
+            "settings_notes": (
+                "ALLOWED_HOSTS=['*'] — accepts any host header. "
+                "DEBUG=False (production). SECRET_KEY generated per-instance via secrets.choice. "
+                "Database: SQLite3 (local file). No hardcoded credentials."
+            ),
+        },
+    },
 }
 
 registry = FindingRegistry()
