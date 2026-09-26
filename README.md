@@ -59,7 +59,7 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 | Provider | Models |
 |---|---|
-| **Claude Code** | `claude-sonnet-4-6` · `claude-sonnet-4-5` |
+| **Claude Code** | `claude-sonnet-4-6` · `claude-sonnet-4-5` — type `/model claude-sonnet-4-6` manually (not shown in `/model` picker) |
 | **OpenAI Codex** | All known models |
 
 ---
