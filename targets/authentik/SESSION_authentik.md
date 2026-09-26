@@ -973,3 +973,36 @@ Key adaptation from "surreal" harness: multi-persona divergence point detection 
 
 Usage:
     python3 targets/authentik/debug-wizard.py --target /tmp/authentik --mode all
+
+### Deep Reads — TypeScript individual file reads (pass 5aq — user/ subtree — 2026-09-26)
+
+All 46 user/ TypeScript files individually read and confirmed CLEAN except for one new PLAUSIBLE LOW finding:
+
+**AUT-CHANGELOG-URL-1 (NEW — PLAUSIBLE LOW)**
+- File: `web/src/components/ak-event-info.ts:538-548`
+- `renderUpdateAvailable()` uses `event.context.changelog` directly as `href` value.
+- Source: `authentik/admin/tasks.py:69` fetches `data.get("stable",{}).get("changelog_url")` from `https://version.goauthentik.io/version.json` and stores it in the UPDATE_AVAILABLE event context.
+- No scheme validation applied before storage or rendering.
+- Attack vector: compromise `version.goauthentik.io` or MITM the HTTPS fetch → inject `javascript:` URL → stored in all UPDATE_AVAILABLE events → admin clicks "New version available" link → XSS in admin UI origin.
+- Fix: `URL.canParse(url) && new URL(url).protocol.startsWith("http")` before using as href.
+
+**CLEAN (user/ subtree):**
+- LibraryPage: ak-library-impl.ts, ak-library.ts, LibraryAppRow.ts (launchUrl confirmed CLEAN via DomainlessFormattedURLValidator), ak-library-application-empty-list.ts, LibraryPageImpl.utils.ts, types.ts, ak-library-impl.browser.test.ts
+- LibraryApplication: index.ts, CardHeader.ts, CardMenu.ts, RACLaunchEndpointModal.ts (window.open: Django reverse() URL)
+- User shell: ak-interface-user.ts, index.entrypoint.ts, Routes.ts
+- Agents: UserAgentForm.ts, UserAgentList.ts, UserAgentsPage.ts
+- Requests: AccessRequestsPage.ts, PendingReviewList.ts, RequestEntitlementModal.ts (window.location.assign: server-generated URL), AccessRequestFulfillForm.ts
+- UserSettings: UserSettingsPage.ts, UserSettingsFlowExecutor.ts, UserPassword.ts, PromptStage.ts (href scheme fixed by globalAK().api.base), MFADeviceForm.ts, MFADevicesPage.ts, UserTokenForm.ts, UserTokenList.ts
+
+Updated findings table:
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| AUT-SESS-PICKLE-1 | HIGH | Unsigned pickle deserialization of session data | CONFIRMED |
+| AUT-TASK-PICKLE-1 | HIGH | Unsigned pickle deserialization of task queue arguments | CONFIRMED |
+| AUT-FLOWTOKEN-PICKLE-1 | HIGH | Unsigned pickle deserialization of FlowToken._plan | CONFIRMED |
+| AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values | CONFIRMED |
+| AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp | CONFIRMED |
+| AUT-SAML-REFURI-1 | LOW | SAML assertion signature allows URI="" (root-element reference) | PLAUSIBLE |
+| AUT-EMAIL-SRCDOC-1 | LOW | Email body preview in unsandboxed srcdoc iframe (inherits admin UI origin) | PLAUSIBLE |
+| AUT-CHANGELOG-URL-1 | LOW | Supply-chain URL injection in UpdateAvailable event renders unvalidated href | PLAUSIBLE |
+| AUT-LAUNCH-URL-1 | LOW | Admin launchUrl href binding (DomainlessFormattedURLValidator blocks at write time) | ELIMINATED |
