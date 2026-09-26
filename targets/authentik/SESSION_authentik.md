@@ -883,3 +883,33 @@ Even though `escapeLabel()` in `FlowGraph.ts` only escapes `"` (leaves `<`/`>` u
 - admin/flows/FlowGraph.ts: CLEAN — escapeLabel() only escapes `"`; node.name/verboseName embedded in Mermaid DSL; Mermaid sanitizes via securityLevel:strict + DOM_PURIFY_RELAXED before returning SVG
 - admin/flows/utils.ts: CLEAN — pure enum-to-msg() helpers; RenderFlowOption() returns plain string
 - elements/mermaid/utils.ts: CLEAN — DefaultMermaidConfig: securityLevel:"strict" + htmlLabels:true + dompurifyConfig:DOM_PURIFY_RELAXED; confirms Mermaid SVG is DOMPurify-sanitized before unsafeHTML(svg) in ak-diagram.ts
+
+---
+
+## Pass 5am — lifecycle/ (9 files) — 2026-09-26
+
+All 9 lifecycle/ files confirmed CLEAN. Key patterns:
+
+- LifecycleRuleForm.ts: instance fields via value=${ifDefined(...)} attribute bindings; item.name text node in userGroupToPair()
+- ObjectReviewIteration.ts: reviewer.name/note as html`<span>${...}</span>` text nodes; reviewer list in msg(str`...`) (Lit-escaped)
+- utils.ts: LifecycleIterationStatus()/OffboardingStatus() are pure enum→hardcoded msg() templates with no user data
+- OffboardingListPage.ts: userObj.username text node; item.user (numeric PK) in toAdminInterface() — integer cannot be `javascript:`
+- ReviewListPage.ts: item.objectAdminUrl prefixed with `#` before translateHashRoute() — `#javascript:...` is a hash fragment, not a JS URI scheme; `ifDefined(... ?? undefined)` removes href when null
+
+---
+
+## Pass 5an — agents/ + navigation/ + reports/ + endpoints/ (33 files) — 2026-09-26
+
+All 33 files confirmed CLEAN. Key patterns:
+
+- admin/agents/AgentForm.ts: result?.token in value=${ifDefined(...)} attribute on ak-hidden-text-input; never rendered as HTML
+- admin/navigation/sidebar.ts: all strings are hardcoded msg() i18n; path/label passed as attribute bindings to ak-sidebar-item
+- admin/reports/ExportButton.ts: params[key] in html`<pre>${this.params[key]}</pre>` — Lit text node (HTML-escaped)
+- connectors/ConnectorsListPage.ts: item.component in IconEditButtonByTagName() — follows same StrictUnsafe registry-validation pattern as other icon edit buttons throughout the app
+- connectors/ConnectorViewPage.ts: connector?.component in fallback `<p>` is a text node (HTML-escaped); used in switch for enum comparison only
+- connectors/agent/AgentConnectorSetup.ts: download links are hardcoded static pkg.goauthentik.io strings; token.name text node
+- connectors/gdtc/GoogleChromeConnectorForm.ts: instance?.credentials property-bound to ak-codemirror via `.value=` — JSON object in editor, not innerHTML
+- devices/DeviceAddHowTo.ts: connector.connectorUuid in slot=/id= attribute bindings (UUID is hex+dashes only)
+- devices/DeviceViewPage.ts: all device facts (hostname, serial, OS name/version, manufacturer, model, CPU count/name, access group) rendered via renderDescriptionList() as text nodes; agentVersion() uses msg(str`...`) text node; rootDisk bytes in numeric value=/max= progress attributes
+- devices/facts/*.ts (4 files): item fields in html`${...}` text node interpolations — device process names, usernames, software names/paths, group names all HTML-escaped by Lit
+- devices/utils.ts: osFamilyToLabel() pure enum→msg(); getSize() pure numeric formatter; trySortNumerical() pure comparison
