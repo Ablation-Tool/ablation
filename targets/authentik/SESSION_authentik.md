@@ -346,3 +346,17 @@
 - web/src/common/purify.ts (full): CLEAN — 5 DOMPurify-backed Trusted Types policies; BrandedHTMLPolicy has explicit FORBID_TAGS (script/iframe/form/input) + FORBID_ATTR (on* handlers); CompiledMarkdownSanitizePolicy re-sanitizes even build-time markdown because admin-controlled replacers may inject values
 - web/src/elements/router/core/navigation.ts (full): CLEAN — navigate() uses new URL(to, window.location.origin); cross-origin → window.location.assign(); decideInterception rejects cross-origin clicks; click interceptor checks pathname prefix
 - web/src/elements/router/core/interfaces.ts (full): CLEAN — URL builders use server-configured base+interface path; toAdminInterface/toUserInterface/toFlowInterface all pure path formatters
+
+### Deep Reads — TypeScript individual file reads (pass 5k — 2026-09-26)
+- web/src/elements/forms/Form.ts (partial): CLEAN — base form class setup; serializeForm() uses typed DOM property reads (value/checked/toJSON), no eval/injection
+- web/src/elements/forms/serialization.ts (full): CLEAN — serializeForm() walks DOM elements via .value/.checked/.toJSON(); assignValue() dot-path JSON assignment via deepmerge; no injection
+- web/src/elements/forms/ModelForm.ts (partial): CLEAN — base ModelForm class, typed CRUD ops
+- web/src/elements/messages/MessageContainer.ts (full): CLEAN — messages rendered as Lit text nodes; tryParsingJSON from server-side <script> tag; no innerHTML
+- web/src/common/sentry/middleware.ts (full): CLEAN — adds Sentry trace headers (baggage, sentry-trace) only; no user input
+- web/src/admin/providers/oauth2/OAuth2ProviderForm.ts (partial): CLEAN — typed API calls; form data from serializeForm() → typed API submit
+- web/src/admin/users/UserListPage.ts (full): CLEAN — item.username/name/displayName all Lit text nodes (escaped); item.pk numeric in href; item.avatar in <img src> (src cannot execute javascript: URI)
+- web/src/common/global.ts (full): CLEAN — reads server context from <meta> tags + Django json_script blocks (not inline JS); enables strict CSP path
+- web/src/common/utils.ts (full): CLEAN — getCookie reads named cookie; randomString uses crypto.getRandomValues() (CSPRNG)
+- web/src/flow/FormStatic.ts (full): CLEAN — username Lit text node; cancelUrl from server-side challenge (admin-configured); avatar in <img src>
+- web/src/flow/stages/authenticator_duo/AuthenticatorDuoStage.ts (full): CLEAN — activationBarcode as <img src>; activationCode as <a href> (Duo-generated URL from server challenge); setInterval polling via typed API call
+- web/src/elements/ak-mdx/ak-mdx.ts (full): CLEAN — URL mode: CompiledMarkdownSanitizePolicy re-sanitizes after replacers run; Content mode: compileRuntimeMarkdown (no eval/Function) then sanitizeHTML(BrandedHTMLPolicy); both paths through DOMPurify before unsafeHTML()
