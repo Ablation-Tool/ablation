@@ -55,6 +55,15 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 ---
 
+## LLM Compatibility
+
+| Provider | Models |
+|---|---|
+| **Claude Code** | `claude-sonnet-4-6` · `claude-sonnet-4-5` |
+| **OpenAI Codex** | All known models |
+
+---
+
 ## Install
 
 ```bash
