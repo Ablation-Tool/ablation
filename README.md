@@ -18,8 +18,6 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ![Claude Code demo](assets/demo.gif)
 
-![demo](assets/screencast2.gif)
-
 ---
 
 ## Framework Architecture & Module Orchestration
