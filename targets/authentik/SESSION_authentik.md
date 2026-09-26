@@ -648,3 +648,16 @@ BACKEND FINDING CONFIRMED (launchUrl): meta_launch_url in Application model has 
 - web/src/admin/users/ak-user-wizard.ts (full): CLEAN — username/token in readonly value= inputs; DEFAULT_USER_TYPES static localized descriptions
 - web/src/admin/users/oauth/UserAccessTokenList.ts (full): CLEAN — item.idToken text node in <pre>; item.provider?.pk in href via toAdminInterface; item.provider?.name text node; scope strings text nodes in chips
 - web/src/admin/users/oauth/UserRefreshTokenList.ts (full): CLEAN — identical pattern to UserAccessTokenList
+
+### Deep Reads — TypeScript individual file reads (pass 5ac — 2026-09-26)
+- web/src/admin/outposts/OutpostListPage.ts (full): CLEAN — item.pk UUID in href via toAdminInterface; p.pk numeric in href via toAdminInterface; item.name/p.name/serviceConnectionObj.name text nodes; config.authentik_host in msg(str``) template
+- web/src/admin/outposts/OutpostViewPage.ts (full): CLEAN — outpost fields in renderDescriptionList strings; document.location.origin in readonly value= inputs; docLink hardcoded hrefs; outpost.name in msg(str``) aria label
+- web/src/admin/outposts/OutpostForm.ts (full): CLEAN — instance.name in ak-text-input value=; item.name in .renderElement returns string; dualSelectPairMaker labels text nodes; config YAML in ak-codemirror value=; docLink hardcoded hrefs
+- web/src/admin/outposts/OutpostHealthList.ts (full): CLEAN — item.hostname text node; version/buildHash/versionShould in msg(str``) templates
+- web/src/admin/outposts/OutpostHealthSimple.ts (full): CLEAN — version/versionShould strings in msg(str``) templates; time formatting
+- web/src/admin/outposts/OutpostProviderList.ts (full): CLEAN — item.pk numeric in href via toAdminInterface; item.assignedApplicationSlug via toAdminInterface; item.name/assignedApplicationName text nodes
+- web/src/admin/outposts/ServiceConnectionListPage.ts (full): CLEAN — item.name/verboseName/itemState.version text nodes; IconEditButtonByTagName uses StrictUnsafe guard (tag name from API, registry-verified)
+- web/src/admin/outposts/ServiceConnectionDockerForm.ts (full): CLEAN — instance.name/url in value= inputs; msg(html`...<code>unix://</code>...`) static HTML in help text
+- web/src/admin/outposts/ServiceConnectionKubernetesForm.ts (full): CLEAN — instance.name in value=; kubeconfig via YAML.stringify in ak-codemirror value=
+- web/src/admin/outposts/ak-service-connection-wizard.ts (full): CLEAN — wizard fetching TypeCreate[] from API; no direct HTML rendering
+- web/src/admin/outposts/utils.ts (full): CLEAN — pure enum-to-localized-string function
