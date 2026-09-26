@@ -59,6 +59,7 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Where did this command string come from? (system/popen/execve)" | `SinkArgClassifier.from_path(elf).classify_all()` — verdicts: RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN |
+| "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` — loads profiles/fortinet.yaml; zero-caller sinks auto-ELIMINATED |
 | "Detect allowlist byte-validators in stripped binary" | `SanitizerDetector.from_path(elf).detect()` — SHELL_SAFE/SHELL_UNSAFE/UNKNOWN per charset |
 | "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` — WORKER/EXEC_AFTER_FORK/EXIT_IN_CHILD |
 | "Find 'safe now catastrophic later' rendering architecture risk (TS/JS/Python)" | `SourceArchRiskScanner.from_context(ctx).scan()` — tags: unsafe_render/type_dispatch/string_selector/registry_lookup/shared_module; HIGH=score≥3 or known combo |
@@ -151,9 +152,10 @@ Requires `XRefGraph.from_path(path).build()` passed as `xg=`. Call `build_corpus
 **MatrixProfileDiff** — `from ablation.analyzers.matrix_profile_diff import MatrixProfileDiff`
 `diff_functions(va_v1, va_v2)`. Use `discord_threshold=0.5` for categorical sequences (default 1.5 too high).
 
-**SinkArgClassifier** — `from ablation.analyzers.sink_arg_classifier import SinkArgClassifier` — `from_path(elf).classify_all()`. `add_sink('fadcsystem', arg_pos=1)` for vendor sinks. Verdicts: RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN. Handles `__snprintf_chk` r8=fmt + callee-saved buffer patterns.
+**SinkArgClassifier** — `from ablation.analyzers.sink_arg_classifier import SinkArgClassifier` — `from_path(elf).classify_all()`. `add_sink('fadcsystem', arg_pos=0)` for vendor sinks. Verdicts: RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN. Handles `__snprintf_chk` r8=fmt + callee-saved buffer patterns. Zero-caller filter: sinks with 0 PLT callers go to `_dead_sinks` (ELIMINATED before BFS). `_count_plt_callers(binary, data)` exported for standalone use.
 **SanitizerDetector** — `from ablation.analyzers.sanitizer_detector import SanitizerDetector` — `from_path(elf).detect(min_score=4)`. Scores: byte-load density + RC (cmp_same_reg_ratio) + dual-return + no-calls gate. Reports SHELL_SAFE/SHELL_UNSAFE/UNKNOWN.
-**ForkExecClassifier** — `from ablation.analyzers.fork_exec_classifier import ForkExecClassifier` — `from_path(elf).classify()`. BFS 32-block child walk. EXEC_AFTER_FORK = investigate; WORKER/EXIT_IN_CHILD = ELIMINATED.
+**ForkExecClassifier** — `from ablation.analyzers.fork_exec_classifier import ForkExecClassifier` — `from_path(elf).classify()`. BFS 32-block child walk. EXEC_AFTER_FORK = investigate; WORKER/EXIT_IN_CHILD = ELIMINATED. v2: je/jz child-entry detection (Clang), child_entry_va backward-branch threshold, _MAX_DIRECT_EXIT_BLOCKS=12 depth gate.
+**VendorProfile** — `from ablation.analyzers.vendor_profile import VendorProfile` — `VendorProfile.from_vendor('fortinet')`. `profile.apply_to(classifier)` registers vendor sinks. `profile.safe_pattern_for_exec(unsetenv_strings)` matches known-safe re-exec fingerprints. Profiles: `ablation/profiles/<vendor>.yaml`. Current: `fortinet` (fadcsystem/fadcpopen/sys_vdom_exec/sys_vdom_exec_safe/fadcsystemf; haproxy_mworker_reexec + nginx_worker_respawn safe patterns; is_valid_host_name sanitizer).
 **FormatStringScanner** — `from ablation.analyzers.format_string_scanner import FormatStringScanner`
 **HeapVulnScanner** — `from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner`
 **LengthUnderflowScanner** — `from ablation.analyzers.length_underflow import LengthUnderflowScanner` — C12-class
