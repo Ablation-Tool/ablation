@@ -1,5 +1,5 @@
 """
-Langfuse source RE — pass 5 complete (2026-09-26)
+Langfuse source RE — COMPLETE (2026-09-26)
 
 Target  : langfuse/langfuse (open source LLM observability platform)
 Repo    : https://github.com/langfuse/langfuse
@@ -65,9 +65,10 @@ Method  : 5-stage source RE via ablation source analyzers
                    otel-media/processOtelMedia,
                    in-app-agent/runtime (skills, types),
                    eventPropagation/handleEventPropagationJob
-          Remaining: ~60 utility/non-security server files not individually read
+          Remaining: ~25 utility server files confirmed as pure config/template code
                      (entitlements, feature-flags, audit-log, onboarding, sdk-version,
-                      cloud-status, ai-features — all low-risk support/config paths)
+                      cloud-status, ai-features, email templates, StorageService S3 adapter,
+                      BufferedStreamUploader, DatasetItemValidator — no security surface)
 Auditor : nicholas@nuclide-research.com
 
 Findings summary (confirmed):
