@@ -913,3 +913,63 @@ All 33 files confirmed CLEAN. Key patterns:
 - devices/DeviceViewPage.ts: all device facts (hostname, serial, OS name/version, manufacturer, model, CPU count/name, access group) rendered via renderDescriptionList() as text nodes; agentVersion() uses msg(str`...`) text node; rootDisk bytes in numeric value=/max= progress attributes
 - devices/facts/*.ts (4 files): item fields in html`${...}` text node interpolations — device process names, usernames, software names/paths, group names all HTML-escaped by Lit
 - devices/utils.ts: osFamilyToLabel() pure enum→msg(); getSize() pure numeric formatter; trySortNumerical() pure comparison
+
+### Deep Reads — TypeScript individual file reads (pass 5ao — 2026-09-26)
+**Directory: web/src/admin/ root (6 files) + admin/admin-overview/ (14 files) — all CLEAN**
+
+- ak-about-modal.ts: buildHash appended to hardcoded GitHub commit URL; version/runtime fields as text nodes via renderEntry()
+- ak-admin-debug-page.ts: static debug page with hardcoded buttons; no user data rendered
+- ak-interface-admin.ts: renderSidebarItems CLEAN; palette commands use hardcoded msg() labels; parseInt(args.id) for numeric IDs; toAdminInterface with hardcoded paths
+- Routes.ts: pure route table; args.id/slug/uuid as property bindings, not rendered as HTML; parseInt(args.id, 10) for numeric IDs
+- helperText.ts: pure hardcoded msg() string constants
+- index.entrypoint.ts: entry point with router init; no user data rendered
+- AdminOverviewPage.ts: formatUserDisplayName(currentUser) in msg(str`...`) via setPageDetails (property); quick actions hardcoded strings; toAdminInterface with hardcoded paths
+- DashboardUserPage.ts: fully static msg() template with enum constants
+- SystemTasksPage.ts: static template with hardcoded msg() strings
+- TopApplicationsTable.ts: event.application.name text node; event.countedEvents numeric text node and value=/max= attributes
+- AdminStatusCard.ts: status.icon in class= attribute binding; status.message as SlottedTemplateResult; pluckErrorDetail(error) text node
+- FipsStatusCard.ts: statusSummary text node; getStatus() returns hardcoded msg() templates
+- RecentEventsCard.ts: subclass of SimpleEventTable with hardcoded toolbar
+- SystemStatusCard.ts: all status messages hardcoded msg() strings; toAdminInterface with hardcoded path
+- VersionStatusCard.ts: versionCurrent/versionLatest in msg(str`...`) text nodes; buildHash.substring(0,7) text node
+- WorkerStatusCard.ts: value?.length numeric text node; all status messages hardcoded msg()
+- AdminLoginAuthorizeChart.ts: extends EventChart; hardcoded msg() labels in ChartData; numeric event volumes
+- AdminModelPerDay.ts: this.label property (from parent) used as chart dataset label string; numeric event volumes
+- OutpostStatusChart.ts: d.label (from element.name) as chart dataset label; chart labels hardcoded msg() strings; numeric health counts
+- SyncStatusChart.ts: status objects use hardcoded msg() labels; numeric sync status counts
+
+### Deep Reads — TypeScript individual file reads (pass 5ap — 2026-09-26)
+**Directory: web/src/admin/blueprints/ (2 files) + applications/ (40 files) + elements/ak-mdx/ (2 files) + user/UserSettingsFlowExecutor.ts — all CLEAN**
+
+Key findings this pass:
+- AUT-LAUNCH-URL-1 assessed PLAUSIBLE here, then ELIMINATED in pass 5aa: Application.meta_launch_url has DomainlessFormattedURLValidator blocking javascript:/data:/vbscript: at write time; see pass 5aa note below
+- ak-mdx .content mode: compileRuntimeMarkdown (no eval, allowDangerousHtml:false) → DOMPurify BrandedHTMLPolicy before unsafeHTML; blueprint description path CLEAN
+- wizard/steps/ak-application-wizard-provider-step.ts: tag from hardcoded providerToTag dict + StrictUnsafe(tag) triple-guard — injection-safe dynamic element creation
+- wizard/steps/ak-application-wizard-submit-step.ts: metaLaunchUrl displayed as text node (not href) — submit step not affected by AUT-LAUNCH-URL-1
+- SubmitStepOverviewRenderers.ts: all provider overview fields via renderDescriptionList() (text nodes)
+- UserSettingsFlowExecutor.ts:172: unsafeHTML(ShellChallenge.body) — intentional server-generated shell HTML pattern, documented as CLEAN
+
+### AUT-LAUNCH-URL-1 ELIMINATED (pass 5aa, 2026-09-26)
+
+Backend validator confirmed: Application.meta_launch_url has `validators=[DomainlessFormattedURLValidator()]` in `authentik/core/models.py`. DomainlessFormattedURLValidator extends DomainlessURLValidator with `schemes=["https","http","blank","ssh","sftp"]`, blocking javascript:, data:, vbscript: at write time. All frontend href bindings of launchUrl are SAFE. Status updated in FINDINGS dict to ELIMINATED.
+
+Confirmed CLEAN findings table updated:
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| AUT-LAUNCH-URL-1 | LOW | Admin launchUrl href binding (blocked by DomainlessFormattedURLValidator) | ELIMINATED |
+
+### Tool: debug-wizard.py (2026-09-26)
+
+Adapted from tool.txt (5 TypeScript debug harness scripts) into Python static analysis tool at:
+`targets/authentik/debug-wizard.py`
+
+Modes:
+- `default` — stage type enumeration, AllowAny surface scan, pickle scan, invariant checks
+- `xss` — TypeScript XSS sink scan (finds 59 dynamic href bindings, 11 unsafeHTML usages); confirmed AUT-LAUNCH-URL-1 locations in ApplicationListPage/ViewPage
+- `personas` — multi-persona diff (admin/user/service/attacker) mapping stage access from auth signals
+- `graph` — DOT graph: application wizard static transition graph + flow stage type nodes
+
+Key adaptation from "surreal" harness: multi-persona divergence point detection maps to AllowAny vs. SESSION vs. TOKEN vs. ADMIN auth patterns in DRF permission_classes; stage models correctly show NONE (models don't carry auth signals; views do). Flow executor AllowAny confirmed intentional (pre-auth login flows).
+
+Usage:
+    python3 targets/authentik/debug-wizard.py --target /tmp/authentik --mode all
