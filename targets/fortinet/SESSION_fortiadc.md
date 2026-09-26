@@ -181,6 +181,7 @@ PLT = {
 | ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb | ~14KB each | ANALYZED | CLEAN — no exec PLT |
 | modules/*.ko | 21 kernel modules | ANALYZED | CLEAN — no call_usermodehelper; ha.ko ha_exec_cmd = kernel-internal only; kvm/xen/platform = stock modules |
 | migadmin/fortiai/ | Django 5.1.6 app | ANALYZED | CLEAN for RCE — no exec/system/subprocess in web code; post-auth session-key path traversal (write-primitive only); query_docs 500 crash (missing @require_session) |
+| /bin/*.sh | 25 shell scripts | COMPLETE | FAD_S1 PLAUSIBLE MEDIUM: saml_sp_metadata.sh ENTITY_ID/URL unescaped in sed "s/%%...%%/$VAR/" — '\"' injection → cmd split; upgrade.sh eval $var PLAUSIBLE LOW; all others admin-only PLAUSIBLE LOW |
 
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
@@ -212,3 +213,4 @@ PLT = {
 - 2026-09-26 (session 6): libips.so COMPLETE — 111 strcpy: 98 malloc-bounded (mov rdi, rax) ELIMINATED; 13 in LuaJIT VM internals (all ips_so_patch_urldb, 0x44fdc8-0xb887ae = lj_debug/lj_str/VM dispatcher). ALL ELIMINATED.
 - 2026-09-26 (session 6): libav.so ANALYZED — avFlowWrite CLEAN (0 sprintf/strcpy); sprintf×47 ELIMINATED (avScanLoad signature load + scanvirUrl/avTlvDecode hash-to-hex loops with fixed-size pre-sized buffers); strcpy×38 mostly ELIMINATED; FAD_AV1 PLAUSIBLE LOW: avIsIgnoreBuffer 0xf3531 malloc(72)+8+strcpy(rbp) — 64B heap slot, filename/URL >64B = potential heap overflow.
 - 2026-09-26 (session 6): vtl COMPLETE — sprintf×85 ELIMINATED (support-info shell cmds written to file not executed; HSM config integer-only; file path builds PLAUSIBLE LOW); strcpy×19 PLAUSIBLE LOW (3 feed rm+cluster_name system() chain; 9 HSM string building; 5 malloc-bounded ELIMINATED; 2 hardcoded literals ELIMINATED). No new findings above existing PLAUSIBLE LOW SafeNet HSM class.
+- 2026-09-26 (session 6): /bin/*.sh COMPLETE — all 25 scripts audited; FAD_S1 PLAUSIBLE MEDIUM: saml_sp_metadata.sh takes 8 admin-set CMDB args (ENTITY_ID, SP_ROOT_URL, SERVICE_URL, LOGOFF_PATH, ACS_PATH); used in sed "s/%%entity_id%%/$ENTITY_ID/g" — '/' escaped to '\/' by prior pass but '"' NOT escaped; if CMDB allows '"' in SAML entity ID → splits double-quoted sed command → shell injection (admin-only). upgrade-config-from3.x.sh eval $exp PLAUSIBLE LOW; upgrade.sh eval $cmd with stat $var PLAUSIBLE LOW; scripting_convert.sh $1 script-file-path PLAUSIBLE LOW; vs_rs_status.sh $2-$5 unquoted grep args PLAUSIBLE LOW.

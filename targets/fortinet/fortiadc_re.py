@@ -1423,6 +1423,64 @@ FINDINGS = {
             ),
         },
     },
+
+    # ── Shell scripts in /bin/ (25 .sh files) ────────────────────────────────────
+    # All called from CMDB/admin operations via fadcsystem or sys_vdom_exec.
+    # Args come from admin-configured CMDB values (file paths, VS names, IP:ports, SAML entities).
+    # Scope: path traversal via unquoted vars in file ops, unescaped sed substitutions.
+
+    "SHELL_SCRIPTS_profile": {
+        "binary": "/bin/*.sh (25 scripts)",
+        "status": "ANALYZED COMPLETE — all admin-only; FAD_S1 PLAUSIBLE MEDIUM (saml_sp_metadata.sh sed injection); misc PLAUSIBLE LOW",
+        "evidence": {
+            "upgrade_eval_LOW": (
+                "upgrade-config-from3.x.sh line 20: eval $exp where exp = grep output from "
+                "/migadmin/etc/cli_syntax.xml (firmware file, format 'gid=\"123\" range=\"val\"'). "
+                "Evaluates to variable assignment only. Source is trusted firmware XML. PLAUSIBLE LOW "
+                "(if /migadmin/etc/ can be written by a previous vulnerability)."
+            ),
+            "upgrade_sh_eval_LOW": (
+                "upgrade.sh lines 24/37: cmd='stat -c %Y $var'; eval $cmd. "
+                "$var = filename from ls *synflood*/*ddos* in /var/log/logrpt. "
+                "If attacker can create file named '$(cmd)' in /var/log/logrpt → cmd injection. "
+                "Requires write access to /var/log/logrpt (admin/root). PLAUSIBLE LOW."
+            ),
+            "fad_s1_saml_sp_metadata": (
+                "saml_sp_metadata.sh: ENTITY_ID/SP_ROOT_URL/SERVICE_URL/LOGOFF_PATH/ACS_PATH "
+                "passed as args from admin-configured SAML SP CMDB entry. "
+                "Used in: sed \"s/%%entity_id%%/$ENTITY_ID/g\" — $ENTITY_ID unescaped for '\"'. "
+                "If CMDB allows '\"' in SAML entity IDs/URLs: ENTITY_ID='x\"; id; echo \"' "
+                "→ splits the double-quoted sed command → shell injection. "
+                "Admin-only. PLAUSIBLE MEDIUM — depends on CMDB validator rejecting '\"' in URL fields. "
+                "Note: '/' IS escaped to '\\/' via prior sed but '\"' is NOT escaped."
+            ),
+            "scripting_convert_LOW": (
+                "scripting_convert.sh / stream_scripting_convert.sh: $1 = script file path "
+                "(admin scripting config). Used as filename in file ops (awk/grep pipelines reading file). "
+                "PLAUSIBLE LOW — path traversal in script file path."
+            ),
+            "vs_rs_status_LOW": (
+                "vs_rs_status.sh: $2-$5 = VS/RS IP:port from CMDB. Filtered through "
+                "sed 's/[][]/./g' but used unquoted in grep patterns: grep '...$VS_IP_PORT...'. "
+                "Regex injection if brackets/special regex chars pass sed filter. PLAUSIBLE LOW."
+            ),
+            "ngx_init_lua_gen_LOW": (
+                "ngx_init_lua_file_gen.sh: $2 = VS name in sed -i pattern. "
+                "If VS name contains '/' or regex metacharacters → sed pattern injection. "
+                "PLAUSIBLE LOW (VS names from admin CMDB, typically alphanumeric)."
+            ),
+            "scripting_priority_ELIMINATED": (
+                "scripting_priority_extract.sh: $1 file path as cat $SCRIPT. "
+                "All processing via grep/awk pipeline on file content. PLAUSIBLE LOW (path only)."
+            ),
+            "remaining_20_LOW": (
+                "All other scripts (saml, routing_check, l2_vs_rs_status, backup_before_reboot, "
+                "icmp_redirect, iommu, quota_check, show_ipv4/ipv6_routing_table, sslhw_init, "
+                "stream_scripting_cr_check/priority/rs_check, zip_core, ngx_balancer/read_lua_file_gen): "
+                "Admin-only, unquoted vars as file/IP/interface paths only. PLAUSIBLE LOW or ELIMINATED."
+            ),
+        },
+    },
 }
 
 registry = FindingRegistry()
