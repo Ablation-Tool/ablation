@@ -852,6 +852,22 @@ FINDINGS = {
                 "EXTERNAL CALLER AUDIT COMPLETE: 0 callers found in any bin or lib in firmware image. "
                 "waf_db_ strings appear only in libwaf.so itself. API is dead code in this image. ELIMINATED."
             ),
+            "waf_wje_readjson_vsnprintf_ELIMINATED": (
+                "waf_wje_readjson (0xe72f0): vsnprintf call at 0xe760e. "
+                "Format string at 0x212fe0 = '%4d-%02d-%02d %02d:%02d:%02d %010lu\\t' — "
+                "fixed timestamp format; all specifiers are integer/unsigned types. "
+                "No user-controlled format components. ELIMINATED."
+            ),
+            "waf_http_cssp_reg_vsnprintf_PLAUSIBLE_LOW": (
+                "waf_http_cssp_reg (0xe4a40): vsnprintf call at 0xe4fed. "
+                "r8=rcx=4th argument used as format string. "
+                "4th arg = admin-supplied Content Security Policy config value. Admin-only. PLAUSIBLE LOW."
+            ),
+            "cfg_openapi_schema_import_file_vsnprintf_PLAUSIBLE_LOW": (
+                "cfg_openapi_schema_import_file (0x19e550): vsnprintf call at 0x19e843. "
+                "r8=rsi=2nd argument used as format string. "
+                "2nd arg = admin-supplied OpenAPI schema file content. Admin-only import operation. PLAUSIBLE LOW."
+            ),
         },
     },
 
@@ -888,23 +904,32 @@ FINDINGS = {
     #   All 12 callers use format strings: 'Create new log file %s...', 'Can not get log file %s...'
     #   ALL ELIMINATED — no shell execution.
     #
-    # NET FINDING: FAD_M1 PLAUSIBLE MEDIUM — VDOM/plugin-name path traversal
-    #   Vectors: 0x19841 (touch), 0x199bd/0x19c27 (rm -rf), 0x18c63 (rm -rf logrpt/plugin)
-    #   Requires CMDB to accept '/' or '..' in VDOM/plugin names (typically blocked by validator).
-    #   Impact: arbitrary file create (touch) or dir deletion (rm -rf) as miglogd daemon.
-    #   Gating: CMDB name validator likely blocks '/' — assess when CMDB validator code is swept.
+    # NET FINDING: FAD_M1 ELIMINATED — VDOM/plugin-name path traversal BLOCKED
+    #   Validator: is_valid_host_name (libcmdb_plugin.so 0x84f00) restricts VDOM names to [A-Za-z0-9_-].
+    #   '/' blocked → no '../' → touch/rm -rf path traversal impossible. Plugin names: same validator class.
+    #   Evidence: bitmask loop 0x84d5e-0x84dd7 + explicit '/' absent from charset → ELIMINATED.
 
     "MIGLOGD_profile": {
         "binary": "miglogd",
-        "status": "ANALYZED — FAD_M1 PLAUSIBLE MEDIUM; all shell injection ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_M1 ELIMINATED; all shell injection ELIMINATED",
         "evidence": {
             "fadcsystem_context": "fadcsystem=posix_spawnp (confirmed libstdext.so); shell injection ELIMINATED across all 16 callers",
             "system_fgt_log": "FortiADC syslog API (not system()); all 12 callers ELIMINATED",
             "eliminated_callers": "hardcoded: 0x17b1d(rm tmp), 0x19453(rm fluentbit), 0x194ad(cp fluentbit), 0x19cac/b/4(killall), 0x1c8b4(log cleanup), 0x2124c(upgrade.sh)",
-            "fad_m1_touch": "0x19841: touch /var/log/logrpt/<VDOM>/should_deleted — path traversal if VDOM name allows '../'",
-            "fad_m1_rm": "0x199bd/0x19c27: rm -rf /var/log/logrpt/<VDOM> — dir deletion traversal (FAD_P2 analog)",
-            "fad_m1_plugin": "0x18c63: rm -rf /var/log/logrpt/<plugin_name> — log plugin name from CMDB",
-            "fad_m1_gating": "all gated by CMDB VDOM/plugin name validator (typically rejects '/' and '..'); confirm when CMDB code swept",
+            "fad_m1_touch_ELIMINATED": (
+                "0x19841: touch /var/log/logrpt/<VDOM>/should_deleted. "
+                "VDOM name validated by is_valid_host_name (libcmdb_plugin.so 0x84f00): charset [A-Za-z0-9_-], "
+                "'/' blocked at bitmask loop 0x84d5e. No '../' possible. ELIMINATED."
+            ),
+            "fad_m1_rm_ELIMINATED": (
+                "0x199bd/0x19c27: rm -rf /var/log/logrpt/<VDOM>. Same VDOM name validator. "
+                "'/' blocked → no traversal. ELIMINATED."
+            ),
+            "fad_m1_plugin_ELIMINATED": (
+                "0x18c63: rm -rf /var/log/logrpt/<plugin_name>. "
+                "Plugin name from CMDB logglobalplugin table — same name-type validator as VDOM. "
+                "No '../' possible. ELIMINATED."
+            ),
             "cp_callers": "0x18ef9/18f48/19521/19565: cp <cmf_get_config_file_path result> to /tmp/fluentbit/ — admin config path, PLAUSIBLE LOW",
         },
     },
@@ -976,7 +1001,7 @@ FINDINGS = {
 
     "LIBAV_profile": {
         "binary": "libav.so",
-        "status": "ANALYZED — no exec sinks; avFlowWrite CLEAN; most sprintf/strcpy ELIMINATED; FAD_AV1 PLAUSIBLE LOW (avIsIgnoreBuffer heap strcpy)",
+        "status": "ANALYZED COMPLETE — no exec sinks; avFlowWrite CLEAN; most sprintf/strcpy ELIMINATED; FAD_AV1 ELIMINATED; scanvirFileBuffer strcpy PLAUSIBLE LOW",
         "evidence": {
             "no_exec_sinks": "No system/execv/fadcsystem/sys_vdom_exec in PLT. CLEAN for cmd injection.",
             "avflowwrite_CLEAN": (
@@ -993,13 +1018,25 @@ FINDINGS = {
                 "avScanLoad(26): AV signature loading. ELIMINATED (trusted FortiGuard data). "
                 "avTlvDecode(7): TLV structure parsing. ELIMINATED. "
                 "avDbSetAdd(2): DB internal operations. ELIMINATED. "
-                "scanvirFileBuffer(1) 0x93f18: src=r12 internal scan state. PLAUSIBLE LOW. "
+                "scanvirFileBuffer(1) 0x93f18: see scanvirFileBuffer_PLAUSIBLE_LOW entry below."
             ),
-            "fad_av1_avIsIgnoreBuffer": (
-                "avIsIgnoreBuffer 0xf3531: malloc(0x48=72) + lea alloc+8 + strcpy(alloc+8, rbp). "
-                "rbp = rsi from function entry (2nd param, likely filename/URL). "
-                "64 bytes available. Filename/URL >64 bytes → heap overflow. PLAUSIBLE LOW "
-                "(caller likely pre-validates length; full taint trace required to confirm)."
+            "fad_av1_ELIMINATED": (
+                "Previous analysis misidentified 0xf3531 as avIsIgnoreBuffer. "
+                "nm -D confirms actual avIsIgnoreBuffer export is at 0xc4180 — uses setjmp/longjmp, "
+                "delegates to 0xc3610, no heap strcpy in normal execution path. "
+                "The strcpy at 0xf3531 is inside internal MIME/Content-Type parser at 0xf33d0 "
+                "(push r15/r14/r13/r12/rbp/rbx; calloc(1,0x48)+strcpy(alloc+8, rbp)). "
+                "rbp = stack buffer filled by field extractor 0xf6320. "
+                "0xf6320 gate: cmp eax, [rsp+0x40] at 0xf638a/0xf6446 where [rsp+0x40]=0x14=20. "
+                "jb 0xf64e0 path: strncpy(&stack_buf, src, len) where len<20 — strcpy copies "
+                "at most 19 chars + null into 64-byte allocation. NO OVERFLOW. ELIMINATED."
+            ),
+            "scanvirFileBuffer_PLAUSIBLE_LOW": (
+                "scanvirFileBuffer (0x93e00) export. strcpy at 0x93f18: strcpy(rcx=4th_arg, r12=scan_result_ptr). "
+                "Source r12 = pointer into internal AV scan result struct (virus name from signature match). "
+                "No length bound on strcpy. Destination size = caller-provided buffer (size unknown; "
+                "no callers in available firmware set). Source not directly user-controlled "
+                "(AV signature database content, not HTTP payload). PLAUSIBLE LOW."
             ),
         },
     },
@@ -1090,7 +1127,7 @@ FINDINGS = {
 
     "FNGINXCTLD_profile": {
         "binary": "fnginxctld",
-        "status": "ANALYZED COMPLETE — FAD_N1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); fadcpopen×2 fnginx-t PLAUSIBLE LOW; all other sinks ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_N1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); all fadcpopen×4 ELIMINATED (iptables hardcoded; fnginx paths VS-name validated); all sinks ELIMINATED",
         "evidence": {
             "fngx_process_vcmd_0x88c0": "variadic printf-to-shell: vsnprintf(cmd) → sys_vdom_exec(vdom, cmd); 40 callers",
             "fad_n1_format_strings": "'ip address add %s/%d dev %s > /dev/null 2>&1'; 'iptables/ip6tables ... -i %s -j FNGINX'",
@@ -1111,10 +1148,14 @@ FINDINGS = {
             "'%s' = 'iptables'/'ip6tables' hardcoded string (offset 0x405b9/0x405ce in binary). ELIMINATED. "
             "0x1b26b: same pattern + fadcpopen('iptables -t mangle -D PREROUTING %ld') — integer line number. ELIMINATED."
         ),
-        "fadcpopen_fnginx_test_PLAUSIBLE_LOW": (
+        "fadcpopen_fnginx_test_ELIMINATED": (
             "0x1ea3c: fadcpopen('/bin/fnginx -t -p %s/%s -c %s/%s/fnginx.conf', 'r') — "
-            "popen() with VS name-derived config path. Shell metacharacters in VS name injectable. Admin-only. PLAUSIBLE LOW. "
-            "0x2c15b: same for fnginx_new. PLAUSIBLE LOW."
+            "popen() with VS name-derived config path. "
+            "0x2c15b: same pattern for fnginx_new ('/bin/fnginx_new -t -p %s/%s -c %s/%s/fnginx.conf'). "
+            "Both %s args are VS name / config directory components. "
+            "VS names validated by is_valid_host_name (libcmdb_plugin.so 0x84f00) → [A-Za-z0-9_-]. "
+            "No shell metacharacters (no '/', ';', '|', '&', '$', backtick, quotes, CRLF) can appear. "
+            "Path components are safe in shell context. ELIMINATED."
         ),
             "execl_2_ELIMINATED": (
                 "0x25d7f: execl('/bin/fnginx', 'fnginx', '-p', ...) — hardcoded fnginx worker respawn. "
@@ -1220,7 +1261,7 @@ FINDINGS = {
 
     "FLG_ACCESSD_profile": {
         "binary": "flg_accessd",
-        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (fadcpopen popen shell); fadcsystem×2 ELIMINATED",
+        "status": "ANALYZED COMPLETE — ALL ELIMINATED (fadcpopen rm path VDOM-validated; fadcsystem posix_spawnp)",
         "evidence": {
             "fadcsystem_0xa752_ELIMINATED": (
                 "snprintf('tar czvf download_%s.tgz -C %s %s') @ 0x11018 → fadcsystem @ 0xa752. "
@@ -1230,10 +1271,13 @@ FINDINGS = {
                 "snprintf('md5sum  %s >%s/checkmd5.md5') @ 0xf841 → fadcsystem @ 0xa830. "
                 "The '>' is a literal token passed to md5sum argv — not shell redirect. posix_spawnp. ELIMINATED."
             ),
-            "fadcpopen_0xe3b8_PLAUSIBLE_LOW": (
-                "fadcpopen('/bin/rm -rfv /var/log/logrpt/<vdom>/resdir/* 2>&1') format @ 0xfe47. "
-                "fadcpopen wraps popen() — real shell invocation. If VDOM name contains shell metacharacters "
-                "(e.g., '; id'), the rm -rfv command is injectable. Admin-only VDOM name configuration. PLAUSIBLE LOW."
+            "fadcpopen_0xe3b8_ELIMINATED": (
+                "fadcpopen @ 0xe3b8: r13 = 4096-byte buf. snprintf at 0xe38f: "
+                "'%s -rfv %s/* 2>&1' with argv[0]='/bin/rm', argv[1]=rbp. "
+                "rbp = [rsp+0x14a0] filled by snprintf at 0xe334: '/var/log/logrpt/%s/resdir' "
+                "where %s = VDOM name. VDOM name validated by is_valid_host_name "
+                "(libcmdb_plugin.so 0x84f00) → [A-Za-z0-9_-] only. "
+                "No shell metacharacters possible in VDOM name. ELIMINATED."
             ),
         },
     },
@@ -1258,23 +1302,24 @@ FINDINGS = {
 
     "LB_profile": {
         "binary": "lb",
-        "status": "ANALYZED COMPLETE — PLAUSIBLE MEDIUM (cmf_exec_conf CRLF); PLAUSIBLE LOW (fadcpopen, /bin/sh mkstemp); rest ELIMINATED",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (cmf_exec_conf CRLF downgrade; /bin/sh mkstemp write-content); fadcpopen grep ELIMINATED (single-quote-safe VS names); rest ELIMINATED",
         "evidence": {
-            "cmf_exec_conf_0x365b5_PLAUSIBLE_MEDIUM": (
-                "cmf_exec_conf @ 0x365b5 sends CLI command built with admin-controlled scripting name, VS name, "
-                "scripting-file name, ADFS-pub-name via %s. Delete format: "
-                "'config vdom\\r\\nedit \"%s\"\\r\\nconfig system scripting\\r\\ndelete \"%s\"\\r\\n...' "
-                "Create format: 'config system scripting\\r\\nedit \"%s\"\\r\\nset scripting-file \"%s\"\\r\\n"
-                "set virtual-server-name \"%s\"\\r\\nset ADFS-pub-name \"%s\"\\r\\n...'. "
-                "Same mechanism as FAD_A2 (libadfs.so): '\"'+CRLF in any %s field injects arbitrary CLI commands. "
-                "Auth: admin CMDB write for scripting config. PLAUSIBLE MEDIUM."
+            "cmf_exec_conf_0x365b5_PLAUSIBLE_LOW": (
+                "cmf_exec_conf @ 0x365b5 sends CLI commands with scripting name, VDOM name, VS name, "
+                "scripting-file path, ADFS-pub-name via %s. Injection requires '\"'+CRLF in a field. "
+                "Name fields (scripting name, VDOM name, VS name, ADFS-pub-name): validated by "
+                "is_valid_host_name (libcmdb_plugin.so 0x84f00) → [A-Za-z0-9_-] only → no '\"' or CRLF. "
+                "Scripting-file path: FILENAME-type field validator — '\"' and CRLF not valid in filenames. "
+                "Downgrade from PLAUSIBLE MEDIUM: no known path to inject '\"'+CRLF into any %s field. "
+                "PLAUSIBLE LOW — residual risk if REST API accepts raw values bypassing CLI validators."
             ),
-            "fadcpopen_0x753c0_PLAUSIBLE_LOW": (
+            "fadcpopen_0x753c0_ELIMINATED": (
                 "fadcpopen('ps -w | grep \\'[SR]    %s -f\\' | grep -F \\'%s\\' | wc | awk\\'{print $1}\\'') "
-                "@ 0x753c0. Real popen() shell pipeline. First %s = process name (e.g. haproxy) in grep "
-                "single-quote arg; second %s = config file path in grep -F single-quote arg. "
-                "Single-quote escape: value containing \\' breaks out of single-quote context. "
-                "Likely haproxy binary name + VS-derived config path; admin-only. PLAUSIBLE LOW."
+                "@ 0x753c0. Real popen() shell pipeline. First %s = process name (haproxy binary name); "
+                "second %s = VS-derived config file path. "
+                "Both are VS/VDOM names validated by is_valid_host_name → [A-Za-z0-9_-]. "
+                "Single-quote breakout requires \\' in the value; [A-Za-z0-9_-] contains no quote characters. "
+                "ELIMINATED."
             ),
             "fadcsystem_bin_sh_PLAUSIBLE_LOW": (
                 "0x23c71/0x7b2a1: /bin/sh <mkstemp> pattern. mkstemp('/tmp/hap_fadcsystem/%s_fadcsystem_sh_XXXXXX'), "
@@ -1353,8 +1398,8 @@ FINDINGS = {
     # All five daemons share a log rotation pattern via system():
     #   snprintf(buf, 'cp /tmp/%s_<daemon>.log /tmp/%s_<daemon>_old.log', vdom_name, vdom_name)
     #   system(buf)
-    # %s = VDOM name. If CMDB VDOM name validation allows shell metacharacters → injection.
-    # Same class as FAD_M1 (miglogd). Log rotation callers: PLAUSIBLE MEDIUM.
+    # %s = VDOM name. VDOM name validated by is_valid_host_name (libcmdb_plugin.so 0x84f00):
+    # charset [A-Za-z0-9_-] only — all shell metacharacters blocked. FAD_BGPD class ELIMINATED.
     #
     # bgpd: 236 system() callers. 4 log rotation format variants + 4 hardcoded access_list strings (ELIMINATED).
     # ospfd: 101 system() callers. 1 format: cp /tmp/%s_ospfd.log … (log rotation only).
@@ -1364,7 +1409,7 @@ FINDINGS = {
 
     "BGP_profile": {
         "binary": "bgpd",
-        "status": "ANALYZED COMPLETE — PLAUSIBLE MEDIUM (log rotation system() x4 variants + VDOM name); ALL 236 callers confirmed log-rotation pattern",
+        "status": "ANALYZED COMPLETE — FAD_BGPD class ELIMINATED; ALL 236 callers log-rotation pattern",
         "evidence": {
             "system_236": "236 system() callers via __snprintf_chk → system(). snprintf + stack buf + system pattern.",
             "log_rotation_fmts": (
@@ -1372,7 +1417,8 @@ FINDINGS = {
                 "'cp /tmp/%s_cmd_bgp.log /tmp/%s_cmd_bgp_old.log' (0x121f28), "
                 "'cp /tmp/%s_fillist.log /tmp/%s_fillist_old.log' (0x143268), "
                 "'cp /tmp/%s_prelist.log /tmp/%s_prelist_old.log' (0x1493d0). "
-                "%s = VDOM name. PLAUSIBLE MEDIUM if VDOM name allows shell metacharacters (same class as FAD_M1)."
+                "%s = VDOM name. VDOM name validated by is_valid_host_name (libcmdb_plugin.so 0x84f00): "
+                "charset [A-Za-z0-9_-], all shell metacharacters (;|&$`) blocked. ELIMINATED."
             ),
             "access_list_ELIMINATED": (
                 "'add_access_list_rule', 'del_access_list_rule', 'add_access_list6_rule', 'del_access_list6_rule' "
@@ -1384,17 +1430,20 @@ FINDINGS = {
 
     "OSPF_profile": {
         "binary": "ospfd",
-        "status": "ANALYZED COMPLETE — ALL 101 system() = log rotation PLAUSIBLE MEDIUM; 0 non-log callers confirmed",
+        "status": "ANALYZED COMPLETE — FAD_BGPD class ELIMINATED; 0 non-log callers confirmed",
         "evidence": {
-            "system_101": "101 callers. All log rotation: 'cp /tmp/%s_ospfd.log /tmp/%s_ospfd_old.log' ×97; 4 context-only (function names, not system() args). Confirmed 0 non-log-rotation callers.",
-            "vdom_injection": "%s = VDOM name. PLAUSIBLE MEDIUM — same class as FAD_M1 and bgpd.",
+            "system_101": "101 callers. All log rotation: 'cp /tmp/%s_ospfd.log /tmp/%s_ospfd_old.log' ×97; 4 context-only. Confirmed 0 non-log callers.",
+            "vdom_injection_ELIMINATED": (
+                "%s = VDOM name. is_valid_host_name (libcmdb_plugin.so 0x84f00) restricts to [A-Za-z0-9_-]; "
+                "no shell metacharacters pass. ELIMINATED."
+            ),
             "system_plt": "0x179e0",
         },
     },
 
     "OSPF6_profile": {
         "binary": "ospf6d",
-        "status": "ANALYZED COMPLETE — FAD_O1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); 65 system() log rotation PLAUSIBLE MEDIUM (FAD_BGPD class)",
+        "status": "ANALYZED COMPLETE — FAD_O1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); 65 system() log rotation FAD_BGPD class ELIMINATED",
         "evidence": {
             "sys_vdom_exec_2_ELIMINATED": (
                 "2 callers (0x3fe90, 0x40257). Format: 'ip -6 xfrm state %s dst %s proto %s spi %s'. "
@@ -1405,10 +1454,10 @@ FINDINGS = {
                 "' enc %s 0x%s' (0x8de37) — snprintf fragment appending IPsec cipher/key to command buffer. "
                 "Not a direct system() call — feeds into sys_vdom_exec command assembly."
             ),
-            "system_65": (
+            "system_65_ELIMINATED": (
                 "65 system() callers. Format: 'cp /tmp/%s_ospf6d.log /tmp/%s_ospf6d_old.log' (0x78568). "
-                "Log rotation with VDOM name — PLAUSIBLE MEDIUM (same class as FAD_M1). "
-                "ALL 65 callers confirmed log-rotation pattern; 0 non-log callers."
+                "Log rotation with VDOM name. VDOM name validated by is_valid_host_name (libcmdb_plugin.so 0x84f00): "
+                "[A-Za-z0-9_-] only — no shell metacharacters. ALL 65 callers log-rotation. ELIMINATED."
             ),
             "false_positive_note": "'enc %s 0x%s' is in a snprintf block that jmps away before system() — not a system() arg.",
             "sys_vdom_exec_plt": "0xf420",
@@ -1820,7 +1869,7 @@ FINDINGS = {
 
     "SHELL_SCRIPTS_profile": {
         "binary": "/bin/*.sh (25 scripts)",
-        "status": "ANALYZED COMPLETE — all admin-only; FAD_S1 PLAUSIBLE MEDIUM (saml_sp_metadata.sh sed injection); misc PLAUSIBLE LOW",
+        "status": "ANALYZED COMPLETE — all admin-only; FAD_S1 ELIMINATED (url_is_valid/xmlParseURI rejects '\"'); misc PLAUSIBLE LOW",
         "evidence": {
             "upgrade_eval_LOW": (
                 "upgrade-config-from3.x.sh line 20: eval $exp where exp = grep output from "
@@ -1834,14 +1883,12 @@ FINDINGS = {
                 "If attacker can create file named '$(cmd)' in /var/log/logrpt → cmd injection. "
                 "Requires write access to /var/log/logrpt (admin/root). PLAUSIBLE LOW."
             ),
-            "fad_s1_saml_sp_metadata": (
-                "saml_sp_metadata.sh: ENTITY_ID/SP_ROOT_URL/SERVICE_URL/LOGOFF_PATH/ACS_PATH "
-                "passed as args from admin-configured SAML SP CMDB entry. "
-                "Used in: sed \"s/%%entity_id%%/$ENTITY_ID/g\" — $ENTITY_ID unescaped for '\"'. "
-                "If CMDB allows '\"' in SAML entity IDs/URLs: ENTITY_ID='x\"; id; echo \"' "
-                "→ splits the double-quoted sed command → shell injection. "
-                "Admin-only. PLAUSIBLE MEDIUM — depends on CMDB validator rejecting '\"' in URL fields. "
-                "Note: '/' IS escaped to '\\/' via prior sed but '\"' is NOT escaped."
+            "fad_s1_saml_sp_metadata_ELIMINATED": (
+                "saml_sp_metadata.sh: ENTITY_ID from admin SAML SP CMDB. "
+                "Used in: sed \"s/%%entity_id%%/$ENTITY_ID/g\" — injection requires '\"' in entity ID. "
+                "CMDB validator: url_is_valid (libcmdb_plugin.so 0xef110) calls xmlParseURI (PLT 0x4e260). "
+                "RFC 2396 excludes '\"' from valid URI syntax; xmlParseURI returns NULL on '\"' → "
+                "url_is_valid returns 0 (invalid) → '\"' blocked at CMDB write time. ELIMINATED."
             ),
             "scripting_convert_LOW": (
                 "scripting_convert.sh / stream_scripting_convert.sh: $1 = script file path "
