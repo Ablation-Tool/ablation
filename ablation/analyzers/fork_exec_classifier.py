@@ -131,7 +131,10 @@ class ForkCallerResult:
     def fmt(self) -> str:
         extra = ''
         if self.verdict == EXEC_AFTER_FORK:
-            extra = f'  exec={self.exec_target}@0x{self.exec_call_va:x}'
+            extra = (
+                f'  exec={self.exec_target}@0x{self.exec_call_va:x}'
+                f'  !! TRACE CHILD TO EXHAUSTION — do not override to ELIMINATED from a partial trace !!'
+            )
         elif self.child_entry_va:
             extra = f'  child_entry=0x{self.child_entry_va:x}'
         return (
