@@ -972,7 +972,14 @@ FINDINGS = {
             "system_0x489aaa": "LuaJIT os.execute() builtin — admin Lua IPS rule script. ELIMINATED (by-design).",
             "popen_0x483375": "LuaJIT io.popen() builtin — same. ELIMINATED.",
             "popen_dead_code": "0x686667/0x6866bd/0x686701: macOS/AIX/Solaris sysctl/lsattr/psrinfo — dead on Linux. ELIMINATED.",
-            "execvp_0x39c3cd": "Internal fork+exec subprocess spawner (chdir+sigprocmask+env setup). PLAUSIBLE LOW (trace caller).",
+            "execvp_0x39c3cd_ELIMINATED": (
+                "libuv uv_spawn() child-side spawn at 0x39c3cd. Strings: 'uid option must be number', "
+                "'gid option must be number', 'stdio table entries must be nil, uv_stream_t, or integer' "
+                "confirm this is libuv's uv__process_child_spawn (process exit after fork+exec). "
+                "Triggered by LuaJIT IPS Lua scripts via uv.spawn() binding — same admin-only class as os.execute(). "
+                "pathname=[rbp-0x260]=r8 and argv=[rbp-0x248] come from Lua script arguments. "
+                "Admin-authored IPS rule scripts only. ELIMINATED (by-design, same class as system/popen builtins)."
+            ),
             "query_interface": "ips_so_query_interface: function-pointer registry, not packet processing.",
             "patch_urldb": "ips_so_patch_urldb: URL database file reader (fopen/fseek/fread).",
             "strcpy_111_ELIMINATED": (
