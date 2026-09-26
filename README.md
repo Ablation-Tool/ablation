@@ -14,11 +14,7 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ---
 
-**Codex supports Ablation**
-
 ![Codex demo](assets/screencast.gif)
-
-**Claude Code supports Ablation**
 
 ![Claude Code demo](assets/demo.gif)
 
