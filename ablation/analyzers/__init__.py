@@ -46,6 +46,7 @@ from .source_ingestion import SourceContext
 from .source_entry_classifier import SourceEntryClassifier, RouteClassification, AUTH_NONE, AUTH_API_KEY, AUTH_SESSION, AUTH_INTERNAL, AUTH_ADMIN
 from .source_sink_scanner import SourceSinkScanner, SinkHit
 from .source_arch_risk import SourceArchRiskScanner, ArchRiskFinding
+from .source_audit_compressor import SourceAuditCompressor, FileProfile, ProfileBucket
 from .source_isolation_checker import SourceIsolationChecker, IsolationFinding
 from .source_taint_tracker import SourceTaintTracker, TaintPath, TaintHop, CallGraph
 from .sink_arg_classifier import (
@@ -104,6 +105,7 @@ __all__ = [
     "AUTH_NONE", "AUTH_API_KEY", "AUTH_SESSION", "AUTH_INTERNAL", "AUTH_ADMIN",
     "SourceSinkScanner", "SinkHit",
     "SourceArchRiskScanner", "ArchRiskFinding",
+    "SourceAuditCompressor", "FileProfile", "ProfileBucket",
     "SourceIsolationChecker", "IsolationFinding",
     "SourceTaintTracker", "TaintPath", "TaintHop", "CallGraph",
     "SinkArgClassifier", "SinkClassification",
