@@ -14,6 +14,8 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ---
 
+![Codex demo](assets/codex-demo.gif)
+
 ![Claude Code demo](assets/demo.gif)
 
 ---
