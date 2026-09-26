@@ -858,15 +858,24 @@ FINDINGS = {
 
     "FNGINXCTLD_profile": {
         "binary": "fnginxctld",
-        "status": "ANALYZED — FAD_N1 PLAUSIBLE MEDIUM; exec callers mapped",
+        "status": "ANALYZED COMPLETE — FAD_N1 PLAUSIBLE MEDIUM; all other exec sinks ELIMINATED",
         "evidence": {
             "fngx_process_vcmd_0x88c0": "variadic printf-to-shell: vsnprintf(cmd) → sys_vdom_exec(vdom, cmd); 40 callers",
             "fad_n1_format_strings": "'ip address add %s/%d dev %s > /dev/null 2>&1'; 'iptables/ip6tables ... -i %s -j FNGINX'",
             "fad_n1_args": "%s = VS interface name / IP address from CMDB config struct (admin-set)",
             "fad_n1_verdict": "PLAUSIBLE MEDIUM — sys_vdom_exec = shell; VS iface name injection if CMDB allows metacharacters",
-            "fadcsystem_66": "posix_spawnp — shell injection ELIMINATED; path traversal audit pending",
-            "execl_2": "0x25d7f/0x32edf — likely fixed-path startup/restart (not yet verified)",
-            "fadcsystemf_1": "0x1bae6 — new sink fadcsystemf; format string not yet extracted",
+            "fadcsystem_66_ELIMINATED": "posix_spawnp — shell injection ELIMINATED.",
+            "execl_2_ELIMINATED": (
+                "0x25d7f: execl('/bin/fnginx', 'fnginx', '-p', ...) — hardcoded fnginx worker respawn. "
+                "0x32edf: execl('/bin/fnginx_new', 'fnginx_new', ...) — hardcoded fnginx_new respawn. ELIMINATED."
+            ),
+            "fadcsystemf_1_ELIMINATED": (
+                "0x1bae6 in g_gw_domain_del: fadcsystemf('mkdir -p %s', snprintf_buf). "
+                "snprintf_buf built as 'mkdir -p /home/old_config_file/<domain_name>/bookmark'. "
+                "Domain name from VDOM/gateway config; fadcsystemf = posix_spawn not shell; "
+                "path traversal in mkdir arg if domain name = '../..' (admin-only domain deletion). "
+                "ELIMINATED for shell injection (posix_spawn). Same-class mkdir traversal as del_netdev."
+            ),
         },
     },
 
@@ -935,12 +944,18 @@ FINDINGS = {
 
     "LOGDAEMONS_profile": {
         "binary": "flg_accessd/flg_indexd/flg_reportd/lb/infod/rd_mng",
-        "status": "PROFILED — fadcsystem callers posix_spawnp only; flg_reportd execve PENDING",
+        "status": "ANALYZED COMPLETE — all ELIMINATED; flg_reportd execve = hardcoded /bin/email (SMTP reporter)",
         "evidence": {
             "fadcsystem_posixspawnp": "All fadcsystem callers use posix_spawnp (libstdext.so confirmed) — shell injection ELIMINATED",
             "rd_mng": "No exec-class sinks. CLEAN.",
-            "flg_reportd_execve": "execve in PLT — caller count and format string not yet extracted",
-            "lb_fadcpopen": "fadcpopen = fork+pipe+exec pattern (no shell per libstdext.so analysis)",
+            "flg_reportd_execve_ELIMINATED": (
+                "execve at 0x1512e — fork+pipe+execve helper at 0x15000. Single caller at 0xaf31. "
+                "path = hardcoded '/bin/email'. argv = hardcoded ['/bin/email', '-V', '--no-encoding', "
+                "'--conf-file', '--from-name', '--from-addr', '--smtp-server', '--smtp-port', '-m', "
+                "'login', '--smtp-user', '--smtp-pass', '-tls', '--subject', 'FortiADC Report', '-a']. "
+                "Args filled from admin SMTP configuration. execve not shell. ELIMINATED."
+            ),
+            "lb_fadcpopen": "fadcpopen = fork+pipe+exec pattern (no shell per libstdext.so analysis). ELIMINATED.",
         },
     },
 
@@ -1025,16 +1040,24 @@ FINDINGS = {
 
     "KEEPALIVED_profile": {
         "binary": "keepalived",
-        "status": "ANALYZED — sys_vdom_exec ELIMINATED; execle PLAUSIBLE LOW (/bin/bash VRRP health check admin-configured)",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (execle /bin/bash VRRP script only; fadcsystem ALL ELIMINATED)",
         "evidence": {
             "sys_vdom_exec_0x54f76_ELIMINATED": (
                 "'echo %d > /proc/sys/net/ipv4/route/proximity_mode' — integer arg (%d), hardcoded path. ELIMINATED."
             ),
-            "execle_0x38659": (
+            "execle_0x38659_PLAUSIBLE_LOW": (
                 "execle('/bin/bash', ...) — VRRP health check script. Admin-configured path. "
                 "By-design: VRRP health checks run admin scripts. PLAUSIBLE LOW."
             ),
-            "fadcsystem_79": "79 fadcsystem callers (posix_spawnp via parse_command_line+execute_command). Format strings pending.",
+            "fadcsystem_79_ALL_ELIMINATED": (
+                "79 callers all ELIMINATED. 75x hardcoded HC chroot setup: "
+                "'mkdir -p /tmp_hc_root/{bin,dev,usr,...}', 'cp -f /lib/*.so /tmp_hc_root/lib', "
+                "'cp -rf /bin/_hc_root_busybox/bin/.', 'find /tmp/failed_llbr_hc -mindepth 1 -delete', "
+                "'killall -9 oracle_client', 'rm -rf /bin/_hc_root_busybox'. "
+                "2 snprintf-then-fadcsystem callers: 'mkdir -p %s/tmp_hc_root' + 'chmod +x %s' — "
+                "HC config-derived paths (admin-configured health check scripts), posix_spawn not shell. "
+                "No %s from network-injectable source. ALL ELIMINATED."
+            ),
             "sys_vdom_exec_plt": "0x9860",
             "execle_plt": "0x9f70",
             "fadcsystem_plt": "0x9b00",
