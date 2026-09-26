@@ -20,11 +20,11 @@ Combined with with Claude Code or OpenAI Codex, it transforms into a fully auton
 
 **Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
 
-**Source Code Audit:** Point Ablation at any repository — open-source project, vendor SDK, or forked dependency — and the Code Base Auditor compresses thousands of source files into a ranked read list in under 30 seconds: which files need individual reads, which can be batch-cleared, and which carry dangerous sinks, unscoped ORM queries, or unauthenticated entry points. A 2861-file TypeScript codebase compresses to 72 reads (40x reduction) without dropping coverage. Supports TypeScript, Python, Go, Rust, Java, Ruby, and PHP.
+**Source Code Audit:** Ablation assigns every source file a 5-bit security profile based on the rendering patterns it contains and groups them by read priority, so the high-risk files surface first. A 2861-file TypeScript codebase compresses to 72 reads.
 
-**Windows Kernel Driver & BYOVD Analysis:** Fully automated attack surface mapping for Windows kernel drivers (.sys). Classifies WDM / KMDF / minifilter drivers, recovers the IRP dispatch table, decodes every IOCTL code, and flags 40+ dangerous kernel API patterns (physical memory R/W, DKOM, pool corruption, credential token theft, MSR writes, callback removal). The BYOVD Detector identifies signed drivers that carry exploitable capabilities across 8 capability classes — the exact technique used to blind EDR controls and escalate to ring-0. PDB path extraction and Authenticode presence check included.
+**Windows Kernel Driver & BYOVD Analysis:** Ablation maps the IRP dispatch table, decodes every IOCTL code, and identifies which kernel APIs expose physical memory and token primitives from user mode. The BYOVD Detector fingerprints signed drivers carrying those capabilities, because one legitimate signed driver is enough to blind EDR from ring-0.
 
-**Erlang / BEAM Analysis:** Full attack surface extraction from compiled Erlang .beam files. Recovers exported and imported functions (equivalent to ELF exports and PLT), the atom table (equivalent to string table), embedded literals, and AST-level debug info with line numbers and record names. Detects obfuscation indicators (stripped/missing chunks). Operates on the same surface-then-taint model as binary RE — sweep the atoms and imports for dangerous patterns, then trace into the BEAM bytecode.
+**Erlang / BEAM Analysis:** Ablation reads every .beam chunk and builds the same surface map it builds for ELF, so atom search, import auditing, and obfuscation detection work the same way they do on Linux firmware. Sweeping an entire OTP release directory takes seconds.
 
 **Decryption**
 - **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
