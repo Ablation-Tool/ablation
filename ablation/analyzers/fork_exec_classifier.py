@@ -101,6 +101,10 @@ _MAX_CHILD_BLOCKS = 32
 _MAX_FUNC_BYTES   = 8192
 # Instruction window to search for test/jne after fork call
 _BRANCH_SCAN      = 12
+# EXIT_IN_CHILD only when exit() reached within this many BFS blocks.
+# Deeper exits are in error/shutdown paths of event-loop workers, not the
+# primary child purpose.
+_MAX_DIRECT_EXIT_BLOCKS = 12
 
 
 # ── Verdict constants ─────────────────────────────────────────────────────────
@@ -304,7 +308,16 @@ class ForkExecClassifier:
             if mnem in ('js', 'jl', 'jle', 'jng'):
                 continue
 
-            # jne / jnz / jg = parent path (has child PID > 0)
+            # je/jz = child takes branch (eax==0 → child); parent falls through.
+            # Clang often emits `je child_target` rather than `jne parent_target`.
+            if mnem in ('je', 'jz'):
+                if insn.operands and insn.operands[0].type == X86_OP_IMM:
+                    child_entry = insn.operands[0].imm
+                    if k + 1 < len(insns):
+                        parent_entry = insns[k + 1].address
+                break
+
+            # jne / jnz / jg = parent path (has child PID > 0); child falls through.
             if mnem in ('jne', 'jnz', 'jg', 'jge', 'jnle'):
                 if insn.operands and insn.operands[0].type == X86_OP_IMM:
                     parent_entry = insn.operands[0].imm
@@ -358,7 +371,9 @@ class ForkExecClassifier:
                         if tgt in self._exec_plts:
                             return (EXEC_AFTER_FORK, self._exec_plts[tgt], insn.address, blocks_walked)
                         if tgt in self._exit_plts:
-                            return (EXIT_IN_CHILD, '', insn.address, blocks_walked)
+                            if blocks_walked <= _MAX_DIRECT_EXIT_BLOCKS:
+                                return (EXIT_IN_CHILD, '', insn.address, blocks_walked)
+                            # Deep exit() = error path in event loop; keep looking
 
                 # Unconditional jump
                 if mnem == 'jmp' and insn.operands:
@@ -372,12 +387,18 @@ class ForkExecClassifier:
                         return (WORKER, '', 0, blocks_walked)
                     break
 
-                # Conditional branch: push both targets
+                # Conditional branch: back-edge to before child_entry_va = pre-fork
+                # event loop → WORKER.  Local back-edges within the child's own
+                # code (op.imm >= child_entry_va) are normal inline loops and
+                # must not trigger a WORKER verdict.
                 if (mnem.startswith('j') and mnem not in ('jmp',)
                         and insn.operands):
                     op = insn.operands[0]
-                    if op.type == X86_OP_IMM and op.imm not in visited:
-                        queue.append(op.imm)
+                    if op.type == X86_OP_IMM:
+                        if op.imm < child_entry_va:  # pre-fork event loop
+                            return (WORKER, '', 0, blocks_walked)
+                        if op.imm not in visited:
+                            queue.append(op.imm)
 
                 # Return without exec = worker pattern
                 if mnem in ('ret', 'retq', 'retn'):
