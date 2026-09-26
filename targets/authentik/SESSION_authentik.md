@@ -426,3 +426,18 @@
 - web/src/flow/FlowExecutorStageFactory.ts (full): CLEAN — tag resolved via: entry.tag || customElements.getName(StageConstructor) || entry.stage; all three sources are compile-time values; unknown challenge.component never reaches unsafeStatic (falls to error path if not in registry)
 - web/src/flow/FlowExecutorStages.ts (full): CLEAN — hardcoded StageEntries array with 30 known ak-/xak-prefixed component names; registry is static, not extensible at runtime
 - web/src/user/user-settings/UserSettingsPage.ts (full): CLEAN — all rendering via child component bindings; currentUser.pk in attribute binding (numeric)
+
+### Deep Reads — TypeScript individual file reads (pass 5q — 2026-09-26)
+- web/src/admin/providers/oauth2/OAuth2ProviderFormForm.ts (full): CLEAN — all form fields via ak-text-input/ak-radio-input/ak-flow-search/ak-crypto-certificate-search; no unsafeHTML
+- web/src/admin/providers/oauth2/OAuth2ProviderRedirectURI.ts (full): CLEAN — redirectURI fields in form input value bindings; no rendered user HTML
+- web/src/admin/crypto/CertificateKeyPairForm.ts (full): CLEAN — PEM data in ak-secret-textarea-input (input control, not rendered); name in ak-text-input
+- web/src/admin/sources/oauth/OAuthSourceForm.ts (full, grep-confirmed): CLEAN — no unsafeHTML; all fields via typed form components
+- web/src/admin/sources/saml/SAMLSourceForm.ts (full, grep-confirmed): CLEAN — no unsafeHTML; hasSigningCert state toggle
+- web/src/admin/stages/prompt/PromptForm.ts (full): CLEAN — previewResult via JSON.stringify in <pre> (Lit text node); renderTypes() hardcoded options; form inputs only
+
+#### unsafeHTML/unsafeStatic exhaustive coverage — ALL 9 FILES CONFIRMED
+- Grep across 2861 TypeScript files: only 9 files use unsafeHTML or unsafeStatic
+- All 9 confirmed reviewed; 7 CLEAN, 2 INFO (PromptStage admin-configured; FlowExecutor/UserSettingsFlowExecutor server-controlled)
+- web/src/elements/ak-dual-select/ak-dual-select.ts (full): CLEAN — unsafeHTML("&nbsp;") or msg(str`${number} items...`) — neither is user-controlled HTML
+- web/src/elements/Diagram/ak-diagram.ts (full): CLEAN — unsafeHTML(svg) from Mermaid renderer of admin-configured diagram text
+- web/src/elements/utils/files.ts (full): CLEAN — unsafeHTML(Intl.ListFormat.format(hardcoded ["theme"])) — hardcoded HTML wrapper, not user data
