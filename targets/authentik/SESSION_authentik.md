@@ -400,3 +400,29 @@
 - web/src/flow/FormStatic.ts (full): CLEAN — username Lit text node; cancelUrl from server-side challenge (admin-configured); avatar in <img src>
 - web/src/flow/stages/authenticator_duo/AuthenticatorDuoStage.ts (full): CLEAN — activationBarcode as <img src>; activationCode as <a href> (Duo-generated URL from server challenge); setInterval polling via typed API call
 - web/src/elements/ak-mdx/ak-mdx.ts (full): CLEAN — URL mode: CompiledMarkdownSanitizePolicy re-sanitizes after replacers run; Content mode: compileRuntimeMarkdown (no eval/Function) then sanitizeHTML(BrandedHTMLPolicy); both paths through DOMPurify before unsafeHTML()
+
+### Deep Reads — TypeScript individual file reads (pass 5o — 2026-09-26)
+- web/src/elements/AppIcon.ts (full): CLEAN — iconClass in CSS class attribute (Lit setAttribute, no HTML injection); resolvedIcon in <img src>; name first-char insignia as text node
+- web/src/elements/user/sources/SourceSettings.ts (full): CLEAN — source.component switch with 4 hardcoded cases + default error; no unsafeStatic; source.title as text node in aria-label
+- web/src/elements/sources/utils.ts (full): CLEAN — renderSourceIcon() renders FA class in class attribute (not innerHTML); iconUrl in <img src>; name in title attribute
+- web/src/user/user-settings/tokens/UserTokenList.ts (full): CLEAN — item.identifier/userObj.username as Lit text nodes; intent via formatIntentLabel; expiry via formatElapsedTime
+- web/src/user/user-settings/mfa/MFADevicesPage.ts (full): CLEAN — item.name/extraDescription as text nodes; stage.component dispatched to deleteWrapper as hardcoded switch; stage.configureUrl in <a href> from server stage config
+
+### Deep Reads — TypeScript individual file reads (pass 5p — 2026-09-26)
+- web/src/user/user-settings/mfa/MFADeviceForm.ts (full): CLEAN — name field via form input binding; send() dispatch on this.instance.type as hardcoded switch; no rendering of user data
+- web/src/user/user-settings/details/UserPassword.ts (full): CLEAN — configureUrl in <a href> (admin-set flow URL); text nodes only
+- web/src/user/user-settings/details/UserSettingsFlowExecutor.ts (full): CLEAN — unsafeHTML(ShellChallenge.body) at line 172: same server-controlled shell HTML pattern as main FlowExecutor; RedirectChallenge.to in <a href> from flow API
+- web/src/elements/buttons/TokenCopyButton/ak-token-copy-button.ts (full): CLEAN — fetches token via typed API call, writes to clipboard via writeToClipboard(); no HTML rendering of token value
+- web/src/admin/providers/proxy/ProxyProviderForm.ts (full): CLEAN — thin wrapper; delegates all rendering to renderForm() in ProxyProviderFormForm.ts
+- web/src/admin/providers/proxy/ProxyProviderFormForm.ts (full): CLEAN — all fields via ak-text-input/ak-switch-input; mode dispatched via ts-pattern match to renderProxySettings/renderForwardSingleSettings/renderForwardDomainSettings; window.location.origin as default externalHost value
+- web/src/admin/providers/radius/RadiusProviderForm.ts (full): CLEAN — thin wrapper; delegates to RadiusProviderFormForm.ts
+- web/src/admin/providers/scim/SCIMProviderForm.ts (full): CLEAN — thin wrapper; delegates to SCIMProviderFormForm.ts
+- web/src/admin/stages/prompt/PromptStageForm.ts (full): CLEAN — ak-text-input for stage name; dual-select for fields and bindings
+- web/src/admin/stages/prompt/PromptForm.ts (partial 80 lines): CLEAN — ModelForm for Prompt; sends via stagesPromptPromptsUpdate/Create; preview rendering not yet read
+- web/src/flow/stages/identification/IdentificationStage.ts (full): CLEAN — applicationPre via msg(str`...`) (localize-safe); enrollUrl/recoveryUrl/passwordlessUrl in <a href> from server flow config; source.name as text node; renderSourceIcon() traced CLEAN; primaryAction server-provided button text
+- web/src/admin/outposts/OutpostForm.ts (full): CLEAN — fields via ak-text-input/ak-search-select; config via ak-codemirror with YAML.stringify(); type selector hardcoded options; provider list from API
+- web/src/admin/policies/expression/ExpressionPolicyForm.ts (full): CLEAN — expression in ak-codemirror; name in text input; no unsafeHTML
+- web/src/flow/FlowExecutor.ts (full): CLEAN — unsafeHTML(challenge.body) only for xak-flow-shell special case; unsafeStatic(tag) from StageMapping.registry (compile-time hardcoded entries only); frame background src from server challenge.flowInfo.background
+- web/src/flow/FlowExecutorStageFactory.ts (full): CLEAN — tag resolved via: entry.tag || customElements.getName(StageConstructor) || entry.stage; all three sources are compile-time values; unknown challenge.component never reaches unsafeStatic (falls to error path if not in registry)
+- web/src/flow/FlowExecutorStages.ts (full): CLEAN — hardcoded StageEntries array with 30 known ak-/xak-prefixed component names; registry is static, not extensible at runtime
+- web/src/user/user-settings/UserSettingsPage.ts (full): CLEAN — all rendering via child component bindings; currentUser.pk in attribute binding (numeric)
