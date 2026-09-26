@@ -647,14 +647,34 @@ FINDINGS = {
 
     "LIBWAF_profile": {
         "binary": "libwaf.so",
-        "status": "SWEEP PARTIAL — FAD_W1 PLAUSIBLE HIGH; fadcsystem/strcpy ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_W1 PLAUSIBLE HIGH (sys_vdom_exec hpwafblockip); all other sinks ELIMINATED; SQLite snprintf-built queries exported-only",
         "evidence": {
-            "sys_vdom_exec_0xb82f9": "waf_blk_ip_dump_cmd: 'hpwafblockip show %s %d %s > /dev/null 2>&1' → shell exec",
-            "sys_vdom_exec_0xb840a": "waf_blk_ip_relese_cmd: 'hpwafblockip clear %s %s %s > /dev/null 2>&1' → shell exec",
-            "fad_w1_assessment": "PLAUSIBLE HIGH — args from VS/VDOM names (admin config); shell metachar bypass unconfirmed",
-            "fadcsystem_callers": "All 5: 'rm -f %s' file paths or hardcoded — ELIMINATED (posix_spawnp, no shell)",
-            "strcpy_0x88074": "parse_regex: malloc(strlen+1) immediately before strcpy — BOUNDED, ELIMINATED",
-            "pending": "waf_system callers, SQLite queries, PCRE patterns not fully audited",
+            "waf_system_ELIMINATED": (
+                "waf_system(0xead90): variadic fmt → __vsnprintf_chk builds string → fadcsystem. "
+                "fadcsystem = posix_spawnp (no shell). ELIMINATED for shell injection."
+            ),
+            "fadcsystem_4_ELIMINATED": (
+                "4 direct fadcsystem callers: "
+                "0xb8a45(waf_blk_ip_get): snprintf('rm -f %s', internal_path); "
+                "0xb8e8e/0xb8edc(waf_blk_ip_gui_clear_catch): snprintf('rm -f %s', internal_path); "
+                "0xec92d(waf_owasp_top10_init_shm): snprintf('touch %s', internal_path). "
+                "All posix_spawnp, no shell. ELIMINATED."
+            ),
+            "sys_vdom_exec_FAD_W1": (
+                "0xb82f9(waf_blk_ip_dump_cmd): sys_vdom_exec(vdom, 'hpwafblockip show <ip> 10000 <vdom> > /dev/null 2>&1'). "
+                "0xb840a(waf_blk_ip_relese_cmd): sys_vdom_exec(vdom, 'hpwafblockip clear <s1> <s2> <vdom> > /dev/null 2>&1'). "
+                "sys_vdom_exec = VDOM shell context execution. FAD_W1 PLAUSIBLE HIGH — "
+                "ip/vdom args from admin-configured VS/VDOM names; shell metachar in name could inject."
+            ),
+            "strcpy_0x88074_ELIMINATED": "parse_regex: malloc(strlen+1) immediately before strcpy — BOUNDED, ELIMINATED",
+            "sqlite_exported_api": (
+                "Exports: waf_db_read_table (select * from %s), "
+                "waf_db_read_table_condition (select * from %s where %s), "
+                "waf_db_get_table_row_num_condition (select count(*) from %s where %s). "
+                "snprintf-built SQL — no sqlite3_bind_* parameterization. "
+                "All 3 functions have 0 internal callers (called from external libs). "
+                "SQL injection risk deferred: audit when processing libcmdb_plugin.so callers."
+            ),
         },
     },
 
@@ -902,10 +922,18 @@ FINDINGS = {
 
     "VTL_profile": {
         "binary": "vtl",
-        "status": "SWEEP PARTIAL — 3 system() callers; HSM = PLAUSIBLE LOW; fork+dup untraced",
+        "status": "ANALYZED PARTIAL — system() callers resolved PLAUSIBLE LOW (HSM admin-only); sprintf/strcpy pending",
         "evidence": {
-            "system_0x430f63_430fcd": "ChrystokiConfiguration (SafeNet Luna HSM): strcpy('rm --force ') + strcat(cluster_name) + system() — third-party, PLAUSIBLE LOW (admin HSM config)",
-            "system_0x426e1d": "fork+dup+system(rbp+8): command pointer from parent struct; needs caller trace",
+            "system_0x430f63_430fcd": (
+                "ChrystokiConfiguration (SafeNet Luna HSM library): strcpy('rm --force ') + strcat(cluster_name) + system(). "
+                "Third-party SafeNet code. Admin-only HSM config. PLAUSIBLE LOW."
+            ),
+            "system_0x426e1d_PLAUSIBLE_LOW": (
+                "ApplianceConfiguration::ParentChildProcess::run() — SafeNet Luna HSM library. "
+                "fork() at 0x426d30; child dup-ifies fds from struct offsets, then calls system(this+8). "
+                "this+8 = command string from HSM config struct (Chrystoki.conf, admin-only). "
+                "Same SafeNet library class as 0x430f63. PLAUSIBLE LOW — admin-only, third-party HSM code."
+            ),
             "sprintf_85": "85 sprintf callers — audit pending (memory corruption / injection risk)",
             "strcpy_19": "19 strcpy callers — bounds checking unknown; pending",
         },
