@@ -1,5 +1,5 @@
 """
-Langfuse source RE — pass 3 complete (2026-09-26)
+Langfuse source RE — pass 4 in progress (2026-09-26)
 
 Target  : langfuse/langfuse (open source LLM observability platform)
 Repo    : https://github.com/langfuse/langfuse
@@ -13,6 +13,9 @@ Method  : 4-stage source RE via ablation source analyzers
           Pass 3:  SSRF audit (LLM/webhook/blob), LLM key storage, admin routes,
                    AI gateway, SCIM, sandbox, dashboard query, IO streaming,
                    remaining route handlers, analytics integrations
+          Pass 4:  Remaining worker features (eval, in-app-agent, batch actions,
+                   blob storage, trace/score/dataset deletion, entity change,
+                   v4 legacy API usage, tokenisation, trace batching)
 Auditor : nicholas@nuclide-research.com
 
 Findings summary (confirmed):
@@ -58,23 +61,40 @@ FINDINGS = [
         "status": "CONFIRMED",
         "severity": "HIGH",
         "cwe": "CWE-306",
-        "title": "Unauthenticated sandbox HTTP server on Docker network (self-hosted)",
+        "title": "Unauthenticated sandbox HTTP server reachable via Docker exec (self-hosted)",
         "description": (
-            "The in-app agent sandbox runtime listens on :5000 with no application-level "
-            "authentication. POST /sandbox with operation=bash executes arbitrary shell via "
-            "spawn('sh', ['-lc', command]). The Docker provider (self-hosted) connects directly "
-            "to the container port with no auth token. Any process on the same Docker network "
-            "gets unauthenticated RCE in the sandbox-server context."
+            "The in-app agent sandbox runtime listens on :5000 (loopback only) with no "
+            "application-level authentication. POST /sandbox with operation=bash executes "
+            "arbitrary shell via spawn('sh', ['-lc', command]). The Docker provider "
+            "(self-hosted) runs callSandboxServer() by executing a Node.js snippet inside "
+            "the container via docker exec (not via the Docker network): the snippet calls "
+            "fetch('http://127.0.0.1:5000/...') over the container's loopback. "
+            "Docker container is created with NetworkDisabled:true — :5000 is NOT reachable "
+            "from other containers on the Docker bridge network. Attack prerequisite is "
+            "Docker daemon access (docker.sock), enabling docker exec into the container "
+            "and direct loopback HTTP to the unauthenticated server. This is still HIGH "
+            "because docker.sock access (common misconfiguration) grants full RCE inside "
+            "the sandbox."
         ),
         "file": "packages/in-app-agent-sandbox-runtime/src/server.ts",
         "line": 47,
         "deployment": "self-hosted",
         "attack_chain": (
-            "SSRF from web container OR compromised sidecar on Docker network "
-            "→ POST http://sandbox:5000/sandbox {operation:'bash', command:'id'} "
-            "→ spawn('sh', ['-lc', 'id']) → arbitrary code in sandbox-server process"
+            "docker.sock mounted or accessible (common self-hosted misconfiguration) "
+            "→ docker exec into sandbox container "
+            "→ POST http://127.0.0.1:5000/sandbox {operation:'bash', command:'id'} "
+            "→ spawn('sh', ['-lc', 'id']) → RCE in sandbox-server context. "
+            "NOTE: NetworkDisabled:true means :5000 is NOT reachable via Docker network; "
+            "docker exec (loopback) is the only path. The worker also calls callSandboxServer "
+            "via docker exec natively — that path is legitimate, but the same endpoint "
+            "has no auth token, so any docker exec capability is equivalent."
         ),
-        "notes": "Cloud deployment uses AWS Lambda MicroVMs; proxy token required. Self-hosted has no equivalent gate.",
+        "notes": (
+            "Cloud deployment uses AWS Lambda MicroVMs with proxy token. "
+            "Self-hosted Docker: NetworkDisabled=true on container, but zero-auth "
+            "design is intentional — isolation contract is the MicroVM/container boundary. "
+            "Prior description incorrectly stated the port was network-reachable."
+        ),
     },
     {
         "id": "LFG-CODEEVAL-1",
