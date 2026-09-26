@@ -804,3 +804,28 @@ Files read (62 total):
 - ssf/ (4 files): all CLEAN
 - wsfed/ (3 files): all CLEAN
 - google_workspace/ (5 files): all CLEAN — credentials object via .value Lit property binding (not string attr)
+
+### Deep Reads — TypeScript individual file reads (pass 5aj — 2026-09-26)
+**Directories: web/src/admin/rbac/ (7 files) + web/src/admin/stages/ (43 files) — all CLEAN**
+
+#### rbac/ — 7 files, all CLEAN
+All RBAC admin components follow the same text-node + value= pattern as the rest of the admin interface.
+- ak-rbac-object-permission-page.ts: pure structural wrapper; model/objectPk passed as element attributes
+- ak-rbac-permission-table.ts: item.name/modelVerbose text nodes; item.name as SlottedTemplateResult string for chip
+- ak-rbac-role-object-permission-form.ts: role.name returned as string from .renderElement; perm.name in label= attr
+- ak-rbac-role-object-permission-table.ts: item.name text node in <a>; toAdminInterface href; tooltip content from msg()
+- ObjectPermissionModal.ts: no user-controlled data rendered; passes model/objectPk as element attrs
+- ak-initial-permissions-form.ts: instance.name in value= binding; role.name returned as string; html`${role.name}` text node
+- ak-initial-permissions-list.ts: item.name returned directly as SlottedTemplateResult from row() (Lit text node)
+
+#### stages/ — 43 files, all CLEAN
+All stage forms follow the BaseStageForm → renderForm() pattern. Every field uses value= bindings or property bindings (.options, .value, ?checked). No user-controlled string ever reaches unsafeHTML() or unsafeStatic().
+
+Notable patterns:
+- ak-stage-wizard.ts + register.ts: structural/registration only, no rendering
+- captcha/shared.ts: CAPTCHA_PROVIDERS is pure static config — all keyURL/jsUrl/apiUrl values are hardcoded vendor URLs (Google, Cloudflare, hCaptcha, Cap), not user-supplied data. Confirmed this is the source of keyURL used in <a href=> in CaptchaStageForm.ts.
+- AuthenticatorEndpointGDTCStageForm.ts: `.value="${credentials}"` — single-expression PropertyPart in Lit; the `"..."` wrapper does NOT change property vs attribute semantics when there is exactly one dynamic expression. Object passed directly to ak-codemirror property.
+- utils.ts (webauthn): deviceTypeRestrictionPair() — item.description/aaguid rendered via html`...` text node interpolation (not unsafeHTML). Lit HTML-escapes all text node interpolations.
+- PromptStageFormHelpers.ts + AuthenticatorValidateStageFormHelpers.ts + IdentificationStageFormHelpers.ts: pure data helpers; all return label strings for dual-select components.
+- AuthenticatorSMSStageForm.ts: note the `accounts accountSid` field is ALSO used for the Generic provider's external API URL (same form field, different semantics depending on provider). This is a value= binding (form input), not rendered as HTML.
+- UserLoginStageForm.ts: sessionDuration/rememberMeOffset/rememberDevice all in text input value= bindings; MDN link in <a href=> is a hardcoded static URL.
