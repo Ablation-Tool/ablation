@@ -86,7 +86,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 | Title | Author |
 |---|---|
-| The Art of Software Security Assessment | Dowd ([github.com/mdowd79](https://github.com/mdowd79)), McDonald, Schuh ([github.com/jschuh](https://github.com/jschuh)) |
+| The Art of Software Security Assessment | Mark Dowd ([github.com/mdowd79](https://github.com/mdowd79)), John McDonald, Justin Schuh ([github.com/jschuh](https://github.com/jschuh)) |
 | Practical Binary Analysis | Dennis Andriesse |
 | Practical Malware Analysis | Sikorski, Honig |
 | Practical Reverse Engineering | Dang, Gazet, Bachaalany |
