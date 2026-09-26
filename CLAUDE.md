@@ -61,6 +61,7 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "Where did this command string come from? (system/popen/execve)" | `SinkArgClassifier.from_path(elf).classify_all()` — verdicts: RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN |
 | "Detect allowlist byte-validators in stripped binary" | `SanitizerDetector.from_path(elf).detect()` — SHELL_SAFE/SHELL_UNSAFE/UNKNOWN per charset |
 | "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` — WORKER/EXEC_AFTER_FORK/EXIT_IN_CHILD |
+| "Find 'safe now catastrophic later' rendering architecture risk (TS/JS/Python)" | `SourceArchRiskScanner.from_context(ctx).scan()` — tags: unsafe_render/type_dispatch/string_selector/registry_lookup/shared_module; HIGH=score≥3 or known combo |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
 | "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
 | "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
