@@ -58,6 +58,7 @@ PLT = {
 | FAD_R2 | restapi | JWT alg=none bypass | ELIMINATED |
 | FAD_R3 | restapi | Scripting upload RCE | **CONFIRMED CRITICAL** (any-auth, root daemon) |
 | FAD_A1 | adfsproxy | TLS cert validation bypass (proxy→ADFS) | **CONFIRMED HIGH** |
+| FAD_A2 | adfsproxy→libadfs.so | CLI injection via cmf_exec_conf in add_relying_party_cmdb_config | **CONFIRMED HIGH** |
 | FAD_P1 | ptd | tcpdump mkdir path traversal (cmd injection ELIMINATED — execvp separate argv) | **CONFIRMED MEDIUM** |
 | FAD_P2 | ptd→libcgo.so | dumpsystem_delete_run path traversal → arbitrary file deletion as root | **CONFIRMED HIGH** |
 | FAD_P_AWS | ptd→libcgo.so | fadc_aws_pyscript_run: dead stub (xor eax,eax; ret) | ELIMINATED |
@@ -108,6 +109,15 @@ PLT = {
 - `fadc_aws_pyscript_run` (0x12e6f0) in libcgo.so = dead stub: `xor eax,eax; ret`
 - No Python execution logic; actual pyscript exec via FAD_R3 (restapi scripting upload path)
 
+### FAD_A2 — libadfs.so CLI injection via cmf_exec_conf (CONFIRMED HIGH)
+- `add_relying_party_cmdb_config` (0x5890) builds multi-line CLI commands with `__snprintf_chk`, then passes to `cmf_exec_conf` (PLT:0x3240)
+- Three format strings embed `edit_name`, `proxy_name`, `relying_party_trust` via `%s` — no sanitization of `"`, `\r`, `\n`
+- Payload: proxy_name = `foo"\r\nconfig system admin\r\nedit admin\r\nset password pwned\r\nnext\r\nend\r\nend\r\nconfig user adfs-relying-party\r\nedit foo` → `"` breaks string token, `\r\n` injects new CLI commands
+- Three affected code paths: 0x59fd (vdom format), 0x5c83 (global format), 0x5d89 (second vdom path)
+- Auth: admin CMDB write access to set ADFS relying party config
+- CWE-78/CWE-88; CVSS 6.7 (AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:L)
+- libadfs.so sweep complete: 24 funcs, no SAML/XML parser, no system/popen. Only high finding is FAD_A2.
+
 ### FAD_A1 — adfsproxy TLS cert bypass (CONFIRMED HIGH)
 - `adfslib/http.VerifyServerCertificate` at `0x667440`: logs "Verify" + returns nil — complete stub
 - Used as `VerifyPeerCertificate` (or equivalent) callback in `GetHTTPClient:0x667520`
@@ -118,9 +128,8 @@ PLT = {
 
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
-2. **libadfs.so** — extracted at `/home/cowboy/ablation/fortiadc-work/libs/libadfs.so` (39K); analyze SAML/Kerberos parsing for injection (adfsproxy CGo bridge)
-3. **Fortinet PSIRT disclosure** — 5 confirmed: FAD_R1 HIGH, FAD_R3 CRIT, FAD_A1 HIGH, FAD_P1 MEDIUM, FAD_P2 HIGH; FAD_R2/FAD_P_AWS ELIMINATED
-4. **fadcsystem definition** — undefined in all 6 extracted libs; must be in a non-extracted lib (likely libsysmgmt or similar); confirm it wraps system() for PSIRT submission
+2. **Fortinet PSIRT disclosure** — 6 confirmed: FAD_R1 HIGH, FAD_R3 CRIT, FAD_A1 HIGH, FAD_A2 HIGH, FAD_P1 MEDIUM, FAD_P2 HIGH; FAD_R2/FAD_P_AWS ELIMINATED
+3. **fadcsystem definition** — undefined in all 6 extracted libs; confirm system() wrapper for PSIRT submission
 
 ## Session History
 - 2026-09-25: Firmware extracted, binaries identified, module scaffolded
@@ -131,3 +140,4 @@ PLT = {
 - 2026-09-25: ptd analyzed — Go 1.24.4 CGo (7775 funcs, not C), root (9 setuid PLT), fadc_exec_tcpdump_run (0x7c2120) mkdir traversal + unvalidated args to fortiadc_tcpdump_run; FAD_P1 CONFIRMED HIGH (pending libwaf.so for cmd injection upgrade)
 - 2026-09-25: libcgo.so extracted from qcow2/rootfs; fortiadc_tcpdump_run (0x143980) analyzed — double-fork+execvp with separate argv; cmd injection ELIMINATED; FAD_P1 downgraded to MEDIUM (mkdir traversal only)
 - 2026-09-25: fortiadc_dumpsystem_delete_run (0xcb1b0) analyzed; input_format_check strspn allowlist blocks metacharacters but permits '.'/'/'; fadcsystem("rm /var/log/crash/<input>") → arbitrary file deletion as root; FAD_P2 CONFIRMED HIGH; fadc_aws_pyscript_run (0x12e6f0) = dead stub (xor eax,eax; ret) ELIMINATED
+- 2026-09-26: libadfs.so sweep complete (24 funcs, BinaryContext+FuncProfiler, full string dump 0x7000-0x8000); add_relying_party_cmdb_config (0x5890) — __snprintf_chk with CLI command format strings + cmf_exec_conf; "%" fields not sanitized for '"'/CRLF; FAD_A2 CONFIRMED HIGH (CLI injection via relying party name/proxy name)

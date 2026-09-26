@@ -343,6 +343,71 @@ FINDINGS = {
         "cvss_estimate": "6.5 (AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:H/A:H)",
         "cwe": "CWE-22 (Path Traversal → Arbitrary File Deletion as Root); CWE-78 ELIMINATED",
     },
+
+    # ── adfsproxy → libadfs.so (C, 39K, 24 exported funcs) ────────────────────
+    # BinaryContext: 24 funcs, 57 PLT imports. No system/popen/execv in PLT.
+    # Sinks: cmf_exec_conf (CLI execution), snprintf (JSON/path building), write/connect.
+    # No XML/SAML parser — this lib handles the FortiADC→ADFS-server protocol,
+    # not inbound SAML parsing. Full string sweep: 0x7000..0x8000.
+
+    "FAD_A2_relying_party_cli_injection": {
+        "binary": "adfsproxy → libadfs.so",
+        "component": "libadfs.so:add_relying_party_cmdb_config:0x5890",
+        "description": (
+            "libadfs.so:add_relying_party_cmdb_config (0x5890, 1360B, 37 calls) builds "
+            "multi-line FortiADC CLI commands using __snprintf_chk and passes them to "
+            "cmf_exec_conf (PLT:0x3240) — the FortiADC CLI execution interface. "
+            "Three format strings embed user-controlled CMDB field values via %s "
+            "with no sanitization of double-quote ('\"'), CR ('\\r'), or LF ('\\n'): "
+            "  Format A (0x7920): "
+            "  'config user adfs-relying-party\\r\\nedit \"%s\"\\r\\nset proxy \"%s\"\\r\\n"
+            "   set relying-party-trust \"%s\"\\r\\nset status enable\\r\\nnext\\r\\nend\\r\\n' "
+            "  Format B (0x7998, global scope): adds outer 'config global\\r\\n...\\r\\nend\\r\\n' "
+            "  Format C (0x7a28, vdom scope): adds 'config vdom\\r\\nedit \"%s\"\\r\\n...' "
+            "  Three %s fields: edit_name (arg0), proxy_name (arg2 from CMDB), "
+            "    relying_party_trust (arg1 from CMDB). "
+            "Attack: if proxy_name = 'foo\"\\r\\nconfig system admin\\r\\nedit admin\\r\\n"
+            "set password hacked\\r\\nnext\\r\\nend\\r\\nend\\r\\nconfig user adfs-relying-party\\r\\n"
+            "edit foo', the double-quote terminates the CLI string token and \\r\\n "
+            "starts a new CLI command. cmf_exec_conf interprets each \\r\\n-delimited "
+            "line as a separate CLI instruction. Result: arbitrary CLI command injection "
+            "as the FortiADC CLI executor (root privilege). "
+            "Privilege boundary: adfsproxy imports setuid/seteuid/setreuid/setresuid — runs as root. "
+            "Auth required: admin-level access to set ADFS relying party config (CMDB write). "
+            "No character filtering or escaping in any of the three call paths."
+        ),
+        "confirmed_by": {
+            "function_va": "libadfs.so:add_relying_party_cmdb_config:0x5890",
+            "format_string_A": "0x7920: 'config user adfs-relying-party\\r\\nedit \"%s\"\\r\\nset proxy \"%s\"\\r\\nset relying-party-trust \"%s\"\\r\\nset status enable\\r\\nnext\\r\\nend\\r\\n'",
+            "format_string_B": "0x7998: outer 'config global\\r\\n...\\r\\nend\\r\\nend\\r\\n' (same %s fields)",
+            "format_string_C": "0x7a28: outer 'config vdom\\r\\nedit \"%s\"\\r\\n...\\r\\nend\\r\\n' (4 %s: vdom + 3 fields)",
+            "cmf_exec_conf_calls": "0x59fd, 0x5c83 — confirmed via capstone disasm of 0x5890..0x5de0",
+            "no_sanitize": "No strncmp, strstr, or character filter on edit_name, proxy_name, relying_party_trust",
+            "snprintf_calls": "0x59ee: __snprintf_chk(static_buf, 0x800, 2, 0x800, format, vdom/config_values)",
+            "injection_char": "'\"' terminates CLI string token; '\\r\\n' separates CLI commands",
+            "privilege": "adfsproxy PLT: setuid/seteuid/setreuid/setresuid (root execution confirmed)",
+            "input_source": "CMDB config: relying party name, proxy name, trust name — admin-set values",
+        },
+        "status": "CONFIRMED HIGH",
+        "cvss_estimate": "6.7 (AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:L)",
+        "cwe": "CWE-78 (OS Command Injection via CLI command injection) / CWE-88 (Argument Injection)",
+        "note": (
+            "libadfs.so sweep summary: "
+            "24 exported functions; no system/popen/execv in PLT; no SAML/XML parser. "
+            "JSON injection surface (adfs_build_register_json:0x43b0): "
+            "'ExternalUrl', 'BackendServerUrl', 'RelyingParty' embedded in JSON without "
+            "escaping '\"' or '\\\\' — malformed JSON sent to ADFS server but impact is "
+            "server-side (not FortiADC itself) — not filed as separate finding. "
+            "adfs_register (0x4240): builds URL path '%s/%s' and '%s/' — URL structure only, "
+            "no shell sink. "
+            "UserName/Passwd strings at 0x75c1/0x75d2 in .rodata: no references found in "
+            ".text (0x1000..0x68e0) — dead strings, not currently used. "
+            "FAD_A1 chain: TLS cert bypass (FAD_A1) + CertPath/KeyPath/CACert sent in "
+            "registration JSON (send_network:0x3470/send_helper:0x3610) — MITM attacker "
+            "can read TLS config paths but not key material (paths only, not key bytes). "
+            "No additional high-severity findings beyond FAD_A2."
+        ),
+    },
 }
 
 registry = FindingRegistry()
