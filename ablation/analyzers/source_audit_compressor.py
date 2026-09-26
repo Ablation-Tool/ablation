@@ -1,5 +1,9 @@
 """
-source_audit_compressor.py — Profile-based audit compression for source codebases.
+source_audit_compressor.py — Source Code Auditor.
+
+Audit any large codebase for security vulnerabilities. Every source file gets a
+5-bit security profile that determines exactly how much attention it needs, so
+nothing gets missed and nothing gets read twice.
 
 The core insight: most source files share identical security-relevant profiles.
 Files with the same profile are auditable as a batch — read one representative,
