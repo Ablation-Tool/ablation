@@ -66,7 +66,7 @@ _AUTH_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (AUTH_INTERNAL, re.compile(r"\bX-aws-proxy-auth\b"), "AWS proxy token"),
 
     # SESSION ── user session / cookie / NextAuth
-    (AUTH_SESSION, re.compile(r"\bgetServerSession\b|\bgetSession\b"), "NextAuth session"),
+    (AUTH_SESSION, re.compile(r"\bgetServerSession\b|\bgetSession\b|\bgetServerAuthSession\w*\b"), "NextAuth session"),
     (AUTH_SESSION, re.compile(r"\bprotectedProcedure\b|\bprotectedProject\w+Procedure\b"), "tRPC protected procedure"),
     (AUTH_SESSION, re.compile(r"\bsessionMiddleware\b|\bwithSession\b"), "session middleware"),
     (AUTH_SESSION, re.compile(r"\brequireSession\b|\bensureAuth\b"), "session guard"),
@@ -81,6 +81,13 @@ _AUTH_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (AUTH_API_KEY, re.compile(r"\bBasicAuth\b|\bBearerAuth\b"), "Basic/Bearer auth"),
     (AUTH_API_KEY, re.compile(r"Authorization.*Bearer|Bearer.*Authorization"), "Bearer header check"),
     (AUTH_API_KEY, re.compile(r"@require_http_methods|api_key_required"), "Python API key decorator"),
+    # Webhook signature verification (Stripe, ClickHouse billing, etc.)
+    (AUTH_API_KEY, re.compile(r"\bwebhook.*secret\b|\bstripe\.webhooks\.constructEvent\b", re.IGNORECASE), "webhook secret verify"),
+    (AUTH_API_KEY, re.compile(r"\btimingSafeEqual\b"), "timing-safe bearer verify"),
+    (AUTH_API_KEY, re.compile(r"\bauthorizeRequestOrThrow\b|\bauthorizeRequest\b"), "authorizeRequest guard"),
+    # INTERNAL service-to-service bearer keys (not user auth)
+    (AUTH_INTERNAL, re.compile(r"CLICKHOUSE_BILLING_METRICS_API_KEY|BILLING_METRICS_API_KEY"), "billing metrics API key"),
+    (AUTH_INTERNAL, re.compile(r"\bSTRIPE_WEBHOOK_SECRET\b|\bchbWebhookHandler\b|\bstripeWebhookHandler\b"), "Stripe/CHB webhook handler"),
 ]
 
 # Signals that a file is a config/health/docs endpoint (lowers NONE severity)
@@ -124,20 +131,75 @@ class SourceEntryClassifier:
     def from_context(cls, ctx: SourceContext) -> "SourceEntryClassifier":
         return cls(ctx)
 
-    def _classify_file(self, path: Path) -> RouteClassification:
-        text = self.ctx.read(path)
-        rel = self.ctx.rel(path)
+    _IMPORT_FROM = re.compile(
+        r"""(?:import\s+\S+\s+from|import\s*\{[^}]*\}\s*from)\s+['"]([^'"]+)['"]""",
+        re.MULTILINE,
+    )
 
+    def _resolve_import(self, from_path: Path, import_str: str) -> Optional[Path]:
+        """Resolve a relative or @-aliased import string to an absolute path."""
+        # Relative import
+        if import_str.startswith("."):
+            base = from_path.parent
+            for ext in ("", ".ts", ".tsx", "/index.ts", "/index.tsx", ".js", "/index.js"):
+                candidate = (base / (import_str + ext)).resolve()
+                if candidate.exists():
+                    return candidate
+            return None
+
+        # Next.js @/ alias — maps to the nearest package root (directory containing src/)
+        if import_str.startswith("@/"):
+            tail = import_str[2:]  # strip @/
+            # Walk up from from_path to find a directory containing src/
+            check = from_path.parent
+            for _ in range(8):
+                candidate_base = check / tail
+                for ext in ("", ".ts", ".tsx", "/index.ts", "/index.tsx", ".js", "/index.js"):
+                    candidate = Path(str(candidate_base) + ext)
+                    if candidate.exists():
+                        return candidate
+                if (check / "package.json").exists():
+                    break
+                check = check.parent
+            return None
+
+        return None  # external package
+
+    def _classify_text(self, text: str) -> tuple[str, str]:
+        """Return (auth_level, matched_signal) for a block of source text."""
         auth_level = AUTH_NONE
         matched_signal = "no auth signal found"
-
         for level, pattern, note in _AUTH_PATTERNS:
             if pattern.search(text):
                 if _AUTH_RANK[level] > _AUTH_RANK[auth_level]:
                     auth_level = level
                     matched_signal = note
+        return auth_level, matched_signal
 
-        is_low_value = any(p.search(text) or p.search(rel) for p in _LOW_VALUE_SIGNALS)
+    def _classify_file(self, path: Path) -> RouteClassification:
+        text = self.ctx.read(path)
+        rel = self.ctx.rel(path)
+
+        auth_level, matched_signal = self._classify_text(text or "")
+
+        # If no auth found in route file, follow one level of imports.
+        # Many Next.js route files are pure shims that re-export a handler.
+        if auth_level == AUTH_NONE and text:
+            for m in self._IMPORT_FROM.finditer(text):
+                import_path = self._resolve_import(path, m.group(1))
+                if import_path is None:
+                    continue
+                imported_text = self.ctx.read(import_path)
+                if not imported_text:
+                    continue
+                imp_level, imp_signal = self._classify_text(imported_text)
+                if _AUTH_RANK[imp_level] > _AUTH_RANK[auth_level]:
+                    auth_level = imp_level
+                    matched_signal = f"{imp_signal} (via {self.ctx.rel(import_path)})"
+                if auth_level != AUTH_NONE:
+                    break  # stop once we find any auth signal
+
+        is_low_value = any(p.search(text or "") or p.search(rel) for p in _LOW_VALUE_SIGNALS)
 
         return RouteClassification(
             path=path,
