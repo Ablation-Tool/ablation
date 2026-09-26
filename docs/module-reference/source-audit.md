@@ -1,6 +1,6 @@
-# Source Analyzers
+# Source Code Auditor
 
-Point Ablation at any repository and get a ranked read list in seconds.
+Audit any large codebase for security vulnerabilities. Entry point is `SourceAuditCompressor`. The remaining analyzers compose around it.
 
 ---
 
