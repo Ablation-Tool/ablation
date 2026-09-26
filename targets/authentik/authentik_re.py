@@ -967,6 +967,16 @@ CLEAN = [
     "web/src/admin/property-mappings/PropertyMappingSourceSAMLForm.ts — API endpoints only",
     "web/src/admin/property-mappings/PropertyMappingSourceSCIMForm.ts — API endpoints only",
     "web/src/admin/property-mappings/PropertyMappingSourceTelegramForm.ts — API endpoints only",
+    # pass 5ah — roles (7 files) + tokens (2 files) — 2026-09-26
+    "web/src/admin/roles/ak-role-form.ts — instance.name in value= attr binding",
+    "web/src/admin/roles/ak-role-list.ts — item.name text node; toAdminInterface(identity/roles/<pk>)",
+    "web/src/admin/roles/ak-role-view.ts — targetRole.name text node in renderDescriptionList; pk in element attrs",
+    "web/src/admin/roles/ak-related-role-table.ts — role.name text node in chip; item.name text node in <a>; toAdminInterface; permission.name text node in chip",
+    "web/src/admin/roles/ak-role-assigned-global-permissions-table.ts — item.modelVerbose/name text nodes; API-controlled verbose names",
+    "web/src/admin/roles/ak-role-assigned-object-permissions-table.ts — item.modelVerbose/name/objectDescription text nodes; objectPk in <pre> text node",
+    "web/src/admin/roles/ak-role-permission-form.ts — permission.name text node in chip",
+    "web/src/admin/tokens/TokenForm.ts — identifier/description in value= bindings; user.username/name as string/text node; dateTimeLocal() in value= on datetime-local input",
+    "web/src/admin/tokens/TokenListPage.ts — item.identifier/userObj.username text nodes; toAdminInterface(identity/users/<pk>); formatIntentLabel() returns localized string",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
