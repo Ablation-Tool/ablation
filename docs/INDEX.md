@@ -28,7 +28,7 @@ Step-by-step guides for common research tasks.
 
 ## Source Code Audit
 
-Point Ablation at any repository — open-source project, vendor SDK, or dependency — and get a ranked read list in under 30 seconds.
+Audit any large codebase for security vulnerabilities, faster than reading it linearly and without missing coverage.
 
 | Document | Covers |
 |---|---|
