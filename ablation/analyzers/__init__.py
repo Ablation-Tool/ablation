@@ -47,6 +47,15 @@ from .source_entry_classifier import SourceEntryClassifier, RouteClassification,
 from .source_sink_scanner import SourceSinkScanner, SinkHit
 from .source_isolation_checker import SourceIsolationChecker, IsolationFinding
 from .source_taint_tracker import SourceTaintTracker, TaintPath, TaintHop, CallGraph
+from .sink_arg_classifier import (
+    SinkArgClassifier, SinkClassification,
+    RODATA_CONST, SNPRINTF_RODATA, ARG_PROPAGATED, UNKNOWN as SINK_UNKNOWN,
+)
+from .sanitizer_detector import SanitizerDetector, SanitizerProfile, SHELL_METACHARACTERS
+from .fork_exec_classifier import (
+    ForkExecClassifier, ForkCallerResult,
+    WORKER, EXEC_AFTER_FORK, EXIT_IN_CHILD, UNKNOWN as FORK_UNKNOWN,
+)
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -95,4 +104,9 @@ __all__ = [
     "SourceSinkScanner", "SinkHit",
     "SourceIsolationChecker", "IsolationFinding",
     "SourceTaintTracker", "TaintPath", "TaintHop", "CallGraph",
+    "SinkArgClassifier", "SinkClassification",
+    "RODATA_CONST", "SNPRINTF_RODATA", "ARG_PROPAGATED", "SINK_UNKNOWN",
+    "SanitizerDetector", "SanitizerProfile", "SHELL_METACHARACTERS",
+    "ForkExecClassifier", "ForkCallerResult",
+    "WORKER", "EXEC_AFTER_FORK", "EXIT_IN_CHILD", "FORK_UNKNOWN",
 ]
