@@ -44,15 +44,26 @@
 | AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp |
 | AUT-FLOW-ALLOWANY-1 | INFO | FlowExecutorView AllowAny (intentional — login flow) |
 
+### Pass 2 — Expression engine, blueprints, debug view, outpost WS (2026-09-26)
+- lib/expression/evaluator.py:365 — exec() in policy evaluator: admin-only by design
+  (ExpressionPolicyViewSet uses DEFAULT_PERMISSION_CLASSES [ObjectPermissions])
+  Notable: `requests` in globals = SSRF primitive; `expr_create_jwt_raw` = arbitrary JWT claims
+- blueprints/v1/common.py — BlueprintLoader(SafeLoader): YAML deser is safe; !File/!Env admin-gated
+  (resolve() only called after check_blueprint_perms() passes)
+- core/views/debug.py — ServerLogAPI AllowAny gated by `if settings.DEBUG:`; not exposed in prod
+- policies/geoip/api.py — ISO3166View AllowAny is static country list; GeoIPPolicyViewSet is authed
+- outposts/consumer.py — OutpostConsumer.connect() uses guardian get_objects_for_user + DenyConnection
+- SourceIsolationChecker: 0 results — checker is Prisma/TS-specific, not applicable to Django ORM
+
+## Clean (investigated, not exploitable)
+- ServerLogAPI, ISO3166View, FlowExecutorView, Expression exec(), Blueprint !File/!Env, Outpost WS
+
 ## Pending
-- SourceIsolationChecker: run on Python files for tenant/org boundary gaps
+- SourceIsolationChecker: needs Python/Django ORM adapter module (toolchain gap)
 - SourceTaintTracker: trace flow executor PLAN_CONTEXT_* to session storage
-- debug view (core/views/debug.py): AllowAny info leak check
-- GeoIP API (policies/geoip/api.py): AllowAny — info leak?
-- Go outpost code: internal/outpost/, cmd/ (LDAP/RADIUS/proxy)
-- Expression engine (lib/expression/): Python eval injection via policy expressions
-- Blueprint import (blueprints/): YAML deserialization / template injection
-- Outpost IPC (outposts/channels/): WebSocket IPC auth review
+- Go outpost code: internal/outpost/ and cmd/ (LDAP injection? Go-specific patterns)
+- Property mappings API: confirm admin-only gate (same exec() path as ExpressionPolicy)
 
 ## Commits
 - 2777c49: source_ingestion.py + source_entry_classifier.py DRF pattern additions
+- 3aaa666: initial RE module — pass 1 (3 pickle HIGH, IPC key MEDIUM)
