@@ -148,11 +148,15 @@ _EXEMPT_PATH_FRAGMENTS = frozenset([
     "clickhousereadskipcache",
     "trace-delete-batch-action-runner",
     "batchactionrunner",
+    # Admin data export workers (export all tables to S3, no per-project scope needed)
+    "coreDataS3ExportQueue", "coredatas3exportqueue",
 ])
 
 
 # where: <varName>  — where clause passed as a variable reference
 _WHERE_VAR_REF = re.compile(r"where\s*:\s*([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s*[,}])", re.DOTALL)
+# where as shorthand property: { where, orderBy } means { where: where, ... }
+_WHERE_SHORTHAND = re.compile(r"\bwhere\s*[,\n]")
 
 
 def _extract_where_block(call_text: str) -> str:
@@ -181,15 +185,18 @@ def _extract_where_block(call_text: str) -> str:
 
 
 def _get_where_var_name(call_text: str) -> str:
-    """Return the variable name if where clause is a bare var ref, else ''."""
+    """Return the variable name if where clause is a bare var ref, else ''.
+    Handles both `where: varName` and shorthand `{ where, ... }`.
+    """
     m = _WHERE_VAR_REF.search(call_text)
-    if not m:
-        return ""
-    name = m.group(1)
-    # Skip if it looks like a keyword or object key
-    if name in ("null", "undefined", "true", "false"):
-        return ""
-    return name
+    if m:
+        name = m.group(1)
+        if name not in ("null", "undefined", "true", "false"):
+            return name
+    # Shorthand: { where, ... } → variable is literally named "where"
+    if _WHERE_SHORTHAND.search(call_text):
+        return "where"
+    return ""
 
 
 # Prisma compound unique key pattern: `projectId_queueId_userId` — the
@@ -294,11 +301,20 @@ class SourceIsolationChecker:
             # empty-where deleteMany on non-global model is still suspicious
             if op_type in ("deleteMany", "updateMany"):
                 return "PLAUSIBLE", "empty where clause on bulk op — verify scope filter"
+            # If scope field appears in the call/prior context (ternary where clause,
+            # helper function like ruleWhere(projectId), etc.) treat as scoped.
+            if _has_scope_field(context_lines) or _has_scope_field(prior_context):
+                return None, ""  # scoped via call context
             return "PLAUSIBLE", "where clause not statically extractable"
 
         # Has a recognized scope field → clean
         if _has_scope_field(where_text):
             return None, ""  # clean, not a finding
+
+        # Where text has no direct scope fields, but prior context may have them
+        # (e.g., where object built from variable references to scoped builders).
+        if prior_context and _has_scope_field(prior_context):
+            return None, ""  # scoped via prior context variable
 
         # Prior-ownership-check pattern: a scoped findFirst/findUnique/findMany
         # in the preceding ~50 lines means this id-only mutation is safe.
