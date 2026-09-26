@@ -101,6 +101,42 @@
 - providers/rac/consumer_client.py: CLEAN — token bound to session; Guacamole protocol filtered via parser; channel groups SHA-256 hashed
 - providers/rac/guacamole.py: CLEAN — strict length-prefix validation; UTF-16 code unit counting; 8192-byte/64-element limits; ping split from forwarded data
 
+### Deep Reads — Continued exhaustive individual file reads (pass 5c — 2026-09-26)
+- enterprise/stages/account_lockdown/stage.py: CLEAN — can_lock_user() self-vs-admin permission gate; TOCTOU fix via User.objects.get(pk=) inside atomic()
+- enterprise/core/revocation.py: CLEAN — retry loop with READ COMMITTED isolation guards credential minting race; dynamic discovery of ExpiringModel subclasses
+- enterprise/middleware.py: CLEAN — license READ_ONLY blocks writes only; explicit allowlist for LicenseViewSet/FlowExecutorView/UserViewSet
+- enterprise/providers/ssf/views/auth.py: CLEAN — bug: line 67 returns (jwt_token.user, token) where token=None; request.auth=None for JWT auth but provider already set on self.view, no security bypass
+- enterprise/providers/ssf/views/base.py: CLEAN — SSFView uses get_authenticators() returning SSFTokenAuth; IsAuthenticated + SSF Bearer
+- enterprise/providers/ssf/views/stream.py: CLEAN — object-level has_perm() on all CRUD methods; stream_id is UUID
+- enterprise/providers/ws_federation/processors/sign_in.py: CLEAN — wreply validated against configured ACS URL (scheme+netloc+path-startswith); lxml programmatic XML construction
+- enterprise/providers/ws_federation/processors/assertion_saml11.py: CLEAN — lxml Element/SubElement, attribute_value.text properly escaped; signing uses AssertionID ref (correct SAML 1.1)
+- enterprise/stages/mtls/stage.py: CLEAN — PolicyBuilder chain verification with now() time check; cert→dict conversion avoids pickle; outpost path requires pass_outpost_certificate perm
+- enterprise/agents/api.py: CLEAN — self-service agents: always expire, ActorPolicyInheritance.NONE; admin_perm gate for cross-user creation
+- enterprise/endpoints/connectors/agent/views/auth_interactive.py: CLEAN — compare_digest on SHA-256(device_token.key); HttpResponseRedirectScheme(allowed_schemes=["goauthentik.io"])
+- enterprise/lifecycle/offboarding/actions.py: CLEAN — audit event emitted BEFORE user.delete() to survive CASCADE
+- enterprise/policies/unique_password/tasks.py: CLEAN — ORM-only cleanup tasks
+- enterprise/providers/scim/views.py: CLEAN — dispatch() requires is_authenticated + change_scimprovider object permission
+- enterprise/endpoints/connectors/agent/http.py: CLEAN — ECDH-ES + AES-256-GCM; ConcatKDFHash X9.63 KDF, 96-bit random nonce, protected header as AAD; correct JWE compact
+- stages/authenticator_duo/stage.py: CLEAN — enroll_status == "success" gate before device creation; duplicate duo_user_id blocked
+- stages/authenticator_webauthn/stage.py: CLEAN — verify_registration_response with server-generated challenge; AAGUID restrictions; max_attempts rate limiting
+- stages/authenticator_email/stage.py: CLEAN — mask_email() in challenge; duplicate email check; token server-generated
+- stages/captcha/stage.py: CLEAN — server-side verification; score min/max threshold; remoteip from ClientIPMiddleware
+- providers/scim/clients/base.py: CLEAN — AUT-CACHE-PICKLE-1 note: get_service_provider_config() caches via postgres cache; hardcoded paths, no user-controlled URLs
+- providers/scim/clients/users.py: CLEAN — code quality note: userName in SCIM filter not quoted (injection into external SCIM server only)
+- providers/scim/clients/auth.py: CLEAN — explicit UTF-8 encoding for Basic auth (RFC 7617)
+- sources/plex/plex.py: CLEAN — hardcoded plex.tv URLs; server overlap checks against admin-configured allowed_servers
+- enterprise/stages/authenticator_endpoint_gdtc/stage.py: CLEAN — FrameChallenge uses local URL reversal
+- enterprise/requests/stage.py: CLEAN — max expiry enforced at persistence with min(granted_expiry_candidates)
+- stages/deny/stage.py: CLEAN — deny_message plan context override is admin-written only
+- stages/redirect/stage.py: CLEAN — ak-flow:// scheme for flow redirect, static URLs admin-configured
+- stages/authenticator_totp/stage.py: CLEAN — session pickle impact++: unsaved TOTPDevice stored in session (AUT-SESS-PICKLE-1 deepening)
+- stages/user_delete/stage.py: CLEAN — logout() before user.delete() prevents session/user mismatch
+- stages/authenticator_static/stage.py: CLEAN — session pickle impact++: StaticDevice + StaticToken list stored in session
+- stages/authenticator_sms/stage.py: CLEAN — plan context pickle impact++: unsaved SMSDevice stored in context; hash_phone_number() for verify_only mode
+- web/src/flow/FlowExecutor.ts: CLEAN — unsafeHTML only for xak-flow-shell (Django template auto-escape); unsafeStatic for tag names (not content)
+- web/src/flow/stages/prompt/PromptStage.ts: INFO — unsafeHTML(prompt.initialValue) for PromptTypeEnum.Static and Alert types; user-provided plan context values reach this path for self-XSS only (per-session isolation; same-user execution)
+- web/src/elements/ak-mdx/ak-mdx.ts: CLEAN — Trusted Types CompiledMarkdownSanitizePolicy.createHTML() before unsafeHTML()
+
 ### Deep Reads — Exhaustive full-codebase sweep (pass 4)
 - Grep sweep: ALL 2151 Python + 80 Go + 2861 TypeScript files for critical patterns
 - pickle.loads: confirmed exhaustive — 5 instances only (sessions.py, dramatiq x3, postgres cache)
