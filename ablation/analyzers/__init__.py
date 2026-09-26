@@ -42,6 +42,11 @@ from .beam_context import (
     SEVERITY_DISPATCH, SEVERITY_NETWORK, SEVERITY_INFO,
     SEVERITY_CODE_EVAL, SEVERITY_CODE_EXEC,
 )
+# ── Source Code Auditor ───────────────────────────────────────────────────────
+# Audit any large codebase for security vulnerabilities.
+# Entry point: SourceAuditCompressor (source_audit_compressor.py)
+# Full pipeline: SourceContext -> SourceAuditCompressor -> SourceEntryClassifier
+#                -> SourceSinkScanner -> SourceIsolationChecker -> SourceTaintTracker
 from .source_ingestion import SourceContext
 from .source_entry_classifier import SourceEntryClassifier, RouteClassification, AUTH_NONE, AUTH_API_KEY, AUTH_SESSION, AUTH_INTERNAL, AUTH_ADMIN
 from .source_sink_scanner import SourceSinkScanner, SinkHit
