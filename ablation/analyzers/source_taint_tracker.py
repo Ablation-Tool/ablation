@@ -130,6 +130,28 @@ _SKIP_FUNC_NAMES = frozenset([
 _MAX_HOP_DEPTH = 6
 _MAX_CALLERS_PER_FUNC = 30
 
+# Method names so common they produce cross-layer FPs. When a caller of one of
+# these names lives in a UI component/hook/store file and the sink is in a
+# backend/worker package, the connection is a name collision, not a real path.
+_OVERLOADED_NAMES = frozenset([
+    "dispatch", "send", "execute", "process", "run", "call", "invoke",
+    "emit", "trigger", "fire", "publish", "notify", "handle",
+    "create", "build", "get", "set", "update", "delete", "fetch",
+])
+
+# Path fragments that mark UI-layer files (frontend components, hooks, stores).
+# Callers in these paths are excluded when the sink is in a backend/worker module.
+_FRONTEND_PATH_FRAGMENTS = frozenset([
+    "/components/", "/hooks/", "/stores/", "/context/", "/ui/",
+    "/pages/", "/app/", "/views/", "/layouts/", "/widgets/",
+])
+
+# Path fragments that mark backend/worker modules.
+_BACKEND_PATH_FRAGMENTS = frozenset([
+    "/server/", "/worker/", "/queues/", "/services/", "/features/evals/",
+    "packages/shared/src/server",
+])
+
 # Files that should not appear on production taint paths
 _EXEMPT_PATH_FRAGMENTS = frozenset([
     ".test.", ".spec.", "__tests__", ".servertest.", ".clienttest.", ".gatewaye2e.",
@@ -326,9 +348,15 @@ class SourceTaintTracker:
         results: list[tuple[Path, str]] = []
         seen: set[tuple[Path, str]] = set()
 
+        # For overloaded names, exclude frontend files when the source
+        # function name maps to a backend module (layer mismatch = FP).
+        is_overloaded = func_name in _OVERLOADED_NAMES
+
         for path in candidates:
             rel = str(path).replace("\\", "/")
             if any(frag in rel for frag in _EXEMPT_PATH_FRAGMENTS):
+                continue
+            if is_overloaded and any(frag in rel for frag in _FRONTEND_PATH_FRAGMENTS):
                 continue
             text = self.ctx.read(path)
             if not text:
