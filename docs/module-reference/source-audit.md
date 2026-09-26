@@ -49,7 +49,7 @@ The core audit tool. Assigns every file a 5-bit security risk profile, groups fi
 
 ### The 5-bit profile
 
-Each file gets a profile integer (0–31) based on which security signals are present:
+Each file gets a profile integer (0-31) based on which security signals are present:
 
 | Bit | Weight | Signal | Triggers on |
 |---|---|---|---|
@@ -63,12 +63,12 @@ Each file gets a profile integer (0–31) based on which security signals are pr
 
 | Profile range | Binary | Signals | Audit action |
 |---|---|---|---|
-| 16–31 | `1xxxx` | unsafe rendering | **Individual read** — every file |
-| 8–15 | `01xxx` | href binding (no unsafe render) | **Individual read** — every file |
-| 4–7 | `001xx` | URL assignment | **Spot-check** — read a sample |
-| 2–3 | `0001x` | user-data rendering only | **Spot-check** — read a sample |
-| 1 | `00001` | shared module, no sinks | **Batch** — one representative |
-| 0 | `00000` | no signals | **Batch-CLEAN** — one representative |
+| 16-31 | `1xxxx` | unsafe rendering | **Individual read** (every file) |
+| 8-15 | `01xxx` | href binding (no unsafe render) | **Individual read** (every file) |
+| 4-7 | `001xx` | URL assignment | **Spot-check** (read a sample) |
+| 2-3 | `0001x` | user-data rendering only | **Spot-check** (read a sample) |
+| 1 | `00001` | shared module, no sinks | **Batch** (one representative) |
+| 0 | `00000` | no signals | **Batch-CLEAN** (one representative) |
 
 ### Usage
 
@@ -125,7 +125,7 @@ python3 -m ablation.analyzers.source_audit_compressor /tmp/authentik --show-file
 
 **File:** `ablation/analyzers/source_entry_classifier.py`
 
-Classifies every HTTP route handler file by its authentication level. Run this before deep reading to build an attack surface map: which endpoints are fully exposed, which are user-gated, which are admin-only.
+Classifies every HTTP route handler file by its authentication level. Run this before deep reading to build an attack surface map: which endpoints are exposed, which are user-gated, which are admin-only.
 
 ### Auth levels (weakest → strongest)
 
@@ -203,7 +203,7 @@ python3 -m ablation.analyzers.source_sink_scanner /tmp/langfuse --severity HIGH
 
 **File:** `ablation/analyzers/source_isolation_checker.py`
 
-Finds database queries (Prisma, Mongoose, SQLAlchemy, raw SQL) that fetch or mutate data without scoping to the authenticated tenant (`orgId`, `projectId`, `userId`). A missing tenant scope in a `findUnique` / `findMany` where clause is the highest-yield pattern class in multi-tenant SaaS — it directly enables IDOR and cross-tenant data leaks.
+Finds database queries (Prisma, Mongoose, SQLAlchemy, raw SQL) that fetch or mutate data without scoping to the authenticated tenant (`orgId`, `projectId`, `userId`). A missing tenant scope in a `findUnique` / `findMany` where clause is the highest-yield pattern class in multi-tenant SaaS because it directly enables IDOR and cross-tenant data leaks.
 
 ### Usage
 
@@ -231,7 +231,7 @@ python3 -m ablation.analyzers.source_isolation_checker /tmp/langfuse --severity 
 
 Detects "safe now, catastrophic later" architectural patterns: files where unsafe rendering
 is co-located with a type-dispatch switch or string-based component selector. These are the
-exact patterns developers extend by adding new cases — without realising each new case is a
+exact patterns developers extend by adding new cases, without realising each new case is a
 new rendering path that may bypass shared sanitization.
 
 The risk model: a file with only one signal category is low-risk. A file with both
