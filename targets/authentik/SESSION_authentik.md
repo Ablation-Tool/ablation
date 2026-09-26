@@ -179,3 +179,36 @@
 - debf4ef: pass 3 — 100% attack surface coverage, exhaustive CLEAN list
 - 0dd967c: pass 5 — AUT-FLOWTOKEN-PICKLE-1 (bare `from pickle import loads` in flows/models.py:353 — missed by grep sweep)
 - pass 5b: 18 more files read (core/, stages/, providers/saml/, sources/ldap/, sources/kerberos/, providers/rac/) — all CLEAN; no new findings; AUT-CACHE-PICKLE-1 consumption confirmed in flows/planner.py:296
+- pass 5d (committed separately): 32+ more files; no new security findings; executor.py context-merge deepens pickle; code-quality: Python 2 except syntax in scim/clients/groups.py:237 + enterprise/license.py:111
+
+### Deep Reads — Continued exhaustive individual file reads (pass 5d — 2026-09-26)
+- flows/views/executor.py: CLEAN — FlowToken plan context merge (line 155) deepens AUT-SESS-PICKLE-1/AUT-FLOWTOKEN-PICKLE-1 interaction; PLAN_CONTEXT_REDIRECT via redirect() guarded by "expression-or-authentik-only" comment; restart_flow() keep_context propagates existing context
+- providers/scim/clients/groups.py: CLEAN — code quality: `except SCIMRequestException, ObjectExistsSyncException:` at line 237 is Python 2 syntax (SyntaxError in Python 3)
+- enterprise/providers/ssf/views/jwks.py: CLEAN — short delegator to OAuth2 JWKSView; Access-Control-Allow-Origin: * (JWKS is intentionally public)
+- enterprise/providers/ws_federation/views.py: CLEAN — WSFedEntryView uses PolicyAccessView; wreply validated in sign_in processor; SAMLSession update_or_create idempotent
+- enterprise/endpoints/connectors/agent/views/apple_authorize.py: CLEAN — AppleAuthorizePreauthView unauthenticated (discovery); AppleAuthorizeView validates device JWT with ES256 + kid→DB lookup; redirect_uri strict equality check; PSSOAuthFulfillmentStage 5-min auth code expiry
+- enterprise/endpoints/connectors/agent/views/apple_nonce.py: CLEAN — DeviceToken lookup required before nonce creation; b64encode(token_bytes(32)) = 256-bit random nonce; 5-min expiry
+- enterprise/endpoints/connectors/agent/views/apple_register.py: CLEAN — IsAuthenticated + AgentAuth; RegisterUserView requires 3-way device+user+token join
+- enterprise/endpoints/connectors/fleet/models.py: CLEAN — config model only
+- enterprise/endpoints/connectors/fleet/stage.py: CLEAN — extends MTLSStageView; SAN URI extraction with ORM __in filter (no SQL injection); device not found raises PermissionDenied
+- enterprise/endpoints/connectors/google_chrome/models.py: CLEAN — JSONField credentials from Google service account; Credentials.from_service_account_info() via official library
+- enterprise/endpoints/connectors/google_chrome/stage.py: CLEAN — FrameChallenge with local reverse() URL only
+- enterprise/providers/google_workspace/clients/groups.py: CLEAN — all API calls via official Google client; slugify() on group name before email domain construction
+- enterprise/providers/microsoft_entra/clients/groups.py: CLEAN — all API calls via official MS Graph SDK; displayName in OData filter unescaped (admin-only code quality); with_url(next_link) uses Graph-returned URL
+- enterprise/lifecycle/models.py: CLEAN — pure re-export
+- enterprise/lifecycle/review/models.py: CLEAN — unique_together [iteration, reviewer] prevents double-review; user_can_review() group membership check; on_review() state guard
+- enterprise/reports/models.py: CLEAN — whitelist dispatch (user/event only); CSV via csv.writer; query_params through DjangoFilterBackend; MockRequest uses requester's own perms
+- enterprise/license.py: CLEAN — x5c chain: cert→intermediate→root CA (embedded); code quality: Python 2 except syntax at line 111; _validate_curve monkey-patch for ES512/secp384r1 legacy licenses (TODO); check_expiry=False disables sig verify for expired licenses (intentional status check)
+- enterprise/policy.py: CLEAN — EnterprisePolicyAccessView adds license validity + INTERNAL user type check to PolicyAccessView
+- enterprise/agents/models.py: CLEAN — Agent.create_for_user() sets unusable_password; MIRROR policy behavior default (agent cannot exceed parent access)
+- enterprise/lifecycle/review/signals.py: CLEAN — post_save dispatches task with UUID only; pre_delete cancels pending iterations
+- providers/scim/tasks.py: CLEAN — thin actor delegators to SyncTasks
+- sources/plex/tasks.py: CLEAN — plex_token redacted from error messages
+- lib/expression/evaluator.py (lines 100-339): CLEAN — expr_create_jwt_raw/expr_send_email are intentionally powerful admin-only primitives; socket.getaddrinfo (DNS not HTTP); expr_user_by(**filters) catches FieldError; wrap_expression() calls sanitize_arg() on all context keys
+- enterprise/models.py: CLEAN — License.status calls validate(check_expiry=False) intentionally
+- admin/api/system.py: CLEAN — HasPermission gate; session cookie redacted from header dump via SafeExceptionReporterFilter
+- blueprints/v1/importer.py: CLEAN — is_model_allowed() whitelist; all mutations via model serializer; _save_with_retry() race condition handling; PK uses model._meta.pk.to_python()
+- crypto/builder.py: CLEAN — RSA 4096, ECDSA P-256, Ed25519, Ed448; common_name[:64]; EdDSA algo=None; NoEncryption() storage (admin-only)
+- rbac/permissions.py: CLEAN — ObjectPermissions: lookup-based bypass intentional (has_object_permission does actual check); rbac_allow_create_without_perm defaults False; assign_initial_permissions scoped to user.all_roles()
+- policies/engine.py: CLEAN — effective_policy_user() MIRROR chain with cycle guard (seen set); Pipe for IPC within-process
+- tenants/utils.py: CLEAN — get_current_tenant() reads connection.schema_name from trusted middleware; get_unique_identifier() scopes to tenant or install_id
