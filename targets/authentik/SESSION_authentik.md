@@ -758,3 +758,20 @@ Notable: `PropertyMappingTestForm.ts` — `result.result` (expression evaluator 
 - PropertyMappingProviderSCIMForm.ts: CLEAN — API endpoints only
 - PropertyMappingProviderScopeForm.ts: CLEAN — scopeName/description in value= bindings
 - PropertyMappingSourceKerberosForm.ts through PropertyMappingSourceTelegramForm.ts: all CLEAN — API endpoints only, inheriting BasePropertyMappingForm
+
+### Deep Reads — TypeScript individual file reads (pass 5ah — 2026-09-26)
+**Directories: web/src/admin/roles/ (7 files) + web/src/admin/tokens/ (2 files) — all CLEAN**
+
+All role/token admin pages follow the established safe patterns: user-controlled strings appear only as Lit text nodes or in `value=` attribute bindings, never in `unsafeHTML()`.
+
+Notable: `ak-role-assigned-object-permissions-table.ts` — `item.objectPk` rendered in `<pre>` as text node (safe); `item.objectDescription` also text node. `ak-related-role-table.ts` — both the user-role assignment form and the table share the same chip/text-node pattern seen throughout.
+
+- ak-role-form.ts: CLEAN — instance.name in value= attr binding
+- ak-role-list.ts: CLEAN — item.name text node; toAdminInterface(identity/roles/<pk>); msg(str`View details of role "${item.name}"`) is string template
+- ak-role-view.ts: CLEAN — targetRole.name text node in renderDescriptionList; pk/modelEnum in element attrs only
+- ak-related-role-table.ts: CLEAN — role/item.name text nodes in chips and <a>; toAdminInterface; permission.name text node
+- ak-role-assigned-global-permissions-table.ts: CLEAN — item.modelVerbose/name text nodes (API-controlled verbose names)
+- ak-role-assigned-object-permissions-table.ts: CLEAN — modelVerbose/name/objectDescription text nodes; objectPk in <pre> text node
+- ak-role-permission-form.ts: CLEAN — permission.name text node in chip
+- TokenForm.ts: CLEAN — identifier/description in value= bindings; user.username returned as string from .renderElement; user.name text node in .renderDescription; dateTimeLocal() produces ISO string in value= on datetime-local input
+- TokenListPage.ts: CLEAN — item.identifier/userObj.username text nodes; toAdminInterface(identity/users/<pk>); formatIntentLabel() returns localized string
