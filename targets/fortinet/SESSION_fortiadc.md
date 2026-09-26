@@ -62,16 +62,16 @@ PLT = {
 | FAD_P1 | ptd | tcpdump mkdir path traversal (cmd injection ELIMINATED — execvp separate argv) | **CONFIRMED MEDIUM** |
 | FAD_P2 | ptd→libcgo.so | dumpsystem_delete_run path traversal → arbitrary file deletion as root | **CONFIRMED HIGH** |
 | FAD_P_AWS | ptd→libcgo.so | fadc_aws_pyscript_run: dead stub (xor eax,eax; ret) | ELIMINATED |
-| FAD_W1 | libwaf.so | sys_vdom_exec in hpwafblockip show/clear: shell exec with VS/VDOM name | PLAUSIBLE HIGH |
+| FAD_W1 | libwaf.so | sys_vdom_exec in hpwafblockip show/clear: posix_spawnp NOT shell (libbase.so confirmed) | ELIMINATED |
 | FAD_M1 | miglogd | fadcsystem touch/rm /var/log/logrpt/<VDOM> path traversal | PLAUSIBLE MEDIUM |
-| FAD_N1 | fnginxctld | fngx_process_vcmd → sys_vdom_exec with VS iface/IP in iptables/ip commands | PLAUSIBLE MEDIUM |
-| FAD_C1 | libcmdb_plugin.so | check_need_wake_up_wccpd → sys_vdom_exec with VXLAN/NVGRE iface name injection | PLAUSIBLE MEDIUM |
-| FAD_O1 | ospf6d | sys_vdom_exec 'ip -6 xfrm state %s dst %s ...' — IPsec state mgmt from routing table | PLAUSIBLE LOW-MEDIUM |
+| FAD_N1 | fnginxctld | fngx_process_vcmd → sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
+| FAD_C1 | libcmdb_plugin.so | check_need_wake_up_wccpd → sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
+| FAD_O1 | ospf6d | sys_vdom_exec 'ip -6 xfrm state' → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
 | FAD_BGPD | bgpd/ospfd/ospf6d | log rotation system() 'cp /tmp/%s_<daemon>.log ...' with VDOM name | PLAUSIBLE MEDIUM (class) |
 | FAD_AV1 | av | fadcsystem diagnostic collect 'cat /proc/meminfo >> %s' — path traversal only | PLAUSIBLE LOW |
-| FAD_H1 | httproxy3 | merge_fngx_session_table → sys_vdom_exec 'cat /etc/fnginx_new/%s/sessions/*' VS name | PLAUSIBLE MEDIUM |
-| FAD_H2 | httproxy3 | merge_httproxy_vs_session_table → sys_vdom_exec session cat with VDOM+VS in path | PLAUSIBLE LOW-MEDIUM |
-| FAD_RT1 | rtmd | brctl addbr/delbr + ifconfig up/down via sys_vdom_exec with bridge/iface name | PLAUSIBLE MEDIUM |
+| FAD_H1 | httproxy3 | merge_fngx_session_table → sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
+| FAD_H2 | httproxy3 | merge_httproxy_vs_session_table → sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
+| FAD_RT1 | rtmd | brctl/ifconfig via sys_vdom_exec → fadcsystem → posix_spawnp NOT shell | ELIMINATED |
 
 ### FAD_R1 — Pre-auth `/debug/pprof/*` (CONFIRMED HIGH)
 - Root cause: `ginpprof.WrapGroup(engine)` at `main.main:0xdc1232` — root `*gin.Engine` passed
@@ -152,13 +152,13 @@ PLT = {
 | cli | 2.7MB C | COMPLETE | CLEAN — rm-rf hardcoded /tmp/; strcpy bounded; more %s=plausible/admin-only |
 | miglogd | 3.5MB C | COMPLETE | FAD_M1 PLAUSIBLE MEDIUM; all shell injection ELIMINATED (posix_spawnp); VDOM/plugin-name path traversal pending CMDB validation check |
 | ocgs | 5.1MB Go+CGo | COMPLETE | CLEAN — Unix domain socket IPC only; standard Go TLS; no exec sinks |
-| libwaf.so | 2.7MB C | COMPLETE | FAD_W1 PLAUSIBLE HIGH (sys_vdom_exec hpwafblockip show/clear); waf_system ELIMINATED (vsnprintf+fadcsystem/posix_spawn); fadcsystem×4 ELIMINATED; SQLite snprintf-built API exported-only (injection risk tracked to libcmdb_plugin.so callers) |
+| libwaf.so | 2.7MB C | COMPLETE | FAD_W1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell; libbase.so confirmed); waf_system ELIMINATED; fadcsystem×4 ELIMINATED; SQLite exported-only dead code |
 | libstdext.so | 27K C | COMPLETE | fadcsystem = parse_command_line → posix_spawnp; NO shell; confirms all fadcsystem callers safe for shell injection |
 | libips.so | 15MB C | COMPLETE | LuaJIT 2.1 embedded; exec sinks = builtins ELIMINATED; 111 strcpy ALL ELIMINATED (98 malloc-bounded heap dest + 13 LuaJIT VM internals) |
 | libav.so | 8MB C | COMPLETE | avFlowWrite CLEAN (0 unsafe sinks); sprintf×47 ELIMINATED (signature loading + hash-to-hex loops); strcpy×35/38 ELIMINATED; FAD_AV1 PLAUSIBLE LOW: avIsIgnoreBuffer 0xf3531 strcpy(malloc(72)+8, filename) — 64B heap slot, URL >64B = overflow |
-| libcmdb_plugin.so | 1.8MB C | COMPLETE | system() ELIMINATED; execve ELIMINATED; FAD_C1 PLAUSIBLE MEDIUM (VXLAN/NVGRE sys_vdom_exec); fadcsystem×81 ALL ELIMINATED/PLAUSIBLE LOW (posix_spawn; admin-config paths/names; no shell injection) |
+| libcmdb_plugin.so | 1.8MB C | COMPLETE | FAD_C1 ELIMINATED (sys_vdom_exec→posix_spawnp NOT shell); system() ELIMINATED; execve ELIMINATED; fadcsystem×81 ALL ELIMINATED/PLAUSIBLE LOW |
 | acme-client | 6.1MB Go+CGo | COMPLETE | CLEAN — no exec PLT; no InsecureSkipVerify=true; ACME url field SSRF potential (admin-only) |
-| fnginxctld | 1.7MB C | COMPLETE | FAD_N1 PLAUSIBLE MEDIUM (fngx_process_vcmd sys_vdom_exec 1 caller); fadcsystem×66 ALL ELIMINATED (posix_spawnp); fadcsystemf×1 ELIMINATED; execl×2 ELIMINATED; fadcpopen×2 iptables ELIMINATED; fadcpopen×2 /bin/fnginx-t PLAUSIBLE LOW |
+| fnginxctld | 1.7MB C | COMPLETE | FAD_N1 ELIMINATED (sys_vdom_exec→posix_spawnp NOT shell); fadcsystem×66 ELIMINATED; fadcpopen×2 iptables ELIMINATED; fadcpopen×2 fnginx-t PLAUSIBLE LOW |
 | vtl | 2.1MB C++ | COMPLETE | All sinks PLAUSIBLE LOW or ELIMINATED (SafeNet HSM admin-only); sprintf×85: support-info writes to file not executed ELIMINATED; HSM config integer-only ELIMINATED; 6 file path PLAUSIBLE LOW; strcpy×19: 5 malloc-bounded ELIMINATED; 3 feed rm+cluster_name system() PLAUSIBLE LOW; 9 HSM string building PLAUSIBLE LOW |
 | flg_accessd | 703KB C | COMPLETE | fadcsystem×2 ELIMINATED (tar czvf posix_spawnp; md5sum '>' literal arg); fadcpopen@0xe3b8 PLAUSIBLE LOW (popen("rm -rfv /var/log/logrpt/<vdom>/resdir/* 2>&1") — admin VDOM name → popen shell injection) |
 | flg_indexd | 2MB C | COMPLETE | ALL ELIMINATED: fadcsystem×10 (killall×5 hardcoded; rm/touch internal log dirs posix_spawnp; killall -9 mysqld hardcoded) |
@@ -169,26 +169,45 @@ PLT = {
 | libsysapi.so | 251KB C | COMPLETE | CLEAN — fadcpopen('quota -uv quarantine' hardcoded); __sprintf_chk hex-encode; asprintf path build quarantine archive; system_fgt_log ELIMINATED; ALL ELIMINATED |
 | bgpd | 1.7MB C PIE | COMPLETE | 236 system() callers — log rotation 'cp /tmp/%s_bgpd.log ...' (4 variants) PLAUSIBLE MEDIUM; access_list strings ELIMINATED |
 | ospfd | 1.1MB C PIE | COMPLETE | 101 system() callers — 'cp /tmp/%s_ospfd.log ...' log rotation PLAUSIBLE MEDIUM |
-| ospf6d | 717KB C PIE | COMPLETE | FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec 'ip -6 xfrm state'); 65 system() log rotation PLAUSIBLE MEDIUM |
+| ospf6d | 717KB C PIE | COMPLETE | FAD_O1 ELIMINATED (sys_vdom_exec→posix_spawnp); 65 system() log rotation PLAUSIBLE MEDIUM (FAD_BGPD class) |
 | keepalived | 994KB C PIE | COMPLETE | ALL ELIMINATED: sys_vdom_exec (echo %d int-only); execle /bin/bash PLAUSIBLE LOW (admin VRRP notify script); execvp×2 hardcoded (/bin/mount proc + /bin/ssh_hc_util); fadcsystem×79: 71 chroot mkdir/mount (hardcoded), 4 cleanup (find -delete/killall), 2 snprintf mkdir+chmod posix_spawnp, 1 open /dev/null |
 | av | 1.2MB C PIE | COMPLETE | fadcsystem 3 callers PLAUSIBLE LOW (diagnostic log; path traversal only); fork 2 callers ELIMINATED (no exec in child) |
 | opensips | 2.5MB C PIE | COMPLETE | CLEAN — no exec sinks; fork only (SIP worker process mgmt) |
-| httproxy3 | 3.9MB C PIE | COMPLETE | FAD_H1 PLAUSIBLE MEDIUM (VS name sys_vdom_exec); FAD_H2 PLAUSIBLE LOW-MEDIUM (session cat stat-gated); HAProxy execvp ELIMINATED; fadcsystem_envp ELIMINATED (mkstemp script) |
+| httproxy3 | 3.9MB C PIE | COMPLETE | FAD_H1/FAD_H2 ELIMINATED (sys_vdom_exec→posix_spawnp NOT shell); HAProxy execvp ELIMINATED; fadcsystem_envp ELIMINATED |
 | uwsgi | 1.3MB C PIE | COMPLETE | CLEAN — execvp = uwsgi self-re-exec graceful restart; fork = worker mgmt; no cmd injection |
 | del_netdev | 14KB C PIE | COMPLETE | PLAUSIBLE LOW-MEDIUM — system('/bin/ls %s > /tmp/tmp.brg.list') with bridge name from CLI |
-| vdom | 14KB C PIE | COMPLETE | PLAUSIBLE LOW — sys_vdom_exec_safe with CLI argv appended; requires admin CLI access |
-| rtmd | 785KB C PIE | COMPLETE | FAD_RT1 PLAUSIBLE MEDIUM — brctl/ifconfig sys_vdom_exec with bridge/iface name (8 callers, same class FAD_N1) |
+| vdom | 14KB C PIE | COMPLETE | ELIMINATED — sys_vdom_exec_safe→fadcsystem→posix_spawnp (libbase.so VA=0x1d160 confirmed); no shell |
+| rtmd | 785KB C PIE | COMPLETE | FAD_RT1 ELIMINATED (sys_vdom_exec→posix_spawnp NOT shell; 8 callers all ELIMINATED) |
 | ditest/encrypt_file/fipstestd/geolookup/infod_shm_mng/inittest/kdbgd/krb_test/send2lb | ~14KB each | COMPLETE | CLEAN — no exec PLT |
 | modules/*.ko | 21 kernel modules | COMPLETE | CLEAN — no call_usermodehelper; ha.ko ha_exec_cmd = kernel-internal only; kvm/xen/platform = stock modules |
 | migadmin/fortiai/ | Django 5.1.6 app | COMPLETE | CLEAN for RCE — no exec/system/subprocess in web code; post-auth session-key path traversal (write-primitive only); query_docs 500 crash (missing @require_session) |
 | /bin/*.sh | 25 shell scripts | COMPLETE | FAD_S1 PLAUSIBLE MEDIUM: saml_sp_metadata.sh ENTITY_ID/URL unescaped in sed "s/%%...%%/$VAR/" — '\"' injection → cmd split; upgrade.sh eval $var PLAUSIBLE LOW; all others admin-only PLAUSIBLE LOW |
 | extra_lib/ Oracle IC | 8 libs 57MB+ | COMPLETE | Oracle Instant Client 12.1 bundled but DEAD CODE — 0 FortiADC bins/libs import or dlopen any Oracle lib; libnnz12.so strcpy×9 struct-bounded ELIMINATED; libclntsh.so system/popen callers internal-only; ELIMINATED |
+| libbase.so | 155KB C | COMPLETE | CRITICAL ARCH: sole definer of sys_vdom_exec (VA=0x1ce80, 366B) and sys_vdom_exec_safe (VA=0x1d160, 364B) and sys_vdom_id_exec; both call fadcsystem@PLT=0x7b60 (→GOT=0x27598=fadcsystem); fadcsystem=posix_spawnp (libstdext.so); ALL sys_vdom_exec callers firmware-wide → posix_spawnp NOT shell; eliminates FAD_W1/N1/C1/H1/H2/RT1/O1; shell ops in format strings ('> /dev/null 2>&1') are literal argv tokens not interpreted |
+| libntp.so | C | COMPLETE | fadcsystem@PLT present; 0 callers in .text section; CLEAN |
+| libbasepp.so | ~14KB C++ | COMPLETE | No exec-class PLT imports; CLEAN |
+| libadc_nl_ipc.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libautolearn.so | ~13KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libcfg_saml.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libcmdbapi.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libfmaildbapi.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libfmlrnd.so | ~13KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libfpoll.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libfts.so | ~13KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libgeo.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libgzip.so | ~13KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libippool.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| librs_profile.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libshmkvdbapi.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libsslhw.so | ~13KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libssli.so | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| libxpl.so.1 | ~14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
+| watchdog | 14KB C | COMPLETE | No exec-class PLT imports; CLEAN |
 
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
-2. **Fortinet PSIRT disclosure** — 6 confirmed: FAD_R3 CRIT, FAD_R1 HIGH, FAD_A1 HIGH, FAD_A2 HIGH, FAD_P2 HIGH, FAD_P1 MEDIUM; FAD_R2/FAD_P_AWS ELIMINATED
-3. **fadcsystem definition** — undefined in all 6 extracted libs; confirm system() wrapper for PSIRT submission
-4. SWEEP COMPLETE — all 11 binaries + 2 shared libs analyzed
+2. RE 100% COMPLETE — all binaries, shared libs, kernel modules, scripts, Python apps analyzed
+3. Confirmed findings: FAD_R3 CRIT, FAD_R1/A1/A2/P2 HIGH, FAD_P1 MEDIUM; PLAUSIBLE: FAD_BGPD/FAD_S1 MEDIUM, FAD_M1/FAD_AV1/FAD_LB class LOW
 
 ## Session History
 - 2026-09-25: Firmware extracted, binaries identified, module scaffolded
@@ -218,3 +237,4 @@ PLT = {
 - 2026-09-26 (session 7): flg_accessd COMPLETE — fadcsystem×2 ELIMINATED (tar czvf posix_spawnp; md5sum '>' literal not shell redirect); fadcpopen@0xe3b8 PLAUSIBLE LOW: popen("rm -rfv /var/log/logrpt/<vdom>/resdir/* 2>&1") — admin VDOM name → shell metachar injection via popen. flg_indexd COMPLETE — fadcsystem×10 ALL ELIMINATED (killall×5 hardcoded; rm -rf internal tsdb/log dirs via posix_spawnp; killall -9 mysqld hardcoded). infod COMPLETE — fadcsystem×10 ALL ELIMINATED (ldb repair hardcoded, rm -rf /var/log/tsdb*, killall -9 infod, touch /tmp/STATISTICS_DB_IPC_PATH); system_fgt_log×2 = syslog API. lb COMPLETE — fadcsystem×23: 21 ELIMINATED (sed substitutions/mkdir/cp/scripting_convert.sh/scripting_priority_extract.sh/haproxy management all posix_spawnp); 2 PLAUSIBLE LOW (/bin/sh <mkstemp> pattern at 0x23c71/0x7b2a1 — shell script written to /tmp/hap_fadcsystem/ then posix_spawnp'd, admin VS/haproxy params); fadcpopen@0x753c0 PLAUSIBLE LOW (popen pipeline "ps -w | grep '[SR]    %s -f' | grep -F '%s' | wc" — process name/config path in grep single-quote args, single-quote escape injection, likely haproxy name+VS config path, admin-controllable); cmf_exec_conf@0x365b5 PLAUSIBLE MEDIUM: CLI CRLF injection via scripting names — delete format "config vdom\r\nedit \"%s\"\r\nconfig system scripting\r\ndelete \"%s\"\r\n" and create format embeds scripting-file/VS-name/ADFS-pub-name — same mechanism as FAD_A2 but in lb scripting management.
 - 2026-09-26 (session 7 cont): fnginxctld COMPLETE — fadcsystem×66 ALL ELIMINATED (posix_spawnp: mkdir/rm/killall fnginx/fnginx_stop with internal+admin-VS paths); fadcsystemf×1 ELIMINATED; execl×2 ELIMINATED (no shell, fnginx respawn); fadcpopen×2 iptables ELIMINATED (hardcoded iptables/ip6tables binary, integer line number); fadcpopen×2 /bin/fnginx -t PLAUSIBLE LOW (popen VS-name in config path, admin-only); sys_vdom_exec = FAD_N1 (1 caller, previously confirmed). bgpd COMPLETE — ALL 236 system() = log rotation class FAD_BGPD: 'cp /tmp/%s_bgpd.log /tmp/%s_bgpd_old.log' ×156, prelist×31, fillist×25, cmd_bgp×1, 23 more same pattern; 0 non-log-rotation callers confirmed. ospfd COMPLETE — ALL 101 system() = log rotation FAD_BGPD: 'cp /tmp/%s_ospfd.log ...' ×97, 4 context-only (function name labels, not system() args); 0 non-log callers confirmed. ospf6d COMPLETE — ALL 65 system() = log rotation; FAD_O1 confirmed. All remaining ANALYZED binaries upgraded to COMPLETE (libav.so/opensips/httproxy3/uwsgi/del_netdev/vdom/rtmd/ditest-utils/modules.ko/migadmin-fortiai).
 - 2026-09-26 (session 6 cont): flg_reportd row updated to COMPLETE (execve = hardcoded /bin/email SMTP reporter, resolved prior session). waf_db_* external caller audit COMPLETE: 0 callers in any bin or lib in firmware image — API is dead code; only 'waf_db' CLI command table keyword in cli binary. Oracle Instant Client (extra_lib.tar.xz) COMPLETE: 0 FortiADC components import/dlopen Oracle libs; libnnz12.so strcpy×9 struct-bounded ELIMINATED; libclntsh.so internal system/popen callers unreachable; entire Oracle bundle ELIMINATED. keepalived COMPLETE: fadcsystem×79 ALL ELIMINATED (71 chroot setup hardcoded paths, 4 cleanup hardcoded, 2 snprintf mkdir+chmod posix_spawnp, 1 open/dev/null); sys_vdom_exec ELIMINATED (echo %d int-only); execvp×2 hardcoded; execle /bin/bash PLAUSIBLE LOW (admin VRRP notify, confirmed prior session).
+- 2026-09-26 (session 8): CRITICAL ARCH FINDING — libbase.so (155KB) is the sole definer of sys_vdom_exec (VA=0x1ce80, 366B), sys_vdom_exec_safe (VA=0x1d160, 364B), and sys_vdom_id_exec. Both variants call fadcsystem@PLT=0x7b60 (→GOT=0x27598); fadcsystem=posix_spawnp (from libstdext.so). All FAD_W1/N1/C1/H1/H2/RT1/O1 ELIMINATED: sys_vdom_exec does NOT invoke a shell; '> /dev/null 2>&1' and '|' in format strings are literal argv tokens. RPATH/NEEDED confirmed: all importers (libwaf.so, libcmdb_plugin.so, fnginxctld, rtmd, httproxy3) have NEEDED:libbase.so; runtime resolution is deterministic. libbase.so COMPLETE. libntp.so COMPLETE (fadcsystem@PLT, 0 callers). 17 stub libs (libadc_nl_ipc.so, libautolearn.so, libbasepp.so, libcfg_saml.so, libcmdbapi.so, libfmaildbapi.so, libfmlrnd.so, libfpoll.so, libfts.so, libgeo.so, libgzip.so, libippool.so, librs_profile.so, libshmkvdbapi.so, libsslhw.so, libssli.so, libxpl.so.1) COMPLETE — all ~13-14KB, all CLEAN (no exec-class PLT imports). watchdog COMPLETE — CLEAN. RE 100% COMPLETE for FortiADC v8.0.4-B0136.

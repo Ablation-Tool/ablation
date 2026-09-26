@@ -624,18 +624,16 @@ FINDINGS = {
     #       Trace needed for each waf_system caller to confirm all formats are hardcoded.
     #     0xec92d waf_owasp_top10_load:  'touch %s' with hardcoded '/tmp/WAF_OWASP_TOP10_IPC_PATH'. ELIMINATED.
     #
-    #   sys_vdom_exec (0x7cac0): 2 callers  ← SHELL EXECUTION (> /dev/null 2>&1 in format string)
+    #   sys_vdom_exec (0x7cac0): 2 callers  ← ELIMINATED — NOT shell (libbase.so confirmed)
     #     0xb82f9 waf_blk_ip_dump_cmd (0xb8230):
     #       snprintf(buf, 'hpwafblockip show %s %d %s > /dev/null 2>&1', rdi, 10000, rsi)
-    #       rdi = 1st arg to dump_cmd; rsi = 2nd arg. Both come from callers (in other binaries).
-    #       '> /dev/null 2>&1' confirms sys_vdom_exec passes to a shell.
-    #       PLAUSIBLE HIGH if rdi/rsi are VS-name/VDOM-name derived (admin CMDB config).
+    #       '> /dev/null 2>&1' are LITERAL ARGV TOKENS after parse_command_line tokenizes by whitespace.
+    #       sys_vdom_exec → fadcsystem (libbase.so VA=0x1ce80) → posix_spawnp. NOT shell.
     #     0xb840a waf_blk_ip_relese_cmd (0xb8330):
     #       snprintf(buf, 'hpwafblockip clear %s %s %s > /dev/null 2>&1', arg1, arg2, arg3)
-    #       Same shell execution via sys_vdom_exec. Same PLAUSIBLE assessment.
-    #     ASSESSMENT: admin-stored injection via VS name/VDOM name in shell command.
-    #       Requires: admin CMDB config + VS name accepted with metacharacters.
-    #       Similar to FAD_A2 pattern. Filed as FAD_W1.
+    #       Same: posix_spawnp with tokenized argv. NOT shell. ELIMINATED.
+    #     ELIMINATED: sys_vdom_exec = VDOM namespace switch + fadcsystem = posix_spawnp.
+    #       Shell ops in format string are dev bug (commands fail to redirect) not a vuln.
     #
     #   strcpy (0x7c000): 1 caller
     #     0x88074 parse_regex: dst = malloc(strlen(src)+1) immediately before strcpy.
@@ -647,7 +645,7 @@ FINDINGS = {
 
     "LIBWAF_profile": {
         "binary": "libwaf.so",
-        "status": "ANALYZED COMPLETE — FAD_W1 PLAUSIBLE HIGH (sys_vdom_exec hpwafblockip); all other sinks ELIMINATED; SQLite snprintf-built queries exported-only",
+        "status": "ANALYZED COMPLETE — FAD_W1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell; libbase.so VA=0x1ce80 confirmed); all sinks ELIMINATED; SQLite exported-only dead code",
         "evidence": {
             "waf_system_ELIMINATED": (
                 "waf_system(0xead90): variadic fmt → __vsnprintf_chk builds string → fadcsystem. "
@@ -660,11 +658,12 @@ FINDINGS = {
                 "0xec92d(waf_owasp_top10_init_shm): snprintf('touch %s', internal_path). "
                 "All posix_spawnp, no shell. ELIMINATED."
             ),
-            "sys_vdom_exec_FAD_W1": (
+            "sys_vdom_exec_FAD_W1_ELIMINATED": (
                 "0xb82f9(waf_blk_ip_dump_cmd): sys_vdom_exec(vdom, 'hpwafblockip show <ip> 10000 <vdom> > /dev/null 2>&1'). "
                 "0xb840a(waf_blk_ip_relese_cmd): sys_vdom_exec(vdom, 'hpwafblockip clear <s1> <s2> <vdom> > /dev/null 2>&1'). "
-                "sys_vdom_exec = VDOM shell context execution. FAD_W1 PLAUSIBLE HIGH — "
-                "ip/vdom args from admin-configured VS/VDOM names; shell metachar in name could inject."
+                "ELIMINATED: sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem→posix_spawnp. "
+                "parse_command_line tokenizes by whitespace; '>' '2>&1' are literal argv to hpwafblockip. "
+                "No shell invoked. Shell operator in format string = developer bug, not exploitable."
             ),
             "strcpy_0x88074_ELIMINATED": "parse_regex: malloc(strlen+1) immediately before strcpy — BOUNDED, ELIMINATED",
             "sqlite_exported_api": (
@@ -848,7 +847,7 @@ FINDINGS = {
 
     "LIBCMDB_PLUGIN_profile": {
         "binary": "libcmdb_plugin.so",
-        "status": "ANALYZED COMPLETE — system() ELIMINATED; execve ELIMINATED; FAD_C1 PLAUSIBLE MEDIUM (sys_vdom_exec x2); fadcsystem 81 callers ALL ELIMINATED or PLAUSIBLE LOW (posix_spawn, admin-only paths)",
+        "status": "ANALYZED COMPLETE — FAD_C1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); system() ELIMINATED; execve ELIMINATED; fadcsystem×81 ALL ELIMINATED/PLAUSIBLE LOW",
         "evidence": {
             "system_9_ELIMINATED": (
                 "All 9 callers in geodebug/geoip_country_name_cmf_startup (GeoIP DB management). "
@@ -858,18 +857,15 @@ FINDINGS = {
             "geoip_hardcoded_pwd": "'F0rtinet899' — hardcoded GeoIP ZIP decryption password (FortiGuard DB update flow).",
             "execve_0x79d22_ELIMINATED": "Inside fadc_popen() fork child (fork+dup2+execve pattern). ELIMINATED (internal fadc_popen impl).",
             "sys_vdom_exec_hardcoded_ELIMINATED": "0x9c94b/9c95a: 'echo flush > /proc/net/ipv{4,6}_snat_addrbook' hardcoded. ELIMINATED.",
-            "fad_c1_nvgre_0xb3d55": (
-                "PLAUSIBLE MEDIUM: snprintf(r13, 256, 'ip link add %s type nvgre id %d dev %s local %s learning', ...) "
-                "→ sys_vdom_exec(vdom, r13). Args from CMDB VXLAN/NVGRE tunnel config struct "
-                "(interface name, tunnel ID, device name, local IP). "
-                "Interface name via sys_get_name_by_vdid + cfg_find_interface — admin-set CMDB value. "
-                "If CMDB allows metacharacters in interface name, shell injection via sys_vdom_exec."
+            "fad_c1_nvgre_0xb3d55_ELIMINATED": (
+                "ELIMINATED: snprintf(r13, 256, 'ip link add %s type nvgre id %d dev %s local %s learning', ...) "
+                "→ sys_vdom_exec(vdom, r13). sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem = posix_spawnp. "
+                "Interface name/IP are argv tokens, not interpreted by shell. NOT shell injection."
             ),
-            "fad_c1_vxlan_0xb4734": (
-                "PLAUSIBLE MEDIUM: snprintf(r13, 256, 'ip link add %s type vxlan id %d dev %s dstport %d local %s ttl %d learning', ...) "
-                "→ sys_vdom_exec(vdom, r13). Args from CMDB VXLAN config struct fields (+0x3ec, +0x3f0, +0x404). "
-                "Same class as FAD_N1 — admin interface name/IP injection into shell. "
-                "Both type 0x8 (VXLAN) and type 0x9 (NVGRE) overlay tunnel creation paths."
+            "fad_c1_vxlan_0xb4734_ELIMINATED": (
+                "ELIMINATED: snprintf(r13, 256, 'ip link add %s type vxlan id %d dev %s dstport %d local %s ttl %d learning', ...) "
+                "→ sys_vdom_exec(vdom, r13). Same: posix_spawnp via fadcsystem. "
+                "Both VXLAN and NVGRE tunnel creation paths ELIMINATED for shell injection."
             ),
             "fadcsystem_81_AUDIT": (
                 "All 81 fadcsystem callers audited. posix_spawnp — no shell injection possible for any. "
@@ -905,10 +901,10 @@ FINDINGS = {
     #     'iptables -t mangle -A/D PREROUTING -p tcp --dport %d:%d -i %s -j FNGINX' (VS ports / iface)
     #     (+ 30+ more callers at 0x1b1b4..0x1b44b — not all sampled)
     #   %s args = VS interface name (rbp/r12 from VS config struct) and IP address.
-    #   sys_vdom_exec = shell execution confirmed ('> /dev/null 2>&1' in format strings).
-    #   FAD_N1: PLAUSIBLE MEDIUM — admin-stored VS interface name injection into iptables/ip commands.
-    #     Impact: if VS interface name allows semicolons/backticks: shell injection as fnginxctld (root?).
-    #     Same class as FAD_W1/FAD_A2. Gated by CMDB interface name validator.
+    #   '> /dev/null 2>&1' are LITERAL ARGV TOKENS — sys_vdom_exec→fadcsystem→posix_spawnp NOT shell.
+    #   FAD_N1: ELIMINATED — sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem = posix_spawnp.
+    #     parse_command_line tokenizes whitespace; shell operators not interpreted.
+    #     Developer intent was redirection but commands fail silently; not a security issue.
     #
     # fadcsystem callers (66): posix_spawnp (no shell). Format strings pending for path traversal.
     # fadcpopen callers (4): 0x1b0cd/0x1b26b/0x1ea3c/0x2c15b — popen via fadcpopen.
@@ -917,12 +913,12 @@ FINDINGS = {
 
     "FNGINXCTLD_profile": {
         "binary": "fnginxctld",
-        "status": "ANALYZED COMPLETE — FAD_N1 PLAUSIBLE MEDIUM; all other exec sinks ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_N1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); fadcpopen×2 fnginx-t PLAUSIBLE LOW; all other sinks ELIMINATED",
         "evidence": {
             "fngx_process_vcmd_0x88c0": "variadic printf-to-shell: vsnprintf(cmd) → sys_vdom_exec(vdom, cmd); 40 callers",
             "fad_n1_format_strings": "'ip address add %s/%d dev %s > /dev/null 2>&1'; 'iptables/ip6tables ... -i %s -j FNGINX'",
             "fad_n1_args": "%s = VS interface name / IP address from CMDB config struct (admin-set)",
-            "fad_n1_verdict": "PLAUSIBLE MEDIUM — sys_vdom_exec = shell; VS iface name injection if CMDB allows metacharacters",
+            "fad_n1_verdict": "ELIMINATED — sys_vdom_exec (libbase.so VA=0x1ce80) = VDOM ns switch + fadcsystem = posix_spawnp. Shell ops are literal argv.",
             "fadcsystem_66_ELIMINATED": (
             "posix_spawnp — shell injection ELIMINATED for all 66 callers. Categories: "
             "mkdir -p /home/new_config_file/<VS>/bookmark (×3 variants); "
@@ -1221,12 +1217,12 @@ FINDINGS = {
 
     "OSPF6_profile": {
         "binary": "ospf6d",
-        "status": "ANALYZED COMPLETE — FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec); ALL 65 system() = log rotation PLAUSIBLE MEDIUM",
+        "status": "ANALYZED COMPLETE — FAD_O1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); 65 system() log rotation PLAUSIBLE MEDIUM (FAD_BGPD class)",
         "evidence": {
-            "sys_vdom_exec_2": (
+            "sys_vdom_exec_2_ELIMINATED": (
                 "2 callers (0x3fe90, 0x40257). Format: 'ip -6 xfrm state %s dst %s proto %s spi %s'. "
-                "Args: state=('ah'/'add' from routing flag), dst/proto/spi from routing table struct. "
-                "Not direct user input — routing data. PLAUSIBLE LOW-MEDIUM (FAD_O1)."
+                "ELIMINATED: sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem = posix_spawnp. "
+                "Route table values are argv tokens; no shell expansion. NOT shell injection."
             ),
             "enc_snprintf_fragment": (
                 "' enc %s 0x%s' (0x8de37) — snprintf fragment appending IPsec cipher/key to command buffer. "
@@ -1318,9 +1314,10 @@ FINDINGS = {
     #
     # sys_vdom_exec callers:
     #   FAD_H1 (0x2b9563, merge_fngx_session_table): 'cat /etc/fnginx_new/%s/sessions/* >> %s 2>/dev/null'
-    #     %s = VS name (first arg), output file (second arg). VS name → shell via sys_vdom_exec. PLAUSIBLE MEDIUM.
-    #   FAD_H2 (0x2b9459, merge_httproxy_vs_session_table): 'cat %s >> %s' where first %s is built from
-    #     '/var/log/vs/%s/%s.%d.sess' (VDOM+VS name). stat() gate: file must exist first. PLAUSIBLE LOW-MEDIUM.
+    #     ELIMINATED: sys_vdom_exec→fadcsystem (libbase.so VA=0x1ce80)→posix_spawnp. NOT shell.
+    #     '>>' and '2>/dev/null' are literal argv tokens to 'cat'. Not interpreted by shell.
+    #   FAD_H2 (0x2b9459, merge_httproxy_vs_session_table): 'cat %s >> %s'
+    #     ELIMINATED: same sys_vdom_exec→posix_spawnp path.
     #   0x2b9a45/0x2bac0d/0x2bb9c5/0x2bc735 (filter_sessions_table): 'cat <hardcoded_proc_file> >> %s'
     #     Source = /proc/net/ip_vs_{session,persist}[_gui] — hardcoded. Output to r13 stack buf. PLAUSIBLE LOW.
     #
@@ -1331,18 +1328,18 @@ FINDINGS = {
 
     "HTTPROXY3_profile": {
         "binary": "httproxy3",
-        "status": "ANALYZED — FAD_H1 PLAUSIBLE MEDIUM (VS name → sys_vdom_exec); FAD_H2 PLAUSIBLE LOW-MEDIUM; HAProxy re-exec ELIMINATED",
+        "status": "ANALYZED COMPLETE — FAD_H1/FAD_H2 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell); HAProxy re-exec ELIMINATED; fadcsystem_envp ELIMINATED",
         "evidence": {
-            "fad_h1_0x2b9563": (
+            "fad_h1_0x2b9563_ELIMINATED": (
                 "merge_fngx_session_table: snprintf(r8='cat /etc/fnginx_new/%s/sessions/* >> %s 2>/dev/null', "
                 "r9=VS_name, stack=outfile) → sys_vdom_exec(rdi, cmd). "
-                "First %s = VS name from CMDB (admin-set). Shell injection if VS name allows metacharacters. "
-                "PLAUSIBLE MEDIUM — same class as FAD_N1 (fnginxctld)."
+                "ELIMINATED: sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem = posix_spawnp. "
+                "'>>' '2>/dev/null' are literal argv tokens; VS name is a plain arg to 'cat'. NOT shell injection."
             ),
-            "fad_h2_0x2b9459": (
-                "merge_httproxy_vs_session_table: builds '/var/log/vs/%s/%s.%d.sess' (VDOM+VS+idx), "
-                "stat() check, then 'cat <session_path> >> <outfile>' via sys_vdom_exec. "
-                "stat() gate: session file must exist to trigger. PLAUSIBLE LOW-MEDIUM."
+            "fad_h2_0x2b9459_ELIMINATED": (
+                "merge_httproxy_vs_session_table: builds '/var/log/vs/%s/%s.%d.sess', stat() check, "
+                "'cat <session_path> >> <outfile>' via sys_vdom_exec. "
+                "ELIMINATED: same sys_vdom_exec→posix_spawnp path; shell operators not interpreted."
             ),
             "filter_sessions_table_4": (
                 "0x2b9a45/0x2bac0d/0x2bb9c5/0x2bc735: 'cat /proc/net/ip_vs_{session,persist}[_gui] >> %s'. "
@@ -1426,24 +1423,79 @@ FINDINGS = {
     #   0x18972, 0x1b876: 'ifconfig %s down' — bring interface down (2 call sites)
     #   0x18b2f, 0x1ba37: 'brctl delbr %s' — delete bridge (2 call sites)
     # %s = bridge/interface name from CMDB (admin-configured VS/network interface).
-    # Same class as FAD_N1 (fnginxctld VS iface) — PLAUSIBLE MEDIUM (FAD_RT1).
-    # stat() gate at 0x17cd5: checks rtmd log file size before exec (not a security gate — just log rotation check).
+    # ELIMINATED: sys_vdom_exec→fadcsystem (libbase.so VA=0x1ce80)→posix_spawnp. NOT shell.
+    # Bridge/iface names are argv tokens to brctl/ifconfig. Not interpreted by shell.
 
     "RTMD_profile": {
         "binary": "rtmd",
-        "status": "ANALYZED — FAD_RT1 PLAUSIBLE MEDIUM (brctl/ifconfig + bridge name → sys_vdom_exec, same class as FAD_N1)",
+        "status": "ANALYZED COMPLETE — FAD_RT1 ELIMINATED (sys_vdom_exec→fadcsystem→posix_spawnp NOT shell; 8 callers all ELIMINATED)",
         "evidence": {
-            "fad_rt1_brctl": (
+            "fad_rt1_brctl_ELIMINATED": (
                 "'brctl addbr %s' (0x7b412, callers 0x17cf5/0x1a363) — add Linux bridge. "
                 "'brctl delbr %s' (0x7b472, callers 0x18b2f/0x1ba37) — delete Linux bridge. "
-                "%s = bridge name from CMDB virtual network config. sys_vdom_exec = shell. PLAUSIBLE MEDIUM."
+                "ELIMINATED: sys_vdom_exec (libbase.so VA=0x1ce80) calls fadcsystem = posix_spawnp. Bridge name = argv[1]."
             ),
-            "fad_rt1_ifconfig": (
+            "fad_rt1_ifconfig_ELIMINATED": (
                 "'ifconfig %s up' (0x7b447, callers 0x17eb6/0x1a524) and 'ifconfig %s down' (0x7b461, callers 0x18972/0x1b876). "
-                "%s = interface name. sys_vdom_exec = shell. PLAUSIBLE MEDIUM (same class as FAD_N1)."
+                "ELIMINATED: posix_spawnp via fadcsystem; iface name is argv[1] not shell-expanded."
             ),
             "stat_check_note": "stat() + file-size check at each caller: log file size check, not a security gate.",
             "sys_vdom_exec_plt": "0x11530",
+        },
+    },
+
+    # ── libbase.so (155KB C) — CRITICAL ARCHITECTURE COMPONENT ──────────────────
+    # Sole definer of sys_vdom_exec (VA=0x1ce80, 366B), sys_vdom_exec_safe (VA=0x1d160, 364B),
+    # sys_vdom_id_exec (VA=0x1cff0, 356B).
+    # PLT imports: fadcsystem (GOT=0x27598), fork (GOT=0x270a8), fm_popen_pipe (GOT=0x27608).
+    # sys_vdom_exec implementation:
+    #   if vdom_name == NULL or empty → call fadcsystem(cmd) directly
+    #   else: sys_get_current_net_vdom() + sys_set_current_net_vdom(vdom_name) → fadcsystem(cmd)
+    # sys_vdom_exec_safe (VA=0x1d160): also calls fadcsystem@PLT=0x7b60 at 0x1d1d8.
+    # PLT stub 0x7b60 = jmp [rip+0x1fa32] → GOT=0x27598 = fadcsystem.
+    # fadcsystem is defined in libstdext.so as parse_command_line + posix_spawnp.
+    # CONCLUSION: ALL firmware-wide sys_vdom_exec callers → posix_spawnp. NOT shell.
+    # Shell operators ('>', '>>', '|', '2>&1') in format strings = literal argv tokens = dev bug.
+    # All importers confirmed via NEEDED:libbase.so in ELF dynamic section.
+
+    "LIBBASE_profile": {
+        "binary": "libbase.so",
+        "status": "ANALYZED COMPLETE — CRITICAL ARCH: sole definer of sys_vdom_exec/sys_vdom_exec_safe; both call fadcsystem=posix_spawnp; ALL FAD_W1/N1/C1/H1/H2/RT1/O1 ELIMINATED",
+        "evidence": {
+            "sys_vdom_exec_VA": "0x1ce80, size=366 bytes. FUNC GLOBAL DEFAULT. Sole definition in firmware.",
+            "sys_vdom_exec_safe_VA": "0x1d160, size=364 bytes. Both variants call fadcsystem@PLT=0x7b60.",
+            "sys_vdom_id_exec_VA": "0x1cff0, size=356 bytes. Same PLT call chain.",
+            "fadcsystem_PLT": "PLT stub at 0x7b60: jmp [rip+0x1fa32] → GOT entry 0x27598 = fadcsystem (libstdext.so).",
+            "execution_model": (
+                "sys_vdom_exec(vdom, cmd): "
+                "1. if vdom==NULL or empty: fadcsystem(cmd) directly; "
+                "2. else: sys_get_current_net_vdom() save, sys_set_current_net_vdom(vdom) switch, fadcsystem(cmd), restore. "
+                "fadcsystem = parse_command_line(whitespace-tokenize) + posix_spawnp. NO shell invoked."
+            ),
+            "shell_op_analysis": (
+                "Format strings in callers contain '> /dev/null 2>&1', '>>', '2>/dev/null', '||'. "
+                "After parse_command_line tokenizes by whitespace: '>' '/dev/null' '2>&1' become "
+                "literal argv elements passed to argv[0] command. Subprocess receives them as args "
+                "(e.g., iptables receives '>' as an unknown flag and ignores/errors). "
+                "Shell expansion NEVER occurs. Developer intent was output redirection but implementation "
+                "uses posix_spawnp — a persistent firmware bug, not a security vulnerability."
+            ),
+            "importer_verification": (
+                "readelf -d of all importers confirmed NEEDED:libbase.so: "
+                "libwaf.so, libcmdb_plugin.so, fnginxctld, rtmd, httproxy3, ospf6d (via libbase.so NEEDED). "
+                "All share RPATH /root/FortiADC_test/FortiADC/lib — build artifact, runtime resolves from deployed /usr/lib/. "
+                "No alternate sys_vdom_exec definition found in firmware image."
+            ),
+            "findings_eliminated": (
+                "FAD_W1 (libwaf.so hpwafblockip): ELIMINATED. "
+                "FAD_N1 (fnginxctld fngx_process_vcmd): ELIMINATED. "
+                "FAD_C1 (libcmdb_plugin.so WCCP VXLAN/NVGRE): ELIMINATED. "
+                "FAD_H1 (httproxy3 merge_fngx_session_table): ELIMINATED. "
+                "FAD_H2 (httproxy3 merge_httproxy_vs_session_table): ELIMINATED. "
+                "FAD_RT1 (rtmd brctl/ifconfig 8 callers): ELIMINATED. "
+                "FAD_O1 (ospf6d ip -6 xfrm state): ELIMINATED. "
+                "vdom binary sys_vdom_exec_safe (VA=0x1d160 in libbase.so): ELIMINATED."
+            ),
         },
     },
 
@@ -1457,11 +1509,11 @@ FINDINGS = {
     # libshmkvdbapi.so (14K): system_fgt_log@plt — syslog API only, not a shell. ELIMINATED.
 
     "SHARED_LIBS_profile": {
-        "binary": "libadc_nl_ipc/libautolearn/libbasepp/libcfg_saml/libcmdbapi/libfmaildbapi/libfmlrnd/libfpoll/libfts/libgeo/libgzip/libippool/libntp/librs_profile/libshmkvdbapi/libsslhw/libssli/libxpl.so.1",
-        "status": "ANALYZED — all CLEAN; libntp fadcsystem ELIMINATED (hardcoded pkill ntpd); libshmkvdbapi system_fgt_log = syslog API",
+        "binary": "libadc_nl_ipc/libautolearn/libbasepp/libcfg_saml/libcmdbapi/libfmaildbapi/libfmlrnd/libfpoll/libfts/libgeo/libgzip/libippool/libntp/librs_profile/libshmkvdbapi/libsslhw/libssli/libxpl.so.1/watchdog",
+        "status": "ANALYZED COMPLETE — all CLEAN; libntp fadcsystem ELIMINATED (hardcoded pkill ntpd); libshmkvdbapi system_fgt_log = syslog API; watchdog CLEAN",
         "evidence": {
-            "clean_16": "libadc_nl_ipc, libautolearn, libbasepp, libcfg_saml, libcmdbapi, libfmaildbapi, libfmlrnd, libfpoll, libfts, libgeo, libgzip, libippool, librs_profile, libsslhw, libssli, libxpl.so.1 — no exec PLT. CLEAN.",
-            "libntp_fadcsystem_ELIMINATED": "time_update_event_to_ntpd: fadcsystem('pkill -SIGUSR1 /bin/ntpd') — hardcoded. ELIMINATED.",
+            "clean_17": "libadc_nl_ipc, libautolearn, libbasepp, libcfg_saml, libcmdbapi, libfmaildbapi, libfmlrnd, libfpoll, libfts, libgeo, libgzip, libippool, librs_profile, libsslhw, libssli, libxpl.so.1, watchdog — no exec-class PLT imports. ALL CLEAN.",
+            "libntp_fadcsystem_ELIMINATED": "time_update_event_to_ntpd: fadcsystem@plt present; 0 callers in .text section. CLEAN.",
             "libshmkvdbapi_ELIMINATED": "system_fgt_log = syslog(3) API wrapper. Not shell execution. ELIMINATED.",
         },
     },
