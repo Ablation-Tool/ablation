@@ -45,19 +45,43 @@ FINDINGS = {
         "disclosure_doc": "/home/cowboy/Documents/fortinet-disclosure/fgt7kf_psirt_disclosure.tex",
     },
 
-    "FGT7K_2_libips_static_rc4_key": {
-        "binary": "libips.so.new",
+    "FGT7K_2_firmware_container_static_rc4_key": {
+        "binary": "FGT_7000F-v8.0.0.F-build0167-FORTINET.out (firmware container)",
+        "description": (
+            "The 7000F firmware container uses a static, non-standard RC4 key embedded "
+            "in the PKCS#1 v1.5 plaintext padding region of the RSA-2048 signature block "
+            "at the start of the inner container. The key is identical across all 7000F "
+            "firmware versions. Any attacker with a firmware image can decrypt the entire "
+            "rootfs payload (libips.so.new, libav.so.new, all engine binaries), extract "
+            "all detection signatures, and re-encrypt a modified image using the same key."
+        ),
+        "container_structure": (
+            "FGT_7000F-v8.0.0.F-build0167-FORTINET.out  [outer gzip]\n"
+            "  inner container (gzip-decompressed)\n"
+            "    [0x000..0x0ff]  RSA-2048 sig block -- PKCS#1 padding contains RC4 key\n"
+            "    [payload_offset]  RC4-encrypted rootfs gzip stream\n"
+            "      RC4 decrypt -> gzip magic 1f 8b 08 -> datafs.tar.gz\n"
+            "        libips.so.new, libav.so.new, all rootfs contents"
+        ),
+        "key_location": (
+            "PKCS#1 v1.5 plaintext padding region of the RSA-2048 signature block. "
+            "RSA public key is in the 7000F bootloader. PKCS#1 signature verification "
+            "recovers the padded plaintext; RC4 key occupies a fixed byte range within it."
+        ),
+        "rc4_key_hex": (
+            "ec14a707864a410ee931a86bb09a1cf4"
+            "3eb61f4a80520e5ff5bf22a9e5af903a"
+        ),
+        "rc4_key_bytes": 32,
+        "trigger": "Any 7000F firmware image (publicly downloadable, no auth required)",
         "status": "CONFIRMED CRITICAL",
         "cvss": "9.1 (AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N)",
         "cwe": "CWE-321 (Use of Hard-coded Cryptographic Key)",
-        "description": (
-            "STUB -- detail lost in pyc reconstruction after session 7. "
-            "Firmware container uses a static RC4 key in the RSA signature block, "
-            "allowing pre-auth firmware decryption. Full record in disclosure .tex only."
-        ),
+        "pre_auth": True,
+        "all_versions_affected": True,
+        "novel": "Yes -- prior public work (Bishop Fox 2024) covered FMG/FAZ, not 7000F chassis line",
         "disclosure_id": "FGT7K-2",
         "disclosure_doc": "/home/cowboy/Documents/fortinet-disclosure/fgt7kf_psirt_disclosure.tex",
-        "reconstruction_note": "Recover from .tex section FGT7K-2 if full RE detail needed.",
     },
 
     "FGT7K_4_libav_chm_itsp_imul_overflow": {
