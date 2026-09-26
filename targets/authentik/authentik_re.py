@@ -1242,6 +1242,10 @@ CLEAN = [
     "web/src/admin/endpoints/devices/facts/DeviceProcessTable.ts — item.id/name/user in html`${...}` text node interpolations",
     "web/src/admin/endpoints/devices/facts/DeviceSoftwareTable.ts — item.name/version/source/path in html`${...}` text node interpolations",
     "web/src/admin/endpoints/devices/facts/DeviceUserTable.ts — item.id/username/name/home in html`${...}` text node interpolations",
+    # pass 5ar — unsafe-render priority files (profiles 17-19) — 2026-09-26
+    "web/src/elements/wizard/CreateWizard.ts — StrictUnsafe(type.component, props) at line 377 where type.component is TypeCreate.component (server-generated element tag name); passes through triple-guard (must start 'ak-', must be registered, must be AKElement); CLEAN",
+    "web/src/common/purify.ts — DOMPurify Trusted Types policy hub; 5 policies: EscapeTrustPolicy (escape all), StripHTMLTrustPolicy (strip all tags), SanitizedTrustPolicy (#text nodes only), CompiledMarkdownSanitizePolicy (allows ak-alert/ak-md-a/ak-diagram + DOMPurify), BrandedHTMLPolicy (forbids script/style/iframe); all unsafeHTML calls go through DOMPurify.sanitize() first; CLEAN",
+    "web/src/elements/dialogs/directives.ts — StrictUnsafe(tagName, props) at line 75 where tagName=window.customElements.getName(factory) and factory is a typed CustomElementConstructor; always a registered element tag name; lookupElementConstructor() returns ElementConstructorBoundary as safe fallback on unknown tag; CLEAN",
     # pass 5aq — user/ subtree (46 files) — 2026-09-26
     "web/src/user/LibraryPage/ak-library-impl.ts — search box input value=${ifPresent(query)} attribute binding; app.name in <option value=> attribute binding; all msg(str`...`) text nodes; appHasLaunchUrl() filter prevents non-http app launch; no innerHTML",
     "web/src/user/LibraryPage/ak-library.ts — structural wrapper; passes apps via .apps=${} property binding; no direct HTML rendering",
@@ -1346,8 +1350,9 @@ PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: pass 5aq complete (user/ subtree 46 files) — AUT-CHANGELOG-URL-1 added — 2026-09-26
+# RE STATUS: pass 5ar complete (unsafe-render profiles 17-19, 12 files all CLEAN) — 2026-09-26
 # Findings: 8 total (AUT-SESS-PICKLE-1 through AUT-CHANGELOG-URL-1) + AUT-LAUNCH-URL-1 ELIMINATED
+# Compressor validated: no false negatives found (insertAdjacentHTML=0, setAttribute href=0, window.location.assign all in profile 4-5)
 
 
 def print_findings():
