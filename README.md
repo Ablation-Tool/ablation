@@ -117,10 +117,6 @@ mindmap
 
 ---
 
-
-  
----
-
 ## Example: Elasticsearch 8.19.19 x-pack-ml RE Workflow
 
 End-to-end analysis of the ML native binaries bundled in FortiSOAR 8.0.0, from RPM extraction through BinaryContext, string xrefs, and capstone disassembly to confirmed findings.
