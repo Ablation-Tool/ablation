@@ -70,12 +70,6 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 pip install git+https://github.com/Ablation-Tool/ablation
 ```
 
-With LLM features:
-
-```bash
-pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
-```
-
 ---
 
 ## Requirements
