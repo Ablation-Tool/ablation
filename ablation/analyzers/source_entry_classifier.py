@@ -65,12 +65,33 @@ _AUTH_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (AUTH_INTERNAL, re.compile(r"\blangfuse-gateway-authorization\b"), "gateway auth header"),
     (AUTH_INTERNAL, re.compile(r"\bX-aws-proxy-auth\b"), "AWS proxy token"),
 
+    # ADMIN ── Django/DRF superuser-only gates
+    (AUTH_ADMIN, re.compile(r"\bIsAdminUser\b|\bIsSuperUser\b"), "DRF IsAdminUser/IsSuperUser"),
+    (AUTH_ADMIN, re.compile(r"@superuser_required\b|@staff_member_required\b"), "Django superuser decorator"),
+
     # SESSION ── user session / cookie / NextAuth
     (AUTH_SESSION, re.compile(r"\bgetServerSession\b|\bgetSession\b|\bgetServerAuthSession\w*\b"), "NextAuth session"),
     (AUTH_SESSION, re.compile(r"\bprotectedProcedure\b|\bprotectedProject\w+Procedure\b"), "tRPC protected procedure"),
     (AUTH_SESSION, re.compile(r"\bsessionMiddleware\b|\bwithSession\b"), "session middleware"),
     (AUTH_SESSION, re.compile(r"\brequireSession\b|\bensureAuth\b"), "session guard"),
     (AUTH_SESSION, re.compile(r"@(login_required|requires_auth)\b"), "Python auth decorator"),
+    # Django CBV mixins
+    (AUTH_SESSION, re.compile(r"\bLoginRequiredMixin\b|\bPermissionRequiredMixin\b"), "Django LoginRequired mixin"),
+    # Django REST Framework — permission/auth class declarations
+    # ObjectPermissions (Authentik default), HasPermission, IsAuthenticated all mean DRF auth is active
+    (AUTH_SESSION, re.compile(r"\bIsAuthenticated\b|\bObjectPermissions\b|\bDjangoObjectPermissions\b"), "DRF IsAuthenticated/ObjectPermissions"),
+    (AUTH_SESSION, re.compile(r"\bHasPermission\b|\bPermissionRequiredMixin\b"), "DRF HasPermission"),
+    (AUTH_SESSION, re.compile(r"\bpermission_classes\s*="), "DRF permission_classes"),
+    (AUTH_SESSION, re.compile(r"\bauthentication_classes\s*="), "DRF authentication_classes"),
+    # DRF class inheritance — ModelViewSet/APIView/ViewSet use DEFAULT_AUTHENTICATION_CLASSES
+    # which in most Django apps means session + token auth (authenticated by default).
+    # Files matching this pattern should be SESSION unless they also have AllowAny.
+    (AUTH_SESSION, re.compile(
+        r"class\s+\w+\s*\([^)]*"
+        r"(?:APIView|ViewSet|ModelViewSet|GenericAPIView|GenericViewSet|"
+        r"ReadOnlyModelViewSet|ListModelMixin|CreateModelMixin|"
+        r"UpdateModelMixin|DestroyModelMixin|RetrieveModelMixin)\b"
+    ), "DRF ViewSet/APIView subclass (default auth)"),
 
     # API_KEY ── API key / Basic auth / Bearer token
     (AUTH_API_KEY, re.compile(r"\bshadowAuth\b|\benforceAuth\b"), "shadowAuth / enforceAuth"),
@@ -81,6 +102,8 @@ _AUTH_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (AUTH_API_KEY, re.compile(r"\bBasicAuth\b|\bBearerAuth\b"), "Basic/Bearer auth"),
     (AUTH_API_KEY, re.compile(r"Authorization.*Bearer|Bearer.*Authorization"), "Bearer header check"),
     (AUTH_API_KEY, re.compile(r"@require_http_methods|api_key_required"), "Python API key decorator"),
+    # DRF TokenAuthentication — API token (not session cookie)
+    (AUTH_API_KEY, re.compile(r"\bTokenAuthentication\b|\bBearerTokenAuthentication\b"), "DRF TokenAuthentication"),
     # Webhook signature verification (Stripe, ClickHouse billing, etc.)
     (AUTH_API_KEY, re.compile(r"\bwebhook.*secret\b|\bstripe\.webhooks\.constructEvent\b", re.IGNORECASE), "webhook secret verify"),
     (AUTH_API_KEY, re.compile(r"\btimingSafeEqual\b"), "timing-safe bearer verify"),
@@ -165,6 +188,21 @@ class SourceEntryClassifier:
 
         return None  # external package
 
+    # DRF AllowAny explicitly removes authentication for a view or action.
+    # A file that sets permission_classes = [AllowAny] (class-level) has at
+    # least one unauthenticated endpoint, so classify as NONE to surface it
+    # for manual review.  Action-level AllowAny (via @action decorator) is a
+    # partial downgrade — the file as a whole still exposes an unauthed path.
+    # We apply the downgrade whenever AllowAny appears as the sole item in
+    # any permission_classes list, regardless of what other permission classes
+    # exist elsewhere in the same file (conservative: flag for review).
+    _ALLOW_ANY_CLASS_LEVEL = re.compile(
+        r"permission_classes\s*=\s*\[\s*AllowAny\s*\]"
+    )
+    _ALLOW_ANY_ACTION = re.compile(
+        r"@action\s*\([^)]*permission_classes\s*=\s*\[\s*AllowAny\s*\]"
+    )
+
     def _classify_text(self, text: str) -> tuple[str, str]:
         """Return (auth_level, matched_signal) for a block of source text."""
         auth_level = AUTH_NONE
@@ -174,6 +212,15 @@ class SourceEntryClassifier:
                 if _AUTH_RANK[level] > _AUTH_RANK[auth_level]:
                     auth_level = level
                     matched_signal = note
+        # AllowAny downgrade: if any view or action in this file uses
+        # AllowAny as the sole permission class, downgrade to NONE so the
+        # unauthenticated endpoint surfaces for review.
+        if auth_level == AUTH_SESSION and (
+            self._ALLOW_ANY_CLASS_LEVEL.search(text)
+            or self._ALLOW_ANY_ACTION.search(text)
+        ):
+            auth_level = AUTH_NONE
+            matched_signal = "AllowAny override (unauthenticated DRF view)"
         return auth_level, matched_signal
 
     def _classify_file(self, path: Path) -> RouteClassification:
