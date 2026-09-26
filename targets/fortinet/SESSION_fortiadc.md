@@ -162,7 +162,7 @@ PLT = {
 | vtl | 2.1MB C++ | COMPLETE | All sinks PLAUSIBLE LOW or ELIMINATED (SafeNet HSM admin-only); sprintf×85: support-info writes to file not executed ELIMINATED; HSM config integer-only ELIMINATED; 6 file path PLAUSIBLE LOW; strcpy×19: 5 malloc-bounded ELIMINATED; 3 feed rm+cluster_name system() PLAUSIBLE LOW; 9 HSM string building PLAUSIBLE LOW |
 | flg_accessd | 703KB C | PROFILED | fadcsystem+fadcpopen only (posix_spawnp); shell injection ELIMINATED |
 | flg_indexd | 2MB C | PROFILED | fadcsystem+system_fgt_log; shell injection ELIMINATED |
-| flg_reportd | 1.9MB C | PROFILED | fadcsystem+execve; execve caller format string PENDING |
+| flg_reportd | 1.9MB C | COMPLETE | fadcsystem ELIMINATED; execve = hardcoded /bin/email SMTP reporter ELIMINATED |
 | lb | 845KB C | PROFILED | fadcsystem_envp+fadcpopen; shell injection ELIMINATED |
 | infod | 1.5MB C | PROFILED | fadcsystem only; shell injection ELIMINATED |
 | rd_mng | 1.4MB C | COMPLETE | No exec sinks. CLEAN. |
@@ -170,7 +170,7 @@ PLT = {
 | bgpd | 1.7MB C PIE | ANALYZED | 236 system() callers — log rotation 'cp /tmp/%s_bgpd.log ...' (4 variants) PLAUSIBLE MEDIUM; access_list strings ELIMINATED |
 | ospfd | 1.1MB C PIE | ANALYZED | 101 system() callers — 'cp /tmp/%s_ospfd.log ...' log rotation PLAUSIBLE MEDIUM |
 | ospf6d | 717KB C PIE | ANALYZED | FAD_O1 PLAUSIBLE LOW-MEDIUM (sys_vdom_exec IPsec 'ip -6 xfrm state'); 65 system() log rotation PLAUSIBLE MEDIUM |
-| keepalived | 994KB C PIE | ANALYZED | sys_vdom_exec ELIMINATED (echo %d hardcoded int); execle /bin/bash PLAUSIBLE LOW (admin VRRP script); fadcsystem 79 callers pending |
+| keepalived | 994KB C PIE | COMPLETE | ALL ELIMINATED: sys_vdom_exec (echo %d int-only); execle /bin/bash PLAUSIBLE LOW (admin VRRP notify script); execvp×2 hardcoded (/bin/mount proc + /bin/ssh_hc_util); fadcsystem×79: 71 chroot mkdir/mount (hardcoded), 4 cleanup (find -delete/killall), 2 snprintf mkdir+chmod posix_spawnp, 1 open /dev/null |
 | av | 1.2MB C PIE | ANALYZED | fadcsystem 3 callers PLAUSIBLE LOW (diagnostic log; path traversal only); fork 2 callers ELIMINATED (no exec in child) |
 | opensips | 2.5MB C PIE | ANALYZED | CLEAN — no exec sinks; fork only (SIP worker process mgmt) |
 | httproxy3 | 3.9MB C PIE | ANALYZED | FAD_H1 PLAUSIBLE MEDIUM (VS name sys_vdom_exec); FAD_H2 PLAUSIBLE LOW-MEDIUM (session cat stat-gated); HAProxy execvp ELIMINATED; fadcsystem_envp ELIMINATED (mkstemp script) |
@@ -182,6 +182,7 @@ PLT = {
 | modules/*.ko | 21 kernel modules | ANALYZED | CLEAN — no call_usermodehelper; ha.ko ha_exec_cmd = kernel-internal only; kvm/xen/platform = stock modules |
 | migadmin/fortiai/ | Django 5.1.6 app | ANALYZED | CLEAN for RCE — no exec/system/subprocess in web code; post-auth session-key path traversal (write-primitive only); query_docs 500 crash (missing @require_session) |
 | /bin/*.sh | 25 shell scripts | COMPLETE | FAD_S1 PLAUSIBLE MEDIUM: saml_sp_metadata.sh ENTITY_ID/URL unescaped in sed "s/%%...%%/$VAR/" — '\"' injection → cmd split; upgrade.sh eval $var PLAUSIBLE LOW; all others admin-only PLAUSIBLE LOW |
+| extra_lib/ Oracle IC | 8 libs 57MB+ | COMPLETE | Oracle Instant Client 12.1 bundled but DEAD CODE — 0 FortiADC bins/libs import or dlopen any Oracle lib; libnnz12.so strcpy×9 struct-bounded ELIMINATED; libclntsh.so system/popen callers internal-only; ELIMINATED |
 
 ## Next Steps
 1. Live test FAD_R1: `curl -sk https://<target>:8443/debug/pprof/goroutine?debug=2`
@@ -214,3 +215,4 @@ PLT = {
 - 2026-09-26 (session 6): libav.so ANALYZED — avFlowWrite CLEAN (0 sprintf/strcpy); sprintf×47 ELIMINATED (avScanLoad signature load + scanvirUrl/avTlvDecode hash-to-hex loops with fixed-size pre-sized buffers); strcpy×38 mostly ELIMINATED; FAD_AV1 PLAUSIBLE LOW: avIsIgnoreBuffer 0xf3531 malloc(72)+8+strcpy(rbp) — 64B heap slot, filename/URL >64B = potential heap overflow.
 - 2026-09-26 (session 6): vtl COMPLETE — sprintf×85 ELIMINATED (support-info shell cmds written to file not executed; HSM config integer-only; file path builds PLAUSIBLE LOW); strcpy×19 PLAUSIBLE LOW (3 feed rm+cluster_name system() chain; 9 HSM string building; 5 malloc-bounded ELIMINATED; 2 hardcoded literals ELIMINATED). No new findings above existing PLAUSIBLE LOW SafeNet HSM class.
 - 2026-09-26 (session 6): /bin/*.sh COMPLETE — all 25 scripts audited; FAD_S1 PLAUSIBLE MEDIUM: saml_sp_metadata.sh takes 8 admin-set CMDB args (ENTITY_ID, SP_ROOT_URL, SERVICE_URL, LOGOFF_PATH, ACS_PATH); used in sed "s/%%entity_id%%/$ENTITY_ID/g" — '/' escaped to '\/' by prior pass but '"' NOT escaped; if CMDB allows '"' in SAML entity ID → splits double-quoted sed command → shell injection (admin-only). upgrade-config-from3.x.sh eval $exp PLAUSIBLE LOW; upgrade.sh eval $cmd with stat $var PLAUSIBLE LOW; scripting_convert.sh $1 script-file-path PLAUSIBLE LOW; vs_rs_status.sh $2-$5 unquoted grep args PLAUSIBLE LOW.
+- 2026-09-26 (session 6 cont): flg_reportd row updated to COMPLETE (execve = hardcoded /bin/email SMTP reporter, resolved prior session). waf_db_* external caller audit COMPLETE: 0 callers in any bin or lib in firmware image — API is dead code; only 'waf_db' CLI command table keyword in cli binary. Oracle Instant Client (extra_lib.tar.xz) COMPLETE: 0 FortiADC components import/dlopen Oracle libs; libnnz12.so strcpy×9 struct-bounded ELIMINATED; libclntsh.so internal system/popen callers unreachable; entire Oracle bundle ELIMINATED. keepalived COMPLETE: fadcsystem×79 ALL ELIMINATED (71 chroot setup hardcoded paths, 4 cleanup hardcoded, 2 snprintf mkdir+chmod posix_spawnp, 1 open/dev/null); sys_vdom_exec ELIMINATED (echo %d int-only); execvp×2 hardcoded; execle /bin/bash PLAUSIBLE LOW (admin VRRP notify, confirmed prior session).

@@ -673,7 +673,8 @@ FINDINGS = {
                 "waf_db_get_table_row_num_condition (select count(*) from %s where %s). "
                 "snprintf-built SQL — no sqlite3_bind_* parameterization. "
                 "All 3 functions have 0 internal callers (called from external libs). "
-                "SQL injection risk deferred: audit when processing libcmdb_plugin.so callers."
+                "EXTERNAL CALLER AUDIT COMPLETE: 0 callers found in any bin or lib in firmware image. "
+                "waf_db_ strings appear only in libwaf.so itself. API is dead code in this image. ELIMINATED."
             ),
         },
     },
@@ -1123,27 +1124,35 @@ FINDINGS = {
 
     "KEEPALIVED_profile": {
         "binary": "keepalived",
-        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (execle /bin/bash VRRP script only; fadcsystem ALL ELIMINATED)",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (execle /bin/bash VRRP script only); all other sinks ELIMINATED",
         "evidence": {
             "sys_vdom_exec_0x54f76_ELIMINATED": (
-                "'echo %d > /proc/sys/net/ipv4/route/proximity_mode' — integer arg (%d), hardcoded path. ELIMINATED."
+                "0x54f10 wrapper: snprintf(0x400-buf, fmt@c28f0='echo %d > /proc/sys/net/ipv4/route/proximity_mode', int_arg) "
+                "→ sys_vdom_exec. Integer arg (%d) only. ELIMINATED."
             ),
             "execle_0x38659_PLAUSIBLE_LOW": (
-                "execle('/bin/bash', ...) — VRRP health check script. Admin-configured path. "
-                "By-design: VRRP health checks run admin scripts. PLAUSIBLE LOW."
+                "execle('/bin/bash', env{DOWN=%d, NODE_WEIGHT_CONFIG=%s, NODE_WEIGHT_MAX=%s}, NULL). "
+                "VRRP health check notify script — admin-configured path. By-design mechanism. PLAUSIBLE LOW."
+            ),
+            "execvp_0x5a70d_ELIMINATED": (
+                "execvp(['/bin/mount', '-t', 'proc', 'none', '/proc']) — hardcoded chroot proc mount. ELIMINATED."
+            ),
+            "execvp_0x92681_ELIMINATED": (
+                "execvp('/bin/ssh_hc_util', ['-u', username, '-p', password, '-i', ip, '-v', port]) — "
+                "SSH health check helper. Args from admin SSH HC config struct. posix_exec not shell. ELIMINATED."
             ),
             "fadcsystem_79_ALL_ELIMINATED": (
-                "79 callers all ELIMINATED. 75x hardcoded HC chroot setup: "
-                "'mkdir -p /tmp_hc_root/{bin,dev,usr,...}', 'cp -f /lib/*.so /tmp_hc_root/lib', "
-                "'cp -rf /bin/_hc_root_busybox/bin/.', 'find /tmp/failed_llbr_hc -mindepth 1 -delete', "
-                "'killall -9 oracle_client', 'rm -rf /bin/_hc_root_busybox'. "
-                "2 snprintf-then-fadcsystem callers: 'mkdir -p %s/tmp_hc_root' + 'chmod +x %s' — "
-                "HC config-derived paths (admin-configured health check scripts), posix_spawn not shell. "
-                "No %s from network-injectable source. ALL ELIMINATED."
+                "79 callers all ELIMINATED. "
+                "71x chroot HC setup block (0x5a2ed-0x5a685): hardcoded mkdir -p /tmp_hc_root/{bin,dev,usr,proc,sbin,"
+                "home,sys,var,lib,script,etc,lib64}, cp -f /lib/*.so, cp -rf /bin/_hc_root_busybox/bin/., "
+                "rm -rf /bin/_hc_root_busybox, fortidev3/amd64 string literals. "
+                "4x misc cleanup: find /tmp/failed_llbr_hc -mindepth 1 -delete (0xb0db), "
+                "find /tmp/lb_hc_failed_rs -mindepth 1 -delete (0xc2d7, 0xc31c), "
+                "killall -9 oracle_client (0x647af, 0x6487f). "
+                "2x snprintf-built: 'mkdir -p %s%s' with admin HC config path (0x4f29e), 'chmod +x %s' (0x4f418) — "
+                "fadcsystem=posix_spawnp, no shell. "
+                "1x 'open /dev/null' via wrapper 0xa22d0 (3 callers at 0x4b11d, 0x949cb, 0xa240b). ALL ELIMINATED."
             ),
-            "sys_vdom_exec_plt": "0x9860",
-            "execle_plt": "0x9f70",
-            "fadcsystem_plt": "0x9b00",
         },
     },
 
@@ -1420,6 +1429,36 @@ FINDINGS = {
                 "ALLOWED_HOSTS=['*'] — accepts any host header. "
                 "DEBUG=False (production). SECRET_KEY generated per-instance via secrets.choice. "
                 "Database: SQLite3 (local file). No hardcoded credentials."
+            ),
+        },
+    },
+
+    # ── Oracle Instant Client 12.1 (extra_lib.tar.xz — 8 libs) ──────────────────
+    # Bundled in /root/extra_lib.tar.xz. No FortiADC binary imports or dlopen's them.
+    # Dead code in this firmware image.
+
+    "ORACLE_IC_profile": {
+        "binary": "extra_lib/ (libclntsh.so.12.1 + 7 supporting libs)",
+        "status": "ANALYZED COMPLETE — DEAD CODE, ELIMINATED; 0 FortiADC callers",
+        "evidence": {
+            "no_callers": (
+                "0 FortiADC bins or libs have NEEDED entries for any Oracle lib. "
+                "0 bins/libs reference Oracle lib filenames in strings (no dlopen). "
+                "Only 'waf_db' (unrelated CLI keyword) found in cli binary — not an OCI call. "
+                "libcgo.so links libwaf.so (not Oracle libs). Entire bundle is unreachable."
+            ),
+            "libclntsh_internal_sinks": (
+                "libclntsh.so.12.1 (57MB): system@plt 7 callers, execvp@plt 4 callers, "
+                "popen/execl also present — all internal Oracle DB client code. "
+                "Unreachable from FortiADC attack surface. ELIMINATED."
+            ),
+            "libnnz12_strcpy": (
+                "libnnz12.so: 9 strcpy callers — all struct/register-bounded (mov rdi, r13/rbx etc). "
+                "Oracle TLS network security library internals. ELIMINATED."
+            ),
+            "other_libs": (
+                "libipc1.so, libmql1.so, libociicus.so, libons.so, libocci.so.12.1, "
+                "libclntshcore.so.12.1: no exec/system sinks. ELIMINATED."
             ),
         },
     },
