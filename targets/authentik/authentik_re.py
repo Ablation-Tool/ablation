@@ -394,6 +394,52 @@ FINDINGS = {
             "Not exploitable in isolation given the len checks, but non-standard."
         ),
     },
+
+    "AUT-EMAIL-SRCDOC-1": {
+        "severity": "LOW",
+        "title": "Email body preview renders in unsandboxed iframe (srcdoc inherits parent origin)",
+        "file": "web/src/components/ak-event-info.ts",
+        "lines": (381, 389),
+        "cwe": "CWE-79",
+        "status": "PLAUSIBLE",
+        "description": (
+            "renderEmailSent() at line 381-389 renders the stored email HTML body directly "
+            "inside an <iframe srcdoc=${body}> without a `sandbox` attribute. "
+            "The `srcdoc` iframe document inherits the parent page's origin (the authentik "
+            "admin UI), so any <script> tags in the email body execute in that origin — "
+            "with full access to parent.window, localStorage, and admin-session cookies. "
+            "The `body` value is event.context.body (the raw HTML email content stored when "
+            "an EmailSent event fires), with only a CID→static logo URL substitution. "
+            "This is admin-only UI, but if a non-admin user can influence the email body "
+            "(e.g., via a field rendered in the email template with Django's | safe filter, "
+            "or via a custom template that injects user-controlled HTML), they could store "
+            "XSS that executes when an admin views the EmailSent event in the event log."
+        ),
+        "exploit_path": [
+            "1. Attacker has an account on the system and can trigger an email send "
+            "(e.g., password reset, registration confirmation)",
+            "2. Attacker's username or other user-controlled field is rendered in the email "
+            "template WITHOUT Django's auto-escaping (via |safe filter or custom template)",
+            "3. Email body containing <script>... payload stored in event.context.body",
+            "4. Admin opens event log → expands the EmailSent event → ak-event-info renders "
+            "   <iframe srcdoc=${body}> — script executes in admin UI origin",
+            "5. Attacker exfiltrates admin session cookie / CSRF token",
+        ],
+        "root_cause": (
+            "No `sandbox` attribute on the <iframe srcdoc> element. "
+            "Fix: add `sandbox` (blocks all scripts) or "
+            "`sandbox='allow-same-origin allow-popups'` (preserves link clicks). "
+            "Secondary defense: ensure all email templates HTML-escape user-controlled fields. "
+            "Note: default Django template auto-escaping ({{ value }}) does protect, but "
+            "opt-in unsafe patterns ({{ value|safe }}, {% autoescape off %}) would bypass it."
+        ),
+        "note": (
+            "Admin-only UI reduces blast radius, but admin XSS is still high-impact "
+            "(admin session exfiltration). The same iframe pattern appears in the "
+            "Enterprise email stage. Compare to LogViewer.ts which uses "
+            "JSON.stringify inside <pre> — a safe pattern for the same kind of raw data."
+        ),
+    },
 }
 
 # ============================================================
@@ -570,6 +616,28 @@ CLEAN = [
     "web/src/flow/stages/authenticator_duo/AuthenticatorDuoStage.ts — activationBarcode <img src>; activationCode <a href> (Duo-generated); setInterval polling via typed API",
     "web/src/elements/ak-mdx/ak-mdx.ts — URL mode: CompiledMarkdownSanitizePolicy after replacers; Content mode: compileRuntimeMarkdown (no eval) then BrandedHTMLPolicy; both through DOMPurify",
     "web/src/ — localStorage: username (RememberMe) and tab IDs only; no auth secrets stored",
+    # Pass 5l TypeScript reads
+    "web/src/elements/ak-mdx/markdown.ts — unified pipeline with allowDangerousHtml:false; no eval/Function; pure tree transformers",
+    "web/src/elements/ak-mdx/components/ak-md-a.ts — handles #fragment links only; no URL construction from user input",
+    "web/src/elements/LoadingOverlay.ts — pure loading spinner; no injection paths",
+    "web/src/elements/CodeMirror.ts — admin YAML/JSON editor; re-export shim",
+    "web/src/elements/table/TableSearch.ts — search value from FormData → API query param (not rendered as HTML)",
+    "web/src/flow/stages/email/EmailStage.ts — static Lit template; no user input rendered",
+    "web/src/flow/components/ak-flow-card.ts — flowInfo.title as Lit text node; slots delegate to parent",
+    "web/src/admin/policies/PolicyTestForm.ts — policy test result messages rendered as Lit text nodes",
+    "web/src/elements/events/LogViewer.ts — item.event/item.logger Lit text nodes; JSON.stringify(item.attributes) in <pre> (text node, HTML-escaped by Lit)",
+    "web/src/elements/ak-mdx/remark/remark-admonition.ts — node.name validated against ADMONITION_TYPES set; hProperties.level from hardcoded map",
+    "web/src/flow/components/ak-brand-footer.ts — link.name via sanitizeHTML(BrandedHTMLPolicy); link.href in <a href> is admin-controlled (no escalation)",
+    "web/src/elements/mixins/branding.ts — pure Lit context mixin for brand config; no rendering",
+    # Pass 5m TypeScript reads
+    "web/src/flow/stages/user_login/UserLoginStage.ts — static Lit template; no user data rendered raw",
+    "web/src/admin/providers/saml/SAMLProviderForm.ts — state management + typed API calls; rendering delegated to renderForm()",
+    "web/src/elements/table/Table.ts — rows rendered via abstract row() method returning SlottedTemplateResult; no unsafeHTML",
+    "web/src/admin/brands/BrandForm.ts (full) — all admin-controlled fields via ak-text-input/ak-switch-input components; no unsafeHTML",
+    "web/src/admin/users/UserInfoCard.ts — user.username/name/email/type Lit text nodes via renderKeyValueList; numeric pk in URLs",
+    "web/src/admin/users/UserForm.ts — all user fields via ak-text-input component bindings; no unsafeHTML",
+    "web/src/admin/events/EventListPage.ts — row() fields as Lit text nodes; item.pk numeric in URL; renderEventUser() in utils.ts",
+    "web/src/admin/events/utils.ts — renderEventUser(): username Lit text node; URLs via toAdminInterface(); device.name via msg(str); device.pk UUID in URL path",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
