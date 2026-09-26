@@ -468,3 +468,25 @@
 - web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageCode.ts (full): CLEAN — code input form; formatDeviceChallengeMessage() confirmed static; PasswordManagerPrefill.totp in value attribute binding
 - web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageDuo.ts (full): CLEAN — errors.map(e=>e.string).join(", ") as text node; deviceChallenge.deviceUid submitted via typed API
 - web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageWebAuthn.ts (full): CLEAN — pluckErrorDetail() as text node in <p role="alert">; deviceChallenge.challenge as typed PublicKeyCredentialRequestOptions; standard WebAuthn navigator.credentials.get()
+
+### Deep Reads — TypeScript individual file reads (pass 5t — 2026-09-26)
+- web/src/flow/providers/IFrameLogoutStage.ts (full): CLEAN — SAML logout via DOM API (iframe.src, form.action, input.value — not innerHTML); providerName as text node; URL assigned to iframe.src/form.action (not injected as HTML)
+- web/src/flow/providers/SessionEnd.ts (full): CLEAN — applicationName/brandName in msg(str`...`) text nodes; overviewUrl/invalidationFlowUrl/applicationLaunchUrl in href attribute bindings
+- web/src/admin/flows/FlowListPage.ts (full): CLEAN — item.slug/title as text nodes; item.exportUrl in href binding; URL construction via window.location.origin + hardcoded-path
+- web/src/admin/flows/FlowForm.ts (full): CLEAN — all fields via ak-text-input/ak-slug-input/ak-switch-input; select options via FlowDesignationEnum/AuthenticationEnum/FlowLayoutEnum hardcoded values; ak-file-search-input for background
+- web/src/admin/users/UserListPage.ts (full): CLEAN — item.username/name as text nodes; item.avatar in src binding; item.pk in toAdminInterface() URL; shouldShowWarning.username in msg(str`...`) text node
+- web/src/admin/users/recovery.ts (full): CLEAN — buttonClasses in class attribute binding (not innerHTML); formatUserDisplayName() in msg(str`...`) text node; modalInvoker() for dialogs
+- web/src/admin/users/UserViewPage.ts (full): CLEAN — child component property bindings; user.username in attribute binding; user.pk as numeric
+- web/src/admin/users/UserOverviewTab.ts (full): CLEAN — user.username in attribute binding; user.attributes?.notes via ak-user-notes-card (DOMPurify protected); user.attributes via ak-object-attributes-card (JSON.stringify text nodes)
+- web/src/admin/users/UserNotesCard.ts (full): CLEAN — user.attributes.notes via ak-mdx .content (DOMPurify BrandedHTMLPolicy sanitization confirmed prior session)
+- web/src/components/ak-object-attributes-card.ts (full): CLEAN — formatValue(): strings as String(v) text nodes; JSON as JSON.stringify() text nodes; booleans via ak-status-label; renderDescriptionList() confirmed CLEAN
+- web/src/components/DescriptionList.ts (full): CLEAN — term/description rendered as ${term}/${description} Lit text node interpolations
+- web/src/components/KeyValueList.ts (full): CLEAN — term/value rendered as ${term}/${value} Lit text node interpolations
+- web/src/admin/users/UserInfoCard.ts (full): CLEAN — user.username/name/email via renderKeyValueList() (text nodes); user.username in msg(str`...`) warning; renderKeyValueList/renderDescriptionList confirmed CLEAN
+- web/src/admin/events/utils.ts (full): CLEAN — renderEventUser(): username as text node; toAdminInterface() for href; msg(str`...`) for on_behalf_of/authenticated_as; EventGeo(): city/country/continent joined as text node
+- web/src/admin/events/EventViewPage.ts (full): CLEAN — event fields as text nodes; JSON.stringify(EventToJSON()) in <pre> text node; ak-event-info carries known AUT-EMAIL-SRCDOC-1 finding
+- web/src/admin/events/EventListPage.ts (full): CLEAN — actionToLabel/renderEventUser/EventGeo confirmed CLEAN; clientIp/brand.name as text nodes; ak-event-info for expanded row (known finding)
+- web/src/admin/applications/ApplicationListPage.ts (full): CLEAN — ak-mdx .url=${MDApplication} is hardcoded module import (URL mode, not user data); item.name/group/providerObj.name as text nodes; item.launchUrl in href (DomainlessURLValidator confirmed)
+- web/src/admin/groups/GroupListPage.ts (full): CLEAN — item.name as text node; item.pk in toAdminInterface() URL; item.users.length as number; item.isSuperuser for status label
+- web/src/admin/tokens/TokenListPage.ts (full): CLEAN — item.identifier as text node; item.userObj.pk in toAdminInterface(); item.userObj.username as text node; formatIntentLabel() hardcoded enum map
+- web/src/admin/outposts/OutpostListPage.ts (full): CLEAN — item.config.authentik_host in msg(str`...`) text node; outpostTypeToLabel() enum map; item.serviceConnectionObj.name as text node; attribute bindings only
