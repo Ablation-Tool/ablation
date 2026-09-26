@@ -80,9 +80,10 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ---
 
-## Reference Material Used to Build Ablation
+## Acknowledgments
+This project was greatly informed and inspired by several key literary works.
 
-**Books** (All obtained from O'Reilly Media | [www.oreilly.com](https://www.oreilly.com))
+**Books** | [www.oreilly.com](https://www.oreilly.com)
 
 | Title | Author |
 |---|---|
@@ -118,7 +119,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 **Honorable Mention**
 
-[Microsoft Excel (Data Analysis ToolPak)](https://support.microsoft.com/en-us/office/use-the-analysis-toolpak-to-perform-complex-data-analysis-6c67ccf0-f4a9-487c-8dec-bdb5a2cefab6) — When analyzing closed infrastructure or securing black-box systems, this exact process is called timing analysis or telemetry reverse engineering. Without source code, the Data Analysis ToolPak mathematically deconstructs how an application works on the backend by strictly observing its inputs and outputs.
+[Microsoft Excel (Data Analysis ToolPak)](https://support.microsoft.com/en-us/office/use-the-analysis-toolpak-to-perform-complex-data-analysis-6c67ccf0-f4a9-487c-8dec-bdb5a2cefab6) When analyzing closed infrastructure or securing black-box systems, this exact process is called timing analysis or telemetry reverse engineering. Without source code, the Data Analysis ToolPak mathematically deconstructs how an application works on the backend by strictly observing its inputs and outputs.
 
 ---
 
