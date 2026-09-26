@@ -440,6 +440,34 @@ FINDINGS = {
             "JSON.stringify inside <pre> — a safe pattern for the same kind of raw data."
         ),
     },
+
+    "AUT-LAUNCH-URL-1": {
+        "severity": "LOW",
+        "title": "Admin-to-admin stored XSS via application launchUrl in href attribute",
+        "file": "web/src/admin/applications/ApplicationListPage.ts",
+        "lines": (149, 163),
+        "cwe": "CWE-79",
+        "status": "ELIMINATED",
+        "description": (
+            "ApplicationListPage.ts:152 renders `href=${item.launchUrl}` on the 'Open' action "
+            "button for each application. ApplicationViewPage.ts:228 does the same: "
+            "`href=${this.application.launchUrl}` on the 'Launch' button. "
+            "Initially assessed as PLAUSIBLE (admin-to-admin stored XSS via javascript: URI). "
+            "ELIMINATED in pass 5aa: Application.meta_launch_url has "
+            "validators=[DomainlessFormattedURLValidator()] at the model layer (core/models.py). "
+            "DomainlessFormattedURLValidator extends DomainlessURLValidator which sets "
+            "schemes=['https','http','blank','ssh','sftp'], blocking javascript:, data:, vbscript: "
+            "at write time. Any malformed URL is rejected before storage. "
+            "The user-facing LibraryApplication also confirmed safe: DomainlessURLValidator "
+            "applied at source + launch URL validated with URL.canParse() in wizard."
+        ),
+        "root_cause": "N/A — backend validator prevents storage of javascript: URIs at write time.",
+        "note": (
+            "Initially assessed as PLAUSIBLE (pass 5ap). Confirmed ELIMINATED in pass 5aa "
+            "after reading Application model validators. Frontend href bindings are safe "
+            "because the backend guarantees only http/https/blank/ssh/sftp schemes reach storage."
+        ),
+    },
 }
 
 # ============================================================
@@ -1182,6 +1210,68 @@ CLEAN = [
     "web/src/admin/endpoints/devices/facts/DeviceProcessTable.ts — item.id/name/user in html`${...}` text node interpolations",
     "web/src/admin/endpoints/devices/facts/DeviceSoftwareTable.ts — item.name/version/source/path in html`${...}` text node interpolations",
     "web/src/admin/endpoints/devices/facts/DeviceUserTable.ts — item.id/username/name/home in html`${...}` text node interpolations",
+    # pass 5ao — admin/ root + admin-overview/ (20 files)
+    "web/src/admin/ak-about-modal.ts — buildHash appended to hardcoded GitHub commit URL; version/runtime fields as text nodes via renderEntry(); product text node",
+    "web/src/admin/ak-admin-debug-page.ts — static debug page with hardcoded buttons; no user data rendered",
+    "web/src/admin/ak-interface-admin.ts — renderSidebarItems CLEAN; palette commands use hardcoded msg() labels from sidebar; route IDs parsed with parseInt; toAdminInterface with hardcoded paths",
+    "web/src/admin/Routes.ts — pure route table; args.id/slug/uuid as property bindings, not rendered as HTML; parseInt(args.id, 10) for numeric IDs",
+    "web/src/admin/helperText.ts — pure hardcoded msg() string constants",
+    "web/src/admin/index.entrypoint.ts — entry point with router init; no user data rendered",
+    "web/src/admin/admin-overview/AdminOverviewPage.ts — formatUserDisplayName(currentUser) in msg(str`...`) via setPageDetails (property); quick actions hardcoded strings; toAdminInterface with hardcoded paths",
+    "web/src/admin/admin-overview/DashboardUserPage.ts — fully static template with msg() strings and enum constants",
+    "web/src/admin/admin-overview/SystemTasksPage.ts — static template with hardcoded msg() strings",
+    "web/src/admin/admin-overview/TopApplicationsTable.ts — event.application.name text node; event.countedEvents numeric text node and value=/max= attributes",
+    "web/src/admin/admin-overview/cards/AdminStatusCard.ts — status.icon in class= attribute binding; status.message as SlottedTemplateResult; pluckErrorDetail(error) text node",
+    "web/src/admin/admin-overview/cards/FipsStatusCard.ts — statusSummary text node; getStatus() returns hardcoded msg() templates",
+    "web/src/admin/admin-overview/cards/RecentEventsCard.ts — subclass of SimpleEventTable with hardcoded toolbar",
+    "web/src/admin/admin-overview/cards/SystemStatusCard.ts — all status messages hardcoded msg() strings; toAdminInterface with hardcoded path",
+    "web/src/admin/admin-overview/cards/VersionStatusCard.ts — versionCurrent/versionLatest in msg(str`...`) text nodes; buildHash.substring(0,7) text node; version-derived href= attribute bindings",
+    "web/src/admin/admin-overview/cards/WorkerStatusCard.ts — value?.length numeric text node; all status messages hardcoded msg()",
+    "web/src/admin/admin-overview/charts/AdminLoginAuthorizeChart.ts — extends EventChart; all hardcoded msg() labels in ChartData; numeric event volumes",
+    "web/src/admin/admin-overview/charts/AdminModelPerDay.ts — this.label property (bound from parent) used as chart dataset label string; numeric event volumes",
+    "web/src/admin/admin-overview/charts/OutpostStatusChart.ts — d.label (from element.name string) used as chart dataset label; chart labels hardcoded msg() strings; numeric health counts",
+    "web/src/admin/admin-overview/charts/SyncStatusChart.ts — status objects use hardcoded msg() labels; chart labels hardcoded msg() strings; numeric sync status counts",
+    # pass 5ap — blueprints/ + applications/ (40 files) + ak-mdx/ (2 files) + UserSettingsFlowExecutor.ts
+    "web/src/admin/blueprints/BlueprintForm.ts — instance.name/path/content in value=${ifDefined(...)} attribute bindings; YAML.stringify(context) to ak-codemirror value= (editor, not innerHTML)",
+    "web/src/admin/blueprints/BlueprintListPage.ts — item.path in html`<pre>${item.path}</pre>` text node; item.name text node; <ak-mdx .content=${description}> uses CLEAN content-mode: markdown→DOMPurify BrandedHTMLPolicy",
+    "web/src/admin/applications/ApplicationForm.ts — all instance.* fields in value=${ifDefined(...)} attribute bindings; toAdminInterface with nextSlug (server slug, not used as href)",
+    "web/src/admin/applications/ApplicationListPage.ts — item.name/metaPublisher/group/providerObj.name/verboseName as text nodes; item.launchUrl in href (CLEAN: DomainlessFormattedURLValidator rejects javascript:/data: at model write time, AUT-LAUNCH-URL-1 ELIMINATED); toAdminInterface with item.slug CLEAN",
+    "web/src/admin/applications/ApplicationViewPage.ts — provider.name/verboseName text nodes; policyEngineMode.toUpperCase() text node; application.launchUrl in href (CLEAN: same DomainlessFormattedURLValidator defense, AUT-LAUNCH-URL-1 ELIMINATED); stats numeric; setPageDetails properties",
+    "web/src/admin/applications/ApplicationAuthorizeChart.ts — extends EventChart; hardcoded msg('Authorizations') label; applicationId.replaceAll('-','') as query parameter; numeric chart data",
+    "web/src/admin/applications/ApplicationCheckAccessForm.ts — m (policy message) in html`${m}` text node; user.username returned as string from renderElement; passing boolean result to ak-status-label",
+    "web/src/admin/applications/ApplicationEvents.ts — thin subclass of SimpleEventTable (CLEAN); applicationId.replaceAll('-','') as query parameter only",
+    "web/src/admin/applications/ak-provider-table.ts — item.name/verboseName returned as strings from row() (text nodes); renderSelectedChip returns string",
+    "web/src/admin/applications/components/ak-backchannel-input.ts — provider.name in html`<ak-chip>${provider.name}</ak-chip>` text node; provider.pk in value=${ifDefined(...)}; this.help in text node",
+    "web/src/admin/applications/components/ak-provider-search-input.ts — renderElement returns item.name string; doGroupBy uses item.verboseName as group key; label/help in text nodes",
+    "web/src/admin/applications/entitlements/ApplicationEntitlementForm.ts — instance.name in value='${instance.name ?? ''}' attribute binding; renderObjectAttributes delegates to ObjectAttributeModelForm",
+    "web/src/admin/applications/entitlements/ApplicationEntitlementPage.ts — item.name in html`${item.name}` text node; item.pbmUuid in property/.instancePk bindings (UUID)",
+    "web/src/admin/applications/wizard/ak-application-wizard.ts — container that passes context via Lit context API; steps passed via .wizard=${this.context} property bindings; no user data rendered",
+    "web/src/admin/applications/wizard/ApplicationWizardFormStepStyles.styles.ts — pure CSS constant export",
+    "web/src/admin/applications/wizard/ApplicationWizardStep.ts — abstract base; wizardTitle/wizardDescription hardcoded msg(); serializeForm returns structured data not HTML",
+    "web/src/admin/applications/wizard/ContextIdentity.ts — Lit context symbol definition; no rendering",
+    "web/src/admin/applications/wizard/steps/ak-application-wizard-application-step.ts — all app.* fields in value=${ifDefined(...)} attribute bindings; URL.canParse() validation present",
+    "web/src/admin/applications/wizard/steps/ak-application-wizard-bindings-step.ts — v.policyObj/groupObj/userObj.name via msg(str`...`) text nodes; order/timeout as numeric values in table content",
+    "web/src/admin/applications/wizard/steps/ak-application-wizard-edit-binding-step.ts — instance.order/timeout in value='${...}' attribute bindings; policy.name/group.name/user.username returned as strings",
+    "web/src/admin/applications/wizard/steps/ak-application-wizard-provider-choice-step.ts — providerModelsList passed as .types=${} property binding; hardcoded msg() labels",
+    "web/src/admin/applications/wizard/steps/ak-application-wizard-provider-step.ts — tag from hardcoded providerToTag dict; StrictUnsafe(tag) triple-guard before element creation — CLEAN",
+    "web/src/admin/applications/wizard/steps/ak-application-wizard-submit-step.ts — app.name/group/policyEngineMode as text nodes; metaLaunchUrl rendered as text node (not href); errors.detail/nonFieldErrors as text nodes",
+    "web/src/admin/applications/wizard/steps/SubmitStepOverviewRenderers.ts — all provider fields via renderDescriptionList (text nodes); uri.url in html`${uri.url}` text node",
+    "web/src/admin/applications/wizard/steps/bindings/ak-application-wizard-bindings-edit-button.ts — label is hardcoded msg(); value is numeric property",
+    "web/src/admin/applications/wizard/steps/bindings/ak-application-wizard-bindings-toolbar.ts — pure toolbar with hardcoded msg() buttons",
+    "web/src/admin/applications/wizard/steps/providers/ApplicationWizardProviderForm.ts — abstract base; serializeForm returns structured data; errorMessages returns array",
+    "web/src/admin/applications/wizard/steps/providers/shared.ts — type definitions and type guards only; no HTML rendering",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-ldap.ts — thin wrapper; delegates to renderForm({provider, errors, brand}) from LDAPProviderFormForm",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-oauth.ts — thin wrapper; delegates to renderForm() from OAuth2ProviderFormForm",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-proxy.ts — thin wrapper; delegates to renderForm() from ProxyProviderFormForm; mode from enum constant",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-rac.ts — provider.name/connectionExpiry in value=${ifDefined(...)} attribute bindings",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-radius.ts — thin wrapper; delegates to renderForm({provider, errors, brand}) from RadiusProviderFormForm",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-saml.ts — thin wrapper; delegates to renderForm() from SAMLProviderFormForm",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-saml-metadata.ts — thin wrapper; delegates to renderForm(this.wizard.provider) from SAMLProviderImportFormForm",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-scim.ts — thin wrapper; delegates to renderForm({provider, errors}) from SCIMProviderFormForm",
+    "web/src/admin/applications/wizard/steps/providers/ak-application-wizard-provider-for-wsfed.ts — thin wrapper; delegates to renderForm({provider, errors}) from WSFederationProviderFormForm",
+    "web/src/elements/ak-mdx/ak-mdx.ts — url mode: CompiledMarkdownSanitizePolicy (DOMPurify); content mode: BrandedHTMLPolicy (DOMPurify) — both sanitized; markdown.ts uses unified (no eval) + allowDangerousHtml:false",
+    "web/src/elements/ak-mdx/markdown.ts — compileRuntimeMarkdown: unified pipeline (remarkParse→remarkRehype({allowDangerousHtml:false})→rehypeStringify); pure tree transforms, no eval",
+    "web/src/user/user-settings/details/UserSettingsFlowExecutor.ts — unsafeHTML((challenge as ShellChallenge).body): intentional shell challenge pattern (same as all flow executors); server-generated HTML from Django template renderer",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
