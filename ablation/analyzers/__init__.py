@@ -52,7 +52,7 @@ from .source_taint_tracker import SourceTaintTracker, TaintPath, TaintHop, CallG
 from .sink_arg_classifier import (
     SinkArgClassifier, SinkClassification,
     RODATA_CONST, SNPRINTF_RODATA, ARG_PROPAGATED, UNKNOWN as SINK_UNKNOWN,
-    _count_plt_callers,
+    _count_plt_callers, batch_plt_intersect,
 )
 from .sanitizer_detector import SanitizerDetector, SanitizerProfile, SHELL_METACHARACTERS
 from .fork_exec_classifier import (
@@ -112,7 +112,7 @@ __all__ = [
     "SourceTaintTracker", "TaintPath", "TaintHop", "CallGraph",
     "SinkArgClassifier", "SinkClassification",
     "RODATA_CONST", "SNPRINTF_RODATA", "ARG_PROPAGATED", "SINK_UNKNOWN",
-    "_count_plt_callers",
+    "_count_plt_callers", "batch_plt_intersect",
     "SanitizerDetector", "SanitizerProfile", "SHELL_METACHARACTERS",
     "ForkExecClassifier", "ForkCallerResult",
     "WORKER", "EXEC_AFTER_FORK", "EXIT_IN_CHILD", "FORK_UNKNOWN",
