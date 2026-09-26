@@ -2,7 +2,7 @@
 
 Two cooperating modules for Windows kernel driver RE: `KernelDriverAnalyzer` for
 attack surface mapping and `BYOVDDetector` for identifying drivers with exploitable
-capabilities. Run `KernelDriverAnalyzer` first — `BYOVDDetector` consumes its output.
+capabilities. Run `KernelDriverAnalyzer` first. `BYOVDDetector` consumes its output.
 
 ---
 
@@ -18,7 +18,7 @@ the kernel API surface, and flags dangerous byte patterns.
 
 - **Driver framework:** WDM / KMDF / minifilter classification
 - **DriverEntry** VA and the `MajorFunction` dispatch table (IRP_MJ_* handlers)
-- **IOCTL codes:** all `CTL_CODE` values found in the binary, fully decoded
+- **IOCTL codes:** all `CTL_CODE` values found in the binary, decoded
 - **Kernel API surface audit:** 40+ dangerous API patterns across 8 risk classes
 - **Dangerous byte patterns:** MSR writes (`WRMSR`), CR0/CR4 manipulation, `HLT`
 - **PDB path** from RSDS debug directory
@@ -49,9 +49,9 @@ print(ic.fmt())
 
 | Bits | Field | Notes |
 |---|---|---|
-| 31:16 | DeviceType | 0x0001–0x7FFF system; 0x8000–0xFFFF user-defined |
+| 31:16 | DeviceType | 0x0001-0x7FFF system; 0x8000-0xFFFF user-defined |
 | 15:14 | Access | FILE_ANY_ACCESS / FILE_READ_ACCESS / FILE_WRITE_ACCESS |
-| 13:2 | Function | 0x000–0x7FF system; 0x800–0xFFF user-defined |
+| 13:2 | Function | 0x000-0x7FF system; 0x800-0xFFF user-defined |
 | 1:0 | Method | BUFFERED=0 / IN_DIRECT=1 / OUT_DIRECT=2 / NEITHER=3 |
 
 `METHOD_NEITHER` (method=3) is the most dangerous: no buffer copy occurs, and a raw
@@ -83,9 +83,8 @@ controls, manipulate kernel objects, or escalate to ring-0.
 
 ### What BYOVD is
 
-Attackers load a legitimate, Authenticode-signed driver that contains dangerous
-capabilities — physical memory R/W, process/token manipulation, direct kernel object
-manipulation — and exploit those capabilities to bypass endpoint detection or escalate
+Attackers load a legitimate, Authenticode-signed driver with dangerous built-in
+capabilities and exploit those capabilities to bypass endpoint detection or escalate
 privileges. The signed driver legitimizes the load; the capability provides the primitive.
 Reference: [loldrivers.io](https://www.loldrivers.io/) for known-vulnerable driver samples.
 
