@@ -1287,7 +1287,9 @@ FINDINGS = {
             ),
             "fadcsystem_0xa830_ELIMINATED": (
                 "snprintf('md5sum  %s >%s/checkmd5.md5') @ 0xf841 → fadcsystem @ 0xa830. "
-                "The '>' is a literal token passed to md5sum argv — not shell redirect. posix_spawnp. ELIMINATED."
+                "fadcsystem parse_redirect_path (libstdext.so 0x2560) parses '>' as file-action redirect; "
+                "stdout redirected to '%s/checkmd5.md5' via posix_spawn file-action. "
+                "Second %s = VDOM-named path ([A-Za-z0-9_-]) → no path traversal. ELIMINATED."
             ),
             "fadcpopen_0xe3b8_ELIMINATED": (
                 "fadcpopen @ 0xe3b8: r13 = 4096-byte buf. snprintf at 0xe38f: "
