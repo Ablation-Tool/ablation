@@ -58,6 +58,9 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "V850: trace recv (RH850/G3M ECU)" | `V850TaintTracker.from_path(elf).run_interprocedural()` |
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
+| "Where did this command string come from? (system/popen/execve)" | `SinkArgClassifier.from_path(elf).classify_all()` — verdicts: RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN |
+| "Detect allowlist byte-validators in stripped binary" | `SanitizerDetector.from_path(elf).detect()` — SHELL_SAFE/SHELL_UNSAFE/UNKNOWN per charset |
+| "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` — WORKER/EXEC_AFTER_FORK/EXIT_IN_CHILD |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
 | "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
 | "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
@@ -146,6 +149,9 @@ Requires `XRefGraph.from_path(path).build()` passed as `xg=`. Call `build_corpus
 **MatrixProfileDiff** — `from ablation.analyzers.matrix_profile_diff import MatrixProfileDiff`
 `diff_functions(va_v1, va_v2)`. Use `discord_threshold=0.5` for categorical sequences (default 1.5 too high).
 
+**SinkArgClassifier** — `from ablation.analyzers.sink_arg_classifier import SinkArgClassifier` — `from_path(elf).classify_all()`. `add_sink('fadcsystem', arg_pos=1)` for vendor sinks. Verdicts: RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN. Handles `__snprintf_chk` r8=fmt + callee-saved buffer patterns.
+**SanitizerDetector** — `from ablation.analyzers.sanitizer_detector import SanitizerDetector` — `from_path(elf).detect(min_score=4)`. Scores: byte-load density + RC (cmp_same_reg_ratio) + dual-return + no-calls gate. Reports SHELL_SAFE/SHELL_UNSAFE/UNKNOWN.
+**ForkExecClassifier** — `from ablation.analyzers.fork_exec_classifier import ForkExecClassifier` — `from_path(elf).classify()`. BFS 32-block child walk. EXEC_AFTER_FORK = investigate; WORKER/EXIT_IN_CHILD = ELIMINATED.
 **FormatStringScanner** — `from ablation.analyzers.format_string_scanner import FormatStringScanner`
 **HeapVulnScanner** — `from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner`
 **LengthUnderflowScanner** — `from ablation.analyzers.length_underflow import LengthUnderflowScanner` — C12-class
