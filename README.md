@@ -101,34 +101,7 @@ mindmap
 - **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
 - **Crypto Audit:** Scans for cryptography.
 - **XorSolver:** Recovers, then decrypts the target section which allows further reverse engineering.
-
----
-
-## Feature Comparison vs. Legacy Tools
-
-**Everything legacy tools have**
-
-| Feature | Ablation | Ghidra | IDA Pro | Binary Ninja |
-|---|:---:|:---:|:---:|:---:|
-| Disassembler | ✅ | ✅ | ✅ | ✅ |
-| Decompiler | ✅ | ✅ | ✅ | ✅ |
-| Scripting API | ✅ | ✅ | ✅ | ✅ |
-| Multi-Architecture | ✅ | ✅ | ✅ | ✅ |
-| Binary Diffing | ✅ | ✅ | ✅ | ✅ |
-
-**Capabilities legacy tools don't have**
-
-| Feature | Ablation | Ghidra | IDA Pro | Binary Ninja |
-|---|:---:|:---:|:---:|:---:|
-| Semantic Search | ✅ | ❌ | ❌ | ❌ |
-| Autonomous Loop | ✅ | ❌ | ❌ | ❌ |
-| Pattern Library | ✅ | ❌ | ❌ | ❌ |
-| Cross-Binary Taint Tracking | ✅ | ❌ | ❌ | ❌ |
-| Version Diffing via DTW | ✅ | ❌ | ❌ | ❌ |
-| Finding Registry | ✅ | ❌ | ❌ | ❌ |
-| Load Time (50 MB) | **35 sec** | 1-4 hrs | Heavy DB | Heavy DB |
-| Cost | **Open Source** | Free / OSS | $3,000+ | Commercial |
-
+  
 ---
 
 ## Real-World Results
