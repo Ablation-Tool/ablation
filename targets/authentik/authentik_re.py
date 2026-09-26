@@ -907,6 +907,10 @@ CLEAN = [
     "web/src/admin/events/TransportForm.ts — instance.name/webhookUrl/emailSubjectPrefix in value=; webhook mapping names in .renderElement return string; template.name in option value=; template.description option text node",
     "web/src/admin/events/DataExportListPage.ts — requestedBy.pk via toAdminInterface; requestedBy.username text node; item.fileUrl server-generated download URL; queryParams values as text nodes in <pre>",
     "web/src/admin/events/eventSearch.ts — pure DjangoQL string builder",
+    # pass 5ae — brands admin (3 files)
+    "web/src/admin/brands/BrandListPage.ts — item.domain/brandingTitle text nodes; no href with user data",
+    "web/src/admin/brands/BrandForm.ts — all brand fields in value= inputs; item.slug text node in renderDescription; attributes YAML in ak-codemirror value=; flows via ak-flow-search property binding",
+    "web/src/admin/brands/Certificates.ts — pure data helper, cert.name as string in DualSelectPair tuple",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",

@@ -679,3 +679,8 @@ BACKEND FINDING CONFIRMED (launchUrl): meta_launch_url in Application model has 
 - web/src/admin/events/TransportForm.ts (full): CLEAN — instance.name/webhookUrl/emailSubjectPrefix in value=; NotificationWebhookMapping.name in .renderElement returns string; template.name in option value=; template.description as option text node
 - web/src/admin/events/DataExportListPage.ts (full): CLEAN — requestedBy.pk via toAdminInterface; requestedBy.username text node; item.fileUrl is server-generated download URL; queryParams values as text nodes in <pre>; msg(html`...toAdminInterface(hardcoded)...`) static paths
 - web/src/admin/events/eventSearch.ts (full): CLEAN — pure DjangoQL string builder, no HTML rendering
+
+### Deep Reads — TypeScript individual file reads (pass 5ae — 2026-09-26)
+- web/src/admin/brands/BrandListPage.ts (full): CLEAN — item.domain/brandingTitle text nodes; no href with user data
+- web/src/admin/brands/BrandForm.ts (full): CLEAN — all brand fields (domain/title/logo/customCss/mapTiles) in value= inputs; item.slug text node in renderDescription; item.name in .renderElement returns string; attributes YAML in ak-codemirror value=; all flows via ak-flow-search property binding
+- web/src/admin/brands/Certificates.ts (full): CLEAN — pure data helper, cert.name as string in DualSelectPair tuple
