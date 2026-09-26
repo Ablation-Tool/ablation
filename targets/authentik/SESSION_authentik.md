@@ -684,3 +684,56 @@ BACKEND FINDING CONFIRMED (launchUrl): meta_launch_url in Application model has 
 - web/src/admin/brands/BrandListPage.ts (full): CLEAN — item.domain/brandingTitle text nodes; no href with user data
 - web/src/admin/brands/BrandForm.ts (full): CLEAN — all brand fields (domain/title/logo/customCss/mapTiles) in value= inputs; item.slug text node in renderDescription; item.name in .renderElement returns string; attributes YAML in ak-codemirror value=; all flows via ak-flow-search property binding
 - web/src/admin/brands/Certificates.ts (full): CLEAN — pure data helper, cert.name as string in DualSelectPair tuple
+
+### Deep Reads — TypeScript individual file reads (pass 5af — 2026-09-26)
+**Directory: web/src/admin/sources/ (36 files, all CLEAN)**
+
+Key patterns confirmed across all source form files:
+- Source name/slug/realm/serverUri/ssoUrl/botUsername/etc. all bound via `value="..."` attribute bindings on form inputs
+- `UserMatchingModeToLabel()`/`GroupMatchingModeToLabel()` — pure enum-to-string functions, return strings for text nodes
+- `group.name`/`user.username`/`user.name` in `.renderElement`/`.renderDescription` closures return strings or text-node TemplateResults
+
+Notable pattern: **Mermaid diagram rendering in OAuthSourceDiagram.ts**
+- `source.name` embedded in Mermaid DSL: `source[OAuth Source ${source.name}]`
+- Rendered via `mermaid.render()` → `unsafeHTML(svg)` in ak-diagram.ts
+- Protected by `htmlLabels: true` + `securityLevel: "strict"` + `dompurifyConfig: DOM_PURIFY_RELAXED`
+- `DOM_PURIFY_RELAXED` allows only `#text`, `<br>`, `<div>`, `<strong>`, `class` — strips all XSS vectors
+- Admin-controlled field anyway; CLEAN
+
+Also confirmed: JSON.stringify(item.attributes) in `<pre>` text nodes in SCIMSourceGroups/SCIMSourceUsers — produces escaped string as Lit text node, not HTML.
+
+- web/src/admin/sources/SourceListPage.ts: CLEAN — item.slug via toAdminInterface; item.name/verboseName text nodes; item.component in IconEditButtonByTagName (StrictUnsafe guard)
+- web/src/admin/sources/SourceViewPage.ts: CLEAN — source.slug as element attribute; source.component in switch case; component text node in default case
+- web/src/admin/sources/BaseSourceForm.ts: CLEAN — pure abstract base, no rendering
+- web/src/admin/sources/ak-source-wizard.ts: CLEAN — wizard factory; type.modelName as property binding
+- web/src/admin/sources/kerberos/KerberosSourceForm.ts: CLEAN — all fields in value= bindings; enum options via label helper functions
+- web/src/admin/sources/kerberos/KerberosSourceViewPage.ts: CLEAN — source.name/realm text nodes; slug/pk in element attrs
+- web/src/admin/sources/kerberos/KerberosSourceConnectivity.ts: CLEAN — serverKey/connectivity values as text nodes
+- web/src/admin/sources/kerberos/KerberosSourceFormHelpers.ts: CLEAN — pure data helper
+- web/src/admin/sources/ldap/LDAPSourceForm.ts: CLEAN — all LDAP fields in value= inputs; group.name in .renderElement returns string
+- web/src/admin/sources/ldap/LDAPSourceViewPage.ts: CLEAN — name/serverUri/baseDn as html`${...}` text nodes
+- web/src/admin/sources/ldap/LDAPSourceConnectivity.ts: CLEAN — key/status/vendor/version all text nodes
+- web/src/admin/sources/ldap/LDAPSourceFormHelpers.ts: CLEAN — pure data helper
+- web/src/admin/sources/ldap/LDAPSourceGroupForm.ts: CLEAN — identifier in value=; group.name returns string; objectUniquenessField in msg(str`...`)
+- web/src/admin/sources/ldap/LDAPSourceGroupList.ts: CLEAN — groupObj.pk via toAdminInterface; name/identifier text nodes
+- web/src/admin/sources/ldap/LDAPSourceUserForm.ts: CLEAN — identifier in value=; user.username/name as string/.renderDescription text node
+- web/src/admin/sources/ldap/LDAPSourceUserList.ts: CLEAN — userObj.pk via toAdminInterface; username/name/identifier text nodes
+- web/src/admin/sources/oauth/OAuthSourceForm.ts: CLEAN — all fields in value= inputs; JSON.stringify(oidcJwks) in ak-codemirror value=
+- web/src/admin/sources/oauth/OAuthSourceViewPage.ts: CLEAN — name/callbackUrl/consumerKey/URLs as text nodes; ProviderToLabel() returns string
+- web/src/admin/sources/oauth/OAuthSourceDiagram.ts: CLEAN — Mermaid node label with source.name, DOMPurify RELAXED sanitization via securityLevel:strict
+- web/src/admin/sources/oauth/OAuthSourceFormHelpers.ts: CLEAN — pure data helper
+- web/src/admin/sources/oauth/utils.ts: CLEAN — pure enum-to-localized-label functions
+- web/src/admin/sources/plex/PlexSourceForm.ts: CLEAN — all fields in value= inputs; r.clientIdentifier in option value=; r.name text node
+- web/src/admin/sources/plex/PlexSourceViewPage.ts: CLEAN — source.name text node; slug/pk in element attrs
+- web/src/admin/sources/plex/PlexSourceFormHelpers.ts: CLEAN — pure data helper
+- web/src/admin/sources/saml/SAMLSourceForm.ts: CLEAN — all SAML fields in value= inputs; enum radio/select options
+- web/src/admin/sources/saml/SAMLSourceViewPage.ts: CLEAN — name/ssoUrl/sloUrl/urlIssuer text nodes; metadata.metadata in ak-codemirror value= (readonly); metadata.downloadUrl in ifDefined href (server-generated)
+- web/src/admin/sources/saml/SAMLSourceFormHelpers.ts: CLEAN — pure data helper
+- web/src/admin/sources/scim/SCIMSourceForm.ts: CLEAN — all fields in value= inputs
+- web/src/admin/sources/scim/SCIMSourceViewPage.ts: CLEAN — name/slug text nodes; rootUrl in readonly value= input (server-generated); tokenObj.identifier in element attribute
+- web/src/admin/sources/scim/SCIMSourceFormHelpers.ts: CLEAN — pure data helper
+- web/src/admin/sources/scim/SCIMSourceGroups.ts: CLEAN — groupObj.pk via toAdminInterface; name/externalId text nodes; JSON.stringify(attributes) in <pre> text node
+- web/src/admin/sources/scim/SCIMSourceUsers.ts: CLEAN — userObj.pk via toAdminInterface; username/name/externalId text nodes; JSON.stringify(attributes) in <pre> text node
+- web/src/admin/sources/telegram/TelegramSourceForm.ts: CLEAN — all fields in value= inputs including botUsername
+- web/src/admin/sources/telegram/TelegramSourceViewPage.ts: CLEAN — name/botUsername text nodes; slug/pk in element attrs
+- web/src/admin/sources/telegram/TelegramSourceFormHelpers.ts: CLEAN — pure data helper
