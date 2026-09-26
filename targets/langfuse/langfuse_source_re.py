@@ -4,7 +4,7 @@ Langfuse source RE — COMPLETE (2026-09-26)
 Target  : langfuse/langfuse (open source LLM observability platform)
 Repo    : https://github.com/langfuse/langfuse
 Version : main branch, shallow clone 2026-09-26
-Method  : 5-stage source RE via ablation source analyzers
+Method  : 6-stage source RE via ablation source analyzers
           Stage 1: SourceContext (5293 files indexed)
           Stage 2: SourceEntryClassifier (40 API routes, 0 non-trivial NONE)
           Stage 3: SourceSinkScanner (3 HIGH, 41 MEDIUM, 6 LOW sinks)
@@ -33,6 +33,24 @@ Method  : 5-stage source RE via ablation source analyzers
                    rbac/allMembersRoutes, search-bar (buildFilterPrompt, parseFilterCompletion,
                                resolveFilterPrompt), score-analytics,
                    support/upload-attachments, project/[projectId]/visit
+          Pass 6:  Remaining server routers + client-side components + utils
+                   SERVER ROUTERS: auditLogs (org membership gating), commentReactions
+                   (uses DB-verified comment.projectId), comments (Prisma.sql parameterized +
+                   sanitizeMentions + ANY($ids::text[]) safe), dashboardWidgets (view declaration
+                   validates dimensions/measures), models (ownership check + LFG-MODEL-REGEX-1),
+                   monitors (requireV4Writes + entitlement), notificationPreferences (enum),
+                   scoreConfigs (SELECT FOR UPDATE for append race), sessions
+                   (protectedGetSessionProcedure + I/O budget cap), tableViewPresets
+                   (tableName z.enum), utilities (SSRF-protected image URL validation)
+                   CLIENT-SIDE: safe-url.ts (getSafeLinkUrl: protocol allowlist blocks
+                   javascript:/data:, protocol-relative //; getSafeImageUrl: https-only),
+                   MarkdownViewer (getSafeLinkUrl + getSafeImageUrl + rel=noopener noreferrer),
+                   redirect.ts (WHATWG URL origin check + // rejection + control char strip),
+                   683 component/page files: zero dangerouslySetInnerHTML, zero window.location
+                   writes, all target="_blank" have rel=noopener noreferrer
+                   SFDC sync: fire-and-forget CRM sync, no injection surface
+                   in-app-agent-sandbox-runtime contracts.ts: confirms bash operation schema
+                   (LFG-SANDBOX-1B already documented)
           Pass 4 worker features covered:
                    eval (decision model, eval metrics, span attrs, S3 client, retry,
                          observation eval scheduler deps + rules + types, batch eval),
@@ -439,7 +457,7 @@ INFO_FINDINGS = [
 
 def print_findings():
     """Print all confirmed findings in RE module format."""
-    print(f"Langfuse Source RE — Pass 5 Complete (web features + repositories)  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
+    print(f"Langfuse Source RE — Pass 6 Complete (ALL files read)  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
     print("=" * 70)
     for f in FINDINGS:
         print(f"\n[{f['id']}] {f['status']} {f['severity']}  {f['cwe']}")
