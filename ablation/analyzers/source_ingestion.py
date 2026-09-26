@@ -76,9 +76,24 @@ _ROUTE_CONTENT_SIGNALS: list[re.Pattern] = [
     re.compile(r"\bexport\s+const\s+(GET|POST|PUT|DELETE|PATCH)\s*="),
     # Express / Fastify
     re.compile(r"\b(app|router)\.(get|post|put|delete|patch|use)\s*\("),
-    # Python Flask / FastAPI / Django
+    # Python Flask / FastAPI — function-based routes
     re.compile(r"@(app|router|bp)\.(get|post|put|delete|patch|route)\s*\("),
+    # Django REST Framework — @api_view decorator
     re.compile(r"@api_view\s*\("),
+    # Django REST Framework — class-based views (ViewSet, APIView, ModelViewSet, etc.)
+    # Any class inheriting from a DRF base is an HTTP handler.
+    re.compile(
+        r"class\s+\w+\s*\([^)]*"
+        r"(?:APIView|ViewSet|ModelViewSet|GenericAPIView|GenericViewSet|"
+        r"ReadOnlyModelViewSet|ListModelMixin|CreateModelMixin|"
+        r"UpdateModelMixin|DestroyModelMixin|RetrieveModelMixin)\b"
+    ),
+    # Django plain class-based views (ListView, CreateView, DetailView, …)
+    re.compile(
+        r"class\s+\w+\s*\([^)]*"
+        r"(?:ListView|CreateView|UpdateView|DeleteView|DetailView|"
+        r"TemplateView|RedirectView|FormView|View)\b"
+    ),
     # Axum / Actix
     re.compile(r"#\[(get|post|put|delete|patch)\("),
 ]
