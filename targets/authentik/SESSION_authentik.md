@@ -606,3 +606,14 @@
 - web/src/admin/policies/geoip/GeoIPPolicyForm.ts (full): CLEAN — instance.name in value=; numeric distance/tolerance fields; countries via ak-dual-select-provider (country.name/.code strings); asns joined as text input value=
 - web/src/admin/groups/GroupListPage.ts (full): CLEAN — item.pk UUID in href via toAdminInterface path; item.name text node; item.users length numeric
 - web/src/admin/groups/GroupViewPage.ts (full): CLEAN — group.name text node; role.pk UUID in href via toAdminInterface (path only); role.name text node; group.attributes.notes rendered via ak-mdx with .content property binding (DOMPurify-sanitized before unsafeHTML); ak-object-attributes-card for attributes
+
+### Deep Reads — TypeScript individual file reads (pass 5aa — 2026-09-26)
+- web/src/admin/groups/ak-group-form.ts (full): CLEAN — instance.name in ak-text-input value=; coreGroupPair/rbacRolePair produce DualSelectPair with item.name text nodes; parents/roles via ak-dual-select-provider; renderObjectAttributes via ObjectAttributeModelForm
+- web/src/admin/groups/RelatedUserList.ts (full): CLEAN — item.pk UUID in href via toAdminInterface path; item.username/item.name text nodes; formatDisambiguatedUserDisplayName returns string; ToggleUserActivationButton/RecoveryButtons delegated components
+- web/src/admin/applications/ApplicationViewPage.ts (full): CLEAN — providerObj.pk in href via toAdminInterface (numeric); providerObj.name text node; application.launchUrl in href (validated by DomainlessFormattedURLValidator at Django model layer — only http/https/blank/ssh/sftp allowed); policyEngineMode text node
+- web/src/admin/applications/ApplicationForm.ts (full): CLEAN — all instance fields in value= bindings; provider via ak-provider-search-input; backchannel providers via ak-backchannel-providers-input; metaLaunchUrl validated backend; no href rendering
+- web/src/admin/applications/ApplicationListPage.ts (full): CLEAN — item.slug in href via toAdminInterface path; item.launchUrl in href (server-validated); item.name/metaPublisher/group text nodes; ak-mdx .url= with imported MDX constant (not user data); providerObj.pk in href via toAdminInterface
+- web/src/admin/crypto/CertificateKeyPairListPage.ts (full): CLEAN — item.certificateDownloadUrl/privateKeyDownloadUrl in href (server-generated download URLs); item.fingerprintSha1/Sha256/certSubject text nodes; item.name/managedSubText text nodes
+- web/src/admin/crypto/CertificateKeyPairForm.ts (full): CLEAN — instance.name in value=; certificateData/keyData via ak-secret-textarea-input (form inputs); no user data as href
+
+BACKEND FINDING CONFIRMED (launchUrl): meta_launch_url in Application model has validators=[DomainlessFormattedURLValidator()]. DomainlessFormattedURLValidator requires scheme in ["http","https","blank","ssh","sftp"]; rejects javascript:, data:, vbscript: at write time. All subsequent frontend href uses of application.launchUrl are SAFE by backend validation.

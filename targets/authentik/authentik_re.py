@@ -840,6 +840,14 @@ CLEAN = [
     "web/src/admin/policies/geoip/GeoIPPolicyForm.ts — instance.name in value=; numeric fields in value= bindings; countries via ak-dual-select-provider (country.name/.code); asns via comma-join value= of text input",
     "web/src/admin/groups/GroupListPage.ts — item.pk in href via toAdminInterface path; item.name text node in <a>; item.users length numeric",
     "web/src/admin/groups/GroupViewPage.ts — group.name text node; role.pk UUID in href via toAdminInterface path; role.name text node; group.attributes.notes rendered via ak-mdx (.content property = DOMPurify sanitized before unsafeHTML); ak-object-attributes-card for attributes",
+    # pass 5aa — group form, related users, application admin, crypto admin
+    "web/src/admin/groups/ak-group-form.ts — instance.name in ak-text-input value=; coreGroupPair/rbacRolePair produce DualSelectPair with item.name text nodes; parents/roles via ak-dual-select-provider; renderObjectAttributes via ObjectAttributeModelForm",
+    "web/src/admin/groups/RelatedUserList.ts — item.pk UUID in href via toAdminInterface path; item.username/name text nodes; formatDisambiguatedUserDisplayName returns string; ToggleUserActivationButton/RecoveryButtons delegated",
+    "web/src/admin/applications/ApplicationViewPage.ts — providerObj.pk in href via toAdminInterface (numeric); providerObj.name text node; application.launchUrl in href (validated by DomainlessFormattedURLValidator at Django model layer: only http/https/blank/ssh/sftp allowed); policyEngineMode text node",
+    "web/src/admin/applications/ApplicationForm.ts — all instance fields in value= bindings; metaLaunchUrl validated backend; no href rendering",
+    "web/src/admin/applications/ApplicationListPage.ts — item.slug in href via toAdminInterface; item.launchUrl in href (server-validated by DomainlessFormattedURLValidator); item.name/metaPublisher/group text nodes; ak-mdx .url= with imported MDX constant (not user data); providerObj.pk in href via toAdminInterface",
+    "web/src/admin/crypto/CertificateKeyPairListPage.ts — item.certificateDownloadUrl/privateKeyDownloadUrl in href (server-generated download URLs); item.fingerprintSha1/Sha256/certSubject text nodes",
+    "web/src/admin/crypto/CertificateKeyPairForm.ts — instance.name in value=; certificateData/keyData via ak-secret-textarea-input; no user data as href",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
