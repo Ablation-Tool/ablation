@@ -14,7 +14,7 @@ Now reverse engineering is accessible to anyone. No matter your wallet or your b
 
 ---
 
-![Codex demo](assets/codex-demo.gif)
+<img src="assets/codex-demo.gif" width="100%">
 
 ---
 
