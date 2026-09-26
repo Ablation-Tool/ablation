@@ -856,7 +856,67 @@ class SinkArgClassifier:
                 f'\n  DEAD IMPORTS (0 callers — ELIMINATED): '
                 + ', '.join(sorted(self._dead_sinks))
             )
+        investigate = by_verdict.get(ARG_PROPAGATED, 0) + by_verdict.get(UNKNOWN, 0)
+        if investigate:
+            lines.append(
+                f'\n  !! SANITIZER CHECK REQUIRED: {investigate} ARG_PROPAGATED/UNKNOWN result(s) above.'
+                f'\n     Run SanitizerDetector on this binary BEFORE filing any of these as PLAUSIBLE.'
+                f'\n     An undetected allowlist validator (e.g. is_valid_host_name) may ELIMINATE the'
+                f'\n     entire class. Skipping this step wasted 12 sessions on FortiADC (sessions 3→13).'
+            )
         return '\n'.join(lines) + '\n'
+
+
+# ── Batch stub-lib PLT intersection check ─────────────────────────────────────
+
+def batch_plt_intersect(
+    directory: str,
+    sinks: Optional[List[str]] = None,
+) -> Dict[str, List[str]]:
+    """
+    Scan every ELF in `directory` and return only those whose PLT intersects
+    with `sinks` (defaults to the built-in exec-class sink list).
+
+    Returns {elf_path: [matching_sink_names]}. Files with zero matches are
+    omitted — they are auto-CLEAN and need no individual audit.
+
+    This is the 30-second stub-lib batch check that avoids the mistake of
+    auditing 17+ ~14KB stub libraries one-by-one when a single PLT intersection
+    loop would have produced the same result.
+
+    Usage:
+        from ablation.analyzers.sink_arg_classifier import batch_plt_intersect
+        hits = batch_plt_intersect('/tmp/fad_root/lib/')
+        for path, names in sorted(hits.items()):
+            print(path, names)
+    """
+    import os
+    target_sinks: List[str] = sinks if sinks is not None else list(_DEFAULT_SINKS.keys())
+    sink_set = set(target_sinks)
+    hits: Dict[str, List[str]] = {}
+    for fname in sorted(os.listdir(directory)):
+        fpath = os.path.join(directory, fname)
+        if not os.path.isfile(fpath):
+            continue
+        try:
+            data = open(fpath, 'rb').read(4)
+            if data[:4] != b'\x7fELF':
+                continue
+            data = open(fpath, 'rb').read()
+        except OSError:
+            continue
+        try:
+            import lief as _lief
+            binary = _lief.parse(fpath)
+            if binary is None:
+                continue
+            plt = _extract_plt_x86(binary, data)
+        except Exception:
+            continue
+        matches = [name for _va, name in plt.items() if name in sink_set]
+        if matches:
+            hits[fpath] = sorted(matches)
+    return hits
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
