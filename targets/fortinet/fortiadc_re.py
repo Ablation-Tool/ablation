@@ -822,7 +822,7 @@ FINDINGS = {
 
     "LIBCMDB_PLUGIN_profile": {
         "binary": "libcmdb_plugin.so",
-        "status": "ANALYZED — system() ELIMINATED; execve ELIMINATED; FAD_C1 PLAUSIBLE MEDIUM (sys_vdom_exec x2); fadcsystem audit pending",
+        "status": "ANALYZED COMPLETE — system() ELIMINATED; execve ELIMINATED; FAD_C1 PLAUSIBLE MEDIUM (sys_vdom_exec x2); fadcsystem 81 callers ALL ELIMINATED or PLAUSIBLE LOW (posix_spawn, admin-only paths)",
         "evidence": {
             "system_9_ELIMINATED": (
                 "All 9 callers in geodebug/geoip_country_name_cmf_startup (GeoIP DB management). "
@@ -831,8 +831,7 @@ FINDINGS = {
             ),
             "geoip_hardcoded_pwd": "'F0rtinet899' — hardcoded GeoIP ZIP decryption password (FortiGuard DB update flow).",
             "execve_0x79d22_ELIMINATED": "Inside fadc_popen() fork child (fork+dup2+execve pattern). ELIMINATED (internal fadc_popen impl).",
-            "sys_vdom_exec_0x9c94b_ELIMINATED": "'echo flush > /proc/net/ipv4_snat_addrbook' — hardcoded. ELIMINATED.",
-            "sys_vdom_exec_0x9c95a_ELIMINATED": "'echo flush > /proc/net/ipv6_snat_addrbook' — hardcoded. ELIMINATED.",
+            "sys_vdom_exec_hardcoded_ELIMINATED": "0x9c94b/9c95a: 'echo flush > /proc/net/ipv{4,6}_snat_addrbook' hardcoded. ELIMINATED.",
             "fad_c1_nvgre_0xb3d55": (
                 "PLAUSIBLE MEDIUM: snprintf(r13, 256, 'ip link add %s type nvgre id %d dev %s local %s learning', ...) "
                 "→ sys_vdom_exec(vdom, r13). Args from CMDB VXLAN/NVGRE tunnel config struct "
@@ -846,8 +845,22 @@ FINDINGS = {
                 "Same class as FAD_N1 — admin interface name/IP injection into shell. "
                 "Both type 0x8 (VXLAN) and type 0x9 (NVGRE) overlay tunnel creation paths."
             ),
-            "fadcsystem_81": "posix_spawnp (no shell); format string audit pending",
-            "fadcpopen_3": "0x8d117/0x8d343/0xab399 — popen via fadcpopen (fork+pipe+exec)",
+            "fadcsystem_81_AUDIT": (
+                "All 81 fadcsystem callers audited. posix_spawnp — no shell injection possible for any. "
+                "17 hardcoded (killall synconf, nginx, echo to /proc, set_cmdline 0-3, umount/rm ram, etc.). "
+                "1 integer echo: echo %d /proc/sys/vm/sip_to_same_sock — ELIMINATED. "
+                "4 callers (0xb0af3-0xb0ce7, router_init_router_prefix_list6): 'vdom exec %s ip link set %s %s > /dev/null' "
+                "— VDOM + iface name from admin config, posix_spawn. PLAUSIBLE LOW (arg injection if iface has spaces). "
+                "2 callers (0xb3432/b3483): 'ethtool -K %s rxvlan on/off' — admin iface name. PLAUSIBLE LOW. "
+                "34 callers (0xc5c5f-0xc9a54, security_init_waf_json_validation): rm/mkdir/tar/unzip/zip/mv/cp with WAF/cert schema paths. "
+                "Admin-configured schema names. No shell injection (posix_spawn). PLAUSIBLE LOW (path traversal). "
+                "6 callers (0xf07e0-0xf0916): bookmark cp/mkdir with VDOM+bookmark names. PLAUSIBLE LOW. "
+                "16 callers (0xfb9ec-0xfd5d4): DNSSEC key management rm/cp with zone/key names. PLAUSIBLE LOW. "
+                "1 caller (0x101d43, oper_glb_topology_upgrade): 'cp %s %s' GLB topology file copy. PLAUSIBLE LOW. "
+                "NET: No new FAD_ findings above FAD_C1. All path-traversal risks admin-only, same class as FAD_M1/FAD_P2."
+            ),
+            "fadcpopen_3": "0x8d117/0x8d343/0xab399 — popen via fadcpopen (fork+pipe+exec, no shell per libstdext.so). ELIMINATED.",
+            "sqlite_waf_db": "Does NOT import waf_db_* functions — SQLite injection audit not applicable here.",
         },
     },
 
