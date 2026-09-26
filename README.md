@@ -2,15 +2,13 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-Ablation is a reverse engineering framework that provides the exact same core disassembly, decompilation, and binary analysis capabilities as industry-standard tools like Ghidra, IDA Pro, and Binary Ninja. Combined with an LLM, it transforms into a fully autonomous reverse engineering tool.
+Ablation is a reverse engineering framework that provides the exact same core disassembly, decompilation, and binary analysis capabilities as industry-standard tools like Ghidra, IDA Pro, and Binary Ninja. Combined with with Claude Code or OpenAI Codex, it transforms into a fully autonomous reverse engineering tool.
 
 
 Ablation is built for the modern landscape, and more importantly, the human.
 
 
 Now reverse engineering is accessible to anyone. No matter your wallet or your barrier of entry into education, you can learn about reverse engineering as you reverse engineer.
-
-Works with Claude Code and OpenAI Codex.
 
 ---
 
