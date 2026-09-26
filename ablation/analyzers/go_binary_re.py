@@ -3,7 +3,7 @@ go_binary_re.py — Go binary reverse engineering module for ablation
 Targets: Go 1.16/1.17+ Mach-O and ELF binaries (x86_64 / arm64)
 Capabilities:
   - Mach-O / ELF section extraction
-  - pclntab full function table parsing (Go 1.16, 1.17, 1.18+)
+  - pclntab full function table parsing (Go 1.16/1.17/1.18/1.19/1.20+)
   - Capstone disassembly with RIP-relative pointer resolution
   - Command dispatch map reconstruction (mapassign_fast64 pattern)
   - Message frame format inference from bufio.Reader call chains
@@ -85,7 +85,8 @@ except ImportError:
 
 # pclntab magic values
 PCLNTAB_MAGIC_116 = 0xfffffffa   # Go 1.16 / 1.17
-PCLNTAB_MAGIC_118 = 0xfffffff0   # Go 1.18+
+PCLNTAB_MAGIC_118 = 0xfffffff0   # Go 1.18 / 1.19
+PCLNTAB_MAGIC_120 = 0xfffffff1   # Go 1.20+ (added textStart field; functab entries 8B not 16B)
 PCLNTAB_MAGIC_OLD = 0xfffffffb   # Go ≤ 1.15
 
 # Mach-O load command types
@@ -270,28 +271,91 @@ def _decode_pclntab_116(data: bytes, pclntab_data: bytes) -> tuple:
 
 def _decode_pclntab_118(data: bytes, pclntab_data: bytes) -> tuple:
     """
-    Go 1.18+ pclntab. The pcHeader layout changed slightly: ptrSize moved.
-    Functionally the same offsets for our purposes; functab at pcln_off.
+    Go 1.18/1.19 pclntab. Same field layout as 1.16/1.17 for our purposes.
     """
     return _decode_pclntab_116(data, pclntab_data)
+
+def _decode_pclntab_120(pclntab_data: bytes) -> tuple:
+    """
+    Go 1.20+ pclntab (magic 0xfffffff1).
+
+    pcHeader layout (Go 1.20+, 64-bit):
+      uint32 magic         [0:4]    = 0xfffffff1
+      uint8  pad1, pad2    [4:6]    = 0
+      uint8  minLC         [6]
+      uint8  ptrSize       [7]      = 8 (64-bit)
+      int    nfunc         [8:16]
+      uint   nfiles        [16:24]
+      uintptr textStart    [24:32]  ← NEW vs 1.18; func PCs are offsets from here
+      uintptr funcnameOffset [32:40]
+      uintptr cuOffset       [40:48]
+      uintptr filetabOffset  [48:56]
+      uintptr pctabOffset    [56:64]
+      uintptr pclnOffset     [64:72]  ← functab start
+    Total: 72 bytes
+
+    Functab entries changed from 16B (two uint64) to 8B (two uint32):
+      uint32 pc_offset   (offset from textStart)
+      uint32 funcoff     (offset within pclntab, relative to pcln_off)
+
+    _Func struct: entryOff(uint32) at +0, nameOff(int32) at +4
+    """
+    if len(pclntab_data) < 72:
+        raise ValueError("pclntab too small for Go 1.20 header")
+
+    nfunc        = struct.unpack_from('<q', pclntab_data, 8)[0]
+    text_start   = struct.unpack_from('<Q', pclntab_data, 24)[0]
+    funcname_off = struct.unpack_from('<Q', pclntab_data, 32)[0]
+    pcln_off     = struct.unpack_from('<Q', pclntab_data, 64)[0]
+
+    return nfunc, funcname_off, pcln_off, text_start
 
 def parse_pclntab(binary_data: bytes, pclntab_fileoff: int, pclntab_size: int,
                    text_slide: int = TEXT_SLIDE_DEFAULT) -> list:
     """
     Parse Go pclntab and return list[GoFunc].
-    Works for Go 1.16, 1.17 (magic 0xfffffffa) and 1.18+ (magic 0xfffffff0).
+    Supports: Go ≤ 1.17 (0xfffffffa), 1.18/1.19 (0xfffffff0), 1.20+ (0xfffffff1).
     """
     pclntab = binary_data[pclntab_fileoff: pclntab_fileoff + pclntab_size]
     if len(pclntab) < 8:
         raise ValueError("pclntab section too small")
 
     magic = struct.unpack_from('<I', pclntab, 0)[0]
+
+    if magic == PCLNTAB_MAGIC_120:
+        # Go 1.20+: 8-byte functab entries, textStart field, nameOff at +4 in _Func
+        nfunc, funcname_off, pcln_off, text_start = _decode_pclntab_120(pclntab)
+        funcnametab = pclntab[funcname_off:]
+        funcs = []
+        for i in range(nfunc):
+            entry_off = pcln_off + i * 8
+            if entry_off + 8 > len(pclntab):
+                break
+            pc_offset = struct.unpack_from('<I', pclntab, entry_off)[0]
+            funcoff   = struct.unpack_from('<I', pclntab, entry_off + 4)[0]
+            entry_va  = text_start + pc_offset
+            abs_fo    = pcln_off + funcoff
+            if abs_fo + 8 > len(pclntab):
+                continue
+            nameoff = struct.unpack_from('<i', pclntab, abs_fo + 4)[0]
+            if nameoff < 0 or nameoff >= len(funcnametab):
+                continue
+            null = funcnametab.find(b'\x00', nameoff)
+            if null < 0:
+                continue
+            name = funcnametab[nameoff:null].decode('utf-8', errors='replace')
+            if not name:
+                continue
+            fileoff = entry_va - text_slide if entry_va > text_slide else 0
+            funcs.append(GoFunc(va=entry_va, fileoff=fileoff, name=name, nameoff=nameoff))
+        return funcs
+
+    # Legacy path: Go 1.16–1.19, 16-byte functab entries
     if magic == PCLNTAB_MAGIC_116:
         nfunc, funcname_off, pcln_off = _decode_pclntab_116(binary_data, pclntab)
     elif magic == PCLNTAB_MAGIC_118:
         nfunc, funcname_off, pcln_off = _decode_pclntab_118(binary_data, pclntab)
     elif magic == PCLNTAB_MAGIC_OLD:
-        # Go ≤ 1.15: simpler format, no pcHeader offsets
         raise ValueError("Go ≤ 1.15 pclntab not implemented")
     else:
         raise ValueError(f"Unknown pclntab magic: 0x{magic:08x}")
@@ -307,7 +371,6 @@ def parse_pclntab(binary_data: bytes, pclntab_fileoff: int, pclntab_size: int,
         entry_pc  = struct.unpack_from('<Q', pclntab, entry_off)[0]
         funcoff   = struct.unpack_from('<Q', pclntab, entry_off + 8)[0]
 
-        # funcoff is relative to pcln_off (functab section within pclntab)
         abs_funcoff = pcln_off + funcoff
         if abs_funcoff + 12 > len(pclntab):
             continue
@@ -324,7 +387,6 @@ def parse_pclntab(binary_data: bytes, pclntab_fileoff: int, pclntab_size: int,
         if not name:
             continue
 
-        # file offset: entry_pc is a VA; subtract text_slide to get file offset
         fileoff = entry_pc - text_slide if entry_pc > text_slide else 0
 
         funcs.append(GoFunc(
