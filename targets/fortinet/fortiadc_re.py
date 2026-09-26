@@ -1026,11 +1026,113 @@ FINDINGS = {
         },
     },
 
+    "FLG_ACCESSD_profile": {
+        "binary": "flg_accessd",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE LOW (fadcpopen popen shell); fadcsystem×2 ELIMINATED",
+        "evidence": {
+            "fadcsystem_0xa752_ELIMINATED": (
+                "snprintf('tar czvf download_%s.tgz -C %s %s') @ 0x11018 → fadcsystem @ 0xa752. "
+                "fadcsystem = posix_spawnp; no shell; args tokenized. ELIMINATED."
+            ),
+            "fadcsystem_0xa830_ELIMINATED": (
+                "snprintf('md5sum  %s >%s/checkmd5.md5') @ 0xf841 → fadcsystem @ 0xa830. "
+                "The '>' is a literal token passed to md5sum argv — not shell redirect. posix_spawnp. ELIMINATED."
+            ),
+            "fadcpopen_0xe3b8_PLAUSIBLE_LOW": (
+                "fadcpopen('/bin/rm -rfv /var/log/logrpt/<vdom>/resdir/* 2>&1') format @ 0xfe47. "
+                "fadcpopen wraps popen() — real shell invocation. If VDOM name contains shell metacharacters "
+                "(e.g., '; id'), the rm -rfv command is injectable. Admin-only VDOM name configuration. PLAUSIBLE LOW."
+            ),
+        },
+    },
+
+    "FLG_INDEXD_profile": {
+        "binary": "flg_indexd",
+        "status": "ANALYZED COMPLETE — ALL ELIMINATED",
+        "evidence": {
+            "fadcsystem_killall_hardcoded": (
+                "0xa07d: fadcsystem('killall -9 flg_accessd'); 0xa092: fadcsystem('killall -9 flg_statusd'); "
+                "0xa0a7: fadcsystem('killall -9 flg_reportd'). Hardcoded strings. ELIMINATED."
+            ),
+            "fadcsystem_mysqld_ELIMINATED": "0x11720: fadcsystem('killall -9 mysqld'). Hardcoded. ELIMINATED.",
+            "fadcsystem_touch_rm_ELIMINATED": (
+                "0xa1f2: fadcsystem('touch /var/log/logrpt/%s/indexd_done') — VDOM name → posix_spawnp. ELIMINATED. "
+                "0xcf4f: fadcsystem('rm -rf %s') — internal log/temp dir → posix_spawnp. ELIMINATED. "
+                "0x11adc: fadcsystem('rm  -rf %s/.*.tmplog') — glob literal token, no shell. ELIMINATED. "
+                "0x13061/0x13c4e/0x13cb4: fadcsystem('rm -rf /var/log/mysql/data/%s/%s.*') — MySQL data cleanup. ELIMINATED."
+            ),
+        },
+    },
+
+    "LB_profile": {
+        "binary": "lb",
+        "status": "ANALYZED COMPLETE — PLAUSIBLE MEDIUM (cmf_exec_conf CRLF); PLAUSIBLE LOW (fadcpopen, /bin/sh mkstemp); rest ELIMINATED",
+        "evidence": {
+            "cmf_exec_conf_0x365b5_PLAUSIBLE_MEDIUM": (
+                "cmf_exec_conf @ 0x365b5 sends CLI command built with admin-controlled scripting name, VS name, "
+                "scripting-file name, ADFS-pub-name via %s. Delete format: "
+                "'config vdom\\r\\nedit \"%s\"\\r\\nconfig system scripting\\r\\ndelete \"%s\"\\r\\n...' "
+                "Create format: 'config system scripting\\r\\nedit \"%s\"\\r\\nset scripting-file \"%s\"\\r\\n"
+                "set virtual-server-name \"%s\"\\r\\nset ADFS-pub-name \"%s\"\\r\\n...'. "
+                "Same mechanism as FAD_A2 (libadfs.so): '\"'+CRLF in any %s field injects arbitrary CLI commands. "
+                "Auth: admin CMDB write for scripting config. PLAUSIBLE MEDIUM."
+            ),
+            "fadcpopen_0x753c0_PLAUSIBLE_LOW": (
+                "fadcpopen('ps -w | grep \\'[SR]    %s -f\\' | grep -F \\'%s\\' | wc | awk\\'{print $1}\\'') "
+                "@ 0x753c0. Real popen() shell pipeline. First %s = process name (e.g. haproxy) in grep "
+                "single-quote arg; second %s = config file path in grep -F single-quote arg. "
+                "Single-quote escape: value containing \\' breaks out of single-quote context. "
+                "Likely haproxy binary name + VS-derived config path; admin-only. PLAUSIBLE LOW."
+            ),
+            "fadcsystem_bin_sh_PLAUSIBLE_LOW": (
+                "0x23c71/0x7b2a1: /bin/sh <mkstemp> pattern. mkstemp('/tmp/hap_fadcsystem/%s_fadcsystem_sh_XXXXXX'), "
+                "write '#!/bin/sh\\n' + shell commands with haproxy/opensips names and VS-derived config paths, "
+                "then fadcsystem('/bin/sh <tempfile>'). Shell metacharacters in VS name or config path would "
+                "execute in /bin/sh context. Admin-only HA/haproxy management. PLAUSIBLE LOW."
+            ),
+            "fadcsystem_sed_ELIMINATED": (
+                "0x35b50-0x35f2e: fadcsystem('sed s/PUB_URI/%s/g %s > %s') and 'sed -i s/ADFS_SERVER_DOMAIN/%s/g %s' etc. "
+                "All posix_spawnp; '>' is literal argv token not shell redirect; sed receives args as argv elements. ELIMINATED."
+            ),
+            "fadcsystem_mkdir_cp_scripts_ELIMINATED": (
+                "0x35a71/0x35aea/0x488e3/0x48920/0x48960/0x691e3/0x69231/0x69275/0x78a92/0x78b0b/0x78b74: "
+                "mkdir -p %s, cp -f %s %s, /bin/scripting_convert.sh %s %s, "
+                "/bin/scripting_priority_extract.sh %s %s %d — all posix_spawnp. ELIMINATED."
+            ),
+            "fadcsystem_0x168cf_ELIMINATED": (
+                "rbx = rdi (first param of enclosing function) → fadcsystem @ 0x168cf. "
+                "Function context: haproxy_operate / set_haproxy — internal haproxy management commands. "
+                "Not user-controlled inputs. ELIMINATED."
+            ),
+        },
+    },
+
+    "INFOD_profile": {
+        "binary": "infod",
+        "status": "ANALYZED COMPLETE — ALL ELIMINATED",
+        "evidence": {
+            "fadcsystem_tsdb_ALL_ELIMINATED": (
+                "fadcsystem × 10 callers. All tsdb (time-series DB) internal maintenance: "
+                "rm -rf /var/log/tsdb (hardcoded); rm -rf /var/log/tsdb_bk (hardcoded); "
+                "mv /var/log/tsdb /var/log/tsdb_bk (hardcoded); mkdir /var/log/tsdb (hardcoded); "
+                "ldb repair --db=/var/log/tsdb/infod_cf (hardcoded); "
+                "killall -9  infod (hardcoded × 2); "
+                "rm -rf %s (tsdb db path/SST file path — internal state, admin system paths); "
+                "touch /tmp/STATISTICS_DB_IPC_PATH (hardcoded IPC marker). "
+                "No user input flows to any fadcsystem arg. ALL ELIMINATED."
+            ),
+            "system_fgt_log_ALL_ELIMINATED": (
+                "system_fgt_log × 2 callers at 0xb134/0xb1ef. "
+                "FortiOS syslog API — log messages for disk resource threshold and data pruning events. "
+                "No exec, no shell. ELIMINATED."
+            ),
+        },
+    },
+
     "LOGDAEMONS_profile": {
-        "binary": "flg_accessd/flg_indexd/flg_reportd/lb/infod/rd_mng",
+        "binary": "flg_reportd/rd_mng",
         "status": "ANALYZED COMPLETE — all ELIMINATED; flg_reportd execve = hardcoded /bin/email (SMTP reporter)",
         "evidence": {
-            "fadcsystem_posixspawnp": "All fadcsystem callers use posix_spawnp (libstdext.so confirmed) — shell injection ELIMINATED",
             "rd_mng": "No exec-class sinks. CLEAN.",
             "flg_reportd_execve_ELIMINATED": (
                 "execve at 0x1512e — fork+pipe+execve helper at 0x15000. Single caller at 0xaf31. "
@@ -1039,7 +1141,6 @@ FINDINGS = {
                 "'login', '--smtp-user', '--smtp-pass', '-tls', '--subject', 'FortiADC Report', '-a']. "
                 "Args filled from admin SMTP configuration. execve not shell. ELIMINATED."
             ),
-            "lb_fadcpopen": "fadcpopen = fork+pipe+exec pattern (no shell per libstdext.so analysis). ELIMINATED.",
         },
     },
 
