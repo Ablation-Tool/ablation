@@ -69,17 +69,6 @@ pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 
 ---
 
-## Feedback
-
-Reach out directly. If there's anything you'd like added or improved on or just report a bug.
-
-- [Open an issue](https://github.com/Ablation-Tool/ablation/issues) on GitHub
-- X: [@ablation_tool](https://x.com/ablation_tool)
-- Signal: [@deadbug.06](https://signal.me/#p/deadbug.06)
-- Email: ablation@nuclide-research.com
-
----
-
 ## Requirements
 
 - Python >= 3.10
