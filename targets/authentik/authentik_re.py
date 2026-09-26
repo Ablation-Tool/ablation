@@ -684,6 +684,31 @@ CLEAN = [
     "web/src/elements/utils/files.ts — unsafeHTML(Intl.ListFormat.format(hardcoded ['theme'])) — hardcoded HTML entity wrapper",
     # EXHAUSTIVE: only 9 TypeScript files use unsafeHTML/unsafeStatic across entire 2861-file codebase
     # All 9 reviewed; 7 CLEAN, 2 INFO (PromptStage admin-config, FlowExecutor/UserSettingsFlowExecutor server-control)
+    # Pass 5r: flow/sources login stages
+    "web/src/flow/sources/plex/PlexLoginInit.ts — Plex auth popup flow; server redirectChallenge.to via window.location.assign(); static Lit template",
+    "web/src/flow/sources/apple/AppleLoginInit.ts — Apple SDK from hardcoded CDN URL; AppleID.auth.init() with server challenge fields; static Lit template",
+    "web/src/flow/sources/telegram/TelegramLogin.ts — Telegram widget via loadTelegramWidget(); botUsername admin-configured; user callback via typed host.submit()",
+    "web/src/flow/sources/telegram/utils.ts — loadTelegramWidget(): hardcoded script src; botUsername via setAttribute(); randomized callback name",
+    # Pass 5s: flow/stages batch
+    "web/src/flow/stages/access_denied/AccessDeniedStage.ts — challenge.errorMessage as text node; cancelUrl in href attribute binding",
+    "web/src/flow/stages/RedirectStage.ts — challenge.to via window.location.assign() (server-controlled by design); getURL() wraps in new URL()",
+    "web/src/flow/stages/authenticator_static/AuthenticatorStaticStage.ts — challenge.codes via formatToken() (hyphen-groups) as Lit text nodes",
+    "web/src/flow/stages/authenticator_totp/AuthenticatorTOTPStage.ts — challenge.configUrl in value/data attribute bindings only; secret via URLSearchParams.get()",
+    "web/src/flow/stages/authenticator_sms/AuthenticatorSMSStage.ts — pure form input stage; no server-provided HTML rendering",
+    "web/src/flow/stages/authenticator_email/AuthenticatorEmailStage.ts — challenge.email in msg(str`...`) text node; form inputs only",
+    "web/src/flow/stages/authenticator_validate/AuthenticatorValidateStage.ts — StrictUnsafe(tag) with hardcoded tags from switch; triple-guarded before unsafeStatic; stage.name/verboseName as text nodes",
+    "web/src/elements/utils/unsafe.ts — StrictUnsafe(): triple-guards before unsafeStatic: prefix(ak-) + registry + AKElement prototype",
+    "web/src/flow/stages/identification/IdentificationStage.ts — applicationPre/primaryAction as text nodes; URLs in href bindings; renderSourceIcon() confirmed CLEAN",
+    "web/src/elements/sources/utils.ts — renderSourceIcon(): fa:// path class attribute binding; non-fa:// src attribute binding; no innerHTML",
+    "web/src/flow/stages/captcha/CaptchaStage.ts — challenge.jsUrl as URL object for CaptchaController.resolve(); no server HTML rendering",
+    "web/src/flow/stages/password/PasswordStage.ts — pendingUser in value attribute; recoveryUrl in href binding; form input only",
+    "web/src/flow/stages/consent/ConsentStage.ts — permission.name/id as text nodes; headerText as text node; token submitted as form data",
+    "web/src/flow/stages/user_login/UserLoginStage.ts — static template; submitter.name from hardcoded button names; no server HTML",
+    "web/src/flow/stages/authenticator_webauthn/WebAuthnAuthenticatorRegisterStage.ts — errorMessage from pluckErrorDetail() as text node; challenge.registration passed to typed WebAuthn API",
+    "web/src/common/labels.ts — all label maps hardcoded enum-to-string; formatDeviceChallengeMessage() returns static msg() strings",
+    "web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageCode.ts — code input form; formatDeviceChallengeMessage() confirmed static; PasswordManagerPrefill.totp in value binding",
+    "web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageDuo.ts — errors.map(e=>e.string).join(',') as text node; deviceUid via typed API submit",
+    "web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageWebAuthn.ts — pluckErrorDetail() as text node; deviceChallenge.challenge as typed PublicKeyCredentialRequestOptions",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",

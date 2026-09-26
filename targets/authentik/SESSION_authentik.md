@@ -441,3 +441,30 @@
 - web/src/elements/ak-dual-select/ak-dual-select.ts (full): CLEAN — unsafeHTML("&nbsp;") or msg(str`${number} items...`) — neither is user-controlled HTML
 - web/src/elements/Diagram/ak-diagram.ts (full): CLEAN — unsafeHTML(svg) from Mermaid renderer of admin-configured diagram text
 - web/src/elements/utils/files.ts (full): CLEAN — unsafeHTML(Intl.ListFormat.format(hardcoded ["theme"])) — hardcoded HTML wrapper, not user data
+
+### Deep Reads — TypeScript individual file reads (pass 5r — 2026-09-26)
+- web/src/flow/sources/plex/PlexLoginInit.ts (full): CLEAN — Plex auth popup flow; server redirectChallenge.to via window.location.assign(); static Lit template
+- web/src/flow/sources/apple/AppleLoginInit.ts (full): CLEAN — Apple SDK from hardcoded CDN URL; AppleID.auth.init() with server-provided challenge fields; static Lit template
+- web/src/flow/sources/telegram/TelegramLogin.ts (full): CLEAN — Telegram widget via loadTelegramWidget(); botUsername/requestMessageAccess admin-configured; user callback data via typed this.host.submit()
+- web/src/flow/sources/telegram/utils.ts (full): CLEAN — loadTelegramWidget() creates script element with hardcoded src="https://telegram.org/js/telegram-widget.js?22"; botUsername via setAttribute() (not innerHTML); randomized callback name
+
+### Deep Reads — TypeScript individual file reads (pass 5s — 2026-09-26)
+- web/src/flow/stages/access_denied/AccessDeniedStage.ts (full): CLEAN — challenge.errorMessage as Lit text node; challenge.flowInfo.cancelUrl in href attribute binding
+- web/src/flow/stages/RedirectStage.ts (full): CLEAN — challenge.to via window.location.assign() (server-controlled by design); getURL() wraps in new URL() for display; text nodes via Lit escaping
+- web/src/flow/stages/authenticator_static/AuthenticatorStaticStage.ts (full): CLEAN — challenge.codes rendered via formatToken() (hyphen-groups only) as Lit text nodes in <li>
+- web/src/flow/stages/authenticator_totp/AuthenticatorTOTPStage.ts (full): CLEAN — challenge.configUrl in value/data attribute bindings; secret extracted via URLSearchParams.get(); writeToClipboard() only
+- web/src/flow/stages/authenticator_sms/AuthenticatorSMSStage.ts (full): CLEAN — pure form input stage; no server-provided HTML rendering
+- web/src/flow/stages/authenticator_email/AuthenticatorEmailStage.ts (full): CLEAN — challenge.email in msg(str`...`) (localize-safe text node); form inputs only
+- web/src/flow/stages/authenticator_validate/AuthenticatorValidateStage.ts (full): CLEAN — StrictUnsafe(tag) with hardcoded tags from resolveAuthenticatorComponentTag() switch; triple-guarded before unsafeStatic; stage.name/verboseName as text nodes; devicePickerPropMap icons are hardcoded
+- web/src/elements/utils/unsafe.ts (full): CLEAN — StrictUnsafe() triple-guards before unsafeStatic(): prefix check (ak-), registry check, AKElement prototype check
+- web/src/flow/stages/identification/IdentificationStage.ts (full): CLEAN — applicationPre/primaryAction as text nodes; enrollUrl/recoveryUrl/passwordlessUrl in href bindings (admin-configured); source.name as text node; renderSourceIcon() confirmed CLEAN
+- web/src/elements/sources/utils.ts (full): CLEAN — renderSourceIcon(): fa:// path uses class attribute binding; non-fa:// uses src attribute binding; both via Lit setAttribute
+- web/src/flow/stages/captcha/CaptchaStage.ts (full): CLEAN — challenge.jsUrl used as URL object for CaptchaController.resolve(); no rendering of server HTML; widget rendered by third-party CAPTCHA providers
+- web/src/flow/stages/password/PasswordStage.ts (full): CLEAN — challenge.pendingUser in value attribute binding; challenge.recoveryUrl in href binding; form input only
+- web/src/flow/stages/consent/ConsentStage.ts (full): CLEAN — permission.name/id as text nodes; challenge.headerText as text node; challenge.token submitted as form data
+- web/src/flow/stages/user_login/UserLoginStage.ts (full): CLEAN — static template; submitter.name from hardcoded button name attributes; no server HTML
+- web/src/flow/stages/authenticator_webauthn/WebAuthnAuthenticatorRegisterStage.ts (full): CLEAN — errorMessage from pluckErrorDetail() as text node; challenge.registration passed to transformCredentialCreateOptions() (typed WebAuthn API, not rendered)
+- web/src/common/labels.ts (full): CLEAN — all label maps are hardcoded enum-to-string; formatDeviceChallengeMessage() returns static msg() strings; email in msg(str`...`) text node
+- web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageCode.ts (full): CLEAN — code input form; formatDeviceChallengeMessage() confirmed static; PasswordManagerPrefill.totp in value attribute binding
+- web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageDuo.ts (full): CLEAN — errors.map(e=>e.string).join(", ") as text node; deviceChallenge.deviceUid submitted via typed API
+- web/src/flow/stages/authenticator_validate/AuthenticatorValidateStageWebAuthn.ts (full): CLEAN — pluckErrorDetail() as text node in <p role="alert">; deviceChallenge.challenge as typed PublicKeyCredentialRequestOptions; standard WebAuthn navigator.credentials.get()
