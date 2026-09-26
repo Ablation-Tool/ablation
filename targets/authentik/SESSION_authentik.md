@@ -661,3 +661,21 @@ BACKEND FINDING CONFIRMED (launchUrl): meta_launch_url in Application model has 
 - web/src/admin/outposts/ServiceConnectionKubernetesForm.ts (full): CLEAN — instance.name in value=; kubeconfig via YAML.stringify in ak-codemirror value=
 - web/src/admin/outposts/ak-service-connection-wizard.ts (full): CLEAN — wizard fetching TypeCreate[] from API; no direct HTML rendering
 - web/src/admin/outposts/utils.ts (full): CLEAN — pure enum-to-localized-string function
+
+### Deep Reads — TypeScript individual file reads (pass 5ad — 2026-09-26)
+- web/src/admin/events/EventListPage.ts (full): CLEAN — actionToLabel/item.app text nodes; item.clientIp text node; item.pk UUID via toAdminInterface; renderEventUser()/EventGeo() safe helpers
+- web/src/admin/events/EventViewPage.ts (full): CLEAN — event fields as text nodes; JSON.stringify(EventToJSON()) in <pre> text node; event.pk UUID in msg(str``)
+- web/src/admin/events/EventMap.ts (full): CLEAN — brandingMapTiles URL as component attribute (server branding config); no user data as HTML
+- web/src/admin/events/utils.ts (full): CLEAN — EventGeo() city/country/continent text nodes; renderEventUser() uses toAdminInterface with numeric pk/UUID; usernames in text nodes and str templates; device.name in msg(str``)
+- web/src/admin/events/labels.ts (full): CLEAN — pure enum-to-localized-label map
+- web/src/admin/events/ObjectChangelog.ts (full): CLEAN — delegates to renderEventUser()/EventGeo()/actionToLabel() safe helpers
+- web/src/admin/events/UserEvents.ts (full): CLEAN — simple wrapper passing targetUser as API parameter
+- web/src/admin/events/SimpleEventTable.ts (full): CLEAN — item.pk UUID via toAdminInterface; actionToLabel/item.app text nodes; delegates to renderEventUser()/EventGeo()
+- web/src/admin/events/EventVolumeChart.ts (full): CLEAN — no user data rendered; only API requests for event volume
+- web/src/admin/events/RuleListPage.ts (full): CLEAN — item.name/severityToLabel text nodes; destinationGroupObj.pk UUID via toAdminInterface; destinationGroupObj.name text node
+- web/src/admin/events/RuleForm.ts (full): CLEAN — instance.name in value=; group.name in .renderElement returns string; severity radio with enum constants
+- web/src/admin/events/RuleFormHelpers.ts (full): CLEAN — pure data helpers, transport.name as string tuple value
+- web/src/admin/events/TransportListPage.ts (full): CLEAN — item.name/modeVerbose text nodes; no href with user data
+- web/src/admin/events/TransportForm.ts (full): CLEAN — instance.name/webhookUrl/emailSubjectPrefix in value=; NotificationWebhookMapping.name in .renderElement returns string; template.name in option value=; template.description as option text node
+- web/src/admin/events/DataExportListPage.ts (full): CLEAN — requestedBy.pk via toAdminInterface; requestedBy.username text node; item.fileUrl is server-generated download URL; queryParams values as text nodes in <pre>; msg(html`...toAdminInterface(hardcoded)...`) static paths
+- web/src/admin/events/eventSearch.ts (full): CLEAN — pure DjangoQL string builder, no HTML rendering
