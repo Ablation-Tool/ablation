@@ -495,3 +495,28 @@
 - web/src/admin/providers/ProviderListPage.ts (full): CLEAN — #rowApp(): assignedApplicationName as text node in <a>; href via toAdminInterface(); row(): item.name as text node; item.verboseName as text node; IconEditButtonByTagName(item.component, item.pk) uses StrictUnsafe internally
 - web/src/admin/sources/SourceListPage.ts (full): CLEAN — row(): item.name as text node in <a>; item.enabled for ak-label conditional; item.verboseName as text node; IconEditButtonByTagName(item.component, item.slug); rowInbuilt(): item.name as text node; static Built-in label
 - web/src/admin/stages/StageListPage.ts (full): CLEAN — row(): item.name/verboseName as text nodes; flow.slug in toAdminInterface() href AND <code>${flow.slug}</code> Lit text node; IconEditButtonByTagName(item.component, item.pk); IconPermissionButton(item.name, ...); renderStageActions(): hardcoded "ak-stage-authenticator-duo-form" string check, never rendered
+
+### Deep Reads — TypeScript individual file reads (pass 5v — 2026-09-26)
+- web/src/admin/admin-overview/cards/AdminStatusCard.ts (full): CLEAN — abstract base; renderValue() html`${this.value}` text node; renderStatus(): status.icon in class attr, status.message is SlottedTemplateResult from subclass; renderError(): pluckErrorDetail() as text node
+- web/src/admin/admin-overview/cards/RecentEventsCard.ts (full): CLEAN — extends SimpleEventTable; renderToolbar() static label only; no user data
+- web/src/admin/admin-overview/cards/SystemStatusCard.ts (full): CLEAN — hardcoded msg() status strings; toAdminInterface() for href; renderValue() returns statusSummary (msg() string)
+- web/src/admin/admin-overview/SystemTasksPage.ts (full): CLEAN — static template delegating to ak-task-list and ak-schedule-list
+- web/src/admin/blueprints/BlueprintListPage.ts (full): CLEAN — blueprint.name as text node; description via <ak-mdx .content=${description}> (DOMPurify BrandedHTMLPolicy); blueprint.path in <pre> Lit text node; BlueprintStatus() returns msg() string
+- web/src/admin/blueprints/BlueprintForm.ts (full): CLEAN — all fields via ak-text-input/ak-switch-input/ak-search-select/ak-codemirror; YAML.stringify for context field
+- web/src/admin/brands/BrandListPage.ts (full): CLEAN — item.domain/brandingTitle as text nodes; item._default for status label
+- web/src/admin/applications/ApplicationViewPage.ts (full): CLEAN — providerObj.name/verboseName as text nodes; launchUrl in href (DomainlessURLValidator); numeric stats as text nodes; applicationSlug in msg(str`...`) text node
+- web/src/admin/admin-overview/AdminOverviewPage.ts (full): CLEAN — hardcoded quickActions; formatUserDisplayName(currentUser) in msg(str`...`) page header
+- web/src/admin/crypto/CertificateKeyPairListPage.ts (full): CLEAN — name/fingerprintSha1/fingerprintSha256/certSubject as text nodes; certDownloadUrl/privateKeyDownloadUrl in href bindings (admin API endpoints)
+- web/src/admin/groups/GroupViewPage.ts (full): CLEAN — group.name as text node; group.attributes.notes via <ak-mdx .content> (DOMPurify); group.attributes via ak-object-attributes-card; role.name as text node in <a>
+- web/src/admin/groups/RelatedUserList.ts (full): CLEAN — item.username/name as text nodes; toAdminInterface() for href; RecoveryButtons() CLEAN; targetGroup.name in msg(str`...`) banner
+- web/src/admin/policies/PolicyListPage.ts (full): CLEAN — item.name/verboseName/boundTo as text nodes; IconEditButtonByTagName(item.component, item.pk)
+- web/src/admin/policies/PolicyBindingForm.ts (full): CLEAN — typed form components; typeNotices.notice as text node interpolation
+- web/src/admin/policies/PolicyEngineModes.ts (full): CLEAN — hardcoded array with static labels and msg() descriptions
+- web/src/admin/policies/BoundPoliciesList.ts (full): CLEAN — group/user/policy names in msg(str`...`) text nodes; toAdminInterface() for href; StrictUnsafe(this.bindingEditForm) where bindingEditForm="ak-policy-binding-form" (hardcoded class property)
+- web/src/admin/users/UserViewPage.ts (full): CLEAN — all tabs delegate to child components via property bindings; targetUser=${user.username} attribute binding; objectPk=${user.pk} numeric
+- web/src/admin/rbac/ak-rbac-permission-table.ts (full): CLEAN — item.name/modelVerbose as text nodes; renderSelectedChip() returns name string
+- web/src/admin/rbac/ak-rbac-role-object-permission-table.ts (full): CLEAN — item.name as text node in <a>; toAdminInterface() for href; tooltip from msg() strings; columns from permission metadata (name/codename strings)
+- web/src/admin/rbac/ObjectPermissionModal.ts (full): CLEAN — delegates to ak-rbac-object-permission-page via property bindings; IconPermissionButton() for modal trigger
+- web/src/admin/enterprise/EnterpriseLicenseListPage.ts (full): CLEAN — name/expiry as text nodes; internalUsers/externalUsers as numbers in msg(str`...`); installID in encoded URL (encodeURIComponent/encodeURI + href attribute binding)
+- web/src/admin/outposts/OutpostHealthList.ts (full): CLEAN — hostname/version/buildHash/versionShould as text nodes in msg(str`...`)
+- web/src/admin/outposts/OutpostViewPage.ts (full): CLEAN — outpost.name/serviceConnectionObj.name as text nodes; outpostTypeToLabel() enum map; tokenIdentifier in .identifier property binding; document.location.origin in value= attribute binding
