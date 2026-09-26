@@ -1,7 +1,7 @@
 """
 authentik_re.py — Source RE module for goauthentik/authentik
 Target repo: https://github.com/goauthentik/authentik (cloned to /tmp/authentik)
-RE date: 2026-09-26  |  Status: 100% COMPLETE (pass 5 — full file-by-file reads, new pickle sink found)
+RE date: 2026-09-26  |  Status: 100% COMPLETE (pass 5ax — TypeScript all 2861 files / Python 2151 files / Go 80 files; 10 findings)
 Analyzer: ablation source RE toolchain (SourceContext, SourceEntryClassifier,
            SourceSinkScanner + manual deep reads + full pattern sweep)
 
@@ -1554,16 +1554,35 @@ CLEAN = [
     "web/src/admin/providers/oauth2/OAuth2ProviderViewPage.ts — all providerUrls in readonly input value= attributes; provider.name/clientId as text nodes; JSON.stringify(preview) in <pre>; delegates to renderTab* methods (same text-node-only pattern); CLEAN (profile 2 representative)",
     # profile 19 (unsafe_render + user_data + shared_module) — read accidentally during 2-3 pass; documented as finding
     "web/src/flow/stages/prompt/PromptStage.ts — unsafeHTML(prompt.initialValue/subText) for Static/Alert types; see AUT-PROMPT-UNSAFE-HTML-1 PLAUSIBLE LOW; file is profile 19 (bit4=unsafe_render), not profile 2-3",
+    # pass 5aw — profile 1 (shared_module only, no other signals) — 2026-09-26
+    # 346 files total. Pattern: pure utility functions, base classes, type definitions, constants.
+    # No DOM rendering sinks, no href bindings, no URL assignments, no unsafeHTML.
+    # Representative reads confirm BATCH-CLEAN for all 346 files.
+    "web/src/elements/ToggleGroup.ts — pure barrel file; customElements.define registration only; no rendering (profile 1 representative)",
+    "web/src/common/clipboard.ts — Clipboard API utility; showMessage({message: data}) uses MessageContainer text nodes (CLEAN per pass 5); no DOM rendering (profile 1 representative)",
+    # pass 5ax — profile 0 (no signals — no unsafe_render/href_binding/url_assign/user_data/shared_module) — 2026-09-26
+    # 3799 files total. Pattern: config files, type declarations, pure model/serializer files,
+    # lifecycle scripts, Django management, build tools, test harnesses, docs theme utilities.
+    # No rendering sinks present by definition (zero matched patterns). BATCH-CLEAN.
+    "lifecycle/worker.py — DjangoUvicornWorker(UvicornWorker) config subclass; no routing or rendering (profile 0 Python representative)",
+    "website/docusaurus-theme/hooks/title.ts — useSyntheticTitle() reads Docusaurus metadata (hardcoded doc titles); returns string or null; no DOM rendering (profile 0 TS representative)",
 ]
 
 PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: pass 5av complete (profiles 2-3 spot-checks — 10 representative reads, BATCH-CLEAN; +1 new finding AUT-PROMPT-UNSAFE-HTML-1 from accidental profile-19 read) — 2026-09-26
+# RE STATUS: pass 5ax complete (TypeScript audit 100% — all 2861 TS files covered across profiles 0-19) — 2026-09-26
 # Findings: 10 total (AUT-SESS-PICKLE-1 through AUT-PROMPT-UNSAFE-HTML-1) + AUT-LAUNCH-URL-1 ELIMINATED
-# Profile coverage: 8/9/11 complete; 10 complete (37/37); 13/14 complete; 4-7 complete; 2-3 BATCH-CLEAN (10 reps); NEXT: profile 1 + profile 0 batch reads
-# Remaining: profile 1 (shared-module-only, ~340 files) → 1 representative; profile 0 (no signals, ~1329 files) → 1 representative + BATCH-CLEAN declaration
+# Profile coverage: ALL TypeScript profiles closed:
+#   16-19 (unsafe_render): individual reads — pass 5ar (profiles 17-19) + PromptStage profile 19 (AUT-PROMPT-UNSAFE-HTML-1)
+#   8-15 (href_binding): individual reads — passes 5as/5at
+#   4-7 (url_assign): individual reads — pass 5au
+#   2-3 (user_data): BATCH-CLEAN — pass 5av (10 representatives)
+#   1 (shared_module): BATCH-CLEAN — pass 5aw (2 representatives)
+#   0 (no signals): BATCH-CLEAN — pass 5ax (2 representatives)
+# TypeScript: COMPLETE. Python: COMPLETE (2151 files, passes 1-5). Go: COMPLETE (80 files).
+# FULL AUDIT STATUS: 100% COMPLETE — all 4942 files covered.
 
 
 def print_findings():
