@@ -92,28 +92,7 @@ flowchart TD
 
 ## Local Decompilers
 
-```mermaid
-mindmap
-  root((Local Decompilers))
-    x86 Family
-      x86 - 32
-      x86 - 64
-    ARM Family
-      ARM - 32
-      ARM - 64
-    MIPS Family
-      MIPS 32+nM
-      MIPS - 64
-    PowerPC Family
-      PPC - 32
-      PPC - 64
-    RISC-V Family
-      RISC-V 32
-      RISC-V 64
-    Embedded / Other
-      ARC EM/HS
-      V850 - 32
-```
+x86-32 · x86-64 · ARM-32 · ARM-64 · MIPS-32 · nanoMIPS · MIPS-64 · PPC-32 · PPC-64 · RISC-V 32 · RISC-V 64 · ARC EM/HS · V850-32
 
 ---
 
