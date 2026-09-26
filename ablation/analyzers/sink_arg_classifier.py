@@ -220,21 +220,33 @@ def _extract_func_starts(binary, data: bytes = b'') -> List[int]:
             if sec_data[i:i + 4] == _ENDBR64:
                 found.append(sec_va + i)
 
-        # push rbp (0x55) after terminator
+        def _preceded_by_terminator(buf, idx, max_look=4):
+            """True if buf[idx] is preceded by a ret/int3, optionally through NOPs."""
+            for back in range(1, max_look + 1):
+                if idx - back < 0:
+                    return False
+                prev = buf[idx - back]
+                if prev in _TERMINATORS:
+                    return True
+                if prev != 0x90:   # non-NOP non-terminator: not a function boundary
+                    return False
+            return False
+
+        # push rbp (0x55) after terminator (allow NOP padding between)
         for i in range(1, len(sec_data)):
-            if sec_data[i] == 0x55 and sec_data[i - 1] in _TERMINATORS:
+            if sec_data[i] == 0x55 and _preceded_by_terminator(sec_data, i):
                 found.append(sec_va + i)
 
-        # push r12-r15 / push rbx / push rsi / push rdi after terminator
+        # push r12-r15 / push rbx / push rsi / push rdi after terminator (allow NOP padding)
         for i in range(1, len(sec_data) - 1):
-            if sec_data[i - 1] not in _TERMINATORS:
-                continue
             b0 = sec_data[i]
             b1 = sec_data[i + 1] if i + 1 < len(sec_data) else 0
             if b0 == 0x41 and (b1 in (0x54, 0x55, 0x56, 0x57)):
-                found.append(sec_va + i)
+                if _preceded_by_terminator(sec_data, i):
+                    found.append(sec_va + i)
             elif b0 in (0x53, 0x56, 0x57):
-                found.append(sec_va + i)
+                if _preceded_by_terminator(sec_data, i):
+                    found.append(sec_va + i)
 
     return sorted(set(found))
 
