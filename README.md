@@ -77,11 +77,9 @@ pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
 
 ---
 
-## License
+## Maintainer
 
-See [LICENSE](LICENSE).
-
----
+Nicholas Michael Kloster & Claude
 
 ---
 
