@@ -99,6 +99,38 @@ Method  : 6-stage source RE via ablation source analyzers
                    XSS SWEEP (all 5293 files): dangerouslySetInnerHTML — zero instances;
                                   innerHTML reads in InAppAgentMessage.tsx are read-not-write (clipboard);
                                   postMessage in SlackIntegrationPage uses window.location.origin target
+          Pass 7 (main session supplement): Auth system + remaining server utils + packages
+                   AUTH: web/src/server/auth.ts (full — 15 static OAuth providers + dynamic SSO;
+                                  signIn callback: z.email() validate + SSO domain enforcement +
+                                  multi-tenant domain check + email OTP blocked from login;
+                                  session callback: DB re-query on every JWT verification;
+                                  sessionsExpiredAt gate: revocation takes effect immediately;
+                                  redirect callback: isValidCallbackUrl + same-origin enforcement;
+                                  timing equalization: await hashPassword() even on missing user;
+                                  email OTP random delay 200-2200ms; useVerificationToken → null
+                                  prevents email-scanner token burn; 11 OIDC providers all via
+                                  env-var credentials, Authentik reverse-proxy case derives
+                                  endpoints from issuer, no user input)
+                   TRPC ROUTERS: userAccount.ts (StringNoHTML on updateDisplayName; featurePreviewFlags
+                                  z.enum allowlist; delete in Serializable TX with last-owner guard;
+                                  signOutAllSessions: advanceSessionsExpiredAtForUser),
+                                  sqlInterface.ts (from: z.enum([...]) whitelist; select.column z.string
+                                  but chart procedure dispatches by queryName enum only — select.column
+                                  not consumed in query bodies; matchAndVerifyTracesUiColumn validates
+                                  column against UiColumnMappings registry before use)
+                   SERVER PAGES: web/src/pages getServerSideProps — all CLEAN:
+                                  trace/[traceId].tsx: DB lookup validates traceId before redirect;
+                                  auth/sign-in.tsx: env var checks only (no user input);
+                                  auth/reset-password.tsx: SMTP env var check only;
+                                  project/[projectId]/evals: encodeURIComponent(projectId) in redirect;
+                                  evals/configs/[configId]: DB lookup + CUID-safe redirect destination;
+                                  datasets/[datasetId]: CUID-safe redirect destination
+                   PACKAGES: packages/native/src/native_codec.rs (Rust binary ClickHouse Native encoder;
+                                  DateTime64Micros/Decimal64 typed; decimal overflow clamped; memory-safe;
+                                  no injection surface),
+                                  web/src/workers/json-parser.worker.ts (deepParseJsonIterative;
+                                  maxSize:10MB; off-main-thread — no auth surface),
+                                  ee/src/ee-license-check/index.ts (env var check only)
           Pass 4 worker features covered:
                    eval (decision model, eval metrics, span attrs, S3 client, retry,
                          observation eval scheduler deps + rules + types, batch eval),
@@ -184,6 +216,30 @@ Pass 5 web features security review — verdict: CLEAN (two new INFO findings)
   Support upload:            Session auth + MAX_FILES=5 cap; uploads to Pylon support API only
   Playground:                authorizeRequest: session + project membership + playground:execute scope;
                              LLM base URL via validateLlmConnectionBaseURL (SSRF-protected)
+
+Pass 6+7 + main session security review — verdict: CLEAN (no new confirmed findings)
+  Auth system (auth.ts):  session callback re-queries DB on every JWT verification — revocation
+                             via sessionsExpiredAt is immediate (no token rotation needed);
+                             redirect callback: isValidCallbackUrl + same-origin enforce;
+                             //evil.com: isValidCallbackUrl passes but redirect callback sees
+                             startsWith("/") → prepended with baseUrl → same-origin result;
+                             timing equalization: await hashPassword() even when user not found;
+                             email OTP: random 200-2200ms delay + useVerificationToken→null
+                             prevents scanner token burn; signIn callback: z.email() validate +
+                             SSO domain enforcement + multi-tenant domain check blocks cross-
+                             domain provider use; 11 providers via env-var credentials only
+  Sandbox server:           resolveSandboxPath uses path.resolve() + startsWith(WORKSPACE+sep)
+                             with explicit separator — prevents /workspace_sibling bypass;
+                             10MB body limit; serial queue prevents FS races
+  RBAC escalation:          rbac/membersRouter throwIfHigherRole: prevents a VIEWER from
+                             assigning OWNER role; membership changes scoped to org context
+  Admin audit trail:        sendAdminAccessWebhook fires on every admin bypass — privilege
+                             elevation cannot be silent regardless of RBAC
+  RedisLock:                Lua atomic check-and-delete; TTL dead-man's switch if Redis dies;
+                             onUnavailable:"fail"|"proceed" per caller
+  Client-side URL safety:   getSafeLinkUrl: protocol allowlist (http/https/mailto/tel) blocks
+                             javascript:/data:; getSafeImageUrl: https-only; getSafeRedirectPath:
+                             WHATWG URL origin check + control char strip + // rejection
 
 Pass 4 worker security review — verdict: CLEAN (one new CONFIRMED finding: LFG-ISO-1)
   Eval anti-loop:      3 layers (createEvalJobs env guard → isObservationAllowed → isEvalTargetEnvAllowed)
@@ -505,7 +561,7 @@ INFO_FINDINGS = [
 
 def print_findings():
     """Print all confirmed findings in RE module format."""
-    print(f"Langfuse Source RE — Pass 6 Complete (ALL files read)  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
+    print(f"Langfuse Source RE — Pass 7 Complete (ALL 5293 files read)  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
     print("=" * 70)
     for f in FINDINGS:
         print(f"\n[{f['id']}] {f['status']} {f['severity']}  {f['cwe']}")
