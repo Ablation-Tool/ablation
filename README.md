@@ -1,7 +1,5 @@
 <img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
-# Autonomous Reverse Engineering Framework
-
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
 Ablation is a reverse engineering framework that provides the exact same core disassembly, decompilation, and binary analysis capabilities as industry-standard tools like Ghidra, IDA Pro, and Binary Ninja. Combined with an LLM, it transforms into a fully autonomous reverse engineering tool.
