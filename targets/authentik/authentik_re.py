@@ -878,6 +878,18 @@ CLEAN = [
     "web/src/admin/users/ak-user-wizard.ts — username/token in readonly value= inputs; DEFAULT_USER_TYPES static descriptions",
     "web/src/admin/users/oauth/UserAccessTokenList.ts — item.idToken text node in <pre>; provider?.pk via toAdminInterface; provider?.name text node; scope strings text nodes in chips",
     "web/src/admin/users/oauth/UserRefreshTokenList.ts — identical pattern to UserAccessTokenList",
+    # pass 5ac — outposts admin (11 files)
+    "web/src/admin/outposts/OutpostListPage.ts — item.pk UUID and p.pk numeric in hrefs via toAdminInterface; item.name/p.name text nodes; config.authentik_host in msg(str``)",
+    "web/src/admin/outposts/OutpostViewPage.ts — outpost fields in renderDescriptionList strings; document.location.origin in readonly value=; docLink hardcoded hrefs; outpost.name in msg(str``) aria label",
+    "web/src/admin/outposts/OutpostForm.ts — instance.name in value=; item.name in .renderElement returns string; dualSelectPairMaker labels text nodes; config YAML in ak-codemirror value=; docLink hrefs",
+    "web/src/admin/outposts/OutpostHealthList.ts — item.hostname text node; version/buildHash/versionShould in msg(str``)",
+    "web/src/admin/outposts/OutpostHealthSimple.ts — version/versionShould in msg(str``); time formatting",
+    "web/src/admin/outposts/OutpostProviderList.ts — item.pk and assignedApplicationSlug via toAdminInterface; item.name/assignedApplicationName text nodes",
+    "web/src/admin/outposts/ServiceConnectionListPage.ts — item.name/verboseName/itemState.version text nodes; IconEditButtonByTagName uses StrictUnsafe guard",
+    "web/src/admin/outposts/ServiceConnectionDockerForm.ts — instance.name/url in value=; msg(html`...<code>unix://</code>...`) static HTML help text",
+    "web/src/admin/outposts/ServiceConnectionKubernetesForm.ts — instance.name in value=; kubeconfig via YAML.stringify in ak-codemirror value=",
+    "web/src/admin/outposts/ak-service-connection-wizard.ts — wizard fetching TypeCreate[] from API; no direct HTML rendering",
+    "web/src/admin/outposts/utils.ts — pure enum-to-localized-string function",
     # OS/SQL exhaustive
     "SWEEP: zero shell=True, zero subprocess, zero yaml.load(), zero exec() outside evaluator",
     "SWEEP: raw SQL in api/search/fields.py uses developer-controlled field/table names (not user input)",
