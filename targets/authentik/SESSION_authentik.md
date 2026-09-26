@@ -158,6 +158,32 @@
 - Channels layer: msgpack.unpackb (not pickle) — no code execution risk
 - Enterprise: pattern-swept all 205 non-test files — no new critical patterns
 
+### Deep Reads — TypeScript individual file reads (pass 5l — 2026-09-26)
+- web/src/elements/ak-mdx/markdown.ts (full): CLEAN — unified pipeline allowDangerousHtml:false; no eval/Function; pure tree transformers
+- web/src/elements/ak-mdx/components/ak-md-a.ts (full): CLEAN — handles #fragment links only; no URL construction from user input
+- web/src/elements/LoadingOverlay.ts (full): CLEAN — pure loading spinner
+- web/src/elements/CodeMirror.ts (re-export): CLEAN — admin YAML/JSON editor shim
+- web/src/elements/table/TableSearch.ts (full): CLEAN — search value from FormData → API query param (not rendered)
+- web/src/flow/stages/email/EmailStage.ts (full): CLEAN — static Lit template; no user input
+- web/src/flow/components/ak-flow-card.ts (full): CLEAN — flowInfo.title as text node; slots delegate
+- web/src/admin/policies/PolicyTestForm.ts (full): CLEAN — policy test result messages as text nodes
+- web/src/elements/events/LogViewer.ts (full): CLEAN — event fields Lit text nodes; JSON.stringify in <pre>
+- web/src/admin/brands/BrandForm.ts (partial 100 lines): CLEAN — admin field bindings
+- web/src/elements/ak-mdx/remark/remark-admonition.ts (full): CLEAN — node.name validated against ADMONITION_TYPES set
+- web/src/flow/components/ak-brand-footer.ts (full): CLEAN — link.name via sanitizeHTML(BrandedHTMLPolicy); link.href admin-controlled
+- web/src/elements/mixins/branding.ts (full): CLEAN — pure Lit context mixin; no rendering
+
+### Deep Reads — TypeScript individual file reads (pass 5m — 2026-09-26)
+- web/src/flow/stages/user_login/UserLoginStage.ts (full): CLEAN — static Lit template; no user data rendered raw
+- web/src/admin/providers/saml/SAMLProviderForm.ts (full): CLEAN — state management + typed API calls; rendering in SAMLProviderFormForm.ts
+- web/src/elements/table/Table.ts (full): CLEAN — rows via abstract row() → SlottedTemplateResult; no unsafeHTML; group names as text nodes; pluckErrorDetail for error state
+- web/src/admin/brands/BrandForm.ts (full completion): CLEAN — all admin-controlled fields via ak-text-input/ak-switch-input; no unsafeHTML
+- web/src/admin/users/UserInfoCard.ts (full): CLEAN — user.username/name/email/type via renderKeyValueList (Lit text nodes); pk numeric in URLs
+- web/src/admin/users/UserForm.ts (full): CLEAN — all user fields via ak-text-input component bindings; no unsafeHTML
+- web/src/admin/events/EventListPage.ts (full): CLEAN — row() renders event fields as text nodes; pk numeric in URL; renderEventUser() from utils.ts
+- web/src/admin/events/utils.ts (full): CLEAN — username/device.name Lit text nodes; URLs via toAdminInterface(); device.pk UUID in URL path only
+- web/src/components/ak-event-info.ts (full): **NEW PLAUSIBLE LOW (AUT-EMAIL-SRCDOC-1)** — renderEmailSent() at line 387 renders event.context.body via <iframe srcdoc=${body}> with NO sandbox attribute; srcdoc inherits parent origin; script in email body runs in admin UI origin; all other event renderers CLEAN (model diff via JSON.stringify in <pre>; policy context via JSON.stringify in <code>; exception messages as text nodes)
+
 ## Confirmed Findings
 
 | ID | Severity | Title | Status |
@@ -168,6 +194,7 @@
 | AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values | CONFIRMED |
 | AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp | CONFIRMED |
 | AUT-SAML-REFURI-1 | LOW | SAML assertion signature allows URI="" (root-element reference) | PLAUSIBLE |
+| AUT-EMAIL-SRCDOC-1 | LOW | Email body preview in unsandboxed srcdoc iframe (inherits admin UI origin) | PLAUSIBLE |
 
 ## Pending (toolchain gaps only)
 - SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only)
