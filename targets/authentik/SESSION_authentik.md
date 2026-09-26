@@ -848,3 +848,38 @@ Notable patterns:
 - Routes.ts: pure static routing table (hardcoded path patterns)
 - helperText.ts: pure static msg() exports
 - index.entrypoint.ts: entry point only
+
+### Deep Reads — TypeScript individual file reads (pass 5al — 2026-09-26)
+**Directories: admin/files/ (1), admin/admin-settings/ (3), admin/blueprints/ import (1), crypto/generate (1), enterprise/ (2), admin/object-attributes/ (3), admin/groups/ partial (2), common/requests/ (1), admin/requests/ (8), admin/flows/ diagrams (4), elements/mermaid/ (1) — all CLEAN**
+
+Mermaid `unsafeHTML(svg)` confirmed CLEAN via two-layer protection:
+1. `securityLevel: "strict"` in `mermaid/utils.ts` — renders diagram in sandboxed iframe mode
+2. `dompurifyConfig: DOM_PURIFY_RELAXED` in same file — `{ALLOWED_TAGS: ["#text","br","div","strong"], ALLOWED_ATTR: ["class"]}` — DOMPurify strips all tags except the minimal set before SVG is returned
+Even though `escapeLabel()` in `FlowGraph.ts` only escapes `"` (leaves `<`/`>` unescaped), Mermaid's DOMPurify pass removes any injected HTML/SVG tags before `unsafeHTML(svg)` places the output in the DOM.
+
+- admin/files/FileUploadForm.ts: CLEAN — assertValidFileName() + FileNamePattern.DOM validates filename; docLink() generates hardcoded doc URL for href
+- admin/admin-settings/AdminSettingsForm.ts: CLEAN — all settings in `value=${ifDefined(...)}` attribute bindings; footerLinks via `.items=` property binding
+- admin/admin-settings/AdminSettingsFooterLinks.ts: CLEAN — footerLink.name/href in input value= bindings; hasLegalScheme() validates against LEGAL_SCHEMES=["http://","https://","mailto:"]
+- admin/admin-settings/AdminSettingsPage.ts: CLEAN — structural page; `.settings=` property binding; no HTML rendering
+- admin/blueprints/BlueprintImportForm.ts: CLEAN — file input + SearchSelect only; result logs via `.items=` property binding
+- admin/crypto/CertificateGenerateForm.ts: CLEAN — no instance data pre-filled; all static form fields
+- admin/enterprise/EnterpriseLicenseForm.ts: CLEAN — installID in readonly `value=${ifPresent(...)}` input binding only
+- admin/enterprise/EnterpriseStatusCard.ts: CLEAN — all numeric/computed values as text nodes; badgeDetails Map returns msg() strings
+- admin/object-attributes/ObjectAttributeListPage.ts: CLEAN — item.group/label/key Lit text nodes; formatObjectAttributeType() returns msg() string
+- admin/object-attributes/ObjectAttributeForm.ts: CLEAN — all fields in `value=${...}` attribute bindings
+- admin/object-attributes/renderAttributes.ts: CLEAN — def.type/def.key in text node interpolations; group in form-group label= attribute binding; YAML.stringify(values) in ak-codemirror value= attribute; ObjectAttributeModelForm abstract base
+- admin/groups/ak-group-member-table.ts: CLEAN — item.username/name Lit text nodes; typed delete API
+- admin/groups/RelatedGroupList.ts: CLEAN — group.name/item.name text nodes; targetUser?.username in msg(str`...`)
+- common/requests/utils.ts: CLEAN — renderTargetSummary(): target.parent?.name/label in Lit html`${label}` text node
+- admin/requests/RequestRuleListPage.ts: CLEAN — item.name as string SlottedTemplateResult; item.targets.length in msg(str`...`)
+- admin/requests/RequestRuleForm.ts: CLEAN — instance?.name/minReviewers in `value=${ifDefined(...)}` bindings
+- admin/requests/AccessRequestListPage.ts: CLEAN — JSON.stringify(item.requesterData) in `<pre>` text node; item.targetObjs[].label/.verboseName as text nodes in `<li>`
+- admin/requests/AccessRequestFulfillForm.ts: CLEAN — JSON.stringify(requesterData) in `<pre>` text node; request?.createdBy.username/currentUser?.username in readonly value= inputs
+- admin/requests/BoundRequestRulesTable.ts: CLEAN — item.ruleObj?.name Lit text node; obj.label text nodes
+- admin/requests/RequestRuleBindingForm.ts: CLEAN — rule.name string from renderElement; instance?.expiryPending/expiryGrantedMax in value= bindings
+- admin/requests/ak-request-rule-wizard.ts: CLEAN — all static msg() content; no user data as HTML
+- admin/flows/FlowDiagram.ts: CLEAN — structural; sets this.diagram = diagram from buildFlowGraph() (Mermaid DSL string, not HTML)
+- admin/flows/FlowDiagramToolbar.ts: CLEAN — IconEditButtonByTagName(node.component, node.pk) StrictUnsafe-guarded; node.name as ariaName string attribute
+- admin/flows/FlowGraph.ts: CLEAN — escapeLabel() only escapes `"`; node.name/verboseName embedded in Mermaid DSL; Mermaid sanitizes via securityLevel:strict + DOM_PURIFY_RELAXED before returning SVG
+- admin/flows/utils.ts: CLEAN — pure enum-to-msg() helpers; RenderFlowOption() returns plain string
+- elements/mermaid/utils.ts: CLEAN — DefaultMermaidConfig: securityLevel:"strict" + htmlLabels:true + dompurifyConfig:DOM_PURIFY_RELAXED; confirms Mermaid SVG is DOMPurify-sanitized before unsafeHTML(svg) in ak-diagram.ts
