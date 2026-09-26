@@ -1,8 +1,8 @@
 # Vulnerability Scanners
 
 Targeted scanners for specific vulnerability classes in x86-64 ELF binaries.
-Both scanners accept either a binary path or an existing `BinaryContext` — reuse
-the context if you are running multiple scanners on the same binary.
+Both scanners accept either a binary path or an existing `BinaryContext`. Reuse
+the context when running multiple scanners on the same binary.
 
 ---
 
@@ -12,8 +12,8 @@ the context if you are running multiple scanners on the same binary.
 
 Detects format string vulnerabilities in x86-64 ELF binaries. A format argument
 is safe only when it is a string literal (RIP-relative load from `.rodata`). Any
-other provenance — function argument, stack variable, or register populated from
-`recv`/`read` — is a finding.
+any other provenance is a finding: a function argument, a stack variable, or a
+register populated from `recv`/`read`.
 
 Covers the full `printf` family, `syslog`, `err`/`warn`, and common custom
 `debug_printf`/`log_printf` variants.
