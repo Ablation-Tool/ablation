@@ -116,8 +116,8 @@ whole directory at once:
 ```python
 from ablation.analyzers.beam_context import sweep_beam_dir, fmt_sweep, SEVERITY_CODE_EXEC
 
-results = sweep_beam_dir('/path/to/app/ebin/', min_severity=SEVERITY_CODE_EXEC)
-print(fmt_sweep(results))
+results = sweep_beam_dir('/path/to/app/ebin/')
+print(fmt_sweep(results, min_severity=SEVERITY_CODE_EXEC))
 ```
 
 Output groups modules by severity tier and lists the dangerous import signatures
