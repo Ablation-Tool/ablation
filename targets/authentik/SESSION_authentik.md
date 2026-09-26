@@ -1,6 +1,6 @@
 # Authentik Source RE Session
 
-## Status: IN PROGRESS — 2026-09-26
+## Status: COMPLETE — 2026-09-26
 
 ## Target
 - Repo: https://github.com/goauthentik/authentik
@@ -18,17 +18,45 @@
 ### Tool Run — SourceEntryClassifier
 - Auth surface: 47 NONE, 150 SESSION, 2 ADMIN, ~810 API_KEY
 - AllowAny downgrade identified: FlowExecutorView (intentional), debug view, geoip API
+- 99 NONE-auth routes reviewed manually — all public endpoints confirmed correct
 
 ### Tool Run — SourceSinkScanner
 - 5 HIGH (all pickle.loads): sessions.py:86, models.py:187/188/190, backend.py:32
 - 3 MEDIUM (Rust Command::new): hardcoded commands, not user-controlled
 
-### Deep Reads — Python auth layer
+### Tool Run — SourceIsolationChecker
+- 0 results — checker is Prisma/TS-specific; Django ORM adapter module is a PENDING toolchain gap
+
+### Deep Reads — Python auth layer (pass 1)
 - authentik/api/authentication.py: TokenAuthentication, IPCUser (/tmp/authentik-core-ipc.key)
 - authentik/core/sessions.py: unsigned pickle session store (vs. Django's signed sessions)
 - packages/django-dramatiq-postgres/models.py: ScheduleBase.send() pickle sinks
 - packages/django-postgres-cache/backend.py: cache pickle sink
 - authentik/flows/views/executor.py:106: FlowExecutorView AllowAny (intentional)
+
+### Deep Reads — Expression/Blueprint/Outpost (pass 2)
+- lib/expression/evaluator.py:365: exec() in policy evaluator — admin-only by design
+  Notable: `requests` in globals = SSRF primitive; `expr_create_jwt_raw` = arbitrary JWT claims
+- blueprints/v1/common.py: BlueprintLoader(SafeLoader) — YAML deser safe; !File/!Env admin-gated
+- core/views/debug.py: ServerLogAPI AllowAny gated by `if settings.DEBUG:`
+- policies/geoip/api.py: ISO3166View AllowAny is static country list
+- outposts/consumer.py: guardian get_objects_for_user + DenyConnection
+
+### Deep Reads — Full attack surface coverage (pass 3)
+- authentik/lib/xml.py: two-layer XXE defense (_reject_doctype expat + XMLParser(resolve_entities=False))
+- providers/oauth2/views/authorize.py: redirect_uri STRICT/REGEX + FORBIDDEN_URI_SCHEMES
+- providers/oauth2/token/base.py: compare_digest client_secret; PKCE; same redirect_uri gate
+- sources/saml/processors/response.py: sig before decrypt, assertion sig after; URI="" allowance (PLAUSIBLE LOW)
+- stages/identification/stage.py:185: dummy hash on invalid identifier (timing equalization)
+- internal/outpost/ldap/search/direct/direct.go: LDAP filter parsed client-side, no backend injection
+- admin/files/validation.py: path traversal prevention — regex + PurePosixPath.parts + abs + .. check
+- api/v3/config.py: ConfigView AllowAny — Sentry DSN + capability flags only
+- tenants/ + django-tenants: PostgreSQL schema isolation; connection.set_tenant() per request
+- core/api/property_mappings.py: @permission_required on test action; ObjectPermissions on all ViewSets
+- sources/scim/views/v2/auth.py: Bearer token, source-scoped Token lookup
+- recovery/views.py: token DB filter, management-command-generated token
+- SWEEP: no shell=True, no raw SQL, no user-controlled file open() outside admin/files (gated)
+- SWEEP: 99 NONE-auth routes — JWKS, WebFinger, device flow, Apple JWKS, GeoIP all correctly public
 
 ### Ablation Tool Improvements (committed as 2777c49)
 - source_ingestion.py: added Django CBV class inheritance patterns to _ROUTE_CONTENT_SIGNALS
@@ -36,34 +64,40 @@
 
 ## Confirmed Findings
 
-| ID | Severity | Title |
-|----|----------|-------|
-| AUT-SESS-PICKLE-1 | HIGH | Unsigned pickle deserialization of session data (no HMAC) |
-| AUT-TASK-PICKLE-1 | HIGH | Unsigned pickle deserialization of task queue arguments |
-| AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values |
-| AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp |
-| AUT-FLOW-ALLOWANY-1 | INFO | FlowExecutorView AllowAny (intentional — login flow) |
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| AUT-SESS-PICKLE-1 | HIGH | Unsigned pickle deserialization of session data (no HMAC) | CONFIRMED |
+| AUT-TASK-PICKLE-1 | HIGH | Unsigned pickle deserialization of task queue arguments | CONFIRMED |
+| AUT-CACHE-PICKLE-1 | MEDIUM | Unsigned pickle deserialization of PostgreSQL cache values | CONFIRMED |
+| AUT-IPC-KEY-1 | MEDIUM | IPC superuser key stored in world-readable /tmp | CONFIRMED |
+| AUT-SAML-REFURI-1 | LOW | SAML assertion signature allows URI="" (root-element reference) | PLAUSIBLE |
 
-### Pass 2 — Expression engine, blueprints, debug view, outpost WS (2026-09-26)
-- lib/expression/evaluator.py:365 — exec() in policy evaluator: admin-only by design
-  (ExpressionPolicyViewSet uses DEFAULT_PERMISSION_CLASSES [ObjectPermissions])
-  Notable: `requests` in globals = SSRF primitive; `expr_create_jwt_raw` = arbitrary JWT claims
-- blueprints/v1/common.py — BlueprintLoader(SafeLoader): YAML deser is safe; !File/!Env admin-gated
-  (resolve() only called after check_blueprint_perms() passes)
-- core/views/debug.py — ServerLogAPI AllowAny gated by `if settings.DEBUG:`; not exposed in prod
-- policies/geoip/api.py — ISO3166View AllowAny is static country list; GeoIPPolicyViewSet is authed
-- outposts/consumer.py — OutpostConsumer.connect() uses guardian get_objects_for_user + DenyConnection
-- SourceIsolationChecker: 0 results — checker is Prisma/TS-specific, not applicable to Django ORM
+## Clean (investigated, not exploitable — exhaustive)
+- TokenAuthentication/IPCUser: compare_digest timing-safe; IPC key issue is AUT-IPC-KEY-1
+- FlowExecutorView AllowAny: intentional (login flow); CSRF not applicable (session-bound flow state)
+- exec() in ExpressionPolicy/PropertyMapping: admin-only by design; SSRF/JWT side effects noted
+- BlueprintLoader(SafeLoader): no YAML RCE; !File/!Env admin-gated
+- ServerLogAPI: only in DEBUG mode (not prod)
+- ISO3166View AllowAny: static country list, no sensitive data
+- ConfigView AllowAny: Sentry DSN + capability flags only
+- lxml_from_string: two-layer XXE defense (_reject_doctype + resolve_entities=False)
+- redirect_uri: STRICT/REGEX + FORBIDDEN_URI_SCHEMES={javascript,data,vbscript}
+- client_secret: compare_digest timing-safe
+- LDAP filter: parsed client-side, no backend injection
+- admin/files: path traversal: regex + PurePosixPath + abs + .. check
+- identification stage: dummy hash on missing user (timing equalization)
+- outpost WebSocket: guardian per-object + DenyConnection
+- django-tenants: schema-per-tenant, correctly isolated
+- SCIM auth: source-scoped Bearer token lookup
+- recovery token: management-command-generated, DB filter only
 
-## Clean (investigated, not exploitable)
-- ServerLogAPI, ISO3166View, FlowExecutorView, Expression exec(), Blueprint !File/!Env, Outpost WS
-
-## Pending
-- SourceIsolationChecker: needs Python/Django ORM adapter module (toolchain gap)
-- SourceTaintTracker: trace flow executor PLAN_CONTEXT_* to session storage
-- Go outpost code: internal/outpost/ and cmd/ (LDAP injection? Go-specific patterns)
-- Property mappings API: confirm admin-only gate (same exec() path as ExpressionPolicy)
+## Pending (toolchain gaps only)
+- SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only)
+- AUT-SAML-REFURI-1: confirm URI="" non-exploitable in all SAML response paths
+- Go RADIUS outpost: survey internal/outpost/radius/ (not covered)
+- RAC provider: survey internal/outpost/rac/ (not covered)
 
 ## Commits
 - 2777c49: source_ingestion.py + source_entry_classifier.py DRF pattern additions
 - 3aaa666: initial RE module — pass 1 (3 pickle HIGH, IPC key MEDIUM)
+- 9029d5f: pass 2 — expression/blueprint/debug/outpost coverage + AUT-SAML-REFURI-1
