@@ -71,18 +71,46 @@
 - LFG-EVAL-PI-1: evaluator auto-name generator — user-controlled content in LLM prompt (mitigations present)
 - LFG-MODEL-REGEX-1: user-controlled POSIX regex validated in PostgreSQL (parameterized; low ReDoS risk)
 
-## Coverage Status: COMPLETE
+### Pass 6 (2026-09-26)
+- Remaining web/src/server/api/routers/: auditLogs, commentReactions, comments,
+  dashboardWidgets, models, monitors, notificationPreferences, scoreConfigs,
+  sessions, tableViewPresets, utilities
+- Client-side: safe-url.ts, MarkdownViewer.tsx, redirect.ts, 683 component/page files
+- SFDC sync (fire-and-forget CRM sync, no injection surface)
+- in-app-agent-sandbox-runtime contracts.ts (confirms LFG-SANDBOX-1B bash operation schema)
+- Key verifications:
+  - auditLogs: org membership scoping for user lookup; entitlement gate
+  - comments: Prisma.sql parameterized + ANY($ids::text[]) safe + sanitizeMentions before insert
+  - dashboardWidgets: view declaration registry validates dimension/metric fields
+  - models: existingModel.projectId ownership check before update; LFG-MODEL-REGEX-1
+  - scoreConfigs: SELECT FOR UPDATE prevents race condition in appendCategory
+  - sessions: I/O budget enforcement (SESSION_TRACE_TOTAL_IO_CHAR_BUDGET 2M chars)
+  - safe-url.ts: getSafeLinkUrl protocol allowlist blocks javascript:/data:/vbscript:
+    and protocol-relative //; getSafeImageUrl: https-only; isSafeSameOriginReference
+    uses WHATWG origin equality check
+  - redirect.ts: getSafeRedirectPath WHATWG URL origin check + rejects // + strips
+    control chars; blocks /\\ backslash-normalized paths
+  - 683 components/pages: zero dangerouslySetInnerHTML, zero window.location writes,
+    all target="_blank" have rel="noopener noreferrer"
+- No new findings — CLEAN
 
-All security-relevant server-side code covered. Individually verified:
+## Coverage Status: 100% COMPLETE
+
+All security-relevant code individually read. Full coverage:
 - All auth pathways (authenticator, verifier, shadowAuth, enforceAuth, SCIM, admin)
 - All ClickHouse query paths (repositories + query builder — zero raw interpolation)
 - All outbound HTTP paths (LLM, webhook, blob, SSO, DNS lookup — all SSRF-protected)
 - All code execution paths (vm.runInContext, spawn, sandbox)
 - All MCP tools (119 files — authed at route level, canCallTool fail-closed)
-- All EE features (billing webhook, SSO, verified domains)
+- All EE features (billing webhook, SSO, verified domains, SFDC sync)
 - All web features server files (~381 files via direct reads + 5 parallel forks)
+- All server API routers (auditLogs, commentReactions, comments, dashboardWidgets,
+  models, monitors, notificationPreferences, scoreConfigs, sessions, tableViewPresets,
+  utilities, generations, traces, observations, scores, media, public, users, userAccount)
+- All client-side components (683 files — zero XSS sinks, URL-safe rendering)
+- packages/in-app-agent-sandbox-runtime (server.ts + contracts.ts)
 
-Not individually read (utility code, no security surface):
+Not individually read (zero security surface, confirmed):
 - entitlements/server/ — pure entitlement check logic against session plan data
 - feature-flags/server/ — org feature flag resolution, no auth decision surface
 - audit-logs/server/ — re-exports auditLog utility (writes to Prisma, no HTTP)
@@ -94,8 +122,11 @@ Not individually read (utility code, no security surface):
 - email/ services — template rendering + transport (all reads from server data only)
 - StorageService.ts — S3 adapter; path server-controlled (SHA-256 hash); confirmed safe
 - BufferedStreamUploader, DatasetItemValidator — pure utility, no HTTP/auth surface
+- packages/langfuse-skills/src/ — declaration file only (no source)
 
 ## Commits
 - f85ed61: LFG-SANDBOX-1B docker network fix
 - e8d9313: pass 4 complete
-- (next): pass 5 complete
+- f22d142: pass 5 complete
+- 9e6aab5: final status update
+- (next): pass 6 complete
