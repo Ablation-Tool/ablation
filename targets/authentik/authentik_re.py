@@ -500,6 +500,40 @@ FINDINGS = {
             "Fix: validate scheme is http/https before use, e.g. URL.canParse(url) && new URL(url).protocol.startsWith('http')."
         ),
     },
+
+    "AUT-MULTITAB-REDIRECT-1": {
+        "severity": "LOW",
+        "title": "Client-side open redirect via unvalidated ?next= parameter in multi-tab flow coordinator",
+        "file": "web/src/flow/controllers/FlowMultitabController.ts",
+        "lines": (45, 65),
+        "cwe": "CWE-601",
+        "status": "PLAUSIBLE",
+        "description": (
+            "FlowMultitabController.multiTabListener() reads the ?next= parameter from "
+            "window.location.search and unconditionally calls window.location.assign(url), "
+            "where url = new URL(next, window.location.origin). The origin check at line 51-55 "
+            "only governs whether suppressNextExitForSameOriginNavigation() or dispatchTabExit() "
+            "is called — the window.location.assign(url) call on line 57 executes in both branches. "
+            "If an attacker crafts a login URL with ?next=https://phishing.example.com and a victim "
+            "visits it, the victim's flow tab will redirect to the attacker's URL when another tab "
+            "fires AKMultiTabEvent (e.g., after completing authentication in a second tab). "
+            "javascript: URLs are blocked by modern browsers in window.location.assign(), "
+            "so only cross-origin HTTP redirects are reachable."
+        ),
+        "exploit_path": [
+            "1. Attacker sends victim: https://authentik.example.com/if/flow/default-auth/?next=https://phishing.com",
+            "2. Victim visits the crafted URL (shows normal login form)",
+            "3. Victim also has/opens another authentik tab and completes authentication there",
+            "4. RedirectStage in second tab fires AKMultiTabEvent across tabs",
+            "5. FlowMultitabController in first tab reads next=https://phishing.com and calls assign()",
+            "6. Victim is redirected to attacker's phishing page",
+        ],
+        "root_cause": (
+            "window.location.assign(url) is called unconditionally after the origin check. "
+            "Fix: only assign when url.origin === window.location.origin, or validate that "
+            "next is a relative URL before constructing the URL object."
+        ),
+    },
 }
 
 # ============================================================
@@ -1437,17 +1471,36 @@ CLEAN = [
     "web/src/components/notifications/NotificationDrawer.ts — href=${item.hyperlink} admin-configured notification rule URL (same trust level as FileListPage item.url); href=${toAdminInterface(event PK)}; item.body as text node; event context as JSON.stringify in <pre> text node; CLEAN",
     "web/src/flow/FormStatic.ts — href=${flowInfo.cancelUrl} Django-generated via reverse() (always HTTP/HTTPS); this.username as text node; this.avatar in <img src>; CLEAN",
     "web/src/flow/components/ak-brand-footer.ts — href=${link.href} from admin-configured brand FooterLink[] (admin-controlled); link.name through sanitizeHTML(BrandedHTMLPolicy) DOMPurify; CLEAN",
+    # pass 5au — profiles 4-7 (url_assign patterns) individual reads — 2026-09-26
+    # profile 4 (url_assign only)
+    "web/src/admin/ak-interface-admin.ts — window.location.assign(toUserInterface()) uses developer path helper returning /if/user/; all other navigation via navigate(toAdminInterface(...)) with hardcoded paths; CLEAN",
+    "web/src/flow/controllers/FlowMultitabController.ts — window.location.assign(url) where url=new URL(qs.get('next'),origin); ORIGIN CHECK DOES NOT GATE ASSIGN CALL (see AUT-MULTITAB-REDIRECT-1 PLAUSIBLE LOW); challenge.applicationPreLaunch from server-controlled challenge CLEAN",
+    "web/src/user/requests/BrowseRequestable.ts — window.location.assign(link) where link from requestsGrantRequestsCreate() API response (server-generated redirect URL); CLEAN",
+    "website/docusaurus-theme/theme/NotFound/Content/index.tsx — window.location.assign(nextURL) where nextURL=destination+suffix; destination from statically compiled Docusaurus redirect index (hardcoded doc paths, not user input); CLEAN",
+    # profile 5 (url_assign + shared_module)
+    "web/src/common/helpers/plex.ts — window.open(url,...) where url from caller passing PlexAPIClient.getPin() authUrl ('https://app.plex.tv/auth#!?...' hardcoded base + URL-encoded params); CLEAN",
+    "web/src/common/users.ts — window.location.assign(authFlowRedirectURL) uses globalAK().api.base+hardcoded flow path; window.location.assign(response.link) from lockdown API response (server-generated); CLEAN",
+    "web/src/elements/commands/ak-command-palette-modal.ts — window.open(url,'_ak_docs') where url=new URL('/search',AK_DOCS_URL) with searchParams.set('q',query) (user query in properly-encoded param on build-time constant base); CLEAN",
+    "web/src/elements/commands/shared.ts — window.open(AK_DOCS_RELEASE_NOTES_URL) and window.open('https://integrations.goauthentik.io/') both hardcoded/build-time constants; CLEAN",
+    "web/src/elements/controllers/SessionContextController.ts — window.location.assign(toUserInterface('settings')) and window.location.assign(toAdminInterface()) use developer path helpers returning fixed /if/ paths; CLEAN",
+    "web/src/elements/router/core/navigation.ts — window.location.assign(url.href) in navigate() utility; callers pass developer-controlled paths; decideInterception has explicit origin check returning null for cross-origin; CLEAN",
+    "web/src/flow/providers/saml/NativeLogoutStage.ts — window.location.assign(this.challenge.redirectUrl) is SAML IdP SLO endpoint URL from admin-configured SAML provider; form action=postUrl same admin-configured pattern; CLEAN",
+    "web/src/flow/sources/plex/PlexLoginInit.ts — window.location.assign(redirectChallenge.to) from sourcesPlexRedeemTokenCreate() API (server-controlled, same as RedirectStage); window.location.assign('/') hardcoded; window.open(authInfo.authUrl) hardcoded https://app.plex.tv base; CLEAN",
+    "web/src/user/requests/RequestEntitlementModal.ts — window.location.assign(link) from requestsGrantRequestsCreate() API response (same pattern as BrowseRequestable); CLEAN",
+    # profile 6 (url_assign + user_data)
+    "web/packages/sfe/src/index.ts — Simple Flow Executor (no-webcomponent fallback): window.location.assign(this.challenge.to) same server-controlled pattern as RedirectStage; user data (flowInfo.title, pendingUser, applicationPre, errorMessage) all in Lit html text nodes or read-only value attributes; CLEAN",
+    # profile 7 (url_assign + user_data + shared_module)
+    "web/src/user/LibraryApplication/RACLaunchEndpointModal.ts — window.open(item.launchUrl,target) where item.launchUrl is admin-configured RAC endpoint URL; modern browsers block javascript: in window.open; item.name as text node; CLEAN",
 ]
 
 PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: pass 5at complete (profile 10 individual reads — 37 files all CLEAN) — 2026-09-26
-# Findings: 8 total (AUT-SESS-PICKLE-1 through AUT-CHANGELOG-URL-1) + AUT-LAUNCH-URL-1 ELIMINATED
-# Compressor validated: no false negatives found (insertAdjacentHTML=0, setAttribute href=0, window.location.assign all in profile 4-5)
-# Profile 11 complete (16/16); profile 9 complete (19/19); profile 10 complete (37/37); profiles 8/13/14: all files read
-# NEXT: profiles 2-7 spot-checks (~226 files), profile 1 representative read (340 files), profile 0 batch-CLEAN (1329 files)
+# RE STATUS: pass 5au complete (profiles 4-7 url_assign reads — 15 files, 1 new finding AUT-MULTITAB-REDIRECT-1) — 2026-09-26
+# Findings: 9 total (AUT-SESS-PICKLE-1 through AUT-MULTITAB-REDIRECT-1) + AUT-LAUNCH-URL-1 ELIMINATED
+# Compressor validated: all url_assign files (profiles 4-7) individually read; open redirect found in FlowMultitabController
+# Profile coverage: 8/9/11 complete; 10 complete (37/37); 13/14 complete; 4-7 complete; NEXT: profiles 2-3 spot-checks (212 files)
 
 
 def print_findings():
