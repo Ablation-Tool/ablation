@@ -143,9 +143,28 @@ Not individually read (zero security surface, confirmed):
 - auth.ts signIn complete: z.email() gate, SSO domain enforcement, 200-2200ms random delay (anti-enum),
   Google hd-claim domain allowlist; email provider blocked for actual login (reset-only)
 
+### Main session supplement (2026-09-26 — same session)
+- auth.ts full: session callback re-queries DB on every JWT; sessionsExpiredAt = immediate revocation;
+  redirect callback: isValidCallbackUrl + same-origin; //evil.com → prepend baseUrl → same-origin safe;
+  useVerificationToken → null prevents scanner token burn; 11 OIDC providers via env-var credentials
+- userAccount.ts: StringNoHTML updateDisplayName; featurePreviewFlags z.enum; delete in Serializable TX
+- sqlInterface.ts + dashboard-router.ts: chart procedure dispatches by queryName enum only;
+  select.column declared but never consumed in query bodies; matchAndVerifyTracesUiColumn validates
+  against UiColumnMappings registry
+- Pages SSPs (all CLEAN): trace redirect uses DB-validated ID; sign-in SSP is env-var only;
+  evals/index uses encodeURIComponent(projectId); eval configs DB lookup + CUID-safe;
+  datasets redirect CUID-safe; reset-password SMTP env check
+- native_codec.rs: Rust DateTime64Micros/Decimal64 encoders; decimal overflow clamped at DECIMAL_LIMIT;
+  memory-safe, no injection surface
+- json-parser.worker.ts: deepParseJsonIterative; maxSize:10MB; browser web worker, no auth surface
+- ee/src/index.ts + ee-license-check: env var checks only
+
 ## Commits
 - f85ed61: LFG-SANDBOX-1B docker network fix
 - e8d9313: pass 4 complete
 - f22d142: pass 5 complete
 - 9e6aab5: final status update
+- b7c7af2: pass 6 complete (server routers + client-side full coverage)
+- 9ea5b41: pass 7 complete — 100% coverage
+- db6b423: main session supplement (auth.ts full, pages SSPs, native codec, json-parser worker)
 - (next): pass 7 complete — RE 100% DONE
