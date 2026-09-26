@@ -960,7 +960,7 @@ FINDINGS = {
 
     "VTL_profile": {
         "binary": "vtl",
-        "status": "ANALYZED PARTIAL — system() callers resolved PLAUSIBLE LOW (HSM admin-only); sprintf/strcpy pending",
+        "status": "ANALYZED COMPLETE — all sinks PLAUSIBLE LOW (SafeNet HSM admin-only) or ELIMINATED; no user-network-reachable injection",
         "evidence": {
             "system_0x430f63_430fcd": (
                 "ChrystokiConfiguration (SafeNet Luna HSM library): strcpy('rm --force ') + strcat(cluster_name) + system(). "
@@ -972,8 +972,25 @@ FINDINGS = {
                 "this+8 = command string from HSM config struct (Chrystoki.conf, admin-only). "
                 "Same SafeNet library class as 0x430f63. PLAUSIBLE LOW — admin-only, third-party HSM code."
             ),
-            "sprintf_85": "85 sprintf callers — audit pending (memory corruption / injection risk)",
-            "strcpy_19": "19 strcpy callers — bounds checking unknown; pending",
+            "sprintf_85_ELIMINATED": (
+                "85 callers audited. "
+                "~25 at 0x40ca3b-0x40ce58 (support-info diagnostics): build shell command strings "
+                "('nslookup -sil %s >> %s', 'ping -c 4 %s >> %s') BUT all followed by fwrite() not system(). "
+                "Command strings written as text to c_supportInfo.txt only. ELIMINATED. "
+                "~14 in ChrystokiConfigurationD1Ev range (0x42c097-0x4316ff): 'VirtualToken%02dLabel/SN', "
+                "'Cluster%02d', 'ServerHtl%02d' — integer-only formats, HSM config. ELIMINATED. "
+                "~6 file path building (0x41a73e/%s.tmp, 0x41a752/%s.old, 0x41aca9/%s%sCert.pem etc.): "
+                "file paths from admin-configured cert names. PLAUSIBLE LOW (path traversal, admin-only). "
+                "Remaining: string building for display/output (std::string::append + fputs). ELIMINATED."
+            ),
+            "strcpy_19_PLAUSIBLE_LOW": (
+                "19 callers audited. "
+                "5 malloc-bounded (mov rdi, rax). ELIMINATED. "
+                "3 at 0x430deb/0x430f50/0x430fba: feed into ChrystokiConfiguration strcpy+strcat+system chain "
+                "('rm --force '+cluster_name). Same PLAUSIBLE LOW class as system() findings above. "
+                "2 hardcoded literals (0x4306b8: strcpy literal '%s,%s'; 0x5491ad: 'dso_dlfcn.c' OpenSSL). ELIMINATED. "
+                "9 in ChrystokiConfigurationD1Ev (HSM token/cluster string building): PLAUSIBLE LOW (admin HSM config)."
+            ),
         },
     },
 
