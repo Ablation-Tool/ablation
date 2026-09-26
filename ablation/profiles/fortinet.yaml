@@ -1,0 +1,88 @@
+# Fortinet vendor profile for ablation analyzers
+#
+# Covers: FortiADC, FortiGate, FortiProxy, FortiSandbox, FortiMail, FortiManager
+# and any other FortiOS-derived firmware that uses the libstdext.so wrapper layer.
+#
+# Architecture note (confirmed in FortiADC v8.0.4-B0136, sessions 8–17):
+#   fadcsystem / fadcpopen are NOT raw shell calls.
+#   They call posix_spawnp via libstdext.so:parse_redirect_path, which handles
+#   '<', '>>', '2>', '&>' as file-actions (dup2+open), NOT via execve /bin/sh.
+#   Shell metacharacters ; | $() ` are passed as literal argv tokens — no shell.
+#   Injection is only possible if the *argument value* itself contains metacharacters
+#   AND the redirect handler passes them through, which it does NOT for /bin/sh.
+
+vendor: fortinet
+
+sinks:
+  - name: fadcsystem
+    arg_pos: 0
+    note: >
+      posix_spawnp wrapper (libstdext.so). NOT a raw shell call. Handles I/O
+      redirects via file-actions; shell metacharacters are literal argv.
+      arg0 = command string (rdi).
+
+  - name: fadcpopen
+    arg_pos: 0
+    note: >
+      popen-like wrapper. arg0 = command string (rdi). Similar to fadcsystem
+      but returns a FILE* for reading output. Metachar behavior same as fadcsystem.
+
+  - name: sys_vdom_exec
+    arg_pos: 1
+    note: >
+      Defined in libbase.so (VA=0x1ce80 in FortiADC v8.0.4-B0136). Calls
+      fadcsystem(cmd) after prepending vdom context. arg1 = command string (rsi).
+      arg0 = vdom_id (int). NOT a shell call — same posix_spawnp path.
+
+  - name: sys_vdom_exec_safe
+    arg_pos: 1
+    note: >
+      Variant of sys_vdom_exec with additional privilege checks. Same arg layout.
+      arg1 = command string (rsi).
+
+  - name: fadcsystemf
+    arg_pos: 0
+    note: >
+      Variadic printf-style wrapper around fadcsystem. arg0 = format string (rdi).
+      Result assembled internally before calling fadcsystem. Format string is
+      typically .rodata; classify the format arg, not the assembled buffer.
+
+known_safe_exec_patterns:
+  - id: haproxy_mworker_reexec
+    description: >
+      HAProxy master-worker process reload (SIGUSR2). Child drops to service
+      UID/GID, clears HAPROXY_MWORKER_* env vars, then execvp(argv[0], argv)
+      using the binary's own original kernel startup args. Not CMDB-sourced.
+    fingerprint:
+      unsetenv_strings:
+        - HAPROXY_MWORKER_REEXEC
+        - HAPROXY_STARTUPLOGS_FD
+        - HAPROXY_MWORKER_WAIT_ONLY
+        - HAPROXY_PROCESSES
+    verdict: ELIMINATED
+    seen_in:
+      - binary: httproxy3
+        caller_va: "0x2a5559"
+        func_va: "0x2a54c0"
+
+  - id: nginx_worker_respawn
+    description: >
+      nginx master process worker respawn. Child execs argv[0] (nginx binary)
+      from ngx_process struct populated at daemon startup. Not user-controlled.
+    fingerprint:
+      exec_path_source: ngx_process.argv[0]
+    verdict: ELIMINATED
+    seen_in:
+      - binary: fnginx_new
+        caller_va: "0x948aa"
+
+known_sanitizers:
+  - name: is_valid_host_name
+    charset: "[A-Za-z0-9_-]"
+    note: >
+      Universal CMDB field validator in libcmdb_plugin.so (FortiADC 0x84f00).
+      Applied to VDOM names, VS names, scripting names, service names, interface
+      names, and all admin-supplied name fields before they reach any exec sink.
+      Blocks '/', '.', ';', '|', '$', '`', '"', "'" and all other shell metacharacters.
+      Confirmed to gate: miglogd fadcsystem, fnginxctld fadcpopen, flg_accessd
+      fadcpopen, lb fadcpopen, lb cmf_exec_conf, saml_sp_metadata.sh entity ID.
