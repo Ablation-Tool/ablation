@@ -51,6 +51,54 @@ Method  : 6-stage source RE via ablation source analyzers
                    SFDC sync: fire-and-forget CRM sync, no injection surface
                    in-app-agent-sandbox-runtime contracts.ts: confirms bash operation schema
                    (LFG-SANDBOX-1B already documented)
+          Pass 7:  Remaining worker internals + remaining tRPC routers + packages
+                   TRPC ROUTERS: trpc.ts (full — enforceUserIsAuthed, enforceTraceAccess,
+                                  enforceSessionAccess, enforceIsAuthedAndOrgMember; admin bypass
+                                  always audited via sendAdminAccessWebhook),
+                                  traces.ts, scores.ts, observations.ts, users.ts, media.ts,
+                                  models.ts, sessions.ts, monitors.ts, scoreConfigs.ts,
+                                  notificationPreferences.ts, tableViewPresets.ts, auditLogs.ts,
+                                  dashboardWidgets.ts, commentReactions.ts, generators/,
+                                  rbac/membersRouter.ts (throwIfHigherRole privilege escalation guard),
+                                  utilities.ts (SSRF-gated image URL probe via validateOutboundUrlHost),
+                                  public.ts (version check hits hardcoded langfuse.com URL)
+                   WORKER INTERNALS: IngestionService (immutableEntityKeys define idempotent upsert;
+                                  all records Zod-validated at schema layer),
+                                  batchExport/handleBatchExportJob (BatchExportQuerySchema guard;
+                                  cancellation check; 30-day expiry guard; retention re-fetched from DB),
+                                  scores/processClickhouseScoreDelete (projectId-scoped),
+                                  entityChange/entityChangeWorker (type-safe switch, unknown types throw),
+                                  observation-field-overflow/processObservationFieldOverflow (env-gated;
+                                  uploads overflow fields to S3 media bucket),
+                                  in-app-agent/executeInAppAgentRun (CAS claimQueuedRun prevents duplicates;
+                                  AbortController for graceful shutdown; MCP API key lifecycle cleanup),
+                                  in-app-agent/resolveLangfuseMcpUrl (LANGFUSE_MCP_BASE_URL > NEXTAUTH_URL;
+                                  URL normalized via new URL(), no user input),
+                                  notifications/commentMentionHandler (all IDs encodeURIComponent;
+                                  comment fetched with projectId WHERE clause always)
+                   EE WORKER: cloudSpendAlerts (Stripe spend query, org-scoped), dataRetention
+                                  (re-fetches retention from DB — prevents stale delete of re-enabled data),
+                                  usageThresholds (org-scoped usage aggregation),
+                                  cloudUsageMetering (billing metering pipeline)
+                   BACKGROUND MIGRATIONS: encryptBlobStorageSecrets (idempotent; detects plain vs
+                                  AES-GCM-256 by colon presence; no user input)
+                   PACKAGES: native/src/native_schema.rs (Rust macro-driven ClickHouse events_full
+                                  column schema; no user input),
+                                  in-app-agent-sandbox-runtime/server.ts (confirmed:
+                                  SandboxOperationSchema gate; runSandboxOperationExclusive serial;
+                                  MAX_REQUEST_BODY_BYTES=10MB; zero-auth intentional = LFG-SANDBOX-1B)
+                   OTEL: web/src/server/otel/processOtelIngestion (content-type gate:
+                                  JSON or x-protobuf only; 16MB warning; validateOtelSpanIds)
+                   SEARCH BAR: validate.ts/commit.ts (MAX_QUERY_LENGTH=2048; validateQuery gate
+                                  before astToFilterState; parity-by-construction guarantees)
+                   WORKER UTILS: PeriodicRunner (abstract interval runner, no security surface),
+                                  RedisLock (UUID ownership + Lua atomic check-and-delete + TTL;
+                                  onUnavailable:"proceed"|"fail" configurable),
+                                  ClickhouseWriter (singleton batch writer; queue per TableName enum;
+                                  exponential backoff; no raw SQL)
+                   XSS SWEEP (all 5293 files): dangerouslySetInnerHTML — zero instances;
+                                  innerHTML reads in InAppAgentMessage.tsx are read-not-write (clipboard);
+                                  postMessage in SlackIntegrationPage uses window.location.origin target
           Pass 4 worker features covered:
                    eval (decision model, eval metrics, span attrs, S3 client, retry,
                          observation eval scheduler deps + rules + types, batch eval),
