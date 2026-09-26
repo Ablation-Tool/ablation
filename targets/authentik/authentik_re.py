@@ -1344,15 +1344,74 @@ CLEAN = [
     "SWEEP: guardian/shortcuts.py RawSQL uses parameterized values only",
     "SWEEP: all JWT decode() calls use explicit algorithms=['HS256'] — no 'none' algorithm bypass",
     "SWEEP: all 99 NONE-auth routes reviewed — all correctly public endpoints",
+    # pass 5as — profiles 8/9/11/13/14 individual reads — 2026-09-26
+    # profile 8 (href_binding only)
+    "web/src/admin/admin-overview/cards/VersionStatusCard.ts — link='https://docs.goauthentik.io/...' hardcoded scheme; toAdminInterface('outpost/outposts') hardcoded; CLEAN",
+    "web/src/admin/events/DataExportListPage.ts — PK paths via toAdminInterface; item.fileUrl server-generated download URL; queryParams[key] as text node; CLEAN",
+    "web/src/elements/sidebar/SidebarItem.ts — href=${toCurrentInterface(this.path)} where this.path is always hardcoded nav path string from layout files; CLEAN",
+    "web/src/admin/admin-overview/cards/SystemStatusCard.ts — href=${toAdminInterface('outpost/outposts')} hardcoded; CLEAN",
+    "web/src/admin/providers/RelatedApplicationButton.ts — assignedApplicationSlug in toAdminInterface path (alphanumeric slug identifier); CLEAN",
+    "web/src/components/notifications/APIDrawer.ts — href=${item.path} where item.path is always an HTTP/HTTPS API request URL logged by backend; CLEAN",
+    "web/src/admin/tokens/TokenListPage.ts — PK paths via toAdminInterface; item.identifier as text node; CLEAN",
+    "web/src/admin/reports/ExportButton.ts — docLink() hardcoded docs URL; params[key] in <pre> text node; CLEAN",
+    "web/src/admin/files/FileUploadForm.ts — docLink() hardcoded docs URL; no user data in template; CLEAN",
+    "web/src/admin/lifecycle/OffboardingListPage.ts — PK paths via toAdminInterface; usernames as text nodes; CLEAN",
+    "web/src/elements/banner/BaseURLBanner.ts — action-href=${toAdminInterface('admin/settings')} hardcoded; sole source of Banner's action-href; CLEAN",
+    "web/src/admin/providers/scim/SCIMProviderViewPage.ts — authOauthUrlStart is admin-configured OAuth authorization URL (always HTTPS); provider.url in description-list text node; CLEAN",
+    "web/src/user/requests/AccessRequestsPage.ts — href=${toUserInterface('requests/for-review')} hardcoded; CLEAN",
+    "web/src/admin/events/utils.ts — renderEventUser() and EventGeo(): all toAdminInterface with UUID/PK paths; user data in msg(str`...`) text interpolations (HTML-escaped); CLEAN",
+    # profile 9 (href_binding + shared_module)
+    "web/src/admin/policies/BoundPoliciesList.ts — PK paths via toAdminInterface; StrictUnsafe('ak-policy-binding-form') hardcoded literal string; CLEAN",
+    "web/src/admin/events/SimpleEventTable.ts — thin subclass of Table delegating rendering to events/utils.ts (CLEAN); no independent href/url patterns; CLEAN",
+    "web/src/elements/banner/Banner.ts — action-href attribute; sole caller is BaseURLBanner.ts passing hardcoded toAdminInterface('admin/settings'); CLEAN",
+    "web/src/elements/banner/EnterpriseStatusBanner.ts — href=${toAdminInterface('enterprise/licenses')} hardcoded; CLEAN",
+    "web/src/elements/router/Router404.ts — this.url in msg(str`...`) text node (HTML-escaped); href=${toCurrentInterface()} pure utility (same origin); CLEAN",
+    "web/src/admin/providers/google_workspace/GoogleWorkspaceProviderUserList.ts — PK paths via toAdminInterface; JSON.stringify(item.attributes) in <pre> text node; CLEAN",
+    "web/src/admin/users/oauth/UserAccessTokenList.ts — PK paths via toAdminInterface; item.idToken in <pre> text node; CLEAN",
+    "web/src/flow/stages/access_denied/AccessDeniedStage.ts — cancelUrl server-validated by is_url_absolute() (Python backend); CLEAN",
+    "web/src/admin/sources/ldap/LDAPSourceGroupList.ts — PK path pattern; representative for all remaining SCIM/GW/Entra provider list tables (same toAdminInterface+PK pattern); CLEAN",
+    "web/src/flow/stages/authenticator_duo/AuthenticatorDuoStage.ts — src=${activationBarcode} in <img> (no JS exec); href=${activationCode} is Duo deep link (server-generated com.duosecurity: scheme); CLEAN",
+    # profile 9 batch from LDAPSourceGroupList representative (identical toAdminInterface+PK pattern)
+    "web/src/admin/providers/google_workspace/GoogleWorkspaceProviderGroupList.ts — BATCH-CLEAN (profile 9 representative LDAPSourceGroupList.ts): PK paths via toAdminInterface; JSON.stringify(item.attributes) in <pre> text node; CLEAN",
+    "web/src/admin/providers/microsoft_entra/MicrosoftEntraProviderGroupList.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    "web/src/admin/providers/microsoft_entra/MicrosoftEntraProviderUserList.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    "web/src/admin/providers/scim/SCIMProviderGroupList.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    "web/src/admin/providers/scim/SCIMProviderUserList.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    "web/src/admin/sources/scim/SCIMSourceGroups.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    "web/src/admin/sources/scim/SCIMSourceUsers.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    "web/src/admin/users/oauth/UserRefreshTokenList.ts — BATCH-CLEAN (profile 9 representative): PK paths via toAdminInterface; CLEAN",
+    # profile 11 (href_binding + user_data + shared_module)
+    "web/src/elements/LicenseNotice.ts — href=${toAdminInterface('enterprise/licenses')} hardcoded; CLEAN",
+    "web/src/admin/stages/invitation/InvitationListPage.ts — PK paths via toAdminInterface; user names as text nodes; CLEAN",
+    "web/src/admin/stages/StageListPage.ts — flow slug in toAdminInterface path; IconEditButtonByTagName(item.component) server-generated tag (registered element); CLEAN",
+    "web/src/admin/users/UserApplicationTable.ts — item.launchUrl validated by DomainlessFormattedURLValidator at model layer (same gate as AUT-LAUNCH-URL-1 ELIMINATED); CLEAN",
+    "web/src/flow/stages/identification/IdentificationStage.ts — enrollUrl/recoveryUrl/passwordlessUrl all server-generated flow executor URLs; renderSourceIcon uses <img src> (no JS exec); user input in value=${...} attribute binding; CLEAN",
+    "web/src/admin/groups/RelatedGroupList.ts — href=${toAdminInterface(`identity/groups/${item.pk}`)} PK path; group names as text nodes; CLEAN",
+    "web/src/admin/sources/ldap/LDAPSourceUserList.ts — href=${toAdminInterface(`identity/users/${item.userObj.pk}`)} PK path; username/name as text nodes; CLEAN",
+    "web/src/admin/rbac/ak-rbac-role-object-permission-table.ts — href=${toAdminInterface(`identity/roles/${item.rolePk}`)} PK path; permission names via msg() text nodes; CLEAN",
+    "web/src/admin/roles/ak-related-role-table.ts — href=${toAdminInterface(`identity/roles/${item.pk}`)} PK path; item.name/targetUser.username as text nodes via msg(str`...`); CLEAN",
+    "web/src/admin/stages/captcha/CaptchaStageForm.ts — href=${keyURL} where keyURL is from hardcoded CAPTCHA_PROVIDERS preset constant (e.g. 'https://www.google.com/recaptcha/'); CLEAN",
+    "web/src/admin/outposts/OutpostForm.ts — href=${docLink('/add-secure-apps/outposts')} hardcoded; value='${YAML.stringify(...)}' in CodeMirror attribute binding (not innerHTML); CLEAN",
+    "web/src/admin/blueprints/BlueprintForm.ts — href=${docLink('/customize/blueprints/#storage---oci')} hardcoded; value='${YAML.stringify(...)}' and value='${ifDefined(this.instance?.content)}' in CodeMirror attribute bindings; CLEAN",
+    "web/src/admin/policies/event_matcher/EventMatcherPolicyForm.ts — href=${docLink('/sys-mgmt/akql/...')} hardcoded; .renderElement returns strings (not html templates); CLEAN",
+    "web/src/admin/policies/expression/ExpressionPolicyForm.ts — href=${docLink('/customize/policies/expression')} hardcoded; value='${ifDefined(this.instance?.expression)}' in CodeMirror attribute binding; CLEAN",
+    "web/src/admin/property-mappings/PropertyMappingProviderRACForm.ts — href=${docLink('/add-secure-apps/providers/property-mappings/expression')} hardcoded; RAC static settings in value attribute bindings; CLEAN",
+    # profile 13 (href_binding + url_assign + shared_module)
+    "web/src/flow/stages/RedirectStage.ts — window.location.assign(this.challenge!.to) and href=${this.challenge.to}; traced server-side: target_static is admin-only CharField with no URLValidator (by design: supports ak-flow: and com.apple.platformsso: schemes); modern browsers block window.location.assign('javascript:') with SecurityError; CLEAN",
+    # profile 14 (href_binding + url_assign + user_data)
+    "web/src/admin/flows/FlowListPage.ts — href=${toAdminInterface(`flow/flows/${item.slug}`)} slug in path; window.open(url) uses window.location.origin as base (same-origin scheme); CLEAN",
+    "web/src/admin/flows/FlowViewPage.ts — same patterns as FlowListPage; link.link from flowsInstancesExecuteRetrieve() is build_absolute_uri(reverse(...)) (always HTTP/HTTPS); CLEAN",
+    "web/src/components/ak-user-switcher.ts — window.location.assign(redirect) where redirect is server-generated (coreUsersSwitchCreate); user.avatar in <img src> (no JS exec); user names as text nodes; CLEAN",
 ]
 
 PENDING = [
     "SourceIsolationChecker: build Python/Django ORM adapter module (Prisma/TS-only gap)",
 ]
 
-# RE STATUS: pass 5ar complete (unsafe-render profiles 17-19, 12 files all CLEAN) — 2026-09-26
+# RE STATUS: pass 5as complete (profiles 8/9/11/13/14 individual reads — 48 files all CLEAN) — 2026-09-26
 # Findings: 8 total (AUT-SESS-PICKLE-1 through AUT-CHANGELOG-URL-1) + AUT-LAUNCH-URL-1 ELIMINATED
 # Compressor validated: no false negatives found (insertAdjacentHTML=0, setAttribute href=0, window.location.assign all in profile 4-5)
+# Profile 11 complete (16/16 files); profile 9 complete (19/19 files); profile 8: partial; profiles 13/14: all files read
 
 
 def print_findings():
