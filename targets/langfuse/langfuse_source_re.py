@@ -1,5 +1,5 @@
 """
-Langfuse source RE — pass 4 in progress (2026-09-26)
+Langfuse source RE — pass 4 complete (2026-09-26)
 
 Target  : langfuse/langfuse (open source LLM observability platform)
 Repo    : https://github.com/langfuse/langfuse
@@ -13,9 +13,40 @@ Method  : 4-stage source RE via ablation source analyzers
           Pass 3:  SSRF audit (LLM/webhook/blob), LLM key storage, admin routes,
                    AI gateway, SCIM, sandbox, dashboard query, IO streaming,
                    remaining route handlers, analytics integrations
-          Pass 4:  Remaining worker features (eval, in-app-agent, batch actions,
-                   blob storage, trace/score/dataset deletion, entity change,
-                   v4 legacy API usage, tokenisation, trace batching)
+          Pass 4:  Remaining worker features — all covered:
+                   eval (decision model, eval metrics, span attrs, S3 client, retry,
+                         observation eval scheduler deps + rules + types, batch eval),
+                   in-app-agent (DLQ retry, integrity runner, skills, types),
+                   tokenisation (usage, async pool, worker thread, model types),
+                   batch actions (processAddToQueue, processTraceDeleteBatchAction,
+                                  processBatchedObservationEval),
+                   blob storage (main handler, manifest, firstExportStart, deprecation,
+                                 byteCounters, gzipStream, partLimitError,
+                                 isCustomerFaultError, abortClassification,
+                                 handleBlobStorageIntegrationSchedule, inFlightExports),
+                   trace/score deletion (processPostgresTraceDelete,
+                                         processClickhouseTraceDelete),
+                   trace-delete-batch-action-runner,
+                   database-read-stream (getDatabaseReadStream, fetchComments,
+                                         event-stream, types),
+                   health (index, queueConsumption),
+                   integrations/prismaErrors,
+                   experiments (experimentServiceClickhouse, utils),
+                   mixpanel (handleMixpanelIntegrationProjectJob, transformers,
+                             handleMixpanelIntegrationSchedule),
+                   posthog (handlePostHogIntegrationProjectJob, transformers,
+                            handlePostHogIntegrationSchedule),
+                   slack/slackMessageBuilder,
+                   monitor-runner, queue-metrics-runner,
+                   v4/v4LegacyApiUsageMetrics,
+                   traceBatching (TraceBatchMetricsRunner, traceBatchTranscript),
+                   media-retention-cleaner, deleted-mask-cleaner,
+                   otel-ingestion/processOtelEvents,
+                   otel-media/processOtelMedia,
+                   in-app-agent/runtime (skills, types),
+                   eventPropagation/handleEventPropagationJob
+          Remaining: web/src/features/* (1177 files, not yet started),
+                     packages/shared/src/server/repositories/* (partial review)
 Auditor : nicholas@nuclide-research.com
 
 Findings summary (confirmed):
@@ -27,7 +58,7 @@ Findings summary (confirmed):
   LFG-ISO-1       LOW   unscoped batchAction update helper (latent IDOR)
   LFG-SANDBOX-1A  MED   prompt injection → auto-approved bash (PLAUSIBLE)
 
-SSRF surface — pass 3 verdict: CLEAN (no new findings)
+SSRF surface — pass 3+4 verdict: CLEAN (no new findings)
   LLM base URL:        validateLlmConnectionBaseURL → validateOutboundUrlHost →
                        CIDR blocklist (all RFC1918 + IMDS + NAT64) + DNS resolution
                        + redirect re-validation; cloud forces empty whitelist + HTTPS-only
@@ -37,6 +68,22 @@ SSRF surface — pass 3 verdict: CLEAN (no new findings)
   AI gateway:          HMAC signature verification (withGatewayResolveSignatureVerification)
   SCIM endpoint:       shadowAuth + org-scoped, Serializable TX for last-OWNER guard
   Sandbox server:      intentional zero-auth, security contract is microVM isolation
+
+Pass 4 worker security review — verdict: CLEAN (one new CONFIRMED finding: LFG-ISO-1)
+  Eval anti-loop:      3 layers (createEvalJobs env guard → isObservationAllowed → isEvalTargetEnvAllowed)
+  Eval dedup:          createW3CTraceId(JSON.stringify([...payloadFields])) deterministic job IDs
+  Blob storage SSRF:   validateBlobStorageEndpoint (pre-flight) + blobStorageEndpointConnectionValidationOptions
+                       (connection-time; defends DNS rebinding); PostHog uses countingFetch + re-validates at socket
+  DDL injection (CH):  assertTargetTable allowlist + assertMonthPartition regex + quoteClickhouseIdentifier/String
+  Partition cursor:    handleEventPropagationJob uses tuple('${partitionToProcess}') template literal but
+                       partitionToProcess is read from ClickHouse system.parts (datetime format, not user input)
+  Trace delete:        processTraceDeleteBatchAction — write-before-advance cursor; canCommitProgress lease
+                       check before every commit; BatchActionQuerySchema + TraceDeleteBatchActionConfigSchema parse;
+                       shouldSkipDeletion guard; unscoped prisma.batchAction.update = LFG-ISO-1 (latent IDOR)
+  Mixpanel/PostHog:    isBadDistinctId blocklist (Mixpanel); fetchWithSecureRedirects + socket-connect re-validate
+                       (PostHog); decrypt() for all credentials; classifyCustomerFault auto-disable
+  Slack builder:       escapeSlackMrkdwn on all user-controlled fields (tags, commitMessage, labels, names)
+  safeBlobKeySegment:  sanitizes user-supplied IDs before S3 key construction (observationEval S3 paths)
 
 Run this module to reproduce the sweep and register confirmed findings:
     python3 targets/langfuse/langfuse_source_re.py --sweep /tmp/langfuse
@@ -314,7 +361,7 @@ INFO_FINDINGS = [
 
 def print_findings():
     """Print all confirmed findings in RE module format."""
-    print(f"Langfuse Source RE — Pass 3 Complete  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
+    print(f"Langfuse Source RE — Pass 4 Complete (worker features)  ({len(FINDINGS)} findings, {len(INFO_FINDINGS)} INFO)")
     print("=" * 70)
     for f in FINDINGS:
         print(f"\n[{f['id']}] {f['status']} {f['severity']}  {f['cwe']}")
