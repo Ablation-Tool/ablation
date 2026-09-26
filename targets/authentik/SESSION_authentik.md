@@ -775,3 +775,32 @@ Notable: `ak-role-assigned-object-permissions-table.ts` — `item.objectPk` rend
 - ak-role-permission-form.ts: CLEAN — permission.name text node in chip
 - TokenForm.ts: CLEAN — identifier/description in value= bindings; user.username returned as string from .renderElement; user.name text node in .renderDescription; dateTimeLocal() produces ISO string in value= on datetime-local input
 - TokenListPage.ts: CLEAN — item.identifier/userObj.username text nodes; toAdminInterface(identity/users/<pk>); formatIntentLabel() returns localized string
+
+### Deep Reads — TypeScript individual file reads (pass 5ai — 2026-09-26)
+**Directory: web/src/admin/providers/ (62 files) — all CLEAN**
+
+All provider admin pages (LDAP, OAuth2, Proxy, SAML, Radius, RAC, Microsoft Entra, SCIM, SSF, WS-Federation, Google Workspace) follow the same safe patterns throughout. Every user-controlled or API-sourced string appears as a Lit text node or in `value=` attribute bindings on form inputs, never in `unsafeHTML()`. Repeated patterns across all provider families:
+
+- Outgoing-sync provider lists (Entra, SCIM, Google Workspace): `item.groupObj.name`/`item.userObj.username` as text nodes; `JSON.stringify(item.attributes, null, 4)` in `<pre>` as text node (safe); `toAdminInterface()` for all hrefs.
+- View pages: provider.name/clientId/audience/etc. all text nodes; server-generated URLs (urlWsfed, urlDownloadMetadata, ssfUrl) in readonly `input[value=]` or `<a href=>` — not user-settable post-write.
+- Form files: all fields in `value=` attribute bindings on native inputs or ak-*-input components.
+- `YAML.stringify(settings)` in RAC/SCIM: serialized object goes into ak-codemirror `value=` — not HTML interpolation.
+- ProxyProviderViewPage.ts: `externalHost` appears in `<a href=>` AND as text node — safe because `DomainlessFormattedURLValidator` blocks `javascript:`/`data:`/`vbscript:` at write time on backend.
+- ProviderViewPage.ts: `switch(provider.component)` selects known element tags; default case renders as text node.
+- ProviderListPage.ts: `item.component` in `IconEditButtonByTagName()` — defended by StrictUnsafe triple-guard in unsafe.ts.
+- SSF StreamTable.ts: `item.aud` text node; `SSFDeliveryMethodToLabel()` returns enum label (no user data).
+- WSFederationProviderViewPage.ts: preview.nameID/attr.Name/attr.Value[] all text nodes or in `<pre>` text nodes — identical to SAMLProviderViewPage pattern.
+
+Files read (62 total):
+- ProviderListPage.ts, ProviderViewPage.ts, BaseProviderForm.ts, RelatedApplicationButton.ts, ak-provider-wizard.ts: CLEAN
+- ldap/ (5 files): all CLEAN — LDAPProviderViewPage.ts shows cn=<username>/ou=users/<baseDn> in readonly input value=
+- oauth2/ (8 files): all CLEAN
+- proxy/ (4 files): all CLEAN — ProxyProviderViewPage externalHost defended by DomainlessFormattedURLValidator
+- saml/ (6 files): all CLEAN
+- radius/ (4 files): all CLEAN
+- rac/ (6 files): all CLEAN — YAML.stringify(settings) in ak-codemirror value=
+- microsoft_entra/ (5 files): all CLEAN
+- scim/ (6 files): all CLEAN — authOauthUrlStart in <a> href is server-generated OAuth URL
+- ssf/ (4 files): all CLEAN
+- wsfed/ (3 files): all CLEAN
+- google_workspace/ (5 files): all CLEAN — credentials object via .value Lit property binding (not string attr)
