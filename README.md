@@ -115,21 +115,13 @@ This project was greatly informed and inspired by several key literary works.
 | Hacking: The Art of Exploitation (2e) | Jon Erickson |
 | Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) |
 | Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich |
+| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler |
 | Advanced Compiler Design and Implementation | Steven Muchnick |
 | Engineering a Compiler | Keith Cooper, Linda Torczon |
-| Reverse Engineering for Beginners | [Dennis Yurichev](https://github.com/DennisYurichev) |
-| x86 Software Reverse Engineering, Cracking, and Counter-Measures | [Stephanie Domas](https://github.com/sdcanonical), [Christopher Domas](https://github.com/xoreaxeaxeax) |
-| The Linux Programming Interface | [Michael Kerrisk](https://github.com/mkerrisk) |
-| Professional Linux Kernel Architecture | [Wolfgang Mauerer](https://github.com/wolfgangmauerer) |
-| Linux Kernel Programming (2nd ed.) | [Kaiwan N. Billimoria](https://github.com/kaiwan) |
-| Building Secure Firmware | [Jiewen Yao](https://github.com/jyao1), Vincent Zimmer |
-| Executable Files for Linux: Under the Hood of ELFs | Mohit Mishra |
-| Mastering Malware Analysis (2nd ed.) | [Alexey Kleymenov](https://github.com/alexey-kleymenov), [Amr Thabet](https://github.com/AmrThabet) |
+| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods |
 | Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha |
-| Malware Analysis Techniques | Dylan Barker |
 | Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) |
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
-| The Art of Randomness | [Ronald T. Kneusel](https://github.com/rkneusel9) |
 | Real-World Cryptography | David Wong |
 
 **Honorable Mention**
