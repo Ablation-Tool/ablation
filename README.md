@@ -89,7 +89,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
 ## Acknowledgments
 This project was greatly informed and inspired by several key literary works.
 
-**Books** | [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
+**Books** supplied by [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
 
 | Title | Author |
 |---|---|
