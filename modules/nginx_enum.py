@@ -1065,8 +1065,6 @@ class NginxEnumerator:
         return '\n'.join(lines)
 
 
-# ── MacStadium convenience ────────────────────────────────────────────────────
-
 def probe_common_sensitive_paths(
         host: str, port: int = 443, use_tls: bool = True,
         timeout: float = 5.0) -> list:
