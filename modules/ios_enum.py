@@ -7,8 +7,6 @@ Sources: Cisco IOS in a Nutshell (156592942X), CyberOps, DevNet.
 Targets: HTTP/REST API, SNMP (CDP neighbor table, running-config OID),
          Telnet banner, TFTP config pull, AAA (TACACS+/RADIUS) detection.
 
-MacStadium context: IOS devices behind ASA (207.254.35.12) and
-alongside Nexus (207.254.14.1).
 """
 
 import json
@@ -461,16 +459,6 @@ def parse_ios_config(config_text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# MacStadium IOS candidates
-# ---------------------------------------------------------------------------
-MACSTADIUM_IOS_CANDIDATES = [
-    {'host': '207.254.14.1',  'label': 'nexus_gw',     'port': 443},
-    {'host': '207.254.14.2',  'label': 'ios_gw_2',     'port': 443},
-    {'host': '10.0.1.1',      'label': 'internal_gw',  'port': 443},
-    {'host': '172.16.1.1',    'label': 'mgmt_gw',      'port': 443},
-]
-
-
 # ---------------------------------------------------------------------------
 # Main enumerator
 # ---------------------------------------------------------------------------
