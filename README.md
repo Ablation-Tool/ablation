@@ -106,23 +106,23 @@ This project was greatly informed and inspired by several key literary works.
 
 **Books** supplied by [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
 
-| Title | Author |
-|---|---|
-| The Art of Software Security Assessment | [Mark Dowd](https://github.com/mdowd79), John McDonald, [Justin Schuh](https://github.com/jschuh) |
-| Practical Binary Analysis | [Dennis Andriesse](https://github.com/dennisaa) |
-| Practical Malware Analysis | Michael Sikorski, Andrew Honig |
-| Practical Reverse Engineering | Bruce Dang, Alexandre Gazet, [Elias Bachaalany](https://github.com/0xeb) |
-| Hacking: The Art of Exploitation (2e) | Jon Erickson |
-| Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) |
-| Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich |
-| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler |
-| Advanced Compiler Design and Implementation | Steven Muchnick |
-| Engineering a Compiler | Keith Cooper, Linda Torczon |
-| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods |
-| Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha |
-| Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) |
-| Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
-| Real-World Cryptography | David Wong |
+| Title | Author | Citation |
+|---|---|---|
+| The Art of Software Security Assessment | [Mark Dowd](https://github.com/mdowd79), John McDonald, [Justin Schuh](https://github.com/jschuh) | cited in `ablation/analyzers/heap_vuln_scanner.py`, `format_string_scanner.py`, `ioctl_attack_surface.py` |
+| Practical Binary Analysis | [Dennis Andriesse](https://github.com/dennisaa) | cited in `ablation/analyzers/taint_tracker_x86.py`, `ablation/core/disasm_engine.py` |
+| Practical Malware Analysis | Michael Sikorski, Andrew Honig | cited in `ablation/core/pe_parser.py`, `ablation/core/shellcode_utils.py` |
+| Practical Reverse Engineering | Bruce Dang, Alexandre Gazet, [Elias Bachaalany](https://github.com/0xeb) | cited in `ablation/core/pe_analyzer.py`, `ablation/analyzers/kernel_driver_analyzer.py` |
+| Hacking: The Art of Exploitation (2e) | Jon Erickson | cited in `ablation/core/platform_detect.py` |
+| Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) | cited in `ablation/core/elf_parser.py`, `ablation/core/binary_parser.py` |
+| Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich | cited in `ablation/analyzers/kernel_driver_analyzer.py`, `ioctl_attack_surface.py` |
+| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler | cited in `ablation/analyzers/kernel_driver_analyzer.py`, `ablation/core/yara_generator.py` |
+| Advanced Compiler Design and Implementation | Steven Muchnick | cited in `ablation/analyzers/dataflow_engine.py` |
+| Engineering a Compiler | Keith Cooper, Linda Torczon | cited in `ablation/core/disasm_engine.py` |
+| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods | cited in `ablation/core/firmware_analyzer.py` |
+| Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha | cited in `ablation/core/yara_generator.py` |
+| Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) | cited in `modules/process_enum.py` |
+| Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) | cited in `modules/tls_enum.py` |
+| Real-World Cryptography | David Wong | cited in `ablation/core/tls_analyzer.py` |
 
 **Honorable Mention**
 
