@@ -170,8 +170,7 @@ runs all confirmed patterns automatically.
 
 ## Resume a session
 
-Ablation is designed for multi-session research. Session state is written to
-`targets/<vendor>/SESSION_<target>.md`. At the start of any session:
+Ablation is designed for multi-session research. At the start of any session:
 
 ```python
 # Load context (110ms -- uses cache)
