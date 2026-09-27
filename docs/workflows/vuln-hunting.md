@@ -258,14 +258,7 @@ Before confirming any finding, verify:
 
 ## Session continuity
 
-Update `targets/<vendor>/SESSION_<target>.md` at the end of every session:
-
-- Binary path and SHA256 prefix
-- New named functions added to the overlay
-- Confirmed findings with instruction addresses and root cause
-- Pending work -- which candidates remain unresolved and why
-
-This file is committed to the repo. The next session reads it first.
+Write session state at the end of every session. Keep it close to the binary: the path, SHA256 prefix, every named function added, confirmed findings with instruction addresses and root cause, and what's still open. Read it before touching the binary next time. That context narrows the search before the sweep even runs.
 
 ---
 
