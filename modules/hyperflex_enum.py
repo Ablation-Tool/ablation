@@ -11,18 +11,6 @@ import urllib.parse
 import base64
 from typing import Optional
 
-HX_DEFAULT_CREDS = [
-    ("admin", "admin"),
-    ("admin", "C1sco12345"),
-    ("admin", "Cisco123"),
-    ("admin", "cisco"),
-    ("admin", "HXpassword1!"),
-    ("hxadmin", "C1sco12345"),
-    ("admin", "Password1!"),
-    ("root", "password1!"),
-    ("root", "Cisco123"),
-]
-
 HX_CONNECT_PORT = 443
 HX_REST_BASE = "/rest/v1"
 
@@ -50,21 +38,6 @@ HX_AUTH_PATHS = {
 ISCSI_PORT = 3260
 NFS_PORT = 2049
 
-# UCSM XML API credentials to try
-UCSM_CREDS = [
-    ("admin", "admin"),
-    ("admin", "cisco"),
-    ("admin", "C1sco12345"),
-    ("admin", "password"),
-]
-
-# APIC REST API credentials to try
-APIC_CREDS = [
-    ("admin", "admin"),
-    ("admin", "cisco"),
-    ("admin", "Cisco123"),
-    ("admin", "password"),
-]
 
 
 def _ssl_ctx() -> ssl.SSLContext:
@@ -115,7 +88,7 @@ def _http_raw(host: str, path: str, method: str = "GET",
         return None
 
 
-def probe_hx_connect(host: str, timeout: int = 8) -> dict:
+def probe_hx_connect(host: str, creds: list = None, timeout: int = 8) -> dict:
     result = {"host": host, "port": HX_CONNECT_PORT, "reachable": False,
               "version": None, "unauth_data": {}, "cred_result": None,
               "auth_data": {}, "intersight_claim_code": None,
@@ -139,7 +112,7 @@ def probe_hx_connect(host: str, timeout: int = 8) -> dict:
 
     # Credential brute
     token = None
-    for user, passwd in HX_DEFAULT_CREDS:
+    for user, passwd in (creds or []):
         body = {"username": user, "password": passwd}
         resp = _hx_request(host, "/rest/v1/tokens", method="POST",
                            body=body, timeout=timeout)
@@ -380,12 +353,11 @@ class HyperFlexEnumerator:
     # New probes
     # ------------------------------------------------------------------
 
-    def probe_ucsm_api(self) -> list:
-        """UCSM XML API at /nuova — default credential check.
+    def probe_ucsm_api(self, creds: list = None) -> list:
+        """UCSM XML API at /nuova — credential check.
 
-        Tries admin/admin and admin/cisco (and admin/C1sco12345).
-        200 + outCookie in body → CRITICAL.
-        200 + error body (API accessible) → MEDIUM with version if present.
+        200 + outCookie in body -> CRITICAL.
+        200 + error body (API accessible) -> MEDIUM with version if present.
         """
         findings = []
         port = 443
@@ -394,7 +366,7 @@ class HyperFlexEnumerator:
         xml_tmpl = '<aaaLogin inName="{u}" inPassword="{p}"/>'
         tried_any = False
 
-        for user, pwd in UCSM_CREDS:
+        for user, pwd in (creds or []):
             body = xml_tmpl.format(u=user, p=pwd).encode()
             resp = _http_raw(
                 self.host, path, method="POST", port=port,
@@ -443,18 +415,17 @@ class HyperFlexEnumerator:
 
         return findings
 
-    def probe_apic_api(self, port: int = 443) -> list:
-        """APIC REST API at /api/aaaLogin.json — default credential check.
+    def probe_apic_api(self, port: int = 443, creds: list = None) -> list:
+        """APIC REST API at /api/aaaLogin.json — credential check.
 
-        Tries admin/admin, admin/cisco, admin/password, admin/Cisco123.
-        200 + token in response → CRITICAL.
-        401 → MEDIUM (API accessible).
+        200 + token in response -> CRITICAL.
+        401 -> MEDIUM (API accessible).
         """
         findings = []
         path = "/api/aaaLogin.json"
         found_crit = False
 
-        for user, pwd in APIC_CREDS:
+        for user, pwd in (creds or []):
             body = json.dumps({
                 "aaUser": {"attributes": {"name": user, "pwd": pwd}}
             }).encode()
