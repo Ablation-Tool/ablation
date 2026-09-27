@@ -3,7 +3,7 @@
 Ablation and Claude Code are complementary: Ablation handles the scale problem
 (finding candidates across thousands of stripped functions in seconds), and Claude
 handles the interpretation problem (tracing taint paths, explaining CFG structure,
-assessing exploitability). Neither replaces the other -- together they cover the
+assessing exploitability). Neither replaces the other. Together they cover the
 full loop from initial scan to confirmed finding.
 
 ---
