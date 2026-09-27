@@ -165,7 +165,7 @@ This project was greatly informed and inspired by several key literary works.
 | Privilege Escalation Techniques | Alexis Ahmed |
 | If It's Smart, It's Vulnerable | Mikko Hyppönen |
 | Physical Fault Injection and Side-Channel Attacks on Mobile Devices | Shepherd, Markantonakis, van Heijningen, Aboulkassimi, Gaine, Heckmann, Naccache |
-| The IDA Pro Book | Chris Eagle |
+
 | Real-World Cryptography | David Wong |
 | Elliptic Curve Cryptography for Developers | Michael Rosing |
 | Mastering Embedded Linux Programming | Frank Vasquez, Chris Simmonds |
