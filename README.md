@@ -109,7 +109,7 @@ This project was greatly informed and inspired by several key literary works.
 | Mathematical Concepts and Methods in Modern Biology | Raina Robeva, Terrell Hodge |
 | Introduction to Biological Networks | Alpan Raval, Animesh Ray |
 | Biological Computation | Ehud Lamm, Ron Unger |
-| Programming Massively Parallel Processors (4th ed.) | Wen-mei W. Hwu, David B. Kirk, Izzat El Hajj |
+| Programming Massively Parallel Processors (4th ed.) | Wen-mei W. Hwu, David B. Kirk, [Izzat El Hajj](https://github.com/ielhajj) |
 | Emerging Trends in Applications and Infrastructures for Computational Biology, Bioinformatics, and Systems Biology | Quoc Nam Tran, Hamid R. Arabnia |
 | Computational Intelligence and Pattern Analysis in Biological Informatics | Ujjwal Maulik, Sanghamitra Bandyopadhyay, Jason T. L. Wang |
 | Meta-heuristic and Evolutionary Algorithms for Engineering Optimization | Omid Bozorg-Haddad, Mohammad Solgi, Hugo A. Loáiciga |
