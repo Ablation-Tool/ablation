@@ -120,7 +120,6 @@ This project was greatly informed and inspired by several key literary works.
 | Attacking Network Protocols | James Forshaw |
 | From Day Zero to Zero Day | Eugene Lim |
 | Open Source Fuzzing Tools | Noam Rathaus, Gadi Evron, Yoav Naveh |
-| The IDA Pro Book | Chris Eagle |
 | The Ultimate Kali Linux Book (3rd ed.) | Glen D. Singh |
 | ARM 64-Bit Assembly Language | Larry D. Pyeatt, William Ughetta |
 | Modern ARM Assembly Language Programming with the ARM Processor | Larry D. Pyeatt |
