@@ -106,9 +106,7 @@ for f in findings:
 
 ## Use case 3: JWT cracking
 
-Enterprise services frequently use weak JWT secrets. This pattern appears in container
-orchestration platforms (confirmed: MacStadium Orka, empty-string secret), API gateways with
-default configurations, and services that derive secrets from hostname or build timestamp.
+Enterprise services frequently use weak JWT secrets. Container orchestration platforms, API gateways with default configurations, and services that derive secrets from hostname or build timestamp are common sources.
 
 ```python
 from ablation.analyzers.crypto_audit import CryptoAudit
@@ -137,7 +135,7 @@ for f in findings:
 ```python
 import jwt  # PyJWT
 
-secret = ""   # confirmed Orka secret
+secret = ""   # confirmed empty-string secret
 forged = jwt.encode(
     {"sub": "admin@example.com", "role": "admin"},
     secret,
