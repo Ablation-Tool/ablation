@@ -135,9 +135,6 @@ Add custom entries for vendor-specific container formats by extending `_MAGIC_DI
 Post-access cryptographic posture auditor. CryptoAudit finds JWTs with weak secrets, SAML
 assertion wrapping risks, hardcoded key material, and TLS endpoint weaknesses.
 
-Synthesized from MacStadium Orka post-compromise analysis: confirmed admin HS256 JWT signed
-with an empty-string secret.
-
 ### JWT audit
 
 ```python

@@ -12,7 +12,7 @@ the context when running multiple scanners on the same binary.
 
 Detects format string vulnerabilities in x86-64 ELF binaries. A format argument
 is safe only when it is a string literal (RIP-relative load from `.rodata`). Any
-any other provenance is a finding: a function argument, a stack variable, or a
+other provenance is a finding: a function argument, a stack variable, or a
 register populated from `recv`/`read`.
 
 Covers the full `printf` family, `syslog`, `err`/`warn`, and common custom
