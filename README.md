@@ -116,6 +116,35 @@ This project was greatly informed and inspired by several key literary works.
 | Computational and Visualization Techniques for Structural Bioinformatics Using Chimera | Forbes J. Burkowski |
 | Evolutionary Computation with Biogeography-based Optimization | Dan Simon, Haiping Ma |
 | Bio-Inspired Optimization for Medical Data Mining | Sumit Srivastava, Abhishek Kumar |
+| Reverse Engineering for Beginners | Dennis Yurichev |
+| Attacking Network Protocols | James Forshaw |
+| From Day Zero to Zero Day | Eugene Lim |
+| Open Source Fuzzing Tools | Noam Rathaus, Gadi Evron, Yoav Naveh |
+| The IDA Pro Book | Chris Eagle |
+| The Ultimate Kali Linux Book (3rd ed.) | Glen D. Singh |
+| ARM 64-Bit Assembly Language | Larry D. Pyeatt, William Ughetta |
+| Modern ARM Assembly Language Programming with the ARM Processor | Larry D. Pyeatt |
+| Digital Design and Computer Architecture: ARM Edition | Sarah L. Harris, David Money Harris |
+| x86 Software Reverse Engineering, Cracking, and Counter-Measures | Stephanie Domas, Christopher Domas |
+| x86 Assembly Language and C Fundamentals | Joseph Caasim Mancini |
+| Foundations of ARM64 Linux Debugging, Disassembling, and Reversing | D. Vostokov |
+| Reverse Engineering ARMv8-A | Austin Kim |
+| The Linux Programming Interface | Michael Kerrisk |
+| Professional Linux Kernel Architecture | Wolfgang Mauerer |
+| Linux Kernel Debugging | Kaiwan N Billimoria |
+| Building Secure Firmware | Jiewen Yao, Vincent Zimmer |
+| Executable Files for Linux: Under the Hood of ELFs | Mohit Mishra |
+| Mastering Reverse Engineering | Reginald Wong |
+| Mastering Malware Analysis (2nd ed.) | Alexey Kleymenov, Amr Thabet |
+| Malware Analysis and Detection Engineering | Abhijit Mohanta, Anoop Saldanha |
+| Malware Analysis Techniques | Dylan Barker |
+| Evasive Malware | Kyle Cucci |
+| Hacking Cryptography | Kamran Khan, Bill Cox |
+| The Art of Randomness | Ronald T. Kneusel |
+| UTM Security with Fortinet | Ken Tam, Ken McAlpine, Martin Hoz |
+| Agentic Coding with Claude Code | Eden Marco |
+| Agentic Architectural Patterns | Dr. Ali Arsanjani, Juan Pablo Bustos |
+| The Art of Readable Code | Dustin Boswell, Trevor Foucher |
 
 **Research Papers**
 
