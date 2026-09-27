@@ -136,8 +136,7 @@ This project was greatly informed and inspired by several key literary works.
 | From Day Zero to Zero Day | [Eugene Lim](https://github.com/spaceraccoon) |
 | Open Source Fuzzing Tools | [Noam Rathaus](https://github.com/nrathaus), [Gadi Evron](https://github.com/gadievron), Yoav Naveh |
 | The Ultimate Kali Linux Book (3rd ed.) | Glen D. Singh |
-| ARM 64-Bit Assembly Language | Larry D. Pyeatt, William Ughetta |
-| Modern ARM Assembly Language Programming with the ARM Processor | Larry D. Pyeatt |
+| ARM 64-Bit Assembly Language / Modern ARM Assembly Language Programming | Larry D. Pyeatt, William Ughetta |
 | Digital Design and Computer Architecture: ARM Edition | Sarah L. Harris, David Money Harris |
 | x86 Software Reverse Engineering, Cracking, and Counter-Measures | [Stephanie Domas](https://github.com/sdcanonical), [Christopher Domas](https://github.com/xoreaxeaxeax) |
 | x86 Assembly Language and C Fundamentals | Joseph Caasim Mancini |
@@ -160,8 +159,7 @@ This project was greatly informed and inspired by several key literary works.
 | Agentic Architectural Patterns | [Dr. Ali Arsanjani](https://github.com/aarsanjani), Juan Pablo Bustos |
 | The Art of Readable Code | [Dustin Boswell](https://github.com/dustinboswell), Trevor Foucher |
 | Securing AI Systems | Pamela K. Isom |
-| Industrial Cybersecurity | Pascal Ackerman |
-| Industrial Cybersecurity (2nd ed.) | Pascal Ackerman |
+| Industrial Cybersecurity (1st & 2nd ed.) | Pascal Ackerman |
 | Virtual Honeypots | Niels Provos, Thorsten Holz |
 | Penetration Tester's Open Source Toolkit | Aaron W. Bayles et al. |
 | Privilege Escalation Techniques | Alexis Ahmed |
