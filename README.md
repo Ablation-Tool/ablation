@@ -161,7 +161,6 @@ This project was greatly informed and inspired by several key literary works.
 | Elliptic Curve Cryptography for Developers | Michael Rosing |
 | Mastering Embedded Linux Programming | Frank Vasquez, Chris Simmonds |
 | Practical Cryptography in Python | Seth James Nielson, Christopher K. Monson |
-| The Mobile Application Hacker's Handbook | Dominic Chell, Tyrone Erasmus, Shaun Colley, Ollie Whitehouse |
 | Modern Parallel Programming with C++ and Assembly Language | Daniel Kusswurm |
 | NLP for Software Engineering | Romil Rawat et al. (eds.) |
 
