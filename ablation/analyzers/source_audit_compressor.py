@@ -35,7 +35,7 @@ Profiles 2–3 (0001x): Has user-data rendering only.
 Profile 1 (00001): Shared module only, no rendering signals.
   → Batch with other shared-only files after one read.
 
-Compression ratio for a 2861-file TypeScript codebase (empirical on authentik):
+Compression ratio for a 2861-file TypeScript codebase (empirical):
   ~2790 files in profile 0 → batch on 1 representative read
   ~71 files in profiles 1–31 → individual or spot-check reads
   Audit compression: 2861 reads → ~72 reads (40x reduction)
