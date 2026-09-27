@@ -225,7 +225,7 @@ flowchart TD
 
 ## Example RE Workflow
 
-End-to-end analysis of stripped binaries from an RPM bundle — from extraction through BinaryContext, string xrefs, and capstone disassembly to confirmed findings.
+End-to-end analysis of stripped binaries from an RPM bundle. Extraction through BinaryContext, string xrefs, and capstone disassembly to confirmed findings.
 
 ```mermaid
 flowchart TD
