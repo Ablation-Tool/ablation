@@ -118,24 +118,8 @@ This project was greatly informed and inspired by several key literary works.
 | Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler |
 | Advanced Compiler Design and Implementation | Steven Muchnick |
 | Engineering a Compiler | Keith Cooper, Linda Torczon |
-| Security Engineering (3rd ed.) | Ross Anderson |
-| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods |
-| The Art of Mac Malware | [Patrick Wardle](https://github.com/patrickwardle) |
-| Mathematical Concepts and Methods in Modern Biology | Raina Robeva, Terrell Hodge |
-| Introduction to Biological Networks | [Alpan Raval](https://github.com/alpanr), Animesh Ray |
-| Biological Computation | Ehud Lamm, Ron Unger |
-| Programming Massively Parallel Processors (4th ed.) | Wen-mei W. Hwu, David B. Kirk, [Izzat El Hajj](https://github.com/ielhajj) |
-| Emerging Trends in Applications and Infrastructures for Computational Biology, Bioinformatics, and Systems Biology | Quoc Nam Tran, Hamid R. Arabnia |
-| Computational Intelligence and Pattern Analysis in Biological Informatics | [Ujjwal Maulik](https://github.com/umaulik), Sanghamitra Bandyopadhyay, Jason T. L. Wang |
-| Meta-heuristic and Evolutionary Algorithms for Engineering Optimization | Omid Bozorg-Haddad, Mohammad Solgi, Hugo A. Loáiciga |
-| Computational and Visualization Techniques for Structural Bioinformatics Using Chimera | Forbes J. Burkowski |
-| Evolutionary Computation with Biogeography-based Optimization | Dan Simon, Haiping Ma |
-| Bio-Inspired Optimization for Medical Data Mining | Sumit Srivastava, Abhishek Kumar |
 | Reverse Engineering for Beginners | [Dennis Yurichev](https://github.com/DennisYurichev) |
-| Attacking Network Protocols | [James Forshaw](https://github.com/tyranid) |
-| From Day Zero to Zero Day | [Eugene Lim](https://github.com/spaceraccoon) |
 | Open Source Fuzzing Tools | [Noam Rathaus](https://github.com/nrathaus), [Gadi Evron](https://github.com/gadievron), Yoav Naveh |
-| The Ultimate Kali Linux Book (3rd ed.) | Glen D. Singh |
 | ARM 64-Bit Assembly Language / Modern ARM Assembly Language Programming | Larry D. Pyeatt, William Ughetta |
 | Digital Design and Computer Architecture: ARM Edition | Sarah L. Harris, David Money Harris |
 | x86 Software Reverse Engineering, Cracking, and Counter-Measures | [Stephanie Domas](https://github.com/sdcanonical), [Christopher Domas](https://github.com/xoreaxeaxeax) |
@@ -155,14 +139,10 @@ This project was greatly informed and inspired by several key literary works.
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
 | The Art of Randomness | [Ronald T. Kneusel](https://github.com/rkneusel9) |
 | UTM Security with Fortinet | Ken Tam, Ken McAlpine, Martin Hoz, Bruce Matsugu, Rick Basile |
-| Agentic Architectural Patterns | [Dr. Ali Arsanjani](https://github.com/aarsanjani), Juan Pablo Bustos |
-| The Art of Readable Code | [Dustin Boswell](https://github.com/dustinboswell), Trevor Foucher |
 | Real-World Cryptography | David Wong |
 | Elliptic Curve Cryptography for Developers | Michael Rosing |
 | Mastering Embedded Linux Programming | Frank Vasquez, Chris Simmonds |
 | Practical Cryptography in Python | Seth James Nielson, Christopher K. Monson |
-| Modern Parallel Programming with C++ and Assembly Language | Daniel Kusswurm |
-| NLP for Software Engineering | Romil Rawat et al. (eds.) |
 
 **Honorable Mention**
 
