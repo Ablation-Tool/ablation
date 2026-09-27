@@ -108,21 +108,21 @@ This project was greatly informed and inspired by several key literary works.
 
 | Title | Author | Citation |
 |---|---|---|
-| The Art of Software Security Assessment | [Mark Dowd](https://github.com/mdowd79), John McDonald, [Justin Schuh](https://github.com/jschuh) | cited in `ablation/analyzers/heap_vuln_scanner.py`, `format_string_scanner.py`, `ioctl_attack_surface.py` |
-| Practical Binary Analysis | [Dennis Andriesse](https://github.com/dennisaa) | cited in `ablation/analyzers/taint_tracker_x86.py`, `ablation/core/disasm_engine.py` |
-| Practical Malware Analysis | Michael Sikorski, Andrew Honig | cited in `ablation/core/pe_parser.py`, `ablation/core/shellcode_utils.py` |
-| Practical Reverse Engineering | Bruce Dang, Alexandre Gazet, [Elias Bachaalany](https://github.com/0xeb) | cited in `ablation/core/pe_analyzer.py`, `ablation/analyzers/kernel_driver_analyzer.py` |
-| Hacking: The Art of Exploitation (2e) | Jon Erickson | cited in `ablation/core/platform_detect.py` |
-| Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) | cited in `ablation/core/elf_parser.py`, `ablation/core/binary_parser.py` |
-| Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich | cited in `ablation/analyzers/kernel_driver_analyzer.py`, `ioctl_attack_surface.py` |
-| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler | cited in `ablation/analyzers/kernel_driver_analyzer.py`, `ablation/core/yara_generator.py` |
-| Advanced Compiler Design and Implementation | Steven Muchnick | cited in `ablation/analyzers/dataflow_engine.py` |
-| Engineering a Compiler | Keith Cooper, Linda Torczon | cited in `ablation/core/disasm_engine.py` |
-| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods | cited in `ablation/core/firmware_analyzer.py` |
-| Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha | cited in `ablation/core/yara_generator.py` |
-| Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) | cited in `modules/process_enum.py` |
-| Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) | cited in `modules/tls_enum.py` |
-| Real-World Cryptography | David Wong | cited in `ablation/core/tls_analyzer.py` |
+| The Art of Software Security Assessment | [Mark Dowd](https://github.com/mdowd79), John McDonald, [Justin Schuh](https://github.com/jschuh) | [heap_vuln_scanner.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/heap_vuln_scanner.py) · [format_string_scanner.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/format_string_scanner.py) · [ioctl_attack_surface.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/ioctl_attack_surface.py) |
+| Practical Binary Analysis | [Dennis Andriesse](https://github.com/dennisaa) | [taint_tracker_x86.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/taint_tracker_x86.py) · [disasm_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/disasm_engine.py) |
+| Practical Malware Analysis | Michael Sikorski, Andrew Honig | [pe_parser.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/pe_parser.py) · [shellcode_utils.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/shellcode_utils.py) |
+| Practical Reverse Engineering | Bruce Dang, Alexandre Gazet, [Elias Bachaalany](https://github.com/0xeb) | [pe_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/pe_analyzer.py) · [kernel_driver_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/kernel_driver_analyzer.py) |
+| Hacking: The Art of Exploitation (2e) | Jon Erickson | [platform_detect.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/platform_detect.py) |
+| Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) | [elf_parser.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/elf_parser.py) · [binary_parser.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/binary_parser.py) |
+| Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich | [kernel_driver_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/kernel_driver_analyzer.py) · [ioctl_attack_surface.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/ioctl_attack_surface.py) |
+| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler | [kernel_driver_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/kernel_driver_analyzer.py) · [yara_generator.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/yara_generator.py) |
+| Advanced Compiler Design and Implementation | Steven Muchnick | [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) |
+| Engineering a Compiler | Keith Cooper, Linda Torczon | [disasm_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/disasm_engine.py) |
+| Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods | [firmware_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/firmware_analyzer.py) |
+| Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha | [yara_generator.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/yara_generator.py) |
+| Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) | [process_enum.py](https://github.com/Ablation-Tool/ablation/blob/main/modules/process_enum.py) |
+| Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) | [tls_enum.py](https://github.com/Ablation-Tool/ablation/blob/main/modules/tls_enum.py) |
+| Real-World Cryptography | David Wong | [tls_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/tls_analyzer.py) |
 
 **Honorable Mention**
 
