@@ -7,7 +7,7 @@ Synthesized from:
   - Penetration Testing (Georgia Weidman) — post-exploitation credential harvesting, lateral pivot
   - Network Attacks and Exploitation (Matthew Monte) — attacker friction reduction, parallel coverage
 
-Post-compromise internal recon inside a MacStadium/OCI environment:
+Post-compromise internal recon inside a target environment:
   - ARP/route table parsing
   - Pure-Python TCP connect subnet scan
   - Credential harvesting from filesystem
@@ -40,10 +40,10 @@ _IS_MACOS = _platform.system() == 'Darwin'
 # Ports that tend to surface AI/ML infra, SSH, web, and databases
 SCAN_PORTS = [22, 80, 443, 2375, 2376, 5432, 6379, 8080, 8443, 9200, 9300, 27017]
 
-# MacStadium internal DNS names (Orka control plane + common CI/CD)
-MACSTADIUM_INTERNAL_NAMES = [
-    'orka-api', 'harbor', 'registry', 'vault', 'jenkins', 'gitlab',
-    'nexus', 'artifactory', 'consul', 'nomad', 'pki', 'ldap',
+# Common internal service hostnames — override with target-specific names
+INTERNAL_SERVICE_NAMES = [
+    'api', 'registry', 'vault', 'jenkins', 'gitlab',
+    'nexus', 'artifactory', 'consul', 'ldap',
     'nfs', 'storage', 'backup', 'mgmt', 'bastion',
 ]
 
@@ -228,8 +228,8 @@ class NetworkDiscovery:
     # -- Internal DNS --
 
     def resolve_internal_names(self, names=None):
-        """Resolve MacStadium-typical internal hostnames."""
-        names = names or MACSTADIUM_INTERNAL_NAMES
+        """Resolve common internal hostnames."""
+        names = names or INTERNAL_SERVICE_NAMES
         for name in names:
             try:
                 ip = socket.gethostbyname(name)
@@ -643,7 +643,7 @@ class CloudMetadataProber:
             self.results['azure_imds'] = {'status': 'BLOCKED'}
 
     def _probe_oci(self):
-        """OCI IMDS v2 — MacStadium uses OCI Jeddah per spof-assessment."""
+        """OCI IMDS v2 probe."""
         base = 'http://169.254.169.254'
         # OCI v2 requires authorization header with token
         _, token = self._get(
