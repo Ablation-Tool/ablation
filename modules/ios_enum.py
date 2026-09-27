@@ -5097,6 +5097,9 @@ def probe_ios_bgp_rib_tree_exposure(host: str, port: int = 443, timeout: float =
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
     import sys
-    host = sys.argv[1] if len(sys.argv) > 1 else '207.254.14.1'
+    if len(sys.argv) < 2:
+        print("usage: ios_enum.py <host>")
+        sys.exit(1)
+    host = sys.argv[1]
     enum = IOSEnumerator(host)
     print(json.dumps(enum.run(), indent=2, default=str))
