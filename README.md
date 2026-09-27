@@ -89,6 +89,21 @@ pip install git+https://github.com/Ablation-Tool/ablation
 ## Acknowledgments
 This project was greatly informed and inspired by several key literary works.
 
+**Research Papers**
+
+| Title | Authors |
+|---|---|
+| [Finding Taint-Style Vulnerabilities in Linux-based Embedded Firmware with SSE-based Alias Analysis](https://arxiv.org/abs/2109.12209) | Cheng, Zheng, Liu, Guan, Liu, Li, Zhu, Ye, Sun |
+| [iResolveX: Multi-Layered Indirect Call Resolution via Static Reasoning and Learning-Augmented Refinement](https://arxiv.org/abs/2601.17888) | Santra et al. |
+| [Extracting Protocol Format as State Machine via Controlled Static Loop Analysis](https://arxiv.org/abs/2305.13483) | Shi, Xu, [Zhang](https://github.com/qingkaishi) |
+| [NEMETYL: Message Type Identification of Binary Network Protocols using Continuous Segment Similarity](https://arxiv.org/abs/2002.03391) | [Kleber et al.](https://github.com/vs-uulm) |
+| [Imperfect Forward Secrecy: How Diffie-Hellman Fails in Practice](https://dl.acm.org/doi/10.1145/2810103.2813707) | [Adrian et al.](https://github.com/dadrian) |
+| [Nonce-Disrespecting Adversaries: Practical Forgery Attacks on GCM in TLS](https://www.usenix.org/conference/woot16/workshop-program/presentation/bock) | [Böck et al.](https://github.com/hannob) |
+| [Whitening Sentence Representations for Better Semantics and Faster Retrieval](https://arxiv.org/abs/2103.15316) | [Su et al.](https://github.com/bojone) |
+| [Constant Propagation with Conditional Branches](https://dl.acm.org/doi/abs/10.1145/103135.103136) | Wegman, Zadeck |
+| [A Simple, Fast Dominance Algorithm](https://www.cs.princeton.edu/techreports/2005/737.pdf) | Cooper, Harvey, Kennedy |
+| [libdft: Practical Dynamic Data Flow Tracking for Commodity Systems](https://dl.acm.org/doi/10.1145/2151024.2151042) | [Kemerlis et al.](https://github.com/vkemerlis) |
+
 **Books** supplied by [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
 
 | Title | Author |
@@ -126,7 +141,7 @@ This project was greatly informed and inspired by several key literary works.
 | Digital Design and Computer Architecture: ARM Edition | Sarah L. Harris, David Money Harris |
 | x86 Software Reverse Engineering, Cracking, and Counter-Measures | Stephanie Domas, Christopher Domas |
 | x86 Assembly Language and C Fundamentals | Joseph Caasim Mancini |
-| Foundations of ARM64 Linux Debugging, Disassembling, and Reversing | D. Vostokov |
+| Foundations of ARM64 Linux Debugging, Disassembling, and Reversing | Dmitry Vostokov |
 | Reverse Engineering ARMv8-A | Austin Kim |
 | The Linux Programming Interface | Michael Kerrisk |
 | Professional Linux Kernel Architecture | Wolfgang Mauerer |
@@ -144,21 +159,6 @@ This project was greatly informed and inspired by several key literary works.
 | Agentic Coding with Claude Code | Eden Marco |
 | Agentic Architectural Patterns | Dr. Ali Arsanjani, Juan Pablo Bustos |
 | The Art of Readable Code | Dustin Boswell, Trevor Foucher |
-
-**Research Papers**
-
-| Title | Authors |
-|---|---|
-| [Finding Taint-Style Vulnerabilities in Linux-based Embedded Firmware with SSE-based Alias Analysis](https://arxiv.org/abs/2109.12209) | Cheng, Zheng, Liu, Guan, Liu, Li, Zhu, Ye, Sun |
-| [iResolveX: Multi-Layered Indirect Call Resolution via Static Reasoning and Learning-Augmented Refinement](https://arxiv.org/abs/2601.17888) | Santra et al. |
-| [Extracting Protocol Format as State Machine via Controlled Static Loop Analysis](https://arxiv.org/abs/2305.13483) | Shi, Xu, [Zhang](https://github.com/qingkaishi) |
-| [NEMETYL: Message Type Identification of Binary Network Protocols using Continuous Segment Similarity](https://arxiv.org/abs/2002.03391) | [Kleber et al.](https://github.com/vs-uulm) |
-| [Imperfect Forward Secrecy: How Diffie-Hellman Fails in Practice](https://dl.acm.org/doi/10.1145/2810103.2813707) | [Adrian et al.](https://github.com/dadrian) |
-| [Nonce-Disrespecting Adversaries: Practical Forgery Attacks on GCM in TLS](https://www.usenix.org/conference/woot16/workshop-program/presentation/bock) | [Böck et al.](https://github.com/hannob) |
-| [Whitening Sentence Representations for Better Semantics and Faster Retrieval](https://arxiv.org/abs/2103.15316) | [Su et al.](https://github.com/bojone) |
-| [Constant Propagation with Conditional Branches](https://dl.acm.org/doi/abs/10.1145/103135.103136) | Wegman, Zadeck |
-| [A Simple, Fast Dominance Algorithm](https://www.cs.princeton.edu/techreports/2005/737.pdf) | Cooper, Harvey, Kennedy |
-| [libdft: Practical Dynamic Data Flow Tracking for Commodity Systems](https://dl.acm.org/doi/10.1145/2151024.2151042) | [Kemerlis et al.](https://github.com/vkemerlis) |
 
 **Honorable Mention**
 
