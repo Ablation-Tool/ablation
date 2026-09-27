@@ -155,7 +155,6 @@ This project was greatly informed and inspired by several key literary works.
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
 | The Art of Randomness | [Ronald T. Kneusel](https://github.com/rkneusel9) |
 | UTM Security with Fortinet | Ken Tam, Ken McAlpine, Martin Hoz, Bruce Matsugu, Rick Basile |
-| Agentic Coding with Claude Code | [Eden Marco](https://github.com/g-emarco) |
 | Agentic Architectural Patterns | [Dr. Ali Arsanjani](https://github.com/aarsanjani), Juan Pablo Bustos |
 | The Art of Readable Code | [Dustin Boswell](https://github.com/dustinboswell), Trevor Foucher |
 | Real-World Cryptography | David Wong |
