@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Nginx Enumeration Module — Ablation
-Targets: Cisco Nexus NX-API frontend (nginx 1.7.10 on 207.254.14.1:443)
+Targets: nginx HTTP servers
 
 CVE coverage for nginx 1.7.x:
   CVE-2013-4547  null byte in URI bypasses access/rewrite rules
@@ -521,15 +521,11 @@ def _enum_nxapi_endpoints(host: str, port: int, use_tls: bool = True) -> list:
 class NginxEnumerator:
     """
     Nginx fingerprint, stub_status probe, CVE check, and attack surface enumeration.
-    Designed for Cisco Nexus NX-API nginx 1.7.10 on 207.254.14.1:443.
     """
 
-    MACSTADIUM_HOST = '207.254.14.1'
-    MACSTADIUM_PORT = 443
-
-    def __init__(self, host: str = None, port: int = 443, use_tls: bool = True,
+    def __init__(self, host: str, port: int = 443, use_tls: bool = True,
                  timeout: float = 8.0):
-        self.host = host or self.MACSTADIUM_HOST
+        self.host = host
         self.port = port
         self.use_tls = use_tls
         self.timeout = timeout
