@@ -158,13 +158,6 @@ This project was greatly informed and inspired by several key literary works.
 | Agentic Coding with Claude Code | [Eden Marco](https://github.com/g-emarco) |
 | Agentic Architectural Patterns | [Dr. Ali Arsanjani](https://github.com/aarsanjani), Juan Pablo Bustos |
 | The Art of Readable Code | [Dustin Boswell](https://github.com/dustinboswell), Trevor Foucher |
-| Securing AI Systems | Pamela K. Isom |
-| Industrial Cybersecurity (1st & 2nd ed.) | Pascal Ackerman |
-| Virtual Honeypots | Niels Provos, Thorsten Holz |
-| Penetration Tester's Open Source Toolkit | Aaron W. Bayles et al. |
-| Privilege Escalation Techniques | Alexis Ahmed |
-| If It's Smart, It's Vulnerable | Mikko Hyppönen |
-| Physical Fault Injection and Side-Channel Attacks on Mobile Devices | Shepherd, Markantonakis, van Heijningen, Aboulkassimi, Gaine, Heckmann, Naccache |
 
 | Real-World Cryptography | David Wong |
 | Elliptic Curve Cryptography for Developers | Michael Rosing |
