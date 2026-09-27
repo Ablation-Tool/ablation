@@ -115,34 +115,22 @@ This project was greatly informed and inspired by several key literary works.
 | Hacking: The Art of Exploitation (2e) | Jon Erickson |
 | Learning Linux Binary Analysis | [Ryan O'Neill](https://github.com/elfmaster) |
 | Windows Internals Part 1 & 2 | [Pavel Yosifovich](https://github.com/zodiacon), Mark Russinovich |
-| Rootkits: Subverting the Windows Kernel | Greg Hoglund, Jamie Butler |
 | Advanced Compiler Design and Implementation | Steven Muchnick |
 | Engineering a Compiler | Keith Cooper, Linda Torczon |
 | Reverse Engineering for Beginners | [Dennis Yurichev](https://github.com/DennisYurichev) |
-| Open Source Fuzzing Tools | [Noam Rathaus](https://github.com/nrathaus), [Gadi Evron](https://github.com/gadievron), Yoav Naveh |
-| ARM 64-Bit Assembly Language / Modern ARM Assembly Language Programming | Larry D. Pyeatt, William Ughetta |
-| Digital Design and Computer Architecture: ARM Edition | Sarah L. Harris, David Money Harris |
 | x86 Software Reverse Engineering, Cracking, and Counter-Measures | [Stephanie Domas](https://github.com/sdcanonical), [Christopher Domas](https://github.com/xoreaxeaxeax) |
-| x86 Assembly Language and C Fundamentals | Joseph Caasim Mancini |
-| Foundations of ARM64 Linux Debugging, Disassembling, and Reversing | Dmitry Vostokov |
-| Reverse Engineering ARMv8-A | Austin Kim |
 | The Linux Programming Interface | [Michael Kerrisk](https://github.com/mkerrisk) |
 | Professional Linux Kernel Architecture | [Wolfgang Mauerer](https://github.com/wolfgangmauerer) |
 | Linux Kernel Programming (2nd ed.) | [Kaiwan N. Billimoria](https://github.com/kaiwan) |
 | Building Secure Firmware | [Jiewen Yao](https://github.com/jyao1), Vincent Zimmer |
 | Executable Files for Linux: Under the Hood of ELFs | Mohit Mishra |
-| Mastering Reverse Engineering | Reginald Wong |
 | Mastering Malware Analysis (2nd ed.) | [Alexey Kleymenov](https://github.com/alexey-kleymenov), [Amr Thabet](https://github.com/AmrThabet) |
 | Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha |
 | Malware Analysis Techniques | Dylan Barker |
 | Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) |
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
 | The Art of Randomness | [Ronald T. Kneusel](https://github.com/rkneusel9) |
-| UTM Security with Fortinet | Ken Tam, Ken McAlpine, Martin Hoz, Bruce Matsugu, Rick Basile |
 | Real-World Cryptography | David Wong |
-| Elliptic Curve Cryptography for Developers | Michael Rosing |
-| Mastering Embedded Linux Programming | Frank Vasquez, Chris Simmonds |
-| Practical Cryptography in Python | Seth James Nielson, Christopher K. Monson |
 
 **Honorable Mention**
 
