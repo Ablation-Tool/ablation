@@ -3157,7 +3157,7 @@ class K8sEnumerator:
 
     # ------------------------------------------------------------------
     # Orka-specific enumeration
-    # MacStadium Orka runs on K8s; orka-system namespace holds API server secrets
+    # orka-system namespace holds Orka API server secrets
     # ------------------------------------------------------------------
 
     def enum_orka(self):
