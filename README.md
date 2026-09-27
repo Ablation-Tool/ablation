@@ -89,7 +89,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
 ## Acknowledgments
 This project was greatly informed and inspired by several key literary works.
 
-**Books** | [www.oreilly.com](https://www.oreilly.com)
+**Books** | [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
 
 | Title | Author |
 |---|---|
@@ -107,11 +107,11 @@ This project was greatly informed and inspired by several key literary works.
 | Practical IoT Hacking | [Fotios Chantzis](https://github.com/ithilgore), Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods |
 | The Art of Mac Malware | [Patrick Wardle](https://github.com/patrickwardle) |
 | Mathematical Concepts and Methods in Modern Biology | Raina Robeva, Terrell Hodge |
-| Introduction to Biological Networks | Alpan Raval, Animesh Ray |
+| Introduction to Biological Networks | [Alpan Raval](https://github.com/alpanr), Animesh Ray |
 | Biological Computation | Ehud Lamm, Ron Unger |
 | Programming Massively Parallel Processors (4th ed.) | Wen-mei W. Hwu, David B. Kirk, [Izzat El Hajj](https://github.com/ielhajj) |
 | Emerging Trends in Applications and Infrastructures for Computational Biology, Bioinformatics, and Systems Biology | Quoc Nam Tran, Hamid R. Arabnia |
-| Computational Intelligence and Pattern Analysis in Biological Informatics | Ujjwal Maulik, Sanghamitra Bandyopadhyay, Jason T. L. Wang |
+| Computational Intelligence and Pattern Analysis in Biological Informatics | [Ujjwal Maulik](https://github.com/umaulik), Sanghamitra Bandyopadhyay, Jason T. L. Wang |
 | Meta-heuristic and Evolutionary Algorithms for Engineering Optimization | Omid Bozorg-Haddad, Mohammad Solgi, Hugo A. Loáiciga |
 | Computational and Visualization Techniques for Structural Bioinformatics Using Chimera | Forbes J. Burkowski |
 | Evolutionary Computation with Biogeography-based Optimization | Dan Simon, Haiping Ma |
