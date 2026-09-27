@@ -131,34 +131,51 @@ This project was greatly informed and inspired by several key literary works.
 | Computational and Visualization Techniques for Structural Bioinformatics Using Chimera | Forbes J. Burkowski |
 | Evolutionary Computation with Biogeography-based Optimization | Dan Simon, Haiping Ma |
 | Bio-Inspired Optimization for Medical Data Mining | Sumit Srivastava, Abhishek Kumar |
-| Reverse Engineering for Beginners | Dennis Yurichev |
-| Attacking Network Protocols | James Forshaw |
-| From Day Zero to Zero Day | Eugene Lim |
-| Open Source Fuzzing Tools | Noam Rathaus, Gadi Evron, Yoav Naveh |
+| Reverse Engineering for Beginners | [Dennis Yurichev](https://github.com/DennisYurichev) |
+| Attacking Network Protocols | [James Forshaw](https://github.com/tyranid) |
+| From Day Zero to Zero Day | [Eugene Lim](https://github.com/spaceraccoon) |
+| Open Source Fuzzing Tools | [Noam Rathaus](https://github.com/nrathaus), [Gadi Evron](https://github.com/gadievron), Yoav Naveh |
 | The Ultimate Kali Linux Book (3rd ed.) | Glen D. Singh |
 | ARM 64-Bit Assembly Language | Larry D. Pyeatt, William Ughetta |
 | Modern ARM Assembly Language Programming with the ARM Processor | Larry D. Pyeatt |
 | Digital Design and Computer Architecture: ARM Edition | Sarah L. Harris, David Money Harris |
-| x86 Software Reverse Engineering, Cracking, and Counter-Measures | Stephanie Domas, Christopher Domas |
+| x86 Software Reverse Engineering, Cracking, and Counter-Measures | [Stephanie Domas](https://github.com/sdcanonical), [Christopher Domas](https://github.com/xoreaxeaxeax) |
 | x86 Assembly Language and C Fundamentals | Joseph Caasim Mancini |
 | Foundations of ARM64 Linux Debugging, Disassembling, and Reversing | Dmitry Vostokov |
 | Reverse Engineering ARMv8-A | Austin Kim |
-| The Linux Programming Interface | Michael Kerrisk |
-| Professional Linux Kernel Architecture | Wolfgang Mauerer |
-| Linux Kernel Debugging | Kaiwan N Billimoria |
-| Building Secure Firmware | Jiewen Yao, Vincent Zimmer |
+| The Linux Programming Interface | [Michael Kerrisk](https://github.com/mkerrisk) |
+| Professional Linux Kernel Architecture | [Wolfgang Mauerer](https://github.com/wolfgangmauerer) |
+| Linux Kernel Programming (2nd ed.) | [Kaiwan N. Billimoria](https://github.com/kaiwan) |
+| Building Secure Firmware | [Jiewen Yao](https://github.com/jyao1), Vincent Zimmer |
 | Executable Files for Linux: Under the Hood of ELFs | Mohit Mishra |
 | Mastering Reverse Engineering | Reginald Wong |
-| Mastering Malware Analysis (2nd ed.) | Alexey Kleymenov, Amr Thabet |
-| Malware Analysis and Detection Engineering | Abhijit Mohanta, Anoop Saldanha |
+| Mastering Malware Analysis (2nd ed.) | [Alexey Kleymenov](https://github.com/alexey-kleymenov), [Amr Thabet](https://github.com/AmrThabet) |
+| Malware Analysis and Detection Engineering | [Abhijit Mohanta](https://github.com/amohanta), Anoop Saldanha |
 | Malware Analysis Techniques | Dylan Barker |
-| Evasive Malware | Kyle Cucci |
-| Hacking Cryptography | Kamran Khan, Bill Cox |
-| The Art of Randomness | Ronald T. Kneusel |
-| UTM Security with Fortinet | Ken Tam, Ken McAlpine, Martin Hoz |
-| Agentic Coding with Claude Code | Eden Marco |
-| Agentic Architectural Patterns | Dr. Ali Arsanjani, Juan Pablo Bustos |
-| The Art of Readable Code | Dustin Boswell, Trevor Foucher |
+| Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) |
+| Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
+| The Art of Randomness | [Ronald T. Kneusel](https://github.com/rkneusel9) |
+| UTM Security with Fortinet | Ken Tam, Ken McAlpine, Martin Hoz, Bruce Matsugu, Rick Basile |
+| Agentic Coding with Claude Code | [Eden Marco](https://github.com/g-emarco) |
+| Agentic Architectural Patterns | [Dr. Ali Arsanjani](https://github.com/aarsanjani), Juan Pablo Bustos |
+| The Art of Readable Code | [Dustin Boswell](https://github.com/dustinboswell), Trevor Foucher |
+| Securing AI Systems | Pamela K. Isom |
+| Industrial Cybersecurity | Pascal Ackerman |
+| Industrial Cybersecurity (2nd ed.) | Pascal Ackerman |
+| Virtual Honeypots | Niels Provos, Thorsten Holz |
+| Penetration Tester's Open Source Toolkit | Aaron W. Bayles et al. |
+| Privilege Escalation Techniques | Alexis Ahmed |
+| If It's Smart, It's Vulnerable | Mikko Hyppönen |
+| Physical Fault Injection and Side-Channel Attacks on Mobile Devices | Shepherd, Markantonakis, van Heijningen, Aboulkassimi, Gaine, Heckmann, Naccache |
+| The IDA Pro Book | Chris Eagle |
+| Real-World Cryptography | David Wong |
+| Elliptic Curve Cryptography for Developers | Michael Rosing |
+| Mastering Embedded Linux Programming | Frank Vasquez, Chris Simmonds |
+| Practical Cryptography in Python | Seth James Nielson, Christopher K. Monson |
+| Android Security Internals | Nikolay Elenkov |
+| The Mobile Application Hacker's Handbook | Dominic Chell, Tyrone Erasmus, Shaun Colley, Ollie Whitehouse |
+| Modern Parallel Programming with C++ and Assembly Language | Daniel Kusswurm |
+| NLP for Software Engineering | Romil Rawat et al. (eds.) |
 
 **Honorable Mention**
 
