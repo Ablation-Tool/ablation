@@ -38,7 +38,7 @@ except ImportError:
 # ── Known-weak JWT secrets ────────────────────────────────────────────────────
 # Ordered by observed frequency in production credential leaks
 JWT_WEAK_SECRETS = [
-    "",           # Empty string — confirmed in MacStadium Orka engine (F-JWT)
+    "",           # Empty string
     "secret",
     "password",
     "admin",
@@ -259,7 +259,7 @@ class CryptoAudit:
         elif alg == "HS256":
             result["vulns"].append("MEDIUM:HS256 — symmetric; secret may be weak or shared")
 
-            # Test empty string secret first (confirmed MacStadium Orka engine)
+            # Test empty string secret first
             if self._verify_hs256(token, ""):
                 result["vulns"].append(
                     "CRITICAL:EMPTY_SECRET — token signed with empty string secret"
