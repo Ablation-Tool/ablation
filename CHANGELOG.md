@@ -2,6 +2,22 @@
 
 ---
 
+## v2.6.0
+
+- **FirmwareContainer** (`firmware_container.py`): parser for partitioned firmware
+  images with a plaintext header and fixed 296-byte partition table records. Detects
+  payload type (gzip/xz/zstd/lz4/lzo/cpio/elf/pe/ext2/3/4) per partition. API:
+  `from_path()`, `dump_partitions()`, `read_partition(name)`, `extract(name, path)`,
+  `extract_all(outdir)`. CLI: `python3 -m ablation.analyzers.firmware_container`.
+  Docs: `docs/module-reference/firmware-containers.md`.
+
+- **VideoContainerAnalyzer** (`video_container.py`): forensic scanner for MP4/MOV,
+  MKV/WebM, and AVI files. Detects polyglot headers, appended trailer data, atom size
+  overflow, EBML unknown-length abuse, and RIFF chunk miscount. API: `from_path()`,
+  `scan()`, `report(findings)`. Docs: `docs/module-reference/firmware-containers.md`.
+
+---
+
 ## v2.5.0
 
 - **FormatStringScanner** (`format_string_scanner.py`): x86-64 format string

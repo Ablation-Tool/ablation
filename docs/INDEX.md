@@ -51,6 +51,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry |
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper |
 | [Structural](module-reference/structural.md) | VtableResolver, VersionDelta, StructuralSim |
+| [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
 
 ---
