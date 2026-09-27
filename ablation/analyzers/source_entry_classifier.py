@@ -56,13 +56,10 @@ _AUTH_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     # ADMIN ── global admin credential gates
     (AUTH_ADMIN, re.compile(r"\bADMIN_API_KEY\b"), "ADMIN_API_KEY env check"),
     (AUTH_ADMIN, re.compile(r"\bisAdminApiKeyAuth\b"), "admin API key auth"),
-    (AUTH_ADMIN, re.compile(r"\bwithGatewayResolveSignatureVerification\b"), "HMAC gateway resolve"),
-    (AUTH_ADMIN, re.compile(r"\bwithGatewayModelsSignatureVerification\b"), "HMAC gateway models"),
-
     # INTERNAL ── service-to-service auth (HMAC, internal tokens)
-    (AUTH_INTERNAL, re.compile(r"\bverifyGatewayRequestSignature\b"), "gateway HMAC verify"),
     (AUTH_INTERNAL, re.compile(r"\bwithGateway\w*SignatureVerification\b"), "gateway signature"),
-    (AUTH_INTERNAL, re.compile(r"\blangfuse-gateway-authorization\b"), "gateway auth header"),
+    (AUTH_INTERNAL, re.compile(r"\bverify\w*Signature\b"), "HMAC signature verify"),
+    (AUTH_INTERNAL, re.compile(r"\bgateway[-_]authorization\b"), "gateway auth header"),
     (AUTH_INTERNAL, re.compile(r"\bX-aws-proxy-auth\b"), "AWS proxy token"),
 
     # ADMIN ── Django/DRF superuser-only gates
@@ -71,7 +68,7 @@ _AUTH_PATTERNS: list[tuple[str, re.Pattern, str]] = [
 
     # SESSION ── user session / cookie / NextAuth
     (AUTH_SESSION, re.compile(r"\bgetServerSession\b|\bgetSession\b|\bgetServerAuthSession\w*\b"), "NextAuth session"),
-    (AUTH_SESSION, re.compile(r"\bprotectedProcedure\b|\bprotectedProject\w+Procedure\b"), "tRPC protected procedure"),
+    (AUTH_SESSION, re.compile(r"\bprotectedProcedure\b|\bprotected\w+Procedure\b"), "tRPC protected procedure"),
     (AUTH_SESSION, re.compile(r"\bsessionMiddleware\b|\bwithSession\b"), "session middleware"),
     (AUTH_SESSION, re.compile(r"\brequireSession\b|\bensureAuth\b"), "session guard"),
     (AUTH_SESSION, re.compile(r"@(login_required|requires_auth)\b"), "Python auth decorator"),
