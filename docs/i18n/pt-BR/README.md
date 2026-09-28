@@ -2,7 +2,7 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-[English](../../../README.md) · [Español](../es/README.md) · **Português (BR)** · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [中文](../zh/README.md) · [日本語](../ja/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md)
+[English](../../../README.md) · [Español](../es/README.md) · **Português (BR)** · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [中文](../zh/README.md) · [日本語](../ja/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) · [한국어](../ko/README.md) · [हिन्दी](../hi/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [Tiếng Việt](../vi/README.md) · [Indonesia](../id/README.md) · [Polski](../pl/README.md) · [Nederlands](../nl/README.md)
 
 Ablation é um framework de engenharia reversa que fornece as mesmas capacidades principais de desmontagem, descompilação e análise binária que ferramentas padrão do setor como Ghidra, IDA Pro e Binary Ninja.
 
