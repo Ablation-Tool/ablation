@@ -53,7 +53,7 @@ Cisco FMC ve ISE'de koordineli açıklama sonrasında, Cisco Ürün Güvenliği 
 
 ---
 
-## Yerel Dekompilörler
+## 13 Yerel Dekompilör
 
 | Mimari | Varyantlar |
 |---|---|

@@ -53,7 +53,7 @@ Po skoordynowanym ujawnieniu dotyczącym Cisco FMC i ISE, Cisco Product Security
 
 ---
 
-## Lokalne dekompilatory
+## 13 Lokalnych dekompilatorów
 
 | Architektura | Warianty |
 |---|---|
