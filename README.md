@@ -24,7 +24,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Windows Kernel Driver & BYOVD Analysis:** Maps the IRP dispatch table, decodes every IOCTL code, and identifies which kernel APIs expose physical memory and token primitives from user mode. The BYOVD Detector fingerprints signed drivers carrying those capabilities, because one legitimate signed driver is enough to blind EDR from ring-0.
 
-**Android / APK Analysis:** Ablation parses APKs at the binary level, reading AXML, DEX, and native lib ELF tables with no external dependencies. The DEX parser reads `class_data_item` access flags directly to build the authoritative list of native methods, then matches them against the ELF symbol table so each method is classified as confirmed, stripped, or dynamically registered. The Binder scanner maps IPC attack surface from AIDL stub classes and `onTransact` overrides, because that boundary is where privilege escalation starts.
+**Android / APK Analysis:** Ablation reads APKs at the binary level without third-party tools. It classifies every native method from DEX `class_data_item` access flags and maps Binder IPC attack surface from AIDL stubs and exported service `onTransact` overrides.
 
 **Erlang / BEAM Analysis:** Erlang compiles to .beam files, and the same surface-map approach used for ELF applies directly, so atom search, import auditing, and obfuscation detection need no special handling. Sweeping a release directory takes seconds.
 
