@@ -303,3 +303,181 @@ python sweeps/android_sweep.py /path/to/app.apk
 XAPK containers are handled transparently — pass the `.xapk` file directly.
 All scanner output is printed in order: manifest summary, CRITICAL/HIGH/MEDIUM
 findings across all scanners, native lib security summary.
+
+---
+
+## DEXDisasm
+
+**File:** `ablation/analyzers/dex_disasm.py`
+
+Disassembles DEX bytecode to smali-style text. Covers all 17 DEX instruction
+formats and annotates every reference with the full descriptor from the DEX flat
+tables: method signatures, field types, class names, and string literals.
+
+### Construction
+
+```python
+from ablation.core.apk_parser import APKParser
+from ablation.analyzers.dex_disasm import DEXDisasm
+
+with APKParser.from_path('/path/to/app.apk') as apk:
+    dexes = list(apk.iter_dex())
+
+dd = DEXDisasm(dexes[0])
+```
+
+### Disassemble one method
+
+```python
+# Both descriptor form and dotted Java form are accepted
+smali = dd.disasm_method('Lcom/example/Foo;', 'onCreate')
+print(smali)
+
+# Output:
+# .method Lcom/example/Foo;->onCreate
+#     .registers 4
+#
+#     0000  const/4 v0, #0
+#     0001  invoke-virtual {v1, v0}, Landroid/widget/TextView;->setText(I)V
+#     0004  return-void
+# .end method
+```
+
+### Disassemble a full class
+
+```python
+smali = dd.disasm_class('Lcom/example/Foo;')
+print(smali)
+```
+
+### List methods with code
+
+```python
+methods = dd.list_methods('Lcom/example/Foo;')
+# Returns sorted list of method names that have a code_item
+```
+
+### One-call convenience
+
+```python
+smali = DEXDisasm.report(dex, 'Lcom/example/Foo;', 'authenticate')
+```
+
+### DEXInstruction fields
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cu_offset` | int | Code unit offset from start of `insns[]` |
+| `opcode` | int | Raw opcode byte |
+| `mnemonic` | str | Smali mnemonic (e.g., `invoke-virtual`) |
+| `fmt` | str | DEX format string (e.g., `35c`) |
+| `regs` | List[int] | Register indices |
+| `ref_idx` | int | DEX table index (-1 if none) |
+| `literal` | int | Literal value |
+| `branch` | int | Branch offset in code units (relative) |
+
+### Low-level: decode a code_item directly
+
+```python
+from ablation.analyzers.dex_disasm import decode_code_item
+
+registers, ins_size, outs_size, instrs = decode_code_item(dex, code_off)
+for ins in instrs:
+    print(f"{ins.cu_offset:04x}  {ins.smali(dex)}")
+```
+
+### Instruction formats decoded
+
+All 17 DEX formats: `10x`, `10t`, `11x`, `11n`, `12x`, `20t`, `21c`, `21h`,
+`21s`, `21t`, `22b`, `22c`, `22s`, `22t`, `22x`, `23x`, `30t`, `31c`, `31i`,
+`31t`, `32x`, `35c`, `3rc`, `45cc`, `4rcc`, `51l`. Unknown opcodes emit
+`data-XX` and advance one code unit so decoding continues past data payloads.
+
+### Limitations
+
+- `fill-array-data`, `packed-switch`, and `sparse-switch` payloads are data
+  blocks embedded in the instruction stream. The disassembler skips their
+  content but prints the branch target label correctly.
+- Try/catch blocks and annotation tables are not rendered (code_item header
+  fields `tries_size` and `debug_info_off` are parsed but not displayed).
+
+---
+
+## DEXLifter
+
+**File:** `ablation/analyzers/dex_lifter.py`
+
+Lifts DEX bytecode to pseudo-Java IR. Produces readable Java-like source from
+the instruction stream without external dependencies or SSA construction.
+
+### Construction
+
+```python
+from ablation.core.apk_parser import APKParser
+from ablation.analyzers.dex_lifter import DEXLifter
+
+with APKParser.from_path('/path/to/app.apk') as apk:
+    dexes = list(apk.iter_dex())
+
+lifter = DEXLifter(dexes[0])
+```
+
+### Lift one method
+
+```python
+pseudo_java = lifter.lift_method('Lcom/thingclips/smart/sdk/ThingNfcPlugin;', 'findDeviceKeys')
+print(pseudo_java)
+```
+
+Output (abbreviated):
+```java
+// com.thingclips.smart.sdk.ThingNfcPlugin.findDeviceKeys
+DeviceKeys findDeviceKeys(String p1, String p2) {
+    // registers=5  params=3  outs=3
+    Intrinsics.checkNotNullParameter(p1, "uid");
+    Intrinsics.checkNotNullParameter(p2, "devId");
+    qbdqpqq v1 = this.getManagerOrThrow();
+    DeviceKeys p1 = v1.findDeviceKeys(p1, p2);
+    return p1;
+}
+```
+
+### Lift a whole class
+
+```python
+pseudo_java = lifter.lift_class('Lcom/example/Foo;')
+```
+
+### One-call convenience
+
+```python
+pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
+```
+
+### What the lifter translates
+
+| DEX bytecode | Pseudo-Java output |
+|---|---|
+| `const-string v0, "uid"` | `String v0 = "uid";` |
+| `iget-object v0, v1, Lf/Bar;->mField:Ljava/lang/String;` | `String v0 = v1.mField;` |
+| `invoke-virtual {v0, v1}, Landroid/widget/TV;->setText(I)V` | `v0.setText(v1);` |
+| `invoke-static + move-result-object vA` | `RetType vA = ClassName.method(args);` |
+| `new-instance v0, Ljava/lang/StringBuilder;` | `StringBuilder v0;  // <init> call follows` |
+| `if-eqz v0, :L000a` | `if (v0 == null) goto :L000a;` |
+| backward `goto :L0000` | `// ↑ back-edge → :L0000  (loop end)` |
+| `check-cast v0, Ljava/util/Map;` | `Map v0 = (Map) v0;` |
+| `sget-object v0, Lfoo/Bar;->TAG:Ljava/lang/String;` | `String v0 = Bar.TAG;` |
+
+### Limitations
+
+- No full SSA or dominator-tree analysis — if/else blocks show as `if (cond) goto :Lxxx`
+  labels rather than structured braces. Sufficient for reading control flow.
+- `new-instance` + `invoke-direct <init>` is shown as two lines; constructor
+  arguments appear on the `<init>` call comment line, not on the `new T()` line.
+- Switch tables (`packed-switch`, `sparse-switch`) show the switch expression
+  and a reference to the payload offset but not the individual case values.
+- Try/catch blocks and exception handlers are not structurally represented
+  (exception registers still appear via `move-exception`).
+- Obfuscator instrumentation (e.g. ByteDance `Tz.a()/Tz.b()` anti-tamper
+  calls) is rendered as-is — which is itself a finding: heavy wrapping around
+  simple logic is a pattern signature for the ByteDance runtime protection.

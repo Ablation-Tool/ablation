@@ -68,6 +68,8 @@ from .vendor_profile import VendorProfile
 from .dex_analyzer import DexAnalyzer, DexFinding
 from .jni_bridge_scanner import JniBridgeScanner, JniBridgeFinding
 from .binder_scanner import BinderScanner, BinderFinding
+from .dex_disasm import DEXDisasm, DEXInstruction, decode_code_item
+from .dex_lifter import DEXLifter, RegVal
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -129,4 +131,6 @@ __all__ = [
     "DexAnalyzer", "DexFinding",
     "JniBridgeScanner", "JniBridgeFinding",
     "BinderScanner", "BinderFinding",
+    "DEXDisasm", "DEXInstruction", "decode_code_item",
+    "DEXLifter", "RegVal",
 ]
