@@ -53,7 +53,7 @@ Ablation 已用于分析来自 Fortinet、Cisco、Juniper、Axis、Fujitsu、Mik
 
 ---
 
-## 本地反编译器
+## 13 个本地反编译器
 
 | 架构 | 变体 |
 |---|---|
