@@ -72,6 +72,9 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.10.0 | DEXLifter — pseudo-Java IR lifter; type inference, field dot-notation, invoke formatting, if/else labels |
+| v2.9.0 | DEXDisasm — all 17 DEX instruction formats, smali output, full reference annotation from DEX flat tables |
+| v2.8.0 | SqlSinkScanner — MySQL C API / SQLite3 SQL injection in ELF binaries |
 | v2.7.0 | APKParser (AXML+DEX+ACC_NATIVE), JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact), android_sweep.py |
 | v2.6.0 | FirmwareContainer partitioned image parser, VideoContainerAnalyzer MP4/MKV/AVI forensics |
 | v2.5.0 | FormatStringScanner fortify variants, IoctlAttackSurfaceGenerator, CrossBinaryTaintTracker, BYOVDDetector PDB fingerprints |
