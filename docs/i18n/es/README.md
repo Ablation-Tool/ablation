@@ -53,7 +53,7 @@ Tras la divulgación coordinada sobre Cisco FMC e ISE, el Cisco Product Security
 
 ---
 
-## Descompiladores locales
+## 13 Descompiladores locales
 
 | Arquitectura | Variantes |
 |---|---|
