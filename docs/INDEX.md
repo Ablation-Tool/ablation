@@ -50,7 +50,8 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Export Formats](module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
 | [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry |
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper |
-| [Structural](module-reference/structural.md) | VtableResolver, VersionDelta, StructuralSim |
+| [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim |
+| [x86-64 Vtable Analysis](module-reference/vtable-x86-64.md) | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live method detection) |
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
 | [Android / APK](module-reference/android.md) | APKParser (AXML+DEX), DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact) |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
@@ -72,6 +73,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.12.0 | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live virtual method detection) |
+| v2.11.0 | BmpKeyExtractor: BMP LSB steganography, Lagrange secret sharing key recovery |
 | v2.10.0 | DEXLifter: pseudo-Java IR lifter with type inference, field dot-notation, invoke formatting, if/else labels |
 | v2.9.0 | DEXDisasm: all 17 DEX instruction formats, smali output, full reference annotation from DEX flat tables |
 | v2.8.0 | SqlSinkScanner: MySQL C API / SQLite3 SQL injection detection in ELF binaries |
