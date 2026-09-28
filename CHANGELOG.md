@@ -2,6 +2,27 @@
 
 ---
 
+## v2.12.0
+
+- **ELFVtableReconstructor** (`analyzers/elf_vtable_reconstructor.py`): Static C++ vtable
+  reconstruction for x86-64 ET_DYN ELF files without executing the binary. Reads `.rela.dyn`
+  and resolves both R_X86_64_RELATIVE (type 8, in-library function pointers) and R_X86_64_64
+  (type 1, exported symbol references) to produce a complete slot→function map. Accepts a
+  vtable VA directly or looks up `_ZTV<N><name>` from the symbol table. Returns a `VtableMap`
+  with `live_slots()`, `function_at(offset)`, `slot_for_va(fn_va)`, and
+  `slot_offset_for_name(fragment)` helpers.
+
+- **VtableDispatchScanner** (`analyzers/vtable_dispatch_scanner.py`): Scans x86-64 ELF
+  executable sections for `call [reg+disp]` dispatch instructions. Covers all standard
+  encodings: bare register (rax–rdi), REX.B-extended (r8–r15), SIB-based (r12/rsp), and
+  both disp8 (0–127) and disp32 forms with full REX prefix variants. Accepts a name→offset
+  dict, a `VtableMap` directly, or a list of raw offsets. Returns a `DispatchReport` with
+  `.dead()` (zero call sites) and `.live()` (call site list) per slot. Composes with
+  `ELFVtableReconstructor`: `scanner.scan(vtable_map)` identifies unreachable virtual methods
+  in one call.
+
+---
+
 ## v2.11.0
 
 - **BmpKeyExtractor / LSBStegoReader / LagrangeKeyExtractor**
