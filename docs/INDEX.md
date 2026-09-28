@@ -52,6 +52,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper |
 | [Structural](module-reference/structural.md) | VtableResolver, VersionDelta, StructuralSim |
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
+| [Android / APK](module-reference/android.md) | APKParser (AXML+DEX), DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact) |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
 
 ---
