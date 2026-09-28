@@ -351,6 +351,8 @@ class ARM32TaintTracker:
         max_bytes: int,
     ) -> None:
         for insn in self._disasm.insns(func_va, max_bytes):
+            if insn.id == 0:  # capstone SKIPDATA placeholder (ARM literal pool)
+                continue
             mn = insn.mnemonic.lower()
             ops = insn.operands
 
