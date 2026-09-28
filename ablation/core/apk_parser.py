@@ -311,6 +311,94 @@ class DEXFile:
                         has_code     = code_off != 0,
                     )
 
+    def dump_class_methods(self, class_name: str) -> str:
+        """
+        Debug dump: per-method table for a single class showing kind, access flags,
+        code_off, and classification notes. Useful for verifying class_data_item parsing.
+
+        class_name accepts either descriptor form ('Lcom/foo/Bar;') or dotted Java form.
+        """
+        # normalize to descriptor form
+        if not class_name.startswith("L"):
+            class_name = "L" + class_name.replace(".", "/") + ";"
+
+        lines = [f"Class: {class_name}"]
+        found = False
+        for row in self._class_defs_raw:
+            (class_idx, _cls_flags, _super_idx,
+             _ifaces_off, _src_idx, _ann_off, data_off, _sv_off) = row
+            if self.type_name(class_idx) != class_name:
+                continue
+            found = True
+            lines.append(f"  class_data_off = {data_off:#010x}")
+            if not data_off:
+                lines.append("  (no class_data_item)")
+                break
+
+            lines.append("")
+            lines.append(f"  {'#':<4} {'meth_idx':<10} {'kind':<10} "
+                         f"{'access':<24} {'code_off':<12} notes / name")
+            lines.append(f"  {'-'*4} {'-'*10} {'-'*10} {'-'*24} {'-'*12} {'-'*30}")
+
+            data = self._data
+            off = data_off
+            sf_size, off  = _uleb128(data, off)
+            if_size, off  = _uleb128(data, off)
+            dm_size, off  = _uleb128(data, off)
+            vm_size, off  = _uleb128(data, off)
+
+            # skip fields
+            for _ in range(sf_size + if_size):
+                _, off = _uleb128(data, off)
+                _, off = _uleb128(data, off)
+
+            entry_num = 0
+            for kind_label, count in (("direct", dm_size), ("virtual", vm_size)):
+                running_idx = 0
+                for _ in range(count):
+                    idx_diff, off = _uleb128(data, off)
+                    flags, off    = _uleb128(data, off)
+                    code_off, off = _uleb128(data, off)
+                    running_idx += idx_diff
+
+                    # decode access flags
+                    parts = []
+                    if flags & _ACC_PUBLIC:    parts.append("public")
+                    if flags & _ACC_PRIVATE:   parts.append("private")
+                    if flags & _ACC_PROTECTED: parts.append("protected")
+                    if flags & _ACC_STATIC:    parts.append("static")
+                    if flags & _ACC_FINAL:     parts.append("final")
+                    if flags & _ACC_NATIVE:    parts.append("native")
+                    if flags & _ACC_ABSTRACT:  parts.append("abstract")
+                    access_str = " ".join(parts) if parts else "package"
+
+                    # classify
+                    is_native   = bool(flags & _ACC_NATIVE)
+                    is_abstract = bool(flags & _ACC_ABSTRACT)
+                    has_code    = code_off != 0
+                    if is_native and has_code:
+                        notes = "NATIVE + code (?)"  # anomaly
+                    elif is_native:
+                        notes = "NATIVE (no DEX code)"
+                    elif is_abstract:
+                        notes = "ABSTRACT (no DEX code)"
+                    elif has_code:
+                        notes = "DEX code"
+                    else:
+                        notes = "NO code (unusual)"
+
+                    name, _ = self._method_info(running_idx)
+                    lines.append(
+                        f"  {entry_num:<4} {running_idx:08X}  {kind_label:<10} "
+                        f"{access_str:<24} {code_off:08X}  {notes}  {name}"
+                    )
+                    entry_num += 1
+            break
+
+        if not found:
+            lines.append(f"  (class not found in this DEX file)")
+        return "\n".join(lines)
+
     def _method_info(self, method_idx: int) -> Tuple[str, str]:
         if method_idx >= len(self._method_ids):
             return (f"<method#{method_idx}>", "")
