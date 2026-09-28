@@ -35,6 +35,8 @@ Gecombineerd met Claude Code of OpenAI Codex wordt het een volledig autonoom rev
 - **Crypto Audit:** Scant op cryptografie.
 - **XorSolver:** Herstelt en ontsleutelt vervolgens de doelsectie voor verdere reverse engineering.
 - **BmpKeyExtractor:** Reconstrueert geheime sleutels verborgen in BMP-pixelsteganografie met behulp van Lagrange-polynoominterpolatie.
+- **ELFVtableReconstructor:** Reconstrueert C++ vtable slot-naar-functie-maps uit .rela.dyn in x86-64 ET_DYN ELF-binaries zonder het binary uit te voeren, zodat alle virtuele methode dispatch-paden zichtbaar zijn via statische analyse alleen.
+- **VtableDispatchScanner:** Scant uitvoerbare secties op `call [reg+disp]`-patronen om te bepalen welke virtuele functieslots daadwerkelijk worden gedispatcht (live) versus nooit worden aangeroepen (dode code).
 
 ---
 

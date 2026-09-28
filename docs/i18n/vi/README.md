@@ -35,6 +35,8 @@ Kết hợp với Claude Code hoặc OpenAI Codex, nó trở thành một công 
 - **Crypto Audit:** Quét mật mã học.
 - **XorSolver:** Phục hồi rồi giải mã phần đích cho phép dịch ngược tiếp theo.
 - **BmpKeyExtractor:** Tái tạo khóa bí mật ẩn trong steganography pixel BMP bằng nội suy đa thức Lagrange.
+- **ELFVtableReconstructor:** Tái tạo bản đồ slot-to-function của vtable C++ từ .rela.dyn trong các file ELF x86-64 ET_DYN mà không cần thực thi binary, giúp tất cả các đường dẫn dispatch phương thức ảo hiển thị qua phân tích tĩnh.
+- **VtableDispatchScanner:** Quét các phần thực thi để tìm các mẫu `call [reg+disp]` nhằm xác định slot hàm ảo nào thực sự được dispatch (live) so với không bao giờ được gọi (dead code).
 
 ---
 
