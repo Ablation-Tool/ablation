@@ -2,7 +2,7 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-[English](../../../README.md) · [Español](../es/README.md) · [Português](../pt-BR/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · **中文** · [日本語](../ja/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md)
+[English](../../../README.md) · [Español](../es/README.md) · [Português](../pt-BR/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · **中文** · [日本語](../ja/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) · [한국어](../ko/README.md) · [हिन्दी](../hi/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [Tiếng Việt](../vi/README.md) · [Indonesia](../id/README.md) · [Polski](../pl/README.md) · [Nederlands](../nl/README.md)
 
 Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Ninja 等行业标准工具相同的核心反汇编、反编译和二进制分析能力。
 
