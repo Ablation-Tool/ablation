@@ -167,12 +167,15 @@ scanner._dangerous_apis['myDangerousMethod'] = (CRITICAL, "custom/sink", "Descri
 
 **File:** `ablation/analyzers/jni_bridge_scanner.py`
 
-Reconstructs the Java ↔ native boundary from DEX + ELF evidence without
-needing to parse `class_data_item` method access flags.
-
-Two detection paths:
+Reconstructs the Java ↔ native boundary from DEX `class_data_item` access flags
+and ELF dynsym. Three-way classification: methods confirmed native in both DEX and
+ELF (strongly confirmed), methods with `ACC_NATIVE` but no ELF symbol (stripped or
+dynamically registered), and ELF `Java_*` symbols with no `ACC_NATIVE` flag (helpers
+or dead code).
 
 **DEX side:**
+- `iter_native_methods()` over `class_data_item` encoded_method arrays — authoritative
+  `ACC_NATIVE` (`0x0100`) flag detection
 - `Ljava/lang/System;->loadLibrary` method reference → identifies which classes
   load native libraries
 - `FieldRef` with type descriptor `J` (long) and a peer-like name → opaque peer
@@ -270,3 +273,33 @@ AIDL stubs dispatch on integer transaction codes in `onTransact`. The first
 method in the AIDL interface maps to code `1`, second to `2`, etc. Fuzzing
 transaction codes (especially codes beyond the defined range) often triggers
 unguarded paths. Each `$Stub` class found is a candidate for code enumeration.
+
+---
+
+## android_sweep.py
+
+**File:** `sweeps/android_sweep.py`
+
+Orchestration script that runs the full APK RE pass in one call: manifest
+analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and native lib ELF
+security properties.
+
+### Usage
+
+```python
+from sweeps.android_sweep import run_sweep
+
+results = run_sweep('/path/to/app.apk')
+# results: dict with keys manifest, dex_findings, jni_findings,
+#          binder_findings, native_lib_findings
+```
+
+Or from the command line:
+
+```bash
+python sweeps/android_sweep.py /path/to/app.apk
+```
+
+XAPK containers are handled transparently — pass the `.xapk` file directly.
+All scanner output is printed in order: manifest summary, CRITICAL/HIGH/MEDIUM
+findings across all scanners, native lib security summary.
